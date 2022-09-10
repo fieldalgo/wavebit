@@ -1,6 +1,12 @@
 import copy
 
+# import mat73
+import scipy
+import scipy.io
+
 import matplotlib.pyplot as plt
+from pathlib import Path
+
 from solver.convolution_matrix import *
 
 
@@ -9,7 +15,7 @@ class LalanneBase:
                  period=0.7, wls=np.linspace(0.5, 2.3, 400), polarization=0,
                  patterns=None, thickness=None):
 
-        self.grating_type = grating_type  # TE, TM, Conical
+        self.grating_type = grating_type  # 1D=0, 1D_conical=1, 2D=2 # TODO
         self.n_I = n_I
         self.n_II = n_II
 
@@ -30,31 +36,16 @@ class LalanneBase:
         self.patterns = [['SILICON', 1, 0.3]] if patterns is None else patterns
         self.thickness = [0.46] if thickness is None else thickness
 
-        self.spectrum_r = []
-        self.spectrum_t = []
-
-    def permittivity_mapping(self, wl, oneover=False):
-
-        nk_pool = {'SILICON': np.array([[300, 400, 500, 600, 700], [3.1, 3.4, 5, 6.4, 2]])}
-        nk_pool = {'SILICON': np.array([[100, 400, 500, 600, 900], [3.48, 3.48, 3.48, 3.48, 3.48]])}
-
-        patterns = copy.deepcopy(self.patterns)
-
-        for i, layer in enumerate(self.patterns):
-            nk_table_of_interest = nk_pool[layer[0].upper()]
-            patterns[i][0] = np.interp(wl, *nk_table_of_interest)
-
-        if oneover:
-            patterns = np.array(patterns)
-            patterns[:, 0] = 1 / patterns[:, 0]
-
-        if type(self.period) in [float, int] or len(self.period) == 1:
-            pmtvy = draw_1d(patterns)
+        # spectrum dimension
+        # TODO: need to keep these result?
+        if grating_type in (0, 1):
+            self.spectrum_r = np.ndarray((len(wls), 2*fourier_order+1))
+            self.spectrum_t = np.ndarray((len(wls), 2*fourier_order+1))
+        elif grating_type == 2:
+            self.spectrum_r = np.ndarray((len(wls), 2*fourier_order+1, 2*fourier_order+1))
+            self.spectrum_t = np.ndarray((len(wls), 2*fourier_order+1, 2*fourier_order+1))
         else:
-            pmtvy = draw_2d(patterns)
-        conv_all = to_conv_mat(pmtvy, self.fourier_order)
-
-        return conv_all
+            raise ValueError
 
     def lalanne_1d(self):
 
@@ -63,10 +54,10 @@ class LalanneBase:
         delta_i0 = np.zeros(2 * self.fourier_order + 1)
         delta_i0[self.fourier_order] = 1
 
-        for wl in self.wls:
+        for i, wl in enumerate(self.wls):
             k0 = 2 * np.pi / wl
 
-            E_conv_all = self.permittivity_mapping(wl)
+            E_conv_all = permittivity_mapping(self.patterns, wl, self.period, self.fourier_order)
 
             kx_vector = k0 * (self.n_I * np.sin(self.theta) - fourier_indices * (wl / self.period)).astype('complex')
 
@@ -78,7 +69,7 @@ class LalanneBase:
 
             Kx = np.diag(kx_vector / k0)
 
-            f = np.eye(2 * self.fourier_order + 1)
+            f = np.eye(self.ff)
 
             if self.polarization == 0:  # TE
                 Y_I = np.diag(k_I_z / k0)
@@ -98,7 +89,7 @@ class LalanneBase:
                 g = 1j * Z_II
                 inc_term = 1j * delta_i0 * np.cos(self.theta) / self.n_I
 
-                oneover_E_conv_all = self.permittivity_mapping(wl, oneover=True)
+                oneover_E_conv_all = permittivity_mapping(self.patterns, wl, self.period, self.fourier_order, oneover=True)
 
             else:
                 raise ValueError
@@ -154,35 +145,44 @@ class LalanneBase:
             else:
                 raise ValueError
 
-            self.spectrum_r.append(DEri.sum())
-            self.spectrum_t.append(DEti.sum())
+            # self.spectrum_r.append(DEri.sum())
+            # self.spectrum_t.append(DEti.sum())
+
+            self.spectrum_r[i] = DEri.real
+            self.spectrum_t[i] = DEti.real
+
+        # center = DEti.shape[0]//2
+        # res = DEti[center-1:center+2]
 
         return self.spectrum_r, self.spectrum_t
 
     def lalanne_1d_conical(self):
 
         if self.theta == 0:
-            self.theta = 0.001
+            self.theta = 1E-10
 
         # pmtvy = draw_1d(self.patterns)
         # E_conv_all = to_conv_mat(pmtvy, self.fourier_order)
 
         fourier_indices = np.arange(-self.fourier_order, self.fourier_order + 1)
 
-        delta_i0 = np.zeros(self.ff).reshape((-1, 1))
-        delta_i0[self.fourier_order] = 1
+        # delta_i0 = np.zeros(self.ff).reshape((-1, 1))
+        delta_i0 = np.zeros((self.ff, 1))
+        delta_i0[self.fourier_order, 0] = 1
 
         I = np.eye(self.ff)
         O = np.zeros((self.ff, self.ff))
 
-        for wl in self.wls:
+        for i, wl in enumerate(self.wls):
             k0 = 2 * np.pi / wl
 
-            E_conv_all = self.permittivity_mapping(wl)
-            oneover_E_conv_all = self.permittivity_mapping(wl, oneover=True)
+            E_conv_all = permittivity_mapping(self.patterns, wl, self.period, self.fourier_order)
+            oneover_E_conv_all = permittivity_mapping(self.patterns, wl, self.period, self.fourier_order, oneover=True)
 
             kx_vector = k0 * (self.n_I * np.sin(self.theta) * np.cos(self.phi) - fourier_indices * (wl / self.period)).astype('complex')
             ky = k0 * self.n_I * np.sin(self.theta) * np.sin(self.phi)
+
+            Kx = np.diag(kx_vector / k0)
 
             k_I_z = (k0 ** 2 * self.n_I ** 2 - kx_vector ** 2 - ky ** 2) ** 0.5
             k_II_z = (k0 ** 2 * self.n_II ** 2 - kx_vector ** 2 - ky ** 2) ** 0.5
@@ -198,16 +198,12 @@ class LalanneBase:
             Z_I = np.diag(k_I_z / (k0 * self.n_I ** 2))
             Z_II = np.diag(k_II_z / (k0 * self.n_II ** 2))
 
-            Kx = np.diag(kx_vector / k0)
-
             big_F = np.block([[I, O], [O, 1j * Z_II]])
             big_G = np.block([[1j * Y_II, O], [O, I]])
 
             big_T = np.eye(2 * self.ff)
 
-            # for E_conv, d in zip(E_conv_all[::-1], self.thickness[::-1]):
             for E_conv, oneover_E_conv, d in zip(E_conv_all[::-1], oneover_E_conv_all[::-1], self.thickness[::-1]):
-
                 E_i = np.linalg.inv(E_conv)
                 oneover_E_conv_i = np.linalg.inv(oneover_E_conv)
 
@@ -310,15 +306,18 @@ class LalanneBase:
             DEti = T_s * np.conj(T_s) * np.real(k_II_z / (k0 * self.n_I * np.cos(self.theta))) \
                    + T_p * np.conj(T_p) * np.real((k_II_z / self.n_II ** 2) / (k0 * self.n_I * np.cos(self.theta)))
 
-            self.spectrum_r.append(DEri.sum())
-            self.spectrum_t.append(DEti.sum())
+            # self.spectrum_r.append(DEri.sum())
+            # self.spectrum_t.append(DEti.sum())
+
+            self.spectrum_r[i] = DEri.real
+            self.spectrum_t[i] = DEti.real
 
         return self.spectrum_r, self.spectrum_t
 
     def lalanne_2d(self):
 
         if self.theta == 0:
-            self.theta = 0.001
+            self.theta = 1E-10
 
         # pmtvy = draw_1d(self.patterns)
         # E_conv_all = to_conv_mat(pmtvy, self.fourier_order)
@@ -333,10 +332,10 @@ class LalanneBase:
 
         center = self.ff ** 2
 
-        for wl in self.wls:
+        for i, wl in enumerate(self.wls):
 
-            E_conv_all = self.permittivity_mapping(wl)
-            oneover_E_conv_all = self.permittivity_mapping(wl, oneover=True)
+            E_conv_all = permittivity_mapping(self.patterns, wl, self.period, self.fourier_order)
+            oneover_E_conv_all = permittivity_mapping(self.patterns, wl, self.period, self.fourier_order, oneover=True)
 
             k0 = 2 * np.pi / wl
 
@@ -478,13 +477,17 @@ class LalanneBase:
             T_s = big_T[:self.ff ** 2, :].flatten()
             T_p = big_T[self.ff ** 2:, :].flatten()
 
-            DEri = R_s * np.conj(R_s) * np.real(k_I_z / (k0 * n_I * np.cos(theta))) \
-                   + R_p * np.conj(R_p) * np.real((k_I_z / n_I ** 2) / (k0 * n_I * np.cos(theta)))
+            DEri = R_s * np.conj(R_s) * np.real(k_I_z / (k0 * self.n_I * np.cos(self.theta))) \
+                   + R_p * np.conj(R_p) * np.real((k_I_z / self.n_I ** 2) / (k0 * self.n_I * np.cos(self.theta)))
 
-            DEti = T_s * np.conj(T_s) * np.real(k_II_z / (k0 * n_I * np.cos(theta))) \
-                   + T_p * np.conj(T_p) * np.real((k_II_z / n_II ** 2) / (k0 * n_I * np.cos(theta)))
-            self.spectrum_r.append(DEri.sum())
-            self.spectrum_t.append(DEti.sum())
+            DEti = T_s * np.conj(T_s) * np.real(k_II_z / (k0 * self.n_I * np.cos(self.theta))) \
+                   + T_p * np.conj(T_p) * np.real((k_II_z / self.n_II ** 2) / (k0 * self.n_I * np.cos(self.theta)))
+
+            # self.spectrum_r.append(DEri.sum())
+            # self.spectrum_t.append(DEti.sum())
+
+            self.spectrum_r[i] = DEri.reshape((self.ff, -1)).real
+            self.spectrum_t[i] = DEti.reshape((self.ff, -1)).real
 
         return self.spectrum_r, self.spectrum_t
 
@@ -498,7 +501,7 @@ if __name__ == '__main__':
     psi = 0
 
     fourier_order = 3
-    period = [0.7, 0.7]
+    period = [0.7]
 
     wls = np.linspace(0.5, 2.3, 400)
 
@@ -513,10 +516,10 @@ if __name__ == '__main__':
 
     res = LalanneBase(polarization_type, n_I, n_II, theta, phi, psi, fourier_order, period, wls, polarization, patterns, thickness)
 
-    # res.lalanne_1d()
+    res.lalanne_1d()
     # res.lalanne_1d_conical()
-    res.lalanne_2d()
+    # res.lalanne_2d()
 
-    plt.plot(res.wls, res.spectrum_r)
-    plt.plot(res.wls, res.spectrum_t)
+    plt.plot(res.wls, res.spectrum_r.sum(axis=1))
+    plt.plot(res.wls, res.spectrum_t.sum(axis=1))
     plt.show()
