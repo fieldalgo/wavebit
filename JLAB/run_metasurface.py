@@ -2,7 +2,7 @@ import time
 import matplotlib.pyplot as plt
 
 import numpy as np
-from JLAB.JLAB import JLABCode
+from JLAB.solver import JLABCode
 from benchmark.interface.Reticolo import Reticolo
 
 
