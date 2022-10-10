@@ -1,7 +1,8 @@
 import time
+
+import matplotlib.pyplot as plt
 import numpy as np
 
-from meent.on_numpy.rcwa import RCWALight as RCWA
 from meent.rcwa import call_solver, sweep_wavelength
 
 
@@ -41,7 +42,7 @@ ucell = np.array([
     ],
 ])
 
-ucell_materials = ['SILICON', 1]
+ucell_materials = ['Si__real', 1]
 
 AA = call_solver(mode=0, grating_type=grating_type, pol=pol, n_I=n_I, n_II=n_II, theta=theta, phi=phi, psi=psi,
                  fourier_order=fourier_order, wls=wls, period=period, ucell=ucell, ucell_materials=ucell_materials,
@@ -54,4 +55,5 @@ wls = np.linspace(500, 1000, 100)
 a, b = sweep_wavelength(wls, mode=0, grating_type=grating_type, pol=pol, n_I=n_I, n_II=n_II, theta=theta, phi=phi, psi=psi,
                  fourier_order=fourier_order, period=period, ucell=ucell, ucell_materials=ucell_materials, thickness=thickness)
 
-print(a)
+plt.plot(wls, a.sum((1, 2)), wls, b.sum((1, 2)))
+plt.show()
