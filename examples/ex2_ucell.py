@@ -19,12 +19,12 @@ psi = 0 if pol else 90  # in degree, notation from Moharam paper
 wls = np.linspace(900, 900, 1)  # wavelength
 
 if grating_type in (0, 1):
-    period = [1400]
-    fourier_order = 20
+    period = [700]
+    fourier_order = 3
 
 else:
     period = [700, 700]
-    fourier_order = 3
+    fourier_order = 5
 
 thickness = [460, 660]
 
@@ -32,13 +32,13 @@ ucell = np.array([
 
     [
         [1, 1, 1, 0, 0, 0, 1, 1, 1, 1],
-        [1, 1, 1, 0, 0, 0, 1, 1, 1, 1],
-        [1, 1, 1, 0, 0, 0, 1, 1, 1, 1],
+        [1, 1, 1, 0, 0, 0, 1, 1, 0, 1],
+        [1, 1, 1, 0, 0, 0, 1, 0, 1, 1],
     ],
     [
         [1, 1, 1, 0, 0, 0, 1, 1, 1, 1],
-        [1, 1, 1, 0, 0, 0, 1, 1, 1, 1],
-        [1, 1, 1, 0, 0, 0, 1, 1, 1, 1],
+        [1, 1, 1, 0, 0, 0, 1, 1, 0, 1],
+        [1, 1, 1, 0, 0, 0, 1, 0, 1, 1],
     ],
 ])
 
@@ -51,9 +51,12 @@ de_ri, de_ti = AA.run_ucell()
 print(de_ri, de_ti)
 
 wls = np.linspace(500, 1000, 100)
+t0 = time.perf_counter()
 
 a, b = sweep_wavelength(wls, mode=0, grating_type=grating_type, pol=pol, n_I=n_I, n_II=n_II, theta=theta, phi=phi, psi=psi,
                  fourier_order=fourier_order, period=period, ucell=ucell, ucell_materials=ucell_materials, thickness=thickness)
+print('wall time: ', time.perf_counter() - t0)
 
 plt.plot(wls, a.sum((1, 2)), wls, b.sum((1, 2)))
+# plt.plot(wls, a.sum((1)), wls, b.sum((1)))
 plt.show()
