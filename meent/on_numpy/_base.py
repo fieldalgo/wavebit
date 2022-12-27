@@ -1,84 +1,10 @@
-import scipy
-
 import numpy as np
-import matplotlib.pyplot as plt
 
 from .scattering_method import scattering_1d_1, scattering_1d_2, scattering_1d_3, scattering_2d_1, scattering_2d_wv,\
     scattering_2d_2, scattering_2d_3
 from .transfer_method import transfer_1d_1, transfer_1d_2, transfer_1d_3, transfer_1d_conical_1, transfer_1d_conical_2,\
     transfer_1d_conical_3, transfer_2d_1, transfer_2d_wv, transfer_2d_2, transfer_2d_3
 
-
-# class Base:
-#     def __init__(self, grating_type):
-#         self.grating_type = grating_type
-#         self.wavelength = None
-#         self.fourier_order = None
-#         self.spectrum_r = None
-#         self.spectrum_t = None
-#
-#     def init_spectrum_array(self):
-#         if self.grating_type in (0, 1):
-#             self.spectrum_r = np.zeros((len(self.wavelength), 2 * self.fourier_order + 1))
-#             self.spectrum_t = np.zeros((len(self.wavelength), 2 * self.fourier_order + 1))
-#         elif self.grating_type == 2:
-#             self.spectrum_r = np.zeros((len(self.wavelength), 2 * self.fourier_order + 1, 2 * self.fourier_order + 1))
-#             self.spectrum_t = np.zeros((len(self.wavelength), 2 * self.fourier_order + 1, 2 * self.fourier_order + 1))
-#         else:
-#             raise ValueError
-#
-#     def save_spectrum_array(self, de_ri, de_ti, i):
-#         de_ri = np.array(de_ri)
-#         de_ti = np.array(de_ti)
-#
-#         if not de_ri.shape:
-#             # 1D or may be not; there is a case that reticolo returns single value
-#             c = self.spectrum_r.shape[1] // 2
-#             self.spectrum_r[i][c] = de_ri
-#
-#         elif len(de_ri.shape) == 1 or de_ri.shape[1] == 1:
-#             de_ri = de_ri.flatten()
-#             c = self.spectrum_r.shape[1] // 2
-#             l = de_ri.shape[0] // 2
-#             if len(de_ri) % 2:
-#                 self.spectrum_r[i][c - l:c + l + 1] = de_ri
-#             else:
-#                 self.spectrum_r[i][c - l:c + l] = de_ri
-#
-#         else:
-#             print('no code')
-#             raise ValueError
-#
-#         if not de_ti.shape:  # 1D
-#             c = self.spectrum_t.shape[1] // 2
-#             self.spectrum_t[i][c] = de_ti
-#
-#         elif len(de_ti.shape) == 1 or de_ti.shape[1] == 1:  # 1D
-#             de_ti = de_ti.flatten()
-#             c = self.spectrum_t.shape[1] // 2
-#             l = de_ti.shape[0] // 2
-#             if len(de_ti) % 2:
-#                 self.spectrum_t[i][c - l:c + l + 1] = de_ti
-#             else:
-#                 self.spectrum_t[i][c - l:c + l] = de_ti
-#
-#         else:
-#             print('no code')
-#             raise ValueError
-#
-#     def plot(self, title=None, marker=None):
-#         if self.grating_type in (0, 1):
-#             plt.plot(self.wavelength, self.spectrum_r.sum(axis=1), marker=marker)
-#             plt.plot(self.wavelength, self.spectrum_t.sum(axis=1), marker=marker)
-#         elif self.grating_type == 2:
-#             plt.plot(self.wavelength, self.spectrum_r.sum(axis=(1, 2)), marker=marker)
-#             plt.plot(self.wavelength, self.spectrum_t.sum(axis=(1, 2)), marker=marker)
-#         else:
-#             raise ValueError
-#         plt.title(title)
-#         plt.show()
-
-# class _BaseRCWA(Base):
 
 class _BaseRCWA:
     def __init__(self, grating_type, n_I=1., n_II=1., theta=0., phi=0., psi=0., fourier_order=10,
@@ -116,8 +42,6 @@ class _BaseRCWA:
         self.thickness = thickness
 
         self.algo = algo
-
-        # self.init_spectrum_array()
 
         self.layer_info_list = []
         self.T1 = None

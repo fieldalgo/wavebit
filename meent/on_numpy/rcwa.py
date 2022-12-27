@@ -39,13 +39,13 @@ class RCWALight(_BaseRCWA):
     #         self.wavelength = wavelength_array
     #         self.init_spectrum_array()
     #
-    #     for i, wl in enumerate(self.wavelength):
+    #     for i, wavelength in enumerate(self.wavelength):
     #
-    #         ucell = fill_factor_to_ucell(self.patterns, wl, self.grating_type, self.mat_table)
+    #         ucell = fill_factor_to_ucell(self.patterns, wavelength, self.grating_type, self.mat_table)
     #         e_conv_all = to_conv_mat(ucell, self.fourier_order)
     #         o_e_conv_all = to_conv_mat(1 / ucell, self.fourier_order)
     #
-    #         de_ri, de_ti = self.solve(wl, e_conv_all, o_e_conv_all)
+    #         de_ri, de_ti = self.solve(wavelength, e_conv_all, o_e_conv_all)
     #         self.spectrum_r[i] = de_ri
     #         self.spectrum_t[i] = de_ti
     #
@@ -57,13 +57,13 @@ class RCWALight(_BaseRCWA):
     #         self.wavelength = wavelength_array
     #         self.init_spectrum_array()
     #
-    #     for i, wl in enumerate(self.wavelength):
+    #     for i, wavelength in enumerate(self.wavelength):
     #
-    #         ucell = put_permittivity_in_ucell(self.ucell, wl, self.grating_type, self.mat_table)
+    #         ucell = put_permittivity_in_ucell(self.ucell, wavelength, self.grating_type, self.mat_table)
     #         e_conv_all = to_conv_mat(ucell, self.fourier_order)
     #         o_e_conv_all = to_conv_mat(1 / ucell, self.fourier_order)
     #
-    #         de_ri, de_ti = self.solve(wl, e_conv_all, o_e_conv_all)
+    #         de_ri, de_ti = self.solve(wavelength, e_conv_all, o_e_conv_all)
     #
     #         self.spectrum_r[i] = de_ri
     #         self.spectrum_t[i] = de_ti

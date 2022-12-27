@@ -1,8 +1,8 @@
 import time
 
 import matplotlib.pyplot as plt
+# import jax.numpy as np
 import numpy as np
-
 from meent.rcwa import call_solver, sweep_wavelength
 
 grating_type = 2  # 0: 1D, 1: 1D conical, 2:2D.
@@ -37,7 +37,7 @@ if grating_type in (0, 1):
 
 else:
     period = [1000, 1000]
-    fourier_order = 15
+    fourier_order = 2
 
     ucell = np.array([
 
@@ -89,10 +89,10 @@ thickness = [500]
 ucell_materials = [1, 3.48]
 # ucell_materials = [3.48, 1]
 t0 = time.time()
-AA = call_solver(mode=0, grating_type=grating_type, pol=pol, n_I=n_I, n_II=n_II, theta=theta, phi=phi, psi=psi,
+AA = call_solver(mode=3, grating_type=grating_type, pol=pol, n_I=n_I, n_II=n_II, theta=theta, phi=phi, psi=psi,
                  fourier_order=fourier_order, wavelength=wavelength, period=period, ucell=ucell, ucell_materials=ucell_materials,
                  thickness=thickness)
 de_ri, de_ti = AA.run_ucell()
 print(de_ri, de_ti)
 print(time.time()-t0)
-res = AA.calculate_field()
+# res = AA.calculate_field()
