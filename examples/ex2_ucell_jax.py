@@ -8,7 +8,9 @@ import jax
 
 
 jax.config.update('jax_platform_name', 'cpu')
+# jax.config.update('jax_platform_name', 'gpu')
 
+# common
 grating_type = 2  # 0: 1D, 1: 1D conical, 2:2D.
 pol = 1  # 0: TE, 1: TM
 
@@ -25,7 +27,7 @@ wavelength = 900  # wavelength
 
 if grating_type in (0, 1):
     period = [1000]
-    fourier_order = 5
+    fourier_order = 2
 
     ucell = np.array([
 
@@ -113,31 +115,18 @@ ucell_materials = [1, 3.48]
 
 mode_options = {0: 'numpy', 1: 'JAX', 2: 'Torch', 3: 'numpy_integ', 4: 'JAX_integ',}
 
-mode_key = 1
+mode_key = 3
+n_iter = 5
 
 print(mode_options[mode_key])
 
-# t0 = time.time()
-# AA = call_solver(mode=mode_key, grating_type=grating_type, pol=pol, n_I=n_I, n_II=n_II, theta=theta, phi=phi, psi=psi,
-#                  fourier_order=fourier_order, wavelength=wavelength, period=period, ucell=ucell, ucell_materials=ucell_materials,
-#                  thickness=thickness)
-# de_ri, de_ti = AA.run_ucell()
-# # print(de_ri, de_ti)
-# print(time.time()-t0)
-# # res = AA.calculate_field()
 AA = call_solver(mode=mode_key, grating_type=grating_type, pol=pol, n_I=n_I, n_II=n_II, theta=theta, phi=phi, psi=psi,
                  fourier_order=fourier_order, wavelength=wavelength, period=period, ucell=ucell,
-                 ucell_materials=ucell_materials,
-                 thickness=thickness)
-t0 = time.time()
-de_ri, de_ti = AA.run_ucell()
-print('first run: ', time.time() - t0)
+                 ucell_materials=ucell_materials, thickness=thickness)
 
-for _ in range(10):
+for i in range(n_iter):
     t0 = time.time()
-    # AA = call_solver(mode=mode_key, grating_type=grating_type, pol=pol, n_I=n_I, n_II=n_II, theta=theta, phi=phi, psi=psi,
-    #                  fourier_order=fourier_order, wavelength=wavelength, period=period, ucell=ucell, ucell_materials=ucell_materials,
-    #                  thickness=thickness)
     de_ri, de_ti = AA.run_ucell()
-    print('multi run: ', time.time()-t0)
-# print(de_ri, de_ti)
+    print(f'run {i}: ', time.time()-t0)
+
+print(de_ri, de_ti)
