@@ -1,106 +1,241 @@
-import copy
+import time
+from functools import partial
+
+import numpy as np
+import jax
 import jax.numpy as jnp
+
+import meent.on_jax.jitted as ee
+
+from os import walk
 from scipy.io import loadmat
-
 from pathlib import Path
-# from jax.scipy.linalg import circulant  # hope this is supported
 
 
-def put_n_ridge_in_pattern(pattern_all, wl):
+# @jax.jit
+def put_permittivity_in_ucell(ucell, mat_list, mat_table, wl, type_complex=jnp.complex128):
 
-    pattern_all = copy.deepcopy(pattern_all)
+    res = ee.zeros(ucell.shape, dtype=type_complex)
 
-    for i, (n_ridge, n_groove, pattern) in enumerate(pattern_all):
+    for z in range(ucell.shape[0]):
+        for y in range(ucell.shape[1]):
+            for x in range(ucell.shape[2]):
+                material = mat_list[ucell[z, y, x]]
+                assign_index = (z, y, x)
 
-        if type(n_ridge) == str:
-            material = n_ridge
-            n_ridge = find_n_index(material, wl)
-        pattern_all[i][0] = n_ridge
-    return pattern_all
+                if type(material) == str:
+                    assign_value = find_nk_index(material, mat_table, wl) ** 2
+                else:
+                    assign_value = material ** 2
+                res = ee.assign(res, assign_index, assign_value)
+
+    return res
 
 
-def find_n_index(material, wl):
-    # TODO: where put this to?
-    nk_path = str(Path(__file__).resolve().parent.parent.parent) + '/nk_data/p_Si.mat'  # TODO: organize
-    mat_si = loadmat(nk_path)
+def put_permittivity_in_ucell_object(ucell_size, mat_list, obj_list, mat_table, wl,
+                                     type_complex=jnp.complex128):
+    # TODO: under development
+    res = ee.zeros(ucell_size, dtype=type_complex)
 
+    for material, obj_index in zip(mat_list, obj_list):
+        if type(material) == str:
+            res[obj_index] = find_nk_index(material, mat_table, wl) ** 2
+        else:
+            res[obj_index] = material ** 2
+
+    return res
+
+
+def find_nk_index(material, mat_table, wl):
+    if material[-6:] == '__real':
+        material = material[:-6]
+        n_only = True
+    else:
+        n_only = False
+
+    mat_data = mat_table[material.upper()]
+
+    n_index = ee.interp(wl, mat_data[:, 0], mat_data[:, 1])
+
+    if n_only:
+        return n_index
+
+    k_index = ee.interp(wl, mat_data[:, 0], mat_data[:, 2])
+    nk = n_index + 1j * k_index
+
+    return nk
+
+
+def read_material_table(nk_path=None):
     mat_table = {}
-    mat_table['SILICON'] = mat_si
 
-    mat_property = mat_table[material.upper()]
-    n_index = jnp.interp(wl, mat_property['WL'].flatten(), mat_property['n'].flatten())
+    if nk_path is None:
+        nk_path = str(Path(__file__).resolve().parent.parent) + '/nk_data'
 
-    return n_index
+    full_path_list, name_list, _ = [], [], []
+    for (dirpath, dirnames, filenames) in walk(nk_path):
+        full_path_list.extend([f'{dirpath}/{filename}' for filename in filenames])
+        name_list.extend(filenames)
+    for path, name in zip(full_path_list, name_list):
+        if name[-3:] == 'txt':
+            data = ee.loadtxt(path, skiprows=1)
+            mat_table[name[:-4].upper()] = data
+
+        elif name[-3:] == 'mat':
+            data = loadmat(path)
+            data = ee.array([data['WL'], data['n'], data['k']])[:, :, 0].T
+            mat_table[name[:-4].upper()] = data
+    return mat_table
 
 
-def fill_factor_to_ucell(patterns_fill_factor, wl, grating_type):
+# can't jit
+def cell_compression(cell, type_complex=jnp.complex128):
 
-    pattern_fill_factor = put_n_ridge_in_pattern(patterns_fill_factor, wl)
-    ucell = draw_fill_factor(pattern_fill_factor, grating_type)
+    if type_complex == jnp.complex128:
+        type_float = jnp.float64
+    else:
+        type_float = jnp.float32
 
-    return ucell
+    # find discontinuities in x
+    step_y, step_x = 1. / ee.array(cell.shape, dtype=type_float)
+    x = []
+    y = []
+    cell_x = []
+    cell_xy = []
+
+    cell_next = ee.roll(cell, -1, axis=1)
+
+    for col in range(cell.shape[1]):
+        if not (cell[:, col] == cell_next[:, col]).all() or (col == cell.shape[1] - 1):
+
+            x.append(step_x * (col + 1))
+            cell_x.append(cell[:, col])
+
+    cell_x = ee.array(cell_x).T
+    cell_x_next = ee.roll(cell_x, -1, axis=0)
+
+    for row in range(cell_x.shape[0]):
+        if not (cell_x[row, :] == cell_x_next[row, :]).all() or (row == cell_x.shape[0] - 1):
+            y.append(step_y * (row + 1))
+            cell_xy.append(cell_x[row, :])
+
+    x = ee.array(x).reshape((-1, 1))
+    y = ee.array(y).reshape((-1, 1))
+    cell_comp = ee.array(cell_xy)
+
+    return cell_comp, x, y
 
 
-def to_conv_mat(pmt, fourier_order):
-    # FFT scaling: https://kr.mathworks.com/matlabcentral/answers/15770-scaling-the-fft-and-the-ifft?s_tid=srchtitle
+# @partial(jax.jit, static_argnums=(1,2 ))
+def fft_piecewise_constant(cell, fourier_order, type_complex=jnp.complex128):
+
+    if cell.shape[0] == 1:
+        fourier_order = [0, fourier_order]
+    else:
+        fourier_order = [fourier_order, fourier_order]
+    cell, x, y = cell_compression(cell, type_complex=type_complex)
+
+    # X axis
+    cell_next_x = ee.roll(cell, -1, axis=1)
+    cell_diff_x = cell_next_x - cell
+
+    modes = ee.arange(-2 * fourier_order[1], 2 * fourier_order[1] + 1, 1)
+
+    f_coeffs_x = cell_diff_x @ ee.exp(-1j * 2 * ee.pi * x @ modes[None, :]).astype(type_complex)
+    c = f_coeffs_x.shape[1] // 2
+
+    x_next = ee.vstack((ee.roll(x, -1, axis=0)[:-1], 1)) - x
+
+    assign_index = (ee.arange(len(f_coeffs_x)), ee.array([c]))
+    assign_value = (cell @ ee.vstack((x[0], x_next[:-1]))).flatten().astype(type_complex)
+
+    f_coeffs_x = ee.assign(f_coeffs_x, assign_index, assign_value)
+    # f_coeffs_x = f_coeffs_x.at[assign_index].set(assign_value)
+
+    mask_int = ee.hstack([ee.arange(c), ee.arange(c+1, f_coeffs_x.shape[1])])
+
+    assign_index = mask_int
+
+    assign_value = f_coeffs_x[:, mask_int] / (1j * 2 * ee.pi * modes[mask_int])
+
+    f_coeffs_x = ee.assign(f_coeffs_x, assign_index, assign_value, row_all=True)
+    # f_coeffs_x = f_coeffs_x.at[:, assign_index].set(assign_value)
+
+    # Y axis
+    f_coeffs_x_next_y = ee.roll(f_coeffs_x, -1, axis=0)
+    f_coeffs_x_diff_y = f_coeffs_x_next_y - f_coeffs_x
+
+    modes = ee.arange(-2 * fourier_order[0], 2 * fourier_order[0] + 1, 1)
+
+    f_coeffs_xy = f_coeffs_x_diff_y.T @ ee.exp(-1j * 2 * ee.pi * y @ modes[None, :]).astype(type_complex)
+    c = f_coeffs_xy.shape[1] // 2
+
+    y_next = ee.vstack((ee.roll(y, -1, axis=0)[:-1], 1)) - y
+
+    assign_index = [c]
+    assign_value = f_coeffs_x.T @ ee.vstack((y[0], y_next[:-1])).astype(type_complex)
+    f_coeffs_xy = ee.assign(f_coeffs_xy, assign_index, assign_value, row_all=True)
+    # f_coeffs_xy = f_coeffs_xy.at[:, assign_index].set(assign_value)
+
+
+    if c:
+        mask_int = ee.hstack([ee.arange(c), ee.arange(c + 1, f_coeffs_x.shape[1])])
+
+        assign_index = mask_int
+        assign_value = f_coeffs_xy[:, mask_int] / (1j * 2 * ee.pi * modes[mask_int])
+
+        f_coeffs_xy = ee.assign(f_coeffs_xy, assign_index, assign_value, row_all=True)
+        # f_coeffs_xy = f_coeffs_xy.at[:, assign_index].set(assign_value)
+
+    return f_coeffs_xy.T
+
+
+# @partial(jax.jit, static_argnums=(1, ))
+def to_conv_mat(pmt, fourier_order, type_complex=jnp.complex128):
+
     if len(pmt.shape) == 2:
         print('shape is 2')
         raise ValueError
     ff = 2 * fourier_order + 1
 
-    # if len(pmt.shape)==2 or pmt.shape[1] == 1:  # 1D
-    if pmt.shape[1] == 1:  # 1D  # TODO: confirm this handles all cases
-        res = jnp.zeros((pmt.shape[0], 2 * fourier_order + 1, 2 * fourier_order + 1)).astype('complex')
+    if pmt.shape[1] == 1:  # 1D
 
-        # extend array for FFT
-        minimum_pattern_size = (4 * fourier_order + 1) * pmt.shape[2]
-        # TODO: what is theoretical minimum?
-        # TODO: can be a scalability issue
-        if pmt.shape[2] < minimum_pattern_size:
-            n = minimum_pattern_size // pmt.shape[2]
-            pmt = jnp.repeat(pmt, n + 1, axis=2)
-
-        for i, pmtvy in enumerate(pmt):
-            pmtvy_fft = jnp.fft.fftshift(jnp.fft.fftn(pmtvy / pmtvy.size))
-            center = pmtvy_fft.shape[1] // 2
-
-            conv_idx = jnp.arange(ff - 1, -ff, -1)
-            conv_idx = circulant(conv_idx)
-            res = res.at[i].set(pmtvy_fft[1, center + conv_idx])
-
-    else:  # 2D
-        # attention on the order of axis.
-        # Here X Y Z. Cell Drawing in CAD is Y X Z. Here is Z Y X
-
-        # TODO: separate fourier order
-        res = jnp.zeros((pmt.shape[0], ff ** 2, ff ** 2)).astype('complex')
-
-        # extend array
-        # TODO: run test
-        minimum_pattern_size = ff ** 2
-        # TODO: what is theoretical minimum?
-        # TODO: can be a scalability issue
-
-        if pmt.shape[1] < minimum_pattern_size:
-            n = minimum_pattern_size // pmt.shape[1]
-            pmt = jnp.repeat(pmt, n + 1, axis=1)
-        if pmt.shape[2] < minimum_pattern_size:
-            n = minimum_pattern_size // pmt.shape[2]
-            pmt = jnp.repeat(pmt, n + 1, axis=2)
+        res = ee.zeros((pmt.shape[0], ff, ff)).astype(type_complex)
 
         for i, layer in enumerate(pmt):
-            pmtvy_fft = jnp.fft.fftshift(jnp.fft.fft2(layer / layer.size))
+            f_coeffs = fft_piecewise_constant(layer, fourier_order, type_complex=type_complex)
 
-            center = jnp.array(pmtvy_fft.shape) // 2
+            center = f_coeffs.shape[1] // 2
 
-            conv_idx = jnp.arange(ff - 1, -ff, -1)
+            conv_idx = ee.arange(-ff + 1, ff, 1)
             conv_idx = circulant(conv_idx)
 
-            conv_i = jnp.repeat(conv_idx, ff, axis=1)
-            conv_i = jnp.repeat(conv_i, ff, axis=0)
-            conv_j = jnp.tile(conv_idx, (ff, ff))
+            e_conv = f_coeffs[0, center + conv_idx]
+            # res = res.at[i].set(e_conv)
+            res = ee.assign(res, i, e_conv)
 
-            res = res.at[i].set(pmtvy_fft[center[0] + conv_i, center[1] + conv_j])
+    else:  # 2D
+        # attention on the order of axis (Z Y X)
+
+        res = ee.zeros((pmt.shape[0], ff ** 2, ff ** 2)).astype(type_complex)
+
+        for i, layer in enumerate(pmt):
+
+            f_coeffs = fft_piecewise_constant(layer, fourier_order, type_complex=type_complex)
+
+            center = ee.array(f_coeffs.shape) // 2
+
+            conv_idx = ee.arange(-ff + 1, ff, 1)
+
+            conv_idx = circulant(conv_idx)
+
+            conv_i = ee.repeat(conv_idx, ff, 1)
+            conv_i = ee.repeat(conv_i, ff, axis=0)
+            conv_j = ee.tile(conv_idx, (ff, ff))
+
+            # res = res.at[i].set(f_coeffs[center[0] + conv_i, center[1] + conv_j])
+            assign_value = f_coeffs[center[0] + conv_i, center[1] + conv_j]
+            res = ee.assign(res, i, assign_value)
 
     # import matplotlib.pyplot as plt
     #
@@ -108,56 +243,21 @@ def to_conv_mat(pmt, fourier_order):
     # plt.imshow(abs(res[0]), cmap='jet')
     # plt.colorbar()
     # plt.show()
-    #
-    return res
-
-
-def draw_fill_factor(patterns_fill_factor, grating_type, resolution=1000):
-
-    # res in Z X Y
-    if grating_type == 2:
-        res = jnp.zeros((len(patterns_fill_factor), resolution, resolution), dtype='complex')
-    else:
-        res = jnp.zeros((len(patterns_fill_factor), 1, resolution), dtype='complex')
-
-    if grating_type in (0, 1):  # TODO: handle this by len(fill_factor)
-        # fill_factor is not exactly implemented.
-        for i, (n_ridge, n_groove, fill_factor) in enumerate(patterns_fill_factor):
-            permittivity = jnp.ones((1, resolution), dtype='complex')
-            cut = int(resolution * fill_factor)
-
-            cut_idx = jnp.arange(cut)
-            permittivity *= n_groove ** 2
-
-            permittivity = permittivity.at[0, cut_idx].set(n_ridge ** 2)
-            res = res.at[i].set(permittivity)
-
-    else:  # 2D
-        for i, (n_ridge, n_groove, fill_factor) in enumerate(patterns_fill_factor):
-            fill_factor = jnp.array(fill_factor)
-            permittivity = jnp.ones((resolution, resolution), dtype='complex')
-            cut = (resolution * fill_factor)  # TODO: need parenthesis?
-            cut_idx_row = jnp.arange(int(cut[1]))
-            cut_idx_column = jnp.arange(int(cut[0]))
-
-            permittivity *= n_groove ** 2
-
-            rows, cols = jnp.meshgrid(cut_idx_row, cut_idx_column, indexing='ij')
-
-            permittivity = permittivity.at[rows, cols].set(n_ridge ** 2)
-            res = res.at[i].set(permittivity)
-
+    # print('conv time: ', time.time() - t0)
     return res
 
 
 def circulant(c):
 
-    center = jnp.array(c.shape) // 2
-    circ = jnp.zeros((center[0] + 1, center[0] + 1), dtype='int32')
+    center = c.shape[0] // 2
+    # circ = ee.zeros((center[0] + 1, center[0] + 1), dtype='int32')
+    circ = ee.zeros((center + 1, center + 1), int)
 
-    for r in range(center[0]+1):
-        idx = jnp.arange(r, r - center - 1, -1)
+    for r in range(center+1):
+        idx = ee.arange(r, r - center - 1, -1)
 
-        circ = circ.at[r].set(c[center + idx])
+        # circ = circ.at[r].set(c[center + idx])
+        assign_value = c[center + idx]
+        circ = ee.assign(circ, r, assign_value)
 
     return circ
