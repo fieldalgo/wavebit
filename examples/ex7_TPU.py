@@ -1,23 +1,10 @@
 import jax
 import jax.numpy as jnp
-try:
-    import jax.tools.colab_tpu
-    jax.tools.colab_tpu.setup_tpu()
-except:
-    pass
+
 # jax.device_count()
 
-gdrive_mounted = False
-
-if gdrive_mounted:
-    try:
-        import drive.MyDrive.meent
-        from drive.MyDrive.meent.rcwa import call_solver
-    except:
-        pass
-else:
-    import meent
-    from meent.rcwa import call_solver
+import meent
+from meent.rcwa import call_solver
 
 
 import time
@@ -26,41 +13,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-# from ex2_ucell_functions import get_cond_numpy, get_cond_jax, get_cond_torch
-# from ex2_ucell_functions import get_cond_numpy, get_cond_torch
+from ex_ucell import load_ucell
 
 
-def get_cond_jax(grating_type, type_int=jnp.int32):
-    fourier_order = 1
-    if grating_type in [0, 1]:
-        period = [1000]
-        ucell = jnp.array([
-            [
-                [
-                    0, 0, 0, 1, 1, 1, 1, 1, 1, 1,
-                ],
-            ],
-        ], dtype=type_int)
-    else:
-        period = [1000, 1000]
-        ucell = jnp.array([
-            [
-                [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, ],
-                [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, ],
-                [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, ],
-                [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, ],
-                [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, ],
-                [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, ],
-                [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, ],
-                [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, ],
-                [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, ],
-                [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, ],
-            ],
-        ], dtype=type_int)
-    return period, fourier_order, ucell
-
-
-# grating_type = 1  # 0: 1D, 1: 1D conical, 2:2D.
 pol = 1  # 0: TE, 1: TM
 
 n_I = 1  # n_incidence
@@ -80,30 +35,36 @@ n_iter = 2
 
 
 def run_test(grating_type, mode_key, dtype, device):
+
+    ucell = load_ucell(grating_type)
+    if grating_type in [0, 1]:
+        period = [1000]
+        fourier_order = 100
+    else:
+        period = [1000, 1000]
+        fourier_order = 20
+
     # Numpy
     if mode_key == 0:
-
         if device != 0:
             return
-
         if dtype == 0:
             type_complex = np.complex128
         elif dtype == 1:
             type_complex = np.complex64
 
-        period, fourier_order, ucell = get_cond_numpy(grating_type)
-
     # JAX
     elif mode_key == 1:
-        import jax
 
         if device == 0:
-            jax.config.update('jax_platform_name', 'cpu')
+
+            device = 'cpu'
+            jax.config.update('jax_platform_name', device)
         elif device == 1:
             jax.config.update('jax_platform_name', 'gpu')
         elif device == 2:
-            import jax.tools.colab_tpu
-            jax.tools.colab_tpu.setup_tpu()
+            # TODO
+            pass
 
         if dtype == 0:
             # from jax.config import config
@@ -119,7 +80,6 @@ def run_test(grating_type, mode_key, dtype, device):
             type_complex = jnp.complex64
         else:
             return
-        period, fourier_order, ucell = get_cond_jax(grating_type)
 
     else:
         # Torch
@@ -136,7 +96,6 @@ def run_test(grating_type, mode_key, dtype, device):
             type_complex = torch.complex64
         else:
             return
-        period, fourier_order, ucell = get_cond_torch(grating_type)
 
     AA = call_solver(mode=mode_key, grating_type=grating_type, pol=pol, n_I=n_I, n_II=n_II, theta=theta, phi=phi,
                      psi=psi,
@@ -157,23 +116,36 @@ def run_test(grating_type, mode_key, dtype, device):
     return de_ri, de_ti
 
 
-def run_loop():
-    for grating_type in [0, 1, 2]:
-        for bd in [1]:
-            for dtype in [0, 1, 2]:
-                for device in [0, 1, 2]:
-                    print(f'grating:{grating_type}, backend:{bd}, dtype:{dtype}, dev:{device}')
-                    run_test(grating_type, bd, dtype, device)
 
-                    # try:
-                    #     print(f'grating:{grating_type}, backend:{bd}, dtype:{dtype}, dev:{device}')
-                    #     run_test(grating_type, bd, dtype, device)
-                    # except Exception as e:
-                    #     print(e)
+def run_loop(a,b, c, d):
+    for grating_type in a:
+        for bd in b:
+            for dtype in c:
+                for device in d:
+                    # run_test(grating_type, bd, dtype, device)
+
+                    try:
+                        print(f'grating:{grating_type}, backend:{bd}, dtype:{dtype}, dev:{device}')
+                        de_ri, de_ti = run_test(grating_type, bd, dtype, device)
+                        # print(de_ti.sum())
+
+                    except Exception as e:
+                        print(e)
+
+a = [2]
+b = [1]
+c = [0,1]
+
+with jax.default_device(jax.devices("cpu")[0]):
+    run_loop(a, b, c, [0])
+
+with jax.default_device(jax.devices("gpu")[0]):
+    run_loop(a, b, c, [1])
+
+with jax.default_device(jax.devices("cpu")[0]):
+    run_loop(a, b, c, [0])
 
 
-def run_assert():
-    for grating_type in [0, 1, 2]:
-        for bd in [0, 1, 2]:
-            print(run_test(grating_type, bd, 0, 0))
+
+
 
