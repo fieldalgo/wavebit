@@ -35,7 +35,7 @@ def cfs2d(cell, x, y, conti_x, conti_y, fto_x, fto_y, type_complex=np.complex128
     if conti_y == 0:  # discontinuous in Y (Row): inverse rule is applied.
         cell = 1 / cell
 
-    cfs1d = _cfs(y, cell, fto_y, period_y)
+    cfs1d = _cfs(y, cell, fto_y, period_y, type_complex=type_complex)
 
     conv_index_1 = circulant(fto_y) + (2 * fto_y)
     conv_index_2 = circulant(fto_x) + (2 * fto_x)
@@ -47,7 +47,7 @@ def cfs2d(cell, x, y, conti_x, conti_y, fto_x, fto_y, type_complex=np.complex128
 
     conv1d = conv1d.reshape((-1, ff_y ** 2))
 
-    cfs2d = _cfs(x, conv1d.T, fto_x, period_x)
+    cfs2d = _cfs(x, conv1d.T, fto_x, period_x, type_complex=type_complex)
 
     conv2d = cfs2d[:, conv_index_2]
     conv2d = conv2d.reshape((ff_y, ff_y, ff_x, ff_x))
@@ -60,7 +60,7 @@ def cfs2d(cell, x, y, conti_x, conti_y, fto_x, fto_y, type_complex=np.complex128
     return conv2d
 
 
-def dfs2d(cell, conti_x, conti_y, fto_x, fto_y, type_complex=np.complex128, perturbation=1E-100):
+def dfs2d(cell, conti_x, conti_y, fto_x, fto_y, type_complex=np.complex128):
     cell = cell.astype(type_complex)
 
     ff_x = 2 * fto_x + 1
