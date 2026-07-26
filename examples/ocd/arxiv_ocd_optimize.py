@@ -10,9 +10,9 @@ import matplotlib.pyplot as plt
 
 from torch.distributions.multivariate_normal import MultivariateNormal
 
-import meent
+import fieldwave
 
-from meent.on_torch.modeler.modeling import read_material_table, find_nk_index
+from fieldwave.on_torch.modeler.modeling import read_material_table, find_nk_index
 
 
 parser = argparse.ArgumentParser(description='Process some integers.')
@@ -81,7 +81,7 @@ def forward():
 
 def modelling_ref_index(wavelength, rcwa_options, modeling_options, params_name, params_value, instructions):
 
-    mee = meent.call_mee(wavelength=wavelength, **rcwa_options)
+    mee = fieldwave.call_mee(wavelength=wavelength, **rcwa_options)
 
     t = mee.thickness
 

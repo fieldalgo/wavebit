@@ -1,6 +1,6 @@
 import numpy as np
 
-from meent import call_mee
+from fieldwave import call_mee
 
 
 def compare_conv_mat_method(backend, type_complex, device):

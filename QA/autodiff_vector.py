@@ -1,4 +1,4 @@
-import meent
+import fieldwave
 
 
 def run_jax():
@@ -20,7 +20,7 @@ def run_jax():
 
     fto = [5, 5]
 
-    mee = meent.call_mee(backend=backend, fto=fto, wavelength=wavelength, thickness=thickness, period=period,
+    mee = fieldwave.call_mee(backend=backend, fto=fto, wavelength=wavelength, thickness=thickness, period=period,
                          device=0, type_complex=0)
 
     opt = optax.sgd(learning_rate=1E5, momentum=0)
@@ -103,7 +103,7 @@ def run_torch():
     input_length3 = torch.tensor([input_length3], dtype=torch.float64, requires_grad=True)
     input_length4 = torch.tensor([input_length4], dtype=torch.float64, requires_grad=True)
 
-    mee = meent.call_mee(backend=backend, fto=fto, wavelength=wavelength, thickness=thickness, period=period,
+    mee = fieldwave.call_mee(backend=backend, fto=fto, wavelength=wavelength, thickness=thickness, period=period,
                          device=0, type_complex=0)
 
     opt = torch.optim.SGD([input_length1, input_length2, input_length3, input_length4], lr=1E5, momentum=0)

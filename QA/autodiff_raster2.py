@@ -6,7 +6,7 @@ import numpy as np
 
 from time import time
 
-from meent import call_mee
+from fieldwave import call_mee
 
 
 def load_setting():

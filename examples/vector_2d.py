@@ -1,6 +1,6 @@
 import torch
 
-import meent
+import fieldwave
 
 
 def run():
@@ -41,7 +41,7 @@ def run():
         ],
     ]
 
-    mee = meent.call_mee(**rcwa_options)
+    mee = fieldwave.call_mee(**rcwa_options)
     mee.ucell = ucell
 
     result = mee.conv_solve()

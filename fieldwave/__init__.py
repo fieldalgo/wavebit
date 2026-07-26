@@ -5,3 +5,5 @@ except:
     pass
 
 from .main import call_mee
+
+__version__ = "0.1.0"

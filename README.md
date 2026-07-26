@@ -54,14 +54,14 @@ JAX and PyTorch is needed for advanced utilization.
 ## How to use
 
 ```python
-import meent
+import fieldwave
 
 # backend 0 = Numpy
 # backend 1 = JAX
 # backend 2 = PyTorch
 
 backend = 1
-mee = meent.call_mee(backend=backend, ...)
+mee = fieldwave.call_mee(backend=backend, ...)
 ```
 ## Tutorials
 Jupyter notebooks are prepared in [tutorials](tutorials) to give a brief introduction.

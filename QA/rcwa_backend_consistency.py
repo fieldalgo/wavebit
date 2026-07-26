@@ -1,11 +1,11 @@
 import numpy as np
 
-import meent
+import fieldwave
 
 
 def consistency_check(option):
 
-    mee = meent.call_mee(backend=0, **option)  # NumPy
+    mee = fieldwave.call_mee(backend=0, **option)  # NumPy
     res_nupmy = mee.conv_solve()
     res_numpy_psi = res_nupmy.res
     res_numpy_te = res_nupmy.res_te_inc
@@ -13,7 +13,7 @@ def consistency_check(option):
 
     field_cell_numpy = mee.calculate_field(res_z=50, res_x=50)
 
-    mee = meent.call_mee(backend=1, **option)  # JAX
+    mee = fieldwave.call_mee(backend=1, **option)  # JAX
     res_jax = mee.conv_solve()
     res_jax_psi = res_jax.res
     res_jax_te = res_jax.res_te_inc
@@ -21,7 +21,7 @@ def consistency_check(option):
 
     field_cell_jax = mee.calculate_field(res_z=50, res_x=50)
 
-    mee = meent.call_mee(backend=2, **option)  # PyTorch
+    mee = fieldwave.call_mee(backend=2, **option)  # PyTorch
     res_torch = mee.conv_solve()
     res_torch_psi = res_torch.res
     res_torch_te = res_torch.res_te_inc

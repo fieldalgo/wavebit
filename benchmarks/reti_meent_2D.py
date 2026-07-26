@@ -2,7 +2,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-import meent
+import fieldwave
 
 try:
     from benchmarks.interface.Reticolo import Reticolo
@@ -32,17 +32,17 @@ def run_2d(option, case, plot_figure=False):
     reti_field_cell = reti_field_cell.conj()
 
     # Numpy
-    mee = meent.call_mee(backend=0, **option)
+    mee = fieldwave.call_mee(backend=0, **option)
     res_numpy = mee.conv_solve()
     field_cell_numpy = mee.calculate_field(res_z=res_z, res_y=res_y, res_x=res_x, set_field_input=(True, True, True))
 
     # JAX
-    mee = meent.call_mee(backend=1, **option)  # JAX
+    mee = fieldwave.call_mee(backend=1, **option)  # JAX
     res_jax = mee.conv_solve()
     field_cell_jax = mee.calculate_field(res_z=res_z, res_y=res_y, res_x=res_x, set_field_input=(True, True, True))
 
     # Torch
-    mee = meent.call_mee(backend=2, **option)  # PyTorch
+    mee = fieldwave.call_mee(backend=2, **option)  # PyTorch
     res_torch = mee.conv_solve()
     field_cell_torch = mee.calculate_field(res_z=res_z, res_y=res_y, res_x=res_x, set_field_input=(True, True, True)).numpy()
 

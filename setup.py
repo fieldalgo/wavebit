@@ -18,12 +18,12 @@ with open(os.path.join(cwd, "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
 setup(
-    name='meent',
-    version='0.12.0',
-    url='https://github.com/kc-ml2/meent',
-    author='KC ML2',
-    author_email='yongha@kc-ml2.com',
-    packages=['meent'] + find_packages(include=['meent.*']),
+    name='fieldwave',
+    version='0.1.0',
+    url='https://github.com/fieldalgo/fieldwave',
+    author='FieldAlgo',
+    author_email='dev@fieldalgo.com',
+    packages=['fieldwave'] + find_packages(include=['fieldwave.*']),
     install_requires=[
         'numpy>=1.23.3',
         'scipy>=1.9.1',
@@ -36,6 +36,6 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     package_data={
-        'meent': ['nk_data/filmetrics/*.txt', 'nk_data/matlab/*.mat'],
+        'fieldwave': ['nk_data/filmetrics/*.txt', 'nk_data/matlab/*.mat'],
     },
 )
