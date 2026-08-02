@@ -9,26 +9,23 @@ def transfer_1d_1(pol, kx, n_top, n_bot, device=torch.device('cpu'), type_comple
     kz_top = (n_top ** 2 - kx ** 2) ** 0.5
     kz_bot = (n_bot ** 2 - kx ** 2) ** 0.5
 
-    F = torch.eye(ff_x, device=device, dtype=type_complex)
-
-    # Substrate boundary: eigenvalue-consistent q = sqrt(kx^2 - eps).
-    # Uses raw n^2 to match Fresnel at bare interfaces.
-    eps_bot = torch.tensor(n_bot ** 2, dtype=type_complex, device=device)
-    # Add tiny negative imaginary perturbation to select correct sqrt branch.
-    # Without this, torch loses the -0j sign from kx.conj(), causing sqrt(-real)
-    # to give positive imaginary instead of negative, which flips the G matrix sign
-    # for propagating diffraction orders and produces wrong Fresnel coefficients.
-    q_bot = (kx ** 2 - eps_bot - 1e-20j).to(type_complex) ** 0.5
-
-    if pol == 0:  # TE
-        G = torch.diag(-q_bot)
-    elif pol == 1:  # TM
-        G = torch.diag(-q_bot / eps_bot)
-    else:
-        raise ValueError
-
     kz_top = kz_top.conj()
     kz_bot = kz_bot.conj()
+
+    F = torch.eye(ff_x, device=device, dtype=type_complex)
+
+    # Outgoing-wave substrate admittance; see numpy transfer_1d_1 for the branch
+    # rationale (correct for both lossless-evanescent and lossy/absorbing substrates).
+    eps_bot = torch.tensor(n_bot ** 2, dtype=type_complex, device=device)
+    kz_sub = (eps_bot - kx ** 2 - 1e-20j).to(type_complex) ** 0.5
+    kz_sub = torch.where(kz_sub.real < 0, -kz_sub, kz_sub)
+
+    if pol == 0:  # TE
+        G = torch.diag(1j * kz_sub)
+    elif pol == 1:  # TM
+        G = torch.diag(1j * kz_sub / eps_bot)
+    else:
+        raise ValueError
 
     T = torch.eye(ff_x, device=device, dtype=type_complex)
 
@@ -190,29 +187,32 @@ def transfer_1d_conical_1(kx, ky, n_top, n_bot, device='cpu', type_complex=torch
     kz_top = (n_top ** 2 - kx ** 2 - ky.reshape((-1, 1)) ** 2) ** 0.5
     kz_bot = (n_bot ** 2 - kx ** 2 - ky.reshape((-1, 1)) ** 2) ** 0.5
 
+    kz_top = kz_top.flatten().conj()
+    kz_bot = kz_bot.flatten().conj()
+
     varphi = torch.arctan(ky.reshape((-1, 1)) / kx).flatten()
 
-    # Eigenvalue-consistent substrate boundary (pre-conj)
+    # Outgoing-wave substrate admittance branch (see transfer_1d_1): Re(kz) >= 0, with
+    # the -1e-20j nudge selecting the correct root for lossless evanescent orders.
+    # Correct for both lossless and absorbing substrates; used in both big_F and big_G.
     eps_bot = torch.tensor(n_bot ** 2, dtype=type_complex, device=kx.device)
-    # Add -1e-20j perturbation for correct sqrt branch (see transfer_1d_1 comment)
-    q_bot = (kx ** 2 + ky.reshape((-1, 1)) ** 2 - eps_bot - 1e-20j).to(type_complex).flatten() ** 0.5
+    kz_sub = (eps_bot - kx ** 2 - ky.reshape((-1, 1)) ** 2 - 1e-20j).to(type_complex).flatten() ** 0.5
+    kz_sub = torch.where(kz_sub.real < 0, -kz_sub, kz_sub)
+    Kz_bot = torch.diag(kz_sub)
 
     big_F = torch.cat(
         [
             torch.cat([I, O], dim=1),
-            torch.cat([O, torch.diag(-q_bot / eps_bot)], dim=1),
+            torch.cat([O, 1j * Kz_bot / eps_bot], dim=1),
         ]
     )
 
     big_G = torch.cat(
         [
-            torch.cat([torch.diag(-q_bot), O], dim=1),
+            torch.cat([1j * Kz_bot, O], dim=1),
             torch.cat([O, I], dim=1),
         ]
     )
-
-    kz_top = kz_top.flatten().conj()
-    kz_bot = kz_bot.flatten().conj()
 
     big_T = torch.eye(2*ff_xy, device=device, dtype=type_complex)
     return kz_top, kz_bot, varphi, big_F, big_G, big_T
@@ -477,29 +477,32 @@ def transfer_2d_1(kx, ky, n_top, n_bot, device=torch.device('cpu'), type_complex
     kz_top = (n_top ** 2 - kx ** 2 - ky.reshape((-1, 1)) ** 2) ** 0.5
     kz_bot = (n_bot ** 2 - kx ** 2 - ky.reshape((-1, 1)) ** 2) ** 0.5
 
+    kz_top = kz_top.flatten().conj()
+    kz_bot = kz_bot.flatten().conj()
+
     varphi = torch.arctan(ky.reshape((-1, 1)) / kx).flatten()
 
-    # Eigenvalue-consistent substrate boundary (pre-conj)
+    # Outgoing-wave substrate admittance branch (see transfer_1d_1): Re(kz) >= 0, with
+    # the -1e-20j nudge selecting the correct root for lossless evanescent orders.
+    # Correct for both lossless and absorbing substrates; used in both big_F and big_G.
     eps_bot = torch.tensor(n_bot ** 2, dtype=type_complex, device=kx.device)
-    # Add -1e-20j perturbation for correct sqrt branch (see transfer_1d_1 comment)
-    q_bot = (kx ** 2 + ky.reshape((-1, 1)) ** 2 - eps_bot - 1e-20j).to(type_complex).flatten() ** 0.5
+    kz_sub = (eps_bot - kx ** 2 - ky.reshape((-1, 1)) ** 2 - 1e-20j).to(type_complex).flatten() ** 0.5
+    kz_sub = torch.where(kz_sub.real < 0, -kz_sub, kz_sub)
+    Kz_bot = torch.diag(kz_sub)
 
     big_F = torch.cat(
         [
             torch.cat([I, O], dim=1),
-            torch.cat([O, torch.diag(-q_bot / eps_bot)], dim=1),
+            torch.cat([O, 1j * Kz_bot / eps_bot], dim=1),
         ]
     )
 
     big_G = torch.cat(
         [
-            torch.cat([torch.diag(-q_bot), O], dim=1),
+            torch.cat([1j * Kz_bot, O], dim=1),
             torch.cat([O, I], dim=1),
         ]
     )
-
-    kz_top = kz_top.flatten().conj()
-    kz_bot = kz_bot.flatten().conj()
 
     big_T = torch.eye(2 * ff_xy, device=device, dtype=type_complex)
 

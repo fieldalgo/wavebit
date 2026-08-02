@@ -14,19 +14,23 @@ def transfer_1d_1(pol, kx, n_top, n_bot, type_complex=np.complex128):
 
     F = np.eye(ff_x, dtype=type_complex)
 
-    # Substrate boundary: eigenvalue-consistent q = sqrt(kx^2 - eps).
-    # Uses raw n^2 to match Fresnel at bare interfaces.
-    # Same-material layer/substrate mismatch is handled in transfer_1d_3
-    # via det(A) ≈ 0 detection.
+    # Substrate boundary admittance from the outgoing-wave kz_bot branch.
+    #   kz_sub = sqrt(eps_bot - kx^2) with Re(kz_sub) >= 0 (and the -1e-20j nudge
+    #   selecting the Im<0 root for lossless evanescent orders).
+    # This is the physically correct branch for BOTH lossless and lossy substrates.
+    # The old `G = -q_bot` form was wrong on lossless evanescent orders (wrong branch
+    # -> non-convergent, wrong order distribution), while the `1j*conj(kz_bot)` form is
+    # wrong for complex (absorbing) substrates because conj(sqrt(z)) is not a root of z.
+    # Both failure modes conserve energy, so they are easy to miss. Verified against
+    # upstream meent (lossless) and analytic Fresnel (absorbing) for TE and TM.
     eps_bot = type_complex(n_bot ** 2)
-    # Add -1e-20j perturbation to ensure correct sqrt branch for propagating modes.
-    # numpy usually gets this right via -0j from kx.conj(), but this makes it explicit.
-    q_bot = (kx ** 2 - eps_bot - 1e-20j).astype(type_complex) ** 0.5
+    kz_sub = (eps_bot - kx ** 2 - 1e-20j).astype(type_complex) ** 0.5
+    kz_sub = np.where(kz_sub.real < 0, -kz_sub, kz_sub)
 
     if pol == 0:  # TE
-        G = np.diag(-q_bot)
+        G = 1j * np.diag(kz_sub)
     elif pol == 1:  # TM
-        G = np.diag(-q_bot / eps_bot)
+        G = 1j * np.diag(kz_sub / eps_bot)
     else:
         raise ValueError
 
@@ -163,15 +167,24 @@ def transfer_1d_conical_1(kx, ky, n_top, n_bot, type_complex=np.complex128):
     kz_top = (n_top ** 2 - kx ** 2 - ky.reshape((-1, 1)) ** 2) ** 0.5
     kz_bot = (n_bot ** 2 - kx ** 2 - ky.reshape((-1, 1)) ** 2) ** 0.5
 
-    varphi = np.arctan(ky.reshape((-1, 1)) / kx).flatten()
-    Kz_bot_raw = np.diag(kz_bot.flatten())
-
-    big_F = np.block([[I, O], [O, 1j * Kz_bot_raw / (n_bot ** 2)]])
-    big_G = np.block([[1j * np.diag(kz_bot.flatten().conj()), O], [O, I]])
-    big_T = np.eye(2 * ff_xy, dtype=type_complex)
-
     kz_top = kz_top.flatten().conj()
     kz_bot = kz_bot.flatten().conj()
+
+    varphi = np.arctan(ky.reshape((-1, 1)) / kx).flatten()
+
+    # Outgoing-wave substrate admittance branch (see transfer_1d_1): Re(kz) >= 0, with
+    # the -1e-20j nudge selecting the correct root for lossless evanescent orders.
+    # Correct for both lossless and absorbing substrates; used in both big_F and big_G.
+    # (Previously big_F used a raw kz_bot and big_G a conjugated one -> wrong branch on
+    # evanescent p-orders; jax/torch used a -q_bot form wrong in both blocks.)
+    eps_bot = type_complex(n_bot ** 2)
+    kz_sub = (eps_bot - kx ** 2 - ky.reshape((-1, 1)) ** 2 - 1e-20j).astype(type_complex).flatten() ** 0.5
+    kz_sub = np.where(kz_sub.real < 0, -kz_sub, kz_sub)
+    Kz_bot = np.diag(kz_sub)
+
+    big_F = np.block([[I, O], [O, 1j * Kz_bot / eps_bot]])
+    big_G = np.block([[1j * Kz_bot, O], [O, I]])
+    big_T = np.eye(2 * ff_xy, dtype=type_complex)
 
     return kz_top, kz_bot, varphi, big_F, big_G, big_T
 
@@ -414,15 +427,24 @@ def transfer_2d_1(kx, ky, n_top, n_bot, type_complex=np.complex128):
     kz_top = (n_top ** 2 - kx ** 2 - ky.reshape((-1, 1)) ** 2) ** 0.5
     kz_bot = (n_bot ** 2 - kx ** 2 - ky.reshape((-1, 1)) ** 2) ** 0.5
 
-    varphi = np.arctan(ky.reshape((-1, 1)) / kx).flatten()
-    Kz_bot_raw = np.diag(kz_bot.flatten())
-
-    big_F = np.block([[I, O], [O, 1j * Kz_bot_raw / (n_bot ** 2)]])
-    big_G = np.block([[1j * np.diag(kz_bot.flatten().conj()), O], [O, I]])
-    big_T = np.eye(2 * ff_xy, dtype=type_complex)
-
     kz_top = kz_top.flatten().conj()
     kz_bot = kz_bot.flatten().conj()
+
+    varphi = np.arctan(ky.reshape((-1, 1)) / kx).flatten()
+
+    # Outgoing-wave substrate admittance branch (see transfer_1d_1): Re(kz) >= 0, with
+    # the -1e-20j nudge selecting the correct root for lossless evanescent orders.
+    # Correct for both lossless and absorbing substrates; used in both big_F and big_G.
+    # (Previously big_F used a raw kz_bot and big_G a conjugated one -> wrong branch on
+    # evanescent p-orders; jax/torch used a -q_bot form wrong in both blocks.)
+    eps_bot = type_complex(n_bot ** 2)
+    kz_sub = (eps_bot - kx ** 2 - ky.reshape((-1, 1)) ** 2 - 1e-20j).astype(type_complex).flatten() ** 0.5
+    kz_sub = np.where(kz_sub.real < 0, -kz_sub, kz_sub)
+    Kz_bot = np.diag(kz_sub)
+
+    big_F = np.block([[I, O], [O, 1j * Kz_bot / eps_bot]])
+    big_G = np.block([[1j * Kz_bot, O], [O, I]])
+    big_T = np.eye(2 * ff_xy, dtype=type_complex)
 
     return kz_top, kz_bot, varphi, big_F, big_G, big_T
 

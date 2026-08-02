@@ -10,25 +10,24 @@ def transfer_1d_1(pol, kx, n_top, n_bot, type_complex=jnp.complex128):
     kz_top = (n_top ** 2 - kx ** 2) ** 0.5
     kz_bot = (n_bot ** 2 - kx ** 2) ** 0.5
 
-    F = jnp.eye(ff_x, dtype=type_complex)
-
-    # Substrate boundary: eigenvalue-consistent q = sqrt(kx^2 - eps).
-    eps_bot = jnp.array(n_bot ** 2, dtype=type_complex)
-    # Add -1e-20j perturbation for correct sqrt branch (see numpy transfer_1d_1 comment)
-    q_bot = (kx ** 2 - eps_bot - 1e-20j).astype(type_complex) ** 0.5
-
-    def false_fun(q_bot):  # TE
-        G = jnp.diag(-q_bot)
-        return G
-
-    def true_fun(q_bot):  # TM
-        G = jnp.diag(-q_bot / eps_bot)
-        return G
-
-    G = jax.lax.cond(pol.real, true_fun, false_fun, q_bot)
-
     kz_top = kz_top.conjugate()
     kz_bot = kz_bot.conjugate()
+
+    F = jnp.eye(ff_x, dtype=type_complex)
+
+    # Outgoing-wave substrate admittance; see numpy transfer_1d_1 for the branch
+    # rationale (correct for both lossless-evanescent and lossy/absorbing substrates).
+    eps_bot = jnp.array(n_bot ** 2, dtype=type_complex)
+    kz_sub = (eps_bot - kx ** 2 - 1e-20j).astype(type_complex) ** 0.5
+    kz_sub = jnp.where(kz_sub.real < 0, -kz_sub, kz_sub)
+
+    def false_fun(kz_sub):  # TE
+        return jnp.diag(1j * kz_sub)
+
+    def true_fun(kz_sub):  # TM
+        return jnp.diag(1j * kz_sub / eps_bot)
+
+    G = jax.lax.cond(pol.real, true_fun, false_fun, kz_sub)
 
     T = jnp.eye(ff_x, dtype=type_complex)
 
@@ -217,18 +216,21 @@ def transfer_1d_conical_1(kx, ky, n_top, n_bot, type_complex=jnp.complex128):
     kz_top = (n_top ** 2 - kx ** 2 - ky.reshape((-1, 1)) ** 2) ** 0.5
     kz_bot = (n_bot ** 2 - kx ** 2 - ky.reshape((-1, 1)) ** 2) ** 0.5
 
-    varphi = jnp.arctan(ky.reshape((-1, 1)) / kx).flatten()
-
-    # Eigenvalue-consistent substrate boundary (pre-conj)
-    eps_bot = jnp.array(n_bot ** 2, dtype=type_complex)
-    # Add -1e-20j perturbation for correct sqrt branch (see transfer_1d_1 comment)
-    q_bot = (kx ** 2 + ky.reshape((-1, 1)) ** 2 - eps_bot - 1e-20j).astype(type_complex).flatten() ** 0.5
-
-    big_F = jnp.block([[I, O], [O, jnp.diag(-q_bot / eps_bot)]])
-    big_G = jnp.block([[jnp.diag(-q_bot), O], [O, I]])
-
     kz_top = kz_top.flatten().conj()
     kz_bot = kz_bot.flatten().conj()
+
+    varphi = jnp.arctan(ky.reshape((-1, 1)) / kx).flatten()
+
+    # Outgoing-wave substrate admittance branch (see transfer_1d_1): Re(kz) >= 0, with
+    # the -1e-20j nudge selecting the correct root for lossless evanescent orders.
+    # Correct for both lossless and absorbing substrates; used in both big_F and big_G.
+    eps_bot = jnp.array(n_bot ** 2, dtype=type_complex)
+    kz_sub = (eps_bot - kx ** 2 - ky.reshape((-1, 1)) ** 2 - 1e-20j).astype(type_complex).flatten() ** 0.5
+    kz_sub = jnp.where(kz_sub.real < 0, -kz_sub, kz_sub)
+    Kz_bot = jnp.diag(kz_sub)
+
+    big_F = jnp.block([[I, O], [O, 1j * Kz_bot / eps_bot]])
+    big_G = jnp.block([[1j * Kz_bot, O], [O, I]])
 
     big_T = jnp.eye(2 * ff_xy, dtype=type_complex)
 
@@ -509,18 +511,21 @@ def transfer_2d_1(kx, ky, n_top, n_bot, type_complex=jnp.complex128):
     kz_top = (n_top ** 2 - kx ** 2 - ky.reshape((-1, 1)) ** 2) ** 0.5
     kz_bot = (n_bot ** 2 - kx ** 2 - ky.reshape((-1, 1)) ** 2) ** 0.5
 
-    varphi = jnp.arctan(ky.reshape((-1, 1)) / kx).flatten()
-
-    # Eigenvalue-consistent substrate boundary (pre-conj)
-    eps_bot = jnp.array(n_bot ** 2, dtype=type_complex)
-    # Add -1e-20j perturbation for correct sqrt branch (see transfer_1d_1 comment)
-    q_bot = (kx ** 2 + ky.reshape((-1, 1)) ** 2 - eps_bot - 1e-20j).astype(type_complex).flatten() ** 0.5
-
-    big_F = jnp.block([[I, O], [O, jnp.diag(-q_bot / eps_bot)]])
-    big_G = jnp.block([[jnp.diag(-q_bot), O], [O, I]])
-
     kz_top = kz_top.flatten().conj()
     kz_bot = kz_bot.flatten().conj()
+
+    varphi = jnp.arctan(ky.reshape((-1, 1)) / kx).flatten()
+
+    # Outgoing-wave substrate admittance branch (see transfer_1d_1): Re(kz) >= 0, with
+    # the -1e-20j nudge selecting the correct root for lossless evanescent orders.
+    # Correct for both lossless and absorbing substrates; used in both big_F and big_G.
+    eps_bot = jnp.array(n_bot ** 2, dtype=type_complex)
+    kz_sub = (eps_bot - kx ** 2 - ky.reshape((-1, 1)) ** 2 - 1e-20j).astype(type_complex).flatten() ** 0.5
+    kz_sub = jnp.where(kz_sub.real < 0, -kz_sub, kz_sub)
+    Kz_bot = jnp.diag(kz_sub)
+
+    big_F = jnp.block([[I, O], [O, 1j * Kz_bot / eps_bot]])
+    big_G = jnp.block([[1j * Kz_bot, O], [O, I]])
 
     big_T = jnp.eye(2 * ff_xy, dtype=type_complex)
 
