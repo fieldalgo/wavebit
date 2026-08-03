@@ -1,0 +1,145 @@
+"""Single-source 1D solve core (fieldwave._core.solve_1d) — Phase 3 gate.
+
+Three properties, one implementation:
+  * bit-parity   — feeding the core the exact inputs the legacy path uses reproduces the
+                   legacy ``de_ri`` / ``de_ti`` byte-for-byte (TE + TM, multi-layer, oblique,
+                   lossy substrate);
+  * cross-backend— the same core on numpy / jax / torch agrees to ~1e-10;
+  * gradients    — d(sum de_ti)/ds through the complex chain agrees across jax / torch / FD.
+
+The core consumes convolution matrices already built by the (numpy) factorization stage;
+porting factorization is a later phase, so cross-backend / grad tests feed those matrices in
+as backend-native constants to isolate the solve.
+"""
+import numpy as np
+import pytest
+
+import fieldwave
+from fieldwave.on_numpy.emsolver.convolution_matrix import to_conv_mat_raster_discrete
+from fieldwave._core.solve_1d import solve_1d
+
+
+def _legacy_and_inputs(pol, ucell, thickness, n_top, n_bot, wl, period, fto, theta):
+    """Run the legacy path and return (legacy de_ri/de_ti, exact core inputs)."""
+    mee = fieldwave.call_mee(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=None,
+                          pol=pol, fto=fto, period=period, wavelength=wl,
+                          thickness=thickness, ucell=ucell)
+    legacy = mee.conv_solve()
+    epx, epy, epz = to_conv_mat_raster_discrete(
+        mee.ucell, mee.fto[0], mee.fto[1], type_complex=mee.type_complex,
+        enhanced_dfs=mee.enhanced_dfs, use_pinv=mee.use_pinv)
+    kx, _ = mee.get_kx_ky_vector(wl)
+    inputs = dict(pol=pol, wavelength=wl, kx=kx, n_top=n_top, n_bot=n_bot,
+                  theta=mee.theta, thickness=mee.thickness,
+                  epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
+    return (np.array(legacy.de_ri), np.array(legacy.de_ti)), inputs
+
+
+CASES = [
+    # name, pol, ucell, thickness, n_top, n_bot, wl, period, fto, theta
+    ('te_1layer', 0, [[[3., 3., 3., 1., 1., 1.]]], [0.15], 2.0, 1.0, 0.777, [0.77], [6, 0], 0.0),
+    ('tm_1layer', 1, [[[3., 3., 3., 1., 1., 1.]]], [0.15], 2.0, 1.0, 0.777, [0.77], [6, 0], 0.0),
+    ('te_2layer', 0, [[[3., 3., 1., 1., 3., 1.]], [[2., 2., 2., 1., 1., 1.]]], [0.15, 0.22],
+     1.0, 1.0, 0.9, [0.7], [5, 0], 0.0),
+    ('tm_2layer', 1, [[[3., 3., 1., 1., 3., 1.]], [[2., 2., 2., 1., 1., 1.]]], [0.15, 0.22],
+     1.0, 1.0, 0.9, [0.7], [5, 0], 0.0),
+    ('te_oblique_lossy', 0, [[[3., 3., 3., 1., 1., 1.]]], [0.2], 1.0, 1.5, 0.777, [0.77], [6, 0], 0.3),
+    ('tm_oblique_lossy', 1, [[[3., 3., 3., 1., 1., 1.]]], [0.2], 1.0, 1.5, 0.777, [0.77], [6, 0], 0.3),
+    # bottom layer uniform and equal to the substrate (n_bot=1) -> same-material short-circuit
+    ('te_same_material', 0, [[[3., 3., 1., 1., 3., 1.]], [[1., 1., 1., 1., 1., 1.]]], [0.2, 0.1],
+     1.0, 1.0, 0.9, [0.7], [5, 0], 0.0),
+    ('tm_same_material', 1, [[[3., 3., 1., 1., 3., 1.]], [[1., 1., 1., 1., 1., 1.]]], [0.2, 0.1],
+     1.0, 1.0, 0.9, [0.7], [5, 0], 0.0),
+]
+
+
+@pytest.mark.parametrize('case', CASES, ids=[c[0] for c in CASES])
+def test_core_bit_parity_vs_legacy(case):
+    _, pol, ucell, thickness, n_top, n_bot, wl, period, fto, theta = case
+    (lri, lti), inputs = _legacy_and_inputs(
+        pol, np.array(ucell), thickness, n_top, n_bot, wl, period, fto, theta)
+    cri, cti = solve_1d(**inputs)
+    assert np.array_equal(lri, np.array(cri)), np.max(np.abs(lri - np.array(cri)))
+    assert np.array_equal(lti, np.array(cti)), np.max(np.abs(lti - np.array(cti)))
+
+
+def _to(backend, x):
+    if backend == 'jax':
+        import jax.numpy as jnp
+        return jnp.asarray(x)
+    import torch
+    return torch.as_tensor(np.asarray(x))
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+@pytest.mark.parametrize('case', CASES, ids=[c[0] for c in CASES])
+def test_core_cross_backend(case, backend):
+    pytest.importorskip(backend)
+    _, pol, ucell, thickness, n_top, n_bot, wl, period, fto, theta = case
+    (_, _), inp = _legacy_and_inputs(
+        pol, np.array(ucell), thickness, n_top, n_bot, wl, period, fto, theta)
+    ri0, ti0 = solve_1d(**inp)                              # numpy reference
+
+    bk = dict(inp)
+    for k in ('kx', 'epx_conv_all', 'epy_conv_all', 'epz_conv_i_all'):
+        bk[k] = _to(backend, inp[k])
+    bk['theta'] = _to(backend, complex(inp['theta']))
+    ri, ti = solve_1d(**bk)
+
+    assert np.allclose(np.array(ri0), np.asarray(ri), atol=1e-10, rtol=0)
+    assert np.allclose(np.array(ti0), np.asarray(ti), atol=1e-10, rtol=0)
+
+
+@pytest.mark.parametrize('pol', [0, 1], ids=['te', 'tm'])
+def test_core_gradient_jax_torch_fd(pol):
+    """d(sum de_ti)/ds where s scales a real perturbation of the layer eps-conv matrix."""
+    jax = pytest.importorskip('jax')
+    torch = pytest.importorskip('torch')
+    import jax.numpy as jnp
+
+    ucell = np.array([[[3., 3., 3., 1., 1., 1.]]])
+    (_, _), inp = _legacy_and_inputs(pol, ucell, [0.15], 2.0, 1.0, 0.777, [0.77], [6, 0], 0.3)
+    # Under autodiff the conv matrices are abstract tracers, so the same-material decision
+    # must come from static geometry (this single layer is not substrate-matched).
+    inp['same_material'] = [False]
+    # perturb epx (TM couples through it; TE is unaffected -> use epy for TE)
+    key = 'epy_conv_all' if pol == 0 else 'epx_conv_all'
+    base = np.array(inp[key])
+    direction = np.real(base).copy()
+
+    def out(sub_inputs):
+        _, ti = solve_1d(**sub_inputs)
+        return ti
+
+    def f_np(s):
+        d = dict(inp); d[key] = base + s * direction
+        return float(np.sum(np.array(out(d))))
+
+    h = 1e-6
+    g_fd = (f_np(h) - f_np(-h)) / (2 * h)
+
+    conv_keys = ('kx', 'epx_conv_all', 'epy_conv_all', 'epz_conv_i_all')
+
+    def f_jax(s):
+        d = dict(inp)
+        for k in conv_keys:
+            d[k] = jnp.asarray(inp[k])
+        d[key] = jnp.asarray(base) + s * jnp.asarray(direction)   # perturbed leaf
+        d['theta'] = jnp.asarray(complex(inp['theta']))
+        return jnp.sum(out(d)).real
+    g_jax = float(jax.grad(lambda s: f_jax(s))(0.0))
+
+    def f_torch(s):
+        d = dict(inp)
+        for k in conv_keys:
+            d[k] = torch.as_tensor(np.asarray(inp[k]))
+        d[key] = torch.as_tensor(base) + s * torch.as_tensor(direction)   # perturbed leaf
+        d['theta'] = torch.as_tensor(complex(inp['theta']))
+        return torch.sum(out(d)).real
+    s = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
+    val = f_torch(s)
+    val.backward()
+    g_torch = float(s.grad)
+
+    assert abs(g_jax - g_torch) < 1e-6, (g_jax, g_torch)
+    assert abs(g_jax - g_fd) < 1e-4, (g_jax, g_fd)
