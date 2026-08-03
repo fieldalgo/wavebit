@@ -5,8 +5,8 @@
 #
 # Only Python and the notebook stack come from conda; the scientific stack is
 # installed with pip, matching how the working env on this machine is built.
-# Version floors mirror setup.py. The trailing comment on each line records the
-# version this env was last verified against (2026-08-04, macOS arm64).
+# The dependency floors live in setup.py and are not duplicated here.
+# Last verified 2026-08-04 on macOS arm64.
 name: fieldwave
 channels:
   - defaults
@@ -16,19 +16,12 @@ dependencies:
   - jupyterlab
   - notebook
   - pip:
-      - numpy>=1.23.3      # 2.2.5
-      - scipy>=1.9.1       # 1.15.2
-      - matplotlib>=3.5.3  # 3.10.1
-      - tqdm>=4.64.1       # 4.67.1
-      # jax backend — setup.py extras_require['jax']
-      - jax>=0.4.1         # 0.11.0
-      - jaxlib>=0.4.1      # 0.11.0
-      - optax>=0.1.4       # NOT installed in the current local env; jax optimizer paths fail without it
-      # torch backend — setup.py extras_require['pytorch']
-      - torch>=2.0.0       # 2.7.0
-      - pytest             # 9.1.1
-      # FieldWave itself, editable
-      - -e .
+      - matplotlib>=3.10
+      - pytest>=9.1
+      # FieldWave itself, editable. This also pulls the core runtime
+      # dependencies (numpy, scipy, array-api-compat) at the floors declared in
+      # setup.py, so they are deliberately not repeated here.
+      - -e .[jax,pytorch]
 #
 # Not declared here: upstream `meent` (pip install meent), installed by hand when
 # cross-checking numpy results against the Reticolo-validated reference. No module

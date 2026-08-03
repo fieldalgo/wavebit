@@ -2,14 +2,19 @@ import os
 
 from setuptools import setup, find_packages
 
+# Floors are the versions the suite is actually verified against, not the
+# oldest that might happen to work. The jax floor is a hard requirement, not a
+# preference: _core/backend.py calls jax.lax.linalg.eig(enable_eigvec_derivs=True),
+# which does not exist before 0.11 — an older jax installs fine and then fails
+# at the first eigendecomposition.
 extras = {
-    'jax': ['jax>=0.4.1',
-            'jaxlib>=0.4.1',
-            'optax>=0.1.4',
-            'tqdm>=4.64.1',
+    'jax': ['jax>=0.11',
+            'jaxlib>=0.11',
+            'optax>=0.2',
+            'tqdm>=4.67',
             ],
-    'pytorch': ['torch>=2.0.0',
-                'tqdm>=4.64.1',
+    'pytorch': ['torch>=2.7',
+                'tqdm>=4.67',
                 ],
 }
 # Read in README.md for our long_description
@@ -26,12 +31,14 @@ setup(
     license='Apache-2.0',
     packages=['fieldwave'] + find_packages(include=['fieldwave.*']),
     install_requires=[
-        'numpy>=1.23.3',
-        'scipy>=1.9.1',
-        'array-api-compat>=1.9',
+        'numpy>=2.2',
+        'scipy>=1.15',
+        'array-api-compat>=1.15',
     ],
     extras_require=extras,
-    python_requires='>=3.8',
+    # 3.12 is what CI runs and what jax 0.11 itself requires. Widen this only
+    # together with a CI matrix that proves the older version works.
+    python_requires='>=3.12',
     description=(
         "Electromagnetic simulation (RCWA) & optimization package in Python"
     ),
