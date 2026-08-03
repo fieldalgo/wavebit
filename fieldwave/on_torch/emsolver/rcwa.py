@@ -4,7 +4,6 @@ import numpy as np
 
 from ._base import _BaseRCWA
 from ..._core.engine import CoreFactorizationMixin
-from .fourier_analytic import to_conv_mat_analytic_layers
 from .field_distribution import field_dist_1d, field_dist_1d_conical, field_dist_2d, field_plot
 from ..modeler.modeling import ModelingTorch
 
@@ -59,10 +58,6 @@ class ResultSubTorch:
 
 
 class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
-    # The analytic shape path is the one factorization strategy still built
-    # per backend; everything else comes from fieldwave._core.factorization.
-    _analytic_builder = staticmethod(to_conv_mat_analytic_layers)
-
     def modeling_vector_instruction(self, *args, **kwargs):
         return self.modeler.modeling_vector_instruction(*args, **kwargs)
 

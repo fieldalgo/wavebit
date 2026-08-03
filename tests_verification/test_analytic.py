@@ -10,9 +10,34 @@ import numpy as np
 import pytest
 
 import fieldwave
-from fieldwave.on_numpy.emsolver.fourier_analytic import (
-    shape_ft, laurent_conv_2d, assemble_eps_coeffs, to_conv_mat_analytic)
-from fieldwave.on_numpy.emsolver.fourier_analysis import dfs2d
+import array_api_compat.numpy as xnp
+from fieldwave._core.analytic import (
+    shape_ft as _shape_ft, laurent_conv_2d as _laurent_conv_2d,
+    assemble_eps_coeffs as _assemble_eps_coeffs, to_conv_mat_analytic_nvf)
+from fieldwave._core.factorization import dfs2d as _dfs2d
+
+
+# The core builders are namespace-generic; bind NumPy for these convention checks.
+def dfs2d(cell, cx, cy, fx, fy):
+    return _dfs2d(xnp, cell, cx, cy, fx, fy)
+
+
+def shape_ft(shape, ky, kx, period):
+    return _shape_ft(xnp, shape, ky, kx, period)
+
+
+def laurent_conv_2d(coeff2d, fto_x, fto_y):
+    return _laurent_conv_2d(xnp, coeff2d, fto_x, fto_y)
+
+
+def assemble_eps_coeffs(shapes, n_base, fto_x, fto_y, period):
+    return _assemble_eps_coeffs(xnp, shapes, n_base, fto_x, fto_y, period, xnp.complex128)
+
+
+def to_conv_mat_analytic(shapes, n_base, fto_x, fto_y, period):
+    """Direct-rule (eps, 1/eps) Laurent pair — the NVF builder's inputs."""
+    eps_c, inv_c = assemble_eps_coeffs(shapes, n_base, fto_x, fto_y, period)
+    return laurent_conv_2d(eps_c, fto_x, fto_y), laurent_conv_2d(inv_c, fto_x, fto_y)
 
 
 # ----------------------------------------------------------------------

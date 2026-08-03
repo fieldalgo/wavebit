@@ -2,7 +2,17 @@ import numpy as np
 import pytest
 import fieldwave
 from fieldwave.on_numpy.modeler.modeling import ModelingNumpy
-from fieldwave.on_numpy.emsolver.nvf import get_normal_vector_field_analytical, to_conv_mat_nvf_2d
+import array_api_compat.numpy as xnp
+from fieldwave._core.analytic import normal_vector_field_analytical as _nvf_analytic
+from fieldwave._core.factorization import nvf_conv_matrices as _nvf_conv
+
+
+def get_normal_vector_field_analytical(grid_shape, shapes, period=(1000.0, 1000.0)):
+    return _nvf_analytic(xnp, grid_shape, shapes, period, xnp.float64)
+
+
+def to_conv_mat_nvf_2d(eps_matrix, fto_x, fto_y, nx=None, ny=None, use_pinv=False):
+    return _nvf_conv(xnp, eps_matrix, nx, ny, fto_x, fto_y, use_pinv=use_pinv)
 
 def test_analytical_normal_vector_generation():
     modeler = ModelingNumpy(period=[1000.0, 1000.0])

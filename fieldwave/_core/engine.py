@@ -9,6 +9,7 @@ without touching the public API.
 Because the core is backend-agnostic, one mixin serves NumPy, JAX and PyTorch alike; the
 per-backend ``transfer_method`` chains it replaces existed in triplicate.
 """
+from . import analytic as _analytic
 from . import factorization as _fac
 from .solve_1d import solve_1d as _solve_1d, solve_1d_conical as _solve_1d_conical
 from .solve_2d import solve_2d as _solve_2d
@@ -67,12 +68,10 @@ class CoreFactorizationMixin:
       the builders, which needs concrete values. For JAX-traced use, call the core builders
       directly with a precomputed ``normal_field`` / ``compression``.
 
-    The analytic shape path (``modeling_type == 2``) still uses each backend's
-    ``fourier_analytic`` builder, reached through ``_analytic_builder``; it is the last
-    factorization strategy not yet in the core.
+    The analytic shape path (``modeling_type == 2``) is built from parametric shapes rather
+    than an array, so there is no input array to read the namespace from — it comes from the
+    backend code instead.
     """
-
-    _analytic_builder = None
 
     def conv_solve(self, **kwargs):
         [setattr(self, k, v) for k, v in kwargs.items()]  # needed for optimization sweeps
@@ -102,14 +101,32 @@ class CoreFactorizationMixin:
                 ucell_vector, fto_x, fto_y, use_pinv=self.use_pinv)
 
         elif self._modeling_type_assigned == 2:                    # analytic shapes
+            xp = _namespace_for_backend(self.backend)
             (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all,
-             epz_conv_i_all) = self._analytic_builder(
+             epz_conv_i_all) = _analytic.to_conv_mat_analytic_layers(
                 self.ucell, fto_x, fto_y, self.period,
                 normal_grid=self.analytic_normal_grid,
-                type_complex=self.type_complex, use_pinv=self.use_pinv)
+                type_complex=xp.complex128, use_pinv=self.use_pinv, xp=xp)
 
         else:
             raise ValueError("Check 'modeling_type' and 'fourier_type' in 'conv_solve'.")
 
         return self.solve_for_conv(self.wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
                                    epxy_conv_all, epyx_conv_all)
+
+
+def _namespace_for_backend(backend):
+    """Array namespace for a ``Backend`` code.
+
+    The analytic builder starts from parametric shapes, not arrays, so unlike every other
+    entry point it cannot infer the namespace from its input.
+    """
+    from .backend import array_namespace
+    if backend == 1:
+        import jax.numpy as jnp
+        return array_namespace(jnp.zeros(1))
+    if backend == 2:
+        import torch
+        return array_namespace(torch.zeros(1))
+    import numpy as np
+    return array_namespace(np.zeros(1))
