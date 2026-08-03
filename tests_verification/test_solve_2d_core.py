@@ -127,3 +127,33 @@ def test_2d_gradient_jax_torch_fd():
 
     assert abs(g_jax - g_torch) < 1e-6, (g_jax, g_torch)
     assert abs(g_jax - g_fd) < 1e-4, (g_jax, g_fd)
+
+
+def test_python_scalar_incidence_keeps_double_precision_on_torch():
+    """A Python-complex theta/psi must not inherit torch's default float32 dtype.
+
+    ``torch.as_tensor(complex(...))`` silently yields complex64 when the default dtype is
+    float32, which costs ~8 digits in the efficiency denominators and shows up as a
+    cross-backend gradient mismatch. The core builds incidence scalars at its own working
+    dtype instead, so passing them through raw is precision-safe either way.
+    """
+    torch = pytest.importorskip('torch')
+    _, ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi = CASES[1]
+    (_, _), inp = _legacy_and_inputs(
+        ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi)
+    ri0, ti0 = solve_2d(**inp)                                   # numpy, double
+
+    default_before = torch.get_default_dtype()
+    torch.set_default_dtype(torch.float32)                       # the hostile setting
+    try:
+        bk = dict(inp)
+        for k in ('kx', 'ky', 'epx_conv_all', 'epy_conv_all', 'epz_conv_i_all'):
+            bk[k] = torch.as_tensor(np.asarray(inp[k]))
+        bk['theta'] = complex(inp['theta'])                      # raw Python scalars
+        bk['psi'] = complex(inp['psi'])
+        ri, ti = solve_2d(**bk)
+    finally:
+        torch.set_default_dtype(default_before)
+
+    assert np.allclose(np.array(ri0), np.asarray(ri), atol=1e-12, rtol=0)
+    assert np.allclose(np.array(ti0), np.asarray(ti), atol=1e-12, rtol=0)

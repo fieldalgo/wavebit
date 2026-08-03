@@ -154,7 +154,7 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     # --- stage 3: final matching -> efficiency (transfer_1d_4) -------------------------
     Kz_top = _diag(xp, kz_top)
     delta = xp.astype(_unit(xp, ff_x, ff_x // 2), C)
-    cos_t = xp.cos(xp.astype(xp.asarray(theta), C))
+    cos_t = xp.cos(xp.asarray(theta, dtype=C))
 
     if pol == 0:  # TE
         inc = 1j * n_top * cos_t * delta
@@ -320,9 +320,9 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
     Kz_top = _diag(xp, kz_top)
     kz_top_2d = xp.reshape(kz_top, (ff_y, ff_x))
     kz_bot_2d = xp.reshape(kz_bot, (ff_y, ff_x))
-    cos_t = xp.cos(xp.astype(xp.asarray(theta), C))
-    sin_psi = xp.sin(xp.astype(xp.asarray(psi), C))
-    cos_psi = xp.cos(xp.astype(xp.asarray(psi), C))
+    cos_t = xp.cos(xp.asarray(theta, dtype=C))
+    sin_psi = xp.sin(xp.asarray(psi, dtype=C))
+    cos_psi = xp.cos(xp.asarray(psi, dtype=C))
 
     delta = xp.reshape(xp.astype(_unit(xp, ff_xy, ff_xy // 2), C), (ff_xy, 1))
 
