@@ -60,7 +60,7 @@ def run_2d(option, case, plot_figure=False):
     print(f'jax: {j1}, {j2}')
     print(f'torch: {t1}, {t2}')
 
-    print('Norm of (meent - reti) per backend')
+    print('Norm of (fieldwave - reti) per backend')
     for i, res_t in enumerate([res_numpy, res_jax, res_torch]):
         reti_de_ri_te, reti_de_ti_te = np.array(top_refl_info_te.efficiency).T,  np.array(top_tran_info_te.efficiency).T
         reti_de_ri_tm, reti_de_ti_tm = np.array(top_refl_info_tm.efficiency).T, np.array(top_tran_info_tm.efficiency).T

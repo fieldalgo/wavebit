@@ -51,8 +51,8 @@ forward = jmee.conv_solve
 
 
 class Loss:
-    def __call__(self, meent_result, *args, **kwargs):
-        res_psi, res_te, res_ti = meent_result.res, meent_result.res_te_inc, meent_result.res_tm_inc
+    def __call__(self, result, *args, **kwargs):
+        res_psi, res_te, res_ti = result.res, result.res_te_inc, result.res_tm_inc
         de_ti = res_psi.de_ti
         center = [a // 2 for a in de_ti.shape]
         res = de_ti[center[0], center[1]+1]

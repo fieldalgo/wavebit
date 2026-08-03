@@ -1,4 +1,4 @@
-name: meent-dev
+name: fieldwave-dev
 channels:
   - conda-forge
 dependencies:

@@ -1,5 +1,5 @@
 # Benchmark
-Meent performance analyses
+FieldWave performance analyses
 
 ## RCWA result (compared to reticolo)
 

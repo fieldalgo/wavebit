@@ -250,24 +250,24 @@ if __name__ == '__main__':
     nmee = fieldwave.call_mee(backend=backend, perturbation=1E-30, **option)
     n_de_ri, n_de_ti = nmee.conv_solve()
     n_field_cell = nmee.calculate_field(res_z=200, res_x=5)
-    print('nmeent de_ri', n_de_ri)
-    print('nmeent de_ti', n_de_ti)
+    print('numpy de_ri', n_de_ri)
+    print('numpy de_ti', n_de_ti)
 
     # # JAX
     # backend = 1
     # jmee = fieldwave.call_mee(backend=backend, perturbation=1E-30, **option)
     # j_de_ri, j_de_ti = jmee.conv_solve()
     # j_field_cell = jmee.calculate_field(res_z=200, res_x=5)
-    # print('jmeent de_ri', j_de_ri)
-    # print('jmeent de_ti', j_de_ti)
+    # print('jax de_ri', j_de_ri)
+    # print('jax de_ti', j_de_ti)
     #
     # # Torch
     # backend = 2
     # tmee = fieldwave.call_mee(backend=backend, perturbation=1E-30, **option)
     # t_de_ri, t_de_ti = tmee.conv_solve()
     # t_field_cell = tmee.calculate_field(res_z=200, res_x=5)
-    # print('tmeent de_ri', t_de_ri)
-    # print('tmeent de_ti', t_de_ti)
+    # print('torch de_ri', t_de_ri)
+    # print('torch de_ti', t_de_ti)
 
     import matplotlib.pyplot as plt
 
