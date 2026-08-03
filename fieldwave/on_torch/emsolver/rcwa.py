@@ -4,7 +4,7 @@ import numpy as np
 
 from ._base import _BaseRCWA
 from ..._core.engine import CoreFactorizationMixin
-from .field_distribution import field_dist_1d, field_dist_1d_conical, field_dist_2d, field_plot
+from ..._core.fields import field_1d, field_1d_conical, field_2d, field_plot
 from ..modeler.modeling import ModelingTorch
 
 
@@ -218,17 +218,14 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
 
         if self._grating_type_assigned == 0:
             res_y = 1
-            field_cell = field_dist_1d(self.wavelength, kx, self.T1, self.layer_info_list, self.period, self.pol,
-                                       res_x=res_x, res_y=res_y, res_z=res_z, device=self.device,
-                                       type_complex=self.type_complex)
+            field_cell = field_1d(self.wavelength, kx, self.T1, self.layer_info_list, self.period, self.pol,
+                                       res_x=res_x, res_y=res_y, res_z=res_z)
         elif self._grating_type_assigned == 1:
-            field_cell = field_dist_1d_conical(self.wavelength, kx, ky, self.T1, self.layer_info_list, self.period,
-                                               res_x=res_x, res_y=res_y, res_z=res_z, set_field_input=set_field_input,
-                                               device=self.device, type_complex=self.type_complex)
+            field_cell = field_1d_conical(self.wavelength, kx, ky, self.T1, self.layer_info_list, self.period,
+                                               res_x=res_x, res_y=res_y, res_z=res_z, set_field_input=set_field_input)
         else:
-            field_cell = field_dist_2d(self.wavelength, kx, ky, self.T1, self.layer_info_list, self.period,
-                                       res_x=res_x, res_y=res_y, res_z=res_z, set_field_input=set_field_input,
-                                       device=self.device, type_complex=self.type_complex)
+            field_cell = field_2d(self.wavelength, kx, ky, self.T1, self.layer_info_list, self.period,
+                                       res_x=res_x, res_y=res_y, res_z=res_z, set_field_input=set_field_input)
 
         return field_cell
 
