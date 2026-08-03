@@ -19,7 +19,7 @@ from .solve_1d import _block, _diag, _diagonal, final_matching
 def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
              epxy_conv_all=None, epyx_conv_all=None,
-             same_material=None, same_material_rtol=1e-3):
+             same_material=None, same_material_rtol=1e-3, full=False):
     """Solve a 2D grating stack for the given ``psi`` incidence.
 
     See :func:`fieldwave._core.solve_1d.solve_1d` for the shared argument conventions. ``kx`` /
@@ -151,4 +151,4 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
 
     # --- stage 3: final matching -> efficiency (transfer_2d_4 == transfer_1d_conical_4) --
     return final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
-                          n_top, n_bot, ff_x, ff_y)
+                          n_top, n_bot, ff_x, ff_y, full=full)

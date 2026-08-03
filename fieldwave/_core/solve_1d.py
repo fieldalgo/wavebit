@@ -45,7 +45,7 @@ def _block(xp, rows):
 
 def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
-             same_material=None, same_material_rtol=1e-3):
+             same_material=None, same_material_rtol=1e-3, full=False):
     """Solve a 1D grating stack for reflection/transmission diffraction efficiency.
 
     Args:
@@ -68,6 +68,8 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
 
     Returns:
         ``(de_ri, de_ti)`` — reflected / transmitted efficiency per order, shape ``(1, ff)``.
+        With ``full=True``, the complete legacy result mapping instead (amplitudes and s/p
+        split; the pure TE/TM path carries all of one polarization, the other side is zero).
     """
     xp = array_namespace(epx_conv_all)
     kx = xp.asarray(kx)
@@ -174,12 +176,22 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
         de_ti = xp.real(Tt * xp.conj(Tt)
                         * xp.real(xp.conj(kz_bot) / n_bot ** 2 / (cos_t / n_top)))
 
-    return de_ri, de_ti
+    if not full:
+        return de_ri, de_ti
+
+    # TE carries everything on s, TM everything on p; the opposite side is identically zero.
+    zeros_amp = xp.zeros_like(R)
+    zeros_eff = xp.zeros_like(de_ri)
+    if pol == 0:
+        return {'res': _pack(R, zeros_amp, Tt, zeros_amp,
+                             de_ri, zeros_eff, de_ti, zeros_eff)}
+    return {'res': _pack(zeros_amp, R, zeros_amp, Tt,
+                         zeros_eff, de_ri, zeros_eff, de_ti)}
 
 
 def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
                      epx_conv_all, epy_conv_all, epz_conv_i_all,
-                     same_material=None, same_material_rtol=1e-3):
+                     same_material=None, same_material_rtol=1e-3, full=False):
     """Solve a general 1D grating (arbitrary azimuth/polarization) for the given ``psi``.
 
     The conical case couples the s and p polarizations, so the per-layer modes and the
@@ -294,7 +306,7 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
 
     # --- stage 3: final matching -> efficiency (transfer_1d_conical_4) ------------------
     return final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
-                          n_top, n_bot, ff_x, ff_y)
+                          n_top, n_bot, ff_x, ff_y, full=full)
 
 
 def _unit(xp, n, i):
@@ -305,13 +317,18 @@ def _unit(xp, n, i):
 
 
 def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
-                   n_top, n_bot, ff_x, ff_y):
-    """Boundary match the assembled s/p system to the incident field -> (de_ri, de_ti).
+                   n_top, n_bot, ff_x, ff_y, full=False):
+    """Boundary match the assembled s/p system to the incident field.
 
     Shared, byte-identical port of ``transfer_1d_conical_4`` / ``transfer_2d_4`` (their final
     equations are the same); used by both :func:`solve_1d_conical` and
-    :func:`fieldwave._core.solve_2d.solve_2d`. Returns the efficiencies for the ``psi``-specified
-    incidence, shape ``(ff_y, ff_x)``.
+    :func:`fieldwave._core.solve_2d.solve_2d`.
+
+    Returns ``(de_ri, de_ti)`` for the ``psi``-specified incidence, shape ``(ff_y, ff_x)``.
+    With ``full=True`` returns the complete legacy result mapping instead: the reflected and
+    transmitted amplitudes and their s/p-resolved efficiencies for the given ``psi``, plus the
+    pure-TE and pure-TM incidence variants (which reuse the same factorized ``final_A``, so
+    they cost one extra solve rather than two full passes).
     """
     ff_xy = ff_x * ff_y
     I = xp.astype(xp.eye(ff_xy), C)
@@ -344,19 +361,64 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
         [-1j * n_top * cos_psi * delta],
     ])
 
-    final_RT = xp.linalg.inv(final_A) @ final_B
+    final_A_inv = xp.linalg.inv(final_A)
+    final_RT = final_A_inv @ final_B
     R_s = xp.reshape(final_RT[:ff_xy, :], (ff_y, ff_x))
     R_p = xp.reshape(final_RT[ff_xy:2 * ff_xy, :], (ff_y, ff_x))
 
     big_T1 = final_RT[2 * ff_xy:, :]
+    big_T_tetm = big_T
     big_T = big_T @ big_T1
     T_s = xp.reshape(big_T[:ff_xy, :], (ff_y, ff_x))
     T_p = xp.reshape(big_T[ff_xy:, :], (ff_y, ff_x))
 
     denom = n_top * cos_t
-    de_ri_s = xp.real(R_s * xp.conj(R_s) * xp.real(kz_top_2d / denom))
-    de_ri_p = xp.real(R_p * xp.conj(R_p) * xp.real(xp.conj(kz_top_2d) / n_top ** 2 / denom))
-    de_ti_s = xp.real(T_s * xp.conj(T_s) * xp.real(kz_bot_2d / denom))
-    de_ti_p = xp.real(T_p * xp.conj(T_p) * xp.real(xp.conj(kz_bot_2d) / n_bot ** 2 / denom))
 
-    return de_ri_s + de_ri_p, de_ti_s + de_ti_p
+    def efficiencies(R_s_, R_p_, T_s_, T_p_):
+        return (xp.real(R_s_ * xp.conj(R_s_) * xp.real(kz_top_2d / denom)),
+                xp.real(R_p_ * xp.conj(R_p_) * xp.real(xp.conj(kz_top_2d) / n_top ** 2 / denom)),
+                xp.real(T_s_ * xp.conj(T_s_) * xp.real(kz_bot_2d / denom)),
+                xp.real(T_p_ * xp.conj(T_p_) * xp.real(xp.conj(kz_bot_2d) / n_bot ** 2 / denom)))
+
+    de_ri_s, de_ri_p, de_ti_s, de_ti_p = efficiencies(R_s, R_p, T_s, T_p)
+
+    if not full:
+        return de_ri_s + de_ri_p, de_ti_s + de_ti_p
+
+    res = _pack(R_s, R_p, T_s, T_p, de_ri_s, de_ri_p, de_ti_s, de_ti_p)
+
+    # Pure-TE (psi = pi/2) and pure-TM (psi = 0) incidence, solved together against the same
+    # already-inverted final_A.
+    half_pi = 3.141592653589793 / 2
+    cols = []
+    for psi_v in (half_pi, 0.0):
+        s_p = xp.sin(xp.asarray(psi_v, dtype=C))
+        c_p = xp.cos(xp.asarray(psi_v, dtype=C))
+        cols.append(_block(xp, [[-s_p * delta],
+                                [c_p * cos_t * delta],
+                                [-1j * s_p * n_top * cos_t * delta],
+                                [-1j * n_top * c_p * delta]]))
+    final_RT_tetm = final_A_inv @ xp.concat(cols, axis=1)
+
+    def split2(M):
+        """Two incidence columns -> (2, ff_y, ff_x), matching the legacy ``.T.reshape``."""
+        return xp.reshape(xp.matrix_transpose(M), (2, ff_y, ff_x))
+
+    R_s_2 = split2(final_RT_tetm[:ff_xy, :])
+    R_p_2 = split2(final_RT_tetm[ff_xy:2 * ff_xy, :])
+    big_T_tetm = big_T_tetm @ final_RT_tetm[2 * ff_xy:, :]
+    T_s_2 = split2(big_T_tetm[:ff_xy, :])
+    T_p_2 = split2(big_T_tetm[ff_xy:, :])
+
+    eff2 = efficiencies(R_s_2, R_p_2, T_s_2, T_p_2)
+    variants = [_pack(R_s_2[i], R_p_2[i], T_s_2[i], T_p_2[i], *(e[i] for e in eff2))
+                for i in (0, 1)]
+
+    return {'res': res, 'res_te_inc': variants[0], 'res_tm_inc': variants[1]}
+
+
+def _pack(R_s, R_p, T_s, T_p, de_ri_s, de_ri_p, de_ti_s, de_ti_p):
+    """Assemble one incidence's results in the legacy ``ResultSub`` field layout."""
+    return {'R_s': R_s, 'R_p': R_p, 'T_s': T_s, 'T_p': T_p,
+            'de_ri': de_ri_s + de_ri_p, 'de_ri_s': de_ri_s, 'de_ri_p': de_ri_p,
+            'de_ti': de_ti_s + de_ti_p, 'de_ti_s': de_ti_s, 'de_ti_p': de_ti_p}
