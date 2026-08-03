@@ -1,7 +1,7 @@
 import numpy as np
 
 from ._base import _BaseRCWA
-from .convolution_matrix import to_conv_mat_raster_continuous, to_conv_mat_raster_discrete, to_conv_mat_vector
+from .convolution_matrix import to_conv_mat_raster_continuous, to_conv_mat_raster_discrete, to_conv_mat_vector, to_conv_mat_raster_nvf
 from .field_distribution import field_plot, field_dist_1d, field_dist_1d_conical, field_dist_2d
 
 
@@ -189,7 +189,7 @@ class RCWANumpy(_BaseRCWA):
     def grating_type_assigned(self, grating_type_assigned):
         self._grating_type_assigned = grating_type_assigned
 
-    def solve_for_conv(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
+    def solve_for_conv(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all=None, epyx_conv_all=None):
         self._assign_grating_type()
 
         if self.grating_type_assigned == 0:
@@ -197,7 +197,7 @@ class RCWANumpy(_BaseRCWA):
         elif self._grating_type_assigned == 1:
             result_dict = self.solve_1d_conical(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
         else:
-            result_dict = self.solve_2d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
+            result_dict = self.solve_2d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all)
 
         res_psi = ResultSubNumpy(**result_dict['res']) if 'res' in result_dict else None
         res_te_inc = ResultSubNumpy(**result_dict['res_te_inc']) if 'res_te_inc' in result_dict else None
@@ -216,10 +216,18 @@ class RCWANumpy(_BaseRCWA):
                 epx_conv_all, epy_conv_all, epz_conv_i_all = to_conv_mat_raster_discrete(
                     self.ucell, self.fto[0], self.fto[1], type_complex=self.type_complex,
                     enhanced_dfs=self.enhanced_dfs, use_pinv=self.use_pinv)
+                epxy_conv_all, epyx_conv_all = None, None
 
             elif self.fourier_type == 1:
                 epx_conv_all, epy_conv_all, epz_conv_i_all = to_conv_mat_raster_continuous(
                     self.ucell, self.fto[0], self.fto[1], type_complex=self.type_complex, use_pinv=self.use_pinv)
+                epxy_conv_all, epyx_conv_all = None, None
+
+            elif self.fourier_type in (2, 'nvf', 'NVF'):
+                epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all, epz_conv_i_all = to_conv_mat_raster_nvf(
+                    self.ucell, self.fto[0], self.fto[1], type_complex=self.type_complex,
+                    enhanced_dfs=self.enhanced_dfs, use_pinv=self.use_pinv)
+
             else:
                 raise ValueError("Check 'modeling_type' and 'fourier_type' in 'conv_solve'.")
 
@@ -227,11 +235,12 @@ class RCWANumpy(_BaseRCWA):
             ucell_vector = self.modeling_vector_instruction(self.ucell)
             epx_conv_all, epy_conv_all, epz_conv_i_all = to_conv_mat_vector(
                 ucell_vector, self.fto[0], self.fto[1], type_complex=self.type_complex, use_pinv=self.use_pinv)
+            epxy_conv_all, epyx_conv_all = None, None
 
         else:
             raise ValueError("Check 'modeling_type' and 'fourier_type' in 'conv_solve'.")
 
-        result = self.solve_for_conv(self.wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
+        result = self.solve_for_conv(self.wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all)
 
         return result
 

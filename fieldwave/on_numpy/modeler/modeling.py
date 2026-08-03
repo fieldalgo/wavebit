@@ -14,6 +14,7 @@ class ModelingNumpy:
         self.y_list = None
         self.mat_table = None
         self.ucell_info_list = None
+        self.shapes_list = []
 
         self._type_complex: type = np.complex128
         self._type_float: type = np.float64

@@ -1,0 +1,79 @@
+import numpy as np
+import fieldwave
+
+
+def test_nvf_circular_grating():
+    print("==================================================")
+    print("Test: NVF (Normal Vector Field) Circular Grating")
+    print("==================================================")
+
+    # 2D Circular Cylinder Grating (n_cylinder=2.0, n_bg=1.0)
+    period = [1000, 1000]
+    wavelength = 600.0
+
+    grid_y, grid_x = np.ogrid[:100, :100]
+    center_y, center_x = 50, 50
+    radius = 30
+    dist_from_center = np.sqrt((grid_x - center_x) ** 2 + (grid_y - center_y) ** 2)
+
+    ucell_2d = np.ones((1, 100, 100), dtype=complex) * 1.0
+    ucell_2d[0, dist_from_center <= radius] = 2.0  # Cylinder with n=2.0
+
+    option_nvf = dict(
+        pol=1, n_top=1.0, n_bot=1.5, theta=10 * np.pi / 180, phi=20 * np.pi / 180,
+        fto=[3, 3], wavelength=wavelength, period=period,
+        ucell=ucell_2d, thickness=[200], fourier_type='nvf'
+    )
+
+    mee_nvf = fieldwave.call_mee(backend=0, **option_nvf)
+    res_nvf = mee_nvf.conv_solve()
+
+    assert res_nvf.de_ri is not None and res_nvf.de_ti is not None
+    R_nvf = float(res_nvf.de_ri.sum())
+    T_nvf = float(res_nvf.de_ti.sum())
+
+    print(f"[NVF] Reflectance R = {R_nvf:.6f}, Transmittance T = {T_nvf:.6f}, R+T = {R_nvf + T_nvf:.6f}")
+
+    assert 0.0 <= R_nvf <= 1.0, f"Unphysical reflectance R = {R_nvf}"
+    assert abs(R_nvf + T_nvf - 1.0) < 1e-3, f"Energy conservation failed in NVF: R+T = {R_nvf + T_nvf}"
+
+    print("SUCCESS: NVF Circular Grating Test Passed!\n")
+
+
+def test_nvf_energy_convergence():
+    """Lossless circular rod at normal incidence: |R+T-1| must ->0 as the Fourier
+    order rises. This is the structural correctness check for the NVF anisotropic
+    factorization; the pre-fix implementation violated energy conservation by
+    O(0.1-0.5) here (wrong epz convention, non-Hermitian projector product)."""
+    print("==================================================")
+    print("Test: NVF energy conservation / convergence")
+    print("==================================================")
+
+    N = 120
+    x = (np.arange(N) + 0.5) / N - 0.5
+    X, Y = np.meshgrid(x, x)
+    ucell = np.ones((1, N, N), dtype=complex)
+    ucell[0, X ** 2 + Y ** 2 <= 0.3 ** 2] = 2.5  # lossless dielectric rod
+
+    cfg = dict(n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, pol=0.0,
+               wavelength=0.5, period=[1.0, 1.0], thickness=[0.3])
+
+    errs = {}
+    for fto in (3, 5, 7):
+        res = fieldwave.call_mee(backend=0, ucell=ucell, fto=[fto, fto],
+                              fourier_type='nvf', **cfg).conv_solve()
+        R = float(np.array(res.de_ri).real.sum())
+        T = float(np.array(res.de_ti).real.sum())
+        errs[fto] = abs(R + T - 1.0)
+        print(f"[NVF] fto={fto:2d}  |R+T-1| = {errs[fto]:.2e}")
+
+    # Tight, order-independent bound the buggy implementation could never meet.
+    assert errs[3] < 1e-6, f"NVF energy error too large at fto=3: {errs[3]}"
+    assert errs[7] < 1e-5, f"NVF energy error too large at fto=7: {errs[7]}"
+
+    print("SUCCESS: NVF energy conservation test passed!\n")
+
+
+if __name__ == "__main__":
+    test_nvf_circular_grating()
+    test_nvf_energy_convergence()

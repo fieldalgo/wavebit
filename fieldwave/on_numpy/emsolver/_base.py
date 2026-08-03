@@ -368,7 +368,7 @@ class _BaseRCWA:
 
         return result
 
-    def solve_2d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
+    def solve_2d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all=None, epyx_conv_all=None):
         self.layer_info_list = []
         self.T1 = None
 
@@ -397,13 +397,15 @@ class _BaseRCWA:
 
             epx_conv = epx_conv_all[layer_index]
             epy_conv = epy_conv_all[layer_index]
+            epxy_conv = epxy_conv_all[layer_index] if epxy_conv_all is not None else None
+            epyx_conv = epyx_conv_all[layer_index] if epyx_conv_all is not None else None
             epz_conv_i = epz_conv_i_all[layer_index]
 
             d = self.thickness[layer_index]
 
             if self.connecting_algo == 'TMM':
                 W, V, q = transfer_2d_2(kx, ky, epx_conv, epy_conv, epz_conv_i, type_complex=self.type_complex,
-                                        use_pinv=self.use_pinv)
+                                        use_pinv=self.use_pinv, epxy_conv=epxy_conv, epyx_conv=epyx_conv)
 
                 layer_eps_diag = np.diag(epx_conv).mean()
                 is_same = np.allclose(layer_eps_diag, eps_below, rtol=1e-3)

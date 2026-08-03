@@ -1,6 +1,7 @@
 import numpy as np
 from .fourier_analysis import dfs2d, cfs2d
 from .primitives import meeinv
+from .nvf import to_conv_mat_nvf_2d
 
 
 def cell_compression(cell, type_complex=np.complex128):
@@ -105,7 +106,6 @@ def to_conv_mat_raster_discrete(ucell, fto_x, fto_y, device=None, type_complex=n
     else:
         minimum_pattern_size_y = 4 * fto_y + 1
         minimum_pattern_size_x = 4 * fto_x + 1
-        # e.g., 8 bytes * (40*500) * (40*500) / 1E6 = 3200 MB = 3.2 GB
 
     for i, layer in enumerate(ucell):
         if layer.shape[0] < minimum_pattern_size_y:
@@ -128,3 +128,47 @@ def to_conv_mat_raster_discrete(ucell, fto_x, fto_y, device=None, type_complex=n
 
     return epx_conv_all, epy_conv_all, epz_conv_i_all
 
+
+def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, device=None, type_complex=np.complex128,
+                           enhanced_dfs=True, use_pinv=False):
+    """
+    Compute NVF 2D convolution matrices for raster dielectric layers.
+    Returns 5 matrices: (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all, epz_conv_i_all).
+    """
+    ff_xy = (2 * fto_x + 1) * (2 * fto_y + 1)
+
+    epx_conv_all = np.zeros((ucell.shape[0], ff_xy, ff_xy)).astype(type_complex)
+    epy_conv_all = np.zeros((ucell.shape[0], ff_xy, ff_xy)).astype(type_complex)
+    epxy_conv_all = np.zeros((ucell.shape[0], ff_xy, ff_xy)).astype(type_complex)
+    epyx_conv_all = np.zeros((ucell.shape[0], ff_xy, ff_xy)).astype(type_complex)
+    epz_conv_i_all = np.zeros((ucell.shape[0], ff_xy, ff_xy)).astype(type_complex)
+
+    if enhanced_dfs:
+        minimum_pattern_size_y = (4 * fto_y + 1) * ucell.shape[1]
+        minimum_pattern_size_x = (4 * fto_x + 1) * ucell.shape[2]
+    else:
+        minimum_pattern_size_y = 4 * fto_y + 1
+        minimum_pattern_size_x = 4 * fto_x + 1
+
+    for i, layer in enumerate(ucell):
+        if layer.shape[0] < minimum_pattern_size_y:
+            n = minimum_pattern_size_y // layer.shape[0]
+            layer = np.repeat(layer, n + 1, axis=0)
+
+        if layer.shape[1] < minimum_pattern_size_x:
+            n = minimum_pattern_size_x // layer.shape[1]
+            layer = np.repeat(layer, n + 1, axis=1)
+
+        eps_matrix = np.conj(layer) ** 2
+
+        Exx, Eyy, Exy, Eyx, Epz_i = to_conv_mat_nvf_2d(
+            eps_matrix, fto_x, fto_y, type_complex=type_complex, use_pinv=use_pinv
+        )
+
+        epx_conv_all[i] = Exx
+        epy_conv_all[i] = Eyy
+        epxy_conv_all[i] = Exy
+        epyx_conv_all[i] = Eyx
+        epz_conv_i_all[i] = Epz_i
+
+    return epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all, epz_conv_i_all
