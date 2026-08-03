@@ -1,0 +1,46 @@
+# Runs the verification suite on every push and pull request.
+#
+# The suite compares all three backends against goldens frozen from the legacy
+# implementation, so jax and torch must both be installed — with either one
+# missing, pytest.importorskip silently drops the cross-backend tests and the
+# run still reports success.
+name: tests
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Matches the development environment. To test more versions, turn
+          # this into a matrix — but check the jax floor in setup.py first.
+          python-version: '3.12'
+          cache: pip
+
+      # Installed ahead of the package so pip already sees torch>=2.0.0 as
+      # satisfied and does not pull the multi-gigabyte CUDA wheel from PyPI.
+      - name: Install CPU-only PyTorch
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install FieldWave with both optional backends
+        run: pip install -e '.[jax,pytorch]' pytest
+
+      # Fails the run if a backend is missing, which would otherwise turn the
+      # cross-backend tests into silent skips.
+      - name: Verify all three backends are importable
+        run: python -c "import numpy, jax, torch, fieldwave; print(fieldwave.__file__)"
+
+      - name: Run verification suite
+        run: pytest tests_verification -q
