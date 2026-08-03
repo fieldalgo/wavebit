@@ -1,6 +1,6 @@
 import numpy as np
 
-from .modeler.modeling import ModelingNumpy
+from .._core.modeler import Modeling
 from .emsolver.rcwa import RCWANumpy
 
 

@@ -53,7 +53,7 @@ class ResultSubNumpy:
         self.de_ti_p = de_ti_p
 
 
-from ..modeler.modeling import ModelingNumpy
+from ..._core.modeler import Modeling
 
 
 class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
@@ -100,7 +100,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                          thickness=thickness, connecting_algo=connecting_algo, perturbation=perturbation,
                          type_complex=type_complex, use_pinv=use_pinv)
 
-        self.modeler = ModelingNumpy(period=self.period, type_complex=type_complex)
+        self.modeler = Modeling(period=self.period, type_complex=type_complex)
 
         self._modeling_type_assigned = None
         self._grating_type_assigned = None

@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-from .modeler.modeling import ModelingTorch
+from .._core.modeler import Modeling
 from .emsolver.rcwa import RCWATorch
 from .optimizer.optimizer import OptimizerTorch
 

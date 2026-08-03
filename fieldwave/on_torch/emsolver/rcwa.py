@@ -5,7 +5,7 @@ import numpy as np
 from ._base import _BaseRCWA
 from ..._core.engine import CoreFactorizationMixin
 from ..._core.fields import field_1d, field_1d_conical, field_2d, field_plot
-from ..modeler.modeling import ModelingTorch
+from ..._core.modeler import Modeling
 
 
 class ResultTorch:
@@ -96,7 +96,7 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
                          thickness=thickness, connecting_algo=connecting_algo, perturbation=perturbation,
                          device=device, type_complex=type_complex, use_pinv=use_pinv)
 
-        self.modeler = ModelingTorch(period=self.period, device=device, type_complex=type_complex)
+        self.modeler = Modeling(period=self.period, device=device, type_complex=type_complex)
 
         self._modeling_type_assigned = None
         self._grating_type_assigned = None
