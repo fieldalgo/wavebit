@@ -9,15 +9,28 @@ them. With this module the gradient runs end-to-end from the design variable —
 raster — through to the diffraction efficiency, which is what an inverse-design user actually
 differentiates.
 
-Strategies ported so far: **DFS** (discrete Fourier series with Li's rules, the default
-``fourier_type=0``) and **NVF** (normal-vector-field factorization, ``fourier_type=2``). The
-continuous/analytic CFS path still uses the legacy per-backend builder.
+All the strategies live here:
+
+===================  ==================  =========================================
+``fourier_type``     builder             method
+===================  ==================  =========================================
+0 (``DFS``)          raster_discrete     discrete Fourier series, Li's rules
+1 (``CONTINUOUS``)   raster_continuous   analytic (staircase-free) Fourier of the
+                                         compressed piecewise-constant layer
+1 (vector)           vector              same, on explicitly given segment edges
+2 (``NVF``)          raster_nvf          normal-vector-field factorization
+===================  ==================  =========================================
 
 A recurring rule runs through this module, the same one the solve core follows for its
 same-material short-circuit: **discrete geometry decisions are computed eagerly and passed in
-as static inputs, while material values flow through differentiably.** The normal vector field
-is geometry (it depends on where the interfaces are), so it is computed once with SciPy and
-held fixed; the permittivity that rides on top of it is what gradients see.
+as static inputs, while material values flow through differentiably.** Two decisions here are
+geometry, not material — the NVF normal field (where the interfaces point) and the CFS block
+compression (where the piecewise-constant blocks start and stop). Both branch on values and,
+in the compression's case, produce a data-dependent shape, so neither can run under a JAX
+trace. Each is therefore split into an eager step that yields a static description
+(:func:`normal_field_for_ucell`, :func:`compression_indices`) and a differentiable step that
+consumes it. Pass those precomputed descriptions to stay traceable; the permittivity riding on
+top of them is what gradients see.
 """
 from .backend import array_namespace
 
@@ -254,3 +267,181 @@ def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
             slot.append(mat)
 
     return tuple(xp.stack(slot) for slot in out)
+
+
+# ================================================ continuous Fourier series (CFS / analytic)
+
+def _cfs(xp, x, cell, fto, period):
+    """1D continuous Fourier series of a piecewise-constant profile.
+
+    ``x`` holds the right-hand edge of each constant segment (shape ``(n, 1)``) and ``cell``
+    the segment values (``(m, n)``). Port of the legacy ``_cfs``, with its two in-place
+    assignments rewritten: the non-DC modes divide by ``1j*2*pi*m`` and the DC mode is the
+    length-weighted mean, so both are expressed as one ``where`` over a mode mask.
+    """
+    C = cell.dtype
+    dev = _device(xp, cell)
+
+    cell_next = xp.roll(cell, -1, axis=1)
+    cell_diff = cell_next - cell
+
+    n_modes = 4 * fto + 1
+    modes = xp.asarray([float(m) for m in range(-2 * fto, 2 * fto + 1)], dtype=C, device=dev)
+
+    # ``x`` / ``period`` arrive as static geometry (often plain NumPy), so lift them onto the
+    # working backend rather than casting in place.
+    period = xp.asarray(period, dtype=C, device=dev)
+    x = xp.asarray(x, dtype=C, device=dev)
+
+    # Segment widths: distance from each edge to the next (last wraps to the period).
+    x_next = xp.concat([xp.roll(x, -1, axis=0)[:-1], xp.reshape(period, (1, 1))], axis=0) - x
+
+    # Scalars fold into `x` *before* the matmul; hoisting them out changes the rounding and
+    # costs bit-parity with the legacy builder.
+    phase = (-1j * 2 * 3.141592653589793 * x) @ xp.reshape(modes, (1, n_modes))
+    f = cell_diff @ xp.exp(phase / period)
+
+    # Divisor for the non-DC modes; 1 at DC so the unused branch of `where` stays finite
+    # (a NaN there would still poison the gradient).
+    is_dc = xp.asarray([m == 2 * fto for m in range(n_modes)], device=dev)
+    divisor = xp.where(is_dc, xp.asarray(1.0, dtype=C, device=dev),
+                       1j * 2 * 3.141592653589793 * modes)
+
+    dc = xp.reshape((cell @ xp.concat([x[0:1], x_next[:-1]], axis=0)) / period, (-1, 1))
+
+    return xp.where(xp.reshape(is_dc, (1, n_modes)), dc, f / xp.reshape(divisor, (1, n_modes)))
+
+
+def cfs2d(xp, cell, x, y, conti_x, conti_y, fto_x, fto_y):
+    """2D continuous Fourier series with Li's rules — the staircase-free factorization.
+
+    ``x`` / ``y`` are the segment edges of the compressed (piecewise-constant) layer, so the
+    permittivity is Fourier-transformed analytically rather than off a raster.
+    """
+    ff_x = 2 * fto_x + 1
+    ff_y = 2 * fto_y + 1
+
+    period_x, period_y = x[-1], y[-1]
+
+    cell = xp.matrix_transpose(cell)
+
+    if conti_y == 0:      # discontinuous in Y (row): inverse rule
+        cell = 1 / cell
+
+    cfs1d = _cfs(xp, y, cell, fto_y, period_y)
+
+    dev = _device(xp, cell)
+    idx_y = xp.asarray([[v + 2 * fto_y for v in row] for row in _circulant_index(fto_y)],
+                       device=dev)
+    idx_x = xp.asarray([[v + 2 * fto_x for v in row] for row in _circulant_index(fto_x)],
+                       device=dev)
+
+    conv1d = cfs1d[:, idx_y]
+
+    if conti_x ^ conti_y:
+        conv1d = xp.linalg.inv(conv1d)
+
+    conv1d = xp.reshape(conv1d, (-1, ff_y ** 2))
+
+    cfs_2d = _cfs(xp, x, xp.matrix_transpose(conv1d), fto_x, period_x)
+
+    conv2d = cfs_2d[:, idx_x]
+    conv2d = xp.reshape(conv2d, (ff_y, ff_y, ff_x, ff_x))
+    conv2d = xp.moveaxis(conv2d, 1, 2)
+    conv2d = xp.reshape(conv2d, (ff_y * ff_x, ff_y * ff_x))
+
+    if conti_x == 0:      # discontinuous in X (column): inverse rule
+        conv2d = xp.linalg.inv(conv2d)
+
+    return conv2d
+
+
+def compression_indices(cell):
+    """Locate the piecewise-constant blocks of a raster layer — **static geometry**.
+
+    Returns ``(row_idx, col_idx, x, y)``: the rows/columns that end a constant block, plus
+    their normalized right-hand edges. The legacy ``cell_compression`` decides this by
+    comparing neighbouring rows/columns *by value* and returns a data-dependent shape, so it
+    cannot run under a JAX trace. Splitting it out keeps the decision eager while the gather it
+    implies (:func:`compress_cell`) stays differentiable — the same split used for the NVF
+    normal field.
+    """
+    import numpy as np
+
+    cell = np.flipud(_to_numpy(cell))
+    step_y, step_x = 1.0 / np.array(cell.shape, dtype=np.float64)
+
+    cell_next = np.roll(cell, -1, axis=1)
+    col_idx = [c for c in range(cell.shape[1])
+               if not (cell[:, c] == cell_next[:, c]).all() or c == cell.shape[1] - 1]
+
+    cell_x = cell[:, col_idx]
+    cell_x_next = np.roll(cell_x, -1, axis=0)
+    row_idx = [r for r in range(cell_x.shape[0])
+               if not (cell_x[r, :] == cell_x_next[r, :]).all() or r == cell_x.shape[0] - 1]
+
+    x = np.array([step_x * (c + 1) for c in col_idx]).reshape((-1, 1))
+    y = np.array([step_y * (r + 1) for r in row_idx]).reshape((-1, 1))
+    return row_idx, col_idx, x, y
+
+
+def compress_cell(xp, cell, row_idx, col_idx):
+    """Gather the compressed layer selected by :func:`compression_indices` (differentiable)."""
+    dev = _device(xp, cell)
+    cell = xp.flip(cell, axis=0)
+    cell = xp.take(cell, xp.asarray(col_idx, device=dev), axis=1)
+    return xp.take(cell, xp.asarray(row_idx, device=dev), axis=0)
+
+
+def to_conv_mat_raster_continuous(ucell, fto_x, fto_y, compression=None, use_pinv=False):
+    """Per-layer convolution matrices via the analytic (staircase-free) CFS path.
+
+    Args:
+        ucell: refractive-index raster ``(n_layers, Ny, Nx)`` — the design variable.
+        fto_x, fto_y: Fourier truncation orders.
+        compression: optional per-layer ``(row_idx, col_idx, x, y)`` from
+            :func:`compression_indices`. Supply it to stay traceable under JAX; it is static
+            geometry either way.
+        use_pinv: use the pseudo-inverse for the ``epz`` inversion.
+
+    Returns:
+        ``(epx_conv_all, epy_conv_all, epz_conv_i_all)``, each ``(n_layers, ff_xy, ff_xy)``.
+    """
+    xp = array_namespace(ucell)
+    _inv = xp.linalg.pinv if use_pinv else xp.linalg.inv
+
+    epx_list, epy_list, epz_i_list = [], [], []
+
+    for i in range(ucell.shape[0]):
+        layer = ucell[i]
+        row_idx, col_idx, x, y = (compression_indices(layer) if compression is None
+                                  else compression[i])
+        n_comp = compress_cell(xp, layer, row_idx, col_idx)
+        eps = xp.conj(xp.astype(n_comp, _complex_dtype(xp, n_comp))) ** 2
+
+        epz_list = cfs2d(xp, eps, x, y, 1, 1, fto_x, fto_y)
+        epx_list.append(cfs2d(xp, eps, x, y, 0, 1, fto_x, fto_y))
+        epy_list.append(cfs2d(xp, eps, x, y, 1, 0, fto_x, fto_y))
+        epz_i_list.append(_inv(epz_list))
+
+    return xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list)
+
+
+def to_conv_mat_vector(ucell_info_list, fto_x, fto_y, use_pinv=False):
+    """Per-layer convolution matrices for vector-modelled layers (CFS on explicit segments).
+
+    Each entry of ``ucell_info_list`` is ``(layer, x_list, y_list)`` — the segment values and
+    their edges — so no compression step is needed.
+    """
+    xp = array_namespace(ucell_info_list[0][0])
+    _inv = xp.linalg.pinv if use_pinv else xp.linalg.inv
+
+    epx_list, epy_list, epz_i_list = [], [], []
+
+    for layer, x, y in ucell_info_list:
+        eps = xp.conj(xp.astype(layer, _complex_dtype(xp, layer))) ** 2
+        epx_list.append(cfs2d(xp, eps, x, y, 0, 1, fto_x, fto_y))
+        epy_list.append(cfs2d(xp, eps, x, y, 1, 0, fto_x, fto_y))
+        epz_i_list.append(_inv(cfs2d(xp, eps, x, y, 1, 1, fto_x, fto_y)))
+
+    return xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list)

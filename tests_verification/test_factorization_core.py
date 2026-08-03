@@ -1,4 +1,4 @@
-"""Single-source DFS factorization (fieldwave._core.factorization) — Phase 4a gate.
+"""Single-source Fourier factorization (fieldwave._core.factorization) — Phase 4a/4b gate.
 
 Beyond the usual parity/cross-backend checks, this closes the differentiability gap that
 motivated the port: with the factorization inside the core, the gradient runs end-to-end from
@@ -12,11 +12,18 @@ import fieldwave
 from fieldwave.on_numpy.emsolver.convolution_matrix import (
     to_conv_mat_raster_discrete as legacy_dfs,
     to_conv_mat_raster_nvf as legacy_nvf,
+    to_conv_mat_raster_continuous as legacy_cfs,
+    to_conv_mat_vector as legacy_vector,
+    cell_compression,
 )
 from fieldwave._core.factorization import (
     to_conv_mat_raster_discrete as core_dfs,
     to_conv_mat_raster_nvf as core_nvf,
+    to_conv_mat_raster_continuous as core_cfs,
+    to_conv_mat_vector as core_vector,
     normal_field_for_ucell,
+    compression_indices,
+    compress_cell,
 )
 from fieldwave._core.solve_1d import solve_1d
 from fieldwave._core.solve_2d import solve_2d
@@ -248,6 +255,102 @@ def test_nvf_end_to_end_gradient_wrt_ucell():
     s = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
     torch.sum(chain(torch.as_tensor(ucell) + s * torch.as_tensor(direction),
                     torch.as_tensor(kx), torch.as_tensor(ky), theta, psi)).real.backward()
+    g_torch = float(s.grad)
+
+    assert abs(g_jax - g_torch) < 1e-8, (g_jax, g_torch)
+    assert abs(g_jax - g_fd) < 1e-6, (g_jax, g_fd)
+
+
+# ============================================ CFS / analytic + vector (fourier_type=1)
+
+CFS_CASES = [
+    ('cfs_1d', _rand((1, 1, 8), 20), 4, 0),
+    ('cfs_2d', _rand((1, 5, 5), 21), 2, 2),
+    ('cfs_binary', np.where(_rand((1, 6, 6), 22) > 2.5, 3.5, 1.0), 2, 2),
+    ('cfs_2layer', _rand((2, 4, 6), 23), 2, 1),
+]
+
+
+@pytest.mark.parametrize('case', CFS_CASES, ids=[c[0] for c in CFS_CASES])
+def test_cfs_bit_parity_vs_legacy(case):
+    _, ucell, fto_x, fto_y = case
+    want = legacy_cfs(ucell, fto_x, fto_y)
+    got = core_cfs(ucell, fto_x, fto_y)
+    for name, a, b in zip(('epx', 'epy', 'epz_i'), want, got):
+        assert np.array_equal(a, np.array(b)), (name, np.max(np.abs(a - np.array(b))))
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+@pytest.mark.parametrize('case', CFS_CASES, ids=[c[0] for c in CFS_CASES])
+def test_cfs_cross_backend(case, backend):
+    pytest.importorskip(backend)
+    _, ucell, fto_x, fto_y = case
+    ref = core_cfs(ucell, fto_x, fto_y)
+    # Compression is static geometry, so it is shared rather than recomputed per backend.
+    compression = [compression_indices(ucell[i]) for i in range(ucell.shape[0])]
+    got = core_cfs(_to(backend, ucell), fto_x, fto_y, compression=compression)
+    for name, a, b in zip(('epx', 'epy', 'epz_i'), ref, got):
+        assert np.allclose(np.array(a), np.asarray(b), atol=1e-12, rtol=0), name
+
+
+def test_vector_path_bit_parity_vs_legacy():
+    """Vector-modelled layers (explicit segment edges, no compression) match the legacy CFS."""
+    info = []
+    for ucell in (_rand((5, 5), 24), _rand((4, 6), 25)):
+        info.append(list(cell_compression(ucell)))
+    want = legacy_vector(info, 2, 2)
+    got = core_vector(info, 2, 2)
+    for name, a, b in zip(('epx', 'epy', 'epz_i'), want, got):
+        assert np.array_equal(a, np.array(b)), (name, np.max(np.abs(a - np.array(b))))
+
+
+def test_compression_indices_match_legacy():
+    """The extracted static geometry step reproduces the legacy compression exactly."""
+    for seed in (26, 27):
+        ucell = np.where(_rand((6, 7), seed) > 2.5, 3.0, 1.0)
+        want_cell, want_x, want_y = cell_compression(ucell)
+        row_idx, col_idx, x, y = compression_indices(ucell)
+        import array_api_compat as ac
+        got_cell = compress_cell(ac.array_namespace(ucell), ucell, row_idx, col_idx)
+        assert np.array_equal(want_cell, np.array(got_cell))
+        assert np.array_equal(want_x, x)
+        assert np.array_equal(want_y, y)
+
+
+def test_cfs_end_to_end_gradient_wrt_ucell():
+    """d(sum de_ti)/d(ucell) through the analytic CFS path: jax == torch == finite-diff."""
+    jax = pytest.importorskip('jax')
+    torch = pytest.importorskip('torch')
+    import jax.numpy as jnp
+
+    ucell = np.array([[[3., 3., 3., 1., 1., 1.]]])
+    direction = np.ones_like(ucell)
+    fto = [6, 0]
+    wl, n_top, n_bot, d = 0.777, 2.0, 1.0, 0.15
+    compression = [compression_indices(ucell[i]) for i in range(ucell.shape[0])]
+
+    mee = fieldwave.call_mee(backend=0, n_top=n_top, n_bot=n_bot, theta=0.3, phi=None, pol=0,
+                          fto=fto, period=[0.77], wavelength=wl, thickness=[d], ucell=ucell)
+    kx, _ = mee.get_kx_ky_vector(wl)
+    theta = complex(mee.theta)
+
+    def chain(u, kx_):
+        epx, epy, epz = core_cfs(u, fto[0], fto[1], compression=compression)
+        _, ti = solve_1d(0, wl, kx_, n_top, n_bot, theta, [d], epx, epy, epz,
+                         same_material=[False])
+        return ti
+
+    def f_np(s):
+        return float(np.sum(np.array(chain(ucell + s * direction, kx))))
+    h = 1e-6
+    g_fd = (f_np(h) - f_np(-h)) / (2 * h)
+
+    g_jax = float(jax.grad(lambda s: jnp.sum(chain(
+        jnp.asarray(ucell) + s * jnp.asarray(direction), jnp.asarray(kx))).real)(0.0))
+
+    s = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
+    torch.sum(chain(torch.as_tensor(ucell) + s * torch.as_tensor(direction),
+                    torch.as_tensor(kx))).real.backward()
     g_torch = float(s.grad)
 
     assert abs(g_jax - g_torch) < 1e-8, (g_jax, g_torch)
