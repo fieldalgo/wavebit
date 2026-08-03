@@ -1,9 +1,11 @@
-# Runs the verification suite on every push and pull request.
+# Two jobs with different purposes.
 #
-# The suite compares all three backends against goldens frozen from the legacy
-# implementation, so jax and torch must both be installed — with either one
-# missing, pytest.importorskip silently drops the cross-backend tests and the
-# run still reports success.
+#   test     — installs both optional backends and runs the whole suite. This is
+#              where the physics is verified.
+#   minimal  — installs the base package alone and only checks that it imports
+#              and solves. The `test` job cannot catch a stray top-level
+#              `import torch` in the core, because torch is installed there; a
+#              numpy-only user would be the first to find out.
 name: tests
 
 on:
@@ -18,18 +20,18 @@ concurrency:
 
 jobs:
   test:
+    name: full backends
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          # Matches the development environment. To test more versions, turn
-          # this into a matrix — but check the jax floor in setup.py first.
+          # Matches the development environment, and jax 0.11 requires 3.12.
           python-version: '3.12'
           cache: pip
 
-      # Installed ahead of the package so pip already sees torch>=2.0.0 as
+      # Installed ahead of the package so pip already sees torch>=2.7 as
       # satisfied and does not pull the multi-gigabyte CUDA wheel from PyPI.
       - name: Install CPU-only PyTorch
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu
@@ -38,9 +40,59 @@ jobs:
         run: pip install -e '.[jax,pytorch]' pytest
 
       # Fails the run if a backend is missing, which would otherwise turn the
-      # cross-backend tests into silent skips.
+      # cross-backend tests into silent skips: the suite guards them with
+      # pytest.importorskip, so an absent backend drops those tests and still
+      # reports success.
       - name: Verify all three backends are importable
         run: python -c "import numpy, jax, torch, fieldwave; print(fieldwave.__file__)"
 
       - name: Run verification suite
         run: pytest tests_verification -q
+
+  minimal:
+    name: minimal install
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor declared in setup.py, and every version up to the one the
+        # full suite runs on.
+        python-version: ['3.10', '3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      # No extras, and a real (non-editable) install.
+      - name: Install FieldWave alone
+        run: pip install .
+
+      # Runs outside the checkout on purpose: from the repo root `import
+      # fieldwave` would resolve to the source tree and the installed package
+      # would never be exercised.
+      - name: Import and solve without any optional backend
+        working-directory: ${{ runner.temp }}
+        run: |
+          python - <<'PY'
+          import sys
+          import numpy as np
+          import fieldwave
+
+          res = fieldwave.call_mee(
+              backend=0, pol=1, n_top=1.0, n_bot=1.5, theta=0.0, phi=0.0,
+              fto=2, wavelength=632.8, period=[1000],
+              ucell=np.array([[[3.8, 3.8]]]), thickness=[200],
+          ).conv_solve()
+
+          R, T = float(res.de_ri.sum()), float(res.de_ti.sum())
+          assert 0.0 <= R <= 1.0 and 0.0 <= T <= 1.0, (R, T)
+          assert abs(R + T - 1.0) < 1e-9, R + T
+
+          eager = {m.split('.')[0] for m in sys.modules} & {'jax', 'torch'}
+          assert not eager, f'optional backend imported on the numpy path: {eager}'
+
+          print(f'numpy-only solve OK: R={R:.6f} T={T:.6f}')
+          PY

@@ -36,9 +36,12 @@ setup(
         'array-api-compat>=1.15',
     ],
     extras_require=extras,
-    # 3.12 is what CI runs and what jax 0.11 itself requires. Widen this only
-    # together with a CI matrix that proves the older version works.
-    python_requires='>=3.12',
+    # Driven by the base install alone (numpy, scipy and array-api-compat all
+    # declare >=3.10), not by the optional backends: jax 0.11 needs 3.12, but
+    # pip enforces that from jax's own metadata when the extra is requested.
+    # Encoding it here would refuse the install to numpy-only users who never
+    # asked for jax. The `minimal` CI job runs on every version listed here.
+    python_requires='>=3.10',
     description=(
         "Electromagnetic simulation (RCWA) & optimization package in Python"
     ),
