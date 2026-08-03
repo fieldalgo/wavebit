@@ -293,6 +293,30 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
             big_T = big_T @ big_A_i @ big_X
 
     # --- stage 3: final matching -> efficiency (transfer_1d_conical_4) ------------------
+    return final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
+                          n_top, n_bot, ff_x, ff_y)
+
+
+def _unit(xp, n, i):
+    """Unit vector ``e_i`` of length ``n`` (real)."""
+    v = [0.0] * n
+    v[i] = 1.0
+    return xp.asarray(v)
+
+
+def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
+                   n_top, n_bot, ff_x, ff_y):
+    """Boundary match the assembled s/p system to the incident field -> (de_ri, de_ti).
+
+    Shared, byte-identical port of ``transfer_1d_conical_4`` / ``transfer_2d_4`` (their final
+    equations are the same); used by both :func:`solve_1d_conical` and
+    :func:`fieldwave._core.solve_2d.solve_2d`. Returns the efficiencies for the ``psi``-specified
+    incidence, shape ``(ff_y, ff_x)``.
+    """
+    ff_xy = ff_x * ff_y
+    I = xp.astype(xp.eye(ff_xy), C)
+    O = xp.astype(xp.zeros((ff_xy, ff_xy)), C)
+
     Kz_top = _diag(xp, kz_top)
     kz_top_2d = xp.reshape(kz_top, (ff_y, ff_x))
     kz_bot_2d = xp.reshape(kz_bot, (ff_y, ff_x))
@@ -335,13 +359,4 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     de_ti_s = xp.real(T_s * xp.conj(T_s) * xp.real(kz_bot_2d / denom))
     de_ti_p = xp.real(T_p * xp.conj(T_p) * xp.real(xp.conj(kz_bot_2d) / n_bot ** 2 / denom))
 
-    de_ri = de_ri_s + de_ri_p
-    de_ti = de_ti_s + de_ti_p
-    return de_ri, de_ti
-
-
-def _unit(xp, n, i):
-    """Unit vector ``e_i`` of length ``n`` (real)."""
-    v = [0.0] * n
-    v[i] = 1.0
-    return xp.asarray(v)
+    return de_ri_s + de_ri_p, de_ti_s + de_ti_p
