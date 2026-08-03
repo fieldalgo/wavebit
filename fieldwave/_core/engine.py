@@ -9,6 +9,7 @@ without touching the public API.
 Because the core is backend-agnostic, one mixin serves NumPy, JAX and PyTorch alike; the
 per-backend ``transfer_method`` chains it replaces existed in triplicate.
 """
+from . import factorization as _fac
 from .solve_1d import solve_1d as _solve_1d, solve_1d_conical as _solve_1d_conical
 from .solve_2d import solve_2d as _solve_2d
 
@@ -51,3 +52,64 @@ class CoreSolveMixin:
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
             use_pinv=self.use_pinv, full=True))
+
+
+class CoreFactorizationMixin:
+    """Provides ``conv_solve`` — factorization through the core, then the core solve.
+
+    Dispatches the same way the per-backend ``conv_solve`` implementations did (modeling type,
+    then Fourier type) but builds every convolution matrix with
+    :mod:`fieldwave._core.factorization`. Two consequences beyond de-duplication:
+
+    * NVF (``fourier_type=2``) now works on every backend — the per-backend builders had it
+      only in NumPy, so JAX and PyTorch used to raise here.
+    * The eager geometry steps (NVF normal field, CFS block compression) are computed inside
+      the builders, which needs concrete values. For JAX-traced use, call the core builders
+      directly with a precomputed ``normal_field`` / ``compression``.
+
+    The analytic shape path (``modeling_type == 2``) still uses each backend's
+    ``fourier_analytic`` builder, reached through ``_analytic_builder``; it is the last
+    factorization strategy not yet in the core.
+    """
+
+    _analytic_builder = None
+
+    def conv_solve(self, **kwargs):
+        [setattr(self, k, v) for k, v in kwargs.items()]  # needed for optimization sweeps
+
+        fto_x, fto_y = self.fto[0], self.fto[1]
+        epxy_conv_all = epyx_conv_all = None
+
+        if self._modeling_type_assigned == 0:                      # raster
+            if self.fourier_type == 0:
+                epx_conv_all, epy_conv_all, epz_conv_i_all = _fac.to_conv_mat_raster_discrete(
+                    self.ucell, fto_x, fto_y,
+                    enhanced_dfs=self.enhanced_dfs, use_pinv=self.use_pinv)
+            elif self.fourier_type == 1:
+                epx_conv_all, epy_conv_all, epz_conv_i_all = _fac.to_conv_mat_raster_continuous(
+                    self.ucell, fto_x, fto_y, use_pinv=self.use_pinv)
+            elif self.fourier_type in (2, 'nvf', 'NVF'):
+                (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all,
+                 epz_conv_i_all) = _fac.to_conv_mat_raster_nvf(
+                    self.ucell, fto_x, fto_y,
+                    enhanced_dfs=self.enhanced_dfs, use_pinv=self.use_pinv)
+            else:
+                raise ValueError("Check 'modeling_type' and 'fourier_type' in 'conv_solve'.")
+
+        elif self._modeling_type_assigned == 1:                    # vector
+            ucell_vector = self.modeling_vector_instruction(self.ucell)
+            epx_conv_all, epy_conv_all, epz_conv_i_all = _fac.to_conv_mat_vector(
+                ucell_vector, fto_x, fto_y, use_pinv=self.use_pinv)
+
+        elif self._modeling_type_assigned == 2:                    # analytic shapes
+            (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all,
+             epz_conv_i_all) = self._analytic_builder(
+                self.ucell, fto_x, fto_y, self.period,
+                normal_grid=self.analytic_normal_grid,
+                type_complex=self.type_complex, use_pinv=self.use_pinv)
+
+        else:
+            raise ValueError("Check 'modeling_type' and 'fourier_type' in 'conv_solve'.")
+
+        return self.solve_for_conv(self.wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
+                                   epxy_conv_all, epyx_conv_all)

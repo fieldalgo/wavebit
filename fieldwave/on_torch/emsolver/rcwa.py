@@ -3,6 +3,7 @@ import torch
 import numpy as np
 
 from ._base import _BaseRCWA
+from ..._core.engine import CoreFactorizationMixin
 from .convolution_matrix import to_conv_mat_raster_discrete, to_conv_mat_raster_continuous, to_conv_mat_vector
 from .fourier_analytic import to_conv_mat_analytic_layers
 from .field_distribution import field_dist_1d, field_dist_1d_conical, field_dist_2d, field_plot
@@ -58,7 +59,11 @@ class ResultSubTorch:
         self.de_ti_p = de_ti_p
 
 
-class RCWATorch(_BaseRCWA):
+class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
+    # The analytic shape path is the one factorization strategy still built
+    # per backend; everything else comes from fieldwave._core.factorization.
+    _analytic_builder = staticmethod(to_conv_mat_analytic_layers)
+
     def modeling_vector_instruction(self, *args, **kwargs):
         return self.modeler.modeling_vector_instruction(*args, **kwargs)
 
@@ -211,45 +216,6 @@ class RCWATorch(_BaseRCWA):
         res_tm_inc = ResultSubTorch(**result_dict['res_tm_inc']) if 'res_tm_inc' in result_dict else None
 
         result = ResultTorch(res_psi, res_te_inc, res_tm_inc)
-
-        return result
-
-    def conv_solve(self, **kwargs):
-        [setattr(self, k, v) for k, v in kwargs.items()]  # needed for optimization
-
-        epxy_conv_all, epyx_conv_all = None, None
-
-        if self.modeling_type_assigned == 0:  # Raster
-
-            if self.fourier_type == 0:
-                epx_conv_all, epy_conv_all, epz_conv_i_all = to_conv_mat_raster_discrete(
-                    self.ucell, self.fto[0], self.fto[1], device=self.device, type_complex=self.type_complex,
-                    enhanced_dfs=self.enhanced_dfs, use_pinv=self.use_pinv)
-
-            elif self.fourier_type == 1:
-                epx_conv_all, epy_conv_all, epz_conv_i_all = to_conv_mat_raster_continuous(
-                    self.ucell, self.fto[0], self.fto[1], device=self.device, type_complex=self.type_complex,
-                    use_pinv=self.use_pinv)
-            else:
-                raise ValueError("Check 'modeling_type' and 'fourier_type' in 'conv_solve'.")
-
-        elif self.modeling_type_assigned == 1:  # Vector
-            ucell_vector = self.modeling_vector_instruction(self.ucell)
-            epx_conv_all, epy_conv_all, epz_conv_i_all = to_conv_mat_vector(
-                ucell_vector, self.fto[0], self.fto[1], device=self.device, type_complex=self.type_complex,
-                use_pinv=self.use_pinv)
-            epxy_conv_all, epyx_conv_all = None, None
-
-        elif self.modeling_type_assigned == 2:  # Analytic (staircase-free shapes + NVF)
-            epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all, epz_conv_i_all = to_conv_mat_analytic_layers(
-                self.ucell, self.fto[0], self.fto[1], self.period, normal_grid=self.analytic_normal_grid,
-                device=self.device, type_complex=self.type_complex, use_pinv=self.use_pinv)
-
-        else:
-            raise ValueError("Check 'modeling_type' and 'fourier_type' in 'conv_solve'.")
-
-        result = self.solve_for_conv(self.wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
-                                     epxy_conv_all, epyx_conv_all)
 
         return result
 

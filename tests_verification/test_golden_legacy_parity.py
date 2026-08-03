@@ -101,7 +101,7 @@ def test_calculate_field_still_runs():
 # ------------------------------------------------ every backend, one implementation
 
 @pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
-@pytest.mark.parametrize('name', [n for n in CASES if 'nvf' not in n])
+@pytest.mark.parametrize('name', list(CASES))
 def test_jax_and_torch_match_the_same_golden(name, backend):
     """JAX and PyTorch run the same core, so they land on the NumPy reference too.
 

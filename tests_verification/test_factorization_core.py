@@ -204,17 +204,22 @@ def test_nvf_runs_on_every_backend(case, backend):
         assert np.allclose(np.array(a), np.asarray(b), atol=1e-12, rtol=0)
 
 
-def test_nvf_legacy_is_numpy_only():
-    """Pins the gap this port closes: legacy NVF is unavailable off NumPy."""
+def test_nvf_now_works_on_every_backend():
+    """NVF used to be NumPy-only; conv_solve now routes every backend through the core.
+
+    ``call_mee(backend=1|2, fourier_type=2)`` raised ValueError before the factorization was
+    wired — the per-backend builders simply had no NVF branch.
+    """
     ucell = _rand((1, 5, 5), 13)
     opts = dict(n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0, fto=[2, 2],
                 period=[1.0, 1.0], wavelength=0.9, thickness=[0.2], ucell=ucell,
                 fourier_type=2)
-    fieldwave.call_mee(backend=0, **opts).conv_solve()          # NumPy works
+    ref = fieldwave.call_mee(backend=0, **opts).conv_solve()
     for backend in (1, 2):
         pytest.importorskip('jax' if backend == 1 else 'torch')
-        with pytest.raises(ValueError):
-            fieldwave.call_mee(backend=backend, **opts).conv_solve()
+        got = fieldwave.call_mee(backend=backend, **opts).conv_solve()
+        assert np.allclose(np.asarray(ref.res.de_ti), np.asarray(got.res.de_ti),
+                           atol=1e-12, rtol=0), backend
 
 
 def test_nvf_end_to_end_gradient_wrt_ucell():

@@ -6,6 +6,7 @@ import jax.numpy as jnp
 from functools import partial
 
 from ._base import _BaseRCWA, jax_device_set
+from ..._core.engine import CoreFactorizationMixin
 from .convolution_matrix import to_conv_mat_raster_discrete, to_conv_mat_raster_continuous, to_conv_mat_vector
 from .fourier_analytic import to_conv_mat_analytic_layers
 from .field_distribution import field_dist_1d, field_dist_1d_conical, field_dist_2d, field_plot
@@ -61,7 +62,11 @@ class ResultSubJax:
         self.de_ti_p = de_ti_p
 
 
-class RCWAJax(_BaseRCWA):
+class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
+    # The analytic shape path is the one factorization strategy still built
+    # per backend; everything else comes from fieldwave._core.factorization.
+    _analytic_builder = staticmethod(to_conv_mat_analytic_layers)
+
     def modeling_vector_instruction(self, *args, **kwargs):
         return self.modeler.modeling_vector_instruction(*args, **kwargs)
 
@@ -257,59 +262,6 @@ class RCWAJax(_BaseRCWA):
     #     return de_ri, de_ti
 
     @jax_device_set
-    def conv_solve(self, **kwargs):
-        [setattr(self, k, v) for k, v in kwargs.items()]  # needed for optimization
-
-        epxy_conv_all, epyx_conv_all = None, None
-
-        if self._modeling_type_assigned == 0:  # Raster
-
-            if self.fourier_type == 0:
-                epx_conv_all, epy_conv_all, epz_conv_i_all = to_conv_mat_raster_discrete(
-                    self.ucell, self.fto[0], self.fto[1], type_complex=self.type_complex,
-                    enhanced_dfs=self.enhanced_dfs, use_pinv=self.use_pinv)
-
-            elif self.fourier_type == 1:
-                epx_conv_all, epy_conv_all, epz_conv_i_all = to_conv_mat_raster_continuous(
-                    self.ucell, self.fto[0], self.fto[1], type_complex=self.type_complex, use_pinv=self.use_pinv)
-            else:
-                raise ValueError("Check 'modeling_type' and 'fourier_type' in 'conv_solve'.")
-
-        elif self._modeling_type_assigned == 1:  # Vector
-            ucell_vector = self.modeling_vector_instruction(self.ucell)
-            epx_conv_all, epy_conv_all, epz_conv_i_all = to_conv_mat_vector(
-                ucell_vector, self.fto[0], self.fto[1], type_complex=self.type_complex, use_pinv=self.use_pinv)
-
-        elif self._modeling_type_assigned == 2:  # Analytic (staircase-free shapes + NVF)
-            epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all, epz_conv_i_all = to_conv_mat_analytic_layers(
-                self.ucell, self.fto[0], self.fto[1], self.period,
-                normal_grid=self.analytic_normal_grid, type_complex=self.type_complex, use_pinv=self.use_pinv)
-
-        else:
-            raise ValueError("Check 'modeling_type' and 'fourier_type' in 'conv_solve'.")
-
-        result = self.solve_for_conv(self.wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
-                                     epxy_conv_all, epyx_conv_all)
-
-        return result
-
-    # @jax.jit
-    # def _conv_solve_jit(self):
-    #     return self._conv_solve()
-
-    # @jax_device_set
-    # def conv_solve(self, **kwargs):
-    #     [setattr(self, k, v) for k, v in kwargs.items()]  # needed for optimization
-    #     if self.fourier_type == 1:
-    #         # print('CFT (fourier_type=1) is not supported for jit-compilation. Using non-jit-compiled method.')
-    #         de_ri, de_ti, layer_info_list, T1 = self._conv_solve()
-    #
-    #     else:
-    #         de_ri, de_ti, layer_info_list, T1 = self._conv_solve()
-    #         # de_ri, de_ti, layer_info_list, T1 = self._conv_solve_jit()
-    #
-    #     return de_ri, de_ti
-
     @jax_device_set
     def calculate_field(self, res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False)):
         kx, ky = self.get_kx_ky_vector(wavelength=self.wavelength)
