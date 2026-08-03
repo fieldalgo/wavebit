@@ -16,7 +16,7 @@ import pytest
 
 import fieldwave
 from fieldwave.on_numpy.emsolver.convolution_matrix import to_conv_mat_raster_discrete
-from fieldwave._core.solve_1d import solve_1d
+from fieldwave._core.solve_1d import solve_1d, solve_1d_conical
 
 
 def _legacy_and_inputs(pol, ucell, thickness, n_top, n_bot, wl, period, fto, theta):
@@ -135,6 +135,115 @@ def test_core_gradient_jax_torch_fd(pol):
             d[k] = torch.as_tensor(np.asarray(inp[k]))
         d[key] = torch.as_tensor(base) + s * torch.as_tensor(direction)   # perturbed leaf
         d['theta'] = torch.as_tensor(complex(inp['theta']))
+        return torch.sum(out(d)).real
+    s = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
+    val = f_torch(s)
+    val.backward()
+    g_torch = float(s.grad)
+
+    assert abs(g_jax - g_torch) < 1e-6, (g_jax, g_torch)
+    assert abs(g_jax - g_fd) < 1e-4, (g_jax, g_fd)
+
+
+# =========================================================================== conical
+
+def _legacy_and_inputs_conical(ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi):
+    """Run the legacy conical path and return (legacy de_ri/de_ti, exact core inputs)."""
+    mee = fieldwave.call_mee(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi,
+                          fto=fto, period=period, wavelength=wl, thickness=thickness, ucell=ucell)
+    legacy = mee.conv_solve()
+    assert mee.grating_type_assigned == 1, mee.grating_type_assigned   # ensure conical path
+    epx, epy, epz = to_conv_mat_raster_discrete(
+        mee.ucell, mee.fto[0], mee.fto[1], type_complex=mee.type_complex,
+        enhanced_dfs=mee.enhanced_dfs, use_pinv=mee.use_pinv)
+    kx, ky = mee.get_kx_ky_vector(wl)
+    inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_top, n_bot=n_bot,
+                  theta=mee.theta, psi=mee.psi, thickness=mee.thickness,
+                  epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
+    return (np.array(legacy.de_ri), np.array(legacy.de_ti)), inputs
+
+
+CONICAL_CASES = [
+    # name, ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi
+    ('con_1layer', [[[3., 3., 3., 1., 1., 1.]]], [0.15], 2.0, 1.0, 0.777, [0.77], [6, 0], 0.2, 0.3, 0.4),
+    ('con_2layer_lossy', [[[3., 3., 1., 1., 3., 1.]], [[2., 2., 2., 1., 1., 1.]]], [0.15, 0.22],
+     1.0, 1.5, 0.9, [0.7], [5, 0], 0.3, 0.5, 1.1),
+    ('con_phi0', [[[4., 4., 1., 1., 1., 1.]]], [0.3], 1.5, 1.0, 0.6, [0.5], [4, 0], 0.25, 0.0, 0.7),
+]
+
+
+@pytest.mark.parametrize('case', CONICAL_CASES, ids=[c[0] for c in CONICAL_CASES])
+def test_conical_bit_parity_vs_legacy(case):
+    _, ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi = case
+    (lri, lti), inp = _legacy_and_inputs_conical(
+        np.array(ucell), thickness, n_top, n_bot, wl, period, fto, theta, phi, psi)
+    cri, cti = solve_1d_conical(**inp)
+    assert np.array_equal(lri, np.array(cri)), np.max(np.abs(lri - np.array(cri)))
+    assert np.array_equal(lti, np.array(cti)), np.max(np.abs(lti - np.array(cti)))
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+@pytest.mark.parametrize('case', CONICAL_CASES, ids=[c[0] for c in CONICAL_CASES])
+def test_conical_cross_backend(case, backend):
+    pytest.importorskip(backend)
+    _, ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi = case
+    (_, _), inp = _legacy_and_inputs_conical(
+        np.array(ucell), thickness, n_top, n_bot, wl, period, fto, theta, phi, psi)
+    ri0, ti0 = solve_1d_conical(**inp)                       # numpy reference
+
+    bk = dict(inp)
+    for k in ('kx', 'ky', 'epx_conv_all', 'epy_conv_all', 'epz_conv_i_all'):
+        bk[k] = _to(backend, inp[k])
+    bk['theta'] = _to(backend, complex(inp['theta']))
+    bk['psi'] = _to(backend, complex(inp['psi']))
+    ri, ti = solve_1d_conical(**bk)
+
+    assert np.allclose(np.array(ri0), np.asarray(ri), atol=1e-10, rtol=0)
+    assert np.allclose(np.array(ti0), np.asarray(ti), atol=1e-10, rtol=0)
+
+
+def test_conical_gradient_jax_torch_fd():
+    """d(sum de_ti)/ds through the coupled s/p conical chain: jax == torch == finite-diff."""
+    jax = pytest.importorskip('jax')
+    torch = pytest.importorskip('torch')
+    import jax.numpy as jnp
+
+    ucell = np.array([[[3., 3., 3., 1., 1., 1.]]])
+    (_, _), inp = _legacy_and_inputs_conical(
+        ucell, [0.15], 2.0, 1.0, 0.777, [0.77], [6, 0], 0.2, 0.3, 0.4)
+    inp['same_material'] = [False]
+    key = 'epx_conv_all'
+    base = np.array(inp[key])
+    direction = np.real(base).copy()
+    conv_keys = ('kx', 'ky', 'epx_conv_all', 'epy_conv_all', 'epz_conv_i_all')
+
+    def out(d):
+        _, ti = solve_1d_conical(**d)
+        return ti
+
+    def f_np(s):
+        d = dict(inp); d[key] = base + s * direction
+        return float(np.sum(np.array(out(d))))
+    h = 1e-6
+    g_fd = (f_np(h) - f_np(-h)) / (2 * h)
+
+    def f_jax(s):
+        d = dict(inp)
+        for k in conv_keys:
+            d[k] = jnp.asarray(inp[k])
+        d[key] = jnp.asarray(base) + s * jnp.asarray(direction)
+        d['theta'] = jnp.asarray(complex(inp['theta']))
+        d['psi'] = jnp.asarray(complex(inp['psi']))
+        return jnp.sum(out(d)).real
+    g_jax = float(jax.grad(lambda s: f_jax(s))(0.0))
+
+    def f_torch(s):
+        d = dict(inp)
+        for k in conv_keys:
+            d[k] = torch.as_tensor(np.asarray(inp[k]))
+        d[key] = torch.as_tensor(base) + s * torch.as_tensor(direction)
+        d['theta'] = torch.as_tensor(complex(inp['theta']))
+        d['psi'] = torch.as_tensor(complex(inp['psi']))
         return torch.sum(out(d)).real
     s = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
     val = f_torch(s)
