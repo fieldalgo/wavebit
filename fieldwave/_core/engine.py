@@ -11,6 +11,7 @@ per-backend ``transfer_method`` chains it replaces existed in triplicate.
 """
 from . import analytic as _analytic
 from . import factorization as _fac
+from .geometry import StaticGeometry, detect_same_material
 from .solve_1d import solve_1d as _solve_1d, solve_1d_conical as _solve_1d_conical
 from .solve_2d import solve_2d as _solve_2d
 
@@ -21,6 +22,12 @@ class CoreSolveMixin:
     def _check_algo(self):
         if self.connecting_algo != 'TMM':
             raise ValueError(f'connecting_algo {self.connecting_algo!r} is not supported')
+
+    _frozen_geometry = None
+
+    def _same_material(self):
+        g = self._frozen_geometry
+        return None if g is None else g.same_material
 
     def _finish(self, out):
         """Store the field-reconstruction state and return just the result mapping."""
@@ -34,7 +41,7 @@ class CoreSolveMixin:
         return self._finish(_solve_1d(
             self.pol, wavelength, kx, self.n_top, self.n_bot, self.theta, self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
-            use_pinv=self.use_pinv, full=True))
+            same_material=self._same_material(), use_pinv=self.use_pinv, full=True))
 
     def solve_1d_conical(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
         self._check_algo()
@@ -42,7 +49,7 @@ class CoreSolveMixin:
         return self._finish(_solve_1d_conical(
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi, self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
-            use_pinv=self.use_pinv, full=True))
+            same_material=self._same_material(), use_pinv=self.use_pinv, full=True))
 
     def solve_2d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None):
@@ -52,7 +59,7 @@ class CoreSolveMixin:
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi, self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
-            use_pinv=self.use_pinv, full=True))
+            same_material=self._same_material(), use_pinv=self.use_pinv, full=True))
 
 
 class CoreFactorizationMixin:
@@ -73,9 +80,44 @@ class CoreFactorizationMixin:
     backend code instead.
     """
 
-    def conv_solve(self, **kwargs):
-        [setattr(self, k, v) for k, v in kwargs.items()]  # needed for optimization sweeps
+    def freeze_geometry(self, **kwargs):
+        """Take this structure's discrete geometry decisions once, eagerly.
 
+        Runs the factorization on the current (concrete) ``ucell`` to capture the
+        same-material flags, plus whatever the active Fourier strategy needs. Hand the result
+        back to :meth:`conv_solve` as ``geometry=`` to make the call traceable.
+        """
+        [setattr(self, k, v) for k, v in kwargs.items()]
+        fto_x, fto_y = self.fto[0], self.fto[1]
+
+        normal_field = compression = None
+        if self._modeling_type_assigned == 0:
+            if self.fourier_type in (2, 'nvf', 'NVF'):
+                normal_field = _fac.normal_field_for_ucell(
+                    self.ucell, fto_x, fto_y, enhanced_dfs=self.enhanced_dfs)
+            elif self.fourier_type == 1:
+                compression = [_fac.compression_indices(self.ucell[i])
+                               for i in range(self.ucell.shape[0])]
+
+        geometry = StaticGeometry(normal_field=normal_field, compression=compression)
+        epx = self._conv_matrices(geometry)[0]
+        geometry.same_material = detect_same_material(epx, self.n_bot)
+        return geometry
+
+    def conv_solve(self, geometry=None, **kwargs):
+        """Build the convolution matrices, then solve.
+
+        ``geometry`` is an optional :class:`~fieldwave._core.geometry.StaticGeometry` — the
+        discrete decisions frozen by :meth:`freeze_geometry`. Supply it to keep the whole call
+        traceable under ``jax.jit`` / ``jax.grad``; omit it and each decision is auto-detected
+        eagerly, which needs concrete values.
+        """
+        [setattr(self, k, v) for k, v in kwargs.items()]  # needed for optimization sweeps
+        self._frozen_geometry = geometry
+        return self.solve_for_conv(self.wavelength, *self._conv_matrices(geometry))
+
+    def _conv_matrices(self, geometry=None):
+        """Convolution matrices for the current structure: ``(epx, epy, epz_i, epxy, epyx)``."""
         fto_x, fto_y = self.fto[0], self.fto[1]
         epxy_conv_all = epyx_conv_all = None
 
@@ -86,12 +128,14 @@ class CoreFactorizationMixin:
                     enhanced_dfs=self.enhanced_dfs, use_pinv=self.use_pinv)
             elif self.fourier_type == 1:
                 epx_conv_all, epy_conv_all, epz_conv_i_all = _fac.to_conv_mat_raster_continuous(
-                    self.ucell, fto_x, fto_y, use_pinv=self.use_pinv)
+                    self.ucell, fto_x, fto_y, use_pinv=self.use_pinv,
+                    compression=None if geometry is None else geometry.compression)
             elif self.fourier_type in (2, 'nvf', 'NVF'):
                 (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all,
                  epz_conv_i_all) = _fac.to_conv_mat_raster_nvf(
                     self.ucell, fto_x, fto_y,
-                    enhanced_dfs=self.enhanced_dfs, use_pinv=self.use_pinv)
+                    enhanced_dfs=self.enhanced_dfs, use_pinv=self.use_pinv,
+                    normal_field=None if geometry is None else geometry.normal_field)
             else:
                 raise ValueError("Check 'modeling_type' and 'fourier_type' in 'conv_solve'.")
 
@@ -111,8 +155,7 @@ class CoreFactorizationMixin:
         else:
             raise ValueError("Check 'modeling_type' and 'fourier_type' in 'conv_solve'.")
 
-        return self.solve_for_conv(self.wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
-                                   epxy_conv_all, epyx_conv_all)
+        return epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all
 
 
 def _namespace_for_backend(backend):
