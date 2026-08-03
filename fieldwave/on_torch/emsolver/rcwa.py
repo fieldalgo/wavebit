@@ -4,6 +4,7 @@ import numpy as np
 
 from ._base import _BaseRCWA
 from .convolution_matrix import to_conv_mat_raster_discrete, to_conv_mat_raster_continuous, to_conv_mat_vector
+from .fourier_analytic import to_conv_mat_analytic_layers
 from .field_distribution import field_dist_1d, field_dist_1d_conical, field_dist_2d, field_plot
 from ..modeler.modeling import ModelingTorch
 
@@ -88,6 +89,7 @@ class RCWATorch(_BaseRCWA):
                  fourier_type=0,
                  enhanced_dfs=True,
                  use_pinv=False,
+                 analytic_normal_grid=256,
                  ):
 
         super().__init__(n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi, pol=pol,
@@ -108,6 +110,7 @@ class RCWATorch(_BaseRCWA):
         self.fourier_type = fourier_type
         self.enhanced_dfs = enhanced_dfs
         self.use_pinv = use_pinv
+        self.analytic_normal_grid = analytic_normal_grid
 
     @property
     def ucell(self):
@@ -138,9 +141,13 @@ class RCWATorch(_BaseRCWA):
             else:
                 raise ValueError
 
-        elif type(ucell) is list:  # Vector
-            self._modeling_type_assigned = 1
-            self._ucell = ucell
+        elif type(ucell) is list:
+            if len(ucell) > 0 and isinstance(ucell[0], dict):  # Analytic (list of layer dicts)
+                self._modeling_type_assigned = 2
+                self._ucell = ucell
+            else:  # Vector
+                self._modeling_type_assigned = 1
+                self._ucell = ucell
         elif ucell is None:
             self._ucell = ucell
             self._modeling_type_assigned = None
@@ -176,6 +183,9 @@ class RCWATorch(_BaseRCWA):
         elif self.modeling_type_assigned == 1:
             self.grating_type_assigned = 2
 
+        elif self.modeling_type_assigned == 2:  # Analytic (staircase-free shapes)
+            self._grating_type_assigned = 2
+
     @property
     def grating_type_assigned(self):
         return self._grating_type_assigned
@@ -184,7 +194,8 @@ class RCWATorch(_BaseRCWA):
     def grating_type_assigned(self, grating_type_assigned):
         self._grating_type_assigned = grating_type_assigned
 
-    def solve_for_conv(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
+    def solve_for_conv(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
+                       epxy_conv_all=None, epyx_conv_all=None):
         self._assign_grating_type()
 
         if self._grating_type_assigned == 0:
@@ -192,7 +203,8 @@ class RCWATorch(_BaseRCWA):
         elif self._grating_type_assigned == 1:
             result_dict = self.solve_1d_conical(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
         else:
-            result_dict = self.solve_2d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
+            result_dict = self.solve_2d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
+                                        epxy_conv_all, epyx_conv_all)
 
         res_psi = ResultSubTorch(**result_dict['res']) if 'res' in result_dict else None
         res_te_inc = ResultSubTorch(**result_dict['res_te_inc']) if 'res_te_inc' in result_dict else None
@@ -204,6 +216,8 @@ class RCWATorch(_BaseRCWA):
 
     def conv_solve(self, **kwargs):
         [setattr(self, k, v) for k, v in kwargs.items()]  # needed for optimization
+
+        epxy_conv_all, epyx_conv_all = None, None
 
         if self.modeling_type_assigned == 0:  # Raster
 
@@ -224,11 +238,18 @@ class RCWATorch(_BaseRCWA):
             epx_conv_all, epy_conv_all, epz_conv_i_all = to_conv_mat_vector(
                 ucell_vector, self.fto[0], self.fto[1], device=self.device, type_complex=self.type_complex,
                 use_pinv=self.use_pinv)
+            epxy_conv_all, epyx_conv_all = None, None
+
+        elif self.modeling_type_assigned == 2:  # Analytic (staircase-free shapes + NVF)
+            epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all, epz_conv_i_all = to_conv_mat_analytic_layers(
+                self.ucell, self.fto[0], self.fto[1], self.period, normal_grid=self.analytic_normal_grid,
+                device=self.device, type_complex=self.type_complex, use_pinv=self.use_pinv)
 
         else:
             raise ValueError("Check 'modeling_type' and 'fourier_type' in 'conv_solve'.")
 
-        result = self.solve_for_conv(self.wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
+        result = self.solve_for_conv(self.wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
+                                     epxy_conv_all, epyx_conv_all)
 
         return result
 

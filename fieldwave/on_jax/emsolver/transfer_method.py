@@ -533,22 +533,30 @@ def transfer_2d_1(kx, ky, n_top, n_bot, type_complex=jnp.complex128):
 
 
 def transfer_2d_2(kx, ky, epx_conv, epy_conv, epz_conv_i, type_complex=jnp.complex128,
-                  perturbation=1E-20, use_pinv=False):
+                  perturbation=1E-20, use_pinv=False, epxy_conv=None, epyx_conv=None):
     ff_x = len(kx)
     ff_y = len(ky)
+    ff_xy = ff_y * ff_x
 
-    I = jnp.eye(ff_y * ff_x, dtype=type_complex)
+    I = jnp.eye(ff_xy, dtype=type_complex)
 
     Kx = jnp.diag(jnp.tile(kx, ff_y).flatten())
     Ky = jnp.diag(jnp.tile(ky.reshape((-1, 1)), ff_x).flatten())
 
+    if epxy_conv is None:
+        epxy_conv = jnp.zeros((ff_xy, ff_xy), dtype=type_complex)
+    if epyx_conv is None:
+        epyx_conv = jnp.zeros((ff_xy, ff_xy), dtype=type_complex)
+
     B = Kx @ epz_conv_i @ Kx - I
     D = Ky @ epz_conv_i @ Ky - I
+    C = Kx @ epz_conv_i @ Ky
+    E_mat = Ky @ epz_conv_i @ Kx
 
     Omega2_LR = jnp.block(
         [
-            [Ky ** 2 + B @ epx_conv, Kx @ (epz_conv_i @ Ky @ epy_conv - Ky)],
-            [Ky @ (epz_conv_i @ Kx @ epx_conv - Kx), Kx ** 2 + D @ epy_conv]
+            [Ky ** 2 + B @ epx_conv - C @ epyx_conv, C @ epy_conv - Kx @ Ky - B @ epxy_conv],
+            [E_mat @ epx_conv - Ky @ Kx - D @ epyx_conv, Kx ** 2 + D @ epy_conv - E_mat @ epxy_conv]
         ])
 
     # eigenvalues, W = jnp.linalg.eig(Omega2_LR)
@@ -558,8 +566,8 @@ def transfer_2d_2(kx, ky, epx_conv, epy_conv, epz_conv_i, type_complex=jnp.compl
 
     Omega_R = jnp.block(
         [
-            [-Kx @ Ky, Kx ** 2 - epy_conv],
-            [epx_conv - Ky ** 2, Ky @ Kx]
+            [-Kx @ Ky + epxy_conv, Kx ** 2 - epy_conv],
+            [epx_conv - Ky ** 2, Ky @ Kx - epyx_conv]
         ]
     )
 

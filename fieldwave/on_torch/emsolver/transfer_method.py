@@ -510,7 +510,7 @@ def transfer_2d_1(kx, ky, n_top, n_bot, device=torch.device('cpu'), type_complex
 
 
 def transfer_2d_2(kx, ky, epx_conv, epy_conv, epz_conv_i, device=torch.device('cpu'), type_complex=torch.complex128,
-                   perturbation=1E-20, use_pinv=False):
+                   perturbation=1E-20, use_pinv=False, epxy_conv=None, epyx_conv=None):
 
     ff_x = len(kx)
     ff_y = len(ky)
@@ -521,13 +521,20 @@ def transfer_2d_2(kx, ky, epx_conv, epy_conv, epz_conv_i, device=torch.device('c
     Kx = torch.diag(kx.tile(ff_y).flatten())
     Ky = torch.diag(ky.reshape((-1, 1)).tile(ff_x).flatten())
 
+    if epxy_conv is None:
+        epxy_conv = torch.zeros((ff_xy, ff_xy), device=device, dtype=type_complex)
+    if epyx_conv is None:
+        epyx_conv = torch.zeros((ff_xy, ff_xy), device=device, dtype=type_complex)
+
     B = Kx @ epz_conv_i @ Kx - I
     D = Ky @ epz_conv_i @ Ky - I
+    C = Kx @ epz_conv_i @ Ky
+    E_mat = Ky @ epz_conv_i @ Kx
 
     Omega2_LR = torch.cat(
         [
-            torch.cat([Ky ** 2 + B @ epx_conv, Kx @ (epz_conv_i @ Ky @ epy_conv - Ky)], dim=1),
-            torch.cat([Ky @ (epz_conv_i @ Kx @ epx_conv - Kx), Kx ** 2 + D @ epy_conv], dim=1)
+            torch.cat([Ky ** 2 + B @ epx_conv - C @ epyx_conv, C @ epy_conv - Kx @ Ky - B @ epxy_conv], dim=1),
+            torch.cat([E_mat @ epx_conv - Ky @ Kx - D @ epyx_conv, Kx ** 2 + D @ epy_conv - E_mat @ epxy_conv], dim=1)
         ])
 
     Eig.perturbation = perturbation
@@ -536,8 +543,8 @@ def transfer_2d_2(kx, ky, epx_conv, epy_conv, epz_conv_i, device=torch.device('c
 
     Omega_R = torch.cat(
         [
-            torch.cat([-Kx @ Ky, Kx ** 2 - epy_conv], dim=1),
-            torch.cat([epx_conv - Ky ** 2, Ky @ Kx], dim=1)
+            torch.cat([-Kx @ Ky + epxy_conv, Kx ** 2 - epy_conv], dim=1),
+            torch.cat([epx_conv - Ky ** 2, Ky @ Kx - epyx_conv], dim=1)
         ]
     )
     V = (Omega_R @ W) / q

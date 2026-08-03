@@ -2,6 +2,7 @@ import numpy as np
 
 from ._base import _BaseRCWA
 from .convolution_matrix import to_conv_mat_raster_continuous, to_conv_mat_raster_discrete, to_conv_mat_vector, to_conv_mat_raster_nvf
+from .fourier_analytic import to_conv_mat_analytic_layers
 from .field_distribution import field_plot, field_dist_1d, field_dist_1d_conical, field_dist_2d
 
 
@@ -89,9 +90,10 @@ class RCWANumpy(_BaseRCWA):
                  connecting_algo='TMM',
                  perturbation=1E-20,
                  type_complex=np.complex128,
-                 fourier_type=0,  # 0 DFS, 1 CFS
+                 fourier_type=0,  # 0 DFS, 1 CFS, 2 NVF
                  enhanced_dfs=True,
                  use_pinv=False,
+                 analytic_normal_grid=256,  # grid for sampling analytic normal field (modeling_type 2)
                  ):
 
         super().__init__(n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi, pol=pol,
@@ -112,6 +114,7 @@ class RCWANumpy(_BaseRCWA):
         self.fourier_type = fourier_type
         self.enhanced_dfs = enhanced_dfs
         self.use_pinv = use_pinv
+        self.analytic_normal_grid = analytic_normal_grid
 
     @property
     def ucell(self):
@@ -131,9 +134,13 @@ class RCWANumpy(_BaseRCWA):
             # self._ucell = np.array(ucell, dtype=dtype)
             self._ucell = ucell.astype(dtype)
 
-        elif type(ucell) is list:  # Vector
-            self._modeling_type_assigned = 1
-            self._ucell = ucell
+        elif type(ucell) is list:
+            if len(ucell) > 0 and isinstance(ucell[0], dict):  # Analytic (list of layer dicts)
+                self._modeling_type_assigned = 2
+                self._ucell = ucell
+            else:  # Vector
+                self._modeling_type_assigned = 1
+                self._ucell = ucell
         elif ucell is None:
             self._ucell = ucell
             self._modeling_type_assigned = None
@@ -180,6 +187,9 @@ class RCWANumpy(_BaseRCWA):
 
         elif self.modeling_type_assigned == 1:  # Vector
             self.grating_type_assigned = 2  # TODO: 1d conical case
+
+        elif self.modeling_type_assigned == 2:  # Analytic (shape-based, staircase-free)
+            self._grating_type_assigned = 2
 
     @property
     def grating_type_assigned(self):
@@ -236,6 +246,11 @@ class RCWANumpy(_BaseRCWA):
             epx_conv_all, epy_conv_all, epz_conv_i_all = to_conv_mat_vector(
                 ucell_vector, self.fto[0], self.fto[1], type_complex=self.type_complex, use_pinv=self.use_pinv)
             epxy_conv_all, epyx_conv_all = None, None
+
+        elif self.modeling_type_assigned == 2:  # Analytic (staircase-free shapes + NVF)
+            epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all, epz_conv_i_all = to_conv_mat_analytic_layers(
+                self.ucell, self.fto[0], self.fto[1], self.period,
+                normal_grid=self.analytic_normal_grid, type_complex=self.type_complex, use_pinv=self.use_pinv)
 
         else:
             raise ValueError("Check 'modeling_type' and 'fourier_type' in 'conv_solve'.")
