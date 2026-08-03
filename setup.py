@@ -23,6 +23,7 @@ setup(
     url='https://github.com/fieldalgo/fieldwave',
     author='FieldAlgo',
     author_email='dev@fieldalgo.com',
+    license='Apache-2.0',
     packages=['fieldwave'] + find_packages(include=['fieldwave.*']),
     install_requires=[
         'numpy>=1.23.3',
