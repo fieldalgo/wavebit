@@ -43,19 +43,17 @@ def transfer_1d_2(pol, kx, epx_conv, epy_conv, epz_conv_i, type_complex=np.compl
         eigenvalues, W = np.linalg.eig(A)
         eigenvalues += 0j  # to get positive square root
         q = eigenvalues ** 0.5
-        Q = np.diag(q)
-        V = W @ Q
+        V = W * q
 
     elif pol == 1:
-        B = Kx @ epz_conv_i @ Kx - np.eye(epy_conv.shape[0], dtype=type_complex)
+        B = kx[:, None] * epz_conv_i * kx - np.eye(epy_conv.shape[0], dtype=type_complex)
 
         eigenvalues, W = np.linalg.eig(epx_conv @ B)
 
         eigenvalues += 0j  # to get positive square root
         q = eigenvalues ** 0.5
 
-        Q = np.diag(q)
-        V = meeinv(epx_conv, use_pinv) @ W @ Q
+        V = meeinv(epx_conv, use_pinv) @ W * q
 
     else:
         raise ValueError
@@ -97,6 +95,7 @@ def transfer_1d_3(k0, W, V, q, d, F, G, T, type_complex=np.complex128, use_pinv=
 
 
 def transfer_1d_4(pol, ff_x, F, G, T, kz_top, kz_bot, theta, n_top, n_bot, type_complex=np.complex128, use_pinv=False):
+    theta = 0 if theta is None else theta
     Kz_top = np.diag(kz_top)
     kz_top = kz_top.reshape((1, ff_x))
     kz_bot = kz_bot.reshape((1, ff_x))
@@ -202,16 +201,13 @@ def transfer_1d_conical_2(kx, ky, epx_conv, epy_conv, epz_conv_i, type_complex=n
     q_1 = eigenvalues_1 ** 0.5
     q_2 = eigenvalues_2 ** 0.5
 
-    Q_1 = np.diag(q_1)
-    Q_2 = np.diag(q_2)
-
     A_i = meeinv(A, use_pinv)
     B_i = meeinv(B, use_pinv)
 
-    V_11 = A_i @ W_1 @ Q_1
+    V_11 = (A_i @ W_1) * q_1
     V_12 = Ky @ A_i @ Kx @ W_2
     V_21 = Ky @ B_i @ Kx @ epz_conv_i @ W_1
-    V_22 = B_i @ W_2 @ Q_2
+    V_22 = (B_i @ W_2) * q_2
 
     W = np.block([W_1, W_2])
     V = np.block([[V_11, V_12],
@@ -284,7 +280,7 @@ def transfer_1d_conical_3(k0, W, V, q, d, varphi, big_F, big_G, big_T, type_comp
 
 def transfer_1d_conical_4(ff_x, ff_y, big_F, big_G, big_T, kz_top, kz_bot, psi, theta, n_top, n_bot,
                           type_complex=np.complex128, use_pinv=False):
-
+    theta = 0 if theta is None else theta
     ff_xy = ff_x * ff_y
 
     Kz_top = np.diag(kz_top)
@@ -455,9 +451,6 @@ def transfer_2d_2(kx, ky, epx_conv, epy_conv, epz_conv_i, type_complex=np.comple
     eigenvalues += 0j  # to get positive square root
     q = eigenvalues ** 0.5
 
-    Q = np.diag(q)
-    Q_i = meeinv(Q, use_pinv)
-
     Omega_R = np.block(
         [
             [-Kx @ Ky, Kx ** 2 - epy_conv],
@@ -465,7 +458,7 @@ def transfer_2d_2(kx, ky, epx_conv, epy_conv, epz_conv_i, type_complex=np.comple
         ]
     )
 
-    V = Omega_R @ W @ Q_i
+    V = (Omega_R @ W) / q
 
     return W, V, q
 
@@ -537,7 +530,7 @@ def transfer_2d_3(k0, W, V, q, d, varphi, big_F, big_G, big_T, type_complex=np.c
 
 def transfer_2d_4(ff_x, ff_y, big_F, big_G, big_T, kz_top, kz_bot, psi, theta, n_top, n_bot,
                   type_complex=np.complex128, use_pinv=False):
-
+    theta = 0 if theta is None else theta
     ff_xy = ff_x * ff_y
 
     Kz_top = np.diag(kz_top)

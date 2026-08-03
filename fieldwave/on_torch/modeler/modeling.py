@@ -29,15 +29,94 @@ class Compress(torch.autograd.Function):
 
 
 class ModelingTorch:
-    def __init__(self, period=None, *args, **kwargs):
-
-        self.ucell = None
+    def __init__(self, period=(1., 1.), device=0, type_complex=torch.complex128, *args, **kwargs):
+        self._ucell = None
         self.ucell_vector = None
         self.x_list = None
         self.y_list = None
         self.mat_table = None
         self.ucell_info_list = None
+
+        self._device = torch.device('cpu')
+        self._type_complex: type = torch.complex128
+        self._type_float: type = torch.float64
+        self._type_int: type = torch.int64
+
+        self.device = device
+        self.type_complex = type_complex
+
+        self._period = None
         self.period = period
+
+    @property
+    def period(self):
+        return self._period
+
+    @period.setter
+    def period(self, period):
+        if type(period) in (int, float):
+            self._period = torch.tensor([period, period], device=self.device, dtype=self.type_float)
+        elif isinstance(period, torch.Tensor):
+            if len(period) == 1:
+                period = torch.cat([period, period])
+            self._period = period.clone().detach().to(device=self.device, dtype=self.type_float)
+        elif type(period) in (list, tuple, np.ndarray):
+            if len(period) == 1:
+                period = [period[0], period[0]]
+            self._period = torch.tensor(period, device=self.device, dtype=self.type_float)
+        else:
+            raise ValueError('Torch period')
+
+    @property
+    def device(self):
+        return self._device
+
+    @device.setter
+    def device(self, device):
+        if device in (0, 'cpu'):
+            self._device = torch.device('cpu')
+        elif device in (1, 'gpu', 'cuda'):
+            self._device = torch.device('cuda')
+        elif type(device) is torch.device:
+            self._device = device
+        else:
+            raise ValueError('device')
+        if hasattr(self, '_period') and self._period is not None:
+            self._period = self._period.clone().detach().to(device=self.device, dtype=self.type_float)
+
+    @property
+    def type_complex(self):
+        return self._type_complex
+
+    @type_complex.setter
+    def type_complex(self, type_complex):
+        if type_complex in (0, torch.complex128, np.complex128):
+            self._type_complex = torch.complex128
+        elif type_complex in (1, torch.complex64, np.complex64):
+            self._type_complex = torch.complex64
+        else:
+            raise ValueError('Torch type_complex')
+
+        self._type_float = torch.float64 if self._type_complex is not torch.complex64 else torch.float32
+        self._type_int = torch.int64 if self._type_complex is not torch.complex64 else torch.int32
+        if hasattr(self, '_period') and self._period is not None:
+            self._period = self._period.clone().detach().to(device=self.device, dtype=self.type_float)
+
+    @property
+    def type_float(self):
+        return self._type_float
+
+    @property
+    def type_int(self):
+        return self._type_int
+
+    @property
+    def ucell(self):
+        return self._ucell
+
+    @ucell.setter
+    def ucell(self, ucell):
+        self._ucell = ucell
         # self.type_complex = torch.complex128
         # self.type_float = torch.float64
 
@@ -493,8 +572,8 @@ class ModelingTorch:
 
             ucell_layer[row_begin:row_end, col_begin:col_end] = pmty
 
-        x_list = torch.cat(col_list).reshape((-1, 1))
-        y_list = torch.cat(row_list).reshape((-1, 1))
+        x_list = torch.cat([torch.as_tensor(x, device=self.device).reshape(-1) for x in col_list]).reshape((-1, 1))
+        y_list = torch.cat([torch.as_tensor(y, device=self.device).reshape(-1) for y in row_list]).reshape((-1, 1))
 
         return ucell_layer, x_list, y_list
 

@@ -5,6 +5,7 @@ import numpy as np
 from ._base import _BaseRCWA
 from .convolution_matrix import to_conv_mat_raster_discrete, to_conv_mat_raster_continuous, to_conv_mat_vector
 from .field_distribution import field_dist_1d, field_dist_1d_conical, field_dist_2d, field_plot
+from ..modeler.modeling import ModelingTorch
 
 
 class ResultTorch:
@@ -18,6 +19,12 @@ class ResultTorch:
     def de_ri(self):
         if self.res is not None:
             return self.res.de_ri
+        elif self.res_te_inc is not None and self.res_tm_inc is not None:
+            return 0.5 * (self.res_te_inc.de_ri + self.res_tm_inc.de_ri)
+        elif self.res_te_inc is not None:
+            return self.res_te_inc.de_ri
+        elif self.res_tm_inc is not None:
+            return self.res_tm_inc.de_ri
         else:
             return None
 
@@ -25,6 +32,12 @@ class ResultTorch:
     def de_ti(self):
         if self.res is not None:
             return self.res.de_ti
+        elif self.res_te_inc is not None and self.res_tm_inc is not None:
+            return 0.5 * (self.res_te_inc.de_ti + self.res_tm_inc.de_ti)
+        elif self.res_te_inc is not None:
+            return self.res_te_inc.de_ti
+        elif self.res_tm_inc is not None:
+            return self.res_tm_inc.de_ti
         else:
             return None
 
@@ -45,6 +58,15 @@ class ResultSubTorch:
 
 
 class RCWATorch(_BaseRCWA):
+    def modeling_vector_instruction(self, *args, **kwargs):
+        return self.modeler.modeling_vector_instruction(*args, **kwargs)
+
+    def rectangle(self, *args, **kwargs):
+        return self.modeler.rectangle(*args, **kwargs)
+
+    def ellipse(self, *args, **kwargs):
+        return self.modeler.ellipse(*args, **kwargs)
+
     def __init__(self,
                  n_top=1.,
                  n_bot=1.,
@@ -73,8 +95,11 @@ class RCWATorch(_BaseRCWA):
                          thickness=thickness, connecting_algo=connecting_algo, perturbation=perturbation,
                          device=device, type_complex=type_complex, use_pinv=use_pinv)
 
+        self.modeler = ModelingTorch(period=self.period, device=device, type_complex=type_complex)
+
         self._modeling_type_assigned = None
         self._grating_type_assigned = None
+        self._ucell = None
 
         self.ucell = ucell
         self.ucell_materials = ucell_materials
@@ -91,7 +116,7 @@ class RCWATorch(_BaseRCWA):
     @ucell.setter
     def ucell(self, ucell):
 
-        if isinstance(ucell, (torch.Tensor, np.ndarray)):  # Raster
+        if isinstance(ucell, torch.Tensor):  # Raster
             self._modeling_type_assigned = 0
             if ucell.dtype in (torch.complex128, torch.complex64):
                 dtype = self.type_complex
@@ -99,7 +124,12 @@ class RCWATorch(_BaseRCWA):
             elif ucell.dtype in (torch.float64, torch.float32, torch.int64, torch.int32):
                 dtype = self.type_float
                 self._ucell = ucell.to(device=self.device, dtype=dtype)
-            elif ucell.dtype in (np.int64, np.float64, np.int32, np.float32):
+            else:
+                raise ValueError
+
+        elif isinstance(ucell, np.ndarray):  # Raster
+            self._modeling_type_assigned = 0
+            if ucell.dtype in (np.int64, np.float64, np.int32, np.float32):
                 dtype = self.type_float
                 self._ucell = torch.tensor(ucell, device=self.device, dtype=dtype)
             elif ucell.dtype in (np.complex128, np.complex64):
@@ -113,6 +143,7 @@ class RCWATorch(_BaseRCWA):
             self._ucell = ucell
         elif ucell is None:
             self._ucell = ucell
+            self._modeling_type_assigned = None
         else:
             raise ValueError
 
@@ -127,6 +158,11 @@ class RCWATorch(_BaseRCWA):
     def _assign_grating_type(self):
         # self.modeling_type_assigned = 0
         # self._grating_type_assigned = 1  # else
+
+        if self.ucell is None:
+            if self._grating_type_assigned is None:
+                self._grating_type_assigned = 2
+            return
 
         if self.modeling_type_assigned == 0:
             if self.ucell.shape[1] == 1:

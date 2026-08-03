@@ -3,10 +3,9 @@ from .emsolver.rcwa import RCWAJax
 from .optimizer.optimizer import OptimizerJax
 
 
-class MeeJax(ModelingJax, RCWAJax, OptimizerJax):
+class MeeJax(RCWAJax, OptimizerJax):
 
     def __init__(self, *args, **kwargs):
-        ModelingJax.__init__(self, *args, **kwargs)
         RCWAJax.__init__(self, *args, **kwargs)
         OptimizerJax.__init__(self, *args, **kwargs)
 

@@ -4,10 +4,9 @@ from .modeler.modeling import ModelingNumpy
 from .emsolver.rcwa import RCWANumpy
 
 
-class MeeNumpy(ModelingNumpy, RCWANumpy):
+class MeeNumpy(RCWANumpy):
 
     def __init__(self, *args, **kwargs):
-        ModelingNumpy.__init__(self, *args, **kwargs)
         RCWANumpy.__init__(self, *args, **kwargs)
 
     # def spectrum(self, wavelength_list):

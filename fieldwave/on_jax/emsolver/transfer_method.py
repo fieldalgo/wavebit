@@ -61,8 +61,7 @@ def transfer_1d_2(pol, kx, epx_conv, epy_conv, epz_conv_i, type_complex=jnp.comp
         eigenvalues, W = eig(A, type_complex, perturbation)
         eigenvalues += 0j  # to get positive square root
         q = eigenvalues ** 0.5
-        Q = jnp.diag(q)
-        V = W @ Q
+        V = W * q
         return W, V, q
 
     def true_fun(Kx, epy_conv):  # TM
@@ -73,9 +72,7 @@ def transfer_1d_2(pol, kx, epx_conv, epy_conv, epz_conv_i, type_complex=jnp.comp
         eigenvalues += 0j  # to get positive square root
         q = eigenvalues ** 0.5
 
-        Q = jnp.diag(q)
-        # V = jnp.linalg.inv(epx_conv) @ W @ Q
-        V = meeinv(epx_conv, use_pinv) @ W @ Q
+        V = meeinv(epx_conv, use_pinv) @ W * q
         return W, V, q
 
     W, V, q = jax.lax.cond(pol.real, true_fun, false_fun, Kx, epy_conv)
@@ -140,6 +137,7 @@ def transfer_1d_3(k0, W, V, q, d, F, G, T, type_complex=jnp.complex128, use_pinv
 
 
 def transfer_1d_4(pol, ff_x, F, G, T, kz_top, kz_bot, theta, n_top, n_bot, type_complex=jnp.complex128, use_pinv=False):
+    theta = 0 if theta is None else theta
     Kz_top = jnp.diag(kz_top)
     kz_top = kz_top.reshape((1, ff_x))
     kz_bot = kz_bot.reshape((1, ff_x))
@@ -182,7 +180,7 @@ def transfer_1d_4(pol, ff_x, F, G, T, kz_top, kz_bot, theta, n_top, n_bot, type_
         _T = (T @ T1).reshape((1, ff_x))
 
         de_ri = (R * R.conj() * (kz_top / (n_top * jnp.cos(theta))).real).real
-        de_ti = (_T * _T.conj() * (kz_bot / n_bot ** 2 / (jnp.cos(theta) / n_top)).real).real
+        de_ti = (_T * _T.conj() * (kz_bot.conj() / n_bot ** 2 / (jnp.cos(theta) / n_top)).real).real
 
         R_s = jnp.zeros(R.shape, dtype=R.dtype)
         R_p = R
@@ -295,16 +293,13 @@ def transfer_1d_conical_2(kx, ky, epx_conv, epy_conv, epz_conv_i, type_complex=j
     q_1 = eigenvalues_1 ** 0.5
     q_2 = eigenvalues_2 ** 0.5
 
-    Q_1 = jnp.diag(q_1)
-    Q_2 = jnp.diag(q_2)
-
     A_i = meeinv(A, use_pinv)
     B_i = meeinv(B, use_pinv)
 
-    V_11 = A_i @ W_1 @ Q_1
+    V_11 = (A_i @ W_1) * q_1
     V_12 = Ky @ A_i @ Kx @ W_2
     V_21 = Ky @ B_i @ Kx @ epz_conv_i @ W_1
-    V_22 = B_i @ W_2 @ Q_2
+    V_22 = (B_i @ W_2) * q_2
 
     W = jnp.block([W_1, W_2])
     V = jnp.block([[V_11, V_12],
@@ -379,7 +374,7 @@ def transfer_1d_conical_3(k0, W, V, q, d, varphi, big_F, big_G, big_T, type_comp
 #                           type_complex=jnp.complex128):
 def transfer_1d_conical_4(ff_x, ff_y, big_F, big_G, big_T, kz_top, kz_bot, psi, theta, n_top, n_bot,
                           type_complex=jnp.complex128, use_pinv=False):
-
+    theta = 0 if theta is None else theta
     ff_xy = ff_x * ff_y
 
     Kz_top = jnp.diag(kz_top)
@@ -434,10 +429,10 @@ def transfer_1d_conical_4(ff_x, ff_y, big_F, big_G, big_T, kz_top, kz_bot, psi, 
     T_p = big_T[ff_xy:, :].reshape((ff_y, ff_x))
 
     de_ri_s = (R_s * R_s.conj() * (kz_top / (n_top * jnp.cos(theta))).real).real
-    de_ri_p = (R_p * R_p.conj() * (kz_top / n_top ** 2 / (n_top * jnp.cos(theta))).real).real
+    de_ri_p = (R_p * R_p.conj() * (kz_top.conj() / n_top ** 2 / (n_top * jnp.cos(theta))).real).real
 
     de_ti_s = (T_s * T_s.conj() * (kz_bot / (n_top * jnp.cos(theta))).real).real
-    de_ti_p = (T_p * T_p.conj() * (kz_bot / n_bot ** 2 / (n_top * jnp.cos(theta))).real).real
+    de_ti_p = (T_p * T_p.conj() * (kz_bot.conj() / n_bot ** 2 / (n_top * jnp.cos(theta))).real).real
 
     de_ri = de_ri_s + de_ri_p
     de_ti = de_ti_s + de_ti_p
@@ -480,10 +475,10 @@ def transfer_1d_conical_4(ff_x, ff_y, big_F, big_G, big_T, kz_top, kz_bot, psi, 
     T_p_tetm = big_T_tetm[ff_xy:, :].T.reshape((2, ff_y, ff_x))
 
     de_ri_s_tetm = (R_s_tetm * R_s_tetm.conj() * (kz_top / (n_top * jnp.cos(theta))).real).real
-    de_ri_p_tetm = (R_p_tetm * R_p_tetm.conj() * (kz_top / n_top ** 2 / (n_top * jnp.cos(theta))).real).real
+    de_ri_p_tetm = (R_p_tetm * R_p_tetm.conj() * (kz_top.conj() / n_top ** 2 / (n_top * jnp.cos(theta))).real).real
 
     de_ti_s_tetm = (T_s_tetm * T_s_tetm.conj() * (kz_bot / (n_top * jnp.cos(theta))).real).real
-    de_ti_p_tetm = (T_p_tetm * T_p_tetm.conj() * (kz_bot / n_bot ** 2 / (n_top * jnp.cos(theta))).real).real
+    de_ti_p_tetm = (T_p_tetm * T_p_tetm.conj() * (kz_bot.conj() / n_bot ** 2 / (n_top * jnp.cos(theta))).real).real
 
     de_ri_tetm = de_ri_s_tetm + de_ri_p_tetm
     de_ti_tetm = de_ti_s_tetm + de_ti_p_tetm
@@ -556,9 +551,6 @@ def transfer_2d_2(kx, ky, epx_conv, epy_conv, epz_conv_i, type_complex=jnp.compl
     eigenvalues += 0j  # to get positive square root
     q = eigenvalues ** 0.5
 
-    Q = jnp.diag(q)
-    Q_i = meeinv(Q, use_pinv)
-
     Omega_R = jnp.block(
         [
             [-Kx @ Ky, Kx ** 2 - epy_conv],
@@ -566,7 +558,7 @@ def transfer_2d_2(kx, ky, epx_conv, epy_conv, epz_conv_i, type_complex=jnp.compl
         ]
     )
 
-    V = Omega_R @ W @ Q_i
+    V = (Omega_R @ W) / q
 
     return W, V, q
 
@@ -638,6 +630,7 @@ def transfer_2d_3(k0, W, V, q, d, varphi, big_F, big_G, big_T, type_complex=jnp.
 
 def transfer_2d_4(ff_x, ff_y, big_F, big_G, big_T, kz_top, kz_bot, psi, theta, n_top, n_bot,
                   type_complex=jnp.complex128, use_pinv=False):
+    theta = 0 if theta is None else theta
     ff_xy = ff_x * ff_y
 
     Kz_top = jnp.diag(kz_top)
@@ -694,10 +687,10 @@ def transfer_2d_4(ff_x, ff_y, big_F, big_G, big_T, kz_top, kz_bot, psi, theta, n
     T_p = big_T[ff_xy:, :].reshape((ff_y, ff_x))
 
     de_ri_s = (R_s * R_s.conj() * (kz_top / (n_top * jnp.cos(theta))).real).real
-    de_ri_p = (R_p * R_p.conj() * (kz_top / n_top ** 2 / (n_top * jnp.cos(theta))).real).real
+    de_ri_p = (R_p * R_p.conj() * (kz_top.conj() / n_top ** 2 / (n_top * jnp.cos(theta))).real).real
 
     de_ti_s = (T_s * T_s.conj() * (kz_bot / (n_top * jnp.cos(theta))).real).real
-    de_ti_p = (T_p * T_p.conj() * (kz_bot / n_bot ** 2 / (n_top * jnp.cos(theta))).real).real
+    de_ti_p = (T_p * T_p.conj() * (kz_bot.conj() / n_bot ** 2 / (n_top * jnp.cos(theta))).real).real
 
     de_ri = de_ri_s + de_ri_p
     de_ti = de_ti_s + de_ti_p
@@ -739,10 +732,10 @@ def transfer_2d_4(ff_x, ff_y, big_F, big_G, big_T, kz_top, kz_bot, psi, theta, n
     T_p_tetm = big_T_tetm[ff_xy:, :].T.reshape((2, ff_y, ff_x))
 
     de_ri_s_tetm = (R_s_tetm * R_s_tetm.conj() * (kz_top / (n_top * jnp.cos(theta))).real).real
-    de_ri_p_tetm = (R_p_tetm * R_p_tetm.conj() * (kz_top / n_top ** 2 / (n_top * jnp.cos(theta))).real).real
+    de_ri_p_tetm = (R_p_tetm * R_p_tetm.conj() * (kz_top.conj() / n_top ** 2 / (n_top * jnp.cos(theta))).real).real
 
     de_ti_s_tetm = (T_s_tetm * T_s_tetm.conj() * (kz_bot / (n_top * jnp.cos(theta))).real).real
-    de_ti_p_tetm = (T_p_tetm * T_p_tetm.conj() * (kz_bot / n_bot ** 2 / (n_top * jnp.cos(theta))).real).real
+    de_ti_p_tetm = (T_p_tetm * T_p_tetm.conj() * (kz_bot.conj() / n_bot ** 2 / (n_top * jnp.cos(theta))).real).real
 
     de_ri_tetm = de_ri_s_tetm + de_ri_p_tetm
     de_ti_tetm = de_ti_s_tetm + de_ti_p_tetm

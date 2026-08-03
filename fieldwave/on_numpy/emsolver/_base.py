@@ -16,6 +16,7 @@ class _BaseRCWA:
         self._device = 0
 
         # type_complex
+        self._type_complex: type
         if type_complex in (0, np.complex128):
             self._type_complex = np.complex128
         elif type_complex in (1, np.complex64):
@@ -77,6 +78,9 @@ class _BaseRCWA:
 
         self.fto = self.fto
         self.thickness = self.thickness
+
+        if hasattr(self, 'modeler') and self.modeler is not None:
+            self.modeler.type_complex = self._type_complex
 
     @property
     def type_float(self):
@@ -147,7 +151,7 @@ class _BaseRCWA:
     @fto.setter
     def fto(self, fto):
 
-        if type(fto) in (list, tuple):
+        if isinstance(fto, (list, tuple)):
             if len(fto) == 1:
                 self._fto = [int(fto[0]), 0]
             elif len(fto) == 2:
@@ -155,19 +159,19 @@ class _BaseRCWA:
             else:
                 raise ValueError
         elif isinstance(fto, np.ndarray):
-            self._fto = fto.tolist()
-            if type(self._fto) is list:
-                if len(self._fto) == 1:
-                    self._fto = [int(self._fto[0]), 0]
-                elif len(self._fto) == 2:
-                    self._fto = [int(v) for v in self._fto]
+            fto_list = fto.tolist()
+            if isinstance(fto_list, list):
+                if len(fto_list) == 1:
+                    self._fto = [int(fto_list[0]), 0]
+                elif len(fto_list) == 2:
+                    self._fto = [int(v) for v in fto_list]
                 else:
                     raise ValueError
-            elif type(self._fto) in (int, float):
-                self._fto = [int(self._fto), 0]
+            elif isinstance(fto_list, (int, float)):
+                self._fto = [int(fto_list), 0]
             else:
                 raise ValueError
-        elif type(fto) in (int, float):
+        elif isinstance(fto, (int, float)):
             self._fto = [int(fto), 0]
         else:
             raise ValueError
@@ -187,6 +191,9 @@ class _BaseRCWA:
         else:
             raise ValueError
 
+        if hasattr(self, 'modeler') and self.modeler is not None:
+            self.modeler.period = self._period
+
     @property
     def thickness(self):
         return self._thickness
@@ -205,11 +212,13 @@ class _BaseRCWA:
         fto_x_range = np.arange(-self.fto[0], self.fto[0] + 1)
         fto_y_range = np.arange(-self.fto[1], self.fto[1] + 1)
 
-        if self.theta.real >= np.float32(np.pi / 2):
+        theta = 0 if self.theta is None else self.theta
+
+        if theta.real >= np.float32(np.pi / 2):
             # https://github.com/numpy/numpy/issues/27306
-            sin_theta = np.sin(np.nextafter(np.float32(np.pi / 2), np.float32(0)) + self.theta.imag * np.complex64(1j))
+            sin_theta = np.sin(np.nextafter(np.float32(np.pi / 2), np.float32(0)) + theta.imag * np.complex64(1j))
         else:
-            sin_theta = np.sin(self.theta)
+            sin_theta = np.sin(theta)
 
         phi = 0 if self.phi is None else self.phi  # phi is None -> 1D TE TM case
 
@@ -311,8 +320,7 @@ class _BaseRCWA:
                 = transfer_1d_conical_1(kx, ky, self.n_top, self.n_bot, type_complex=self.type_complex)
 
         elif self.connecting_algo == 'SMM':
-            print('SMM for 1D conical is not implemented')
-            return np.nan, np.nan
+            raise ValueError('SMM for 1D conical is not implemented')
         else:
             raise ValueError
 

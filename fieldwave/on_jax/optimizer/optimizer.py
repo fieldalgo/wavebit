@@ -2,7 +2,7 @@ import jax
 
 try:
     import optax
-except TypeError as e:
+except (TypeError, ImportError, ModuleNotFoundError) as e:
     import warnings
 
     warnings.warn('Importing optax failed. You can run RCWA but not optimization in JaxMeent. '

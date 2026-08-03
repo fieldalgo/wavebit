@@ -77,7 +77,7 @@ def to_conv_mat_raster_continuous(ucell, fto_x, fto_y, device=None, type_complex
 
     for i, layer in enumerate(ucell):
         n_compressed, x_list, y_list = cell_compression(layer, type_complex=type_complex)
-        eps_matrix = n_compressed ** 2
+        eps_matrix = np.conj(n_compressed) ** 2
 
         epz_conv = cfs2d(eps_matrix, x_list, y_list, 1, 1, fto_x, fto_y, type_complex)
         epy_conv = cfs2d(eps_matrix, x_list, y_list, 1, 0, fto_x, fto_y, type_complex)

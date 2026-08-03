@@ -7,7 +7,8 @@ from functools import partial
 
 from ._base import _BaseRCWA, jax_device_set
 from .convolution_matrix import to_conv_mat_raster_discrete, to_conv_mat_raster_continuous, to_conv_mat_vector
-from .field_distribution import field_dist_1d, field_dist_1d_conical, field_dist_2d,  field_plot
+from .field_distribution import field_dist_1d, field_dist_1d_conical, field_dist_2d, field_plot
+from ..modeler.modeling import ModelingJax
 
 
 class ResultJax:
@@ -21,6 +22,12 @@ class ResultJax:
     def de_ri(self):
         if self.res is not None:
             return self.res.de_ri
+        elif self.res_te_inc is not None and self.res_tm_inc is not None:
+            return 0.5 * (self.res_te_inc.de_ri + self.res_tm_inc.de_ri)
+        elif self.res_te_inc is not None:
+            return self.res_te_inc.de_ri
+        elif self.res_tm_inc is not None:
+            return self.res_tm_inc.de_ri
         else:
             return None
 
@@ -28,6 +35,12 @@ class ResultJax:
     def de_ti(self):
         if self.res is not None:
             return self.res.de_ti
+        elif self.res_te_inc is not None and self.res_tm_inc is not None:
+            return 0.5 * (self.res_te_inc.de_ti + self.res_tm_inc.de_ti)
+        elif self.res_te_inc is not None:
+            return self.res_te_inc.de_ti
+        elif self.res_tm_inc is not None:
+            return self.res_tm_inc.de_ti
         else:
             return None
 
@@ -48,6 +61,15 @@ class ResultSubJax:
 
 
 class RCWAJax(_BaseRCWA):
+    def modeling_vector_instruction(self, *args, **kwargs):
+        return self.modeler.modeling_vector_instruction(*args, **kwargs)
+
+    def rectangle(self, *args, **kwargs):
+        return self.modeler.rectangle(*args, **kwargs)
+
+    def ellipse(self, *args, **kwargs):
+        return self.modeler.ellipse(*args, **kwargs)
+
     def __init__(self,
                  n_top=1.,
                  n_bot=1.,
@@ -76,8 +98,11 @@ class RCWAJax(_BaseRCWA):
                          thickness=thickness, connecting_algo=connecting_algo, perturbation=perturbation,
                          device=device, type_complex=type_complex, use_pinv=use_pinv)
 
+        self.modeler = ModelingJax(period=self.period, type_complex=type_complex)
+
         self._modeling_type_assigned = None
         self._grating_type_assigned = None
+        self._ucell = None
 
         self.ucell = ucell
         self.ucell_materials = ucell_materials
@@ -117,6 +142,7 @@ class RCWAJax(_BaseRCWA):
             self._ucell = ucell
         elif ucell is None:
             self._ucell = ucell
+            self._modeling_type_assigned = None
         else:
             raise ValueError
 
@@ -144,22 +170,27 @@ class RCWAJax(_BaseRCWA):
         Returns:
 
         """
+        if self.ucell is None:
+            if self._grating_type_assigned is None:
+                self._grating_type_assigned = 2
+            return
+
         if self.modeling_type_assigned == 0:  # Raster
             if self.ucell.shape[1] == 1:
                 if (self.pol in (0, 1)) and (self.phi is None) and (self.fto[1] == 0):
                     self._grating_type_assigned = 0
                 else:
                     self._grating_type_assigned = 1
-
-                    # TODO: jit
-                    # def false_fun(): return 0  # 1D TE and TM only
-                    # def true_fun(): return 1
-                    #
-                    # gear = jax.lax.cond(self.phi % (2 * np.pi) + self.fto[1], true_fun, false_fun)
-                    #
-                    # self._grating_type_assigned = gear
             else:
                 self._grating_type_assigned = 2
+
+        # TODO: jit
+        # def false_fun(): return 0  # 1D TE and TM only
+        # def true_fun(): return 1
+        #
+        # gear = jax.lax.cond(self.phi % (2 * np.pi) + self.fto[1], true_fun, false_fun)
+        #
+        # self._grating_type_assigned = gear
 
         elif self.modeling_type_assigned == 1:  # Vector
             self.grating_type_assigned = 2
@@ -290,15 +321,15 @@ class RCWAJax(_BaseRCWA):
             print('CFT (fourier_type=1) is not supported with JAX jit-compilation. Use conv_solve_field_no_jit.')
             return None, None, None
 
-        de_ri, de_ti, _, _ = self._conv_solve()
+        res = self.conv_solve()
         field_cell = self.calculate_field(res_x, res_y, res_z, set_field_input)
-        return de_ri, de_ti, field_cell
+        return res, field_cell
 
     @jax_device_set
     def conv_solve_field_no_jit(self, res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False)):
-        de_ri, de_ti, _, _ = self._conv_solve()
+        res = self.conv_solve()
         field_cell = self.calculate_field(res_x, res_y, res_z, set_field_input)
-        return de_ri, de_ti, field_cell
+        return res, field_cell
 
     def run_ucell_vmap(self, ucell_list):
         """

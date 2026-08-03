@@ -7,14 +7,74 @@ from pathlib import Path
 
 
 class ModelingNumpy:
-    def __init__(self, *args, **kwargs):
-
-        self.ucell = None
+    def __init__(self, period=(1., 1.), type_complex=np.complex128, *args, **kwargs):
+        self._ucell = None
         self.ucell_vector = None
         self.x_list = None
         self.y_list = None
         self.mat_table = None
         self.ucell_info_list = None
+
+        self._type_complex: type = np.complex128
+        self._type_float: type = np.float64
+        self._type_int: type = np.int64
+        self.type_complex = type_complex
+
+        self._period = None
+        self.period = period
+
+    @property
+    def period(self):
+        return self._period
+
+    @period.setter
+    def period(self, period):
+        if period is None:
+            self._period = None
+        elif isinstance(period, (int, float)):
+            self._period = np.array([period, period], dtype=self.type_float)
+        elif isinstance(period, (list, tuple, np.ndarray)):
+            if len(period) == 1:
+                period = [period[0], period[0]]
+            self._period = np.array(period, dtype=self.type_float)
+        else:
+            raise ValueError('Numpy period')
+
+    @property
+    def type_complex(self):
+        return self._type_complex
+
+    @type_complex.setter
+    def type_complex(self, type_complex):
+        if type_complex in (0, np.complex128):
+            self._type_complex = np.complex128
+        elif type_complex in (1, np.complex64):
+            self._type_complex = np.complex64
+        elif type_complex in (np.complex128, np.complex64):
+            self._type_complex = type_complex
+        else:
+            raise ValueError('Numpy type_complex')
+
+        self._type_float = np.float64 if self._type_complex is not np.complex64 else np.float32
+        self._type_int = np.int64 if self._type_complex is not np.complex64 else np.int32
+        if hasattr(self, '_period') and self._period is not None:
+            self._period = np.array(self._period, dtype=self._type_float)
+
+    @property
+    def type_float(self):
+        return self._type_float
+
+    @property
+    def type_int(self):
+        return self._type_int
+
+    @property
+    def ucell(self):
+        return self._ucell
+
+    @ucell.setter
+    def ucell(self, ucell):
+        self._ucell = ucell
 
     @staticmethod
     def rectangle_no_approximation(cx, cy, lx, ly, base):
@@ -598,6 +658,9 @@ class ModelingNumpy:
                 index = bisect_left(col_list, bottom_right[1].real)
                 col_list.insert(index, bottom_right[1])
 
+        if self.period is None:
+            raise ValueError("period is not set")
+
         if not row_list or row_list[-1] != self.period[1]:
             row_list.append(self.period[1].reshape(1).astype(datatype))
         if not col_list or col_list[-1] != self.period[0]:
@@ -627,8 +690,8 @@ class ModelingNumpy:
 
             ucell_layer[row_begin:row_end, col_begin:col_end] = pmty
 
-        x_list = np.concatenate(col_list).reshape((-1, 1))
-        y_list = np.concatenate(row_list).reshape((-1, 1))
+        x_list = np.concatenate([np.asarray(x).reshape(-1) for x in col_list]).reshape((-1, 1))
+        y_list = np.concatenate([np.asarray(y).reshape(-1) for y in row_list]).reshape((-1, 1))
 
         return ucell_layer, x_list, y_list
 

@@ -2,7 +2,7 @@
 *.egg-info
 .vscode
 .DS_Store
-__pycache__\
+__pycache__/
 venv/
 build/
 dist/
@@ -18,3 +18,4 @@ venv
 *__pycache__*
 *.json
 *.csv
+devs/

@@ -8,8 +8,70 @@ from pathlib import Path
 
 
 class ModelingJax:
-    def __init__(self, *args, **kwargs):
-        pass
+    def __init__(self, period=(1., 1.), type_complex=jnp.complex128, *args, **kwargs):
+        self._ucell = None
+        self.ucell_vector = None
+        self.x_list = None
+        self.y_list = None
+        self.mat_table = None
+        self.ucell_info_list = None
+
+        self._type_complex: type = jnp.complex128
+        self._type_float: type = jnp.float64
+        self._type_int: type = jnp.int64
+        self.type_complex = type_complex
+
+        self._period = None
+        self.period = period
+
+    @property
+    def period(self):
+        return self._period
+
+    @period.setter
+    def period(self, period):
+        if type(period) in (int, float):
+            self._period = jnp.array([period, period], dtype=self.type_float)
+        elif type(period) in (list, tuple, np.ndarray) or isinstance(period, jnp.ndarray):
+            if len(period) == 1:
+                period = [period[0], period[0]]
+            self._period = jnp.array(period, dtype=self.type_float)
+        else:
+            raise ValueError('JAX period')
+
+    @property
+    def type_complex(self):
+        return self._type_complex
+
+    @type_complex.setter
+    def type_complex(self, type_complex):
+        if type_complex in (0, jnp.complex128, np.complex128):
+            self._type_complex = jnp.complex128
+        elif type_complex in (1, jnp.complex64, np.complex64):
+            self._type_complex = jnp.complex64
+        else:
+            raise ValueError('JAX type_complex')
+
+        self._type_float = jnp.float64 if self._type_complex is not jnp.complex64 else jnp.float32
+        self._type_int = jnp.int64 if self._type_complex is not jnp.complex64 else jnp.int32
+        if hasattr(self, '_period') and self._period is not None:
+            self._period = jnp.array(self._period, dtype=self._type_float)
+
+    @property
+    def type_float(self):
+        return self._type_float
+
+    @property
+    def type_int(self):
+        return self._type_int
+
+    @property
+    def ucell(self):
+        return self._ucell
+
+    @ucell.setter
+    def ucell(self, ucell):
+        self._ucell = ucell
 
     @staticmethod
     def rectangle_no_approximation(cx, cy, lx, ly, base):
@@ -617,8 +679,8 @@ class ModelingJax:
 
             ucell_layer = ucell_layer.at[row_begin:row_end, col_begin:col_end].set(pmty)
 
-        x_list = jnp.concatenate(col_list).reshape((-1, 1))
-        y_list = jnp.concatenate(row_list).reshape((-1, 1))
+        x_list = jnp.concatenate([jnp.asarray(x).reshape(-1) for x in col_list]).reshape((-1, 1))
+        y_list = jnp.concatenate([jnp.asarray(y).reshape(-1) for y in row_list]).reshape((-1, 1))
 
         return ucell_layer, x_list, y_list
 

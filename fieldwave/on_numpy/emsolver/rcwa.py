@@ -15,6 +15,12 @@ class ResultNumpy:
     def de_ri(self):
         if self.res is not None:
             return self.res.de_ri
+        elif self.res_te_inc is not None and self.res_tm_inc is not None:
+            return 0.5 * (self.res_te_inc.de_ri + self.res_tm_inc.de_ri)
+        elif self.res_te_inc is not None:
+            return self.res_te_inc.de_ri
+        elif self.res_tm_inc is not None:
+            return self.res_tm_inc.de_ri
         else:
             return None
 
@@ -22,6 +28,12 @@ class ResultNumpy:
     def de_ti(self):
         if self.res is not None:
             return self.res.de_ti
+        elif self.res_te_inc is not None and self.res_tm_inc is not None:
+            return 0.5 * (self.res_te_inc.de_ti + self.res_tm_inc.de_ti)
+        elif self.res_te_inc is not None:
+            return self.res_te_inc.de_ti
+        elif self.res_tm_inc is not None:
+            return self.res_tm_inc.de_ti
         else:
             return None
 
@@ -41,7 +53,25 @@ class ResultSubNumpy:
         self.de_ti_p = de_ti_p
 
 
+from ..modeler.modeling import ModelingNumpy
+
+
 class RCWANumpy(_BaseRCWA):
+    def modeling_vector_instruction(self, *args, **kwargs):
+        return self.modeler.modeling_vector_instruction(*args, **kwargs)
+
+    def rectangle(self, *args, **kwargs):
+        return self.modeler.rectangle(*args, **kwargs)
+
+    def ellipse(self, *args, **kwargs):
+        return self.modeler.ellipse(*args, **kwargs)
+
+    def run_ucell_vmap(self, ucell_list):
+        """
+        under development
+        """
+        pass
+
     def __init__(self,
                  n_top=1.,
                  n_bot=1.,
@@ -58,7 +88,6 @@ class RCWANumpy(_BaseRCWA):
                  ucell_materials=None,
                  connecting_algo='TMM',
                  perturbation=1E-20,
-                 device='cpu',
                  type_complex=np.complex128,
                  fourier_type=0,  # 0 DFS, 1 CFS
                  enhanced_dfs=True,
@@ -68,10 +97,13 @@ class RCWANumpy(_BaseRCWA):
         super().__init__(n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi, pol=pol,
                          fto=fto, period=period, wavelength=wavelength,
                          thickness=thickness, connecting_algo=connecting_algo, perturbation=perturbation,
-                         device=device, type_complex=type_complex, use_pinv=use_pinv)
+                         type_complex=type_complex, use_pinv=use_pinv)
+
+        self.modeler = ModelingNumpy(period=self.period, type_complex=type_complex)
 
         self._modeling_type_assigned = None
         self._grating_type_assigned = None
+        self._ucell = None
 
         self.ucell = ucell
         self.ucell_materials = ucell_materials
@@ -104,6 +136,7 @@ class RCWANumpy(_BaseRCWA):
             self._ucell = ucell
         elif ucell is None:
             self._ucell = ucell
+            self._modeling_type_assigned = None
         else:
             raise ValueError
 
@@ -131,6 +164,10 @@ class RCWANumpy(_BaseRCWA):
         Returns:
 
         """
+        if self.ucell is None:
+            if self._grating_type_assigned is None:
+                self._grating_type_assigned = 2
+            return
 
         if self.modeling_type_assigned == 0:  # Raster
             if self.ucell.shape[1] == 1:
