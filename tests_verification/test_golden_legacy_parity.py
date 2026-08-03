@@ -96,3 +96,30 @@ def test_calculate_field_still_runs():
     field = mee.calculate_field(res_x=4, res_y=4, res_z=4)
     field = np.asarray(field)
     assert field.ndim >= 3 and np.isfinite(field).all()
+
+
+# ------------------------------------------------ every backend, one implementation
+
+@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('name', [n for n in CASES if 'nvf' not in n])
+def test_jax_and_torch_match_the_same_golden(name, backend):
+    """JAX and PyTorch run the same core, so they land on the NumPy reference too.
+
+    This is the property the rewrite exists to guarantee: one implementation, so a backend
+    cannot silently drift. The tolerance is float-rounding only — the backends' linear algebra
+    differs in accumulation order, not in the physics.
+    """
+    pytest.importorskip('jax' if backend == 1 else 'torch')
+    kw = dict(CASES[name])
+    kw['ucell'] = np.asarray(kw['ucell'], dtype=float)
+    result = fieldwave.call_mee(backend=backend, **kw).conv_solve()
+
+    for sub in ('res', 'res_te_inc', 'res_tm_inc'):
+        got_sub = getattr(result, sub)
+        if got_sub is None:
+            continue
+        for f in ('de_ri', 'de_ti'):
+            want = GOLDEN[f'{name}__{sub}__{f}']
+            got = np.asarray(getattr(got_sub, f))
+            assert np.allclose(want, got, atol=1e-12, rtol=0), (
+                sub, f, np.max(np.abs(want - got)))

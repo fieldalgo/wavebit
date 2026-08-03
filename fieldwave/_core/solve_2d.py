@@ -13,7 +13,7 @@ versions, so this module reuses ``solve_1d``'s boundary init and ``final_matchin
 """
 from .backend import array_namespace, eig
 from .conventions import outgoing_sqrt
-from .solve_1d import _block, _diag, _diagonal, final_matching
+from .solve_1d import _block, _diag, _diagonal, _same_material, final_matching
 
 
 def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
@@ -60,7 +60,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     big_G = _block(xp, [[1j * Kz_bot, O], [O, I]])
     big_T = xp.astype(xp.eye(2 * ff_xy), C)
 
-    eps_below = complex(n_bot).conjugate() ** 2
+    eps_below = xp.asarray(complex(n_bot).conjugate() ** 2, dtype=C)
 
     # Kx = diag(tile(kx, ff_y)) ; Ky = diag(tile(ky[:,None], ff_x)) — Array-API broadcast form.
     kx_full = xp.reshape(xp.broadcast_to(kx[None, :], (ff_y, ff_x)), (-1,))
@@ -100,8 +100,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
 
         if same_material is None:
             layer_eps_diag = xp.mean(_diagonal(xp, epx_conv))
-            is_same = bool(abs(complex(layer_eps_diag) - complex(eps_below))
-                           <= same_material_rtol * abs(complex(eps_below)))
+            is_same = _same_material(xp, layer_eps_diag, eps_below, same_material_rtol)
             eps_below = layer_eps_diag
         else:
             is_same = bool(same_material[layer_index])

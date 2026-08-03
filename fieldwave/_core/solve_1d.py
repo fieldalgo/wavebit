@@ -34,6 +34,16 @@ def _diagonal(xp, M):
     return xp.linalg.diagonal(M)
 
 
+def _same_material(xp, layer_eps, eps_below, rtol, atol=1e-8):
+    """``allclose``-equivalent test for the same-material short-circuit.
+
+    Stays on array ops and narrows to a Python bool only at the end. Converting the value with
+    ``complex()`` instead would break under ``jax.grad``: its tracers support ``__bool__``
+    (the primal is concrete there) but not ``__complex__``.
+    """
+    return bool(xp.abs(layer_eps - eps_below) <= atol + rtol * xp.abs(eps_below))
+
+
 def _block(xp, rows):
     """Assemble a block matrix from a 2D list of blocks (Array-API stand-in for ``np.block``).
 
@@ -108,7 +118,7 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
 
     # eps of the medium just below the current layer (substrate uses conj(n)^2 to match
     # the layer convention); drives the same-material short-circuit. Kept a plain scalar.
-    eps_below = complex(n_bot).conjugate() ** 2
+    eps_below = xp.asarray(complex(n_bot).conjugate() ** 2, dtype=C)
 
     # --- stage 2: per-layer eig + transfer coupling (transfer_1d_2 / transfer_1d_3) ----
     layer_info_list = []
@@ -136,8 +146,7 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
         # from the concrete matrices (eager NumPy path -> legacy parity).
         if same_material is None:
             layer_eps_diag = xp.mean(_diagonal(xp, epx_conv))
-            is_same = bool(abs(complex(layer_eps_diag) - complex(eps_below))
-                           <= same_material_rtol * abs(complex(eps_below)))
+            is_same = _same_material(xp, layer_eps_diag, eps_below, same_material_rtol)
             eps_below = layer_eps_diag
         else:
             is_same = bool(same_material[layer_index])
@@ -240,7 +249,7 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     big_G = _block(xp, [[1j * Kz_bot, O], [O, I]])
     big_T = xp.astype(xp.eye(2 * ff_xy), C)
 
-    eps_below = complex(n_bot).conjugate() ** 2
+    eps_below = xp.asarray(complex(n_bot).conjugate() ** 2, dtype=C)
 
     # --- stage 2/3: per-layer eig + coupled s/p transfer (conical_2 / conical_3) --------
     Kx = _diag(xp, kx)
@@ -273,8 +282,7 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
 
         if same_material is None:
             layer_eps_diag = xp.mean(_diagonal(xp, epx_conv))
-            is_same = bool(abs(complex(layer_eps_diag) - complex(eps_below))
-                           <= same_material_rtol * abs(complex(eps_below)))
+            is_same = _same_material(xp, layer_eps_diag, eps_below, same_material_rtol)
             eps_below = layer_eps_diag
         else:
             is_same = bool(same_material[layer_index])
