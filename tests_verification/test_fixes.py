@@ -116,7 +116,7 @@ def test_5_continuous_raster_convolution_matrix():
     print("Test 5: Continuous Raster Convolution Matrix np.conj")
     print("==================================================")
     
-    from fieldwave.on_numpy.emsolver.convolution_matrix import to_conv_mat_raster_continuous
+    from fieldwave._core.factorization import to_conv_mat_raster_continuous
     
     n_compressed = np.array([0.18 + 3.0j])
     ucell = np.array([[[0.18 + 3.0j]]])

@@ -1,38 +1,37 @@
-"""Single-source 1D solve core (fieldwave._core.solve_1d) — Phase 3 gate.
+"""Single-source 1D solve core (fieldwave._core.solve_1d).
 
 Three properties, one implementation:
-  * bit-parity   — feeding the core the exact inputs the legacy path uses reproduces the
-                   legacy ``de_ri`` / ``de_ti`` byte-for-byte (TE + TM, multi-layer, oblique,
-                   lossy substrate);
-  * cross-backend— the same core on numpy / jax / torch agrees to ~1e-10;
-  * gradients    — d(sum de_ti)/ds through the complex chain agrees across jax / torch / FD.
+  * wiring        — driving the core through ``call_mee``/``conv_solve`` gives the same numbers
+                    as calling it directly (the mixin passes the right arguments);
+  * cross-backend — the same core on numpy / jax / torch agrees to ~1e-10;
+  * gradients     — d(sum de_ti)/ds through the complex chain agrees across jax / torch / FD.
 
-The core consumes convolution matrices already built by the (numpy) factorization stage;
-porting factorization is a later phase, so cross-backend / grad tests feed those matrices in
-as backend-native constants to isolate the solve.
+The physics oracle lives in test_golden_legacy_parity.py: reference values frozen from the
+legacy transfer-matrix chains before they were replaced. Comparing against ``conv_solve``
+in-process would prove nothing now that it dispatches into the core.
 """
 import numpy as np
 import pytest
 
 import fieldwave
-from fieldwave.on_numpy.emsolver.convolution_matrix import to_conv_mat_raster_discrete
+from fieldwave._core.factorization import to_conv_mat_raster_discrete
 from fieldwave._core.solve_1d import solve_1d, solve_1d_conical
 
 
-def _legacy_and_inputs(pol, ucell, thickness, n_top, n_bot, wl, period, fto, theta):
-    """Run the legacy path and return (legacy de_ri/de_ti, exact core inputs)."""
+def _run_and_inputs(pol, ucell, thickness, n_top, n_bot, wl, period, fto, theta):
+    """Solve via the public API and return (its de_ri/de_ti, the same inputs)."""
     mee = fieldwave.call_mee(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=None,
                           pol=pol, fto=fto, period=period, wavelength=wl,
                           thickness=thickness, ucell=ucell)
-    legacy = mee.conv_solve()
+    via_api = mee.conv_solve()
     epx, epy, epz = to_conv_mat_raster_discrete(
-        mee.ucell, mee.fto[0], mee.fto[1], type_complex=mee.type_complex,
+        mee.ucell, mee.fto[0], mee.fto[1],
         enhanced_dfs=mee.enhanced_dfs, use_pinv=mee.use_pinv)
     kx, _ = mee.get_kx_ky_vector(wl)
     inputs = dict(pol=pol, wavelength=wl, kx=kx, n_top=n_top, n_bot=n_bot,
                   theta=mee.theta, thickness=mee.thickness,
                   epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
-    return (np.array(legacy.de_ri), np.array(legacy.de_ti)), inputs
+    return (np.array(via_api.de_ri), np.array(via_api.de_ti)), inputs
 
 
 CASES = [
@@ -54,9 +53,9 @@ CASES = [
 
 
 @pytest.mark.parametrize('case', CASES, ids=[c[0] for c in CASES])
-def test_core_bit_parity_vs_legacy(case):
+def test_wiring_matches_direct_core_call(case):
     _, pol, ucell, thickness, n_top, n_bot, wl, period, fto, theta = case
-    (lri, lti), inputs = _legacy_and_inputs(
+    (lri, lti), inputs = _run_and_inputs(
         pol, np.array(ucell), thickness, n_top, n_bot, wl, period, fto, theta)
     cri, cti = solve_1d(**inputs)
     assert np.array_equal(lri, np.array(cri)), np.max(np.abs(lri - np.array(cri)))
@@ -76,7 +75,7 @@ def _to(backend, x):
 def test_core_cross_backend(case, backend):
     pytest.importorskip(backend)
     _, pol, ucell, thickness, n_top, n_bot, wl, period, fto, theta = case
-    (_, _), inp = _legacy_and_inputs(
+    (_, _), inp = _run_and_inputs(
         pol, np.array(ucell), thickness, n_top, n_bot, wl, period, fto, theta)
     ri0, ti0 = solve_1d(**inp)                              # numpy reference
 
@@ -98,7 +97,7 @@ def test_core_gradient_jax_torch_fd(pol):
     import jax.numpy as jnp
 
     ucell = np.array([[[3., 3., 3., 1., 1., 1.]]])
-    (_, _), inp = _legacy_and_inputs(pol, ucell, [0.15], 2.0, 1.0, 0.777, [0.77], [6, 0], 0.3)
+    (_, _), inp = _run_and_inputs(pol, ucell, [0.15], 2.0, 1.0, 0.777, [0.77], [6, 0], 0.3)
     # Under autodiff the conv matrices are abstract tracers, so the same-material decision
     # must come from static geometry (this single layer is not substrate-matched).
     inp['same_material'] = [False]
@@ -147,20 +146,20 @@ def test_core_gradient_jax_torch_fd(pol):
 
 # =========================================================================== conical
 
-def _legacy_and_inputs_conical(ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi):
-    """Run the legacy conical path and return (legacy de_ri/de_ti, exact core inputs)."""
+def _run_and_inputs_conical(ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi):
+    """Same, forced onto the conical path."""
     mee = fieldwave.call_mee(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi,
                           fto=fto, period=period, wavelength=wl, thickness=thickness, ucell=ucell)
-    legacy = mee.conv_solve()
+    via_api = mee.conv_solve()
     assert mee.grating_type_assigned == 1, mee.grating_type_assigned   # ensure conical path
     epx, epy, epz = to_conv_mat_raster_discrete(
-        mee.ucell, mee.fto[0], mee.fto[1], type_complex=mee.type_complex,
+        mee.ucell, mee.fto[0], mee.fto[1],
         enhanced_dfs=mee.enhanced_dfs, use_pinv=mee.use_pinv)
     kx, ky = mee.get_kx_ky_vector(wl)
     inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_top, n_bot=n_bot,
                   theta=mee.theta, psi=mee.psi, thickness=mee.thickness,
                   epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
-    return (np.array(legacy.de_ri), np.array(legacy.de_ti)), inputs
+    return (np.array(via_api.de_ri), np.array(via_api.de_ti)), inputs
 
 
 CONICAL_CASES = [
@@ -173,9 +172,9 @@ CONICAL_CASES = [
 
 
 @pytest.mark.parametrize('case', CONICAL_CASES, ids=[c[0] for c in CONICAL_CASES])
-def test_conical_bit_parity_vs_legacy(case):
+def test_conical_wiring_matches_direct_core_call(case):
     _, ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi = case
-    (lri, lti), inp = _legacy_and_inputs_conical(
+    (lri, lti), inp = _run_and_inputs_conical(
         np.array(ucell), thickness, n_top, n_bot, wl, period, fto, theta, phi, psi)
     cri, cti = solve_1d_conical(**inp)
     assert np.array_equal(lri, np.array(cri)), np.max(np.abs(lri - np.array(cri)))
@@ -187,7 +186,7 @@ def test_conical_bit_parity_vs_legacy(case):
 def test_conical_cross_backend(case, backend):
     pytest.importorskip(backend)
     _, ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi = case
-    (_, _), inp = _legacy_and_inputs_conical(
+    (_, _), inp = _run_and_inputs_conical(
         np.array(ucell), thickness, n_top, n_bot, wl, period, fto, theta, phi, psi)
     ri0, ti0 = solve_1d_conical(**inp)                       # numpy reference
 
@@ -209,7 +208,7 @@ def test_conical_gradient_jax_torch_fd():
     import jax.numpy as jnp
 
     ucell = np.array([[[3., 3., 3., 1., 1., 1.]]])
-    (_, _), inp = _legacy_and_inputs_conical(
+    (_, _), inp = _run_and_inputs_conical(
         ucell, [0.15], 2.0, 1.0, 0.777, [0.77], [6, 0], 0.2, 0.3, 0.4)
     inp['same_material'] = [False]
     key = 'epx_conv_all'

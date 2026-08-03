@@ -2,8 +2,6 @@ import torch
 
 import numpy as np
 
-from .scattering_method import scattering_1d_1, scattering_1d_2, scattering_1d_3, scattering_2d_1, scattering_2d_wv, \
-    scattering_2d_2, scattering_2d_3
 
 from ..._core.engine import CoreSolveMixin
 

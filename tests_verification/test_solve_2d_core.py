@@ -1,31 +1,30 @@
-"""Single-source 2D solve core (fieldwave._core.solve_2d) — Phase 3c gate.
+"""Single-source 2D solve core (fieldwave._core.solve_2d).
 
-Same three properties as the 1D core: bit-parity vs the legacy 2D path, cross-backend
-agreement on numpy/jax/torch, and cross-backend-consistent gradients. Convolution matrices
-come from the (numpy) factorization stage and are fed in as backend-native constants to
-isolate the solve (factorization port is a later phase).
+Cross-backend agreement, cross-backend-consistent gradients, and a check that driving the core
+through ``conv_solve`` matches calling it directly. The physics oracle is the frozen legacy
+reference in test_golden_legacy_parity.py.
 """
 import numpy as np
 import pytest
 
 import fieldwave
-from fieldwave.on_numpy.emsolver.convolution_matrix import to_conv_mat_raster_discrete
+from fieldwave._core.factorization import to_conv_mat_raster_discrete
 from fieldwave._core.solve_2d import solve_2d
 
 
-def _legacy_and_inputs(ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi):
+def _run_and_inputs(ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi):
     mee = fieldwave.call_mee(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi,
                           fto=fto, period=period, wavelength=wl, thickness=thickness, ucell=ucell)
-    legacy = mee.conv_solve()
+    via_api = mee.conv_solve()
     assert mee.grating_type_assigned == 2, mee.grating_type_assigned    # ensure 2D path
     epx, epy, epz = to_conv_mat_raster_discrete(
-        mee.ucell, mee.fto[0], mee.fto[1], type_complex=mee.type_complex,
+        mee.ucell, mee.fto[0], mee.fto[1],
         enhanced_dfs=mee.enhanced_dfs, use_pinv=mee.use_pinv)
     kx, ky = mee.get_kx_ky_vector(wl)
     inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_top, n_bot=n_bot,
                   theta=mee.theta, psi=mee.psi, thickness=mee.thickness,
                   epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
-    return (np.array(legacy.de_ri), np.array(legacy.de_ti)), inputs
+    return (np.array(via_api.de_ri), np.array(via_api.de_ti)), inputs
 
 
 def _rand(shape, seed):
@@ -41,9 +40,9 @@ CASES = [
 
 
 @pytest.mark.parametrize('case', CASES, ids=[c[0] for c in CASES])
-def test_2d_bit_parity_vs_legacy(case):
+def test_2d_wiring_matches_direct_core_call(case):
     _, ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi = case
-    (lri, lti), inp = _legacy_and_inputs(
+    (lri, lti), inp = _run_and_inputs(
         ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi)
     cri, cti = solve_2d(**inp)
     assert np.array_equal(lri, np.array(cri)), np.max(np.abs(lri - np.array(cri)))
@@ -63,7 +62,7 @@ def _to(backend, x):
 def test_2d_cross_backend(case, backend):
     pytest.importorskip(backend)
     _, ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi = case
-    (_, _), inp = _legacy_and_inputs(
+    (_, _), inp = _run_and_inputs(
         ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi)
     ri0, ti0 = solve_2d(**inp)                               # numpy reference
 
@@ -85,7 +84,7 @@ def test_2d_gradient_jax_torch_fd():
     import jax.numpy as jnp
 
     ucell = _rand((1, 4, 4), 3)
-    (_, _), inp = _legacy_and_inputs(ucell, [0.15], 1.0, 1.0, 0.9, [1.0, 1.0], [1, 1], 0.2, 0.4, 0.9)
+    (_, _), inp = _run_and_inputs(ucell, [0.15], 1.0, 1.0, 0.9, [1.0, 1.0], [1, 1], 0.2, 0.4, 0.9)
     inp['same_material'] = [False]
     key = 'epx_conv_all'
     base = np.array(inp[key])
@@ -139,7 +138,7 @@ def test_python_scalar_incidence_keeps_double_precision_on_torch():
     """
     torch = pytest.importorskip('torch')
     _, ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi = CASES[1]
-    (_, _), inp = _legacy_and_inputs(
+    (_, _), inp = _run_and_inputs(
         ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi)
     ri0, ti0 = solve_2d(**inp)                                   # numpy, double
 

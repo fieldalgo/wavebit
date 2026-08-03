@@ -2,7 +2,6 @@ import numpy as np
 
 from ._base import _BaseRCWA
 from ..._core.engine import CoreFactorizationMixin
-from .convolution_matrix import to_conv_mat_raster_continuous, to_conv_mat_raster_discrete, to_conv_mat_vector, to_conv_mat_raster_nvf
 from .fourier_analytic import to_conv_mat_analytic_layers
 from .field_distribution import field_plot, field_dist_1d, field_dist_1d_conical, field_dist_2d
 

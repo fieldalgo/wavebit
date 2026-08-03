@@ -1,15 +1,15 @@
-"""The core reproduces the *entire* legacy result surface, not just (de_ri, de_ti).
+"""The core produces the *entire* public result surface, not just (de_ri, de_ti).
 
-Wiring ``call_mee`` into the core needs more than efficiencies: the public ``Result`` carries
-reflected/transmitted amplitudes, their s/p split, and — for the conical and 2D paths — the
-pure-TE and pure-TM incidence variants. Every one of those fields must be byte-identical
-before the legacy solvers can be retired.
+``Result`` carries reflected/transmitted amplitudes, their s/p split, and — for the conical and
+2D paths — the pure-TE and pure-TM incidence variants. These check that ``full=True`` delivers
+all of it and that the wiring routes it through unchanged; the values themselves are pinned
+against the frozen legacy reference in test_golden_legacy_parity.py.
 """
 import numpy as np
 import pytest
 
 import fieldwave
-from fieldwave.on_numpy.emsolver.convolution_matrix import to_conv_mat_raster_discrete
+from fieldwave._core.factorization import to_conv_mat_raster_discrete
 from fieldwave._core.solve_1d import solve_1d, solve_1d_conical
 from fieldwave._core.solve_2d import solve_2d
 
@@ -21,7 +21,7 @@ def _setup(**kw):
     mee = fieldwave.call_mee(backend=0, **kw)
     legacy = mee.conv_solve()
     epx, epy, epz = to_conv_mat_raster_discrete(
-        mee.ucell, mee.fto[0], mee.fto[1], type_complex=mee.type_complex,
+        mee.ucell, mee.fto[0], mee.fto[1],
         enhanced_dfs=mee.enhanced_dfs, use_pinv=mee.use_pinv)
     kx, ky = mee.get_kx_ky_vector(kw['wavelength'])
     return mee, legacy, (epx, epy, epz), kx, ky

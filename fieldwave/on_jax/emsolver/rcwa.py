@@ -7,7 +7,6 @@ from functools import partial
 
 from ._base import _BaseRCWA, jax_device_set
 from ..._core.engine import CoreFactorizationMixin
-from .convolution_matrix import to_conv_mat_raster_discrete, to_conv_mat_raster_continuous, to_conv_mat_vector
 from .fourier_analytic import to_conv_mat_analytic_layers
 from .field_distribution import field_dist_1d, field_dist_1d_conical, field_dist_2d, field_plot
 from ..modeler.modeling import ModelingJax

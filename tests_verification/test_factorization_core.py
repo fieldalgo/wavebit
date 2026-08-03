@@ -5,17 +5,12 @@ motivated the port: with the factorization inside the core, the gradient runs en
 the *design variable* — the ``ucell`` raster — through to diffraction efficiency, rather than
 stopping at the convolution matrices.
 """
+import pathlib
+
 import numpy as np
 import pytest
 
 import fieldwave
-from fieldwave.on_numpy.emsolver.convolution_matrix import (
-    to_conv_mat_raster_discrete as legacy_dfs,
-    to_conv_mat_raster_nvf as legacy_nvf,
-    to_conv_mat_raster_continuous as legacy_cfs,
-    to_conv_mat_vector as legacy_vector,
-    cell_compression,
-)
 from fieldwave._core.factorization import (
     to_conv_mat_raster_discrete as core_dfs,
     to_conv_mat_raster_nvf as core_nvf,
@@ -33,6 +28,11 @@ def _rand(shape, seed):
     return np.random.default_rng(seed).uniform(1.0, 4.0, size=shape)
 
 
+# The legacy builders these were originally checked against are gone; their outputs live on
+# as frozen reference data (tests_verification/gen_goldens_factorization.py).
+GOLDEN = np.load(pathlib.Path(__file__).parent / 'golden_legacy_factorization.npz')
+
+
 CASES = [
     # name, ucell, fto_x, fto_y
     ('1d_1layer', _rand((1, 1, 8), 0), 4, 0),
@@ -45,11 +45,12 @@ CASES = [
 @pytest.mark.parametrize('case', CASES, ids=[c[0] for c in CASES])
 @pytest.mark.parametrize('enhanced_dfs', [True, False], ids=['enhanced', 'plain'])
 def test_factorization_bit_parity_vs_legacy(case, enhanced_dfs):
-    _, ucell, fto_x, fto_y = case
-    want = legacy_dfs(ucell, fto_x, fto_y, enhanced_dfs=enhanced_dfs)
+    name, ucell, fto_x, fto_y = case
+    tag = 'enhanced' if enhanced_dfs else 'plain'
     got = core_dfs(ucell, fto_x, fto_y, enhanced_dfs=enhanced_dfs)
-    for name, a, b in zip(('epx', 'epy', 'epz_i'), want, got):
-        assert np.array_equal(a, np.array(b)), (name, np.max(np.abs(a - np.array(b))))
+    for slot, b in zip(('epx', 'epy', 'epz_i'), got):
+        a = GOLDEN[f'dfs__{name}__{tag}__{slot}']
+        assert np.array_equal(a, np.array(b)), (slot, np.max(np.abs(a - np.array(b))))
 
 
 def _to(backend, x):
@@ -180,12 +181,11 @@ NVF_CASES = [
 
 @pytest.mark.parametrize('case', NVF_CASES, ids=[c[0] for c in NVF_CASES])
 def test_nvf_bit_parity_vs_legacy(case):
-    _, ucell, fto_x, fto_y = case
-    want = legacy_nvf(ucell, fto_x, fto_y)
+    name, ucell, fto_x, fto_y = case
     got = core_nvf(ucell, fto_x, fto_y)
-    names = ('epx', 'epy', 'epxy', 'epyx', 'epz_i')
-    for name, a, b in zip(names, want, got):
-        assert np.array_equal(a, np.array(b)), (name, np.max(np.abs(a - np.array(b))))
+    for slot, b in zip(('epx', 'epy', 'epxy', 'epyx', 'epz_i'), got):
+        a = GOLDEN[f'nvf__{name}__{slot}']
+        assert np.array_equal(a, np.array(b)), (slot, np.max(np.abs(a - np.array(b))))
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
@@ -278,11 +278,11 @@ CFS_CASES = [
 
 @pytest.mark.parametrize('case', CFS_CASES, ids=[c[0] for c in CFS_CASES])
 def test_cfs_bit_parity_vs_legacy(case):
-    _, ucell, fto_x, fto_y = case
-    want = legacy_cfs(ucell, fto_x, fto_y)
+    name, ucell, fto_x, fto_y = case
     got = core_cfs(ucell, fto_x, fto_y)
-    for name, a, b in zip(('epx', 'epy', 'epz_i'), want, got):
-        assert np.array_equal(a, np.array(b)), (name, np.max(np.abs(a - np.array(b))))
+    for slot, b in zip(('epx', 'epy', 'epz_i'), got):
+        a = GOLDEN[f'cfs__{name}__{slot}']
+        assert np.array_equal(a, np.array(b)), (slot, np.max(np.abs(a - np.array(b))))
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
@@ -300,26 +300,24 @@ def test_cfs_cross_backend(case, backend):
 
 def test_vector_path_bit_parity_vs_legacy():
     """Vector-modelled layers (explicit segment edges, no compression) match the legacy CFS."""
-    info = []
-    for ucell in (_rand((5, 5), 24), _rand((4, 6), 25)):
-        info.append(list(cell_compression(ucell)))
-    want = legacy_vector(info, 2, 2)
+    info = [[GOLDEN[f'vector__in{i}__cell'], GOLDEN[f'vector__in{i}__x'],
+             GOLDEN[f'vector__in{i}__y']] for i in (0, 1)]
     got = core_vector(info, 2, 2)
-    for name, a, b in zip(('epx', 'epy', 'epz_i'), want, got):
-        assert np.array_equal(a, np.array(b)), (name, np.max(np.abs(a - np.array(b))))
+    for slot, b in zip(('epx', 'epy', 'epz_i'), got):
+        a = GOLDEN[f'vector__{slot}']
+        assert np.array_equal(a, np.array(b)), (slot, np.max(np.abs(a - np.array(b))))
 
 
 def test_compression_indices_match_legacy():
     """The extracted static geometry step reproduces the legacy compression exactly."""
+    import array_api_compat as ac
     for seed in (26, 27):
-        ucell = np.where(_rand((6, 7), seed) > 2.5, 3.0, 1.0)
-        want_cell, want_x, want_y = cell_compression(ucell)
+        ucell = GOLDEN[f'compress__{seed}__ucell']
         row_idx, col_idx, x, y = compression_indices(ucell)
-        import array_api_compat as ac
         got_cell = compress_cell(ac.array_namespace(ucell), ucell, row_idx, col_idx)
-        assert np.array_equal(want_cell, np.array(got_cell))
-        assert np.array_equal(want_x, x)
-        assert np.array_equal(want_y, y)
+        assert np.array_equal(GOLDEN[f'compress__{seed}__cell'], np.array(got_cell))
+        assert np.array_equal(GOLDEN[f'compress__{seed}__x'], x)
+        assert np.array_equal(GOLDEN[f'compress__{seed}__y'], y)
 
 
 def test_cfs_end_to_end_gradient_wrt_ucell():
