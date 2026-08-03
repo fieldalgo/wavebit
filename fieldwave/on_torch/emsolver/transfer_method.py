@@ -1,6 +1,7 @@
 import torch
 
 from .primitives import Eig, meeinv
+from ..._core.conventions import outgoing_sqrt
 
 
 def transfer_1d_1(pol, kx, n_top, n_bot, device=torch.device('cpu'), type_complex=torch.complex128):
@@ -17,8 +18,7 @@ def transfer_1d_1(pol, kx, n_top, n_bot, device=torch.device('cpu'), type_comple
     # Outgoing-wave substrate admittance; see numpy transfer_1d_1 for the branch
     # rationale (correct for both lossless-evanescent and lossy/absorbing substrates).
     eps_bot = torch.tensor(n_bot ** 2, dtype=type_complex, device=device)
-    kz_sub = (eps_bot - kx ** 2 - 1e-20j).to(type_complex) ** 0.5
-    kz_sub = torch.where(kz_sub.real < 0, -kz_sub, kz_sub)
+    kz_sub = outgoing_sqrt(torch, (eps_bot - kx ** 2 - 1e-20j).to(type_complex))
 
     if pol == 0:  # TE
         G = torch.diag(1j * kz_sub)
@@ -196,8 +196,7 @@ def transfer_1d_conical_1(kx, ky, n_top, n_bot, device='cpu', type_complex=torch
     # the -1e-20j nudge selecting the correct root for lossless evanescent orders.
     # Correct for both lossless and absorbing substrates; used in both big_F and big_G.
     eps_bot = torch.tensor(n_bot ** 2, dtype=type_complex, device=kx.device)
-    kz_sub = (eps_bot - kx ** 2 - ky.reshape((-1, 1)) ** 2 - 1e-20j).to(type_complex).flatten() ** 0.5
-    kz_sub = torch.where(kz_sub.real < 0, -kz_sub, kz_sub)
+    kz_sub = outgoing_sqrt(torch, (eps_bot - kx ** 2 - ky.reshape((-1, 1)) ** 2 - 1e-20j).to(type_complex).flatten())
     Kz_bot = torch.diag(kz_sub)
 
     big_F = torch.cat(
@@ -486,8 +485,7 @@ def transfer_2d_1(kx, ky, n_top, n_bot, device=torch.device('cpu'), type_complex
     # the -1e-20j nudge selecting the correct root for lossless evanescent orders.
     # Correct for both lossless and absorbing substrates; used in both big_F and big_G.
     eps_bot = torch.tensor(n_bot ** 2, dtype=type_complex, device=kx.device)
-    kz_sub = (eps_bot - kx ** 2 - ky.reshape((-1, 1)) ** 2 - 1e-20j).to(type_complex).flatten() ** 0.5
-    kz_sub = torch.where(kz_sub.real < 0, -kz_sub, kz_sub)
+    kz_sub = outgoing_sqrt(torch, (eps_bot - kx ** 2 - ky.reshape((-1, 1)) ** 2 - 1e-20j).to(type_complex).flatten())
     Kz_bot = torch.diag(kz_sub)
 
     big_F = torch.cat(

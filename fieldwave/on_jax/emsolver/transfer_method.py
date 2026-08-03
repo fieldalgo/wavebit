@@ -2,6 +2,7 @@ import jax
 import jax.numpy as jnp
 
 from .primitives import eig, conj, meeinv
+from ..._core.conventions import outgoing_sqrt
 
 
 def transfer_1d_1(pol, kx, n_top, n_bot, type_complex=jnp.complex128):
@@ -18,8 +19,7 @@ def transfer_1d_1(pol, kx, n_top, n_bot, type_complex=jnp.complex128):
     # Outgoing-wave substrate admittance; see numpy transfer_1d_1 for the branch
     # rationale (correct for both lossless-evanescent and lossy/absorbing substrates).
     eps_bot = jnp.array(n_bot ** 2, dtype=type_complex)
-    kz_sub = (eps_bot - kx ** 2 - 1e-20j).astype(type_complex) ** 0.5
-    kz_sub = jnp.where(kz_sub.real < 0, -kz_sub, kz_sub)
+    kz_sub = outgoing_sqrt(jnp, (eps_bot - kx ** 2 - 1e-20j).astype(type_complex))
 
     def false_fun(kz_sub):  # TE
         return jnp.diag(1j * kz_sub)
@@ -225,8 +225,7 @@ def transfer_1d_conical_1(kx, ky, n_top, n_bot, type_complex=jnp.complex128):
     # the -1e-20j nudge selecting the correct root for lossless evanescent orders.
     # Correct for both lossless and absorbing substrates; used in both big_F and big_G.
     eps_bot = jnp.array(n_bot ** 2, dtype=type_complex)
-    kz_sub = (eps_bot - kx ** 2 - ky.reshape((-1, 1)) ** 2 - 1e-20j).astype(type_complex).flatten() ** 0.5
-    kz_sub = jnp.where(kz_sub.real < 0, -kz_sub, kz_sub)
+    kz_sub = outgoing_sqrt(jnp, (eps_bot - kx ** 2 - ky.reshape((-1, 1)) ** 2 - 1e-20j).astype(type_complex).flatten())
     Kz_bot = jnp.diag(kz_sub)
 
     big_F = jnp.block([[I, O], [O, 1j * Kz_bot / eps_bot]])
@@ -520,8 +519,7 @@ def transfer_2d_1(kx, ky, n_top, n_bot, type_complex=jnp.complex128):
     # the -1e-20j nudge selecting the correct root for lossless evanescent orders.
     # Correct for both lossless and absorbing substrates; used in both big_F and big_G.
     eps_bot = jnp.array(n_bot ** 2, dtype=type_complex)
-    kz_sub = (eps_bot - kx ** 2 - ky.reshape((-1, 1)) ** 2 - 1e-20j).astype(type_complex).flatten() ** 0.5
-    kz_sub = jnp.where(kz_sub.real < 0, -kz_sub, kz_sub)
+    kz_sub = outgoing_sqrt(jnp, (eps_bot - kx ** 2 - ky.reshape((-1, 1)) ** 2 - 1e-20j).astype(type_complex).flatten())
     Kz_bot = jnp.diag(kz_sub)
 
     big_F = jnp.block([[I, O], [O, 1j * Kz_bot / eps_bot]])

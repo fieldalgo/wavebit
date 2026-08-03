@@ -1,6 +1,7 @@
 import numpy as np
 
 from .primitives import meeinv
+from ..._core.conventions import outgoing_sqrt
 
 
 def transfer_1d_1(pol, kx, n_top, n_bot, type_complex=np.complex128):
@@ -24,8 +25,7 @@ def transfer_1d_1(pol, kx, n_top, n_bot, type_complex=np.complex128):
     # Both failure modes conserve energy, so they are easy to miss. Verified against
     # upstream meent (lossless) and analytic Fresnel (absorbing) for TE and TM.
     eps_bot = type_complex(n_bot ** 2)
-    kz_sub = (eps_bot - kx ** 2 - 1e-20j).astype(type_complex) ** 0.5
-    kz_sub = np.where(kz_sub.real < 0, -kz_sub, kz_sub)
+    kz_sub = outgoing_sqrt(np, (eps_bot - kx ** 2 - 1e-20j).astype(type_complex))
 
     if pol == 0:  # TE
         G = 1j * np.diag(kz_sub)
@@ -178,8 +178,7 @@ def transfer_1d_conical_1(kx, ky, n_top, n_bot, type_complex=np.complex128):
     # (Previously big_F used a raw kz_bot and big_G a conjugated one -> wrong branch on
     # evanescent p-orders; jax/torch used a -q_bot form wrong in both blocks.)
     eps_bot = type_complex(n_bot ** 2)
-    kz_sub = (eps_bot - kx ** 2 - ky.reshape((-1, 1)) ** 2 - 1e-20j).astype(type_complex).flatten() ** 0.5
-    kz_sub = np.where(kz_sub.real < 0, -kz_sub, kz_sub)
+    kz_sub = outgoing_sqrt(np, (eps_bot - kx ** 2 - ky.reshape((-1, 1)) ** 2 - 1e-20j).astype(type_complex).flatten())
     Kz_bot = np.diag(kz_sub)
 
     big_F = np.block([[I, O], [O, 1j * Kz_bot / eps_bot]])
@@ -438,8 +437,7 @@ def transfer_2d_1(kx, ky, n_top, n_bot, type_complex=np.complex128):
     # (Previously big_F used a raw kz_bot and big_G a conjugated one -> wrong branch on
     # evanescent p-orders; jax/torch used a -q_bot form wrong in both blocks.)
     eps_bot = type_complex(n_bot ** 2)
-    kz_sub = (eps_bot - kx ** 2 - ky.reshape((-1, 1)) ** 2 - 1e-20j).astype(type_complex).flatten() ** 0.5
-    kz_sub = np.where(kz_sub.real < 0, -kz_sub, kz_sub)
+    kz_sub = outgoing_sqrt(np, (eps_bot - kx ** 2 - ky.reshape((-1, 1)) ** 2 - 1e-20j).astype(type_complex).flatten())
     Kz_bot = np.diag(kz_sub)
 
     big_F = np.block([[I, O], [O, 1j * Kz_bot / eps_bot]])
