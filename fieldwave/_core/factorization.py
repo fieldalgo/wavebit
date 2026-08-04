@@ -195,6 +195,15 @@ def normal_vector_field(eps_matrix):
     border[:, 1:] |= (eps[:, 1:] != eps[:, :-1])
     border[:, :-1] |= (eps[:, :-1] != eps[:, 1:])
 
+    # A one-cell axis carries no interface of its own: the structure cannot vary along it, so
+    # every normal points along the other axis. Say so directly -- `np.gradient` needs three
+    # cells and would otherwise raise, which is what made NVF unusable on 1D gratings. With a
+    # constant normal the NVF projector reduces to Li's rules exactly (C_xx = I, C_xy = C_yy =
+    # 0 gives eps_xx = <1/eps>^-1 and eps_yy = <eps>), so this is not an approximation.
+    if 1 in eps.shape:
+        along_x = np.ones(eps.shape), np.zeros(eps.shape)
+        return along_x if eps.shape[0] == 1 else (along_x[1], along_x[0])
+
     dist_map = distance_transform_edt(~border)
     gy, gx = np.gradient(dist_map)
     norm = np.hypot(gx, gy)

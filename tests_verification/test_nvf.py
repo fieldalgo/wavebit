@@ -1,4 +1,6 @@
 import numpy as np
+import pytest
+
 import fieldwave
 
 
@@ -77,3 +79,26 @@ def test_nvf_energy_convergence():
 if __name__ == "__main__":
     test_nvf_circular_grating()
     test_nvf_energy_convergence()
+
+
+@pytest.mark.parametrize('kind', ['te', 'tm', 'conical'])
+def test_nvf_on_a_one_cell_axis_reduces_to_li(kind):
+    """A 1D grating has no interface along y, so NVF must *be* Li there — and must run.
+
+    ``np.gradient`` needs three cells, so the distance-transform normal field used to raise on
+    a ``(layers, 1, N)`` ucell and NVF was simply unusable on 1D. The fix states the normal
+    directly: with a one-cell axis every normal points along the other one, and a constant
+    normal collapses the NVF projector onto Li's rules (``C_xx = I``, ``C_xy = C_yy = 0``).
+
+    So this asserts equality, not closeness — anything else means the collapse is not exact.
+    """
+    ucell = np.array([[[3., 3., 1., 1., 3., 1., 1., 1.]]])
+    cfg = dict(backend=0, ucell=ucell, period=[0.77], thickness=[0.2], theta=0.25,
+               wavelength=0.777, n_top=1.0, n_bot=1.5, fto=[10, 0])
+    cfg |= dict(phi=0.3, psi=0.4) if kind == 'conical' else dict(pol=0 if kind == 'te' else 1)
+
+    def total(fourier_type):
+        res = fieldwave.rcwa(fourier_type=fourier_type, **cfg).conv_solve()
+        return float(np.sum(np.asarray(res.de_ri)))
+
+    assert total(2) == pytest.approx(total(0), abs=1e-12)
