@@ -7,6 +7,8 @@ captured from the legacy per-backend implementation before that was deleted
 """
 import pathlib
 
+import importlib
+
 import numpy as np
 import pytest
 
@@ -108,3 +110,49 @@ def test_jax_device_setter_round_trips():
     # variant is still blocked by a separate same-material/tracer problem, so pin the
     # no-jit one, which goes through the same decorator.
     solver.conv_solve_field_no_jit(res_x=10, res_y=1, res_z=10)
+
+
+@pytest.mark.parametrize('backend,name', [(1, 'jax'), (2, 'torch')])
+def test_vector_path_differentiates_wrt_edge_positions(backend, name):
+    """An OCD fit differentiates the *edges* — CD, sidewall angle, pitch — not the pixels.
+
+    Those live in the segment edge list the vector modeler produces, and ``_cfs`` used to lift
+    it with ``asarray(..., dtype=)``, which detaches under PyTorch. The solve still returned a
+    tensor, just one with no graph behind it, so this failed only when someone called
+    ``backward()``.
+
+    Compared against a central difference rather than a stored number: the point is that the
+    derivative is the real one, not that it is any particular value.
+    """
+    pytest.importorskip(name)
+    if backend == 1:
+        importlib.import_module('fieldwave.on_jax')
+
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3],
+               n_top=1.0, n_bot=1.0, wavelength=900.0, pol=0.5)
+
+    def total(cd, xp_scalar):
+        inst = [[3.5, [['rectangle', xp_scalar(150.0), xp_scalar(150.0), cd,
+                        xp_scalar(60.0), 2.0, xp_scalar(0.0)]]]]
+        res = fieldwave.rcwa(backend=backend, ucell=inst, **cfg).conv_solve()
+        return res.de_ti
+
+    if backend == 2:
+        import torch
+        T = lambda v: torch.tensor(v, dtype=torch.float64)
+        cd = torch.tensor(80.0, dtype=torch.float64, requires_grad=True)
+        torch.sum(total(cd, T)).backward()
+        auto = float(cd.grad)
+        with torch.no_grad():
+            h = 1e-3
+            fd = float((torch.sum(total(T(80.0 + h), T)) - torch.sum(total(T(80.0 - h), T))) / (2 * h))
+    else:
+        import jax, jax.numpy as jnp
+        J = lambda v: jnp.asarray(v, dtype=jnp.float64)
+        f = lambda cd: jnp.sum(total(cd, J)).real
+        auto = float(jax.grad(f)(80.0))
+        h = 1e-3
+        fd = float((f(80.0 + h) - f(80.0 - h)) / (2 * h))
+
+    assert auto != 0.0
+    assert abs(auto - fd) / abs(fd) < 1e-4, (auto, fd)

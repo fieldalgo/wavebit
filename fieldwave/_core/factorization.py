@@ -298,6 +298,23 @@ def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
 
 # ================================================ continuous Fourier series (CFS / analytic)
 
+def _lift(xp, v, dtype, device=None):
+    """``v`` on the working backend at ``dtype``, keeping any autograd graph intact.
+
+    ``asarray(tensor, dtype=...)`` detaches under PyTorch, so a value that *is* a design
+    variable would silently stop carrying gradient. Only values that are not already arrays of
+    this namespace get created from scratch.
+    """
+    if hasattr(v, 'dtype') and hasattr(v, 'shape'):
+        try:
+            same = array_namespace(v) is xp
+        except Exception:
+            same = False
+        if same:
+            return v if v.dtype == dtype else xp.astype(v, dtype)
+    return xp.asarray(v, dtype=dtype, device=device)
+
+
 def _cfs(xp, x, cell, fto, period):
     """1D continuous Fourier series of a piecewise-constant profile.
 
@@ -315,10 +332,11 @@ def _cfs(xp, x, cell, fto, period):
     n_modes = 4 * fto + 1
     modes = xp.asarray([float(m) for m in range(-2 * fto, 2 * fto + 1)], dtype=C, device=dev)
 
-    # ``x`` / ``period`` arrive as static geometry (often plain NumPy), so lift them onto the
-    # working backend rather than casting in place.
-    period = xp.asarray(period, dtype=C, device=dev)
-    x = xp.asarray(x, dtype=C, device=dev)
+    # ``x`` holds the segment edges, which for a vector-modelled layer *are* the design
+    # variables an OCD fit differentiates -- CD, sidewall angle, pitch all live here. Lift
+    # them without detaching; ``asarray(..., dtype=)`` would cut the graph under PyTorch.
+    period = _lift(xp, period, C, dev)
+    x = _lift(xp, x, C, dev)
 
     # Segment widths: distance from each edge to the next (last wraps to the period).
     x_next = xp.concat([xp.roll(x, -1, axis=0)[:-1], xp.reshape(period, (1, 1))], axis=0) - x
