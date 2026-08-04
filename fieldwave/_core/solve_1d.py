@@ -34,13 +34,34 @@ def _diagonal(xp, M):
     return xp.linalg.diagonal(M)
 
 
+def uniform_eps(xp, conv, rtol=1e-3, atol=1e-8):
+    """The single permittivity of a *uniform* layer, or ``None`` if it is patterned.
+
+    A uniform layer has no structure to transform, so its convolution matrix is exactly
+    ``eps * I`` in every factorization. Testing the whole matrix is the point: the mean of the
+    diagonal alone is the DC coefficient, which two differently patterned layers can share, and
+    reading that as "same material" would skip an interface that is really there.
+    """
+    eps = xp.mean(_diagonal(xp, conv))
+    I = xp.astype(xp.eye(conv.shape[0]), conv.dtype)
+    if bool(xp.max(xp.abs(conv - eps * I)) <= atol + rtol * xp.abs(eps)):
+        return eps
+    return None
+
+
 def _same_material(xp, layer_eps, eps_below, rtol, atol=1e-8):
     """``allclose``-equivalent test for the same-material short-circuit.
+
+    Both arguments come from :func:`uniform_eps`, so ``None`` means "patterned" and can never
+    match: the short-circuit propagates the layer without matching an interface, which is only
+    valid when this layer and the medium below share their mode basis.
 
     Stays on array ops and narrows to a Python bool only at the end. Converting the value with
     ``complex()`` instead would break under ``jax.grad``: its tracers support ``__bool__``
     (the primal is concrete there) but not ``__complex__``.
     """
+    if layer_eps is None or eps_below is None:
+        return False
     return bool(xp.abs(layer_eps - eps_below) <= atol + rtol * xp.abs(eps_below))
 
 
@@ -207,9 +228,9 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
         # supplied flags when given (keeps the trace intact under autodiff), else auto-detect
         # from the concrete matrices (eager NumPy path -> legacy parity).
         if same_material is None:
-            layer_eps_diag = xp.mean(_diagonal(xp, epx_conv))
-            is_same = _same_material(xp, layer_eps_diag, eps_below, same_material_rtol)
-            eps_below = layer_eps_diag
+            layer_eps = uniform_eps(xp, epx_conv, same_material_rtol)
+            is_same = _same_material(xp, layer_eps, eps_below, same_material_rtol)
+            eps_below = layer_eps
         else:
             is_same = bool(same_material[layer_index])
 
@@ -336,9 +357,9 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
             xp, _inv, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C)
 
         if same_material is None:
-            layer_eps_diag = xp.mean(_diagonal(xp, epx_conv))
-            is_same = _same_material(xp, layer_eps_diag, eps_below, same_material_rtol)
-            eps_below = layer_eps_diag
+            layer_eps = uniform_eps(xp, epx_conv, same_material_rtol)
+            is_same = _same_material(xp, layer_eps, eps_below, same_material_rtol)
+            eps_below = layer_eps
         else:
             is_same = bool(same_material[layer_index])
 

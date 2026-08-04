@@ -213,6 +213,34 @@ def test_9_vector_modeling_period():
     print("SUCCESS: Test 9 Passed!\n")
 
 
+def test_10_same_material_needs_uniformity():
+    print("==================================================")
+    print("Test 10: Same-Material Detection Requires Uniformity")
+    print("==================================================")
+
+    # Two differently patterned layers that happen to share an average permittivity. The
+    # detection used to compare only that average (the DC coefficient), flag the upper layer
+    # as identical to the one below, and skip the interface between them -- which cost this
+    # lossless stack its energy conservation by ~50x.
+    UC = np.array([[[3., 3., 1., 1.], [1., 3., 3., 1.],
+                    [1., 1., 3., 3.], [3., 1., 1., 3.]]])
+    option = dict(
+        ucell=np.concat([UC, UC[:, ::-1]]), thickness=[0.2, 0.3], n_top=1.0, n_bot=1.0,
+        psi=0.4, wavelength=0.5, period=[0.6, 0.6], theta=0.1, phi=0.0, fto=[2, 2])
+
+    solver = fieldwave.rcwa(backend=0, **option)
+    flags = solver.freeze_geometry().same_material
+    print(f"same_material flags = {flags} (both layers are patterned)")
+    assert not any(flags), f"patterned layer flagged as same-material: {flags}"
+
+    for algo in ('TMM', 'SMM'):
+        res = fieldwave.rcwa(backend=0, connecting_algo=algo, **option).conv_solve()
+        total = float(np.sum(res.de_ri)) + float(np.sum(res.de_ti))
+        print(f"[{algo}] R+T = {total:.12f}")
+        assert abs(total - 1.0) < 1e-9, f"{algo} energy conservation failed: {total}"
+    print("SUCCESS: Test 10 Passed!\n")
+
+
 if __name__ == "__main__":
     test_1_si_glass_branch_cut()
     test_2_air_au_raw_n_lossy_substrate()
@@ -223,6 +251,7 @@ if __name__ == "__main__":
     test_7_none_theta_handling()
     test_8_torch_ucell_numpy_ndarray()
     test_9_vector_modeling_period()
+    test_10_same_material_needs_uniformity()
     print("==================================================")
     print("ALL FIXES VERIFICATION TESTS PASSED SUCCESSFULLY! ")
     print("==================================================")

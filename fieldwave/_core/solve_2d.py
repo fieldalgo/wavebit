@@ -13,7 +13,7 @@ versions, so this module reuses ``solve_1d``'s boundary init and ``final_matchin
 """
 from .backend import array_namespace, eig
 from .conventions import outgoing_sqrt
-from .solve_1d import _block, _diag, _diagonal, _same_material, final_matching
+from .solve_1d import _block, _diag, _same_material, final_matching, uniform_eps
 
 
 def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epyx_conv, C):
@@ -145,9 +145,9 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
                                  epxy_conv, epyx_conv, C)
 
         if same_material is None:
-            layer_eps_diag = xp.mean(_diagonal(xp, epx_conv))
-            is_same = _same_material(xp, layer_eps_diag, eps_below, same_material_rtol)
-            eps_below = layer_eps_diag
+            layer_eps = uniform_eps(xp, epx_conv, same_material_rtol)
+            is_same = _same_material(xp, layer_eps, eps_below, same_material_rtol)
+            eps_below = layer_eps
         else:
             is_same = bool(same_material[layer_index])
 

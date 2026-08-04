@@ -179,12 +179,11 @@ def test_same_material_flags_are_accepted_and_ignored():
 
 # ------------------------------------------------------------------------------ robustness
 
-# Two differently patterned layers whose *mean* permittivity happens to match: the TMM
-# same-material auto-detection compares only that mean, flags the upper layer as identical to
-# the one below, and skips the interface — which costs it energy conservation badly (~50x on
-# this structure). SMM has no such short-circuit, so it is the algorithm that still answers
-# here. Asserted on SMM only; the TMM detection bug is tracked separately, and this test is
-# what will catch it if SMM ever grows the same shortcut.
+# Two differently patterned layers whose *mean* permittivity happens to match. This is the
+# structure that exposed the same-material misdetection (test_fixes.test_10): TMM read the
+# upper layer as identical to the one below and skipped their interface, losing ~50x on
+# energy, while SMM — which has no such short-circuit — stayed exact. Kept here as the SMM
+# side of that story: it is what will catch SMM growing the same kind of shortcut.
 DEGENERATE_MEAN = dict(
     ucell=np.concat([UC_2D, UC_2D[:, ::-1]]), thickness=[0.2, 0.3], n_top=1.0, n_bot=1.0,
     psi=0.4, wavelength=0.5, period=[0.6, 0.6], fto=[2, 2])
@@ -192,10 +191,16 @@ DEGENERATE_MEAN = dict(
 
 @pytest.mark.parametrize('theta,phi', [(0.0, 0.0), (0.1, 0.0), (0.1, 0.4)])
 def test_smm_survives_same_mean_layers(theta, phi):
-    """Lossless energy conservation on a stack the TMM short-circuit mis-reads."""
-    smm = _solve('SMM', dict(DEGENERATE_MEAN, theta=theta, phi=phi))
+    """Lossless energy conservation, and TMM agreement, on that stack."""
+    kwargs = dict(DEGENERATE_MEAN, theta=theta, phi=phi)
+    smm = _solve('SMM', kwargs)
     total = float(np.sum(np.array(smm.de_ri)) + np.sum(np.array(smm.de_ti)))
     assert abs(total - 1.0) < 1e-9, total
+
+    tmm = _solve('TMM', kwargs)
+    for field in ('de_ri', 'de_ti'):
+        a, b = np.array(getattr(tmm, field)), np.array(getattr(smm, field))
+        assert np.allclose(a, b, atol=1e-10, rtol=0), (field, np.max(np.abs(a - b)))
 
 
 def test_smm_2d_matches_conical_on_y_invariant_stack():

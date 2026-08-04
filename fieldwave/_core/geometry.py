@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from .backend import array_namespace
-from .solve_1d import _diagonal, _same_material
+from .solve_1d import _same_material, uniform_eps
 
 
 @dataclass(eq=False)
@@ -56,9 +56,11 @@ class StaticGeometry:
 def detect_same_material(epx_conv_all, n_bot, rtol=1e-3):
     """Per-layer flags for the interface short-circuit, from concrete convolution matrices.
 
-    A uniform layer of the medium below has diagonal ``eps_conv ~= eps_below * I``. Walks
-    bottom-to-top, matching the order the solve applies them in, and returns them indexed by
-    layer so the solve can read ``same_material[layer_index]`` directly.
+    A uniform layer of the medium below has ``eps_conv ~= eps_below * I`` — the *whole* matrix,
+    not just its mean diagonal, which is only the DC coefficient and which two differently
+    patterned layers can share. Walks bottom-to-top, matching the order the solve applies them
+    in, and returns them indexed by layer so the solve can read ``same_material[layer_index]``
+    directly.
     """
     xp = array_namespace(epx_conv_all)
     eps_below = xp.asarray(complex(n_bot).conjugate() ** 2, dtype=epx_conv_all.dtype)
@@ -66,7 +68,7 @@ def detect_same_material(epx_conv_all, n_bot, rtol=1e-3):
     n_layers = epx_conv_all.shape[0]
     flags = [False] * n_layers
     for i in range(n_layers)[::-1]:
-        layer_eps = xp.mean(_diagonal(xp, epx_conv_all[i]))
+        layer_eps = uniform_eps(xp, epx_conv_all[i], rtol)
         flags[i] = _same_material(xp, layer_eps, eps_below, rtol)
         eps_below = layer_eps
     return flags
