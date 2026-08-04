@@ -78,6 +78,20 @@ grad = jax.grad(lambda ucell: jnp.sum(
     solver.conv_solve(ucell=ucell, geometry=geometry).res.de_ti).real)
 ```
 
+### Connecting algorithm
+
+How per-layer modes are joined into a stack response. The default is the transfer-matrix
+method; the scattering-matrix method is available as an alternative:
+
+```python
+solver = fieldwave.rcwa(backend=0, connecting_algo='SMM', ...)   # 'TMM' is the default
+```
+
+Both share the same eigenmodes and boundary conventions and agree to ~1e-14; SMM costs
+~1.1-1.4x, cascades layer responses that can be reused independently, and is the formulation
+most published results are stated in. Field reconstruction (`calculate_field`) needs the TMM
+path.
+
 ## Tutorials
 
 Jupyter notebooks are prepared in [tutorials](tutorials) to give a brief introduction.

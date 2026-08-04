@@ -16,6 +16,63 @@ from .conventions import outgoing_sqrt
 from .solve_1d import _block, _diag, _diagonal, _same_material, final_matching
 
 
+def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epyx_conv, C):
+    """Raw (unrotated) eigenmodes ``(W, V, q)`` of one 2D layer.
+
+    ``W`` is the ``[Ex; Ey]`` mode matrix and ``q`` the modal decay constants; the principal
+    square root keeps ``Re(q) >= 0`` so ``exp(-k0*q*d)`` never grows. Shared by the TMM
+    (:func:`solve_2d`) and SMM (:mod:`fieldwave._core.scattering`) connecting algorithms.
+    """
+    B = Kx @ epz_conv_i @ Kx - I
+    D = Ky @ epz_conv_i @ Ky - I
+    Cc = Kx @ epz_conv_i @ Ky
+    E = Ky @ epz_conv_i @ Kx
+
+    Omega2_LR = _block(xp, [
+        [Ky @ Ky + B @ epx_conv - Cc @ epyx_conv, Cc @ epy_conv - Kx @ Ky - B @ epxy_conv],
+        [E @ epx_conv - Ky @ Kx - D @ epyx_conv, Kx @ Kx + D @ epy_conv - E @ epxy_conv],
+    ])
+    w, W = eig(Omega2_LR)
+    q = xp.astype(w, C) ** 0.5
+
+    Omega_R = _block(xp, [
+        [-Kx @ Ky + epxy_conv, Kx @ Kx - epy_conv],
+        [epx_conv - Ky @ Ky, Ky @ Kx - epyx_conv],
+    ])
+    V = (Omega_R @ W) / q
+    return W, V, q
+
+
+def sp_modes_2d(xp, W, V, F_c, F_s, ff_xy):
+    """Rotate 2D layer modes into the s/p boundary basis: ``(big_W, big_V)``.
+
+    ``big_W`` maps mode amplitudes to the boundary variables ``(E_s, F_p)`` and ``big_V`` to
+    ``(H_s, H_p)`` — the pair the substrate seed ``big_F`` / ``big_G`` is written in.
+    """
+    W_11 = W[:ff_xy, :ff_xy]
+    W_12 = W[:ff_xy, ff_xy:]
+    W_21 = W[ff_xy:, :ff_xy]
+    W_22 = W[ff_xy:, ff_xy:]
+    V_11 = V[:ff_xy, :ff_xy]
+    V_12 = V[:ff_xy, ff_xy:]
+    V_21 = V[ff_xy:, :ff_xy]
+    V_22 = V[ff_xy:, ff_xy:]
+
+    W_ss = F_c @ W_21 - F_s @ W_11
+    W_sp = F_c @ W_22 - F_s @ W_12
+    W_ps = F_c @ W_11 + F_s @ W_21
+    W_pp = F_c @ W_12 + F_s @ W_22
+
+    V_ss = F_c @ V_11 + F_s @ V_21
+    V_sp = F_c @ V_12 + F_s @ V_22
+    V_ps = F_c @ V_21 - F_s @ V_11
+    V_pp = F_c @ V_22 - F_s @ V_12
+
+    big_W = _block(xp, [[W_ss, W_sp], [W_ps, W_pp]])
+    big_V = _block(xp, [[V_ss, V_sp], [V_ps, V_pp]])
+    return big_W, big_V
+
+
 def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
              epxy_conv_all=None, epyx_conv_all=None,
@@ -69,6 +126,8 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     ky_full = xp.reshape(xp.broadcast_to(ky_col, (ff_y, ff_x)), (-1,))
     Kx = _diag(xp, kx_full)
     Ky = _diag(xp, ky_full)
+    F_c = _diag(xp, xp.cos(varphi))
+    F_s = _diag(xp, xp.sin(varphi))
 
     # --- stage 2/3: per-layer eig + coupled block transfer (transfer_2d_2 / transfer_2d_3)
     big_I = xp.astype(xp.eye(2 * ff_xy), C)
@@ -82,23 +141,8 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
         epyx_conv = O if epyx_conv_all is None else epyx_conv_all[layer_index]
         d = thickness[layer_index]
 
-        B = Kx @ epz_conv_i @ Kx - I
-        D = Ky @ epz_conv_i @ Ky - I
-        Cc = Kx @ epz_conv_i @ Ky
-        E = Ky @ epz_conv_i @ Kx
-
-        Omega2_LR = _block(xp, [
-            [Ky @ Ky + B @ epx_conv - Cc @ epyx_conv, Cc @ epy_conv - Kx @ Ky - B @ epxy_conv],
-            [E @ epx_conv - Ky @ Kx - D @ epyx_conv, Kx @ Kx + D @ epy_conv - E @ epxy_conv],
-        ])
-        w, W = eig(Omega2_LR)
-        q = xp.astype(w, C) ** 0.5
-
-        Omega_R = _block(xp, [
-            [-Kx @ Ky + epxy_conv, Kx @ Kx - epy_conv],
-            [epx_conv - Ky @ Ky, Ky @ Kx - epyx_conv],
-        ])
-        V = (Omega_R @ W) / q
+        W, V, q = layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i,
+                                 epxy_conv, epyx_conv, C)
 
         if same_material is None:
             layer_eps_diag = xp.mean(_diagonal(xp, epx_conv))
@@ -118,30 +162,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
             big_T = big_T @ (W @ big_X @ W_i)
             big_A_i = big_B = xp.zeros_like(big_F)
         else:
-            W_11 = W[:ff_xy, :ff_xy]
-            W_12 = W[:ff_xy, ff_xy:]
-            W_21 = W[ff_xy:, :ff_xy]
-            W_22 = W[ff_xy:, ff_xy:]
-            V_11 = V[:ff_xy, :ff_xy]
-            V_12 = V[:ff_xy, ff_xy:]
-            V_21 = V[ff_xy:, :ff_xy]
-            V_22 = V[ff_xy:, ff_xy:]
-
-            F_c = _diag(xp, xp.cos(varphi))
-            F_s = _diag(xp, xp.sin(varphi))
-
-            W_ss = F_c @ W_21 - F_s @ W_11
-            W_sp = F_c @ W_22 - F_s @ W_12
-            W_ps = F_c @ W_11 + F_s @ W_21
-            W_pp = F_c @ W_12 + F_s @ W_22
-
-            V_ss = F_c @ V_11 + F_s @ V_21
-            V_sp = F_c @ V_12 + F_s @ V_22
-            V_ps = F_c @ V_21 - F_s @ V_11
-            V_pp = F_c @ V_22 - F_s @ V_12
-
-            big_W = _block(xp, [[W_ss, W_sp], [W_ps, W_pp]])
-            big_V = _block(xp, [[V_ss, V_sp], [V_ps, V_pp]])
+            big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, ff_xy)
 
             big_W_i = _inv(big_W)
             big_V_i = _inv(big_V)

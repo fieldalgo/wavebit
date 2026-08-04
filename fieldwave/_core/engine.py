@@ -12,16 +12,31 @@ per-backend ``transfer_method`` chains it replaces existed in triplicate.
 from . import analytic as _analytic
 from . import factorization as _fac
 from .geometry import StaticGeometry, detect_same_material
+from .scattering import smm_1d as _smm_1d, smm_1d_conical as _smm_1d_conical, smm_2d as _smm_2d
 from .solve_1d import solve_1d as _solve_1d, solve_1d_conical as _solve_1d_conical
 from .solve_2d import solve_2d as _solve_2d
+
+# Connecting algorithm -> the core solve for each grating type. TMM propagates an enhanced
+# transmittance matrix; SMM cascades per-layer scattering matrices. Same modes, same boundary
+# conventions, same answers (~1e-14); SMM costs ~1.1-1.4x and cannot reconstruct fields. The
+# two solves in each row take identical arguments, which is what makes the dispatch a lookup.
+_SOLVES = {
+    'TMM': {'1d': _solve_1d, 'conical': _solve_1d_conical, '2d': _solve_2d},
+    'SMM': {'1d': _smm_1d, 'conical': _smm_1d_conical, '2d': _smm_2d},
+}
 
 
 class CoreSolveMixin:
     """Provides ``solve_1d`` / ``solve_1d_conical`` / ``solve_2d`` backed by the core."""
 
-    def _check_algo(self):
-        if self.connecting_algo != 'TMM':
-            raise ValueError(f'connecting_algo {self.connecting_algo!r} is not supported')
+    def _solve_fn(self, grating_type):
+        """The core solve for this instance's ``connecting_algo`` and the given grating type."""
+        try:
+            return _SOLVES[self.connecting_algo][grating_type]
+        except KeyError:
+            raise ValueError(
+                f'connecting_algo {self.connecting_algo!r} is not supported '
+                f'(expected one of {sorted(_SOLVES)})') from None
 
     _frozen_geometry = None
 
@@ -36,26 +51,26 @@ class CoreSolveMixin:
         return out
 
     def solve_1d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
-        self._check_algo()
+        solve = self._solve_fn('1d')
         kx, _ = self.get_kx_ky_vector(wavelength)
-        return self._finish(_solve_1d(
+        return self._finish(solve(
             self.pol, wavelength, kx, self.n_top, self.n_bot, self.theta, self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             same_material=self._same_material(), use_pinv=self.use_pinv, full=True))
 
     def solve_1d_conical(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
-        self._check_algo()
+        solve = self._solve_fn('conical')
         kx, ky = self.get_kx_ky_vector(wavelength)
-        return self._finish(_solve_1d_conical(
+        return self._finish(solve(
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi, self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             same_material=self._same_material(), use_pinv=self.use_pinv, full=True))
 
     def solve_2d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None):
-        self._check_algo()
+        solve = self._solve_fn('2d')
         kx, ky = self.get_kx_ky_vector(wavelength)
-        return self._finish(_solve_2d(
+        return self._finish(solve(
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi, self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,

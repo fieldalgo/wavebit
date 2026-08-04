@@ -19,6 +19,19 @@ def _dev(x):
     return x.device if hasattr(x, 'device') else None
 
 
+def _require_solved(T1, layer_info_list):
+    """Reject the states that cannot produce a field, with the reason.
+
+    The SMM connecting algorithm cascades scattering matrices and never forms the per-layer
+    amplitude propagators this reconstruction walks, so it leaves both of these empty.
+    """
+    if T1 is None or len(layer_info_list) == 0:
+        raise NotImplementedError(
+            'field reconstruction needs the per-layer amplitudes from a TMM solve; '
+            "run the solve with connecting_algo='TMM' (SMM returns efficiencies and "
+            'boundary amplitudes only), or solve before asking for the field.')
+
+
 def _diag_exp(xp, diag_vals, n):
     """``exp`` of a diagonal matrix stack, given its diagonals — the legacy ``d_exp``.
 
@@ -57,6 +70,7 @@ def _z_slices(xp, res_z, d, C, dev=None):
 def field_1d(wavelength, kx, T1, layer_info_list, period, pol,
              res_x=20, res_y=1, res_z=20):
     """Field of a pure TE/TM 1D stack. Returns ``(res_z*n_layers, res_y, res_x, 3)``."""
+    _require_solved(T1, layer_info_list)
     xp = array_namespace(T1)
     C = T1.dtype
     k0 = 2 * 3.141592653589793 / wavelength
@@ -99,6 +113,7 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, res_x, res_y
     They differ only in how the layer's mode matrices assemble into ``(Sx, Sy, Ux, Uy)``; the
     propagation, the z-sampling and the inverse transform are identical.
     """
+    _require_solved(T1, layer_info_list)
     xp = array_namespace(T1)
     C = T1.dtype
     k0 = 2 * 3.141592653589793 / wavelength

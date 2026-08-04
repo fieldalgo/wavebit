@@ -53,6 +53,74 @@ def _block(xp, rows):
     return xp.concat([xp.concat(r, axis=1) for r in rows], axis=0)
 
 
+def layer_modes_1d(xp, inv, pol, kx, I, epx_conv, epy_conv, epz_conv_i, C):
+    """Eigenmodes ``(W, V, q)`` of one 1D TE / TM layer.
+
+    ``W`` expands the continuous primary field (``E_y`` for TE, ``H_y`` for TM), ``V`` its
+    partner, and ``q`` are the modal decay constants used as ``exp(-k0*q*d)``. The principal
+    square root keeps ``Re(q) >= 0``, so that exponential never grows.
+
+    Shared by the TMM (:func:`solve_1d`) and SMM (:mod:`fieldwave._core.scattering`) connecting
+    algorithms — the mode algebra is a property of the layer, not of how layers are joined.
+    """
+    if pol == 0:  # TE
+        A = _diag(xp, kx) @ _diag(xp, kx) - epy_conv
+        w, W = eig(A)
+        q = xp.astype(w, C) ** 0.5
+        V = W * q
+    elif pol == 1:  # TM
+        B = kx[:, None] * epz_conv_i * kx[None, :] - I
+        w, W = eig(epx_conv @ B)
+        q = xp.astype(w, C) ** 0.5
+        V = inv(epx_conv) @ W * q
+    else:
+        raise ValueError(f'pol must be 0 (TE) or 1 (TM), got {pol!r}')
+    return W, V, q
+
+
+def layer_modes_1d_conical(xp, inv, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C):
+    """Raw (unrotated) eigenmodes of one conical 1D layer.
+
+    Returns ``(W1, W2, q1, q2, V_11, V_12, V_21, V_22)`` — the two decoupled mode families and
+    the four blocks that couple them into the s/p system built by :func:`sp_modes_1d_conical`.
+    Shared by the TMM and SMM connecting algorithms.
+    """
+    A = Kx2 - epy_conv
+    B = Kx @ epz_conv_i @ Kx - I
+    w1, W1 = eig(Ky2 + A)
+    w2, W2 = eig(Ky2 + B @ epx_conv)
+    q1 = xp.astype(w1, C) ** 0.5
+    q2 = xp.astype(w2, C) ** 0.5
+
+    A_i = inv(A)
+    B_i = inv(B)
+    V_11 = (A_i @ W1) * q1
+    V_12 = Ky @ A_i @ Kx @ W2
+    V_21 = Ky @ B_i @ Kx @ epz_conv_i @ W1
+    V_22 = (B_i @ W2) * q2
+    return W1, W2, q1, q2, V_11, V_12, V_21, V_22
+
+
+def sp_modes_1d_conical(xp, F_c, F_s, W1, W2, V_11, V_12, V_21, V_22):
+    """Rotate conical layer modes into the s/p boundary basis: ``(big_W, big_V)``.
+
+    ``big_W`` maps mode amplitudes to the boundary variables ``(E_s, F_p)`` and ``big_V`` to
+    ``(H_s, H_p)`` — the same pair the substrate seed ``big_F`` / ``big_G`` is written in.
+    """
+    V_ss = F_c @ V_11
+    V_sp = F_c @ V_12 - F_s @ W2
+    W_ss = F_c @ W1 + F_s @ V_21
+    W_sp = F_s @ V_22
+    W_ps = F_s @ V_11
+    W_pp = F_c @ W2 + F_s @ V_12
+    V_ps = F_c @ V_21 - F_s @ W1
+    V_pp = F_c @ V_22
+
+    big_W = _block(xp, [[V_ss, V_sp], [W_ps, W_pp]])
+    big_V = _block(xp, [[W_ss, W_sp], [V_ps, V_pp]])
+    return big_W, big_V
+
+
 def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
              same_material=None, same_material_rtol=1e-3, use_pinv=False, full=False):
@@ -132,16 +200,7 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
         epz_conv_i = epz_conv_i_all[layer_index]
         d = thickness[layer_index]
 
-        if pol == 0:  # TE
-            A = _diag(xp, kx) @ _diag(xp, kx) - epy_conv
-            w, W = eig(A)
-            q = xp.astype(w, C) ** 0.5
-            V = W * q
-        else:         # TM
-            B = kx[:, None] * epz_conv_i * kx[None, :] - I
-            w, W = eig(epx_conv @ B)
-            q = xp.astype(w, C) ** 0.5
-            V = _inv(epx_conv) @ W * q
+        W, V, q = layer_modes_1d(xp, _inv, pol, kx, I, epx_conv, epy_conv, epz_conv_i, C)
 
         # Same-material short-circuit. A uniform layer of the medium below has diagonal
         # eps_conv ~= eps_below * I. The decision is discrete geometry: take it from the
@@ -262,6 +321,8 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     Ky = _diag(xp, ky_vec)
     Kx2 = _diag(xp, kx * kx)
     Ky2 = _diag(xp, ky_vec * ky_vec)
+    F_c = _diag(xp, xp.cos(varphi))
+    F_s = _diag(xp, xp.sin(varphi))
 
     layer_info_list = []
     n_layers = len(thickness) if not hasattr(thickness, 'shape') else thickness.shape[0]
@@ -271,19 +332,8 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
         epz_conv_i = epz_conv_i_all[layer_index]
         d = thickness[layer_index]
 
-        A = Kx2 - epy_conv
-        B = Kx @ epz_conv_i @ Kx - I
-        w1, W1 = eig(Ky2 + A)
-        w2, W2 = eig(Ky2 + B @ epx_conv)
-        q1 = xp.astype(w1, C) ** 0.5
-        q2 = xp.astype(w2, C) ** 0.5
-
-        A_i = _inv(A)
-        B_i = _inv(B)
-        V_11 = (A_i @ W1) * q1
-        V_12 = Ky @ A_i @ Kx @ W2
-        V_21 = Ky @ B_i @ Kx @ epz_conv_i @ W1
-        V_22 = (B_i @ W2) * q2
+        W1, W2, q1, q2, V_11, V_12, V_21, V_22 = layer_modes_1d_conical(
+            xp, _inv, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C)
 
         if same_material is None:
             layer_eps_diag = xp.mean(_diagonal(xp, epx_conv))
@@ -307,20 +357,8 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
             big_T = big_T @ (big_W @ big_X @ big_W_i)
             big_A_i = big_B = xp.zeros_like(big_F)
         else:
-            F_c = _diag(xp, xp.cos(varphi))
-            F_s = _diag(xp, xp.sin(varphi))
-
-            V_ss = F_c @ V_11
-            V_sp = F_c @ V_12 - F_s @ W2
-            W_ss = F_c @ W1 + F_s @ V_21
-            W_sp = F_s @ V_22
-            W_ps = F_s @ V_11
-            W_pp = F_c @ W2 + F_s @ V_12
-            V_ps = F_c @ V_21 - F_s @ W1
-            V_pp = F_c @ V_22
-
-            big_W = _block(xp, [[V_ss, V_sp], [W_ps, W_pp]])
-            big_V = _block(xp, [[W_ss, W_sp], [V_ps, V_pp]])
+            big_W, big_V = sp_modes_1d_conical(xp, F_c, F_s, W1, W2,
+                                               V_11, V_12, V_21, V_22)
 
             big_W_i = _inv(big_W)
             big_V_i = _inv(big_V)
@@ -409,10 +447,8 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
     denom = n_top * cos_t
 
     def efficiencies(R_s_, R_p_, T_s_, T_p_):
-        return (xp.real(R_s_ * xp.conj(R_s_) * xp.real(kz_top_2d / denom)),
-                xp.real(R_p_ * xp.conj(R_p_) * xp.real(xp.conj(kz_top_2d) / n_top ** 2 / denom)),
-                xp.real(T_s_ * xp.conj(T_s_) * xp.real(kz_bot_2d / denom)),
-                xp.real(T_p_ * xp.conj(T_p_) * xp.real(xp.conj(kz_bot_2d) / n_bot ** 2 / denom)))
+        return sp_efficiencies(xp, kz_top_2d, kz_bot_2d, denom, n_top, n_bot,
+                               R_s_, R_p_, T_s_, T_p_)
 
     de_ri_s, de_ri_p, de_ti_s, de_ti_p = efficiencies(R_s, R_p, T_s, T_p)
 
@@ -453,6 +489,19 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
     T1 = xp.stack([big_T1, big_T1_tetm[:, 0:1], big_T1_tetm[:, 1:2]])
 
     return {'res': res, 'res_te_inc': variants[0], 'res_tm_inc': variants[1], 'T1': T1}
+
+
+def sp_efficiencies(xp, kz_top_2d, kz_bot_2d, denom, n_top, n_bot, R_s, R_p, T_s, T_p):
+    """Power-normalized diffraction efficiencies from the s/p boundary amplitudes.
+
+    ``denom = n_top*cos(theta)`` is the incident-power factor; the s channel carries the
+    electric amplitude and the p channel the magnetic one, hence the ``1/n**2`` on p.
+    Shared by the TMM final matching and the SMM connecting algorithm.
+    """
+    return (xp.real(R_s * xp.conj(R_s) * xp.real(kz_top_2d / denom)),
+            xp.real(R_p * xp.conj(R_p) * xp.real(xp.conj(kz_top_2d) / n_top ** 2 / denom)),
+            xp.real(T_s * xp.conj(T_s) * xp.real(kz_bot_2d / denom)),
+            xp.real(T_p * xp.conj(T_p) * xp.real(xp.conj(kz_bot_2d) / n_bot ** 2 / denom)))
 
 
 def _pack(R_s, R_p, T_s, T_p, de_ri_s, de_ri_p, de_ti_s, de_ti_p):

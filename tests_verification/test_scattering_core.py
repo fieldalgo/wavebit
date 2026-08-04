@@ -1,0 +1,317 @@
+"""Scattering-matrix connecting algorithm (fieldwave._core.scattering).
+
+SMM has no golden file of its own on purpose: its oracle is the TMM path, which is itself
+pinned to the legacy results in test_golden_legacy_parity.py. So the properties tested are
+
+  * agreement    — SMM == TMM on every grating type, in efficiencies *and* in the s/p
+                   amplitudes, for the psi incidence and both pure-TE / pure-TM variants;
+  * conservation — lossless stacks keep their energy (a check TMM agreement alone would pass
+                   even if both were wrong the same way, so it is worth its own assertion);
+  * wiring       — connecting_algo='SMM' reaches the core solve, and an unknown algo is
+                   rejected with a useful message;
+  * scope        — field reconstruction after an SMM solve fails loudly, not with a NaN cell;
+  * portability  — same numbers on numpy / jax / torch, and gradients still flow.
+"""
+import numpy as np
+import pytest
+
+import fieldwave
+from fieldwave._core.factorization import to_conv_mat_raster_discrete
+from fieldwave._core.scattering import smm_1d, smm_1d_conical, smm_2d
+from fieldwave._core.solve_1d import solve_1d, solve_1d_conical
+from fieldwave._core.solve_2d import solve_2d
+
+# ---------------------------------------------------------------------------------- cases
+# name, kwargs for fieldwave.rcwa (grating type follows from ucell / phi, as in the solver)
+UC_1D = np.array([[[3., 3., 1., 1., 3., 1.]], [[2., 2., 2., 1., 1., 1.]]])
+UC_1D_SUB = np.array([[[3., 3., 1., 1., 3., 1.]], [[1., 1., 1., 1., 1., 1.]]])
+UC_2D = np.array([[[3., 3., 1., 1.], [1., 3., 3., 1.], [1., 1., 3., 3.], [3., 1., 1., 3.]]])
+
+CASES_1D = [
+    ('te_1layer', dict(pol=0, ucell=np.array([[[3., 3., 3., 1., 1., 1.]]]), thickness=[0.15],
+                       n_top=2.0, n_bot=1.0, theta=0.0, wavelength=0.777, period=[0.77],
+                       fto=[6, 0])),
+    ('tm_1layer', dict(pol=1, ucell=np.array([[[3., 3., 3., 1., 1., 1.]]]), thickness=[0.15],
+                       n_top=2.0, n_bot=1.0, theta=0.0, wavelength=0.777, period=[0.77],
+                       fto=[6, 0])),
+    ('te_2layer_oblique', dict(pol=0, ucell=UC_1D, thickness=[0.15, 0.22], n_top=2.0,
+                               n_bot=1.5, theta=0.3, wavelength=0.777, period=[0.77],
+                               fto=[5, 0])),
+    ('tm_2layer_oblique', dict(pol=1, ucell=UC_1D, thickness=[0.15, 0.22], n_top=2.0,
+                               n_bot=1.5, theta=0.3, wavelength=0.777, period=[0.77],
+                               fto=[5, 0])),
+    # bottom layer uniform and equal to the substrate: TMM short-circuits the interface,
+    # SMM has no short-circuit to take — they must still land on the same answer.
+    ('te_same_material', dict(pol=0, ucell=UC_1D_SUB, thickness=[0.2, 0.1], n_top=1.0,
+                              n_bot=1.0, theta=0.0, wavelength=0.9, period=[0.7],
+                              fto=[5, 0])),
+    ('tm_same_material', dict(pol=1, ucell=UC_1D_SUB, thickness=[0.2, 0.1], n_top=1.0,
+                              n_bot=1.0, theta=0.0, wavelength=0.9, period=[0.7],
+                              fto=[5, 0])),
+    # thick, strongly evanescent: the regime where a connecting algorithm goes wrong if it
+    # ever inverts a growing exponential
+    ('tm_thick', dict(pol=1, ucell=np.array([[[4., 4., 4., 4., 1., 1., 1., 1.]]]),
+                      thickness=[20.0], n_top=1.0, n_bot=1.0, theta=0.0, wavelength=0.5,
+                      period=[0.6], fto=[12, 0])),
+]
+
+CASES_CONICAL = [
+    ('con_1layer', dict(ucell=np.array([[[3., 3., 3., 1., 1., 1.]]]), thickness=[0.15],
+                        n_top=2.0, n_bot=1.0, theta=0.2, phi=0.3, psi=0.4, wavelength=0.777,
+                        period=[0.77], fto=[6, 0])),
+    ('con_2layer_lossy_sub', dict(ucell=UC_1D, thickness=[0.15, 0.22], n_top=1.0, n_bot=1.5,
+                                  theta=0.3, phi=0.5, psi=1.1, wavelength=0.9, period=[0.7],
+                                  fto=[5, 0])),
+    ('con_phi0', dict(ucell=np.array([[[4., 4., 1., 1., 1., 1.]]]), thickness=[0.3],
+                      n_top=1.5, n_bot=1.0, theta=0.25, phi=0.0, psi=0.7, wavelength=0.6,
+                      period=[0.5], fto=[4, 0])),
+]
+
+CASES_2D = [
+    ('2d_1layer', dict(ucell=UC_2D, thickness=[0.3], n_top=1.0, n_bot=1.5, theta=0.2,
+                       phi=0.4, psi=0.7, wavelength=0.9, period=[0.7, 0.7], fto=[3, 3])),
+    # The two layers must differ in *mean* permittivity, not just in pattern: equal means
+    # trip the TMM same-material misdetection pinned by test_smm_survives_* below.
+    ('2d_2layer_normal', dict(ucell=np.concat([UC_2D, 1 + UC_2D[:, ::-1]]),
+                              thickness=[0.2, 0.3], n_top=1.0, n_bot=1.0, theta=0.0,
+                              phi=0.0, psi=0.4, wavelength=0.5, period=[0.6, 0.6],
+                              fto=[2, 2])),
+]
+
+ALL_CASES = ([(n, k, '1d') for n, k in CASES_1D]
+             + [(n, k, 'conical') for n, k in CASES_CONICAL]
+             + [(n, k, '2d') for n, k in CASES_2D])
+
+AMPLITUDES = ('R_s', 'R_p', 'T_s', 'T_p')
+EFFICIENCIES = ('de_ri', 'de_ri_s', 'de_ri_p', 'de_ti', 'de_ti_s', 'de_ti_p')
+
+
+def _solve(algo, kwargs):
+    return fieldwave.rcwa(backend=0, connecting_algo=algo, **kwargs).conv_solve()
+
+
+# ------------------------------------------------------------------------------- agreement
+
+@pytest.mark.parametrize('name,kwargs,kind', ALL_CASES, ids=[c[0] for c in ALL_CASES])
+def test_smm_matches_tmm(name, kwargs, kind):
+    """Same efficiencies and same s/p amplitudes, for every incidence the solve reports."""
+    tmm = _solve('TMM', kwargs)
+    smm = _solve('SMM', kwargs)
+
+    for variant in ('res', 'res_te_inc', 'res_tm_inc'):
+        a, b = getattr(tmm, variant), getattr(smm, variant)
+        if a is None:                      # 1D TE/TM reports only the psi incidence
+            assert b is None, variant
+            continue
+        for field in AMPLITUDES + EFFICIENCIES:
+            x, y = np.array(getattr(a, field)), np.array(getattr(b, field))
+            assert x.shape == y.shape, (variant, field, x.shape, y.shape)
+            assert np.allclose(x, y, atol=1e-10, rtol=0), \
+                (variant, field, np.max(np.abs(x - y)))
+
+
+@pytest.mark.parametrize('name,kwargs,kind', ALL_CASES, ids=[c[0] for c in ALL_CASES])
+def test_smm_conserves_energy_when_lossless(name, kwargs, kind):
+    """Every case here is lossless, so reflection + transmission must sum to 1."""
+    smm = _solve('SMM', kwargs)
+    total = float(np.sum(np.array(smm.de_ri)) + np.sum(np.array(smm.de_ti)))
+    assert abs(total - 1.0) < 1e-9, total
+
+
+# ---------------------------------------------------------------------------------- wiring
+
+def _core_inputs(kwargs):
+    """Solver-built arguments for a direct core call (same route the mixin takes)."""
+    solver = fieldwave.rcwa(backend=0, connecting_algo='SMM', **kwargs)
+    solver.conv_solve()                    # assigns the grating type
+    epx, epy, epz = to_conv_mat_raster_discrete(
+        solver.ucell, solver.fto[0], solver.fto[1],
+        enhanced_dfs=solver.enhanced_dfs, use_pinv=solver.use_pinv)
+    kx, ky = solver.get_kx_ky_vector(kwargs['wavelength'])
+    common = dict(wavelength=kwargs['wavelength'], kx=kx, n_top=solver.n_top,
+                  n_bot=solver.n_bot, theta=solver.theta, thickness=solver.thickness,
+                  epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
+    if solver.grating_type_assigned == 0:
+        return solver, dict(common, pol=solver.pol)
+    return solver, dict(common, ky=ky, psi=solver.psi)
+
+
+CORE_FN = {'1d': (smm_1d, solve_1d), 'conical': (smm_1d_conical, solve_1d_conical),
+           '2d': (smm_2d, solve_2d)}
+
+
+@pytest.mark.parametrize('name,kwargs,kind', ALL_CASES, ids=[c[0] for c in ALL_CASES])
+def test_wiring_matches_direct_core_call(name, kwargs, kind):
+    """connecting_algo='SMM' dispatches to the core with the arguments it expects."""
+    smm_fn, _ = CORE_FN[kind]
+    solver, inputs = _core_inputs(kwargs)
+    via_api = _solve('SMM', kwargs)
+    ri, ti = smm_fn(**inputs)
+    assert np.array_equal(np.array(via_api.de_ri), np.array(ri))
+    assert np.array_equal(np.array(via_api.de_ti), np.array(ti))
+
+
+def test_unknown_connecting_algo_is_rejected():
+    kwargs = CASES_1D[0][1]
+    with pytest.raises(ValueError, match="'RCWA-ish'"):
+        _solve('RCWA-ish', kwargs)
+
+
+def test_field_reconstruction_after_smm_raises():
+    """SMM never builds the per-layer amplitudes fields need — say so, don't emit NaNs."""
+    solver = fieldwave.rcwa(backend=0, connecting_algo='SMM', **CASES_1D[0][1])
+    solver.conv_solve()
+    with pytest.raises(NotImplementedError, match='TMM'):
+        solver.calculate_field(res_x=4, res_z=4)
+
+
+def test_same_material_flags_are_accepted_and_ignored():
+    """Frozen geometry must not change the SMM answer — it has no short-circuit to freeze."""
+    kwargs = dict(CASES_1D[4][1])          # te_same_material
+    solver = fieldwave.rcwa(backend=0, connecting_algo='SMM', **kwargs)
+    frozen = solver.freeze_geometry()
+    assert any(frozen.same_material), frozen.same_material   # the case really does trigger it
+    with_geom = solver.conv_solve(geometry=frozen)
+    without = _solve('SMM', kwargs)
+    assert np.allclose(np.array(with_geom.de_ri), np.array(without.de_ri), atol=0, rtol=0)
+    assert np.allclose(np.array(with_geom.de_ti), np.array(without.de_ti), atol=0, rtol=0)
+
+
+# ------------------------------------------------------------------------------ robustness
+
+# Two differently patterned layers whose *mean* permittivity happens to match: the TMM
+# same-material auto-detection compares only that mean, flags the upper layer as identical to
+# the one below, and skips the interface — which costs it energy conservation badly (~50x on
+# this structure). SMM has no such short-circuit, so it is the algorithm that still answers
+# here. Asserted on SMM only; the TMM detection bug is tracked separately, and this test is
+# what will catch it if SMM ever grows the same shortcut.
+DEGENERATE_MEAN = dict(
+    ucell=np.concat([UC_2D, UC_2D[:, ::-1]]), thickness=[0.2, 0.3], n_top=1.0, n_bot=1.0,
+    psi=0.4, wavelength=0.5, period=[0.6, 0.6], fto=[2, 2])
+
+
+@pytest.mark.parametrize('theta,phi', [(0.0, 0.0), (0.1, 0.0), (0.1, 0.4)])
+def test_smm_survives_same_mean_layers(theta, phi):
+    """Lossless energy conservation on a stack the TMM short-circuit mis-reads."""
+    smm = _solve('SMM', dict(DEGENERATE_MEAN, theta=theta, phi=phi))
+    total = float(np.sum(np.array(smm.de_ri)) + np.sum(np.array(smm.de_ti)))
+    assert abs(total - 1.0) < 1e-9, total
+
+
+def test_smm_2d_matches_conical_on_y_invariant_stack():
+    """Independent check on the coupled path: a y-invariant 2D grating is a conical one.
+
+    The two go through different mode algebra (2D block operator vs the conical s/p pair), so
+    agreement here is evidence about the physics, not just about the connecting algorithm.
+    """
+    pattern = np.array([[[3., 3., 1., 1., 3., 1., 1., 1.]],
+                        [[2., 2., 2., 1., 1., 1., 2., 2.]]])
+    common = dict(thickness=[0.2, 0.3], n_top=1.0, n_bot=1.0, psi=0.4, wavelength=0.5,
+                  period=[0.6, 0.6], theta=0.1, phi=0.0, fto=[2, 0])
+    conical = _solve('SMM', dict(common, ucell=pattern))
+    two_d = _solve('SMM', dict(common, ucell=np.repeat(pattern, 8, axis=1)))
+    for field in ('de_ri', 'de_ti'):
+        a = np.array(getattr(conical, field)).ravel()
+        b = np.array(getattr(two_d, field)).ravel()
+        assert np.allclose(a, b, atol=1e-10, rtol=0), (field, np.max(np.abs(a - b)))
+
+
+# ----------------------------------------------------------------------------- portability
+
+def _to(backend, x):
+    if backend == 'jax':
+        import fieldwave.on_jax     # noqa: F401  (enables x64; RCWA needs double precision)
+        import jax.numpy as jnp
+        return jnp.asarray(x)
+    import torch
+    return torch.as_tensor(np.asarray(x))
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+@pytest.mark.parametrize('name,kwargs,kind', ALL_CASES, ids=[c[0] for c in ALL_CASES])
+def test_cross_backend(name, kwargs, kind, backend):
+    pytest.importorskip(backend)
+    smm_fn, _ = CORE_FN[kind]
+    _, inputs = _core_inputs(kwargs)
+    ri0, ti0 = smm_fn(**inputs)                                   # numpy reference
+
+    bk = dict(inputs)
+    for key in ('kx', 'ky', 'epx_conv_all', 'epy_conv_all', 'epz_conv_i_all'):
+        if key in bk:
+            bk[key] = _to(backend, inputs[key])
+    for key in ('theta', 'psi'):
+        if key in bk:
+            bk[key] = _to(backend, complex(inputs[key]))
+    ri, ti = smm_fn(**bk)
+
+    assert np.allclose(np.array(ri0), np.asarray(ri), atol=1e-10, rtol=0)
+    assert np.allclose(np.array(ti0), np.asarray(ti), atol=1e-10, rtol=0)
+
+
+@pytest.mark.parametrize('pol', [0, 1], ids=['te', 'tm'])
+def test_gradient_jax_torch_fd(pol):
+    """d(sum de_ti)/ds where s scales a real perturbation of a layer's eps-conv matrix."""
+    jax = pytest.importorskip('jax')
+    torch = pytest.importorskip('torch')
+    import fieldwave.on_jax          # noqa: F401  (enables x64)
+    import jax.numpy as jnp
+
+    kwargs = dict(CASES_1D[pol][1], theta=0.3)
+    _, inputs = _core_inputs(kwargs)
+    key = 'epy_conv_all' if pol == 0 else 'epx_conv_all'
+    base = np.array(inputs[key])
+    direction = np.real(base).copy()
+    conv_keys = ('kx', 'epx_conv_all', 'epy_conv_all', 'epz_conv_i_all')
+
+    def f_np(s):
+        d = dict(inputs); d[key] = base + s * direction
+        return float(np.sum(np.array(smm_1d(**d)[1])))
+    h = 1e-6
+    g_fd = (f_np(h) - f_np(-h)) / (2 * h)
+
+    def f_jax(s):
+        d = dict(inputs)
+        for k in conv_keys:
+            d[k] = jnp.asarray(inputs[k])
+        d[key] = jnp.asarray(base) + s * jnp.asarray(direction)
+        d['theta'] = jnp.asarray(complex(inputs['theta']))
+        return jnp.sum(smm_1d(**d)[1]).real
+    g_jax = float(jax.grad(f_jax)(0.0))
+
+    def f_torch(s):
+        d = dict(inputs)
+        for k in conv_keys:
+            d[k] = torch.as_tensor(np.asarray(inputs[k]))
+        d[key] = torch.as_tensor(base) + s * torch.as_tensor(direction)
+        d['theta'] = torch.as_tensor(complex(inputs['theta']))
+        return torch.sum(smm_1d(**d)[1]).real
+    s = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
+    f_torch(s).backward()
+    g_torch = float(s.grad)
+
+    assert abs(g_jax - g_torch) < 1e-6, (g_jax, g_torch)
+    assert abs(g_jax - g_fd) < 1e-4, (g_jax, g_fd)
+
+
+def test_jit_traceable_jax():
+    """The SMM cascade is jittable: no data-dependent branching on traced values."""
+    jax = pytest.importorskip('jax')
+    import fieldwave.on_jax          # noqa: F401  (enables x64)
+    import jax.numpy as jnp
+
+    _, inputs = _core_inputs(CASES_1D[0][1])
+    static = {k: v for k, v in inputs.items() if k not in
+              ('kx', 'epx_conv_all', 'epy_conv_all', 'epz_conv_i_all')}
+    arrays = {k: jnp.asarray(inputs[k]) for k in
+              ('kx', 'epx_conv_all', 'epy_conv_all', 'epz_conv_i_all')}
+    static['theta'] = jnp.asarray(complex(inputs['theta']))
+
+    @jax.jit
+    def run(kx, epx, epy, epz):
+        return smm_1d(kx=kx, epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz, **static)
+
+    ri, ti = run(arrays['kx'], arrays['epx_conv_all'], arrays['epy_conv_all'],
+                 arrays['epz_conv_i_all'])
+    ri0, ti0 = smm_1d(**inputs)
+    assert np.allclose(np.array(ri0), np.asarray(ri), atol=1e-10, rtol=0)
+    assert np.allclose(np.array(ti0), np.asarray(ti), atol=1e-10, rtol=0)
