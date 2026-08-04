@@ -1,7 +1,7 @@
 """Single-source 1D solve core (fieldwave._core.solve_1d).
 
 Three properties, one implementation:
-  * wiring        — driving the core through ``call_mee``/``conv_solve`` gives the same numbers
+  * wiring        — driving the core through ``rcwa``/``conv_solve`` gives the same numbers
                     as calling it directly (the mixin passes the right arguments);
   * cross-backend — the same core on numpy / jax / torch agrees to ~1e-10;
   * gradients     — d(sum de_ti)/ds through the complex chain agrees across jax / torch / FD.
@@ -20,16 +20,16 @@ from fieldwave._core.solve_1d import solve_1d, solve_1d_conical
 
 def _run_and_inputs(pol, ucell, thickness, n_top, n_bot, wl, period, fto, theta):
     """Solve via the public API and return (its de_ri/de_ti, the same inputs)."""
-    mee = fieldwave.call_mee(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=None,
+    solver = fieldwave.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=None,
                           pol=pol, fto=fto, period=period, wavelength=wl,
                           thickness=thickness, ucell=ucell)
-    via_api = mee.conv_solve()
+    via_api = solver.conv_solve()
     epx, epy, epz = to_conv_mat_raster_discrete(
-        mee.ucell, mee.fto[0], mee.fto[1],
-        enhanced_dfs=mee.enhanced_dfs, use_pinv=mee.use_pinv)
-    kx, _ = mee.get_kx_ky_vector(wl)
+        solver.ucell, solver.fto[0], solver.fto[1],
+        enhanced_dfs=solver.enhanced_dfs, use_pinv=solver.use_pinv)
+    kx, _ = solver.get_kx_ky_vector(wl)
     inputs = dict(pol=pol, wavelength=wl, kx=kx, n_top=n_top, n_bot=n_bot,
-                  theta=mee.theta, thickness=mee.thickness,
+                  theta=solver.theta, thickness=solver.thickness,
                   epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
     return (np.array(via_api.de_ri), np.array(via_api.de_ti)), inputs
 
@@ -148,16 +148,16 @@ def test_core_gradient_jax_torch_fd(pol):
 
 def _run_and_inputs_conical(ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi):
     """Same, forced onto the conical path."""
-    mee = fieldwave.call_mee(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi,
+    solver = fieldwave.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi,
                           fto=fto, period=period, wavelength=wl, thickness=thickness, ucell=ucell)
-    via_api = mee.conv_solve()
-    assert mee.grating_type_assigned == 1, mee.grating_type_assigned   # ensure conical path
+    via_api = solver.conv_solve()
+    assert solver.grating_type_assigned == 1, solver.grating_type_assigned   # ensure conical path
     epx, epy, epz = to_conv_mat_raster_discrete(
-        mee.ucell, mee.fto[0], mee.fto[1],
-        enhanced_dfs=mee.enhanced_dfs, use_pinv=mee.use_pinv)
-    kx, ky = mee.get_kx_ky_vector(wl)
+        solver.ucell, solver.fto[0], solver.fto[1],
+        enhanced_dfs=solver.enhanced_dfs, use_pinv=solver.use_pinv)
+    kx, ky = solver.get_kx_ky_vector(wl)
     inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_top, n_bot=n_bot,
-                  theta=mee.theta, psi=mee.psi, thickness=mee.thickness,
+                  theta=solver.theta, psi=solver.psi, thickness=solver.thickness,
                   epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
     return (np.array(via_api.de_ri), np.array(via_api.de_ti)), inputs
 

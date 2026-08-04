@@ -7,10 +7,10 @@ import fieldwave
 def run_vector(rcwa_options, backend):
 
     rcwa_options['backend'] = backend
-    mee = fieldwave.call_mee(**rcwa_options)
-    mee.ucell = ucell_vector
+    solver = fieldwave.rcwa(**rcwa_options)
+    solver.ucell = ucell_vector
 
-    res = mee.conv_solve()
+    res = solver.conv_solve()
 
     return res.de_ri, res.de_ti
 
@@ -34,9 +34,9 @@ def run_raster(rcwa_options, backend, fourier_type):
 
     rcwa_options['ucell'] = ucell_raster_1
 
-    mee = fieldwave.call_mee(**rcwa_options)
+    solver = fieldwave.rcwa(**rcwa_options)
 
-    res = mee.conv_solve()
+    res = solver.conv_solve()
     de_ri, de_ti = res.de_ri, res.de_ti
 
     return de_ri, de_ti

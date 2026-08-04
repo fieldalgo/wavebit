@@ -42,7 +42,7 @@ def test_vector_nvf_energy_conservation():
     fto_val = 2
     Exx, Eyy, Exy, Eyx, Epz_i = to_conv_mat_nvf_2d(eps_matrix, fto_val, fto_val, nx=nx_vec, ny=ny_vec)
 
-    m = fieldwave.call_mee(
+    m = fieldwave.rcwa(
         backend=0, fourier_type=0, fto=[fto_val, fto_val],
         pol=1, n_top=1.0, n_bot=1.45,
         theta=10.0 * np.pi / 180, phi=20.0 * np.pi / 180,

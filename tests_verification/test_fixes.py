@@ -18,8 +18,8 @@ def test_1_si_glass_branch_cut():
 
     for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
         try:
-            mee = fieldwave.call_mee(backend=backend_id, **option)
-            res = mee.conv_solve()
+            solver = fieldwave.rcwa(backend=backend_id, **option)
+            res = solver.conv_solve()
             assert res.de_ri is not None and res.de_ti is not None
             R = float(res.de_ri.sum())
             T = float(res.de_ti.sum())
@@ -49,8 +49,8 @@ def test_2_air_au_raw_n_lossy_substrate():
 
     for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
         try:
-            mee = fieldwave.call_mee(backend=backend_id, **option)
-            res = mee.conv_solve()
+            solver = fieldwave.rcwa(backend=backend_id, **option)
+            res = solver.conv_solve()
             assert res.de_ri is not None
             R = float(res.de_ri.sum())
             print(f"[{backend_name}] Calculated R = {R:.6f} (Diff: {abs(R - R_exact):.6e})")
@@ -76,8 +76,8 @@ def test_3_same_material_interface():
     )
 
     for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
-        mee = fieldwave.call_mee(backend=backend_id, **option)
-        res = mee.conv_solve()
+        solver = fieldwave.rcwa(backend=backend_id, **option)
+        res = solver.conv_solve()
         assert res.de_ri is not None
         R = float(res.de_ri.sum())
         print(f"[{backend_name}] Au(20nm)/Au R = {R:.6f} (Exact: {R_exact:.6f})")
@@ -100,8 +100,8 @@ def test_4_tm_transmittance_conjugation():
 
     for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
         try:
-            mee = fieldwave.call_mee(backend=backend_id, **option_conical)
-            res = mee.conv_solve()
+            solver = fieldwave.rcwa(backend=backend_id, **option_conical)
+            res = solver.conv_solve()
             assert res.res_tm_inc is not None and res.res_tm_inc.de_ti_p is not None
             T_p = float(res.res_tm_inc.de_ti_p.sum())
             print(f"[{backend_name} Conical TM] Transmittance T_p = {T_p:.6f}")
@@ -141,10 +141,10 @@ def test_6_none_ucell_grating_type():
 
     for backend_id, backend_name in [(0, 'NumPy'), (1, 'JAX'), (2, 'PyTorch')]:
         try:
-            mee = fieldwave.call_mee(backend=backend_id, **option)
-            mee._assign_grating_type()
-            print(f"[{backend_name}] ucell=None assigned grating_type: {mee.grating_type_assigned}")
-            assert mee.grating_type_assigned == 2, f"Expected grating_type_assigned == 2 for None ucell, got {mee.grating_type_assigned}"
+            solver = fieldwave.rcwa(backend=backend_id, **option)
+            solver._assign_grating_type()
+            print(f"[{backend_name}] ucell=None assigned grating_type: {solver.grating_type_assigned}")
+            assert solver.grating_type_assigned == 2, f"Expected grating_type_assigned == 2 for None ucell, got {solver.grating_type_assigned}"
         except Exception as e:
             print(f"[{backend_name}] Error: {e}")
             raise e
@@ -164,8 +164,8 @@ def test_7_none_theta_handling():
 
     for backend_id, backend_name in [(0, 'NumPy'), (1, 'JAX'), (2, 'PyTorch')]:
         try:
-            mee = fieldwave.call_mee(backend=backend_id, **option)
-            res = mee.conv_solve()
+            solver = fieldwave.rcwa(backend=backend_id, **option)
+            res = solver.conv_solve()
             assert res.de_ri is not None
             R = float(res.de_ri.sum())
             print(f"[{backend_name}] theta=None solve succeeded: R = {R:.6f}")
@@ -201,12 +201,12 @@ def test_9_vector_modeling_period():
     print("==================================================")
 
     for backend_id, backend_name in [(0, 'NumPy'), (1, 'JAX'), (2, 'PyTorch')]:
-        mee = fieldwave.call_mee(backend=backend_id, period=[1000, 1000])
-        assert mee.modeler.period is not None
+        solver = fieldwave.rcwa(backend=backend_id, period=[1000, 1000])
+        assert solver.modeler.period is not None
         # vector object for layer
-        sub_element = mee.modeler.rectangle_no_approximation(cx=500, cy=500, lx=200, ly=200, base=2.0)
+        sub_element = solver.modeler.rectangle_no_approximation(cx=500, cy=500, lx=200, ly=200, base=2.0)
         layer_info_list = [[1.0, sub_element]]
-        ucell_vector = mee.modeler.draw(layer_info_list)
+        ucell_vector = solver.modeler.draw(layer_info_list)
         assert ucell_vector is not None
         assert len(ucell_vector) == 1
         print(f"[{backend_name}] Vector modeling period test passed")

@@ -18,10 +18,10 @@ def test_intenum_equals_int_codes():
 
 def _solve(pol, fourier_type, backend):
     ucell = np.array([[[3.0, 3.0, 3.0, 1.0, 1.0, 1.0]]])
-    mee = fieldwave.call_mee(backend=backend, n_top=2.0, n_bot=1.0, theta=0.0, phi=None,
+    solver = fieldwave.rcwa(backend=backend, n_top=2.0, n_bot=1.0, theta=0.0, phi=None,
                           pol=pol, fto=[6, 0], period=[0.77], wavelength=0.777,
                           thickness=[0.15], fourier_type=fourier_type, ucell=ucell)
-    r = mee.conv_solve()
+    r = solver.conv_solve()
     return float(np.array(r.de_ri).sum()), float(np.array(r.de_ti).sum())
 
 

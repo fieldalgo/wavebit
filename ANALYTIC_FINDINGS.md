@@ -97,8 +97,8 @@ ucell = [dict(n_base=1.0, shapes=[
                   angle=np.deg2rad(25), n_index=1.0),
              dict(type='ellipse', cx=0.8, cy=0.9, lx=0.3, ly=0.2,
                   angle=0.6, n_index=3.0)])]
-mee = fieldwave.call_mee(backend=0, ucell=ucell, fto=(11, 11), ...)  # analytic_normal_grid=256 (default)
-res = mee.conv_solve()
+solver = fieldwave.rcwa(backend=0, ucell=ucell, fto=(11, 11), ...)  # analytic_normal_grid=256 (default)
+res = solver.conv_solve()
 ```
 
 `lx/ly/angle/cx/cy/n_index` may be tensors (torch/jax) and are differentiable w.r.t. them.

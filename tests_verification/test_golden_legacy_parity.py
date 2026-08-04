@@ -48,14 +48,14 @@ CASES = {
 def _run(name):
     kw = dict(CASES[name])
     kw['ucell'] = np.asarray(kw['ucell'], dtype=float)
-    mee = fieldwave.call_mee(backend=0, **kw)
-    return mee, mee.conv_solve()
+    solver = fieldwave.rcwa(backend=0, **kw)
+    return solver, solver.conv_solve()
 
 
 @pytest.mark.parametrize('name', list(CASES))
 def test_results_match_legacy_golden(name):
-    mee, result = _run(name)
-    assert mee.grating_type_assigned == GOLDEN[f'{name}__grating_type']
+    solver, result = _run(name)
+    assert solver.grating_type_assigned == GOLDEN[f'{name}__grating_type']
 
     checked = 0
     for sub in ('res', 'res_te_inc', 'res_tm_inc'):
@@ -75,14 +75,14 @@ def test_results_match_legacy_golden(name):
 @pytest.mark.parametrize('name', list(CASES))
 def test_field_reconstruction_state_matches_legacy_golden(name):
     """``layer_info_list`` / ``T1`` feed calculate_field, which nothing else covers."""
-    mee, _ = _run(name)
+    solver, _ = _run(name)
 
     want_T1 = GOLDEN[f'{name}__T1']
-    got_T1 = np.asarray(mee.T1)
+    got_T1 = np.asarray(solver.T1)
     assert got_T1.shape == want_T1.shape
     assert np.array_equal(want_T1, got_T1), np.max(np.abs(want_T1 - got_T1))
 
-    for i, layer in enumerate(mee.layer_info_list):
+    for i, layer in enumerate(solver.layer_info_list):
         for j, part in enumerate(('epz_i', 'W', 'V', 'q', 'd', 'A_i', 'B')):
             want = GOLDEN[f'{name}__layer{i}__{part}']
             got = np.asarray(layer[j])
@@ -92,8 +92,8 @@ def test_field_reconstruction_state_matches_legacy_golden(name):
 
 def test_calculate_field_still_runs():
     """Smoke-cover field reconstruction end to end — it reads the state pinned above."""
-    mee, _ = _run('2d_oblique')
-    field = mee.calculate_field(res_x=4, res_y=4, res_z=4)
+    solver, _ = _run('2d_oblique')
+    field = solver.calculate_field(res_x=4, res_y=4, res_z=4)
     field = np.asarray(field)
     assert field.ndim >= 3 and np.isfinite(field).all()
 
@@ -112,7 +112,7 @@ def test_jax_and_torch_match_the_same_golden(name, backend):
     pytest.importorskip('jax' if backend == 1 else 'torch')
     kw = dict(CASES[name])
     kw['ucell'] = np.asarray(kw['ucell'], dtype=float)
-    result = fieldwave.call_mee(backend=backend, **kw).conv_solve()
+    result = fieldwave.rcwa(backend=backend, **kw).conv_solve()
 
     for sub in ('res', 'res_te_inc', 'res_tm_inc'):
         got_sub = getattr(result, sub)

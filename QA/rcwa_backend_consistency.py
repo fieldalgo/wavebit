@@ -5,29 +5,29 @@ import fieldwave
 
 def consistency_check(option):
 
-    mee = fieldwave.call_mee(backend=0, **option)  # NumPy
-    res_nupmy = mee.conv_solve()
+    solver = fieldwave.rcwa(backend=0, **option)  # NumPy
+    res_nupmy = solver.conv_solve()
     res_numpy_psi = res_nupmy.res
     res_numpy_te = res_nupmy.res_te_inc
     res_numpy_tm = res_nupmy.res_tm_inc
 
-    field_cell_numpy = mee.calculate_field(res_z=50, res_x=50)
+    field_cell_numpy = solver.calculate_field(res_z=50, res_x=50)
 
-    mee = fieldwave.call_mee(backend=1, **option)  # JAX
-    res_jax = mee.conv_solve()
+    solver = fieldwave.rcwa(backend=1, **option)  # JAX
+    res_jax = solver.conv_solve()
     res_jax_psi = res_jax.res
     res_jax_te = res_jax.res_te_inc
     res_jax_tm = res_jax.res_tm_inc
 
-    field_cell_jax = mee.calculate_field(res_z=50, res_x=50)
+    field_cell_jax = solver.calculate_field(res_z=50, res_x=50)
 
-    mee = fieldwave.call_mee(backend=2, **option)  # PyTorch
-    res_torch = mee.conv_solve()
+    solver = fieldwave.rcwa(backend=2, **option)  # PyTorch
+    res_torch = solver.conv_solve()
     res_torch_psi = res_torch.res
     res_torch_te = res_torch.res_te_inc
     res_torch_tm = res_torch.res_tm_inc
 
-    field_cell_torch = mee.calculate_field(res_z=50, res_x=50)
+    field_cell_torch = solver.calculate_field(res_z=50, res_x=50)
     field_cell_torch = field_cell_torch.numpy()
 
     check_attr = ['R_s', 'R_p', 'T_s', 'T_p', 'de_ri_s', 'de_ri_p', 'de_ri', 'de_ti_s', 'de_ti_p', 'de_ti']

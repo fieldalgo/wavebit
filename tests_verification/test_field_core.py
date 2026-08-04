@@ -38,17 +38,17 @@ VARIANTS = (('default', (True, False, False)), ('all', (True, True, True)))
 def _solved(name, backend=0):
     kw = dict(CASES[name])
     kw['ucell'] = np.asarray(kw['ucell'], dtype=float)
-    mee = fieldwave.call_mee(backend=backend, **kw)
-    mee.conv_solve()
-    return mee
+    solver = fieldwave.rcwa(backend=backend, **kw)
+    solver.conv_solve()
+    return solver
 
 
 @pytest.mark.parametrize('tag,sfi', VARIANTS, ids=[v[0] for v in VARIANTS])
 @pytest.mark.parametrize('name', list(CASES))
 def test_field_matches_legacy_golden(name, tag, sfi):
-    mee = _solved(name)
-    assert mee.grating_type_assigned == GOLDEN[f'{name}__grating_type']
-    got = np.asarray(mee.calculate_field(res_x=5, res_y=4, res_z=6, set_field_input=sfi))
+    solver = _solved(name)
+    assert solver.grating_type_assigned == GOLDEN[f'{name}__grating_type']
+    got = np.asarray(solver.calculate_field(res_x=5, res_y=4, res_z=6, set_field_input=sfi))
     want = GOLDEN[f'{name}__{tag}']
     assert got.shape == want.shape, (got.shape, want.shape)
     assert np.allclose(want, got, atol=1e-12, rtol=0), np.max(np.abs(want - got))
@@ -59,8 +59,8 @@ def test_field_matches_legacy_golden(name, tag, sfi):
 def test_field_cross_backend(name, backend):
     """One implementation, so jax and torch reconstruct the same field as numpy."""
     pytest.importorskip('jax' if backend == 1 else 'torch')
-    mee = _solved(name, backend=backend)
-    got = np.asarray(mee.calculate_field(res_x=5, res_y=4, res_z=6))
+    solver = _solved(name, backend=backend)
+    got = np.asarray(solver.calculate_field(res_x=5, res_y=4, res_z=6))
     want = GOLDEN[f'{name}__default']
     assert got.shape == want.shape, (got.shape, want.shape)
     assert np.allclose(want, got, atol=1e-10, rtol=0), np.max(np.abs(want - got))

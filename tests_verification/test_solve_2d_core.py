@@ -13,16 +13,16 @@ from fieldwave._core.solve_2d import solve_2d
 
 
 def _run_and_inputs(ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi):
-    mee = fieldwave.call_mee(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi,
+    solver = fieldwave.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi,
                           fto=fto, period=period, wavelength=wl, thickness=thickness, ucell=ucell)
-    via_api = mee.conv_solve()
-    assert mee.grating_type_assigned == 2, mee.grating_type_assigned    # ensure 2D path
+    via_api = solver.conv_solve()
+    assert solver.grating_type_assigned == 2, solver.grating_type_assigned    # ensure 2D path
     epx, epy, epz = to_conv_mat_raster_discrete(
-        mee.ucell, mee.fto[0], mee.fto[1],
-        enhanced_dfs=mee.enhanced_dfs, use_pinv=mee.use_pinv)
-    kx, ky = mee.get_kx_ky_vector(wl)
+        solver.ucell, solver.fto[0], solver.fto[1],
+        enhanced_dfs=solver.enhanced_dfs, use_pinv=solver.use_pinv)
+    kx, ky = solver.get_kx_ky_vector(wl)
     inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_top, n_bot=n_bot,
-                  theta=mee.theta, psi=mee.psi, thickness=mee.thickness,
+                  theta=solver.theta, psi=solver.psi, thickness=solver.thickness,
                   epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
     return (np.array(via_api.de_ri), np.array(via_api.de_ti)), inputs
 

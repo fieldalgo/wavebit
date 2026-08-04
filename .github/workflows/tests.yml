@@ -81,7 +81,7 @@ jobs:
           import numpy as np
           import fieldwave
 
-          res = fieldwave.call_mee(
+          res = fieldwave.rcwa(
               backend=0, pol=1, n_top=1.0, n_bot=1.5, theta=0.0, phi=0.0,
               fto=2, wavelength=632.8, period=[1000],
               ucell=np.array([[[3.8, 3.8]]]), thickness=[200],

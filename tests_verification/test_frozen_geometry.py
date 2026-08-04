@@ -22,24 +22,24 @@ IDS = ['dfs', 'cfs', 'nvf']
 @pytest.mark.parametrize('fourier_type', STRATEGIES, ids=IDS)
 def test_frozen_geometry_does_not_change_the_answer(fourier_type):
     """Freezing is an optimization, not a different computation."""
-    mee = fieldwave.call_mee(backend=0, ucell=UCELL, fourier_type=fourier_type, **KW)
-    auto = mee.conv_solve()
-    frozen = mee.conv_solve(geometry=mee.freeze_geometry())
+    solver = fieldwave.rcwa(backend=0, ucell=UCELL, fourier_type=fourier_type, **KW)
+    auto = solver.conv_solve()
+    frozen = solver.conv_solve(geometry=solver.freeze_geometry())
     assert np.array_equal(np.asarray(auto.res.de_ri), np.asarray(frozen.res.de_ri))
     assert np.array_equal(np.asarray(auto.res.de_ti), np.asarray(frozen.res.de_ti))
 
 
 @pytest.mark.parametrize('fourier_type', STRATEGIES, ids=IDS)
 def test_jit_and_grad_through_the_public_api(fourier_type):
-    """jax.jit and jax.grad over call_mee/conv_solve, for every Fourier strategy."""
+    """jax.jit and jax.grad over rcwa/conv_solve, for every Fourier strategy."""
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
 
-    mee = fieldwave.call_mee(backend=1, ucell=UCELL, fourier_type=fourier_type, **KW)
-    geometry = mee.freeze_geometry()
+    solver = fieldwave.rcwa(backend=1, ucell=UCELL, fourier_type=fourier_type, **KW)
+    geometry = solver.freeze_geometry()
 
     def loss(u):
-        return jnp.sum(mee.conv_solve(ucell=u, geometry=geometry).res.de_ti).real
+        return jnp.sum(solver.conv_solve(ucell=u, geometry=geometry).res.de_ti).real
 
     u = jnp.asarray(UCELL)
     eager = float(loss(u))
@@ -66,10 +66,10 @@ def test_auto_detection_still_blocks_jit(fourier_type):
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
 
-    mee = fieldwave.call_mee(backend=1, ucell=UCELL, fourier_type=fourier_type, **KW)
+    solver = fieldwave.rcwa(backend=1, ucell=UCELL, fourier_type=fourier_type, **KW)
 
     def loss(u):
-        return jnp.sum(mee.conv_solve(ucell=u).res.de_ti).real
+        return jnp.sum(solver.conv_solve(ucell=u).res.de_ti).real
 
     with pytest.raises(Exception):
         jax.jit(loss)(jnp.asarray(UCELL))
@@ -78,7 +78,7 @@ def test_auto_detection_still_blocks_jit(fourier_type):
 def test_freeze_geometry_reports_what_the_strategy_needs():
     """Only the fields the active strategy consumes are populated."""
     def geo(fourier_type):
-        return fieldwave.call_mee(backend=0, ucell=UCELL, fourier_type=fourier_type,
+        return fieldwave.rcwa(backend=0, ucell=UCELL, fourier_type=fourier_type,
                                **KW).freeze_geometry()
 
     dfs = geo(FourierType.DFS)
@@ -92,7 +92,7 @@ def test_freeze_geometry_reports_what_the_strategy_needs():
 def test_same_material_flags_are_correct():
     """A uniform bottom layer matching the substrate is detected; a patterned one is not."""
     ucell = np.array([[[3., 3., 1., 1., 3., 1.]], [[1., 1., 1., 1., 1., 1.]]])
-    mee = fieldwave.call_mee(backend=0, ucell=ucell, pol=0, phi=None, n_top=1.0, n_bot=1.0,
+    solver = fieldwave.rcwa(backend=0, ucell=ucell, pol=0, phi=None, n_top=1.0, n_bot=1.0,
                           theta=0.0, fto=[5, 0], period=[0.7], wavelength=0.9,
                           thickness=[0.2, 0.1])
-    assert mee.freeze_geometry().same_material == [False, True]
+    assert solver.freeze_geometry().same_material == [False, True]

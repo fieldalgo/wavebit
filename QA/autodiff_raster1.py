@@ -42,7 +42,7 @@ ucell = np.array([[[2.58941352 + 0.47745679j, 4.17771602 + 0.88991205j,
                     2.93805426 + 2.63385392j]]])
 
 # JAX Meent
-jmee = fieldwave.call_mee(backend=1, pol=pol, n_top=n_top, n_bot=n_bot, theta=theta, phi=phi,
+jmee = fieldwave.rcwa(backend=1, pol=pol, n_top=n_top, n_bot=n_bot, theta=theta, phi=phi,
                       fto=fto, wavelength=wavelength, period=period, ucell=ucell,
                       thickness=thickness, type_complex=type_complex, device=device)
 
@@ -81,7 +81,7 @@ print('thickness final:')
 print(res_j['thickness'])
 
 # Torch Meent
-tmee = fieldwave.call_mee(backend=2, pol=pol, n_top=n_top, n_bot=n_bot, theta=theta, phi=phi,
+tmee = fieldwave.rcwa(backend=2, pol=pol, n_top=n_top, n_bot=n_bot, theta=theta, phi=phi,
                       fto=fto, wavelength=wavelength, period=period, ucell=ucell,
                       thickness=thickness, type_complex=type_complex, device=device)
 

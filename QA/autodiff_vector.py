@@ -20,7 +20,7 @@ def run_jax():
 
     fto = [5, 5]
 
-    mee = fieldwave.call_mee(backend=backend, fto=fto, wavelength=wavelength, thickness=thickness, period=period,
+    solver = fieldwave.rcwa(backend=backend, fto=fto, wavelength=wavelength, thickness=thickness, period=period,
                          device=0, type_complex=0)
 
     opt = optax.sgd(learning_rate=1E5, momentum=0)
@@ -35,9 +35,9 @@ def run_jax():
                 ['ellipse', -400 + 1000, -700 + 1000, length4, 160, 4, 0.4, 20, 20],  # obj 4
             ], ],
         ]
-        mee.ucell = ucell
+        solver.ucell = ucell
 
-        res = mee.conv_solve().res
+        res = solver.conv_solve().res
         de_ti = res.de_ti
 
         cy, cx = de_ti.shape[0] // 2,  de_ti.shape[1] // 2
@@ -103,7 +103,7 @@ def run_torch():
     input_length3 = torch.tensor([input_length3], dtype=torch.float64, requires_grad=True)
     input_length4 = torch.tensor([input_length4], dtype=torch.float64, requires_grad=True)
 
-    mee = fieldwave.call_mee(backend=backend, fto=fto, wavelength=wavelength, thickness=thickness, period=period,
+    solver = fieldwave.rcwa(backend=backend, fto=fto, wavelength=wavelength, thickness=thickness, period=period,
                          device=0, type_complex=0)
 
     opt = torch.optim.SGD([input_length1, input_length2, input_length3, input_length4], lr=1E5, momentum=0)
@@ -118,9 +118,9 @@ def run_torch():
                  ['ellipse', -400+1000, -700+1000, length4, 160, 4, 0.4, 20, 20],  # obj 4
              ], ],
         ]
-        mee.ucell = ucell
+        solver.ucell = ucell
 
-        res = mee.conv_solve().res
+        res = solver.conv_solve().res
         de_ti = res.de_ti
 
         cy, cx = de_ti.shape[0] // 2,  de_ti.shape[1] // 2

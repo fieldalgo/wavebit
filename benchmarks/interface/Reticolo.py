@@ -247,7 +247,7 @@ if __name__ == '__main__':
 
     # Numpy
     backend = 0
-    nmee = fieldwave.call_mee(backend=backend, perturbation=1E-30, **option)
+    nmee = fieldwave.rcwa(backend=backend, perturbation=1E-30, **option)
     n_de_ri, n_de_ti = nmee.conv_solve()
     n_field_cell = nmee.calculate_field(res_z=200, res_x=5)
     print('numpy de_ri', n_de_ri)
@@ -255,7 +255,7 @@ if __name__ == '__main__':
 
     # # JAX
     # backend = 1
-    # jmee = fieldwave.call_mee(backend=backend, perturbation=1E-30, **option)
+    # jmee = fieldwave.rcwa(backend=backend, perturbation=1E-30, **option)
     # j_de_ri, j_de_ti = jmee.conv_solve()
     # j_field_cell = jmee.calculate_field(res_z=200, res_x=5)
     # print('jax de_ri', j_de_ri)
@@ -263,7 +263,7 @@ if __name__ == '__main__':
     #
     # # Torch
     # backend = 2
-    # tmee = fieldwave.call_mee(backend=backend, perturbation=1E-30, **option)
+    # tmee = fieldwave.rcwa(backend=backend, perturbation=1E-30, **option)
     # t_de_ri, t_de_ti = tmee.conv_solve()
     # t_field_cell = tmee.calculate_field(res_z=200, res_x=5)
     # print('torch de_ri', t_de_ri)

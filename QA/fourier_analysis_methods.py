@@ -1,6 +1,6 @@
 import numpy as np
 
-from fieldwave import call_mee
+from fieldwave import rcwa
 
 
 def compare_conv_mat_method(backend, type_complex, device):
@@ -22,21 +22,21 @@ def compare_conv_mat_method(backend, type_complex, device):
 
     thickness = [325]
     period = [abs(wavelength / np.sin(60 / 180 * np.pi))]
-    mee = call_mee(backend, pol=pol, n_top=n_top, n_bot=n_bot, theta=theta, phi=phi,
+    solver = rcwa(backend, pol=pol, n_top=n_top, n_bot=n_bot, theta=theta, phi=phi,
                    fto=fto, wavelength=wavelength, period=period, ucell=ucell,
                    thickness=thickness, device=device, type_complex=type_complex, )
 
-    mee.fourier_type = 0
-    mee.enhanced_dfs = False
-    res_dfs = mee.conv_solve().res
+    solver.fourier_type = 0
+    solver.enhanced_dfs = False
+    res_dfs = solver.conv_solve().res
     de_ri_dfs, de_ti_dfs = res_dfs.de_ri, res_dfs.de_ti
 
-    mee.enhanced_dfs = True
-    res_efs = mee.conv_solve().res
+    solver.enhanced_dfs = True
+    res_efs = solver.conv_solve().res
     de_ri_efs, de_ti_efs = res_efs.de_ri, res_efs.de_ti
 
-    mee.fourier_type = 1
-    res_cfs = mee.conv_solve().res
+    solver.fourier_type = 1
+    res_cfs = solver.conv_solve().res
     de_ri_cfs, de_ti_cfs = res_cfs.de_ri, res_cfs.de_ti
 
     a = np.linalg.norm(de_ri_dfs - de_ri_efs)

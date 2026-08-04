@@ -41,10 +41,10 @@ def run():
         ],
     ]
 
-    mee = fieldwave.call_mee(**rcwa_options)
-    mee.ucell = ucell
+    solver = fieldwave.rcwa(**rcwa_options)
+    solver.ucell = ucell
 
-    result = mee.conv_solve()
+    result = solver.conv_solve()
 
     result_given_pol = result.res
     result_te_incidence = result.res_te_inc

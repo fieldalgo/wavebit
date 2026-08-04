@@ -18,13 +18,13 @@ FIELDS = ('R_s', 'R_p', 'T_s', 'T_p',
 
 
 def _setup(**kw):
-    mee = fieldwave.call_mee(backend=0, **kw)
-    legacy = mee.conv_solve()
+    solver = fieldwave.rcwa(backend=0, **kw)
+    legacy = solver.conv_solve()
     epx, epy, epz = to_conv_mat_raster_discrete(
-        mee.ucell, mee.fto[0], mee.fto[1],
-        enhanced_dfs=mee.enhanced_dfs, use_pinv=mee.use_pinv)
-    kx, ky = mee.get_kx_ky_vector(kw['wavelength'])
-    return mee, legacy, (epx, epy, epz), kx, ky
+        solver.ucell, solver.fto[0], solver.fto[1],
+        enhanced_dfs=solver.enhanced_dfs, use_pinv=solver.use_pinv)
+    kx, ky = solver.get_kx_ky_vector(kw['wavelength'])
+    return solver, legacy, (epx, epy, epz), kx, ky
 
 
 def _assert_all_fields(legacy_sub, got):
@@ -39,9 +39,9 @@ def test_solve_1d_full_result_matches_legacy(pol):
     kw = dict(n_top=2.0, n_bot=1.0, theta=0.3, phi=None, pol=pol, fto=[6, 0],
               period=[0.77], wavelength=0.777, thickness=[0.15],
               ucell=np.array([[[3., 3., 3., 1., 1., 1.]]]))
-    mee, legacy, conv, kx, _ = _setup(**kw)
-    got = solve_1d(pol, kw['wavelength'], kx, kw['n_top'], kw['n_bot'], mee.theta,
-                   mee.thickness, *conv, full=True)
+    solver, legacy, conv, kx, _ = _setup(**kw)
+    got = solve_1d(pol, kw['wavelength'], kx, kw['n_top'], kw['n_bot'], solver.theta,
+                   solver.thickness, *conv, full=True)
     _assert_all_fields(legacy.res, got['res'])
 
 
@@ -58,12 +58,12 @@ def test_conical_and_2d_full_result_matches_legacy(case):
     name, ucell, thickness, fto, period = case
     kw = dict(n_top=1.5, n_bot=1.0, theta=0.2, phi=0.3, psi=0.7, fto=fto, period=period,
               wavelength=0.9, thickness=thickness, ucell=ucell)
-    mee, legacy, conv, kx, ky = _setup(**kw)
+    solver, legacy, conv, kx, ky = _setup(**kw)
 
-    solver = solve_1d_conical if name == 'conical' else solve_2d
-    args = ([kw['wavelength'], kx, ky, kw['n_top'], kw['n_bot'], mee.theta, mee.psi,
-             mee.thickness] + list(conv))
-    got = solver(*args, full=True)
+    solve_fn = solve_1d_conical if name == 'conical' else solve_2d
+    args = ([kw['wavelength'], kx, ky, kw['n_top'], kw['n_bot'], solver.theta, solver.psi,
+             solver.thickness] + list(conv))
+    got = solve_fn(*args, full=True)
 
     # all three incidence variants, every field
     _assert_all_fields(legacy.res, got['res'])
@@ -76,9 +76,9 @@ def test_full_flag_is_consistent_with_tuple_form():
     kw = dict(n_top=1.5, n_bot=1.0, theta=0.2, phi=0.3, psi=0.7, fto=[2, 2],
               period=[1.0, 1.0], wavelength=0.9, thickness=[0.2],
               ucell=np.random.default_rng(2).uniform(1, 4, (1, 5, 5)))
-    mee, _, conv, kx, ky = _setup(**kw)
-    args = [kw['wavelength'], kx, ky, kw['n_top'], kw['n_bot'], mee.theta, mee.psi,
-            mee.thickness] + list(conv)
+    solver, _, conv, kx, ky = _setup(**kw)
+    args = [kw['wavelength'], kx, ky, kw['n_top'], kw['n_bot'], solver.theta, solver.psi,
+            solver.thickness] + list(conv)
     de_ri, de_ti = solve_2d(*args)
     full = solve_2d(*args, full=True)
     assert np.array_equal(np.array(de_ri), np.array(full['res']['de_ri']))

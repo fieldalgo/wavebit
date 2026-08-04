@@ -16,9 +16,9 @@ while gradients flow through the material values.
 
 That is what :class:`StaticGeometry` carries. Freeze it once from a concrete structure::
 
-    mee = fieldwave.call_mee(backend=Backend.JAX, ucell=ucell, ...)
-    geometry = mee.freeze_geometry()
-    grad = jax.grad(lambda u: jnp.sum(mee.conv_solve(ucell=u, geometry=geometry).res.de_ti))
+    solver = fieldwave.rcwa(backend=Backend.JAX, ucell=ucell, ...)
+    geometry = solver.freeze_geometry()
+    grad = jax.grad(lambda u: jnp.sum(solver.conv_solve(ucell=u, geometry=geometry).res.de_ti))
 
 Without it, ``conv_solve`` still auto-detects — the eager path that reproduces the legacy
 result exactly — but only ``fourier_type=DFS`` survives ``jax.grad`` (its detection narrows a

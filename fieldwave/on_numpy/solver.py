@@ -4,7 +4,7 @@ from .._core.modeler import Modeling
 from .emsolver.rcwa import RCWANumpy
 
 
-class MeeNumpy(RCWANumpy):
+class SolverNumpy(RCWANumpy):
 
     def __init__(self, *args, **kwargs):
         RCWANumpy.__init__(self, *args, **kwargs)

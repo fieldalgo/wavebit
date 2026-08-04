@@ -6,7 +6,7 @@ from .emsolver.rcwa import RCWATorch
 from .optimizer.optimizer import OptimizerTorch
 
 
-class MeeTorch(RCWATorch, OptimizerTorch):
+class SolverTorch(RCWATorch, OptimizerTorch):
 
     def __init__(self, device=0, type_complex=0, *args, **kwargs):
 

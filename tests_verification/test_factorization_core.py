@@ -78,13 +78,13 @@ def test_factorization_feeds_solve_bit_exactly():
     wl, n_top, n_bot, theta, period, fto = 0.777, 2.0, 1.0, 0.3, [0.77], [6, 0]
     thickness = [0.15]
 
-    mee = fieldwave.call_mee(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=None, pol=0,
+    solver = fieldwave.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=None, pol=0,
                           fto=fto, period=period, wavelength=wl, thickness=thickness, ucell=ucell)
-    legacy = mee.conv_solve()
-    kx, _ = mee.get_kx_ky_vector(wl)
+    legacy = solver.conv_solve()
+    kx, _ = solver.get_kx_ky_vector(wl)
 
     epx, epy, epz = core_dfs(ucell, fto[0], fto[1])
-    ri, ti = solve_1d(0, wl, kx, n_top, n_bot, mee.theta, mee.thickness, epx, epy, epz)
+    ri, ti = solve_1d(0, wl, kx, n_top, n_bot, solver.theta, solver.thickness, epx, epy, epz)
 
     assert np.array_equal(np.array(legacy.de_ri), np.array(ri))
     assert np.array_equal(np.array(legacy.de_ti), np.array(ti))
@@ -108,10 +108,10 @@ def test_end_to_end_gradient_wrt_ucell_1d():
     ucell = np.array([[[3., 3., 3., 1., 1., 1.]]])
     direction = np.ones_like(ucell)
     fto = [6, 0]
-    mee = fieldwave.call_mee(backend=0, n_top=2.0, n_bot=1.0, theta=0.3, phi=None, pol=0,
+    solver = fieldwave.rcwa(backend=0, n_top=2.0, n_bot=1.0, theta=0.3, phi=None, pol=0,
                           fto=fto, period=[0.77], wavelength=0.777, thickness=[0.15], ucell=ucell)
-    kx, _ = mee.get_kx_ky_vector(0.777)
-    theta = complex(mee.theta)
+    kx, _ = solver.get_kx_ky_vector(0.777)
+    theta = complex(solver.theta)
     fk = dict(fto_x=fto[0], fto_y=fto[1])
 
     def f_np(s):
@@ -142,10 +142,10 @@ def test_end_to_end_gradient_wrt_ucell_2d():
     direction = np.ones_like(ucell)
     fto = [1, 1]
     wl, n_top, n_bot = 0.9, 1.0, 1.0
-    mee = fieldwave.call_mee(backend=0, n_top=n_top, n_bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
+    solver = fieldwave.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
                           fto=fto, period=[1.0, 1.0], wavelength=wl, thickness=[0.15], ucell=ucell)
-    kx, ky = mee.get_kx_ky_vector(wl)
-    theta, psi = complex(mee.theta), complex(mee.psi)
+    kx, ky = solver.get_kx_ky_vector(wl)
+    theta, psi = complex(solver.theta), complex(solver.psi)
 
     def chain(u, kx_, ky_, th_, ps_):
         epx, epy, epz = core_dfs(u, fto[0], fto[1])
@@ -193,7 +193,7 @@ def test_nvf_bit_parity_vs_legacy(case):
 def test_nvf_runs_on_every_backend(case, backend):
     """NVF on jax / torch — a capability the legacy per-backend builders never had.
 
-    ``call_mee(backend=1|2, fourier_type=2)`` raises ValueError on the legacy path; the
+    ``rcwa(backend=1|2, fourier_type=2)`` raises ValueError on the legacy path; the
     single-source builder makes the same factorization available on all three.
     """
     pytest.importorskip(backend)
@@ -207,17 +207,17 @@ def test_nvf_runs_on_every_backend(case, backend):
 def test_nvf_now_works_on_every_backend():
     """NVF used to be NumPy-only; conv_solve now routes every backend through the core.
 
-    ``call_mee(backend=1|2, fourier_type=2)`` raised ValueError before the factorization was
+    ``rcwa(backend=1|2, fourier_type=2)`` raised ValueError before the factorization was
     wired — the per-backend builders simply had no NVF branch.
     """
     ucell = _rand((1, 5, 5), 13)
     opts = dict(n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0, fto=[2, 2],
                 period=[1.0, 1.0], wavelength=0.9, thickness=[0.2], ucell=ucell,
                 fourier_type=2)
-    ref = fieldwave.call_mee(backend=0, **opts).conv_solve()
+    ref = fieldwave.rcwa(backend=0, **opts).conv_solve()
     for backend in (1, 2):
         pytest.importorskip('jax' if backend == 1 else 'torch')
-        got = fieldwave.call_mee(backend=backend, **opts).conv_solve()
+        got = fieldwave.rcwa(backend=backend, **opts).conv_solve()
         assert np.allclose(np.asarray(ref.res.de_ti), np.asarray(got.res.de_ti),
                            atol=1e-12, rtol=0), backend
 
@@ -238,10 +238,10 @@ def test_nvf_end_to_end_gradient_wrt_ucell():
     wl, n_top, n_bot, d = 0.9, 1.0, 1.0, 0.2
     normal_field = normal_field_for_ucell(ucell, fto[0], fto[1])
 
-    mee = fieldwave.call_mee(backend=0, n_top=n_top, n_bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
+    solver = fieldwave.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
                           fto=fto, period=[1.0, 1.0], wavelength=wl, thickness=[d], ucell=ucell)
-    kx, ky = mee.get_kx_ky_vector(wl)
-    theta, psi = complex(mee.theta), complex(mee.psi)
+    kx, ky = solver.get_kx_ky_vector(wl)
+    theta, psi = complex(solver.theta), complex(solver.psi)
 
     def chain(u, kx_, ky_, th_, ps_):
         epx, epy, epxy, epyx, epz = core_nvf(u, fto[0], fto[1], normal_field=normal_field)
@@ -332,10 +332,10 @@ def test_cfs_end_to_end_gradient_wrt_ucell():
     wl, n_top, n_bot, d = 0.777, 2.0, 1.0, 0.15
     compression = [compression_indices(ucell[i]) for i in range(ucell.shape[0])]
 
-    mee = fieldwave.call_mee(backend=0, n_top=n_top, n_bot=n_bot, theta=0.3, phi=None, pol=0,
+    solver = fieldwave.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=0.3, phi=None, pol=0,
                           fto=fto, period=[0.77], wavelength=wl, thickness=[d], ucell=ucell)
-    kx, _ = mee.get_kx_ky_vector(wl)
-    theta = complex(mee.theta)
+    kx, _ = solver.get_kx_ky_vector(wl)
+    theta = complex(solver.theta)
 
     def chain(u, kx_):
         epx, epy, epz = core_cfs(u, fto[0], fto[1], compression=compression)

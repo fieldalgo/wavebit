@@ -7,15 +7,15 @@ def _merge_domain(kwargs, domain_kwargs, source):
     clash = set(kwargs) & set(domain_kwargs)
     if clash:
         raise ValueError(
-            f"{source} already sets {sorted(clash)}; do not also pass them to call_mee.")
+            f"{source} already sets {sorted(clash)}; do not also pass them to rcwa.")
     merged = dict(kwargs)
     merged.update(domain_kwargs)
     return merged
 
 
-def call_mee(backend=0, *args, stack=None, incidence=None, **kwargs):
+def rcwa(backend=0, *args, stack=None, incidence=None, **kwargs):
     """
-    decide backend and return RCWA mee instance
+    decide backend and return RCWA solver instance
 
     Args:
         backend: decide backend. 0 is numpy and 1 is JAX.
@@ -27,7 +27,7 @@ def call_mee(backend=0, *args, stack=None, incidence=None, **kwargs):
         **kwargs: passed to RCWA instance
 
     Returns:
-        RCWA: RCWA mee instance
+        RCWA: RCWA solver instance
 
     """
     if stack is not None:
@@ -36,21 +36,21 @@ def call_mee(backend=0, *args, stack=None, incidence=None, **kwargs):
         kwargs = _merge_domain(kwargs, incidence.as_kwargs(), 'incidence')
 
     if backend == 0:
-        from .on_numpy.mee import MeeNumpy
-        mee = MeeNumpy(backend=backend, *args, **kwargs)
+        from .on_numpy.solver import SolverNumpy
+        solver = SolverNumpy(backend=backend, *args, **kwargs)
     elif backend == 1:
-        from .on_jax.mee import MeeJax
-        mee = MeeJax(backend=backend, *args, **kwargs)
+        from .on_jax.solver import SolverJax
+        solver = SolverJax(backend=backend, *args, **kwargs)
     elif backend == 2:
-        from .on_torch.mee import MeeTorch
-        mee = MeeTorch(backend=backend, *args, **kwargs)
+        from .on_torch.solver import SolverTorch
+        solver = SolverTorch(backend=backend, *args, **kwargs)
     else:
         raise ValueError
-    return mee
+    return solver
 
 # def call_solver(backend=0, *args, **kwargs):
 #     """
-#     decide backend and return RCWA mee instance
+#     decide backend and return RCWA solver instance
 #
 #     Args:
 #         backend: decide backend. 0 is numpy and 1 is JAX.
@@ -58,7 +58,7 @@ def call_mee(backend=0, *args, stack=None, incidence=None, **kwargs):
 #         **kwargs: passed to RCWA instance
 #
 #     Returns:
-#         RCWA: RCWA mee instance
+#         RCWA: RCWA solver instance
 #
 #     """
 #     if backend == 0:

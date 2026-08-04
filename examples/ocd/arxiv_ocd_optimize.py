@@ -81,14 +81,14 @@ def forward():
 
 def modelling_ref_index(wavelength, rcwa_options, modeling_options, params_name, params_value, instructions):
 
-    mee = fieldwave.call_mee(wavelength=wavelength, **rcwa_options)
+    solver = fieldwave.rcwa(wavelength=wavelength, **rcwa_options)
 
-    t = mee.thickness
+    t = solver.thickness
 
     for i in range(len(t)):
         if f'l{i+1}_thickness' in params_name:
             t[i] = params_value[params_name[f'l{i+1}_thickness']].reshape((1, 1))
-    mee.thickness = t
+    solver.thickness = t
 
     mat_table = read_material_table()
 
@@ -118,16 +118,16 @@ def modelling_ref_index(wavelength, rcwa_options, modeling_options, params_name,
             a = find_nk_index(a, mat_table, wavelength).conj()
 
         ucell.append([a, obj_list_per_layer])
-    mee.ucell = ucell
+    solver.ucell = ucell
 
-    return mee, ucell
+    return solver, ucell
 
 
-def reflectance_mode_00(mee, wavelength):
-    mee.wavelength = wavelength
+def reflectance_mode_00(solver, wavelength):
+    solver.wavelength = wavelength
 
-    # de_ri, de_ti = mee.conv_solve()
-    result = mee.conv_solve()
+    # de_ri, de_ti = solver.conv_solve()
+    result = solver.conv_solve()
     de_ri, de_ti = result.de_ri, result.de_ti
 
     x_c, y_c = np.array(de_ti.shape) // 2
@@ -141,8 +141,8 @@ def generate_spectrum(rcwa_options, modeling_options, params_name, params_value,
     spectrum = torch.zeros(len(wavelength_list))
 
     for i, wl in enumerate(wavelength_list):
-        mee, layer_info_list = modelling_ref_index(wl, rcwa_options, modeling_options, params_name, params_value, instructions)
-        spectrum[i] = reflectance_mode_00(mee, wavelength=wl)
+        solver, layer_info_list = modelling_ref_index(wl, rcwa_options, modeling_options, params_name, params_value, instructions)
+        spectrum[i] = reflectance_mode_00(solver, wavelength=wl)
 
     return spectrum, layer_info_list
 

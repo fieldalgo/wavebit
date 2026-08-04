@@ -3,7 +3,7 @@ from .emsolver.rcwa import RCWAJax
 from .optimizer.optimizer import OptimizerJax
 
 
-class MeeJax(RCWAJax, OptimizerJax):
+class SolverJax(RCWAJax, OptimizerJax):
 
     def __init__(self, *args, **kwargs):
         RCWAJax.__init__(self, *args, **kwargs)

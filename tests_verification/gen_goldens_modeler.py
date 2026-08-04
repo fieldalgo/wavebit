@@ -22,23 +22,23 @@ INSTRUCTIONS = {
 
 out = {}
 for name, instr in INSTRUCTIONS.items():
-    mee = fieldwave.call_mee(backend=0, period=PERIOD, thickness=[205.0, 100.0], fto=[3, 3],
+    solver = fieldwave.rcwa(backend=0, period=PERIOD, thickness=[205.0, 100.0], fto=[3, 3],
                           n_top=1.0, n_bot=1.0, wavelength=900.0, pol=0.5, ucell=instr)
-    info = mee.modeling_vector_instruction(mee.ucell)
+    info = solver.modeling_vector_instruction(solver.ucell)
     out[f'{name}__n_layers'] = np.array(len(info))
     for i, (cell, x, y) in enumerate(info):
         out[f'{name}__L{i}__cell'] = np.asarray(cell)
         out[f'{name}__L{i}__x'] = np.asarray(x)
         out[f'{name}__L{i}__y'] = np.asarray(y)
-    res = mee.conv_solve()
+    res = solver.conv_solve()
     out[f'{name}__de_ri'] = np.asarray(res.res.de_ri)
     out[f'{name}__de_ti'] = np.asarray(res.res.de_ti)
 
 # rectangle_no_approximation / draw, exercised by test_fixes
-mee = fieldwave.call_mee(backend=0, period=[1000.0, 1000.0], thickness=[100.0], fto=[2, 2],
+solver = fieldwave.rcwa(backend=0, period=[1000.0, 1000.0], thickness=[100.0], fto=[2, 2],
                       wavelength=900.0, ucell=[[1.0, []]])
-elem = mee.modeler.rectangle_no_approximation(cx=500, cy=500, lx=200, ly=200, base=2.0)
-drawn = mee.modeler.draw([[1.0, elem]])
+elem = solver.modeler.rectangle_no_approximation(cx=500, cy=500, lx=200, ly=200, base=2.0)
+drawn = solver.modeler.draw([[1.0, elem]])
 for i, (cell, x, y) in enumerate(drawn):
     out[f'draw__L{i}__cell'] = np.asarray(cell)
     out[f'draw__L{i}__x'] = np.asarray(x)

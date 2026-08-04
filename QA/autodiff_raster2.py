@@ -6,7 +6,7 @@ import numpy as np
 
 from time import time
 
-from fieldwave import call_mee
+from fieldwave import rcwa
 
 
 def load_setting():
@@ -55,12 +55,12 @@ def load_setting():
 def optimize_jax(setting):
     ucell = setting['ucell']
 
-    mee = call_mee(backend=1, **setting)
+    solver = rcwa(backend=1, **setting)
 
     @jax.jit
     def grad_loss(ucell):
-        mee.ucell = ucell
-        res = mee.conv_solve().res
+        solver.ucell = ucell
+        res = solver.conv_solve().res
         de_ri, de_ti = res.de_ri, res.de_ti
 
         loss = de_ti[de_ti.shape[0] // 2, de_ti.shape[1] // 2]
@@ -72,8 +72,8 @@ def optimize_jax(setting):
 
         @jax.jit
         def compute(ucell):
-            mee.ucell = ucell
-            result = mee.conv_solve()
+            solver.ucell = ucell
+            result = solver.conv_solve()
             de_ti = result.res.de_ti
             loss = de_ti[de_ti.shape[0] // 2, de_ti.shape[1] // 2]
 
@@ -84,12 +84,12 @@ def optimize_jax(setting):
                 for c in range(ucell.shape[2]):
                     ucell_delta_m = ucell.copy()
                     ucell_delta_m[layer, r, c] -= delta
-                    mee.ucell = ucell_delta_m
+                    solver.ucell = ucell_delta_m
                     de_ti_delta_m = compute(ucell_delta_m, )
 
                     ucell_delta_p = ucell.copy()
                     ucell_delta_p[layer, r, c] += delta
-                    mee.ucell = ucell_delta_p
+                    solver.ucell = ucell_delta_p
                     de_ti_delta_p = compute(ucell_delta_p, )
 
                     grad_numeric = (de_ti_delta_p - de_ti_delta_m) / (2 * delta)
@@ -111,18 +111,18 @@ def optimize_jax(setting):
 
 
 def optimize_torch(setting):
-    mee = call_mee(backend=2, **setting)
+    solver = rcwa(backend=2, **setting)
 
-    mee.ucell.requires_grad = True
+    solver.ucell.requires_grad = True
 
     t0 = time()
-    res = mee.conv_solve().res
+    res = solver.conv_solve().res
     de_ri, de_ti = res.de_ri, res.de_ti
 
     loss = de_ti[de_ti.shape[0] // 2, de_ti.shape[1] // 2]
 
     loss.backward()
-    grad_ad = mee.ucell.grad
+    grad_ad = solver.ucell.grad
     t_ad = time() - t0
 
     def grad_numerical(ucell, delta):
@@ -134,14 +134,14 @@ def optimize_torch(setting):
                 for c in range(ucell.shape[2]):
                     ucell_delta_m = ucell.clone().detach()
                     ucell_delta_m[layer, r, c] -= delta
-                    mee.ucell = ucell_delta_m
-                    res = mee.conv_solve().res
+                    solver.ucell = ucell_delta_m
+                    res = solver.conv_solve().res
                     de_ri_delta_m, de_ti_delta_m = res.de_ri, res.de_ti
 
                     ucell_delta_p = ucell.clone().detach()
                     ucell_delta_p[layer, r, c] += delta
-                    mee.ucell = ucell_delta_p
-                    res = mee.conv_solve().res
+                    solver.ucell = ucell_delta_p
+                    res = solver.conv_solve().res
                     de_ri_delta_p, de_ti_delta_p = res.de_ri, res.de_ti
 
                     cy, cx = np.array(de_ti_delta_p.shape) // 2
@@ -151,7 +151,7 @@ def optimize_torch(setting):
         return grad_arr
 
     t0 = time()
-    grad_nume = grad_numerical(mee.ucell, 1E-6)
+    grad_nume = grad_numerical(solver.ucell, 1E-6)
     t_nume = time() - t0
 
     print('Torch grad_ad:\n', grad_ad)

@@ -5,7 +5,7 @@
 import numpy as np
 from time import time
 
-from fieldwave import call_mee
+from fieldwave import rcwa
 
 
 def compare():
@@ -41,32 +41,32 @@ def compare():
         ],
     ])
 
-    mee = call_mee(backend=backend, pol=pol, n_top=n_top, n_bot=n_bot, theta=theta, fto=fto,
+    solver = rcwa(backend=backend, pol=pol, n_top=n_top, n_bot=n_bot, theta=theta, fto=fto,
                    wavelength=wavelength, period=period, thickness=thickness)
 
     # 1D
-    mee.phi = None  # which is default
-    mee.ucell = ucell_1d
+    solver.phi = None  # which is default
+    solver.ucell = ucell_1d
 
     t0_1d = time()
-    res = mee.conv_solve().res
+    res = solver.conv_solve().res
     t1_1d = time()
     de_ri1, de_ti1 = res.de_ri, res.de_ti
     print('1D (de_ri, de_ti): ', de_ri1, de_ti1)
 
     # 1D conical
-    mee.phi = 0
+    solver.phi = 0
     t0_1dc = time()
-    res = mee.conv_solve().res
+    res = solver.conv_solve().res
     t1_1dc = time()
     de_ri1c, de_ti1c = res.de_ri, res.de_ti
     print('1Dc (de_ri, de_ti): ', de_ri1c, de_ti1c)
 
     # 2D
-    mee.phi = 0
+    solver.phi = 0
     t0_2d = time()
-    mee.ucell = ucell_2d
-    res = mee.conv_solve().res
+    solver.ucell = ucell_2d
+    res = solver.conv_solve().res
     t1_2d = time()
     de_ri2, de_ti2 = res.de_ri, res.de_ti
     print('2D (de_ri, de_ti): ', de_ri2, de_ti2)

@@ -8,9 +8,9 @@ from jax import tree_util
 # actually imported — and not on `import fieldwave`.
 jax.config.update('jax_enable_x64', True)
 
-from fieldwave.on_jax.mee import MeeJax
+from fieldwave.on_jax.solver import SolverJax
 
-tree_util.register_pytree_node(MeeJax,
-                               MeeJax._tree_flatten,
-                               MeeJax._tree_unflatten)
+tree_util.register_pytree_node(SolverJax,
+                               SolverJax._tree_flatten,
+                               SolverJax._tree_unflatten)
 

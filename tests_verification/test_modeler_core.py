@@ -50,7 +50,7 @@ def test_vector_solve_matches_legacy_golden(name, backend):
     """End to end: modeled geometry -> factorization -> efficiencies, on every backend."""
     if backend:
         pytest.importorskip('jax' if backend == 1 else 'torch')
-    result = fieldwave.call_mee(backend=backend, ucell=INSTRUCTIONS[name], **SOLVE_KW).conv_solve()
+    result = fieldwave.rcwa(backend=backend, ucell=INSTRUCTIONS[name], **SOLVE_KW).conv_solve()
     for field in ('de_ri', 'de_ti'):
         want = GOLDEN[f'{name}__{field}']
         got = np.asarray(getattr(result.res, field))

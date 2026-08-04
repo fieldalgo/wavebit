@@ -15,7 +15,7 @@ single layer is exactly ``(thickness[i], ucell[i])``:
 
 ``Stack`` therefore holds the ordered layers plus the surrounding media (``n_top``,
 ``n_bot``, ``period``); ``Incidence`` holds the illumination. Numerics and backend choice
-(``fto``, ``fourier_type``, ``backend``, ``type_complex``) stay as :func:`fieldwave.call_mee`
+(``fto``, ``fourier_type``, ``backend``, ``type_complex``) stay as :func:`fieldwave.rcwa`
 arguments — they are not part of the physical scene.
 
 Backend-agnostic: a raster ``eps`` may be a NumPy / JAX / PyTorch array; stacking goes
@@ -99,7 +99,7 @@ class Stack:
         return eps_list
 
     def as_kwargs(self) -> dict:
-        """The geometry keyword arguments for :func:`fieldwave.call_mee`."""
+        """The geometry keyword arguments for :func:`fieldwave.rcwa`."""
         return dict(ucell=self.ucell, thickness=self.thickness,
                     n_top=self.n_top, n_bot=self.n_bot, period=self.period)
 
@@ -129,6 +129,6 @@ class Incidence:
     psi: Optional[Any] = None
 
     def as_kwargs(self) -> dict:
-        """The illumination keyword arguments for :func:`fieldwave.call_mee`."""
+        """The illumination keyword arguments for :func:`fieldwave.rcwa`."""
         return dict(wavelength=self.wavelength, theta=self.theta, phi=self.phi,
                     pol=self.pol, psi=self.psi)

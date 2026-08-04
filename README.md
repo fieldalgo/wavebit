@@ -63,8 +63,8 @@ import fieldwave
 # backend 1 = JAX
 # backend 2 = PyTorch
 
-mee = fieldwave.call_mee(backend=1, ...)
-result = mee.conv_solve()
+solver = fieldwave.rcwa(backend=1, ...)
+result = solver.conv_solve()
 ```
 
 To differentiate through a simulation, freeze the structure's discrete geometry once so the
@@ -73,9 +73,9 @@ rest stays traceable:
 ```python
 import jax, jax.numpy as jnp
 
-geometry = mee.freeze_geometry()
+geometry = solver.freeze_geometry()
 grad = jax.grad(lambda ucell: jnp.sum(
-    mee.conv_solve(ucell=ucell, geometry=geometry).res.de_ti).real)
+    solver.conv_solve(ucell=ucell, geometry=geometry).res.de_ti).real)
 ```
 
 ## Tutorials

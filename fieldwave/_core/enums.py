@@ -9,7 +9,7 @@ from enum import IntEnum
 
 
 class Backend(IntEnum):
-    """Array backend for :func:`fieldwave.call_mee`."""
+    """Array backend for :func:`fieldwave.rcwa`."""
     NUMPY = 0
     JAX = 1
     TORCH = 2

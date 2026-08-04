@@ -32,17 +32,17 @@ CASES = {
 out = {}
 for name, kw in CASES.items():
     kw = dict(kw); kw['ucell'] = np.asarray(kw['ucell'], dtype=float)
-    mee = fieldwave.call_mee(backend=0, **kw)
-    r = mee.conv_solve()
-    out[f'{name}__grating_type'] = np.array(mee.grating_type_assigned)
+    solver = fieldwave.rcwa(backend=0, **kw)
+    r = solver.conv_solve()
+    out[f'{name}__grating_type'] = np.array(solver.grating_type_assigned)
     for sub in ('res', 'res_te_inc', 'res_tm_inc'):
         s = getattr(r, sub)
         if s is None:
             continue
         for f in FIELDS:
             out[f'{name}__{sub}__{f}'] = np.asarray(getattr(s, f))
-    out[f'{name}__T1'] = np.asarray(mee.T1)
-    for i, li in enumerate(mee.layer_info_list):
+    out[f'{name}__T1'] = np.asarray(solver.T1)
+    for i, li in enumerate(solver.layer_info_list):
         for j, nm in enumerate(('epz_i','W','V','q','d','A_i','B')):
             out[f'{name}__layer{i}__{nm}'] = np.asarray(li[j])
 

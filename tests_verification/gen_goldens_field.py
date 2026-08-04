@@ -10,7 +10,7 @@ import numpy as np
 import fieldwave
 
 CASES = {
-    # name: call_mee kwargs -> exercises grating_type 0 / 1 / 2
+    # name: rcwa kwargs -> exercises grating_type 0 / 1 / 2
     'te_1d':    dict(pol=0, phi=None, ucell=[[[3., 3., 3., 1., 1., 1.]]], thickness=[0.15],
                      n_top=2., n_bot=1., theta=0.2, fto=[4, 0], period=[0.77], wavelength=0.777),
     'tm_1d':    dict(pol=1, phi=None, ucell=[[[3., 3., 3., 1., 1., 1.]]], thickness=[0.15],
@@ -32,12 +32,12 @@ out = {}
 for name, kw in CASES.items():
     kw = dict(kw)
     kw['ucell'] = np.asarray(kw['ucell'], dtype=float)
-    mee = fieldwave.call_mee(backend=0, **kw)
-    mee.conv_solve()
+    solver = fieldwave.rcwa(backend=0, **kw)
+    solver.conv_solve()
     for tag, sfi in (('default', (True, False, False)), ('all', (True, True, True))):
-        field = mee.calculate_field(res_x=5, res_y=4, res_z=6, set_field_input=sfi)
+        field = solver.calculate_field(res_x=5, res_y=4, res_z=6, set_field_input=sfi)
         out[f'{name}__{tag}'] = np.asarray(field)
-    out[f'{name}__grating_type'] = np.array(mee.grating_type_assigned)
+    out[f'{name}__grating_type'] = np.array(solver.grating_type_assigned)
 
 np.savez_compressed(str(pathlib.Path(__file__).parent / 'golden_legacy_field.npz'), **out)
 print(f'wrote {len(out)} arrays; shapes: ' +

@@ -72,9 +72,9 @@ def energy_and_t0(res):
 
 
 def solve(ucell, fourier_type, fto):
-    mee = fieldwave.call_mee(backend=0, ucell=ucell, fto=(fto, fto),
+    solver = fieldwave.rcwa(backend=0, ucell=ucell, fto=(fto, fto),
                           fourier_type=fourier_type, **CFG)
-    return energy_and_t0(mee.conv_solve())
+    return energy_and_t0(solver.conv_solve())
 
 
 # ----------------------------------------------------------------------

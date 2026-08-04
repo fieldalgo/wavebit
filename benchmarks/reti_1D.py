@@ -31,19 +31,19 @@ def run_1d(option, plot_figure=False):
     reti_field_cell = reti_field_cell.conj()
 
     # Numpy
-    mee = fieldwave.call_mee(backend=0, **option)
-    res_numpy = mee.conv_solve()
-    field_cell_numpy = mee.calculate_field(res_z=res_z, res_y=res_y, res_x=res_x)
+    solver = fieldwave.rcwa(backend=0, **option)
+    res_numpy = solver.conv_solve()
+    field_cell_numpy = solver.calculate_field(res_z=res_z, res_y=res_y, res_x=res_x)
 
     # JAX
-    mee = fieldwave.call_mee(backend=1, **option)  # JAX
-    res_jax = mee.conv_solve()
-    field_cell_jax = mee.calculate_field(res_z=res_z, res_y=res_y, res_x=res_x)
+    solver = fieldwave.rcwa(backend=1, **option)  # JAX
+    res_jax = solver.conv_solve()
+    field_cell_jax = solver.calculate_field(res_z=res_z, res_y=res_y, res_x=res_x)
 
     # Torch
-    mee = fieldwave.call_mee(backend=2, **option)  # PyTorch
-    res_torch = mee.conv_solve()
-    field_cell_torch = mee.calculate_field(res_z=res_z, res_y=res_y, res_x=res_x).numpy()
+    solver = fieldwave.rcwa(backend=2, **option)  # PyTorch
+    res_torch = solver.conv_solve()
+    field_cell_torch = solver.calculate_field(res_z=res_z, res_y=res_y, res_x=res_x).numpy()
 
     bds = ['Numpy', 'JAX', 'Torch']
     fields = [field_cell_numpy, field_cell_jax, field_cell_torch]

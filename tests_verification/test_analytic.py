@@ -114,8 +114,8 @@ def test_axis_aligned_matches_raster_nvf():
         return d[d.shape[0] // 2, d.shape[0] // 2]
 
     for fto in (4, 6, 8):
-        a = t0(fieldwave.call_mee(backend=0, ucell=analytic, fto=(fto, fto), **cfg).conv_solve())
-        n = t0(fieldwave.call_mee(backend=0, ucell=ras, fto=(fto, fto), fourier_type=2, **cfg).conv_solve())
+        a = t0(fieldwave.rcwa(backend=0, ucell=analytic, fto=(fto, fto), **cfg).conv_solve())
+        n = t0(fieldwave.rcwa(backend=0, ucell=ras, fto=(fto, fto), fourier_type=2, **cfg).conv_solve())
         assert abs(a - n) < 5e-3  # residual is only the finite-N raster boundary placement
 
 
@@ -134,7 +134,7 @@ def test_energy_conservation_lossless():
                                       n_index=3.0)]),
     ]
     for fto in (5, 8):
-        res = fieldwave.call_mee(backend=0, ucell=ucell, fto=(fto, fto), **cfg).conv_solve()
+        res = fieldwave.rcwa(backend=0, ucell=ucell, fto=(fto, fto), **cfg).conv_solve()
         tot = np.array(res.de_ri).real.sum() + np.array(res.de_ti).real.sum()
         assert abs(tot - 1.0) < 1e-9
 
@@ -151,7 +151,7 @@ def test_cross_backend_agreement():
                                            n_index=3.0)])]
 
     def T(bk):
-        return float(np.array(fieldwave.call_mee(backend=bk, ucell=ucell, fto=(6, 6), **cfg)
+        return float(np.array(fieldwave.rcwa(backend=bk, ucell=ucell, fto=(6, 6), **cfg)
                               .conv_solve().de_ti).real.sum())
 
     tn, tj, tt = T(0), T(1), T(2)
@@ -170,7 +170,7 @@ def _fd_grad_lx(shape_type, lx0=0.5):
         s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, ly=(lx if shape_type == 'circle' else 0.3),
                  angle=(0.0 if shape_type == 'circle' else 0.4), n_index=2.5)
         uc = [dict(n_base=1.0, shapes=[s])]
-        return float(np.array(fieldwave.call_mee(backend=0, ucell=uc, fto=(6, 6), **cfg)
+        return float(np.array(fieldwave.rcwa(backend=0, ucell=uc, fto=(6, 6), **cfg)
                               .conv_solve().de_ti).real.sum())
 
     h = 1e-5
@@ -184,7 +184,7 @@ def test_torch_gradient(shape_type):
     lx = torch.tensor(0.5, dtype=torch.float64, requires_grad=True)
     s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, ly=(lx if shape_type == 'circle' else 0.3),
              angle=(0.0 if shape_type == 'circle' else 0.4), n_index=2.5)
-    res = fieldwave.call_mee(backend=2, ucell=[dict(n_base=1.0, shapes=[s])], fto=(6, 6), **cfg).conv_solve()
+    res = fieldwave.rcwa(backend=2, ucell=[dict(n_base=1.0, shapes=[s])], fto=(6, 6), **cfg).conv_solve()
     T = res.de_ti.real.sum()
     T.backward()
     assert np.isfinite(float(lx.grad))
@@ -200,7 +200,7 @@ def test_jax_gradient(shape_type):
     def loss(lx):
         s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, ly=(lx if shape_type == 'circle' else 0.3),
                  angle=(0.0 if shape_type == 'circle' else 0.4), n_index=2.5)
-        r = fieldwave.call_mee(backend=1, ucell=[dict(n_base=1.0, shapes=[s])], fto=(6, 6), **cfg).conv_solve()
+        r = fieldwave.rcwa(backend=1, ucell=[dict(n_base=1.0, shapes=[s])], fto=(6, 6), **cfg).conv_solve()
         return jnp.real(r.de_ti).sum()
 
     g = float(jax.grad(loss)(jnp.array(0.5)))
@@ -223,9 +223,9 @@ def test_analytic_beats_staircase_tilted():
         d = np.array(res.de_ti).real
         return d[d.shape[0] // 2, d.shape[0] // 2]
 
-    ref = t0(fieldwave.call_mee(backend=0, ucell=analytic, fto=(15, 15), **cfg).conv_solve())
-    a11 = t0(fieldwave.call_mee(backend=0, ucell=analytic, fto=(11, 11), **cfg).conv_solve())
-    s11 = t0(fieldwave.call_mee(backend=0, ucell=stair, fto=(11, 11), **cfg).conv_solve())
+    ref = t0(fieldwave.rcwa(backend=0, ucell=analytic, fto=(15, 15), **cfg).conv_solve())
+    a11 = t0(fieldwave.rcwa(backend=0, ucell=analytic, fto=(11, 11), **cfg).conv_solve())
+    s11 = t0(fieldwave.rcwa(backend=0, ucell=stair, fto=(11, 11), **cfg).conv_solve())
 
     err_analytic = abs(a11 - ref)
     err_stair = abs(s11 - ref)

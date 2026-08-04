@@ -43,8 +43,8 @@ def make_circle_raster(N, R, n_rod, n_bg=1.0):
 
 
 def solve(backend, ucell, fto, **cfg):
-    mee = fieldwave.call_mee(backend=backend, ucell=ucell, fto=(fto, fto), **cfg)
-    return t0_and_energy(mee.conv_solve())
+    solver = fieldwave.rcwa(backend=backend, ucell=ucell, fto=(fto, fto), **cfg)
+    return t0_and_energy(solver.conv_solve())
 
 
 # ----------------------------------------------------------------------
