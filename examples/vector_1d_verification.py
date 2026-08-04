@@ -49,7 +49,8 @@ if __name__ == '__main__':
                         wavelength=900,
                         )
 
-    # si = 3.638751670074983-0.007498295841854125j
+    # Absorbing Si would be 3.638751670074983+0.007498295841854125j — Im(n) > 0 is loss
+    # here, the same convention the bundled nk tables use (n + 1j*k).
     si = 3.638751670074983
     sio2 = 1.4518
     si3n4 = 2.0056
