@@ -331,6 +331,21 @@ class Modeling:
         Within ``angle_margin`` of a multiple of pi/2 the exact single-block form is returned;
         otherwise the shape is split into an upper triangle, a mid parallelogram and a lower
         triangle, each sampled into ``n_split_*`` blocks.
+
+        **``angle`` carries no gradient inside the margin**, and that is the lesser of two
+        evils rather than an oversight. The block decomposition of a nearly-aligned rectangle
+        misses the true shape by a staircase whose area grows like ``|angle|``, and refining
+        ``n_split`` does not remove it: measured against the analytic path, the decomposition
+        adds a spurious ``0.21*|angle|`` to the diffraction efficiency (stable from
+        ``n_split`` 4 through 64) on top of a true derivative of ``-0.011``. A one-sided
+        difference through the rotated branch therefore reports about ``+-0.2`` — twenty times
+        the real slope, with the sign set by the direction of approach — while the exact
+        branch reports zero. A central difference still recovers the derivative, because the
+        ``|angle|`` term cancels; that is why this is invisible away from the margin.
+
+        So: to fit a sidewall angle near normal, use the analytic path
+        (``ucell=[dict(n_base=..., shapes=[...])]``), which builds the rotated shape's Fourier
+        coefficients in closed form and is smooth through zero.
         """
         xp = self._ns(cx, cy, lx, ly, angle, self._period)
         dev = self._dev(cx, cy, lx, ly, angle)
@@ -343,9 +358,14 @@ class Modeling:
 
         angle = angle % (2 * _PI)
 
-        # No rotation (within the margin): exact, no splitting needed.
+        # No rotation (within the margin): exact, no splitting needed. The range runs to 4,
+        # not 3: ``angle`` has already been wrapped into [0, 2*pi), so a small *negative*
+        # angle arrives as ``2*pi - eps`` and only a target at 2*pi catches it. Without that
+        # last target, -1e-6 took the rotated branch while +1e-6 took the exact one, and the
+        # two disagreed by 2e-7 in efficiency — a discontinuity sitting exactly on the
+        # unrotated case that any angle fit passes through.
         abs_angle = xp.abs(angle) % (2 * _PI)
-        for k in range(4):
+        for k in range(5):
             target = k * _PI / 2
             if bool(target - angle_margin <= abs_angle) and \
                     bool(abs_angle <= target + angle_margin):

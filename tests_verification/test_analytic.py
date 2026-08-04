@@ -291,4 +291,7 @@ def test_circle_ignores_ly_everywhere(ly):
     cfg = dict(period=[P, P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
                wavelength=0.777, n_top=1.0, n_bot=1.5, fto=[6, 6])
     got = fieldwave.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=[shape])], **cfg).conv_solve()
-    assert float(np.sum(np.asarray(got.de_ri))) == pytest.approx(0.161262158771, abs=1e-9)
+    # The three spellings agreeing is the claim; the absolute value is only a regression
+    # anchor, and it rides on ``analytic_normal_grid`` — it read 0.161262158771 while that
+    # default was 256, and moved 1.1e-4 when the default rose to 1024.
+    assert float(np.sum(np.asarray(got.de_ri))) == pytest.approx(0.161153064902, abs=1e-9)

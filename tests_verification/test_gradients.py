@@ -201,3 +201,70 @@ def test_vector_edge_gradients(param, index, start, name):
     auto, fd = _derivative(backend, objective, start)
     assert abs(fd) > 1e-8, f'the objective does not depend on {param}; test is vacuous'
     assert abs(auto - fd) / abs(fd) < 1e-3, (param, auto, fd)
+
+
+# ------------------------------------------------------------------- shape gradients near zero
+
+def test_rectangle_margin_is_symmetric_about_zero():
+    """A rectangle at -1e-6 rad must take the same branch as one at +1e-6.
+
+    ``angle`` is wrapped into [0, 2*pi) before the near-alignment test, so a small negative
+    angle arrives as ``2*pi - eps``. The targets used to stop at ``3*pi/2``, so the negative
+    side fell through to the rotated decomposition while the positive side got the exact
+    single block, and the two disagreed by 2e-7 in efficiency — a step sitting exactly on the
+    unrotated case, which is where any sidewall-angle fit starts.
+    """
+    m = fieldwave.rcwa(backend=0, period=[300.0, 300.0]).modeler
+    blocks = [m.rectangle(150.0, 150.0, 80.0, 60.0, 2.0, a) for a in (-1e-6, 0.0, 1e-6)]
+    assert [len(b) for b in blocks] == [1, 1, 1], [len(b) for b in blocks]
+    for side in (0, 2):
+        assert np.allclose(np.asarray(blocks[side][0][:2], dtype=float),
+                           np.asarray(blocks[1][0][:2], dtype=float))
+
+
+def test_analytic_angle_is_smooth_through_normal():
+    """The analytic path is the one that can fit a sidewall angle near normal; the vector one cannot.
+
+    Rotating a rectangle moves its Fourier coefficients analytically, so the efficiency is
+    smooth in ``angle`` and the two one-sided slopes at zero must agree. They do, on the
+    analytic path. The block decomposition instead misses the shape by a staircase of area
+    ``~|angle|`` that ``n_split`` does not remove (measured stable from 4 to 64), which shows
+    up as a kink about twenty times the true slope. A central difference hides it — the
+    ``|angle|`` term cancels — so this only bites an optimizer, which sees one side at a time.
+    """
+    base = dict(period=[300.0, 300.0], thickness=[205.0], fto=[5, 5], n_top=1.0, n_bot=1.0,
+                wavelength=900.0, pol=0.5, theta=0.1, phi=0.3)
+
+    def analytic(angle):
+        shape = dict(type='rectangle', cx=150.0, cy=150.0, lx=80.0, ly=60.0,
+                     angle=angle, n_index=2.0)
+        res = fieldwave.rcwa(backend=0, ucell=[dict(n_base=3.5, shapes=[shape])],
+                             **base).conv_solve()
+        return float(np.sum(res.de_ti))
+
+    h = 1e-5
+    f0, fp, fm = analytic(0.0), analytic(h), analytic(-h)
+    left, right = (f0 - fm) / h, (fp - f0) / h
+    assert abs(right - left) < 0.02 * abs(left), (left, right)
+
+
+def test_translation_leaves_only_sampling_noise_in_the_shape_gradient():
+    """Sliding a single layer along x cannot change the efficiency, so d/dcx is exactly zero.
+
+    What is left is the normal field's sampling grid, and its cell size sets the noise floor
+    under every shape gradient on this path: 5e-4 at ``analytic_normal_grid=256``, which is
+    the reason the default is no longer 256.
+    """
+    base = dict(period=[300.0, 300.0], thickness=[205.0], fto=[5, 5], n_top=1.0, n_bot=1.0,
+                wavelength=900.0, pol=0.5, theta=0.1, phi=0.3)
+    solver = fieldwave.rcwa(backend=0, period=[300.0, 300.0])
+    cell = 300.0 / solver.analytic_normal_grid
+
+    def total(cx):
+        shape = dict(type='rectangle', cx=cx, cy=150.0, lx=80.0, ly=60.0,
+                     angle=0.4, n_index=2.0)
+        return float(np.sum(fieldwave.rcwa(backend=0, ucell=[dict(n_base=3.5, shapes=[shape])],
+                                           **base).conv_solve().de_ti))
+
+    values = [total(150.0 + f * cell) for f in (0.05, 0.35, 0.65, 0.95)]
+    assert np.ptp(values) < 5e-5, np.ptp(values)

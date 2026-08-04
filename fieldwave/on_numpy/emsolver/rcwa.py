@@ -92,7 +92,10 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                  fourier_type=0,  # 0 DFS, 1 CFS, 2 NVF
                  enhanced_dfs=True,
                  use_pinv=False,
-                 analytic_normal_grid=256,  # grid for sampling analytic normal field (modeling_type 2)
+                 analytic_normal_grid=1024,  # normal-field sampling; sets the floor on shape gradients
+                 # (a translation-invariant structure should give d/dcx == 0 exactly; the
+                 #  sampling leaves a sawtooth instead -- 5e-4 at 256, 4.2e-5 at 1024, for
+                 #  ~1.2-2x the runtime. Raise further to fit positions below that.)
                  ):
 
         super().__init__(n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi, pol=pol,
