@@ -35,6 +35,32 @@ def _grid(xp, fto_x, fto_y, dev, dtype):
     return ky[:, None] + 0.0 * kx[None, :], 0.0 * ky[:, None] + kx[None, :]
 
 
+def shape_geometry(shape, Px, Py):
+    """``(type, cx, cy, lx, ly, angle)`` for one shape dict, resolved once for everybody.
+
+    It exists because the transform and the normal field used to resolve them separately and
+    disagree. Two ways that showed:
+
+    * ``circle`` is round. Its transform only ever used ``lx`` as the diameter, while the
+      normal field read ``ly`` as a second semi-axis — so ``ly != lx`` on a circle silently
+      built one structure for ``eps`` and a different one for the projector (14% on
+      ``sum(de_ri)``). ``ly`` is now ``lx`` for a circle wherever it is read; an oval is an
+      ``ellipse``.
+    * the defaults differed (``ly`` fell back to ``lx`` in one and to ``500.0`` in the other),
+      so *omitting* ``ly`` on a circle — the natural way to write it — degenerated the normal
+      field and moved the answer 6%.
+
+    Lengths are absolute, in the units of ``period`` (see the module docstring).
+    """
+    stype = shape.get('type', 'rectangle')
+    cx = shape.get('cx', Px / 2.0)
+    cy = shape.get('cy', Py / 2.0)
+    lx = shape.get('lx', shape.get('l', 0.0))
+    round_ = stype in ('circle', 'disk', 'square')
+    ly = lx if round_ else shape.get('ly', shape.get('l', 0.0))
+    return stype, cx, cy, lx, ly, shape.get('angle', 0.0)
+
+
 def shape_ft(xp, shape, ky, kx, period):
     """Continuous Fourier transform of one shape's indicator, divided by the cell area.
 
@@ -42,12 +68,7 @@ def shape_ft(xp, shape, ky, kx, period):
     the analytic analogue of one ``dfs2d`` Fourier coefficient.
     """
     Px, Py = period[0], period[1]
-    stype = shape.get('type', 'rectangle')
-    cx = shape.get('cx', Px / 2.0)
-    cy = shape.get('cy', Py / 2.0)
-    lx = shape.get('lx', shape.get('l', 0.0))
-    ly = shape.get('ly', lx if stype in ('circle', 'square') else shape.get('l', 0.0))
-    angle = shape.get('angle', 0.0)
+    stype, cx, cy, lx, ly, angle = shape_geometry(shape, Px, Py)
 
     pi = 3.141592653589793
     u = 2.0 * pi * kx / Px
@@ -155,10 +176,7 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype):
     ny_total = xp.zeros((Ny, Nx), dtype=dtype)
 
     for s in shapes:
-        stype = s.get('type', 'ellipse')
-        cx, cy = s.get('cx', Px / 2.0), s.get('cy', Py / 2.0)
-        lx, ly = s.get('lx', 500.0), s.get('ly', 500.0)
-        angle = s.get('angle', 0.0)
+        stype, cx, cy, lx, ly, angle = shape_geometry(s, Px, Py)
 
         cos_a = xp.cos(as_array(xp, angle, dtype=dtype))
         sin_a = xp.sin(as_array(xp, angle, dtype=dtype))

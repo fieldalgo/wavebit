@@ -269,3 +269,26 @@ def test_analytic_beats_staircase_tilted():
     err_stair = abs(s11 - ref)
     assert err_analytic < 5e-3
     assert err_analytic < err_stair / 5  # analytic is far closer to the converged answer
+
+
+@pytest.mark.parametrize('ly', [None, 'same', 'different'])
+def test_circle_ignores_ly_everywhere(ly):
+    """A circle is round: ``ly`` must not change the answer, and omitting it must be safe.
+
+    The transform read ``lx`` as the diameter while the normal field read ``ly`` as a second
+    semi-axis, and the two disagreed about the default (``lx`` versus ``500.0``). So passing
+    ``ly != lx`` built one structure for ``eps`` and another for the projector — 14% on
+    ``sum(de_ri)`` — and *omitting* ``ly``, the natural way to write a circle, degenerated the
+    normal field by 6%. Both resolve through ``shape_geometry`` now.
+    """
+    P, NR = 0.77, 3.5
+    shape = dict(type='circle', cx=0.5 * P, cy=0.5 * P, lx=0.5 * P, n_index=NR)
+    if ly == 'same':
+        shape['ly'] = 0.5 * P
+    elif ly == 'different':
+        shape['ly'] = 0.3 * P
+
+    cfg = dict(period=[P, P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
+               wavelength=0.777, n_top=1.0, n_bot=1.5, fto=[6, 6])
+    got = fieldwave.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=[shape])], **cfg).conv_solve()
+    assert float(np.sum(np.asarray(got.de_ri))) == pytest.approx(0.161262158771, abs=1e-9)

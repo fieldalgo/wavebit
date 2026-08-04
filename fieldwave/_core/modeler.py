@@ -536,14 +536,22 @@ class Modeling:
         points_contour_rot = (rotate @ points_origin_contour)[:, :, None] + offset
 
         n_contour = points_contour_rot.shape[1]
+        if n_contour < 3:
+            raise ValueError(
+                f'an ellipse contour needs at least 3 points, got {n_contour}: raise '
+                f'n_split_w / n_split_h (they give n_split - 1 contour points each)')
 
         # Topmost contour point — a geometry decision, so it is narrowed to Python here.
         y_highest_index = int(xp.argmax(xp.real(points_contour_rot), axis=1)[1, 0])
         points_contour_rot = xp.roll(points_contour_rot, n_contour // 2 - y_highest_index, axis=1)
         y_highest_index = int(xp.argmax(xp.real(points_contour_rot), axis=1)[1, 0])
 
-        right = points_contour_rot[:, y_highest_index - 1]
-        left = points_contour_rot[:, y_highest_index + 1]
+        # The contour is closed, so the neighbours wrap — the same ``% n_contour`` the block
+        # loop below already uses. Without it ``+ 1`` runs off the end and the default
+        # ``n_split_w = n_split_h = 2`` raised IndexError, i.e. an ellipse could not be drawn
+        # without knowing to pass a larger split.
+        right = points_contour_rot[:, (y_highest_index - 1) % n_contour]
+        left = points_contour_rot[:, (y_highest_index + 1) % n_contour]
 
         right_y = right[1].real
         left_y = left[1].real
