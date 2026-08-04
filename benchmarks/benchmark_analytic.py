@@ -89,8 +89,8 @@ def bench_metallic_circle():
     for fto in (3, 5, 7, 9, 11):
         a, _ = solve(0, analytic, fto, **cfg)
         ras = make_circle_raster(240, R, NM)
-        nvf, _ = solve(0, ras, fto, fourier_type=2, **cfg)
-        dfs, _ = solve(0, ras, fto, fourier_type=0, **cfg)
+        nvf, _ = solve(0, ras, fto, factorization='nvf', **cfg)
+        dfs, _ = solve(0, ras, fto, **cfg)
         print(f"    {fto:>3} | {abs(a - ref):13.2e} | {abs(nvf - ref):12.2e} | {abs(dfs - ref):12.2e}")
 
 

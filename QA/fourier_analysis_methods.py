@@ -26,7 +26,7 @@ def compare_conv_mat_method(backend, type_complex, device):
                    fto=fto, wavelength=wavelength, period=period, ucell=ucell,
                    thickness=thickness, device=device, type_complex=type_complex, )
 
-    solver.fourier_type = 0
+    solver.fourier_coefficients = 'sampled'
     solver.enhanced_dfs = False
     res_dfs = solver.conv_solve().res
     de_ri_dfs, de_ti_dfs = res_dfs.de_ri, res_dfs.de_ti
@@ -35,7 +35,7 @@ def compare_conv_mat_method(backend, type_complex, device):
     res_efs = solver.conv_solve().res
     de_ri_efs, de_ti_efs = res_efs.de_ri, res_efs.de_ti
 
-    solver.fourier_type = 1
+    solver.fourier_coefficients = 'integrated'
     res_cfs = solver.conv_solve().res
     de_ri_cfs, de_ti_cfs = res_cfs.de_ri, res_cfs.de_ti
 

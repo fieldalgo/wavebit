@@ -15,7 +15,6 @@ import numpy as np
 import pytest
 
 import fieldwave
-from fieldwave import FourierType
 
 RNG = np.random.default_rng(0)
 UCELL_1D = RNG.uniform(1.0, 4.0, (1, 1, 8))
@@ -109,15 +108,14 @@ def test_no_jit_still_auto_detects_without_a_geometry():
     assert np.array_equal(np.asarray(auto.de_ti), np.asarray(frozen.de_ti))
 
 
-@pytest.mark.parametrize('fourier_type', [FourierType.DFS, FourierType.CONTINUOUS],
-                         ids=['dfs', 'cfs'])
-def test_every_traceable_fourier_strategy_runs_under_jit(fourier_type):
-    """CFS included: with its block compression frozen, it no longer has to bail out.
+@pytest.mark.parametrize('fourier_coefficients', ['sampled', 'integrated'])
+def test_every_traceable_fourier_strategy_runs_under_jit(fourier_coefficients):
+    """The integrated series included: with its block compression frozen, it no longer bails.
 
-    The old implementation printed a notice and returned ``(None, None, None)`` for
-    ``fourier_type=1`` — a silent wrong-arity return that no caller could unpack.
+    The old implementation printed a notice and returned ``(None, None, None)`` for the
+    closed-form path — a silent wrong-arity return that no caller could unpack.
     """
-    solver = _solver(1, '2d', fourier_type=fourier_type)
+    solver = _solver(1, '2d', fourier_coefficients=fourier_coefficients)
     result, field = solver.conv_solve_field(res_x=4, res_y=4, res_z=4,
                                             geometry=solver.freeze_geometry())
 

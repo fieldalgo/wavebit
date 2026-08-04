@@ -148,7 +148,7 @@ def case_2d_1(plot_figure=False):
     option['period'] = [770 / factor, 770 / factor]
     option['wavelength'] = 777 / factor
     option['thickness'] = [100 / factor, ]  # final term is for h_substrate
-    option['fourier_type'] = 1
+    option['fourier_coefficients'] = 'integrated'
 
     ucell = np.array(
         [[
@@ -181,7 +181,7 @@ def case_2d_2(plot_figure=False):
     option['period'] = [770 / factor, 770 / factor]
     option['wavelength'] = 777 / factor
     option['thickness'] = [100 / factor, ]  # final term is for h_substrate
-    option['fourier_type'] = 1
+    option['fourier_coefficients'] = 'integrated'
 
     ucell = np.array(
         [[
@@ -214,7 +214,7 @@ def case_2d_3(plot_figure=False):
     option['period'] = [770 / factor, 770 / factor]
     option['wavelength'] = 777 / factor
     option['thickness'] = [100 / factor, ]  # final term is for h_substrate
-    option['fourier_type'] = 1
+    option['fourier_coefficients'] = 'integrated'
 
     ucell = np.array(
         [[
@@ -246,7 +246,7 @@ def case_2d_4(plot_figure=False):
     option['period'] = [480 / factor, 480 / factor]
     option['wavelength'] = 550 / factor
     option['thickness'] = [220 / factor, ]  # final term is for h_substrate
-    option['fourier_type'] = 1
+    option['fourier_coefficients'] = 'integrated'
 
     ucell = np.array(
         [
@@ -274,7 +274,7 @@ def case_2d_5(plot_figure=False):
     option['period'] = [480 / factor, 480 / factor]
     option['wavelength'] = 550 / factor
     option['thickness'] = [220 / factor, ]  # final term is for h_substrate
-    option['fourier_type'] = 1
+    option['fourier_coefficients'] = 'integrated'
 
     ucell = np.array(
         [
@@ -302,7 +302,7 @@ def case_2d_6(plot_figure=False):
     option['period'] = [480 / factor, 480 / factor]
     option['wavelength'] = 550 / factor
     option['thickness'] = [220 / factor, ]  # final term is for h_substrate
-    option['fourier_type'] = 1
+    option['fourier_coefficients'] = 'integrated'
 
     ucell = [
         # layer 1
@@ -336,7 +336,7 @@ def case_2d_7(plot_figure=False):
     option['period'] = [480 / factor, 480 / factor]
     option['wavelength'] = 550 / factor
     option['thickness'] = [220 / factor, ]  # final term is for h_substrate
-    option['fourier_type'] = 1
+    option['fourier_coefficients'] = 'integrated'
 
     ucell = [
         # layer 1

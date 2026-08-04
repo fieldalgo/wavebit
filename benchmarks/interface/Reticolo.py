@@ -200,7 +200,7 @@ if __name__ == '__main__':
         'fto': 1,
         'thickness': [1000],
         'period': [1000],
-        'fourier_type': 2,
+        'factorization': 'nvf',
         'ucell': np.array(
             [
                 [[3.1, 1.1, 1.2, 1.6, 3.1]],
@@ -219,7 +219,7 @@ if __name__ == '__main__':
     #     'fto': 1,
     #     'thickness': [220],
     #     'period': [480],
-    #     'fourier_type': 2,
+    #     'factorization': 'nvf',
     #     'ucell': (np.array(
     #         [
     #             [

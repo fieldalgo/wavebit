@@ -111,7 +111,9 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                  perturbation=1E-20,
                  device='cpu',
                  type_complex=jnp.complex128,
-                 fourier_type=0,  # 0 DFS, 1 CFS, 2 NVF
+                 fourier_coefficients=None,  # 'sampled' (default, DFS) | 'integrated' (closed-form series)
+                 factorization=None,         # 'li' (default) | 'nvf' (normal vector field)
+                 fourier_type=None,          # deprecated alias for the two keywords above
                  enhanced_dfs=True,
                  analytic_normal_grid=1024,  # normal-field sampling; sets the floor on shape gradients
                  # (a translation-invariant structure should give d/dcx == 0 exactly; the
@@ -134,7 +136,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         self.ucell_materials = ucell_materials
 
         self.backend = backend
-        self.fourier_type = fourier_type
+        self._set_fourier_options(fourier_coefficients, factorization, fourier_type)
         self.enhanced_dfs = enhanced_dfs
         self.analytic_normal_grid = analytic_normal_grid
 

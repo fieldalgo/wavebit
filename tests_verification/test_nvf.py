@@ -24,7 +24,7 @@ def test_nvf_circular_grating():
     option_nvf = dict(
         pol=1, n_top=1.0, n_bot=1.5, theta=10 * np.pi / 180, phi=20 * np.pi / 180,
         fto=[3, 3], wavelength=wavelength, period=period,
-        ucell=ucell_2d, thickness=[200], fourier_type='nvf'
+        ucell=ucell_2d, thickness=[200], factorization='nvf'
     )
 
     mee_nvf = fieldwave.rcwa(backend=0, **option_nvf)
@@ -63,7 +63,7 @@ def test_nvf_energy_convergence():
     errs = {}
     for fto in (3, 5, 7):
         res = fieldwave.rcwa(backend=0, ucell=ucell, fto=[fto, fto],
-                              fourier_type='nvf', **cfg).conv_solve()
+                              factorization='nvf', **cfg).conv_solve()
         R = float(np.array(res.de_ri).real.sum())
         T = float(np.array(res.de_ti).real.sum())
         errs[fto] = abs(R + T - 1.0)
@@ -97,8 +97,12 @@ def test_nvf_on_a_one_cell_axis_reduces_to_li(kind):
                wavelength=0.777, n_top=1.0, n_bot=1.5, fto=[10, 0])
     cfg |= dict(phi=0.3, psi=0.4) if kind == 'conical' else dict(pol=0 if kind == 'te' else 1)
 
-    def total(fourier_type):
-        res = fieldwave.rcwa(fourier_type=fourier_type, **cfg).conv_solve()
+    def total(**kw):
+        res = fieldwave.rcwa(**kw, **cfg).conv_solve()
         return float(np.sum(np.asarray(res.de_ri)))
 
-    assert total(2) == pytest.approx(total(0), abs=1e-12)
+    assert total(factorization='nvf') == pytest.approx(total(factorization='li'), abs=1e-12)
+    # ...and the collapse is a property of the projector, so it holds whichever way the
+    # coefficients are obtained -- including the pairing the old integer could not spell.
+    assert (total(fourier_coefficients='integrated', factorization='nvf')
+            == pytest.approx(total(fourier_coefficients='integrated'), abs=1e-12))

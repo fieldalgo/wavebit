@@ -21,7 +21,8 @@ class SolverJax(RCWAJax, OptimizerJax):
             'perturbation': self.perturbation,
             'device': self.device,
             'type_complex': self.type_complex,
-            'fourier_type': self.fourier_type,
+            'fourier_coefficients': self.fourier_coefficients,
+            'factorization': self.factorization,
             'enhanced_dfs': self.enhanced_dfs,
         }
 

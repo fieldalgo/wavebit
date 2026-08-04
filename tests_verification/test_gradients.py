@@ -37,7 +37,7 @@ ANALYTIC_BASE = dict(period=[0.77, 0.77], thickness=[0.25], theta=0.35, phi=0.4,
 def _frozen_raster():
     global FROZEN
     if FROZEN is None:
-        FROZEN = fieldwave.rcwa(backend=0, ucell=RASTER, fourier_type=0, **BASE).freeze_geometry()
+        FROZEN = fieldwave.rcwa(backend=0, ucell=RASTER, **BASE).freeze_geometry()
     return FROZEN
 
 
@@ -112,9 +112,10 @@ def test_raster_scalar_gradients(param, name):
             cfg['period'] = [p, cast(0.77)]
         else:
             cfg[param] = p
-        solver = fieldwave.rcwa(backend=backend, ucell=cast(RASTER), fourier_type=0, **cfg)
-        # No frozen geometry: a DFS build has no discrete decision to take, so it traces as
-        # is. It used to need one, for a same-material check that no longer exists.
+        solver = fieldwave.rcwa(backend=backend, ucell=cast(RASTER), **cfg)
+        # No frozen geometry: the default ('sampled', 'li') build has no discrete decision to
+        # take, so it traces as is. It used to need one, for a same-material check that no
+        # longer exists.
         return solver.conv_solve().de_ti.sum()
 
     start = {'theta': 0.2, 'phi': 0.3, 'psi': 0.4, 'wavelength': 0.777, 'n_top': 1.0,
@@ -126,30 +127,34 @@ def test_raster_scalar_gradients(param, name):
 
 @pytest.mark.parametrize('name', ['torch', 'jax'])
 def test_raster_per_cell_gradient_reaches_every_cell(name):
-    """DFS is the raster transform topology optimization needs: one gradient per cell.
+    """Sampled coefficients are what topology optimization needs: one gradient per cell.
 
-    CFS legitimately gives 9 of 64 — it compresses the raster into blocks and the other cells
-    genuinely stop being variables — which is why the choice is not an implementation detail.
+    The integrated (closed-form) series legitimately gives 9 of 64 — it compresses the raster
+    into blocks and the other cells genuinely stop being variables — which is why the choice
+    is not an implementation detail, and why ``fourier_coefficients`` defaults to ``'sampled'``.
+    Changing that default silently breaks every topology-optimization user.
     """
     backend, cast = _backend(name)
 
-    def cells(fourier_type, geometry=None):
+    def cells(geometry=None, **strategy):
         if backend == 2:
             import torch
             uc = torch.tensor(RASTER, dtype=torch.float64, requires_grad=True)
-            res = fieldwave.rcwa(backend=2, ucell=uc, fourier_type=fourier_type,
+            res = fieldwave.rcwa(backend=2, ucell=uc, **strategy,
                                  **BASE).conv_solve(geometry=geometry)
             torch.sum(res.de_ti).backward()
             return int((uc.grad.abs() > 1e-14).sum())
         import jax, jax.numpy as jnp
-        g = jax.grad(lambda u: jnp.sum(fieldwave.rcwa(backend=1, ucell=u,
-                     fourier_type=fourier_type, **BASE).conv_solve(geometry=geometry).de_ti).real)
+        g = jax.grad(lambda u: jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **strategy,
+                     **BASE).conv_solve(geometry=geometry).de_ti).real)
         return int(np.sum(np.abs(np.asarray(g(jnp.asarray(RASTER)))) > 1e-14))
 
-    assert cells(0) == RASTER.size
+    # No strategy keywords at all: this is the *default* that has to carry every cell.
+    assert cells() == RASTER.size
 
-    solver = fieldwave.rcwa(backend=backend, ucell=cast(RASTER), fourier_type=1, **BASE)
-    assert cells(1, solver.freeze_geometry()) < RASTER.size
+    integrated = dict(fourier_coefficients='integrated')
+    solver = fieldwave.rcwa(backend=backend, ucell=cast(RASTER), **integrated, **BASE)
+    assert cells(solver.freeze_geometry(), **integrated) < RASTER.size
 
 
 # ------------------------------------------------------------------------- analytic (shape/OCD)

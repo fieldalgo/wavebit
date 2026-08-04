@@ -138,7 +138,7 @@ def case_1d_1(plot_figure=False):
     option['period'] = [770/factor]
     option['wavelength'] = 777/factor
     option['thickness'] = [100/factor,]
-    option['fourier_type'] = 1
+    option['fourier_coefficients'] = 'integrated'
 
     ucell = np.array(
         [
@@ -163,7 +163,7 @@ def case_1d_2(plot_figure=False):
     option['period'] = [770/factor]
     option['wavelength'] = 777/factor
     option['thickness'] = [100/factor,]
-    option['fourier_type'] = 1
+    option['fourier_coefficients'] = 'integrated'
 
     ucell = np.array(
         [

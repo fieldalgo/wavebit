@@ -9,17 +9,23 @@ them. With this module the gradient runs end-to-end from the design variable —
 raster — through to the diffraction efficiency, which is what an inverse-design user actually
 differentiates.
 
-All the strategies live here:
+All the strategies live here. The raster builders are the cross product of two independent
+choices — how the Fourier coefficients are obtained, and which rule closes the products of
+discontinuous functions:
 
-===================  ==================  =========================================
-``fourier_type``     builder             method
-===================  ==================  =========================================
-0 (``DFS``)          raster_discrete     discrete Fourier series, Li's rules
-1 (``CONTINUOUS``)   raster_continuous   analytic (staircase-free) Fourier of the
-                                         compressed piecewise-constant layer
-1 (vector)           vector              same, on explicitly given segment edges
-2 (``NVF``)          raster_nvf          normal-vector-field factorization
-===================  ==================  =========================================
+- ``('sampled', 'li')``       -> :func:`to_conv_mat_raster_discrete`, discrete Fourier series
+  off the raster with Li's rules. The default, and the only path that carries a gradient to
+  every raster cell.
+- ``('integrated', 'li')``    -> :func:`to_conv_mat_raster_continuous`, closed-form
+  (staircase-free) Fourier of the compressed layer with Li's rules.
+- ``('sampled', 'nvf')``      -> :func:`to_conv_mat_raster_nvf`, DFS with the
+  normal-vector-field factorization.
+- ``('integrated', 'nvf')``   -> :func:`to_conv_mat_raster_continuous_nvf`, closed-form
+  Fourier with NVF.
+
+Vector-modelled layers (:func:`to_conv_mat_vector`) are the closed-form series on explicitly
+given segment edges, with Li's rules; the analytic *shape* path lives in
+:mod:`fieldwave._core.analytic` and is always NVF.
 
 A recurring rule runs through this module: **discrete geometry decisions are computed eagerly
 and passed in as static inputs, while material values flow through differentiably.** Two
@@ -294,11 +300,26 @@ def normal_field_for_ucell(ucell, fto_x, fto_y, enhanced_dfs=True):
             for eps in _layer_eps(xp, ucell, fto_x, fto_y, enhanced_dfs)]
 
 
-def nvf_conv_matrices(xp, eps_matrix, nx, ny, fto_x, fto_y):
-    """NVF (Li/Schuster normal-vector) convolution matrices for one layer.
+def _nvf_projector(xp, nx, ny, fto_x, fto_y, dtype, device=None):
+    """Convolution matrices of the normal projector: ``C_xx = <nx^2>`` etc.
 
-    With ``E = <eps>`` (direct rule), ``A = <1/eps>^-1`` (inverse rule), ``Delta = E - A`` and
-    the normal projector blocks ``C_xx = <nx^2>``, ``C_xy = <nx ny>``, ``C_yy = <ny^2>``::
+    Always sampled off the raster the normal field lives on, whatever
+    ``fourier_coefficients`` says. That keyword describes how the *permittivity* series is
+    obtained — the part that is a design variable and that staircasing costs accuracy on. The
+    normal field is static geometry (see :func:`normal_vector_field`): it is a smooth
+    extension of the interface direction into the bulk, so it has no piecewise-constant block
+    structure for the closed-form series to integrate over in the first place.
+    """
+    C_xx = dfs2d(xp, xp.asarray(nx ** 2, dtype=dtype, device=device), 1, 1, fto_x, fto_y)
+    C_xy = dfs2d(xp, xp.asarray(nx * ny, dtype=dtype, device=device), 1, 1, fto_x, fto_y)
+    C_yy = dfs2d(xp, xp.asarray(ny ** 2, dtype=dtype, device=device), 1, 1, fto_x, fto_y)
+    return C_xx, C_xy, C_yy
+
+
+def _nvf_assemble(xp, ep_dir, ep_inv, C_xx, C_xy, C_yy):
+    """Close the NVF factorization from the direct/inverse-rule matrices and the projector.
+
+    With ``E = <eps>`` (direct rule), ``A = <1/eps>^-1`` (inverse rule) and ``Delta = E - A``::
 
         eps_xx = E - 1/2 (Delta @ C_xx + C_xx @ Delta)
         eps_yy = E - 1/2 (Delta @ C_yy + C_yy @ Delta)
@@ -307,34 +328,53 @@ def nvf_conv_matrices(xp, eps_matrix, nx, ny, fto_x, fto_y):
     The 1/2-symmetrization is essential: the plain product ``Delta @ C`` is not Hermitian,
     giving complex ``q^2`` and gross energy-conservation violation on curved boundaries.
 
+    ``ep_dir`` / ``ep_inv`` are the only inputs that depend on how the coefficients are
+    obtained, which is what lets the sampled and integrated builders share this step.
+
     Returns the five matrices in the slot convention the 2D solve expects:
     ``(epx, epy, epxy, epyx, epz_i) = (eps_xx, eps_yy, -eps_xy, -eps_yx, inv(<eps>))``.
     """
-    C = _complex_dtype(xp, eps_matrix)
-    eps_matrix = xp.astype(eps_matrix, C)
-
-    dev = _device(xp, eps_matrix)
-    C_xx_grid = xp.asarray(nx ** 2, dtype=C, device=dev)
-    C_xy_grid = xp.asarray(nx * ny, dtype=C, device=dev)
-    C_yy_grid = xp.asarray(ny ** 2, dtype=C, device=dev)
-
-    # eps is a staircase however finely it was sampled, so its coefficients are exact from
-    # the grid it arrives on. The projector grids below are not -- they sample a continuous
-    # vector field -- which is why only these two carry the flag.
-    ep_dir = dfs2d(xp, eps_matrix, 1, 1, fto_x, fto_y, piecewise_constant=True)
-    ep_inv = dfs2d(xp, 1.0 / eps_matrix, 1, 1, fto_x, fto_y, piecewise_constant=True)
-
     delta_ep = ep_dir - xp.linalg.inv(ep_inv)
-
-    C_xx = dfs2d(xp, C_xx_grid, 1, 1, fto_x, fto_y)
-    C_xy = dfs2d(xp, C_xy_grid, 1, 1, fto_x, fto_y)
-    C_yy = dfs2d(xp, C_yy_grid, 1, 1, fto_x, fto_y)
 
     eps_xx = ep_dir - 0.5 * (delta_ep @ C_xx + C_xx @ delta_ep)
     eps_yy = ep_dir - 0.5 * (delta_ep @ C_yy + C_yy @ delta_ep)
     eps_xy = -0.5 * (delta_ep @ C_xy + C_xy @ delta_ep)      # == eps_yx (symmetric)
 
     return eps_xx, eps_yy, -eps_xy, -eps_xy, xp.linalg.inv(ep_dir)
+
+
+def nvf_conv_matrices(xp, eps_matrix, nx, ny, fto_x, fto_y):
+    """NVF convolution matrices for one layer, with sampled (DFS) coefficients."""
+    C = _complex_dtype(xp, eps_matrix)
+    eps_matrix = xp.astype(eps_matrix, C)
+    dev = _device(xp, eps_matrix)
+
+    # eps is a staircase however finely it was sampled, so its coefficients are exact from
+    # the grid it arrives on. The projector grids are not -- they sample a continuous
+    # vector field -- which is why only these two carry the flag.
+    ep_dir = dfs2d(xp, eps_matrix, 1, 1, fto_x, fto_y, piecewise_constant=True)
+    ep_inv = dfs2d(xp, 1.0 / eps_matrix, 1, 1, fto_x, fto_y, piecewise_constant=True)
+
+    return _nvf_assemble(xp, ep_dir, ep_inv,
+                         *_nvf_projector(xp, nx, ny, fto_x, fto_y, C, dev))
+
+
+def nvf_conv_matrices_continuous(xp, eps_comp, x, y, nx, ny, fto_x, fto_y):
+    """NVF convolution matrices for one layer, with integrated (closed-form) coefficients.
+
+    ``eps_comp`` is the *compressed* piecewise-constant layer and ``x`` / ``y`` its segment
+    edges, exactly as :func:`cfs2d` takes them; ``nx`` / ``ny`` are the normal field on the
+    uncompressed raster (see :func:`_nvf_projector` for why the two grids differ).
+    """
+    C = _complex_dtype(xp, eps_comp)
+    eps_comp = xp.astype(eps_comp, C)
+    dev = _device(xp, eps_comp)
+
+    ep_dir = cfs2d(xp, eps_comp, x, y, 1, 1, fto_x, fto_y)
+    ep_inv = cfs2d(xp, 1.0 / eps_comp, x, y, 1, 1, fto_x, fto_y)
+
+    return _nvf_assemble(xp, ep_dir, ep_inv,
+                         *_nvf_projector(xp, nx, ny, fto_x, fto_y, C, dev))
 
 
 def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
@@ -546,6 +586,52 @@ def to_conv_mat_raster_continuous(ucell, fto_x, fto_y, compression=None):
         epz_i_list.append(xp.linalg.inv(epz_list))
 
     return xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list)
+
+
+def to_conv_mat_raster_continuous_nvf(ucell, fto_x, fto_y, normal_field=None, compression=None,
+                                      enhanced_dfs=True):
+    """Per-layer convolution matrices for a raster ``ucell`` via closed-form Fourier + NVF.
+
+    The combination the deprecated ``fourier_type`` integer could not express. It buys the
+    staircase-free permittivity series of the integrated path *and* the vector factorization
+    that handles boundaries not aligned with x or y — which is what a shape/OCD fit of a
+    tilted sidewall wants from a raster.
+
+    Args:
+        ucell: refractive-index raster ``(n_layers, Ny, Nx)`` — the design variable.
+        fto_x, fto_y: Fourier truncation orders.
+        normal_field: optional per-layer ``(nx, ny)`` from :func:`normal_field_for_ucell`.
+        compression: optional per-layer ``(row_idx, col_idx, x, y)`` from
+            :func:`compression_indices`.
+        enhanced_dfs: upsampling of the grid the *normal field* is taken on. It does not
+            affect the permittivity series here, which is integrated over the compressed
+            blocks rather than sampled.
+
+    Both ``normal_field`` and ``compression`` are static geometry; supply both to keep the
+    build traceable under JAX (this path is the only one that needs both).
+
+    Returns:
+        ``(epx, epy, epxy, epyx, epz_i)``, each ``(n_layers, ff_xy, ff_xy)``.
+    """
+    xp = array_namespace(ucell)
+
+    out = [[], [], [], [], []]
+    eps_grids = _layer_eps(xp, ucell, fto_x, fto_y, enhanced_dfs)
+
+    for i, eps_grid in enumerate(eps_grids):
+        nx, ny = normal_vector_field(eps_grid) if normal_field is None else normal_field[i]
+
+        layer = ucell[i]
+        row_idx, col_idx, x, y = (compression_indices(layer) if compression is None
+                                  else compression[i])
+        n_comp = compress_cell(xp, layer, row_idx, col_idx)
+        eps_comp = xp.astype(n_comp, _complex_dtype(xp, n_comp)) ** 2
+
+        for slot, mat in zip(out, nvf_conv_matrices_continuous(
+                xp, eps_comp, x, y, nx, ny, fto_x, fto_y)):
+            slot.append(mat)
+
+    return tuple(xp.stack(slot) for slot in out)
 
 
 def to_conv_mat_vector(ucell_info_list, fto_x, fto_y):

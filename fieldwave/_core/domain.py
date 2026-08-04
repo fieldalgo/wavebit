@@ -15,8 +15,8 @@ single layer is exactly ``(thickness[i], ucell[i])``:
 
 ``Stack`` therefore holds the ordered layers plus the surrounding media (``n_top``,
 ``n_bot``, ``period``); ``Incidence`` holds the illumination. Numerics and backend choice
-(``fto``, ``fourier_type``, ``backend``, ``type_complex``) stay as :func:`fieldwave.rcwa`
-arguments — they are not part of the physical scene.
+(``fto``, ``fourier_coefficients``, ``factorization``, ``backend``, ``type_complex``) stay as
+:func:`fieldwave.rcwa` arguments — they are not part of the physical scene.
 
 Backend-agnostic: a raster ``eps`` may be a NumPy / JAX / PyTorch array; stacking goes
 through the Array-API namespace so gradients survive.

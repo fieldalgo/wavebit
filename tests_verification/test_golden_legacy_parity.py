@@ -72,8 +72,8 @@ CASES = {
     '2d_normal':   dict(psi=0., phi=0., ucell=_rand((1, 5, 5), 0), thickness=[0.2], n_top=1., n_bot=1., theta=0., fto=[2, 2], period=[1., 1.], wavelength=0.9),
     '2d_oblique':  dict(psi=0.9, phi=0.4, ucell=_rand((1, 6, 6), 1), thickness=[0.3], n_top=1., n_bot=1.5, theta=0.3, fto=[2, 2], period=[1., 1.2], wavelength=0.8),
     '2d_2layer':   dict(psi=1.1, phi=0.5, ucell=_rand((2, 4, 4), 2), thickness=[0.15, 0.22], n_top=1.2, n_bot=1., theta=0.2, fto=[2, 2], period=[0.9, 0.9], wavelength=0.7),
-    '2d_nvf':      dict(psi=0.9, phi=0.4, ucell=_rand((1, 5, 5), 3), thickness=[0.2], n_top=1., n_bot=1., theta=0.2, fto=[2, 2], period=[1., 1.], wavelength=0.9, fourier_type=2),
-    '2d_cfs':      dict(psi=0.7, phi=0.3, ucell=_rand((1, 5, 5), 4), thickness=[0.2], n_top=1.5, n_bot=1., theta=0.2, fto=[2, 2], period=[1., 1.], wavelength=0.9, fourier_type=1),
+    '2d_nvf':      dict(psi=0.9, phi=0.4, ucell=_rand((1, 5, 5), 3), thickness=[0.2], n_top=1., n_bot=1., theta=0.2, fto=[2, 2], period=[1., 1.], wavelength=0.9, factorization='nvf'),
+    '2d_cfs':      dict(psi=0.7, phi=0.3, ucell=_rand((1, 5, 5), 4), thickness=[0.2], n_top=1.5, n_bot=1., theta=0.2, fto=[2, 2], period=[1., 1.], wavelength=0.9, fourier_coefficients='integrated'),
 }
 
 

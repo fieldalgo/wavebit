@@ -211,7 +211,7 @@ def test_end_to_end_gradient_wrt_ucell_2d():
     assert abs(g_jax - g_fd) < 1e-6, (g_jax, g_fd)
 
 
-# ================================================================== NVF (fourier_type=2)
+# ============================================================== NVF (factorization='nvf')
 
 NVF_CASES = [
     ('nvf_5x5', _rand((1, 5, 5), 10), 2, 2),
@@ -249,7 +249,7 @@ def test_nvf_permittivity_inputs_are_the_exact_ones(case):
 def test_nvf_runs_on_every_backend(case, backend):
     """NVF on jax / torch — a capability the legacy per-backend builders never had.
 
-    ``rcwa(backend=1|2, fourier_type=2)`` raises ValueError on the legacy path; the
+    ``rcwa(backend=1|2, factorization='nvf')`` raises ValueError on the legacy path; the
     single-source builder makes the same factorization available on all three.
     """
     pytest.importorskip(backend)
@@ -263,13 +263,13 @@ def test_nvf_runs_on_every_backend(case, backend):
 def test_nvf_now_works_on_every_backend():
     """NVF used to be NumPy-only; conv_solve now routes every backend through the core.
 
-    ``rcwa(backend=1|2, fourier_type=2)`` raised ValueError before the factorization was
+    ``rcwa(backend=1|2, factorization='nvf')`` raised ValueError before the factorization was
     wired — the per-backend builders simply had no NVF branch.
     """
     ucell = _rand((1, 5, 5), 13)
     opts = dict(n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0, fto=[2, 2],
                 period=[1.0, 1.0], wavelength=0.9, thickness=[0.2], ucell=ucell,
-                fourier_type=2)
+                factorization='nvf')
     ref = fieldwave.rcwa(backend=0, **opts).conv_solve()
     for backend in (1, 2):
         pytest.importorskip('jax' if backend == 1 else 'torch')
@@ -322,7 +322,7 @@ def test_nvf_end_to_end_gradient_wrt_ucell():
     assert abs(g_jax - g_fd) < 1e-6, (g_jax, g_fd)
 
 
-# ============================================ CFS / analytic + vector (fourier_type=1)
+# ================================ CFS / analytic + vector (fourier_coefficients='integrated')
 
 CFS_CASES = [
     ('cfs_1d', _rand((1, 1, 8), 20), 4, 0),

@@ -85,7 +85,7 @@ if __name__ == '__main__':
         'fto': 1,
         'thickness': [1000, 300],
         'period': [1000],
-        'fourier_type': 1,
+        'fourier_coefficients': 'integrated',
         'ucell': np.array(
             [
                 [[3.1, 1.1, 1.2, 1.6, 3.1]],

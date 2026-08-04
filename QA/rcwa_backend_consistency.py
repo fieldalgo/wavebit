@@ -74,21 +74,21 @@ def consistency_check(option):
 
 if __name__ == '__main__':
     option1 = {'pol': 0, 'n_top': 2, 'n_bot': 1, 'theta': 12 * np.pi / 180, 'phi': 0 * np.pi / 180, 'fto': 0,
-               'period': [770], 'wavelength': 777, 'thickness': [100], 'fourier_type': 0,
+               'period': [770], 'wavelength': 777, 'thickness': [100], 'fourier_coefficients': 'sampled',
                'ucell': np.array([[[3, 3, 3, 3, 3, 1, 1, 1, 1, 1]], ])}
 
     option2 = {'pol': 1, 'n_top': 1, 'n_bot': 1.3, 'theta': 0 * np.pi / 180, 'phi': 0 * np.pi / 180, 'fto': 40,
-               'period': [2000], 'wavelength': 400, 'thickness': [1000], 'fourier_type': 1,
+               'period': [2000], 'wavelength': 400, 'thickness': [1000], 'fourier_coefficients': 'integrated',
                'ucell': np.array([[[3, 3, 3.3, 3, 3, 4, 1, 1, 1, 1.2, 1.1, 3, 2, 1.1]], ])}
 
     option3 = {'psi': 40/180*np.pi, 'n_top': 1, 'n_bot': 1, 'theta': 0 * np.pi / 180, 'phi': 12 * np.pi / 180,
                'fto': 80,
-               'period': [200], 'wavelength': 1000, 'thickness': [100], 'fourier_type': 0, 'enhanced_dfs': False,
+               'period': [200], 'wavelength': 1000, 'thickness': [100], 'fourier_coefficients': 'sampled', 'enhanced_dfs': False,
                'ucell': np.array([[[3, 3, 3.3, 3, 3, 4, 1, 1, 1, 1.2, 1.1, 3, 2, 1.1]], ])}
 
     option4 = {'psi': 10/180*np.pi, 'n_top': 1, 'n_bot': 1.5, 'theta': 30 * np.pi / 180, 'phi': 0 * np.pi / 180,
                'fto': [10, 10],
-               'period': [200, 600], 'wavelength': 1000, 'thickness': [100, 111, 222, 102, 44], 'fourier_type': 0,
+               'period': [200, 600], 'wavelength': 1000, 'thickness': [100, 111, 222, 102, 44], 'fourier_coefficients': 'sampled',
                'enhanced_dfs': True,
                'ucell': np.random.rand(5, 20, 20)*3+1, }
 
@@ -103,7 +103,7 @@ if __name__ == '__main__':
     ]
 
     option5 = {'pol': 0, 'n_top': 2, 'n_bot': 1, 'theta': 12 * np.pi / 180, 'phi': 0 * np.pi / 180, 'fto': [5,5],
-               'period': [770], 'wavelength': 777, 'thickness': [100], 'fourier_type': 0,
+               'period': [770], 'wavelength': 777, 'thickness': [100], 'fourier_coefficients': 'sampled',
                'ucell': ucell5}
 
     ucell6 = [
@@ -123,7 +123,7 @@ if __name__ == '__main__':
          ], ],
     ]
     option6 = {'pol': 0, 'n_top': 2, 'n_bot': 2, 'theta': 2 * np.pi / 180, 'phi': 10 * np.pi / 180, 'fto': [5, 5],
-               'period': [770], 'wavelength': 777, 'thickness': [100, 90], 'fourier_type': 0,
+               'period': [770], 'wavelength': 777, 'thickness': [100, 90], 'fourier_coefficients': 'sampled',
                'ucell': ucell6}
 
     cands = [option1, option2, option3, option4, option5, option6]

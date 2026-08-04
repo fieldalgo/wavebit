@@ -13,32 +13,37 @@ import numpy as np
 import pytest
 
 import fieldwave
-from fieldwave import FourierType
 
 UCELL = np.random.default_rng(0).uniform(1.0, 4.0, (1, 5, 5))
 KW = dict(n_top=1.0, n_bot=1.0, theta=0.1, phi=0.2, psi=0.3, fto=[2, 2],
           period=[1.0, 1.0], wavelength=0.9, thickness=[0.2])
-STRATEGIES = [FourierType.DFS, FourierType.CONTINUOUS, FourierType.NVF]
-IDS = ['dfs', 'cfs', 'nvf']
+
+# Every point of the two-axis cross product, including ('integrated', 'nvf') -- the one the
+# deprecated `fourier_type` integer had no code for. It needs both frozen fields at once,
+# which nothing else exercises.
+STRATEGIES = [dict(fourier_coefficients=c, factorization=f)
+              for c in ('sampled', 'integrated') for f in ('li', 'nvf')]
+IDS = ['sampled-li', 'sampled-nvf', 'integrated-li', 'integrated-nvf']
+DEFAULT_STRATEGY = dict(fourier_coefficients='sampled', factorization='li')
 
 
-@pytest.mark.parametrize('fourier_type', STRATEGIES, ids=IDS)
-def test_frozen_geometry_does_not_change_the_answer(fourier_type):
+@pytest.mark.parametrize('strategy', STRATEGIES, ids=IDS)
+def test_frozen_geometry_does_not_change_the_answer(strategy):
     """Freezing is an optimization, not a different computation."""
-    solver = fieldwave.rcwa(backend=0, ucell=UCELL, fourier_type=fourier_type, **KW)
+    solver = fieldwave.rcwa(backend=0, ucell=UCELL, **strategy, **KW)
     auto = solver.conv_solve()
     frozen = solver.conv_solve(geometry=solver.freeze_geometry())
     assert np.array_equal(np.asarray(auto.res.de_ri), np.asarray(frozen.res.de_ri))
     assert np.array_equal(np.asarray(auto.res.de_ti), np.asarray(frozen.res.de_ti))
 
 
-@pytest.mark.parametrize('fourier_type', STRATEGIES, ids=IDS)
-def test_jit_and_grad_through_the_public_api(fourier_type):
+@pytest.mark.parametrize('strategy', STRATEGIES, ids=IDS)
+def test_jit_and_grad_through_the_public_api(strategy):
     """jax.jit and jax.grad over rcwa/conv_solve, for every Fourier strategy."""
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
 
-    solver = fieldwave.rcwa(backend=1, ucell=UCELL, fourier_type=fourier_type, **KW)
+    solver = fieldwave.rcwa(backend=1, ucell=UCELL, **strategy, **KW)
     geometry = solver.freeze_geometry()
 
     def loss(u):
@@ -58,15 +63,19 @@ def test_jit_and_grad_through_the_public_api(fourier_type):
     assert abs(float(np.sum(g * d)) - fd) < 1e-5, (float(np.sum(g * d)), fd)
 
 
-def _jit_loss(fourier_type):
+def _jit_loss(**strategy):
     import jax.numpy as jnp
-    solver = fieldwave.rcwa(backend=1, ucell=UCELL, fourier_type=fourier_type, **KW)
+    solver = fieldwave.rcwa(backend=1, ucell=UCELL, **strategy, **KW)
     return lambda u: jnp.sum(solver.conv_solve(ucell=u).res.de_ti).real
 
 
-@pytest.mark.parametrize('fourier_type', [FourierType.CONTINUOUS, FourierType.NVF],
-                         ids=['cfs', 'nvf'])
-def test_auto_detection_still_blocks_jit(fourier_type):
+# The default pairing is left out on purpose: it decides nothing, so it traces unfrozen.
+NEEDS_FREEZE = [s for s in STRATEGIES if s != DEFAULT_STRATEGY]
+NEEDS_FREEZE_IDS = [i for i, s in zip(IDS, STRATEGIES) if s != DEFAULT_STRATEGY]
+
+
+@pytest.mark.parametrize('strategy', NEEDS_FREEZE, ids=NEEDS_FREEZE_IDS)
+def test_auto_detection_still_blocks_jit(strategy):
     """Pins *why* the API exists: for these strategies, tracing fails without it.
 
     Auto-detection is the eager path; the normal field and the CFS block compression both
@@ -76,11 +85,11 @@ def test_auto_detection_still_blocks_jit(fourier_type):
     import jax.numpy as jnp
 
     with pytest.raises(Exception):
-        jax.jit(_jit_loss(fourier_type))(jnp.asarray(UCELL))
+        jax.jit(_jit_loss(**strategy))(jnp.asarray(UCELL))
 
 
-def test_dfs_needs_no_frozen_geometry_at_all():
-    """DFS decides nothing, so it jits straight off the public API.
+def test_the_default_pairing_needs_no_frozen_geometry_at_all():
+    """('sampled', 'li') decides nothing, so it jits straight off the public API.
 
     It used to raise here. The one discrete decision on this path was the same-material
     short-circuit, and removing that left nothing between ``conv_solve`` and a trace --
@@ -89,9 +98,9 @@ def test_dfs_needs_no_frozen_geometry_at_all():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
 
-    got = float(jax.jit(_jit_loss(FourierType.DFS))(jnp.asarray(UCELL)))
+    got = float(jax.jit(_jit_loss(**DEFAULT_STRATEGY))(jnp.asarray(UCELL)))
     want = float(np.sum(np.asarray(
-        fieldwave.rcwa(backend=0, ucell=UCELL, fourier_type=FourierType.DFS,
+        fieldwave.rcwa(backend=0, ucell=UCELL, **DEFAULT_STRATEGY,
                        **KW).conv_solve().res.de_ti).real))
     assert got == pytest.approx(want, abs=1e-10)
 
@@ -99,19 +108,22 @@ def test_dfs_needs_no_frozen_geometry_at_all():
 def test_freeze_geometry_reports_what_the_strategy_needs():
     """Only the fields the active strategy consumes are populated.
 
-    DFS populates nothing: it has no discrete decision left to take. (It had one -- the
-    same-material short-circuit -- until that turned out to be a workaround for a singularity
-    the convention merge had already removed.)
+    The default pairing populates nothing: it has no discrete decision left to take. (It had
+    one -- the same-material short-circuit -- until that turned out to be a workaround for a
+    singularity the convention merge had already removed.)
     """
-    def geo(fourier_type):
-        return fieldwave.rcwa(backend=0, ucell=UCELL, fourier_type=fourier_type,
-                               **KW).freeze_geometry()
+    def geo(**strategy):
+        return fieldwave.rcwa(backend=0, ucell=UCELL, **strategy, **KW).freeze_geometry()
 
-    dfs = geo(FourierType.DFS)
-    assert dfs.normal_field is None and dfs.compression is None
+    default = geo()
+    assert default.normal_field is None and default.compression is None
 
-    assert geo(FourierType.NVF).normal_field is not None
-    assert geo(FourierType.CONTINUOUS).compression is not None
+    # Each axis pulls in its own decision, and they compose.
+    assert geo(factorization='nvf').normal_field is not None
+    assert geo(fourier_coefficients='integrated').compression is not None
+
+    both = geo(fourier_coefficients='integrated', factorization='nvf')
+    assert both.normal_field is not None and both.compression is not None
 
 
 @pytest.mark.parametrize('name,make,start', [

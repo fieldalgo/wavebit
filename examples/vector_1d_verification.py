@@ -15,13 +15,14 @@ def run_vector(rcwa_options, backend):
     return res.de_ri, res.de_ti
 
 
-def run_raster(rcwa_options, backend, fourier_type):
+def run_raster(rcwa_options, backend, fourier_coefficients):
 
     # ucell_raster = ucell_raster.numpy()
 
     rcwa_options['backend'] = backend
-    rcwa_options['fourier_type'] = fourier_type
-    # 0: Discrete Fourier series; 1 is for Continuous FS which is used in vector modeling.
+    rcwa_options['fourier_coefficients'] = fourier_coefficients
+    # 'sampled': discrete Fourier series; 'integrated' is the closed-form series that
+    # vector modeling uses.
 
     if backend == 0:
         ucell_raster_1 = np.asarray(ucell_raster)
@@ -160,12 +161,12 @@ if __name__ == '__main__':
     print(f'Norm of difference JAX and Torch; R: {np.linalg.norm(de_ri_v_1-de_ri_v_2)}, T: {np.linalg.norm(de_ti_v_1-de_ti_v_2)}')
     print(f'Norm of difference Torch and NumPy; R: {np.linalg.norm(de_ri_v_1-de_ri_v_2)}, T: {np.linalg.norm(de_ti_v_1-de_ti_v_2)}')
 
-    de_ri_r_0_dfs, de_ti_r_0_dfs = run_raster(rcwa_options, 0, 0)  # NumPy
-    de_ri_r_0_cfs, de_ti_r_0_cfs = run_raster(rcwa_options, 0, 1)  # NumPy
-    de_ri_r_1_dfs, de_ti_r_1_dfs = run_raster(rcwa_options, 1, 0)  # JAX
-    de_ri_r_1_cfs, de_ti_r_1_cfs = run_raster(rcwa_options, 1, 1)  # JAX
-    de_ri_r_2_dfs, de_ti_r_2_dfs = run_raster(rcwa_options, 2, 0)  # PyTorch
-    de_ri_r_2_cfs, de_ti_r_2_cfs = run_raster(rcwa_options, 2, 1)  # PyTorch
+    de_ri_r_0_dfs, de_ti_r_0_dfs = run_raster(rcwa_options, 0, 'sampled')  # NumPy
+    de_ri_r_0_cfs, de_ti_r_0_cfs = run_raster(rcwa_options, 0, 'integrated')  # NumPy
+    de_ri_r_1_dfs, de_ti_r_1_dfs = run_raster(rcwa_options, 1, 'sampled')  # JAX
+    de_ri_r_1_cfs, de_ti_r_1_cfs = run_raster(rcwa_options, 1, 'integrated')  # JAX
+    de_ri_r_2_dfs, de_ti_r_2_dfs = run_raster(rcwa_options, 2, 'sampled')  # PyTorch
+    de_ri_r_2_cfs, de_ti_r_2_cfs = run_raster(rcwa_options, 2, 'integrated')  # PyTorch
 
     de_ri_r_1_dfs, de_ti_r_1_dfs = np.array(de_ri_r_1_dfs), np.array(de_ti_r_1_dfs)
     de_ri_r_1_cfs, de_ti_r_1_cfs = np.array(de_ri_r_1_cfs), np.array(de_ti_r_1_cfs)

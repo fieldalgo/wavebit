@@ -9,8 +9,12 @@ without touching the public API.
 Because the core is backend-agnostic, one mixin serves NumPy, JAX and PyTorch alike; the
 per-backend ``transfer_method`` chains it replaces existed in triplicate.
 """
+import warnings
+
 from . import analytic as _analytic
 from . import factorization as _fac
+from .enums import (Factorization, FourierCoefficients, coefficients_of, factorization_of,
+                    resolve_fourier_options, to_fourier_type)
 from .geometry import StaticGeometry
 from .scattering import smm_1d as _smm_1d, smm_1d_conical as _smm_1d_conical, smm_2d as _smm_2d
 from .solve_1d import solve_1d as _solve_1d, solve_1d_conical as _solve_1d_conical
@@ -74,11 +78,11 @@ class CoreFactorizationMixin:
     """Provides ``conv_solve`` — factorization through the core, then the core solve.
 
     Dispatches the same way the per-backend ``conv_solve`` implementations did (modeling type,
-    then Fourier type) but builds every convolution matrix with
+    then the Fourier options) but builds every convolution matrix with
     :mod:`fieldwave._core.factorization`. Two consequences beyond de-duplication:
 
-    * NVF (``fourier_type=2``) now works on every backend — the per-backend builders had it
-      only in NumPy, so JAX and PyTorch used to raise here.
+    * NVF works on every backend — the per-backend builders had it only in NumPy, so JAX and
+      PyTorch used to raise here.
     * The eager geometry steps (NVF normal field, CFS block compression) are computed inside
       the builders, which needs concrete values. For JAX-traced use, call the core builders
       directly with a precomputed ``normal_field`` / ``compression``.
@@ -86,7 +90,59 @@ class CoreFactorizationMixin:
     The analytic shape path (``modeling_type == 2``) is built from parametric shapes rather
     than an array, so there is no input array to read the namespace from — it comes from the
     backend code instead.
+
+    Also owns the two Fourier option attributes and the deprecated ``fourier_type`` alias, so
+    the three backend constructors resolve them identically.
     """
+
+    _fourier_coefficients = FourierCoefficients.SAMPLED
+    _factorization = Factorization.LI
+
+    def _set_fourier_options(self, fourier_coefficients, factorization, fourier_type):
+        """Settle ``fourier_coefficients`` / ``factorization`` from a constructor's arguments."""
+        self._fourier_coefficients, self._factorization = resolve_fourier_options(
+            fourier_coefficients, factorization, fourier_type)
+
+    @property
+    def fourier_coefficients(self):
+        """How each layer's Fourier coefficients are obtained: ``'sampled'`` | ``'integrated'``."""
+        return self._fourier_coefficients
+
+    @fourier_coefficients.setter
+    def fourier_coefficients(self, value):
+        self._fourier_coefficients = coefficients_of(value)
+
+    @property
+    def factorization(self):
+        """Which rule closes the discontinuous products: ``'li'`` | ``'nvf'``."""
+        return self._factorization
+
+    @factorization.setter
+    def factorization(self, value):
+        self._factorization = factorization_of(value)
+
+    @property
+    def fourier_type(self):
+        """Deprecated alias for the ``(fourier_coefficients, factorization)`` pair.
+
+        Reading it raises for ``('integrated', 'nvf')``: that combination is new and has no
+        legacy integer, which is the whole reason the keyword was split.
+        """
+        warnings.warn(
+            "'fourier_type' is deprecated and will be removed; read 'fourier_coefficients' "
+            "and 'factorization' instead.", DeprecationWarning, stacklevel=2)
+        code = to_fourier_type(self._fourier_coefficients, self._factorization)
+        if code is None:
+            raise ValueError(
+                f"fourier_coefficients={self._fourier_coefficients.value!r} with "
+                f"factorization={self._factorization.value!r} has no 'fourier_type' code; "
+                f"read those two attributes instead.")
+        return code
+
+    @fourier_type.setter
+    def fourier_type(self, value):
+        self._fourier_coefficients, self._factorization = resolve_fourier_options(
+            fourier_type=value)
 
     def freeze_geometry(self, **kwargs):
         """Take this structure's discrete geometry decisions once, eagerly.
@@ -99,12 +155,15 @@ class CoreFactorizationMixin:
         [setattr(self, k, v) for k, v in kwargs.items()]
         fto_x, fto_y = self.fto[0], self.fto[1]
 
+        # The two axes decide independently what has to be frozen: NVF needs the normal
+        # field, the integrated series needs the block compression, and ('integrated', 'nvf')
+        # -- the combination the old integer could not spell -- needs both.
         normal_field = compression = None
         if self._modeling_type_assigned == 0:
-            if self.fourier_type in (2, 'nvf', 'NVF'):
+            if self._factorization == Factorization.NVF:
                 normal_field = _fac.normal_field_for_ucell(
                     self.ucell, fto_x, fto_y, enhanced_dfs=self.enhanced_dfs)
-            elif self.fourier_type == 1:
+            if self._fourier_coefficients == FourierCoefficients.INTEGRATED:
                 compression = [_fac.compression_indices(self.ucell[i])
                                for i in range(self.ucell.shape[0])]
 
@@ -136,21 +195,35 @@ class CoreFactorizationMixin:
         epxy_conv_all = epyx_conv_all = None
 
         if self._modeling_type_assigned == 0:                      # raster
-            if self.fourier_type == 0:
-                epx_conv_all, epy_conv_all, epz_conv_i_all = _fac.to_conv_mat_raster_discrete(
-                    self.ucell, fto_x, fto_y, enhanced_dfs=self.enhanced_dfs)
-            elif self.fourier_type == 1:
-                epx_conv_all, epy_conv_all, epz_conv_i_all = _fac.to_conv_mat_raster_continuous(
-                    self.ucell, fto_x, fto_y,
-                    compression=None if geometry is None else geometry.compression)
-            elif self.fourier_type in (2, 'nvf', 'NVF'):
-                (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all,
-                 epz_conv_i_all) = _fac.to_conv_mat_raster_nvf(
-                    self.ucell, fto_x, fto_y,
-                    enhanced_dfs=self.enhanced_dfs,
-                    normal_field=None if geometry is None else geometry.normal_field)
+            # The two axes are dispatched independently. Splitting on the factorization
+            # first is not arbitrary: Li's rules return three matrices and NVF returns five
+            # (it couples x and y, so epxy / epyx stop being zero).
+            sampled = self._fourier_coefficients == FourierCoefficients.SAMPLED
+            normal_field = None if geometry is None else geometry.normal_field
+            compression = None if geometry is None else geometry.compression
+
+            if self._factorization == Factorization.LI:
+                if sampled:
+                    epx_conv_all, epy_conv_all, epz_conv_i_all = \
+                        _fac.to_conv_mat_raster_discrete(
+                            self.ucell, fto_x, fto_y, enhanced_dfs=self.enhanced_dfs)
+                else:
+                    epx_conv_all, epy_conv_all, epz_conv_i_all = \
+                        _fac.to_conv_mat_raster_continuous(
+                            self.ucell, fto_x, fto_y, compression=compression)
             else:
-                raise ValueError("Check 'modeling_type' and 'fourier_type' in 'conv_solve'.")
+                if sampled:
+                    (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all,
+                     epz_conv_i_all) = _fac.to_conv_mat_raster_nvf(
+                        self.ucell, fto_x, fto_y,
+                        enhanced_dfs=self.enhanced_dfs,
+                        normal_field=normal_field)
+                else:
+                    (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all,
+                     epz_conv_i_all) = _fac.to_conv_mat_raster_continuous_nvf(
+                        self.ucell, fto_x, fto_y,
+                        enhanced_dfs=self.enhanced_dfs,
+                        normal_field=normal_field, compression=compression)
 
         elif self._modeling_type_assigned == 1:                    # vector
             ucell_vector = self.modeling_vector_instruction(
@@ -168,7 +241,7 @@ class CoreFactorizationMixin:
                 type_complex=xp.complex128, xp=xp)
 
         else:
-            raise ValueError("Check 'modeling_type' and 'fourier_type' in 'conv_solve'.")
+            raise ValueError("Check 'modeling_type' in 'conv_solve'.")
 
         return epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all
 

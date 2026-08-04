@@ -173,8 +173,9 @@ keep passing.
 - The normal projectors still depend on `analytic_normal_grid` sampling (default 256) — the
   coefficients themselves are analytic, but the projectors retain grid error. Increase the
   grid if needed.
-- `fourier_type` is ignored on the analytic path (always the NVF 5-matrix form). For a
-  non-NVF pure-Laurent comparison, call `fourier_analytic.to_conv_mat_analytic` directly.
+- `fourier_coefficients` and `factorization` are both ignored on the analytic path: it is
+  always the closed-form shape Fourier transform in the NVF 5-matrix form. For a non-NVF
+  pure-Laurent comparison, call `fourier_analytic.to_conv_mat_analytic` directly.
 
 ### References
 - L. Li, JOSA A 13, 1870 (1996). — Fourier factorization / inverse rule.

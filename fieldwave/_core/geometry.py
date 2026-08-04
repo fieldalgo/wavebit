@@ -23,8 +23,8 @@ That is what :class:`StaticGeometry` carries. Freeze it once from a concrete str
     grad = jax.grad(lambda u: jnp.sum(solver.conv_solve(ucell=u, geometry=geometry).res.de_ti))
 
 Without it, ``conv_solve`` still auto-detects — the eager path that reproduces the legacy
-result exactly — but nothing survives ``jax.jit``, and ``fourier_type=DFS`` is the only
-strategy with nothing to detect in the first place.
+result exactly — but nothing survives ``jax.jit``, and ``fourier_coefficients='sampled'``
+with ``factorization='li'`` is the only pairing with nothing to detect in the first place.
 """
 from dataclasses import dataclass
 from typing import Any, Optional

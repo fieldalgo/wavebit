@@ -165,8 +165,8 @@ def test_axis_aligned_matches_raster_nvf():
 
     for psi in (np.pi / 2, 0.0):                       # TE, then TM
         want = total(analytic, psi)
-        assert abs(total(ras, psi, fourier_type=2) - want) < 1e-3      # raster NVF
-        assert abs(total(ras, psi, fourier_type=0) - want) < 2e-3      # raster DFS
+        assert abs(total(ras, psi, factorization='nvf') - want) < 1e-3  # raster NVF
+        assert abs(total(ras, psi) - want) < 2e-3                       # raster DFS
 
 
 @pytest.mark.parametrize('psi', [np.pi / 2, 0.0], ids=['te', 'tm'])
@@ -224,7 +224,7 @@ def test_analytic_shape_parameters_are_absolute_lengths():
         res = fieldwave.rcwa(backend=0, ucell=ucell, **cfg, **kw).conv_solve()
         return float(np.sum(np.asarray(res.de_ri)))
 
-    reference = total(ras, fourier_type=2)
+    reference = total(ras, factorization='nvf')
     assert abs(total(shaped(L * P, 0.5 * P)) - reference) < 1e-3        # absolute: agrees
     assert abs(total(shaped(L, 0.5)) - reference) > 1e-2               # fractions: does not
 
