@@ -5,6 +5,15 @@ circles, ellipses — and its permittivity is Fourier-transformed *analytically*
 sampled onto a raster. That removes staircase error entirely, so the same accuracy needs far
 fewer harmonics on curved or tilted boundaries.
 
+A layer is ``dict(n_base=..., shapes=[...])`` and a shape is
+``dict(type='rectangle'|'circle'|'ellipse', cx=, cy=, lx=, ly=, angle=, n_index=)``.
+
+**Shape parameters are absolute lengths, in whatever unit ``period`` is given in** -- not
+fractions of the period. A rod filling half a 0.77-long period is ``lx=0.385``, centred at
+``cx=0.385``; the defaults say the same thing (``cx`` defaults to ``period_x / 2``). Passing
+fractions builds a rod ``1/period`` times too large and says nothing about it, so
+``test_analytic_shape_parameters_are_absolute_lengths`` pins the distinction.
+
 Everything here is differentiable with respect to the shape parameters (``cx``, ``cy``, ``lx``,
 ``ly``, ``angle``, ``n_index``) — those are what an inverse-design user actually optimizes. The
 one primitive that made this hard, Bessel ``J1``, lives in :mod:`fieldwave._core.backend`: SciPy
@@ -221,8 +230,10 @@ def to_conv_mat_analytic_layers(layer_shapes, fto_x, fto_y, period,
                                 normal_grid=256, type_complex=None, use_pinv=False, xp=None):
     """Stack the analytic-NVF convolution matrices over layers.
 
-    ``layer_shapes`` is one ``dict(n_base=..., shapes=[...])`` per layer. Returns
-    ``(epx, epy, epxy, epyx, epz_i)``, each ``(n_layers, ff_xy, ff_xy)``.
+    ``layer_shapes`` is one ``dict(n_base=..., shapes=[...])`` per layer, with the shapes'
+    ``cx`` / ``cy`` / ``lx`` / ``ly`` as absolute lengths in the units of ``period`` (see the
+    module docstring). Returns ``(epx, epy, epxy, epyx, epz_i)``, each
+    ``(n_layers, ff_xy, ff_xy)``.
 
     The array namespace is taken from the first differentiable shape parameter found, so
     passing JAX or PyTorch scalars for e.g. ``lx`` makes the whole build run — and

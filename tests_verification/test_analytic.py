@@ -97,26 +97,64 @@ def test_shape_ft_matches_fine_dft(shape):
 # 3. axis-aligned analytic == raster-NVF (same validated machinery)
 # ----------------------------------------------------------------------
 def test_axis_aligned_matches_raster_nvf():
-    cfg = dict(n_top=1.0, n_bot=1.45, theta=0.0, phi=None,
-               period=(1.0, 1.0), wavelength=1.5, thickness=(0.5,), pol=0.0)
-    NR = 3.5
-    N = 150
-    x = (np.arange(N) + 0.5) / N - 0.5
-    X, Y = np.meshgrid(x, x)
-    ras = np.full((N, N), 1.0)
-    ras[(np.abs(X) <= 0.3) & (np.abs(Y) <= 0.3)] = NR
-    ras = ras[None]
-    analytic = [dict(n_base=1.0, shapes=[dict(type='rectangle', cx=0.5, cy=0.5,
-                                              lx=0.6, ly=0.6, angle=0.0, n_index=NR)])]
+    """The analytic rectangle and the same rectangle rastered give the same physics.
 
-    def t0(res):
-        d = np.array(res.de_ti).real
-        return d[d.shape[0] // 2, d.shape[0] // 2]
+    Two things this pins that the earlier version did not. The period is not 1, so the shape
+    parameters have to be *absolute* — they are lengths in the same units as ``period``, not
+    fractions of it — and passing fractions here would solve a different, larger rod and fail.
+    And it checks TM at oblique incidence over the summed orders, not TE at normal incidence on
+    the zeroth order; the normal component of E dominates TM, so that is where a wrong normal
+    field or a wrong shape would show first.
 
-    for fto in (4, 6, 8):
-        a = t0(fieldwave.rcwa(backend=0, ucell=analytic, fto=(fto, fto), **cfg).conv_solve())
-        n = t0(fieldwave.rcwa(backend=0, ucell=ras, fto=(fto, fto), fourier_type=2, **cfg).conv_solve())
-        assert abs(a - n) < 5e-3  # residual is only the finite-N raster boundary placement
+    The rod edges land exactly on pixel boundaries (``L * N / 2`` integral), so the raster is
+    not an approximation of the rectangle -- it is the rectangle. What is left is the
+    factorization difference alone, and it does not move with N.
+    """
+    P, NR, L, N = 0.77, 3.5, 0.5, 128
+    cfg = dict(n_top=1.0, n_bot=1.5, theta=0.35, phi=0.4, period=(P, P),
+               wavelength=0.777, thickness=(0.25,), fto=(8, 8))
+
+    xx, yy = ((np.mgrid[0:N, 0:N] + 0.5) / N)[::-1]
+    ras = np.where((np.abs(xx - 0.5) < L / 2) & (np.abs(yy - 0.5) < L / 2), NR, 1.0)[None]
+    analytic = [dict(n_base=1.0, shapes=[dict(type='rectangle', cx=0.5 * P, cy=0.5 * P,
+                                              lx=L * P, ly=L * P, angle=0.0, n_index=NR)])]
+
+    def total(ucell, psi, **kw):
+        res = fieldwave.rcwa(backend=0, ucell=ucell, psi=psi, **cfg, **kw).conv_solve()
+        return float(np.sum(np.asarray(res.de_ri)))
+
+    for psi in (np.pi / 2, 0.0):                       # TE, then TM
+        want = total(analytic, psi)
+        assert abs(total(ras, psi, fourier_type=2) - want) < 1e-3      # raster NVF
+        assert abs(total(ras, psi, fourier_type=0) - want) < 2e-3      # raster DFS
+
+
+def test_analytic_shape_parameters_are_absolute_lengths():
+    """``cx`` / ``lx`` are lengths, not fractions of the period.
+
+    Nothing else says so: the defaults (``Px / 2``) are the only statement in the code, and
+    every other test here uses ``period = 1`` where the two readings coincide. Reading them as
+    fractions builds a rod ``1/period`` times too big, which stays silent -- it just solves a
+    different structure.
+    """
+    P, NR, L, N = 0.77, 3.5, 0.5, 128
+    cfg = dict(n_top=1.0, n_bot=1.5, theta=0.35, phi=0.0, period=(P, P),
+               wavelength=0.777, thickness=(0.25,), fto=(6, 6), psi=0.0)
+
+    xx, yy = ((np.mgrid[0:N, 0:N] + 0.5) / N)[::-1]
+    ras = np.where((np.abs(xx - 0.5) < L / 2) & (np.abs(yy - 0.5) < L / 2), NR, 1.0)[None]
+
+    def shaped(lx, cx):
+        return [dict(n_base=1.0, shapes=[dict(type='rectangle', cx=cx, cy=cx, lx=lx, ly=lx,
+                                              angle=0.0, n_index=NR)])]
+
+    def total(ucell, **kw):
+        res = fieldwave.rcwa(backend=0, ucell=ucell, **cfg, **kw).conv_solve()
+        return float(np.sum(np.asarray(res.de_ri)))
+
+    reference = total(ras, fourier_type=2)
+    assert abs(total(shaped(L * P, 0.5 * P)) - reference) < 1e-3        # absolute: agrees
+    assert abs(total(shaped(L, 0.5)) - reference) > 1e-2               # fractions: does not
 
 
 # ----------------------------------------------------------------------

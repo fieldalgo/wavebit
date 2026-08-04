@@ -141,7 +141,10 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
                 raise ValueError
 
         elif type(ucell) is list:
-            if len(ucell) > 0 and isinstance(ucell[0], dict):  # Analytic (list of layer dicts)
+            # Analytic: one dict(n_base=..., shapes=[...]) per layer. Shape
+            # coordinates are absolute lengths in the units of `period`, not
+            # fractions of it -- see fieldwave._core.analytic.
+            if len(ucell) > 0 and isinstance(ucell[0], dict):
                 self._modeling_type_assigned = 2
                 self._ucell = ucell
             else:  # Vector
