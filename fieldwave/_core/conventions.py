@@ -24,7 +24,39 @@ def outgoing_sqrt(xp, arg):
     return xp.where(xp.real(kz) < 0, -kz, kz)
 
 
-def substrate_eps(xp, n_bot, dtype):
+def internal_index(xp, n):
+    """A refractive index in the convention the solve runs in.
+
+    A Python (or NumPy) scalar stays a scalar. That matters twice over: it keeps a real index
+    bit-for-bit what it was, arrays being enough to reassociate a product and move the last
+    digit; and it stays weakly typed, where ``asarray`` of a Python ``complex`` would become
+    ``complex64`` under PyTorch and lose ~8 digits that promotion cannot bring back.
+    """
+    if isinstance(n, (int, float)):      # real: conjugation is the identity
+        return n
+    if isinstance(n, complex):
+        return n.conjugate()
+    return xp.conj(n)
+
+
+def boundary_kz(xp, n, kx, ky=None):
+    """Half-space ``kz`` in the internal convention, for the given retained orders.
+
+    Computes the physical root and conjugates it, which is only the same thing as conjugating
+    the *expression* when the in-plane wavevector is real. It is not once ``n_top`` is complex:
+    ``kx`` arrives already conjugated, so pairing it with a raw ``n**2`` mixes the two
+    conventions and the reflected amplitude comes out wrong at oblique incidence.
+
+    Written as the original expression with the two conjugations inserted rather than as a
+    tidier ``n**2 - k_par_sq``: summing the in-plane terms first reassociates the subtraction
+    and moves the last digit, which the bit-exact legacy parity tests do notice.
+    """
+    if ky is None:
+        return xp.conj((n ** 2 - xp.conj(kx) ** 2) ** 0.5)
+    return xp.conj((n ** 2 - xp.conj(kx) ** 2 - xp.conj(ky) ** 2) ** 0.5)
+
+
+def substrate_eps(xp, n_bot):
     """Substrate permittivity in the convention the rest of the solve runs in.
 
     The internal convention is the conjugated one: ``get_kx_ky_vector`` conjugates ``kx``, and
@@ -38,12 +70,8 @@ def substrate_eps(xp, n_bot, dtype):
 
     The same-material detection already conjugates for this reason; this is that rule applied
     to the boundary too.
-
-    ``dtype`` is the solve's complex working dtype, and passing it is not optional: PyTorch
-    reads a bare Python ``complex`` as ``complex64``, and the resulting ~1e-8 error survives
-    the later promotion to ``complex128``.
     """
-    return xp.conj(xp.asarray(n_bot, dtype=dtype)) ** 2
+    return internal_index(xp, n_bot) ** 2
 
 
 def safe_sqrt(xp, z, eps=1e-30):

@@ -37,7 +37,7 @@ propagators that the TMM recursion produces as a by-product; the SMM path return
 ``layer_info_list = []`` and :mod:`fieldwave._core.fields` raises a clear error on it.
 """
 from .backend import array_namespace
-from .conventions import outgoing_sqrt, substrate_eps
+from .conventions import boundary_kz, internal_index, outgoing_sqrt, substrate_eps
 from .solve_1d import (_block, _diag, _pack, _unit, layer_modes_1d, layer_modes_1d_conical,
                        sp_efficiencies, sp_modes_1d_conical)
 from .solve_2d import layer_modes_2d, sp_modes_2d
@@ -147,9 +147,10 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     # Boundary branches, taken from the TMM path so both algorithms answer identically:
     # conjugated principal root for the efficiency factors and the superstrate boundary,
     # the outgoing (Re >= 0) root for the substrate boundary.
-    kz_top = xp.conj((n_top ** 2 - kx ** 2) ** 0.5)
-    kz_bot = xp.conj((n_bot ** 2 - kx ** 2) ** 0.5)
-    eps_bot = substrate_eps(xp, n_bot, C)   # conjugated convention: see conventions
+    kz_top = boundary_kz(xp, n_top, kx)
+    kz_bot = boundary_kz(xp, n_bot, kx)
+    eps_bot = substrate_eps(xp, n_bot)   # conjugated convention: see conventions
+    n_top_i = internal_index(xp, n_top)
     kz_sub = outgoing_sqrt(xp, eps_bot - kx ** 2 - 1e-20j)
 
     # Gap medium: eps chosen per order so kz_gap == 1, which keeps V_gap trivially invertible.
@@ -160,7 +161,7 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
         V_bot = 1j * _diag(xp, kz_sub)
         V_gap = 1j * I
     elif pol == 1:    # TM — primary variable H_y, partner scaled by eps
-        V_top = 1j * _diag(xp, kz_top / n_top ** 2)
+        V_top = 1j * _diag(xp, kz_top / n_top_i ** 2)
         V_bot = 1j * _diag(xp, kz_sub / eps_bot)
         V_gap = 1j * _diag(xp, 1 / eps_gap)
     else:
@@ -222,9 +223,10 @@ def _smm_sp(xp, C, inv, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     big_I = xp.astype(xp.eye(2 * ff_xy), C)
     ky_col = xp.reshape(ky, (-1, 1))
 
-    kz_top = xp.reshape(xp.conj((n_top ** 2 - kx ** 2 - ky_col ** 2) ** 0.5), (-1,))
-    kz_bot = xp.reshape(xp.conj((n_bot ** 2 - kx ** 2 - ky_col ** 2) ** 0.5), (-1,))
-    eps_bot = substrate_eps(xp, n_bot, C)   # conjugated convention: see conventions
+    kz_top = xp.reshape(boundary_kz(xp, n_top, kx, ky_col), (-1,))
+    kz_bot = xp.reshape(boundary_kz(xp, n_bot, kx, ky_col), (-1,))
+    eps_bot = substrate_eps(xp, n_bot)   # conjugated convention: see conventions
+    n_top_i = internal_index(xp, n_top)
     kz_sub = outgoing_sqrt(xp, xp.reshape(eps_bot - kx ** 2 - ky_col ** 2 - 1e-20j, (-1,)))
     eps_gap = xp.reshape(1 + kx ** 2 + ky_col ** 2, (-1,))    # kz_gap == 1 by construction
 
@@ -233,7 +235,7 @@ def _smm_sp(xp, C, inv, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
 
     # Half-space and gap modes in the (E_s, F_p) / (H_s, H_p) boundary basis — the same form
     # the TMM substrate seed (big_F, big_G) has.
-    W_top = _block(xp, [[I, O], [O, 1j * Kz_top / n_top ** 2]])
+    W_top = _block(xp, [[I, O], [O, 1j * Kz_top / n_top_i ** 2]])
     V_top = _block(xp, [[1j * Kz_top, O], [O, I]])
     W_bot = _block(xp, [[I, O], [O, 1j * Kz_sub / eps_bot]])
     V_bot = _block(xp, [[1j * Kz_sub, O], [O, I]])
@@ -256,7 +258,7 @@ def _smm_sp(xp, C, inv, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     def incident(psi_v):
         s_p = xp.sin(xp.asarray(psi_v, dtype=C))
         c_p = xp.cos(xp.asarray(psi_v, dtype=C))
-        return xp.concat([s_p * delta, 1j * n_top * c_p * delta], axis=0)
+        return xp.concat([s_p * delta, 1j * n_top_i * c_p * delta], axis=0)
 
     # psi as asked, then the pure-TE / pure-TM incidences (free: same scattering matrix).
     cols = [incident(psi)] + ([incident(_PI / 2), incident(0.0)] if full else [])

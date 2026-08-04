@@ -1,4 +1,4 @@
-"""Reflection off a stack on an *absorbing* substrate, against the analytic multilayer answer.
+"""Reflection off a stack in *absorbing* media, against the analytic multilayer answer.
 
 A uniform stack has a closed-form reflection coefficient, so this file needs no golden: the
 oracle is the Fresnel/Airy recursion below, and the solver is driven with uniform layers at
@@ -9,12 +9,21 @@ The reference is itself checked (``test_reference_agrees_where_the_solver_is_kno
 on lossless stacks and on lossy *layers*, where solver and analytic agree to ~1e-16 for TE and
 TM at normal and oblique incidence.
 
-What it pins: the substrate must enter the boundary in the same (conjugated) convention the
-layers do. It did not, so the stack reflected as though the substrate were ``conj(n_bot)`` —
-an absorbing medium read as a gain medium. Only the phase of the substrate reflection was
-affected, so it hid wherever interference cannot show it (a bare interface, or a vanishing
-layer) and grew with the stack above it: ~2.6% on one layer, ~12% on two. Real ``n_bot`` was
-never affected, which is why it survived every lossless test.
+What it pins: every boundary quantity must enter in the same (conjugated) convention the
+layers do. Two places did not.
+
+* The substrate permittivity was raw ``n_bot**2``, so the stack reflected as though the
+  substrate were ``conj(n_bot)`` — absorbing read as gain. Only the reflection *phase* was
+  affected, so it hid wherever interference cannot show it (a bare interface, a vanishing
+  layer) and grew with the stack above it: ~2.6% on one layer, ~12% on two.
+* ``kz_top`` paired a raw ``n_top**2`` with an already-conjugated ``kx``, and the incident-field
+  coefficients used a raw ``n_top``. With an absorbing superstrate the reflected amplitude was
+  wrong outright — by ~1% at normal incidence and by more than the amplitude itself at oblique.
+
+Real indices were never affected by either, which is why both survived every lossless test.
+
+For an absorbing superstrate the *amplitude* is the meaningful check: incident power in an
+absorbing medium is convention-dependent, so ``de_ri`` there is not compared to anything.
 """
 import importlib
 
@@ -31,9 +40,17 @@ SI = 4.0 + 0.05j          # weakly absorbing
 # ------------------------------------------------------------------ analytic reference
 
 def _kz(n, k_par):
-    """Out-of-plane wavevector on the decaying branch (``e^{-iwt}``, ``Im(n) > 0`` = loss)."""
+    """Out-of-plane wavevector of the downward wave (``e^{-iwt}``, ``Im(n) > 0`` = loss).
+
+    The branch is ``Re(kz) > 0`` — energy flowing down — falling back to ``Im(kz) > 0`` for a
+    purely evanescent order. Selecting on ``Im`` alone is wrong as soon as ``k_par`` is complex
+    (a lossy superstrate at oblique incidence): a *lossless* layer can legitimately have
+    ``Im(kz) < 0`` there, and forcing it positive returns ``|r| > 1``.
+    """
     v = np.sqrt(complex(n) ** 2 - k_par ** 2)
-    return v if v.imag >= 0 else -v
+    if abs(v.real) > 1e-12:
+        return v if v.real > 0 else -v
+    return v if v.imag > 0 else -v
 
 
 def analytic_r(ns, thicknesses, wavelength, theta, pol):
@@ -154,3 +171,59 @@ def test_complex_n_bot_keeps_full_precision_on_every_backend(backend):
                            fto=2, wavelength=WL, period=[WL * 2], ucell=ucell, thickness=ds)
     got = float(np.sum(np.asarray(solver.conv_solve().de_ri)))
     assert got == pytest.approx(want, abs=1e-12)
+
+
+# ------------------------------------------------------- amplitude oracle (absorbing media)
+# Reflectance needs an incident power, which is convention-dependent in an absorbing medium.
+# The complex amplitude is not: the solver reports conj(r) — it runs the conjugated problem —
+# so `R == conj(analytic_r)` is an exact check that works with a lossy superstrate too.
+
+WET = 1.5 + 0.02j         # weakly absorbing ambient
+
+AMPLITUDE_CASES = [
+    ('lossless', [1.0, 1.5, 2.2, 1.8], [20.0, 35.0]),
+    ('lossy_substrate', [1.0, 1.5, AU], [20.0]),
+    ('weakly_absorbing_superstrate', [WET, 1.5, 1.8], [20.0]),
+    ('strongly_absorbing_superstrate', [AU, 1.5, 1.8], [20.0]),
+    ('absorbing_on_both_sides', [WET, 1.5, AU], [20.0]),
+]
+
+
+def solver_r(ns, thicknesses, wavelength, theta, pol, path, algo='TMM'):
+    """The solver's reflection amplitude, normalized to compare against ``conj(analytic_r)``.
+
+    ``path`` picks which core solve runs: ``'1d'`` (pure TE/TM), ``'conical'`` or ``'2d'``.
+    The coupled paths report the p channel as its *magnetic* amplitude against an incident
+    ``i*n_top`` (in the internal convention), hence the division; the s channel is the electric
+    amplitude against an incident 1, so it needs none.
+    """
+    layers = ns[1:-1]
+    common = dict(backend=0, connecting_algo=algo, n_top=ns[0], n_bot=ns[-1], theta=theta,
+                  wavelength=wavelength, thickness=thicknesses)
+    if path == '1d':
+        solver = fieldwave.rcwa(pol=pol, fto=0, period=[wavelength * 2],
+                                ucell=np.array([[[n, n]] for n in layers]), **common)
+    else:
+        cell = ([[[n, n]] for n in layers] if path == 'conical'
+                else [[[n, n], [n, n]] for n in layers])
+        solver = fieldwave.rcwa(phi=0.0, psi=(np.pi / 2 if pol == 0 else 0.0), fto=[0, 0],
+                                period=[wavelength * 2, wavelength * 2],
+                                ucell=np.array(cell), **common)
+    res = solver.conv_solve().res
+    amp = np.asarray(res.R_s if pol == 0 else res.R_p).ravel()
+    value = complex(amp[len(amp) // 2])
+    if path == '1d' or pol == 0:
+        return value
+    return value / (1j * np.conj(complex(ns[0])))
+
+
+@pytest.mark.parametrize('algo', ['TMM', 'SMM'])
+@pytest.mark.parametrize('path', ['1d', 'conical', '2d'])
+@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
+@pytest.mark.parametrize('case', AMPLITUDE_CASES, ids=[c[0] for c in AMPLITUDE_CASES])
+def test_reflection_amplitude(case, pol, theta, path, algo):
+    """Complex reflection amplitude, for absorbing media on either side or both."""
+    _, ns, ds = case
+    want = np.conj(analytic_r(ns, ds, WL, theta, pol))
+    got = solver_r(ns, ds, WL, theta, pol, path, algo)
+    assert abs(got - want) < 1e-12, (got, want)

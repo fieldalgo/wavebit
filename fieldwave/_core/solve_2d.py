@@ -12,7 +12,7 @@ enter the mode operator. ``transfer_2d_1`` and ``transfer_2d_4`` are identical t
 versions, so this module reuses ``solve_1d``'s boundary init and ``final_matching`` verbatim.
 """
 from .backend import array_namespace, eig
-from .conventions import outgoing_sqrt, substrate_eps
+from .conventions import boundary_kz, internal_index, outgoing_sqrt, substrate_eps
 from .solve_1d import _block, _diag, _same_material, final_matching, uniform_eps
 
 
@@ -105,11 +105,11 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     ky_col = xp.reshape(ky, (-1, 1))
 
     # --- stage 1: boundary init (transfer_2d_1 == transfer_1d_conical_1) ----------------
-    kz_top = xp.reshape(xp.conj((n_top ** 2 - kx ** 2 - ky_col ** 2) ** 0.5), (-1,))
-    kz_bot = xp.reshape(xp.conj((n_bot ** 2 - kx ** 2 - ky_col ** 2) ** 0.5), (-1,))
+    kz_top = xp.reshape(boundary_kz(xp, n_top, kx, ky_col), (-1,))
+    kz_bot = xp.reshape(boundary_kz(xp, n_bot, kx, ky_col), (-1,))
     varphi = xp.reshape(xp.atan(ky_col / kx), (-1,))
 
-    eps_bot = substrate_eps(xp, n_bot, C)   # conjugated convention: see conventions
+    eps_bot = substrate_eps(xp, n_bot)   # conjugated convention: see conventions
     kz_sub = outgoing_sqrt(xp, xp.reshape(eps_bot - kx ** 2 - ky_col ** 2 - 1e-20j, (-1,)))
     Kz_bot = _diag(xp, kz_sub)
 
