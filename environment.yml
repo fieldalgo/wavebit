@@ -22,6 +22,12 @@ dependencies:
       # dependencies (numpy, scipy, array-api-compat) at the floors declared in
       # setup.py, so they are deliberately not repeated here.
       - -e .[jax,pytorch]
+      # Bridge to Octave, for the Reticolo comparison in benchmarks/. It is the only
+      # oracle here that validates diffraction orders -- the analytic multilayer
+      # reference covers uniform layers only -- so it earns a place in the dev
+      # environment. Needs Octave itself on PATH (brew install octave), and the
+      # Reticolo sources, which are not redistributable and live outside this repo.
+      - oct2py>=6.0
 #
 # Not declared here: upstream `meent` (pip install meent), installed by hand when
 # cross-checking numpy results against the Reticolo-validated reference. No module
