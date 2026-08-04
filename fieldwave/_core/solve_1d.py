@@ -21,7 +21,7 @@ Stages (matching the legacy chain, kept as one function each to make bit-parity 
   3. final matching      — incident field -> R, T -> diffraction efficiency
 """
 from .backend import array_namespace, eig
-from .conventions import outgoing_sqrt
+from .conventions import outgoing_sqrt, substrate_eps
 
 
 def _diag(xp, v):
@@ -193,7 +193,7 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     kz_bot = xp.conj((n_bot ** 2 - kx ** 2) ** 0.5)
 
     # Substrate admittance from the single outgoing-wave kz branch (lossless AND lossy).
-    eps_bot = n_bot ** 2
+    eps_bot = substrate_eps(xp, n_bot, C)   # conjugated convention: see conventions
     kz_sub = outgoing_sqrt(xp, eps_bot - kx ** 2 - 1e-20j)
     if pol == 0:      # TE
         G = 1j * _diag(xp, kz_sub)
@@ -324,7 +324,7 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     kz_bot = xp.reshape(xp.conj((n_bot ** 2 - kx ** 2 - ky_col ** 2) ** 0.5), (-1,))
     varphi = xp.reshape(xp.atan(ky_col / kx), (-1,))
 
-    eps_bot = n_bot ** 2
+    eps_bot = substrate_eps(xp, n_bot, C)   # conjugated convention: see conventions
     kz_sub = outgoing_sqrt(xp, xp.reshape(eps_bot - kx ** 2 - ky_col ** 2 - 1e-20j, (-1,)))
     Kz_bot = _diag(xp, kz_sub)
 

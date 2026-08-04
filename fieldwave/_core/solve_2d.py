@@ -12,7 +12,7 @@ enter the mode operator. ``transfer_2d_1`` and ``transfer_2d_4`` are identical t
 versions, so this module reuses ``solve_1d``'s boundary init and ``final_matching`` verbatim.
 """
 from .backend import array_namespace, eig
-from .conventions import outgoing_sqrt
+from .conventions import outgoing_sqrt, substrate_eps
 from .solve_1d import _block, _diag, _same_material, final_matching, uniform_eps
 
 
@@ -109,7 +109,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     kz_bot = xp.reshape(xp.conj((n_bot ** 2 - kx ** 2 - ky_col ** 2) ** 0.5), (-1,))
     varphi = xp.reshape(xp.atan(ky_col / kx), (-1,))
 
-    eps_bot = n_bot ** 2
+    eps_bot = substrate_eps(xp, n_bot, C)   # conjugated convention: see conventions
     kz_sub = outgoing_sqrt(xp, xp.reshape(eps_bot - kx ** 2 - ky_col ** 2 - 1e-20j, (-1,)))
     Kz_bot = _diag(xp, kz_sub)
 

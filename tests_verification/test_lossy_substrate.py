@@ -9,12 +9,15 @@ The reference is itself checked (``test_reference_agrees_where_the_solver_is_kno
 on lossless stacks and on lossy *layers*, where solver and analytic agree to ~1e-16 for TE and
 TM at normal and oblique incidence.
 
-What it pins: with a lossy *substrate* the solver reflects as though the substrate were
-``conj(n_bot)`` — an absorbing medium read as a gain medium. Only the phase of the substrate
-reflection is affected, so it hides wherever interference does not matter (a bare interface,
-or a vanishing layer) and grows with the number of layers above it: ~2.6% on one layer, ~12%
-on two. Layers themselves are fine; the superstrate is not exercised here.
+What it pins: the substrate must enter the boundary in the same (conjugated) convention the
+layers do. It did not, so the stack reflected as though the substrate were ``conj(n_bot)`` —
+an absorbing medium read as a gain medium. Only the phase of the substrate reflection was
+affected, so it hid wherever interference cannot show it (a bare interface, or a vanishing
+layer) and grew with the stack above it: ~2.6% on one layer, ~12% on two. Real ``n_bot`` was
+never affected, which is why it survived every lossless test.
 """
+import importlib
+
 import numpy as np
 import pytest
 
@@ -94,7 +97,6 @@ def test_reference_agrees_where_the_solver_is_known_good(case, pol, theta):
     assert solver_R(ns, ds, WL, theta, pol) == pytest.approx(want, abs=1e-12)
 
 
-@pytest.mark.xfail(strict=True, reason='substrate reflects as conj(n_bot): absorbing read as gain')
 @pytest.mark.parametrize('algo', ['TMM', 'SMM'])
 @pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
 @pytest.mark.parametrize('case', LOSSY_SUBSTRATE, ids=[c[0] for c in LOSSY_SUBSTRATE])
@@ -103,3 +105,52 @@ def test_lossy_substrate_reflection(case, pol, theta, algo):
     _, ns, ds = case
     want = abs(analytic_r(ns, ds, WL, theta, pol)) ** 2
     assert solver_R(ns, ds, WL, theta, pol, algo) == pytest.approx(want, abs=1e-12)
+
+
+@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
+def test_absorbing_layer_identical_to_its_substrate(pol, theta):
+    """An absorbing layer on a substrate of the same material must vanish into it.
+
+    The short-circuit is forced *off* so this measures the boundary rather than the shortcut:
+    the layer and the substrate have to arrive at the same modes on their own. They did not
+    while the substrate skipped the conjugated convention, and the short-circuit was hiding
+    it — the answer stayed right only because skipping the layer leaves a bare interface,
+    where the wrong phase cannot show.
+    """
+    from fieldwave._core.geometry import StaticGeometry
+    ns, ds = [1.0, AU, AU], [20.0]
+    want = abs(analytic_r(ns, ds, WL, theta, pol)) ** 2   # == the bare air/gold interface
+
+    ucell = np.array([[[AU, AU]]])
+    common = dict(backend=0, pol=pol, n_top=1.0, n_bot=AU, theta=theta, fto=0,
+                  wavelength=WL, period=[WL * 2], ucell=ucell, thickness=ds)
+    forced = fieldwave.rcwa(connecting_algo='TMM', **common).conv_solve(
+        geometry=StaticGeometry(same_material=[False]))
+    smm = fieldwave.rcwa(connecting_algo='SMM', **common).conv_solve()
+
+    assert float(np.sum(forced.de_ri)) == pytest.approx(want, abs=1e-12)
+    assert float(np.sum(smm.de_ri)) == pytest.approx(want, abs=1e-12)
+
+
+@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+def test_complex_n_bot_keeps_full_precision_on_every_backend(backend):
+    """A complex ``n_bot`` must reach the boundary at the solve's working precision.
+
+    PyTorch reads a bare Python ``complex`` as ``complex64``, and the ~1e-8 error that
+    introduces survives the later promotion to ``complex128`` — invisible against a real
+    ``n_bot``, which is exactly the case the other cross-backend tests use.
+    """
+    pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    if backend == 1:
+        # via importlib: a plain `import fieldwave.on_jax` here would rebind `fieldwave`
+        # as a local for the whole function, breaking the torch branch that skips it.
+        importlib.import_module('fieldwave.on_jax')       # enables x64
+
+    ns, ds = [1.0, 1.5, AU], [20.0]
+    want = solver_R(ns, ds, WL, 0.3, 0)                     # numpy reference
+
+    ucell = np.array([[[n, n] for n in ns[1:-1]]][0])[None]
+    solver = fieldwave.rcwa(backend=backend, pol=0, n_top=ns[0], n_bot=ns[-1], theta=0.3,
+                           fto=2, wavelength=WL, period=[WL * 2], ucell=ucell, thickness=ds)
+    got = float(np.sum(np.asarray(solver.conv_solve().de_ri)))
+    assert got == pytest.approx(want, abs=1e-12)

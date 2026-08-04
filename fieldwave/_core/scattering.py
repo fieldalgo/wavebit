@@ -37,7 +37,7 @@ propagators that the TMM recursion produces as a by-product; the SMM path return
 ``layer_info_list = []`` and :mod:`fieldwave._core.fields` raises a clear error on it.
 """
 from .backend import array_namespace
-from .conventions import outgoing_sqrt
+from .conventions import outgoing_sqrt, substrate_eps
 from .solve_1d import (_block, _diag, _pack, _unit, layer_modes_1d, layer_modes_1d_conical,
                        sp_efficiencies, sp_modes_1d_conical)
 from .solve_2d import layer_modes_2d, sp_modes_2d
@@ -149,7 +149,7 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     # the outgoing (Re >= 0) root for the substrate boundary.
     kz_top = xp.conj((n_top ** 2 - kx ** 2) ** 0.5)
     kz_bot = xp.conj((n_bot ** 2 - kx ** 2) ** 0.5)
-    eps_bot = n_bot ** 2
+    eps_bot = substrate_eps(xp, n_bot, C)   # conjugated convention: see conventions
     kz_sub = outgoing_sqrt(xp, eps_bot - kx ** 2 - 1e-20j)
 
     # Gap medium: eps chosen per order so kz_gap == 1, which keeps V_gap trivially invertible.
@@ -224,7 +224,7 @@ def _smm_sp(xp, C, inv, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
 
     kz_top = xp.reshape(xp.conj((n_top ** 2 - kx ** 2 - ky_col ** 2) ** 0.5), (-1,))
     kz_bot = xp.reshape(xp.conj((n_bot ** 2 - kx ** 2 - ky_col ** 2) ** 0.5), (-1,))
-    eps_bot = n_bot ** 2
+    eps_bot = substrate_eps(xp, n_bot, C)   # conjugated convention: see conventions
     kz_sub = outgoing_sqrt(xp, xp.reshape(eps_bot - kx ** 2 - ky_col ** 2 - 1e-20j, (-1,)))
     eps_gap = xp.reshape(1 + kx ** 2 + ky_col ** 2, (-1,))    # kz_gap == 1 by construction
 
