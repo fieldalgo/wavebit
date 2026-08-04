@@ -11,6 +11,13 @@ backends are deleted, and it covers the whole public result surface — efficien
 amplitudes, the TE/TM incidence variants, and the ``layer_info_list`` / ``T1`` state that field
 reconstruction reads.
 
+One case is no longer legacy-derived. ``2d_cfs`` exercised the CFS builder, which read the
+``ucell``'s first row as the *last* y while DFS and NVF read it as the first -- so the frozen
+values are the answer to the mirrored structure, and no transform recovers them. Those entries
+were recomputed after the axis was unified (2026-08-05), and the replacement is checked against
+Reticolo rather than against this implementation: pure TE and TM incidence on that exact
+structure agree to 7e-14. Every other case is still the legacy solver's own output.
+
 Compared to ``atol=1e-12``, not bit-for-bit. Bit-exactness was the right test while the port
 was being *proved* equal to the legacy chain; as a standing guard it fails on things that are
 not defects — reassociating a sum moves the last digit (``(a-b)-c`` and ``a-(b+c)`` differ by

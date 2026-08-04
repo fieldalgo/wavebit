@@ -386,7 +386,7 @@ def compression_indices(cell):
     """
     import numpy as np
 
-    cell = np.flipud(_to_numpy(cell))
+    cell = _to_numpy(cell)
     step_y, step_x = 1.0 / np.array(cell.shape, dtype=np.float64)
 
     cell_next = np.roll(cell, -1, axis=1)
@@ -406,7 +406,6 @@ def compression_indices(cell):
 def compress_cell(xp, cell, row_idx, col_idx):
     """Gather the compressed layer selected by :func:`compression_indices` (differentiable)."""
     dev = _device(xp, cell)
-    cell = xp.flip(cell, axis=0)
     cell = xp.take(cell, xp.asarray(col_idx, device=dev), axis=1)
     return xp.take(cell, xp.asarray(row_idx, device=dev), axis=0)
 

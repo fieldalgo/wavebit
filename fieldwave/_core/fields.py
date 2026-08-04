@@ -4,6 +4,10 @@ Fields come back in the same ``e^{-iωt}`` convention as everything else (see
 :mod:`fieldwave._core.conventions`): a wave travelling in ``+z`` carries ``exp(+i*k0*kz*z)``,
 and the in-plane kernel matches the order-index sign the convolution matrices are built with.
 
+Axes follow the array, not the picture: row ``0`` of the returned cell is ``y = 0``, the same
+row of ``ucell`` that the factorization reads as ``y = 0``. Turning that into a conventional
+image is :func:`field_plot`'s job, and it flips there.
+
 Turns a solved stack back into the field inside it. Each layer's mode amplitudes are
 propagated to a set of z-slices, then inverse-Fourier-transformed onto an (x, y) grid.
 
@@ -59,7 +63,7 @@ def _inv_fourier(xp, kx, ky, period, res_x, res_y, k0, C):
     if ky is None:
         return xp.reshape(xp.exp(1j * x_2d), (res_y, res_x, -1))
 
-    y_1d = xp.flip(xp.linspace(0, period[1], res_y, dtype=C, device=dev))
+    y_1d = xp.linspace(0, period[1], res_y, dtype=C, device=dev)
     y_2d = xp.reshape(y_1d, (res_y, 1, 1)) * ky * k0
     y_2d = xp.reshape(xp.broadcast_to(y_2d, (res_y, res_x, ky.shape[0])),
                       (res_y, res_x, ky.shape[0], 1))
@@ -228,7 +232,12 @@ def field_plot(field_cell, pol=0, plot_indices=(1, 1, 1, 1, 1, 1), y_slice=0, z_
         for idx, name in enumerate(title):
             if not plot_indices[idx]:
                 continue
-            plt.imshow(abs(field_cell[sl + (slice(None), idx)]) ** 2, cmap='jet', aspect='auto')
+            image = abs(field_cell[sl + (slice(None), idx)]) ** 2
+            if ylabel == 'Y':
+                # the cell's y runs with the array index; an image reads top-down, so the
+                # flip that used to live in the reconstruction lives here instead
+                image = image[::-1]
+            plt.imshow(image, cmap='jet', aspect='auto')
             plt.colorbar()
             plt.title(f'{name}, {view}')
             plt.xlabel('X')
