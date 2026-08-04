@@ -10,6 +10,13 @@ This is the oracle that outlives the legacy code: it keeps working after the tri
 backends are deleted, and it covers the whole public result surface — efficiencies,
 amplitudes, the TE/TM incidence variants, and the ``layer_info_list`` / ``T1`` state that field
 reconstruction reads.
+
+Compared to ``atol=1e-12``, not bit-for-bit. Bit-exactness was the right test while the port
+was being *proved* equal to the legacy chain; as a standing guard it fails on things that are
+not defects — reassociating a sum moves the last digit (``(a-b)-c`` and ``a-(b+c)`` differ by
+~1e-16), and so can a different BLAS. It also pushes back on legitimate cleanups, which is the
+opposite of what an oracle should do. Every real defect this file exists to catch is orders of
+magnitude larger: the boundary-convention bugs found in 2026-08 ran from 1% to 4900%.
 """
 import pathlib
 
@@ -17,6 +24,9 @@ import numpy as np
 import pytest
 
 import fieldwave
+
+# Tight enough that no defect hides under it, loose enough to ignore float reassociation.
+TOL = 1e-12
 
 GOLDEN = np.load(pathlib.Path(__file__).parent / 'golden_legacy.npz')
 FIELDS = ('R_s', 'R_p', 'T_s', 'T_p',
@@ -66,7 +76,7 @@ def test_results_match_legacy_golden(name):
         for f in FIELDS:
             want = GOLDEN[f'{name}__{sub}__{f}']
             got = np.asarray(getattr(got_sub, f))
-            assert np.array_equal(want, got), (
+            assert np.allclose(want, got, atol=TOL, rtol=0), (
                 sub, f, np.max(np.abs(want - got)))
             checked += 1
     assert checked >= 10
@@ -80,14 +90,15 @@ def test_field_reconstruction_state_matches_legacy_golden(name):
     want_T1 = GOLDEN[f'{name}__T1']
     got_T1 = np.asarray(solver.T1)
     assert got_T1.shape == want_T1.shape
-    assert np.array_equal(want_T1, got_T1), np.max(np.abs(want_T1 - got_T1))
+    assert np.allclose(want_T1, got_T1, atol=TOL, rtol=0), np.max(np.abs(want_T1 - got_T1))
 
     for i, layer in enumerate(solver.layer_info_list):
         for j, part in enumerate(('epz_i', 'W', 'V', 'q', 'd', 'A_i', 'B')):
             want = GOLDEN[f'{name}__layer{i}__{part}']
             got = np.asarray(layer[j])
             assert got.shape == want.shape, (i, part, want.shape, got.shape)
-            assert np.array_equal(want, got), (i, part, np.max(np.abs(want - got)))
+            assert np.allclose(want, got, atol=TOL, rtol=0), (
+                i, part, np.max(np.abs(want - got)))
 
 
 def test_calculate_field_still_runs():

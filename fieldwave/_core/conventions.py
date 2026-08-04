@@ -27,10 +27,9 @@ def outgoing_sqrt(xp, arg):
 def internal_index(xp, n):
     """A refractive index in the convention the solve runs in.
 
-    A Python (or NumPy) scalar stays a scalar. That matters twice over: it keeps a real index
-    bit-for-bit what it was, arrays being enough to reassociate a product and move the last
-    digit; and it stays weakly typed, where ``asarray`` of a Python ``complex`` would become
-    ``complex64`` under PyTorch and lose ~8 digits that promotion cannot bring back.
+    A Python (or NumPy) scalar stays a scalar, and stays weakly typed with it: ``asarray`` of a
+    Python ``complex`` becomes ``complex64`` under PyTorch, losing ~8 digits that the later
+    promotion to ``complex128`` cannot bring back.
     """
     if isinstance(n, (int, float)):      # real: conjugation is the identity
         return n
@@ -47,9 +46,8 @@ def boundary_kz(xp, n, kx, ky=None):
     ``kx`` arrives already conjugated, so pairing it with a raw ``n**2`` mixes the two
     conventions and the reflected amplitude comes out wrong at oblique incidence.
 
-    Written as the original expression with the two conjugations inserted rather than as a
-    tidier ``n**2 - k_par_sq``: summing the in-plane terms first reassociates the subtraction
-    and moves the last digit, which the bit-exact legacy parity tests do notice.
+    Written the way the physical formula reads, term by term, rather than collecting the
+    in-plane terms first.
     """
     if ky is None:
         return xp.conj((n ** 2 - xp.conj(kx) ** 2) ** 0.5)
