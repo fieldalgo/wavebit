@@ -36,7 +36,9 @@ class Reticolo:
     def run_res2(self, grating_type, period, fto, ucell, thickness, theta, phi, pol, wavelength, n_top, n_bot,
                  *args, **kwargs):
 
-        phi *= (180 / np.pi)
+        # theta and phi both stay in radians: res1 takes the azimuth that way, same as it
+        # takes k_parallel = n*sin(theta). Converting phi to degrees here solved a different
+        # problem entirely -- the 2D comparison was off by 2.7e-2 and did not converge.
 
         if grating_type in (0, 1):
             period = period[0]
@@ -59,31 +61,23 @@ class Reticolo:
             textures = [n_top, *ucell_new, n_bot]
 
         else:
-            raise ValueError
+            # 2D: every raster pixel becomes one Reticolo rectangle, so the texture is the
+            # same staircase the solver sees rather than a re-idealized shape. Rectangles are
+            # given by centre and size; the background never shows because they tile the cell.
+            Ny, Nx = ucell.shape[1], ucell.shape[2]
+            unit_x, unit_y = period[0] / Nx, period[1] / Ny
 
-            # Nx = ucell.shape[2]
-            # Ny = ucell.shape[1]
-            # period_x = period[0]
-            # period_y = period[1]
-            #
-            # unit_x = period_x / Nx
-            # unit_y = period_y / Ny
-            #
-            # grid_x = np.linspace(0, period[0], Nx + 1)[1:]
-            # grid_y = np.linspace(0, period[1], Ny + 1)[1:]
-            #
-            # grid_x -= period_x / 2
-            # grid_y -= period_y / 2
-            #
-            # ucell_new = []
-            # for z in range(ucell.shape[0]):
-            #     ucell_layer = [10]
-            #     for y, yval in enumerate(grid_y):
-            #         for x, xval in enumerate(grid_x):
-            #             obj = [xval, yval, unit_x, unit_y, ucell[z, y, x], 1]
-            #             ucell_layer.append(obj)
-            #     ucell_new.append(ucell_layer)
-            # textures = [n_top, *ucell_new, n_bot]
+            cx = ((np.arange(Nx) + 0.5) * unit_x)[None, :].repeat(Ny, 0).ravel()
+            cy = ((np.arange(Ny) + 0.5) * unit_y)[:, None].repeat(Nx, 1).ravel()
+
+            ucell_new = []
+            for z in range(ucell.shape[0]):
+                rects = np.stack([cx, cy, np.full(Nx * Ny, unit_x), np.full(Nx * Ny, unit_y),
+                                  ucell[z].ravel(), np.ones(Nx * Ny)], axis=1)
+                background = np.array([[1.0, 0, 0, 0, 0, 0]])
+                ucell_new.append(np.concat([background, rects]).astype(complex))
+
+            textures = [n_top, *ucell_new, n_bot]
 
         profile = np.array([[0, *thickness, 0], range(1, len(thickness) + 3)])
 

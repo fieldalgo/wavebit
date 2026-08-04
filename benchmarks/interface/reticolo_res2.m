@@ -25,7 +25,20 @@ parm.res1.champ = 1; % the electromagnetic field is calculated accurately
 
 textures = cell(1, size(_textures, 2));
 for i = 1:length(_textures)
-    textures(i) = _textures(i);
+    t = _textures{i};
+    % 2D textures arrive as a numeric (1 + Nrect) x 6 matrix -- oct2py cannot encode a cell
+    % holding a scalar next to row vectors, so the cell is assembled here instead. Row 1
+    % column 1 is the background index; every later row is [cx, cy, lx, ly, n, mesh].
+    if isnumeric(t) && ndims(t) == 2 && size(t, 2) == 6 && size(t, 1) > 1
+        tt = cell(1, size(t, 1));
+        tt{1} = t(1, 1);
+        for r = 2:size(t, 1)
+            tt{r} = t(r, :);
+        end
+        textures{i} = tt;
+    else
+        textures(i) = _textures(i);
+    end
 end
 
 profile = cell(1, size(_profile, 1));
