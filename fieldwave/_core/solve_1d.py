@@ -118,7 +118,10 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
 
     # eps of the medium just below the current layer (substrate uses conj(n)^2 to match
     # the layer convention); drives the same-material short-circuit. Kept a plain scalar.
-    eps_below = xp.asarray(complex(n_bot).conjugate() ** 2, dtype=C)
+    # Only the auto-detection branch reads it, and `complex(n_bot)` needs a concrete n_bot --
+    # so skip the seed entirely when the flags come in frozen, keeping the solve traceable.
+    eps_below = (None if same_material is not None
+                 else xp.asarray(complex(n_bot).conjugate() ** 2, dtype=C))
 
     # --- stage 2: per-layer eig + transfer coupling (transfer_1d_2 / transfer_1d_3) ----
     layer_info_list = []
@@ -249,7 +252,9 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     big_G = _block(xp, [[1j * Kz_bot, O], [O, I]])
     big_T = xp.astype(xp.eye(2 * ff_xy), C)
 
-    eps_below = xp.asarray(complex(n_bot).conjugate() ** 2, dtype=C)
+    # See solve_1d: only auto-detection reads this, and it needs a concrete n_bot.
+    eps_below = (None if same_material is not None
+                 else xp.asarray(complex(n_bot).conjugate() ** 2, dtype=C))
 
     # --- stage 2/3: per-layer eig + coupled s/p transfer (conical_2 / conical_3) --------
     Kx = _diag(xp, kx)

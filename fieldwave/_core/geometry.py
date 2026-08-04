@@ -31,7 +31,7 @@ from .backend import array_namespace
 from .solve_1d import _diagonal, _same_material
 
 
-@dataclass
+@dataclass(eq=False)
 class StaticGeometry:
     """The discrete geometry decisions of one structure, taken once.
 
@@ -42,6 +42,11 @@ class StaticGeometry:
 
     A field left ``None`` means "auto-detect", which is what the strategy in use does not need
     (a DFS build never touches ``normal_field``, for instance).
+
+    ``eq=False`` keeps identity-based ``__eq__``/``__hash__``, which is what lets a frozen
+    geometry be passed as a *static* argument to a jitted method such as
+    ``SolverJax.conv_solve_field``: it holds arrays, so value equality would be both ill-defined
+    and unhashable, whereas one freeze reused across calls is exactly one compilation.
     """
     same_material: Optional[Any] = None
     normal_field: Optional[Any] = None

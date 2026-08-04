@@ -234,8 +234,11 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
 
         return field_cell
 
-    def conv_solve_field(self, res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False)):
-        res = self.conv_solve()
+    def conv_solve_field(self, res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False),
+                         geometry=None):
+        """``geometry`` is optional here — NumPy is always eager, so auto-detection works. It is
+        accepted so backend-agnostic code can pass the same frozen geometry JAX requires."""
+        res = self.conv_solve(geometry=geometry)
         field_cell = self.calculate_field(res_x, res_y, res_z, set_field_input)
         return res, field_cell
 

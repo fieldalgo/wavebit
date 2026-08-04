@@ -32,14 +32,17 @@ def _diag_exp(xp, diag_vals, n):
 def _inv_fourier(xp, kx, ky, period, res_x, res_y, k0, C):
     """Inverse-transform kernel ``exp(-i k.r)`` sampled on the (x, y) grid, flattened over orders."""
     dev = _dev(kx)
-    x_1d = xp.linspace(0, float(period[0]), res_x, dtype=C, device=dev)
+    # `period` stays an array rather than a Python float: all three backends take an array
+    # endpoint and give bit-identical samples, and narrowing it would break tracing whenever
+    # the solver itself is jitted (period is a traced child of the JAX solver pytree).
+    x_1d = xp.linspace(0, period[0], res_x, dtype=C, device=dev)
     x_2d = xp.reshape(x_1d, (1, res_x, 1)) * kx * k0
     x_2d = xp.reshape(xp.broadcast_to(x_2d, (res_y, res_x, kx.shape[0])),
                       (res_y, res_x, 1, kx.shape[0]))
     if ky is None:
         return xp.reshape(xp.exp(-1j * x_2d), (res_y, res_x, -1))
 
-    y_1d = xp.flip(xp.linspace(0, float(period[1]), res_y, dtype=C, device=dev))
+    y_1d = xp.flip(xp.linspace(0, period[1], res_y, dtype=C, device=dev))
     y_2d = xp.reshape(y_1d, (res_y, 1, 1)) * ky * k0
     y_2d = xp.reshape(xp.broadcast_to(y_2d, (res_y, res_x, ky.shape[0])),
                       (res_y, res_x, ky.shape[0], 1))

@@ -60,7 +60,9 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     big_G = _block(xp, [[1j * Kz_bot, O], [O, I]])
     big_T = xp.astype(xp.eye(2 * ff_xy), C)
 
-    eps_below = xp.asarray(complex(n_bot).conjugate() ** 2, dtype=C)
+    # See solve_1d: only auto-detection reads this, and it needs a concrete n_bot.
+    eps_below = (None if same_material is not None
+                 else xp.asarray(complex(n_bot).conjugate() ** 2, dtype=C))
 
     # Kx = diag(tile(kx, ff_y)) ; Ky = diag(tile(ky[:,None], ff_x)) — Array-API broadcast form.
     kx_full = xp.reshape(xp.broadcast_to(kx[None, :], (ff_y, ff_x)), (-1,))

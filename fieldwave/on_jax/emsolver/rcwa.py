@@ -11,12 +11,22 @@ from ..._core.fields import field_1d, field_1d_conical, field_2d, field_plot
 from ..._core.modeler import Modeling
 
 
+@jax.tree_util.register_pytree_node_class
 class ResultJax:
+    """Solve result. Registered as a pytree so a jitted method can return one."""
+
     def __init__(self, res=None, res_te_inc=None, res_tm_inc=None):
 
         self.res = res
         self.res_te_inc = res_te_inc
         self.res_tm_inc = res_tm_inc
+
+    def tree_flatten(self):
+        return (self.res, self.res_te_inc, self.res_tm_inc), None
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(*children)
 
     @property
     def de_ri(self):
@@ -45,7 +55,20 @@ class ResultJax:
             return None
 
 
+@jax.tree_util.register_pytree_node_class
 class ResultSubJax:
+    """One incidence's amplitudes and efficiencies; a pytree for the same reason as ResultJax."""
+
+    _FIELDS = ('R_s', 'R_p', 'T_s', 'T_p',
+               'de_ri', 'de_ri_s', 'de_ri_p', 'de_ti', 'de_ti_s', 'de_ti_p')
+
+    def tree_flatten(self):
+        return tuple(getattr(self, name) for name in self._FIELDS), None
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(*children)
+
     def __init__(self, R_s, R_p, T_s, T_p, de_ri, de_ri_s, de_ri_p, de_ti, de_ti_s, de_ti_p):
         self.R_s = R_s
         self.R_p = R_p
@@ -256,8 +279,14 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
     #     return de_ri, de_ti
 
     @jax_device_set
-    @jax_device_set
     def calculate_field(self, res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False)):
+        """Reconstruct the field from the state left behind by the last solve.
+
+        Takes no ``geometry``: it never calls ``conv_solve``, and every discrete decision it
+        makes -- the grating type, and which incidences ``set_field_input`` selects -- is
+        already concrete by the time it runs. It reads ``self.T1`` / ``self.layer_info_list``,
+        so whichever geometry the preceding solve used is the one in force here.
+        """
         kx, ky = self.get_kx_ky_vector(wavelength=self.wavelength)
 
         if self._grating_type_assigned == 0:
@@ -276,22 +305,46 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
     def field_plot(self, field_cell):
         field_plot(field_cell, self.pol)
 
-    @partial(jax.jit, static_argnums=(1, 2, 3))
+    @partial(jax.jit, static_argnums=(1, 2, 3, 4, 5),
+             static_argnames=('res_x', 'res_y', 'res_z', 'set_field_input', 'geometry'))
     @jax_device_set
-    def conv_solve_field(self, res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False), **kwargs):
+    def conv_solve_field(self, res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False),
+                         geometry=None, **kwargs):
+        """Solve and reconstruct the field in one jit-compiled call.
+
+        ``geometry`` is required here, unlike on :meth:`conv_solve`. This method jits over
+        ``self``, so the structure arrives as tracers and the discrete decisions inside the
+        factorization and the solve have nothing concrete to branch on; a
+        :class:`~fieldwave._core.geometry.StaticGeometry` from
+        :meth:`~fieldwave._core.engine.CoreFactorizationMixin.freeze_geometry` supplies them as
+        static data. It is a static argument -- reuse one freeze across calls and you compile
+        once.
+
+        ``res_x`` / ``res_y`` / ``res_z`` and ``set_field_input`` are static too: they set the
+        output shape and select which incidences to reconstruct.
+
+        Use :meth:`conv_solve_field_no_jit` for the eager equivalent that auto-detects.
+        """
+        if geometry is None:
+            raise ValueError(
+                'conv_solve_field is jit-compiled and needs the geometry frozen up front:\n'
+                '    geometry = solver.freeze_geometry()\n'
+                '    result, field_cell = solver.conv_solve_field(..., geometry=geometry)\n'
+                'Reuse that one geometry across calls to compile only once. '
+                'For the eager, auto-detecting path use solver.conv_solve_field_no_jit(...).')
+
         [setattr(self, k, v) for k, v in kwargs.items()]  # needed for optimization
 
-        if self.fourier_type == 1:
-            print('CFT (fourier_type=1) is not supported with JAX jit-compilation. Use conv_solve_field_no_jit.')
-            return None, None, None
-
-        res = self.conv_solve()
+        res = self.conv_solve(geometry=geometry)
         field_cell = self.calculate_field(res_x, res_y, res_z, set_field_input)
         return res, field_cell
 
     @jax_device_set
-    def conv_solve_field_no_jit(self, res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False)):
-        res = self.conv_solve()
+    def conv_solve_field_no_jit(self, res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False),
+                                geometry=None):
+        """Eager solve-and-field. ``geometry`` is optional: omit it and each discrete decision
+        is auto-detected from the concrete structure."""
+        res = self.conv_solve(geometry=geometry)
         field_cell = self.calculate_field(res_x, res_y, res_z, set_field_input)
         return res, field_cell
 
