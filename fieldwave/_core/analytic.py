@@ -24,7 +24,7 @@ The convolution matrices are built with the NVF (Li / Götz-Schuster) normal-vec
 factorization: ``eps`` and ``1/eps`` come from the exact shape transform, while the normal
 projectors come from the shapes' *analytic* unit normal field sampled on a grid.
 """
-from .backend import array_namespace, j1, jinc, sinc
+from .backend import array_namespace, as_array, j1, jinc, sinc
 from .factorization import dfs2d
 
 
@@ -41,7 +41,7 @@ def shape_ft(xp, shape, ky, kx, period):
     Returns ``c(ky, kx) = 1/(Px*Py) * FT{1_shape}(u, v)`` on the integer reciprocal grid —
     the analytic analogue of one ``dfs2d`` Fourier coefficient.
     """
-    Px, Py = float(period[0]), float(period[1])
+    Px, Py = period[0], period[1]
     stype = shape.get('type', 'rectangle')
     cx = shape.get('cx', Px / 2.0)
     cy = shape.get('cy', Py / 2.0)
@@ -54,8 +54,8 @@ def shape_ft(xp, shape, ky, kx, period):
     v = 2.0 * pi * ky / Py
 
     # Rotated frequency coordinates: kappa = Rot(angle)^T @ k
-    ct = xp.cos(xp.asarray(angle, dtype=u.dtype))
-    st = xp.sin(xp.asarray(angle, dtype=u.dtype))
+    ct = xp.cos(as_array(xp, angle, dtype=u.dtype))
+    st = xp.sin(as_array(xp, angle, dtype=u.dtype))
     kxr = u * ct + v * st
     kyr = -u * st + v * ct
 
@@ -94,7 +94,7 @@ def assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype):
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
     KKY, KKX = _grid(xp, fto_x, fto_y, dev, real_dtype)
 
-    eps_bg = xp.conj(xp.asarray(n_base, dtype=dtype)) ** 2
+    eps_bg = xp.conj(as_array(xp, n_base, dtype=dtype)) ** 2
     inv_bg = 1.0 / eps_bg
 
     # DC term only: the background is constant over the whole cell.
@@ -104,7 +104,7 @@ def assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype):
     inv_eps_c = xp.where(is_dc, inv_bg, zero)
 
     for shape in shapes:
-        eps_s = xp.conj(xp.asarray(shape['n_index'], dtype=dtype)) ** 2
+        eps_s = xp.conj(as_array(xp, shape['n_index'], dtype=dtype)) ** 2
         ft = xp.astype(shape_ft(xp, shape, KKY, KKX, period), dtype)
         eps_c = eps_c + (eps_s - eps_bg) * ft
         inv_eps_c = inv_eps_c + (1.0 / eps_s - inv_bg) * ft
@@ -144,7 +144,7 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype):
     differentiable in the shape parameters.
     """
     Ny, Nx = grid_shape
-    Py, Px = float(period[0]), float(period[1])
+    Py, Px = period[0], period[1]
 
     x = (xp.asarray([float(i) for i in range(Nx)], dtype=dtype) + 0.5) * (Px / Nx)
     y = (xp.asarray([float(i) for i in range(Ny)], dtype=dtype) + 0.5) * (Py / Ny)
@@ -160,8 +160,8 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype):
         lx, ly = s.get('lx', 500.0), s.get('ly', 500.0)
         angle = s.get('angle', 0.0)
 
-        cos_a = xp.cos(xp.asarray(angle, dtype=dtype))
-        sin_a = xp.sin(xp.asarray(angle, dtype=dtype))
+        cos_a = xp.cos(as_array(xp, angle, dtype=dtype))
+        sin_a = xp.sin(as_array(xp, angle, dtype=dtype))
         dx, dy = X - cx, Y - cy
         xr = dx * cos_a + dy * sin_a
         yr = -dx * sin_a + dy * cos_a
@@ -213,7 +213,7 @@ def to_conv_mat_analytic_nvf(xp, shapes, n_base, fto_x, fto_y, period, dtype,
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
     nx, ny = normal_vector_field_analytical(
         xp, (normal_grid, normal_grid), shapes,
-        (float(period[1]), float(period[0])), real_dtype)
+        (period[1], period[0]), real_dtype)
 
     C_xx = dfs2d(xp, xp.astype(nx ** 2, dtype), 1, 1, fto_x, fto_y)
     C_xy = dfs2d(xp, xp.astype(nx * ny, dtype), 1, 1, fto_x, fto_y)

@@ -20,7 +20,7 @@ Stages (matching the legacy chain, kept as one function each to make bit-parity 
   2. per-layer eig+couple— Redheffer/transfer propagation from the bottom layer up
   3. final matching      — incident field -> R, T -> diffraction efficiency
 """
-from .backend import array_namespace, eig
+from .backend import array_namespace, as_array, eig
 from .conventions import boundary_kz, mode_q
 
 
@@ -174,7 +174,7 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     """
     xp = array_namespace(epx_conv_all)
     _inv = xp.linalg.pinv if use_pinv else xp.linalg.inv
-    kx = xp.asarray(kx)
+    kx = as_array(xp, kx)
     if not xp.isdtype(kx.dtype, 'complex floating'):
         # Promote a real kx to the complex working dtype the algebra needs.
         kx = xp.astype(kx, xp.complex128)
@@ -254,7 +254,7 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     # --- stage 3: final matching -> efficiency (transfer_1d_4) -------------------------
     Kz_top = _diag(xp, kz_top)
     delta = xp.astype(_unit(xp, ff_x, ff_x // 2), C)
-    cos_t = xp.cos(xp.asarray(theta, dtype=C))
+    cos_t = xp.cos(as_array(xp, theta, dtype=C))
 
     if pol == 0:  # TE
         inc = -1j * n_top * cos_t * delta
@@ -300,8 +300,8 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     """
     xp = array_namespace(epx_conv_all)
     _inv = xp.linalg.pinv if use_pinv else xp.linalg.inv
-    kx = xp.asarray(kx)
-    ky = xp.asarray(ky)
+    kx = as_array(xp, kx)
+    ky = as_array(xp, ky)
     if not xp.isdtype(kx.dtype, 'complex floating'):
         kx = xp.astype(kx, xp.complex128)
         ky = xp.astype(ky, xp.complex128)
@@ -428,9 +428,9 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
     Kz_top = _diag(xp, kz_top)
     kz_top_2d = xp.reshape(kz_top, (ff_y, ff_x))
     kz_bot_2d = xp.reshape(kz_bot, (ff_y, ff_x))
-    cos_t = xp.cos(xp.asarray(theta, dtype=C))
-    sin_psi = xp.sin(xp.asarray(psi, dtype=C))
-    cos_psi = xp.cos(xp.asarray(psi, dtype=C))
+    cos_t = xp.cos(as_array(xp, theta, dtype=C))
+    sin_psi = xp.sin(as_array(xp, psi, dtype=C))
+    cos_psi = xp.cos(as_array(xp, psi, dtype=C))
 
     delta = xp.reshape(xp.astype(_unit(xp, ff_xy, ff_xy // 2), C), (ff_xy, 1))
 

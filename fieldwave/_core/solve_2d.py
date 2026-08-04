@@ -11,7 +11,7 @@ convolution blocks (``epxy`` / ``epyx``, produced by the NVF factorization; ``No
 enter the mode operator. ``transfer_2d_1`` and ``transfer_2d_4`` are identical to the conical
 versions, so this module reuses ``solve_1d``'s boundary init and ``final_matching`` verbatim.
 """
-from .backend import array_namespace, eig
+from .backend import array_namespace, as_array, eig
 from .conventions import boundary_kz, mode_q
 from .solve_1d import _block, _diag, _same_material, final_matching, uniform_eps
 
@@ -87,8 +87,8 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     """
     xp = array_namespace(epx_conv_all)
     _inv = xp.linalg.pinv if use_pinv else xp.linalg.inv
-    kx = xp.asarray(kx)
-    ky = xp.asarray(ky)
+    kx = as_array(xp, kx)
+    ky = as_array(xp, ky)
     if not xp.isdtype(kx.dtype, 'complex floating'):
         kx = xp.astype(kx, xp.complex128)
         ky = xp.astype(ky, xp.complex128)

@@ -36,7 +36,7 @@ Not supported: field reconstruction. ``calculate_field`` needs the per-layer amp
 propagators that the TMM recursion produces as a by-product; the SMM path returns
 ``layer_info_list = []`` and :mod:`fieldwave._core.fields` raises a clear error on it.
 """
-from .backend import array_namespace
+from .backend import array_namespace, as_array
 from .conventions import boundary_kz
 from .solve_1d import (_block, _diag, _pack, _unit, layer_modes_1d, layer_modes_1d_conical,
                        sp_efficiencies, sp_modes_1d_conical)
@@ -110,13 +110,13 @@ def _n_layers(thickness):
 def _prepare(epx_conv_all, kx, ky=None):
     """Namespace, complex working dtype and complex-promoted ``kx`` / ``ky``."""
     xp = array_namespace(epx_conv_all)
-    kx = xp.asarray(kx)
+    kx = as_array(xp, kx)
     if not xp.isdtype(kx.dtype, 'complex floating'):
         kx = xp.astype(kx, xp.complex128)
         if ky is not None:
-            ky = xp.astype(xp.asarray(ky), xp.complex128)
+            ky = xp.astype(as_array(xp, ky), xp.complex128)
     elif ky is not None:
-        ky = xp.asarray(ky)
+        ky = as_array(xp, ky)
     return xp, kx.dtype, kx, ky
 
 

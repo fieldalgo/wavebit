@@ -6,6 +6,19 @@ import numpy as np
 from ..._core.engine import CoreSolveMixin
 
 
+def _as_tensor(v, device=None, dtype=None):
+    """``v`` as a torch tensor, keeping any autograd graph intact.
+
+    ``torch.tensor(x)`` copies and detaches, so wrapping an incidence angle or a period that
+    the caller is optimizing would silently drop it from the graph — the solve still returns a
+    tensor, just one with nothing behind it. Tensors are moved with ``.to()``; everything else
+    is created as before.
+    """
+    if isinstance(v, torch.Tensor):
+        return v.to(device=device, dtype=dtype)
+    return torch.tensor(v, device=device, dtype=dtype)
+
+
 class _BaseRCWA(CoreSolveMixin):
     def __init__(self, n_top=1., n_bot=1., theta=0., phi=None, psi=None, pol=0., fto=(0, 0),
                  period=(1., 1.), wavelength=1.,
@@ -112,7 +125,7 @@ class _BaseRCWA(CoreSolveMixin):
         if theta is None:
             self._theta = None
         else:
-            self._theta = torch.tensor(theta, device=self.device, dtype=self.type_complex)
+            self._theta = _as_tensor(theta, device=self.device, dtype=self.type_complex)
             self._theta = torch.where(self._theta == 0, self.perturbation, self._theta)  # perturbation
 
     @property
@@ -124,7 +137,7 @@ class _BaseRCWA(CoreSolveMixin):
         if phi is None:
             self._phi = None
         else:
-            self._phi = torch.tensor(phi, device=self.device, dtype=self.type_complex)
+            self._phi = _as_tensor(phi, device=self.device, dtype=self.type_complex)
 
     @property
     def psi(self):
@@ -133,7 +146,7 @@ class _BaseRCWA(CoreSolveMixin):
     @psi.setter
     def psi(self, psi):
         if psi is not None:
-            self._psi = torch.tensor(psi, dtype=self.type_complex)
+            self._psi = _as_tensor(psi, dtype=self.type_complex)
             pol = -(2 * psi / torch.pi - 1)
             self._pol = pol
 
@@ -195,11 +208,17 @@ class _BaseRCWA(CoreSolveMixin):
     @period.setter
     def period(self, period):
         if type(period) in (int, float):
-            self._period = torch.tensor([period, period], device=self.device, dtype=self.type_float)
+            self._period = _as_tensor([period, period], device=self.device, dtype=self.type_float)
         elif type(period) in (list, tuple, np.ndarray) or isinstance(period, torch.Tensor):
             if len(period) == 1:
                 period = [period[0], period[0]]
-            self._period = torch.tensor(period, device=self.device, dtype=self.type_float)
+            if isinstance(period, (list, tuple)) and any(isinstance(p, torch.Tensor) for p in period):
+                # a sequence holding tensors: stack rather than re-wrap, or the caller's
+                # graph is lost. Each element is cast first so nothing is created at float32.
+                self._period = torch.stack([_as_tensor(p, device=self.device, dtype=self.type_float)
+                                            for p in period])
+            else:
+                self._period = _as_tensor(period, device=self.device, dtype=self.type_float)
         else:
             raise ValueError
 
@@ -213,9 +232,13 @@ class _BaseRCWA(CoreSolveMixin):
     @thickness.setter
     def thickness(self, thickness):
         if type(thickness) in (int, float):
-            self._thickness = torch.tensor([thickness], device=self.device, dtype=self.type_float)
+            self._thickness = _as_tensor([thickness], device=self.device, dtype=self.type_float)
         elif type(thickness) in (list, tuple, np.ndarray):
-            self._thickness = torch.tensor(thickness, device=self.device, dtype=self.type_float)
+            if isinstance(thickness, (list, tuple)) and any(isinstance(t, torch.Tensor) for t in thickness):
+                self._thickness = torch.stack([_as_tensor(t, device=self.device, dtype=self.type_float)
+                                               for t in thickness])
+            else:
+                self._thickness = _as_tensor(thickness, device=self.device, dtype=self.type_float)
         elif type(thickness) is torch.Tensor:
             self._thickness = thickness.to(device=self.device, dtype=self.type_float)
         else:

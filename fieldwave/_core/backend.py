@@ -16,6 +16,32 @@ def array_namespace(*xs):
     return ac.array_namespace(*xs)
 
 
+def as_array(xp, v, dtype=None, device=None):
+    """``v`` as an ``xp`` array, keeping any autograd graph intact.
+
+    ``xp.asarray`` detaches under PyTorch, and does something worse when the dtype already
+    matches: it hands back *the same tensor* with ``requires_grad`` flipped off in place, so a
+    caller's optimizer leaf stops carrying gradient after one forward pass, silently. Values
+    that are already arrays of this namespace are therefore cast with ``astype``, which is
+    differentiable; everything else (Python scalars, NumPy arrays, lists) goes through
+    ``asarray`` as before, where there is no graph to lose.
+
+    Use this anywhere a *user-supplied* quantity enters the algebra — an index, an angle, a
+    period, a wavelength, an edge position. `xp.asarray` is still right for values the core
+    builds itself, such as index arrays and constants.
+    """
+    if hasattr(v, 'dtype') and hasattr(v, 'shape'):
+        try:
+            same_ns = ac.array_namespace(v) is xp
+        except Exception:
+            same_ns = False
+        if same_ns:
+            return v if dtype is None or v.dtype == dtype else xp.astype(v, dtype)
+    if dtype is None:
+        return xp.asarray(v, device=device)
+    return xp.asarray(v, dtype=dtype, device=device)
+
+
 def eig(A):
     """Eigendecomposition of a (possibly non-Hermitian) complex matrix.
 
