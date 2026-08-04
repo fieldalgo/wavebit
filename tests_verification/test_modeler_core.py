@@ -78,3 +78,32 @@ def test_torch_device_code_is_not_a_device_index():
                        xp=__import__('array_api_compat').array_namespace(torch.zeros(1)))
     info = modeler.modeling_vector_instruction(INSTRUCTIONS['rect_rot'])
     assert np.array_equal(GOLDEN['rect_rot__L0__cell'], np.asarray(info[0][0]))
+
+
+def test_jax_device_setter_round_trips():
+    """``solver.device = solver.device`` must be accepted on the jax backend.
+
+    The getter returns resolved ``jax.Device`` objects, and several paths re-assign the
+    property, so rejecting them breaks ``conv_solve_field``. The old check compared the
+    repr of the implementation class, which stopped matching when jaxlib moved ``Device``
+    from ``xla_extension`` to ``_jax``.
+    """
+    jax = pytest.importorskip('jax')
+
+    solver = fieldwave.rcwa(
+        backend=1, pol=0, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, fto=[5],
+        wavelength=900.0, period=[1000.0], thickness=[500.0],
+        ucell=np.array([[[1.0, 3.0, 3.0, 1.0]]]), device=0)
+
+    solver.device = solver.device                      # the round-trip that used to raise
+    solver.device = jax.devices('cpu')[0]              # a bare device, not a list
+    assert all(isinstance(d, jax.Device) for d in solver.device)
+
+    with pytest.raises(ValueError):
+        solver.device = 'not-a-device'
+
+    # The caller-visible symptom was here: @jax_device_set re-assigns the property, so the
+    # rejected round-trip surfaced as a bare ValueError out of conv_solve_field. The jitted
+    # variant is still blocked by a separate same-material/tracer problem, so pin the
+    # no-jit one, which goes through the same decorator.
+    solver.conv_solve_field_no_jit(res_x=10, res_y=1, res_z=10)

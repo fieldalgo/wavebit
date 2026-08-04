@@ -69,10 +69,17 @@ class _BaseRCWA(CoreSolveMixin):
             self._device = jax.devices('cpu')
         elif device in (1, 'gpu', 'cuda'):
             self._device = jax.devices('gpu')
-        elif type(device) is list and (str(type(device[0])) == "<class 'jaxlib.xla_extension.Device'>"):
-            self._device = device
+        # Already-resolved devices, which is what the getter hands back — so assigning
+        # `self.device = self.device` has to round-trip. Test against the public
+        # ``jax.Device``: matching the repr of the implementation class instead broke
+        # silently when jaxlib moved it from ``xla_extension`` to ``_jax``.
+        elif isinstance(device, jax.Device):
+            self._device = [device]
+        elif (isinstance(device, (list, tuple)) and device
+                and all(isinstance(d, jax.Device) for d in device)):
+            self._device = list(device)
         else:
-            raise ValueError
+            raise ValueError(f'unsupported jax device: {device!r}')
 
     @property
     def type_complex(self):
