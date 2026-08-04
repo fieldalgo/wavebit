@@ -106,16 +106,19 @@ def assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype):
 def laurent_conv_2d(xp, coeff2d, fto_x, fto_y):
     """Block-Toeplitz (Laurent) convolution matrix from a 2D coefficient grid.
 
-    ``M[(r,s),(c,d)] = coeff(ky=c-r, kx=d-s)`` — the same ordering ``dfs2d`` produces.
+    ``M[(r,s),(c,d)] = coeff(ky=r-c, kx=s-d)`` — the same ordering ``dfs2d`` produces. The
+    sign is the order-index convention (see ``_circulant_index``); the two builders have to
+    agree with each other and with ``kx``, which ``test_laurent_matches_dfs2d_convention``
+    pins.
     """
     ff_x = 2 * fto_x + 1
     ff_y = 2 * fto_y + 1
     dev = _device(coeff2d)
 
-    iy = xp.asarray([[[[c - r + 2 * fto_y]]] for r in range(ff_y) for c in range(ff_y)],
+    iy = xp.asarray([[[[r - c + 2 * fto_y]]] for r in range(ff_y) for c in range(ff_y)],
                     device=dev)
     iy = xp.reshape(iy, (ff_y, ff_y))
-    ix = xp.asarray([[d - s + 2 * fto_x for d in range(ff_x)] for s in range(ff_x)], device=dev)
+    ix = xp.asarray([[s - d + 2 * fto_x for d in range(ff_x)] for s in range(ff_x)], device=dev)
 
     m4 = coeff2d[iy[:, None, :, None], ix[None, :, None, :]]      # [r, s, c, d]
     return xp.reshape(m4, (ff_y * ff_x, ff_y * ff_x))

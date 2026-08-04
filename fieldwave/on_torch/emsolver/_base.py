@@ -247,10 +247,10 @@ class _BaseRCWA(CoreSolveMixin):
             phi = self.phi
 
         kx = (self.n_top * sin_theta * torch.cos(phi) + fto_x_range * (
-                wavelength / self.period[0])).type(self.type_complex).conj()
+                wavelength / self.period[0])).type(self.type_complex)
 
         ky = (self.n_top * sin_theta * torch.sin(phi) + fto_y_range * (
-                wavelength / self.period[1])).type(self.type_complex).conj()
+                wavelength / self.period[1])).type(self.type_complex)
 
         return kx, ky
 

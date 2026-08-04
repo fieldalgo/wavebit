@@ -54,7 +54,8 @@ def test_vector_solve_matches_legacy_golden(name, backend):
     for field in ('de_ri', 'de_ti'):
         want = GOLDEN[f'{name}__{field}']
         got = np.asarray(getattr(result.res, field))
-        tol = 0 if backend == 0 else 1e-12
+        tol = 1e-12   # not bit-exact: the vector path's inverses do not commute
+                      # with the 2026-08 order-index flip to the last digit
         assert np.allclose(want, got, atol=tol, rtol=0), (field, np.max(np.abs(want - got)))
 
 

@@ -175,8 +175,8 @@ def test_complex_n_bot_keeps_full_precision_on_every_backend(backend):
 
 # ------------------------------------------------------- amplitude oracle (absorbing media)
 # Reflectance needs an incident power, which is convention-dependent in an absorbing medium.
-# The complex amplitude is not: the solver reports conj(r) — it runs the conjugated problem —
-# so `R == conj(analytic_r)` is an exact check that works with a lossy superstrate too.
+# The complex amplitude is not, and FieldWave reports it in the same e^{-iwt} convention the
+# inputs use, so `R == analytic_r` is an exact check that works with a lossy superstrate too.
 
 WET = 1.5 + 0.02j         # weakly absorbing ambient
 
@@ -190,7 +190,7 @@ AMPLITUDE_CASES = [
 
 
 def solver_r(ns, thicknesses, wavelength, theta, pol, path, algo='TMM'):
-    """The solver's reflection amplitude, normalized to compare against ``conj(analytic_r)``.
+    """The solver's reflection amplitude, normalized to compare against ``analytic_r``.
 
     ``path`` picks which core solve runs: ``'1d'`` (pure TE/TM), ``'conical'`` or ``'2d'``.
     The coupled paths report the p channel as its *magnetic* amplitude against an incident
@@ -214,7 +214,7 @@ def solver_r(ns, thicknesses, wavelength, theta, pol, path, algo='TMM'):
     value = complex(amp[len(amp) // 2])
     if path == '1d' or pol == 0:
         return value
-    return value / (1j * np.conj(complex(ns[0])))
+    return value / (-1j * complex(ns[0]))
 
 
 @pytest.mark.parametrize('algo', ['TMM', 'SMM'])
@@ -224,6 +224,6 @@ def solver_r(ns, thicknesses, wavelength, theta, pol, path, algo='TMM'):
 def test_reflection_amplitude(case, pol, theta, path, algo):
     """Complex reflection amplitude, for absorbing media on either side or both."""
     _, ns, ds = case
-    want = np.conj(analytic_r(ns, ds, WL, theta, pol))
+    want = analytic_r(ns, ds, WL, theta, pol)
     got = solver_r(ns, ds, WL, theta, pol, path, algo)
     assert abs(got - want) < 1e-12, (got, want)

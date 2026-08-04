@@ -36,9 +36,16 @@ from .backend import array_namespace
 
 
 def _circulant_index(fto):
-    """Circular index matrix selecting Fourier orders ``m - n`` (pure integer, data-free)."""
+    """Circular index matrix selecting Fourier orders ``m - n`` (pure integer, data-free).
+
+    The sign here *is* the order-index convention, and it has to agree with the sign ``kx``
+    carries: a convolution matrix built for one and paired with the other mirrors the
+    diffraction orders (+1 and -1 swap) while conserving energy, so nothing catches it except
+    a grating comparison. Uniform layers cannot expose it at all -- their convolution matrix
+    is ``eps * I``, which is its own transpose.
+    """
     ff = 2 * fto + 1
-    return [[(-r + c) for c in range(ff)] for r in range(ff)]
+    return [[(r - c) for c in range(ff)] for r in range(ff)]
 
 
 def dfs2d(xp, cell, conti_x, conti_y, fto_x, fto_y):
@@ -90,8 +97,8 @@ def _layer_eps(xp, ucell, fto_x, fto_y, enhanced_dfs):
     """Yield each layer's permittivity grid, upsampled as the DFS/NVF builders require.
 
     Upsampling factors depend only on shapes, so this stays static under tracing. The
-    ``conj(n)**2`` maps refractive index to permittivity under the ``e^{-iwt}`` convention
-    (``Im(n) > 0`` = loss).
+    ``n**2`` maps refractive index to permittivity: FieldWave works in ``e^{-iwt}``
+    throughout (``Im(n) > 0`` = loss), with no conjugation on the way in.
     """
     if enhanced_dfs:
         min_y = (4 * fto_y + 1) * ucell.shape[1]
@@ -106,7 +113,7 @@ def _layer_eps(xp, ucell, fto_x, fto_y, enhanced_dfs):
             layer = xp.repeat(layer, min_y // layer.shape[0] + 1, axis=0)
         if layer.shape[1] < min_x:
             layer = xp.repeat(layer, min_x // layer.shape[1] + 1, axis=1)
-        yield xp.conj(xp.astype(layer, _complex_dtype(xp, layer))) ** 2
+        yield xp.astype(layer, _complex_dtype(xp, layer)) ** 2
 
 
 def to_conv_mat_raster_discrete(ucell, fto_x, fto_y, enhanced_dfs=True, use_pinv=False):
@@ -428,7 +435,7 @@ def to_conv_mat_raster_continuous(ucell, fto_x, fto_y, compression=None, use_pin
         row_idx, col_idx, x, y = (compression_indices(layer) if compression is None
                                   else compression[i])
         n_comp = compress_cell(xp, layer, row_idx, col_idx)
-        eps = xp.conj(xp.astype(n_comp, _complex_dtype(xp, n_comp))) ** 2
+        eps = xp.astype(n_comp, _complex_dtype(xp, n_comp)) ** 2
 
         epz_list = cfs2d(xp, eps, x, y, 1, 1, fto_x, fto_y)
         epx_list.append(cfs2d(xp, eps, x, y, 0, 1, fto_x, fto_y))
@@ -450,7 +457,7 @@ def to_conv_mat_vector(ucell_info_list, fto_x, fto_y, use_pinv=False):
     epx_list, epy_list, epz_i_list = [], [], []
 
     for layer, x, y in ucell_info_list:
-        eps = xp.conj(xp.astype(layer, _complex_dtype(xp, layer))) ** 2
+        eps = xp.astype(layer, _complex_dtype(xp, layer)) ** 2
         epx_list.append(cfs2d(xp, eps, x, y, 0, 1, fto_x, fto_y))
         epy_list.append(cfs2d(xp, eps, x, y, 1, 0, fto_x, fto_y))
         epz_i_list.append(_inv(cfs2d(xp, eps, x, y, 1, 1, fto_x, fto_y)))

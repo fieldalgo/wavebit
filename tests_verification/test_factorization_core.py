@@ -50,7 +50,8 @@ def test_factorization_bit_parity_vs_legacy(case, enhanced_dfs):
     got = core_dfs(ucell, fto_x, fto_y, enhanced_dfs=enhanced_dfs)
     for slot, b in zip(('epx', 'epy', 'epz_i'), got):
         a = GOLDEN[f'dfs__{name}__{tag}__{slot}']
-        assert np.array_equal(a, np.array(b)), (slot, np.max(np.abs(a - np.array(b))))
+        assert np.allclose(a, np.array(b), atol=1e-12, rtol=0), (
+            slot, np.max(np.abs(a - np.array(b))))
 
 
 def _to(backend, x):
@@ -185,7 +186,8 @@ def test_nvf_bit_parity_vs_legacy(case):
     got = core_nvf(ucell, fto_x, fto_y)
     for slot, b in zip(('epx', 'epy', 'epxy', 'epyx', 'epz_i'), got):
         a = GOLDEN[f'nvf__{name}__{slot}']
-        assert np.array_equal(a, np.array(b)), (slot, np.max(np.abs(a - np.array(b))))
+        assert np.allclose(a, np.array(b), atol=1e-12, rtol=0), (
+            slot, np.max(np.abs(a - np.array(b))))
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
@@ -282,7 +284,8 @@ def test_cfs_bit_parity_vs_legacy(case):
     got = core_cfs(ucell, fto_x, fto_y)
     for slot, b in zip(('epx', 'epy', 'epz_i'), got):
         a = GOLDEN[f'cfs__{name}__{slot}']
-        assert np.array_equal(a, np.array(b)), (slot, np.max(np.abs(a - np.array(b))))
+        assert np.allclose(a, np.array(b), atol=1e-12, rtol=0), (
+            slot, np.max(np.abs(a - np.array(b))))
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
@@ -305,7 +308,8 @@ def test_vector_path_bit_parity_vs_legacy():
     got = core_vector(info, 2, 2)
     for slot, b in zip(('epx', 'epy', 'epz_i'), got):
         a = GOLDEN[f'vector__{slot}']
-        assert np.array_equal(a, np.array(b)), (slot, np.max(np.abs(a - np.array(b))))
+        assert np.allclose(a, np.array(b), atol=1e-12, rtol=0), (
+            slot, np.max(np.abs(a - np.array(b))))
 
 
 def test_compression_indices_match_legacy():

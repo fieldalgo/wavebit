@@ -1,75 +1,53 @@
 """Centralized sign / branch-cut conventions.
 
-fieldwave uses the ``e^{-iωt}`` time convention (``Im(n) > 0`` = loss). Every substrate,
-superstrate, and layer ``kz`` branch choice must draw from here, so a lossy case can never
-silently disagree with a lossless one (the class of bug this module exists to prevent).
+FieldWave works in the ``e^{-iωt}`` time convention throughout — inputs, internals and
+returned amplitudes alike. ``Im(n) > 0`` is loss, which is what refractive-index databases
+tabulate (``n + 1j*k``), and a wave travelling in ``+z`` carries ``exp(+i*k0*kz*z)``.
+
+There is no second convention hiding underneath. Until 2026-08 there was: ``kx`` and the
+permittivity were conjugated on the way in, the algebra ran on the conjugated problem, and the
+returned amplitudes were never conjugated back. Every boundary added after that had to guess
+which side of the seam it was on, and three of them guessed wrong (absorbing substrates and
+superstrates came out as gain media). The seam is gone; this module holds what replaced it.
+
+Two branch rules, and they are *not* the same rule:
+
+``mode_q``       a layer's modal constant, used as ``exp(-k0*q*z)`` going down.
+``boundary_kz``  a half-space's ``kz``, used as ``exp(+i*k0*kz*z)`` going down.
+
+Both pick "downward", but they parametrize it differently, so ``q = -i*kz`` relates them and
+their tie-breaks come out opposite. Selecting on ``Im`` alone is wrong for either: with a
+complex in-plane wavevector (an absorbing superstrate at oblique incidence) even a lossless
+layer can have ``Im(kz) < 0``, and forcing it positive returns ``|r| > 1``.
 
 Backend-agnostic: pass the array namespace as ``xp`` (``numpy`` / ``jax.numpy`` / ``torch``).
-The functions use only ops with matching signatures across those namespaces.
 """
 
+_FLAT = 1e-12      # below this, a real part counts as zero and the tie-break decides
 
-def outgoing_sqrt(xp, arg):
-    """``sqrt(arg)`` on the outgoing / decaying branch: ``Re(result) >= 0``.
 
-    ``arg`` is the already-complex quantity ``eps - k_parallel**2 - 1e-20j``. The caller adds
-    the ``-1e-20j`` nudge (which selects the correct root for lossless evanescent orders); the
-    ``Re >= 0`` flip here makes the choice correct for lossy / absorbing media as well.
+def mode_q(xp, eigenvalue):
+    """Modal decay constant ``q`` of a layer mode, from its eigenvalue ``q**2``.
 
-    This is the single home for the substrate/superstrate/layer kz branch. It is *not* the
-    conjugated ``sqrt`` shortcut (which is a root of ``conj(arg)``, wrong for complex ``arg``),
-    nor the ``-q_bot`` form (wrong on lossless evanescent orders).
+    A mode varies as ``exp(-k0*q*z)`` with ``z`` measured downward, so the physical root is
+    the one that does not grow: ``Re(q) >= 0``. For a lossless propagating mode ``Re(q)`` is
+    zero and the root is imaginary; there the downward wave is ``q = -i*kz``, i.e. ``Im(q) <= 0``.
     """
-    kz = arg ** 0.5
-    return xp.where(xp.real(kz) < 0, -kz, kz)
+    v = eigenvalue ** 0.5
+    flip = xp.where(xp.abs(xp.real(v)) > _FLAT, xp.real(v) < 0, xp.imag(v) > 0)
+    return xp.where(flip, -v, v)
 
 
-def internal_index(xp, n):
-    """A refractive index in the convention the solve runs in.
+def boundary_kz(xp, eps, k_par_sq):
+    """``kz`` of a homogeneous half-space for the downward-going wave.
 
-    A Python (or NumPy) scalar stays a scalar, and stays weakly typed with it: ``asarray`` of a
-    Python ``complex`` becomes ``complex64`` under PyTorch, losing ~8 digits that the later
-    promotion to ``complex128`` cannot bring back.
+    ``exp(+i*k0*kz*z)`` travels down, so the physical root carries energy that way:
+    ``Re(kz) > 0``. A purely evanescent order has no real part, and there the decaying
+    choice is ``Im(kz) > 0``.
     """
-    if isinstance(n, (int, float)):      # real: conjugation is the identity
-        return n
-    if isinstance(n, complex):
-        return n.conjugate()
-    return xp.conj(n)
-
-
-def boundary_kz(xp, n, kx, ky=None):
-    """Half-space ``kz`` in the internal convention, for the given retained orders.
-
-    Computes the physical root and conjugates it, which is only the same thing as conjugating
-    the *expression* when the in-plane wavevector is real. It is not once ``n_top`` is complex:
-    ``kx`` arrives already conjugated, so pairing it with a raw ``n**2`` mixes the two
-    conventions and the reflected amplitude comes out wrong at oblique incidence.
-
-    Written the way the physical formula reads, term by term, rather than collecting the
-    in-plane terms first.
-    """
-    if ky is None:
-        return xp.conj((n ** 2 - xp.conj(kx) ** 2) ** 0.5)
-    return xp.conj((n ** 2 - xp.conj(kx) ** 2 - xp.conj(ky) ** 2) ** 0.5)
-
-
-def substrate_eps(xp, n_bot):
-    """Substrate permittivity in the convention the rest of the solve runs in.
-
-    The internal convention is the conjugated one: ``get_kx_ky_vector`` conjugates ``kx``, and
-    the factorization stores ``conj(eps)`` in the convolution matrices (a layer of ``n =
-    0.18+3j`` lands as ``-8.9676-1.08j``). The substrate has to enter the boundary the same
-    way, or a layer and a substrate of *the same material* end up with conjugate mode
-    constants — which is exactly what happened: the stack reflected as though the substrate
-    were ``conj(n_bot)``, absorbing read as gain
-    (tests_verification/test_lossy_substrate.py). Real ``n_bot`` is unaffected, which is why
-    this went unnoticed.
-
-    The same-material detection already conjugates for this reason; this is that rule applied
-    to the boundary too.
-    """
-    return internal_index(xp, n_bot) ** 2
+    v = (eps - k_par_sq) ** 0.5
+    flip = xp.where(xp.abs(xp.real(v)) > _FLAT, xp.real(v) < 0, xp.imag(v) < 0)
+    return xp.where(flip, -v, v)
 
 
 def safe_sqrt(xp, z, eps=1e-30):

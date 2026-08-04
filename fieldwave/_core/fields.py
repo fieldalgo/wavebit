@@ -1,5 +1,9 @@
 """Single-source near-field reconstruction.
 
+Fields come back in the same ``e^{-iωt}`` convention as everything else (see
+:mod:`fieldwave._core.conventions`): a wave travelling in ``+z`` carries ``exp(+i*k0*kz*z)``,
+and the in-plane kernel matches the order-index sign the convolution matrices are built with.
+
 Turns a solved stack back into the field inside it. Each layer's mode amplitudes are
 propagated to a set of z-slices, then inverse-Fourier-transformed onto an (x, y) grid.
 
@@ -53,13 +57,13 @@ def _inv_fourier(xp, kx, ky, period, res_x, res_y, k0, C):
     x_2d = xp.reshape(xp.broadcast_to(x_2d, (res_y, res_x, kx.shape[0])),
                       (res_y, res_x, 1, kx.shape[0]))
     if ky is None:
-        return xp.reshape(xp.exp(-1j * x_2d), (res_y, res_x, -1))
+        return xp.reshape(xp.exp(1j * x_2d), (res_y, res_x, -1))
 
     y_1d = xp.flip(xp.linspace(0, period[1], res_y, dtype=C, device=dev))
     y_2d = xp.reshape(y_1d, (res_y, 1, 1)) * ky * k0
     y_2d = xp.reshape(xp.broadcast_to(y_2d, (res_y, res_x, ky.shape[0])),
                       (res_y, res_x, ky.shape[0], 1))
-    return xp.reshape(xp.exp(-1j * x_2d) * xp.exp(-1j * y_2d), (res_y, res_x, -1))
+    return xp.reshape(xp.exp(1j * x_2d) * xp.exp(1j * y_2d), (res_y, res_x, -1))
 
 
 def _z_slices(xp, res_z, d, C, dev=None):
@@ -92,10 +96,10 @@ def field_1d(wavelength, kx, T1, layer_info_list, period, pol,
         bwd = _diag_exp(xp, k0 * Qd, ff)
         My = W @ (fwd @ c1 + bwd @ c2)
         Mx = V @ (-fwd @ c1 + bwd @ c2)
-        Mz = -1j * (epz_conv_i @ Kx @ My if pol else Kx @ My)
+        Mz = 1j * (epz_conv_i @ Kx @ My if pol else Kx @ My)
 
         inv_f = _inv_fourier(xp, kx, None, period, res_x, res_y, k0, C)
-        sgn = 1j if pol == 0 else -1j
+        sgn = -1j if pol == 0 else 1j
         Fy = inv_f[:, :, None, :] @ My[:, None, None, :, :]
         Fx = sgn * (inv_f[:, :, None, :] @ Mx[:, None, None, :, :])
         Fz = sgn * (inv_f[:, :, None, :] @ Mz[:, None, None, :, :])
@@ -167,12 +171,12 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, res_x, res_y
             Ux = V_11 @ (-a1p + a1m) + V_12 @ (-a2p + a2m)
             Uy = V_21 @ (-a1p + a1m) + V_22 @ (-a2p + a2m)
 
-        Sz = -1j * epz_conv_i @ (Kx @ Uy - Ky @ Ux)
-        Uz = -1j * (Kx @ Sy - Ky @ Sx)
+        Sz = 1j * epz_conv_i @ (Kx @ Uy - Ky @ Ux)
+        Uz = 1j * (Kx @ Sy - Ky @ Sx)
 
         inv_f = _inv_fourier(xp, kx, ky, period, res_x, res_y, k0, C)[:, :, None, :]
         comps = [inv_f @ M[:, :, None, None, :, :] for M in (Sx, Sy, Sz)]
-        comps += [1j * (inv_f @ M[:, :, None, None, :, :]) for M in (Ux, Uy, Uz)]
+        comps += [-1j * (inv_f @ M[:, :, None, None, :, :]) for M in (Ux, Uy, Uz)]
         val = xp.concat([c[..., 0] for c in comps], axis=-1)
         cells.append(xp.moveaxis(val, 1, 0))
 

@@ -12,7 +12,7 @@ enter the mode operator. ``transfer_2d_1`` and ``transfer_2d_4`` are identical t
 versions, so this module reuses ``solve_1d``'s boundary init and ``final_matching`` verbatim.
 """
 from .backend import array_namespace, eig
-from .conventions import boundary_kz, internal_index, outgoing_sqrt, substrate_eps
+from .conventions import boundary_kz, mode_q
 from .solve_1d import _block, _diag, _same_material, final_matching, uniform_eps
 
 
@@ -33,7 +33,7 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
         [E @ epx_conv - Ky @ Kx - D @ epyx_conv, Kx @ Kx + D @ epy_conv - E @ epxy_conv],
     ])
     w, W = eig(Omega2_LR)
-    q = xp.astype(w, C) ** 0.5
+    q = mode_q(xp, xp.astype(w, C))
 
     Omega_R = _block(xp, [
         [-Kx @ Ky + epxy_conv, Kx @ Kx - epy_conv],
@@ -105,16 +105,16 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     ky_col = xp.reshape(ky, (-1, 1))
 
     # --- stage 1: boundary init (transfer_2d_1 == transfer_1d_conical_1) ----------------
-    kz_top = xp.reshape(boundary_kz(xp, n_top, kx, ky_col), (-1,))
-    kz_bot = xp.reshape(boundary_kz(xp, n_bot, kx, ky_col), (-1,))
+    k_par_sq = kx ** 2 + ky_col ** 2
+    kz_top = xp.reshape(boundary_kz(xp, n_top ** 2, k_par_sq), (-1,))
+    kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq), (-1,))
     varphi = xp.reshape(xp.atan(ky_col / kx), (-1,))
 
-    eps_bot = substrate_eps(xp, n_bot)   # conjugated convention: see conventions
-    kz_sub = outgoing_sqrt(xp, xp.reshape(eps_bot - kx ** 2 - ky_col ** 2 - 1e-20j, (-1,)))
-    Kz_bot = _diag(xp, kz_sub)
+    eps_bot = n_bot ** 2
+    Kz_bot = _diag(xp, kz_bot)
 
-    big_F = _block(xp, [[I, O], [O, 1j * Kz_bot / eps_bot]])
-    big_G = _block(xp, [[1j * Kz_bot, O], [O, I]])
+    big_F = _block(xp, [[I, O], [O, -1j * Kz_bot / eps_bot]])
+    big_G = _block(xp, [[-1j * Kz_bot, O], [O, I]])
     big_T = xp.astype(xp.eye(2 * ff_xy), C)
 
     # See solve_1d: only auto-detection reads this, and it needs a concrete n_bot.

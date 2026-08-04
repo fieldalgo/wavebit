@@ -21,7 +21,7 @@ Stages (matching the legacy chain, kept as one function each to make bit-parity 
   3. final matching      — incident field -> R, T -> diffraction efficiency
 """
 from .backend import array_namespace, eig
-from .conventions import boundary_kz, internal_index, outgoing_sqrt, substrate_eps
+from .conventions import boundary_kz, mode_q
 
 
 def _diag(xp, v):
@@ -87,12 +87,12 @@ def layer_modes_1d(xp, inv, pol, kx, I, epx_conv, epy_conv, epz_conv_i, C):
     if pol == 0:  # TE
         A = _diag(xp, kx) @ _diag(xp, kx) - epy_conv
         w, W = eig(A)
-        q = xp.astype(w, C) ** 0.5
+        q = mode_q(xp, xp.astype(w, C))
         V = W * q
     elif pol == 1:  # TM
         B = kx[:, None] * epz_conv_i * kx[None, :] - I
         w, W = eig(epx_conv @ B)
-        q = xp.astype(w, C) ** 0.5
+        q = mode_q(xp, xp.astype(w, C))
         V = inv(epx_conv) @ W * q
     else:
         raise ValueError(f'pol must be 0 (TE) or 1 (TM), got {pol!r}')
@@ -110,8 +110,8 @@ def layer_modes_1d_conical(xp, inv, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz
     B = Kx @ epz_conv_i @ Kx - I
     w1, W1 = eig(Ky2 + A)
     w2, W2 = eig(Ky2 + B @ epx_conv)
-    q1 = xp.astype(w1, C) ** 0.5
-    q2 = xp.astype(w2, C) ** 0.5
+    q1 = mode_q(xp, xp.astype(w1, C))
+    q2 = mode_q(xp, xp.astype(w2, C))
 
     A_i = inv(A)
     B_i = inv(B)
@@ -187,18 +187,16 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     I = xp.astype(xp.eye(ff_x), C)
 
     # --- stage 1: boundary init (port of transfer_1d_1) --------------------------------
-    # kz for the diffraction-efficiency factors: principal root, conjugated branch (raw n).
-    # Scalars (n_top/n_bot) promote against the complex kx, so no explicit cast is needed.
-    kz_top = boundary_kz(xp, n_top, kx)
-    kz_bot = boundary_kz(xp, n_bot, kx)
+    # One kz per half-space on the downward branch; it serves both the substrate admittance
+    # and the efficiency factors. Scalars promote against the complex kx.
+    kz_top = boundary_kz(xp, n_top ** 2, kx ** 2)
+    kz_bot = boundary_kz(xp, n_bot ** 2, kx ** 2)
 
-    # Substrate admittance from the single outgoing-wave kz branch (lossless AND lossy).
-    eps_bot = substrate_eps(xp, n_bot)   # conjugated convention: see conventions
-    kz_sub = outgoing_sqrt(xp, eps_bot - kx ** 2 - 1e-20j)
+    eps_bot = n_bot ** 2
     if pol == 0:      # TE
-        G = 1j * _diag(xp, kz_sub)
+        G = -1j * _diag(xp, kz_bot)
     elif pol == 1:    # TM
-        G = 1j * _diag(xp, kz_sub / eps_bot)
+        G = -1j * _diag(xp, kz_bot / eps_bot)
     else:
         raise ValueError(f'pol must be 0 (TE) or 1 (TM), got {pol!r}')
 
@@ -258,14 +256,13 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     delta = xp.astype(_unit(xp, ff_x, ff_x // 2), C)
     cos_t = xp.cos(xp.asarray(theta, dtype=C))
 
-    n_top_i = internal_index(xp, n_top)
     if pol == 0:  # TE
-        inc = 1j * n_top_i * cos_t * delta
-        T1 = _inv(G + 1j * Kz_top @ F) @ (1j * Kz_top @ delta + inc)
+        inc = -1j * n_top * cos_t * delta
+        T1 = _inv(G - 1j * Kz_top @ F) @ (-1j * Kz_top @ delta + inc)
     else:         # TM
-        Kz_scaled = Kz_top / (n_top_i ** 2)
-        inc = 1j * delta * cos_t / n_top_i
-        T1 = _inv(G + 1j * Kz_scaled @ F) @ (1j * Kz_scaled @ delta + inc)
+        Kz_scaled = Kz_top / (n_top ** 2)
+        inc = -1j * delta * cos_t / n_top
+        T1 = _inv(G - 1j * Kz_scaled @ F) @ (-1j * Kz_scaled @ delta + inc)
 
     R = (F @ T1 - delta)[None, :]
     Tt = (T @ T1)[None, :]
@@ -275,7 +272,7 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
         de_ti = xp.real(Tt * xp.conj(Tt) * xp.real(kz_bot / (n_top * cos_t)))
     else:         # TM
         de_ti = xp.real(Tt * xp.conj(Tt)
-                        * xp.real(xp.conj(kz_bot) / n_bot ** 2 / (cos_t / n_top)))
+                        * xp.real(kz_bot / n_bot ** 2 / (cos_t / n_top)))
 
     if not full:
         return de_ri, de_ti
@@ -321,16 +318,16 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     ky_col = xp.reshape(ky, (-1, 1))
 
     # --- stage 1: boundary init (transfer_1d_conical_1) --------------------------------
-    kz_top = xp.reshape(boundary_kz(xp, n_top, kx, ky_col), (-1,))
-    kz_bot = xp.reshape(boundary_kz(xp, n_bot, kx, ky_col), (-1,))
+    k_par_sq = kx ** 2 + ky_col ** 2
+    kz_top = xp.reshape(boundary_kz(xp, n_top ** 2, k_par_sq), (-1,))
+    kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq), (-1,))
     varphi = xp.reshape(xp.atan(ky_col / kx), (-1,))
 
-    eps_bot = substrate_eps(xp, n_bot)   # conjugated convention: see conventions
-    kz_sub = outgoing_sqrt(xp, xp.reshape(eps_bot - kx ** 2 - ky_col ** 2 - 1e-20j, (-1,)))
-    Kz_bot = _diag(xp, kz_sub)
+    eps_bot = n_bot ** 2
+    Kz_bot = _diag(xp, kz_bot)
 
-    big_F = _block(xp, [[I, O], [O, 1j * Kz_bot / eps_bot]])
-    big_G = _block(xp, [[1j * Kz_bot, O], [O, I]])
+    big_F = _block(xp, [[I, O], [O, -1j * Kz_bot / eps_bot]])
+    big_G = _block(xp, [[-1j * Kz_bot, O], [O, I]])
     big_T = xp.astype(xp.eye(2 * ff_xy), C)
 
     # See solve_1d: only auto-detection reads this, and it needs a concrete n_bot.
@@ -442,18 +439,17 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
     bG = [[big_G[:ff_xy, :ff_xy], big_G[:ff_xy, ff_xy:]],
           [big_G[ff_xy:, :ff_xy], big_G[ff_xy:, ff_xy:]]]
 
-    n_top_i = internal_index(xp, n_top)
     final_A = _block(xp, [
         [I, O, -bF[0][0], -bF[0][1]],
-        [O, -1j * Kz_top / (n_top_i ** 2), -bF[1][0], -bF[1][1]],
-        [-1j * Kz_top, O, -bG[0][0], -bG[0][1]],
+        [O, 1j * Kz_top / (n_top ** 2), -bF[1][0], -bF[1][1]],
+        [1j * Kz_top, O, -bG[0][0], -bG[0][1]],
         [O, I, -bG[1][0], -bG[1][1]],
     ])
     final_B = _block(xp, [
         [-sin_psi * delta],
         [cos_psi * cos_t * delta],
-        [-1j * sin_psi * n_top_i * cos_t * delta],
-        [-1j * n_top_i * cos_psi * delta],
+        [1j * sin_psi * n_top * cos_t * delta],
+        [1j * n_top * cos_psi * delta],
     ])
 
     final_A_inv = _inv(final_A)
@@ -489,8 +485,8 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
         c_p = xp.cos(xp.asarray(psi_v, dtype=C))
         cols.append(_block(xp, [[-s_p * delta],
                                 [c_p * cos_t * delta],
-                                [-1j * s_p * n_top_i * cos_t * delta],
-                                [-1j * n_top_i * c_p * delta]]))
+                                [1j * s_p * n_top * cos_t * delta],
+                                [1j * n_top * c_p * delta]]))
     final_RT_tetm = final_A_inv @ xp.concat(cols, axis=1)
 
     def split2(M):
@@ -522,9 +518,9 @@ def sp_efficiencies(xp, kz_top_2d, kz_bot_2d, denom, n_top, n_bot, R_s, R_p, T_s
     Shared by the TMM final matching and the SMM connecting algorithm.
     """
     return (xp.real(R_s * xp.conj(R_s) * xp.real(kz_top_2d / denom)),
-            xp.real(R_p * xp.conj(R_p) * xp.real(xp.conj(kz_top_2d) / n_top ** 2 / denom)),
+            xp.real(R_p * xp.conj(R_p) * xp.real(kz_top_2d / n_top ** 2 / denom)),
             xp.real(T_s * xp.conj(T_s) * xp.real(kz_bot_2d / denom)),
-            xp.real(T_p * xp.conj(T_p) * xp.real(xp.conj(kz_bot_2d) / n_bot ** 2 / denom)))
+            xp.real(T_p * xp.conj(T_p) * xp.real(kz_bot_2d / n_bot ** 2 / denom)))
 
 
 def _pack(R_s, R_p, T_s, T_p, de_ri_s, de_ri_p, de_ti_s, de_ti_p):

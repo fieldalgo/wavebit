@@ -113,7 +113,7 @@ def test_4_tm_transmittance_conjugation():
 
 def test_5_continuous_raster_convolution_matrix():
     print("==================================================")
-    print("Test 5: Continuous Raster Convolution Matrix np.conj")
+    print("Test 5: Continuous Raster Convolution Matrix sign")
     print("==================================================")
     
     from fieldwave._core.factorization import to_conv_mat_raster_continuous
@@ -122,9 +122,11 @@ def test_5_continuous_raster_convolution_matrix():
     ucell = np.array([[[0.18 + 3.0j]]])
     
     epx, epy, epz_i = to_conv_mat_raster_continuous(ucell, fto_x=1, fto_y=1)
+    # eps = n**2 with no conjugation: Im(n) > 0 is loss, so Im(eps) > 0 as well. This
+    # asserted the opposite until 2026-08, when the solver stopped conjugating on the way in.
     imag_part = epx[0, 0, 0].imag
     print(f"[on_numpy continuous raster] eps[0,0,0] imag part = {imag_part:.4f}")
-    assert imag_part < 0, f"Expected negative imaginary part for lossy material, got {imag_part}"
+    assert imag_part > 0, f"Expected positive imaginary part for lossy material, got {imag_part}"
     print("SUCCESS: Test 5 Passed!\n")
 
 
