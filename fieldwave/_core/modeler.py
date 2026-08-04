@@ -16,11 +16,12 @@ Two conventions carry over from the already-ported modules:
   (``rotate[0, 0] = ...``, ``ucell_layer[r0:r1, c0:c1] = pmty``, ``arr[:, ::2] = ...``). Each is
   rewritten as a build-then-``stack``/``concat``, or as a ``where`` over a statically computed
   index mask, so the values stay in the differentiable chain on every backend.
-* **Geometry decisions are eager, material values flow through.** Sorting the block edges,
-  picking the rotation octant, locating the ellipse's topmost contour point — all of these
-  branch on values and are narrowed to Python with ``bool()`` / ``int()``. The coordinates and
-  refractive indices themselves are never narrowed, so gradients still reach ``cx``, ``cy``,
-  ``lx``, ``ly``, ``angle`` and ``n_index``.
+* **Geometry decisions are eager, material values flow through.** Sorting the block edges and
+  picking the rectangle's rotation octant branch on values and are narrowed to Python with
+  ``bool()`` / ``int()``. The coordinates and refractive indices themselves are never narrowed,
+  so gradients still reach ``cx``, ``cy``, ``lx``, ``ly``, ``angle`` and ``n_index``. The
+  ellipse needs no such decision at all: its blocks are one closed-form expression of the
+  shape parameters, valid at every angle.
 
 The one genuinely backend-specific corner is the material table: it is read off disk
 (``np.loadtxt`` / ``scipy.io.loadmat``) and interpolated with NumPy, because there is no
@@ -171,16 +172,6 @@ def _precision_is_double(type_complex):
     if '64' in s or '32' in s:
         return False
     raise ValueError(f'unsupported type_complex: {type_complex}')
-
-
-def _minimum(a, b):
-    """Python's two-argument ``min`` on possibly-array operands (narrows only the predicate)."""
-    return b if bool(b < a) else a
-
-
-def _maximum(a, b):
-    """Python's two-argument ``max`` on possibly-array operands."""
-    return b if bool(b > a) else a
 
 
 def _bisect_left(seq, value):
@@ -514,118 +505,79 @@ class Modeling:
                 angle_margin=1E-5, debug=False):
         """Ellipse (axes ``lx`` / ``ly``, rotated by ``angle``) as a stack of blocks.
 
-        The contour is sampled, rolled so the topmost point comes first, then walked down both
-        sides at once; each consecutive pair of points bounds one block.
+        The shape is cut into horizontal slabs and each slab becomes one axis-aligned block
+        whose centre and width are the ellipse's *exact* horizontal chord at the slab's
+        mid-height. Taking the chord at the middle of the slab rather than at its edge is what
+        makes the error cancel to first order, so the decomposition converges like
+        ``n_split**-2`` and does so monotonically.
+
+        The slab edges are spaced uniformly in the contour angle measured from the top vertex,
+        not uniformly in ``y``, which keeps the slabs short where the boundary turns fastest —
+        the caps — and is the same sampling the contour walk this replaced used.
+
+        The decomposition is a stack in ``y``, so it has one resolution and not two;
+        ``n_split_w`` and ``n_split_h`` were never independent either (the contour walk stacked
+        the two samplings, so unequal counts raised), and the larger of the two is the slab
+        count. ``angle_margin`` is accepted for call compatibility with :meth:`rectangle` and
+        ignored: the chord is a closed form that stays exact and smooth through every angle, so
+        there is no aligned special case to fall back to and nothing to wrap ``angle`` into.
+        That also means ``angle`` carries a usable gradient here at every value, which is not
+        true of :meth:`rectangle` (see its docstring). ``debug`` returns the slab edges and the
+        chord centres and half-widths alongside the blocks.
+
+        The previous decomposition sampled the contour and paired consecutive points into
+        blocks. Each block took its left edge from one sample and its right edge from another
+        at a *different* height, so the width error did not shrink with ``n_split``, it only
+        changed sign — measured against the true chord it alternated by several percent of the
+        radius at ``n_split`` 20 and again at 80, which is the oscillation this replaces. It
+        also had a silent failure: when the sampling put a point exactly on the top vertex
+        (an unrotated ellipse with ``n_split % 4 == 1``) the two sides came out level, the
+        interleave produced nothing, and every block collapsed to the origin — the ellipse
+        vanished from the layer with no error raised.
         """
         xp = self._ns(cx, cy, lx, ly, angle, self._period)
         dev = self._dev(cx, cy, lx, ly, angle)
         C, F = self._complex(xp), self._float(xp)
 
         # The ellipse (unlike the rectangle) carries its axes as complex from the start.
+        cx = _shape_param(xp, cx, C, dev)
+        cy = _shape_param(xp, cy, C, dev)
         lx = _shape_param(xp, lx, C, dev)
         ly = _shape_param(xp, ly, C, dev)
         angle = _shape_param(xp, angle, F, dev)
 
-        angle = angle % (2 * _PI)
-
-        points_x_origin = lx / 2 * xp.cos(xp.linspace(_PI / 2, 0, n_split_w, dtype=F, device=dev))
-        points_y_origin = ly / 2 * xp.sin(xp.linspace(-_PI / 2, _PI / 2, n_split_h,
-                                                      dtype=F, device=dev))
-
-        points_x_origin_contour = lx / 2 * xp.cos(
-            xp.linspace(-_PI, _PI, n_split_w, dtype=F, device=dev))[:-1]
-        points_y_origin_contour = ly / 2 * xp.sin(
-            xp.linspace(-_PI, _PI, n_split_h, dtype=F, device=dev))[:-1]
-        points_origin_contour = xp.stack([points_x_origin_contour, points_y_origin_contour])
-
-        D = points_x_origin.dtype
-        axis_x_origin = xp.stack(
-            [points_x_origin, xp.ones(points_x_origin.shape[0], dtype=D, device=dev)])
-        axis_y_origin = xp.stack(
-            [xp.ones(points_y_origin.shape[0], dtype=D, device=dev), points_y_origin])
-
-        cos_a = xp.astype(xp.cos(angle), D)
-        sin_a = xp.astype(xp.sin(angle), D)
-        rotate = xp.stack([xp.concat([cos_a, -sin_a]), xp.concat([sin_a, cos_a])])
-
-        # (2, n) -> (2, n, 1), then offset the x row by cx and the y row by cy.
-        offset = xp.reshape(xp.stack([_as1(xp, cx, D, dev), _as1(xp, cy, D, dev)]), (2, 1, 1))
-
-        axis_x_rot = (rotate @ axis_x_origin)[:, :, None] + offset
-        axis_y_rot = (rotate @ axis_y_origin)[:, :, None] + offset
-        points_contour_rot = (rotate @ points_origin_contour)[:, :, None] + offset
-
-        n_contour = points_contour_rot.shape[1]
-        if n_contour < 3:
+        n_slab = max(int(n_split_w), int(n_split_h))
+        if n_slab < 2:
             raise ValueError(
-                f'an ellipse contour needs at least 3 points, got {n_contour}: raise '
-                f'n_split_w / n_split_h (they give n_split - 1 contour points each)')
+                f'an ellipse needs at least 2 slabs, got {n_slab}: raise n_split_w / n_split_h')
 
-        # Topmost contour point — a geometry decision, so it is narrowed to Python here.
-        y_highest_index = int(xp.argmax(xp.real(points_contour_rot), axis=1)[1, 0])
-        points_contour_rot = xp.roll(points_contour_rot, n_contour // 2 - y_highest_index, axis=1)
-        y_highest_index = int(xp.argmax(xp.real(points_contour_rot), axis=1)[1, 0])
+        a, b = lx / 2, ly / 2
+        cos_a = xp.astype(xp.cos(angle), C)
+        sin_a = xp.astype(xp.sin(angle), C)
 
-        # The contour is closed, so the neighbours wrap — the same ``% n_contour`` the block
-        # loop below already uses. Without it ``+ 1`` runs off the end and the default
-        # ``n_split_w = n_split_h = 2`` raised IndexError, i.e. an ellipse could not be drawn
-        # without knowing to pass a larger split.
-        right = points_contour_rot[:, (y_highest_index - 1) % n_contour]
-        left = points_contour_rot[:, (y_highest_index + 1) % n_contour]
+        # Half-height of the rotated ellipse's bounding box. Every quantity below is written in
+        # terms of it because the chord then needs no square root of a difference: at the angle
+        # ``s`` from the top vertex the boundary is y = cy + R*cos(s), and the chord there is
+        # exactly ``2*a*b*sin(s)/R`` wide, centred at ``cx + (a**2 - b**2)*cos*sin*cos(s)/R``.
+        # (Substituting y into the rotated conic gives a discriminant of ``R**2 - (y - cy)**2``
+        # over ``(a*b)**2``, which the substitution reduces to ``sin(s)**2`` outright.)
+        R = xp.sqrt((b * cos_a) ** 2 + (a * sin_a) ** 2)
 
-        right_y = right[1].real
-        left_y = left[1].real
+        s = xp.linspace(0., _PI, n_slab + 1, dtype=F, device=dev)
+        s_edge = xp.astype(xp.reshape(s, (-1, 1)), C)
+        s_mid = (s_edge[:-1] + s_edge[1:]) / 2
 
-        left_array = []
-        right_array = []
+        y_edge = cy + R * xp.cos(s_edge)                 # descending: top vertex first
+        x_center = cx + (a ** 2 - b ** 2) * cos_a * sin_a * xp.cos(s_mid) / R
+        x_half = a * b * xp.sin(s_mid) / R
 
-        if bool(left_y > right_y):
-            right_array.append(points_contour_rot[:, y_highest_index])
-        elif bool(left_y < right_y):
-            left_array.append(points_contour_rot[:, y_highest_index])
-
-        for i in range(n_contour // 2):
-            left_array.append(points_contour_rot[:, (y_highest_index + i + 1) % n_contour])
-            right_array.append(points_contour_rot[:, (y_highest_index - i - 1) % n_contour])
-
-        # Interleave the two sides (the legacy wrote into ``arr[:, ::2]`` / ``arr[:, 1::2]``).
-        if bool(left_y > right_y):
-            first, second = right_array, left_array
-        elif bool(left_y < right_y):
-            first, second = left_array, right_array
-        else:
-            first, second = [], []
-
-        columns = []
-        for i in range(len(first)):
-            columns.append(first[i])
-            if i < len(second):
-                columns.append(second[i])
-
-        if columns:
-            arr = xp.stack(columns, axis=1)
-        else:  # degenerate: both sides level (the legacy left its buffer at zero here)
-            arr = xp.zeros((2, len(right_array) + len(left_array), 1),
-                           dtype=points_contour_rot.dtype, device=dev)
-
-        arr_roll = xp.roll(arr, -1, axis=1)
-
-        AC = points_contour_rot.dtype
-        res = []
-        for i in range(arr.shape[1]):
-            ax, ay = arr[0, i], arr[1, i]
-            bx, by = arr_roll[0, i], arr_roll[1, i]
-
-            LL = [xp.astype(_minimum(ay.real, by.real), AC),
-                  xp.astype(_minimum(ax.real, bx.real), AC)]
-            UR = [xp.astype(_maximum(ay.real, by.real), AC),
-                  xp.astype(_maximum(ax.real, bx.real), AC)]
-
-            res.append([LL, UR, n_index])
+        res = [[[y_edge[i + 1], x_center[i] - x_half[i]],
+                [y_edge[i], x_center[i] + x_half[i]], n_index]
+               for i in range(n_slab)]
 
         if debug:
-            return res[:-1], (axis_x_rot, axis_y_rot, points_contour_rot)
-        return res[:-1]
+            return res, (y_edge, x_center, x_half)
+        return res
 
     # ------------------------------------------------------------------------------ gridding
 

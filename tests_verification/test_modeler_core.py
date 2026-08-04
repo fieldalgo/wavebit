@@ -4,6 +4,8 @@ The modeler decomposes parametric shapes — rectangles and ellipses, optionally
 the piecewise-constant blocks the vector factorization consumes. Its reference values were
 captured from the legacy per-backend implementation before that was deleted
 (gen_goldens_modeler.py -> golden_legacy_modeler.npz).
+
+The ellipse is the exception — see ``LEGACY_PARITY`` below and test_modeler_ellipse.py.
 """
 import pathlib
 
@@ -32,8 +34,16 @@ INSTRUCTIONS = {
 SOLVE_KW = dict(period=PERIOD, thickness=[205.0, 100.0], fto=[3, 3],
                 n_top=1.0, n_bot=1.0, wavelength=900.0, pol=0.5)
 
+# The ellipse is deliberately not held to its legacy golden. The decomposition those numbers
+# were captured from did not converge — refining the contour changed the structure instead of
+# resolving it, so the efficiency swung between 0.24 and 0.68 as ``n_split`` grew, and one
+# family of splits deleted the shape outright. Reproducing that is not a property worth
+# keeping, so the ellipse is checked against geometry in test_modeler_ellipse.py instead. The
+# rectangle, which does converge, keeps its parity here.
+LEGACY_PARITY = [name for name in INSTRUCTIONS if not name.startswith('ellipse')]
 
-@pytest.mark.parametrize('name', list(INSTRUCTIONS))
+
+@pytest.mark.parametrize('name', LEGACY_PARITY)
 def test_vector_blocks_match_legacy_golden(name):
     """The decomposed blocks and their edges, layer by layer."""
     info = Modeling(period=PERIOD).modeling_vector_instruction(INSTRUCTIONS[name])
@@ -47,7 +57,7 @@ def test_vector_blocks_match_legacy_golden(name):
 
 
 @pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
-@pytest.mark.parametrize('name', list(INSTRUCTIONS))
+@pytest.mark.parametrize('name', LEGACY_PARITY)
 def test_vector_solve_matches_legacy_golden(name, backend):
     """End to end: modeled geometry -> factorization -> efficiencies, on every backend."""
     if backend:

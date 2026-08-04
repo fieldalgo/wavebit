@@ -1,6 +1,11 @@
 """Freeze the legacy vector modeler's output as reference data.
 
 Run while fieldwave/on_numpy/modeler/modeling.py still exists.
+
+The two ``ellipse`` entries it writes are kept for the record but are no longer asserted
+against: the legacy ellipse decomposition did not converge under refinement, so
+test_modeler_core.py holds only the rectangles to parity and test_modeler_ellipse.py checks
+the ellipse against geometry instead.
 """
 import pathlib
 
