@@ -114,14 +114,15 @@ def test_enums_accept_name_or_value():
 def test_sweep_expands_to_the_cartesian_product():
     spec = JobSpec.from_dict({
         **BINARY_GRATING,
-        'sweep': {'wavelength': {'linspace': [500.0, 900.0, 5]}, 'theta': [0.0, 10.0]},
+        # radians, and the test said 10.0 until the units rule caught it
+        'sweep': {'wavelength': {'linspace': [500.0, 900.0, 5]}, 'theta': [0.0, 0.2]},
     })
     assert len(spec) == 10                          # 5 wavelengths x 2 angles
 
     points = spec.expand()
     assert len(points) == 10
     assert [(p.incidence.wavelength, p.incidence.theta) for p in points[:3]] == [
-        (500.0, 0.0), (500.0, 10.0), (600.0, 0.0)]
+        (500.0, 0.0), (500.0, 0.2), (600.0, 0.0)]
 
     # every point is independently executable, and distinct
     assert all(not p.sweep for p in points)
@@ -141,7 +142,7 @@ def test_linspace_endpoints_are_exact():
     assert axis[0] == 500.0
     assert axis[-1] == pytest.approx(1000.0)
     assert len(axis) == 6
-    assert Sweep.from_dict({'theta': {'linspace': [7.0, 7.0, 1]}}).axes['theta'] == [7.0]
+    assert Sweep.from_dict({'theta': {'linspace': [0.7, 0.7, 1]}}).axes['theta'] == [0.7]
 
 
 def test_running_a_sweep_spec_is_refused_with_the_way_out():
@@ -197,3 +198,33 @@ def test_raster_ref_is_refused_by_the_stateless_entry_point():
 def test_run_rejects_a_type_it_cannot_interpret():
     with pytest.raises(SpecError, match=r'expected a JobSpec'):
         fieldwave.run(42)
+
+
+# ---------------------------------------------------------------- units
+
+def test_degrees_where_radians_belong_are_refused():
+    """The trap this rule exists for: nothing downstream can catch it.
+
+    A polar angle of 10 makes the solver return finite numbers that conserve no energy, and
+    they look like absorption — which the solver's physical check deliberately permits,
+    since a lossy stack does exactly that. So the only place it can be caught is here.
+    """
+    with pytest.raises(SpecError, match=r'RADIANS'):
+        JobSpec.from_dict({**BINARY_GRATING,
+                           'incidence': {**BINARY_GRATING['incidence'], 'theta': 10.0}})
+
+    # and by the same route a sweep takes, which reaches the solver through expand()
+    with pytest.raises(SpecError, match=r'RADIANS'):
+        JobSpec.from_dict({**BINARY_GRATING, 'sweep': {'theta': [0.0, 5.0]}})
+
+
+def test_real_polar_angles_pass():
+    import math
+    spec = JobSpec.from_dict({
+        **BINARY_GRATING,
+        'sweep': {'theta': [0.0, math.radians(10), math.radians(60), -math.radians(45)]}})
+    assert len(spec) == 4
+    # A lossless stack must still conserve energy at a real angle.
+    for point in spec.expand():
+        r = fieldwave.run(point)
+        assert r.de_ri.sum() + r.de_ti.sum() == pytest.approx(1.0, abs=1e-9)

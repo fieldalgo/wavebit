@@ -32,6 +32,7 @@ from itertools import product
 from typing import Any, Optional
 import hashlib
 import json
+import math
 
 from .domain import Layer, Stack, Incidence
 from .enums import Backend, Pol, FourierType
@@ -194,6 +195,11 @@ class Sweep:
                 values = [start + i * step for i in range(num)]
             if not values:
                 raise SpecError(f"sweep.{name}: no values — an empty axis has no points")
+            if name == 'theta':
+                # Swept angles reach the solver through expand(), bypassing the incidence
+                # check, so the same bound is applied where the values are declared.
+                for v in values:
+                    _check_polar_angle(v)
             axes[name] = values
         return cls(axes=axes)
 
@@ -378,7 +384,33 @@ def _incidence_from_dict(d) -> Incidence:
     _reject_unknown(d, ('wavelength', 'theta', 'phi', 'pol', 'psi'), 'incidence')
     if 'pol' in d:
         d['pol'] = _normalise_pol(d['pol'])
+    if 'theta' in d:
+        _check_polar_angle(d['theta'])
     return Incidence(**d)
+
+
+def _check_polar_angle(theta):
+    """Reject a polar angle that cannot be one — which in practice means degrees.
+
+    Angles here are **radians**, and nothing in the arithmetic objects to being handed
+    degrees: ``theta=10`` is 573 degrees, and the solver returns finite numbers for it that
+    conserve no energy. Worse, they look like absorption, so the solver's own physical check
+    passes them — it declines to flag ``R + T < 1`` precisely because a lossy stack does that
+    legitimately, and it cannot tell the two apart.
+
+    Nothing downstream can catch this, so it is caught here. A polar angle at or beyond
+    pi/2 is light arriving from behind the stack, so the bound costs no legitimate use.
+    """
+    try:
+        magnitude = abs(float(theta))
+    except (TypeError, ValueError):
+        return                                       # arrays and tensors are checked by use
+    if magnitude >= math.pi / 2:
+        raise SpecError(
+            f'incidence.theta: {theta} is not a polar angle — angles are in RADIANS, and '
+            f'this is {math.degrees(magnitude):.0f} degrees. Did you mean '
+            f'{math.radians(magnitude):.4f}? (Nothing further downstream can catch this: '
+            f'the solve returns finite numbers that merely look absorbing.)')
 
 
 def _normalise_pol(pol):
