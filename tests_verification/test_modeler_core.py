@@ -133,6 +133,100 @@ def test_rotated_rectangle_grid_keeps_the_legacy_layer_with_fewer_lines():
     assert not np.all(np.diff(np.asarray(GOLDEN['rect_rot__L0__y']).reshape(-1).real) > 0)
 
 
+@pytest.mark.parametrize('angle,swapped', [(0.0, False), (np.pi / 2, True), (np.pi, False),
+                                           (3 * np.pi / 2, True), (2 * np.pi, False)])
+@pytest.mark.parametrize('n_split', [0, 1])
+def test_axis_aligned_rectangle_is_the_exact_single_block(angle, swapped, n_split):
+    """An aligned rectangle needs no decomposition and does not get one.
+
+    It used to reach that through an ``angle_margin`` special case. Now it falls out: the two
+    triangles have zero height at an aligned angle, so only the band is left, and one slab
+    across the band *is* the rectangle. Held to ``rectangle_no_approximation`` bit-for-bit,
+    including the side swap past a quarter turn.
+    """
+    modeler = Modeling(period=PERIOD)
+    got = modeler.rectangle(150.0, 150.0, 80.0, 60.0, 2.0, angle, n_split, n_split)
+    lx, ly = (60.0, 80.0) if swapped else (80.0, 60.0)
+    want = modeler.rectangle_no_approximation(150.0, 150.0, lx, ly, 2.0)
+
+    assert len(got) == 1
+    for got_corner, want_corner in zip(got[0][:2], want[0][:2]):
+        for g, w in zip(got_corner, want_corner):
+            assert float(np.real(np.asarray(g).reshape(-1)[0])) == float(np.real(w))
+
+
+@pytest.mark.parametrize('angle', [0.0, 1e-9, 0.05, -0.05, 0.4, -0.4, 1.0, 2.5, 4.0,
+                                   np.pi / 2, -np.pi / 2])
+def test_rectangle_blocks_sum_to_the_true_area(angle):
+    """The blocks account for ``lx*ly`` exactly, at every angle.
+
+    The chord is linear in height between the two inner corners, and those corners are slab
+    boundaries, so reading the chord at the middle of a slab gives that slab its exact area.
+    """
+    blocks = Modeling(period=PERIOD).rectangle(150.0, 150.0, 80.0, 60.0, 2.0, angle, 4, 4)
+    f = lambda v: float(np.real(np.asarray(v).reshape(-1)[0]))
+    area = sum((f(b[1][0]) - f(b[0][0])) * (f(b[1][1]) - f(b[0][1])) for b in blocks)
+
+    assert area == pytest.approx(80.0 * 60.0, rel=1e-12)
+
+
+def test_rectangle_has_no_step_where_the_angle_margin_used_to_end():
+    """Crossing 1e-5 rad no longer moves the answer on its own.
+
+    The margin returned the exact block below 1e-5 and the decomposition above it, so the
+    efficiency sat on its ``angle = 0`` value across the window and then dropped 6.75e-5 in one
+    step at the edge — a step that did not shrink from ``n_split`` 4 to 1024. Here the slope
+    across that crossing has to match the slope just outside it.
+    """
+    cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
+               wavelength=900.0, pol=0.5)
+
+    def de_ti(angle):
+        ucell = [[3.5, [['rectangle', 150.0, 150.0, 80.0, 60.0, 2.0, angle, 8, 8]]]]
+        return float(np.sum(np.asarray(
+            fieldwave.rcwa(backend=0, ucell=ucell, **cfg).conv_solve().de_ti)))
+
+    across = (de_ti(1.02e-5) - de_ti(0.98e-5)) / (0.04e-5)
+    outside = (de_ti(1.10e-5) - de_ti(1.06e-5)) / (0.04e-5)
+
+    assert across == pytest.approx(outside, rel=1e-3), (across, outside)
+
+
+def test_rectangle_angle_carries_gradient_near_an_aligned_angle():
+    """``backward()`` used to raise here, not return zero.
+
+    Inside the margin the exact branch never touched ``angle``, so the graph was cut and torch
+    reported ``element 0 of tensors does not require grad``. 1e-5 rad is inside that window.
+
+    At an exactly aligned angle the derivative is still not the one-sided slope: the two
+    triangles appear only once the angle leaves zero, so the structure differs on the two sides
+    and autograd returns a subgradient of the kink. That is one point rather than a window, and
+    it is checked separately below.
+    """
+    torch = pytest.importorskip('torch')
+    tensor = lambda v: torch.tensor(v, dtype=torch.float64)
+    cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
+               wavelength=900.0, pol=0.5)
+
+    def de_ti(angle):
+        ucell = [[3.5, [['rectangle', tensor(150.0), tensor(150.0), tensor(80.0),
+                         tensor(60.0), 2.0, angle, 8, 8]]]]
+        return torch.sum(fieldwave.rcwa(backend=2, ucell=ucell, **cfg).conv_solve().de_ti)
+
+    p = torch.tensor(1e-5, dtype=torch.float64, requires_grad=True)
+    out = de_ti(p)
+    assert out.requires_grad, 'angle left the graph — the margin is back'
+    out.backward()
+    auto = float(p.grad)
+
+    step = 5e-6
+    with torch.no_grad():
+        fd = float((de_ti(tensor(1e-5 + step)) - de_ti(tensor(1e-5 - step))) / (2 * step))
+
+    assert abs(fd) > 1.0, fd
+    assert auto == pytest.approx(fd, rel=1e-3), (auto, fd)
+
+
 @pytest.mark.parametrize('shape,args', [
     ('ellipse', (350., 350., 400., 250., 3.0, 0.0, 24, 24)),     # symmetric: edges coincide
     ('ellipse', (350., 350., 400., 250., 3.0, 0.0, 25, 25)),     # the other parity

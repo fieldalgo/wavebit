@@ -205,21 +205,40 @@ def test_vector_edge_gradients(param, index, start, name):
 
 # ------------------------------------------------------------------- shape gradients near zero
 
-def test_rectangle_margin_is_symmetric_about_zero():
-    """A rectangle at -1e-6 rad must take the same branch as one at +1e-6.
+def test_rectangle_is_built_the_same_way_on_both_sides_of_zero_angle():
+    """A rectangle at -1e-6 rad must be built exactly like one at +1e-6.
 
-    ``angle`` is wrapped into [0, 2*pi) before the near-alignment test, so a small negative
-    angle arrives as ``2*pi - eps``. The targets used to stop at ``3*pi/2``, so the negative
-    side fell through to the rotated decomposition while the positive side got the exact
-    single block, and the two disagreed by 2e-7 in efficiency — a step sitting exactly on the
-    unrotated case, which is where any sidewall-angle fit starts.
+    ``angle`` used to be wrapped into [0, 2*pi) and then tested against a list of aligned
+    targets that stopped at ``3*pi/2``, so a small *negative* angle arrived as ``2*pi - eps``,
+    missed every target, and fell through to the rotated decomposition while the positive side
+    got an exact single block. The two disagreed by 2e-7 in efficiency — a step sitting exactly
+    on the unrotated case, which is where any sidewall-angle fit starts.
+
+    There is no aligned-target test left to get wrong: the angle folds onto ``[0, pi/2)`` and
+    both sides run the same code. So the check is on the geometry the two sides produce, which
+    is now identical rather than merely close, and on the unrotated case still sitting between
+    them.
     """
     m = fieldwave.rcwa(backend=0, period=[300.0, 300.0]).modeler
     blocks = [m.rectangle(150.0, 150.0, 80.0, 60.0, 2.0, a) for a in (-1e-6, 0.0, 1e-6)]
-    assert [len(b) for b in blocks] == [1, 1, 1], [len(b) for b in blocks]
-    for side in (0, 2):
-        assert np.allclose(np.asarray(blocks[side][0][:2], dtype=float),
-                           np.asarray(blocks[1][0][:2], dtype=float))
+    f = lambda v: float(np.real(np.asarray(v).reshape(-1)[0]))
+
+    def bbox(bs):
+        ys = [f(b[0][0]) for b in bs] + [f(b[1][0]) for b in bs]
+        xs = [f(b[0][1]) for b in bs] + [f(b[1][1]) for b in bs]
+        return min(xs), max(xs), min(ys), max(ys)
+
+    def area(bs):
+        return sum((f(b[1][0]) - f(b[0][0])) * (f(b[1][1]) - f(b[0][1])) for b in bs)
+
+    assert len(blocks[0]) == len(blocks[2]), [len(b) for b in blocks]
+    assert bbox(blocks[0]) == bbox(blocks[2])
+    for bs in blocks:
+        assert area(bs) == pytest.approx(80.0 * 60.0, rel=1e-12)
+
+    # The rotated pair sits within the rotation's own reach of the unrotated one.
+    for a, b in zip(bbox(blocks[0]), bbox(blocks[1])):
+        assert abs(a - b) < 1e-4, (bbox(blocks[0]), bbox(blocks[1]))
 
 
 def test_analytic_angle_is_smooth_through_normal():
@@ -227,10 +246,13 @@ def test_analytic_angle_is_smooth_through_normal():
 
     Rotating a rectangle moves its Fourier coefficients analytically, so the efficiency is
     smooth in ``angle`` and the two one-sided slopes at zero must agree. They do, on the
-    analytic path. The block decomposition instead misses the shape by a staircase of area
-    ``~|angle|`` that ``n_split`` does not remove (measured stable from 4 to 64), which shows
-    up as a kink about twenty times the true slope. A central difference hides it — the
-    ``|angle|`` term cancels — so this only bites an optimizer, which sees one side at a time.
+    analytic path, and that is all this pins.
+
+    The vector path is not held to it. It is a staircase at any angle but zero, and at zero it
+    stops being one — the two triangles appear the moment the angle leaves it — so the two
+    sides of zero are not built from the same number of blocks and its one-sided slopes are
+    free to differ. A central difference hides that, so it only bites an optimizer, which sees
+    one side at a time.
     """
     base = dict(period=[300.0, 300.0], thickness=[205.0], fto=[5, 5], n_top=1.0, n_bot=1.0,
                 wavelength=900.0, pol=0.5, theta=0.1, phi=0.3)
