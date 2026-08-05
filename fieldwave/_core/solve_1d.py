@@ -20,7 +20,7 @@ Stages (matching the legacy chain, kept as one function each to make bit-parity 
   2. per-layer eig+couple— Redheffer/transfer propagation from the bottom layer up
   3. final matching      — incident field -> R, T -> diffraction efficiency
 """
-from .backend import array_namespace, as_array, eig
+from .backend import array_namespace, as_array, check_finite, check_physical, eig
 from .conventions import boundary_kz, mode_q
 
 
@@ -274,6 +274,9 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
         de_ti = xp.real(Tt * xp.conj(Tt)
                         * xp.real(kz_bot / n_bot ** 2 / (cos_t / n_top)))
 
+    check_finite(xp, de_ri=de_ri, de_ti=de_ti)
+    check_physical(xp, de_ri, de_ti, n_top)
+
     if not full:
         return de_ri, de_ti
 
@@ -470,6 +473,9 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
                                R_s_, R_p_, T_s_, T_p_)
 
     de_ri_s, de_ri_p, de_ti_s, de_ti_p = efficiencies(R_s, R_p, T_s, T_p)
+
+    check_finite(xp, de_ri=de_ri_s + de_ri_p, de_ti=de_ti_s + de_ti_p)
+    check_physical(xp, de_ri_s + de_ri_p, de_ti_s + de_ti_p, n_top)
 
     if not full:
         return de_ri_s + de_ri_p, de_ti_s + de_ti_p

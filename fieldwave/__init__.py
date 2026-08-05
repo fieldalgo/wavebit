@@ -1,4 +1,5 @@
 from .main import rcwa
+from ._core.backend import UnphysicalResultWarning
 from ._core.enums import Backend, Pol, FourierType
 from ._core.domain import Layer, Stack, Incidence
 from ._core.geometry import StaticGeometry

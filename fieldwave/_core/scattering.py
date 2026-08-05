@@ -36,7 +36,7 @@ Not supported: field reconstruction. ``calculate_field`` needs the per-layer amp
 propagators that the TMM recursion produces as a by-product; the SMM path returns
 ``layer_info_list = []`` and :mod:`fieldwave._core.fields` raises a clear error on it.
 """
-from .backend import array_namespace, as_array
+from .backend import array_namespace, as_array, check_finite, check_physical
 from .conventions import boundary_kz
 from .solve_1d import (_block, _diag, _pack, _unit, layer_modes_1d, layer_modes_1d_conical,
                        sp_efficiencies, sp_modes_1d_conical)
@@ -188,6 +188,9 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
         de_ti = xp.real(Tt * xp.conj(Tt)
                         * xp.real(xp.conj(kz_bot) / n_bot ** 2 / (cos_t / n_top)))
 
+    check_finite(xp, de_ri=de_ri, de_ti=de_ti)
+    check_physical(xp, de_ri, de_ti, n_top)
+
     if not full:
         return de_ri, de_ti
 
@@ -280,6 +283,9 @@ def _smm_sp(xp, C, inv, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     kz_bot_2d = xp.reshape(kz_bot, (ff_y, ff_x))
     denom = n_top * xp.cos(xp.asarray(theta, dtype=C))
     eff = sp_efficiencies(xp, kz_top_2d, kz_bot_2d, denom, n_top, n_bot, R_s, R_p, T_s, T_p)
+
+    check_finite(xp, de_ri=eff[0][0] + eff[1][0], de_ti=eff[2][0] + eff[3][0])
+    check_physical(xp, eff[0][0] + eff[1][0], eff[2][0] + eff[3][0], n_top)
 
     if not full:
         return eff[0][0] + eff[1][0], eff[2][0] + eff[3][0]

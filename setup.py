@@ -31,7 +31,15 @@ setup(
     license='Apache-2.0',
     packages=['fieldwave'] + find_packages(include=['fieldwave.*']),
     install_requires=[
-        'numpy>=2.2',
+        # 2.3.1, not 2.2, because of a NumPy bug in the complex `matmul` FP-status check:
+        # on 2.2.x and 2.3.0 an ordinary complex matrix product raises a cascade of
+        # `RuntimeWarning: overflow / divide by zero / invalid value encountered in matmul`
+        # on values nowhere near overflow -- measured here on a convolution matrix with
+        # condition number 12 whose largest entry was 2.1. A single 2D solve emitted 456 of
+        # them. The values were never affected (energy conserved to ~1e-14, and the results
+        # are bit-identical across versions); only the reporting was. 2.3.1 fixes it, so the
+        # floor is the fix rather than a suppression layer inside the library.
+        'numpy>=2.3.1',
         'scipy>=1.15',
         'array-api-compat>=1.15',
     ],

@@ -16,6 +16,91 @@ def array_namespace(*xs):
     return ac.array_namespace(*xs)
 
 
+def _is_numpy(xp):
+    """True for the eager NumPy namespace — the one backend whose values are always concrete."""
+    name = xp.__name__
+    return 'jax' not in name and 'torch' not in name
+
+
+def check_finite(xp, **named):
+    """Raise if any named eager-NumPy result carries a NaN or an infinity.
+
+    The solve reaches the edges of double precision on purpose — a strongly evanescent mode's
+    ``exp(-k0*q*d)`` lands in the subnormal range — so a result that came back non-finite is
+    worth stopping on rather than returning. This is the check that says so.
+
+    Only the eager NumPy path is checked. Under JAX the values are tracers during ``jit`` /
+    ``grad`` (reading them would either fail or force a concretization that breaks the trace),
+    and PyTorch's are likewise graph nodes; both follow the same eager-only branch convention
+    the rest of the core uses.
+    """
+    if not _is_numpy(xp):
+        return
+    import numpy as np
+    bad = sorted(k for k, v in named.items() if not bool(np.all(np.isfinite(np.asarray(v)))))
+    if bad:
+        raise FloatingPointError(
+            f"non-finite value in {', '.join(bad)} — the solve did not produce a physical "
+            'result. The usual causes are a degenerate structure (a singular interface: a '
+            'layer identical to its neighbour that was not detected as such, a zero or '
+            'near-zero thickness, an exactly grazing order) or a truncation the geometry '
+            'cannot support. Try adjusting fto, re-slicing the stack into thinner layers, or '
+            'use_pinv=True.')
+
+
+class UnphysicalResultWarning(UserWarning):
+    """A solve returned finite but physically impossible efficiencies.
+
+    Its own category so it can be escalated (``warnings.simplefilter('error',
+    UnphysicalResultWarning)`` gives a traceback with the values still in scope) or silenced
+    independently of everything else the library might warn about.
+    """
+
+
+def check_physical(xp, de_ri, de_ti, n_top, atol=1e-3):
+    """Warn if efficiencies are finite but cannot describe a physical result.
+
+    :func:`check_finite` catches contamination that announces itself. This catches the tier
+    below it — a solve that stayed finite and is still wrong, which nothing else would notice.
+    Two signals, both properties of the result rather than of the arithmetic that produced it:
+
+    * a negative efficiency, which is negative power;
+    * ``sum(R) + sum(T) > 1`` for a passive stack, which is gain out of nothing.
+
+    Deliberately *not* checked: ``R + T < 1``, which is just absorption. And the whole check is
+    skipped for a complex ``n_top``, where the incident-power normalization is
+    convention-dependent and the efficiencies are not comparable to 1 at all (the same reason
+    ``test_lossy_media`` declines to compare ``de_ri`` there).
+
+    Known false positive: a gain medium (``Im(n) < 0`` in this codebase's convention) legitimately
+    exceeds 1. Filter :class:`UnphysicalResultWarning` if that is what you are modelling.
+
+    The message carries no numbers, so Python's default filter collapses a sweep's worth of
+    occurrences into one report instead of re-emitting per wavelength; escalate the category to
+    an error when you want to catch a specific one.
+    """
+    if not _is_numpy(xp):
+        return
+    import numpy as np
+    if bool(np.any(np.imag(np.asarray(n_top)) != 0)):
+        return
+
+    r = np.real(np.asarray(de_ri))
+    t = np.real(np.asarray(de_ti))
+    problems = []
+    if float(min(np.min(r), np.min(t))) < -atol:
+        problems.append('a negative efficiency (negative power)')
+    if float(np.sum(r) + np.sum(t)) > 1 + atol:
+        problems.append('R+T above 1 for a passive stack (gain out of nothing)')
+    if problems:
+        import warnings
+        warnings.warn(
+            f"solve returned {' and '.join(problems)}. The result is finite but not physical, "
+            'so treat it as a failed solve: check for a degenerate structure, and try adjusting '
+            'fto, re-slicing the stack into thinner layers, or use_pinv=True.',
+            UnphysicalResultWarning, stacklevel=2)
+
+
 def as_array(xp, v, dtype=None, device=None):
     """``v`` as an ``xp`` array, keeping any autograd graph intact.
 
