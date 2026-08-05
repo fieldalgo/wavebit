@@ -34,6 +34,11 @@ top of them is what gradients see.
 from .backend import array_namespace
 
 
+def _wrap(orders, n):
+    """``orders`` reduced mod ``n`` — the DFT bin each Fourier order lands in."""
+    return [[k % n for k in row] for row in orders]
+
+
 def _circulant_index(fto):
     """Circular index matrix selecting Fourier orders ``m - n`` (pure integer, data-free).
 
@@ -47,11 +52,49 @@ def _circulant_index(fto):
     return [[(r - c) for c in range(ff)] for r in range(ff)]
 
 
-def dfs2d(xp, cell, conti_x, conti_y, fto_x, fto_y):
+def _pixel_correction(xp, orders, n, dtype, device=None):
+    """Turn an ``n``-point DFT coefficient into the exact one for ``n`` constant pixels.
+
+    A raster layer is not a set of samples, it is a piecewise-constant function: pixel ``j``
+    holds its value across ``[j/n, (j+1)/n)``. Integrating that against ``exp(-2*pi*i*k*x)``
+    gives the ``n``-point DFT coefficient times ``sinc(k/n) * exp(-i*pi*k/n)`` — a box
+    transform and the half-pixel offset of the cell centre. Exactly, for any ``k``, including
+    ``|k| > n`` where the DFT itself has wrapped.
+
+    That last part is what makes the upsampling unnecessary rather than merely cheaper. The
+    previous approach repeated each pixel until the grid resolved ``4*fto+1`` harmonics and
+    took the DFT of *that*, which converges to this expression as ``1/R`` — so it was an
+    approximation of a closed form, at a grid cost of ``(4*fto+1)**2`` per layer.
+    """
+    k = xp.astype(xp.asarray(orders, device=device), dtype)
+    t = k / n
+    pi = 3.141592653589793
+    # sinc(t) with the removable singularity at t = 0 handled without a branch, so this stays
+    # differentiable and traceable.
+    num = xp.sin(pi * t)
+    den = xp.where(t == 0, xp.ones_like(t), pi * t)
+    sinc = xp.where(t == 0, xp.ones_like(t), num / den)
+    return sinc * xp.exp(-1j * pi * t)
+
+
+def dfs2d(xp, cell, conti_x, conti_y, fto_x, fto_y, piecewise_constant=False):
     """2D discrete Fourier series of ``cell`` with Li's factorization rules.
 
     ``conti_x`` / ``conti_y`` flag the direction as continuous (1) or discontinuous (0); a
     discontinuous direction takes the inverse rule. Port of the legacy ``dfs2d``.
+
+    ``piecewise_constant`` says each value of ``cell`` holds across its whole pixel, rather
+    than being a sample of something that varies inside it. When that is true the coefficients
+    have an exact closed form and this computes it (see :func:`_pixel_correction`); when it is
+    false there is no exact value to reach from the grid at all, and the transform is left
+    alone.
+
+    A permittivity raster is the first case — ``ucell`` names the material *occupying* each
+    cell, and a coarser or finer spelling of the same structure is the same function. A normal
+    field is the second: it is a continuous vector field this code evaluates on a grid, so
+    refining the grid changes the field itself. Applying the correction there is harmless but
+    pointless (measured end-to-end at ~7e-7, four decades under the field's own discretization
+    error), and it would assert a shape the data does not have.
     """
     ff_x = 2 * fto_x + 1
     ff_y = 2 * fto_y + 1
@@ -63,10 +106,20 @@ def dfs2d(xp, cell, conti_x, conti_y, fto_x, fto_y):
 
     dfs1d = xp.fft.fft(cell / cell.shape[1])
 
-    idx_y = xp.asarray(_circulant_index(fto_y), device=_device(xp, cell))
-    idx_x = xp.asarray(_circulant_index(fto_x), device=_device(xp, cell))
+    dev = _device(xp, cell)
+    ord_y = _circulant_index(fto_y)
+    ord_x = _circulant_index(fto_x)
+    n_y = cell.shape[1]
+
+    # Which DFT bin an order lands in, stated rather than left to Python's negative indexing.
+    # Identical wherever the old form worked, and defined where it did not: raw order indices
+    # need a grid of at least 4*fto+1 to stay in range, which is the whole reason the raster
+    # used to be upsampled before anything else was considered.
+    idx_y = xp.asarray(_wrap(ord_y, n_y), device=dev)
 
     conv1d = dfs1d[:, idx_y]
+    if piecewise_constant:
+        conv1d = conv1d * _pixel_correction(xp, ord_y, n_y, conv1d.dtype, dev)
 
     if conti_x ^ conti_y:
         conv1d = xp.linalg.inv(conv1d)
@@ -74,9 +127,13 @@ def dfs2d(xp, cell, conti_x, conti_y, fto_x, fto_y):
     conv1d = xp.reshape(conv1d, (-1, ff_y ** 2))
 
     conv1d_t = xp.matrix_transpose(conv1d)
-    dfs_2d = xp.fft.fft(conv1d_t / conv1d_t.shape[1])
+    n_x = conv1d_t.shape[1]
+    dfs_2d = xp.fft.fft(conv1d_t / n_x)
 
+    idx_x = xp.asarray(_wrap(ord_x, n_x), device=dev)
     conv2d = dfs_2d[:, idx_x]
+    if piecewise_constant:
+        conv2d = conv2d * _pixel_correction(xp, ord_x, n_x, conv2d.dtype, dev)
     conv2d = xp.reshape(conv2d, (ff_y, ff_y, ff_x, ff_x))
     conv2d = xp.moveaxis(conv2d, 1, 2)
     conv2d = xp.reshape(conv2d, (ff_y * ff_x, ff_y * ff_x))
@@ -93,12 +150,23 @@ def _device(xp, x):
 
 
 def _layer_eps(xp, ucell, fto_x, fto_y, enhanced_dfs):
-    """Yield each layer's permittivity grid, upsampled as the DFS/NVF builders require.
+    """Yield each layer's permittivity grid, upsampled as the caller requires.
 
     Upsampling factors depend only on shapes, so this stays static under tracing. The
     ``n**2`` maps refractive index to permittivity: FieldWave works in ``e^{-iwt}``
     throughout (``Im(n) > 0`` = loss), with no conjugation on the way in.
+
+    ``enhanced_dfs=None`` skips upsampling entirely, which is what the DFS path wants now
+    that :func:`dfs2d` gets the exact coefficients from the pixel grid itself. The NVF path
+    still upsamples: its normal field is a geometric construction that genuinely needs the
+    finer grid, and no closed form replaces it.
     """
+    if enhanced_dfs is None:
+        for i in range(ucell.shape[0]):
+            layer = ucell[i]
+            yield xp.astype(layer, _complex_dtype(xp, layer)) ** 2
+        return
+
     if enhanced_dfs:
         min_y = (4 * fto_y + 1) * ucell.shape[1]
         min_x = (4 * fto_x + 1) * ucell.shape[2]
@@ -122,8 +190,13 @@ def to_conv_mat_raster_discrete(ucell, fto_x, fto_y, enhanced_dfs=True):
         ucell: refractive-index raster, shape ``(n_layers, Ny, Nx)``. This is the design
             variable — gradients flow back to it.
         fto_x, fto_y: Fourier truncation orders.
-        enhanced_dfs: upsample each layer so the raster resolves ``4*fto+1`` harmonics per
-            cell (the legacy default; reduces staircase aliasing).
+        enhanced_dfs: accepted and no longer read *on this path*. It upsampled each layer so
+            the raster resolved ``4*fto+1`` harmonics per cell, which approached the
+            coefficients this now computes exactly (:func:`_pixel_correction`) as ``1/R``. The
+            grid cost ``(4*fto+1)**2`` per layer — 4 GB at ``fto=12`` on a 256x256 cell — and
+            bought ~1e-5 against RETICOLO where the exact route sits at ~1e-14. It still means
+            something to :func:`to_conv_mat_raster_nvf`, whose normal field has no closed form
+            and genuinely needs the finer grid.
 
     Returns:
         ``(epx_conv_all, epy_conv_all, epz_conv_i_all)``, each ``(n_layers, ff_xy, ff_xy)``.
@@ -132,10 +205,10 @@ def to_conv_mat_raster_discrete(ucell, fto_x, fto_y, enhanced_dfs=True):
 
     epx_list, epy_list, epz_i_list = [], [], []
 
-    for eps_matrix in _layer_eps(xp, ucell, fto_x, fto_y, enhanced_dfs):
-        epz_conv = dfs2d(xp, eps_matrix, 1, 1, fto_x, fto_y)
-        epy_conv = dfs2d(xp, eps_matrix, 1, 0, fto_x, fto_y)
-        epx_conv = dfs2d(xp, eps_matrix, 0, 1, fto_x, fto_y)
+    for eps_matrix in _layer_eps(xp, ucell, fto_x, fto_y, None):
+        epz_conv = dfs2d(xp, eps_matrix, 1, 1, fto_x, fto_y, piecewise_constant=True)
+        epy_conv = dfs2d(xp, eps_matrix, 1, 0, fto_x, fto_y, piecewise_constant=True)
+        epx_conv = dfs2d(xp, eps_matrix, 0, 1, fto_x, fto_y, piecewise_constant=True)
 
         epx_list.append(epx_conv)
         epy_list.append(epy_conv)
@@ -245,8 +318,11 @@ def nvf_conv_matrices(xp, eps_matrix, nx, ny, fto_x, fto_y):
     C_xy_grid = xp.asarray(nx * ny, dtype=C, device=dev)
     C_yy_grid = xp.asarray(ny ** 2, dtype=C, device=dev)
 
-    ep_dir = dfs2d(xp, eps_matrix, 1, 1, fto_x, fto_y)
-    ep_inv = dfs2d(xp, 1.0 / eps_matrix, 1, 1, fto_x, fto_y)
+    # eps is a staircase however finely it was sampled, so its coefficients are exact from
+    # the grid it arrives on. The projector grids below are not -- they sample a continuous
+    # vector field -- which is why only these two carry the flag.
+    ep_dir = dfs2d(xp, eps_matrix, 1, 1, fto_x, fto_y, piecewise_constant=True)
+    ep_inv = dfs2d(xp, 1.0 / eps_matrix, 1, 1, fto_x, fto_y, piecewise_constant=True)
 
     delta_ep = ep_dir - xp.linalg.inv(ep_inv)
 
@@ -271,7 +347,13 @@ def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
         normal_field: optional per-layer ``(nx, ny)`` pairs for the *upsampled* layer grid.
             Supply this to keep the build traceable under JAX (the default computes the field
             with SciPy, which needs concrete values). It is static geometry either way.
-        enhanced_dfs: as in :func:`to_conv_mat_raster_discrete`.
+        enhanced_dfs: upsample each layer to resolve ``4*fto+1`` harmonics per cell. Unlike
+            the DFS path this still does something: the permittivity coefficients are exact
+            either way (the upsampled grid is the same staircase, so
+            :func:`_pixel_correction` applies to it unchanged), but the *normal field* is a
+            continuous vector field evaluated on whatever grid it is given, and refining that
+            grid is the only thing that makes it more accurate. So the memory this costs is
+            not removable here the way it was there.
 
     Returns:
         ``(epx, epy, epxy, epyx, epz_i)``, each ``(n_layers, ff_xy, ff_xy)``.

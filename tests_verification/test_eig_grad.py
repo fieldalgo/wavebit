@@ -185,7 +185,13 @@ def test_uniform_layer_at_normal_incidence_is_differentiable(backend):
 
 
 def test_the_degeneracy_is_real():
-    """Guard the guard: none of the above means anything if the modes are not degenerate."""
+    """Guard the guard: none of the above means anything if the modes are not degenerate.
+
+    Counted pairwise rather than between sorted neighbours. ``sort_complex`` orders by real
+    part then imaginary, and these modes are a mix of real and purely imaginary ones, so a
+    degenerate pair need not land adjacent — an earlier version of this check counted three
+    pairs instead of four for that reason alone.
+    """
     import array_api_compat.numpy as xnp
     from fieldwave._core.factorization import to_conv_mat_raster_discrete
     from fieldwave._core.solve_1d import layer_modes_1d
@@ -196,5 +202,8 @@ def test_the_degeneracy_is_real():
     I = np.eye(2 * fto + 1, dtype=complex)
     _, _, q = layer_modes_1d(xnp, np.linalg.inv, 0, kx, I, epx[0], epy[0], epz[0], complex)
 
-    gaps = np.abs(np.diff(np.sort_complex(np.asarray(q))))
-    assert int((gaps < 1e-13).sum()) == 4, gaps      # four exactly-coincident pairs
+    q = np.asarray(q)
+    nearest = (np.abs(q[:, None] - q[None, :]) + np.eye(len(q)) * 1e9).min(axis=1)
+    # m = 0 stands alone; +m and -m coincide for every other order.
+    assert int((nearest < 1e-12).sum()) == 2 * fto, nearest
+    assert len({round(v.real, 12) + 1j * round(v.imag, 12) for v in q}) == fto + 1

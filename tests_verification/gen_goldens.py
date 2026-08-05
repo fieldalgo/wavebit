@@ -1,6 +1,10 @@
 """Capture reference results from the LEGACY solver, to pin the core against forever.
 
 Run against a checkout where _BaseRCWA still uses the transfer_method chains.
+
+The write is under ``__main__``: everything above it is import-safe, so another module can
+read ``CASES`` without silently overwriting the golden file. It was not, and doing exactly
+that cost a restore from git.
 """
 import pathlib
 
@@ -46,5 +50,6 @@ for name, kw in CASES.items():
         for j, nm in enumerate(('epz_i','W','V','q','d','A_i','B')):
             out[f'{name}__layer{i}__{nm}'] = np.asarray(li[j])
 
-np.savez_compressed(str(pathlib.Path(__file__).parent / 'golden_legacy.npz'), **out)
-print(f'wrote {len(out)} arrays for {len(CASES)} cases')
+if __name__ == '__main__':
+    np.savez_compressed(str(pathlib.Path(__file__).parent / 'golden_legacy.npz'), **out)
+    print(f'wrote {len(out)} arrays for {len(CASES)} cases')

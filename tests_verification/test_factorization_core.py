@@ -10,7 +10,10 @@ import pathlib
 import numpy as np
 import pytest
 
+import array_api_compat.numpy as xnp
+
 import fieldwave
+from fieldwave._core.factorization import dfs2d
 from fieldwave._core.factorization import (
     to_conv_mat_raster_discrete as core_dfs,
     to_conv_mat_raster_nvf as core_nvf,
@@ -42,16 +45,55 @@ CASES = [
 ]
 
 
+def _exact_coeff(eps, ky, kx):
+    """Fourier coefficient of a pixel raster, by integrating each pixel analytically.
+
+    The definition, spelled out with no shortcut: ``eps`` is constant on
+    ``[j/Ny, (j+1)/Ny) x [i/Nx, (i+1)/Nx)``, so the transform is a finite sum of elementary
+    integrals. Deliberately not the closed form the builder uses — a reference that shared its
+    derivation would only confirm the arithmetic.
+    """
+    Ny, Nx = eps.shape
+
+    def axis(k, N, n):
+        a, b = n / N, (n + 1) / N
+        if k == 0:
+            return b - a
+        return (np.exp(-2j * np.pi * k * b) - np.exp(-2j * np.pi * k * a)) / (-2j * np.pi * k)
+
+    return sum(eps[j, i] * axis(ky, Ny, j) * axis(kx, Nx, i)
+               for j in range(Ny) for i in range(Nx))
+
+
 @pytest.mark.parametrize('case', CASES, ids=[c[0] for c in CASES])
-@pytest.mark.parametrize('enhanced_dfs', [True, False], ids=['enhanced', 'plain'])
-def test_factorization_bit_parity_vs_legacy(case, enhanced_dfs):
+def test_dfs_coefficients_are_the_exact_ones(case):
+    """``<eps>`` must be the raster's own Fourier coefficients, to round-off.
+
+    This replaces a bit-parity check against the legacy builder, which is gone: that builder
+    resampled the raster onto a grid resolving ``4*fto+1`` harmonics and transformed *that*,
+    approaching these values as ``1/R`` and stopping ~1e-2 short on the coefficients (~1e-5
+    on efficiency, measured against RETICOLO). The exact route made the frozen values wrong to
+    hold, and ``gen_goldens_factorization.py`` cannot be re-run — it imports modules deleted in
+    ``306c9ea``.
+
+    So the oracle moved rather than being regenerated. It is stronger for it: this compares
+    against the definition instead of against another implementation, and needs no golden.
+    """
     name, ucell, fto_x, fto_y = case
-    tag = 'enhanced' if enhanced_dfs else 'plain'
-    got = core_dfs(ucell, fto_x, fto_y, enhanced_dfs=enhanced_dfs)
-    for slot, b in zip(('epx', 'epy', 'epz_i'), got):
-        a = GOLDEN[f'dfs__{name}__{tag}__{slot}']
-        assert np.allclose(a, np.array(b), atol=1e-12, rtol=0), (
-            slot, np.max(np.abs(a - np.array(b))))
+    eps = np.asarray(ucell, dtype=float)[0] ** 2
+
+    got = np.asarray(dfs2d(xnp, eps.astype(complex), 1, 1, fto_x, fto_y,
+                           piecewise_constant=True))
+    ff_x, ff_y = 2 * fto_x + 1, 2 * fto_y + 1
+    want = np.empty_like(got)
+    for r in range(ff_y * ff_x):
+        for c in range(ff_y * ff_x):
+            ky = r // ff_x - c // ff_x
+            kx = r % ff_x - c % ff_x
+            want[r, c] = _exact_coeff(eps, ky, kx)
+
+    assert np.abs(got - want).max() < 1e-12 * max(1.0, np.abs(want).max()), (
+        name, np.abs(got - want).max())
 
 
 def _to(backend, x):
@@ -179,13 +221,27 @@ NVF_CASES = [
 
 
 @pytest.mark.parametrize('case', NVF_CASES, ids=[c[0] for c in NVF_CASES])
-def test_nvf_bit_parity_vs_legacy(case):
+def test_nvf_permittivity_inputs_are_the_exact_ones(case):
+    """NVF's ``<eps>`` and ``<1/eps>`` are exact too; its projectors are what still are not.
+
+    The same retirement as the DFS check above, and for the same reason — but narrower,
+    because only part of the NVF build changed. ``<eps>`` and ``<1/eps>`` read a raster, so
+    they get the exact coefficients. ``C_xx``/``C_xy``/``C_yy`` read the normal field, which
+    is a continuous vector field sampled on a grid: no closed form replaces it, refining the
+    grid is the only thing that helps, and nothing about it moved.
+    """
     name, ucell, fto_x, fto_y = case
-    got = core_nvf(ucell, fto_x, fto_y)
-    for slot, b in zip(('epx', 'epy', 'epxy', 'epyx', 'epz_i'), got):
-        a = GOLDEN[f'nvf__{name}__{slot}']
-        assert np.allclose(a, np.array(b), atol=1e-12, rtol=0), (
-            slot, np.max(np.abs(a - np.array(b))))
+    eps = np.asarray(ucell, dtype=float)[0] ** 2
+
+    for label, cell in (('eps', eps), ('1/eps', 1.0 / eps)):
+        got = np.asarray(dfs2d(xnp, cell.astype(complex), 1, 1, fto_x, fto_y,
+                               piecewise_constant=True))
+        ff_x, ff_y = 2 * fto_x + 1, 2 * fto_y + 1
+        want = np.empty_like(got)
+        for r in range(ff_y * ff_x):
+            for c in range(ff_y * ff_x):
+                want[r, c] = _exact_coeff(cell, r // ff_x - c // ff_x, r % ff_x - c % ff_x)
+        assert np.abs(got - want).max() < 1e-12 * max(1.0, np.abs(want).max()), (name, label)
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])

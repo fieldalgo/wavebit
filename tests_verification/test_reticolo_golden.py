@@ -7,13 +7,15 @@ than correctness. RETICOLO is the one reference here that says a grating's *orde
 right, and it is independent: a different group's solver, in a different language, validated
 over two decades of published work.
 
-The agreement it certifies is specific, and worth stating plainly. RETICOLO builds a binary
-grating's Fourier coefficients from the *exact* edge positions. So does the CFS path
-(``fourier_type=CONTINUOUS``), and the two land on each other at round-off — 1e-15 to 1e-13
-below. The raster DFS path (``fourier_type=DFS``) discretizes the same grating onto pixels
-instead, so it converges to the same physics down a different road: ~1e-5 at ``fto=4`` and
-still ~1e-6 at ``fto=40``. Both are correct; only one of them is comparable at machine
-precision, and pretending otherwise would mean a tolerance too loose to catch anything.
+RETICOLO builds a binary grating's Fourier coefficients from the *exact* edge positions, and
+so do both raster paths here — CFS by compressing the raster into blocks first, DFS straight
+off the pixel grid. These gratings have their edges on pixel boundaries, so the raster *is*
+the structure and all three land on each other at round-off, 1e-15 to 1e-13.
+
+That is true of DFS only since 2026-08. It used to resample the raster onto a grid fine
+enough to resolve ``4*fto+1`` harmonics and transform *that*, which approaches the same
+expression as 1/R — leaving it ~1e-5 from RETICOLO where it now sits at ~1e-14. The test that
+holds DFS to this tolerance used to assert the opposite.
 
 The values are frozen in ``golden_reticolo.npz`` by ``gen_goldens_reticolo.py``, which needs
 Octave and RETICOLO. This file needs neither, which is the point: the evidence used to live
@@ -165,21 +167,23 @@ def test_the_order_axis_is_not_symmetric_in_these_cases(name):
     assert np.abs(ti[idx] - ti[::-1][idx]).max() > 1e-4, name
 
 
-def test_the_raster_path_is_not_held_to_this_tolerance():
-    """Say out loud what the golden does and does not cover.
+@pytest.mark.parametrize('name', list(CASES))
+def test_the_raster_path_holds_the_same_tolerance(name):
+    """The DFS path is held to this too, and that is a recent thing.
 
-    The DFS path discretizes the grating onto pixels where RETICOLO and CFS use the exact
-    edges, so it approaches the same answer along a different curve — ~1e-6 at fto=30, not
-    1e-13. Pinning that here would either fail or need a tolerance five decades looser than
-    the one above, which is why the golden is a CFS statement. What can be asserted is that
-    it is converging to the same place, and this is where a break in the raster builder
-    would show against an independent reference rather than against another FieldWave path.
+    RETICOLO builds a binary grating's coefficients from the exact edge positions. So does
+    CFS, and so does DFS now: a raster is a piecewise-constant function, and the exact
+    coefficients of one come out of an N-point transform without resampling it. Since these
+    gratings have their edges on pixel boundaries, the raster *is* the structure, and all
+    three agree to round-off.
+
+    Until 2026-08 the DFS path upsampled the raster instead and took the transform of that,
+    which converges to the same expression as 1/R — so this check would have failed at ~1e-5,
+    and did: it used to assert the opposite, that the raster path could not be held here.
     """
     g = _golden()
-    name = 'te_high_order'
     kw = dict(CASES[name])
     res = fieldwave.rcwa(backend=0, fourier_type=FourierType.DFS, **kw).conv_solve()
-    got = np.real(np.asarray(res.de_ti)).ravel()[g[f'{name}__idx_ti']]
-    err = np.abs(got - g[f'{name}__de_ti']).max()
-    assert err < 1e-4, err                 # close to RETICOLO...
-    assert err > 1e-11, err                # ...but not at the CFS path's tolerance
+    for side, arr in (('ri', res.de_ri), ('ti', res.de_ti)):
+        got = np.real(np.asarray(arr)).ravel()[g[f'{name}__idx_{side}']]
+        assert np.abs(got - g[f'{name}__de_{side}']).max() < 1e-11, (name, side)
