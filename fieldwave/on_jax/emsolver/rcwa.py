@@ -166,9 +166,11 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                 self._ucell = jnp.array(ucell, dtype=dtype)
 
         elif type(ucell) is list:
-            # Analytic: one dict(n_base=..., shapes=[...]) per layer. Shape
-            # coordinates are absolute lengths in the units of `period`, not
-            # fractions of it -- see fieldwave._core.analytic.
+            # Analytic: one dict(n_base=..., shapes=[...], combine=...) per layer.
+            # Shape coordinates are absolute lengths in the units of `period`, not
+            # fractions of it, and `combine` picks what overlapping shapes mean --
+            # this path adds them where the vector path paints. See
+            # fieldwave._core.analytic; overlaps are refused until it is set.
             if len(ucell) > 0 and isinstance(ucell[0], dict):
                 self._modeling_type_assigned = 2
                 self._ucell = ucell

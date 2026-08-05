@@ -5,7 +5,7 @@ circles, ellipses — and its permittivity is Fourier-transformed *analytically*
 sampled onto a raster. That removes staircase error entirely, so the same accuracy needs far
 fewer harmonics on curved or tilted boundaries.
 
-A layer is ``dict(n_base=..., shapes=[...])`` and a shape is
+A layer is ``dict(n_base=..., shapes=[...], combine=...)`` and a shape is
 ``dict(type='rectangle'|'circle'|'ellipse', cx=, cy=, lx=, ly=, angle=, n_index=)``.
 
 **Shapes superpose; they do not paint over each other.** Each one contributes
@@ -13,10 +13,22 @@ A layer is ``dict(n_base=..., shapes=[...])`` and a shape is
 contributions and the permittivity there is neither shape's. Two 120x120 rods of index 2 and 3
 in a background of 1, overlapping by 7200 of a 90000 cell, come out at a mean permittivity of
 2.76 where painting the second over the first gives 2.52 -- and the efficiency follows, 0.9856
-against the 0.9792 a raster and the vector path agree on. Nothing raises: the layer is simply a
-different one. The vector path (``ucell=[[n_base, [[shape, ...], ...]]]``) is the one that
-paints, later object over earlier, and it is what to use when shapes are meant to overlap.
-Non-overlapping shapes are unaffected, which is the case this path is built for.
+against the 0.9792 a raster and the vector path agree on. The vector path
+(``ucell=[[n_base, [[shape, ...], ...]]]``) is the one that paints, later object over earlier,
+so the same recipe means two different structures depending on which path it is handed to.
+
+``combine`` is what makes that choice explicit, and :func:`check_layer_combination` enforces
+it: while no two shapes intersect the question does not arise and any spelling is accepted,
+but an overlap without ``combine='add'`` is refused rather than answered. The layer that used
+to come back silently different now names the two shapes and both ways forward — keep the
+superposition with ``combine='add'``, or move to the vector path to paint. ``combine='paint'``
+is accepted and only raises where it would matter, because painting here needs the closed-form
+transform of a shape *difference* — the intersection of two rotated primitives — which is not
+implemented.
+
+The check costs a pairwise geometry test per layer (see :mod:`fieldwave._core.overlap`) and
+needs concrete numbers, so a layer whose parameters are tracers is passed through unchecked;
+:meth:`freeze_geometry` is the eager call that still sees them.
 
 **Shape parameters are absolute lengths, in whatever unit ``period`` is given in** -- not
 fractions of the period. A rod filling half a 0.77-long period is ``lx=0.385``, centred at
@@ -34,8 +46,14 @@ The convolution matrices are built with the NVF (Li / Götz-Schuster) normal-vec
 factorization: ``eps`` and ``1/eps`` come from the exact shape transform, while the normal
 projectors come from the shapes' *analytic* unit normal field sampled on a grid.
 """
+from . import overlap as _overlap
 from .backend import array_namespace, as_array, j1, jinc, sinc
 from .factorization import dfs2d
+
+COMBINE_MODES = ('add', 'paint')
+
+#: Penetration below this fraction of the period is touching, not overlapping.
+OVERLAP_TOL_REL = 1e-6
 
 
 def _grid(xp, fto_x, fto_y, dev, dtype):
@@ -69,6 +87,95 @@ def shape_geometry(shape, Px, Py):
     round_ = stype in ('circle', 'disk', 'square')
     ly = lx if round_ else shape.get('ly', shape.get('l', 0.0))
     return stype, cx, cy, lx, ly, shape.get('angle', 0.0)
+
+
+def _primitives(shapes, Px, Py):
+    """The layer's shapes as convex primitives, or ``None`` if the parameters are not concrete.
+
+    The overlap test compares numbers, which a JAX tracer is not — and PyTorch tensors, which
+    do convert, keep working. Any backend's refusal to hand over a value is that backend
+    saying "this is traced", so it means *skip the check*, never *fail the solve*: a traced
+    call already had its eager pass through :meth:`freeze_geometry`, and turning a
+    differentiable sweep into an exception would be a worse bargain than the one this check
+    exists to fix.
+    """
+    try:
+        return [_overlap.primitive(*shape_geometry(shape, Px, Py)) for shape in shapes]
+    except Exception:                                  # noqa: BLE001 - "not a concrete value"
+        return None
+
+
+def _shape_name(shapes, i):
+    return f"{i} ({shapes[i].get('type', 'rectangle')})"
+
+
+def _across(ox, oy):
+    """Which period boundary a periodic image sits over, as a phrase or ``''`` for none."""
+    axes = [name for name, off in (('x', ox), ('y', oy)) if off]
+    return f" across the {' and '.join(axes)} period boundary" if axes else ''
+
+
+def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_REL):
+    """Refuse a layer whose shapes overlap without saying how they should combine.
+
+    This is where the analytic path's superposition stops being implicit. Shapes that do not
+    intersect mean the same structure under either rule, so nothing is refused and ``combine``
+    need not be given; shapes that *do* intersect mean two different structures, and the layer
+    has to pick one. Raises :class:`ValueError` when it has not, and
+    :class:`NotImplementedError` for the one it asked for that this path cannot build.
+
+    Touching is not overlapping — abutting rectangles and a shape exactly filling the period
+    both come out at a gap of zero — and ``tol_rel`` is measured against the period, so a
+    fraction of a cell of interpenetration is still allowed as arithmetic noise.
+    """
+    combine = layer.get('combine')
+    if combine is not None and combine not in COMBINE_MODES:
+        raise ValueError(
+            f'Analytic layer {layer_index}: combine={combine!r} is not one of '
+            f'{COMBINE_MODES}.')
+
+    shapes = layer.get('shapes', [])
+    if len(shapes) < 1:
+        return
+
+    try:
+        Px, Py = float(period[0]), float(period[1])
+    except Exception:                                  # noqa: BLE001 - traced period
+        return
+
+    prims = _primitives(shapes, Px, Py)
+    if prims is None:
+        return
+
+    hits = _overlap.overlapping_pairs(prims, Px, Py, tol_rel * max(Px, Py))
+    if not hits or combine == 'add':
+        return
+
+    i, j, ox, oy, _ = hits[0]
+    more = f' (and {len(hits) - 1} more such pair(s))' if len(hits) > 1 else ''
+    if i == j:
+        what = (f'shape {_shape_name(shapes, i)} is larger than the period and runs into its '
+                f'own image{_across(ox, oy)}')
+    else:
+        what = (f'shapes {_shape_name(shapes, i)} and {_shape_name(shapes, j)} '
+                f'overlap{_across(ox, oy)}')
+
+    if combine == 'paint':
+        raise NotImplementedError(
+            f'Analytic layer {layer_index}: {what}{more}, and this path cannot paint them. '
+            f"combine='paint' needs the closed-form transform of a shape difference — the "
+            f'intersection of two rotated primitives — which is not implemented here. Use the '
+            f'vector path, ucell=[[n_base, [[shape, ...], ...]]], which paints later shapes '
+            f"over earlier ones, or combine='add' to superpose them.")
+
+    raise ValueError(
+        f'Analytic layer {layer_index}: {what}{more}. This path adds every shape\'s '
+        f'(eps_shape - eps_base) * FT(indicator), so the overlap gets both contributions and '
+        f"ends up as neither shape's material, while the vector path paints one over the "
+        f'other — the same recipe, two different structures. Say which you mean:\n'
+        f"  - combine='add' in the layer dict to keep the superposition computed here;\n"
+        f'  - the vector path, ucell=[[n_base, [[shape, ...], ...]]], to paint later shapes '
+        f'over earlier ones.')
 
 
 def shape_ft(xp, shape, ky, kx, period):
@@ -263,6 +370,10 @@ def to_conv_mat_analytic_layers(layer_shapes, fto_x, fto_y, period,
     module docstring). Returns ``(epx, epy, epxy, epyx, epz_i)``, each
     ``(n_layers, ff_xy, ff_xy)``.
 
+    Every layer goes through :func:`check_layer_combination` first — this is the funnel the
+    analytic path reaches the solver through, so it is the one place that can guarantee an
+    overlap is never answered silently.
+
     The array namespace is taken from the first differentiable shape parameter found, so
     passing JAX or PyTorch scalars for e.g. ``lx`` makes the whole build run — and
     differentiate — on that backend. Pass ``xp`` to force it.
@@ -272,7 +383,8 @@ def to_conv_mat_analytic_layers(layer_shapes, fto_x, fto_y, period,
     dtype = xp.complex128 if type_complex is None else type_complex
 
     out = [[], [], [], [], []]
-    for layer in layer_shapes:
+    for index, layer in enumerate(layer_shapes):
+        check_layer_combination(layer, period, index)
         n_base = layer.get('n_base', layer.get('base', 1.0))
         mats = to_conv_mat_analytic_nvf(
             xp, layer.get('shapes', []), n_base, fto_x, fto_y, period, dtype,

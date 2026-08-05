@@ -370,12 +370,12 @@ def test_circle_ignores_ly_everywhere(ly):
 
 
 def test_shapes_superpose_where_they_overlap():
-    """Overlapping shapes are added, not painted over — pinned because nothing says so at runtime.
+    """Overlapping shapes are added, not painted over — what ``combine='add'`` now selects.
 
     Each shape contributes ``(eps_shape - eps_base) * FT(indicator)``, so an overlap receives
-    both. That is fine for the non-overlapping layers this path is built for and silently a
-    different structure otherwise, which is worth a test rather than a surprise: someone moving
-    a vector recipe over gets no error, just another answer.
+    both. This is the coefficient builder underneath the modeling layer, so it superposes
+    unconditionally; the layer above refuses to reach it without being told that is the
+    intent (:func:`check_layer_combination`).
 
     The vector path paints instead — later object over earlier — and agrees with a raster of
     the same instruction to eight digits, which is what makes the analytic value identifiable
@@ -402,7 +402,12 @@ def test_shapes_superpose_where_they_overlap():
 
 
 def test_overlapping_shapes_move_the_answer_while_the_vector_path_does_not():
-    """The user-visible half of it: analytic parts from the raster, the vector path does not."""
+    """The user-visible half of it: analytic parts from the raster, the vector path does not.
+
+    This is why the layer has to be asked. ``combine='add'`` is the answer that keeps the
+    superposition, and it is a different structure from the one the same recipe builds on the
+    vector path — which is what the two assertions measure.
+    """
     period, n_base = [300.0, 300.0], 1.0
     cfg = dict(period=period, thickness=[205.0], fto=[6, 6], n_top=1.0, n_bot=1.0,
                wavelength=900.0, pol=0, theta=0.0, phi=0.0)
@@ -423,9 +428,169 @@ def test_overlapping_shapes_move_the_answer_while_the_vector_path_does_not():
     want = total(raster[None], fourier_coefficients='sampled')
     vector = total([[n_base, [['rectangle', cx, 150.0, 120.0, 120.0, n, 0, 0, 0]
                               for cx, n in boxes]]])
-    analytic = total([dict(n_base=n_base,
+    analytic = total([dict(n_base=n_base, combine='add',
                            shapes=[dict(type='rectangle', cx=cx, cy=150.0, lx=120.0, ly=120.0,
                                         angle=0.0, n_index=n) for cx, n in boxes])])
 
     assert vector == pytest.approx(want, abs=1e-8)
     assert abs(analytic - want) > 1e-3, (analytic, want)
+
+
+# ------------------------------------------------------- the layer has to say how shapes combine
+
+CHECK_CFG = dict(period=[300.0, 300.0], thickness=[205.0], fto=[2, 2], n_top=1.0, n_bot=1.0,
+                 wavelength=900.0, pol=0, theta=0.0, phi=0.0)
+
+
+def rod(cx, cy=150.0, lx=120.0, ly=120.0, angle=0.0, n_index=2.0, type='rectangle'):
+    return dict(type=type, cx=cx, cy=cy, lx=lx, ly=ly, angle=angle, n_index=n_index)
+
+
+def solve(shapes, **layer):
+    return fieldwave.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=shapes, **layer)],
+                          **CHECK_CFG).conv_solve()
+
+
+def test_overlapping_shapes_are_refused_until_the_layer_says_how_to_combine():
+    """The hazard this whole check exists for: the same recipe means two structures.
+
+    A vector recipe moved onto the analytic path used to come back superposed, with nothing
+    said. Now the layer is refused until it names the rule, and the message has to carry both
+    shapes and both ways forward — a user who cannot act on the error is no better off than
+    one who never saw it.
+    """
+    shapes = [rod(130.0, n_index=2.0), rod(190.0, n_index=3.0)]
+
+    with pytest.raises(ValueError) as raised:
+        solve(shapes)
+    message = str(raised.value)
+    assert '0 (rectangle)' in message and '1 (rectangle)' in message
+    assert "combine='add'" in message and 'vector path' in message
+
+    # And the escape hatch actually escapes, to the superposition that was always computed.
+    assert float(np.sum(np.asarray(solve(shapes, combine='add').de_ti))) > 0.0
+
+
+def test_disjoint_shapes_never_have_to_answer_the_question():
+    """No overlap, no difference between the rules — so no ``combine``, and any spelling works.
+
+    This is the case the analytic path is built for and the one that must stay free: the check
+    is only worth having if it fires on actual overlap, since pushing people off this path
+    costs them the staircase-free rotation it exists to provide.
+    """
+    shapes = [rod(70.0, lx=100.0), rod(220.0, lx=100.0, n_index=3.0)]
+    want = float(np.sum(np.asarray(solve(shapes).de_ti)))
+
+    for combine in ('add', 'paint'):
+        assert float(np.sum(np.asarray(solve(shapes, combine=combine).de_ti))) == want
+
+
+def test_touching_is_not_overlapping():
+    """Abutting shapes are the same structure either way, and designs are full of them.
+
+    Two rectangles sharing an edge, two tangent circles, and a rod filling the period exactly
+    all sit at a gap of zero. Reporting them would refuse ordinary geometry — a checkerboard,
+    a full-width slab — for a difference of measure zero.
+    """
+    solve([rod(70.0), rod(190.0, n_index=3.0)])                       # edges meet at x = 130
+    solve([rod(80.0, lx=60.0, type='circle'), rod(140.0, lx=60.0, type='circle')])
+    solve([rod(150.0, lx=300.0)])                                     # exactly one period wide
+
+
+def test_paint_is_only_refused_where_it_would_differ():
+    """``combine='paint'`` is honest about what it is: unbuildable here, and only where it bites."""
+    with pytest.raises(NotImplementedError) as raised:
+        solve([rod(130.0), rod(190.0, n_index=3.0)], combine='paint')
+    assert 'vector path' in str(raised.value)
+
+
+def test_unknown_combine_modes_are_refused_even_without_an_overlap():
+    """A typo in the one word that picks the semantics must not read as the default."""
+    with pytest.raises(ValueError, match='combine='):
+        solve([rod(150.0)], combine='superpose')
+
+
+def test_overlap_is_found_across_the_period_boundary():
+    """The layer is a unit cell: shapes that miss inside it can still meet through the edge."""
+    shapes = [rod(20.0, lx=100.0), rod(280.0, lx=100.0, n_index=3.0)]   # meet through x = 0
+
+    with pytest.raises(ValueError, match='period boundary'):
+        solve(shapes)
+    solve(shapes, combine='add')
+
+
+def test_a_shape_wider_than_the_period_runs_into_its_own_image():
+    """Same silent-wrong-structure class: one shape, no pair, and still not what it says.
+
+    Its transform is a single sinc that no longer describes a periodic indicator, so the layer
+    is not the structure the parameters name. One shape is enough to report.
+    """
+    with pytest.raises(ValueError, match='larger than the period'):
+        solve([rod(150.0, lx=340.0)])
+
+
+def test_detection_follows_the_shapes_and_not_their_bounding_boxes():
+    """Rotation and curvature are where a lazy test would refuse a perfectly good layer.
+
+    Both pairs have overlapping axis-aligned bounding boxes and are disjoint: two rectangles
+    at +/- 45 degrees passing corner to corner, and two ellipses crossing broadside to
+    end-on. Nudged into contact, both are reported — so the pass is not the check being
+    asleep.
+    """
+    diagonal = [rod(110.0, 110.0, lx=120.0, ly=40.0, angle=np.pi / 4),
+                rod(190.0, 190.0, lx=120.0, ly=40.0, angle=-np.pi / 4, n_index=3.0)]
+    crossing = [rod(120.0, 150.0, lx=160.0, ly=30.0, type='ellipse'),
+                rod(225.0, 150.0, lx=30.0, ly=160.0, type='ellipse', n_index=3.0)]
+
+    for shapes in (diagonal, crossing):
+        solve(shapes)                                          # disjoint: no question to ask
+        closed = [dict(shapes[0]), dict(shapes[1], cx=shapes[0]['cx'] + 10.0)]
+        with pytest.raises(ValueError, match='overlap'):
+            solve(closed)
+
+
+def test_the_check_reports_the_exact_geometry_it_should():
+    """The gap itself, against closed forms — the numbers the report is a threshold on."""
+    from fieldwave._core.overlap import primitive, signed_gap
+
+    circle = primitive('circle', 0.0, 0.0, 20.0, 20.0, 0.0)
+    assert signed_gap(circle, primitive('circle', 24.0, 0.0, 20.0, 20.0, 0.0)) \
+        == pytest.approx(4.0, abs=1e-12)                       # centres 24 apart, radii 10
+    assert signed_gap(circle, primitive('rectangle', 30.0, 0.0, 20.0, 20.0, 0.0)) \
+        == pytest.approx(10.0, abs=1e-12)                      # face at 20, circle ends at 10
+    assert signed_gap(primitive('rectangle', 0.0, 0.0, 20.0, 20.0, 0.0),
+                      primitive('rectangle', 16.0, 0.0, 20.0, 20.0, 0.0)) \
+        == pytest.approx(-4.0, abs=1e-12)                       # penetration depth, not distance
+
+    # The searched path (a genuine ellipse) has to land on the same answers.
+    assert signed_gap(primitive('ellipse', 0.0, 0.0, 20.0, 10.0, 0.0),
+                      primitive('ellipse', 45.0, 0.0, 20.0, 10.0, 0.0)) \
+        == pytest.approx(25.0, rel=1e-9)                        # semi-axes 10 and 10 along x
+    assert signed_gap(primitive('ellipse', 0.0, 0.0, 20.0, 10.0, np.pi / 2),
+                      primitive('circle', 0.0, 30.0, 20.0, 20.0, 0.0)) \
+        == pytest.approx(10.0, rel=1e-9)                        # rotated: semi-axis 10 along y
+
+
+def test_the_check_steps_aside_for_a_traced_solve():
+    """It compares numbers, and a tracer is not one — so tracing must pass through, not fail.
+
+    A jitted analytic solve is the reason this cannot simply be an unconditional assertion:
+    turning a differentiable sweep into an exception would cost more than the silence it
+    replaces. ``freeze_geometry`` is the eager pass such a sweep already makes, and the same
+    layer with a concrete ``cx`` right beside it is what still gets checked.
+    """
+    jax = pytest.importorskip('jax')
+    jnp = pytest.importorskip('jax.numpy')
+
+    def layer(cx):
+        return [dict(n_base=1.0, shapes=[rod(cx), rod(190.0, n_index=3.0)])]
+
+    frozen = fieldwave.rcwa(backend=1, ucell=layer(60.0), **CHECK_CFG).freeze_geometry()
+
+    def total(cx):
+        return jnp.sum(fieldwave.rcwa(backend=1, ucell=layer(cx),
+                                      **CHECK_CFG).conv_solve(geometry=frozen).de_ti)
+
+    assert float(jax.jit(total)(jnp.asarray(130.0))) > 0.0     # overlapping, and traced: allowed
+    with pytest.raises(ValueError, match='overlap'):
+        total(130.0)                                           # same layer, concrete: refused
