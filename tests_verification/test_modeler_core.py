@@ -441,3 +441,53 @@ def test_the_staircase_costs_a_kink_at_an_aligned_angle(pol, name):
     # Flat in n_split: more blocks resolve the shape, not the factorization.
     coarse = (de_ti(0.0, 16) - de_ti(step, 16)) / step
     assert coarse == pytest.approx(-right, rel=0.02), (coarse, right)
+
+
+def _rectangle_chord(y, cx, cy, lx, ly, angle):
+    """[left, right] of the rotated rectangle at height ``y``, walked round its corners."""
+    ca, sa = np.cos(angle), np.sin(angle)
+    corners = [(ca * sx - sa * sy + cx, sa * sx + ca * sy + cy)
+               for sx, sy in ((lx / 2, ly / 2), (lx / 2, -ly / 2),
+                              (-lx / 2, -ly / 2), (-lx / 2, ly / 2))]
+    xs = []
+    for i in range(4):
+        (x1, y1), (x2, y2) = corners[i], corners[(i + 1) % 4]
+        if (y1 - y) * (y2 - y) <= 0 and y1 != y2:
+            xs.append(x1 + (x2 - x1) * (y - y1) / (y2 - y1))
+    return (min(xs), max(xs)) if len(xs) >= 2 else None
+
+
+def test_random_rectangles_tile_exactly_and_sit_on_the_true_edges():
+    """The fixed cases above, swept: 40 rectangles drawn from anywhere in the parameter space.
+
+    Checked against the rotated rectangle's own corners, so nothing depends on how the
+    decomposition is written, and the angles run past a full turn in both directions because
+    the fold onto a quarter turn is the kind of thing a fixed list misses.
+    """
+    rng = np.random.default_rng(20260805)
+    f = lambda v: float(np.real(np.asarray(v).reshape(-1)[0]))
+
+    for _ in range(40):
+        cx, cy = rng.uniform(80, 220, 2)
+        lx, ly = rng.uniform(15, 110, 2)
+        angle = float(rng.uniform(-2 * np.pi, 2 * np.pi))
+        n = int(rng.integers(1, 20))
+        case = (cx, cy, lx, ly, angle, n)
+
+        raw = Modeling(period=PERIOD).rectangle(cx, cy, lx, ly, 2.0, angle, n, n)
+        bs = [(f(b[0][0]), f(b[0][1]), f(b[1][0]), f(b[1][1])) for b in raw]
+
+        for ylo, xlo, yhi, xhi in bs:
+            assert yhi > ylo and xhi > xlo, case
+        for (ylo, _, _, _), (_, _, yhi_next, _) in zip(bs[:-1], bs[1:]):
+            assert ylo == pytest.approx(yhi_next, abs=1e-9 * max(1.0, abs(ylo))), case
+
+        area = sum((b[2] - b[0]) * (b[3] - b[1]) for b in bs)
+        assert area == pytest.approx(lx * ly, rel=1e-12), case
+
+        # Each block's sides are the true chord at some height inside its own slab.
+        for ylo, xlo, yhi, xhi in bs:
+            heights = np.linspace(ylo, yhi, 41)[1:-1]
+            chords = [_rectangle_chord(y, cx, cy, lx, ly, angle) for y in heights]
+            gap = min(abs(xlo - c[0]) + abs(xhi - c[1]) for c in chords if c is not None)
+            assert gap < 1e-6, (case, ylo, xlo, yhi, xhi, gap)

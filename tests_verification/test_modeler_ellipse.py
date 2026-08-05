@@ -324,3 +324,44 @@ def test_the_blocks_still_carry_gradient_to_the_shape_parameters(param, value, s
 
     assert abs(fd) > 1e-6, fd                        # the case has to be sensitive to be a test
     assert auto == pytest.approx(fd, rel=1e-4), (auto, fd)
+
+
+# ------------------------------------------------------------------------------- property sweep
+
+def test_random_ellipses_are_chords_that_tile_and_converge():
+    """The fixed cases above, swept: 40 ellipses drawn from anywhere in the parameter space.
+
+    Every invariant is checked against the ellipse's own equation, so nothing here depends on
+    how the decomposition is written. The angles run past a full turn in both directions
+    because the fold onto a quarter turn is exactly the kind of thing a fixed list misses.
+    """
+    rng = np.random.default_rng(20260805)
+
+    for _ in range(40):
+        cx, cy = rng.uniform(80, 220, 2)
+        lx, ly = rng.uniform(15, 110, 2)
+        angle = float(rng.uniform(-2 * np.pi, 2 * np.pi))
+        n = int(rng.integers(2, 40))
+        case = (cx, cy, lx, ly, angle, n)
+
+        bs = blocks(lx, ly, angle, n, cx=cx, cy=cy)
+        assert len(bs) == n, case
+
+        for ylo, xlo, yhi, xhi in bs:
+            assert yhi > ylo and xhi > xlo, case
+            inside = [h for h in heights_on_boundary(xlo, lx, ly, angle, cx, cy)
+                      if ylo - 1e-9 <= h <= yhi + 1e-9]
+            assert inside, case
+            assert any(implicit(xhi, h, lx, ly, angle, cx, cy) == pytest.approx(1.0, abs=1e-9)
+                       for h in inside), case
+
+        for (ylo, _, _, _), (_, _, yhi_next, _) in zip(bs[:-1], bs[1:]):
+            assert ylo == pytest.approx(yhi_next, abs=1e-9 * max(1.0, abs(ylo))), case
+
+        exact = np.pi * lx * ly / 4
+        errs = [abs(sum((b[2] - b[0]) * (b[3] - b[1])
+                        for b in blocks(lx, ly, angle, m, cx=cx, cy=cy)) - exact)
+                for m in (16, 32, 64)]
+        assert errs[0] > errs[1] > errs[2], (case, errs)
+        for coarse, fine in zip(errs[:-1], errs[1:]):
+            assert 3.5 < coarse / fine < 4.5, (case, errs)
