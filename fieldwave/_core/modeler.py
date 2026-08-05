@@ -199,6 +199,44 @@ class VectorGridPlan(NamedTuple):
     ranges: tuple
 
 
+class StaleGeometryError(RuntimeError):
+    """A frozen geometry no longer describes the structure it is being replayed onto."""
+
+
+def _check_plan_still_fits(xp, row_list, col_list):
+    """Reject a replayed grid whose lines have fallen out of order.
+
+    A recorded plan says which block edge becomes which grid line, in what order. Move the
+    shape parameters far enough and the edges themselves reorder, at which point the plan is
+    describing a layer that is no longer there — and the result is wrong without being
+    obviously wrong, which is the failure this exists to stop. Measured: an ellipse frozen at
+    ``lx`` 85 and replayed at 120 lands 1.5e-4 off; two rectangles frozen apart and replayed
+    overlapping land 4% off.
+
+    The tell is free. Grid lines are sorted by construction, so a replayed list that is not
+    sorted is a plan that no longer fits — every stale case measured shows it, and every valid
+    one is strictly increasing with room to spare (``min diff`` +1.13 at ``lx`` 100 against
+    -7.80 at 120).
+
+    Only reachable eagerly. Under a trace the comparison below is itself the thing that cannot
+    be done — which is what the plan exists to avoid — so a jitted call carries no check, and
+    a long fit should re-freeze on a schedule rather than rely on being told.
+    """
+    for name, values in (('y', row_list), ('x', col_list)):
+        try:
+            edges = [float(xp.real(v)[0]) for v in values]
+        except Exception:                       # a tracer: nothing to compare, nothing to do
+            return
+        for i, (lo, hi) in enumerate(zip(edges[:-1], edges[1:])):
+            if hi <= lo:
+                raise StaleGeometryError(
+                    f'the frozen geometry no longer fits this structure: replaying it puts '
+                    f'{name} grid line {i + 1} at {hi:.6g}, at or below its predecessor '
+                    f'{lo:.6g}. The shape parameters have moved far enough to reorder the '
+                    f'block edges, so the recorded plan describes a different layer. Call '
+                    f'freeze_geometry() again, or drop geometry= to rebuild by comparison.')
+
+
 def _bisect_left(seq, value):
     """``bisect.bisect_left`` comparing real parts only.
 
@@ -597,6 +635,8 @@ class Modeling:
         row_list = [edge_of(src, True) for src in plan.row_sources]
         col_list = [edge_of(src, False) for src in plan.col_sources]
 
+        _check_plan_still_fits(xp, row_list, col_list)
+
         n_row, n_col = len(row_list), len(col_list)
         ucell_layer = xp.ones((n_row, n_col), dtype=datatype, device=dev) * pmtvy_base
         rows = xp.arange(n_row, device=dev)
@@ -623,8 +663,12 @@ class Modeling:
         called with one it replays them and never compares anything, which leaves only gathers
         and a ``where`` — all traceable. The recorded plan is read back through
         :meth:`~fieldwave._core.engine.CoreSolveMixin.freeze_geometry`, the same route the
-        other frozen decisions take, and carries the same caveat: move a parameter far enough
-        to reorder the edges and the plan is describing a layer you no longer have.
+        other frozen decisions take. What it costs: move the parameters far enough and the block
+        edges reorder, at which point the plan describes a layer you no longer have. "Far
+        enough" is not far — an ellipse frozen at ``lx`` 85 is already wrong at 110. Replaying
+        eagerly raises :class:`StaleGeometryError` when that happens, since a plan that no
+        longer fits produces an unsorted grid; a *traced* replay cannot check, so a long fit
+        should re-freeze on a schedule rather than wait to be told.
         """
         pmtvy_base, obj_list = layer_info
 

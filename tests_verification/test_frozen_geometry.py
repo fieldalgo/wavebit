@@ -149,3 +149,39 @@ def test_a_frozen_geometry_makes_the_vector_path_traceable(name, make, start):
     fd = (float(total(jnp.asarray(start + step))) - float(total(jnp.asarray(start - step)))) \
         / (2 * step)
     assert grad == pytest.approx(fd, rel=2e-3), (grad, fd)
+
+
+def test_a_stale_frozen_geometry_is_refused_rather_than_answered():
+    """Reusing a frozen plan too far from where it was taken has to fail loudly.
+
+    The plan records which block edge becomes which grid line. Move the shape parameters far
+    enough and the edges reorder, so the plan describes a different layer — and the answer that
+    comes back is wrong without looking wrong, which is the whole hazard. Measured before the
+    check existed: an ellipse frozen at ``lx`` 85 and replayed at 120 was 1.5e-4 off.
+
+    The tell is free, because grid lines are sorted by construction: a replayed list that is
+    not sorted is a plan that no longer fits. This pins both halves — that it is refused where
+    it does not fit, and that where it *is* accepted the answer matches a rebuild exactly, so
+    the check is not merely conservative.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    importlib.import_module('fieldwave.on_jax')
+    from fieldwave._core.modeler import StaleGeometryError
+
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
+               theta=0.15, phi=0.35, pol=0, wavelength=900.0)
+    make = lambda lx: [[3.5, [['ellipse', 150.0, 150.0, lx, 55.0, 2.0, 0.27, 9, 9]]]]
+
+    def total(lx, geometry=None):
+        return float(jnp.sum(fieldwave.rcwa(backend=1, ucell=make(lx), **cfg)
+                             .conv_solve(geometry=geometry).de_ti).real)
+
+    frozen = fieldwave.rcwa(backend=1, ucell=make(jnp.asarray(85.0)), **cfg).freeze_geometry()
+
+    for lx in (85.0, 100.0):                       # near the freeze: accepted, and exact
+        assert total(jnp.asarray(lx), frozen) == total(lx)
+
+    for lx in (120.0, 200.0):                      # far from it: refused, not answered
+        with pytest.raises(StaleGeometryError, match='no longer fits'):
+            total(jnp.asarray(lx), frozen)
