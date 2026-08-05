@@ -1,3 +1,5 @@
+<p align="center"><img src="images/fieldwave_logo.svg" width=45% alt="FieldWave" /></p>
+
 # FieldWave
 
 [![tests](https://github.com/FieldAlgo/fieldwave/actions/workflows/tests.yml/badge.svg)](https://github.com/FieldAlgo/fieldwave/actions/workflows/tests.yml)
