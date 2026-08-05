@@ -4,9 +4,11 @@ The single-source core (migration Phase 3+) calls these; the current per-backend
 not yet. Keeping the surface tiny is the point: everything divergent between NumPy / JAX /
 PyTorch lives here, so it can be tested in one place.
 
-``eig`` is the one primitive that genuinely differs. JAX >= 0.11 supports gradients through
-non-symmetric complex ``eig`` natively via ``enable_eigvec_derivs`` (assumes distinct
-eigenvalues); PyTorch's ``torch.linalg.eig`` is differentiable; NumPy needs no gradient.
+``eig`` is the one primitive that genuinely differs, and the one whose *gradient* this module
+supplies rather than delegates: both frameworks can differentiate a non-symmetric complex
+``eig`` (JAX via ``enable_eigvec_derivs``, PyTorch natively) but both assume distinct
+eigenvalues and return NaN when that fails, which an ordinary structure can cause. See the
+note above :func:`eig`. NumPy needs no gradient.
 """
 import array_api_compat as ac
 
@@ -126,29 +128,161 @@ def as_array(xp, v, dtype=None, device=None):
     return xp.asarray(v, dtype=dtype, device=device)
 
 
-def eig(A):
-    """Eigendecomposition of a (possibly non-Hermitian) complex matrix.
+# --- eig, and the one place eigenvalue degeneracy is handled ---------------------------
+#
+# The eigenvector derivative carries a ``1 / (w_i - w_j)``, so it is undefined where two
+# eigenvalues coincide. That is not an exotic case here: a *uniform* layer at normal
+# incidence has ``q(+m) == q(-m)`` exactly, for every retained order. Both frameworks'
+# native rules return NaN there — the whole gradient, not just the degenerate directions —
+# and a uniform buffer or spacer layer at normal incidence is an ordinary thing to put in a
+# stack, so an inverse-design run walks into it without doing anything unusual.
+#
+# The fix is Lorentzian broadening of that reciprocal, ``1/d -> conj(d)/(|d|**2 + eps)``,
+# which is what every differentiable RCWA does; the variation is in the epsilon. Broadening
+# is not a patch over the singularity so much as the correct value at it: a degenerate
+# eigenspace has a gauge freedom, a physical loss cannot depend on it, and the sensitivity
+# the naive expression computes as 0/0 really is zero. The regularized gradient at exact
+# degeneracy comes out equal to the limit approaching it, not merely finite.
+#
+# This follows fmmax (MIT, google/fmmax, `utils.py`), whose eps is relative to the
+# eigenvalue range with an absolute floor rather than fixed (torcwa 1e-10, meent 1e-10 on
+# Torch and 1e-20 on JAX). A fixed eps is tied to the matrix scale: measured against finite
+# differences, the fixed one degrades from ~2e-10 to ~1e-7 as the operator shrinks four
+# decades, where the scale-aware one stays flat. That difference is the reason to prefer it.
+#
+# The gauge term (the third one in `rhs`) also comes from fmmax; grcwa carries it, meent and
+# torcwa drop it. It is kept here on their authority rather than on evidence: for a
+# gauge-invariant loss — which every physical loss is — it provably contributes nothing, and
+# no measurement made here separates it from its absence. It costs one matmul.
+#
+# Equation 4.77 of Boeddeker et al., arXiv:1701.00392. Cross-checked against both
+# frameworks' native rules where those are defined (see tests_verification/test_eig_grad).
 
-    Returns ``(eigenvalues, right_eigenvectors)`` and is differentiable on JAX and PyTorch.
+EIG_EPS_RELATIVE = 1e-12
+EIG_EPS_MINIMUM = 1e-24
+
+
+def _eig_grad(xp, w, V, gw, gV):
+    """Gradient of ``A`` given the eigendecomposition's, in PyTorch's complex convention.
+
+    ``gw`` / ``gV`` are cotangents with respect to the *conjugates* of the outputs, which is
+    what PyTorch hands a custom Function and what it wants back. JAX's convention is the
+    other one, so :func:`_jax_eig` conjugates on the way in and out; that asymmetry is the
+    only framework-specific part of this, and taking it on faith is how the PyTorch rule
+    first came out wrong by a term (native and finite differences both said so).
     """
+    n = w.shape[-1]
+    I = xp.eye(n, device=_device_of(w))
+    eye = xp.astype(I, xp.bool)
+
+    delta = w[..., None, :] - w[..., :, None]
+    delta_sq = xp.abs(delta) ** 2
+    # Scale-aware: the broadening has to shrink with the problem, or the same structure in
+    # different units gets a different gradient.
+    eps = xp.maximum(EIG_EPS_RELATIVE * xp.max(delta_sq), as_array(xp, EIG_EPS_MINIMUM))
+    f = xp.conj(delta) / (delta_sq + eps)
+    f = xp.where(eye, xp.zeros_like(f), f)            # no broadening on the diagonal
+
+    V_H = xp.matrix_transpose(xp.conj(V))
+    VHgV = V_H @ gV
+
+    rhs = (xp.astype(I, gw.dtype) * gw[..., None, :]
+           + xp.conj(f) * VHgV
+           - xp.conj(f) * (V_H @ V) @ xp.where(eye, xp.astype(xp.real(VHgV), VHgV.dtype),
+                                               xp.zeros_like(VHgV))) @ V_H
+    return xp.linalg.solve(V_H, rhs)
+
+
+def _device_of(x):
+    """``device=`` argument for building an array alongside ``x`` (None on NumPy/JAX)."""
+    return x.device if hasattr(x, 'device') else None
+
+
+def _eig_raw(A):
+    """The framework's own eigendecomposition, with no gradient rule attached."""
     xp = ac.array_namespace(A)
     name = xp.__name__
     if 'torch' in name:
         import torch
-        w, V = torch.linalg.eig(A)
-        return w, V
+        return torch.linalg.eig(A)
     if 'jax' in name:
         import jax.lax.linalg as jll
-        out = jll.eig(
-            A,
-            compute_left_eigenvectors=False,
-            compute_right_eigenvectors=True,
-            enable_eigvec_derivs=True,
-        )
+        out = jll.eig(A, compute_left_eigenvectors=False, compute_right_eigenvectors=True,
+                      enable_eigvec_derivs=False)
         return out[0], out[-1]
     import numpy as np
-    w, V = np.linalg.eig(A)
-    return w, V
+    return np.linalg.eig(A)
+
+
+def eig(A):
+    """Eigendecomposition of a (possibly non-Hermitian) complex matrix.
+
+    Returns ``(eigenvalues, right_eigenvectors)`` and is differentiable on JAX and PyTorch,
+    including where eigenvalues are degenerate — see the note above this function.
+    """
+    xp = ac.array_namespace(A)
+    name = xp.__name__
+    if 'torch' in name:
+        return _torch_eig(A)
+    if 'jax' in name:
+        return _jax_eig(A)
+    return _eig_raw(A)
+
+
+_JAX_EIG = None
+
+
+def _jax_eig(A):
+    """JAX ``eig`` with the broadened rule, built on first use so importing stays cheap."""
+    global _JAX_EIG
+    if _JAX_EIG is None:
+        import jax
+
+        @jax.custom_vjp
+        def _eig_jax(A):
+            return _eig_raw(A)
+
+        def _fwd(A):
+            w, V = _eig_raw(A)
+            return (w, V), (w, V)
+
+        def _bwd(res, g):
+            import jax.numpy as jnp
+            w, V = res
+            grad_w, grad_V = g
+            # JAX cotangents are with respect to the parameters; _eig_grad wants them with
+            # respect to the conjugates, and returns one in the same convention.
+            return (jnp.conj(_eig_grad(jnp, w, V, jnp.conj(grad_w), jnp.conj(grad_V))),)
+
+        _eig_jax.defvjp(_fwd, _bwd)
+        _JAX_EIG = _eig_jax
+    return _JAX_EIG(A)
+
+
+_TORCH_EIG = None
+
+
+def _torch_eig(A):
+    """PyTorch ``eig`` with the broadened rule (same construction as the JAX one)."""
+    global _TORCH_EIG
+    if _TORCH_EIG is None:
+        import torch
+
+        class _Eig(torch.autograd.Function):
+            @staticmethod
+            def forward(ctx, A):
+                w, V = torch.linalg.eig(A)
+                ctx.save_for_backward(w, V)
+                return w, V
+
+            @staticmethod
+            def backward(ctx, grad_w, grad_V):
+                w, V = ctx.saved_tensors
+                return _eig_grad(ac.array_namespace(V), w, V,
+                                 grad_w.resolve_conj(), grad_V.resolve_conj())
+
+        _TORCH_EIG = _Eig
+    return _TORCH_EIG.apply(A)
 
 
 # --- Bessel J1: the second primitive that genuinely differs per framework ---------------
