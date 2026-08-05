@@ -28,6 +28,7 @@ The one genuinely backend-specific corner is the material table: it is read off 
 Array-API ``interp`` and the table is static data rather than a design variable.
 """
 from os import walk
+from typing import NamedTuple
 from pathlib import Path
 
 import numpy as np
@@ -174,6 +175,30 @@ def _precision_is_double(type_complex):
     raise ValueError(f'unsupported type_complex: {type_complex}')
 
 
+def _edge_list(xp, parts, type_float, type_complex, device):
+    """The ``(n, 1)`` grid line column both the eager build and the replay hand back."""
+    flat = [_flat(xp, v, type_float, type_complex, device) for v in parts]
+    dtype = _result_dtype(xp, [p.dtype for p in flat])
+    return xp.reshape(xp.concat([xp.astype(p, dtype) for p in flat]), (-1, 1))
+
+
+class VectorGridPlan(NamedTuple):
+    """Where each grid line came from, and which rows and columns each block owns.
+
+    Everything here is a Python int or ``None`` — no arrays — so a plan is hashable and can be
+    passed as a static argument to a jitted call, and so replaying it involves no comparison of
+    any traced value.
+
+    ``row_sources`` / ``col_sources`` name, per grid line and in order, the block edge that
+    became it: ``(obj_index, 0 or 1, 0 or 1)`` for the near or far edge of that object's row or
+    column, or ``None`` for the closing period line. Two blocks that met at a coordinate appear
+    once, under whichever of them got there first — which is the sharing, recorded.
+    """
+    row_sources: tuple
+    col_sources: tuple
+    ranges: tuple
+
+
 def _bisect_left(seq, value):
     """``bisect.bisect_left`` comparing real parts only.
 
@@ -204,6 +229,10 @@ class Modeling:
                  *args, **kwargs):
         self._ucell = None
         self.ucell_vector = None
+        self.grid_plans = None
+        self._last_plan = None
+        self.shape_choices = None
+        self._shape_replay = self._shape_record = None
         self.x_list = None
         self.y_list = None
         self.mat_table = None
@@ -384,8 +413,17 @@ class Modeling:
         angle = _shape_param(xp, angle, F, dev)
 
         # Fold onto [0, pi/2): the shape repeats every pi, and a quarter turn swaps the sides.
+        # The choices below are discrete — which quarter turn, which regions exist, which
+        # strip bounds each slab — so they are recorded on the way through and replayed from
+        # the record when one is supplied, for the same reason the grid build is (see
+        # :meth:`vector_per_layer_numeric`). Only the arithmetic is left for a tracer.
+        replay = self._take_shape_choice()
+        choice = {}
+
         phi = angle % _PI
-        if bool(phi >= _PI / 2):
+        swap = replay['swap'] if replay else bool(phi >= _PI / 2)
+        choice['swap'] = swap
+        if swap:
             phi = phi - _PI / 2
             A, B = ly / 2, lx / 2
         else:
@@ -396,15 +434,19 @@ class Modeling:
 
         half_height = A * sin_p + B * cos_p          # top and bottom corners
         inner = A * sin_p - B * cos_p                # the other two, at +-|inner|
-        if bool((xp.real(inner) < 0)[0]):
+        negate = replay['negate'] if replay else bool((xp.real(inner) < 0)[0])
+        choice['negate'] = negate
+        if negate:
             inner = -inner
 
         # Slab boundaries, region by region. A region of zero height contributes none: at an
         # aligned angle the triangles vanish and the band is the whole shape.
         n_tri = max(1, int(n_split_triangle))
         n_par = max(1, int(n_split_parallelogram))
-        has_triangles = bool((xp.real(half_height - inner) > 0)[0])
-        has_band = bool((xp.real(inner) > 0)[0])
+        has_triangles = (replay['has_triangles'] if replay
+                         else bool((xp.real(half_height - inner) > 0)[0]))
+        has_band = replay['has_band'] if replay else bool((xp.real(inner) > 0)[0])
+        choice['has_triangles'], choice['has_band'] = has_triangles, has_band
 
         regions = []
         if has_triangles:
@@ -420,24 +462,28 @@ class Modeling:
                 edges.append(top + (bottom - top) * (k / count))
 
         res = []
-        for top, bottom in zip(edges[:-1], edges[1:]):
+        strips = []
+        for slab, (top, bottom) in enumerate(zip(edges[:-1], edges[1:])):
             dy = (top + bottom) / 2
 
             # |cos*dx + sin*dy| <= A and |-sin*dx + cos*dy| <= B each bound dx; the chord is the
             # tighter one. Both comparisons are multiplied through by cos*sin >= 0 so that a
             # vanishing sin picks the cos strip instead of dividing by zero.
-            if bool((xp.real((A - sin_p * dy) * sin_p - (cos_p * dy + B) * cos_p) <= 0)[0]):
-                right = (A - sin_p * dy) / cos_p
-            else:
-                right = (cos_p * dy + B) / sin_p
+            right_on_cos = (replay['strips'][slab][0] if replay else bool(
+                (xp.real((A - sin_p * dy) * sin_p - (cos_p * dy + B) * cos_p) <= 0)[0]))
+            right = ((A - sin_p * dy) / cos_p if right_on_cos
+                     else (cos_p * dy + B) / sin_p)
 
-            if bool((xp.real((-A - sin_p * dy) * sin_p - (cos_p * dy - B) * cos_p) >= 0)[0]):
-                left = (-A - sin_p * dy) / cos_p
-            else:
-                left = (cos_p * dy - B) / sin_p
+            left_on_cos = (replay['strips'][slab][1] if replay else bool(
+                (xp.real((-A - sin_p * dy) * sin_p - (cos_p * dy - B) * cos_p) >= 0)[0]))
+            left = ((-A - sin_p * dy) / cos_p if left_on_cos
+                    else (cos_p * dy - B) / sin_p)
+            strips.append((right_on_cos, left_on_cos))
 
             res.append([[cy + bottom, cx + left], [cy + top, cx + right], n_index])
 
+        choice['strips'] = tuple(strips)
+        self._record_shape_choice(choice)
         return res
 
     def ellipse(self, cx, cy, lx, ly, n_index, angle=0, n_split_w=2, n_split_h=2,
@@ -520,12 +566,65 @@ class Modeling:
 
     # ------------------------------------------------------------------------------ gridding
 
-    def vector_per_layer_numeric(self, layer_info, x64=True):
+    def _take_shape_choice(self):
+        """The next recorded shape choice to replay, or ``None`` while recording."""
+        queue = getattr(self, '_shape_replay', None)
+        return queue.pop(0) if queue else None
+
+    def _record_shape_choice(self, choice):
+        record = getattr(self, '_shape_record', None)
+        if record is not None:
+            record.append(choice)
+
+    def _replay_grid(self, xp, dev, datatype, F, C, pmtvy_base, obj_list, plan):
+        """Build the layer from a recorded :class:`VectorGridPlan`, comparing nothing.
+
+        The edge *values* are still the traced ones — they are gathered from the blocks the
+        plan names — and only their order, their sharing and each block's index range come from
+        the record. That is the whole difference: the eager build reaches those three by
+        comparing coordinates, which is exactly what a tracer cannot do.
+        """
+        if self.period is None:
+            raise ValueError('period is not set')
+        period = _cast(xp, self.period, F, dev)
+
+        def edge_of(source, is_row):
+            if source is None:                       # the closing period line
+                return _cast(xp, xp.reshape(period[1 if is_row else 0], (1,)), datatype, dev)
+            obj_index, corner, axis = source
+            return obj_list[obj_index][corner][axis]
+
+        row_list = [edge_of(src, True) for src in plan.row_sources]
+        col_list = [edge_of(src, False) for src in plan.col_sources]
+
+        n_row, n_col = len(row_list), len(col_list)
+        ucell_layer = xp.ones((n_row, n_col), dtype=datatype, device=dev) * pmtvy_base
+        rows = xp.arange(n_row, device=dev)
+        cols = xp.arange(n_col, device=dev)
+
+        for obj, (row_begin, row_end, col_begin, col_end) in zip(obj_list, plan.ranges):
+            mask = (xp.reshape((rows >= row_begin) & (rows < row_end), (-1, 1))
+                    & xp.reshape((cols >= col_begin) & (cols < col_end), (1, -1)))
+            ucell_layer = xp.where(mask, _cast(xp, obj[2], datatype, dev), ucell_layer)
+
+        return ucell_layer, _edge_list(xp, col_list, F, C, dev), _edge_list(xp, row_list, F, C, dev)
+
+    def vector_per_layer_numeric(self, layer_info, x64=True, plan=None):
         """Reduce one layer's block list to ``(cell, x_list, y_list)``.
 
         Every distinct block edge becomes a grid line, and blocks that meet at a coordinate
         share the one line rather than getting one each, so ``x_list`` / ``y_list`` come back
         strictly increasing. See :func:`insert_edge` for why sharing is the right answer.
+
+        Which edge becomes which line, and which two share one, are *discrete* decisions: they
+        come out of comparing coordinates, and comparing a traced coordinate is what stops this
+        function under ``jax.jit``. So they are separable from the arithmetic. Called without a
+        ``plan`` this records them into :class:`VectorGridPlan` and hangs it on ``self.grid_plans``;
+        called with one it replays them and never compares anything, which leaves only gathers
+        and a ``where`` — all traceable. The recorded plan is read back through
+        :meth:`~fieldwave._core.engine.CoreSolveMixin.freeze_geometry`, the same route the
+        other frozen decisions take, and carries the same caveat: move a parameter far enough
+        to reorder the edges and the plan is describing a layer you no longer have.
         """
         pmtvy_base, obj_list = layer_info
 
@@ -536,11 +635,18 @@ class Modeling:
         # TODO: activate and apply 'x64' option thru this function and connect to meent class.
         datatype = xp.complex128 if x64 else xp.complex64
 
+        F, C = self._float(xp), self._complex(xp)
+
+        if plan is not None:
+            return self._replay_grid(xp, dev, datatype, F, C, pmtvy_base, obj_list, plan)
+
         # Griding
         row_list = []
         col_list = []
+        row_src = []
+        col_src = []
 
-        def insert_edge(seq, value):
+        def insert_edge(seq, src, value, source):
             """Add one block edge to its sorted grid line list, reusing a line already there.
 
             A block's rows and columns are located below with ``list.index``, which returns the
@@ -567,15 +673,16 @@ class Modeling:
             if len(seq) > index and bool(value == seq[index]):
                 return seq[index]
             seq.insert(index, value)
+            src.insert(index, source)
             return value
 
-        for obj in obj_list:
+        for obj_index, obj in enumerate(obj_list):
             top_left, bottom_right, _ = obj
 
-            top_left[0] = insert_edge(row_list, top_left[0])
-            bottom_right[0] = insert_edge(row_list, bottom_right[0])
-            top_left[1] = insert_edge(col_list, top_left[1])
-            bottom_right[1] = insert_edge(col_list, bottom_right[1])
+            top_left[0] = insert_edge(row_list, row_src, top_left[0], (obj_index, 0, 0))
+            bottom_right[0] = insert_edge(row_list, row_src, bottom_right[0], (obj_index, 1, 0))
+            top_left[1] = insert_edge(col_list, col_src, top_left[1], (obj_index, 0, 1))
+            bottom_right[1] = insert_edge(col_list, col_src, bottom_right[1], (obj_index, 1, 1))
 
         if self.period is None:
             raise ValueError('period is not set')
@@ -584,13 +691,15 @@ class Modeling:
 
         if not row_list or bool(row_list[-1] != period[1]):
             row_list.append(_cast(xp, xp.reshape(period[1], (1,)), datatype, dev))
+            row_src.append(None)
         if not col_list or bool(col_list[-1] != period[0]):
             col_list.append(_cast(xp, xp.reshape(period[0], (1,)), datatype, dev))
+            col_src.append(None)
 
         if row_list and bool(row_list[0] == 0):
-            row_list = row_list[1:]
+            row_list, row_src = row_list[1:], row_src[1:]
         if col_list and bool(col_list[0] == 0):
-            col_list = col_list[1:]
+            col_list, col_src = col_list[1:], col_src[1:]
 
         n_row, n_col = len(row_list), len(col_list)
         ucell_layer = xp.ones((n_row, n_col), dtype=datatype, device=dev) * pmtvy_base
@@ -598,6 +707,7 @@ class Modeling:
         rows = xp.arange(n_row, device=dev)
         cols = xp.arange(n_col, device=dev)
 
+        ranges = []
         for obj in obj_list:
             top_left, bottom_right, pmty = obj
 
@@ -606,6 +716,7 @@ class Modeling:
 
             col_begin = 0 if bool(top_left[1] == 0) else col_list.index(top_left[1]) + 1
             col_end = col_list.index(bottom_right[1]) + 1
+            ranges.append((row_begin, row_end, col_begin, col_end))
 
             # The block bounds are integer indices, so the mask is static; the value written
             # through it is not, and stays differentiable.
@@ -613,25 +724,27 @@ class Modeling:
                     & xp.reshape((cols >= col_begin) & (cols < col_end), (1, -1)))
             ucell_layer = xp.where(mask, _cast(xp, pmty, datatype, dev), ucell_layer)
 
-        F, C = self._float(xp), self._complex(xp)
-        x_parts = [_flat(xp, x, F, C, dev) for x in col_list]
-        y_parts = [_flat(xp, y, F, C, dev) for y in row_list]
+        self._last_plan = VectorGridPlan(row_sources=tuple(row_src), col_sources=tuple(col_src),
+                                        ranges=tuple(ranges))
 
-        x_dtype = _result_dtype(xp, [p.dtype for p in x_parts])
-        y_dtype = _result_dtype(xp, [p.dtype for p in y_parts])
+        return (ucell_layer, _edge_list(xp, col_list, F, C, dev),
+                _edge_list(xp, row_list, F, C, dev))
 
-        x_list = xp.reshape(xp.concat([xp.astype(p, x_dtype) for p in x_parts]), (-1, 1))
-        y_list = xp.reshape(xp.concat([xp.astype(p, y_dtype) for p in y_parts]), (-1, 1))
+    def draw(self, layer_info_list, plans=None):
+        """Grid every layer. Returns a list of ``[cell, x_list, y_list]``, bottom layer first.
 
-        return ucell_layer, x_list, y_list
-
-    def draw(self, layer_info_list):
-        """Grid every layer. Returns a list of ``[cell, x_list, y_list]``, bottom layer first."""
+        ``plans`` is a per-layer sequence of :class:`VectorGridPlan` to replay; omit it and the
+        grid decisions are taken by comparison, which needs concrete coordinates. Either way
+        the plans used end up on ``self.grid_plans``, which is what ``freeze_geometry`` reads.
+        """
         ucell_info_list = []
         film_flags = []
+        used_plans = []
 
-        for layer_info in layer_info_list:
-            ucell_layer, x_list, y_list = self.vector_per_layer_numeric(layer_info)
+        for i, layer_info in enumerate(layer_info_list):
+            plan = None if plans is None else plans[i]
+            ucell_layer, x_list, y_list = self.vector_per_layer_numeric(layer_info, plan=plan)
+            used_plans.append(plan if plan is not None else self._last_plan)
             ucell_info_list.append([ucell_layer, x_list, y_list])
             # TODO: eig for homo layer
             film_flags.append(1.0 if x_list.shape[0] == y_list.shape[0] == 1 else 0.0)
@@ -640,6 +753,7 @@ class Modeling:
         dev = self._dev(*[info[0] for info in ucell_info_list])
         self.film_layer = xp.asarray(film_flags, dtype=self._float(xp), device=dev)
         self.ucell_info_list = ucell_info_list
+        self.grid_plans = used_plans
 
         return ucell_info_list
 
@@ -667,8 +781,10 @@ class Modeling:
 
         return res
 
-    def modeling_vector_instruction(self, instructions):
+    def modeling_vector_instruction(self, instructions, plans=None, shape_choices=None):
         """Run a full instruction set: ``[[base_index, [[shape, *params], ...]], ...]``."""
+        self._shape_replay = list(shape_choices) if shape_choices is not None else None
+        self._shape_record = None if shape_choices is not None else []
         layer_info_list = []
         for layer in instructions:
             obj_list_per_layer = []
@@ -679,7 +795,10 @@ class Modeling:
 
             layer_info_list.append([base_refractive_index, obj_list_per_layer])
 
-        return self.draw(layer_info_list)
+        self.shape_choices = (list(shape_choices) if shape_choices is not None
+                              else self._shape_record)
+        self._shape_replay = self._shape_record = None
+        return self.draw(layer_info_list, plans=plans)
 
 
 # ------------------------------------------------------------------------------ material table

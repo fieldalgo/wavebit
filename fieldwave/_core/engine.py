@@ -116,6 +116,9 @@ class CoreFactorizationMixin:
 
         geometry = StaticGeometry(normal_field=normal_field, compression=compression)
         epx = self._conv_matrices(geometry)[0]
+        if self._modeling_type_assigned == 1:
+            geometry.vector_grid = self.modeler.grid_plans
+            geometry.shape_choices = self.modeler.shape_choices
         geometry.same_material = detect_same_material(epx, self.n_bot)
         return geometry
 
@@ -155,7 +158,9 @@ class CoreFactorizationMixin:
                 raise ValueError("Check 'modeling_type' and 'fourier_type' in 'conv_solve'.")
 
         elif self._modeling_type_assigned == 1:                    # vector
-            ucell_vector = self.modeling_vector_instruction(self.ucell)
+            ucell_vector = self.modeling_vector_instruction(
+                self.ucell, plans=None if geometry is None else geometry.vector_grid,
+                shape_choices=None if geometry is None else geometry.shape_choices)
             epx_conv_all, epy_conv_all, epz_conv_i_all = _fac.to_conv_mat_vector(
                 ucell_vector, fto_x, fto_y, use_pinv=self.use_pinv)
 

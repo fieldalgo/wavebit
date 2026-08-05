@@ -6,6 +6,8 @@ survives a JAX trace. ``freeze_geometry()`` takes those decisions once against t
 structure; handing the result back to ``conv_solve`` makes the whole call jit- and
 grad-traceable without changing a single number.
 """
+import importlib
+
 import numpy as np
 import pytest
 
@@ -96,3 +98,54 @@ def test_same_material_flags_are_correct():
                           theta=0.0, fto=[5, 0], period=[0.7], wavelength=0.9,
                           thickness=[0.2, 0.1])
     assert solver.freeze_geometry().same_material == [False, True]
+
+
+@pytest.mark.parametrize('name,make,start', [
+    ('ellipse lx', lambda v: [[3.5, [['ellipse', 140.0, 160.0, v, 55.0, 2.0, 0.27, 9, 9]]]], 85.0),
+    ('rectangle lx', lambda v: [[3.5, [['rectangle', 140.0, 160.0, v, 55.0, 2.0, 0.27, 4, 4]]]],
+     85.0),
+    ('rectangle angle',
+     lambda v: [[3.5, [['rectangle', 140.0, 160.0, 85.0, 55.0, 2.0, v, 4, 4]]]], 0.27),
+    ('overlapping pair',
+     lambda v: [[1.0, [['rectangle', 130.0, 150.0, v, 120.0, 2.0, 0.0, 0, 0],
+                       ['rectangle', 190.0, 150.0, 120.0, 120.0, 3.0, 0.0, 0, 0]]]], 120.0),
+])
+def test_a_frozen_geometry_makes_the_vector_path_traceable(name, make, start):
+    """``jax.jit`` over a shape parameter, which the vector path could not do before.
+
+    What stopped it was never arithmetic: it was the comparisons that decide which edge becomes
+    which grid line, which two share one, and which strip bounds each of a rectangle's slabs.
+    Those are discrete, so ``freeze_geometry`` records them and the traced call replays them —
+    the same bargain the normal field and the same-material flags already make, and with the
+    same caveat, that a parameter moved far enough to reorder the edges leaves the record
+    describing a layer that is no longer there.
+
+    The overlapping pair is here because it is the case that has no alternative: the analytic
+    path superposes shapes rather than painting them (see test_analytic.py), so a layer whose
+    objects overlap can only be built this way.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    importlib.import_module('fieldwave.on_jax')
+
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
+               theta=0.15, phi=0.35, pol=0, wavelength=900.0)
+    x = jnp.asarray(start)
+    frozen = fieldwave.rcwa(backend=1, ucell=make(x), **cfg).freeze_geometry()
+    assert frozen.vector_grid is not None, 'the grid plan was not recorded'
+
+    def total(v):
+        return jnp.sum(fieldwave.rcwa(backend=1, ucell=make(v), **cfg)
+                       .conv_solve(geometry=frozen).de_ti).real
+
+    eager = float(total(x))
+    assert float(jax.jit(total)(x)) == pytest.approx(eager, rel=1e-11)
+
+    grad = float(jax.grad(total)(x))
+    assert grad != 0.0
+    assert float(jax.jit(jax.grad(total))(x)) == pytest.approx(grad, rel=1e-11)
+
+    step = 1e-3
+    fd = (float(total(jnp.asarray(start + step))) - float(total(jnp.asarray(start - step)))) \
+        / (2 * step)
+    assert grad == pytest.approx(fd, rel=2e-3), (grad, fd)
