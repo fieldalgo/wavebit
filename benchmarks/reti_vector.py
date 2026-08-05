@@ -24,8 +24,14 @@ Reading the 2D output: 46 of its 48 rows land at 1e-13. Two do not — the ellip
 under normal incidence, at 3e-8, which is 6e-7 of the efficiencies involved. It is isolated in
 ``n_split`` rather than systematic (7e-15 / 3e-14 / **3e-8** / 9e-14 / 5e-14 at 6 / 10 / 14 /
 20 / 30) and the grid it comes from is not the finest in that sweep, so it reads as one
-structure's conditioning rather than a property of the decomposition. FieldWave conserves
-energy to 3e-15 there. Which code is the 3e-8 has not been established.
+structure's conditioning rather than a property of the decomposition.
+
+It is Reticolo's. Sliding the shape along x cannot change an efficiency, so how far a code
+moves under that translation is its own error scale on the structure — and at ``n_split`` 14
+Reticolo moves 6.0e-8 while FieldWave moves 1.6e-14, the disagreement being the same size as
+Reticolo's own wobble. At 10 and 20 both sit at 1e-14. FieldWave also conserves energy to
+3e-15 throughout. Read the two rows as the oracle's floor on that texture, not as a finding
+about the modeler.
 """
 import sys
 import warnings
