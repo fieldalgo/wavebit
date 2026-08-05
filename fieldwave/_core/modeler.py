@@ -584,9 +584,9 @@ class Modeling:
     def vector_per_layer_numeric(self, layer_info, x64=True):
         """Reduce one layer's block list to ``(cell, x_list, y_list)``.
 
-        Every distinct block edge becomes a grid line; coincident edges are nudged apart by a
-        growing perturbation so the sort stays strict, and the returned ``x_list`` / ``y_list``
-        are strictly increasing. See :func:`insert_edge` below for what the nudge is for.
+        Every distinct block edge becomes a grid line, and blocks that meet at a coordinate
+        share the one line rather than getting one each, so ``x_list`` / ``y_list`` come back
+        strictly increasing. See :func:`insert_edge` for why sharing is the right answer.
         """
         pmtvy_base, obj_list = layer_info
 
@@ -595,62 +595,48 @@ class Modeling:
         dev = self._dev(*[c for obj in obj_list for corner in obj[:2] for c in corner])
 
         # TODO: activate and apply 'x64' option thru this function and connect to meent class.
-        if x64:
-            datatype = xp.complex128
-            perturbation = 0
-            perturbation_unit = 1E-14
-        else:
-            datatype = xp.complex64
-            perturbation = 0
-            perturbation_unit = 1E-6
+        datatype = xp.complex128 if x64 else xp.complex64
 
         # Griding
         row_list = []
         col_list = []
 
-        def insert_edge(seq, value, downward):
-            """Add one block edge to its sorted grid line list, nudged off any edge already there.
+        def insert_edge(seq, value):
+            """Add one block edge to its sorted grid line list, reusing a line already there.
 
-            The nudge is what the grid builder below depends on: it locates each block's rows
-            and columns with ``list.index``, which returns the *first* match, so two edges
-            sharing a coordinate would put two different blocks on one grid line. Nudging the
-            later one keeps them distinct. ``downward`` moves a block's far edge down and its
-            near edge up, so a block never grows into its neighbour.
+            A block's rows and columns are located below with ``list.index``, which returns the
+            *first* match, so two blocks whose edges coincide have to agree on which line they
+            mean. They get the same one: the block below a shared boundary ends on it and the
+            block above begins on it, which is what abutting blocks are.
 
-            The insertion slot is taken *after* the nudge. Taking it before — which is what this
-            did — puts an upward-nudged edge in front of the twin it has just moved past, and
-            the edge list comes back out of order. It was easy to miss because the disorder is
-            the size of the nudge: an unrotated ellipse at ``n_split`` 24 had 10 of its 49
-            column edges inverted, by 8e-11 each, which reaches ``_cfs`` as a negative segment
-            width. Harmless at ``perturbation_unit`` 1e-14; the ``x64=False`` branch below uses
-            1e-6, where a few hundred collisions would put the disorder at ~0.1 length units.
+            This used to nudge the second edge off the first by a growing relative perturbation
+            instead, leaving two lines a few times 1e-14 apart with a sliver of background
+            between them. Every stack of slabs hit it — a decomposed ellipse has a shared
+            boundary between every pair — so the grid came out about twice as long as the
+            geometry: 49 lines each way at ``n_split`` 24, against 26 rows and 39 columns of
+            real content. The nudge was also what made the edge lists non-monotonic, since it
+            moved an edge past the twin it was then inserted in front of.
 
-            A nudge landing on a *third* edge is not chased; nothing here places distinct edges
-            within a nudge of each other.
+            Sharing is safe for autograd, which was the other reason given for the nudge.
+            Where two edges coincide *identically* — abutting slabs, two objects built to touch
+            — they carry the same derivative and dropping one changes nothing;
+            ``test_two_objects_sharing_an_edge_keep_their_gradient`` measures it. Where they
+            merely cross at this parameter value, the layer has a genuine kink there and
+            autograd returns the one-sided derivative, exactly as it did with the nudge.
             """
-            nonlocal perturbation
             index = _bisect_left(seq, value)
             if len(seq) > index and bool(value == seq[index]):
-                # TODO: change; save how many perturbations were applied in a variable
-                perturbation += perturbation_unit
-                if downward:
-                    value = value - (value * perturbation)
-                elif bool(value == 0):
-                    value = value + perturbation
-                else:
-                    value = value + (value * perturbation)
-                index = _bisect_left(seq, value)
+                return seq[index]
             seq.insert(index, value)
             return value
 
-        # overlap check and apply perturbation
         for obj in obj_list:
             top_left, bottom_right, _ = obj
 
-            top_left[0] = insert_edge(row_list, top_left[0], downward=False)
-            bottom_right[0] = insert_edge(row_list, bottom_right[0], downward=True)
-            top_left[1] = insert_edge(col_list, top_left[1], downward=False)
-            bottom_right[1] = insert_edge(col_list, bottom_right[1], downward=True)
+            top_left[0] = insert_edge(row_list, top_left[0])
+            bottom_right[0] = insert_edge(row_list, bottom_right[0])
+            top_left[1] = insert_edge(col_list, top_left[1])
+            bottom_right[1] = insert_edge(col_list, bottom_right[1])
 
         if self.period is None:
             raise ValueError('period is not set')

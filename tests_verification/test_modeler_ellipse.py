@@ -292,19 +292,15 @@ def test_gradient_survives_the_coincident_edges_of_an_unrotated_ellipse(param, v
     """An unrotated ellipse puts two slabs' side edges at exactly the same x, by symmetry.
 
     ``x_half`` is ``a*sin(s_mid)`` and ``sin`` is symmetric about pi/2, so slab ``i`` and slab
-    ``n - 1 - i`` produce bit-identical left and right edges — 10 coincident pairs out of 49
-    grid lines at ``n_split`` 24. Coincident edges are the case
-    ``vector_per_layer_numeric``'s perturbation exists to break up, so that two blocks cannot
-    collapse onto one grid line and lose an edge (and its share of the derivative) out of the
-    graph. This asserts the outcome that matters — autograd still agreeing with a difference
-    quotient — at both parities of ``n_split``, since the odd one also has a slab centred on
-    pi/2 with no twin.
+    ``n - 1 - i`` produce bit-identical left and right edges — 10 coincident pairs at
+    ``n_split`` 24, which ``vector_per_layer_numeric`` collapses onto one grid line each. The
+    two carry the same derivative, so the collapse is free; this asserts the outcome that
+    matters, autograd still agreeing with a difference quotient, at both parities of
+    ``n_split``, since the odd one also has a slab centred on pi/2 with no twin.
 
-    It does *not* fail with the perturbation switched off, which was worth checking and is
-    worth recording: at ``perturbation_unit = 0`` the duplicates survive into the grid as
-    zero-width bands and the answer moves by 1e-11, autograd tracking it the whole way. The
-    perturbation is load-bearing for the grid builder's ``list.index`` lookups, not for
-    gradient flow on this path.
+    ``test_two_objects_sharing_an_edge_keep_their_gradient`` in test_modeler_core.py is the
+    same question asked where the two edges belong to different objects and reach the same
+    coordinate by different arithmetic.
     """
     pytest.importorskip('torch')
     auto, fd = _grad_and_difference(param, value, step, angle=0.0, n_split=n_split)

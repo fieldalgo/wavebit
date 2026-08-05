@@ -43,19 +43,26 @@ SOLVE_KW = dict(period=PERIOD, thickness=[205.0, 100.0], fto=[3, 3],
 LEGACY_PARITY = [name for name in INSTRUCTIONS if not name.startswith('ellipse')]
 
 # ``rect_rot`` is held to the golden through the solve and through the geometry, but not
-# array-for-array: the stored ``y`` has two pairs of rows in the wrong order, because the
-# builder used to insert a nudged edge at the slot it found *before* nudging it. Fixing that
-# reorders those rows and the cell rows with them. See the dedicated test below, which pins
-# what did not change (the material anywhere in the layer) and what did (the sort).
+# array-for-array: it is the only case here whose blocks touch, and blocks that touch now share
+# a grid line instead of getting a nudged one each. Its grid is shorter (and sorted) as a
+# result. See the dedicated test below, which pins what did not change — the material anywhere
+# in the layer — and what did.
 BITWISE_PARITY = [name for name in LEGACY_PARITY if name != 'rect_rot']
 
 
-def material_at(cell, x, y, n=601, period=300.0):
+#: Offsets the sample points off any round coordinate. Landing exactly on a grid line makes
+#: the lookup depend on which side of that line the sampler rounds to, which is precisely what
+#: differs between a grid with a zero-width band at a boundary and one without — at 601 evenly
+#: spaced samples one row sat exactly on ``cy`` and reported a difference that was not there.
+_OFF_LATTICE = 0.3183098861837907
+
+
+def material_at(cell, x, y, n=600, period=300.0):
     """The layer's refractive index sampled on an ``n`` x ``n`` grid of points.
 
     Comparing *this* rather than the raw arrays is what survives a change in how grid lines are
-    ordered or how many zero-width bands sit between them: it asks what the solver would see at
-    a position, which is the thing that must not move.
+    ordered or how many of them a boundary is spelled with: it asks what the solver would see
+    at a position, which is the thing that must not move.
     """
     cell = np.asarray(cell)
     x_edges = np.real(np.asarray(x)).reshape(-1)
@@ -68,7 +75,7 @@ def material_at(cell, x, y, n=601, period=300.0):
     y_edges, x_edges = y_edges[order_y], x_edges[order_x]
     cell = cell[order_y][:, order_x]
 
-    points = (np.arange(n) + 0.5) / n * period
+    points = (np.arange(n) + _OFF_LATTICE) / n * period
     iy = np.clip(np.searchsorted(y_edges, points, 'left'), 0, cell.shape[0] - 1)
     ix = np.clip(np.searchsorted(x_edges, points, 'left'), 0, cell.shape[1] - 1)
     return cell[np.ix_(iy, ix)]
@@ -87,35 +94,42 @@ def test_vector_blocks_match_legacy_golden(name):
             assert np.array_equal(want, got), (i, tag, np.max(np.abs(want - got)))
 
 
-def test_rotated_rectangle_blocks_are_the_legacy_ones_in_the_right_order():
-    """The grid line lists come back strictly increasing, holding the layer itself fixed.
+def test_rotated_rectangle_grid_keeps_the_legacy_layer_with_fewer_lines():
+    """The grid drops its duplicate lines and comes back sorted, without moving any material.
 
-    Coincident block edges are nudged apart so two blocks cannot land on one grid line, but the
-    builder used to insert the nudged edge at the slot ``_bisect_left`` had returned *before*
-    the nudge — in front of the very twin the nudge had moved it past. The stored legacy ``y``
-    has two such inversions and is therefore not sorted; a negative segment width is what
-    ``_cfs`` makes of one.
+    The stored golden has one grid line per block edge, including a near-duplicate wherever two
+    blocks meet — the builder used to nudge the second edge off the first by a relative 1e-14
+    rather than let them share a line, and inserted it at the slot found *before* the nudge, so
+    the list was not even sorted (``rect_rot__L0__y`` has two inversions, and a negative
+    segment width is what ``_cfs`` makes of one).
 
-    So the claim here is narrow and checkable: the fix is a reordering. Sorting the legacy
-    edges reproduces the new ones to within the nudge, the material at 361201 points across
-    both layers is untouched, and ``test_vector_solve_matches_legacy_golden[rect_rot]`` still
-    holds the efficiencies to 1e-12.
+    The claim here is narrow and checkable: the layer is the same object, described with fewer
+    lines. The material at 360000 points across both layers is identical, the edges that remain
+    are a subset of the legacy ones to within the old nudge, and
+    ``test_vector_solve_matches_legacy_golden[rect_rot]`` still holds the efficiencies to 1e-12.
     """
     info = Modeling(period=PERIOD).modeling_vector_instruction(INSTRUCTIONS['rect_rot'])
 
     for i, (cell, x, y) in enumerate(info):
-        want_y = np.asarray(GOLDEN[f'rect_rot__L{i}__y']).reshape(-1)
-        got_y = np.asarray(y).reshape(-1)
+        want_y = np.asarray(GOLDEN[f'rect_rot__L{i}__y']).reshape(-1).real
+        got_y = np.asarray(y).reshape(-1).real
+        got_x = np.asarray(x).reshape(-1).real
 
-        assert np.all(np.diff(got_y.real) > 0), i
-        assert np.all(np.diff(np.asarray(x).reshape(-1).real) > 0), i
-        assert np.sort(want_y.real) == pytest.approx(got_y.real, abs=1e-9), i
+        assert np.all(np.diff(got_y) > 0), i
+        assert np.all(np.diff(got_x) > 0), i
+        assert len(got_y) <= len(want_y), i
+
+        # Every surviving line was a legacy line (up to the nudge the legacy applied to it).
+        nearest = np.min(np.abs(got_y[:, None] - np.sort(want_y)[None, :]), axis=1)
+        assert np.max(nearest) < 1e-9, (i, np.max(nearest))
 
         assert np.array_equal(material_at(cell, x, y),
                               material_at(GOLDEN[f'rect_rot__L{i}__cell'],
-                                          GOLDEN[f'rect_rot__L{i}__x'], want_y)), i
+                                          GOLDEN[f'rect_rot__L{i}__x'],
+                                          GOLDEN[f'rect_rot__L{i}__y'])), i
 
-    # And the golden really is the unsorted one — otherwise this test proves nothing.
+    # The golden really is the longer, unsorted one — otherwise this test proves nothing.
+    assert len(np.asarray(GOLDEN['rect_rot__L0__y'])) > len(np.asarray(info[0][2]))
     assert not np.all(np.diff(np.asarray(GOLDEN['rect_rot__L0__y']).reshape(-1).real) > 0)
 
 
@@ -129,9 +143,11 @@ def test_rotated_rectangle_blocks_are_the_legacy_ones_in_the_right_order():
 def test_grid_lines_come_back_strictly_increasing(shape, args):
     """``x_list`` / ``y_list`` are segment edges; out of order they are a negative width.
 
-    The unrotated ellipse is the sharp case — ``sin`` is symmetric about pi/2, so slab ``i`` and
-    slab ``n - 1 - i`` produce bit-identical side edges and every one of those pairs goes
-    through the nudge. Ten of 49 column edges came back inverted before the fix.
+    Blocks that meet at a coordinate share one line, so a stack of ``n`` slabs spends ``n + 1``
+    rows and not ``2n + 1``. The unrotated ellipse is the sharp case in both respects: ``sin``
+    is symmetric about pi/2, so slab ``i`` and slab ``n - 1 - i`` also produce bit-identical
+    *side* edges. It used to spend 49 lines each way at ``n_split`` 24, ten of the columns
+    inverted.
     """
     modeler = Modeling(period=[700.0, 700.0])
     blocks = getattr(modeler, shape)(*args)
@@ -140,6 +156,42 @@ def test_grid_lines_come_back_strictly_increasing(shape, args):
     for tag, edges in (('x', x), ('y', y)):
         values = np.real(np.asarray(edges)).reshape(-1)
         assert np.all(np.diff(values) > 0), (tag, np.min(np.diff(values)))
+
+    # One row per slab, plus the closing period line and the one below the shape — no twins.
+    assert np.asarray(y).shape[0] <= len(blocks) + 2, np.asarray(y).shape
+
+
+def test_two_objects_sharing_an_edge_keep_their_gradient():
+    """Two blocks meeting at a coordinate share one grid line — the shared line still moves.
+
+    This is the case the old nudge was there for, so it is the one that has to be measured
+    rather than argued. Both rectangles' facing edges are ``100 + p/2``, reached by different
+    arithmetic (``cx + lx/2`` against ``(cx + p) - lx/2``), so they are two nodes in the graph
+    that the grid builder collapses into one line. The derivative that survives has to be the
+    real one.
+    """
+    torch = pytest.importorskip('torch')
+    tensor = lambda v: torch.tensor(v, dtype=torch.float64)
+
+    def total(p):
+        ucell = [[1.0, [['rectangle', tensor(100.), tensor(150.), p, tensor(60.), 2.0,
+                         tensor(0.)],
+                        ['rectangle', tensor(100.) + p, tensor(150.), p, tensor(60.), 3.0,
+                         tensor(0.)]]]]
+        cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
+                   wavelength=900.0, pol=0.5)
+        return torch.sum(fieldwave.rcwa(backend=2, ucell=ucell, **cfg).conv_solve().de_ti)
+
+    p = torch.tensor(80.0, dtype=torch.float64, requires_grad=True)
+    total(p).backward()
+    auto = float(p.grad)
+
+    step = 1e-3
+    with torch.no_grad():
+        fd = float((total(tensor(80.0 + step)) - total(tensor(80.0 - step))) / (2 * step))
+
+    assert abs(fd) > 1e-6, fd
+    assert auto == pytest.approx(fd, rel=1e-4), (auto, fd)
 
 
 @pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
