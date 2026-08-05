@@ -1,5 +1,9 @@
 # FieldWave
 
+[![tests](https://github.com/FieldAlgo/fieldwave/actions/workflows/tests.yml/badge.svg)](https://github.com/FieldAlgo/fieldwave/actions/workflows/tests.yml)
+[![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+
 **Differentiable electromagnetic simulation suite — by [FieldAlgo](https://fieldalgo.com)**
 
 FieldWave simulates how light interacts with nanostructures, and differentiates through the
@@ -13,7 +17,81 @@ whole calculation — so the same code that predicts a device's response can als
 
 FieldWave is the successor to [meent](https://github.com/kc-ml2/meent), continued by its
 original lead author at FieldAlgo. It is derived from meent (MIT License, © 2022 ML2) and is
-developed independently under Apache-2.0.
+developed independently under Apache-2.0. If you are coming from meent, see
+[Migrating from meent](#migrating-from-meent) — the API was renamed and one geometry
+convention changed.
+
+## How to install
+
+FieldWave is not on PyPI yet. Install it from source:
+
+```shell
+pip install git+https://github.com/FieldAlgo/fieldwave.git
+```
+
+Or, for a checkout you intend to edit:
+
+```shell
+git clone https://github.com/FieldAlgo/fieldwave.git
+cd fieldwave
+pip install -e .
+```
+
+The base install needs only Python ≥ 3.10, NumPy ≥ 2.2, SciPy ≥ 1.15 and array-api-compat.
+JAX and PyTorch are optional and bring autodiff and GPU support:
+
+```shell
+pip install -e '.[jax]'       # or '.[pytorch]', or '.[jax,pytorch]'
+```
+
+`environment.yml` builds the full development environment, including the tools the benchmarks
+need:
+
+```shell
+conda env create -f environment.yml   # run from the repo root
+conda activate fieldwave
+```
+
+> On NumPy 2.2.x the solver's matrix products print spurious
+> `RuntimeWarning: divide by zero / overflow / invalid value encountered in matmul`.
+> The results are unaffected — it is a NumPy bug, not a failed solve — and it does not
+> occur on NumPy 2.5 and later.
+
+## Quickstart
+
+A binary grating, solved on the NumPy backend:
+
+```python
+import numpy as np
+import fieldwave
+
+# One 300 nm layer, half air and half n = 3.5, on a glass substrate.
+ucell = np.array([[[1.0, 1.0, 3.5, 3.5]]])   # (layer, y, x) — refractive index
+
+solver = fieldwave.rcwa(
+    backend=0,                  # 0 = NumPy, 1 = JAX, 2 = PyTorch
+    wavelength=900.,            # every length shares one unit; nm here
+    period=[700.],
+    fto=[10, 0],                # Fourier truncation order (x, y)
+    n_top=1., n_bot=1.5,
+    theta=0., phi=0., pol=0.,   # pol: 0 = TE, 1 = TM
+    ucell=ucell, thickness=[300.],
+)
+
+result = solver.conv_solve()
+print(result.de_ri.sum(), result.de_ti.sum())   # 0.20538982716989146 0.7946101728301077
+```
+
+`de_ri` and `de_ti` are the reflected and transmitted diffraction efficiencies, one entry per
+order. Here they sum to 1 within 1e-15, as a lossless structure must.
+
+The integer codes have named equivalents, if you prefer them to the literals:
+
+```python
+from fieldwave import Backend, Pol, FourierType
+
+solver = fieldwave.rcwa(backend=Backend.JAX, pol=Pol.TM, fourier_type=FourierType.NVF, ...)
+```
 
 ## Backends
 
@@ -38,45 +116,54 @@ One implementation runs on all three, so a result never depends on which you pic
 
 *In 32bit operation, operations on numbers of 8>= digit difference fail without warning or error.
 Use only when you do understand what you are doing.
-**As of now(2023.03.19), GPU-native Eigendecomposition is not implemented in JAX and PyTorch.
-It's enforced to run on CPUs and send back to GPUs.
+**GPU-native eigendecomposition was unavailable in JAX and PyTorch when this was last checked
+(2023-03); it is forced onto the CPU and sent back to the GPU. Re-verify against the versions
+you run — it is the one place where the backend choice can dominate the runtime.
 
 NumPy is simple and light to use. Suggested as a baseline with small ~ medium scale optics problem.
 JAX and PyTorch are recommended for cases having large scale or optimization part.
 If you want parallelized computing with multiple devices (e.g., GPUs), JAX is ready for that.
 But since JAX does jit compilation, it takes much time at the first run.
 
-## How to install
+## Describing a structure
 
-```shell
-pip install fieldwave
-```
+The type of `ucell` selects the modeling path; there is no separate mode switch.
 
-JAX and PyTorch are needed for advanced utilization.
+| `ucell` | Path | What it is |
+| --- | --- | --- |
+| `ndarray`, shape `(n_layers, Ny, Nx)` | **raster** | refractive index sampled on a grid |
+| `list` of `[n_base, [shape, ...]]` per layer | **vector** | drawn shapes reduced to piecewise-constant blocks, then Fourier-transformed analytically instead of off a grid — see [`examples/vector_1d.py`](examples/vector_1d.py) |
+| `list` of `dict(n_base=..., shapes=[...])` per layer | **analytic** | smooth primitives (rotated rectangle, circle, ellipse) with exact Fourier coefficients — no staircase at all |
 
-## How to use
-
-```python
-import fieldwave
-
-# backend 0 = NumPy
-# backend 1 = JAX
-# backend 2 = PyTorch
-
-solver = fieldwave.rcwa(backend=1, ...)
-result = solver.conv_solve()
-```
-
-To differentiate through a simulation, freeze the structure's discrete geometry once so the
-rest stays traceable:
+The analytic path takes one dict per layer. Note that `cx`, `cy`, `lx` and `ly` are absolute
+lengths in the units of `period`, not fractions of it:
 
 ```python
-import jax, jax.numpy as jnp
+ucell = [dict(n_base=1.0, shapes=[
+    dict(type='circle', cx=350., cy=350., lx=200., n_index=3.5),
+])]
 
-geometry = solver.freeze_geometry()
-grad = jax.grad(lambda ucell: jnp.sum(
-    solver.conv_solve(ucell=ucell, geometry=geometry).res.de_ti).real)
+solver = fieldwave.rcwa(backend=0, period=[700., 700.], ucell=ucell, ...)
 ```
+
+### Fourier factorization
+
+For the raster path, `fourier_type` chooses how the permittivity is factorized. It changes
+how fast the result converges with `fto`, not what it converges to:
+
+```python
+solver = fieldwave.rcwa(backend=0, fourier_type=0, ...)   # the default
+```
+
+| `fourier_type` | Name | Notes |
+| --- | --- | --- |
+| `0` | **DFS** — discrete Fourier series | Li's rules on the raster. The default, and the only one that survives `jax.grad` without a frozen geometry. |
+| `1` | **CFS** — continuous Fourier series | Analytic transform of the raster's rectangles. The most accurate path here, and the algorithm Reticolo uses. |
+| `2` | **NVF** — normal vector field | Factorizes along the material interfaces. Made for curved and tilted boundaries, where a staircase converges slowly. |
+
+The analytic path always uses the NVF form and ignores `fourier_type`. Its derivation,
+convergence data and limitations are written up in
+[docs/analytic-modeling.md](docs/analytic-modeling.md).
 
 ### Connecting algorithm
 
@@ -92,14 +179,93 @@ Both share the same eigenmodes and boundary conventions and agree to ~1e-14; SMM
 most published results are stated in. Field reconstruction (`calculate_field`) needs the TMM
 path.
 
+## Conventions
+
+Three of these decide whether your input means what you think it means. They are worth
+reading once.
+
+**Time convention.** FieldWave works in `e^{-iωt}` throughout — inputs, internals and
+returned amplitudes alike. `Im(n) > 0` is loss, which is how refractive-index databases
+tabulate it (`n + 1j*k`), and a wave travelling in `+z` carries `exp(+i*k0*kz*z)`. There is no
+second convention underneath; see [`fieldwave/_core/conventions.py`](fieldwave/_core/conventions.py).
+
+**Axes follow the array.** Row `0` of `ucell` is `y = 0`, for every builder and for the
+reconstructed field cell alike. The flip that renders a field the conventional way up belongs
+to plotting (`field_plot`), not to the data.
+
+**Analytic shape coordinates are absolute.** On the analytic path, `cx`, `cy`, `lx` and `ly`
+are lengths in the same units as `period` — not fractions of it. Passing fractions builds a
+structure `1/period` times too small and solves it without complaint.
+
+**Units are yours.** `wavelength`, `period` and `thickness` only have to share one unit. The
+quickstart uses nanometres; nothing in the solver assumes it.
+
+## Differentiating a simulation
+
+Three steps in the pipeline decide something structural rather than compute a value — whether
+a layer is uniform, which way the interfaces point, where the piecewise-constant blocks start
+and stop. They branch on values, so they cannot run inside a JAX trace. Freeze them once from
+the concrete structure, and the rest of the call stays traceable:
+
+```python
+import jax, jax.numpy as jnp
+
+solver = fieldwave.rcwa(backend=1, ucell=ucell, ...)
+geometry = solver.freeze_geometry()
+
+grad = jax.grad(lambda u: jnp.sum(
+    solver.conv_solve(ucell=u, geometry=geometry).de_ti))(ucell)
+```
+
+Omit `geometry` and each decision is auto-detected eagerly instead — which reproduces the
+same numbers, but only `fourier_type=0` survives `jax.grad`, and nothing survives `jax.jit`.
+
+## Validation
+
+The physics is checked against references, not only against itself:
+
+* **Reticolo**, the established RCWA implementation, through an Octave bridge in
+  [`benchmarks/`](benchmarks). The CFS path agrees to ~1e-13 across twelve angle and
+  polarization combinations; it is the only reference here that validates individual
+  diffraction *orders* rather than totals.
+* **Energy conservation** for lossless structures, at machine precision (|R+T−1| ~ 1e-15).
+* **Cross-backend agreement** — NumPy, JAX and PyTorch on the same input, since one core
+  implementation serves all three.
+* **Analytic gradients against finite differences**, for the shape parameters the optimizer
+  actually moves.
+
+The suite lives in [`tests_verification/`](tests_verification) and runs in CI on every push;
+[`QA/`](QA) holds the longer-running scripts that are not part of it.
+
 ## Tutorials
 
 Jupyter notebooks are prepared in [tutorials](tutorials) to give a brief introduction.
 
 ## Examples
 
-Comprehensive examples of computational optics with FieldWave can be found in the `examples`
-folder.
+Comprehensive examples of computational optics with FieldWave can be found in the
+[`examples`](examples) folder.
+
+## Migrating from meent
+
+The physics carries over; the names changed, and one convention did.
+
+| meent | FieldWave |
+| --- | --- |
+| `import meent` | `import fieldwave` |
+| `meent.call_mee(backend=...)` | `fieldwave.rcwa(backend=...)` |
+| `MeeNumpy` / `MeeJax` / `MeeTorch` | `SolverNumpy` / `SolverJax` / `SolverTorch` |
+| MIT | Apache-2.0 |
+
+Everything else — `conv_solve`, `ucell`, `thickness`, `fto`, `period`, `pol`,
+`connecting_algo`, the `de_ri` / `de_ti` results — keeps its name and meaning.
+
+One result does change. meent's CFS path read `ucell` row `0` as the *last* y while its other
+paths read it as the first, so the same array described two different structures depending on
+`fourier_type`. At `phi = 0` this is invisible; away from it, CFS was ~1e-2 off Reticolo.
+FieldWave reads row `0` as `y = 0` everywhere, and CFS now agrees to ~1e-13. If you are
+reproducing a meent result at oblique azimuth with `fourier_type=1`, expect a difference —
+this one is the fix, not a regression.
 
 ## Roadmap
 
@@ -127,6 +293,10 @@ please cite:
     year={2024}
 }
 ```
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).
 
 ## Contact
 

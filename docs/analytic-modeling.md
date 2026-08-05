@@ -1,12 +1,15 @@
 # Analytic (staircase-free) modeling — approach and results
 
-Written: 2026-08
-Targets: `fieldwave/on_{numpy,jax,torch}/emsolver/fourier_analytic.py`,
-      `emsolver/nvf.py::get_normal_vector_field_analytical`,
-      `emsolver/transfer_method.py::transfer_2d_2` (off-diagonal slots),
-      `emsolver/rcwa.py` (modeling type 2 dispatch)
+Written: 2026-08. Paths updated after the single-source rewrite folded the three per-backend
+copies into `_core`.
 
-Related note: the NVF factorization derivation/verification is in [`NVF_FINDINGS.md`](NVF_FINDINGS.md).
+Targets:
+- `fieldwave/_core/analytic.py` — the analytic Fourier coefficients, and
+  `normal_vector_field_analytical` for the normal field
+- `fieldwave/_core/solve_2d.py::layer_modes_2d` — the `epxy` / `epyx` off-diagonal slots the
+  NVF form fills
+- `fieldwave/_core/engine.py::_conv_matrices` — the modeling-type-2 dispatch, selected by the
+  `ucell` setter in `fieldwave/on_*/emsolver/rcwa.py`
 
 ---
 
@@ -32,7 +35,8 @@ precision for lossless structures, agrees across numpy/jax/torch, and is differe
 
 ## 1. Analytic Fourier coefficients
 
-The coefficient convention matches `fourier_analysis.dfs2d` (checked to machine precision):
+The coefficient convention matches `_core/factorization.py::dfs2d` (checked to machine
+precision):
 
 ```
 c(ky, kx) = 1/(Px Py) ∫∫_cell f(x,y) exp(-i 2π (ky y/Py + kx x/Px)) dx dy
@@ -78,10 +82,12 @@ epz_i = inv(⟦ε⟧)
 ```
 
 The projectors `Cxx=⟦nx²⟧` etc. are obtained by sampling the **analytic unit normal field**
-(`get_normal_vector_field_analytical`, a level-set gradient) on a fine grid and running
-`dfs2d`. Unlike the SDF normals of a staircased boundary, these are the true-boundary
-normals, so the full NVF benefit is realized. For why the `½`-symmetrization is needed, see
-[`NVF_FINDINGS.md`](NVF_FINDINGS.md).
+(`_core/analytic.py::normal_vector_field_analytical`, a level-set gradient) on a fine grid
+and running `dfs2d`. Unlike the SDF normals of a staircased boundary, these are the
+true-boundary normals, so the full NVF benefit is realized. Why the `½`-symmetrization is
+needed — the plain product `Δ C` is not Hermitian, which gives complex `q²` and gross
+energy-conservation violation on curved boundaries — is written out in the
+`nvf_conv_matrices` docstring in `_core/factorization.py`.
 
 ## 3. Usage (new modeling type)
 
