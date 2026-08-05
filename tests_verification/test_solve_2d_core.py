@@ -19,7 +19,7 @@ def _run_and_inputs(ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi,
     assert solver.grating_type_assigned == 2, solver.grating_type_assigned    # ensure 2D path
     epx, epy, epz = to_conv_mat_raster_discrete(
         solver.ucell, solver.fto[0], solver.fto[1],
-        enhanced_dfs=solver.enhanced_dfs, use_pinv=solver.use_pinv)
+        enhanced_dfs=solver.enhanced_dfs)
     kx, ky = solver.get_kx_ky_vector(wl)
     inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_top, n_bot=n_bot,
                   theta=solver.theta, psi=solver.psi, thickness=solver.thickness,

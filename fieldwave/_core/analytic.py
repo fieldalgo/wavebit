@@ -224,7 +224,7 @@ def _hypot_safe(xp, a, b):
 
 
 def to_conv_mat_analytic_nvf(xp, shapes, n_base, fto_x, fto_y, period, dtype,
-                             normal_grid=256, use_pinv=False):
+                             normal_grid=256):
     """The five 2D-solve convolution matrices for one analytic layer, via NVF.
 
     ``eps`` / ``1/eps`` come from the exact shape transform (no staircase); the normal
@@ -235,8 +235,7 @@ def to_conv_mat_analytic_nvf(xp, shapes, n_base, fto_x, fto_y, period, dtype,
     ep_dir = laurent_conv_2d(xp, eps_c, fto_x, fto_y)
     ep_inv = laurent_conv_2d(xp, inv_eps_c, fto_x, fto_y)
 
-    _inv = xp.linalg.pinv if use_pinv else xp.linalg.inv
-    delta_ep = ep_dir - _inv(ep_inv)
+    delta_ep = ep_dir - xp.linalg.inv(ep_inv)
 
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
     nx, ny = normal_vector_field_analytical(
@@ -251,11 +250,11 @@ def to_conv_mat_analytic_nvf(xp, shapes, n_base, fto_x, fto_y, period, dtype,
     eps_yy = ep_dir - 0.5 * (delta_ep @ C_yy + C_yy @ delta_ep)
     eps_xy = -0.5 * (delta_ep @ C_xy + C_xy @ delta_ep)          # == eps_yx (symmetric)
 
-    return eps_xx, eps_yy, -eps_xy, -eps_xy, _inv(ep_dir)
+    return eps_xx, eps_yy, -eps_xy, -eps_xy, xp.linalg.inv(ep_dir)
 
 
 def to_conv_mat_analytic_layers(layer_shapes, fto_x, fto_y, period,
-                                normal_grid=256, type_complex=None, use_pinv=False, xp=None):
+                                normal_grid=256, type_complex=None, xp=None):
     """Stack the analytic-NVF convolution matrices over layers.
 
     ``layer_shapes`` is one ``dict(n_base=..., shapes=[...])`` per layer, with the shapes'
@@ -276,7 +275,7 @@ def to_conv_mat_analytic_layers(layer_shapes, fto_x, fto_y, period,
         n_base = layer.get('n_base', layer.get('base', 1.0))
         mats = to_conv_mat_analytic_nvf(
             xp, layer.get('shapes', []), n_base, fto_x, fto_y, period, dtype,
-            normal_grid=normal_grid, use_pinv=use_pinv)
+            normal_grid=normal_grid)
         for slot, m in zip(out, mats):
             slot.append(m)
 

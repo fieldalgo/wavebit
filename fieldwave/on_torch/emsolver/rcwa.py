@@ -87,7 +87,6 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
                  type_complex=torch.complex128,
                  fourier_type=0,
                  enhanced_dfs=True,
-                 use_pinv=False,
                  analytic_normal_grid=1024,  # normal-field sampling; sets the floor on shape gradients
                  # (a translation-invariant structure should give d/dcx == 0 exactly; the
                  #  sampling leaves a sawtooth instead -- 5e-4 at 256, 4.2e-5 at 1024, for
@@ -97,7 +96,7 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
         super().__init__(n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi, pol=pol,
                          fto=fto, period=period, wavelength=wavelength,
                          thickness=thickness, connecting_algo=connecting_algo, perturbation=perturbation,
-                         device=device, type_complex=type_complex, use_pinv=use_pinv)
+                         device=device, type_complex=type_complex)
 
         self.modeler = Modeling(period=self.period, device=device, type_complex=type_complex)
 
@@ -111,7 +110,6 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
         self.backend = backend
         self.fourier_type = fourier_type
         self.enhanced_dfs = enhanced_dfs
-        self.use_pinv = use_pinv
         self.analytic_normal_grid = analytic_normal_grid
 
     @property

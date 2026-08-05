@@ -56,7 +56,7 @@ class CoreSolveMixin:
         return self._finish(solve(
             self.pol, wavelength, kx, self.n_top, self.n_bot, self.theta, self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
-            same_material=self._same_material(), use_pinv=self.use_pinv, full=True))
+            same_material=self._same_material(), full=True))
 
     def solve_1d_conical(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
         solve = self._solve_fn('conical')
@@ -64,7 +64,7 @@ class CoreSolveMixin:
         return self._finish(solve(
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi, self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
-            same_material=self._same_material(), use_pinv=self.use_pinv, full=True))
+            same_material=self._same_material(), full=True))
 
     def solve_2d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None):
@@ -74,7 +74,7 @@ class CoreSolveMixin:
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi, self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
-            same_material=self._same_material(), use_pinv=self.use_pinv, full=True))
+            same_material=self._same_material(), full=True))
 
 
 class CoreFactorizationMixin:
@@ -142,17 +142,16 @@ class CoreFactorizationMixin:
         if self._modeling_type_assigned == 0:                      # raster
             if self.fourier_type == 0:
                 epx_conv_all, epy_conv_all, epz_conv_i_all = _fac.to_conv_mat_raster_discrete(
-                    self.ucell, fto_x, fto_y,
-                    enhanced_dfs=self.enhanced_dfs, use_pinv=self.use_pinv)
+                    self.ucell, fto_x, fto_y, enhanced_dfs=self.enhanced_dfs)
             elif self.fourier_type == 1:
                 epx_conv_all, epy_conv_all, epz_conv_i_all = _fac.to_conv_mat_raster_continuous(
-                    self.ucell, fto_x, fto_y, use_pinv=self.use_pinv,
+                    self.ucell, fto_x, fto_y,
                     compression=None if geometry is None else geometry.compression)
             elif self.fourier_type in (2, 'nvf', 'NVF'):
                 (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all,
                  epz_conv_i_all) = _fac.to_conv_mat_raster_nvf(
                     self.ucell, fto_x, fto_y,
-                    enhanced_dfs=self.enhanced_dfs, use_pinv=self.use_pinv,
+                    enhanced_dfs=self.enhanced_dfs,
                     normal_field=None if geometry is None else geometry.normal_field)
             else:
                 raise ValueError("Check 'modeling_type' and 'fourier_type' in 'conv_solve'.")
@@ -162,7 +161,7 @@ class CoreFactorizationMixin:
                 self.ucell, plans=None if geometry is None else geometry.vector_grid,
                 shape_choices=None if geometry is None else geometry.shape_choices)
             epx_conv_all, epy_conv_all, epz_conv_i_all = _fac.to_conv_mat_vector(
-                ucell_vector, fto_x, fto_y, use_pinv=self.use_pinv)
+                ucell_vector, fto_x, fto_y)
 
         elif self._modeling_type_assigned == 2:                    # analytic shapes
             xp = _namespace_for_backend(self.backend)
@@ -170,7 +169,7 @@ class CoreFactorizationMixin:
              epz_conv_i_all) = _analytic.to_conv_mat_analytic_layers(
                 self.ucell, fto_x, fto_y, self.period,
                 normal_grid=self.analytic_normal_grid,
-                type_complex=xp.complex128, use_pinv=self.use_pinv, xp=xp)
+                type_complex=xp.complex128, xp=xp)
 
         else:
             raise ValueError("Check 'modeling_type' and 'fourier_type' in 'conv_solve'.")

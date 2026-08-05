@@ -22,7 +22,7 @@ def _setup(**kw):
     legacy = solver.conv_solve()
     epx, epy, epz = to_conv_mat_raster_discrete(
         solver.ucell, solver.fto[0], solver.fto[1],
-        enhanced_dfs=solver.enhanced_dfs, use_pinv=solver.use_pinv)
+        enhanced_dfs=solver.enhanced_dfs)
     kx, ky = solver.get_kx_ky_vector(kw['wavelength'])
     return solver, legacy, (epx, epy, epz), kx, ky
 

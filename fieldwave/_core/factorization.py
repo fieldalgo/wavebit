@@ -116,7 +116,7 @@ def _layer_eps(xp, ucell, fto_x, fto_y, enhanced_dfs):
         yield xp.astype(layer, _complex_dtype(xp, layer)) ** 2
 
 
-def to_conv_mat_raster_discrete(ucell, fto_x, fto_y, enhanced_dfs=True, use_pinv=False):
+def to_conv_mat_raster_discrete(ucell, fto_x, fto_y, enhanced_dfs=True):
     """Per-layer convolution matrices for a raster ``ucell`` via the DFS path.
 
     Args:
@@ -125,7 +125,6 @@ def to_conv_mat_raster_discrete(ucell, fto_x, fto_y, enhanced_dfs=True, use_pinv
         fto_x, fto_y: Fourier truncation orders.
         enhanced_dfs: upsample each layer so the raster resolves ``4*fto+1`` harmonics per
             cell (the legacy default; reduces staircase aliasing).
-        use_pinv: use the pseudo-inverse for the ``epz`` inversion.
 
     Returns:
         ``(epx_conv_all, epy_conv_all, epz_conv_i_all)``, each ``(n_layers, ff_xy, ff_xy)``.
@@ -141,7 +140,7 @@ def to_conv_mat_raster_discrete(ucell, fto_x, fto_y, enhanced_dfs=True, use_pinv
 
         epx_list.append(epx_conv)
         epy_list.append(epy_conv)
-        epz_i_list.append(xp.linalg.pinv(epz_conv) if use_pinv else xp.linalg.inv(epz_conv))
+        epz_i_list.append(xp.linalg.inv(epz_conv))
 
     return xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list)
 
@@ -223,7 +222,7 @@ def normal_field_for_ucell(ucell, fto_x, fto_y, enhanced_dfs=True):
             for eps in _layer_eps(xp, ucell, fto_x, fto_y, enhanced_dfs)]
 
 
-def nvf_conv_matrices(xp, eps_matrix, nx, ny, fto_x, fto_y, use_pinv=False):
+def nvf_conv_matrices(xp, eps_matrix, nx, ny, fto_x, fto_y):
     """NVF (Li/Schuster normal-vector) convolution matrices for one layer.
 
     With ``E = <eps>`` (direct rule), ``A = <1/eps>^-1`` (inverse rule), ``Delta = E - A`` and
@@ -250,8 +249,7 @@ def nvf_conv_matrices(xp, eps_matrix, nx, ny, fto_x, fto_y, use_pinv=False):
     ep_dir = dfs2d(xp, eps_matrix, 1, 1, fto_x, fto_y)
     ep_inv = dfs2d(xp, 1.0 / eps_matrix, 1, 1, fto_x, fto_y)
 
-    _inv = xp.linalg.pinv if use_pinv else xp.linalg.inv
-    delta_ep = ep_dir - _inv(ep_inv)
+    delta_ep = ep_dir - xp.linalg.inv(ep_inv)
 
     C_xx = dfs2d(xp, C_xx_grid, 1, 1, fto_x, fto_y)
     C_xy = dfs2d(xp, C_xy_grid, 1, 1, fto_x, fto_y)
@@ -261,11 +259,11 @@ def nvf_conv_matrices(xp, eps_matrix, nx, ny, fto_x, fto_y, use_pinv=False):
     eps_yy = ep_dir - 0.5 * (delta_ep @ C_yy + C_yy @ delta_ep)
     eps_xy = -0.5 * (delta_ep @ C_xy + C_xy @ delta_ep)      # == eps_yx (symmetric)
 
-    return eps_xx, eps_yy, -eps_xy, -eps_xy, _inv(ep_dir)
+    return eps_xx, eps_yy, -eps_xy, -eps_xy, xp.linalg.inv(ep_dir)
 
 
 def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
-                           enhanced_dfs=True, use_pinv=False):
+                           enhanced_dfs=True):
     """Per-layer NVF convolution matrices for a raster ``ucell``.
 
     Args:
@@ -274,7 +272,7 @@ def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
         normal_field: optional per-layer ``(nx, ny)`` pairs for the *upsampled* layer grid.
             Supply this to keep the build traceable under JAX (the default computes the field
             with SciPy, which needs concrete values). It is static geometry either way.
-        enhanced_dfs, use_pinv: as in :func:`to_conv_mat_raster_discrete`.
+        enhanced_dfs: as in :func:`to_conv_mat_raster_discrete`.
 
     Returns:
         ``(epx, epy, epxy, epyx, epz_i)``, each ``(n_layers, ff_xy, ff_xy)``.
@@ -290,7 +288,7 @@ def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
             nx, ny = normal_field[i]
 
         for slot, mat in zip(out, nvf_conv_matrices(
-                xp, eps_matrix, nx, ny, fto_x, fto_y, use_pinv=use_pinv)):
+                xp, eps_matrix, nx, ny, fto_x, fto_y)):
             slot.append(mat)
 
     return tuple(xp.stack(slot) for slot in out)
@@ -437,7 +435,7 @@ def compress_cell(xp, cell, row_idx, col_idx):
     return xp.take(cell, xp.asarray(row_idx, device=dev), axis=0)
 
 
-def to_conv_mat_raster_continuous(ucell, fto_x, fto_y, compression=None, use_pinv=False):
+def to_conv_mat_raster_continuous(ucell, fto_x, fto_y, compression=None):
     """Per-layer convolution matrices via the analytic (staircase-free) CFS path.
 
     Args:
@@ -446,13 +444,11 @@ def to_conv_mat_raster_continuous(ucell, fto_x, fto_y, compression=None, use_pin
         compression: optional per-layer ``(row_idx, col_idx, x, y)`` from
             :func:`compression_indices`. Supply it to stay traceable under JAX; it is static
             geometry either way.
-        use_pinv: use the pseudo-inverse for the ``epz`` inversion.
 
     Returns:
         ``(epx_conv_all, epy_conv_all, epz_conv_i_all)``, each ``(n_layers, ff_xy, ff_xy)``.
     """
     xp = array_namespace(ucell)
-    _inv = xp.linalg.pinv if use_pinv else xp.linalg.inv
 
     epx_list, epy_list, epz_i_list = [], [], []
 
@@ -466,19 +462,18 @@ def to_conv_mat_raster_continuous(ucell, fto_x, fto_y, compression=None, use_pin
         epz_list = cfs2d(xp, eps, x, y, 1, 1, fto_x, fto_y)
         epx_list.append(cfs2d(xp, eps, x, y, 0, 1, fto_x, fto_y))
         epy_list.append(cfs2d(xp, eps, x, y, 1, 0, fto_x, fto_y))
-        epz_i_list.append(_inv(epz_list))
+        epz_i_list.append(xp.linalg.inv(epz_list))
 
     return xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list)
 
 
-def to_conv_mat_vector(ucell_info_list, fto_x, fto_y, use_pinv=False):
+def to_conv_mat_vector(ucell_info_list, fto_x, fto_y):
     """Per-layer convolution matrices for vector-modelled layers (CFS on explicit segments).
 
     Each entry of ``ucell_info_list`` is ``(layer, x_list, y_list)`` — the segment values and
     their edges — so no compression step is needed.
     """
     xp = array_namespace(ucell_info_list[0][0])
-    _inv = xp.linalg.pinv if use_pinv else xp.linalg.inv
 
     epx_list, epy_list, epz_i_list = [], [], []
 
@@ -486,6 +481,6 @@ def to_conv_mat_vector(ucell_info_list, fto_x, fto_y, use_pinv=False):
         eps = xp.astype(layer, _complex_dtype(xp, layer)) ** 2
         epx_list.append(cfs2d(xp, eps, x, y, 0, 1, fto_x, fto_y))
         epy_list.append(cfs2d(xp, eps, x, y, 1, 0, fto_x, fto_y))
-        epz_i_list.append(_inv(cfs2d(xp, eps, x, y, 1, 1, fto_x, fto_y)))
+        epz_i_list.append(xp.linalg.inv(cfs2d(xp, eps, x, y, 1, 1, fto_x, fto_y)))
 
     return xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list)

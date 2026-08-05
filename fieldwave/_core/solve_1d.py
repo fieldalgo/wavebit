@@ -74,7 +74,7 @@ def _block(xp, rows):
     return xp.concat([xp.concat(r, axis=1) for r in rows], axis=0)
 
 
-def layer_modes_1d(xp, inv, pol, kx, I, epx_conv, epy_conv, epz_conv_i, C):
+def layer_modes_1d(xp, pol, kx, I, epx_conv, epy_conv, epz_conv_i, C):
     """Eigenmodes ``(W, V, q)`` of one 1D TE / TM layer.
 
     ``W`` expands the continuous primary field (``E_y`` for TE, ``H_y`` for TM), ``V`` its
@@ -93,13 +93,13 @@ def layer_modes_1d(xp, inv, pol, kx, I, epx_conv, epy_conv, epz_conv_i, C):
         B = kx[:, None] * epz_conv_i * kx[None, :] - I
         w, W = eig(epx_conv @ B)
         q = mode_q(xp, xp.astype(w, C))
-        V = inv(epx_conv) @ W * q
+        V = xp.linalg.inv(epx_conv) @ W * q
     else:
         raise ValueError(f'pol must be 0 (TE) or 1 (TM), got {pol!r}')
     return W, V, q
 
 
-def layer_modes_1d_conical(xp, inv, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C):
+def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C):
     """Raw (unrotated) eigenmodes of one conical 1D layer.
 
     Returns ``(W1, W2, q1, q2, V_11, V_12, V_21, V_22)`` — the two decoupled mode families and
@@ -113,8 +113,8 @@ def layer_modes_1d_conical(xp, inv, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz
     q1 = mode_q(xp, xp.astype(w1, C))
     q2 = mode_q(xp, xp.astype(w2, C))
 
-    A_i = inv(A)
-    B_i = inv(B)
+    A_i = xp.linalg.inv(A)
+    B_i = xp.linalg.inv(B)
     V_11 = (A_i @ W1) * q1
     V_12 = Ky @ A_i @ Kx @ W2
     V_21 = Ky @ B_i @ Kx @ epz_conv_i @ W1
@@ -144,7 +144,7 @@ def sp_modes_1d_conical(xp, F_c, F_s, W1, W2, V_11, V_12, V_21, V_22):
 
 def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
-             same_material=None, same_material_rtol=1e-3, use_pinv=False, full=False):
+             same_material=None, same_material_rtol=1e-3, full=False):
     """Solve a 1D grating stack for reflection/transmission diffraction efficiency.
 
     Args:
@@ -164,8 +164,6 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
             legacy result; do not rely on auto-detection while differentiating w.r.t. the
             permittivity, where the matrices are abstract tracers.
         same_material_rtol: tolerance for the auto-detection above.
-        use_pinv: use the pseudo-inverse everywhere an inverse is taken (the legacy
-            ``meeinv`` option; helps on ill-conditioned truncations).
 
     Returns:
         ``(de_ri, de_ti)`` — reflected / transmitted efficiency per order, shape ``(1, ff)``.
@@ -173,7 +171,6 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
         split; the pure TE/TM path carries all of one polarization, the other side is zero).
     """
     xp = array_namespace(epx_conv_all)
-    _inv = xp.linalg.pinv if use_pinv else xp.linalg.inv
     kx = as_array(xp, kx)
     if not xp.isdtype(kx.dtype, 'complex floating'):
         # Promote a real kx to the complex working dtype the algebra needs.
@@ -219,7 +216,7 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
         epz_conv_i = epz_conv_i_all[layer_index]
         d = thickness[layer_index]
 
-        W, V, q = layer_modes_1d(xp, _inv, pol, kx, I, epx_conv, epy_conv, epz_conv_i, C)
+        W, V, q = layer_modes_1d(xp, pol, kx, I, epx_conv, epy_conv, epz_conv_i, C)
 
         # Same-material short-circuit. A uniform layer of the medium below has diagonal
         # eps_conv ~= eps_below * I. The decision is discrete geometry: take it from the
@@ -235,15 +232,15 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
         X = _diag(xp, xp.exp(-k0 * q * d))
         if is_same:
             # No interface reflection: propagate only, in the physical basis.
-            W_i = _inv(W)
+            W_i = xp.linalg.inv(W)
             T = T @ (W @ X @ W_i)
             a_i = b = xp.zeros_like(I)
         else:
-            W_i = _inv(W)
-            V_i = _inv(V)
+            W_i = xp.linalg.inv(W)
+            V_i = xp.linalg.inv(V)
             a = 0.5 * (W_i @ F + V_i @ G)
             b = 0.5 * (W_i @ F - V_i @ G)
-            a_i = _inv(a)
+            a_i = xp.linalg.inv(a)
             F = W @ (I + X @ b @ a_i @ X)
             G = V @ (I - X @ b @ a_i @ X)
             T = T @ a_i @ X
@@ -258,11 +255,11 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
 
     if pol == 0:  # TE
         inc = -1j * n_top * cos_t * delta
-        T1 = _inv(G - 1j * Kz_top @ F) @ (-1j * Kz_top @ delta + inc)
+        T1 = xp.linalg.inv(G - 1j * Kz_top @ F) @ (-1j * Kz_top @ delta + inc)
     else:         # TM
         Kz_scaled = Kz_top / (n_top ** 2)
         inc = -1j * delta * cos_t / n_top
-        T1 = _inv(G - 1j * Kz_scaled @ F) @ (-1j * Kz_scaled @ delta + inc)
+        T1 = xp.linalg.inv(G - 1j * Kz_scaled @ F) @ (-1j * Kz_scaled @ delta + inc)
 
     R = (F @ T1 - delta)[None, :]
     Tt = (T @ T1)[None, :]
@@ -292,7 +289,7 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
 
 def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
                      epx_conv_all, epy_conv_all, epz_conv_i_all,
-                     same_material=None, same_material_rtol=1e-3, use_pinv=False, full=False):
+                     same_material=None, same_material_rtol=1e-3, full=False):
     """Solve a general 1D grating (arbitrary azimuth/polarization) for the given ``psi``.
 
     The conical case couples the s and p polarizations, so the per-layer modes and the
@@ -302,7 +299,6 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     out-of-plane order and ``psi`` the polarization angle.
     """
     xp = array_namespace(epx_conv_all)
-    _inv = xp.linalg.pinv if use_pinv else xp.linalg.inv
     kx = as_array(xp, kx)
     ky = as_array(xp, ky)
     if not xp.isdtype(kx.dtype, 'complex floating'):
@@ -355,7 +351,7 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
         d = thickness[layer_index]
 
         W1, W2, q1, q2, V_11, V_12, V_21, V_22 = layer_modes_1d_conical(
-            xp, _inv, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C)
+            xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C)
 
         if same_material is None:
             layer_eps = uniform_eps(xp, epx_conv, same_material_rtol)
@@ -375,18 +371,18 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
 
         if is_same:
             big_W = _block(xp, [[W1, O], [O, W2]])
-            big_W_i = _inv(big_W)
+            big_W_i = xp.linalg.inv(big_W)
             big_T = big_T @ (big_W @ big_X @ big_W_i)
             big_A_i = big_B = xp.zeros_like(big_F)
         else:
             big_W, big_V = sp_modes_1d_conical(xp, F_c, F_s, W1, W2,
                                                V_11, V_12, V_21, V_22)
 
-            big_W_i = _inv(big_W)
-            big_V_i = _inv(big_V)
+            big_W_i = xp.linalg.inv(big_W)
+            big_V_i = xp.linalg.inv(big_V)
             big_A = 0.5 * (big_W_i @ big_F + big_V_i @ big_G)
             big_B = 0.5 * (big_W_i @ big_F - big_V_i @ big_G)
-            big_A_i = _inv(big_A)
+            big_A_i = xp.linalg.inv(big_A)
 
             big_F = big_W @ (big_I + big_X @ big_B @ big_A_i @ big_X)
             big_G = big_V @ (big_I - big_X @ big_B @ big_A_i @ big_X)
@@ -396,7 +392,7 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
 
     # --- stage 3: final matching -> efficiency (transfer_1d_conical_4) ------------------
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
-                         n_top, n_bot, ff_x, ff_y, use_pinv=use_pinv, full=full)
+                         n_top, n_bot, ff_x, ff_y, full=full)
     if full:
         out['layer_info_list'] = layer_info_list
     return out
@@ -410,7 +406,7 @@ def _unit(xp, n, i):
 
 
 def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
-                   n_top, n_bot, ff_x, ff_y, use_pinv=False, full=False):
+                   n_top, n_bot, ff_x, ff_y, full=False):
     """Boundary match the assembled s/p system to the incident field.
 
     Shared, byte-identical port of ``transfer_1d_conical_4`` / ``transfer_2d_4`` (their final
@@ -424,7 +420,6 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
     they cost one extra solve rather than two full passes).
     """
     ff_xy = ff_x * ff_y
-    _inv = xp.linalg.pinv if use_pinv else xp.linalg.inv
     I = xp.astype(xp.eye(ff_xy), C)
     O = xp.astype(xp.zeros((ff_xy, ff_xy)), C)
 
@@ -455,7 +450,7 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
         [1j * n_top * cos_psi * delta],
     ])
 
-    final_A_inv = _inv(final_A)
+    final_A_inv = xp.linalg.inv(final_A)
     final_RT = final_A_inv @ final_B
     R_s = xp.reshape(final_RT[:ff_xy, :], (ff_y, ff_x))
     R_p = xp.reshape(final_RT[ff_xy:2 * ff_xy, :], (ff_y, ff_x))

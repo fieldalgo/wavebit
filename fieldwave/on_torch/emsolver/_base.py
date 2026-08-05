@@ -23,7 +23,7 @@ class _BaseRCWA(CoreSolveMixin):
     def __init__(self, n_top=1., n_bot=1., theta=0., phi=None, psi=None, pol=0., fto=(0, 0),
                  period=(1., 1.), wavelength=1.,
                  thickness=(0.,), connecting_algo='TMM', perturbation=1E-20,
-                 device='cpu', type_complex=torch.complex128, use_pinv=False):
+                 device='cpu', type_complex=torch.complex128):
 
         # device
         if device in (0, 'cpu'):
@@ -60,7 +60,6 @@ class _BaseRCWA(CoreSolveMixin):
         self.wavelength = wavelength
         self.thickness = thickness
         self.connecting_algo = connecting_algo
-        self.use_pinv = use_pinv
 
         self.layer_info_list = []
         self.T1 = None

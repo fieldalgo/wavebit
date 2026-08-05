@@ -76,7 +76,7 @@ def sp_modes_2d(xp, W, V, F_c, F_s, ff_xy):
 def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
              epxy_conv_all=None, epyx_conv_all=None,
-             same_material=None, same_material_rtol=1e-3, use_pinv=False, full=False):
+             same_material=None, same_material_rtol=1e-3, full=False):
     """Solve a 2D grating stack for the given ``psi`` incidence.
 
     See :func:`fieldwave._core.solve_1d.solve_1d` for the shared argument conventions. ``kx`` /
@@ -86,7 +86,6 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     Returns ``(de_ri, de_ti)`` for the ``psi``-specified incidence, shape ``(ff_y, ff_x)``.
     """
     xp = array_namespace(epx_conv_all)
-    _inv = xp.linalg.pinv if use_pinv else xp.linalg.inv
     kx = as_array(xp, kx)
     ky = as_array(xp, ky)
     if not xp.isdtype(kx.dtype, 'complex floating'):
@@ -158,17 +157,17 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
         big_X = _block(xp, [[X_1, O], [O, X_2]])
 
         if is_same:
-            W_i = _inv(W)
+            W_i = xp.linalg.inv(W)
             big_T = big_T @ (W @ big_X @ W_i)
             big_A_i = big_B = xp.zeros_like(big_F)
         else:
             big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, ff_xy)
 
-            big_W_i = _inv(big_W)
-            big_V_i = _inv(big_V)
+            big_W_i = xp.linalg.inv(big_W)
+            big_V_i = xp.linalg.inv(big_V)
             big_A = 0.5 * (big_W_i @ big_F + big_V_i @ big_G)
             big_B = 0.5 * (big_W_i @ big_F - big_V_i @ big_G)
-            big_A_i = _inv(big_A)
+            big_A_i = xp.linalg.inv(big_A)
 
             big_F = big_W @ (big_I + big_X @ big_B @ big_A_i @ big_X)
             big_G = big_V @ (big_I - big_X @ big_B @ big_A_i @ big_X)
@@ -179,7 +178,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
 
     # --- stage 3: final matching -> efficiency (transfer_2d_4 == transfer_1d_conical_4) --
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
-                         n_top, n_bot, ff_x, ff_y, use_pinv=use_pinv, full=full)
+                         n_top, n_bot, ff_x, ff_y, full=full)
     if full:
         out['layer_info_list'] = layer_info_list
     return out

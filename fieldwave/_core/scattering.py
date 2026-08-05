@@ -51,52 +51,52 @@ _PI = 3.141592653589793
 #     [out_top ; out_bot] = S @ [in_top ; in_bot]
 # where ``in_top`` travels down into the structure and ``in_bot`` up into it.
 
-def _ab_matrices(inv, W_to, V_to, W_from, V_from):
+def _ab_matrices(xp, W_to, V_to, W_from, V_from):
     """Interface coefficients ``(A, B)`` for a boundary crossed *into* the ``to`` basis.
 
     From continuity of the primary field and its partner across the interface,
     ``c_to_down = (A @ c_from_down + B @ c_from_up)/2`` (and the mirrored relation for the
     upward amplitudes), with ``A = W_to^-1 W_from + V_to^-1 V_from`` and ``B`` the difference.
     """
-    P = inv(W_to) @ W_from
-    Q = inv(V_to) @ V_from
+    P = xp.linalg.inv(W_to) @ W_from
+    Q = xp.linalg.inv(V_to) @ V_from
     return P + Q, P - Q
 
 
-def _s_layer(inv, A, B, X):
+def _s_layer(xp, A, B, X):
     """Scattering matrix of one layer embedded between gap half-spaces.
 
     ``A``/``B`` describe the gap -> layer interface and ``X = diag(exp(-k0*q*d))`` the modal
     propagation across it. The layer is symmetric, so ``S22 == S11`` and ``S21 == S12``.
     """
-    A_i = inv(A)
+    A_i = xp.linalg.inv(A)
     XB = X @ B
-    common = inv(A - XB @ A_i @ X @ B)
+    common = xp.linalg.inv(A - XB @ A_i @ X @ B)
     S11 = common @ (XB @ A_i @ X @ A - B)
     S12 = common @ X @ (A - B @ A_i @ B)
     return S11, S12, S12, S11
 
 
-def _s_reflection(inv, W_top, V_top, W_gap, V_gap):
+def _s_reflection(xp, W_top, V_top, W_gap, V_gap):
     """Scattering matrix of the superstrate -> gap interface (port 1 in the superstrate)."""
-    A, B = _ab_matrices(inv, W_gap, V_gap, W_top, V_top)
-    A_i = inv(A)
+    A, B = _ab_matrices(xp, W_gap, V_gap, W_top, V_top)
+    A_i = xp.linalg.inv(A)
     return -A_i @ B, 2 * A_i, 0.5 * (A - B @ A_i @ B), B @ A_i
 
 
-def _s_transmission(inv, W_bot, V_bot, W_gap, V_gap):
+def _s_transmission(xp, W_bot, V_bot, W_gap, V_gap):
     """Scattering matrix of the gap -> substrate interface (port 2 in the substrate)."""
-    A, B = _ab_matrices(inv, W_gap, V_gap, W_bot, V_bot)
-    A_i = inv(A)
+    A, B = _ab_matrices(xp, W_gap, V_gap, W_bot, V_bot)
+    A_i = xp.linalg.inv(A)
     return B @ A_i, 0.5 * (A - B @ A_i @ B), 2 * A_i, -A_i @ B
 
 
-def redheffer_star(inv, I, S_a, S_b):
+def redheffer_star(xp, I, S_a, S_b):
     """Redheffer star product ``S_a * S_b`` — cascade two scattering matrices."""
     a11, a12, a21, a22 = S_a
     b11, b12, b21, b22 = S_b
-    D_i = inv(I - b11 @ a22)
-    F_i = inv(I - a22 @ b11)
+    D_i = xp.linalg.inv(I - b11 @ a22)
+    F_i = xp.linalg.inv(I - a22 @ b11)
     return (a11 + a12 @ D_i @ b11 @ a21,
             a12 @ D_i @ b12,
             b21 @ F_i @ a21,
@@ -124,7 +124,7 @@ def _prepare(epx_conv_all, kx, ky=None):
 
 def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
-           same_material=None, same_material_rtol=1e-3, use_pinv=False, full=False):
+           same_material=None, same_material_rtol=1e-3, full=False):
     """Solve a 1D grating stack by scattering matrices — SMM twin of :func:`solve_1d`.
 
     Same arguments and same returns as :func:`fieldwave._core.solve_1d.solve_1d`, so the two are
@@ -137,7 +137,6 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     field reconstruction is a TMM-only capability (see the module docstring).
     """
     xp, C, kx, _ = _prepare(epx_conv_all, kx)
-    _inv = xp.linalg.pinv if use_pinv else xp.linalg.inv
 
     ff_x = kx.shape[0]
     k0 = 2 * _PI / wavelength
@@ -166,14 +165,14 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     W_top = W_bot = W_gap = I    # homogeneous half-spaces are diagonal in this basis
 
     # --- cascade: superstrate interface, every layer top-to-bottom, substrate interface ----
-    S = _s_reflection(_inv, W_top, V_top, W_gap, V_gap)
+    S = _s_reflection(xp, W_top, V_top, W_gap, V_gap)
     for layer_index in range(_n_layers(thickness)):
-        W, V, q = layer_modes_1d(xp, _inv, pol, kx, I, epx_conv_all[layer_index],
+        W, V, q = layer_modes_1d(xp, pol, kx, I, epx_conv_all[layer_index],
                                  epy_conv_all[layer_index], epz_conv_i_all[layer_index], C)
         X = _diag(xp, xp.exp(-k0 * q * thickness[layer_index]))
-        A, B = _ab_matrices(_inv, W, V, W_gap, V_gap)
-        S = redheffer_star(_inv, I, S, _s_layer(_inv, A, B, X))
-    S = redheffer_star(_inv, I, S, _s_transmission(_inv, W_bot, V_bot, W_gap, V_gap))
+        A, B = _ab_matrices(xp, W, V, W_gap, V_gap)
+        S = redheffer_star(xp, I, S, _s_layer(xp, A, B, X))
+    S = redheffer_star(xp, I, S, _s_transmission(xp, W_bot, V_bot, W_gap, V_gap))
 
     # --- incidence -> amplitudes -> efficiency --------------------------------------------
     delta = xp.reshape(xp.astype(_unit(xp, ff_x, ff_x // 2), C), (ff_x, 1))
@@ -211,7 +210,7 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
 
 # ------------------------------------------------------------------- coupled s/p (conical, 2D)
 
-def _smm_sp(xp, C, inv, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
+def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
             layer_modes, full):
     """Shared SMM cascade + matching for the coupled s/p paths (conical and 2D).
 
@@ -247,13 +246,13 @@ def _smm_sp(xp, C, inv, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     W_gap = _block(xp, [[I, O], [O, -1j * _diag(xp, 1 / eps_gap)]])
     V_gap = _block(xp, [[-1j * I, O], [O, I]])
 
-    S = _s_reflection(inv, W_top, V_top, W_gap, V_gap)
+    S = _s_reflection(xp, W_top, V_top, W_gap, V_gap)
     for layer_index in range(_n_layers(thickness)):
         big_W, big_V, q = layer_modes(layer_index)
         big_X = _diag(xp, xp.exp(-k0 * q * thickness[layer_index]))
-        A, B = _ab_matrices(inv, big_W, big_V, W_gap, V_gap)
-        S = redheffer_star(inv, big_I, S, _s_layer(inv, A, B, big_X))
-    S = redheffer_star(inv, big_I, S, _s_transmission(inv, W_bot, V_bot, W_gap, V_gap))
+        A, B = _ab_matrices(xp, big_W, big_V, W_gap, V_gap)
+        S = redheffer_star(xp, big_I, S, _s_layer(xp, A, B, big_X))
+    S = redheffer_star(xp, big_I, S, _s_transmission(xp, W_bot, V_bot, W_gap, V_gap))
 
     # --- incidence ------------------------------------------------------------------------
     # Amplitudes are (E_s, H_p) by construction of W/V above, so the incident column is the
@@ -303,13 +302,12 @@ def _smm_sp(xp, C, inv, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
 
 def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
                    epx_conv_all, epy_conv_all, epz_conv_i_all,
-                   same_material=None, same_material_rtol=1e-3, use_pinv=False, full=False):
+                   same_material=None, same_material_rtol=1e-3, full=False):
     """Solve a conical 1D grating by scattering matrices — SMM twin of :func:`solve_1d_conical`.
 
     Same arguments and returns; ``same_material`` is accepted and ignored (see :func:`smm_1d`).
     """
     xp, C, kx, ky = _prepare(epx_conv_all, kx, ky)
-    _inv = xp.linalg.pinv if use_pinv else xp.linalg.inv
 
     ff_x = kx.shape[0]
     I = xp.astype(xp.eye(ff_x), C)
@@ -326,25 +324,24 @@ def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
 
     def layer_modes(layer_index):
         W1, W2, q1, q2, V_11, V_12, V_21, V_22 = layer_modes_1d_conical(
-            xp, _inv, Kx, Ky, Kx2, Ky2, I, epx_conv_all[layer_index],
+            xp, Kx, Ky, Kx2, Ky2, I, epx_conv_all[layer_index],
             epy_conv_all[layer_index], epz_conv_i_all[layer_index], C)
         big_W, big_V = sp_modes_1d_conical(xp, F_c, F_s, W1, W2, V_11, V_12, V_21, V_22)
         return big_W, big_V, xp.concat([q1, q2])
 
-    return _smm_sp(xp, C, _inv, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
+    return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
                    layer_modes, full)
 
 
 def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
            epxy_conv_all=None, epyx_conv_all=None,
-           same_material=None, same_material_rtol=1e-3, use_pinv=False, full=False):
+           same_material=None, same_material_rtol=1e-3, full=False):
     """Solve a 2D grating stack by scattering matrices — SMM twin of :func:`solve_2d`.
 
     Same arguments and returns; ``same_material`` is accepted and ignored (see :func:`smm_1d`).
     """
     xp, C, kx, ky = _prepare(epx_conv_all, kx, ky)
-    _inv = xp.linalg.pinv if use_pinv else xp.linalg.inv
 
     ff_x = kx.shape[0]
     ff_y = ky.shape[0]
@@ -370,5 +367,5 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
         big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, ff_xy)
         return big_W, big_V, q
 
-    return _smm_sp(xp, C, _inv, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
+    return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
                    layer_modes, full)
