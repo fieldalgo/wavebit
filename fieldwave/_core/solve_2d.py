@@ -118,7 +118,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
 
     # See solve_1d: only auto-detection reads this, and it needs a concrete n_bot.
     eps_below = (None if same_material is not None
-                 else xp.asarray(complex(n_bot).conjugate() ** 2, dtype=C))
+                 else xp.asarray(complex(n_bot) ** 2, dtype=C))
 
     # Kx = diag(tile(kx, ff_y)) ; Ky = diag(tile(ky[:,None], ff_x)) — Array-API broadcast form.
     kx_full = xp.reshape(xp.broadcast_to(kx[None, :], (ff_y, ff_x)), (-1,))
@@ -156,22 +156,18 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
         X_2 = _diag(xp, xp.exp(-k0 * q_2 * d))
         big_X = _block(xp, [[X_1, O], [O, X_2]])
 
-        if is_same:
-            W_i = xp.linalg.inv(W)
-            big_T = big_T @ (W @ big_X @ W_i)
-            big_A_i = big_B = xp.zeros_like(big_F)
-        else:
-            big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, ff_xy)
+        big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, ff_xy)
 
-            big_W_i = xp.linalg.inv(big_W)
-            big_V_i = xp.linalg.inv(big_V)
-            big_A = 0.5 * (big_W_i @ big_F + big_V_i @ big_G)
-            big_B = 0.5 * (big_W_i @ big_F - big_V_i @ big_G)
-            big_A_i = xp.linalg.inv(big_A)
+        big_W_i = xp.linalg.inv(big_W)
+        big_V_i = xp.linalg.inv(big_V)
+        big_B = 0.5 * (big_W_i @ big_F - big_V_i @ big_G)
+        # See solve_1d: `a` is exactly I here, and that is the whole of the short-circuit.
+        big_A_i = big_I if is_same else xp.linalg.inv(0.5 * (big_W_i @ big_F + big_V_i @ big_G))
 
-            big_F = big_W @ (big_I + big_X @ big_B @ big_A_i @ big_X)
-            big_G = big_V @ (big_I - big_X @ big_B @ big_A_i @ big_X)
-            big_T = big_T @ big_A_i @ big_X
+        Y = big_X @ big_B @ big_A_i @ big_X
+        big_F = big_W @ (big_I + Y)
+        big_G = big_V @ (big_I - Y)
+        big_T = big_T @ big_A_i @ big_X
 
         # Bottom-to-top, matching the legacy append order; consumed by field reconstruction.
         layer_info_list.append([epz_conv_i, W, V, q, d, big_A_i, big_B])

@@ -157,12 +157,13 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
         epx_conv_all, epy_conv_all, epz_conv_i_all: per-layer convolution matrices,
             indexed ``[layer]`` on the first axis, as produced by the factorization stage.
         same_material: optional per-layer bool sequence marking layers that are uniform and
-            of the same material as the medium just below (interface matching skipped,
-            propagation only). This is a discrete *geometry* fact, so supplying it keeps the
-            solve traceable/jittable under JAX autodiff. When ``None`` it is auto-detected from
-            the (concrete) convolution matrices — the eager NumPy path that reproduces the
-            legacy result; do not rely on auto-detection while differentiating w.r.t. the
-            permittivity, where the matrices are abstract tracers.
+            of the same material as the medium just below. Sharing a mode basis with what is
+            underneath makes that interface's ``a`` exactly ``I``, so the flag saves one
+            matrix inverse — and only that. It does not license skipping the layer. This is a
+            discrete *geometry* fact, so supplying it keeps the solve traceable/jittable under
+            JAX autodiff. When ``None`` it is auto-detected from the (concrete) convolution
+            matrices — the eager NumPy path; do not rely on auto-detection while
+            differentiating w.r.t. the permittivity, where the matrices are abstract tracers.
         same_material_rtol: tolerance for the auto-detection above.
 
     Returns:
@@ -200,12 +201,14 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     F = I
     T = I
 
-    # eps of the medium just below the current layer (substrate uses conj(n)^2 to match
-    # the layer convention); drives the same-material short-circuit. Kept a plain scalar.
+    # eps of the medium just below the current layer; drives the same-material short-circuit.
+    # `n_bot**2` is the same map the layer builders use (`e^{-iwt}`, no conjugation on the way
+    # in) -- seeding it conjugated meant an absorbing substrate never matched an identical
+    # bottom layer, so the short-circuit silently never fired there. Kept a plain scalar.
     # Only the auto-detection branch reads it, and `complex(n_bot)` needs a concrete n_bot --
     # so skip the seed entirely when the flags come in frozen, keeping the solve traceable.
     eps_below = (None if same_material is not None
-                 else xp.asarray(complex(n_bot).conjugate() ** 2, dtype=C))
+                 else xp.asarray(complex(n_bot) ** 2, dtype=C))
 
     # --- stage 2: per-layer eig + transfer coupling (transfer_1d_2 / transfer_1d_3) ----
     layer_info_list = []
@@ -230,20 +233,25 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
             is_same = bool(same_material[layer_index])
 
         X = _diag(xp, xp.exp(-k0 * q * d))
-        if is_same:
-            # No interface reflection: propagate only, in the physical basis.
-            W_i = xp.linalg.inv(W)
-            T = T @ (W @ X @ W_i)
-            a_i = b = xp.zeros_like(I)
-        else:
-            W_i = xp.linalg.inv(W)
-            V_i = xp.linalg.inv(V)
-            a = 0.5 * (W_i @ F + V_i @ G)
-            b = 0.5 * (W_i @ F - V_i @ G)
-            a_i = xp.linalg.inv(a)
-            F = W @ (I + X @ b @ a_i @ X)
-            G = V @ (I - X @ b @ a_i @ X)
-            T = T @ a_i @ X
+        W_i = xp.linalg.inv(W)
+        V_i = xp.linalg.inv(V)
+        b = 0.5 * (W_i @ F - V_i @ G)
+
+        # Same-material short-circuit: sharing modes with the medium below makes ``a``
+        # exactly ``I``, so what it saves is one inverse -- and nothing else. ``b`` still has
+        # to be carried: it is the *lower stack's* reflection expressed in those shared modes,
+        # and it vanishes only when that stack is itself reflectionless (a matching substrate,
+        # or another same-material layer above one). Forcing ``b = 0`` regardless dropped this
+        # layer's thickness out of ``F``/``G`` entirely -- two identical layers on a different
+        # substrate reflected as though the upper one were not there (0.0735 against an Airy
+        # oracle's 0.0338) -- and storing ``a_i = 0`` alongside it zeroed the reconstructed
+        # field everywhere below, through ``T_layer = A_i @ X @ T_layer``.
+        a_i = I if is_same else xp.linalg.inv(0.5 * (W_i @ F + V_i @ G))
+
+        Y = X @ b @ a_i @ X
+        F = W @ (I + Y)
+        G = V @ (I - Y)
+        T = T @ a_i @ X
 
         # Bottom-to-top, matching the legacy append order; consumed by field reconstruction.
         layer_info_list.append([epz_conv_i, W, V, q, d, a_i, b])
@@ -331,7 +339,7 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
 
     # See solve_1d: only auto-detection reads this, and it needs a concrete n_bot.
     eps_below = (None if same_material is not None
-                 else xp.asarray(complex(n_bot).conjugate() ** 2, dtype=C))
+                 else xp.asarray(complex(n_bot) ** 2, dtype=C))
 
     # --- stage 2/3: per-layer eig + coupled s/p transfer (conical_2 / conical_3) --------
     Kx = _diag(xp, kx)
@@ -369,24 +377,19 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
         V = _block(xp, [[V_11, V_12], [V_21, V_22]])
         q = xp.concat([q1, q2])
 
-        if is_same:
-            big_W = _block(xp, [[W1, O], [O, W2]])
-            big_W_i = xp.linalg.inv(big_W)
-            big_T = big_T @ (big_W @ big_X @ big_W_i)
-            big_A_i = big_B = xp.zeros_like(big_F)
-        else:
-            big_W, big_V = sp_modes_1d_conical(xp, F_c, F_s, W1, W2,
-                                               V_11, V_12, V_21, V_22)
+        big_W, big_V = sp_modes_1d_conical(xp, F_c, F_s, W1, W2,
+                                           V_11, V_12, V_21, V_22)
 
-            big_W_i = xp.linalg.inv(big_W)
-            big_V_i = xp.linalg.inv(big_V)
-            big_A = 0.5 * (big_W_i @ big_F + big_V_i @ big_G)
-            big_B = 0.5 * (big_W_i @ big_F - big_V_i @ big_G)
-            big_A_i = xp.linalg.inv(big_A)
+        big_W_i = xp.linalg.inv(big_W)
+        big_V_i = xp.linalg.inv(big_V)
+        big_B = 0.5 * (big_W_i @ big_F - big_V_i @ big_G)
+        # See solve_1d: `a` is exactly I here, and that is the whole of the short-circuit.
+        big_A_i = big_I if is_same else xp.linalg.inv(0.5 * (big_W_i @ big_F + big_V_i @ big_G))
 
-            big_F = big_W @ (big_I + big_X @ big_B @ big_A_i @ big_X)
-            big_G = big_V @ (big_I - big_X @ big_B @ big_A_i @ big_X)
-            big_T = big_T @ big_A_i @ big_X
+        Y = big_X @ big_B @ big_A_i @ big_X
+        big_F = big_W @ (big_I + Y)
+        big_G = big_V @ (big_I - Y)
+        big_T = big_T @ big_A_i @ big_X
 
         layer_info_list.append([epz_conv_i, W, V, q, d, big_A_i, big_B])
 

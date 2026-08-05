@@ -65,9 +65,14 @@ def detect_same_material(epx_conv_all, n_bot, rtol=1e-3):
     patterned layers can share. Walks bottom-to-top, matching the order the solve applies them
     in, and returns them indexed by layer so the solve can read ``same_material[layer_index]``
     directly.
+
+    The substrate seed is ``n_bot**2`` -- the same ``n -> eps`` map the layer builders use,
+    with no conjugation (see ``_core.conventions``). It was conjugated here, so an absorbing
+    substrate never matched a bottom layer of that same material and the flag silently stayed
+    False for every lossy stack.
     """
     xp = array_namespace(epx_conv_all)
-    eps_below = xp.asarray(complex(n_bot).conjugate() ** 2, dtype=epx_conv_all.dtype)
+    eps_below = xp.asarray(complex(n_bot) ** 2, dtype=epx_conv_all.dtype)
 
     n_layers = epx_conv_all.shape[0]
     flags = [False] * n_layers
