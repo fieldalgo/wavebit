@@ -585,7 +585,8 @@ class Modeling:
         """Reduce one layer's block list to ``(cell, x_list, y_list)``.
 
         Every distinct block edge becomes a grid line; coincident edges are nudged apart by a
-        growing perturbation so the sort stays strict (and so backprop sees distinct edges).
+        growing perturbation so the sort stays strict, and the returned ``x_list`` / ``y_list``
+        are strictly increasing. See :func:`insert_edge` below for what the nudge is for.
         """
         pmtvy_base, obj_list = layer_info
 
@@ -607,44 +608,49 @@ class Modeling:
         row_list = []
         col_list = []
 
+        def insert_edge(seq, value, downward):
+            """Add one block edge to its sorted grid line list, nudged off any edge already there.
+
+            The nudge is what the grid builder below depends on: it locates each block's rows
+            and columns with ``list.index``, which returns the *first* match, so two edges
+            sharing a coordinate would put two different blocks on one grid line. Nudging the
+            later one keeps them distinct. ``downward`` moves a block's far edge down and its
+            near edge up, so a block never grows into its neighbour.
+
+            The insertion slot is taken *after* the nudge. Taking it before — which is what this
+            did — puts an upward-nudged edge in front of the twin it has just moved past, and
+            the edge list comes back out of order. It was easy to miss because the disorder is
+            the size of the nudge: an unrotated ellipse at ``n_split`` 24 had 10 of its 49
+            column edges inverted, by 8e-11 each, which reaches ``_cfs`` as a negative segment
+            width. Harmless at ``perturbation_unit`` 1e-14; the ``x64=False`` branch below uses
+            1e-6, where a few hundred collisions would put the disorder at ~0.1 length units.
+
+            A nudge landing on a *third* edge is not chased; nothing here places distinct edges
+            within a nudge of each other.
+            """
+            nonlocal perturbation
+            index = _bisect_left(seq, value)
+            if len(seq) > index and bool(value == seq[index]):
+                # TODO: change; save how many perturbations were applied in a variable
+                perturbation += perturbation_unit
+                if downward:
+                    value = value - (value * perturbation)
+                elif bool(value == 0):
+                    value = value + perturbation
+                else:
+                    value = value + (value * perturbation)
+                index = _bisect_left(seq, value)
+            seq.insert(index, value)
+            return value
+
         # overlap check and apply perturbation
         for obj in obj_list:
             top_left, bottom_right, _ = obj
 
-            # top_left[0]
-            index = _bisect_left(row_list, top_left[0])
-            if len(row_list) > index and bool(top_left[0] == row_list[index]):
-                perturbation += perturbation_unit
-                if bool(top_left[0] == 0):
-                    top_left[0] = top_left[0] + perturbation
-                else:
-                    # TODO: change; save how many perturbations were applied in a variable
-                    top_left[0] = top_left[0] + (top_left[0] * perturbation)
-            row_list.insert(index, top_left[0])
-
-            # bottom_right[0]
-            index = _bisect_left(row_list, bottom_right[0])
-            if len(row_list) > index and bool(bottom_right[0] == row_list[index]):
-                perturbation += perturbation_unit
-                bottom_right[0] = bottom_right[0] - (bottom_right[0] * perturbation)
-            row_list.insert(index, bottom_right[0])
-
-            # top_left[1]
-            index = _bisect_left(col_list, top_left[1])
-            if len(col_list) > index and bool(top_left[1] == col_list[index]):
-                perturbation += perturbation_unit
-                if bool(top_left[1] == 0):
-                    top_left[1] = top_left[1] + perturbation
-                else:
-                    top_left[1] = top_left[1] + (top_left[1] * perturbation)
-            col_list.insert(index, top_left[1])
-
-            # bottom_right[1]
-            index = _bisect_left(col_list, bottom_right[1])
-            if len(col_list) > index and bool(bottom_right[1] == col_list[index]):
-                perturbation += perturbation_unit
-                bottom_right[1] = bottom_right[1] - (bottom_right[1] * perturbation)
-            col_list.insert(index, bottom_right[1])
+            top_left[0] = insert_edge(row_list, top_left[0], downward=False)
+            bottom_right[0] = insert_edge(row_list, bottom_right[0], downward=True)
+            top_left[1] = insert_edge(col_list, top_left[1], downward=False)
+            bottom_right[1] = insert_edge(col_list, bottom_right[1], downward=True)
 
         if self.period is None:
             raise ValueError('period is not set')

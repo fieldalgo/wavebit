@@ -42,8 +42,39 @@ SOLVE_KW = dict(period=PERIOD, thickness=[205.0, 100.0], fto=[3, 3],
 # rectangle, which does converge, keeps its parity here.
 LEGACY_PARITY = [name for name in INSTRUCTIONS if not name.startswith('ellipse')]
 
+# ``rect_rot`` is held to the golden through the solve and through the geometry, but not
+# array-for-array: the stored ``y`` has two pairs of rows in the wrong order, because the
+# builder used to insert a nudged edge at the slot it found *before* nudging it. Fixing that
+# reorders those rows and the cell rows with them. See the dedicated test below, which pins
+# what did not change (the material anywhere in the layer) and what did (the sort).
+BITWISE_PARITY = [name for name in LEGACY_PARITY if name != 'rect_rot']
 
-@pytest.mark.parametrize('name', LEGACY_PARITY)
+
+def material_at(cell, x, y, n=601, period=300.0):
+    """The layer's refractive index sampled on an ``n`` x ``n`` grid of points.
+
+    Comparing *this* rather than the raw arrays is what survives a change in how grid lines are
+    ordered or how many zero-width bands sit between them: it asks what the solver would see at
+    a position, which is the thing that must not move.
+    """
+    cell = np.asarray(cell)
+    x_edges = np.real(np.asarray(x)).reshape(-1)
+    y_edges = np.real(np.asarray(y)).reshape(-1)
+
+    # Sorted here rather than assumed, so a legacy array with rows out of order can be sampled
+    # on the same footing as a fixed one.
+    order_y = np.argsort(y_edges, kind='stable')
+    order_x = np.argsort(x_edges, kind='stable')
+    y_edges, x_edges = y_edges[order_y], x_edges[order_x]
+    cell = cell[order_y][:, order_x]
+
+    points = (np.arange(n) + 0.5) / n * period
+    iy = np.clip(np.searchsorted(y_edges, points, 'left'), 0, cell.shape[0] - 1)
+    ix = np.clip(np.searchsorted(x_edges, points, 'left'), 0, cell.shape[1] - 1)
+    return cell[np.ix_(iy, ix)]
+
+
+@pytest.mark.parametrize('name', BITWISE_PARITY)
 def test_vector_blocks_match_legacy_golden(name):
     """The decomposed blocks and their edges, layer by layer."""
     info = Modeling(period=PERIOD).modeling_vector_instruction(INSTRUCTIONS[name])
@@ -54,6 +85,61 @@ def test_vector_blocks_match_legacy_golden(name):
             got = np.asarray(got)
             assert got.shape == want.shape, (i, tag, want.shape, got.shape)
             assert np.array_equal(want, got), (i, tag, np.max(np.abs(want - got)))
+
+
+def test_rotated_rectangle_blocks_are_the_legacy_ones_in_the_right_order():
+    """The grid line lists come back strictly increasing, holding the layer itself fixed.
+
+    Coincident block edges are nudged apart so two blocks cannot land on one grid line, but the
+    builder used to insert the nudged edge at the slot ``_bisect_left`` had returned *before*
+    the nudge — in front of the very twin the nudge had moved it past. The stored legacy ``y``
+    has two such inversions and is therefore not sorted; a negative segment width is what
+    ``_cfs`` makes of one.
+
+    So the claim here is narrow and checkable: the fix is a reordering. Sorting the legacy
+    edges reproduces the new ones to within the nudge, the material at 361201 points across
+    both layers is untouched, and ``test_vector_solve_matches_legacy_golden[rect_rot]`` still
+    holds the efficiencies to 1e-12.
+    """
+    info = Modeling(period=PERIOD).modeling_vector_instruction(INSTRUCTIONS['rect_rot'])
+
+    for i, (cell, x, y) in enumerate(info):
+        want_y = np.asarray(GOLDEN[f'rect_rot__L{i}__y']).reshape(-1)
+        got_y = np.asarray(y).reshape(-1)
+
+        assert np.all(np.diff(got_y.real) > 0), i
+        assert np.all(np.diff(np.asarray(x).reshape(-1).real) > 0), i
+        assert np.sort(want_y.real) == pytest.approx(got_y.real, abs=1e-9), i
+
+        assert np.array_equal(material_at(cell, x, y),
+                              material_at(GOLDEN[f'rect_rot__L{i}__cell'],
+                                          GOLDEN[f'rect_rot__L{i}__x'], want_y)), i
+
+    # And the golden really is the unsorted one — otherwise this test proves nothing.
+    assert not np.all(np.diff(np.asarray(GOLDEN['rect_rot__L0__y']).reshape(-1).real) > 0)
+
+
+@pytest.mark.parametrize('shape,args', [
+    ('ellipse', (350., 350., 400., 250., 3.0, 0.0, 24, 24)),     # symmetric: edges coincide
+    ('ellipse', (350., 350., 400., 250., 3.0, 0.0, 25, 25)),     # the other parity
+    ('ellipse', (350., 350., 400., 250., 3.0, 0.4, 80, 80)),
+    ('rectangle', (150., 150., 80., 60., 2.0, 0.4, 16, 16)),
+    ('rectangle', (150., 150., 80., 60., 2.0, 0.4, 64, 64)),
+])
+def test_grid_lines_come_back_strictly_increasing(shape, args):
+    """``x_list`` / ``y_list`` are segment edges; out of order they are a negative width.
+
+    The unrotated ellipse is the sharp case — ``sin`` is symmetric about pi/2, so slab ``i`` and
+    slab ``n - 1 - i`` produce bit-identical side edges and every one of those pairs goes
+    through the nudge. Ten of 49 column edges came back inverted before the fix.
+    """
+    modeler = Modeling(period=[700.0, 700.0])
+    blocks = getattr(modeler, shape)(*args)
+    _, x, y = modeler.draw([[1.0, blocks]])[0]
+
+    for tag, edges in (('x', x), ('y', y)):
+        values = np.real(np.asarray(edges)).reshape(-1)
+        assert np.all(np.diff(values) > 0), (tag, np.min(np.diff(values)))
 
 
 @pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
@@ -90,7 +176,12 @@ def test_torch_device_code_is_not_a_device_index():
     modeler = Modeling(period=PERIOD, type_complex=torch.complex128, device=0,
                        xp=__import__('array_api_compat').array_namespace(torch.zeros(1)))
     info = modeler.modeling_vector_instruction(INSTRUCTIONS['rect_rot'])
-    assert np.array_equal(GOLDEN['rect_rot__L0__cell'], np.asarray(info[0][0]))
+
+    # Compared against the NumPy backend rather than the stored golden: the golden's rect_rot
+    # rows are in the pre-fix order (see the reordering test above), and what this test is
+    # actually about is that torch produced the same layer at all.
+    want = Modeling(period=PERIOD).modeling_vector_instruction(INSTRUCTIONS['rect_rot'])
+    assert np.array_equal(np.asarray(want[0][0]), np.asarray(info[0][0]))
 
 
 def test_jax_device_setter_round_trips():
