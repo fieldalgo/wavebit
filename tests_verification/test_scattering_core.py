@@ -70,8 +70,9 @@ CASES_CONICAL = [
 CASES_2D = [
     ('2d_1layer', dict(ucell=UC_2D, thickness=[0.3], n_top=1.0, n_bot=1.5, theta=0.2,
                        phi=0.4, psi=0.7, wavelength=0.9, period=[0.7, 0.7], fto=[3, 3])),
-    # The two layers must differ in *mean* permittivity, not just in pattern: equal means
-    # trip the TMM same-material misdetection pinned by test_smm_survives_* below.
+    # The two layers differ in *mean* permittivity, not just in pattern. Equal means used to
+    # trip a TMM misdetection (see the DEGENERATE_MEAN note below); that path is gone, and
+    # this stays the way it is because the case is a cross-algorithm check, not a probe of it.
     ('2d_2layer_normal', dict(ucell=np.concat([UC_2D, 1 + UC_2D[:, ::-1]]),
                               thickness=[0.2, 0.3], n_top=1.0, n_bot=1.0, theta=0.0,
                               phi=0.0, psi=0.4, wavelength=0.5, period=[0.6, 0.6],
@@ -165,13 +166,11 @@ def test_field_reconstruction_after_smm_raises():
         solver.calculate_field(res_x=4, res_z=4)
 
 
-def test_same_material_flags_are_accepted_and_ignored():
-    """Frozen geometry must not change the SMM answer — it has no short-circuit to freeze."""
-    kwargs = dict(CASES_1D[4][1])          # te_same_material
+def test_frozen_geometry_does_not_change_the_smm_answer():
+    """SMM decides nothing discrete, so freezing must be a no-op for it, bit for bit."""
+    kwargs = dict(CASES_1D[4][1])          # a substrate-matched bottom layer
     solver = fieldwave.rcwa(backend=0, connecting_algo='SMM', **kwargs)
-    frozen = solver.freeze_geometry()
-    assert any(frozen.same_material), frozen.same_material   # the case really does trigger it
-    with_geom = solver.conv_solve(geometry=frozen)
+    with_geom = solver.conv_solve(geometry=solver.freeze_geometry())
     without = _solve('SMM', kwargs)
     assert np.allclose(np.array(with_geom.de_ri), np.array(without.de_ri), atol=0, rtol=0)
     assert np.allclose(np.array(with_geom.de_ti), np.array(without.de_ti), atol=0, rtol=0)
@@ -182,8 +181,9 @@ def test_same_material_flags_are_accepted_and_ignored():
 # Two differently patterned layers whose *mean* permittivity happens to match. This is the
 # structure that exposed the same-material misdetection (test_fixes.test_10): TMM read the
 # upper layer as identical to the one below and skipped their interface, losing ~50x on
-# energy, while SMM — which has no such short-circuit — stayed exact. Kept here as the SMM
-# side of that story: it is what will catch SMM growing the same kind of shortcut.
+# energy, while SMM — which never had such a short-circuit — stayed exact. TMM has none
+# either now, so no solver can skip an interface; kept as what would catch either of them
+# growing one back.
 DEGENERATE_MEAN = dict(
     ucell=np.concat([UC_2D, UC_2D[:, ::-1]]), thickness=[0.2, 0.3], n_top=1.0, n_bot=1.0,
     psi=0.4, wavelength=0.5, period=[0.6, 0.6], fto=[2, 2])

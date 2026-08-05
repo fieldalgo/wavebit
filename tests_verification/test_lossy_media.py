@@ -177,24 +177,23 @@ def test_lossless_layer_on_absorbing_substrate_conserves_energy(algo, pol, theta
 def test_absorbing_layer_identical_to_its_substrate(pol, theta):
     """An absorbing layer on a substrate of the same material must vanish into it.
 
-    The short-circuit is forced *off* so this measures the boundary rather than the shortcut:
-    the layer and the substrate have to arrive at the same modes on their own. They did not
-    while the substrate skipped the conjugated convention, and the short-circuit was hiding
-    it — the answer stayed right only because skipping the layer leaves a bare interface,
-    where the wrong phase cannot show.
+    The layer and the substrate have to arrive at the same modes on their own. They did not
+    while the substrate skipped the conjugated convention, and a short-circuit that skipped
+    the interface entirely was hiding it — the answer stayed right only because skipping the
+    layer leaves a bare interface, where the wrong phase cannot show. Nothing is skipped now:
+    this is the general transfer recursion solving the matched interface for itself, which is
+    also what makes it a live check on the boundary.
     """
-    from fieldwave._core.geometry import StaticGeometry
     ns, ds = [1.0, AU, AU], [20.0]
     want = abs(analytic_r(ns, ds, WL, theta, pol)) ** 2   # == the bare air/gold interface
 
     ucell = np.array([[[AU, AU]]])
     common = dict(backend=0, pol=pol, n_top=1.0, n_bot=AU, theta=theta, fto=0,
                   wavelength=WL, period=[WL * 2], ucell=ucell, thickness=ds)
-    forced = fieldwave.rcwa(connecting_algo='TMM', **common).conv_solve(
-        geometry=StaticGeometry(same_material=[False]))
+    tmm = fieldwave.rcwa(connecting_algo='TMM', **common).conv_solve()
     smm = fieldwave.rcwa(connecting_algo='SMM', **common).conv_solve()
 
-    assert float(np.sum(forced.de_ri)) == pytest.approx(want, abs=1e-12)
+    assert float(np.sum(tmm.de_ri)) == pytest.approx(want, abs=1e-12)
     assert float(np.sum(smm.de_ri)) == pytest.approx(want, abs=1e-12)
 
 

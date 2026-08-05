@@ -1,8 +1,9 @@
 """Frozen geometry makes the public API traceable (fieldwave.StaticGeometry).
 
-Three pipeline steps decide something structural rather than numeric — the same-material
-short-circuit, the NVF normal field, the CFS block compression. All branch on values, so none
-survives a JAX trace. ``freeze_geometry()`` takes those decisions once against the concrete
+Two pipeline steps decide something structural rather than numeric — the NVF normal field and
+the CFS block compression. Both branch on values, so neither survives a JAX trace. (There was
+a third, the same-material short-circuit; removing it is what left DFS with nothing to
+freeze.) ``freeze_geometry()`` takes those decisions once against the concrete
 structure; handing the result back to ``conv_solve`` makes the whole call jit- and
 grad-traceable without changing a single number.
 """
@@ -57,47 +58,60 @@ def test_jit_and_grad_through_the_public_api(fourier_type):
     assert abs(float(np.sum(g * d)) - fd) < 1e-5, (float(np.sum(g * d)), fd)
 
 
-@pytest.mark.parametrize('fourier_type', STRATEGIES, ids=IDS)
-def test_auto_detection_still_blocks_jit(fourier_type):
-    """Pins *why* the API exists: without frozen geometry, tracing fails.
+def _jit_loss(fourier_type):
+    import jax.numpy as jnp
+    solver = fieldwave.rcwa(backend=1, ucell=UCELL, fourier_type=fourier_type, **KW)
+    return lambda u: jnp.sum(solver.conv_solve(ucell=u).res.de_ti).real
 
-    Auto-detection is the eager path that reproduces the legacy result; it is not traceable.
-    (DFS survives ``jax.grad`` because its detection narrows a tracer whose primal is
-    concrete, but no strategy survives ``jax.jit``.)
+
+@pytest.mark.parametrize('fourier_type', [FourierType.CONTINUOUS, FourierType.NVF],
+                         ids=['cfs', 'nvf'])
+def test_auto_detection_still_blocks_jit(fourier_type):
+    """Pins *why* the API exists: for these strategies, tracing fails without it.
+
+    Auto-detection is the eager path; the normal field and the CFS block compression both
+    branch on concrete values, and the compression's output shape depends on them.
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
 
-    solver = fieldwave.rcwa(backend=1, ucell=UCELL, fourier_type=fourier_type, **KW)
-
-    def loss(u):
-        return jnp.sum(solver.conv_solve(ucell=u).res.de_ti).real
-
     with pytest.raises(Exception):
-        jax.jit(loss)(jnp.asarray(UCELL))
+        jax.jit(_jit_loss(fourier_type))(jnp.asarray(UCELL))
+
+
+def test_dfs_needs_no_frozen_geometry_at_all():
+    """DFS decides nothing, so it jits straight off the public API.
+
+    It used to raise here. The one discrete decision on this path was the same-material
+    short-circuit, and removing that left nothing between ``conv_solve`` and a trace --
+    ``freeze_geometry()`` is now optional for DFS rather than the price of admission.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+
+    got = float(jax.jit(_jit_loss(FourierType.DFS))(jnp.asarray(UCELL)))
+    want = float(np.sum(np.asarray(
+        fieldwave.rcwa(backend=0, ucell=UCELL, fourier_type=FourierType.DFS,
+                       **KW).conv_solve().res.de_ti).real))
+    assert got == pytest.approx(want, abs=1e-10)
 
 
 def test_freeze_geometry_reports_what_the_strategy_needs():
-    """Only the fields the active strategy consumes are populated."""
+    """Only the fields the active strategy consumes are populated.
+
+    DFS populates nothing: it has no discrete decision left to take. (It had one -- the
+    same-material short-circuit -- until that turned out to be a workaround for a singularity
+    the convention merge had already removed.)
+    """
     def geo(fourier_type):
         return fieldwave.rcwa(backend=0, ucell=UCELL, fourier_type=fourier_type,
                                **KW).freeze_geometry()
 
     dfs = geo(FourierType.DFS)
-    assert dfs.same_material is not None
     assert dfs.normal_field is None and dfs.compression is None
 
     assert geo(FourierType.NVF).normal_field is not None
     assert geo(FourierType.CONTINUOUS).compression is not None
-
-
-def test_same_material_flags_are_correct():
-    """A uniform bottom layer matching the substrate is detected; a patterned one is not."""
-    ucell = np.array([[[3., 3., 1., 1., 3., 1.]], [[1., 1., 1., 1., 1., 1.]]])
-    solver = fieldwave.rcwa(backend=0, ucell=ucell, pol=0, phi=None, n_top=1.0, n_bot=1.0,
-                          theta=0.0, fto=[5, 0], period=[0.7], wavelength=0.9,
-                          thickness=[0.2, 0.1])
-    assert solver.freeze_geometry().same_material == [False, True]
 
 
 @pytest.mark.parametrize('name,make,start', [

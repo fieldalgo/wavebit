@@ -1,36 +1,37 @@
-"""The same-material short-circuit must be an optimization, not a different computation.
+"""A layer identical to the medium below it is still a layer.
 
-When a uniform layer is the same material as the medium just below it, the interface between
-them reflects nothing, and the solve can skip solving for that interface. What it may *not*
-skip is the layer: its thickness still has to reach the boundary matching, and its modes still
-have to carry the transfer down to whatever is underneath.
+There is nothing special about this arrangement in the solve any more, and that is the claim
+worth pinning, because for most of this codebase's life there was. A short-circuit detected
+"uniform layer, same material as what is underneath" and skipped the interface matching for
+it, storing ``a_i = b = 0`` and leaving ``F`` / ``G`` untouched. Two things followed:
 
-The short-circuit did neither. It stored ``a_i = b = 0`` and left ``F`` / ``G`` untouched, so:
-
-* the layer's thickness never entered ``F`` / ``G`` -- two identical layers on a *different*
+* the layer's thickness never entered ``F`` / ``G``, so two identical layers on a *different*
   substrate reflected as though the upper one were absent (0.0735 against an Airy oracle's
   0.0338, a 118% error), and
 * ``a_i = 0`` annihilated the field recursion ``T_layer = A_i @ X @ T_layer``, zeroing the
   reconstructed field in that layer and in **every layer below it**.
 
-Both were invisible to the suite as it stood: the golden field cases contain no same-material
-stack, and the only same-material case anywhere put the layer directly on a matching
-substrate -- the one arrangement where ``b`` really is zero and the bug cancels.
+Neither was visible: the golden field cases contain no same-material stack, and the only
+same-material case anywhere put the layer directly on a matching substrate -- the one
+arrangement where the skipped term really is zero and the bug cancels.
 
-``b`` is the *lower stack's* reflection expressed in the shared modes. It vanishes only when
-that stack is itself reflectionless, which is exactly the matching-substrate case. Everything
-here is arranged so it is not.
+The short-circuit was added in 2026-03 for a real failure. Sharing a mode basis with the
+medium below made ``a = 0.5*(W_i F + V_i G)`` *singular* under the conjugated formulation of
+the day (its own comment: "V_i @ G ~= -I, making A ~= 0"), so inverting it blew up. The
+2026-08 convention merge flipped the sign of ``G``; the same quantity is now ``a = I``, with
+condition number 1. The singularity was gone and the workaround was not, so the workaround is
+what these tests now assert the absence of.
 """
 import numpy as np
 import pytest
 
 import fieldwave
-from fieldwave._core.geometry import StaticGeometry
 
 WL = 500.0
 AU = 0.18 + 3.0j                      # gold at 500nm
 
-# n=1.5 twice in a row, on a substrate that is *not* 1.5, so `b` != 0 at the upper interface.
+# n=1.5 twice in a row, on a substrate that is *not* 1.5, so the term the short-circuit
+# dropped is non-zero here.
 STACKED = ([1.0, 1.5, 1.5, 2.0], [20.0, 35.0])
 
 
@@ -54,33 +55,33 @@ def _solver(ns, ds, *, pol=0, theta=0.2, path='1d', fto=0):
                           period=[WL * 2, WL * 2], ucell=np.array(cell), **common)
 
 
-def _R(solver, same=None):
-    kw = {} if same is None else dict(geometry=StaticGeometry(same_material=same))
-    return float(np.sum(np.asarray(solver.conv_solve(**kw).de_ri)).real)
+def _R(solver):
+    return float(np.sum(np.asarray(solver.conv_solve().de_ri)).real)
+
+
+INCIDENCE = [(p, t) for p in (0, 1) for t in (0.0, 0.4)]
+IDS = [f'{"te" if p == 0 else "tm"}_theta{t}' for p, t in INCIDENCE]
 
 
 # ----------------------------------------------------------------------
 # 1. the efficiency, against an absolute oracle
 # ----------------------------------------------------------------------
-@pytest.mark.parametrize('pol,theta',
-                         [(p, t) for p in (0, 1) for t in (0.0, 0.4)],
-                         ids=[f'{"te" if p == 0 else "tm"}_theta{t}'
-                              for p in (0, 1) for t in (0.0, 0.4)])
-def test_stacked_same_material_matches_the_analytic_stack(pol, theta):
+@pytest.mark.parametrize('path', ['1d', 'conical', '2d'])
+@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
+def test_stacked_same_material_matches_the_analytic_stack(pol, theta, path):
     """Two identical layers on a different substrate: the upper one must still count.
 
-    This is the arrangement the short-circuit got wrong, and an Airy recursion over the same
-    indices settles it without reference to any solver.
+    This is the arrangement that was wrong, and an Airy recursion over the same indices
+    settles it without reference to any solver. All three transfer paths carried their own
+    copy of the short-circuit, and the conical one additionally built its transfer in a
+    different mode basis than its own general branch used, so each needs saying separately.
     """
     ns, ds = STACKED
-    solver = _solver(ns, ds, pol=pol, theta=theta)
+    solver = _solver(ns, ds, pol=pol, theta=theta, path=path)
     assert _R(solver) == pytest.approx(_airy_R(ns, ds, theta, pol), abs=1e-12)
 
 
-@pytest.mark.parametrize('pol,theta',
-                         [(p, t) for p in (0, 1) for t in (0.0, 0.4)],
-                         ids=[f'{"te" if p == 0 else "tm"}_theta{t}'
-                              for p in (0, 1) for t in (0.0, 0.4)])
+@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
 def test_merging_same_material_layers_is_the_same_structure(pol, theta):
     """Splitting a slab in two must not change anything -- the split is not physical."""
     ns, ds = STACKED
@@ -89,83 +90,81 @@ def test_merging_same_material_layers_is_the_same_structure(pol, theta):
     assert _R(split) == pytest.approx(_R(whole), abs=1e-12)
 
 
-# ----------------------------------------------------------------------
-# 2. on == off, on every solve path
-# ----------------------------------------------------------------------
-@pytest.mark.parametrize('path', ['1d', 'conical', '2d'])
-@pytest.mark.parametrize('pol', [0, 1], ids=['te', 'tm'])
-def test_short_circuit_changes_nothing_on_any_path(path, pol):
-    """Taking the shortcut and not taking it are the same computation.
+@pytest.mark.parametrize('d', [1.0, 20.0, 2000.0], ids=['thin', 'typical', 'thick'])
+def test_absorbing_layer_on_its_own_substrate_at_any_thickness(d):
+    """Au on Au: the case the short-circuit was originally added to survive.
 
-    The general branch is the reference: it makes no same-material assumption and reproduces
-    the oracle above. ``conical`` and ``2d`` carry their own copies of the branch, and the
-    conical one additionally built its transfer in a different mode basis than its general
-    branch used, so each needs saying separately.
+    Under the conjugated formulation this made the interface matrix singular and the solve
+    blew up. It is now an ordinary matched interface -- the layer is optically indistinguishable
+    from the substrate, so any thickness must give the bare air/gold Fresnel reflectance.
     """
-    ns, ds = STACKED
-    solver = _solver(ns, ds, pol=pol, path=path)
-    assert _R(solver) == pytest.approx(_R(solver, same=[False] * len(ds)), abs=1e-12)
+    want = _airy_R([1.0, AU, AU], [d], 0.3, 1)
+    assert _R(_solver([1.0, AU, AU], [d], pol=1, theta=0.3)) == pytest.approx(want, abs=1e-12)
 
 
-def test_the_short_circuit_actually_fires_here():
-    """Guard the guard: none of this proves anything if the flag never turns on."""
-    ns, ds = STACKED
-    flags = _solver(ns, ds).freeze_geometry().same_material
-    assert flags == [True, False], flags          # ucell is top-to-bottom
+def test_a_matched_interface_is_well_conditioned():
+    """Directly: the quantity that used to be singular here is the identity.
 
-
-def test_absorbing_substrate_is_detected_as_same_material():
-    """An absorbing layer on a substrate of its own material must match it.
-
-    The detector seeded ``eps_below`` with ``conj(n_bot)**2`` while the layer builders use a
-    raw ``n_bot**2``, so for any complex ``n_bot`` the two could never agree and the flag was
-    stuck False -- the short-circuit silently did not exist for lossy stacks.
+    Pins the reason the short-circuit is removable rather than merely removed. If a future
+    convention change flips ``G``'s sign back, ``a`` returns to ~0 and this fails loudly
+    instead of the solve quietly producing garbage.
     """
-    flags = _solver([1.0, AU, AU], [20.0]).freeze_geometry().same_material
-    assert flags == [True], flags
+    import array_api_compat.numpy as xnp
+    from fieldwave._core.conventions import boundary_kz
+    from fieldwave._core.solve_1d import _diag, layer_modes_1d
+
+    fto, theta = 2, 0.3
+    ff = 2 * fto + 1
+    kx = np.asarray([np.sin(theta) + m * 0.5 for m in range(-fto, fto + 1)], dtype=complex)
+    I = np.eye(ff, dtype=complex)
+
+    eps = complex(AU) ** 2                      # layer and substrate are both gold
+    W, V, _ = layer_modes_1d(xnp, np.linalg.inv, 1, kx, I, eps * I, eps * I,
+                             (1 / eps) * I, complex)
+    F = I
+    G = -1j * _diag(xnp, boundary_kz(xnp, eps, kx ** 2) / eps)          # substrate seed, TM
+
+    a = 0.5 * (np.linalg.inv(W) @ F + np.linalg.inv(V) @ G)
+    assert np.abs(a - I).max() < 1e-12, np.abs(a - I).max()
+    assert np.linalg.cond(a) == pytest.approx(1.0, abs=1e-9)
 
 
 # ----------------------------------------------------------------------
-# 3. the field below the layer
+# 2. the field below the layer
 # ----------------------------------------------------------------------
 RES = 10
+FIELD_STACK = ([1.0, 1.5, 1.5, 2.0, 1.0], [30.0, 30.0, 40.0])
 
 
-def _field(ns, ds, *, pol=0, theta=0.2, fto=2, same=None):
+def _field(ns, ds, *, pol=0, theta=0.2, fto=2):
     solver = _solver(ns, ds, pol=pol, theta=theta, fto=fto)
-    kw = {} if same is None else dict(geometry=StaticGeometry(same_material=same))
-    solver.conv_solve(**kw)
+    solver.conv_solve()
     return np.asarray(solver.calculate_field(res_x=RES, res_y=1, res_z=RES))
 
 
 def test_field_below_a_same_material_layer_is_not_zero():
-    """``a_i = 0`` propagated through ``T_layer = A_i @ X @ T_layer`` and killed everything.
+    """Layers 0 and 1 are both n=1.5 and layer 2 is not; 1 and 2 came back identically zero.
 
-    Layer 0 and layer 1 are both n=1.5 and layer 2 is not, so the flag fires on layer 1 and
-    the field in layers 1 *and* 2 came back identically zero. A stack that reflects and
-    transmits normally the whole time, with no field in most of it.
+    A stack that reflected and transmitted normally the whole time, with no field in most
+    of it.
     """
-    ns, ds = [1.0, 1.5, 1.5, 2.0, 1.0], [30.0, 30.0, 40.0]
-    f = _field(ns, ds).reshape(3, RES, -1)
+    f = _field(*FIELD_STACK).reshape(3, RES, -1)
     for i in range(3):
         assert np.abs(f[i]).max() > 1e-3, f'layer {i} is empty'
 
 
 @pytest.mark.parametrize('pol', [0, 1], ids=['te', 'tm'])
-def test_field_matches_the_general_branch_and_the_merged_stack(pol):
-    """And it is not merely non-zero: it is the field the un-shortcut stack has.
+def test_field_matches_the_merged_stack(pol):
+    """And it is not merely non-zero: it is the field the merged stack has.
 
-    Two references, because they fail differently. Forcing the flags off runs the identical
-    structure through the general branch. Merging the two same-material layers into one of
-    their combined thickness is a different *input* describing the same physical stack, so it
-    also pins that the thickness survived the shortcut.
+    Writing the two same-material layers as one of their combined thickness is a different
+    *input* describing the same physical stack, so this pins that the thickness survived --
+    the half of the defect that the efficiency tests above also see, but here in the
+    reconstruction, which is where it was total rather than partial.
     """
-    ns, ds = [1.0, 1.5, 1.5, 2.0, 1.0], [30.0, 30.0, 40.0]
-    got = _field(ns, ds, pol=pol)
-    assert np.allclose(got, _field(ns, ds, pol=pol, same=[False] * 3), atol=1e-12, rtol=0)
-
-    merged = _field([1.0, 1.5, 2.0, 1.0], [60.0, 40.0], pol=pol)
-    # Same z sampling per layer, so the merged run has 2 blocks where this one has 3; the
-    # bottom (n=2.0) block is the one both describe identically.
-    assert np.allclose(got.reshape(3, RES, -1)[2], merged.reshape(2, RES, -1)[1],
-                       atol=1e-12, rtol=0)
+    ns, ds = FIELD_STACK
+    got = _field(ns, ds, pol=pol).reshape(3, RES, -1)
+    merged = _field([1.0, 1.5, 2.0, 1.0], [60.0, 40.0], pol=pol).reshape(2, RES, -1)
+    # Same z sampling per layer, so merged has 2 blocks where this has 3; the bottom (n=2.0)
+    # block is the one both describe identically.
+    assert np.allclose(got[2], merged[1], atol=1e-12, rtol=0)

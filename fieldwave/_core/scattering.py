@@ -124,14 +124,11 @@ def _prepare(epx_conv_all, kx, ky=None):
 
 def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
-           same_material=None, same_material_rtol=1e-3, full=False):
+           full=False):
     """Solve a 1D grating stack by scattering matrices — SMM twin of :func:`solve_1d`.
 
     Same arguments and same returns as :func:`fieldwave._core.solve_1d.solve_1d`, so the two are
-    interchangeable behind ``connecting_algo``. ``same_material`` / ``same_material_rtol`` are
-    accepted and ignored: the S-matrix recursion never inverts an interface matrix that a
-    substrate-matched layer would make singular, so the short-circuit they drive has no
-    counterpart here.
+    interchangeable behind ``connecting_algo``.
 
     With ``full=True`` the returned mapping carries ``layer_info_list = []`` and ``T1 = None``:
     field reconstruction is a TMM-only capability (see the module docstring).
@@ -302,10 +299,10 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
 
 def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
                    epx_conv_all, epy_conv_all, epz_conv_i_all,
-                   same_material=None, same_material_rtol=1e-3, full=False):
+                   full=False):
     """Solve a conical 1D grating by scattering matrices — SMM twin of :func:`solve_1d_conical`.
 
-    Same arguments and returns; ``same_material`` is accepted and ignored (see :func:`smm_1d`).
+    Same arguments and returns as :func:`smm_1d`.
     """
     xp, C, kx, ky = _prepare(epx_conv_all, kx, ky)
 
@@ -336,10 +333,10 @@ def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
 def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
            epxy_conv_all=None, epyx_conv_all=None,
-           same_material=None, same_material_rtol=1e-3, full=False):
+           full=False):
     """Solve a 2D grating stack by scattering matrices — SMM twin of :func:`solve_2d`.
 
-    Same arguments and returns; ``same_material`` is accepted and ignored (see :func:`smm_1d`).
+    Same arguments and returns as :func:`smm_1d`.
     """
     xp, C, kx, ky = _prepare(epx_conv_all, kx, ky)
 

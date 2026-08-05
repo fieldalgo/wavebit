@@ -85,7 +85,6 @@ def test_2d_gradient_jax_torch_fd():
 
     ucell = _rand((1, 4, 4), 3)
     (_, _), inp = _run_and_inputs(ucell, [0.15], 1.0, 1.0, 0.9, [1.0, 1.0], [1, 1], 0.2, 0.4, 0.9)
-    inp['same_material'] = [False]
     key = 'epx_conv_all'
     base = np.array(inp[key])
     direction = np.real(base).copy()

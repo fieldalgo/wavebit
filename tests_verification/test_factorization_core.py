@@ -95,8 +95,7 @@ def test_factorization_feeds_solve_bit_exactly():
 
 def _chain_1d(fac_kwargs, ucell, kx, theta):
     epx, epy, epz = core_dfs(ucell, **fac_kwargs)
-    _, ti = solve_1d(0, 0.777, kx, 2.0, 1.0, theta, [0.15], epx, epy, epz,
-                     same_material=[False])
+    _, ti = solve_1d(0, 0.777, kx, 2.0, 1.0, theta, [0.15], epx, epy, epz)
     return ti
 
 
@@ -150,8 +149,7 @@ def test_end_to_end_gradient_wrt_ucell_2d():
 
     def chain(u, kx_, ky_, th_, ps_):
         epx, epy, epz = core_dfs(u, fto[0], fto[1])
-        _, ti = solve_2d(wl, kx_, ky_, n_top, n_bot, th_, ps_, [0.15], epx, epy, epz,
-                         same_material=[False])
+        _, ti = solve_2d(wl, kx_, ky_, n_top, n_bot, th_, ps_, [0.15], epx, epy, epz)
         return ti
 
     def f_np(s):
@@ -248,7 +246,7 @@ def test_nvf_end_to_end_gradient_wrt_ucell():
     def chain(u, kx_, ky_, th_, ps_):
         epx, epy, epxy, epyx, epz = core_nvf(u, fto[0], fto[1], normal_field=normal_field)
         _, ti = solve_2d(wl, kx_, ky_, n_top, n_bot, th_, ps_, [d], epx, epy, epz,
-                         epxy_conv_all=epxy, epyx_conv_all=epyx, same_material=[False])
+                         epxy_conv_all=epxy, epyx_conv_all=epyx)
         return ti
 
     def f_np(s):
@@ -343,8 +341,7 @@ def test_cfs_end_to_end_gradient_wrt_ucell():
 
     def chain(u, kx_):
         epx, epy, epz = core_cfs(u, fto[0], fto[1], compression=compression)
-        _, ti = solve_1d(0, wl, kx_, n_top, n_bot, theta, [d], epx, epy, epz,
-                         same_material=[False])
+        _, ti = solve_1d(0, wl, kx_, n_top, n_bot, theta, [d], epx, epy, epz)
         return ti
 
     def f_np(s):

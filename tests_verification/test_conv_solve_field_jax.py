@@ -2,7 +2,7 @@
 
 This method jits over ``self``, which is what makes it different from ``conv_solve``: the whole
 structure arrives as tracers, so every discrete decision downstream — the grating-type dispatch,
-the same-material short-circuit, the NVF/CFS geometry — has nothing concrete to branch on. It
+the NVF/CFS geometry — has nothing concrete to branch on. It
 therefore *requires* a ``StaticGeometry`` from ``freeze_geometry()``, and says so rather than
 letting a raw ``TracerBoolConversionError`` escape.
 

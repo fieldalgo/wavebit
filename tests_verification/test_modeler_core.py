@@ -354,8 +354,8 @@ def test_jax_device_setter_round_trips():
 
     # The caller-visible symptom was here: @jax_device_set re-assigns the property, so the
     # rejected round-trip surfaced as a bare ValueError out of conv_solve_field. The jitted
-    # variant is still blocked by a separate same-material/tracer problem, so pin the
-    # no-jit one, which goes through the same decorator.
+    # variant requires a frozen geometry passed up front by contract, so pin the no-jit one,
+    # which goes through the same decorator.
     solver.conv_solve_field_no_jit(res_x=10, res_y=1, res_z=10)
 
 

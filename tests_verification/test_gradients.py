@@ -113,9 +113,9 @@ def test_raster_scalar_gradients(param, name):
         else:
             cfg[param] = p
         solver = fieldwave.rcwa(backend=backend, ucell=cast(RASTER), fourier_type=0, **cfg)
-        # the same-material auto-detection reads concrete values, so under a JAX trace the
-        # discrete geometry has to be frozen first (this is the documented contract).
-        return solver.conv_solve(geometry=_frozen_raster() if backend == 1 else None).de_ti.sum()
+        # No frozen geometry: a DFS build has no discrete decision to take, so it traces as
+        # is. It used to need one, for a same-material check that no longer exists.
+        return solver.conv_solve().de_ti.sum()
 
     start = {'theta': 0.2, 'phi': 0.3, 'psi': 0.4, 'wavelength': 0.777, 'n_top': 1.0,
              'n_bot': 1.5, 'thickness': 0.2, 'period': 0.77}[param]

@@ -21,10 +21,9 @@ All the strategies live here:
 2 (``NVF``)          raster_nvf          normal-vector-field factorization
 ===================  ==================  =========================================
 
-A recurring rule runs through this module, the same one the solve core follows for its
-same-material short-circuit: **discrete geometry decisions are computed eagerly and passed in
-as static inputs, while material values flow through differentiably.** Two decisions here are
-geometry, not material — the NVF normal field (where the interfaces point) and the CFS block
+A recurring rule runs through this module: **discrete geometry decisions are computed eagerly
+and passed in as static inputs, while material values flow through differentiably.** Two
+decisions here are geometry, not material — the NVF normal field (where the interfaces point) and the CFS block
 compression (where the piecewise-constant blocks start and stop). Both branch on values and,
 in the compression's case, produce a data-dependent shape, so neither can run under a JAX
 trace. Each is therefore split into an eager step that yields a static description

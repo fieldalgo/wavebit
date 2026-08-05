@@ -11,7 +11,7 @@ per-backend ``transfer_method`` chains it replaces existed in triplicate.
 """
 from . import analytic as _analytic
 from . import factorization as _fac
-from .geometry import StaticGeometry, detect_same_material
+from .geometry import StaticGeometry
 from .scattering import smm_1d as _smm_1d, smm_1d_conical as _smm_1d_conical, smm_2d as _smm_2d
 from .solve_1d import solve_1d as _solve_1d, solve_1d_conical as _solve_1d_conical
 from .solve_2d import solve_2d as _solve_2d
@@ -40,10 +40,6 @@ class CoreSolveMixin:
 
     _frozen_geometry = None
 
-    def _same_material(self):
-        g = self._frozen_geometry
-        return None if g is None else g.same_material
-
     def _finish(self, out):
         """Store the field-reconstruction state and return just the result mapping."""
         self.layer_info_list = out.pop('layer_info_list')
@@ -56,7 +52,7 @@ class CoreSolveMixin:
         return self._finish(solve(
             self.pol, wavelength, kx, self.n_top, self.n_bot, self.theta, self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
-            same_material=self._same_material(), full=True))
+            full=True))
 
     def solve_1d_conical(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
         solve = self._solve_fn('conical')
@@ -64,7 +60,7 @@ class CoreSolveMixin:
         return self._finish(solve(
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi, self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
-            same_material=self._same_material(), full=True))
+            full=True))
 
     def solve_2d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None):
@@ -74,7 +70,7 @@ class CoreSolveMixin:
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi, self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
-            same_material=self._same_material(), full=True))
+            full=True))
 
 
 class CoreFactorizationMixin:
@@ -98,9 +94,10 @@ class CoreFactorizationMixin:
     def freeze_geometry(self, **kwargs):
         """Take this structure's discrete geometry decisions once, eagerly.
 
-        Runs the factorization on the current (concrete) ``ucell`` to capture the
-        same-material flags, plus whatever the active Fourier strategy needs. Hand the result
-        back to :meth:`conv_solve` as ``geometry=`` to make the call traceable.
+        Captures whatever the active Fourier strategy decides from the concrete ``ucell``.
+        Hand the result back to :meth:`conv_solve` as ``geometry=`` to make the call
+        traceable. A DFS build decides nothing, so its frozen geometry is empty — passing it
+        is still what keeps ``conv_solve`` off the eager path.
         """
         [setattr(self, k, v) for k, v in kwargs.items()]
         fto_x, fto_y = self.fto[0], self.fto[1]
@@ -115,11 +112,13 @@ class CoreFactorizationMixin:
                                for i in range(self.ucell.shape[0])]
 
         geometry = StaticGeometry(normal_field=normal_field, compression=compression)
-        epx = self._conv_matrices(geometry)[0]
         if self._modeling_type_assigned == 1:
+            # The vector modeler records its plans while it builds, so run the build once to
+            # get them. The other paths decide nothing here, and used to pay for this call
+            # only because the same-material detector read its output.
+            self._conv_matrices(geometry)
             geometry.vector_grid = self.modeler.grid_plans
             geometry.shape_choices = self.modeler.shape_choices
-        geometry.same_material = detect_same_material(epx, self.n_bot)
         return geometry
 
     def conv_solve(self, geometry=None, **kwargs):

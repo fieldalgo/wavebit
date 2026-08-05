@@ -215,25 +215,21 @@ def test_9_vector_modeling_period():
     print("SUCCESS: Test 9 Passed!\n")
 
 
-def test_10_same_material_needs_uniformity():
+def test_10_shared_mean_permittivity_keeps_the_interface():
     print("==================================================")
-    print("Test 10: Same-Material Detection Requires Uniformity")
+    print("Test 10: Layers Sharing a Mean Permittivity Keep Their Interface")
     print("==================================================")
 
-    # Two differently patterned layers that happen to share an average permittivity. The
-    # detection used to compare only that average (the DC coefficient), flag the upper layer
-    # as identical to the one below, and skip the interface between them -- which cost this
-    # lossless stack its energy conservation by ~50x.
+    # Two differently patterned layers that happen to share an average permittivity. A
+    # short-circuit used to compare only that average (the DC coefficient), flag the upper
+    # layer as identical to the one below, and skip the interface between them -- which cost
+    # this lossless stack its energy conservation by ~50x. The short-circuit is gone entirely
+    # now, so nothing can skip an interface; this holds the energy statement that caught it.
     UC = np.array([[[3., 3., 1., 1.], [1., 3., 3., 1.],
                     [1., 1., 3., 3.], [3., 1., 1., 3.]]])
     option = dict(
         ucell=np.concat([UC, UC[:, ::-1]]), thickness=[0.2, 0.3], n_top=1.0, n_bot=1.0,
         psi=0.4, wavelength=0.5, period=[0.6, 0.6], theta=0.1, phi=0.0, fto=[2, 2])
-
-    solver = fieldwave.rcwa(backend=0, **option)
-    flags = solver.freeze_geometry().same_material
-    print(f"same_material flags = {flags} (both layers are patterned)")
-    assert not any(flags), f"patterned layer flagged as same-material: {flags}"
 
     for algo in ('TMM', 'SMM'):
         res = fieldwave.rcwa(backend=0, connecting_algo=algo, **option).conv_solve()
@@ -253,7 +249,7 @@ if __name__ == "__main__":
     test_7_none_theta_handling()
     test_8_torch_ucell_numpy_ndarray()
     test_9_vector_modeling_period()
-    test_10_same_material_needs_uniformity()
+    test_10_shared_mean_permittivity_keeps_the_interface()
     print("==================================================")
     print("ALL FIXES VERIFICATION TESTS PASSED SUCCESSFULLY! ")
     print("==================================================")

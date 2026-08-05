@@ -44,7 +44,7 @@ CASES = [
      1.0, 1.0, 0.9, [0.7], [5, 0], 0.0),
     ('te_oblique_lossy', 0, [[[3., 3., 3., 1., 1., 1.]]], [0.2], 1.0, 1.5, 0.777, [0.77], [6, 0], 0.3),
     ('tm_oblique_lossy', 1, [[[3., 3., 3., 1., 1., 1.]]], [0.2], 1.0, 1.5, 0.777, [0.77], [6, 0], 0.3),
-    # bottom layer uniform and equal to the substrate (n_bot=1) -> same-material short-circuit
+    # bottom layer uniform and equal to the substrate (n_bot=1): a matched interface
     ('te_same_material', 0, [[[3., 3., 1., 1., 3., 1.]], [[1., 1., 1., 1., 1., 1.]]], [0.2, 0.1],
      1.0, 1.0, 0.9, [0.7], [5, 0], 0.0),
     ('tm_same_material', 1, [[[3., 3., 1., 1., 3., 1.]], [[1., 1., 1., 1., 1., 1.]]], [0.2, 0.1],
@@ -98,9 +98,6 @@ def test_core_gradient_jax_torch_fd(pol):
 
     ucell = np.array([[[3., 3., 3., 1., 1., 1.]]])
     (_, _), inp = _run_and_inputs(pol, ucell, [0.15], 2.0, 1.0, 0.777, [0.77], [6, 0], 0.3)
-    # Under autodiff the conv matrices are abstract tracers, so the same-material decision
-    # must come from static geometry (this single layer is not substrate-matched).
-    inp['same_material'] = [False]
     # perturb epx (TM couples through it; TE is unaffected -> use epy for TE)
     key = 'epy_conv_all' if pol == 0 else 'epx_conv_all'
     base = np.array(inp[key])
@@ -210,7 +207,6 @@ def test_conical_gradient_jax_torch_fd():
     ucell = np.array([[[3., 3., 3., 1., 1., 1.]]])
     (_, _), inp = _run_and_inputs_conical(
         ucell, [0.15], 2.0, 1.0, 0.777, [0.77], [6, 0], 0.2, 0.3, 0.4)
-    inp['same_material'] = [False]
     key = 'epx_conv_all'
     base = np.array(inp[key])
     direction = np.real(base).copy()

@@ -29,42 +29,6 @@ def _diag(xp, v):
     return xp.diag(v)
 
 
-def _diagonal(xp, M):
-    """Extract the diagonal of a 2D matrix as a 1D vector (Array-API standard)."""
-    return xp.linalg.diagonal(M)
-
-
-def uniform_eps(xp, conv, rtol=1e-3, atol=1e-8):
-    """The single permittivity of a *uniform* layer, or ``None`` if it is patterned.
-
-    A uniform layer has no structure to transform, so its convolution matrix is exactly
-    ``eps * I`` in every factorization. Testing the whole matrix is the point: the mean of the
-    diagonal alone is the DC coefficient, which two differently patterned layers can share, and
-    reading that as "same material" would skip an interface that is really there.
-    """
-    eps = xp.mean(_diagonal(xp, conv))
-    I = xp.astype(xp.eye(conv.shape[0]), conv.dtype)
-    if bool(xp.max(xp.abs(conv - eps * I)) <= atol + rtol * xp.abs(eps)):
-        return eps
-    return None
-
-
-def _same_material(xp, layer_eps, eps_below, rtol, atol=1e-8):
-    """``allclose``-equivalent test for the same-material short-circuit.
-
-    Both arguments come from :func:`uniform_eps`, so ``None`` means "patterned" and can never
-    match: the short-circuit propagates the layer without matching an interface, which is only
-    valid when this layer and the medium below share their mode basis.
-
-    Stays on array ops and narrows to a Python bool only at the end. Converting the value with
-    ``complex()`` instead would break under ``jax.grad``: its tracers support ``__bool__``
-    (the primal is concrete there) but not ``__complex__``.
-    """
-    if layer_eps is None or eps_below is None:
-        return False
-    return bool(xp.abs(layer_eps - eps_below) <= atol + rtol * xp.abs(eps_below))
-
-
 def _block(xp, rows):
     """Assemble a block matrix from a 2D list of blocks (Array-API stand-in for ``np.block``).
 
@@ -144,7 +108,7 @@ def sp_modes_1d_conical(xp, F_c, F_s, W1, W2, V_11, V_12, V_21, V_22):
 
 def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
-             same_material=None, same_material_rtol=1e-3, full=False):
+             full=False):
     """Solve a 1D grating stack for reflection/transmission diffraction efficiency.
 
     Args:
@@ -156,15 +120,6 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
         thickness: per-layer thicknesses, top-to-bottom (``ucell``/first-axis order).
         epx_conv_all, epy_conv_all, epz_conv_i_all: per-layer convolution matrices,
             indexed ``[layer]`` on the first axis, as produced by the factorization stage.
-        same_material: optional per-layer bool sequence marking layers that are uniform and
-            of the same material as the medium just below. Sharing a mode basis with what is
-            underneath makes that interface's ``a`` exactly ``I``, so the flag saves one
-            matrix inverse — and only that. It does not license skipping the layer. This is a
-            discrete *geometry* fact, so supplying it keeps the solve traceable/jittable under
-            JAX autodiff. When ``None`` it is auto-detected from the (concrete) convolution
-            matrices — the eager NumPy path; do not rely on auto-detection while
-            differentiating w.r.t. the permittivity, where the matrices are abstract tracers.
-        same_material_rtol: tolerance for the auto-detection above.
 
     Returns:
         ``(de_ri, de_ti)`` — reflected / transmitted efficiency per order, shape ``(1, ff)``.
@@ -201,15 +156,6 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     F = I
     T = I
 
-    # eps of the medium just below the current layer; drives the same-material short-circuit.
-    # `n_bot**2` is the same map the layer builders use (`e^{-iwt}`, no conjugation on the way
-    # in) -- seeding it conjugated meant an absorbing substrate never matched an identical
-    # bottom layer, so the short-circuit silently never fired there. Kept a plain scalar.
-    # Only the auto-detection branch reads it, and `complex(n_bot)` needs a concrete n_bot --
-    # so skip the seed entirely when the flags come in frozen, keeping the solve traceable.
-    eps_below = (None if same_material is not None
-                 else xp.asarray(complex(n_bot) ** 2, dtype=C))
-
     # --- stage 2: per-layer eig + transfer coupling (transfer_1d_2 / transfer_1d_3) ----
     layer_info_list = []
     n_layers = len(thickness) if not hasattr(thickness, 'shape') else thickness.shape[0]
@@ -221,32 +167,15 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
 
         W, V, q = layer_modes_1d(xp, pol, kx, I, epx_conv, epy_conv, epz_conv_i, C)
 
-        # Same-material short-circuit. A uniform layer of the medium below has diagonal
-        # eps_conv ~= eps_below * I. The decision is discrete geometry: take it from the
-        # supplied flags when given (keeps the trace intact under autodiff), else auto-detect
-        # from the concrete matrices (eager NumPy path -> legacy parity).
-        if same_material is None:
-            layer_eps = uniform_eps(xp, epx_conv, same_material_rtol)
-            is_same = _same_material(xp, layer_eps, eps_below, same_material_rtol)
-            eps_below = layer_eps
-        else:
-            is_same = bool(same_material[layer_index])
-
         X = _diag(xp, xp.exp(-k0 * q * d))
         W_i = xp.linalg.inv(W)
         V_i = xp.linalg.inv(V)
         b = 0.5 * (W_i @ F - V_i @ G)
 
-        # Same-material short-circuit: sharing modes with the medium below makes ``a``
-        # exactly ``I``, so what it saves is one inverse -- and nothing else. ``b`` still has
-        # to be carried: it is the *lower stack's* reflection expressed in those shared modes,
-        # and it vanishes only when that stack is itself reflectionless (a matching substrate,
-        # or another same-material layer above one). Forcing ``b = 0`` regardless dropped this
-        # layer's thickness out of ``F``/``G`` entirely -- two identical layers on a different
-        # substrate reflected as though the upper one were not there (0.0735 against an Airy
-        # oracle's 0.0338) -- and storing ``a_i = 0`` alongside it zeroed the reconstructed
-        # field everywhere below, through ``T_layer = A_i @ X @ T_layer``.
-        a_i = I if is_same else xp.linalg.inv(0.5 * (W_i @ F + V_i @ G))
+        # A layer of the same material as the medium below shares its mode basis, which makes
+        # `a` exactly I -- there used to be a branch substituting that and skipping this
+        # inverse. It bought one inverse and it is gone; see the module docstring.
+        a_i = xp.linalg.inv(0.5 * (W_i @ F + V_i @ G))
 
         Y = X @ b @ a_i @ X
         F = W @ (I + Y)
@@ -297,7 +226,7 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
 
 def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
                      epx_conv_all, epy_conv_all, epz_conv_i_all,
-                     same_material=None, same_material_rtol=1e-3, full=False):
+                     full=False):
     """Solve a general 1D grating (arbitrary azimuth/polarization) for the given ``psi``.
 
     The conical case couples the s and p polarizations, so the per-layer modes and the
@@ -337,10 +266,6 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     big_G = _block(xp, [[-1j * Kz_bot, O], [O, I]])
     big_T = xp.astype(xp.eye(2 * ff_xy), C)
 
-    # See solve_1d: only auto-detection reads this, and it needs a concrete n_bot.
-    eps_below = (None if same_material is not None
-                 else xp.asarray(complex(n_bot) ** 2, dtype=C))
-
     # --- stage 2/3: per-layer eig + coupled s/p transfer (conical_2 / conical_3) --------
     Kx = _diag(xp, kx)
     ky_vec = ky[0] * xp.astype(xp.ones((ff_x,)), C)      # ff_y == 1: Ky = diag(ky0 * 1)
@@ -361,13 +286,6 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
         W1, W2, q1, q2, V_11, V_12, V_21, V_22 = layer_modes_1d_conical(
             xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C)
 
-        if same_material is None:
-            layer_eps = uniform_eps(xp, epx_conv, same_material_rtol)
-            is_same = _same_material(xp, layer_eps, eps_below, same_material_rtol)
-            eps_below = layer_eps
-        else:
-            is_same = bool(same_material[layer_index])
-
         X_1 = _diag(xp, xp.exp(-k0 * q1 * d))
         X_2 = _diag(xp, xp.exp(-k0 * q2 * d))
         big_I = xp.astype(xp.eye(2 * ff_xy), C)
@@ -383,8 +301,7 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
         big_W_i = xp.linalg.inv(big_W)
         big_V_i = xp.linalg.inv(big_V)
         big_B = 0.5 * (big_W_i @ big_F - big_V_i @ big_G)
-        # See solve_1d: `a` is exactly I here, and that is the whole of the short-circuit.
-        big_A_i = big_I if is_same else xp.linalg.inv(0.5 * (big_W_i @ big_F + big_V_i @ big_G))
+        big_A_i = xp.linalg.inv(0.5 * (big_W_i @ big_F + big_V_i @ big_G))
 
         Y = big_X @ big_B @ big_A_i @ big_X
         big_F = big_W @ (big_I + Y)

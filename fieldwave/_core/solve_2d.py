@@ -13,7 +13,7 @@ versions, so this module reuses ``solve_1d``'s boundary init and ``final_matchin
 """
 from .backend import array_namespace, as_array, eig
 from .conventions import boundary_kz, mode_q
-from .solve_1d import _block, _diag, _same_material, final_matching, uniform_eps
+from .solve_1d import _block, _diag, final_matching
 
 
 def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epyx_conv, C):
@@ -76,7 +76,7 @@ def sp_modes_2d(xp, W, V, F_c, F_s, ff_xy):
 def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
              epxy_conv_all=None, epyx_conv_all=None,
-             same_material=None, same_material_rtol=1e-3, full=False):
+             full=False):
     """Solve a 2D grating stack for the given ``psi`` incidence.
 
     See :func:`fieldwave._core.solve_1d.solve_1d` for the shared argument conventions. ``kx`` /
@@ -116,9 +116,6 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     big_G = _block(xp, [[-1j * Kz_bot, O], [O, I]])
     big_T = xp.astype(xp.eye(2 * ff_xy), C)
 
-    # See solve_1d: only auto-detection reads this, and it needs a concrete n_bot.
-    eps_below = (None if same_material is not None
-                 else xp.asarray(complex(n_bot) ** 2, dtype=C))
 
     # Kx = diag(tile(kx, ff_y)) ; Ky = diag(tile(ky[:,None], ff_x)) — Array-API broadcast form.
     kx_full = xp.reshape(xp.broadcast_to(kx[None, :], (ff_y, ff_x)), (-1,))
@@ -143,13 +140,6 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
         W, V, q = layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i,
                                  epxy_conv, epyx_conv, C)
 
-        if same_material is None:
-            layer_eps = uniform_eps(xp, epx_conv, same_material_rtol)
-            is_same = _same_material(xp, layer_eps, eps_below, same_material_rtol)
-            eps_below = layer_eps
-        else:
-            is_same = bool(same_material[layer_index])
-
         q_1 = q[:ff_xy]
         q_2 = q[ff_xy:]
         X_1 = _diag(xp, xp.exp(-k0 * q_1 * d))
@@ -161,8 +151,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
         big_W_i = xp.linalg.inv(big_W)
         big_V_i = xp.linalg.inv(big_V)
         big_B = 0.5 * (big_W_i @ big_F - big_V_i @ big_G)
-        # See solve_1d: `a` is exactly I here, and that is the whole of the short-circuit.
-        big_A_i = big_I if is_same else xp.linalg.inv(0.5 * (big_W_i @ big_F + big_V_i @ big_G))
+        big_A_i = xp.linalg.inv(0.5 * (big_W_i @ big_F + big_V_i @ big_G))
 
         Y = big_X @ big_B @ big_A_i @ big_X
         big_F = big_W @ (big_I + Y)
