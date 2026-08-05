@@ -9,8 +9,10 @@ The reference is itself checked (``test_reference_agrees_where_the_solver_is_kno
 on lossless stacks and on lossy *layers*, where solver and analytic agree to ~1e-16 for TE and
 TM at normal and oblique incidence.
 
-What it pins: every boundary quantity must enter in the same (conjugated) convention the
-layers do. Two places did not.
+What it pins: every quantity must enter in the same convention the layers do — boundaries and
+Fourier builders alike. Three places did not. The first two are stated in the pre-2026-08
+conjugated formulation, which is what the code ran on when they were found (see
+``_core.conventions`` for what replaced it).
 
 * The substrate permittivity was raw ``n_bot**2``, so the stack reflected as though the
   substrate were ``conj(n_bot)`` — absorbing read as gain. Only the reflection *phase* was
@@ -19,8 +21,13 @@ layers do. Two places did not.
 * ``kz_top`` paired a raw ``n_top**2`` with an already-conjugated ``kx``, and the incident-field
   coefficients used a raw ``n_top``. With an absorbing superstrate the reflected amplitude was
   wrong outright — by ~1% at normal incidence and by more than the amplitude itself at oblique.
+* The analytic (shape-based) Fourier builder kept conjugating after the seam was removed, so an
+  absorbing *layer* built that way came out as gain — R + T above 1, and ~9% on the reflectance
+  of a single gold film. Hence ``test_absorbing_layer_via_the_analytic_path`` below: the raster
+  builder was already covered here, the analytic one was not covered anywhere.
 
-Real indices were never affected by either, which is why both survived every lossless test.
+Real indices were never affected by any of them, which is why all three survived every
+lossless test.
 
 For an absorbing superstrate the *amplitude* is the meaningful check: incident power in an
 absorbing medium is convention-dependent, so ``de_ri`` there is not compared to anything.
@@ -189,6 +196,49 @@ def test_absorbing_layer_identical_to_its_substrate(pol, theta):
 
     assert float(np.sum(forced.de_ri)) == pytest.approx(want, abs=1e-12)
     assert float(np.sum(smm.de_ri)) == pytest.approx(want, abs=1e-12)
+
+
+def solver_R_analytic(ns, thicknesses, wavelength, theta, pol):
+    """Total reflectance of the same stack built through the ANALYTIC path.
+
+    ``shapes=[]`` makes each layer uniform ``n_base``, so the structure is identical to the one
+    ``solver_RT`` rasters — only the ``n -> eps`` builder differs. That routes through the 2D
+    solve (the analytic path always does), so the polarization comes in as ``psi`` rather than
+    ``pol``, and the period must be 2D.
+    """
+    ucell = [dict(n_base=n, shapes=[]) for n in ns[1:-1]]
+    solver = fieldwave.rcwa(backend=0, n_top=ns[0], n_bot=ns[-1], theta=theta, phi=0.0,
+                            psi=(np.pi / 2 if pol == 0 else 0.0), fto=0,
+                            wavelength=wavelength, period=[wavelength * 2, wavelength * 2],
+                            ucell=ucell, thickness=thicknesses)
+    return float(np.sum(np.asarray(solver.conv_solve().de_ri)).real)
+
+
+ANALYTIC_CASES = KNOWN_GOOD + LOSSY_SUBSTRATE
+
+
+@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
+@pytest.mark.parametrize('case', ANALYTIC_CASES, ids=[c[0] for c in ANALYTIC_CASES])
+def test_absorbing_layer_via_the_analytic_path(case, pol, theta):
+    """The analytic builder must land on the same physics as the raster one, for complex ``n``.
+
+    The analytic path had no complex-index coverage at all: ``tests_verification/test_analytic``
+    was entirely real, where ``conj(n)**2 == n**2``. Running the *uniform* stack through it puts
+    it against the absolute oracle rather than against another solver — gold as a layer landed
+    ~9% off here and tripped the ``R + T > 1`` guard, because the conjugation turned it into a
+    gain medium. Nothing about the shape machinery is exercised; the ``n -> eps`` convention is
+    the entire point.
+
+    Uniform layers are also the only place the two builders can be held to 1e-12 against each
+    other. Put a *patterned* absorbing structure through both and they disagree by ~3e-3 at
+    ``fto=8`` — not a convention difference but the two NVF factorizations converging to each
+    other slowly when ``|eps|`` is large.
+    """
+    _, ns, ds = case
+    want = abs(analytic_r(ns, ds, WL, theta, pol)) ** 2
+    got = solver_R_analytic(ns, ds, WL, theta, pol)
+    assert got == pytest.approx(want, abs=1e-12)
+    assert got == pytest.approx(solver_R(ns, ds, WL, theta, pol), abs=1e-12)   # == raster
 
 
 @pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])

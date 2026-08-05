@@ -118,14 +118,15 @@ def assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype):
     """Analytic Fourier coefficients of ``eps`` and ``1/eps`` for one layer.
 
     Each grid has shape ``(4*fto_y+1, 4*fto_x+1)``, indexed ``[ky+2*fto_y, kx+2*fto_x]`` — the
-    doubled range a ``(2*fto+1)**2`` Laurent matrix needs. ``conj(n)**2`` maps index to
-    permittivity under the ``e^{-iwt}`` convention.
+    doubled range a ``(2*fto+1)**2`` Laurent matrix needs. The ``n**2`` maps refractive index
+    to permittivity: FieldWave works in ``e^{-iwt}`` throughout (``Im(n) > 0`` = loss), with no
+    conjugation on the way in.
     """
     dev = getattr(n_base, 'device', None) if hasattr(n_base, 'device') else None
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
     KKY, KKX = _grid(xp, fto_x, fto_y, dev, real_dtype)
 
-    eps_bg = xp.conj(as_array(xp, n_base, dtype=dtype)) ** 2
+    eps_bg = as_array(xp, n_base, dtype=dtype) ** 2
     inv_bg = 1.0 / eps_bg
 
     # DC term only: the background is constant over the whole cell.
@@ -135,7 +136,7 @@ def assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype):
     inv_eps_c = xp.where(is_dc, inv_bg, zero)
 
     for shape in shapes:
-        eps_s = xp.conj(as_array(xp, shape['n_index'], dtype=dtype)) ** 2
+        eps_s = as_array(xp, shape['n_index'], dtype=dtype) ** 2
         ft = xp.astype(shape_ft(xp, shape, KKY, KKX, period), dtype)
         eps_c = eps_c + (eps_s - eps_bg) * ft
         inv_eps_c = inv_eps_c + (1.0 / eps_s - inv_bg) * ft

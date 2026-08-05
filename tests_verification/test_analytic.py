@@ -1,11 +1,13 @@
 """
 Verification tests for the ANALYTIC (staircase-free) modeling path.
 
-Covers: Fourier-coefficient convention vs dfs2d, analytic formulas vs a fine
-midpoint DFT, axis-aligned equivalence with the raster-NVF path, energy conservation,
-cross-backend agreement, differentiability, and the convergence advantage over the
-staircase path.
+Covers: Fourier-coefficient convention vs dfs2d, the ``n -> eps`` convention under complex
+indices, analytic formulas vs a fine midpoint DFT, axis-aligned equivalence with the
+raster-NVF path, energy conservation, cross-backend agreement, differentiability, and the
+convergence advantage over the staircase path.
 """
+import warnings
+
 import numpy as np
 import pytest
 
@@ -14,6 +16,7 @@ import array_api_compat.numpy as xnp
 from fieldwave._core.analytic import (
     shape_ft as _shape_ft, laurent_conv_2d as _laurent_conv_2d,
     assemble_eps_coeffs as _assemble_eps_coeffs, to_conv_mat_analytic_nvf)
+from fieldwave._core.backend import UnphysicalResultWarning
 from fieldwave._core.factorization import dfs2d as _dfs2d
 
 
@@ -41,7 +44,7 @@ def to_conv_mat_analytic(shapes, n_base, fto_x, fto_y, period):
 
 
 # ----------------------------------------------------------------------
-# 1. laurent_conv_2d builds the exact same ordering as dfs2d
+# 1. coefficient-builder conventions: ordering, and n -> eps
 # ----------------------------------------------------------------------
 def test_laurent_matches_dfs2d_convention():
     rng = np.random.default_rng(0)
@@ -58,6 +61,43 @@ def test_laurent_matches_dfs2d_convention():
     M_lau = laurent_conv_2d(coeff2d, fto_x, fto_y)
 
     assert np.abs(M_dfs - M_lau).max() < 1e-12
+
+
+@pytest.mark.parametrize('where', ['n_base', 'n_index'])
+def test_complex_index_is_loss_not_gain(where):
+    """``Im(n) > 0`` must come out as ``Im(eps) > 0``, on both the background and the shape.
+
+    The builder conjugated on the way in (``conj(n)**2``), which is the convention
+    ``_core/conventions.py`` says FieldWave removed -- so an absorbing index became a gain
+    medium, and only on this path: the raster builder (``factorization._layer_eps``) always
+    used a raw ``n**2``. Nothing caught it because every case in this file was real, where
+    ``conj(n)**2 == n**2``.
+
+    The check is on the DC coefficient, which for a uniform background *is* ``eps``, and for a
+    shape covering a known area fraction is the exact ``eps`` average. Sign of the imaginary
+    part is the whole claim; the magnitude is there so a stray ``abs`` could not pass it.
+    """
+    N_METAL = 0.05 + 3.5j                       # a metal: conj() flips it to gain
+    eps_metal = N_METAL ** 2                    # (0.0025 - 12.25) + 0.35j -- Im > 0 is loss
+    fto_x = fto_y = 2
+    period = (1.0, 1.0)
+    dc = (2 * fto_y, 2 * fto_x)                 # [ky+2*fto_y, kx+2*fto_x] at ky = kx = 0
+
+    if where == 'n_base':
+        eps_c, inv_c = assemble_eps_coeffs([], N_METAL, fto_x, fto_y, period)
+        assert complex(eps_c[dc]) == pytest.approx(eps_metal, rel=1e-14)
+        assert complex(inv_c[dc]) == pytest.approx(1.0 / eps_metal, rel=1e-14)
+    else:
+        # A square of side 1/2 covers a quarter of the cell, so the DC term is the exact
+        # area-weighted mean and the shape's contribution is separable from the background's.
+        shape = dict(type='rectangle', cx=0.5, cy=0.5, lx=0.5, ly=0.5, angle=0.0,
+                     n_index=N_METAL)
+        eps_c, inv_c = assemble_eps_coeffs([shape], 1.0, fto_x, fto_y, period)
+        assert complex(eps_c[dc]) == pytest.approx(1.0 + 0.25 * (eps_metal - 1.0), rel=1e-12)
+        assert complex(inv_c[dc]) == pytest.approx(1.0 + 0.25 * (1.0 / eps_metal - 1.0),
+                                                   rel=1e-12)
+
+    assert complex(eps_c[dc]).imag > 0          # loss, not gain
 
 
 # ----------------------------------------------------------------------
@@ -127,6 +167,38 @@ def test_axis_aligned_matches_raster_nvf():
         want = total(analytic, psi)
         assert abs(total(ras, psi, fourier_type=2) - want) < 1e-3      # raster NVF
         assert abs(total(ras, psi, fourier_type=0) - want) < 2e-3      # raster DFS
+
+
+@pytest.mark.parametrize('psi', [np.pi / 2, 0.0], ids=['te', 'tm'])
+def test_metal_rod_absorbs_end_to_end(psi):
+    """A metal rod through the whole solve must absorb, not amplify.
+
+    The coefficient test above pins ``n -> eps``; this pins that nothing downstream undoes it.
+    ``conj(n)**2`` turned this rod into a gain medium, and a passive stack that returns
+    ``R + T > 1`` is exactly what ``check_physical`` exists to catch — so the warning being
+    absent is as much the assertion as the number is.
+
+    Why this rather than a comparison against the same rod rastered: the two NVF schemes do not
+    agree closely for a metal. Their gap here is ~3e-3 on ``sum(de_ti)`` at ``fto=8`` and does
+    not shrink when the raster is refined (128 -> 256 moves it by 1%), because they are
+    different factorizations that meet only as ``fto -> inf``, and ``|eps|`` this large converges
+    slowly. A tolerance loose enough to pass would be looser than the effect being guarded.
+    The tight cross-path statement lives in ``test_lossy_media`` instead, on uniform layers
+    where an absolute oracle exists.
+    """
+    P, L = 0.77, 0.5
+    NR = 0.05 + 3.5j                                   # metal rod: conj() would make it gain
+    ucell = [dict(n_base=1.0, shapes=[dict(type='rectangle', cx=0.5 * P, cy=0.5 * P,
+                                           lx=L * P, ly=L * P, angle=0.0, n_index=NR)])]
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', UnphysicalResultWarning)
+        res = fieldwave.rcwa(backend=0, ucell=ucell, psi=psi, n_top=1.0, n_bot=1.5,
+                             theta=0.35, phi=0.4, period=(P, P), wavelength=0.777,
+                             thickness=(0.25,), fto=(8, 8)).conv_solve()
+
+    total = float(np.sum(np.asarray(res.de_ri)).real + np.sum(np.asarray(res.de_ti)).real)
+    assert 0.5 < total < 0.95, total       # absorbing, and absorbing by a visible margin
 
 
 def test_analytic_shape_parameters_are_absolute_lengths():
