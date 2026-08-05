@@ -39,7 +39,7 @@ cd fieldwave
 pip install -e .
 ```
 
-The base install needs only Python ≥ 3.10, NumPy ≥ 2.2, SciPy ≥ 1.15 and array-api-compat.
+The base install needs only Python ≥ 3.10, NumPy ≥ 2.3.1, SciPy ≥ 1.15 and array-api-compat.
 JAX and PyTorch are optional and bring autodiff and GPU support:
 
 ```shell
@@ -54,10 +54,11 @@ conda env create -f environment.yml   # run from the repo root
 conda activate fieldwave
 ```
 
-> On NumPy 2.2.x the solver's matrix products print spurious
-> `RuntimeWarning: divide by zero / overflow / invalid value encountered in matmul`.
-> The results are unaffected — it is a NumPy bug, not a failed solve — and it does not
-> occur on NumPy 2.5 and later.
+> The NumPy floor is deliberately high. NumPy 2.2.5 through 2.3.0 mis-report the FP status
+> of a complex `matmul`, so a single solve can print hundreds of
+> `RuntimeWarning: overflow / divide by zero / invalid value encountered in matmul`
+> while returning correct efficiencies. 2.3.1 is silent on byte-identical inputs, so the
+> floor is the fix rather than a suppression inside the library.
 
 ## Quickstart
 
@@ -238,6 +239,13 @@ The physics is checked against references, not only against itself:
 
 The suite lives in [`tests_verification/`](tests_verification) and runs in CI on every push;
 [`QA/`](QA) holds the longer-running scripts that are not part of it.
+
+Every solve also checks what it is about to hand back. A NaN or infinity in `de_ri` / `de_ti`
+raises `FloatingPointError` naming the contaminated array; a result that stayed finite but
+cannot be physical — a negative efficiency, or R+T above 1 out of a passive stack — warns
+`UnphysicalResultWarning`. Both are eager-NumPy only, so JAX and PyTorch tracing is untouched.
+If you are modelling gain (`Im(n) < 0` here), R+T above 1 is correct and the warning is a
+false positive — filter that category.
 
 ## Tutorials
 
