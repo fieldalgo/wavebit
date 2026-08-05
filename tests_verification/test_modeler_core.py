@@ -403,3 +403,41 @@ def test_vector_path_differentiates_wrt_edge_positions(backend, name):
 
     assert auto != 0.0
     assert abs(auto - fd) / abs(fd) < 1e-4, (auto, fd)
+
+
+@pytest.mark.parametrize('pol,name', [(0, 'TE'), (1, 'TM')])
+def test_the_staircase_costs_a_kink_at_an_aligned_angle(pol, name):
+    """What the rewrite did *not* fix, pinned so nobody reads the missing margin as a fix.
+
+    A staircase and a smoothly tilted boundary do not share Fourier coefficients at a finite
+    harmonic count, and the gap goes like ``|angle|``: the efficiency falls off its aligned
+    value at the same rate on both sides, so the two one-sided slopes are equal and opposite
+    instead of equal. Adding blocks does not help — the coefficient is flat in ``n_split`` —
+    which is the whole reason an angle fit near normal belongs on the analytic path.
+
+    Checked in pure polarizations. At ``pol=0.5`` the TE and TM amplitudes interfere and the
+    cross term is genuinely odd in the angle, which hides this under a real first-order term;
+    measuring there is what made it look absent.
+    """
+    cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
+               wavelength=900.0, pol=pol, theta=0.0, phi=0.0)
+
+    def de_ti(angle, n_split):
+        ucell = [[3.5, [['rectangle', 150.0, 150.0, 80.0, 60.0, 2.0, angle, n_split, n_split]]]]
+        return float(np.sum(np.asarray(
+            fieldwave.rcwa(backend=0, ucell=ucell, **cfg).conv_solve().de_ti)))
+
+    step = 1e-4
+    at_zero = de_ti(0.0, 64)
+    right = (de_ti(step, 64) - at_zero) / step
+    left = (at_zero - de_ti(-step, 64)) / step
+
+    # Even in the angle, to numerical noise: the two sides are mirror images of one structure.
+    assert de_ti(step, 64) == pytest.approx(de_ti(-step, 64), abs=1e-11), name
+    # ... which is exactly why equal-and-opposite one-sided slopes mean a kink, not a slope.
+    assert right == pytest.approx(-left, rel=1e-6), (left, right)
+    assert abs(right) > 0.1, right
+
+    # Flat in n_split: more blocks resolve the shape, not the factorization.
+    coarse = (de_ti(0.0, 16) - de_ti(step, 16)) / step
+    assert coarse == pytest.approx(-right, rel=0.02), (coarse, right)

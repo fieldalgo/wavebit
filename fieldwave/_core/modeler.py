@@ -345,8 +345,19 @@ class Modeling:
         sides swapped — which is what keeps ``cos(phi)`` away from zero, and each chord edge is
         the narrower of two strips chosen by a comparison with the divisions cleared, so the
         strip whose coefficient vanishes at an aligned angle is never the one divided by. There
-        is nothing left to guard, and ``angle_margin`` is accepted for call compatibility and
-        ignored.
+        is no division left to guard, and ``angle_margin`` is accepted for call compatibility
+        and ignored.
+
+        **This does not make the path fit a sidewall angle near normal.** A staircase and a
+        smoothly tilted boundary do not have the same Fourier coefficients at a finite harmonic
+        count, and the difference goes like ``|angle|``: on an 80x60 rectangle in TE at
+        ``fto = [3, 3]``, ``sum(de_ti)`` falls off its aligned value at 0.59 per radian on
+        *both* sides. That coefficient is flat in ``n_split`` (0.546 at 4, 0.595 at 256) and
+        only comes down with harmonics (0.59 at ``fto`` 3, 0.16 at 12), so adding blocks cannot
+        remove it — it is the staircase's cost, not its resolution. The analytic path builds
+        the rotated shape's coefficients in closed form and is smooth through zero; measured
+        beside it, its one-sided slopes agree to 5e-4 where these differ by 1.2. Use it for
+        angle fits, as :mod:`fieldwave._core.analytic` says.
 
         That margin used to return the exact single block within ``1e-5`` of a multiple of
         ``pi/2``. Its cost was a plateau and a cliff: the efficiency was pinned to its
