@@ -1,0 +1,185 @@
+"""Diffraction orders against RETICOLO, from a checked-in golden.
+
+Every other oracle in this suite is blind to diffraction. ``test_lossy_media``'s Airy
+recursion is exact but describes uniform layers, where only the zeroth order exists; the
+legacy goldens are the previous implementation's own output, so they pin continuity rather
+than correctness. RETICOLO is the one reference here that says a grating's *orders* are
+right, and it is independent: a different group's solver, in a different language, validated
+over two decades of published work.
+
+The agreement it certifies is specific, and worth stating plainly. RETICOLO builds a binary
+grating's Fourier coefficients from the *exact* edge positions. So does the CFS path
+(``fourier_type=CONTINUOUS``), and the two land on each other at round-off — 1e-15 to 1e-13
+below. The raster DFS path (``fourier_type=DFS``) discretizes the same grating onto pixels
+instead, so it converges to the same physics down a different road: ~1e-5 at ``fto=4`` and
+still ~1e-6 at ``fto=40``. Both are correct; only one of them is comparable at machine
+precision, and pretending otherwise would mean a tolerance too loose to catch anything.
+
+The values are frozen in ``golden_reticolo.npz`` by ``gen_goldens_reticolo.py``, which needs
+Octave and RETICOLO. This file needs neither, which is the point: the evidence used to live
+in a notebook under a gitignored ``dev/`` and in ``benchmarks/``, which has no assertions and
+does not run in CI, so the strongest result the project had was also the one nothing checked.
+
+RETICOLO returns only the *propagating* orders, so the golden carries the order indices it
+reported and the comparison selects those; that the two agree on **which** orders propagate
+is itself part of the assertion.
+"""
+import pathlib
+
+import numpy as np
+import pytest
+
+import fieldwave
+from fieldwave import FourierType
+
+GOLDEN_PATH = pathlib.Path(__file__).parent / 'golden_reticolo.npz'
+
+# 1D binary grating, exact edges on both sides. `ucell` is a raster only in spelling: the CFS
+# path reads the block edges off it, and RETICOLO is handed those same edges.
+_HALF = np.array([[[3.0] * 5 + [1.0] * 5]])
+_QUARTER = np.array([[[3.5] * 3 + [1.0] * 9]])
+_TWO_LAYER = np.array([[[3.0] * 6 + [1.0] * 6], [[2.2] * 8 + [1.0] * 4]])
+
+# name -> solver kwargs. `grating_type` picks RETICOLO's branch: 0 for pure TE/TM, 1 conical.
+CASES = {
+    'te_normal': dict(pol=0, theta=0.0, phi=None, n_top=1.0, n_bot=1.5, fto=10,
+                      period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
+    'te_oblique': dict(pol=0, theta=0.2, phi=None, n_top=1.0, n_bot=1.5, fto=10,
+                       period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
+    'tm_normal': dict(pol=1, theta=0.0, phi=None, n_top=1.0, n_bot=1.5, fto=10,
+                      period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
+    'tm_oblique': dict(pol=1, theta=0.2, phi=None, n_top=1.0, n_bot=1.5, fto=10,
+                       period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
+    # A duty cycle that is not 1/2 and a higher contrast: the +-1 orders carry real power.
+    'te_quarter': dict(pol=0, theta=0.15, phi=None, n_top=1.0, n_bot=1.5, fto=12,
+                       period=[0.8], wavelength=0.7, ucell=_QUARTER, thickness=[0.25]),
+    'tm_quarter': dict(pol=1, theta=0.15, phi=None, n_top=1.0, n_bot=1.5, fto=12,
+                       period=[0.8], wavelength=0.7, ucell=_QUARTER, thickness=[0.25]),
+    # Two patterned layers: the interface between them is under test, not just the boundary.
+    'te_two_layer': dict(pol=0, theta=0.25, phi=None, n_top=1.0, n_bot=2.0, fto=10,
+                         period=[0.7], wavelength=0.85, ucell=_TWO_LAYER,
+                         thickness=[0.15, 0.22]),
+    'tm_two_layer': dict(pol=1, theta=0.25, phi=None, n_top=1.0, n_bot=2.0, fto=10,
+                         period=[0.7], wavelength=0.85, ucell=_TWO_LAYER,
+                         thickness=[0.15, 0.22]),
+    # Denser truncation, where the two solvers' round-off has the most room to diverge.
+    'te_high_order': dict(pol=0, theta=0.2, phi=None, n_top=1.0, n_bot=1.5, fto=30,
+                          period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
+    'tm_high_order': dict(pol=1, theta=0.2, phi=None, n_top=1.0, n_bot=1.5, fto=30,
+                          period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
+    # Conical (azimuth != 0) — RETICOLO's other branch, and the solver's `solve_1d_conical`.
+    'conical_te': dict(psi=np.pi / 2, theta=0.2, phi=0.3, n_top=1.0, n_bot=1.5, fto=10,
+                       period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
+    'conical_tm': dict(psi=0.0, theta=0.2, phi=0.3, n_top=1.0, n_bot=1.5, fto=10,
+                       period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
+}
+
+
+def _solve(name, backend=0):
+    kw = dict(CASES[name])
+    return fieldwave.rcwa(backend=backend, fourier_type=FourierType.CONTINUOUS,
+                          **kw).conv_solve()
+
+
+def _golden():
+    if not GOLDEN_PATH.exists():
+        pytest.skip(f'{GOLDEN_PATH.name} is missing — regenerate with gen_goldens_reticolo.py')
+    return np.load(GOLDEN_PATH)
+
+
+@pytest.mark.parametrize('name', list(CASES))
+def test_orders_match_reticolo(name):
+    """Per-order reflected and transmitted efficiency, against RETICOLO's own numbers.
+
+    ``atol=1e-11`` is round-off room, not slack: the measured disagreement across these cases
+    is 1e-15 to 1e-13, and it is bounded by how the two implementations order their
+    arithmetic rather than by any modelling choice. A wrong Fourier order-index sign — the
+    failure this oracle exists to catch, which mirrors +1 against -1 while conserving energy
+    perfectly — moves an asymmetric case by O(0.1).
+    """
+    g = _golden()
+    res = _solve(name)
+
+    for side, arr in (('ri', np.asarray(res.de_ri)), ('ti', np.asarray(res.de_ti))):
+        idx = g[f'{name}__idx_{side}']
+        want = g[f'{name}__de_{side}']
+        got = np.real(arr).ravel()[idx]
+        assert got.shape == want.shape, (name, side, got.shape, want.shape)
+        assert np.abs(got - want).max() < 1e-11, (name, side, np.abs(got - want).max())
+
+
+@pytest.mark.parametrize('name', list(CASES))
+def test_the_same_orders_propagate(name):
+    """Every order RETICOLO did *not* report must be evanescent here, and carry no power.
+
+    Without this the comparison above could pass while the solver put power into orders
+    RETICOLO says cannot propagate — the selection would simply not look at them.
+    """
+    g = _golden()
+    res = _solve(name)
+
+    for side, arr in (('ri', np.asarray(res.de_ri)), ('ti', np.asarray(res.de_ti))):
+        idx = set(g[f'{name}__idx_{side}'].tolist())
+        rest = [v for i, v in enumerate(np.real(arr).ravel()) if i not in idx]
+        assert max(abs(v) for v in rest) < 1e-12, (name, side, max(abs(v) for v in rest))
+
+
+@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+def test_reticolo_agreement_holds_on_every_backend(backend):
+    """The oracle is about the physics, so it cannot be a NumPy-only result."""
+    pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    if backend == 1:
+        import importlib
+        importlib.import_module('fieldwave.on_jax')          # enables x64
+
+    g = _golden()
+    name = 'te_oblique'
+    res = _solve(name, backend=backend)
+    for side, arr in (('ri', np.asarray(res.de_ri)), ('ti', np.asarray(res.de_ti))):
+        got = np.real(arr).ravel()[g[f'{name}__idx_{side}']]
+        assert np.abs(got - g[f'{name}__de_{side}']).max() < 1e-9
+
+
+ASYMMETRIC = ['te_quarter', 'tm_quarter', 'te_two_layer', 'tm_two_layer',
+              'te_oblique', 'tm_oblique']
+
+
+@pytest.mark.parametrize('name', ASYMMETRIC)
+def test_the_order_axis_is_not_symmetric_in_these_cases(name):
+    """Which cases can actually see a mirrored order axis — and it is not all of them.
+
+    The failure this oracle is best placed to catch is a wrong Fourier order-index sign: it
+    swaps +1 with -1, conserves energy perfectly, and is invisible to every other check here
+    (``_core.conventions`` records that RETICOLO is what found it last time). But a grating
+    that is mirror-symmetric, at normal incidence, has ``de(+m) == de(-m)`` *physically*, so
+    reversing the order axis changes nothing and the comparison passes either way.
+
+    Reversing ``de_ti`` on the four symmetric cases above moves them by ~1e-15 — nothing. On
+    these it moves them by 1e-3 to 3e-1. So the guard lives entirely in the asymmetric cases,
+    and this test says so out loud rather than leaving it to be rediscovered by someone
+    trimming the case list.
+    """
+    res = _solve(name)
+    ti = np.real(np.asarray(res.de_ti)).ravel()
+    idx = _golden()[f'{name}__idx_ti']
+    assert np.abs(ti[idx] - ti[::-1][idx]).max() > 1e-4, name
+
+
+def test_the_raster_path_is_not_held_to_this_tolerance():
+    """Say out loud what the golden does and does not cover.
+
+    The DFS path discretizes the grating onto pixels where RETICOLO and CFS use the exact
+    edges, so it approaches the same answer along a different curve — ~1e-6 at fto=30, not
+    1e-13. Pinning that here would either fail or need a tolerance five decades looser than
+    the one above, which is why the golden is a CFS statement. What can be asserted is that
+    it is converging to the same place, and this is where a break in the raster builder
+    would show against an independent reference rather than against another FieldWave path.
+    """
+    g = _golden()
+    name = 'te_high_order'
+    kw = dict(CASES[name])
+    res = fieldwave.rcwa(backend=0, fourier_type=FourierType.DFS, **kw).conv_solve()
+    got = np.real(np.asarray(res.de_ti)).ravel()[g[f'{name}__idx_ti']]
+    err = np.abs(got - g[f'{name}__de_ti']).max()
+    assert err < 1e-4, err                 # close to RETICOLO...
+    assert err > 1e-11, err                # ...but not at the CFS path's tolerance
