@@ -185,8 +185,14 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     if pol == 0:
         de_ti = xp.real(Tt * xp.conj(Tt) * xp.real(kz_bot / (n_top * cos_t)))
     else:
+        # Re(kz/eps), not Re(conj(kz)/eps): for TM the downward flux is Re(E_x H_y*) with E_x
+        # proportional to (kz/eps) H_y. The two agree for a real n_bot, which is why a stray
+        # conjugate here survived every lossless test; against an absorbing substrate it
+        # returned negative transmitted power. See `conventions`: this codebase ran on a
+        # conjugated problem until 2026-08, and this was the last boundary still on the far
+        # side of that seam.
         de_ti = xp.real(Tt * xp.conj(Tt)
-                        * xp.real(xp.conj(kz_bot) / n_bot ** 2 / (cos_t / n_top)))
+                        * xp.real(kz_bot / n_bot ** 2 / (cos_t / n_top)))
 
     check_finite(xp, de_ri=de_ri, de_ti=de_ti)
     check_physical(xp, de_ri, de_ti, n_top)

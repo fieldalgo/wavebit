@@ -76,13 +76,19 @@ def analytic_r(ns, thicknesses, wavelength, theta, pol):
     return r
 
 
-def solver_R(ns, thicknesses, wavelength, theta, pol, algo='TMM'):
-    """Total reflectance of the same stack through the solver (uniform layers, fto=0)."""
+def solver_RT(ns, thicknesses, wavelength, theta, pol, algo='TMM'):
+    """Total ``(R, T)`` of the same stack through the solver (uniform layers, fto=0)."""
     ucell = np.array([[[n, n]] for n in ns[1:-1]])
     solver = fieldwave.rcwa(backend=0, connecting_algo=algo, pol=pol, n_top=ns[0],
                            n_bot=ns[-1], theta=theta, fto=0, wavelength=wavelength,
                            period=[wavelength * 2], ucell=ucell, thickness=thicknesses)
-    return float(np.sum(solver.conv_solve().de_ri))
+    res = solver.conv_solve()
+    return float(np.sum(res.de_ri).real), float(np.sum(res.de_ti).real)
+
+
+def solver_R(ns, thicknesses, wavelength, theta, pol, algo='TMM'):
+    """Total reflectance of the same stack through the solver (uniform layers, fto=0)."""
+    return solver_RT(ns, thicknesses, wavelength, theta, pol, algo)[0]
 
 
 # name, indices, thicknesses
@@ -122,6 +128,42 @@ def test_lossy_substrate_reflection(case, pol, theta, algo):
     _, ns, ds = case
     want = abs(analytic_r(ns, ds, WL, theta, pol)) ** 2
     assert solver_R(ns, ds, WL, theta, pol, algo) == pytest.approx(want, abs=1e-12)
+
+
+@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
+@pytest.mark.parametrize('case', LOSSY_SUBSTRATE, ids=[c[0] for c in LOSSY_SUBSTRATE])
+def test_lossy_substrate_transmission_agrees_between_algorithms(case, pol, theta):
+    """``de_ti`` into an absorbing substrate, TMM against SMM.
+
+    The reflection tests above compared only ``de_ri``, and that gap hid a real break for four
+    years' worth of the SMM path: its TM branch normalized by ``Re(conj(kz_bot)/n_bot**2)``
+    where every other efficiency in the codebase uses ``Re(kz_bot/n_bot**2)``. The two are equal
+    for a real ``n_bot``, so nothing lossless could see it; against gold it returned *negative*
+    transmitted power (T = -0.263 where TMM gave +0.088).
+
+    The right factor follows from the flux itself: for TM the downward Poynting component is
+    ``Re(E_x H_y*)`` with ``E_x`` proportional to ``(kz/eps) H_y``, giving ``Re(kz/eps)``. The
+    conjugate was a leftover of the pre-2026-08 conjugated formulation (see ``conventions``).
+    """
+    _, ns, ds = case
+    tmm = solver_RT(ns, ds, WL, theta, pol, 'TMM')
+    smm = solver_RT(ns, ds, WL, theta, pol, 'SMM')
+    assert smm[0] == pytest.approx(tmm[0], abs=1e-12)
+    assert smm[1] == pytest.approx(tmm[1], abs=1e-12)
+    assert tmm[1] > 0, 'transmitted power into an absorbing substrate cannot be negative'
+
+
+@pytest.mark.parametrize('algo', ['TMM', 'SMM'])
+@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
+def test_lossless_layer_on_absorbing_substrate_conserves_energy(algo, pol, theta):
+    """``de_ti`` is the power *entering* the substrate, so nothing is lost above it.
+
+    With every layer lossless, R + T must be exactly 1 however absorbing the substrate is —
+    the sharpest available statement about ``de_ti``'s normalization, and one no reflection-only
+    test can make.
+    """
+    R, T = solver_RT([1.0, 1.5, AU], [20.0], WL, theta, pol, algo)
+    assert R + T == pytest.approx(1.0, abs=1e-12)
 
 
 @pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
