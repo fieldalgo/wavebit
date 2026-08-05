@@ -36,8 +36,16 @@ trace. Each is therefore split into an eager step that yields a static descripti
 (:func:`normal_field_for_ucell`, :func:`compression_indices`) and a differentiable step that
 consumes it. Pass those precomputed descriptions to stay traceable; the permittivity riding on
 top of them is what gradients see.
+
+A precomputed description belongs to the structure it was taken on. Replaying one onto a
+raster whose *pattern* has moved describes a layer that is no longer there, so each of the two
+is checked against the layer it is handed — see :func:`_check_normal_field_still_fits` and
+:func:`_check_compression_still_fits`, and :mod:`fieldwave._core.geometry` for the rule they
+share. Material values never move a pattern, so the sweeps this split exists to serve pass
+untouched.
 """
 from .backend import array_namespace
+from .geometry import StaleGeometryError
 
 
 def _wrap(orders, n):
@@ -265,13 +273,6 @@ def normal_vector_field(eps_matrix):
 
     eps = _to_numpy(eps_matrix)
 
-    # Material interfaces: cells differing from any 4-neighbour.
-    border = np.zeros(eps.shape, dtype=bool)
-    border[1:, :] |= (eps[1:, :] != eps[:-1, :])
-    border[:-1, :] |= (eps[:-1, :] != eps[1:, :])
-    border[:, 1:] |= (eps[:, 1:] != eps[:, :-1])
-    border[:, :-1] |= (eps[:, :-1] != eps[:, 1:])
-
     # A one-cell axis carries no interface of its own: the structure cannot vary along it, so
     # every normal points along the other axis. Say so directly -- `np.gradient` needs three
     # cells and would otherwise raise, which is what made NVF unusable on 1D gratings. With a
@@ -281,11 +282,35 @@ def normal_vector_field(eps_matrix):
         along_x = np.ones(eps.shape), np.zeros(eps.shape)
         return along_x if eps.shape[0] == 1 else (along_x[1], along_x[0])
 
-    dist_map = distance_transform_edt(~border)
+    dist_map = distance_transform_edt(~_interface_mask(eps))
     gy, gx = np.gradient(dist_map)
     norm = np.hypot(gx, gy)
     norm[norm == 0] = 1.0
     return gx / norm, gy / norm
+
+
+def _interface_mask(eps):
+    """Cells that differ from a 4-neighbour — where the material interfaces sit."""
+    import numpy as np
+    border = np.zeros(eps.shape, dtype=bool)
+    border[1:, :] |= (eps[1:, :] != eps[:-1, :])
+    border[:-1, :] |= (eps[:-1, :] != eps[1:, :])
+    border[:, 1:] |= (eps[:, 1:] != eps[:, :-1])
+    border[:, :-1] |= (eps[:, :-1] != eps[:, 1:])
+    return border
+
+
+def _normal_field_source(eps):
+    """Everything :func:`normal_vector_field` reads off a layer, and nothing else.
+
+    That is the shape, plus — unless an axis is a single cell, where the field is the constant
+    along-axis one whatever the pattern — the interface mask. Two layers with the same source
+    have the same normal field, bit for bit, which is what makes this the tell: it accepts a
+    replay exactly when replaying is the same computation as rebuilding.
+    """
+    if 1 in eps.shape:
+        return eps.shape, None
+    return eps.shape, _interface_mask(eps)
 
 
 def normal_field_for_ucell(ucell, fto_x, fto_y, enhanced_dfs=True):
@@ -298,6 +323,65 @@ def normal_field_for_ucell(ucell, fto_x, fto_y, enhanced_dfs=True):
     xp = array_namespace(ucell)
     return [normal_vector_field(eps)
             for eps in _layer_eps(xp, ucell, fto_x, fto_y, enhanced_dfs)]
+
+
+def normal_field_source_for_ucell(ucell, fto_x, fto_y, enhanced_dfs=True):
+    """What :func:`normal_field_for_ucell` derived its answer from, per layer.
+
+    Freeze this alongside the normal field and hand both back to
+    :func:`to_conv_mat_raster_nvf`; the replay compares it against the layer actually in front
+    of it and refuses a field that was sampled from a different one.
+    """
+    xp = array_namespace(ucell)
+    return [_normal_field_source(_to_numpy(eps))
+            for eps in _layer_eps(xp, ucell, fto_x, fto_y, enhanced_dfs)]
+
+
+def _check_normal_field_still_fits(eps_matrix, source, index):
+    """Refuse a frozen normal field sampled from interfaces that have since moved.
+
+    The field says which way each interface points. Move the pattern in the raster and it is
+    describing a layer that is no longer there — measured on a 40x40 rod frozen at 12 cells
+    wide and replayed at 20, the transmitted orders come back 0.55 off and the total reads
+    0.710 against a true 0.346. Nothing raised, and nothing looked unusual.
+
+    The tell is exact rather than merely conservative, because :func:`_normal_field_source`
+    captures the field's *only* input: same source, same field, so a replay it accepts is the
+    same computation as a rebuild. Over 300 randomised replays no accepted one differed from a
+    rebuild at all (0.0e+00), and the one rejected replay that was nonetheless exact had lost
+    every interface it had — a layer gone uniform, where no normal field is wrong because none
+    is used. Re-freezing costs one call.
+
+    Only reachable eagerly. Under a trace the layer cannot be read at all, which is the point
+    of having frozen it — so a jitted call carries no check, and a long fit should re-freeze on
+    a schedule rather than rely on being told.
+    """
+    import numpy as np
+    if source is None:
+        return
+    try:
+        eps = _to_numpy(eps_matrix)
+    except Exception:                     # a tracer: nothing to compare, nothing to do
+        return
+
+    shape, mask = source[index]
+    now_shape, now_mask = _normal_field_source(eps)
+    if shape == now_shape and (mask is None or np.array_equal(mask, now_mask)):
+        return                            # equal shapes agree on whether a mask exists at all
+
+    if shape != now_shape:
+        moved = (f'layer {index} is now {now_shape}, where the normal field was sampled on '
+                 f'{shape}')
+    else:
+        moved = (f"layer {index}'s material interfaces have moved — "
+                 f'{int(np.count_nonzero(mask != now_mask))} of {mask.size} cells of the '
+                 f'pattern the normal field was sampled from now differ')
+    raise StaleGeometryError(
+        f'the frozen geometry no longer fits this structure: {moved}. The recorded field '
+        f'points along interfaces that are not there any more, so it describes a different '
+        f'layer. Call freeze_geometry() again, or drop geometry= to rebuild by comparison. '
+        f'(Changing the refractive index of a layer never trips this; moving its pattern '
+        f'does.)')
 
 
 def _nvf_projector(xp, nx, ny, fto_x, fto_y, dtype, device=None):
@@ -377,7 +461,7 @@ def nvf_conv_matrices_continuous(xp, eps_comp, x, y, nx, ny, fto_x, fto_y):
                          *_nvf_projector(xp, nx, ny, fto_x, fto_y, C, dev))
 
 
-def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
+def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None, normal_field_source=None,
                            enhanced_dfs=True):
     """Per-layer NVF convolution matrices for a raster ``ucell``.
 
@@ -387,6 +471,10 @@ def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
         normal_field: optional per-layer ``(nx, ny)`` pairs for the *upsampled* layer grid.
             Supply this to keep the build traceable under JAX (the default computes the field
             with SciPy, which needs concrete values). It is static geometry either way.
+        normal_field_source: what that field was sampled from, from
+            :func:`normal_field_source_for_ucell`. Supply it and an eager replay is checked
+            against the layer in front of it (see :func:`_check_normal_field_still_fits`);
+            leave it ``None`` and the field is replayed on trust.
         enhanced_dfs: upsample each layer to resolve ``4*fto+1`` harmonics per cell. Unlike
             the DFS path this still does something: the permittivity coefficients are exact
             either way (the upsampled grid is the same staircase, so
@@ -400,12 +488,21 @@ def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
     """
     xp = array_namespace(ucell)
 
+    for name, record in (('normal field', normal_field),
+                         ('normal-field source', normal_field_source)):
+        if record is not None and len(record) != ucell.shape[0]:
+            raise StaleGeometryError(
+                f'the frozen geometry no longer fits this structure: it holds a {name} for '
+                f'{len(record)} layers and this one has {ucell.shape[0]}. Call '
+                f'freeze_geometry() again, or drop geometry= to rebuild by comparison.')
+
     out = [[], [], [], [], []]
 
     for i, eps_matrix in enumerate(_layer_eps(xp, ucell, fto_x, fto_y, enhanced_dfs)):
         if normal_field is None:
             nx, ny = normal_vector_field(eps_matrix)
         else:
+            _check_normal_field_still_fits(eps_matrix, normal_field_source, i)
             nx, ny = normal_field[i]
 
         for slot, mat in zip(out, nvf_conv_matrices(
@@ -549,6 +646,77 @@ def compression_indices(cell):
     return row_idx, col_idx, x, y
 
 
+def _steps_along(cell, axis):
+    """Indices along ``axis`` where ``cell`` differs from its successor — where it must be cut.
+
+    Cyclic, matching :func:`compression_indices`: the last index compares against the first,
+    and is a required cut regardless since it closes the period.
+    """
+    import numpy as np
+    nxt = np.roll(cell, -1, axis=axis)
+    same = (cell == nxt).all(axis=1 - axis)
+    return {int(i) for i in np.flatnonzero(~same)} | {cell.shape[axis] - 1}
+
+
+def _check_compression_still_fits(cell, record, index):
+    """Refuse a frozen compression whose cut no longer separates the layer's blocks.
+
+    The record says which rows and columns end a constant block. Move the pattern in the raster
+    and the gather takes the wrong ones, collapsing the layer onto the one it was frozen on —
+    literally: a 40x40 rod frozen at 12 cells wide and replayed at 13, 16, 20 and 24 returns
+    the *same* total every time (0.591) while the true answers run 0.733 down to 0.496, and the
+    per-order efficiencies land up to 0.24 off.
+
+    What matters is not that the record is the one this layer would produce, but that it is
+    still *a* description of it: every place the layer steps has to be cut. A cut with a
+    redundant line splits one constant block into two of the same value, which is the same
+    profile written differently. That distinction is not pedantic — requiring the record to
+    match exactly rejected 19 of 300 randomised replays that a rebuild agreed with to
+    0.0e+00, mostly material sweeps that drove two neighbouring blocks to the same index, which
+    is the sweep freezing exists to serve. Requiring only that the cut still separates the
+    blocks rejected none of them, and admitted nothing worse than a reordered summation:
+    3.6e-15 across those 300 replays, 7.3e-15 on the transmitted efficiencies themselves.
+
+    Only reachable eagerly, as for :func:`_check_normal_field_still_fits`.
+    """
+    import numpy as np
+    try:
+        cell = _to_numpy(cell)
+    except Exception:                     # a tracer: nothing to compare, nothing to do
+        return
+
+    row_idx, col_idx, x, y = record
+    n_row, n_col = cell.shape
+
+    def refuse(detail):
+        raise StaleGeometryError(
+            f'the frozen geometry no longer fits this structure: layer {index} {detail}. The '
+            f'recorded compression would gather blocks that are not the ones this layer has, '
+            f'so it describes a different layer. Call freeze_geometry() again, or drop '
+            f'geometry= to rebuild by comparison. (Changing the refractive index of a layer '
+            f'never trips this on its own; moving its pattern does.)')
+
+    if not len(col_idx) or not len(row_idx) or col_idx[-1] != n_col - 1 \
+            or row_idx[-1] != n_row - 1:
+        refuse(f'is {cell.shape}, which the recorded cut does not span')
+
+    missing = sorted(_steps_along(cell, 1) - set(int(c) for c in col_idx))
+    if missing:
+        refuse(f'now steps at column {missing[0]}, where the recorded cut does not divide it')
+
+    cell_x = cell[:, list(col_idx)]
+    missing = sorted(_steps_along(cell_x, 0) - set(int(r) for r in row_idx))
+    if missing:
+        refuse(f'now steps at row {missing[0]}, where the recorded cut does not divide it')
+
+    step_y, step_x = 1.0 / np.array(cell.shape, dtype=np.float64)
+    edges = (np.asarray(x), np.asarray(y))
+    want = (np.array([step_x * (c + 1) for c in col_idx]).reshape((-1, 1)),
+            np.array([step_y * (r + 1) for r in row_idx]).reshape((-1, 1)))
+    if not all(np.array_equal(a, b) for a, b in zip(edges, want)):
+        refuse('carries block edges that are not the ones its shape implies')
+
+
 def compress_cell(xp, cell, row_idx, col_idx):
     """Gather the compressed layer selected by :func:`compression_indices` (differentiable)."""
     dev = _device(xp, cell)
@@ -564,19 +732,29 @@ def to_conv_mat_raster_continuous(ucell, fto_x, fto_y, compression=None):
         fto_x, fto_y: Fourier truncation orders.
         compression: optional per-layer ``(row_idx, col_idx, x, y)`` from
             :func:`compression_indices`. Supply it to stay traceable under JAX; it is static
-            geometry either way.
+            geometry either way. Replayed eagerly it is checked against the layer in front of
+            it (see :func:`_check_compression_still_fits`).
 
     Returns:
         ``(epx_conv_all, epy_conv_all, epz_conv_i_all)``, each ``(n_layers, ff_xy, ff_xy)``.
     """
     xp = array_namespace(ucell)
 
+    if compression is not None and len(compression) != ucell.shape[0]:
+        raise StaleGeometryError(
+            f'the frozen geometry no longer fits this structure: it holds a compression for '
+            f'{len(compression)} layers and this one has {ucell.shape[0]}. Call '
+            f'freeze_geometry() again, or drop geometry= to rebuild by comparison.')
+
     epx_list, epy_list, epz_i_list = [], [], []
 
     for i in range(ucell.shape[0]):
         layer = ucell[i]
-        row_idx, col_idx, x, y = (compression_indices(layer) if compression is None
-                                  else compression[i])
+        if compression is None:
+            row_idx, col_idx, x, y = compression_indices(layer)
+        else:
+            _check_compression_still_fits(layer, compression[i], i)
+            row_idx, col_idx, x, y = compression[i]
         n_comp = compress_cell(xp, layer, row_idx, col_idx)
         eps = xp.astype(n_comp, _complex_dtype(xp, n_comp)) ** 2
 
@@ -588,7 +766,8 @@ def to_conv_mat_raster_continuous(ucell, fto_x, fto_y, compression=None):
     return xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list)
 
 
-def to_conv_mat_raster_continuous_nvf(ucell, fto_x, fto_y, normal_field=None, compression=None,
+def to_conv_mat_raster_continuous_nvf(ucell, fto_x, fto_y, normal_field=None,
+                                      normal_field_source=None, compression=None,
                                       enhanced_dfs=True):
     """Per-layer convolution matrices for a raster ``ucell`` via closed-form Fourier + NVF.
 
@@ -601,8 +780,11 @@ def to_conv_mat_raster_continuous_nvf(ucell, fto_x, fto_y, normal_field=None, co
         ucell: refractive-index raster ``(n_layers, Ny, Nx)`` — the design variable.
         fto_x, fto_y: Fourier truncation orders.
         normal_field: optional per-layer ``(nx, ny)`` from :func:`normal_field_for_ucell`.
+        normal_field_source: what that field was sampled from, as in
+            :func:`to_conv_mat_raster_nvf` — this path replays the same record and is checked
+            the same way.
         compression: optional per-layer ``(row_idx, col_idx, x, y)`` from
-            :func:`compression_indices`.
+            :func:`compression_indices`. Replayed eagerly it is checked too.
         enhanced_dfs: upsampling of the grid the *normal field* is taken on. It does not
             affect the permittivity series here, which is integrated over the compressed
             blocks rather than sampled.
@@ -619,11 +801,18 @@ def to_conv_mat_raster_continuous_nvf(ucell, fto_x, fto_y, normal_field=None, co
     eps_grids = _layer_eps(xp, ucell, fto_x, fto_y, enhanced_dfs)
 
     for i, eps_grid in enumerate(eps_grids):
-        nx, ny = normal_vector_field(eps_grid) if normal_field is None else normal_field[i]
+        if normal_field is None:
+            nx, ny = normal_vector_field(eps_grid)
+        else:
+            _check_normal_field_still_fits(eps_grid, normal_field_source, i)
+            nx, ny = normal_field[i]
 
         layer = ucell[i]
-        row_idx, col_idx, x, y = (compression_indices(layer) if compression is None
-                                  else compression[i])
+        if compression is None:
+            row_idx, col_idx, x, y = compression_indices(layer)
+        else:
+            _check_compression_still_fits(layer, compression[i], i)
+            row_idx, col_idx, x, y = compression[i]
         n_comp = compress_cell(xp, layer, row_idx, col_idx)
         eps_comp = xp.astype(n_comp, _complex_dtype(xp, n_comp)) ** 2
 

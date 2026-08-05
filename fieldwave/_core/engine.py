@@ -149,8 +149,12 @@ class CoreFactorizationMixin:
 
         Captures whatever the active Fourier strategy decides from the concrete ``ucell``.
         Hand the result back to :meth:`conv_solve` as ``geometry=`` to make the call
-        traceable. A DFS build decides nothing, so its frozen geometry is empty — passing it
-        is still what keeps ``conv_solve`` off the eager path.
+        traceable. The default ('sampled', 'li') build decides nothing, so its frozen geometry
+        is empty — passing it is still what keeps ``conv_solve`` off the eager path.
+
+        The record describes *this* structure. Replaying it onto one whose geometry has moved
+        is refused rather than answered, eagerly — see :mod:`fieldwave._core.geometry` for what
+        each record checks and why a traced replay cannot.
         """
         [setattr(self, k, v) for k, v in kwargs.items()]
         fto_x, fto_y = self.fto[0], self.fto[1]
@@ -158,16 +162,19 @@ class CoreFactorizationMixin:
         # The two axes decide independently what has to be frozen: NVF needs the normal
         # field, the integrated series needs the block compression, and ('integrated', 'nvf')
         # -- the combination the old integer could not spell -- needs both.
-        normal_field = compression = None
+        normal_field = normal_field_source = compression = None
         if self._modeling_type_assigned == 0:
             if self._factorization == Factorization.NVF:
                 normal_field = _fac.normal_field_for_ucell(
+                    self.ucell, fto_x, fto_y, enhanced_dfs=self.enhanced_dfs)
+                normal_field_source = _fac.normal_field_source_for_ucell(
                     self.ucell, fto_x, fto_y, enhanced_dfs=self.enhanced_dfs)
             if self._fourier_coefficients == FourierCoefficients.INTEGRATED:
                 compression = [_fac.compression_indices(self.ucell[i])
                                for i in range(self.ucell.shape[0])]
 
-        geometry = StaticGeometry(normal_field=normal_field, compression=compression)
+        geometry = StaticGeometry(normal_field=normal_field, compression=compression,
+                                  normal_field_source=normal_field_source)
         if self._modeling_type_assigned == 1:
             # The vector modeler records its plans while it builds, so run the build once to
             # get them. The other paths decide nothing here, and used to pay for this call
@@ -184,6 +191,12 @@ class CoreFactorizationMixin:
         discrete decisions frozen by :meth:`freeze_geometry`. Supply it to keep the whole call
         traceable under ``jax.jit`` / ``jax.grad``; omit it and each decision is auto-detected
         eagerly, which needs concrete values.
+
+        Raises:
+            StaleGeometryError: eagerly, when ``geometry`` no longer describes the structure it
+                is being replayed onto. A traced call cannot check — the comparison is the
+                thing the record exists to avoid — so a long fit should re-freeze on a schedule
+                rather than wait to be told.
         """
         [setattr(self, k, v) for k, v in kwargs.items()]  # needed for optimization sweeps
         self._frozen_geometry = geometry
@@ -200,6 +213,7 @@ class CoreFactorizationMixin:
             # (it couples x and y, so epxy / epyx stop being zero).
             sampled = self._fourier_coefficients == FourierCoefficients.SAMPLED
             normal_field = None if geometry is None else geometry.normal_field
+            normal_field_source = None if geometry is None else geometry.normal_field_source
             compression = None if geometry is None else geometry.compression
 
             if self._factorization == Factorization.LI:
@@ -217,13 +231,16 @@ class CoreFactorizationMixin:
                      epz_conv_i_all) = _fac.to_conv_mat_raster_nvf(
                         self.ucell, fto_x, fto_y,
                         enhanced_dfs=self.enhanced_dfs,
-                        normal_field=normal_field)
+                        normal_field=normal_field,
+                        normal_field_source=normal_field_source)
                 else:
                     (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all,
                      epz_conv_i_all) = _fac.to_conv_mat_raster_continuous_nvf(
                         self.ucell, fto_x, fto_y,
                         enhanced_dfs=self.enhanced_dfs,
-                        normal_field=normal_field, compression=compression)
+                        normal_field=normal_field,
+                        normal_field_source=normal_field_source,
+                        compression=compression)
 
         elif self._modeling_type_assigned == 1:                    # vector
             ucell_vector = self.modeling_vector_instruction(

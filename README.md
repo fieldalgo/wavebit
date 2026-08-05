@@ -236,6 +236,11 @@ Omit `geometry` and each decision is auto-detected eagerly instead — which rep
 same numbers, but only the default `('sampled', 'li')` pairing survives `jax.grad`, and
 nothing survives `jax.jit`.
 
+A freeze describes the structure it was taken on. Sweeping the *material values* reuses it
+exactly; moving the geometry does not, and an eager `conv_solve` raises `StaleGeometryError`
+rather than answering from a record that no longer fits. A traced call cannot check — the
+comparison is what the freeze exists to avoid — so re-freeze on a schedule during a long fit.
+
 ## Validation
 
 The physics is checked against references, not only against itself:

@@ -34,6 +34,7 @@ from pathlib import Path
 import numpy as np
 
 from .backend import array_namespace
+from .geometry import StaleGeometryError      # raised here too; one home for the contract
 
 _PI = 3.141592653589793
 
@@ -197,10 +198,6 @@ class VectorGridPlan(NamedTuple):
     row_sources: tuple
     col_sources: tuple
     ranges: tuple
-
-
-class StaleGeometryError(RuntimeError):
-    """A frozen geometry no longer describes the structure it is being replayed onto."""
 
 
 def _check_plan_still_fits(xp, row_list, col_list):

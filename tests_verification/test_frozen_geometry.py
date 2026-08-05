@@ -211,3 +211,137 @@ def test_a_stale_frozen_geometry_is_refused_rather_than_answered():
     for lx in (120.0, 200.0):                      # far from it: refused, not answered
         with pytest.raises(StaleGeometryError, match='no longer fits'):
             total(jnp.asarray(lx), frozen)
+
+
+# --------------------------------------------------------------- the raster records
+
+RASTER_KW = dict(n_top=1.0, n_bot=1.0, theta=0.1, phi=0.2, psi=0.3, fto=[2, 2],
+                 period=[1000.0, 1000.0], wavelength=900.0, thickness=[300.0])
+
+
+def _rod(width, height=10, n_rod=3.5, n_bg=1.0, n=20):
+    """One layer: a centred rectangular rod, ``width`` x ``height`` cells of a 20x20 raster."""
+    cell = np.ones((1, n, n)) * n_bg
+    r0, c0 = (n - height) // 2, (n - width) // 2
+    cell[0, r0:r0 + height, c0:c0 + width] = n_rod
+    return cell
+
+
+def _de_ti(ucell, strategy, geometry=None):
+    solver = fieldwave.rcwa(backend=0, ucell=ucell, **strategy, **RASTER_KW)
+    return np.asarray(solver.conv_solve(geometry=geometry).res.de_ti).real
+
+
+@pytest.mark.parametrize('strategy', [dict(factorization='nvf'),
+                                      dict(fourier_coefficients='integrated')],
+                         ids=['nvf', 'cfs'])
+def test_a_stale_raster_record_is_refused_rather_than_answered(strategy):
+    """A record frozen on one raster must not be replayed onto a raster that has moved.
+
+    Both raster records are sampled from, or indexed against, one concrete pattern — the NVF
+    normal field says which way each interface points, the CFS compression says which rows and
+    columns end a constant block. Move the pattern and each describes a layer that is no longer
+    there, and the answer comes back wrong without looking wrong. Measured on a 40x40 rod frozen
+    at 12 cells wide and replayed wider, before either check existed: NVF read a total of 0.710
+    against a true 0.346, with single orders 0.55 off; CFS returned the *same* total (0.591) for
+    widths 13, 16, 20 and 24 while the true answers ran 0.733 down to 0.496 — the replay had
+    collapsed the layer back onto the one it was frozen on.
+
+    This pins both halves, as the vector-path test does: refused where the record no longer
+    fits, and exact where it is accepted, so the check is not merely conservative.
+    """
+    frozen = fieldwave.rcwa(backend=0, ucell=_rod(6), **strategy,
+                            **RASTER_KW).freeze_geometry()
+
+    for width in (7, 8, 10, 14):                   # the pattern moved: refused, not answered
+        with pytest.raises(fieldwave.StaleGeometryError, match='no longer fits'):
+            _de_ti(_rod(width), strategy, frozen)
+
+    for n_rod in (3.5, 3.0, 2.0, 1.4):             # material only: accepted, and bit-exact
+        ucell = _rod(6, n_rod=n_rod)
+        assert np.array_equal(_de_ti(ucell, strategy, frozen),
+                              _de_ti(ucell, strategy))
+
+
+def test_a_compression_that_still_separates_the_blocks_is_kept():
+    """The CFS check asks whether the record still fits, not whether it is the one re-derived.
+
+    A cut with a line the layer no longer needs splits one constant block into two of the same
+    value — the same profile written differently, not a different layer. Insisting the record
+    match a re-derivation exactly refused 19 of 300 randomised replays that a rebuild agreed
+    with to 0.0e+00, nearly all of them material sweeps that drove two neighbouring blocks to
+    one index, which is the sweep freezing exists to serve. Asking only that every step still
+    falls on a cut refused none of them, and admitted nothing worse than a reordered summation
+    (3.6e-15 on the convolution matrices, 7.3e-15 on the efficiencies).
+    """
+    def stripes(values, n=20, split=10):
+        cell = np.ones((1, n, n))
+        width = n // len(values)
+        for k, v in enumerate(values):
+            cell[0, :split, k * width:(k + 1) * width] = v
+            cell[0, split:, k * width:(k + 1) * width] = 0.5 * v + 0.5
+        return cell
+
+    frozen = fieldwave.rcwa(backend=0, ucell=stripes([1.0, 2.0, 3.0, 4.0]),
+                            fourier_coefficients='integrated',
+                            **RASTER_KW).freeze_geometry()
+
+    for values in ([1.0, 2.0, 2.0, 4.0], [1.0, 1.0, 3.0, 3.0], [2.0, 2.0, 2.0, 2.0]):
+        ucell = stripes(values)                    # blocks merged: the frozen cut still fits
+        replayed = _de_ti(ucell, dict(fourier_coefficients='integrated'), frozen)
+        assert replayed == pytest.approx(_de_ti(ucell, dict(fourier_coefficients='integrated')), abs=1e-13)
+
+    for values in ([1.0, 2.0, 3.0], [1.0, 2.0, 3.0, 4.0, 1.5, 2.5, 3.5, 4.5]):
+        with pytest.raises(fieldwave.StaleGeometryError, match='no longer fits'):
+            _de_ti(stripes(values), dict(fourier_coefficients='integrated'), frozen)
+
+
+def test_a_one_cell_axis_makes_every_same_shape_replay_valid():
+    """On a 1D grating the normal field is constant, so the check must not reject a moved rod.
+
+    ``normal_vector_field`` short-circuits a one-cell axis: the structure cannot vary along it,
+    so every normal points along the other one whatever the pattern is. The tell has to know
+    that, or NVF on 1D gratings — the case the short-circuit was added for — would refuse every
+    replay that changed anything.
+    """
+    cfg = dict(n_top=1.0, n_bot=1.0, theta=0.2, phi=0.0, pol=0, fto=[5, 0],
+               period=[700.0], wavelength=900.0, thickness=[200.0])
+
+    def grating(width):
+        cell = np.ones((1, 1, 20))
+        cell[0, 0, :width] = 3.5
+        return cell
+
+    frozen = fieldwave.rcwa(backend=0, ucell=grating(8), factorization='nvf',
+                            **cfg).freeze_geometry()
+    for width in (8, 10, 14):
+        solvers = [fieldwave.rcwa(backend=0, ucell=grating(width), factorization='nvf',
+                                  **cfg) for _ in range(2)]
+        replayed = np.asarray(solvers[0].conv_solve(geometry=frozen).res.de_ti)
+        assert np.array_equal(replayed, np.asarray(solvers[1].conv_solve().res.de_ti))
+
+
+def test_a_traced_replay_carries_no_check():
+    """Under a trace the comparison is the thing the record exists to avoid, so it is skipped.
+
+    This is the documented limit, pinned so it stays a decision rather than an accident: a
+    jitted call replays the record on trust. A long fit should re-freeze on a schedule rather
+    than wait to be told.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+
+    solver = fieldwave.rcwa(backend=0, ucell=_rod(6), factorization='nvf', **RASTER_KW)
+    frozen = solver.freeze_geometry()
+    assert frozen.normal_field_source is not None, 'the tell was not recorded'
+
+    jax_solver = fieldwave.rcwa(backend=1, ucell=_rod(6), factorization='nvf',
+                                **RASTER_KW)
+
+    def total(u):
+        return jnp.sum(jax_solver.conv_solve(ucell=u, geometry=frozen).res.de_ti).real
+
+    moved = jnp.asarray(_rod(14))
+    with pytest.raises(fieldwave.StaleGeometryError):
+        total(moved)                               # eager: refused
+    assert np.isfinite(float(jax.jit(total)(moved)))   # traced: answered, unchecked

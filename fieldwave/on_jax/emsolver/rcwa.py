@@ -326,6 +326,10 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         static data. It is a static argument -- reuse one freeze across calls and you compile
         once.
 
+        Because this method always traces, a stale ``geometry`` is replayed on trust here: the
+        comparison that would catch it is the thing the freeze exists to avoid. ``conv_solve``
+        refuses one eagerly, so check a long fit there, or re-freeze on a schedule.
+
         ``res_x`` / ``res_y`` / ``res_z`` and ``set_field_input`` are static too: they set the
         output shape and select which incidences to reconstruct.
 
