@@ -44,8 +44,7 @@ def check_finite(xp, **named):
             'result. The usual causes are a degenerate structure (a singular interface: a '
             'layer identical to its neighbour that was not detected as such, a zero or '
             'near-zero thickness, an exactly grazing order) or a truncation the geometry '
-            'cannot support. Try adjusting fto, re-slicing the stack into thinner layers, or '
-            'use_pinv=True.')
+            'cannot support. Try adjusting fto, or re-slicing the stack into thinner layers.')
 
 
 class UnphysicalResultWarning(UserWarning):
@@ -97,7 +96,7 @@ def check_physical(xp, de_ri, de_ti, n_top, atol=1e-3):
         warnings.warn(
             f"solve returned {' and '.join(problems)}. The result is finite but not physical, "
             'so treat it as a failed solve: check for a degenerate structure, and try adjusting '
-            'fto, re-slicing the stack into thinner layers, or use_pinv=True.',
+            'fto or re-slicing the stack into thinner layers.',
             UnphysicalResultWarning, stacklevel=2)
 
 
