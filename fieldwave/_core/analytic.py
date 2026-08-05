@@ -8,6 +8,16 @@ fewer harmonics on curved or tilted boundaries.
 A layer is ``dict(n_base=..., shapes=[...])`` and a shape is
 ``dict(type='rectangle'|'circle'|'ellipse', cx=, cy=, lx=, ly=, angle=, n_index=)``.
 
+**Shapes superpose; they do not paint over each other.** Each one contributes
+``(eps_shape - eps_base) * FT(indicator)``, so where two overlap the layer gets *both*
+contributions and the permittivity there is neither shape's. Two 120x120 rods of index 2 and 3
+in a background of 1, overlapping by 7200 of a 90000 cell, come out at a mean permittivity of
+2.76 where painting the second over the first gives 2.52 -- and the efficiency follows, 0.9856
+against the 0.9792 a raster and the vector path agree on. Nothing raises: the layer is simply a
+different one. The vector path (``ucell=[[n_base, [[shape, ...], ...]]]``) is the one that
+paints, later object over earlier, and it is what to use when shapes are meant to overlap.
+Non-overlapping shapes are unaffected, which is the case this path is built for.
+
 **Shape parameters are absolute lengths, in whatever unit ``period`` is given in** -- not
 fractions of the period. A rod filling half a 0.77-long period is ``lx=0.385``, centred at
 ``cx=0.385``; the defaults say the same thing (``cx`` defaults to ``period_x / 2``). Passing

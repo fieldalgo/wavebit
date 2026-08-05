@@ -295,3 +295,65 @@ def test_circle_ignores_ly_everywhere(ly):
     # anchor, and it rides on ``analytic_normal_grid`` — it read 0.161262158771 while that
     # default was 256, and moved 1.1e-4 when the default rose to 1024.
     assert float(np.sum(np.asarray(got.de_ri))) == pytest.approx(0.161153064902, abs=1e-9)
+
+
+def test_shapes_superpose_where_they_overlap():
+    """Overlapping shapes are added, not painted over — pinned because nothing says so at runtime.
+
+    Each shape contributes ``(eps_shape - eps_base) * FT(indicator)``, so an overlap receives
+    both. That is fine for the non-overlapping layers this path is built for and silently a
+    different structure otherwise, which is worth a test rather than a surprise: someone moving
+    a vector recipe over gets no error, just another answer.
+
+    The vector path paints instead — later object over earlier — and agrees with a raster of
+    the same instruction to eight digits, which is what makes the analytic value identifiable
+    as the superposition rather than either of them being noise.
+    """
+    period, n_base = [300.0, 300.0], 1.0
+    rods = [dict(type='rectangle', cx=130.0, cy=150.0, lx=120.0, ly=120.0, angle=0.0,
+                 n_index=2.0),
+            dict(type='rectangle', cx=190.0, cy=150.0, lx=120.0, ly=120.0, angle=0.0,
+                 n_index=3.0)]
+
+    eps_c, _ = _assemble_eps_coeffs(xnp, rods, n_base, 3, 3, period, np.complex128)
+    dc = complex(eps_c[2 * 3, 2 * 3]).real
+
+    cell = period[0] * period[1]
+    fraction = 120.0 * 120.0 / cell
+    superposed = n_base ** 2 + (2.0 ** 2 - n_base ** 2) * fraction \
+        + (3.0 ** 2 - n_base ** 2) * fraction
+    overlap = 60.0 * 120.0 / cell
+    painted = superposed - (3.0 ** 2 - n_base ** 2) * overlap
+
+    assert dc == pytest.approx(superposed, rel=1e-12)
+    assert dc != pytest.approx(painted, rel=1e-6)      # 2.76 against 2.52
+
+
+def test_overlapping_shapes_move_the_answer_while_the_vector_path_does_not():
+    """The user-visible half of it: analytic parts from the raster, the vector path does not."""
+    period, n_base = [300.0, 300.0], 1.0
+    cfg = dict(period=period, thickness=[205.0], fto=[6, 6], n_top=1.0, n_bot=1.0,
+               wavelength=900.0, pol=0, theta=0.0, phi=0.0)
+    boxes = [(130.0, 2.0), (190.0, 3.0)]
+
+    n_pix = 900
+    axis = (np.arange(n_pix) + 0.5) / n_pix * period[0]
+    X, Y = np.meshgrid(axis, axis)
+    raster = np.full((n_pix, n_pix), n_base)
+    for cx, n_index in boxes:                            # later box paints over the earlier
+        raster = np.where((np.abs(X - cx) <= 60.0) & (np.abs(Y - 150.0) <= 60.0),
+                          n_index, raster)
+
+    def total(ucell, **extra):
+        return float(np.sum(np.asarray(
+            fieldwave.rcwa(backend=0, ucell=ucell, **extra, **cfg).conv_solve().de_ti)))
+
+    want = total(raster[None], fourier_type=0)
+    vector = total([[n_base, [['rectangle', cx, 150.0, 120.0, 120.0, n, 0, 0, 0]
+                              for cx, n in boxes]]])
+    analytic = total([dict(n_base=n_base,
+                           shapes=[dict(type='rectangle', cx=cx, cy=150.0, lx=120.0, ly=120.0,
+                                        angle=0.0, n_index=n) for cx, n in boxes])])
+
+    assert vector == pytest.approx(want, abs=1e-8)
+    assert abs(analytic - want) > 1e-3, (analytic, want)
