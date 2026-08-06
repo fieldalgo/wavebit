@@ -263,6 +263,11 @@ exactly; moving the geometry does not, and an eager `conv_solve` raises `StaleGe
 rather than answering from a record that no longer fits. A traced call cannot check — the
 comparison is what the freeze exists to avoid — so re-freeze on a schedule during a long fit.
 
+On PyTorch, eager and `.backward()` are the supported path. `torch.compile` is not: it buys
+nothing here — the solve is almost entirely LAPACK calls the compiler forwards untouched — and
+on torch below 2.13 it does not even run, which is why that is the floor. Measurements and the
+full diagnosis are in [docs/torch-compile.md](docs/torch-compile.md).
+
 ## Validation
 
 The physics is checked against references, not only against itself:
