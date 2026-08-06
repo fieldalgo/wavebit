@@ -39,7 +39,7 @@ cd fieldwave
 pip install -e .
 ```
 
-The base install needs only Python ≥ 3.10, NumPy ≥ 2.3.1, SciPy ≥ 1.15 and array-api-compat.
+The base install needs only Python ≥ 3.10, NumPy ≥ 2.5.1, SciPy ≥ 1.18 and array-api-compat.
 JAX and PyTorch are optional and bring autodiff and GPU support:
 
 ```shell
@@ -54,11 +54,13 @@ conda env create -f environment.yml   # run from the repo root
 conda activate fieldwave
 ```
 
-> The NumPy floor is deliberately high. NumPy 2.2.5 through 2.3.0 mis-report the FP status
-> of a complex `matmul`, so a single solve can print hundreds of
-> `RuntimeWarning: overflow / divide by zero / invalid value encountered in matmul`
-> while returning correct efficiencies. 2.3.1 is silent on byte-identical inputs, so the
-> floor is the fix rather than a suppression inside the library.
+> The floors are deliberately high: they are the versions the suite is actually verified
+> against, not the oldest that might work. Loosening one later is safe; tightening one after a
+> release is not. Two of them also sit above a known defect — NumPy 2.2.5 through 2.3.0
+> mis-report the FP status of a complex `matmul`, printing hundreds of
+> `RuntimeWarning: ... encountered in matmul` while returning correct efficiencies, and torch
+> below 2.13 cannot compile the solver at all (see [docs/torch-compile.md](docs/torch-compile.md)).
+> If you need an older one, verify it and the floor can come down.
 
 ## Quickstart
 
