@@ -30,19 +30,27 @@ given segment edges, with Li's rules; the analytic *shape* path lives in
 A recurring rule runs through this module: **discrete geometry decisions are computed eagerly
 and passed in as static inputs, while material values flow through differentiably.** Two
 decisions here are geometry, not material — the NVF normal field (where the interfaces point) and the CFS block
-compression (where the piecewise-constant blocks start and stop). Both branch on values and,
-in the compression's case, produce a data-dependent shape, so neither can run under a JAX
-trace. Each is therefore split into an eager step that yields a static description
+compression (where the piecewise-constant blocks start and stop). Both branch on values, and
+the compression's output shape depends on the answer, so neither survives ``jax.jit``. Each is
+therefore split into an eager step that yields a static description
 (:func:`normal_field_for_ucell`, :func:`compression_indices`) and a differentiable step that
 consumes it. Pass those precomputed descriptions to stay traceable; the permittivity riding on
 top of them is what gradients see.
+
+``jax.grad`` alone is the weaker bar, and the two decisions sit on opposite sides of it. The
+compression clears it: its comparisons narrow one value at a time (:func:`_as_bools`), and a
+grad tracer still carries a concrete primal to narrow, so a gradient needs no frozen geometry.
+The normal field does not: SciPy's distance transform wants the whole array as NumPy, which no
+tracer will give.
 
 A precomputed description belongs to the structure it was taken on. Replaying one onto a
 raster whose *pattern* has moved describes a layer that is no longer there, so each of the two
 is checked against the layer it is handed — see :func:`_check_normal_field_still_fits` and
 :func:`_check_compression_still_fits`, and :mod:`fieldwave._core.geometry` for the rule they
 share. Material values never move a pattern, so the sweeps this split exists to serve pass
-untouched.
+untouched. A fit whose *pattern* moves every step is a different matter: on the compression it
+should simply drop ``geometry=`` and differentiate, which cannot go stale because it records
+nothing.
 """
 from .backend import array_namespace
 from .geometry import StaleGeometryError
@@ -617,30 +625,50 @@ def cfs2d(xp, cell, x, y, conti_x, conti_y, fto_x, fto_y):
     return conv2d
 
 
+def _as_bools(flags):
+    """``flags`` as a list of Python ``bool``, narrowed however the backend allows.
+
+    Whole-array in one step when the values are concrete, and element by element when that
+    fails. The second path is not a fallback for tidiness: under ``jax.grad`` a tracer refuses
+    a whole-array NumPy conversion, but each element still narrows, because a grad tracer
+    carries a concrete primal. Under ``jax.jit`` neither works — there is no primal to read,
+    which is exactly what a frozen geometry is for.
+    """
+    try:
+        return [bool(v) for v in _to_numpy(flags)]
+    except Exception:                     # a grad tracer: narrow one value at a time
+        return [bool(v) for v in flags]
+
+
 def compression_indices(cell):
     """Locate the piecewise-constant blocks of a raster layer — **static geometry**.
 
     Returns ``(row_idx, col_idx, x, y)``: the rows/columns that end a constant block, plus
-    their normalized right-hand edges. The legacy ``cell_compression`` decides this by
-    comparing neighbouring rows/columns *by value* and returns a data-dependent shape, so it
-    cannot run under a JAX trace. Splitting it out keeps the decision eager while the gather it
-    implies (:func:`compress_cell`) stays differentiable — the same split used for the NVF
-    normal field.
+    their normalized right-hand edges. The decision compares neighbouring rows/columns *by
+    value* and its output shape depends on the answer, so it cannot run under ``jax.jit`` —
+    that is what :meth:`~fieldwave._core.engine.CoreFactorizationMixin.freeze_geometry`
+    records. It *can* run inside ``jax.grad``: the comparisons are narrowed through
+    :func:`_as_bools`, which a grad tracer permits. So a gradient over a raster whose pattern
+    moves every step — a binary topology optimization, say — needs no frozen geometry and
+    therefore cannot be served a stale one. The gather this implies (:func:`compress_cell`)
+    stays differentiable either way.
+
+    Worked in the input's own namespace rather than through NumPy for that reason alone; a
+    concrete array still takes the whole-array path in :func:`_as_bools` and costs the same.
     """
     import numpy as np
 
-    cell = _to_numpy(cell)
-    step_y, step_x = 1.0 / np.array(cell.shape, dtype=np.float64)
+    xp = array_namespace(cell)
+    n_row, n_col = cell.shape
 
-    cell_next = np.roll(cell, -1, axis=1)
-    col_idx = [c for c in range(cell.shape[1])
-               if not (cell[:, c] == cell_next[:, c]).all() or c == cell.shape[1] - 1]
+    same_col = _as_bools(xp.all(cell == xp.roll(cell, -1, axis=1), axis=0))
+    col_idx = [c for c in range(n_col) if not same_col[c] or c == n_col - 1]
 
-    cell_x = cell[:, col_idx]
-    cell_x_next = np.roll(cell_x, -1, axis=0)
-    row_idx = [r for r in range(cell_x.shape[0])
-               if not (cell_x[r, :] == cell_x_next[r, :]).all() or r == cell_x.shape[0] - 1]
+    cell_x = xp.take(cell, xp.asarray(col_idx, device=_device(xp, cell)), axis=1)
+    same_row = _as_bools(xp.all(cell_x == xp.roll(cell_x, -1, axis=0), axis=1))
+    row_idx = [r for r in range(n_row) if not same_row[r] or r == n_row - 1]
 
+    step_y, step_x = 1.0 / np.array((n_row, n_col), dtype=np.float64)
     x = np.array([step_x * (c + 1) for c in col_idx]).reshape((-1, 1))
     y = np.array([step_y * (r + 1) for r in row_idx]).reshape((-1, 1))
     return row_idx, col_idx, x, y

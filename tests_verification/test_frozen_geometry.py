@@ -1,11 +1,16 @@
 """Frozen geometry makes the public API traceable (fieldwave.StaticGeometry).
 
 Two pipeline steps decide something structural rather than numeric — the NVF normal field and
-the CFS block compression. Both branch on values, so neither survives a JAX trace. (There was
+the CFS block compression. Both branch on values, so neither survives ``jax.jit``. (There was
 a third, the same-material short-circuit; removing it is what left DFS with nothing to
 freeze.) ``freeze_geometry()`` takes those decisions once against the concrete
 structure; handing the result back to ``conv_solve`` makes the whole call jit- and
 grad-traceable without changing a single number.
+
+``jax.grad`` on its own is the weaker bar and the two steps part company there: the
+compression decides itself inside a gradient, the normal field cannot. That boundary is worth
+pinning, because on the near side a frozen record is optional — and an optional record is one
+that cannot go stale.
 """
 import importlib
 
@@ -345,3 +350,93 @@ def test_a_traced_replay_carries_no_check():
     with pytest.raises(fieldwave.StaleGeometryError):
         total(moved)                               # eager: refused
     assert np.isfinite(float(jax.jit(total)(moved)))   # traced: answered, unchecked
+
+
+CFS_STRATEGY = dict(fourier_coefficients='integrated', factorization='li')
+
+
+def test_the_compression_decides_itself_inside_a_gradient():
+    """``('integrated', 'li')`` differentiates with no frozen geometry at all.
+
+    The compression branches on values, so it cannot be traced by ``jax.jit`` — but ``jax.grad``
+    is the weaker bar. A grad tracer carries a concrete primal, so each comparison still narrows
+    to a Python ``bool`` one value at a time, which is all the decision needs. The legacy
+    ``meent`` builder had this property by accident, being written in ``jnp``; the port lost it
+    by routing the decision through ``np.asarray``, which no tracer will answer.
+
+    Getting it back matters for one workflow in particular. A fit whose raster *pattern* moves
+    every step — a binary topology optimization, where the design variable is which cell is
+    which material — invalidates a frozen record every step, and under a trace nothing can say
+    so. Deciding inside the gradient removes the record, and with it the whole failure mode.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+
+    def total(u):
+        return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **CFS_STRATEGY, **KW)
+                       .conv_solve().res.de_ti).real
+
+    grad = np.asarray(jax.grad(total)(jnp.asarray(UCELL)))
+    assert grad.shape == UCELL.shape and np.isfinite(grad).all()
+
+    d = np.zeros_like(UCELL)
+    d[0, 2, 3] = 1.0
+    h = 1e-6
+    fd = (float(total(jnp.asarray(UCELL + h * d))) -
+          float(total(jnp.asarray(UCELL - h * d)))) / (2 * h)
+    assert float(np.sum(grad * d)) == pytest.approx(fd, rel=1e-4), (np.sum(grad * d), fd)
+
+
+def test_a_moving_pattern_needs_no_record_on_the_compression_path():
+    """The payoff: a gradient stays correct while the raster pattern moves under it.
+
+    Frozen, this is the case that goes stale every step and is refused (or, under a trace,
+    answered wrongly). Unfrozen, the compression is re-decided per call, so there is nothing to
+    be stale — checked here against a finite difference at each moved pattern.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+
+    rng = np.random.default_rng(3)
+    design = rng.random((1, 6, 6)) < 0.4
+
+    def total(u):
+        return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **CFS_STRATEGY, **KW)
+                       .conv_solve().res.de_ti).real
+
+    for flips in (0, 2, 4):
+        pattern = design.copy()
+        for k in range(flips):
+            i, j = divmod(k * 7 % 36, 6)
+            pattern[0, i, j] = ~pattern[0, i, j]
+        ucell = np.where(pattern, 3.5, 1.0)
+
+        grad = np.asarray(jax.grad(total)(jnp.asarray(ucell)))
+        assert np.isfinite(grad).all()
+
+        d = np.zeros_like(ucell)
+        d[0, 1, 4] = 1.0
+        h = 1e-6
+        fd = (float(total(jnp.asarray(ucell + h * d))) -
+              float(total(jnp.asarray(ucell - h * d)))) / (2 * h)
+        assert float(np.sum(grad * d)) == pytest.approx(fd, rel=1e-4, abs=1e-9)
+
+
+def test_the_normal_field_still_needs_a_freeze_to_differentiate():
+    """The other side of the boundary, pinned so it stays a known limit.
+
+    The normal field comes off SciPy's distance transform, which wants the whole layer as a
+    NumPy array — a grad tracer will not give one, primal or not. So NVF has no unfrozen
+    gradient, and a fit whose pattern moves must re-freeze rather than drop ``geometry=``.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+
+    nvf = dict(fourier_coefficients='sampled', factorization='nvf')
+
+    def total(u):
+        return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **nvf, **KW)
+                       .conv_solve().res.de_ti).real
+
+    with pytest.raises(Exception):
+        jax.grad(total)(jnp.asarray(UCELL))
