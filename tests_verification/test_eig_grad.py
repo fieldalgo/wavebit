@@ -200,7 +200,7 @@ def test_the_degeneracy_is_real():
     fto = 4
     kx = np.asarray([0.0 + m * 0.9 / 0.7 for m in range(-fto, fto + 1)], dtype=complex)
     I = np.eye(2 * fto + 1, dtype=complex)
-    _, _, q = layer_modes_1d(xnp, np.linalg.inv, 0, kx, I, epx[0], epy[0], epz[0], complex)
+    _, _, q = layer_modes_1d(xnp, 0, kx, I, epx[0], epy[0], epz[0], complex)
 
     q = np.asarray(q)
     nearest = (np.abs(q[:, None] - q[None, :]) + np.eye(len(q)) * 1e9).min(axis=1)

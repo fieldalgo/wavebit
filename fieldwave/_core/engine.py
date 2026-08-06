@@ -51,16 +51,14 @@ class CoreSolveMixin:
         kx, _ = self.get_kx_ky_vector(wavelength)
         return self._finish(solve(
             self.pol, wavelength, kx, self.n_top, self.n_bot, self.theta, self.thickness,
-            epx_conv_all, epy_conv_all, epz_conv_i_all,
-            full=True))
+            epx_conv_all, epy_conv_all, epz_conv_i_all, full=True))
 
     def solve_1d_conical(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
         solve = self._solve_fn('conical')
         kx, ky = self.get_kx_ky_vector(wavelength)
         return self._finish(solve(
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi, self.thickness,
-            epx_conv_all, epy_conv_all, epz_conv_i_all,
-            full=True))
+            epx_conv_all, epy_conv_all, epz_conv_i_all, full=True))
 
     def solve_2d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None):
@@ -69,8 +67,7 @@ class CoreSolveMixin:
         return self._finish(solve(
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi, self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
-            epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
-            full=True))
+            epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all, full=True))
 
 
 class CoreFactorizationMixin:

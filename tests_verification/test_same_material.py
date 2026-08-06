@@ -119,8 +119,7 @@ def test_a_matched_interface_is_well_conditioned():
     I = np.eye(ff, dtype=complex)
 
     eps = complex(AU) ** 2                      # layer and substrate are both gold
-    W, V, _ = layer_modes_1d(xnp, np.linalg.inv, 1, kx, I, eps * I, eps * I,
-                             (1 / eps) * I, complex)
+    W, V, _ = layer_modes_1d(xnp, 1, kx, I, eps * I, eps * I, (1 / eps) * I, complex)
     F = I
     G = -1j * _diag(xnp, boundary_kz(xnp, eps, kx ** 2) / eps)          # substrate seed, TM
 
