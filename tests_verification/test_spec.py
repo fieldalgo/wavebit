@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 import fieldwave
-from fieldwave import JobSpec, Sweep, SpecError, Backend, Pol, FourierType
+from fieldwave import JobSpec, Sweep, SpecError, Backend, Pol, Factorization
 
 
 BINARY_GRATING = {
@@ -102,10 +102,10 @@ def test_pol_normalises_to_a_number_and_keeps_fractions():
 def test_enums_accept_name_or_value():
     spec = JobSpec.from_dict({
         **BINARY_GRATING,
-        'numerics': {'backend': 'JAX', 'fourier_type': 'nvf', 'fto': 3},
+        'numerics': {'backend': 'JAX', 'factorization': 'nvf', 'fto': 3},
     })
     assert spec.numerics.backend is Backend.JAX
-    assert spec.numerics.fourier_type is FourierType.NVF
+    assert spec.numerics.factorization is Factorization.NVF
     assert spec.numerics.fto == (3, 0)              # a bare int is the x order
 
 

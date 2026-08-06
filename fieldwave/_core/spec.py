@@ -35,7 +35,7 @@ import json
 import math
 
 from .domain import Layer, Stack, Incidence
-from .enums import Backend, Pol, FourierType
+from .enums import Backend, Factorization, FourierCoefficients, Pol
 
 SPEC_VERSION = '1'
 
@@ -71,17 +71,19 @@ def _enum(value, enum_cls, where):
     try:
         return enum_cls(value)
     except ValueError:
+        # Only the integer-coded enums have a numeric spelling to suggest.
+        codes = ('' if not all(isinstance(m.value, int) for m in enum_cls)
+                 else f" or {[int(m) for m in enum_cls]}")
         raise SpecError(
             f"{where}: {value!r} is not a {enum_cls.__name__}. "
-            f"Expected one of {[m.name.lower() for m in enum_cls]} "
-            f"or {[int(m) for m in enum_cls]}") from None
+            f"Expected one of {[m.name.lower() for m in enum_cls]}{codes}") from None
 
 
 def _jsonable(value):
     """Plain-Python form of a value, so ``to_dict`` output survives ``json.dumps``."""
     if isinstance(value, bool) or value is None:
         return value
-    if isinstance(value, (Backend, Pol, FourierType)):
+    if isinstance(value, (Backend, Pol, FourierCoefficients, Factorization)):
         return value.name.lower()
     if isinstance(value, (str, int, float)):
         return value
@@ -105,16 +107,16 @@ class Numerics:
     """
     backend: Backend = Backend.NUMPY
     fto: Any = (0, 0)
-    fourier_type: FourierType = FourierType.DFS
+    fourier_coefficients: FourierCoefficients = FourierCoefficients.SAMPLED
+    factorization: Factorization = Factorization.LI
     type_complex: int = 128
     connecting_algo: str = 'TMM'
     enhanced_dfs: bool = True
-    use_pinv: bool = False
     perturbation: float = 1e-20
     analytic_normal_grid: int = 1024
 
-    _FIELDS = ('backend', 'fto', 'fourier_type', 'type_complex', 'connecting_algo',
-               'enhanced_dfs', 'use_pinv', 'perturbation', 'analytic_normal_grid')
+    _FIELDS = ('backend', 'fto', 'fourier_coefficients', 'factorization', 'type_complex',
+               'connecting_algo', 'enhanced_dfs', 'perturbation', 'analytic_normal_grid')
 
     @classmethod
     def from_dict(cls, d) -> 'Numerics':
@@ -122,8 +124,12 @@ class Numerics:
         _reject_unknown(d, cls._FIELDS, 'numerics')
         if 'backend' in d:
             d['backend'] = _enum(d['backend'], Backend, 'numerics.backend')
-        if 'fourier_type' in d:
-            d['fourier_type'] = _enum(d['fourier_type'], FourierType, 'numerics.fourier_type')
+        if 'fourier_coefficients' in d:
+            d['fourier_coefficients'] = _enum(d['fourier_coefficients'], FourierCoefficients,
+                                              'numerics.fourier_coefficients')
+        if 'factorization' in d:
+            d['factorization'] = _enum(d['factorization'], Factorization,
+                                       'numerics.factorization')
         if 'fto' in d:
             fto = d['fto']
             fto = (fto, 0) if isinstance(fto, int) else tuple(fto)
@@ -144,11 +150,11 @@ class Numerics:
         return dict(
             backend=int(self.backend),
             fto=list(self.fto),
-            fourier_type=int(self.fourier_type),
+            fourier_coefficients=self.fourier_coefficients.value,
+            factorization=self.factorization.value,
             type_complex=0 if self.type_complex == 128 else 1,
             connecting_algo=self.connecting_algo,
             enhanced_dfs=self.enhanced_dfs,
-            use_pinv=self.use_pinv,
             perturbation=self.perturbation,
             analytic_normal_grid=self.analytic_normal_grid,
         )
