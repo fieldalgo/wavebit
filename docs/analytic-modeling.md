@@ -83,8 +83,20 @@ epz_i = inv(⟦ε⟧)
 
 The projectors `Cxx=⟦nx²⟧` etc. are obtained by sampling the **analytic unit normal field**
 (`_core/analytic.py::normal_vector_field_analytical`, a level-set gradient) on a fine grid
-and running `dfs2d`. Unlike the SDF normals of a staircased boundary, these are the
-true-boundary normals, so the full NVF benefit is realized. Why the `½`-symmetrization is
+and transforming it (`normal_projector_coeffs`). Unlike the SDF normals of a staircased
+boundary, these are the true-boundary normals, so the full NVF benefit is realized.
+
+For a layer holding **one** shape the field is sampled with the shape at the centre of the
+cell and the coefficients are then translated to `(cx, cy)` by `e^{-i k·(c − P/2)}` — the same
+phase `⟦ε⟧` already carries. Sampling it in place instead does two things, both wrong: it
+sends `cx`/`cy` through `sign()`, whose derivative is zero, so `d/dcy` lost the projectors'
+share of an exact cancellation and came out at −1.7e−1 instead of 0; and it clips a field that
+is defined over the whole plane against a fixed cell, so a translated structure was a
+*different* structure (1.6e−3 on `sum(de_ri)`, unchanged from 256 to 4096 samples). With the
+phase, every one of the five matrices is `D X D⁻¹` for one diagonal `D`, so a translated layer
+reproduces the centred one to 1e−14 and `d/dcx`, `d/dcy` come out at 5e−9. Several shapes take
+a *normalized sum* of their fields, which no single phase translates, and stay on the sampled
+route. Why the `½`-symmetrization is
 needed — the plain product `Δ C` is not Hermitian, which gives complex `q²` and gross
 energy-conservation violation on curved boundaries — is written out in the
 `nvf_conv_matrices` docstring in `_core/factorization.py`.
@@ -170,8 +182,12 @@ keep passing.
   inclusion–exclusion handling.
 - The normal field for multiple shapes is a superposition of level-set gradients
   (heuristic). A single shape is exact.
-- The normal projectors still depend on `analytic_normal_grid` sampling (default 256) — the
-  coefficients themselves are analytic, but the projectors retain grid error. Increase the
+- A multi-shape layer's position gradients keep the defect described in §2: the normalized
+  sum is not a rigid translate, so its field is sampled in place. Translating such a layer
+  bodily still moves `sum(de_ri)` by 7.1e−4, against 1.5e−14 for a single shape.
+- The normal projectors still depend on `analytic_normal_grid` sampling (default 1024) — the
+  coefficients themselves are analytic, and the shape's *position* is now carried
+  analytically too, but the field's shape (size, rotation) retains grid error. Increase the
   grid if needed.
 - `fourier_coefficients` and `factorization` are both ignored on the analytic path: it is
   always the closed-form shape Fourier transform in the NVF 5-matrix form. For a non-NVF

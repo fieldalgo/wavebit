@@ -61,6 +61,11 @@ reaches it a different way behind one name.
 The convolution matrices are built with the NVF (Li / Götz-Schuster) normal-vector
 factorization: ``eps`` and ``1/eps`` come from the exact shape transform, while the normal
 projectors come from the shapes' *analytic* unit normal field sampled on a grid.
+
+``cx`` and ``cy`` are the exception to "sampled": a lone shape's normal field is built at the
+centre of the cell and translated by a phase, because sampling it in place both kills the
+position derivative and makes the answer depend on where in the cell the shape sits. See
+:func:`normal_projector_coeffs`.
 """
 from . import overlap as _overlap
 from .backend import array_namespace, as_array, j1, jinc, sinc
@@ -292,7 +297,12 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype):
     """Unit normal field of the shapes, sampled on ``grid_shape`` — analytic, not from a raster.
 
     ``period`` is unpacked as ``(Py, Px)``. Written without in-place mutation so it stays
-    differentiable in the shape parameters.
+    differentiable in the shape parameters — with the exception of ``cx`` and ``cy``, which the
+    rectangle branch reaches only through ``sign()`` and a comparison. Both have zero derivative
+    everywhere, so a position never survives this function.
+
+    That is why :func:`normal_projector_coeffs` does not put a position in: it builds the field
+    with the shape at the centre of the cell and translates the *coefficients*.
     """
     Ny, Nx = grid_shape
     Py, Px = period[0], period[1]
@@ -343,6 +353,77 @@ def _hypot_safe(xp, a, b):
     return xp.where(n == 0, xp.ones_like(n), n)
 
 
+def _sampled_coeffs(xp, field, fto_x, fto_y):
+    """Fourier coefficients of a sampled field on the doubled reciprocal grid.
+
+    ``c(ky, kx) = 1/(Ny*Nx) * sum f[iy, ix] exp(-2i*pi*(ky*iy/Ny + kx*ix/Nx))``, laid out the
+    way :func:`assemble_eps_coeffs` lays its grids out. Feeding it to :func:`laurent_conv_2d`
+    reproduces ``dfs2d(field, 1, 1, ...)`` — that equivalence is what
+    ``test_laurent_matches_dfs2d_convention`` states, and it is what lets a translation be
+    applied here as a phase instead of by moving the samples.
+    """
+    Ny, Nx = field.shape
+    dev = _device(field)
+    F = xp.fft.fft2(field) / (Ny * Nx)
+    iy = xp.asarray([k % Ny for k in range(-2 * fto_y, 2 * fto_y + 1)], device=dev)
+    ix = xp.asarray([k % Nx for k in range(-2 * fto_x, 2 * fto_x + 1)], device=dev)
+    return F[iy[:, None], ix[None, :]]
+
+
+def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype):
+    """Coefficient grids of ``nx**2``, ``nx*ny`` and ``ny**2`` — the NVF projectors' input.
+
+    **One shape is built at the centre of the cell and carried to ``(cx, cy)`` by a phase**,
+    the same way :func:`assemble_eps_coeffs` carries the permittivity. Two things follow, and
+    both are the point.
+
+    *The position becomes differentiable.* Sampling the field at the shape's actual place puts
+    ``cx`` and ``cy`` through ``sign()``, whose derivative is zero, so the projectors used to
+    contribute *nothing* to ``d/dcy`` — while the permittivity term contributed its exact
+    share. Translation invariance holds by those two cancelling, so what was left was the
+    permittivity term standing alone: -1.7e-1 on ``d(sum de_ri)/dcy`` for a rectangle, against
+    a true value of zero. Through the phase the two carry the same factor and cancel to
+    machine precision.
+
+    *And the model becomes translation-covariant, which it was not.* The normal field is
+    defined over the whole plane — a rectangle's wedges and a circle's rays do not stop at the
+    shape — so sampling it over a fixed cell clips a different part of it depending on where
+    the shape sits. That is not a discretization: ``<nx**2>`` for a circle moves 2.4e-2 between
+    0.30 and 0.50 of the period and does not budge when the grid goes from 256 to 4096. It
+    reached ``sum(de_ri)`` as 1.6e-3, so the same structure translated gave a different answer.
+    Built here it reproduces the centred one to 1e-14, at every ``fto``.
+
+    Several shapes cannot use it. The field is a *normalized sum* of the shapes' fields
+    (``sum(g/|g|)`` then divided by its own norm), and moving one shape does not translate that
+    sum — no phase describes it. Interpolating each shape's field onto the common grid instead
+    was measured and rejected: the forward error is small (7e-5 on ``sum(de_ri)``) but it
+    oscillates over one grid cell, so its *derivative* is 2e-1, worse than the bias being
+    removed. Multi-shape layers therefore keep the sampled field, and their position gradients
+    keep the defect above.
+    """
+    Px, Py = period[0], period[1]
+    real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
+
+    if len(shapes) == 1:
+        _, cx, cy, _, _, _ = shape_geometry(shapes[0], Px, Py)
+        built = [dict(shapes[0], cx=Px / 2.0, cy=Py / 2.0)]
+        shift_y, shift_x = (cy - Py / 2.0) / Py, (cx - Px / 2.0) / Px   # fractions of a period
+    else:
+        built, shift_y, shift_x = shapes, None, None
+
+    nx, ny = normal_vector_field_analytical(xp, grid_shape, built, (Py, Px), real_dtype)
+
+    if shift_y is None:
+        phase = 1.0
+    else:
+        KKY, KKX = _grid(xp, fto_x, fto_y, _device(nx), real_dtype)
+        arg = KKY * shift_y + KKX * shift_x
+        phase = xp.exp(xp.astype(arg, dtype) * (-2j * 3.141592653589793))
+
+    return tuple(_sampled_coeffs(xp, xp.astype(f, dtype), fto_x, fto_y) * phase
+                 for f in (nx * nx, nx * ny, ny * ny))
+
+
 def to_conv_mat_analytic_nvf(xp, shapes, n_base, fto_x, fto_y, period, dtype,
                              normal_grid=256):
     """The five 2D-solve convolution matrices for one analytic layer, via NVF.
@@ -350,6 +431,10 @@ def to_conv_mat_analytic_nvf(xp, shapes, n_base, fto_x, fto_y, period, dtype,
     ``eps`` / ``1/eps`` come from the exact shape transform (no staircase); the normal
     projectors come from the shapes' analytic normal field. Same Hermitian symmetrization as
     the raster NVF path — see :func:`fieldwave._core.factorization.nvf_conv_matrices`.
+
+    Every one of the five is ``D X D^-1`` for the shape's translation phase ``D`` and a
+    position-free ``X`` (see :func:`normal_projector_coeffs`), so sliding a single-shape layer
+    conjugates the whole solve by a diagonal and leaves each order's efficiency alone.
     """
     eps_c, inv_eps_c = assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype)
     ep_dir = laurent_conv_2d(xp, eps_c, fto_x, fto_y)
@@ -357,14 +442,11 @@ def to_conv_mat_analytic_nvf(xp, shapes, n_base, fto_x, fto_y, period, dtype,
 
     delta_ep = ep_dir - xp.linalg.inv(ep_inv)
 
-    real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
-    nx, ny = normal_vector_field_analytical(
-        xp, (normal_grid, normal_grid), shapes,
-        (period[1], period[0]), real_dtype)
-
-    C_xx = dfs2d(xp, xp.astype(nx ** 2, dtype), 1, 1, fto_x, fto_y)
-    C_xy = dfs2d(xp, xp.astype(nx * ny, dtype), 1, 1, fto_x, fto_y)
-    C_yy = dfs2d(xp, xp.astype(ny ** 2, dtype), 1, 1, fto_x, fto_y)
+    c_xx, c_xy, c_yy = normal_projector_coeffs(
+        xp, shapes, (normal_grid, normal_grid), period, fto_x, fto_y, dtype)
+    C_xx = laurent_conv_2d(xp, c_xx, fto_x, fto_y)
+    C_xy = laurent_conv_2d(xp, c_xy, fto_x, fto_y)
+    C_yy = laurent_conv_2d(xp, c_yy, fto_x, fto_y)
 
     eps_xx = ep_dir - 0.5 * (delta_ep @ C_xx + C_xx @ delta_ep)
     eps_yy = ep_dir - 0.5 * (delta_ep @ C_yy + C_yy @ delta_ep)

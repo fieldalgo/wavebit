@@ -275,12 +275,16 @@ def test_analytic_angle_is_smooth_through_normal():
     assert abs(right - left) < 0.02 * abs(left), (left, right)
 
 
-def test_translation_leaves_only_sampling_noise_in_the_shape_gradient():
+def test_translation_leaves_nothing_behind_within_one_normal_field_cell():
     """Sliding a single layer along x cannot change the efficiency, so d/dcx is exactly zero.
 
-    What is left is the normal field's sampling grid, and its cell size sets the noise floor
-    under every shape gradient on this path: 5e-4 at ``analytic_normal_grid=256``, which is
-    the reason the default is no longer 256.
+    The sub-grid-cell sweep is the historical shape of this test: the normal field used to be
+    sampled at the shape's place, so its cell size set a noise floor under every shape gradient
+    on this path — 5e-4 at ``analytic_normal_grid=256``, which is why the default rose to 1024.
+    A lone shape's field is now translated by a phase instead
+    (:func:`fieldwave._core.analytic.normal_projector_coeffs`) and the floor is gone: this reads
+    5.8e-13, and ``test_shape_position_gradients`` is where the full statement lives. The bound
+    stays loose here because the sweep no longer probes anything that varies.
     """
     base = dict(period=[300.0, 300.0], thickness=[205.0], fto=[5, 5], n_top=1.0, n_bot=1.0,
                 wavelength=900.0, pol=0.5, theta=0.1, phi=0.3)
