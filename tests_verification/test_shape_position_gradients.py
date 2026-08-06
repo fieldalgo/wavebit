@@ -201,6 +201,78 @@ def test_the_rectangle_normal_field_still_cannot_carry_a_position():
             assert abs(auto - fd) < 0.05 * abs(fd), (kind, auto, fd)
 
 
+# ------------------------------------------------------------------ more than one layer
+#
+# Everything above is one layer, where the phase cancels against itself. A stack asks a
+# different question, and it has two halves that have to be tested together: translating the
+# whole stack must change nothing, and translating *one* layer of it must change something.
+# Only the first would pass just as well if the phases cancelled globally for a reason that had
+# nothing to do with each layer being right.
+
+STACK = dict(period=[P, P], thickness=[0.25, 0.30], theta=0.35, phi=0.4, psi=0.0,
+             wavelength=0.777, n_top=1.0, n_bot=1.5, fto=[4, 4])
+CX0, CX1 = 0.35 * P, 0.55 * P
+
+
+def _stack(cx0, cx1):
+    return [dict(n_base=1.0, shapes=[dict(type='rectangle', cx=cx0, cy=0.385, lx=0.385,
+                                          ly=0.231, angle=0.4, n_index=3.5)]),
+            dict(n_base=1.0, shapes=[dict(type='circle', cx=cx1, cy=0.462, lx=0.385,
+                                          n_index=2.5)])]
+
+
+def _stack_total(cx0, cx1):
+    res = fieldwave.rcwa(backend=0, ucell=_stack(cx0, cx1), **STACK).conv_solve()
+    return float(np.real(np.sum(np.asarray(res.de_ri))))
+
+
+def _stack_jtotal(cx0, cx1):
+    res = fieldwave.rcwa(backend=1, ucell=_stack(cx0, cx1), **STACK).conv_solve()
+    return jnp.real(jnp.sum(res.de_ri))
+
+
+def test_a_stack_translated_bodily_does_not_move():
+    """Sliding every layer by the same amount is still one translation, so still exactly zero.
+
+    Each layer carries its own phase ``D_i``, and a common shift multiplies all of them by the
+    same ``D``, so the whole solve is conjugated by it. Measured: 1.9e-14 across the sweep, and
+    the derivative with respect to the common shift is 3.8e-9 — the same float floor the
+    single-layer cases sit on.
+    """
+    shifts = np.linspace(0.0, 0.15, 5)
+
+    values = [_stack_total(CX0 + d, CX1 + d) for d in shifts]
+    assert np.ptp(values) < 1e-12, np.ptp(values)
+
+    g = np.array([float(jax.grad(lambda d: _stack_jtotal(CX0 + d, CX1 + d))(jnp.asarray(d)))
+                  for d in shifts[:3]])
+    assert np.abs(g).max() < 1e-7, g
+
+
+def test_moving_one_layer_of_two_moves_the_answer_and_the_gradient_says_by_how_much():
+    """And the half that the invariance alone cannot see.
+
+    Moving one layer changes the two layers' *relative* position, which is a different structure
+    — ``sum(de_ri)`` runs over 1.6e-2 here — so the right answer is a large non-zero gradient,
+    not a small one. A construction that cancelled the phases globally would pass the test above
+    and fail this one; each layer's phase has to be its own.
+
+    Against central differences, at three configurations and for both layers: agreement to
+    2.6e-9 - 2.6e-8 relative, on gradients of 0.12 to 0.81.
+    """
+    h = 1e-6
+    for d in (0.0, 0.05, 0.10):
+        auto0 = float(jax.grad(lambda c: _stack_jtotal(c, CX1))(jnp.asarray(CX0 + d)))
+        fd0 = (_stack_total(CX0 + d + h, CX1) - _stack_total(CX0 + d - h, CX1)) / (2 * h)
+        assert abs(fd0) > 1e-2, (d, fd0)          # the layers really do see each other
+        assert abs(auto0 - fd0) < 1e-5 * abs(fd0), (d, auto0, fd0)
+
+        auto1 = float(jax.grad(lambda c: _stack_jtotal(CX0, c))(jnp.asarray(CX1 + d)))
+        fd1 = (_stack_total(CX0, CX1 + d + h) - _stack_total(CX0, CX1 + d - h)) / (2 * h)
+        assert abs(fd1) > 1e-2, (d, fd1)
+        assert abs(auto1 - fd1) < 1e-5 * abs(fd1), (d, auto1, fd1)
+
+
 @pytest.mark.xfail(
     strict=True,
     reason='a layer of several shapes takes a normalized sum of their fields, which no single '
