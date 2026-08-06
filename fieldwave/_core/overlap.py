@@ -31,6 +31,15 @@ being reported.
 """
 import math
 
+#: What a layer may say about shapes that overlap. Both shape paths read this: the analytic
+#: path superposes (``'add'``), the vector path paints later shapes over earlier ones
+#: (``'paint'``), and neither can build the other's rule. A recipe that means one of them has
+#: to be able to say so, or moving it between paths silently changes the structure.
+COMBINE_MODES = ('add', 'paint')
+
+#: Penetration below this fraction of the period is touching, not overlapping.
+OVERLAP_TOL_REL = 1e-6
+
 _INV_PHI = (5.0 ** 0.5 - 1.0) / 2.0
 
 BOX = 'box'

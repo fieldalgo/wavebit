@@ -594,3 +594,65 @@ def test_the_check_steps_aside_for_a_traced_solve():
     assert float(jax.jit(total)(jnp.asarray(130.0))) > 0.0     # overlapping, and traced: allowed
     with pytest.raises(ValueError, match='overlap'):
         total(130.0)                                           # same layer, concrete: refused
+
+
+# ------------------------------------------------------------------ the vector path's half
+
+VECTOR_CFG = dict(period=[300.0, 300.0], thickness=[205.0], fto=[6, 6], n_top=1.0, n_bot=1.0,
+                  wavelength=900.0, pol=0, theta=0.0, phi=0.0)
+
+
+def _vector_box(cx, n_index=2.0):
+    return ['rectangle', cx, 150.0, 120.0, 120.0, n_index, 0.0, 0, 0]
+
+
+def _vector_total(objects, *combine):
+    layer = [1.0, objects, *combine]
+    return float(np.sum(np.asarray(
+        fieldwave.rcwa(backend=0, ucell=[layer], **VECTOR_CFG).conv_solve().de_ti)))
+
+
+def test_the_vector_path_refuses_the_superposition_it_cannot_draw():
+    """The mirror of the analytic refusal, and the other half of making `combine` portable.
+
+    Writing ``combine='add'`` and handing it to this path used to paint it, silently -- the
+    same trap in the other direction. It cannot be drawn here: this path lays down a staircase
+    of blocks and each block holds one index, so an overlap can only take one of them.
+    """
+    with pytest.raises(NotImplementedError, match='cannot add them'):
+        _vector_total([_vector_box(140.0), _vector_box(180.0, 3.0)], 'add')
+
+
+def test_the_vector_path_still_paints_what_it_always_painted():
+    """`combine` is not a new tax: an unlabelled layer, and `'paint'`, are what this path did.
+
+    Painting is this path's own rule and a raster of the same recipe agrees with it, so unlike
+    the analytic side there is nothing surprising here to refuse.
+    """
+    objects = [_vector_box(140.0), _vector_box(180.0, 3.0)]
+    silent = _vector_total(objects)
+    assert _vector_total(objects, 'paint') == silent
+
+
+def test_combine_is_free_while_nothing_overlaps():
+    """Disjoint shapes mean one structure, so either spelling is accepted -- on both paths.
+
+    That is what keeps `combine` from taxing the case the analytic path exists for, and it is
+    also the case in which the two paths have to agree: same recipe, same answer.
+    """
+    objects = [_vector_box(80.0), _vector_box(220.0)]
+    disjoint = _vector_total(objects)
+    assert _vector_total(objects, 'add') == disjoint
+    assert _vector_total(objects, 'paint') == disjoint
+
+    shapes = [dict(type='rectangle', cx=cx, cy=150.0, lx=120.0, ly=120.0, angle=0.0,
+                   n_index=2.0) for cx in (80.0, 220.0)]
+    analytic = float(np.sum(np.asarray(
+        fieldwave.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=shapes)],
+                       **VECTOR_CFG).conv_solve().de_ti)))
+    assert analytic == pytest.approx(disjoint, abs=2e-3)
+
+
+def test_a_misspelled_combine_is_refused_on_the_vector_path_too():
+    with pytest.raises(ValueError, match='is not one of'):
+        _vector_total([_vector_box(80.0)], 'union')

@@ -17,14 +17,30 @@ against the 0.9792 a raster and the vector path agree on. The vector path
 (``ucell=[[n_base, [[shape, ...], ...]]]``) is the one that paints, later object over earlier,
 so the same recipe means two different structures depending on which path it is handed to.
 
-``combine`` is what makes that choice explicit, and :func:`check_layer_combination` enforces
-it: while no two shapes intersect the question does not arise and any spelling is accepted,
-but an overlap without ``combine='add'`` is refused rather than answered. The layer that used
-to come back silently different now names the two shapes and both ways forward — keep the
-superposition with ``combine='add'``, or move to the vector path to paint. ``combine='paint'``
-is accepted and only raises where it would matter, because painting here needs the closed-form
-transform of a shape *difference* — the intersection of two rotated primitives — which is not
-implemented.
+``combine`` is what makes that choice explicit. It is a property of the *layer*, not of this
+module: both shape paths read it, and each refuses the rule it cannot build, so a recipe
+carrying one cannot be quietly given the other. :func:`check_layer_combination` enforces it
+here and :func:`fieldwave._core.modeler.check_vector_layer_combination` there.
+
+While no two shapes intersect the question does not arise and any spelling is accepted on
+either path — that keeps ``combine`` from taxing the case this path exists for. An overlap is
+where they part:
+
+=========  ==========================  ====================================================
+path       unlabelled                  refuses
+=========  ==========================  ====================================================
+analytic   refused                     ``'paint'`` — needs the transform of a shape
+                                       *difference*, the intersection of two rotated
+                                       primitives, which is not implemented
+vector     painted (its own rule)      ``'add'`` — a staircase of blocks holds one index
+                                       per block, so an overlap can only take one of them
+=========  ==========================  ====================================================
+
+The asymmetry in the middle column is deliberate. Painting is what the vector path does and
+what a raster of the same recipe agrees with, so there is nothing surprising to refuse;
+superposition here is the rule nobody expects, so this path asks rather than assumes. The
+layer that used to come back silently different now names the two shapes and both ways
+forward.
 
 The check costs a pairwise geometry test per layer (see :mod:`fieldwave._core.overlap`) and
 needs concrete numbers, so a layer whose parameters are tracers is passed through unchecked;
@@ -49,11 +65,7 @@ projectors come from the shapes' *analytic* unit normal field sampled on a grid.
 from . import overlap as _overlap
 from .backend import array_namespace, as_array, j1, jinc, sinc
 from .factorization import dfs2d
-
-COMBINE_MODES = ('add', 'paint')
-
-#: Penetration below this fraction of the period is touching, not overlapping.
-OVERLAP_TOL_REL = 1e-6
+from .overlap import COMBINE_MODES, OVERLAP_TOL_REL      # re-exported; both paths read them
 
 
 def _grid(xp, fto_x, fto_y, dev, dtype):

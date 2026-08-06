@@ -33,8 +33,10 @@ from pathlib import Path
 
 import numpy as np
 
+from . import overlap as _overlap
 from .backend import array_namespace
 from .geometry import StaleGeometryError      # raised here too; one home for the contract
+from .overlap import COMBINE_MODES, OVERLAP_TOL_REL
 
 _PI = 3.141592653589793
 
@@ -152,6 +154,81 @@ def _result_dtype(xp, dtypes):
     for d in dtypes[1:]:
         out = xp.result_type(out, d)
     return out
+
+
+def _vector_primitives(objects):
+    """The layer's drawing instructions as convex primitives, or ``None`` if not concrete.
+
+    Every vector instruction is ``[name, cx, cy, lx, ly, n_index, angle, ...]``, so the
+    geometry sits at the same offsets whatever the shape is. A parameter that will not become
+    a float is a tracer, and that means *skip the check* rather than fail the build — the same
+    bargain the analytic side makes.
+    """
+    try:
+        prims = []
+        for obj in objects:
+            p = obj[1:]
+            angle = p[5] if len(p) > 5 else 0.0
+            prims.append(_overlap.primitive(obj[0], p[0], p[1], p[2], p[3], angle))
+        return prims
+    except Exception:                                  # noqa: BLE001 - "not a concrete value"
+        return None
+
+
+def _vector_shape_name(objects, i):
+    return f'{i} ({objects[i][0]})'
+
+
+def check_vector_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_REL):
+    """Refuse a vector layer that asks for a combination this path cannot draw.
+
+    The mirror of :func:`fieldwave._core.analytic.check_layer_combination`. This path paints,
+    later object over earlier, and that is what an unlabelled layer gets — painting is this
+    path's own rule, and a raster of the same structure agrees with it, so there is nothing
+    surprising to refuse. What it cannot do is superpose: ``combine='add'`` asks for every
+    shape's contribution to be *summed*, which is a property of a Fourier series, not of a
+    staircase of blocks that each hold one index. Asking for it here used to be painted
+    silently, which is the same trap the analytic side had in the other direction.
+
+    Only an actual overlap raises: while no two shapes intersect, painting and adding describe
+    the same structure and any spelling is accepted.
+    """
+    combine = layer[2] if len(layer) > 2 else None
+    if combine is not None and combine not in COMBINE_MODES:
+        raise ValueError(
+            f'Vector layer {layer_index}: combine={combine!r} is not one of {COMBINE_MODES}.')
+    if combine != 'add':
+        return                                         # painting is what this path does
+
+    objects = layer[1]
+    if len(objects) < 1:
+        return
+    try:
+        Px, Py = float(period[0]), float(period[1])
+    except Exception:                                  # noqa: BLE001 - traced period
+        return
+
+    prims = _vector_primitives(objects)
+    if prims is None:
+        return
+
+    hits = _overlap.overlapping_pairs(prims, Px, Py, tol_rel * max(Px, Py))
+    if not hits:
+        return
+
+    i, j, _ox, _oy, _ = hits[0]
+    more = f' (and {len(hits) - 1} more such pair(s))' if len(hits) > 1 else ''
+    what = (f'shape {_vector_shape_name(objects, i)} is larger than the period and runs into '
+            f'its own image' if i == j else
+            f'shapes {_vector_shape_name(objects, i)} and {_vector_shape_name(objects, j)} '
+            f'overlap')
+    raise NotImplementedError(
+        f'Vector layer {layer_index}: {what}{more}, and this path cannot add them. '
+        f"combine='add' superposes every shape's contribution, which this path has no way to "
+        f'express: it draws a staircase of blocks and each block holds one index, so an '
+        f'overlap can only take one of them. Use the analytic path, '
+        f"ucell=[dict(n_base=..., shapes=[...], combine='add')], which superposes, or "
+        f"combine='paint' to keep what this path draws.")
 
 
 def _precision_is_double(type_complex):
@@ -823,11 +900,18 @@ class Modeling:
         return res
 
     def modeling_vector_instruction(self, instructions, plans=None, shape_choices=None):
-        """Run a full instruction set: ``[[base_index, [[shape, *params], ...]], ...]``."""
+        """Run a full instruction set: ``[[base_index, [[shape, *params], ...], combine], ...]``.
+
+        ``combine`` is optional and, on this path, defaults to what this path does: paint.
+        Supplying ``'add'`` asks for the analytic path's superposition, which a staircase of
+        blocks cannot express, so it is refused rather than painted — see
+        :func:`check_vector_layer_combination`.
+        """
         self._shape_replay = list(shape_choices) if shape_choices is not None else None
         self._shape_record = None if shape_choices is not None else []
         layer_info_list = []
-        for layer in instructions:
+        for index, layer in enumerate(instructions):
+            check_vector_layer_combination(layer, self.period, index)
             obj_list_per_layer = []
             base_refractive_index = layer[0]
             for vector_object in layer[1]:
