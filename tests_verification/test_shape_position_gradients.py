@@ -273,17 +273,117 @@ def test_moving_one_layer_of_two_moves_the_answer_and_the_gradient_says_by_how_m
         assert abs(auto1 - fd1) < 1e-5 * abs(fd1), (d, auto1, fd1)
 
 
+# ------------------------------------------------------- more than one shape in a layer
+#
+# The limitation, and it is two things rather than one. A layer's field is ``sum(g/|g|)``
+# divided by its own norm, so:
+#
+#   (a) a *common* translation is not carried by a phase, and the clipped window comes back;
+#   (b) moving one shape *relative* to the others genuinely reshapes the field, and a
+#       rectangle's share of that reshaping is invisible to a grid — its level-set gradient is
+#       piecewise constant, so the derivative lives on the wedge boundaries as a line measure
+#       and no sample sees it.
+#
+# (a) alone is fixable and was tried: place the shapes at their offsets from the *mean* of the
+# centres, which reduces to the present rule when there is one shape, and carry that mean as
+# the phase. It works on paper and in the generic case — a rectangle pair goes from 1.2e-4 to
+# 6.6e-15. It was rejected because it manufactures the degeneracy it needs to avoid: two shapes
+# always land exactly opposed about the centre of the cell, so their unit fields cancel exactly
+# along the segment between them. For two identical circles that puts 16 grid points at
+# ``|n_total| == 0`` (410 below 1e-12), where ``_hypot_safe`` returns a finite value but its
+# gradient is ``0 * inf`` — the common-translation gradient comes back NaN, and the forward
+# jitters by 2.4e-6 as float rounding moves which points land on the segment. It also made (b)
+# worse for rectangles, 1.6e-1 to 2.9e-1 at the same point. One defect for two.
+#
+# (b) is not reachable by any phase, and not by the closed form that would work for a lone
+# rectangle either: the *combined* normalized field is not piecewise constant even when both
+# shapes are rectangles, because ``|sum|`` varies continuously between them. It needs a normal
+# field whose rectangle branch is differentiable in position to begin with — which is the
+# ``tanh`` mollification already rejected, on this path, for breaking
+# ``test_analytic_angle_is_smooth_through_normal``.
+#
+# So: smooth shapes are already right in (b) and only (a) is missing; rectangles are wrong in
+# both. Both halves are pinned below so that neither can be assumed from the other.
+
+TWO_CFG = dict(period=[P, P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
+               wavelength=0.777, n_top=1.0, n_bot=1.5, fto=[4, 4])
+CA, CB = 0.28 * P, 0.68 * P
+
+TWO_CIRCLES = (dict(type='circle', cy=0.30 * P, lx=0.20 * P, n_index=3.0),
+               dict(type='circle', cy=0.70 * P, lx=0.20 * P, n_index=2.2))
+TWO_RECTANGLES = (dict(type='rectangle', cy=0.30 * P, lx=0.20 * P, ly=0.15 * P, angle=0.4,
+                       n_index=3.0),
+                  dict(type='rectangle', cy=0.70 * P, lx=0.20 * P, ly=0.15 * P, angle=0.9,
+                       n_index=2.2))
+
+
+def _two(pair, ca, cb):
+    return [dict(n_base=1.0, shapes=[dict(pair[0], cx=ca), dict(pair[1], cx=cb)])]
+
+
+def _two_total(pair, ca, cb):
+    res = fieldwave.rcwa(backend=0, ucell=_two(pair, ca, cb), **TWO_CFG).conv_solve()
+    return float(np.real(np.sum(np.asarray(res.de_ri))))
+
+
+def _two_jtotal(pair, ca, cb):
+    res = fieldwave.rcwa(backend=1, ucell=_two(pair, ca, cb), **TWO_CFG).conv_solve()
+    return jnp.real(jnp.sum(res.de_ri))
+
+
+def test_two_smooth_shapes_already_carry_a_correct_relative_gradient():
+    """Half of the multi-shape case is not broken, and saying so is the point of this test.
+
+    A circle's normals are ``2*xr/a**2``, linear in position, so moving one circle past another
+    reaches the field through arithmetic that differentiates. Autograd matches central
+    differences to 4.7e-6 - 3.1e-5 here. Whatever is wrong with a multi-shape layer, it is not
+    that the *sum* blocks the gradient — it is the rectangle, which the next test pins.
+    """
+    h = 1e-5
+    for d in (0.02, 0.05, 0.08):
+        auto = float(jax.grad(lambda c: _two_jtotal(TWO_CIRCLES, c, CB))(jnp.asarray(CA + d)))
+        fd = (_two_total(TWO_CIRCLES, CA + d + h, CB)
+              - _two_total(TWO_CIRCLES, CA + d - h, CB)) / (2 * h)
+        assert abs(fd) > 1e-4, (d, fd)
+        assert abs(auto - fd) < 1e-3 * abs(fd), (d, auto, fd)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="a rectangle's normals end in sign(), and with a second shape in the layer there is "
+           'no phase to route its position around that: moving it relative to the other really '
+           'does reshape the normalized sum, and a grid cannot see a piecewise-constant '
+           "field's derivative")
+def test_two_rectangles_carry_a_correct_relative_gradient_too():
+    """The half that is broken, at the point where it breaks.
+
+    Same question as above with rectangles instead of circles, and autograd is off by 11% to
+    105% against central differences. This is ``sign()`` again — the same zero derivative the
+    single-shape case had — but here the phase cannot be used to route around it, because the
+    field genuinely changes shape rather than translating.
+    """
+    h = 1e-5
+    for d in (0.02, 0.05, 0.08):
+        auto = float(jax.grad(lambda c: _two_jtotal(TWO_RECTANGLES, c, CB))(jnp.asarray(CA + d)))
+        fd = (_two_total(TWO_RECTANGLES, CA + d + h, CB)
+              - _two_total(TWO_RECTANGLES, CA + d - h, CB)) / (2 * h)
+        assert abs(fd) > 1e-4, (d, fd)
+        assert abs(auto - fd) < 1e-2 * abs(fd), (d, auto, fd)
+
+
 @pytest.mark.xfail(
     strict=True,
     reason='a layer of several shapes takes a normalized sum of their fields, which no single '
-           'phase translates, so its normal field is still sampled in place')
+           'phase translates, so its normal field is still sampled in place; centring on the '
+           'mean of the shape centres fixes this but manufactures exact cancellations (see the '
+           'note above this test)')
 def test_a_layer_of_two_shapes_is_translation_invariant_too():
-    """The limitation, stated as the test that would notice it going away.
+    """The other half: a common translation, which is the same zero a lone shape gets exactly.
 
-    Moving *both* shapes by the same amount is the same physical translation as moving one, so
-    this is the same zero — but the field of a multi-shape layer is ``sum(g/|g|)`` divided by
-    its own norm, and that sum is not a translate of anything. It stays on the sampled path and
-    keeps the clipped window: 7.1e-4 on ``sum(de_ri)``, against the 1.5e-14 a lone shape gets.
+    Moving *both* shapes by the same amount is one physical translation, so this is the same
+    statement ``test_translation_invariance_holds_in_the_objective`` makes. A multi-shape layer
+    keeps the sampled field and the clipped window: 7.1e-4 on ``sum(de_ri)`` here, 1.2e-4 for
+    the tighter pairs above, against the 1.5e-14 a lone shape gets.
 
     Interpolating each shape's field onto the common grid was tried and rejected — it brings the
     forward spread down to 7e-5 but the residue oscillates over one grid cell, so the *gradient*

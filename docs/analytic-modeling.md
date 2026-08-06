@@ -182,9 +182,15 @@ keep passing.
   inclusion–exclusion handling.
 - The normal field for multiple shapes is a superposition of level-set gradients
   (heuristic). A single shape is exact.
-- A multi-shape layer's position gradients keep the defect described in §2: the normalized
-  sum is not a rigid translate, so its field is sampled in place. Translating such a layer
-  bodily still moves `sum(de_ri)` by 7.1e−4, against 1.5e−14 for a single shape.
+- A multi-shape layer's position gradients keep the defect described in §2, in two halves.
+  Translating such a layer bodily still moves `sum(de_ri)` by 7.1e−4, against 1.5e−14 for a
+  single shape; and moving one shape *relative* to another is right for smooth shapes (4.7e−6
+  against central differences) but 11–105% wrong for rectangles. Centring on the mean of the
+  shape centres fixes the first half (1.2e−4 → 6.6e−15) and was rejected: it places two shapes
+  exactly opposed about the cell centre, their unit fields cancel exactly on grid points, and
+  the gradient there is `0*inf`. The second half needs a rectangle normal field that is
+  differentiable in position to begin with, which is the `tanh` mollification already rejected
+  for breaking smoothness through `angle = 0`.
 - The normal projectors still depend on `analytic_normal_grid` sampling (default 1024) — the
   coefficients themselves are analytic, and the shape's *position* is now carried
   analytically too, but the field's shape (size, rotation) retains grid error. Increase the

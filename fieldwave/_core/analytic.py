@@ -393,13 +393,40 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype)
     reached ``sum(de_ri)`` as 1.6e-3, so the same structure translated gave a different answer.
     Built here it reproduces the centred one to 1e-14, at every ``fto``.
 
-    Several shapes cannot use it. The field is a *normalized sum* of the shapes' fields
-    (``sum(g/|g|)`` then divided by its own norm), and moving one shape does not translate that
-    sum — no phase describes it. Interpolating each shape's field onto the common grid instead
-    was measured and rejected: the forward error is small (7e-5 on ``sum(de_ri)``) but it
-    oscillates over one grid cell, so its *derivative* is 2e-1, worse than the bias being
-    removed. Multi-shape layers therefore keep the sampled field, and their position gradients
-    keep the defect above.
+    Several shapes cannot use it, and the reason is worth stating precisely because it is two
+    reasons. The field is a *normalized sum* (``sum(g/|g|)``, divided by its own norm), so a
+    **common** translation is not carried by a phase and the clipped window comes back; and
+    moving one shape **relative** to the others genuinely reshapes the field, which no phase
+    describes at all. The second is the hard half: a rectangle's level-set gradient is piecewise
+    constant, so its derivative is a line measure on the wedge boundaries that no grid sample
+    sees, and the closed form that would serve a lone rectangle does not exist here either —
+    ``|sum|`` varies continuously between two shapes, so the combined field is not piecewise
+    constant even when both of them are rectangles. Measured: two circles, whose normals are
+    linear in position, already agree with central differences to 4.7e-6; two rectangles are off
+    by 11% to 105%.
+
+    Three routes were measured and rejected.
+
+    * *Interpolating* each shape's field onto the common grid holds the forward error to 7e-5,
+      but the residue oscillates over one grid cell, so its derivative is 2e-1 — worse than the
+      bias being removed.
+    * *Centring on the mean of the shape centres* (which reduces to the rule above for one
+      shape) fixes the common-translation half exactly, 1.2e-4 to 6.6e-15 on a rectangle pair.
+      It manufactures the degeneracy it needs to avoid: two shapes then sit exactly opposed
+      about the centre of the cell, their unit fields cancel exactly along the segment between
+      them, and for two identical circles 16 grid points reach ``|n_total| == 0`` — where
+      :func:`_hypot_safe` is finite but its gradient is ``0 * inf``. The common-translation
+      gradient comes back NaN. It also moved the relative-position error for rectangles from
+      1.6e-1 to 2.9e-1.
+    * *Mollifying* ``sign()`` (``tanh(xr/w)``) removes the zero derivative at the source and
+      would serve both halves, but the width that makes the position gradient accurate is not
+      the width that keeps the answer smooth through ``angle = 0``: it broke
+      ``test_analytic_angle_is_smooth_through_normal``, and any value chosen between the two is
+      a tuning constant.
+
+    Multi-shape layers therefore keep the sampled field. Both halves of what that costs are
+    pinned in ``test_shape_position_gradients.py``, the working one as a test and the broken one
+    as a strict xfail, so neither can be inferred from the other.
     """
     Px, Py = period[0], period[1]
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
