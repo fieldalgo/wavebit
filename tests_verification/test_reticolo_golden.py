@@ -32,7 +32,6 @@ import numpy as np
 import pytest
 
 import fieldwave
-from fieldwave import FourierType
 
 GOLDEN_PATH = pathlib.Path(__file__).parent / 'golden_reticolo.npz'
 
@@ -79,7 +78,7 @@ CASES = {
 
 def _solve(name, backend=0):
     kw = dict(CASES[name])
-    return fieldwave.rcwa(backend=backend, fourier_type=FourierType.CONTINUOUS,
+    return fieldwave.rcwa(backend=backend, fourier_coefficients='integrated',
                           **kw).conv_solve()
 
 
@@ -183,7 +182,7 @@ def test_the_raster_path_holds_the_same_tolerance(name):
     """
     g = _golden()
     kw = dict(CASES[name])
-    res = fieldwave.rcwa(backend=0, fourier_type=FourierType.DFS, **kw).conv_solve()
+    res = fieldwave.rcwa(backend=0, fourier_coefficients='sampled', **kw).conv_solve()
     for side, arr in (('ri', res.de_ri), ('ti', res.de_ti)):
         got = np.real(np.asarray(arr)).ravel()[g[f'{name}__idx_{side}']]
         assert np.abs(got - g[f'{name}__de_{side}']).max() < 1e-11, (name, side)

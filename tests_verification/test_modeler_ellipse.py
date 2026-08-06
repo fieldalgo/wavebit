@@ -222,8 +222,9 @@ def test_converged_efficiency_matches_a_raster_of_the_same_ellipse():
                       ELLIPSE['cx'], ELLIPSE['cy']) <= 1.0
     ucell = np.where(inside, ELLIPSE['n_index'], ELLIPSE['n_base'])[None]
 
-    raster = float(np.sum(fieldwave.rcwa(backend=0, ucell=ucell, fourier_type=0, **SOLVE_KW)
-                          .conv_solve().de_ti))
+    raster = float(np.sum(fieldwave.rcwa(backend=0, ucell=ucell,
+                                         fourier_coefficients='sampled', factorization='li',
+                                         **SOLVE_KW).conv_solve().de_ti))
 
     assert solve_vector(320) == pytest.approx(raster, abs=2e-4)
 

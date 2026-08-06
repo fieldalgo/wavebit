@@ -91,9 +91,9 @@ order. Here they sum to 1 within 1e-15, as a lossless structure must.
 The integer codes have named equivalents, if you prefer them to the literals:
 
 ```python
-from fieldwave import Backend, Pol, FourierType
+from fieldwave import Backend, Pol, Factorization
 
-solver = fieldwave.rcwa(backend=Backend.JAX, pol=Pol.TM, fourier_type=FourierType.NVF, ...)
+solver = fieldwave.rcwa(backend=Backend.JAX, pol=Pol.TM, factorization=Factorization.NVF, ...)
 ```
 
 ## Backends
@@ -151,20 +151,32 @@ solver = fieldwave.rcwa(backend=0, period=[700., 700.], ucell=ucell, ...)
 
 ### Fourier factorization
 
-For the raster path, `fourier_type` chooses how the permittivity is factorized. It changes
-how fast the result converges with `fto`, not what it converges to:
+For the raster path, two independent keywords decide how the permittivity becomes convolution
+matrices. They change how fast the result converges with `fto`, not what it converges to:
 
 ```python
-solver = fieldwave.rcwa(backend=0, fourier_type=0, ...)   # the default
+solver = fieldwave.rcwa(backend=0, fourier_coefficients='sampled', factorization='li', ...)
 ```
 
-| `fourier_type` | Name | Notes |
-| --- | --- | --- |
-| `0` | **DFS** — discrete Fourier series | Li's rules on the raster. The default, and the only one that survives `jax.grad` without a frozen geometry. |
-| `1` | **CFS** — continuous Fourier series | Analytic transform of the raster's rectangles. The most accurate path here, and the algorithm Reticolo uses. |
-| `2` | **NVF** — normal vector field | Factorizes along the material interfaces. Made for curved and tilted boundaries, where a staircase converges slowly. |
+`fourier_coefficients` — how a layer's Fourier coefficients are obtained:
 
-The analytic path always uses the NVF form and ignores `fourier_type`. Its derivation,
+| Value | Notes |
+| --- | --- |
+| `'sampled'` | Discrete series straight off the pixel grid. The default, and the only one that survives `jax.grad` without a frozen geometry. |
+| `'integrated'` | Closed-form transform of the raster's rectangles. The more accurate route, and the one Reticolo uses. |
+
+`factorization` — which rule closes the products of discontinuous functions:
+
+| Value | Notes |
+| --- | --- |
+| `'li'` | Li's rules, applied along x and y. The default. |
+| `'nvf'` | Normal vector field — factorizes along the material interfaces. Made for curved and tilted boundaries, where a staircase converges slowly. |
+
+All four pairings work. The deprecated `fourier_type` integer expressed only three of them —
+`0 = ('sampled', 'li')`, `1 = ('integrated', 'li')`, `2 = ('sampled', 'nvf')` — and had no
+code at all for `('integrated', 'nvf')`, the pairing a fit of a tilted sidewall wants.
+
+The analytic path always uses the NVF form and ignores both keywords. Its derivation,
 convergence data and limitations are written up in
 [docs/analytic-modeling.md](docs/analytic-modeling.md).
 
@@ -221,7 +233,8 @@ grad = jax.grad(lambda u: jnp.sum(
 ```
 
 Omit `geometry` and each decision is auto-detected eagerly instead — which reproduces the
-same numbers, but only `fourier_type=0` survives `jax.grad`, and nothing survives `jax.jit`.
+same numbers, but only the default `('sampled', 'li')` pairing survives `jax.grad`, and
+nothing survives `jax.jit`.
 
 ## Validation
 
@@ -265,17 +278,22 @@ The physics carries over; the names changed, and one convention did.
 | `import meent` | `import fieldwave` |
 | `meent.call_mee(backend=...)` | `fieldwave.rcwa(backend=...)` |
 | `MeeNumpy` / `MeeJax` / `MeeTorch` | `SolverNumpy` / `SolverJax` / `SolverTorch` |
+| `fourier_type=0` / `=1` / `=2` | `fourier_coefficients` + `factorization` (see above) |
 | MIT | Apache-2.0 |
+
+`fourier_type` still works and still means what it did, with a `DeprecationWarning`; it split
+because one integer was standing for two independent choices.
 
 Everything else — `conv_solve`, `ucell`, `thickness`, `fto`, `period`, `pol`,
 `connecting_algo`, the `de_ri` / `de_ti` results — keeps its name and meaning.
 
 One result does change. meent's CFS path read `ucell` row `0` as the *last* y while its other
 paths read it as the first, so the same array described two different structures depending on
-`fourier_type`. At `phi = 0` this is invisible; away from it, CFS was ~1e-2 off Reticolo.
-FieldWave reads row `0` as `y = 0` everywhere, and CFS now agrees to ~1e-13. If you are
-reproducing a meent result at oblique azimuth with `fourier_type=1`, expect a difference —
-this one is the fix, not a regression.
+meent's `fourier_type`. At `phi = 0` this is invisible; away from it, CFS was ~1e-2 off
+Reticolo. FieldWave reads row `0` as `y = 0` everywhere, and CFS now agrees to ~1e-13. If you
+are reproducing a meent result at oblique azimuth with meent's `fourier_type=1` —
+`fourier_coefficients='integrated'` here — expect a difference: this one is the fix, not a
+regression.
 
 ## Roadmap
 

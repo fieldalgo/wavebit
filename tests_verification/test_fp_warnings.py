@@ -110,11 +110,14 @@ def test_conical_stack_is_silent_and_conserves_energy(connecting_algo):
     assert abs(_energy(res) - 1.0) < 1e-10
 
 
-@pytest.mark.parametrize('fourier_type', [0, 1, 2])
-def test_every_factorization_is_silent(fourier_type):
+@pytest.mark.parametrize('strategy',
+                         [dict(fourier_coefficients=c, factorization=f)
+                          for c in ('sampled', 'integrated') for f in ('li', 'nvf')],
+                         ids=['sampled-li', 'sampled-nvf', 'integrated-li', 'integrated-nvf'])
+def test_every_factorization_is_silent(strategy):
     """The convolution builders were the loudest sites of all under the broken NumPy."""
     res, fp = _run(ucell=_ucell_2d(), thickness=[600], period=[700, 700], fto=[6, 6],
-                   pol=1, n_bot=3.48, fourier_type=fourier_type)
+                   pol=1, n_bot=3.48, **strategy)
     assert fp == []
     assert abs(_energy(res) - 1.0) < 1e-10
 

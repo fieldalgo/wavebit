@@ -420,7 +420,7 @@ def test_overlapping_shapes_move_the_answer_while_the_vector_path_does_not():
         return float(np.sum(np.asarray(
             fieldwave.rcwa(backend=0, ucell=ucell, **extra, **cfg).conv_solve().de_ti)))
 
-    want = total(raster[None], fourier_type=0)
+    want = total(raster[None], fourier_coefficients='sampled')
     vector = total([[n_base, [['rectangle', cx, 150.0, 120.0, 120.0, n, 0, 0, 0]
                               for cx, n in boxes]]])
     analytic = total([dict(n_base=n_base,

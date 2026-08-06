@@ -18,6 +18,6 @@
 ## Fourier factorization
 * [NVF Fourier factorization](04-nvf-fourier-factorization.ipynb)
   * why a curved, high-contrast boundary converges slowly under a plain discrete Fourier sum,
-    and what the normal vector field (`fourier_type=2`) does about it.
+    and what the normal vector field (`factorization='nvf'`) does about it.
   * also shows `freeze_geometry()`, the object that holds the normal field fixed and keeps a
     solve traceable.
