@@ -31,8 +31,10 @@ jobs:
           python-version: '3.12'
           cache: pip
 
-      # Installed ahead of the package so pip already sees torch>=2.7 as
+      # Installed ahead of the package so pip already sees torch>=2.13 as
       # satisfied and does not pull the multi-gigabyte CUDA wheel from PyPI.
+      # The CPU index's latest is well above the floor, so this stays satisfied;
+      # if the floor ever passes what that index serves, pin it here instead.
       - name: Install CPU-only PyTorch
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu
 
