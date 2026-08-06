@@ -249,8 +249,9 @@ def test_a_stale_raster_record_is_refused_rather_than_answered(strategy):
     there, and the answer comes back wrong without looking wrong. Measured on a 40x40 rod frozen
     at 12 cells wide and replayed wider, before either check existed: NVF read a total of 0.710
     against a true 0.346, with single orders 0.55 off; CFS returned the *same* total (0.591) for
-    widths 13, 16, 20 and 24 while the true answers ran 0.733 down to 0.496 — the replay had
-    collapsed the layer back onto the one it was frozen on.
+    widths 13, 16, 20 and 24 while the true answers ran 0.733 down to 0.496 — those four sample
+    to the same three values at the frozen indices, so they all build one profile that is
+    neither the true layer nor the frozen one (whose own answer is 0.490).
 
     This pins both halves, as the vector-path test does: refused where the record no longer
     fits, and exact where it is accepted, so the check is not merely conservative.

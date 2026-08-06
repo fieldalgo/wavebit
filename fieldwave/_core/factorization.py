@@ -689,11 +689,14 @@ def _steps_along(cell, axis):
 def _check_compression_still_fits(cell, record, index):
     """Refuse a frozen compression whose cut no longer separates the layer's blocks.
 
-    The record says which rows and columns end a constant block. Move the pattern in the raster
-    and the gather takes the wrong ones, collapsing the layer onto the one it was frozen on —
-    literally: a 40x40 rod frozen at 12 cells wide and replayed at 13, 16, 20 and 24 returns
-    the *same* total every time (0.591) while the true answers run 0.733 down to 0.496, and the
-    per-order efficiencies land up to 0.24 off.
+    The record says which rows and columns end a constant block, *and* where those blocks'
+    edges sit. Move the pattern in the raster and the gather samples the new layer at the old
+    indices, then pins those samples to the old edges — building a layer that is neither the
+    frozen one nor the true one. Whole ranges of structures land on the same wrong profile: a
+    40x40 rod frozen at 12 cells wide and replayed at 13, 16, 20 and 24 samples to the same
+    three values every time, so it returns the same total every time (0.591) while the true
+    answers run 0.733 down to 0.496 — and the frozen structure's own answer is 0.490, which is
+    none of them. Per-order efficiencies land up to 0.24 off.
 
     What matters is not that the record is the one this layer would produce, but that it is
     still *a* description of it: every place the layer steps has to be cut. A cut with a
