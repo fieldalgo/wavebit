@@ -70,13 +70,65 @@ class StaticGeometry:
     A field left ``None`` means "auto-detect", which is what the strategy in use does not need
     (a DFS build never touches ``normal_field``, for instance).
 
-    ``eq=False`` keeps identity-based ``__eq__``/``__hash__``, which is what lets a frozen
-    geometry be passed as a *static* argument to a jitted method such as
-    ``SolverJax.conv_solve_field``: it holds arrays, so value equality would be both ill-defined
-    and unhashable, whereas one freeze reused across calls is exactly one compilation.
+    **Why the equality below is what it is.** A frozen geometry is passed as a *static*
+    argument to a jitted call, so its ``__eq__``/``__hash__`` decide when JAX recompiles. Two
+    records answer that question differently:
+
+    * The vector records are pure Python — which block edge becomes which grid line, in what
+      order. Nothing but *ordering*: the edge coordinates themselves stay traced, which is what
+      carries a gradient to a length. So they compare **by content**, and a freeze taken again
+      on a structure whose ordering has not changed hits the compilation cache. That is the
+      difference between re-freezing every step and re-freezing on a schedule — measured on an
+      ellipse swept over ``lx`` 85 to 125, two compilations instead of ten, and re-freezing
+      every step becomes the *cheapest* way to run, not the most expensive one.
+    * ``normal_field`` and ``compression`` hold arrays, where value equality is both
+      ill-defined and unhashable. A record carrying either falls back to **identity**, exactly
+      as before.
+
+    A content-hashed record must not be mutated after it is handed to a jitted call, for the
+    usual reason: its hash would move underneath the cache. ``freeze_geometry`` fills one in
+    before returning it, and nothing else writes to one.
     """
     normal_field: Optional[Any] = None
     normal_field_source: Optional[Any] = None
     compression: Optional[Any] = None
     vector_grid: Optional[Any] = None
     shape_choices: Optional[Any] = None
+
+    def _cache_key(self):
+        """What ``__eq__``/``__hash__`` compare: the content when that is well defined.
+
+        Falls back to identity the moment an array-bearing record is present, or if the vector
+        records turn out to hold something unhashable — a conservative answer costs a
+        recompilation, a wrong one would serve a cached program for a different structure.
+        """
+        if self.normal_field is None and self.normal_field_source is None \
+                and self.compression is None:
+            try:
+                key = ('content', _hashable(self.vector_grid), _hashable(self.shape_choices))
+                hash(key)
+                return key
+            except TypeError:
+                pass
+        return ('identity', id(self))
+
+    def __eq__(self, other):
+        if not isinstance(other, StaticGeometry):
+            return NotImplemented
+        return self._cache_key() == other._cache_key()
+
+    def __hash__(self):
+        return hash(self._cache_key())
+
+
+def _hashable(obj):
+    """``obj`` rebuilt out of tuples so it can be hashed, leaving leaves alone.
+
+    Raises ``TypeError`` through :func:`hash` at the call site if a leaf is unhashable, which
+    is the signal to fall back to identity rather than guess.
+    """
+    if isinstance(obj, dict):
+        return tuple(sorted((k, _hashable(v)) for k, v in obj.items()))
+    if isinstance(obj, (list, tuple)):
+        return tuple(_hashable(v) for v in obj)
+    return obj

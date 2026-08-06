@@ -123,13 +123,23 @@ def test_every_traceable_fourier_strategy_runs_under_jit(fourier_coefficients):
     assert np.isfinite(np.asarray(result.de_ti)).all()
 
 
-def test_reusing_one_geometry_compiles_once():
-    """A frozen geometry is a static argument keyed by identity: reuse it and you compile once."""
+def test_a_freeze_recompiles_only_when_its_content_moves():
+    """A frozen geometry is a static argument, so what it compares by decides recompilation.
+
+    It used to compare by identity, which made *taking a freeze again* a recompilation even
+    when it recorded exactly the same decisions. That is the wrong default for the loop this
+    API is for: re-freezing every step is the only way a fit cannot be served a stale record,
+    and identity comparison priced it at a full recompilation per step. Records that can say
+    what they contain now do, so an unchanged structure re-freezes into the same cache entry.
+
+    Records holding arrays still fall back to identity — value equality on an array is neither
+    well defined nor hashable — so this pins both halves.
+    """
     import jax
     from fieldwave.on_jax.emsolver.rcwa import RCWAJax
 
     jax.clear_caches()
-    solver = _solver(1, '1d_conical')
+    solver = _solver(1, '1d_conical')          # ('sampled', 'li'): records nothing at all
     geometry = solver.freeze_geometry()
     before = RCWAJax.conv_solve_field._cache_size()
 
@@ -137,9 +147,15 @@ def test_reusing_one_geometry_compiles_once():
     solver.conv_solve_field(res_x=8, res_y=1, res_z=4, geometry=geometry)
     assert RCWAJax.conv_solve_field._cache_size() == before + 1
 
-    # A different freeze is a different structure as far as the trace is concerned.
+    # Freezing again on the same structure records the same thing, so it is the same program.
     solver.conv_solve_field(res_x=8, res_y=1, res_z=4, geometry=solver.freeze_geometry())
-    assert RCWAJax.conv_solve_field._cache_size() == before + 2
+    assert RCWAJax.conv_solve_field._cache_size() == before + 1
+
+    # A record carrying arrays cannot compare by content, and says so by compiling again.
+    nvf = _solver(1, '1d_conical', factorization='nvf')
+    nvf.conv_solve_field(res_x=8, res_y=1, res_z=4, geometry=nvf.freeze_geometry())
+    nvf.conv_solve_field(res_x=8, res_y=1, res_z=4, geometry=nvf.freeze_geometry())
+    assert RCWAJax.conv_solve_field._cache_size() == before + 3
 
 
 def test_resolution_and_field_selection_are_static():

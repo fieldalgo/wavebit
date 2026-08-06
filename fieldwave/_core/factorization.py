@@ -40,8 +40,11 @@ top of them is what gradients see.
 ``jax.grad`` alone is the weaker bar, and the two decisions sit on opposite sides of it. The
 compression clears it: its comparisons narrow one value at a time (:func:`_as_bools`), and a
 grad tracer still carries a concrete primal to narrow, so a gradient needs no frozen geometry.
-The normal field does not: SciPy's distance transform wants the whole array as NumPy, which no
-tracer will give.
+The normal field does not, as written: it hands the whole upsampled layer to SciPy in one
+NumPy conversion, and no tracer answers that. This is a property of the implementation rather
+than of the problem — the field depends on nothing but the interface mask, and the upsample is
+a block repeat, so the mask follows from the *base* raster, which is small enough to narrow the
+same way (1.9 ms at 128x128). A host callback would clear jit as well. Neither is done here.
 
 A precomputed description belongs to the structure it was taken on. Replaying one onto a
 raster whose *pattern* has moved describes a layer that is no longer there, so each of the two

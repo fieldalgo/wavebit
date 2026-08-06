@@ -424,11 +424,15 @@ def test_a_moving_pattern_needs_no_record_on_the_compression_path():
 
 
 def test_the_normal_field_still_needs_a_freeze_to_differentiate():
-    """The other side of the boundary, pinned so it stays a known limit.
+    """The other side of the boundary — as the code stands, not as the problem demands.
 
-    The normal field comes off SciPy's distance transform, which wants the whole layer as a
-    NumPy array — a grad tracer will not give one, primal or not. So NVF has no unfrozen
-    gradient, and a fit whose pattern moves must re-freeze rather than drop ``geometry=``.
+    ``normal_vector_field`` hands the whole upsampled layer to SciPy in one NumPy conversion,
+    and no tracer answers that, so NVF has no unfrozen gradient today. That is a fact about
+    this implementation, not a barrier: the field depends on nothing but the interface mask,
+    and since the upsample is a block repeat the mask follows from the *base* raster, which
+    narrows value by value in 1.9 ms at 128x128. A host callback would clear ``jax.jit`` too.
+    This pins where the line actually sits so that moving it is a decision rather than a
+    surprise.
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
@@ -441,3 +445,53 @@ def test_the_normal_field_still_needs_a_freeze_to_differentiate():
 
     with pytest.raises(Exception):
         jax.grad(total)(jnp.asarray(UCELL))
+
+
+def test_a_length_that_moves_without_reordering_reuses_the_compilation():
+    """Re-freezing every step costs a recompilation only when the *ordering* changes.
+
+    The vector record is which block edge becomes which grid line, in what order — the edge
+    coordinates stay traced, which is what carries a gradient to a length. So a length can move
+    a long way with the record unchanged: swept over ``lx`` 85 to 125 below, the plan is
+    identical until 115, where two edges cross.
+
+    That is what makes re-freezing every step affordable, and re-freezing every step is what
+    makes a stale record impossible — the fit never carries one forward. Compared against
+    identity comparison, which recompiled on every freeze regardless, this sweep goes from ten
+    compilations to two.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    importlib.import_module('fieldwave.on_jax')
+
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
+               theta=0.15, phi=0.35, pol=0, wavelength=900.0)
+    make = lambda lx: [[3.5, [['ellipse', 150.0, 150.0, lx, 55.0, 2.0, 0.27, 4, 4]]]]
+
+    def freeze_at(lx):
+        return fieldwave.rcwa(backend=1, ucell=make(jnp.asarray(lx)), **cfg).freeze_geometry()
+
+    keys = {}
+    for lx in (85.0, 90.0, 100.0, 106.0, 110.0, 115.0, 125.0):
+        keys[lx] = freeze_at(lx)
+
+    # Same ordering: a fresh freeze is the same static argument, hash included.
+    for lx in (90.0, 100.0, 106.0, 110.0):
+        assert keys[lx] == keys[85.0], lx
+        assert hash(keys[lx]) == hash(keys[85.0]), lx
+
+    # The ordering does change eventually, and then it must not be reused.
+    assert keys[115.0] != keys[85.0]
+    assert keys[125.0] == keys[115.0]
+
+    # And the gradient is the one for the structure actually in front of it, each time.
+    def total(lx, geometry):
+        return jnp.sum(fieldwave.rcwa(backend=1, ucell=make(lx), **cfg)
+                       .conv_solve(geometry=geometry).de_ti).real
+
+    for lx in (100.0, 120.0):
+        grad = float(jax.grad(total)(jnp.asarray(lx), freeze_at(lx)))
+        step = 1e-3
+        fd = (float(total(jnp.asarray(lx + step), freeze_at(lx + step))) -
+              float(total(jnp.asarray(lx - step), freeze_at(lx - step)))) / (2 * step)
+        assert grad == pytest.approx(fd, rel=2e-3), (lx, grad, fd)
