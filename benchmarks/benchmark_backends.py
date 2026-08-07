@@ -87,6 +87,47 @@ class Budget:
         return self.limit is None or self.left() > estimate_s
 
 
+
+# ------------------------------------------------------------------ machine state
+
+def _probe_step():
+    """One fixed, mid-sized solve. Not a result — a ruler for the machine itself."""
+    import torch
+    rng = np.random.default_rng(0)
+    pattern = np.where(rng.random((1, 64, 64)) < 0.35, 3.5, 1.0)
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[5, 5], n_top=1.0, n_bot=1.0,
+               theta=0.15, phi=0.35, psi=0.3, wavelength=900.0)
+
+    def step():
+        t = torch.tensor(pattern, requires_grad=True)
+        out = fieldwave.rcwa(backend=2, ucell=t, **STRATEGIES['DFS'], **cfg).conv_solve()
+        out.res.de_ti.real.sum().backward()
+
+    return step
+
+
+def warm_up(seconds=45):
+    """Run the probe until the machine settles, before anything is timed.
+
+    Without this the first sweep is measured on a cold machine and the later ones on a warm
+    one, which showed up as the raster tables being systematically slower than the vector ones
+    in the same run — a property of the ordering, not of the code under test.
+    """
+    step = _probe_step()
+    print(f'[warm-up] {seconds} s ...', flush=True)
+    deadline = time.perf_counter() + seconds
+    while time.perf_counter() < deadline:
+        step()
+
+
+def drift(label, out):
+    """Time the probe and record it, so a run states its own repeatability."""
+    ms = _time(_probe_step(), reps=3)
+    out.append({'at': label, 'ms': ms})
+    print(f'[drift] {label}: {ms:.0f} ms', flush=True)
+    checkpoint({'drift': out})
+
+
 # ------------------------------------------------------------------ the three modes
 
 def _fingerprint(grad):
@@ -387,6 +428,13 @@ def report(state):
         table(rows, 'Re-freezing every step while lx moves — where the recompilation lands',
               ['lx', 'ms', 'grad'])
 
+    if 'drift' in state:
+        rows = [[e['at'], f'{e["ms"]:.0f}'] for e in state['drift']]
+        first = state['drift'][0]['ms']
+        rows.append(['spread', f'{max(e["ms"] for e in state["drift"]) / min(e["ms"] for e in state["drift"]):.2f}x'])
+        table(rows, 'Machine drift over the run — one fixed configuration, timed three times',
+              ['at', 'ms'])
+
     if 'stale_window' in state:
         rows = []
         for e in state['stale_window']:
@@ -419,8 +467,13 @@ def main():
     print(f'# FieldWave backend benchmark  (budget {args.budget:.0f} s, reps {args.reps})\n',
           flush=True)
 
+    warm_up(5 if args.quick else 45)
+    marks = []
+    drift('start', marks)
     sweep_vector(budget, args.reps, args.quick)
+    drift('after vector', marks)
     sweep_raster(budget, args.reps, args.quick)
+    drift('after raster', marks)
     sweep_recompile(budget, args.reps)
     if not args.quick:
         sweep_stale_window(budget)
