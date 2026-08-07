@@ -423,28 +423,86 @@ def test_a_moving_pattern_needs_no_record_on_the_compression_path():
         assert float(np.sum(grad * d)) == pytest.approx(fd, rel=1e-4, abs=1e-9)
 
 
-def test_the_normal_field_still_needs_a_freeze_to_differentiate():
-    """The other side of the boundary — as the code stands, not as the problem demands.
+def test_the_normal_field_decides_itself_inside_a_gradient_too():
+    """NVF differentiates unfrozen as well, so no raster strategy is forced to hold a record.
 
-    ``normal_vector_field`` hands the whole upsampled layer to SciPy in one NumPy conversion,
-    and no tracer answers that, so NVF has no unfrozen gradient today. That is a fact about
-    this implementation, not a barrier: the field depends on nothing but the interface mask,
-    and since the upsample is a block repeat the mask follows from the *base* raster, which
-    narrows value by value in 1.9 ms at 128x128. A host callback would clear ``jax.jit`` too.
-    This pins where the line actually sits so that moving it is a decision rather than a
-    surprise.
+    It could not before, and the reason was narrow: ``normal_vector_field`` handed the whole
+    *upsampled* layer to SciPy in one NumPy conversion, which no tracer answers. But the field
+    reads nothing except the interface mask, and the upsample is a block repeat -- so the mask
+    follows from the base raster, which narrows value by value like the compression's
+    comparisons do, with ``repeat_y * repeat_x`` fewer of them.
+
+    What this buys is the same thing the compression got: a fit whose raster pattern moves
+    every step carries no record, so it cannot be served a stale one.
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
 
-    nvf = dict(fourier_coefficients='sampled', factorization='nvf')
+    for strategy in (dict(fourier_coefficients='sampled', factorization='nvf'),
+                     dict(fourier_coefficients='integrated', factorization='nvf')):
+        def total(u):
+            return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **strategy, **KW)
+                           .conv_solve().res.de_ti).real
+
+        grad = np.asarray(jax.grad(total)(jnp.asarray(UCELL)))
+        assert grad.shape == UCELL.shape and np.isfinite(grad).all()
+
+        # Deriving the mask instead of reading it is meant to be the same mask, so the frozen
+        # and unfrozen paths must not merely agree -- they must be the same computation.
+        solver = fieldwave.rcwa(backend=1, ucell=UCELL, **strategy, **KW)
+        frozen = solver.freeze_geometry()
+
+        def total_frozen(u):
+            return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **strategy, **KW)
+                           .conv_solve(geometry=frozen).res.de_ti).real
+
+        assert np.array_equal(grad, np.asarray(jax.grad(total_frozen)(jnp.asarray(UCELL))))
+
+
+def test_the_nvf_gradient_holds_the_interfaces_fixed():
+    """Pins what the NVF gradient *is*, because a finite difference does not measure it.
+
+    The normal field is geometry: the gradient is taken with the interfaces held where they
+    are. On a raster whose cells take two values that makes a finite difference the wrong
+    instrument -- nudging a cell that shares a value with a neighbour *creates* an interface
+    between them, so the difference quotient straddles two different structures and disagrees
+    by 3-37%. Nudge a cell that already differs from all four neighbours, where the mask cannot
+    move, and it agrees to 5e-8.
+
+    Worth pinning because the disagreement looks exactly like a broken gradient and is not one.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    from fieldwave._core import factorization as _fac
+
+    strategy = dict(fourier_coefficients='sampled', factorization='nvf')
+    rng = np.random.default_rng(0)
+    ucell = np.where(rng.random((1, 8, 8)) < 0.35, 3.5, 1.0)
 
     def total(u):
-        return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **nvf, **KW)
+        return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **strategy, **KW)
                        .conv_solve().res.de_ti).real
 
-    with pytest.raises(Exception):
-        jax.grad(total)(jnp.asarray(UCELL))
+    def mask_size(u):
+        return int(_fac.normal_field_source_for_ucell(u, KW['fto'][0], KW['fto'][1])[0][1].sum())
+
+    grad = np.asarray(jax.grad(total)(jnp.asarray(ucell)))
+    step = 1e-4
+
+    frozen_interfaces = [(r, c) for r in range(1, 7) for c in range(1, 7)
+                         if all(ucell[0, r + dr, c + dc] != ucell[0, r, c]
+                                for dr, dc in ((1, 0), (-1, 0), (0, 1), (0, -1)))]
+    assert frozen_interfaces, 'no cell isolated enough to probe'
+
+    r, c = frozen_interfaces[0]
+    d = np.zeros_like(ucell)
+    d[0, r, c] = 1.0
+    assert mask_size(ucell + step * d) == mask_size(ucell), 'the probe moved an interface'
+
+    fd = (float(total(jnp.asarray(ucell + step * d))) -
+          float(total(jnp.asarray(ucell - step * d)))) / (2 * step)
+    assert float(np.sum(grad * d)) == pytest.approx(fd, rel=1e-5)
+
 
 
 def test_a_length_that_moves_without_reordering_reuses_the_compilation():

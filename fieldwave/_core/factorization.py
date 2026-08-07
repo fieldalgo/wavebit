@@ -37,14 +37,17 @@ therefore split into an eager step that yields a static description
 consumes it. Pass those precomputed descriptions to stay traceable; the permittivity riding on
 top of them is what gradients see.
 
-``jax.grad`` alone is the weaker bar, and the two decisions sit on opposite sides of it. The
-compression clears it: its comparisons narrow one value at a time (:func:`_as_bools`), and a
-grad tracer still carries a concrete primal to narrow, so a gradient needs no frozen geometry.
-The normal field does not, as written: it hands the whole upsampled layer to SciPy in one
-NumPy conversion, and no tracer answers that. This is a property of the implementation rather
-than of the problem — the field depends on nothing but the interface mask, and the upsample is
-a block repeat, so the mask follows from the *base* raster, which is small enough to narrow the
-same way (1.9 ms at 128x128). A host callback would clear jit as well. Neither is done here.
+``jax.grad`` alone is the weaker bar, and both decisions clear it, because a grad tracer
+carries a concrete primal and so permits narrowing one value at a time even though it refuses a
+whole-array NumPy conversion (:func:`_as_bools`). The compression compares neighbouring
+rows and columns that way directly. The normal field cannot — SciPy wants the mask as an array
+— so it derives that mask from the *base* raster rather than reading it off the upsampled one
+(:func:`_upsampled_interface_mask`); the upsample is a block repeat, so the two are the same
+mask, and the base has ``repeat_y * repeat_x`` fewer values to narrow. **Neither raster
+strategy needs a frozen geometry to differentiate**, which is what makes a fit whose pattern
+moves every step safe: with no record there is nothing to go stale.
+
+``jax.jit`` is the bar neither clears, and that is what a frozen geometry is for.
 
 A precomputed description belongs to the structure it was taken on. Replaying one onto a
 raster whose *pattern* has moved describes a layer that is no longer there, so each of the two
@@ -186,10 +189,24 @@ def _layer_eps(xp, ucell, fto_x, fto_y, enhanced_dfs):
     still upsamples: its normal field is a geometric construction that genuinely needs the
     finer grid, and no closed form replaces it.
     """
+    for eps, _, _, _ in _layer_eps_detail(xp, ucell, fto_x, fto_y, enhanced_dfs):
+        yield eps
+
+
+def _layer_eps_detail(xp, ucell, fto_x, fto_y, enhanced_dfs):
+    """:func:`_layer_eps`, plus the grid it was repeated from and by how much.
+
+    The NVF path needs those: its interface mask can be derived from the *base* grid rather
+    than read off the upsampled one, which is the difference between narrowing 128x128 values
+    and 2688x2688 (see :func:`_upsampled_interface_mask`). Yields
+    ``(eps, base_eps, repeat_y, repeat_x)``, where ``base_eps`` is the layer before repeating
+    and the factors are 1 when it was not repeated.
+    """
     if enhanced_dfs is None:
         for i in range(ucell.shape[0]):
             layer = ucell[i]
-            yield xp.astype(layer, _complex_dtype(xp, layer)) ** 2
+            eps = xp.astype(layer, _complex_dtype(xp, layer)) ** 2
+            yield eps, eps, 1, 1
         return
 
     if enhanced_dfs:
@@ -201,11 +218,14 @@ def _layer_eps(xp, ucell, fto_x, fto_y, enhanced_dfs):
 
     for i in range(ucell.shape[0]):
         layer = ucell[i]
-        if layer.shape[0] < min_y:
-            layer = xp.repeat(layer, min_y // layer.shape[0] + 1, axis=0)
-        if layer.shape[1] < min_x:
-            layer = xp.repeat(layer, min_x // layer.shape[1] + 1, axis=1)
-        yield xp.astype(layer, _complex_dtype(xp, layer)) ** 2
+        base = xp.astype(layer, _complex_dtype(xp, layer)) ** 2
+        repeat_y = min_y // layer.shape[0] + 1 if layer.shape[0] < min_y else 1
+        repeat_x = min_x // layer.shape[1] + 1 if layer.shape[1] < min_x else 1
+        if repeat_y > 1:
+            layer = xp.repeat(layer, repeat_y, axis=0)
+        if repeat_x > 1:
+            layer = xp.repeat(layer, repeat_x, axis=1)
+        yield xp.astype(layer, _complex_dtype(xp, layer)) ** 2, base, repeat_y, repeat_x
 
 
 def to_conv_mat_raster_discrete(ucell, fto_x, fto_y, enhanced_dfs=True):
@@ -259,14 +279,19 @@ def _to_numpy(x):
     return np.asarray(x)
 
 
-def normal_vector_field(eps_matrix):
+def normal_vector_field(eps_matrix, interface_mask=None):
     """Unit normal vector field ``(nx, ny)`` of a raster layer, via a signed-distance field.
 
     This is a **geometry** quantity — it depends on where the material interfaces sit, not on
     the permittivity values carried between them — so it is computed eagerly in NumPy/SciPy
-    and then held fixed while gradients flow through the permittivity. Requires a concrete
-    array; under a JAX trace, pass a precomputed field instead (see
-    :func:`to_conv_mat_raster_nvf`).
+    and then held fixed while gradients flow through the permittivity.
+
+    ``interface_mask`` is the one input the whole construction reads (see
+    :func:`_interface_mask`). Supplying it lets a caller that can obtain the mask some other
+    way skip the whole-array NumPy conversion this would otherwise need, which is what lets the
+    NVF paths differentiate without a frozen geometry — see
+    :func:`_upsampled_interface_mask`. Left ``None``, the mask is read off ``eps_matrix``,
+    which needs concrete values.
 
     The signed-distance field is the only raster method offered, deliberately. The
     factorization needs a normal field that is unit magnitude across the *whole* cell — that
@@ -282,18 +307,20 @@ def normal_vector_field(eps_matrix):
     import numpy as np
     from scipy.ndimage import distance_transform_edt
 
-    eps = _to_numpy(eps_matrix)
+    shape = tuple(eps_matrix.shape)
 
     # A one-cell axis carries no interface of its own: the structure cannot vary along it, so
     # every normal points along the other axis. Say so directly -- `np.gradient` needs three
     # cells and would otherwise raise, which is what made NVF unusable on 1D gratings. With a
     # constant normal the NVF projector reduces to Li's rules exactly (C_xx = I, C_xy = C_yy =
     # 0 gives eps_xx = <1/eps>^-1 and eps_yy = <eps>), so this is not an approximation.
-    if 1 in eps.shape:
-        along_x = np.ones(eps.shape), np.zeros(eps.shape)
-        return along_x if eps.shape[0] == 1 else (along_x[1], along_x[0])
+    if 1 in shape:
+        along_x = np.ones(shape), np.zeros(shape)
+        return along_x if shape[0] == 1 else (along_x[1], along_x[0])
 
-    dist_map = distance_transform_edt(~_interface_mask(eps))
+    if interface_mask is None:
+        interface_mask = _interface_mask(_to_numpy(eps_matrix))
+    dist_map = distance_transform_edt(~interface_mask)
     gy, gx = np.gradient(dist_map)
     norm = np.hypot(gx, gy)
     norm[norm == 0] = 1.0
@@ -309,6 +336,59 @@ def _interface_mask(eps):
     border[:, 1:] |= (eps[:, 1:] != eps[:, :-1])
     border[:, :-1] |= (eps[:, :-1] != eps[:, 1:])
     return border
+
+
+def _upsampled_interface_mask(xp, base_eps, repeat_y, repeat_x):
+    """The interface mask of a block-repeated grid, from the base grid's neighbour comparisons.
+
+    :func:`_layer_eps_detail` upsamples by repeating each cell, so the repeated grid is
+    constant inside every block. Two neighbouring cells of it can therefore only differ where
+    they straddle a block boundary *and* the base differs across it — which means the whole
+    mask follows from ``(base_ny-1)*base_nx + base_ny*(base_nx-1)`` comparisons on the base,
+    rather than one read of the repeated grid.
+
+    That is the whole point. Reading the repeated grid means converting it to NumPy in one
+    step, which a tracer refuses; narrowing the base's comparisons one value at a time is
+    something a grad tracer allows, and there are ``repeat_y * repeat_x`` times fewer of them —
+    128x128 rather than 2688x2688 at ``fto=5``. It is what lets NVF differentiate with no
+    frozen geometry. (Under ``jax.jit`` neither works: there is no primal to narrow.)
+
+    Note this is *not* the base's own mask repeated. Repeating ``[1, 2]`` twice gives
+    ``[1, 1, 2, 2]``, whose border cells are the middle two, not all four.
+    """
+    import numpy as np
+
+    base_ny, base_nx = tuple(base_eps.shape)
+    border = np.zeros((base_ny * repeat_y, base_nx * repeat_x), dtype=bool)
+
+    if base_ny > 1:
+        differs = _as_bools(xp, base_eps[:-1, :] != base_eps[1:, :])
+        differs = np.repeat(differs, repeat_x, axis=1)
+        last_of_block = np.arange(base_ny - 1) * repeat_y + repeat_y - 1
+        border[last_of_block, :] |= differs
+        border[last_of_block + 1, :] |= differs
+
+    if base_nx > 1:
+        differs = _as_bools(xp, base_eps[:, :-1] != base_eps[:, 1:])
+        differs = np.repeat(differs, repeat_y, axis=0)
+        last_of_block = np.arange(base_nx - 1) * repeat_x + repeat_x - 1
+        border[:, last_of_block] |= differs
+        border[:, last_of_block + 1] |= differs
+
+    return border
+
+
+def _interface_mask_of(xp, eps, base_eps, repeat_y, repeat_x):
+    """The interface mask of ``eps``, by whichever route the backend allows.
+
+    Straight off the repeated grid when its values are concrete — the same read as before, and
+    the cheaper one. From the base grid when they are not, which is the case a gradient
+    presents.
+    """
+    try:
+        return _interface_mask(_to_numpy(eps))
+    except Exception:                     # a tracer: derive it from the base instead
+        return _upsampled_interface_mask(xp, base_eps, repeat_y, repeat_x)
 
 
 def _normal_field_source(eps):
@@ -509,9 +589,11 @@ def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None, normal_field_
 
     out = [[], [], [], [], []]
 
-    for i, eps_matrix in enumerate(_layer_eps(xp, ucell, fto_x, fto_y, enhanced_dfs)):
+    layers = _layer_eps_detail(xp, ucell, fto_x, fto_y, enhanced_dfs)
+    for i, (eps_matrix, base_eps, repeat_y, repeat_x) in enumerate(layers):
         if normal_field is None:
-            nx, ny = normal_vector_field(eps_matrix)
+            nx, ny = normal_vector_field(
+                eps_matrix, _interface_mask_of(xp, eps_matrix, base_eps, repeat_y, repeat_x))
         else:
             _check_normal_field_still_fits(eps_matrix, normal_field_source, i)
             nx, ny = normal_field[i]
@@ -628,8 +710,8 @@ def cfs2d(xp, cell, x, y, conti_x, conti_y, fto_x, fto_y):
     return conv2d
 
 
-def _as_bools(flags):
-    """``flags`` as a list of Python ``bool``, narrowed however the backend allows.
+def _as_bools(xp, flags):
+    """``flags`` as a NumPy bool array of the same shape, narrowed however the backend allows.
 
     Whole-array in one step when the values are concrete, and element by element when that
     fails. The second path is not a fallback for tidiness: under ``jax.grad`` a tracer refuses
@@ -637,10 +719,12 @@ def _as_bools(flags):
     carries a concrete primal. Under ``jax.jit`` neither works — there is no primal to read,
     which is exactly what a frozen geometry is for.
     """
+    import numpy as np
     try:
-        return [bool(v) for v in _to_numpy(flags)]
+        return np.asarray(_to_numpy(flags), dtype=bool)
     except Exception:                     # a grad tracer: narrow one value at a time
-        return [bool(v) for v in flags]
+        flat = [bool(v) for v in xp.reshape(flags, (-1,))]
+        return np.asarray(flat, dtype=bool).reshape(tuple(flags.shape))
 
 
 def compression_indices(cell):
@@ -664,11 +748,11 @@ def compression_indices(cell):
     xp = array_namespace(cell)
     n_row, n_col = cell.shape
 
-    same_col = _as_bools(xp.all(cell == xp.roll(cell, -1, axis=1), axis=0))
+    same_col = _as_bools(xp, xp.all(cell == xp.roll(cell, -1, axis=1), axis=0))
     col_idx = [c for c in range(n_col) if not same_col[c] or c == n_col - 1]
 
     cell_x = xp.take(cell, xp.asarray(col_idx, device=_device(xp, cell)), axis=1)
-    same_row = _as_bools(xp.all(cell_x == xp.roll(cell_x, -1, axis=0), axis=1))
+    same_row = _as_bools(xp, xp.all(cell_x == xp.roll(cell_x, -1, axis=0), axis=1))
     row_idx = [r for r in range(n_row) if not same_row[r] or r == n_row - 1]
 
     step_y, step_x = 1.0 / np.array((n_row, n_col), dtype=np.float64)
@@ -832,11 +916,12 @@ def to_conv_mat_raster_continuous_nvf(ucell, fto_x, fto_y, normal_field=None,
     xp = array_namespace(ucell)
 
     out = [[], [], [], [], []]
-    eps_grids = _layer_eps(xp, ucell, fto_x, fto_y, enhanced_dfs)
+    eps_grids = _layer_eps_detail(xp, ucell, fto_x, fto_y, enhanced_dfs)
 
-    for i, eps_grid in enumerate(eps_grids):
+    for i, (eps_grid, base_eps, repeat_y, repeat_x) in enumerate(eps_grids):
         if normal_field is None:
-            nx, ny = normal_vector_field(eps_grid)
+            nx, ny = normal_vector_field(
+                eps_grid, _interface_mask_of(xp, eps_grid, base_eps, repeat_y, repeat_x))
         else:
             _check_normal_field_still_fits(eps_grid, normal_field_source, i)
             nx, ny = normal_field[i]

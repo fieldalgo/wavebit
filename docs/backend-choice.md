@@ -1,7 +1,7 @@
 # Backend choice for a differentiated run — measurements
 
 Written: 2026-08. Measured on CPU (Apple silicon, single process, float64).
-**Read the caveats before carrying any of these numbers to a GPU.**
+**Every number here is from one CPU host; see the caveats before carrying any of it elsewhere.**
 
 Targets:
 - `benchmarks/benchmark_backends.py` — the sweep this document reports
@@ -36,9 +36,9 @@ the speed of a wrong answer.
   `jax jit` with a re-freeze each step is *slower* than eager PyTorch.
 - **From `fto≈7` up, `jax jit` is roughly 2x PyTorch** and repays its compilation in under a
   dozen steps.
-- **`jax eager` is rarely the right answer.** It is 2-11x slower than PyTorch at small scale,
-  converges to it at large scale, and cannot run NVF at all. Its value is that it exists where
-  a freeze would go stale.
+- **`jax eager` is rarely the right answer on speed.** It is 2-11x slower than PyTorch at
+  small scale and level with it at large scale. Its value is elsewhere: it is the mode with no
+  record, so it cannot be served a stale one — and every raster strategy now reaches it.
 - **Re-freezing every step is free on the vector path and ruinous on the raster path.** The
   vector record compares by content, so an unchanged structure reuses its compilation; the
   raster records hold arrays, fall back to identity, and recompile every step.
@@ -154,30 +154,30 @@ A binary raster, `d(sum de_ti)/d(ucell)`, swept across all three Fourier strateg
 
 | config | torch | jax eager | jit (one freeze) | jit (re-freeze) | compile | freeze |
 |---|---|---|---|---|---|---|
-| N=16, fto=3, DFS | 21 | 66 | 16 | 16 | 718 | 0 |
-| N=16, fto=3, CFS | 19 | 71 | 16 | 583 | 802 | 0 |
-| N=16, fto=3, NVF | 23 | *fails* | 17 | 526 | 707 | 3 |
-| N=32, fto=3, DFS | 19 | 66 | 16 | 16 | 641 | 0 |
-| N=32, fto=3, CFS | 23 | 73 | 15 | 563 | 865 | 0 |
-| N=32, fto=3, NVF | 41 | *fails* | 19 | 586 | 781 | 10 |
-| N=32, fto=5, DFS | 124 | 138 | 82 | 83 | 731 | 0 |
-| N=32, fto=5, CFS | 137 | 143 | 84 | 629 | 899 | 0 |
-| N=32, fto=5, NVF | 186 | *fails* | 92 | 664 | 837 | 22 |
-| N=64, fto=3, DFS | 20 | 65 | 15 | 15 | 714 | 0 |
-| N=64, fto=3, CFS | 21 | 69 | 15 | 584 | 905 | 0 |
-| N=64, fto=3, NVF | 92 | *fails* | 31 | 703 | 912 | 39 |
-| N=64, fto=5, DFS | 128 | 133 | 80 | 81 | 729 | 0 |
-| N=64, fto=5, CFS | 135 | 142 | 83 | 631 | 904 | 0 |
-| N=64, fto=5, NVF | 321 | *fails* | 138 | 1082 | 1282 | 90 |
-| N=64, fto=7, DFS | 537 | 462 | 364 | 364 | 1017 | 0 |
-| N=64, fto=7, CFS | 540 | 465 | 364 | 905 | 1193 | 0 |
-| N=64, fto=7, NVF | 910 | *fails* | 460 | 1819 | 1999 | 160 |
-| N=128, fto=3, DFS | 20 | 66 | 15 | 16 | 680 | 0 |
-| N=128, fto=3, CFS | 21 | 71 | 16 | 614 | 871 | 0 |
-| N=128, fto=3, NVF | 319 | *fails* | 87 | 1368 | 1500 | 151 |
-| N=128, fto=5, DFS | 132 | 137 | 82 | 81 | 731 | 0 |
-| N=128, fto=5, CFS | 134 | 141 | 81 | 636 | 927 | 0 |
-| N=128, fto=5, NVF | 906 | *fails* | 277 | 2833 | 2838 | 359 |
+| N=16, fto=3, DFS | 19 | 67 | 16 | 16 | 747 | 0 |
+| N=16, fto=3, CFS | 19 | 79 | 16 | 612 | 895 | 0 |
+| N=16, fto=3, NVF | 22 | 79 | 16 | 569 | 750 | 3 |
+| N=32, fto=3, DFS | 17 | 67 | 15 | 16 | 679 | 0 |
+| N=32, fto=3, CFS | 19 | 69 | 15 | 626 | 836 | 0 |
+| N=32, fto=3, NVF | 37 | 87 | 19 | 571 | 863 | 10 |
+| N=32, fto=5, DFS | 142 | 141 | 82 | 82 | 709 | 0 |
+| N=32, fto=5, CFS | 135 | 144 | 82 | 648 | 907 | 0 |
+| N=32, fto=5, NVF | 182 | 177 | 90 | 684 | 1023 | 24 |
+| N=64, fto=3, DFS | 20 | 66 | 15 | 16 | 706 | 0 |
+| N=64, fto=3, CFS | 21 | 72 | 15 | 625 | 885 | 0 |
+| N=64, fto=3, NVF | 95 | 127 | 31 | 739 | 922 | 38 |
+| N=64, fto=5, DFS | 130 | 138 | 80 | 80 | 736 | 0 |
+| N=64, fto=5, CFS | 140 | 143 | 83 | 672 | 967 | 0 |
+| N=64, fto=5, NVF | 320 | 294 | 134 | 1162 | 1367 | 91 |
+| N=64, fto=7, DFS | 546 | 480 | 380 | 383 | 1071 | 0 |
+| N=64, fto=7, CFS | 593 | 528 | 390 | 993 | 1439 | 0 |
+| N=64, fto=7, NVF | 1011 | 888 | 493 | 1976 | 2330 | 172 |
+| N=128, fto=3, DFS | 19 | 69 | 16 | 16 | 682 | 0 |
+| N=128, fto=3, CFS | 22 | 71 | 16 | 624 | 906 | 0 |
+| N=128, fto=3, NVF | 337 | 326 | 87 | 1424 | 1597 | 157 |
+| N=128, fto=5, DFS | 133 | 137 | 82 | 83 | 723 | 0 |
+| N=128, fto=5, CFS | 133 | 145 | 83 | 676 | 973 | 1 |
+| N=128, fto=5, NVF | 978 | 815 | 298 | 2944 | 3169 | 371 |
 
 Four things this says.
 
@@ -192,20 +192,21 @@ refuse it eagerly, but a jitted call cannot check) or not use jit.
 so its `re-freeze` column matches its `one freeze` column exactly and staleness cannot arise.
 This is the strategy to reach for in a raster inverse design whose pattern moves every step.
 
-**3. `jax eager` cannot run NVF, and the reason is narrower than it looks.** A grad tracer
-refuses a whole-array NumPy conversion but permits narrowing one value at a time — its primal
-is concrete, so each element reads:
+**3. Every raster strategy differentiates unfrozen.** A grad tracer refuses a whole-array
+NumPy conversion but permits narrowing one value at a time — its primal is concrete, so each
+element reads:
 
 | | `np.asarray(whole_array)` | `bool(one_element)` |
 |---|---|---|
 | `jax.grad` tracer | `TracerArrayConversionError` | **OK** |
 | `jax.jit` tracer | `TracerArrayConversionError` | `TracerBoolConversionError` |
 
-`compression_indices` asks the second way, so CFS differentiates unfrozen.
-`normal_vector_field` asks the first, handing the whole upsampled layer to SciPy, so NVF does
-not. That is a property of how it asks, not of the problem: the field depends on nothing but
-the interface mask, and the upsample is a block repeat, so the mask follows from the base
-raster and would narrow the same way. Not done.
+Both eager decisions ask the second way. The compression compares neighbouring rows and columns
+directly; the normal field cannot (SciPy wants the mask as an array), so it derives the mask
+from the *base* raster instead of reading it off the upsampled one. Since the upsample is a
+block repeat the two are the same mask, and the base has `repeat_y * repeat_x` fewer values to
+narrow. So `geometry=` is optional for a gradient on every raster path, which is what makes a
+fit whose pattern moves every step safe.
 
 **4. NVF's cost grows with the raster, the others' do not.** DFS and CFS are flat in `N` (the
 convolution matrix depends on `fto`, not `N`); NVF is not, because the distance transform runs
@@ -271,23 +272,14 @@ and, within the freeze's own cost, the fast one.
 
 ## Caveats
 
-- **CPU only, and a GPU does not simply scale these numbers.** Two of the quantities here move
-  in *opposite* directions on a GPU, so "it would favour jit" is too coarse to be useful:
-
-  - The **per-step ratio** should move towards `jax jit`. What jit removes is per-operation
-    dispatch, and on a GPU each of those is a kernel launch. The modeling step is the worst
-    case for that — it emits one small operation per block, 902 of them at `n_split=20` — so
-    the low-`fto` regime where PyTorch wins here is the one most likely to flip.
-  - The **break-even in steps** should move *away* from it. Break-even is
-    `compile / (torch_step − jit_step)`; a GPU shrinks both step times, so the numerator's
-    denominator shrinks in absolute ms, while XLA's GPU compilation is typically slower than
-    its CPU compilation, not faster. Fewer ms saved per step against a larger fixed cost means
-    more steps to repay it.
-
-  Which effect dominates is not predictable from this data. Measure before choosing.
-- **PyTorch was measured eager.** `torch.compile` was not tested. If it were used it would
-  acquire a recompilation cost on the same trigger — a change in the discrete description — so
-  the shape of the trade would come to resemble JAX's.
+- **CPU only.** Every number here was measured on one CPU host, and none of it has been run on
+  a GPU. Do not extrapolate: the per-step times and the compilation cost need not move in the
+  same direction, so neither the ratios nor the break-even table carries over on its own.
+- **PyTorch was measured eager, which is the only way it runs today.** `torch.compile` fails
+  on every FieldWave path before torch 2.13, and once it works it measures 0.85–1.02x — see
+  `docs/torch-compile.md`, which also profiles why (97.9% of the runtime at `fto=10` is inside
+  LAPACK/BLAS calls Inductor forwards verbatim). So `torch` here means eager torch, and that is
+  not a limitation of the measurement.
 - **Single process, no batching.** Nothing here says how the modes behave under `vmap`, across
   a wavelength sweep, or on several devices — and a wavelength sweep is the case where one
   compilation is amortised over many solves, which would favour jit well beyond what is
