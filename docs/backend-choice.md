@@ -45,7 +45,7 @@ the speed of a wrong answer.
 - **All three strategies now cost the same.** NVF used to grow with the raster — 359 ms of
   freeze against a 277 ms step at `N=128, fto=5` — because its normal field was taken on a
   grid `4*fto+1` times finer per axis. That is gone (`docs/nvf-upsampling.md`); its freeze is
-  now 1-3 ms and its step is level with DFS.
+  now under 2 ms and its step is level with DFS.
 
 ---
 
@@ -57,29 +57,35 @@ angle and pitch. Times are ms per step.
 
 | config | torch | jax eager | jit (one freeze) | jit (re-freeze) | compile | freeze |
 |---|---|---|---|---|---|---|
-| fto=3, split=4, L=1 | 20 | 112 | 16 | 21 | 1652 | 4 |
-| fto=3, split=12, L=1 | 21 | 170 | 16 | 29 | 1765 | 12 |
-| fto=3, split=20, L=1 | 22 | 248 | 17 | 42 | 1922 | 22 |
-| fto=5, split=4, L=1 | 125 | 179 | 80 | 85 | 1628 | 4 |
-| fto=5, split=12, L=1 | 129 | 239 | 80 | 95 | 1799 | 12 |
-| fto=5, split=20, L=1 | 130 | 320 | 79 | 102 | 2034 | 23 |
-| fto=5, split=12, L=3 | 328 | 669 | 122 | 157 | 2794 | 35 |
-| fto=7, split=4, L=1 | 533 | 504 | 366 | 371 | 1959 | 4 |
-| fto=7, split=12, L=1 | 558 | 562 | 384 | 379 | 2170 | 12 |
-| fto=7, split=20, L=1 | 564 | 642 | 361 | 391 | 2308 | 23 |
-| fto=7, split=12, L=3 | 1333 | 1739 | 721 | 699 | 3407 | 36 |
-| fto=7, split=20, L=3 | 1522 | 1794 | 632 | 699 | 3624 | 75 |
-| fto=9, split=12, L=1 | 1832 | 1758 | 1354 | 1383 | 3244 | 12 |
-| fto=9, split=20, L=1 | 1943 | 2066 | 1373 | 1425 | 3687 | 25 |
-| fto=9, split=20, L=3 | 4837 | 5051 | 2372 | 2542 | 6145 | 76 |
-| fto=11, split=20, L=3 | 20175 | 17101 | 8705 | 8958 | 13549 | 113 |
+| fto=3, split=4, L=1 | 26 | 110 | 17 | 21 | 1653 | 4 |
+| fto=3, split=12, L=1 | 22 | 169 | 17 | 29 | 1839 | 12 |
+| fto=3, split=20, L=1 | 25 | 251 | 17 | 40 | 2007 | 23 |
+| fto=5, split=4, L=1 | 132 | 180 | 82 | 86 | 1703 | 4 |
+| fto=5, split=12, L=1 | 130 | 242 | 87 | 92 | 1840 | 12 |
+| fto=5, split=20, L=1 | 133 | 322 | 81 | 103 | 2015 | 22 |
+| fto=5, split=12, L=3 | 341 | 648 | 124 | 160 | 2717 | 35 |
+| fto=7, split=4, L=1 | 554 | 521 | 376 | 381 | 2008 | 4 |
+| fto=7, split=12, L=1 | 589 | 575 | 379 | 387 | 2227 | 13 |
+| fto=7, split=20, L=1 | 583 | 647 | 372 | 397 | 2374 | 23 |
+| fto=7, split=12, L=3 | 1342 | 1545 | 608 | 637 | 3150 | 34 |
+| fto=7, split=20, L=3 | 1423 | 1803 | 600 | 676 | 3483 | 70 |
+| fto=9, split=12, L=1 | 1886 | 1727 | 1350 | 1369 | 3314 | 12 |
+| fto=9, split=20, L=1 | 1917 | 1785 | 1336 | 1364 | 3378 | 23 |
+| fto=9, split=20, L=3 | 4408 | 4757 | 2375 | 2466 | 5408 | 68 |
+| fto=11, split=20, L=3 | 13594 | 12652 | 7112 | 6985 | 10086 | 77 |
 
-**Read one table at a time.** Within a single run these are repeatable to ~15%, and the four
-modes on a row are timed back to back, so comparisons *along a row* are sound. Between runs
-hours apart they are not: the same commit measured 133 ms and 217 ms on the same
-configuration on separate days, and the sweep always runs the vector path first, so the raster
-table is taken on a warmer machine than the vector one. Both tables here come from one run for
-that reason. Treat a ratio as meaningful and a third significant figure as not.
+**Read one table at a time.** Nothing is timed until a 45 s warm-up has run, and the sweep
+times one fixed configuration three times to state its own repeatability:
+
+| | start | after vector | after raster | spread |
+|---|---|---|---|---|
+| probe (ms) | 150 | 127 | 145 | **1.18x** |
+
+Within that spread, and with the four modes on a row timed back to back, a comparison *along a
+row* is sound. Across runs it is not: the same commit measured 133 ms and 217 ms on the same
+configuration on different days, and an A/B over four commits found no code difference that
+explains it. Both tables here come from one run for that reason. Treat a ratio as meaningful
+and a third significant figure as not.
 
 ### Re-freezing every step costs almost nothing here
 
@@ -89,7 +95,7 @@ vector record compares **by content**: it is which block edge becomes which grid
 order, and the edge *coordinates* stay traced. A length can move a long way without the
 ordering changing, and an unchanged ordering reuses the compiled program.
 
-The gap between the two columns is the freeze itself (4-113 ms), which grows with `n_split` and
+The gap between the two columns is the freeze itself (4-70 ms), which grows with `n_split` and
 layer count and is otherwise flat.
 
 ### When compilation pays for itself
@@ -98,17 +104,20 @@ Break-even against PyTorch, counting the compile a fit must amortise:
 
 | config | torch − jit(re-freeze) | compile | steps to break even |
 |---|---|---|---|
-| fto=3, split=4 | −1 ms | 1652 | **never** |
-| fto=3, split=12 | −8 ms | 1765 | **never** |
-| fto=3, split=20 | −20 ms | 1922 | **never** |
-| fto=5, split=4 | +40 ms | 1628 | 41 |
-| fto=5, split=12 | +34 ms | 1799 | 53 |
-| fto=5, split=20 | +28 ms | 2034 | 73 |
-| fto=5, split=12, L=3 | +171 ms | 2794 | 17 |
-| fto=7, split=4 | +162 ms | 1959 | 13 |
-| fto=7, split=12, L=3 | +634 ms | 3407 | 6 |
-| fto=9, split=20, L=3 | +2295 ms | 6145 | 3 |
-| fto=11, split=20, L=3 | +11217 ms | 13549 | 2 |
+| fto=3, split=4 | +5 ms | 1653 | 331 |
+| fto=3, split=12 | −7 ms | 1839 | **never** |
+| fto=3, split=20 | −15 ms | 2007 | **never** |
+| fto=5, split=4 | +46 ms | 1703 | 37 |
+| fto=5, split=12 | +38 ms | 1840 | 48 |
+| fto=5, split=20 | +30 ms | 2015 | 67 |
+| fto=5, split=12, L=3 | +181 ms | 2717 | 15 |
+| fto=7, split=4 | +173 ms | 2008 | 12 |
+| fto=7, split=12, L=3 | +705 ms | 3150 | 4 |
+| fto=9, split=20, L=3 | +1942 ms | 5408 | 3 |
+| fto=11, split=20, L=3 | +6609 ms | 10086 | 2 |
+
+The `fto=3` rows sit inside the 1.18x drift the probe measured, so read them as "no
+difference worth compiling for" rather than as a sign.
 
 At `fto=3` the modeling dominates; at `fto≥7` the eigen-solve does. `n_split` matters much
 less than `fto`: it moves the freeze cost, not the solve.
@@ -145,12 +154,12 @@ Sweeping `lx` from 85 to 125 on a 4-slab ellipse, re-freezing at every point:
 
 | lx | 85 | 90 | 95 | 100 | 103 | 106 | 110 | **115** | 120 | 125 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| ms | 2618 | 32 | 33 | 32 | 31 | 31 | 32 | **1245** | 35 | 34 |
+| ms | 1868 | 23 | 22 | 22 | 23 | 25 | 23 | **856** | 23 | 23 |
 
 One compilation at the start, one when two block edges cross at `lx≈115`, and nothing in
 between — a 47% move in the design variable for two compilations. That crossing is exactly
 where a *held* record would have gone stale, so the recompilation and the staleness boundary
-are the same event. Re-freezing every step converts a silent wrong answer into a one-second pause.
+are the same event. Re-freezing every step converts a silent wrong answer into a sub-second pause.
 
 ---
 
@@ -160,36 +169,36 @@ A binary raster, `d(sum de_ti)/d(ucell)`, swept across all three Fourier strateg
 
 | config | torch | jax eager | jit (one freeze) | jit (re-freeze) | compile | freeze |
 |---|---|---|---|---|---|---|
-| N=16, fto=3, DFS | 28 | 110 | 23 | 22 | 1061 | 0 |
-| N=16, fto=3, CFS | 31 | 120 | 22 | 928 | 1264 | 0 |
-| N=16, fto=3, NVF | 30 | 118 | 23 | 809 | 1009 | 1 |
-| N=32, fto=3, DFS | 27 | 111 | 22 | 22 | 986 | 0 |
-| N=32, fto=3, CFS | 29 | 117 | 21 | 959 | 1333 | 1 |
-| N=32, fto=3, NVF | 29 | 114 | 23 | 805 | 1032 | 1 |
-| N=32, fto=5, DFS | 195 | 211 | 108 | 112 | 1100 | 0 |
-| N=32, fto=5, CFS | 190 | 219 | 114 | 972 | 1357 | 1 |
-| N=32, fto=5, NVF | 210 | 224 | 118 | 956 | 1238 | 1 |
-| N=64, fto=3, DFS | 27 | 112 | 18 | 21 | 1183 | 0 |
-| N=64, fto=3, CFS | 28 | 116 | 21 | 972 | 1394 | 1 |
-| N=64, fto=3, NVF | 26 | 117 | 22 | 851 | 1000 | 1 |
-| N=64, fto=5, DFS | 183 | 210 | 108 | 107 | 1291 | 0 |
-| N=64, fto=5, CFS | 187 | 212 | 113 | 1007 | 1508 | 1 |
-| N=64, fto=5, NVF | 201 | 221 | 118 | 877 | 1098 | 1 |
-| N=64, fto=7, DFS | 805 | 665 | 514 | 499 | 1535 | 0 |
-| N=64, fto=7, CFS | 772 | 661 | 506 | 1381 | 1903 | 1 |
-| N=64, fto=7, NVF | 827 | 675 | 525 | 1330 | 1549 | 1 |
-| N=128, fto=3, DFS | 34 | 114 | 21 | 23 | 1079 | 0 |
-| N=128, fto=3, CFS | 42 | 120 | 23 | 952 | 1389 | 1 |
-| N=128, fto=3, NVF | 33 | 122 | 25 | 856 | 1045 | 2 |
-| N=128, fto=5, DFS | 193 | 210 | 114 | 115 | 1161 | 0 |
-| N=128, fto=5, CFS | 224 | 224 | 113 | 1021 | 1435 | 1 |
-| N=128, fto=5, NVF | 203 | 218 | 118 | 886 | 1122 | 3 |
+| N=16, fto=3, DFS | 18 | 67 | 16 | 16 | 700 | 0 |
+| N=16, fto=3, CFS | 18 | 70 | 16 | 626 | 917 | 0 |
+| N=16, fto=3, NVF | 18 | 70 | 16 | 527 | 709 | 0 |
+| N=32, fto=3, DFS | 19 | 66 | 15 | 15 | 695 | 0 |
+| N=32, fto=3, CFS | 19 | 77 | 15 | 639 | 929 | 0 |
+| N=32, fto=3, NVF | 20 | 73 | 17 | 561 | 683 | 0 |
+| N=32, fto=5, DFS | 140 | 146 | 85 | 86 | 792 | 0 |
+| N=32, fto=5, CFS | 138 | 150 | 84 | 733 | 975 | 0 |
+| N=32, fto=5, NVF | 136 | 147 | 83 | 585 | 727 | 0 |
+| N=64, fto=3, DFS | 18 | 67 | 15 | 15 | 688 | 0 |
+| N=64, fto=3, CFS | 20 | 72 | 15 | 613 | 933 | 0 |
+| N=64, fto=3, NVF | 21 | 73 | 16 | 547 | 727 | 1 |
+| N=64, fto=5, DFS | 131 | 140 | 80 | 80 | 771 | 0 |
+| N=64, fto=5, CFS | 138 | 153 | 132 | 1032 | 1050 | 0 |
+| N=64, fto=5, NVF | 142 | 157 | 93 | 659 | 895 | 1 |
+| N=64, fto=7, DFS | 641 | 559 | 416 | 425 | 1340 | 0 |
+| N=64, fto=7, CFS | 613 | 550 | 399 | 1026 | 1322 | 0 |
+| N=64, fto=7, NVF | 595 | 514 | 399 | 1006 | 1208 | 1 |
+| N=128, fto=3, DFS | 19 | 70 | 16 | 16 | 718 | 0 |
+| N=128, fto=3, CFS | 24 | 74 | 17 | 649 | 946 | 1 |
+| N=128, fto=3, NVF | 21 | 79 | 18 | 608 | 838 | 1 |
+| N=128, fto=5, DFS | 140 | 150 | 84 | 85 | 843 | 0 |
+| N=128, fto=5, CFS | 143 | 157 | 87 | 799 | 996 | 0 |
+| N=128, fto=5, NVF | 148 | 152 | 84 | 619 | 795 | 1 |
 
 Four things this says.
 
 **1. Re-freezing is ruinous for CFS and NVF.** Their records hold arrays, where value equality
 is neither well defined nor hashable, so `StaticGeometry` falls back to identity and a new
-freeze misses the compilation cache every time: ~900 ms against a ~22 ms step. The content-hash
+freeze misses the compilation cache every time: ~600 ms against a ~16 ms step. The content-hash
 path helps the vector records only. On these two strategies a fit must either hold one freeze
 (and risk staleness — `_check_compression_still_fits` and `_check_normal_field_still_fits`
 refuse it eagerly, but a jitted call cannot check) or not use jit.
@@ -216,7 +225,7 @@ raster path, which is what makes a fit whose pattern moves every step safe.
 **4. Nothing here separates the strategies on cost any more.** DFS, CFS and NVF land within a
 few percent of each other at every size. NVF used to be the outlier, growing with `N` where the
 others were flat, because its distance transform ran on the `(4*fto+1)*N` upsampled grid; it no
-longer upsamples, and its freeze fell from 359 ms to 3 ms at `N=128, fto=5`. So the choice among
+longer upsamples, and its freeze fell from 359 ms to 1 ms at `N=128, fto=5`. So the choice among
 them is now about accuracy, which is what it should have been.
 
 ---
