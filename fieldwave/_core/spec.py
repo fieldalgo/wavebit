@@ -111,12 +111,11 @@ class Numerics:
     factorization: Factorization = Factorization.LI
     type_complex: int = 128
     connecting_algo: str = 'TMM'
-    enhanced_dfs: bool = None       # deprecated: accepted and no longer read
     perturbation: float = 1e-20
     analytic_normal_grid: int = 1024
 
     _FIELDS = ('backend', 'fto', 'fourier_coefficients', 'factorization', 'type_complex',
-               'connecting_algo', 'enhanced_dfs', 'perturbation', 'analytic_normal_grid')
+               'connecting_algo', 'perturbation', 'analytic_normal_grid')
 
     @classmethod
     def from_dict(cls, d) -> 'Numerics':
@@ -154,7 +153,6 @@ class Numerics:
             factorization=self.factorization.value,
             type_complex=0 if self.type_complex == 128 else 1,
             connecting_algo=self.connecting_algo,
-            enhanced_dfs=self.enhanced_dfs,
             perturbation=self.perturbation,
             analytic_normal_grid=self.analytic_normal_grid,
         )

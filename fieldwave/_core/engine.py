@@ -145,36 +145,6 @@ class CoreFactorizationMixin:
             fourier_type=value)
 
 
-    @property
-    def enhanced_dfs(self):
-        """Accepted and ignored; setting it warns. Deprecated.
-
-        It chose how far to resample a layer before transforming it, and neither path it
-        served still wants that. The permittivity coefficients are obtained in closed form
-        (:func:`fieldwave._core.factorization._pixel_correction`), so a finer spelling of the
-        same staircase is the same function. The normal field is lifted only to the floor its
-        transform needs (:func:`fieldwave._core.factorization._normal_field_floor`), and
-        lifting it further made the answer *worse* in 27 of 32 measured combinations — the grid
-        samples a guess at the boundary behind the staircase, and refining it makes the guess
-        track the staircase rather than the shape. See ``docs/nvf-upsampling.md``.
-
-        Reading it back gives what was set, so existing code neither breaks nor quietly changes
-        meaning; nothing downstream reads it.
-        """
-        return getattr(self, '_enhanced_dfs', True)
-
-    @enhanced_dfs.setter
-    def enhanced_dfs(self, value):
-        import warnings
-        if value is not None and not getattr(self, '_enhanced_dfs_warned', False):
-            warnings.warn(
-                "'enhanced_dfs' is deprecated and no longer read: the permittivity "
-                "coefficients are exact without resampling, and resampling the normal field "
-                "loses accuracy. It will be removed.",
-                DeprecationWarning, stacklevel=2)
-            self._enhanced_dfs_warned = True
-        self._enhanced_dfs = True if value is None else value
-
     def freeze_geometry(self, **kwargs):
         """Take this structure's discrete geometry decisions once, eagerly.
 

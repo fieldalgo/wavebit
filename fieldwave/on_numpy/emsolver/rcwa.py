@@ -92,7 +92,6 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                  fourier_coefficients=None,  # 'sampled' (default, DFS) | 'integrated' (closed-form series)
                  factorization=None,         # 'li' (default) | 'nvf' (normal vector field)
                  fourier_type=None,          # deprecated alias for the two keywords above
-                 enhanced_dfs=None,
                  analytic_normal_grid=1024,  # normal-field sampling; sets the floor on shape gradients
                  # (a translation-invariant structure should give d/dcx == 0 exactly; the
                  #  sampling leaves a sawtooth instead -- 5e-4 at 256, 4.2e-5 at 1024, for
@@ -115,7 +114,6 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
 
         self.backend = backend
         self._set_fourier_options(fourier_coefficients, factorization, fourier_type)
-        self.enhanced_dfs = enhanced_dfs
         self.analytic_normal_grid = analytic_normal_grid
 
     @property

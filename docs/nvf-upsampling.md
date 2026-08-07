@@ -5,7 +5,8 @@ Written: 2026-08-07. Measured on CPU, NumPy backend, float64.
 Targets:
 - `fieldwave/_core/factorization.py::_normal_field_floor` — the floor that replaced the knob
 - `fieldwave/_core/factorization.py::normal_vector_field` — the distance-transform construction
-- `fieldwave/_core/engine.py::CoreFactorizationMixin.enhanced_dfs` — the deprecated parameter
+- the `enhanced_dfs` parameter — removed outright, not deprecated: nothing read it, so
+  leaving it to be set would have been a lie rather than a compatibility shim
 
 ---
 

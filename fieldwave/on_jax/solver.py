@@ -23,7 +23,6 @@ class SolverJax(RCWAJax, OptimizerJax):
             'type_complex': self.type_complex,
             'fourier_coefficients': self.fourier_coefficients,
             'factorization': self.factorization,
-            'enhanced_dfs': self.enhanced_dfs,
         }
 
         return children, aux_data
