@@ -124,8 +124,7 @@ def resolve_fourier_options(fourier_coefficients=None, factorization=None, fouri
 
     ==========================  ==============================================================
     ``fourier_coefficients``    how a layer's Fourier coefficients are obtained
-    ``'sampled'``               discrete series off the raster (DFS), with ``enhanced_dfs``
-                                upsampling
+    ``'sampled'``               discrete series off the raster (DFS), coefficients exact
     ``'integrated'``            closed-form series over the compressed constant blocks (CFS)
     --------------------------  --------------------------------------------------------------
     ``factorization``           which rule closes the products of discontinuous functions

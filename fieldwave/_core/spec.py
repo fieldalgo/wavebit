@@ -111,7 +111,7 @@ class Numerics:
     factorization: Factorization = Factorization.LI
     type_complex: int = 128
     connecting_algo: str = 'TMM'
-    enhanced_dfs: bool = True
+    enhanced_dfs: bool = None       # deprecated: accepted and no longer read
     perturbation: float = 1e-20
     analytic_normal_grid: int = 1024
 

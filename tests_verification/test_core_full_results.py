@@ -21,8 +21,7 @@ def _setup(**kw):
     solver = fieldwave.rcwa(backend=0, **kw)
     legacy = solver.conv_solve()
     epx, epy, epz = to_conv_mat_raster_discrete(
-        solver.ucell, solver.fto[0], solver.fto[1],
-        enhanced_dfs=solver.enhanced_dfs)
+        solver.ucell, solver.fto[0], solver.fto[1])
     kx, ky = solver.get_kx_ky_vector(kw['wavelength'])
     return solver, legacy, (epx, epy, epz), kx, ky
 

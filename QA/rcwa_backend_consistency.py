@@ -83,13 +83,12 @@ if __name__ == '__main__':
 
     option3 = {'psi': 40/180*np.pi, 'n_top': 1, 'n_bot': 1, 'theta': 0 * np.pi / 180, 'phi': 12 * np.pi / 180,
                'fto': 80,
-               'period': [200], 'wavelength': 1000, 'thickness': [100], 'fourier_coefficients': 'sampled', 'enhanced_dfs': False,
+               'period': [200], 'wavelength': 1000, 'thickness': [100], 'fourier_coefficients': 'sampled',
                'ucell': np.array([[[3, 3, 3.3, 3, 3, 4, 1, 1, 1, 1.2, 1.1, 3, 2, 1.1]], ])}
 
     option4 = {'psi': 10/180*np.pi, 'n_top': 1, 'n_bot': 1.5, 'theta': 30 * np.pi / 180, 'phi': 0 * np.pi / 180,
                'fto': [10, 10],
                'period': [200, 600], 'wavelength': 1000, 'thickness': [100, 111, 222, 102, 44], 'fourier_coefficients': 'sampled',
-               'enhanced_dfs': True,
                'ucell': np.random.rand(5, 20, 20)*3+1, }
 
     ucell5 = [

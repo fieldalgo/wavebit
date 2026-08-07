@@ -27,11 +27,9 @@ def compare_conv_mat_method(backend, type_complex, device):
                    thickness=thickness, device=device, type_complex=type_complex, )
 
     solver.fourier_coefficients = 'sampled'
-    solver.enhanced_dfs = False
     res_dfs = solver.conv_solve().res
     de_ri_dfs, de_ti_dfs = res_dfs.de_ri, res_dfs.de_ti
 
-    solver.enhanced_dfs = True
     res_efs = solver.conv_solve().res
     de_ri_efs, de_ti_efs = res_efs.de_ri, res_efs.de_ti
 

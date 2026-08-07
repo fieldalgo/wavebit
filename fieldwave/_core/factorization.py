@@ -177,50 +177,52 @@ def _device(xp, x):
     return x.device if hasattr(x, 'device') else None
 
 
-def _layer_eps(xp, ucell, fto_x, fto_y, enhanced_dfs):
-    """Yield each layer's permittivity grid, upsampled as the caller requires.
+def _layer_eps(xp, ucell):
+    """Yield each layer's permittivity grid, on the raster exactly as given.
 
-    Upsampling factors depend only on shapes, so this stays static under tracing. The
-    ``n**2`` maps refractive index to permittivity: FieldWave works in ``e^{-iwt}``
+    The ``n**2`` maps refractive index to permittivity: FieldWave works in ``e^{-iwt}``
     throughout (``Im(n) > 0`` = loss), with no conjugation on the way in.
 
-    ``enhanced_dfs=None`` skips upsampling entirely, which is what the DFS path wants now
-    that :func:`dfs2d` gets the exact coefficients from the pixel grid itself. The NVF path
-    still upsamples: its normal field is a geometric construction that genuinely needs the
-    finer grid, and no closed form replaces it.
+    Nothing is resampled. :func:`dfs2d` obtains the raster's Fourier coefficients in closed
+    form (:func:`_pixel_correction`), so a finer grid of the same staircase is the same
+    function and buys nothing. The NVF path is the one that still needs a floor, and states
+    that itself — see :func:`_layer_eps_for_normal_field`.
     """
-    for eps, _, _, _ in _layer_eps_detail(xp, ucell, fto_x, fto_y, enhanced_dfs):
-        yield eps
+    for i in range(ucell.shape[0]):
+        layer = ucell[i]
+        yield xp.astype(layer, _complex_dtype(xp, layer)) ** 2
 
 
-def _layer_eps_detail(xp, ucell, fto_x, fto_y, enhanced_dfs):
-    """:func:`_layer_eps`, plus the grid it was repeated from and by how much.
+def _normal_field_floor(shape, fto_x, fto_y):
+    """Repeat factors that lift a layer to the grid the normal field's transform needs.
 
-    The NVF path needs those: its interface mask can be derived from the *base* grid rather
-    than read off the upsampled one, which is the difference between narrowing 128x128 values
-    and 2688x2688 (see :func:`_upsampled_interface_mask`). Yields
-    ``(eps, base_eps, repeat_y, repeat_x)``, where ``base_eps`` is the layer before repeating
-    and the factors are 1 when it was not repeated.
+    The normal field is a continuous vector field this code evaluates on a grid, so unlike the
+    permittivity it has no closed-form transform and :func:`dfs2d` reads it off the grid
+    directly. That requires ``4*fto+1`` points: the circulant asks for orders up to
+    ``+/-2*fto``, and on a shorter grid ``k % n`` folds distinct orders onto one bin. The
+    damage is structural rather than gradual — a *constant* normal field must transform to the
+    identity for NVF to collapse onto Li's rules on a one-cell axis, and on a short grid it
+    picks up off-diagonals at ``+/-n`` instead.
+
+    Only up to that floor. Going past it was the old ``enhanced_dfs=True``, which multiplied it
+    by the raster size; measured across 32 shape/material/polarization/order combinations it
+    lost accuracy in 27 and gained in none that stood up (see ``docs/nvf-upsampling.md``).
     """
-    if enhanced_dfs is None:
-        for i in range(ucell.shape[0]):
-            layer = ucell[i]
-            eps = xp.astype(layer, _complex_dtype(xp, layer)) ** 2
-            yield eps, eps, 1, 1
-        return
+    return (max(1, (4 * fto_y + 1) // shape[0] + 1) if shape[0] < 4 * fto_y + 1 else 1,
+            max(1, (4 * fto_x + 1) // shape[1] + 1) if shape[1] < 4 * fto_x + 1 else 1)
 
-    if enhanced_dfs:
-        min_y = (4 * fto_y + 1) * ucell.shape[1]
-        min_x = (4 * fto_x + 1) * ucell.shape[2]
-    else:
-        min_y = 4 * fto_y + 1
-        min_x = 4 * fto_x + 1
 
+def _layer_eps_for_normal_field(xp, ucell, fto_x, fto_y):
+    """Each layer's permittivity grid for the NVF path, with the base it was repeated from.
+
+    Yields ``(eps, base_eps, repeat_y, repeat_x)``. The base is what
+    :func:`_upsampled_interface_mask` derives the interface mask from when the values cannot be
+    read whole, which is what lets NVF differentiate without a frozen geometry.
+    """
     for i in range(ucell.shape[0]):
         layer = ucell[i]
         base = xp.astype(layer, _complex_dtype(xp, layer)) ** 2
-        repeat_y = min_y // layer.shape[0] + 1 if layer.shape[0] < min_y else 1
-        repeat_x = min_x // layer.shape[1] + 1 if layer.shape[1] < min_x else 1
+        repeat_y, repeat_x = _normal_field_floor(layer.shape, fto_x, fto_y)
         if repeat_y > 1:
             layer = xp.repeat(layer, repeat_y, axis=0)
         if repeat_x > 1:
@@ -228,20 +230,13 @@ def _layer_eps_detail(xp, ucell, fto_x, fto_y, enhanced_dfs):
         yield xp.astype(layer, _complex_dtype(xp, layer)) ** 2, base, repeat_y, repeat_x
 
 
-def to_conv_mat_raster_discrete(ucell, fto_x, fto_y, enhanced_dfs=True):
+def to_conv_mat_raster_discrete(ucell, fto_x, fto_y):
     """Per-layer convolution matrices for a raster ``ucell`` via the DFS path.
 
     Args:
         ucell: refractive-index raster, shape ``(n_layers, Ny, Nx)``. This is the design
             variable — gradients flow back to it.
         fto_x, fto_y: Fourier truncation orders.
-        enhanced_dfs: accepted and no longer read *on this path*. It upsampled each layer so
-            the raster resolved ``4*fto+1`` harmonics per cell, which approached the
-            coefficients this now computes exactly (:func:`_pixel_correction`) as ``1/R``. The
-            grid cost ``(4*fto+1)**2`` per layer — 4 GB at ``fto=12`` on a 256x256 cell — and
-            bought ~1e-5 against RETICOLO where the exact route sits at ~1e-14. It still means
-            something to :func:`to_conv_mat_raster_nvf`, whose normal field has no closed form
-            and genuinely needs the finer grid.
 
     Returns:
         ``(epx_conv_all, epy_conv_all, epz_conv_i_all)``, each ``(n_layers, ff_xy, ff_xy)``.
@@ -250,7 +245,7 @@ def to_conv_mat_raster_discrete(ucell, fto_x, fto_y, enhanced_dfs=True):
 
     epx_list, epy_list, epz_i_list = [], [], []
 
-    for eps_matrix in _layer_eps(xp, ucell, fto_x, fto_y, None):
+    for eps_matrix in _layer_eps(xp, ucell):
         epz_conv = dfs2d(xp, eps_matrix, 1, 1, fto_x, fto_y, piecewise_constant=True)
         epy_conv = dfs2d(xp, eps_matrix, 1, 0, fto_x, fto_y, piecewise_constant=True)
         epx_conv = dfs2d(xp, eps_matrix, 0, 1, fto_x, fto_y, piecewise_constant=True)
@@ -341,7 +336,7 @@ def _interface_mask(eps):
 def _upsampled_interface_mask(xp, base_eps, repeat_y, repeat_x):
     """The interface mask of a block-repeated grid, from the base grid's neighbour comparisons.
 
-    :func:`_layer_eps_detail` upsamples by repeating each cell, so the repeated grid is
+    :func:`_layer_eps_for_normal_field` lifts a layer to the floor by repeating each cell, so the repeated grid is
     constant inside every block. Two neighbouring cells of it can therefore only differ where
     they straddle a block boundary *and* the base differs across it — which means the whole
     mask follows from ``(base_ny-1)*base_nx + base_ny*(base_nx-1)`` comparisons on the base,
@@ -404,7 +399,7 @@ def _normal_field_source(eps):
     return eps.shape, _interface_mask(eps)
 
 
-def normal_field_for_ucell(ucell, fto_x, fto_y, enhanced_dfs=True):
+def normal_field_for_ucell(ucell, fto_x, fto_y):
     """Per-layer ``(nx, ny)`` normal fields for ``ucell``, on the grid the NVF build uses.
 
     Precompute this once from the concrete geometry and hand it to
@@ -413,10 +408,10 @@ def normal_field_for_ucell(ucell, fto_x, fto_y, enhanced_dfs=True):
     """
     xp = array_namespace(ucell)
     return [normal_vector_field(eps)
-            for eps in _layer_eps(xp, ucell, fto_x, fto_y, enhanced_dfs)]
+            for eps, _, _, _ in _layer_eps_for_normal_field(xp, ucell, fto_x, fto_y)]
 
 
-def normal_field_source_for_ucell(ucell, fto_x, fto_y, enhanced_dfs=True):
+def normal_field_source_for_ucell(ucell, fto_x, fto_y):
     """What :func:`normal_field_for_ucell` derived its answer from, per layer.
 
     Freeze this alongside the normal field and hand both back to
@@ -425,7 +420,7 @@ def normal_field_source_for_ucell(ucell, fto_x, fto_y, enhanced_dfs=True):
     """
     xp = array_namespace(ucell)
     return [_normal_field_source(_to_numpy(eps))
-            for eps in _layer_eps(xp, ucell, fto_x, fto_y, enhanced_dfs)]
+            for eps, _, _, _ in _layer_eps_for_normal_field(xp, ucell, fto_x, fto_y)]
 
 
 def _check_normal_field_still_fits(eps_matrix, source, index):
@@ -552,8 +547,8 @@ def nvf_conv_matrices_continuous(xp, eps_comp, x, y, nx, ny, fto_x, fto_y):
                          *_nvf_projector(xp, nx, ny, fto_x, fto_y, C, dev))
 
 
-def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None, normal_field_source=None,
-                           enhanced_dfs=True):
+def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
+                           normal_field_source=None):
     """Per-layer NVF convolution matrices for a raster ``ucell``.
 
     Args:
@@ -566,13 +561,12 @@ def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None, normal_field_
             :func:`normal_field_source_for_ucell`. Supply it and an eager replay is checked
             against the layer in front of it (see :func:`_check_normal_field_still_fits`);
             leave it ``None`` and the field is replayed on trust.
-        enhanced_dfs: upsample each layer to resolve ``4*fto+1`` harmonics per cell. Unlike
-            the DFS path this still does something: the permittivity coefficients are exact
-            either way (the upsampled grid is the same staircase, so
-            :func:`_pixel_correction` applies to it unchanged), but the *normal field* is a
-            continuous vector field evaluated on whatever grid it is given, and refining that
-            grid is the only thing that makes it more accurate. So the memory this costs is
-            not removable here the way it was there.
+
+    The normal field is taken on the raster as given, lifted only to the floor its transform
+    needs (:func:`_normal_field_floor`). Lifting it further used to be offered and is not: the
+    grid is a sampling of a guess at the boundary behind the staircase, and refining it makes
+    the guess follow the staircase more faithfully rather than the shape — measured worse in
+    27 of 32 combinations (``docs/nvf-upsampling.md``).
 
     Returns:
         ``(epx, epy, epxy, epyx, epz_i)``, each ``(n_layers, ff_xy, ff_xy)``.
@@ -589,7 +583,7 @@ def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None, normal_field_
 
     out = [[], [], [], [], []]
 
-    layers = _layer_eps_detail(xp, ucell, fto_x, fto_y, enhanced_dfs)
+    layers = _layer_eps_for_normal_field(xp, ucell, fto_x, fto_y)
     for i, (eps_matrix, base_eps, repeat_y, repeat_x) in enumerate(layers):
         if normal_field is None:
             nx, ny = normal_vector_field(
@@ -885,8 +879,7 @@ def to_conv_mat_raster_continuous(ucell, fto_x, fto_y, compression=None):
 
 
 def to_conv_mat_raster_continuous_nvf(ucell, fto_x, fto_y, normal_field=None,
-                                      normal_field_source=None, compression=None,
-                                      enhanced_dfs=True):
+                                      normal_field_source=None, compression=None):
     """Per-layer convolution matrices for a raster ``ucell`` via closed-form Fourier + NVF.
 
     The combination the deprecated ``fourier_type`` integer could not express. It buys the
@@ -903,9 +896,6 @@ def to_conv_mat_raster_continuous_nvf(ucell, fto_x, fto_y, normal_field=None,
             the same way.
         compression: optional per-layer ``(row_idx, col_idx, x, y)`` from
             :func:`compression_indices`. Replayed eagerly it is checked too.
-        enhanced_dfs: upsampling of the grid the *normal field* is taken on. It does not
-            affect the permittivity series here, which is integrated over the compressed
-            blocks rather than sampled.
 
     Both ``normal_field`` and ``compression`` are static geometry; supply both to keep the
     build traceable under JAX (this path is the only one that needs both).
@@ -916,7 +906,7 @@ def to_conv_mat_raster_continuous_nvf(ucell, fto_x, fto_y, normal_field=None,
     xp = array_namespace(ucell)
 
     out = [[], [], [], [], []]
-    eps_grids = _layer_eps_detail(xp, ucell, fto_x, fto_y, enhanced_dfs)
+    eps_grids = _layer_eps_for_normal_field(xp, ucell, fto_x, fto_y)
 
     for i, (eps_grid, base_eps, repeat_y, repeat_x) in enumerate(eps_grids):
         if normal_field is None:

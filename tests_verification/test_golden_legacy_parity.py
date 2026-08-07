@@ -30,8 +30,19 @@ branch has no counterpart for (driven by TE or TM incidence, nothing between) --
 structures at ``psi = pi/2`` and ``psi = 0`` agree to 2e-15. The five 2D cases have no
 independent check here; ``test_reticolo_golden`` is the standing one, on its own cases.
 
-What that costs is worth naming: for those seven, this file now pins continuity against this
-implementation rather than against the one it replaced.
+Then ``2d_nvf`` alone was recomputed (2026-08-07) when the NVF path stopped over-refining the
+grid its normal field is taken on. It used to repeat each cell ``4*fto+1`` times before the
+distance transform; it now lifts a layer only to the floor that transform needs, which on this
+5x5 case is a 10x10 grid rather than 50x50. The answer moves a lot -- transmitted efficiency
+0.684 to 0.352 under TM incidence -- and energy is conserved to 1.000000000000 either way.
+There is no independent oracle for a *random* 5x5 raster under NVF, and there cannot really be
+one: NVF's premise is that a staircase stands for a smooth boundary, and a random raster has no
+boundary behind it. The justification is elsewhere -- on smooth shapes, where an analytic
+reference exists, the over-refined grid was worse in 27 of 32 combinations
+(``docs/nvf-upsampling.md``).
+
+What that costs is worth naming: for those seven, and now for ``2d_nvf`` a second time, this
+file pins continuity against this implementation rather than against the one it replaced.
 
 Compared to ``atol=1e-12``, not bit-for-bit. Bit-exactness was the right test while the port
 was being *proved* equal to the legacy chain; as a standing guard it fails on things that are

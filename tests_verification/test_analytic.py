@@ -224,8 +224,13 @@ def test_analytic_shape_parameters_are_absolute_lengths():
         res = fieldwave.rcwa(backend=0, ucell=ucell, **cfg, **kw).conv_solve()
         return float(np.sum(np.asarray(res.de_ri)))
 
+    # The two readings separate by ~90x, so the threshold is not load-bearing; it is set
+    # above the analytic-vs-raster gap and far below the misreading. That gap widened from
+    # 1e-3 when the NVF normal field stopped being taken on an over-refined grid (2026-08-07,
+    # see docs/nvf-upsampling.md) -- a raster DFS reference sits at 1.7e-3 on this structure
+    # too, so it is the reference that moved, not the shape parameters.
     reference = total(ras, factorization='nvf')
-    assert abs(total(shaped(L * P, 0.5 * P)) - reference) < 1e-3        # absolute: agrees
+    assert abs(total(shaped(L * P, 0.5 * P)) - reference) < 5e-3        # absolute: agrees
     assert abs(total(shaped(L, 0.5)) - reference) > 1e-2               # fractions: does not
 
 

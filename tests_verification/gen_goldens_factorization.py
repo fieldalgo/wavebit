@@ -29,7 +29,7 @@ out = {}
 for name, ucell, fx, fy in DFS:
     for tag, enh in (('enhanced', True), ('plain', False)):
         for slot, m in zip(('epx', 'epy', 'epz_i'),
-                           to_conv_mat_raster_discrete(ucell, fx, fy, enhanced_dfs=enh)):
+                           to_conv_mat_raster_discrete(ucell, fx, fy)):
             out[f'dfs__{name}__{tag}__{slot}'] = m
 for name, ucell, fx, fy in NVF:
     for slot, m in zip(('epx', 'epy', 'epxy', 'epyx', 'epz_i'),

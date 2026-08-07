@@ -126,8 +126,7 @@ def _core_inputs(kwargs):
     solver = fieldwave.rcwa(backend=0, connecting_algo='SMM', **kwargs)
     solver.conv_solve()                    # assigns the grating type
     epx, epy, epz = to_conv_mat_raster_discrete(
-        solver.ucell, solver.fto[0], solver.fto[1],
-        enhanced_dfs=solver.enhanced_dfs)
+        solver.ucell, solver.fto[0], solver.fto[1])
     kx, ky = solver.get_kx_ky_vector(kwargs['wavelength'])
     common = dict(wavelength=kwargs['wavelength'], kx=kx, n_top=solver.n_top,
                   n_bot=solver.n_bot, theta=solver.theta, thickness=solver.thickness,

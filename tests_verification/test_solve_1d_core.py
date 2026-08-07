@@ -25,8 +25,7 @@ def _run_and_inputs(pol, ucell, thickness, n_top, n_bot, wl, period, fto, theta)
                           thickness=thickness, ucell=ucell)
     via_api = solver.conv_solve()
     epx, epy, epz = to_conv_mat_raster_discrete(
-        solver.ucell, solver.fto[0], solver.fto[1],
-        enhanced_dfs=solver.enhanced_dfs)
+        solver.ucell, solver.fto[0], solver.fto[1])
     kx, _ = solver.get_kx_ky_vector(wl)
     inputs = dict(pol=pol, wavelength=wl, kx=kx, n_top=n_top, n_bot=n_bot,
                   theta=solver.theta, thickness=solver.thickness,
@@ -150,8 +149,7 @@ def _run_and_inputs_conical(ucell, thickness, n_top, n_bot, wl, period, fto, the
     via_api = solver.conv_solve()
     assert solver.grating_type_assigned == 1, solver.grating_type_assigned   # ensure conical path
     epx, epy, epz = to_conv_mat_raster_discrete(
-        solver.ucell, solver.fto[0], solver.fto[1],
-        enhanced_dfs=solver.enhanced_dfs)
+        solver.ucell, solver.fto[0], solver.fto[1])
     kx, ky = solver.get_kx_ky_vector(wl)
     inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_top, n_bot=n_bot,
                   theta=solver.theta, psi=solver.psi, thickness=solver.thickness,
