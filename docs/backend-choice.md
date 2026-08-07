@@ -36,7 +36,7 @@ the speed of a wrong answer.
   `jax jit` with a re-freeze each step is *slower* than eager PyTorch.
 - **From `fto≈7` up, `jax jit` is roughly 2x PyTorch** and repays its compilation in under a
   dozen steps.
-- **`jax eager` is rarely the right answer.** It is 2-6x slower than PyTorch at small scale,
+- **`jax eager` is rarely the right answer.** It is 2-11x slower than PyTorch at small scale,
   converges to it at large scale, and cannot run NVF at all. Its value is that it exists where
   a freeze would go stale.
 - **Re-freezing every step is free on the vector path and ruinous on the raster path.** The
@@ -104,9 +104,34 @@ Break-even against PyTorch, counting the compile a fit must amortise:
 | fto=9, split=20, L=3 | +1837 ms | 5039 | 3 |
 | fto=11, split=20, L=3 | +5714 ms | 9392 | 2 |
 
-At `fto=3` the Python-side modeling dominates and XLA has nothing to fuse that PyTorch is not
-already doing; at `fto≥7` the eigen-solve dominates and XLA's advantage is real. `n_split`
-matters much less than `fto`: it moves the freeze cost, not the solve.
+At `fto=3` the modeling dominates; at `fto≥7` the eigen-solve does. `n_split` matters much
+less than `fto`: it moves the freeze cost, not the solve.
+
+### Why `jax eager` loses, and where it stops losing
+
+Splitting a forward call into the modeling step (many small operations) and the solve (one
+large linear algebra call) locates all of it:
+
+| | modeling | solve | blocks |
+|---|---|---|---|
+| fto=3, split=4 — torch | 0.4 ms | 12.3 ms | 54 |
+| fto=3, split=4 — jax | **4.0 ms** | 23.0 ms | 54 |
+| fto=3, split=20 — torch | 2.8 ms | 13.4 ms | 902 |
+| fto=3, split=20 — jax | **24.3 ms** | 22.0 ms | 902 |
+| fto=11, split=20 — torch | 2.8 ms | 3512 ms | 902 |
+| fto=11, split=20 — jax | 27.3 ms | **2543 ms** | 902 |
+
+JAX is ~9x slower on the modeling step at every size, because JAX has no true eager mode:
+every operation goes through its own dispatch, and the vector modeler emits one small array
+operation per block — 902 of them at `n_split=20`. PyTorch's C++ dispatcher absorbs that;
+JAX's does not. Taking a gradient widens it further (forward alone is 46 ms against 16; with
+`jax.grad` it is 250 against 22), since each primitive is then traced through JVP and partial
+evaluation.
+
+The solve is the other way around: from `fto=7` up, JAX is *faster* there (2543 ms against
+3512 at `fto=11`). So `jax eager` catching up at high `fto` is not the eager path improving —
+it is the part where it loses shrinking to nothing as one 1250x1250 eigendecomposition comes
+to dominate.
 
 ### Where the recompilation lands
 
@@ -167,10 +192,20 @@ refuse it eagerly, but a jitted call cannot check) or not use jit.
 so its `re-freeze` column matches its `one freeze` column exactly and staleness cannot arise.
 This is the strategy to reach for in a raster inverse design whose pattern moves every step.
 
-**3. `jax eager` cannot run NVF.** `normal_vector_field` hands the whole upsampled layer to
-SciPy in one NumPy conversion, and no tracer answers that. This is a property of the
-implementation, not of the problem — the field depends on nothing but the interface mask, and
-the upsample is a block repeat, so the mask follows from the base raster. Not done.
+**3. `jax eager` cannot run NVF, and the reason is narrower than it looks.** A grad tracer
+refuses a whole-array NumPy conversion but permits narrowing one value at a time — its primal
+is concrete, so each element reads:
+
+| | `np.asarray(whole_array)` | `bool(one_element)` |
+|---|---|---|
+| `jax.grad` tracer | `TracerArrayConversionError` | **OK** |
+| `jax.jit` tracer | `TracerArrayConversionError` | `TracerBoolConversionError` |
+
+`compression_indices` asks the second way, so CFS differentiates unfrozen.
+`normal_vector_field` asks the first, handing the whole upsampled layer to SciPy, so NVF does
+not. That is a property of how it asks, not of the problem: the field depends on nothing but
+the interface mask, and the upsample is a block repeat, so the mask follows from the base
+raster and would narrow the same way. Not done.
 
 **4. NVF's cost grows with the raster, the others' do not.** DFS and CFS are flat in `N` (the
 convolution matrix depends on `fto`, not `N`); NVF is not, because the distance transform runs
@@ -236,9 +271,20 @@ and, within the freeze's own cost, the fast one.
 
 ## Caveats
 
-- **CPU only.** XLA's advantage is largest exactly where this was not measured. A GPU run
-  should be expected to move every crossover substantially towards `jax jit`, and to make the
-  compilation cost matter relatively less.
+- **CPU only, and a GPU does not simply scale these numbers.** Two of the quantities here move
+  in *opposite* directions on a GPU, so "it would favour jit" is too coarse to be useful:
+
+  - The **per-step ratio** should move towards `jax jit`. What jit removes is per-operation
+    dispatch, and on a GPU each of those is a kernel launch. The modeling step is the worst
+    case for that — it emits one small operation per block, 902 of them at `n_split=20` — so
+    the low-`fto` regime where PyTorch wins here is the one most likely to flip.
+  - The **break-even in steps** should move *away* from it. Break-even is
+    `compile / (torch_step − jit_step)`; a GPU shrinks both step times, so the numerator's
+    denominator shrinks in absolute ms, while XLA's GPU compilation is typically slower than
+    its CPU compilation, not faster. Fewer ms saved per step against a larger fixed cost means
+    more steps to repay it.
+
+  Which effect dominates is not predictable from this data. Measure before choosing.
 - **PyTorch was measured eager.** `torch.compile` was not tested. If it were used it would
   acquire a recompilation cost on the same trigger — a change in the discrete description — so
   the shape of the trade would come to resemble JAX's.
