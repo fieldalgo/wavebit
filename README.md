@@ -125,6 +125,11 @@ Use only when you do understand what you are doing.
 (2023-03); it is forced onto the CPU and sent back to the GPU. Re-verify against the versions
 you run — it is the one place where the backend choice can dominate the runtime.
 
+For a run that is *differentiated*, the table above is not the whole story — eager PyTorch and
+a jitted JAX step trade places with problem size, and a frozen geometry is worth its
+compilation only above a certain `fto`. That is measured in
+[docs/backend-choice.md](docs/backend-choice.md).
+
 NumPy is simple and light to use. Suggested as a baseline with small ~ medium scale optics problem.
 JAX and PyTorch are recommended for cases having large scale or optimization part.
 If you want parallelized computing with multiple devices (e.g., GPUs), JAX is ready for that.
@@ -184,7 +189,7 @@ solver = fieldwave.rcwa(backend=0, fourier_coefficients='sampled', factorization
 
 | Value | Notes |
 | --- | --- |
-| `'sampled'` | Discrete series straight off the pixel grid. The default, and the only one that survives `jax.grad` without a frozen geometry. |
+| `'sampled'` | Discrete series straight off the pixel grid, with the raster's coefficients in closed form. The default. |
 | `'integrated'` | Closed-form transform of the raster's rectangles. The more accurate route, and the one Reticolo uses. |
 
 `factorization` — which rule closes the products of discontinuous functions:
@@ -192,7 +197,7 @@ solver = fieldwave.rcwa(backend=0, fourier_coefficients='sampled', factorization
 | Value | Notes |
 | --- | --- |
 | `'li'` | Li's rules, applied along x and y. The default. |
-| `'nvf'` | Normal vector field — factorizes along the material interfaces. Made for curved and tilted boundaries, where a staircase converges slowly. |
+| `'nvf'` | Normal vector field — factorizes along the material interfaces. Made for curved and tilted boundaries, where a staircase converges slowly; how it reads those interfaces off a raster, and what that costs, is in [docs/nvf-upsampling.md](docs/nvf-upsampling.md). |
 
 All four pairings work. The deprecated `fourier_type` integer expressed only three of them —
 `0 = ('sampled', 'li')`, `1 = ('integrated', 'li')`, `2 = ('sampled', 'nvf')` — and had no
@@ -239,29 +244,41 @@ quickstart uses nanometres; nothing in the solver assumes it.
 
 ## Differentiating a simulation
 
-Three steps in the pipeline decide something structural rather than compute a value — whether
-a layer is uniform, which way the interfaces point, where the piecewise-constant blocks start
-and stop. They branch on values, so they cannot run inside a JAX trace. Freeze them once from
-the concrete structure, and the rest of the call stays traceable:
+Two steps in the raster pipeline decide something structural rather than compute a value —
+which way the interfaces point, and where the piecewise-constant blocks start and stop. Both
+branch on values, so neither survives `jax.jit`.
+
+Neither of them needs help to survive `jax.grad`, though. A grad tracer carries a concrete
+value, so the decisions read it one at a time and a gradient works straight off the public API:
 
 ```python
 import jax, jax.numpy as jnp
 
 solver = fieldwave.rcwa(backend=1, ucell=ucell, ...)
-geometry = solver.freeze_geometry()
-
-grad = jax.grad(lambda u: jnp.sum(
-    solver.conv_solve(ucell=u, geometry=geometry).de_ti))(ucell)
+grad = jax.grad(lambda u: jnp.sum(solver.conv_solve(ucell=u).de_ti))(ucell)
 ```
 
-Omit `geometry` and each decision is auto-detected eagerly instead — which reproduces the
-same numbers, but only the default `('sampled', 'li')` pairing survives `jax.grad`, and
-nothing survives `jax.jit`.
+`jax.jit` is the harder bar, and that is what `freeze_geometry()` is for — it takes those
+decisions once against the concrete structure and hands them back as data:
+
+```python
+geometry = solver.freeze_geometry()
+step = jax.jit(lambda u: jnp.sum(solver.conv_solve(ucell=u, geometry=geometry).de_ti))
+```
 
 A freeze describes the structure it was taken on. Sweeping the *material values* reuses it
 exactly; moving the geometry does not, and an eager `conv_solve` raises `StaleGeometryError`
 rather than answering from a record that no longer fits. A traced call cannot check — the
-comparison is what the freeze exists to avoid — so re-freeze on a schedule during a long fit.
+comparison is what the freeze exists to avoid.
+
+So take the freeze again every step. On the vector path it costs a few milliseconds and
+recompiles only when the recorded *ordering* changes, which is the same moment a held record
+would have gone stale — a length can move 47% for two compilations. That makes re-freezing both
+the fastest way to run a moving fit and the only one that cannot carry a stale record forward.
+
+Which backend to use, and whether to jit at all, is not obvious and is not a matter of taste:
+below `fto ~ 5` eager PyTorch beats a jitted JAX step outright, and the crossover moves with
+problem size. Measurements are in [docs/backend-choice.md](docs/backend-choice.md).
 
 On PyTorch, eager and `.backward()` are the supported path. `torch.compile` is not: it buys
 nothing here — the solve is almost entirely LAPACK calls the compiler forwards untouched — and

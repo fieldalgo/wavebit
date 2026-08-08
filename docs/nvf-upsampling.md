@@ -14,8 +14,10 @@ Targets:
 
 `enhanced_dfs=True` repeated every cell `4*fto+1` times before taking the normal field. Across
 32 combinations of shape, material, polarization and truncation order it **lost accuracy in 27
-and gained in none that stood up**. It is gone; the normal field is now taken on the raster as
-given, lifted only to the `4*fto+1`-point floor its transform structurally requires.
+and gained in none that stood up**. It is gone — the parameter with it, from the solver
+constructors and from `Numerics`, so passing it now raises rather than being quietly ignored.
+The normal field is taken on the raster as given, lifted only to the `4*fto+1`-point floor its
+transform structurally requires.
 
 ## What the knob did
 
@@ -124,5 +126,7 @@ for a smooth boundary, and a random raster has none. The justification is this d
 ## Reproduce
 
 The sweeps here are not checked in as a benchmark; they are one-off measurements against the
-analytic shape path. `benchmarks/benchmark_analytic.py` covers the neighbouring question — how
-the analytic path compares to raster and staircase representations — on the same structures.
+analytic shape path. Two neighbouring write-ups cover the questions either side of this one:
+[`analytic-modeling.md`](analytic-modeling.md) on how the analytic path compares to the raster
+and staircase representations, and [`backend-choice.md`](backend-choice.md) on what the change
+here did to the cost of NVF relative to the other two strategies (it removed the difference).

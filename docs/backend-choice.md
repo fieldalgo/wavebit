@@ -10,6 +10,9 @@ Targets:
 - `fieldwave/_core/factorization.py::compression_indices`, `normal_field_for_ucell` — the two
   raster decisions that must be taken eagerly
 - `fieldwave/_core/modeler.py::_check_plan_still_fits` — the vector record's staleness check
+- [`nvf-upsampling.md`](nvf-upsampling.md) — why NVF's cost fell between the first run of this
+  sweep and the one reported here; [`torch-compile.md`](torch-compile.md) — why PyTorch is
+  measured eager
 
 ---
 
@@ -44,7 +47,8 @@ the speed of a wrong answer.
   raster records hold arrays, fall back to identity, and recompile every step.
 - **All three strategies now cost the same.** NVF used to grow with the raster — 359 ms of
   freeze against a 277 ms step at `N=128, fto=5` — because its normal field was taken on a
-  grid `4*fto+1` times finer per axis. That is gone (`docs/nvf-upsampling.md`); its freeze is
+  grid `4*fto+1` times finer per axis. That is gone ([`nvf-upsampling.md`](nvf-upsampling.md));
+  its freeze is
   now under 2 ms and its step is level with DFS.
 
 ---
