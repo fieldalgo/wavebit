@@ -1,6 +1,6 @@
 """The normal field's defining invariant — and the record of why SDF is the only method.
 
-``nvf_conv_matrices`` derives the Li/Götz-Schuster factorization from a normal field that is
+``nvf_conv_matrices`` derives the Li/Schuster factorization from a normal field that is
 **unit magnitude throughout the unit cell**, not just at the interface. That assumption is
 load-bearing: it is what makes ``C_xx + C_yy = <nx^2> + <ny^2> = I``, so the projector splits E
 into normal and tangential parts and nothing else. Nothing else in the suite pins it down, so a
