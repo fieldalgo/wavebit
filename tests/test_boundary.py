@@ -304,9 +304,10 @@ def test_a_circle_without_ly_is_the_same_circle_on_both_paths(fto):
     ``epz_i`` again, for the reason given in the one-rectangle test above: it is ``inv(ep_dir)``
     and never touches the normal field, which the two paths extend differently. Unlike a
     rectangle this cannot be exact -- the polygon is a 256-gon and the transform is a Bessel
-    form -- and 1.6e-5 flat over fto 4..8 is that polygonisation, not a disagreement about the
-    shape. A misread ``ly`` is not a 1e-5 effect: falling back to zero empties the circle and
-    falling back to the old 500.0 fills the cell.
+    form -- but the polygon is **area-matched**, which drops that gap from 1.6e-5 to the 1e-9
+    band. The tolerance is set from there rather than from a round number, so it would notice
+    the scaling being dropped. A misread ``ly`` is not a 1e-9 effect either way: falling back to
+    zero empties the circle and falling back to the old 500.0 fills the cell.
 
     ``skew`` drops ``cx`` / ``cy`` as well, on a cell where the default for them is *arguable*:
     ``shape_geometry`` fills an omitted centre from the period, and on a parallelogram that is
@@ -326,7 +327,10 @@ def test_a_circle_without_ly_is_the_same_circle_on_both_paths(fto):
                                           xnp.complex128, normal_grid=ng, lattice=lat)
         rel = (np.abs(np.asarray(mine[4]) - np.asarray(theirs[4])).max()
                / np.abs(np.asarray(theirs[4])).max())
-        assert rel < 1e-4, (name, rel)
+        # Measured 3.2e-10 (fto 4) and 6.2e-10 (fto 8), square and skew alike. Set just
+        # above that, not at a round number: dropping the area matching puts it back at
+        # 1.6e-5 and a 1e-4 tolerance would have absorbed that silently.
+        assert rel < 5e-9, (name, rel)
 
 
 # --------------------------------------------------------------------------- wiring
