@@ -29,11 +29,11 @@ Two paths are swept, because they differentiate different things:
 
 Run from the repo root::
 
-    python benchmarks/benchmark_backends.py                    # ~2 h, the full sweep
-    python benchmarks/benchmark_backends.py --quick            # ~5 min
-    python benchmarks/benchmark_backends.py --budget 3600      # stop adding work after 1 h
+    python studies/benchmark_backends.py                    # ~2 h, the full sweep
+    python studies/benchmark_backends.py --quick            # ~5 min
+    python studies/benchmark_backends.py --budget 3600      # stop adding work after 1 h
 
-Results stream to ``benchmarks/results/backends.json`` as they land, so an interrupted run
+Results stream to ``studies/results/backends.json`` as they land, so an interrupted run
 still leaves everything it finished. Markdown tables go to stdout.
 """
 import argparse

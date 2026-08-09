@@ -156,7 +156,7 @@ def as_array(xp, v, dtype=None, device=None):
 # no measurement made here separates it from its absence. It costs one matmul.
 #
 # Equation 4.77 of Boeddeker et al., arXiv:1701.00392. Cross-checked against both
-# frameworks' native rules where those are defined (see tests_verification/test_eig_grad).
+# frameworks' native rules where those are defined (see tests/test_eig_grad).
 
 EIG_EPS_RELATIVE = 1e-12
 EIG_EPS_MINIMUM = 1e-24

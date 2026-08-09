@@ -61,7 +61,7 @@ import fieldwave
 # Tight enough that no defect hides under it, loose enough to ignore float reassociation.
 TOL = 1e-12
 
-GOLDEN = np.load(pathlib.Path(__file__).parent / 'golden_legacy.npz')
+GOLDEN = np.load(pathlib.Path(__file__).parent / 'data' / 'golden_legacy.npz')
 FIELDS = ('R_s', 'R_p', 'T_s', 'T_p',
           'de_ri', 'de_ri_s', 'de_ri_p', 'de_ti', 'de_ti_s', 'de_ti_p')
 

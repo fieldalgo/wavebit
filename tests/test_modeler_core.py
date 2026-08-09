@@ -17,7 +17,7 @@ import pytest
 import fieldwave
 from fieldwave._core.modeler import Modeling
 
-GOLDEN = np.load(pathlib.Path(__file__).parent / 'golden_legacy_modeler.npz')
+GOLDEN = np.load(pathlib.Path(__file__).parent / 'data' / 'golden_legacy_modeler.npz')
 
 PERIOD = [300.0, 300.0]
 SI, SIO2, SI3N4 = 3.638751670074983, 1.4518, 2.0056

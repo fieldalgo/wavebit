@@ -54,7 +54,7 @@ rotated frequency coordinate `κ = Rot(θ)^T k` and the center phase `e^{-i k·c
 
 Here `sinc(z)=sin z/z`, `jinc(z)=2 J1(z)/z` (both removable at 0, value 1). The circle is the
 `a=b=R` special case of the ellipse. All three formulas are verified against a fine
-midpoint DFT (`tests_verification/test_analytic.py`).
+midpoint DFT (`tests/test_analytic.py`).
 
 A layer's coefficients are assembled as background + sum of (non-overlapping) shapes:
 
@@ -121,7 +121,7 @@ res = solver.conv_solve()
 
 `lx/ly/angle/cx/cy/n_index` may be tensors (torch/jax) and are differentiable w.r.t. them.
 
-## 4. Results (`benchmarks/benchmark_analytic.py`)
+## 4. Results (`studies/benchmark_analytic.py`)
 
 **[1] Dielectric tilted rectangle** (30°, n=3.5, TM, subwavelength). Reference = analytic
 fto=16. Same rectangle represented analytically vs. as a vector staircase (n_split); `t0`
@@ -170,7 +170,7 @@ precision energy conservation. Backend agreement: `|np−jax|`~1e-14, `|np−tor
 
 ## 6. Regression tests
 
-`tests_verification/test_analytic.py`: (1) laurent==dfs2d convention, (2) the three shape
+`tests/test_analytic.py`: (1) laurent==dfs2d convention, (2) the three shape
 formulas vs a fine DFT, (3) axis-aligned analytic==raster-NVF, (4) lossless energy
 conservation, (5) backend agreement, (6) torch/jax differentiability, (7) analytic ≥5× more
 accurate than staircase for a tilted dielectric. Existing `test_nvf*` and `test_fixes` all

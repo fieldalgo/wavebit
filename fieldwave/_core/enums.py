@@ -137,7 +137,7 @@ def resolve_fourier_options(fourier_coefficients=None, factorization=None, fouri
     property, not a taste call: topology optimization needs one gradient per raster cell, and
     only the sampled path gives that — the integrated path compresses the raster into blocks,
     so the interior cells genuinely stop being variables. See
-    ``tests_verification/test_gradients.py::test_raster_per_cell_gradient_reaches_every_cell``.
+    ``tests/test_gradients.py::test_raster_per_cell_gradient_reaches_every_cell``.
 
     ``fourier_type`` is the deprecated alias, mapping ``0 -> ('sampled', 'li')``,
     ``1 -> ('integrated', 'li')``, ``2 -> ('sampled', 'nvf')``. Passing it alongside either

@@ -10,9 +10,9 @@ Answer these in order and stop at the first **yes**. The point of the order is t
 |---|---|---|
 | **0** | Is this going into git at all? A fragment, a probe, an idea being tried out. | **No → your scratch space, outside the repository.** Stop here. |
 | 1 | Is it the implementation? | `fieldwave/` |
-| 2 | Can you write the `assert` line *before* you run it? | `tests_verification/` |
-| 3 | …and does that criterion come from an **outside solver** (RETICOLO, GRCWA, TORCWA)? | the external-oracle machinery — `benchmarks/interface/` plus the golden and its test |
-| 4 | Would writing that `assert` mean asserting the very thing you are trying to find out? | `benchmarks/` — **and** a write-up in `docs/` |
+| 2 | Can you write the `assert` line *before* you run it? | `tests/` |
+| 3 | …and does that criterion come from an **outside solver** (RETICOLO, GRCWA, TORCWA)? | the external-oracle machinery — `tests/references/interface/` plus the golden and its test |
+| 4 | Would writing that `assert` mean asserting the very thing you are trying to find out? | `studies/` — **and** a write-up in `docs/` |
 | 5 | Is it prose someone will cite later? | `docs/` |
 | 6 | Is it a lesson, read in order, for someone who has not used the API? | `tutorials/` |
 | 7 | Is it FieldWave applied to an outside problem? | `examples/` |
@@ -23,11 +23,11 @@ If none of them is a yes, **the file has no home yet.** Say so in the PR rather 
 
 Two more rules that go with the table:
 
-- **Every directory carries a `README.md` whose first table maps each entry to the question it answers.** Not what the script does — what it exists to find out. `benchmarks/README.md` is the model.
+- **Every directory carries a `README.md` whose first table maps each entry to the question it answers.** Not what the script does — what it exists to find out. `studies/README.md` is the model.
 - **Everything committed is in English**: code, comments, docs and commit messages. Your scratch space is exempt, which is part of why it is kept separate.
 - **Scratch lives outside the checkout.** An ignored directory inside the repository is not safe — it is what `git clean -xdf` exists to delete. Keep it as a sibling of the checkout (this project uses `../<your-scratch-dir>`) and symlink it in as `lab` if you want it on hand; the symlink is ignored, and losing it costs one `ln -s`.
 
-The reasoning behind all of this, the survey it was checked against, and the renames still planned (`tests_verification/` → `tests/`, `benchmarks/` → `studies/`, external oracles regrouped under `tests/references/`) are in [`docs/repository-layout.md`](docs/repository-layout.md). **The table above uses today's directory names, so it is correct as written**; if a name here disagrees with that document, the rename has not happened yet and this file wins.
+The reasoning behind all of this — including the survey of 104 repositories it was checked against, and why `src/` was considered and rejected — is in [`docs/repository-layout.md`](docs/repository-layout.md). **This file is the operative one**: if a directory name there disagrees with the table above, the table wins.
 
 ## Reporting bugs
 
@@ -46,7 +46,7 @@ Not sure whether something is a bug, a usage question, or a feature idea? Open a
 ## Pull requests
 
 - **Keep PRs small and focused.** One fix or one feature per PR reviews much faster than a grab-bag.
-- **Add or extend a test.** Solver changes need a numerical test against a reference value; see `tests_verification/` for the pattern.
+- **Add or extend a test.** Solver changes need a numerical test against a reference value; see `tests/` for the pattern.
 - **Mind the conventions.** All sign and branch-cut choices live in `fieldwave/_core/conventions.py` — never introduce a local `sqrt`/`kz` branch decision elsewhere. FieldWave uses the `e^{-iωt}` time convention (`Im(n) > 0` = loss).
 - **Backend neutrality.** New solver code should be written against the Array API (`fieldwave/_core/backend.py`) rather than importing NumPy/JAX/Torch directly, unless there is a documented reason.
 - For anything larger than a bug fix, please open an issue first to discuss the design — it protects your time as much as the maintainer's.
@@ -57,7 +57,7 @@ Not sure whether something is a bug, a usage question, or a feature idea? Open a
 git clone https://github.com/fieldalgo/fieldwave.git
 cd fieldwave
 pip install -e .[jax]      # or .[pytorch], or plain -e . for NumPy only
-pytest tests_verification/ -q
+pytest tests/ -q
 ```
 
 ## Licensing

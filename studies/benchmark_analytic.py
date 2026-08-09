@@ -14,7 +14,7 @@ The analytic modeling path is selected by passing ``ucell`` as a list of layer d
 
 Run from the repo root:
 
-    python benchmarks/benchmark_analytic.py
+    python studies/benchmark_analytic.py
 """
 import os
 import sys

@@ -49,7 +49,7 @@ jobs:
         run: python -c "import numpy, jax, torch, fieldwave; print(fieldwave.__file__)"
 
       - name: Run verification suite
-        run: pytest tests_verification -q
+        run: pytest tests -q
 
   minimal:
     name: minimal install

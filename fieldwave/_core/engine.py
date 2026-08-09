@@ -36,7 +36,7 @@ _SOLVES = {
 def _concrete_period(value):
     """``period`` as two plain floats, or ``None`` if it has none to give.
 
-    ``period`` is a differentiable parameter (see ``tests_verification/test_gradients.py``), so
+    ``period`` is a differentiable parameter (see ``tests/test_gradients.py``), so
     it arrives in three shapes and all three are legitimate. Plain numbers convert outright. A
     grad-tracking torch tensor has to be detached first. A ``jax.grad`` tracer refuses both a
     whole-array conversion *and* ``float()`` — unlike the boolean narrowing

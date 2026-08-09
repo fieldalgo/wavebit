@@ -295,7 +295,7 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None):
     ``method='sobel'`` alternative (a raw ``grad(eps)``) is nonzero only in the one-pixel band
     at the interface, so it is not a unit field and collapses the projector toward 0, which
     degenerates the scheme back toward the plain direct rule. It was never reachable from the
-    solver and was dropped in the port. See ``tests_verification/test_nvf_normal_field.py``.
+    solver and was dropped in the port. See ``tests/test_nvf_normal_field.py``.
     For the shape-based (non-raster) normal field, see
     :func:`fieldwave._core.analytic.normal_vector_field_analytical`.
 

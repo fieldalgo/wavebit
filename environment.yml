@@ -22,7 +22,7 @@ dependencies:
       # dependencies (numpy, scipy, array-api-compat) at the floors declared in
       # pyproject.toml, so they are deliberately not repeated here.
       - -e .[jax,pytorch]
-      # Bridge to Octave, for the Reticolo comparison in benchmarks/. It is the only
+      # Bridge to Octave, for the Reticolo comparison in tests/references/. It is the only
       # oracle here that validates diffraction orders -- the analytic multilayer
       # reference covers uniform layers only -- so it earns a place in the dev
       # environment. Needs Octave itself on PATH (brew install octave), and the

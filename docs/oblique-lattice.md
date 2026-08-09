@@ -154,7 +154,7 @@ wrongly. Three checks that are:
 **A unimodular shear.** `a2' = a2 + a1` generates the *identical* point lattice: same cell area,
 same reciprocal set. So the two runs must agree, and they do — 1.2e-4 on a raster, 2.0e-6 on
 analytic shapes (tighter because there is no staircase in it). This is the cheapest correctness
-check available and it is worth running on your own structure; `tests_verification/test_oblique_lattice.py`
+check available and it is worth running on your own structure; `tests/test_oblique_lattice.py`
 has it as `test_unimodular_shear_is_the_same_physics`. With the normal field's metric correction
 removed the same comparison drifts to 8.5e-4 — that is the test having teeth.
 
@@ -188,4 +188,4 @@ correction is why NVF rather than Li's nested rule is the factorization that por
 is written in Cartesian tensor components, so once the normal is Cartesian nothing else in the
 factorization learns the cell was skewed. The same correction fixes an orthogonal case that was
 also wrong — a raster whose pixels are not square in real space; see
-`tests_verification/test_nvf_non_square_grid.py`.
+`tests/test_nvf_non_square_grid.py`.

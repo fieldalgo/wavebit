@@ -12,7 +12,7 @@ import pytest
 
 import fieldwave
 
-GOLDEN = np.load(pathlib.Path(__file__).parent / 'golden_legacy_field.npz')
+GOLDEN = np.load(pathlib.Path(__file__).parent / 'data' / 'golden_legacy_field.npz')
 
 # Must stay identical to gen_goldens_field.py.
 CASES = {

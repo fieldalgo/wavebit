@@ -221,7 +221,7 @@ ANALYTIC_CASES = KNOWN_GOOD + LOSSY_SUBSTRATE
 def test_absorbing_layer_via_the_analytic_path(case, pol, theta):
     """The analytic builder must land on the same physics as the raster one, for complex ``n``.
 
-    The analytic path had no complex-index coverage at all: ``tests_verification/test_analytic``
+    The analytic path had no complex-index coverage at all: ``tests/test_analytic``
     was entirely real, where ``conj(n)**2 == n**2``. Running the *uniform* stack through it puts
     it against the absolute oracle rather than against another solver — gold as a layer landed
     ~9% off here and tripped the ``R + T > 1`` guard, because the conjugation turned it into a

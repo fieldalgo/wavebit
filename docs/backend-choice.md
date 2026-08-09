@@ -4,7 +4,7 @@ Written: 2026-08. Measured on CPU (Apple silicon, single process, float64).
 **Every number here is from one CPU host; see the caveats before carrying any of it elsewhere.**
 
 Targets:
-- `benchmarks/benchmark_backends.py` — the sweep this document reports
+- `studies/benchmark_backends.py` — the sweep this document reports
 - `fieldwave/_core/geometry.py::StaticGeometry` — what a freeze records, and what its equality
   costs
 - `fieldwave/_core/factorization.py::compression_indices`, `normal_field_for_ucell` — the two
@@ -308,6 +308,6 @@ and, within the freeze's own cost, the fast one.
 - The break-even tables assume a fit that holds its discrete description. A fit that reorders
   block edges every step pays the compile every step, and no amount of `fto` rescues that.
 
-Reproduce with `python benchmarks/benchmark_backends.py`. The run this document reports is
-checked in as `benchmarks/results/backends.log`; a run also writes machine-readable numbers to
-`benchmarks/results/backends.json`, which the repository does not track (`*.json` is ignored).
+Reproduce with `python studies/benchmark_backends.py`. The run this document reports is
+checked in as `studies/results/backends.log`; a run also writes machine-readable numbers to
+`studies/results/backends.json`, which the repository does not track (`*.json` is ignored).

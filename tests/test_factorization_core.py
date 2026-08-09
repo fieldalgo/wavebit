@@ -32,8 +32,8 @@ def _rand(shape, seed):
 
 
 # The legacy builders these were originally checked against are gone; their outputs live on
-# as frozen reference data (tests_verification/gen_goldens_factorization.py).
-GOLDEN = np.load(pathlib.Path(__file__).parent / 'golden_legacy_factorization.npz')
+# as frozen reference data (tests/data/gen_goldens_factorization.py).
+GOLDEN = np.load(pathlib.Path(__file__).parent / 'data' / 'golden_legacy_factorization.npz')
 
 
 CASES = [

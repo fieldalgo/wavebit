@@ -1,11 +1,11 @@
 # Verification suite
 
 Everything whose expected answer can be stated before the run. CI runs all of it on every push
-(`pytest tests_verification -q`); there is no second, unasserted tier.
+(`pytest tests -q`); there is no second, unasserted tier.
 
 The test for whether something belongs here: **can you write the `assert` line first?** If
 writing it would mean asserting the thing you are trying to find out, it is a study and belongs
-in [`../benchmarks/`](../benchmarks) with a [`../docs/`](../docs) write-up instead. See
+in [`../studies/`](../studies) with a [`../docs/`](../docs) write-up instead. See
 [`../CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## Where the expected answers come from

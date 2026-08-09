@@ -2,7 +2,7 @@
 
 FieldWave applied to outside problems. **CI does not run any of this**, so treat it as a
 starting point rather than as a guarantee — if something here disagrees with
-[`../tests_verification/`](../tests_verification), the tests are right.
+[`../tests/`](../tests), the tests are right.
 
 | Entry | Question it answers |
 | --- | --- |

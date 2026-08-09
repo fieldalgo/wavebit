@@ -1,8 +1,10 @@
 # Repository layout — the target structure, and the rule that keeps it
 
-Written: 2026-08-09. **Proposal. No tracked file has been moved**, and none moves until the
-concurrent sessions land — that is a decision, not an oversight. The one thing already done is
-`lab/`, which is untracked and so cost the repository nothing; it is marked **Done** below.
+Written: 2026-08-09. **Executed 2026-08-10**, except for taking the vendored examples out,
+which needs destination repositories. The wave-2 renames were done despite live work in the
+affected directories: every session was idle at the time, `git mv` recorded all 34 moves as
+renames rather than delete/add, and the affected sessions were told directly. What that costs
+whoever rebases is written down under *Rebasing across the rename* below.
 
 Counts were measured against `develop` at `ae07ffa` and this document is based on `3c73d3d`;
 `develop` moves under concurrent work, so treat them as accurate to within a few files rather
@@ -464,14 +466,14 @@ No project in 104 uses a qualified name like `tests_verification`.
 
 | # | Move | Touches | Note |
 |---|---|---|---|
-| 1 | Add `CONTRIBUTING.md` with the routing rule, and link it from `README.md` | 1 new file + 1 line | **First, and land it on `develop`.** Two sessions have now misfiled while the rule existed but was unreachable. |
-| 2 | READMEs: add `docs/`, add `tests/`, rewrite `examples/` to the question table, one line in `tutorials/` | 4 files | Additive. |
-| 3 | Fix `.gitattributes`; add `lab` to `.gitignore` — **no trailing slash**, it is a symlink | 5 lines | See below. Keep the `dev/`/`devs/` lines until every checkout has renamed. |
-| 4 | Dissolve `QA/` | 6 deleted, ~3 test files, `README.md:310` | Evidence below. |
+| 1 | ~~Add `CONTRIBUTING.md`~~ **done** — with the routing rule, and link it from `README.md` | 1 new file + 1 line | **First, and land it on `develop`.** Two sessions have now misfiled while the rule existed but was unreachable. |
+| 2 | ~~READMEs~~ **done** — add `docs/`, add `tests/`, rewrite `examples/` to the question table, one line in `tutorials/` | 4 files | Additive. |
+| 3 | ~~Fix `.gitattributes`~~ **done** —; add `lab` to `.gitignore` — **no trailing slash**, it is a symlink | 5 lines | See below. Keep the `dev/`/`devs/` lines until every checkout has renamed. |
+| 4 | ~~Dissolve `QA/`~~ **done** — | 6 deleted, ~3 test files, `README.md:310` | Evidence below. |
 | 5 | Vendored examples out of the repository | 341 files removed | 492 → **151** tracked files. Needs the destination repos to exist. |
-| 6 | `setup.py` → `pyproject.toml` | 1 file | Independent of everything else. |
-| 7 | `tests_verification/` → `tests/`; goldens into `tests/data/` | 42 files, 8 textual refs | No code imports it. |
-| 8 | `benchmarks/` → `studies/`; oracles into `tests/references/` | 16 files + **8 prose refs** | Zero *code* changes outside the directory; the prose refs are listed below. Do after 7. |
+| 6 | ~~`setup.py` → `pyproject.toml`~~ **done** — | 1 file | Independent of everything else. |
+| 7 | ~~`tests_verification/` → `tests/`; goldens into `tests/data/`~~ | **done** | 44 files. |
+| 8 | ~~`benchmarks/` → `studies/`; oracles into `tests/references/`~~ | **done** | 16 files; 21 prose and comment references followed. |
 
 Moves 1–6 touch nothing any live branch has. **Moves 7–8 are top-level renames and rebase
 through all 16 worktrees** — they should land together, in one quiet window, with nothing else
@@ -610,3 +612,38 @@ That is the whole file.
 > carries a README whose first table maps each entry to the question it answers. The routing
 > rule itself lives in `CONTRIBUTING.md`, because a README can say what is there but not where a
 > new file goes.**
+
+---
+
+## Rebasing across the rename (2026-08-10)
+
+Wave 2 landed while eight worktrees had work in the renamed directories. If you are one of
+them, this is what to expect.
+
+**Committed changes usually need nothing.** All 34 moves were recorded by `git mv`, so git sees
+renames rather than delete-plus-add and carries your edits to the new path on rebase.
+
+**Uncommitted changes are the awkward case**, because this repository sets
+`rebase.autostash=true`: the stash pops after the rebase and its paths still say
+`tests_verification/` or `benchmarks/`, which no longer exist. The result is not a clean
+conflict — it is those directories quietly reappearing with only your files in them.
+
+Cleanest order, if you have uncommitted work in either:
+
+```sh
+git stash push -m pre-rename          # before rebasing, not after
+git rebase develop
+git stash pop                         # paths now resolve against the new tree
+```
+
+If you have already rebased and a `tests_verification/` or `benchmarks/` directory has come
+back, nothing is lost — move the files and delete the empty directory:
+
+```sh
+git mv tests_verification/<file> tests/<file>     # or tests/data/, tests/references/
+git mv benchmarks/<file> studies/<file>
+```
+
+The mapping: test modules → `tests/`; `golden_legacy*.npz` and their generators →
+`tests/data/`; anything RETICOLO/GRCWA/TORCWA → `tests/references/`; `benchmark_*.py` →
+`studies/`.

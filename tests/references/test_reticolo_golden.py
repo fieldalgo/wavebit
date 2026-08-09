@@ -19,7 +19,7 @@ holds DFS to this tolerance used to assert the opposite.
 
 The values are frozen in ``golden_reticolo.npz`` by ``gen_goldens_reticolo.py``, which needs
 Octave and RETICOLO. This file needs neither, which is the point: the evidence used to live
-in a notebook under a gitignored ``dev/`` and in ``benchmarks/``, which has no assertions and
+in a notebook under a gitignored ``dev/`` and in ``studies/``, which has no assertions and
 does not run in CI, so the strongest result the project had was also the one nothing checked.
 
 RETICOLO returns only the *propagating* orders, so the golden carries the order indices it

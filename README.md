@@ -46,7 +46,7 @@ JAX and PyTorch are optional and bring autodiff and GPU support:
 pip install -e '.[jax]'       # or '.[pytorch]', or '.[jax,pytorch]'
 ```
 
-`environment.yml` builds the full development environment, including the tools the benchmarks
+`environment.yml` builds the full development environment, including the tools the studies
 need:
 
 ```shell
@@ -297,7 +297,7 @@ full diagnosis are in [docs/torch-compile.md](docs/torch-compile.md).
 The physics is checked against references, not only against itself:
 
 * **Reticolo**, the established RCWA implementation, through an Octave bridge in
-  [`benchmarks/`](benchmarks). The CFS path agrees to ~1e-13 across twelve angle and
+  [`tests/references/`](tests/references). The CFS path agrees to ~1e-13 across twelve angle and
   polarization combinations; it is the only reference here that validates individual
   diffraction *orders* rather than totals.
 * **Energy conservation** for lossless structures, at machine precision (|R+T−1| ~ 1e-15).
@@ -306,7 +306,7 @@ The physics is checked against references, not only against itself:
 * **Analytic gradients against finite differences**, for the shape parameters the optimizer
   actually moves.
 
-The suite lives in [`tests_verification/`](tests_verification) and runs in CI on every push.
+The suite lives in [`tests/`](tests) and runs in CI on every push.
 Everything with a statable criterion lives there, including the slower cross-backend and
 optimizer checks — there is no second, unasserted tier.
 
