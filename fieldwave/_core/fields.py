@@ -50,9 +50,40 @@ def _diag_exp(xp, diag_vals, n):
     return eye * xp.exp(diag_vals)[..., None, :]
 
 
-def _inv_fourier(xp, kx, ky, period, res_x, res_y, k0, C):
-    """Inverse-transform kernel ``exp(-i k.r)`` sampled on the (x, y) grid, flattened over orders."""
+def _inv_fourier(xp, kx, ky, period, res_x, res_y, k0, C, lattice=None):
+    """Inverse-transform kernel ``exp(-i k.r)`` sampled on the cell, flattened over orders.
+
+    With ``lattice`` given (and ``kx`` / ``ky`` therefore per-order, ``(ff_y, ff_x)``) the
+    samples are taken on the cell's own parallelogram, ``r = u*a1 + v*a2`` for ``u, v`` in
+    ``[0, 1]``, and the returned grid is indexed by ``(v, u)`` rather than ``(y, x)``.
+
+    Separability survives that, which is the whole reason this is a few lines rather than a
+    rewrite::
+
+        k.r = k.(u*a1 + v*a2) = u*(k.a1) + v*(k.a2)
+
+    so the kernel is still an outer product, just of ``exp(i*k0*u*(k.a1))`` and
+    ``exp(i*k0*v*(k.a2))`` instead of ``exp(i*kx*x)`` and ``exp(i*ky*y)``. Nothing extra has to
+    be carried: the incident offset is already inside ``kx`` / ``ky``, so ``k.a1`` and ``k.a2``
+    absorb it. On an axis-aligned cell ``k.a1 = kx*Lx`` and ``u = x/Lx``, which is the 1-D
+    branch below, and that branch is left alone so its samples stay bit-identical.
+    """
     dev = _dev(kx)
+    # Branch on the *layout*, not on whether a basis was supplied: an axis-aligned cell may
+    # carry an explicit `diag(period)` and still hand over separable 1-D vectors, in which case
+    # the old path is both correct and bit-identical.
+    if kx.ndim == 2:
+        a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
+        a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
+        kx_f = xp.reshape(kx, (-1,))
+        ky_f = xp.reshape(ky, (-1,))
+        proj_a1 = (kx_f * a1x + ky_f * a1y) * k0          # k . a1, per order
+        proj_a2 = (kx_f * a2x + ky_f * a2y) * k0          # k . a2
+        u_1d = xp.linspace(0, 1, res_x, dtype=C, device=dev)
+        v_1d = xp.linspace(0, 1, res_y, dtype=C, device=dev)
+        u_ph = xp.exp(1j * xp.reshape(u_1d, (1, res_x, 1)) * proj_a1)
+        v_ph = xp.exp(1j * xp.reshape(v_1d, (res_y, 1, 1)) * proj_a2)
+        return xp.broadcast_to(u_ph * v_ph, (res_y, res_x, kx_f.shape[0]))
     # `period` stays an array rather than a Python float: all three backends take an array
     # endpoint and give bit-identical samples, and narrowing it would break tracing whenever
     # the solver itself is jitted (period is a traced child of the JAX solver pytree).
@@ -114,45 +145,28 @@ def field_1d(wavelength, kx, T1, layer_info_list, period, pol,
     return xp.concat(cells, axis=0)
 
 
-def _reject_oblique(kx):
-    """Refuse per-order ``kx`` — a skewed cell — since the inverse transform below is separable.
-
-    :func:`_inv_fourier` builds the basis as an outer product of ``exp(i*kx*x)`` and
-    ``exp(i*ky*y)``, which only holds when ``kx`` depends on ``m`` alone and ``ky`` on ``n``
-    alone. With ``G = m*b1 + n*b2`` non-orthogonal both depend on both, and the product form
-    silently reconstructs a different field.
-
-    Separability is recoverable rather than lost: on the *parametric* ``(u, v)`` grid the
-    lattice part is ``exp(2i*pi*(m*u + n*v))``, separable again, with only the smooth incident
-    phase ``exp(i*k_inc.r)`` left to carry. Rendering in lattice coordinates is therefore the
-    natural way to lift this, and is deferred rather than blocked.
-    """
-    if getattr(kx, 'ndim', 1) == 2:
-        raise NotImplementedError(
-            'Field reconstruction is not implemented yet for a non-orthogonal cell basis '
-            '(set via .lattice). The efficiencies from conv_solve() are unaffected; only the '
-            'real-space field reconstruction is missing, because its inverse transform assumes '
-            'kx varies with m alone and ky with n alone, which a skewed cell breaks.')
-
-
 def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, res_x, res_y, res_z,
-                   set_field_input, conical):
+                   set_field_input, conical, lattice=None):
     """Shared body of the conical and 2D reconstructions.
 
     They differ only in how the layer's mode matrices assemble into ``(Sx, Sy, Ux, Uy)``; the
     propagation, the z-sampling and the inverse transform are identical.
     """
-    _reject_oblique(kx)
     _require_solved(T1, layer_info_list)
     xp = array_namespace(T1)
     C = T1.dtype
     k0 = 2 * 3.141592653589793 / wavelength
-    ff_x, ff_y = kx.shape[0], ky.shape[0]
+    if kx.ndim == 2:
+        ff_y, ff_x = kx.shape
+    else:
+        ff_x, ff_y = kx.shape[0], ky.shape[0]
     ff_xy = ff_x * ff_y
 
-    kx_full = xp.reshape(xp.broadcast_to(kx[None, :], (ff_y, ff_x)), (-1,))
-    ky_full = xp.reshape(xp.broadcast_to(xp.reshape(ky, (-1, 1)), (ff_y, ff_x)), (-1,))
-    Kx, Ky = xp.diag(kx_full), xp.diag(ky_full)
+    # Same two spellings the solve accepts, resolved by the same helper — 1-D separable for an
+    # axis-aligned cell (broadcast exactly as before), per-order for any lattice.
+    from .solve_2d import order_grid_kxy
+    kx_g, ky_g = order_grid_kxy(xp, kx, ky)
+    Kx, Ky = xp.diag(xp.reshape(kx_g, (-1,))), xp.diag(xp.reshape(ky_g, (-1,)))
 
     dev = _dev(T1)
     keep = [i for i, on in enumerate(set_field_input) if on]
@@ -200,7 +214,8 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, res_x, res_y
         Sz = 1j * epz_conv_i @ (Kx @ Uy - Ky @ Ux)
         Uz = 1j * (Kx @ Sy - Ky @ Sx)
 
-        inv_f = _inv_fourier(xp, kx, ky, period, res_x, res_y, k0, C)[:, :, None, :]
+        inv_f = _inv_fourier(xp, kx, ky, period, res_x, res_y, k0, C,
+                             lattice)[:, :, None, :]
         comps = [inv_f @ M[:, :, None, None, :, :] for M in (Sx, Sy, Sz)]
         comps += [-1j * (inv_f @ M[:, :, None, None, :, :]) for M in (Ux, Uy, Uz)]
         val = xp.concat([c[..., 0] for c in comps], axis=-1)
@@ -212,17 +227,19 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, res_x, res_y
 
 
 def field_1d_conical(wavelength, kx, ky, T1, layer_info_list, period,
-                     res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False)):
+                     res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False),
+                     lattice=None):
     """Field of a general 1D (conical) stack. ``(n_selected, res_z*n_layers, res_y, res_x, 6)``."""
     return _field_coupled(wavelength, kx, ky, T1, layer_info_list, period,
-                          res_x, res_y, res_z, set_field_input, conical=True)
+                          res_x, res_y, res_z, set_field_input, conical=True, lattice=lattice)
 
 
 def field_2d(wavelength, kx, ky, T1, layer_info_list, period,
-             res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False)):
+             res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False),
+             lattice=None):
     """Field of a 2D stack. ``(n_selected, res_z*n_layers, res_y, res_x, 6)``."""
     return _field_coupled(wavelength, kx, ky, T1, layer_info_list, period,
-                          res_x, res_y, res_z, set_field_input, conical=False)
+                          res_x, res_y, res_z, set_field_input, conical=False, lattice=lattice)
 
 
 def field_plot(field_cell, pol=0, plot_indices=(1, 1, 1, 1, 1, 1), y_slice=0, z_slice=-1,

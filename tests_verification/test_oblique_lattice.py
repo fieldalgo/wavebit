@@ -269,12 +269,52 @@ def test_integrated_coefficients_survive_a_unimodular_shear():
     assert r_o == pytest.approx(r_s, abs=1e-3)
 
 
-def test_field_reconstruction_is_refused_on_a_skewed_cell():
-    """The inverse transform is an outer product, which a skewed cell breaks."""
+def test_field_reconstruction_runs_on_a_skewed_cell():
+    """Samples land on the cell's parallelogram, so the grid is indexed by ``(v, u)``."""
     s = solver(raster(HEX), lattice=HEX)
     s.conv_solve()
-    with pytest.raises(NotImplementedError, match='not implemented yet'):
-        s.calculate_field(res_x=4, res_y=4, res_z=4)
+    field = np.asarray(s.calculate_field(res_x=6, res_y=6, res_z=4))
+    assert field.shape[-1] == 6 and np.all(np.isfinite(field))
+
+
+def test_the_reconstructed_field_agrees_across_a_unimodular_shear():
+    """Compared where the comparison is meaningful: in a homogeneous region.
+
+    The two bases describe the same lattice, so the field at the same *Cartesian* point must
+    agree. Their parametric grids differ, but for a given ``v`` the sheared row visits exactly
+    the orthogonal row's x-values, cyclically shifted — ``x = (i+j)/(N-1) * P`` against
+    ``i'/(N-1) * P`` — so the alignment below is exact rather than interpolated.
+
+    The catch, and the reason this samples away from the structure: a unimodular change of basis
+    keeps the lattice but **retains a different set of orders** — a sheared parallelogram in
+    ``(m, n)`` where the other has a square. Converged quantities cannot tell (the efficiencies
+    agree to 2e-6), but a field is a finite sum over exactly that set, and near a material
+    discontinuity the tails the two sets disagree about decay far too slowly to cancel. Measured
+    on this structure the interface slice sits at 1.1e-1 and does **not** improve from fto 4 to
+    12 — which is the truncation shape, not an error. In the homogeneous cap, where every
+    surviving order is propagating and both sets hold all of them, the same comparison is
+    2.0e-4: a 500x drop across the same field.
+    """
+    n = 21
+    shapes = [{'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 2 * R, 'n_index': N_ROD}]
+    ucell = [{'n_base': 1.0, 'shapes': []}, {'n_base': 1.0, 'shapes': shapes}]
+
+    def field(lattice):
+        s = fieldwave.rcwa(backend=0, ucell=ucell, period=[P, P], fto=[8, 8],
+                           thickness=[600.0, H], wavelength=WL, n_top=1.0, n_bot=1.0,
+                           theta=0.0, phi=0.0, psi=0.0, factorization='nvf', lattice=lattice)
+        s.conv_solve()
+        return np.asarray(s.calculate_field(res_x=n, res_y=n, res_z=12))
+
+    f_o, f_s = field(None), field(SHEAR)
+    aligned = np.empty_like(f_s)
+    for j in range(n):
+        for i in range(n):
+            aligned[..., j, i, :] = f_o[..., j, (i + j) % (n - 1), :]
+
+    scale = np.abs(f_o).max()
+    top = np.abs(f_s[:, 0, :, :n - 1, :] - aligned[:, 0, :, :n - 1, :]).max() / scale
+    assert top < 1e-3, f'homogeneous region should agree: {top:.2e}'
 
 
 def test_field_reconstruction_still_works_when_axis_aligned():

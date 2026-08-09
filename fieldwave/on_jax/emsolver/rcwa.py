@@ -305,10 +305,12 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                                        res_x=res_x, res_y=res_y, res_z=res_z)
         elif self._grating_type_assigned == 1:
             field_cell = field_1d_conical(self.wavelength, kx, ky, self.T1, self.layer_info_list, self.period,
-                                               res_x=res_x, res_y=res_y, res_z=res_z,  set_field_input=set_field_input)
+                                               res_x=res_x, res_y=res_y, res_z=res_z,  set_field_input=set_field_input,
+                                               lattice=self.lattice)
         else:
             field_cell = field_2d(self.wavelength, kx, ky, self.T1, self.layer_info_list, self.period,
-                                       res_x=res_x, res_y=res_y, res_z=res_z, set_field_input=set_field_input)
+                                       res_x=res_x, res_y=res_y, res_z=res_z, set_field_input=set_field_input,
+                                       lattice=self.lattice)
 
         return field_cell
 

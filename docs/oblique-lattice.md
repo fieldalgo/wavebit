@@ -89,7 +89,7 @@ instead of answering.
 | analytic shapes, painted **overlap** | refused | resolving an overlap clips against a rectangular cell |
 | vector modeler (`modeling_type=1`) | refused | rasterises onto a rectangular grid of its own |
 | `factorization='li'` | refused | see below |
-| field reconstruction | refused | the inverse transform is separable; a skew breaks it |
+| field reconstruction | supported | output grid is indexed by `(v, u)`, not `(y, x)` — see below |
 
 `li` applies the inverse rule along the **raster axes** (`epx = dfs2d(cell, 0, 1)`), and the solve
 consumes the result as Cartesian `eps_xx` / `eps_yy`. On a skewed cell those axes are `a1` / `a2`,
@@ -97,9 +97,33 @@ not `x` / `y`. Repairing it means Li's covariant formulation (JOSA A **14**(10),
 worth costing before doing, given `nvf` already converges faster on exactly the curved boundaries
 this feature exists for.
 
-Field reconstruction is deferred rather than blocked: on the *parametric* `(u, v)` grid the
-lattice part is `exp(2i*pi*(m*u + n*v))`, separable again, with only the smooth incident phase
-left to carry.
+## Fields on a skewed cell
+
+`calculate_field` works, with one change you have to handle when plotting: **samples land on the
+cell's parallelogram**, `r = u*a1 + v*a2` for `u, v` in `[0, 1]`, so the returned grid is indexed
+by `(v, u)` and not by `(y, x)`. Convert before drawing:
+
+```python
+u = np.linspace(0, 1, res_x); v = np.linspace(0, 1, res_y)
+U, V = np.meshgrid(u, v)
+X = U * a1[0] + V * a2[0]
+Y = U * a1[1] + V * a2[1]
+plt.pcolormesh(X, Y, np.abs(field[0, z_index, :, :, 0]))    # not imshow
+```
+
+Separability survives the skew, which is why this was a few lines: `k.r = u*(k.a1) + v*(k.a2)`,
+still an outer product. The incident offset rides inside `kx` / `ky` already, so nothing extra is
+carried.
+
+**One thing not to be surprised by.** Comparing a field between two bases that describe the same
+lattice will *not* agree near a material boundary, and that is not an error. A change of basis
+keeps the lattice but retains a different set of orders — a sheared parallelogram in `(m, n)`
+where the other has a square. Converged quantities cannot tell (efficiencies agree to 2e-6), but
+a field is a finite sum over exactly that set, and the evanescent tails the two sets disagree
+about decay far too slowly to cancel at a discontinuity. Measured: 1.1e-1 at the interface, flat
+from `fto=4` to `fto=12`; **2.0e-4** in a homogeneous region of the same run, where every
+surviving order is propagating and both sets hold all of them. Compare fields away from
+boundaries, or at matched order sets.
 
 ## How it was validated, and how to validate your own use
 
