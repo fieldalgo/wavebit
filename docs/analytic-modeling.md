@@ -201,7 +201,9 @@ keep passing.
 
 ### References
 - L. Li, JOSA A 13, 1870 (1996). — Fourier factorization / inverse rule.
-- P. Götz, T. Schuster et al., JOSA A 24, 2880 (2007). — normal vector method.
+- T. Schuster, J. Ruoff, N. Kerwien, S. Rafler, W. Osten, JOSA A 24, 2880 (2007). — normal vector
+  method. (Not Götz et al. — that is the separate Opt. Express 16, 17295 (2008) paper on
+  generating the field automatically.)
 
 ---
 
