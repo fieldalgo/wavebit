@@ -165,3 +165,27 @@ to 5e-16.
 See also: [`analytic-modeling.md`](analytic-modeling.md) for the closed-form shape transforms this
 path reuses, and [`nvf-upsampling.md`](nvf-upsampling.md) for the normal field's grid on the
 raster path.
+
+### References
+
+Neither of the two algorithms this path is built on originates here.
+
+- G. Greiner, K. Hormann, *Efficient clipping of arbitrary polygons*, ACM Transactions on
+  Graphics **17**(2), 71–83 (1998).
+  [doi:10.1145/274363.274364](https://doi.org/10.1145/274363.274364) — the clipping, in
+  `_core/clipper.py`. What is added here is the degeneracy handling: plain GH has no answer when
+  a vertex lies *on* an edge, which grid-snapped designs produce constantly.
+- S.-W. Lee, R. Mittra, *Fourier transform of a polygonal shape function and its application in
+  electromagnetics*, IEEE Transactions on Antennas and Propagation **31**(1), 99–103 (1983) —
+  the divergence-theorem transform, in `_core/polygon.py`.
+
+And one convention borrowed from a neighbouring implementation rather than a paper:
+
+- RETICOLO polygonises an ellipse **area-preservingly** — `retu.m`, "FORME SIMPLIFIEE EN 2 D":
+  "la surface totale de l'inclusion etant celle de l'ellipse". That is not a refinement but the
+  defining property of its approximation, because an inscribed polygon's area deficit lands on
+  the DC coefficient and pollutes every low order. Cite as Hugonin & Lalanne,
+  [arXiv:2101.00901](https://arxiv.org/abs/2101.00901).
+  **`polygon.ellipse_verts` currently inscribes** and therefore carries that deficit — 2.84e-5
+  at the default 256 vertices against 8.4e-10 area-matched. See
+  `<the manual's working notes>`.

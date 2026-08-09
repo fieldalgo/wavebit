@@ -130,3 +130,19 @@ analytic shape path. Two neighbouring write-ups cover the questions either side 
 [`analytic-modeling.md`](analytic-modeling.md) on how the smooth path compares to the raster
 and staircase representations, and [`backend-choice.md`](backend-choice.md) on what the change
 here did to the cost of NVF relative to the other two strategies (it removed the difference).
+
+### References
+
+- L. Li, *Use of Fourier series in the analysis of discontinuous periodic structures*, JOSA A
+  **13**(9), 1870 (1996). [doi:10.1364/JOSAA.13.001870](https://doi.org/10.1364/JOSAA.13.001870)
+  — the rules NVF must collapse onto when the normal field is constant, which is what the
+  `4*fto+1` floor protects.
+- T. Schuster, J. Ruoff, N. Kerwien, S. Rafler, W. Osten, *Normal vector method for convergence
+  improvement using the RCWA for crossed gratings*, JOSA A **24**(9), 2880 (2007).
+  [doi:10.1364/JOSAA.24.002880](https://doi.org/10.1364/JOSAA.24.002880) — the method itself.
+- P. Götz, T. Schuster, K. Frenner, S. Rafler, W. Osten, *Normal vector method for the RCWA with
+  automated vector field generation*, Opt. Express **16**(22), 17295 (2008).
+  [doi:10.1364/OE.16.017295](https://doi.org/10.1364/OE.16.017295) — the paper that addresses
+  generating the field for an arbitrary shape, which is the problem the distance transform here
+  solves. Whether it is the *same* construction has not been checked against the full text; see
+  the same caveat in [`analytic-modeling.md`](analytic-modeling.md).
