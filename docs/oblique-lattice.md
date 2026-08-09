@@ -176,7 +176,42 @@ trusting either.
 ## How it was validated, and how to validate your own use
 
 Energy conservation is **not** evidence here — `R + T == 1` holds to 1e-15 with the geometry read
-wrongly. Three checks that are:
+wrongly. Four checks that are, the first of them against numbers from the literature:
+
+**Li's checkerboard, against published values.** The benchmark from Li, JOSA A **14**(10), 2758
+(1997), as tabulated by Demésy et al. in *Gratings: Theory and Numeric Applications* (2012),
+Table 5.4. Parameters: `phi0 = theta0 = 0`, `psi0 = 45 deg`, `dx = dy = 5*lambda*sqrt(2)/4`,
+`h = lambda`, `eps+ = 2.25`, `eps- = 1`.
+
+This is the ideal case for the feature, because a checkerboard **is** an oblique-cell problem: on
+a square cell it needs two blocks, and on its own primitive cell — a square rotated 45 degrees,
+which `is_axis_aligned` correctly reports as *not* axis-aligned — it needs one. The paper's
+`dx = dy = 5*sqrt(2)/4 = 1.767767` is exactly that primitive cell's edge.
+
+| order | Li FMM | FEM | FieldWave | vs FEM |
+|---|---|---|---|---|
+| T(-1,-1) | 0.04308 | 0.04333 | 0.04318 | -1.5e-4 |
+| T(-1,0) | 0.12860 | 0.12845 | 0.12850 | +5e-5 |
+| T(-1,+1) | 0.06196 | 0.06176 | 0.06177 | +1e-5 |
+| T(0,-1) | 0.12860 | 0.12838 | 0.12850 | +1.2e-4 |
+| **T(0,0)** | 0.17486 | 0.17577 | **0.17556** | -2.1e-4 |
+| T(0,+1) | 0.12860 | 0.12839 | 0.12850 | +1.1e-4 |
+| T(+1,-1) | 0.06196 | 0.06177 | 0.06177 | 0 |
+| T(+1,0) | 0.12860 | 0.12843 | 0.12850 | +7e-5 |
+| T(+1,+1) | 0.04308 | 0.04332 | 0.04317 | -1.5e-4 |
+
+Worst 2.06e-4 over all nine, at `fto=(16,16)`; sum of reflected orders 0.10057 against the
+paper's 0.10040. For scale, the paper's own FMM and FEM differ by 9.1e-4 on T(0,0) — this sits
+closer to FEM than those two sit to each other.
+
+**Watch the polarisation frame when reproducing it.** `psi0 = 45 deg` in the paper is measured
+from *its* cell axes, and those axes are the rotated basis, so in FieldWave's Cartesian frame it
+is `psi = pi/2`. Getting this wrong is not subtle if you look at the right thing: the wrong frame
+swaps which pairs of orders are degenerate — `psi=0` makes T(-1,-1) equal T(-1,+1) where the
+paper has them split — and the error grows to 1.9e-2 while T(0,0) barely moves, because T(0,0) is
+polarisation-independent on a C4v cell. **Compare the whole order table, not the zeroth order.**
+
+Three more:
 
 **A unimodular shear.** `a2' = a2 + a1` generates the *identical* point lattice: same cell area,
 same reciprocal set. So the two runs must agree, and they do — 1.2e-4 on a raster, 2.0e-6 on

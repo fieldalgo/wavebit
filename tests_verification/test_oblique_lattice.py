@@ -376,3 +376,50 @@ def test_a_frozen_normal_field_replays_onto_the_same_lattice():
     # Not bit-identity: `eig` is not bit-reproducible run to run (see the axis-aligned test).
     assert float(np.sum(np.asarray(replayed.de_ti))) == pytest.approx(
         totals(cell, lattice=HEX)[1], abs=1e-12)
+
+
+# ------------------------------------------------- against numbers from the literature
+
+# Li, JOSA A 14(10), 2758 (1997), as tabulated by Demesy et al., "Gratings: Theory and Numeric
+# Applications" (2012), Table 5.4. phi0 = theta0 = 0, psi0 = 45 deg measured from the cell axes,
+# dx = dy = 5*lambda*sqrt(2)/4, h = lambda, eps+ = 2.25, eps- = 1.
+LI_FEM = {(-1, -1): 0.04333, (-1, 0): 0.12845, (-1, 1): 0.06176,
+          (0, -1): 0.12838, (0, 0): 0.17577, (0, 1): 0.12839,
+          (1, -1): 0.06177, (1, 0): 0.12843, (1, 1): 0.04332}
+LI_SIDE = 1.25                                     # block edge; cell edge is LI_SIDE*sqrt(2)
+
+
+def test_li_1997_checkerboard_matches_the_published_table():
+    """The published crossed-grating benchmark, on the oblique cell it is naturally posed in.
+
+    A checkerboard needs two blocks on a square cell and one on its own primitive cell — a
+    square rotated 45 degrees, which is *not* axis-aligned — so this exercises the oblique path
+    against numbers that did not come from this codebase. The paper's
+    ``dx = dy = 5*sqrt(2)/4 = 1.767767`` is that primitive cell's edge.
+
+    ``psi0 = 45 deg`` in the paper is measured from its own cell axes, which are the rotated
+    basis, so here it is ``psi = pi/2``. That matters more than it looks: the wrong frame leaves
+    T(0,0) almost unchanged (it is polarisation-independent on a C4v cell) while swapping which
+    pairs of orders are degenerate, and the worst error grows to 1.9e-2. Hence the whole table
+    is compared and not the zeroth order.
+    """
+    a1 = np.array([LI_SIDE, LI_SIDE])
+    a2 = np.array([LI_SIDE, -LI_SIDE])
+    basis = np.column_stack((a1, a2))
+    assert not lat.is_axis_aligned(basis)                       # the point of the test
+    assert np.linalg.norm(a1) == pytest.approx(5 * np.sqrt(2) / 4)
+
+    centre = 0.5 * (a1 + a2)
+    ucell = [{'n_base': 1.0, 'shapes': [
+        {'type': 'rectangle', 'cx': float(centre[0]), 'cy': float(centre[1]),
+         'lx': LI_SIDE, 'ly': LI_SIDE, 'n_index': 1.5}]}]
+    s = fieldwave.rcwa(backend=0, ucell=ucell, fto=[12, 12], thickness=[1.0], wavelength=1.0,
+                       n_top=1.5, n_bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2,
+                       factorization='nvf', lattice=basis)
+    res = s.conv_solve().res
+    ti = np.asarray(res.de_ti)
+    c = (ti.shape[0] // 2, ti.shape[1] // 2)
+
+    worst = max(abs(float(ti[c[0] + n, c[1] + m]) - v) for (n, m), v in LI_FEM.items())
+    assert worst < 1e-3, f'worst deviation from the published table: {worst:.2e}'
+    assert float(np.asarray(res.de_ri).sum()) == pytest.approx(0.10040, abs=1e-3)
