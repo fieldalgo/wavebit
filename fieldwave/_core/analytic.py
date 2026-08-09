@@ -142,6 +142,75 @@ def _across(ox, oy):
     return f" across the {' and '.join(axes)} period boundary" if axes else ''
 
 
+#: Keys every shape takes, whatever its type.
+_COMMON_KEYS = frozenset({'type', 'cx', 'cy', 'angle', 'n_index'})
+
+#: The length keys each type takes, on top of :data:`_COMMON_KEYS`. ``l`` is the both-axes
+#: spelling. The round types have no ``ly`` **because they have no second length** — that is
+#: the whole content of this table, and the reason it is a table rather than a comment.
+_LENGTH_KEYS = {
+    'rectangle': frozenset({'lx', 'ly', 'l'}),
+    'ellipse': frozenset({'lx', 'ly', 'l'}),
+    'square': frozenset({'lx', 'l'}),
+    'circle': frozenset({'lx', 'l'}),
+    'disk': frozenset({'lx', 'l'}),
+}
+
+
+def check_shape_spec(shape, shape_index=0, layer_index=0):
+    """Refuse a shape dict that says something this path will not do.
+
+    Every key here is read with ``.get`` and a default, which is what makes
+    :func:`shape_geometry` total — it never raises, so it stays usable under a trace. The cost
+    of being total is that a key nobody reads is a key nobody complains about: ``angel=0.7``
+    silently gave no rotation, ``radius=0.2`` silently gave a shape of size zero, and ``ly`` on
+    a circle silently gave a different structure to each of the paths that read it. This is
+    where that is paid for instead, once, at the funnel.
+
+    On ``ly`` for a round type the rule is about the **key**, not the value: a ``circle`` does
+    not take one, whatever it would have been set to. Refusing it only when it *differs* from
+    ``lx`` was tried first and is worse in every direction —
+
+    * it cannot see a traced ``ly`` at all, which is the case that matters most. A
+      differentiable ``ly`` on a circle is dropped, so ``d(loss)/d(ly)`` is *exactly zero* and
+      an optimiser reads that as a converged direction. Measured: 866.9 for ``lx`` against 0.0
+      for ``ly`` on the same circle, where an ``ellipse`` gives 886.3 and 351.7.
+    * comparing values then needs a tolerance (a float32 backend round-trips 0.3 to
+      0.30000001) and an identity escape for ``ly=lx`` sharing one tracer — about 25 lines,
+      all of it to accept a spelling that says nothing the shape did not already say.
+
+    Key presence is a plain dict lookup, so this behaves identically eager, jitted and under
+    ``grad``. That is the whole reason it is phrased this way.
+    """
+    where = f'Analytic layer {layer_index}, shape {shape_index}'
+    stype = shape.get('type', 'rectangle')
+    lengths = _LENGTH_KEYS.get(stype)
+    if lengths is None:
+        raise ValueError(f'{where}: type={stype!r} is not a shape this path can build. '
+                         f'Known types: {sorted(_LENGTH_KEYS)}.')
+
+    if 'ly' in shape and 'ly' not in lengths:
+        # Answered here rather than by the unknown-key branch below, which would offer 'l' as
+        # the near miss and send a user who wants an oval further from `ellipse`, not closer.
+        alt = 'ellipse' if stype in ('circle', 'disk') else 'rectangle'
+        raise ValueError(
+            f"{where}: {stype!r} has one length, so 'ly' would be dropped -- silently, and "
+            f"with a zero gradient if it is a parameter you are optimising. Drop it if 'lx' "
+            f"is the size you meant, or use type={alt!r} to give two lengths.")
+
+    unknown = set(shape) - (lengths | _COMMON_KEYS)
+    if unknown:
+        import difflib
+        known = sorted(lengths | _COMMON_KEYS)
+        bits = []
+        for key in sorted(unknown):
+            near = difflib.get_close_matches(key, known, n=1, cutoff=0.6)
+            bits.append(f'{key!r}' + (f" (did you mean {near[0]!r}?)" if near else ''))
+        raise ValueError(f'{where}: {stype!r} does not take {", ".join(bits)}. '
+                         f'It takes {known}. A key nobody reads is silently ignored, which is '
+                         f'why this is refused rather than dropped.')
+
+
 def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_REL,
                             lattice=None):
     """Refuse a layer whose shapes overlap without saying how they should combine.
@@ -156,6 +225,12 @@ def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_RE
     Touching is not overlapping — abutting rectangles and a shape exactly filling the period
     both come out at a gap of zero — and ``tol_rel`` is measured against the period, so a
     fraction of a cell of interpenetration is still allowed as arithmetic noise.
+
+    Also runs :func:`check_shape_spec` over every shape, ahead of everything else here. This
+    function is the funnel the analytic path reaches the solver through, and — unlike
+    :func:`shape_geometry`, where the check would sit closer to the mistake — it is not inside
+    :func:`_primitives`, whose ``except Exception`` would catch the refusal and answer it by
+    silently skipping the overlap check.
     """
     combine = layer.get('combine')
     if combine is not None and combine not in COMBINE_MODES:
@@ -164,6 +239,8 @@ def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_RE
             f'{COMBINE_MODES}.')
 
     shapes = layer.get('shapes', [])
+    for i, shape in enumerate(shapes):
+        check_shape_spec(shape, i, layer_index)
     if len(shapes) < 1:
         return
 

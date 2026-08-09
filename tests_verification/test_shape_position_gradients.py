@@ -55,7 +55,10 @@ IDS = [f'{s}_{p}' for s, p in CASES]
 def _shape(kind, param, value):
     s = dict(type=kind, cx=0.385, cy=0.385, lx=0.385, ly=0.231, angle=0.4, n_index=3.5)
     if kind == 'circle':
-        s['ly'] = s['lx']
+        # Same geometry as the `ly = lx` this used to write -- `lx` is the diameter and
+        # `shape_geometry` resolves the second axis to it -- but a circle has no second length
+        # to name, and `check_shape_spec` now says so rather than dropping it.
+        del s['ly']
     s[param] = value
     return s
 

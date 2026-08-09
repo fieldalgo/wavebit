@@ -105,7 +105,7 @@ def test_complex_index_is_loss_not_gain(where):
 # ----------------------------------------------------------------------
 @pytest.mark.parametrize("shape", [
     dict(type='rectangle', cx=0.55, cy=0.45, lx=0.5, ly=0.3, angle=0.6),
-    dict(type='circle', cx=0.5, cy=0.5, lx=0.6, ly=0.6, angle=0.0),
+    dict(type='circle', cx=0.5, cy=0.5, lx=0.6, angle=0.0),
     dict(type='ellipse', cx=0.55, cy=0.45, lx=0.7, ly=0.4, angle=0.9),
 ])
 def test_shape_ft_matches_fine_dft(shape):
@@ -245,7 +245,7 @@ def test_energy_conservation_lossless():
                                       angle=np.deg2rad(40), n_index=2.4)]),
         dict(n_base=1.5, shapes=[dict(type='rectangle', cx=0.4, cy=0.5, lx=0.4, ly=0.5,
                                       angle=np.deg2rad(25), n_index=1.0),
-                                 dict(type='circle', cx=0.8, cy=0.9, lx=0.25, ly=0.25,
+                                 dict(type='circle', cx=0.8, cy=0.9, lx=0.25,
                                       n_index=3.0)]),
     ]
     for fto in (5, 8):
@@ -262,7 +262,7 @@ def test_cross_backend_agreement():
                period=(1.0, 1.2), wavelength=1.5, thickness=(0.3,), pol=0.3)
     ucell = [dict(n_base=1.0, shapes=[dict(type='ellipse', cx=0.5, cy=0.6, lx=0.5, ly=0.3,
                                            angle=np.deg2rad(40), n_index=2.4),
-                                      dict(type='circle', cx=0.3, cy=0.3, lx=0.2, ly=0.2,
+                                      dict(type='circle', cx=0.3, cy=0.3, lx=0.2,
                                            n_index=3.0)])]
 
     def T(bk):
@@ -282,8 +282,8 @@ def _fd_grad_lx(shape_type, lx0=0.5):
                period=(1.0, 1.0), wavelength=1.5, thickness=(0.4,), pol=0.5)
 
     def T(lx):
-        s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, ly=(lx if shape_type == 'circle' else 0.3),
-                 angle=(0.0 if shape_type == 'circle' else 0.4), n_index=2.5)
+        s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, n_index=2.5,
+                 **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
         uc = [dict(n_base=1.0, shapes=[s])]
         return float(np.array(fieldwave.rcwa(backend=0, ucell=uc, fto=(6, 6), **cfg)
                               .conv_solve().de_ti).real.sum())
@@ -297,8 +297,8 @@ def test_torch_gradient(shape_type):
     torch = pytest.importorskip("torch")
     fd, cfg = _fd_grad_lx(shape_type)
     lx = torch.tensor(0.5, dtype=torch.float64, requires_grad=True)
-    s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, ly=(lx if shape_type == 'circle' else 0.3),
-             angle=(0.0 if shape_type == 'circle' else 0.4), n_index=2.5)
+    s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, n_index=2.5,
+             **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
     res = fieldwave.rcwa(backend=2, ucell=[dict(n_base=1.0, shapes=[s])], fto=(6, 6), **cfg).conv_solve()
     T = res.de_ti.real.sum()
     T.backward()
@@ -313,8 +313,8 @@ def test_jax_gradient(shape_type):
     fd, cfg = _fd_grad_lx(shape_type)
 
     def loss(lx):
-        s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, ly=(lx if shape_type == 'circle' else 0.3),
-                 angle=(0.0 if shape_type == 'circle' else 0.4), n_index=2.5)
+        s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, n_index=2.5,
+                 **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
         r = fieldwave.rcwa(backend=1, ucell=[dict(n_base=1.0, shapes=[s])], fto=(6, 6), **cfg).conv_solve()
         return jnp.real(r.de_ti).sum()
 
@@ -348,30 +348,49 @@ def test_analytic_beats_staircase_tilted():
     assert err_analytic < err_stair / 5  # analytic is far closer to the converged answer
 
 
-@pytest.mark.parametrize('ly', [None, 'same', 'different'])
-def test_circle_ignores_ly_everywhere(ly):
-    """A circle is round: ``ly`` must not change the answer, and omitting it must be safe.
+CIRCLE_P, CIRCLE_NR = 0.77, 3.5
+CIRCLE_CFG = dict(period=[CIRCLE_P, CIRCLE_P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
+                  wavelength=0.777, n_top=1.0, n_bot=1.5, fto=[6, 6])
+
+
+def test_a_circle_is_written_with_one_length():
+    """A circle is round, so one diameter is the whole of it — and the only spelling taken.
 
     The transform read ``lx`` as the diameter while the normal field read ``ly`` as a second
     semi-axis, and the two disagreed about the default (``lx`` versus ``500.0``). So passing
     ``ly != lx`` built one structure for ``eps`` and another for the projector — 14% on
     ``sum(de_ri)`` — and *omitting* ``ly``, the natural way to write a circle, degenerated the
     normal field by 6%. Both resolve through ``shape_geometry`` now.
-    """
-    P, NR = 0.77, 3.5
-    shape = dict(type='circle', cx=0.5 * P, cy=0.5 * P, lx=0.5 * P, n_index=NR)
-    if ly == 'same':
-        shape['ly'] = 0.5 * P
-    elif ly == 'different':
-        shape['ly'] = 0.3 * P
 
-    cfg = dict(period=[P, P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
-               wavelength=0.777, n_top=1.0, n_bot=1.5, fto=[6, 6])
-    got = fieldwave.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=[shape])], **cfg).conv_solve()
-    # The three spellings agreeing is the claim; the absolute value is only a regression
-    # anchor, and it rides on ``analytic_normal_grid`` — it read 0.161262158771 while that
-    # default was 256, and moved 1.1e-4 when the default rose to 1024.
+    That fix made ``ly`` harmless rather than absent, which this test used to pin: all three
+    spellings returned the same number. It is now refused instead (``check_shape_spec``), for
+    the reason in ``test_a_circle_that_names_a_second_length_is_refused`` — a length that is
+    accepted and dropped still has a zero gradient, and silence is what the whole class of bug
+    was made of. The anchor moves here, onto the one spelling there is.
+    """
+    shape = dict(type='circle', cx=0.5 * CIRCLE_P, cy=0.5 * CIRCLE_P, lx=0.5 * CIRCLE_P,
+                 n_index=CIRCLE_NR)
+    got = fieldwave.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=[shape])],
+                         **CIRCLE_CFG).conv_solve()
+    # Only a regression anchor, and it rides on ``analytic_normal_grid`` — it read
+    # 0.161262158771 while that default was 256, and moved 1.1e-4 when the default rose to 1024.
     assert float(np.sum(np.asarray(got.de_ri))) == pytest.approx(0.161153064902, abs=1e-9)
+
+
+@pytest.mark.parametrize('ly, why', [(0.5 * CIRCLE_P, 'a second length that agrees'),
+                                     (0.3 * CIRCLE_P, 'a second length that does not')])
+def test_a_circle_that_names_a_second_length_is_refused(ly, why):
+    """Refused on the *key*, so both of these go the same way — which is the point.
+
+    Accepting the agreeing one would mean reading the value to tell them apart, and a value is
+    the one thing not readable under ``jax.grad``. See ``check_shape_spec``: the tolerance and
+    identity handling that a value rule needs are exactly what phrasing it on the key removes.
+    """
+    shape = dict(type='circle', cx=0.5 * CIRCLE_P, cy=0.5 * CIRCLE_P, lx=0.5 * CIRCLE_P,
+                 ly=ly, n_index=CIRCLE_NR)
+    with pytest.raises(ValueError, match="'ly' would be dropped"):
+        fieldwave.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=[shape])],
+                       **CIRCLE_CFG).conv_solve()
 
 
 def test_shapes_superpose_where_they_overlap():
@@ -448,7 +467,13 @@ CHECK_CFG = dict(period=[300.0, 300.0], thickness=[205.0], fto=[2, 2], n_top=1.0
 
 
 def rod(cx, cy=150.0, lx=120.0, ly=120.0, angle=0.0, n_index=2.0, type='rectangle'):
-    return dict(type=type, cx=cx, cy=cy, lx=lx, ly=ly, angle=angle, n_index=n_index)
+    s = dict(type=type, cx=cx, cy=cy, lx=lx, ly=ly, angle=angle, n_index=n_index)
+    if type in ('circle', 'disk', 'square'):
+        # A round rod has one length. The helper's `ly` default is not the caller asking for a
+        # second one, and passing it on would be this helper inventing an ambiguity to hand to
+        # `check_shape_spec` -- `rod(80.0, lx=60.0, type='circle')` would arrive as 60 by 120.
+        del s['ly']
+    return s
 
 
 def solve(shapes, **layer):
@@ -526,6 +551,61 @@ def test_unknown_combine_modes_are_refused_even_without_an_overlap():
     """A typo in the one word that picks the semantics must not read as the default."""
     with pytest.raises(ValueError, match='combine='):
         solve([rod(150.0)], combine='superpose')
+
+
+# ------------------------------------------------------- what a shape dict may say
+def _circle(**over):
+    return dict(dict(type='circle', cx=150.0, cy=150.0, lx=120.0, n_index=2.0), **over)
+
+
+@pytest.mark.parametrize('shape, match', [
+    # a key nobody reads is a key nobody complains about -- every one of these was silent
+    (_circle(ly=200.0), "'ly' would be dropped"),             # meant an ellipse
+    (dict(_circle(), type='square', ly=200.0), 'rectangle'),  # meant a rectangle
+    (_circle(radius=60.0), 'radius'),                         # meant lx, and got a size-0 shape
+    (_circle(angel=0.7), "did you mean 'angle'"),             # meant angle, and got no rotation
+    (_circle(type='Circle'), 'Known types'),                   # meant circle, and got ly = 0
+])
+def test_a_shape_dict_that_says_something_unreadable_is_refused(shape, match):
+    """Every default is a ``.get``, so an unread key is dropped in silence. Not any more.
+
+    ``shape_geometry`` stays total on purpose -- it has to be usable under a trace -- so this
+    is charged once at the funnel instead. All five of these built a structure and returned a
+    number before; two of them (``radius``, ``Circle``) built a shape of size zero.
+    """
+    with pytest.raises(ValueError, match=match):
+        solve([shape])
+
+
+@pytest.mark.parametrize('shape', [
+    _circle(),                                       # the natural spelling: one diameter
+    dict(type='circle', cx=150.0, cy=150.0, l=120.0, n_index=2.0),   # `l` says the same
+    dict(_circle(), type='ellipse', ly=200.0),       # two lengths, on the type that has two
+    dict(_circle(), type='rectangle', ly=200.0, angle=0.4),
+])
+def test_a_shape_dict_that_says_one_thing_is_accepted(shape):
+    """The refusal is for saying more than the type has room for, not for using the path."""
+    assert float(np.sum(np.asarray(solve([shape]).de_ti))) > 0.0
+
+
+def test_a_traced_ly_on_a_circle_is_refused_where_a_comparison_cannot_reach():
+    """The dead-gradient case, and the reason this checks the *key* and not the values.
+
+    ``jax.grad`` hands ``ly`` in as a tracer, which no comparison can read -- so a rule phrased
+    as "refuse when lx != ly" is blind here, eagerly correct and silently off under the one
+    workflow that matters most. And ignored means ``d(loss)/d(ly)`` is exactly 0.0, which an
+    optimiser cannot tell from a converged direction.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    from fieldwave._core.analytic import check_shape_spec
+
+    def f(ly):
+        check_shape_spec(_circle(ly=ly))
+        return ly
+
+    with pytest.raises(ValueError, match="'ly' would be dropped"):
+        jax.grad(f)(jnp.asarray(120.0))
 
 
 def test_overlap_is_found_across_the_period_boundary():
