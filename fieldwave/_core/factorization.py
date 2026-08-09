@@ -274,7 +274,7 @@ def _to_numpy(x):
     return np.asarray(x)
 
 
-def normal_vector_field(eps_matrix, interface_mask=None):
+def normal_vector_field(eps_matrix, interface_mask=None, lattice=None):
     """Unit normal vector field ``(nx, ny)`` of a raster layer, via a signed-distance field.
 
     This is a **geometry** quantity — it depends on where the material interfaces sit, not on
@@ -298,6 +298,20 @@ def normal_vector_field(eps_matrix, interface_mask=None):
     solver and was dropped in the port. See ``tests_verification/test_nvf_normal_field.py``.
     For the shape-based (non-raster) normal field, see
     :func:`fieldwave._core.analytic.normal_vector_field_analytical`.
+
+    ``lattice`` is the cell basis the raster indexes into. It matters because this is the one
+    piece of the NVF construction that is *Cartesian-geometric* rather than index-based: the
+    distance transform and ``np.gradient`` both work in index steps, and only a basis whose
+    pixels are square in real space makes an index-space normal a Cartesian one. Left ``None``
+    the index grid is taken to be isotropic Cartesian, which is what this has always assumed;
+    given a basis, distances pick up the per-axis physical step and the gradient is carried
+    through ``J^-T`` (:func:`fieldwave._core.lattice.jacobian`) before normalising, so the
+    direction is exact at the interface for a skewed *or* merely non-square cell.
+
+    That correction is what lets NVF serve a non-orthogonal lattice at all, and it is also why
+    NVF rather than Li's nested rule is the factorization that ports there: the tensor this
+    feeds (:func:`_nvf_assemble`) is written in Cartesian components, so once the normal is
+    Cartesian nothing else in the factorization learns the cell was skewed.
     """
     import numpy as np
     from scipy.ndimage import distance_transform_edt
@@ -315,8 +329,29 @@ def normal_vector_field(eps_matrix, interface_mask=None):
 
     if interface_mask is None:
         interface_mask = _interface_mask(_to_numpy(eps_matrix))
-    dist_map = distance_transform_edt(~interface_mask)
-    gy, gx = np.gradient(dist_map)
+
+    if lattice is None:
+        dist_map = distance_transform_edt(~interface_mask)
+        g_j, g_i = np.gradient(dist_map)
+    else:
+        from .lattice import jacobian
+        ny, nx = shape
+        J = jacobian(lattice, ny, nx)
+        # Physical length of one index step along each axis: axis 0 walks a2/ny, axis 1 a1/nx.
+        # Exact for an axis-aligned cell; for a sheared one it is the best `sampling` can say,
+        # since scipy's transform has no way to express a non-diagonal metric. The direction
+        # that survives normalisation is set by the gradient below, which is exact regardless.
+        step_j = float(np.hypot(J[0, 1], J[1, 1]))
+        step_i = float(np.hypot(J[0, 0], J[1, 0]))
+        dist_map = distance_transform_edt(~interface_mask, sampling=(step_j, step_i))
+        g_j, g_i = np.gradient(dist_map)
+        # grad_xy f = J^-T @ (df/di, df/dj) -- the inverse transpose, not the Jacobian: index
+        # steps push forward, gradients pull back.
+        Jinv_T = np.linalg.inv(J).T
+        g_i, g_j = (Jinv_T[0, 0] * g_i + Jinv_T[0, 1] * g_j,
+                    Jinv_T[1, 0] * g_i + Jinv_T[1, 1] * g_j)
+
+    gx, gy = g_i, g_j
     norm = np.hypot(gx, gy)
     norm[norm == 0] = 1.0
     return gx / norm, gy / norm
@@ -386,32 +421,47 @@ def _interface_mask_of(xp, eps, base_eps, repeat_y, repeat_x):
         return _upsampled_interface_mask(xp, base_eps, repeat_y, repeat_x)
 
 
-def _normal_field_source(eps):
+def _lattice_key(lattice):
+    """A hashable, comparable stand-in for a basis — ``None`` stays ``None``."""
+    if lattice is None:
+        return None
+    import numpy as np
+    return tuple(np.asarray(lattice, dtype=float).reshape(-1).tolist())
+
+
+def _normal_field_source(eps, lattice=None):
     """Everything :func:`normal_vector_field` reads off a layer, and nothing else.
 
     That is the shape, plus — unless an axis is a single cell, where the field is the constant
-    along-axis one whatever the pattern — the interface mask. Two layers with the same source
-    have the same normal field, bit for bit, which is what makes this the tell: it accepts a
-    replay exactly when replaying is the same computation as rebuilding.
+    along-axis one whatever the pattern — the interface mask, plus the cell basis. Two layers
+    with the same source have the same normal field, bit for bit, which is what makes this the
+    tell: it accepts a replay exactly when replaying is the same computation as rebuilding.
+
+    The basis belongs here for the same reason the mask does. It is an *input* to the field
+    (see :func:`normal_vector_field`), so a field frozen on one cell and replayed on a skewed
+    one describes interfaces pointing the wrong way — with nothing to notice, since the NVF
+    assembly stays Hermitian and energy still conserves.
     """
     if 1 in eps.shape:
-        return eps.shape, None
-    return eps.shape, _interface_mask(eps)
+        return eps.shape, None, _lattice_key(lattice)
+    return eps.shape, _interface_mask(eps), _lattice_key(lattice)
 
 
-def normal_field_for_ucell(ucell, fto_x, fto_y):
+def normal_field_for_ucell(ucell, fto_x, fto_y, lattice=None):
     """Per-layer ``(nx, ny)`` normal fields for ``ucell``, on the grid the NVF build uses.
 
     Precompute this once from the concrete geometry and hand it to
     :func:`to_conv_mat_raster_nvf` as ``normal_field=`` to keep the build traceable under a
     JAX transform (the SciPy distance transform cannot run on tracers).
+
+    ``lattice`` is the cell basis; see :func:`normal_vector_field` for what it changes.
     """
     xp = array_namespace(ucell)
-    return [normal_vector_field(eps)
+    return [normal_vector_field(eps, lattice=lattice)
             for eps, _, _, _ in _layer_eps_for_normal_field(xp, ucell, fto_x, fto_y)]
 
 
-def normal_field_source_for_ucell(ucell, fto_x, fto_y):
+def normal_field_source_for_ucell(ucell, fto_x, fto_y, lattice=None):
     """What :func:`normal_field_for_ucell` derived its answer from, per layer.
 
     Freeze this alongside the normal field and hand both back to
@@ -419,11 +469,11 @@ def normal_field_source_for_ucell(ucell, fto_x, fto_y):
     of it and refuses a field that was sampled from a different one.
     """
     xp = array_namespace(ucell)
-    return [_normal_field_source(_to_numpy(eps))
+    return [_normal_field_source(_to_numpy(eps), lattice)
             for eps, _, _, _ in _layer_eps_for_normal_field(xp, ucell, fto_x, fto_y)]
 
 
-def _check_normal_field_still_fits(eps_matrix, source, index):
+def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None):
     """Refuse a frozen normal field sampled from interfaces that have since moved.
 
     The field says which way each interface points. Move the pattern in the raster and it is
@@ -450,12 +500,19 @@ def _check_normal_field_still_fits(eps_matrix, source, index):
     except Exception:                     # a tracer: nothing to compare, nothing to do
         return
 
-    shape, mask = source[index]
-    now_shape, now_mask = _normal_field_source(eps)
-    if shape == now_shape and (mask is None or np.array_equal(mask, now_mask)):
+    entry = source[index]
+    shape, mask = entry[0], entry[1]
+    lat = entry[2] if len(entry) > 2 else None      # records frozen before the basis was one
+    now_shape, now_mask, now_lat = _normal_field_source(eps, lattice)
+    if (shape == now_shape and lat == now_lat
+            and (mask is None or np.array_equal(mask, now_mask))):
         return                            # equal shapes agree on whether a mask exists at all
 
-    if shape != now_shape:
+    if lat != now_lat:
+        moved = (f'the cell basis is now {now_lat}, where the normal field was sampled on '
+                 f'{lat} — the interfaces point the same way in the raster but a different '
+                 f'way in space')
+    elif shape != now_shape:
         moved = (f'layer {index} is now {now_shape}, where the normal field was sampled on '
                  f'{shape}')
     else:
@@ -548,7 +605,7 @@ def nvf_conv_matrices_continuous(xp, eps_comp, x, y, nx, ny, fto_x, fto_y):
 
 
 def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
-                           normal_field_source=None):
+                           normal_field_source=None, lattice=None):
     """Per-layer NVF convolution matrices for a raster ``ucell``.
 
     Args:
@@ -587,9 +644,10 @@ def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
     for i, (eps_matrix, base_eps, repeat_y, repeat_x) in enumerate(layers):
         if normal_field is None:
             nx, ny = normal_vector_field(
-                eps_matrix, _interface_mask_of(xp, eps_matrix, base_eps, repeat_y, repeat_x))
+                eps_matrix, _interface_mask_of(xp, eps_matrix, base_eps, repeat_y, repeat_x),
+                lattice=lattice)
         else:
-            _check_normal_field_still_fits(eps_matrix, normal_field_source, i)
+            _check_normal_field_still_fits(eps_matrix, normal_field_source, i, lattice)
             nx, ny = normal_field[i]
 
         for slot, mat in zip(out, nvf_conv_matrices(

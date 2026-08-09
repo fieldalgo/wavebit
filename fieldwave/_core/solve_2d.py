@@ -16,6 +16,29 @@ from .conventions import boundary_kz, mode_q
 from .solve_1d import _block, _diag, final_matching
 
 
+def order_grid_kxy(xp, kx, ky):
+    """``kx`` / ``ky`` on the ``(ff_y, ff_x)`` order grid, from either spelling.
+
+    Two ways in, because a lattice basis decides which one is even expressible:
+
+    * **1-D**, lengths ``(ff_x,)`` and ``(ff_y,)`` — the separable form an axis-aligned cell
+      admits, where ``kx`` depends only on ``m`` and ``ky`` only on ``n``. Broadcast to the
+      grid here, which is what both solves used to do inline.
+    * **2-D**, ``(ff_y, ff_x)`` each — the per-order Cartesian components, which is the only
+      form a skewed cell has: with ``G = m*b1 + n*b2`` non-orthogonal, *both* components
+      depend on *both* indices and no pair of 1-D vectors can hold them. See
+      :func:`fieldwave._core.lattice.order_kxy`.
+
+    Everything downstream reads the grid, so the two spellings converge here and the algebra
+    below never branches. The 1-D route broadcasts exactly as before, element for element.
+    """
+    if kx.ndim == 2:
+        return kx, ky
+    ff_x, ff_y = kx.shape[0], ky.shape[0]
+    return (xp.broadcast_to(kx[None, :], (ff_y, ff_x)),
+            xp.broadcast_to(xp.reshape(ky, (-1, 1)), (ff_y, ff_x)))
+
+
 def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epyx_conv, C):
     """Raw (unrotated) eigenmodes ``(W, V, q)`` of one 2D layer.
 
@@ -79,9 +102,13 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
              full=False):
     """Solve a 2D grating stack for the given ``psi`` incidence.
 
-    See :func:`fieldwave._core.solve_1d.solve_1d` for the shared argument conventions. ``kx`` /
-    ``ky`` are the retained in-plane orders (lengths ``ff_x`` / ``ff_y``); ``epxy_conv_all`` /
-    ``epyx_conv_all`` are the optional off-diagonal permittivity blocks (``None`` -> zero).
+    See :func:`fieldwave._core.solve_1d.solve_1d` for the shared argument conventions.
+    ``epxy_conv_all`` / ``epyx_conv_all`` are the optional off-diagonal permittivity blocks
+    (``None`` -> zero).
+
+    ``kx`` / ``ky`` are the retained in-plane orders, in either spelling
+    :func:`order_grid_kxy` accepts: 1-D of lengths ``ff_x`` / ``ff_y`` for an axis-aligned
+    cell, or ``(ff_y, ff_x)`` per-order Cartesian components for any lattice.
 
     Returns ``(de_ri, de_ti)`` for the ``psi``-specified incidence, shape ``(ff_y, ff_x)``.
     """
@@ -93,21 +120,20 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
         ky = xp.astype(ky, xp.complex128)
     C = kx.dtype
 
-    ff_x = kx.shape[0]
-    ff_y = ky.shape[0]
+    kx_g, ky_g = order_grid_kxy(xp, kx, ky)
+    ff_y, ff_x = kx_g.shape
     ff_xy = ff_x * ff_y
     k0 = 2 * 3.141592653589793 / wavelength
     theta = 0.0 if theta is None else theta
 
     I = xp.astype(xp.eye(ff_xy), C)
     O = xp.astype(xp.zeros((ff_xy, ff_xy)), C)
-    ky_col = xp.reshape(ky, (-1, 1))
 
     # --- stage 1: boundary init (transfer_2d_1 == transfer_1d_conical_1) ----------------
-    k_par_sq = kx ** 2 + ky_col ** 2
+    k_par_sq = kx_g ** 2 + ky_g ** 2
     kz_top = xp.reshape(boundary_kz(xp, n_top ** 2, k_par_sq), (-1,))
     kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq), (-1,))
-    varphi = xp.reshape(xp.atan(ky_col / kx), (-1,))
+    varphi = xp.reshape(xp.atan(ky_g / kx_g), (-1,))
 
     eps_bot = n_bot ** 2
     Kz_bot = _diag(xp, kz_bot)
@@ -117,11 +143,11 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     big_T = xp.astype(xp.eye(2 * ff_xy), C)
 
 
-    # Kx = diag(tile(kx, ff_y)) ; Ky = diag(tile(ky[:,None], ff_x)) — Array-API broadcast form.
-    kx_full = xp.reshape(xp.broadcast_to(kx[None, :], (ff_y, ff_x)), (-1,))
-    ky_full = xp.reshape(xp.broadcast_to(ky_col, (ff_y, ff_x)), (-1,))
-    Kx = _diag(xp, kx_full)
-    Ky = _diag(xp, ky_full)
+    # The order grid flattened row-major: m fastest, matching how ``dfs2d`` lays out the
+    # convolution matrices. Diagonal either way — the eigenproblem below reads only these two
+    # diagonals, which is why a skewed lattice never reaches it.
+    Kx = _diag(xp, xp.reshape(kx_g, (-1,)))
+    Ky = _diag(xp, xp.reshape(ky_g, (-1,)))
     F_c = _diag(xp, xp.cos(varphi))
     F_s = _diag(xp, xp.sin(varphi))
 

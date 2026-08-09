@@ -1,0 +1,236 @@
+"""Non-orthogonal (oblique) unit cells: the ``lattice`` basis.
+
+The load-bearing test here is :func:`test_unimodular_shear_is_the_same_physics`. Energy
+conservation proves nothing on this path — the NVF assembly is Hermitian-symmetrised whatever
+the normal field says, so ``R+T == 1`` holds to 1e-15 even when the cell is being read wrongly
+— so every check below compares against a *second representation of the same structure* or a
+closed form, never against a self-consistency identity.
+
+The other half of the file pins the refusals. Each unsupported combination runs happily on a
+skewed cell and returns a plausible wrong number; the tests assert it raises instead.
+"""
+import numpy as np
+import pytest
+
+import fieldwave
+from fieldwave._core import lattice as lat
+from fieldwave._core.geometry import StaleGeometryError
+
+P = 400.0
+WL = 900.0
+H = 150.0
+N_ROD, N_AIR = 2.4, 1.0
+R = 90.0
+
+ORTHO = np.column_stack(([P, 0.0], [0.0, P]))
+SHEAR = np.column_stack(([P, 0.0], [P, P]))       # a2' = a2 + a1: the *same* point lattice
+HEX = np.column_stack(([P, 0.0], [P / 2, P * np.sqrt(3) / 2]))
+
+
+def raster(basis, n=128, radius=R):
+    """A rod on the parametric grid of ``basis``: ``cell[j, i]`` at ``(i+.5)/n*a1+(j+.5)/n*a2``."""
+    a1, a2 = np.asarray(basis)[:, 0], np.asarray(basis)[:, 1]
+    t = (np.arange(n) + 0.5) / n
+    U, V = np.meshgrid(t, t)
+    pts = U[..., None] * a1 + V[..., None] * a2
+    centre = 0.5 * (a1 + a2)
+    inside = np.zeros(pts.shape[:2], dtype=bool)
+    for i in (-1, 0, 1):                           # minimum image over the lattice
+        for j in (-1, 0, 1):
+            s = i * a1 + j * a2
+            inside |= (((pts[..., 0] - centre[0] - s[0]) ** 2
+                        + (pts[..., 1] - centre[1] - s[1]) ** 2) <= radius ** 2)
+    cell = np.full((1, n, n), N_AIR)
+    cell[0][inside] = N_ROD
+    return cell
+
+
+def solver(cell, fto=8, lattice=None, **kw):
+    kw.setdefault('factorization', 'nvf')
+    return fieldwave.rcwa(backend=0, ucell=cell, period=[P, P], fto=[fto, fto],
+                          thickness=[H], wavelength=WL, n_top=1.0, n_bot=1.0,
+                          theta=0.0, phi=0.0, psi=0.0, lattice=lattice, **kw)
+
+
+def totals(cell, fto=8, lattice=None, **kw):
+    res = solver(cell, fto, lattice, **kw).conv_solve()
+    return float(np.sum(np.asarray(res.de_ri))), float(np.sum(np.asarray(res.de_ti)))
+
+
+# ------------------------------------------------------------------- the basis itself
+
+def test_default_lattice_is_none_and_reads_as_axis_aligned():
+    """``None`` rather than a materialised ``diag(period)``: ``period`` may be a JAX tracer."""
+    s = solver(raster(ORTHO))
+    assert s.lattice is None
+    assert s.lattice_is_axis_aligned
+
+
+def test_assigning_a_basis_reports_the_edge_lengths_as_period():
+    s = solver(raster(HEX), lattice=HEX)
+    assert not s.lattice_is_axis_aligned
+    assert np.allclose(s.period, [P, P])           # both hex basis vectors have length P
+
+
+def test_a_diagonal_basis_is_still_axis_aligned():
+    """Diagonal, not merely orthogonal — a rotated orthogonal basis is *not* separable."""
+    assert lat.is_axis_aligned(np.diag([3.0, 7.0]))
+    rot = np.array([[1.0, -1.0], [1.0, 1.0]])      # orthogonal columns, rotated 45 degrees
+    assert not lat.is_axis_aligned(rot)
+
+
+@pytest.mark.parametrize('bad, match', [
+    (np.zeros((2, 3)), 'columns are the basis vectors'),
+    (np.array([[1.0, 2.0], [2.0, 4.0]]), 'parallel'),      # det == 0
+])
+def test_a_degenerate_basis_is_refused(bad, match):
+    with pytest.raises(ValueError, match=match):
+        lat.as_lattice(lattice=bad)
+
+
+def test_order_kxy_reduces_to_the_separable_formula():
+    """The generalisation must be exactly the old expression on a diagonal basis."""
+    fto_x, fto_y, lx, ly = 3, 2, 300.0, 700.0
+    kx, ky = lat.order_kxy(np, np.diag([lx, ly]), fto_x, fto_y, WL,
+                           0.25, -0.5, dtype=np.complex128)
+    m = np.arange(-fto_x, fto_x + 1)[None, :]
+    n = np.arange(-fto_y, fto_y + 1)[:, None]
+    # Not bit-identical: the general form divides by det once and multiplies back, so the
+    # rounding differs in the last place. Equal to well under any physical significance.
+    assert np.allclose(np.asarray(kx), 0.25 + m * (WL / lx), rtol=1e-14, atol=0)
+    assert np.allclose(np.asarray(ky), -0.5 + n * (WL / ly), rtol=1e-14, atol=0)
+
+
+# ------------------------------------------------------------------- the physics
+
+def test_an_axis_aligned_basis_changes_nothing():
+    """Passing ``diag(period)`` explicitly must be the untouched orthogonal path, bit for bit."""
+    cell = raster(ORTHO)
+    assert totals(cell) == totals(cell, lattice=ORTHO)
+
+
+def test_unimodular_shear_is_the_same_physics():
+    """``a2' = a2 + a1`` generates the identical lattice, so the answers must agree.
+
+    Not an approximation of each other: same point lattice, same cell area, same reciprocal
+    set. The residual is the two rasters staircasing the rod differently, which is why the
+    tolerance is 1e-3 rather than machine epsilon and why it tightens with resolution.
+
+    Guarding this specifically because it fails *quietly*. With the metric correction removed
+    from the normal field the same comparison drifts to ~8.5e-4 at n=512/fto=14 and ~7x that
+    here, while both runs still conserve energy to 1e-15.
+    """
+    r_o, t_o = totals(raster(ORTHO))
+    r_s, t_s = totals(raster(SHEAR), lattice=SHEAR)
+    assert t_o == pytest.approx(t_s, abs=1e-3)
+    assert r_o == pytest.approx(r_s, abs=1e-3)
+
+
+def test_a_uniform_layer_is_lattice_independent():
+    """No interfaces, so only the k-mapping is under test — and it must not shift the answer.
+
+    A homogeneous slab has one propagating order whatever the cell is; a wrong reciprocal
+    basis moves the *other* orders' kz and shows up as leaked efficiency.
+    """
+    flat = np.full((1, 64, 64), 1.7)
+    base = totals(flat)
+    for basis in (SHEAR, HEX):
+        assert totals(flat, lattice=basis) == pytest.approx(base, abs=1e-9)
+
+
+def test_hex_lattice_matches_its_rectangular_supercell():
+    """The workaround this feature replaces, at low resolution: same array, two cells."""
+    a = P
+    sq3 = np.sqrt(3.0)
+    hex_cell = raster(HEX, n=96, radius=80.0)
+
+    nx = 96
+    ny = round(nx * sq3)
+    x = (np.arange(nx) + 0.5) / nx * a
+    y = (np.arange(ny) + 0.5) / ny * (a * sq3)
+    X, Y = np.meshgrid(x, y)
+    inside = np.zeros(X.shape, dtype=bool)
+    for cx, cy in ((0.25 * a, 0.25 * a * sq3), (0.75 * a, 0.75 * a * sq3)):
+        for i in (-1, 0, 1):
+            for j in (-1, 0, 1):
+                inside |= (((X - cx - i * a) ** 2
+                            + (Y - cy - j * a * sq3) ** 2) <= 80.0 ** 2)
+    sup = np.full((1, ny, nx), N_AIR)
+    sup[0][inside] = N_ROD
+
+    _, t_hex = totals(hex_cell, fto=8, lattice=HEX)
+    sup_solver = fieldwave.rcwa(backend=0, ucell=sup, period=[a, a * sq3], fto=[8, 14],
+                                thickness=[H], wavelength=WL, n_top=1.0, n_bot=1.0,
+                                theta=0.0, phi=0.0, psi=0.0, factorization='nvf')
+    t_sup = float(np.sum(np.asarray(sup_solver.conv_solve().de_ti)))
+    assert t_hex == pytest.approx(t_sup, abs=5e-3)
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+def test_oblique_runs_on_every_backend(backend):
+    """The basis is resolved in the shared core, so all three backends get it at once."""
+    cell = raster(HEX, n=64)
+    if backend == 1:
+        pytest.importorskip('jax')
+        import jax
+        jax.config.update('jax_enable_x64', True)
+        cell = __import__('jax.numpy', fromlist=['x']).asarray(cell)
+    elif backend == 2:
+        cell = pytest.importorskip('torch').tensor(cell, dtype=pytest.importorskip(
+            'torch').float64)
+    s = fieldwave.rcwa(backend=backend, ucell=cell, period=[P, P], fto=[4, 4],
+                       thickness=[H], wavelength=WL, n_top=1.0, n_bot=1.0,
+                       theta=0.0, phi=0.0, psi=0.0, factorization='nvf', lattice=HEX)
+    res = s.conv_solve()
+    total = float(np.sum(np.asarray(res.de_ri))) + float(np.sum(np.asarray(res.de_ti)))
+    assert total == pytest.approx(1.0, abs=1e-6)
+
+
+# ------------------------------------------------------------------- the refusals
+
+def test_li_is_refused_on_a_skewed_cell():
+    """Li's nested rule factorizes along the raster axes, which stop being x and y."""
+    with pytest.raises(NotImplementedError, match="factorization='nvf'"):
+        totals(raster(HEX), lattice=HEX, factorization='li')
+
+
+def test_integrated_coefficients_are_refused_on_a_skewed_cell():
+    with pytest.raises(NotImplementedError, match="fourier_coefficients='sampled'"):
+        totals(raster(HEX), lattice=HEX, fourier_coefficients='integrated')
+
+
+def test_field_reconstruction_is_refused_on_a_skewed_cell():
+    """The inverse transform is an outer product, which a skewed cell breaks."""
+    s = solver(raster(HEX), lattice=HEX)
+    s.conv_solve()
+    with pytest.raises(NotImplementedError, match='not implemented yet'):
+        s.calculate_field(res_x=4, res_y=4, res_z=4)
+
+
+def test_field_reconstruction_still_works_when_axis_aligned():
+    s = solver(raster(ORTHO))
+    s.conv_solve()
+    assert s.calculate_field(res_x=4, res_y=4, res_z=4) is not None
+
+
+def test_a_frozen_normal_field_is_refused_across_a_lattice_change():
+    """The basis is an input to the normal field, so a replay onto another cell is stale.
+
+    Without this the replay is accepted in silence: the raster is unchanged, so every other
+    tell agrees, and only the direction the interfaces point in space has moved.
+    """
+    cell = raster(HEX)
+    s = solver(cell, lattice=HEX)
+    frozen = s.freeze_geometry()
+    s2 = solver(cell, lattice=SHEAR)
+    with pytest.raises(StaleGeometryError, match='cell basis'):
+        s2.conv_solve(geometry=frozen)
+
+
+def test_a_frozen_normal_field_replays_onto_the_same_lattice():
+    cell = raster(HEX)
+    s = solver(cell, lattice=HEX)
+    frozen = s.freeze_geometry()
+    replayed = s.conv_solve(geometry=frozen)
+    assert float(np.sum(np.asarray(replayed.de_ti))) == pytest.approx(
+        totals(cell, lattice=HEX)[1], abs=0)

@@ -14,6 +14,8 @@ import warnings
 from . import analytic as _analytic
 from . import boundary as _boundary
 from . import factorization as _fac
+from . import lattice as _lattice
+from .backend import _device_of, array_namespace
 from .enums import (Factorization, FourierCoefficients, coefficients_of, factorization_of,
                     resolve_fourier_options, to_fourier_type)
 from .geometry import StaticGeometry
@@ -44,6 +46,81 @@ class CoreSolveMixin:
                 f'(expected one of {sorted(_SOLVES)})') from None
 
     _frozen_geometry = None
+    _lattice_basis = None
+
+    @property
+    def lattice(self):
+        """The unit cell's ``(2, 2)`` basis, columns ``a1`` / ``a2`` — or ``None``.
+
+        ``None`` is the default and means the axis-aligned cell ``diag(period)``. It is a
+        distinct value rather than a materialised ``diag(period)`` on purpose: ``period`` may
+        be a JAX tracer inside a jitted solve, and a basis has to be concrete (it decides
+        control flow and reaches SciPy). Leaving the default un-materialised keeps every
+        existing call off that conversion entirely, so the orthogonal path is untouched.
+
+        Assigning a basis selects the non-orthogonal path; ``period`` then reports the
+        basis-vector lengths (see :func:`fieldwave._core.lattice.periods_of`), and the raster
+        is read in lattice coordinates — ``ucell[layer][j, i]`` sampling
+        ``r = (i+0.5)/Nx * a1 + (j+0.5)/Ny * a2``.
+        """
+        return self._lattice_basis
+
+    @lattice.setter
+    def lattice(self, value):
+        if value is None:
+            self._lattice_basis = None
+            return
+        A = _lattice.as_lattice(lattice=value)
+        self._lattice_basis = A
+        self.period = _lattice.periods_of(A)
+
+    @property
+    def lattice_is_axis_aligned(self):
+        """Whether the cell is ``diag(Lx, Ly)`` — i.e. whether the separable k-layout applies."""
+        return self._lattice_basis is None or _lattice.is_axis_aligned(self._lattice_basis)
+
+    @property
+    def _geometry_lattice(self):
+        """The basis the *geometry* steps need — ``None`` whenever the cell is axis-aligned.
+
+        Deliberately ``None`` even for a basis written out as an explicit ``diag(Lx, Ly)``, so
+        that the two spellings of the same cell give the same answer and enabling this feature
+        cannot move an existing result.
+
+        There is a real correction being withheld by that choice. The metric path also fixes
+        an *orthogonal* case the legacy one gets wrong: when a raster's pixels are not square
+        in real space (``period[0]/Nx != period[1]/Ny``) the index-space distance transform
+        yields a normal up to ~18 degrees off — measured on a 45-degree interface in a 200x400
+        cell on a 64x64 grid, ``|cos|`` to the true normal is 0.9487 legacy against 1.000000
+        with the metric. That is a pre-existing defect with its own before/after, not part of
+        supporting a skewed cell, and folding it in here would silently change results for
+        anyone already running NVF on a non-square grid. It should land as its own change.
+        """
+        return None if self.lattice_is_axis_aligned else self._lattice_basis
+
+    def _kxy_2d(self, wavelength):
+        """Per-order ``(kx, ky)`` for the 2D solve, in whichever layout the lattice admits.
+
+        Axis-aligned cells keep the two 1-D vectors untouched — same objects, same values, so
+        nothing downstream can tell this method was added. A skewed cell cannot be written that
+        way and gets the ``(ff_y, ff_x)`` Cartesian components instead; both spellings are what
+        :func:`fieldwave._core.solve_2d.order_grid_kxy` accepts.
+
+        The incident components are read back out of the 1-D vectors at ``m = n = 0`` rather
+        than recomputed. That entry *is* ``k_inc`` by construction, so the backend's own
+        ``sin(theta)`` handling — which differs between NumPy, JAX and Torch for tracing
+        reasons — stays the single source for incidence, and the lattice basis is the only new
+        arithmetic here.
+        """
+        kx, ky = self.get_kx_ky_vector(wavelength)
+        A = self._lattice_basis
+        if A is None or _lattice.is_axis_aligned(A):
+            return kx, ky
+        fto_x, fto_y = int(self.fto[0]), int(self.fto[1])
+        xp = array_namespace(kx)
+        return _lattice.order_kxy(xp, A, fto_x, fto_y, wavelength,
+                                  kx[fto_x], ky[fto_y],
+                                  dtype=kx.dtype, device=_device_of(kx))
 
     def _finish(self, out):
         """Store the field-reconstruction state and return just the result mapping."""
@@ -68,7 +145,7 @@ class CoreSolveMixin:
     def solve_2d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None):
         solve = self._solve_fn('2d')
-        kx, ky = self.get_kx_ky_vector(wavelength)
+        kx, ky = self._kxy_2d(wavelength)
         return self._finish(solve(
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi, self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
@@ -168,9 +245,9 @@ class CoreFactorizationMixin:
         if self._modeling_type_assigned == 0:
             if self._factorization == Factorization.NVF:
                 normal_field = _fac.normal_field_for_ucell(
-                    self.ucell, fto_x, fto_y)
+                    self.ucell, fto_x, fto_y, lattice=self._geometry_lattice)
                 normal_field_source = _fac.normal_field_source_for_ucell(
-                    self.ucell, fto_x, fto_y)
+                    self.ucell, fto_x, fto_y, lattice=self._geometry_lattice)
             if self._fourier_coefficients == FourierCoefficients.INTEGRATED:
                 compression = [_fac.compression_indices(self.ucell[i])
                                for i in range(self.ucell.shape[0])]
@@ -217,8 +294,52 @@ class CoreFactorizationMixin:
         self._frozen_geometry = geometry
         return self.solve_for_conv(self.wavelength, *self._conv_matrices(geometry))
 
+    def _reject_unsupported_lattice(self):
+        """Refuse the build paths a skewed cell has no implementation for — before they answer.
+
+        Every one of these *runs* on a non-orthogonal cell and returns a plausible, wrong
+        number: the raster is still a raster, the transforms are still transforms, and the NVF
+        assembly stays Hermitian so energy still conserves to 1e-15. Nothing downstream is in a
+        position to notice, which is why the refusal has to live here.
+
+        What each is missing is specific, not general:
+
+        * ``factorization='li'`` applies the inverse rule along the *raster axes* (see
+          :func:`~fieldwave._core.factorization.to_conv_mat_raster_discrete`), and the solve
+          consumes the result as Cartesian ``eps_xx`` / ``eps_yy``. On a skewed cell those axes
+          are ``a1`` / ``a2``, not ``x`` / ``y``. Repairing that is Li's covariant formulation
+          (JOSA A 14(10), 2758), a separate piece of work — and one worth costing first, since
+          NVF already converges faster than Li does on the curved boundaries this feature is
+          for.
+        * The integrated (analytic) coefficients are closed forms derived for a rectangular
+          cell. A Cartesian ellipse stays an ellipse under the skew and ports cleanly; a
+          rectangle becomes a parallelogram and its sinc product does not. Re-deriving them is
+          ordinary work, just not done here.
+        * The vector and analytic modelers describe shapes in a rectangular cell for the same
+          reason.
+        """
+        if self.lattice_is_axis_aligned:
+            return
+        common = ('The cell basis is non-orthogonal (set via .lattice). ')
+        if self._modeling_type_assigned != 0:
+            raise NotImplementedError(
+                common + f'modeling_type={self._modeling_type_assigned} builds from shapes '
+                f'placed in a rectangular cell, which is not implemented yet for a skewed '
+                f'one. Use a raster ucell (modeling_type=0).')
+        if self._fourier_coefficients != FourierCoefficients.SAMPLED:
+            raise NotImplementedError(
+                common + f"fourier_coefficients={self._fourier_coefficients.value!r} uses "
+                f'closed-form series derived for a rectangular cell, which is not implemented '
+                f"yet for a skewed one. Use fourier_coefficients='sampled'.")
+        if self._factorization != Factorization.NVF:
+            raise NotImplementedError(
+                common + f"factorization={self._factorization.value!r} applies the inverse "
+                f'rule along the raster axes, which are not x and y once the cell is skewed, '
+                f"so it would answer plausibly and wrongly. Use factorization='nvf'.")
+
     def _conv_matrices(self, geometry=None):
         """Convolution matrices for the current structure: ``(epx, epy, epz_i, epxy, epyx)``."""
+        self._reject_unsupported_lattice()
         fto_x, fto_y = self.fto[0], self.fto[1]
         epxy_conv_all = epyx_conv_all = None
 
@@ -246,7 +367,8 @@ class CoreFactorizationMixin:
                      epz_conv_i_all) = _fac.to_conv_mat_raster_nvf(
                         self.ucell, fto_x, fto_y,
                         normal_field=normal_field,
-                        normal_field_source=normal_field_source)
+                        normal_field_source=normal_field_source,
+                        lattice=self._geometry_lattice)
                 else:
                     (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all,
                      epz_conv_i_all) = _fac.to_conv_mat_raster_continuous_nvf(

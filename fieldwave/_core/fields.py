@@ -114,6 +114,27 @@ def field_1d(wavelength, kx, T1, layer_info_list, period, pol,
     return xp.concat(cells, axis=0)
 
 
+def _reject_oblique(kx):
+    """Refuse per-order ``kx`` — a skewed cell — since the inverse transform below is separable.
+
+    :func:`_inv_fourier` builds the basis as an outer product of ``exp(i*kx*x)`` and
+    ``exp(i*ky*y)``, which only holds when ``kx`` depends on ``m`` alone and ``ky`` on ``n``
+    alone. With ``G = m*b1 + n*b2`` non-orthogonal both depend on both, and the product form
+    silently reconstructs a different field.
+
+    Separability is recoverable rather than lost: on the *parametric* ``(u, v)`` grid the
+    lattice part is ``exp(2i*pi*(m*u + n*v))``, separable again, with only the smooth incident
+    phase ``exp(i*k_inc.r)`` left to carry. Rendering in lattice coordinates is therefore the
+    natural way to lift this, and is deferred rather than blocked.
+    """
+    if getattr(kx, 'ndim', 1) == 2:
+        raise NotImplementedError(
+            'Field reconstruction is not implemented yet for a non-orthogonal cell basis '
+            '(set via .lattice). The efficiencies from conv_solve() are unaffected; only the '
+            'real-space field reconstruction is missing, because its inverse transform assumes '
+            'kx varies with m alone and ky with n alone, which a skewed cell breaks.')
+
+
 def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, res_x, res_y, res_z,
                    set_field_input, conical):
     """Shared body of the conical and 2D reconstructions.
@@ -121,6 +142,7 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, res_x, res_y
     They differ only in how the layer's mode matrices assemble into ``(Sx, Sy, Ux, Uy)``; the
     propagation, the z-sampling and the inverse transform are identical.
     """
+    _reject_oblique(kx)
     _require_solved(T1, layer_info_list)
     xp = array_namespace(T1)
     C = T1.dtype

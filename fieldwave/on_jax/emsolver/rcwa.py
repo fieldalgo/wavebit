@@ -118,6 +118,9 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                  # (a translation-invariant structure should give d/dcx == 0 exactly; the
                  #  sampling leaves a sawtooth instead -- 5e-4 at 256, 4.2e-5 at 1024, for
                  #  ~1.2-2x the runtime. Raise further to fit positions below that.)
+                 lattice=None,               # 2x2 cell basis (columns a1, a2); None = diag(period).
+                 # Kept last on purpose: SolverJax._tree_unflatten passes the children
+                 # positionally, so a new parameter anywhere earlier silently shifts them.
                  ):
 
         super().__init__(n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi, pol=pol,
@@ -137,6 +140,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         self.backend = backend
         self._set_fourier_options(fourier_coefficients, factorization, fourier_type)
         self.analytic_normal_grid = analytic_normal_grid
+        self.lattice = lattice      # after period: assigning a basis overwrites period
 
     @property
     def ucell(self):
@@ -293,7 +297,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         already concrete by the time it runs. It reads ``self.T1`` / ``self.layer_info_list``,
         so whichever geometry the preceding solve used is the one in force here.
         """
-        kx, ky = self.get_kx_ky_vector(wavelength=self.wavelength)
+        kx, ky = self._kxy_2d(self.wavelength)
 
         if self._grating_type_assigned == 0:
             res_y = 1

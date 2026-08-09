@@ -40,7 +40,7 @@ from .backend import array_namespace, as_array, check_finite, check_physical
 from .conventions import boundary_kz
 from .solve_1d import (_block, _diag, _pack, _unit, layer_modes_1d, layer_modes_1d_conical,
                        sp_efficiencies, sp_modes_1d_conical)
-from .solve_2d import layer_modes_2d, sp_modes_2d
+from .solve_2d import layer_modes_2d, order_grid_kxy, sp_modes_2d
 
 _PI = 3.141592653589793
 
@@ -214,8 +214,8 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     ``layer_modes(layer_index)`` returns that layer's ``(big_W, big_V, q)`` in the s/p boundary
     basis; everything else — half-spaces, gap, cascade, incidence, efficiencies — is common.
     """
-    ff_x = kx.shape[0]
-    ff_y = ky.shape[0]
+    kx_g, ky_g = order_grid_kxy(xp, kx, ky)
+    ff_y, ff_x = kx_g.shape
     ff_xy = ff_x * ff_y
     k0 = 2 * _PI / wavelength
     theta = 0.0 if theta is None else theta
@@ -223,13 +223,12 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     I = xp.astype(xp.eye(ff_xy), C)
     O = xp.astype(xp.zeros((ff_xy, ff_xy)), C)
     big_I = xp.astype(xp.eye(2 * ff_xy), C)
-    ky_col = xp.reshape(ky, (-1, 1))
 
-    k_par_sq = kx ** 2 + ky_col ** 2
+    k_par_sq = kx_g ** 2 + ky_g ** 2
     kz_top = xp.reshape(boundary_kz(xp, n_top ** 2, k_par_sq), (-1,))
     kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq), (-1,))
     eps_bot = n_bot ** 2
-    eps_gap = xp.reshape(1 + kx ** 2 + ky_col ** 2, (-1,))    # kz_gap == 1 by construction
+    eps_gap = xp.reshape(1 + k_par_sq, (-1,))                 # kz_gap == 1 by construction
 
     Kz_top = _diag(xp, kz_top)
     Kz_bot = _diag(xp, kz_bot)
@@ -340,18 +339,15 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     """
     xp, C, kx, ky = _prepare(epx_conv_all, kx, ky)
 
-    ff_x = kx.shape[0]
-    ff_y = ky.shape[0]
+    kx_g, ky_g = order_grid_kxy(xp, kx, ky)
+    ff_y, ff_x = kx_g.shape
     ff_xy = ff_x * ff_y
     I = xp.astype(xp.eye(ff_xy), C)
     O = xp.astype(xp.zeros((ff_xy, ff_xy)), C)
-    ky_col = xp.reshape(ky, (-1, 1))
-    varphi = xp.reshape(xp.atan(ky_col / kx), (-1,))
+    varphi = xp.reshape(xp.atan(ky_g / kx_g), (-1,))
 
-    kx_full = xp.reshape(xp.broadcast_to(kx[None, :], (ff_y, ff_x)), (-1,))
-    ky_full = xp.reshape(xp.broadcast_to(ky_col, (ff_y, ff_x)), (-1,))
-    Kx = _diag(xp, kx_full)
-    Ky = _diag(xp, ky_full)
+    Kx = _diag(xp, xp.reshape(kx_g, (-1,)))
+    Ky = _diag(xp, xp.reshape(ky_g, (-1,)))
     F_c = _diag(xp, xp.cos(varphi))
     F_s = _diag(xp, xp.sin(varphi))
 
