@@ -23,8 +23,13 @@ would pass every broken version of this feature.
 
 Run from the repo root::
 
-    python benchmarks/benchmark_oblique_lattice.py            # all of them
+    python benchmarks/benchmark_oblique_lattice.py            # all of them, + log + figure
     python benchmarks/benchmark_oblique_lattice.py published  # one
+
+Output follows the convention `benchmark_backends.py` set: the transcript streams to
+``results/oblique_lattice.log`` (checked in) as it lands, the numbers to
+``results/oblique_lattice.json`` (gitignored), and a full run also writes
+``images/oblique-lattice.png``.
 
 ``s4`` needs the S4 python module; point ``S4_PATH`` at it (default is the py312 build beside
 this repo). Every other check is self-contained.
@@ -246,7 +251,7 @@ def shear(fto=8, n=128):
         c = 0.5 * (a1 + a2)
         kw = {'lattice': basis} if use_lattice else {}
         s = fieldwave.rcwa(backend=0, ucell=[{'n_base': 1.0, 'shapes': [
-            {'type': 'circle', 'cx': float(c[0]), 'cy': float(c[1]), 'lx': 180.0, 'ly': 180.0,
+            {'type': 'circle', 'cx': float(c[0]), 'cy': float(c[1]), 'lx': 180.0,
              'n_index': 2.4}]}], period=[p, p], fto=[12, 12], thickness=[150.0],
             wavelength=900.0, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
             factorization='nvf', **kw)
@@ -298,12 +303,19 @@ def supercell(pitch=400.0, radius=80.0, n=96):
 # ------------------------------------------------------------------ cost
 
 def cost(pitch=400.0, radius=90.0):
-    """What the feature buys: order counts, the cost exponent, and wall clock.
+    """What the feature buys: order counts and wall clock.
 
     Two regimes, and quoting one for the other is misleading. The order count scales with cell
     area, so a native cell keeps exactly half — but that only becomes ~8x once the matrices are
-    large enough to be in the asymptotic regime. A metasurface library at ``fto=8`` is not, and
-    sees ~3x.
+    large enough to be in the asymptotic regime. A metasurface library at ``fto=8`` is not.
+
+    **Read the order ratio, not the third digit of the time ratio.** The order counts are exact
+    and identical on every run; the timings are not. This has no warm-up and no repetition —
+    `benchmark_backends.py` spends 45 s warming the machine and times one fixed configuration
+    three times across the run, and that discipline is what its numbers rest on. Here the drift
+    probe below is the whole of it: one configuration timed before and after everything else. If
+    those two disagree, the run measured the machine and the ratios are worth no more than
+    "somewhere around 3-5x".
     """
     hexb = _hex(pitch)
     cell = _rod_raster(hexb, 384, radius)
@@ -320,6 +332,14 @@ def cost(pitch=400.0, radius=90.0):
     sup = np.full((1, ny, 384), 1.0)
     sup[0][inside] = 2.4
 
+    def _probe():
+        s = fieldwave.rcwa(backend=0, ucell=cell, period=[pitch, pitch], fto=[10, 10],
+                           thickness=[300.0], wavelength=900.0, n_top=1.0, n_bot=1.0,
+                           theta=0.0, phi=0.0, psi=0.0, factorization='nvf', lattice=hexb)
+        t0 = time.perf_counter(); s.conv_solve(); return time.perf_counter() - t0
+
+    drift_a = _probe()
+    print(f'  [drift] start: {drift_a * 1000:.0f} ms')
     print(f'  {"":>10} {"fto":>9} {"orders":>7} {"sec":>7}')
     rows = {}
     for label, f in (('native', 8), ('native', 12), ('native', 16)):
@@ -339,28 +359,198 @@ def cost(pitch=400.0, radius=90.0):
         print(f'  {"supercell":>10} {str((f, fy)):>9} {(2*f+1)*(2*fy+1):>7} {dt:>7.2f}')
 
     print()
+    ratios = {}
     for f in (8, 12, 16):
         nn, tn = rows[('native', f)]
         ns, ts = rows[('super', f)]
+        ratios[str(f)] = ts / tn
         print(f'  fto={f:>2}: orders {ns/nn:.2f}x, time {ts/tn:.1f}x')
     n = np.array([rows[('super', f)][0] for f in (8, 12, 16)], float)
     t = np.array([rows[('super', f)][1] for f in (8, 12, 16)], float)
-    p = np.polyfit(np.log(n), np.log(t), 1)[0]
-    print(f'\n  measured cost exponent: N^{p:.2f}  (not N^3 — the convolution build is sub-cubic)')
-    return p
+    p = float(np.polyfit(np.log(n), np.log(t), 1)[0])
+    drift_b = _probe()
+    spread = abs(drift_b - drift_a) / max(drift_a, drift_b)
+    print(f'\n  [drift] end: {drift_b * 1000:.0f} ms   (start {drift_a * 1000:.0f} ms, '
+          f'spread {spread:.0%})')
+    print(f'  cost exponent from these three points: N^{p:.2f}')
+    if spread > 0.15:
+        print('  ^ the drift probe moved more than 15%: this run timed the machine, not the')
+        print('    code. The order ratios above are still exact; the time ratios are not.')
+    return {'native': {str(f): rows[('native', f)] for f in (8, 12, 16)},
+            'super': {str(f): rows[('super', f)] for f in (8, 12, 16)},
+            'exponent': p, 'ratios': ratios, 'drift': [drift_a, drift_b, spread]}
 
 
 CHECKS = {'published': published, 'polarisation': published_polarisation_frame,
           's4': s4, 'shear': shear, 'supercell': supercell, 'cost': cost}
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+LOG = os.path.join(HERE, 'results', 'oblique_lattice.log')
+JSON = os.path.join(HERE, 'results', 'oblique_lattice.json')
+FIG = os.path.join(ROOT, 'images', 'oblique-lattice.png')
+
+
+class _Tee:
+    """Stream the transcript to the log as it lands, so an interrupted run still leaves it."""
+
+    def __init__(self, path):
+        self.term, self.fh = sys.stdout, open(path, 'w')
+
+    def write(self, s):
+        self.term.write(s)
+        self.fh.write(s)
+        self.fh.flush()
+
+    def flush(self):
+        self.term.flush()
+        self.fh.flush()
+
+
+def figure(data, path=FIG):
+    """Three panels: is it right, what does it cost, and does it converge faster.
+
+    Drawn from the numbers the checks just returned, so the figure cannot drift from the log
+    beside it.
+    """
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(1, 3, figsize=(15, 4.2))
+
+    keys = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 0), (0, 1), (1, -1), (1, 0), (1, 1)]
+    x = np.arange(len(keys))
+    fw = data.get('published_orders')
+    if fw:
+        ax[0].plot(x, [LI_FMM[k] for k in keys], 's', ms=9, mfc='none', label='Li 1997 (FMM)')
+        ax[0].plot(x, [LI_FEM[k] for k in keys], 'o', ms=9, mfc='none', label='published FEM')
+        ax[0].plot(x, [fw[str(k)] for k in keys], 'x', ms=9, label='FieldWave (oblique)')
+        ax[0].set_xticks(x)
+        ax[0].set_xticklabels([f'{a},{b}' for a, b in keys], fontsize=8)
+        ax[0].set_xlabel('diffraction order (n,m)')
+        ax[0].set_ylabel('transmittance')
+        ax[0].set_title(f"Li's checkerboard vs the published table\nworst "
+                        f"{data['published_worst']:.1e} over all nine", fontsize=10)
+        ax[0].legend(fontsize=8)
+        ax[0].grid(alpha=.3)
+
+    c = data.get('cost')
+    if c:
+        # Against `fto`, not against retained orders. Both cells obey the same N^p curve, so
+        # time-vs-N puts them on top of each other and hides the point — which is that the same
+        # `fto` costs the supercell more, because it needs more orders to express it.
+        ftos = [8, 12, 16]
+        for label, mark, name in (('native', 'o-', 'native oblique'),
+                                  ('super', 's--', 'rectangular supercell')):
+            ax[1].semilogy(ftos, [c[label][str(f)][1] for f in ftos], mark, label=name)
+        for f in ftos:
+            ax[1].annotate(f'{c["ratios"][str(f)]:.1f}x', (f, c['super'][str(f)][1]),
+                           textcoords='offset points', xytext=(6, 4), fontsize=9)
+        ax[1].set_xticks(ftos)
+        ax[1].set_xlabel('fto (per axis)')
+        ax[1].set_ylabel('wall clock (s)')
+        drift = c.get('drift', [0, 0, 0])[2]
+        ax[1].set_title(f"cost at the same fto\norder ratio 1.7x exact; timing drift "
+                        f"{drift:.0%} this run", fontsize=10)
+        ax[1].legend(fontsize=8)
+        ax[1].grid(alpha=.3, which='both')
+
+    conv = data.get('convergence')
+    if conv:
+        ax[2].plot(conv['fw_orders'], conv['fw_T'], 'x-', label='FieldWave, native cell')
+        ax[2].plot(conv['s4_orders'], conv['s4_T'], 's--', mfc='none',
+                   label='S4, square supercell')
+        ax[2].axhline(LI_FEM[(0, 0)], color='k', lw=.8, ls=':', label='published FEM')
+        ax[2].set_xlabel('retained orders')
+        ax[2].set_ylabel('T(0,0)')
+        ax[2].set_title('same benchmark, two cells\nhalf the orders and it settles first',
+                        fontsize=10)
+        ax[2].legend(fontsize=8)
+        ax[2].grid(alpha=.3)
+
+    fig.tight_layout()
+    fig.savefig(path, dpi=140)
+    print(f'\nfigure: {path}')
+
+
+def convergence():
+    """T(0,0) against retained orders, native cell vs the supercell S4 has to use.
+
+    The one plot that shows *why* halving the orders matters: it is not only cheaper per solve,
+    the native cell reaches its answer at a truncation the supercell has not reached.
+    """
+    side = 1.25
+    basis = np.column_stack((np.array([side, side]), np.array([side, -side])))
+    fw_orders, fw_t = [], []
+    for f in (6, 10, 14, 18):
+        ti, _ = _checkerboard(basis, side, f, np.pi / 2)
+        c = (ti.shape[0] // 2, ti.shape[1] // 2)
+        fw_orders.append((2 * f + 1) ** 2)
+        fw_t.append(float(ti[c]))
+        print(f'  FieldWave  orders {fw_orders[-1]:>5}  T(0,0)={fw_t[-1]:.6f}')
+
+    s4_orders, s4_t = [], []
+    try:
+        sys.path.insert(0, S4_PATH)
+        import S4                                                      # noqa: N813
+        L = 2 * side
+        for ng in (101, 201, 401, 701, 1001):
+            S = S4.New(Lattice=((L, 0), (0, L)), NumBasis=ng)
+            S.SetMaterial(Name='D', Epsilon=2.25)
+            S.SetMaterial(Name='V', Epsilon=1.0)
+            S.AddLayer(Name='b', Thickness=0, Material='D')
+            S.AddLayer(Name='s', Thickness=1, Material='V')
+            for cx, cy in ((-0.5 * side, -0.5 * side), (0.5 * side, 0.5 * side)):
+                S.SetRegionRectangle(Layer='s', Material='D', Center=(cx, cy), Angle=0,
+                                     Halfwidths=(0.5 * side, 0.5 * side))
+            S.AddLayer(Name='a', Thickness=0, Material='V')
+            S.SetFrequency(1)
+            S.SetExcitationPlanewave(IncidenceAngles=(0, 0), sAmplitude=1, pAmplitude=0)
+            inc = S.GetPowerFlux(Layer='b')[0].real
+            s4_orders.append(len(S.GetBasisSet()))
+            s4_t.append(float(S.GetPowerFluxByOrder(Layer='a')[0][0].real / inc))
+            print(f'  S4         orders {s4_orders[-1]:>5}  T(0,0)={s4_t[-1]:.6f}')
+    except ImportError as exc:
+        print(f'  S4 skipped: {exc}')
+    print(f'  published FEM T(0,0) = {LI_FEM[(0, 0)]}')
+    return dict(fw_orders=fw_orders, fw_T=fw_t, s4_orders=s4_orders, s4_T=s4_t)
+
+
 if __name__ == '__main__':
-    want = sys.argv[1:] or list(CHECKS)
+    import json
+
+    want = sys.argv[1:] or list(CHECKS) + ['convergence']
+    full = not sys.argv[1:]
+    if full:
+        os.makedirs(os.path.dirname(LOG), exist_ok=True)
+        sys.stdout = _Tee(LOG)
+
+    data = {}
     for name in want:
-        if name not in CHECKS:
-            print(f'unknown check {name!r}; pick from {list(CHECKS)}')
+        fn = CHECKS.get(name) or (convergence if name == 'convergence' else None)
+        if fn is None:
+            print(f'unknown check {name!r}; pick from {list(CHECKS) + ["convergence"]}')
             raise SystemExit(2)
         print(f'\n=== {name} ===')
         try:
-            CHECKS[name]()
+            data[name] = fn()
         except ImportError as exc:
             print(f'  skipped: {exc}')
+
+    if full:
+        side = 1.25
+        basis = np.column_stack((np.array([side, side]), np.array([side, -side])))
+        ti, _ = _checkerboard(basis, side, 16, np.pi / 2)
+        c = (ti.shape[0] // 2, ti.shape[1] // 2)
+        payload = {
+            'published_orders': {str(k): float(ti[c[0] + k[0], c[1] + k[1]]) for k in LI_FEM},
+            'published_worst': data.get('published'),
+            'convergence': data.get('convergence'),
+            'cost': data.get('cost'),
+        }
+        os.makedirs(os.path.dirname(FIG), exist_ok=True)
+        with open(JSON, 'w') as fh:
+            json.dump(payload, fh, indent=1, sort_keys=True, default=float)
+        figure(payload)
+        print(f'log: {LOG}\njson: {JSON}')
