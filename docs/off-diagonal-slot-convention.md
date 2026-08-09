@@ -6,7 +6,7 @@ Targets:
 - `fieldwave/_core/solve_2d.py::layer_modes_2d` — the two blocks, and the ordering mismatch between them
 - `fieldwave/_core/factorization.py::_nvf_assemble` — where the sign convention is set
 - `fieldwave/on_numpy/emsolver/rcwa.py::solve_for_conv` — the only way to reach the slots by hand
-- `tests_verification/test_uniform_anisotropic.py` — every number below
+- `tests/test_uniform_anisotropic.py` — every number below
 
 Companion to [`anisotropic-materials.md`](anisotropic-materials.md), which answers the scoping
 question ("can I give the solver an anisotropic material, and what does each gap cost?"). This one
@@ -360,7 +360,7 @@ gyrotropic slab plus an algebraic identity that holds at general `K`; the identi
 consistency, not an outside check. A published crossed magneto-optic grating, or a second solver,
 would be the honest confirmation.
 
-Tests: `tests_verification/test_uniform_anisotropic.py`
+Tests: `tests/test_uniform_anisotropic.py`
 
 - `test_gyrotropic_layer_has_the_right_shape` — what does hold today (passes)
 - `test_gyrotropic_layer_matches_faraday` — the exact answer (xfail, strict; flips to XPASS the

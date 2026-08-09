@@ -140,7 +140,7 @@ convolution matrix is a scaled identity. The code states this itself —
 
 So a birefringent film, a uniaxial substrate or an LC layer can be solved on `develop` right now by
 filling the five slots directly. This is checked, not asserted:
-`tests_verification/test_uniform_anisotropic.py` drives the call below against an analytic Airy
+`tests/test_uniform_anisotropic.py` drives the call below against an analytic Airy
 slab per eigen-polarisation and a Jones waveplate, and matches to ~1e-16.
 
 ```python
