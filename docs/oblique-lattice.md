@@ -61,16 +61,21 @@ a rectangle stays a rectangle under a skew and `cx` / `cy` mean what they always
 
 Hex array of Si pillars, pitch 400 nm, r = 90 nm, h = 300 nm, lambda = 900 nm, normal incidence.
 The supercell and the native cell describe the same infinite array.
+(`benchmarks/benchmark_oblique_lattice.py cost`)
 
-| | orders | wall clock |
-|---|---|---|
-| `a x a*sqrt(3)` supercell, `fto=(14, 24)` | 1421 | 38.9 s |
-| native hex cell, `fto=(12, 12)` | 625 | 3.3 s |
+| `fto` | native orders | supercell orders | order ratio | time ratio |
+|---|---|---|---|---|
+| 8 | 289 | 493 | 1.71 | **3.1x** |
+| 12 | 625 | 1075 | 1.72 | **4.4x** |
+| 16 | 1089 | 1881 | 1.73 | **5.6x** |
 
-The order-count ratio is exactly 2 (it is the cell-area ratio; verified numerically across
-`fto`), and the measured cost exponent is `N^2.7` — not `N^3`, because the convolution build is
-sub-cubic. At matched k-space coverage that is **~8x**, and better in practice because the
-supercell converges more slowly than the native cell does.
+Measured cost exponent `N^2.85` — not `N^3`, because the convolution build is sub-cubic.
+
+**Quote the row you are in, not a single number.** The ratio grows with `fto` because small
+matrices are not yet in the asymptotic regime, so a metasurface library run at `fto=8` sees ~3x
+where a converged high-truncation run sees more. The table above compares equal `fto`; matching
+*k-space coverage* instead makes the order ratio exactly 2 (it is the cell-area ratio) and pushes
+the asymptotic figure to ~8x. Both are honest, and they are different quantities.
 
 Do not confuse this with a convergence fix. On the same structure, `factorization='li'` had not
 converged at `fto=(16, 28)` after 72 s while `'nvf'` settled by `fto=(10, 17)` in 5 s. That gap
@@ -214,22 +219,28 @@ polarisation-independent on a C4v cell. **Compare the whole order table, not the
 Three more:
 
 **A unimodular shear.** `a2' = a2 + a1` generates the *identical* point lattice: same cell area,
-same reciprocal set. So the two runs must agree, and they do — 1.2e-4 on a raster, 2.0e-6 on
-analytic shapes (tighter because there is no staircase in it). This is the cheapest correctness
+same reciprocal set. So the two runs must agree, and they do — **1.09e-4** on a raster, **2.03e-6**
+on analytic shapes (tighter because there is no staircase in it). This is the cheapest correctness
 check available and it is worth running on your own structure; `tests_verification/test_oblique_lattice.py`
 has it as `test_unimodular_shear_is_the_same_physics`. With the normal field's metric correction
-removed the same comparison drifts to 8.5e-4 — that is the test having teeth.
+removed the same comparison drifts to ~8.5e-4 — that is the test having teeth.
 
-**S4 as an outside oracle, against a square-lattice control.** S4 supports arbitrary lattice
-vectors, so it checks the reciprocal mapping independently. It sits 6.60e-3 from FieldWave on a
-square lattice — where none of this code runs — and 6.77e-3 on hex. The gap is S4's own slow
-convergence, equal on both, so the oblique path adds **1.7e-4** over the already-validated
-orthogonal one. (Use S4's default Laurent rule for this. `PolarizationDecomposition=True`
-diverged on *both* lattices in our hands, 0.986 -> 0.933, and is not usable as an oracle.)
+**S4 as an outside oracle, against a square-lattice control.** The control is the point. S4's
+default Laurent rule converges slowly on a high-contrast curved boundary, so a raw hex comparison
+shows a gap that says nothing on its own. Running the same comparison on a **square** lattice,
+where none of the oblique code executes, measures that gap independently: **6.77e-3** on the
+control against **6.19e-3** on hex, so the oblique path adds **5.8e-4** over the
+already-validated orthogonal one — and in the direction of *less* disagreement, not more.
 
-**The supercell it replaces.** A native hex cell reproduces its rectangular supercell; the
-residual is the two rasters staircasing the feature differently, so it tightens with resolution
-rather than with `fto`.
+Do not reach for `PolarizationDecomposition=True` to speed S4 up here; it diverged on both
+lattices in our hands (0.986 -> 0.933 over the same sweep) and is not usable as an oracle.
+
+**The supercell it replaces.** A native hex cell reproduces its rectangular supercell to
+**1.21e-4**; the residual is the two rasters staircasing the feature differently, so it tightens
+with raster resolution rather than with `fto`.
+
+All four are reproduced by `benchmarks/benchmark_oblique_lattice.py`, one subcommand each. The
+numbers above are what that script prints — if it disagrees with this page, the script is right.
 
 ## A worked case: a visible metalens phase library
 
