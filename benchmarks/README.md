@@ -6,7 +6,6 @@ Performance and convergence analyses. Each script is standalone and runs from th
 | --- | --- |
 | `benchmark_backends.py` | Which backend, and whether to freeze the geometry, for a *differentiated* run. Sweeps the vector and raster paths across four modes and a range of `fto`, and reports the compile cost that decides between them. Write-up: [../docs/backend-choice.md](../docs/backend-choice.md). |
 | `benchmark_analytic.py` | How the analytic (staircase-free) shape path converges against the raster and vector staircases, for tilted and curved boundaries. Write-up: [../docs/analytic-modeling.md](../docs/analytic-modeling.md). |
-| `benchmark_oblique_lattice.py` | Non-orthogonal cells: what they cost, and whether they are right. Five checks — Li's published checkerboard table, S4 against a square-lattice control, a unimodular shear, the supercell it replaces, and the cost ratio. Write-up: [../docs/oblique-lattice.md](../docs/oblique-lattice.md). |
 | `reti_1D.py`, `reti_1Dc.py`, `reti_2D.py`, `interface/` | Comparisons against RETICOLO, GRCWA and TORCWA. |
 
 ## Reading a timing table

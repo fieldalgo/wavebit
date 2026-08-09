@@ -121,12 +121,33 @@ the truncation set matched exactly (`LatticeTruncation='Parallelogramic'`,
   and any residual difference is factorisation, normal field or truncation — nothing else.
 - **Painting is the right reading of an overlap.** Where both codes have converged, shape
   addition sits 8.5–68x further from S4 than this path does.
-- **The advantage appears exactly where tilt does.** Comparing per diffraction order and pushing
-  both codes' truncation together, the distance to S4 keeps falling for this path while the vector
-  path's settles on a floor — its staircase error. On a rotated bar the ratio grows 0.61 → 1.27 →
-  1.64 → 2.10 over `fto` 8 → 18, and reading a single truncation would have got the sign wrong:
-  at `fto` 8 the staircase still looked closer, because S4's own truncation error dominated.
+- **The advantage appears exactly where a staircase would.** Comparing per diffraction order and
+  pushing both codes' truncation together to `fto` 18, the distance to S4 keeps falling for this
+  path while the vector path's settles on a floor — its staircase error. Distances over the
+  propagating orders, `sum |path - S4|`:
+
+  | case | boundary | vector | shape addition |
+  |---|---|---|---|
+  | overlap, axis-aligned | 1.66e-02 | 1.66e-02 | 2.83e-01 |
+  | oblique incidence, axis-aligned | 3.09e-02 | 3.08e-02 | 3.31e-01 |
+  | one rotated bar | **2.25e-02** | 4.73e-02 | 2.24e-02 |
+  | rotated **and** overlapping | **2.02e-02** | 1.43e-01 | 1.74e-01 |
+  | one ellipse | **1.52e-02** | 3.29e-01 | 1.51e-02 |
+  | overlapping ellipses | **2.58e-02** | 1.91e-01 | 3.44e-01 |
+  | overlapping circles | **1.51e-02** | 1.62e-01 | 2.00e-01 |
+
 - **Axis-aligned overlap ties** (1.00x), as it must — there is no staircase there to beat.
+- **The ratio is not a fixed number; it grows with truncation.** On the rotated overlapping case
+  it runs 1.08 → 1.31 → 2.30 → 3.19 → 4.11 → 5.13 → 6.11 → **7.05** over `fto` 4 → 18. Reading a
+  single truncation would have got the sign wrong on a rotated bar: at `fto` 8 the staircase still
+  looked *closer*, because S4's own truncation error dominated.
+- **Polygonising a curve costs almost nothing, and the staircase costs everything.** On a single
+  ellipse — the one case where S4 holds the true closed-form shape and this path holds a 256-gon —
+  the permittivity coefficients differ by 3.70e-05 (2.7e-05 relative), which is the polygonisation
+  in isolation; every other case is 1e-15 because both sides then hold the same polygons. In the
+  *answer* it does not show: 1.52e-02 here against 1.51e-02 for the closed-form analytic path,
+  the two tracking each other all the way down. The vector path sits at 3.29e-01 and **flat** —
+  on a curve its staircase does not shrink with truncation at all.
 
 Not settled: **high index contrast**. Over a ladder of `max n` = 1.5 / 1.9 / 2.4 / 2.9 this path
 and the vector path drift from S4 together, but S4's own `fto`-to-`fto` change at `n <= 2.9` is

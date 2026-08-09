@@ -21,13 +21,6 @@ belongs there as markdown instead.
   * setting precision(64bit or 32bit)
   * separately written for JAX and PyTorch backends for user convenience.
 
-## Non-orthogonal lattices
-* [Hexagonal and other tilted cells](05-oblique-lattice.ipynb)
-  * the `lattice` keyword, and the raster convention that goes with it — a raster is read in
-    *lattice* coordinates, and building it on a Cartesian grid instead describes a different
-    structure with no error and no loss of energy conservation.
-  * a worked metalens phase library, and the published benchmark the feature was checked against.
-
 ## Fourier factorization
 * [NVF Fourier factorization](04-nvf-fourier-factorization.ipynb)
   * why a curved, high-contrast boundary converges slowly under a plain discrete Fourier sum,
