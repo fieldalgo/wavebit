@@ -1,0 +1,436 @@
+"""
+benchmark_truncation_shape.py -- rectangular vs circular Fourier-order truncation.
+
+
+FieldWave keeps a full rectangle of Fourier orders, |m| <= fto_x and |n| <= fto_y, so the
+harmonic count is always (2*fto_x+1)*(2*fto_y+1).  S4 instead keeps a disc in reciprocal
+space: the orders with the smallest |G|, with the last shell closed so lattice symmetry is
+preserved.  At the same maximum order the disc holds about pi/4 of the harmonics of the box,
+and RCWA cost scales as N^3, so the disc is ~2x cheaper -- if the discarded corner orders were
+not doing any work.
+
+This script measures that.  For each structure it solves the same problem with both truncation
+sets and reports the error against a converged reference as a function of the harmonic count.
+Both shapes go through the same permittivity raster, the same normal field and the same solver
+primitives, so the only difference is which orders are kept.
+
+Factorization modes:
+
+  'nvf'      the production normal vector field path.  Every input to ``_nvf_assemble`` --
+             ``<eps>``, ``<1/eps>``, ``<nx^2>``, ``<nx ny>``, ``<ny^2>`` -- is a plain direct
+             rule matrix, i.e. a G-difference lookup, so it can be built *natively* on any
+             order set.  The circular case here is a real circular NVF, not a restriction of a
+             rectangular one.  This is the mode the verdict rests on.
+
+  'laurent'  plain Laurent rule (no inverse rule), also an exact G-difference build.  A cheap
+             control: at low index contrast it is essentially the exact factorization, so its
+             error is essentially pure truncation error.
+
+  'li'       the nested Li inverse rule.  Rectangular sets only -- the nested 1D-then-2D
+             inversion needs a complete rectangle, and restricting the matrices built on the
+             enclosing box leaks corner-order information a true circular Li could not have.
+             Kept for the rectangular convergence curve, not run circularly.
+
+The result: at equal accuracy the disc costs 1.20x on a round pillar, 0.78x on an axis-aligned
+square and 1.01x on one rotated 30 deg -- structure-dependent and within +/-20%, so the ~2x the
+harmonic count promises never arrives.  Li, JOSA A 14(10), 2758 (1997) introduced circular
+truncation and concluded the parallelogramic one is superior; S4 and GRCWA default to circular
+regardless.  Numbers, method and the S4/GRCWA order-selection analysis are in
+``docs/fourier-truncation-shape.md``.
+"""
+
+import time
+
+import numpy as np
+
+from fieldwave._core.conventions import boundary_kz
+from fieldwave._core.factorization import (_nvf_assemble, dfs2d, normal_vector_field,
+                                           to_conv_mat_raster_nvf)
+from fieldwave._core.solve_1d import _block, _diag, final_matching
+from fieldwave._core.solve_2d import layer_modes_2d, sp_modes_2d
+
+C128 = np.complex128
+
+
+# ---------------------------------------------------------------- order sets
+
+def order_grid(fto_x, fto_y):
+    """Flat (m, n) order lists in the solver's layout: flat index is iy * ff_x + ix."""
+    m = np.arange(-fto_x, fto_x + 1)
+    n = np.arange(-fto_y, fto_y + 1)
+    mm, nn = np.meshgrid(m, n)  # (ff_y, ff_x)
+
+    return mm.flatten(), nn.flatten()
+
+
+def circular_select(mm, nn, period, radius):
+    """S4-style cut: keep |G| <= radius, ties included so the shell stays closed.
+
+    radius is in units of 1/period[0], i.e. radius == max order along x.  The mask is
+    centrosymmetric and always keeps (0, 0), so the zero order stays at flat index N // 2 --
+    which is what lets :func:`final_matching` place the incident delta without being told.
+    """
+    g2 = mm ** 2 + (nn * period[0] / period[1]) ** 2
+
+    return g2 <= radius ** 2 + 1e-9
+
+
+# ------------------------------------------------------- convolution matrices
+
+def _pixel_correction(k, n):
+    """Exact-for-constant-pixels factor, matching factorization._pixel_correction."""
+    t = k / n
+
+    return np.sinc(t) * np.exp(-1j * np.pi * t)
+
+
+def toeplitz_conv(f, mm, nn, piecewise_constant):
+    """Direct-rule convolution matrix on an arbitrary order set: ``E[i, j] = f_hat[G_i - G_j]``.
+
+    The order-index sign follows ``factorization._circulant_index`` (``r - c``); the selftest
+    below pins it against ``dfs2d``.
+    """
+    ny, nx = f.shape
+    coef = np.fft.fft2(np.asarray(f, dtype=C128) / f.size)
+
+    dn = nn[:, None] - nn[None, :]
+    dm = mm[:, None] - mm[None, :]
+    E = coef[dn % ny, dm % nx]
+
+    if piecewise_constant:
+        E = E * _pixel_correction(dn, ny) * _pixel_correction(dm, nx)
+
+    return E
+
+
+def conv_mats(eps, normal_field, mm, nn, keep, fto_box, mode):
+    """``(epx, epy, epxy, epyx, epz_i)`` for the selected order set."""
+    m, n = mm[keep], nn[keep]
+
+    if mode == 'nvf':
+        nx_f, ny_f = normal_field
+
+        return _nvf_assemble(
+            np,
+            toeplitz_conv(eps, m, n, True),
+            toeplitz_conv(1.0 / eps, m, n, True),
+            toeplitz_conv(nx_f ** 2, m, n, False),
+            toeplitz_conv(nx_f * ny_f, m, n, False),
+            toeplitz_conv(ny_f ** 2, m, n, False),
+        )
+
+    if mode == 'laurent':
+        E = toeplitz_conv(eps, m, n, True)
+        O = np.zeros_like(E)
+
+        return E, E, O, O, np.linalg.inv(E)
+
+    if mode == 'li':
+        if not keep.all():
+            raise ValueError('the nested Li rule has no circular form; see the module docstring')
+        fto_x, fto_y = fto_box
+        epz = dfs2d(np, eps, 1, 1, fto_x, fto_y, piecewise_constant=True)
+        epy = dfs2d(np, eps, 1, 0, fto_x, fto_y, piecewise_constant=True)
+        epx = dfs2d(np, eps, 0, 1, fto_x, fto_y, piecewise_constant=True)
+        O = np.zeros_like(epz)
+
+        return epx, epy, O, O, np.linalg.inv(epz)
+
+    raise ValueError(mode)
+
+
+# ------------------------------------------------------------------- solver
+
+def solve_flat(mm, nn, epx, epy, epxy, epyx, epz_i, wavelength, period, thickness,
+               n_top, n_bot, theta, phi, psi):
+    """2D RCWA (TMM) for an arbitrary flat set of Fourier orders.
+
+    Same chain as ``_core.solve_2d.solve_2d`` -- and reusing its ``layer_modes_2d`` /
+    ``sp_modes_2d`` / ``final_matching`` verbatim -- with the (ff_y, ff_x) tensor-product
+    layout replaced by an explicit order list so non-rectangular sets work.  Single layer.
+    """
+    xp = np
+    ff_xy = len(mm)
+    k0 = 2 * np.pi / wavelength
+
+    kx = np.asarray(n_top * np.sin(theta) * np.cos(phi)
+                    + mm * (wavelength / period[0]), dtype=C128)
+    ky = np.asarray(n_top * np.sin(theta) * np.sin(phi)
+                    + nn * (wavelength / period[1]), dtype=C128)
+
+    k_par_sq = kx ** 2 + ky ** 2
+    kz_top = boundary_kz(xp, n_top ** 2, k_par_sq)
+    kz_bot = boundary_kz(xp, n_bot ** 2, k_par_sq)
+    varphi = np.atan(ky / kx)
+
+    I = np.astype(np.eye(ff_xy), C128)
+    O = np.astype(np.zeros((ff_xy, ff_xy)), C128)
+
+    Kz_bot = _diag(xp, kz_bot)
+    big_F = _block(xp, [[I, O], [O, -1j * Kz_bot / n_bot ** 2]])
+    big_G = _block(xp, [[-1j * Kz_bot, O], [O, I]])
+    big_T = np.astype(np.eye(2 * ff_xy), C128)
+    big_I = np.astype(np.eye(2 * ff_xy), C128)
+
+    Kx = _diag(xp, kx)
+    Ky = _diag(xp, ky)
+    F_c = _diag(xp, np.cos(varphi))
+    F_s = _diag(xp, np.sin(varphi))
+
+    W, V, q = layer_modes_2d(xp, Kx, Ky, I, epx, epy, epz_i, epxy, epyx, C128)
+
+    X_1 = _diag(xp, np.exp(-k0 * q[:ff_xy] * thickness))
+    X_2 = _diag(xp, np.exp(-k0 * q[ff_xy:] * thickness))
+    big_X = _block(xp, [[X_1, O], [O, X_2]])
+
+    big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, ff_xy)
+    big_W_i = np.linalg.inv(big_W)
+    big_V_i = np.linalg.inv(big_V)
+    big_B = 0.5 * (big_W_i @ big_F - big_V_i @ big_G)
+    big_A_i = np.linalg.inv(0.5 * (big_W_i @ big_F + big_V_i @ big_G))
+
+    Y = big_X @ big_B @ big_A_i @ big_X
+    big_F = big_W @ (big_I + Y)
+    big_G = big_V @ (big_I - Y)
+    big_T = big_T @ big_A_i @ big_X
+
+    # ff_x = ff_xy, ff_y = 1: the flat set *is* the layout. The incident delta lands at
+    # ff_xy // 2, which is the zero order for both shapes (see circular_select).
+    de_ri, de_ti = final_matching(xp, C128, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
+                                 n_top, n_bot, ff_xy, 1, full=False)
+
+    return de_ri.flatten(), de_ti.flatten(), kz_top, kz_bot
+
+
+# ---------------------------------------------------------------- structures
+
+def make_cell(kind, ngrid=512, n_ridge=3.48, n_base=1.0, fill=0.4, rotation=0.):
+    """Square-lattice pillar with a fixed fill factor, as a refractive index raster."""
+    t = (np.arange(ngrid) + 0.5) / ngrid
+    yy, xx = np.meshgrid(t, t, indexing='ij')
+
+    dx, dy = xx - 0.5, yy - 0.5
+    if rotation:
+        c, s = np.cos(rotation), np.sin(rotation)
+        dx, dy = c * dx + s * dy, -s * dx + c * dy
+
+    if kind == 'circle':
+        r = np.sqrt(fill / np.pi)
+        mask = dx ** 2 + dy ** 2 <= r ** 2
+    elif kind == 'square':
+        a = np.sqrt(fill) / 2
+        mask = (np.abs(dx) <= a) & (np.abs(dy) <= a)
+    else:
+        raise ValueError(kind)
+
+    return np.where(mask, n_ridge, n_base)
+
+
+# ------------------------------------------------------------------ driver
+
+CASE = dict(
+    wavelength=900.,
+    period=(1200., 1200.),
+    thickness=300.,
+    n_top=1.,
+    n_bot=1.,
+    theta=20 / 180 * np.pi,
+    phi=30 / 180 * np.pi,
+    psi=0.,  # TM
+)
+
+
+def run_one(eps, normal_field, mm, nn, keep, fto_box, mode):
+    mats = conv_mats(eps, normal_field, mm, nn, keep, fto_box, mode)
+
+    t0 = time.perf_counter()
+    de_ri, de_ti, kz_top, kz_bot = solve_flat(
+        mm[keep], nn[keep], *mats,
+        CASE['wavelength'], CASE['period'], CASE['thickness'],
+        CASE['n_top'], CASE['n_bot'], CASE['theta'], CASE['phi'], CASE['psi'])
+    dt = time.perf_counter() - t0
+
+    return dict(m=mm[keep], n=nn[keep], de_ri=de_ri, de_ti=de_ti,
+                kz_top=kz_top, kz_bot=kz_bot, n_harmonics=int(keep.sum()), time=dt)
+
+
+def compare(res, ref):
+    """Error of `res` against reference `ref`, on the orders they share."""
+    ref_key = {(m, n): i for i, (m, n) in enumerate(zip(ref['m'], ref['n']))}
+    idx_res, idx_ref = [], []
+    for i, (m, n) in enumerate(zip(res['m'], res['n'])):
+        j = ref_key.get((m, n))
+        if j is not None:
+            idx_res.append(i)
+            idx_ref.append(j)
+    idx_res = np.array(idx_res)
+    idx_ref = np.array(idx_ref)
+
+    prop = (ref['kz_top'][idx_ref].real > 1e-10) | (ref['kz_bot'][idx_ref].real > 1e-10)
+
+    d_ri = np.abs(res['de_ri'][idx_res] - ref['de_ri'][idx_ref])
+    d_ti = np.abs(res['de_ti'][idx_res] - ref['de_ti'][idx_ref])
+
+    return dict(
+        err_R_total=abs(res['de_ri'].sum() - ref['de_ri'].sum()),
+        err_T_total=abs(res['de_ti'].sum() - ref['de_ti'].sum()),
+        err_order_max=max(d_ri[prop].max(), d_ti[prop].max()) if prop.any() else np.nan,
+    )
+
+
+def equivalent_rect_N(rect_rows, err):
+    """Harmonic count a rectangular set needs to reach `err`, log-interpolated."""
+    pts = sorted((row[2]['n_harmonics'], row[3]['err_order_max']) for row in rect_rows)
+    for (n0, e0), (n1, e1) in zip(pts, pts[1:]):
+        if e0 >= err >= e1 and e0 > 0 and e1 > 0:
+            w = np.log(e0 / err) / np.log(e0 / e1)
+            return n0 + w * (n1 - n0)
+
+    return np.nan
+
+
+# ------------------------------------------------------------------ selftest
+
+def selftest():
+    """Pin the G-difference build and the flat solver against the production code."""
+    cell = make_cell('circle', ngrid=64)
+    eps = cell.astype(C128) ** 2
+    fto = 3
+    mm, nn = order_grid(fto, fto)
+
+    for flag in (False, True):
+        direct = toeplitz_conv(eps, mm, nn, flag)
+        nested = dfs2d(np, eps, 1, 1, fto, fto, piecewise_constant=flag)
+        err = np.abs(direct - nested).max()
+        print(f'selftest conv (piecewise_constant={flag}): {err:.3e}')
+        assert err < 1e-12, err
+
+    # flat solver vs the production NVF path, on a rectangular set
+    ucell = cell[None, :, :]
+    epx, epy, epxy, epyx, epz_i = to_conv_mat_raster_nvf(ucell, fto, fto)
+    de_ri_ref, de_ti_ref = _core_solve_2d(ucell, fto, epx, epy, epxy, epyx, epz_i)
+
+    nf = normal_vector_field(eps)
+    r = run_one(eps, nf, mm, nn, np.ones(mm.shape, bool), (fto, fto), 'nvf')
+    err = max(np.abs(r['de_ri'] - de_ri_ref.flatten()).max(),
+              np.abs(r['de_ti'] - de_ti_ref.flatten()).max())
+    print(f'selftest solver (flat vs _core.solve_2d): {err:.3e}')
+    assert err < 1e-12, err
+
+
+def _core_solve_2d(ucell, fto, epx, epy, epxy, epyx, epz_i):
+    from fieldwave._core.solve_2d import solve_2d
+
+    C = CASE
+    rng = np.arange(-fto, fto + 1)
+    kx = C['n_top'] * np.sin(C['theta']) * np.cos(C['phi']) + rng * (C['wavelength'] / C['period'][0])
+    ky = C['n_top'] * np.sin(C['theta']) * np.sin(C['phi']) + rng * (C['wavelength'] / C['period'][1])
+
+    return solve_2d(C['wavelength'], kx, ky, C['n_top'], C['n_bot'], C['theta'], C['psi'],
+                    [C['thickness']], epx, epy, epz_i, epxy, epyx)
+
+
+# -------------------------------------------------------------------- sweep
+
+def sweep(eps, normal_field, mode, fto_ref, ftos, radii, label):
+    print(f'\n===== {label}  factorization={mode} '
+          f'  (reference: rectangular fto={fto_ref}) =====')
+
+    mm_r, nn_r = order_grid(fto_ref, fto_ref)
+    ref = run_one(eps, normal_field, mm_r, nn_r, np.ones(mm_r.shape, dtype=bool),
+                  (fto_ref, fto_ref), mode)
+    print(f'reference: N={ref["n_harmonics"]}  '
+          f'R={ref["de_ri"].sum():.6f}  T={ref["de_ti"].sum():.6f}  {ref["time"]:.1f}s')
+
+    for back in (2, 4):
+        mm_c, nn_c = order_grid(fto_ref - back, fto_ref - back)
+        chk = run_one(eps, normal_field, mm_c, nn_c, np.ones(mm_c.shape, dtype=bool),
+                      (fto_ref - back, fto_ref - back), mode)
+        print(f'reference drift (fto={fto_ref - back} vs {fto_ref}): '
+              f'{compare(chk, ref)["err_order_max"]:.2e}')
+
+    rect_rows, circ_rows = [], []
+    for fto in ftos:
+        mm, nn = order_grid(fto, fto)
+        r = run_one(eps, normal_field, mm, nn, np.ones(mm.shape, bool), (fto, fto), mode)
+        rect_rows.append(('rect', fto, r, compare(r, ref)))
+
+    if mode != 'li':
+        for radius in radii:
+            box = int(np.ceil(radius))
+            mm, nn = order_grid(box, box)
+            keep = circular_select(mm, nn, CASE['period'], radius)
+            r = run_one(eps, normal_field, mm, nn, keep, (box, box), mode)
+            circ_rows.append(('circ', radius, r, compare(r, ref)))
+
+    print(f'{"shape":>6} {"maxord":>7} {"N":>6} {"time[s]":>8} '
+          f'{"err_order":>11} {"err_R":>11} {"err_T":>11}')
+    for shape, order, r, e in sorted(rect_rows + circ_rows,
+                                     key=lambda row: row[2]['n_harmonics']):
+        print(f'{shape:>6} {order:>7} {r["n_harmonics"]:>6} {r["time"]:>8.2f} '
+              f'{e["err_order_max"]:>11.3e} {e["err_R_total"]:>11.3e} '
+              f'{e["err_T_total"]:>11.3e}')
+
+    if circ_rows:
+        print(f'\n{"circ maxord":>12} {"N_circ":>7} {"err":>11} {"N_rect same err":>16} '
+              f'{"N ratio":>9} {"cost ratio":>11}')
+        for _, radius, r, e in circ_rows:
+            n_eq = equivalent_rect_N(rect_rows, e['err_order_max'])
+            ratio = r['n_harmonics'] / n_eq if n_eq == n_eq else np.nan
+            print(f'{radius:>12} {r["n_harmonics"]:>7} {e["err_order_max"]:>11.3e} '
+                  f'{n_eq:>16.0f} {ratio:>9.3f} {ratio ** 3:>11.3f}')
+
+    return dict(mode=mode, label=label, rect=rect_rows, circ=circ_rows)
+
+
+def main(fto_ref=20, ftos=(3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
+         radii=(3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
+         structures=(('circle pillar, n=3.48', dict(kind='circle')),
+                     ('square pillar, n=3.48', dict(kind='square')),
+                     ('square pillar rot 30deg, n=3.48',
+                      dict(kind='square', rotation=np.pi / 6))),
+         modes=('nvf', 'laurent'), plot=None):
+    """Sweep both truncation shapes over `structures`; pass `plot=<path>` for the error curves."""
+
+    selftest()
+
+    blocks = []
+    for label, kwargs in structures:
+        eps = make_cell(**kwargs).astype(C128) ** 2
+        normal_field = normal_vector_field(eps)
+        for mode in modes:
+            blocks.append(sweep(eps, normal_field, mode, fto_ref, ftos, radii, label))
+
+    if plot:
+        make_plot(blocks, plot)
+
+
+def make_plot(blocks, path):
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+
+    ncol = len({b['mode'] for b in blocks})
+    nrow = int(np.ceil(len(blocks) / ncol))
+    fig, axes = plt.subplots(nrow, ncol, figsize=(5.2 * ncol, 4.0 * nrow), squeeze=False)
+
+    for ax, b in zip(axes.flatten(), blocks):
+        for key, marker, name in (('rect', 'o', 'rectangular'), ('circ', 's', 'circular')):
+            if not b[key]:
+                continue
+            n = [row[2]['n_harmonics'] for row in b[key]]
+            e = [row[3]['err_order_max'] for row in b[key]]
+            ax.loglog(n, e, marker=marker, label=name)
+        ax.set_title(f'{b["label"]}\n{b["mode"]}', fontsize=9)
+        ax.set_xlabel('harmonics N')
+        ax.set_ylabel('max per-order DE error')
+        ax.grid(True, which='both', alpha=0.3)
+        ax.legend(fontsize=8)
+
+    fig.tight_layout()
+    fig.savefig(path, dpi=130)
+    print(f'\nsaved {path}')
+
+
+if __name__ == '__main__':
+    main()
