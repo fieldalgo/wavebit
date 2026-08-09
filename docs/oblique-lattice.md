@@ -77,22 +77,22 @@ converged at `fto=(16, 28)` after 72 s while `'nvf'` settled by `fto=(10, 17)` i
 is the *factorization*, not the lattice, and an oblique cell does nothing about it. The two wins
 are independent and multiply.
 
-## What is refused
+## What works and what is refused
 
-Each of these **runs** on a skewed cell and returns a plausible wrong number, so each raises
-instead of answering.
-
-| | status | why |
+| | status | note |
 |---|---|---|
 | `factorization='nvf'`, sampled or integrated | supported | — |
 | analytic shapes, summed | supported | lengths are absolute Cartesian; nothing deforms |
-| analytic shapes, painted **overlap** | supported | the clipper is Cartesian; only the images and the transform needed the basis |
-| vector modeler (`modeling_type=1`) | refused | rasterises onto a rectangular grid of its own |
-
-So everything except `li` and the vector modeler works on a skewed cell, and both of those have a
-supported route to the same structure (a raster, or analytic shapes).
-| `factorization='li'` | refused | see below |
+| analytic shapes, painted **overlap** | supported | the clipper is Cartesian; only the periodic images and the transform needed the basis |
 | field reconstruction | supported | output grid is indexed by `(v, u)`, not `(y, x)` — see below |
+| vector modeler (`modeling_type=1`) | **refused** | rasterises onto a rectangular grid of its own |
+| `factorization='li'` | **refused** | see below |
+
+Everything except `li` and the vector modeler works on a skewed cell, and both of those have a
+supported route to the same structure — a raster, or analytic shapes.
+
+The two refusals raise rather than answering, and that matters: both of them *run* on a skewed
+cell and return a plausible wrong number, with energy still conserving to 1e-15.
 
 `li` applies the inverse rule along the **raster axes** (`epx = dfs2d(cell, 0, 1)`), and the solve
 consumes the result as Cartesian `eps_xx` / `eps_yy`. On a skewed cell those axes are `a1` / `a2`,
