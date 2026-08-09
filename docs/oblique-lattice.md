@@ -146,6 +146,33 @@ from `fto=4` to `fto=12`; **2.0e-4** in a homogeneous region of the same run, wh
 surviving order is propagating and both sets hold all of them. Compare fields away from
 boundaries, or at matched order sets.
 
+## Reading the complex amplitude (not lattice-specific, but everyone hits it)
+
+Efficiencies come out of `res.de_ti` and are polarisation-summed, so they are always safe. The
+**complex** amplitudes are split into s and p, and the one carrying the light depends on `psi`:
+
+| `psi` | incidence | the amplitude is in |
+|---|---|---|
+| `0` | TM (p) | `T_p` — **`T_s` is identically zero** |
+| `pi/2` | TE (s) | `T_s` — `T_p` is zero |
+
+Reading the wrong one gives an array of zeros, and `np.angle` of a near-zero complex number is
+noise that looks like a plausible phase. The safe route is the pure-TE / pure-TM variants the
+solve computes anyway, where the assignment is unambiguous:
+
+```python
+res = solver.conv_solve()
+ts = np.asarray(res.res_te_inc.T_s)          # pure-TE incidence: T_s is the whole amplitude
+c = (ts.shape[0] // 2, ts.shape[1] // 2)     # the zero order sits at the centre
+t0 = complex(ts[c])
+amplitude, phase = abs(t0), np.angle(t0)
+```
+
+Note that `|t0|**2` is not the transmitted efficiency: power into a substrate of index `n_sub`
+carries a factor of `n_sub` (at normal incidence). On a metalens cell with `n_sub = 1.46`,
+`|t0|**2 = 0.67` and `sum(de_ti) = 0.98` are the same result — check that they agree before
+trusting either.
+
 ## How it was validated, and how to validate your own use
 
 Energy conservation is **not** evidence here — `R + T == 1` holds to 1e-15 with the geometry read
@@ -168,6 +195,30 @@ diverged on *both* lattices in our hands, 0.986 -> 0.933, and is not usable as a
 **The supercell it replaces.** A native hex cell reproduces its rectangular supercell; the
 residual is the two rasters staircasing the feature differently, so it tightens with resolution
 rather than with `fto`.
+
+## A worked case: a visible metalens phase library
+
+TiO2 pillars (n = 2.43) on fused silica (n = 1.46), hex pitch 350 nm, height 600 nm, at 532 nm —
+the geometry family of Khorasaninejad et al., Science **352**, 1190 (2016). Note the pitch check
+this design depends on: `|G|_min = 0.02073 /nm` against `k0*n_sub = 0.01724 /nm`, so nothing but
+the zero order propagates into the substrate.
+
+Sweeping the pillar diameter from 80 to 260 nm gives a usable library — phase spans 6.648 rad
+(1.06 x 2*pi), **monotonic**, so the phase-to-diameter map inverts. Three diameters (180, 210,
+220 nm) sit on resonances and drop to T = 0.50-0.79; excluding them leaves 16 of 19 points with
+a worst transmission of 0.936. The whole sweep takes 14 s.
+
+Cross-checked against S4 on the same structure, which is the useful part: at D = 150 nm S4
+converges to 0.96675 against FieldWave's 0.96643 (3.5e-4), and at D = 240 nm to 0.99694 against
+0.99905 (2.1e-3) while still climbing. Both gaps are S4's own convergence — and FieldWave is
+already at its final value with 289 orders, where S4 has not settled at 595. That is the
+staircase-free shape transform and NVF together, not the lattice.
+
+The same structure as a rectangular supercell agrees to 6.0e-4 and takes 2.9x as long
+(`fto=(8,14)`, 493 orders, 2.57 s against 289 orders, 0.89 s). Note that is **~3x, not the ~8x**
+quoted above: 8x is the asymptotic ratio on a converged high-contrast structure, and a metalens
+library at `fto=8` is not in that regime — the order ratio there is 1.71, not 2. Expect ~3x on
+this kind of sweep and ~8x when you genuinely need the harmonics.
 
 ## Where the skew actually reaches the code
 
