@@ -12,7 +12,7 @@ This is designed from what the project contains today, not derived from what the
 look like. Where the current layout already matches, that is a result, not an assumption.
 
 Targets:
-- `.github/workflows/tests.yml`, `setup.py`, `.gitattributes` — the packaging and CI files the
+- `.github/workflows/tests.yml`, `pyproject.toml`, `.gitattributes` — the packaging and CI files the
   structure has to keep true
 - `tests_verification/gen_goldens_reticolo.py`, `benchmarks/interface/` — the external-oracle
   machinery, currently split across two directories

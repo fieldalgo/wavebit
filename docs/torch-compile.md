@@ -6,7 +6,7 @@ NumPy 2.5.1 / SciPy 1.18.0 / jax 0.11.0.
 Targets:
 - `fieldwave/_core/modeler.py::Modeling.period` — where the first failure is raised
 - `fieldwave/_core/backend.py::eig` — the primitive the remaining failures are about
-- `setup.py` — the torch floor, raised from 2.7 to 2.13 as a result; see §3
+- `pyproject.toml` — the torch floor, raised from 2.7 to 2.13 as a result; see §3
 
 ---
 
@@ -25,7 +25,7 @@ complex operators at all, which is essentially the entire remainder.
 
 **Recommendation: do not add `torch.compile` support.** The torch floor was nonetheless raised
 to 2.13 — not to enable compiling, but because this project's stated rule is that floors are the
-versions the suite is verified against (`setup.py`), and 2.13 is what it is now verified
+versions the suite is verified against (`pyproject.toml`), and 2.13 is what it is now verified
 against. Eager torch and `.backward()` work fine on 2.7.0; only `torch.compile` does not.
 
 ---
@@ -125,7 +125,7 @@ not. Both halves were re-checked on `8257e2c` after the same-material short-circ
 (`5c73bda`); that removal deleted one graph-break source and changed nothing else here.
 
 **The floor moved to `torch>=2.13` because of this.** Not to enable compiling — §4 shows that
-buys nothing — but because `setup.py`'s own rule is that floors are the versions the suite is
+buys nothing — but because `pyproject.toml`'s own rule is that floors are the versions the suite is
 verified against. The full suite was run on that combination (torch 2.13.0, jax 0.11.0, NumPy
 2.5.1, SciPy 1.18.0, array-api-compat 1.15.0): green, nothing skipped, no regressions against
 the frozen goldens.

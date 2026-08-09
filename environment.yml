@@ -5,7 +5,7 @@
 #
 # Only Python and the notebook stack come from conda; the scientific stack is
 # installed with pip, matching how the working env on this machine is built.
-# The dependency floors live in setup.py and are not duplicated here.
+# The dependency floors live in pyproject.toml and are not duplicated here.
 # Last verified 2026-08-04 on macOS arm64.
 name: fieldwave
 channels:
@@ -20,7 +20,7 @@ dependencies:
       - pytest>=9.1
       # FieldWave itself, editable. This also pulls the core runtime
       # dependencies (numpy, scipy, array-api-compat) at the floors declared in
-      # setup.py, so they are deliberately not repeated here.
+      # pyproject.toml, so they are deliberately not repeated here.
       - -e .[jax,pytorch]
       # Bridge to Octave, for the Reticolo comparison in benchmarks/. It is the only
       # oracle here that validates diffraction orders -- the analytic multilayer

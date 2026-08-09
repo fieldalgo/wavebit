@@ -11,7 +11,7 @@ through 2.3.0 and fixed in 2.3.1. Measured on the same machine, same Accelerate 
 bytes in: 456 warnings on 2.3.0, zero on 2.3.1, identical efficiencies either way. A matrix
 with condition number 12 and no entry above 2.1 in magnitude was enough to trigger it.
 
-That is why ``setup.py`` floors NumPy at 2.3.1 instead of the library suppressing anything: on
+That is why ``pyproject.toml`` floors NumPy at 2.3.1 instead of the library suppressing anything: on
 a supported NumPy there are no spurious flags to hide, and hiding them would only ever cost the
 user a real warning later.
 
@@ -77,12 +77,12 @@ def _ucell_1d():
 
 
 def test_numpy_is_new_enough_to_report_fp_flags_correctly():
-    """The floor in setup.py is the whole fix; state it once, here, in the open."""
+    """The floor in pyproject.toml is the whole fix; state it once, here, in the open."""
     major, minor, patch = (int(p) for p in np.__version__.split('.')[:3])
     assert (major, minor, patch) >= (2, 3, 1), (
         f'NumPy {np.__version__} miscounts FP status flags in complex matmul and will emit '
         'hundreds of spurious overflow/divide-by-zero warnings from any solve. '
-        'setup.py requires numpy>=2.3.1.')
+        'pyproject.toml requires numpy>=2.3.1.')
 
 
 @pytest.mark.parametrize('connecting_algo', ['TMM', 'SMM'])

@@ -57,7 +57,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The floor declared in setup.py, and every version up to the one the
+        # The floor declared in pyproject.toml, and every version up to the one the
         # full suite runs on.
         python-version: ['3.10', '3.11', '3.12']
     steps:
