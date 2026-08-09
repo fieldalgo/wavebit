@@ -274,7 +274,24 @@ def _to_numpy(x):
     return np.asarray(x)
 
 
-def normal_vector_field(eps_matrix, interface_mask=None):
+def _pixel_aspect(period, ny, nx):
+    """``(Ly/Ny) / (Lx/Nx)`` — how much longer one index step is along y than along x.
+
+    The single number that decides whether an index-space normal is a Cartesian one. Only the
+    *ratio* enters: a uniform scale multiplies the whole gradient and divides straight back out
+    of the normalisation, so a cell measured in nm and the same cell in um give the same field.
+    That is why this is one scalar rather than the two lengths, and why the key
+    :func:`_normal_field_source` records is this and not ``period``.
+
+    Returns exactly ``1.0`` for a square-pixel raster, which is what keeps that case bit-for-bit
+    unchanged: ``sampling=(1.0, 1.0)`` is bit-identical to no sampling at all, and dividing by
+    ``1.0`` is exact.
+    """
+    px, py = float(period[0]), float(period[1])
+    return (py / ny) / (px / nx)
+
+
+def normal_vector_field(eps_matrix, interface_mask=None, period=None):
     """Unit normal vector field ``(nx, ny)`` of a raster layer, via a signed-distance field.
 
     This is a **geometry** quantity — it depends on where the material interfaces sit, not on
@@ -298,6 +315,19 @@ def normal_vector_field(eps_matrix, interface_mask=None):
     solver and was dropped in the port. See ``tests_verification/test_nvf_normal_field.py``.
     For the shape-based (non-raster) normal field, see
     :func:`fieldwave._core.analytic.normal_vector_field_analytical`.
+
+    ``period`` is the cell's ``(Lx, Ly)``, and it matters because this is the one piece of the
+    NVF construction that is *Cartesian-geometric* rather than index-based. The distance
+    transform and ``np.gradient`` both count index steps, and one index step is the same
+    physical length on both axes only when ``Lx/Nx == Ly/Ny``. When it is not, the two
+    components are scaled differently, and normalising cannot undo that — an anisotropic scale
+    changes a direction where a uniform one does not. Left ``None`` the index grid is taken to
+    be isotropic, which is what this has always assumed; given the period, the distance
+    transform picks up the per-axis step and the gradient is divided back through it, so the
+    direction is Cartesian for any pixel aspect ratio.
+
+    A square-pixel raster is unaffected bit-for-bit, not merely to round-off — see
+    :func:`_pixel_aspect`. So the correction reaches exactly the rasters that were wrong.
     """
     import numpy as np
     from scipy.ndimage import distance_transform_edt
@@ -315,8 +345,19 @@ def normal_vector_field(eps_matrix, interface_mask=None):
 
     if interface_mask is None:
         interface_mask = _interface_mask(_to_numpy(eps_matrix))
-    dist_map = distance_transform_edt(~interface_mask)
-    gy, gx = np.gradient(dist_map)
+
+    if period is None:
+        dist_map = distance_transform_edt(~interface_mask)
+        gy, gx = np.gradient(dist_map)
+    else:
+        # Work in units of one x-step, so a square-pixel raster lands on `sampling=(1, 1)` and
+        # a division by 1.0 -- both exact, which is what makes that case bit-for-bit unchanged.
+        # The common factor of `Lx/Nx` that this drops is uniform, so the normalisation below
+        # would have removed it anyway.
+        aspect = _pixel_aspect(period, *shape)
+        dist_map = distance_transform_edt(~interface_mask, sampling=(aspect, 1.0))
+        gy, gx = np.gradient(dist_map)
+        gy = gy / aspect
     norm = np.hypot(gx, gy)
     norm[norm == 0] = 1.0
     return gx / norm, gy / norm
@@ -386,32 +427,43 @@ def _interface_mask_of(xp, eps, base_eps, repeat_y, repeat_x):
         return _upsampled_interface_mask(xp, base_eps, repeat_y, repeat_x)
 
 
-def _normal_field_source(eps):
+def _normal_field_source(eps, period=None):
     """Everything :func:`normal_vector_field` reads off a layer, and nothing else.
 
     That is the shape, plus — unless an axis is a single cell, where the field is the constant
-    along-axis one whatever the pattern — the interface mask. Two layers with the same source
-    have the same normal field, bit for bit, which is what makes this the tell: it accepts a
-    replay exactly when replaying is the same computation as rebuilding.
+    along-axis one whatever the pattern — the interface mask, plus the pixel aspect ratio. Two
+    layers with the same source have the same normal field, bit for bit, which is what makes
+    this the tell: it accepts a replay exactly when replaying is the same computation as
+    rebuilding.
+
+    The aspect ratio belongs here for the same reason the mask does: it is an *input* to the
+    field (see :func:`normal_vector_field`), so a field frozen on one pixel shape and replayed
+    on another describes interfaces pointing the wrong way in space — with nothing to notice,
+    since the NVF assembly stays Hermitian and energy still conserves. Recording the ratio
+    rather than the period is deliberate and exact: a uniform rescale of the cell leaves the
+    field identical, so it must not read as a change.
     """
+    aspect = None if period is None else _pixel_aspect(period, *eps.shape)
     if 1 in eps.shape:
-        return eps.shape, None
-    return eps.shape, _interface_mask(eps)
+        return eps.shape, None, aspect
+    return eps.shape, _interface_mask(eps), aspect
 
 
-def normal_field_for_ucell(ucell, fto_x, fto_y):
+def normal_field_for_ucell(ucell, fto_x, fto_y, period=None):
     """Per-layer ``(nx, ny)`` normal fields for ``ucell``, on the grid the NVF build uses.
 
     Precompute this once from the concrete geometry and hand it to
     :func:`to_conv_mat_raster_nvf` as ``normal_field=`` to keep the build traceable under a
     JAX transform (the SciPy distance transform cannot run on tracers).
+
+    ``period`` is the cell's ``(Lx, Ly)``; see :func:`normal_vector_field` for what it changes.
     """
     xp = array_namespace(ucell)
-    return [normal_vector_field(eps)
+    return [normal_vector_field(eps, period=period)
             for eps, _, _, _ in _layer_eps_for_normal_field(xp, ucell, fto_x, fto_y)]
 
 
-def normal_field_source_for_ucell(ucell, fto_x, fto_y):
+def normal_field_source_for_ucell(ucell, fto_x, fto_y, period=None):
     """What :func:`normal_field_for_ucell` derived its answer from, per layer.
 
     Freeze this alongside the normal field and hand both back to
@@ -419,11 +471,11 @@ def normal_field_source_for_ucell(ucell, fto_x, fto_y):
     of it and refuses a field that was sampled from a different one.
     """
     xp = array_namespace(ucell)
-    return [_normal_field_source(_to_numpy(eps))
+    return [_normal_field_source(_to_numpy(eps), period)
             for eps, _, _, _ in _layer_eps_for_normal_field(xp, ucell, fto_x, fto_y)]
 
 
-def _check_normal_field_still_fits(eps_matrix, source, index):
+def _check_normal_field_still_fits(eps_matrix, source, index, period=None):
     """Refuse a frozen normal field sampled from interfaces that have since moved.
 
     The field says which way each interface points. Move the pattern in the raster and it is
@@ -450,12 +502,19 @@ def _check_normal_field_still_fits(eps_matrix, source, index):
     except Exception:                     # a tracer: nothing to compare, nothing to do
         return
 
-    shape, mask = source[index]
-    now_shape, now_mask = _normal_field_source(eps)
-    if shape == now_shape and (mask is None or np.array_equal(mask, now_mask)):
+    entry = source[index]
+    shape, mask = entry[0], entry[1]
+    aspect = entry[2] if len(entry) > 2 else None   # records frozen before the step was an input
+    now_shape, now_mask, now_aspect = _normal_field_source(eps, period)
+    if (shape == now_shape and aspect == now_aspect
+            and (mask is None or np.array_equal(mask, now_mask))):
         return                            # equal shapes agree on whether a mask exists at all
 
-    if shape != now_shape:
+    if aspect != now_aspect:
+        moved = (f'the raster pixel is now {now_aspect} times as long in y as in x, where the '
+                 f'normal field was sampled at {aspect} — the interfaces point the same way in '
+                 f'the raster but a different way in space')
+    elif shape != now_shape:
         moved = (f'layer {index} is now {now_shape}, where the normal field was sampled on '
                  f'{shape}')
     else:
@@ -548,7 +607,7 @@ def nvf_conv_matrices_continuous(xp, eps_comp, x, y, nx, ny, fto_x, fto_y):
 
 
 def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
-                           normal_field_source=None):
+                           normal_field_source=None, period=None):
     """Per-layer NVF convolution matrices for a raster ``ucell``.
 
     Args:
@@ -587,9 +646,10 @@ def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
     for i, (eps_matrix, base_eps, repeat_y, repeat_x) in enumerate(layers):
         if normal_field is None:
             nx, ny = normal_vector_field(
-                eps_matrix, _interface_mask_of(xp, eps_matrix, base_eps, repeat_y, repeat_x))
+                eps_matrix, _interface_mask_of(xp, eps_matrix, base_eps, repeat_y, repeat_x),
+                period=period)
         else:
-            _check_normal_field_still_fits(eps_matrix, normal_field_source, i)
+            _check_normal_field_still_fits(eps_matrix, normal_field_source, i, period)
             nx, ny = normal_field[i]
 
         for slot, mat in zip(out, nvf_conv_matrices(
@@ -879,7 +939,8 @@ def to_conv_mat_raster_continuous(ucell, fto_x, fto_y, compression=None):
 
 
 def to_conv_mat_raster_continuous_nvf(ucell, fto_x, fto_y, normal_field=None,
-                                      normal_field_source=None, compression=None):
+                                      normal_field_source=None, compression=None,
+                                      period=None):
     """Per-layer convolution matrices for a raster ``ucell`` via closed-form Fourier + NVF.
 
     The combination the deprecated ``fourier_type`` integer could not express. It buys the
@@ -911,9 +972,10 @@ def to_conv_mat_raster_continuous_nvf(ucell, fto_x, fto_y, normal_field=None,
     for i, (eps_grid, base_eps, repeat_y, repeat_x) in enumerate(eps_grids):
         if normal_field is None:
             nx, ny = normal_vector_field(
-                eps_grid, _interface_mask_of(xp, eps_grid, base_eps, repeat_y, repeat_x))
+                eps_grid, _interface_mask_of(xp, eps_grid, base_eps, repeat_y, repeat_x),
+                period=period)
         else:
-            _check_normal_field_still_fits(eps_grid, normal_field_source, i)
+            _check_normal_field_still_fits(eps_grid, normal_field_source, i, period)
             nx, ny = normal_field[i]
 
         layer = ucell[i]

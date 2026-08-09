@@ -31,6 +31,63 @@ _SOLVES = {
 }
 
 
+def _concrete_period(value):
+    """``period`` as two plain floats, or ``None`` if it has none to give.
+
+    ``period`` is a differentiable parameter (see ``tests_verification/test_gradients.py``), so
+    it arrives in three shapes and all three are legitimate. Plain numbers convert outright. A
+    grad-tracking torch tensor has to be detached first. A ``jax.grad`` tracer refuses both a
+    whole-array conversion *and* ``float()`` — unlike the boolean narrowing
+    :func:`~fieldwave._core.factorization._as_bools` relies on, there is no way to read a
+    scalar out of one — so the honest answer there is ``None``.
+
+    ``None`` costs nothing when a frozen geometry is present, because
+    :meth:`CoreFactorizationMixin._period_for` recovers the pixel shape from the record. Without
+    one it falls back to the legacy index-space normal, unchanged.
+    """
+    import numpy as np
+    if value is None:
+        return None
+    if hasattr(value, 'detach'):
+        value = value.detach()
+    try:
+        p = np.atleast_1d(np.asarray(value, dtype=float))
+    except Exception:
+        try:
+            items = value if isinstance(value, (list, tuple)) else list(value)
+            p = np.asarray([float(v.detach() if hasattr(v, 'detach') else v) for v in items],
+                           dtype=float)
+        except Exception:             # a jax tracer: no primal to read
+            return None
+    if p.size == 1:
+        return float(p[0]), float(p[0])
+    return float(p[0]), float(p[1])
+
+
+def _recorded_period(normal_field_source):
+    """A ``(1, aspect)`` stand-in for the pixel shape a frozen record was taken on.
+
+    The record stores the aspect ratio, not the two lengths, because that is all the field
+    depends on (:func:`~fieldwave._core.factorization._pixel_aspect`). Any period with the same
+    ratio therefore reproduces it, and ``(1, aspect)`` scaled by the layer's own grid is the
+    simplest one to hand back — it re-derives to exactly the recorded number.
+
+    Layers disagreeing, or a record predating the aspect being an input, both answer ``None``:
+    neither names a single pixel shape, and inventing one would be worse than falling back.
+    """
+    if not normal_field_source:
+        return None
+    entries = [e for e in normal_field_source if len(e) > 2]
+    if len(entries) != len(normal_field_source):
+        return None
+    ratios = {(e[2], e[0]) for e in entries}      # (aspect, shape) — shape sets the re-derivation
+    if len(ratios) != 1 or None in {r[0] for r in ratios}:
+        return None
+    aspect, (ny, nx) = ratios.pop()
+    # _pixel_aspect((Lx, Ly), ny, nx) == (Ly/ny) / (Lx/nx); pick Lx = nx so it reduces to Ly/ny.
+    return float(nx), float(aspect * ny)
+
+
 class CoreSolveMixin:
     """Provides ``solve_1d`` / ``solve_1d_conical`` / ``solve_2d`` backed by the core."""
 
@@ -146,6 +203,26 @@ class CoreFactorizationMixin:
             fourier_type=value)
 
 
+    def _period_for(self, geometry):
+        """The pixel shape the NVF geometry steps should use — live, or from the record.
+
+        ``period`` is readable except when it is the variable under differentiation, which is
+        exactly when a caller is most likely to also be replaying a frozen geometry. Freezing
+        happens eagerly on a concrete ``period``, so the record was built on a real pixel shape;
+        letting an unreadable one arrive as ``None`` would make the same structure look like a
+        different raster and the replay would be refused
+        (:func:`~fieldwave._core.factorization._check_normal_field_still_fits`).
+
+        Taking it back out of the record rather than storing it a second time keeps the two in
+        step: it re-derives to the very number the check compares against. And it is the honest
+        answer besides — the field being replayed *is* the one built on that pixel shape,
+        whatever ``period`` has since become.
+        """
+        period = _concrete_period(self.period)
+        if period is not None or geometry is None:
+            return period
+        return _recorded_period(geometry.normal_field_source)
+
     def freeze_geometry(self, **kwargs):
         """Take this structure's discrete geometry decisions once, eagerly.
 
@@ -167,10 +244,11 @@ class CoreFactorizationMixin:
         normal_field = normal_field_source = compression = None
         if self._modeling_type_assigned == 0:
             if self._factorization == Factorization.NVF:
+                period = _concrete_period(self.period)
                 normal_field = _fac.normal_field_for_ucell(
-                    self.ucell, fto_x, fto_y)
+                    self.ucell, fto_x, fto_y, period=period)
                 normal_field_source = _fac.normal_field_source_for_ucell(
-                    self.ucell, fto_x, fto_y)
+                    self.ucell, fto_x, fto_y, period=period)
             if self._fourier_coefficients == FourierCoefficients.INTEGRATED:
                 compression = [_fac.compression_indices(self.ucell[i])
                                for i in range(self.ucell.shape[0])]
@@ -246,14 +324,16 @@ class CoreFactorizationMixin:
                      epz_conv_i_all) = _fac.to_conv_mat_raster_nvf(
                         self.ucell, fto_x, fto_y,
                         normal_field=normal_field,
-                        normal_field_source=normal_field_source)
+                        normal_field_source=normal_field_source,
+                        period=self._period_for(geometry))
                 else:
                     (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all,
                      epz_conv_i_all) = _fac.to_conv_mat_raster_continuous_nvf(
                         self.ucell, fto_x, fto_y,
                         normal_field=normal_field,
                         normal_field_source=normal_field_source,
-                        compression=compression)
+                        compression=compression,
+                        period=self._period_for(geometry))
 
         elif self._modeling_type_assigned == 1:                    # vector
             ucell_vector = self.modeling_vector_instruction(
