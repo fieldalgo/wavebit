@@ -10,12 +10,18 @@ readme = "README.md"
 license = "Apache-2.0"
 authors = [{ name = "FieldAlgo", email = "dev@fieldalgo.com" }]
 
-# Driven by the base install alone (numpy, scipy and array-api-compat all declare
-# >=3.10), not by the optional backends: jax 0.11 needs 3.12, but pip enforces that
-# from jax's own metadata when the extra is requested. Encoding it here would refuse
-# the install to numpy-only users who never asked for jax. The `minimal` CI job runs
-# on every version listed here.
-requires-python = ">=3.10"
+# Driven by the base install alone, not by the optional backends: jax 0.11 also needs
+# 3.12, but pip enforces that from jax's own metadata when the extra is requested, so
+# it is not what sets this. The binding constraints are the numpy and scipy floors
+# below -- numpy 2.5.1 and scipy 1.18 both declare Requires-Python >=3.12, and
+# array-api-compat 1.15 still declares >=3.10, so it does not bind.
+#
+# This said >=3.10 until the numpy/scipy floors were raised past it, which made the
+# declaration unsatisfiable rather than merely generous: on 3.10 the newest numpy pip
+# will consider is 2.2.6, so `pip install fieldwave` failed at resolution with "No
+# matching distribution found for numpy>=2.5.1". Keep this in step with those floors --
+# the `minimal` CI job runs on every version listed here, which is what caught it.
+requires-python = ">=3.12"
 
 # Floors are the versions the suite is actually verified against, not the oldest that
 # might happen to work. That rule is applied literally to the numerical stack -- numpy,
