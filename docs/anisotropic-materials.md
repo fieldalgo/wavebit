@@ -139,7 +139,9 @@ convolution matrix is a scaled identity. The code states this itself —
 > (`factorization.py::_circulant_index`)
 
 So a birefringent film, a uniaxial substrate or an LC layer can be solved on `develop` right now by
-filling the five slots directly:
+filling the five slots directly. This is checked, not asserted:
+`tests_verification/test_uniform_anisotropic.py` drives the call below against an analytic Airy
+slab per eigen-polarisation and a Jones waveplate, and matches to ~1e-16.
 
 ```python
 import numpy as np
@@ -160,7 +162,12 @@ res = mee.solve_for_conv(wavelength, epx, epy, epz_i, epxy, epyx)
 Two things to watch:
 
 - The **slot sign convention** is `(epx, epy, epxy, epyx, epz_i) = (exx, eyy, -exy, -eyx, ⟦eps⟧⁻¹)`.
-  It is set by `_nvf_assemble`, not by the mode operator, and it is easy to get backwards.
+  It is set by `_nvf_assemble`, not by the mode operator, and getting it backwards is close to
+  undetectable: `+eps_xy` mirrors the optic axis about `x`, and **every power efficiency stays
+  bit-identical** — co-polarised, cross-polarised and total alike. Only the complex amplitude
+  moves, `T_p` flipping sign while `T_s` does not. Measured, not argued; see
+  `test_uniform_anisotropic.py::test_off_diagonal_sign_shows_up_in_the_amplitude_only`. If you
+  are checking a hand-filled tensor against anything, check an amplitude.
 - The **2D path must be selected**. `rcwa.py::_assign_grating_type` picks the path from the `ucell` shape, so
   a pure multilayer stack with `exy != 0` has to be routed to the 2D solve — the 1D and conical
   paths have no off-diagonal slots to fill.
