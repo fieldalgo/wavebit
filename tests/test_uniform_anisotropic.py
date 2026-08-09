@@ -227,3 +227,73 @@ def test_off_diagonal_sign_shows_up_in_the_amplitude_only():
     assert abs(T_p_right) > 1e-2, 'no cross-polarised amplitude to carry the sign'
     assert T_p_flipped == pytest.approx(-T_p_right, abs=1e-12), 'the mirror must flip T_p'
     assert complex(flipped.T_s.sum()) == pytest.approx(complex(right.T_s.sum()), abs=1e-12)
+
+
+# ------------------------------------------------------------------ asymmetric tensors
+#
+# Everything above uses eps_xy == eps_yx, which is all any shipped path can produce:
+# `_nvf_assemble`, `boundary.py` and `analytic.py` each return ``-eps_xy`` *twice*. The two
+# blocks in ``layer_modes_2d`` disagree on the order of that pair, and equal entries hide it.
+#
+#     Omega2_LR carries  (epxy, epyx)
+#     Omega_R   carries  (epyx, epxy)      <- the other way round
+#
+# A factorization ``Omega2_LR = Omega_L @ Omega_R`` must have an ``Omega_L`` built from the
+# geometry alone. Symbolically it is not: with the shipped ordering ``Omega_L`` depends on
+# ``epx, epy, epxy, epyx``, and exchanging the pair inside ``Omega_R`` alone reduces it to
+# ``[[-Kx Ky epz_i, Kx^2 epz_i - 1], [-Ky^2 epz_i + 1, Kx Ky epz_i]]`` for any tensor.
+#
+# So the eigenvalues come from one tensor and the H-field from its transpose. No shipped path
+# can reach it, which is why this is xfail rather than a bug report against a released number.
+
+DELTA = 0.45          # gyrotropy strength
+
+
+def jones_from_solver(res):
+    """Transmitted 2x2 Jones matrix in the ``(x, y)`` basis, from both incidence channels.
+
+    Calibrated on the symmetric cases above: for TE incidence (``E`` along y) the solver
+    reports ``T_s = Ey`` and ``T_p = i*Ex``; TM incidence fills the other column and is
+    ``E`` along ``-x`` in the same basis.
+    """
+    te, tm = res.res_te_inc, res.res_tm_inc
+    col_y = np.array([-1j * complex(te.T_p.sum()), complex(te.T_s.sum())])
+    col_x = -np.array([-1j * complex(tm.T_p.sum()), complex(tm.T_s.sum())])
+    return np.column_stack([col_x, col_y])
+
+
+def faraday_jones(eps_d, gamma):
+    """``eps = [[ed, i*g], [-i*g, ed]]`` -- circular eigenstates, a scalar slab on each.
+
+    ``v+ = (1, -i)/sqrt2`` sees ``ed + g`` and ``v- = (1, +i)/sqrt2`` sees ``ed - g``; the
+    interface preserves each, so every circular component is an independent Fabry-Perot.
+    """
+    _, t_plus = slab_s(eps_d + gamma)
+    _, t_minus = slab_s(eps_d - gamma)
+    P_plus = 0.5 * np.array([[1, 1j], [-1j, 1]])
+    P_minus = 0.5 * np.array([[1, -1j], [1j, 1]])
+    return t_plus * P_plus + t_minus * P_minus
+
+
+def test_gyrotropic_layer_has_the_right_shape():
+    """What *does* hold today: the answer is gyrotropic in form, just not in magnitude."""
+    res = solve_uniform(EO, EO, EO, exy=+1j * DELTA, eyx=-1j * DELTA)
+    J = jones_from_solver(res)
+    assert J[0, 0] == pytest.approx(J[1, 1], abs=1e-12), 'diagonal must stay degenerate'
+    assert J[0, 1] == pytest.approx(-J[1, 0], abs=1e-12), 'off-diagonal must be antisymmetric'
+    assert float(res.res_te_inc.de_ti.sum()
+                 + res.res_te_inc.de_ri.sum()) == pytest.approx(1.0, abs=1e-12)
+
+
+@pytest.mark.xfail(strict=True,
+                   reason='Omega_R carries (epxy, epyx) in the opposite order to Omega2_LR, '
+                          'so an asymmetric tensor gets its H-field from the transpose. '
+                          'Exchanging the pair inside Omega_R alone fixes it and is a no-op '
+                          'for every symmetric tensor, which is all any shipped path emits.')
+def test_gyrotropic_layer_matches_faraday():
+    """Faraday rotation through a gyrotropic slab, against the circular-eigenstate answer.
+
+    Off by ~4e-2 today and first-order in ``gamma``; the repair above lands it at ~6e-16.
+    """
+    res = solve_uniform(EO, EO, EO, exy=+1j * DELTA, eyx=-1j * DELTA)
+    assert np.abs(jones_from_solver(res) - faraday_jones(EO, DELTA)).max() < 1e-12

@@ -63,8 +63,8 @@ So the solved tensor class is
         [  0    0   ezz ]
 ```
 
-with `epxy` and `epyx` as **independent** arguments — the algebra never assumes `exy == eyx`, so a
-gyrotropic (`exy = -eyx`) in-plane block fits the same slots. The `ezz` entry enters only as its
+with `epxy` and `epyx` as separate arguments — but **only a symmetric pair is actually solved
+correctly**; see §6.1. The `ezz` entry enters only as its
 inverse because `E_z` is eliminated algebraically as `E_z = ezz⁻¹ D_z`, which is also why field
 reconstruction reads nothing but `epz_conv_i` (`fields.py::214`).
 
@@ -266,12 +266,67 @@ reconstruction in `fields.py`. All of it assumes the 2ff shape.
 
 Cost is not only structural: `eig` is `O(N³)`, so 2ff → 4ff is roughly **8x** on the layer solve.
 
-### Note on gyrotropy
+## 6.1 Gyrotropy: the two blocks disagree on the order of the pair
+
+*Summarised here; the full derivation, the figures and every measurement are in
+[`off-diagonal-slot-convention.md`](off-diagonal-slot-convention.md).*
 
 In-plane antisymmetry (`exy = -eyx`, i.e. Faraday-type magneto-optics) does **not** break the
-second-order form — what breaks it is the z-coupling, not the in-plane asymmetry. The slots are
-already independent, so gyrotropy is a validation problem (match a known Faraday rotation angle),
-not a formulation problem.
+second-order form — what breaks that is the z-coupling, not the in-plane asymmetry. Gyrotropy
+therefore needs no new formulation: the derivation below produces a geometry-only `Omega_L` for an
+arbitrary in-plane tensor, asymmetric included. What it runs into is an **ordering error in the
+implementation** of that form — one block carries the off-diagonal pair the other way round.
+
+`layer_modes_2d` builds two blocks, and they carry the off-diagonal pair in **opposite orders**:
+
+```
+   Omega2_LR   ...  - Cc @ epyx   ... - B @ epxy    (eigenvalues q², and W)
+   Omega_R     ...  + epxy        ... - epyx        (the H-field, V = Omega_R W / q)
+```
+
+A factorization `Omega2_LR = Omega_L @ Omega_R` is only meaningful if `Omega_L` is built from the
+geometry alone. Symbolically it is not — with the shipped ordering `Omega_L` comes out depending
+on `epx`, `epy`, `epxy` and `epyx`. Exchanging the pair inside `Omega_R` **only** reduces it to
+
+```
+   Omega_L = [[-Kx Ky epz_i,      Kx² epz_i - 1],
+              [-Ky² epz_i + 1,    Kx Ky epz_i  ]]
+```
+
+for an arbitrary tensor and any incidence angle. So as shipped, an asymmetric tensor gets its
+eigenvalues from one medium and its magnetic field from that medium's transpose.
+
+Measured on a gyrotropic slab (`eps = [[eo, i·g], [-i·g, eo]]`, g = 0.45) against the
+circular-eigenstate answer — each circular component is an independent Fabry–Pérot with
+`n± = sqrt(eo ± g)`:
+
+| | max abs error in the transmitted Jones matrix |
+|---|---|
+| as shipped | 3.6e-2 — first order in `g`, so it does not wash out |
+| with the pair exchanged in `Omega_R` | 6.5e-16 |
+
+The result still *looks* right: the Jones matrix stays degenerate on the diagonal and
+antisymmetric off it, energy conserves to 1e-12, and the rotation sense is correct. Only the
+magnitude is wrong.
+
+This is not an artefact of the reference's time convention. A handedness or `e^{-iwt}` sign error
+in the analytic side could only relabel `g -> -g`, so scanning `g` over a continuum settles it:
+the shipped output's best fit *anywhere* is `g = +0.4264` at 3.18e-2 — it is not the exact
+gyrotropic answer for any `g` — while the exchanged version lands on `g = +0.45000` at 6.47e-16.
+The `Omega_L` argument above is convention-free outright: it is an algebraic identity of the
+code, with no physics in it.
+
+Still open, and *not* settled by any of this: which magnetization direction `[[eo, i·g], [-i·g,
+eo]]` denotes under this repo's `e^{-iwt}`, `Im(n) > 0` convention. What is verified is that the
+solver reproduces the tensor it is handed — not what that tensor means physically.
+
+**Nothing shipped can reach this.** `_nvf_assemble`, `boundary.py` and `analytic.py` each return
+`-eps_xy` *twice*, so every tensor the library builds is symmetric, and for a symmetric pair the
+exchange is a no-op — bit-identical. The defect is reachable only by hand through
+`solve_for_conv`, which is exactly what a gyrotropy experiment would do first.
+
+Pinned by `test_uniform_anisotropic.py::test_gyrotropic_layer_matches_faraday` (xfail, strict),
+with `::test_gyrotropic_layer_has_the_right_shape` recording what does hold today.
 
 ## 7. Where to start
 
