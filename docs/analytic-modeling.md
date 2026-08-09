@@ -200,10 +200,24 @@ keep passing.
   pure-Laurent comparison, call `fourier_analytic.to_conv_mat_analytic` directly.
 
 ### References
-- L. Li, JOSA A 13, 1870 (1996). — Fourier factorization / inverse rule.
-- T. Schuster, J. Ruoff, N. Kerwien, S. Rafler, W. Osten, JOSA A 24, 2880 (2007). — normal vector
-  method. (Not Götz et al. — that is the separate Opt. Express 16, 17295 (2008) paper on
-  generating the field automatically.)
+- L. Li, *Use of Fourier series in the analysis of discontinuous periodic structures*, JOSA A
+  **13**(9), 1870 (1996). [doi:10.1364/JOSAA.13.001870](https://doi.org/10.1364/JOSAA.13.001870)
+  — Fourier factorization / inverse rule.
+- T. Schuster, J. Ruoff, N. Kerwien, S. Rafler, W. Osten, *Normal vector method for convergence
+  improvement using the RCWA for crossed gratings*, JOSA A **24**(9), 2880 (2007).
+  [doi:10.1364/JOSAA.24.002880](https://doi.org/10.1364/JOSAA.24.002880) — the normal vector
+  method itself, which is what this path implements.
+- P. Götz, T. Schuster, K. Frenner, S. Rafler, W. Osten, *Normal vector method for the RCWA with
+  automated vector field generation*, Opt. Express **16**(22), 17295 (2008).
+  [doi:10.1364/OE.16.017295](https://doi.org/10.1364/OE.16.017295) — a **distinct** paper (Götz is
+  not an author of the 2007 one, and the two are easy to merge). It supplies the field for
+  *arbitrary* shapes, the gap its abstract names; both papers call the simple-shape case trivial.
+  This path is that trivial case — `analytic.normal_vector_field_analytical` writes the normal
+  down in closed form from the rectangle/ellipse parameters, so it follows the 2007 method and
+  owes nothing to the 2008 algorithm. The raster path
+  (`factorization.normal_vector_field`) is the one solving the 2008 paper's problem, by a
+  signed-distance transform; whether that is the construction the paper itself uses has not been
+  checked against the full text.
 
 ---
 

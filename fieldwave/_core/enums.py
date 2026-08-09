@@ -38,7 +38,7 @@ class FourierCoefficients(str, Enum):
 class Factorization(str, Enum):
     """Which rule closes the products of discontinuous functions."""
     LI = 'li'    # Li's rules on the x/y axes
-    NVF = 'nvf'  # normal vector field (Goetz-Schuster); a superset of Li
+    NVF = 'nvf'  # normal vector field (Schuster et al. 2007); a superset of Li
 
 
 class FourierType(IntEnum):

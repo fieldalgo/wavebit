@@ -62,7 +62,7 @@ one primitive that made this hard, Bessel ``J1``, lives in :mod:`fieldwave._core
 has it, PyTorch's has no autograd backward, and JAX's returns NaN near zero, so each backend
 reaches it a different way behind one name.
 
-The convolution matrices are built with the NVF (Li / Götz-Schuster) normal-vector
+The convolution matrices are built with the NVF (Li / Schuster et al.) normal-vector
 factorization: ``eps`` and ``1/eps`` come from the exact shape transform, while the normal
 projectors come from the shapes' *analytic* unit normal field sampled on a grid.
 
