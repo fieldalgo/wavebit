@@ -226,7 +226,7 @@ def check_block_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_
         f'Vector layer {layer_index}: {what}{more}, and this path cannot add them. '
         f"combine='add' superposes every shape's contribution, which this path has no way to "
         f'express: it draws a staircase of blocks and each block holds one index, so an '
-        f'overlap can only take one of them. Use the analytic path, '
+        f'overlap can only take one of them. Use the smooth path, '
         f"ucell=[dict(n_base=..., shapes=[...], combine='add')], which superposes, or "
         f"combine='paint' to keep what this path draws.")
 
@@ -498,9 +498,9 @@ class Modeling:
         remove it — it is the staircase's cost, not its resolution. Only harmonics do, and
         slowly: 0.594 / 0.217 / 0.147 / 0.111 at ``fto`` 3 / 5 / 11 / 17.
 
-        The analytic path builds the rotated shape's coefficients in closed form, and its kink
+        The smooth path builds the rotated shape's coefficients in closed form, and its kink
         is not small but *absent* — measured at 4e-4 or below at every one of those counts. It
-        is also where the vector path is heading: at 0.4 rad the analytic answer settles by
+        is also where the block path is heading: at 0.4 rad the analytic answer settles by
         ``fto`` 8 and moves by 4e-4 after, while the vector one is still coming down at 17
         (0.3746 / 0.3606 / 0.3484 against 0.3081 / 0.3363 / 0.3367). Use it for angle fits, as
         :mod:`fieldwave._core.analytic` says.
@@ -903,7 +903,7 @@ class Modeling:
         """Run a full instruction set: ``[[base_index, [[shape, *params], ...], combine], ...]``.
 
         ``combine`` is optional and, on this path, defaults to what this path does: paint.
-        Supplying ``'add'`` asks for the analytic path's superposition, which a staircase of
+        Supplying ``'add'`` asks for the smooth path's superposition, which a staircase of
         blocks cannot express, so it is refused rather than painted — see
         :func:`check_block_layer_combination`.
         """

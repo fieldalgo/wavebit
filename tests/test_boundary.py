@@ -356,7 +356,7 @@ def test_paint_is_accepted_and_is_not_add():
 
 
 def test_paint_agrees_with_the_vector_path():
-    """The vector path paints too, so on axis-aligned shapes both describe the same structure."""
+    """The block path paints too, so on axis-aligned shapes both describe the same structure."""
     painted = _total(_solve([dict(n_base=1.0, combine='paint', shapes=PAINT_SHAPES)]).conv_solve())
     vec = [[1.0, [['rectangle', s['cx'], s['cy'], s['lx'], s['ly'], s['n_index'], s['angle'],
                    2, 2] for s in PAINT_SHAPES]]]

@@ -12,21 +12,21 @@ Two things a layer can need at once, and until now no path gave both:
 | path | tilted edge | overlapping shapes |
 |---|---|---|
 | raster | staircase | as drawn |
-| vector | staircase | **painted** |
-| analytic | **exact** | added (superposed) |
+| block | staircase | **painted** |
+| smooth | **exact** | added (superposed) |
 | **boundary** | **exact** | **painted** |
 
-The vector path paints later shapes over earlier ones, which is what a raster of the same recipe
+The block path paints later shapes over earlier ones, which is what a raster of the same recipe
 agrees with — but it decomposes shapes into axis-aligned blocks, so a tilted edge becomes a
-staircase. The analytic path transforms a tilted shape in closed form, but *sums* the shapes, so
+staircase. The smooth path transforms a tilted shape in closed form, but *sums* the shapes, so
 where two overlap the layer gets both contributions and the permittivity there is neither
-shape's. Asking for `combine='paint'` on the analytic path used to raise `NotImplementedError`.
+shape's. Asking for `combine='paint'` on the smooth path used to raise `NotImplementedError`.
 
 The two cannot simply be mixed. `normal_vector_field_analytical` builds its field from each shape
 in turn and never asks which boundary survived the painting, so a hybrid would put a normal on an
 interface that the painting has already covered up.
 
-**Note this is not free.** An axis-aligned overlap costs the vector path nothing: axis-aligned
+**Note this is not free.** An axis-aligned overlap costs the block path nothing: axis-aligned
 rectangles tile exactly into axis-aligned blocks, overlap or not, so there is no staircase to
 remove. This path earns its keep only where an edge is actually tilted.
 
@@ -64,7 +64,7 @@ Shapes are in painting order — a later shape covers an earlier one. `rectangle
 error far below the normal field's.
 
 **Routing is on the overlap, not on the spelling.** While no two shapes intersect, painting and
-adding describe the same structure, so the layer stays on the closed-form analytic path: exact,
+adding describe the same structure, so the layer stays on the closed-form smooth path: exact,
 cheaper, and identical to `combine='add'` as it was before. Sending `'paint'` down a different
 path regardless would make two names for one structure return different numbers — measured 0.8%
 apart on disjoint rods, because the two paths extend the normal differently.
@@ -81,9 +81,9 @@ gradient:
   in-place writes, so it traces and differentiates on every backend.
 
 `freeze_geometry()` records the plan in `StaticGeometry.boundary_plans`, exactly as it records the
-vector modeler's grid plan. Because the plan is pure Python indices it compares **by content**, so
+block modeler's grid plan. Because the plan is pure Python indices it compares **by content**, so
 re-freezing a structure whose topology has not changed hits the JAX compilation cache — take the
-freeze again every step, as with the vector path (see the README on stale geometry).
+freeze again every step, as with the block path (see the README on stale geometry).
 
 ```python
 solver = fieldwave.rcwa(backend=1, ucell=ucell, ...)
@@ -123,10 +123,10 @@ the truncation set matched exactly (`LatticeTruncation='Parallelogramic'`,
   addition sits 8.5–68x further from S4 than this path does.
 - **The advantage appears exactly where a staircase would.** Comparing per diffraction order and
   pushing both codes' truncation together to `fto` 18, the distance to S4 keeps falling for this
-  path while the vector path's settles on a floor — its staircase error. Distances over the
+  path while the block path's settles on a floor — its staircase error. Distances over the
   propagating orders, `sum |path - S4|`:
 
-  | case | boundary | vector | shape addition |
+  | case | boundary | block | shape addition |
   |---|---|---|---|
   | overlap, axis-aligned | 1.66e-02 | 1.66e-02 | 2.83e-01 |
   | oblique incidence, axis-aligned | 3.09e-02 | 3.08e-02 | 3.31e-01 |
@@ -145,19 +145,19 @@ the truncation set matched exactly (`LatticeTruncation='Parallelogramic'`,
   ellipse — the one case where S4 holds the true closed-form shape and this path holds a 256-gon —
   the permittivity coefficients differ by 3.70e-05 (2.7e-05 relative), which is the polygonisation
   in isolation; every other case is 1e-15 because both sides then hold the same polygons. In the
-  *answer* it does not show: 1.52e-02 here against 1.51e-02 for the closed-form analytic path,
-  the two tracking each other all the way down. The vector path sits at 3.29e-01 and **flat** —
+  *answer* it does not show: 1.52e-02 here against 1.51e-02 for the closed-form smooth path,
+  the two tracking each other all the way down. The block path sits at 3.29e-01 and **flat** —
   on a curve its staircase does not shrink with truncation at all.
 
 Not settled: **high index contrast**. Over a ladder of `max n` = 1.5 / 1.9 / 2.4 / 2.9 this path
-and the vector path drift from S4 together, but S4's own `fto`-to-`fto` change at `n <= 2.9` is
+and the block path drift from S4 together, but S4's own `fto`-to-`fto` change at `n <= 2.9` is
 still 1e-2 at `fto` 12 — larger than the difference being measured, so nothing can be concluded
 there. Trust the 1.5–1.9 band. This is a known limit of the factorisation at high contrast rather
 than a property of this path; the existing paths meet the same wall.
 
 Against the repository's own paths: two overlapping rods give 0.548127 painted here, 0.824944
-summed by the analytic path, and 0.547893 on the vector path — which paints, and so should agree.
-On a single shape, where there is nothing to resolve, the permittivity matches the analytic path
+summed by the smooth path, and 0.547893 on the block path — which paints, and so should agree.
+On a single shape, where there is nothing to resolve, the permittivity matches the smooth path
 to 5e-16.
 
 ---

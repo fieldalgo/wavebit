@@ -12,8 +12,8 @@ analytic         **exact**           added (superposed)
 **this one**     **exact**           **painted**
 ===============  ==================  =====================
 
-The vector path paints later shapes over earlier ones but decomposes them into axis-aligned
-blocks, so a tilted edge becomes a staircase. The analytic path transforms a tilted shape in
+The block path paints later shapes over earlier ones but decomposes them into axis-aligned
+blocks, so a tilted edge becomes a staircase. The smooth path transforms a tilted shape in
 closed form but *sums* the shapes, so an overlap gets both contributions and ends up as neither
 shape's material. Neither can be fixed by mixing them: the analytic normal field never asks
 which boundary survived.
@@ -31,7 +31,7 @@ Split in two halves, which is what makes it differentiable:
 
 Validated against S4 (an independent RCWA implementation): the permittivity coefficients agree
 to 2.2e-16, and on a case with both tilt and overlap this path sits 4x closer to it than the
-vector path, while tying on axis-aligned overlap where the vector path has no staircase to lose.
+block path, while tying on axis-aligned overlap where the block path has no staircase to lose.
 """
 from . import clipper as _clipper
 from .analytic import laurent_conv_2d, shape_geometry, _sampled_coeffs
@@ -279,7 +279,7 @@ POLYGON_VERTICES = 256
 def shape_vertices(xp, shape, period, n_poly=POLYGON_VERTICES):
     """Counter-clockwise vertices of one analytic primitive.
 
-    Same shape dictionaries the analytic path takes, and the same convention: ``lx`` / ``ly``
+    Same shape dictionaries the smooth path takes, and the same convention: ``lx`` / ``ly``
     are full lengths, so a circle is ``lx = ly = diameter``.
 
     The dict is read by :func:`~fieldwave._core.analytic.shape_geometry` and nowhere else, for
@@ -305,7 +305,7 @@ def plan_layer(shapes, period, n_poly=POLYGON_VERTICES):
     """Resolve one layer's painting order into disjoint loops. **Concrete values only.**
 
     This is the discrete half — which loop holds which vertex, which edges cross — so it runs
-    on NumPy outside any trace, exactly like the vector modeler's grid plan. Freeze it once
+    on NumPy outside any trace, exactly like the block modeler's grid plan. Freeze it once
     (:meth:`~fieldwave._core.engine.RCWAEngine.freeze_geometry`) and every later step replays
     it against traced vertices.
     """
@@ -320,7 +320,7 @@ def to_conv_mat_boundary_layer(xp, shapes, n_base, fto_x, fto_y, period, dtype,
     """The five convolution matrices for one layer whose shapes are *painted*.
 
     ``shapes`` is in painting order — a later shape covers an earlier one — which is what the
-    vector path means by painting and what a raster of the same instruction agrees with. Pass
+    block path means by painting and what a raster of the same instruction agrees with. Pass
     ``plan`` from a frozen geometry to keep the call traceable; leave it ``None`` and the
     painting is resolved eagerly, which needs concrete shape parameters.
     """

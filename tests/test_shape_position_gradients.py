@@ -1,4 +1,4 @@
-"""Gradients with respect to a shape's *position* on the analytic path.
+"""Gradients with respect to a shape's *position* on the smooth path.
 
 ``cx`` and ``cy`` were the two shape parameters ``test_gradients`` never covered. The reason
 was recorded as a gap — a finite-difference comparison that failed and got removed — and the

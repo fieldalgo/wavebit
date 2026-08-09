@@ -1,6 +1,6 @@
 """Do two analytic shapes overlap? — the geometry behind the layer-semantics check.
 
-:mod:`fieldwave._core.analytic` superposes its shapes and the vector path paints them, so the
+:mod:`fieldwave._core.analytic` superposes its shapes and the block path paints them, so the
 two only describe the same structure while no two shapes intersect. That makes "do these
 intersect?" the question the modeling layer has to answer before it can let a layer through,
 and this module answers it for the analytic primitives: rectangle / square (a rotated box) and
@@ -32,7 +32,7 @@ being reported.
 import math
 
 #: What a layer may say about shapes that overlap. Both shape paths read this: the analytic
-#: path superposes (``'add'``), the vector path paints later shapes over earlier ones
+#: path superposes (``'add'``), the block path paints later shapes over earlier ones
 #: (``'paint'``), and neither can build the other's rule. A recipe that means one of them has
 #: to be able to say so, or moving it between paths silently changes the structure.
 COMBINE_MODES = ('add', 'paint')

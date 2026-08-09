@@ -298,7 +298,7 @@ def test_vector_solve_matches_legacy_golden(name, backend):
     for field in ('de_ri', 'de_ti'):
         want = GOLDEN[f'{name}__{field}']
         got = np.asarray(getattr(result.res, field))
-        tol = 1e-12   # not bit-exact: the vector path's inverses do not commute
+        tol = 1e-12   # not bit-exact: the block path's inverses do not commute
                       # with the 2026-08 order-index flip to the last digit
         assert np.allclose(want, got, atol=tol, rtol=0), (field, np.max(np.abs(want - got)))
 
@@ -363,7 +363,7 @@ def test_jax_device_setter_round_trips():
 def test_vector_path_differentiates_wrt_edge_positions(backend, name):
     """An OCD fit differentiates the *edges* — CD, sidewall angle, pitch — not the pixels.
 
-    Those live in the segment edge list the vector modeler produces, and ``_cfs`` used to lift
+    Those live in the segment edge list the block modeler produces, and ``_cfs`` used to lift
     it with ``asarray(..., dtype=)``, which detaches under PyTorch. The solve still returned a
     tensor, just one with no graph behind it, so this failed only when someone called
     ``backward()``.
@@ -413,7 +413,7 @@ def test_the_staircase_costs_a_kink_at_an_aligned_angle(pol, name):
     harmonic count, and the gap goes like ``|angle|``: the efficiency falls off its aligned
     value at the same rate on both sides, so the two one-sided slopes are equal and opposite
     instead of equal. Adding blocks does not help — the coefficient is flat in ``n_split`` —
-    which is the whole reason an angle fit near normal belongs on the analytic path.
+    which is the whole reason an angle fit near normal belongs on the smooth path.
 
     Checked in pure polarizations. At ``pol=0.5`` the TE and TM amplitudes interfere and the
     cross term is genuinely odd in the angle, which hides this under a real first-order term;

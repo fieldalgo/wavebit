@@ -60,7 +60,7 @@ def _backend(name):
 def _derivative(backend, objective, value, rel_step=1e-6):
     """(autograd, central difference) of ``objective`` at ``value``.
 
-    ``rel_step`` matters more than it looks on the analytic path: the normal field is sampled
+    ``rel_step`` matters more than it looks on the smooth path: the normal field is sampled
     on a grid of ``period / normal_grid``, so the objective carries a sawtooth of that
     period. A difference step that straddles one of those steps reports the jump, not the
     derivative — at ``cx = period/2``, which sits exactly on a grid line, ``h = 1e-6`` gives
@@ -247,13 +247,13 @@ def test_rectangle_is_built_the_same_way_on_both_sides_of_zero_angle():
 
 
 def test_analytic_angle_is_smooth_through_normal():
-    """The analytic path is the one that can fit a sidewall angle near normal; the vector one cannot.
+    """The smooth path is the one that can fit a sidewall angle near normal; the vector one cannot.
 
     Rotating a rectangle moves its Fourier coefficients analytically, so the efficiency is
     smooth in ``angle`` and the two one-sided slopes at zero must agree. They do, on the
-    analytic path, and that is all this pins.
+    smooth path, and that is all this pins.
 
-    The vector path is not held to it. It is a staircase at any angle but zero, and at zero it
+    The block path is not held to it. It is a staircase at any angle but zero, and at zero it
     stops being one — the two triangles appear the moment the angle leaves it — so the two
     sides of zero are not built from the same number of blocks and its one-sided slopes are
     free to differ. A central difference hides that, so it only bites an optimizer, which sees

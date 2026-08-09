@@ -202,7 +202,7 @@ def solver_R_analytic(ns, thicknesses, wavelength, theta, pol):
 
     ``shapes=[]`` makes each layer uniform ``n_base``, so the structure is identical to the one
     ``solver_RT`` rasters — only the ``n -> eps`` builder differs. That routes through the 2D
-    solve (the analytic path always does), so the polarization comes in as ``psi`` rather than
+    solve (the smooth path always does), so the polarization comes in as ``psi`` rather than
     ``pol``, and the period must be 2D.
     """
     ucell = [dict(n_base=n, shapes=[]) for n in ns[1:-1]]
@@ -221,7 +221,7 @@ ANALYTIC_CASES = KNOWN_GOOD + LOSSY_SUBSTRATE
 def test_absorbing_layer_via_the_analytic_path(case, pol, theta):
     """The analytic builder must land on the same physics as the raster one, for complex ``n``.
 
-    The analytic path had no complex-index coverage at all: ``tests/test_analytic``
+    The smooth path had no complex-index coverage at all: ``tests/test_analytic``
     was entirely real, where ``conj(n)**2 == n**2``. Running the *uniform* stack through it puts
     it against the absolute oracle rather than against another solver — gold as a layer landed
     ~9% off here and tripped the ``R + T > 1`` guard, because the conjugation turned it into a

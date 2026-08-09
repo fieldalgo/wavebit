@@ -142,7 +142,7 @@ def test_freeze_geometry_reports_what_the_strategy_needs():
                        ['rectangle', 190.0, 150.0, 120.0, 120.0, 3.0, 0.0, 0, 0]]]], 120.0),
 ])
 def test_a_frozen_geometry_makes_the_vector_path_traceable(name, make, start):
-    """``jax.jit`` over a shape parameter, which the vector path could not do before.
+    """``jax.jit`` over a shape parameter, which the block path could not do before.
 
     What stopped it was never arithmetic: it was the comparisons that decide which edge becomes
     which grid line, which two share one, and which strip bounds each of a rectangle's slabs.

@@ -85,10 +85,10 @@ are independent and multiply.
 | analytic shapes, summed | supported | lengths are absolute Cartesian; nothing deforms |
 | analytic shapes, painted **overlap** | supported | the clipper is Cartesian; only the periodic images and the transform needed the basis |
 | field reconstruction | supported | output grid is indexed by `(v, u)`, not `(y, x)` — see below |
-| vector modeler (`modeling_type=1`) | **refused** | rasterises onto a rectangular grid of its own |
+| block modeler (`modeling_type=1`) | **refused** | rasterises onto a rectangular grid of its own |
 | `factorization='li'` | **refused** | see below |
 
-Everything except `li` and the vector modeler works on a skewed cell, and both of those have a
+Everything except `li` and the block modeler works on a skewed cell, and both of those have a
 supported route to the same structure — a raster, or analytic shapes.
 
 The two refusals raise rather than answering, and that matters: both of them *run* on a skewed

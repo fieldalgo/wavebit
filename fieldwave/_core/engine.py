@@ -324,7 +324,7 @@ class CoreFactorizationMixin:
         geometry = StaticGeometry(normal_field=normal_field, compression=compression,
                                   normal_field_source=normal_field_source)
         if self._modeling_type_assigned == 1:
-            # The vector modeler records its plans while it builds, so run the build once to
+            # The block modeler records its plans while it builds, so run the build once to
             # get them -- the *modeler*, not the whole factorization. Freezing used to go
             # through `_conv_matrices` and throw the convolution matrices away, which it paid
             # for only because the same-material detector read them; that detector is gone.
@@ -381,7 +381,7 @@ class CoreFactorizationMixin:
         since NVF already converges faster than Li on the curved boundaries this feature exists
         for.
 
-        The vector modeler (``modeling_type=1``) rasterises shapes onto a rectangular grid of
+        The block modeler (``modeling_type=1``) rasterises shapes onto a rectangular grid of
         its own and is not ported.
 
         Two things that were refused here are not any more, both because the assumption behind
@@ -402,7 +402,7 @@ class CoreFactorizationMixin:
         common = ('The cell basis is non-orthogonal (set via .lattice). ')
         if self._modeling_type_assigned == 1:
             raise NotImplementedError(
-                common + 'the vector modeler (modeling_type=1) rasterises onto a rectangular '
+                common + 'the block modeler (modeling_type=1) rasterises onto a rectangular '
                 'grid, which is not implemented yet for a skewed cell. Use a raster ucell '
                 '(modeling_type=0) or analytic shapes (modeling_type=2).')
         if self._factorization != Factorization.NVF:

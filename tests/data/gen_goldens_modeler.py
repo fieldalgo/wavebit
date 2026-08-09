@@ -1,4 +1,4 @@
-"""Freeze the legacy vector modeler's output as reference data.
+"""Freeze the legacy block modeler's output as reference data.
 
 Run while fieldwave/on_numpy/modeler/modeling.py still exists.
 

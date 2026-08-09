@@ -142,7 +142,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
             # Analytic: one dict(n_base=..., shapes=[...], combine=...) per layer.
             # Shape coordinates are absolute lengths in the units of `period`, not
             # fractions of it, and `combine` picks what overlapping shapes mean --
-            # this path adds them where the vector path paints. See
+            # this path adds them where the block path paints. See
             # fieldwave._core.analytic; overlaps are refused until it is set.
             if len(ucell) > 0 and isinstance(ucell[0], dict):
                 self._modeling_type_assigned = 2

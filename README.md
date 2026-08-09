@@ -142,10 +142,10 @@ The type of `ucell` selects the modeling path; there is no separate mode switch.
 | `ucell` | Path | What it is |
 | --- | --- | --- |
 | `ndarray`, shape `(n_layers, Ny, Nx)` | **raster** | refractive index sampled on a grid |
-| `list` of `[n_base, [shape, ...]]` per layer | **vector** | drawn shapes reduced to piecewise-constant blocks, then Fourier-transformed analytically instead of off a grid — see [`examples/vector_1d.py`](examples/vector_1d.py) |
-| `list` of `dict(n_base=..., shapes=[...])` per layer | **analytic** | smooth primitives (rotated rectangle, circle, ellipse) with exact Fourier coefficients — no staircase at all |
+| `list` of `[n_base, [shape, ...]]` per layer | **block** | drawn shapes reduced to piecewise-constant blocks, then Fourier-transformed analytically instead of off a grid — see [`examples/vector_1d.py`](examples/vector_1d.py) |
+| `list` of `dict(n_base=..., shapes=[...])` per layer | **smooth** | smooth primitives (rotated rectangle, circle, ellipse) with exact Fourier coefficients — no staircase at all |
 
-The analytic path takes one dict per layer. Note that `cx`, `cy`, `lx` and `ly` are absolute
+The smooth path takes one dict per layer. Note that `cx`, `cy`, `lx` and `ly` are absolute
 lengths in the units of `period`, not fractions of it:
 
 ```python
@@ -158,8 +158,8 @@ solver = fieldwave.rcwa(backend=0, period=[700., 700.], ucell=ucell, ...)
 
 ### Shapes that overlap
 
-The two shape paths do different things with an overlap. The vector path **paints**, later
-shape over earlier; the analytic path **superposes**, adding every shape's contribution, so
+The two shape paths do different things with an overlap. The block path **paints**, later
+shape over earlier; the smooth path **superposes**, adding every shape's contribution, so
 the overlap ends up as neither shape's material. Same recipe, two different structures.
 
 `combine` is how a layer says which it means — `'paint'` or `'add'`:
@@ -167,20 +167,20 @@ the overlap ends up as neither shape's material. Same recipe, two different stru
 ```python
 ucell = [dict(n_base=1.0, combine='add', shapes=[...])]     # superpose, in closed form
 ucell = [dict(n_base=1.0, combine='paint', shapes=[...])]   # paint, edges still exact
-ucell = [[1.0, [['rectangle', ...], ...], 'paint']]         # vector: paint, edges staircased
+ucell = [[1.0, [['rectangle', ...], ...], 'paint']]         # block path: paint, edges staircased
 ```
 
 Both are built on the shape paths now. `'paint'` with an actual overlap resolves the painting
 into polygons first and transforms those — so a layer can be painted *and* keep a tilted edge
 exact, which no single path used to offer. See
-[`docs/boundary-modeling.md`](docs/boundary-modeling.md). The vector path still refuses
+[`docs/boundary-modeling.md`](docs/boundary-modeling.md). The block path still refuses
 `'add'`: a staircase of blocks holds one index per block, so an overlap can only take one of
 them.
 
 While no two shapes intersect, both rules describe the same structure, so `combine` is
 optional, nothing is refused, and both spellings give the same numbers. It only has to be
-given where it changes the answer — and there, an unlabelled *analytic* layer is refused,
-because superposition is the rule nobody expects. The vector path paints unlabelled, which is
+given where it changes the answer — and there, an unlabelled *smooth* layer is refused,
+because superposition is the rule nobody expects. The block path paints unlabelled, which is
 what it always did and what a raster of the same recipe agrees with.
 
 ### Fourier factorization
@@ -210,7 +210,7 @@ All four pairings work. The deprecated `fourier_type` integer expressed only thr
 `0 = ('sampled', 'li')`, `1 = ('integrated', 'li')`, `2 = ('sampled', 'nvf')` — and had no
 code at all for `('integrated', 'nvf')`, the pairing a fit of a tilted sidewall wants.
 
-The analytic path always uses the NVF form and ignores both keywords. Its derivation,
+The smooth path always uses the NVF form and ignores both keywords. Its derivation,
 convergence data and limitations are written up in
 [docs/analytic-modeling.md](docs/analytic-modeling.md).
 
@@ -242,7 +242,7 @@ second convention underneath; see [`fieldwave/_core/conventions.py`](fieldwave/_
 reconstructed field cell alike. The flip that renders a field the conventional way up belongs
 to plotting (`field_plot`), not to the data.
 
-**Analytic shape coordinates are absolute.** On the analytic path, `cx`, `cy`, `lx` and `ly`
+**Smooth-path shape coordinates are absolute.** On the smooth path, `cx`, `cy`, `lx` and `ly`
 are lengths in the same units as `period` — not fractions of it. Passing fractions builds a
 structure `1/period` times too small and solves it without complaint.
 
@@ -278,7 +278,7 @@ exactly; moving the geometry does not, and an eager `conv_solve` raises `StaleGe
 rather than answering from a record that no longer fits. A traced call cannot check — the
 comparison is what the freeze exists to avoid.
 
-So take the freeze again every step. On the vector path it costs a few milliseconds and
+So take the freeze again every step. On the block path it costs a few milliseconds and
 recompiles only when the recorded *ordering* changes, which is the same moment a held record
 would have gone stale — a length can move 47% for two compilations. That makes re-freezing both
 the fastest way to run a moving fit and the only one that cannot carry a stale record forward.

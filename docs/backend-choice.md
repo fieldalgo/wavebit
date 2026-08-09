@@ -9,7 +9,7 @@ Targets:
   costs
 - `fieldwave/_core/factorization.py::compression_indices`, `normal_field_for_ucell` — the two
   raster decisions that must be taken eagerly
-- `fieldwave/_core/modeler.py::_check_plan_still_fits` — the vector record's staleness check
+- `fieldwave/_core/modeler.py::_check_plan_still_fits` — the block record's staleness check
 - [`nvf-upsampling.md`](nvf-upsampling.md) — why NVF's cost fell between the first run of this
   sweep and the one reported here; [`torch-compile.md`](torch-compile.md) — why PyTorch is
   measured eager
@@ -42,8 +42,8 @@ the speed of a wrong answer.
 - **`jax eager` is rarely the right answer on speed.** It is 2-11x slower than PyTorch at
   small scale and level with it at large scale. Its value is elsewhere: it is the mode with no
   record, so it cannot be served a stale one — and every raster strategy now reaches it.
-- **Re-freezing every step is free on the vector path and ruinous on the raster path.** The
-  vector record compares by content, so an unchanged structure reuses its compilation; the
+- **Re-freezing every step is free on the block path and ruinous on the raster path.** The
+  block record compares by content, so an unchanged structure reuses its compilation; the
   raster records hold arrays, fall back to identity, and recompile every step.
 - **All three strategies now cost the same.** NVF used to grow with the raster — 359 ms of
   freeze against a 277 ms step at `N=128, fto=5` — because its normal field was taken on a
@@ -81,7 +81,7 @@ angle and pitch. Times are ms per step.
 **Read one table at a time.** Nothing is timed until a 45 s warm-up has run, and the sweep
 times one fixed configuration three times to state its own repeatability:
 
-| | start | after vector | after raster | spread |
+| | start | after block | after raster | spread |
 |---|---|---|---|---|
 | probe (ms) | 150 | 127 | 145 | **1.18x** |
 
@@ -95,7 +95,7 @@ and a third significant figure as not.
 
 `jit (re-freeze)` retakes the freeze on every step — the only shape of loop that cannot carry a
 stale record forward. It tracks `jit (one freeze)` within the freeze's own cost, because the
-vector record compares **by content**: it is which block edge becomes which grid line, in what
+block record compares **by content**: it is which block edge becomes which grid line, in what
 order, and the edge *coordinates* stay traced. A length can move a long way without the
 ordering changing, and an unchanged ordering reuses the compiled program.
 
@@ -141,7 +141,7 @@ large linear algebra call) locates all of it:
 | fto=11, split=20 — jax | 27.3 ms | **2543 ms** | 902 |
 
 JAX is ~9x slower on the modeling step at every size, because JAX has no true eager mode:
-every operation goes through its own dispatch, and the vector modeler emits one small array
+every operation goes through its own dispatch, and the block modeler emits one small array
 operation per block — 902 of them at `n_split=20`. PyTorch's C++ dispatcher absorbs that;
 JAX's does not. Taking a gradient widens it further (forward alone is 46 ms against 16; with
 `jax.grad` it is 250 against 22), since each primitive is then traced through JVP and partial
@@ -203,7 +203,7 @@ Four things this says.
 **1. Re-freezing is ruinous for CFS and NVF.** Their records hold arrays, where value equality
 is neither well defined nor hashable, so `StaticGeometry` falls back to identity and a new
 freeze misses the compilation cache every time: ~600 ms against a ~16 ms step. The content-hash
-path helps the vector records only. On these two strategies a fit must either hold one freeze
+path helps the block records only. On these two strategies a fit must either hold one freeze
 (and risk staleness — `_check_compression_still_fits` and `_check_normal_field_still_fits`
 refuse it eagerly, but a jitted call cannot check) or not use jit.
 
@@ -236,7 +236,7 @@ them is now about accuracy, which is what it should have been.
 
 ## If a fit must hold one freeze — how far it stays valid
 
-Re-freezing every step removes the question on the vector path, but the raster records give no
+Re-freezing every step removes the question on the block path, but the raster records give no
 choice: their identity comparison makes a re-freeze a recompilation, so a jitted raster fit
 holds one. The width of that record's validity was bisected against
 `_check_plan_still_fits` — the boundary is sharp, exact up to it (a replay at 106.31 matches a
@@ -281,10 +281,10 @@ above the expected convergence point than at the centre of the search range.
 | Raster inverse design, pattern moves every step | **`('sampled','li')`**, any backend |
 | Raster with CFS/NVF, pattern moves | **torch** (jit's re-freeze recompiles every step) |
 | Raster with CFS/NVF, pattern fixed | jax jit, one freeze |
-| Anything where a stale record would be silent | **torch**, or re-freeze on the vector path |
+| Anything where a stale record would be silent | **torch**, or re-freeze on the block path |
 
 The general shape: **PyTorch is the default, and JAX earns its place at large `fto` on the
-vector path.** Where JAX is chosen there, re-freezing every step is now both the safe option
+block path.** Where JAX is chosen there, re-freezing every step is now both the safe option
 and, within the freeze's own cost, the fast one.
 
 ---

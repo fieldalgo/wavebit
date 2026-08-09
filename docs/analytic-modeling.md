@@ -15,7 +15,7 @@ Targets:
 
 ## TL;DR
 
-The existing vector/raster modelers approximate tilted or curved boundaries with a
+The existing raster/block modelers approximate tilted or curved boundaries with a
 **staircase of axis-aligned rectangles**. That staircase is pure geometric error, so it
 only shrinks with high Fourier order / fine grids, and there is no **true smooth
 boundary/normal** for the NVF (normal vector field) factorization to exploit.
@@ -36,12 +36,12 @@ Two qualifications, both measured, both easy to trip over:
   improved raster-NVF by ~8x on the metallic circle, and the two are now level there — see §4
   case [2]. The separation that survives is against a *staircase* (case [1]), where the
   geometric error has a floor no Fourier order removes.
-- **On an axis-aligned boundary the analytic path is the slower one.** Li's rules along x and y
+- **On an axis-aligned boundary the smooth path is the slower one.** Li's rules along x and y
   are already optimal when the interfaces are axis-aligned, so NVF only costs there. Measured
-  against RETICOLO: the vector path matches at 1e-14 every order while the analytic path needs
+  against RETICOLO: the block path matches at 1e-14 every order while the smooth path needs
   fto≈16 to reach 1e-4.
 
-Choose the path by the boundary, not on a general expectation that the analytic path wins.
+Choose the path by the boundary, not on a general expectation that the smooth path wins.
 
 ---
 
@@ -115,8 +115,8 @@ energy-conservation violation on curved boundaries — is written out in the
 
 ## 3. Usage (new modeling type)
 
-Passing `ucell` as a **list of layer dicts** dispatches to the analytic path (modeling type
-2, grating type 2). The existing raster (ndarray) and vector (nested list) paths keep
+Passing `ucell` as a **list of layer dicts** dispatches to the smooth path (modeling type
+2, grating type 2). The existing raster (ndarray) and block (nested list) paths keep
 working.
 
 ```python
@@ -136,7 +136,7 @@ res = solver.conv_solve()
 ## 4. Results (`studies/benchmark_analytic.py`)
 
 **[1] Dielectric tilted rectangle** (30°, n=3.5, TM, subwavelength). Reference = analytic
-fto=16. Same rectangle represented analytically vs. as a vector staircase (n_split); `t0`
+fto=16. Same rectangle represented analytically vs. as a block staircase (n_split); `t0`
 error:
 
 | fto | analytic | staircase n=8 | staircase n=24 |
@@ -187,7 +187,7 @@ dielectric, is the one that still separates the paths, because there the stairca
 geometric error floor that no Fourier order removes and no raster refinement reaches.
 
 For a curved boundary the honest evidence is now the RETICOLO comparison, which has an external
-reference rather than the analytic path's own fto=16: the analytic result is flat from fto=5
+reference rather than the smooth path's own fto=16: the analytic result is flat from fto=5
 while two independent staircases are still climbing toward it at fto=20. See
 `<the manual's working notes>`.
 
@@ -234,7 +234,7 @@ keep passing.
   coefficients themselves are analytic, and the shape's *position* is now carried
   analytically too, but the field's shape (size, rotation) retains grid error. Increase the
   grid if needed.
-- `fourier_coefficients` and `factorization` are both ignored on the analytic path: it is
+- `fourier_coefficients` and `factorization` are both ignored on the smooth path: it is
   always the closed-form shape Fourier transform in the NVF 5-matrix form. For a non-NVF
   pure-Laurent comparison, call `fourier_analytic.to_conv_mat_smooth` directly.
 

@@ -13,7 +13,7 @@ A layer is ``dict(n_base=..., shapes=[...], combine=...)`` and a shape is
 contributions and the permittivity there is neither shape's. Two 120x120 rods of index 2 and 3
 in a background of 1, overlapping by 7200 of a 90000 cell, come out at a mean permittivity of
 2.76 where painting the second over the first gives 2.52 -- and the efficiency follows, 0.9856
-against the 0.9792 a raster and the vector path agree on. The vector path
+against the 0.9792 a raster and the block path agree on. The block path
 (``ucell=[[n_base, [[shape, ...], ...]]]``) is the one that paints, later object over earlier,
 so the same recipe means two different structures depending on which path it is handed to.
 
@@ -36,7 +36,7 @@ vector     painted (its own rule)      ``'add'`` — a staircase of blocks holds
                                        per block, so an overlap can only take one of them
 =========  ==========================  ====================================================
 
-The asymmetry in the middle column is deliberate. Painting is what the vector path does and
+The asymmetry in the middle column is deliberate. Painting is what the block path does and
 what a raster of the same recipe agrees with, so there is nothing surprising to refuse;
 superposition here is the rule nobody expects, so this path asks rather than assumes. The
 layer that used to come back silently different now names the two shapes and both ways
@@ -215,7 +215,7 @@ def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_RE
                             lattice=None):
     """Refuse a layer whose shapes overlap without saying how they should combine.
 
-    This is where the analytic path's superposition stops being implicit. Shapes that do not
+    This is where the smooth path's superposition stops being implicit. Shapes that do not
     intersect mean the same structure under either rule, so nothing is refused and ``combine``
     need not be given; shapes that *do* intersect mean two different structures, and the layer
     has to pick one. Raises :class:`ValueError` when it has not. Both answers can now be built —
@@ -227,7 +227,7 @@ def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_RE
     fraction of a cell of interpenetration is still allowed as arithmetic noise.
 
     Also runs :func:`check_shape_spec` over every shape, ahead of everything else here. This
-    function is the funnel the analytic path reaches the solver through, and — unlike
+    function is the funnel the smooth path reaches the solver through, and — unlike
     :func:`shape_geometry`, where the check would sit closer to the mistake — it is not inside
     :func:`_primitives`, whose ``except Exception`` would catch the refusal and answer it by
     silently skipping the overlap check.
@@ -272,10 +272,10 @@ def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_RE
     raise ValueError(
         f'Analytic layer {layer_index}: {what}{more}. This path adds every shape\'s '
         f'(eps_shape - eps_base) * FT(indicator), so the overlap gets both contributions and '
-        f"ends up as neither shape's material, while the vector path paints one over the "
+        f"ends up as neither shape's material, while the block path paints one over the "
         f'other — the same recipe, two different structures. Say which you mean:\n'
         f"  - combine='add' in the layer dict to keep the superposition computed here;\n"
-        f'  - the vector path, ucell=[[n_base, [[shape, ...], ...]]], to paint later shapes '
+        f'  - the block path, ucell=[[n_base, [[shape, ...], ...]]], to paint later shapes '
         f'over earlier ones.')
 
 
@@ -657,7 +657,7 @@ def to_conv_mat_smooth_layers(layer_shapes, fto_x, fto_y, period,
     ``(n_layers, ff_xy, ff_xy)``.
 
     Every layer goes through :func:`check_layer_combination` first — this is the funnel the
-    analytic path reaches the solver through, so it is the one place that can guarantee an
+    smooth path reaches the solver through, so it is the one place that can guarantee an
     overlap is never answered silently.
 
     The array namespace is taken from the first differentiable shape parameter found, so

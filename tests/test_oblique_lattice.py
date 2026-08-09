@@ -214,7 +214,7 @@ def test_li_is_refused_on_a_skewed_cell():
 
 
 def test_the_vector_modeler_is_refused_on_a_skewed_cell():
-    with pytest.raises(NotImplementedError, match='vector modeler'):
+    with pytest.raises(NotImplementedError, match='block modeler'):
         s = fieldwave.rcwa(backend=0, ucell=[[1.0, [['rectangle', 100.0, 200.0, 50.0, 50.0,
                                                      2.4, 0, 0, 0]]]],
                            period=[P, P], fto=[4, 4], thickness=[H], wavelength=WL,

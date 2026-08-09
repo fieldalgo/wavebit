@@ -319,7 +319,7 @@ def sweep_recompile(budget, reps):
 def sweep_stale_window(budget):
     """How far a *held* freeze stays valid — bisected, per shape and slab count.
 
-    Only matters if a fit holds one record rather than retaking it; on the vector path that is
+    Only matters if a fit holds one record rather than retaking it; on the block path that is
     no longer the recommended loop, but the raster records give no choice.
     """
     import jax.numpy as jnp

@@ -401,7 +401,7 @@ def test_shapes_superpose_where_they_overlap():
     unconditionally; the layer above refuses to reach it without being told that is the
     intent (:func:`check_layer_combination`).
 
-    The vector path paints instead — later object over earlier — and agrees with a raster of
+    The block path paints instead — later object over earlier — and agrees with a raster of
     the same instruction to eight digits, which is what makes the analytic value identifiable
     as the superposition rather than either of them being noise.
     """
@@ -426,11 +426,11 @@ def test_shapes_superpose_where_they_overlap():
 
 
 def test_overlapping_shapes_move_the_answer_while_the_vector_path_does_not():
-    """The user-visible half of it: analytic parts from the raster, the vector path does not.
+    """The user-visible half of it: analytic parts from the raster, the block path does not.
 
     This is why the layer has to be asked. ``combine='add'`` is the answer that keeps the
     superposition, and it is a different structure from the one the same recipe builds on the
-    vector path — which is what the two assertions measure.
+    block path — which is what the two assertions measure.
     """
     period, n_base = [300.0, 300.0], 1.0
     cfg = dict(period=period, thickness=[205.0], fto=[6, 6], n_top=1.0, n_bot=1.0,
@@ -484,7 +484,7 @@ def solve(shapes, **layer):
 def test_overlapping_shapes_are_refused_until_the_layer_says_how_to_combine():
     """The hazard this whole check exists for: the same recipe means two structures.
 
-    A vector recipe moved onto the analytic path used to come back superposed, with nothing
+    A vector recipe moved onto the smooth path used to come back superposed, with nothing
     said. Now the layer is refused until it names the rule, and the message has to carry both
     shapes and both ways forward — a user who cannot act on the error is no better off than
     one who never saw it.
@@ -495,7 +495,7 @@ def test_overlapping_shapes_are_refused_until_the_layer_says_how_to_combine():
         solve(shapes)
     message = str(raised.value)
     assert '0 (rectangle)' in message and '1 (rectangle)' in message
-    assert "combine='add'" in message and 'vector path' in message
+    assert "combine='add'" in message and 'block path' in message
 
     # And the escape hatch actually escapes, to the superposition that was always computed.
     assert float(np.sum(np.asarray(solve(shapes, combine='add').de_ti))) > 0.0
@@ -504,7 +504,7 @@ def test_overlapping_shapes_are_refused_until_the_layer_says_how_to_combine():
 def test_disjoint_shapes_never_have_to_answer_the_question():
     """No overlap, no difference between the rules — so no ``combine``, and any spelling works.
 
-    This is the case the analytic path is built for and the one that must stay free: the check
+    This is the case the smooth path is built for and the one that must stay free: the check
     is only worth having if it fires on actual overlap, since pushing people off this path
     costs them the staircase-free rotation it exists to provide.
     """
@@ -694,7 +694,7 @@ def test_the_check_steps_aside_for_a_traced_solve():
         total(130.0)                                           # same layer, concrete: refused
 
 
-# ------------------------------------------------------------------ the vector path's half
+# ------------------------------------------------------------------ the block path's half
 
 VECTOR_CFG = dict(period=[300.0, 300.0], thickness=[205.0], fto=[6, 6], n_top=1.0, n_bot=1.0,
                   wavelength=900.0, pol=0, theta=0.0, phi=0.0)
@@ -735,7 +735,7 @@ def test_the_vector_path_still_paints_what_it_always_painted():
 def test_combine_is_free_while_nothing_overlaps():
     """Disjoint shapes mean one structure, so either spelling is accepted -- on both paths.
 
-    That is what keeps `combine` from taxing the case the analytic path exists for, and it is
+    That is what keeps `combine` from taxing the case the smooth path exists for, and it is
     also the case in which the two paths have to agree: same recipe, same answer.
     """
     objects = [_vector_box(80.0), _vector_box(220.0)]

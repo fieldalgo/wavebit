@@ -64,7 +64,7 @@ class StaticGeometry:
             derived from — carried so a replay can tell whether it still fits, not consumed by
             the build. Left ``None``, the NVF replay is unchecked.
         compression: per-layer ``(row_idx, col_idx, x, y)`` for the CFS factorization.
-        block_grid: per-layer ``VectorGridPlan`` for the vector modeler's grid build.
+        block_grid: per-layer ``VectorGridPlan`` for the block modeler's grid build.
         shape_choices: per-shape discrete branch outcomes taken inside ``Modeling.rectangle``.
         boundary_plans: per-layer ``(table_records, regions)`` for the boundary path — which
             loop holds which vertex and which edges cross, once the painting is resolved. Like

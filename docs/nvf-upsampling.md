@@ -127,6 +127,6 @@ for a smooth boundary, and a random raster has none. The justification is this d
 
 The sweeps here are not checked in as a benchmark; they are one-off measurements against the
 analytic shape path. Two neighbouring write-ups cover the questions either side of this one:
-[`analytic-modeling.md`](analytic-modeling.md) on how the analytic path compares to the raster
+[`analytic-modeling.md`](analytic-modeling.md) on how the smooth path compares to the raster
 and staircase representations, and [`backend-choice.md`](backend-choice.md) on what the change
 here did to the cost of NVF relative to the other two strategies (it removed the difference).

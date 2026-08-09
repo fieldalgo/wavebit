@@ -40,7 +40,7 @@ for name, ucell, fx, fy in CFS:
                        to_conv_mat_raster_continuous(ucell, fx, fy)):
         out[f'cfs__{name}__{slot}'] = m
 
-# vector path: explicit segment edges, no compression step
+# block path: explicit segment edges, no compression step
 info = [list(cell_compression(rand((5, 5), 24))), list(cell_compression(rand((4, 6), 25)))]
 for i, (cell, x, y) in enumerate(info):
     out[f'vector__in{i}__cell'] = cell

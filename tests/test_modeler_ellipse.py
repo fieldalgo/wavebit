@@ -1,4 +1,4 @@
-"""The vector modeler's ellipse decomposition, checked for *convergence* rather than parity.
+"""The block modeler's ellipse decomposition, checked for *convergence* rather than parity.
 
 An ellipse has no exact block decomposition — it is approximated by a stack of axis-aligned
 blocks — so the only meaningful contract is that refining ``n_split`` makes the approximation
@@ -214,7 +214,7 @@ def test_efficiency_converges_monotonically_in_n_split():
 
 
 def test_converged_efficiency_matches_a_raster_of_the_same_ellipse():
-    """The vector path's limit is the same structure the raster Fourier path sees."""
+    """The block path's limit is the same structure the raster Fourier path sees."""
     n_pix = 512
     axis = (np.arange(n_pix) + 0.5) / n_pix * SOLVE_KW['period'][0]
     X, Y = np.meshgrid(axis, axis)
@@ -232,10 +232,10 @@ def test_converged_efficiency_matches_a_raster_of_the_same_ellipse():
 def test_converged_efficiency_matches_the_analytic_shape_path():
     """The same ellipse built as a parametric shape instead of as blocks.
 
-    A looser check than the raster one, and deliberately so: the analytic path factorizes with
-    NVF while the vector path uses Li's rules on the block edges, so the two agree only once
+    A looser check than the raster one, and deliberately so: the smooth path factorizes with
+    NVF while the block path uses Li's rules on the block edges, so the two agree only once
     the harmonic count is high enough for both — 0.3% at ``fto`` 8, 0.1% at 10. What it does
-    pin tightly is the *rotation convention*: feeding the analytic path the opposite sign of
+    pin tightly is the *rotation convention*: feeding the smooth path the opposite sign of
     ``angle`` misses by an order of magnitude more, so a flipped rotation cannot hide inside
     the factorization tolerance.
     """
