@@ -937,7 +937,8 @@ def to_conv_mat_raster_continuous(ucell, fto_x, fto_y, compression=None):
 
 
 def to_conv_mat_raster_continuous_nvf(ucell, fto_x, fto_y, normal_field=None,
-                                      normal_field_source=None, compression=None):
+                                      normal_field_source=None, compression=None,
+                                      lattice=None):
     """Per-layer convolution matrices for a raster ``ucell`` via closed-form Fourier + NVF.
 
     The combination the deprecated ``fourier_type`` integer could not express. It buys the
@@ -954,9 +955,16 @@ def to_conv_mat_raster_continuous_nvf(ucell, fto_x, fto_y, normal_field=None,
             the same way.
         compression: optional per-layer ``(row_idx, col_idx, x, y)`` from
             :func:`compression_indices`. Replayed eagerly it is checked too.
+        lattice: the cell basis, as in :func:`to_conv_mat_raster_nvf`.
 
     Both ``normal_field`` and ``compression`` are static geometry; supply both to keep the
     build traceable under JAX (this path is the only one that needs both).
+
+    ``lattice`` is carried here even though the solver currently refuses ``('integrated',
+    'nvf')`` on a skewed cell, because the basis is part of the frozen record's staleness key
+    (:func:`_normal_field_source`). A builder that replays that record without being able to
+    see the basis would reject a field frozen *with* one — so the parameter is what keeps this
+    path consistent with the record it consumes, not a second implementation of the skew.
 
     Returns:
         ``(epx, epy, epxy, epyx, epz_i)``, each ``(n_layers, ff_xy, ff_xy)``.
@@ -969,9 +977,10 @@ def to_conv_mat_raster_continuous_nvf(ucell, fto_x, fto_y, normal_field=None,
     for i, (eps_grid, base_eps, repeat_y, repeat_x) in enumerate(eps_grids):
         if normal_field is None:
             nx, ny = normal_vector_field(
-                eps_grid, _interface_mask_of(xp, eps_grid, base_eps, repeat_y, repeat_x))
+                eps_grid, _interface_mask_of(xp, eps_grid, base_eps, repeat_y, repeat_x),
+                lattice=lattice)
         else:
-            _check_normal_field_still_fits(eps_grid, normal_field_source, i)
+            _check_normal_field_still_fits(eps_grid, normal_field_source, i, lattice)
             nx, ny = normal_field[i]
 
         layer = ucell[i]

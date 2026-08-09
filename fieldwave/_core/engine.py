@@ -375,7 +375,8 @@ class CoreFactorizationMixin:
                         self.ucell, fto_x, fto_y,
                         normal_field=normal_field,
                         normal_field_source=normal_field_source,
-                        compression=compression)
+                        compression=compression,
+                        lattice=self._geometry_lattice)
 
         elif self._modeling_type_assigned == 1:                    # vector
             ucell_vector = self.modeling_vector_instruction(
