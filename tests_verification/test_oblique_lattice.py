@@ -104,18 +104,24 @@ def test_order_kxy_reduces_to_the_separable_formula():
 # ------------------------------------------------------------------- the physics
 
 def test_an_axis_aligned_basis_changes_nothing():
-    """Spelling the cell as an explicit ``diag(period)`` must not move it off the old path.
+    """Naming the cell explicitly must not select a different path from leaving it implicit.
 
     Asserted structurally rather than by comparing numbers. The two runs *are* the same
     computation, but ``eig`` / ``inv`` are not bit-reproducible run to run — an identical call
     repeated six times here spreads by 3.5e-18 — so an equality check would be testing LAPACK's
-    reduction order, not this. The invariants below are exact and deterministic: the geometry
-    steps see no basis, and the k-vectors stay the two separable 1-D vectors.
+    reduction order, not this. The invariants below are exact and deterministic: both spellings
+    hand the geometry steps the same basis, and the k-vectors stay two separable 1-D vectors.
+
+    That first invariant once read ``_geometry_lattice is None`` for both. It is
+    ``diag(period)`` for both now — the metric reaches every non-square raster, not only a
+    skewed cell (see :meth:`~fieldwave._core.engine.CoreSolveMixin._geometry_lattice_for`).
+    What the test is *for* is unchanged, and is what it still says.
     """
     cell = raster(ORTHO)
     plain, explicit = solver(cell), solver(cell, lattice=ORTHO)
     assert explicit.lattice_is_axis_aligned
-    assert plain._geometry_lattice is None and explicit._geometry_lattice is None
+    assert np.array_equal(plain._geometry_lattice_for(None),
+                          explicit._geometry_lattice_for(None))
     for s in (plain, explicit):
         kx, ky = s._kxy_2d(WL)
         assert kx.ndim == 1 and ky.ndim == 1

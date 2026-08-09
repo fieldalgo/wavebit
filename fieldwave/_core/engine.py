@@ -33,6 +33,66 @@ _SOLVES = {
 }
 
 
+def _concrete_period(value):
+    """``period`` as two plain floats, or ``None`` if it has none to give.
+
+    ``period`` is a differentiable parameter (see ``tests_verification/test_gradients.py``), so
+    it arrives in three shapes and all three are legitimate. Plain numbers convert outright. A
+    grad-tracking torch tensor has to be detached first. A ``jax.grad`` tracer refuses both a
+    whole-array conversion *and* ``float()`` — unlike the boolean narrowing
+    :func:`~fieldwave._core.factorization._as_bools` relies on, there is no way to read a
+    scalar out of one — so the honest answer there is ``None``.
+
+    ``None`` costs nothing when a frozen geometry is present, because
+    :meth:`CoreFactorizationMixin._geometry_lattice_for` recovers it from the record. Without
+    one it falls back to the legacy index-space normal, unchanged.
+    """
+    import numpy as np
+    if value is None:
+        return None
+    if hasattr(value, 'detach'):
+        value = value.detach()
+    try:
+        p = np.atleast_1d(np.asarray(value, dtype=float))
+    except Exception:
+        try:
+            items = value if isinstance(value, (list, tuple)) else list(value)
+            p = np.asarray([float(v.detach() if hasattr(v, 'detach') else v) for v in items],
+                           dtype=float)
+        except Exception:             # a jax tracer: no primal to read
+            return None
+    if p.size == 1:
+        return float(p[0]), float(p[0])
+    return float(p[0]), float(p[1])
+
+
+def _recorded_lattice(normal_field_source):
+    """The cell basis a frozen record was taken on, or ``None`` if it does not name one.
+
+    The record stores the basis scaled to ``|a1| == 1``
+    (:func:`~fieldwave._core.factorization._lattice_key`), because that is all the normal field
+    depends on — a uniform rescale of the cell leaves it identical. That scaled basis is itself
+    a perfectly good basis to hand back: it re-derives to exactly the key the staleness check
+    compares against, so a replay can never be refused for having reconstructed it differently.
+
+    Layers disagreeing, or a record predating the basis being an input, both answer ``None``:
+    neither names a single cell, and inventing one would be worse than falling back.
+    """
+    import numpy as np
+    if not normal_field_source:
+        return None
+    entries = [e for e in normal_field_source if len(e) > 2]
+    if len(entries) != len(normal_field_source):
+        return None
+    keys = {e[2] for e in entries}
+    if len(keys) != 1:
+        return None
+    key = keys.pop()
+    if key is None:
+        return None
+    return np.asarray(key, dtype=float).reshape(2, 2)
+
+
 class CoreSolveMixin:
     """Provides ``solve_1d`` / ``solve_1d_conical`` / ``solve_2d`` backed by the core."""
 
@@ -79,24 +139,32 @@ class CoreSolveMixin:
         """Whether the cell is ``diag(Lx, Ly)`` — i.e. whether the separable k-layout applies."""
         return self._lattice_basis is None or _lattice.is_axis_aligned(self._lattice_basis)
 
-    @property
-    def _geometry_lattice(self):
-        """The basis the *geometry* steps need — ``None`` whenever the cell is axis-aligned.
+    def _geometry_lattice_for(self, geometry):
+        """The cell basis the *geometry* steps should use — live, or recovered from the record.
 
-        Deliberately ``None`` even for a basis written out as an explicit ``diag(Lx, Ly)``, so
-        that the two spellings of the same cell give the same answer and enabling this feature
-        cannot move an existing result.
+        One accessor rather than two, because a skewed basis and a non-square pixel are the
+        same question asked twice: both ask what one raster step means in real space, and a 2x2
+        answers it in either case. An axis-aligned cell gets ``diag(period)`` — it is *not*
+        withheld, because the metric it enables fixes a real defect there too (a raster whose
+        pixels are not square in real space had its normal up to ~18 degrees off; see
+        :func:`~fieldwave._core.factorization.normal_vector_field`).
 
-        There is a real correction being withheld by that choice. The metric path also fixes
-        an *orthogonal* case the legacy one gets wrong: when a raster's pixels are not square
-        in real space (``period[0]/Nx != period[1]/Ny``) the index-space distance transform
-        yields a normal up to ~18 degrees off — measured on a 45-degree interface in a 200x400
-        cell on a 64x64 grid, ``|cos|`` to the true normal is 0.9487 legacy against 1.000000
-        with the metric. That is a pre-existing defect with its own before/after, not part of
-        supporting a skewed cell, and folding it in here would silently change results for
-        anyone already running NVF on a non-square grid. It should land as its own change.
+        ``period`` is readable except when it is the variable under differentiation, which is
+        exactly when a caller is most likely to also be replaying a frozen geometry. Freezing
+        happens eagerly on a concrete ``period``, so the record was built on a real pixel shape;
+        letting an unreadable one arrive as ``None`` would make the same structure look like a
+        different raster and the replay would be refused
+        (:func:`~fieldwave._core.factorization._check_normal_field_still_fits`). Taking it back
+        out of the record rather than storing it twice keeps the two in step, and is the honest
+        answer besides — the field being replayed *is* the one built on that pixel shape,
+        whatever ``period`` has since become.
         """
-        return None if self.lattice_is_axis_aligned else self._lattice_basis
+        if not self.lattice_is_axis_aligned:
+            return self._lattice_basis
+        period = _concrete_period(self.period)
+        if period is not None:
+            return _lattice.as_lattice(period=period)
+        return None if geometry is None else _recorded_lattice(geometry.normal_field_source)
 
     def _kxy_2d(self, wavelength):
         """Per-order ``(kx, ky)`` for the 2D solve, in whichever layout the lattice admits.
@@ -244,10 +312,11 @@ class CoreFactorizationMixin:
         normal_field = normal_field_source = compression = None
         if self._modeling_type_assigned == 0:
             if self._factorization == Factorization.NVF:
+                basis = self._geometry_lattice_for(None)
                 normal_field = _fac.normal_field_for_ucell(
-                    self.ucell, fto_x, fto_y, lattice=self._geometry_lattice)
+                    self.ucell, fto_x, fto_y, lattice=basis)
                 normal_field_source = _fac.normal_field_source_for_ucell(
-                    self.ucell, fto_x, fto_y, lattice=self._geometry_lattice)
+                    self.ucell, fto_x, fto_y, lattice=basis)
             if self._fourier_coefficients == FourierCoefficients.INTEGRATED:
                 compression = [_fac.compression_indices(self.ucell[i])
                                for i in range(self.ucell.shape[0])]
@@ -372,7 +441,7 @@ class CoreFactorizationMixin:
                         self.ucell, fto_x, fto_y,
                         normal_field=normal_field,
                         normal_field_source=normal_field_source,
-                        lattice=self._geometry_lattice)
+                        lattice=self._geometry_lattice_for(geometry))
                 else:
                     (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all,
                      epz_conv_i_all) = _fac.to_conv_mat_raster_continuous_nvf(
@@ -380,7 +449,7 @@ class CoreFactorizationMixin:
                         normal_field=normal_field,
                         normal_field_source=normal_field_source,
                         compression=compression,
-                        lattice=self._geometry_lattice)
+                        lattice=self._geometry_lattice_for(geometry))
 
         elif self._modeling_type_assigned == 1:                    # vector
             ucell_vector = self.modeling_vector_instruction(
@@ -397,7 +466,7 @@ class CoreFactorizationMixin:
                 normal_grid=self.analytic_normal_grid,
                 type_complex=xp.complex128, xp=xp,
                 boundary_plans=None if geometry is None else geometry.boundary_plans,
-                lattice=self._geometry_lattice)
+                lattice=self._geometry_lattice_for(geometry))
 
         else:
             raise ValueError("Check 'modeling_type' in 'conv_solve'.")

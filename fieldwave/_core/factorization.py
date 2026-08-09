@@ -337,13 +337,23 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None):
         from .lattice import jacobian
         ny, nx = shape
         J = jacobian(lattice, ny, nx)
+        # Work in units of one x-step: divide J through by |a1|/nx before anything reads it.
+        # A uniform scale cannot survive the normalisation at the end, so this changes no
+        # direction — but it makes a square-pixel raster land on exactly `sampling=(1, 1)` and
+        # a `J^-T` of the identity, which is bit-identical to taking no metric at all. Without
+        # it those cells moved by ~7e-15 purely from multiplying a factor in and dividing it
+        # back out.
+        J = J / (float(np.hypot(J[0, 0], J[1, 0])) or 1.0)
         # Physical length of one index step along each axis: axis 0 walks a2/ny, axis 1 a1/nx.
         # Exact for an axis-aligned cell; for a sheared one it is the best `sampling` can say,
         # since scipy's transform has no way to express a non-diagonal metric. The direction
         # that survives normalisation is set by the gradient below, which is exact regardless.
         step_j = float(np.hypot(J[0, 1], J[1, 1]))
         step_i = float(np.hypot(J[0, 0], J[1, 0]))
-        dist_map = distance_transform_edt(~interface_mask, sampling=(step_j, step_i))
+        if step_j == step_i == 1.0:
+            dist_map = distance_transform_edt(~interface_mask)
+        else:
+            dist_map = distance_transform_edt(~interface_mask, sampling=(step_j, step_i))
         g_j, g_i = np.gradient(dist_map)
         # grad_xy f = J^-T @ (df/di, df/dj) -- the inverse transpose, not the Jacobian: index
         # steps push forward, gradients pull back.
@@ -422,11 +432,21 @@ def _interface_mask_of(xp, eps, base_eps, repeat_y, repeat_x):
 
 
 def _lattice_key(lattice):
-    """A hashable, comparable stand-in for a basis — ``None`` stays ``None``."""
+    """A hashable, comparable stand-in for a basis — ``None`` stays ``None``.
+
+    Scaled so ``|a1| == 1``, which makes the key record the cell's *shape* and not its size.
+    That is exact rather than merely tolerant: a uniform rescale of the cell leaves the normal
+    field identical (the scale multiplies into the distance transform and divides straight back
+    out of the normalisation), so keying on absolute lengths would refuse replays that are in
+    fact the same computation. Combined with the grid shape, which the key already carries,
+    this pins the pixel geometry exactly.
+    """
     if lattice is None:
         return None
     import numpy as np
-    return tuple(np.asarray(lattice, dtype=float).reshape(-1).tolist())
+    A = np.asarray(lattice, dtype=float)
+    scale = float(np.hypot(A[0, 0], A[1, 0])) or 1.0
+    return tuple((A / scale).reshape(-1).tolist())
 
 
 def _normal_field_source(eps, lattice=None):

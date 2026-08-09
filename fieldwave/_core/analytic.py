@@ -593,7 +593,11 @@ def to_conv_mat_analytic_layers(layer_shapes, fto_x, fto_y, period,
             # one, and this module can only sum. Resolve the painting into disjoint polygons
             # and transform those. A painted layer with nothing overlapping means the same
             # structure either way, so it stays here -- exact, and cheaper.
-            if lattice is not None:
+            # Skew, not merely "a basis was supplied": since the metric correction landed,
+            # every axis-aligned cell carries a `diag(period)` basis too, and those resolve
+            # exactly as they always did.
+            from .lattice import is_axis_aligned
+            if lattice is not None and not is_axis_aligned(lattice):
                 raise NotImplementedError(
                     f'layer {index} paints shapes that overlap, and resolving an overlap into '
                     f'polygons is not implemented yet for a non-orthogonal cell basis (set via '
