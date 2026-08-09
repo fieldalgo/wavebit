@@ -66,6 +66,10 @@ class StaticGeometry:
         compression: per-layer ``(row_idx, col_idx, x, y)`` for the CFS factorization.
         vector_grid: per-layer ``VectorGridPlan`` for the vector modeler's grid build.
         shape_choices: per-shape discrete branch outcomes taken inside ``Modeling.rectangle``.
+        boundary_plans: per-layer ``(table_records, regions)`` for the boundary path — which
+            loop holds which vertex and which edges cross, once the painting is resolved. Like
+            the vector records these are pure Python indices, never coordinates, so a replay
+            carries a gradient to the vertices and they compare by content.
 
     A field left ``None`` means "auto-detect", which is what the strategy in use does not need
     (a DFS build never touches ``normal_field``, for instance).
@@ -94,6 +98,7 @@ class StaticGeometry:
     compression: Optional[Any] = None
     vector_grid: Optional[Any] = None
     shape_choices: Optional[Any] = None
+    boundary_plans: Optional[Any] = None
 
     def _cache_key(self):
         """What ``__eq__``/``__hash__`` compare: the content when that is well defined.
@@ -105,7 +110,8 @@ class StaticGeometry:
         if self.normal_field is None and self.normal_field_source is None \
                 and self.compression is None:
             try:
-                key = ('content', _hashable(self.vector_grid), _hashable(self.shape_choices))
+                key = ('content', _hashable(self.vector_grid), _hashable(self.shape_choices),
+                       _hashable(self.boundary_plans))
                 hash(key)
                 return key
             except TypeError:

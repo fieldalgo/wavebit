@@ -29,9 +29,9 @@ where they part:
 =========  ==========================  ====================================================
 path       unlabelled                  refuses
 =========  ==========================  ====================================================
-analytic   refused                     ``'paint'`` — needs the transform of a shape
-                                       *difference*, the intersection of two rotated
-                                       primitives, which is not implemented
+analytic   refused                     nothing — ``'add'`` is built here, ``'paint'`` by
+                                       :mod:`.boundary`, which resolves the overlap into
+                                       disjoint polygons first and transforms those
 vector     painted (its own rule)      ``'add'`` — a staircase of blocks holds one index
                                        per block, so an overlap can only take one of them
 =========  ==========================  ====================================================
@@ -41,6 +41,10 @@ what a raster of the same recipe agrees with, so there is nothing surprising to 
 superposition here is the rule nobody expects, so this path asks rather than assumes. The
 layer that used to come back silently different now names the two shapes and both ways
 forward.
+
+``'paint'`` used to be refused here too, on the grounds that it needs the transform of a shape
+*difference*. It still does — :mod:`.boundary` computes that difference as a polygon rather
+than in closed form, which is what made it buildable.
 
 The check costs a pairwise geometry test per layer (see :mod:`fieldwave._core.overlap`) and
 needs concrete numbers, so a layer whose parameters are tracers is passed through unchecked;
@@ -138,8 +142,9 @@ def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_RE
     This is where the analytic path's superposition stops being implicit. Shapes that do not
     intersect mean the same structure under either rule, so nothing is refused and ``combine``
     need not be given; shapes that *do* intersect mean two different structures, and the layer
-    has to pick one. Raises :class:`ValueError` when it has not, and
-    :class:`NotImplementedError` for the one it asked for that this path cannot build.
+    has to pick one. Raises :class:`ValueError` when it has not. Both answers can now be built —
+    ``'add'`` here and ``'paint'`` by :mod:`.boundary`, which resolves the overlap into
+    polygons first — so neither is refused, only silence is.
 
     Touching is not overlapping — abutting rectangles and a shape exactly filling the period
     both come out at a gap of zero — and ``tol_rel`` is measured against the period, so a
@@ -178,12 +183,7 @@ def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_RE
                 f'overlap{_across(ox, oy)}')
 
     if combine == 'paint':
-        raise NotImplementedError(
-            f'Analytic layer {layer_index}: {what}{more}, and this path cannot paint them. '
-            f"combine='paint' needs the closed-form transform of a shape difference — the "
-            f'intersection of two rotated primitives — which is not implemented here. Use the '
-            f'vector path, ucell=[[n_base, [[shape, ...], ...]]], which paints later shapes '
-            f"over earlier ones, or combine='add' to superpose them.")
+        return          # handled by the boundary path, not here — see :mod:`.boundary`
 
     raise ValueError(
         f'Analytic layer {layer_index}: {what}{more}. This path adds every shape\'s '
@@ -193,6 +193,33 @@ def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_RE
         f"  - combine='add' in the layer dict to keep the superposition computed here;\n"
         f'  - the vector path, ucell=[[n_base, [[shape, ...], ...]]], to paint later shapes '
         f'over earlier ones.')
+
+
+def layer_needs_resolving(layer, period):
+    """Does this layer actually need the boundary path — i.e. is it painted *and* overlapping?
+
+    While nothing intersects, painting and adding describe the same structure, and the closed
+    form here is both exact and cheaper than resolving a polygon that has nothing to resolve.
+    Routing on the spelling alone would also make two names for one structure return different
+    numbers (measured 0.8% apart on disjoint rods), which is the surprise ``combine`` exists to
+    remove.
+
+    Returns ``False`` when the parameters are not concrete — a traced call has already had its
+    eager pass through :meth:`freeze_geometry`, which is where the decision was taken.
+    """
+    if layer.get('combine') != 'paint':
+        return False
+    shapes = layer.get('shapes', [])
+    if len(shapes) < 2:
+        return False
+    try:
+        Px, Py = float(period[0]), float(period[1])
+    except Exception:                                  # noqa: BLE001 - traced period
+        return False
+    prims = _primitives(shapes, Px, Py)
+    if prims is None:
+        return False
+    return bool(_overlap.overlapping_pairs(prims, Px, Py, OVERLAP_TOL_REL * max(Px, Py)))
 
 
 def shape_ft(xp, shape, ky, kx, period):
@@ -483,7 +510,8 @@ def to_conv_mat_analytic_nvf(xp, shapes, n_base, fto_x, fto_y, period, dtype,
 
 
 def to_conv_mat_analytic_layers(layer_shapes, fto_x, fto_y, period,
-                                normal_grid=256, type_complex=None, xp=None):
+                                normal_grid=256, type_complex=None, xp=None,
+                                boundary_plans=None):
     """Stack the analytic-NVF convolution matrices over layers.
 
     ``layer_shapes`` is one ``dict(n_base=..., shapes=[...])`` per layer, with the shapes'
@@ -507,9 +535,20 @@ def to_conv_mat_analytic_layers(layer_shapes, fto_x, fto_y, period,
     for index, layer in enumerate(layer_shapes):
         check_layer_combination(layer, period, index)
         n_base = layer.get('n_base', layer.get('base', 1.0))
-        mats = to_conv_mat_analytic_nvf(
-            xp, layer.get('shapes', []), n_base, fto_x, fto_y, period, dtype,
-            normal_grid=normal_grid)
+        plan = None if boundary_plans is None else boundary_plans[index]
+        if plan is not None or layer_needs_resolving(layer, period):
+            # A painted layer that actually overlaps is a different structure from a summed
+            # one, and this module can only sum. Resolve the painting into disjoint polygons
+            # and transform those. A painted layer with nothing overlapping means the same
+            # structure either way, so it stays here -- exact, and cheaper.
+            from .boundary import to_conv_mat_boundary_layer
+            mats = to_conv_mat_boundary_layer(
+                xp, layer.get('shapes', []), n_base, fto_x, fto_y, period, dtype,
+                normal_grid=normal_grid, plan=plan)
+        else:
+            mats = to_conv_mat_analytic_nvf(
+                xp, layer.get('shapes', []), n_base, fto_x, fto_y, period, dtype,
+                normal_grid=normal_grid)
         for slot, m in zip(out, mats):
             slot.append(m)
 

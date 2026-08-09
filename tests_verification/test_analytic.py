@@ -502,11 +502,24 @@ def test_touching_is_not_overlapping():
     solve([rod(150.0, lx=300.0)])                                     # exactly one period wide
 
 
-def test_paint_is_only_refused_where_it_would_differ():
-    """``combine='paint'`` is honest about what it is: unbuildable here, and only where it bites."""
-    with pytest.raises(NotImplementedError) as raised:
-        solve([rod(130.0), rod(190.0, n_index=3.0)], combine='paint')
-    assert 'vector path' in str(raised.value)
+def test_paint_now_builds_and_is_not_the_sum():
+    """``combine='paint'`` used to raise here; the boundary path builds it, and it differs.
+
+    It has to differ: the overlap holds the later shape's material under painting and the sum
+    of both contributions under superposition, so agreeing would mean one of them is wrong.
+    What this pins is that asking for painting no longer silently returns the sum -- the
+    failure the ``combine`` keyword exists to prevent, now in the direction that used to be
+    unbuildable rather than refused.
+    """
+    shapes = [rod(130.0), rod(190.0, n_index=3.0)]
+    painted = float(np.sum(np.asarray(solve(shapes, combine='paint').de_ti)))
+    added = float(np.sum(np.asarray(solve(shapes, combine='add').de_ti)))
+    assert 0.0 < painted < 1.0
+    # These rods overlap over a small part of the cell, so the two structures are close and
+    # the gap is ~1e-3 -- four orders above the 1e-12 the two spellings agree to when nothing
+    # intersects (`test_disjoint_shapes_never_have_to_answer_the_question`). That contrast is
+    # the point; the size of the gap is the geometry's business, not this test's.
+    assert abs(painted - added) > 1e-4, (painted, added)
 
 
 def test_unknown_combine_modes_are_refused_even_without_an_overlap():

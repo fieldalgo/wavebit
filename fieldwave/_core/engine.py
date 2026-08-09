@@ -12,6 +12,7 @@ per-backend ``transfer_method`` chains it replaces existed in triplicate.
 import warnings
 
 from . import analytic as _analytic
+from . import boundary as _boundary
 from . import factorization as _fac
 from .enums import (Factorization, FourierCoefficients, coefficients_of, factorization_of,
                     resolve_fourier_options, to_fourier_type)
@@ -186,6 +187,16 @@ class CoreFactorizationMixin:
             self.modeling_vector_instruction(self.ucell)
             geometry.vector_grid = self.modeler.grid_plans
             geometry.shape_choices = self.modeler.shape_choices
+        if self._modeling_type_assigned == 2:
+            # Only a painted layer that actually overlaps has a plan to freeze. A summed one
+            # has no discrete decision in it, and a painted one with nothing overlapping means
+            # the same structure either way -- both stay on the closed-form path, so their
+            # slots stay None and the replay never looks.
+            plans = [_boundary.plan_layer(layer.get('shapes', []))
+                     if _analytic.layer_needs_resolving(layer, self.period) else None
+                     for layer in self.ucell]
+            if any(p is not None for p in plans):
+                geometry.boundary_plans = plans
         return geometry
 
     def conv_solve(self, geometry=None, **kwargs):
@@ -257,7 +268,8 @@ class CoreFactorizationMixin:
              epz_conv_i_all) = _analytic.to_conv_mat_analytic_layers(
                 self.ucell, fto_x, fto_y, self.period,
                 normal_grid=self.analytic_normal_grid,
-                type_complex=xp.complex128, xp=xp)
+                type_complex=xp.complex128, xp=xp,
+                boundary_plans=None if geometry is None else geometry.boundary_plans)
 
         else:
             raise ValueError("Check 'modeling_type' in 'conv_solve'.")

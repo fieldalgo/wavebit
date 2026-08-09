@@ -253,3 +253,73 @@ def test_gradient_reaches_the_shape_parameters():
         fd = (float(loss(p0.at[i].add(h))) - float(loss(p0.at[i].add(-h)))) / (2 * h)
         an = float(g[i])
         assert abs(fd - an) <= 1e-5 * max(abs(fd), abs(an), 1.0), (i, fd, an)
+
+
+# --------------------------------------------------------------------------- wiring
+def _solve(ucell, fto=6, **over):
+    import fieldwave
+    cfg = dict(backend=0, fto=(fto, fto), period=PERIOD, thickness=(0.6,), wavelength=1.6,
+               n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, pol=0)
+    cfg.update(over)
+    return fieldwave.rcwa(ucell=ucell, **cfg)
+
+
+PAINT_SHAPES = [dict(type='rectangle', cx=0.40, cy=0.40, lx=0.34, ly=0.34, angle=0.0,
+                     n_index=2.0),
+                dict(type='rectangle', cx=0.56, cy=0.56, lx=0.34, ly=0.34, angle=0.0,
+                     n_index=3.0)]
+
+
+def _total(res):
+    return float(np.asarray(res.de_ti).real.sum())
+
+
+def test_paint_is_accepted_and_is_not_add():
+    """The two rules are two structures; asking for one must not quietly give the other."""
+    painted = _total(_solve([dict(n_base=1.0, combine='paint', shapes=PAINT_SHAPES)]).conv_solve())
+    added = _total(_solve([dict(n_base=1.0, combine='add', shapes=PAINT_SHAPES)]).conv_solve())
+    assert abs(painted - added) > 0.1, (painted, added)
+
+
+def test_paint_agrees_with_the_vector_path():
+    """The vector path paints too, so on axis-aligned shapes both describe the same structure."""
+    painted = _total(_solve([dict(n_base=1.0, combine='paint', shapes=PAINT_SHAPES)]).conv_solve())
+    vec = [[1.0, [['rectangle', s['cx'], s['cy'], s['lx'], s['ly'], s['n_index'], s['angle'],
+                   2, 2] for s in PAINT_SHAPES]]]
+    assert abs(painted - _total(_solve(vec).conv_solve())) < 5e-3
+
+
+def test_paint_without_overlap_equals_add():
+    """While nothing intersects, the two rules mean the same thing and must agree exactly."""
+    apart = [dict(type='rectangle', cx=0.22, cy=0.22, lx=0.26, ly=0.26, angle=0.3, n_index=2.0),
+             dict(type='rectangle', cx=0.74, cy=0.74, lx=0.26, ly=0.26, angle=-0.4, n_index=3.0)]
+    a = _total(_solve([dict(n_base=1.0, combine='paint', shapes=apart)]).conv_solve())
+    b = _total(_solve([dict(n_base=1.0, combine='add', shapes=apart)]).conv_solve())
+    assert abs(a - b) < 2e-3, (a, b)
+
+
+def test_freeze_geometry_records_a_plan_only_for_painted_layers():
+    solver = _solve([dict(n_base=1.0, combine='paint', shapes=PAINT_SHAPES),
+                     dict(n_base=1.0, combine='add', shapes=PAINT_SHAPES)],
+                    thickness=(0.3, 0.3))
+    g = solver.freeze_geometry()
+    assert g.boundary_plans is not None
+    assert g.boundary_plans[0] is not None      # painted
+    assert g.boundary_plans[1] is None          # summed -- nothing discrete to freeze
+
+
+def test_frozen_plan_reproduces_the_eager_answer():
+    solver = _solve([dict(n_base=1.0, combine='paint', shapes=PAINT_SHAPES)])
+    eager = _total(solver.conv_solve())
+    replayed = _total(solver.conv_solve(geometry=solver.freeze_geometry()))
+    assert abs(eager - replayed) < 1e-12
+
+
+def test_a_painted_ellipse_is_polygonised():
+    """Curved primitives are polygonised for this path; the answer must still be sane."""
+    shapes = [dict(type='ellipse', cx=0.42, cy=0.46, lx=0.44, ly=0.28, angle=0.5, n_index=2.0),
+              dict(type='circle', cx=0.60, cy=0.58, lx=0.30, ly=0.30, angle=0.0, n_index=3.0)]
+    r = _solve([dict(n_base=1.0, combine='paint', shapes=shapes)]).conv_solve()
+    t = _total(r)
+    assert 0.0 < t < 1.0
+    assert abs(t + float(np.asarray(r.de_ri).real.sum()) - 1.0) < 1e-9    # lossless
