@@ -208,9 +208,9 @@ def test_9_vector_modeling_period():
         # vector object for layer
         sub_element = solver.modeler.rectangle_no_approximation(cx=500, cy=500, lx=200, ly=200, base=2.0)
         layer_info_list = [[1.0, sub_element]]
-        ucell_vector = solver.modeler.draw(layer_info_list)
-        assert ucell_vector is not None
-        assert len(ucell_vector) == 1
+        ucell_block = solver.modeler.draw(layer_info_list)
+        assert ucell_block is not None
+        assert len(ucell_block) == 1
         print(f"[{backend_name}] Vector modeling period test passed")
     print("SUCCESS: Test 9 Passed!\n")
 

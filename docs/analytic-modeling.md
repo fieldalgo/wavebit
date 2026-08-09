@@ -127,7 +127,7 @@ ucell = [dict(n_base=1.0, shapes=[
                   angle=np.deg2rad(25), n_index=1.0),
              dict(type='ellipse', cx=0.8, cy=0.9, lx=0.3, ly=0.2,
                   angle=0.6, n_index=3.0)])]
-solver = fieldwave.rcwa(backend=0, ucell=ucell, fto=(11, 11), ...)  # analytic_normal_grid=256 (default)
+solver = fieldwave.rcwa(backend=0, ucell=ucell, fto=(11, 11), ...)  # normal_grid=256 (default)
 res = solver.conv_solve()
 ```
 
@@ -230,13 +230,13 @@ keep passing.
   the gradient there is `0*inf`. The second half needs a rectangle normal field that is
   differentiable in position to begin with, which is the `tanh` mollification already rejected
   for breaking smoothness through `angle = 0`.
-- The normal projectors still depend on `analytic_normal_grid` sampling (default 1024) — the
+- The normal projectors still depend on `normal_grid` sampling (default 1024) — the
   coefficients themselves are analytic, and the shape's *position* is now carried
   analytically too, but the field's shape (size, rotation) retains grid error. Increase the
   grid if needed.
 - `fourier_coefficients` and `factorization` are both ignored on the analytic path: it is
   always the closed-form shape Fourier transform in the NVF 5-matrix form. For a non-NVF
-  pure-Laurent comparison, call `fourier_analytic.to_conv_mat_analytic` directly.
+  pure-Laurent comparison, call `fourier_analytic.to_conv_mat_smooth` directly.
 
 ### References
 - L. Li, *Use of Fourier series in the analysis of discontinuous periodic structures*, JOSA A

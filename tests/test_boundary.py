@@ -199,11 +199,11 @@ def test_permittivity_matches_the_analytic_path_for_one_shape(fto):
     (measured 4.8e-3 flat over fto 4..12), so requiring them to agree would be requiring one
     extension to be the other.
     """
-    from fieldwave._core.analytic import to_conv_mat_analytic_nvf
+    from fieldwave._core.analytic import to_conv_mat_smooth_nvf
     shape = dict(type='rectangle', cx=0.5, cy=0.5, lx=0.42, ly=0.31, angle=0.4, n_index=2.0)
     ng = 1024
     (mine, _) = _mats(xnp, [(0.5, 0.5, 0.42, 0.31, 0.4, 2.0)], fto=fto, ng=ng)
-    theirs = to_conv_mat_analytic_nvf(xnp, [shape], 1.0, fto, fto, PERIOD, xnp.complex128,
+    theirs = to_conv_mat_smooth_nvf(xnp, [shape], 1.0, fto, fto, PERIOD, xnp.complex128,
                                       normal_grid=ng)
     rel = (np.abs(np.asarray(mine[4]) - np.asarray(theirs[4])).max()
            / np.abs(np.asarray(theirs[4])).max())
@@ -314,7 +314,7 @@ def test_a_circle_without_ly_is_the_same_circle_on_both_paths(fto):
     asserts the two paths **agree**, not that the location is right -- there is one default, so
     correcting it later moves both paths together, which is the property worth pinning.
     """
-    from fieldwave._core.analytic import to_conv_mat_analytic_nvf
+    from fieldwave._core.analytic import to_conv_mat_smooth_nvf
     from fieldwave._core.lattice import as_lattice, periods_of
     ng = 1024
     for name, lat in (('square', None), ('skew', as_lattice(lattice=[[1.0, 0.3], [0.0, 1.0]]))):
@@ -322,7 +322,7 @@ def test_a_circle_without_ly_is_the_same_circle_on_both_paths(fto):
         period = PERIOD if lat is None else periods_of(lat)
         mine = _b.to_conv_mat_boundary_layer(xnp, [shape], 1.0, fto, fto, period,
                                              xnp.complex128, normal_grid=ng, lattice=lat)
-        theirs = to_conv_mat_analytic_nvf(xnp, [shape], 1.0, fto, fto, period,
+        theirs = to_conv_mat_smooth_nvf(xnp, [shape], 1.0, fto, fto, period,
                                           xnp.complex128, normal_grid=ng, lattice=lat)
         rel = (np.abs(np.asarray(mine[4]) - np.asarray(theirs[4])).max()
                / np.abs(np.asarray(theirs[4])).max())

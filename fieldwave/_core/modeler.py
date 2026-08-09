@@ -7,7 +7,7 @@ with one Array-API implementation, in the same style as :mod:`fieldwave._core.fa
 What this module produces is the *vector* (staircase-free) description of a layer: a list of
 ``(cell, x_list, y_list)`` triples, where ``cell`` holds the refractive index of each
 piecewise-constant block and ``x_list`` / ``y_list`` the block edges. That is exactly the input
-:func:`fieldwave._core.factorization.to_conv_mat_vector` consumes, so a shape drawn here is
+:func:`fieldwave._core.factorization.to_conv_mat_block` consumes, so a shape drawn here is
 Fourier-transformed analytically rather than off a raster.
 
 Two conventions carry over from the already-ported modules:
@@ -156,7 +156,7 @@ def _result_dtype(xp, dtypes):
     return out
 
 
-def _vector_primitives(objects):
+def _block_primitives(objects):
     """The layer's drawing instructions as convex primitives, or ``None`` if not concrete.
 
     Every vector instruction is ``[name, cx, cy, lx, ly, n_index, angle, ...]``, so the
@@ -175,11 +175,11 @@ def _vector_primitives(objects):
         return None
 
 
-def _vector_shape_name(objects, i):
+def _block_shape_name(objects, i):
     return f'{i} ({objects[i][0]})'
 
 
-def check_vector_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_REL):
+def check_block_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_REL):
     """Refuse a vector layer that asks for a combination this path cannot draw.
 
     The mirror of :func:`fieldwave._core.analytic.check_layer_combination`. This path paints,
@@ -208,7 +208,7 @@ def check_vector_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP
     except Exception:                                  # noqa: BLE001 - traced period
         return
 
-    prims = _vector_primitives(objects)
+    prims = _block_primitives(objects)
     if prims is None:
         return
 
@@ -218,9 +218,9 @@ def check_vector_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP
 
     i, j, _ox, _oy, _ = hits[0]
     more = f' (and {len(hits) - 1} more such pair(s))' if len(hits) > 1 else ''
-    what = (f'shape {_vector_shape_name(objects, i)} is larger than the period and runs into '
+    what = (f'shape {_block_shape_name(objects, i)} is larger than the period and runs into '
             f'its own image' if i == j else
-            f'shapes {_vector_shape_name(objects, i)} and {_vector_shape_name(objects, j)} '
+            f'shapes {_block_shape_name(objects, i)} and {_block_shape_name(objects, j)} '
             f'overlap')
     raise NotImplementedError(
         f'Vector layer {layer_index}: {what}{more}, and this path cannot add them. '
@@ -340,7 +340,7 @@ class Modeling:
     def __init__(self, period=(1., 1.), type_complex=None, xp=None, device=None,
                  *args, **kwargs):
         self._ucell = None
-        self.ucell_vector = None
+        self.ucell_block = None
         self.grid_plans = None
         self._last_plan = None
         self.shape_choices = None
@@ -528,7 +528,7 @@ class Modeling:
         # The choices below are discrete — which quarter turn, which regions exist, which
         # strip bounds each slab — so they are recorded on the way through and replayed from
         # the record when one is supplied, for the same reason the grid build is (see
-        # :meth:`vector_per_layer_numeric`). Only the arithmetic is left for a tracer.
+        # :meth:`block_per_layer_numeric`). Only the arithmetic is left for a tracer.
         replay = self._take_shape_choice()
         choice = {}
 
@@ -723,7 +723,7 @@ class Modeling:
 
         return ucell_layer, _edge_list(xp, col_list, F, C, dev), _edge_list(xp, row_list, F, C, dev)
 
-    def vector_per_layer_numeric(self, layer_info, x64=True, plan=None):
+    def block_per_layer_numeric(self, layer_info, x64=True, plan=None):
         """Reduce one layer's block list to ``(cell, x_list, y_list)``.
 
         Every distinct block edge becomes a grid line, and blocks that meet at a coordinate
@@ -861,7 +861,7 @@ class Modeling:
 
         for i, layer_info in enumerate(layer_info_list):
             plan = None if plans is None else plans[i]
-            ucell_layer, x_list, y_list = self.vector_per_layer_numeric(layer_info, plan=plan)
+            ucell_layer, x_list, y_list = self.block_per_layer_numeric(layer_info, plan=plan)
             used_plans.append(plan if plan is not None else self._last_plan)
             ucell_info_list.append([ucell_layer, x_list, y_list])
             # TODO: eig for homo layer
@@ -899,24 +899,24 @@ class Modeling:
 
         return res
 
-    def modeling_vector_instruction(self, instructions, plans=None, shape_choices=None):
+    def modeling_block_instruction(self, instructions, plans=None, shape_choices=None):
         """Run a full instruction set: ``[[base_index, [[shape, *params], ...], combine], ...]``.
 
         ``combine`` is optional and, on this path, defaults to what this path does: paint.
         Supplying ``'add'`` asks for the analytic path's superposition, which a staircase of
         blocks cannot express, so it is refused rather than painted — see
-        :func:`check_vector_layer_combination`.
+        :func:`check_block_layer_combination`.
         """
         self._shape_replay = list(shape_choices) if shape_choices is not None else None
         self._shape_record = None if shape_choices is not None else []
         layer_info_list = []
         for index, layer in enumerate(instructions):
-            check_vector_layer_combination(layer, self.period, index)
+            check_block_layer_combination(layer, self.period, index)
             obj_list_per_layer = []
             base_refractive_index = layer[0]
-            for vector_object in layer[1]:
-                func = getattr(self, vector_object[0])
-                obj_list_per_layer += func(*vector_object[1:])
+            for block_object in layer[1]:
+                func = getattr(self, block_object[0])
+                obj_list_per_layer += func(*block_object[1:])
 
             layer_info_list.append([base_refractive_index, obj_list_per_layer])
 

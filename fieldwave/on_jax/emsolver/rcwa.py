@@ -84,8 +84,8 @@ class ResultSubJax:
 
 
 class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
-    def modeling_vector_instruction(self, *args, **kwargs):
-        return self.modeler.modeling_vector_instruction(*args, **kwargs)
+    def modeling_block_instruction(self, *args, **kwargs):
+        return self.modeler.modeling_block_instruction(*args, **kwargs)
 
     def rectangle(self, *args, **kwargs):
         return self.modeler.rectangle(*args, **kwargs)
@@ -114,7 +114,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                  fourier_coefficients=None,  # 'sampled' (default, DFS) | 'integrated' (closed-form series)
                  factorization=None,         # 'li' (default) | 'nvf' (normal vector field)
                  fourier_type=None,          # deprecated alias for the two keywords above
-                 analytic_normal_grid=1024,  # normal-field sampling; sets the floor on shape gradients
+                 normal_grid=1024,  # normal-field sampling; sets the floor on shape gradients
                  # (a translation-invariant structure should give d/dcx == 0 exactly; the
                  #  sampling leaves a sawtooth instead -- 5e-4 at 256, 4.2e-5 at 1024, for
                  #  ~1.2-2x the runtime. Raise further to fit positions below that.)
@@ -139,7 +139,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
 
         self.backend = backend
         self._set_fourier_options(fourier_coefficients, factorization, fourier_type)
-        self.analytic_normal_grid = analytic_normal_grid
+        self.normal_grid = normal_grid
         self.lattice = lattice      # after period: assigning a basis overwrites period
 
     @property

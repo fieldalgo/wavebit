@@ -8,7 +8,7 @@ def run_vector(rcwa_options, backend):
 
     rcwa_options['backend'] = backend
     solver = fieldwave.rcwa(**rcwa_options)
-    solver.ucell = ucell_vector
+    solver.ucell = ucell_block
 
     res = solver.conv_solve()
 
@@ -56,7 +56,7 @@ if __name__ == '__main__':
     sio2 = 1.4518
     si3n4 = 2.0056
 
-    ucell_vector = [
+    ucell_block = [
         # layer 1
         [si3n4,
             [

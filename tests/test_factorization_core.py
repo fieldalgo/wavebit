@@ -18,7 +18,7 @@ from fieldwave._core.factorization import (
     to_conv_mat_raster_discrete as core_dfs,
     to_conv_mat_raster_nvf as core_nvf,
     to_conv_mat_raster_continuous as core_cfs,
-    to_conv_mat_vector as core_vector,
+    to_conv_mat_block as core_vector,
     normal_field_for_ucell,
     compression_indices,
     compress_cell,

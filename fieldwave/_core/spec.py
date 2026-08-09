@@ -112,10 +112,10 @@ class Numerics:
     type_complex: int = 128
     connecting_algo: str = 'TMM'
     perturbation: float = 1e-20
-    analytic_normal_grid: int = 1024
+    normal_grid: int = 1024
 
     _FIELDS = ('backend', 'fto', 'fourier_coefficients', 'factorization', 'type_complex',
-               'connecting_algo', 'perturbation', 'analytic_normal_grid')
+               'connecting_algo', 'perturbation', 'normal_grid')
 
     @classmethod
     def from_dict(cls, d) -> 'Numerics':
@@ -154,7 +154,7 @@ class Numerics:
             type_complex=0 if self.type_complex == 128 else 1,
             connecting_algo=self.connecting_algo,
             perturbation=self.perturbation,
-            analytic_normal_grid=self.analytic_normal_grid,
+            normal_grid=self.normal_grid,
         )
 
 

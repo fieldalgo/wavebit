@@ -15,7 +15,7 @@ import fieldwave
 import array_api_compat.numpy as xnp
 from fieldwave._core.analytic import (
     shape_ft as _shape_ft, laurent_conv_2d as _laurent_conv_2d,
-    assemble_eps_coeffs as _assemble_eps_coeffs, to_conv_mat_analytic_nvf)
+    assemble_eps_coeffs as _assemble_eps_coeffs, to_conv_mat_smooth_nvf)
 from fieldwave._core.backend import UnphysicalResultWarning
 from fieldwave._core.factorization import dfs2d as _dfs2d
 
@@ -37,7 +37,7 @@ def assemble_eps_coeffs(shapes, n_base, fto_x, fto_y, period):
     return _assemble_eps_coeffs(xnp, shapes, n_base, fto_x, fto_y, period, xnp.complex128)
 
 
-def to_conv_mat_analytic(shapes, n_base, fto_x, fto_y, period):
+def to_conv_mat_smooth(shapes, n_base, fto_x, fto_y, period):
     """Direct-rule (eps, 1/eps) Laurent pair — the NVF builder's inputs."""
     eps_c, inv_c = assemble_eps_coeffs(shapes, n_base, fto_x, fto_y, period)
     return laurent_conv_2d(eps_c, fto_x, fto_y), laurent_conv_2d(inv_c, fto_x, fto_y)
@@ -372,7 +372,7 @@ def test_a_circle_is_written_with_one_length():
                  n_index=CIRCLE_NR)
     got = fieldwave.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=[shape])],
                          **CIRCLE_CFG).conv_solve()
-    # Only a regression anchor, and it rides on ``analytic_normal_grid`` — it read
+    # Only a regression anchor, and it rides on ``normal_grid`` — it read
     # 0.161262158771 while that default was 256, and moved 1.1e-4 when the default rose to 1024.
     assert float(np.sum(np.asarray(got.de_ri))) == pytest.approx(0.161153064902, abs=1e-9)
 

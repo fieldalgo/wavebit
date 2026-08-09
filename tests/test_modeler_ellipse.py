@@ -294,7 +294,7 @@ def test_gradient_survives_the_coincident_edges_of_an_unrotated_ellipse(param, v
 
     ``x_half`` is ``a*sin(s_mid)`` and ``sin`` is symmetric about pi/2, so slab ``i`` and slab
     ``n - 1 - i`` produce bit-identical left and right edges — 10 coincident pairs at
-    ``n_split`` 24, which ``vector_per_layer_numeric`` collapses onto one grid line each. The
+    ``n_split`` 24, which ``block_per_layer_numeric`` collapses onto one grid line each. The
     two carry the same derivative, so the collapse is free; this asserts the outcome that
     matters, autograd still agreeing with a difference quotient, at both parities of
     ``n_split``, since the odd one also has a slab centred on pi/2 with no twin.

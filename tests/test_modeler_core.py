@@ -84,7 +84,7 @@ def material_at(cell, x, y, n=600, period=300.0):
 @pytest.mark.parametrize('name', BITWISE_PARITY)
 def test_vector_blocks_match_legacy_golden(name):
     """The decomposed blocks and their edges, layer by layer."""
-    info = Modeling(period=PERIOD).modeling_vector_instruction(INSTRUCTIONS[name])
+    info = Modeling(period=PERIOD).modeling_block_instruction(INSTRUCTIONS[name])
     assert len(info) == int(GOLDEN[f'{name}__n_layers'])
     for i, (cell, x, y) in enumerate(info):
         for tag, got in (('cell', cell), ('x', x), ('y', y)):
@@ -108,7 +108,7 @@ def test_rotated_rectangle_grid_keeps_the_legacy_layer_with_fewer_lines():
     are a subset of the legacy ones to within the old nudge, and
     ``test_vector_solve_matches_legacy_golden[rect_rot]`` still holds the efficiencies to 1e-12.
     """
-    info = Modeling(period=PERIOD).modeling_vector_instruction(INSTRUCTIONS['rect_rot'])
+    info = Modeling(period=PERIOD).modeling_block_instruction(INSTRUCTIONS['rect_rot'])
 
     for i, (cell, x, y) in enumerate(info):
         want_y = np.asarray(GOLDEN[f'rect_rot__L{i}__y']).reshape(-1).real
@@ -321,12 +321,12 @@ def test_torch_device_code_is_not_a_device_index():
     torch = pytest.importorskip('torch')
     modeler = Modeling(period=PERIOD, type_complex=torch.complex128, device=0,
                        xp=__import__('array_api_compat').array_namespace(torch.zeros(1)))
-    info = modeler.modeling_vector_instruction(INSTRUCTIONS['rect_rot'])
+    info = modeler.modeling_block_instruction(INSTRUCTIONS['rect_rot'])
 
     # Compared against the NumPy backend rather than the stored golden: the golden's rect_rot
     # rows are in the pre-fix order (see the reordering test above), and what this test is
     # actually about is that torch produced the same layer at all.
-    want = Modeling(period=PERIOD).modeling_vector_instruction(INSTRUCTIONS['rect_rot'])
+    want = Modeling(period=PERIOD).modeling_block_instruction(INSTRUCTIONS['rect_rot'])
     assert np.array_equal(np.asarray(want[0][0]), np.asarray(info[0][0]))
 
 

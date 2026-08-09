@@ -1,7 +1,7 @@
 # Boundary modeling — painting an overlap without staircasing the edges
 
 Written: 2026-08. Targets `fieldwave/_core/boundary.py`, `_core/clipper.py`, `_core/polygon.py`,
-and the `combine='paint'` route through `_core/analytic.py::to_conv_mat_analytic_layers`.
+and the `combine='paint'` route through `_core/analytic.py::to_conv_mat_smooth_layers`.
 
 ---
 

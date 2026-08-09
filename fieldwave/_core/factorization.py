@@ -23,7 +23,7 @@ discontinuous functions:
 - ``('integrated', 'nvf')``   -> :func:`to_conv_mat_raster_continuous_nvf`, closed-form
   Fourier with NVF.
 
-Vector-modelled layers (:func:`to_conv_mat_vector`) are the closed-form series on explicitly
+Vector-modelled layers (:func:`to_conv_mat_block`) are the closed-form series on explicitly
 given segment edges, with Li's rules; the analytic *shape* path lives in
 :mod:`fieldwave._core.analytic` and is always NVF.
 
@@ -1019,7 +1019,7 @@ def to_conv_mat_raster_continuous_nvf(ucell, fto_x, fto_y, normal_field=None,
     return tuple(xp.stack(slot) for slot in out)
 
 
-def to_conv_mat_vector(ucell_info_list, fto_x, fto_y):
+def to_conv_mat_block(ucell_info_list, fto_x, fto_y):
     """Per-layer convolution matrices for vector-modelled layers (CFS on explicit segments).
 
     Each entry of ``ucell_info_list`` is ``(layer, x_list, y_list)`` — the segment values and

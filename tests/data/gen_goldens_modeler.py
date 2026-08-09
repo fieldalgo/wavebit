@@ -29,7 +29,7 @@ out = {}
 for name, instr in INSTRUCTIONS.items():
     solver = fieldwave.rcwa(backend=0, period=PERIOD, thickness=[205.0, 100.0], fto=[3, 3],
                           n_top=1.0, n_bot=1.0, wavelength=900.0, pol=0.5, ucell=instr)
-    info = solver.modeling_vector_instruction(solver.ucell)
+    info = solver.modeling_block_instruction(solver.ucell)
     out[f'{name}__n_layers'] = np.array(len(info))
     for i, (cell, x, y) in enumerate(info):
         out[f'{name}__L{i}__cell'] = np.asarray(cell)

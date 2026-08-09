@@ -6,7 +6,7 @@ import pathlib
 
 import numpy as np
 
-from fieldwave.on_numpy.emsolver.fourier_analytic import to_conv_mat_analytic_layers
+from fieldwave.on_numpy.emsolver.fourier_analytic import to_conv_mat_smooth_layers
 
 PERIOD = (1.0, 1.2)
 CASES = {
@@ -23,7 +23,7 @@ CASES = {
 out = {}
 for name, layers in CASES.items():
     for grid in (128, 256):
-        mats = to_conv_mat_analytic_layers(layers, 2, 2, PERIOD, normal_grid=grid)
+        mats = to_conv_mat_smooth_layers(layers, 2, 2, PERIOD, normal_grid=grid)
         for slot, m in zip(('epx', 'epy', 'epxy', 'epyx', 'epz_i'), mats):
             out[f'{name}__g{grid}__{slot}'] = np.asarray(m)
 

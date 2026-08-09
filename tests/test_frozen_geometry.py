@@ -163,7 +163,7 @@ def test_a_frozen_geometry_makes_the_vector_path_traceable(name, make, start):
                theta=0.15, phi=0.35, pol=0, wavelength=900.0)
     x = jnp.asarray(start)
     frozen = fieldwave.rcwa(backend=1, ucell=make(x), **cfg).freeze_geometry()
-    assert frozen.vector_grid is not None, 'the grid plan was not recorded'
+    assert frozen.block_grid is not None, 'the grid plan was not recorded'
 
     def total(v):
         return jnp.sum(fieldwave.rcwa(backend=1, ucell=make(v), **cfg)

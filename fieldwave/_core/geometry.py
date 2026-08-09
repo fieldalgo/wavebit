@@ -33,7 +33,7 @@ One rule covers all of them: *the record must still be a description of the laye
 it.* Each path has its own reading of that, because each record depends on something different:
 
 ======================  ==================================================================
-``vector_grid``         the replayed grid lines must still be in order
+``block_grid``         the replayed grid lines must still be in order
 ``normal_field``        the interfaces it was sampled from must still be where they were
 ``compression``         the cut it recorded must still separate every block the layer has
 ======================  ==================================================================
@@ -64,7 +64,7 @@ class StaticGeometry:
             derived from — carried so a replay can tell whether it still fits, not consumed by
             the build. Left ``None``, the NVF replay is unchecked.
         compression: per-layer ``(row_idx, col_idx, x, y)`` for the CFS factorization.
-        vector_grid: per-layer ``VectorGridPlan`` for the vector modeler's grid build.
+        block_grid: per-layer ``VectorGridPlan`` for the vector modeler's grid build.
         shape_choices: per-shape discrete branch outcomes taken inside ``Modeling.rectangle``.
         boundary_plans: per-layer ``(table_records, regions)`` for the boundary path — which
             loop holds which vertex and which edges cross, once the painting is resolved. Like
@@ -96,7 +96,7 @@ class StaticGeometry:
     normal_field: Optional[Any] = None
     normal_field_source: Optional[Any] = None
     compression: Optional[Any] = None
-    vector_grid: Optional[Any] = None
+    block_grid: Optional[Any] = None
     shape_choices: Optional[Any] = None
     boundary_plans: Optional[Any] = None
 
@@ -110,7 +110,7 @@ class StaticGeometry:
         if self.normal_field is None and self.normal_field_source is None \
                 and self.compression is None:
             try:
-                key = ('content', _hashable(self.vector_grid), _hashable(self.shape_choices),
+                key = ('content', _hashable(self.block_grid), _hashable(self.shape_choices),
                        _hashable(self.boundary_plans))
                 hash(key)
                 return key

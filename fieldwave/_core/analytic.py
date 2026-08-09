@@ -20,7 +20,7 @@ so the same recipe means two different structures depending on which path it is 
 ``combine`` is what makes that choice explicit. It is a property of the *layer*, not of this
 module: both shape paths read it, and each refuses the rule it cannot build, so a recipe
 carrying one cannot be quietly given the other. :func:`check_layer_combination` enforces it
-here and :func:`fieldwave._core.modeler.check_vector_layer_combination` there.
+here and :func:`fieldwave._core.modeler.check_block_layer_combination` there.
 
 While no two shapes intersect the question does not arise and any spelling is accepted on
 either path — that keeps ``combine`` from taxing the case this path exists for. An overlap is
@@ -614,7 +614,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype,
                  for f in (nx * nx, nx * ny, ny * ny))
 
 
-def to_conv_mat_analytic_nvf(xp, shapes, n_base, fto_x, fto_y, period, dtype,
+def to_conv_mat_smooth_nvf(xp, shapes, n_base, fto_x, fto_y, period, dtype,
                              normal_grid=256, lattice=None):
     """The five 2D-solve convolution matrices for one analytic layer, via NVF.
 
@@ -646,7 +646,7 @@ def to_conv_mat_analytic_nvf(xp, shapes, n_base, fto_x, fto_y, period, dtype,
     return eps_xx, eps_yy, -eps_xy, -eps_xy, xp.linalg.inv(ep_dir)
 
 
-def to_conv_mat_analytic_layers(layer_shapes, fto_x, fto_y, period,
+def to_conv_mat_smooth_layers(layer_shapes, fto_x, fto_y, period,
                                 normal_grid=256, type_complex=None, xp=None,
                                 boundary_plans=None, lattice=None):
     """Stack the analytic-NVF convolution matrices over layers.
@@ -683,7 +683,7 @@ def to_conv_mat_analytic_layers(layer_shapes, fto_x, fto_y, period,
                 xp, layer.get('shapes', []), n_base, fto_x, fto_y, period, dtype,
                 normal_grid=normal_grid, plan=plan, lattice=lattice)
         else:
-            mats = to_conv_mat_analytic_nvf(
+            mats = to_conv_mat_smooth_nvf(
                 xp, layer.get('shapes', []), n_base, fto_x, fto_y, period, dtype,
                 normal_grid=normal_grid, lattice=lattice)
         for slot, m in zip(out, mats):

@@ -9,7 +9,7 @@ import numpy as np
 
 from fieldwave.on_numpy.emsolver.convolution_matrix import (
     to_conv_mat_raster_discrete, to_conv_mat_raster_continuous,
-    to_conv_mat_raster_nvf, to_conv_mat_vector, cell_compression,
+    to_conv_mat_raster_nvf, to_conv_mat_block, cell_compression,
 )
 
 
@@ -46,7 +46,7 @@ for i, (cell, x, y) in enumerate(info):
     out[f'vector__in{i}__cell'] = cell
     out[f'vector__in{i}__x'] = x
     out[f'vector__in{i}__y'] = y
-for slot, m in zip(('epx', 'epy', 'epz_i'), to_conv_mat_vector(info, 2, 2)):
+for slot, m in zip(('epx', 'epy', 'epz_i'), to_conv_mat_block(info, 2, 2)):
     out[f'vector__{slot}'] = m
 
 # cell_compression itself (the core splits it into indices + gather)

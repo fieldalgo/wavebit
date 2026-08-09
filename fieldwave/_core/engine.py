@@ -330,8 +330,8 @@ class CoreFactorizationMixin:
             # for only because the same-material detector read them; that detector is gone.
             # Dropping them takes a freeze from 25.6 ms to 10.4 ms, which is what makes
             # re-freezing every step of a fit cheaper than nursing one along.
-            self.modeling_vector_instruction(self.ucell)
-            geometry.vector_grid = self.modeler.grid_plans
+            self.modeling_block_instruction(self.ucell)
+            geometry.block_grid = self.modeler.grid_plans
             geometry.shape_choices = self.modeler.shape_choices
         if self._modeling_type_assigned == 2:
             # Only a painted layer that actually overlaps has a plan to freeze. A summed one
@@ -453,18 +453,18 @@ class CoreFactorizationMixin:
                         lattice=self._geometry_lattice_for(geometry))
 
         elif self._modeling_type_assigned == 1:                    # vector
-            ucell_vector = self.modeling_vector_instruction(
-                self.ucell, plans=None if geometry is None else geometry.vector_grid,
+            ucell_block = self.modeling_block_instruction(
+                self.ucell, plans=None if geometry is None else geometry.block_grid,
                 shape_choices=None if geometry is None else geometry.shape_choices)
-            epx_conv_all, epy_conv_all, epz_conv_i_all = _fac.to_conv_mat_vector(
-                ucell_vector, fto_x, fto_y)
+            epx_conv_all, epy_conv_all, epz_conv_i_all = _fac.to_conv_mat_block(
+                ucell_block, fto_x, fto_y)
 
         elif self._modeling_type_assigned == 2:                    # analytic shapes
             xp = _namespace_for_backend(self.backend)
             (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all,
-             epz_conv_i_all) = _analytic.to_conv_mat_analytic_layers(
+             epz_conv_i_all) = _analytic.to_conv_mat_smooth_layers(
                 self.ucell, fto_x, fto_y, self.period,
-                normal_grid=self.analytic_normal_grid,
+                normal_grid=self.normal_grid,
                 type_complex=xp.complex128, xp=xp,
                 boundary_plans=None if geometry is None else geometry.boundary_plans,
                 lattice=self._geometry_lattice_for(geometry))
