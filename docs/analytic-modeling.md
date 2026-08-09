@@ -202,3 +202,14 @@ keep passing.
 ### References
 - L. Li, JOSA A 13, 1870 (1996). — Fourier factorization / inverse rule.
 - P. Götz, T. Schuster et al., JOSA A 24, 2880 (2007). — normal vector method.
+
+---
+
+## Overlapping shapes
+
+This module **sums** its shapes, so an overlap gets both contributions and is neither shape's
+material. `combine='paint'` on a layer whose shapes actually intersect is built by the boundary
+path instead — it resolves the painting into disjoint polygons and transforms those, keeping the
+tilted edges exact. See [`boundary-modeling.md`](boundary-modeling.md).
+
+While nothing intersects the two rules mean the same structure, and the layer stays here.

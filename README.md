@@ -162,19 +162,26 @@ The two shape paths do different things with an overlap. The vector path **paint
 shape over earlier; the analytic path **superposes**, adding every shape's contribution, so
 the overlap ends up as neither shape's material. Same recipe, two different structures.
 
-`combine` is how a layer says which it means — `'paint'` or `'add'` — and each path refuses
-the one it cannot build rather than quietly doing the other:
+`combine` is how a layer says which it means — `'paint'` or `'add'`:
 
 ```python
-ucell = [dict(n_base=1.0, combine='add', shapes=[...])]     # analytic: superpose
-ucell = [[1.0, [['rectangle', ...], ...], 'paint']]         # vector: paint
+ucell = [dict(n_base=1.0, combine='add', shapes=[...])]     # superpose, in closed form
+ucell = [dict(n_base=1.0, combine='paint', shapes=[...])]   # paint, edges still exact
+ucell = [[1.0, [['rectangle', ...], ...], 'paint']]         # vector: paint, edges staircased
 ```
 
+Both are built on the shape paths now. `'paint'` with an actual overlap resolves the painting
+into polygons first and transforms those — so a layer can be painted *and* keep a tilted edge
+exact, which no single path used to offer. See
+[`docs/boundary-modeling.md`](docs/boundary-modeling.md). The vector path still refuses
+`'add'`: a staircase of blocks holds one index per block, so an overlap can only take one of
+them.
+
 While no two shapes intersect, both rules describe the same structure, so `combine` is
-optional and nothing is refused. It only has to be given where it changes the answer — and
-there, an unlabelled *analytic* layer is refused, because superposition is the rule nobody
-expects. The vector path paints unlabelled, which is what it always did and what a raster of
-the same recipe agrees with.
+optional, nothing is refused, and both spellings give the same numbers. It only has to be
+given where it changes the answer — and there, an unlabelled *analytic* layer is refused,
+because superposition is the rule nobody expects. The vector path paints unlabelled, which is
+what it always did and what a raster of the same recipe agrees with.
 
 ### Fourier factorization
 
