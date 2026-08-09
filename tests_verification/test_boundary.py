@@ -255,6 +255,80 @@ def test_gradient_reaches_the_shape_parameters():
         assert abs(fd - an) <= 1e-5 * max(abs(fd), abs(an), 1.0), (i, fd, an)
 
 
+# --------------------------------------------------------------- one dict, one reading
+#: A circle written the natural way: the diameter given once. Summing this used to work and
+#: painting it used to raise ``KeyError: 'ly'``, because the two paths read the dict apart.
+CIRCLE_NO_LY = dict(type='circle', cx=0.42, cy=0.38, lx=0.34, n_index=2.4)
+
+
+@pytest.mark.parametrize('shape, spelt_out', [
+    # a circle's second length has no spelling of its own -- `ellipse` is where two go, which
+    # is exactly what the resolved circle has to equal
+    (CIRCLE_NO_LY,
+     dict(type='ellipse', cx=0.42, cy=0.38, lx=0.34, ly=0.34, angle=0.0)),
+    # no centre either -- the transform centres a shape in the cell, so this path must too
+    (dict(type='circle', lx=0.34, n_index=2.4),
+     dict(type='ellipse', cx=0.5, cy=0.5, lx=0.34, ly=0.34, angle=0.0)),
+    # a square is square, and `rectangle` is where the second side goes
+    (dict(type='square', cx=0.4, cy=0.6, lx=0.3, angle=0.2, n_index=2.4),
+     dict(type='rectangle', cx=0.4, cy=0.6, lx=0.3, ly=0.3, angle=0.2)),
+    # `l` is the both-axes spelling of a length
+    (dict(type='rectangle', cx=0.4, cy=0.6, l=0.3, n_index=2.4),
+     dict(type='rectangle', cx=0.4, cy=0.6, lx=0.3, ly=0.3, angle=0.0)),
+    (dict(type='ellipse', cx=0.4, cy=0.6, lx=0.3, ly=0.2, angle=-0.7, n_index=2.4),
+     dict(type='ellipse', cx=0.4, cy=0.6, lx=0.3, ly=0.2, angle=-0.7)),
+])
+def test_shape_vertices_reads_the_dict_like_the_transform(shape, spelt_out):
+    """One shape dict, one reading -- `analytic.shape_geometry` -- for polygons too.
+
+    Every default this path used to carry on its own is checked against a dict that states the
+    same geometry outright, so the two have to draw the *identical* polygon: omitted ``ly``,
+    omitted ``cx`` / ``cy``, ``l``, and a round type's second length. Vertex-for-vertex, not to
+    a tolerance -- there is one reader, so there is nothing to round.
+
+    The pairs cross types on purpose (``circle`` against ``ellipse``, ``square`` against
+    ``rectangle``): a round type has one length, so the form that states two *is* the other
+    type. Only the geometry is compared, not the name.
+    """
+    from fieldwave._core.analytic import shape_geometry
+    assert shape_geometry(shape, *PERIOD)[1:] == shape_geometry(spelt_out, *PERIOD)[1:]
+    a = np.asarray(_b.shape_vertices(xnp, shape, PERIOD), float)
+    b = np.asarray(_b.shape_vertices(xnp, spelt_out, PERIOD), float)
+    assert np.array_equal(a, b)
+
+
+@pytest.mark.parametrize('fto', [4, 8])
+def test_a_circle_without_ly_is_the_same_circle_on_both_paths(fto):
+    """Painted and summed hold the same permittivity for a lone circle -- so it must be round.
+
+    ``epz_i`` again, for the reason given in the one-rectangle test above: it is ``inv(ep_dir)``
+    and never touches the normal field, which the two paths extend differently. Unlike a
+    rectangle this cannot be exact -- the polygon is a 256-gon and the transform is a Bessel
+    form -- and 1.6e-5 flat over fto 4..8 is that polygonisation, not a disagreement about the
+    shape. A misread ``ly`` is not a 1e-5 effect: falling back to zero empties the circle and
+    falling back to the old 500.0 fills the cell.
+
+    ``skew`` drops ``cx`` / ``cy`` as well, on a cell where the default for them is *arguable*:
+    ``shape_geometry`` fills an omitted centre from the period, and on a parallelogram that is
+    not the cell centre (measured 0.5, 0.522 against a centre of 0.65, 0.5 on this shear). This
+    asserts the two paths **agree**, not that the location is right -- there is one default, so
+    correcting it later moves both paths together, which is the property worth pinning.
+    """
+    from fieldwave._core.analytic import to_conv_mat_analytic_nvf
+    from fieldwave._core.lattice import as_lattice, periods_of
+    ng = 1024
+    for name, lat in (('square', None), ('skew', as_lattice(lattice=[[1.0, 0.3], [0.0, 1.0]]))):
+        shape = CIRCLE_NO_LY if lat is None else dict(type='circle', lx=0.34, n_index=2.4)
+        period = PERIOD if lat is None else periods_of(lat)
+        mine = _b.to_conv_mat_boundary_layer(xnp, [shape], 1.0, fto, fto, period,
+                                             xnp.complex128, normal_grid=ng, lattice=lat)
+        theirs = to_conv_mat_analytic_nvf(xnp, [shape], 1.0, fto, fto, period,
+                                          xnp.complex128, normal_grid=ng, lattice=lat)
+        rel = (np.abs(np.asarray(mine[4]) - np.asarray(theirs[4])).max()
+               / np.abs(np.asarray(theirs[4])).max())
+        assert rel < 1e-4, (name, rel)
+
+
 # --------------------------------------------------------------------------- wiring
 def _solve(ucell, fto=6, **over):
     import fieldwave
@@ -315,10 +389,48 @@ def test_frozen_plan_reproduces_the_eager_answer():
     assert abs(eager - replayed) < 1e-12
 
 
+def test_a_circle_without_ly_paints_and_sums_to_the_same_answer():
+    """The dict that used to sum and not paint, through both rules, on one structure.
+
+    Nothing here overlaps, so the two rules describe the same thing and the two answers are
+    the *same number* rather than merely two numbers. Note what this does and does not reach:
+    while nothing intersects, ``paint`` stays on the summed closed form (see
+    ``layer_needs_resolving``), so this pins the contract but never calls ``shape_vertices``.
+    The test below is the one that paints.
+    """
+    apart = [CIRCLE_NO_LY,
+             dict(type='rectangle', cx=0.80, cy=0.82, lx=0.22, ly=0.18, angle=-0.4,
+                  n_index=3.0)]
+    a = _total(_solve([dict(n_base=1.0, combine='paint', shapes=apart)]).conv_solve())
+    b = _total(_solve([dict(n_base=1.0, combine='add', shapes=apart)]).conv_solve())
+    assert abs(a - b) < 2e-3, (a, b)
+
+
+def test_a_circle_without_ly_survives_the_polygon_path():
+    """The regression: an overlap sends the same dict through ``shape_vertices``.
+
+    ``freeze_geometry`` is where this reached first and raised ``KeyError: 'ly'`` -- it plans
+    the painting, so it reads the shapes before the solve does. Spelling ``ly`` out on the
+    circle is the workaround that hid this, so the comparison is against the shape that
+    genuinely takes two lengths instead: an equal-axis ``ellipse`` is the same structure, and
+    has to give the same number.
+    """
+    over = dict(type='rectangle', cx=0.60, cy=0.58, lx=0.34, ly=0.26, angle=0.4, n_index=3.0)
+    circle = dict(CIRCLE_NO_LY, cx=0.44, cy=0.44, lx=0.36)
+    spelt = dict(circle, type='ellipse', ly=circle['lx'], angle=0.0)
+
+    got = []
+    for shapes in ([circle, over], [spelt, over]):
+        solver = _solve([dict(n_base=1.0, combine='paint', shapes=shapes)])
+        assert solver.freeze_geometry().boundary_plans[0] is not None    # it really painted
+        got.append(_total(solver.conv_solve()))
+    assert got[0] == got[1], got
+
+
 def test_a_painted_ellipse_is_polygonised():
     """Curved primitives are polygonised for this path; the answer must still be sane."""
     shapes = [dict(type='ellipse', cx=0.42, cy=0.46, lx=0.44, ly=0.28, angle=0.5, n_index=2.0),
-              dict(type='circle', cx=0.60, cy=0.58, lx=0.30, ly=0.30, angle=0.0, n_index=3.0)]
+              dict(type='circle', cx=0.60, cy=0.58, lx=0.30, angle=0.0, n_index=3.0)]
     r = _solve([dict(n_base=1.0, combine='paint', shapes=shapes)]).conv_solve()
     t = _total(r)
     assert 0.0 < t < 1.0

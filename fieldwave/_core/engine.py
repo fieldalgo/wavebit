@@ -338,7 +338,7 @@ class CoreFactorizationMixin:
             # has no discrete decision in it, and a painted one with nothing overlapping means
             # the same structure either way -- both stay on the closed-form path, so their
             # slots stay None and the replay never looks.
-            plans = [_boundary.plan_layer(layer.get('shapes', []))
+            plans = [_boundary.plan_layer(layer.get('shapes', []), self.period)
                      if _analytic.layer_needs_resolving(
                          layer, self.period, self._geometry_lattice_for(None)) else None
                      for layer in self.ucell]

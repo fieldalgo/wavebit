@@ -235,8 +235,8 @@ def test_a_painted_overlap_survives_a_unimodular_shear():
     """
     def painted(lattice):
         ucell = [{'n_base': 1.0, 'combine': 'paint', 'shapes': [
-            {'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 160.0, 'ly': 160.0, 'n_index': 2.4},
-            {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'ly': 160.0, 'n_index': 3.0}]}]
+            {'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 160.0, 'n_index': 2.4},
+            {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'n_index': 3.0}]}]
         s = fieldwave.rcwa(backend=0, ucell=ucell, period=[P, P], fto=[6, 6], thickness=[H],
                            wavelength=WL, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                            factorization='nvf', lattice=lattice)
@@ -252,8 +252,8 @@ def test_a_painted_overlap_is_not_the_same_as_summing_it():
     If painting and summing agreed here, agreeing across the shear would say nothing about the
     resolver having run.
     """
-    shapes = [{'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 160.0, 'ly': 160.0, 'n_index': 2.4},
-              {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'ly': 160.0, 'n_index': 3.0}]
+    shapes = [{'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 160.0, 'n_index': 2.4},
+              {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'n_index': 3.0}]
 
     def run(combine):
         s = fieldwave.rcwa(backend=0, ucell=[{'n_base': 1.0, 'combine': combine,

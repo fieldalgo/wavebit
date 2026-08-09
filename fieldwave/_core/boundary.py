@@ -34,7 +34,7 @@ to 2.2e-16, and on a case with both tilt and overlap this path sits 4x closer to
 vector path, while tying on axis-aligned overlap where the vector path has no staircase to lose.
 """
 from . import clipper as _clipper
-from .analytic import laurent_conv_2d, _sampled_coeffs
+from .analytic import laurent_conv_2d, shape_geometry, _sampled_coeffs
 from .polygon import ellipse_verts, polygon_ft, rect_verts
 
 
@@ -276,16 +276,22 @@ def conv_mats(xp, regions, n_base, fto_x, fto_y, period, normal_grid, dtype, cdt
 POLYGON_VERTICES = 256
 
 
-def shape_vertices(xp, shape, n_poly=POLYGON_VERTICES):
+def shape_vertices(xp, shape, period, n_poly=POLYGON_VERTICES):
     """Counter-clockwise vertices of one analytic primitive.
 
     Same shape dictionaries the analytic path takes, and the same convention: ``lx`` / ``ly``
     are full lengths, so a circle is ``lx = ly = diameter``.
+
+    The dict is read by :func:`~fieldwave._core.analytic.shape_geometry` and nowhere else, for
+    the reason that function was written: it used to be read here as well, directly, and the
+    two readings disagreed. ``ly`` had no default here at all, so the natural spelling of a
+    circle — give the diameter once — summed fine and raised ``KeyError`` the moment the same
+    layer was painted; ``cx`` / ``cy`` had no default either, where the transform centres a
+    shape in the cell; and ``square`` kept whatever ``ly`` it was handed instead of being
+    square. ``period`` is taken for the same reason the transform takes it: it is what an
+    omitted centre falls back to.
     """
-    kind = shape.get('type', 'rectangle')
-    cx, cy = shape['cx'], shape['cy']
-    lx, ly = shape['lx'], shape['ly']
-    angle = shape.get('angle', 0.0)
+    kind, cx, cy, lx, ly, angle = shape_geometry(shape, period[0], period[1])
     if kind in ('rectangle', 'square'):
         return rect_verts(xp, cx, cy, lx, ly, angle)
     if kind in ('circle', 'disk', 'ellipse'):
@@ -295,7 +301,7 @@ def shape_vertices(xp, shape, n_poly=POLYGON_VERTICES):
         f"Supported: rectangle, square, circle, disk, ellipse.")
 
 
-def plan_layer(shapes, n_poly=POLYGON_VERTICES):
+def plan_layer(shapes, period, n_poly=POLYGON_VERTICES):
     """Resolve one layer's painting order into disjoint loops. **Concrete values only.**
 
     This is the discrete half — which loop holds which vertex, which edges cross — so it runs
@@ -304,7 +310,7 @@ def plan_layer(shapes, n_poly=POLYGON_VERTICES):
     it against traced vertices.
     """
     import numpy as _np
-    concrete = [_np.asarray(shape_vertices(_np, s, n_poly), float) for s in shapes]
+    concrete = [_np.asarray(shape_vertices(_np, s, period, n_poly), float) for s in shapes]
     return _clipper.resolve_painting(concrete)
 
 
@@ -318,8 +324,8 @@ def to_conv_mat_boundary_layer(xp, shapes, n_base, fto_x, fto_y, period, dtype,
     ``plan`` from a frozen geometry to keep the call traceable; leave it ``None`` and the
     painting is resolved eagerly, which needs concrete shape parameters.
     """
-    verts = [shape_vertices(xp, s, n_poly) for s in shapes]
-    recs, regions = plan_layer(shapes, n_poly) if plan is None else plan
+    verts = [shape_vertices(xp, s, period, n_poly) for s in shapes]
+    recs, regions = plan_layer(shapes, period, n_poly) if plan is None else plan
     vals = _clipper.eval_table(xp, recs, verts)
     regs = [(s['n_index'], [_clipper.loop_verts(xp, lp, vals) for lp, _sgn in region])
             for s, region in zip(shapes, regions)]

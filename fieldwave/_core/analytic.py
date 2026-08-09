@@ -99,6 +99,12 @@ def shape_geometry(shape, Px, Py):
       so *omitting* ``ly`` on a circle — the natural way to write it — degenerated the normal
       field and moved the answer 6%.
 
+    *Everybody* means the polygon path as well:
+    :func:`~fieldwave._core.boundary.shape_vertices` was a third reader with its own rules
+    until 2026-08-09 — no default for ``ly``, none for ``cx`` / ``cy``, and a ``square`` that
+    kept whatever ``ly`` it was handed. The first of those is how the same circle dict summed
+    cleanly and raised ``KeyError: 'ly'`` the moment it was painted.
+
     Lengths are absolute, in the units of ``period`` (see the module docstring).
     """
     stype = shape.get('type', 'rectangle')
