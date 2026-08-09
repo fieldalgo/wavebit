@@ -26,10 +26,22 @@ them directly to the solver without staircase decomposition. `⟦ε⟧` and `⟦
 analytically, and the normal projectors are built from an **analytic normal field**, then
 factorized with NVF.
 
-Result: it **converges at far lower order than the staircase path for both tilted
-(dielectric) and curved (metallic) boundaries**, satisfies energy conservation to machine
-precision for lossless structures, agrees across numpy/jax/torch, and is differentiable
-(compatible with the optimization pipeline).
+Result: it **converges at far lower order than a staircase of the same boundary**, satisfies
+energy conservation to machine precision for lossless structures, agrees across
+numpy/jax/torch, and is differentiable (compatible with the optimization pipeline).
+
+Two qualifications, both measured, both easy to trip over:
+
+- **Against raster-NVF on a curved boundary the margin is gone.** Retiring `enhanced_dfs`
+  improved raster-NVF by ~8x on the metallic circle, and the two are now level there — see §4
+  case [2]. The separation that survives is against a *staircase* (case [1]), where the
+  geometric error has a floor no Fourier order removes.
+- **On an axis-aligned boundary the analytic path is the slower one.** Li's rules along x and y
+  are already optimal when the interfaces are axis-aligned, so NVF only costs there. Measured
+  against RETICOLO: the vector path matches at 1e-14 every order while the analytic path needs
+  fto≈16 to reach 1e-4.
+
+Choose the path by the boundary, not on a general expectation that the analytic path wins.
 
 ---
 
@@ -139,18 +151,45 @@ Analytic at fto=5 (1e-2) already beats the staircase at fto=11 (n=24, 2.6e-2), a
 more accurate at fto=11. The staircase saturates at its geometric-error floor (~3e-2) no
 matter the order.
 
-**[2] Metallic circle** (n=0.05+3.5j, R=0.3, TM). Reference = analytic fto=16. `t0` error:
+**[2] Metallic circle** (n=0.05+3.5j, R=0.3, TM). Reference = analytic fto=16. `t0` error,
+re-measured at `f537010` (2026-08-09):
 
 | fto | analytic-NVF | raster-NVF (SDF normals) | raster-DFS |
 |---:|---:|---:|---:|
-| 3 | 1.6e-2 | 1.5e-2 | 4.2e-2 |
-| 7 | 1.5e-2 | 1.6e-2 | 1.2e-2 |
-| 9 | **1.5e-3** | 1.1e-2 | 2.6e-2 |
-| 11 | **1.4e-3** | 5.5e-3 | 1.8e-2 |
+| 3 | 1.56e-2 | 1.39e-2 | 4.18e-2 |
+| 5 | 2.78e-2 | 3.42e-2 | 2.89e-2 |
+| 7 | 1.52e-2 | 1.48e-2 | 1.24e-2 |
+| 9 | 1.49e-3 | **1.39e-3** | 2.59e-2 |
+| 11 | **1.37e-3** | 3.48e-3 | 1.75e-2 |
 
-At high order the accuracy ranks **analytic-NVF < raster-NVF < DFS** (as expected). Metal
-oscillates at low order but the high-order trend is clear. Confirms that the NVF benefit
-requires **true geometry/normals**.
+**This case no longer separates analytic-NVF from raster-NVF, and the earlier version of this
+section claimed it did.** It read "the accuracy ranks analytic-NVF < raster-NVF < DFS (as
+expected)" against a raster-NVF column of 1.1e-2 at fto=9 and 5.5e-3 at fto=11. Those numbers
+were correct when measured; the baseline has since moved.
+
+Retiring `enhanced_dfs` (see [nvf-upsampling.md](nvf-upsampling.md)) improved raster-NVF here by
+about 8x. A/B on this exact case, extracting the old tree with `git archive` so no git state is
+touched:
+
+| raster-NVF error | fto=9 | fto=11 |
+|---|---|---|
+| `21ad539` (before) | 1.073e-2 | 5.487e-3 |
+| `f537010` (after) | 1.385e-3 | 3.484e-3 |
+
+Nothing regressed — this is one of the 27-of-32 combinations that write-up reports gaining
+accuracy. What went away is the *margin*: at fto=9 raster-NVF is now marginally ahead of
+analytic-NVF, and only at fto=11 does analytic lead again.
+
+So this case no longer supports the claim it was written for. Metal also oscillates badly at
+low order — the analytic error *rises* from 1.56e-2 at fto=3 to 2.78e-2 at fto=5 — and with the
+two NVF columns now level, there is no clean trend left to read off it. Case [1], the tilted
+dielectric, is the one that still separates the paths, because there the staircase carries a
+geometric error floor that no Fourier order removes and no raster refinement reaches.
+
+For a curved boundary the honest evidence is now the RETICOLO comparison, which has an external
+reference rather than the analytic path's own fto=16: the analytic result is flat from fto=5
+while two independent staircases are still climbing toward it at fto=20. See
+`<the manual's working notes>`.
 
 **[3] Lossless multi-shape / multi-layer** (ellipse + rectangle + circle, conical
 incidence, non-square period): `|R+T−1|` = 6.7e-16 (fto5), 1.1e-14 (fto8) — machine-
