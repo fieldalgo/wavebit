@@ -26,15 +26,32 @@ def polygon_area(xp, verts):
     return 0.5 * xp.sum(x * yn - xn * y)
 
 
-def polygon_ft(xp, verts, ky, kx, period):
-    """1/(Px*Py) * FT of the polygon indicator, on the integer reciprocal grid (ky, kx).
+def polygon_ft(xp, verts, ky, kx, period, lattice=None):
+    """1/area * FT of the polygon indicator, on the integer reciprocal grid (ky, kx).
 
     ``verts`` is (N, 2) in (x, y), counter-clockwise. Returns an array shaped like ``kx``.
+
+    ``lattice`` is the cell basis (``None`` = axis-aligned ``diag(period)``), and as in
+    :func:`fieldwave._core.analytic.shape_ft` it reaches only the two lines that turn the order
+    indices into ``(u, v)``. Everything after them is the contour integral in **Cartesian**
+    frequency, so a skewed cell changes where the transform is sampled and nothing about the
+    polygon. Vertices are absolute Cartesian positions, and the shape needs no wrapping at the
+    cell edge either: ``exp(-i G.r)`` carries the lattice periodicity, so integrating over the
+    polygon wherever it sits gives the right coefficient.
     """
     Px, Py = period[0], period[1]
     pi = 3.141592653589793
-    u = 2.0 * pi * kx / Px
-    v = 2.0 * pi * ky / Py
+    if lattice is None:
+        u = 2.0 * pi * kx / Px
+        v = 2.0 * pi * ky / Py
+        cell_area = Px * Py
+    else:
+        a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
+        a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
+        det = a1x * a2y - a2x * a1y
+        u = 2.0 * pi * (a2y * kx - a1y * ky) / det
+        v = 2.0 * pi * (-a2x * kx + a1x * ky) / det
+        cell_area = abs(det)
 
     x, y = verts[:, 0], verts[:, 1]
     xn, yn = xp.roll(x, -1), xp.roll(y, -1)
@@ -53,7 +70,7 @@ def polygon_ft(xp, verts, ky, kx, period):
     k2_safe = xp.where(nz, k2, xp.ones_like(k2))
     area = polygon_area(xp, verts)
     F = xp.where(nz, 1j * contour / k2_safe, (area + 0j) * xp.ones_like(contour))
-    return F / (Px * Py)
+    return F / cell_area
 
 
 # ---------------------------------------------------------------- primitives

@@ -223,16 +223,47 @@ def test_the_vector_modeler_is_refused_on_a_skewed_cell():
         s.conv_solve()
 
 
-def test_a_painted_overlap_is_refused_on_a_skewed_cell():
-    """Summing shapes works skewed; *resolving* an overlap clips against a rectangular cell."""
-    ucell = [{'n_base': 1.0, 'combine': 'paint', 'shapes': [
-        {'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 160.0, 'n_index': 2.4},
-        {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'n_index': 3.0}]}]
-    s = fieldwave.rcwa(backend=0, ucell=ucell, period=[P, P], fto=[4, 4], thickness=[H],
-                       wavelength=WL, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
-                       factorization='nvf', lattice=HEX)
-    with pytest.raises(NotImplementedError, match='overlap'):
-        s.conv_solve()
+def test_a_painted_overlap_survives_a_unimodular_shear():
+    """Resolving an overlap into polygons works skewed: the clipper never sees the cell.
+
+    ``resolve_painting`` takes vertex arrays and does Cartesian polygon booleans — no period,
+    no wrapping, and none needed: ``exp(-i G.r)`` carries the lattice periodicity, so a polygon
+    straddling an edge transforms correctly wherever it sits. What did need the basis was the
+    same three things the summed path needed, plus periodic-image enumeration in
+    :func:`~fieldwave._core.overlap.overlapping_pairs`, which decides whether a layer has an
+    overlap at all and shifted by ``(ox*Px, oy*Py)`` rather than along the lattice.
+    """
+    def painted(lattice):
+        ucell = [{'n_base': 1.0, 'combine': 'paint', 'shapes': [
+            {'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 160.0, 'ly': 160.0, 'n_index': 2.4},
+            {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'ly': 160.0, 'n_index': 3.0}]}]
+        s = fieldwave.rcwa(backend=0, ucell=ucell, period=[P, P], fto=[6, 6], thickness=[H],
+                           wavelength=WL, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+                           factorization='nvf', lattice=lattice)
+        res = s.conv_solve()
+        return float(np.sum(np.asarray(res.de_ti)))
+
+    assert painted(None) == pytest.approx(painted(SHEAR), abs=1e-3)
+
+
+def test_a_painted_overlap_is_not_the_same_as_summing_it():
+    """Guards the test above from being vacuous: the two rules must give different answers.
+
+    If painting and summing agreed here, agreeing across the shear would say nothing about the
+    resolver having run.
+    """
+    shapes = [{'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 160.0, 'ly': 160.0, 'n_index': 2.4},
+              {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'ly': 160.0, 'n_index': 3.0}]
+
+    def run(combine):
+        s = fieldwave.rcwa(backend=0, ucell=[{'n_base': 1.0, 'combine': combine,
+                                              'shapes': shapes}],
+                           period=[P, P], fto=[6, 6], thickness=[H], wavelength=WL,
+                           n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+                           factorization='nvf', lattice=SHEAR)
+        return float(np.sum(np.asarray(s.conv_solve().de_ti)))
+
+    assert abs(run('paint') - run('add')) > 1e-3
 
 
 # --------------------------------------------------- paths a skew turned out not to break

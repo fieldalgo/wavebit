@@ -136,7 +136,8 @@ def _across(ox, oy):
     return f" across the {' and '.join(axes)} period boundary" if axes else ''
 
 
-def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_REL):
+def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_REL,
+                            lattice=None):
     """Refuse a layer whose shapes overlap without saying how they should combine.
 
     This is where the analytic path's superposition stops being implicit. Shapes that do not
@@ -169,7 +170,7 @@ def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_RE
     if prims is None:
         return
 
-    hits = _overlap.overlapping_pairs(prims, Px, Py, tol_rel * max(Px, Py))
+    hits = _overlap.overlapping_pairs(prims, Px, Py, tol_rel * max(Px, Py), lattice)
     if not hits or combine == 'add':
         return
 
@@ -195,7 +196,7 @@ def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_RE
         f'over earlier ones.')
 
 
-def layer_needs_resolving(layer, period):
+def layer_needs_resolving(layer, period, lattice=None):
     """Does this layer actually need the boundary path — i.e. is it painted *and* overlapping?
 
     While nothing intersects, painting and adding describe the same structure, and the closed
@@ -219,7 +220,8 @@ def layer_needs_resolving(layer, period):
     prims = _primitives(shapes, Px, Py)
     if prims is None:
         return False
-    return bool(_overlap.overlapping_pairs(prims, Px, Py, OVERLAP_TOL_REL * max(Px, Py)))
+    return bool(_overlap.overlapping_pairs(prims, Px, Py, OVERLAP_TOL_REL * max(Px, Py),
+                                           lattice))
 
 
 def shape_ft(xp, shape, ky, kx, period, lattice=None):
@@ -585,30 +587,18 @@ def to_conv_mat_analytic_layers(layer_shapes, fto_x, fto_y, period,
 
     out = [[], [], [], [], []]
     for index, layer in enumerate(layer_shapes):
-        check_layer_combination(layer, period, index)
+        check_layer_combination(layer, period, index, lattice=lattice)
         n_base = layer.get('n_base', layer.get('base', 1.0))
         plan = None if boundary_plans is None else boundary_plans[index]
-        if plan is not None or layer_needs_resolving(layer, period):
+        if plan is not None or layer_needs_resolving(layer, period, lattice):
             # A painted layer that actually overlaps is a different structure from a summed
             # one, and this module can only sum. Resolve the painting into disjoint polygons
             # and transform those. A painted layer with nothing overlapping means the same
             # structure either way, so it stays here -- exact, and cheaper.
-            # Skew, not merely "a basis was supplied": since the metric correction landed,
-            # every axis-aligned cell carries a `diag(period)` basis too, and those resolve
-            # exactly as they always did.
-            from .lattice import is_axis_aligned
-            if lattice is not None and not is_axis_aligned(lattice):
-                raise NotImplementedError(
-                    f'layer {index} paints shapes that overlap, and resolving an overlap into '
-                    f'polygons is not implemented yet for a non-orthogonal cell basis (set via '
-                    f'.lattice): the resolver clips against a rectangular cell and wraps across '
-                    f'its edges. Shapes that do not overlap take the summed path, which does '
-                    f"support a skewed cell -- or use combine='sum' if the overlap is not "
-                    f'meant to be resolved.')
             from .boundary import to_conv_mat_boundary_layer
             mats = to_conv_mat_boundary_layer(
                 xp, layer.get('shapes', []), n_base, fto_x, fto_y, period, dtype,
-                normal_grid=normal_grid, plan=plan)
+                normal_grid=normal_grid, plan=plan, lattice=lattice)
         else:
             mats = to_conv_mat_analytic_nvf(
                 xp, layer.get('shapes', []), n_base, fto_x, fto_y, period, dtype,

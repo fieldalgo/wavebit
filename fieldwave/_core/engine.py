@@ -339,7 +339,8 @@ class CoreFactorizationMixin:
             # the same structure either way -- both stay on the closed-form path, so their
             # slots stay None and the replay never looks.
             plans = [_boundary.plan_layer(layer.get('shapes', []))
-                     if _analytic.layer_needs_resolving(layer, self.period) else None
+                     if _analytic.layer_needs_resolving(
+                         layer, self.period, self._geometry_lattice_for(None)) else None
                      for layer in self.ucell]
             if any(p is not None for p in plans):
                 geometry.boundary_plans = plans

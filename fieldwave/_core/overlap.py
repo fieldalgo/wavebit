@@ -188,7 +188,7 @@ def _shifted(p, dx, dy):
     return (p[0], p[1] + dx, p[2] + dy, p[3], p[4], p[5], p[6])
 
 
-def overlapping_pairs(prims, period_x, period_y, tol):
+def overlapping_pairs(prims, period_x, period_y, tol, lattice=None):
     """Every pair of primitives that interpenetrates by more than ``tol``.
 
     Yields ``(i, j, image_x, image_y, gap)`` with ``i <= j``; ``image_*`` is which periodic
@@ -219,7 +219,15 @@ def overlapping_pairs(prims, period_x, period_y, tol):
             for ox, oy in _IMAGES:
                 if i == j and (ox, oy) == (0, 0):
                     continue                      # a shape always overlaps itself
-                shifted = _shifted(q, ox * period_x, oy * period_y)
+                if lattice is None:
+                    dx, dy = ox * period_x, oy * period_y
+                else:
+                    # Images sit on the lattice, not on a rectangle: a skewed cell's neighbour
+                    # is ox*a1 + oy*a2. Getting this wrong does not raise -- it reports the
+                    # wrong pairs as overlapping, and the layer takes the wrong build path.
+                    dx = ox * float(lattice[0][0]) + oy * float(lattice[0][1])
+                    dy = ox * float(lattice[1][0]) + oy * float(lattice[1][1])
+                shifted = _shifted(q, dx, dy)
                 if math.hypot(p[1] - shifted[1], p[2] - shifted[2]) - reach >= -tol:
                     continue
                 gap = signed_gap(p, shifted)

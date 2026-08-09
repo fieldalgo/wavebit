@@ -86,8 +86,11 @@ instead of answering.
 |---|---|---|
 | `factorization='nvf'`, sampled or integrated | supported | — |
 | analytic shapes, summed | supported | lengths are absolute Cartesian; nothing deforms |
-| analytic shapes, painted **overlap** | refused | resolving an overlap clips against a rectangular cell |
+| analytic shapes, painted **overlap** | supported | the clipper is Cartesian; only the images and the transform needed the basis |
 | vector modeler (`modeling_type=1`) | refused | rasterises onto a rectangular grid of its own |
+
+So everything except `li` and the vector modeler works on a skewed cell, and both of those have a
+supported route to the same structure (a raster, or analytic shapes).
 | `factorization='li'` | refused | see below |
 | field reconstruction | supported | output grid is indexed by `(v, u)`, not `(y, x)` — see below |
 

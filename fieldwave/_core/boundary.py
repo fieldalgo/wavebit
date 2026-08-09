@@ -75,7 +75,8 @@ def _nearest(xp, pts, A, E, L2):
     return j, foot[rows, j]
 
 
-def distance_gradient_normal_field(xp, polys, grid_shape, period, dtype, chunk=None):
+def distance_gradient_normal_field(xp, polys, grid_shape, period, dtype, chunk=None,
+                                   lattice=None):
     """Unit normal from the direction to the closest boundary *point*.
 
     The closest *edge* is not well defined -- beyond a corner both edges meeting there have the
@@ -96,10 +97,19 @@ def distance_gradient_normal_field(xp, polys, grid_shape, period, dtype, chunk=N
     A, E, L2 = segments_of(xp, polys)
     M = A.shape[0]
 
-    x = (xp.asarray([float(i) for i in range(Nx)], dtype=dtype) + 0.5) * (Px / Nx)
-    y = (xp.asarray([float(i) for i in range(Ny)], dtype=dtype) + 0.5) * (Py / Ny)
-    X = x[None, :] + 0.0 * y[:, None]
-    Y = y[:, None] + 0.0 * x[None, :]
+    u = (xp.asarray([float(i) for i in range(Nx)], dtype=dtype) + 0.5) / Nx
+    v = (xp.asarray([float(i) for i in range(Ny)], dtype=dtype) + 0.5) / Ny
+    if lattice is None:
+        X = (u * Px)[None, :] + 0.0 * v[:, None]
+        Y = (v * Py)[:, None] + 0.0 * u[None, :]
+    else:
+        # Sample the cell's own parallelogram. Only the sample *positions* move: the distances
+        # measured below are Cartesian already, so unlike the raster normal field there is no
+        # metric to apply afterwards.
+        a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
+        a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
+        X = u[None, :] * a1x + v[:, None] * a2x
+        Y = u[None, :] * a1y + v[:, None] * a2y
     pts = xp.stack([xp.reshape(X, (-1,)), xp.reshape(Y, (-1,))], axis=-1)
 
     npix = Ny * Nx
@@ -166,7 +176,8 @@ def check_normal_grid(grid_shape, fto_x, fto_y):
                          f'needs at least {need_y}x{need_x}')
 
 
-def normal_projector_coeffs(xp, loops, grid_shape, period, fto_x, fto_y, dtype, cdtype):
+def normal_projector_coeffs(xp, loops, grid_shape, period, fto_x, fto_y, dtype, cdtype,
+                            lattice=None):
     """Coefficient grids of ``nx**2``, ``nx*ny``, ``ny**2``, built with the layer CENTRED.
 
     The normal field lives on the whole plane, so sampling it in a fixed cell clips a different
@@ -182,23 +193,40 @@ def normal_projector_coeffs(xp, loops, grid_shape, period, fto_x, fto_y, dtype, 
 
     if len(loops) == 1:
         c = _centroid(xp, loops[0])
-        shift = xp.stack([c[0] - Px / 2.0, c[1] - Py / 2.0])
+        if lattice is None:
+            mid_x, mid_y = Px / 2.0, Py / 2.0
+            frac_x, frac_y = 1.0 / Px, 1.0 / Py           # fractions of a period
+        else:
+            a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
+            a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
+            mid_x, mid_y = 0.5 * (a1x + a2x), 0.5 * (a1y + a2y)
+        shift = xp.stack([c[0] - mid_x, c[1] - mid_y])
         built = [loops[0] - shift[None, :]]
         KY, KX = _k_grids(xp, fto_x, fto_y, dtype)
-        arg = -2.0 * 3.141592653589793 * (KY * (shift[1] / Py) + KX * (shift[0] / Px))
+        if lattice is None:
+            su, sv = shift[0] * frac_x, shift[1] * frac_y
+        else:
+            # The displacement in *fractional lattice* coordinates, A^-1 @ shift. The phase is
+            # already exp(-i G.d) written that way; it was only ever handed Px / Py fractions.
+            det = a1x * a2y - a2x * a1y
+            su = (a2y * shift[0] - a2x * shift[1]) / det
+            sv = (-a1y * shift[0] + a1x * shift[1]) / det
+        arg = -2.0 * 3.141592653589793 * (KY * sv + KX * su)
         phase = xp.astype(xp.cos(arg), cdtype) + 1j * xp.astype(xp.sin(arg), cdtype)
     else:
         built = loops
         phase = xp.asarray(1.0 + 0j, dtype=cdtype)
 
-    nx, ny = distance_gradient_normal_field(xp, built, grid_shape, period, dtype)
+    nx, ny = distance_gradient_normal_field(xp, built, grid_shape, period, dtype,
+                                            lattice=lattice)
     out = []
     for f in (nx * nx, nx * ny, ny * ny):
         out.append(_sampled_coeffs(xp, xp.astype(f, cdtype), fto_x, fto_y) * phase)
     return out
 
 
-def conv_mats(xp, regions, n_base, fto_x, fto_y, period, normal_grid, dtype, cdtype):
+def conv_mats(xp, regions, n_base, fto_x, fto_y, period, normal_grid, dtype, cdtype,
+              lattice=None):
     """``(epx, epy, epxy, epyx, epz_i)`` for one boundary-resolved layer.
 
     ``regions`` is ``[(n_index, [loop, ...]), ...]`` -- disjoint, painting already resolved by
@@ -218,7 +246,7 @@ def conv_mats(xp, regions, n_base, fto_x, fto_y, period, normal_grid, dtype, cdt
         eps_s = xp.conj(xp.astype(xp.asarray(n_index, dtype=cdtype), cdtype)) ** 2
         ft = zero
         for V in polys:
-            ft = ft + polygon_ft(xp, V, KY, KX, (Px, Py))
+            ft = ft + polygon_ft(xp, V, KY, KX, (Px, Py), lattice)
         eps_c = eps_c + (eps_s - eps_bg) * ft
         inv_c = inv_c + (1.0 / eps_s - 1.0 / eps_bg) * ft
 
@@ -228,7 +256,8 @@ def conv_mats(xp, regions, n_base, fto_x, fto_y, period, normal_grid, dtype, cdt
 
     all_loops = [V for _, polys in regions for V in polys]
     c_xx, c_xy, c_yy = normal_projector_coeffs(
-        xp, all_loops, (normal_grid, normal_grid), (Px, Py), fto_x, fto_y, dtype, cdtype)
+        xp, all_loops, (normal_grid, normal_grid), (Px, Py), fto_x, fto_y, dtype, cdtype,
+        lattice=lattice)
     C_xx = laurent_conv_2d(xp, c_xx, fto_x, fto_y)
     C_xy = laurent_conv_2d(xp, c_xy, fto_x, fto_y)
     C_yy = laurent_conv_2d(xp, c_yy, fto_x, fto_y)
@@ -280,7 +309,8 @@ def plan_layer(shapes, n_poly=POLYGON_VERTICES):
 
 
 def to_conv_mat_boundary_layer(xp, shapes, n_base, fto_x, fto_y, period, dtype,
-                               normal_grid=256, n_poly=POLYGON_VERTICES, plan=None):
+                               normal_grid=256, n_poly=POLYGON_VERTICES, plan=None,
+                               lattice=None):
     """The five convolution matrices for one layer whose shapes are *painted*.
 
     ``shapes`` is in painting order — a later shape covers an earlier one — which is what the
@@ -294,4 +324,5 @@ def to_conv_mat_boundary_layer(xp, shapes, n_base, fto_x, fto_y, period, dtype,
     regs = [(s['n_index'], [_clipper.loop_verts(xp, lp, vals) for lp, _sgn in region])
             for s, region in zip(shapes, regions)]
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
-    return conv_mats(xp, regs, n_base, fto_x, fto_y, period, normal_grid, real_dtype, dtype)
+    return conv_mats(xp, regs, n_base, fto_x, fto_y, period, normal_grid, real_dtype, dtype,
+                     lattice=lattice)
