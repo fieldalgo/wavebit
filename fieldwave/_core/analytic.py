@@ -222,18 +222,41 @@ def layer_needs_resolving(layer, period):
     return bool(_overlap.overlapping_pairs(prims, Px, Py, OVERLAP_TOL_REL * max(Px, Py)))
 
 
-def shape_ft(xp, shape, ky, kx, period):
+def shape_ft(xp, shape, ky, kx, period, lattice=None):
     """Continuous Fourier transform of one shape's indicator, divided by the cell area.
 
-    Returns ``c(ky, kx) = 1/(Px*Py) * FT{1_shape}(u, v)`` on the integer reciprocal grid —
-    the analytic analogue of one ``dfs2d`` Fourier coefficient.
+    Returns ``c(ky, kx) = 1/area * FT{1_shape}(u, v)`` on the integer reciprocal grid — the
+    analytic analogue of one ``dfs2d`` Fourier coefficient.
+
+    ``lattice`` is the cell basis (``None`` = the axis-aligned ``diag(period)``). It reaches
+    only the two lines below, and that is the whole of what a skewed cell costs this function:
+    ``(u, v)`` is the reciprocal vector ``G = m*b1 + n*b2`` in **Cartesian** components, and
+    everything after it — the rotation, the phase, the sinc product, the Bessel forms — is
+    already written in Cartesian frequency and so does not care how ``G`` was reached.
+
+    Nothing about the shape deforms either, because shape lengths are absolute Cartesian
+    quantities (see :func:`shape_geometry`), not fractions of the cell. A rectangle stays a
+    rectangle under a skew; only the grid of frequencies its transform is *sampled at* stops
+    being rectangular. That is why this path needed far less than the raster one, where the
+    normal field genuinely is index-based and needs the metric.
     """
     Px, Py = period[0], period[1]
     stype, cx, cy, lx, ly, angle = shape_geometry(shape, Px, Py)
 
     pi = 3.141592653589793
-    u = 2.0 * pi * kx / Px
-    v = 2.0 * pi * ky / Py
+    if lattice is None:
+        u = 2.0 * pi * kx / Px
+        v = 2.0 * pi * ky / Py
+        area = Px * Py
+    else:
+        # (u, v) = 2*pi * A^-T @ (m, n), written out for the same reason as in
+        # fieldwave._core.lattice.order_kxy: one expression per component, no matrix inverse.
+        a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
+        a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
+        det = a1x * a2y - a2x * a1y
+        u = 2.0 * pi * (a2y * kx - a1y * ky) / det
+        v = 2.0 * pi * (-a2x * kx + a1x * ky) / det
+        area = abs(det)
 
     # Rotated frequency coordinates: kappa = Rot(angle)^T @ k
     ct = xp.cos(as_array(xp, angle, dtype=u.dtype))
@@ -262,10 +285,10 @@ def shape_ft(xp, shape, ky, kx, period):
     else:
         raise ValueError(f'Unknown analytic shape type: {stype!r}')
 
-    return phase * s / (Px * Py)
+    return phase * s / area
 
 
-def assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype):
+def assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype, lattice=None):
     """Analytic Fourier coefficients of ``eps`` and ``1/eps`` for one layer.
 
     Each grid has shape ``(4*fto_y+1, 4*fto_x+1)``, indexed ``[ky+2*fto_y, kx+2*fto_x]`` — the
@@ -288,7 +311,7 @@ def assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype):
 
     for shape in shapes:
         eps_s = as_array(xp, shape['n_index'], dtype=dtype) ** 2
-        ft = xp.astype(shape_ft(xp, shape, KKY, KKX, period), dtype)
+        ft = xp.astype(shape_ft(xp, shape, KKY, KKX, period, lattice), dtype)
         eps_c = eps_c + (eps_s - eps_bg) * ft
         inv_eps_c = inv_eps_c + (1.0 / eps_s - inv_bg) * ft
 
@@ -320,7 +343,7 @@ def _device(x):
     return x.device if hasattr(x, 'device') else None
 
 
-def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype):
+def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype, lattice=None):
     """Unit normal field of the shapes, sampled on ``grid_shape`` — analytic, not from a raster.
 
     ``period`` is unpacked as ``(Py, Px)``. Written without in-place mutation so it stays
@@ -334,10 +357,22 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype):
     Ny, Nx = grid_shape
     Py, Px = period[0], period[1]
 
-    x = (xp.asarray([float(i) for i in range(Nx)], dtype=dtype) + 0.5) * (Px / Nx)
-    y = (xp.asarray([float(i) for i in range(Ny)], dtype=dtype) + 0.5) * (Py / Ny)
-    X = x[None, :] + 0.0 * y[:, None]
-    Y = y[:, None] + 0.0 * x[None, :]
+    u = (xp.asarray([float(i) for i in range(Nx)], dtype=dtype) + 0.5) / Nx
+    v = (xp.asarray([float(i) for i in range(Ny)], dtype=dtype) + 0.5) / Ny
+    if lattice is None:
+        X = (u * Px)[None, :] + 0.0 * v[:, None]
+        Y = (v * Py)[:, None] + 0.0 * u[None, :]
+    else:
+        # Sample on the cell's own parallelogram: r = u*a1 + v*a2. Only the sample *positions*
+        # move. The gradients below are analytic derivatives of the shape formulas, which are
+        # Cartesian by construction, so unlike the raster normal field
+        # (:func:`fieldwave._core.factorization.normal_vector_field`) there is no Jacobian to
+        # apply afterwards -- that one differentiates the raster, this one differentiates the
+        # shape.
+        a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
+        a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
+        X = u[None, :] * a1x + v[:, None] * a2x
+        Y = u[None, :] * a1y + v[:, None] * a2y
 
     nx_total = xp.zeros((Ny, Nx), dtype=dtype)
     ny_total = xp.zeros((Ny, Nx), dtype=dtype)
@@ -397,7 +432,7 @@ def _sampled_coeffs(xp, field, fto_x, fto_y):
     return F[iy[:, None], ix[None, :]]
 
 
-def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype):
+def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype, lattice=None):
     """Coefficient grids of ``nx**2``, ``nx*ny`` and ``ny**2`` — the NVF projectors' input.
 
     **One shape is built at the centre of the cell and carried to ``(cx, cy)`` by a phase**,
@@ -460,12 +495,28 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype)
 
     if len(shapes) == 1:
         _, cx, cy, _, _, _ = shape_geometry(shapes[0], Px, Py)
-        built = [dict(shapes[0], cx=Px / 2.0, cy=Py / 2.0)]
-        shift_y, shift_x = (cy - Py / 2.0) / Py, (cx - Px / 2.0) / Px   # fractions of a period
+        if lattice is None:
+            mid_x, mid_y = Px / 2.0, Py / 2.0
+            # Fractions of a period -- which is what the phase below is written in.
+            shift_y, shift_x = (cy - mid_y) / Py, (cx - mid_x) / Px
+        else:
+            a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
+            a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
+            mid_x, mid_y = 0.5 * (a1x + a2x), 0.5 * (a1y + a2y)
+            # Same quantity, stated properly: the displacement in *fractional lattice*
+            # coordinates, A^-1 @ (c - mid). The phase is exp(-2i*pi*(m*u_d + n*v_d)), which is
+            # exp(-i G.d) already -- it was lattice-general all along, it was only ever handed
+            # its argument as a fraction of Px / Py.
+            det = a1x * a2y - a2x * a1y
+            dx, dy = cx - mid_x, cy - mid_y
+            shift_x = (a2y * dx - a2x * dy) / det
+            shift_y = (-a1y * dx + a1x * dy) / det
+        built = [dict(shapes[0], cx=mid_x, cy=mid_y)]
     else:
         built, shift_y, shift_x = shapes, None, None
 
-    nx, ny = normal_vector_field_analytical(xp, grid_shape, built, (Py, Px), real_dtype)
+    nx, ny = normal_vector_field_analytical(xp, grid_shape, built, (Py, Px), real_dtype,
+                                            lattice)
 
     if shift_y is None:
         phase = 1.0
@@ -479,7 +530,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype)
 
 
 def to_conv_mat_analytic_nvf(xp, shapes, n_base, fto_x, fto_y, period, dtype,
-                             normal_grid=256):
+                             normal_grid=256, lattice=None):
     """The five 2D-solve convolution matrices for one analytic layer, via NVF.
 
     ``eps`` / ``1/eps`` come from the exact shape transform (no staircase); the normal
@@ -490,14 +541,15 @@ def to_conv_mat_analytic_nvf(xp, shapes, n_base, fto_x, fto_y, period, dtype,
     position-free ``X`` (see :func:`normal_projector_coeffs`), so sliding a single-shape layer
     conjugates the whole solve by a diagonal and leaves each order's efficiency alone.
     """
-    eps_c, inv_eps_c = assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype)
+    eps_c, inv_eps_c = assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype,
+                                           lattice)
     ep_dir = laurent_conv_2d(xp, eps_c, fto_x, fto_y)
     ep_inv = laurent_conv_2d(xp, inv_eps_c, fto_x, fto_y)
 
     delta_ep = ep_dir - xp.linalg.inv(ep_inv)
 
     c_xx, c_xy, c_yy = normal_projector_coeffs(
-        xp, shapes, (normal_grid, normal_grid), period, fto_x, fto_y, dtype)
+        xp, shapes, (normal_grid, normal_grid), period, fto_x, fto_y, dtype, lattice)
     C_xx = laurent_conv_2d(xp, c_xx, fto_x, fto_y)
     C_xy = laurent_conv_2d(xp, c_xy, fto_x, fto_y)
     C_yy = laurent_conv_2d(xp, c_yy, fto_x, fto_y)
@@ -511,7 +563,7 @@ def to_conv_mat_analytic_nvf(xp, shapes, n_base, fto_x, fto_y, period, dtype,
 
 def to_conv_mat_analytic_layers(layer_shapes, fto_x, fto_y, period,
                                 normal_grid=256, type_complex=None, xp=None,
-                                boundary_plans=None):
+                                boundary_plans=None, lattice=None):
     """Stack the analytic-NVF convolution matrices over layers.
 
     ``layer_shapes`` is one ``dict(n_base=..., shapes=[...])`` per layer, with the shapes'
@@ -541,6 +593,14 @@ def to_conv_mat_analytic_layers(layer_shapes, fto_x, fto_y, period,
             # one, and this module can only sum. Resolve the painting into disjoint polygons
             # and transform those. A painted layer with nothing overlapping means the same
             # structure either way, so it stays here -- exact, and cheaper.
+            if lattice is not None:
+                raise NotImplementedError(
+                    f'layer {index} paints shapes that overlap, and resolving an overlap into '
+                    f'polygons is not implemented yet for a non-orthogonal cell basis (set via '
+                    f'.lattice): the resolver clips against a rectangular cell and wraps across '
+                    f'its edges. Shapes that do not overlap take the summed path, which does '
+                    f"support a skewed cell -- or use combine='sum' if the overlap is not "
+                    f'meant to be resolved.')
             from .boundary import to_conv_mat_boundary_layer
             mats = to_conv_mat_boundary_layer(
                 xp, layer.get('shapes', []), n_base, fto_x, fto_y, period, dtype,
@@ -548,7 +608,7 @@ def to_conv_mat_analytic_layers(layer_shapes, fto_x, fto_y, period,
         else:
             mats = to_conv_mat_analytic_nvf(
                 xp, layer.get('shapes', []), n_base, fto_x, fto_y, period, dtype,
-                normal_grid=normal_grid)
+                normal_grid=normal_grid, lattice=lattice)
         for slot, m in zip(out, mats):
             slot.append(m)
 

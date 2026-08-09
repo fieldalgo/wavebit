@@ -207,9 +207,60 @@ def test_li_is_refused_on_a_skewed_cell():
         totals(raster(HEX), lattice=HEX, factorization='li')
 
 
-def test_integrated_coefficients_are_refused_on_a_skewed_cell():
-    with pytest.raises(NotImplementedError, match="fourier_coefficients='sampled'"):
-        totals(raster(HEX), lattice=HEX, fourier_coefficients='integrated')
+def test_the_vector_modeler_is_refused_on_a_skewed_cell():
+    with pytest.raises(NotImplementedError, match='vector modeler'):
+        s = fieldwave.rcwa(backend=0, ucell=[[1.0, [['rectangle', 100.0, 200.0, 50.0, 50.0,
+                                                     2.4, 0, 0, 0]]]],
+                           period=[P, P], fto=[4, 4], thickness=[H], wavelength=WL,
+                           n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+                           factorization='nvf', lattice=HEX)
+        s.conv_solve()
+
+
+def test_a_painted_overlap_is_refused_on_a_skewed_cell():
+    """Summing shapes works skewed; *resolving* an overlap clips against a rectangular cell."""
+    ucell = [{'n_base': 1.0, 'combine': 'paint', 'shapes': [
+        {'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 160.0, 'n_index': 2.4},
+        {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'n_index': 3.0}]}]
+    s = fieldwave.rcwa(backend=0, ucell=ucell, period=[P, P], fto=[4, 4], thickness=[H],
+                       wavelength=WL, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+                       factorization='nvf', lattice=HEX)
+    with pytest.raises(NotImplementedError, match='overlap'):
+        s.conv_solve()
+
+
+# --------------------------------------------------- paths a skew turned out not to break
+
+def _analytic_totals(g, lattice=None):
+    """One circle, stated in absolute Cartesian lengths — the same disc on the same lattice."""
+    ucell = [{'n_base': 1.0, 'shapes': [
+        {'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 2 * R, 'n_index': N_ROD}]}]
+    s = fieldwave.rcwa(backend=0, ucell=ucell, period=[P, P], fto=[g, g], thickness=[H],
+                       wavelength=WL, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+                       factorization='nvf', lattice=lattice)
+    return float(np.sum(np.asarray(s.conv_solve().de_ti)))
+
+
+def test_analytic_shapes_survive_a_unimodular_shear():
+    """Shape lengths are absolute Cartesian, so nothing about the shape deforms under a skew.
+
+    Only the frequency grid its transform is sampled at stops being rectangular. This converges
+    an order tighter than the raster comparison (2e-6 against 1.2e-4) because there is no
+    staircase in it at all — the residual is the normal-field sampling grid alone.
+    """
+    assert _analytic_totals(12) == pytest.approx(_analytic_totals(12, SHEAR), abs=1e-4)
+
+
+def test_integrated_coefficients_survive_a_unimodular_shear():
+    """``cfs2d`` integrates over the *parametric* cell, where there is no metric to get wrong.
+
+    The Jacobian cancels against the ``1/area`` normalisation, so this path was lattice-general
+    before anyone asked it to be. Refused for a while on the assumption it was not.
+    """
+    r_o, t_o = totals(raster(ORTHO), fourier_coefficients='integrated')
+    r_s, t_s = totals(raster(SHEAR), lattice=SHEAR, fourier_coefficients='integrated')
+    assert t_o == pytest.approx(t_s, abs=1e-3)
+    assert r_o == pytest.approx(r_s, abs=1e-3)
 
 
 def test_field_reconstruction_is_refused_on_a_skewed_cell():

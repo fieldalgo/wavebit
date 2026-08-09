@@ -302,35 +302,39 @@ class CoreFactorizationMixin:
         assembly stays Hermitian so energy still conserves to 1e-15. Nothing downstream is in a
         position to notice, which is why the refusal has to live here.
 
-        What each is missing is specific, not general:
+        What is left is specific, not general. ``factorization='li'`` applies the inverse rule
+        along the *raster axes* (see
+        :func:`~fieldwave._core.factorization.to_conv_mat_raster_discrete`), and the solve
+        consumes the result as Cartesian ``eps_xx`` / ``eps_yy``. On a skewed cell those axes
+        are ``a1`` / ``a2``, not ``x`` / ``y``. Repairing that is Li's covariant formulation
+        (JOSA A 14(10), 2758) — a separate piece of work, and one worth costing before doing,
+        since NVF already converges faster than Li on the curved boundaries this feature exists
+        for.
 
-        * ``factorization='li'`` applies the inverse rule along the *raster axes* (see
-          :func:`~fieldwave._core.factorization.to_conv_mat_raster_discrete`), and the solve
-          consumes the result as Cartesian ``eps_xx`` / ``eps_yy``. On a skewed cell those axes
-          are ``a1`` / ``a2``, not ``x`` / ``y``. Repairing that is Li's covariant formulation
-          (JOSA A 14(10), 2758), a separate piece of work — and one worth costing first, since
-          NVF already converges faster than Li does on the curved boundaries this feature is
-          for.
-        * The integrated (analytic) coefficients are closed forms derived for a rectangular
-          cell. A Cartesian ellipse stays an ellipse under the skew and ports cleanly; a
-          rectangle becomes a parallelogram and its sinc product does not. Re-deriving them is
-          ordinary work, just not done here.
-        * The vector and analytic modelers describe shapes in a rectangular cell for the same
-          reason.
+        The vector modeler (``modeling_type=1``) rasterises shapes onto a rectangular grid of
+        its own and is not ported.
+
+        Two things that were refused here are not any more, both because the assumption behind
+        the refusal turned out to be wrong rather than because they were implemented:
+
+        * The **integrated** coefficients are computed by ``cfs2d`` as an integral over the
+          *parametric* cell, where the Jacobian cancels against the ``1/area`` normalisation.
+          There is no metric in it, so it was always lattice-general.
+        * The **analytic shape** path (``modeling_type=2``) states shape lengths as absolute
+          Cartesian quantities, so nothing about a shape deforms under a skew — a rectangle
+          stays a rectangle. Only the grid of frequencies its transform is sampled at moves,
+          which is one expression in :func:`~fieldwave._core.analytic.shape_ft`. Overlapping
+          *painted* layers are still refused inside that path: resolving an overlap clips
+          against a rectangular cell.
         """
         if self.lattice_is_axis_aligned:
             return
         common = ('The cell basis is non-orthogonal (set via .lattice). ')
-        if self._modeling_type_assigned != 0:
+        if self._modeling_type_assigned == 1:
             raise NotImplementedError(
-                common + f'modeling_type={self._modeling_type_assigned} builds from shapes '
-                f'placed in a rectangular cell, which is not implemented yet for a skewed '
-                f'one. Use a raster ucell (modeling_type=0).')
-        if self._fourier_coefficients != FourierCoefficients.SAMPLED:
-            raise NotImplementedError(
-                common + f"fourier_coefficients={self._fourier_coefficients.value!r} uses "
-                f'closed-form series derived for a rectangular cell, which is not implemented '
-                f"yet for a skewed one. Use fourier_coefficients='sampled'.")
+                common + 'the vector modeler (modeling_type=1) rasterises onto a rectangular '
+                'grid, which is not implemented yet for a skewed cell. Use a raster ucell '
+                '(modeling_type=0) or analytic shapes (modeling_type=2).')
         if self._factorization != Factorization.NVF:
             raise NotImplementedError(
                 common + f"factorization={self._factorization.value!r} applies the inverse "
@@ -392,7 +396,8 @@ class CoreFactorizationMixin:
                 self.ucell, fto_x, fto_y, self.period,
                 normal_grid=self.analytic_normal_grid,
                 type_complex=xp.complex128, xp=xp,
-                boundary_plans=None if geometry is None else geometry.boundary_plans)
+                boundary_plans=None if geometry is None else geometry.boundary_plans,
+                lattice=self._geometry_lattice)
 
         else:
             raise ValueError("Check 'modeling_type' in 'conv_solve'.")
