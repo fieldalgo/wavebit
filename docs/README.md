@@ -15,6 +15,7 @@ tables. Say what was measured on what hardware, and where the result stops being
 | [`nvf-upsampling.md`](nvf-upsampling.md) | What grid should the NVF normal field be taken on? | Not the fine one: it lost accuracy in 27 of 32 combinations and cost the most |
 | [`torch-compile.md`](torch-compile.md) | Is `torch.compile` worth chasing for this solver? | No — the solve is almost all LAPACK, which the compiler forwards untouched |
 | [`oblique-lattice.md`](oblique-lattice.md) | What would non-orthogonal (oblique, hexagonal) lattice support cost? | See the document |
+| [`anisotropic-materials.md`](anisotropic-materials.md) | Can an anisotropic or magnetic material be given to the solver, and what does each missing case cost? | Uniform in-plane tensors already work; only `eps_xz` needs a different solver |
 | [`repository-layout.md`](repository-layout.md) | Where does a new file go, and why is the tree shaped this way? | The routing rule, restated for contributors in [`../CONTRIBUTING.md`](../CONTRIBUTING.md) |
 
 ## Docs vs tutorials
