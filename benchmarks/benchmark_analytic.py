@@ -105,7 +105,7 @@ def bench_energy_and_backends():
                                       angle=np.deg2rad(40), n_index=2.4)]),
         dict(n_base=1.5, shapes=[dict(type='rectangle', cx=0.4, cy=0.5, lx=0.4, ly=0.5,
                                       angle=np.deg2rad(25), n_index=1.0),
-                                 dict(type='circle', cx=0.8, cy=0.9, lx=0.25, ly=0.25,
+                                 dict(type='circle', cx=0.8, cy=0.9, lx=0.25,
                                       n_index=3.0)]),
     ]
     print("\n" + "=" * 74)

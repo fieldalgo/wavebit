@@ -109,7 +109,7 @@ working.
 
 ```python
 ucell = [dict(n_base=1.0, shapes=[
-             dict(type='circle', cx=0.5, cy=0.5, lx=0.6, ly=0.6, n_index=3.5)]),
+             dict(type='circle', cx=0.5, cy=0.5, lx=0.6, n_index=3.5)]),
          dict(n_base=1.5, shapes=[
              dict(type='rectangle', cx=0.4, cy=0.5, lx=0.4, ly=0.5,
                   angle=np.deg2rad(25), n_index=1.0),
