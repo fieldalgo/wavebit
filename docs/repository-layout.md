@@ -1,7 +1,6 @@
 # Repository layout — the target structure, and the rule that keeps it
 
-Written: 2026-08-09. **Executed 2026-08-10**, except for taking the vendored examples out,
-which needs destination repositories. The wave-2 renames were done despite live work in the
+Written: 2026-08-09. **Executed in full, 2026-08-10.** The wave-2 renames were done despite live work in the
 affected directories: every session was idle at the time, `git mv` recorded all 34 moves as
 renames rather than delete/add, and the affected sessions were told directly. What that costs
 whoever rebases is written down under *Rebasing across the rename* below.
@@ -19,7 +18,7 @@ Targets:
 - `tests_verification/gen_goldens_reticolo.py`, `benchmarks/interface/` — the external-oracle
   machinery, currently split across two directories
 - `examples/electric-field-fno/`, `examples/metasurface-design/` — 341 files of vendored
-  third-party ML code, 69% of the repository
+  third-party ML code, 69% of the repository; **removed 2026-08-10**
 - the root layout of **104 well-known repositories**, surveyed 2026-08-09 — so the rule is
   checked against the field, not only against this project
 
@@ -470,7 +469,7 @@ No project in 104 uses a qualified name like `tests_verification`.
 | 2 | ~~READMEs~~ **done** — add `docs/`, add `tests/`, rewrite `examples/` to the question table, one line in `tutorials/` | 4 files | Additive. |
 | 3 | ~~Fix `.gitattributes`~~ **done** —; add `lab` to `.gitignore` — **no trailing slash**, it is a symlink | 5 lines | See below. Keep the `dev/`/`devs/` lines until every checkout has renamed. |
 | 4 | ~~Dissolve `QA/`~~ **done** — | 6 deleted, ~3 test files, `README.md:310` | Evidence below. |
-| 5 | Vendored examples out of the repository | 341 files removed | 492 → **151** tracked files. Needs the destination repos to exist. |
+| 5 | ~~Vendored examples out of the repository~~ **done** | 341 files removed | 498 → **157** tracked files. No destination repo needed: they are intact on `upstream/main`. |
 | 6 | ~~`setup.py` → `pyproject.toml`~~ **done** — | 1 file | Independent of everything else. |
 | 7 | ~~`tests_verification/` → `tests/`; goldens into `tests/data/`~~ | **done** | 44 files. |
 | 8 | ~~`benchmarks/` → `studies/`; oracles into `tests/references/`~~ | **done** | 16 files; 21 prose and comment references followed. |
@@ -557,8 +556,13 @@ what someone unfamiliar with the codebase searches first.
 `from fieldwave.on_numpy.modeler.modeling import ...`; `fieldwave/on_numpy/` holds only an empty
 `__init__.py`, `emsolver/` and `solver.py`. **This example cannot import**, and nothing noticed.
 
-**Decision: the trees leave.** B for `neuraloperator` (pin the dependency, carry the three named
-edits as a patch), A for `dv3` (240 files is a project, not a patch). `examples/` drops to 16
+**Done 2026-08-10: deleted outright, and no new repository was needed.** The earlier options
+(A: move to its own repo, B: pin the dependency and carry a patch) both assumed FieldWave wanted
+to keep running these examples. It does not — they are meent-lineage work, and separating the
+two projects is the point. Both trees survive complete on `upstream/main`
+(github.com/kc-ml2/meent, public) under the same paths, which is where the paper published from
+that lineage should point anyway, and they remain in this repository's history. So deletion
+loses nothing and costs no coordination. `examples/` drops to 16
 files — `rcwa/` (7 textbook cases), `ocd/` (4, the arXiv optimization study), `vector_*.py` (4),
 two READMEs — all pure FieldWave.
 

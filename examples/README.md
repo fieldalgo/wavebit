@@ -1,28 +1,33 @@
 # Examples
 
-FieldWave applied to outside problems. **CI does not run any of this**, so treat it as a
-starting point rather than as a guarantee — if something here disagrees with
-[`../tests/`](../tests), the tests are right.
+FieldWave applied to problems, in plain scripts. Everything here is pure FieldWave — no ML
+frameworks, no vendored dependencies, nothing that needs a dataset or a GPU.
 
 | Entry | Question it answers |
 | --- | --- |
-| [`rcwa/`](rcwa) | What do the textbook cases look like in FieldWave? Moharam and Lalanne's 1D TE/TM, conical and 2D gratings — the standard results a new RCWA implementation is checked against, written out step by step for someone studying the method. |
-| [`vector_1d.py`](vector_1d.py), [`vector_2d.py`](vector_2d.py) | How do you describe a structure as drawn shapes instead of a raster, and how does that path compare against the raster? The `*_verification.py` pair beside each is the comparison. |
-| [`ocd/`](ocd) | Can FieldWave drive an optical critical-dimension fit, and which optimizer suits it? Reproduction material for the published sweep across five algorithms. |
-| [`electric-field-fno/`](electric-field-fno) | Can a Fourier neural operator predict the field a solver would compute? Training and evaluation for the FNO surrogate. |
-| [`metasurface-design/`](metasurface-design) | Can reinforcement learning design a metasurface with FieldWave in the loop? DQN and DreamerV3 agents. |
+| [`rcwa/`](rcwa) | What do the textbook cases look like in FieldWave? Moharam and Lalanne's 1D TE/TM, conical and 2D gratings — the standard results any RCWA implementation is checked against, written out step by step for someone studying the method. |
+| [`vector_1d.py`](vector_1d.py), [`vector_2d.py`](vector_2d.py) | How do you describe a structure as drawn shapes instead of a raster? The `_verification.py` file beside each answers the follow-up: does that path agree with the raster it replaces? |
+| [`ocd/`](ocd) | Can FieldWave drive an optical critical-dimension fit, and which optimizer suits it? A sweep across five algorithms, from the published study. |
 
-## Two things to know before relying on these
+## What is not here any more
 
-**The two ML examples vendor a fork of a third-party package** — `neuraloperator` under
-`electric-field-fno/`, and `sheeprl` under `metasurface-design/dv3/`. Together they are 318 of
-the files in this repository. They are forks rather than pins because each carries local
-modifications; both are scheduled to move to their own repositories, and their licences
-(MIT and Apache-2.0 respectively) travel with them.
+The two machine-learning examples — a Fourier neural operator for field prediction, and
+metasurface design by reinforcement learning — were removed on 2026-08-10. Between them they
+bundled forks of two third-party packages (`neuraloperator` and `sheeprl`), which came to **341
+files, 69% of this repository**, none of it FieldWave code and none of it exercised by anything.
 
-**They also predate the rewrite.** `electric-field-fno/data.py` still imports
-`fieldwave.on_numpy.modeler.modeling`, which no longer exists — that example cannot run as
-committed. `rcwa/`, `vector_*.py` and `ocd/` are pure FieldWave and current.
+They remain in full in [meent](https://github.com/kc-ml2/meent), the project FieldWave was
+forked from, under `examples/electric-field-fno/` and `examples/metasurface-design/` — which is
+the right home for them: they belong to that lineage and to the paper published from it. They
+are also still in this repository's git history.
 
-Nothing in this directory is covered by CI, which is how the above went unnoticed. See
-[`../docs/repository-layout.md`](../docs/repository-layout.md) for what is planned about it.
+Removing them was not a judgement on the work. It is that FieldWave is a solver, and carrying a
+reinforcement-learning framework inside `examples/` made every repository-wide search answer for
+somebody else's code.
+
+## How maintained is this?
+
+**Not covered by CI at the time of writing.** If something here disagrees with
+[`../tests/`](../tests), the tests are right. The entries above are small and fast enough that a
+smoke job is cheap — see the open decisions in
+[`../docs/repository-layout.md`](../docs/repository-layout.md).

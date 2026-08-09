@@ -1,8 +1,2 @@
-# Only genuinely third-party trees are `vendored`; it means "not ours", and marking our own
-# code with it also hides it from GitHub code search.
-examples/electric-field-fno/neuraloperator/** linguist-vendored
-examples/metasurface-design/dv3/**           linguist-vendored
-examples/metasurface-design/dqn/**           linguist-vendored
-
 # Notebooks are ours, but counting them would report the repository as mostly Jupyter.
 tutorials/** linguist-documentation
