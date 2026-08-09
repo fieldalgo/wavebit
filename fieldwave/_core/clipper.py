@@ -7,8 +7,10 @@ indices, never coordinates -- ``('src', 'B', 7)`` or ``('x', 3, 5, 8, 9)`` -- so
 against traced vertices (:func:`eval_table`) is pure arithmetic and differentiates. That split
 is why a discrete geometric decision does not stop a gradient.
 
-Greiner-Hormann does the clipping. Two things about it cost a debugging round each and are kept
-in the code rather than only in a comment:
+The clipping is Greiner-Hormann: G. Greiner and K. Hormann, "Efficient clipping of arbitrary
+polygons", *ACM Transactions on Graphics* **17**(2), 71-83 (1998), doi:10.1145/274363.274364.
+Two things about it cost a debugging round each and are kept in the code rather than only in a
+comment:
 
 * **Degeneracies are the norm, not the exception.** Plain GH fails on 49.9% of grid-snapped
   rectangle pairs -- shared edges and corners-on-edges are what real designs are made of, and

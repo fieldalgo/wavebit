@@ -7,6 +7,15 @@ and no quadrature. ``k = 0`` is the one point where that form is singular; it is
 lattice point (the smallest non-zero ``|k|`` is ``2*pi/max(Px, Py)``), so a single ``where``
 handles it and there is no small-denominator regime to approach.
 
+The result is not new here. S.-W. Lee and R. Mittra, "Fourier transform of a polygonal shape
+function and its application in electromagnetics", *IEEE Trans. Antennas Propag.* **31**(1),
+99-103 (1983), is the standard electromagnetics reference for it; the derivation is repeated
+above because the sign and factor-of-two conventions have to match
+:func:`fieldwave._core.factorization.dfs2d` exactly, and getting ``sinc((k.e)/2)`` wrong as
+``sinc(k.e)`` is invisible on axis-aligned rectangles.
+
+:func:`polygon_area` is the shoelace formula (Gauss's area formula).
+
 A hole needs no special case. The transform is a signed contour integral, so a loop wound the
 other way subtracts by itself, and :mod:`.clipper` returns holes exactly that way.
 """

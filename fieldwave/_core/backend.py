@@ -292,6 +292,9 @@ def _torch_eig(A):
 # `jax.scipy.special.bessel_jn` returns NaN for small arguments, so it needs its own
 # implementation entirely. Same value, three routes — exactly what this adapter is for.
 
+# The two pieces are textbook, not invented here: the ascending series is DLMF 10.2.2
+# (Abramowitz & Stegun 9.1.10) and the large-argument form is Hankel's expansion, DLMF 10.17.3
+# (A&S 9.2.1-9.2.6), whose P/Q coefficients are the a_k(nu) recursion built just below.
 _J1_THR = 12.0            # series below, asymptotic expansion above
 _J1_SERIES_TERMS = 30
 _J1_ASYM_TERMS = 6
