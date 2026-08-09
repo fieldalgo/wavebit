@@ -96,9 +96,27 @@ cell and return a plausible wrong number, with energy still conserving to 1e-15.
 
 `li` applies the inverse rule along the **raster axes** (`epx = dfs2d(cell, 0, 1)`), and the solve
 consumes the result as Cartesian `eps_xx` / `eps_yy`. On a skewed cell those axes are `a1` / `a2`,
-not `x` / `y`. Repairing it means Li's covariant formulation (JOSA A **14**(10), 2758) — and it is
-worth costing before doing, given `nvf` already converges faster on exactly the curved boundaries
-this feature exists for.
+not `x` / `y`. Repairing it means Li's covariant formulation (JOSA A **14**(10), 2758).
+
+Before anyone spends that: **`nvf` already contains `li`.** With a constant axis-aligned normal
+the projector collapses to `C_xx = I`, `C_xy = C_yy = 0`, and the assembly reduces to
+`eps_xx = <1/eps>^-1`, `eps_yy = <eps>` — Li's rules exactly, not an approximation of them (see
+`factorization.normal_vector_field`). A rectangle has a constant normal on each face, so `nvf`
+reproduces `li` face by face there.
+
+Measured, on the structure most favourable to `li` — a rectangle aligned to the axes, 512x512
+raster, square lattice:
+
+| fto | `li` | `nvf` |
+|---|---|---|
+| 12 | 0.86259051 | 0.86239874 |
+| 15 | 0.86204124 | 0.86242349 |
+| 18 | 0.86197717 | 0.86186546 |
+
+Same limit to ~1e-4, same cost (30.0 s against 31.1 s at fto 18). On a *curved* boundary the two
+part company completely: on a circular pillar `li` had not converged at `fto=(16, 28)` after 72 s
+while `nvf` settled by `fto=(10, 17)` in 5 s. No measured case has `li` ahead. One structure, one
+wavelength, normal incidence — but the containment above is structural and holds regardless.
 
 ## Fields on a skewed cell
 
