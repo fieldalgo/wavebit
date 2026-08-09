@@ -1,5 +1,11 @@
 # Tutorials
 
+Lessons, read in order, for someone who has not used the API yet. The boundary against
+[`../docs/`](../docs) is **audience, not format**: a tutorial is outgrown after one reading,
+while a document in `docs/` is cited — including from code comments — and records what was
+measured or why a default is what it is. A notebook whose purpose is to record a measurement
+belongs there as markdown instead.
+
 ## Modeling and Electromagnetic simulation
 * [Modeling and EMsolver](01-modeling-and-emsolver.ipynb)
   * modeling and Electromagnetic simulation(FieldWave uses RCWA).

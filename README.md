@@ -306,8 +306,9 @@ The physics is checked against references, not only against itself:
 * **Analytic gradients against finite differences**, for the shape parameters the optimizer
   actually moves.
 
-The suite lives in [`tests_verification/`](tests_verification) and runs in CI on every push;
-[`QA/`](QA) holds the longer-running scripts that are not part of it.
+The suite lives in [`tests_verification/`](tests_verification) and runs in CI on every push.
+Everything with a statable criterion lives there, including the slower cross-backend and
+optimizer checks — there is no second, unasserted tier.
 
 Every solve also checks what it is about to hand back. A NaN or infinity in `de_ri` / `de_ti`
 raises `FloatingPointError` naming the contaminated array; a result that stayed finite but
