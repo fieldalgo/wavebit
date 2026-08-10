@@ -348,10 +348,84 @@ is bit-identical either way, so nothing the library builds moved. Pinned by
 The first row is a wrapper. The second is real work but reuses the mode operator unchanged. The
 third is a second solver living beside the first.
 
-One caveat that applies to rows two and three: **the existing goldens cannot arbitrate any of
-this.** Every NVF golden is 1D or square-pixel, so an anisotropic factorization would need its own
-reference — an analytic uniaxial slab for the uniform case, and a published crossed-anisotropic
-grating for the patterned one.
+That caveat used to read "the existing goldens cannot arbitrate any of this", and it no longer
+holds. Four oracles now cover this ground, three of them external, with goldens checked in:
+
+| oracle | reaches | file |
+|---|---|---|
+| Berreman 4x4 (written here) | uniform tensors incl. z-coupling, in-layer fields | `tests/test_anisotropic_berreman.py` |
+| RETICOLO (Li/Lalanne lineage) | uniform **complex** tensors, z-coupling | `golden_reticolo_anisotropic.npz` |
+| fmmax (Liu & Fan lineage, MIT) | uniform complex tensors, **patterned**, **`mu`** | `golden_fmmax.npz`, `golden_fmmax_magnetic.npz` |
+| S4 (same lineage, C++) | real tensors, patterned | `golden_s4.npz` |
+
+Two things to know before leaning on them. The magnetic golden was **frozen before anything could
+consume it** — deliberately, since an oracle chosen after the work is an oracle chosen to agree —
+and its `mu = 1` half is gated against the solver today while its magnetic half carries only a
+physical guard. And fmmax and S4 share a formulation lineage, so agreement between *those two* is
+weaker evidence than agreement with RETICOLO or Berreman.
+
+## 8. How the solver would choose, once there is a choice
+
+Everything above says what is missing. This says how the pieces would be selected once they
+exist, because that decision is not the user's to make and the shape of it constrains the work.
+
+**The principle is already in the codebase.** `rcwa.py::_assign_grating_type` reads the `ucell`
+shape, `pol` and `phi` and picks the cheapest formulation that can express the problem — its
+docstring says so in as many words: *"This decides the efficient formulation for given case."*
+1D TE/TM splits into scalars, 1D conical does not, 2D couples everything. Anisotropy adds axes to
+that same decision rather than a new kind of decision.
+
+| axis | read from | branches |
+|---|---|---|
+| grating dimensionality *(exists)* | `ucell` shape, `pol`, `phi` | 1D TE/TM, 1D conical, 2D |
+| **z row of the tensor** | `eps_xz`, `eps_zx`, `eps_yz`, `eps_zy` | 2ff second-order, 4ff first-order |
+| **permeability** | `mu != 1` | existing operator, magnetic operator |
+| **patterned or uniform** | layer has in-plane structure | factorization, or scaled identities |
+
+### Why it has to be automatic
+
+The cost spread is large enough that a wrong default is a real tax, and small enough in the
+common case that nobody would notice paying it. Measured on RETICOLO at 441 orders, against an
+isotropic layer of the same size:
+
+| layer | cost |
+|---|---|
+| diagonal anisotropic | 2.8x |
+| in-plane tensor, empty z row (Faraday) | 3.3x |
+| **z-coupled (Voigt)** | **9.5x** |
+
+The 9.5x is the 4ff jump — the eigenproblem doubles and `eig` is cubic. A user with a Faraday
+stack has no reason to know that a populated `eps_yz` is what would cost them eight times more,
+and no way to check whether their tensor has one without reading this document. That is what an
+`auto` default is for.
+
+### And why the override still matters
+
+```python
+class Formulation(str, Enum):
+    AUTO   = 'auto'   # read the tensor and decide          (default)
+    SECOND = '2ff'    # force second-order; refuse z-coupling
+    FIRST  = '4ff'    # force first-order; always possible, ~8x
+```
+
+Forcing `'4ff'` on a problem that does not need it is how the 4ff solver gets **validated**: a
+z-decoupled case run both ways must agree, and that is an internal cross-check no external oracle
+provides. It is the same reason `connecting_algo` is selectable — and the same reason
+`test_anisotropic_berreman.py` drives SMM as well as TMM, since "the correction reaches the other
+path for free" is exactly the sort of claim that turns out to be false.
+
+Forcing `'2ff'` on a z-coupled tensor must **raise**, not quietly drop the z row. That failure mode
+is already measured: dropping it moves the efficiencies by 2e-2 to 6e-2 while `R + T` stays at 1 to
+machine precision, so every check a caller is likely to run still passes. The guard exists today at
+the tensor adapter (`test_anisotropic_berreman.py::reject_z_coupling`) and belongs in the solver
+once the solver can be handed a tensor directly.
+
+### One requirement on the dispatch itself
+
+**Which path ran has to be visible in the result.** `grating_type_assigned` is already exposed for
+exactly this reason. A silent 8x is indistinguishable from a slow machine, and a benchmark that
+cannot say which formulation it measured is not a benchmark. Whatever the attribute ends up being
+called, it needs to survive into whatever a study script reads.
 
 ## References
 
