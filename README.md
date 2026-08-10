@@ -15,14 +15,6 @@ whole calculation — so the same code that predicts a device's response can als
 * **EM simulation** — RCWA solver, rigorous and fully vectorial
 * **Optimization** — gradients flow end to end, from geometry to diffraction efficiency
 
-## Lineage
-
-FieldWave is the successor to [meent](https://github.com/kc-ml2/meent), continued by its
-original lead author at FieldAlgo. It is derived from meent (MIT License, © 2022 ML2) and is
-developed independently under Apache-2.0. If you are coming from meent, see
-[Migrating from meent](#migrating-from-meent) — the API was renamed and one geometry
-convention changed.
-
 ## How to install
 
 FieldWave is not on PyPI yet. Install it from source:
@@ -359,32 +351,6 @@ Bug reports, questions and pull requests are welcome — see
 in, answerable without reading what is already in each one. The reasoning, and the renames still
 planned, are in [`docs/repository-layout.md`](docs/repository-layout.md).
 
-## Migrating from meent
-
-The physics carries over; the names changed, and one convention did.
-
-| meent | FieldWave |
-| --- | --- |
-| `import meent` | `import fieldwave` |
-| `meent.call_mee(backend=...)` | `fieldwave.rcwa(backend=...)` |
-| `MeeNumpy` / `MeeJax` / `MeeTorch` | `SolverNumpy` / `SolverJax` / `SolverTorch` |
-| `fourier_type=0` / `=1` / `=2` | `fourier_coefficients` + `factorization` (see above) |
-| MIT | Apache-2.0 |
-
-`fourier_type` still works and still means what it did, with a `DeprecationWarning`; it split
-because one integer was standing for two independent choices.
-
-Everything else — `conv_solve`, `ucell`, `thickness`, `fto`, `period`, `pol`,
-`connecting_algo`, the `de_ri` / `de_ti` results — keeps its name and meaning.
-
-One result does change. meent's CFS path read `ucell` row `0` as the *last* y while its other
-paths read it as the first, so the same array described two different structures depending on
-meent's `fourier_type`. At `phi = 0` this is invisible; away from it, CFS was ~1e-2 off
-Reticolo. FieldWave reads row `0` as `y = 0` everywhere, and CFS now agrees to ~1e-13. If you
-are reproducing a meent result at oblique azimuth with meent's `fourier_type=1` —
-`fourier_coefficients='integrated'` here — expect a difference: this one is the fix, not a
-regression.
-
 ## Roadmap
 
 FieldWave is being built as a suite rather than a single solver:
@@ -394,27 +360,50 @@ FieldWave is being built as a suite rather than a single solver:
 2. **FDTD** — a time-domain solver sharing the same geometry and material layers, enabling
    cross-validation of the same structure between methods.
 
+## Coming from meent
+
+FieldWave derives from [meent](https://github.com/kc-ml2/meent). The physics carries over; the
+names changed, and one convention did.
+
+| meent | FieldWave |
+| --- | --- |
+| `import meent` | `import fieldwave` |
+| `meent.call_mee(backend=...)` | `fieldwave.rcwa(backend=...)` |
+| `MeeNumpy` / `MeeJax` / `MeeTorch` | `SolverNumpy` / `SolverJax` / `SolverTorch` |
+| `fourier_type=0` / `=1` / `=2` | `fourier_coefficients` + `factorization` (see above) |
+
+Everything else — `conv_solve`, `ucell`, `thickness`, `fto`, `period`, `pol`,
+`connecting_algo`, the `de_ri` / `de_ti` results — keeps its name and meaning. `fourier_type`
+still works and still means what it did, with a `DeprecationWarning`; it split because one
+integer was standing for two independent choices.
+
+One *result* changes, at oblique azimuth on the `integrated` path, and it is a fix rather than
+a regression. What it was, and how to tell whether it touches you:
+[`docs/migration.md`](docs/migration.md).
+
 ## Citation
 
-FieldWave builds on the work published as meent. If you use FieldWave in your research,
-please cite:
+If you use FieldWave in your research, please cite the software:
 
 ```bibtex
-@article{kim2024meent,
-    title={Meent: Differentiable Electromagnetic Simulator for Machine Learning},
-    author={Kim, Yongha and Jung, Anthony W. and Kim, Sanmun and
-            Octavian, Kevin and Heo, Doyoung and Park, Chaejin and
-            Shin, Jeongmin and Nam, Sunghyun and Park, Chanhyung and
-            Park, Juho and Han, Sangjun and Lee, Jinmyoung and
-            Kim, Seolho and Jang, Min Seok and Park, Chan Y.},
-    journal={arXiv preprint arXiv:2406.12904},
-    year={2024}
+@software{fieldwave,
+    title  = {FieldWave: Differentiable Electromagnetic Simulation Suite},
+    author = {Kim, Yongha},
+    year   = {2026},
+    url    = {https://github.com/fieldalgo/fieldwave},
 }
 ```
 
-## License
+The RCWA formulation FieldWave started from was published as meent; if it is the *method* you
+are citing rather than this implementation, that paper is in [CITATION.bib](CITATION.bib).
 
-Apache-2.0. See [LICENSE](LICENSE).
+## License and provenance
+
+FieldWave is licensed under Apache-2.0. See [LICENSE](LICENSE).
+
+It derives from [meent](https://github.com/kc-ml2/meent) (MIT License, © 2022 ML2), whose
+notice is carried in full in [LICENSE.meent](LICENSE.meent). FieldWave is developed
+independently by FieldAlgo and is not affiliated with, endorsed by, or supported by ML2.
 
 ## Contact
 

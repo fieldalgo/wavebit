@@ -17,6 +17,7 @@ tables. Say what was measured on what hardware, and where the result stops being
 | [`oblique-lattice.md`](oblique-lattice.md) | What would non-orthogonal (oblique, hexagonal) lattice support cost? | See the document |
 | [`anisotropic-materials.md`](anisotropic-materials.md) | Can an anisotropic or magnetic material be given to the solver, and what does each missing case cost? | Uniform in-plane tensors already work; only `eps_xz` needs a different solver |
 | [`repository-layout.md`](repository-layout.md) | Where does a new file go, and why is the tree shaped this way? | The routing rule, restated for contributors in [`../CONTRIBUTING.md`](../CONTRIBUTING.md) |
+| [`migration.md`](migration.md) | Which meent results does FieldWave deliberately not reproduce? | One: CFS at oblique azimuth, where meent's row-0 convention disagreed with its own other paths |
 
 ## Docs vs tutorials
 
