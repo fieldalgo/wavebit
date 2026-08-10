@@ -398,10 +398,40 @@ tensor.** The first person to do that will be someone trying gyrotropy.
 | Which magnetization `+i·g` means | **open** |
 | A *patterned* anisotropic layer | **out of scope here** — needs the factorization in `anisotropic-materials.md` §3 |
 
-What is still not evidence: Berreman is an independent *formulation*, but it is written in this
-repo and validated against this solver's own known-good cases. A published crossed magneto-optic
-grating, or a third-party solver, would be a stronger confirmation than either. It would also be
-the only way to test the patterned case, which no uniform-layer oracle can reach.
+### What the oracle is, and is not
+
+Two limits are worth stating plainly, because the evidence above is easy to over-read.
+
+**It is an algorithm written here, not a third-party solver.** Berreman 4x4 is an independent
+*formulation* — it shares no algebra with RCWA — but the implementation is ~50 lines in
+`tests/test_anisotropic_berreman.py`, written by the same hand that wrote the thing it judges, and
+validated against this solver's own known-good cases. On the oracle tiers in `tests/README.md` that
+puts it in **physics**, not **an outside solver**. It cannot catch a misconception shared between
+the two.
+
+S4 was tried as the outside solver and did not work out. The build here accepts a real 3x3
+permittivity tensor, antisymmetric off-diagonal included, which is enough to express a
+discriminating case — but its numbers disagree with all three of Berreman, shipped and patched on
+*symmetric* tensors, where those three agree to 7.8e-16. At normal incidence its s and p channels
+come out swapped and otherwise exact; at oblique they do not reconcile. That is a convention
+mismatch in the wiring, not a physics disagreement, and an oracle whose conventions are not pinned
+down is not evidence. Worth another attempt: S4 would be the first genuine outside check here, and
+the tensor support is already there.
+
+**Every case is a uniform film.** Not one of them has structure in the plane. Concretely, that
+means all of this runs at `fto=(0, 0)` — a single Fourier order — with convolution matrices
+hand-filled as scaled identities. So the machinery that turns a *pattern* into those matrices is
+never touched: not `dfs2d`, not Li's rules, not NVF, not the analytic or boundary builders, not
+truncation.
+
+What is therefore validated is the layer mode operator, the s/p rotation, the boundary match and
+the layer joining — which is exactly where the defect lives, so the finding stands. What is not
+validated, at all, is any anisotropic behaviour of a *patterned* layer.
+
+That gap is not an oversight to be closed with more oracle cases. A patterned anisotropic layer
+needs a factorization that does not exist yet (`anisotropic-materials.md` §3), so there is nothing
+to test; and no uniform-layer oracle could reach it if there were. Closing it needs a published
+crossed magneto-optic grating, or a third-party solver that does patterned anisotropy.
 
 Tests: `tests/test_uniform_anisotropic.py`
 

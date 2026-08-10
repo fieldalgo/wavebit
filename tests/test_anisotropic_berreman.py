@@ -35,6 +35,17 @@ What it pins beyond the existing file:
 Note that the defect *is* visible in power efficiencies here, unlike the sign-convention error in
 ``test_uniform_anisotropic.py``, which only moves a complex amplitude. Those are different claims
 about different mistakes; only the latter is invisible to R and T.
+
+**Scope.** Every case in this file is a *uniform film*: no in-plane structure, ``fto=(0, 0)``, one
+Fourier order, convolution matrices hand-filled as scaled identities. Nothing that turns a pattern
+into those matrices is exercised — not ``dfs2d``, not Li's rules, not NVF, not the analytic or
+boundary builders, not truncation. What this file covers is the layer mode operator, the s/p
+rotation, the boundary match and the layer joining. Anisotropy on a *patterned* layer is untested
+here and untestable here; it needs the factorization described in
+``docs/anisotropic-materials.md`` §3, which does not exist yet.
+
+And the oracle is an algorithm implemented below, not a third-party solver — see
+``docs/off-diagonal-slot-convention.md`` §8 for why S4 was tried for that role and set aside.
 """
 import numpy as np
 import pytest
