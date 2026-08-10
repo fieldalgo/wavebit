@@ -9,8 +9,6 @@ without touching the public API.
 Because the core is backend-agnostic, one mixin serves NumPy, JAX and PyTorch alike; the
 per-backend ``transfer_method`` chains it replaces existed in triplicate.
 """
-import warnings
-
 from . import analytic as _analytic
 from . import boundary as _boundary
 from . import factorization as _fac
@@ -18,7 +16,7 @@ from . import lattice as _lattice
 from .backend import _device_of, array_namespace
 from .enums import (DEFAULT_FACTORIZATION, DEFAULT_FOURIER_COEFFICIENTS, Factorization,
                     FourierCoefficients, coefficients_of, factorization_of,
-                    resolve_fourier_options, to_fourier_type)
+                    resolve_fourier_options)
 from .geometry import StaticGeometry
 from .scattering import smm_1d as _smm_1d, smm_1d_conical as _smm_1d_conical, smm_2d as _smm_2d
 from .solve_1d import solve_1d as _solve_1d, solve_1d_conical as _solve_1d_conical
@@ -295,11 +293,10 @@ class CoreFactorizationMixin:
     than an array, so there is no input array to read the namespace from — it comes from the
     backend code instead.
 
-    Also owns the two Fourier option attributes and the deprecated ``fourier_type`` alias, so
-    the three backend constructors resolve them identically. *Neither* axis is a free choice on
-    every path — see :attr:`factorization` and :attr:`fourier_coefficients` — so both are stored
-    as *what was asked for* (``None`` when nobody asked) and resolved against the modeling path
-    on read.
+    Also owns the two Fourier option attributes, so the three backend constructors resolve them
+    identically. *Neither* axis is a free choice on every path — see :attr:`factorization` and
+    :attr:`fourier_coefficients` — so both are stored as *what was asked for* (``None`` when
+    nobody asked) and resolved against the modeling path on read.
     """
 
     #: Which of the three modeling paths the current ``ucell`` selected; the concrete solver
@@ -316,10 +313,10 @@ class CoreFactorizationMixin:
     #: property.
     _fourier_coefficients = None
 
-    def _set_fourier_options(self, fourier_coefficients, factorization, fourier_type):
+    def _set_fourier_options(self, fourier_coefficients, factorization):
         """Settle ``fourier_coefficients`` / ``factorization`` from a constructor's arguments."""
         self._fourier_coefficients, self._factorization = resolve_fourier_options(
-            fourier_coefficients, factorization, fourier_type, keep_unset=True)
+            fourier_coefficients, factorization, keep_unset=True)
 
     @property
     def fourier_coefficients(self):
@@ -389,42 +386,6 @@ class CoreFactorizationMixin:
     @factorization.setter
     def factorization(self, value):
         self._factorization = factorization_of(value)
-
-    @property
-    def fourier_type(self):
-        """Deprecated alias for the ``(fourier_coefficients, factorization)`` pair.
-
-        Reading it raises for ``('integrated', 'nvf')``: that combination is new and has no
-        legacy integer, which is the whole reason the keyword was split. It reports *both*
-        resolved axes, so it reads 1 on the block path (``modeling_type=1``) even though nobody
-        wrote it -- same values the two properties give, and for the same reason. It therefore
-        also raises :class:`NotImplementedError` wherever they do, rather than reporting a code
-        for a build that will not happen.
-
-        The smooth shape path (``modeling_type=2``) is the case with no code at all: it resolves
-        to ``('integrated', 'nvf')``, the one pair the integer never spelled. There is no
-        honest answer to give there -- 2 would name the sampled series that path cannot form --
-        so it raises. That is not a regression the split introduced; it is the split finding a
-        structure the old integer was already describing wrongly.
-        """
-        warnings.warn(
-            "'fourier_type' is deprecated and will be removed; read 'fourier_coefficients' "
-            "and 'factorization' instead.", DeprecationWarning, stacklevel=2)
-        factorization = self.factorization
-        coefficients = self.fourier_coefficients
-        code = to_fourier_type(coefficients, factorization)
-        if code is None:
-            raise ValueError(
-                f"fourier_coefficients={coefficients.value!r} with "
-                f"factorization={factorization.value!r} has no 'fourier_type' code; "
-                f"read those two attributes instead.")
-        return code
-
-    @fourier_type.setter
-    def fourier_type(self, value):
-        self._fourier_coefficients, self._factorization = resolve_fourier_options(
-            fourier_type=value)
-
 
     def freeze_geometry(self, **kwargs):
         """Take this structure's discrete geometry decisions once, eagerly.

@@ -131,6 +131,27 @@ def test_asking_for_the_rule_a_path_does_not_implement_is_refused(path, rule):
         totals(path, factorization=rule)
 
 
+#: Every spelling of the same explicit request. The refusal has to key on the *value asked
+#: for*, never on the spelling it arrived in, so all of these are one request in three
+#: costumes -- ``factorization_of`` normalizes them before the comparison ever runs.
+SPELLINGS_OF_LI = ['li', 'LI', Factorization.LI]
+
+
+@pytest.mark.parametrize('spelling', SPELLINGS_OF_LI, ids=['lower', 'upper', 'enum'])
+def test_a_request_is_refused_however_it_is_spelled(spelling):
+    """A non-canonical spelling of an explicit request must be refused like the canonical one.
+
+    This replaces the ``fourier_type=0`` case that stood here while the deprecated integer
+    alias existed. The alias is gone, but the question it pinned is not: any spelling that is
+    normalized on the way in must still read as a *request* when the refusal decides whether
+    the user asked for something or merely left the default alone. A spelling that slipped
+    through unnormalized would compare unequal to ``Factorization.NVF`` and be refused for the
+    wrong reason -- or, written straight onto the private attribute, silently substitute.
+    """
+    with pytest.raises(NotImplementedError, match="factorization='li'"):
+        fieldwave.rcwa(ucell=SMOOTH, factorization=spelling, **KW).conv_solve()
+
+
 #: How each refusal is expected to name the rule the path *does* use. Matched as a phrase
 #: rather than as the bare enum value, because a bare ``li`` matches "applies" and would let a
 #: message that never names Li at all pass.
@@ -211,32 +232,6 @@ def test_freezing_the_geometry_refuses_before_the_solve_does(path, rule):
     """
     with pytest.raises(NotImplementedError):
         solver(path).freeze_geometry(factorization=rule)
-
-
-def test_the_deprecated_fourier_type_alias_is_refused_the_same_way():
-    """``fourier_type=0`` spells ``('sampled', 'li')`` out, so on smooth shapes it is a request.
-
-    The alias exists for outside code that never migrated, which is exactly the code most
-    likely to be passing a 0 it does not mean.
-    """
-    with pytest.warns(DeprecationWarning):
-        s = fieldwave.rcwa(ucell=SMOOTH, fourier_type=0, **KW)
-    with pytest.raises(NotImplementedError, match="factorization='li'"):
-        s.conv_solve()
-
-
-def test_reading_the_deprecated_alias_reports_the_resolved_rule():
-    """``fourier_type`` reads back 1 on a block solver nobody configured — ('integrated', 'li').
-
-    The smooth path is the more natural subject and used to be the one here, reading 2. It
-    cannot be any more: once ``fourier_coefficients`` resolves per path too, the smooth path
-    resolves to ``('integrated', 'nvf')``, the one pair the legacy integer never spelled, and
-    reading the alias there raises instead. See
-    ``test_fourier_coefficients_by_modeling_path.py::test_the_alias_has_no_code_at_all_for_the_smooth_path``.
-    The block path makes the same point — a resolved value nobody wrote — and has a code.
-    """
-    with pytest.warns(DeprecationWarning):
-        assert fieldwave.rcwa(ucell=BLOCK, **KW).fourier_type == 1
 
 
 @pytest.mark.parametrize('name,code', [('jax', 1), ('torch', 2)])

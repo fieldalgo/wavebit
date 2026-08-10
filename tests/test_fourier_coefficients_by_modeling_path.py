@@ -295,43 +295,6 @@ def test_a_pytree_round_trip_keeps_a_real_request_and_still_refuses_it_at_the_so
         back.conv_solve()
 
 
-# --------------------------------------------------------------- the deprecated alias
-
-def test_the_deprecated_fourier_type_alias_is_refused_the_same_way():
-    """``fourier_type=2`` spells ``('sampled', 'nvf')`` out, so on smooth shapes it is a request.
-
-    Picked over 0 because 2 names the factorization the smooth path *does* implement, which
-    isolates the coefficients axis: the refusal below can only be this one. The alias exists
-    for outside code that never migrated, which is exactly the code most likely to be passing
-    a 2 it does not mean.
-    """
-    with pytest.warns(DeprecationWarning):
-        s = fieldwave.rcwa(ucell=SMOOTH, fourier_type=2, **KW)
-    with pytest.raises(NotImplementedError, match="fourier_coefficients='sampled'"):
-        s.conv_solve()
-
-
-def test_the_alias_reads_back_the_resolved_pair_on_the_block_path():
-    """1 is ``('integrated', 'li')`` -- what the block path runs, though nobody wrote it.
-
-    It used to read 0, which named a discrete series off a raster that path does not have.
-    """
-    with pytest.warns(DeprecationWarning):
-        assert fieldwave.rcwa(ucell=BLOCK, **KW).fourier_type == 1
-
-
-def test_the_alias_has_no_code_at_all_for_the_smooth_path():
-    """The smooth path resolves to ``('integrated', 'nvf')`` -- the one pair the integer never
-    spelled, and the reason the keyword was split in the first place.
-
-    So there is no honest answer to give here and it raises. Before this change it read 2,
-    which is ``('sampled', 'nvf')``: right on the rule, wrong on the series.
-    """
-    with pytest.warns(DeprecationWarning):
-        with pytest.raises(ValueError, match='no .fourier_type. code'):
-            fieldwave.rcwa(ucell=SMOOTH, **KW).fourier_type
-
-
 # ------------------------------------------------------ both axes unavailable at once
 
 def test_a_smooth_call_naming_both_unavailable_values_is_told_about_the_rule():

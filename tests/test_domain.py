@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 import fieldwave
-from fieldwave import Layer, Stack, Incidence, Pol, FourierType
+from fieldwave import Layer, Stack, Incidence, Pol
 
 
 # ---------------------------------------------------------------- round-trip

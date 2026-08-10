@@ -97,7 +97,6 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                  # default resolves per modeling path -- 'li' on a raster and on the
                  # vector modeler, 'nvf' on analytic shapes, which is the only rule
                  # each of those last two implements. Naming the other one raises.
-                 fourier_type=None,          # deprecated alias for the two keywords above
                  normal_grid=1024,  # normal-field sampling; sets the floor on shape gradients
                  # (a translation-invariant structure should give d/dcx == 0 exactly; the
                  #  sampling leaves a sawtooth instead -- 5e-4 at 256, 4.2e-5 at 1024, for
@@ -122,7 +121,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         self.ucell_materials = ucell_materials
 
         self.backend = backend
-        self._set_fourier_options(fourier_coefficients, factorization, fourier_type)
+        self._set_fourier_options(fourier_coefficients, factorization)
         self.normal_grid = normal_grid
         self.lattice = lattice      # after period: assigning a basis overwrites period
 

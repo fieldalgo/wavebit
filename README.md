@@ -222,10 +222,10 @@ solver = fieldwave.rcwa(backend=0, fourier_coefficients='sampled', factorization
 | `'li'` | Li's rules, applied along x and y. The default. |
 | `'nvf'` | Normal vector field — factorizes along the material interfaces. Made for curved and tilted boundaries, where a staircase converges slowly; how it reads those interfaces off a raster, and what that costs, is in [docs/nvf-upsampling.md](docs/nvf-upsampling.md). |
 
-All four pairings work on the raster path. The deprecated `fourier_type` integer expressed only
-three of them — `0 = ('sampled', 'li')`, `1 = ('integrated', 'li')`, `2 = ('sampled', 'nvf')` —
-and had no code at all for `('integrated', 'nvf')`, the pairing a fit of a tilted sidewall
-wants.
+All four pairings work on the raster path, including `('integrated', 'nvf')` — the
+staircase-free permittivity series *and* a factorization that handles boundaries not aligned
+with x or y, which is what a fit of a tilted sidewall wants. Keeping the two as separate
+keywords is what makes that pairing reachable.
 
 The other two paths have one pairing each, because each states a layer as geometry and
 integrates over it in closed form: the block path is `('integrated', 'li')` and the smooth path
@@ -367,30 +367,6 @@ FieldWave is being built as a suite rather than a single solver:
 2. **FDTD** — a time-domain solver sharing the same geometry and material layers, enabling
    cross-validation of the same structure between methods.
 
-## Coming from meent
-
-FieldWave derives from [meent](https://github.com/kc-ml2/meent). The physics carries over; the
-names changed, and one convention did.
-
-| meent | FieldWave |
-| --- | --- |
-| `import meent` | `import fieldwave` |
-| `meent.call_mee(backend=...)` | `fieldwave.rcwa(backend=...)` |
-| `MeeNumpy` / `MeeJax` / `MeeTorch` | `SolverNumpy` / `SolverJax` / `SolverTorch` |
-| `fourier_type=0` / `=1` / `=2` | `fourier_coefficients` + `factorization` (see above) |
-
-Everything else — `conv_solve`, `ucell`, `thickness`, `fto`, `period`, `pol`,
-`connecting_algo`, the `de_ri` / `de_ti` results — keeps its name and meaning. `fourier_type`
-still works on the raster path, with a `DeprecationWarning`. On the two shape paths it can name
-a pairing the path cannot build, and is refused there rather than substituted; reading it back
-on the smooth path raises for the same reason, since that path resolves to
-`('integrated', 'nvf')` — the one pairing the integer never had. It split because one integer
-was standing for two independent choices.
-
-One *result* changes, at oblique azimuth on the `integrated` path, and it is a fix rather than
-a regression. What it was, and how to tell whether it touches you:
-[`docs/migration.md`](docs/migration.md).
-
 ## Citation
 
 If you use FieldWave in your research, please cite the software:
@@ -404,16 +380,10 @@ If you use FieldWave in your research, please cite the software:
 }
 ```
 
-The RCWA formulation FieldWave started from was published as meent; if it is the *method* you
-are citing rather than this implementation, that paper is in [CITATION.bib](CITATION.bib).
+## License
 
-## License and provenance
-
-FieldWave is licensed under Apache-2.0. See [LICENSE](LICENSE).
-
-It derives from [meent](https://github.com/kc-ml2/meent) (MIT License, © 2022 ML2), whose
-notice is carried in full in [LICENSE.meent](LICENSE.meent). FieldWave is developed
-independently by FieldAlgo and is not affiliated with, endorsed by, or supported by ML2.
+FieldWave is licensed under Apache-2.0. See [LICENSE](LICENSE), which also records the
+third-party notices this project carries.
 
 ## Contact
 

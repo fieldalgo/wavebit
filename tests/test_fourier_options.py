@@ -1,19 +1,19 @@
-"""``fourier_type`` split into two independent axes.
+"""``fourier_coefficients`` and ``factorization`` are two independent axes.
 
-The old keyword was one integer standing for two orthogonal choices — how a layer's Fourier
-coefficients are obtained, and which rule closes the products of discontinuous functions — so
-only three of the four combinations were spellable:
+They are orthogonal choices — how a layer's Fourier coefficients are obtained, and which rule
+closes the products of discontinuous functions — so on the raster path all four of their
+pairings are reachable. That is the point of keeping them as two keywords: a single knob
+covering both can only ever name a subset, and the pairing it drops is
+``('integrated', 'nvf')`` — the one a shape/OCD fit of a tilted sidewall wants, being the
+staircase-free permittivity series *and* a factorization that handles boundaries not aligned
+with x or y.
 
-    0 -> ('sampled', 'li')      1 -> ('integrated', 'li')      2 -> ('sampled', 'nvf')
-
-``('integrated', 'nvf')`` had no code at all, which is the combination a shape/OCD fit of a
-tilted sidewall wants: the staircase-free permittivity series *and* a factorization that
-handles boundaries not aligned with x or y.
-
-This file covers the split itself — the default, the deprecated alias, and the newly
-reachable pairing. The per-strategy numerics live in ``test_nvf.py`` /
-``test_factorization_core.py``, and the frozen-geometry / tracing coverage of all four points
-in ``test_frozen_geometry.py``.
+So this file covers the two axes as a pair — the default, that neither keyword may move the
+other, and that fourth pairing. The per-strategy numerics live in
+``test_nvf.py`` / ``test_factorization_core.py``; the frozen-geometry / tracing coverage of
+all four points in ``test_frozen_geometry.py``; and how each axis resolves against a modeling
+path that implements only one of its values in
+``test_factorization_by_modeling_path.py`` / ``test_fourier_coefficients_by_modeling_path.py``.
 """
 import numpy as np
 import pytest
@@ -66,61 +66,23 @@ def test_the_default_is_what_spelling_it_out_gives():
             _totals(CFG_2D, fourier_coefficients='sampled', factorization='li'))
 
 
-# ------------------------------------------------------------ the deprecated alias
-
-LEGACY = [(0, 'sampled', 'li'), (1, 'integrated', 'li'), (2, 'sampled', 'nvf'),
-          ('nvf', 'sampled', 'nvf'), ('NVF', 'sampled', 'nvf')]
-
-
-@pytest.mark.parametrize('code,coefficients,factorization', LEGACY)
-def test_fourier_type_still_selects_what_it_used_to(code, coefficients, factorization):
-    """The alias has to keep working: this is a public API with outside users."""
-    with pytest.warns(DeprecationWarning, match='fourier_type'):
-        solver = fieldwave.rcwa(**CFG_2D, fourier_type=code)
-    assert solver.fourier_coefficients == coefficients
-    assert solver.factorization == factorization
-
-
-@pytest.mark.parametrize('code,coefficients,factorization', LEGACY)
-def test_the_alias_gives_bit_identical_results(code, coefficients, factorization):
-    with pytest.warns(DeprecationWarning):
-        legacy = _totals(CFG_2D, fourier_type=code)
-    assert legacy == _totals(CFG_2D, fourier_coefficients=coefficients,
-                             factorization=factorization)
-
-
-def test_fourier_type_is_readable_and_assignable_after_construction():
-    """``solver.fourier_type = 1`` was a supported way to switch strategy mid-script."""
-    solver = fieldwave.rcwa(**CFG_2D)
-    with pytest.warns(DeprecationWarning):
-        assert solver.fourier_type == 0
-
-    with pytest.warns(DeprecationWarning):
-        solver.fourier_type = 2
-    assert solver.fourier_coefficients == 'sampled' and solver.factorization == 'nvf'
-
-
-def test_reading_fourier_type_raises_for_the_pair_it_cannot_express():
-    solver = fieldwave.rcwa(**CFG_2D, fourier_coefficients='integrated', factorization='nvf')
-    with pytest.raises(ValueError, match='no .fourier_type. code'):
-        solver.fourier_type
-
-
-def test_mixing_the_alias_with_the_new_keywords_is_an_error():
-    """Silently letting one win would hide a real misunderstanding of what was selected."""
-    with pytest.raises(ValueError, match='deprecated alias'):
-        fieldwave.rcwa(**CFG_2D, fourier_type=2, factorization='nvf')
-    with pytest.raises(ValueError, match='deprecated alias'):
-        fieldwave.rcwa(**CFG_2D, fourier_type=0, fourier_coefficients='sampled')
-
-
-@pytest.mark.parametrize('bad', [3, -1, 'dfs', None.__class__])
-def test_an_unknown_fourier_type_still_raises(bad):
-    with pytest.raises(ValueError):
-        fieldwave.rcwa(**CFG_2D, fourier_type=bad)
-
-
 # ------------------------------------------------------------------- validation
+
+@pytest.mark.parametrize('name,code', [('numpy', 0), ('jax', 1), ('torch', 2)])
+def test_the_removed_fourier_type_alias_is_not_silently_swallowed(name, code):
+    """The removed single-knob spelling has to *fail*, not be ignored.
+
+    A keyword the constructor quietly drops is the one failure mode worse than removing it:
+    a script still carrying the old spelling would run the default strategy while believing it
+    had asked for another, and nothing in the result would say so. Each backend spells its own
+    constructor signature out, so each has to refuse on its own -- a ``**kwargs`` added to any
+    one of them would swallow it there and nowhere else.
+    """
+    if name != 'numpy':
+        pytest.importorskip(name)
+    with pytest.raises(TypeError, match='fourier_type'):
+        fieldwave.rcwa(**dict(CFG_2D, backend=code), fourier_type=2)
+
 
 @pytest.mark.parametrize('keyword,bad', [('fourier_coefficients', 'discrete'),
                                          ('fourier_coefficients', 0),

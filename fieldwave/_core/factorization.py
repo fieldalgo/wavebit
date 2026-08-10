@@ -961,10 +961,10 @@ def to_conv_mat_raster_continuous_nvf(ucell, fto_x, fto_y, normal_field=None,
                                       lattice=None):
     """Per-layer convolution matrices for a raster ``ucell`` via closed-form Fourier + NVF.
 
-    The combination the deprecated ``fourier_type`` integer could not express. It buys the
-    staircase-free permittivity series of the integrated path *and* the vector factorization
-    that handles boundaries not aligned with x or y — which is what a shape/OCD fit of a
-    tilted sidewall wants from a raster.
+    The pairing that needs both axes named independently. It buys the staircase-free
+    permittivity series of the integrated path *and* the vector factorization that handles
+    boundaries not aligned with x or y — which is what a shape/OCD fit of a tilted sidewall
+    wants from a raster.
 
     Args:
         ucell: refractive-index raster ``(n_layers, Ny, Nx)`` — the design variable.

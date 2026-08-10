@@ -75,4 +75,4 @@ pytest tests/ -q
 
 ## Licensing
 
-FieldWave is licensed under Apache-2.0. By submitting a contribution, you agree that it is your own work and is provided under the same license (inbound = outbound). FieldWave is derived from [meent](https://github.com/kc-ml2/meent) (MIT License, © 2022 ML2); the original license notice must be preserved.
+FieldWave is licensed under Apache-2.0. By submitting a contribution, you agree that it is your own work and is provided under the same license (inbound = outbound). The third-party notices recorded in [LICENSE](LICENSE) must be preserved.

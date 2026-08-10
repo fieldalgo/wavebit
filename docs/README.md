@@ -17,7 +17,6 @@ tables. Say what was measured on what hardware, and where the result stops being
 | [`oblique-lattice.md`](oblique-lattice.md) | What would non-orthogonal (oblique, hexagonal) lattice support cost? | See the document |
 | [`fourier-truncation-shape.md`](fourier-truncation-shape.md) | Does S4's circular cut of the Fourier order set beat the full rectangle FieldWave keeps? | **Not implemented** — structure-dependent, within ±20%, and negative on a common case |
 | [`anisotropic-materials.md`](anisotropic-materials.md) | Can an anisotropic or magnetic material be given to the solver, and what does each missing case cost? | Uniform in-plane tensors already work; only `eps_xz` needs a different solver |
-| [`migration.md`](migration.md) | Which meent results does FieldWave deliberately not reproduce? | One: CFS at oblique azimuth, where meent's row-0 convention disagreed with its own other paths |
 
 ## Docs vs tutorials
 

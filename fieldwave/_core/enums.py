@@ -9,10 +9,9 @@ so they are a drop-in, non-breaking upgrade: ``Pol.TE == 0`` is true and the exi
 strings the solver stores, so ``factorization=Factorization.NVF`` and ``factorization='nvf'``
 are the same thing.
 
-They replace the single ``FourierType`` integer, which conflated two independent choices —
-see :func:`resolve_fourier_options`.
+The two are independent choices, and keeping them as separate keywords is what makes all four
+of their pairings reachable — see :func:`resolve_fourier_options`.
 """
-import warnings
 from enum import Enum, IntEnum
 
 
@@ -41,30 +40,6 @@ class Factorization(str, Enum):
     NVF = 'nvf'  # normal vector field (Schuster et al. 2007); a superset of Li
 
 
-class FourierType(IntEnum):
-    """Deprecated: the single integer that used to select both axes at once.
-
-    Superseded by ``fourier_coefficients`` + ``factorization``; see
-    :func:`resolve_fourier_options` for the mapping. Kept so existing code and pickles keep
-    importing.
-    """
-    DFS = 0         # discrete Fourier series (standard Li rules on a raster)
-    CONTINUOUS = 1  # closed-form Fourier of axis-aligned raster rectangles
-    NVF = 2         # normal vector field (also accepts the strings 'nvf' / 'NVF')
-
-
-# The deprecated integer stood for a *pair* of choices, which is exactly why it had to go:
-# only three of the four combinations were spellable, and the missing one --
-# ('integrated', 'nvf') -- is the one a shape/OCD fit of a tilted sidewall wants.
-_FROM_FOURIER_TYPE = {
-    0: (FourierCoefficients.SAMPLED, Factorization.LI),
-    1: (FourierCoefficients.INTEGRATED, Factorization.LI),
-    2: (FourierCoefficients.SAMPLED, Factorization.NVF),
-}
-
-# Reverse map, for the deprecated ``solver.fourier_type`` attribute. Deliberately partial.
-_TO_FOURIER_TYPE = {pair: code for code, pair in _FROM_FOURIER_TYPE.items()}
-
 DEFAULT_FOURIER_COEFFICIENTS = FourierCoefficients.SAMPLED
 DEFAULT_FACTORIZATION = Factorization.LI
 
@@ -91,35 +66,8 @@ def factorization_of(value):
     return _one_of(Factorization, value, 'factorization')
 
 
-def from_fourier_type(fourier_type):
-    """The ``(fourier_coefficients, factorization)`` pair a legacy ``fourier_type`` meant.
-
-    Emits a ``DeprecationWarning``. Accepts the integers 0/1/2 (or :class:`FourierType`) and
-    the strings ``'nvf'`` / ``'NVF'`` the solver used to special-case.
-    """
-    key = 2 if isinstance(fourier_type, str) and fourier_type.lower() == 'nvf' else fourier_type
-    try:
-        pair = _FROM_FOURIER_TYPE[key]
-    except (KeyError, TypeError):
-        raise ValueError(
-            f"fourier_type={fourier_type!r} is not valid; expected 0, 1, 2 or 'nvf'") from None
-
-    warnings.warn(
-        f"'fourier_type' is deprecated and will be removed; it conflated two independent "
-        f"choices. Use fourier_coefficients={pair[0].value!r}, factorization={pair[1].value!r}.",
-        DeprecationWarning, stacklevel=3)
-    return pair
-
-
-def to_fourier_type(fourier_coefficients, factorization):
-    """The legacy integer for a pair, or ``None`` when the pair has no legacy spelling."""
-    return _TO_FOURIER_TYPE.get((coefficients_of(fourier_coefficients),
-                                 factorization_of(factorization)))
-
-
-def resolve_fourier_options(fourier_coefficients=None, factorization=None, fourier_type=None,
-                            keep_unset=False):
-    """Settle the two Fourier axes from the new keywords or the deprecated alias.
+def resolve_fourier_options(fourier_coefficients=None, factorization=None, keep_unset=False):
+    """Settle the two Fourier axes from the keywords a caller passed.
 
     The two axes are independent:
 
@@ -140,26 +88,12 @@ def resolve_fourier_options(fourier_coefficients=None, factorization=None, fouri
     so the interior cells genuinely stop being variables. See
     ``tests/test_gradients.py::test_raster_per_cell_gradient_reaches_every_cell``.
 
-    ``fourier_type`` is the deprecated alias, mapping ``0 -> ('sampled', 'li')``,
-    ``1 -> ('integrated', 'li')``, ``2 -> ('sampled', 'nvf')``. Passing it alongside either
-    new keyword is an error rather than a silent precedence rule.
-
     ``keep_unset=True`` returns ``None`` for an axis the caller left out, instead of that
     axis's default. Keeping the two apart is what lets a caller tell *"the user asked for
     Li"* from *"Li is the default nobody touched"* — a distinction the defaults erase, and
     the only thing that makes refusing a rule a build path cannot express safe. See
-    :attr:`fieldwave._core.engine.CoreFactorizationMixin.factorization`. The deprecated
-    ``fourier_type`` names both axes at once, so it never yields ``None``.
+    :attr:`fieldwave._core.engine.CoreFactorizationMixin.factorization`.
     """
-    if fourier_type is not None:
-        given = [k for k, v in (('fourier_coefficients', fourier_coefficients),
-                                ('factorization', factorization)) if v is not None]
-        if given:
-            raise ValueError(
-                f"fourier_type is the deprecated alias for {' and '.join(given)}; "
-                f"pass one or the other, not both.")
-        return from_fourier_type(fourier_type)
-
     unset_coefficients = None if keep_unset else DEFAULT_FOURIER_COEFFICIENTS
     unset_factorization = None if keep_unset else DEFAULT_FACTORIZATION
     return (unset_coefficients if fourier_coefficients is None

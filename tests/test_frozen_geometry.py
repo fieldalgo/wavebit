@@ -23,9 +23,9 @@ UCELL = np.random.default_rng(0).uniform(1.0, 4.0, (1, 5, 5))
 KW = dict(n_top=1.0, n_bot=1.0, theta=0.1, phi=0.2, psi=0.3, fto=[2, 2],
           period=[1.0, 1.0], wavelength=0.9, thickness=[0.2])
 
-# Every point of the two-axis cross product, including ('integrated', 'nvf') -- the one the
-# deprecated `fourier_type` integer had no code for. It needs both frozen fields at once,
-# which nothing else exercises.
+# Every point of the two-axis cross product, including ('integrated', 'nvf') -- the pairing
+# that only became reachable once the two axes were named independently. It needs both frozen
+# fields at once, which nothing else exercises.
 STRATEGIES = [dict(fourier_coefficients=c, factorization=f)
               for c in ('sampled', 'integrated') for f in ('li', 'nvf')]
 IDS = ['sampled-li', 'sampled-nvf', 'integrated-li', 'integrated-nvf']

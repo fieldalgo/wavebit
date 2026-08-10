@@ -7,7 +7,7 @@ give byte-identical results to passing the raw value.
 import numpy as np
 
 import fieldwave
-from fieldwave import Backend, Factorization, FourierCoefficients, FourierType, Pol
+from fieldwave import Backend, Factorization, FourierCoefficients, Pol
 
 
 def test_intenum_equals_int_codes():
@@ -19,12 +19,6 @@ def test_str_enums_equal_their_strings():
     assert FourierCoefficients.SAMPLED == 'sampled'
     assert FourierCoefficients.INTEGRATED == 'integrated'
     assert Factorization.LI == 'li' and Factorization.NVF == 'nvf'
-
-
-def test_deprecated_fourier_type_still_equals_its_int_codes():
-    """``FourierType`` is deprecated but must keep comparing as it always did."""
-    assert FourierType.DFS == 0 and FourierType.CONTINUOUS == 1 and FourierType.NVF == 2
-    assert FourierType.NVF in (2, 'nvf', 'NVF')
 
 
 def _solve(pol, backend, **strategy):
