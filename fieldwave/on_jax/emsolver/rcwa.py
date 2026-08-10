@@ -194,9 +194,6 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
     def modeling_type_assigned(self):
         return self._modeling_type_assigned
 
-    # @modeling_type_assigned.setter
-    # def modeling_type_assigned(self, modeling_type_assigned):
-    #     self._modeling_type_assigned = modeling_type_assigned
 
     def _assign_grating_type(self):
         """
@@ -228,14 +225,6 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
             else:
                 self._grating_type_assigned = 2
 
-        # TODO: jit
-        # def false_fun(): return 0  # 1D TE and TM only
-        # def true_fun(): return 1
-        #
-        # gear = jax.lax.cond(self.phi % (2 * np.pi) + self.fto[1], true_fun, false_fun)
-        #
-        # self._grating_type_assigned = gear
-
         elif self.modeling_type_assigned == 1:  # Vector
             self.grating_type_assigned = 2
 
@@ -253,16 +242,6 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
     @jax_device_set
     def solve_for_conv(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
                        epxy_conv_all=None, epyx_conv_all=None):
-
-        # def false_fun(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
-        #     de_ri, de_ti, layer_info_list, T1 = self.solve_1d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
-        #     return de_ri, de_ti, layer_info_list, T1
-        #
-        # def true_fun(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
-        #     de_ri, de_ti, layer_info_list, T1 = self.solve_2d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
-        #     return de_ri, de_ti, layer_info_list, T1
-        #
-        # de_ri, de_ti, layer_info_list, T1 = jax.lax.cond(self._grating_type_assigned, true_fun, false_fun, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
 
         self._assign_grating_type()
 
@@ -282,14 +261,6 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
 
         return result
 
-    # @jax_device_set
-    # def solve(self, wavelength, e_conv_all, o_e_conv_all):
-    #     de_ri, de_ti, layer_info_list, T1, kx_vector = jax.jit(self._solve)(wavelength, e_conv_all, o_e_conv_all)
-    #
-    #     self.layer_info_list = layer_info_list
-    #     self.T1 = T1
-    #
-    #     return de_ri, de_ti
 
     @jax_device_set
     def calculate_field(self, res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False)):
@@ -382,8 +353,6 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         """
 
         de_ri, de_ti = jax.pmap(self.conv_solve)(ucell_list)
-        # de_ri.block_until_ready()
-        # de_ti.block_until_ready()
 
         de_ri = jnp.array(de_ri)
         de_ti = jnp.array(de_ti)

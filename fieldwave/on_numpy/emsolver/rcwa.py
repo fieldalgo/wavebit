@@ -140,7 +140,6 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                 dtype = self.type_complex
             else:
                 raise ValueError
-            # self._ucell = np.array(ucell, dtype=dtype)
             self._ucell = ucell.astype(dtype)
 
         elif type(ucell) is list:
@@ -165,9 +164,6 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
     def modeling_type_assigned(self):
         return self._modeling_type_assigned
 
-    # @modeling_type_assigned.setter
-    # def modeling_type_assigned(self, modeling_type_assigned):
-    #     self._modeling_type_assigned = modeling_type_assigned
 
     def _assign_grating_type(self):
         """

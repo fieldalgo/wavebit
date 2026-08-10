@@ -1,8 +1,5 @@
 from tqdm import tqdm
 
-from ..emsolver.rcwa import RCWATorch
-
-
 class Grad:
     def __init__(self):
         pass
@@ -40,6 +37,5 @@ class OptimizerTorch(Grad):
 
             loss_value.backward()  # Back Prop.
             optimizer.step()
-            # print(f'step {i}, loss: {loss_value}')
 
         return [getattr(self, poi) for poi in pois]

@@ -172,14 +172,8 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
     def modeling_type_assigned(self):
         return self._modeling_type_assigned
 
-    # @modeling_type_assigned.setter
-    # def modeling_type_assigned(self, modeling_type_assigned):
-    #     self._modeling_type_assigned = modeling_type_assigned
 
     def _assign_grating_type(self):
-        # self.modeling_type_assigned = 0
-        # self._grating_type_assigned = 1  # else
-
         if self.ucell is None:
             if self._grating_type_assigned is None:
                 self._grating_type_assigned = 2

@@ -246,15 +246,6 @@ class _BaseRCWA(CoreSolveMixin):
         else:
             raise ValueError
 
-    # @staticmethod
-    # def jax_device_set(func):
-    #     @functools.wraps(func)
-    #     def wrap(*args, **kwargs):
-    #         self, *_ = args
-    #         with jax.default_device(self.device[0]):
-    #             res = func(*args, **kwargs)
-    #             return res
-    #     return wrap
 
     @jax_device_set
     def get_kx_ky_vector(self, wavelength):

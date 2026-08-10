@@ -107,7 +107,6 @@ class _BaseRCWA(CoreSolveMixin):
             self._phi = None
         else:
             self._phi = np.array(phi, dtype=self.type_complex)
-        # self._phi = np.array(phi, dtype=self.type_complex) if phi is not None else None
 
     @property
     def psi(self):

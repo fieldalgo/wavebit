@@ -1,7 +1,6 @@
 import torch
 import numpy as np
 
-from .._core.modeler import Modeling
 from .emsolver.rcwa import RCWATorch
 from .optimizer.optimizer import OptimizerTorch
 
@@ -27,13 +26,9 @@ class SolverTorch(RCWATorch, OptimizerTorch):
             self._type_complex = torch.complex64
         else:
             raise ValueError('Torch type_complex')
-        #
         self._type_float = torch.float64 if self._type_complex is not torch.complex64 else torch.float32
         self._type_int = torch.int64 if self._type_complex is not torch.complex64 else torch.int32
-        # self.perturbation = perturbation
-        #
         self.device = device
-        # self.type_complex = type_complex
 
         RCWATorch.__init__(self, device=device, type_complex=type_complex, *args, **kwargs)
         OptimizerTorch.__init__(self, device=device, type_complex=type_complex, *args, **kwargs)
