@@ -175,11 +175,39 @@ So the ledger:
 | speed, in a solve | 0.01-0.3% | indistinguishable |
 | maintenance | ours | PyTorch's |
 
-**Single precision is the one place the builtin is still better**, by 4x. Recovering that would
-mean dispatching on dtype *and* backend, and re-introducing a custom autograd `Function` for the
-builtin's missing backward — in a mode already documented as hazardous, to move from 2.1e-06 to
-4.7e-07 when double precision offers 1.1e-12. Not taken; recorded here so the choice is visible
-rather than accidental.
+**Single precision is the one place the builtin is still better**, by 4x. Since neither wins at
+both precisions, the choice is exposed rather than decided for you.
+
+## The switch
+
+```python
+import fieldwave
+fieldwave.set_j1_implementation('hybrid')     # returns the previous setting
+fieldwave.get_j1_implementation()
+```
+
+| setting | torch float64 | torch float32 | jax |
+|---|---:|---:|---|
+| **`'auto'`** *(default)* | **9.0e-13** | **4.6e-07** | hybrid |
+| `'hybrid'` | 9.0e-13 | 3.6e-06 | hybrid |
+| `'native'` | 4.1e-07 | 4.6e-07 | hybrid |
+
+- **`'auto'`** takes the accurate one for the precision in hand — the hybrid at 64-bit, the
+  framework's own below it. It is not a tie-break: neither implementation wins at both, so the
+  default does not pretend one does.
+- **`'hybrid'`** always, when you want the traced backends comparable regardless of dtype, or
+  one fewer variable while profiling something else.
+- **`'native'`** `torch.special.bessel_j1`, wrapped for the autograd backward it does not ship.
+  Faster as a function; that is 0.01-0.3% of a solve, so speed is rarely the reason.
+
+**JAX ignores the setting**, in every mode, and `'native'` deliberately does not raise for it:
+`bessel_jn` returns NaN for small arguments, so there is nothing to switch to, and a global
+switch should not break one backend because another lacks an option. Pinned by
+`test_j1_switch_leaves_jax_alone`.
+
+The setting is module-global because `j1` is reached from inside the transform with no keyword
+channel to thread. That makes it process-wide state: set it once at start-up, not per call,
+and be aware of it if two things share an interpreter.
 
 ## Tests
 

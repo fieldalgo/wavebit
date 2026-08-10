@@ -426,13 +426,62 @@ def _j1_asymptotic(xp, x):
     return xp.sqrt(2.0 / (3.141592653589793 * x)) * (P * xp.cos(omega) - Q * xp.sin(omega))
 
 
+_J1_CHOICES = ('auto', 'hybrid', 'native')
+_j1_impl = 'auto'
+
+
+def set_j1_implementation(name):
+    """Choose which ``J_1`` the traced backends use. Returns the previous setting.
+
+    Only PyTorch has a real choice here; see ``docs/bessel-j1.md`` for the measurements.
+
+    ``'auto'`` (default)
+        The more accurate one for the precision in hand: the hybrid in float64 (1.1e-12
+        against ``torch.special.bessel_j1``'s 4.1e-07) and the framework's own in float32
+        (4.7e-07 against the hybrid's 2.1e-06). Neither is better at both, so the default
+        does not pretend one is.
+
+    ``'hybrid'``
+        The series/asymptotic hybrid always. Pick this when you want the two traced backends
+        to compute bit-comparable values regardless of dtype, or when profiling something
+        else and you want one fewer variable.
+
+    ``'native'``
+        ``torch.special.bessel_j1``, wrapped for the autograd backward it does not ship.
+        Faster as a function -- 29-170x -- though that is 0.01-0.3% of a solve, so this is
+        rarely the reason to choose it. **Costs four orders of accuracy in float64.**
+
+    JAX ignores the setting and always takes the hybrid: ``jax.scipy.special.bessel_jn``
+    returns NaN for small arguments, so there is nothing to switch to. Asking for
+    ``'native'`` does not raise for that reason -- a global switch should not break one
+    backend because another lacks an option -- but it does not change JAX's behaviour.
+    """
+    global _j1_impl
+    if name not in _J1_CHOICES:
+        raise ValueError(f"j1 implementation {name!r} is not one of {list(_J1_CHOICES)}")
+    previous, _j1_impl = _j1_impl, name
+    return previous
+
+
+def get_j1_implementation():
+    """The current :func:`set_j1_implementation` setting."""
+    return _j1_impl
+
+
 def j1(x):
     """Bessel function of the first kind, order 1 — differentiable on every backend.
 
     Defined for ``x >= 0`` (the analytic shape transforms only ever evaluate it there).
+    Which implementation runs is :func:`set_j1_implementation`'s to decide.
     """
     xp = ac.array_namespace(x)
     name = xp.__name__
+    if 'torch' in name:
+        single = xp.finfo(x.dtype).bits <= 32
+        # 'auto' takes the accurate one for this precision, which is the framework's below
+        # 64-bit and the hybrid at 64-bit. See set_j1_implementation.
+        if _j1_impl == 'native' or (_j1_impl == 'auto' and single):
+            return _TorchBesselJ1.apply(x)
     if 'torch' in name or 'jax' in name:
         # No `abs` here, deliberately. It looks harmless because the domain is x >= 0, but it
         # is even where J1 is odd, and -- worse -- its derivative at 0 is 0 in both frameworks,
@@ -451,6 +500,38 @@ def j1(x):
     from scipy.special import j1 as _scipy_j1
     import numpy as np
     return _scipy_j1(np.asarray(x))
+
+
+class _TorchBesselJ1Meta(type):
+    """Builds the torch autograd Function lazily so importing this module never needs torch."""
+    _impl = None
+
+    def apply(cls, x):
+        if cls._impl is None:
+            import torch
+
+            class _Impl(torch.autograd.Function):
+                @staticmethod
+                def forward(ctx, x):
+                    ctx.save_for_backward(x)
+                    return torch.special.bessel_j1(x)
+
+                @staticmethod
+                def backward(ctx, grad_out):
+                    # dJ1/dx = J0(x) - J1(x)/x, and 1/2 at x = 0.
+                    (x,) = ctx.saved_tensors
+                    safe = torch.where(x == 0, torch.ones_like(x), x)
+                    dj1 = torch.where(
+                        x == 0, torch.full_like(x, 0.5),
+                        torch.special.bessel_j0(x) - torch.special.bessel_j1(x) / safe)
+                    return grad_out * dj1
+
+            cls._impl = _Impl
+        return cls._impl.apply(x)
+
+
+class _TorchBesselJ1(metaclass=_TorchBesselJ1Meta):
+    """``torch.special.bessel_j1`` with the analytic backward it is missing."""
 
 
 def jinc(x):

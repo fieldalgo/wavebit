@@ -33,7 +33,8 @@ _enable_jax_x64_if_already_imported()
 
 from .main import rcwa
 from ._core.backend import (PrecisionLossWarning, UnphysicalResultWarning,
-                            UnresolvedBranchWarning)
+                            UnresolvedBranchWarning, get_j1_implementation,
+                            set_j1_implementation)
 from ._core.conventions import branch_tolerance
 from ._core.enums import Backend, Pol, FourierCoefficients, Factorization
 from ._core.domain import Layer, Stack, Incidence

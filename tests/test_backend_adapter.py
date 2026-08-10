@@ -128,16 +128,110 @@ def test_j1_single_precision_uses_its_own_crossover(lib):
     The tolerance is loose on purpose: 5e-06 against a measured 2.1e-06 and a float32 epsilon
     of 1.2e-07. Single precision is documented as hazardous and this does not pretend
     otherwise; it only pins that the hybrid stays in the right order of magnitude for it.
+
+    Forces `hybrid` rather than taking the default. Under `auto` torch's float32 goes to the
+    framework's own routine, so this would silently stop testing the crossover while keeping
+    its name -- which is the failure a test like this exists to avoid.
     """
     xp = pytest.importorskip(lib)
+    from fieldwave import set_j1_implementation
     from fieldwave._core.backend import j1
+    previous = set_j1_implementation('hybrid')
     probe = np.linspace(1e-3, 95.0, 1500)
     if lib == 'jax':
         x = xp.numpy.asarray(probe, dtype=xp.numpy.float32)
     else:
         x = xp.as_tensor(probe, dtype=xp.float32)
-    got = np.asarray(j1(x), dtype=float)
+    try:
+        got = np.asarray(j1(x), dtype=float)
+    finally:
+        set_j1_implementation(previous)
     assert np.max(np.abs(got - _j1_reference(probe))) < 5e-06
+
+
+@pytest.fixture
+def j1_default():
+    """Restore the global setting, which is global exactly because j1 has no other channel."""
+    from fieldwave import set_j1_implementation
+    previous = set_j1_implementation('auto')
+    yield
+    set_j1_implementation(previous)
+
+
+def test_j1_switch_picks_the_accurate_one_for_each_precision(j1_default):
+    """`auto` is not a tie-break: neither implementation wins at both precisions.
+
+    Measured against mpmath (docs/bessel-j1.md): the hybrid is 1.1e-12 in float64 where
+    torch's builtin is 4.1e-07, and the builtin is 4.7e-07 in float32 where the hybrid is
+    2.1e-06. So `auto` takes the hybrid at 64-bit and the builtin below it, and this test
+    pins that it really is switching rather than doing one thing and calling it two.
+    """
+    torch = pytest.importorskip('torch')
+    from fieldwave import set_j1_implementation
+    from fieldwave._core.backend import j1
+    probe = np.linspace(1e-3, 95.0, 1500)
+    ref = _j1_reference(probe)
+
+    def err(dtype):
+        return np.max(np.abs(np.asarray(j1(torch.as_tensor(probe, dtype=dtype)), float) - ref))
+
+    set_j1_implementation('hybrid')
+    hybrid64, hybrid32 = err(torch.float64), err(torch.float32)
+    set_j1_implementation('native')
+    native64, native32 = err(torch.float64), err(torch.float32)
+    set_j1_implementation('auto')
+    auto64, auto32 = err(torch.float64), err(torch.float32)
+
+    # the premise: they genuinely trade off, so `auto` has something to decide
+    assert hybrid64 < native64 / 100, (hybrid64, native64)
+    assert native32 < hybrid32 / 2, (native32, hybrid32)
+    # and auto takes the better one at each precision
+    assert auto64 == pytest.approx(hybrid64, rel=1e-6)
+    assert auto32 == pytest.approx(native32, rel=1e-6)
+
+
+def test_j1_switch_leaves_jax_alone(j1_default):
+    """JAX has no second option, so the switch must not pretend otherwise.
+
+    `jax.scipy.special.bessel_jn` returns NaN for small arguments. Asking for 'native'
+    deliberately does not raise -- a global switch should not break one backend because
+    another lacks an option -- but it must not change what JAX computes either.
+    """
+    pytest.importorskip('jax')
+    import jax
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+    from fieldwave import set_j1_implementation
+    from fieldwave._core.backend import j1
+    x = jnp.asarray(np.linspace(1e-3, 95.0, 500), dtype=jnp.float64)
+    out = {}
+    for mode in ('auto', 'hybrid', 'native'):
+        set_j1_implementation(mode)
+        out[mode] = np.asarray(j1(x), dtype=float)
+    assert np.array_equal(out['auto'], out['hybrid'])
+    assert np.array_equal(out['auto'], out['native'])
+
+
+def test_j1_switch_rejects_an_unknown_name(j1_default):
+    from fieldwave import set_j1_implementation, get_j1_implementation
+    with pytest.raises(ValueError, match='auto'):
+        set_j1_implementation('fastest')
+    assert get_j1_implementation() == 'auto'      # unchanged by the failed call
+
+
+@pytest.mark.parametrize('mode', ['auto', 'hybrid', 'native'])
+def test_j1_derivative_survives_every_switch_setting(mode, j1_default):
+    """The builtin has no backward of its own, so 'native' has to supply one."""
+    torch = pytest.importorskip('torch')
+    from scipy.special import j0, j1 as scipy_j1
+    from fieldwave import set_j1_implementation
+    from fieldwave._core.backend import j1
+    set_j1_implementation(mode)
+    for x0 in (0.0, 0.7, 12.4, 12.6, 40.0):
+        t = torch.tensor(x0, dtype=torch.float64, requires_grad=True)
+        j1(t).backward()
+        exact = 0.5 if x0 == 0 else float(j0(x0) - scipy_j1(x0) / x0)
+        assert abs(float(t.grad) - exact) < 1e-10, (mode, x0, float(t.grad), exact)
 
 
 @pytest.mark.parametrize('lib', ['jax', 'torch'])
