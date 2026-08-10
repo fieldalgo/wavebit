@@ -163,6 +163,12 @@ The type of `ucell` selects the modeling path; there is no separate mode switch.
 | `list` of `[n_base, [shape, ...]]` per layer | **block** | drawn shapes reduced to piecewise-constant blocks, then Fourier-transformed analytically instead of off a grid — see [`examples/vector_1d.py`](examples/vector_1d.py) |
 | `list` of `dict(n_base=..., shapes=[...])` per layer | **smooth** | smooth primitives (rotated rectangle, circle, ellipse) with exact Fourier coefficients — no staircase at all |
 
+There is a fourth, **boundary**, which the `ucell` type alone cannot select: it is what a smooth
+layer becomes when its shapes actually overlap and it asks for `combine='paint'`, and it is the
+only path that keeps a tilted edge exact *and* paints. See
+[Shapes that overlap](#shapes-that-overlap) below and
+[`docs/boundary-modeling.md`](docs/boundary-modeling.md).
+
 The smooth path takes one dict per layer. Note that `cx`, `cy`, `lx` and `ly` are absolute
 lengths in the units of `period`, not fractions of it:
 
