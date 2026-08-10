@@ -2,7 +2,7 @@
 
 # FieldWave
 
-[![tests](https://github.com/FieldAlgo/fieldwave/actions/workflows/tests.yml/badge.svg)](https://github.com/FieldAlgo/fieldwave/actions/workflows/tests.yml)
+[![tests](https://github.com/fieldalgo/fieldwave/actions/workflows/tests.yml/badge.svg)](https://github.com/fieldalgo/fieldwave/actions/workflows/tests.yml)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 
@@ -28,13 +28,13 @@ convention changed.
 FieldWave is not on PyPI yet. Install it from source:
 
 ```shell
-pip install git+https://github.com/FieldAlgo/fieldwave.git
+pip install git+https://github.com/fieldalgo/fieldwave.git
 ```
 
 Or, for a checkout you intend to edit:
 
 ```shell
-git clone https://github.com/FieldAlgo/fieldwave.git
+git clone https://github.com/fieldalgo/fieldwave.git
 cd fieldwave
 pip install -e .
 ```
