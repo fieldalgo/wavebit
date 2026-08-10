@@ -6,7 +6,7 @@ frameworks, no vendored dependencies, nothing that needs a dataset or a GPU.
 | Entry | Question it answers |
 | --- | --- |
 | [`rcwa/`](rcwa) | What do the textbook cases look like in FieldWave? Moharam and Lalanne's 1D TE/TM, conical and 2D gratings — the standard results any RCWA implementation is checked against, written out step by step for someone studying the method. |
-| [`vector_1d.py`](vector_1d.py), [`vector_2d.py`](vector_2d.py) | How do you describe a structure as drawn shapes instead of a raster? The `_verification.py` file beside each answers the follow-up: does that path agree with the raster it replaces? |
+| [`block_1d.py`](block_1d.py), [`block_2d.py`](block_2d.py) | How do you describe a structure as drawn shapes instead of a raster? The `_verification.py` file beside each answers the follow-up: does that path agree with the raster it replaces? |
 
 ## How maintained is this?
 

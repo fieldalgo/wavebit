@@ -152,7 +152,7 @@ The type of `ucell` selects the modeling path; there is no separate mode switch.
 | `ucell` | Path | What it is |
 | --- | --- | --- |
 | `ndarray`, shape `(n_layers, Ny, Nx)` | **raster** | refractive index sampled on a grid |
-| `list` of `[n_base, [shape, ...]]` per layer | **block** | drawn shapes reduced to piecewise-constant blocks, then Fourier-transformed analytically instead of off a grid — see [`examples/vector_1d.py`](examples/vector_1d.py) |
+| `list` of `[n_base, [shape, ...]]` per layer | **block** | drawn shapes reduced to piecewise-constant blocks, then Fourier-transformed analytically instead of off a grid — see [`examples/block_1d.py`](examples/block_1d.py) |
 | `list` of `dict(n_base=..., shapes=[...])` per layer | **smooth** | smooth primitives (rotated rectangle, circle, ellipse) with exact Fourier coefficients — no staircase at all |
 
 There is a fourth, **boundary**, which the `ucell` type alone cannot select: it is what a smooth
