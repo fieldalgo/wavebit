@@ -355,7 +355,13 @@ def shape_ft(xp, shape, ky, kx, period, lattice=None):
         s = lx * sinc(kxr * lx / 2.0) * ly * sinc(kyr * ly / 2.0)
     elif stype in ('circle', 'disk'):
         R = lx / 2.0
-        rho = (u * u + v * v) ** 0.5
+        # Same DC guard as the ellipse below, and for the same reason: ``rho`` is zero there,
+        # ``d(sqrt)/d`` is infinite, and ``jinc``'s own ``where`` turns that into NaN. Here the
+        # radicand depends on ``period``, so it is ``d(de_ri)/d(period)`` that used to come back
+        # NaN on a circle while the guarded ellipse was fine.
+        r2 = u * u + v * v
+        nz = r2 != 0
+        rho = xp.where(nz, xp.sqrt(xp.where(nz, r2, xp.ones_like(r2))), xp.zeros_like(r2))
         s = (pi * R * R) * jinc(R * rho)          # 2 pi R J1(R rho)/rho
     elif stype == 'ellipse':
         a = lx / 2.0
@@ -495,9 +501,22 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype, lattic
 
 
 def _hypot_safe(xp, a, b):
-    """``hypot`` with zeros replaced by 1, so the division that follows is well defined."""
-    n = (a * a + b * b) ** 0.5
-    return xp.where(n == 0, xp.ones_like(n), n)
+    """``hypot`` with zeros replaced by 1, so the division that follows is well defined.
+
+    The guard is on the *input* to the root, not on its output. Patching the output
+    (``where(n == 0, 1, n)`` on ``n = (a*a + b*b)**0.5``) fixes the forward value and nothing
+    else: autograd still differentiates the branch ``where`` discarded, ``d/da`` of that root
+    at ``a == b == 0`` is infinite, and ``where``'s ``0 * inf`` is NaN. Taking the root of the
+    replaced radicand instead means it is only ever evaluated at 1, where the derivative is
+    finite — and ``sqrt(1) == 1`` is the same replacement value, so the forward result is
+    unchanged.
+
+    Both callers reach zero on ordinary geometry: a shape's own centre gives ``g == 0``, and
+    two shapes placed symmetrically make their unit normals exactly opposed on the segment
+    between them, which the grid lands on exactly.
+    """
+    n2 = a * a + b * b
+    return xp.where(n2 == 0, xp.ones_like(n2), n2) ** 0.5
 
 
 def _sampled_coeffs(xp, field, fto_x, fto_y):
