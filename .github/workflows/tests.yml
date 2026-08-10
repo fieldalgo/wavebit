@@ -1,4 +1,4 @@
-# Two jobs with different purposes.
+# Three jobs with different purposes.
 #
 #   test     — installs both optional backends and runs the whole suite. This is
 #              where the physics is verified.
@@ -6,6 +6,14 @@
 #              and solves. The `test` job cannot catch a stray top-level
 #              `import torch` in the core, because torch is installed there; a
 #              numpy-only user would be the first to find out.
+#   examples — runs every script under `examples/` and checks it did not fail.
+#              The suite imports the library the way the library likes to be
+#              imported; the examples are the only thing here that exercises the
+#              public API the way a reader of the README would write it, so an
+#              interface the code moved out from under them shows up nowhere else.
+#              Kept out of `test` because it finishes in well under a minute
+#              against that job's ~9, so a broken example is a fast,
+#              separately-named red mark rather than nine minutes of waiting.
 name: tests
 
 on:
@@ -73,6 +81,39 @@ jobs:
           NUMEXPR_NUM_THREADS: 1
           VECLIB_MAXIMUM_THREADS: 1
         run: pytest tests -q
+
+  examples:
+    name: examples smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      # Same reason as in `test`: get the CPU wheel in before the extras can pull
+      # the CUDA one.
+      - name: Install CPU-only PyTorch
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      # Both backends, because the four vector examples use torch and the two
+      # `_verification` ones use jax as well. matplotlib is not a dependency of
+      # the library and never should be -- it is a dependency of the examples,
+      # which plot.
+      - name: Install FieldWave with both optional backends
+        run: pip install -e '.[jax,pytorch]' matplotlib
+
+      # Runs every examples/**/*.py from its own directory under MPLBACKEND=Agg and
+      # fails on a non-zero exit, a `Traceback`, or an `UnphysicalResultWarning`.
+      #
+      # That third condition is the one worth defending: a script can run to
+      # completion and still return R+T > 1 on a passive stack, so an exit-code-only
+      # check would pass a solve that is physically wrong. The runner's docstring
+      # says what the check cannot see.
+      - name: Run every example
+        run: python tests/run_examples_smoke.py
 
   minimal:
     name: minimal install
