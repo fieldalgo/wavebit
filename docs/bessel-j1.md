@@ -126,7 +126,7 @@ Large argument is the easy end: the asymptotic expansion improves as `z` grows.
 
 58 combinations — circle, 3:1 ellipse, rotated ellipse, a 0.04-diameter circle, a
 0.85-diameter circle, rectangle + circle, lossy circle × normal TE, oblique TM, conical ×
-`fto` 3, 8, 15 — comparing every backend's `de_ri` and `de_ti` against NumPy:
+`fto` 3, 8, 15 — comparing every backend's `R` and `T` against NumPy:
 
 | | worst over all 58 |
 |---|---:|
@@ -140,6 +140,46 @@ not reappear in any combination.
 One combination was **refused** rather than solved: a 0.85-diameter circle in a 0.8 period runs
 into its own image, and the layer-combination check said so and asked which rule was meant. The
 case was ill-posed; the guard worked.
+
+## What it cost, and the honest ledger
+
+The hybrid is **29-170x slower than `torch.special.bessel_j1`** as a function. It evaluates
+30 series terms and 12 expansion terms as separate tensor operations, and `where` computes
+*both* branches everywhere, against one fused kernel:
+
+| points | hybrid | builtin | ratio |
+|---:|---:|---:|---:|
+| 169 | 210 us | 1.2 us | 170x |
+| 961 | 404 us | 6.3 us | 64x |
+| 3721 | 1102 us | 26 us | 43x |
+| 40401 | 10.7 ms | 373 us | 29x |
+
+It does not matter, and that is measured rather than assumed. `jinc` is called once per layer
+to build the permittivity coefficients, on an array of `(4*fto+1)^2` points, against a solve
+dominated by a dense complex eigendecomposition:
+
+| `fto` | total solve | J1 | share |
+|---:|---:|---:|---:|
+| 5 | 88.5 ms | 0.26 ms | **0.30%** |
+| 9 | 1184 ms | 0.51 ms | **0.04%** |
+| 13 | 8357 ms | 0.93 ms | **0.01%** |
+
+So the ledger:
+
+| | hybrid | `torch.special.bessel_j1` |
+|---|---|---|
+| float64 accuracy | **1.1e-12** | 4.1e-07 |
+| float32 accuracy | 2.1e-06 | **4.7e-07** |
+| autograd | native, plain arithmetic | **none** — needed a custom `Function` |
+| speed, as a function | 29-170x slower | faster |
+| speed, in a solve | 0.01-0.3% | indistinguishable |
+| maintenance | ours | PyTorch's |
+
+**Single precision is the one place the builtin is still better**, by 4x. Recovering that would
+mean dispatching on dtype *and* backend, and re-introducing a custom autograd `Function` for the
+builtin's missing backward — in a mode already documented as hazardous, to move from 2.1e-06 to
+4.7e-07 when double precision offers 1.1e-12. Not taken; recorded here so the choice is visible
+rather than accidental.
 
 ## Tests
 
