@@ -1,0 +1,137 @@
+"""Anisotropic uniform stacks against RETICOLO, from a checked-in golden.
+
+``tests/test_anisotropic_berreman.py`` judges the same cases with a Berreman 4x4 written in
+this repo. That is an independent *formulation*, but not an independent *implementation* — a
+misconception shared by both would survive it. This file is the outside check: a different
+group's solver, in a different language, validated over two decades of published work, and
+already this suite's strongest oracle for isotropic gratings.
+
+What made it possible is that RETICOLO has carried a toolbox for arbitrarily anisotropic
+multilayer stacks since V9 (Hugonin and Lalanne, arXiv:2101.00901). A texture may be given as
+a cell holding a full complex 3x3 permittivity tensor; ``exemple_V9_0D_anisotrope.m`` ships
+with it and is what ``interface/reti_aniso.m`` follows.
+
+**No convention fitting was needed.** The isotropic and symmetric cases below agree with both
+Berreman and this solver to ~1e-15 as they stand, which is what licenses reading the
+asymmetric ones as physics rather than as a bookkeeping difference. S4 was tried for this role
+first and failed exactly that gate — see ``docs/off-diagonal-slot-convention.md`` §8.
+
+The asymmetric cases are ``xfail(strict)``: ``layer_modes_2d`` carries the off-diagonal pair in
+one order inside ``Omega2_LR`` and the other inside ``Omega_R``, so a tensor with
+``eps_xy != eps_yx`` takes its modes from one medium and its H-field from that medium's
+transpose. RETICOLO puts the shipped operator 4e-2 to 6e-2 out; exchanging the pair inside
+``Omega_R`` alone lands every case at ~1e-15. No shipped path can produce an asymmetric tensor
+— every producer emits ``-eps_xy`` twice — so this is a latent defect, not a wrong released
+number.
+
+Values are frozen in ``golden_reticolo_anisotropic.npz`` by
+``gen_goldens_reticolo_anisotropic.py``, which needs Octave and RETICOLO V10. This file needs
+neither.
+"""
+import pathlib
+import sys
+
+import numpy as np
+import pytest
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+from test_anisotropic_berreman import solve_tensor_stack          # noqa: E402
+
+GOLDEN_PATH = pathlib.Path(__file__).parent / 'golden_reticolo_anisotropic.npz'
+
+WL = 600.0
+PERIOD = 300.0
+THICK = 220.0
+
+
+def _tensor(exx, eyy, ezz, exy=0.0, eyx=0.0):
+    return np.array([[exx, exy, 0], [eyx, eyy, 0], [0, 0, ezz]], dtype=complex)
+
+
+def is_hermitian(eps, tol=1e-12):
+    """Hermitian permittivity means lossless. Also imported by the generator.
+
+    Worth stating because the two asymmetric families here differ on it: a gyrotropic tensor
+    (``eps_xy = +i g``, ``eps_yx = -i g``) *is* Hermitian and conserves energy, while a real
+    antisymmetric one is not — it is an active medium, and R + T above one is its correct
+    answer rather than a symptom of anything.
+    """
+    e = np.asarray(eps, dtype=complex)
+    return bool(np.abs(e - e.conj().T).max() <= tol)
+
+
+# name -> (eps 3x3, theta in degrees). Thickness and period are shared.
+SYMMETRIC_CASES = {
+    'isotropic_normal': (_tensor(2.25, 2.25, 2.25), 0.0),
+    'isotropic_35deg': (_tensor(2.25, 2.25, 2.25), 35.0),
+    'diagonal_biaxial_35deg': (_tensor(2.1, 3.4, 2.8), 35.0),
+    'symmetric_offdiag_normal': (_tensor(2.25, 4.0, 2.25, 0.3, 0.3), 0.0),
+    'symmetric_offdiag_35deg': (_tensor(2.25, 4.0, 2.25, 0.3, 0.3), 35.0),
+}
+
+ASYMMETRIC_CASES = {
+    'real_antisymmetric_normal': (_tensor(2.25, 4.0, 2.25, 0.3, -0.3), 0.0),
+    'real_antisymmetric_35deg': (_tensor(2.25, 4.0, 2.25, 0.3, -0.3), 35.0),
+    'gyrotropic_normal': (_tensor(2.25, 2.25, 2.25, 0.45j, -0.45j), 0.0),
+    'gyrotropic_45deg': (_tensor(2.25, 2.25, 2.25, 0.45j, -0.45j), 45.0),
+}
+
+ALL_CASES = {**SYMMETRIC_CASES, **ASYMMETRIC_CASES}
+
+
+def solver_efficiencies(eps, theta_deg):
+    """``[R_TE, T_TE, R_TM, T_TM]`` — the four numbers RETICOLO reports."""
+    d = solve_tensor_stack([(eps, THICK)], np.deg2rad(theta_deg), wl=WL)
+    return np.array([d['s']['R_s'] + d['s']['R_p'], d['s']['T_s'] + d['s']['T_p'],
+                     d['p']['R_s'] + d['p']['R_p'], d['p']['T_s'] + d['p']['T_p']])
+
+
+@pytest.fixture(scope='module')
+def golden():
+    if not GOLDEN_PATH.exists():
+        pytest.skip(f'{GOLDEN_PATH.name} missing; regenerate with '
+                    'gen_goldens_reticolo_anisotropic.py')
+    return np.load(GOLDEN_PATH)
+
+
+@pytest.mark.parametrize('name', list(SYMMETRIC_CASES), ids=list(SYMMETRIC_CASES))
+def test_symmetric_tensors_match_reticolo(golden, name):
+    """The convention gate. These are the tensors a shipped path can actually produce."""
+    eps, theta_deg = SYMMETRIC_CASES[name]
+    gap = np.abs(solver_efficiencies(eps, theta_deg) - golden[name]).max()
+    assert gap < 1e-12, f'{name}: {gap:.2e} from RETICOLO'
+
+
+@pytest.mark.xfail(strict=True,
+                   reason='Omega_R carries (epxy, epyx) in the opposite order to Omega2_LR, so '
+                          'an asymmetric tensor takes its modes from one medium and its H-field '
+                          'from that medium transpose. Exchanging the pair inside Omega_R alone '
+                          'lands every case here at ~1e-15, and is a no-op for symmetric '
+                          'tensors, which is all any shipped path emits.')
+@pytest.mark.parametrize('name', list(ASYMMETRIC_CASES), ids=list(ASYMMETRIC_CASES))
+def test_asymmetric_tensors_match_reticolo(golden, name):
+    eps, theta_deg = ASYMMETRIC_CASES[name]
+    gap = np.abs(solver_efficiencies(eps, theta_deg) - golden[name]).max()
+    assert gap < 1e-12, f'{name}: {gap:.2e} from RETICOLO'
+
+
+def test_golden_conserves_energy_on_the_hermitian_cases(golden):
+    """Guards the golden itself.
+
+    A Hermitian tensor is lossless, so RETICOLO's own numbers must sum to one. A golden that
+    failed this would mean the generator wired something wrong, and the xfail above would be
+    measuring that instead of the defect.
+
+    The real antisymmetric cases are deliberately excluded: they are *not* Hermitian, so they
+    are active media and R + T above one is correct for them. Asserting otherwise is a mistake
+    this file's generator caught the first time it ran.
+    """
+    checked = 0
+    for name, (eps, _) in ALL_CASES.items():
+        if not is_hermitian(eps):
+            continue
+        r_te, t_te, r_tm, t_tm = golden[name]
+        assert r_te + t_te == pytest.approx(1.0, abs=1e-9), f'{name} TE'
+        assert r_tm + t_tm == pytest.approx(1.0, abs=1e-9), f'{name} TM'
+        checked += 1
+    assert checked >= 5, 'expected several lossless cases to guard'
