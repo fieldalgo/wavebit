@@ -402,21 +402,35 @@ tensor.** The first person to do that will be someone trying gyrotropy.
 
 Two limits are worth stating plainly, because the evidence above is easy to over-read.
 
-**It is an algorithm written here, not a third-party solver.** Berreman 4x4 is an independent
+**Berreman is an algorithm written here, not a third-party solver.** It is an independent
 *formulation* — it shares no algebra with RCWA — but the implementation is ~50 lines in
 `tests/test_anisotropic_berreman.py`, written by the same hand that wrote the thing it judges, and
 validated against this solver's own known-good cases. On the oracle tiers in `tests/README.md` that
 puts it in **physics**, not **an outside solver**. It cannot catch a misconception shared between
 the two.
 
-S4 was tried as the outside solver and did not work out. The build here accepts a real 3x3
-permittivity tensor, antisymmetric off-diagonal included, which is enough to express a
-discriminating case — but its numbers disagree with all three of Berreman, shipped and patched on
-*symmetric* tensors, where those three agree to 7.8e-16. At normal incidence its s and p channels
-come out swapped and otherwise exact; at oblique they do not reconcile. That is a convention
-mismatch in the wiring, not a physics disagreement, and an oracle whose conventions are not pinned
-down is not evidence. Worth another attempt: S4 would be the first genuine outside check here, and
-the tensor support is already there.
+**RETICOLO closes that gap.** V10 takes a texture as a full complex 3x3 permittivity tensor
+(`exemple_V9_{0D,1D,2D,conique}_anisotrope.m` ship with it), and this repo already trusts it as its
+strongest oracle. Run on the same stacks, with the same convention gate applied first — isotropic
+and symmetric tensors, where it agrees with Berreman to 2.1e-15, no convention fitting needed:
+
+| configuration | shipped, vs RETICOLO | pair exchanged | Berreman, vs RETICOLO |
+|---|---|---|---|
+| real antisymmetric, normal | 5.3e-2 | **8.9e-16** | 4.4e-16 |
+| real antisymmetric, 35 deg | 5.5e-2 | **7.8e-16** | 1.0e-15 |
+| gyrotropic, normal | 4.2e-2 | **7.8e-16** | 5.6e-16 |
+| gyrotropic, 45 deg | 5.6e-2 | **1.0e-15** | 3.3e-16 |
+
+So a third party's code, in a different language, by a different group, reaches the same answer as
+the exchanged operator and disagrees with the shipped one by the same margin measured everywhere
+else. It also corroborates the Berreman implementation independently, which retroactively
+strengthens every number in §5.1.
+
+S4 was tried first and set aside. The build here takes a real 3x3 tensor, antisymmetric off-diagonal
+included, but rejects complex ones, and its numbers disagree with Berreman, shipped and patched
+alike on *symmetric* tensors — s and p swapped at normal incidence, irreconcilable at oblique. A
+wiring convention rather than physics, but an oracle whose conventions are not pinned down is not
+evidence, so it was dropped rather than fitted.
 
 **Every case is a uniform film.** Not one of them has structure in the plane. Concretely, that
 means all of this runs at `fto=(0, 0)` — a single Fourier order — with convolution matrices
@@ -428,10 +442,14 @@ What is therefore validated is the layer mode operator, the s/p rotation, the bo
 the layer joining — which is exactly where the defect lives, so the finding stands. What is not
 validated, at all, is any anisotropic behaviour of a *patterned* layer.
 
-That gap is not an oversight to be closed with more oracle cases. A patterned anisotropic layer
-needs a factorization that does not exist yet (`anisotropic-materials.md` §3), so there is nothing
-to test; and no uniform-layer oracle could reach it if there were. Closing it needs a published
-crossed magneto-optic grating, or a third-party solver that does patterned anisotropy.
+That gap will not close by adding cases here: a patterned anisotropic layer needs a factorization
+that does not exist yet (`anisotropic-materials.md` §3), so there is nothing to test, and no
+uniform-layer oracle could reach it if there were.
+
+It is, however, reachable when the time comes. RETICOLO's anisotropic examples include 1D, 2D and
+conical *patterned* textures, not just the uniform ones used above — so the oracle for the
+factorization work already exists and is already wired into this repo. That is worth knowing before
+anyone starts: the hard part will be Popov–Nevière, not finding something to check it against.
 
 Tests: `tests/test_uniform_anisotropic.py`
 
