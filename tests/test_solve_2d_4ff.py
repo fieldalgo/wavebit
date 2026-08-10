@@ -83,17 +83,26 @@ Z_COUPLED = [
 ANGLES = [0.0, 35.0, 62.0]
 
 
-def _kxky(theta_deg):
-    return np.array([np.sin(np.deg2rad(theta_deg))]), np.array([0.0])
+def _kxky(theta_deg, alpha_deg=0.0):
+    st, a = np.sin(np.deg2rad(theta_deg)), np.deg2rad(alpha_deg)
+    return np.array([st * np.cos(a)]), np.array([st * np.sin(a)])
 
 
-def rt(eps, theta_deg, thick=THICK):
+def rt(eps, theta_deg, thick=THICK, alpha_deg=0.0):
     """``{'s': (R, T), 'p': (R, T)}`` for a single layer, in a named polarisation basis."""
-    kx, ky = _kxky(theta_deg)
+    kx, ky = _kxky(theta_deg, alpha_deg)
     psi_s, psi_p = vacuum_sp_states(np, kx, ky, 1)
     layers = [(blocks(eps), thick)]
     return {'s': solve_uniform_stack(WL, kx, ky, layers, 1, psi_s),
             'p': solve_uniform_stack(WL, kx, ky, layers, 1, psi_p)}
+
+
+def rot_z(eps, alpha_deg):
+    """The tensor as seen after turning the whole problem by ``alpha`` about the stack normal."""
+    a = np.deg2rad(alpha_deg)
+    c, s = np.cos(a), np.sin(a)
+    R = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+    return R @ np.asarray(eps, dtype=complex) @ R.T
 
 
 @pytest.mark.parametrize('theta_deg', ANGLES)
@@ -219,6 +228,55 @@ def test_stack_solve_matches_berreman(label, eps, theta_deg):
         want = (ref[pol]['R_s'] + ref[pol]['R_p'], ref[pol]['T_s'] + ref[pol]['T_p'])
         gap = max(abs(g - w) for g, w in zip(got[pol], want))
         assert gap < 1e-12, f'{label} at {theta_deg} deg, {pol}-pol: {gap:.2e}'
+
+
+@pytest.mark.parametrize('alpha_deg', [17.0, 90.0, 133.0, 251.0])
+@pytest.mark.parametrize('theta_deg', [18.0, 35.0, 62.0])
+@pytest.mark.parametrize('label,eps', Z_DECOUPLED + Z_COUPLED,
+                         ids=[c[0] for c in Z_DECOUPLED + Z_COUPLED])
+def test_rotating_the_whole_problem_about_z_changes_nothing(label, eps, theta_deg, alpha_deg):
+    """Turn the tensor and the incidence azimuth together; the efficiencies must not move.
+
+    This is the only judge of a tilted magnetisation that is neither a solver nor ours. **No
+    outside solver reaches this geometry** — RETICOLO stops conserving energy past one
+    off-diagonal pair (``tests/references/README.md``), fmmax's "general anisotropic" entry point
+    means *magnetic* and still takes only the five 2ff slots, and S4 has the same shape. So the
+    alternative to a theorem is two of our own derivations agreeing, which is what
+    ``_berreman_M`` already is.
+
+    It is also the only thing in the repo that exercises ``ky != 0`` at all. Every other
+    anisotropy test sits in the plane of incidence, and so does ``_berreman_M``, which takes
+    ``kx`` alone. Measured rather than asserted: five mutations that are exactly the identity at
+    ``ky = 0`` — dropping ``ky`` from ``kt``, from ``kz``, from the s direction, from ``Ez``'s
+    ``Hx`` term, and from ``Ey'`` — leave every other anisotropy test in this repo passing, and
+    every one of them dies here.
+
+    **Oblique only, and that is not a dodge.** At normal incidence the plane of incidence does
+    not exist, so ``vacuum_sp_states`` fixes ``shat = y`` by convention; the labels then stop
+    following the geometry and a quarter turn genuinely exchanges them — see the test below,
+    which pins that instead.
+    """
+    before = rt(eps, theta_deg)
+    after = rt(rot_z(eps, alpha_deg), theta_deg, alpha_deg=alpha_deg)
+    for pol in ('s', 'p'):
+        gap = max(abs(b - a) for b, a in zip(before[pol], after[pol]))
+        assert gap < 1e-12, f'{label} at {theta_deg} deg, turned {alpha_deg} deg, {pol}: {gap:.2e}'
+
+
+@pytest.mark.parametrize('label,eps', Z_DECOUPLED + Z_COUPLED,
+                         ids=[c[0] for c in Z_DECOUPLED + Z_COUPLED])
+def test_a_quarter_turn_at_normal_incidence_exchanges_s_and_p(label, eps):
+    """The companion to the above, and the reason it is restricted to oblique incidence.
+
+    With ``kt = 0`` there is no plane of incidence for s and p to be defined against, so the
+    convention names them after the fixed axes. Turning the tensor a quarter turn then maps x to
+    y and the two labels swap outright rather than staying put. Asserting the swap keeps that
+    from being mistaken for the covariance above failing.
+    """
+    before, after = rt(eps, 0.0), rt(rot_z(eps, 90.0), 0.0)
+    for src, dst in (('s', 'p'), ('p', 's')):
+        gap = max(abs(b - a) for b, a in zip(before[src], after[dst]))
+        assert gap < 1e-12, f'{label}: {src} should land on {dst}, off by {gap:.2e}'
 
 
 @pytest.mark.parametrize('label,eps', Z_DECOUPLED + Z_COUPLED,
