@@ -287,6 +287,44 @@ The shipped answer keeps every property you would think to check:
      magnitude                                             ✗  ← only this is wrong
 ```
 
+## 5.1 Measured again against an outside oracle
+
+Everything above rests on closed forms that exist only because the layer is uniform and the tensor
+is simple, plus an identity internal to the code. Neither is an outside check, so the argument was
+one formulation talking to itself.
+
+Berreman's 4x4 method is the outside check. It eliminates `E_z` and `H_z` and integrates the
+transverse fields as a first-order system, `d/dz (Ex, Ey, Hx, Hy) = i k0 M (Ex, Ey, Hx, Hy)`, so a
+uniform layer is a matrix exponential and a stack is their product. No Fourier orders, no
+eigenmodes, no s/p rotation, no transfer recursion — it shares no algebra with RCWA.
+
+Validated first on tensors a shipped path can produce (isotropic, absorbing, diagonal, biaxial,
+rotated-uniaxial, three-layer), normal and oblique: **max 7.8e-16**. Only then applied to the
+asymmetric cases:
+
+| configuration | as shipped | pair exchanged in `Omega_R` |
+|---|---|---|
+| gyrotropic slab, normal | 5.2e-2 | 3.6e-16 |
+| gyrotropic slab, 15 / 30 / 45 / 60 / 75 deg | 7.8e-3 … 1.9e-1 | ≤ 1.1e-15 |
+| general asymmetric, complex, 0 and 40 deg | 2.6e-2 … 8.4e-1 | ≤ 2.0e-15 |
+| multilayer (gyro / isotropic / gyro, and a 4-layer) | 8.5e-3 … 1.8e-1 | ≤ 1.6e-15 |
+| thickness 40 … 1500 nm at 28 deg | 1.5e-2 … 1.3e-1 | ≤ 1.6e-15 |
+
+Every asymmetric configuration tried, at every angle, lands on the oracle once the pair is
+exchanged. The complex Jones matrix matches too, to ~1e-15, once fieldwave's per-channel s/p phase
+(`diag(1, -i)` on output, `diag(1, -1)` on input, fitted on a symmetric case) is taken out.
+
+Two corrections this pass forced:
+
+* **Power efficiencies do discriminate here.** §3 shows the *sign* error hiding from R and T, and
+  that remains true — but it is a statement about a mirrored optic axis, not about the ordering
+  defect. For an asymmetric tensor the efficiencies are simply wrong, which makes the discriminator
+  convention-free and much easier to check than the amplitude argument in §6.
+* **Onsager reciprocity does not discriminate.** `T(-g) = T(g)^T` holds to 5.7e-16 for the shipped
+  code as well as the exchanged one. A plausible-looking symmetry check passes on the wrong answer.
+
+Pinned by `tests/test_anisotropic_berreman.py`.
+
 ## 6. It is not a time-convention artefact
 
 A reasonable objection: this repo runs `e^{-iwt}` with `Im(n) > 0` as loss
@@ -353,15 +391,17 @@ tensor.** The first person to do that will be someone trying gyrotropy.
 | | |
 |---|---|
 | Sign convention (`slot = -eps`) | derived, measured, pinned by a test |
-| Asymmetric-tensor ordering | defect confirmed symbolically and numerically; **not fixed** |
-| Effect on released behaviour | none — verified bit-identical |
+| Asymmetric-tensor ordering | defect confirmed symbolically, numerically, and against an outside oracle; **not fixed** |
+| The repair (exchange the pair in `Omega_R`) | lands on the oracle at ~1e-15 across every configuration tried |
+| Effect on released behaviour | none — verified bit-identical on real gratings |
+| Oblique incidence, stacks, complex asymmetric tensors | covered by `tests/test_anisotropic_berreman.py` |
 | Which magnetization `+i·g` means | **open** |
-| Asymmetric tensor at oblique incidence, vs an independent oracle | **not covered** |
+| A *patterned* anisotropic layer | **out of scope here** — needs the factorization in `anisotropic-materials.md` §3 |
 
-The last row matters if the repair is applied. The evidence for it is a normal-incidence
-gyrotropic slab plus an algebraic identity that holds at general `K`; the identity is internal
-consistency, not an outside check. A published crossed magneto-optic grating, or a second solver,
-would be the honest confirmation.
+What is still not evidence: Berreman is an independent *formulation*, but it is written in this
+repo and validated against this solver's own known-good cases. A published crossed magneto-optic
+grating, or a third-party solver, would be a stronger confirmation than either. It would also be
+the only way to test the patterned case, which no uniform-layer oracle can reach.
 
 Tests: `tests/test_uniform_anisotropic.py`
 
