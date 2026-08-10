@@ -20,6 +20,13 @@ runs every script from its own directory with `MPLBACKEND=Agg` and fails on a no
 example can run to completion and still be returning R+T > 1. The whole set takes well under a
 minute, which is why it is a separate job from the verification suite rather than part of it.
 
+**It cannot tell you the numbers are right, and the gap is larger than it looks.** Seven of the
+eleven scripts — all of [`rcwa/`](rcwa) — do not import FieldWave at all; they are from-scratch
+reference implementations. Of the four that do, `block_1d.py` solves on PyTorch and
+`block_2d.py` on JAX, and the result guards are NumPy-only. So the `UnphysicalResultWarning`
+condition reaches **two scripts**, the two `_verification.py` files. For the other nine a green
+tick means the code ran, and says nothing about what it printed.
+
 The same check runs locally, from the repository root:
 
 ```bash
