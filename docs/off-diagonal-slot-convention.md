@@ -402,16 +402,21 @@ tensor.** The first person to do that will be someone trying gyrotropy.
 
 Two limits are worth stating plainly, because the evidence above is easy to over-read.
 
-**Berreman is an algorithm written here, not a third-party solver.** It is an independent
-*formulation* — it shares no algebra with RCWA — but the implementation is ~50 lines in
-`tests/test_anisotropic_berreman.py`, written by the same hand that wrote the thing it judges, and
-validated against this solver's own known-good cases. On the oracle tiers in `tests/README.md` that
-puts it in **physics**, not **an outside solver**. It cannot catch a misconception shared between
-the two.
+**Berreman's method is a standard; the fifty lines of it here are not.** The 4x4 formulation
+(Berreman 1972) is the reference technique for stratified anisotropic media, and it was built for
+exactly this case — the paper's own abstract names Faraday rotation and optical activity as what
+the 6x6 starting point is meant to carry. Nothing about the method is improvised.
 
-**RETICOLO closes that gap.** V10 takes a texture as a full complex 3x3 permittivity tensor
-(`exemple_V9_{0D,1D,2D,conique}_anisotrope.m` ship with it), and this repo already trusts it as its
-strongest oracle. Run on the same stacks, with the same convention gate applied first — isotropic
+What is local is the *implementation*: ~50 lines in `tests/test_anisotropic_berreman.py`, written
+by the same hand as the thing it judges and validated against this solver's own known-good cases.
+That is a statement about provenance, not about quality. On the oracle tiers in `tests/README.md`
+it lands in **physics** rather than **an outside solver**, for the narrow reason that a
+misconception shared by both implementations would survive — not because the reference is weak.
+
+**RETICOLO closes that gap.** Hugonin and Lalanne's code has carried a toolbox for arbitrarily
+anisotropic multilayer stacks since V9; V10 takes a texture as a full complex 3x3 permittivity
+tensor, and ships `exemple_V9_{0D,1D,2D,conique}_anisotrope.m` to demonstrate it. This repo already
+trusts it as its strongest oracle. Run on the same stacks, with the same convention gate applied first — isotropic
 and symmetric tensors, where it agrees with Berreman to 2.1e-15, no convention fitting needed:
 
 | configuration | shipped, vs RETICOLO | pair exchanged | Berreman, vs RETICOLO |
@@ -456,3 +461,29 @@ Tests: `tests/test_uniform_anisotropic.py`
 - `test_gyrotropic_layer_has_the_right_shape` — what does hold today (passes)
 - `test_gyrotropic_layer_matches_faraday` — the exact answer (xfail, strict; flips to XPASS the
   moment the ordering is repaired)
+
+`tests/test_anisotropic_berreman.py`
+
+- `test_oracle_agrees_where_the_solver_is_known_good` — the convention gate (passes)
+- `test_asymmetric_tensor_matches_the_oracle` — oblique, stacks, complex tensors (xfail, strict)
+
+## References
+
+Every number in §5.1 and §8 rests on one of these two. Both were checked against the publishers
+rather than quoted from memory.
+
+- D. W. Berreman, *Optics in Stratified and Anisotropic Media: 4×4-Matrix Formulation*,
+  J. Opt. Soc. Am. **62**(4), 502 (1972).
+  [doi:10.1364/JOSA.62.000502](https://doi.org/10.1364/JOSA.62.000502) — the formulation
+  `tests/test_anisotropic_berreman.py` implements. It starts from a 6×6 statement of Maxwell's
+  equations chosen so that Faraday rotation and optical activity are expressible, which is why it
+  is the natural reference for the gyrotropic case rather than a workaround for it.
+- J. P. Hugonin and P. Lalanne, *RETICOLO software for grating analysis*, Institut d'Optique,
+  Orsay (2005); [arXiv:2101.00901](https://arxiv.org/abs/2101.00901) — an RCWA implementation for
+  1D, conical and 2D crossed gratings. From V9 it carries a toolbox for arbitrarily anisotropic
+  multilayer stacks, which is what made the outside check in §8 possible. Already this repo's
+  strongest oracle for isotropic gratings (`tests/references/`, `tests/data/golden_reticolo.npz`).
+
+Also cited in `anisotropic-materials.md`, for the factorization a patterned anisotropic layer would
+need: Li (2003) for the 4ff formulation, Popov and Nevière (2001) for the rearrangement, Schuster
+et al. (2007) for the NVF this repo implements.

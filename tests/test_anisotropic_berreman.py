@@ -5,8 +5,17 @@ exist because the layer is uniform *and* the tensor is simple: an Airy slab per 
 a Jones waveplate at normal incidence. Those run out exactly where the interesting cases start —
 an asymmetric tensor at oblique incidence has no one-line answer.
 
-This file supplies one. Berreman's 4x4 method eliminates ``E_z`` and ``H_z`` and integrates the
-remaining transverse fields as a first-order system,
+This file supplies one, following
+
+    D. W. Berreman, "Optics in Stratified and Anisotropic Media: 4x4-Matrix Formulation",
+    J. Opt. Soc. Am. 62(4), 502 (1972).  doi:10.1364/JOSA.62.000502
+
+which is the reference technique for stratified anisotropic media and was built with exactly this
+case in mind — its 6x6 starting point is chosen so that Faraday rotation and optical activity are
+expressible, so the gyrotropic tensors below are what it is *for*, not a stretch of it.
+
+The method eliminates ``E_z`` and ``H_z`` and integrates the remaining transverse fields as a
+first-order system,
 
     d/dz (Ex, Ey, Hx, Hy) = i k0 M (Ex, Ey, Hx, Hy)
 
@@ -14,6 +23,11 @@ so a uniform layer is a matrix exponential and a stack is their product. It shar
 RCWA: no Fourier orders, no eigenmodes, no s/p mode rotation, no scattering or transfer recursion.
 Agreement is therefore evidence about the physics rather than about our own conventions — which
 matters here, because the sign and ordering conventions are exactly what is in question.
+
+Independently corroborated by RETICOLO (Hugonin and Lalanne, arXiv:2101.00901), whose V9+ toolbox
+for arbitrarily anisotropic multilayer stacks reproduces the cases below to ~1e-15 with no
+convention fitting — see ``docs/off-diagonal-slot-convention.md`` §8. That check needs Octave and
+so does not run here; this file is the part that runs everywhere.
 
 The oracle is checked before it is trusted (``test_oracle_agrees_where_the_solver_is_known_good``):
 isotropic, absorbing, diagonal, biaxial, rotated-uniaxial and multilayer, at normal and oblique
@@ -59,7 +73,7 @@ WL = 600.0
 # ------------------------------------------------------------------ the oracle
 
 def _berreman_M(eps, kx):
-    """``M`` in ``dpsi/dz = i k0 M psi`` for ``psi = (Ex, Ey, Hx, Hy)``.
+    """``M`` in ``dpsi/dz = i k0 M psi`` for ``psi = (Ex, Ey, Hx, Hy)``. After Berreman (1972).
 
     Derived for this repo's ``e^{-iwt}`` convention with fields going as
     ``exp(i k0 (kx x + kz z))``, so ``curl E = i k0 H`` and ``curl H = -i k0 eps E`` with ``H``
