@@ -116,6 +116,31 @@ def test_j1_matches_scipy_on_every_backend(lib):
 
 
 @pytest.mark.parametrize('lib', ['jax', 'torch'])
+def test_j1_single_precision_uses_its_own_crossover(lib):
+    """float32 needs a different crossover, and the double-precision one costs 200x.
+
+    The series loses a fixed number of *digits* to cancellation, which is a far larger share
+    of single precision's budget than of double's. Optimising separately against mpmath puts
+    the crossover at 12.5 in double and 7.0 in single. Running single with the double
+    crossover measured 2.7e-04 -- worse than the `torch.special.bessel_j1` this path
+    replaced, which is the regression this test exists to prevent.
+
+    The tolerance is loose on purpose: 5e-06 against a measured 2.1e-06 and a float32 epsilon
+    of 1.2e-07. Single precision is documented as hazardous and this does not pretend
+    otherwise; it only pins that the hybrid stays in the right order of magnitude for it.
+    """
+    xp = pytest.importorskip(lib)
+    from fieldwave._core.backend import j1
+    probe = np.linspace(1e-3, 95.0, 1500)
+    if lib == 'jax':
+        x = xp.numpy.asarray(probe, dtype=xp.numpy.float32)
+    else:
+        x = xp.as_tensor(probe, dtype=xp.float32)
+    got = np.asarray(j1(x), dtype=float)
+    assert np.max(np.abs(got - _j1_reference(probe))) < 5e-06
+
+
+@pytest.mark.parametrize('lib', ['jax', 'torch'])
 def test_j1_derivative_is_right_including_at_zero(lib):
     """``dJ1/dx = J0 - J1/x``, and 1/2 at the origin.
 

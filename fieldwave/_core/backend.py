@@ -389,7 +389,14 @@ def _torch_eig(A):
 #     count can restore -- 30 terms and 80 terms give the same 4.8e-13 at x <= 12.
 #   * the asymptotic expansion is limited by truncation and is *divergent*: past its optimal
 #     term count the error grows again. At x >= 12.5 it improves to 12 terms and worsens after.
+#
+# **The crossover depends on the precision, which is why there are two of them.** The series'
+# loss is cancellation, so it costs a fixed number of *digits* -- which is a much larger share
+# of float32's budget than of float64's. Optimising the two separately against mpmath:
+# 12.5 in double (7.8e-13) and 7.0 in single (2.1e-06). Using the double-precision crossover
+# in single costs 200x, and that was measured after it had already been written that way.
 _J1_THR = 12.5
+_J1_THR_F32 = 7.0
 _J1_SERIES_TERMS = 30
 _J1_ASYM_TERMS = 12
 _J1_A = [1.0]
@@ -434,7 +441,8 @@ def j1(x):
         #
         # As an array of x's own dtype: torch.minimum refuses a Python float, and building it
         # this way keeps the clamp in the input's precision.
-        thr = xp.full_like(x, _J1_THR)
+        single = xp.finfo(x.dtype).bits <= 32
+        thr = xp.full_like(x, _J1_THR_F32 if single else _J1_THR)
         # Clamp each branch's input so the *unselected* branch stays finite: a NaN there
         # would still poison the gradient through `where`.
         return xp.where(x < thr,
