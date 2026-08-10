@@ -236,6 +236,40 @@ what both keywords used to do, returning the other value's numbers with nothing 
 to say so. The smooth path's derivation, convergence data and limitations are written up in
 [docs/analytic-modeling.md](docs/analytic-modeling.md).
 
+### Non-orthogonal unit cells
+
+`period=(Lx, Ly)` describes a rectangular cell and is the default. A cell that is *not*
+rectangular — hexagonal, or any oblique basis — is given as the two primitive vectors instead:
+
+```python
+a = 400.
+a1, a2 = np.array([a, 0.]), np.array([a / 2, a * np.sqrt(3) / 2])     # hex
+
+solver = fieldwave.rcwa(backend=0, lattice=np.column_stack((a1, a2)),   # columns are a1, a2
+                        factorization='nvf', ucell=ucell, ...)
+```
+
+Setting `lattice` makes `period` report the basis-vector lengths `(|a1|, |a2|)`. A hexagonal
+array spelled as an `a x a*sqrt(3)` rectangular supercell needs twice the cell area, hence twice
+the retained orders, and the solve is `O(N^2.7)` — so the native cell is about **8x** cheaper on
+a converged high-contrast structure (~3x on a lightly-truncated sweep).
+
+**The raster is read in lattice coordinates.** `ucell[layer][j, i]` is the permittivity at
+`r = (i + 0.5)/Nx * a1 + (j + 0.5)/Ny * a2`. Building a raster on a Cartesian grid and passing a
+tilted basis therefore describes a *different structure*, silently — energy still conserves to
+1e-15. Analytic shapes are immune: their lengths are absolute Cartesian quantities, so a
+rectangle stays a rectangle under a skew.
+
+Two build paths are refused on a skewed cell rather than answering, because both run and return
+a plausible wrong number: `factorization='li'` on a raster (the inverse rule follows the raster
+axes, which are `a1` / `a2` once skewed — repairing it is Li's covariant formulation) and the
+block modeler. Everything else works, including analytic shapes with painted overlaps and field
+reconstruction — whose output grid is then indexed by `(v, u)` rather than `(y, x)`.
+
+The measurements, the validation against Li's published checkerboard table, and a worked metalens
+phase library are in [docs/oblique-lattice.md](docs/oblique-lattice.md);
+[`tutorials/05-oblique-lattice.ipynb`](tutorials/05-oblique-lattice.ipynb) is the walkthrough.
+
 ### Connecting algorithm
 
 How per-layer modes are joined into a stack response. The default is the transfer-matrix
@@ -323,6 +357,10 @@ The physics is checked against references, not only against itself:
   [`tests/references/`](tests/references). The CFS path agrees to ~1e-13 across twelve angle and
   polarization combinations; it is the only reference here that validates individual
   diffraction *orders* rather than totals.
+* **Published benchmark tables** — Li's 1997 crossed-grating checkerboard, as tabulated by
+  Demésy et al. (2012). All nine transmitted orders agree to a worst 2.06e-4, closer to the
+  paper's FEM reference than the paper's own two methods sit to each other. It is posed on the
+  oblique primitive cell, so it validates that path against numbers from outside this project.
 * **Energy conservation** for lossless structures, at machine precision (|R+T−1| ~ 1e-15).
 * **Cross-backend agreement** — NumPy, JAX and PyTorch on the same input, since one core
   implementation serves all three.

@@ -497,8 +497,13 @@ class CoreFactorizationMixin:
           Cartesian quantities, so nothing about a shape deforms under a skew — a rectangle
           stays a rectangle. Only the grid of frequencies its transform is sampled at moves,
           which is one expression in :func:`~fieldwave._core.analytic.shape_ft`. Overlapping
-          *painted* layers are still refused inside that path: resolving an overlap clips
-          against a rectangular cell.
+          *painted* layers were refused inside that path for a while, on the belief that
+          resolving an overlap clips against a rectangular cell. It does not: the clipper does
+          Cartesian polygon booleans and never sees the cell, and ``exp(-i G.r)`` carries the
+          periodicity for a polygon straddling an edge. What actually needed the basis was the
+          periodic-image enumeration in
+          :func:`~fieldwave._core.overlap.overlapping_pairs`, which decides whether a layer has
+          an overlap at all. See ``test_a_painted_overlap_survives_a_unimodular_shear``.
 
         The Li check below reads the *resolved* :attr:`factorization`, which is why a skewed
         run on the smooth shape path no longer has to spell ``factorization='nvf'`` out: that
