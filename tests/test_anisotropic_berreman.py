@@ -128,17 +128,56 @@ def berreman_efficiencies(layers, theta, wl=WL):
 
 # ------------------------------------------------------------------ the solver
 
+def reject_z_coupling(eps, tol=1e-12):
+    """Refuse a tensor whose ``z`` row or column is populated — before it answers.
+
+    The five slots span ``[[exx, exy, 0], [eyx, eyy, 0], [0, 0, ezz]]`` and nothing more, so
+    ``eps_xz``, ``eps_zx``, ``eps_yz`` and ``eps_zy`` have nowhere to go. Dropping them is what
+    a naive adapter does, and the result is *plausible*: the reduced tensor is a perfectly good
+    medium, so the solve succeeds and energy conserves to 1e-16. It is simply a different
+    problem from the one that was asked.
+
+    Measured, on a gyrotropic tensor at 35 degrees with the magnetisation laid over: dropping
+    the pair moves the efficiencies by 2.1e-2 for ``M`` along x and 6.2e-2 for ``M`` tilted 45
+    degrees, with ``R + T`` sitting at exactly 1 throughout. Nothing downstream is in a position
+    to notice, which is why the refusal has to live at the adapter.
+
+    Physically this is the Voigt geometry — magnetisation lying in the plane rather than along
+    the stack normal. Supporting it means the 4ff first-order system in ``(Ex, Ey, Hx, Hy)``:
+    with a populated ``z`` row the elimination of ``E_z`` leaves a first-derivative term, so
+    ``d2E/dz2 = P Q E`` does not exist and the mode operator this solver is built on has nothing
+    to be. See ``docs/anisotropic-materials.md`` §6.
+
+    The Berreman oracle in this file is already that first-order system and takes such tensors
+    without complaint — which is what makes the gap measurable rather than merely asserted.
+    """
+    e = np.asarray(eps, dtype=complex)
+    off = {'eps_xz': e[0, 2], 'eps_zx': e[2, 0], 'eps_yz': e[1, 2], 'eps_zy': e[2, 1]}
+    bad = {k: v for k, v in off.items() if abs(v) > tol}
+    if bad:
+        named = ', '.join(f'{k}={v:.4g}' for k, v in bad.items())
+        raise NotImplementedError(
+            f'z-coupling is not expressible in the five convolution slots ({named}). '
+            'The solve would silently drop these and answer for the reduced tensor, which '
+            'conserves energy and looks fine. This is the Voigt geometry; it needs the 4ff '
+            'first-order formulation — see docs/anisotropic-materials.md section 6.')
+
+
 def solve_tensor_stack(layers, theta, wl=WL, connecting_algo='TMM'):
     """Drive the 2D solve with a hand-filled tensor per layer.
 
     ``ucell`` stays ``None``: there is no raster, and it routes ``_assign_grating_type`` to the
     2D path, the only one with off-diagonal slots. The slot convention is ``-eps_xy`` — see
     ``docs/off-diagonal-slot-convention.md``.
+
+    Refuses a tensor with a populated ``z`` row or column rather than dropping it silently;
+    see :func:`reject_z_coupling`.
     """
     I = np.eye(1, dtype=np.complex128)
     epx, epy, epz_i, epxy, epyx, thick = [], [], [], [], [], []
     for eps, d in layers:
         e = np.asarray(eps, dtype=complex)
+        reject_z_coupling(e)
         epx.append(e[0, 0] * I)
         epy.append(e[1, 1] * I)
         epxy.append(-e[0, 1] * I)
@@ -244,6 +283,47 @@ def test_scattering_algorithm_agrees_on_asymmetric_tensors(label, layers, theta_
     got = solve_tensor_stack(layers, theta, connecting_algo='SMM')
     gap = max_gap(ref, got)
     assert gap < 1e-12, f'{label}: SMM is {gap:.2e} from the oracle'
+
+
+def gyro_along(direction, g=0.45, ed=2.25):
+    """``eps_ij = ed d_ij + i e_ijk g_k`` — the magnetisation direction picks the cells.
+
+    ``M`` along z fills ``eps_xy`` / ``eps_yx`` (Faraday, expressible here); ``M`` in the plane
+    fills the z row and column instead (Voigt, not expressible).
+    """
+    e = np.eye(3, dtype=complex) * ed
+    gx, gy, gz = np.asarray(direction, dtype=float) * g
+    e[0, 1] += 1j * gz
+    e[1, 0] -= 1j * gz
+    e[1, 2] += 1j * gx
+    e[2, 1] -= 1j * gx
+    e[2, 0] += 1j * gy
+    e[0, 2] -= 1j * gy
+    return e
+
+
+@pytest.mark.parametrize('label,direction', [
+    ('M along x', (1, 0, 0)),
+    ('M along y', (0, 1, 0)),
+    ('M tilted 45 deg', (np.sin(np.pi / 4), 0, np.cos(np.pi / 4))),
+])
+def test_voigt_geometry_is_refused_rather_than_quietly_reduced(label, direction):
+    """A magnetisation off the stack normal must raise, not answer.
+
+    The failure this guards against is not a crash. Dropping the z row leaves a valid medium,
+    so the solve succeeds, ``R + T`` is 1 to machine precision, and the number is wrong by
+    2e-2 to 6e-2. Every check a caller is likely to run passes.
+    """
+    with pytest.raises(NotImplementedError, match='z-coupling'):
+        solve_tensor_stack([(gyro_along(direction), 220.0)], np.deg2rad(35))
+
+
+def test_faraday_geometry_is_not_caught_by_that_guard():
+    """The control: magnetisation along the stack normal has an empty z row and must pass."""
+    layers = [(gyro_along((0, 0, 1)), 220.0)]
+    gap = max_gap(berreman_efficiencies(layers, np.deg2rad(35)),
+                  solve_tensor_stack(layers, np.deg2rad(35)))
+    assert gap < 1e-12
 
 
 def test_the_oracle_conserves_energy_on_a_lossless_gyrotropic_slab():
