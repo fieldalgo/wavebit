@@ -26,6 +26,21 @@ def _run_and_inputs(ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi,
     return (np.array(via_api.de_ri), np.array(via_api.de_ti)), inputs
 
 
+def _assert_same_answer(via_api, direct):
+    """The API route and the direct core call agree — to a tolerance, not bit for bit.
+
+    The property under test is that the mixin passes the right arguments, and every way of
+    getting that wrong moves the efficiencies by far more than 1e-12. Exact equality would
+    additionally assert that two independent runs of the same expressions land on the same last
+    bit, which is a claim about the BLAS rather than about this code. Its SMM twin
+    (test_scattering_core.py, where the full note lives) has failed that way intermittently on
+    GitHub's runners, and only on the larger mode matrices — of which these 2D cases have the
+    largest in the suite, so they were next in line.
+    """
+    for a, b in zip(via_api, direct):
+        np.testing.assert_allclose(a, np.array(b), rtol=1e-12, atol=1e-15)
+
+
 def _rand(shape, seed):
     return np.random.default_rng(seed).uniform(1.0, 4.0, size=shape)
 
@@ -44,8 +59,7 @@ def test_2d_wiring_matches_direct_core_call(case):
     (lri, lti), inp = _run_and_inputs(
         ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi)
     cri, cti = solve_2d(**inp)
-    assert np.array_equal(lri, np.array(cri)), np.max(np.abs(lri - np.array(cri)))
-    assert np.array_equal(lti, np.array(cti)), np.max(np.abs(lti - np.array(cti)))
+    _assert_same_answer((lri, lti), (cri, cti))
 
 
 def _to(backend, x):

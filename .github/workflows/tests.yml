@@ -48,7 +48,30 @@ jobs:
       - name: Verify all three backends are importable
         run: python -c "import numpy, jax, torch, fieldwave; print(fieldwave.__file__)"
 
+      # Single-threaded BLAS, so that two calls with the same inputs give the same bits.
+      #
+      # Part of the suite asserts exact equality between two results computed in the same
+      # process -- that freezing a geometry is a no-op, that `full=True` only adds fields,
+      # that the core reproduces the legacy chains. Those are claims about this code taking
+      # one path twice, and they are worth asserting exactly; but a threaded kernel is free
+      # to partition a reduction differently between two calls, and then the last bit moves
+      # for reasons that have nothing to do with the claim. That is what these runners did:
+      # the same commit failed three such comparisons on one run and passed them on a re-run,
+      # and only on the cases with 26x26 mode matrices or larger.
+      #
+      # (Differing runner CPU models cannot explain it on their own: both results in each of
+      # those comparisons are computed in one process on one machine, so a SIMD kernel chosen
+      # per CPU applies equally to both.)
+      #
+      # Nothing here is large enough to want threads -- the biggest mode matrix in the suite
+      # is a few hundred square -- so this costs no wall-clock worth measuring.
       - name: Run verification suite
+        env:
+          OPENBLAS_NUM_THREADS: 1
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          NUMEXPR_NUM_THREADS: 1
+          VECLIB_MAXIMUM_THREADS: 1
         run: pytest tests -q
 
   minimal:

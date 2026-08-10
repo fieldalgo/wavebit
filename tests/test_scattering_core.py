@@ -147,8 +147,26 @@ def test_wiring_matches_direct_core_call(name, kwargs, kind):
     solver, inputs = _core_inputs(kwargs)
     via_api = _solve('SMM', kwargs)
     ri, ti = smm_fn(**inputs)
-    assert np.array_equal(np.array(via_api.de_ri), np.array(ri))
-    assert np.array_equal(np.array(via_api.de_ti), np.array(ti))
+    # To a tolerance, not bit for bit. The property here is that the mixin hands the core the
+    # arguments it expects, and every way of getting that wrong -- kx and ky swapped, psi
+    # dropped, the layers in the other order -- moves the efficiencies by far more than 1e-12.
+    # Exact equality would additionally assert something this test does not own: that two
+    # independent runs of the same expressions land on the same last bit. They do on every
+    # machine measured here, but the two routes are two separate BLAS call sequences, and on
+    # GitHub's ubuntu-latest runners this has disagreed in the low bits on one run and agreed
+    # on a re-run of the same commit -- and only on the cases whose mode matrices are 26x26 or
+    # larger, which points at a blocked or threaded kernel rather than at anything in this
+    # repository (both results are computed in one process on one machine, so a SIMD kernel
+    # chosen per CPU model cannot separate them). Where bit-identity *is* the property --
+    # freezing a geometry below, the `full=` flag in test_core_full_results.py, legacy parity --
+    # the tests that own it still assert it exactly, and CI pins the BLAS thread count so they
+    # have a deterministic runtime to assert it on.
+    #
+    # atol is not zero because a 2D case reports evanescent orders as round-off-level numbers
+    # (~1e-29) rather than exact zeros; comparing those on their own relative scale would test
+    # the round-off, not the wiring.
+    np.testing.assert_allclose(np.array(via_api.de_ri), np.array(ri), rtol=1e-12, atol=1e-15)
+    np.testing.assert_allclose(np.array(via_api.de_ti), np.array(ti), rtol=1e-12, atol=1e-15)
 
 
 def test_unknown_connecting_algo_is_rejected():
