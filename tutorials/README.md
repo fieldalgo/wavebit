@@ -27,3 +27,10 @@ belongs there as markdown instead.
     and what the normal vector field (`factorization='nvf'`) does about it.
   * also shows `freeze_geometry()`, the object that holds the normal field fixed and keeps a
     solve traceable.
+
+## Non-orthogonal lattices
+* [Hexagonal and other tilted cells](05-oblique-lattice.ipynb)
+  * the `lattice` keyword, and the raster convention that goes with it — a raster is read in
+    *lattice* coordinates, and building it on a Cartesian grid instead describes a different
+    structure with no error and no loss of energy conservation.
+  * a worked metalens phase library, and the published benchmark the feature was checked against.
