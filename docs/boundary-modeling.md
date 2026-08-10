@@ -116,6 +116,48 @@ res = solver.conv_solve(geometry=solver.freeze_geometry())
 A gradient runs from `(cx, cy, lx, ly, angle)` through the replay, the polygon transform and the
 normal field to the convolution matrices, and matches finite differences to 2.3e-08.
 
+### It also carries a position gradient the smooth path cannot
+
+A multi-shape *smooth* layer differentiates correctly with respect to `lx`, `ly` and `angle`, and
+**not** with respect to `cx` and `cy`. The reason is stated in full at
+`analytic.normal_projector_coeffs`; the short version is that a rectangle's level-set gradient is
+piecewise constant, so the position reaches its sampled normal field only through `sign()`, whose
+derivative is zero. The variation lives entirely on the wedge lines, which sweep across pixels as
+the shape moves.
+
+The failure is sharper than "inaccurate", and worth seeing stated as a number. On the projector
+coefficients of two rectangles, `d/dcx` by autodiff is **exactly 0.0** — and so is a central
+difference once `h` is small enough to stay between two pixel crossings (0.0 at `h` = 1e-7, 1e-8,
+1e-9, against -1.0 at 1e-6). The two agree perfectly. The field really is locally constant in
+`cx`; every bit of the translation dependence sits in jumps, so there is no slope for a gradient
+to be wrong about. Two *circles*, whose normal is radial and so genuinely smooth in the centre,
+agree to nine digits (2.624456e-02 both ways) — the mechanism confirming itself, since only the
+shape changed. A single shape of any type is exact through the phase trick. The gap is pinned as
+`xfail` in `tests/test_shape_position_gradients.py`.
+
+**This path does not have it**, because the normal field here is the gradient of the distance to
+the resolved boundary: a vertex coordinate reaches it as arithmetic rather than through a sign,
+and there is no normalized sum of per-shape fields at all. Sweeping `h` on the five convolution
+matrices of a painted pair, every parameter — `cx` and `cy` included — converges onto the
+autodiff value by `h` = 1e-7 (`d/dcx` = -3.065387e+02 analytic against -3.065387e+02). The
+intermediate-`h` wobble is a real slope sampled across the same pixel jumps, not an absent one.
+
+The distinction matters for what could be done about it. The measurement above holds for a
+painted **disjoint** pair as well (3.878496e-01 analytic against 3.878512e-01 at `h` = 1e-7), so
+the grad-of-distance field carries a position gradient whether or not anything overlaps — which
+makes "give multi-shape smooth layers this field instead" a route the three already rejected at
+`normal_projector_coeffs` did not consider. It is not free: it is a different NVF choice, so
+forward answers on those layers would move, and that has to be measured against S4 before it
+would be worth taking.
+
+### Layers of both kinds in one `ucell`
+
+They differentiate together, and the mixture costs nothing: the branch is on `plan is not None`,
+which is static under a trace, and the per-layer results are only `stack`ed. Verified on a
+three-layer stack — one painted-and-overlapping, one painted-and-disjoint, one summed — through
+`jax.jit` and `jax.grad`: every parameter's gradient is finite, and each layer's agreement with
+central differences is exactly what that layer would show on its own.
+
 ### Freeze before you trace, or the overlap goes unnoticed
 
 The routing test of the previous section compares coordinates, and a tracer is not a coordinate:
