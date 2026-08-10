@@ -24,13 +24,13 @@ class OptimizerTorch(Grad):
 
         return grad
 
-    def meent_optimizer(self, _pois, _opt, *args, **kwargs):
+    def _build_optimizer(self, _pois, _opt, *args, **kwargs):
         _parameters_to_fit = [(getattr(self, poi)) for poi in _pois]
         res = _opt(_parameters_to_fit, *args, **kwargs)
         return res
 
     def fit(self, pois, forward, loss_fn, optimizer, opt_options, iteration=1):
-        optimizer = self.meent_optimizer(pois, optimizer, **opt_options)
+        optimizer = self._build_optimizer(pois, optimizer, **opt_options)
         [setattr(getattr(self, poi), 'requires_grad', True) for poi in pois]
 
         for _ in tqdm(range(iteration)):

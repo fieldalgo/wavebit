@@ -750,7 +750,7 @@ class Modeling:
                       self._period)
         dev = self._dev(*[c for obj in obj_list for corner in obj[:2] for c in corner])
 
-        # TODO: activate and apply 'x64' option thru this function and connect to meent class.
+        # TODO: activate and apply 'x64' option thru this function and connect to the solver class.
         datatype = xp.complex128 if x64 else xp.complex64
 
         F, C = self._float(xp), self._complex(xp)

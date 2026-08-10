@@ -35,7 +35,7 @@ class _BaseRCWA(CoreSolveMixin):
         else:
             raise ValueError('JAX type_complex')
 
-        # currently these two are not used. Only TorchMeent uses.
+        # currently these two are not used. Only the torch backend uses them.
         self._type_float = jnp.float64 if self._type_complex is not jnp.complex64 else jnp.float32
         self._type_int = jnp.int64 if self._type_complex is not jnp.complex64 else jnp.int32
         self.perturbation = perturbation

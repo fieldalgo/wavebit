@@ -20,7 +20,7 @@ class _BaseRCWA(CoreSolveMixin):
         else:
             raise ValueError('Numpy type_complex')
 
-        # currently these two are not used. Only TorchMeent uses.
+        # currently these two are not used. Only the torch backend uses them.
         self._type_float = np.float64 if self.type_complex is not np.complex64 else np.float32
         self._type_int = np.int64 if self.type_complex is not np.complex64 else np.int32
         self.perturbation = perturbation
@@ -48,7 +48,7 @@ class _BaseRCWA(CoreSolveMixin):
 
     @device.setter
     def device(self, device):
-        print('NumpyMeent support only CPU.')
+        print('The NumPy backend runs on CPU only.')
 
     @property
     def type_complex(self):

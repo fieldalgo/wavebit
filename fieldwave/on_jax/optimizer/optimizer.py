@@ -5,7 +5,7 @@ try:
 except (TypeError, ImportError, ModuleNotFoundError) as e:
     import warnings
 
-    warnings.warn('Importing optax failed. You can run RCWA but not optimization in JaxMeent. '
+    warnings.warn('Importing optax failed. You can run RCWA but not optimization on the JAX backend. '
                   'One possible reason is python version: optax support python>=3.9.')
 
 from tqdm import tqdm
