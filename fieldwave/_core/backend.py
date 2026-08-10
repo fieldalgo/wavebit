@@ -376,9 +376,22 @@ def _torch_eig(A):
 # The two pieces are textbook, not invented here: the ascending series is DLMF 10.2.2
 # (Abramowitz & Stegun 9.1.10) and the large-argument form is Hankel's expansion, DLMF 10.17.3
 # (A&S 9.2.1-9.2.6), whose P/Q coefficients are the a_k(nu) recursion built just below.
-_J1_THR = 12.0            # series below, asymptotic expansion above
+# Series below the threshold, Hankel asymptotic expansion above. Both constants were chosen
+# by measurement against mpmath at 40 digits, 6000 points on (0, 95]: for each candidate
+# (threshold, term count) the max error of the *combined* function was evaluated, and this is
+# the minimum. Moving either one away from these values makes the worst case worse.
+#
+# The two branches fail in different ways, which is why the optimum is a compromise rather than
+# "more terms is better":
+#
+#   * the series is limited by **cancellation**, not truncation. Its largest term at x is
+#     ~(x/2)^x / (m!(m+1)!), which dwarfs the result, so past x ~ 12 it loses digits no term
+#     count can restore -- 30 terms and 80 terms give the same 4.8e-13 at x <= 12.
+#   * the asymptotic expansion is limited by truncation and is *divergent*: past its optimal
+#     term count the error grows again. At x >= 12.5 it improves to 12 terms and worsens after.
+_J1_THR = 12.5
 _J1_SERIES_TERMS = 30
-_J1_ASYM_TERMS = 6
+_J1_ASYM_TERMS = 12
 _J1_A = [1.0]
 for _k in range(1, 2 * _J1_ASYM_TERMS + 2):
     _J1_A.append(_J1_A[-1] * (4.0 - (2 * _k - 1) ** 2) / (_k * 8.0))
@@ -413,51 +426,23 @@ def j1(x):
     """
     xp = ac.array_namespace(x)
     name = xp.__name__
-    if 'torch' in name:
-        import torch
-        return _TorchBesselJ1.apply(x)
-    if 'jax' in name:
-        x = xp.abs(x)
+    if 'torch' in name or 'jax' in name:
+        # No `abs` here, deliberately. It looks harmless because the domain is x >= 0, but it
+        # is even where J1 is odd, and -- worse -- its derivative at 0 is 0 in both frameworks,
+        # so it silently zeroes dJ1/dx at the origin. The series below is odd by construction
+        # and gives the correct 1/2 there.
+        #
+        # As an array of x's own dtype: torch.minimum refuses a Python float, and building it
+        # this way keeps the clamp in the input's precision.
+        thr = xp.full_like(x, _J1_THR)
         # Clamp each branch's input so the *unselected* branch stays finite: a NaN there
         # would still poison the gradient through `where`.
-        return xp.where(x < _J1_THR,
-                        _j1_series(xp, xp.minimum(x, _J1_THR)),
-                        _j1_asymptotic(xp, xp.maximum(x, _J1_THR)))
+        return xp.where(x < thr,
+                        _j1_series(xp, xp.minimum(x, thr)),
+                        _j1_asymptotic(xp, xp.maximum(x, thr)))
     from scipy.special import j1 as _scipy_j1
     import numpy as np
     return _scipy_j1(np.asarray(x))
-
-
-class _TorchBesselJ1Meta(type):
-    """Builds the torch autograd Function lazily so importing this module never needs torch."""
-    _impl = None
-
-    def apply(cls, x):
-        if cls._impl is None:
-            import torch
-
-            class _Impl(torch.autograd.Function):
-                @staticmethod
-                def forward(ctx, x):
-                    ctx.save_for_backward(x)
-                    return torch.special.bessel_j1(x)
-
-                @staticmethod
-                def backward(ctx, grad_out):
-                    # dJ1/dx = J0(x) - J1(x)/x, and 1/2 at x = 0.
-                    (x,) = ctx.saved_tensors
-                    safe = torch.where(x == 0, torch.ones_like(x), x)
-                    dj1 = torch.where(
-                        x == 0, torch.full_like(x, 0.5),
-                        torch.special.bessel_j0(x) - torch.special.bessel_j1(x) / safe)
-                    return grad_out * dj1
-
-            cls._impl = _Impl
-        return cls._impl.apply(x)
-
-
-class _TorchBesselJ1(metaclass=_TorchBesselJ1Meta):
-    """``torch.special.bessel_j1`` with the analytic backward it is missing."""
 
 
 def jinc(x):
