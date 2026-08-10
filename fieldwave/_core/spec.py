@@ -108,7 +108,12 @@ class Numerics:
     backend: Backend = Backend.NUMPY
     fto: Any = (0, 0)
     fourier_coefficients: FourierCoefficients = FourierCoefficients.SAMPLED
-    factorization: Factorization = Factorization.LI
+    #: ``None`` = unset, and it has to stay spellable: the solver resolves an unset
+    #: factorization against the modeling path (Li on a raster, NVF on analytic shapes) and
+    #: refuses a rule the path cannot express. Defaulting this to ``Factorization.LI`` would
+    #: hand every spec an explicit request it never made, so a spec carrying analytic layers
+    #: would be refused for asking for Li.
+    factorization: Optional[Factorization] = None
     type_complex: int = 128
     connecting_algo: str = 'TMM'
     perturbation: float = 1e-20
@@ -126,7 +131,7 @@ class Numerics:
         if 'fourier_coefficients' in d:
             d['fourier_coefficients'] = _enum(d['fourier_coefficients'], FourierCoefficients,
                                               'numerics.fourier_coefficients')
-        if 'factorization' in d:
+        if d.get('factorization') is not None:
             d['factorization'] = _enum(d['factorization'], Factorization,
                                        'numerics.factorization')
         if 'fto' in d:
@@ -145,16 +150,22 @@ class Numerics:
         return {f: _jsonable(getattr(self, f)) for f in self._FIELDS}
 
     def as_kwargs(self) -> dict:
-        """Solver keyword arguments. ``type_complex`` becomes the solver's 0/1 code."""
+        """Solver keyword arguments. ``type_complex`` becomes the solver's 0/1 code.
+
+        An unset ``factorization`` is *omitted* rather than filled in, so that the solver sees
+        the same "nobody asked" it would from a bare ``rcwa()`` call and resolves it per
+        modeling path.
+        """
         return dict(
             backend=int(self.backend),
             fto=list(self.fto),
             fourier_coefficients=self.fourier_coefficients.value,
-            factorization=self.factorization.value,
             type_complex=0 if self.type_complex == 128 else 1,
             connecting_algo=self.connecting_algo,
             perturbation=self.perturbation,
             normal_grid=self.normal_grid,
+            **({} if self.factorization is None
+               else {'factorization': self.factorization.value}),
         )
 
 

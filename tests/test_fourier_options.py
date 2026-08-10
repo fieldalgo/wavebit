@@ -51,6 +51,10 @@ def test_the_default_is_sampled_li():
     Only sampled coefficients carry a gradient to every raster cell, which is what topology
     optimization differentiates. This asserts the two attributes rather than the behaviour so
     that a change of default fails here, loudly, rather than in a gradient test nobody reads.
+
+    ``CFG_2D`` is a raster, and the ``factorization`` half of this is only a raster fact: the
+    other two modeling paths implement one rule apiece and resolve the default to it. See
+    ``test_factorization_by_modeling_path.py``.
     """
     solver = fieldwave.rcwa(**CFG_2D)
     assert solver.fourier_coefficients == 'sampled'

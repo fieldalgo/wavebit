@@ -86,10 +86,17 @@ are independent and multiply.
 | analytic shapes, painted **overlap** | supported | the clipper is Cartesian; only the periodic images and the transform needed the basis |
 | field reconstruction | supported | output grid is indexed by `(v, u)`, not `(y, x)` — see below |
 | block modeler (`modeling_type=1`) | **refused** | rasterises onto a rectangular grid of its own |
-| `factorization='li'` | **refused** | see below |
+| `factorization='li'` on a raster | **refused** | see below |
 
 Everything except `li` and the block modeler works on a skewed cell, and both of those have a
 supported route to the same structure — a raster, or analytic shapes.
+
+**Analytic shapes need no keyword at all.** `factorization` resolves per modeling path, and the
+analytic path implements only `nvf` — it builds `eps` from the shapes' own analytic normal field,
+so there is no raster axis for `li` to run along. Its default is therefore already `nvf`, and the
+`li` refusal above never applied to it. Passing `factorization='li'` with analytic shapes raises
+whether or not the cell is skewed, because that path cannot express it; the `factorization='nvf'`
+in the example at the top of this page is required for the **raster** it uses.
 
 The two refusals raise rather than answering, and that matters: both of them *run* on a skewed
 cell and return a plausible wrong number, with energy still conserving to 1e-15.

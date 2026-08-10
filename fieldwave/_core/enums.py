@@ -117,7 +117,8 @@ def to_fourier_type(fourier_coefficients, factorization):
                                  factorization_of(factorization)))
 
 
-def resolve_fourier_options(fourier_coefficients=None, factorization=None, fourier_type=None):
+def resolve_fourier_options(fourier_coefficients=None, factorization=None, fourier_type=None,
+                            keep_unset=False):
     """Settle the two Fourier axes from the new keywords or the deprecated alias.
 
     The two axes are independent:
@@ -142,6 +143,13 @@ def resolve_fourier_options(fourier_coefficients=None, factorization=None, fouri
     ``fourier_type`` is the deprecated alias, mapping ``0 -> ('sampled', 'li')``,
     ``1 -> ('integrated', 'li')``, ``2 -> ('sampled', 'nvf')``. Passing it alongside either
     new keyword is an error rather than a silent precedence rule.
+
+    ``keep_unset=True`` returns ``None`` for an axis the caller left out, instead of that
+    axis's default. Keeping the two apart is what lets a caller tell *"the user asked for
+    Li"* from *"Li is the default nobody touched"* — a distinction the defaults erase, and
+    the only thing that makes refusing a rule a build path cannot express safe. See
+    :attr:`fieldwave._core.engine.CoreFactorizationMixin.factorization`. The deprecated
+    ``fourier_type`` names both axes at once, so it never yields ``None``.
     """
     if fourier_type is not None:
         given = [k for k, v in (('fourier_coefficients', fourier_coefficients),
@@ -152,7 +160,9 @@ def resolve_fourier_options(fourier_coefficients=None, factorization=None, fouri
                 f"pass one or the other, not both.")
         return from_fourier_type(fourier_type)
 
-    return (DEFAULT_FOURIER_COEFFICIENTS if fourier_coefficients is None
+    unset_coefficients = None if keep_unset else DEFAULT_FOURIER_COEFFICIENTS
+    unset_factorization = None if keep_unset else DEFAULT_FACTORIZATION
+    return (unset_coefficients if fourier_coefficients is None
             else coefficients_of(fourier_coefficients),
-            DEFAULT_FACTORIZATION if factorization is None
+            unset_factorization if factorization is None
             else factorization_of(factorization))

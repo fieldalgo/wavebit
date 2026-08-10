@@ -16,7 +16,8 @@ from . import boundary as _boundary
 from . import factorization as _fac
 from . import lattice as _lattice
 from .backend import _device_of, array_namespace
-from .enums import (Factorization, FourierCoefficients, coefficients_of, factorization_of,
+from .enums import (DEFAULT_FACTORIZATION, DEFAULT_FOURIER_COEFFICIENTS, Factorization,
+                    FourierCoefficients, coefficients_of, factorization_of,
                     resolve_fourier_options, to_fourier_type)
 from .geometry import StaticGeometry
 from .scattering import smm_1d as _smm_1d, smm_1d_conical as _smm_1d_conical, smm_2d as _smm_2d
@@ -220,6 +221,30 @@ class CoreSolveMixin:
             epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all, full=True))
 
 
+# The rule each modeling path actually implements, for the two paths that implement exactly
+# one. The raster path (0) is absent because it implements both and so takes the option as
+# given; on these two the option is a claim to check rather than a choice to make.
+_FACTORIZATION_IMPLEMENTED_BY = {
+    1: Factorization.LI,
+    2: Factorization.NVF,
+}
+
+# Why each of those two is the only rule its path has, phrased for the person who asked for
+# the other one. The distinction matters: one is unbuilt, the other is unbuildable.
+_FACTORIZATION_REASON = {
+    1: ("the block path (modeling_type=1) applies Li's rules to the rectangles its modeler "
+        "paints (fieldwave._core.factorization.to_conv_mat_block); no normal field is computed "
+        "there, so NVF is not implemented on it. Use a raster ucell (modeling_type=0) or "
+        "smooth shapes (modeling_type=2), which both have it"),
+    2: ("the smooth shape path (modeling_type=2) builds eps from the shapes' own analytic "
+        "normal field (fieldwave._core.analytic.to_conv_mat_smooth_nvf). There is no raster "
+        "axis to run Li's nested 1D rule along, so Li's rules are not something that path has "
+        "yet to grow -- they are not something it can express. NVF is a superset of Li anyway "
+        "(a constant normal collapses the projector onto Li's rules exactly), so nothing is "
+        "lost: drop the keyword, or pass factorization='nvf' to say so"),
+}
+
+
 class CoreFactorizationMixin:
     """Provides ``conv_solve`` — factorization through the core, then the core solve.
 
@@ -238,16 +263,29 @@ class CoreFactorizationMixin:
     backend code instead.
 
     Also owns the two Fourier option attributes and the deprecated ``fourier_type`` alias, so
-    the three backend constructors resolve them identically.
+    the three backend constructors resolve them identically. ``factorization`` is not a free
+    choice on every path — see :attr:`factorization` — so it is stored as *what was asked for*
+    (``None`` when nobody asked) and resolved against the modeling path on read.
     """
 
     _fourier_coefficients = FourierCoefficients.SAMPLED
-    _factorization = Factorization.LI
+    #: Which of the three modeling paths the current ``ucell`` selected; the concrete solver
+    #: classes assign it. Defaulted here because :attr:`factorization` resolves against it, so
+    #: the mixin would otherwise only work inside a class that happens to set it first.
+    _modeling_type_assigned = None
+    #: What was *asked for*, with ``None`` meaning "nobody said". Read through the
+    #: :attr:`factorization` property, never directly: only two of the three modeling paths
+    #: implement both rules, so the requested value and the effective one are not the same
+    #: thing, and telling an explicit request from an untouched default is what decides
+    #: whether the mismatch is worth refusing.
+    _factorization = None
 
     def _set_fourier_options(self, fourier_coefficients, factorization, fourier_type):
         """Settle ``fourier_coefficients`` / ``factorization`` from a constructor's arguments."""
-        self._fourier_coefficients, self._factorization = resolve_fourier_options(
-            fourier_coefficients, factorization, fourier_type)
+        coefficients, self._factorization = resolve_fourier_options(
+            fourier_coefficients, factorization, fourier_type, keep_unset=True)
+        self._fourier_coefficients = (DEFAULT_FOURIER_COEFFICIENTS if coefficients is None
+                                      else coefficients)
 
     @property
     def fourier_coefficients(self):
@@ -260,8 +298,33 @@ class CoreFactorizationMixin:
 
     @property
     def factorization(self):
-        """Which rule closes the discontinuous products: ``'li'`` | ``'nvf'``."""
-        return self._factorization
+        """Which rule closes the discontinuous products: ``'li'`` | ``'nvf'``.
+
+        This reports the rule the *current structure* will be built with, which is not always
+        the one that was asked for, because only the raster path implements both. The block
+        path has only Li's rules and the smooth shape path only NVF, so on those two the
+        keyword is a claim about the build rather than a choice within it, and this resolves
+        it against the modeling path instead of repeating it back.
+
+        Raises:
+            NotImplementedError: when the rule was *explicitly* asked for and this modeling
+                path does not implement it. Refusing rather than substituting is the point --
+                a smooth-path circle used to answer to ``factorization='li'`` with NVF numbers
+                and no way to tell. The default is exempt because it is not a request: it is
+                resolved per path, so a user who never touched the keyword gets Li on a raster
+                and NVF on smooth shapes, which is what each path always did.
+        """
+        implemented = _FACTORIZATION_IMPLEMENTED_BY.get(self._modeling_type_assigned)
+        if implemented is None:                       # raster, or no ucell yet: free choice
+            return DEFAULT_FACTORIZATION if self._factorization is None else self._factorization
+        if self._factorization is not None and self._factorization != implemented:
+            # `!=`, not `is not`: `Factorization` is a str enum, so a value written straight
+            # onto the private attribute compares equal to the member it spells, and the
+            # formatting below tolerates one rather than dying inside the error path.
+            raise NotImplementedError(
+                f"factorization={factorization_of(self._factorization).value!r} is not "
+                f"available here: {_FACTORIZATION_REASON[self._modeling_type_assigned]}.")
+        return implemented
 
     @factorization.setter
     def factorization(self, value):
@@ -272,16 +335,21 @@ class CoreFactorizationMixin:
         """Deprecated alias for the ``(fourier_coefficients, factorization)`` pair.
 
         Reading it raises for ``('integrated', 'nvf')``: that combination is new and has no
-        legacy integer, which is the whole reason the keyword was split.
+        legacy integer, which is the whole reason the keyword was split. It reports the
+        *resolved* factorization, so on the smooth shape path (``modeling_type=2``) it reads 2
+        even though nobody wrote it -- same value :attr:`factorization` gives, and for the same
+        reason. It therefore also raises :class:`NotImplementedError` wherever that property
+        does, rather than reporting a code for a build that will not happen.
         """
         warnings.warn(
             "'fourier_type' is deprecated and will be removed; read 'fourier_coefficients' "
             "and 'factorization' instead.", DeprecationWarning, stacklevel=2)
-        code = to_fourier_type(self._fourier_coefficients, self._factorization)
+        factorization = self.factorization
+        code = to_fourier_type(self._fourier_coefficients, factorization)
         if code is None:
             raise ValueError(
                 f"fourier_coefficients={self._fourier_coefficients.value!r} with "
-                f"factorization={self._factorization.value!r} has no 'fourier_type' code; "
+                f"factorization={factorization.value!r} has no 'fourier_type' code; "
                 f"read those two attributes instead.")
         return code
 
@@ -304,6 +372,12 @@ class CoreFactorizationMixin:
         each record checks and why a traced replay cannot.
         """
         [setattr(self, k, v) for k, v in kwargs.items()]
+        # Same two refusals as `_conv_matrices`, in the same order, for the same reason: a
+        # record of a build that cannot happen is worth nothing, and a structure that gets one
+        # diagnosis from `freeze_geometry` and a different one from `conv_solve` sends the
+        # reader to the wrong place depending on which they called.
+        self._reject_unsupported_lattice()
+        factorization = self.factorization
         fto_x, fto_y = self.fto[0], self.fto[1]
 
         # The two axes decide independently what has to be frozen: NVF needs the normal
@@ -311,7 +385,7 @@ class CoreFactorizationMixin:
         # -- the combination the old integer could not spell -- needs both.
         normal_field = normal_field_source = compression = None
         if self._modeling_type_assigned == 0:
-            if self._factorization == Factorization.NVF:
+            if factorization == Factorization.NVF:
                 basis = self._geometry_lattice_for(None)
                 normal_field = _fac.normal_field_for_ucell(
                     self.ucell, fto_x, fto_y, lattice=basis)
@@ -396,6 +470,11 @@ class CoreFactorizationMixin:
           which is one expression in :func:`~fieldwave._core.analytic.shape_ft`. Overlapping
           *painted* layers are still refused inside that path: resolving an overlap clips
           against a rectangular cell.
+
+        The Li check below reads the *resolved* :attr:`factorization`, which is why a skewed
+        run on the smooth shape path no longer has to spell ``factorization='nvf'`` out: that
+        path resolves to NVF on its own, and demanding the keyword was this refusal reading the
+        unresolved default and mistaking it for a request.
         """
         if self.lattice_is_axis_aligned:
             return
@@ -405,15 +484,25 @@ class CoreFactorizationMixin:
                 common + 'the block modeler (modeling_type=1) rasterises onto a rectangular '
                 'grid, which is not implemented yet for a skewed cell. Use a raster ucell '
                 '(modeling_type=0) or analytic shapes (modeling_type=2).')
-        if self._factorization != Factorization.NVF:
+        factorization = self.factorization
+        if factorization != Factorization.NVF:
             raise NotImplementedError(
-                common + f"factorization={self._factorization.value!r} applies the inverse "
+                common + f"factorization={factorization.value!r} applies the inverse "
                 f'rule along the raster axes, which are not x and y once the cell is skewed, '
                 f"so it would answer plausibly and wrongly. Use factorization='nvf'.")
 
     def _conv_matrices(self, geometry=None):
         """Convolution matrices for the current structure: ``(epx, epy, epz_i, epxy, epyx)``."""
+        # Lattice first, then the rule -- the order is load-bearing. A skewed cell on the block
+        # path is unbuildable whatever rule is named, so reporting the *keyword* there would
+        # send the user to change the one thing that cannot help. The other way round is safe:
+        # `_reject_unsupported_lattice` reads the resolved `factorization` itself, so a skewed
+        # cell asking for a rule its path cannot express still gets told about the rule.
         self._reject_unsupported_lattice()
+        # Then read, unconditionally: this is the one call every build goes through, so it is
+        # where a rule the chosen path cannot express has to be refused rather than quietly
+        # replaced by the one that path does implement.
+        factorization = self.factorization
         fto_x, fto_y = self.fto[0], self.fto[1]
         epxy_conv_all = epyx_conv_all = None
 
@@ -426,7 +515,7 @@ class CoreFactorizationMixin:
             normal_field_source = None if geometry is None else geometry.normal_field_source
             compression = None if geometry is None else geometry.compression
 
-            if self._factorization == Factorization.LI:
+            if factorization == Factorization.LI:
                 if sampled:
                     epx_conv_all, epy_conv_all, epz_conv_i_all = \
                         _fac.to_conv_mat_raster_discrete(
@@ -452,14 +541,19 @@ class CoreFactorizationMixin:
                         compression=compression,
                         lattice=self._geometry_lattice_for(geometry))
 
-        elif self._modeling_type_assigned == 1:                    # vector
+        elif self._modeling_type_assigned == 1:                    # block -- Li only
+            # No branch on `factorization` here, and that is not an oversight: this path has
+            # one rule (see _FACTORIZATION_IMPLEMENTED_BY), and asking it for the other one
+            # was refused above rather than answered with this.
             ucell_block = self.modeling_block_instruction(
                 self.ucell, plans=None if geometry is None else geometry.block_grid,
                 shape_choices=None if geometry is None else geometry.shape_choices)
             epx_conv_all, epy_conv_all, epz_conv_i_all = _fac.to_conv_mat_block(
                 ucell_block, fto_x, fto_y)
 
-        elif self._modeling_type_assigned == 2:                    # analytic shapes
+        elif self._modeling_type_assigned == 2:                    # smooth shapes -- NVF only
+            # Likewise fixed: the epsilon tensor comes from the shapes' analytic normal field,
+            # so five matrices always, and `factorization='li'` was refused above.
             xp = _namespace_for_backend(self.backend)
             (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all,
              epz_conv_i_all) = _analytic.to_conv_mat_smooth_layers(

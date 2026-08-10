@@ -86,7 +86,10 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
                  device='cpu',
                  type_complex=torch.complex128,
                  fourier_coefficients=None,  # 'sampled' (default, DFS) | 'integrated' (closed-form series)
-                 factorization=None,         # 'li' (default) | 'nvf' (normal vector field)
+                 factorization=None,         # 'li' | 'nvf' (normal vector field); the
+                 # default resolves per modeling path -- 'li' on a raster and on the
+                 # vector modeler, 'nvf' on analytic shapes, which is the only rule
+                 # each of those last two implements. Naming the other one raises.
                  fourier_type=None,          # deprecated alias for the two keywords above
                  normal_grid=1024,  # normal-field sampling; sets the floor on shape gradients
                  # (a translation-invariant structure should give d/dcx == 0 exactly; the
