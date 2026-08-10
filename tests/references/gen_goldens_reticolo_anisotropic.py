@@ -16,6 +16,13 @@ Setup notes:
   V9-and-later feature; V10_2025 is what both were verified against.
 * ``oct2py`` does not carry complex matrices across reliably, so ``interface/reti_aniso.m``
   takes the real and imaginary parts separately.
+* What RETICOLO will and will not take, from its V10 manual — read this before adding cases:
+  a **uniform** layer accepts an arbitrary 3x3 tensor (page 1), a **patterned** one only a
+  diagonal tensor via ``parm.res1.change_index`` (pages 1 and 7), and the **substrate and
+  superstrate cannot be anisotropic at all** (page 1). Every case below is a uniform layer
+  between vacuum, which is the intersection of those. A magneto-optic substrate, or an
+  off-diagonal tensor inside a grating, has to go to a different oracle — see
+  ``docs/off-diagonal-slot-convention.md`` §8.
 * Energy conservation is checked at generation time, **for the Hermitian cases only**. Those
   are lossless, so a golden that does not sum to one there means the bridge is wired wrong —
   better to fail here than to freeze it and have the test measure the wiring instead of the

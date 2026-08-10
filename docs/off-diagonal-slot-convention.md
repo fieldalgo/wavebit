@@ -473,10 +473,20 @@ that does not exist yet (`anisotropic-materials.md` §3), so there is nothing to
 uniform-layer oracle could reach it if there were.
 
 It is, however, reachable when the time comes — though not by the route this document first claimed.
-RETICOLO's patterned anisotropic examples exist, but they express anisotropy through
-`parm.res1.change_index`, which its own documentation labels *anisotropie **diagonale***
-(`reticolo_allege_v10/res0.m:26`). A full 3x3 tensor is accepted only for a **uniform** texture. So
-RETICOLO covers a patterned *diagonal* tensor and nothing off-diagonal.
+RETICOLO draws the line between patterned and uniform, and its own V10 manual states it on page 1:
+
+> Diagonal anisotropy (`eps_xx != eps_yy != eps_zz`) can be incorporated in **structured grating
+> layers** and gratings with **uniform layers** having **arbitrary anisotropy** (`eps_xy != 0` …)
+> can also be handled
+
+So a patterned layer gets a diagonal tensor and nothing off-diagonal; a full 3x3 is accepted only
+where the layer is uniform. Two further constraints come with it, neither obvious from the examples
+and both worth knowing before building a case around them:
+
+* **The substrate and superstrate cannot be anisotropic** (manual, page 1). The goldens here have
+  vacuum on both sides, so it does not bite — but it rules out, say, a magneto-optic substrate.
+* The absorption-loss integral in `res3` is **not valid for uniform layers with non-diagonal
+  anisotropy** (manual, page 13). Efficiencies are unaffected; only that loss route is.
 
 The patterned off-diagonal oracle is S4, which takes a tensor material on a patterned region
 directly — real tensors only, which is enough. For a patterned tensor that is also *complex*,
