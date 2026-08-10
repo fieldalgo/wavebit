@@ -637,6 +637,17 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype,
     Multi-shape layers therefore keep the sampled field. Both halves of what that costs are
     pinned in ``test_shape_position_gradients.py``, the working one as a test and the broken one
     as a strict xfail, so neither can be inferred from the other.
+
+    **The forward answer is affected too, not only the gradient — keep every shape inside the
+    cell.** A shape straddling the boundary may be named in any period; ``cx`` and ``cx + Px``
+    are one structure. A single shape agrees exactly across periods because the phase carries
+    it. Several shapes do not: for a rod at ``cx`` = 0.10 / 1.10 / 2.10 beside a fixed second
+    rod, total transmission comes out 0.8532 / 0.8678 / 0.8665. Splitting the layer's inputs
+    puts it here rather than in the transform — across one period the permittivity coefficients
+    agree to 1.1e-15 while ``<nx**2>`` differs by 3.1e-1. The boundary path inherits it
+    identically, bit for bit, since it takes its field from the same place. An optimizer left
+    free to move a shape will walk it over the edge and climb the artefact, so clamp the
+    centres. Pinned by ``test_a_multishape_layer_is_not_periodic_across_the_cell_edge``.
     """
     Px, Py = period[0], period[1]
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32

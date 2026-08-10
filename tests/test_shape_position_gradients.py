@@ -30,6 +30,7 @@ import numpy as np
 import pytest
 
 import fieldwave
+from fieldwave._core import analytic as _an
 
 pytest.importorskip('jax')
 import jax                                                     # noqa: E402
@@ -405,3 +406,50 @@ def test_a_layer_of_two_shapes_is_translation_invariant_too():
 
     values = [total(d) for d in np.linspace(0.0, 0.2, 9)]
     assert np.ptp(values) < 1e-12, np.ptp(values)
+
+
+def test_a_multishape_layer_is_not_periodic_across_the_cell_edge():
+    """Pins the *forward* half of the same defect, which is easy to meet by accident.
+
+    A shape straddling the cell boundary can be named in any period -- ``cx`` and ``cx + Px``
+    are one structure -- and a single-shape layer agrees across periods exactly, because the
+    phase in ``normal_projector_coeffs`` carries it. A multi-shape layer does not: its field is
+    a normalized sum that no single phase translates, so the clipped window comes back and the
+    answer depends on which period the shape was named in.
+
+    This is an assertion of what the code *does*, not of what it should do. It is here so the
+    day someone fixes ``normal_projector_coeffs`` for several shapes, this fails loudly and
+    gets deleted rather than quietly continuing to describe a repaired path.
+
+    The practical consequence is in the docstring: keep every shape inside the cell, and clamp
+    the centres if an optimizer is moving them.
+    """
+    cfg = dict(backend=0, period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), fto=(4, 4),
+               n_top=1.0, n_bot=1.45, theta=0.0, phi=None, pol=0.0)
+    fixed = dict(type='rectangle', cx=0.72, cy=0.62, lx=0.26, ly=0.30, angle=0.0, n_index=2.1)
+
+    def total(cx, shapes_after):
+        moving = dict(type='rectangle', cx=cx, cy=0.5, lx=0.30, ly=0.24, angle=0.0,
+                      n_index=3.48)
+        ucell = [dict(n_base=1.0, shapes=[moving] + shapes_after)]
+        return float(np.sum(np.asarray(
+            fieldwave.rcwa(ucell=ucell, normal_grid=256, **cfg).conv_solve().T)).real)
+
+    # one shape: exact across periods, which is what makes the contrast meaningful
+    alone = [total(cx, []) for cx in (0.10, 1.10, 2.10)]
+    assert np.ptp(alone) < 1e-12, alone
+
+    # two shapes: not periodic. Spread is ~1.5e-2 -- far above any tolerance a caller would set
+    pair = [total(cx, [fixed]) for cx in (0.10, 1.10, 2.10)]
+    assert np.ptp(pair) > 1e-3, pair
+
+    # and it is the normal field alone: the permittivity coefficients are periodic
+    shapes = lambda cx: [dict(type='rectangle', cx=cx, cy=0.5, lx=0.30, ly=0.24, angle=0.0,
+                              n_index=3.48), fixed]
+    eps = [np.asarray(_an.assemble_eps_coeffs(np, shapes(cx), 1.0, 4, 4, (1.0, 1.0),
+                                              np.complex128)) for cx in (0.10, 1.10)]
+    assert np.max(np.abs(eps[0] - eps[1])) < 1e-13
+    nxx = [np.asarray(_an.normal_projector_coeffs(np, shapes(cx), (256, 256), (1.0, 1.0),
+                                                  4, 4, np.complex128)[0])
+           for cx in (0.10, 1.10)]
+    assert np.max(np.abs(nxx[0] - nxx[1])) > 1e-2
