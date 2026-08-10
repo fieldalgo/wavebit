@@ -84,7 +84,7 @@ solver = fieldwave.rcwa(
 )
 
 result = solver.conv_solve()
-print(result.de_ri.sum(), result.de_ti.sum())   # 0.20538982716989146 0.7946101728301077
+print(result.de_ri.sum(), result.de_ti.sum())   # 0.2053316282584784 0.7946683717415217
 ```
 
 `de_ri` and `de_ti` are the reflected and transmitted diffraction efficiencies, one entry per
