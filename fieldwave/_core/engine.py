@@ -26,8 +26,9 @@ from .solve_2d import solve_2d as _solve_2d
 
 # Connecting algorithm -> the core solve for each grating type. TMM propagates an enhanced
 # transmittance matrix; SMM cascades per-layer scattering matrices. Same modes, same boundary
-# conventions, same answers (~1e-14); SMM costs ~1.1-1.4x and cannot reconstruct fields. The
-# two solves in each row take identical arguments, which is what makes the dispatch a lookup.
+# conventions, same answers (~1e-14), both able to reconstruct fields; SMM costs ~1.1-1.4x on
+# efficiencies and a little more once it also recovers the per-layer amplitudes. The two
+# solves in each row take identical arguments, which is what makes the dispatch a lookup.
 _SOLVES = {
     'TMM': {'1d': _solve_1d, 'conical': _solve_1d_conical, '2d': _solve_2d},
     'SMM': {'1d': _smm_1d, 'conical': _smm_1d_conical, '2d': _smm_2d},

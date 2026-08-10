@@ -102,6 +102,29 @@ def test_tmm_and_smm_agree(fto, thickness):
     assert np.allclose(tmm.de_ti, smm.de_ti, rtol=1e-9, atol=1e-12)
 
 
+@pytest.mark.parametrize('thickness', [500.0, 10_000.0])
+def test_tmm_and_smm_fields_agree_through_a_thick_layer(thickness):
+    """The near field too, not only the efficiencies — the harder half for the SMM.
+
+    SMM does not carry per-layer amplitudes; it recovers them after the cascade, and that
+    recovery inverts a matrix built from the layer's interfaces and everything below it. Deep
+    in the evanescent regime is where such an inverse would degrade if the reconstruction had
+    picked the wrong reference plane, so this is the case that pins the choice.
+    """
+    cells = []
+    for algo in ('TMM', 'SMM'):
+        solver = fieldwave.rcwa(
+            backend=0, wavelength=400.0, period=[3000.0], fto=[40, 0],
+            n_top=1.0, n_bot=1.5, theta=0.0, phi=0.0, pol=0.0,
+            ucell=_grating(), thickness=[thickness], connecting_algo=algo)
+        solver.conv_solve()
+        cells.append(np.asarray(solver.calculate_field(res_x=8, res_y=1, res_z=6)))
+
+    tmm, smm = cells
+    assert np.all(np.isfinite(np.abs(tmm))) and np.all(np.isfinite(np.abs(smm)))
+    assert np.max(np.abs(tmm - smm)) < 1e-9 * np.max(np.abs(tmm))
+
+
 def test_tmm_and_smm_agree_on_a_lossy_stack():
     tmm = _solve(fto=30, thickness=5_000.0, n_hi=0.15 + 3.5j, period=2000.0,
                  wavelength=500.0, algo='TMM')

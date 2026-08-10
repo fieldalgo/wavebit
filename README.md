@@ -247,8 +247,9 @@ solver = fieldwave.rcwa(backend=0, connecting_algo='SMM', ...)   # 'TMM' is the 
 
 Both share the same eigenmodes and boundary conventions and agree to ~1e-14; SMM costs
 ~1.1-1.4x, cascades layer responses that can be reused independently, and is the formulation
-most published results are stated in. Field reconstruction (`calculate_field`) needs the TMM
-path.
+most published results are stated in. Field reconstruction (`calculate_field`) works from
+either — the SMM recovers the per-layer amplitudes from its cascade afterwards, which is what
+takes it to ~1.3-1.6x.
 
 ## Conventions
 

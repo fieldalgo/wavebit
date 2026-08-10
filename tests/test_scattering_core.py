@@ -9,7 +9,8 @@ pinned to the legacy results in test_golden_legacy_parity.py. So the properties 
                    even if both were wrong the same way, so it is worth its own assertion);
   * wiring       — connecting_algo='SMM' reaches the core solve, and an unknown algo is
                    rejected with a useful message;
-  * scope        — field reconstruction after an SMM solve fails loudly, not with a NaN cell;
+  * fields       — the near field reconstructed after an SMM solve, and the per-layer state
+                   it is built from, match the TMM's, on an axis-aligned and a skewed cell;
   * portability  — same numbers on numpy / jax / torch, and gradients still flow.
 """
 import numpy as np
@@ -175,11 +176,140 @@ def test_unknown_connecting_algo_is_rejected():
         _solve('RCWA-ish', kwargs)
 
 
-def test_field_reconstruction_after_smm_raises():
-    """SMM never builds the per-layer amplitudes fields need — say so, don't emit NaNs."""
-    solver = fieldwave.rcwa(backend=0, connecting_algo='SMM', **CASES_1D[0][1])
+def _field(algo, kwargs, **res):
+    solver = fieldwave.rcwa(backend=0, connecting_algo=algo, **kwargs)
     solver.conv_solve()
-    with pytest.raises(NotImplementedError, match='TMM'):
+    cell = solver.calculate_field(set_field_input=(True, True, True), **res)
+    return solver, np.array(cell)
+
+
+@pytest.mark.parametrize('name,kwargs,kind', ALL_CASES, ids=[c[0] for c in ALL_CASES])
+def test_smm_field_matches_tmm(name, kwargs, kind):
+    """The reconstructed near field, not just the far field, on every grating type.
+
+    The SMM cascade throws away what field reconstruction walks, so it recovers the per-layer
+    amplitudes from its own split-plane amplitudes afterwards. This is the check that the
+    recovery is the same physical state and not merely a plausible one — including for the
+    TE / TM incidence variants, which have their own amplitude columns.
+    """
+    _, tmm = _field('TMM', kwargs, res_x=6, res_y=6, res_z=5)
+    _, smm = _field('SMM', kwargs, res_x=6, res_y=6, res_z=5)
+    assert tmm.shape == smm.shape
+    scale = np.max(np.abs(tmm))
+    assert np.max(np.abs(tmm - smm)) < 1e-10 * scale, np.max(np.abs(tmm - smm)) / scale
+
+
+@pytest.mark.parametrize('name,kwargs,kind', ALL_CASES, ids=[c[0] for c in ALL_CASES])
+def test_smm_field_state_matches_tmm(name, kwargs, kind):
+    """The recovered state itself is the TMM's, layer by layer — not just its field.
+
+    Both algorithms hand ``fields`` the same three things per layer: the incident amplitude
+    ``T1``, the block advancing it to the next layer, and the block turning it into that
+    layer's up-going amplitude. Those are unique given the modes (which both take from the
+    same builders), so they must agree matrix for matrix. Only ``W`` / ``V`` / ``q`` are gauge
+    here, and they are shared, not recomputed.
+
+    The exception is the bottom layer — entry ``0``, since the list runs bottom-to-top. Its
+    two blocks describe the amplitude handed *past* the stack, which the reconstruction never
+    reads, and the two algorithms express that one in different bases (see ``_field_state``).
+    What is defined there is their product, which is what the reconstruction actually forms.
+    """
+    tmm = fieldwave.rcwa(backend=0, connecting_algo='TMM', **kwargs)
+    smm = fieldwave.rcwa(backend=0, connecting_algo='SMM', **kwargs)
+    tmm.conv_solve()
+    smm.conv_solve()
+
+    a, b = np.array(tmm.T1), np.array(smm.T1)
+    assert a.shape == b.shape
+    assert np.max(np.abs(a - b)) < 1e-10 * np.max(np.abs(a))
+
+    def close(x, y, where):
+        # Floored at 1: an interface between identical materials makes B identically zero,
+        # and a relative bound on a zero matrix compares two roundoff patterns.
+        scale = max(float(np.max(np.abs(x))), 1.0)
+        assert np.max(np.abs(x - y)) < 1e-9 * scale, (where, np.max(np.abs(x - y)))
+
+    assert len(tmm.layer_info_list) == len(smm.layer_info_list) == len(kwargs['thickness'])
+    for i, (li_t, li_s) in enumerate(zip(tmm.layer_info_list, smm.layer_info_list)):
+        if i == 0:                                     # bottom layer: only the product is fixed
+            close(np.array(li_t[6]) @ np.array(li_t[5]),
+                  np.array(li_s[6]) @ np.array(li_s[5]), (i, 'B@A_i'))
+            continue
+        for j, nm in ((5, 'A_i'), (6, 'B')):
+            close(np.array(li_t[j]), np.array(li_s[j]), (i, nm))
+
+
+# theta=0, n_bot=1.5 and lambda/period=1/4 put order m=+-6 exactly at the substrate cutoff:
+# kx = 1.5 = n_bot, so kz_bot = 0 and the substrate's own mode basis is singular. Recovering
+# the amplitudes in that basis is the natural-looking choice and it dies here; the gap basis
+# the recovery actually uses cannot, by construction of eps_gap.
+CUTOFF = dict(ucell=np.array([[[3., 3., 1., 1., 3., 1.]], [[2., 2., 2., 1., 1., 1.]]]),
+              thickness=[300.0, 500.0], n_top=1.0, n_bot=1.5, theta=0.0,
+              wavelength=500.0, period=[2000.0], fto=[8, 0])
+
+
+@pytest.mark.parametrize('extra', [dict(pol=0), dict(pol=1), dict(pol=0.4, phi=0.3)],
+                         ids=['te', 'tm', 'conical'])
+def test_smm_field_with_an_order_exactly_at_the_substrate_cutoff(extra):
+    """A retained order sitting at kz_bot = 0 is a real configuration, not a pathology."""
+    kwargs = dict(CUTOFF, **extra)
+    solver = fieldwave.rcwa(backend=0, connecting_algo='SMM', **kwargs)
+    kz = np.sqrt(np.array(solver.n_bot, dtype=complex) ** 2
+                 - np.array(solver.get_kx_ky_vector(kwargs['wavelength'])[0]) ** 2)
+    assert np.min(np.abs(kz)) < 1e-12, 'premise: an order must sit exactly at cutoff'
+
+    _, tmm = _field('TMM', kwargs, res_x=6, res_y=6, res_z=4)
+    _, smm = _field('SMM', kwargs, res_x=6, res_y=6, res_z=4)
+    assert np.all(np.isfinite(np.abs(smm)))
+    assert np.max(np.abs(tmm - smm)) < 1e-10 * np.max(np.abs(tmm))
+
+
+# A rod on a hexagonal cell, sampled on that cell's own parametric grid. The skewed field
+# path indexes its output by the lattice coordinates (u, v), not by (x, y) -- both algorithms
+# go through the same reconstruction, so agreement here is about the amplitudes reaching it.
+HEX_P = 400.0
+HEX = np.column_stack(([HEX_P, 0.0], [HEX_P / 2, HEX_P * np.sqrt(3) / 2]))
+
+
+def _hex_rod(n=48, radius=90.0):
+    a1, a2 = HEX[:, 0], HEX[:, 1]
+    t = (np.arange(n) + 0.5) / n
+    U, V = np.meshgrid(t, t)
+    pts = U[..., None] * a1 + V[..., None] * a2
+    centre = 0.5 * (a1 + a2)
+    inside = np.zeros(pts.shape[:2], dtype=bool)
+    for i in (-1, 0, 1):                       # minimum image over the lattice
+        for j in (-1, 0, 1):
+            s = i * a1 + j * a2
+            inside |= ((pts[..., 0] - centre[0] - s[0]) ** 2
+                       + (pts[..., 1] - centre[1] - s[1]) ** 2) <= radius ** 2
+    cell = np.full((1, n, n), 1.0)
+    cell[0][inside] = 2.4
+    return cell
+
+
+def test_smm_field_on_a_skewed_cell_matches_tmm():
+    """The two capabilities were added independently and had never met.
+
+    Non-orthogonal cells arrived while field reconstruction was still TMM-only, so the skewed
+    reconstruction has only ever been exercised through the TMM. Nothing in the amplitude
+    recovery reads the lattice -- it works in the mode and gap bases, which the basis change
+    never touches -- and this is the test that says so rather than assuming it.
+    """
+    kwargs = dict(ucell=_hex_rod(), period=[HEX_P, HEX_P], fto=[4, 4], thickness=[150.0],
+                  wavelength=900.0, n_top=1.0, n_bot=1.0, theta=0.1, phi=0.3, psi=0.4,
+                  lattice=HEX, factorization='nvf')
+    _, tmm = _field('TMM', kwargs, res_x=6, res_y=6, res_z=4)
+    _, smm = _field('SMM', kwargs, res_x=6, res_y=6, res_z=4)
+    assert tmm.shape == smm.shape
+    assert np.all(np.isfinite(np.abs(smm)))
+    assert np.max(np.abs(tmm - smm)) < 1e-10 * np.max(np.abs(tmm))
+
+
+def test_field_before_solve_raises():
+    """No solve, no amplitudes — fail with the reason rather than on a None."""
+    solver = fieldwave.rcwa(backend=0, connecting_algo='SMM', **CASES_1D[0][1])
+    with pytest.raises(RuntimeError, match='solve'):
         solver.calculate_field(res_x=4, res_z=4)
 
 
@@ -268,6 +398,26 @@ def test_cross_backend(name, kwargs, kind, backend):
 
     assert np.allclose(np.array(ri0), np.asarray(ri), atol=1e-10, rtol=0)
     assert np.allclose(np.array(ti0), np.asarray(ti), atol=1e-10, rtol=0)
+
+
+@pytest.mark.parametrize('backend,name', [(1, 'jax'), (2, 'torch')], ids=['jax', 'torch'])
+@pytest.mark.parametrize('case', [CASES_1D[2], CASES_CONICAL[1], CASES_2D[0]],
+                         ids=['1d', 'conical', '2d'])
+def test_smm_field_cross_backend(case, backend, name):
+    """The amplitude recovery is Array-API code like the rest — same field on every backend."""
+    pytest.importorskip(name)
+    if name == 'jax':
+        # `as _`: a plain `import fieldwave.on_jax` would rebind `fieldwave` as a local.
+        import fieldwave.on_jax as _   # noqa: F401  (enables x64; RCWA needs double precision)
+    kwargs = case[1]
+    _, reference = _field('SMM', kwargs, res_x=5, res_y=5, res_z=4)
+
+    solver = fieldwave.rcwa(backend=backend, connecting_algo='SMM', **kwargs)
+    solver.conv_solve(geometry=solver.freeze_geometry())
+    cell = np.asarray(solver.calculate_field(res_x=5, res_y=5, res_z=4,
+                                             set_field_input=(True, True, True)))
+    assert cell.shape == reference.shape
+    assert np.max(np.abs(cell - reference)) < 1e-10 * np.max(np.abs(reference))
 
 
 @pytest.mark.parametrize('pol', [0, 1], ids=['te', 'tm'])

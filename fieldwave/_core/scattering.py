@@ -17,7 +17,8 @@ What it is *not*: a rescue from TMM instability. This TMM is the enhanced-transm
 so it is already stable; both algorithms only ever evaluate ``exp(-k0*q*d)`` with ``Re(q) >= 0``
 (principal root) and only inside bounded products. Measured on thick, strongly evanescent and
 high-truncation stacks the two agree to ~1e-14 with no energy drift either way, and SMM costs
-~1.1-1.4x TMM (the per-layer ``eig`` dominates both).
+~1.1-1.4x TMM (the per-layer ``eig`` dominates both), or ~1.3-1.6x once it also recovers the
+field-reconstruction state described below.
 
 Formulation, in the conventions this codebase already uses (see :func:`solve_1d`):
 
@@ -32,9 +33,15 @@ Formulation, in the conventions this codebase already uses (see :func:`solve_1d`
   for the coupled path, unit primary amplitude for 1D TE/TM. These are the same incident
   amplitudes the TMM final matching solves against.
 
-Not supported: field reconstruction. ``calculate_field`` needs the per-layer amplitude
-propagators that the TMM recursion produces as a by-product; the SMM path returns
-``layer_info_list = []`` and :mod:`fieldwave._core.fields` raises a clear error on it.
+Field reconstruction works from either algorithm. What :mod:`fieldwave._core.fields` walks is
+per-layer mode amplitudes, which the TMM recursion happens to leave behind and the SMM cascade
+does not — so the SMM recovers them afterwards from its own split-plane amplitudes and hands
+over the same ``layer_info_list`` / ``T1`` state (see :func:`_field_state`). Same is close to
+literal: the recovered blocks match the TMM's to ~1e-15 for every layer but the bottom one,
+where the two differ by a basis the reconstruction never resolves. They have to match, because
+the amplitudes they describe are unique given the modes, and the modes come from the same
+builders. That recovery is a second pass over the stack, done only under ``full=True``, and it
+is where the extra ~10-20% in the cost quoted above goes.
 """
 from .backend import array_namespace, as_array, check_finite, check_physical
 from .conventions import boundary_kz
@@ -120,6 +127,89 @@ def _prepare(epx_conv_all, kx, ky=None):
     return xp, kx.dtype, kx, ky
 
 
+# ------------------------------------------------------------- field-reconstruction state
+# The cascade above answers at the outer ports only. Field reconstruction needs what is
+# inside: each layer's own down- and up-going mode amplitudes. Both are recovered from the
+# split-plane amplitudes of the same cascade, and then handed over in the exact form
+# `fields` already consumes from the TMM — see `_field_state` for that contract.
+
+def _below_reflections(xp, I, S_layers, S_trn):
+    """Reflection of everything below each split plane, in the gap basis.
+
+    ``gamma[p]`` maps the down-going gap amplitude at split plane ``p`` to the up-going one:
+    it is the ``S11`` block of ``L_p * ... * L_{n-1} * S_trn``. Plane ``p`` sits directly above
+    layer ``p``, so plane ``n`` faces the substrate interface alone.
+
+    Built bottom-up, one plane at a time. Only the ``S11`` block of each partial cascade is
+    ever used, and that block costs a single inverse — a fraction of a full Redheffer star.
+    """
+    n = len(S_layers)
+    gamma = [None] * (n + 1)
+    gamma[n] = S_trn[0]
+    for p in range(n - 1, -1, -1):
+        s11, s12, s21, s22 = S_layers[p]
+        below = gamma[p + 1]
+        gamma[p] = s11 + s12 @ xp.linalg.inv(I - below @ s22) @ below @ s21
+    return gamma
+
+
+def _field_state(xp, I, S_ref, S_trn, S_layers, AB, c_inc):
+    """Per-layer ``(a_i, b)`` blocks and the top-layer amplitude ``T1``, top-to-bottom.
+
+    Field reconstruction walks the stack downward carrying one vector: ``T_i``, layer ``i``'s
+    down-going mode amplitude at its own top plane. It asks each layer for two matrices — one
+    that advances that vector to the next layer (``T_{i+1} = a_i X_i T_i``) and one that turns
+    it into the layer's up-going amplitude at its bottom plane (``c2_i = b_i T_{i+1}``). The
+    TMM produces both as by-products of its recursion; the SMM has to reconstruct them, and
+    away from the bottom layer they come out as the *same* matrices, because the down-going
+    amplitude at a plane determines everything below it uniquely.
+
+    At the plane below layer ``i`` the gap amplitudes are ``(g, gamma[i+1] g)`` for some ``g``,
+    so a layer's amplitudes there are linear in ``g``: down is ``M_i g`` and up is ``N_i g``,
+    with ``M_i = (A_i + B_i gamma)/2`` and ``N_i = (B_i + A_i gamma)/2`` from the gap -> layer
+    interface. Eliminating ``g`` between neighbours gives the two matrices asked for.
+
+    The bottom layer has no layer below it and carries ``g`` itself onward, which is why its
+    two blocks are the one place this state differs from the TMM's (their product, the only
+    combination the reconstruction forms, still agrees). Going further and expressing that
+    vector in the substrate's own basis — matching the TMM exactly — would mean inverting the
+    substrate's ``V``, and that matrix is singular whenever a retained order sits exactly at
+    cutoff, ``kz_bot == 0``. The gap basis is the one basis this formulation guarantees
+    invertible, by its choice of ``eps_gap``; the value handed past the bottom layer is never
+    read anyway.
+
+    Reference planes matter here too: ``b_i`` is anchored at the layer *bottom*, which is what
+    keeps every exponential in it decaying. Anchoring the up-going amplitude at the top plane
+    instead would need ``X^-1``, and that is exactly the growing exponential both connecting
+    algorithms are built to avoid.
+    """
+    n = len(S_layers)
+    if n == 0:
+        return [], None
+
+    gamma = _below_reflections(xp, I, S_layers, S_trn)
+
+    # Down-going gap amplitude just below the superstrate interface, closing the loop over
+    # everything below it: g = S_ref21 c_inc + S_ref22 (gamma[0] g).
+    g_top = xp.linalg.inv(I - S_ref[3] @ gamma[0]) @ (S_ref[2] @ c_inc)
+    A_0, B_0 = AB[0]
+    T1 = 0.5 * (A_0 + B_0 @ gamma[0]) @ g_top
+
+    blocks = []
+    for i in range(n):
+        A, B = AB[i]
+        below = gamma[i + 1]
+        M = 0.5 * (A + B @ below)
+        N = 0.5 * (B + A @ below)
+        if i + 1 < n:
+            A_next, B_next = AB[i + 1]
+            M_next = 0.5 * (A_next + B_next @ below)
+            blocks.append((M_next @ xp.linalg.inv(M), N @ xp.linalg.inv(M_next)))
+        else:
+            blocks.append((xp.linalg.inv(M), N))    # carried on in the gap basis, M_next = I
+    return blocks, T1
+
+
 # --------------------------------------------------------------------------------- 1D TE / TM
 
 def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
@@ -130,8 +220,8 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     Same arguments and same returns as :func:`fieldwave._core.solve_1d.solve_1d`, so the two are
     interchangeable behind ``connecting_algo``.
 
-    With ``full=True`` the returned mapping carries ``layer_info_list = []`` and ``T1 = None``:
-    field reconstruction is a TMM-only capability (see the module docstring).
+    With ``full=True`` the returned mapping also carries the ``layer_info_list`` / ``T1`` state
+    field reconstruction consumes, recovered from the cascade by :func:`_field_state`.
     """
     xp, C, kx, _ = _prepare(epx_conv_all, kx)
 
@@ -162,14 +252,23 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     W_top = W_bot = W_gap = I    # homogeneous half-spaces are diagonal in this basis
 
     # --- cascade: superstrate interface, every layer top-to-bottom, substrate interface ----
-    S = _s_reflection(xp, W_top, V_top, W_gap, V_gap)
+    S_ref = _s_reflection(xp, W_top, V_top, W_gap, V_gap)
+    S_trn = _s_transmission(xp, W_bot, V_bot, W_gap, V_gap)
+    S_layers, AB, modes = [], [], []
+    S = S_ref
     for layer_index in range(_n_layers(thickness)):
         W, V, q = layer_modes_1d(xp, pol, kx, I, epx_conv_all[layer_index],
                                  epy_conv_all[layer_index], epz_conv_i_all[layer_index], C)
-        X = _diag(xp, xp.exp(-k0 * q * thickness[layer_index]))
+        d = thickness[layer_index]
+        X = _diag(xp, xp.exp(-k0 * q * d))
         A, B = _ab_matrices(xp, W, V, W_gap, V_gap)
-        S = redheffer_star(xp, I, S, _s_layer(xp, A, B, X))
-    S = redheffer_star(xp, I, S, _s_transmission(xp, W_bot, V_bot, W_gap, V_gap))
+        S_layer = _s_layer(xp, A, B, X)
+        S = redheffer_star(xp, I, S, S_layer)
+        if full:
+            S_layers.append(S_layer)
+            AB.append((A, B))
+            modes.append([epz_conv_i_all[layer_index], W, V, q, d])
+    S = redheffer_star(xp, I, S, S_trn)
 
     # --- incidence -> amplitudes -> efficiency --------------------------------------------
     delta = xp.reshape(xp.astype(_unit(xp, ff_x, ff_x // 2), C), (ff_x, 1))
@@ -202,17 +301,25 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
         res = _pack(R, zeros_amp, Tt, zeros_amp, de_ri, zeros_eff, de_ti, zeros_eff)
     else:
         res = _pack(zeros_amp, R, zeros_amp, Tt, zeros_eff, de_ri, zeros_eff, de_ti)
-    return {'res': res, 'layer_info_list': [], 'T1': None}
+
+    blocks, T1 = _field_state(xp, I, S_ref, S_trn, S_layers, AB, delta)
+    # Bottom-to-top, the order field reconstruction walks in reverse (as the TMM appends it).
+    layer_info_list = [m + list(b) for m, b in zip(modes, blocks)][::-1]
+    if T1 is not None:
+        T1 = xp.reshape(T1, (ff_x,))    # the 1D path carries T1 as a plain vector
+    return {'res': res, 'layer_info_list': layer_info_list, 'T1': T1}
 
 
 # ------------------------------------------------------------------- coupled s/p (conical, 2D)
 
 def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
-            layer_modes, full):
+            layer_modes, epz_conv_i_all, full):
     """Shared SMM cascade + matching for the coupled s/p paths (conical and 2D).
 
-    ``layer_modes(layer_index)`` returns that layer's ``(big_W, big_V, q)`` in the s/p boundary
-    basis; everything else — half-spaces, gap, cascade, incidence, efficiencies — is common.
+    ``layer_modes(layer_index)`` returns that layer's ``(big_W, big_V, q, W, V)``: the mode
+    matrices in the s/p boundary basis that the cascade joins layers through, then the raw
+    (unrotated) pair that field reconstruction expands the same amplitudes with. Everything
+    else — half-spaces, gap, cascade, incidence, efficiencies — is common.
     """
     kx_g, ky_g = order_grid_kxy(xp, kx, ky)
     ff_y, ff_x = kx_g.shape
@@ -242,13 +349,22 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     W_gap = _block(xp, [[I, O], [O, -1j * _diag(xp, 1 / eps_gap)]])
     V_gap = _block(xp, [[-1j * I, O], [O, I]])
 
-    S = _s_reflection(xp, W_top, V_top, W_gap, V_gap)
+    S_ref = _s_reflection(xp, W_top, V_top, W_gap, V_gap)
+    S_trn = _s_transmission(xp, W_bot, V_bot, W_gap, V_gap)
+    S_layers, AB, modes = [], [], []
+    S = S_ref
     for layer_index in range(_n_layers(thickness)):
-        big_W, big_V, q = layer_modes(layer_index)
-        big_X = _diag(xp, xp.exp(-k0 * q * thickness[layer_index]))
+        big_W, big_V, q, W, V = layer_modes(layer_index)
+        d = thickness[layer_index]
+        big_X = _diag(xp, xp.exp(-k0 * q * d))
         A, B = _ab_matrices(xp, big_W, big_V, W_gap, V_gap)
-        S = redheffer_star(xp, big_I, S, _s_layer(xp, A, B, big_X))
-    S = redheffer_star(xp, big_I, S, _s_transmission(xp, W_bot, V_bot, W_gap, V_gap))
+        S_layer = _s_layer(xp, A, B, big_X)
+        S = redheffer_star(xp, big_I, S, S_layer)
+        if full:
+            S_layers.append(S_layer)
+            AB.append((A, B))
+            modes.append([epz_conv_i_all[layer_index], W, V, q, d])
+    S = redheffer_star(xp, big_I, S, S_trn)
 
     # --- incidence ------------------------------------------------------------------------
     # Amplitudes are (E_s, H_p) by construction of W/V above, so the incident column is the
@@ -292,8 +408,14 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
         return eff[0][0] + eff[1][0], eff[2][0] + eff[3][0]
 
     packed = [_pack(R_s[i], R_p[i], T_s[i], T_p[i], *(e[i] for e in eff)) for i in range(3)]
+
+    blocks, T1 = _field_state(xp, big_I, S_ref, S_trn, S_layers, AB, c_inc)
+    layer_info_list = [m + list(b) for m, b in zip(modes, blocks)][::-1]
+    if T1 is not None:
+        # One column per incidence variant (psi, TE, TM), as the TMM stacks them.
+        T1 = xp.stack([T1[:, i:i + 1] for i in range(n_inc)])
     return {'res': packed[0], 'res_te_inc': packed[1], 'res_tm_inc': packed[2],
-            'layer_info_list': [], 'T1': None}
+            'layer_info_list': layer_info_list, 'T1': T1}
 
 
 def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
@@ -323,10 +445,12 @@ def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
             xp, Kx, Ky, Kx2, Ky2, I, epx_conv_all[layer_index],
             epy_conv_all[layer_index], epz_conv_i_all[layer_index], C)
         big_W, big_V = sp_modes_1d_conical(xp, F_c, F_s, W1, W2, V_11, V_12, V_21, V_22)
-        return big_W, big_V, xp.concat([q1, q2])
+        W = _block(xp, [[W1, W2]])
+        V = _block(xp, [[V_11, V_12], [V_21, V_22]])
+        return big_W, big_V, xp.concat([q1, q2]), W, V
 
     return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
-                   layer_modes, full)
+                   layer_modes, epz_conv_i_all, full)
 
 
 def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
@@ -358,7 +482,7 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
                                  epy_conv_all[layer_index], epz_conv_i_all[layer_index],
                                  epxy_conv, epyx_conv, C)
         big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, ff_xy)
-        return big_W, big_V, q
+        return big_W, big_V, q, W, V
 
     return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
-                   layer_modes, full)
+                   layer_modes, epz_conv_i_all, full)

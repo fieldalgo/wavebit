@@ -30,14 +30,13 @@ def _dev(x):
 def _require_solved(T1, layer_info_list):
     """Reject the states that cannot produce a field, with the reason.
 
-    The SMM connecting algorithm cascades scattering matrices and never forms the per-layer
-    amplitude propagators this reconstruction walks, so it leaves both of these empty.
+    Both connecting algorithms fill this state (the SMM recovers it from its cascade), so an
+    empty one means no solve has run — or a stack with no layers, which has no interior.
     """
     if T1 is None or len(layer_info_list) == 0:
-        raise NotImplementedError(
-            'field reconstruction needs the per-layer amplitudes from a TMM solve; '
-            "run the solve with connecting_algo='TMM' (SMM returns efficiencies and "
-            'boundary amplitudes only), or solve before asking for the field.')
+        raise RuntimeError(
+            'field reconstruction needs the per-layer amplitudes a solve leaves behind: '
+            'run conv_solve (or solve) first, on a stack with at least one layer.')
 
 
 def _diag_exp(xp, diag_vals, n):
