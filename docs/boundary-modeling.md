@@ -69,6 +69,29 @@ cheaper, and identical to `combine='add'` as it was before. Sending `'paint'` do
 path regardless would make two names for one structure return different numbers — measured 0.8%
 apart on disjoint rods, because the two paths extend the normal differently.
 
+### Which path a layer took
+
+**There is no `modeling_type` for this path**, and the omission is deliberate rather than
+pending. `modeling_type` is a property of the whole solver, decided from the *type* of `ucell`
+alone — 0 raster, 1 block, 2 smooth. The choice between boundary and the closed form is taken
+**per layer**, by the loop in `to_conv_mat_smooth_layers`, from the shapes' actual coordinates.
+One smooth `ucell` can have its first layer resolved into polygons and its second transformed in
+closed form; a solver-wide integer cannot say that. Both layers report `modeling_type == 2`.
+
+Two consequences worth keeping straight:
+
+- The four rows of the table above are not four settings to pick between. The first three are
+  `ucell` types; the fourth is what the third *becomes*, layer by layer, where it has to.
+- What records the choice is `geometry.boundary_plans`: a layer's slot holds a plan if that layer
+  resolved, and `None` if it stayed on the closed form. That, not `modeling_type`, is what to
+  read when you want to know which happened.
+
+Nothing else about such a layer changes, which is the other half of why the integer was not
+split. Boundary and smooth share one option contract — `factorization='nvf'` and
+`fourier_coefficients='integrated'`, both fixed, neither a choice — and one coordinate
+convention, absolute lengths in the units of `period`. A separate code would duplicate every
+entry in `engine.py`'s refusal tables and distinguish nothing a user can act on.
+
 ## Differentiability
 
 Split in two halves, which is the whole reason a discrete geometric decision does not stop a
@@ -92,6 +115,18 @@ res = solver.conv_solve(geometry=solver.freeze_geometry())
 
 A gradient runs from `(cx, cy, lx, ly, angle)` through the replay, the polygon transform and the
 normal field to the convolution matrices, and matches finite differences to 2.3e-08.
+
+### Freeze before you trace, or the overlap goes unnoticed
+
+The routing test of the previous section compares coordinates, and a tracer is not a coordinate:
+`analytic._primitives` reads a backend's refusal to hand over a value as "this is traced" and
+returns `None`, after which both `layer_needs_resolving` and `check_layer_combination` return
+without deciding anything. That is the right behaviour *given* the assumption it is written on — a
+traced call has already had its eager pass through `freeze_geometry`, and turning a differentiable
+sweep into an exception would be a worse bargain than the check is worth. But it is an assumption,
+not a check. `jax.jit` over a painted, overlapping layer with **no** frozen geometry does not
+raise and does not resolve: it sums the shapes and returns a different structure's answer. So the
+freeze is not only what makes the call fast, it is what makes it correct — take it, every step.
 
 ## Two properties worth knowing before you trust a number
 

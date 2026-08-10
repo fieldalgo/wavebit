@@ -163,7 +163,8 @@ The type of `ucell` selects the modeling path; there is no separate mode switch.
 
 There is a fourth, **boundary**, which the `ucell` type alone cannot select: it is what a smooth
 layer becomes when its shapes actually overlap and it asks for `combine='paint'`, and it is the
-only path that keeps a tilted edge exact *and* paints. See
+only path that keeps a tilted edge exact *and* paints. It is decided per layer, not per solver,
+so one smooth `ucell` can hold layers of both kinds. See
 [Shapes that overlap](#shapes-that-overlap) below and
 [`docs/boundary-modeling.md`](docs/boundary-modeling.md).
 
