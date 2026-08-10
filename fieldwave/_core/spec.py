@@ -107,7 +107,13 @@ class Numerics:
     """
     backend: Backend = Backend.NUMPY
     fto: Any = (0, 0)
-    fourier_coefficients: FourierCoefficients = FourierCoefficients.SAMPLED
+    #: ``None`` = unset, for the same reason as ``factorization`` below: the solver resolves an
+    #: unset series against the modeling path (sampled on a raster, integrated on both shape
+    #: paths, which is the only series either can form) and refuses one the path cannot form.
+    #: Defaulting this to ``FourierCoefficients.SAMPLED`` would hand every spec an explicit
+    #: request it never made, so a spec carrying shape layers would be refused for asking for
+    #: the sampled series.
+    fourier_coefficients: Optional[FourierCoefficients] = None
     #: ``None`` = unset, and it has to stay spellable: the solver resolves an unset
     #: factorization against the modeling path (Li on a raster, NVF on analytic shapes) and
     #: refuses a rule the path cannot express. Defaulting this to ``Factorization.LI`` would
@@ -128,7 +134,7 @@ class Numerics:
         _reject_unknown(d, cls._FIELDS, 'numerics')
         if 'backend' in d:
             d['backend'] = _enum(d['backend'], Backend, 'numerics.backend')
-        if 'fourier_coefficients' in d:
+        if d.get('fourier_coefficients') is not None:
             d['fourier_coefficients'] = _enum(d['fourier_coefficients'], FourierCoefficients,
                                               'numerics.fourier_coefficients')
         if d.get('factorization') is not None:
@@ -152,18 +158,19 @@ class Numerics:
     def as_kwargs(self) -> dict:
         """Solver keyword arguments. ``type_complex`` becomes the solver's 0/1 code.
 
-        An unset ``factorization`` is *omitted* rather than filled in, so that the solver sees
-        the same "nobody asked" it would from a bare ``rcwa()`` call and resolves it per
-        modeling path.
+        An unset ``fourier_coefficients`` or ``factorization`` is *omitted* rather than filled
+        in, so that the solver sees the same "nobody asked" it would from a bare ``rcwa()``
+        call and resolves each per modeling path.
         """
         return dict(
             backend=int(self.backend),
             fto=list(self.fto),
-            fourier_coefficients=self.fourier_coefficients.value,
             type_complex=0 if self.type_complex == 128 else 1,
             connecting_algo=self.connecting_algo,
             perturbation=self.perturbation,
             normal_grid=self.normal_grid,
+            **({} if self.fourier_coefficients is None
+               else {'fourier_coefficients': self.fourier_coefficients.value}),
             **({} if self.factorization is None
                else {'factorization': self.factorization.value}),
         )

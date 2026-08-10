@@ -222,12 +222,18 @@ solver = fieldwave.rcwa(backend=0, fourier_coefficients='sampled', factorization
 | `'li'` | Li's rules, applied along x and y. The default. |
 | `'nvf'` | Normal vector field — factorizes along the material interfaces. Made for curved and tilted boundaries, where a staircase converges slowly; how it reads those interfaces off a raster, and what that costs, is in [docs/nvf-upsampling.md](docs/nvf-upsampling.md). |
 
-All four pairings work. The deprecated `fourier_type` integer expressed only three of them —
-`0 = ('sampled', 'li')`, `1 = ('integrated', 'li')`, `2 = ('sampled', 'nvf')` — and had no
-code at all for `('integrated', 'nvf')`, the pairing a fit of a tilted sidewall wants.
+All four pairings work on the raster path. The deprecated `fourier_type` integer expressed only
+three of them — `0 = ('sampled', 'li')`, `1 = ('integrated', 'li')`, `2 = ('sampled', 'nvf')` —
+and had no code at all for `('integrated', 'nvf')`, the pairing a fit of a tilted sidewall
+wants.
 
-The smooth path always uses the NVF form and ignores both keywords. Its derivation,
-convergence data and limitations are written up in
+The other two paths have one pairing each, because each states a layer as geometry and
+integrates over it in closed form: the block path is `('integrated', 'li')` and the smooth path
+`('integrated', 'nvf')`. Both keywords resolve to that on their own, so leaving them unset is
+not a request and gets the build those paths always ran. Naming a value the path does not
+implement raises `NotImplementedError` rather than quietly running the one it does — which is
+what both keywords used to do, returning the other value's numbers with nothing in the result
+to say so. The smooth path's derivation, convergence data and limitations are written up in
 [docs/analytic-modeling.md](docs/analytic-modeling.md).
 
 ### Connecting algorithm
@@ -374,8 +380,11 @@ names changed, and one convention did.
 
 Everything else — `conv_solve`, `ucell`, `thickness`, `fto`, `period`, `pol`,
 `connecting_algo`, the `de_ri` / `de_ti` results — keeps its name and meaning. `fourier_type`
-still works and still means what it did, with a `DeprecationWarning`; it split because one
-integer was standing for two independent choices.
+still works on the raster path, with a `DeprecationWarning`. On the two shape paths it can name
+a pairing the path cannot build, and is refused there rather than substituted; reading it back
+on the smooth path raises for the same reason, since that path resolves to
+`('integrated', 'nvf')` — the one pairing the integer never had. It split because one integer
+was standing for two independent choices.
 
 One *result* changes, at oblique azimuth on the `integrated` path, and it is a fix rather than
 a regression. What it was, and how to tell whether it touches you:

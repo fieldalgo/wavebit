@@ -226,9 +226,17 @@ def test_the_deprecated_fourier_type_alias_is_refused_the_same_way():
 
 
 def test_reading_the_deprecated_alias_reports_the_resolved_rule():
-    """``fourier_type`` reads back 2 on a smooth solver nobody configured — that is NVF."""
+    """``fourier_type`` reads back 1 on a block solver nobody configured — ('integrated', 'li').
+
+    The smooth path is the more natural subject and used to be the one here, reading 2. It
+    cannot be any more: once ``fourier_coefficients`` resolves per path too, the smooth path
+    resolves to ``('integrated', 'nvf')``, the one pair the legacy integer never spelled, and
+    reading the alias there raises instead. See
+    ``test_fourier_coefficients_by_modeling_path.py::test_the_alias_has_no_code_at_all_for_the_smooth_path``.
+    The block path makes the same point — a resolved value nobody wrote — and has a code.
+    """
     with pytest.warns(DeprecationWarning):
-        assert fieldwave.rcwa(ucell=SMOOTH, **KW).fourier_type == 2
+        assert fieldwave.rcwa(ucell=BLOCK, **KW).fourier_type == 1
 
 
 @pytest.mark.parametrize('name,code', [('jax', 1), ('torch', 2)])

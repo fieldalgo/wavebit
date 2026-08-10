@@ -246,6 +246,36 @@ _FACTORIZATION_REASON = {
         "lost: drop the keyword, or pass factorization='nvf' to say so"),
 }
 
+# The other Fourier axis, exactly the same shape of fact. Both shape paths describe a layer as
+# geometry rather than as samples, and integrate the permittivity over that geometry in closed
+# form; neither has a raster underneath to run a discrete series along. The raster path (0) is
+# again absent because it is the one that implements both.
+_COEFFICIENTS_IMPLEMENTED_BY = {
+    1: FourierCoefficients.INTEGRATED,
+    2: FourierCoefficients.INTEGRATED,
+}
+
+# Why, phrased for the person who asked for 'sampled'. Same distinction as above: the block
+# path's missing series is unbuilt, the smooth path's is unbuildable.
+_COEFFICIENTS_REASON = {
+    1: ("the block path (modeling_type=1) hands the factorizer explicit rectangles and their "
+        "edges, and integrates eps over them in closed form "
+        "(fieldwave._core.factorization.cfs2d, via to_conv_mat_block). The edges are the "
+        "geometry, at whatever real coordinates the modeler put them, so there is no raster "
+        "underneath to sample -- rasterising one first is what modeling_type=0 is. Use a "
+        "raster ucell, which implements both"),
+    2: ("the smooth shape path (modeling_type=2) transforms geometry analytically -- each "
+        "shape in turn (fieldwave._core.analytic.shape_ft), or, for a painted layer whose "
+        "shapes overlap, the disjoint polygons the painting resolves into "
+        "(fieldwave._core.boundary.to_conv_mat_boundary_layer). Either transform *is* the "
+        "integral of eps over the cell, evaluated in closed form. Parametric geometry has no "
+        "samples to take a discrete "
+        "series of, so the sampled coefficients are not a series that path has yet to grow -- "
+        "they are not one it can form. The integrated coefficients are the exact ones anyway, "
+        "so nothing is lost: drop the keyword, or pass fourier_coefficients='integrated' to "
+        "say so"),
+}
+
 
 class CoreFactorizationMixin:
     """Provides ``conv_solve`` — factorization through the core, then the core solve.
@@ -265,14 +295,14 @@ class CoreFactorizationMixin:
     backend code instead.
 
     Also owns the two Fourier option attributes and the deprecated ``fourier_type`` alias, so
-    the three backend constructors resolve them identically. ``factorization`` is not a free
-    choice on every path — see :attr:`factorization` — so it is stored as *what was asked for*
-    (``None`` when nobody asked) and resolved against the modeling path on read.
+    the three backend constructors resolve them identically. *Neither* axis is a free choice on
+    every path — see :attr:`factorization` and :attr:`fourier_coefficients` — so both are stored
+    as *what was asked for* (``None`` when nobody asked) and resolved against the modeling path
+    on read.
     """
 
-    _fourier_coefficients = FourierCoefficients.SAMPLED
     #: Which of the three modeling paths the current ``ucell`` selected; the concrete solver
-    #: classes assign it. Defaulted here because :attr:`factorization` resolves against it, so
+    #: classes assign it. Defaulted here because both option properties resolve against it, so
     #: the mixin would otherwise only work inside a class that happens to set it first.
     _modeling_type_assigned = None
     #: What was *asked for*, with ``None`` meaning "nobody said". Read through the
@@ -281,18 +311,45 @@ class CoreFactorizationMixin:
     #: thing, and telling an explicit request from an untouched default is what decides
     #: whether the mismatch is worth refusing.
     _factorization = None
+    #: Likewise, and for the same reason — see :attr:`fourier_coefficients`. Read through the
+    #: property.
+    _fourier_coefficients = None
 
     def _set_fourier_options(self, fourier_coefficients, factorization, fourier_type):
         """Settle ``fourier_coefficients`` / ``factorization`` from a constructor's arguments."""
-        coefficients, self._factorization = resolve_fourier_options(
+        self._fourier_coefficients, self._factorization = resolve_fourier_options(
             fourier_coefficients, factorization, fourier_type, keep_unset=True)
-        self._fourier_coefficients = (DEFAULT_FOURIER_COEFFICIENTS if coefficients is None
-                                      else coefficients)
 
     @property
     def fourier_coefficients(self):
-        """How each layer's Fourier coefficients are obtained: ``'sampled'`` | ``'integrated'``."""
-        return self._fourier_coefficients
+        """How each layer's Fourier coefficients are obtained: ``'sampled'`` | ``'integrated'``.
+
+        Resolved against the modeling path, exactly like :attr:`factorization` and for the same
+        reason. Only the raster path takes both: the two shape paths state a layer as geometry
+        and integrate over it in closed form, so the integrated series is the only one either
+        can form, and the keyword there is a claim about the build rather than a choice within
+        it.
+
+        Raises:
+            NotImplementedError: when the series was *explicitly* asked for and this modeling
+                path cannot form it. Same exemption for the default, and for the same reason:
+                ``'sampled'`` is the module-wide default, so a block- or smooth-path user who
+                never touched the keyword is not asking for anything and keeps the closed-form
+                series both paths always ran.
+        """
+        implemented = _COEFFICIENTS_IMPLEMENTED_BY.get(self._modeling_type_assigned)
+        if implemented is None:                       # raster, or no ucell yet: free choice
+            return (DEFAULT_FOURIER_COEFFICIENTS if self._fourier_coefficients is None
+                    else self._fourier_coefficients)
+        if self._fourier_coefficients is not None and self._fourier_coefficients != implemented:
+            # `!=` rather than `is not`, and `coefficients_of` in the message, for the reason
+            # spelled out in `factorization`: this is a str enum, so a raw string written onto
+            # the private attribute compares equal and must still format.
+            raise NotImplementedError(
+                f"fourier_coefficients="
+                f"{coefficients_of(self._fourier_coefficients).value!r} is not available "
+                f"here: {_COEFFICIENTS_REASON[self._modeling_type_assigned]}.")
+        return implemented
 
     @fourier_coefficients.setter
     def fourier_coefficients(self, value):
@@ -337,20 +394,27 @@ class CoreFactorizationMixin:
         """Deprecated alias for the ``(fourier_coefficients, factorization)`` pair.
 
         Reading it raises for ``('integrated', 'nvf')``: that combination is new and has no
-        legacy integer, which is the whole reason the keyword was split. It reports the
-        *resolved* factorization, so on the smooth shape path (``modeling_type=2``) it reads 2
-        even though nobody wrote it -- same value :attr:`factorization` gives, and for the same
-        reason. It therefore also raises :class:`NotImplementedError` wherever that property
-        does, rather than reporting a code for a build that will not happen.
+        legacy integer, which is the whole reason the keyword was split. It reports *both*
+        resolved axes, so it reads 1 on the block path (``modeling_type=1``) even though nobody
+        wrote it -- same values the two properties give, and for the same reason. It therefore
+        also raises :class:`NotImplementedError` wherever they do, rather than reporting a code
+        for a build that will not happen.
+
+        The smooth shape path (``modeling_type=2``) is the case with no code at all: it resolves
+        to ``('integrated', 'nvf')``, the one pair the integer never spelled. There is no
+        honest answer to give there -- 2 would name the sampled series that path cannot form --
+        so it raises. That is not a regression the split introduced; it is the split finding a
+        structure the old integer was already describing wrongly.
         """
         warnings.warn(
             "'fourier_type' is deprecated and will be removed; read 'fourier_coefficients' "
             "and 'factorization' instead.", DeprecationWarning, stacklevel=2)
         factorization = self.factorization
-        code = to_fourier_type(self._fourier_coefficients, factorization)
+        coefficients = self.fourier_coefficients
+        code = to_fourier_type(coefficients, factorization)
         if code is None:
             raise ValueError(
-                f"fourier_coefficients={self._fourier_coefficients.value!r} with "
+                f"fourier_coefficients={coefficients.value!r} with "
                 f"factorization={factorization.value!r} has no 'fourier_type' code; "
                 f"read those two attributes instead.")
         return code
@@ -380,6 +444,7 @@ class CoreFactorizationMixin:
         # reader to the wrong place depending on which they called.
         self._reject_unsupported_lattice()
         factorization = self.factorization
+        coefficients = self.fourier_coefficients
         fto_x, fto_y = self.fto[0], self.fto[1]
 
         # The two axes decide independently what has to be frozen: NVF needs the normal
@@ -393,7 +458,7 @@ class CoreFactorizationMixin:
                     self.ucell, fto_x, fto_y, lattice=basis)
                 normal_field_source = _fac.normal_field_source_for_ucell(
                     self.ucell, fto_x, fto_y, lattice=basis)
-            if self._fourier_coefficients == FourierCoefficients.INTEGRATED:
+            if coefficients == FourierCoefficients.INTEGRATED:
                 compression = [_fac.compression_indices(self.ucell[i])
                                for i in range(self.ucell.shape[0])]
 
@@ -501,10 +566,13 @@ class CoreFactorizationMixin:
         # `_reject_unsupported_lattice` reads the resolved `factorization` itself, so a skewed
         # cell asking for a rule its path cannot express still gets told about the rule.
         self._reject_unsupported_lattice()
-        # Then read, unconditionally: this is the one call every build goes through, so it is
-        # where a rule the chosen path cannot express has to be refused rather than quietly
-        # replaced by the one that path does implement.
+        # Then read both, unconditionally: this is the one call every build goes through, so it
+        # is where an option the chosen path cannot express has to be refused rather than
+        # quietly replaced by the one that path does implement. The factorization is read first
+        # so that a smooth-path call naming *both* unavailable values is told about the rule --
+        # the axis a user is far likelier to have meant something by.
         factorization = self.factorization
+        coefficients = self.fourier_coefficients
         fto_x, fto_y = self.fto[0], self.fto[1]
         epxy_conv_all = epyx_conv_all = None
 
@@ -512,7 +580,7 @@ class CoreFactorizationMixin:
             # The two axes are dispatched independently. Splitting on the factorization
             # first is not arbitrary: Li's rules return three matrices and NVF returns five
             # (it couples x and y, so epxy / epyx stop being zero).
-            sampled = self._fourier_coefficients == FourierCoefficients.SAMPLED
+            sampled = coefficients == FourierCoefficients.SAMPLED
             normal_field = None if geometry is None else geometry.normal_field
             normal_field_source = None if geometry is None else geometry.normal_field_source
             compression = None if geometry is None else geometry.compression
@@ -543,19 +611,23 @@ class CoreFactorizationMixin:
                         compression=compression,
                         lattice=self._geometry_lattice_for(geometry))
 
-        elif self._modeling_type_assigned == 1:                    # block -- Li only
-            # No branch on `factorization` here, and that is not an oversight: this path has
-            # one rule (see _FACTORIZATION_IMPLEMENTED_BY), and asking it for the other one
-            # was refused above rather than answered with this.
+        elif self._modeling_type_assigned == 1:      # block -- Li on integrated coefficients
+            # No branch on either option here, and that is not an oversight: this path has one
+            # rule and one series (see _FACTORIZATION_IMPLEMENTED_BY and
+            # _COEFFICIENTS_IMPLEMENTED_BY) -- `to_conv_mat_block` integrates eps over the
+            # painted rectangles with `cfs2d`, unconditionally. Asking it for the other of
+            # either was refused above rather than answered with this.
             ucell_block = self.modeling_block_instruction(
                 self.ucell, plans=None if geometry is None else geometry.block_grid,
                 shape_choices=None if geometry is None else geometry.shape_choices)
             epx_conv_all, epy_conv_all, epz_conv_i_all = _fac.to_conv_mat_block(
                 ucell_block, fto_x, fto_y)
 
-        elif self._modeling_type_assigned == 2:                    # smooth shapes -- NVF only
-            # Likewise fixed: the epsilon tensor comes from the shapes' analytic normal field,
-            # so five matrices always, and `factorization='li'` was refused above.
+        elif self._modeling_type_assigned == 2:      # smooth shapes -- NVF on exact transforms
+            # Likewise fixed on both axes: the epsilon tensor comes from the shapes' analytic
+            # normal field, so five matrices always, and each shape's transform is the exact
+            # integral over the cell, so the coefficients are integrated ones. Naming
+            # `factorization='li'` or `fourier_coefficients='sampled'` was refused above.
             xp = _namespace_for_backend(self.backend)
             (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all,
              epz_conv_i_all) = _analytic.to_conv_mat_smooth_layers(

@@ -89,7 +89,10 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                  connecting_algo='TMM',
                  perturbation=1E-20,
                  type_complex=np.complex128,
-                 fourier_coefficients=None,  # 'sampled' (default, DFS) | 'integrated' (closed-form series)
+                 fourier_coefficients=None,  # 'sampled' (DFS) | 'integrated'
+                 # (closed-form series); the default resolves per modeling path --
+                 # 'sampled' on a raster, 'integrated' on both shape paths, which is
+                 # the only series either can form. Naming the other one raises.
                  factorization=None,         # 'li' | 'nvf' (normal vector field); the
                  # default resolves per modeling path -- 'li' on a raster and on the
                  # vector modeler, 'nvf' on analytic shapes, which is the only rule

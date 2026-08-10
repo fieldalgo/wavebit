@@ -234,9 +234,16 @@ keep passing.
   coefficients themselves are analytic, and the shape's *position* is now carried
   analytically too, but the field's shape (size, rotation) retains grid error. Increase the
   grid if needed.
-- `fourier_coefficients` and `factorization` are both ignored on the smooth path: it is
-  always the closed-form shape Fourier transform in the NVF 5-matrix form. For a non-NVF
-  pure-Laurent comparison, call `fourier_analytic.to_conv_mat_smooth` directly.
+- `fourier_coefficients` and `factorization` both have exactly one value here, and this path
+  resolves them to it rather than reading them: `('integrated', 'nvf')`, the closed-form shape
+  Fourier transform in the NVF 5-matrix form. Leaving either unset is not a request and gets
+  that build; naming the *other* value of either — `'sampled'` or `'li'` — raises
+  `NotImplementedError` instead of being silently substituted, which is what both used to be.
+  Neither missing value is merely unbuilt: a parametric shape has no samples to take a
+  discrete series of, and there is no raster axis for Li's nested 1D rule to run along.
+  For a non-NVF pure-Laurent comparison, call the two builders directly:
+  `_core.analytic.assemble_eps_coeffs` returns the coefficient grids for `eps` and `1/eps`, and
+  `_core.analytic.laurent_conv_2d` turns either into a block-Toeplitz matrix.
 
 ### References
 - L. Li, *Use of Fourier series in the analysis of discontinuous periodic structures*, JOSA A
