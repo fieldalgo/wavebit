@@ -4,6 +4,12 @@
 but not yet numerically stable, nothing dispatches to it, and there is no field
 reconstruction.** See "What is not here" at the bottom before building on it.
 
+Pinned by ``tests/test_solve_2d_4ff.py`` against the 2ff path and a Berreman 4x4, and by
+``tests/references/test_4ff_external_goldens.py`` against RETICOLO and fmmax — 21 cases, worst
+gap 2.4e-15, no convention fitting. Note what that does *not* cover: every case in both goldens
+has an empty z row, because both were frozen for a 2ff consumer. The geometry this module
+exists for is still judged only by our own Berreman.
+
 Why it exists. :mod:`fieldwave._core.solve_2d` reduces a layer to the second-order form
 ``d2E_t/dz2 = Omega2 E_t``, which exists only when the permittivity has an empty z row and
 column. With ``eps_xz`` or ``eps_yz`` populated the elimination of ``E_z`` leaves a
@@ -145,14 +151,61 @@ def split_forward_backward(xp, M, ff):
     return lam[forward], psi[:, forward], lam[backward], psi[:, backward]
 
 
-def solve_uniform_stack(wavelength, kx, ky, layers, ff):
-    """``[(R, T), ...]`` per incident vacuum mode, for a stack of uniform anisotropic layers.
+def vacuum_sp_states(xp, kx, ky, ff, order=0):
+    """``(psi_s, psi_p)``: unit-amplitude incident plane waves in vacuum, as ``4ff`` states.
+
+    The incident field has to be named rather than picked out of the vacuum eigenbasis. In
+    vacuum both forward modes share ``lam = kz``, so that eigenspace is degenerate and *any*
+    basis of it is a valid answer from ``eig`` — LAPACK happens to return clean s and p at
+    ``ky = 0`` because ``M`` separates there, which is an artefact of the block structure and
+    not a promise. Off the plane of incidence, or on another backend, the two would mix and
+    "the first forward mode" would silently stop meaning p.
+
+    With ``khat = (kx, ky, kz)`` and ``shat`` the unit vector perpendicular to the plane of
+    incidence, ``curl E = i k0 H`` gives ``H = khat x E``, so::
+
+        s:  E = shat,          H = khat x shat
+        p:  E = shat x khat,   H = shat
+
+    At normal incidence the plane of incidence is undefined and ``shat`` is taken as ``y``,
+    which is the limit the oblique cases approach.
+    """
+    kx0, ky0 = float(xp.reshape(xp.asarray(kx), (-1,))[order]), \
+        float(xp.reshape(xp.asarray(ky), (-1,))[order])
+    kt = (kx0 ** 2 + ky0 ** 2) ** 0.5
+    kz = (1.0 - kt ** 2) ** 0.5
+    if kt ** 2 >= 1.0:
+        raise ValueError(f'order {order} is evanescent in vacuum (|kt| = {kt:.4f}); there is no '
+                         'incident plane wave to define.')
+
+    khat = (kx0, ky0, kz)
+    shat = (-ky0 / kt, kx0 / kt, 0.0) if kt > 1e-14 else (0.0, 1.0, 0.0)
+    cross = lambda a, b: (a[1] * b[2] - a[2] * b[1],   # noqa: E731
+                          a[2] * b[0] - a[0] * b[2],
+                          a[0] * b[1] - a[1] * b[0])
+
+    out = []
+    for E, H in ((shat, cross(khat, shat)), (cross(shat, khat), shat)):
+        psi = xp.zeros((4 * ff,), dtype=xp.complex128)
+        for slot, val in ((0, E[0]), (1, E[1]), (2, H[0]), (3, H[1])):
+            psi[slot * ff + order] = val
+        out.append(psi)
+    return tuple(out)
+
+
+def solve_uniform_stack(wavelength, kx, ky, layers, ff, incident):
+    """``(R, T)`` for one incident state, through a stack of uniform anisotropic layers.
 
     ``layers`` is ``[(eps_blocks, thickness), ...]`` where ``eps_blocks`` is the mapping
-    :func:`layer_matrix_4ff` takes. Vacuum on both sides — and note it is *not* special-cased:
-    vacuum is a layer with ``eps = I`` and the mode split picks its forward and backward halves
-    like any other, which is what would make an anisotropic substrate free here. The 2ff path
+    :func:`layer_matrix_4ff` takes. ``incident`` is a ``4ff`` state — see
+    :func:`vacuum_sp_states`. Vacuum on both sides, and note it is *not* special-cased: vacuum
+    is a layer with ``eps = I`` whose forward and backward halves come from the same mode split
+    as any other, which is what would make an anisotropic substrate free here. The 2ff path
     cannot say that, and neither can RETICOLO.
+
+    ``R`` and ``T`` are fluxes of the *reconstructed* reflected and transmitted fields, not sums
+    of per-mode fluxes. Those agree only when the modes are flux-orthogonal, which holds for a
+    lossless medium and stops holding exactly where it would be least noticed.
 
     **Correct but not stable.** The transfer is ``Psi exp(i k0 lam d) Psi^-1`` per layer, which
     overflows for a thick or strongly evanescent layer. Rather than return a number that has
@@ -181,19 +234,18 @@ def solve_uniform_stack(wavelength, kx, ky, layers, ff):
         E = _diag_of(xp, xp.exp(1j * k0 * lam * d))
         P = (Psi @ E @ xp.linalg.inv(Psi)) @ P
 
-    # Matching at the two interfaces at once: incident + reflected on the input side must
-    # transfer to transmitted only on the output side, so P (a + psi_vb r) = psi_vf t.
-    flux_f, flux_b = mode_flux_z(xp, psi_vf, ff), mode_flux_z(xp, psi_vb, ff)
+    # Matching at both interfaces at once: incident + reflected on the input side must transfer
+    # to transmitted only on the output side, so P (a + psi_vb r) = psi_vf t.
     A = xp.concat([P @ psi_vb, -psi_vf], axis=1)
+    sol = xp.linalg.solve(A, xp.reshape(-(P @ incident), (-1, 1)))[:, 0]
+    reflected = psi_vb @ sol[:2 * ff]
+    transmitted = psi_vf @ sol[2 * ff:]
 
-    out = []
-    for j in range(2 * ff):
-        sol = xp.linalg.solve(A, xp.reshape(-(P @ psi_vf[:, j]), (-1, 1)))[:, 0]
-        r, t = sol[:2 * ff], sol[2 * ff:]
-        inc = float(flux_f[j])
-        out.append((float(-xp.sum(flux_b * xp.abs(r) ** 2) / inc),
-                    float(xp.sum(flux_f * xp.abs(t) ** 2) / inc)))
-    return out
+    def flux(v):
+        return float(mode_flux_z(xp, xp.reshape(v, (-1, 1)), ff)[0])
+
+    inc = flux(incident)
+    return -flux(reflected) / inc, flux(transmitted) / inc
 
 
 def _diag_of(xp, v):

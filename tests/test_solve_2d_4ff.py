@@ -15,6 +15,11 @@ Two oracles, and the split between them is the point:
   against RETICOLO and fmmax. For a single order the two operators should agree entry for
   entry, not merely in their spectra.
 
+Both of those are ours, so a misconception this repo holds about the problem survives every
+test in this file. The outside check lives in
+``tests/references/test_4ff_external_goldens.py`` — RETICOLO and fmmax, 21 cases, on goldens
+that were already committed.
+
 Every case here is a uniform layer at one Fourier order. Multi-order is untested — the algebra
 is written in blocks and should extend, but "should extend" is exactly the sort of claim this
 suite exists to disbelieve.
@@ -24,7 +29,7 @@ import pytest
 
 from fieldwave._core.solve_2d import layer_modes_2d
 from fieldwave._core.solve_2d_4ff import (layer_matrix_4ff, split_forward_backward,
-                                          solve_uniform_stack)
+                                          solve_uniform_stack, vacuum_sp_states)
 
 WL = 600.0
 THICK = 220.0
@@ -80,6 +85,15 @@ ANGLES = [0.0, 35.0, 62.0]
 
 def _kxky(theta_deg):
     return np.array([np.sin(np.deg2rad(theta_deg))]), np.array([0.0])
+
+
+def rt(eps, theta_deg, thick=THICK):
+    """``{'s': (R, T), 'p': (R, T)}`` for a single layer, in a named polarisation basis."""
+    kx, ky = _kxky(theta_deg)
+    psi_s, psi_p = vacuum_sp_states(np, kx, ky, 1)
+    layers = [(blocks(eps), thick)]
+    return {'s': solve_uniform_stack(WL, kx, ky, layers, 1, psi_s),
+            'p': solve_uniform_stack(WL, kx, ky, layers, 1, psi_p)}
 
 
 @pytest.mark.parametrize('theta_deg', ANGLES)
@@ -198,19 +212,13 @@ def test_stack_solve_matches_berreman(label, eps, theta_deg):
     """
     from test_anisotropic_berreman import berreman_efficiencies
 
-    kx, ky = _kxky(theta_deg)
-    got = solve_uniform_stack(WL, kx, ky, [(blocks(eps), THICK)], ff=1)
+    got = rt(eps, theta_deg)
     ref = berreman_efficiencies([(np.asarray(eps, dtype=complex), THICK)],
                                 np.deg2rad(theta_deg))
-    want = [(ref[p]['R_s'] + ref[p]['R_p'], ref[p]['T_s'] + ref[p]['T_p']) for p in ('s', 'p')]
-
-    # The two vacuum forward modes are s and p, but which eigenvector came out first is not
-    # fixed, so allow either pairing rather than pinning an ordering the eigensolver does not
-    # promise.
-    def gap(order):
-        return max(max(abs(g[0] - w[0]), abs(g[1] - w[1])) for g, w in zip(got, order))
-
-    assert min(gap(want), gap(want[::-1])) < 1e-12, f'{label} at {theta_deg} deg'
+    for pol in ('s', 'p'):
+        want = (ref[pol]['R_s'] + ref[pol]['R_p'], ref[pol]['T_s'] + ref[pol]['T_p'])
+        gap = max(abs(g - w) for g, w in zip(got[pol], want))
+        assert gap < 1e-12, f'{label} at {theta_deg} deg, {pol}-pol: {gap:.2e}'
 
 
 @pytest.mark.parametrize('label,eps', Z_DECOUPLED + Z_COUPLED,
@@ -219,9 +227,8 @@ def test_lossless_layers_conserve_energy(label, eps):
     """Every tensor here is Hermitian, so ``R + T`` must be 1 for each incident mode."""
     e = np.asarray(eps, dtype=complex)
     assert np.abs(e - e.conj().T).max() < 1e-12, 'case is not Hermitian; fix the case, not this'
-    kx, ky = _kxky(35.0)
-    for R, T in solve_uniform_stack(WL, kx, ky, [(blocks(eps), THICK)], ff=1):
-        assert R + T == pytest.approx(1.0, abs=1e-10), label
+    for pol, (R, T) in rt(eps, 35.0).items():
+        assert R + T == pytest.approx(1.0, abs=1e-10), f'{label}, {pol}-pol'
 
 
 def test_a_thick_layer_is_refused_rather_than_overflowed():
@@ -234,4 +241,5 @@ def test_a_thick_layer_is_refused_rather_than_overflowed():
     kx, ky = _kxky(0.0)
     absorbing = np.diag([(0.2 + 4.0j) ** 2] * 3).astype(complex)
     with pytest.raises(ValueError, match='scattering-matrix recursion'):
-        solve_uniform_stack(WL, kx, ky, [(blocks(absorbing), 60000.0)], ff=1)
+        solve_uniform_stack(WL, kx, ky, [(blocks(absorbing), 60000.0)], 1,
+                            vacuum_sp_states(np, kx, ky, 1)[0])

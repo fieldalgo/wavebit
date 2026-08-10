@@ -24,6 +24,11 @@ transpose. RETICOLO puts the shipped operator 4e-2 to 6e-2 out; exchanging the p
 — every producer emits ``-eps_xy`` twice — so this is a latent defect, not a wrong released
 number.
 
+The golden also holds a ``Z_COUPLED_CASES`` block that **this file deliberately does not
+consume**: those tensors have a populated z row, which the 2ff path has no slot for. They are
+generated here because the bridge and the guards already exist, and are asserted in
+``test_4ff_external_goldens.py``.
+
 Values are frozen in ``golden_reticolo_anisotropic.npz`` by
 ``gen_goldens_reticolo_anisotropic.py``, which needs Octave and RETICOLO V10. This file needs
 neither.
@@ -76,7 +81,43 @@ ASYMMETRIC_CASES = {
     'gyrotropic_45deg': (_tensor(2.25, 2.25, 2.25, 0.45j, -0.45j), 45.0),
 }
 
-ALL_CASES = {**SYMMETRIC_CASES, **ASYMMETRIC_CASES}
+def _gyro(direction, g=0.45, ed=2.25):
+    """``eps_ij = ed d_ij + i e_ijk g_k`` — the magnetisation direction picks which cells fill.
+
+    Along ``z`` this reproduces the Faraday tensor above; along ``x`` or ``y`` it populates the
+    z row, which is the Voigt geometry and the whole reason a first-order solver exists.
+    Hermitian either way, so lossless, so the generator's energy guard still applies.
+    """
+    e = np.eye(3, dtype=complex) * ed
+    gx, gy, gz = np.asarray(direction, dtype=float) * g
+    e[0, 1] += 1j * gz
+    e[1, 0] -= 1j * gz
+    e[1, 2] += 1j * gx
+    e[2, 1] -= 1j * gx
+    e[2, 0] += 1j * gy
+    e[0, 2] -= 1j * gy
+    return e
+
+
+# A populated z row. **The 2ff path cannot express these at all** — it has no slot for eps_xz or
+# eps_yz — so none of the tests in this file may consume them; they exist for
+# ``test_4ff_external_goldens.py``, and they are the first external check this repo has of the
+# geometry the 4ff solver was written for.
+#
+# Exactly one off-diagonal pair each, and delta0 = 0, because that is as far as RETICOLO can be
+# trusted here — see the measured boundary in ``gen_goldens_reticolo_anisotropic.py``. A tilted
+# magnetisation (xy and yz together) is deliberately absent: RETICOLO returns R + T = 1.0044 for
+# it, on a tensor that is Hermitian and therefore lossless.
+#
+# Normal incidence is a control: with kx = 0 the z row has nothing to couple to, so a solver
+# that silently dropped it would still be right there and wrong at 35 deg.
+Z_COUPLED_CASES = {
+    'voigt_x_normal': (_gyro((1, 0, 0)), 0.0),
+    'voigt_x_35deg': (_gyro((1, 0, 0)), 35.0),
+    'voigt_y_35deg': (_gyro((0, 1, 0)), 35.0),
+}
+
+ALL_CASES = {**SYMMETRIC_CASES, **ASYMMETRIC_CASES, **Z_COUPLED_CASES}
 
 
 def solver_efficiencies(eps, theta_deg):

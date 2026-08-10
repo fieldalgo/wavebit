@@ -23,6 +23,32 @@ Setup notes:
   between vacuum, which is the intersection of those. A magneto-optic substrate, or an
   off-diagonal tensor inside a grating, has to go to a different oracle — see
   ``docs/off-diagonal-slot-convention.md`` §8.
+* **"Accepts an arbitrary 3x3" is narrower in practice than the manual reads**, and the
+  boundary was measured here on 2026-08-11 rather than assumed. Feeding a *real symmetric*
+  tensor — Hermitian, hence provably lossless, hence ``R + T = 1`` by theorem — through this
+  same bridge:
+
+  ===============================  ==========  =====================================
+  tensor                           ``delta0``  RETICOLO's own ``R + T``
+  ===============================  ==========  =====================================
+  diagonal                         0 and 40    1 to 1e-15 (and matches 4ff to 1e-15)
+  one off-diagonal pair            0           1 to 1e-15 (and matches 4ff to 1e-15)
+  one off-diagonal pair            1 / 40      off by 5.8e-6 / 6.3e-3
+  two or three off-diagonal pairs  0           off by 2.5e-3 to 1.2e-2
+  ===============================  ==========  =====================================
+
+  The deviation is equal and opposite between TE and TM, and does not move when ``nn`` is
+  raised from 0 to 8, so it is converged rather than truncated. It cannot be a convention
+  difference on this side: a real symmetric matrix stays real symmetric under transposition and
+  under any permutation of axes, so no reading of the tensor this bridge could get wrong makes
+  the medium lossy. The shipped ``exemple_V9_0D_anisotrope.m`` uses a single ``xz`` pair at
+  ``delta0 = 0`` — inside the exact region that holds.
+
+  Consequence: **RETICOLO is not an oracle for a general anisotropic tensor.** It is one for
+  diagonal tensors, and for a single off-diagonal pair at classical mounting, which is where
+  every case in this file sits. The tilted-magnetisation and fully dense cases were written,
+  measured, and then removed rather than frozen. This is not a claim about RETICOLO's internals,
+  which have not been read — only about the numbers it returns through this bridge.
 * Energy conservation is checked at generation time, **for the Hermitian cases only**. Those
   are lossless, so a golden that does not sum to one there means the bridge is wired wrong —
   better to fail here than to freeze it and have the test measure the wiring instead of the
