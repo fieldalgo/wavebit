@@ -236,8 +236,10 @@ _FACTORIZATION_REASON = {
         "paints (fieldwave._core.factorization.to_conv_mat_block); no normal field is computed "
         "there, so NVF is not implemented on it. Use a raster ucell (modeling_type=0) or "
         "smooth shapes (modeling_type=2), which both have it"),
-    2: ("the smooth shape path (modeling_type=2) builds eps from the shapes' own analytic "
-        "normal field (fieldwave._core.analytic.to_conv_mat_smooth_nvf). There is no raster "
+    2: ("the smooth shape path (modeling_type=2) builds eps from an analytic normal field -- "
+        "the shapes' own (fieldwave._core.analytic.to_conv_mat_smooth_nvf), or, for a painted "
+        "layer whose shapes overlap, that of the disjoint polygons the painting resolves into "
+        "(fieldwave._core.boundary.to_conv_mat_boundary_layer). There is no raster "
         "axis to run Li's nested 1D rule along, so Li's rules are not something that path has "
         "yet to grow -- they are not something it can express. NVF is a superset of Li anyway "
         "(a constant normal collapses the projector onto Li's rules exactly), so nothing is "
@@ -258,7 +260,7 @@ class CoreFactorizationMixin:
       the builders, which needs concrete values. For JAX-traced use, call the core builders
       directly with a precomputed ``normal_field`` / ``compression``.
 
-    The analytic shape path (``modeling_type == 2``) is built from parametric shapes rather
+    The smooth shape path (``modeling_type == 2``) is built from parametric shapes rather
     than an array, so there is no input array to read the namespace from — it comes from the
     backend code instead.
 
@@ -464,7 +466,7 @@ class CoreFactorizationMixin:
         * The **integrated** coefficients are computed by ``cfs2d`` as an integral over the
           *parametric* cell, where the Jacobian cancels against the ``1/area`` normalisation.
           There is no metric in it, so it was always lattice-general.
-        * The **analytic shape** path (``modeling_type=2``) states shape lengths as absolute
+        * The **smooth shape** path (``modeling_type=2``) states shape lengths as absolute
           Cartesian quantities, so nothing about a shape deforms under a skew — a rectangle
           stays a rectangle. Only the grid of frequencies its transform is sampled at moves,
           which is one expression in :func:`~fieldwave._core.analytic.shape_ft`. Overlapping
@@ -483,7 +485,7 @@ class CoreFactorizationMixin:
             raise NotImplementedError(
                 common + 'the block modeler (modeling_type=1) rasterises onto a rectangular '
                 'grid, which is not implemented yet for a skewed cell. Use a raster ucell '
-                '(modeling_type=0) or analytic shapes (modeling_type=2).')
+                '(modeling_type=0) or smooth shapes (modeling_type=2).')
         factorization = self.factorization
         if factorization != Factorization.NVF:
             raise NotImplementedError(

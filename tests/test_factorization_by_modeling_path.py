@@ -144,6 +144,36 @@ def test_the_refusal_names_the_rule_the_path_does_use(path, rule):
         totals(path, factorization=rule)
 
 
+# A painted layer whose shapes actually overlap is still `modeling_type=2`, but it does not
+# reach `to_conv_mat_smooth_nvf` at all: `to_conv_mat_smooth_layers` resolves the painting into
+# disjoint polygons and transforms those instead (`boundary.to_conv_mat_boundary_layer`).
+PAINTED_OVERLAP = [{'n_base': 1.0, 'combine': 'paint', 'shapes': [
+    {'type': 'rectangle', 'cx': 0.45, 'cy': 0.5, 'lx': 0.4, 'ly': 0.4, 'n_index': 2.0},
+    {'type': 'rectangle', 'cx': 0.60, 'cy': 0.5, 'lx': 0.4, 'ly': 0.4, 'n_index': 3.0}]}]
+
+
+def test_the_boundary_sub_path_is_classified_and_refused_like_the_rest_of_smooth():
+    """The polygon route is the same path by every tell that matters, so it must refuse alike."""
+    s = fieldwave.rcwa(ucell=PAINTED_OVERLAP, **KW)
+    assert s.factorization == 'nvf'
+    assert sum(m is not None for m in s._conv_matrices()) == 5
+    with pytest.raises(NotImplementedError, match="factorization='li'"):
+        fieldwave.rcwa(ucell=PAINTED_OVERLAP, factorization='li', **KW).conv_solve()
+
+
+def test_the_smooth_refusal_names_the_route_the_refused_layer_actually_takes():
+    """A refusal that cites one concrete function has to cite the right one.
+
+    The message named only ``to_conv_mat_smooth_nvf``, which a painted overlapping layer never
+    calls — so the single pointer it offered sent that reader to code their structure does not
+    run. Nothing but a test keeps message text honest, hence this one.
+    """
+    with pytest.raises(NotImplementedError, match='to_conv_mat_boundary_layer'):
+        fieldwave.rcwa(ucell=PAINTED_OVERLAP, factorization='li', **KW).conv_solve()
+    with pytest.raises(NotImplementedError, match='to_conv_mat_smooth_nvf'):
+        totals('smooth', factorization='li')
+
+
 def test_the_smooth_refusal_says_li_is_not_missing_but_meaningless_there():
     """Not "not implemented yet" — there is no raster axis for Li's nested rule to run along.
 
