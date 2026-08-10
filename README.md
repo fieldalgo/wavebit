@@ -100,40 +100,58 @@ solver = fieldwave.rcwa(backend=Backend.JAX, pol=Pol.TM, factorization=Factoriza
 
 ## Backends
 
-One implementation runs on all three, so a result never depends on which you pick:
+One implementation of the physics sits behind a thin adapter and runs on all three, so a result
+never depends on which you pick — cross-backend agreement is part of the test suite, not a
+claim.
 
-![alt text](images/backends.png "Backends")
+![NumPy, JAX and PyTorch](images/backends.png "Backends")
 
-* [NumPy](https://github.com/numpy/numpy) — the fundamental package for scientific computing with Python; easy and lean to use
-* [JAX](https://github.com/google/jax) — autograd and XLA, brought together for high-performance machine learning research
-* [PyTorch](https://github.com/pytorch/pytorch) — tensor computation with strong GPU acceleration and neural networks built on a tape-based autograd system
+* [NumPy](https://github.com/numpy/numpy) — the baseline. No autodiff, no GPU, nothing to
+  compile, and the only backend that checks its own output (see [Validation](#validation)).
+* [JAX](https://github.com/google/jax) — autodiff and XLA. `jax.grad` works straight off the
+  public API; `jax.jit` additionally needs a frozen geometry.
+* [PyTorch](https://github.com/pytorch/pytorch) — autodiff eagerly, with no record to freeze
+  and so none to go stale. `torch.compile` is not a supported path here.
 
-### When to use
+### What each one can do
 
-|                 | NumPy | JAX | PyTorch | Description |
-| --------------- | :---: | :-: | :-----: | :---------: |
-| 64bit support   |   O   |  O  |    O    | Default for scientific computing |
-| 32bit support   |   O   |  O  |    O    | 32bit (float32 and complex64) data type operation* |
-| GPU support     |   X   |  O  |    O    | except Eigendecomposition** |
-| TPU support     |   X   |  X  |    X    | Currently there is no workaround to do 32 bit eigendecomposition on TPU |
-| AD support      |   X   |  O  |    O    | Automatic Differentiation (Back Propagation) |
-| Parallelization |   X   |  O  |    X    | JAX pmap function |
+|                              | NumPy | JAX | PyTorch |
+| ---------------------------- | :---: | :-: | :-----: |
+| float64 / complex128         |   ●   |  ●  |    ●    |
+| float32 / complex64          |   ●   |  ●  |    ●    |
+| Automatic differentiation    |   ○   |  ●  |    ●    |
+| GPU                          |   ○   | ●*  |   ●*    |
+| In-process device parallelism |  ○   | ● (`pmap`) | ○ |
+| TPU                          |   ○   |  ○  |    ○    |
 
-*In 32bit operation, operations on numbers of 8>= digit difference fail without warning or error.
-Use only when you do understand what you are doing.
-**GPU-native eigendecomposition was unavailable in JAX and PyTorch when this was last checked
-(2023-03); it is forced onto the CPU and sent back to the GPU. Re-verify against the versions
-you run — it is the one place where the backend choice can dominate the runtime.
+\*The eigendecomposition has no GPU-native implementation in either framework: it is moved to
+the CPU and the result sent back. Nothing here has been measured on a GPU, so read that column
+as "the framework supports it", not as a performance claim. TPU is out entirely, because a
+32-bit eigendecomposition has no route there at all.
 
-For a run that is *differentiated*, the table above is not the whole story — eager PyTorch and
-a jitted JAX step trade places with problem size, and a frozen geometry is worth its
-compilation only above a certain `fto`. That is measured in
-[docs/backend-choice.md](docs/backend-choice.md).
+That last row is about splitting *one* computation across devices, which only JAX does. It says
+nothing about the parallelism a sweep wants: a wavelength, angle or parameter sweep is a set of
+independent solves, and distributing those across processes or nodes — Ray, MPI, a Slurm array
+— works identically on all three backends.
 
-NumPy is simple and light to use. Suggested as a baseline with small ~ medium scale optics problem.
-JAX and PyTorch are recommended for cases having large scale or optimization part.
-If you want parallelized computing with multiple devices (e.g., GPUs), JAX is ready for that.
-But since JAX does jit compilation, it takes much time at the first run.
+32-bit halves the memory and is not always safe: two numbers differing by eight or more digits
+cancel silently — no warning, no error — and a convolution matrix routinely holds both. Reach
+for it only once you have checked that your problem does not.
+
+### Which one to run
+
+Not a matter of taste, and not the same answer for a forward solve as for a differentiated one:
+
+* **Forward solves, small to medium.** NumPy — lightest to install, and the one that warns when
+  a result cannot be physical.
+* **Differentiated, `fto ≲ 5`.** Eager PyTorch beats a jitted JAX step outright; JAX's
+  compilation never repays itself at that size.
+* **Differentiated, `fto ≳ 7`, long run.** A jitted JAX step is roughly 2x PyTorch and repays
+  its compilation in under a dozen steps.
+
+Where the crossover falls, and whether a freeze is worth it at all, is measured in
+[docs/backend-choice.md](docs/backend-choice.md) — on one CPU host, with the run's own
+repeatability printed next to the numbers.
 
 ## Describing a structure
 
