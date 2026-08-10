@@ -24,14 +24,12 @@ def run_raster(rcwa_options, backend, fourier_coefficients):
     # 'sampled': discrete Fourier series; 'integrated' is the closed-form series that
     # vector modeling uses.
 
-    if backend == 0:
-        ucell_raster_1 = np.asarray(ucell_raster)
-    elif backend == 1:
-        ucell_raster_1 = np.asarray(ucell_raster)
-    elif backend == 2:
-        ucell_raster_1 = torch.as_tensor(ucell_raster)
-    else:
-        raise ValueError
+    # One array for every backend. Handing torch the Python list instead would build it at
+    # torch's *default* dtype -- float32 -- and no later cast recovers the digits the
+    # constructor already dropped. That showed up here as torch disagreeing with the block
+    # path by 5.6e-5 while numpy and jax agreed to 1e-13, which reads as a solver defect and
+    # is not one.
+    ucell_raster_1 = np.asarray(ucell_raster)
 
     rcwa_options['ucell'] = ucell_raster_1
 

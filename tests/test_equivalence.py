@@ -85,3 +85,47 @@ def test_all_three_conserve_energy(pol):
     for phi, ucell in ((None, UCELL_1D), (0.0, UCELL_1D), (0.0, UCELL_2D)):
         ri, ti = _solve(pol, phi, ucell)
         assert abs(ri.sum() + ti.sum() - 1.0) < 1e-9, (phi, ucell.shape)
+
+
+# --------------------------------------------------------- block path vs raster, per backend
+
+# A single rectangle, given twice: once as a drawn shape for the block path, once as the raster
+# of that same shape. Edges sit on pixel boundaries, so the raster *is* the rectangle and the two
+# descriptions are the same structure rather than an approximation of one another.
+# The raster is 12 cells over a 1200 nm period, so cells 4..7 are x = 400..800 -- a 400 nm
+# rectangle centred at 600. `ly` spans the full period because the structure is y-invariant.
+# These are absolute lengths in the units of `period`, not fractions of it.
+# n = 3.48 rather than a round number on purpose: 3.5 is exactly representable in float32, so
+# a single-precision raster would round-trip through it unharmed and this test would pass while
+# blind to the very defect it exists for. 3.48 is not, and it separates the two by ~3e-8.
+_N = 3.48
+_RASTER = np.array([[[1.0] * 4 + [_N] * 4 + [1.0] * 4]])
+_BLOCK = [[1.0, [['rectangle', 600.0, 600.0, 400.0, 1200.0, _N, 0, 0, 0]]]]
+
+_CFG = dict(n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, pol=0.0,
+            fto=[5, 0], wavelength=900.0, period=[1200.0, 1200.0], thickness=[300.0])
+
+
+@pytest.mark.parametrize('backend,name', [(0, 'numpy'), (1, 'jax'), (2, 'torch')])
+def test_block_and_raster_describe_the_same_structure(backend, name):
+    """The two modeling paths must agree, on every backend, to round-off.
+
+    This is a regression test for a defect in the *example* that used to demonstrate it:
+    ``examples/vector_*_verification.py`` built the raster with ``torch.as_tensor`` on a Python
+    list, which takes torch's **default** dtype -- float32 -- and no later cast recovers digits
+    the constructor already dropped. It printed a block-vs-raster disagreement of 5.6e-5 on
+    torch while numpy and jax agreed to 1e-13, which reads as a solver defect and was not one.
+
+    The tolerance is what the paths actually achieve once the dtype is right: ~1e-13. Anything
+    near 1e-5 again means someone has reintroduced a single-precision array on one backend.
+    """
+    if name != 'numpy':
+        pytest.importorskip(name)
+
+    block = fieldwave.rcwa(backend=backend, ucell=_BLOCK, **_CFG).conv_solve().res
+    raster = fieldwave.rcwa(backend=backend, ucell=_RASTER, **_CFG).conv_solve().res
+
+    for a, b, which in ((block.de_ri, raster.de_ri, 'de_ri'),
+                        (block.de_ti, raster.de_ti, 'de_ti')):
+        diff = np.linalg.norm(np.asarray(a, dtype=float) - np.asarray(b, dtype=float))
+        assert diff < 1e-11, f'{name} {which}: {diff:.3e}'
