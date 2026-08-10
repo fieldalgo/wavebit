@@ -439,11 +439,24 @@ the exchanged operator and disagrees with the shipped one by the same margin mea
 else. It also corroborates the Berreman implementation independently, which retroactively
 strengthens every number in §5.1.
 
-S4 was tried first and set aside. The build here takes a real 3x3 tensor, antisymmetric off-diagonal
-included, but rejects complex ones, and its numbers disagree with Berreman, shipped and patched
-alike on *symmetric* tensors — s and p swapped at normal incidence, irreconcilable at oblique. A
-wiring convention rather than physics, but an oracle whose conventions are not pinned down is not
-evidence, so it was dropped rather than fitted.
+**S4 works too, and the reason it appeared not to was mine.** It was set aside once on the grounds
+that its numbers disagreed on symmetric tensors — which they did, but the cause was neither the
+angle convention nor anything physical. S4 indexes the permittivity tensor with **x and y
+exchanged** relative to this repo. Conjugating by the swap matrix, `SWAP @ eps @ SWAP`, brings it
+onto Berreman at **5.6e-16** for symmetric tensors and **6.7e-16 / 2.2e-16** for a real
+antisymmetric one, at normal and oblique incidence alike. The angle argument is `(polar,
+azimuth)` as written, verified against an analytic Airy slab at 0, 20 and 45 degrees.
+
+Two limits, both worth knowing before reaching for it. This build **rejects complex tensors**, so
+gyrotropy proper is out of reach; a real antisymmetric tensor is an active medium rather than a
+physical one, but it discriminates the ordering just as well. And `<a survey of the available solvers>`
+records that S4 gives **silently wrong results when polarisation decomposition and anisotropy are
+used together** — so read total power flux per incident polarisation, as the measurements above do,
+and not order-resolved s/p amplitudes.
+
+What S4 adds that RETICOLO cannot is the **patterned** case: a tensor material assigns to a
+patterned region and runs (checked at 49 orders). That is the oracle the factorization work in
+`anisotropic-materials.md` §3 will need, and it exists today.
 
 **Every case is a uniform film.** Not one of them has structure in the plane. Concretely, that
 means all of this runs at `fto=(0, 0)` — a single Fourier order — with convolution matrices
@@ -459,10 +472,20 @@ That gap will not close by adding cases here: a patterned anisotropic layer need
 that does not exist yet (`anisotropic-materials.md` §3), so there is nothing to test, and no
 uniform-layer oracle could reach it if there were.
 
-It is, however, reachable when the time comes. RETICOLO's anisotropic examples include 1D, 2D and
-conical *patterned* textures, not just the uniform ones used above — so the oracle for the
-factorization work already exists and is already wired into this repo. That is worth knowing before
-anyone starts: the hard part will be Popov–Nevière, not finding something to check it against.
+It is, however, reachable when the time comes — though not by the route this document first claimed.
+RETICOLO's patterned anisotropic examples exist, but they express anisotropy through
+`parm.res1.change_index`, which its own documentation labels *anisotropie **diagonale***
+(`reticolo_allege_v10/res0.m:26`). A full 3x3 tensor is accepted only for a **uniform** texture. So
+RETICOLO covers a patterned *diagonal* tensor and nothing off-diagonal.
+
+The patterned off-diagonal oracle is S4, which takes a tensor material on a patterned region
+directly — real tensors only, which is enough. For a patterned tensor that is also *complex*,
+`<a survey of the available solvers>` records two candidates carrying full complex `eps` **and** `mu`
+tensors: `inkstone` and `fmmax`. Neither is installed here.
+
+So the oracles exist for every stage of that work; what does not exist is the factorization. The
+hard part will be Popov–Nevière, not finding something to check it against — which was the right
+conclusion reached for the wrong reason the first time.
 
 Tests: `tests/test_uniform_anisotropic.py`
 
