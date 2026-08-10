@@ -293,8 +293,9 @@ on `epx`, `epy`, `epxy` and `epyx`. Exchanging the pair inside `Omega_R` **only*
               [-Ky² epz_i + 1,    Kx Ky epz_i  ]]
 ```
 
-for an arbitrary tensor and any incidence angle. So as shipped, an asymmetric tensor gets its
-eigenvalues from one medium and its magnetic field from that medium's transpose.
+for an arbitrary tensor and any incidence angle. Before the repair the two blocks carried the pair
+in the same order, so an asymmetric tensor got its eigenvalues from one medium and its magnetic
+field from that medium's transpose.
 
 Measured on a gyrotropic slab (`eps = [[eo, i·g], [-i·g, eo]]`, g = 0.45) against the
 circular-eigenstate answer — each circular component is an independent Fabry–Pérot with
@@ -302,7 +303,7 @@ circular-eigenstate answer — each circular component is an independent Fabry�
 
 | | max abs error in the transmitted Jones matrix |
 |---|---|
-| as shipped | 3.6e-2 — first order in `g`, so it does not wash out |
+| before the repair | 3.6e-2 — first order in `g`, so it did not wash out |
 | with the pair exchanged in `Omega_R` | 6.5e-16 |
 
 The result still *looks* right: the Jones matrix stays degenerate on the diagonal and
@@ -325,8 +326,10 @@ solver reproduces the tensor it is handed — not what that tensor means physica
 exchange is a no-op — bit-identical. The defect is reachable only by hand through
 `solve_for_conv`, which is exactly what a gyrotropy experiment would do first.
 
-Pinned by `test_uniform_anisotropic.py::test_gyrotropic_layer_matches_faraday` (xfail, strict),
-with `::test_gyrotropic_layer_has_the_right_shape` recording what does hold today.
+**Fixed.** `Omega_R` now takes `epyx` where it took `epxy` and vice versa; every symmetric tensor
+is bit-identical either way, so nothing the library builds moved. Pinned by
+`test_uniform_anisotropic.py`, `test_anisotropic_berreman.py` (a Berreman 4x4 oracle) and
+`tests/references/test_reticolo_anisotropic_golden.py` (RETICOLO, frozen golden).
 
 ## 7. Where to start
 

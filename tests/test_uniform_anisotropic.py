@@ -285,15 +285,11 @@ def test_gyrotropic_layer_has_the_right_shape():
                  + res.res_te_inc.de_ri.sum()) == pytest.approx(1.0, abs=1e-12)
 
 
-@pytest.mark.xfail(strict=True,
-                   reason='Omega_R carries (epxy, epyx) in the opposite order to Omega2_LR, '
-                          'so an asymmetric tensor gets its H-field from the transpose. '
-                          'Exchanging the pair inside Omega_R alone fixes it and is a no-op '
-                          'for every symmetric tensor, which is all any shipped path emits.')
 def test_gyrotropic_layer_matches_faraday():
     """Faraday rotation through a gyrotropic slab, against the circular-eigenstate answer.
 
-    Off by ~4e-2 today and first-order in ``gamma``; the repair above lands it at ~6e-16.
+    This was ``xfail`` until ``layer_modes_2d`` was corrected — the error was ~4e-2 and first
+    order in ``gamma``, so it did not wash out at weak gyrotropy either.
     """
     res = solve_uniform(EO, EO, EO, exy=+1j * DELTA, eyx=-1j * DELTA)
     assert np.abs(jones_from_solver(res) - faraday_jones(EO, DELTA)).max() < 1e-12

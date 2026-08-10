@@ -128,7 +128,7 @@ def berreman_efficiencies(layers, theta, wl=WL):
 
 # ------------------------------------------------------------------ the solver
 
-def solve_tensor_stack(layers, theta, wl=WL):
+def solve_tensor_stack(layers, theta, wl=WL, connecting_algo='TMM'):
     """Drive the 2D solve with a hand-filled tensor per layer.
 
     ``ucell`` stays ``None``: there is no raster, and it routes ``_assign_grating_type`` to the
@@ -146,7 +146,8 @@ def solve_tensor_stack(layers, theta, wl=WL):
         epz_i.append(np.linalg.inv(e[2, 2] * I))
         thick.append(d)
     mee = fieldwave.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=theta, phi=0.0, psi=0.0,
-                         fto=(0, 0), period=(300.0, 300.0), wavelength=wl, thickness=thick)
+                         fto=(0, 0), period=(300.0, 300.0), wavelength=wl, thickness=thick,
+                         connecting_algo=connecting_algo)
     res = mee.solve_for_conv(wl, np.stack(epx), np.stack(epy), np.stack(epz_i),
                              np.stack(epxy), np.stack(epyx))
     out = {}
@@ -215,18 +216,34 @@ ASYMMETRIC_CASES = [
 ]
 
 
-@pytest.mark.xfail(strict=True,
-                   reason='Omega_R carries (epxy, epyx) in the opposite order to Omega2_LR, so an '
-                          'asymmetric tensor takes its modes from one medium and its H-field from '
-                          'that medium transpose. Exchanging the pair inside Omega_R alone brings '
-                          'every case here to ~1e-15 and is a no-op for symmetric tensors, which '
-                          'is all any shipped path emits.')
 @pytest.mark.parametrize('label,layers,theta_deg', ASYMMETRIC_CASES,
                          ids=[c[0] for c in ASYMMETRIC_CASES])
 def test_asymmetric_tensor_matches_the_oracle(label, layers, theta_deg):
+    """Oblique incidence, stacks and gyrotropy — none of which the closed forms elsewhere reach.
+
+    These were ``xfail`` until ``layer_modes_2d`` was corrected: its two blocks had carried the
+    off-diagonal pair in the *same* order, which is only consistent when the pair is symmetric.
+    The error ran 8e-3 to 8e-1 depending on configuration.
+    """
     gap = max_gap(berreman_efficiencies(layers, np.deg2rad(theta_deg)),
                   solve_tensor_stack(layers, np.deg2rad(theta_deg)))
     assert gap < 1e-12, f'{label}: oracle and solver disagree by {gap:.2e}'
+
+
+@pytest.mark.parametrize('label,layers,theta_deg', ASYMMETRIC_CASES,
+                         ids=[c[0] for c in ASYMMETRIC_CASES])
+def test_scattering_algorithm_agrees_on_asymmetric_tensors(label, layers, theta_deg):
+    """The same cases through SMM rather than TMM.
+
+    ``layer_modes_2d`` is shared by both connecting algorithms, so the ordering correction
+    reaches SMM for free — but "for free" is exactly the kind of claim that turns out to be
+    false, and nothing else here drives SMM with an off-diagonal tensor at all.
+    """
+    theta = np.deg2rad(theta_deg)
+    ref = berreman_efficiencies(layers, theta)
+    got = solve_tensor_stack(layers, theta, connecting_algo='SMM')
+    gap = max_gap(ref, got)
+    assert gap < 1e-12, f'{label}: SMM is {gap:.2e} from the oracle'
 
 
 def test_the_oracle_conserves_energy_on_a_lossless_gyrotropic_slab():

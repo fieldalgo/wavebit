@@ -45,6 +45,18 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     ``W`` is the ``[Ex; Ey]`` mode matrix and ``q`` the modal decay constants; the principal
     square root keeps ``Re(q) >= 0`` so ``exp(-k0*q*d)`` never grows. Shared by the TMM
     (:func:`solve_2d`) and SMM (:mod:`fieldwave._core.scattering`) connecting algorithms.
+
+    The two blocks are the factors of ``d2E/dz2 = P Q E``: ``Omega2_LR`` is the product written
+    out, ``Omega_R`` the right factor kept so ``V`` can recover ``H``. **They must carry the
+    off-diagonal pair in opposite orders** — ``Omega2_LR`` pairs ``epyx`` with the first column
+    and ``epxy`` with the second, ``Omega_R`` the reverse. That is not a symmetry to tidy up: it
+    is what makes ``Omega_L = Omega2_LR @ inv(Omega_R)`` come out as geometry alone,
+    ``[[-Kx Ky epz_i, Kx^2 epz_i - 1], [-Ky^2 epz_i + 1, Kx Ky epz_i]]``, for an arbitrary
+    tensor at any incidence. Align them and an asymmetric tensor takes its modes from one medium
+    and its H-field from that medium's transpose, silently: every tensor the library builds is
+    symmetric, so nothing in a normal run can tell the difference. See
+    ``docs/off-diagonal-slot-convention.md`` §4, and ``tests/test_anisotropic_berreman.py`` /
+    ``tests/references/test_reticolo_anisotropic_golden.py`` for what pins it.
     """
     B = Kx @ epz_conv_i @ Kx - I
     D = Ky @ epz_conv_i @ Ky - I
@@ -59,8 +71,8 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     q = mode_q(xp, xp.astype(w, C))
 
     Omega_R = _block(xp, [
-        [-Kx @ Ky + epxy_conv, Kx @ Kx - epy_conv],
-        [epx_conv - Ky @ Ky, Ky @ Kx - epyx_conv],
+        [-Kx @ Ky + epyx_conv, Kx @ Kx - epy_conv],
+        [epx_conv - Ky @ Ky, Ky @ Kx - epxy_conv],
     ])
     V = (Omega_R @ W) / q
     return W, V, q

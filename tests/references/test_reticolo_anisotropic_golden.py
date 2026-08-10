@@ -102,14 +102,14 @@ def test_symmetric_tensors_match_reticolo(golden, name):
     assert gap < 1e-12, f'{name}: {gap:.2e} from RETICOLO'
 
 
-@pytest.mark.xfail(strict=True,
-                   reason='Omega_R carries (epxy, epyx) in the opposite order to Omega2_LR, so '
-                          'an asymmetric tensor takes its modes from one medium and its H-field '
-                          'from that medium transpose. Exchanging the pair inside Omega_R alone '
-                          'lands every case here at ~1e-15, and is a no-op for symmetric '
-                          'tensors, which is all any shipped path emits.')
 @pytest.mark.parametrize('name', list(ASYMMETRIC_CASES), ids=list(ASYMMETRIC_CASES))
 def test_asymmetric_tensors_match_reticolo(golden, name):
+    """``eps_xy != eps_yx``, which nothing in the library builds and only a hand-filled tensor
+    reaches.
+
+    These were ``xfail`` until the two blocks in ``layer_modes_2d`` were given the off-diagonal
+    pair in opposite orders; before that the shipped operator was 4.2e-2 to 5.5e-2 out here.
+    """
     eps, theta_deg = ASYMMETRIC_CASES[name]
     gap = np.abs(solver_efficiencies(eps, theta_deg) - golden[name]).max()
     assert gap < 1e-12, f'{name}: {gap:.2e} from RETICOLO'

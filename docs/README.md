@@ -17,7 +17,7 @@ tables. Say what was measured on what hardware, and where the result stops being
 | [`oblique-lattice.md`](oblique-lattice.md) | What would non-orthogonal (oblique, hexagonal) lattice support cost? | See the document |
 | [`fourier-truncation-shape.md`](fourier-truncation-shape.md) | Does S4's circular cut of the Fourier order set beat the full rectangle FieldWave keeps? | **Not implemented** — structure-dependent, within ±20%, and negative on a common case |
 | [`anisotropic-materials.md`](anisotropic-materials.md) | Can an anisotropic or magnetic material be given to the solver, and what does each missing case cost? | Uniform in-plane tensors already work; only `eps_xz` needs a different solver |
-| [`off-diagonal-slot-convention.md`](off-diagonal-slot-convention.md) | If I fill the five permittivity slots by hand, what goes in them — and why does an asymmetric tensor come out wrong? | The slot holds `-eps_xy`; asymmetric pairs hit an ordering defect that nothing shipped can reach |
+| [`off-diagonal-slot-convention.md`](off-diagonal-slot-convention.md) | If I fill the five permittivity slots by hand, what goes in them — and why did an asymmetric tensor come out wrong? | The slot holds `-eps_xy`; an ordering defect on asymmetric pairs, found and fixed |
 
 ## Docs vs tutorials
 

@@ -1,12 +1,14 @@
-# The off-diagonal permittivity slots — what they hold, and why an asymmetric tensor comes out wrong
+# The off-diagonal permittivity slots — what they hold, and why an asymmetric tensor came out wrong
 
-Written: 2026-08-10. Measured on CPU, NumPy backend, float64.
+Written: 2026-08-10. Measured on CPU, NumPy backend, float64. The ordering defect in §4 was
+repaired the same day; the measurements are kept as taken, with it in place.
 
 Targets:
-- `fieldwave/_core/solve_2d.py::layer_modes_2d` — the two blocks, and the ordering mismatch between them
+- `fieldwave/_core/solve_2d.py::layer_modes_2d` — the two blocks, and why they must order the pair oppositely
 - `fieldwave/_core/factorization.py::_nvf_assemble` — where the sign convention is set
 - `fieldwave/on_numpy/emsolver/rcwa.py::solve_for_conv` — the only way to reach the slots by hand
-- `tests/test_uniform_anisotropic.py` — every number below
+- `tests/test_uniform_anisotropic.py`, `tests/test_anisotropic_berreman.py`,
+  `tests/references/test_reticolo_anisotropic_golden.py` — every number below
 
 Companion to [`anisotropic-materials.md`](anisotropic-materials.md), which answers the scoping
 question ("can I give the solver an anisotropic material, and what does each gap cost?"). This one
@@ -21,13 +23,19 @@ I supposed to put in them, and where does that go wrong?**
    signature says so.
 2. Getting that sign backwards is **invisible to every power efficiency** — R, T, co-pol, cross-pol
    and total are all bit-identical. Only a complex amplitude changes.
-3. More seriously: the two blocks inside `layer_modes_2d` carry the off-diagonal pair in **opposite
-   orders**, so an *asymmetric* tensor (`eps_xy != eps_yx`, i.e. gyrotropy) gets its eigenvalues
-   from one medium and its magnetic field from that medium's transpose. Measured error 3.6e-2,
-   first order in the gyrotropy strength.
-4. **No shipped code path can reach point 3.** Every tensor the library builds is symmetric, and
-   for a symmetric pair the ordering is a no-op — verified bit-identical on real gratings. This is
-   a latent defect that blocks a future capability, not a wrong number in anything released.
+3. More seriously — and this is **now fixed** — the two blocks inside `layer_modes_2d` used to
+   carry the off-diagonal pair in the *same* order, so an *asymmetric* tensor
+   (`eps_xy != eps_yx`, i.e. gyrotropy) took its eigenvalues from one medium and its magnetic
+   field from that medium's transpose. Measured error 3.6e-2, first order in the gyrotropy
+   strength. The repair exchanges the pair inside `Omega_R` only.
+4. **No shipped code path could reach point 3, and none is affected by the repair.** Every tensor
+   the library builds is symmetric, and for a symmetric pair the ordering is a no-op — verified
+   bit-identical on real gratings. It was a latent defect blocking a future capability, never a
+   wrong number in anything released.
+
+Everything below is written as it was measured, with the defect in place. That is deliberate: the
+numbers are why the repair is the right one, and they are the only record of what the failure
+looked like.
 
 ---
 
@@ -158,7 +166,7 @@ sign — because `|T_p|²` cannot see a mirror, but `T_p` can.
 
 This is pinned by `test_off_diagonal_sign_shows_up_in_the_amplitude_only`.
 
-## 4. The deeper problem: the two blocks disagree
+## 4. The deeper problem: the two blocks disagreed
 
 Everything above concerns *your* sign. This section concerns the code's.
 
@@ -391,8 +399,8 @@ tensor.** The first person to do that will be someone trying gyrotropy.
 | | |
 |---|---|
 | Sign convention (`slot = -eps`) | derived, measured, pinned by a test |
-| Asymmetric-tensor ordering | defect confirmed symbolically, numerically, and against an outside oracle; **not fixed** |
-| The repair (exchange the pair in `Omega_R`) | lands on the oracle at ~1e-15 across every configuration tried |
+| Asymmetric-tensor ordering | defect confirmed symbolically, numerically, and against an outside oracle; **fixed** |
+| The repair (exchange the pair in `Omega_R`) | applied; lands on both oracles at ~1e-15 across every configuration tried |
 | Effect on released behaviour | none — verified bit-identical on real gratings |
 | Oblique incidence, stacks, complex asymmetric tensors | covered by `tests/test_anisotropic_berreman.py` |
 | Which magnetization `+i·g` means | **open** |
@@ -459,13 +467,17 @@ anyone starts: the hard part will be Popov–Nevière, not finding something to 
 Tests: `tests/test_uniform_anisotropic.py`
 
 - `test_gyrotropic_layer_has_the_right_shape` — what does hold today (passes)
-- `test_gyrotropic_layer_matches_faraday` — the exact answer (xfail, strict; flips to XPASS the
-  moment the ordering is repaired)
+- `test_gyrotropic_layer_matches_faraday` — the exact answer (was xfail until the repair landed)
 
 `tests/test_anisotropic_berreman.py`
 
 - `test_oracle_agrees_where_the_solver_is_known_good` — the convention gate (passes)
-- `test_asymmetric_tensor_matches_the_oracle` — oblique, stacks, complex tensors (xfail, strict)
+- `test_asymmetric_tensor_matches_the_oracle` — oblique, stacks, complex tensors
+
+`tests/references/test_reticolo_anisotropic_golden.py`
+
+- `test_symmetric_tensors_match_reticolo` — the convention gate against the outside solver
+- `test_asymmetric_tensors_match_reticolo` — the same four cases, from a frozen golden
 
 ## References
 
