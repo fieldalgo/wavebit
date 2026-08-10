@@ -33,6 +33,9 @@ I supposed to put in them, and where does that go wrong?**
 
 ## 1. What the five slots are
 
+Throughout this document **block** means a sub-matrix — what `solve_2d.py::_block` assembles — not
+the `modeling='block'` path. Nothing here is about modelers.
+
 The 2D mode operator reads five permittivity blocks. They correspond to a tensor like this:
 
 ```
@@ -321,7 +324,7 @@ Every producer in the library returns the off-diagonal value **twice**:
 ```
      factorization.py:590   return eps_xx, eps_yy, -eps_xy, -eps_xy, inv(ep_dir)
      boundary.py:268        return eps_xx, eps_yy, -eps_xy, -eps_xy, inv(ep_dir)
-     analytic.py:563        return eps_xx, eps_yy, -eps_xy, -eps_xy, inv(ep_dir)
+     analytic.py:646        return eps_xx, eps_yy, -eps_xy, -eps_xy, inv(ep_dir)
                                                    └────┬────┘
                                               the same value, so the
                                               ordering cannot matter
