@@ -266,6 +266,25 @@ reconstruction in `fields.py`. All of it assumes the 2ff shape.
 
 Cost is not only structural: `eig` is `O(N³)`, so 2ff → 4ff is roughly **8x** on the layer solve.
 
+**Part of this now exists.** `fieldwave/_core/solve_2d_4ff.py` carries the first-order operator
+`M`, the forward/backward split, and a stack solve, pinned by `tests/test_solve_2d_4ff.py`
+against both the 2ff path (where that path is valid, eigenvalues agree at `lam = i q` to 1e-15)
+and the Berreman oracle (entry for entry, to 1e-16, on tensors 2ff cannot express at all).
+Nothing dispatches to it. What is still missing is the part that makes it usable: the transfer is
+`Psi exp(i k0 lam d) Psi⁻¹` and overflows on a thick layer, so it needs the scattering-matrix
+recursion the 2ff path already has; multi-order is coded but unchecked against a grating; there is
+no field reconstruction. The module refuses an out-of-range layer rather than returning a number
+it cannot stand behind.
+
+Two findings from building it, both invisible until the case existed. The `±` pairing above does
+not merely become unnecessary in 4ff — it becomes *false*: at normal incidence the backward set
+still matches the negated forward set to 1e-16, but for a tilted magnetisation at 35° they part by
+9e-2. z-coupling and oblique incidence have to combine before the assumption breaks, which is why
+nothing noticed. And direction has to be decided per mode against its own norm: scaling the
+flux threshold by the largest flux in the set works on every propagating case and then, once every
+mode is evanescent — which is every diffraction order above the light line — promotes 1e-17 of
+noise to real energy flow.
+
 ## 6.1 Gyrotropy: the two blocks disagree on the order of the pair
 
 *Summarised here; the full derivation, the figures and every measurement are in
