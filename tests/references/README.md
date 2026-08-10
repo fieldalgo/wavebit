@@ -4,22 +4,73 @@ Validation against solvers that are not ours. The expected answer is known — a
 ~1e-13 — so these are tests, not studies. What makes them their own directory is that
 *producing* the reference needs software this project does not ship.
 
-The split is by what each piece needs:
-
-| Piece | Needs |
-| --- | --- |
-| `interface/` — bridges to RETICOLO, GRCWA and TORCWA | Octave or MATLAB, and the external solver |
-| `gen_goldens_reticolo.py` — freezes the reference numbers | the same; run by hand, rarely |
-| `golden_reticolo.npz` — the frozen numbers, committed | nothing |
-| `test_reticolo_golden.py` — the assertion | nothing; **runs in CI everywhere** |
-| `reti_1D.py`, `reti_1Dc.py`, `reti_2D.py` — live side-by-side comparisons | Octave; exploratory, not asserted |
-
-That is the whole point of the arrangement: the expensive half runs once on a machine that has
-the tools, and what CI checks on every push is the committed numbers.
+The arrangement is the same for every oracle: the expensive half runs once, by hand, on a
+machine that has the tools; what CI checks on every push is the committed numbers.
 
 **Regenerating a golden is not a way to make a failing test pass.** These numbers did not come
 from this codebase, which is exactly what makes them worth having.
 
-RETICOLO is the only oracle wired up so far, and the one reference here that validates
-individual diffraction *orders* rather than totals. The GRCWA and TORCWA bridges exist but have
-no frozen case yet — adding one means adding files here, not changing test code.
+## The oracles
+
+| Oracle | Reaches | Generator needs | Golden |
+| --- | --- | --- | --- |
+| **RETICOLO** (Li/Lalanne lineage) | diffraction *orders*; uniform layers with an arbitrary complex 3x3 tensor, z-coupling included | Octave + the V10 snapshot in `<a reference collection outside this repository>` | `golden_reticolo.npz`, `golden_reticolo_anisotropic.npz` |
+| **fmmax** (Liu & Fan lineage, MIT) | uniform complex tensors, **patterned** tensors, **permeability** | the `fwref` env — see below | `golden_fmmax.npz`, `golden_fmmax_magnetic.npz` |
+| **S4** (same lineage, C++) | real tensors, patterned | the S4 extension, already in the project env | `golden_s4.npz` |
+
+A fourth oracle lives outside this directory: the Berreman 4x4 in
+`tests/test_anisotropic_berreman.py` is an independent *formulation* — not RCWA at all — but our
+own implementation, so it sits a tier below these three.
+
+Two things to weigh when reading agreement between them:
+
+* **fmmax generalises the S4 paper**, so those two share a formulation lineage. Agreement between
+  *them* is weaker evidence than agreement with RETICOLO or Berreman.
+* **RETICOLO validates individual orders**; the others are compared on totals per incident
+  polarisation. For anisotropy that is deliberate — `<a survey of the available solvers>` records that
+  S4 is silently wrong when polarisation decomposition and anisotropy are combined.
+
+The GRCWA and TORCWA bridges in `interface/` predate all of this and have no frozen case. Neither
+supports anisotropy.
+
+## The `fwref` environment
+
+fmmax carries its own JAX floor and the project env sits well ahead of it, so installing fmmax
+alongside would drag JAX back and break the backend the suite tests. It gets its own environment,
+used by nothing but the generators here:
+
+```bash
+conda create -y -n fwref python=3.11
+conda run -n fwref pip install fmmax
+```
+
+Two consequences worth knowing before touching those generators:
+
+* **The case list cannot live in the test module** the way the RETICOLO pair's does — neither env
+  can import the other's module, since `fwref` has no `fieldwave` and the project env has no
+  `fmmax`. It lives in `_fmmax_cases.py`, which imports numpy and nothing else.
+* **JAX defaults to float32.** Without `jax.config.update('jax_enable_x64', True)` an fmmax
+  generator agrees with an analytic slab only to ~3e-8, which reads as a mediocre solver and is
+  really a mediocre configuration.
+
+## Which file does what
+
+| Piece | Needs |
+| --- | --- |
+| `interface/` — bridges to RETICOLO, GRCWA and TORCWA | Octave or MATLAB, and the external solver |
+| `gen_goldens_*.py` — freeze the reference numbers | the oracle; run by hand, rarely |
+| `golden_*.npz` — the frozen numbers, committed | nothing |
+| `test_*_golden.py` — the assertions | nothing; **run in CI everywhere** |
+| `reti_1D.py`, `reti_1Dc.py`, `reti_2D.py` — live side-by-side comparisons | Octave; exploratory, not asserted |
+
+## A golden frozen ahead of its consumer
+
+`golden_fmmax_magnetic.npz` holds rows nothing in this solver can consume — permeability has no
+slot anywhere (`docs/anisotropic-materials.md` §5). It was frozen anyway, on purpose: **an oracle
+chosen after the work is an oracle chosen to agree.**
+
+What keeps that honest is that every case is generated twice, once with its permeability and once
+at `mu = 1`, and the `mu = 1` half *is* held to the solver today. If the harness, units or
+conventions were wrong, that subset would fail now, while the answer is independently knowable.
+The magnetic half carries a physical guard instead of a comparative one: every case is Hermitian
+in both tensors, hence lossless, so `R + T = 1` is enforced on the frozen numbers.
