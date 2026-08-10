@@ -10,13 +10,13 @@ tables. Say what was measured on what hardware, and where the result stops being
 | Document | Question it answers | Decision |
 | --- | --- | --- |
 | [`backend-choice.md`](backend-choice.md) | Which backend, and whether to freeze the geometry, for a *differentiated* run? | PyTorch below `fto≈5`; `jax jit` from `fto≈7` up; re-freeze every step |
-| [`analytic-modeling.md`](analytic-modeling.md) | How does the staircase-free shape path converge against the raster and vector staircases? | Analytic for tilted and curved boundaries |
+| [`analytic-modeling.md`](analytic-modeling.md) | How does the staircase-free shape path converge against the raster and block staircases? | The smooth path for tilted and curved boundaries |
 | [`boundary-modeling.md`](boundary-modeling.md) | Can a layer be painted *and* keep a tilted edge exact? | Yes — resolve the painting into polygons once, then transform those |
 | [`nvf-upsampling.md`](nvf-upsampling.md) | What grid should the NVF normal field be taken on? | Not the fine one: it lost accuracy in 27 of 32 combinations and cost the most |
 | [`torch-compile.md`](torch-compile.md) | Is `torch.compile` worth chasing for this solver? | No — the solve is almost all LAPACK, which the compiler forwards untouched |
 | [`oblique-lattice.md`](oblique-lattice.md) | What would non-orthogonal (oblique, hexagonal) lattice support cost? | See the document |
+| [`fourier-truncation-shape.md`](fourier-truncation-shape.md) | Does S4's circular cut of the Fourier order set beat the full rectangle FieldWave keeps? | **Not implemented** — structure-dependent, within ±20%, and negative on a common case |
 | [`anisotropic-materials.md`](anisotropic-materials.md) | Can an anisotropic or magnetic material be given to the solver, and what does each missing case cost? | Uniform in-plane tensors already work; only `eps_xz` needs a different solver |
-| [`repository-layout.md`](repository-layout.md) | Where does a new file go, and why is the tree shaped this way? | The routing rule, restated for contributors in [`../CONTRIBUTING.md`](../CONTRIBUTING.md) |
 | [`migration.md`](migration.md) | Which meent results does FieldWave deliberately not reproduce? | One: CFS at oblique azimuth, where meent's row-0 convention disagreed with its own other paths |
 
 ## Docs vs tutorials

@@ -348,8 +348,8 @@ Bug reports, questions and pull requests are welcome — see
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 **Adding a file? Start there.** It opens with the rule for which directory a new file belongs
-in, answerable without reading what is already in each one. The reasoning, and the renames still
-planned, are in [`docs/repository-layout.md`](docs/repository-layout.md).
+in, answerable without reading what is already in each one, and says why the directories are
+named as they are.
 
 ## Roadmap
 
