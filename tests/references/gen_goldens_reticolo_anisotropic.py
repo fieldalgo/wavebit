@@ -11,9 +11,9 @@ Cases are imported from the test module rather than restated, for the reason
 
 Setup notes:
 
-* Needs **V10**, not the V9 tree the isotropic generator uses. The anisotropic texture form
-  (a cell holding a 3x3 tensor) is a V9-and-later feature, and V10_2025 is what was verified
-  here. Override with ``RETICOLO_ANISO_PATH``.
+* Reads the same **V10** snapshot as ``gen_goldens_reticolo.py``, through the same
+  ``RETICOLO_PATH``. The anisotropic texture form (a cell holding a 3x3 tensor) is a
+  V9-and-later feature; V10_2025 is what both were verified against.
 * ``oct2py`` does not carry complex matrices across reliably, so ``interface/reti_aniso.m``
   takes the real and imaginary parts separately.
 * Energy conservation is checked at generation time, **for the Hermitian cases only**. Those
@@ -34,7 +34,7 @@ sys.path.insert(0, str(HERE.parents[1]))    # tests/, for the case list
 sys.path.insert(0, str(HERE))
 
 RETICOLO_PATH = os.environ.get(
-    'RETICOLO_ANISO_PATH',
+    'RETICOLO_PATH',
     os.path.expanduser('$RETICOLO_PATH/'
                        'V10_2025/reticolo_allege_v10'))
 
@@ -47,7 +47,7 @@ def main():
     from test_reticolo_anisotropic_golden import ALL_CASES, WL, PERIOD, THICK, is_hermitian
 
     if not pathlib.Path(RETICOLO_PATH).is_dir():
-        raise SystemExit(f'RETICOLO not found at {RETICOLO_PATH}; set RETICOLO_ANISO_PATH')
+        raise SystemExit(f'RETICOLO not found at {RETICOLO_PATH}; set RETICOLO_PATH')
 
     octave.addpath(RETICOLO_PATH)
     octave.addpath(str(HERE / 'interface'))

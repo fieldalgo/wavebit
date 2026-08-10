@@ -13,9 +13,15 @@ stay identical is a copy that will not.
 
 Setup notes, all of them things that cost an afternoon once:
 
-* Use the **V9_pristine** tree. The modified ``V9`` beside it fails inside ``retb`` under
-  Octave 9.4 with nonconformant operands. Override with ``RETICOLO_PATH`` if yours is
-  elsewhere.
+* Points at the **V10 snapshot in the reference collection**
+  (``$RETICOLO_PATH``), which is version-pinned and sits beside the licence
+  and provenance notes. Override with ``RETICOLO_PATH`` if yours is elsewhere.
+
+  It used to point at a ``V9_pristine`` tree under an unrelated project directory, chosen
+  because the modified ``V9`` beside it failed inside ``retb`` under Octave 9.4 with
+  nonconformant operands. Both generators in this directory now read the same tree. The
+  switch was checked rather than assumed: regenerating this golden against V10 reproduces
+  all 48 arrays **bit for bit**, so nothing in the checked-in data moved.
 * ``fto`` reaches RETICOLO as a scalar for the 1D branches; handing it the solver's
   ``[fto_x, fto_y]`` pair returns an empty efficiency list rather than an error.
 * RETICOLO reports only propagating orders, in increasing order index. The order indices are
@@ -35,7 +41,8 @@ sys.path.insert(0, str(HERE))              # the bridge and the test module besi
 
 RETICOLO_PATH = os.environ.get(
     'RETICOLO_PATH',
-    '<a path outside this repository>')
+    os.path.expanduser('$RETICOLO_PATH/'
+                       'V10_2025/reticolo_allege_v10'))
 
 OUT = HERE / 'golden_reticolo.npz'
 
