@@ -74,18 +74,30 @@ if __name__ == '__main__':
     b = si
     c = si
 
+    # Row 0 is y = 0 and the column index is x, on every path in the package -- the same
+    # convention the block modeler grids with. Typed the other way up, this raster is the
+    # vertical mirror of the ucell above and not the same structure: obj 1 (cy 250) lands at
+    # y 0-100 and obj 2 (cy 40) at y 230-290. With vacuum on both sides only the specular
+    # order propagates, so the mirror image radiates exactly like the original and the two
+    # paths still agree to 1e-15. Let a higher order propagate -- an index other than 1 on
+    # either half-space is enough -- and the disagreement appears.
     ucell_raster = [
         [
-            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            # y 0-10: background
+            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+
+            # obj 2: x 220-260, y 10-70
+            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
+            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
+            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
+            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
+            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
+            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
+
+            # y 70-200: background
+            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
 
             [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
             [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
@@ -98,16 +110,17 @@ if __name__ == '__main__':
             [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
             [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
 
-            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
-            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
-            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
-            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
-            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
-            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
-            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            # obj 1: x 0-100, y 200-300
+            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
 
         ],
         [
