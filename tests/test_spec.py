@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 import fieldwave
-from fieldwave import JobSpec, Sweep, SpecError, Backend, Pol, Factorization
+from fieldwave import JobSpec, Sweep, SpecError, Backend, Factorization
 
 
 BINARY_GRATING = {

@@ -15,8 +15,7 @@ import fieldwave
 import array_api_compat.numpy as xnp
 from fieldwave._core.analytic import (
     shape_ft as _shape_ft, laurent_conv_2d as _laurent_conv_2d,
-    assemble_eps_coeffs as _assemble_eps_coeffs, to_conv_mat_smooth_nvf,
-    normal_vector_field_analytical as _nvf_analytic)
+    assemble_eps_coeffs as _assemble_eps_coeffs, normal_vector_field_analytical as _nvf_analytic)
 from fieldwave._core.backend import UnphysicalResultWarning
 from fieldwave._core.factorization import dfs2d as _dfs2d
 

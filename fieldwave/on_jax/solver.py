@@ -1,4 +1,3 @@
-from .._core.modeler import Modeling
 from .emsolver.rcwa import RCWAJax
 from .optimizer.optimizer import OptimizerJax
 

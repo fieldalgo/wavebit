@@ -32,7 +32,6 @@ solver's slots take the negation. Note that power efficiencies cannot see that s
 (``docs/off-diagonal-slot-convention.md`` §3), so this golden does not pin it — the amplitude
 test in ``tests/test_uniform_anisotropic.py`` does.
 """
-import os
 import pathlib
 import sys
 

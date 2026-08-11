@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 import fieldwave
 from fieldwave._core.modeler import Modeling
 import array_api_compat.numpy as xnp

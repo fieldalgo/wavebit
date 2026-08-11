@@ -32,7 +32,7 @@ import fieldwave
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from gen_goldens_s4 import CASES, WL, PERIOD, THICK, SWAP, tensor      # noqa: E402
+from gen_goldens_s4 import CASES, WL, PERIOD, THICK, SWAP      # noqa: E402
 
 GOLDEN_PATH = HERE / 'golden_s4.npz'
 

@@ -3,8 +3,6 @@ import numpy as np
 
 import fieldwave
 
-from fieldwave._core.modeler import find_nk_index
-
 
 # os.environ['OCTAVE_EXECUTABLE'] = '/opt/homebrew/bin/octave-cli'
 

@@ -83,3 +83,38 @@ include = ["fieldwave*"]
 # the checkout rather than importing the source tree.
 [tool.setuptools.package-data]
 fieldwave = ["nk_data/filmetrics/*.txt", "nk_data/matlab/*.mat"]
+
+# The rule set is narrow on purpose: every entry below names a defect, none names a
+# preference. That distinction is the whole policy. Ruff's own default set reports 651
+# findings here, led by 346 C408 (`dict()` where `{}` would do) and 73 I001 (import order),
+# and `--select ALL` reaches 4006 E501 and 3979 Q000. Acting on those would rewrite the
+# hand-wrapped docstrings that carry most of the reasoning in this codebase, in exchange for
+# no defect found. Add a rule when it can fail a run, not when it can tidy one.
+#
+# F401 is the one that earns its place by history rather than by principle. It is the failure
+# this repo accumulates: a refactor moves a function, the import that fed it stays, and the
+# module goes on advertising a dependency it no longer has. `_core/analytic.py` carried
+# `from .factorization import dfs2d` unused across every commit since 672993c, which reads as
+# if the module obtains its coefficients off a raster -- the one thing it exists not to do.
+#
+# The rest are free insurance: each sits at zero findings today, so they cost nothing until
+# something actually breaks. F821 is not hypothetical -- it is what found the commented-out
+# `import fieldwave` in tests/references/interface/Reticolo.py, where line 244 still called
+# `fieldwave.rcwa(...)`. F811 matters most in the suite, where a duplicated test name silently
+# shadows the earlier definition and the lost test is never reported as missing.
+#
+# F841 (assigned-but-unused local) is deliberately absent: 14 of them exist, and in numerical
+# code an unused intermediate is as often a kept-for-reading step as a mistake. It would spend
+# attention rather than save it.
+[tool.ruff.lint]
+select = ["F401", "F811", "F821", "F632", "E711", "E712", "E714"]
+
+# The package's public surface. `import fieldwave; fieldwave.Layer` works precisely because
+# __init__ binds these names and nothing here uses them, so all 19 read as unused. The other
+# spelling is an `__all__` repeating the same 19 names, which states it at more length.
+#
+# Note what is *not* exempted: tests/references/ and tutorials/ stay linted. They look like
+# throwaway comparison harnesses, which is exactly the argument for skipping them -- and the
+# Reticolo bug above was sitting in one of them.
+[tool.ruff.lint.per-file-ignores]
+"fieldwave/__init__.py" = ["F401"]

@@ -5,7 +5,6 @@ This code is not supported and no plan to modify as of now.
 import torch
 import torcwa
 import numpy as np
-import matplotlib.pyplot as plt
 
 
 class TORCWA:
