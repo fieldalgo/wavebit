@@ -6,6 +6,12 @@ from jax import tree_util
 # only as a cross-backend mismatch. Enabling it changes the caller's jax
 # process-wide, so it happens here — reached only when the jax backend is
 # actually imported — and not on `import fieldwave`.
+#
+# It is *also* done earlier when the caller already had jax loaded, by
+# `fieldwave/__init__.py::_enable_jax_x64_if_already_imported`. Doing it only
+# here left a window: an array built between `import fieldwave` and the first
+# solve is complex64, and gets widened later without recovering anything. This
+# line still covers the case where jax arrives after fieldwave.
 jax.config.update('jax_enable_x64', True)
 
 from fieldwave.on_jax.solver import SolverJax

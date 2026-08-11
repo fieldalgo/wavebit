@@ -300,12 +300,49 @@ Note that the CFS (`integrated`) path is not traceable at all — `factorization
 calls `bool()` on a tracer — so a jit'd solve is on the DFS path regardless. That predates this
 work.
 
-**A trap worth knowing about while measuring any of this.** `fieldwave/on_jax/__init__.py`
-enables `jax_enable_x64` on import, and `import fieldwave` alone does not pull that in — the
-backend module loads on the first `rcwa(backend=1)`. An array built before then is silently
-complex64, so `theta` can arrive at single precision while `type_complex=0` says otherwise.
-That produced a `|R| = 3.94` in an early draft of this document that was read as a solver bug
-and was not one; `import fieldwave.on_jax` first, or build the arrays after the first solve.
+### The x64 ordering trap, and why it now warns
+
+`fieldwave/on_jax/__init__.py` enables `jax_enable_x64`, and it does so deliberately late: the
+setting is process-wide and belongs to the caller, so it happens when the JAX backend is first
+*used*, not on `import fieldwave`. An array built in the gap between the two is silently
+complex64:
+
+```python
+import jax.numpy as jnp, fieldwave
+theta = jnp.asarray(0.4 + 0.3j)                               # complex64 — x64 is not on yet
+fieldwave.rcwa(backend=1, theta=theta, type_complex=0, ...)   # ...but double was asked for
+```
+
+The setter's `jnp.array(theta, dtype=complex128)` then widens it without recovering anything,
+and the solve runs with ~8 significant digits missing from its incidence angle. Measured
+`|R| = 3.94` against a true 0.67, with every dtype in sight reading complex128 — **this was
+diagnosed as a solver bug before it was diagnosed as an import ordering artifact**, which is
+the whole argument for reporting it.
+
+Two things address it, because neither is enough alone.
+
+**The cap is lifted earlier.** `import fieldwave` now enables x64 when JAX is *already* loaded
+(`_enable_jax_x64_if_already_imported`). The original rationale was that the setting is
+process-wide and belongs to the caller — but fieldwave flips it either way, just later, so
+deferring never spared the caller the change; it only made the moment depend on import order.
+Note what x64 actually is:
+
+| | x64 off | x64 on |
+| --- | --- | --- |
+| `jnp.asarray(0.4)` | float32 | float64 |
+| `jnp.asarray(0.4, jnp.float64)` | **float32** — cannot opt in | float64 |
+| `jnp.asarray(0.4, jnp.float32)` | float32 | float32 — can still opt out |
+
+It is a **cap**, not a default, and `type_complex` keeps selecting the solve's precision either
+way (`type_complex=1` still returns complex64 with x64 on). The half of the old rationale that
+survives is that a NumPy-only caller should pay nothing, so this never *imports* JAX — pinned
+by `test_importing_fieldwave_does_not_drag_jax_in`.
+
+**What that cannot reach still warns.** `import fieldwave` before `import jax` leaves no config
+to change, so `check_input_precision` reports (`PrecisionLossWarning`) whenever `theta` or `phi`
+arrives narrower than the working precision. Not JAX-specific — any array handed in below the
+solve's precision loses the same way — and quiet for a Python float, a matching dtype, and
+single data given to a single-precision solve.
 
 ### And offers a scoped override
 
