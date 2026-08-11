@@ -85,7 +85,7 @@ def test_numpy_is_new_enough_to_report_fp_flags_correctly():
         'pyproject.toml requires numpy>=2.3.1.')
 
 
-@pytest.mark.parametrize('connecting_algo', ['TMM', 'SMM'])
+@pytest.mark.parametrize('connecting_algo', ['ETM', 'SMM'])
 def test_thick_2d_stack_is_silent_and_conserves_energy(connecting_algo):
     res, fp = _run(ucell=_ucell_2d(), thickness=[600], period=[700, 700], fto=[8, 8],
                    pol=1, n_bot=3.48, connecting_algo=connecting_algo)
@@ -93,7 +93,7 @@ def test_thick_2d_stack_is_silent_and_conserves_energy(connecting_algo):
     assert abs(_energy(res) - 1.0) < 1e-10
 
 
-@pytest.mark.parametrize('connecting_algo', ['TMM', 'SMM'])
+@pytest.mark.parametrize('connecting_algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('pol', [0, 1])
 def test_thick_1d_stack_is_silent_and_conserves_energy(connecting_algo, pol):
     res, fp = _run(ucell=_ucell_1d(), thickness=[800, 400], period=[700], fto=[8, 0],
@@ -102,7 +102,7 @@ def test_thick_1d_stack_is_silent_and_conserves_energy(connecting_algo, pol):
     assert abs(_energy(res) - 1.0) < 1e-10
 
 
-@pytest.mark.parametrize('connecting_algo', ['TMM', 'SMM'])
+@pytest.mark.parametrize('connecting_algo', ['ETM', 'SMM'])
 def test_conical_stack_is_silent_and_conserves_energy(connecting_algo):
     res, fp = _run(ucell=_ucell_1d(), thickness=[800, 400], period=[700], fto=[8, 0],
                    pol=0, phi=0.3, n_bot=3.48, connecting_algo=connecting_algo)

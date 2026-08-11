@@ -231,7 +231,7 @@ def test_10_shared_mean_permittivity_keeps_the_interface():
         ucell=np.concat([UC, UC[:, ::-1]]), thickness=[0.2, 0.3], n_top=1.0, n_bot=1.0,
         psi=0.4, wavelength=0.5, period=[0.6, 0.6], theta=0.1, phi=0.0, fto=[2, 2])
 
-    for algo in ('TMM', 'SMM'):
+    for algo in ('ETM', 'SMM'):
         res = fieldwave.rcwa(backend=0, connecting_algo=algo, **option).conv_solve()
         total = float(np.sum(res.de_ri)) + float(np.sum(res.de_ti))
         print(f"[{algo}] R+T = {total:.12f}")

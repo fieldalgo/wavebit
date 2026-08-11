@@ -1,23 +1,23 @@
 """Scattering-matrix method (SMM) — the second connecting algorithm, single-source.
 
-The *connecting algorithm* is how per-layer eigenmodes are joined into a stack response. TMM
+The *connecting algorithm* is how per-layer eigenmodes are joined into a stack response. ETM
 (:mod:`fieldwave._core.solve_1d` / :mod:`fieldwave._core.solve_2d`) propagates an enhanced
 transmittance matrix; SMM composes per-layer scattering matrices with the Redheffer star
-product. Both consume the same modes — this module imports the mode builders from the TMM
+product. Both consume the same modes — this module imports the mode builders from the ETM
 solves rather than restating the eigen-algebra — and both use the same boundary conventions,
-so ``connecting_algo='SMM'`` returns the same efficiencies as ``'TMM'``, not a second opinion.
+so ``connecting_algo='SMM'`` returns the same efficiencies as ``'ETM'``, not a second opinion.
 
 Why have it: a layer's scattering matrix depends only on that layer and the shared gap medium,
 and the star product is associative. Layer responses can therefore be built once and cascaded,
-reused, or reordered without touching their neighbours — where TMM's recursion carries a state
+reused, or reordered without touching their neighbours — where ETM's recursion carries a state
 that already contains everything below the current layer. SMM is also the formulation most of
-the literature states its results in, which makes it the natural cross-check on the TMM path.
+the literature states its results in, which makes it the natural cross-check on the ETM path.
 
-What it is *not*: a rescue from TMM instability. This TMM is the enhanced-transmittance form,
-so it is already stable; both algorithms only ever evaluate ``exp(-k0*q*d)`` with ``Re(q) >= 0``
+What it is *not*: a rescue from transfer-matrix instability. The option is named ``'ETM'``
+because it *is* the enhanced-transmittance form, which is already stable; both algorithms only ever evaluate ``exp(-k0*q*d)`` with ``Re(q) >= 0``
 (principal root) and only inside bounded products. Measured on thick, strongly evanescent and
 high-truncation stacks the two agree to ~1e-14 with no energy drift either way, and SMM costs
-~1.1-1.4x TMM (the per-layer ``eig`` dominates both), or ~1.3-1.6x once it also recovers the
+~1.1-1.4x ETM (the per-layer ``eig`` dominates both), or ~1.3-1.6x once it also recovers the
 field-reconstruction state described below.
 
 Formulation, in the conventions this codebase already uses (see :func:`solve_1d`):
@@ -31,13 +31,13 @@ Formulation, in the conventions this codebase already uses (see :func:`solve_1d`
   gap cancels out of the composed result whatever it is, as long as it is used everywhere).
 * Incidence enters as mode amplitudes directly: ``E_s = sin(psi)`` and ``H_p = i*n_top*cos(psi)``
   for the coupled path, unit primary amplitude for 1D TE/TM. These are the same incident
-  amplitudes the TMM final matching solves against.
+  amplitudes the ETM final matching solves against.
 
 Field reconstruction works from either algorithm. What :mod:`fieldwave._core.fields` walks is
-per-layer mode amplitudes, which the TMM recursion happens to leave behind and the SMM cascade
+per-layer mode amplitudes, which the ETM recursion happens to leave behind and the SMM cascade
 does not — so the SMM recovers them afterwards from its own split-plane amplitudes and hands
 over the same ``layer_info_list`` / ``T1`` state (see :func:`_field_state`). Same is close to
-literal: the recovered blocks match the TMM's to ~1e-15 for every layer but the bottom one,
+literal: the recovered blocks match the ETM's to ~1e-15 for every layer but the bottom one,
 where the two differ by a basis the reconstruction never resolves. They have to match, because
 the amplitudes they describe are unique given the modes, and the modes come from the same
 builders. That recovery is a second pass over the stack, done only under ``full=True``, and it
@@ -131,7 +131,7 @@ def _prepare(epx_conv_all, kx, ky=None):
 # The cascade above answers at the outer ports only. Field reconstruction needs what is
 # inside: each layer's own down- and up-going mode amplitudes. Both are recovered from the
 # split-plane amplitudes of the same cascade, and then handed over in the exact form
-# `fields` already consumes from the TMM — see `_field_state` for that contract.
+# `fields` already consumes from the ETM — see `_field_state` for that contract.
 
 def _below_reflections(xp, I, S_layers, S_trn):
     """Reflection of everything below each split plane, in the gap basis.
@@ -160,7 +160,7 @@ def _field_state(xp, I, S_ref, S_trn, S_layers, AB, c_inc):
     down-going mode amplitude at its own top plane. It asks each layer for two matrices — one
     that advances that vector to the next layer (``T_{i+1} = a_i X_i T_i``) and one that turns
     it into the layer's up-going amplitude at its bottom plane (``c2_i = b_i T_{i+1}``). The
-    TMM produces both as by-products of its recursion; the SMM has to reconstruct them, and
+    ETM produces both as by-products of its recursion; the SMM has to reconstruct them, and
     away from the bottom layer they come out as the *same* matrices, because the down-going
     amplitude at a plane determines everything below it uniquely.
 
@@ -170,9 +170,9 @@ def _field_state(xp, I, S_ref, S_trn, S_layers, AB, c_inc):
     interface. Eliminating ``g`` between neighbours gives the two matrices asked for.
 
     The bottom layer has no layer below it and carries ``g`` itself onward, which is why its
-    two blocks are the one place this state differs from the TMM's (their product, the only
+    two blocks are the one place this state differs from the ETM's (their product, the only
     combination the reconstruction forms, still agrees). Going further and expressing that
-    vector in the substrate's own basis — matching the TMM exactly — would mean inverting the
+    vector in the substrate's own basis — matching the ETM exactly — would mean inverting the
     substrate's ``V``, and that matrix is singular whenever a retained order sits exactly at
     cutoff, ``kz_bot == 0``. The gap basis is the one basis this formulation guarantees
     invertible, by its choice of ``eps_gap``; the value handed past the bottom layer is never
@@ -230,7 +230,7 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     theta = 0.0 if theta is None else theta
     I = xp.astype(xp.eye(ff_x), C)
 
-    # Boundary branches come from the same place the TMM path takes them, so the two
+    # Boundary branches come from the same place the ETM path takes them, so the two
     # algorithms answer identically.
     kz_top = boundary_kz(xp, n_top ** 2, kx ** 2)
     kz_bot = boundary_kz(xp, n_bot ** 2, kx ** 2)
@@ -303,7 +303,7 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
         res = _pack(zeros_amp, R, zeros_amp, Tt, zeros_eff, de_ri, zeros_eff, de_ti)
 
     blocks, T1 = _field_state(xp, I, S_ref, S_trn, S_layers, AB, delta)
-    # Bottom-to-top, the order field reconstruction walks in reverse (as the TMM appends it).
+    # Bottom-to-top, the order field reconstruction walks in reverse (as the ETM appends it).
     layer_info_list = [m + list(b) for m, b in zip(modes, blocks)][::-1]
     if T1 is not None:
         T1 = xp.reshape(T1, (ff_x,))    # the 1D path carries T1 as a plain vector
@@ -341,7 +341,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     Kz_bot = _diag(xp, kz_bot)
 
     # Half-space and gap modes in the (E_s, F_p) / (H_s, H_p) boundary basis — the same form
-    # the TMM substrate seed (big_F, big_G) has.
+    # the ETM substrate seed (big_F, big_G) has.
     W_top = _block(xp, [[I, O], [O, -1j * Kz_top / n_top ** 2]])
     V_top = _block(xp, [[-1j * Kz_top, O], [O, I]])
     W_bot = _block(xp, [[I, O], [O, -1j * Kz_bot / eps_bot]])
@@ -412,7 +412,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     blocks, T1 = _field_state(xp, big_I, S_ref, S_trn, S_layers, AB, c_inc)
     layer_info_list = [m + list(b) for m, b in zip(modes, blocks)][::-1]
     if T1 is not None:
-        # One column per incidence variant (psi, TE, TM), as the TMM stacks them.
+        # One column per incidence variant (psi, TE, TM), as the ETM stacks them.
         T1 = xp.stack([T1[:, i:i + 1] for i in range(n_inc)])
     return {'res': packed[0], 'res_te_inc': packed[1], 'res_tm_inc': packed[2],
             'layer_info_list': layer_info_list, 'T1': T1}

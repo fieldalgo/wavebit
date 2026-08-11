@@ -363,29 +363,33 @@ def test_the_cascade_matches_the_closed_form_across_thicknesses(n, thick, algo):
     assert T == pytest.approx(want_t, rel=1e-11), f'{algo}, n={n}, d={thick}'
 
 
-def test_the_transfer_refuses_before_it_becomes_inaccurate():
-    """``connecting_algo='TMM'`` is a second opinion, so its bound must sit where it stops being
-    one — not where it crashes.
+def test_the_unstabilised_transfer_refuses_before_it_becomes_inaccurate():
+    """``'TMM'`` is a third opinion, so its bound must sit where it stops being one — not
+    where it crashes.
 
-    The two are different by three decades. The transfer's relative error grows like
-    ``eps*exp(2x)`` in the modal exponent, so it is already 1.2e-8 out at ``x = 9`` and 8.5e-4 at
-    ``x = 16``, while it does not overflow until about 700. A bound placed at the crash lets all
-    of that through silently; this checks the bound is placed at the accuracy instead, by
-    requiring that whatever TMM still accepts agrees with the cascade.
+    The two are different by three decades. Its relative error grows like ``eps*exp(2x)`` in the
+    modal exponent, so it is already 1.2e-8 out at ``x = 9`` and 8.5e-4 at ``x = 16``, while it
+    does not overflow until about 700. A bound placed at the crash lets all of that through
+    silently; this checks the bound is placed at the accuracy instead, by requiring that whatever
+    it still accepts agrees with the stabilised path.
+
+    Note the name. ``'ETM'`` is the enhanced form and is what the 2ff path calls its default
+    too; ``'TMM'`` here is the plain transfer, which the 2ff path does not offer. One string, one
+    meaning, across both solvers.
     """
     kx, ky = _kxky(35.0)
     absorbing = np.diag([(1.5 + 0.1j) ** 2] * 3).astype(complex)
     psi = vacuum_sp_states(np, kx, ky, 1)[0]
 
-    # just inside the bound: TMM answers, and its answer is still worth having
+    # just inside the bound: it answers, and its answer is still worth having
     ok = [(blocks(absorbing), 7000.0)]
-    smm = solve_uniform_stack(WL, kx, ky, ok, 1, psi)
-    tmm = solve_uniform_stack(WL, kx, ky, ok, 1, psi, connecting_algo='TMM')
-    for a, b in zip(smm, tmm):
-        assert a == pytest.approx(b, rel=1e-6), 'TMM accepted a case it cannot do accurately'
+    good = solve_uniform_stack(WL, kx, ky, ok, 1, psi)
+    naive = solve_uniform_stack(WL, kx, ky, ok, 1, psi, connecting_algo='TMM')
+    for a, b in zip(good, naive):
+        assert a == pytest.approx(b, rel=1e-6), 'accepted a case it cannot do accurately'
 
     # past it: refused, and told where to go instead
-    with pytest.raises(ValueError, match="connecting_algo='SMM'"):
+    with pytest.raises(ValueError, match="connecting_algo='ETM'"):
         solve_uniform_stack(WL, kx, ky, [(blocks(absorbing), 30000.0)], 1, psi,
                             connecting_algo='TMM')
 
@@ -396,7 +400,8 @@ def test_the_transfer_refuses_before_it_becomes_inaccurate():
 def test_the_connecting_algorithms_agree_where_all_are_valid(label, eps, theta_deg):
     """Three ways of joining the same modes must give the same stack.
 
-    They are *not* equivalent in reach — only ETM and SMM survive a thick layer — so agreement
+    They are *not* equivalent in reach — only the two stable ones survive a thick layer — so
+    agreement
     on a thin stack is what says the difference between them is stability and nothing else. A
     disagreement here would point at the interface matching or the mode ordering, which no
     external oracle would localise.

@@ -6,7 +6,7 @@ from ..._core.engine import CoreSolveMixin
 class _BaseRCWA(CoreSolveMixin):
     def __init__(self, n_top=1., n_bot=1., theta=0., phi=None, psi=None, pol=0., fto=(0, 0),
                  period=(1., 1.), wavelength=1.,
-                 thickness=(0.,), connecting_algo='TMM', perturbation=1E-20,
+                 thickness=(0.,), connecting_algo='ETM', perturbation=1E-20,
                  device=0, type_complex=np.complex128):
 
         self._device = 0

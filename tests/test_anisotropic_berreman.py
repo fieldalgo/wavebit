@@ -163,7 +163,7 @@ def reject_z_coupling(eps, tol=1e-12):
             'first-order formulation — see docs/anisotropic-materials.md section 6.')
 
 
-def solve_tensor_stack(layers, theta, wl=WL, connecting_algo='TMM'):
+def solve_tensor_stack(layers, theta, wl=WL, connecting_algo='ETM'):
     """Drive the 2D solve with a hand-filled tensor per layer.
 
     ``ucell`` stays ``None``: there is no raster, and it routes ``_assign_grating_type`` to the
@@ -272,7 +272,7 @@ def test_asymmetric_tensor_matches_the_oracle(label, layers, theta_deg):
 @pytest.mark.parametrize('label,layers,theta_deg', ASYMMETRIC_CASES,
                          ids=[c[0] for c in ASYMMETRIC_CASES])
 def test_scattering_algorithm_agrees_on_asymmetric_tensors(label, layers, theta_deg):
-    """The same cases through SMM rather than TMM.
+    """The same cases through SMM rather than ETM.
 
     ``layer_modes_2d`` is shared by both connecting algorithms, so the ordering correction
     reaches SMM for free — but "for free" is exactly the kind of claim that turns out to be

@@ -282,10 +282,10 @@ a real magnetised film has — is past that edge, so it still rests on our own B
 measurements and the reasoning are in `tests/references/README.md`.
 
 Nothing dispatches to it. It is, however, stable for any thickness: layers are joined by an
-enhanced-transmittance recursion (`connecting_algo='ETM'`, the same technique that makes the 2ff
-transfer stable) or by scattering matrices (`'SMM'`), and both hold ~1e-13 relative accuracy out
+enhanced-transmittance recursion (`connecting_algo='ETM'`, the same string and the same
+technique as the 2ff path) or by scattering matrices (`'SMM'`), and both hold ~1e-13 relative accuracy out
 to a modal exponent of 2500, where they reproduce the closed-form single-interface Fresnel
-reflectance to 4e-16. A naive transfer is kept as `'TMM'` for cross-checking and refuses past the
+reflectance to 4e-16. An unstabilised transfer is kept as `'TMM'` for cross-checking and refuses past the
 point where it is accurate. What is still missing: multi-order is coded but unchecked against a
 grating, and there is no field reconstruction.
 
@@ -443,7 +443,7 @@ class Formulation(str, Enum):
 Forcing `'4ff'` on a problem that does not need it is how the 4ff solver gets **validated**: a
 z-decoupled case run both ways must agree, and that is an internal cross-check no external oracle
 provides. It is the same reason `connecting_algo` is selectable — and the same reason
-`test_anisotropic_berreman.py` drives SMM as well as TMM, since "the correction reaches the other
+`test_anisotropic_berreman.py` drives SMM as well as ETM, since "the correction reaches the other
 path for free" is exactly the sort of claim that turns out to be false.
 
 Forcing `'2ff'` on a z-coupled tensor must **raise**, not quietly drop the z row. That failure mode

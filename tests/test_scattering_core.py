@@ -1,16 +1,16 @@
 """Scattering-matrix connecting algorithm (fieldwave._core.scattering).
 
-SMM has no golden file of its own on purpose: its oracle is the TMM path, which is itself
+SMM has no golden file of its own on purpose: its oracle is the ETM path, which is itself
 pinned to the legacy results in test_golden_legacy_parity.py. So the properties tested are
 
-  * agreement    — SMM == TMM on every grating type, in efficiencies *and* in the s/p
+  * agreement    — SMM == ETM on every grating type, in efficiencies *and* in the s/p
                    amplitudes, for the psi incidence and both pure-TE / pure-TM variants;
-  * conservation — lossless stacks keep their energy (a check TMM agreement alone would pass
+  * conservation — lossless stacks keep their energy (a check ETM agreement alone would pass
                    even if both were wrong the same way, so it is worth its own assertion);
   * wiring       — connecting_algo='SMM' reaches the core solve, and an unknown algo is
                    rejected with a useful message;
   * fields       — the near field reconstructed after an SMM solve, and the per-layer state
-                   it is built from, match the TMM's, on an axis-aligned and a skewed cell;
+                   it is built from, match the ETM's, on an axis-aligned and a skewed cell;
   * portability  — same numbers on numpy / jax / torch, and gradients still flow.
 """
 import numpy as np
@@ -41,7 +41,7 @@ CASES_1D = [
     ('tm_2layer_oblique', dict(pol=1, ucell=UC_1D, thickness=[0.15, 0.22], n_top=2.0,
                                n_bot=1.5, theta=0.3, wavelength=0.777, period=[0.77],
                                fto=[5, 0])),
-    # bottom layer uniform and equal to the substrate: TMM short-circuits the interface,
+    # bottom layer uniform and equal to the substrate: ETM short-circuits the interface,
     # SMM has no short-circuit to take — they must still land on the same answer.
     ('te_same_material', dict(pol=0, ucell=UC_1D_SUB, thickness=[0.2, 0.1], n_top=1.0,
                               n_bot=1.0, theta=0.0, wavelength=0.9, period=[0.7],
@@ -72,7 +72,7 @@ CASES_2D = [
     ('2d_1layer', dict(ucell=UC_2D, thickness=[0.3], n_top=1.0, n_bot=1.5, theta=0.2,
                        phi=0.4, psi=0.7, wavelength=0.9, period=[0.7, 0.7], fto=[3, 3])),
     # The two layers differ in *mean* permittivity, not just in pattern. Equal means used to
-    # trip a TMM misdetection (see the DEGENERATE_MEAN note below); that path is gone, and
+    # trip a ETM misdetection (see the DEGENERATE_MEAN note below); that path is gone, and
     # this stays the way it is because the case is a cross-algorithm check, not a probe of it.
     ('2d_2layer_normal', dict(ucell=np.concat([UC_2D, 1 + UC_2D[:, ::-1]]),
                               thickness=[0.2, 0.3], n_top=1.0, n_bot=1.0, theta=0.0,
@@ -97,7 +97,7 @@ def _solve(algo, kwargs):
 @pytest.mark.parametrize('name,kwargs,kind', ALL_CASES, ids=[c[0] for c in ALL_CASES])
 def test_smm_matches_tmm(name, kwargs, kind):
     """Same efficiencies and same s/p amplitudes, for every incidence the solve reports."""
-    tmm = _solve('TMM', kwargs)
+    tmm = _solve('ETM', kwargs)
     smm = _solve('SMM', kwargs)
 
     for variant in ('res', 'res_te_inc', 'res_tm_inc'):
@@ -192,7 +192,7 @@ def test_smm_field_matches_tmm(name, kwargs, kind):
     recovery is the same physical state and not merely a plausible one — including for the
     TE / TM incidence variants, which have their own amplitude columns.
     """
-    _, tmm = _field('TMM', kwargs, res_x=6, res_y=6, res_z=5)
+    _, tmm = _field('ETM', kwargs, res_x=6, res_y=6, res_z=5)
     _, smm = _field('SMM', kwargs, res_x=6, res_y=6, res_z=5)
     assert tmm.shape == smm.shape
     scale = np.max(np.abs(tmm))
@@ -201,7 +201,7 @@ def test_smm_field_matches_tmm(name, kwargs, kind):
 
 @pytest.mark.parametrize('name,kwargs,kind', ALL_CASES, ids=[c[0] for c in ALL_CASES])
 def test_smm_field_state_matches_tmm(name, kwargs, kind):
-    """The recovered state itself is the TMM's, layer by layer — not just its field.
+    """The recovered state itself is the ETM's, layer by layer — not just its field.
 
     Both algorithms hand ``fields`` the same three things per layer: the incident amplitude
     ``T1``, the block advancing it to the next layer, and the block turning it into that
@@ -214,7 +214,7 @@ def test_smm_field_state_matches_tmm(name, kwargs, kind):
     reads, and the two algorithms express that one in different bases (see ``_field_state``).
     What is defined there is their product, which is what the reconstruction actually forms.
     """
-    tmm = fieldwave.rcwa(backend=0, connecting_algo='TMM', **kwargs)
+    tmm = fieldwave.rcwa(backend=0, connecting_algo='ETM', **kwargs)
     smm = fieldwave.rcwa(backend=0, connecting_algo='SMM', **kwargs)
     tmm.conv_solve()
     smm.conv_solve()
@@ -258,7 +258,7 @@ def test_smm_field_with_an_order_exactly_at_the_substrate_cutoff(extra):
                  - np.array(solver.get_kx_ky_vector(kwargs['wavelength'])[0]) ** 2)
     assert np.min(np.abs(kz)) < 1e-12, 'premise: an order must sit exactly at cutoff'
 
-    _, tmm = _field('TMM', kwargs, res_x=6, res_y=6, res_z=4)
+    _, tmm = _field('ETM', kwargs, res_x=6, res_y=6, res_z=4)
     _, smm = _field('SMM', kwargs, res_x=6, res_y=6, res_z=4)
     assert np.all(np.isfinite(np.abs(smm)))
     assert np.max(np.abs(tmm - smm)) < 1e-10 * np.max(np.abs(tmm))
@@ -291,15 +291,15 @@ def _hex_rod(n=48, radius=90.0):
 def test_smm_field_on_a_skewed_cell_matches_tmm():
     """The two capabilities were added independently and had never met.
 
-    Non-orthogonal cells arrived while field reconstruction was still TMM-only, so the skewed
-    reconstruction has only ever been exercised through the TMM. Nothing in the amplitude
+    Non-orthogonal cells arrived while field reconstruction was still ETM-only, so the skewed
+    reconstruction has only ever been exercised through the ETM. Nothing in the amplitude
     recovery reads the lattice -- it works in the mode and gap bases, which the basis change
     never touches -- and this is the test that says so rather than assuming it.
     """
     kwargs = dict(ucell=_hex_rod(), period=[HEX_P, HEX_P], fto=[4, 4], thickness=[150.0],
                   wavelength=900.0, n_top=1.0, n_bot=1.0, theta=0.1, phi=0.3, psi=0.4,
                   lattice=HEX, factorization='nvf')
-    _, tmm = _field('TMM', kwargs, res_x=6, res_y=6, res_z=4)
+    _, tmm = _field('ETM', kwargs, res_x=6, res_y=6, res_z=4)
     _, smm = _field('SMM', kwargs, res_x=6, res_y=6, res_z=4)
     assert tmm.shape == smm.shape
     assert np.all(np.isfinite(np.abs(smm)))
@@ -326,9 +326,9 @@ def test_frozen_geometry_does_not_change_the_smm_answer():
 # ------------------------------------------------------------------------------ robustness
 
 # Two differently patterned layers whose *mean* permittivity happens to match. This is the
-# structure that exposed the same-material misdetection (test_fixes.test_10): TMM read the
+# structure that exposed the same-material misdetection (test_fixes.test_10): ETM read the
 # upper layer as identical to the one below and skipped their interface, losing ~50x on
-# energy, while SMM — which never had such a short-circuit — stayed exact. TMM has none
+# energy, while SMM — which never had such a short-circuit — stayed exact. ETM has none
 # either now, so no solver can skip an interface; kept as what would catch either of them
 # growing one back.
 DEGENERATE_MEAN = dict(
@@ -338,13 +338,13 @@ DEGENERATE_MEAN = dict(
 
 @pytest.mark.parametrize('theta,phi', [(0.0, 0.0), (0.1, 0.0), (0.1, 0.4)])
 def test_smm_survives_same_mean_layers(theta, phi):
-    """Lossless energy conservation, and TMM agreement, on that stack."""
+    """Lossless energy conservation, and ETM agreement, on that stack."""
     kwargs = dict(DEGENERATE_MEAN, theta=theta, phi=phi)
     smm = _solve('SMM', kwargs)
     total = float(np.sum(np.array(smm.de_ri)) + np.sum(np.array(smm.de_ti)))
     assert abs(total - 1.0) < 1e-9, total
 
-    tmm = _solve('TMM', kwargs)
+    tmm = _solve('ETM', kwargs)
     for field in ('de_ri', 'de_ti'):
         a, b = np.array(getattr(tmm, field)), np.array(getattr(smm, field))
         assert np.allclose(a, b, atol=1e-10, rtol=0), (field, np.max(np.abs(a - b)))

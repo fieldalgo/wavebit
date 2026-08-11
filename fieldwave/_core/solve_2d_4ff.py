@@ -58,26 +58,31 @@ thickness — a mode carrying energy towards ``+z`` cannot gain amplitude on the
 ``Im(lam_f) >= 0``, and the mirrored statement holds backwards. Two of the three connecting
 algorithms are then arrangements that keep only those factors:
 
-===========  ==================================  =====================  ===================
-``algo``     form                                thickness              cost, 40 layers
-===========  ==================================  =====================  ===================
-``'ETM'``    enhanced transmittance (default)    unbounded              0.94x
-``'SMM'``    scattering matrices, Redheffer      unbounded              1.13x
-``'TMM'``    ``Psi exp(...) Psi^-1``, naive      refuses past x = 9     1.00x
-===========  ==================================  =====================  ===================
+==========  ==================================  ====================  ================
+``algo``    form                                thickness             cost, 40 layers
+==========  ==================================  ====================  ================
+``'ETM'``   enhanced transmittance (default)    unbounded             0.94x
+``'SMM'``   scattering matrices, Redheffer      unbounded             1.13x
+``'TMM'``   ``Psi exp(...) Psi^-1``, plain      refuses past x = 9    1.00x
+==========  ==================================  ====================  ================
 
-ETM and SMM agree to 1.2e-15 over eight tensors, three angles and both polarisations, and both
-hold ~1e-13 relative accuracy out to a modal exponent of 2500, where they reproduce the
+``'ETM'`` is the same option, under the same name, as the 2ff path's default — the string has
+to mean one thing across both solvers. ``'TMM'`` here is the plain unstabilised transfer,
+which the 2ff path does not offer at all; it exists only to show the stabilisation is
+load-bearing.
+
+The two stable ones agree to 1.2e-15 over eight tensors, three angles and both polarisations,
+and both hold ~1e-13 relative accuracy out to a modal exponent of 2500, where they reproduce the
 closed-form single-interface Fresnel reflectance to 4e-16.
 
-TMM is kept deliberately naive, as a third opinion whose failure mode is understood: it holds
-the growing and decaying halves in one matrix and inverts it, so its relative error grows like
+``'TMM'`` is kept as a third opinion whose failure mode is understood: it holds the growing
+and decaying halves in one matrix and inverts it, so its relative error grows like
 ``eps*exp(2x)``. Its bound is set by *accuracy*, not by overflow — see ``_MAX_EXPONENT``.
 
 **None of this covers a gain medium**, where a forward mode amplifies by construction
 (``Im(lam_f) < 0``; measured -0.108 for ``n = 1.5 - 0.1j``) and the propagators stop being
-contractions. Measured anyway: ETM and SMM still track the Airy closed form to ~1e-13 out to an
-exponent of 113, and past roughly 700 return NaN. Nothing guards that, because there the growth
+contractions. Measured anyway: the two stable algorithms still track the Airy closed form to ~1e-13
+out to an exponent of 113, and past roughly 700 return NaN. Nothing guards that, because there the growth
 is the physics rather than an artefact — but the stability claim is about passive media and
 should not be read further.
 
@@ -97,10 +102,10 @@ _FLAT = 1e-12
 
 # The transfer inverts a matrix holding exp(+x) and exp(-x) at once, so it loses relative
 # precision like eps*exp(2x) -- measured 1.2e-8 at x = 9.1 against a predicted 1.8e-8, and 8.5e-4
-# by x = 15.9. This bound is where that prediction passes ~1e-9, which is where TMM stops being
-# usable as a cross-check on SMM. It is deliberately far below the overflow point: the earlier
-# value of 300 only caught the crash, and let three decades of silently wrong answers through
-# first (5.1e+25 relative error at x = 34, no complaint).
+# by x = 15.9. This bound is where that prediction passes ~1e-9, which is where it stops being
+# usable as a cross-check. It is deliberately far below the overflow point: the earlier value of
+# 300 only caught the crash, and let three decades of silently wrong answers through first
+# (5.1e+25 relative error at x = 34, no complaint).
 _MAX_EXPONENT = 9.0
 
 
@@ -293,7 +298,7 @@ def _solve_etm(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb):
 
     Same idea as :func:`fieldwave._core.solve_2d.solve_2d`'s ``big_A_i`` / ``big_T`` recursion
     (Moharam et al. 1995), which is why the 2ff transfer is stable while the naive one in
-    :func:`_solve_tmm` is not. The growth is not removed by better conditioning; it is arranged
+    :func:`_solve_naive` is not. The growth is not removed by better conditioning; it is arranged
     never to appear.
 
     Sweeping upward, suppose the state below a layer is ``psi = G t`` for an unknown ``t``.
@@ -325,8 +330,13 @@ def _solve_etm(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb):
     return psi_vb @ sol[:2 * ff], psi_vf @ (T_acc @ sol[2 * ff:])
 
 
-def _solve_tmm(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb):
-    """Eigen-decomposition transfer, kept as a second opinion. Refuses where it would blow up."""
+def _solve_naive(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb):
+    """Unstabilised eigen-decomposition transfer, kept only as a third opinion.
+
+    Not ``connecting_algo='ETM'``, which is the enhanced form in :func:`_solve_etm` and is what
+    :mod:`fieldwave._core.solve_2d` uses. This one exists so the stabilisation can be shown to
+    be doing something, and refuses where it would be inaccurate.
+    """
     P = xp.astype(xp.eye(4 * ff), Kx.dtype)
     for eps_blocks, d in layers:
         lam_f, psi_f, lam_b, psi_b = split_forward_backward(
@@ -335,9 +345,9 @@ def _solve_tmm(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb):
         exponent = k0 * float(xp.max(xp.abs(xp.imag(lam)))) * float(d)
         if exponent > _MAX_EXPONENT:
             raise ValueError(
-                f'layer exponent {exponent:.1f} is past what the eigen-decomposition transfer '
-                "can carry in float64. Use connecting_algo='SMM', which is bounded for any "
-                'thickness.')
+                f'layer exponent {exponent:.1f} is past what the unstabilised transfer can '
+                "carry in float64. Use connecting_algo='ETM' or 'SMM', either of "
+                'which is bounded for any thickness.')
         Psi = xp.concat([psi_f, psi_b], axis=1)
         E = _diag_of(xp, xp.exp(1j * k0 * lam * d))
         P = (Psi @ E @ xp.linalg.inv(Psi)) @ P
@@ -366,10 +376,10 @@ def solve_uniform_stack(wavelength, kx, ky, layers, ff, incident, connecting_alg
     ``connecting_algo`` selects how layers are joined. Three, and the choice matters here in a
     way it does not in the 2ff path, where both shipped options are already stable:
 
-    * ``'ETM'`` (default) is the enhanced-transmittance recursion, the same technique that makes
-      the 2ff transfer stable. Growth never appears rather than being cancelled. Measured the
-      cheapest of the three — 0.94x the naive transfer on a 40-layer stack, against SMM's 1.13x
-      — and identical to SMM at 1.2e-15, which is why it is the default.
+    * ``'ETM'`` (default) is the enhanced-transmittance recursion — **the same option, under
+      the same name, as the 2ff path's default**. Growth never appears rather than being
+      cancelled. Measured the cheapest of the three — 0.94x the plain transfer on a 40-layer
+      stack, against SMM's 1.13x — and identical to SMM at 1.2e-15.
     * ``'SMM'`` cascades per-layer scattering matrices with the Redheffer star. Same stability,
       slightly dearer, and the formulation most of the literature states its results in. Its
       per-layer matrices are also independent of their neighbours, which is what would let them
@@ -392,10 +402,11 @@ def solve_uniform_stack(wavelength, kx, ky, layers, ff, incident, connecting_alg
     elif connecting_algo == 'ETM':
         reflected, transmitted = _solve_etm(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb)
     elif connecting_algo == 'TMM':
-        reflected, transmitted = _solve_tmm(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb)
+        reflected, transmitted = _solve_naive(xp, k0, Kx, Ky, layers, ff, incident,
+                                              psi_vf, psi_vb)
     else:
         raise ValueError(
-            f"connecting_algo must be 'SMM', 'ETM' or 'TMM', got {connecting_algo!r}")
+            f"connecting_algo must be 'ETM', 'SMM' or 'TMM', got {connecting_algo!r}")
 
     def flux(v):
         return float(mode_flux_z(xp, xp.reshape(v, (-1, 1)), ff)[0])
