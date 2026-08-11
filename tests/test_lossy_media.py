@@ -240,6 +240,53 @@ def test_absorbing_layer_via_the_analytic_path(case, pol, theta):
     assert got == pytest.approx(solver_R(ns, ds, WL, theta, pol), abs=1e-12)   # == raster
 
 
+def solver_R_painted(n, thickness, wavelength, theta, pol):
+    """Total reflectance of a *uniform* layer of index ``n`` built through the PAINTED path.
+
+    Two overlapping rectangles of the same index, together covering the cell. The overlap is
+    what routes the layer to ``_core.boundary.to_conv_mat_boundary_layer`` (a non-overlapping
+    ``paint`` stays on the summed closed form), and same-index-everywhere is what leaves a
+    uniform slab at the end of it, so the Airy oracle applies exactly and none of the shape
+    machinery is under test. The ``n -> eps`` convention is the entire point, again.
+    """
+    P = 400.0
+    shapes = [dict(type='rectangle', cx=0.30 * P, cy=0.5 * P, lx=0.75 * P, ly=1.4 * P,
+                   n_index=n),
+              dict(type='rectangle', cx=0.72 * P, cy=0.5 * P, lx=0.75 * P, ly=1.4 * P,
+                   n_index=n)]
+    solver = fieldwave.rcwa(backend=0, n_top=1.0, n_bot=1.5, theta=theta, phi=0.0,
+                            psi=(np.pi / 2 if pol == 0 else 0.0), fto=(3, 3),
+                            wavelength=wavelength, period=[P, P],
+                            ucell=[dict(n_base=n, combine='paint', shapes=shapes)],
+                            thickness=[thickness])
+    res = solver.conv_solve()
+    return float(np.sum(np.asarray(res.de_ri)).real), float(np.sum(np.asarray(res.de_ti)).real)
+
+
+@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
+@pytest.mark.parametrize('n', [AU, SI], ids=['gold', 'weakly_absorbing'])
+def test_absorbing_layer_via_the_painted_path(n, pol, theta):
+    """The boundary (painted-polygon) builder, for complex ``n``. It was the last one left.
+
+    ``_core/boundary.py`` is a later copy of ``_core/analytic.py``'s coefficient assembly, and
+    it kept the ``conj(n)**2`` that the smooth path was moved off — so a painted absorbing
+    layer came out as *gain*: reflectance off by 0.15 on gold and 0.023 on the weak absorber,
+    with ``R + T`` up to 1.11.
+
+    Nothing objected, for the same reason the analytic path went uncovered before it:
+    ``test_boundary.py`` builds every shape with a **real** ``n_index``, where ``conj(n)**2``
+    and ``n**2`` are the same number. Its two builders are cross-checked against each other to
+    5e-9 and both were on the same real indices, so agreeing proved nothing about this.
+
+    ``R + T <= 1`` is asserted separately from the oracle: it is the statement that survives
+    even if the oracle is ever doubted, and it is what the conjugation broke most visibly.
+    """
+    R, T = solver_R_painted(n, 60.0, WL, theta, pol)
+    want = abs(analytic_r([1.0, n, 1.5], [60.0], WL, theta, pol)) ** 2
+    assert R == pytest.approx(want, abs=1e-12)
+    assert R + T <= 1.0, 'an absorbing layer cannot return more power than it was given'
+
+
 @pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
 def test_complex_n_bot_keeps_full_precision_on_every_backend(backend):
     """A complex ``n_bot`` must reach the boundary at the solve's working precision.
