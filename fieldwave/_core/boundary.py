@@ -35,6 +35,7 @@ block path, while tying on axis-aligned overlap where the block path has no stai
 """
 from . import clipper as _clipper
 from .analytic import nvf_from_coeffs, shape_geometry, _sampled_coeffs
+from .lattice import sample_grid
 from .polygon import ellipse_verts, polygon_ft, rect_verts
 
 
@@ -86,6 +87,10 @@ def distance_gradient_normal_field(xp, polys, grid_shape, period, dtype, chunk=N
     Sign flips inside/outside, which does not matter: NVF only uses ``nx**2``, ``nx*ny``,
     ``ny**2``.
 
+    The sample points come from :func:`fieldwave._core.lattice.sample_grid`, shared with the
+    analytic builder — this body was written by copying that one, and copying it is how it
+    inherited a reversed ``period`` unpack that sampled over a transposed cell.
+
     ``chunk`` is how many pixels are handled at once. It bounds the ``pixels x segments``
     temporaries without changing any result -- the arithmetic per pixel is independent, so a
     chunked run is bit-identical to a flat one. ``None`` targets 4M entries per temporary;
@@ -93,23 +98,10 @@ def distance_gradient_normal_field(xp, polys, grid_shape, period, dtype, chunk=N
     alive at once. Peak then stops growing with the grid, which is the point.
     """
     Ny, Nx = grid_shape
-    Px, Py = period[0], period[1]           # period is (Px, Py) here as everywhere else
     A, E, L2 = segments_of(xp, polys)
     M = A.shape[0]
 
-    u = (xp.asarray([float(i) for i in range(Nx)], dtype=dtype) + 0.5) / Nx
-    v = (xp.asarray([float(i) for i in range(Ny)], dtype=dtype) + 0.5) / Ny
-    if lattice is None:
-        X = (u * Px)[None, :] + 0.0 * v[:, None]
-        Y = (v * Py)[:, None] + 0.0 * u[None, :]
-    else:
-        # Sample the cell's own parallelogram. Only the sample *positions* move: the distances
-        # measured below are Cartesian already, so unlike the raster normal field there is no
-        # metric to apply afterwards.
-        a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
-        a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
-        X = u[None, :] * a1x + v[:, None] * a2x
-        Y = u[None, :] * a1y + v[:, None] * a2y
+    X, Y = sample_grid(xp, grid_shape, period, dtype, lattice)
     pts = xp.stack([xp.reshape(X, (-1,)), xp.reshape(Y, (-1,))], axis=-1)
 
     npix = Ny * Nx

@@ -88,6 +88,47 @@ def test_a_degenerate_basis_is_refused(bad, match):
         lat.as_lattice(lattice=bad)
 
 
+def test_the_sample_grid_gets_the_two_axes_the_right_way_round():
+    """``sample_grid`` stretches ``u`` -- which indexes Nx -- by ``period[0]``, and only that.
+
+    The one reader of the ``period`` pair for the two non-raster normal-field builders, which is
+    why it is worth pinning here rather than only through them: ``analytic`` and ``boundary``
+    each carried a copy of this block, the copy in ``boundary`` kept a reversed unpack, and on a
+    square cell -- which every test that reached it used -- the two orders are the same number.
+    So this cell is 2:1.
+
+    **Both branches, and the transposition rather than the pair, for the second one.** A basis
+    makes ``period`` unread, so reversing the pair cannot move the lattice branch and a check
+    written that way would pin nothing; the mistake that branch *can* make is the same
+    transposition spelled as ``diag(Py, Px)``. Measured on this cell, both move X by 0.9 and Y by
+    5/6 -- so the last assertion pair is not inferred from reading the code, it is the number the
+    reversed call actually returns. And the two branches have to agree with each other exactly,
+    since they describe the same cell. Which one the solver takes was *counted*, not read:
+    ``engine`` hands the shape paths ``as_lattice(period=...)`` whenever the period is readable,
+    so the basis branch is the ordinary one and ``lattice=None`` survives for direct callers and
+    for a ``grad`` with respect to ``period``, where the pair arrives as a tracer.
+    """
+    Px, Py = 2.0, 1.0
+    Ny, Nx = 3, 5
+    u = (np.arange(Nx) + 0.5) / Nx
+    v = (np.arange(Ny) + 0.5) / Ny
+    want_x = u[None, :] * Px + 0.0 * v[:, None]
+    want_y = v[:, None] * Py + 0.0 * u[None, :]
+
+    X0, Y0 = lat.sample_grid(np, (Ny, Nx), (Px, Py), np.float64)
+    Xb, Yb = lat.sample_grid(np, (Ny, Nx), (Px, Py), np.float64, np.diag([Px, Py]))
+    for X, Y in ((X0, Y0), (Xb, Yb)):
+        assert X.shape == (Ny, Nx) and Y.shape == (Ny, Nx)
+        assert np.array_equal(X, want_x)
+        assert np.array_equal(Y, want_y)
+
+    Xr, Yr = lat.sample_grid(np, (Ny, Nx), (Py, Px), np.float64)             # pair reversed
+    Xt, Yt = lat.sample_grid(np, (Ny, Nx), (Px, Py), np.float64, np.diag([Py, Px]))  # transposed
+    for X, Y in ((Xr, Yr), (Xt, Yt)):
+        assert abs(np.abs(X - X0).max() - 0.9) < 1e-15
+        assert abs(np.abs(Y - Y0).max() - 5.0 / 6.0) < 1e-15
+
+
 def test_order_kxy_reduces_to_the_separable_formula():
     """The generalisation must be exactly the old expression on a diagonal basis."""
     fto_x, fto_y, lx, ly = 3, 2, 300.0, 700.0

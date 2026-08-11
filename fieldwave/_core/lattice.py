@@ -38,7 +38,8 @@ import numpy as np
 
 from .backend import as_array
 
-__all__ = ['as_lattice', 'is_axis_aligned', 'jacobian', 'order_kxy', 'periods_of']
+__all__ = ['as_lattice', 'is_axis_aligned', 'jacobian', 'order_kxy', 'periods_of',
+           'sample_grid']
 
 
 def as_lattice(period=None, lattice=None):
@@ -116,6 +117,50 @@ def jacobian(A, ny, nx):
     """
     A = np.asarray(A, dtype=float)
     return np.column_stack((A[:, 0] / nx, A[:, 1] / ny))
+
+
+def sample_grid(xp, grid_shape, period, dtype, lattice=None):
+    """Cartesian coordinates of the cell's pixel centres: two ``(Ny, Nx)`` arrays ``(X, Y)``.
+
+    ``r = (i + 0.5)/Nx * a1 + (j + 0.5)/Ny * a2`` — the raster placement stated at the top of
+    this module, evaluated as *positions* rather than read as indices. That is what the two
+    non-raster normal-field builders need
+    (:func:`fieldwave._core.analytic.normal_vector_field_analytical`,
+    :func:`fieldwave._core.boundary.distance_gradient_normal_field`): both measure something
+    Cartesian at each sample — analytic shape gradients on one side, distances to polygon edges
+    on the other — so a skewed basis moves the sample points and nothing else. No metric follows.
+    :func:`jacobian`, which converts index steps, is the raster path's correction and not theirs.
+
+    Here rather than once per builder because ``period`` is a positional pair of two same-typed
+    floats: unpacking it as ``(Py, Px)`` is a mistake nothing reacts to — not the types, not the
+    runtime, and not a test on a square cell, where both names bind to the same number. It
+    happened. The reversed unpack travelled from the analytic builder to the boundary one with a
+    copy of this block, while the caller that reversed it back did not, so the boundary path
+    sampled its field over a transposed cell on any non-square period (fixed 2026-08-11). One
+    reader is one opportunity to get it wrong.
+
+    ``period`` is read only when ``lattice`` is None, which is the rarer branch: ``engine``
+    hands the shape paths ``as_lattice(period=...)`` whenever the period is *readable*
+    (:meth:`~fieldwave._core.engine.CoreFactorizationMixin._geometry_lattice_for`). Counting the
+    calls says what that leaves — direct callers, and one solver case: a ``grad`` with respect to
+    ``period`` itself, where the pair arrives as a tracer with no primal to read. Which is also
+    why the pair stays a pair here instead of being folded into the basis: this branch has to
+    keep tracing, and ``as_lattice`` converts to float. The ``lattice`` branch does too, so it
+    holds a *constant* cell — fine, because a skewed cell is not a design variable, and the
+    axis-aligned one is the one that can be.
+
+    A check written on ``lattice=None`` alone therefore pins the branch the solver mostly does
+    not take, and it takes two to hold the convention.
+    """
+    Ny, Nx = grid_shape
+    u = (xp.asarray([float(i) for i in range(Nx)], dtype=dtype) + 0.5) / Nx
+    v = (xp.asarray([float(i) for i in range(Ny)], dtype=dtype) + 0.5) / Ny
+    if lattice is None:
+        Px, Py = period[0], period[1]
+        return (u * Px)[None, :] + 0.0 * v[:, None], (v * Py)[:, None] + 0.0 * u[None, :]
+    a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
+    a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
+    return u[None, :] * a1x + v[:, None] * a2x, u[None, :] * a1y + v[:, None] * a2y
 
 
 def order_kxy(xp, A, fto_x, fto_y, wavelength, k_inc_x, k_inc_y, dtype, device=None):

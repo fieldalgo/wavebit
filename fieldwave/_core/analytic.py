@@ -73,6 +73,7 @@ position derivative and makes the answer depend on where in the cell the shape s
 """
 from . import overlap as _overlap
 from .backend import array_namespace, as_array, j1, jinc, sinc
+from .lattice import sample_grid
 from .overlap import COMBINE_MODES, OVERLAP_TOL_REL      # re-exported; both paths read them
 
 
@@ -478,24 +479,18 @@ def _device(x):
 def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype, lattice=None):
     """Unit normal field of the shapes, sampled on ``grid_shape`` — analytic, not from a raster.
 
-    ``period`` is unpacked as ``(Px, Py)`` — the order every other builder in the package reads
-    it in (``polygon.polygon_ft``, :func:`shape_ft`, :func:`shape_geometry`,
-    ``boundary.normal_projector_coeffs``, ``boundary.conv_mats``). It took ``(Py, Px)`` until
-    2026-08-11, with a caller that reversed the pair to match, so the analytic path was correct
-    and the convention was still wrong: being the odd one out is what cost a real wrong answer.
-    ``boundary.distance_gradient_normal_field`` was written by copying this body, kept the
-    reversed unpack, and has a caller that passes ``(Px, Py)`` — so it sampled its field over a
-    transposed cell. Nothing caught it, because a square cell makes the swap invisible and every
-    test that reached it used one.
+    The sample points come from :func:`fieldwave._core.lattice.sample_grid`, which is where the
+    sample grid's ``(Px, Py)`` unpack lives and why it lives in exactly one place — this body
+    used to carry its own copy, and ``boundary.distance_gradient_normal_field`` was written from
+    that copy.
 
-    How far that reached had to be *measured* rather than read off the shared line, and the
-    answer differs per copy: there the pair is read only when ``lattice is None``, and ``engine``
-    hands the shape paths a basis whenever the period is readable, so it was live only for direct
-    callers. Here it is not so contained — the ``lattice`` branch below shields the sample grid,
-    but :func:`shape_geometry` is reached either way and takes the pair as well, so a shape that
-    leaves ``cx`` / ``cy`` to default is sensitive even with a basis in hand. Reversing the pair
-    on a 2:1 cell moves this field by 1.96 with an explicit centre and no lattice, by 1.7 with a
-    defaulted centre and a lattice, and by exactly 0 with both.
+    ``period`` is still read here, though, and not only for the grid: :func:`shape_geometry`
+    takes the pair as well and is reached whether or not a basis was given, so a shape that
+    leaves ``cx`` / ``cy`` to default is sensitive to the order even when the sample grid is
+    built from a lattice. That is what makes this path less contained than the boundary one, and
+    it had to be *measured* rather than read off the shared line: reversing the pair on a 2:1
+    cell moves this field by 1.96 with an explicit centre and no lattice, by 1.7 with a defaulted
+    centre and a lattice, and by exactly 0 with both.
 
     Written without in-place mutation so it stays differentiable in the shape parameters — with
     the exception of ``cx`` and ``cy``, which the rectangle branch reaches only through
@@ -507,23 +502,7 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype, lattic
     """
     Ny, Nx = grid_shape
     Px, Py = period[0], period[1]
-
-    u = (xp.asarray([float(i) for i in range(Nx)], dtype=dtype) + 0.5) / Nx
-    v = (xp.asarray([float(i) for i in range(Ny)], dtype=dtype) + 0.5) / Ny
-    if lattice is None:
-        X = (u * Px)[None, :] + 0.0 * v[:, None]
-        Y = (v * Py)[:, None] + 0.0 * u[None, :]
-    else:
-        # Sample on the cell's own parallelogram: r = u*a1 + v*a2. Only the sample *positions*
-        # move. The gradients below are analytic derivatives of the shape formulas, which are
-        # Cartesian by construction, so unlike the raster normal field
-        # (:func:`fieldwave._core.factorization.normal_vector_field`) there is no Jacobian to
-        # apply afterwards -- that one differentiates the raster, this one differentiates the
-        # shape.
-        a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
-        a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
-        X = u[None, :] * a1x + v[:, None] * a2x
-        Y = u[None, :] * a1y + v[:, None] * a2y
+    X, Y = sample_grid(xp, grid_shape, period, dtype, lattice)
 
     nx_total = xp.zeros((Ny, Nx), dtype=dtype)
     ny_total = xp.zeros((Ny, Nx), dtype=dtype)
