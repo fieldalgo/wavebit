@@ -93,7 +93,7 @@ def distance_gradient_normal_field(xp, polys, grid_shape, period, dtype, chunk=N
     alive at once. Peak then stops growing with the grid, which is the point.
     """
     Ny, Nx = grid_shape
-    Py, Px = period[0], period[1]
+    Px, Py = period[0], period[1]           # period is (Px, Py) here as everywhere else
     A, E, L2 = segments_of(xp, polys)
     M = A.shape[0]
 
