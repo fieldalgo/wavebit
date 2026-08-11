@@ -114,9 +114,13 @@ def split_forward_backward(xp, M, ff):
 
     Forward means energy flowing towards ``+z``, falling back to decay in ``+z`` where the mode
     carries no real flux. That is the same rule
-    :func:`fieldwave._core.conventions.boundary_kz` applies to a half-space, and it has to be —
-    ``psi`` goes as ``exp(i k0 lam z)``, so ``lam`` sits exactly where that function's ``kz``
-    does.
+    :func:`fieldwave._core.conventions.boundary_kz` applies to a half-space **for a real
+    in-plane wavevector**, which is the only kind this path sees: its half-spaces are vacuum,
+    so ``k_par`` is real and the flux and decay conditions select the same mode (they are
+    separate demands only when ``k_par`` is complex — see ``docs/time-convention-audit.md``
+    §3). ``psi`` goes as ``exp(i k0 lam z)``, so ``lam`` sits exactly where that function's
+    ``kz`` does. If this path ever grows an absorbing superstrate, the correction
+    ``boundary_kz`` carries has to come with it, and this comment is the pointer to that.
 
     Flux is the primary test rather than ``Re(lam)`` because an absorbing or gyrotropic layer
     can put a propagating mode on the wrong side of the real axis; the ``Im`` fallback only

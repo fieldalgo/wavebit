@@ -29,9 +29,14 @@ Formulation, in the conventions this codebase already uses (see :func:`solve_1d`
 * Layers are joined through a fictitious *gap medium* with ``eps_gap = 1 + kx^2 + ky^2``, so
   ``kz_gap == 1`` exactly and the gap's ``V`` can never be singular (the standard trick; the
   gap cancels out of the composed result whatever it is, as long as it is used everywhere).
-* Incidence enters as mode amplitudes directly: ``E_s = sin(psi)`` and ``H_p = i*n_top*cos(psi)``
-  for the coupled path, unit primary amplitude for 1D TE/TM. These are the same incident
-  amplitudes the TMM final matching solves against.
+* Incidence enters as mode amplitudes directly: ``E_s = sin(psi)`` and
+  ``H_p = -i*n_top*cos(psi)`` for the coupled path, unit primary amplitude for 1D TE/TM.
+  These are the same incident amplitudes the TMM final matching solves against. The sign on
+  ``H_p`` is the one ``e^{-iωt}`` requires and the one the code has always carried; this
+  sentence said ``+i`` — the conjugate — until 2026-08-11, describing the formulation that
+  was retired in 2026-08 rather than the code beneath it. Checked rather than reasoned:
+  ``R_p / (-i*n_top)`` is the analytic amplitude to 1e-15 on both algorithms
+  (``test_lossy_media.test_reflection_amplitude``), and ``+i`` gives its negative.
 
 Field reconstruction works from either algorithm. What :mod:`fieldwave._core.fields` walks is
 per-layer mode amplitudes, which the TMM recursion happens to leave behind and the SMM cascade
@@ -368,7 +373,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
 
     # --- incidence ------------------------------------------------------------------------
     # Amplitudes are (E_s, H_p) by construction of W/V above, so the incident column is the
-    # incident field itself: E_s = sin(psi), H_p = i*n_top*cos(psi).
+    # incident field itself: E_s = sin(psi), H_p = -i*n_top*cos(psi).
     delta = xp.reshape(xp.astype(_unit(xp, ff_xy, ff_xy // 2), C), (ff_xy, 1))
 
     def incident(psi_v):
