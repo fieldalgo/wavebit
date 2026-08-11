@@ -133,6 +133,35 @@ def test_evanescent_incidence_matches_reticolo():
     assert worst < 2e-13, worst
 
 
+@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+def test_double_precision_agrees_across_backends_at_a_complex_angle(backend):
+    """The three backends must land on the same answer, which single precision does not.
+
+    64-bit agreement here is exact to ~1e-15. At complex64 the same three come back at 3.94,
+    2.96 and 3.82 — *each wrong differently*, which is the signature of a branch decided by
+    round-off rather than of precision loss, and the reason this regime warns instead of being
+    repaired. See ``tests/test_fp_warnings.py`` for that tier and ``docs/branch-cuts.md`` for
+    why no threshold fixes it.
+    """
+    g = _golden()
+    kx, ky = 1.6, 1.2                       # comfortably outside the light line
+    theta = np.arcsin(np.sqrt(kx ** 2 + ky ** 2 + 0.0001, dtype=np.complex128))
+    phi = np.arctan(ky / (kx + 0.0001), dtype=np.complex128)
+
+    def solve(bk):
+        res = fieldwave.rcwa(backend=bk, pol=0, n_top=float(g['n_top']),
+                             n_bot=float(g['n_bot']), theta=theta, phi=phi, fto=[40],
+                             wavelength=float(g['wavelength']), period=list(g['period']),
+                             ucell=g['ucell'], thickness=list(g['thickness']),
+                             type_complex=0, fourier_coefficients='integrated',
+                             factorization='li').conv_solve()
+        return complex(np.asarray(res.res_te_inc.R_s).ravel()[40])
+
+    reference, got = solve(0), solve(backend)
+    assert abs(reference) < 1.0, reference
+    assert abs(got - reference) < 1e-12, (backend, got, reference)
+
+
 def test_uniform_stack_does_not_diffract_at_a_complex_angle():
     """A layer with no pattern has no diffraction orders, whatever the incidence angle.
 

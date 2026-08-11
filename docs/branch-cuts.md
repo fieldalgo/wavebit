@@ -1,0 +1,390 @@
+# Branch cuts — which square root, and the two ways it went wrong
+
+Written: 2026-08-11. Measured on CPU (Apple Accelerate), NumPy / JAX / PyTorch, float64 and
+float32.
+
+Targets:
+- `fieldwave/_core/conventions.py` — `mode_q`, `boundary_kz`, `incident_kz`,
+  `_check_resolvable`, `branch_tolerance`
+- `fieldwave/_core/solve_1d.py` — `solve_1d` stage 3, `final_matching`
+- `tests/references/test_reticolo_conical_sweep.py` — the RETICOLO oracle
+- `tests/test_fp_warnings.py` — the three tiers of "this result is not trustworthy"
+
+---
+
+## TL;DR
+
+Every `sqrt` of a complex number in this solver has **two answers**, and picking one is a
+physical decision, not an arithmetic one. Two separate things went wrong there — one a bug,
+one a limit — and neither was visible at a real incidence angle:
+
+| | Symptom | Cause | Fixed |
+| --- | --- | --- | --- |
+| **Respelled root** | complex `theta` returned `R = -delta`, `T = 0` — a grating that scatters nothing | the incident wave's `kz` was written two ways that agree only for real angles | `incident_kz` |
+| **Unresolvable branch** | complex64 returns \|R\| ~ 4 on all three backends, each wrong differently | at that precision `Re(v)` *is* round-off, so the branch is taken from the sign of noise | **not fixable** — it warns, and offers a scoped override |
+
+The first was invisible because **a real incidence angle makes it an identity**; it is fixed and
+double precision is now exact to 1e-14 everywhere measured. The second is not a bug that can be
+fixed — single precision does not carry the information the decision needs — so the solver
+detects it and says so. The oracle that found both is a 2024 sweep over complex angles.
+
+---
+
+## 1. The one idea
+
+A wave's out-of-plane wavevector comes from
+
+```
+kz = sqrt(n^2 - k_par^2)
+```
+
+and `sqrt` on the complex plane has two roots, `+v` and `-v`. They are *both* mathematically
+valid. Which one is physical depends on what the wave is doing:
+
+```
+                    Im(kz)
+                      ^
+            +i*s  *   |                  Im > 0 : decays upward   -> a REFLECTED order
+                      |
+      ----------------+----------------> Re(kz)
+              Re > 0  |  ...carries energy downward -> a TRANSMITTED / incident order
+                      |
+            -i*s  *   |                  Im < 0 : grows upward
+```
+
+So the rule is *ordered*: prefer `Re(kz) > 0` (energy going down); only when the root is
+**purely imaginary** — no real part at all — does the sign of `Im` decide. That ordering is
+what `boundary_kz` implements, and `mode_q` implements its `q = -i*kz` counterpart, which is
+why their tie-breaks come out opposite.
+
+Everything below is a consequence of two questions that rule leaves open:
+
+1. Which root does the **incident** wave take? It is the one order travelling *downward* into
+   the stack, so it is not a "reflected order" and the rule above does not name it.
+2. What counts as **"no real part at all"**? That is a numerical question with a
+   dtype-dependent answer.
+
+---
+
+## 2. Where the angle goes complex
+
+The 2024 oracle sweeps `(kx, ky)` over `[-2, 2]^2` and sets
+
+```python
+theta = arcsin(sqrt(kx**2 + ky**2 + 1e-4))
+```
+
+Wherever `kx^2 + ky^2 > 1` that is `arcsin` of a real number greater than one, which is
+**complex**. Physically it is evanescent illumination — light arriving as a decaying field
+rather than a propagating beam, the way a prism's frustrated total internal reflection feeds a
+nearby surface.
+
+```
+   ky
+  +2 +-------------------------------------+
+     | x x x x x x x x x x x x x x x x x x |   x = theta COMPLEX (evanescent)
+     | x x x x x . . . . . . . x x x x x x |       372 of 441 points
+     | x x x . .               . . x x x x |
+     | x x .        _____        . . x x x |
+   0 | x x .       /  o  \         . x x x |   . = theta REAL (propagating)
+     | x x .       \_____/         . x x x |       69 of 441 points
+     | x x x . .               . . x x x x |
+     | x x x x x . . . . . . . x x x x x x |
+     | x x x x x x x x x x x x x x x x x x |
+  -2 +-------------------------------------+
+    -2                 0                  +2  kx
+                  light line: kx^2 + ky^2 = 1
+```
+
+Two facts about that outer region matter for everything that follows:
+
+* It is **84% of the grid**. The 2024 study plotted it as ordinary data.
+* `arcsin` of a real `> 1` always returns `pi/2 + i*arccosh(...)`, so every one of those 372
+  points sits at `Re(theta) == pi/2` **exactly**. One special value, not a spread — which is
+  why one of the two bugs produced a suspiciously tidy answer there.
+
+---
+
+## 3. Failure one — the same number, spelled twice
+
+The boundary match solves, at stage 3 of `solve_1d`:
+
+```python
+inc = -1j * n_top * cos_t * delta                        # the incident field
+T1  = inv(G - 1j*Kz_top @ F) @ (-1j * Kz_top @ delta + inc)
+```
+
+`Kz_top` comes from `boundary_kz`. `inc` recomputes the same physical quantity as
+`n_top * cos(theta)`. Watch what the right-hand side does at the incident order:
+
+```
+  RHS  =  -i * kz_top[c] * delta   +   -i * n_top*cos(theta) * delta
+
+  real theta      kz_top[c] = n_top*cos(theta) = +kz
+                  RHS = -i*kz + -i*kz = -2i*kz            the two terms ADD
+
+  complex theta   cos(pi/2 + i*b) = -i*sinh(b)            negative-imaginary
+                  boundary_kz forces Im > 0  ->  +i*sinh(b)
+                  RHS = -i*(+i*s) + -i*(-i*s) = (+s) + (-s) = 0     they CANCEL
+```
+
+The right-hand side vanishes identically at the one order that carries the illumination, so
+`T1 = 0`, `T = 0`, and `R = F @ 0 - delta = -delta`. The solver reports total reflection with
+no diffraction whatsoever — and because that is a smooth constant, it **plots as a clean flat
+region** rather than as noise:
+
+```
+   fieldwave BEFORE                fieldwave AFTER
+   +---------------+               +---------------+
+   |###############|               |  ..:::===:::..|
+   |####,-----,####|               |..::==     ==::|
+   |###/       \###|               |.::=  (real)  =|
+   |###\       /###|               |..::==     ==::|
+   |####'-----'####|               |  ..:::===:::..|
+   +---------------+               +---------------+
+    # = R is exactly -1             the pattern continues across the light line
+```
+
+**The fix is to stop spelling it twice.** `incident_kz(kz_top, index)` returns `kz_top[index]`
+— read from the vector the other side of the match already uses:
+
+```python
+kz_inc = incident_kz(kz_top, ff_x // 2)
+inc = -1j * kz_inc * delta
+```
+
+For a real angle this is an identity and nothing moves; the 69 propagating points went
+`1.97e-14 -> 1.95e-14` against RETICOLO. Three call sites needed it: `solve_1d`'s TE and TM
+branches, and **both** `final_B` builds in `final_matching` — the second makes the pure-TE/TM
+incidence variants, and missing it leaves conical broken while 1D looks fixed. `solve_2d`
+reuses `final_matching` and came along.
+
+### Why not fix `boundary_kz` instead
+
+Two other ways to make the two sides agree were tried and are wrong:
+
+| Attempt | Result |
+| --- | --- |
+| Use meent's plain `(eps - k_par_sq)**0.5`, no branch enforcement | \|R\| up to **6.9** |
+| Force `kz_top[incident]` to match `cos(theta)` | \|R\| = **4.3** |
+
+The tell for the second was that the answer came out as `s * conj(analytic)` for a real scale
+`s` — a *flipped branch*, not a scale error. `boundary_kz` was right all along.
+
+### The independent witness
+
+`smm_1d` and `_smm_sp` never respelled anything: they build the incident field from a
+`boundary_kz`-derived `V_top`. **SMM was already correct at complex angles**, and after the fix
+TMM lands on SMM's answer. Two independent formulations agreeing is stronger evidence than one
+matching a reference.
+
+| | real theta | `0.5+0.3j` | `pi/2+1.3j` |
+| --- | --- | --- | --- |
+| TMM 1D | 9.3e-17 | 4.5e-16 | 1.2e-16 |
+| TMM conical | 3.9e-16 | 2.8e-16 | 2.0e-16 |
+| SMM 1D | 5.5e-16 | 2.3e-16 | 3.2e-16 |
+| SMM conical | 1.0e-15 | 5.6e-16 | 2.0e-16 |
+
+(vs the analytic Airy reference in `tests/test_lossy_media.py`, uniform slab.)
+
+---
+
+## 4. Failure two — a question single precision cannot answer
+
+Both branch rules ask the same thing, `is Re(v) zero?`, and answer it against a fixed number:
+
+```python
+_FLAT = 1e-12
+flip = xp.where(xp.abs(xp.real(v)) > _FLAT, xp.real(v) < 0, xp.imag(v) < 0)
+```
+
+For a root that is *mathematically* pure-imaginary, `Re(v)` is round-off — and round-off has a
+size set entirely by the working precision:
+
+```
+   |Re(v)| for a root that should be exactly imaginary     measured: ~1e-16 (f64), ~1e-7 (f32)
+
+   1e-20      1e-16          1e-12              1e-7               1e-3
+     |----------|--------------|------------------|------------------|
+             eps(f64)        _FLAT             eps(f32)
+                            (fixed)
+
+   float64:  noise sits BELOW _FLAT   -> the Im tie-break runs        correct
+   float32:  noise sits ABOVE _FLAT   -> the tie-break is SKIPPED
+                                         and `Re(v) < 0` reads the sign of noise
+```
+
+Measured at one evanescent point, `fto=40` (162 orders):
+
+| | `boundary_kz` decided on round-off | `mode_q` |
+| --- | --- | --- |
+| complex128 | 0 / 162 | 0 / 162 |
+| **complex64** | **140 / 162** | **28 / 162** |
+
+All three backends fail, and **each is wrong differently** — precision loss would put them near
+each other:
+
+| | float64 (all three identical) | numpy f32 | jax f32 | torch f32 |
+| --- | --- | --- | --- | --- |
+| propagating | `-0.58376357-0.12888271j` | 1.1e-05 | 3.0e-04 | 3.4e-05 |
+| evanescent | `-0.46138379+0.48956102j` | **3.94** | **2.96** | **3.82** |
+
+### There is no threshold that fixes it
+
+The obvious repair is to scale the cutoff to the dtype. It does not work, and the measurement
+is worth keeping so nobody re-derives it. Nine physically meaningful cases at `fto=30`, float32
+against float64 as ground truth, sweeping the cutoff:
+
+| cutoff | lossless, complex angle | weakly absorbing superstrate | worst of nine |
+| --- | --- | --- | --- |
+| `1e-12` (shipped) | **4.51** | 1.9e-04 | 7.34 |
+| `1e-6` | 1.3e-06 | **7.4e-01** | — |
+| `1e-5` | 3.4e-07 | **1.75** | 1.75 |
+
+Raising it fixes the complex angle and breaks the weak absorber; lowering it does the reverse.
+They cannot both be served because **the genuine `Re(kz)` of a superstrate with `Im(n) = 1e-5`
+is smaller than the round-off of a lossless layer at a complex angle** — signal and noise
+occupy the same decade, and no cutoff separates overlapping distributions.
+
+Widening the decision to complex128 does not help either: promoting a value that was *computed*
+in complex64 cannot recover information the rounding already discarded. Measured — identical
+numbers to the fixed cutoff, to every digit.
+
+### So it reports instead
+
+`_check_resolvable` warns (`UnresolvedBranchWarning`) when a decision is taken from a real part
+inside its own dtype's round-off. It is a check on the precision, not on the physics:
+
+| | complex128 | complex64 |
+| --- | --- | --- |
+| real angle, lossless | silent | warns (12 / 244) |
+| complex angle | silent | warns (128 / 244) |
+| weakly absorbing superstrate | silent | warns (103 / 244) |
+
+Zero false positives at double precision across all three regimes.
+
+**Unlike the other diagnostics this one is not NumPy-only**, and that matters: the backends it
+would have skipped return the worst answers. At the same complex64 point NumPy gives `|R| = 1.80`
+and warns; JAX gives 4.12 and PyTorch 5.68, silently — on the paths people take for gradients
+and GPUs. What blocks the check is an *abstract* value, not a namespace, so the reduction runs
+in the caller's own namespace and only the scalar is read; when that read raises, the value was
+a tracer and there was nothing to inspect. `jax.jit(jax.grad(...))` is pinned in
+`test_the_check_does_not_break_tracing`.
+
+Cost, measured in isolation against the `eig` of the layer it belongs to (fto=60):
+
+| | one check | `eig(2N)` | share |
+| --- | --- | --- | --- |
+| numpy | 3.5 us | 57.3 ms | **0.006%** |
+| torch | 13.8 us | 69.7 ms | **0.020%** |
+| jax | 74.8 us | 44.9 ms | **0.166%** |
+
+JAX is the expensive one because reading the scalar forces a device sync; it is still under a
+fifth of a percent of the dominant operation. Whole-solve wall-clock could not resolve it above
+run-to-run noise on this machine — JAX's async dispatch and per-call retracing swamp it — which
+is why the isolated measurement is the one quoted.
+
+**Under `jit` the check cannot run at all**, and silence there would mean two different things.
+So a traced *single-precision* solve reports that it went unchecked; a traced double-precision
+one stays quiet. The dtype is known at trace time even when the values are not, which is the
+only thing there is to say — and it is worth saying, because tracing and single precision are
+both reached for speed and their combination is where a wrong branch is least likely to be
+caught:
+
+| | eager | under `jit` |
+| --- | --- | --- |
+| complex128 | silent, \|R\| = 0.672 | silent, \|R\| = 0.672 |
+| complex64 | **warns** ("a branch was decided from…"), \|R\| = 3.974 | **warns** ("this solve is traced…"), \|R\| = 3.929 |
+
+Note that the CFS (`integrated`) path is not traceable at all — `factorization.py::_as_bools`
+calls `bool()` on a tracer — so a jit'd solve is on the DFS path regardless. That predates this
+work.
+
+**A trap worth knowing about while measuring any of this.** `fieldwave/on_jax/__init__.py`
+enables `jax_enable_x64` on import, and `import fieldwave` alone does not pull that in — the
+backend module loads on the first `rcwa(backend=1)`. An array built before then is silently
+complex64, so `theta` can arrive at single precision while `type_complex=0` says otherwise.
+That produced a `|R| = 3.94` in an early draft of this document that was read as a solver bug
+and was not one; `import fieldwave.on_jax` first, or build the arrays after the first solve.
+
+### And offers a scoped override
+
+The two regimes turn out to be mutually exclusive in practice, which makes the choice
+*statable* rather than a guess — a superstrate with any absorption never produces the
+degeneracy, because its roots are genuinely complex. A solve containing both wants the default:
+
+| cutoff | complex angle only | weak absorber only | both in one solve |
+| --- | --- | --- | --- |
+| `1e-12` | 4.51 | 1.9e-04 | 1.4e-04 |
+| `1e-6` | 1.3e-06 | 7.4e-01 | 1.4e-04 |
+| `1e-5` | 3.4e-07 | 1.75 | 2.21 |
+
+Hence `fieldwave.branch_tolerance`, a context manager rather than a constructor keyword: it
+overrides a convention for a block, which is what it honestly is, and it reaches all 15 call
+sites across four modules without adding a permanent argument to the public API.
+
+```python
+with fieldwave.branch_tolerance(1e-5):      # lossless superstrate, complex angle, float32
+    res = solver.conv_solve()
+```
+
+**Raise it for a lossless superstrate at a complex incidence angle; leave it alone if the
+superstrate absorbs at all.** At complex128 it applies to nothing — the default already stands
+four orders clear of round-off, and moving it can only hurt.
+
+## 5. What it bought
+
+Max `|solver - RETICOLO|` on `Re(R_s)` of the (0,0) order, over all 441 points, `fto=80`:
+
+| | propagating (69) | evanescent (372) | points off by > 0.05 |
+| --- | --- | --- | --- |
+| before the `incident_kz` fix, float64 | 1.97e-14 | **7.85e-01** | 356 / 441 |
+| after, float64 | 1.95e-14 | **3.91e-14** | 0 |
+| float32, either way | 1.09e-03 | **1.55e+01** | 358 / 441 |
+
+Float32 is unchanged and stays unusable across the light line — that is section 4's subject, and
+it now announces itself rather than being silent. Float64 is what this table is about.
+
+---
+
+## 6. Why the suite could not see either one
+
+This is the part worth keeping.
+
+* **Both bugs are identities at a real incidence angle.** The first respells a number that is
+  the same number; the second compares round-off against a threshold that round-off never
+  reaches. No amount of tightening a tolerance on a real angle finds either.
+* **Neither breaks energy conservation.** The degenerate `R = -delta` is perfectly unitary.
+* **The wrong answer looked *tidier* than the right one.** A flat disc complement reads as
+  "total reflection region", not as a failure.
+* **No test in the repo set a complex `theta`** before 2026-08-11. The regime had never been
+  exercised, so it rotted with nothing objecting — the same blind-spot shape as the normal-field
+  goldens being all 1D or square-pixel.
+
+What pins it now, in `tests/references/test_reticolo_conical_sweep.py`:
+
+| Test | Catches |
+| --- | --- |
+| `test_propagating_incidence_matches_reticolo` | the ordinary regime, 2e-13 |
+| `test_evanescent_incidence_matches_reticolo` | failure one, from the 2024 golden |
+| `test_uniform_stack_does_not_diffract_at_a_complex_angle` | failure one *away* from `Re(theta)=pi/2`, where it diverged to ~7e3 instead of going quiet |
+| `test_double_precision_resolves_every_branch[3 regimes]` | that the warning is silent where the answer is trustworthy |
+| `test_single_precision_reports_an_unresolvable_branch[3 regimes]` | that it fires where it is not |
+| `test_branch_tolerance_rescues_a_complex_angle…` | that the override actually moves the answer |
+
+The float64/float32 pair is the load-bearing one: zero false positives at double precision is
+what makes the warning worth emitting at all.
+
+Note that `|R| <= 1` is **not** available as an assertion under evanescent illumination — the
+incident wave carries no power, and the analytic Airy result for a lossless stack legitimately
+reaches 1.01. Orders that must be identically zero are the honest invariant, which is what the
+uniform-stack test uses.
+
+---
+
+## 7. Where the oracle lives
+
+The golden is `tests/references/golden_reticolo_conical_sweep.npz`, cut from a 2024-09-09
+RETICOLO run by `gen_goldens_reticolo_conical_sweep.py`. The full study — notebooks, the raw
+`.mat` files, before/after data and the figures — is outside this repository at
+`<the study directory>/20260811_fieldwave_rerun/`, with its own README.
