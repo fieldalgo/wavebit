@@ -470,6 +470,36 @@ class CoreFactorizationMixin:
         self._frozen_geometry = geometry
         return self.solve_for_conv(self.wavelength, *self._conv_matrices(geometry))
 
+    def conv_matrices(self, geometry=None, **kwargs):
+        """The convolution matrices for this structure, without solving.
+
+        Returns ``(epx, epy, epz_i, epxy, epyx)`` — exactly the tuple :meth:`solve_for_conv`
+        takes after the wavelength, so ``solver.solve_for_conv(wl, *solver.conv_matrices())``
+        is ``conv_solve()``. Each is ``(n_layers, ff_xy, ff_xy)`` with ``ff_xy =
+        (2*fto_x+1) * (2*fto_y+1)``; ``epxy`` and ``epyx`` are ``None`` on the paths that
+        produce three rather than five (see :func:`~._core.factorization.nvf_conv_matrices`).
+
+        **This exists because the boundary was one-way.** ``solve_for_conv`` has always accepted
+        these matrices, so a caller could put them *in*; nothing returned them, so anyone who
+        wanted to look at what a modeling path actually built had to reach into ``_core`` and
+        reassemble it. That is not hypothetical: three separate attempts to hand-rebuild this
+        quantity against internals produced three wrong numbers in one day, because the
+        reassembly has to reproduce the doubled reciprocal grid's layout and the order-index
+        sign convention, and both fail silently when guessed.
+
+        It is the right object to compare two modeling paths with, for the same reason it is the
+        one the solve consumes: every path produces it, so a comparison is between the same
+        quantity rather than between two reconstructions of it. Note what it *includes*, though
+        — on an NVF path these carry the normal-field projector as well as the geometry, so a
+        difference between two paths is not attributable to their geometry alone. Isolating the
+        geometry means comparing the permittivity coefficients instead, which is a narrower
+        question and is left to the caller that has it.
+
+        ``geometry`` behaves as in :meth:`conv_solve`.
+        """
+        [setattr(self, k, v) for k, v in kwargs.items()]
+        return self._conv_matrices(geometry)
+
     def _reject_unsupported_lattice(self):
         """Refuse the build paths a skewed cell has no implementation for — before they answer.
 
