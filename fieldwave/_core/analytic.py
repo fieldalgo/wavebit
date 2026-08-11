@@ -437,16 +437,35 @@ def _device(x):
 def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype, lattice=None):
     """Unit normal field of the shapes, sampled on ``grid_shape`` — analytic, not from a raster.
 
-    ``period`` is unpacked as ``(Py, Px)``. Written without in-place mutation so it stays
-    differentiable in the shape parameters — with the exception of ``cx`` and ``cy``, which the
-    rectangle branch reaches only through ``sign()`` and a comparison. Both have zero derivative
-    everywhere, so a position never survives this function.
+    ``period`` is unpacked as ``(Px, Py)`` — the order every other builder in the package reads
+    it in (``polygon.polygon_ft``, :func:`shape_ft`, :func:`shape_geometry`,
+    ``boundary.normal_projector_coeffs``, ``boundary.conv_mats``). It took ``(Py, Px)`` until
+    2026-08-11, with a caller that reversed the pair to match, so the analytic path was correct
+    and the convention was still wrong: being the odd one out is what cost a real wrong answer.
+    ``boundary.distance_gradient_normal_field`` was written by copying this body, kept the
+    reversed unpack, and has a caller that passes ``(Px, Py)`` — so it sampled its field over a
+    transposed cell. Nothing caught it, because a square cell makes the swap invisible and every
+    test that reached it used one.
+
+    How far that reached had to be *measured* rather than read off the shared line, and the
+    answer differs per copy: there the pair is read only when ``lattice is None``, and ``engine``
+    hands the shape paths a basis whenever the period is readable, so it was live only for direct
+    callers. Here it is not so contained — the ``lattice`` branch below shields the sample grid,
+    but :func:`shape_geometry` is reached either way and takes the pair as well, so a shape that
+    leaves ``cx`` / ``cy`` to default is sensitive even with a basis in hand. Reversing the pair
+    on a 2:1 cell moves this field by 1.96 with an explicit centre and no lattice, by 1.7 with a
+    defaulted centre and a lattice, and by exactly 0 with both.
+
+    Written without in-place mutation so it stays differentiable in the shape parameters — with
+    the exception of ``cx`` and ``cy``, which the rectangle branch reaches only through
+    ``sign()`` and a comparison. Both have zero derivative everywhere, so a position never
+    survives this function.
 
     That is why :func:`normal_projector_coeffs` does not put a position in: it builds the field
     with the shape at the centre of the cell and translates the *coefficients*.
     """
     Ny, Nx = grid_shape
-    Py, Px = period[0], period[1]
+    Px, Py = period[0], period[1]
 
     u = (xp.asarray([float(i) for i in range(Nx)], dtype=dtype) + 0.5) / Nx
     v = (xp.asarray([float(i) for i in range(Ny)], dtype=dtype) + 0.5) / Ny
@@ -619,7 +638,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype,
     else:
         built, shift_y, shift_x = shapes, None, None
 
-    nx, ny = normal_vector_field_analytical(xp, grid_shape, built, (Py, Px), real_dtype,
+    nx, ny = normal_vector_field_analytical(xp, grid_shape, built, (Px, Py), real_dtype,
                                             lattice)
 
     if shift_y is None:
