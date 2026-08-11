@@ -11,6 +11,7 @@ per-backend ``transfer_method`` chains it replaces existed in triplicate.
 """
 from . import analytic as _analytic
 from . import boundary as _boundary
+from . import levelset as _levelset
 from . import factorization as _fac
 from . import lattice as _lattice
 from .backend import _device_of, array_namespace
@@ -441,7 +442,9 @@ class CoreFactorizationMixin:
             # has no discrete decision in it, and a painted one with nothing overlapping means
             # the same structure either way -- both stay on the closed-form path, so their
             # slots stay None and the replay never looks.
-            plans = [_boundary.plan_layer(layer.get('shapes', []), self.period)
+            plans = [_levelset.plan_layer(layer['phi'], self.period)
+                     if _analytic.is_levelset_layer(layer) else
+                     _boundary.plan_layer(layer.get('shapes', []), self.period)
                      if _analytic.layer_needs_resolving(
                          layer, self.period, self._geometry_lattice_for(None)) else None
                      for layer in self.ucell]
