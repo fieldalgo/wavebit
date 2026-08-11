@@ -16,10 +16,6 @@ Two things a layer can need at once, and until now no path gave both:
 | smooth | **exact** | added (superposed) |
 | **boundary** | **exact** | **painted** |
 
-(A fifth has since been added for a geometry given as a *field* rather than as shapes — see
-[`levelset-modeling.md`](levelset-modeling.md), which reuses this path's transform and its
-plan/replay discipline.)
-
 The block path paints later shapes over earlier ones, which is what a raster of the same recipe
 agrees with — but it decomposes shapes into axis-aligned blocks, so a tilted edge becomes a
 staircase. The smooth path transforms a tilted shape in closed form, but *sums* the shapes, so

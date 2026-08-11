@@ -12,7 +12,6 @@ tables. Say what was measured on what hardware, and where the result stops being
 | [`backend-choice.md`](backend-choice.md) | Which backend, and whether to freeze the geometry, for a *differentiated* run? | PyTorch below `fto≈5`; `jax jit` from `fto≈7` up; re-freeze every step |
 | [`analytic-modeling.md`](analytic-modeling.md) | How does the staircase-free shape path converge against the raster and block staircases? | The smooth path for tilted and curved boundaries |
 | [`boundary-modeling.md`](boundary-modeling.md) | Can a layer be painted *and* keep a tilted edge exact? | Yes — resolve the painting into polygons once, then transform those |
-| [`levelset-modeling.md`](levelset-modeling.md) | Can a topology-optimizable design field skip the staircase *and* give a shape derivative? | Yes — marching triangles, the segment-sum transform, and `grad phi` as the normal field |
 | [`nvf-upsampling.md`](nvf-upsampling.md) | What grid should the NVF normal field be taken on? | Not the fine one: it lost accuracy in 27 of 32 combinations and cost the most |
 | [`torch-compile.md`](torch-compile.md) | Is `torch.compile` worth chasing for this solver? | No — the solve is almost all LAPACK, which the compiler forwards untouched |
 | [`oblique-lattice.md`](oblique-lattice.md) | What does `lattice` do to a non-orthogonal (oblique, hexagonal) cell, and what does it cost? | Implemented — ~8x cheaper than the supercell; NVF only, and the raster is read in lattice coordinates |

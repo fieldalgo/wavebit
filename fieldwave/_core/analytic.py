@@ -211,19 +211,8 @@ def check_shape_spec(shape, shape_index=0, layer_index=0):
                          f'why this is refused rather than dropped.')
 
 
-def is_levelset_layer(layer):
-    """Is this ``ucell`` entry a level set (:mod:`.levelset`) rather than a list of shapes?
-
-    Lives here rather than in :mod:`.levelset` so the routing can ask without importing it —
-    that module imports this one, and a level set is the one layer kind whose *dispatch* has to
-    be decided before anything is built.
-    """
-    return isinstance(layer, dict) and layer.get('phi') is not None
-
-
-#: What a layer dict may say. ``phi`` / ``n_index`` are the level-set spelling, the rest the
-#: shape-list one; a layer carries one set or the other, never both.
-_LAYER_KEYS = frozenset({'n_base', 'base', 'shapes', 'combine', 'phi', 'n_index'})
+#: Everything a layer dict may say. Keep this in step with what the builders below read.
+_LAYER_KEYS = frozenset({'n_base', 'base', 'shapes', 'combine'})
 
 
 def check_layer_spec(layer, layer_index=0):
@@ -241,17 +230,10 @@ def check_layer_spec(layer, layer_index=0):
         raise ValueError(
             f'Analytic layer {layer_index}: {unknown} is not read by any path here. A layer '
             f'takes {sorted(_LAYER_KEYS)}. Refused rather than ignored, because an unread key '
-            f'leaves a layer that still builds — and a level set whose phi went unread is a '
-            f'uniform slab, which solves and conserves energy.')
-    if is_levelset_layer(layer):
-        if layer.get('shapes'):
-            raise ValueError(
-                f'Analytic layer {layer_index}: a layer is either a level set (phi) or a list '
-                f'of shapes, not both. The field already says where the material is.')
-        if layer.get('n_index') is None:
-            raise ValueError(
-                f'Analytic layer {layer_index}: a level-set layer needs n_index — the index '
-                f'where phi > 0. n_base is the index everywhere else.')
+            f'leaves a layer that still *builds*: a dict carrying nothing this reads has no '
+            f'shapes either, and an empty shape list is legal, so it comes back as a uniform '
+            f'slab of n_base — which solves, conserves energy to 1e-14, and is not the '
+            f'structure that was asked for.')
 
 
 def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_REL,
@@ -768,18 +750,9 @@ def to_conv_mat_smooth_layers(layer_shapes, fto_x, fto_y, period,
     out = [[], [], [], [], []]
     for index, layer in enumerate(layer_shapes):
         check_layer_spec(layer, index)
-        plan = None if boundary_plans is None else boundary_plans[index]
-        if is_levelset_layer(layer):
-            # A level set carries no shape list and no overlap to combine — the field *is* the
-            # geometry, and the marching-triangle decomposition is disjoint by construction.
-            from .levelset import to_conv_mat_levelset_layer
-            mats = to_conv_mat_levelset_layer(
-                xp, layer, fto_x, fto_y, period, dtype, plan=plan, lattice=lattice)
-            for slot, m in zip(out, mats):
-                slot.append(m)
-            continue
         check_layer_combination(layer, period, index, lattice=lattice)
         n_base = layer.get('n_base', layer.get('base', 1.0))
+        plan = None if boundary_plans is None else boundary_plans[index]
         if plan is not None or layer_needs_resolving(layer, period, lattice):
             # A painted layer that actually overlaps is a different structure from a summed
             # one, and this module can only sum. Resolve the painting into disjoint polygons
@@ -802,7 +775,7 @@ def to_conv_mat_smooth_layers(layer_shapes, fto_x, fto_y, period,
 def _infer_namespace(layer_shapes):
     """Namespace of the first array-like shape parameter; NumPy when everything is a scalar."""
     for layer in layer_shapes:
-        candidates = [layer.get('n_base'), layer.get('base'), layer.get('phi')]
+        candidates = [layer.get('n_base'), layer.get('base')]
         for shape in layer.get('shapes', []):
             candidates.extend(shape.get(k) for k in
                               ('cx', 'cy', 'lx', 'ly', 'l', 'angle', 'n_index'))
