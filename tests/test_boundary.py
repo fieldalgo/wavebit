@@ -639,3 +639,45 @@ def test_a_traced_summed_layer_is_not_refused():
         return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **cfg).conv_solve().T).real
 
     assert np.isfinite(float(jax.grad(total)(jnp.asarray(0.34))))
+
+
+def test_a_frozen_geometry_answers_the_overlap_question_for_every_layer():
+    """A freeze records the *decision*, not only the plans it produced.
+
+    ``boundary_plans`` used to be left unset when nothing overlapped, which made two cases
+    indistinguishable downstream: "looked at while the numbers were concrete, and it does not
+    overlap" and "no freeze was taken". The first is an answer; the second is not. Under a
+    trace the difference decides whether the overlap test has to be re-taken on values that
+    cannot answer it -- so a *disjoint* painted layer, re-frozen every step exactly as the
+    documentation advises, raised.
+
+    Both sides of the crossing therefore belong in one test: the entry is ``None`` where the
+    shapes are apart and a plan where they meet, and both differentiate.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    cfg = dict(period=(1.0, 1.0), wavelength=0.94, fto=(5, 5), n_top=1.0, n_bot=1.45,
+               theta=0.0, phi=None, pol=0.0, thickness=(0.3,), normal_grid=256)
+    fixed = dict(type='rectangle', cx=0.70, cy=0.5, lx=0.26, ly=0.30, angle=0.0, n_index=2.1)
+
+    def ucell(cx):
+        return [dict(n_base=1.0, combine='paint', shapes=[
+            dict(type='rectangle', cx=cx, cy=0.5, lx=0.26, ly=0.30, angle=0.0, n_index=3.48),
+            dict(fixed)])]
+
+    # the rods meet at cx = 0.44: 0.44 + 0.13 == 0.70 - 0.13
+    for cx, overlapping in ((0.42, False), (0.46, True)):
+        frozen = fieldwave.rcwa(backend=0, ucell=ucell(cx), **cfg).freeze_geometry()
+        assert frozen.boundary_plans is not None, cx
+        assert (frozen.boundary_plans[0] is not None) is overlapping, cx
+
+        def total(v):
+            return jnp.sum(fieldwave.rcwa(backend=1, ucell=ucell(v), **cfg)
+                           .conv_solve(geometry=frozen).T).real
+
+        analytic = float(jax.grad(total)(jnp.asarray(cx)))
+        h = 1e-4
+        step = [float(np.sum(np.asarray(
+            fieldwave.rcwa(backend=0, ucell=ucell(cx + s * h), **cfg).conv_solve().T)).real)
+            for s in (1, -1)]
+        assert analytic == pytest.approx((step[0] - step[1]) / (2 * h), rel=3e-2), cx

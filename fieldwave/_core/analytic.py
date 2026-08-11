@@ -778,10 +778,16 @@ def to_conv_mat_smooth_layers(layer_shapes, fto_x, fto_y, period,
     out = [[], [], [], [], []]
     for index, layer in enumerate(layer_shapes):
         check_layer_spec(layer, index)
+        # A frozen geometry carries the decision for *every* layer, so when one is present it
+        # is the whole answer: `plan is None` there means "looked at while the numbers were
+        # concrete, and it does not overlap". Re-asking would put the question to traced
+        # values that cannot answer it.
+        frozen = boundary_plans is not None
+        plan = boundary_plans[index] if frozen else None
         check_layer_combination(layer, period, index, lattice=lattice)
         n_base = layer.get('n_base', layer.get('base', 1.0))
-        plan = None if boundary_plans is None else boundary_plans[index]
-        if plan is not None or layer_needs_resolving(layer, period, lattice):
+        if plan is not None or (not frozen
+                                and layer_needs_resolving(layer, period, lattice)):
             # A painted layer that actually overlaps is a different structure from a summed
             # one, and this module can only sum. Resolve the painting into disjoint polygons
             # and transform those. A painted layer with nothing overlapping means the same

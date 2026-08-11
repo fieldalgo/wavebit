@@ -445,8 +445,13 @@ class CoreFactorizationMixin:
                      if _analytic.layer_needs_resolving(
                          layer, self.period, self._geometry_lattice_for(None)) else None
                      for layer in self.ucell]
-            if any(p is not None for p in plans):
-                geometry.boundary_plans = plans
+            # Recorded whether or not anything needed a plan. The entry *is* the decision:
+            # `None` here means "looked at while the numbers were concrete, and it does not
+            # overlap". Setting the attribute only when something overlapped made those two
+            # cases indistinguishable downstream, so a disjoint painted layer under a trace
+            # had to re-take the overlap test it had already passed -- on values that can no
+            # longer answer it.
+            geometry.boundary_plans = plans
         return geometry
 
     def conv_solve(self, geometry=None, **kwargs):
