@@ -76,10 +76,10 @@ solver = fieldwave.rcwa(
 )
 
 result = solver.conv_solve()
-print(result.de_ri.sum(), result.de_ti.sum())   # 0.2053316282584784 0.7946683717415217
+print(result.R.sum(), result.T.sum())   # 0.2053316282584784 0.7946683717415217
 ```
 
-`de_ri` and `de_ti` are the reflected and transmitted diffraction efficiencies, one entry per
+`R` and `T` are the reflected and transmitted diffraction efficiencies, one entry per
 order. Here they sum to 1 within 1e-15, as a lossless structure must.
 
 `n_top` and `n_bot` may be complex: an absorbing substrate or superstrate is given as an index
@@ -294,13 +294,24 @@ takes it to ~1.3-1.6x.
 
 ## Conventions
 
-Three of these decide whether your input means what you think it means. They are worth
-reading once.
+The full contract — every sign, axis, name and unit a script can depend on — is one page:
+[`docs/conventions.md`](docs/conventions.md). The rows that most often decide whether your
+input means what you think it means:
 
 **Time convention.** FieldWave works in `e^{-iωt}` throughout — inputs, internals and
 returned amplitudes alike. `Im(n) > 0` is loss, which is how refractive-index databases
 tabulate it (`n + 1j*k`), and a wave travelling in `+z` carries `exp(+i*k0*kz*z)`. There is no
 second convention underneath; see [`fieldwave/_core/conventions.py`](fieldwave/_core/conventions.py).
+
+**Layers are listed top to bottom, and `+z` points into the stack.** `ucell[0]` is the layer
+light meets first, arriving from `n_top`. Angles are radians: `theta` from the normal, `phi`
+the azimuth of the plane of incidence, `psi` the polarization (`pi/2` = s/TE, `0` = p/TM).
+
+**Uppercase is power, lowercase is amplitude.** `R`/`T` are per-order efficiencies, shape
+`(ff_y, ff_x)` — `y` first, the transpose of the `fto=[x, y]` input order — with the incident
+order at the centre; `result.order(m, n)` indexes by order so you never touch that layout.
+`r_s`/`r_p`/`t_s`/`t_p` are the complex Fresnel amplitudes, directly comparable to the
+textbook coefficients.
 
 **Axes follow the array.** Row `0` of `ucell` is `y = 0`, for every builder and for the
 reconstructed field cell alike. The flip that renders a field the conventional way up belongs
@@ -326,7 +337,7 @@ value, so the decisions read it one at a time and a gradient works straight off 
 import jax, jax.numpy as jnp
 
 solver = fieldwave.rcwa(backend=1, ucell=ucell, ...)
-grad = jax.grad(lambda u: jnp.sum(solver.conv_solve(ucell=u).de_ti))(ucell)
+grad = jax.grad(lambda u: jnp.sum(solver.conv_solve(ucell=u).T))(ucell)
 ```
 
 `jax.jit` is the harder bar, and that is what `freeze_geometry()` is for — it takes those
@@ -334,7 +345,7 @@ decisions once against the concrete structure and hands them back as data:
 
 ```python
 geometry = solver.freeze_geometry()
-step = jax.jit(lambda u: jnp.sum(solver.conv_solve(ucell=u, geometry=geometry).de_ti))
+step = jax.jit(lambda u: jnp.sum(solver.conv_solve(ucell=u, geometry=geometry).T))
 ```
 
 A freeze describes the structure it was taken on. Sweeping the *material values* reuses it
@@ -378,7 +389,7 @@ The suite lives in [`tests/`](tests) and runs in CI on every push.
 Everything with a statable criterion lives there, including the slower cross-backend and
 optimizer checks — there is no second, unasserted tier.
 
-Every solve also checks what it is about to hand back. A NaN or infinity in `de_ri` / `de_ti`
+Every solve also checks what it is about to hand back. A NaN or infinity in `R` / `T`
 raises `FloatingPointError` naming the contaminated array; a result that stayed finite but
 cannot be physical — a negative efficiency, or R+T above 1 out of a passive stack — warns
 `UnphysicalResultWarning`. Both are eager-NumPy only, so JAX and PyTorch tracing is untouched.

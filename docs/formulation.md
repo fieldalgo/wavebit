@@ -358,13 +358,13 @@ The conical/2D final match (`final_matching`) is the same elimination in the s/p
 basis, solved as one `4·ff` system (`final_A`, `final_B`). The boundary variables it uses
 are **definitions carried over from the legacy chain** — s carries the electric amplitude
 (`E_s`), p carries the magnetic one (an incident p wave of unit E has `H̃ = n_top`), which
-is why `final_B`'s rows read `(-sinψ, cosψ kz_inc/n_top, i sinψ kz_inc, i n_top cosψ)`
-and why the reported `R_p` is a magnetic amplitude: the amplitude oracle divides it by
-`-i n_top` before comparing to the Fresnel `r_p`
-(`tests/test_lossy_media.py::solver_r`). Those two facts — the division and its sign —
-are pinned by `test_reflection_amplitude` across six path/algorithm combinations, which
-is the honest statement of where the s/p sign conventions are *checked* rather than
-*derived*.
+is why `final_B`'s rows read `(-sinψ, cosψ kz_inc/n_top, i sinψ kz_inc, i n_top cosψ)`.
+The magnetic p variable becomes the Fresnel `r_p` through `/(-i n_top)`; since 2026-08-12
+that conversion lives at the pack sites, so the public `r_p`/`t_p` are Fresnel-normalized
+and the amplitude oracle compares them directly. The facts are pinned by
+`test_reflection_amplitude` and `test_transmission_amplitude` across six path/algorithm
+combinations, which is the honest statement of where the s/p sign conventions are
+*checked* rather than *derived*.
 
 ---
 
