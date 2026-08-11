@@ -25,6 +25,7 @@ import pytest
 os.environ.setdefault('JAX_ENABLE_X64', '1')
 
 import array_api_compat.numpy as xnp
+import fieldwave
 from fieldwave._core import boundary as _b
 from fieldwave._core import clipper as _c
 from fieldwave._core.polygon import polygon_ft, polygon_area, rect_verts, ellipse_verts
@@ -478,3 +479,97 @@ def test_a_painted_ellipse_is_polygonised():
     t = _total(r)
     assert 0.0 < t < 1.0
     assert abs(t + float(np.asarray(r.R).real.sum()) - 1.0) < 1e-9    # lossless
+
+
+# ------------------------------------------------- the painting plan across backends
+
+def _two_painted(w, curved=False):
+    """Two overlapping shapes, painted, with every geometry value wrapped by `w`."""
+    first = (dict(type='circle', cx=w(0.55), cy=w(0.5), lx=w(0.30), n_index=3.48) if curved
+             else dict(type='rectangle', cx=w(0.55), cy=w(0.5), lx=w(0.26), ly=w(0.24),
+                       angle=w(0.0), n_index=3.48))
+    return [dict(n_base=1.0, combine='paint', shapes=[
+        first,
+        dict(type='rectangle', cx=0.68, cy=0.58, lx=0.26, ly=0.30, angle=0.0, n_index=2.1)])]
+
+
+_PAINT_CFG = dict(period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), fto=(4, 4),
+                  n_top=1.0, n_bot=1.45, theta=0.0, phi=None, pol=0.0, normal_grid=256)
+
+
+def _painted_total(backend, w, curved=False, geometry=None):
+    solver = fieldwave.rcwa(backend=backend, ucell=_two_painted(w, curved), **_PAINT_CFG)
+    res = solver.conv_solve() if geometry is None else solver.conv_solve(geometry=geometry)
+    t = res.T
+    return float(np.sum(np.asarray(t.detach() if hasattr(t, 'detach') else t)).real)
+
+
+@pytest.mark.parametrize('curved', [False, True], ids=['rectangles', 'circle'])
+def test_a_painted_overlap_agrees_across_backends(curved):
+    """Every backend, same painted overlap, same answer.
+
+    Both halves of this used to raise on PyTorch and on PyTorch only, for reasons that had
+    nothing to do with the physics:
+
+    * ``plan_layer`` runs on NumPy by design but read the caller's shape dict, so a torch
+      tensor reached ``rect_verts`` and met ``numpy_array * Tensor``. JAX survived by
+      accident -- its arrays satisfy ``__array__`` and convert on contact -- so testing on
+      JAX proved nothing about torch here.
+    * ``ellipse_verts`` called ``xp.cos`` on a scalar, which torch refuses. That one fired
+      for *every* angle including 0.0, so the boundary path could not draw a circle or an
+      ellipse on torch at all.
+
+    Routing is on the overlap, so both are reached only when the shapes actually intersect --
+    which is why a non-overlapping smoke test would have stayed green through both.
+    """
+    reference = _painted_total(0, float, curved)
+    for backend, lib in ((1, 'jax'), (2, 'torch')):
+        pytest.importorskip(lib)
+        assert _painted_total(backend, float, curved) == pytest.approx(reference, abs=1e-12)
+
+
+def test_a_painted_overlap_takes_traced_geometry_on_torch():
+    """The same, with the shape parameters as tensors rather than floats.
+
+    Separate from the case above because the float path and the tensor path reach
+    ``plan_layer`` differently, and only the second one raised.
+    """
+    torch = pytest.importorskip('torch')
+    reference = _painted_total(0, float)
+    traced = _painted_total(2, lambda v: torch.tensor(v, dtype=torch.float64))
+    assert traced == pytest.approx(reference, abs=1e-12)
+
+
+def test_painted_geometry_follows_the_dtype_it_was_given():
+    """float32 parameters give a float32 answer, and that is the caller's choice, not a bug.
+
+    Worth pinning because ``torch.tensor(0.55)`` is float32 under torch's stock default,
+    regardless of ``type_complex`` -- so the natural way to write a traced parameter quietly
+    halves the precision of the geometry. The library follows the input rather than overriding
+    it; this records that it does, and how much it costs.
+
+    Both dtypes are named explicitly rather than leaning on ``torch.get_default_dtype()``.
+    That default is process-global and another test in the suite sets it, so a version of this
+    test that relied on it passed alone and failed in the file -- which is a statement about
+    test isolation, not about the geometry.
+    """
+    torch = pytest.importorskip('torch')
+    reference = _painted_total(0, float)
+    single = _painted_total(2, lambda v: torch.tensor(v, dtype=torch.float32))
+    double = _painted_total(2, lambda v: torch.tensor(v, dtype=torch.float64))
+    assert double == pytest.approx(reference, abs=1e-12)
+    assert single != pytest.approx(reference, abs=1e-12)
+    assert single == pytest.approx(reference, abs=1e-6)
+
+
+def test_freezing_a_painted_layer_works_on_torch():
+    """``freeze_geometry()`` is what the docstring points at, and it raised in the same frame.
+
+    It is the call that runs ``plan_layer``, so taking the freeze was itself the failure.
+    """
+    torch = pytest.importorskip('torch')
+    ucell = _two_painted(lambda v: torch.tensor(v, dtype=torch.float64))
+    solver = fieldwave.rcwa(backend=2, ucell=ucell, **_PAINT_CFG)
+    frozen = solver.freeze_geometry()
+    total = float(np.sum(np.asarray(solver.conv_solve(geometry=frozen).T.detach())).real)
+    assert total == pytest.approx(_painted_total(0, float), abs=1e-12)

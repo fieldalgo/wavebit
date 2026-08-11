@@ -84,13 +84,45 @@ def polygon_ft(xp, verts, ky, kx, period, lattice=None):
 
 # ---------------------------------------------------------------- primitives
 
+def _vertex_dtype(xp, *args):
+    """The real dtype these vertices should be built in.
+
+    Taken from the arguments when any of them is an array, so a traced parameter carries its
+    own precision through; ``float64`` otherwise.
+
+    The fallback is the point. ``xp.asarray([1.0, ...])`` takes the *namespace default*, and
+    torch's is ``float32`` no matter what ``type_complex`` the solver was given. A layer whose
+    shape parameters are plain Python floats -- the ordinary case -- therefore had its geometry
+    built in single precision on PyTorch alone, silently.
+    """
+    for a in args:
+        dt = getattr(a, 'dtype', None)
+        if dt is not None:
+            return dt
+    return xp.float64
+
+
+def _scalar(xp, v, dtype):
+    """A shape parameter as a 0-d array of ``dtype``, whether it arrived as one or as a float.
+
+    ``torch.cos`` refuses a Python float, and ``numpy.cos`` accepts one -- so a function that
+    passes scalars straight to a ufunc works on NumPy and JAX and raises on PyTorch, for every
+    input including ``angle = 0.0``. Promoting here is what makes the three namespaces
+    interchangeable.
+    """
+    if getattr(v, 'dtype', None) is not None:
+        return v
+    return xp.asarray(v, dtype=dtype)
+
+
 def rect_verts(xp, cx, cy, lx, ly, angle):
     """CCW vertices of a rotated rectangle. Exact -- a polygon *is* a rectangle."""
-    one = xp.asarray([1.0, 1.0, 1.0, 1.0])
-    sx = xp.asarray([-0.5, 0.5, 0.5, -0.5])
-    sy = xp.asarray([-0.5, -0.5, 0.5, 0.5])
+    dt = _vertex_dtype(xp, cx, cy, lx, ly, angle)
+    one = xp.asarray([1.0, 1.0, 1.0, 1.0], dtype=dt)
+    sx = xp.asarray([-0.5, 0.5, 0.5, -0.5], dtype=dt)
+    sy = xp.asarray([-0.5, -0.5, 0.5, 0.5], dtype=dt)
     lx_, ly_ = sx * lx, sy * ly
-    c, s = xp.cos(angle * one), xp.sin(angle * one)
+    c, s = xp.cos(_scalar(xp, angle, dt) * one), xp.sin(_scalar(xp, angle, dt) * one)
     return xp.stack([cx + lx_ * c - ly_ * s, cy + lx_ * s + ly_ * c], axis=-1)
 
 
@@ -114,10 +146,12 @@ def ellipse_verts(xp, cx, cy, lx, ly, angle, n):
     l'inclusion etant celle de l'ellipse".
     """
     two_pi = 6.283185307179586
-    t = xp.asarray([i * two_pi / n for i in range(n)])
+    dt = _vertex_dtype(xp, cx, cy, lx, ly, angle)
+    t = xp.asarray([i * two_pi / n for i in range(n)], dtype=dt)
     import math
     scale = math.sqrt(two_pi / (n * math.sin(two_pi / n)))
     a, b = lx / 2.0 * scale, ly / 2.0 * scale
     px, py = a * xp.cos(t), b * xp.sin(t)
-    c, s = xp.cos(angle), xp.sin(angle)
+    ang = _scalar(xp, angle, dt)
+    c, s = xp.cos(ang), xp.sin(ang)
     return xp.stack([cx + px * c - py * s, cy + px * s + py * c], axis=-1)

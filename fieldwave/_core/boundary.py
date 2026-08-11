@@ -297,6 +297,30 @@ def shape_vertices(xp, shape, period, n_poly=POLYGON_VERTICES):
         f"Supported: rectangle, square, circle, disk, ellipse.")
 
 
+def _concrete_shape(shape):
+    """Every numeric value of a shape dict as a plain Python float.
+
+    :func:`plan_layer` is documented "concrete values only" and was relying on the caller to
+    have honoured it. NumPy and JAX let that slide -- a JAX array satisfies ``__array__`` and
+    converts on contact -- while a PyTorch tensor survives all the way into ``rect_verts`` and
+    multiplies against a NumPy array, which raises. Enforcing the contract here is what makes
+    the planning stage namespace-agnostic, which is what it always claimed to be.
+
+    Values that are not numbers are passed through untouched: a shape's ``type``, and a complex
+    ``n_index``, which ``float()`` would refuse and which the planner never reads anyway.
+    """
+    out = {}
+    for k, v in shape.items():
+        detach = getattr(v, 'detach', None)
+        if detach is not None:
+            v = detach()
+        try:
+            out[k] = float(v)
+        except (TypeError, ValueError):
+            out[k] = v
+    return out
+
+
 def plan_layer(shapes, period, n_poly=POLYGON_VERTICES):
     """Resolve one layer's painting order into disjoint loops. **Concrete values only.**
 
@@ -306,7 +330,8 @@ def plan_layer(shapes, period, n_poly=POLYGON_VERTICES):
     it against traced vertices.
     """
     import numpy as _np
-    concrete = [_np.asarray(shape_vertices(_np, s, period, n_poly), float) for s in shapes]
+    concrete = [_np.asarray(shape_vertices(_np, _concrete_shape(s), period, n_poly), float)
+                for s in shapes]
     return _clipper.resolve_painting(concrete)
 
 
