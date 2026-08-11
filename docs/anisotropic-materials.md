@@ -281,11 +281,13 @@ and truncation-independent. A tilted magnetisation — xy and yz populated toget
 a real magnetised film has — is past that edge, so it still rests on our own Berreman. The
 measurements and the reasoning are in `tests/references/README.md`.
 
-Nothing dispatches to it. What is still missing is the part that makes it usable: the transfer is
-`Psi exp(i k0 lam d) Psi⁻¹` and overflows on a thick layer, so it needs the scattering-matrix
-recursion the 2ff path already has; multi-order is coded but unchecked against a grating; there is
-no field reconstruction. The module refuses an out-of-range layer rather than returning a number
-it cannot stand behind.
+Nothing dispatches to it. It is, however, stable for any thickness: layers are joined by an
+enhanced-transmittance recursion (`connecting_algo='ETM'`, the same technique that makes the 2ff
+transfer stable) or by scattering matrices (`'SMM'`), and both hold ~1e-13 relative accuracy out
+to a modal exponent of 2500, where they reproduce the closed-form single-interface Fresnel
+reflectance to 4e-16. A naive transfer is kept as `'TMM'` for cross-checking and refuses past the
+point where it is accurate. What is still missing: multi-order is coded but unchecked against a
+grating, and there is no field reconstruction.
 
 Two findings from building it, both invisible until the case existed. The `±` pairing above does
 not merely become unnecessary in 4ff — it becomes *false*: at normal incidence the backward set

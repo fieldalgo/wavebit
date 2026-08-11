@@ -301,8 +301,9 @@ def _fresnel(n, theta_deg):
             abs((n ** 2 * ct - c2) / (n ** 2 * ct + c2)) ** 2)
 
 
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('theta_deg', [0.0, 35.0, 62.0])
-def test_a_thick_absorbing_slab_is_a_single_interface(theta_deg):
+def test_a_thick_absorbing_slab_is_a_single_interface(theta_deg, algo):
     """The anchor for the regime the transfer cannot reach, and it is a closed form.
 
     Once a slab is thick enough that nothing returns from its far side, its reflectance *is* the
@@ -317,9 +318,9 @@ def test_a_thick_absorbing_slab_is_a_single_interface(theta_deg):
     want_s, want_p = _fresnel(ABSORBING_N, theta_deg)
 
     for psi, want, pol in ((psi_s, want_s, 's'), (psi_p, want_p, 'p')):
-        R, T = solve_uniform_stack(WL, kx, ky, layers, 1, psi)
-        assert R == pytest.approx(want, abs=1e-12), f'{pol}-pol at {theta_deg} deg'
-        assert T == 0.0, f'{pol}-pol: nothing may survive 100 wavelengths of this'
+        R, T = solve_uniform_stack(WL, kx, ky, layers, 1, psi, connecting_algo=algo)
+        assert R == pytest.approx(want, abs=1e-12), f'{algo}, {pol}-pol at {theta_deg} deg'
+        assert T == 0.0, f'{algo}: nothing may survive 100 wavelengths of this'
 
 
 def _airy_slab(n, theta_deg, d):
@@ -337,9 +338,10 @@ def _airy_slab(n, theta_deg, d):
             abs(t12 * t21 * ph / (1 - r ** 2 * ph ** 2)) ** 2)
 
 
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('thick', [500.0, 4000.0, 10000.0, 30000.0])
 @pytest.mark.parametrize('n', [1.5 + 0.1j, 1.5 - 0.1j], ids=['lossy', 'gain'])
-def test_the_cascade_matches_the_closed_form_across_thicknesses(n, thick):
+def test_the_cascade_matches_the_closed_form_across_thicknesses(n, thick, algo):
     """A closed form over the whole range, where interference is still alive.
 
     ``test_a_thick_absorbing_slab_is_a_single_interface`` pins the far limit, where the answer
@@ -353,11 +355,12 @@ def test_the_cascade_matches_the_closed_form_across_thicknesses(n, thick):
     """
     kx, ky = _kxky(35.0)
     layers = [(blocks(np.diag([n ** 2] * 3).astype(complex)), thick)]
-    R, T = solve_uniform_stack(WL, kx, ky, layers, 1, vacuum_sp_states(np, kx, ky, 1)[0])
+    R, T = solve_uniform_stack(WL, kx, ky, layers, 1, vacuum_sp_states(np, kx, ky, 1)[0],
+                               connecting_algo=algo)
     want_r, want_t = _airy_slab(n, 35.0, thick)
 
-    assert R == pytest.approx(want_r, rel=1e-11), f'n={n}, d={thick}'
-    assert T == pytest.approx(want_t, rel=1e-11), f'n={n}, d={thick}'
+    assert R == pytest.approx(want_r, rel=1e-11), f'{algo}, n={n}, d={thick}'
+    assert T == pytest.approx(want_t, rel=1e-11), f'{algo}, n={n}, d={thick}'
 
 
 def test_the_transfer_refuses_before_it_becomes_inaccurate():
@@ -390,25 +393,27 @@ def test_the_transfer_refuses_before_it_becomes_inaccurate():
 @pytest.mark.parametrize('theta_deg', [0.0, 35.0])
 @pytest.mark.parametrize('label,eps', Z_DECOUPLED + Z_COUPLED,
                          ids=[c[0] for c in Z_DECOUPLED + Z_COUPLED])
-def test_the_two_connecting_algorithms_agree_where_both_are_valid(label, eps, theta_deg):
-    """Two ways of joining the same modes must give the same stack.
+def test_the_connecting_algorithms_agree_where_all_are_valid(label, eps, theta_deg):
+    """Three ways of joining the same modes must give the same stack.
 
-    The 2ff path makes this same comparison (``tests/`` covers TMM vs SMM there) and it means
-    more here, because the two are *not* equivalent in reach: only one survives a thick layer. A
-    disagreement in the overlapping range would say the interface matching or the mode ordering
-    differs between them, which no external oracle would localise.
+    They are *not* equivalent in reach — only ETM and SMM survive a thick layer — so agreement
+    on a thin stack is what says the difference between them is stability and nothing else. A
+    disagreement here would point at the interface matching or the mode ordering, which no
+    external oracle would localise.
     """
     kx, ky = _kxky(theta_deg)
     layers = [(blocks(eps), THICK)]
     for psi, pol in zip(vacuum_sp_states(np, kx, ky, 1), ('s', 'p')):
-        smm = solve_uniform_stack(WL, kx, ky, layers, 1, psi)
-        tmm = solve_uniform_stack(WL, kx, ky, layers, 1, psi, connecting_algo='TMM')
-        gap = max(abs(a - b) for a, b in zip(smm, tmm))
+        got = {a: solve_uniform_stack(WL, kx, ky, layers, 1, psi, connecting_algo=a)
+               for a in ('ETM', 'SMM', 'TMM')}
+        gap = max(abs(x - y) for u, v in (('ETM', 'SMM'), ('ETM', 'TMM'))
+                  for x, y in zip(got[u], got[v]))
         assert gap < 1e-12, f'{label} at {theta_deg} deg, {pol}-pol: {gap:.2e}'
 
 
+@pytest.mark.parametrize('algo', ['ETM', 'SMM', 'TMM'])
 @pytest.mark.parametrize('theta_deg', [0.0, 35.0])
-def test_a_multilayer_stack_matches_berreman(theta_deg):
+def test_a_multilayer_stack_matches_berreman(theta_deg, algo):
     """The Redheffer cascade over more than one layer — untouched by every test above.
 
     Each single-layer case exercises two interfaces and one propagation. Only a stack exercises
@@ -430,7 +435,7 @@ def test_a_multilayer_stack_matches_berreman(theta_deg):
     ref = berreman_efficiencies(stack, np.deg2rad(theta_deg))
 
     for psi, pol in zip(vacuum_sp_states(np, kx, ky, 1), ('s', 'p')):
-        got = solve_uniform_stack(WL, kx, ky, layers, 1, psi)
+        got = solve_uniform_stack(WL, kx, ky, layers, 1, psi, connecting_algo=algo)
         want = (ref[pol]['R_s'] + ref[pol]['R_p'], ref[pol]['T_s'] + ref[pol]['T_p'])
         gap = max(abs(g - w) for g, w in zip(got, want))
-        assert gap < 1e-12, f'{theta_deg} deg, {pol}-pol: {gap:.2e}'
+        assert gap < 1e-12, f'{algo}, {theta_deg} deg, {pol}-pol: {gap:.2e}'

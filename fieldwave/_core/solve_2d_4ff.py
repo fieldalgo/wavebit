@@ -51,24 +51,35 @@ degrees the backward set departs from the negated forward set by 9e-2, while at 
 incidence the two coincide to 1e-15 — so the pairing survives exactly where nobody would have
 noticed it failing.
 
-**Layers are joined by scattering matrices, and that is what makes it stable.** The direction
-split is not bookkeeping: it is what lets each layer be propagated by ``exp(i k0 lam_f d)``
-forward and ``exp(-i k0 lam_b d)`` backward. **In a passive medium** both have modulus at most
-one for any thickness — a mode carrying energy towards ``+z`` cannot gain amplitude on the way,
-so ``Im(lam_f) >= 0``, and the mirrored statement holds backwards. Nothing grows, so nothing has
-to be cancelled later, and the cascade holds ~1e-13 relative accuracy out to a modal exponent of
-2500 where it reproduces the closed-form single-interface Fresnel reflectance to 4e-16.
+**What makes the stack solve stable is the direction split, not the algorithm on top of it.**
+The split is what lets a layer be propagated by ``exp(i k0 lam_f d)`` forward and
+``exp(-i k0 lam_b d)`` backward. **In a passive medium** both have modulus at most one for any
+thickness — a mode carrying energy towards ``+z`` cannot gain amplitude on the way, so
+``Im(lam_f) >= 0``, and the mirrored statement holds backwards. Two of the three connecting
+algorithms are then arrangements that keep only those factors:
 
-**That argument does not cover a gain medium**, where a forward mode amplifies by construction
-(``Im(lam_f) < 0``; measured -0.108 for ``n = 1.5 - 0.1j``) and the propagator is no longer a
-contraction. Measured anyway: it still tracks the Airy closed form to ~1e-13 out to an exponent
-of 113, and past roughly 700 it returns NaN. Nothing here guards that, because for a gain medium
-the growth is the physics rather than an artefact — but the stability claim is about passive
-media and should not be read further.
+===========  ==================================  =====================  ===================
+``algo``     form                                thickness              cost, 40 layers
+===========  ==================================  =====================  ===================
+``'ETM'``    enhanced transmittance (default)    unbounded              0.94x
+``'SMM'``    scattering matrices, Redheffer      unbounded              1.13x
+``'TMM'``    ``Psi exp(...) Psi^-1``, naive      refuses past x = 9     1.00x
+===========  ==================================  =====================  ===================
 
-The eigen-decomposition transfer is kept as ``connecting_algo='TMM'`` for cross-checking; the
-two agree to 1.2e-15 across eight tensors, three angles and both polarisations. Its bound is set
-by *accuracy*, not by overflow — see ``_MAX_EXPONENT``.
+ETM and SMM agree to 1.2e-15 over eight tensors, three angles and both polarisations, and both
+hold ~1e-13 relative accuracy out to a modal exponent of 2500, where they reproduce the
+closed-form single-interface Fresnel reflectance to 4e-16.
+
+TMM is kept deliberately naive, as a third opinion whose failure mode is understood: it holds
+the growing and decaying halves in one matrix and inverts it, so its relative error grows like
+``eps*exp(2x)``. Its bound is set by *accuracy*, not by overflow — see ``_MAX_EXPONENT``.
+
+**None of this covers a gain medium**, where a forward mode amplifies by construction
+(``Im(lam_f) < 0``; measured -0.108 for ``n = 1.5 - 0.1j``) and the propagators stop being
+contractions. Measured anyway: ETM and SMM still track the Airy closed form to ~1e-13 out to an
+exponent of 113, and past roughly 700 return NaN. Nothing guards that, because there the growth
+is the physics rather than an artefact — but the stability claim is about passive media and
+should not be read further.
 
 What is not here, in the order it will be wanted:
 
@@ -277,6 +288,43 @@ def _forward_amplitudes(xp, incident, psi_vf, psi_vb, ff):
     return coef[:2 * ff]
 
 
+def _solve_etm(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb):
+    """Enhanced transmittance matrix — the 2ff path's stable transfer, carried over to 4ff.
+
+    Same idea as :func:`fieldwave._core.solve_2d.solve_2d`'s ``big_A_i`` / ``big_T`` recursion
+    (Moharam et al. 1995), which is why the 2ff transfer is stable while the naive one in
+    :func:`_solve_tmm` is not. The growth is not removed by better conditioning; it is arranged
+    never to appear.
+
+    Sweeping upward, suppose the state below a layer is ``psi = G t`` for an unknown ``t``.
+    Decomposing in that layer's modes gives ``a_f = X_f^-1 P t`` — and ``X_f^-1`` is exactly the
+    growing factor. ETM absorbs it into the unknown, ``t' = X_f^-1 P t``, leaving
+
+        G_above = Psi_f + Psi_b @ X_b @ (Q P^-1) @ X_f
+
+    in which ``X_f`` and ``X_b`` appear only as the bounded, decaying factors they are. The
+    redefinition is bookkept separately as ``P^-1 X_f`` per layer, so the transmitted amplitude
+    can be recovered at the end.
+    """
+    G = psi_vf
+    T_acc = xp.astype(xp.eye(2 * ff), Kx.dtype)
+    for eps_blocks, d in reversed(list(layers)):
+        lam_f, psi_f, lam_b, psi_b = split_forward_backward(
+            xp, layer_matrix_4ff(xp, Kx, Ky, **eps_blocks), ff)
+        X_f = _diag_of(xp, xp.exp(1j * k0 * lam_f * d))
+        X_b = _diag_of(xp, xp.exp(-1j * k0 * lam_b * d))
+
+        PQ = xp.linalg.solve(xp.concat([psi_f, psi_b], axis=1), G)
+        P_i = xp.linalg.inv(PQ[:2 * ff])
+        G = psi_f + psi_b @ X_b @ (PQ[2 * ff:] @ P_i) @ X_f
+        T_acc = T_acc @ (P_i @ X_f)
+
+    # incident + reflected on the top side must be whatever the recursion says arrives there
+    sol = xp.linalg.solve(xp.concat([psi_vb, -G], axis=1),
+                          xp.reshape(-incident, (-1, 1)))[:, 0]
+    return psi_vb @ sol[:2 * ff], psi_vf @ (T_acc @ sol[2 * ff:])
+
+
 def _solve_tmm(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb):
     """Eigen-decomposition transfer, kept as a second opinion. Refuses where it would blow up."""
     P = xp.astype(xp.eye(4 * ff), Kx.dtype)
@@ -301,7 +349,7 @@ def _solve_tmm(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb):
     return psi_vb @ sol[:2 * ff], psi_vf @ sol[2 * ff:]
 
 
-def solve_uniform_stack(wavelength, kx, ky, layers, ff, incident, connecting_algo='SMM'):
+def solve_uniform_stack(wavelength, kx, ky, layers, ff, incident, connecting_algo='ETM'):
     """``(R, T)`` for one incident state, through a stack of uniform anisotropic layers.
 
     ``layers`` is ``[(eps_blocks, thickness), ...]`` where ``eps_blocks`` is the mapping
@@ -315,15 +363,20 @@ def solve_uniform_stack(wavelength, kx, ky, layers, ff, incident, connecting_alg
     of per-mode fluxes. Those agree only when the modes are flux-orthogonal, which holds for a
     lossless medium and stops holding exactly where it would be least noticed.
 
-    ``connecting_algo`` selects how layers are joined, and here — unlike the 2ff path, where the
-    two are equivalent and TMM is already stable — the choice has consequences:
+    ``connecting_algo`` selects how layers are joined. Three, and the choice matters here in a
+    way it does not in the 2ff path, where both shipped options are already stable:
 
-    * ``'SMM'`` (default) cascades per-layer scattering matrices with the Redheffer star. Both
-      propagators are contractions for any thickness, so nothing overflows.
-    * ``'TMM'`` propagates ``Psi exp(i k0 lam d) Psi^-1``, which holds the growing and decaying
-      halves in one matrix and inverts it. Kept because agreement between two connecting
-      algorithms over the range where both are valid is a real check on each, and it **raises**
-      rather than returning a number it cannot stand behind once past that range.
+    * ``'ETM'`` (default) is the enhanced-transmittance recursion, the same technique that makes
+      the 2ff transfer stable. Growth never appears rather than being cancelled. Measured the
+      cheapest of the three — 0.94x the naive transfer on a 40-layer stack, against SMM's 1.13x
+      — and identical to SMM at 1.2e-15, which is why it is the default.
+    * ``'SMM'`` cascades per-layer scattering matrices with the Redheffer star. Same stability,
+      slightly dearer, and the formulation most of the literature states its results in. Its
+      per-layer matrices are also independent of their neighbours, which is what would let them
+      be cached or reordered.
+    * ``'TMM'`` propagates ``Psi exp(i k0 lam d) Psi^-1``, holding the growing and decaying
+      halves in one matrix and inverting it. Deliberately kept in its naive form as a third
+      opinion, and it **raises** past the point where it is accurate — see ``_MAX_EXPONENT``.
     """
     xp = array_namespace(kx)
     k0 = 2 * 3.141592653589793 / wavelength
@@ -336,10 +389,13 @@ def solve_uniform_stack(wavelength, kx, ky, layers, ff, incident, connecting_alg
         S11, _, S21, _ = _solve_smm(xp, k0, Kx, Ky, layers, ff, psi_vf, psi_vb)
         a_inc = _forward_amplitudes(xp, incident, psi_vf, psi_vb, ff)
         reflected, transmitted = psi_vb @ (S11 @ a_inc), psi_vf @ (S21 @ a_inc)
+    elif connecting_algo == 'ETM':
+        reflected, transmitted = _solve_etm(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb)
     elif connecting_algo == 'TMM':
         reflected, transmitted = _solve_tmm(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb)
     else:
-        raise ValueError(f"connecting_algo must be 'SMM' or 'TMM', got {connecting_algo!r}")
+        raise ValueError(
+            f"connecting_algo must be 'SMM', 'ETM' or 'TMM', got {connecting_algo!r}")
 
     def flux(v):
         return float(mode_flux_z(xp, xp.reshape(v, (-1, 1)), ff)[0])
