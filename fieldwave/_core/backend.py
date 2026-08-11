@@ -58,6 +58,21 @@ class UnphysicalResultWarning(UserWarning):
     """
 
 
+class UnresolvedBranchWarning(UserWarning):
+    """A ``sqrt`` branch was chosen from a value that carries no information about it.
+
+    Selecting the physical root asks whether ``Re(v)`` is zero, and that is answerable only
+    while ``Re(v)`` stands clear of the working precision's round-off. At complex64 it often
+    does not: round-off is ~1e-7, and both a lossless layer at a complex incidence angle and a
+    weakly absorbing superstrate put real parts at exactly that scale — one of them noise, the
+    other signal, and nothing in the value distinguishes them. The branch is then taken from
+    the sign of round-off, which is why a single-precision solve can return ``|R| ~ 4`` while
+    the same solve at double precision is exact to 1e-14.
+
+    Its own category so it can be escalated or silenced on its own; see ``docs/branch-cuts.md``.
+    """
+
+
 def check_physical(xp, de_ri, de_ti, n_top, atol=1e-3):
     """Warn if efficiencies are finite but cannot describe a physical result.
 
