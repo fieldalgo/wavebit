@@ -23,7 +23,7 @@ conventions differ. This audit went looking. Four results:
 | --- | --- | --- | --- |
 | **1** | Which priority is right for a half-space, `Re(kz) > 0` or `Im(kz) >= 0`? | **Neither, on its own.** `Re(kz) > 0` with an `Im` tie-break is right for every real `k_par` and for most complex ones; a third condition decides the rest | **yes** — `_off_principal_branch` |
 | **2** | Is `mode_q` disagreeing with `boundary_kz` at complex `k_par` a defect? | **No** — a layer's `±q` is a label and a half-space's `kz` is a boundary condition. The label is measured free to 2.0e-15 | no |
-| **3** | Is the TM discrepancy against the mpmath Airy reference a solver defect? | **No** — the solver matches two independent references to 4.3e-16 in TM at every absorption. The reference's p-admittance is the thing that was wrong | no |
+| **3** | Is the TM discrepancy against the mpmath Airy reference a solver defect? | **No — and (corrected 2026-08-12) not a reference defect either**: the compared numbers were the coupled path's TM *efficiency* and the reference's `|r_p|²`, which for an absorbing superstrate differ by exactly `|n_top|²·Re(n_top⁻²)` — two conventions of a quantity the contract excludes. Solver matches both references to 4.3e-16 on amplitudes | no |
 | **4** | Any other flip residue? | **One live**: the painted-polygon builder still wrote `conj(n)**2`, turning an absorbing painted layer into gain. Plus one sentence of prose left in the old convention | **yes** — `boundary.py` |
 
 The load-bearing find is (1). The shipped rule put a **step discontinuity of 2.96 in the
@@ -341,7 +341,36 @@ formulation. Fixed as prose; nothing numerical moved.
 
 ---
 
-## 7. The TM discrepancy is in the reference, not the solver
+## 7. The TM discrepancy — resolved: two efficiency conventions, no defect anywhere
+
+> **Correction, 2026-08-12.** This section originally concluded "the p-admittance of the
+> earlier reference is what was wrong". The dev-paper-archive session then showed its
+> reference had used the correct `n²/kz` all along, and supplied its exact stack — which
+> settled the whole thing in one measurement, below. The reference was right, the solver
+> was right, and the 1.7e-02 was **two legitimately different conventions of a quantity
+> the contract declares undefined**: the reported "solver" number was the *coupled*
+> (psi-specified) path's TM efficiency, the reference's was `|r_p|²`, and for an absorbing
+> superstrate at a real angle those differ by exactly
+>
+> ```
+> R_p(coupled) / |r_p|²  =  |n_top|² · Re(n_top⁻²)          (TE factor: exactly 1)
+> ```
+>
+> Measured on their stack (`n_top = 1.5+0.3i`, layer `n = 2`, `d = 0.37`, `λ = 0.94`,
+> `θ = 0.6`): `0.2207491559 × 0.9230769231 = 0.2037684516` — their two numbers, to all
+> ten digits. The TE factor being exactly 1 (`kz_inc = n_top·cosθ` is an identity at real
+> `θ`) is why TE never showed it, and the factor `→ 1` as `Im(n_top)² → 0` is the k²
+> vanishing. The pure-1D path's TM efficiency equals `|r_p|²`; the coupled path weights by
+> `Re(kz/n²)`. Both are defensible spellings of "incident power in an absorbing medium",
+> which is precisely the quantity `docs/conventions.md` excludes from the contract — the
+> amplitudes are the comparable surface there, and those agree across every path to 1e-15.
+> The cross-path difference is now pinned as *known and deliberate-not-hidden* by
+> `test_lossy_media.py::test_absorbing_superstrate_efficiency_is_convention_bound`.
+
+What follows is the original investigation, kept because its measurements stand: the solver
+agrees with two independent references to machine precision, and the spelling table remains
+a useful catalogue of error families that produce this symptom's *shape* — even though, as
+it turns out, none of them was the cause.
 
 The open item was a TM disagreement of 1.7e-02 at `Im(n_top) = 0.3` against an mpmath
 50-digit Airy reference in admittance form, falling as roughly `k²` to 8.0e-17 at `k = 0`,
@@ -369,8 +398,9 @@ bit-identical (§3), so the root is not a free variable in this table.
 | 0.10 | TM | 9.64e-17 | 1.82e-16 | 1.01e-16 |
 | 0.00 | TM | 3.79e-16 | 4.48e-16 | 6.94e-17 |
 
-The solver is right in TM at every absorption, against both. **The p-admittance of the earlier
-reference is what was wrong.**
+The solver is right in TM at every absorption, against both. (The original conclusion drawn
+here — that the earlier reference's p-admittance was wrong — did not survive contact with
+that reference's actual code; see the correction box above.)
 
 The correct one follows from the transverse pair that is continuous across an interface. For
 TM under `e^{-iωt}`, with `H` carrying the free-space impedance, the first-order system is
@@ -398,11 +428,10 @@ Spellings that are wrong, and how wrong, on the same stack (error against the so
 | `n/cos(θ_real)` in every medium | 2.08e-01 | 1.56e-01 | 1.04e-01 | **9.9e-02** |
 | `n/√(1−(Re k_par/n)²)` (real-part Snell) | 2.07e-01 | 6.82e-02 | 1.95e-02 | 3.8e-16 |
 
-All but one vanish as the absorption does, which is the signature reported. The exact 1.7e-02
-was not reproduced — the earlier script was not available and the stack it used is not
-recorded here — so which of these it was is not established. What *is* established is that the
-solver is not the wrong side of it. `n/cos(θ_real)` is the only candidate that can be
-eliminated outright: it stays wrong at `k = 0`.
+All but one vanish as the absorption does, which is the signature reported — and that shared
+signature is exactly why the table could not identify the cause: the true explanation (the
+efficiency-normalization factor in the correction box) vanishes as k² too. The table survives
+as a catalogue of misspellings to check against, not as the resolution.
 
 ---
 
@@ -456,10 +485,10 @@ was found and nothing was changed.
   the two knobs a user turns — and that it satisfies the radiation condition (`Re(kz) > 0`,
   §2). If someone finds a fourth physical deformation that disagrees, this is where to look.
 
-* **The exact TM discrepancy of 1.7e-02 was not reproduced**, only bounded: the solver is
-  right to 4.3e-16 against two independent references, and seven candidate wrong admittances
-  are tabulated with their errors. Six of them cannot be told apart from the reported symptom
-  without the original script.
+* ~~The exact TM discrepancy of 1.7e-02 was not reproduced~~ — **it now is, to all ten
+  digits** (§7 correction box): the coupled path's TM efficiency versus `|r_p|²`, factor
+  `|n_top|²·Re(n_top⁻²)`. Left struck rather than deleted because the original hedge is the
+  reason the wrong attribution stayed retractable.
 
 * **`Re(kz) > 0` and `Re(kz/eps) > 0` are not the same condition when both `eps` and
   `k_par**2` are complex** — they disagree in 29% of an unrestricted random sample. For real

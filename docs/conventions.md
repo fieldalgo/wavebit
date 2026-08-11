@@ -81,7 +81,10 @@ Amplitude fine print, stated once so it never has to be discovered:
   `r_p = (n2 - n1)/(n2 + n1) = -r_s`;
 - phase reference: `r` at the top interface, `t` at the bottom one;
 - with an absorbing **superstrate**, incident power is convention-dependent, so `R`/`T`
-  are not comparable to 1 — the amplitudes are the meaningful quantities there;
+  are not comparable to 1 — the amplitudes are the meaningful quantities there. Concretely
+  so: the pure-1D and coupled paths normalize that undefined quantity *differently* (TM
+  efficiencies differ by exactly `|n_top|²·Re(n_top⁻²)`; TE by exactly 1), which is pinned
+  as deliberate notice rather than hidden — compare `r`/`t`, never `R`/`T`, in that regime;
 - there are no raw "boundary variables" in the public surface. (Before the first release
   the p amplitudes were exposed as magnetic-field boundary variables needing a
   `/(-i*n_top)` footnote; they were renamed and normalized outright, with no aliases —

@@ -394,6 +394,47 @@ def test_reflection_amplitude(case, pol, theta, path, algo):
     assert abs(got - want) < 1e-12, (got, want)
 
 
+def test_absorbing_superstrate_efficiency_is_convention_bound():
+    """With a complex ``n_top`` the TM efficiency differs *between paths* — by a known factor.
+
+    ``docs/conventions.md`` excludes efficiencies under an absorbing superstrate from the
+    contract because incident power there has no privileged definition. This test pins how
+    concretely that is true: the pure-1D path's TM efficiency equals ``|r_p|**2`` while the
+    coupled path weights by ``Re(kz/n**2)``, and at a real angle (where ``kz_inc`` equals
+    ``n_top*cos(theta)`` exactly) the two differ by ``|n_top|**2 * Re(n_top**-2)`` — the TE
+    factor being exactly 1. This spent a day masquerading as a 1.7e-2 solver-vs-reference
+    defect (audit §7, corrected 2026-08-12: 0.2207491559 * 0.9230769231 = 0.2037684516 to
+    all digits); pinning the factor is what keeps it from costing a second day. If a future
+    release *unifies* the normalization, this is the test that decision must consciously
+    rewrite — and the amplitudes, which agree across paths to 1e-15, must not move.
+    """
+    n_top, theta = 1.5 + 0.3j, 0.6
+    ns, ds = [n_top, 2.0, 1.0], [30.0]
+
+    def eff(path):
+        common = dict(backend=0, n_top=ns[0], n_bot=ns[-1], theta=theta, wavelength=WL,
+                      thickness=ds)
+        if path == '1d':
+            s = fieldwave.rcwa(pol=1, fto=0, period=[WL * 2],
+                               ucell=np.array([[[n, n]] for n in ns[1:-1]]), **common)
+        else:
+            s = fieldwave.rcwa(phi=0.0, psi=0.0, fto=[0, 0],
+                               period=[WL * 2, WL * 2],
+                               ucell=np.array([[[n, n], [n, n]] for n in ns[1:-1]]), **common)
+        res = s.conv_solve()
+        return float(np.sum(np.asarray(res.R))), res
+
+    R_1d, res_1d = eff('1d')
+    R_2d, res_2d = eff('2d')
+    factor = abs(n_top) ** 2 * (1 / n_top ** 2).real
+
+    r_1d = complex(np.asarray(res_1d.res.r_p).ravel()[0])
+    assert R_1d == pytest.approx(abs(r_1d) ** 2, abs=1e-12)          # 1d: R == |r_p|^2
+    assert R_2d == pytest.approx(R_1d * factor, abs=1e-12)           # coupled: the factor
+    r_2d = complex(np.asarray(res_2d.res.r_p).ravel()[0])
+    assert abs(r_2d - r_1d) < 1e-12                                  # amplitudes agree
+
+
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('path', ['1d', 'conical', '2d'])
 @pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
