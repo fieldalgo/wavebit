@@ -290,15 +290,95 @@ def test_lossless_layers_conserve_energy(label, eps):
         assert R + T == pytest.approx(1.0, abs=1e-10), f'{label}, {pol}-pol'
 
 
-def test_a_thick_layer_is_refused_rather_than_overflowed():
-    """The transfer is ``Psi exp(i k0 lam d) Psi^-1`` and has a range; say so rather than
-    returning a number that has lost its meaning.
+ABSORBING_N = 0.2 + 4.0j
 
-    The fix is a scattering-matrix recursion, for which the direction split is the prerequisite
-    and which is not implemented. Until it is, this is the honest boundary.
+
+def _fresnel(n, theta_deg):
+    """``(R_s, R_p)`` off a single vacuum/medium interface — the closed form a thick slab tends to."""
+    ct, st = np.cos(np.deg2rad(theta_deg)), np.sin(np.deg2rad(theta_deg))
+    c2 = np.sqrt(n ** 2 - st ** 2)
+    return (abs((ct - c2) / (ct + c2)) ** 2,
+            abs((n ** 2 * ct - c2) / (n ** 2 * ct + c2)) ** 2)
+
+
+@pytest.mark.parametrize('theta_deg', [0.0, 35.0, 62.0])
+def test_a_thick_absorbing_slab_is_a_single_interface(theta_deg):
+    """The anchor for the regime the transfer cannot reach, and it is a closed form.
+
+    Once a slab is thick enough that nothing returns from its far side, its reflectance *is* the
+    single-interface Fresnel value. At 60000 nm and ``n = 0.2 + 4j`` the modal exponent is about
+    2500 — eight times past where ``float64`` gives up — so this says the cascade stays exact
+    where the eigen-decomposition transfer has no answer at all, against arithmetic rather than
+    against another solver.
+    """
+    kx, ky = _kxky(theta_deg)
+    layers = [(blocks(np.diag([ABSORBING_N ** 2] * 3).astype(complex)), 60000.0)]
+    psi_s, psi_p = vacuum_sp_states(np, kx, ky, 1)
+    want_s, want_p = _fresnel(ABSORBING_N, theta_deg)
+
+    for psi, want, pol in ((psi_s, want_s, 's'), (psi_p, want_p, 'p')):
+        R, T = solve_uniform_stack(WL, kx, ky, layers, 1, psi)
+        assert R == pytest.approx(want, abs=1e-12), f'{pol}-pol at {theta_deg} deg'
+        assert T == 0.0, f'{pol}-pol: nothing may survive 100 wavelengths of this'
+
+
+def test_the_transfer_still_refuses_what_it_cannot_carry():
+    """``connecting_algo='TMM'`` is kept as a second opinion, not as a fallback.
+
+    It has a range, and past it the honest answer is to say so and name the algorithm that does
+    not. Keeping the refusal is what stops the two paths from silently swapping roles.
     """
     kx, ky = _kxky(0.0)
-    absorbing = np.diag([(0.2 + 4.0j) ** 2] * 3).astype(complex)
-    with pytest.raises(ValueError, match='scattering-matrix recursion'):
+    absorbing = np.diag([ABSORBING_N ** 2] * 3).astype(complex)
+    with pytest.raises(ValueError, match="connecting_algo='SMM'"):
         solve_uniform_stack(WL, kx, ky, [(blocks(absorbing), 60000.0)], 1,
-                            vacuum_sp_states(np, kx, ky, 1)[0])
+                            vacuum_sp_states(np, kx, ky, 1)[0], connecting_algo='TMM')
+
+
+@pytest.mark.parametrize('theta_deg', [0.0, 35.0])
+@pytest.mark.parametrize('label,eps', Z_DECOUPLED + Z_COUPLED,
+                         ids=[c[0] for c in Z_DECOUPLED + Z_COUPLED])
+def test_the_two_connecting_algorithms_agree_where_both_are_valid(label, eps, theta_deg):
+    """Two ways of joining the same modes must give the same stack.
+
+    The 2ff path makes this same comparison (``tests/`` covers TMM vs SMM there) and it means
+    more here, because the two are *not* equivalent in reach: only one survives a thick layer. A
+    disagreement in the overlapping range would say the interface matching or the mode ordering
+    differs between them, which no external oracle would localise.
+    """
+    kx, ky = _kxky(theta_deg)
+    layers = [(blocks(eps), THICK)]
+    for psi, pol in zip(vacuum_sp_states(np, kx, ky, 1), ('s', 'p')):
+        smm = solve_uniform_stack(WL, kx, ky, layers, 1, psi)
+        tmm = solve_uniform_stack(WL, kx, ky, layers, 1, psi, connecting_algo='TMM')
+        gap = max(abs(a - b) for a, b in zip(smm, tmm))
+        assert gap < 1e-12, f'{label} at {theta_deg} deg, {pol}-pol: {gap:.2e}'
+
+
+@pytest.mark.parametrize('theta_deg', [0.0, 35.0])
+def test_a_multilayer_stack_matches_berreman(theta_deg):
+    """The Redheffer cascade over more than one layer — untouched by every test above.
+
+    Each single-layer case exercises two interfaces and one propagation. Only a stack exercises
+    the star product joining layer to layer, and the ordering it has to keep: the mix below is
+    deliberately asymmetric, so getting the stack backwards changes the answer.
+
+    Measured, not assumed — traversing ``layers`` bottom-up leaves every other test in this file
+    and every external golden passing, and fails only here.
+    """
+    from test_anisotropic_berreman import berreman_efficiencies
+
+    stack = [(np.asarray(Z_DECOUPLED[1][1], dtype=complex), 140.0),
+             (gyro((1, 0, 0)), 90.0),
+             (np.diag([(1.4 + 0.05j) ** 2] * 3).astype(complex), 210.0),
+             (rotated_uniaxial(np.deg2rad(52)), 175.0)]
+
+    kx, ky = _kxky(theta_deg)
+    layers = [(blocks(e), d) for e, d in stack]
+    ref = berreman_efficiencies(stack, np.deg2rad(theta_deg))
+
+    for psi, pol in zip(vacuum_sp_states(np, kx, ky, 1), ('s', 'p')):
+        got = solve_uniform_stack(WL, kx, ky, layers, 1, psi)
+        want = (ref[pol]['R_s'] + ref[pol]['R_p'], ref[pol]['T_s'] + ref[pol]['T_p'])
+        gap = max(abs(g - w) for g, w in zip(got, want))
+        assert gap < 1e-12, f'{theta_deg} deg, {pol}-pol: {gap:.2e}'

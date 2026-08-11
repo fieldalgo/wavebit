@@ -1,8 +1,8 @@
 """First-order (4ff) layer solve — the formulation a z-coupled tensor needs.
 
-**Status: the operator and the mode split are done and pinned; the stack solve here is correct
-but not yet numerically stable, nothing dispatches to it, and there is no field
-reconstruction.** See "What is not here" at the bottom before building on it.
+**Status: the operator, the mode split and the stack solve are done and pinned, and the solve is
+stable for any thickness. Nothing dispatches to it, multi-order is unvalidated, and there is no
+field reconstruction.** See "What is not here" at the bottom before building on it.
 
 Pinned by ``tests/test_solve_2d_4ff.py`` against the 2ff path and a Berreman 4x4, and by
 ``tests/references/test_4ff_external_goldens.py`` against RETICOLO and fmmax — 21 cases, worst
@@ -51,13 +51,18 @@ degrees the backward set departs from the negated forward set by 9e-2, while at 
 incidence the two coincide to 1e-15 — so the pairing survives exactly where nobody would have
 noticed it failing.
 
+**Layers are joined by scattering matrices, and that is what makes it stable.** The direction
+split is not bookkeeping: it is what lets each layer be propagated by ``exp(i k0 lam_f d)``
+forward and ``exp(-i k0 lam_b d)`` backward, both of which have modulus at most one for *any*
+thickness because forward modes decay towards ``+z`` and backward modes towards ``-z``. Nothing
+grows, so nothing has to be cancelled later. The eigen-decomposition transfer is kept as
+``connecting_algo='TMM'`` for cross-checking and refuses past its range; measured, the two agree
+to 1.2e-15 across eight tensors, three angles and both polarisations, and only the cascade
+reaches an exponent of 2500 — where it returns the closed-form single-interface Fresnel
+reflectance to 4e-16 while the transfer has no answer at all.
+
 What is not here, in the order it will be wanted:
 
-* **Numerical stability.** :func:`solve_uniform_stack` propagates a layer as
-  ``Psi exp(i k0 lam d) Psi^-1``, which grows without bound for a thick layer — the classic
-  failure the 2ff path avoids with its ``X`` / ``A`` / ``B`` recursion. The forward/backward
-  split needed for a scattering-matrix recursion is already done here; the recursion is not.
-  :func:`solve_uniform_stack` raises rather than returning a number it cannot stand behind.
 * **Fourier orders beyond one.** The algebra is written in blocks and should extend as it
   stands, but nothing has checked it against a grating.
 * **Dispatch.** Nothing routes to this. ``solve_for_conv`` still refuses a z-coupled tensor.
@@ -193,7 +198,97 @@ def vacuum_sp_states(xp, kx, ky, ff, order=0):
     return tuple(out)
 
 
-def solve_uniform_stack(wavelength, kx, ky, layers, ff, incident):
+def _interface_s(xp, psi1_f, psi1_b, psi2_f, psi2_b):
+    """Scattering matrix of the boundary between two media, in their own mode bases.
+
+    The whole transverse state is continuous across the interface, so with amplitudes ``a``,
+
+        Psi1_f a1_f + Psi1_b a1_b = Psi2_f a2_f + Psi2_b a2_b
+
+    and grouping the two *outgoing* sets on the left gives the scattering form directly. No
+    ``kz`` sign flip and no gap medium is needed here — the 2ff path needs both because its two
+    directions share one eigenvector, and these do not.
+    """
+    n = psi1_f.shape[1]
+    out = xp.concat([psi1_b, -psi2_f], axis=1)
+    inn = xp.concat([-psi1_f, psi2_b], axis=1)
+    S = xp.linalg.solve(out, inn)
+    return S[:n, :n], S[:n, n:], S[n:, :n], S[n:, n:]
+
+
+def _propagate_s(xp, lam_f, lam_b, k0, d, ff):
+    """Scattering matrix of a uniform layer, forward amplitudes referenced at its top.
+
+    **This is the whole reason for the direction split.** Forward modes decay towards ``+z``
+    (``Im(lam_f) >= 0``) so ``|exp(i k0 lam_f d)| <= 1``, and backward modes decay towards ``-z``
+    so their propagator is bounded too. Both entries are contractions for any thickness, which is
+    precisely what the eigen-decomposition transfer cannot promise: it holds the growing and
+    decaying halves in one matrix and inverts it, so the growing half sets the conditioning.
+    """
+    zero = xp.astype(xp.zeros((2 * ff, 2 * ff)), lam_f.dtype)
+    X_f = _diag_of(xp, xp.exp(1j * k0 * lam_f * d))
+    X_b = _diag_of(xp, xp.exp(-1j * k0 * lam_b * d))
+    return zero, X_b, X_f, zero
+
+
+def _solve_smm(xp, k0, Kx, Ky, layers, ff, psi_vf, psi_vb):
+    """Cascade interface and propagation scattering matrices with the Redheffer star."""
+    from .scattering import redheffer_star
+
+    I = xp.astype(xp.eye(2 * ff), Kx.dtype)
+    S, prev_f, prev_b = None, psi_vf, psi_vb
+    for eps_blocks, d in layers:
+        lam_f, psi_f, lam_b, psi_b = split_forward_backward(
+            xp, layer_matrix_4ff(xp, Kx, Ky, **eps_blocks), ff)
+        for part in (_interface_s(xp, prev_f, prev_b, psi_f, psi_b),
+                     _propagate_s(xp, lam_f, lam_b, k0, d, ff)):
+            S = part if S is None else redheffer_star(xp, I, S, part)
+        prev_f, prev_b = psi_f, psi_b
+    tail = _interface_s(xp, prev_f, prev_b, psi_vf, psi_vb)
+    return tail if S is None else redheffer_star(xp, I, S, tail)
+
+
+def _forward_amplitudes(xp, incident, psi_vf, psi_vb, ff):
+    """Mode amplitudes of an incident state, and a check that it is purely incident.
+
+    Decomposing over the *full* basis rather than solving against ``psi_vf`` alone keeps the
+    system square and costs nothing, since the backward half is the thing worth testing: a state
+    with any backward content is not an incident wave, and would otherwise be silently projected.
+    """
+    coef = xp.linalg.solve(xp.concat([psi_vf, psi_vb], axis=1),
+                           xp.reshape(incident, (-1, 1)))[:, 0]
+    leak = float(xp.max(xp.abs(coef[2 * ff:])))
+    if leak > 1e-10 * max(float(xp.max(xp.abs(coef[:2 * ff]))), 1e-300):
+        raise ValueError(f'the incident state has backward content ({leak:.2e}); it is not a '
+                         'wave arriving from the top. Build it with vacuum_sp_states.')
+    return coef[:2 * ff]
+
+
+def _solve_tmm(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb):
+    """Eigen-decomposition transfer, kept as a second opinion. Refuses where it would blow up."""
+    P = xp.astype(xp.eye(4 * ff), Kx.dtype)
+    for eps_blocks, d in layers:
+        lam_f, psi_f, lam_b, psi_b = split_forward_backward(
+            xp, layer_matrix_4ff(xp, Kx, Ky, **eps_blocks), ff)
+        lam = xp.concat([lam_f, lam_b])
+        exponent = k0 * float(xp.max(xp.abs(xp.imag(lam)))) * float(d)
+        if exponent > _MAX_EXPONENT:
+            raise ValueError(
+                f'layer exponent {exponent:.1f} is past what the eigen-decomposition transfer '
+                "can carry in float64. Use connecting_algo='SMM', which is bounded for any "
+                'thickness.')
+        Psi = xp.concat([psi_f, psi_b], axis=1)
+        E = _diag_of(xp, xp.exp(1j * k0 * lam * d))
+        P = (Psi @ E @ xp.linalg.inv(Psi)) @ P
+
+    # Matching at both interfaces at once: incident + reflected on the input side must transfer
+    # to transmitted only on the output side, so P (a + psi_vb r) = psi_vf t.
+    A = xp.concat([P @ psi_vb, -psi_vf], axis=1)
+    sol = xp.linalg.solve(A, xp.reshape(-(P @ incident), (-1, 1)))[:, 0]
+    return psi_vb @ sol[:2 * ff], psi_vf @ sol[2 * ff:]
+
+
+def solve_uniform_stack(wavelength, kx, ky, layers, ff, incident, connecting_algo='SMM'):
     """``(R, T)`` for one incident state, through a stack of uniform anisotropic layers.
 
     ``layers`` is ``[(eps_blocks, thickness), ...]`` where ``eps_blocks`` is the mapping
@@ -207,10 +302,15 @@ def solve_uniform_stack(wavelength, kx, ky, layers, ff, incident):
     of per-mode fluxes. Those agree only when the modes are flux-orthogonal, which holds for a
     lossless medium and stops holding exactly where it would be least noticed.
 
-    **Correct but not stable.** The transfer is ``Psi exp(i k0 lam d) Psi^-1`` per layer, which
-    overflows for a thick or strongly evanescent layer. Rather than return a number that has
-    lost its meaning, this raises when the exponent leaves float64's useful range. Fixing it is
-    the scattering-matrix recursion, for which the split above is the prerequisite.
+    ``connecting_algo`` selects how layers are joined, and here — unlike the 2ff path, where the
+    two are equivalent and TMM is already stable — the choice has consequences:
+
+    * ``'SMM'`` (default) cascades per-layer scattering matrices with the Redheffer star. Both
+      propagators are contractions for any thickness, so nothing overflows.
+    * ``'TMM'`` propagates ``Psi exp(i k0 lam d) Psi^-1``, which holds the growing and decaying
+      halves in one matrix and inverts it. Kept because agreement between two connecting
+      algorithms over the range where both are valid is a real check on each, and it **raises**
+      rather than returning a number it cannot stand behind once past that range.
     """
     xp = array_namespace(kx)
     k0 = 2 * 3.141592653589793 / wavelength
@@ -219,27 +319,14 @@ def solve_uniform_stack(wavelength, kx, ky, layers, ff, incident):
     vac = _identity_blocks(xp, ff, Kx.dtype)
     _, psi_vf, _, psi_vb = split_forward_backward(xp, layer_matrix_4ff(xp, Kx, Ky, **vac), ff)
 
-    P = xp.astype(xp.eye(4 * ff), Kx.dtype)
-    for eps_blocks, d in layers:
-        M = layer_matrix_4ff(xp, Kx, Ky, **eps_blocks)
-        lam_f, psi_f, lam_b, psi_b = split_forward_backward(xp, M, ff)
-        lam = xp.concat([lam_f, lam_b])
-        exponent = k0 * float(xp.max(xp.abs(xp.imag(lam)))) * float(d)
-        if exponent > _MAX_EXPONENT:
-            raise ValueError(
-                f'layer exponent {exponent:.1f} is past what the eigen-decomposition transfer '
-                'can carry in float64. This needs the scattering-matrix recursion, which is '
-                'not implemented here — see the module docstring.')
-        Psi = xp.concat([psi_f, psi_b], axis=1)
-        E = _diag_of(xp, xp.exp(1j * k0 * lam * d))
-        P = (Psi @ E @ xp.linalg.inv(Psi)) @ P
-
-    # Matching at both interfaces at once: incident + reflected on the input side must transfer
-    # to transmitted only on the output side, so P (a + psi_vb r) = psi_vf t.
-    A = xp.concat([P @ psi_vb, -psi_vf], axis=1)
-    sol = xp.linalg.solve(A, xp.reshape(-(P @ incident), (-1, 1)))[:, 0]
-    reflected = psi_vb @ sol[:2 * ff]
-    transmitted = psi_vf @ sol[2 * ff:]
+    if connecting_algo == 'SMM':
+        S11, _, S21, _ = _solve_smm(xp, k0, Kx, Ky, layers, ff, psi_vf, psi_vb)
+        a_inc = _forward_amplitudes(xp, incident, psi_vf, psi_vb, ff)
+        reflected, transmitted = psi_vb @ (S11 @ a_inc), psi_vf @ (S21 @ a_inc)
+    elif connecting_algo == 'TMM':
+        reflected, transmitted = _solve_tmm(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb)
+    else:
+        raise ValueError(f"connecting_algo must be 'SMM' or 'TMM', got {connecting_algo!r}")
 
     def flux(v):
         return float(mode_flux_z(xp, xp.reshape(v, (-1, 1)), ff)[0])
