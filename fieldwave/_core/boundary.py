@@ -34,7 +34,7 @@ to 2.2e-16, and on a case with both tilt and overlap this path sits 4x closer to
 block path, while tying on axis-aligned overlap where the block path has no staircase to lose.
 """
 from . import clipper as _clipper
-from .analytic import laurent_conv_2d, shape_geometry, _sampled_coeffs
+from .analytic import nvf_from_coeffs, shape_geometry, _sampled_coeffs
 from .polygon import ellipse_verts, polygon_ft, rect_verts
 
 
@@ -250,22 +250,11 @@ def conv_mats(xp, regions, n_base, fto_x, fto_y, period, normal_grid, dtype, cdt
         eps_c = eps_c + (eps_s - eps_bg) * ft
         inv_c = inv_c + (1.0 / eps_s - 1.0 / eps_bg) * ft
 
-    ep_dir = laurent_conv_2d(xp, eps_c, fto_x, fto_y)
-    ep_inv = laurent_conv_2d(xp, inv_c, fto_x, fto_y)
-    delta = ep_dir - xp.linalg.inv(ep_inv)
-
     all_loops = [V for _, polys in regions for V in polys]
     c_xx, c_xy, c_yy = normal_projector_coeffs(
         xp, all_loops, (normal_grid, normal_grid), (Px, Py), fto_x, fto_y, dtype, cdtype,
         lattice=lattice)
-    C_xx = laurent_conv_2d(xp, c_xx, fto_x, fto_y)
-    C_xy = laurent_conv_2d(xp, c_xy, fto_x, fto_y)
-    C_yy = laurent_conv_2d(xp, c_yy, fto_x, fto_y)
-
-    eps_xx = ep_dir - 0.5 * (delta @ C_xx + C_xx @ delta)
-    eps_yy = ep_dir - 0.5 * (delta @ C_yy + C_yy @ delta)
-    eps_xy = -0.5 * (delta @ C_xy + C_xy @ delta)
-    return eps_xx, eps_yy, -eps_xy, -eps_xy, xp.linalg.inv(ep_dir)
+    return nvf_from_coeffs(xp, eps_c, inv_c, c_xx, c_xy, c_yy, fto_x, fto_y)
 
 
 # ================================================== one painted layer, end to end
