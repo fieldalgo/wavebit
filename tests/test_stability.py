@@ -27,7 +27,7 @@ def _grating(n_hi=4.0, cells=8):
     return np.array([[[1.0] * half + [n_hi] * half]])
 
 
-def _solve(*, fto, thickness, n_hi=4.0, algo='TMM', type_complex=np.complex128,
+def _solve(*, fto, thickness, n_hi=4.0, algo='ETM', type_complex=np.complex128,
            period=3000.0, wavelength=400.0, n_bot=1.5):
     return fieldwave.rcwa(
         backend=0, wavelength=wavelength, period=[period], fto=[fto, 0],
@@ -91,11 +91,11 @@ def test_absorbing_metal_stays_physical_when_thick():
 def test_tmm_and_smm_agree(fto, thickness):
     """The two connecting algorithms are independent routes to the same answer.
 
-    Scattering-matrix formulations are the usual answer to evanescent blow-up, so TMM
-    tracking SMM to machine precision through a thick stack is the statement that TMM is
+    Scattering-matrix formulations are the usual answer to evanescent blow-up, so ETM
+    tracking SMM to machine precision through a thick stack is the statement that ETM is
     not the fragile one here.
     """
-    tmm = _solve(fto=fto, thickness=thickness, algo='TMM')
+    tmm = _solve(fto=fto, thickness=thickness, algo='ETM')
     smm = _solve(fto=fto, thickness=thickness, algo='SMM')
 
     assert np.allclose(tmm.de_ri, smm.de_ri, rtol=1e-9, atol=1e-12)
@@ -112,7 +112,7 @@ def test_tmm_and_smm_fields_agree_through_a_thick_layer(thickness):
     picked the wrong reference plane, so this is the case that pins the choice.
     """
     cells = []
-    for algo in ('TMM', 'SMM'):
+    for algo in ('ETM', 'SMM'):
         solver = fieldwave.rcwa(
             backend=0, wavelength=400.0, period=[3000.0], fto=[40, 0],
             n_top=1.0, n_bot=1.5, theta=0.0, phi=0.0, pol=0.0,
@@ -127,7 +127,7 @@ def test_tmm_and_smm_fields_agree_through_a_thick_layer(thickness):
 
 def test_tmm_and_smm_agree_on_a_lossy_stack():
     tmm = _solve(fto=30, thickness=5_000.0, n_hi=0.15 + 3.5j, period=2000.0,
-                 wavelength=500.0, algo='TMM')
+                 wavelength=500.0, algo='ETM')
     smm = _solve(fto=30, thickness=5_000.0, n_hi=0.15 + 3.5j, period=2000.0,
                  wavelength=500.0, algo='SMM')
     assert np.allclose(tmm.de_ri, smm.de_ri, rtol=1e-8, atol=1e-11)

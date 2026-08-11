@@ -33,7 +33,123 @@ between them where they part. ``docs/time-convention-audit.md`` derives all of i
 Backend-agnostic: pass the array namespace as ``xp`` (``numpy`` / ``jax.numpy`` / ``torch``).
 """
 
+import contextlib
+
+from .backend import UnresolvedBranchWarning
+
 _FLAT = 1e-12      # below this, a real part counts as zero and the tie-break decides
+
+
+@contextlib.contextmanager
+def branch_tolerance(value):
+    """Override the "is ``Re(v)`` zero?" cutoff for the enclosed solves. Advanced, and scoped.
+
+    Exists because at single precision there is no right answer to bake in. ``Re(v)`` for a
+    root that should be pure-imaginary is round-off ~1e-7 at complex64, and a weakly absorbing
+    superstrate carries a *genuine* real part at the same scale — the two overlap, so any fixed
+    cutoff has to sacrifice one of them. Measured against double precision (``fto=30``,
+    ``docs/branch-cuts.md``):
+
+    ============================  ==========  ==========  ==========
+    ``value``                     1e-12       1e-6        1e-5
+    ============================  ==========  ==========  ==========
+    lossless, complex angle       4.51        1.3e-06     3.4e-07
+    weakly absorbing superstrate  1.9e-04     7.4e-01     1.75
+    ============================  ==========  ==========  ==========
+
+    The rule that follows is statable, which is the only reason this is exposed rather than
+    guessed at: **raise it for a lossless superstrate at a complex incidence angle; leave it
+    alone if the superstrate absorbs at all.** Any absorption makes the root genuinely complex
+    and the degeneracy never arises — a solve containing both regimes wants the default.
+
+    At complex128 nothing here applies: round-off is ~1e-16, the default already stands four
+    orders clear of it, and moving this can only make things worse. :class:`UnresolvedBranchWarning`
+    fires exactly when the question has become unanswerable, so reach for this only after seeing it.
+
+    Not thread-safe — it swaps a module-level constant for the duration of the block::
+
+        with fieldwave.branch_tolerance(1e-6):
+            res = solver.conv_solve()
+    """
+    global _FLAT
+    old = _FLAT
+    _FLAT = float(value)
+    try:
+        yield
+    finally:
+        _FLAT = old
+
+# How many eps of slack to allow for the round-off accumulated in forming the radicand and
+# taking the root. Not a branch threshold — it decides nothing, it only bounds where the
+# branch decision stops being answerable. See :func:`_check_resolvable`.
+_NOISE_EPS = 8.0
+
+# Anything with a coarser eps than this is single precision. complex64 is 1.2e-7 and
+# complex128 is 2.2e-16, so the gap is nine orders wide and the exact value is arbitrary.
+_SINGLE_EPS = 1e-10
+
+
+def _check_resolvable(xp, v):
+    """Warn when the branch is being decided from a real part the dtype cannot resolve.
+
+    :func:`mode_q` and :func:`boundary_kz` both ask "is ``Re(v)`` zero?" and answer it against
+    ``_FLAT``. That question has no dtype-independent answer: round-off on ``Re(v)`` is ~1e-16
+    at complex128 and ~1e-7 at complex64, and ``_FLAT`` sits between them. At single precision
+    the comparison therefore reads the *sign of noise*, and no other threshold fixes it —
+    a lossless layer at a complex angle needs the cutoff raised, a weakly absorbing superstrate
+    needs it left alone, and their real parts overlap. Measured in ``docs/branch-cuts.md``.
+
+    So this reports rather than repairs. It is silent at complex128 (0 of 244 decisions
+    unresolvable across lossless, complex-angle and weakly-absorbing cases) and fires at
+    complex64 (12 to 128 of 244), which makes it a check on the precision rather than on the
+    physics — and it costs nothing measurable, being two absolute values on an array the solve
+    already built.
+
+    Unlike the guards in ``_core/backend.py`` this is **not** NumPy-only, and deliberately so:
+    the backends it would have skipped are the ones that need it most. Measured at the same
+    complex64 point, NumPy returns ``|R| = 1.80`` and warns while JAX returns 4.12 and PyTorch
+    5.68 — the two worst answers, silently, on the paths people reach for when they want
+    gradients or a GPU.
+
+    What actually blocks the check is an *abstract* value, not a namespace: a JAX tracer under
+    ``jit``/``grad``, a PyTorch ``FakeTensor`` under ``compile``. So the reduction runs in the
+    caller's own namespace and only the resulting scalar is read, which is one boolean of
+    device sync rather than a copy of the array — and when that read is impossible the value
+    was abstract and there is nothing to look at anyway.
+    """
+    try:
+        eps = xp.finfo(v.dtype).eps
+    except Exception:
+        return                                  # not a float/complex dtype
+    re, mag = xp.abs(xp.real(v)), xp.abs(v)
+    noise = _NOISE_EPS * eps * xp.maximum(mag, xp.asarray(1e-30, dtype=mag.dtype))
+    flagged = xp.any((re > _FLAT) & (re < noise))
+    try:
+        hit = bool(flagged)
+    except Exception:
+        # Traced — the value is not there to be read. Silence would be the wrong answer here:
+        # the check *not running* and the check *finding nothing* are different states, and a
+        # jit'd single-precision solve is exactly where a wrong branch goes unnoticed (measured:
+        # |R| = 3.93 under jit, no warning, against 0.67 at double precision). The dtype is
+        # known at trace time even when the values are not, so say that much.
+        if eps > _SINGLE_EPS:
+            import warnings
+            warnings.warn(
+                'this solve is traced, so whether its square-root branches are resolvable '
+                'could not be checked — and it is running in single precision, where they '
+                'often are not. A wrong branch here is finite and silent. Run at double '
+                'precision (type_complex=0), or trace a double-precision solve if you need '
+                'jit; see docs/branch-cuts.md.',
+                UnresolvedBranchWarning, stacklevel=3)
+        return
+    if hit:
+        import warnings
+        warnings.warn(
+            'a square-root branch was decided from a real part smaller than this dtype can '
+            'resolve, so the choice came from round-off rather than from the physics. The '
+            'result is finite and may be badly wrong. Re-run at double precision '
+            '(type_complex=0); docs/branch-cuts.md covers the single-precision case.',
+            UnresolvedBranchWarning, stacklevel=3)
 
 
 def mode_q(xp, eigenvalue):
@@ -55,6 +171,7 @@ def mode_q(xp, eigenvalue):
     ``tests/test_branch_selection.py``. See ``docs/time-convention-audit.md`` §5.
     """
     v = eigenvalue ** 0.5
+    _check_resolvable(xp, v)
     flip = xp.where(xp.abs(xp.real(v)) > _FLAT, xp.real(v) < 0, xp.imag(v) > 0)
     return xp.where(flip, -v, v)
 
@@ -73,6 +190,7 @@ def boundary_kz(xp, eps, k_par_sq):
     """
     kz2 = eps - k_par_sq
     v = kz2 ** 0.5
+    _check_resolvable(xp, v)
     flip = xp.where(xp.abs(xp.real(v)) > _FLAT, xp.real(v) < 0, xp.imag(v) < 0)
     v = xp.where(flip, -v, v)
     return xp.where(_off_principal_branch(xp, eps, k_par_sq, kz2), -v, v)

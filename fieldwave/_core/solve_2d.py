@@ -43,7 +43,7 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     """Raw (unrotated) eigenmodes ``(W, V, q)`` of one 2D layer.
 
     ``W`` is the ``[Ex; Ey]`` mode matrix and ``q`` the modal decay constants; the principal
-    square root keeps ``Re(q) >= 0`` so ``exp(-k0*q*d)`` never grows. Shared by the TMM
+    square root keeps ``Re(q) >= 0`` so ``exp(-k0*q*d)`` never grows. Shared by the ETM
     (:func:`solve_2d`) and SMM (:mod:`fieldwave._core.scattering`) connecting algorithms.
 
     The two blocks are the factors of ``d2E/dz2 = P Q E``: ``Omega2_LR`` is the product written

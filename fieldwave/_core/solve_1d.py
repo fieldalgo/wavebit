@@ -45,7 +45,7 @@ def layer_modes_1d(xp, pol, kx, I, epx_conv, epy_conv, epz_conv_i, C):
     partner, and ``q`` are the modal decay constants used as ``exp(-k0*q*d)``. The principal
     square root keeps ``Re(q) >= 0``, so that exponential never grows.
 
-    Shared by the TMM (:func:`solve_1d`) and SMM (:mod:`fieldwave._core.scattering`) connecting
+    Shared by the ETM (:func:`solve_1d`) and SMM (:mod:`fieldwave._core.scattering`) connecting
     algorithms — the mode algebra is a property of the layer, not of how layers are joined.
     """
     if pol == 0:  # TE
@@ -68,7 +68,7 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
 
     Returns ``(W1, W2, q1, q2, V_11, V_12, V_21, V_22)`` — the two decoupled mode families and
     the four blocks that couple them into the s/p system built by :func:`sp_modes_1d_conical`.
-    Shared by the TMM and SMM connecting algorithms.
+    Shared by the ETM and SMM connecting algorithms.
     """
     A = Kx2 - epy_conv
     B = Kx @ epz_conv_i @ Kx - I
@@ -445,7 +445,7 @@ def sp_efficiencies(xp, kz_top_2d, kz_bot_2d, denom, n_top, n_bot, R_s, R_p, T_s
 
     ``denom = n_top*cos(theta)`` is the incident-power factor; the s channel carries the
     electric amplitude and the p channel the magnetic one, hence the ``1/n**2`` on p.
-    Shared by the TMM final matching and the SMM connecting algorithm.
+    Shared by the ETM final matching and the SMM connecting algorithm.
     """
     return (xp.real(R_s * xp.conj(R_s) * xp.real(kz_top_2d / denom)),
             xp.real(R_p * xp.conj(R_p) * xp.real(kz_top_2d / n_top ** 2 / denom)),

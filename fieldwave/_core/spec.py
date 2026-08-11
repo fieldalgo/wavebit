@@ -121,7 +121,7 @@ class Numerics:
     #: would be refused for asking for Li.
     factorization: Optional[Factorization] = None
     type_complex: int = 128
-    connecting_algo: str = 'TMM'
+    connecting_algo: str = 'ETM'
     perturbation: float = 1e-20
     normal_grid: int = 1024
 

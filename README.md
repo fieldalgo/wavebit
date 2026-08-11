@@ -278,11 +278,12 @@ phase library are in [docs/oblique-lattice.md](docs/oblique-lattice.md);
 
 ### Connecting algorithm
 
-How per-layer modes are joined into a stack response. The default is the transfer-matrix
-method; the scattering-matrix method is available as an alternative:
+How per-layer modes are joined into a stack response. The default is the *enhanced*
+transmittance-matrix method (Moharam et al. 1995) — the stabilised transfer, not the naive
+one; the scattering-matrix method is available as an alternative:
 
 ```python
-solver = fieldwave.rcwa(backend=0, connecting_algo='SMM', ...)   # 'TMM' is the default
+solver = fieldwave.rcwa(backend=0, connecting_algo='SMM', ...)   # 'ETM' is the default
 ```
 
 Both share the same eigenmodes and boundary conventions and agree to ~1e-14; SMM costs

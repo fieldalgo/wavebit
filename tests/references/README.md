@@ -14,7 +14,7 @@ from this codebase, which is exactly what makes them worth having.
 
 | Oracle | Reaches | Generator needs | Golden |
 | --- | --- | --- | --- |
-| **RETICOLO** (Li/Lalanne lineage) | diffraction *orders*; uniform layers with an arbitrary complex 3x3 tensor, z-coupling included | Octave + the V10 snapshot in `<a reference collection outside this repository>` | `golden_reticolo.npz`, `golden_reticolo_anisotropic.npz` |
+| **RETICOLO** (Li/Lalanne lineage) | diffraction *orders*; uniform layers with a complex 3x3 tensor — **but only up to one off-diagonal pair, at classical mounting**, see below | Octave + the V10 snapshot in `<a reference collection outside this repository>` | `golden_reticolo.npz`, `golden_reticolo_anisotropic.npz` |
 | **RETICOLO**, swept over `(kx, ky)` | conical incidence across the light line, **including complex (evanescent) angles** | nothing — frozen from a 2024-09-09 study, see its generator | `golden_reticolo_conical_sweep.npz` |
 | **fmmax** (Liu & Fan lineage, MIT) | uniform complex tensors, **patterned** tensors, **permeability** | the `fwref` env — see below | `golden_fmmax.npz`, `golden_fmmax_magnetic.npz` |
 | **S4** (same lineage, C++) | real tensors, patterned | the S4 extension, already in the project env | `golden_s4.npz` |
@@ -22,6 +22,67 @@ from this codebase, which is exactly what makes them worth having.
 A fourth oracle lives outside this directory: the Berreman 4x4 in
 `tests/test_anisotropic_berreman.py` is an independent *formulation* — not RCWA at all — but our
 own implementation, so it sits a tier below these three.
+
+### Where RETICOLO stops being an oracle
+
+Measured 2026-08-11, not taken from the manual. Feed a **real symmetric** tensor — Hermitian,
+therefore lossless, therefore `R + T = 1` by theorem — through `interface/reti_aniso.m`:
+
+| tensor | `delta0` | RETICOLO's own `R + T` |
+|---|---|---|
+| diagonal | 0 and 40 | 1 to 1e-15 |
+| one off-diagonal pair | 0 | 1 to 1e-15 |
+| one off-diagonal pair | 1 / 40 | off by 5.8e-6 / 6.3e-3 |
+| two or three off-diagonal pairs | 0 | off by 2.5e-3 to 1.2e-2 |
+
+The deviation is equal and opposite between TE and TM and does not move when `nn` goes from 0 to
+8, so it is converged rather than truncated. It is not a convention difference on our side
+either: a real symmetric matrix stays real symmetric under transposition and under any
+permutation of axes, so nothing this bridge could misread makes the medium lossy. RETICOLO's own
+`exemple_V9_0D_anisotrope.m` uses a single `xz` pair at `delta0 = 0`, inside the region that
+holds.
+
+So a **tilted magnetisation — the ordinary state of a real magnetised film — has no external
+oracle here**, and `tests/test_anisotropic_berreman.py` is still the only judge of it. The cases
+that would have covered it were written, measured, and removed rather than frozen; the
+generator's energy guard is what caught them. This says nothing about RETICOLO's internals,
+which have not been read — only about the numbers it returns through this bridge.
+
+### The other three, and why none of them fills that gap
+
+Checked 2026-08-11, because "no oracle exists" is a claim that has to be earned rather than
+assumed:
+
+Each was run, at its current release, against two checks that need no agreement with anything
+else: does a lossless tensor come back with `R + T = 1`, and does zeroing `xz/zx/yz/zy` change
+the answer.
+
+| solver | version | z-coupling | how it was established |
+|---|---|---|---|
+| fmmax | 1.7.1 | none | `eigensolve_general_anisotropic_media` takes `xx/xy/yx/yy/zz` for each of eps and mu, with no `xz/yz/zx/zy` — "general" there means *magnetic*. API signature. |
+| inkstone | 0.3.15 | **accepted, silently dropped** | `AddMaterial` takes a `(3,3)` array; output is bit-identical to the same tensor with the z row zeroed |
+| EMpy | 2.2.3 | **read, but unusable** | `AnisotropicTransferMatrix` does use the z row, and returns `R + T = 1.6e13` for a plain Faraday tensor at normal incidence |
+| S4 | — | none | same five-slot shape; not re-run here |
+
+inkstone deserves the detail because it is the trap. It has the only full-3×3 API of the eight,
+it conserves energy to 1.3e-15 across thirty lossless configurations, and it reproduces our 4ff
+to 1e-15 on every z-*decoupled* case including conical incidence — so the harness is sound and
+nothing looks wrong. On z-coupled tensors it is 4e-4 to 3e-2 out, unmoved by `num_g` from 1 to
+21, and on the four cases inside RETICOLO's validated region **RETICOLO and our 4ff agree to
+1e-15 while inkstone alone departs**. Energy conservation cannot catch this: the tensor it
+actually solves is a valid lossless one, which is the same reason our own 2ff path returns
+`R + T = 1` on a Voigt tensor while being wrong (`test_anisotropic_berreman.py`).
+
+EMpy fails the opposite way, and its normal-incidence blowup is what makes that readable: at
+`theta = 0` there is no angle convention to get wrong, and the same harness returns the exact
+Airy answer for isotropic and diagonal tensors, so `1.6e13` is the solver rather than the
+bridge. It is a pure T-matrix, which its own documentation calls unstable.
+
+**The pattern worth carrying forward: "supports a full 3×3 tensor" was wrong or badly incomplete
+for three of the four.** An API that accepts an argument is not an API that uses it correctly.
+
+inkstone is AGPL, so its implementation has not been read; every statement above is black-box —
+public API signatures and returned numbers. EMpy and fmmax are MIT.
 
 Two things to weigh when reading agreement between them:
 

@@ -83,7 +83,7 @@ def analytic_r(ns, thicknesses, wavelength, theta, pol):
     return r
 
 
-def solver_RT(ns, thicknesses, wavelength, theta, pol, algo='TMM'):
+def solver_RT(ns, thicknesses, wavelength, theta, pol, algo='ETM'):
     """Total ``(R, T)`` of the same stack through the solver (uniform layers, fto=0)."""
     ucell = np.array([[[n, n]] for n in ns[1:-1]])
     solver = fieldwave.rcwa(backend=0, connecting_algo=algo, pol=pol, n_top=ns[0],
@@ -93,7 +93,7 @@ def solver_RT(ns, thicknesses, wavelength, theta, pol, algo='TMM'):
     return float(np.sum(res.de_ri).real), float(np.sum(res.de_ti).real)
 
 
-def solver_R(ns, thicknesses, wavelength, theta, pol, algo='TMM'):
+def solver_R(ns, thicknesses, wavelength, theta, pol, algo='ETM'):
     """Total reflectance of the same stack through the solver (uniform layers, fto=0)."""
     return solver_RT(ns, thicknesses, wavelength, theta, pol, algo)[0]
 
@@ -127,7 +127,7 @@ def test_reference_agrees_where_the_solver_is_known_good(case, pol, theta):
     assert solver_R(ns, ds, WL, theta, pol) == pytest.approx(want, abs=1e-12)
 
 
-@pytest.mark.parametrize('algo', ['TMM', 'SMM'])
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
 @pytest.mark.parametrize('case', LOSSY_SUBSTRATE, ids=[c[0] for c in LOSSY_SUBSTRATE])
 def test_lossy_substrate_reflection(case, pol, theta, algo):
@@ -140,27 +140,27 @@ def test_lossy_substrate_reflection(case, pol, theta, algo):
 @pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
 @pytest.mark.parametrize('case', LOSSY_SUBSTRATE, ids=[c[0] for c in LOSSY_SUBSTRATE])
 def test_lossy_substrate_transmission_agrees_between_algorithms(case, pol, theta):
-    """``de_ti`` into an absorbing substrate, TMM against SMM.
+    """``de_ti`` into an absorbing substrate, ETM against SMM.
 
     The reflection tests above compared only ``de_ri``, and that gap hid a real break for four
     years' worth of the SMM path: its TM branch normalized by ``Re(conj(kz_bot)/n_bot**2)``
     where every other efficiency in the codebase uses ``Re(kz_bot/n_bot**2)``. The two are equal
     for a real ``n_bot``, so nothing lossless could see it; against gold it returned *negative*
-    transmitted power (T = -0.263 where TMM gave +0.088).
+    transmitted power (T = -0.263 where ETM gave +0.088).
 
     The right factor follows from the flux itself: for TM the downward Poynting component is
     ``Re(E_x H_y*)`` with ``E_x`` proportional to ``(kz/eps) H_y``, giving ``Re(kz/eps)``. The
     conjugate was a leftover of the pre-2026-08 conjugated formulation (see ``conventions``).
     """
     _, ns, ds = case
-    tmm = solver_RT(ns, ds, WL, theta, pol, 'TMM')
+    tmm = solver_RT(ns, ds, WL, theta, pol, 'ETM')
     smm = solver_RT(ns, ds, WL, theta, pol, 'SMM')
     assert smm[0] == pytest.approx(tmm[0], abs=1e-12)
     assert smm[1] == pytest.approx(tmm[1], abs=1e-12)
     assert tmm[1] > 0, 'transmitted power into an absorbing substrate cannot be negative'
 
 
-@pytest.mark.parametrize('algo', ['TMM', 'SMM'])
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
 def test_lossless_layer_on_absorbing_substrate_conserves_energy(algo, pol, theta):
     """``de_ti`` is the power *entering* the substrate, so nothing is lost above it.
@@ -190,7 +190,7 @@ def test_absorbing_layer_identical_to_its_substrate(pol, theta):
     ucell = np.array([[[AU, AU]]])
     common = dict(backend=0, pol=pol, n_top=1.0, n_bot=AU, theta=theta, fto=0,
                   wavelength=WL, period=[WL * 2], ucell=ucell, thickness=ds)
-    tmm = fieldwave.rcwa(connecting_algo='TMM', **common).conv_solve()
+    tmm = fieldwave.rcwa(connecting_algo='ETM', **common).conv_solve()
     smm = fieldwave.rcwa(connecting_algo='SMM', **common).conv_solve()
 
     assert float(np.sum(tmm.de_ri)) == pytest.approx(want, abs=1e-12)
@@ -327,7 +327,7 @@ AMPLITUDE_CASES = [
 ]
 
 
-def solver_r(ns, thicknesses, wavelength, theta, pol, path, algo='TMM'):
+def solver_r(ns, thicknesses, wavelength, theta, pol, path, algo='ETM'):
     """The solver's reflection amplitude, normalized to compare against ``analytic_r``.
 
     ``path`` picks which core solve runs: ``'1d'`` (pure TE/TM), ``'conical'`` or ``'2d'``.
@@ -355,7 +355,7 @@ def solver_r(ns, thicknesses, wavelength, theta, pol, path, algo='TMM'):
     return value / (-1j * complex(ns[0]))
 
 
-@pytest.mark.parametrize('algo', ['TMM', 'SMM'])
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('path', ['1d', 'conical', '2d'])
 @pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
 @pytest.mark.parametrize('case', AMPLITUDE_CASES, ids=[c[0] for c in AMPLITUDE_CASES])

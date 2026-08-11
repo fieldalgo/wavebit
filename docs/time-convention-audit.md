@@ -408,9 +408,12 @@ eliminated outright: it stays wrong at `k = 0`.
 
 ## 8. Swept and clean
 
-**Six formulations, one physics.** `{TMM, SMM} × {1d, conical, 2d}` share `conventions.py` and
+**Six formulations, one physics.** `{ETM, SMM} × {1d, conical, 2d}` share `conventions.py` and
 nothing else — the SMM builds its incident field from mode amplitudes and cascades Redheffer
-stars, the TMM builds it from the boundary match and multiplies transfer blocks. Compared on
+stars, the ETM builds it from the boundary match and multiplies transfer blocks. (`'TMM'` was
+the option's name when this audit ran; it was renamed the same week — the 2ff algorithm was
+always the enhanced-transmittance form. `'TMM'` now names only the 4ff path's deliberately
+plain transfer.) Compared on
 the complex reflection *amplitude* (`de_ri` has no defined incident-power normalisation with
 an absorbing superstrate), over ten configurations all with complex `k_par`, including the
 three the correction moves:

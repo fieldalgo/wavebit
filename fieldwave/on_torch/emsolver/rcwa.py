@@ -81,7 +81,7 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
                  pol=0.,
                  fto=(0, 0),
                  ucell_materials=None,
-                 connecting_algo='TMM',
+                 connecting_algo='ETM',
                  perturbation=1E-20,
                  device='cpu',
                  type_complex=torch.complex128,

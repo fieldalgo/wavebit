@@ -4,6 +4,7 @@ import numpy as np
 
 
 from ..._core.engine import CoreSolveMixin
+from fieldwave._core.backend import check_input_precision
 
 
 def _as_tensor(v, device=None, dtype=None):
@@ -22,7 +23,7 @@ def _as_tensor(v, device=None, dtype=None):
 class _BaseRCWA(CoreSolveMixin):
     def __init__(self, n_top=1., n_bot=1., theta=0., phi=None, psi=None, pol=0., fto=(0, 0),
                  period=(1., 1.), wavelength=1.,
-                 thickness=(0.,), connecting_algo='TMM', perturbation=1E-20,
+                 thickness=(0.,), connecting_algo='ETM', perturbation=1E-20,
                  device='cpu', type_complex=torch.complex128):
 
         # device
@@ -124,6 +125,7 @@ class _BaseRCWA(CoreSolveMixin):
         if theta is None:
             self._theta = None
         else:
+            check_input_precision('theta', theta, self.type_complex)
             self._theta = _as_tensor(theta, device=self.device, dtype=self.type_complex)
             self._theta = torch.where(self._theta == 0, self.perturbation, self._theta)  # perturbation
 
@@ -136,6 +138,7 @@ class _BaseRCWA(CoreSolveMixin):
         if phi is None:
             self._phi = None
         else:
+            check_input_precision('phi', phi, self.type_complex)
             self._phi = _as_tensor(phi, device=self.device, dtype=self.type_complex)
 
     @property

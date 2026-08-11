@@ -1,6 +1,8 @@
 # Anisotropic and magnetic materials — what the solver already takes, and what each gap costs
 
-Written: 2026-08-09. Scoping only; nothing here is implemented.
+Written: 2026-08-09, and it was scoping only then. Since 2026-08-11 the z-coupling row is
+implemented — see [`first-order-4ff.md`](first-order-4ff.md) for what that path does and how
+far it is checked. This document keeps the scoping question: what each *remaining* gap costs.
 
 Targets:
 - `fieldwave/_core/solve_2d.py::layer_modes_2d` — the five permittivity slots the mode operator reads
@@ -15,12 +17,13 @@ Targets:
 | case | status | what it costs |
 |---|---|---|
 | uniform (unpatterned) anisotropic layer, in-plane tensor | **works today** | a thin wrapper |
-| patterned anisotropic layer | not supported | a new factorization; **solver unchanged** |
+| `eps_xz` / `eps_yz` (z-coupling), uniform | **solved, not wired** | done — a different solver, [`first-order-4ff.md`](first-order-4ff.md); still needs dispatch |
+| patterned anisotropic layer | not supported | a new factorization; **both solvers unchanged** |
 | `mu != 1` | not supported | layer operator **and** the half-space boundary |
-| `eps_xz` / `eps_yz` (z-coupling) | not supported | **a different solver** — 4ff first-order, not 2ff second-order |
 
-Nothing on this list is impossible. Exactly one of them changes the *shape* of the code rather
-than its content, and it is the last row.
+Nothing on this list is impossible. Exactly one of them changed the *shape* of the code rather
+than its content — the z-coupling row, which is why it needed a second solver and got one. The
+remaining two are content: new matrices for the same machinery.
 
 ## 1. What the mode operator already accepts
 
@@ -269,12 +272,28 @@ Cost is not only structural: `eig` is `O(N³)`, so 2ff → 4ff is roughly **8x**
 **Part of this now exists.** `fieldwave/_core/solve_2d_4ff.py` carries the first-order operator
 `M`, the forward/backward split, and a stack solve, pinned by `tests/test_solve_2d_4ff.py`
 against both the 2ff path (where that path is valid, eigenvalues agree at `lam = i q` to 1e-15)
-and the Berreman oracle (entry for entry, to 1e-16, on tensors 2ff cannot express at all).
-Nothing dispatches to it. What is still missing is the part that makes it usable: the transfer is
-`Psi exp(i k0 lam d) Psi⁻¹` and overflows on a thick layer, so it needs the scattering-matrix
-recursion the 2ff path already has; multi-order is coded but unchecked against a grating; there is
-no field reconstruction. The module refuses an out-of-range layer rather than returning a number
-it cannot stand behind.
+and the Berreman oracle (entry for entry, to 1e-16, on tensors 2ff cannot express at all), and
+by `tests/references/test_4ff_external_goldens.py` against RETICOLO and fmmax (24 cases, worst
+2.4e-15, no convention fitting). Three of those are Voigt tensors generated for this — **the
+first time an outside solver has judged the geometry this module exists for.**
+
+That external reach has a hard edge, measured rather than assumed. RETICOLO is exact for a
+diagonal tensor at any mounting and for a *single* off-diagonal pair at classical mounting;
+beyond that it returns `R + T` up to 1.2e-2 from one on a provably lossless tensor, converged
+and truncation-independent. A tilted magnetisation — xy and yz populated together, which is what
+a real magnetised film has — is past that edge, so it still rests on our own Berreman. The
+measurements and the reasoning are in `tests/references/README.md`.
+
+Nothing dispatches to it. It is, however, stable for any thickness: layers are joined by an
+enhanced-transmittance recursion (`connecting_algo='ETM'`, the same string and the same
+technique as the 2ff path) or by scattering matrices (`'SMM'`), and both hold ~1e-13 relative accuracy out
+to a modal exponent of 2500, where they reproduce the closed-form single-interface Fresnel
+reflectance to 4e-16. An unstabilised transfer is kept as `'TMM'` for cross-checking and refuses past the
+point where it is accurate — which on a 220 nm layer means from 25 Fourier orders upward, since
+diffraction orders above the light line are strongly evanescent whatever the thickness. That is
+the historical reason RCWA needed the enhanced form, not a preference between two recursions.
+The block layout is checked at 9 and 25 orders; what is still missing is order *coupling*, which
+needs the patterned factorization of §3, and field reconstruction.
 
 Two findings from building it, both invisible until the case existed. The `±` pairing above does
 not merely become unnecessary in 4ff — it becomes *false*: at normal incidence the backward set
@@ -373,7 +392,7 @@ holds. Four oracles now cover this ground, three of them external, with goldens 
 | oracle | reaches | file |
 |---|---|---|
 | Berreman 4x4 (written here) | uniform tensors incl. z-coupling, in-layer fields | `tests/test_anisotropic_berreman.py` |
-| RETICOLO (Li/Lalanne lineage) | uniform **complex** tensors, z-coupling | `golden_reticolo_anisotropic.npz` |
+| RETICOLO (Li/Lalanne lineage) | uniform **complex** tensors, z-coupling — but only one off-diagonal pair, at `delta0 = 0` | `golden_reticolo_anisotropic.npz` |
 | fmmax (Liu & Fan lineage, MIT) | uniform complex tensors, **patterned**, **`mu`** | `golden_fmmax.npz`, `golden_fmmax_magnetic.npz` |
 | S4 (same lineage, C++) | real tensors, patterned | `golden_s4.npz` |
 
@@ -430,7 +449,7 @@ class Formulation(str, Enum):
 Forcing `'4ff'` on a problem that does not need it is how the 4ff solver gets **validated**: a
 z-decoupled case run both ways must agree, and that is an internal cross-check no external oracle
 provides. It is the same reason `connecting_algo` is selectable — and the same reason
-`test_anisotropic_berreman.py` drives SMM as well as TMM, since "the correction reaches the other
+`test_anisotropic_berreman.py` drives SMM as well as ETM, since "the correction reaches the other
 path for free" is exactly the sort of claim that turns out to be false.
 
 Forcing `'2ff'` on a z-coupled tensor must **raise**, not quietly drop the z row. That failure mode
