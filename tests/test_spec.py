@@ -42,9 +42,9 @@ def test_run_matches_the_equivalent_rcwa_call():
         ucell=np.array([[[1.0, 1.0, 3.5, 3.5]]]), thickness=[300.],
     ).conv_solve()
 
-    assert np.array_equal(result.de_ri, reference.de_ri)
-    assert np.array_equal(result.de_ti, reference.de_ti)
-    assert result.de_ri.sum() + result.de_ti.sum() == pytest.approx(1.0, abs=1e-13)
+    assert np.array_equal(result.R, reference.R)
+    assert np.array_equal(result.T, reference.T)
+    assert result.R.sum() + result.T.sum() == pytest.approx(1.0, abs=1e-13)
 
 
 def test_run_accepts_spec_object_mapping_and_json():
@@ -55,8 +55,8 @@ def test_run_accepts_spec_object_mapping_and_json():
     from_str = fieldwave.run(spec.to_json())
 
     for other in (from_map, from_str):
-        assert np.array_equal(from_obj.de_ri, other.de_ri)
-        assert np.array_equal(from_obj.de_ti, other.de_ti)
+        assert np.array_equal(from_obj.R, other.R)
+        assert np.array_equal(from_obj.T, other.T)
 
 
 # ---------------------------------------------------------------- round-trip and identity
@@ -159,7 +159,7 @@ def test_expanded_sweep_points_match_direct_calls():
         direct = dict(BINARY_GRATING)
         direct['incidence'] = {**BINARY_GRATING['incidence'],
                                'wavelength': point.incidence.wavelength}
-        assert np.array_equal(fieldwave.run(point).de_ri, fieldwave.run(direct).de_ri)
+        assert np.array_equal(fieldwave.run(point).R, fieldwave.run(direct).R)
 
 
 # ---------------------------------------------------------------- rejection
@@ -227,4 +227,4 @@ def test_real_polar_angles_pass():
     # A lossless stack must still conserve energy at a real angle.
     for point in spec.expand():
         r = fieldwave.run(point)
-        assert r.de_ri.sum() + r.de_ti.sum() == pytest.approx(1.0, abs=1e-9)
+        assert r.R.sum() + r.T.sum() == pytest.approx(1.0, abs=1e-9)

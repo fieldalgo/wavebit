@@ -1,4 +1,4 @@
-"""The core produces the *entire* public result surface, not just (de_ri, de_ti).
+"""The core produces the *entire* public result surface, not just (R, T).
 
 ``Result`` carries reflected/transmitted amplitudes, their s/p split, and — for the conical and
 2D paths — the pure-TE and pure-TM incidence variants. These check that ``full=True`` delivers
@@ -13,8 +13,8 @@ from fieldwave._core.factorization import to_conv_mat_raster_discrete
 from fieldwave._core.solve_1d import solve_1d, solve_1d_conical
 from fieldwave._core.solve_2d import solve_2d
 
-FIELDS = ('R_s', 'R_p', 'T_s', 'T_p',
-          'de_ri', 'de_ri_s', 'de_ri_p', 'de_ti', 'de_ti_s', 'de_ti_p')
+FIELDS = ('r_s', 'r_p', 't_s', 't_p',
+          'R', 'R_s', 'R_p', 'T', 'T_s', 'T_p')
 
 
 def _setup(**kw):
@@ -78,7 +78,7 @@ def test_full_flag_is_consistent_with_tuple_form():
     solver, _, conv, kx, ky = _setup(**kw)
     args = [kw['wavelength'], kx, ky, kw['n_top'], kw['n_bot'], solver.theta, solver.psi,
             solver.thickness] + list(conv)
-    de_ri, de_ti = solve_2d(*args)
+    R, T = solve_2d(*args)
     full = solve_2d(*args, full=True)
-    assert np.array_equal(np.array(de_ri), np.array(full['res']['de_ri']))
-    assert np.array_equal(np.array(de_ti), np.array(full['res']['de_ti']))
+    assert np.array_equal(np.array(R), np.array(full['res']['R']))
+    assert np.array_equal(np.array(T), np.array(full['res']['T']))

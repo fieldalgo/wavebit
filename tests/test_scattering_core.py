@@ -84,8 +84,8 @@ ALL_CASES = ([(n, k, '1d') for n, k in CASES_1D]
              + [(n, k, 'conical') for n, k in CASES_CONICAL]
              + [(n, k, '2d') for n, k in CASES_2D])
 
-AMPLITUDES = ('R_s', 'R_p', 'T_s', 'T_p')
-EFFICIENCIES = ('de_ri', 'de_ri_s', 'de_ri_p', 'de_ti', 'de_ti_s', 'de_ti_p')
+AMPLITUDES = ('r_s', 'r_p', 't_s', 't_p')
+EFFICIENCIES = ('R', 'R_s', 'R_p', 'T', 'T_s', 'T_p')
 
 
 def _solve(algo, kwargs):
@@ -116,7 +116,7 @@ def test_smm_matches_tmm(name, kwargs, kind):
 def test_smm_conserves_energy_when_lossless(name, kwargs, kind):
     """Every case here is lossless, so reflection + transmission must sum to 1."""
     smm = _solve('SMM', kwargs)
-    total = float(np.sum(np.array(smm.de_ri)) + np.sum(np.array(smm.de_ti)))
+    total = float(np.sum(np.array(smm.R)) + np.sum(np.array(smm.T)))
     assert abs(total - 1.0) < 1e-9, total
 
 
@@ -166,8 +166,8 @@ def test_wiring_matches_direct_core_call(name, kwargs, kind):
     # atol is not zero because a 2D case reports evanescent orders as round-off-level numbers
     # (~1e-29) rather than exact zeros; comparing those on their own relative scale would test
     # the round-off, not the wiring.
-    np.testing.assert_allclose(np.array(via_api.de_ri), np.array(ri), rtol=1e-12, atol=1e-15)
-    np.testing.assert_allclose(np.array(via_api.de_ti), np.array(ti), rtol=1e-12, atol=1e-15)
+    np.testing.assert_allclose(np.array(via_api.R), np.array(ri), rtol=1e-12, atol=1e-15)
+    np.testing.assert_allclose(np.array(via_api.T), np.array(ti), rtol=1e-12, atol=1e-15)
 
 
 def test_unknown_connecting_algo_is_rejected():
@@ -319,8 +319,8 @@ def test_frozen_geometry_does_not_change_the_smm_answer():
     solver = fieldwave.rcwa(backend=0, connecting_algo='SMM', **kwargs)
     with_geom = solver.conv_solve(geometry=solver.freeze_geometry())
     without = _solve('SMM', kwargs)
-    assert np.allclose(np.array(with_geom.de_ri), np.array(without.de_ri), atol=0, rtol=0)
-    assert np.allclose(np.array(with_geom.de_ti), np.array(without.de_ti), atol=0, rtol=0)
+    assert np.allclose(np.array(with_geom.R), np.array(without.R), atol=0, rtol=0)
+    assert np.allclose(np.array(with_geom.T), np.array(without.T), atol=0, rtol=0)
 
 
 # ------------------------------------------------------------------------------ robustness
@@ -341,11 +341,11 @@ def test_smm_survives_same_mean_layers(theta, phi):
     """Lossless energy conservation, and ETM agreement, on that stack."""
     kwargs = dict(DEGENERATE_MEAN, theta=theta, phi=phi)
     smm = _solve('SMM', kwargs)
-    total = float(np.sum(np.array(smm.de_ri)) + np.sum(np.array(smm.de_ti)))
+    total = float(np.sum(np.array(smm.R)) + np.sum(np.array(smm.T)))
     assert abs(total - 1.0) < 1e-9, total
 
     tmm = _solve('ETM', kwargs)
-    for field in ('de_ri', 'de_ti'):
+    for field in ('R', 'T'):
         a, b = np.array(getattr(tmm, field)), np.array(getattr(smm, field))
         assert np.allclose(a, b, atol=1e-10, rtol=0), (field, np.max(np.abs(a - b)))
 
@@ -362,7 +362,7 @@ def test_smm_2d_matches_conical_on_y_invariant_stack():
                   period=[0.6, 0.6], theta=0.1, phi=0.0, fto=[2, 0])
     conical = _solve('SMM', dict(common, ucell=pattern))
     two_d = _solve('SMM', dict(common, ucell=np.repeat(pattern, 8, axis=1)))
-    for field in ('de_ri', 'de_ti'):
+    for field in ('R', 'T'):
         a = np.array(getattr(conical, field)).ravel()
         b = np.array(getattr(two_d, field)).ravel()
         assert np.allclose(a, b, atol=1e-10, rtol=0), (field, np.max(np.abs(a - b)))
@@ -422,7 +422,7 @@ def test_smm_field_cross_backend(case, backend, name):
 
 @pytest.mark.parametrize('pol', [0, 1], ids=['te', 'tm'])
 def test_gradient_jax_torch_fd(pol):
-    """d(sum de_ti)/ds where s scales a real perturbation of a layer's eps-conv matrix."""
+    """d(sum T)/ds where s scales a real perturbation of a layer's eps-conv matrix."""
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
     import fieldwave.on_jax          # noqa: F401  (enables x64)

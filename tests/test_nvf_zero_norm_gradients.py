@@ -85,7 +85,7 @@ def test_symmetric_two_shape_layer_has_a_finite_position_gradient():
     def objective(d):
         res = fieldwave.rcwa(backend=1, ucell=[dict(n_base=1.0, shapes=_twin_circles(d))],
                              **BASE).conv_solve()
-        return jnp.real(jnp.sum(res.de_ri))
+        return jnp.real(jnp.sum(res.R))
 
     at_zero = float(jax.grad(objective)(jnp.asarray(0.0)))
     assert np.isfinite(at_zero), at_zero

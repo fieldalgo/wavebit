@@ -181,13 +181,13 @@ def test_rectangle_has_no_step_where_the_angle_margin_used_to_end():
     cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
                wavelength=900.0, pol=0.5)
 
-    def de_ti(angle):
+    def T(angle):
         ucell = [[3.5, [['rectangle', 150.0, 150.0, 80.0, 60.0, 2.0, angle, 8, 8]]]]
         return float(np.sum(np.asarray(
-            fieldwave.rcwa(backend=0, ucell=ucell, **cfg).conv_solve().de_ti)))
+            fieldwave.rcwa(backend=0, ucell=ucell, **cfg).conv_solve().T)))
 
-    across = (de_ti(1.02e-5) - de_ti(0.98e-5)) / (0.04e-5)
-    outside = (de_ti(1.10e-5) - de_ti(1.06e-5)) / (0.04e-5)
+    across = (T(1.02e-5) - T(0.98e-5)) / (0.04e-5)
+    outside = (T(1.10e-5) - T(1.06e-5)) / (0.04e-5)
 
     assert across == pytest.approx(outside, rel=1e-3), (across, outside)
 
@@ -208,20 +208,20 @@ def test_rectangle_angle_carries_gradient_near_an_aligned_angle():
     cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
                wavelength=900.0, pol=0.5)
 
-    def de_ti(angle):
+    def T(angle):
         ucell = [[3.5, [['rectangle', tensor(150.0), tensor(150.0), tensor(80.0),
                          tensor(60.0), 2.0, angle, 8, 8]]]]
-        return torch.sum(fieldwave.rcwa(backend=2, ucell=ucell, **cfg).conv_solve().de_ti)
+        return torch.sum(fieldwave.rcwa(backend=2, ucell=ucell, **cfg).conv_solve().T)
 
     p = torch.tensor(1e-5, dtype=torch.float64, requires_grad=True)
-    out = de_ti(p)
+    out = T(p)
     assert out.requires_grad, 'angle left the graph — the margin is back'
     out.backward()
     auto = float(p.grad)
 
     step = 5e-6
     with torch.no_grad():
-        fd = float((de_ti(tensor(1e-5 + step)) - de_ti(tensor(1e-5 - step))) / (2 * step))
+        fd = float((T(tensor(1e-5 + step)) - T(tensor(1e-5 - step))) / (2 * step))
 
     assert abs(fd) > 1.0, fd
     assert auto == pytest.approx(fd, rel=1e-3), (auto, fd)
@@ -274,7 +274,7 @@ def test_two_objects_sharing_an_edge_keep_their_gradient():
                          tensor(0.)]]]]
         cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
                    wavelength=900.0, pol=0.5)
-        return torch.sum(fieldwave.rcwa(backend=2, ucell=ucell, **cfg).conv_solve().de_ti)
+        return torch.sum(fieldwave.rcwa(backend=2, ucell=ucell, **cfg).conv_solve().T)
 
     p = torch.tensor(80.0, dtype=torch.float64, requires_grad=True)
     total(p).backward()
@@ -295,8 +295,9 @@ def test_vector_solve_matches_legacy_golden(name, backend):
     if backend:
         pytest.importorskip('jax' if backend == 1 else 'torch')
     result = fieldwave.rcwa(backend=backend, ucell=INSTRUCTIONS[name], **SOLVE_KW).conv_solve()
-    for field in ('de_ri', 'de_ti'):
-        want = GOLDEN[f'{name}__{field}']
+    # Golden keys keep the frozen legacy names (de_ri/de_ti); the attributes were renamed.
+    for key, field in (('de_ri', 'R'), ('de_ti', 'T')):
+        want = GOLDEN[f'{name}__{key}']
         got = np.asarray(getattr(result.res, field))
         tol = 1e-12   # not bit-exact: the block path's inverses do not commute
                       # with the 2026-08 order-index flip to the last digit
@@ -382,7 +383,7 @@ def test_vector_path_differentiates_wrt_edge_positions(backend, name):
         inst = [[3.5, [['rectangle', xp_scalar(150.0), xp_scalar(150.0), cd,
                         xp_scalar(60.0), 2.0, xp_scalar(0.0)]]]]
         res = fieldwave.rcwa(backend=backend, ucell=inst, **cfg).conv_solve()
-        return res.de_ti
+        return res.T
 
     if backend == 2:
         import torch
@@ -422,24 +423,24 @@ def test_the_staircase_costs_a_kink_at_an_aligned_angle(pol, name):
     cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
                wavelength=900.0, pol=pol, theta=0.0, phi=0.0)
 
-    def de_ti(angle, n_split):
+    def T(angle, n_split):
         ucell = [[3.5, [['rectangle', 150.0, 150.0, 80.0, 60.0, 2.0, angle, n_split, n_split]]]]
         return float(np.sum(np.asarray(
-            fieldwave.rcwa(backend=0, ucell=ucell, **cfg).conv_solve().de_ti)))
+            fieldwave.rcwa(backend=0, ucell=ucell, **cfg).conv_solve().T)))
 
     step = 1e-4
-    at_zero = de_ti(0.0, 64)
-    right = (de_ti(step, 64) - at_zero) / step
-    left = (at_zero - de_ti(-step, 64)) / step
+    at_zero = T(0.0, 64)
+    right = (T(step, 64) - at_zero) / step
+    left = (at_zero - T(-step, 64)) / step
 
     # Even in the angle, to numerical noise: the two sides are mirror images of one structure.
-    assert de_ti(step, 64) == pytest.approx(de_ti(-step, 64), abs=1e-11), name
+    assert T(step, 64) == pytest.approx(T(-step, 64), abs=1e-11), name
     # ... which is exactly why equal-and-opposite one-sided slopes mean a kink, not a slope.
     assert right == pytest.approx(-left, rel=1e-6), (left, right)
     assert abs(right) > 0.1, right
 
     # Flat in n_split: more blocks resolve the shape, not the factorization.
-    coarse = (de_ti(0.0, 16) - de_ti(step, 16)) / step
+    coarse = (T(0.0, 16) - T(step, 16)) / step
     assert coarse == pytest.approx(-right, rel=0.02), (coarse, right)
 
 

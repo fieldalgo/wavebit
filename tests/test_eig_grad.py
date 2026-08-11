@@ -151,19 +151,19 @@ STACK = dict(n_top=1.0, n_bot=1.0, phi=None, pol=0, fto=[4, 0],
 
 
 def _ucell_grad(theta, backend):
-    """d(sum de_ti) / d(ucell) — a derivative that has to cross the eigendecomposition."""
+    """d(sum T) / d(ucell) — a derivative that has to cross the eigendecomposition."""
     if backend == 1:
         def loss(u):
             s = fieldwave.rcwa(backend=1, ucell=u, theta=theta,
                                fourier_coefficients='sampled', factorization='li', **STACK)
-            return jnp.real(jnp.sum(s.conv_solve().de_ti))
+            return jnp.real(jnp.sum(s.conv_solve().T))
         return np.asarray(jax.grad(loss)(jnp.asarray(UNIFORM)))
 
     torch = pytest.importorskip('torch')
     u = torch.tensor(UNIFORM, dtype=torch.float64, requires_grad=True)
     s = fieldwave.rcwa(backend=2, ucell=u, theta=theta,
                        fourier_coefficients='sampled', factorization='li', **STACK)
-    s.conv_solve().de_ti.real.sum().backward()
+    s.conv_solve().T.real.sum().backward()
     return u.grad.numpy()
 
 

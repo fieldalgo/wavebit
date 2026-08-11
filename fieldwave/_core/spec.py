@@ -37,7 +37,7 @@ import math
 from .domain import Layer, Stack, Incidence
 from .enums import Backend, Factorization, FourierCoefficients, Pol
 
-SPEC_VERSION = '1'
+SPEC_VERSION = '2'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12)
 
 #: Incidence fields a sweep may vary. Geometry sweeps wait for the parametric geometry
 #: layer — sweeping a raster grid point-by-point is not a thing anyone wants to declare.
@@ -254,7 +254,7 @@ class JobSpec:
     incidence: Incidence = field(default_factory=Incidence)
     numerics: Numerics = field(default_factory=Numerics)
     sweep: Sweep = field(default_factory=Sweep)
-    outputs: tuple = ('de_ri', 'de_ti')
+    outputs: tuple = ('R', 'T')
     solver: str = 'rcwa'
     version: str = SPEC_VERSION
 
@@ -283,7 +283,7 @@ class JobSpec:
         if solver != 'rcwa':
             raise SpecError(f"spec.solver: only 'rcwa' exists so far, got {solver!r}")
 
-        outputs = tuple(d.get('outputs', ('de_ri', 'de_ti')))
+        outputs = tuple(d.get('outputs', ('R', 'T')))
         if not outputs:
             raise SpecError("spec.outputs: no outputs requested — the run would return nothing")
 

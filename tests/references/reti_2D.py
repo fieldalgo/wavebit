@@ -65,8 +65,8 @@ def run_2d(option, case, plot_figure=False):
         reti_de_ri_te, reti_de_ti_te = np.array(top_refl_info_te.efficiency).T,  np.array(top_tran_info_te.efficiency).T
         reti_de_ri_tm, reti_de_ti_tm = np.array(top_refl_info_tm.efficiency).T, np.array(top_tran_info_tm.efficiency).T
 
-        de_ri_te, de_ti_te = np.array(res_t.res_te_inc.de_ri).T,  np.array(res_t.res_te_inc.de_ti).T
-        de_ri_tm, de_ti_tm = np.array(res_t.res_tm_inc.de_ri).T,  np.array(res_t.res_tm_inc.de_ti).T
+        de_ri_te, de_ti_te = np.array(res_t.res_te_inc.R).T,  np.array(res_t.res_te_inc.T).T
+        de_ri_tm, de_ti_tm = np.array(res_t.res_tm_inc.R).T,  np.array(res_t.res_tm_inc.T).T
 
         reti_de_ri_te = reti_de_ri_te[reti_de_ri_te > 1E-5]
         reti_de_ti_te = reti_de_ti_te[reti_de_ti_te > 1E-5]

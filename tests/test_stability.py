@@ -38,7 +38,7 @@ def _solve(*, fto, thickness, n_hi=4.0, algo='ETM', type_complex=np.complex128,
 
 
 def _energy(result):
-    return float(result.de_ri.sum() + result.de_ti.sum())
+    return float(result.R.sum() + result.T.sum())
 
 
 def evanescent_orders(fto, period, wavelength, n=1.0):
@@ -98,8 +98,8 @@ def test_tmm_and_smm_agree(fto, thickness):
     tmm = _solve(fto=fto, thickness=thickness, algo='ETM')
     smm = _solve(fto=fto, thickness=thickness, algo='SMM')
 
-    assert np.allclose(tmm.de_ri, smm.de_ri, rtol=1e-9, atol=1e-12)
-    assert np.allclose(tmm.de_ti, smm.de_ti, rtol=1e-9, atol=1e-12)
+    assert np.allclose(tmm.R, smm.R, rtol=1e-9, atol=1e-12)
+    assert np.allclose(tmm.T, smm.T, rtol=1e-9, atol=1e-12)
 
 
 @pytest.mark.parametrize('thickness', [500.0, 10_000.0])
@@ -130,8 +130,8 @@ def test_tmm_and_smm_agree_on_a_lossy_stack():
                  wavelength=500.0, algo='ETM')
     smm = _solve(fto=30, thickness=5_000.0, n_hi=0.15 + 3.5j, period=2000.0,
                  wavelength=500.0, algo='SMM')
-    assert np.allclose(tmm.de_ri, smm.de_ri, rtol=1e-8, atol=1e-11)
-    assert np.allclose(tmm.de_ti, smm.de_ti, rtol=1e-8, atol=1e-11)
+    assert np.allclose(tmm.R, smm.R, rtol=1e-8, atol=1e-11)
+    assert np.allclose(tmm.T, smm.T, rtol=1e-8, atol=1e-11)
 
 
 # ---------------------------------------------------------------- precision
@@ -147,8 +147,8 @@ def test_single_precision_tracks_double():
     """32-bit should cost accuracy, not correctness."""
     wide = _solve(fto=40, thickness=5_000.0, type_complex=np.complex128)
     narrow = _solve(fto=40, thickness=5_000.0, type_complex=np.complex64)
-    assert np.allclose(np.real(wide.de_ri), np.real(narrow.de_ri), atol=1e-4)
-    assert np.allclose(np.real(wide.de_ti), np.real(narrow.de_ti), atol=1e-4)
+    assert np.allclose(np.real(wide.R), np.real(narrow.R), atol=1e-4)
+    assert np.allclose(np.real(wide.T), np.real(narrow.T), atol=1e-4)
 
 
 # ---------------------------------------------------------------- the guard itself
@@ -156,7 +156,7 @@ def test_single_precision_tracks_double():
 def test_results_are_finite_and_non_negative_at_the_extreme():
     """The two things ``check_physical`` looks for, asserted rather than warned about."""
     result = _solve(fto=40, thickness=50_000.0)
-    for name, array in (('de_ri', result.de_ri), ('de_ti', result.de_ti)):
+    for name, array in (('R', result.R), ('T', result.T)):
         values = np.real(np.asarray(array))
         assert np.all(np.isfinite(values)), f'{name} went non-finite'
         assert values.min() > -1e-9, f'{name} went negative — negative power'

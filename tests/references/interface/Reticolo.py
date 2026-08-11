@@ -236,32 +236,32 @@ if __name__ == '__main__':
 
     reti = Reticolo()
     reti_de_ri, reti_de_ti, c, d, r_field_cell = reti.run_res3(**option)
-    print('reti de_ri', np.array(reti_de_ri).flatten())
-    print('reti de_ti', np.array(reti_de_ti).flatten())
+    print('reti R', np.array(reti_de_ri).flatten())
+    print('reti T', np.array(reti_de_ti).flatten())
 
     # Numpy
     backend = 0
     nmee = fieldwave.rcwa(backend=backend, perturbation=1E-30, **option)
     n_de_ri, n_de_ti = nmee.conv_solve()
     n_field_cell = nmee.calculate_field(res_z=200, res_x=5)
-    print('numpy de_ri', n_de_ri)
-    print('numpy de_ti', n_de_ti)
+    print('numpy R', n_de_ri)
+    print('numpy T', n_de_ti)
 
     # # JAX
     # backend = 1
     # jmee = fieldwave.rcwa(backend=backend, perturbation=1E-30, **option)
     # j_de_ri, j_de_ti = jmee.conv_solve()
     # j_field_cell = jmee.calculate_field(res_z=200, res_x=5)
-    # print('jax de_ri', j_de_ri)
-    # print('jax de_ti', j_de_ti)
+    # print('jax R', j_de_ri)
+    # print('jax T', j_de_ti)
     #
     # # Torch
     # backend = 2
     # tmee = fieldwave.rcwa(backend=backend, perturbation=1E-30, **option)
     # t_de_ri, t_de_ti = tmee.conv_solve()
     # t_field_cell = tmee.calculate_field(res_z=200, res_x=5)
-    # print('torch de_ri', t_de_ri)
-    # print('torch de_ti', t_de_ti)
+    # print('torch R', t_de_ri)
+    # print('torch T', t_de_ti)
 
     import matplotlib.pyplot as plt
 

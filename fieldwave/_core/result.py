@@ -1,0 +1,155 @@
+"""The solve result — one backend-agnostic container, and the naming contract.
+
+Naming follows the optics convention the rest of the ecosystem reads by sight:
+**uppercase is power, lowercase is amplitude.**
+
+``R``, ``T``
+    Per-order diffraction efficiency, shape ``(ff_y, ff_x)`` with the incident order at
+    the centre (``[fto_y, fto_x]``); index ``+1`` along the last axis is order ``m = +1``.
+    ``R`` is the fraction of incident power returned into the incidence medium, ``T`` the
+    fraction leaving through the far side. For an absorbing superstrate the incident-power
+    normalization is convention-dependent and these are not comparable to ``1`` — use the
+    amplitudes there.
+
+``R_s``, ``R_p``, ``T_s``, ``T_p``
+    The same efficiencies resolved by outgoing polarization (``R = R_s + R_p``).
+
+``r_s``, ``r_p``, ``t_s``, ``t_p``
+    Complex **Fresnel amplitudes** — the E-field ratio against a unit incident E-field, in
+    ``e^{-iωt}``, directly comparable to the textbook Fresnel/Airy coefficients. The p sign
+    convention is the one where a single interface at normal incidence gives
+    ``r_p = (n2 - n1)/(n2 + n1) = -r_s``. The solves construct these from their boundary
+    variables at pack time (the p channel's boundary variable is a magnetic amplitude; the
+    conversion differs between the pure-1D and the coupled paths and is measured to 6e-16
+    against the Airy forms in ``tests/test_lossy_media.py``), so no caller ever needs to
+    know a boundary variable existed. Phase reference: ``r`` at the top interface, ``t`` at
+    the bottom one.
+
+Until 2026-08 the efficiencies were named ``de_ri`` / ``de_ti`` (meent lineage) and
+``R_s``/``R_p`` named the raw *boundary amplitudes* — the ones needing a ``/(-i n_top)``
+footnote before they matched any textbook. Renamed outright before the first release;
+nothing aliases the old names.
+"""
+
+
+class ResultSub:
+    """One incidence's per-order efficiencies and Fresnel amplitudes."""
+
+    _FIELDS = ('r_s', 'r_p', 't_s', 't_p',
+               'R', 'R_s', 'R_p', 'T', 'T_s', 'T_p')
+
+    def __init__(self, r_s, r_p, t_s, t_p, R, R_s, R_p, T, T_s, T_p):
+        self.r_s = r_s
+        self.r_p = r_p
+        self.t_s = t_s
+        self.t_p = t_p
+        self.R = R
+        self.R_s = R_s
+        self.R_p = R_p
+        self.T = T
+        self.T_s = T_s
+        self.T_p = T_p
+
+    # pytree protocol (used by the JAX backend's registered subclass; harmless elsewhere)
+    def tree_flatten(self):
+        return tuple(getattr(self, name) for name in self._FIELDS), None
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(*children)
+
+
+class OrderView:
+    """Everything the solve knows about one diffraction order, as scalars."""
+
+    __slots__ = ('m', 'n', 'R', 'T', 'r_s', 'r_p', 't_s', 't_p')
+
+    def __init__(self, m, n, R, T, r_s, r_p, t_s, t_p):
+        self.m, self.n = m, n
+        self.R, self.T = R, T
+        self.r_s, self.r_p, self.t_s, self.t_p = r_s, r_p, t_s, t_p
+
+    def __repr__(self):
+        return (f'OrderView(m={self.m}, n={self.n}, R={self.R!r}, T={self.T!r}, '
+                f'r_s={self.r_s!r}, r_p={self.r_p!r}, t_s={self.t_s!r}, t_p={self.t_p!r})')
+
+
+class Result:
+    """Solve result: the ``psi``-specified incidence plus the pure-s/p variants.
+
+    ``res`` holds the incidence actually asked for; ``res_te_inc`` / ``res_tm_inc`` the
+    pure-TE and pure-TM variants the coupled solves produce for free. The top-level
+    ``R`` / ``T`` delegate to ``res`` when it exists and otherwise average the two pure
+    incidences — unpolarized illumination.
+    """
+
+    def __init__(self, res=None, res_te_inc=None, res_tm_inc=None, fto=None):
+        self.res = res
+        self.res_te_inc = res_te_inc
+        self.res_tm_inc = res_tm_inc
+        #: (fto_x, fto_y) — static metadata for order(); not a pytree child.
+        self.fto = tuple(int(v) for v in fto) if fto is not None else None
+
+    # pytree protocol (see ResultSub)
+    def tree_flatten(self):
+        return (self.res, self.res_te_inc, self.res_tm_inc), self.fto
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(*children, fto=aux_data)
+
+    def _delegate(self, name):
+        if self.res is not None:
+            return getattr(self.res, name)
+        te = getattr(self.res_te_inc, name) if self.res_te_inc is not None else None
+        tm = getattr(self.res_tm_inc, name) if self.res_tm_inc is not None else None
+        if te is not None and tm is not None:
+            return 0.5 * (te + tm)
+        return te if te is not None else tm
+
+    @property
+    def R(self):
+        """Reflection efficiency per order (unpolarized average if no ``psi`` was given)."""
+        return self._delegate('R')
+
+    @property
+    def T(self):
+        """Transmission efficiency per order (unpolarized average if no ``psi`` was given)."""
+        return self._delegate('T')
+
+    def order(self, m, n=0):
+        """Scalars for diffraction order ``(m, n)`` of the solved (``res``) incidence.
+
+        Spares the caller the array layout: efficiencies and amplitudes are stored as
+        ``(ff_y, ff_x)`` grids — note ``y`` first, the transpose of the ``fto=[x, y]``
+        input order — with the incident order at the centre. This indexes them by the
+        order indices themselves.
+        """
+        sub = self.res if self.res is not None else (
+            self.res_te_inc if self.res_te_inc is not None else self.res_tm_inc)
+        if sub is None:
+            raise ValueError('no solved incidence to index into')
+        if self.fto is None:
+            raise ValueError('this result carries no fto metadata; index the arrays directly')
+        fx, fy = self.fto
+
+        def pick(a):
+            if a is None:
+                return None
+            row = a.reshape(-1, a.shape[-1])[n + fy if a.reshape(-1, a.shape[-1]).shape[0] > 1 else 0]
+            return row[m + fx]
+
+        if not (-fx <= m <= fx):
+            raise IndexError(f'order m={m} outside the retained set [-{fx}, {fx}]')
+        ny = None
+        for a in (sub.R, sub.T):
+            if a is not None:
+                ny = a.reshape(-1, a.shape[-1]).shape[0]
+                break
+        if ny is not None and ny > 1 and not (-fy <= n <= fy):
+            raise IndexError(f'order n={n} outside the retained set [-{fy}, {fy}]')
+        if ny is not None and ny == 1 and n != 0:
+            raise IndexError('this solve retained a single row of orders; only n=0 exists')
+
+        return OrderView(m, n, pick(sub.R), pick(sub.T),
+                         pick(sub.r_s), pick(sub.r_p), pick(sub.t_s), pick(sub.t_p))

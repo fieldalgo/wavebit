@@ -90,7 +90,7 @@ def _backend_scalar(backend):
 
 def _total(res):
     import torch
-    d = res.de_ti
+    d = res.T
     return torch.sum(d) if hasattr(d, 'backward') or hasattr(d, 'grad_fn') else d.sum()
 
 
@@ -116,7 +116,7 @@ def test_raster_scalar_gradients(param, name):
         # No frozen geometry: the default ('sampled', 'li') build has no discrete decision to
         # take, so it traces as is. It used to need one, for a same-material check that no
         # longer exists.
-        return solver.conv_solve().de_ti.sum()
+        return solver.conv_solve().T.sum()
 
     start = {'theta': 0.2, 'phi': 0.3, 'psi': 0.4, 'wavelength': 0.777, 'n_top': 1.0,
              'n_bot': 1.5, 'thickness': 0.2, 'period': 0.77}[param]
@@ -142,11 +142,11 @@ def test_raster_per_cell_gradient_reaches_every_cell(name):
             uc = torch.tensor(RASTER, dtype=torch.float64, requires_grad=True)
             res = fieldwave.rcwa(backend=2, ucell=uc, **strategy,
                                  **BASE).conv_solve(geometry=geometry)
-            torch.sum(res.de_ti).backward()
+            torch.sum(res.T).backward()
             return int((uc.grad.abs() > 1e-14).sum())
         import jax, jax.numpy as jnp
         g = jax.grad(lambda u: jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **strategy,
-                     **BASE).conv_solve(geometry=geometry).de_ti).real)
+                     **BASE).conv_solve(geometry=geometry).T).real)
         return int(np.sum(np.abs(np.asarray(g(jnp.asarray(RASTER)))) > 1e-14))
 
     # No strategy keywords at all: this is the *default* that has to carry every cell.
@@ -180,7 +180,7 @@ def test_analytic_shape_gradients(param, name):
             cfg[param] = p
         res = fieldwave.rcwa(backend=backend, ucell=[dict(n_base=n_base, shapes=[shape])],
                              **cfg).conv_solve()
-        return res.de_ri.sum()
+        return res.R.sum()
 
     start = dict(SHAPE, n_base=1.0, theta=0.35, wavelength=0.777, thickness=0.25)[param]
     auto, fd = _derivative(backend, objective, float(start), rel_step=1e-8)
@@ -201,7 +201,7 @@ def test_vector_edge_gradients(param, index, start, name):
         rect = ['rectangle', cast(150.0), cast(150.0), cast(80.0), cast(60.0), 2.0, cast(0.4)]
         rect[index] = p
         res = fieldwave.rcwa(backend=backend, ucell=[[3.5, [rect]]], **VECTOR_BASE).conv_solve()
-        return res.de_ti.sum()
+        return res.T.sum()
 
     auto, fd = _derivative(backend, objective, start)
     assert abs(fd) > 1e-8, f'the objective does not depend on {param}; test is vacuous'
@@ -267,7 +267,7 @@ def test_analytic_angle_is_smooth_through_normal():
                      angle=angle, n_index=2.0)
         res = fieldwave.rcwa(backend=0, ucell=[dict(n_base=3.5, shapes=[shape])],
                              **base).conv_solve()
-        return float(np.sum(res.de_ti))
+        return float(np.sum(res.T))
 
     h = 1e-5
     f0, fp, fm = analytic(0.0), analytic(h), analytic(-h)
@@ -295,7 +295,7 @@ def test_translation_leaves_nothing_behind_within_one_normal_field_cell():
         shape = dict(type='rectangle', cx=cx, cy=150.0, lx=80.0, ly=60.0,
                      angle=0.4, n_index=2.0)
         return float(np.sum(fieldwave.rcwa(backend=0, ucell=[dict(n_base=3.5, shapes=[shape])],
-                                           **base).conv_solve().de_ti))
+                                           **base).conv_solve().T))
 
     values = [total(150.0 + f * cell) for f in (0.05, 0.35, 0.65, 0.95)]
     assert np.ptp(values) < 5e-5, np.ptp(values)

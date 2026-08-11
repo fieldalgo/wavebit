@@ -63,7 +63,7 @@ def solver(path, **strategy):
 
 def totals(path, **strategy):
     res = solver(path, **strategy).conv_solve()
-    return (float(np.sum(np.asarray(res.de_ri))), float(np.sum(np.asarray(res.de_ti))))
+    return (float(np.sum(np.asarray(res.R))), float(np.sum(np.asarray(res.T))))
 
 
 def n_conv_matrices(path, **strategy):
@@ -259,8 +259,8 @@ def test_a_skewed_smooth_cell_no_longer_has_to_spell_out_nvf():
     default = fieldwave.rcwa(ucell=SMOOTH, lattice=hexagonal, **KW)
     spelled_out = fieldwave.rcwa(ucell=SMOOTH, lattice=hexagonal, factorization='nvf', **KW)
     assert default.factorization == 'nvf'
-    assert (float(np.sum(default.conv_solve().de_ti)) ==
-            float(np.sum(spelled_out.conv_solve().de_ti)))
+    assert (float(np.sum(default.conv_solve().T)) ==
+            float(np.sum(spelled_out.conv_solve().T)))
 
 
 def test_a_skewed_raster_cell_still_refuses_li():
@@ -325,7 +325,7 @@ def test_a_spec_that_does_not_mention_factorization_does_not_request_one():
     assert Numerics.from_dict(Numerics().to_dict()).factorization is None
 
     result = fieldwave.run(SPEC)
-    assert float(np.sum(np.asarray(result.de_ti))) == totals('smooth')[1]
+    assert float(np.sum(np.asarray(result.T))) == totals('smooth')[1]
 
 
 def test_a_spec_that_does_mention_it_is_refused_like_any_other_request():
@@ -338,5 +338,5 @@ def test_a_spec_may_still_name_the_rule_its_path_does_implement():
     from fieldwave._core.spec import Numerics
     assert Numerics.from_dict({'factorization': 'nvf'}).factorization is Factorization.NVF
     numerics = dict(SPEC['numerics'], factorization='nvf')
-    assert (float(np.sum(np.asarray(fieldwave.run({**SPEC, 'numerics': numerics}).de_ti))) ==
+    assert (float(np.sum(np.asarray(fieldwave.run({**SPEC, 'numerics': numerics}).T))) ==
             totals('smooth')[1])

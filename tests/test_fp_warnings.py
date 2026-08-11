@@ -59,7 +59,7 @@ def _run(**kwargs):
 
 
 def _energy(res):
-    return float(np.sum(res.res.de_ri) + np.sum(res.res.de_ti))
+    return float(np.sum(res.res.R) + np.sum(res.res.T))
 
 
 # --- the structures: thick, high-truncation, deeply evanescent -----------------------------
@@ -186,13 +186,15 @@ def test_caller_raise_policy_survives_a_solve():
 
 def test_check_finite_passes_finite_values():
     xp = array_namespace(np.zeros(1))
-    check_finite(xp, de_ri=np.array([0.4, 0.1]), de_ti=np.array([0.5]))
+    check_finite(xp, R=np.array([0.4, 0.1]), T=np.array([0.5]))
 
 
 @pytest.mark.parametrize('bad', [np.nan, np.inf, -np.inf])
 def test_check_finite_raises_with_a_structural_hint(bad):
     xp = array_namespace(np.zeros(1))
     with pytest.raises(FloatingPointError) as e:
+        # check_finite is internal; its call sites still pass the internal de_ri/de_ti
+        # names (the public rename to R/T lives in the Result container, not here).
         check_finite(xp, de_ri=np.array([0.4, bad]), de_ti=np.array([0.5]))
     msg = str(e.value)
     assert 'de_ri' in msg and 'de_ti' not in msg      # names only the contaminated array
@@ -218,12 +220,12 @@ def test_finiteness_guard_fires_from_the_solve_path():
 
 # --- tier 2: finite, but not a physical result ----------------------------------------------
 
-def _physical(de_ri, de_ti, n_top=1.0):
+def _physical(R, T, n_top=1.0):
     """Run the plausibility check, returning the warnings it emitted."""
     xp = array_namespace(np.zeros(1))
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        check_physical(xp, np.asarray(de_ri), np.asarray(de_ti), n_top)
+        check_physical(xp, np.asarray(R), np.asarray(T), n_top)
     return [r for r in rec if issubclass(r.category, UnphysicalResultWarning)]
 
 
@@ -300,14 +302,14 @@ def test_guards_are_no_ops_on_jax():
     import jax.numpy as jnp
     xp = array_namespace(jnp.zeros(1))
     # A tracer's value is unreadable during jit; neither guard may look.
-    check_finite(xp, de_ri=jnp.asarray([np.nan]))
+    check_finite(xp, R=jnp.asarray([np.nan]))
     check_physical(xp, jnp.asarray([9.0]), jnp.asarray([9.0]), 1.0)
 
 
 def test_guards_are_no_ops_on_torch():
     torch = pytest.importorskip('torch')
     xp = array_namespace(torch.zeros(1))
-    check_finite(xp, de_ri=torch.tensor([float('nan')]))
+    check_finite(xp, R=torch.tensor([float('nan')]))
     check_physical(xp, torch.tensor([9.0]), torch.tensor([9.0]), 1.0)
 
 
@@ -391,7 +393,7 @@ def test_a_traced_single_precision_solve_says_it_could_not_be_checked():
             wavelength=900e-9, period=[2000e-9], ucell=_BRANCH_UCELL, thickness=[100e-9],
             type_complex=type_complex, fourier_coefficients='sampled',
             factorization='li').conv_solve()
-        return jnp.asarray(res.res_te_inc.R_s).ravel()[10]
+        return jnp.asarray(res.res_te_inc.r_s).ravel()[10]
 
     def traced(type_complex):
         with warnings.catch_warnings(record=True) as rec:
@@ -415,15 +417,15 @@ def test_the_check_does_not_break_tracing():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
 
-    def de_ri(theta):
+    def R(theta):
         res = fieldwave.rcwa(
             backend=1, pol=0, n_top=1.0, n_bot=5.0, theta=theta, phi=0.3, fto=[6],
             wavelength=900e-9, period=[2000e-9], ucell=_BRANCH_UCELL, thickness=[100e-9],
             type_complex=0, fourier_coefficients='sampled',
             factorization='li').conv_solve()
-        return jnp.sum(jnp.real(jnp.asarray(res.res_te_inc.de_ri_s)))
+        return jnp.sum(jnp.real(jnp.asarray(res.res_te_inc.R_s)))
 
-    grad = jax.jit(jax.grad(de_ri))(jnp.asarray(0.4))
+    grad = jax.jit(jax.grad(R))(jnp.asarray(0.4))
     assert np.isfinite(float(grad))
 
 
@@ -452,10 +454,10 @@ def test_branch_tolerance_rescues_a_complex_angle_at_single_precision():
     raising the cutoff brings it to ~1e-6. The same setting is *wrong* for a weak absorber —
     that trade is the documented reason this is a scoped override and not a new default.
     """
-    ref = np.asarray(_branch_solve(0, **_REGIMES['complex angle']).res_te_inc.R_s).ravel()
+    ref = np.asarray(_branch_solve(0, **_REGIMES['complex angle']).res_te_inc.r_s).ravel()
 
     def err():
-        got = np.asarray(_branch_solve(1, **_REGIMES['complex angle']).res_te_inc.R_s).ravel()
+        got = np.asarray(_branch_solve(1, **_REGIMES['complex angle']).res_te_inc.r_s).ravel()
         return float(np.abs(got - ref).max())
 
     with warnings.catch_warnings():

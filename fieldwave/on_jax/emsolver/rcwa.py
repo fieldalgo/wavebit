@@ -8,79 +8,18 @@ from functools import partial
 from ._base import _BaseRCWA, jax_device_set
 from ..._core.engine import CoreFactorizationMixin
 from ..._core.fields import field_1d, field_1d_conical, field_2d, field_plot
+from ..._core.result import Result, ResultSub
 from ..._core.modeler import Modeling
 
 
 @jax.tree_util.register_pytree_node_class
-class ResultJax:
-    """Solve result. Registered as a pytree so a jitted method can return one."""
-
-    def __init__(self, res=None, res_te_inc=None, res_tm_inc=None):
-
-        self.res = res
-        self.res_te_inc = res_te_inc
-        self.res_tm_inc = res_tm_inc
-
-    def tree_flatten(self):
-        return (self.res, self.res_te_inc, self.res_tm_inc), None
-
-    @classmethod
-    def tree_unflatten(cls, aux_data, children):
-        return cls(*children)
-
-    @property
-    def de_ri(self):
-        if self.res is not None:
-            return self.res.de_ri
-        elif self.res_te_inc is not None and self.res_tm_inc is not None:
-            return 0.5 * (self.res_te_inc.de_ri + self.res_tm_inc.de_ri)
-        elif self.res_te_inc is not None:
-            return self.res_te_inc.de_ri
-        elif self.res_tm_inc is not None:
-            return self.res_tm_inc.de_ri
-        else:
-            return None
-
-    @property
-    def de_ti(self):
-        if self.res is not None:
-            return self.res.de_ti
-        elif self.res_te_inc is not None and self.res_tm_inc is not None:
-            return 0.5 * (self.res_te_inc.de_ti + self.res_tm_inc.de_ti)
-        elif self.res_te_inc is not None:
-            return self.res_te_inc.de_ti
-        elif self.res_tm_inc is not None:
-            return self.res_tm_inc.de_ti
-        else:
-            return None
+class ResultJax(Result):
+    """Shared container, registered as a pytree so a jitted method can return one."""
 
 
 @jax.tree_util.register_pytree_node_class
-class ResultSubJax:
-    """One incidence's amplitudes and efficiencies; a pytree for the same reason as ResultJax."""
-
-    _FIELDS = ('R_s', 'R_p', 'T_s', 'T_p',
-               'de_ri', 'de_ri_s', 'de_ri_p', 'de_ti', 'de_ti_s', 'de_ti_p')
-
-    def tree_flatten(self):
-        return tuple(getattr(self, name) for name in self._FIELDS), None
-
-    @classmethod
-    def tree_unflatten(cls, aux_data, children):
-        return cls(*children)
-
-    def __init__(self, R_s, R_p, T_s, T_p, de_ri, de_ri_s, de_ri_p, de_ti, de_ti_s, de_ti_p):
-        self.R_s = R_s
-        self.R_p = R_p
-        self.T_s = T_s
-        self.T_p = T_p
-        self.de_ri = de_ri
-        self.de_ri_s = de_ri_s
-        self.de_ri_p = de_ri_p
-
-        self.de_ti = de_ti
-        self.de_ti_s = de_ti_s
-        self.de_ti_p = de_ti_p
+class ResultSubJax(ResultSub):
+    """Shared container; a pytree for the same reason as :class:`ResultJax`."""
 
 
 class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
@@ -257,7 +196,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         res_te_inc = ResultSubJax(**result_dict['res_te_inc']) if 'res_te_inc' in result_dict else None
         res_tm_inc = ResultSubJax(**result_dict['res_tm_inc']) if 'res_tm_inc' in result_dict else None
 
-        result = ResultJax(res_psi, res_te_inc, res_tm_inc)
+        result = ResultJax(res_psi, res_te_inc, res_tm_inc, fto=self.fto)
 
         return result
 
@@ -343,17 +282,15 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         under development
         """
 
-        de_ri, de_ti = jax.vmap(self.conv_solve)(ucell_list)
+        R, T = jax.vmap(self.conv_solve)(ucell_list)
 
-        return de_ri, de_ti
+        return R, T
 
     def run_ucell_pmap(self, ucell_list):
         """
         under development
         """
 
-        de_ri, de_ti = jax.pmap(self.conv_solve)(ucell_list)
+        R, T = jax.pmap(self.conv_solve)(ucell_list)
 
-        de_ri = jnp.array(de_ri)
-        de_ti = jnp.array(de_ti)
-        return de_ri, de_ti
+        return jnp.array(R), jnp.array(T)

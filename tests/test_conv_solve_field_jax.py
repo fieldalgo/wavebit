@@ -60,8 +60,8 @@ def test_jit_matches_the_eager_path(case):
     eager, field_eager = solver.conv_solve_field_no_jit(res_x=res_x, res_y=res_y, res_z=res_z)
 
     assert np.allclose(np.asarray(field), np.asarray(field_eager), rtol=0, atol=1e-10)
-    assert np.allclose(np.asarray(jitted.de_ti), np.asarray(eager.de_ti), rtol=0, atol=1e-12)
-    assert np.allclose(np.asarray(jitted.de_ri), np.asarray(eager.de_ri), rtol=0, atol=1e-12)
+    assert np.allclose(np.asarray(jitted.T), np.asarray(eager.T), rtol=0, atol=1e-12)
+    assert np.allclose(np.asarray(jitted.R), np.asarray(eager.R), rtol=0, atol=1e-12)
 
 
 @pytest.mark.parametrize('case', list(CASES))
@@ -105,7 +105,7 @@ def test_no_jit_still_auto_detects_without_a_geometry():
                                                           geometry=solver.freeze_geometry())
 
     assert np.array_equal(np.asarray(auto_field), np.asarray(frozen_field))
-    assert np.array_equal(np.asarray(auto.de_ti), np.asarray(frozen.de_ti))
+    assert np.array_equal(np.asarray(auto.T), np.asarray(frozen.T))
 
 
 @pytest.mark.parametrize('fourier_coefficients', ['sampled', 'integrated'])
@@ -120,7 +120,7 @@ def test_every_traceable_fourier_strategy_runs_under_jit(fourier_coefficients):
                                             geometry=solver.freeze_geometry())
 
     assert np.asarray(field).shape == (1, 4, 4, 4, 6)
-    assert np.isfinite(np.asarray(result.de_ti)).all()
+    assert np.isfinite(np.asarray(result.T)).all()
 
 
 def test_a_freeze_recompiles_only_when_its_content_moves():

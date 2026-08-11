@@ -22,8 +22,8 @@ def run_1d(option, plot_figure=False):
     (top_refl_info_te, top_tran_info_te, top_refl_info_tm, top_tran_info_tm,
      bottom_refl_info_te, bottom_tran_info_te, bottom_refl_info_tm, bottom_tran_info_tm, reti_field_cell) \
         = reti.run_res3(**option, grating_type=0, matlab_plot_field=0, res3_npts=res_z)
-    # print('reti de_ri', np.array(reti_de_ri).flatten())
-    # print('reti de_ti', np.array(reti_de_ti).flatten())
+    # print('reti R', np.array(reti_de_ri).flatten())
+    # print('reti T', np.array(reti_de_ti).flatten())
 
     reti_field_cell = reti_field_cell[:, None, :, :]
     reti_field_cell = reti_field_cell[res_z:-res_z]
@@ -53,18 +53,18 @@ def run_1d(option, plot_figure=False):
         reti_de_ri_te, reti_de_ti_te = np.array(top_refl_info_te.efficiency).T,  np.array(top_tran_info_te.efficiency).T
         reti_de_ri_tm, reti_de_ti_tm = np.array(top_refl_info_tm.efficiency).T, np.array(top_tran_info_tm.efficiency).T
 
-        # de_ri_te, de_ti_te = np.array(res_t.res_te_inc.de_ri).T,  np.array(res_t.res_te_inc.de_ti).T
-        # de_ri_tm, de_ti_tm = np.array(res_t.res_tm_inc.de_ri).T,  np.array(res_t.res_tm_inc.de_ti).T
+        # de_ri_te, de_ti_te = np.array(res_t.res_te_inc.R).T,  np.array(res_t.res_te_inc.T).T
+        # de_ri_tm, de_ti_tm = np.array(res_t.res_tm_inc.R).T,  np.array(res_t.res_tm_inc.T).T
         #
         # de_ri_te = de_ri_te[de_ri_te > 1E-5]
         # de_ti_te = de_ti_te[de_ti_te > 1E-5]
         # de_ri_tm = de_ri_tm[de_ri_tm > 1E-5]
         # de_ti_tm = de_ti_tm[de_ti_tm > 1E-5]
 
-        de_ri, de_ti = np.array(res_t.res.de_ri).T,  np.array(res_t.res.de_ti).T
+        R, T = np.array(res_t.res.R).T,  np.array(res_t.res.T).T
 
-        de_ri = de_ri[de_ri > 1E-5]
-        de_ti = de_ti[de_ti > 1E-5]
+        R = R[R > 1E-5]
+        T = T[T > 1E-5]
 
         # reti_R_s_te = top_refl_info_te.amplitude_TE
         # reti_T_s_te = top_tran_info_te.amplitude_TE
@@ -77,8 +77,8 @@ def run_1d(option, plot_figure=False):
         # T_p_tm = res_t.res_tm_inc.T_p
 
         print(bds[i])
-        print('de_ri', np.linalg.norm(de_ri - reti_de_ri_te),
-              'de_ti', np.linalg.norm(de_ti - reti_de_ti_te),
+        print('R', np.linalg.norm(R - reti_de_ri_te),
+              'T', np.linalg.norm(T - reti_de_ti_te),
               )
 
         for i_field in range(reti_field_cell.shape[-1]):

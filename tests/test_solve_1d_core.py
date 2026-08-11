@@ -4,7 +4,7 @@ Three properties, one implementation:
   * wiring        — driving the core through ``rcwa``/``conv_solve`` gives the same numbers
                     as calling it directly (the mixin passes the right arguments);
   * cross-backend — the same core on numpy / jax / torch agrees to ~1e-10;
-  * gradients     — d(sum de_ti)/ds through the complex chain agrees across jax / torch / FD.
+  * gradients     — d(sum T)/ds through the complex chain agrees across jax / torch / FD.
 
 The physics oracle lives in test_golden_legacy_parity.py: reference values frozen from the
 legacy transfer-matrix chains before they were replaced. Comparing against ``conv_solve``
@@ -19,7 +19,7 @@ from fieldwave._core.solve_1d import solve_1d, solve_1d_conical
 
 
 def _run_and_inputs(pol, ucell, thickness, n_top, n_bot, wl, period, fto, theta):
-    """Solve via the public API and return (its de_ri/de_ti, the same inputs)."""
+    """Solve via the public API and return (its R/T, the same inputs)."""
     solver = fieldwave.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=None,
                           pol=pol, fto=fto, period=period, wavelength=wl,
                           thickness=thickness, ucell=ucell)
@@ -30,7 +30,7 @@ def _run_and_inputs(pol, ucell, thickness, n_top, n_bot, wl, period, fto, theta)
     inputs = dict(pol=pol, wavelength=wl, kx=kx, n_top=n_top, n_bot=n_bot,
                   theta=solver.theta, thickness=solver.thickness,
                   epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
-    return (np.array(via_api.de_ri), np.array(via_api.de_ti)), inputs
+    return (np.array(via_api.R), np.array(via_api.T)), inputs
 
 
 def _assert_same_answer(via_api, direct):
@@ -104,7 +104,7 @@ def test_core_cross_backend(case, backend):
 
 @pytest.mark.parametrize('pol', [0, 1], ids=['te', 'tm'])
 def test_core_gradient_jax_torch_fd(pol):
-    """d(sum de_ti)/ds where s scales a real perturbation of the layer eps-conv matrix."""
+    """d(sum T)/ds where s scales a real perturbation of the layer eps-conv matrix."""
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
     import jax.numpy as jnp
@@ -168,7 +168,7 @@ def _run_and_inputs_conical(ucell, thickness, n_top, n_bot, wl, period, fto, the
     inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_top, n_bot=n_bot,
                   theta=solver.theta, psi=solver.psi, thickness=solver.thickness,
                   epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
-    return (np.array(via_api.de_ri), np.array(via_api.de_ti)), inputs
+    return (np.array(via_api.R), np.array(via_api.T)), inputs
 
 
 CONICAL_CASES = [
@@ -210,7 +210,7 @@ def test_conical_cross_backend(case, backend):
 
 
 def test_conical_gradient_jax_torch_fd():
-    """d(sum de_ti)/ds through the coupled s/p conical chain: jax == torch == finite-diff."""
+    """d(sum T)/ds through the coupled s/p conical chain: jax == torch == finite-diff."""
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
     import jax.numpy as jnp

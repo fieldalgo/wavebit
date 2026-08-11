@@ -85,7 +85,7 @@ def test_propagating_incidence_matches_reticolo():
 
     worst = 0.0
     for i, j in prop:
-        got = np.asarray(_solve(g, i, j).R_s).ravel()[FTO].real
+        got = np.asarray(_solve(g, i, j).r_s).ravel()[FTO].real
         worst = max(worst, abs(got - want[i, j]))
     assert worst < 2e-13, worst
 
@@ -103,7 +103,7 @@ def test_propagating_incidence_conserves_energy():
     for i, j in prop:
         te = _solve(g, i, j)
         total = sum(float(np.nansum(np.asarray(a).real))
-                    for a in (te.de_ri_s, te.de_ri_p, te.de_ti_s, te.de_ti_p))
+                    for a in (te.R_s, te.R_p, te.T_s, te.T_p))
         worst = max(worst, abs(1.0 - total))
     assert worst < 1e-12, worst
 
@@ -128,7 +128,7 @@ def test_evanescent_incidence_matches_reticolo():
 
     worst = 0.0
     for i, j in evan:
-        got = np.asarray(_solve(g, i, j).R_s).ravel()[FTO].real
+        got = np.asarray(_solve(g, i, j).r_s).ravel()[FTO].real
         worst = max(worst, abs(got - want[i, j]))
     assert worst < 2e-13, worst
 
@@ -155,7 +155,7 @@ def test_double_precision_agrees_across_backends_at_a_complex_angle(backend):
                              ucell=g['ucell'], thickness=list(g['thickness']),
                              type_complex=0, fourier_coefficients='integrated',
                              factorization='li').conv_solve()
-        return complex(np.asarray(res.res_te_inc.R_s).ravel()[40])
+        return complex(np.asarray(res.res_te_inc.r_s).ravel()[40])
 
     reference, got = solve(0), solve(backend)
     assert abs(reference) < 1.0, reference
@@ -184,6 +184,6 @@ def test_uniform_stack_does_not_diffract_at_a_complex_angle():
                          thickness=list(g['thickness']),
                          fourier_coefficients='integrated',
                          factorization='li').conv_solve()
-    R = np.asarray(res.res_te_inc.R_s).ravel()
+    R = np.asarray(res.res_te_inc.r_s).ravel()
     off_centre = np.abs(np.delete(R, FTO)).max()
     assert off_centre < 1e-12, off_centre

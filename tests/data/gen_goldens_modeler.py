@@ -36,8 +36,8 @@ for name, instr in INSTRUCTIONS.items():
         out[f'{name}__L{i}__x'] = np.asarray(x)
         out[f'{name}__L{i}__y'] = np.asarray(y)
     res = solver.conv_solve()
-    out[f'{name}__de_ri'] = np.asarray(res.res.de_ri)
-    out[f'{name}__de_ti'] = np.asarray(res.res.de_ti)
+    out[f'{name}__de_ri'] = np.asarray(res.res.R)
+    out[f'{name}__de_ti'] = np.asarray(res.res.T)
 
 # rectangle_no_approximation / draw, exercised by test_fixes
 solver = fieldwave.rcwa(backend=0, period=[1000.0, 1000.0], thickness=[100.0], fto=[2, 2],

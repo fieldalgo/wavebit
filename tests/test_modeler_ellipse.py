@@ -192,8 +192,8 @@ def solve_vector(n_split, backend=0):
     e = ELLIPSE
     ucell = [[e['n_base'], [['ellipse', e['cx'], e['cy'], e['lx'], e['ly'], e['n_index'],
                              e['angle'], n_split, n_split]]]]
-    de_ti = fieldwave.rcwa(backend=backend, ucell=ucell, **SOLVE_KW).conv_solve().de_ti
-    return float(np.sum(np.asarray(de_ti)))
+    T = fieldwave.rcwa(backend=backend, ucell=ucell, **SOLVE_KW).conv_solve().T
+    return float(np.sum(np.asarray(T)))
 
 
 def test_efficiency_converges_monotonically_in_n_split():
@@ -224,7 +224,7 @@ def test_converged_efficiency_matches_a_raster_of_the_same_ellipse():
 
     raster = float(np.sum(fieldwave.rcwa(backend=0, ucell=ucell,
                                          fourier_coefficients='sampled', factorization='li',
-                                         **SOLVE_KW).conv_solve().de_ti))
+                                         **SOLVE_KW).conv_solve().T))
 
     assert solve_vector(320) == pytest.approx(raster, abs=2e-4)
 
@@ -246,11 +246,11 @@ def test_converged_efficiency_matches_the_analytic_shape_path():
         ucell = [dict(n_base=e['n_base'],
                       shapes=[dict(type='ellipse', cx=e['cx'], cy=e['cy'], lx=e['lx'],
                                    ly=e['ly'], angle=angle, n_index=e['n_index'])])]
-        return float(np.sum(fieldwave.rcwa(backend=0, ucell=ucell, **kw).conv_solve().de_ti))
+        return float(np.sum(fieldwave.rcwa(backend=0, ucell=ucell, **kw).conv_solve().T))
 
     ucell = [[e['n_base'], [['ellipse', e['cx'], e['cy'], e['lx'], e['ly'], e['n_index'],
                              e['angle'], 240, 240]]]]
-    vector = float(np.sum(fieldwave.rcwa(backend=0, ucell=ucell, **kw).conv_solve().de_ti))
+    vector = float(np.sum(fieldwave.rcwa(backend=0, ucell=ucell, **kw).conv_solve().T))
 
     assert vector == pytest.approx(analytic(e['angle']), rel=0.01)
     assert abs(vector - analytic(-e['angle'])) > 10 * abs(vector - analytic(e['angle']))
@@ -264,7 +264,7 @@ def test_the_other_backends_decompose_the_ellipse_the_same_way(backend):
 
 
 def _grad_and_difference(param, value, step, angle, n_split):
-    """Autograd derivative of ``sum(de_ti)`` and the central difference beside it (torch)."""
+    """Autograd derivative of ``sum(T)`` and the central difference beside it (torch)."""
     import torch
 
     def total(overrides):
@@ -276,7 +276,7 @@ def _grad_and_difference(param, value, step, angle, n_split):
                   [['ellipse', args['cx'], args['cy'], args['lx'], args['ly'],
                     ELLIPSE['n_index'], args['angle'], n_split, n_split]]]]
         kw = dict(SOLVE_KW, fto=[3, 3])
-        return torch.sum(fieldwave.rcwa(backend=2, ucell=ucell, **kw).conv_solve().de_ti)
+        return torch.sum(fieldwave.rcwa(backend=2, ucell=ucell, **kw).conv_solve().T)
 
     p = torch.tensor(value, dtype=torch.float64, requires_grad=True)
     total({param: p}).backward()

@@ -238,12 +238,19 @@ def conv_mats(xp, regions, n_base, fto_x, fto_y, period, normal_grid, dtype, cdt
     is_dc = (KY == 0) & (KX == 0)
     zero = xp.zeros(KY.shape, dtype=cdtype)
 
-    eps_bg = xp.conj(xp.astype(xp.asarray(n_base, dtype=cdtype), cdtype)) ** 2
+    # `n**2`, not `conj(n)**2`. FieldWave works in `e^{-iwt}` throughout (`Im(n) > 0` = loss)
+    # with no conjugation on the way in — the same sentence `analytic.assemble_eps_coeffs`
+    # carries, and this builder is its later copy. It kept the conjugate that the smooth path
+    # was moved off in 2026-08, which turned an absorbing painted layer into a gain medium:
+    # `R + T` up to 1.11 and reflectance off by 0.16 on gold. Invisible to `test_boundary.py`,
+    # which builds every shape with a real `n_index`, where the two spellings are identical.
+    # See `docs/time-convention-audit.md` §6.
+    eps_bg = xp.astype(xp.asarray(n_base, dtype=cdtype), cdtype) ** 2
     eps_c = xp.where(is_dc, eps_bg, zero)
     inv_c = xp.where(is_dc, 1.0 / eps_bg, zero)
 
     for n_index, polys in regions:
-        eps_s = xp.conj(xp.astype(xp.asarray(n_index, dtype=cdtype), cdtype)) ** 2
+        eps_s = xp.astype(xp.asarray(n_index, dtype=cdtype), cdtype) ** 2
         ft = zero
         for V in polys:
             ft = ft + polygon_ft(xp, V, KY, KX, (Px, Py), lattice)

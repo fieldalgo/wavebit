@@ -632,6 +632,6 @@ def test_a_real_grating_matches_the_2ff_solve(fto, theta_deg, phi_deg):
     states = vacuum_sp_states(np, kx, ky, ff, order=fto * (2 * fto + 1) + fto)
     for psi, res, pol in zip(states, (ref.res_te_inc, ref.res_tm_inc), ('TE/s', 'TM/p')):
         got = solve_uniform_stack(WL, kx, ky, layers, ff, psi)
-        want = (float(np.asarray(res.de_ri).sum()), float(np.asarray(res.de_ti).sum()))
+        want = (float(np.asarray(res.R).sum()), float(np.asarray(res.T).sum()))
         gap = max(abs(a - b) for a, b in zip(got, want))
         assert gap < 1e-12, f'{pol}, fto={fto}, {theta_deg}/{phi_deg} deg: {gap:.2e}'

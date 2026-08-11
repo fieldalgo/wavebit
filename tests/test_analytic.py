@@ -162,7 +162,7 @@ def test_axis_aligned_matches_raster_nvf():
 
     def total(ucell, psi, **kw):
         res = fieldwave.rcwa(backend=0, ucell=ucell, psi=psi, **cfg, **kw).conv_solve()
-        return float(np.sum(np.asarray(res.de_ri)))
+        return float(np.sum(np.asarray(res.R)))
 
     for psi in (np.pi / 2, 0.0):                       # TE, then TM
         want = total(analytic, psi)
@@ -245,7 +245,7 @@ def test_metal_rod_absorbs_end_to_end(psi):
     absent is as much the assertion as the number is.
 
     Why this rather than a comparison against the same rod rastered: the two NVF schemes do not
-    agree closely for a metal. Their gap here is ~3e-3 on ``sum(de_ti)`` at ``fto=8`` and does
+    agree closely for a metal. Their gap here is ~3e-3 on ``sum(T)`` at ``fto=8`` and does
     not shrink when the raster is refined (128 -> 256 moves it by 1%), because they are
     different factorizations that meet only as ``fto -> inf``, and ``|eps|`` this large converges
     slowly. A tolerance loose enough to pass would be looser than the effect being guarded.
@@ -263,7 +263,7 @@ def test_metal_rod_absorbs_end_to_end(psi):
                              theta=0.35, phi=0.4, period=(P, P), wavelength=0.777,
                              thickness=(0.25,), fto=(8, 8)).conv_solve()
 
-    total = float(np.sum(np.asarray(res.de_ri)).real + np.sum(np.asarray(res.de_ti)).real)
+    total = float(np.sum(np.asarray(res.R)).real + np.sum(np.asarray(res.T)).real)
     assert 0.5 < total < 0.95, total       # absorbing, and absorbing by a visible margin
 
 
@@ -288,7 +288,7 @@ def test_analytic_shape_parameters_are_absolute_lengths():
 
     def total(ucell, **kw):
         res = fieldwave.rcwa(backend=0, ucell=ucell, **cfg, **kw).conv_solve()
-        return float(np.sum(np.asarray(res.de_ri)))
+        return float(np.sum(np.asarray(res.R)))
 
     # The two readings separate by ~90x, so the threshold is not load-bearing; it is set
     # above the analytic-vs-raster gap and far below the misreading. That gap widened from
@@ -316,7 +316,7 @@ def test_energy_conservation_lossless():
     ]
     for fto in (5, 8):
         res = fieldwave.rcwa(backend=0, ucell=ucell, fto=(fto, fto), **cfg).conv_solve()
-        tot = np.array(res.de_ri).real.sum() + np.array(res.de_ti).real.sum()
+        tot = np.array(res.R).real.sum() + np.array(res.T).real.sum()
         assert abs(tot - 1.0) < 1e-9
 
 
@@ -333,7 +333,7 @@ def test_cross_backend_agreement():
 
     def T(bk):
         return float(np.array(fieldwave.rcwa(backend=bk, ucell=ucell, fto=(6, 6), **cfg)
-                              .conv_solve().de_ti).real.sum())
+                              .conv_solve().T).real.sum())
 
     tn, tj, tt = T(0), T(1), T(2)
     assert abs(tn - tj) < 1e-10
@@ -352,7 +352,7 @@ def _fd_grad_lx(shape_type, lx0=0.5):
                  **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
         uc = [dict(n_base=1.0, shapes=[s])]
         return float(np.array(fieldwave.rcwa(backend=0, ucell=uc, fto=(6, 6), **cfg)
-                              .conv_solve().de_ti).real.sum())
+                              .conv_solve().T).real.sum())
 
     h = 1e-5
     return (T(lx0 + h) - T(lx0 - h)) / (2 * h), cfg
@@ -366,7 +366,7 @@ def test_torch_gradient(shape_type):
     s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, n_index=2.5,
              **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
     res = fieldwave.rcwa(backend=2, ucell=[dict(n_base=1.0, shapes=[s])], fto=(6, 6), **cfg).conv_solve()
-    T = res.de_ti.real.sum()
+    T = res.T.real.sum()
     T.backward()
     assert np.isfinite(float(lx.grad))
     assert abs(float(lx.grad) - fd) < 1e-3
@@ -382,7 +382,7 @@ def test_jax_gradient(shape_type):
         s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, n_index=2.5,
                  **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
         r = fieldwave.rcwa(backend=1, ucell=[dict(n_base=1.0, shapes=[s])], fto=(6, 6), **cfg).conv_solve()
-        return jnp.real(r.de_ti).sum()
+        return jnp.real(r.T).sum()
 
     g = float(jax.grad(loss)(jnp.array(0.5)))
     assert np.isfinite(g)
@@ -401,7 +401,7 @@ def test_analytic_beats_staircase_tilted():
     stair = [[1.0, [['rectangle', c, c, L, L, NR, ang, 24, 24]]]]
 
     def t0(res):
-        d = np.array(res.de_ti).real
+        d = np.array(res.T).real
         return d[d.shape[0] // 2, d.shape[0] // 2]
 
     ref = t0(fieldwave.rcwa(backend=0, ucell=analytic, fto=(15, 15), **cfg).conv_solve())
@@ -425,7 +425,7 @@ def test_a_circle_is_written_with_one_length():
     The transform read ``lx`` as the diameter while the normal field read ``ly`` as a second
     semi-axis, and the two disagreed about the default (``lx`` versus ``500.0``). So passing
     ``ly != lx`` built one structure for ``eps`` and another for the projector — 14% on
-    ``sum(de_ri)`` — and *omitting* ``ly``, the natural way to write a circle, degenerated the
+    ``sum(R)`` — and *omitting* ``ly``, the natural way to write a circle, degenerated the
     normal field by 6%. Both resolve through ``shape_geometry`` now.
 
     That fix made ``ly`` harmless rather than absent, which this test used to pin: all three
@@ -440,7 +440,7 @@ def test_a_circle_is_written_with_one_length():
                          **CIRCLE_CFG).conv_solve()
     # Only a regression anchor, and it rides on ``normal_grid`` — it read
     # 0.161262158771 while that default was 256, and moved 1.1e-4 when the default rose to 1024.
-    assert float(np.sum(np.asarray(got.de_ri))) == pytest.approx(0.161153064902, abs=1e-9)
+    assert float(np.sum(np.asarray(got.R))) == pytest.approx(0.161153064902, abs=1e-9)
 
 
 @pytest.mark.parametrize('ly, why', [(0.5 * CIRCLE_P, 'a second length that agrees'),
@@ -513,7 +513,7 @@ def test_overlapping_shapes_move_the_answer_while_the_vector_path_does_not():
 
     def total(ucell, **extra):
         return float(np.sum(np.asarray(
-            fieldwave.rcwa(backend=0, ucell=ucell, **extra, **cfg).conv_solve().de_ti)))
+            fieldwave.rcwa(backend=0, ucell=ucell, **extra, **cfg).conv_solve().T)))
 
     want = total(raster[None], fourier_coefficients='sampled')
     vector = total([[n_base, [['rectangle', cx, 150.0, 120.0, 120.0, n, 0, 0, 0]
@@ -564,7 +564,7 @@ def test_overlapping_shapes_are_refused_until_the_layer_says_how_to_combine():
     assert "combine='add'" in message and 'block path' in message
 
     # And the escape hatch actually escapes, to the superposition that was always computed.
-    assert float(np.sum(np.asarray(solve(shapes, combine='add').de_ti))) > 0.0
+    assert float(np.sum(np.asarray(solve(shapes, combine='add').T))) > 0.0
 
 
 def test_disjoint_shapes_never_have_to_answer_the_question():
@@ -575,10 +575,10 @@ def test_disjoint_shapes_never_have_to_answer_the_question():
     costs them the staircase-free rotation it exists to provide.
     """
     shapes = [rod(70.0, lx=100.0), rod(220.0, lx=100.0, n_index=3.0)]
-    want = float(np.sum(np.asarray(solve(shapes).de_ti)))
+    want = float(np.sum(np.asarray(solve(shapes).T)))
 
     for combine in ('add', 'paint'):
-        assert float(np.sum(np.asarray(solve(shapes, combine=combine).de_ti))) == want
+        assert float(np.sum(np.asarray(solve(shapes, combine=combine).T))) == want
 
 
 def test_touching_is_not_overlapping():
@@ -603,8 +603,8 @@ def test_paint_now_builds_and_is_not_the_sum():
     unbuildable rather than refused.
     """
     shapes = [rod(130.0), rod(190.0, n_index=3.0)]
-    painted = float(np.sum(np.asarray(solve(shapes, combine='paint').de_ti)))
-    added = float(np.sum(np.asarray(solve(shapes, combine='add').de_ti)))
+    painted = float(np.sum(np.asarray(solve(shapes, combine='paint').T)))
+    added = float(np.sum(np.asarray(solve(shapes, combine='add').T)))
     assert 0.0 < painted < 1.0
     # These rods overlap over a small part of the cell, so the two structures are close and
     # the gap is ~1e-3 -- four orders above the 1e-12 the two spellings agree to when nothing
@@ -651,7 +651,7 @@ def test_a_shape_dict_that_says_something_unreadable_is_refused(shape, match):
 ])
 def test_a_shape_dict_that_says_one_thing_is_accepted(shape):
     """The refusal is for saying more than the type has room for, not for using the path."""
-    assert float(np.sum(np.asarray(solve([shape]).de_ti))) > 0.0
+    assert float(np.sum(np.asarray(solve([shape]).T))) > 0.0
 
 
 def test_a_traced_ly_on_a_circle_is_refused_where_a_comparison_cannot_reach():
@@ -753,7 +753,7 @@ def test_the_check_steps_aside_for_a_traced_solve():
 
     def total(cx):
         return jnp.sum(fieldwave.rcwa(backend=1, ucell=layer(cx),
-                                      **CHECK_CFG).conv_solve(geometry=frozen).de_ti)
+                                      **CHECK_CFG).conv_solve(geometry=frozen).T)
 
     assert float(jax.jit(total)(jnp.asarray(130.0))) > 0.0     # overlapping, and traced: allowed
     with pytest.raises(ValueError, match='overlap'):
@@ -773,7 +773,7 @@ def _vector_box(cx, n_index=2.0):
 def _vector_total(objects, *combine):
     layer = [1.0, objects, *combine]
     return float(np.sum(np.asarray(
-        fieldwave.rcwa(backend=0, ucell=[layer], **VECTOR_CFG).conv_solve().de_ti)))
+        fieldwave.rcwa(backend=0, ucell=[layer], **VECTOR_CFG).conv_solve().T)))
 
 
 def test_the_vector_path_refuses_the_superposition_it_cannot_draw():
@@ -813,7 +813,7 @@ def test_combine_is_free_while_nothing_overlaps():
                    n_index=2.0) for cx in (80.0, 220.0)]
     analytic = float(np.sum(np.asarray(
         fieldwave.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=shapes)],
-                       **VECTOR_CFG).conv_solve().de_ti)))
+                       **VECTOR_CFG).conv_solve().T)))
     assert analytic == pytest.approx(disjoint, abs=2e-3)
 
 

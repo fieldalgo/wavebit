@@ -129,8 +129,8 @@ def test_factorization_feeds_solve_bit_exactly():
     epx, epy, epz = core_dfs(ucell, fto[0], fto[1])
     ri, ti = solve_1d(0, wl, kx, n_top, n_bot, solver.theta, solver.thickness, epx, epy, epz)
 
-    assert np.array_equal(np.array(legacy.de_ri), np.array(ri))
-    assert np.array_equal(np.array(legacy.de_ti), np.array(ti))
+    assert np.array_equal(np.array(legacy.R), np.array(ri))
+    assert np.array_equal(np.array(legacy.T), np.array(ti))
 
 
 # ------------------------------------------------- end-to-end differentiability (the point)
@@ -142,7 +142,7 @@ def _chain_1d(fac_kwargs, ucell, kx, theta):
 
 
 def test_end_to_end_gradient_wrt_ucell_1d():
-    """d(sum de_ti)/d(ucell raster): jax == torch == finite-diff, through factorization."""
+    """d(sum T)/d(ucell raster): jax == torch == finite-diff, through factorization."""
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
     import jax.numpy as jnp
@@ -274,12 +274,12 @@ def test_nvf_now_works_on_every_backend():
     for backend in (1, 2):
         pytest.importorskip('jax' if backend == 1 else 'torch')
         got = fieldwave.rcwa(backend=backend, **opts).conv_solve()
-        assert np.allclose(np.asarray(ref.res.de_ti), np.asarray(got.res.de_ti),
+        assert np.allclose(np.asarray(ref.res.T), np.asarray(got.res.T),
                            atol=1e-12, rtol=0), backend
 
 
 def test_nvf_end_to_end_gradient_wrt_ucell():
-    """d(sum de_ti)/d(ucell) through the NVF factorization: jax == torch == finite-diff.
+    """d(sum T)/d(ucell) through the NVF factorization: jax == torch == finite-diff.
 
     The normal vector field is static geometry (precomputed once), so gradients measure the
     permittivity dependence with the interface directions held fixed.
@@ -379,7 +379,7 @@ def test_compression_indices_match_legacy():
 
 
 def test_cfs_end_to_end_gradient_wrt_ucell():
-    """d(sum de_ti)/d(ucell) through the analytic CFS path: jax == torch == finite-diff."""
+    """d(sum T)/d(ucell) through the analytic CFS path: jax == torch == finite-diff."""
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
     import jax.numpy as jnp

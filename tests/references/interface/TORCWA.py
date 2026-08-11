@@ -113,7 +113,7 @@ if __name__ == '__main__':
     }
     res = TORCWA(**option)
 
-    de_ri, de_ti = res.run()
-    print(de_ri.sum() + de_ti.sum())
-    print(de_ri)
-    print(de_ti)
+    R, T = res.run()
+    print(R.sum() + T.sum())
+    print(R)
+    print(T)

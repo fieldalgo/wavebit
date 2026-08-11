@@ -38,7 +38,7 @@ def _jax_losses():
     solver = fieldwave.rcwa(backend=1, **CFG)
 
     def loss(u):
-        return -jnp.sum(solver.conv_solve(ucell=u).res.de_ti)
+        return -jnp.sum(solver.conv_solve(ucell=u).res.T)
 
     u = jnp.asarray(UCELL0)
     opt = optax.adam(LR)
@@ -65,7 +65,7 @@ def _torch_losses():
     out = []
     for _ in range(STEPS):
         opt.zero_grad()
-        value = -torch.sum(solver.conv_solve(ucell=u).res.de_ti)
+        value = -torch.sum(solver.conv_solve(ucell=u).res.T)
         value.backward()
         assert torch.all(torch.isfinite(u.grad)), 'torch gradient went non-finite'
         out.append(float(value.detach()))
