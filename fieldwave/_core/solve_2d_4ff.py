@@ -53,13 +53,22 @@ noticed it failing.
 
 **Layers are joined by scattering matrices, and that is what makes it stable.** The direction
 split is not bookkeeping: it is what lets each layer be propagated by ``exp(i k0 lam_f d)``
-forward and ``exp(-i k0 lam_b d)`` backward, both of which have modulus at most one for *any*
-thickness because forward modes decay towards ``+z`` and backward modes towards ``-z``. Nothing
-grows, so nothing has to be cancelled later. The eigen-decomposition transfer is kept as
-``connecting_algo='TMM'`` for cross-checking and refuses past its range; measured, the two agree
-to 1.2e-15 across eight tensors, three angles and both polarisations, and only the cascade
-reaches an exponent of 2500 — where it returns the closed-form single-interface Fresnel
-reflectance to 4e-16 while the transfer has no answer at all.
+forward and ``exp(-i k0 lam_b d)`` backward. **In a passive medium** both have modulus at most
+one for any thickness — a mode carrying energy towards ``+z`` cannot gain amplitude on the way,
+so ``Im(lam_f) >= 0``, and the mirrored statement holds backwards. Nothing grows, so nothing has
+to be cancelled later, and the cascade holds ~1e-13 relative accuracy out to a modal exponent of
+2500 where it reproduces the closed-form single-interface Fresnel reflectance to 4e-16.
+
+**That argument does not cover a gain medium**, where a forward mode amplifies by construction
+(``Im(lam_f) < 0``; measured -0.108 for ``n = 1.5 - 0.1j``) and the propagator is no longer a
+contraction. Measured anyway: it still tracks the Airy closed form to ~1e-13 out to an exponent
+of 113, and past roughly 700 it returns NaN. Nothing here guards that, because for a gain medium
+the growth is the physics rather than an artefact — but the stability claim is about passive
+media and should not be read further.
+
+The eigen-decomposition transfer is kept as ``connecting_algo='TMM'`` for cross-checking; the
+two agree to 1.2e-15 across eight tensors, three angles and both polarisations. Its bound is set
+by *accuracy*, not by overflow — see ``_MAX_EXPONENT``.
 
 What is not here, in the order it will be wanted:
 
@@ -75,9 +84,13 @@ from .backend import array_namespace, eig
 # evanescent and direction is decided by decay instead. See split_forward_backward.
 _FLAT = 1e-12
 
-# exp(i k0 lam d) beyond this is past the point where the eigen-decomposition transfer means
-# anything in float64; a scattering-matrix recursion is the fix, not a larger bound.
-_MAX_EXPONENT = 300.0
+# The transfer inverts a matrix holding exp(+x) and exp(-x) at once, so it loses relative
+# precision like eps*exp(2x) -- measured 1.2e-8 at x = 9.1 against a predicted 1.8e-8, and 8.5e-4
+# by x = 15.9. This bound is where that prediction passes ~1e-9, which is where TMM stops being
+# usable as a cross-check on SMM. It is deliberately far below the overflow point: the earlier
+# value of 300 only caught the crash, and let three decades of silently wrong answers through
+# first (5.1e+25 relative error at x = 34, no complaint).
+_MAX_EXPONENT = 9.0
 
 
 def layer_matrix_4ff(xp, Kx, Ky, exx, exy, exz, eyx, eyy, eyz, ezx, ezy, ezz_i):

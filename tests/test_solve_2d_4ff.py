@@ -322,17 +322,69 @@ def test_a_thick_absorbing_slab_is_a_single_interface(theta_deg):
         assert T == 0.0, f'{pol}-pol: nothing may survive 100 wavelengths of this'
 
 
-def test_the_transfer_still_refuses_what_it_cannot_carry():
-    """``connecting_algo='TMM'`` is kept as a second opinion, not as a fallback.
+def _airy_slab(n, theta_deg, d):
+    """Exact ``(R, T)`` for an isotropic slab between vacuum, s-polarised.
 
-    It has a range, and past it the honest answer is to say so and name the algorithm that does
-    not. Keeping the refusal is what stops the two paths from silently swapping roles.
+    Vacuum on *both* sides, so there is no ``Re(n cos)`` normalisation on ``T`` — including one
+    scales the answer by 1.69 at 35 degrees, which reads exactly like a solver that is wrong in
+    the transmission only.
     """
-    kx, ky = _kxky(0.0)
-    absorbing = np.diag([ABSORBING_N ** 2] * 3).astype(complex)
+    k0, t = 2 * np.pi / WL, np.deg2rad(theta_deg)
+    ct, c2 = np.cos(t), np.sqrt(n ** 2 - np.sin(t) ** 2)
+    r, t12, t21 = (ct - c2) / (ct + c2), 2 * ct / (ct + c2), 2 * c2 / (ct + c2)
+    ph = np.exp(1j * k0 * c2 * d)
+    return (abs(r * (1 - ph ** 2) / (1 - r ** 2 * ph ** 2)) ** 2,
+            abs(t12 * t21 * ph / (1 - r ** 2 * ph ** 2)) ** 2)
+
+
+@pytest.mark.parametrize('thick', [500.0, 4000.0, 10000.0, 30000.0])
+@pytest.mark.parametrize('n', [1.5 + 0.1j, 1.5 - 0.1j], ids=['lossy', 'gain'])
+def test_the_cascade_matches_the_closed_form_across_thicknesses(n, thick):
+    """A closed form over the whole range, where interference is still alive.
+
+    ``test_a_thick_absorbing_slab_is_a_single_interface`` pins the far limit, where the answer
+    stops depending on thickness at all. This pins the way in: at 30000 nm the modal exponent is
+    34 and ``T`` is 2.6e-30, and the cascade still tracks the Airy formula to ~1e-13 relative.
+
+    The gain case (``Im(n) < 0`` under this repo's convention) is included because it is where
+    the SMM stability argument does *not* apply — forward modes amplify there, so the propagator
+    is no longer a contraction. It stays accurate anyway over this range; what it eventually does
+    is return NaN rather than a wrong number, past an exponent of about 700.
+    """
+    kx, ky = _kxky(35.0)
+    layers = [(blocks(np.diag([n ** 2] * 3).astype(complex)), thick)]
+    R, T = solve_uniform_stack(WL, kx, ky, layers, 1, vacuum_sp_states(np, kx, ky, 1)[0])
+    want_r, want_t = _airy_slab(n, 35.0, thick)
+
+    assert R == pytest.approx(want_r, rel=1e-11), f'n={n}, d={thick}'
+    assert T == pytest.approx(want_t, rel=1e-11), f'n={n}, d={thick}'
+
+
+def test_the_transfer_refuses_before_it_becomes_inaccurate():
+    """``connecting_algo='TMM'`` is a second opinion, so its bound must sit where it stops being
+    one — not where it crashes.
+
+    The two are different by three decades. The transfer's relative error grows like
+    ``eps*exp(2x)`` in the modal exponent, so it is already 1.2e-8 out at ``x = 9`` and 8.5e-4 at
+    ``x = 16``, while it does not overflow until about 700. A bound placed at the crash lets all
+    of that through silently; this checks the bound is placed at the accuracy instead, by
+    requiring that whatever TMM still accepts agrees with the cascade.
+    """
+    kx, ky = _kxky(35.0)
+    absorbing = np.diag([(1.5 + 0.1j) ** 2] * 3).astype(complex)
+    psi = vacuum_sp_states(np, kx, ky, 1)[0]
+
+    # just inside the bound: TMM answers, and its answer is still worth having
+    ok = [(blocks(absorbing), 7000.0)]
+    smm = solve_uniform_stack(WL, kx, ky, ok, 1, psi)
+    tmm = solve_uniform_stack(WL, kx, ky, ok, 1, psi, connecting_algo='TMM')
+    for a, b in zip(smm, tmm):
+        assert a == pytest.approx(b, rel=1e-6), 'TMM accepted a case it cannot do accurately'
+
+    # past it: refused, and told where to go instead
     with pytest.raises(ValueError, match="connecting_algo='SMM'"):
-        solve_uniform_stack(WL, kx, ky, [(blocks(absorbing), 60000.0)], 1,
-                            vacuum_sp_states(np, kx, ky, 1)[0], connecting_algo='TMM')
+        solve_uniform_stack(WL, kx, ky, [(blocks(absorbing), 30000.0)], 1, psi,
+                            connecting_algo='TMM')
 
 
 @pytest.mark.parametrize('theta_deg', [0.0, 35.0])
