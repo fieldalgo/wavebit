@@ -192,17 +192,22 @@ def test_the_analytic_normal_field_gets_the_two_axes_the_right_way_round():
     small effect: it takes the worst deviation to 1.0, i.e. somewhere in the cell the field
     comes out square to the radius instead of along it.
 
-    **Both branches are checked, and the second one is the reachable one.** ``lattice=None``
-    builds the sample grid from Px / Py directly; a basis makes that branch unreachable, so a
-    check written only that way pins a path the solver never takes (``engine`` hands the shape
-    paths ``as_lattice(period=...)`` whenever the period is readable). But the pair is read
-    *outside* the branch as well, at :func:`shape_geometry`, which is where a shape that does
-    not name ``cx`` / ``cy`` gets its centre -- so the natural way to write a centred disc stays
-    sensitive with a basis in hand. Measured on this cell, reversing the pair moves the field by
-    1.96 with an explicit centre and no lattice, and by 1.7 with the centre defaulted and a
-    lattice; the remaining combination, explicit centre *and* a lattice, moves by exactly 0.
-    That last cell is why the defaulted case is here: on its own the first assertion would be
-    checking dead code.
+    **Both branches are checked, and the second one is the ordinary one.** ``lattice=None``
+    builds the sample grid from Px / Py directly (in
+    :func:`~fieldwave._core.lattice.sample_grid`, since 2026-08-11 -- one reader for both shape
+    paths), and a basis makes that read unreachable. Counting the calls says how much a check
+    written only that way would pin: ``engine`` hands the shape paths ``as_lattice(period=...)``
+    whenever the period is *readable*, so what is left for ``lattice=None`` is direct callers
+    and a ``grad`` with respect to ``period``, where the pair arrives as a tracer with no primal
+    to read. Rare, not dead -- and not the path this test is here to protect.
+
+    But the pair is read *outside* the branch as well, at :func:`shape_geometry`, which is where
+    a shape that does not name ``cx`` / ``cy`` gets its centre -- so the natural way to write a
+    centred disc stays sensitive with a basis in hand. Measured on this cell, reversing the pair
+    moves the field by 1.96 with an explicit centre and no lattice, and by 1.7 with the centre
+    defaulted and a lattice; the remaining combination, explicit centre *and* a lattice, moves
+    by exactly 0. That last cell is why the defaulted case is here: on its own the first
+    assertion would be pinning the rare branch only.
     """
     Px, Py, r = 2.0, 1.0, 0.3
     Ny, Nx = 129, 257
