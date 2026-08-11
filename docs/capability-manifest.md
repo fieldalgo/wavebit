@@ -1,0 +1,95 @@
+# The capability manifest — what the solver says about itself, and where the line is
+
+Written: 2026-08-11.
+
+Targets:
+- `fieldwave/manifest.py` — the document
+- `tests/test_manifest.py` — what keeps it true
+- `fieldwave/_core/engine.py` — the refusal tables it reads
+- `fieldwave/on_numpy/emsolver/rcwa.py` — the `ucell` setter whose type dispatch it describes
+
+---
+
+## TL;DR
+
+FieldWave has five independent numerical choices — modeling path, Fourier series,
+factorization rule, backend, lattice spelling — and the rules governing them are scattered
+across nine documents and two refusal tables in `_core/engine.py`. Programs outside this
+process need those rules: documentation, configuration UIs, an assistant that recommends
+conditions. Until now the only way to get them was to read the source and retype what you
+found, which is how a consumer ends up confidently telling users about a flag that was
+deleted a year ago.
+
+`fieldwave.manifest` publishes them instead, as one JSON document generated from the code
+and checked against it by the suite.
+
+```bash
+python -m fieldwave.manifest > fieldwave-manifest.json
+```
+
+**Decision: capabilities and constraints only.** The manifest says what each path implements,
+what is refused and why, and which spelling of `ucell` selects which path. It does not
+recommend anything.
+
+## The line, and why it is where it is
+
+| In | Out |
+| --- | --- |
+| What each path implements | Which path to use |
+| What is refused, and why | "PyTorch below `fto≈5`" |
+| How a `ucell` selects a path | A vocabulary for describing an experiment |
+| Which material cases are unsolvable | An extraction schema, a system prompt |
+
+The test is whether the fact can be checked against the code. `_FACTORIZATION_IMPLEMENTED_BY`
+can be — build a block-path solver, ask for NVF, watch it refuse. *"PyTorch wins below
+`fto≈5`"* cannot: it is a measurement on one CPU host about a workload, and the solver has no
+opinion about it. A fact that cannot be checked that way does not belong in the module, because
+publishing it would extend the manifest's guarantee to something the guarantee does not cover.
+
+That line also settles a scope question that came up while this was being built. An advisor
+that maps *"my pillars are round and I want to optimise their diameters"* onto a condition
+set is a useful thing, but it is advice about a user's problem rather than a property of the
+solver, and a library that grows a recommendation engine has stopped being a library. It
+lives outside this repository and consumes the manifest. What stays here is the half only
+this repository can know.
+
+## Why the tests are not mirror tests
+
+`fieldwave/manifest.py` reads `_core/engine.py`'s tables at import, so asserting that the two
+agree would assert that a variable equals itself. `tests/test_manifest.py` checks the
+manifest against **runtime behaviour** instead:
+
+| Test | What would have to break for it to fail |
+| --- | --- |
+| Each spelling selects the modeling type it claims | The `ucell` setter's type dispatch changes, or the prose describing a spelling stops matching what it accepts |
+| An option the manifest withholds is refused | A path stops refusing what the manifest says it cannot express |
+| An option the manifest offers actually builds | A path is described as implementing something it refuses |
+| The skewed-cell refusals hold | `_reject_unsupported_lattice` loosens or tightens |
+| Every cited source exists | A file a claim was anchored to is renamed or deleted |
+
+The middle two are the pair that matters: they close the loop the refusal tables sit in the
+middle of, so the manifest is tied to what the solver *does* rather than to what one table
+*says*.
+
+## The constraint that is stated twice
+
+`lattice.refused_on_oblique` describes the two refusals a skewed cell carries, in prose. The
+same two are also listed by name in `paths_refused_on_oblique` and
+`factorizations_refused_on_oblique`, because a consumer deciding what to recommend needs a
+membership test and prose is not one.
+
+Two spellings of one fact drift, and the machine-readable spelling is the one a consumer
+acts on — so a mismatch would leave the document reading correctly and behaving wrongly.
+`test_the_named_and_described_skewed_refusals_agree` is what stops that.
+
+## Refusals are facts, not roadmap
+
+`materials[].supported` is the solver's own answer. `false` means a run cannot be done today,
+and `why` says what would have to change — a new factorization for a patterned anisotropic
+layer, a second site for `mu != 1`, a first-order solver for `eps_xz`. Publishing that is
+deliberate: a consumer that cannot tell "unsupported" from "you spelled it wrong" will send
+users to debug their own input.
+
+The `z_coupled` entry is the one to watch. Its `why` describes work that exists but is not
+reachable — the 4ff operator is written and pinned, nothing dispatches to it, and there is no
+field reconstruction. When that changes, the manifest is where it has to be said.

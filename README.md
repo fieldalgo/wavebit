@@ -292,6 +292,24 @@ most published results are stated in. Field reconstruction (`calculate_field`) w
 either — the SMM recovers the per-layer amplitudes from its cascade afterwards, which is what
 takes it to ~1.3-1.6x.
 
+### Reading these choices from another program
+
+Which path implements which option, what a skewed cell refuses, which material cases are
+unsolvable — all of it is published as one generated JSON document, so a tool that needs it
+does not have to read the source and retype what it finds:
+
+```bash
+python -m fieldwave.manifest > fieldwave-manifest.json
+```
+
+`tests/test_manifest.py` checks it against the solver's actual behaviour, so a path that
+grows or loses an option fails the suite rather than going stale in a consumer.
+
+**Capabilities and constraints only** — the manifest never recommends anything. Choosing
+between the options is advice about your problem rather than a property of the solver, and it
+belongs to whoever is giving the advice. See
+[docs/capability-manifest.md](docs/capability-manifest.md).
+
 ## Conventions
 
 The full contract — every sign, axis, name and unit a script can depend on — is one page:
