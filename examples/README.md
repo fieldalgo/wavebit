@@ -5,7 +5,6 @@ frameworks, no vendored dependencies, nothing that needs a dataset or a GPU.
 
 | Entry | Question it answers |
 | --- | --- |
-| [`rcwa/`](rcwa) | What do the textbook cases look like in FieldWave? Moharam and Lalanne's 1D TE/TM, conical and 2D gratings — the standard results any RCWA implementation is checked against, written out step by step for someone studying the method. |
 | [`block_1d.py`](block_1d.py), [`block_2d.py`](block_2d.py) | How do you describe a structure as drawn shapes instead of a raster? The `_verification.py` file beside each answers the follow-up: does that path agree with the raster it replaces? |
 | [`levelset_2d.py`](levelset_2d.py) | How do you describe a structure whose shape *and topology* are still unknown? A level-set layer, and eight ascent steps on `dJ/d phi` — the shape derivative, straight out of autodiff. |
 
@@ -21,12 +20,17 @@ runs every script from its own directory with `MPLBACKEND=Agg` and fails on a no
 example can run to completion and still be returning R+T > 1. The whole set takes well under a
 minute, which is why it is a separate job from the verification suite rather than part of it.
 
-**It cannot tell you the numbers are right, and the gap is larger than it looks.** Seven of the
-eleven scripts — all of [`rcwa/`](rcwa) — do not import FieldWave at all; they are from-scratch
-reference implementations. Of the four that do, `block_1d.py` solves on PyTorch and
-`block_2d.py` on JAX, and the result guards are NumPy-only. So the `UnphysicalResultWarning`
-condition reaches **two scripts**, the two `_verification.py` files. For the other nine a green
-tick means the code ran, and says nothing about what it printed.
+**It cannot tell you the numbers are right.** All five scripts import FieldWave, but the result
+guards are NumPy-only, and `block_1d.py` and `levelset_2d.py` solve on PyTorch while
+`block_2d.py` solves on JAX. So the `UnphysicalResultWarning` condition reaches **two scripts**,
+the two `_verification.py` files. For the other three a green tick means the code ran, and says
+nothing about what it printed.
+
+Nor does it check what a verification example is *for*. Until 2026-08-11 the 2D one compared a
+block `ucell` against a raster that was the vertical mirror of it — a defect that survived
+because a mirrored structure radiates into the specular order exactly like the original, so the
+two paths agreed to 1e-15 for as long as the only propagating order was the zeroth. Energy was
+conserved throughout. If you add a case here, give it a propagating higher order.
 
 The same check runs locally, from the repository root:
 
@@ -34,4 +38,4 @@ The same check runs locally, from the repository root:
 python tests/run_examples_smoke.py
 ```
 
-It takes a path to narrow the run — `python tests/run_examples_smoke.py examples/rcwa`.
+It takes a path to narrow the run — `python tests/run_examples_smoke.py examples/block_2d.py`.
