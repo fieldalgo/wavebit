@@ -20,9 +20,11 @@ test in this file. The outside check lives in
 ``tests/references/test_4ff_external_goldens.py`` — RETICOLO and fmmax, 21 cases, on goldens
 that were already committed.
 
-Every case here is a uniform layer at one Fourier order. Multi-order is untested — the algebra
-is written in blocks and should extend, but "should extend" is exactly the sort of claim this
-suite exists to disbelieve.
+Every case here is a **uniform** layer. Most run at one Fourier order; the two multi-order
+tests at the end exist because "the algebra is written in blocks and should extend" is exactly
+the sort of claim this suite exists to disbelieve — and because at ``ff = 1`` the entire block
+layout is the identity and can be wrong invisibly. What they cannot reach is order *coupling*,
+which needs a patterned layer and therefore a factorization this solver does not have.
 """
 import numpy as np
 import pytest
@@ -95,6 +97,24 @@ def rt(eps, theta_deg, thick=THICK, alpha_deg=0.0):
     layers = [(blocks(eps), thick)]
     return {'s': solve_uniform_stack(WL, kx, ky, layers, 1, psi_s),
             'p': solve_uniform_stack(WL, kx, ky, layers, 1, psi_p)}
+
+
+PERIOD = 300.0
+
+
+def order_grid(fto, theta_deg, phi_deg=0.0):
+    """``(kx, ky, ff, centre)`` on a flattened ``(ff_y, ff_x)`` grid, as the 2ff path lays it out.
+
+    ``order_grid_kxy`` broadcasts the two 1-D vectors to that grid and everything downstream
+    reads it flattened, so a test that builds the same layout is testing the same indexing.
+    """
+    fx, fy = fto
+    kx = (np.sin(np.deg2rad(theta_deg)) * np.cos(np.deg2rad(phi_deg))
+          + np.arange(-fx, fx + 1) * WL / PERIOD)
+    ky = (np.sin(np.deg2rad(theta_deg)) * np.sin(np.deg2rad(phi_deg))
+          + np.arange(-fy, fy + 1) * WL / PERIOD)
+    KX, KY = np.meshgrid(kx, ky)
+    return KX.ravel(), KY.ravel(), KX.size, fy * (2 * fx + 1) + fx
 
 
 def rot_z(eps, alpha_deg):
@@ -444,3 +464,120 @@ def test_a_multilayer_stack_matches_berreman(theta_deg, algo):
         want = (ref[pol]['R_s'] + ref[pol]['R_p'], ref[pol]['T_s'] + ref[pol]['T_p'])
         gap = max(abs(g - w) for g, w in zip(got, want))
         assert gap < 1e-12, f'{algo}, {theta_deg} deg, {pol}-pol: {gap:.2e}'
+
+
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+@pytest.mark.parametrize('fto', [(1, 1), (2, 2)], ids=['9 orders', '25 orders'])
+@pytest.mark.parametrize('theta_deg,phi_deg', [(0.0, 0.0), (35.0, 0.0), (35.0, 40.0)],
+                         ids=['normal', 'oblique', 'conical'])
+@pytest.mark.parametrize('label,eps', Z_DECOUPLED + Z_COUPLED,
+                         ids=[c[0] for c in Z_DECOUPLED + Z_COUPLED])
+def test_adding_orders_to_a_uniform_stack_changes_nothing(label, eps, theta_deg, phi_deg, fto,
+                                                          algo):
+    """The multi-order gate, and it needs no oracle: a uniform layer cannot diffract.
+
+    Every test above this one runs at a single Fourier order, which leaves the module's whole
+    block layout unexercised — the ``psi[:ff] / psi[ff:2*ff] / ...`` slicing, where an order sits
+    inside a ``4*ff`` state, the ``2*ff`` block sizes in the connecting algorithms, and the count
+    the direction split insists on. All of that is the identity at ``ff = 1`` and can be wrong
+    without a single existing test noticing. "The algebra is written in blocks and should extend"
+    is exactly the claim this suite exists to disbelieve.
+
+    A uniform layer has no structure to couple orders through, so its convolution matrices are
+    scaled identities and every order above zero is a separate, evanescent, unexcited problem.
+    Adding them must therefore leave the answer bit-for-bit — which makes this a statement about
+    indexing alone, with the physics held fixed. At period 300 and wavelength 600 the first order
+    sits at ``kx = 2``, well past the light line, so the evanescent path is exercised throughout.
+
+    Both stable connecting algorithms, because each sizes its own blocks: running only the
+    default left ``eye(2*ff)`` in the Redheffer cascade and the propagation block size reachable
+    only at one order, and mutating both to a hardcoded ``2`` was invisible until this was
+    parametrised. ``'TMM'`` is absent for a reason the test below states.
+    """
+    kx, ky, ff, centre = order_grid(fto, theta_deg, phi_deg)
+    kx1, ky1, ff1, c1 = order_grid((0, 0), theta_deg, phi_deg)
+    layers, layers1 = [(blocks(eps, ff), THICK)], [(blocks(eps, ff1), THICK)]
+
+    for j, pol in enumerate(('s', 'p')):
+        want = solve_uniform_stack(WL, kx1, ky1, layers1, ff1,
+                                   vacuum_sp_states(np, kx1, ky1, ff1, order=c1)[j],
+                                   connecting_algo=algo)
+        got = solve_uniform_stack(WL, kx, ky, layers, ff,
+                                  vacuum_sp_states(np, kx, ky, ff, order=centre)[j],
+                                  connecting_algo=algo)
+        gap = max(abs(a - b) for a, b in zip(got, want))
+        assert gap < 1e-12, (f'{algo}, {label}, {theta_deg}/{phi_deg} deg, {pol}-pol, '
+                             f'ff={ff}: {gap:.2e}')
+
+
+@pytest.mark.parametrize('label,eps', Z_DECOUPLED + Z_COUPLED,
+                         ids=[c[0] for c in Z_DECOUPLED + Z_COUPLED])
+def test_the_operator_decouples_into_one_problem_per_order(label, eps):
+    """Sharper than the end-to-end check, and it localises a layout error to the operator.
+
+    With no structure to mix orders, the ``4*ff`` operator is a permutation away from ``ff``
+    independent ``4x4`` blocks — so its spectrum must be exactly the union of the single-order
+    spectra taken at each order's own ``(kx, ky)``. If the blocks are assembled in the wrong
+    interleaving the answer above can still come out right by symmetry; this cannot.
+
+    The two spectra are matched by optimal assignment rather than by sorting. Most of these
+    eigenvalues are purely imaginary — every order above the light line is evanescent — so their
+    real parts are all ~0 and ``sort_complex``, which orders on the real part first, breaks the
+    ties differently in the two computations. That reports a gap of 5 to 6 on operators that in
+    fact agree to 1e-14, which is a failure of the comparison and not of the code.
+    """
+    from scipy.optimize import linear_sum_assignment
+
+    kx, ky, ff, _ = order_grid((1, 1), 35.0, 40.0)
+    got = np.linalg.eigvals(layer_matrix_4ff(np, np.diag(kx).astype(complex),
+                                             np.diag(ky).astype(complex), **blocks(eps, ff)))
+
+    want = np.concatenate([
+        np.linalg.eigvals(layer_matrix_4ff(np, np.diag([kx[i]]).astype(complex),
+                                           np.diag([ky[i]]).astype(complex), **blocks(eps)))
+        for i in range(ff)])
+
+    cost = np.abs(got[:, None] - want[None, :])
+    gap = cost[linear_sum_assignment(cost)].max()
+    assert gap < 1e-12, f'{label}: {gap:.2e}'
+
+
+def test_the_plain_transfer_cannot_do_a_realistic_order_count():
+    """Why ``'TMM'`` is a diagnostic and not an option, stated as a measurement.
+
+    Its weakness is usually described as "thick layers", which undersells it. Diffraction orders
+    above the light line are *strongly* evanescent, and their modal exponent grows with the order
+    index whatever the thickness — so on a 220 nm layer of ``n = 1.5``:
+
+    ======  =====  ==============  =========
+    fto     ff     max exponent    plain TMM
+    ======  =====  ==============  =========
+    (0,0)      1             0.0   ok
+    (1,1)      9             7.0   ok
+    (2,2)     25            13.9   refuses
+    (3,3)     49            20.6   refuses
+    (5,5)    121            33.7   refuses
+    ======  =====  ==============  =========
+
+    ``fto = (2, 2)`` is a *small* grating calculation. So the unstabilised transfer is not merely
+    weak on thick stacks, it cannot run a real problem at all — which is the historical reason
+    RCWA needed the enhanced form (Moharam et al. 1995) rather than a preference between two
+    equivalent recursions.
+    """
+    eps = Z_DECOUPLED[0][1]
+    kx, ky, ff, centre = order_grid((1, 1), 35.0, 40.0)
+    psi = vacuum_sp_states(np, kx, ky, ff, order=centre)[0]
+    layers = [(blocks(eps, ff), THICK)]
+
+    # 9 orders: inside the bound, and must still agree with the stable paths
+    plain = solve_uniform_stack(WL, kx, ky, layers, ff, psi, connecting_algo='TMM')
+    good = solve_uniform_stack(WL, kx, ky, layers, ff, psi)
+    for a, b in zip(plain, good):
+        assert a == pytest.approx(b, abs=1e-10), '9 orders should still be within reach'
+
+    # 25 orders: refused, on a layer thin enough that thickness is plainly not the cause
+    kx, ky, ff, centre = order_grid((2, 2), 35.0, 40.0)
+    with pytest.raises(ValueError, match="connecting_algo='ETM'"):
+        solve_uniform_stack(WL, kx, ky, [(blocks(eps, ff), THICK)], ff,
+                            vacuum_sp_states(np, kx, ky, ff, order=centre)[0],
+                            connecting_algo='TMM')

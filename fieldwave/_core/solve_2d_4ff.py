@@ -1,8 +1,9 @@
 """First-order (4ff) layer solve — the formulation a z-coupled tensor needs.
 
-**Status: the operator, the mode split and the stack solve are done and pinned, and the solve is
-stable for any thickness. Nothing dispatches to it, multi-order is unvalidated, and there is no
-field reconstruction.** See "What is not here" at the bottom before building on it.
+**Status: the operator, the mode split and the stack solve are done and pinned; the solve is
+stable for any thickness and correct at any number of Fourier orders. Nothing dispatches to it,
+order *coupling* is untested, and there is no field reconstruction.** See "What is not here" at
+the bottom before building on it.
 
 Pinned by ``tests/test_solve_2d_4ff.py`` against the 2ff path and a Berreman 4x4, and by
 ``tests/references/test_4ff_external_goldens.py`` against RETICOLO and fmmax — 21 cases, worst
@@ -88,8 +89,14 @@ should not be read further.
 
 What is not here, in the order it will be wanted:
 
-* **Fourier orders beyond one.** The algebra is written in blocks and should extend as it
-  stands, but nothing has checked it against a grating.
+* **Order coupling.** The block layout is now checked at 9 and 25 orders: a uniform layer
+  cannot diffract, so adding orders must leave the answer untouched, and it does to ~1e-14
+  through both stable connecting algorithms and at conical incidence. That validates the
+  *indexing* — where an order sits inside a ``4*ff`` state, the ``2*ff`` block sizes, the count
+  the direction split insists on — and nothing more. Every convolution matrix in those tests is
+  still a scaled identity, because a **patterned** anisotropic layer is not expressible at all
+  until the factorization in ``docs/anisotropic-materials.md`` §3 exists. Order coupling is the
+  one thing multi-order testing here cannot reach.
 * **Dispatch.** Nothing routes to this. ``solve_for_conv`` still refuses a z-coupled tensor.
 * **Field reconstruction**, and the ``mu`` rows that
   ``tests/references/golden_fmmax_magnetic.npz`` is already holding.

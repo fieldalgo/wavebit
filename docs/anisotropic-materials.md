@@ -286,8 +286,11 @@ enhanced-transmittance recursion (`connecting_algo='ETM'`, the same string and t
 technique as the 2ff path) or by scattering matrices (`'SMM'`), and both hold ~1e-13 relative accuracy out
 to a modal exponent of 2500, where they reproduce the closed-form single-interface Fresnel
 reflectance to 4e-16. An unstabilised transfer is kept as `'TMM'` for cross-checking and refuses past the
-point where it is accurate. What is still missing: multi-order is coded but unchecked against a
-grating, and there is no field reconstruction.
+point where it is accurate — which on a 220 nm layer means from 25 Fourier orders upward, since
+diffraction orders above the light line are strongly evanescent whatever the thickness. That is
+the historical reason RCWA needed the enhanced form, not a preference between two recursions.
+The block layout is checked at 9 and 25 orders; what is still missing is order *coupling*, which
+needs the patterned factorization of §3, and field reconstruction.
 
 Two findings from building it, both invisible until the case existed. The `±` pairing above does
 not merely become unnecessary in 4ff — it becomes *false*: at normal incidence the backward set
