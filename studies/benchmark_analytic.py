@@ -27,11 +27,11 @@ import fieldwave
 
 
 def t0_and_energy(res):
-    de_ri = np.array(res.de_ri).real
-    de_ti = np.array(res.de_ti).real
-    c = de_ti.shape[0] // 2
-    t0 = de_ti[c, c]
-    return t0, float(de_ri.sum() + de_ti.sum())
+    R = np.array(res.R).real
+    T = np.array(res.T).real
+    c = T.shape[0] // 2
+    t0 = T[c, c]
+    return t0, float(R.sum() + T.sum())
 
 
 def make_circle_raster(N, R, n_rod, n_bg=1.0):

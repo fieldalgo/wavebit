@@ -23,7 +23,7 @@ def _run_and_inputs(ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi,
     inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_top, n_bot=n_bot,
                   theta=solver.theta, psi=solver.psi, thickness=solver.thickness,
                   epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
-    return (np.array(via_api.de_ri), np.array(via_api.de_ti)), inputs
+    return (np.array(via_api.R), np.array(via_api.T)), inputs
 
 
 def _assert_same_answer(via_api, direct):
@@ -91,7 +91,7 @@ def test_2d_cross_backend(case, backend):
 
 
 def test_2d_gradient_jax_torch_fd():
-    """d(sum de_ti)/ds through the coupled 2D block chain: jax == torch == finite-diff."""
+    """d(sum T)/ds through the coupled 2D block chain: jax == torch == finite-diff."""
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
     import jax.numpy as jnp

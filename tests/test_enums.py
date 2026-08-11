@@ -27,7 +27,7 @@ def _solve(pol, backend, **strategy):
                           pol=pol, fto=[6, 0], period=[0.77], wavelength=0.777,
                           thickness=[0.15], ucell=ucell, **strategy)
     r = solver.conv_solve()
-    return float(np.array(r.de_ri).sum()), float(np.array(r.de_ti).sum())
+    return float(np.array(r.R).sum()), float(np.array(r.T).sum())
 
 
 def test_enum_matches_raw_api():

@@ -49,11 +49,11 @@ def run():
     result_te_incidence = result.res_te_inc
     result_tm_incidence = result.res_tm_inc
 
-    de_ri, de_ti = result_given_pol.de_ri, result_given_pol.de_ti
-    de_ri1, de_ti1 = result_te_incidence.de_ri, result_te_incidence.de_ti
-    de_ri2, de_ti2 = result_tm_incidence.de_ri, result_tm_incidence.de_ti
+    R, T = result_given_pol.R, result_given_pol.T
+    de_ri1, de_ti1 = result_te_incidence.R, result_te_incidence.T
+    de_ri2, de_ti2 = result_tm_incidence.R, result_tm_incidence.T
 
-    print(de_ri.sum(), de_ti.sum())
+    print(R.sum(), T.sum())
     print(de_ri1.sum(), de_ti1.sum())
     print(de_ri2.sum(), de_ti2.sum())
 

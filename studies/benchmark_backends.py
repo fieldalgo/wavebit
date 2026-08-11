@@ -101,7 +101,7 @@ def _probe_step():
     def step():
         t = torch.tensor(pattern, requires_grad=True)
         out = fieldwave.rcwa(backend=2, ucell=t, **STRATEGIES['DFS'], **cfg).conv_solve()
-        out.res.de_ti.real.sum().backward()
+        out.res.T.real.sum().backward()
 
     return step
 
@@ -147,7 +147,7 @@ def torch_grad(build, seed):
 
     def step():
         v = torch.tensor(np.asarray(seed, dtype=np.float64), requires_grad=True)
-        out = build(2, v).conv_solve().res.de_ti.real.sum()
+        out = build(2, v).conv_solve().res.T.real.sum()
         out.backward()
         return _fingerprint(v.grad.detach().numpy())
 
@@ -160,7 +160,7 @@ def jax_eager_grad(build, seed):
     import jax.numpy as jnp
 
     def loss(v):
-        return jnp.sum(build(1, v).conv_solve().res.de_ti).real
+        return jnp.sum(build(1, v).conv_solve().res.T).real
 
     x = jnp.asarray(np.asarray(seed, dtype=np.float64))
     g = jax.grad(loss)
@@ -179,7 +179,7 @@ def jax_jit_grad(build, seed):
     import jax.numpy as jnp
 
     def loss(v, geometry):
-        return jnp.sum(build(1, v).conv_solve(geometry=geometry).res.de_ti).real
+        return jnp.sum(build(1, v).conv_solve(geometry=geometry).res.T).real
 
     x = jnp.asarray(np.asarray(seed, dtype=np.float64))
     freeze = lambda: build(1, x).freeze_geometry()
@@ -300,7 +300,7 @@ def sweep_recompile(budget, reps):
 
     def loss(v, geometry):
         return jnp.sum(fieldwave.rcwa(backend=1, ucell=make(v), **cfg)
-                       .conv_solve(geometry=geometry).de_ti).real
+                       .conv_solve(geometry=geometry).T).real
 
     g = jax.jit(jax.grad(loss), static_argnums=1)
     freeze = lambda lx: fieldwave.rcwa(backend=1, ucell=make(jnp.asarray(lx)),

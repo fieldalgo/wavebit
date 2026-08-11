@@ -40,7 +40,7 @@ CFG_1D = dict(backend=0, ucell=np.array([[[3., 3., 1., 1., 3., 1., 1., 1.]]]), p
 
 def _totals(cfg, **strategy):
     res = fieldwave.rcwa(**cfg, **strategy).conv_solve()
-    return (float(np.sum(np.asarray(res.de_ri))), float(np.sum(np.asarray(res.de_ti))))
+    return (float(np.sum(np.asarray(res.R))), float(np.sum(np.asarray(res.T))))
 
 
 # ------------------------------------------------------------------ the default

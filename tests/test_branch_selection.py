@@ -96,7 +96,7 @@ def _amp(n_top, n_bot, n_layer, d, theta, pol):
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         res = solver.conv_solve().res
-    amp = np.asarray(res.R_s if pol == 0 else res.R_p).ravel()
+    amp = np.asarray(res.r_s if pol == 0 else res.r_p).ravel()
     return complex(amp[len(amp) // 2])
 
 
@@ -193,7 +193,7 @@ def _run(cfg):
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         res = fieldwave.rcwa(**cfg).conv_solve().res
-    return np.asarray(res.R_s if cfg['pol'] == 0 else res.R_p).ravel()
+    return np.asarray(res.r_s if cfg['pol'] == 0 else res.r_p).ravel()
 
 
 @pytest.mark.parametrize('pol', [0, 1], ids=['te', 'tm'])

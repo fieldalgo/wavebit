@@ -83,25 +83,25 @@ def main():
                        thickness=kw['thickness'], theta=kw['theta'],
                        phi=kw.get('phi'), wavelength=kw['wavelength'],
                        n_top=kw['n_top'], n_bot=kw['n_bot'])
-        de_ri, de_ti, _, _ = reti.run_res2(grating_type=1 if conical else 0, pol=pol,
+        R, T, _, _ = reti.run_res2(grating_type=1 if conical else 0, pol=pol,
                                            **reti_kw)
-        de_ri = np.asarray(de_ri, dtype=float).ravel()
-        de_ti = np.asarray(de_ti, dtype=float).ravel()
+        R = np.asarray(R, dtype=float).ravel()
+        T = np.asarray(T, dtype=float).ravel()
 
         idx_ri = _propagating_indices(kw, kw['n_top'])
         idx_ti = _propagating_indices(kw, kw['n_bot'])
-        if len(idx_ri) != len(de_ri) or len(idx_ti) != len(de_ti):
+        if len(idx_ri) != len(R) or len(idx_ti) != len(T):
             raise SystemExit(
-                f'{name}: RETICOLO reported {len(de_ri)}/{len(de_ti)} propagating orders, '
+                f'{name}: RETICOLO reported {len(R)}/{len(T)} propagating orders, '
                 f'the grating equation says {len(idx_ri)}/{len(idx_ti)}. Freezing this would '
                 'compare the wrong entries.')
 
-        out[f'{name}__de_ri'] = de_ri
-        out[f'{name}__de_ti'] = de_ti
+        out[f'{name}__de_ri'] = R
+        out[f'{name}__de_ti'] = T
         out[f'{name}__idx_ri'] = idx_ri
         out[f'{name}__idx_ti'] = idx_ti
-        print(f'{name:16s} orders R={len(de_ri)} T={len(de_ti)}  '
-              f'sum={de_ri.sum() + de_ti.sum():.12f}')
+        print(f'{name:16s} orders R={len(R)} T={len(T)}  '
+              f'sum={R.sum() + T.sum():.12f}')
 
     np.savez_compressed(OUT, **out)
     print(f'\nwrote {OUT} ({OUT.stat().st_size} bytes, {len(CASES)} cases)')

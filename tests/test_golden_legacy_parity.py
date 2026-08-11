@@ -62,8 +62,26 @@ import fieldwave
 TOL = 1e-12
 
 GOLDEN = np.load(pathlib.Path(__file__).parent / 'data' / 'golden_legacy.npz')
-FIELDS = ('R_s', 'R_p', 'T_s', 'T_p',
-          'de_ri', 'de_ri_s', 'de_ri_p', 'de_ti', 'de_ti_s', 'de_ti_p')
+
+# The golden stores the legacy field layout: efficiencies as R/T and the raw
+# *boundary* amplitudes as R_s..T_p. The 2026-08-12 result rename kept every efficiency
+# value and moved the amplitudes to Fresnel normalization, so the map from a golden entry
+# to today's attribute carries a conversion factor for the amplitudes. The factors are the
+# exact ones the pack sites apply (measured against the Airy forms in test_lossy_media),
+# so applying them to the golden reproduces today's stored values to float rounding —
+# nothing here was regenerated.
+#
+#   golden key   attr    pure-1D path            coupled (conical / 2D) path
+EFFICIENCIES = (('de_ri', 'R'), ('de_ri_s', 'R_s'), ('de_ri_p', 'R_p'),
+                ('de_ti', 'T'), ('de_ti_s', 'T_s'), ('de_ti_p', 'T_p'))
+
+
+def _amp_map(grating_type, n_top, n_bot):
+    if grating_type == 0:                              # pure 1D: primary is the amplitude
+        return (('R_s', 'r_s', 1.0), ('R_p', 'r_p', 1.0),
+                ('T_s', 't_s', 1.0), ('T_p', 't_p', n_top / n_bot))
+    return (('R_s', 'r_s', 1.0), ('R_p', 'r_p', 1.0 / (-1j * n_top)),   # coupled: H -> E
+            ('T_s', 't_s', 1.0), ('T_p', 't_p', 1.0 / (-1j * n_bot)))
 
 
 def _rand(shape, seed):
@@ -100,17 +118,26 @@ def test_results_match_legacy_golden(name):
     solver, result = _run(name)
     assert solver.grating_type_assigned == GOLDEN[f'{name}__grating_type']
 
+    kw = CASES[name]
+    amp_map = _amp_map(solver.grating_type_assigned, kw['n_top'], kw['n_bot'])
+
     checked = 0
     for sub in ('res', 'res_te_inc', 'res_tm_inc'):
         got_sub = getattr(result, sub)
         if got_sub is None:
             assert f'{name}__{sub}__de_ri' not in GOLDEN, f'{sub} was present in the legacy run'
             continue
-        for f in FIELDS:
-            want = GOLDEN[f'{name}__{sub}__{f}']
-            got = np.asarray(getattr(got_sub, f))
+        for key, attr in EFFICIENCIES:
+            want = GOLDEN[f'{name}__{sub}__{key}']
+            got = np.asarray(getattr(got_sub, attr))
             assert np.allclose(want, got, atol=TOL, rtol=0), (
-                sub, f, np.max(np.abs(want - got)))
+                sub, key, np.max(np.abs(want - got)))
+            checked += 1
+        for key, attr, factor in amp_map:
+            want = GOLDEN[f'{name}__{sub}__{key}'] * factor
+            got = np.asarray(getattr(got_sub, attr))
+            assert np.allclose(want, got, atol=TOL, rtol=0), (
+                sub, key, np.max(np.abs(want - got)))
             checked += 1
     assert checked >= 10
 
@@ -175,8 +202,8 @@ def test_jax_and_torch_match_the_same_golden(name, backend):
         got_sub = getattr(result, sub)
         if got_sub is None:
             continue
-        for f in ('de_ri', 'de_ti'):
-            want = GOLDEN[f'{name}__{sub}__{f}']
-            got = np.asarray(getattr(got_sub, f))
+        for key, attr in (('de_ri', 'R'), ('de_ti', 'T')):
+            want = GOLDEN[f'{name}__{sub}__{key}']
+            got = np.asarray(getattr(got_sub, attr))
             assert np.allclose(want, got, atol=1e-12, rtol=0), (
-                sub, f, np.max(np.abs(want - got)))
+                sub, key, np.max(np.abs(want - got)))

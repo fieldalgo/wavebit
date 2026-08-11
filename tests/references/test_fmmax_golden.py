@@ -51,8 +51,8 @@ def solve(eps, theta_deg):
                              np.stack([np.linalg.inv(e[2, 2] * I)]),
                              np.stack([-e[0, 1] * I]), np.stack([-e[1, 0] * I]))
     te, tm = res.res_te_inc, res.res_tm_inc
-    return np.array([float(te.de_ri.sum()), float(te.de_ti.sum()),
-                     float(tm.de_ri.sum()), float(tm.de_ti.sum())])
+    return np.array([float(te.R.sum()), float(te.T.sum()),
+                     float(tm.R.sum()), float(tm.T.sum())])
 
 
 @pytest.fixture(scope='module')

@@ -191,8 +191,8 @@ def solve_tensor_stack(layers, theta, wl=WL, connecting_algo='ETM'):
                              np.stack(epxy), np.stack(epyx))
     out = {}
     for name, sub in (('s', res.res_te_inc), ('p', res.res_tm_inc)):
-        out[name] = dict(R_s=float(sub.de_ri_s.sum()), R_p=float(sub.de_ri_p.sum()),
-                         T_s=float(sub.de_ti_s.sum()), T_p=float(sub.de_ti_p.sum()))
+        out[name] = dict(R_s=float(sub.R_s.sum()), R_p=float(sub.R_p.sum()),
+                         T_s=float(sub.T_s.sum()), T_p=float(sub.T_p.sum()))
     return out
 
 

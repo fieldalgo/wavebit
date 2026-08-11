@@ -31,8 +31,8 @@ def disc_raster(N, r=0.30):
 def test_it_is_exactly_what_solve_for_conv_takes():
     """The round trip is the contract: feeding the result back reproduces conv_solve()."""
     solver = fieldwave.rcwa(ucell=[dict(n_base=1.0, shapes=[CIRCLE])], **BASE)
-    direct = solver.conv_solve().res.de_ti
-    relayed = solver.solve_for_conv(solver.wavelength, *solver.conv_matrices()).res.de_ti
+    direct = solver.conv_solve().res.T
+    relayed = solver.solve_for_conv(solver.wavelength, *solver.conv_matrices()).res.T
     assert np.abs(np.asarray(direct) - np.asarray(relayed)).max() == 0.0
 
 

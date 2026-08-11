@@ -196,10 +196,10 @@ def solve_flat(mm, nn, epx, epy, epxy, epyx, epz_i, wavelength, period, thicknes
 
     # ff_x = ff_xy, ff_y = 1: the flat set *is* the layout. The incident delta lands at
     # ff_xy // 2, which is the zero order for both shapes (see circular_select).
-    de_ri, de_ti = final_matching(xp, C128, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
+    R, T = final_matching(xp, C128, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
                                  n_top, n_bot, ff_xy, 1, full=False)
 
-    return de_ri.flatten(), de_ti.flatten(), kz_top, kz_bot
+    return R.flatten(), T.flatten(), kz_top, kz_bot
 
 
 # ---------------------------------------------------------------- structures
@@ -244,13 +244,13 @@ def run_one(eps, normal_field, mm, nn, keep, fto_box, mode):
     mats = conv_mats(eps, normal_field, mm, nn, keep, fto_box, mode)
 
     t0 = time.perf_counter()
-    de_ri, de_ti, kz_top, kz_bot = solve_flat(
+    R, T, kz_top, kz_bot = solve_flat(
         mm[keep], nn[keep], *mats,
         CASE['wavelength'], CASE['period'], CASE['thickness'],
         CASE['n_top'], CASE['n_bot'], CASE['theta'], CASE['phi'], CASE['psi'])
     dt = time.perf_counter() - t0
 
-    return dict(m=mm[keep], n=nn[keep], de_ri=de_ri, de_ti=de_ti,
+    return dict(m=mm[keep], n=nn[keep], R=R, T=T,
                 kz_top=kz_top, kz_bot=kz_bot, n_harmonics=int(keep.sum()), time=dt)
 
 
@@ -268,12 +268,12 @@ def compare(res, ref):
 
     prop = (ref['kz_top'][idx_ref].real > 1e-10) | (ref['kz_bot'][idx_ref].real > 1e-10)
 
-    d_ri = np.abs(res['de_ri'][idx_res] - ref['de_ri'][idx_ref])
-    d_ti = np.abs(res['de_ti'][idx_res] - ref['de_ti'][idx_ref])
+    d_ri = np.abs(res['R'][idx_res] - ref['R'][idx_ref])
+    d_ti = np.abs(res['T'][idx_res] - ref['T'][idx_ref])
 
     return dict(
-        err_R_total=abs(res['de_ri'].sum() - ref['de_ri'].sum()),
-        err_T_total=abs(res['de_ti'].sum() - ref['de_ti'].sum()),
+        err_R_total=abs(res['R'].sum() - ref['R'].sum()),
+        err_T_total=abs(res['T'].sum() - ref['T'].sum()),
         err_order_max=max(d_ri[prop].max(), d_ti[prop].max()) if prop.any() else np.nan,
     )
 
@@ -312,8 +312,8 @@ def selftest():
 
     nf = normal_vector_field(eps)
     r = run_one(eps, nf, mm, nn, np.ones(mm.shape, bool), (fto, fto), 'nvf')
-    err = max(np.abs(r['de_ri'] - de_ri_ref.flatten()).max(),
-              np.abs(r['de_ti'] - de_ti_ref.flatten()).max())
+    err = max(np.abs(r['R'] - de_ri_ref.flatten()).max(),
+              np.abs(r['T'] - de_ti_ref.flatten()).max())
     print(f'selftest solver (flat vs _core.solve_2d): {err:.3e}')
     assert err < 1e-12, err
 
@@ -340,7 +340,7 @@ def sweep(eps, normal_field, mode, fto_ref, ftos, radii, label):
     ref = run_one(eps, normal_field, mm_r, nn_r, np.ones(mm_r.shape, dtype=bool),
                   (fto_ref, fto_ref), mode)
     print(f'reference: N={ref["n_harmonics"]}  '
-          f'R={ref["de_ri"].sum():.6f}  T={ref["de_ti"].sum():.6f}  {ref["time"]:.1f}s')
+          f'R={ref["R"].sum():.6f}  T={ref["T"].sum():.6f}  {ref["time"]:.1f}s')
 
     for back in (2, 4):
         mm_c, nn_c = order_grid(fto_ref - back, fto_ref - back)

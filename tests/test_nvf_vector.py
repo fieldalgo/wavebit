@@ -52,8 +52,8 @@ def test_vector_nvf_energy_conservation():
     
     res = m.solve_for_conv(1000.0, np.array([Exx]), np.array([Eyy]), np.array([Epz_i]), np.array([Exy]), np.array([Eyx]))
     
-    R = float(res.de_ri.sum())
-    T = float(res.de_ti.sum())
+    R = float(res.R.sum())
+    T = float(res.T.sum())
     
     # Energy conservation: R + T = 1.0 (within 5% tolerance for low-order truncated NVF)
     assert abs((R + T) - 1.0) < 5e-2, f"Energy not conserved: R+T = {R+T}"

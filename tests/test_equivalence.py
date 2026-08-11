@@ -39,7 +39,7 @@ def _solve(pol, phi, ucell):
     solver.phi = phi
     solver.ucell = ucell
     res = solver.conv_solve().res
-    return np.squeeze(np.asarray(res.de_ri)), np.squeeze(np.asarray(res.de_ti))
+    return np.squeeze(np.asarray(res.R)), np.squeeze(np.asarray(res.T))
 
 
 @pytest.mark.parametrize('pol', [0, 1], ids=['TE', 'TM'])
@@ -125,7 +125,7 @@ def test_block_and_raster_describe_the_same_structure(backend, name):
     block = fieldwave.rcwa(backend=backend, ucell=_BLOCK, **_CFG).conv_solve().res
     raster = fieldwave.rcwa(backend=backend, ucell=_RASTER, **_CFG).conv_solve().res
 
-    for a, b, which in ((block.de_ri, raster.de_ri, 'de_ri'),
-                        (block.de_ti, raster.de_ti, 'de_ti')):
+    for a, b, which in ((block.R, raster.R, 'R'),
+                        (block.T, raster.T, 'T')):
         diff = np.linalg.norm(np.asarray(a, dtype=float) - np.asarray(b, dtype=float))
         assert diff < 1e-11, f'{name} {which}: {diff:.3e}'

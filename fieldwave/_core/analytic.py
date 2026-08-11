@@ -93,7 +93,7 @@ def shape_geometry(shape, Px, Py):
     * ``circle`` is round. Its transform only ever used ``lx`` as the diameter, while the
       normal field read ``ly`` as a second semi-axis — so ``ly != lx`` on a circle silently
       built one structure for ``eps`` and a different one for the projector (14% on
-      ``sum(de_ri)``). ``ly`` is now ``lx`` for a circle wherever it is read; an oval is an
+      ``sum(R)``). ``ly`` is now ``lx`` for a circle wherever it is read; an oval is an
       ``ellipse``.
     * the defaults differed (``ly`` fell back to ``lx`` in one and to ``500.0`` in the other),
       so *omitting* ``ly`` on a circle — the natural way to write it — degenerated the normal
@@ -382,7 +382,7 @@ def shape_ft(xp, shape, ky, kx, period, lattice=None):
         R = lx / 2.0
         # Same DC guard as the ellipse below, and for the same reason: ``rho`` is zero there,
         # ``d(sqrt)/d`` is infinite, and ``jinc``'s own ``where`` turns that into NaN. Here the
-        # radicand depends on ``period``, so it is ``d(de_ri)/d(period)`` that used to come back
+        # radicand depends on ``period``, so it is ``d(R)/d(period)`` that used to come back
         # NaN on a circle while the guarded ellipse was fine.
         r2 = u * u + v * v
         nz = r2 != 0
@@ -591,7 +591,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype,
     ``cx`` and ``cy`` through ``sign()``, whose derivative is zero, so the projectors used to
     contribute *nothing* to ``d/dcy`` — while the permittivity term contributed its exact
     share. Translation invariance holds by those two cancelling, so what was left was the
-    permittivity term standing alone: -1.7e-1 on ``d(sum de_ri)/dcy`` for a rectangle, against
+    permittivity term standing alone: -1.7e-1 on ``d(sum R)/dcy`` for a rectangle, against
     a true value of zero. Through the phase the two carry the same factor and cancel to
     machine precision.
 
@@ -600,7 +600,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype,
     shape — so sampling it over a fixed cell clips a different part of it depending on where
     the shape sits. That is not a discretization: ``<nx**2>`` for a circle moves 2.4e-2 between
     0.30 and 0.50 of the period and does not budge when the grid goes from 256 to 4096. It
-    reached ``sum(de_ri)`` as 1.6e-3, so the same structure translated gave a different answer.
+    reached ``sum(R)`` as 1.6e-3, so the same structure translated gave a different answer.
     Built here it reproduces the centred one to 1e-14, at every ``fto``.
 
     Several shapes cannot use it, and the reason is worth stating precisely because it is two

@@ -54,7 +54,7 @@ def solver(cell, fto=8, lattice=None, **kw):
 
 def totals(cell, fto=8, lattice=None, **kw):
     res = solver(cell, fto, lattice, **kw).conv_solve()
-    return float(np.sum(np.asarray(res.de_ri))), float(np.sum(np.asarray(res.de_ti)))
+    return float(np.sum(np.asarray(res.R))), float(np.sum(np.asarray(res.T)))
 
 
 # ------------------------------------------------------------------- the basis itself
@@ -181,7 +181,7 @@ def test_hex_lattice_matches_its_rectangular_supercell():
     sup_solver = fieldwave.rcwa(backend=0, ucell=sup, period=[a, a * sq3], fto=[8, 14],
                                 thickness=[H], wavelength=WL, n_top=1.0, n_bot=1.0,
                                 theta=0.0, phi=0.0, psi=0.0, factorization='nvf')
-    t_sup = float(np.sum(np.asarray(sup_solver.conv_solve().de_ti)))
+    t_sup = float(np.sum(np.asarray(sup_solver.conv_solve().T)))
     assert t_hex == pytest.approx(t_sup, abs=5e-3)
 
 
@@ -201,7 +201,7 @@ def test_oblique_runs_on_every_backend(backend):
                        thickness=[H], wavelength=WL, n_top=1.0, n_bot=1.0,
                        theta=0.0, phi=0.0, psi=0.0, factorization='nvf', lattice=HEX)
     res = s.conv_solve()
-    total = float(np.sum(np.asarray(res.de_ri))) + float(np.sum(np.asarray(res.de_ti)))
+    total = float(np.sum(np.asarray(res.R))) + float(np.sum(np.asarray(res.T)))
     assert total == pytest.approx(1.0, abs=1e-6)
 
 
@@ -241,7 +241,7 @@ def test_a_painted_overlap_survives_a_unimodular_shear():
                            wavelength=WL, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                            factorization='nvf', lattice=lattice)
         res = s.conv_solve()
-        return float(np.sum(np.asarray(res.de_ti)))
+        return float(np.sum(np.asarray(res.T)))
 
     assert painted(None) == pytest.approx(painted(SHEAR), abs=1e-3)
 
@@ -261,7 +261,7 @@ def test_a_painted_overlap_is_not_the_same_as_summing_it():
                            period=[P, P], fto=[6, 6], thickness=[H], wavelength=WL,
                            n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                            factorization='nvf', lattice=SHEAR)
-        return float(np.sum(np.asarray(s.conv_solve().de_ti)))
+        return float(np.sum(np.asarray(s.conv_solve().T)))
 
     assert abs(run('paint') - run('add')) > 1e-3
 
@@ -275,7 +275,7 @@ def _analytic_totals(g, lattice=None):
     s = fieldwave.rcwa(backend=0, ucell=ucell, period=[P, P], fto=[g, g], thickness=[H],
                        wavelength=WL, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                        factorization='nvf', lattice=lattice)
-    return float(np.sum(np.asarray(s.conv_solve().de_ti)))
+    return float(np.sum(np.asarray(s.conv_solve().T)))
 
 
 def test_analytic_shapes_survive_a_unimodular_shear():
@@ -374,7 +374,7 @@ def test_a_frozen_normal_field_replays_onto_the_same_lattice():
     frozen = s.freeze_geometry()
     replayed = s.conv_solve(geometry=frozen)
     # Not bit-identity: `eig` is not bit-reproducible run to run (see the axis-aligned test).
-    assert float(np.sum(np.asarray(replayed.de_ti))) == pytest.approx(
+    assert float(np.sum(np.asarray(replayed.T))) == pytest.approx(
         totals(cell, lattice=HEX)[1], abs=1e-12)
 
 
@@ -419,9 +419,9 @@ def test_li_1997_checkerboard_matches_the_published_table():
                        n_top=1.5, n_bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2,
                        factorization='nvf', lattice=basis)
     res = s.conv_solve().res
-    ti = np.asarray(res.de_ti)
+    ti = np.asarray(res.T)
     c = (ti.shape[0] // 2, ti.shape[1] // 2)
 
     worst = max(abs(float(ti[c[0] + n, c[1] + m]) - v) for (n, m), v in LI_FEM.items())
     assert worst < 1e-3, f'worst deviation from the published table: {worst:.2e}'
-    assert float(np.asarray(res.de_ri).sum()) == pytest.approx(0.10040, abs=1e-3)
+    assert float(np.asarray(res.R).sum()) == pytest.approx(0.10040, abs=1e-3)

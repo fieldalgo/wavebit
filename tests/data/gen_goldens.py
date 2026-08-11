@@ -12,7 +12,7 @@ import numpy as np
 
 import fieldwave
 
-FIELDS = ('R_s','R_p','T_s','T_p','de_ri','de_ri_s','de_ri_p','de_ti','de_ti_s','de_ti_p')
+FIELDS = ('R_s','R_p','T_s','T_p','R','R_s','R_p','T','T_s','T_p')
 
 def rand(shape, seed):
     return np.random.default_rng(seed).uniform(1.0, 4.0, size=shape)

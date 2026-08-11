@@ -63,13 +63,13 @@ class GRCWA:
         obj.GridLayer_geteps(self.ucell.flatten())
 
         # compute reflection and transmission
-        de_ri, de_ti = obj.RT_Solve(normalize=1, byorder=1)
+        R, T = obj.RT_Solve(normalize=1, byorder=1)
 
-        # de_ti, de_ti = de_ri.sum(), de_ti.sum()
+        # T, T = R.sum(), T.sum()
 
         # print('R=', R, ', T=', T, ', R+T=', R+T)
 
-        return de_ri, de_ti
+        return R, T
 
 
 if __name__ == '__main__':
@@ -96,7 +96,7 @@ if __name__ == '__main__':
 
     res = GRCWA(**option)
 
-    de_ri, de_ti = res.run()
-    print(de_ri.sum() + de_ti.sum())
-    print(de_ri)
-    print(de_ti)
+    R, T = res.run()
+    print(R.sum() + T.sum())
+    print(R)
+    print(T)

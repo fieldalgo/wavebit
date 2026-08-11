@@ -56,7 +56,7 @@ def _solver(ns, ds, *, pol=0, theta=0.2, path='1d', fto=0):
 
 
 def _R(solver):
-    return float(np.sum(np.asarray(solver.conv_solve().de_ri)).real)
+    return float(np.sum(np.asarray(solver.conv_solve().R)).real)
 
 
 INCIDENCE = [(p, t) for p in (0, 1) for t in (0.0, 0.4)]

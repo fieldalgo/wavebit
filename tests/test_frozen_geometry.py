@@ -38,8 +38,8 @@ def test_frozen_geometry_does_not_change_the_answer(strategy):
     solver = fieldwave.rcwa(backend=0, ucell=UCELL, **strategy, **KW)
     auto = solver.conv_solve()
     frozen = solver.conv_solve(geometry=solver.freeze_geometry())
-    assert np.array_equal(np.asarray(auto.res.de_ri), np.asarray(frozen.res.de_ri))
-    assert np.array_equal(np.asarray(auto.res.de_ti), np.asarray(frozen.res.de_ti))
+    assert np.array_equal(np.asarray(auto.res.R), np.asarray(frozen.res.R))
+    assert np.array_equal(np.asarray(auto.res.T), np.asarray(frozen.res.T))
 
 
 @pytest.mark.parametrize('strategy', STRATEGIES, ids=IDS)
@@ -52,7 +52,7 @@ def test_jit_and_grad_through_the_public_api(strategy):
     geometry = solver.freeze_geometry()
 
     def loss(u):
-        return jnp.sum(solver.conv_solve(ucell=u, geometry=geometry).res.de_ti).real
+        return jnp.sum(solver.conv_solve(ucell=u, geometry=geometry).res.T).real
 
     u = jnp.asarray(UCELL)
     eager = float(loss(u))
@@ -71,7 +71,7 @@ def test_jit_and_grad_through_the_public_api(strategy):
 def _jit_loss(**strategy):
     import jax.numpy as jnp
     solver = fieldwave.rcwa(backend=1, ucell=UCELL, **strategy, **KW)
-    return lambda u: jnp.sum(solver.conv_solve(ucell=u).res.de_ti).real
+    return lambda u: jnp.sum(solver.conv_solve(ucell=u).res.T).real
 
 
 # The default pairing is left out on purpose: it decides nothing, so it traces unfrozen.
@@ -106,7 +106,7 @@ def test_the_default_pairing_needs_no_frozen_geometry_at_all():
     got = float(jax.jit(_jit_loss(**DEFAULT_STRATEGY))(jnp.asarray(UCELL)))
     want = float(np.sum(np.asarray(
         fieldwave.rcwa(backend=0, ucell=UCELL, **DEFAULT_STRATEGY,
-                       **KW).conv_solve().res.de_ti).real))
+                       **KW).conv_solve().res.T).real))
     assert got == pytest.approx(want, abs=1e-10)
 
 
@@ -167,7 +167,7 @@ def test_a_frozen_geometry_makes_the_vector_path_traceable(name, make, start):
 
     def total(v):
         return jnp.sum(fieldwave.rcwa(backend=1, ucell=make(v), **cfg)
-                       .conv_solve(geometry=frozen).de_ti).real
+                       .conv_solve(geometry=frozen).T).real
 
     eager = float(total(x))
     assert float(jax.jit(total)(x)) == pytest.approx(eager, rel=1e-11)
@@ -206,7 +206,7 @@ def test_a_stale_frozen_geometry_is_refused_rather_than_answered():
 
     def total(lx, geometry=None):
         return float(jnp.sum(fieldwave.rcwa(backend=1, ucell=make(lx), **cfg)
-                             .conv_solve(geometry=geometry).de_ti).real)
+                             .conv_solve(geometry=geometry).T).real)
 
     frozen = fieldwave.rcwa(backend=1, ucell=make(jnp.asarray(85.0)), **cfg).freeze_geometry()
 
@@ -234,7 +234,7 @@ def _rod(width, height=10, n_rod=3.5, n_bg=1.0, n=20):
 
 def _de_ti(ucell, strategy, geometry=None):
     solver = fieldwave.rcwa(backend=0, ucell=ucell, **strategy, **RASTER_KW)
-    return np.asarray(solver.conv_solve(geometry=geometry).res.de_ti).real
+    return np.asarray(solver.conv_solve(geometry=geometry).res.T).real
 
 
 @pytest.mark.parametrize('strategy', [dict(factorization='nvf'),
@@ -323,8 +323,8 @@ def test_a_one_cell_axis_makes_every_same_shape_replay_valid():
     for width in (8, 10, 14):
         solvers = [fieldwave.rcwa(backend=0, ucell=grating(width), factorization='nvf',
                                   **cfg) for _ in range(2)]
-        replayed = np.asarray(solvers[0].conv_solve(geometry=frozen).res.de_ti)
-        assert np.array_equal(replayed, np.asarray(solvers[1].conv_solve().res.de_ti))
+        replayed = np.asarray(solvers[0].conv_solve(geometry=frozen).res.T)
+        assert np.array_equal(replayed, np.asarray(solvers[1].conv_solve().res.T))
 
 
 def test_a_traced_replay_carries_no_check():
@@ -345,7 +345,7 @@ def test_a_traced_replay_carries_no_check():
                                 **RASTER_KW)
 
     def total(u):
-        return jnp.sum(jax_solver.conv_solve(ucell=u, geometry=frozen).res.de_ti).real
+        return jnp.sum(jax_solver.conv_solve(ucell=u, geometry=frozen).res.T).real
 
     moved = jnp.asarray(_rod(14))
     with pytest.raises(fieldwave.StaleGeometryError):
@@ -375,7 +375,7 @@ def test_the_compression_decides_itself_inside_a_gradient():
 
     def total(u):
         return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **CFS_STRATEGY, **KW)
-                       .conv_solve().res.de_ti).real
+                       .conv_solve().res.T).real
 
     grad = np.asarray(jax.grad(total)(jnp.asarray(UCELL)))
     assert grad.shape == UCELL.shape and np.isfinite(grad).all()
@@ -403,7 +403,7 @@ def test_a_moving_pattern_needs_no_record_on_the_compression_path():
 
     def total(u):
         return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **CFS_STRATEGY, **KW)
-                       .conv_solve().res.de_ti).real
+                       .conv_solve().res.T).real
 
     for flips in (0, 2, 4):
         pattern = design.copy()
@@ -442,7 +442,7 @@ def test_the_normal_field_decides_itself_inside_a_gradient_too():
                      dict(fourier_coefficients='integrated', factorization='nvf')):
         def total(u):
             return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **strategy, **KW)
-                           .conv_solve().res.de_ti).real
+                           .conv_solve().res.T).real
 
         grad = np.asarray(jax.grad(total)(jnp.asarray(UCELL)))
         assert grad.shape == UCELL.shape and np.isfinite(grad).all()
@@ -454,7 +454,7 @@ def test_the_normal_field_decides_itself_inside_a_gradient_too():
 
         def total_frozen(u):
             return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **strategy, **KW)
-                           .conv_solve(geometry=frozen).res.de_ti).real
+                           .conv_solve(geometry=frozen).res.T).real
 
         assert np.array_equal(grad, np.asarray(jax.grad(total_frozen)(jnp.asarray(UCELL))))
 
@@ -481,7 +481,7 @@ def test_the_nvf_gradient_holds_the_interfaces_fixed():
 
     def total(u):
         return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **strategy, **KW)
-                       .conv_solve().res.de_ti).real
+                       .conv_solve().res.T).real
 
     def mask_size(u):
         return int(_fac.normal_field_source_for_ucell(u, KW['fto'][0], KW['fto'][1])[0][1].sum())
@@ -545,7 +545,7 @@ def test_a_length_that_moves_without_reordering_reuses_the_compilation():
     # And the gradient is the one for the structure actually in front of it, each time.
     def total(lx, geometry):
         return jnp.sum(fieldwave.rcwa(backend=1, ucell=make(lx), **cfg)
-                       .conv_solve(geometry=geometry).de_ti).real
+                       .conv_solve(geometry=geometry).T).real
 
     for lx in (100.0, 120.0):
         grad = float(jax.grad(total)(jnp.asarray(lx), freeze_at(lx)))

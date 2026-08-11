@@ -6,55 +6,12 @@ from ._base import _BaseRCWA
 from ..._core.engine import CoreFactorizationMixin
 from ..._core.fields import field_1d, field_1d_conical, field_2d, field_plot
 from ..._core.modeler import Modeling
+from ..._core.result import Result, ResultSub
 
 
-class ResultTorch:
-    def __init__(self, res=None, res_te_inc=None, res_tm_inc=None):
-
-        self.res = res
-        self.res_te_inc = res_te_inc
-        self.res_tm_inc = res_tm_inc
-
-    @property
-    def de_ri(self):
-        if self.res is not None:
-            return self.res.de_ri
-        elif self.res_te_inc is not None and self.res_tm_inc is not None:
-            return 0.5 * (self.res_te_inc.de_ri + self.res_tm_inc.de_ri)
-        elif self.res_te_inc is not None:
-            return self.res_te_inc.de_ri
-        elif self.res_tm_inc is not None:
-            return self.res_tm_inc.de_ri
-        else:
-            return None
-
-    @property
-    def de_ti(self):
-        if self.res is not None:
-            return self.res.de_ti
-        elif self.res_te_inc is not None and self.res_tm_inc is not None:
-            return 0.5 * (self.res_te_inc.de_ti + self.res_tm_inc.de_ti)
-        elif self.res_te_inc is not None:
-            return self.res_te_inc.de_ti
-        elif self.res_tm_inc is not None:
-            return self.res_tm_inc.de_ti
-        else:
-            return None
-
-
-class ResultSubTorch:
-    def __init__(self, R_s, R_p, T_s, T_p, de_ri, de_ri_s, de_ri_p, de_ti, de_ti_s, de_ti_p):
-        self.R_s = R_s
-        self.R_p = R_p
-        self.T_s = T_s
-        self.T_p = T_p
-        self.de_ri = de_ri
-        self.de_ri_s = de_ri_s
-        self.de_ri_p = de_ri_p
-
-        self.de_ti = de_ti
-        self.de_ti_s = de_ti_s
-        self.de_ti_p = de_ti_p
+# One shared container (fieldwave._core.result); the old per-backend copies are gone.
+ResultTorch = Result
+ResultSubTorch = ResultSub
 
 
 class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
@@ -218,7 +175,7 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
         res_te_inc = ResultSubTorch(**result_dict['res_te_inc']) if 'res_te_inc' in result_dict else None
         res_tm_inc = ResultSubTorch(**result_dict['res_tm_inc']) if 'res_tm_inc' in result_dict else None
 
-        result = ResultTorch(res_psi, res_te_inc, res_tm_inc)
+        result = ResultTorch(res_psi, res_te_inc, res_tm_inc, fto=self.fto)
 
         return result
 

@@ -19,7 +19,7 @@ was *sampled at the shape's actual place*.
 * **The spread.** Not the grid: it survived at 4096 samples unchanged. The normal field is
   defined over the whole plane, and a fixed cell clips a different part of it depending on
   where the shape sits, so the same structure translated was a *different* structure to the
-  factorization — 1.6e-3 on ``sum(de_ri)`` for a circle.
+  factorization — 1.6e-3 on ``sum(R)`` for a circle.
 
 :func:`fieldwave._core.analytic.normal_projector_coeffs` now builds a lone shape's field at the
 centre of the cell and translates the coefficients by a phase, which removes both at once. The
@@ -64,11 +64,11 @@ def _shape(kind, param, value):
 
 
 def _position_gradients(kind, param):
-    """``d(sum de_ri)/d(param)`` at each position. Every entry should be zero."""
+    """``d(sum R)/d(param)`` at each position. Every entry should be zero."""
     def objective(v):
         res = fieldwave.rcwa(backend=1, ucell=[dict(n_base=1.0, shapes=[_shape(kind, param, v)])],
                              **BASE).conv_solve()
-        return jnp.real(jnp.sum(res.de_ri))
+        return jnp.real(jnp.sum(res.R))
 
     return np.array([float(jax.grad(objective)(jnp.asarray(x))) for x in POSITIONS])
 
@@ -86,7 +86,7 @@ def test_translation_invariance_holds_in_the_objective(kind, param):
     def total(v):
         res = fieldwave.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=[_shape(kind, param, v)])],
                              **BASE).conv_solve()
-        return float(np.sum(np.asarray(res.de_ri)).real)
+        return float(np.sum(np.asarray(res.R)).real)
 
     values = [total(x) for x in POSITIONS]
     assert np.ptp(values) < 1e-12, (kind, param, np.ptp(values))
@@ -226,12 +226,12 @@ def _stack(cx0, cx1):
 
 def _stack_total(cx0, cx1):
     res = fieldwave.rcwa(backend=0, ucell=_stack(cx0, cx1), **STACK).conv_solve()
-    return float(np.real(np.sum(np.asarray(res.de_ri))))
+    return float(np.real(np.sum(np.asarray(res.R))))
 
 
 def _stack_jtotal(cx0, cx1):
     res = fieldwave.rcwa(backend=1, ucell=_stack(cx0, cx1), **STACK).conv_solve()
-    return jnp.real(jnp.sum(res.de_ri))
+    return jnp.real(jnp.sum(res.R))
 
 
 def test_a_stack_translated_bodily_does_not_move():
@@ -256,7 +256,7 @@ def test_moving_one_layer_of_two_moves_the_answer_and_the_gradient_says_by_how_m
     """And the half that the invariance alone cannot see.
 
     Moving one layer changes the two layers' *relative* position, which is a different structure
-    — ``sum(de_ri)`` runs over 1.6e-2 here — so the right answer is a large non-zero gradient,
+    — ``sum(R)`` runs over 1.6e-2 here — so the right answer is a large non-zero gradient,
     not a small one. A construction that cancelled the phases globally would pass the test above
     and fail this one; each layer's phase has to be its own.
 
@@ -326,12 +326,12 @@ def _two(pair, ca, cb):
 
 def _two_total(pair, ca, cb):
     res = fieldwave.rcwa(backend=0, ucell=_two(pair, ca, cb), **TWO_CFG).conv_solve()
-    return float(np.real(np.sum(np.asarray(res.de_ri))))
+    return float(np.real(np.sum(np.asarray(res.R))))
 
 
 def _two_jtotal(pair, ca, cb):
     res = fieldwave.rcwa(backend=1, ucell=_two(pair, ca, cb), **TWO_CFG).conv_solve()
-    return jnp.real(jnp.sum(res.de_ri))
+    return jnp.real(jnp.sum(res.R))
 
 
 def test_two_smooth_shapes_already_carry_a_correct_relative_gradient():
@@ -385,7 +385,7 @@ def test_a_layer_of_two_shapes_is_translation_invariant_too():
 
     Moving *both* shapes by the same amount is one physical translation, so this is the same
     statement ``test_translation_invariance_holds_in_the_objective`` makes. A multi-shape layer
-    keeps the sampled field and the clipped window: 7.1e-4 on ``sum(de_ri)`` here, 1.2e-4 for
+    keeps the sampled field and the clipped window: 7.1e-4 on ``sum(R)`` here, 1.2e-4 for
     the tighter pairs above, against the 1.5e-14 a lone shape gets.
 
     Interpolating each shape's field onto the common grid was tried and rejected — it brings the
@@ -401,7 +401,7 @@ def test_a_layer_of_two_shapes_is_translation_invariant_too():
                  n_index=3.5),
             dict(type='circle', cx=0.70 + d, cy=0.80, lx=0.25, n_index=2.5)])]
         return float(np.sum(np.asarray(
-            fieldwave.rcwa(backend=0, ucell=ucell, **cfg).conv_solve().de_ri)).real)
+            fieldwave.rcwa(backend=0, ucell=ucell, **cfg).conv_solve().R)).real)
 
     values = [total(d) for d in np.linspace(0.0, 0.2, 9)]
     assert np.ptp(values) < 1e-12, np.ptp(values)

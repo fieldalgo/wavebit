@@ -300,12 +300,15 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     if not full:
         return de_ri, de_ti
 
+    # Same Fresnel conversion as the ETM pure path: reflection primaries are already the
+    # amplitude; the TM transmission converts H back to E across the index step.
     zeros_amp = xp.zeros_like(R)
     zeros_eff = xp.zeros_like(de_ri)
     if pol == 0:
         res = _pack(R, zeros_amp, Tt, zeros_amp, de_ri, zeros_eff, de_ti, zeros_eff)
     else:
-        res = _pack(zeros_amp, R, zeros_amp, Tt, zeros_eff, de_ri, zeros_eff, de_ti)
+        res = _pack(zeros_amp, R, zeros_amp, Tt * (n_top / n_bot),
+                    zeros_eff, de_ri, zeros_eff, de_ti)
 
     blocks, T1 = _field_state(xp, I, S_ref, S_trn, S_layers, AB, delta)
     # Bottom-to-top, the order field reconstruction walks in reverse (as the ETM appends it).
@@ -412,7 +415,9 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     if not full:
         return eff[0][0] + eff[1][0], eff[2][0] + eff[3][0]
 
-    packed = [_pack(R_s[i], R_p[i], T_s[i], T_p[i], *(e[i] for e in eff)) for i in range(3)]
+    # Coupled-path Fresnel conversion, identical to the ETM final matching's.
+    amps = (R_s, R_p / (-1j * n_top), T_s, T_p / (-1j * n_bot))
+    packed = [_pack(*(a[i] for a in amps), *(e[i] for e in eff)) for i in range(3)]
 
     blocks, T1 = _field_state(xp, big_I, S_ref, S_trn, S_layers, AB, c_inc)
     layer_info_list = [m + list(b) for m, b in zip(modes, blocks)][::-1]

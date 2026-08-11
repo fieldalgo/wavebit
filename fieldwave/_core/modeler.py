@@ -492,7 +492,7 @@ class Modeling:
         **This does not make the path fit a sidewall angle near normal.** A staircase and a
         smoothly tilted boundary do not have the same Fourier coefficients at a finite harmonic
         count, and the difference goes like ``|angle|``: on an 80x60 rectangle in TE at
-        ``fto = [3, 3]``, ``sum(de_ti)`` falls off its aligned value at 0.59 per radian on
+        ``fto = [3, 3]``, ``sum(T)`` falls off its aligned value at 0.59 per radian on
         *both* sides. That coefficient is flat in ``n_split`` (0.546 at 4, 0.595 at 256) and
         only comes down with harmonics (0.59 at ``fto`` 3, 0.16 at 12), so adding blocks cannot
         remove it — it is the staircase's cost, not its resolution. Only harmonics do, and

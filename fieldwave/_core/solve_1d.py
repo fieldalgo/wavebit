@@ -220,12 +220,17 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
         return de_ri, de_ti
 
     # TE carries everything on s, TM everything on p; the opposite side is identically zero.
+    # The pure path's primary amplitude IS the Fresnel amplitude on the reflection side (for
+    # TM the primary is H with unit incident H, and r_H == r_E in the convention where a
+    # normal-incidence interface gives r_p = -r_s); transmission converts H back to E across
+    # the index step, t_E = t_H * n_top/n_bot. Measured at 5.6e-16 (tests/test_lossy_media).
     zeros_amp = xp.zeros_like(R)
     zeros_eff = xp.zeros_like(de_ri)
     if pol == 0:
         res = _pack(R, zeros_amp, Tt, zeros_amp, de_ri, zeros_eff, de_ti, zeros_eff)
     else:
-        res = _pack(zeros_amp, R, zeros_amp, Tt, zeros_eff, de_ri, zeros_eff, de_ti)
+        res = _pack(zeros_amp, R, zeros_amp, Tt * (n_top / n_bot),
+                    zeros_eff, de_ri, zeros_eff, de_ti)
     return {'res': res, 'layer_info_list': layer_info_list, 'T1': T1}
 
 
@@ -404,7 +409,12 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
     if not full:
         return de_ri_s + de_ri_p, de_ti_s + de_ti_p
 
-    res = _pack(R_s, R_p, T_s, T_p, de_ri_s, de_ri_p, de_ti_s, de_ti_p)
+    # The coupled paths' p boundary variable is a magnetic amplitude; ``/(-i*n)`` on its own
+    # side is what makes it the Fresnel E-ratio (measured, tests/test_lossy_media).
+    def fresnel(R_s_, R_p_, T_s_, T_p_):
+        return R_s_, R_p_ / (-1j * n_top), T_s_, T_p_ / (-1j * n_bot)
+
+    res = _pack(*fresnel(R_s, R_p, T_s, T_p), de_ri_s, de_ri_p, de_ti_s, de_ti_p)
 
     # Pure-TE (psi = pi/2) and pure-TM (psi = 0) incidence, solved together against the same
     # already-inverted final_A.
@@ -431,8 +441,8 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
     T_p_2 = split2(big_T_tetm[ff_xy:, :])
 
     eff2 = efficiencies(R_s_2, R_p_2, T_s_2, T_p_2)
-    variants = [_pack(R_s_2[i], R_p_2[i], T_s_2[i], T_p_2[i], *(e[i] for e in eff2))
-                for i in (0, 1)]
+    amps2 = fresnel(R_s_2, R_p_2, T_s_2, T_p_2)
+    variants = [_pack(*(a[i] for a in amps2), *(e[i] for e in eff2)) for i in (0, 1)]
 
     # Field reconstruction consumes T1 for the given psi plus the two incidence variants.
     T1 = xp.stack([big_T1, big_T1_tetm[:, 0:1], big_T1_tetm[:, 1:2]])
@@ -453,8 +463,15 @@ def sp_efficiencies(xp, kz_top_2d, kz_bot_2d, denom, n_top, n_bot, R_s, R_p, T_s
             xp.real(T_p * xp.conj(T_p) * xp.real(kz_bot_2d / n_bot ** 2 / denom)))
 
 
-def _pack(R_s, R_p, T_s, T_p, de_ri_s, de_ri_p, de_ti_s, de_ti_p):
-    """Assemble one incidence's results in the legacy ``ResultSub`` field layout."""
-    return {'R_s': R_s, 'R_p': R_p, 'T_s': T_s, 'T_p': T_p,
-            'de_ri': de_ri_s + de_ri_p, 'de_ri_s': de_ri_s, 'de_ri_p': de_ri_p,
-            'de_ti': de_ti_s + de_ti_p, 'de_ti_s': de_ti_s, 'de_ti_p': de_ti_p}
+def _pack(r_s, r_p, t_s, t_p, R_s, R_p, T_s, T_p):
+    """Assemble one incidence's results in the ``ResultSub`` field layout.
+
+    Amplitudes arrive **already Fresnel-normalized** — each pack site owns the conversion
+    from its boundary variables, because the factor differs between the pure-1D path (the
+    primary itself is the amplitude; TM transmission needs ``n_top/n_bot``) and the coupled
+    paths (the p boundary variable is a magnetic amplitude; ``/(-i*n)`` on its own side).
+    Both conversions are measured against the Airy forms in ``tests/test_lossy_media.py``.
+    """
+    return {'r_s': r_s, 'r_p': r_p, 't_s': t_s, 't_p': t_p,
+            'R': R_s + R_p, 'R_s': R_s, 'R_p': R_p,
+            'T': T_s + T_p, 'T_s': T_s, 'T_p': T_p}

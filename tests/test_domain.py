@@ -57,7 +57,7 @@ def test_empty_stack_is_none():
 # ------------------------------------------------------------- solver parity
 
 def _de(res):
-    return float(np.array(res.de_ri).sum()), float(np.array(res.de_ti).sum())
+    return float(np.array(res.R).sum()), float(np.array(res.T).sum())
 
 
 def test_raster_1d_parity():

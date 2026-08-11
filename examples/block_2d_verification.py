@@ -12,7 +12,7 @@ def run_block(rcwa_options, backend):
 
     res = solver.conv_solve()
 
-    return res.de_ri, res.de_ti
+    return res.R, res.T
 
 
 def run_raster(rcwa_options, backend, fourier_coefficients):
@@ -36,9 +36,9 @@ def run_raster(rcwa_options, backend, fourier_coefficients):
     solver = fieldwave.rcwa(**rcwa_options)
 
     res = solver.conv_solve()
-    de_ri, de_ti = res.de_ri, res.de_ti
+    R, T = res.R, res.T
 
-    return de_ri, de_ti
+    return R, T
 
 
 if __name__ == '__main__':

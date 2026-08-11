@@ -101,7 +101,7 @@ def test_orders_match_reticolo(name):
     g = _golden()
     res = _solve(name)
 
-    for side, arr in (('ri', np.asarray(res.de_ri)), ('ti', np.asarray(res.de_ti))):
+    for side, arr in (('ri', np.asarray(res.R)), ('ti', np.asarray(res.T))):
         idx = g[f'{name}__idx_{side}']
         want = g[f'{name}__de_{side}']
         got = np.real(arr).ravel()[idx]
@@ -119,7 +119,7 @@ def test_the_same_orders_propagate(name):
     g = _golden()
     res = _solve(name)
 
-    for side, arr in (('ri', np.asarray(res.de_ri)), ('ti', np.asarray(res.de_ti))):
+    for side, arr in (('ri', np.asarray(res.R)), ('ti', np.asarray(res.T))):
         idx = set(g[f'{name}__idx_{side}'].tolist())
         rest = [v for i, v in enumerate(np.real(arr).ravel()) if i not in idx]
         assert max(abs(v) for v in rest) < 1e-12, (name, side, max(abs(v) for v in rest))
@@ -136,7 +136,7 @@ def test_reticolo_agreement_holds_on_every_backend(backend):
     g = _golden()
     name = 'te_oblique'
     res = _solve(name, backend=backend)
-    for side, arr in (('ri', np.asarray(res.de_ri)), ('ti', np.asarray(res.de_ti))):
+    for side, arr in (('ri', np.asarray(res.R)), ('ti', np.asarray(res.T))):
         got = np.real(arr).ravel()[g[f'{name}__idx_{side}']]
         assert np.abs(got - g[f'{name}__de_{side}']).max() < 1e-9
 
@@ -155,13 +155,13 @@ def test_the_order_axis_is_not_symmetric_in_these_cases(name):
     that is mirror-symmetric, at normal incidence, has ``de(+m) == de(-m)`` *physically*, so
     reversing the order axis changes nothing and the comparison passes either way.
 
-    Reversing ``de_ti`` on the four symmetric cases above moves them by ~1e-15 — nothing. On
+    Reversing ``T`` on the four symmetric cases above moves them by ~1e-15 — nothing. On
     these it moves them by 1e-3 to 3e-1. So the guard lives entirely in the asymmetric cases,
     and this test says so out loud rather than leaving it to be rediscovered by someone
     trimming the case list.
     """
     res = _solve(name)
-    ti = np.real(np.asarray(res.de_ti)).ravel()
+    ti = np.real(np.asarray(res.T)).ravel()
     idx = _golden()[f'{name}__idx_ti']
     assert np.abs(ti[idx] - ti[::-1][idx]).max() > 1e-4, name
 
@@ -183,6 +183,6 @@ def test_the_raster_path_holds_the_same_tolerance(name):
     g = _golden()
     kw = dict(CASES[name])
     res = fieldwave.rcwa(backend=0, fourier_coefficients='sampled', **kw).conv_solve()
-    for side, arr in (('ri', res.de_ri), ('ti', res.de_ti)):
+    for side, arr in (('ri', res.R), ('ti', res.T)):
         got = np.real(np.asarray(arr)).ravel()[g[f'{name}__idx_{side}']]
         assert np.abs(got - g[f'{name}__de_{side}']).max() < 1e-11, (name, side)

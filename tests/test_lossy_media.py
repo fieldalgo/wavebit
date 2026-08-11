@@ -30,7 +30,7 @@ Real indices were never affected by any of them, which is why all three survived
 lossless test.
 
 For an absorbing superstrate the *amplitude* is the meaningful check: incident power in an
-absorbing medium is convention-dependent, so ``de_ri`` there is not compared to anything.
+absorbing medium is convention-dependent, so ``R`` there is not compared to anything.
 """
 import importlib
 
@@ -90,7 +90,7 @@ def solver_RT(ns, thicknesses, wavelength, theta, pol, algo='ETM'):
                            n_bot=ns[-1], theta=theta, fto=0, wavelength=wavelength,
                            period=[wavelength * 2], ucell=ucell, thickness=thicknesses)
     res = solver.conv_solve()
-    return float(np.sum(res.de_ri).real), float(np.sum(res.de_ti).real)
+    return float(np.sum(res.R).real), float(np.sum(res.T).real)
 
 
 def solver_R(ns, thicknesses, wavelength, theta, pol, algo='ETM'):
@@ -140,9 +140,9 @@ def test_lossy_substrate_reflection(case, pol, theta, algo):
 @pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
 @pytest.mark.parametrize('case', LOSSY_SUBSTRATE, ids=[c[0] for c in LOSSY_SUBSTRATE])
 def test_lossy_substrate_transmission_agrees_between_algorithms(case, pol, theta):
-    """``de_ti`` into an absorbing substrate, ETM against SMM.
+    """``T`` into an absorbing substrate, ETM against SMM.
 
-    The reflection tests above compared only ``de_ri``, and that gap hid a real break for four
+    The reflection tests above compared only ``R``, and that gap hid a real break for four
     years' worth of the SMM path: its TM branch normalized by ``Re(conj(kz_bot)/n_bot**2)``
     where every other efficiency in the codebase uses ``Re(kz_bot/n_bot**2)``. The two are equal
     for a real ``n_bot``, so nothing lossless could see it; against gold it returned *negative*
@@ -163,10 +163,10 @@ def test_lossy_substrate_transmission_agrees_between_algorithms(case, pol, theta
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
 def test_lossless_layer_on_absorbing_substrate_conserves_energy(algo, pol, theta):
-    """``de_ti`` is the power *entering* the substrate, so nothing is lost above it.
+    """``T`` is the power *entering* the substrate, so nothing is lost above it.
 
     With every layer lossless, R + T must be exactly 1 however absorbing the substrate is —
-    the sharpest available statement about ``de_ti``'s normalization, and one no reflection-only
+    the sharpest available statement about ``T``'s normalization, and one no reflection-only
     test can make.
     """
     R, T = solver_RT([1.0, 1.5, AU], [20.0], WL, theta, pol, algo)
@@ -193,8 +193,8 @@ def test_absorbing_layer_identical_to_its_substrate(pol, theta):
     tmm = fieldwave.rcwa(connecting_algo='ETM', **common).conv_solve()
     smm = fieldwave.rcwa(connecting_algo='SMM', **common).conv_solve()
 
-    assert float(np.sum(tmm.de_ri)) == pytest.approx(want, abs=1e-12)
-    assert float(np.sum(smm.de_ri)) == pytest.approx(want, abs=1e-12)
+    assert float(np.sum(tmm.R)) == pytest.approx(want, abs=1e-12)
+    assert float(np.sum(smm.R)) == pytest.approx(want, abs=1e-12)
 
 
 def solver_R_analytic(ns, thicknesses, wavelength, theta, pol):
@@ -210,7 +210,7 @@ def solver_R_analytic(ns, thicknesses, wavelength, theta, pol):
                             psi=(np.pi / 2 if pol == 0 else 0.0), fto=0,
                             wavelength=wavelength, period=[wavelength * 2, wavelength * 2],
                             ucell=ucell, thickness=thicknesses)
-    return float(np.sum(np.asarray(solver.conv_solve().de_ri)).real)
+    return float(np.sum(np.asarray(solver.conv_solve().R)).real)
 
 
 ANALYTIC_CASES = KNOWN_GOOD + LOSSY_SUBSTRATE
@@ -260,7 +260,7 @@ def solver_R_painted(n, thickness, wavelength, theta, pol):
                             ucell=[dict(n_base=n, combine='paint', shapes=shapes)],
                             thickness=[thickness])
     res = solver.conv_solve()
-    return float(np.sum(np.asarray(res.de_ri)).real), float(np.sum(np.asarray(res.de_ti)).real)
+    return float(np.sum(np.asarray(res.R)).real), float(np.sum(np.asarray(res.T)).real)
 
 
 @pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
@@ -307,7 +307,7 @@ def test_complex_n_bot_keeps_full_precision_on_every_backend(backend):
     ucell = np.array([[[n, n] for n in ns[1:-1]]][0])[None]
     solver = fieldwave.rcwa(backend=backend, pol=0, n_top=ns[0], n_bot=ns[-1], theta=0.3,
                            fto=2, wavelength=WL, period=[WL * 2], ucell=ucell, thickness=ds)
-    got = float(np.sum(np.asarray(solver.conv_solve().de_ri)))
+    got = float(np.sum(np.asarray(solver.conv_solve().R)))
     assert got == pytest.approx(want, abs=1e-12)
 
 
@@ -327,13 +327,38 @@ AMPLITUDE_CASES = [
 ]
 
 
-def solver_r(ns, thicknesses, wavelength, theta, pol, path, algo='ETM'):
-    """The solver's reflection amplitude, normalized to compare against ``analytic_r``.
+def analytic_t(ns, thicknesses, wavelength, theta, pol):
+    """Transmission amplitude (E-field ratio) of a uniform stack, via a 2x2 transfer.
+
+    Same conventions as :func:`analytic_r`; for TM the characteristic transfer works in the
+    magnetic variable, so the last line converts its ratio back to an E-field one.
+    """
+    k_par = ns[0] * np.sin(theta)
+    k = [_kz(n, k_par) for n in ns]
+
+    def eta(i):
+        return k[i] if pol == 0 else k[i] / complex(ns[i]) ** 2
+
+    M = np.eye(2, dtype=complex)
+    for i in range(1, len(ns) - 1):
+        b = 2 * np.pi / wavelength * k[i] * thicknesses[i - 1]
+        M = M @ np.array([[np.cos(b), -1j * np.sin(b) / eta(i)],
+                          [-1j * eta(i) * np.sin(b), np.cos(b)]])
+    e0, eN = eta(0), eta(len(ns) - 1)
+    t = 2 * e0 / (e0 * M[0, 0] + eN * M[1, 1] + e0 * eN * M[0, 1] + M[1, 0])
+    if pol == 1:
+        t = t * complex(ns[0]) / complex(ns[-1])
+    return t
+
+
+def solver_amps(ns, thicknesses, wavelength, theta, pol, path, algo='ETM'):
+    """The solver's Fresnel amplitudes ``(r, t)`` for the asked polarization.
 
     ``path`` picks which core solve runs: ``'1d'`` (pure TE/TM), ``'conical'`` or ``'2d'``.
-    The coupled paths report the p channel as its *magnetic* amplitude against an incident
-    ``i*n_top`` (in the internal convention), hence the division; the s channel is the electric
-    amplitude against an incident 1, so it needs none.
+    No normalization happens here — ``r_s``/``r_p``/``t_s``/``t_p`` *are* the Fresnel
+    amplitudes, which is the public contract this file pins. (Until 2026-08-12 the result
+    exposed raw boundary variables instead, and this function carried the ``/(-i*n_top)``
+    footnote that conversion now lives without.)
     """
     layers = ns[1:-1]
     common = dict(backend=0, connecting_algo=algo, n_top=ns[0], n_bot=ns[-1], theta=theta,
@@ -348,11 +373,13 @@ def solver_r(ns, thicknesses, wavelength, theta, pol, path, algo='ETM'):
                                 period=[wavelength * 2, wavelength * 2],
                                 ucell=np.array(cell), **common)
     res = solver.conv_solve().res
-    amp = np.asarray(res.R_s if pol == 0 else res.R_p).ravel()
-    value = complex(amp[len(amp) // 2])
-    if path == '1d' or pol == 0:
-        return value
-    return value / (-1j * complex(ns[0]))
+    r = np.asarray(res.r_s if pol == 0 else res.r_p).ravel()
+    t = np.asarray(res.t_s if pol == 0 else res.t_p).ravel()
+    return complex(r[len(r) // 2]), complex(t[len(t) // 2])
+
+
+def solver_r(ns, thicknesses, wavelength, theta, pol, path, algo='ETM'):
+    return solver_amps(ns, thicknesses, wavelength, theta, pol, path, algo)[0]
 
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
@@ -360,8 +387,25 @@ def solver_r(ns, thicknesses, wavelength, theta, pol, path, algo='ETM'):
 @pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
 @pytest.mark.parametrize('case', AMPLITUDE_CASES, ids=[c[0] for c in AMPLITUDE_CASES])
 def test_reflection_amplitude(case, pol, theta, path, algo):
-    """Complex reflection amplitude, for absorbing media on either side or both."""
+    """``r_s`` / ``r_p`` are the Fresnel amplitudes, for absorbing media on either side."""
     _, ns, ds = case
     want = analytic_r(ns, ds, WL, theta, pol)
     got = solver_r(ns, ds, WL, theta, pol, path, algo)
+    assert abs(got - want) < 1e-12, (got, want)
+
+
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+@pytest.mark.parametrize('path', ['1d', 'conical', '2d'])
+@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
+@pytest.mark.parametrize('case', AMPLITUDE_CASES, ids=[c[0] for c in AMPLITUDE_CASES])
+def test_transmission_amplitude(case, pol, theta, path, algo):
+    """``t_s`` / ``t_p`` are the Fresnel amplitudes too — the conversion each pack site owns.
+
+    This is the test that distinguishes the three conversions (none for s, ``n_top/n_bot``
+    for the pure-1D TM primary, ``/(-i*n_bot)`` for the coupled p channel): drop or swap any
+    one of them and its path fails here while reflection stays green.
+    """
+    _, ns, ds = case
+    want = analytic_t(ns, ds, WL, theta, pol)
+    got = solver_amps(ns, ds, WL, theta, pol, path, algo)[1]
     assert abs(got - want) < 1e-12, (got, want)

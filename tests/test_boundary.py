@@ -388,7 +388,7 @@ PAINT_SHAPES = [dict(type='rectangle', cx=0.40, cy=0.40, lx=0.34, ly=0.34, angle
 
 
 def _total(res):
-    return float(np.asarray(res.de_ti).real.sum())
+    return float(np.asarray(res.T).real.sum())
 
 
 def test_paint_is_accepted_and_is_not_add():
@@ -477,4 +477,4 @@ def test_a_painted_ellipse_is_polygonised():
     r = _solve([dict(n_base=1.0, combine='paint', shapes=shapes)]).conv_solve()
     t = _total(r)
     assert 0.0 < t < 1.0
-    assert abs(t + float(np.asarray(r.de_ri).real.sum()) - 1.0) < 1e-9    # lossless
+    assert abs(t + float(np.asarray(r.R).real.sum()) - 1.0) < 1e-9    # lossless

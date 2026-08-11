@@ -20,9 +20,9 @@ def test_1_si_glass_branch_cut():
         try:
             solver = fieldwave.rcwa(backend=backend_id, **option)
             res = solver.conv_solve()
-            assert res.de_ri is not None and res.de_ti is not None
-            R = float(res.de_ri.sum())
-            T = float(res.de_ti.sum())
+            assert res.R is not None and res.T is not None
+            R = float(res.R.sum())
+            T = float(res.T.sum())
             print(f"[{backend_name}] R = {R:.6f}, T = {T:.6f}, R+T = {R+T:.6f}")
             assert 0.0 <= R <= 1.0, f"Unphysical reflectance R = {R}"
             assert abs(R + T - 1.0) < 1e-4, f"Energy conservation failed: R+T = {R+T}"
@@ -51,8 +51,8 @@ def test_2_air_au_raw_n_lossy_substrate():
         try:
             solver = fieldwave.rcwa(backend=backend_id, **option)
             res = solver.conv_solve()
-            assert res.de_ri is not None
-            R = float(res.de_ri.sum())
+            assert res.R is not None
+            R = float(res.R.sum())
             print(f"[{backend_name}] Calculated R = {R:.6f} (Diff: {abs(R - R_exact):.6e})")
             assert abs(R - R_exact) < 1e-3, f"Fresnel match failed for {backend_name}"
         except Exception as e:
@@ -78,8 +78,8 @@ def test_3_same_material_interface():
     for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
         solver = fieldwave.rcwa(backend=backend_id, **option)
         res = solver.conv_solve()
-        assert res.de_ri is not None
-        R = float(res.de_ri.sum())
+        assert res.R is not None
+        R = float(res.R.sum())
         print(f"[{backend_name}] Au(20nm)/Au R = {R:.6f} (Exact: {R_exact:.6f})")
         assert abs(R - R_exact) < 1e-3, f"Same-material failed for {backend_name}"
     print("SUCCESS: Test 3 Passed!\n")
@@ -102,8 +102,8 @@ def test_4_tm_transmittance_conjugation():
         try:
             solver = fieldwave.rcwa(backend=backend_id, **option_conical)
             res = solver.conv_solve()
-            assert res.res_tm_inc is not None and res.res_tm_inc.de_ti_p is not None
-            T_p = float(res.res_tm_inc.de_ti_p.sum())
+            assert res.res_tm_inc is not None and res.res_tm_inc.T_p is not None
+            T_p = float(res.res_tm_inc.T_p.sum())
             print(f"[{backend_name} Conical TM] Transmittance T_p = {T_p:.6f}")
             assert T_p >= 0.0, f"Negative transmittance found in {backend_name}: T_p = {T_p}"
         except Exception as e:
@@ -168,8 +168,8 @@ def test_7_none_theta_handling():
         try:
             solver = fieldwave.rcwa(backend=backend_id, **option)
             res = solver.conv_solve()
-            assert res.de_ri is not None
-            R = float(res.de_ri.sum())
+            assert res.R is not None
+            R = float(res.R.sum())
             print(f"[{backend_name}] theta=None solve succeeded: R = {R:.6f}")
             assert R >= 0.0, f"Expected non-negative R for theta=None in {backend_name}"
         except Exception as e:
@@ -233,7 +233,7 @@ def test_10_shared_mean_permittivity_keeps_the_interface():
 
     for algo in ('ETM', 'SMM'):
         res = fieldwave.rcwa(backend=0, connecting_algo=algo, **option).conv_solve()
-        total = float(np.sum(res.de_ri)) + float(np.sum(res.de_ti))
+        total = float(np.sum(res.R)) + float(np.sum(res.T))
         print(f"[{algo}] R+T = {total:.12f}")
         assert abs(total - 1.0) < 1e-9, f"{algo} energy conservation failed: {total}"
     print("SUCCESS: Test 10 Passed!\n")
