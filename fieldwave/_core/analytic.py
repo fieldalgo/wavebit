@@ -313,8 +313,16 @@ def layer_needs_resolving(layer, period, lattice=None):
     numbers (measured 0.8% apart on disjoint rods), which is the surprise ``combine`` exists to
     remove.
 
-    Returns ``False`` when the parameters are not concrete — a traced call has already had its
-    eager pass through :meth:`freeze_geometry`, which is where the decision was taken.
+    Raises when the parameters are not concrete and no plan was frozen. That case used to
+    return ``False`` on the reasoning that a traced call has already had its eager pass through
+    :meth:`freeze_geometry` — but nothing enforced it, and the cost of the assumption being
+    wrong is not a slower path or a warning. It is a **different structure**: the layer is
+    summed instead of painted, silently. Measured under ``jax.grad`` on two overlapping rods,
+    ``T`` came out 0.8743 where painting gives 0.8539, and the gradient was bit-identical to
+    the one ``combine='add'`` returns — which is what identified it.
+
+    PyTorch never hit this: its tensors convert to floats, so the check ran. JAX tracers do
+    not, so it silently did not.
     """
     if layer.get('combine') != 'paint':
         return False
@@ -323,11 +331,20 @@ def layer_needs_resolving(layer, period, lattice=None):
         return False
     try:
         Px, Py = float(period[0]), float(period[1])
+        prims = _primitives(shapes, Px, Py)
     except Exception:                                  # noqa: BLE001 - traced period
-        return False
-    prims = _primitives(shapes, Px, Py)
+        prims = None
     if prims is None:
-        return False
+        raise ValueError(
+            "combine='paint' on a traced layer needs a frozen geometry. Whether the shapes "
+            "overlap decides which structure this is -- painted, or summed -- and that "
+            "question cannot be asked of a traced value. Taking the summed branch anyway "
+            "would solve a different structure than the one asked for, without saying so.\n"
+            "  Freeze once, outside the trace, and replay:\n"
+            "    geometry = solver.freeze_geometry()\n"
+            "    result = solver.conv_solve(geometry=geometry)\n"
+            "  Re-take the freeze whenever the shapes may have started or stopped "
+            "overlapping; the plan compares by content, so an unchanged one is free.")
     return bool(_overlap.overlapping_pairs(prims, Px, Py, OVERLAP_TOL_REL * max(Px, Py),
                                            lattice))
 

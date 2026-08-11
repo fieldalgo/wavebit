@@ -573,3 +573,69 @@ def test_freezing_a_painted_layer_works_on_torch():
     frozen = solver.freeze_geometry()
     total = float(np.sum(np.asarray(solver.conv_solve(geometry=frozen).T.detach())).real)
     assert total == pytest.approx(_painted_total(0, float), abs=1e-12)
+
+
+def test_a_traced_painted_layer_is_refused_without_a_frozen_geometry():
+    """The silent one: `combine='paint'` under `jax.grad` used to solve a *summed* layer.
+
+    Whether two shapes overlap decides which structure a painted layer is, and that question
+    needs concrete numbers. A JAX tracer refuses to give them, and the check used to read that
+    refusal as "not overlapping" and fall through to the summing branch -- on the reasoning
+    that a traced call has already had its eager pass through ``freeze_geometry``. Nothing
+    enforced that, and the cost of the assumption failing is not a slower path: it is a
+    different structure, solved and differentiated without a word.
+
+    How it was identified is worth keeping. The gradient looked merely wrong -- -3.48 where
+    finite differences give -0.6461 -- until it was compared against the same layer spelled
+    ``combine='add'``, which returns **the same number to the last digit**. Not a broken
+    derivative; the derivative of something else.
+
+    PyTorch never reached this, because its tensors convert to floats and the check ran. So a
+    torch-only test would have passed throughout.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    cfg = dict(period=(1.0, 1.0), wavelength=0.94, fto=(5, 5), n_top=1.0, n_bot=1.45,
+               theta=0.0, phi=None, pol=0.0, thickness=(0.3,), normal_grid=256)
+    fixed = dict(type='rectangle', cx=0.70, cy=0.62, lx=0.26, ly=0.30, angle=0.0, n_index=2.1)
+
+    def ucell(v):
+        return [dict(n_base=1.0, combine='paint', shapes=[
+            dict(type='rectangle', cx=0.46, cy=0.5, lx=v, ly=0.26, angle=0.3, n_index=3.48),
+            dict(fixed)])]
+
+    def total(v, geometry=None):
+        solver = fieldwave.rcwa(backend=1, ucell=ucell(v), **cfg)
+        res = solver.conv_solve() if geometry is None else solver.conv_solve(geometry=geometry)
+        return jnp.sum(res.T).real
+
+    with pytest.raises(ValueError, match='freeze_geometry'):
+        jax.grad(total)(jnp.asarray(0.34))
+
+    # and the documented route works, and agrees with central differences on the *painted*
+    # structure rather than on the summed one
+    frozen = fieldwave.rcwa(backend=0, ucell=ucell(0.34), **cfg).freeze_geometry()
+    analytic = float(jax.grad(lambda v: total(v, frozen))(jnp.asarray(0.34)))
+    h = 1e-4
+    plus = float(np.sum(np.asarray(
+        fieldwave.rcwa(backend=0, ucell=ucell(0.34 + h), **cfg).conv_solve().T)).real)
+    minus = float(np.sum(np.asarray(
+        fieldwave.rcwa(backend=0, ucell=ucell(0.34 - h), **cfg).conv_solve().T)).real)
+    assert analytic == pytest.approx((plus - minus) / (2 * h), rel=2e-3)
+
+
+def test_a_traced_summed_layer_is_not_refused():
+    """The refusal is for `paint` only -- a summed layer has no overlap question to ask."""
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    cfg = dict(period=(1.0, 1.0), wavelength=0.94, fto=(5, 5), n_top=1.0, n_bot=1.45,
+               theta=0.0, phi=None, pol=0.0, thickness=(0.3,), normal_grid=256)
+
+    def total(v):
+        u = [dict(n_base=1.0, combine='add', shapes=[
+            dict(type='rectangle', cx=0.46, cy=0.5, lx=v, ly=0.26, angle=0.3, n_index=3.48),
+            dict(type='rectangle', cx=0.70, cy=0.62, lx=0.26, ly=0.30, angle=0.0,
+                 n_index=2.1)])]
+        return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **cfg).conv_solve().T).real
+
+    assert np.isfinite(float(jax.grad(total)(jnp.asarray(0.34))))
