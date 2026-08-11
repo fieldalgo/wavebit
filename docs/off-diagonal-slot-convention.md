@@ -421,10 +421,17 @@ That is a statement about provenance, not about quality. On the oracle tiers in 
 it lands in **physics** rather than **an outside solver**, for the narrow reason that a
 misconception shared by both implementations would survive — not because the reference is weak.
 
-**RETICOLO closes that gap.** Hugonin and Lalanne's code has carried a toolbox for arbitrarily
-anisotropic multilayer stacks since V9; V10 takes a texture as a full complex 3x3 permittivity
-tensor, and ships `exemple_V9_{0D,1D,2D,conique}_anisotrope.m` to demonstrate it. This repo already
-trusts it as its strongest oracle. Run on the same stacks, with the same convention gate applied first — isotropic
+**RETICOLO closes that gap** — for the tensors in this document, which is narrower than it sounded
+when this was written. Hugonin and Lalanne's code has carried a toolbox for arbitrarily anisotropic
+multilayer stacks since V9; V10 takes a texture as a full complex 3x3 permittivity tensor, and
+ships `exemple_V9_{0D,1D,2D,conique}_anisotrope.m` to demonstrate it. This repo trusts it as its
+strongest oracle.
+
+Since measured (2026-08-11): that trust holds for a diagonal tensor at any mounting and for **one**
+off-diagonal pair at classical mounting, which covers every case in this document. Past that
+RETICOLO's own `R + T` leaves 1 by up to 1.2e-2 on a provably lossless tensor. See
+[`five-slot-limit.md`](five-slot-limit.md) §4 and `tests/references/README.md`. Nothing below
+changes; the cases here all have a single pair and `delta0 = 0`. Run on the same stacks, with the same convention gate applied first — isotropic
 and symmetric tensors, where it agrees with Berreman to 2.1e-15, no convention fitting needed:
 
 | configuration | shipped, vs RETICOLO | pair exchanged | Berreman, vs RETICOLO |
