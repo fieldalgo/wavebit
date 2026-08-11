@@ -30,10 +30,13 @@ import json
 from ._core.enums import Backend, Factorization, FourierCoefficients, Pol
 from ._core.engine import (_COEFFICIENTS_IMPLEMENTED_BY, _COEFFICIENTS_REASON,
                            _FACTORIZATION_IMPLEMENTED_BY, _FACTORIZATION_REASON)
+from ._core.spec import SPEC_VERSION
 
 #: Bumped when the document's *shape* changes, so a consumer can refuse one it cannot read.
 #: Independent of the FieldWave version, which moves whenever the content does.
-MANIFEST_VERSION = '1'
+#: '2': the ``results`` section — the solve's output contract joined the document when the
+#: result surface was renamed for the first release (2026-08-12).
+MANIFEST_VERSION = '2'
 
 
 # ------------------------------------------------------------------ how a ucell is spelled
@@ -188,6 +191,45 @@ MATERIALS = (
 )
 
 
+# ------------------------------------------------------------------ what a solve returns
+
+#: The result contract, restated as data for consumers that build UIs over the output.
+#: This is the half of ``docs/conventions.md`` a program can hold: field names, their kind,
+#: and the layout rule. It passes the same admission test as everything else here — every
+#: claim is checked against a *real* result object by ``tests/test_manifest.py``, so a
+#: rename that misses this table fails the suite instead of going stale in a consumer.
+RESULTS = {
+    'convention': 'uppercase is power, lowercase is amplitude; the normative statement '
+                  'is docs/conventions.md',
+    'efficiencies': {
+        'total': ('R', 'T'),
+        'by_outgoing_polarization': ('R_s', 'R_p', 'T_s', 'T_p'),
+        'layout': 'arrays of shape (ff_y, ff_x) — y first, the transpose of the '
+                  'fto=[x, y] input order — with the incident order at the centre',
+        'accessor': 'result.order(m, n) indexes every per-order quantity by the order '
+                    'indices themselves',
+        'caveat': 'with an absorbing superstrate the incident-power normalization is '
+                  'convention-dependent, so these are not comparable to 1; use the '
+                  'amplitudes there',
+    },
+    'amplitudes': {
+        'fields': ('r_s', 'r_p', 't_s', 't_p'),
+        'meaning': 'complex Fresnel amplitudes in e^{-iwt}: E-field ratios against a unit '
+                   'incident E-field, comparable to the textbook coefficients',
+        'p_sign': 'the convention where a normal-incidence interface gives r_p = -r_s',
+    },
+    'incidences': {
+        'fields': ('res', 'res_te_inc', 'res_tm_inc'),
+        'meaning': 'the psi-specified solve plus the pure-TE and pure-TM variants; '
+                   'top-level R/T average the two variants when no psi solve exists',
+    },
+    'jobspec': {
+        'outputs_default': ('R', 'T'),
+        'spec_version': SPEC_VERSION,
+    },
+    'source': 'docs/conventions.md',
+}
+
 # ------------------------------------------------------------------ the document
 
 def manifest() -> dict:
@@ -218,7 +260,19 @@ def manifest() -> dict:
             'refused_on_oblique': [dict(r) for r in LATTICE['refused_on_oblique']],
         },
         'materials': [dict(m) for m in MATERIALS],
+        'results': _jsonable_results(),
     }
+
+
+def _jsonable_results() -> dict:
+    """``RESULTS`` with tuples as lists, so the document round-trips through JSON."""
+    def conv(v):
+        if isinstance(v, dict):
+            return {k: conv(x) for k, x in v.items()}
+        if isinstance(v, tuple):
+            return list(v)
+        return v
+    return conv(RESULTS)
 
 
 def cited_sources() -> set:

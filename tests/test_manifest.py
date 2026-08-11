@@ -191,3 +191,41 @@ def test_every_material_case_states_a_reason():
     for entry in MATERIALS:
         assert entry['why'], f"{entry['case']}: no reason given"
         assert isinstance(entry['supported'], bool)
+
+
+# ------------------------------------------------ the results contract, against a real result
+
+def test_results_section_matches_a_real_result():
+    """Every claim in ``results`` against a solve's actual output — not the tables.
+
+    Same non-mirror principle as the rest of this file: the manifest could only drift from
+    the result surface silently, because nothing else reads both. So build a solver, solve,
+    and hold each published name to the object: uppercase fields must exist and be real
+    (power), lowercase must exist and be complex (amplitude), the incidence variants must be
+    present, the accessor must work and agree with the arrays at the claimed layout, and the
+    JobSpec facts must match ``_core.spec``. A future rename that misses the manifest fails
+    here rather than in a consumer's UI.
+    """
+    from fieldwave._core.spec import SPEC_VERSION, JobSpec
+
+    m = manifest()['results']
+    res = fieldwave.rcwa(ucell=_RASTER, **KW).conv_solve()
+    sub = res.res if res.res is not None else res.res_te_inc
+
+    for name in list(m['efficiencies']['total']) + list(m['efficiencies']['by_outgoing_polarization']):
+        arr = np.asarray(getattr(sub, name))
+        assert np.isrealobj(arr), f'{name} is published as power and must be real'
+    for name in m['amplitudes']['fields']:
+        arr = np.asarray(getattr(sub, name))
+        assert np.iscomplexobj(arr), f'{name} is published as an amplitude and must be complex'
+    for name in m['incidences']['fields']:
+        assert hasattr(res, name), name
+
+    # the layout claim and the accessor claim, against each other
+    fx, fy = res.fto
+    R = np.asarray(res.R)
+    assert R.shape == (2 * fy + 1, 2 * fx + 1)
+    assert float(res.order(1, -1).R) == R[fy - 1, fx + 1]
+
+    assert tuple(m['jobspec']['outputs_default']) == tuple(JobSpec().outputs)
+    assert m['jobspec']['spec_version'] == SPEC_VERSION

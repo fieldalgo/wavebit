@@ -53,6 +53,18 @@ solver, and a library that grows a recommendation engine has stopped being a lib
 lives outside this repository and consumes the manifest. What stays here is the half only
 this repository can know.
 
+### One later admission: the results contract (2026-08-12)
+
+The first cut carried inputs and constraints only, and drew the line at "what the solver
+returns" as well. That half was admitted when the result surface was renamed for the first
+release, because it passes the same test the line is made of: *can the fact be checked
+against the code?* The `results` section's every claim — field names, power-vs-amplitude
+kind, the order layout, the accessor, the JobSpec defaults — is held against a **real
+result object** by `tests/test_manifest.py`, so a rename that misses the manifest fails the
+suite. What still stays out is unchanged: recommendations, and vocabulary for describing a
+user's experiment. The section is data *about* the contract; the contract itself is
+[`conventions.md`](conventions.md), which stays normative.
+
 ## Why the tests are not mirror tests
 
 `fieldwave/manifest.py` reads `_core/engine.py`'s tables at import, so asserting that the two
