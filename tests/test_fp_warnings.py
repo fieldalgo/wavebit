@@ -24,13 +24,16 @@ What this file pins:
 * contamination is loud, in two tiers: a non-finite efficiency raises, and a finite but
   physically impossible one warns. Both point at the structure rather than at the arithmetic.
 """
+import pathlib
 import warnings
 
 import numpy as np
 import pytest
 
 import fieldwave
-from fieldwave._core.backend import (UnphysicalResultWarning, array_namespace, check_finite,
+from fieldwave._core.backend import (PrecisionLossWarning, UnphysicalResultWarning,
+                                     UnresolvedBranchWarning,
+                                     array_namespace, check_finite,
                                      check_physical)
 from fieldwave._core.solve_1d import final_matching
 
@@ -306,3 +309,263 @@ def test_guards_are_no_ops_on_torch():
     xp = array_namespace(torch.zeros(1))
     check_finite(xp, de_ri=torch.tensor([float('nan')]))
     check_physical(xp, torch.tensor([9.0]), torch.tensor([9.0]), 1.0)
+
+
+# --- tier three: a branch decided from round-off ---------------------------------------------
+#
+# check_finite catches contamination that announces itself, check_physical catches a finite
+# result that cannot be physical. Both read the *result*. This tier reads the arithmetic: a
+# sqrt branch is a discrete choice, and at complex64 the quantity it is taken from is often
+# pure round-off. The answer stays finite and stays physical (the degenerate case is perfectly
+# unitary), so neither tier above it fires. See docs/branch-cuts.md.
+
+_BRANCH_UCELL = np.array([[[0, 1, 0, 1, 1, 1]]]) * 4 + 1
+
+
+def _branch_solve(type_complex, n_top=1.0, theta=0.4, phi=0.3, backend=0):
+    return fieldwave.rcwa(
+        backend=backend, pol=0, n_top=n_top, n_bot=5.0, theta=theta, phi=phi, fto=[30],
+        wavelength=900e-9, period=[2000e-9], ucell=_BRANCH_UCELL, thickness=[100e-9],
+        type_complex=type_complex, fourier_coefficients='integrated',
+        factorization='li').conv_solve()
+
+
+def _branch_warnings(**kw):
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        _branch_solve(**kw)
+    return [r for r in rec if issubclass(r.category, UnresolvedBranchWarning)]
+
+
+_COMPLEX_THETA = np.arcsin(np.sqrt(1.6 ** 2 + 1.2 ** 2 + 1e-4, dtype=np.complex128))
+_COMPLEX_PHI = np.arctan(1.2 / 1.6001, dtype=np.complex128)
+
+_REGIMES = {
+    'real angle': dict(),
+    'complex angle': dict(theta=_COMPLEX_THETA, phi=_COMPLEX_PHI),
+    # Its genuine Re(kz) sits at the same scale as the round-off above; that overlap is why
+    # no fixed cutoff serves both, and why this warns rather than being repaired.
+    'weak absorber': dict(n_top=1.4 + 1e-5j, theta=0.6, phi=0.4),
+}
+
+
+@pytest.mark.parametrize('regime', list(_REGIMES))
+@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+def test_double_precision_resolves_every_branch(backend, regime):
+    """Silence at complex128 is the claim that makes the warning worth having."""
+    assert _branch_warnings(type_complex=0, backend=backend, **_REGIMES[regime]) == []
+
+
+@pytest.mark.parametrize('regime', list(_REGIMES))
+@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+def test_single_precision_reports_an_unresolvable_branch(backend, regime):
+    """complex64 cannot answer the question, and says so instead of guessing quietly.
+
+    Every backend, deliberately: unlike the guards in ``_core/backend.py`` this one is not
+    NumPy-only, because the backends it would have skipped return the *worst* answers here —
+    NumPy 1.80, JAX 4.12, PyTorch 5.68 at the same point — and they are the paths taken for
+    gradients and GPUs.
+    """
+    assert _branch_warnings(type_complex=1, backend=backend, **_REGIMES[regime])
+
+
+def test_a_traced_single_precision_solve_says_it_could_not_be_checked():
+    """Silence must not mean two different things.
+
+    Under ``jit`` the values are tracers, so the check cannot run — and that is exactly where a
+    wrong branch is least likely to be noticed: measured ``|R| = 3.93`` traced at complex64
+    against 0.67 at complex128, with nothing said. The dtype *is* known at trace time even when
+    the values are not, so a traced single-precision solve reports that it went unchecked. A
+    traced double-precision one stays silent, which is what keeps the message meaningful.
+    """
+    jax = pytest.importorskip('jax')
+    import fieldwave.on_jax          # noqa: F401  -- enables x64 before any array is made
+    import jax.numpy as jnp
+
+    theta = np.arcsin(np.sqrt(1.6 ** 2 + 1.2 ** 2 + 1e-4, dtype=np.complex128))
+    phi = np.arctan(1.2 / 1.6001, dtype=np.complex128)
+
+    def amplitude(type_complex, t):
+        res = fieldwave.rcwa(
+            backend=1, pol=0, n_top=1.0, n_bot=5.0, theta=t, phi=phi, fto=[10],
+            wavelength=900e-9, period=[2000e-9], ucell=_BRANCH_UCELL, thickness=[100e-9],
+            type_complex=type_complex, fourier_coefficients='sampled',
+            factorization='li').conv_solve()
+        return jnp.asarray(res.res_te_inc.R_s).ravel()[10]
+
+    def traced(type_complex):
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter('always')
+            jax.jit(lambda t: amplitude(type_complex, t))(jnp.asarray(theta))
+        return [str(r.message) for r in rec
+                if issubclass(r.category, UnresolvedBranchWarning)]
+
+    assert traced(0) == []
+    single = traced(1)
+    assert single and 'traced' in single[0]
+
+
+def test_the_check_does_not_break_tracing():
+    """Under jit/grad the value is abstract; the check must bail, not raise.
+
+    This is why the reduction runs in the caller's namespace and only the scalar is read: an
+    unreadable scalar means the value was never there to inspect. Uses the sampled/DFS path,
+    the one that is traceable at all.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+
+    def de_ri(theta):
+        res = fieldwave.rcwa(
+            backend=1, pol=0, n_top=1.0, n_bot=5.0, theta=theta, phi=0.3, fto=[6],
+            wavelength=900e-9, period=[2000e-9], ucell=_BRANCH_UCELL, thickness=[100e-9],
+            type_complex=0, fourier_coefficients='sampled',
+            factorization='li').conv_solve()
+        return jnp.sum(jnp.real(jnp.asarray(res.res_te_inc.de_ri_s)))
+
+    grad = jax.jit(jax.grad(de_ri))(jnp.asarray(0.4))
+    assert np.isfinite(float(grad))
+
+
+def test_branch_warning_message_carries_no_numbers():
+    a = str(_branch_warnings(type_complex=1)[0].message)
+    b = str(_branch_warnings(type_complex=1, **_REGIMES['complex angle'])[0].message)
+    assert a == b
+
+
+def test_branch_warning_category_is_exported():
+    assert fieldwave.UnresolvedBranchWarning is UnresolvedBranchWarning
+
+
+def test_branch_tolerance_is_scoped_and_restores():
+    import fieldwave._core.conventions as conventions
+    before = conventions._FLAT
+    with fieldwave.branch_tolerance(1e-6):
+        assert conventions._FLAT == 1e-6
+    assert conventions._FLAT == before
+
+
+def test_branch_tolerance_rescues_a_complex_angle_at_single_precision():
+    """The escape hatch has to actually move the answer, or it is decoration.
+
+    Double precision is the reference; at complex64 the default cutoff is 4.5 off it, and
+    raising the cutoff brings it to ~1e-6. The same setting is *wrong* for a weak absorber —
+    that trade is the documented reason this is a scoped override and not a new default.
+    """
+    ref = np.asarray(_branch_solve(0, **_REGIMES['complex angle']).res_te_inc.R_s).ravel()
+
+    def err():
+        got = np.asarray(_branch_solve(1, **_REGIMES['complex angle']).res_te_inc.R_s).ravel()
+        return float(np.abs(got - ref).max())
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        assert err() > 1.0
+        with fieldwave.branch_tolerance(1e-5):
+            assert err() < 1e-5
+
+
+# --- tier four: a value that arrived below the precision it was asked to be solved at --------
+
+def _precision_warnings(theta, backend=0, type_complex=0):
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        fieldwave.rcwa(
+            backend=backend, pol=0, n_top=1.0, n_bot=5.0, theta=theta, phi=0.3, fto=[5],
+            wavelength=900e-9, period=[2000e-9], ucell=_BRANCH_UCELL, thickness=[100e-9],
+            type_complex=type_complex, fourier_coefficients='sampled', factorization='li')
+    return [r for r in rec if issubclass(r.category, PrecisionLossWarning)]
+
+
+@pytest.mark.parametrize('theta, type_complex, expected', [
+    (np.float64(0.4), 0, False),        # matches the solve
+    (0.4, 0, False),                    # a Python float has no dtype to lose
+    (np.float32(0.4), 1, False),        # single data, single solve — consistent
+    (np.float32(0.4), 0, True),         # double was asked for; widening recovers nothing
+    (np.complex64(0.4 + 0.3j), 0, True),
+])
+def test_an_input_below_the_solve_precision_is_reported(theta, type_complex, expected):
+    assert bool(_precision_warnings(theta, type_complex=type_complex)) is expected
+
+
+def _in_subprocess(body):
+    """Run ``body`` in a fresh interpreter with ``JAX_*`` scrubbed.
+
+    Import order is the whole subject here, so it cannot be tested in-process: by the time any
+    other test has run, x64 is long since on. The environment is scrubbed because
+    ``tests/test_boundary.py`` sets ``JAX_ENABLE_X64=1`` at import and a child would inherit it
+    — that difference passed alone and failed in the full suite until it was pinned down.
+    """
+    import os
+    import subprocess
+    import sys
+    import textwrap
+    env = {k: v for k, v in os.environ.items() if not k.startswith('JAX')}
+    env['PYTHONPATH'] = str(pathlib.Path(__file__).resolve().parent.parent)
+    out = subprocess.run([sys.executable, '-c', textwrap.dedent(body)],
+                         capture_output=True, text=True, env=env)
+    assert out.returncode == 0, out.stderr[-2000:]
+    return out.stdout
+
+
+def test_importing_fieldwave_lifts_the_x64_cap_when_jax_is_already_loaded():
+    """The half of the trap that can be closed rather than merely reported.
+
+    With x64 off JAX cannot be *asked* for float64 — it is a cap, not a default — and fieldwave
+    flips it either way, just later. Deferring therefore does not spare the caller the
+    process-wide change; it only makes the moment depend on import order, and an array built in
+    the gap is silently complex64. So it also happens at ``import fieldwave``, when JAX is
+    already present.
+    """
+    pytest.importorskip('jax')
+    assert 'OK' in _in_subprocess("""
+        import jax.numpy as jnp
+        import fieldwave
+        assert jnp.asarray(0.4 + 0.3j).dtype == jnp.complex128, 'the cap was not lifted'
+        print('OK')
+    """)
+
+
+def test_importing_fieldwave_does_not_drag_jax_in():
+    """The half of the old rationale that still holds: a NumPy-only caller pays nothing."""
+    assert 'OK' in _in_subprocess("""
+        import sys
+        import fieldwave
+        assert 'jax' not in sys.modules, 'import fieldwave pulled jax in'
+        print('OK')
+    """)
+
+
+def test_the_remaining_x64_ordering_gap_is_reported():
+    """JAX arriving *after* fieldwave is the ordering the early lift cannot reach.
+
+    Nothing has imported JAX yet when ``import fieldwave`` runs, so there is no config to
+    change; ``fieldwave.on_jax`` enables x64 later, at the first solve, and an array built
+    before that is complex64. The setter widens it without recovering anything — measured
+    ``|R| = 3.94`` against a true 0.67, with every dtype in sight reading complex128, which was
+    read as a solver bug before it was read as this.
+    """
+    pytest.importorskip('jax')
+    assert 'OK' in _in_subprocess("""
+        import warnings
+        import fieldwave
+        import jax.numpy as jnp
+        import numpy as np
+        from fieldwave._core.backend import PrecisionLossWarning
+
+        theta = jnp.asarray(0.4 + 0.3j)
+        assert theta.dtype == jnp.complex64, theta.dtype        # the trap is armed
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter('always')
+            fieldwave.rcwa(
+                backend=1, pol=0, n_top=1.0, n_bot=5.0, theta=theta, phi=0.3, fto=[5],
+                wavelength=900e-9, period=[2000e-9],
+                ucell=np.array([[[0, 1, 0, 1, 1, 1]]]) * 4 + 1, thickness=[100e-9],
+                type_complex=0, fourier_coefficients='sampled', factorization='li')
+        assert any(issubclass(r.category, PrecisionLossWarning) for r in rec), \\
+            'the remaining ordering gap went unreported'
+        print('OK')
+    """)
+
+def test_precision_warning_category_is_exported():
+    assert fieldwave.PrecisionLossWarning is PrecisionLossWarning

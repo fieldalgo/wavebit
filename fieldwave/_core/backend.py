@@ -58,6 +58,87 @@ class UnphysicalResultWarning(UserWarning):
     """
 
 
+class UnresolvedBranchWarning(UserWarning):
+    """A ``sqrt`` branch was chosen from a value that carries no information about it.
+
+    Selecting the physical root asks whether ``Re(v)`` is zero, and that is answerable only
+    while ``Re(v)`` stands clear of the working precision's round-off. At complex64 it often
+    does not: round-off is ~1e-7, and both a lossless layer at a complex incidence angle and a
+    weakly absorbing superstrate put real parts at exactly that scale — one of them noise, the
+    other signal, and nothing in the value distinguishes them. The branch is then taken from
+    the sign of round-off, which is why a single-precision solve can return ``|R| ~ 4`` while
+    the same solve at double precision is exact to 1e-14.
+
+    Its own category so it can be escalated or silenced on its own; see ``docs/branch-cuts.md``.
+    """
+
+
+class PrecisionLossWarning(UserWarning):
+    """A user-supplied value arrived narrower than the precision the solve was asked for.
+
+    Widening it is not the same as having had it: the digits are already gone. Its own
+    category so it can be silenced by a caller who is passing single-precision data on purpose.
+    """
+
+
+def _real_itemsize(dtype):
+    """Bytes per real component, or None for anything that is not a float/complex dtype.
+
+    Has to swallow three spellings: a NumPy scalar type (``np.complex128``), a dtype object,
+    and a PyTorch dtype, whose ``str`` is ``'torch.complex64'`` and which ``np.dtype`` refuses.
+    """
+    if dtype is None:
+        return None
+    import numpy as np
+    try:
+        d = np.dtype(dtype)
+    except Exception:
+        try:
+            d = np.dtype(str(dtype).rsplit('.', 1)[-1])
+        except Exception:
+            return None
+    if d.kind == 'f':
+        return d.itemsize
+    if d.kind == 'c':
+        return d.itemsize // 2
+    return None
+
+
+def check_input_precision(name, value, target_dtype):
+    """Warn when ``value`` is already narrower than ``target_dtype`` asks for.
+
+    The case this exists for: ``fieldwave/on_jax/__init__.py`` enables ``jax_enable_x64``, and
+    it does so on purpose only when the JAX backend is *first used*, since the setting is
+    process-wide and belongs to the caller. But `import fieldwave` alone does not pull that
+    module in, so an array built between the two is silently single precision::
+
+        import jax.numpy as jnp, fieldwave
+        theta = jnp.asarray(0.4 + 0.3j)          # complex64 -- x64 is not on yet
+        fieldwave.rcwa(backend=1, theta=theta, type_complex=0, ...)   # asks for double
+
+    ``jnp.array(theta, dtype=complex128)`` in the setter then promotes it without recovering
+    anything, and the solve runs with ~8 significant digits missing from its incidence angle.
+    That produced a ``|R| = 3.94`` against a true 0.67 while every dtype in sight said
+    complex128 — and it was read as a solver bug before it was read as this.
+
+    Not JAX-specific: any array handed in below the working precision loses the same way.
+    Silent widening is the failure mode, so this is the one place that says it out loud.
+    """
+    target = _real_itemsize(target_dtype)
+    have = _real_itemsize(getattr(value, 'dtype', None))
+    if target is None or have is None or have >= target:
+        return
+    import warnings
+    warnings.warn(
+        f'{name} was given at {8 * have}-bit precision but this solve runs at '
+        f'{8 * target}-bit, and widening it cannot recover the digits already lost. If this '
+        'is JAX, the usual cause is building the array before the first solve — '
+        '`jax_enable_x64` is enabled when fieldwave.on_jax is first imported, not by '
+        '`import fieldwave`. Import fieldwave.on_jax first, or build the array after the '
+        'first solve.',
+        PrecisionLossWarning, stacklevel=3)
+
+
 def check_physical(xp, de_ri, de_ti, n_top, atol=1e-3):
     """Warn if efficiencies are finite but cannot describe a physical result.
 

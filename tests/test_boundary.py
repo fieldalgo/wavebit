@@ -163,6 +163,45 @@ def test_normal_field_is_a_unit_vector_everywhere():
     assert np.abs(mag - 1.0).max() < 1e-12
 
 
+def test_the_normal_field_gets_the_two_axes_the_right_way_round():
+    """A disc's normal is radial in REAL space -- true only if the sample cell is not transposed.
+
+    ``period[0]`` is Px everywhere in this package (``polygon.polygon_ft``,
+    ``boundary.normal_projector_coeffs``, ``analytic.shape_ft``), so the sample grid has to
+    stretch ``u`` -- which indexes Nx -- by ``period[0]``. Reading the pair the other way round
+    samples the field over a transposed cell, and **a square cell hides it completely**: every
+    other normal-field test here runs on 1x1. So this one is 2:1, and a disc is the shape that
+    says which axis is which, because its correct normal is the radial direction and nothing
+    else.
+
+    The annulus skips the centre (the disc's medial axis is the single point there, where the
+    direction is undefined) and stops well inside the cell, so no pixel's nearest boundary point
+    is decided by the cell edge. The tolerance is set by the polygonisation: a 256-gon's edge
+    normal is off-radial by at most pi/256, i.e. 7.5e-5 in the cosine. A swapped pair is not a
+    small effect -- it puts this at 1.0.
+    """
+    Px, Py, r = 2.0, 1.0, 0.3
+    V = ellipse_verts(xnp, Px / 2.0, Py / 2.0, 2 * r, 2 * r, 0.0, 256)
+    Ny, Nx = 129, 257
+    nx, ny = _b.distance_gradient_normal_field(xnp, [V], (Ny, Nx), (Px, Py), xnp.float64)
+
+    X, Y = np.meshgrid((np.arange(Nx) + 0.5) / Nx * Px, (np.arange(Ny) + 0.5) / Ny * Py)
+    dx, dy = X - Px / 2.0, Y - Py / 2.0
+    rad = np.hypot(dx, dy)
+    align = (np.asarray(nx) * dx + np.asarray(ny) * dy) / np.where(rad > 0, rad, 1.0)
+    near = (rad > 0.5 * r) & (rad < 1.5 * r)
+    assert np.abs(np.abs(align[near]) - 1.0).max() < 1e-3
+
+    # And the same statement read off one pixel, exactly, where a swap is plainest. The grid is
+    # odd so row 64 sits *on* the centre line, and the polygonisation puts a vertex on the +x
+    # axis, so due east of the centre the nearest boundary point is that vertex and the normal
+    # is x_hat with no polygon tilt left in it. On the transposed cell this pixel is not even
+    # outside the disc.
+    i, j = Ny // 2, int((Px / 2.0 + 1.3 * r) / Px * Nx)
+    assert abs(abs(float(nx[i, j])) - 1.0) < 1e-14
+    assert abs(float(ny[i, j])) < 1e-14
+
+
 def test_normal_field_chunking_changes_nothing():
     """Chunking is a static split for memory; it must not be visible in the answer."""
     V = ellipse_verts(xnp, 0.5, 0.5, 0.34, 0.19, 0.7, 64)

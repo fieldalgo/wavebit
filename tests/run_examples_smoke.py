@@ -23,11 +23,10 @@ A script fails on any of:
 How far the third condition actually reaches, which is less far than it reads. The result guards
 are NumPy-only -- ``check_physical`` returns early on any other namespace, and under ``jit`` it
 has to, since a traced array carries no value to compare. Eager JAX and eager PyTorch could
-carry it and do not today. Seven of the eleven scripts here do not import FieldWave at all (all
-of ``rcwa/``, which are from-scratch reference implementations); of the four that do,
-``block_1d.py`` solves on PyTorch and ``block_2d.py`` on JAX. So this condition reaches the two
-``_verification.py`` files and nothing else. The exit-status and ``Traceback`` conditions cover
-all eleven; for the other nine, green means the script ran, not that its numbers are right.
+carry it and do not today. All four scripts here import FieldWave, but ``block_1d.py`` solves on
+PyTorch and ``block_2d.py`` on JAX, so this condition reaches the two ``_verification.py`` files
+and nothing else. The exit-status and ``Traceback`` conditions cover all four; for the other two,
+green means the script ran, not that its numbers are right.
 
 Known hole, since honesty about coverage is cheaper than discovering it later: detection is by
 scanning the child's output, so a script that silences the category itself -- ``simplefilter
@@ -39,8 +38,8 @@ say so in the script and expect this check to stop seeing it.
 
 Usage::
 
-    python tests/run_examples_smoke.py                # every example
-    python tests/run_examples_smoke.py examples/rcwa  # a subtree, for iterating
+    python tests/run_examples_smoke.py                    # every example
+    python tests/run_examples_smoke.py examples/block_2d.py   # one script, for iterating
 """
 
 from __future__ import annotations
@@ -91,9 +90,10 @@ def run_one(script: Path) -> tuple[bool, float, list[str], str]:
     """Run one script and judge it. Returns ``(ok, seconds, reasons, output)``."""
     env = dict(os.environ)
 
-    # Headless. Every rcwa/ example ends in plt.show(), which blocks forever on an interactive
-    # backend -- on a runner there is no display, so the failure would be an import error
-    # instead, but Agg is what makes this work identically on a developer's machine.
+    # Headless, kept as insurance rather than for a current need: nothing under examples/ imports
+    # matplotlib today, but a plotting example that ends in plt.show() would block forever on an
+    # interactive backend -- silently, until this script's timeout -- and setting it here costs
+    # nothing. On a runner there is no display anyway; Agg is what makes the two behave alike.
     env['MPLBACKEND'] = 'Agg'
 
     # The repository ahead of anything installed. Scripts run from their own directory, so the

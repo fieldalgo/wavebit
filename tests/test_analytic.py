@@ -15,7 +15,8 @@ import fieldwave
 import array_api_compat.numpy as xnp
 from fieldwave._core.analytic import (
     shape_ft as _shape_ft, laurent_conv_2d as _laurent_conv_2d,
-    assemble_eps_coeffs as _assemble_eps_coeffs, to_conv_mat_smooth_nvf)
+    assemble_eps_coeffs as _assemble_eps_coeffs, to_conv_mat_smooth_nvf,
+    normal_vector_field_analytical as _nvf_analytic)
 from fieldwave._core.backend import UnphysicalResultWarning
 from fieldwave._core.factorization import dfs2d as _dfs2d
 
@@ -167,6 +168,71 @@ def test_axis_aligned_matches_raster_nvf():
         want = total(analytic, psi)
         assert abs(total(ras, psi, factorization='nvf') - want) < 1e-3  # raster NVF
         assert abs(total(ras, psi) - want) < 2e-3                       # raster DFS
+
+
+def test_the_analytic_normal_field_gets_the_two_axes_the_right_way_round():
+    """A disc's normal is radial in REAL space -- true only if the sample cell is not transposed.
+
+    ``period[0]`` is Px everywhere in this package (:func:`shape_ft`,
+    :func:`~fieldwave._core.analytic.shape_geometry`, ``polygon.polygon_ft``,
+    ``boundary.normal_projector_coeffs``), so the sample grid has to stretch ``u`` -- which
+    indexes Nx -- by ``period[0]``. ``normal_vector_field_analytical`` read the pair backwards
+    until 2026-08-11 and its one production caller reversed it back, so the path was right and
+    nothing in the suite constrained the convention: **a square cell hides the swap completely**,
+    and every existing caller here and in ``test_nvf_vector``,
+    ``test_nvf_zero_norm_gradients`` and ``test_shape_position_gradients`` uses one. So this
+    cell is 2:1, and a disc is the shape that says which axis is which, because its correct
+    normal is the radial direction and nothing else.
+
+    Unlike the polygon path's distance gradient, this is a closed form -- for a circle
+    ``g = 2*(dx, dy)/a**2``, exactly parallel to the radius at every sample -- so there is no
+    polygonisation angle to allow for and the tolerance is machine epsilon rather than the 1e-3
+    its counterpart in ``test_boundary`` needs. The centre pixel is the one exclusion: ``g``
+    vanishes there, :func:`~fieldwave._core.analytic._hypot_safe` returns ``(0, 0)`` by design,
+    and the grid being odd on both axes lands a sample exactly on it. A swapped pair is not a
+    small effect: it takes the worst deviation to 1.0, i.e. somewhere in the cell the field
+    comes out square to the radius instead of along it.
+
+    **Both branches are checked, and the second one is the reachable one.** ``lattice=None``
+    builds the sample grid from Px / Py directly; a basis makes that branch unreachable, so a
+    check written only that way pins a path the solver never takes (``engine`` hands the shape
+    paths ``as_lattice(period=...)`` whenever the period is readable). But the pair is read
+    *outside* the branch as well, at :func:`shape_geometry`, which is where a shape that does
+    not name ``cx`` / ``cy`` gets its centre -- so the natural way to write a centred disc stays
+    sensitive with a basis in hand. Measured on this cell, reversing the pair moves the field by
+    1.96 with an explicit centre and no lattice, and by 1.7 with the centre defaulted and a
+    lattice; the remaining combination, explicit centre *and* a lattice, moves by exactly 0.
+    That last cell is why the defaulted case is here: on its own the first assertion would be
+    checking dead code.
+    """
+    Px, Py, r = 2.0, 1.0, 0.3
+    Ny, Nx = 129, 257
+    shape = dict(type='circle', cx=Px / 2.0, cy=Py / 2.0, lx=2 * r, n_index=2.0)
+    nx, ny = _nvf_analytic(xnp, (Ny, Nx), [shape], (Px, Py), xnp.float64)
+
+    X, Y = np.meshgrid((np.arange(Nx) + 0.5) / Nx * Px, (np.arange(Ny) + 0.5) / Ny * Py)
+    dx, dy = X - Px / 2.0, Y - Py / 2.0
+    rad = np.hypot(dx, dy)
+
+    def radial_alignment(fx, fy):
+        return (np.asarray(fx) * dx + np.asarray(fy) * dy) / np.where(rad > 0, rad, 1.0)
+
+    assert np.abs(np.abs(radial_alignment(nx, ny)[rad > 0]) - 1.0).max() < 1e-12
+
+    # And the same statement read off one pixel, exactly, where a swap is plainest. Both counts
+    # are odd, so the disc's centre is a sample and row 64 sits *on* the centre line: due east
+    # of it the normal is x_hat with nothing else in it. On the transposed cell that row is not
+    # the centre line and this pixel is not even due east of the disc.
+    i, j = Ny // 2, int((Px / 2.0 + 1.3 * r) / Px * Nx)
+    assert abs(abs(float(nx[i, j])) - 1.0) < 1e-14
+    assert abs(float(ny[i, j])) < 1e-14
+
+    # The branch the solver actually takes: a basis in hand, and the centre left to default out
+    # of Px / Py. Same disc, so the same radial statement holds and the same tolerance applies.
+    centred = dict(type='circle', lx=2 * r, n_index=2.0)
+    nx_l, ny_l = _nvf_analytic(xnp, (Ny, Nx), [centred], (Px, Py), xnp.float64,
+                               ((Px, 0.0), (0.0, Py)))
+    assert np.abs(np.abs(radial_alignment(nx_l, ny_l)[rad > 0]) - 1.0).max() < 1e-12
 
 
 @pytest.mark.parametrize('psi', [np.pi / 2, 0.0], ids=['te', 'tm'])

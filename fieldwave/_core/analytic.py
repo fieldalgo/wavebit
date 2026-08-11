@@ -211,6 +211,31 @@ def check_shape_spec(shape, shape_index=0, layer_index=0):
                          f'why this is refused rather than dropped.')
 
 
+#: Everything a layer dict may say. Keep this in step with what the builders below read.
+_LAYER_KEYS = frozenset({'n_base', 'base', 'shapes', 'combine'})
+
+
+def check_layer_spec(layer, layer_index=0):
+    """Refuse a layer dict that says something nothing here reads.
+
+    Same argument as :func:`check_shape_spec` one level up, and the same cost of not having it:
+    every key is read with ``.get`` and a default, so a misspelling is not an error, it is a
+    *different structure* returned without complaint. A layer whose ``phi`` is spelled ``pih``
+    has no shapes either, and an empty shape list is perfectly legal — so it comes back as a
+    uniform slab of ``n_base``, solves, conserves energy, and is wrong. There is nothing
+    downstream that could notice.
+    """
+    unknown = sorted(set(layer) - _LAYER_KEYS)
+    if unknown:
+        raise ValueError(
+            f'Analytic layer {layer_index}: {unknown} is not read by any path here. A layer '
+            f'takes {sorted(_LAYER_KEYS)}. Refused rather than ignored, because an unread key '
+            f'leaves a layer that still *builds*: a dict carrying nothing this reads has no '
+            f'shapes either, and an empty shape list is legal, so it comes back as a uniform '
+            f'slab of n_base — which solves, conserves energy to 1e-14, and is not the '
+            f'structure that was asked for.')
+
+
 def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_REL,
                             lattice=None):
     """Refuse a layer whose shapes overlap without saying how they should combine.
@@ -437,16 +462,35 @@ def _device(x):
 def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype, lattice=None):
     """Unit normal field of the shapes, sampled on ``grid_shape`` — analytic, not from a raster.
 
-    ``period`` is unpacked as ``(Py, Px)``. Written without in-place mutation so it stays
-    differentiable in the shape parameters — with the exception of ``cx`` and ``cy``, which the
-    rectangle branch reaches only through ``sign()`` and a comparison. Both have zero derivative
-    everywhere, so a position never survives this function.
+    ``period`` is unpacked as ``(Px, Py)`` — the order every other builder in the package reads
+    it in (``polygon.polygon_ft``, :func:`shape_ft`, :func:`shape_geometry`,
+    ``boundary.normal_projector_coeffs``, ``boundary.conv_mats``). It took ``(Py, Px)`` until
+    2026-08-11, with a caller that reversed the pair to match, so the analytic path was correct
+    and the convention was still wrong: being the odd one out is what cost a real wrong answer.
+    ``boundary.distance_gradient_normal_field`` was written by copying this body, kept the
+    reversed unpack, and has a caller that passes ``(Px, Py)`` — so it sampled its field over a
+    transposed cell. Nothing caught it, because a square cell makes the swap invisible and every
+    test that reached it used one.
+
+    How far that reached had to be *measured* rather than read off the shared line, and the
+    answer differs per copy: there the pair is read only when ``lattice is None``, and ``engine``
+    hands the shape paths a basis whenever the period is readable, so it was live only for direct
+    callers. Here it is not so contained — the ``lattice`` branch below shields the sample grid,
+    but :func:`shape_geometry` is reached either way and takes the pair as well, so a shape that
+    leaves ``cx`` / ``cy`` to default is sensitive even with a basis in hand. Reversing the pair
+    on a 2:1 cell moves this field by 1.96 with an explicit centre and no lattice, by 1.7 with a
+    defaulted centre and a lattice, and by exactly 0 with both.
+
+    Written without in-place mutation so it stays differentiable in the shape parameters — with
+    the exception of ``cx`` and ``cy``, which the rectangle branch reaches only through
+    ``sign()`` and a comparison. Both have zero derivative everywhere, so a position never
+    survives this function.
 
     That is why :func:`normal_projector_coeffs` does not put a position in: it builds the field
     with the shape at the centre of the cell and translates the *coefficients*.
     """
     Ny, Nx = grid_shape
-    Py, Px = period[0], period[1]
+    Px, Py = period[0], period[1]
 
     u = (xp.asarray([float(i) for i in range(Nx)], dtype=dtype) + 0.5) / Nx
     v = (xp.asarray([float(i) for i in range(Ny)], dtype=dtype) + 0.5) / Ny
@@ -619,7 +663,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype,
     else:
         built, shift_y, shift_x = shapes, None, None
 
-    nx, ny = normal_vector_field_analytical(xp, grid_shape, built, (Py, Px), real_dtype,
+    nx, ny = normal_vector_field_analytical(xp, grid_shape, built, (Px, Py), real_dtype,
                                             lattice)
 
     if shift_y is None:
@@ -647,13 +691,29 @@ def to_conv_mat_smooth_nvf(xp, shapes, n_base, fto_x, fto_y, period, dtype,
     """
     eps_c, inv_eps_c = assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype,
                                            lattice)
+    c_xx, c_xy, c_yy = normal_projector_coeffs(
+        xp, shapes, (normal_grid, normal_grid), period, fto_x, fto_y, dtype, lattice)
+    return nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, fto_x, fto_y)
+
+
+def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, fto_x, fto_y):
+    """Assemble the five convolution matrices from coefficient grids — the NVF tensor itself.
+
+    The last step of every non-raster NVF path, and the same step for all of them: what differs
+    between the analytic, boundary and level-set paths is *how* the five coefficient grids were
+    obtained, never what is done with them. Kept in one place so a change to the tensor cannot
+    reach one path and miss another — the raster path's equivalent is
+    :func:`fieldwave._core.factorization.nvf_conv_matrices`.
+
+    ``eps_c`` / ``inv_eps_c`` are the ``eps`` and ``1/eps`` coefficients on the doubled
+    reciprocal grid; ``c_xx`` / ``c_xy`` / ``c_yy`` those of ``nx**2``, ``nx*ny``, ``ny**2``.
+    Returns ``(eps_xx, eps_yy, eps_xy, eps_yx, epz_i)``.
+    """
     ep_dir = laurent_conv_2d(xp, eps_c, fto_x, fto_y)
     ep_inv = laurent_conv_2d(xp, inv_eps_c, fto_x, fto_y)
 
     delta_ep = ep_dir - xp.linalg.inv(ep_inv)
 
-    c_xx, c_xy, c_yy = normal_projector_coeffs(
-        xp, shapes, (normal_grid, normal_grid), period, fto_x, fto_y, dtype, lattice)
     C_xx = laurent_conv_2d(xp, c_xx, fto_x, fto_y)
     C_xy = laurent_conv_2d(xp, c_xy, fto_x, fto_y)
     C_yy = laurent_conv_2d(xp, c_yy, fto_x, fto_y)
@@ -689,6 +749,7 @@ def to_conv_mat_smooth_layers(layer_shapes, fto_x, fto_y, period,
 
     out = [[], [], [], [], []]
     for index, layer in enumerate(layer_shapes):
+        check_layer_spec(layer, index)
         check_layer_combination(layer, period, index, lattice=lattice)
         n_base = layer.get('n_base', layer.get('base', 1.0))
         plan = None if boundary_plans is None else boundary_plans[index]

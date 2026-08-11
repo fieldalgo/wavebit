@@ -21,7 +21,7 @@ Stages (matching the legacy chain, kept as one function each to make bit-parity 
   3. final matching      — incident field -> R, T -> diffraction efficiency
 """
 from .backend import array_namespace, as_array, check_finite, check_physical, eig
-from .conventions import boundary_kz, mode_q
+from .conventions import boundary_kz, incident_kz, mode_q
 
 
 def _diag(xp, v):
@@ -189,13 +189,18 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     Kz_top = _diag(xp, kz_top)
     delta = xp.astype(_unit(xp, ff_x, ff_x // 2), C)
     cos_t = xp.cos(as_array(xp, theta, dtype=C))
+    # The incident wave's own kz, read off the same vector the reflected orders use. It equals
+    # `n_top * cos(theta)` for a real incidence angle, and must be *taken from* `kz_top` rather
+    # than recomputed so that a complex angle cannot put the two sides of the match on opposite
+    # branches -- see :func:`~fieldwave._core.conventions.incident_kz`.
+    kz_inc = incident_kz(kz_top, ff_x // 2)
 
     if pol == 0:  # TE
-        inc = -1j * n_top * cos_t * delta
+        inc = -1j * kz_inc * delta
         T1 = xp.linalg.inv(G - 1j * Kz_top @ F) @ (-1j * Kz_top @ delta + inc)
     else:         # TM
         Kz_scaled = Kz_top / (n_top ** 2)
-        inc = -1j * delta * cos_t / n_top
+        inc = -1j * delta * kz_inc / (n_top ** 2)
         T1 = xp.linalg.inv(G - 1j * Kz_scaled @ F) @ (-1j * Kz_scaled @ delta + inc)
 
     R = (F @ T1 - delta)[None, :]
@@ -343,10 +348,14 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
     I = xp.astype(xp.eye(ff_xy), C)
     O = xp.astype(xp.zeros((ff_xy, ff_xy)), C)
 
+    cos_t = xp.cos(as_array(xp, theta, dtype=C))
+    # See :func:`~fieldwave._core.conventions.incident_kz`: an identity for a real angle, and
+    # the difference between a solve and a degenerate R = -delta for a complex one.
+    kz_inc = incident_kz(kz_top, ff_xy // 2)
+
     Kz_top = _diag(xp, kz_top)
     kz_top_2d = xp.reshape(kz_top, (ff_y, ff_x))
     kz_bot_2d = xp.reshape(kz_bot, (ff_y, ff_x))
-    cos_t = xp.cos(as_array(xp, theta, dtype=C))
     sin_psi = xp.sin(as_array(xp, psi, dtype=C))
     cos_psi = xp.cos(as_array(xp, psi, dtype=C))
 
@@ -365,8 +374,8 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
     ])
     final_B = _block(xp, [
         [-sin_psi * delta],
-        [cos_psi * cos_t * delta],
-        [1j * sin_psi * n_top * cos_t * delta],
+        [cos_psi * (kz_inc / n_top) * delta],
+        [1j * sin_psi * kz_inc * delta],
         [1j * n_top * cos_psi * delta],
     ])
 
@@ -405,8 +414,8 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
         s_p = xp.sin(xp.asarray(psi_v, dtype=C))
         c_p = xp.cos(xp.asarray(psi_v, dtype=C))
         cols.append(_block(xp, [[-s_p * delta],
-                                [c_p * cos_t * delta],
-                                [1j * s_p * n_top * cos_t * delta],
+                                [c_p * (kz_inc / n_top) * delta],
+                                [1j * s_p * kz_inc * delta],
                                 [1j * n_top * c_p * delta]]))
     final_RT_tetm = final_A_inv @ xp.concat(cols, axis=1)
 

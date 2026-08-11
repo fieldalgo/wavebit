@@ -98,12 +98,12 @@ jobs:
       - name: Install CPU-only PyTorch
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu
 
-      # Both backends, because the four vector examples use torch and the two
-      # `_verification` ones use jax as well. matplotlib is not a dependency of
-      # the library and never should be -- it is a dependency of the examples,
-      # which plot.
+      # Both backends, because `block_1d` solves on torch,
+      # `block_2d` on jax, and the two `_verification` ones run all three.
+      # No matplotlib: nothing under examples/ plots any more, and it is not a
+      # dependency of the library and never should be.
       - name: Install FieldWave with both optional backends
-        run: pip install -e '.[jax,pytorch]' matplotlib
+        run: pip install -e '.[jax,pytorch]'
 
       # Runs every examples/**/*.py from its own directory under MPLBACKEND=Agg and
       # fails on a non-zero exit, a `Traceback`, or an `UnphysicalResultWarning`.
