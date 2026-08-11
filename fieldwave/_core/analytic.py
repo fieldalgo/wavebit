@@ -73,7 +73,6 @@ position derivative and makes the answer depend on where in the cell the shape s
 """
 from . import overlap as _overlap
 from .backend import array_namespace, as_array, j1, jinc, sinc
-from .factorization import dfs2d
 from .overlap import COMBINE_MODES, OVERLAP_TOL_REL      # re-exported; both paths read them
 
 
