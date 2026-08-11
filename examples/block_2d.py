@@ -4,18 +4,20 @@ import fieldwave
 
 
 def run():
-    rcwa_options = dict(backend=1, thickness=[205, 305, 100000], period=[300, 300],
-                        fto=[3, 3],
-                        n_top=1, n_bot=1,
-                        wavelength=900,
-                        pol=0.5,
-                        )
-
     # Absorbing Si would be 3.638751670074983+0.007498295841854125j — Im(n) > 0 is loss
-    # here, the same convention the bundled nk tables use (n + 1j*k).
+    # here, the same convention the bundled nk tables use (n + 1j*k). n_bot takes a complex
+    # index just as a layer does.
     si = 3.638751670074983
     sio2 = 1.4518
     si3n4 = 2.0056
+
+    # The silicon underneath is the substrate, so it goes in n_bot.
+    rcwa_options = dict(backend=1, thickness=[205, 305], period=[300, 300],
+                        fto=[3, 3],
+                        n_top=1, n_bot=si,
+                        wavelength=900,
+                        pol=0.5,
+                        )
 
     ucell = [
         # layer 1
@@ -35,10 +37,6 @@ def run():
                 # obj 2
                 ['rectangle', 200, 150, 49.5, 300, si, 0, 0, 0],
             ],
-        ],
-        # layer 3
-        [si,
-         []
         ],
     ]
 
