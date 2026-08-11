@@ -20,11 +20,13 @@ test in this file. The outside check lives in
 ``tests/references/test_4ff_external_goldens.py`` — RETICOLO and fmmax, 21 cases, on goldens
 that were already committed.
 
-Every case here is a **uniform** layer. Most run at one Fourier order; the two multi-order
-tests at the end exist because "the algebra is written in blocks and should extend" is exactly
-the sort of claim this suite exists to disbelieve — and because at ``ff = 1`` the entire block
-layout is the identity and can be wrong invisibly. What they cannot reach is order *coupling*,
-which needs a patterned layer and therefore a factorization this solver does not have.
+Most cases here are **uniform** layers at one Fourier order. Three groups at the end widen
+that, each for a reason: the multi-order tests because "the algebra is written in blocks and
+should extend" is the sort of claim this suite exists to disbelieve, and because at ``ff = 1``
+the entire block layout is the identity and can be wrong invisibly; and the grating test because
+a uniform layer's convolution matrices are scaled identities, so nothing else here makes orders
+actually couple. What none of them reach is a patterned *anisotropic* layer, which has no
+factorization yet.
 """
 import numpy as np
 import pytest
@@ -581,3 +583,55 @@ def test_the_plain_transfer_cannot_do_a_realistic_order_count():
         solve_uniform_stack(WL, kx, ky, [(blocks(eps, ff), THICK)], ff,
                             vacuum_sp_states(np, kx, ky, ff, order=centre)[0],
                             connecting_algo='TMM')
+
+
+@pytest.mark.parametrize('theta_deg,phi_deg', [(0.0, 0.0), (35.0, 40.0)],
+                         ids=['normal', 'conical'])
+@pytest.mark.parametrize('fto', [1, 2, 3], ids=['9 orders', '25 orders', '49 orders'])
+def test_a_real_grating_matches_the_2ff_solve(fto, theta_deg, phi_deg):
+    """Order *coupling*, which the uniform multi-order tests cannot reach.
+
+    An **isotropic** grating needs no new factorization: the 2ff path already builds the three
+    convolution matrices, and for a scalar permittivity the 4ff operator's z row is empty, so the
+    mapping is direct — ``exx = epx``, ``eyy = epy``, ``ezz_i = epz_i``, everything else zero.
+    That is not a fitted correspondence: ``epx`` carries the inverse rule along ``x`` because
+    ``D_x = eps E_x`` is a continuous quantity written as a product of discontinuous ones, and
+    ``exx`` sits in exactly that product in the first-order form too.
+
+    What makes this different from every other test in this file is that the convolution matrices
+    are **full**, not scaled identities. Orders genuinely mix, so this exercises the block algebra
+    with real coupling rather than ff independent problems side by side.
+
+    It stops at isotropic. A *patterned anisotropic* layer has no factorization at all yet — Li's
+    rule does not apply per component when the continuous quantity is a sum of three products
+    (``docs/anisotropic-materials.md`` §3) — so the geometry 4ff exists for still cannot be
+    patterned. This says the solver is ready for those matrices, not that they exist.
+    """
+    import fieldwave
+    from fieldwave._core.factorization import to_conv_mat_raster_discrete
+    from fieldwave._core.solve_2d import order_grid_kxy
+
+    ucell = np.ones((1, 40, 40))
+    ucell[0, 12:28, 12:28] = 2.6
+
+    solver = fieldwave.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=np.deg2rad(theta_deg),
+                            phi=np.deg2rad(phi_deg), psi=0.0, fto=(fto, fto),
+                            period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
+                            ucell=ucell)
+    ref = solver.conv_solve()
+
+    KX, KY = order_grid_kxy(np, np.asarray(solver.get_kx_ky_vector(WL)[0], complex),
+                            np.asarray(solver.get_kx_ky_vector(WL)[1], complex))
+    kx, ky = KX.ravel(), KY.ravel()
+    ff = kx.size
+    epx, epy, epz_i = to_conv_mat_raster_discrete(np.asarray(ucell, dtype=complex), fto, fto)
+    O = np.zeros((ff, ff), dtype=complex)
+    layers = [(dict(exx=epx[0], exy=O, exz=O, eyx=O, eyy=epy[0], eyz=O, ezx=O, ezy=O,
+                    ezz_i=epz_i[0]), THICK)]
+
+    states = vacuum_sp_states(np, kx, ky, ff, order=fto * (2 * fto + 1) + fto)
+    for psi, res, pol in zip(states, (ref.res_te_inc, ref.res_tm_inc), ('TE/s', 'TM/p')):
+        got = solve_uniform_stack(WL, kx, ky, layers, ff, psi)
+        want = (float(np.asarray(res.de_ri).sum()), float(np.asarray(res.de_ti).sum()))
+        gap = max(abs(a - b) for a, b in zip(got, want))
+        assert gap < 1e-12, f'{pol}, fto={fto}, {theta_deg}/{phi_deg} deg: {gap:.2e}'

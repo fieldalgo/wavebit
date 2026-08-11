@@ -1,6 +1,8 @@
 # Anisotropic and magnetic materials — what the solver already takes, and what each gap costs
 
-Written: 2026-08-09. Scoping only; nothing here is implemented.
+Written: 2026-08-09, and it was scoping only then. Since 2026-08-11 the z-coupling row is
+implemented — see [`first-order-4ff.md`](first-order-4ff.md) for what that path does and how
+far it is checked. This document keeps the scoping question: what each *remaining* gap costs.
 
 Targets:
 - `fieldwave/_core/solve_2d.py::layer_modes_2d` — the five permittivity slots the mode operator reads
@@ -15,12 +17,13 @@ Targets:
 | case | status | what it costs |
 |---|---|---|
 | uniform (unpatterned) anisotropic layer, in-plane tensor | **works today** | a thin wrapper |
-| patterned anisotropic layer | not supported | a new factorization; **solver unchanged** |
+| `eps_xz` / `eps_yz` (z-coupling), uniform | **solved, not wired** | done — a different solver, [`first-order-4ff.md`](first-order-4ff.md); still needs dispatch |
+| patterned anisotropic layer | not supported | a new factorization; **both solvers unchanged** |
 | `mu != 1` | not supported | layer operator **and** the half-space boundary |
-| `eps_xz` / `eps_yz` (z-coupling) | not supported | **a different solver** — 4ff first-order, not 2ff second-order |
 
-Nothing on this list is impossible. Exactly one of them changes the *shape* of the code rather
-than its content, and it is the last row.
+Nothing on this list is impossible. Exactly one of them changed the *shape* of the code rather
+than its content — the z-coupling row, which is why it needed a second solver and got one. The
+remaining two are content: new matrices for the same machinery.
 
 ## 1. What the mode operator already accepts
 
