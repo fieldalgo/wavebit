@@ -42,17 +42,19 @@ def run_raster(rcwa_options, backend, fourier_coefficients):
 
 
 if __name__ == '__main__':
-    rcwa_options = dict(backend=0, thickness=[205, 100000], period=[300, 300],
-                        fto=[3, 3],
-                        n_top=1, n_bot=1,
-                        wavelength=900,
-                        )
-
     # Absorbing Si would be 3.638751670074983+0.007498295841854125j — Im(n) > 0 is loss
-    # here, the same convention the bundled nk tables use (n + 1j*k).
+    # here, the same convention the bundled nk tables use (n + 1j*k). n_bot takes a complex
+    # index just as a layer does.
     si = 3.638751670074983
     sio2 = 1.4518
     si3n4 = 2.0056
+
+    # The silicon underneath is the substrate, so it goes in n_bot.
+    rcwa_options = dict(backend=0, thickness=[205], period=[300, 300],
+                        fto=[3, 3],
+                        n_top=1, n_bot=si,
+                        wavelength=900,
+                        )
 
     ucell_block = [
         # layer 1
@@ -64,28 +66,25 @@ if __name__ == '__main__':
                 ['rectangle', 240, 40, 40, 60, si, 0, 0, 0],
             ],
         ],
-        # layer 2
-        [si,
-         []
-        ],
     ]
 
     a = si3n4
     b = si
     c = si
 
+    # Row 0 is y = 0, as on every path in this package -- see Conventions in the README.
     ucell_raster = [
         [
-            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
+            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
+            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
+            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
+            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
+            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
+            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
 
             [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
             [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
@@ -98,49 +97,16 @@ if __name__ == '__main__':
             [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
             [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
 
-            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
-            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
-            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
-            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
-            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
-            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,b,b,b,b,a,a,a,a],
-            [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
-
-        ],
-        [
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
-            [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b] + [b,b,b,b,b,b,b,b,b,b],
+            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
+            [c,c,c,c,c,c,c,c,c,c] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],
         ],
     ]
 

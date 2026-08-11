@@ -82,6 +82,12 @@ print(result.de_ri.sum(), result.de_ti.sum())   # 0.2053316282584784 0.794668371
 `de_ri` and `de_ti` are the reflected and transmitted diffraction efficiencies, one entry per
 order. Here they sum to 1 within 1e-15, as a lossless structure must.
 
+`n_top` and `n_bot` may be complex: an absorbing substrate or superstrate is given as an index
+like any other, with loss as `Im(n) > 0`, matching the bundled nk tables. `tests/test_lossy_media.py`
+pins both against the closed-form multilayer answer. One caveat at the top boundary — incident
+power in an absorbing medium is convention-dependent, so with a complex `n_top` the efficiencies
+are not comparable to 1 and the amplitudes are what mean something.
+
 The integer codes have named equivalents, if you prefer them to the literals:
 
 ```python
