@@ -96,7 +96,32 @@ What is not here, in the order it will be wanted:
   layer, where Li's rule does not apply per component because the continuous quantity is a sum of
   three products (``docs/anisotropic-materials.md`` §3). This module takes convolution matrices
   as input and needs no change for it; the matrices do not exist.
-* **Dispatch.** Nothing routes to this. ``solve_for_conv`` still refuses a z-coupled tensor.
+* **Dispatch.** Nothing routes to this, and ``solve_for_conv`` has no argument to put a z row in
+  — its five slots are the whole public surface. The design was worked out on 2026-08-11 and the
+  two facts that decide it are measured, so it need not be re-derived:
+
+  **The mode correspondence is exact and simple.** For a layer both formulations can express,
+  the 2ff triple is recoverable from the 4ff state with no fitting::
+
+      W = psi_f[:2*ff]          the transverse E
+      V = 1j * psi_f[2*ff:]     the partner field, i times the transverse H
+      q  = -1j * lam_f
+
+  Verified to 1e-15 on biaxial and rotated-uniaxial layers at three incidences; the ``1j`` is a
+  clean scalar, identical in every case.
+
+  **But the ETM recursion cannot be reused as it stands.** It writes the two directions as
+  ``big_F = big_W (I + Y)`` and ``big_G = big_V (I - Y)``, which assumes the backward modes are
+  the forward ones with the partner field negated. Measured, that assumption holds to 1e-15 for
+  a z-decoupled layer *and at normal incidence*, and fails at 6.9e-1 (E) / 1.1 (H) for a Voigt
+  tensor at 35 degrees — the same ``+-`` pairing this module exists because of.
+
+  So dispatch is not a branch inside :func:`fieldwave._core.solve_2d.solve_2d`. The 4ff path has
+  to carry its own stack solve, which it does, and hand the shared
+  :func:`fieldwave._core.solve_1d.final_matching` a ``(big_F, big_G, big_T)`` built from its own
+  ``G`` and ``T_acc`` — rotated into the s/p basis by ``varphi`` and carrying the ``1j`` above.
+  Getting that normalisation right is the remaining work: ``big_T`` feeds ``T_s`` / ``T_p``
+  directly, so a per-mode scale that cancels in ``R`` does not cancel in ``T``.
 * **Field reconstruction**, and the ``mu`` rows that
   ``tests/references/golden_fmmax_magnetic.npz`` is already holding.
 """
