@@ -52,11 +52,16 @@ which have not been read — only about the numbers it returns through this brid
 Checked 2026-08-11, because "no oracle exists" is a claim that has to be earned rather than
 assumed:
 
-| solver | z-coupling | how it was established |
-|---|---|---|
-| fmmax v1.7.1 | none | `eigensolve_general_anisotropic_media` takes `xx/xy/yx/yy/zz` for each of eps and mu and has no `xz/yz/zx/zy` — "general" there means *magnetic*. API signature. |
-| S4 | none | same five-slot shape |
-| inkstone 0.3.15 | **accepted, then silently dropped** | `AddMaterial` takes a `(3,3)` array, and the output is bit-identical to the same tensor with the z row zeroed |
+Each was run, at its current release, against two checks that need no agreement with anything
+else: does a lossless tensor come back with `R + T = 1`, and does zeroing `xz/zx/yz/zy` change
+the answer.
+
+| solver | version | z-coupling | how it was established |
+|---|---|---|---|
+| fmmax | 1.7.1 | none | `eigensolve_general_anisotropic_media` takes `xx/xy/yx/yy/zz` for each of eps and mu, with no `xz/yz/zx/zy` — "general" there means *magnetic*. API signature. |
+| inkstone | 0.3.15 | **accepted, silently dropped** | `AddMaterial` takes a `(3,3)` array; output is bit-identical to the same tensor with the z row zeroed |
+| EMpy | 2.2.3 | **read, but unusable** | `AnisotropicTransferMatrix` does use the z row, and returns `R + T = 1.6e13` for a plain Faraday tensor at normal incidence |
+| S4 | — | none | same five-slot shape; not re-run here |
 
 inkstone deserves the detail because it is the trap. It has the only full-3×3 API of the eight,
 it conserves energy to 1.3e-15 across thirty lossless configurations, and it reproduces our 4ff
@@ -67,8 +72,16 @@ nothing looks wrong. On z-coupled tensors it is 4e-4 to 3e-2 out, unmoved by `nu
 actually solves is a valid lossless one, which is the same reason our own 2ff path returns
 `R + T = 1` on a Voigt tensor while being wrong (`test_anisotropic_berreman.py`).
 
+EMpy fails the opposite way, and its normal-incidence blowup is what makes that readable: at
+`theta = 0` there is no angle convention to get wrong, and the same harness returns the exact
+Airy answer for isotropic and diagonal tensors, so `1.6e13` is the solver rather than the
+bridge. It is a pure T-matrix, which its own documentation calls unstable.
+
+**The pattern worth carrying forward: "supports a full 3×3 tensor" was wrong or badly incomplete
+for three of the four.** An API that accepts an argument is not an API that uses it correctly.
+
 inkstone is AGPL, so its implementation has not been read; every statement above is black-box —
-public API signatures and returned numbers.
+public API signatures and returned numbers. EMpy and fmmax are MIT.
 
 Two things to weigh when reading agreement between them:
 
