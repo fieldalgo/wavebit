@@ -237,12 +237,13 @@ def test_stack_solve_matches_berreman(label, eps, theta_deg):
 def test_rotating_the_whole_problem_about_z_changes_nothing(label, eps, theta_deg, alpha_deg):
     """Turn the tensor and the incidence azimuth together; the efficiencies must not move.
 
-    This is the only judge of a tilted magnetisation that is neither a solver nor ours. **No
-    outside solver reaches this geometry** — RETICOLO stops conserving energy past one
-    off-diagonal pair (``tests/references/README.md``), fmmax's "general anisotropic" entry point
-    means *magnetic* and still takes only the five 2ff slots, and S4 has the same shape. So the
-    alternative to a theorem is two of our own derivations agreeing, which is what
-    ``_berreman_M`` already is.
+    This is the only judge of a tilted magnetisation that is neither a solver nor ours. **All
+    four surveyed solvers are out, each for a measured reason** — RETICOLO stops conserving
+    energy past one off-diagonal pair; fmmax's "general anisotropic" entry point means *magnetic*
+    and still takes only the five 2ff slots; S4 has the same shape; and inkstone, the one with a
+    full 3x3 API, returns numbers bit-identical to the same tensor with its z row zeroed. The
+    table is in ``tests/references/README.md``. So the alternative to a theorem is two of our own
+    derivations agreeing, which is what ``_berreman_M`` already is.
 
     It is also the only thing in the repo that exercises ``ky != 0`` at all. Every other
     anisotropy test sits in the plane of incidence, and so does ``_berreman_M``, which takes
