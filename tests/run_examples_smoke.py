@@ -23,10 +23,10 @@ A script fails on any of:
 How far the third condition actually reaches, which is less far than it reads. The result guards
 are NumPy-only -- ``check_physical`` returns early on any other namespace, and under ``jit`` it
 has to, since a traced array carries no value to compare. Eager JAX and eager PyTorch could
-carry it and do not today. All five scripts here import FieldWave, but ``block_1d.py`` and
-``levelset_2d.py`` solve on PyTorch and ``block_2d.py`` on JAX, so this condition reaches the
-two ``_verification.py`` files and nothing else. The exit-status and ``Traceback`` conditions
-cover all five; for the other three, green means the script ran, not that its numbers are right.
+carry it and do not today. All four scripts here import FieldWave, but ``block_1d.py`` solves on
+PyTorch and ``block_2d.py`` on JAX, so this condition reaches the two ``_verification.py`` files
+and nothing else. The exit-status and ``Traceback`` conditions cover all four; for the other two,
+green means the script ran, not that its numbers are right.
 
 Known hole, since honesty about coverage is cheaper than discovering it later: detection is by
 scanning the child's output, so a script that silences the category itself -- ``simplefilter
