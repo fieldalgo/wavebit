@@ -50,6 +50,25 @@ def boundary_kz(xp, eps, k_par_sq):
     return xp.where(flip, -v, v)
 
 
+def incident_kz(kz_top, index):
+    """The incident order's ``kz``, read off the superstrate vector rather than recomputed.
+
+    The boundary match sets a reflected field built from ``kz_top`` (via :func:`boundary_kz`)
+    against an incident field. Both sides need the *same* number at the incident order, and
+    the reliable way to guarantee that is to take it from the vector the other side already
+    uses — ``kz_top[index]`` — instead of writing ``n_top * cos(theta)`` a second time.
+
+    The two spellings agree for a real incidence angle, which is why the duplication survived:
+    it is an identity there and nothing in the suite could see it. They part company as soon
+    as ``theta`` is complex (evanescent illumination), where ``cos(theta)`` is
+    negative-imaginary while :func:`boundary_kz` forces ``Im(kz) > 0``. The two sides then
+    carry opposite signs at that one order and cancel exactly, and the solve returns
+    ``R = -delta`` with ``T = 0`` — a grating that scatters nothing, which plots as a clean
+    flat region rather than as the failure it is.
+    """
+    return kz_top[index]
+
+
 def safe_sqrt(xp, z, eps=1e-30):
     """``sqrt`` with a finite derivative at 0 (guards autodiff NaN at the DC/branch point)."""
     return (z + eps) ** 0.5
