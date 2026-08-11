@@ -15,6 +15,7 @@ from this codebase, which is exactly what makes them worth having.
 | Oracle | Reaches | Generator needs | Golden |
 | --- | --- | --- | --- |
 | **RETICOLO** (Li/Lalanne lineage) | diffraction *orders*; uniform layers with an arbitrary complex 3x3 tensor, z-coupling included | Octave + the V10 snapshot in `<a reference collection outside this repository>` | `golden_reticolo.npz`, `golden_reticolo_anisotropic.npz` |
+| **RETICOLO**, swept over `(kx, ky)` | conical incidence across the light line, **including complex (evanescent) angles** | nothing — frozen from a 2024-09-09 study, see its generator | `golden_reticolo_conical_sweep.npz` |
 | **fmmax** (Liu & Fan lineage, MIT) | uniform complex tensors, **patterned** tensors, **permeability** | the `fwref` env — see below | `golden_fmmax.npz`, `golden_fmmax_magnetic.npz` |
 | **S4** (same lineage, C++) | real tensors, patterned | the S4 extension, already in the project env | `golden_s4.npz` |
 
