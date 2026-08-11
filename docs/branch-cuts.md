@@ -57,6 +57,24 @@ So the rule is *ordered*: prefer `Re(kz) > 0` (energy going down); only when the
 what `boundary_kz` implements, and `mode_q` implements its `q = -i*kz` counterpart, which is
 why their tie-breaks come out opposite.
 
+> **Scope of that counterpart claim** (added 2026-08-12, after the time-convention audit
+> measured it): `q = -i*kz` is an identity **only for a real in-plane wavevector**. With a
+> complex `k_par` (an absorbing superstrate at oblique incidence) the two functions return
+> *unrelated* roots — measured, `mode_q` hands back `+i*kz`, the other one — and that is
+> correct rather than a defect: a half-space's root is a boundary condition with one right
+> answer, while a layer's `±q` pair enters the stack algebra in full, so its label is free
+> and `mode_q` spends the freedom on keeping `exp(-k0*q*d)` bounded (flip any subset of a
+> layer's roots and the solve moves by ~1e-13). The "Re-first picks a growing wave in the
+> substrate" worry resolves the same way: for a passive medium fed by a lossy superstrate,
+> `k_r . k_i = 0` — the wave is constant along its own ray, and the growth in `z` is the
+> transverse bookkeeping of an `x`-decay the incident field shares, so boundedness is not
+> an available criterion there; continuation from normal incidence is, and `boundary_kz`
+> now carries its closed form (`_off_principal_branch`). Derivations and measurements:
+> `docs/time-convention-audit.md` §2-§5; pinned in `tests/test_branch_selection.py`
+> (`test_the_two_selectors_disagree_at_complex_k_par_by_design` is the exact case above).
+> Everything below this box concerns the regimes where the identity does hold, and stands
+> unchanged.
+
 Everything below is a consequence of two questions that rule leaves open:
 
 1. Which root does the **incident** wave take? It is the one order travelling *downward* into
