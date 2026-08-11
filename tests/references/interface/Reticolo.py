@@ -1,7 +1,7 @@
 import os
 import numpy as np
 
-# import fieldwave
+import fieldwave
 
 from fieldwave._core.modeler import find_nk_index
 
