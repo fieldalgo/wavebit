@@ -1,6 +1,7 @@
 import numpy as np
 
 from ..._core.engine import CoreSolveMixin
+from fieldwave._core.backend import check_input_precision
 
 
 class _BaseRCWA(CoreSolveMixin):
@@ -94,6 +95,7 @@ class _BaseRCWA(CoreSolveMixin):
         if theta is None:
             self._theta = None
         else:
+            check_input_precision('theta', theta, self.type_complex)
             self._theta = np.array(theta, dtype=self.type_complex)
             self._theta = np.where(self._theta == 0, self.perturbation, self._theta)  # perturbation
 
@@ -106,6 +108,7 @@ class _BaseRCWA(CoreSolveMixin):
         if phi is None:
             self._phi = None
         else:
+            check_input_precision('phi', phi, self.type_complex)
             self._phi = np.array(phi, dtype=self.type_complex)
 
     @property
