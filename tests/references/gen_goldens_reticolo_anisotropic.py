@@ -66,10 +66,13 @@ HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))    # tests/, for the case list
 sys.path.insert(0, str(HERE))
 
-RETICOLO_PATH = os.environ.get(
-    'RETICOLO_PATH',
-    os.path.expanduser('$RETICOLO_PATH/'
-                       'V10_2025/reticolo_allege_v10'))
+# No default: where RETICOLO is installed is a property of the machine, not of this project,
+# and a default that happens to match one checkout silently resolves to nothing everywhere else.
+RETICOLO_PATH = os.environ.get('RETICOLO_PATH')
+if not RETICOLO_PATH:
+    raise SystemExit('set RETICOLO_PATH to a reticolo_allege_v10 directory to regenerate this '
+                     'golden; the committed .npz is what the tests read.')
+RETICOLO_PATH = os.path.expanduser(RETICOLO_PATH)
 
 OUT = HERE / 'golden_reticolo_anisotropic.npz'
 
