@@ -8,9 +8,9 @@ Targets:
   was called `laurent_conv_2d` until this document was written
 - `fieldwave/_core/analytic.py::_grid`, `fieldwave/_core/analytic.py::assemble_eps_coeffs` —
   the doubled reciprocal grid the builder consumes, and why it is doubled
-- `fieldwave/_core/factorization.py::dfs2d_piecewise_constant` — the raster twin, and where
+- `fieldwave/_core/factorization.py::fourier2d_piecewise_constant` — the raster twin, and where
   `inverse_rule` chooses the rule
-- `tests/test_analytic.py` — `test_conv_matrix_matches_dfs2d_convention`, which pins the ordering
+- `tests/test_analytic.py` — `test_conv_matrix_matches_grid_convention`, which pins the ordering
   the two builders share
 
 ---
@@ -48,9 +48,9 @@ Both names for the first rule are in use in this repository and both are correct
 in code (`ep_dir`, `ep_inv`). The gloss form — naming one and parenthesising the other — is the
 one to copy in new prose, because a reader who knows only one name still lands.
 
-`dfs2d_piecewise_constant`'s `inverse_rule` is the switch: `'x'` or `'y'` names the
+`fourier2d_piecewise_constant`'s `inverse_rule` is the switch: `'x'` or `'y'` names the
 direction whose discontinuity the rule closes, `None` asks for the direct rule both ways.
-Nothing else selects it, and `dfs2d_sampled` does not offer it at all — a field that is
+Nothing else selects it, and `fourier2d_pointwise` does not offer it at all — a field that is
 continuous by construction has no discontinuity for the inverse rule to close.
 
 ## 2. What `conv_matrix_2d` actually is
@@ -131,7 +131,7 @@ name, so no alias was kept and none is owed.
 | Moved | Count | Where |
 | --- | --- | --- |
 | `laurent_conv_2d` → `conv_matrix_2d` | 14 | `_core/analytic.py`, `tests/test_analytic.py`, `analytic-modeling.md` |
-| `test_laurent_matches_dfs2d_convention` → `test_conv_matrix_matches_dfs2d_convention` | 4 | `tests/test_analytic.py`, `_core/analytic.py`, `analytic-modeling.md` |
+| `test_laurent_matches_dfs2d_convention` → `test_conv_matrix_matches_grid_convention` | 4 | `tests/test_analytic.py`, `_core/analytic.py`, `analytic-modeling.md` |
 | "Laurent matrix" meaning the structure → "convolution matrix" | 2 | `_core/analytic.py` |
 
 **`Laurent` meaning the rule stayed, in all 15 places.** It is correct there, and one of them
@@ -157,7 +157,8 @@ not 4-fold), 96x96 raster, `max|T(psi=0) - T(psi=90)ᵀ|`:
 | 8 | 1.4e-3 | 3.5e-13 |
 | 12 | 5.9e-4 | 5.1e-13 |
 
-The NVF column is the control: it uses only `conti=(1, 1)`, so no nesting order is chosen and
+The NVF column is the control: it asks for the direct rule both ways, so no nesting order is
+chosen and
 the symmetry holds to machine precision. On a high-contrast random raster the `li` residue
 reaches 1e-1.
 
@@ -178,23 +179,24 @@ Two things follow for anyone reading a `li` result:
   would otherwise pass, and so would one that accidentally fixed it and left this section
   stale. Both are in `tests/test_factorization_core.py` and cost about a second.
 
-## 7. One more word that was doing two jobs: `dfs2d`
+## 7. One more word that was doing two jobs: the grid builder
 
-`dfs2d(..., piecewise_constant=False)` carried the same defect as `laurent_conv_2d`, one level
+`dfs2d(..., piecewise_constant=False)` — now `_fourier2d_grid` — carried the same defect
+as `laurent_conv_2d`, one level
 down. The flag does not express a preference — it states **what the grid holds**, and there are
 exactly two answers with exactly two consumers:
 
 | Entry point | Grid holds | Callers |
 | --- | --- | --- |
-| `dfs2d_piecewise_constant` | values that hold across their pixel — `eps`, `1/eps` | 5 in `fieldwave/` |
-| `dfs2d_sampled` | point samples of a continuous field — the NVF normal field | 3 in `fieldwave/` |
+| `fourier2d_piecewise_constant` | values that hold across their pixel — `eps`, `1/eps` | 5 in `fieldwave/` |
+| `fourier2d_pointwise` | point samples of a continuous field — the NVF normal field | 3 in `fieldwave/` |
 
 A value the caller can never be in doubt about should not be a parameter the caller restates,
 and the default made it worse: `False` was the answer 3 of 8 sites wanted, so the *majority*
-case was the one you got by forgetting. `_dfs2d` is now private with the flag keyword-only and
+case was the one you got by forgetting. `_fourier2d_grid` is now private with the flag keyword-only and
 undefaulted, so even a direct call has to say which it means.
 
-`dfs2d_sampled` also drops the rule argument rather than defaulting it. Every call in the
+`fourier2d_pointwise` also drops the rule argument rather than defaulting it. Every call in the
 repository asked for the direct rule — not by accident: the inverse rule closes products of
 *concurrently discontinuous* factors, and a unit-vector field that is continuous by
 construction has no discontinuity for it to close. It was not a choice anyone had, only a
@@ -224,7 +226,45 @@ projector identity `C_xx + C_yy = I` that the rest of that file checks holds und
 build: one assertion that the sampled build is what runs, and one that the two builds are far
 enough apart (1.1e-2 here) for the first to be pinning anything.
 
-The convention probe in `tests/test_analytic.py` calls `dfs2d_sampled` for a third reason: it
+The convention probe in `tests/test_analytic.py` calls `fourier2d_pointwise` for a third reason: it
 compares against a raw `np.fft.fft2` and wants no pixel correction in the way. The name still
 fits — asking for the uncorrected build *is* declaring the input to be samples — but the intent
 there is "show me the plain DFT", not "this is a measured field".
+
+## 8. `sampled` and `integrated`, all the way down
+
+`DFS` and `CFS` used to be the shorthand for the two ways a layer's Fourier coefficients are
+obtained, and `sampled` / `integrated` the public spelling of the same choice. Two vocabularies
+for one thing, and the internal one collided with the module's most load-bearing word:
+**continuous**. Li's rules are decided by which field component is *continuous* across an
+interface, so `CFS = continuous Fourier series` put that word on a method while the physics next
+to it used it for a property of a field. `conti_x` / `conti_y` had already taken it for a third
+meaning before they were removed.
+
+The public words won, everywhere:
+
+| was | is |
+| --- | --- |
+| `cfs2d`, `_cfs` | `fourier2d_integrated`, `_fourier1d_integrated` |
+| `to_conv_mat_raster_discrete` | `to_conv_mat_raster_sampled` |
+| `to_conv_mat_raster_continuous`, `..._continuous_nvf` | `..._integrated`, `..._integrated_nvf` |
+| `nvf_conv_matrices_continuous` | `nvf_conv_matrices_integrated` |
+| `DFS` / `CFS` in prose, tables and study mode names | `sampled` / `integrated` |
+
+`NVF` stays. It abbreviates *normal vector field*, which is a thing rather than a method, and it
+sits on the other axis: `sampled` and `integrated` are the two values of `fourier_coefficients`,
+while `nvf` is one of the two values of `factorization`. The four combinations are all real
+builders, which is why `to_conv_mat_raster_integrated_nvf` carries both words.
+
+One caution for anyone repeating this. `DFS` and `CFS` were nouns; `sampled` and `integrated`
+are adjectives. Substituting them one for one produces "the sampled/sampled path", "match the
+legacy integrated", "Raster with sampled" — all of which a blind pass here produced before they
+were rewritten as noun phrases. The rule that works is *the sampled path*, *integrated
+coefficients*, *the integrated build*.
+
+**One thing this vocabulary does not tell you, and should.** `fourier_coefficients` governs the
+*permittivity* only. The NVF normal field is read off the grid on both paths — `_nvf_projector`
+calls `fourier2d_pointwise` from `nvf_conv_matrices` and from `nvf_conv_matrices_integrated` alike —
+because a sampled field has no closed form to integrate. So `('integrated', 'nvf')` integrates
+`eps` and `1/eps` exactly and still samples the projector, and that is not a gap in the
+implementation: it is what the normal field is.

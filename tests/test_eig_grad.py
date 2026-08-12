@@ -171,7 +171,7 @@ def _ucell_grad(theta, backend):
 def test_uniform_layer_at_normal_incidence_is_differentiable(backend):
     """The ordinary structure that used to return an all-NaN gradient.
 
-    A uniform layer, normal incidence, DFS: ``q(+m) == q(-m)`` exactly for all nine retained
+    A uniform layer, normal incidence, sampled coefficients: ``q(+m) == q(-m)`` exactly for all nine retained
     orders. Every element of the gradient came back NaN, on both autodiff backends — and
     tilting the source by 1e-9 was enough to make it finite and well behaved, so this is a
     knife-edge that a sweep steps onto rather than a region of bad conditioning.
@@ -195,10 +195,10 @@ def test_the_degeneracy_is_real():
     pairs instead of four for that reason alone.
     """
     import array_api_compat.numpy as xnp
-    from fieldwave._core.factorization import to_conv_mat_raster_discrete
+    from fieldwave._core.factorization import to_conv_mat_raster_sampled
     from fieldwave._core.solve_1d import layer_modes_1d
 
-    epx, epy, epz = to_conv_mat_raster_discrete(UNIFORM ** 2, 4, 0)
+    epx, epy, epz = to_conv_mat_raster_sampled(UNIFORM ** 2, 4, 0)
     fto = 4
     kx = np.asarray([0.0 + m * 0.9 / 0.7 for m in range(-fto, fto + 1)], dtype=complex)
     I = np.eye(2 * fto + 1, dtype=complex)

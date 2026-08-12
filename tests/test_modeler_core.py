@@ -101,7 +101,7 @@ def test_rotated_rectangle_grid_keeps_the_legacy_layer_with_fewer_lines():
     blocks meet — the builder used to nudge the second edge off the first by a relative 1e-14
     rather than let them share a line, and inserted it at the slot found *before* the nudge, so
     the list was not even sorted (``rect_rot__L0__y`` has two inversions, and a negative
-    segment width is what ``_cfs`` makes of one).
+    segment width is what ``_fourier1d_integrated`` makes of one).
 
     The claim here is narrow and checkable: the layer is the same object, described with fewer
     lines. The material at 360000 points across both layers is identical, the edges that remain
@@ -364,7 +364,7 @@ def test_jax_device_setter_round_trips():
 def test_vector_path_differentiates_wrt_edge_positions(backend, name):
     """An OCD fit differentiates the *edges* — CD, sidewall angle, pitch — not the pixels.
 
-    Those live in the segment edge list the block modeler produces, and ``_cfs`` used to lift
+    Those live in the segment edge list the block modeler produces, and ``_fourier1d_integrated`` used to lift
     it with ``asarray(..., dtype=)``, which detaches under PyTorch. The solve still returned a
     tensor, just one with no graph behind it, so this failed only when someone called
     ``backward()``.

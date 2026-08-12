@@ -314,8 +314,8 @@ caught:
 | complex128 | silent, \|R\| = 0.672 | silent, \|R\| = 0.672 |
 | complex64 | **warns** ("a branch was decided from…"), \|R\| = 3.974 | **warns** ("this solve is traced…"), \|R\| = 3.929 |
 
-Note that the CFS (`integrated`) path is not traceable at all — `factorization.py::_as_bools`
-calls `bool()` on a tracer — so a jit'd solve is on the DFS path regardless. That predates this
+Note that the `integrated` path is not traceable at all — `factorization.py::_as_bools`
+calls `bool()` on a tracer — so a jit'd solve is on the sampled path regardless. That predates this
 work.
 
 ### The x64 ordering trap, and why it now warns

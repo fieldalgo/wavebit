@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 import fieldwave
-from fieldwave._core.factorization import to_conv_mat_raster_discrete
+from fieldwave._core.factorization import to_conv_mat_raster_sampled
 from fieldwave._core.solve_1d import solve_1d, solve_1d_conical
 from fieldwave._core.solve_2d import solve_2d
 
@@ -20,7 +20,7 @@ FIELDS = ('r_s', 'r_p', 't_s', 't_p',
 def _setup(**kw):
     solver = fieldwave.rcwa(backend=0, **kw)
     legacy = solver.conv_solve()
-    epx, epy, epz = to_conv_mat_raster_discrete(
+    epx, epy, epz = to_conv_mat_raster_sampled(
         solver.ucell, solver.fto[0], solver.fto[1])
     kx, ky = solver.get_kx_ky_vector(kw['wavelength'])
     return solver, legacy, (epx, epy, epz), kx, ky

@@ -411,7 +411,7 @@ def test_the_check_does_not_break_tracing():
     """Under jit/grad the value is abstract; the check must bail, not raise.
 
     This is why the reduction runs in the caller's namespace and only the scalar is read: an
-    unreadable scalar means the value was never there to inspect. Uses the sampled/DFS path,
+    unreadable scalar means the value was never there to inspect. Uses the sampled path,
     the one that is traceable at all.
     """
     jax = pytest.importorskip('jax')

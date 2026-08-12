@@ -13,14 +13,14 @@ All the strategies live here. The raster builders are the cross product of two i
 choices — how the Fourier coefficients are obtained, and which rule closes the products of
 discontinuous functions:
 
-- ``('sampled', 'li')``       -> :func:`to_conv_mat_raster_discrete`, discrete Fourier series
+- ``('sampled', 'li')``       -> :func:`to_conv_mat_raster_sampled`, discrete Fourier series
   off the raster with Li's rules. The default, and the only path that carries a gradient to
   every raster cell.
-- ``('integrated', 'li')``    -> :func:`to_conv_mat_raster_continuous`, closed-form
+- ``('integrated', 'li')``    -> :func:`to_conv_mat_raster_integrated`, closed-form
   (staircase-free) Fourier of the compressed layer with Li's rules.
-- ``('sampled', 'nvf')``      -> :func:`to_conv_mat_raster_nvf`, DFS with the
+- ``('sampled', 'nvf')``      -> :func:`to_conv_mat_raster_nvf`, sampled coefficients with the
   normal-vector-field factorization.
-- ``('integrated', 'nvf')``   -> :func:`to_conv_mat_raster_continuous_nvf`, closed-form
+- ``('integrated', 'nvf')``   -> :func:`to_conv_mat_raster_integrated_nvf`, closed-form
   Fourier with NVF.
 
 Vector-modelled layers (:func:`to_conv_mat_block`) are the closed-form series on explicitly
@@ -29,7 +29,7 @@ given segment edges, with Li's rules; the analytic *shape* path lives in
 
 A recurring rule runs through this module: **discrete geometry decisions are computed eagerly
 and passed in as static inputs, while material values flow through differentiably.** Two
-decisions here are geometry, not material — the NVF normal field (where the interfaces point) and the CFS block
+decisions here are geometry, not material — the NVF normal field (where the interfaces point) and the integrated block
 compression (where the piecewise-constant blocks start and stop). Both branch on values, and
 the compression's output shape depends on the answer, so neither survives ``jax.jit``. Each is
 therefore split into an eager step that yields a static description
@@ -101,7 +101,7 @@ def _circulant_index(fto):
 def _circulant_gather(xp, fto, dev):
     """Index expanding a ``4*fto+1`` order vector into the ``(ff, ff)`` circulant of ``r - c``.
 
-    The same shape :func:`cfs2d` builds; ``+ 2*fto`` turns the signed order into a position in
+    The same shape :func:`fourier2d_integrated` builds; ``+ 2*fto`` turns the signed order into a position in
     that vector.
     """
     return xp.asarray([[v + 2 * fto for v in row] for row in _circulant_index(fto)], device=dev)
@@ -132,7 +132,7 @@ def _pixel_correction(xp, orders, n, dtype, device=None):
     return sinc * xp.exp(-1j * pi * t)
 
 
-def dfs2d_piecewise_constant(xp, cell, fto_x, fto_y, *, inverse_rule):
+def fourier2d_piecewise_constant(xp, cell, fto_x, fto_y, *, inverse_rule):
     """2D discrete Fourier series of a grid whose values *hold across* their pixels.
 
     A permittivity raster is this case: ``ucell`` names the material occupying each cell, so
@@ -144,38 +144,44 @@ def dfs2d_piecewise_constant(xp, cell, fto_x, fto_y, *, inverse_rule):
     ``None`` for the direct rule both ways. Those three are Li's three components of one
     layer: ``None`` builds ``epz``, ``'y'`` builds ``epy``, ``'x'`` builds ``epx``.
     """
-    return _dfs2d(xp, cell, fto_x, fto_y, inverse_rule=inverse_rule, piecewise_constant=True)
+    return _fourier2d_grid(xp, cell, fto_x, fto_y, inverse_rule=inverse_rule, piecewise_constant=True)
 
 
-def dfs2d_sampled(xp, field, fto_x, fto_y):
-    """2D discrete Fourier series of a continuous field *measured* on a grid.
+def fourier2d_pointwise(xp, field, fto_x, fto_y):
+    """2D discrete Fourier series of a grid holding *point samples* of a continuous field.
 
-    The NVF normal field is this case, and the only one in the package: it is a continuous
+    The NVF normal field is this case, and the only one in the package: a continuous
     unit-vector field evaluated at grid points, so refining the grid changes the field itself
     and no exact coefficient is reachable from the samples. The transform is left alone.
 
-    **No ``conti`` arguments, deliberately.** The inverse rule exists for factors that are
-    discontinuous; a field that is continuous by construction has nothing to apply it to, and
-    every call in the package passed ``(1, 1)``. Offering the choice would only be offering a
-    way to be wrong.
+    ``pointwise`` rather than ``sampled`` because ``sampled`` is already taken, one level up:
+    ``fourier_coefficients='sampled'`` names the whole raster/DFT path — the path in which a
+    permittivity goes through :func:`fourier2d_piecewise_constant`, not through here. The pair
+    that matters at *this* level is whether a value holds across its pixel or only at the
+    point, and that is what these two names now say.
+
+    **No rule argument, deliberately.** The inverse rule exists for factors that are
+    discontinuous; a field continuous by construction has nothing to apply it to, and every
+    call in the package asked for the direct rule. Offering the choice would only be offering
+    a way to be wrong.
 
     Because there is no closed form, this path *does* need ``4*fto+1`` points — the caller
     lifts the grid to that floor, see :func:`_normal_field_floor`.
     """
-    return _dfs2d(xp, field, fto_x, fto_y, inverse_rule=None, piecewise_constant=False)
+    return _fourier2d_grid(xp, field, fto_x, fto_y, inverse_rule=None, piecewise_constant=False)
 
 
-def _dfs2d(xp, cell, fto_x, fto_y, *, inverse_rule, piecewise_constant):
+def _fourier2d_grid(xp, cell, fto_x, fto_y, *, inverse_rule, piecewise_constant):
     """2D discrete Fourier series of ``cell`` with Li's factorization rules.
 
     Private, and ``piecewise_constant`` has no default, because the two answers are not a
     preference: they say what kind of data the grid holds, and getting it wrong is silent.
-    Call :func:`dfs2d_piecewise_constant` or :func:`dfs2d_sampled` instead, which say it in
+    Call :func:`fourier2d_piecewise_constant` or :func:`fourier2d_pointwise` instead, which say it in
     the name.
 
     ``inverse_rule`` is the direction whose discontinuity the inverse rule closes (``'x'``,
     ``'y'``, or ``None`` for neither) — see :func:`_inverse_axes`. Port of the legacy
-    ``dfs2d``, whose name this module's two public entry points still carry.
+    ``dfs2d``; the two entry points above are what callers use.
 
     This is the *only* thing that selects a rule. The other name for the continuous
     case is Laurent's rule, which this codebase mostly calls ``direct`` — see
@@ -232,7 +238,7 @@ def _dfs2d(xp, cell, fto_x, fto_y, *, inverse_rule, piecewise_constant):
     n_y = cell.shape[1]
 
     # Read the coefficients on the *order* vector, correct them there, and only then expand
-    # into the circulant -- the shape `cfs2d` has always had.
+    # into the circulant -- the shape `fourier2d_integrated` has always had.
     #
     # Two reasons it is this way round. It is cheaper: the circulant repeats each of the
     # 4*fto+1 distinct orders across (2*fto+1)**2 entries, so correcting afterwards evaluates
@@ -284,7 +290,7 @@ def _layer_eps(xp, ucell):
     The ``n**2`` maps refractive index to permittivity: FieldWave works in ``e^{-iwt}``
     throughout (``Im(n) > 0`` = loss), with no conjugation on the way in.
 
-    Nothing is resampled. :func:`dfs2d_piecewise_constant` obtains the raster's
+    Nothing is resampled. :func:`fourier2d_piecewise_constant` obtains the raster's
     coefficients in closed form (:func:`_pixel_correction`), so a finer grid of the same
     staircase is the same
     function and buys nothing. The NVF path is the one that still needs a floor, and states
@@ -299,7 +305,7 @@ def _normal_field_floor(shape, fto_x, fto_y):
     """Repeat factors that lift a layer to the grid the normal field's transform needs.
 
     The normal field is a continuous vector field this code evaluates on a grid, so unlike the
-    permittivity it has no closed-form transform and :func:`dfs2d_sampled` reads it off the grid
+    permittivity it has no closed-form transform and :func:`fourier2d_pointwise` reads it off the grid
     directly. That requires ``4*fto+1`` points: the circulant asks for orders up to
     ``+/-2*fto``, and on a shorter grid ``k % n`` folds distinct orders onto one bin. The
     damage is structural rather than gradual — a *constant* normal field must transform to the
@@ -332,8 +338,8 @@ def _layer_eps_for_normal_field(xp, ucell, fto_x, fto_y):
         yield xp.astype(layer, _complex_dtype(xp, layer)) ** 2, base, repeat_y, repeat_x
 
 
-def to_conv_mat_raster_discrete(ucell, fto_x, fto_y):
-    """Per-layer convolution matrices for a raster ``ucell`` via the DFS path.
+def to_conv_mat_raster_sampled(ucell, fto_x, fto_y):
+    """Per-layer convolution matrices for a raster ``ucell`` via the sampled path.
 
     Args:
         ucell: refractive-index raster, shape ``(n_layers, Ny, Nx)``. This is the design
@@ -348,9 +354,9 @@ def to_conv_mat_raster_discrete(ucell, fto_x, fto_y):
     epx_list, epy_list, epz_i_list = [], [], []
 
     for eps_matrix in _layer_eps(xp, ucell):
-        epz_conv = dfs2d_piecewise_constant(xp, eps_matrix, fto_x, fto_y, inverse_rule=None)
-        epy_conv = dfs2d_piecewise_constant(xp, eps_matrix, fto_x, fto_y, inverse_rule='y')
-        epx_conv = dfs2d_piecewise_constant(xp, eps_matrix, fto_x, fto_y, inverse_rule='x')
+        epz_conv = fourier2d_piecewise_constant(xp, eps_matrix, fto_x, fto_y, inverse_rule=None)
+        epy_conv = fourier2d_piecewise_constant(xp, eps_matrix, fto_x, fto_y, inverse_rule='y')
+        epx_conv = fourier2d_piecewise_constant(xp, eps_matrix, fto_x, fto_y, inverse_rule='x')
 
         epx_list.append(epx_conv)
         epy_list.append(epy_conv)
@@ -659,9 +665,9 @@ def _nvf_projector(xp, nx, ny, fto_x, fto_y, dtype, device=None):
     extension of the interface direction into the bulk, so it has no piecewise-constant block
     structure for the closed-form series to integrate over in the first place.
     """
-    C_xx = dfs2d_sampled(xp, xp.asarray(nx ** 2, dtype=dtype, device=device), fto_x, fto_y)
-    C_xy = dfs2d_sampled(xp, xp.asarray(nx * ny, dtype=dtype, device=device), fto_x, fto_y)
-    C_yy = dfs2d_sampled(xp, xp.asarray(ny ** 2, dtype=dtype, device=device), fto_x, fto_y)
+    C_xx = fourier2d_pointwise(xp, xp.asarray(nx ** 2, dtype=dtype, device=device), fto_x, fto_y)
+    C_xy = fourier2d_pointwise(xp, xp.asarray(nx * ny, dtype=dtype, device=device), fto_x, fto_y)
+    C_yy = fourier2d_pointwise(xp, xp.asarray(ny ** 2, dtype=dtype, device=device), fto_x, fto_y)
     return C_xx, C_xy, C_yy
 
 
@@ -693,7 +699,7 @@ def _nvf_assemble(xp, ep_dir, ep_inv, C_xx, C_xy, C_yy):
 
 
 def nvf_conv_matrices(xp, eps_matrix, nx, ny, fto_x, fto_y):
-    """NVF convolution matrices for one layer, with sampled (DFS) coefficients."""
+    """NVF convolution matrices for one layer, with sampled coefficients."""
     C = _complex_dtype(xp, eps_matrix)
     eps_matrix = xp.astype(eps_matrix, C)
     dev = _device(xp, eps_matrix)
@@ -701,26 +707,26 @@ def nvf_conv_matrices(xp, eps_matrix, nx, ny, fto_x, fto_y):
     # eps is a staircase however finely it was sampled, so its coefficients are exact from
     # the grid it arrives on. The projector grids are not -- they sample a continuous
     # vector field -- which is why only these two carry the flag.
-    ep_dir = dfs2d_piecewise_constant(xp, eps_matrix, fto_x, fto_y, inverse_rule=None)
-    ep_inv = dfs2d_piecewise_constant(xp, 1.0 / eps_matrix, fto_x, fto_y, inverse_rule=None)
+    ep_dir = fourier2d_piecewise_constant(xp, eps_matrix, fto_x, fto_y, inverse_rule=None)
+    ep_inv = fourier2d_piecewise_constant(xp, 1.0 / eps_matrix, fto_x, fto_y, inverse_rule=None)
 
     return _nvf_assemble(xp, ep_dir, ep_inv,
                          *_nvf_projector(xp, nx, ny, fto_x, fto_y, C, dev))
 
 
-def nvf_conv_matrices_continuous(xp, eps_comp, x, y, nx, ny, fto_x, fto_y):
+def nvf_conv_matrices_integrated(xp, eps_comp, x, y, nx, ny, fto_x, fto_y):
     """NVF convolution matrices for one layer, with integrated (closed-form) coefficients.
 
     ``eps_comp`` is the *compressed* piecewise-constant layer and ``x`` / ``y`` its segment
-    edges, exactly as :func:`cfs2d` takes them; ``nx`` / ``ny`` are the normal field on the
+    edges, exactly as :func:`fourier2d_integrated` takes them; ``nx`` / ``ny`` are the normal field on the
     uncompressed raster (see :func:`_nvf_projector` for why the two grids differ).
     """
     C = _complex_dtype(xp, eps_comp)
     eps_comp = xp.astype(eps_comp, C)
     dev = _device(xp, eps_comp)
 
-    ep_dir = cfs2d(xp, eps_comp, x, y, fto_x, fto_y, inverse_rule=None)
-    ep_inv = cfs2d(xp, 1.0 / eps_comp, x, y, fto_x, fto_y, inverse_rule=None)
+    ep_dir = fourier2d_integrated(xp, eps_comp, x, y, fto_x, fto_y, inverse_rule=None)
+    ep_inv = fourier2d_integrated(xp, 1.0 / eps_comp, x, y, fto_x, fto_y, inverse_rule=None)
 
     return _nvf_assemble(xp, ep_dir, ep_inv,
                          *_nvf_projector(xp, nx, ny, fto_x, fto_y, C, dev))
@@ -779,7 +785,7 @@ def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
     return tuple(xp.stack(slot) for slot in out)
 
 
-# ================================================ continuous Fourier series (CFS / analytic)
+# ============================================ integrated Fourier series (closed form, analytic)
 
 def _lift(xp, v, dtype, device=None):
     """``v`` on the working backend at ``dtype``, keeping any autograd graph intact.
@@ -798,11 +804,11 @@ def _lift(xp, v, dtype, device=None):
     return xp.asarray(v, dtype=dtype, device=device)
 
 
-def _cfs(xp, x, cell, fto, period):
+def _fourier1d_integrated(xp, x, cell, fto, period):
     """1D continuous Fourier series of a piecewise-constant profile.
 
     ``x`` holds the right-hand edge of each constant segment (shape ``(n, 1)``) and ``cell``
-    the segment values (``(m, n)``). Port of the legacy ``_cfs``, with its two in-place
+    the segment values (``(m, n)``). Port of the legacy ``_fourier1d_integrated``, with its two in-place
     assignments rewritten: the non-DC modes divide by ``1j*2*pi*m`` and the DC mode is the
     length-weighted mean, so both are expressed as one ``where`` over a mode mask.
     """
@@ -840,13 +846,26 @@ def _cfs(xp, x, cell, fto, period):
     return xp.where(xp.reshape(is_dc, (1, n_modes)), dc, f / xp.reshape(divisor, (1, n_modes)))
 
 
-def cfs2d(xp, cell, x, y, fto_x, fto_y, *, inverse_rule):
+def fourier2d_integrated(xp, cell, x, y, fto_x, fto_y, *, inverse_rule):
     """2D continuous Fourier series with Li's rules — the staircase-free factorization.
 
     ``x`` / ``y`` are the segment edges of the compressed (piecewise-constant) layer, so the
     permittivity is Fourier-transformed analytically rather than off a raster.
 
-    ``inverse_rule`` is as in :func:`dfs2d_piecewise_constant`.
+    **``continuous`` describes the method, not the data.** What arrives here is piecewise
+    constant, exactly as in :func:`fourier2d_piecewise_constant`; the coefficients are obtained by
+    integrating over the segments rather than by a discrete sum, which is the ``integrated`` / ``sampled``
+    distinction and nothing more. The public spelling of the same choice is
+    ``fourier_coefficients='integrated'``.
+
+    What that buys is *where the steps may sit*. :func:`fourier2d_piecewise_constant` places them
+    on the pixel grid at ``j/n``, so an edge at ``x = 0.317`` is first snapped to a pixel and
+    then transformed exactly; here the edge is a number this function integrates to. Both are
+    exact for the staircase they are given — they differ in which staircases they can be
+    given. Curved boundaries are still approximated by steps in both;
+    :mod:`fieldwave._core.analytic` is the path where the staircase itself is gone.
+
+    ``inverse_rule`` is as in :func:`fourier2d_piecewise_constant`.
     """
     inv_x, inv_y = _inverse_axes(inverse_rule)
     ff_x = 2 * fto_x + 1
@@ -859,7 +878,7 @@ def cfs2d(xp, cell, x, y, fto_x, fto_y, *, inverse_rule):
     if inv_y:             # y discontinuous: the inverse rule starts from 1/eps
         cell = 1 / cell
 
-    cfs1d = _cfs(xp, y, cell, fto_y, period_y)
+    cfs1d = _fourier1d_integrated(xp, y, cell, fto_y, period_y)
 
     dev = _device(xp, cell)
     idx_y = _circulant_gather(xp, fto_y, dev)
@@ -872,7 +891,7 @@ def cfs2d(xp, cell, x, y, fto_x, fto_y, *, inverse_rule):
 
     conv1d = xp.reshape(conv1d, (-1, ff_y ** 2))
 
-    cfs_2d = _cfs(xp, x, xp.matrix_transpose(conv1d), fto_x, period_x)
+    cfs_2d = _fourier1d_integrated(xp, x, xp.matrix_transpose(conv1d), fto_x, period_x)
 
     conv2d = cfs_2d[:, idx_x]
     conv2d = xp.reshape(conv2d, (ff_y, ff_y, ff_x, ff_x))
@@ -1017,8 +1036,8 @@ def compress_cell(xp, cell, row_idx, col_idx):
     return xp.take(cell, xp.asarray(row_idx, device=dev), axis=0)
 
 
-def to_conv_mat_raster_continuous(ucell, fto_x, fto_y, compression=None):
-    """Per-layer convolution matrices via the analytic (staircase-free) CFS path.
+def to_conv_mat_raster_integrated(ucell, fto_x, fto_y, compression=None):
+    """Per-layer convolution matrices via the analytic (staircase-free) integrated path.
 
     Args:
         ucell: refractive-index raster ``(n_layers, Ny, Nx)`` — the design variable.
@@ -1051,15 +1070,15 @@ def to_conv_mat_raster_continuous(ucell, fto_x, fto_y, compression=None):
         n_comp = compress_cell(xp, layer, row_idx, col_idx)
         eps = xp.astype(n_comp, _complex_dtype(xp, n_comp)) ** 2
 
-        epz_list = cfs2d(xp, eps, x, y, fto_x, fto_y, inverse_rule=None)
-        epx_list.append(cfs2d(xp, eps, x, y, fto_x, fto_y, inverse_rule='x'))
-        epy_list.append(cfs2d(xp, eps, x, y, fto_x, fto_y, inverse_rule='y'))
+        epz_list = fourier2d_integrated(xp, eps, x, y, fto_x, fto_y, inverse_rule=None)
+        epx_list.append(fourier2d_integrated(xp, eps, x, y, fto_x, fto_y, inverse_rule='x'))
+        epy_list.append(fourier2d_integrated(xp, eps, x, y, fto_x, fto_y, inverse_rule='y'))
         epz_i_list.append(xp.linalg.inv(epz_list))
 
     return xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list)
 
 
-def to_conv_mat_raster_continuous_nvf(ucell, fto_x, fto_y, normal_field=None,
+def to_conv_mat_raster_integrated_nvf(ucell, fto_x, fto_y, normal_field=None,
                                       normal_field_source=None, compression=None,
                                       lattice=None):
     """Per-layer convolution matrices for a raster ``ucell`` via closed-form Fourier + NVF.
@@ -1115,7 +1134,7 @@ def to_conv_mat_raster_continuous_nvf(ucell, fto_x, fto_y, normal_field=None,
         n_comp = compress_cell(xp, layer, row_idx, col_idx)
         eps_comp = xp.astype(n_comp, _complex_dtype(xp, n_comp)) ** 2
 
-        for slot, mat in zip(out, nvf_conv_matrices_continuous(
+        for slot, mat in zip(out, nvf_conv_matrices_integrated(
                 xp, eps_comp, x, y, nx, ny, fto_x, fto_y)):
             slot.append(mat)
 
@@ -1123,7 +1142,7 @@ def to_conv_mat_raster_continuous_nvf(ucell, fto_x, fto_y, normal_field=None,
 
 
 def to_conv_mat_block(ucell_info_list, fto_x, fto_y):
-    """Per-layer convolution matrices for vector-modelled layers (CFS on explicit segments).
+    """Per-layer convolution matrices for vector-modelled layers (integrated over explicit segments).
 
     Each entry of ``ucell_info_list`` is ``(layer, x_list, y_list)`` — the segment values and
     their edges — so no compression step is needed.
@@ -1134,8 +1153,8 @@ def to_conv_mat_block(ucell_info_list, fto_x, fto_y):
 
     for layer, x, y in ucell_info_list:
         eps = xp.astype(layer, _complex_dtype(xp, layer)) ** 2
-        epx_list.append(cfs2d(xp, eps, x, y, fto_x, fto_y, inverse_rule='x'))
-        epy_list.append(cfs2d(xp, eps, x, y, fto_x, fto_y, inverse_rule='y'))
-        epz_i_list.append(xp.linalg.inv(cfs2d(xp, eps, x, y, fto_x, fto_y, inverse_rule=None)))
+        epx_list.append(fourier2d_integrated(xp, eps, x, y, fto_x, fto_y, inverse_rule='x'))
+        epy_list.append(fourier2d_integrated(xp, eps, x, y, fto_x, fto_y, inverse_rule='y'))
+        epz_i_list.append(xp.linalg.inv(fourier2d_integrated(xp, eps, x, y, fto_x, fto_y, inverse_rule=None)))
 
     return xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list)

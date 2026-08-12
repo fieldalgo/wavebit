@@ -46,7 +46,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                  connecting_algo='ETM',
                  perturbation=1E-20,
                  type_complex=np.complex128,
-                 fourier_coefficients=None,  # 'sampled' (DFS) | 'integrated'
+                 fourier_coefficients=None,  # 'sampled' | 'integrated'
                  # (closed-form series); the default resolves per modeling path --
                  # 'sampled' on a raster, 'integrated' on both shape paths, which is
                  # the only series either can form. Naming the other one raises.

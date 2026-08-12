@@ -102,7 +102,7 @@ The two refusals raise rather than answering, and that matters: both of them *ru
 cell and return a plausible wrong number, with energy still conserving to 1e-15.
 
 `li` applies the inverse rule along the **raster axes**
-(`epx = dfs2d_piecewise_constant(cell, 0, 1)`), and the solve
+(`epx = fourier2d_piecewise_constant(cell, 0, 1)`), and the solve
 consumes the result as Cartesian `eps_xx` / `eps_yy`. On a skewed cell those axes are `a1` / `a2`,
 not `x` / `y`. Repairing it means Li's covariant formulation (JOSA A **14**(10), 2758).
 

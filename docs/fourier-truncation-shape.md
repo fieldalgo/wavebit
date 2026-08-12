@@ -64,8 +64,8 @@ pinned against the production code before anything is read off them:
 
 | check | residual |
 |---|---|
-| G-difference build vs `dfs2d_sampled` | 1.7e-16 |
-| G-difference build vs `dfs2d_piecewise_constant` | 4.5e-16 |
+| G-difference build vs `fourier2d_pointwise` | 1.7e-16 |
+| G-difference build vs `fourier2d_piecewise_constant` | 4.5e-16 |
 | `solve_flat` on a rectangular set vs `_core.solve_2d` (NVF) | 4.0e-15 |
 
 Reference drift (`fto=18` against `fto=20`) is 4e-4 to 9e-4 under NVF, five to eight times

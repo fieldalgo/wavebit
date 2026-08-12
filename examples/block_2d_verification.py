@@ -152,11 +152,11 @@ if __name__ == '__main__':
     de_ri_r_2_dfs, de_ti_r_2_dfs = np.array(de_ri_r_2_dfs), np.array(de_ti_r_2_dfs)
     de_ri_r_2_cfs, de_ti_r_2_cfs = np.array(de_ri_r_2_cfs), np.array(de_ti_r_2_cfs)
 
-    print('\nRaster with DFS; R and T from NumPy\n')
+    print('\nRaster, sampled coefficients; R and T from NumPy\n')
     print('Reflectance from NumPy: \n', de_ri_r_1_dfs[c_x-1:c_x+2, c_y-1:c_y+2])
     print('Transmittance from NumPy: \n', de_ti_r_1_dfs[c_x-1:c_x+2, c_y-1:c_y+2])
 
-    print('\nRaster with CFS; R and T from NumPy\n')
+    print('\nRaster, integrated coefficients; R and T from NumPy\n')
     print('Reflectance from NumPy: \n', de_ri_r_1_dfs[c_x-1:c_x+2, c_y-1:c_y+2])
     print('Transmittance from NumPy: \n', de_ti_r_1_dfs[c_x-1:c_x+2, c_y-1:c_y+2])
 

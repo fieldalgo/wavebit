@@ -7,7 +7,7 @@ purpose.
 Only the raster path obtains coefficients two ways. Both shape paths state a layer as geometry
 rather than as samples and integrate the permittivity over that geometry in closed form -- the
 block path over the rectangles its modeler paints (``to_conv_mat_block``, every matrix built
-with ``cfs2d``), the smooth path over each shape's analytic transform (``analytic.shape_ft``,
+with ``fourier2d_integrated``), the smooth path over each shape's analytic transform (``analytic.shape_ft``,
 which *is* that integral). Neither has a raster underneath to run a discrete series along, and
 neither used to look at the keyword at all.
 

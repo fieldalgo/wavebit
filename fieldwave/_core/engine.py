@@ -259,7 +259,7 @@ _COEFFICIENTS_IMPLEMENTED_BY = {
 _COEFFICIENTS_REASON = {
     1: ("the block path (modeling_type=1) hands the factorizer explicit rectangles and their "
         "edges, and integrates eps over them in closed form "
-        "(fieldwave._core.factorization.cfs2d, via to_conv_mat_block). The edges are the "
+        "(fieldwave._core.factorization.fourier2d_integrated, via to_conv_mat_block). The edges are the "
         "geometry, at whatever real coordinates the modeler put them, so there is no raster "
         "underneath to sample -- rasterising one first is what modeling_type=0 is. Use a "
         "raster ucell, which implements both"),
@@ -285,7 +285,7 @@ class CoreFactorizationMixin:
 
     * NVF works on every backend — the per-backend builders had it only in NumPy, so JAX and
       PyTorch used to raise here.
-    * The eager geometry steps (NVF normal field, CFS block compression) are computed inside
+    * The eager geometry steps (NVF normal field, the integrated path's block compression) are computed inside
       the builders, which needs concrete values. For JAX-traced use, call the core builders
       directly with a precomputed ``normal_field`` / ``compression``.
 
@@ -512,7 +512,7 @@ class CoreFactorizationMixin:
 
         What is left is specific, not general. ``factorization='li'`` applies the inverse rule
         along the *raster axes* (see
-        :func:`~fieldwave._core.factorization.to_conv_mat_raster_discrete`), and the solve
+        :func:`~fieldwave._core.factorization.to_conv_mat_raster_sampled`), and the solve
         consumes the result as Cartesian ``eps_xx`` / ``eps_yy``. On a skewed cell those axes
         are ``a1`` / ``a2``, not ``x`` / ``y``. Repairing that is Li's covariant formulation
         (JOSA A 14(10), 2758) — a separate piece of work, and one worth costing before doing,
@@ -525,7 +525,7 @@ class CoreFactorizationMixin:
         Two things that were refused here are not any more, both because the assumption behind
         the refusal turned out to be wrong rather than because they were implemented:
 
-        * The **integrated** coefficients are computed by ``cfs2d`` as an integral over the
+        * The **integrated** coefficients are computed by ``fourier2d_integrated`` as an integral over the
           *parametric* cell, where the Jacobian cancels against the ``1/area`` normalisation.
           There is no metric in it, so it was always lattice-general.
         * The **smooth shape** path (``modeling_type=2``) states shape lengths as absolute
@@ -590,11 +590,11 @@ class CoreFactorizationMixin:
             if factorization == Factorization.LI:
                 if sampled:
                     epx_conv_all, epy_conv_all, epz_conv_i_all = \
-                        _fac.to_conv_mat_raster_discrete(
+                        _fac.to_conv_mat_raster_sampled(
                             self.ucell, fto_x, fto_y)
                 else:
                     epx_conv_all, epy_conv_all, epz_conv_i_all = \
-                        _fac.to_conv_mat_raster_continuous(
+                        _fac.to_conv_mat_raster_integrated(
                             self.ucell, fto_x, fto_y, compression=compression)
             else:
                 if sampled:
@@ -606,7 +606,7 @@ class CoreFactorizationMixin:
                         lattice=self._geometry_lattice_for(geometry))
                 else:
                     (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all,
-                     epz_conv_i_all) = _fac.to_conv_mat_raster_continuous_nvf(
+                     epz_conv_i_all) = _fac.to_conv_mat_raster_integrated_nvf(
                         self.ucell, fto_x, fto_y,
                         normal_field=normal_field,
                         normal_field_source=normal_field_source,
@@ -617,7 +617,7 @@ class CoreFactorizationMixin:
             # No branch on either option here, and that is not an oversight: this path has one
             # rule and one series (see _FACTORIZATION_IMPLEMENTED_BY and
             # _COEFFICIENTS_IMPLEMENTED_BY) -- `to_conv_mat_block` integrates eps over the
-            # painted rectangles with `cfs2d`, unconditionally. Asking it for the other of
+            # painted rectangles with `fourier2d_integrated`, unconditionally. Asking it for the other of
             # either was refused above rather than answered with this.
             ucell_block = self.modeling_block_instruction(
                 self.ucell, plans=None if geometry is None else geometry.block_grid,

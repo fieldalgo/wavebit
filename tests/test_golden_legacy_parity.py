@@ -13,13 +13,13 @@ reconstruction reads.
 
 Two rounds of entries are no longer legacy-derived.
 
-``2d_cfs`` exercised the CFS builder, which read the ``ucell``'s first row as the *last* y
-while DFS and NVF read it as the first -- so the frozen values were the answer to the mirrored
+``2d_cfs`` exercised the integrated builder, which read the ``ucell``'s first row as the *last* y
+while the sampled and NVF builders read it as the first -- so the frozen values were the answer to the mirrored
 structure, and no transform recovers them. Those entries were recomputed after the axis was
 unified (2026-08-05), checked against Reticolo rather than against this implementation: pure TE
 and TM incidence on that exact structure agree to 7e-14.
 
-Then every entry was recomputed (2026-08-05) when the DFS builder stopped resampling the
+Then every entry was recomputed (2026-08-05) when the sampled builder stopped resampling the
 raster. It used to upsample each layer until the grid resolved ``4*fto+1`` harmonics and
 transform that, which approaches the raster's own Fourier coefficients as ``1/R``; those are
 now computed exactly instead, which moved the answers by ~1e-5. The legacy values encoded the

@@ -608,7 +608,7 @@ def test_a_real_grating_matches_the_2ff_solve(fto, theta_deg, phi_deg):
     patterned. This says the solver is ready for those matrices, not that they exist.
     """
     import fieldwave
-    from fieldwave._core.factorization import to_conv_mat_raster_discrete
+    from fieldwave._core.factorization import to_conv_mat_raster_sampled
     from fieldwave._core.solve_2d import order_grid_kxy
 
     ucell = np.ones((1, 40, 40))
@@ -624,7 +624,7 @@ def test_a_real_grating_matches_the_2ff_solve(fto, theta_deg, phi_deg):
                             np.asarray(solver.get_kx_ky_vector(WL)[1], complex))
     kx, ky = KX.ravel(), KY.ravel()
     ff = kx.size
-    epx, epy, epz_i = to_conv_mat_raster_discrete(np.asarray(ucell, dtype=complex), fto, fto)
+    epx, epy, epz_i = to_conv_mat_raster_sampled(np.asarray(ucell, dtype=complex), fto, fto)
     O = np.zeros((ff, ff), dtype=complex)
     layers = [(dict(exx=epx[0], exy=O, exz=O, eyx=O, eyy=epy[0], eyz=O, ezx=O, ezy=O,
                     ezz_i=epz_i[0]), THICK)]

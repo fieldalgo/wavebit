@@ -330,7 +330,7 @@ def test_analytic_shapes_survive_a_unimodular_shear():
 
 
 def test_integrated_coefficients_survive_a_unimodular_shear():
-    """``cfs2d`` integrates over the *parametric* cell, where there is no metric to get wrong.
+    """``fourier2d_integrated`` integrates over the *parametric* cell, where there is no metric to get wrong.
 
     The Jacobian cancels against the ``1/area`` normalisation, so this path was lattice-general
     before anyone asked it to be. Refused for a while on the assumption it was not.

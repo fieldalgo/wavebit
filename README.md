@@ -390,7 +390,7 @@ full diagnosis are in [docs/torch-compile.md](docs/torch-compile.md).
 The physics is checked against references, not only against itself:
 
 * **Reticolo**, the established RCWA implementation, through an Octave bridge in
-  [`tests/references/`](tests/references). The CFS path agrees to ~1e-13 across twelve angle and
+  [`tests/references/`](tests/references). The integrated path agrees to ~1e-13 across twelve angle and
   polarization combinations; it is the only reference here that validates individual
   diffraction *orders* rather than totals.
 * **Published benchmark tables** — Li's 1997 crossed-grating checkerboard, as tabulated by

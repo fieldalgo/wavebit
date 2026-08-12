@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 import fieldwave
-from fieldwave._core.factorization import to_conv_mat_raster_discrete
+from fieldwave._core.factorization import to_conv_mat_raster_sampled
 from fieldwave._core.solve_1d import solve_1d, solve_1d_conical
 
 
@@ -24,7 +24,7 @@ def _run_and_inputs(pol, ucell, thickness, n_top, n_bot, wl, period, fto, theta)
                           pol=pol, fto=fto, period=period, wavelength=wl,
                           thickness=thickness, ucell=ucell)
     via_api = solver.conv_solve()
-    epx, epy, epz = to_conv_mat_raster_discrete(
+    epx, epy, epz = to_conv_mat_raster_sampled(
         solver.ucell, solver.fto[0], solver.fto[1])
     kx, _ = solver.get_kx_ky_vector(wl)
     inputs = dict(pol=pol, wavelength=wl, kx=kx, n_top=n_top, n_bot=n_bot,
@@ -162,7 +162,7 @@ def _run_and_inputs_conical(ucell, thickness, n_top, n_bot, wl, period, fto, the
                           fto=fto, period=period, wavelength=wl, thickness=thickness, ucell=ucell)
     via_api = solver.conv_solve()
     assert solver.grating_type_assigned == 1, solver.grating_type_assigned   # ensure conical path
-    epx, epy, epz = to_conv_mat_raster_discrete(
+    epx, epy, epz = to_conv_mat_raster_sampled(
         solver.ucell, solver.fto[0], solver.fto[1])
     kx, ky = solver.get_kx_ky_vector(wl)
     inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_top, n_bot=n_bot,

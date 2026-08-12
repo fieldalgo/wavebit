@@ -13,11 +13,11 @@ import pytest
 import array_api_compat.numpy as xnp
 
 import fieldwave
-from fieldwave._core.factorization import dfs2d_piecewise_constant
+from fieldwave._core.factorization import fourier2d_piecewise_constant
 from fieldwave._core.factorization import (
-    to_conv_mat_raster_discrete as core_dfs,
+    to_conv_mat_raster_sampled as core_dfs,
     to_conv_mat_raster_nvf as core_nvf,
-    to_conv_mat_raster_continuous as core_cfs,
+    to_conv_mat_raster_integrated as core_cfs,
     to_conv_mat_block as core_vector,
     normal_field_for_ucell,
     compression_indices,
@@ -96,7 +96,7 @@ def test_dfs_coefficients_are_the_exact_ones(case):
     name, ucell, fto_x, fto_y = case
     eps = np.asarray(ucell, dtype=float)[0] ** 2
 
-    got = np.asarray(dfs2d_piecewise_constant(xnp, eps.astype(complex), fto_x, fto_y, inverse_rule=None))
+    got = np.asarray(fourier2d_piecewise_constant(xnp, eps.astype(complex), fto_x, fto_y, inverse_rule=None))
     ff_x, ff_y = 2 * fto_x + 1, 2 * fto_y + 1
     want = np.empty_like(got)
     for r in range(ff_y * ff_x):
@@ -237,7 +237,7 @@ NVF_CASES = [
 def test_nvf_permittivity_inputs_are_the_exact_ones(case):
     """NVF's ``<eps>`` and ``<1/eps>`` are exact too; its projectors are what still are not.
 
-    The same retirement as the DFS check above, and for the same reason — but narrower,
+    The same retirement as the sampled check above, and for the same reason — but narrower,
     because only part of the NVF build changed. ``<eps>`` and ``<1/eps>`` read a raster, so
     they get the exact coefficients. ``C_xx``/``C_xy``/``C_yy`` read the normal field, which
     is a continuous vector field sampled on a grid: no closed form replaces it, refining the
@@ -247,7 +247,7 @@ def test_nvf_permittivity_inputs_are_the_exact_ones(case):
     eps = np.asarray(ucell, dtype=float)[0] ** 2
 
     for label, cell in (('eps', eps), ('1/eps', 1.0 / eps)):
-        got = np.asarray(dfs2d_piecewise_constant(xnp, cell.astype(complex), fto_x, fto_y, inverse_rule=None))
+        got = np.asarray(fourier2d_piecewise_constant(xnp, cell.astype(complex), fto_x, fto_y, inverse_rule=None))
         ff_x, ff_y = 2 * fto_x + 1, 2 * fto_y + 1
         want = np.empty_like(got)
         for r in range(ff_y * ff_x):
@@ -334,9 +334,9 @@ def test_nvf_end_to_end_gradient_wrt_ucell():
     assert abs(g_jax - g_fd) < 1e-6, (g_jax, g_fd)
 
 
-# ================================ CFS / analytic + vector (fourier_coefficients='integrated')
+# ============================ integrated + vector layers (fourier_coefficients='integrated')
 
-CFS_CASES = [
+INTEGRATED_CASES = [
     ('cfs_1d', _rand((1, 1, 8), 20), 4, 0),
     ('cfs_2d', _rand((1, 5, 5), 21), 2, 2),
     ('cfs_binary', np.where(_rand((1, 6, 6), 22) > 2.5, 3.5, 1.0), 2, 2),
@@ -344,7 +344,7 @@ CFS_CASES = [
 ]
 
 
-@pytest.mark.parametrize('case', CFS_CASES, ids=[c[0] for c in CFS_CASES])
+@pytest.mark.parametrize('case', INTEGRATED_CASES, ids=[c[0] for c in INTEGRATED_CASES])
 def test_cfs_bit_parity_vs_legacy(case):
     name, ucell, fto_x, fto_y = case
     got = core_cfs(ucell, fto_x, fto_y)
@@ -355,7 +355,7 @@ def test_cfs_bit_parity_vs_legacy(case):
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
-@pytest.mark.parametrize('case', CFS_CASES, ids=[c[0] for c in CFS_CASES])
+@pytest.mark.parametrize('case', INTEGRATED_CASES, ids=[c[0] for c in INTEGRATED_CASES])
 def test_cfs_cross_backend(case, backend):
     pytest.importorskip(backend)
     _, ucell, fto_x, fto_y = case
@@ -368,7 +368,7 @@ def test_cfs_cross_backend(case, backend):
 
 
 def test_vector_path_bit_parity_vs_legacy():
-    """Vector-modelled layers (explicit segment edges, no compression) match the legacy CFS."""
+    """Vector-modelled layers (explicit segment edges, no compression) match the legacy integrated build."""
     info = [[GOLDEN[f'vector__in{i}__cell'], GOLDEN[f'vector__in{i}__x'],
              GOLDEN[f'vector__in{i}__y']] for i in (0, 1)]
     got = core_vector(info, 2, 2)
@@ -391,7 +391,7 @@ def test_compression_indices_match_legacy():
 
 
 def test_cfs_end_to_end_gradient_wrt_ucell():
-    """d(sum T)/d(ucell) through the analytic CFS path: jax == torch == finite-diff."""
+    """d(sum T)/d(ucell) through the analytic integrated path: jax == torch == finite-diff."""
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
     import jax.numpy as jnp

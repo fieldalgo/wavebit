@@ -52,7 +52,7 @@ about different mistakes; only the latter is invisible to R and T.
 
 **Scope.** Every case in this file is a *uniform film*: no in-plane structure, ``fto=(0, 0)``, one
 Fourier order, convolution matrices hand-filled as scaled identities. Nothing that turns a pattern
-into those matrices is exercised — not the ``dfs2d_*`` builders, not Li's rules, not NVF, not
+into those matrices is exercised — not the ``fourier2d_*`` builders, not Li's rules, not NVF, not
 the analytic or
 boundary builders, not truncation. What this file covers is the layer mode operator, the s/p
 rotation, the boundary match and the layer joining. Anisotropy on a *patterned* layer is untested

@@ -53,8 +53,8 @@ import fieldwave                                                        # noqa: 
 RESULTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'results', 'backends.json')
 
 STRATEGIES = {
-    'DFS': dict(fourier_coefficients='sampled', factorization='li'),
-    'CFS': dict(fourier_coefficients='integrated', factorization='li'),
+    'sampled': dict(fourier_coefficients='sampled', factorization='li'),
+    'integrated': dict(fourier_coefficients='integrated', factorization='li'),
     'NVF': dict(fourier_coefficients='sampled', factorization='nvf'),
 }
 
@@ -100,7 +100,7 @@ def _probe_step():
 
     def step():
         t = torch.tensor(pattern, requires_grad=True)
-        out = fieldwave.rcwa(backend=2, ucell=t, **STRATEGIES['DFS'], **cfg).conv_solve()
+        out = fieldwave.rcwa(backend=2, ucell=t, **STRATEGIES['sampled'], **cfg).conv_solve()
         out.res.T.real.sum().backward()
 
     return step

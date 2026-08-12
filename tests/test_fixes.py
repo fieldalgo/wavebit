@@ -115,12 +115,12 @@ def test_5_continuous_raster_convolution_matrix():
     print("Test 5: Continuous Raster Convolution Matrix sign")
     print("==================================================")
     
-    from fieldwave._core.factorization import to_conv_mat_raster_continuous
+    from fieldwave._core.factorization import to_conv_mat_raster_integrated
     
     n_compressed = np.array([0.18 + 3.0j])
     ucell = np.array([[[0.18 + 3.0j]]])
     
-    epx, epy, epz_i = to_conv_mat_raster_continuous(ucell, fto_x=1, fto_y=1)
+    epx, epy, epz_i = to_conv_mat_raster_integrated(ucell, fto_x=1, fto_y=1)
     # eps = n**2 with no conjugation: Im(n) > 0 is loss, so Im(eps) > 0 as well. This
     # asserted the opposite until 2026-08, when the solver stopped conjugating on the way in.
     imag_part = epx[0, 0, 0].imag

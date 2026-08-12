@@ -73,7 +73,7 @@ def bench_tilted_dielectric():
 
 
 # ----------------------------------------------------------------------
-# 2. Metallic circle — analytic-NVF vs raster-NVF vs raster-DFS
+# 2. Metallic circle — analytic-NVF vs raster-NVF vs raster-sampled
 # ----------------------------------------------------------------------
 def bench_metallic_circle():
     cfg = dict(n_top=1.0, n_bot=1.0, theta=0.0, phi=None,
@@ -85,7 +85,7 @@ def bench_metallic_circle():
     print("\n" + "=" * 74)
     print(f"[2] Metallic circle (n={NM}, R={R}, TM subwavelength)")
     print(f"    reference t0 (analytic fto=16) = {ref:.6f}")
-    print(f"    {'fto':>3} | {'analytic-NVF':>13} | {'raster-NVF':>12} | {'raster-DFS':>12}")
+    print(f"    {'fto':>3} | {'analytic-NVF':>13} | {'raster-NVF':>12} | {'raster-sampled':>14}")
     for fto in (3, 5, 7, 9, 11):
         a, _ = solve(0, analytic, fto, **cfg)
         ras = make_circle_raster(240, R, NM)

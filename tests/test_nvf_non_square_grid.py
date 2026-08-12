@@ -143,7 +143,7 @@ def test_the_solver_hands_the_cell_basis_to_the_factorization(coefficients):
                n_top=1.0, n_bot=1.5, theta=0.2, factorization='nvf',
                fourier_coefficients=coefficients, ucell=layers)
     build = (fac.to_conv_mat_raster_nvf if coefficients == 'sampled'
-             else fac.to_conv_mat_raster_continuous_nvf)
+             else fac.to_conv_mat_raster_integrated_nvf)
 
     on_pixel_shape = build(layers, 3, 3, lattice=np.diag([PX, PY]))[0]
     on_index_grid = build(layers, 3, 3, lattice=None)[0]

@@ -30,7 +30,7 @@ Verbatim from `meent`. What changed underneath it is where it lands:
 
 | | in `meent` | now |
 |---|---|---|
-| DFS permittivity coefficients | its main purpose | **ignored** — obtained in closed form since `072710d` |
+| sampled-path permittivity coefficients | its main purpose | **ignored** — obtained in closed form since `072710d` |
 | NVF normal field | (NVF did not exist) | its only remaining reader |
 
 So a flag whose reason for existing was the permittivity survived into a codebase where the
@@ -74,7 +74,7 @@ Raising the real raster resolution behaves as it should:
 Base raster 240x240 (fine enough that the staircase error is small), truth from the analytic
 shape path at `fto=16`, error on the specular transmitted order.
 
-| case | `fto` | DFS | R=1 | R=2 | R=4 |
+| case | `fto` | sampled | R=1 | R=2 | R=4 |
 |---|---|---|---|---|---|
 | dielectric circle, TM | 4 | 1.60e-02 | **3.73e-03** | 5.34e-03 | 6.43e-03 |
 | | 6 | 1.25e-02 | **1.33e-03** | 2.86e-03 | 3.90e-03 |
@@ -104,7 +104,7 @@ Two controls make the separation exact:
 
 The floor is not an accuracy preference, it is structural. The normal field has no closed-form
 transform (unlike the permittivity, which `_pixel_correction` handles for any order), so
-`dfs2d_sampled` reads it off the grid, and the circulant asks for orders up to `±2*fto`. On a grid
+`fourier2d_pointwise` reads it off the grid, and the circulant asks for orders up to `±2*fto`. On a grid
 shorter than `4*fto+1`, `k % n` folds distinct orders onto one bin.
 
 The consequence is not gradual. A **constant** normal field must transform to the identity for

@@ -28,7 +28,7 @@ import pytest
 
 import array_api_compat.numpy as xnp
 
-from fieldwave._core.factorization import (dfs2d_piecewise_constant, dfs2d_sampled,
+from fieldwave._core.factorization import (fourier2d_piecewise_constant, fourier2d_pointwise,
                                            normal_vector_field, nvf_conv_matrices)
 
 
@@ -82,8 +82,8 @@ def _unit_fraction(nx, ny):
 
 def _projector_defect(nx, ny, fto=3):
     """``||C_xx + C_yy - I|| / ||I||`` in Fourier space — 0 iff ``nx^2 + ny^2 == 1``."""
-    C_xx = dfs2d_sampled(xnp, (nx ** 2).astype(complex), fto, fto)
-    C_yy = dfs2d_sampled(xnp, (ny ** 2).astype(complex), fto, fto)
+    C_xx = fourier2d_pointwise(xnp, (nx ** 2).astype(complex), fto, fto)
+    C_yy = fourier2d_pointwise(xnp, (ny ** 2).astype(complex), fto, fto)
     I = np.eye(C_xx.shape[0])
     return float(np.linalg.norm(C_xx + C_yy - I) / np.linalg.norm(I))
 
@@ -159,12 +159,12 @@ def test_the_projector_is_built_from_the_sampled_transform():
                             for f in (nx ** 2, nx * ny, ny ** 2))
         return c_xx, c_xy, c_yy
 
-    sampled = assembled(lambda f: dfs2d_sampled(xnp, f, fto, fto))
-    staircase = assembled(lambda f: dfs2d_piecewise_constant(xnp, f, fto, fto, inverse_rule=None))
+    sampled = assembled(lambda f: fourier2d_pointwise(xnp, f, fto, fto))
+    staircase = assembled(lambda f: fourier2d_piecewise_constant(xnp, f, fto, fto, inverse_rule=None))
 
     # The projector that shipped is the sampled one, to the last bit of the assembly.
     from fieldwave._core.factorization import _nvf_assemble
-    want = np.asarray(_nvf_assemble(xnp, *(np.asarray(dfs2d_piecewise_constant(
+    want = np.asarray(_nvf_assemble(xnp, *(np.asarray(fourier2d_piecewise_constant(
         xnp, e.astype(complex), fto, fto, inverse_rule=None)) for e in (eps, 1.0 / eps)), *sampled)[0])
     assert np.allclose(got, want, atol=1e-12, rtol=0), np.abs(got - want).max()
 

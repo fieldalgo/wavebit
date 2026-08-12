@@ -154,7 +154,7 @@ matter the order.
 **[2] Metallic circle** (n=0.05+3.5j, R=0.3, TM). Reference = analytic fto=16. `t0` error,
 re-measured at `f537010` (2026-08-09):
 
-| fto | analytic-NVF | raster-NVF (SDF normals) | raster-DFS |
+| fto | analytic-NVF | raster-NVF (SDF normals) | raster-sampled |
 |---:|---:|---:|---:|
 | 3 | 1.56e-2 | 1.39e-2 | 4.18e-2 |
 | 5 | 2.78e-2 | 3.42e-2 | 2.89e-2 |
@@ -163,7 +163,7 @@ re-measured at `f537010` (2026-08-09):
 | 11 | **1.37e-3** | 3.48e-3 | 1.75e-2 |
 
 **This case no longer separates analytic-NVF from raster-NVF, and the earlier version of this
-section claimed it did.** It read "the accuracy ranks analytic-NVF < raster-NVF < DFS (as
+section claimed it did.** It read "the accuracy ranks analytic-NVF < raster-NVF < raster-sampled (as
 expected)" against a raster-NVF column of 1.1e-2 at fto=9 and 5.5e-3 at fto=11. Those numbers
 were correct when measured; the baseline has since moved.
 
@@ -208,7 +208,7 @@ precision energy conservation. Backend agreement: `|np−jax|`~1e-14, `|np−tor
 
 ## 6. Regression tests
 
-`tests/test_analytic.py`: (1) conv_matrix_2d==dfs2d_sampled convention, (2) the three shape
+`tests/test_analytic.py`: (1) conv_matrix_2d==fourier2d_pointwise convention, (2) the three shape
 formulas vs a fine DFT, (3) axis-aligned analytic==raster-NVF, (4) lossless energy
 conservation, (5) backend agreement, (6) torch/jax differentiability, (7) analytic ≥5× more
 accurate than staircase for a tilted dielectric. Existing `test_nvf*` and `test_fixes` all

@@ -181,7 +181,7 @@ The share grew during this investigation, for a reason worth recording. An earli
 `c992b72` put BLAS/LAPACK at 89% at `fto=10`, with `_fft_c2c` taking 5% there and 30% at
 `fto=3`. `072710d perf(factorization): compute the raster's Fourier coefficients exactly` then
 landed. It did not remove the FFT — the same six transforms still run — but it removed the
-**upsampling** in front of them: the DFS path used to repeat pixels until the grid resolved
+**upsampling** in front of them: the sampled path used to repeat pixels until the grid resolved
 `4*fto+1` harmonics and transform *that*, where the exact coefficients are the N-point DFT of
 the original grid times `sinc(k/N) * exp(-i*pi*k/N)`. Transforming the small grid instead took
 the FFT from 8.4 ms to 0.05 ms at `fto=3` (0.34% of the work) and from 157.9 ms to 0.27 ms at

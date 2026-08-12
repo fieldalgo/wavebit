@@ -8,14 +8,15 @@ right, and it is independent: a different group's solver, in a different languag
 over two decades of published work.
 
 RETICOLO builds a binary grating's Fourier coefficients from the *exact* edge positions, and
-so do both raster paths here — CFS by compressing the raster into blocks first, DFS straight
+so do both raster paths here — the integrated one by compressing the raster into blocks
+first, the sampled one straight
 off the pixel grid. These gratings have their edges on pixel boundaries, so the raster *is*
 the structure and all three land on each other at round-off, 1e-15 to 1e-13.
 
-That is true of DFS only since 2026-08. It used to resample the raster onto a grid fine
+That is true of sampled only since 2026-08. It used to resample the raster onto a grid fine
 enough to resolve ``4*fto+1`` harmonics and transform *that*, which approaches the same
 expression as 1/R — leaving it ~1e-5 from RETICOLO where it now sits at ~1e-14. The test that
-holds DFS to this tolerance used to assert the opposite.
+holds sampled to this tolerance used to assert the opposite.
 
 The values are frozen in ``golden_reticolo.npz`` by ``gen_goldens_reticolo.py``, which needs
 Octave and RETICOLO. This file needs neither, which is the point: the evidence used to live
@@ -35,7 +36,7 @@ import fieldwave
 
 GOLDEN_PATH = pathlib.Path(__file__).parent / 'golden_reticolo.npz'
 
-# 1D binary grating, exact edges on both sides. `ucell` is a raster only in spelling: the CFS
+# 1D binary grating, exact edges on both sides. `ucell` is a raster only in spelling: the integrated
 # path reads the block edges off it, and RETICOLO is handed those same edges.
 _HALF = np.array([[[3.0] * 5 + [1.0] * 5]])
 _QUARTER = np.array([[[3.5] * 3 + [1.0] * 9]])
@@ -168,15 +169,16 @@ def test_the_order_axis_is_not_symmetric_in_these_cases(name):
 
 @pytest.mark.parametrize('name', list(CASES))
 def test_the_raster_path_holds_the_same_tolerance(name):
-    """The DFS path is held to this too, and that is a recent thing.
+    """The sampled path is held to this too, and that is a recent thing.
 
     RETICOLO builds a binary grating's coefficients from the exact edge positions. So does
-    CFS, and so does DFS now: a raster is a piecewise-constant function, and the exact
+    the integrated path, and so does the sampled one now: a raster is a piecewise-constant
+function, and the exact
     coefficients of one come out of an N-point transform without resampling it. Since these
     gratings have their edges on pixel boundaries, the raster *is* the structure, and all
     three agree to round-off.
 
-    Until 2026-08 the DFS path upsampled the raster instead and took the transform of that,
+    Until 2026-08 the sampled path upsampled the raster instead and took the transform of that,
     which converges to the same expression as 1/R — so this check would have failed at ~1e-5,
     and did: it used to assert the opposite, that the raster path could not be held here.
     """

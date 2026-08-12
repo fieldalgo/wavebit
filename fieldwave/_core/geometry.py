@@ -4,7 +4,7 @@ Two steps in the pipeline decide something *structural* rather than compute a va
 
 ===================  ===========================================================
 normal field (NVF)   which way do the material interfaces point?
-compression (CFS)    where do the piecewise-constant blocks start and stop?
+compression    where do the piecewise-constant blocks start and stop?
 ===================  ===========================================================
 
 (There were three. The same-material short-circuit -- is this layer uniform and identical to
@@ -63,7 +63,7 @@ class StaticGeometry:
         normal_field_source: per-layer ``(shape, interface mask)`` that ``normal_field`` was
             derived from — carried so a replay can tell whether it still fits, not consumed by
             the build. Left ``None``, the NVF replay is unchecked.
-        compression: per-layer ``(row_idx, col_idx, x, y)`` for the CFS factorization.
+        compression: per-layer ``(row_idx, col_idx, x, y)`` for the integrated path's factorization.
         block_grid: per-layer ``VectorGridPlan`` for the block modeler's grid build.
         shape_choices: per-shape discrete branch outcomes taken inside ``Modeling.rectangle``.
         boundary_plans: per-layer ``(table_records, regions)`` for the boundary path — which
@@ -72,7 +72,7 @@ class StaticGeometry:
             carries a gradient to the vertices and they compare by content.
 
     A field left ``None`` means "auto-detect", which is what the strategy in use does not need
-    (a DFS build never touches ``normal_field``, for instance).
+    (a sampled build never touches ``normal_field``, for instance).
 
     **Why the equality below is what it is.** A frozen geometry is passed as a *static*
     argument to a jitted call, so its ``__eq__``/``__hash__`` decide when JAX recompiles. Two

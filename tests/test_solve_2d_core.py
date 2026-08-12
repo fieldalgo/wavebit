@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 import fieldwave
-from fieldwave._core.factorization import to_conv_mat_raster_discrete
+from fieldwave._core.factorization import to_conv_mat_raster_sampled
 from fieldwave._core.solve_2d import solve_2d
 
 
@@ -17,7 +17,7 @@ def _run_and_inputs(ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi,
                           fto=fto, period=period, wavelength=wl, thickness=thickness, ucell=ucell)
     via_api = solver.conv_solve()
     assert solver.grating_type_assigned == 2, solver.grating_type_assigned    # ensure 2D path
-    epx, epy, epz = to_conv_mat_raster_discrete(
+    epx, epy, epz = to_conv_mat_raster_sampled(
         solver.ucell, solver.fto[0], solver.fto[1])
     kx, ky = solver.get_kx_ky_vector(wl)
     inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_top, n_bot=n_bot,

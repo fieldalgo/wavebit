@@ -49,7 +49,7 @@ the speed of a wrong answer.
   freeze against a 277 ms step at `N=128, fto=5` — because its normal field was taken on a
   grid `4*fto+1` times finer per axis. That is gone ([`nvf-upsampling.md`](nvf-upsampling.md));
   its freeze is
-  now under 2 ms and its step is level with DFS.
+  now under 2 ms and its step is level with the sampled path.
 
 ---
 
@@ -173,34 +173,34 @@ A binary raster, `d(sum de_ti)/d(ucell)`, swept across all three Fourier strateg
 
 | config | torch | jax eager | jit (one freeze) | jit (re-freeze) | compile | freeze |
 |---|---|---|---|---|---|---|
-| N=16, fto=3, DFS | 18 | 67 | 16 | 16 | 700 | 0 |
-| N=16, fto=3, CFS | 18 | 70 | 16 | 626 | 917 | 0 |
+| N=16, fto=3, sampled | 18 | 67 | 16 | 16 | 700 | 0 |
+| N=16, fto=3, integrated | 18 | 70 | 16 | 626 | 917 | 0 |
 | N=16, fto=3, NVF | 18 | 70 | 16 | 527 | 709 | 0 |
-| N=32, fto=3, DFS | 19 | 66 | 15 | 15 | 695 | 0 |
-| N=32, fto=3, CFS | 19 | 77 | 15 | 639 | 929 | 0 |
+| N=32, fto=3, sampled | 19 | 66 | 15 | 15 | 695 | 0 |
+| N=32, fto=3, integrated | 19 | 77 | 15 | 639 | 929 | 0 |
 | N=32, fto=3, NVF | 20 | 73 | 17 | 561 | 683 | 0 |
-| N=32, fto=5, DFS | 140 | 146 | 85 | 86 | 792 | 0 |
-| N=32, fto=5, CFS | 138 | 150 | 84 | 733 | 975 | 0 |
+| N=32, fto=5, sampled | 140 | 146 | 85 | 86 | 792 | 0 |
+| N=32, fto=5, integrated | 138 | 150 | 84 | 733 | 975 | 0 |
 | N=32, fto=5, NVF | 136 | 147 | 83 | 585 | 727 | 0 |
-| N=64, fto=3, DFS | 18 | 67 | 15 | 15 | 688 | 0 |
-| N=64, fto=3, CFS | 20 | 72 | 15 | 613 | 933 | 0 |
+| N=64, fto=3, sampled | 18 | 67 | 15 | 15 | 688 | 0 |
+| N=64, fto=3, integrated | 20 | 72 | 15 | 613 | 933 | 0 |
 | N=64, fto=3, NVF | 21 | 73 | 16 | 547 | 727 | 1 |
-| N=64, fto=5, DFS | 131 | 140 | 80 | 80 | 771 | 0 |
-| N=64, fto=5, CFS | 138 | 153 | 132 | 1032 | 1050 | 0 |
+| N=64, fto=5, sampled | 131 | 140 | 80 | 80 | 771 | 0 |
+| N=64, fto=5, integrated | 138 | 153 | 132 | 1032 | 1050 | 0 |
 | N=64, fto=5, NVF | 142 | 157 | 93 | 659 | 895 | 1 |
-| N=64, fto=7, DFS | 641 | 559 | 416 | 425 | 1340 | 0 |
-| N=64, fto=7, CFS | 613 | 550 | 399 | 1026 | 1322 | 0 |
+| N=64, fto=7, sampled | 641 | 559 | 416 | 425 | 1340 | 0 |
+| N=64, fto=7, integrated | 613 | 550 | 399 | 1026 | 1322 | 0 |
 | N=64, fto=7, NVF | 595 | 514 | 399 | 1006 | 1208 | 1 |
-| N=128, fto=3, DFS | 19 | 70 | 16 | 16 | 718 | 0 |
-| N=128, fto=3, CFS | 24 | 74 | 17 | 649 | 946 | 1 |
+| N=128, fto=3, sampled | 19 | 70 | 16 | 16 | 718 | 0 |
+| N=128, fto=3, integrated | 24 | 74 | 17 | 649 | 946 | 1 |
 | N=128, fto=3, NVF | 21 | 79 | 18 | 608 | 838 | 1 |
-| N=128, fto=5, DFS | 140 | 150 | 84 | 85 | 843 | 0 |
-| N=128, fto=5, CFS | 143 | 157 | 87 | 799 | 996 | 0 |
+| N=128, fto=5, sampled | 140 | 150 | 84 | 85 | 843 | 0 |
+| N=128, fto=5, integrated | 143 | 157 | 87 | 799 | 996 | 0 |
 | N=128, fto=5, NVF | 148 | 152 | 84 | 619 | 795 | 1 |
 
 Four things this says.
 
-**1. Re-freezing is ruinous for CFS and NVF.** Their records hold arrays, where value equality
+**1. Re-freezing is ruinous for the integrated and NVF records.** Their records hold arrays, where value equality
 is neither well defined nor hashable, so `StaticGeometry` falls back to identity and a new
 freeze misses the compilation cache every time: ~600 ms against a ~16 ms step. The content-hash
 path helps the block records only. On these two strategies a fit must either hold one freeze
@@ -226,7 +226,8 @@ from the *base* raster instead of reading it off the grid it was lifted onto. Si
 a block repeat the two are the same mask. So `geometry=` is optional for a gradient on every
 raster path, which is what makes a fit whose pattern moves every step safe.
 
-**4. Nothing here separates the strategies on cost any more.** DFS, CFS and NVF land within a
+**4. Nothing here separates the strategies on cost any more.** The sampled, integrated and
+NVF builds land within a
 few percent of each other at every size. NVF used to be the outlier, growing with `N` where the
 others were flat, because its distance transform ran on the `(4*fto+1)*N` upsampled grid; it no
 longer upsamples, and its freeze fell from 359 ms to 1 ms at `N=128, fto=5`. So the choice among
@@ -279,8 +280,8 @@ above the expected convergence point than at the centre of the search range.
 | OCD fit, `fto ≤ 5` | **torch** |
 | OCD fit, `fto ≥ 7`, long run | **jax jit, re-freezing every step** |
 | Raster inverse design, pattern moves every step | **`('sampled','li')`**, any backend |
-| Raster with CFS/NVF, pattern moves | **torch** (jit's re-freeze recompiles every step) |
-| Raster with CFS/NVF, pattern fixed | jax jit, one freeze |
+| Raster, integrated or NVF, pattern moves | **torch** (jit's re-freeze recompiles every step) |
+| Raster, integrated or NVF, pattern fixed | jax jit, one freeze |
 | Anything where a stale record would be silent | **torch**, or re-freeze on the block path |
 
 The general shape: **PyTorch is the default, and JAX earns its place at large `fto` on the

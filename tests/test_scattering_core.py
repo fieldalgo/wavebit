@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 import fieldwave
-from fieldwave._core.factorization import to_conv_mat_raster_discrete
+from fieldwave._core.factorization import to_conv_mat_raster_sampled
 from fieldwave._core.scattering import smm_1d, smm_1d_conical, smm_2d
 from fieldwave._core.solve_1d import solve_1d, solve_1d_conical
 from fieldwave._core.solve_2d import solve_2d
@@ -126,7 +126,7 @@ def _core_inputs(kwargs):
     """Solver-built arguments for a direct core call (same route the mixin takes)."""
     solver = fieldwave.rcwa(backend=0, connecting_algo='SMM', **kwargs)
     solver.conv_solve()                    # assigns the grating type
-    epx, epy, epz = to_conv_mat_raster_discrete(
+    epx, epy, epz = to_conv_mat_raster_sampled(
         solver.ucell, solver.fto[0], solver.fto[1])
     kx, ky = solver.get_kx_ky_vector(kwargs['wavelength'])
     common = dict(wavelength=kwargs['wavelength'], kx=kx, n_top=solver.n_top,

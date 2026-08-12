@@ -1,8 +1,8 @@
 """Frozen geometry makes the public API traceable (fieldwave.StaticGeometry).
 
 Two pipeline steps decide something structural rather than numeric — the NVF normal field and
-the CFS block compression. Both branch on values, so neither survives ``jax.jit``. (There was
-a third, the same-material short-circuit; removing it is what left DFS with nothing to
+the integrated block compression. Both branch on values, so neither survives ``jax.jit``. (There was
+a third, the same-material short-circuit; removing it is what left the sampled path with nothing to
 freeze.) ``freeze_geometry()`` takes those decisions once against the concrete
 structure; handing the result back to ``conv_solve`` makes the whole call jit- and
 grad-traceable without changing a single number.
@@ -83,7 +83,7 @@ NEEDS_FREEZE_IDS = [i for i, s in zip(IDS, STRATEGIES) if s != DEFAULT_STRATEGY]
 def test_auto_detection_still_blocks_jit(strategy):
     """Pins *why* the API exists: for these strategies, tracing fails without it.
 
-    Auto-detection is the eager path; the normal field and the CFS block compression both
+    Auto-detection is the eager path; the normal field and the integrated block compression both
     branch on concrete values, and the compression's output shape depends on them.
     """
     jax = pytest.importorskip('jax')
@@ -98,7 +98,7 @@ def test_the_default_pairing_needs_no_frozen_geometry_at_all():
 
     It used to raise here. The one discrete decision on this path was the same-material
     short-circuit, and removing that left nothing between ``conv_solve`` and a trace --
-    ``freeze_geometry()`` is now optional for DFS rather than the price of admission.
+    ``freeze_geometry()`` is now optional for the sampled path rather than the price of admission.
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
@@ -244,11 +244,11 @@ def test_a_stale_raster_record_is_refused_rather_than_answered(strategy):
     """A record frozen on one raster must not be replayed onto a raster that has moved.
 
     Both raster records are sampled from, or indexed against, one concrete pattern — the NVF
-    normal field says which way each interface points, the CFS compression says which rows and
+    normal field says which way each interface points, the integrated compression says which rows and
     columns end a constant block. Move the pattern and each describes a layer that is no longer
     there, and the answer comes back wrong without looking wrong. Measured on a 40x40 rod frozen
     at 12 cells wide and replayed wider, before either check existed: NVF read a total of 0.710
-    against a true 0.346, with single orders 0.55 off; CFS returned the *same* total (0.591) for
+    against a true 0.346, with single orders 0.55 off; the integrated path returned the *same* total (0.591) for
     widths 13, 16, 20 and 24 while the true answers ran 0.733 down to 0.496 — those four sample
     to the same three values at the frozen indices, so they all build one profile that is
     neither the true layer nor the frozen one (whose own answer is 0.490).
@@ -270,7 +270,7 @@ def test_a_stale_raster_record_is_refused_rather_than_answered(strategy):
 
 
 def test_a_compression_that_still_separates_the_blocks_is_kept():
-    """The CFS check asks whether the record still fits, not whether it is the one re-derived.
+    """The integrated check asks whether the record still fits, not whether it is the one re-derived.
 
     A cut with a line the layer no longer needs splits one constant block into two of the same
     value — the same profile written differently, not a different layer. Insisting the record
@@ -353,7 +353,7 @@ def test_a_traced_replay_carries_no_check():
     assert np.isfinite(float(jax.jit(total)(moved)))   # traced: answered, unchecked
 
 
-CFS_STRATEGY = dict(fourier_coefficients='integrated', factorization='li')
+INTEGRATED_STRATEGY = dict(fourier_coefficients='integrated', factorization='li')
 
 
 def test_the_compression_decides_itself_inside_a_gradient():
@@ -374,7 +374,7 @@ def test_the_compression_decides_itself_inside_a_gradient():
     import jax.numpy as jnp
 
     def total(u):
-        return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **CFS_STRATEGY, **KW)
+        return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **INTEGRATED_STRATEGY, **KW)
                        .conv_solve().res.T).real
 
     grad = np.asarray(jax.grad(total)(jnp.asarray(UCELL)))
@@ -402,7 +402,7 @@ def test_a_moving_pattern_needs_no_record_on_the_compression_path():
     design = rng.random((1, 6, 6)) < 0.4
 
     def total(u):
-        return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **CFS_STRATEGY, **KW)
+        return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **INTEGRATED_STRATEGY, **KW)
                        .conv_solve().res.T).real
 
     for flips in (0, 2, 4):

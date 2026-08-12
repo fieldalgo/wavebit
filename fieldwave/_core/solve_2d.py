@@ -155,7 +155,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     big_T = xp.astype(xp.eye(2 * ff_xy), C)
 
 
-    # The order grid flattened row-major: m fastest, matching how the ``dfs2d_*`` builders
+    # The order grid flattened row-major: m fastest, matching how the ``fourier2d_*`` builders
     # lay out the convolution matrices. Diagonal either way — the eigenproblem below reads
     # only these two diagonals, which is why a skewed lattice never reaches it.
     Kx = _diag(xp, xp.reshape(kx_g, (-1,)))
