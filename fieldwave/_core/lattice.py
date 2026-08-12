@@ -23,8 +23,12 @@ the Fourier machinery: substituting ``r = u*a1 + v*a2`` turns the cell integral 
     eps_hat[m, n] = \\int_0^1 \\int_0^1 eps(u, v) exp(-2i*pi*(m*u + n*v)) du dv
 
 an ordinary DFT on the parametric ``(u, v)`` grid for *any* basis, still indexed by integer
-differences and therefore still block-Toeplitz. That is why ``dfs2d`` and the Toeplitz builds
-in :mod:`fieldwave._core.factorization` are untouched by this module.
+differences and therefore still block-Toeplitz. That is why ``dfs2d`` and the convolution
+matrix builds in :mod:`fieldwave._core.factorization` are untouched by this module.
+
+(``block-Toeplitz`` is the usual shorthand and is what matters here — the indexing by
+differences survives the skew. The exact structure is BTTB; ``docs/factorization-terms.md`` §3
+has the distinction and the check.)
 
 The raster follows that substitution: ``ucell[layer][j, i]`` is the permittivity at
 ``r = (i + 0.5)/Nx * a1 + (j + 0.5)/Ny * a2``. Axis 1 runs along ``a1`` (and pairs with

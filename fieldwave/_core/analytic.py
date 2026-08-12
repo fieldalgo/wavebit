@@ -78,7 +78,12 @@ from .overlap import COMBINE_MODES, OVERLAP_TOL_REL      # re-exported; both pat
 
 
 def _grid(xp, fto_x, fto_y, dev, dtype):
-    """Integer reciprocal grid ``(KY, KX)`` spanning the doubled range a Laurent matrix needs."""
+    """Integer reciprocal grid ``(KY, KX)`` spanning the doubled range a convolution matrix needs.
+
+    Doubled because the matrix is indexed by *differences*: ``r - c`` and ``s - d`` each reach
+    ``+-2*fto``, so a grid of ``2*fto+1`` per axis cannot fill its corners. See
+    ``docs/factorization-terms.md`` for the layout and why the result is BTTB, not Toeplitz.
+    """
     ky = xp.asarray([float(m) for m in range(-2 * fto_y, 2 * fto_y + 1)], dtype=dtype, device=dev)
     kx = xp.asarray([float(m) for m in range(-2 * fto_x, 2 * fto_x + 1)], dtype=dtype, device=dev)
     return ky[:, None] + 0.0 * kx[None, :], 0.0 * ky[:, None] + kx[None, :]
@@ -425,7 +430,8 @@ def assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype, lattice
     """Analytic Fourier coefficients of ``eps`` and ``1/eps`` for one layer.
 
     Each grid has shape ``(4*fto_y+1, 4*fto_x+1)``, indexed ``[ky+2*fto_y, kx+2*fto_x]`` — the
-    doubled range a ``(2*fto+1)**2`` Laurent matrix needs. The ``n**2`` maps refractive index
+    doubled range a ``(2*fto+1)**2`` convolution matrix needs (``docs/factorization-terms.md``
+    §2 for why it doubles). The ``n**2`` maps refractive index
     to permittivity: FieldWave works in ``e^{-iwt}`` throughout (``Im(n) > 0`` = loss), with no
     conjugation on the way in.
     """
@@ -452,12 +458,21 @@ def assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype, lattice
 
 
 def laurent_conv_2d(xp, coeff2d, fto_x, fto_y):
-    """Block-Toeplitz (Laurent) convolution matrix from a 2D coefficient grid.
+    """Convolution matrix from a 2D coefficient grid.
 
     ``M[(r,s),(c,d)] = coeff(ky=r-c, kx=s-d)`` — the same ordering ``dfs2d`` produces. The
     sign is the order-index convention (see ``_circulant_index``); the two builders have to
     agree with each other and with ``kx``, which ``test_laurent_matches_dfs2d_convention``
     pins.
+
+    **Rule-neutral, despite the name.** ``Laurent`` here is the *direct* factorization rule,
+    and this builder implements neither rule: :func:`to_conv_mat_smooth_nvf` calls it on
+    ``eps`` and on ``1/eps`` two lines apart, and the inverse rule's inversion happens in the
+    caller. It is also called on the three normal-field products.
+
+    The result is **BTTB** (block-Toeplitz with Toeplitz blocks), not Toeplitz: with the row
+    and column pairs flattened, ``i - j`` does not determine ``(r-c, s-d)``, so the diagonals
+    are not constant. ``docs/factorization-terms.md`` has the check and the vocabulary.
     """
     ff_x = 2 * fto_x + 1
     ff_y = 2 * fto_y + 1

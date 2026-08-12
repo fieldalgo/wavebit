@@ -111,6 +111,11 @@ def dfs2d(xp, cell, conti_x, conti_y, fto_x, fto_y, piecewise_constant=False):
     ``conti_x`` / ``conti_y`` flag the direction as continuous (1) or discontinuous (0); a
     discontinuous direction takes the inverse rule. Port of the legacy ``dfs2d``.
 
+    These flags are the *only* thing that selects a rule. The other name for the continuous
+    case is Laurent's rule, which this codebase mostly calls ``direct`` — see
+    ``docs/factorization-terms.md``, which also explains why the matrix built from these
+    coefficients is BTTB rather than Toeplitz.
+
     ``piecewise_constant`` says each value of ``cell`` holds across its whole pixel, rather
     than being a sample of something that varies inside it. When that is true the coefficients
     have an exact closed form and this computes it (see :func:`_pixel_correction`); when it is
