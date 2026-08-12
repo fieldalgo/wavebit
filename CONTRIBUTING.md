@@ -30,7 +30,7 @@ Two more rules that go with the table:
 
 - **Every directory carries a `README.md` whose first table maps each entry to the question it answers.** Not what the script does — what it exists to find out. `studies/README.md` is the model.
 - **Everything committed is in English**: code, comments, docs and commit messages. Your scratch space is exempt, which is part of why it is kept separate.
-- **Scratch lives outside the checkout.** An ignored directory inside the repository is not safe — it is what `git clean -xdf` exists to delete. Keep it as a sibling of the checkout (this project uses `../<your-scratch-dir>`) and symlink it in as `lab` if you want it on hand; the symlink is ignored, and losing it costs one `ln -s`.
+- **Scratch lives outside the checkout.** An ignored directory inside the repository is not safe — it is what `git clean -xdf` exists to delete. Keep it as a sibling of the checkout and symlink it in as `lab` if you want it on hand (`ln -s ../<your-scratch-dir> lab`); the symlink is ignored, and losing it costs one `ln -s`.
 
 ### Why the directories are named this way
 

@@ -32,8 +32,8 @@ PUBLISHED = ('fieldwave', 'docs', 'tests', 'studies', 'tutorials', 'examples')
 TEXT_SUFFIXES = {'.py', '.md', '.ipynb', '.toml', '.cfg', '.yml', '.yaml', '.txt', '.m'}
 
 # A home directory or a user-rooted absolute path. `~/` alone is not enough to match: it is
-# ordinary in prose ("keep it as a sibling, `../<your-scratch-dir>`"), and what makes a pointer a
-# leak is that it descends into somebody's tree.
+# ordinary in prose ("keep it as a sibling of the checkout"), and what makes a pointer a leak
+# is that it descends into somebody's tree.
 OUTWARD = re.compile(
     r'(?:/(?:Users|home)/[A-Za-z0-9._-]+/'          # /Users/someone/... or /home/someone/...
     r'|~/[A-Za-z0-9._-]+/'                          # ~/project/..., ~/miniconda3/...
