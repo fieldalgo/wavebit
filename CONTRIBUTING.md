@@ -66,6 +66,26 @@ Not sure whether something is a bug, a usage question, or a feature idea? Open a
 - **Backend neutrality.** New solver code should be written against the Array API (`fieldwave/_core/backend.py`) rather than importing NumPy/JAX/Torch directly, unless there is a documented reason.
 - For anything larger than a bug fix, please open an issue first to discuss the design — it protects your time as much as the maintainer's.
 
+### Branches: rebase, then merge with a merge commit
+
+Work happens on several branches at once, often in parallel worktrees over the same clone. That
+is what these two rules are for; neither is about tidiness.
+
+- **Rebase your branch onto `develop`. Never merge `develop` into your branch.** Merging the
+  other way puts a merge commit *inside* the branch, and with several branches doing it the
+  history criss-crosses until nobody can read it. Rebasing keeps each branch a straight line
+  sitting on `develop`'s tip, so the only merge is the one that lands it.
+- **Land it with `git merge --no-ff`**, even when a fast-forward is possible. The merge commit
+  is the one place the branch name survives, which is what answers *which piece of work did
+  this come from* when several branches land the same day. Fast-forward scatters the commits
+  into `develop` in timestamp order and that question stops having an answer. Write the merge
+  message as the summary of the branch: the individual commits already say what each change is.
+- **Exception: a branch of one or two trivial commits** — a typo, a version bump — fast-forwards.
+  A merge commit wrapping one line is noise.
+
+`git log --merges develop` is the changelog this produces, and it is only as good as the merge
+messages.
+
 ## Development setup
 
 ```shell
