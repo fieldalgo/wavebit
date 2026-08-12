@@ -156,7 +156,7 @@ jobs:
               ucell=np.array([[[3.8, 3.8]]]), thickness=[200],
           ).conv_solve()
 
-          R, T = float(res.de_ri.sum()), float(res.de_ti.sum())
+          R, T = float(res.R.sum()), float(res.T.sum())
           assert 0.0 <= R <= 1.0 and 0.0 <= T <= 1.0, (R, T)
           assert abs(R + T - 1.0) < 1e-9, R + T
 
