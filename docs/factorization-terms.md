@@ -263,8 +263,28 @@ were rewritten as noun phrases. The rule that works is *the sampled path*, *inte
 coefficients*, *the integrated build*.
 
 **One thing this vocabulary does not tell you, and should.** `fourier_coefficients` governs the
-*permittivity* only. The NVF normal field is read off the grid on both paths — `_nvf_projector`
-calls `fourier2d_pointwise` from `nvf_conv_matrices` and from `nvf_conv_matrices_integrated` alike —
-because a sampled field has no closed form to integrate. So `('integrated', 'nvf')` integrates
-`eps` and `1/eps` exactly and still samples the projector, and that is not a gap in the
-implementation: it is what the normal field is.
+*permittivity* only — never the normal field. But the reason differs by path, and only one of
+the two is the one you would guess.
+
+On the **raster** path both values are accepted and the normal field is unaffected:
+`_nvf_projector` calls `fourier2d_pointwise` from `nvf_conv_matrices` and from
+`nvf_conv_matrices_integrated` alike, because a sampled field has no closed form to integrate.
+So `('integrated', 'nvf')` integrates `eps` and `1/eps` exactly and still samples the
+projector. Not a gap in the implementation — it is what the normal field is.
+
+On the **shape** path (analytic layer dicts) the question never arises:
+`fourier_coefficients='sampled'` is refused outright with `NotImplementedError` — parametric
+geometry has no samples to take a discrete series of — so `'integrated'` is the only value
+there.
+
+The two paths also differ in where the field's grid comes from, which is easy to assume away.
+Counting calls on a 32x32 raster and a circular shape layer:
+
+| path | `lattice.sample_grid` calls |
+| --- | --- |
+| raster, `'sampled'` | 0 |
+| raster, `'integrated'` | 0 |
+| shapes (analytic dicts) | 1 |
+
+`sample_grid` serves the non-raster builders only; the raster normal field is index-based and
+goes through `factorization.normal_vector_field` without ever asking for cell coordinates.
