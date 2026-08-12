@@ -407,8 +407,8 @@ The derivations and measurements are in `docs/time-convention-audit.md` and
 
 ## 10. Mapping to the `e^{+jωt}` paper draft
 
-The paper draft (`<the paper draft directory>/`) is written in the
-engineering convention. The two formulations are exact complex conjugates (`j ↔ -i`);
+A separate paper draft, kept outside this repository, is written in the engineering
+convention. The two formulations are exact complex conjugates (`j ↔ -i`);
 every physical magnitude is identical. For cross-reading:
 
 | | paper (`e^{+jωt}`) | this document / the code (`e^{-iωt}`) |
@@ -430,5 +430,5 @@ the theory chapter's first paragraph is the cheapest bug repellent this codebase
 history has to offer.
 
 A LaTeX version of this derivation (paper-voice, no code references) is kept outside this
-repository at `<a directory outside this repository>/formulation_eminus.tex`, ready to `\input`
-into the paper for the case where the paper is instead flipped to match the code.
+repository, ready to `\input` into the paper for the case where the paper is instead flipped
+to match the code.

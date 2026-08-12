@@ -188,8 +188,7 @@ geometric error floor that no Fourier order removes and no raster refinement rea
 
 For a curved boundary the honest evidence is now the RETICOLO comparison, which has an external
 reference rather than the smooth path's own fto=16: the analytic result is flat from fto=5
-while two independent staircases are still climbing toward it at fto=20. See
-`<the manual's working notes>`.
+while two independent staircases are still climbing toward it at fto=20.
 
 **[3] Lossless multi-shape / multi-layer** (ellipse + rectangle + circle, conical
 incidence, non-square period): `|R+T−1|` = 6.7e-16 (fto5), 1.1e-14 (fto8) — machine-

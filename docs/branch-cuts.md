@@ -440,6 +440,7 @@ uniform-stack test uses.
 ## 7. Where the oracle lives
 
 The golden is `tests/references/golden_reticolo_conical_sweep.npz`, cut from a 2024-09-09
-RETICOLO run by `gen_goldens_reticolo_conical_sweep.py`. The full study — notebooks, the raw
-`.mat` files, before/after data and the figures — is outside this repository at
-`<the study directory>/20260811_fieldwave_rerun/`, with its own README.
+RETICOLO run by `gen_goldens_reticolo_conical_sweep.py`. Everything the tests need is in the
+repository; the study it was cut from — notebooks, the raw `.mat` files, before/after data and
+the figures — is retained privately by the authors and is not required to reproduce anything
+here. Regenerating the golden needs a RETICOLO installation and nothing else.

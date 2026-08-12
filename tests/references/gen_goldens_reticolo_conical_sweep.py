@@ -5,16 +5,17 @@ on 2024-09-09, by a study that lived outside this repository, and its raw output
 7-19 MB ``.mat`` files. All this script does is pull out the one slice the test needs -- the
 zeroth-order reflected amplitude for TE incidence -- and commit it at a few kilobytes.
 
-Source (not in this repository)::
+The study directory is not in this repository and is not needed to run the tests -- the golden
+is committed. It holds::
 
-    <the study directory>/20240910/
-        run_reti.m               the sweep driver
-        Reticolo_RCWA_1D.m       the per-point wrapper
-        reti_res_80.mat          fto=80   (reti_res2.mat is the same run, to 3e-14)
-        reti_res_200.mat         fto=200
+    run_reti.m               the sweep driver
+    Reticolo_RCWA_1D.m       the per-point wrapper
+    reti_res_80.mat          fto=80   (reti_res2.mat is the same run, to 3e-14)
+    reti_res_200.mat         fto=200
 
-Point ``SOURCE`` at that directory and run this file with Octave-free Python; the golden it
-writes is what CI reads.
+Pass that directory as the first argument and run this file with Octave-free Python; the golden
+it writes is what CI reads. There is no default: the path is machine-specific, and a stale
+default that silently resolves to nothing is worse than being asked for it.
 """
 import pathlib
 import sys
@@ -22,8 +23,11 @@ import sys
 import numpy as np
 import scipy.io
 
-SOURCE = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else
-                      '<the study directory>/20240910').expanduser()
+if len(sys.argv) < 2:
+    raise SystemExit(f'usage: {pathlib.Path(__file__).name} <study-directory>\n'
+                     '  the directory holding reti_res_80.mat and reti_res_200.mat; see the '
+                     'module docstring')
+SOURCE = pathlib.Path(sys.argv[1]).expanduser()
 OUT = pathlib.Path(__file__).parent / 'golden_reticolo_conical_sweep.npz'
 
 # The grid and structure `run_reti.m` swept. Lengths are metres here; the .m file works in nm.
