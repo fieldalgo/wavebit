@@ -1,4 +1,4 @@
-"""Single-source 2D RCWA solve — Phase 3c of the rewrite (see ``<a scratch note outside this repository>``).
+"""Single-source 2D RCWA solve — Phase 3c of the rewrite.
 
 Port of the triplicated ``transfer_2d_1..4`` chain into one backend-agnostic solve against the
 Array-API namespace, sharing the boundary/branch conventions and the final s/p matching with

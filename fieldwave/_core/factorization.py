@@ -1,4 +1,4 @@
-"""Single-source Fourier factorization — Phase 4a of the rewrite (see ``<a scratch note outside this repository>``).
+"""Single-source Fourier factorization — Phase 4a of the rewrite.
 
 Builds the per-layer convolution matrices (``epx`` / ``epy`` / ``inv(epz)``) that the solve
 core consumes, written once against the Array-API namespace instead of once per backend.

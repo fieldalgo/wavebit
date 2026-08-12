@@ -14,7 +14,7 @@ from this codebase, which is exactly what makes them worth having.
 
 | Oracle | Reaches | Generator needs | Golden |
 | --- | --- | --- | --- |
-| **RETICOLO** (Li/Lalanne lineage) | diffraction *orders*; uniform layers with a complex 3x3 tensor — **but only up to one off-diagonal pair, at classical mounting**, see below | Octave + the V10 snapshot in `<a reference collection outside this repository>` | `golden_reticolo.npz`, `golden_reticolo_anisotropic.npz` |
+| **RETICOLO** (Li/Lalanne lineage) | diffraction *orders*; uniform layers with a complex 3x3 tensor — **but only up to one off-diagonal pair, at classical mounting**, see below | Octave + a licensed RETICOLO V10 tree (`RETICOLO_PATH`) | `golden_reticolo.npz`, `golden_reticolo_anisotropic.npz` |
 | **RETICOLO**, swept over `(kx, ky)` | conical incidence across the light line, **including complex (evanescent) angles** | nothing — frozen from a 2024-09-09 study, see its generator | `golden_reticolo_conical_sweep.npz` |
 | **fmmax** (Liu & Fan lineage, MIT) | uniform complex tensors, **patterned** tensors, **permeability** | the `fwref` env — see below | `golden_fmmax.npz`, `golden_fmmax_magnetic.npz` |
 | **S4** (same lineage, C++) | real tensors, patterned | the S4 extension, already in the project env | `golden_s4.npz` |
@@ -89,8 +89,8 @@ Two things to weigh when reading agreement between them:
 * **fmmax generalises the S4 paper**, so those two share a formulation lineage. Agreement between
   *them* is weaker evidence than agreement with RETICOLO or Berreman.
 * **RETICOLO validates individual orders**; the others are compared on totals per incident
-  polarisation. For anisotropy that is deliberate — `<a survey of the available solvers>` records that
-  S4 is silently wrong when polarisation decomposition and anisotropy are combined.
+  polarisation. For anisotropy that is deliberate: S4 is silently wrong when polarisation decomposition
+  and anisotropy are combined, so totals are the only sound comparison against it.
 
 The GRCWA and TORCWA bridges in `interface/` predate all of this and have no frozen case. Neither
 supports anisotropy.

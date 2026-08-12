@@ -1,6 +1,6 @@
 """Typed domain objects at the API boundary — ``Layer`` / ``Stack`` / ``Incidence``.
 
-Phase 2 of the rewrite (see ``<a scratch note outside this repository>``): the geometry and illumination a user
+Phase 2 of the rewrite: the geometry and illumination a user
 configures become typed objects instead of a bare ``ucell`` array plus loose
 ``thickness`` / ``theta`` / ``pol`` scalars. These are a non-breaking, *adapt-in* layer —
 the legacy keyword arguments keep working unchanged, and a ``Stack`` round-trips losslessly
@@ -40,7 +40,7 @@ class Layer:
     ``eps`` is the layer's entry of a legacy ``ucell`` in any of the three encodings — a
     raster grid array ``(Ny, Nx)``, a vector ``[bg_material, [objects...]]``, or an analytic
     layer dict. Phase 2 keeps this a thin typed pairing; a richer ``Material`` / ``Shape``
-    geometry model (see ``<a scratch note outside this repository>``) is deferred to a later phase.
+    geometry model is deferred to a later phase.
     """
     thickness: float
     eps: Any

@@ -43,6 +43,20 @@ OUTWARD = re.compile(
 # This file quotes the patterns it forbids, and so does the contract that describes them.
 EXEMPT = {'tests/test_docs_contract.py', 'docs/README.md', 'CONTRIBUTING.md'}
 
+# Paths that do not resolve and are named on purpose. Listed rather than pattern-matched, so
+# that adding one is a decision somebody writes down: the whole failure this file exists to
+# catch is a reference that looks fine and is not.
+CITED_BUT_ABSENT = {
+    # A file the script writes rather than reads. `*.json` is ignored on purpose -- the log
+    # beside it is the committed record, and a second copy would be a second thing to keep true.
+    'studies/results/backends.json',
+    # Deliberately named as gone. Each appears in prose that says so ("used to live in",
+    # "the legacy", "the deleted"), explaining where a test came from or what it replaced.
+    'QA/1d_pattern_in_1dc_and_2d.py',
+    'QA/autodiff_raster1.py',
+    'on_numpy/emsolver/nvf.py',
+}
+
 
 def published_files():
     for d in PUBLISHED:
@@ -81,28 +95,42 @@ def docs_with_targets():
 
 
 # A repo-relative path in backticks. This catches the other half of the same mistake: not
-# `/Users/someone/...` but `<a survey of the available solvers>` or `<a scratch note outside this repository>` -- a path that
+# `/Users/someone/...` but `third_party/rcwa/ANALYSIS.md` or `dev/bench_jit.py` -- a path that
 # looks local, resolves on the author's disk, and is simply absent from the clone. It reads as
 # an in-repo reference, which makes it worse than an obvious outward one.
 CITED_PATH = re.compile(r'`([A-Za-z0-9_][A-Za-z0-9._/-]*\.(?:md|py|json|npz|toml|yml|cfg))`')
 
 
-@pytest.mark.parametrize('doc', sorted(p.name for p in (ROOT / 'docs').glob('*.md')))
-def test_paths_a_document_cites_are_in_the_repository(doc):
-    """Every backticked path resolves, from the repo root or as `_core/...` shorthand."""
-    p = ROOT / 'docs' / doc
-    missing = []
-    for m in CITED_PATH.finditer(p.read_text(encoding='utf-8')):
-        t = m.group(1)
-        if '/' not in t:
-            continue                                    # a bare filename is prose, not a path
-        if any((base / t).exists() for base in (ROOT, ROOT / 'fieldwave', p.parent)):
+def test_paths_cited_anywhere_are_in_the_repository():
+    """Every backticked path in a shipped file resolves.
+
+    Scoped to `docs/` at first, which is how `third_party/rcwa/ANALYSIS.md` survived twice in
+    `tests/references/`: the rule was right and the check was looking in one place. A cited
+    path is a promise the reader can follow it, and that promise is made wherever it is
+    written.
+    """
+    bad = []
+    for p in published_files():
+        rel = p.relative_to(ROOT).as_posix()
+        if rel in EXEMPT:
             continue
-        missing.append(t)
-    assert not missing, (
-        f'docs/{doc} cites paths that are not in the repository: {sorted(set(missing))}. '
-        'A path that resolves only on the author\'s disk reads as an in-repo reference and is '
-        'the harder half of the same leak -- see the contract in docs/README.md.')
+        try:
+            text = p.read_text(encoding='utf-8')
+        except UnicodeDecodeError:
+            continue
+        for m in CITED_PATH.finditer(text):
+            t = m.group(1)
+            if '/' not in t or t in CITED_BUT_ABSENT:
+                continue                                # a bare filename is prose, not a path
+            if any((base / t).exists() for base in (ROOT, ROOT / 'fieldwave', p.parent)):
+                continue
+            bad.append(f'{rel}: {t}')
+
+    assert not bad, (
+        'these cite paths that are not in the repository:\n  ' + '\n  '.join(sorted(set(bad))) +
+        '\n\nA path that resolves only on the author\'s disk reads as an in-repo reference, '
+        'which is the harder half of the same leak -- nothing about it looks wrong. State the '
+        'substance instead of the address; see the contract in docs/README.md.')
 
 
 @pytest.mark.parametrize('doc', [p.name for p, _ in docs_with_targets()])

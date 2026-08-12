@@ -6,7 +6,7 @@ anywhere. Rerun it only to add cases, never to make a failing test pass.
     conda run -n fieldwave python tests/references/gen_goldens_s4.py
 
 **Why a fourth oracle, and what it is not.** fmmax generalises the S4 paper (Liu & Fan 2012,
-eq. 28) — ``<a survey of the available solvers>`` §2.4 — so these two are the *same formulation
+eq. 28) — so these two are the *same formulation
 lineage*, and this file does not add an independent derivation the way RETICOLO does. What it
 adds is a second **implementation** of that lineage, in C++ against LAPACK rather than JAX, and
 one predating the other by a decade. Formulation errors survive it; implementation errors do

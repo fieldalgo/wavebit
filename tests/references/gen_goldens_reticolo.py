@@ -13,9 +13,9 @@ stay identical is a copy that will not.
 
 Setup notes, all of them things that cost an afternoon once:
 
-* Points at the **V10 snapshot in the reference collection**
-  (``$RETICOLO_PATH``), which is version-pinned and sits beside the licence
-  and provenance notes. Override with ``RETICOLO_PATH`` if yours is elsewhere.
+* Points at a **version-pinned V10 tree**, given by ``RETICOLO_PATH``. RETICOLO is licensed
+  and not redistributable, so it is kept outside this repository beside its licence and
+  provenance notes rather than vendored in.
 
   It used to point at a ``V9_pristine`` tree under an unrelated project directory, chosen
   because the modified ``V9`` beside it failed inside ``retb`` under Octave 9.4 with

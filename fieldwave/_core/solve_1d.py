@@ -1,4 +1,4 @@
-"""Single-source 1D (TE / TM / conical) RCWA solve — Phase 3 of the rewrite (``<a scratch note outside this repository>``).
+"""Single-source 1D (TE / TM / conical) RCWA solve — Phase 3 of the rewrite.
 
 One backend-agnostic implementation of the transfer-matrix solve for a 1D grating stack,
 written against the Array-API namespace (``numpy`` / ``jax.numpy`` / ``torch``). It is the
