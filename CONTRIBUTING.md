@@ -66,7 +66,7 @@ Not sure whether something is a bug, a usage question, or a feature idea? Open a
 - **Backend neutrality.** New solver code should be written against the Array API (`fieldwave/_core/backend.py`) rather than importing NumPy/JAX/Torch directly, unless there is a documented reason.
 - For anything larger than a bug fix, please open an issue first to discuss the design — it protects your time as much as the maintainer's.
 
-### Branches: rebase, then merge with a merge commit
+### Branches: rebase, then fast-forward
 
 Work happens on several branches at once, often in parallel worktrees over the same clone. That
 is what these two rules are for; neither is about tidiness.
@@ -74,17 +74,21 @@ is what these two rules are for; neither is about tidiness.
 - **Rebase your branch onto `develop`. Never merge `develop` into your branch.** Merging the
   other way puts a merge commit *inside* the branch, and with several branches doing it the
   history criss-crosses until nobody can read it. Rebasing keeps each branch a straight line
-  sitting on `develop`'s tip, so the only merge is the one that lands it.
-- **Land it with `git merge --no-ff`**, even when a fast-forward is possible. The merge commit
-  is the one place the branch name survives, which is what answers *which piece of work did
-  this come from* when several branches land the same day. Fast-forward scatters the commits
-  into `develop` in timestamp order and that question stops having an answer. Write the merge
-  message as the summary of the branch: the individual commits already say what each change is.
-- **Exception: a branch of one or two trivial commits** — a typo, a version bump — fast-forwards.
-  A merge commit wrapping one line is noise.
+  sitting on `develop`'s tip.
+- **Land it with `git merge --ff-only`, whatever the size of the branch.** `develop` is linear:
+  no merge commits, no exceptions for large branches. `merge.ff=only` is set in the repo config
+  as a guard, so a plain `git merge` that would create one refuses; never pass `--no-ff` to
+  override it. If the fast-forward fails, another session landed first — rebase again and retry.
+  That retry loop is the concurrency control between sessions.
 
-`git log --merges develop` is the changelog this produces, and it is only as good as the merge
-messages.
+**The commit, not the branch, is the unit of history here.** With no merge commit to carry a
+branch name, each commit has to stand on its own: squash WIP and fixup commits during the
+rebase, and write the message so it answers *what changed and why* without the branch for
+context. `git log --oneline develop` is the changelog this produces.
+
+This replaced a `--no-ff` rule on 2026-08-13 (`d1f5195`). If you find prose elsewhere that
+still describes merge commits as the landing step, it predates that and is wrong;
+[`CLAUDE.md`](CLAUDE.md) and this section are the current word.
 
 **One trap, because this repository turns it on.** `rebase.updateRefs` is set to `true` here, so
 every rebase moves *any other branch* pointing into the rebased range — no flag needed. That
