@@ -22,6 +22,8 @@ If none of them is a yes, **the file has no home yet.** Say so in the PR rather 
 
 **Questions 5 and 6 are the other pair worth restating.** `docs/` is published: anyone who clones this repository reads it, so it holds what a user or contributor needs — measurements, and the reasoning behind a default. A record of *how the project is run* is finished work rather than scratch, but it is not part of the library, and putting it here means publishing it. Keep those alongside the checkout instead of inside it.
 
+Because it is published, **nothing committed here may name a path outside the checkout** — not a document, not a script's default argument, not a notebook's stored output. State what a private record measured; never where it sits. [`docs/README.md`](docs/README.md) states the contract, and `tests/test_docs_contract.py` fails the build on a violation. A draft that keeps wanting to point outward is usually a question-6 file that landed in the wrong place.
+
 **Questions 2 and 4 are the pair that gets misfiled**, so they are worth restating. If you can state the criterion up front — `assert abs(R + T - 1) < 1e-9`, `assert norm(numpy - jax) < 1e-12` — it is a test. If writing the assertion would require the answer you are running it to discover — `assert jax_is_faster` — it is a study, and it is not finished until `docs/` records what the numbers decided. Equivalently: when the number moves, would you fix the *code* or the *write-up*?
 
 Two more rules that go with the table:

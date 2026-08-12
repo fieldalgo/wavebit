@@ -4,8 +4,52 @@ Measurements and decisions, written so they can be cited. `fieldwave/_core/` lin
 of these from code comments — they are why a constant has the value it has, so a document here
 is not finished until it states what its numbers decided.
 
+**Which prose belongs here at all is decided by [`../CONTRIBUTING.md`](../CONTRIBUTING.md), and
+that table wins over anything below.** What follows is the contract for a document once it is
+here: what it must contain, and what it may point at.
+
 House style: title, `Written:` date, a `Targets:` list of the files it explains, a TL;DR, then
 tables. Say what was measured on what hardware, and where the result stops being trustworthy.
+Every path in `Targets:` must resolve — `tests/test_docs_contract.py` checks it.
+
+## A document here points inward only
+
+`docs/` is published. Everyone who clones this repository gets it, so **a document may only
+reference things that arrive with the clone**, plus the published literature:
+
+| May cite | Must not cite |
+| --- | --- |
+| code, tests, studies and other docs in this repository | a path on anyone's machine — `/Users/...`, `<a path outside this repository>`, `C:\...` |
+| a DOI, an arXiv id, a public URL | a private study, an unpublished draft, an internal note |
+| a released version of another project | a sibling checkout or scratch directory, however stable it feels |
+
+The rule is not decoration; it is what this repository already got wrong. Four documents
+pointed at directories that exist on one laptop, and the pointers named more than a location:
+a private collaboration, an old project name, a folder of internal drafts. To a reader they
+were dangling links, and to the author they were a disclosure nobody chose to make. The
+committed git author field says *who* wrote this, which is attribution and belongs; a path says
+*what else is on their disk*, which is neither.
+
+**When the source really is outside, state the substance instead of the address.** A private
+measurement is still evidence — write down what it measured and what the number was, and say
+plainly that the raw record is not public. `branch-cuts.md` §7 is the pattern: it names the
+golden that ships, dates the run it was cut from, and stops there.
+
+One thing worth noticing about how the leaks were distributed: they were all in the documents
+whose subject lives outside the code. A document explaining `_core/` has no occasion to name a
+directory. **If a draft here keeps wanting to point somewhere else, that is a signal it belongs
+somewhere else** — question 6 of the CONTRIBUTING table, not this folder.
+
+## What a document here is not
+
+- **Not the user manual.** These answer *why it is built this way*; how to use the library is
+  the tutorials and the manual. Overlap in subject is fine — the two have different readers.
+- **Not a changelog or a project record.** A document states what is true now and what the
+  measurement decided. Past defects appear only where the current behaviour is otherwise
+  inexplicable — a warning that exists because of one, a slot whose sign looks wrong until you
+  know why.
+- **Not a scratch pad.** An unfinished measurement lives in `studies/` until it decides
+  something; scratch lives outside the checkout entirely.
 
 | Document | Question it answers | Decision |
 | --- | --- | --- |
