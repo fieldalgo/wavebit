@@ -26,6 +26,20 @@ from fieldwave._core.factorization import (
 from fieldwave._core.solve_1d import solve_1d
 from fieldwave._core.solve_2d import solve_2d
 
+# Enables jax x64, which every jax case here needs: at float32 the cross-backend comparisons
+# miss their 1e-10 tolerance and the gradient checks miss 1e-8. Guarded because jax is
+# optional -- when it is absent the jax cases skip themselves via `pytest.importorskip`.
+#
+# At the top of the module rather than beside each `import jax.numpy`, which is the idiom
+# elsewhere in this suite, because the jax paths here are scattered across `_to` and three
+# gradient tests: a jax case added later would silently inherit float32. That is how this file
+# came to depend on *another* test module importing `fieldwave.on_jax` first -- the whole suite
+# passed while `pytest tests/test_factorization_core.py` alone failed nine of them.
+try:
+    import fieldwave.on_jax                                    # noqa: E402,F401
+except ImportError:
+    pass
+
 
 def _rand(shape, seed):
     return np.random.default_rng(seed).uniform(1.0, 4.0, size=shape)
