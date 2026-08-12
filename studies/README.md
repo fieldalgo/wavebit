@@ -16,6 +16,34 @@ makes them assertions, not studies.
 | `benchmark_analytic.py` | How the analytic (staircase-free) shape path converges against the raster and vector staircases, for tilted and curved boundaries. Write-up: [../docs/analytic-modeling.md](../docs/analytic-modeling.md). |
 | `benchmark_truncation_shape.py` | Whether S4's circular cut of the Fourier order set beats the full rectangle FieldWave keeps. Sweeps both shapes through the same permittivity raster and solver, on NVF and on Laurent as a control. Write-up: [../docs/fourier-truncation-shape.md](../docs/fourier-truncation-shape.md). |
 
+## Rejected, and why
+
+Some questions end in "do not do this". The code stays out of `develop` — it would be dead
+weight — but the answer should not have to be rediscovered, and the branch holding it should not
+have to be diffed to find that out.
+
+**Eigendecomposition-free propagator, by matrix square root.** Replacing the per-layer `eig` with
+`sqrtm` + `expm` is algebraically exact, not an approximation, and it measures that way:
+efficiencies, amplitudes, phases and gradients all match the eig path to 1e-13. It is rejected
+anyway, because no branch rule is safe for every structure. Whether a given structure is safe
+turns out to depend on the *raster* rather than the optics — the same grating at 48 cells carries
+a growing mode where 40, 44, 52 and 56 do not — and the only way to check is to run the
+eigendecomposition the method exists to remove. The error is invisible on a thin layer and
+unbounded on a thick one, and neither the square root's residual nor energy conservation detects
+it. This conclusion is specific to the matrix-square-root formulation; R-DIT and PIM never form a
+square root and are not covered by it.
+
+- Branch `claude/rcwa-no-eigendecomposition-b92d89`, tag `study/no-merge/matfun-propagator`.
+  **Not merged, and deliberately not rebased.** The value is the measurements, and they are tied
+  to the tree they were taken on: `study_matfun_envelope.py` reproduces them against that tree,
+  not a later one. Rebasing forward would leave new code carrying old numbers.
+- A consequence worth knowing before you sweep: **that branch is out of scope for API renames and
+  for `develop`-wide refactors.** Its tree predates the result API rename and the
+  `factorization.py` renaming, so it still reads `de_ri` / `de_ti` and
+  `to_conv_mat_raster_discrete`. That is expected, not a defect to fix.
+- `git diff develop..claude/rcwa-no-eigendecomposition-b92d89` looks enormous. That is staleness,
+  not a revert; `git log develop..<branch>` shows the two commits that are actually there.
+
 ## Reading a timing table
 
 `benchmark_backends.py` warms the machine for 45 s before it times anything, and times one
