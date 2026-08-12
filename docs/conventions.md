@@ -58,6 +58,23 @@ All angles are **radians**.
 | `psi` | polarization: the angle of **E** from the p direction in the plane transverse to **k**. `psi = pi/2` is pure s (TE-like), `psi = 0` pure p (TM-like) |
 | `pol` (1D paths) | `0` = TE, `1` = TM — an alias for `psi = pi/2` / `0` on the pure path |
 
+### General (elliptical) polarization
+
+`polarization = (a_s, a_p)` states the incident polarization as a pair of complex
+**E-field amplitudes**, in the same (s, p) basis as `psi` and the returned amplitudes:
+`(1, 0)` is pure s, `(0, 1)` pure p, and `psi = v` is exactly
+`polarization = (sin(v), cos(v))`. What the pair adds is the relative phase `psi` cannot
+spell — `(1, -1j)/sqrt(2)` and `(1, +1j)/sqrt(2)` are the two circular states.
+
+- `psi` and `polarization` are mutually exclusive. Naming both is an error, not an
+  override.
+- The pair's overall magnitude is **not read**: `|a_s|^2 + |a_p|^2 = 1` is not required,
+  because the pair is normalized to unit incident flux on the way in — efficiencies are per
+  unit incident power and amplitudes per unit incident E-field whatever scale you write.
+  The overall *phase* is kept, and carries into the complex amplitudes.
+- A 1D structure given a pair is solved on the conical path (the pure 1D TE/TM path is
+  single-polarization by construction); the answer is the same physics at conical cost.
+
 ## Diffraction orders
 
 The retained orders are `m = -fto_x..fto_x`, `n = -fto_y..fto_y`, with in-plane
@@ -78,7 +95,7 @@ user code never needs the previous paragraph.
 | `R`, `T` | per-order diffraction efficiency: power returned to the incidence medium / leaving through the far side, as a fraction of incident power |
 | `R_s`, `R_p`, `T_s`, `T_p` | the same, resolved by outgoing polarization; `R = R_s + R_p` |
 | `r_s`, `r_p`, `t_s`, `t_p` | complex **Fresnel amplitudes**: E-field ratios against a unit incident E-field, directly comparable to the textbook Fresnel/Airy coefficients (pinned to 1e-12 against them, absorbing media included) |
-| `res`, `res_te_inc`, `res_tm_inc` | the `psi`-specified incidence, plus the pure-s and pure-p variants the coupled solves produce for free; top-level `R`/`T` average the two variants when no `psi` solve exists (unpolarized illumination) |
+| `res`, `res_te_inc`, `res_tm_inc` | the incidence as specified (`psi`, or the `polarization` pair), plus the pure-s and pure-p variants the coupled solves produce for free; top-level `R`/`T` average the two variants when no specified solve exists (unpolarized illumination) |
 
 Amplitude fine print, stated once so it never has to be discovered:
 
@@ -104,6 +121,7 @@ Amplitude fine print, stated once so it never has to be discovered:
 | order layout, order-index sign | `tests/references/test_reticolo_golden.py` (mirrors orders if wrong, conserving energy) |
 | `incidence_side`, incidence-relative results | `tests/test_backside_incidence.py` (reversed-stack Airy oracle, reciprocity both halves) and the `inc_bottom` cases of `tests/references/test_reticolo_golden.py` |
 | result naming, `order()`, delegation | `tests/test_result_api.py` |
+| the `polarization` pair: `psi` equivalence, unit-flux normalization, circular states | `tests/test_polarization.py` |
 | square-root branches behind `kz` | `tests/test_branch_selection.py` |
 | the whole surface, per backend | `tests/test_golden_legacy_parity.py` |
 

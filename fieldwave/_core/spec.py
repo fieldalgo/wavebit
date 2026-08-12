@@ -403,7 +403,8 @@ def _eps_to_json(eps):
 
 def _incidence_from_dict(d) -> Incidence:
     d = dict(d or {})
-    _reject_unknown(d, ('wavelength', 'theta', 'phi', 'pol', 'psi', 'incidence_side'),
+    _reject_unknown(d, ('wavelength', 'theta', 'phi', 'pol', 'psi', 'incidence_side',
+                        'polarization'),
                     'incidence')
     if 'pol' in d:
         d['pol'] = _normalise_pol(d['pol'])
@@ -413,7 +414,44 @@ def _incidence_from_dict(d) -> Incidence:
         raise SpecError(
             f"incidence.incidence_side: expected 'top' or 'bottom', "
             f"got {d['incidence_side']!r}")
+    if d.get('polarization') is not None:
+        d['polarization'] = _polarization_from_json(d['polarization'])
     return Incidence(**d)
+
+
+def _polarization_from_json(value):
+    """The amplitude pair with each entry as a ``complex``, whichever way it was written.
+
+    JSON has no complex type, so a component is written as a real number or as a two-list
+    ``[re, im]``; a spec built in-process rather than parsed may also carry Python complex
+    values, which pass through. One canonical parsed form is what lets ``(1, -1j)`` and
+    ``[[1, 0], [0, -1]]`` hash to the same :meth:`JobSpec.key`.
+    """
+    if isinstance(value, str) or not hasattr(value, '__iter__'):
+        raise SpecError(
+            f'incidence.polarization: expected a pair (a_s, a_p), got {value!r}')
+    entries = list(value)
+    if len(entries) != 2:
+        raise SpecError(
+            f'incidence.polarization: expected 2 amplitudes (a_s, a_p), '
+            f'got {len(entries)}')
+    pair = []
+    for name, v in zip(('a_s', 'a_p'), entries):
+        if isinstance(v, (list, tuple)):
+            ok = (len(v) == 2 and all(isinstance(x, (int, float))
+                                      and not isinstance(x, bool) for x in v))
+            if not ok:
+                raise SpecError(
+                    f'incidence.polarization: {name} written as a list must be the pair '
+                    f'[re, im], got {v!r}')
+            pair.append(complex(v[0], v[1]))
+        elif isinstance(v, complex) or (isinstance(v, (int, float))
+                                        and not isinstance(v, bool)):
+            pair.append(complex(v))
+        else:
+            raise SpecError(
+                f'incidence.polarization: {name} must be a number or [re, im], got {v!r}')
+    return tuple(pair)
 
 
 def _check_polar_angle(theta):
@@ -461,9 +499,16 @@ def _normalise_pol(pol):
 
 
 def _incidence_to_dict(inc: Incidence) -> dict:
-    return {'wavelength': _jsonable(inc.wavelength), 'theta': _jsonable(inc.theta),
-            'phi': _jsonable(inc.phi), 'pol': _jsonable(inc.pol), 'psi': _jsonable(inc.psi),
-            'incidence_side': _jsonable(inc.incidence_side)}
+    d = {'wavelength': _jsonable(inc.wavelength), 'theta': _jsonable(inc.theta),
+         'phi': _jsonable(inc.phi), 'pol': _jsonable(inc.pol), 'psi': _jsonable(inc.psi),
+         'incidence_side': _jsonable(inc.incidence_side)}
+    if inc.polarization is not None:
+        # Written as [re, im] pairs — JSON has no complex type — and only when set, so the
+        # key() of every pre-existing spec is unchanged. `+ 0.0` flushes the negative zero
+        # complex(-1j).real produces, which would otherwise split one run into two keys.
+        d['polarization'] = [[v.real + 0.0, v.imag + 0.0]
+                             for v in _polarization_from_json(inc.polarization)]
+    return d
 
 
 # ------------------------------------------------------------------ execution

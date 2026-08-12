@@ -125,6 +125,10 @@ class Incidence:
     ``incidence_side`` is ``'top'`` or ``'bottom'`` — illumination is part of the incidence,
     not of the scene, which is why it lives here rather than on :class:`Stack`. ``theta`` /
     ``phi`` are measured in the incidence medium (``n_bot``'s normal for ``'bottom'``).
+
+    ``polarization`` is the complex amplitude pair ``(a_s, a_p)`` — the general (elliptical)
+    polarization ``psi`` cannot spell. It supersedes ``psi``: giving both is an error, and
+    ``psi = v`` is exactly ``polarization = (sin(v), cos(v))``. See ``docs/conventions.md``.
     """
     wavelength: Any = 1.0
     theta: Any = 0.0
@@ -132,8 +136,10 @@ class Incidence:
     pol: Any = Pol.TE
     psi: Optional[Any] = None
     incidence_side: str = 'top'
+    polarization: Optional[Any] = None
 
     def as_kwargs(self) -> dict:
         """The illumination keyword arguments for :func:`fieldwave.rcwa`."""
         return dict(wavelength=self.wavelength, theta=self.theta, phi=self.phi,
-                    pol=self.pol, psi=self.psi, incidence_side=self.incidence_side)
+                    pol=self.pol, psi=self.psi, incidence_side=self.incidence_side,
+                    polarization=self.polarization)

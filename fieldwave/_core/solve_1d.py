@@ -21,7 +21,7 @@ Stages (matching the legacy chain, kept as one function each to make bit-parity 
   3. final matching      — incident field -> R, T -> diffraction efficiency
 """
 from .backend import array_namespace, as_array, check_finite, check_physical, eig
-from .conventions import boundary_kz, incident_kz, mode_q
+from .conventions import boundary_kz, incident_kz, incident_sp_amplitudes, mode_q
 
 
 def _diag(xp, v):
@@ -286,7 +286,7 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
 
 def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
                      epx_conv_all, epy_conv_all, epz_conv_i_all,
-                     incidence_side='top', full=False):
+                     incidence_side='top', polarization=None, full=False):
     """Solve a general 1D grating (arbitrary azimuth/polarization) for the given ``psi``.
 
     The conical case couples the s and p polarizations, so the per-layer modes and the
@@ -294,7 +294,9 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     the ``(de_ri, de_ti)`` of the ``psi``-specified incidence (shape ``(ff_y, ff_x)`` with
     ``ff_y == 1``). See :func:`solve_1d` for the argument conventions — including
     ``incidence_side``, handled by the same mirror; ``ky`` is the single
-    out-of-plane order and ``psi`` the polarization angle.
+    out-of-plane order and ``psi`` the polarization angle. ``polarization`` is the complex
+    amplitude pair ``(a_s, a_p)`` that supersedes ``psi`` when given — see
+    :func:`~fieldwave._core.conventions.incident_sp_amplitudes`.
     """
     xp = array_namespace(epx_conv_all)
     if _is_backside(incidence_side):
@@ -377,7 +379,7 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
 
     # --- stage 3: final matching -> efficiency (transfer_1d_conical_4) ------------------
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
-                         n_top, n_bot, ff_x, ff_y, full=full)
+                         n_top, n_bot, ff_x, ff_y, polarization=polarization, full=full)
     if full:
         out['layer_info_list'] = layer_info_list
     return out
@@ -391,18 +393,23 @@ def _unit(xp, n, i):
 
 
 def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
-                   n_top, n_bot, ff_x, ff_y, full=False):
+                   n_top, n_bot, ff_x, ff_y, polarization=None, full=False):
     """Boundary match the assembled s/p system to the incident field.
 
     Shared, byte-identical port of ``transfer_1d_conical_4`` / ``transfer_2d_4`` (their final
     equations are the same); used by both :func:`solve_1d_conical` and
     :func:`fieldwave._core.solve_2d.solve_2d`.
 
-    Returns ``(de_ri, de_ti)`` for the ``psi``-specified incidence, shape ``(ff_y, ff_x)``.
+    The incidence is ``psi`` — or the complex amplitude pair ``polarization = (a_s, a_p)``,
+    which supersedes ``psi`` when given (see
+    :func:`~fieldwave._core.conventions.incident_sp_amplitudes`; ``psi = v`` and
+    ``polarization = (sin(v), cos(v))`` are the same incidence).
+
+    Returns ``(de_ri, de_ti)`` for that incidence, shape ``(ff_y, ff_x)``.
     With ``full=True`` returns the complete legacy result mapping instead: the reflected and
-    transmitted amplitudes and their s/p-resolved efficiencies for the given ``psi``, plus the
-    pure-TE and pure-TM incidence variants (which reuse the same factorized ``final_A``, so
-    they cost one extra solve rather than two full passes).
+    transmitted amplitudes and their s/p-resolved efficiencies for the given incidence, plus
+    the pure-TE and pure-TM incidence variants (which reuse the same factorized ``final_A``,
+    so they cost one extra solve rather than two full passes).
     """
     ff_xy = ff_x * ff_y
     I = xp.astype(xp.eye(ff_xy), C)
@@ -416,8 +423,7 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
     Kz_top = _diag(xp, kz_top)
     kz_top_2d = xp.reshape(kz_top, (ff_y, ff_x))
     kz_bot_2d = xp.reshape(kz_bot, (ff_y, ff_x))
-    sin_psi = xp.sin(as_array(xp, psi, dtype=C))
-    cos_psi = xp.cos(as_array(xp, psi, dtype=C))
+    a_s, a_p = incident_sp_amplitudes(xp, C, psi, polarization)
 
     delta = xp.reshape(xp.astype(_unit(xp, ff_xy, ff_xy // 2), C), (ff_xy, 1))
 
@@ -433,10 +439,10 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
         [O, I, -bG[1][0], -bG[1][1]],
     ])
     final_B = _block(xp, [
-        [-sin_psi * delta],
-        [cos_psi * (kz_inc / n_top) * delta],
-        [1j * sin_psi * kz_inc * delta],
-        [1j * n_top * cos_psi * delta],
+        [-a_s * delta],
+        [a_p * (kz_inc / n_top) * delta],
+        [1j * a_s * kz_inc * delta],
+        [1j * n_top * a_p * delta],
     ])
 
     final_A_inv = xp.linalg.inv(final_A)
@@ -499,7 +505,7 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
     amps2 = fresnel(R_s_2, R_p_2, T_s_2, T_p_2)
     variants = [_pack(*(a[i] for a in amps2), *(e[i] for e in eff2)) for i in (0, 1)]
 
-    # Field reconstruction consumes T1 for the given psi plus the two incidence variants.
+    # Field reconstruction consumes T1 for the given incidence plus the two variants.
     T1 = xp.stack([big_T1, big_T1_tetm[:, 0:1], big_T1_tetm[:, 1:2]])
 
     return {'res': res, 'res_te_inc': variants[0], 'res_tm_inc': variants[1], 'T1': T1}

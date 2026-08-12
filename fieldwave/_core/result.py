@@ -75,9 +75,10 @@ class OrderView:
 
 
 class Result:
-    """Solve result: the ``psi``-specified incidence plus the pure-s/p variants.
+    """Solve result: the specified incidence plus the pure-s/p variants.
 
-    ``res`` holds the incidence actually asked for; ``res_te_inc`` / ``res_tm_inc`` the
+    ``res`` holds the incidence actually asked for — by ``psi``, or by the complex
+    amplitude pair ``polarization=(a_s, a_p)``; ``res_te_inc`` / ``res_tm_inc`` the
     pure-TE and pure-TM variants the coupled solves produce for free. The top-level
     ``R`` / ``T`` delegate to ``res`` when it exists and otherwise average the two pure
     incidences — unpolarized illumination.

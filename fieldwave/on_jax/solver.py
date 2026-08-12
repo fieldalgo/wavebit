@@ -32,13 +32,27 @@ class SolverJax(RCWAJax, OptimizerJax):
             # A dispatch key like `pol`: the solves branch on it (which cascade blocks are
             # read, which way the stack is walked), so it must come back static, never traced.
             'incidence_side': self.incidence_side,
+            # Static, like `pol`: the pair is a plain tuple, not a traced leaf — `psi` is the
+            # child that carries polarization gradients. Restored directly (see below),
+            # along with the psi-was-explicit flag the psi child would otherwise overwrite.
+            'polarization': self._polarization,
+            'psi_given': self._psi_given,
         }
 
         return children, aux_data
 
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
+        # `polarization` cannot ride through __init__: the psi child is always present (it
+        # is the traced leaf, non-None even when it was merely derived from `pol`), so the
+        # constructor would see both spellings of the incidence and refuse a state that was
+        # legal when it was flattened. Rebuild without it, then restore the slot directly.
+        aux_data = dict(aux_data)
+        polarization = aux_data.pop('polarization')
+        psi_given = aux_data.pop('psi_given')
         solver = cls(*children, **aux_data)
+        solver._polarization = polarization
+        solver._psi_given = psi_given
 
         # ``pol`` and ``psi`` are one degree of freedom held twice: ``psi`` rides along as a
         # traced child (it enters the solve as cos/sin amplitudes, so gradients flow through

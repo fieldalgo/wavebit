@@ -260,3 +260,28 @@ def test_incidence_side_claims_match_the_solver():
     for side in m['values']:
         assert side in str(excinfo.value), (
             f'the refusal must name {side!r} so a consumer can relay the legal values')
+
+
+def test_polarization_claims_match_runtime():
+    """The ``incidences`` section's polarization claims, against the solver.
+
+    Same runtime-contrast principle: the manifest says the pair fills the specified-solve
+    slot, supersedes ``psi`` (naming both raises), equals ``psi``'s ``(sin, cos)`` spelling,
+    and is normalized to unit incident flux — so do each of those, on a real solve. The full
+    physics (circular states, energy at complex pairs) lives in ``tests/test_polarization.py``.
+    """
+    kw = {k: v for k, v in KW.items() if k != 'psi'}
+
+    via_pair = fieldwave.rcwa(ucell=_RASTER, polarization=(np.sin(0.4), np.cos(0.4)),
+                              **kw).conv_solve()
+    assert via_pair.res is not None, 'the pair must fill the specified-incidence slot'
+
+    via_psi = fieldwave.rcwa(ucell=_RASTER, psi=0.4, **kw).conv_solve()
+    np.testing.assert_allclose(via_pair.res.R, via_psi.res.R, atol=1e-14)
+
+    scaled = fieldwave.rcwa(ucell=_RASTER, polarization=(5 * np.sin(0.4), 5 * np.cos(0.4)),
+                            **kw).conv_solve()
+    np.testing.assert_allclose(scaled.res.R, via_pair.res.R, atol=1e-14)
+
+    with pytest.raises(ValueError, match='psi and polarization'):
+        fieldwave.rcwa(ucell=_RASTER, psi=0.4, polarization=(1, 0), **kw)

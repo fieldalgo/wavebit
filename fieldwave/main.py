@@ -22,7 +22,8 @@ def rcwa(backend=0, *args, stack=None, incidence=None, **kwargs):
         stack: optional typed ``Stack`` supplying ``ucell`` / ``thickness`` / ``n_top`` /
             ``n_bot`` / ``period`` (adapts in; do not also pass those keywords).
         incidence: optional typed ``Incidence`` supplying ``wavelength`` / ``theta`` /
-            ``phi`` / ``pol`` / ``psi`` (adapts in; do not also pass those keywords).
+            ``phi`` / ``pol`` / ``psi`` / ``polarization`` (adapts in; do not also pass
+            those keywords).
         *args: passed to RCWA instance
         **kwargs: passed to RCWA instance
 

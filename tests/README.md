@@ -16,7 +16,7 @@ compares the code to itself proves continuity, not correctness.
 | Oracle | Files | What a pass means |
 | --- | --- | --- |
 | **An outside solver** | `test_reticolo_golden.py`, `test_oblique_lattice.py` (published Li 1997 table) | The strongest evidence here: a different group's code, in a different language. RETICOLO is the only reference that validates individual diffraction *orders* rather than totals. |
-| **Physics** | `test_lossy_media.py`, `test_stability.py`, `test_fp_warnings.py`, energy checks throughout | R+T = 1 on a lossless stack, Airy recursion on uniform layers. Independent of how we implement it. |
+| **Physics** | `test_lossy_media.py`, `test_stability.py`, `test_fp_warnings.py`, `test_polarization.py` (circular states against the gyrotropic-slab Airy answer), energy checks throughout | R+T = 1 on a lossless stack, Airy recursion on uniform layers. Independent of how we implement it. |
 | **Internal consistency** | `test_equivalence.py`, `test_solve_1d_core.py`, `test_solve_2d_core.py`, `test_field_core.py` | Three formulations and three backends must agree. Catches drift, not a shared mistake. |
 | **Analytic gradients vs finite differences** | `test_gradients.py`, `test_shape_position_gradients.py`, `test_eig_grad.py`, `test_optimization_smoke.py` | The derivative is right, not just the value — and the optimizer loop makes progress. |
 | **Frozen goldens** | `test_golden_legacy_parity.py`, `test_factorization_core.py`, `test_modeler_core.py`, `test_analytic.py` | Continuity only. These are the previous implementation's own output, so they pin *change*, never correctness. |

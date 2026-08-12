@@ -93,6 +93,14 @@ def _recorded_lattice(normal_field_source):
     return np.asarray(key, dtype=float).reshape(2, 2)
 
 
+#: One message for both directions of the same mistake — the ``psi`` setters raise it when a
+#: pair is already set, the ``polarization`` setter when ``psi`` was given explicitly.
+_PSI_POLARIZATION_CLASH = (
+    'psi and polarization both given: they specify the same thing (the incident '
+    'polarization), so one must be dropped rather than silently overridden. '
+    'psi = v is exactly polarization = (sin(v), cos(v)).')
+
+
 class CoreSolveMixin:
     """Provides ``solve_1d`` / ``solve_1d_conical`` / ``solve_2d`` backed by the core."""
 
@@ -128,6 +136,17 @@ class CoreSolveMixin:
         """
         return self.n_bot if self._incidence_side == 'bottom' else self.n_top
 
+    def _psi_set_explicitly(self):
+        """Called by the backend ``psi`` setters on a non-``None`` assignment.
+
+        Refuses the assignment while a ``polarization`` pair is set (the two spell the same
+        physical input), and otherwise records that ``psi`` was *given* rather than derived
+        from ``pol`` — the distinction the ``polarization`` setter's own refusal reads.
+        """
+        if self._polarization is not None:
+            raise ValueError(_PSI_POLARIZATION_CLASH)
+        self._psi_given = True
+
     def _solve_fn(self, grating_type):
         """The core solve for this instance's ``connecting_algo`` and the given grating type."""
         try:
@@ -139,6 +158,53 @@ class CoreSolveMixin:
 
     _frozen_geometry = None
     _lattice_basis = None
+    _polarization = None
+    #: Whether ``psi`` was set explicitly (rather than derived from ``pol``); the backend
+    #: ``psi`` setters maintain it. It is what lets ``polarization`` refuse to coexist with an
+    #: explicit ``psi`` without also refusing the ``psi`` every solver derives from ``pol``.
+    _psi_given = False
+
+    @property
+    def polarization(self):
+        """The incident polarization as a complex amplitude pair ``(a_s, a_p)`` — or ``None``.
+
+        The pair lives in the same ``(s, p)`` basis as ``psi`` and the returned amplitudes:
+        ``(1, 0)`` is pure s (``psi = pi/2``), ``(0, 1)`` pure p (``psi = 0``), and
+        ``psi = v`` is exactly ``(sin(v), cos(v))``. What the pair adds is the relative
+        phase ``psi`` cannot spell — ``(1, -1j)/sqrt(2)`` and ``(1, +1j)/sqrt(2)`` are the
+        circular states. The overall magnitude is divided out (efficiencies are per unit
+        incident flux, amplitudes per unit incident E-field); the overall phase is kept and
+        carries into the complex amplitudes. See
+        :func:`~fieldwave._core.conventions.incident_sp_amplitudes`.
+
+        ``polarization`` and an explicit ``psi`` are mutually exclusive — setting both is an
+        error, not an override. A 1D structure given a pair is solved on the conical path,
+        which carries both polarizations; the pure 1D TE/TM path is single-polarization by
+        construction.
+        """
+        return self._polarization
+
+    @polarization.setter
+    def polarization(self, polarization):
+        if polarization is None:
+            self._polarization = None
+            return
+        if self._psi_given:
+            raise ValueError(_PSI_POLARIZATION_CLASH)
+        pair = tuple(polarization)
+        if len(pair) != 2:
+            raise ValueError(
+                f'polarization must be a pair (a_s, a_p) of complex amplitudes, '
+                f'got {len(pair)} value(s)')
+        try:
+            if complex(pair[0]) == 0 and complex(pair[1]) == 0:
+                raise ValueError(
+                    'polarization = (0, 0) carries no incident field; give at least one '
+                    'nonzero amplitude (the pair is normalized to unit flux, so its overall '
+                    'scale is free)')
+        except TypeError:
+            pass                      # traced values: concreteness is not theirs to prove
+        self._polarization = pair
 
     @property
     def lattice(self):
@@ -229,6 +295,14 @@ class CoreSolveMixin:
         return out
 
     def solve_1d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
+        if self._polarization is not None:
+            # Unreachable through conv_solve — `_assign_grating_type` sends a structure with a
+            # pair to the conical path, which carries both polarizations — so this only
+            # answers a direct call.
+            raise ValueError(
+                'the pure 1D TE/TM path is single-polarization by construction and cannot '
+                'take a polarization pair; use solve_1d_conical, which a full solve '
+                '(conv_solve) selects on its own when polarization is set')
         solve = self._solve_fn('1d')
         kx, _ = self.get_kx_ky_vector(wavelength)
         return self._finish(solve(
@@ -242,7 +316,8 @@ class CoreSolveMixin:
         return self._finish(solve(
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi, self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
-            incidence_side=self.incidence_side, full=True))
+            incidence_side=self.incidence_side,
+            polarization=self._polarization, full=True))
 
     def solve_2d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None):
@@ -252,7 +327,8 @@ class CoreSolveMixin:
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi, self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
-            incidence_side=self.incidence_side, full=True))
+            incidence_side=self.incidence_side,
+            polarization=self._polarization, full=True))
 
 
 # The rule each modeling path actually implements, for the two paths that implement exactly

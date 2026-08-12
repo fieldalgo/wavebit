@@ -59,18 +59,21 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                  #  sampling leaves a sawtooth instead -- 5e-4 at 256, 4.2e-5 at 1024, for
                  #  ~1.2-2x the runtime. Raise further to fit positions below that.)
                  lattice=None,               # 2x2 cell basis (columns a1, a2); None = diag(period).
-                 # Kept last on purpose: SolverJax._tree_unflatten passes the children
-                 # positionally, so a new parameter anywhere earlier silently shifts them.
+                 # New parameters go at the end on purpose: SolverJax._tree_unflatten passes
+                 # the children positionally, so one added earlier silently shifts them.
                  incidence_side='top',       # 'top' | 'bottom': which medium the light
                  # arrives from. Scene labels (n_top / n_bot / ucell order) never move;
                  # results are incidence-relative and theta/phi are measured in the
                  # incidence medium. See docs/conventions.md.
+                 polarization=None,          # complex incident amplitude pair (a_s, a_p);
+                 # supersedes psi (naming both raises). See docs/conventions.md.
                  ):
 
         super().__init__(n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi, pol=pol,
                          fto=fto, period=period, wavelength=wavelength,
                          thickness=thickness, connecting_algo=connecting_algo, perturbation=perturbation,
-                         type_complex=type_complex)
+                         type_complex=type_complex,
+                         polarization=polarization)
         self.incidence_side = incidence_side
 
         self.modeler = Modeling(period=self.period, type_complex=type_complex)
@@ -150,7 +153,10 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
 
         if self.modeling_type_assigned == 0:  # Raster
             if self.ucell.shape[1] == 1:
-                if (self.pol in (0, 1)) and (self.phi is None) and (self.fto[1] == 0):
+                # A polarization pair mixes s and p, which the pure 1D TE/TM path cannot
+                # carry by construction — the conical path is the 1D formulation that can.
+                if ((self.pol in (0, 1)) and (self.phi is None) and (self.fto[1] == 0)
+                        and (self.polarization is None)):
                     self._grating_type_assigned = 0  # 1D TE and TM only
                 else:
                     self._grating_type_assigned = 1  # 1D conical

@@ -220,8 +220,16 @@ RESULTS = {
     },
     'incidences': {
         'fields': ('res', 'res_te_inc', 'res_tm_inc'),
-        'meaning': 'the psi-specified solve plus the pure-TE and pure-TM variants; '
-                   'top-level R/T average the two variants when no psi solve exists',
+        'meaning': 'the solve for the incidence as specified — psi, or the complex '
+                   'amplitude pair polarization=(a_s, a_p) — plus the pure-TE and pure-TM '
+                   'variants; top-level R/T average the two variants when no specified '
+                   'solve exists',
+        'polarization_input': 'polarization=(a_s, a_p) supersedes psi (naming both raises); '
+                              'psi = v is exactly (sin(v), cos(v)), and the pair adds the '
+                              'relative phase psi cannot spell — (1, -1j)/sqrt(2) and '
+                              '(1, +1j)/sqrt(2) are the circular states. The pair is '
+                              'normalized to unit incident flux (overall scale is free, '
+                              'overall phase is kept)',
     },
     'incidence_side': {
         'values': ('top', 'bottom'),

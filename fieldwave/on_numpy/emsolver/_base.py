@@ -8,7 +8,7 @@ class _BaseRCWA(CoreSolveMixin):
     def __init__(self, n_top=1., n_bot=1., theta=0., phi=None, psi=None, pol=0., fto=(0, 0),
                  period=(1., 1.), wavelength=1.,
                  thickness=(0.,), connecting_algo='ETM', perturbation=1E-20,
-                 device=0, type_complex=np.complex128):
+                 device=0, type_complex=np.complex128, polarization=None):
 
         self._device = 0
 
@@ -33,6 +33,7 @@ class _BaseRCWA(CoreSolveMixin):
         self.phi = phi
         self.pol = pol
         self.psi = psi
+        self.polarization = polarization
 
         self.fto = fto
         self.period = period
@@ -118,6 +119,7 @@ class _BaseRCWA(CoreSolveMixin):
     @psi.setter
     def psi(self, psi):
         if psi is not None:
+            self._psi_set_explicitly()
             self._psi = np.array(psi, dtype=self.type_complex)  # TODO: complex, QA
             pol = -(2 * psi / np.pi - 1)
             self._pol = pol

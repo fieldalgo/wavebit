@@ -111,8 +111,11 @@ def sp_modes_2d(xp, W, V, F_c, F_s, ff_xy):
 def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
              epxy_conv_all=None, epyx_conv_all=None,
-             incidence_side='top', full=False):
+             incidence_side='top', polarization=None, full=False):
     """Solve a 2D grating stack for the given ``psi`` incidence.
+
+    ``polarization`` is the complex amplitude pair ``(a_s, a_p)`` that supersedes ``psi``
+    when given — see :func:`~fieldwave._core.conventions.incident_sp_amplitudes`.
 
     See :func:`fieldwave._core.solve_1d.solve_1d` for the shared argument conventions —
     including ``incidence_side``, handled by the same mirror (the off-diagonal blocks
@@ -208,7 +211,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
 
     # --- stage 3: final matching -> efficiency (transfer_2d_4 == transfer_1d_conical_4) --
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
-                         n_top, n_bot, ff_x, ff_y, full=full)
+                         n_top, n_bot, ff_x, ff_y, polarization=polarization, full=full)
     if full:
         out['layer_info_list'] = layer_info_list
     return out

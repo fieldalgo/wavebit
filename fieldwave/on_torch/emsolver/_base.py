@@ -24,7 +24,7 @@ class _BaseRCWA(CoreSolveMixin):
     def __init__(self, n_top=1., n_bot=1., theta=0., phi=None, psi=None, pol=0., fto=(0, 0),
                  period=(1., 1.), wavelength=1.,
                  thickness=(0.,), connecting_algo='ETM', perturbation=1E-20,
-                 device='cpu', type_complex=torch.complex128):
+                 device='cpu', type_complex=torch.complex128, polarization=None):
 
         # device
         if device in (0, 'cpu'):
@@ -55,6 +55,7 @@ class _BaseRCWA(CoreSolveMixin):
         self.phi = phi
         self.pol = pol
         self.psi = psi
+        self.polarization = polarization
 
         self.fto = fto
         self.period = period
@@ -148,6 +149,7 @@ class _BaseRCWA(CoreSolveMixin):
     @psi.setter
     def psi(self, psi):
         if psi is not None:
+            self._psi_set_explicitly()
             self._psi = _as_tensor(psi, dtype=self.type_complex)
             pol = -(2 * psi / torch.pi - 1)
             self._pol = pol

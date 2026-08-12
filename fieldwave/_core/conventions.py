@@ -35,7 +35,7 @@ Backend-agnostic: pass the array namespace as ``xp`` (``numpy`` / ``jax.numpy`` 
 
 import contextlib
 
-from .backend import UnresolvedBranchWarning
+from .backend import UnresolvedBranchWarning, as_array
 
 _FLAT = 1e-12      # below this, a real part counts as zero and the tie-break decides
 
@@ -249,6 +249,39 @@ def incident_kz(kz_top, index):
     flat region rather than as the failure it is.
     """
     return kz_top[index]
+
+
+def incident_sp_amplitudes(xp, C, psi, polarization=None):
+    """The incident wave's electric amplitudes ``(a_s, a_p)``, normalized to unit flux.
+
+    This is the one place the two spellings of the incident polarization meet the solves:
+
+    * ``psi`` — the polarization angle: ``(a_s, a_p) = (sin(psi), cos(psi))``, the exact
+      operations the boundary match has always applied, so a ``psi`` solve is bit-identical
+      to what it was before ``polarization`` existed.
+    * ``polarization`` — a pair of complex amplitudes in the same ``(s, p)`` basis, which is
+      what ``psi`` cannot spell: a relative phase. ``(1, -1j)/sqrt(2)`` and ``(1, +1j)/sqrt(2)``
+      are the circular states. When given, it wins and ``psi`` is not read.
+
+    The pair's overall magnitude is *not* a degree of freedom: it is divided out here, so
+    efficiencies are per unit incident flux and amplitudes per unit incident E-field whatever
+    scale the caller wrote — ``(3, 4j)`` and ``(0.6, 0.8j)`` are the same incidence. The
+    overall *phase* is kept (the norm is real positive), and carries into the returned
+    complex amplitudes. ``psi = v`` and ``polarization = (sin(v), cos(v))`` are equivalent
+    by construction; pinned in ``tests/test_polarization.py``.
+
+    Both entries are E-field amplitudes even though the coupled paths carry the p channel as
+    a magnetic boundary variable — the ``-i*n_top`` conversion belongs to the incident-column
+    builders, exactly as the ``/(-i*n)`` on the way out belongs to the pack sites.
+    """
+    if polarization is None:
+        psi = as_array(xp, psi, dtype=C)
+        return xp.sin(psi), xp.cos(psi)
+    a_s = as_array(xp, polarization[0], dtype=C)
+    a_p = as_array(xp, polarization[1], dtype=C)
+    norm = xp.sqrt(xp.abs(a_s) ** 2 + xp.abs(a_p) ** 2)
+    norm = xp.astype(norm, C)
+    return a_s / norm, a_p / norm
 
 
 def safe_sqrt(xp, z, eps=1e-30):
