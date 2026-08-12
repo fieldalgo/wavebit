@@ -160,12 +160,12 @@ def test_the_projector_is_built_from_the_sampled_transform():
         return c_xx, c_xy, c_yy
 
     sampled = assembled(lambda f: dfs2d_sampled(xnp, f, fto, fto))
-    staircase = assembled(lambda f: dfs2d_piecewise_constant(xnp, f, 1, 1, fto, fto))
+    staircase = assembled(lambda f: dfs2d_piecewise_constant(xnp, f, fto, fto, inverse_rule=None))
 
     # The projector that shipped is the sampled one, to the last bit of the assembly.
     from fieldwave._core.factorization import _nvf_assemble
     want = np.asarray(_nvf_assemble(xnp, *(np.asarray(dfs2d_piecewise_constant(
-        xnp, e.astype(complex), 1, 1, fto, fto)) for e in (eps, 1.0 / eps)), *sampled)[0])
+        xnp, e.astype(complex), fto, fto, inverse_rule=None)) for e in (eps, 1.0 / eps)), *sampled)[0])
     assert np.allclose(got, want, atol=1e-12, rtol=0), np.abs(got - want).max()
 
     # ... and the other build is far enough away that the check above has teeth.

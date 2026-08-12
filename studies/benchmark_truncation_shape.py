@@ -130,9 +130,9 @@ def conv_mats(eps, normal_field, mm, nn, keep, fto_box, mode):
         if not keep.all():
             raise ValueError('the nested Li rule has no circular form; see the module docstring')
         fto_x, fto_y = fto_box
-        epz = dfs2d_piecewise_constant(np, eps, 1, 1, fto_x, fto_y)
-        epy = dfs2d_piecewise_constant(np, eps, 1, 0, fto_x, fto_y)
-        epx = dfs2d_piecewise_constant(np, eps, 0, 1, fto_x, fto_y)
+        epz = dfs2d_piecewise_constant(np, eps, fto_x, fto_y, inverse_rule=None)
+        epy = dfs2d_piecewise_constant(np, eps, fto_x, fto_y, inverse_rule='y')
+        epx = dfs2d_piecewise_constant(np, eps, fto_x, fto_y, inverse_rule='x')
         O = np.zeros_like(epz)
 
         return epx, epy, O, O, np.linalg.inv(epz)
@@ -301,7 +301,7 @@ def selftest():
 
     for flag in (False, True):
         direct = toeplitz_conv(eps, mm, nn, flag)
-        nested = (dfs2d_piecewise_constant(np, eps, 1, 1, fto, fto) if flag
+        nested = (dfs2d_piecewise_constant(np, eps, fto, fto, inverse_rule=None) if flag
                   else dfs2d_sampled(np, eps, fto, fto))
         err = np.abs(direct - nested).max()
         print(f'selftest conv (piecewise_constant={flag}): {err:.3e}')

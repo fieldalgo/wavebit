@@ -96,8 +96,7 @@ def test_dfs_coefficients_are_the_exact_ones(case):
     name, ucell, fto_x, fto_y = case
     eps = np.asarray(ucell, dtype=float)[0] ** 2
 
-    got = np.asarray(dfs2d_piecewise_constant(xnp, eps.astype(complex), 1, 1,
-                                              fto_x, fto_y))
+    got = np.asarray(dfs2d_piecewise_constant(xnp, eps.astype(complex), fto_x, fto_y, inverse_rule=None))
     ff_x, ff_y = 2 * fto_x + 1, 2 * fto_y + 1
     want = np.empty_like(got)
     for r in range(ff_y * ff_x):
@@ -248,8 +247,7 @@ def test_nvf_permittivity_inputs_are_the_exact_ones(case):
     eps = np.asarray(ucell, dtype=float)[0] ** 2
 
     for label, cell in (('eps', eps), ('1/eps', 1.0 / eps)):
-        got = np.asarray(dfs2d_piecewise_constant(xnp, cell.astype(complex), 1, 1,
-                                                  fto_x, fto_y))
+        got = np.asarray(dfs2d_piecewise_constant(xnp, cell.astype(complex), fto_x, fto_y, inverse_rule=None))
         ff_x, ff_y = 2 * fto_x + 1, 2 * fto_y + 1
         want = np.empty_like(got)
         for r in range(ff_y * ff_x):

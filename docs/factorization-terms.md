@@ -9,7 +9,7 @@ Targets:
 - `fieldwave/_core/analytic.py::_grid`, `fieldwave/_core/analytic.py::assemble_eps_coeffs` —
   the doubled reciprocal grid the builder consumes, and why it is doubled
 - `fieldwave/_core/factorization.py::dfs2d_piecewise_constant` — the raster twin, and where
-  `conti_x` / `conti_y` choose the rule
+  `inverse_rule` chooses the rule
 - `tests/test_analytic.py` — `test_conv_matrix_matches_dfs2d_convention`, which pins the ordering
   the two builders share
 
@@ -48,10 +48,10 @@ Both names for the first rule are in use in this repository and both are correct
 in code (`ep_dir`, `ep_inv`). The gloss form — naming one and parenthesising the other — is the
 one to copy in new prose, because a reader who knows only one name still lands.
 
-`dfs2d_piecewise_constant`'s `conti_x` / `conti_y` are the switch: a direction flagged
-discontinuous (`0`) takes the inverse rule. Nothing else selects it, and `dfs2d_sampled` does
-not offer them at all — a field that is continuous by construction has no discontinuity for
-the inverse rule to close.
+`dfs2d_piecewise_constant`'s `inverse_rule` is the switch: `'x'` or `'y'` names the
+direction whose discontinuity the rule closes, `None` asks for the direct rule both ways.
+Nothing else selects it, and `dfs2d_sampled` does not offer it at all — a field that is
+continuous by construction has no discontinuity for the inverse rule to close.
 
 ## 2. What `conv_matrix_2d` actually is
 
@@ -194,11 +194,20 @@ and the default made it worse: `False` was the answer 3 of 8 sites wanted, so th
 case was the one you got by forgetting. `_dfs2d` is now private with the flag keyword-only and
 undefaulted, so even a direct call has to say which it means.
 
-`dfs2d_sampled` also drops `conti_x` / `conti_y` rather than defaulting them. Every call in the
-repository passed `(1, 1)` — not by accident: the inverse rule closes products of *concurrently
-discontinuous* factors, and a unit-vector field that is continuous by construction has no
-discontinuity for it to close. The arguments were not a choice anyone had, only a way to be
-wrong.
+`dfs2d_sampled` also drops the rule argument rather than defaulting it. Every call in the
+repository asked for the direct rule — not by accident: the inverse rule closes products of
+*concurrently discontinuous* factors, and a unit-vector field that is continuous by
+construction has no discontinuity for it to close. It was not a choice anyone had, only a
+way to be wrong.
+
+The same reasoning reached the rule argument itself on 2026-08-12. It was `conti_x` /
+`conti_y`, a pair of integers flagging each direction *continuous* (`1`) or not (`0`) —
+four states for three meanings, since `(0, 0)` is not part of Li's scheme as used here and
+appeared nowhere, yet nothing refused it. The names also ran backwards: `conti_y=0` meant
+"y takes the inverse rule", so the flag that was *set* said what was not true of the axis
+it named. One `inverse_rule` of `None` / `'x'` / `'y'` says the same thing in the
+direction the reader is thinking in, and makes the fourth state unrepresentable rather
+than merely unused.
 
 Why this was worth doing rather than documenting: the two mistakes are not symmetric, and the
 dangerous one is silent. Feeding a permittivity raster to the sampled build costs 5.7e-4 per

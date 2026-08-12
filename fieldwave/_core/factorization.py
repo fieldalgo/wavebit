@@ -62,6 +62,24 @@ from .backend import array_namespace
 from .geometry import StaleGeometryError
 
 
+def _inverse_axes(inverse_rule):
+    """``inverse_rule`` as ``(along_x, along_y)`` booleans, refusing anything else.
+
+    One three-valued argument rather than the pair of ``conti_x`` / ``conti_y`` integers this
+    took until 2026-08-12. Those had four states and only three meanings: ``(0, 0)`` — both
+    directions discontinuous — is not part of Li's scheme as used here and was never passed
+    anywhere, but nothing said so and nothing refused it. A typo could reach it silently.
+
+    The names also ran backwards. ``conti_y=0`` meant "y is discontinuous, so y takes the
+    inverse rule", so the flag that was set said what was *not* true of the axis it named.
+    """
+    if inverse_rule not in (None, 'x', 'y'):
+        raise ValueError(
+            f"inverse_rule: expected None (direct rule both ways), 'x' or 'y' — the direction "
+            f"whose discontinuity the inverse rule closes; got {inverse_rule!r}")
+    return inverse_rule == 'x', inverse_rule == 'y'
+
+
 def _wrap(orders, n):
     """``orders`` reduced mod ``n`` — the DFT bin each Fourier order lands in."""
     return [k % n for k in orders]
@@ -114,7 +132,7 @@ def _pixel_correction(xp, orders, n, dtype, device=None):
     return sinc * xp.exp(-1j * pi * t)
 
 
-def dfs2d_piecewise_constant(xp, cell, conti_x, conti_y, fto_x, fto_y):
+def dfs2d_piecewise_constant(xp, cell, fto_x, fto_y, *, inverse_rule):
     """2D discrete Fourier series of a grid whose values *hold across* their pixels.
 
     A permittivity raster is this case: ``ucell`` names the material occupying each cell, so
@@ -122,10 +140,11 @@ def dfs2d_piecewise_constant(xp, cell, conti_x, conti_y, fto_x, fto_y):
     :func:`_pixel_correction` supplies. Exact for any order, including past the point where
     the DFT itself wraps — which is why this path needs no grid floor.
 
-    ``conti_x`` / ``conti_y`` select the rule per direction, as in :func:`_dfs2d`; all three
-    of ``(1,1)``, ``(1,0)`` and ``(0,1)`` are Li's components of one layer.
+    ``inverse_rule`` names the direction whose discontinuity the inverse rule closes, or
+    ``None`` for the direct rule both ways. Those three are Li's three components of one
+    layer: ``None`` builds ``epz``, ``'y'`` builds ``epy``, ``'x'`` builds ``epx``.
     """
-    return _dfs2d(xp, cell, conti_x, conti_y, fto_x, fto_y, piecewise_constant=True)
+    return _dfs2d(xp, cell, fto_x, fto_y, inverse_rule=inverse_rule, piecewise_constant=True)
 
 
 def dfs2d_sampled(xp, field, fto_x, fto_y):
@@ -143,10 +162,10 @@ def dfs2d_sampled(xp, field, fto_x, fto_y):
     Because there is no closed form, this path *does* need ``4*fto+1`` points — the caller
     lifts the grid to that floor, see :func:`_normal_field_floor`.
     """
-    return _dfs2d(xp, field, 1, 1, fto_x, fto_y, piecewise_constant=False)
+    return _dfs2d(xp, field, fto_x, fto_y, inverse_rule=None, piecewise_constant=False)
 
 
-def _dfs2d(xp, cell, conti_x, conti_y, fto_x, fto_y, *, piecewise_constant):
+def _dfs2d(xp, cell, fto_x, fto_y, *, inverse_rule, piecewise_constant):
     """2D discrete Fourier series of ``cell`` with Li's factorization rules.
 
     Private, and ``piecewise_constant`` has no default, because the two answers are not a
@@ -154,11 +173,11 @@ def _dfs2d(xp, cell, conti_x, conti_y, fto_x, fto_y, *, piecewise_constant):
     Call :func:`dfs2d_piecewise_constant` or :func:`dfs2d_sampled` instead, which say it in
     the name.
 
-    ``conti_x`` / ``conti_y`` flag the direction as continuous (1) or discontinuous (0); a
-    discontinuous direction takes the inverse rule. Port of the legacy ``dfs2d``, whose
-    name this module's two public entry points still carry.
+    ``inverse_rule`` is the direction whose discontinuity the inverse rule closes (``'x'``,
+    ``'y'``, or ``None`` for neither) — see :func:`_inverse_axes`. Port of the legacy
+    ``dfs2d``, whose name this module's two public entry points still carry.
 
-    These flags are the *only* thing that selects a rule. The other name for the continuous
+    This is the *only* thing that selects a rule. The other name for the continuous
     case is Laurent's rule, which this codebase mostly calls ``direct`` — see
     ``docs/factorization-terms.md``, which also explains why the matrix built from these
     coefficients is BTTB rather than Toeplitz.
@@ -196,12 +215,13 @@ def _dfs2d(xp, cell, conti_x, conti_y, fto_x, fto_y, *, piecewise_constant):
     under the field's own discretization error". That is reproducible only at normal incidence
     with no index contrast, and is not a bound.)
     """
+    inv_x, inv_y = _inverse_axes(inverse_rule)
     ff_x = 2 * fto_x + 1
     ff_y = 2 * fto_y + 1
 
     cell = xp.matrix_transpose(cell)
 
-    if conti_y == 0:      # discontinuous in Y (row): inverse rule
+    if inv_y:             # y discontinuous: the inverse rule starts from 1/eps
         cell = 1 / cell
 
     dfs1d = xp.fft.fft(cell / cell.shape[1])
@@ -230,7 +250,7 @@ def _dfs2d(xp, cell, conti_x, conti_y, fto_x, fto_y, *, piecewise_constant):
         coeff_y = coeff_y * _pixel_correction(xp, orders_y, n_y, coeff_y.dtype, dev)
     conv1d = coeff_y[:, _circulant_gather(xp, fto_y, dev)]
 
-    if conti_x ^ conti_y:
+    if inv_x or inv_y:    # Li's inner step, whichever direction asked for it
         conv1d = xp.linalg.inv(conv1d)
 
     conv1d = xp.reshape(conv1d, (-1, ff_y ** 2))
@@ -247,7 +267,7 @@ def _dfs2d(xp, cell, conti_x, conti_y, fto_x, fto_y, *, piecewise_constant):
     conv2d = xp.moveaxis(conv2d, 1, 2)
     conv2d = xp.reshape(conv2d, (ff_y * ff_x, ff_y * ff_x))
 
-    if conti_x == 0:      # discontinuous in X (column): inverse rule
+    if inv_x:             # x discontinuous: Li's outer step closes it
         conv2d = xp.linalg.inv(conv2d)
 
     return conv2d
@@ -328,9 +348,9 @@ def to_conv_mat_raster_discrete(ucell, fto_x, fto_y):
     epx_list, epy_list, epz_i_list = [], [], []
 
     for eps_matrix in _layer_eps(xp, ucell):
-        epz_conv = dfs2d_piecewise_constant(xp, eps_matrix, 1, 1, fto_x, fto_y)
-        epy_conv = dfs2d_piecewise_constant(xp, eps_matrix, 1, 0, fto_x, fto_y)
-        epx_conv = dfs2d_piecewise_constant(xp, eps_matrix, 0, 1, fto_x, fto_y)
+        epz_conv = dfs2d_piecewise_constant(xp, eps_matrix, fto_x, fto_y, inverse_rule=None)
+        epy_conv = dfs2d_piecewise_constant(xp, eps_matrix, fto_x, fto_y, inverse_rule='y')
+        epx_conv = dfs2d_piecewise_constant(xp, eps_matrix, fto_x, fto_y, inverse_rule='x')
 
         epx_list.append(epx_conv)
         epy_list.append(epy_conv)
@@ -681,8 +701,8 @@ def nvf_conv_matrices(xp, eps_matrix, nx, ny, fto_x, fto_y):
     # eps is a staircase however finely it was sampled, so its coefficients are exact from
     # the grid it arrives on. The projector grids are not -- they sample a continuous
     # vector field -- which is why only these two carry the flag.
-    ep_dir = dfs2d_piecewise_constant(xp, eps_matrix, 1, 1, fto_x, fto_y)
-    ep_inv = dfs2d_piecewise_constant(xp, 1.0 / eps_matrix, 1, 1, fto_x, fto_y)
+    ep_dir = dfs2d_piecewise_constant(xp, eps_matrix, fto_x, fto_y, inverse_rule=None)
+    ep_inv = dfs2d_piecewise_constant(xp, 1.0 / eps_matrix, fto_x, fto_y, inverse_rule=None)
 
     return _nvf_assemble(xp, ep_dir, ep_inv,
                          *_nvf_projector(xp, nx, ny, fto_x, fto_y, C, dev))
@@ -699,8 +719,8 @@ def nvf_conv_matrices_continuous(xp, eps_comp, x, y, nx, ny, fto_x, fto_y):
     eps_comp = xp.astype(eps_comp, C)
     dev = _device(xp, eps_comp)
 
-    ep_dir = cfs2d(xp, eps_comp, x, y, 1, 1, fto_x, fto_y)
-    ep_inv = cfs2d(xp, 1.0 / eps_comp, x, y, 1, 1, fto_x, fto_y)
+    ep_dir = cfs2d(xp, eps_comp, x, y, fto_x, fto_y, inverse_rule=None)
+    ep_inv = cfs2d(xp, 1.0 / eps_comp, x, y, fto_x, fto_y, inverse_rule=None)
 
     return _nvf_assemble(xp, ep_dir, ep_inv,
                          *_nvf_projector(xp, nx, ny, fto_x, fto_y, C, dev))
@@ -820,12 +840,15 @@ def _cfs(xp, x, cell, fto, period):
     return xp.where(xp.reshape(is_dc, (1, n_modes)), dc, f / xp.reshape(divisor, (1, n_modes)))
 
 
-def cfs2d(xp, cell, x, y, conti_x, conti_y, fto_x, fto_y):
+def cfs2d(xp, cell, x, y, fto_x, fto_y, *, inverse_rule):
     """2D continuous Fourier series with Li's rules — the staircase-free factorization.
 
     ``x`` / ``y`` are the segment edges of the compressed (piecewise-constant) layer, so the
     permittivity is Fourier-transformed analytically rather than off a raster.
+
+    ``inverse_rule`` is as in :func:`dfs2d_piecewise_constant`.
     """
+    inv_x, inv_y = _inverse_axes(inverse_rule)
     ff_x = 2 * fto_x + 1
     ff_y = 2 * fto_y + 1
 
@@ -833,7 +856,7 @@ def cfs2d(xp, cell, x, y, conti_x, conti_y, fto_x, fto_y):
 
     cell = xp.matrix_transpose(cell)
 
-    if conti_y == 0:      # discontinuous in Y (row): inverse rule
+    if inv_y:             # y discontinuous: the inverse rule starts from 1/eps
         cell = 1 / cell
 
     cfs1d = _cfs(xp, y, cell, fto_y, period_y)
@@ -844,7 +867,7 @@ def cfs2d(xp, cell, x, y, conti_x, conti_y, fto_x, fto_y):
 
     conv1d = cfs1d[:, idx_y]
 
-    if conti_x ^ conti_y:
+    if inv_x or inv_y:    # Li's inner step, whichever direction asked for it
         conv1d = xp.linalg.inv(conv1d)
 
     conv1d = xp.reshape(conv1d, (-1, ff_y ** 2))
@@ -856,7 +879,7 @@ def cfs2d(xp, cell, x, y, conti_x, conti_y, fto_x, fto_y):
     conv2d = xp.moveaxis(conv2d, 1, 2)
     conv2d = xp.reshape(conv2d, (ff_y * ff_x, ff_y * ff_x))
 
-    if conti_x == 0:      # discontinuous in X (column): inverse rule
+    if inv_x:             # x discontinuous: Li's outer step closes it
         conv2d = xp.linalg.inv(conv2d)
 
     return conv2d
@@ -1028,9 +1051,9 @@ def to_conv_mat_raster_continuous(ucell, fto_x, fto_y, compression=None):
         n_comp = compress_cell(xp, layer, row_idx, col_idx)
         eps = xp.astype(n_comp, _complex_dtype(xp, n_comp)) ** 2
 
-        epz_list = cfs2d(xp, eps, x, y, 1, 1, fto_x, fto_y)
-        epx_list.append(cfs2d(xp, eps, x, y, 0, 1, fto_x, fto_y))
-        epy_list.append(cfs2d(xp, eps, x, y, 1, 0, fto_x, fto_y))
+        epz_list = cfs2d(xp, eps, x, y, fto_x, fto_y, inverse_rule=None)
+        epx_list.append(cfs2d(xp, eps, x, y, fto_x, fto_y, inverse_rule='x'))
+        epy_list.append(cfs2d(xp, eps, x, y, fto_x, fto_y, inverse_rule='y'))
         epz_i_list.append(xp.linalg.inv(epz_list))
 
     return xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list)
@@ -1111,8 +1134,8 @@ def to_conv_mat_block(ucell_info_list, fto_x, fto_y):
 
     for layer, x, y in ucell_info_list:
         eps = xp.astype(layer, _complex_dtype(xp, layer)) ** 2
-        epx_list.append(cfs2d(xp, eps, x, y, 0, 1, fto_x, fto_y))
-        epy_list.append(cfs2d(xp, eps, x, y, 1, 0, fto_x, fto_y))
-        epz_i_list.append(xp.linalg.inv(cfs2d(xp, eps, x, y, 1, 1, fto_x, fto_y)))
+        epx_list.append(cfs2d(xp, eps, x, y, fto_x, fto_y, inverse_rule='x'))
+        epy_list.append(cfs2d(xp, eps, x, y, fto_x, fto_y, inverse_rule='y'))
+        epz_i_list.append(xp.linalg.inv(cfs2d(xp, eps, x, y, fto_x, fto_y, inverse_rule=None)))
 
     return xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list)
