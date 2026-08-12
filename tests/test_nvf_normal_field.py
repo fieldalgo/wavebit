@@ -28,7 +28,8 @@ import pytest
 
 import array_api_compat.numpy as xnp
 
-from fieldwave._core.factorization import dfs2d_sampled, normal_vector_field
+from fieldwave._core.factorization import (dfs2d_piecewise_constant, dfs2d_sampled,
+                                           normal_vector_field, nvf_conv_matrices)
 
 
 def _circle(N, radius_frac=0.3, n_in=2.0, n_out=1.0):
@@ -131,3 +132,44 @@ def test_sobel_style_gradient_field_violates_the_invariant(name, geom):
     # ... and it is decisively worse than the field that shipped.
     sdf = _projector_defect(*normal_vector_field(geom(100)))
     assert sdf < coarse / 10, f'{name}: sdf {sdf:.4g} not decisively better than sobel {coarse:.4g}'
+
+
+def test_the_projector_is_built_from_the_sampled_transform():
+    """``nvf_conv_matrices`` must take the normal field as samples, not as a staircase.
+
+    The projector grids are a continuous unit-vector field evaluated at grid points, so their
+    coefficients are the plain DFT; applying the piecewise-constant pixel correction there
+    asserts a shape the data does not have. Which build is used was a boolean argument until
+    2026-08-12 and is now the choice of entry point, but neither spelling is self-checking:
+    the projector identity ``C_xx + C_yy = I`` that the rest of this file pins holds under
+    *either* build, so nothing above would notice the swap.
+
+    Both halves matter. The first says the sampled build is what runs. The second says that
+    is a decision rather than a coincidence -- if the two builds ever agreed here, the first
+    assertion would be pinning nothing.
+    """
+    eps = _circle(40)
+    nx, ny = normal_vector_field(eps)
+    fto = 3
+
+    got = np.asarray(nvf_conv_matrices(xnp, eps, nx, ny, fto, fto)[0])
+
+    def assembled(build):
+        c_xx, c_xy, c_yy = (np.asarray(build(f.astype(complex)))
+                            for f in (nx ** 2, nx * ny, ny ** 2))
+        return c_xx, c_xy, c_yy
+
+    sampled = assembled(lambda f: dfs2d_sampled(xnp, f, fto, fto))
+    staircase = assembled(lambda f: dfs2d_piecewise_constant(xnp, f, 1, 1, fto, fto))
+
+    # The projector that shipped is the sampled one, to the last bit of the assembly.
+    from fieldwave._core.factorization import _nvf_assemble
+    want = np.asarray(_nvf_assemble(xnp, *(np.asarray(dfs2d_piecewise_constant(
+        xnp, e.astype(complex), 1, 1, fto, fto)) for e in (eps, 1.0 / eps)), *sampled)[0])
+    assert np.allclose(got, want, atol=1e-12, rtol=0), np.abs(got - want).max()
+
+    # ... and the other build is far enough away that the check above has teeth.
+    gap = max(np.abs(a - b).max() for a, b in zip(sampled, staircase))
+    assert gap > 1e-3, (
+        f'the two builds of the projector differ by only {gap:.2e}, so the assertion above '
+        f'no longer distinguishes them')

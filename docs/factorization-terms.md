@@ -171,10 +171,12 @@ Two things follow for anyone reading a `li` result:
 - The residue is *not* energy error. Total power conserves to 1e-14 in both arms, so no
   conservation check will surface it. In the table above the whole residue shows up as a
   difference in **total** transmitted power between two polarisations that ought to agree.
-- Nothing in the suite tests this. The invariant is checkable in a few lines — it needs only a
-  transpose-symmetric raster and two solves — and it is currently unpinned in both directions:
-  a regression that worsened the nesting would pass, and so would one that accidentally fixed
-  it.
+- The suite pins it since 2026-08-12, in both directions.
+  `test_nvf_does_not_tell_x_and_y_apart` is the invariant — NVF chooses no nesting order, so
+  the symmetry is exact — and `test_li_tells_x_and_y_apart_and_this_is_expected` records the
+  cost of not having it, bounded above *and* below: a regression that worsened the nesting
+  would otherwise pass, and so would one that accidentally fixed it and left this section
+  stale. Both are in `tests/test_factorization_core.py` and cost about a second.
 
 ## 7. One more word that was doing two jobs: `dfs2d`
 
@@ -206,6 +208,12 @@ roughly `N < 2*fto` the inverse-rule matrix goes singular and the solve raises `
 reports anything. The reverse mistake — the sampled field built as a staircase — is 1e-5 at
 normal incidence into an index-matched substrate and 2e-4 to 2e-3 with contrast or at conical
 incidence, and never structural.
+
+`tests/test_nvf_normal_field.py::test_the_projector_is_built_from_the_sampled_transform` pins
+the choice at the one production site that makes it. It needs two halves, because the
+projector identity `C_xx + C_yy = I` that the rest of that file checks holds under *either*
+build: one assertion that the sampled build is what runs, and one that the two builds are far
+enough apart (1.1e-2 here) for the first to be pinning anything.
 
 The convention probe in `tests/test_analytic.py` calls `dfs2d_sampled` for a third reason: it
 compares against a raw `np.fft.fft2` and wants no pixel correction in the way. The name still

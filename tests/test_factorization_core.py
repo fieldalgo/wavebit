@@ -429,3 +429,65 @@ def test_cfs_end_to_end_gradient_wrt_ucell():
 
     assert abs(g_jax - g_torch) < 1e-8, (g_jax, g_torch)
     assert abs(g_jax - g_fd) < 1e-6, (g_jax, g_fd)
+
+
+def _transpose_symmetric_L(N=48):
+    """An L-shape with ``eps(x, y) == eps(y, x)``, deliberately not 4-fold symmetric."""
+    u = np.ones((N, N))
+    u[N // 8:N // 2, N // 8:N // 4] = 3.2
+    u = np.maximum(u, u.T)
+    assert np.array_equal(u, u.T)
+    return u[None, :, :]
+
+
+def _transmission_map(ucell, factorization, fto, psi):
+    res = fieldwave.rcwa(
+        backend=0, factorization=factorization, fto=[fto, fto],
+        pol=1, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=psi,
+        wavelength=1.3, period=[1.0, 1.0], thickness=[0.4], ucell=ucell).conv_solve()
+    t = np.asarray(res.T)
+    ff = int(round(t.size ** 0.5))
+    return t.reshape(ff, ff)
+
+
+def _relabelling_residue(factorization, fto):
+    """``max|T(psi=0) - T(psi=90)^T|`` on a transpose-symmetric structure at normal incidence.
+
+    Swapping x and y maps that problem onto itself with the polarisation exchanged, so the
+    diffraction map has to come back transposed. Any residue is the builder telling x and y
+    apart.
+    """
+    ucell = _transpose_symmetric_L()
+    a = _transmission_map(ucell, factorization, fto, 0.0)
+    b = _transmission_map(ucell, factorization, fto, np.pi / 2)
+    return float(np.abs(a - b.T).max())
+
+
+@pytest.mark.parametrize('fto', [4, 6])
+def test_nvf_does_not_tell_x_and_y_apart(fto):
+    """NVF chooses no nesting order, so the relabelling symmetry is exact.
+
+    This is the invariant; the ``li`` test below is the record of what it costs not to have
+    it. Both were unpinned until 2026-08-12 -- see ``docs/factorization-terms.md`` §6.
+    """
+    resid = _relabelling_residue('nvf', fto)
+    assert resid < 1e-11, f'nvf broke the x<->y relabelling symmetry by {resid:.2e}'
+
+
+@pytest.mark.parametrize('fto', [4, 6])
+def test_li_tells_x_and_y_apart_and_this_is_expected(fto):
+    """Li's nested rule fixes one axis inside the other, so it does *not* hold the symmetry.
+
+    Intrinsic to the crossed-grating scheme rather than a defect here -- Liu & Fan name it in
+    the S4 paper as the reason vector-field formulations exist, which is what the NVF path is.
+
+    Bounded on both sides on purpose. Above, because a regression that worsened the nesting
+    would otherwise pass unnoticed; below, because one that *fixed* it should also stop and
+    make somebody update ``docs/factorization-terms.md`` §6 rather than quietly invalidating
+    it. Energy conservation sees none of this: the whole residue appears as a difference in
+    total transmitted power between two polarisations that ought to agree.
+    """
+    resid = _relabelling_residue('li', fto)
+    assert 1e-4 < resid < 5e-2, (
+        f'li relabelling residue {resid:.2e} left the band this test records; if the nesting '
+        f'genuinely changed, docs/factorization-terms.md §6 needs the new numbers')
