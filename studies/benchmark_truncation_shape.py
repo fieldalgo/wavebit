@@ -44,7 +44,8 @@ import time
 import numpy as np
 
 from fieldwave._core.conventions import boundary_kz
-from fieldwave._core.factorization import (_nvf_assemble, dfs2d, normal_vector_field,
+from fieldwave._core.factorization import (_nvf_assemble, dfs2d_piecewise_constant,
+                                           dfs2d_sampled, normal_vector_field,
                                            to_conv_mat_raster_nvf)
 from fieldwave._core.solve_1d import _block, _diag, final_matching
 from fieldwave._core.solve_2d import layer_modes_2d, sp_modes_2d
@@ -88,7 +89,7 @@ def toeplitz_conv(f, mm, nn, piecewise_constant):
     """Direct-rule convolution matrix on an arbitrary order set: ``E[i, j] = f_hat[G_i - G_j]``.
 
     The order-index sign follows ``factorization._circulant_index`` (``r - c``); the selftest
-    below pins it against ``dfs2d``.
+    below pins it against the ``dfs2d_*`` builders.
     """
     ny, nx = f.shape
     coef = np.fft.fft2(np.asarray(f, dtype=C128) / f.size)
@@ -129,9 +130,9 @@ def conv_mats(eps, normal_field, mm, nn, keep, fto_box, mode):
         if not keep.all():
             raise ValueError('the nested Li rule has no circular form; see the module docstring')
         fto_x, fto_y = fto_box
-        epz = dfs2d(np, eps, 1, 1, fto_x, fto_y, piecewise_constant=True)
-        epy = dfs2d(np, eps, 1, 0, fto_x, fto_y, piecewise_constant=True)
-        epx = dfs2d(np, eps, 0, 1, fto_x, fto_y, piecewise_constant=True)
+        epz = dfs2d_piecewise_constant(np, eps, 1, 1, fto_x, fto_y)
+        epy = dfs2d_piecewise_constant(np, eps, 1, 0, fto_x, fto_y)
+        epx = dfs2d_piecewise_constant(np, eps, 0, 1, fto_x, fto_y)
         O = np.zeros_like(epz)
 
         return epx, epy, O, O, np.linalg.inv(epz)
@@ -300,7 +301,8 @@ def selftest():
 
     for flag in (False, True):
         direct = toeplitz_conv(eps, mm, nn, flag)
-        nested = dfs2d(np, eps, 1, 1, fto, fto, piecewise_constant=flag)
+        nested = (dfs2d_piecewise_constant(np, eps, 1, 1, fto, fto) if flag
+                  else dfs2d_sampled(np, eps, fto, fto))
         err = np.abs(direct - nested).max()
         print(f'selftest conv (piecewise_constant={flag}): {err:.3e}')
         assert err < 1e-12, err

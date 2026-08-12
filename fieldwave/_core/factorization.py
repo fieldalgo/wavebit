@@ -105,11 +105,49 @@ def _pixel_correction(xp, orders, n, dtype, device=None):
     return sinc * xp.exp(-1j * pi * t)
 
 
-def dfs2d(xp, cell, conti_x, conti_y, fto_x, fto_y, piecewise_constant=False):
+def dfs2d_piecewise_constant(xp, cell, conti_x, conti_y, fto_x, fto_y):
+    """2D discrete Fourier series of a grid whose values *hold across* their pixels.
+
+    A permittivity raster is this case: ``ucell`` names the material occupying each cell, so
+    the layer is a staircase and its Fourier coefficients have an exact closed form, which
+    :func:`_pixel_correction` supplies. Exact for any order, including past the point where
+    the DFT itself wraps — which is why this path needs no grid floor.
+
+    ``conti_x`` / ``conti_y`` select the rule per direction, as in :func:`_dfs2d`; all three
+    of ``(1,1)``, ``(1,0)`` and ``(0,1)`` are Li's components of one layer.
+    """
+    return _dfs2d(xp, cell, conti_x, conti_y, fto_x, fto_y, piecewise_constant=True)
+
+
+def dfs2d_sampled(xp, field, fto_x, fto_y):
+    """2D discrete Fourier series of a continuous field *measured* on a grid.
+
+    The NVF normal field is this case, and the only one in the package: it is a continuous
+    unit-vector field evaluated at grid points, so refining the grid changes the field itself
+    and no exact coefficient is reachable from the samples. The transform is left alone.
+
+    **No ``conti`` arguments, deliberately.** The inverse rule exists for factors that are
+    discontinuous; a field that is continuous by construction has nothing to apply it to, and
+    every call in the package passed ``(1, 1)``. Offering the choice would only be offering a
+    way to be wrong.
+
+    Because there is no closed form, this path *does* need ``4*fto+1`` points — the caller
+    lifts the grid to that floor, see :func:`_normal_field_floor`.
+    """
+    return _dfs2d(xp, field, 1, 1, fto_x, fto_y, piecewise_constant=False)
+
+
+def _dfs2d(xp, cell, conti_x, conti_y, fto_x, fto_y, *, piecewise_constant):
     """2D discrete Fourier series of ``cell`` with Li's factorization rules.
 
+    Private, and ``piecewise_constant`` has no default, because the two answers are not a
+    preference: they say what kind of data the grid holds, and getting it wrong is silent.
+    Call :func:`dfs2d_piecewise_constant` or :func:`dfs2d_sampled` instead, which say it in
+    the name.
+
     ``conti_x`` / ``conti_y`` flag the direction as continuous (1) or discontinuous (0); a
-    discontinuous direction takes the inverse rule. Port of the legacy ``dfs2d``.
+    discontinuous direction takes the inverse rule. Port of the legacy ``dfs2d``, whose
+    name this module's two public entry points still carry.
 
     These flags are the *only* thing that selects a rule. The other name for the continuous
     case is Laurent's rule, which this codebase mostly calls ``direct`` — see
@@ -136,7 +174,7 @@ def dfs2d(xp, cell, conti_x, conti_y, fto_x, fto_y, piecewise_constant=False):
     refining the grid changes the field itself. Applying the correction there would assert a
     shape the data does not have.
 
-    **The two directions fail very differently, and the default is the milder one.** Flipping
+    **The two directions fail very differently, which is why neither is a default.** Flipping
     the projector sites to ``True`` (asserting a staircase the field does not have) moves the
     efficiencies by 1e-5 at normal incidence into an index-matched substrate, and by 2e-4 to
     2e-3 once there is index contrast or conical incidence — between one decade under the
@@ -208,8 +246,9 @@ def _layer_eps(xp, ucell):
     The ``n**2`` maps refractive index to permittivity: FieldWave works in ``e^{-iwt}``
     throughout (``Im(n) > 0`` = loss), with no conjugation on the way in.
 
-    Nothing is resampled. :func:`dfs2d` obtains the raster's Fourier coefficients in closed
-    form (:func:`_pixel_correction`), so a finer grid of the same staircase is the same
+    Nothing is resampled. :func:`dfs2d_piecewise_constant` obtains the raster's
+    coefficients in closed form (:func:`_pixel_correction`), so a finer grid of the same
+    staircase is the same
     function and buys nothing. The NVF path is the one that still needs a floor, and states
     that itself — see :func:`_layer_eps_for_normal_field`.
     """
@@ -222,7 +261,7 @@ def _normal_field_floor(shape, fto_x, fto_y):
     """Repeat factors that lift a layer to the grid the normal field's transform needs.
 
     The normal field is a continuous vector field this code evaluates on a grid, so unlike the
-    permittivity it has no closed-form transform and :func:`dfs2d` reads it off the grid
+    permittivity it has no closed-form transform and :func:`dfs2d_sampled` reads it off the grid
     directly. That requires ``4*fto+1`` points: the circulant asks for orders up to
     ``+/-2*fto``, and on a shorter grid ``k % n`` folds distinct orders onto one bin. The
     damage is structural rather than gradual — a *constant* normal field must transform to the
@@ -271,9 +310,9 @@ def to_conv_mat_raster_discrete(ucell, fto_x, fto_y):
     epx_list, epy_list, epz_i_list = [], [], []
 
     for eps_matrix in _layer_eps(xp, ucell):
-        epz_conv = dfs2d(xp, eps_matrix, 1, 1, fto_x, fto_y, piecewise_constant=True)
-        epy_conv = dfs2d(xp, eps_matrix, 1, 0, fto_x, fto_y, piecewise_constant=True)
-        epx_conv = dfs2d(xp, eps_matrix, 0, 1, fto_x, fto_y, piecewise_constant=True)
+        epz_conv = dfs2d_piecewise_constant(xp, eps_matrix, 1, 1, fto_x, fto_y)
+        epy_conv = dfs2d_piecewise_constant(xp, eps_matrix, 1, 0, fto_x, fto_y)
+        epx_conv = dfs2d_piecewise_constant(xp, eps_matrix, 0, 1, fto_x, fto_y)
 
         epx_list.append(epx_conv)
         epy_list.append(epy_conv)
@@ -582,9 +621,9 @@ def _nvf_projector(xp, nx, ny, fto_x, fto_y, dtype, device=None):
     extension of the interface direction into the bulk, so it has no piecewise-constant block
     structure for the closed-form series to integrate over in the first place.
     """
-    C_xx = dfs2d(xp, xp.asarray(nx ** 2, dtype=dtype, device=device), 1, 1, fto_x, fto_y)
-    C_xy = dfs2d(xp, xp.asarray(nx * ny, dtype=dtype, device=device), 1, 1, fto_x, fto_y)
-    C_yy = dfs2d(xp, xp.asarray(ny ** 2, dtype=dtype, device=device), 1, 1, fto_x, fto_y)
+    C_xx = dfs2d_sampled(xp, xp.asarray(nx ** 2, dtype=dtype, device=device), fto_x, fto_y)
+    C_xy = dfs2d_sampled(xp, xp.asarray(nx * ny, dtype=dtype, device=device), fto_x, fto_y)
+    C_yy = dfs2d_sampled(xp, xp.asarray(ny ** 2, dtype=dtype, device=device), fto_x, fto_y)
     return C_xx, C_xy, C_yy
 
 
@@ -624,8 +663,8 @@ def nvf_conv_matrices(xp, eps_matrix, nx, ny, fto_x, fto_y):
     # eps is a staircase however finely it was sampled, so its coefficients are exact from
     # the grid it arrives on. The projector grids are not -- they sample a continuous
     # vector field -- which is why only these two carry the flag.
-    ep_dir = dfs2d(xp, eps_matrix, 1, 1, fto_x, fto_y, piecewise_constant=True)
-    ep_inv = dfs2d(xp, 1.0 / eps_matrix, 1, 1, fto_x, fto_y, piecewise_constant=True)
+    ep_dir = dfs2d_piecewise_constant(xp, eps_matrix, 1, 1, fto_x, fto_y)
+    ep_inv = dfs2d_piecewise_constant(xp, 1.0 / eps_matrix, 1, 1, fto_x, fto_y)
 
     return _nvf_assemble(xp, ep_dir, ep_inv,
                          *_nvf_projector(xp, nx, ny, fto_x, fto_y, C, dev))

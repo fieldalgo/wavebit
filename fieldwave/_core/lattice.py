@@ -23,8 +23,9 @@ the Fourier machinery: substituting ``r = u*a1 + v*a2`` turns the cell integral 
     eps_hat[m, n] = \\int_0^1 \\int_0^1 eps(u, v) exp(-2i*pi*(m*u + n*v)) du dv
 
 an ordinary DFT on the parametric ``(u, v)`` grid for *any* basis, still indexed by integer
-differences and therefore still block-Toeplitz. That is why ``dfs2d`` and the convolution
-matrix builds in :mod:`fieldwave._core.factorization` are untouched by this module.
+differences and therefore still block-Toeplitz. That is why the ``dfs2d_*`` builders and
+the convolution matrix builds in :mod:`fieldwave._core.factorization` are untouched by
+this module.
 
 (``block-Toeplitz`` is the usual shorthand and is what matters here — the indexing by
 differences survives the skew. The exact structure is BTTB; ``docs/factorization-terms.md`` §3
@@ -173,7 +174,7 @@ def order_kxy(xp, A, fto_x, fto_y, wavelength, k_inc_x, k_inc_y, dtype, device=N
     Both are normalized by ``k0`` — i.e. these are ``kx/k0``, matching what
     ``get_kx_ky_vector`` has always returned — and laid out so that ``reshape(-1)`` gives the
     flat order list the convolution matrices are indexed by (``m`` fastest, matching
-    ``dfs2d``'s final ``(ff_y, ff_x)`` reshape).
+    ``_dfs2d``'s final ``(ff_y, ff_x)`` reshape).
 
     The closed form, written out rather than taken from a matrix inverse so it stays one
     expression per component and differentiates cleanly::

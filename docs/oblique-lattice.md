@@ -101,7 +101,8 @@ in the example at the top of this page is required for the **raster** it uses.
 The two refusals raise rather than answering, and that matters: both of them *run* on a skewed
 cell and return a plausible wrong number, with energy still conserving to 1e-15.
 
-`li` applies the inverse rule along the **raster axes** (`epx = dfs2d(cell, 0, 1)`), and the solve
+`li` applies the inverse rule along the **raster axes**
+(`epx = dfs2d_piecewise_constant(cell, 0, 1)`), and the solve
 consumes the result as Cartesian `eps_xx` / `eps_yy`. On a skewed cell those axes are `a1` / `a2`,
 not `x` / `y`. Repairing it means Li's covariant formulation (JOSA A **14**(10), 2758).
 
@@ -273,7 +274,8 @@ only diagonal `Kx` / `Ky`, and substituting `r = u*a1 + v*a2` leaves
     eps_hat[m, n] = \int_0^1 \int_0^1 eps(u, v) exp(-2i*pi*(m*u + n*v)) du dv
 
 an ordinary DFT on the parametric grid for *any* basis — still indexed by integer differences,
-still block-Toeplitz. `dfs2d`, the Toeplitz builds and `final_matching` are untouched. Truncation
+still block-Toeplitz. The `dfs2d_*` builders, the Toeplitz builds and `final_matching` are
+untouched. Truncation
 stays rectangular in `(m, n)`; Li introduced circular truncation *in* the non-orthogonal setting
 and still found the parallelogramic one superior, and it measured worse here too.
 

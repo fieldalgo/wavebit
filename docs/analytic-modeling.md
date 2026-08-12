@@ -47,7 +47,7 @@ Choose the path by the boundary, not on a general expectation that the smooth pa
 
 ## 1. Analytic Fourier coefficients
 
-The coefficient convention matches `_core/factorization.py::dfs2d` (checked to machine
+The coefficient convention matches the `_core/factorization.py::dfs2d_*` builders (checked to machine
 precision):
 
 ```
@@ -77,7 +77,7 @@ inv_eps_c(k) = (1/eps_bg)·δ_k0 + Σ_s (1/conj(n_s)² − 1/conj(n_bg)²)·Ŝ_s
 
 `conj(n)²` matches fieldwave's `e^{-iωt}` convention (Im n>0 = loss), i.e. the same as
 `to_conv_mat_raster_nvf`. `conv_matrix_2d` builds the block-Toeplitz matrices `⟦ε⟧`,
-`⟦1/ε⟧` from this `(4fto+1)²` coefficient grid in the same ordering as `dfs2d`.
+`⟦1/ε⟧` from this `(4fto+1)²` coefficient grid in the same ordering as the `dfs2d_*` builders.
 
 ## 2. Coupling with the NVF factorization
 
@@ -208,7 +208,7 @@ precision energy conservation. Backend agreement: `|np−jax|`~1e-14, `|np−tor
 
 ## 6. Regression tests
 
-`tests/test_analytic.py`: (1) conv_matrix_2d==dfs2d convention, (2) the three shape
+`tests/test_analytic.py`: (1) conv_matrix_2d==dfs2d_sampled convention, (2) the three shape
 formulas vs a fine DFT, (3) axis-aligned analytic==raster-NVF, (4) lossless energy
 conservation, (5) backend agreement, (6) torch/jax differentiability, (7) analytic ≥5× more
 accurate than staircase for a tilted dielectric. Existing `test_nvf*` and `test_fixes` all

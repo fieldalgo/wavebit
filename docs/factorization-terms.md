@@ -8,8 +8,8 @@ Targets:
   was called `laurent_conv_2d` until this document was written
 - `fieldwave/_core/analytic.py::_grid`, `fieldwave/_core/analytic.py::assemble_eps_coeffs` —
   the doubled reciprocal grid the builder consumes, and why it is doubled
-- `fieldwave/_core/factorization.py::dfs2d` — the raster twin, and where `conti_x` / `conti_y`
-  choose the rule
+- `fieldwave/_core/factorization.py::dfs2d_piecewise_constant` — the raster twin, and where
+  `conti_x` / `conti_y` choose the rule
 - `tests/test_analytic.py` — `test_conv_matrix_matches_dfs2d_convention`, which pins the ordering
   the two builders share
 
@@ -48,8 +48,10 @@ Both names for the first rule are in use in this repository and both are correct
 in code (`ep_dir`, `ep_inv`). The gloss form — naming one and parenthesising the other — is the
 one to copy in new prose, because a reader who knows only one name still lands.
 
-`dfs2d`'s `conti_x` / `conti_y` are the switch: a direction flagged discontinuous (`0`) takes
-the inverse rule. Nothing else selects it.
+`dfs2d_piecewise_constant`'s `conti_x` / `conti_y` are the switch: a direction flagged
+discontinuous (`0`) takes the inverse rule. Nothing else selects it, and `dfs2d_sampled` does
+not offer them at all — a field that is continuous by construction has no discontinuity for
+the inverse rule to close.
 
 ## 2. What `conv_matrix_2d` actually is
 
@@ -140,7 +142,7 @@ word out of the repository would have broken that and fixed nothing.
 ## 6. The nested rule is direction-dependent, and nothing tests it
 
 Applying the rules in 2D means nesting them: one axis is transformed inside, the other
-outside. `dfs2d` fixes that order — inner y, outer x — which is Li's own construction and is
+outside. The shared core fixes that order — inner y, outer x — which is Li's own construction and is
 correct. But it means the builder is **not invariant under relabelling x and y**, and that is
 observable in the answer.
 
@@ -173,3 +175,39 @@ Two things follow for anyone reading a `li` result:
   transpose-symmetric raster and two solves — and it is currently unpinned in both directions:
   a regression that worsened the nesting would pass, and so would one that accidentally fixed
   it.
+
+## 7. One more word that was doing two jobs: `dfs2d`
+
+`dfs2d(..., piecewise_constant=False)` carried the same defect as `laurent_conv_2d`, one level
+down. The flag does not express a preference — it states **what the grid holds**, and there are
+exactly two answers with exactly two consumers:
+
+| Entry point | Grid holds | Callers |
+| --- | --- | --- |
+| `dfs2d_piecewise_constant` | values that hold across their pixel — `eps`, `1/eps` | 5 in `fieldwave/` |
+| `dfs2d_sampled` | point samples of a continuous field — the NVF normal field | 3 in `fieldwave/` |
+
+A value the caller can never be in doubt about should not be a parameter the caller restates,
+and the default made it worse: `False` was the answer 3 of 8 sites wanted, so the *majority*
+case was the one you got by forgetting. `_dfs2d` is now private with the flag keyword-only and
+undefaulted, so even a direct call has to say which it means.
+
+`dfs2d_sampled` also drops `conti_x` / `conti_y` rather than defaulting them. Every call in the
+repository passed `(1, 1)` — not by accident: the inverse rule closes products of *concurrently
+discontinuous* factors, and a unit-vector field that is continuous by construction has no
+discontinuity for it to close. The arguments were not a choice anyone had, only a way to be
+wrong.
+
+Why this was worth doing rather than documenting: the two mistakes are not symmetric, and the
+dangerous one is silent. Feeding a permittivity raster to the sampled build costs 5.7e-4 per
+order on a comfortable grid (N=64, fto=4), 4.9e-3 on a tight one (N=24, fto=10), and below
+roughly `N < 2*fto` the inverse-rule matrix goes singular and the solve raises `LinAlgError`
+(measured: N=16, fto=8). Energy conserves to 1e-14 through all of it, so nothing downstream
+reports anything. The reverse mistake — the sampled field built as a staircase — is 1e-5 at
+normal incidence into an index-matched substrate and 2e-4 to 2e-3 with contrast or at conical
+incidence, and never structural.
+
+The convention probe in `tests/test_analytic.py` calls `dfs2d_sampled` for a third reason: it
+compares against a raw `np.fft.fft2` and wants no pixel correction in the way. The name still
+fits — asking for the uncorrected build *is* declaring the input to be samples — but the intent
+there is "show me the plain DFT", not "this is a measured field".

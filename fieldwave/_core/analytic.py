@@ -358,7 +358,7 @@ def shape_ft(xp, shape, ky, kx, period, lattice=None):
     """Continuous Fourier transform of one shape's indicator, divided by the cell area.
 
     Returns ``c(ky, kx) = 1/area * FT{1_shape}(u, v)`` on the integer reciprocal grid — the
-    analytic analogue of one ``dfs2d`` Fourier coefficient.
+    analytic analogue of one Fourier coefficient the ``dfs2d_*`` builders read off a raster.
 
     ``lattice`` is the cell basis (``None`` = the axis-aligned ``diag(period)``). It reaches
     only the two lines below, and that is the whole of what a skewed cell costs this function:
@@ -460,7 +460,8 @@ def assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype, lattice
 def conv_matrix_2d(xp, coeff2d, fto_x, fto_y):
     """Convolution matrix from a 2D coefficient grid.
 
-    ``M[(r,s),(c,d)] = coeff(ky=r-c, kx=s-d)`` — the same ordering ``dfs2d`` produces. The
+    ``M[(r,s),(c,d)] = coeff(ky=r-c, kx=s-d)`` — the ordering the ``dfs2d_*`` builders
+    produce. The
     sign is the order-index convention (see ``_circulant_index``); the two builders have to
     agree with each other and with ``kx``, which ``test_conv_matrix_matches_dfs2d_convention``
     pins.
@@ -579,7 +580,7 @@ def _sampled_coeffs(xp, field, fto_x, fto_y):
 
     ``c(ky, kx) = 1/(Ny*Nx) * sum f[iy, ix] exp(-2i*pi*(ky*iy/Ny + kx*ix/Nx))``, laid out the
     way :func:`assemble_eps_coeffs` lays its grids out. Feeding it to :func:`conv_matrix_2d`
-    reproduces ``dfs2d(field, 1, 1, ...)`` — that equivalence is what
+    reproduces ``dfs2d_sampled(field, ...)`` — that equivalence is what
     ``test_conv_matrix_matches_dfs2d_convention`` states, and it is what lets a translation be
     applied here as a phase instead of by moving the samples.
     """

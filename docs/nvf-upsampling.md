@@ -104,7 +104,7 @@ Two controls make the separation exact:
 
 The floor is not an accuracy preference, it is structural. The normal field has no closed-form
 transform (unlike the permittivity, which `_pixel_correction` handles for any order), so
-`dfs2d` reads it off the grid, and the circulant asks for orders up to `±2*fto`. On a grid
+`dfs2d_sampled` reads it off the grid, and the circulant asks for orders up to `±2*fto`. On a grid
 shorter than `4*fto+1`, `k % n` folds distinct orders onto one bin.
 
 The consequence is not gradual. A **constant** normal field must transform to the identity for

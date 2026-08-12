@@ -1,7 +1,8 @@
 """
 Verification tests for the ANALYTIC (staircase-free) modeling path.
 
-Covers: Fourier-coefficient convention vs dfs2d, the ``n -> eps`` convention under complex
+Covers: Fourier-coefficient convention vs ``dfs2d_sampled``, the ``n -> eps`` convention
+under complex
 indices, analytic formulas vs a fine midpoint DFT, axis-aligned equivalence with the
 raster-NVF path, energy conservation, cross-backend agreement, differentiability, and the
 convergence advantage over the staircase path.
@@ -17,12 +18,13 @@ from fieldwave._core.analytic import (
     shape_ft as _shape_ft, conv_matrix_2d as _conv_matrix_2d,
     assemble_eps_coeffs as _assemble_eps_coeffs, normal_vector_field_analytical as _nvf_analytic)
 from fieldwave._core.backend import UnphysicalResultWarning
-from fieldwave._core.factorization import dfs2d as _dfs2d
+from fieldwave._core.factorization import dfs2d_sampled as _dfs2d_sampled
 
 
 # The core builders are namespace-generic; bind NumPy for these convention checks.
-def dfs2d(cell, cx, cy, fx, fy):
-    return _dfs2d(xnp, cell, cx, cy, fx, fy)
+def dfs2d(cell, fx, fy):
+    """The raw DFT build, which is what this convention probe wants -- no pixel correction."""
+    return _dfs2d_sampled(xnp, cell, fx, fy)
 
 
 def shape_ft(shape, ky, kx, period):
@@ -52,7 +54,7 @@ def test_conv_matrix_matches_dfs2d_convention():
     cell = rng.random((Ny, Nx)) + 1.0
     fto_x, fto_y = 2, 3
 
-    M_dfs = dfs2d(cell.astype(complex), 1, 1, fto_x, fto_y)
+    M_dfs = dfs2d(cell.astype(complex), fto_x, fto_y)
 
     F = np.fft.fft2(cell) / (Nx * Ny)
     KY = np.arange(-2 * fto_y, 2 * fto_y + 1)

@@ -468,7 +468,8 @@ patterned region and runs (checked at 49 orders). That is the oracle the factori
 **Every case is a uniform film.** Not one of them has structure in the plane. Concretely, that
 means all of this runs at `fto=(0, 0)` — a single Fourier order — with convolution matrices
 hand-filled as scaled identities. So the machinery that turns a *pattern* into those matrices is
-never touched: not `dfs2d`, not Li's rules, not NVF, not the analytic or boundary builders, not
+never touched: not the `dfs2d_*` builders, not Li's rules, not NVF, not the analytic or boundary
+builders, not
 truncation.
 
 What is therefore validated is the layer mode operator, the s/p rotation, the boundary match and

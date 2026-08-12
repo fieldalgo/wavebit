@@ -92,7 +92,8 @@ They are **one scalar permittivity** put through three different factorization r
                           eps = ucell ** 2
                                  │
           ┌──────────────────────┼──────────────────────┐
-   dfs2d(eps, 0, 1)      dfs2d(eps, 1, 0)      dfs2d(eps, 1, 1)
+  ..._piecewise_constant  ..._piecewise_constant  ..._piecewise_constant
+      (eps, 0, 1)            (eps, 1, 0)            (eps, 1, 1)
   inverse rule along x  inverse rule along y      direct rule
           │                      │                      │
        epx_conv               epy_conv               epz_conv ──inv──> epz_conv_i

@@ -6,7 +6,7 @@ Targets:
 - `fieldwave/_core/solve_1d.py` — `layer_modes_1d`, `layer_modes_1d_conical`, `solve_1d`,
   `final_matching`
 - `fieldwave/_core/solve_2d.py` — `layer_modes_2d`
-- `fieldwave/_core/factorization.py` — `_circulant_index`, `dfs2d`
+- `fieldwave/_core/factorization.py` — `_circulant_index`, `dfs2d_piecewise_constant`
 - `fieldwave/_core/conventions.py` — every square root below
 - the paper draft (`e^{+jωt}`), via the mapping table in §10
 

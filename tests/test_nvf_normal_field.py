@@ -28,7 +28,7 @@ import pytest
 
 import array_api_compat.numpy as xnp
 
-from fieldwave._core.factorization import dfs2d, normal_vector_field
+from fieldwave._core.factorization import dfs2d_sampled, normal_vector_field
 
 
 def _circle(N, radius_frac=0.3, n_in=2.0, n_out=1.0):
@@ -81,8 +81,8 @@ def _unit_fraction(nx, ny):
 
 def _projector_defect(nx, ny, fto=3):
     """``||C_xx + C_yy - I|| / ||I||`` in Fourier space — 0 iff ``nx^2 + ny^2 == 1``."""
-    C_xx = dfs2d(xnp, (nx ** 2).astype(complex), 1, 1, fto, fto)
-    C_yy = dfs2d(xnp, (ny ** 2).astype(complex), 1, 1, fto, fto)
+    C_xx = dfs2d_sampled(xnp, (nx ** 2).astype(complex), fto, fto)
+    C_yy = dfs2d_sampled(xnp, (ny ** 2).astype(complex), fto, fto)
     I = np.eye(C_xx.shape[0])
     return float(np.linalg.norm(C_xx + C_yy - I) / np.linalg.norm(I))
 
