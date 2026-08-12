@@ -1,4 +1,4 @@
-# Three jobs with different purposes.
+# Four jobs with different purposes.
 #
 #   test     — installs both optional backends and runs the whole suite. This is
 #              where the physics is verified.
@@ -14,6 +14,11 @@
 #              Kept out of `test` because it finishes in well under a minute
 #              against that job's ~9, so a broken example is a fast,
 #              separately-named red mark rather than nine minutes of waiting.
+#   lint     — runs ruff on the rules `pyproject.toml` selects. It installs no
+#              package at all, so it answers in seconds; the point is that a
+#              rule nothing enforces is a comment. The config landed with 19
+#              findings cleared, and without this job the twentieth arrives
+#              unannounced.
 name: tests
 
 on:
@@ -27,6 +32,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      # Pinned, not floored, and that is the opposite of the rule the runtime
+      # dependencies follow. A floor there says "verified from here up"; a floor
+      # here would let a later ruff introduce findings on a commit that changed
+      # nothing, and a red run nobody caused is how a check stops being read.
+      # The rule set in pyproject.toml was chosen rather than inherited, so the
+      # tool that interprets it is chosen too. Raise this deliberately.
+      - name: Install ruff
+        run: pip install ruff==0.16.2
+
+      # No package install: ruff reads source, so this job needs neither the
+      # dependencies nor a build, and finishes in seconds. `.` covers the
+      # notebooks under tutorials/ as well -- ruff lints their cells.
+      - name: Check the rules pyproject.toml selects
+        run: ruff check .
+
   test:
     name: full backends
     runs-on: ubuntu-latest
