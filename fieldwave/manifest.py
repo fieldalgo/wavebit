@@ -223,6 +223,15 @@ RESULTS = {
         'meaning': 'the psi-specified solve plus the pure-TE and pure-TM variants; '
                    'top-level R/T average the two variants when no psi solve exists',
     },
+    'incidence_side': {
+        'values': ('top', 'bottom'),
+        'default': 'top',
+        'meaning': "which medium the illumination arrives from ('bottom' = n_bot). "
+                   'n_top / n_bot / ucell order are scene labels and never move; results '
+                   'are incidence-relative — R returns into the incidence medium, T exits '
+                   'the far side, theta/phi are measured against the incidence medium\'s '
+                   'normal — so post-processing is identical for both sides',
+    },
     'jobspec': {
         'outputs_default': ('R', 'T'),
         'spec_version': SPEC_VERSION,

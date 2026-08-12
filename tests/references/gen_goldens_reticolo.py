@@ -86,25 +86,34 @@ def main():
                        thickness=kw['thickness'], theta=kw['theta'],
                        phi=kw.get('phi'), wavelength=kw['wavelength'],
                        n_top=kw['n_top'], n_bot=kw['n_bot'])
-        R, T, _, _ = reti.run_res2(grating_type=1 if conical else 0, pol=pol,
+        # One res2 call answers both illumination sides: RETICOLO's inc_bottom_* results are
+        # its own bottom-incidence solve at the same k_parallel = n_top*sin(theta). The
+        # bottom-side reflection propagates in n_bot and the transmission in n_top, so the
+        # roles of the two index sets swap.
+        R, T, R_bot, T_bot = reti.run_res2(grating_type=1 if conical else 0, pol=pol,
                                            **reti_kw)
         R = np.asarray(R, dtype=float).ravel()
         T = np.asarray(T, dtype=float).ravel()
+        R_bot = np.asarray(R_bot, dtype=float).ravel()
+        T_bot = np.asarray(T_bot, dtype=float).ravel()
 
         idx_ri = _propagating_indices(kw, kw['n_top'])
         idx_ti = _propagating_indices(kw, kw['n_bot'])
-        if len(idx_ri) != len(R) or len(idx_ti) != len(T):
+        if (len(idx_ri) != len(R) or len(idx_ti) != len(T)
+                or len(idx_ti) != len(R_bot) or len(idx_ri) != len(T_bot)):
             raise SystemExit(
-                f'{name}: RETICOLO reported {len(R)}/{len(T)} propagating orders, '
-                f'the grating equation says {len(idx_ri)}/{len(idx_ti)}. Freezing this would '
-                'compare the wrong entries.')
+                f'{name}: RETICOLO reported {len(R)}/{len(T)} propagating orders top-side '
+                f'and {len(R_bot)}/{len(T_bot)} bottom-side, the grating equation says '
+                f'{len(idx_ri)}/{len(idx_ti)}. Freezing this would compare the wrong entries.')
 
         out[f'{name}__de_ri'] = R
         out[f'{name}__de_ti'] = T
         out[f'{name}__idx_ri'] = idx_ri
         out[f'{name}__idx_ti'] = idx_ti
+        out[f'{name}__de_ri_bot'] = R_bot
+        out[f'{name}__de_ti_bot'] = T_bot
         print(f'{name:16s} orders R={len(R)} T={len(T)}  '
-              f'sum={R.sum() + T.sum():.12f}')
+              f'sum={R.sum() + T.sum():.12f}  bottom sum={R_bot.sum() + T_bot.sum():.12f}')
 
     np.savez_compressed(OUT, **out)
     print(f'\nwrote {OUT} ({OUT.stat().st_size} bytes, {len(CASES)} cases)')

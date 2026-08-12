@@ -57,12 +57,17 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
                  lattice=None,               # 2x2 cell basis (columns a1, a2); None = diag(period).
                  # Kept last on purpose: SolverJax._tree_unflatten passes the children
                  # positionally, so a new parameter anywhere earlier silently shifts them.
+                 incidence_side='top',       # 'top' | 'bottom': which medium the light
+                 # arrives from. Scene labels (n_top / n_bot / ucell order) never move;
+                 # results are incidence-relative and theta/phi are measured in the
+                 # incidence medium. See docs/conventions.md.
                  ):
 
         super().__init__(n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi, pol=pol,
                          fto=fto, period=period, wavelength=wavelength,
                          thickness=thickness, connecting_algo=connecting_algo, perturbation=perturbation,
                          device=device, type_complex=type_complex)
+        self.incidence_side = incidence_side
 
         self.modeler = Modeling(period=self.period, device=device, type_complex=type_complex)
 
@@ -194,6 +199,12 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
             field_cell = field_2d(self.wavelength, kx, ky, self.T1, self.layer_info_list, self.period,
                                        res_x=res_x, res_y=res_y, res_z=res_z, set_field_input=set_field_input,
                                        lattice=self.lattice)
+
+        if self.incidence_side == 'bottom':
+            # The backside solve leaves its state in the mirrored frame (z reversed); un-flip
+            # once here so the returned cell is in SCENE coordinates for either side.
+            field_cell = torch.flip(field_cell,
+                                    dims=[0 if self._grating_type_assigned == 0 else 1])
 
         return field_cell
 

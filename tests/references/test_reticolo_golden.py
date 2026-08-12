@@ -167,6 +167,61 @@ def test_the_order_axis_is_not_symmetric_in_these_cases(name):
     assert np.abs(ti[idx] - ti[::-1][idx]).max() > 1e-4, name
 
 
+def _solve_bottom(name, backend=0):
+    """The same scene lit from below, at RETICOLO's own bottom-incidence k_parallel.
+
+    RETICOLO answers both sides from one ``res2`` call at one ``k_parallel =
+    n_top*sin(theta)``; FieldWave states the bottom-side angle in the incidence medium
+    (``docs/conventions.md``), so the matching solve is ``incidence_side='bottom'`` at
+    ``theta_bottom = asin(n_top*sin(theta)/n_bot)`` — same in-plane wavevector, said in the
+    other medium's terms. Real for every case here since ``n_bot > n_top`` throughout.
+    """
+    kw = dict(CASES[name])
+    kw['theta'] = float(np.arcsin(kw['n_top'] * np.sin(kw['theta']) / kw['n_bot']))
+    return fieldwave.rcwa(backend=backend, fourier_coefficients='integrated',
+                          incidence_side='bottom', **kw).conv_solve()
+
+
+@pytest.mark.parametrize('name', list(CASES))
+def test_bottom_incidence_orders_match_reticolo(name):
+    """Backside per-order efficiencies against RETICOLO's own ``inc_bottom`` numbers.
+
+    This is the one external solver pinning ``incidence_side='bottom'`` on actual
+    diffraction orders (the analytic oracles in ``tests/test_backside_incidence.py`` stop at
+    uniform stacks). The index sets swap roles relative to the top-side test: bottom-side
+    reflection propagates in ``n_bot``, transmission in ``n_top``. Same 1e-11 as the top
+    side — measured disagreement is 1e-16..1e-13.
+    """
+    g = _golden()
+    if f'{name}__de_ri_bot' not in g:
+        pytest.skip('golden predates bottom incidence — regenerate with '
+                    'gen_goldens_reticolo.py')
+    res = _solve_bottom(name)
+
+    for side, idx_key, arr in (('ri_bot', 'idx_ti', np.asarray(res.R)),
+                               ('ti_bot', 'idx_ri', np.asarray(res.T))):
+        idx = g[f'{name}__{idx_key}']
+        want = g[f'{name}__de_{side}']
+        got = np.real(arr).ravel()[idx]
+        assert got.shape == want.shape, (name, side, got.shape, want.shape)
+        assert np.abs(got - want).max() < 1e-11, (name, side, np.abs(got - want).max())
+
+
+@pytest.mark.parametrize('name', list(CASES))
+def test_the_same_orders_propagate_from_below(name):
+    """Orders evanescent on the bottom-incidence side must carry no power, same as on top."""
+    g = _golden()
+    if f'{name}__de_ri_bot' not in g:
+        pytest.skip('golden predates bottom incidence — regenerate with '
+                    'gen_goldens_reticolo.py')
+    res = _solve_bottom(name)
+
+    for idx_key, arr in (('idx_ti', np.asarray(res.R)), ('idx_ri', np.asarray(res.T))):
+        idx = set(g[f'{name}__{idx_key}'].tolist())
+        rest = [v for i, v in enumerate(np.real(arr).ravel()) if i not in idx]
+        assert max(abs(v) for v in rest) < 1e-12, (name, idx_key)
+
+
 @pytest.mark.parametrize('name', list(CASES))
 def test_the_raster_path_holds_the_same_tolerance(name):
     """The sampled path is held to this too, and that is a recent thing.

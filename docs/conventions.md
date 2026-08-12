@@ -30,9 +30,14 @@ the layer light meets first, `n_top` the medium it arrives from, `n_bot` the med
 exits into. A wave travelling `+z` carries `exp(+i*k0*kz*z)` with `Re(kz) > 0`; decay
 toward `+z` is `Im(kz) > 0`.
 
-"Top/bottom" name the *scene*, not the illumination: light enters from the top today, and
-the parameter slot for back-side incidence (`incidence_side`) is reserved so that adding
-it will not rename anything on this page.
+"Top/bottom" name the *scene*, not the illumination. `incidence_side` (`'top'` by
+default, `'bottom'` for back-side illumination) selects which medium the light arrives
+from; nothing on this page renames or reorders when it changes — `ucell[0]` is the top
+layer whichever way the light travels. Results are **incidence-relative** (the port
+model): `R` is power back into the incidence medium, `T` power through the far side,
+`theta`/`phi` are measured against the incidence medium's normal (`n_bot`'s, for
+`'bottom'`), and the amplitudes keep the Fresnel contract below — so user
+post-processing is identical for both sides.
 
 Within a layer the array follows the image convention: row `0` of `ucell` is `y = 0`, for
 every builder and for the reconstructed field cell alike. The flip that renders a field
@@ -79,7 +84,8 @@ Amplitude fine print, stated once so it never has to be discovered:
 
 - the p sign convention is the one where a single interface at normal incidence gives
   `r_p = (n2 - n1)/(n2 + n1) = -r_s`;
-- phase reference: `r` at the top interface, `t` at the bottom one;
+- phase reference: `r` at the incidence-side interface, `t` at the far one (top and
+  bottom respectively for the default illumination);
 - with an absorbing **superstrate**, incident power is convention-dependent, so `R`/`T`
   are not comparable to 1 — the amplitudes are the meaningful quantities there. Concretely
   so: the pure-1D and coupled paths normalize that undefined quantity *differently* (TM
@@ -96,6 +102,7 @@ Amplitude fine print, stated once so it never has to be discovered:
 | --- | --- |
 | time/loss, amplitudes | `tests/test_lossy_media.py` (Airy oracle, absorbing media both sides) |
 | order layout, order-index sign | `tests/references/test_reticolo_golden.py` (mirrors orders if wrong, conserving energy) |
+| `incidence_side`, incidence-relative results | `tests/test_backside_incidence.py` (reversed-stack Airy oracle, reciprocity both halves) and the `inc_bottom` cases of `tests/references/test_reticolo_golden.py` |
 | result naming, `order()`, delegation | `tests/test_result_api.py` |
 | square-root branches behind `kz` | `tests/test_branch_selection.py` |
 | the whole surface, per backend | `tests/test_golden_legacy_parity.py` |

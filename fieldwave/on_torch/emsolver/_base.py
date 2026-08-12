@@ -271,10 +271,11 @@ class _BaseRCWA(CoreSolveMixin):
         else:
             phi = self.phi
 
-        kx = (self.n_top * sin_theta * torch.cos(phi) + fto_x_range * (
+        # n_inc, not n_top: theta lives in the incidence medium, which incidence_side picks.
+        kx = (self.n_inc * sin_theta * torch.cos(phi) + fto_x_range * (
                 wavelength / self.period[0])).type(self.type_complex)
 
-        ky = (self.n_top * sin_theta * torch.sin(phi) + fto_y_range * (
+        ky = (self.n_inc * sin_theta * torch.sin(phi) + fto_y_range * (
                 wavelength / self.period[1])).type(self.type_complex)
 
         return kx, ky

@@ -29,6 +29,43 @@ def _diag(xp, v):
     return xp.diag(v)
 
 
+def _is_backside(incidence_side):
+    """Whether ``incidence_side`` selects backside illumination, refusing anything else.
+
+    The check lives at the core boundary rather than only in the solver constructors because
+    the solves are also called directly; a typo'd side must not quietly illuminate from the
+    top.
+    """
+    if incidence_side not in ('top', 'bottom'):
+        raise ValueError(
+            f"incidence_side must be 'top' or 'bottom', got {incidence_side!r}")
+    return incidence_side == 'bottom'
+
+
+def _mirrored_scene(n_top, n_bot, thickness, *per_layer):
+    """The z-mirrored scene: reversed layers between swapped half-spaces.
+
+    Backside illumination is solved as *top-side* illumination of this mirror. That is exact,
+    not approximate: ``z -> -z`` is a symmetry of Maxwell's equations, it leaves every layer's
+    in-plane pattern untouched (a layer is z-invariant inside itself), and it turns "arrive
+    from ``n_bot`` travelling ``-z``" into "arrive from the mirror's top travelling ``+z``" —
+    the one problem the solve already handles. ``theta`` / ``phi`` / ``psi`` pass through
+    unchanged because the contract states them against the incidence medium's normal, which
+    the mirror maps onto the top normal; ``kx`` / ``ky`` must already be built with the
+    incidence medium's index (see :attr:`~fieldwave._core.engine.CoreSolveMixin.n_inc`).
+
+    Reversal is by Python-level indexing rather than ``xp.flip`` so it works identically on
+    arrays, lists of per-layer matrices, and traced values — the indices are static, so
+    nothing here blocks ``jit`` or gradients. ``per_layer`` entries may be ``None``
+    (``epxy_conv_all`` / ``epyx_conv_all``) and pass through as ``None``.
+    """
+    n = len(thickness) if not hasattr(thickness, 'shape') else thickness.shape[0]
+    order = list(range(int(n)))[::-1]
+    rev = lambda a: [a[i] for i in order]
+    return (n_bot, n_top, rev(thickness),
+            *(None if stack is None else rev(stack) for stack in per_layer))
+
+
 def _block(xp, rows):
     """Assemble a block matrix from a 2D list of blocks (Array-API stand-in for ``np.block``).
 
@@ -108,18 +145,25 @@ def sp_modes_1d_conical(xp, F_c, F_s, W1, W2, V_11, V_12, V_21, V_22):
 
 def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
-             full=False):
+             incidence_side='top', full=False):
     """Solve a 1D grating stack for reflection/transmission diffraction efficiency.
 
     Args:
         pol: ``0`` (TE) or ``1`` (TM).
         wavelength: incident wavelength (sets ``k0 = 2*pi/wavelength``).
-        kx: in-plane wavevectors of the retained orders (length ``ff = 2*fto+1``).
-        n_top, n_bot: superstrate / substrate refractive indices.
-        theta: incident polar angle (``None`` -> 0; matches the legacy ``cos(theta)`` factor).
+        kx: in-plane wavevectors of the retained orders (length ``ff = 2*fto+1``), built
+            with the *incidence* medium's index (``n_bot`` for backside illumination).
+        n_top, n_bot: superstrate / substrate refractive indices — scene labels, whichever
+            side the light arrives from.
+        theta: incident polar angle (``None`` -> 0; matches the legacy ``cos(theta)`` factor),
+            measured from the incidence medium's normal.
         thickness: per-layer thicknesses, top-to-bottom (``ucell``/first-axis order).
         epx_conv_all, epy_conv_all, epz_conv_i_all: per-layer convolution matrices,
             indexed ``[layer]`` on the first axis, as produced by the factorization stage.
+        incidence_side: ``'top'`` (default) or ``'bottom'``. Backside illumination is solved
+            as top-side illumination of the z-mirrored scene (see :func:`_mirrored_scene`);
+            results are incidence-relative either way — ``de_ri`` is power back into the
+            incidence medium, ``de_ti`` power through the far side.
 
     Returns:
         ``(de_ri, de_ti)`` — reflected / transmitted efficiency per order, shape ``(1, ff)``.
@@ -127,6 +171,12 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
         split; the pure TE/TM path carries all of one polarization, the other side is zero).
     """
     xp = array_namespace(epx_conv_all)
+    if _is_backside(incidence_side):
+        # After the namespace read: the mirror rebinds the per-layer stacks to plain lists
+        # (static indexing keeps them traceable), which array_namespace does not accept.
+        n_top, n_bot, thickness, epx_conv_all, epy_conv_all, epz_conv_i_all = \
+            _mirrored_scene(n_top, n_bot, thickness,
+                            epx_conv_all, epy_conv_all, epz_conv_i_all)
     kx = as_array(xp, kx)
     if not xp.isdtype(kx.dtype, 'complex floating'):
         # Promote a real kx to the complex working dtype the algebra needs.
@@ -236,16 +286,21 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
 
 def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
                      epx_conv_all, epy_conv_all, epz_conv_i_all,
-                     full=False):
+                     incidence_side='top', full=False):
     """Solve a general 1D grating (arbitrary azimuth/polarization) for the given ``psi``.
 
     The conical case couples the s and p polarizations, so the per-layer modes and the
     boundary system are ``2*ff`` block matrices. Port of ``transfer_1d_conical_1..4``; returns
     the ``(de_ri, de_ti)`` of the ``psi``-specified incidence (shape ``(ff_y, ff_x)`` with
-    ``ff_y == 1``). See :func:`solve_1d` for the argument conventions; ``ky`` is the single
+    ``ff_y == 1``). See :func:`solve_1d` for the argument conventions — including
+    ``incidence_side``, handled by the same mirror; ``ky`` is the single
     out-of-plane order and ``psi`` the polarization angle.
     """
     xp = array_namespace(epx_conv_all)
+    if _is_backside(incidence_side):
+        n_top, n_bot, thickness, epx_conv_all, epy_conv_all, epz_conv_i_all = \
+            _mirrored_scene(n_top, n_bot, thickness,
+                            epx_conv_all, epy_conv_all, epz_conv_i_all)
     kx = as_array(xp, kx)
     ky = as_array(xp, ky)
     if not xp.isdtype(kx.dtype, 'complex floating'):

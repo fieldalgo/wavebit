@@ -229,3 +229,34 @@ def test_results_section_matches_a_real_result():
 
     assert tuple(m['jobspec']['outputs_default']) == tuple(JobSpec().outputs)
     assert m['jobspec']['spec_version'] == SPEC_VERSION
+
+
+def test_incidence_side_claims_match_the_solver():
+    """The published sides against runtime behaviour, both directions.
+
+    Every value the manifest lists must build and must *matter* — on a z-asymmetric scene
+    the two sides must return different reflectances, otherwise the manifest is publishing a
+    knob that changes nothing. A value it does not list must be refused by name, and the
+    published default must be what an untouched solver actually does. Physics is pinned
+    elsewhere (``tests/test_backside_incidence.py``, the RETICOLO ``inc_bottom`` golden);
+    this closes the document-vs-solver loop only.
+    """
+    m = manifest()['results']['incidence_side']
+    asym = np.array([[[3.0] * 16 + [1.0] * 16]])
+    kw = dict(KW, phi=None, psi=None, fto=[4, 0], n_bot=2.0, ucell=asym, thickness=[0.3])
+
+    got = {}
+    for side in m['values']:
+        res = fieldwave.rcwa(incidence_side=side, **kw).conv_solve()
+        got[side] = float(np.sum(np.asarray(res.R)))
+    assert abs(got['top'] - got['bottom']) > 1e-3, \
+        'the published sides must select genuinely different solves'
+
+    solver = fieldwave.rcwa(**kw)
+    assert solver.incidence_side == m['default']
+
+    with pytest.raises(ValueError) as excinfo:
+        fieldwave.rcwa(incidence_side='sideways', **kw)
+    for side in m['values']:
+        assert side in str(excinfo.value), (
+            f'the refusal must name {side!r} so a consumer can relay the legal values')

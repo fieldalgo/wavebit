@@ -115,20 +115,25 @@ class Stack:
 
 @dataclass
 class Incidence:
-    """The incident illumination: wavelength, angles, and polarization.
+    """The incident illumination: wavelength, angles, polarization, and which side it hits.
 
     ``pol`` is the TM fraction (``Pol.TE == 0`` … ``Pol.TM == 1``); ``psi`` / ``phi`` are the
     conical polarization / azimuth angles (``None`` selects the pure 1D TE/TM path). These map
     one-to-one onto the existing constructor arguments, so precedence (an explicit ``psi``
     overriding ``pol``) is whatever the solver already does.
+
+    ``incidence_side`` is ``'top'`` or ``'bottom'`` — illumination is part of the incidence,
+    not of the scene, which is why it lives here rather than on :class:`Stack`. ``theta`` /
+    ``phi`` are measured in the incidence medium (``n_bot``'s normal for ``'bottom'``).
     """
     wavelength: Any = 1.0
     theta: Any = 0.0
     phi: Optional[Any] = None
     pol: Any = Pol.TE
     psi: Optional[Any] = None
+    incidence_side: str = 'top'
 
     def as_kwargs(self) -> dict:
         """The illumination keyword arguments for :func:`fieldwave.rcwa`."""
         return dict(wavelength=self.wavelength, theta=self.theta, phi=self.phi,
-                    pol=self.pol, psi=self.psi)
+                    pol=self.pol, psi=self.psi, incidence_side=self.incidence_side)

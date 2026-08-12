@@ -50,8 +50,8 @@ is where the extra ~10-20% in the cost quoted above goes.
 """
 from .backend import array_namespace, as_array, check_finite, check_physical
 from .conventions import boundary_kz
-from .solve_1d import (_block, _diag, _pack, _unit, layer_modes_1d, layer_modes_1d_conical,
-                       sp_efficiencies, sp_modes_1d_conical)
+from .solve_1d import (_block, _diag, _is_backside, _pack, _unit, layer_modes_1d,
+                       layer_modes_1d_conical, sp_efficiencies, sp_modes_1d_conical)
 from .solve_2d import layer_modes_2d, order_grid_kxy, sp_modes_2d
 
 _PI = 3.141592653589793
@@ -219,15 +219,28 @@ def _field_state(xp, I, S_ref, S_trn, S_layers, AB, c_inc):
 
 def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
-           full=False):
+           incidence_side='top', full=False):
     """Solve a 1D grating stack by scattering matrices — SMM twin of :func:`solve_1d`.
 
     Same arguments and same returns as :func:`fieldwave._core.solve_1d.solve_1d`, so the two are
     interchangeable behind ``connecting_algo``.
 
+    ``incidence_side='bottom'`` costs nothing here: the cascade composes all four blocks
+    whichever side is lit, so backside illumination is *reading* ``S22`` / ``S12`` where the
+    top side reads ``S11`` / ``S21``, plus the incidence-medium normalization. That one-pass
+    read and the ETM's mirrored-scene solve are the same algebra, not merely the same physics:
+    the two interface matrices are block-swaps of each other (``_s_transmission`` returns
+    ``_s_reflection``'s blocks in the swapped order, same ``A``/``B``), each layer's matrix is
+    symmetric, and reversing a cascade of such factors block-swaps the product. Measured
+    against the ETM backside solve at 1e-16 on efficiencies and 1e-14 on field cells
+    (``tests/test_backside_incidence.py``).
+
     With ``full=True`` the returned mapping also carries the ``layer_info_list`` / ``T1`` state
-    field reconstruction consumes, recovered from the cascade by :func:`_field_state`.
+    field reconstruction consumes, recovered from the cascade by :func:`_field_state` — for
+    the backside, from the mirrored cascade's interface matrices, so the state describes the
+    mirrored scene exactly as the ETM path's does.
     """
+    backside = _is_backside(incidence_side)
     xp, C, kx, _ = _prepare(epx_conv_all, kx)
 
     ff_x = kx.shape[0]
@@ -276,26 +289,33 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     S = redheffer_star(xp, I, S, S_trn)
 
     # --- incidence -> amplitudes -> efficiency --------------------------------------------
+    # Incidence-relative labels: reflection returns into the incidence medium, transmission
+    # leaves through the far side. For the backside these are the substrate-port outputs, so
+    # the reads swap to S22 / S12; everything after is the top-side arithmetic with the two
+    # half-spaces in incidence-relative roles.
     delta = xp.reshape(xp.astype(_unit(xp, ff_x, ff_x // 2), C), (ff_x, 1))
-    R = xp.reshape(S[0] @ delta, (1, ff_x))
-    Tt = xp.reshape(S[2] @ delta, (1, ff_x))
+    R = xp.reshape((S[3] if backside else S[0]) @ delta, (1, ff_x))
+    Tt = xp.reshape((S[1] if backside else S[2]) @ delta, (1, ff_x))
+
+    kz_ref, kz_trn = (kz_bot, kz_top) if backside else (kz_top, kz_bot)
+    n_ref, n_trn = (n_bot, n_top) if backside else (n_top, n_bot)
 
     cos_t = xp.cos(xp.asarray(theta, dtype=C))
-    de_ri = xp.real(R * xp.conj(R) * xp.real(kz_top / (n_top * cos_t)))
+    de_ri = xp.real(R * xp.conj(R) * xp.real(kz_ref / (n_ref * cos_t)))
     if pol == 0:
-        de_ti = xp.real(Tt * xp.conj(Tt) * xp.real(kz_bot / (n_top * cos_t)))
+        de_ti = xp.real(Tt * xp.conj(Tt) * xp.real(kz_trn / (n_ref * cos_t)))
     else:
         # Re(kz/eps), not Re(conj(kz)/eps): for TM the downward flux is Re(E_x H_y*) with E_x
-        # proportional to (kz/eps) H_y. The two agree for a real n_bot, which is why a stray
-        # conjugate here survived every lossless test; against an absorbing substrate it
+        # proportional to (kz/eps) H_y. The two agree for a real exit index, which is why a
+        # stray conjugate here survived every lossless test; against an absorbing substrate it
         # returned negative transmitted power. See `conventions`: this codebase ran on a
         # conjugated problem until 2026-08, and this was the last boundary still on the far
         # side of that seam.
         de_ti = xp.real(Tt * xp.conj(Tt)
-                        * xp.real(kz_bot / n_bot ** 2 / (cos_t / n_top)))
+                        * xp.real(kz_trn / n_trn ** 2 / (cos_t / n_ref)))
 
     check_finite(xp, de_ri=de_ri, de_ti=de_ti)
-    check_physical(xp, de_ri, de_ti, n_top)
+    check_physical(xp, de_ri, de_ti, n_ref)
 
     if not full:
         return de_ri, de_ti
@@ -307,10 +327,21 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     if pol == 0:
         res = _pack(R, zeros_amp, Tt, zeros_amp, de_ri, zeros_eff, de_ti, zeros_eff)
     else:
-        res = _pack(zeros_amp, R, zeros_amp, Tt * (n_top / n_bot),
+        res = _pack(zeros_amp, R, zeros_amp, Tt * (n_ref / n_trn),
                     zeros_eff, de_ri, zeros_eff, de_ti)
 
-    blocks, T1 = _field_state(xp, I, S_ref, S_trn, S_layers, AB, delta)
+    if backside:
+        # The mirrored scene's own cascade pieces, assembled from what this pass already
+        # built: the layer matrices are symmetric and the interface matrices come from the
+        # same A/B, so only the two half-space interfaces are formed anew. The recovered
+        # state then describes the mirrored scene — the same frame the ETM backside solve
+        # leaves behind — and field reconstruction un-mirrors once, at the cell level.
+        S_ref_m = _s_reflection(xp, W_bot, V_bot, W_gap, V_gap)
+        S_trn_m = _s_transmission(xp, W_top, V_top, W_gap, V_gap)
+        blocks, T1 = _field_state(xp, I, S_ref_m, S_trn_m, S_layers[::-1], AB[::-1], delta)
+        modes = modes[::-1]
+    else:
+        blocks, T1 = _field_state(xp, I, S_ref, S_trn, S_layers, AB, delta)
     # Bottom-to-top, the order field reconstruction walks in reverse (as the ETM appends it).
     layer_info_list = [m + list(b) for m, b in zip(modes, blocks)][::-1]
     if T1 is not None:
@@ -321,13 +352,19 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
 # ------------------------------------------------------------------- coupled s/p (conical, 2D)
 
 def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
-            layer_modes, epz_conv_i_all, full):
+            layer_modes, epz_conv_i_all, backside, full):
     """Shared SMM cascade + matching for the coupled s/p paths (conical and 2D).
 
     ``layer_modes(layer_index)`` returns that layer's ``(big_W, big_V, q, W, V)``: the mode
     matrices in the s/p boundary basis that the cascade joins layers through, then the raw
     (unrotated) pair that field reconstruction expands the same amplitudes with. Everything
     else — half-spaces, gap, cascade, incidence, efficiencies — is common.
+
+    ``backside`` selects the substrate-port reads (see :func:`smm_1d` for why that read *is*
+    the mirrored-scene solve): the incident column is built with the incidence medium's index,
+    reflection comes out of ``S22`` and transmission out of ``S12``, and the p sign flip stays
+    with the reflection port — in the mirror's frame the reflected wave is the upward one,
+    whichever scene medium it returns into.
     """
     kx_g, ky_g = order_grid_kxy(xp, kx, ky)
     ff_y, ff_x = kx_g.shape
@@ -374,22 +411,25 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
             modes.append([epz_conv_i_all[layer_index], W, V, q, d])
     S = redheffer_star(xp, big_I, S, S_trn)
 
+    kz_ref, kz_trn = (kz_bot, kz_top) if backside else (kz_top, kz_bot)
+    n_ref, n_trn = (n_bot, n_top) if backside else (n_top, n_bot)
+
     # --- incidence ------------------------------------------------------------------------
     # Amplitudes are (E_s, H_p) by construction of W/V above, so the incident column is the
-    # incident field itself: E_s = sin(psi), H_p = -i*n_top*cos(psi).
+    # incident field itself: E_s = sin(psi), H_p = -i*n_inc*cos(psi) in the incidence medium.
     delta = xp.reshape(xp.astype(_unit(xp, ff_xy, ff_xy // 2), C), (ff_xy, 1))
 
     def incident(psi_v):
         s_p = xp.sin(xp.asarray(psi_v, dtype=C))
         c_p = xp.cos(xp.asarray(psi_v, dtype=C))
-        return xp.concat([s_p * delta, -1j * n_top * c_p * delta], axis=0)
+        return xp.concat([s_p * delta, -1j * n_ref * c_p * delta], axis=0)
 
     # psi as asked, then the pure-TE / pure-TM incidences (free: same scattering matrix).
     cols = [incident(psi)] + ([incident(_PI / 2), incident(0.0)] if full else [])
     c_inc = xp.concat(cols, axis=1)
 
-    c_ref = S[0] @ c_inc
-    c_trn = S[2] @ c_inc
+    c_ref = (S[3] if backside else S[0]) @ c_inc
+    c_trn = (S[1] if backside else S[2]) @ c_inc
 
     n_inc = len(cols)
 
@@ -404,22 +444,30 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     T_s = as_orders(c_trn[:ff_xy, :])
     T_p = as_orders(c_trn[ff_xy:, :])
 
-    kz_top_2d = xp.reshape(kz_top, (ff_y, ff_x))
-    kz_bot_2d = xp.reshape(kz_bot, (ff_y, ff_x))
-    denom = n_top * xp.cos(xp.asarray(theta, dtype=C))
-    eff = sp_efficiencies(xp, kz_top_2d, kz_bot_2d, denom, n_top, n_bot, R_s, R_p, T_s, T_p)
+    kz_ref_2d = xp.reshape(kz_ref, (ff_y, ff_x))
+    kz_trn_2d = xp.reshape(kz_trn, (ff_y, ff_x))
+    denom = n_ref * xp.cos(xp.asarray(theta, dtype=C))
+    eff = sp_efficiencies(xp, kz_ref_2d, kz_trn_2d, denom, n_ref, n_trn, R_s, R_p, T_s, T_p)
 
     check_finite(xp, de_ri=eff[0][0] + eff[1][0], de_ti=eff[2][0] + eff[3][0])
-    check_physical(xp, eff[0][0] + eff[1][0], eff[2][0] + eff[3][0], n_top)
+    check_physical(xp, eff[0][0] + eff[1][0], eff[2][0] + eff[3][0], n_ref)
 
     if not full:
         return eff[0][0] + eff[1][0], eff[2][0] + eff[3][0]
 
     # Coupled-path Fresnel conversion, identical to the ETM final matching's.
-    amps = (R_s, R_p / (-1j * n_top), T_s, T_p / (-1j * n_bot))
+    amps = (R_s, R_p / (-1j * n_ref), T_s, T_p / (-1j * n_trn))
     packed = [_pack(*(a[i] for a in amps), *(e[i] for e in eff)) for i in range(3)]
 
-    blocks, T1 = _field_state(xp, big_I, S_ref, S_trn, S_layers, AB, c_inc)
+    if backside:
+        # Mirrored-scene field state, same construction as `smm_1d`'s backside branch.
+        S_ref_m = _s_reflection(xp, W_bot, V_bot, W_gap, V_gap)
+        S_trn_m = _s_transmission(xp, W_top, V_top, W_gap, V_gap)
+        blocks, T1 = _field_state(xp, big_I, S_ref_m, S_trn_m,
+                                  S_layers[::-1], AB[::-1], c_inc)
+        modes = modes[::-1]
+    else:
+        blocks, T1 = _field_state(xp, big_I, S_ref, S_trn, S_layers, AB, c_inc)
     layer_info_list = [m + list(b) for m, b in zip(modes, blocks)][::-1]
     if T1 is not None:
         # One column per incidence variant (psi, TE, TM), as the ETM stacks them.
@@ -430,11 +478,12 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
 
 def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
                    epx_conv_all, epy_conv_all, epz_conv_i_all,
-                   full=False):
+                   incidence_side='top', full=False):
     """Solve a conical 1D grating by scattering matrices — SMM twin of :func:`solve_1d_conical`.
 
     Same arguments and returns as :func:`smm_1d`.
     """
+    backside = _is_backside(incidence_side)
     xp, C, kx, ky = _prepare(epx_conv_all, kx, ky)
 
     ff_x = kx.shape[0]
@@ -460,17 +509,18 @@ def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
         return big_W, big_V, xp.concat([q1, q2]), W, V
 
     return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
-                   layer_modes, epz_conv_i_all, full)
+                   layer_modes, epz_conv_i_all, backside, full)
 
 
 def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
            epxy_conv_all=None, epyx_conv_all=None,
-           full=False):
+           incidence_side='top', full=False):
     """Solve a 2D grating stack by scattering matrices — SMM twin of :func:`solve_2d`.
 
     Same arguments and returns as :func:`smm_1d`.
     """
+    backside = _is_backside(incidence_side)
     xp, C, kx, ky = _prepare(epx_conv_all, kx, ky)
 
     kx_g, ky_g = order_grid_kxy(xp, kx, ky)
@@ -495,4 +545,4 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
         return big_W, big_V, q, W, V
 
     return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
-                   layer_modes, epz_conv_i_all, full)
+                   layer_modes, epz_conv_i_all, backside, full)

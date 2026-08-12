@@ -403,11 +403,16 @@ def _eps_to_json(eps):
 
 def _incidence_from_dict(d) -> Incidence:
     d = dict(d or {})
-    _reject_unknown(d, ('wavelength', 'theta', 'phi', 'pol', 'psi'), 'incidence')
+    _reject_unknown(d, ('wavelength', 'theta', 'phi', 'pol', 'psi', 'incidence_side'),
+                    'incidence')
     if 'pol' in d:
         d['pol'] = _normalise_pol(d['pol'])
     if 'theta' in d:
         _check_polar_angle(d['theta'])
+    if d.get('incidence_side', 'top') not in ('top', 'bottom'):
+        raise SpecError(
+            f"incidence.incidence_side: expected 'top' or 'bottom', "
+            f"got {d['incidence_side']!r}")
     return Incidence(**d)
 
 
@@ -457,7 +462,8 @@ def _normalise_pol(pol):
 
 def _incidence_to_dict(inc: Incidence) -> dict:
     return {'wavelength': _jsonable(inc.wavelength), 'theta': _jsonable(inc.theta),
-            'phi': _jsonable(inc.phi), 'pol': _jsonable(inc.pol), 'psi': _jsonable(inc.psi)}
+            'phi': _jsonable(inc.phi), 'pol': _jsonable(inc.pol), 'psi': _jsonable(inc.psi),
+            'incidence_side': _jsonable(inc.incidence_side)}
 
 
 # ------------------------------------------------------------------ execution

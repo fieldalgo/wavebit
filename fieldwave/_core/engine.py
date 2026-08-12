@@ -96,6 +96,38 @@ def _recorded_lattice(normal_field_source):
 class CoreSolveMixin:
     """Provides ``solve_1d`` / ``solve_1d_conical`` / ``solve_2d`` backed by the core."""
 
+    _incidence_side = 'top'
+
+    @property
+    def incidence_side(self):
+        """Which medium the illumination arrives from: ``'top'`` (default) or ``'bottom'``.
+
+        ``n_top`` / ``n_bot`` / ``ucell`` order are *scene* labels and never move — this
+        selects the illumination only. Results are incidence-relative (the port model):
+        ``R`` is power back into the incidence medium, ``T`` power through the far side,
+        the Fresnel amplitudes keep their contract, and ``theta`` / ``phi`` are measured
+        against the incidence medium's normal (``n_bot``'s, for ``'bottom'``). User
+        post-processing is therefore identical for both sides. See ``docs/conventions.md``.
+        """
+        return self._incidence_side
+
+    @incidence_side.setter
+    def incidence_side(self, value):
+        if value not in ('top', 'bottom'):
+            raise ValueError(
+                f"incidence_side must be 'top' or 'bottom', got {value!r}")
+        self._incidence_side = value
+
+    @property
+    def n_inc(self):
+        """The incidence medium's index — the one ``theta`` / ``phi`` / ``kx`` live in.
+
+        The in-plane wavevector build (each backend's ``get_kx_ky_vector``) reads this
+        rather than ``n_top``, so ``kx_m = n_inc*sin(theta)*cos(phi) + m*wl/period`` holds
+        for either illumination side with one spelling.
+        """
+        return self.n_bot if self._incidence_side == 'bottom' else self.n_top
+
     def _solve_fn(self, grating_type):
         """The core solve for this instance's ``connecting_algo`` and the given grating type."""
         try:
@@ -201,14 +233,16 @@ class CoreSolveMixin:
         kx, _ = self.get_kx_ky_vector(wavelength)
         return self._finish(solve(
             self.pol, wavelength, kx, self.n_top, self.n_bot, self.theta, self.thickness,
-            epx_conv_all, epy_conv_all, epz_conv_i_all, full=True))
+            epx_conv_all, epy_conv_all, epz_conv_i_all,
+            incidence_side=self.incidence_side, full=True))
 
     def solve_1d_conical(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
         solve = self._solve_fn('conical')
         kx, ky = self.get_kx_ky_vector(wavelength)
         return self._finish(solve(
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi, self.thickness,
-            epx_conv_all, epy_conv_all, epz_conv_i_all, full=True))
+            epx_conv_all, epy_conv_all, epz_conv_i_all,
+            incidence_side=self.incidence_side, full=True))
 
     def solve_2d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None):
@@ -217,7 +251,8 @@ class CoreSolveMixin:
         return self._finish(solve(
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi, self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
-            epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all, full=True))
+            epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
+            incidence_side=self.incidence_side, full=True))
 
 
 # The rule each modeling path actually implements, for the two paths that implement exactly

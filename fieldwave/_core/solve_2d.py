@@ -13,7 +13,7 @@ versions, so this module reuses ``solve_1d``'s boundary init and ``final_matchin
 """
 from .backend import array_namespace, as_array, eig
 from .conventions import boundary_kz, mode_q
-from .solve_1d import _block, _diag, final_matching
+from .solve_1d import _block, _diag, _is_backside, _mirrored_scene, final_matching
 
 
 def order_grid_kxy(xp, kx, ky):
@@ -111,10 +111,12 @@ def sp_modes_2d(xp, W, V, F_c, F_s, ff_xy):
 def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
              epxy_conv_all=None, epyx_conv_all=None,
-             full=False):
+             incidence_side='top', full=False):
     """Solve a 2D grating stack for the given ``psi`` incidence.
 
-    See :func:`fieldwave._core.solve_1d.solve_1d` for the shared argument conventions.
+    See :func:`fieldwave._core.solve_1d.solve_1d` for the shared argument conventions —
+    including ``incidence_side``, handled by the same mirror (the off-diagonal blocks
+    reverse with the rest of the stack; a layer's in-plane tensor is untouched by ``z -> -z``).
     ``epxy_conv_all`` / ``epyx_conv_all`` are the optional off-diagonal permittivity blocks
     (``None`` -> zero).
 
@@ -125,6 +127,11 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     Returns ``(de_ri, de_ti)`` for the ``psi``-specified incidence, shape ``(ff_y, ff_x)``.
     """
     xp = array_namespace(epx_conv_all)
+    if _is_backside(incidence_side):
+        (n_top, n_bot, thickness, epx_conv_all, epy_conv_all, epz_conv_i_all,
+         epxy_conv_all, epyx_conv_all) = _mirrored_scene(
+            n_top, n_bot, thickness, epx_conv_all, epy_conv_all, epz_conv_i_all,
+            epxy_conv_all, epyx_conv_all)
     kx = as_array(xp, kx)
     ky = as_array(xp, ky)
     if not xp.isdtype(kx.dtype, 'complex floating'):
