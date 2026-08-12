@@ -64,7 +64,7 @@ from .geometry import StaleGeometryError
 
 def _wrap(orders, n):
     """``orders`` reduced mod ``n`` — the DFT bin each Fourier order lands in."""
-    return [[k % n for k in row] for row in orders]
+    return [k % n for k in orders]
 
 
 def _circulant_index(fto):
@@ -78,6 +78,15 @@ def _circulant_index(fto):
     """
     ff = 2 * fto + 1
     return [[(r - c) for c in range(ff)] for r in range(ff)]
+
+
+def _circulant_gather(xp, fto, dev):
+    """Index expanding a ``4*fto+1`` order vector into the ``(ff, ff)`` circulant of ``r - c``.
+
+    The same shape :func:`cfs2d` builds; ``+ 2*fto`` turns the signed order into a position in
+    that vector.
+    """
+    return xp.asarray([[v + 2 * fto for v in row] for row in _circulant_index(fto)], device=dev)
 
 
 def _pixel_correction(xp, orders, n, dtype, device=None):
@@ -198,19 +207,28 @@ def _dfs2d(xp, cell, conti_x, conti_y, fto_x, fto_y, *, piecewise_constant):
     dfs1d = xp.fft.fft(cell / cell.shape[1])
 
     dev = _device(xp, cell)
-    ord_y = _circulant_index(fto_y)
-    ord_x = _circulant_index(fto_x)
+    orders_y = list(range(-2 * fto_y, 2 * fto_y + 1))
+    orders_x = list(range(-2 * fto_x, 2 * fto_x + 1))
     n_y = cell.shape[1]
 
-    # Which DFT bin an order lands in, stated rather than left to Python's negative indexing.
-    # Identical wherever the old form worked, and defined where it did not: raw order indices
-    # need a grid of at least 4*fto+1 to stay in range, which is the whole reason the raster
-    # used to be upsampled before anything else was considered.
-    idx_y = xp.asarray(_wrap(ord_y, n_y), device=dev)
-
-    conv1d = dfs1d[:, idx_y]
+    # Read the coefficients on the *order* vector, correct them there, and only then expand
+    # into the circulant -- the shape `cfs2d` has always had.
+    #
+    # Two reasons it is this way round. It is cheaper: the circulant repeats each of the
+    # 4*fto+1 distinct orders across (2*fto+1)**2 entries, so correcting afterwards evaluates
+    # the same sin/exp and repeats the same multiply ~21x over at fto=20. And it is the only
+    # order that is *correct* to fold: the correction depends on the order, not on the DFT bin
+    # it wraps to, so it cannot be pushed any earlier into `dfs1d` -- on a short grid distinct
+    # orders share a bin and need different factors.
+    #
+    # `_wrap` states that bin rather than leaning on Python's negative indexing. Identical
+    # wherever the old form worked, and defined where it did not: raw order indices need a grid
+    # of at least 4*fto+1 to stay in range, which is the whole reason the raster used to be
+    # upsampled before anything else was considered.
+    coeff_y = dfs1d[:, xp.asarray(_wrap(orders_y, n_y), device=dev)]
     if piecewise_constant:
-        conv1d = conv1d * _pixel_correction(xp, ord_y, n_y, conv1d.dtype, dev)
+        coeff_y = coeff_y * _pixel_correction(xp, orders_y, n_y, coeff_y.dtype, dev)
+    conv1d = coeff_y[:, _circulant_gather(xp, fto_y, dev)]
 
     if conti_x ^ conti_y:
         conv1d = xp.linalg.inv(conv1d)
@@ -221,10 +239,10 @@ def _dfs2d(xp, cell, conti_x, conti_y, fto_x, fto_y, *, piecewise_constant):
     n_x = conv1d_t.shape[1]
     dfs_2d = xp.fft.fft(conv1d_t / n_x)
 
-    idx_x = xp.asarray(_wrap(ord_x, n_x), device=dev)
-    conv2d = dfs_2d[:, idx_x]
+    coeff_x = dfs_2d[:, xp.asarray(_wrap(orders_x, n_x), device=dev)]
     if piecewise_constant:
-        conv2d = conv2d * _pixel_correction(xp, ord_x, n_x, conv2d.dtype, dev)
+        coeff_x = coeff_x * _pixel_correction(xp, orders_x, n_x, coeff_x.dtype, dev)
+    conv2d = coeff_x[:, _circulant_gather(xp, fto_x, dev)]
     conv2d = xp.reshape(conv2d, (ff_y, ff_y, ff_x, ff_x))
     conv2d = xp.moveaxis(conv2d, 1, 2)
     conv2d = xp.reshape(conv2d, (ff_y * ff_x, ff_y * ff_x))
@@ -821,10 +839,8 @@ def cfs2d(xp, cell, x, y, conti_x, conti_y, fto_x, fto_y):
     cfs1d = _cfs(xp, y, cell, fto_y, period_y)
 
     dev = _device(xp, cell)
-    idx_y = xp.asarray([[v + 2 * fto_y for v in row] for row in _circulant_index(fto_y)],
-                       device=dev)
-    idx_x = xp.asarray([[v + 2 * fto_x for v in row] for row in _circulant_index(fto_x)],
-                       device=dev)
+    idx_y = _circulant_gather(xp, fto_y, dev)
+    idx_x = _circulant_gather(xp, fto_x, dev)
 
     conv1d = cfs1d[:, idx_y]
 
