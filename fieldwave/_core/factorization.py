@@ -116,6 +116,14 @@ def dfs2d(xp, cell, conti_x, conti_y, fto_x, fto_y, piecewise_constant=False):
     ``docs/factorization-terms.md``, which also explains why the matrix built from these
     coefficients is BTTB rather than Toeplitz.
 
+    Applying the rules in 2D means nesting them, and this fixes the order: inner y, outer x.
+    That is Li's construction, so ``epy`` takes the inner inverse and ``epx`` the outer one —
+    the mid-loop ``inv`` below is not movable to the end. It also means the result is not
+    invariant under relabelling x and y: on a transpose-symmetric structure the two
+    polarisations disagree by ~6e-4 at ``fto=12`` where NVF holds the symmetry to 1e-13.
+    Intrinsic to the scheme rather than a defect here, and untested; the measurement is in
+    ``docs/factorization-terms.md`` §6.
+
     ``piecewise_constant`` says each value of ``cell`` holds across its whole pixel, rather
     than being a sample of something that varies inside it. When that is true the coefficients
     have an exact closed form and this computes it (see :func:`_pixel_correction`); when it is
@@ -125,9 +133,21 @@ def dfs2d(xp, cell, conti_x, conti_y, fto_x, fto_y, piecewise_constant=False):
     A permittivity raster is the first case — ``ucell`` names the material *occupying* each
     cell, and a coarser or finer spelling of the same structure is the same function. A normal
     field is the second: it is a continuous vector field this code evaluates on a grid, so
-    refining the grid changes the field itself. Applying the correction there is harmless but
-    pointless (measured end-to-end at ~7e-7, four decades under the field's own discretization
-    error), and it would assert a shape the data does not have.
+    refining the grid changes the field itself. Applying the correction there would assert a
+    shape the data does not have.
+
+    **The two directions fail very differently, and the default is the milder one.** Flipping
+    the projector sites to ``True`` (asserting a staircase the field does not have) moves the
+    efficiencies by 1e-5 at normal incidence into an index-matched substrate, and by 2e-4 to
+    2e-3 once there is index contrast or conical incidence — between one decade under the
+    change from doubling the raster and comparable to it. Omitting it on a permittivity raster
+    is the serious one: 1e-4 to 2e-2 per order, growing with ``fto``, and below roughly
+    ``N < 2*fto`` the inverse-rule matrix is singular and the solve raises ``LinAlgError``
+    outright. Energy conservation is undisturbed either way, so nothing downstream notices.
+
+    (An earlier version of this docstring gave the first figure as ``~7e-7``, "four decades
+    under the field's own discretization error". That is reproducible only at normal incidence
+    with no index contrast, and is not a bound.)
     """
     ff_x = 2 * fto_x + 1
     ff_y = 2 * fto_y + 1

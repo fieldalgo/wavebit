@@ -14,7 +14,7 @@ import pytest
 import fieldwave
 import array_api_compat.numpy as xnp
 from fieldwave._core.analytic import (
-    shape_ft as _shape_ft, laurent_conv_2d as _laurent_conv_2d,
+    shape_ft as _shape_ft, conv_matrix_2d as _conv_matrix_2d,
     assemble_eps_coeffs as _assemble_eps_coeffs, normal_vector_field_analytical as _nvf_analytic)
 from fieldwave._core.backend import UnphysicalResultWarning
 from fieldwave._core.factorization import dfs2d as _dfs2d
@@ -29,8 +29,8 @@ def shape_ft(shape, ky, kx, period):
     return _shape_ft(xnp, shape, ky, kx, period)
 
 
-def laurent_conv_2d(coeff2d, fto_x, fto_y):
-    return _laurent_conv_2d(xnp, coeff2d, fto_x, fto_y)
+def conv_matrix_2d(coeff2d, fto_x, fto_y):
+    return _conv_matrix_2d(xnp, coeff2d, fto_x, fto_y)
 
 
 def assemble_eps_coeffs(shapes, n_base, fto_x, fto_y, period):
@@ -40,13 +40,13 @@ def assemble_eps_coeffs(shapes, n_base, fto_x, fto_y, period):
 def to_conv_mat_smooth(shapes, n_base, fto_x, fto_y, period):
     """Direct-rule (eps, 1/eps) Laurent pair — the NVF builder's inputs."""
     eps_c, inv_c = assemble_eps_coeffs(shapes, n_base, fto_x, fto_y, period)
-    return laurent_conv_2d(eps_c, fto_x, fto_y), laurent_conv_2d(inv_c, fto_x, fto_y)
+    return conv_matrix_2d(eps_c, fto_x, fto_y), conv_matrix_2d(inv_c, fto_x, fto_y)
 
 
 # ----------------------------------------------------------------------
 # 1. coefficient-builder conventions: ordering, and n -> eps
 # ----------------------------------------------------------------------
-def test_laurent_matches_dfs2d_convention():
+def test_conv_matrix_matches_dfs2d_convention():
     rng = np.random.default_rng(0)
     Ny, Nx = 12, 10
     cell = rng.random((Ny, Nx)) + 1.0
@@ -58,7 +58,7 @@ def test_laurent_matches_dfs2d_convention():
     KY = np.arange(-2 * fto_y, 2 * fto_y + 1)
     KX = np.arange(-2 * fto_x, 2 * fto_x + 1)
     coeff2d = np.array([[F[ky % Ny, kx % Nx] for kx in KX] for ky in KY])
-    M_lau = laurent_conv_2d(coeff2d, fto_x, fto_y)
+    M_lau = conv_matrix_2d(coeff2d, fto_x, fto_y)
 
     assert np.abs(M_dfs - M_lau).max() < 1e-12
 

@@ -76,7 +76,7 @@ inv_eps_c(k) = (1/eps_bg)·δ_k0 + Σ_s (1/conj(n_s)² − 1/conj(n_bg)²)·Ŝ_s
 ```
 
 `conj(n)²` matches fieldwave's `e^{-iωt}` convention (Im n>0 = loss), i.e. the same as
-`to_conv_mat_raster_nvf`. `laurent_conv_2d` builds the block-Toeplitz matrices `⟦ε⟧`,
+`to_conv_mat_raster_nvf`. `conv_matrix_2d` builds the block-Toeplitz matrices `⟦ε⟧`,
 `⟦1/ε⟧` from this `(4fto+1)²` coefficient grid in the same ordering as `dfs2d`.
 
 ## 2. Coupling with the NVF factorization
@@ -208,7 +208,7 @@ precision energy conservation. Backend agreement: `|np−jax|`~1e-14, `|np−tor
 
 ## 6. Regression tests
 
-`tests/test_analytic.py`: (1) laurent==dfs2d convention, (2) the three shape
+`tests/test_analytic.py`: (1) conv_matrix_2d==dfs2d convention, (2) the three shape
 formulas vs a fine DFT, (3) axis-aligned analytic==raster-NVF, (4) lossless energy
 conservation, (5) backend agreement, (6) torch/jax differentiability, (7) analytic ≥5× more
 accurate than staircase for a tilted dielectric. Existing `test_nvf*` and `test_fixes` all
@@ -242,7 +242,7 @@ keep passing.
   discrete series of, and there is no raster axis for Li's nested 1D rule to run along.
   For a non-NVF pure-Laurent comparison, call the two builders directly:
   `_core.analytic.assemble_eps_coeffs` returns the coefficient grids for `eps` and `1/eps`, and
-  `_core.analytic.laurent_conv_2d` turns either into a block-Toeplitz matrix.
+  `_core.analytic.conv_matrix_2d` turns either into a block-Toeplitz matrix.
 
 ### References
 - L. Li, *Use of Fourier series in the analysis of discontinuous periodic structures*, JOSA A

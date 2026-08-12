@@ -457,18 +457,19 @@ def assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype, lattice
     return eps_c, inv_eps_c
 
 
-def laurent_conv_2d(xp, coeff2d, fto_x, fto_y):
+def conv_matrix_2d(xp, coeff2d, fto_x, fto_y):
     """Convolution matrix from a 2D coefficient grid.
 
     ``M[(r,s),(c,d)] = coeff(ky=r-c, kx=s-d)`` — the same ordering ``dfs2d`` produces. The
     sign is the order-index convention (see ``_circulant_index``); the two builders have to
-    agree with each other and with ``kx``, which ``test_laurent_matches_dfs2d_convention``
+    agree with each other and with ``kx``, which ``test_conv_matrix_matches_dfs2d_convention``
     pins.
 
-    **Rule-neutral, despite the name.** ``Laurent`` here is the *direct* factorization rule,
-    and this builder implements neither rule: :func:`to_conv_mat_smooth_nvf` calls it on
-    ``eps`` and on ``1/eps`` two lines apart, and the inverse rule's inversion happens in the
-    caller. It is also called on the three normal-field products.
+    **Rule-neutral, which is what the name is for.** This was ``laurent_conv_2d`` until
+    2026-08-12, and ``Laurent`` is the *direct* factorization rule — a rule word on a builder
+    that implements neither. :func:`to_conv_mat_smooth_nvf` calls it on ``eps`` and on
+    ``1/eps`` two lines apart, and on the three normal-field products; the inverse rule's
+    inversion happens in the caller.
 
     The result is **BTTB** (block-Toeplitz with Toeplitz blocks), not Toeplitz: with the row
     and column pairs flattened, ``i - j`` does not determine ``(r-c, s-d)``, so the diagonals
@@ -577,9 +578,9 @@ def _sampled_coeffs(xp, field, fto_x, fto_y):
     """Fourier coefficients of a sampled field on the doubled reciprocal grid.
 
     ``c(ky, kx) = 1/(Ny*Nx) * sum f[iy, ix] exp(-2i*pi*(ky*iy/Ny + kx*ix/Nx))``, laid out the
-    way :func:`assemble_eps_coeffs` lays its grids out. Feeding it to :func:`laurent_conv_2d`
+    way :func:`assemble_eps_coeffs` lays its grids out. Feeding it to :func:`conv_matrix_2d`
     reproduces ``dfs2d(field, 1, 1, ...)`` — that equivalence is what
-    ``test_laurent_matches_dfs2d_convention`` states, and it is what lets a translation be
+    ``test_conv_matrix_matches_dfs2d_convention`` states, and it is what lets a translation be
     applied here as a phase instead of by moving the samples.
     """
     Ny, Nx = field.shape
@@ -730,14 +731,14 @@ def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, fto_x, fto_y):
     reciprocal grid; ``c_xx`` / ``c_xy`` / ``c_yy`` those of ``nx**2``, ``nx*ny``, ``ny**2``.
     Returns ``(eps_xx, eps_yy, eps_xy, eps_yx, epz_i)``.
     """
-    ep_dir = laurent_conv_2d(xp, eps_c, fto_x, fto_y)
-    ep_inv = laurent_conv_2d(xp, inv_eps_c, fto_x, fto_y)
+    ep_dir = conv_matrix_2d(xp, eps_c, fto_x, fto_y)
+    ep_inv = conv_matrix_2d(xp, inv_eps_c, fto_x, fto_y)
 
     delta_ep = ep_dir - xp.linalg.inv(ep_inv)
 
-    C_xx = laurent_conv_2d(xp, c_xx, fto_x, fto_y)
-    C_xy = laurent_conv_2d(xp, c_xy, fto_x, fto_y)
-    C_yy = laurent_conv_2d(xp, c_yy, fto_x, fto_y)
+    C_xx = conv_matrix_2d(xp, c_xx, fto_x, fto_y)
+    C_xy = conv_matrix_2d(xp, c_xy, fto_x, fto_y)
+    C_yy = conv_matrix_2d(xp, c_yy, fto_x, fto_y)
 
     eps_xx = ep_dir - 0.5 * (delta_ep @ C_xx + C_xx @ delta_ep)
     eps_yy = ep_dir - 0.5 * (delta_ep @ C_yy + C_yy @ delta_ep)

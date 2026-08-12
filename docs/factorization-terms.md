@@ -4,12 +4,13 @@ Written: 2026-08-12. Structure claims below are measured, not asserted; the chec
 §3 and reproduces in seconds.
 
 Targets:
-- `fieldwave/_core/analytic.py::laurent_conv_2d` — the builder whose name is the collision
+- `fieldwave/_core/analytic.py::conv_matrix_2d` — the builder the collision used to be in; it
+  was called `laurent_conv_2d` until this document was written
 - `fieldwave/_core/analytic.py::_grid`, `fieldwave/_core/analytic.py::assemble_eps_coeffs` —
   the doubled reciprocal grid the builder consumes, and why it is doubled
 - `fieldwave/_core/factorization.py::dfs2d` — the raster twin, and where `conti_x` / `conti_y`
   choose the rule
-- `tests/test_analytic.py` — `test_laurent_matches_dfs2d_convention`, which pins the ordering
+- `tests/test_analytic.py` — `test_conv_matrix_matches_dfs2d_convention`, which pins the ordering
   the two builders share
 
 ---
@@ -18,13 +19,15 @@ Targets:
 
 Four words are in play and they belong to two different axes. **Laurent** and **direct** name
 the same *factorization rule*; **inverse** (Li) names the other one. **Toeplitz** names a
-*matrix shape* and no rule at all. The one function whose name mixes the axes is
-`laurent_conv_2d`, which builds the matrix for both rules.
+*matrix shape* and no rule at all.
+
+One function used to mix the axes. `conv_matrix_2d` was `laurent_conv_2d`, which put a rule
+word on a builder that serves both rules; §5 records the rename and what stayed behind.
 
 Two things are worth knowing before editing any of this:
 
-1. `laurent_conv_2d` is **rule-neutral**. It is called on `eps` and on `1/eps` two lines apart.
-   Reading its name as "the direct-rule builder" is wrong, and the name invites exactly that.
+1. `conv_matrix_2d` is **rule-neutral**. It is called on `eps` and on `1/eps` two lines apart,
+   and on the three normal-field products. No rule has been chosen when it runs.
 2. The matrix it returns is **not Toeplitz**. It is BTTB — block-Toeplitz with Toeplitz blocks
    — and the distinction is checkable, not pedantic (§3).
 
@@ -48,7 +51,7 @@ one to copy in new prose, because a reader who knows only one name still lands.
 `dfs2d`'s `conti_x` / `conti_y` are the switch: a direction flagged discontinuous (`0`) takes
 the inverse rule. Nothing else selects it.
 
-## 2. What `laurent_conv_2d` actually is
+## 2. What `conv_matrix_2d` actually is
 
 It takes a grid of Fourier coefficients and lays them out as a convolution matrix:
 
@@ -61,16 +64,16 @@ is building. In `to_conv_mat_smooth_nvf` it is called five times in a row — on
 `1/eps`, and on the three normal-field products `nx^2`, `nx ny`, `ny^2`:
 
 ```python
-ep_dir = laurent_conv_2d(xp, eps_c,     fto_x, fto_y)
-ep_inv = laurent_conv_2d(xp, inv_eps_c, fto_x, fto_y)
+ep_dir = conv_matrix_2d(xp, eps_c,     fto_x, fto_y)
+ep_inv = conv_matrix_2d(xp, inv_eps_c, fto_x, fto_y)
 ...
 delta_ep = ep_dir - xp.linalg.inv(ep_inv)
 ```
 
 The inverse rule's *inversion* is the caller's, on the line after. The builder is shared.
 
-This is why the name misleads: it carries a rule word into a place where no rule has been
-chosen yet. `ep_inv = laurent_conv_2d(...)` reads as a contradiction and is not one.
+This is what the old name got wrong: it carried a rule word into a place where no rule has been
+chosen yet, so `ep_inv = laurent_conv_2d(...)` read as a contradiction without being one.
 
 The index differences `r - c` and `s - d` each span `-2*fto .. +2*fto`, which is why the
 coefficient grid arrives on a **doubled** reciprocal range — see `_grid`. A grid of only
@@ -113,20 +116,60 @@ Harmless in prose, too weak to justify a function name.
 | its structure, in passing | `block-Toeplitz` | — |
 | the builder itself | name what it does, not what shape comes out | a rule word |
 
-## 5. The open item
+## 5. The rename, and what did not move
 
-`laurent_conv_2d` mixes the axes, and renaming it is the obvious repair. Naming it for the
-structure does not work either: `toeplitz_` would be false, `block_toeplitz_` under-specified,
-`bttb_` unreadable. What is left is naming it for what it produces — a convolution matrix —
-which is also the vocabulary the rest of the code already uses (`nvf_conv_matrices`,
-`to_conv_mat_smooth_nvf`, `epx_conv`).
+`laurent_conv_2d` became `conv_matrix_2d`. Naming it for the structure was considered and
+rejected: `toeplitz_` is false, `block_toeplitz_` under-specified, `bttb_` unreadable. What is
+left is naming it for what it produces — a convolution matrix — which is the vocabulary the
+rest of the code already uses (`nvf_conv_matrices`, `to_conv_mat_smooth_nvf`, `epx_conv`).
 
-Scope, if it is done: 14 occurrences of the identifier across `_core/analytic.py`,
-`tests/test_analytic.py` and `docs/analytic-modeling.md`; 4 more for
-`test_laurent_matches_dfs2d_convention`; 2 uses of "Laurent matrix" meaning the structure, in
-`_core/analytic.py`. The 15 uses of `Laurent` meaning *the rule* stay — they are correct, and
-one of them (`modes=('nvf', 'laurent')` in `studies/benchmark_truncation_shape.py`) is a value
-a user types.
+Done before the first release, while `_core` is private and nothing outside it imports the
+name, so no alias was kept and none is owed.
 
-Not done here. This document exists so that the collision is legible whether or not the rename
-happens.
+| Moved | Count | Where |
+| --- | --- | --- |
+| `laurent_conv_2d` → `conv_matrix_2d` | 14 | `_core/analytic.py`, `tests/test_analytic.py`, `analytic-modeling.md` |
+| `test_laurent_matches_dfs2d_convention` → `test_conv_matrix_matches_dfs2d_convention` | 4 | `tests/test_analytic.py`, `_core/analytic.py`, `analytic-modeling.md` |
+| "Laurent matrix" meaning the structure → "convolution matrix" | 2 | `_core/analytic.py` |
+
+**`Laurent` meaning the rule stayed, in all 15 places.** It is correct there, and one of them
+is not prose at all: `modes=('nvf', 'laurent')` in
+`studies/benchmark_truncation_shape.py` is a value a user types. A rename that had swept the
+word out of the repository would have broken that and fixed nothing.
+
+## 6. The nested rule is direction-dependent, and nothing tests it
+
+Applying the rules in 2D means nesting them: one axis is transformed inside, the other
+outside. `dfs2d` fixes that order — inner y, outer x — which is Li's own construction and is
+correct. But it means the builder is **not invariant under relabelling x and y**, and that is
+observable in the answer.
+
+Take a structure with `eps(x, y) = eps(y, x)` in a square cell at normal incidence. Rotating
+the incident polarisation by 90 degrees maps the problem onto itself, so the diffraction map
+must come back transposed, exactly. Measured on an L-shape (transpose-symmetric, deliberately
+not 4-fold), 96x96 raster, `max|T(psi=0) - T(psi=90)ᵀ|`:
+
+| fto | `factorization='li'` | `factorization='nvf'` |
+| --- | --- | --- |
+| 4 | 5.3e-3 | 2.2e-14 |
+| 8 | 1.4e-3 | 3.5e-13 |
+| 12 | 5.9e-4 | 5.1e-13 |
+
+The NVF column is the control: it uses only `conti=(1, 1)`, so no nesting order is chosen and
+the symmetry holds to machine precision. On a high-contrast random raster the `li` residue
+reaches 1e-1.
+
+**This is not a defect in the implementation.** It is intrinsic to Li's crossed-grating
+scheme, and Liu & Fan name it in the S4 paper as the reason they ship vector-field
+formulations instead — an effective staircasing that comes from taking 1D transforms along the
+principal lattice directions. It is why the NVF path exists.
+
+Two things follow for anyone reading a `li` result:
+
+- The residue is *not* energy error. Total power conserves to 1e-14 in both arms, so no
+  conservation check will surface it. In the table above the whole residue shows up as a
+  difference in **total** transmitted power between two polarisations that ought to agree.
+- Nothing in the suite tests this. The invariant is checkable in a few lines — it needs only a
+  transpose-symmetric raster and two solves — and it is currently unpinned in both directions:
+  a regression that worsened the nesting would pass, and so would one that accidentally fixed
+  it.
