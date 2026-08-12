@@ -122,6 +122,11 @@ def test_paths_cited_anywhere_are_in_the_repository():
             t = m.group(1)
             if '/' not in t or t in CITED_BUT_ABSENT:
                 continue                                # a bare filename is prose, not a path
+            # Three bases, and the middle one is a deliberate house style rather than slack:
+            # `_core/analytic.py` is how this codebase refers to its own internals, in 13 files
+            # and counting, and there is only one `_core/` for it to mean. Spelling it
+            # `fieldwave/_core/...` everywhere would be longer and no clearer. The third base
+            # accepts a link relative to the citing file, which is how one doc points at another.
             if any((base / t).exists() for base in (ROOT, ROOT / 'fieldwave', p.parent)):
                 continue
             bad.append(f'{rel}: {t}')

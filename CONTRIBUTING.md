@@ -86,6 +86,13 @@ is what these two rules are for; neither is about tidiness.
 `git log --merges develop` is the changelog this produces, and it is only as good as the merge
 messages.
 
+**One trap, because this repository turns it on.** `rebase.updateRefs` is set to `true` here, so
+every rebase moves *any other branch* pointing into the rebased range — no flag needed. That
+makes the obvious safety net useless: `git branch backup/my-work` before a rebase gets carried
+along with the rebase and ends up at the new commits, backing up nothing. **Tag instead** —
+`git tag backup/my-work` — since tags are not updated, or pass `--no-update-refs` for that one
+rebase. Found the hard way by a session that thought it had a backup.
+
 ## Development setup
 
 ```shell

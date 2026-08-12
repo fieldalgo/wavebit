@@ -12,6 +12,12 @@ House style: title, `Written:` date, a `Targets:` list of the files it explains,
 tables. Say what was measured on what hardware, and where the result stops being trustworthy.
 Every path in `Targets:` must resolve — `tests/test_docs_contract.py` checks it.
 
+Two spellings both count as resolving, and both are intended. A path from the repository root
+(`fieldwave/_core/analytic.py`) always works, and so does the `_core/...` shorthand this
+codebase uses for its own internals — there is only one `_core/`, and writing the prefix out
+every time is longer without being clearer. `Targets:` lists use the full path; running prose
+may use either.
+
 ## A document here points inward only
 
 `docs/` is published. Everyone who clones this repository gets it, so **a document may only
