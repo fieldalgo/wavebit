@@ -154,7 +154,7 @@ works:
 Values were bit-identical (`diff = 0.0`) and gradients agreed to `8.5e-20`.
 
 For scale, `jax.jit` — the analogue that does work — bought roughly 1.9x at `fto=3` falling to
-1.3x at `fto=10` when last measured, the same collapsing trend recorded in `<a scratch note outside this repository>`.
+1.3x at `fto=10` when last measured -- the same collapsing trend, measured the same way.
 Compiled torch does not reach that, and does not reach plain NumPy either.
 
 ## 5. Why the prize is zero, and what would change that

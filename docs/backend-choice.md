@@ -309,5 +309,6 @@ and, within the freeze's own cost, the fast one.
   block edges every step pays the compile every step, and no amount of `fto` rescues that.
 
 Reproduce with `python studies/benchmark_backends.py`. The run this document reports is
-checked in as `studies/results/backends.log`; a run also writes machine-readable numbers to
-`studies/results/backends.json`, which the repository does not track (`*.json` is ignored).
+checked in as `studies/results/backends.log`. A run also writes the same numbers as JSON
+beside it, which the repository deliberately does not track (`*.json` is ignored): the log is
+the record, and a second copy would be a second thing to keep true.

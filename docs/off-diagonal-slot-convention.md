@@ -456,8 +456,8 @@ azimuth)` as written, verified against an analytic Airy slab at 0, 20 and 45 deg
 
 Two limits, both worth knowing before reaching for it. This build **rejects complex tensors**, so
 gyrotropy proper is out of reach; a real antisymmetric tensor is an active medium rather than a
-physical one, but it discriminates the ordering just as well. And `<a survey of the available solvers>`
-records that S4 gives **silently wrong results when polarisation decomposition and anisotropy are
+physical one, but it discriminates the ordering just as well. A separate survey of the
+available solvers records that S4 gives **silently wrong results when polarisation decomposition and anisotropy are
 used together** — so read total power flux per incident polarisation, as the measurements above do,
 and not order-resolved s/p amplitudes.
 
@@ -497,8 +497,8 @@ and both worth knowing before building a case around them:
 
 The patterned off-diagonal oracle is S4, which takes a tensor material on a patterned region
 directly — real tensors only, which is enough. For a patterned tensor that is also *complex*,
-`<a survey of the available solvers>` records two candidates carrying full complex `eps` **and** `mu`
-tensors: `inkstone` and `fmmax`. Neither is installed here.
+two candidates carry full complex `eps` **and** `mu` tensors: `inkstone` and `fmmax`. Neither
+is installed here.
 
 So the oracles exist for every stage of that work; what does not exist is the factorization. The
 hard part will be Popov–Nevière, not finding something to check it against — which was the right
@@ -534,7 +534,7 @@ rather than quoted from memory.
   Orsay (2005); [arXiv:2101.00901](https://arxiv.org/abs/2101.00901) — an RCWA implementation for
   1D, conical and 2D crossed gratings. From V9 it carries a toolbox for arbitrarily anisotropic
   multilayer stacks, which is what made the outside check in §8 possible. Already this repo's
-  strongest oracle for isotropic gratings (`tests/references/`, `tests/data/golden_reticolo.npz`).
+  strongest oracle for isotropic gratings (`tests/references/golden_reticolo.npz`).
 
 Also cited in `anisotropic-materials.md`, for the factorization a patterned anisotropic layer would
 need: Li (2003) for the 4ff formulation, Popov and Nevière (2001) for the rearrangement, Schuster

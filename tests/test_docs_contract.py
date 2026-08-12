@@ -36,7 +36,7 @@ TEXT_SUFFIXES = {'.py', '.md', '.ipynb', '.toml', '.cfg', '.yml', '.yaml', '.txt
 # leak is that it descends into somebody's tree.
 OUTWARD = re.compile(
     r'(?:/(?:Users|home)/[A-Za-z0-9._-]+/'          # /Users/someone/... or /home/someone/...
-    r'|~/[A-Za-z0-9._-]+/'                          # <a path outside this repository>, <env>/...
+    r'|~/[A-Za-z0-9._-]+/'                          # ~/project/..., ~/miniconda3/...
     r'|[A-Za-z]:\\\\?[A-Za-z0-9._-]+\\)'            # C:\Users\...
 )
 
@@ -78,6 +78,31 @@ def docs_with_targets():
         text = p.read_text(encoding='utf-8')
         if 'Targets' in text:
             yield p, text
+
+
+# A repo-relative path in backticks. This catches the other half of the same mistake: not
+# `/Users/someone/...` but `<a survey of the available solvers>` or `<a scratch note outside this repository>` -- a path that
+# looks local, resolves on the author's disk, and is simply absent from the clone. It reads as
+# an in-repo reference, which makes it worse than an obvious outward one.
+CITED_PATH = re.compile(r'`([A-Za-z0-9_][A-Za-z0-9._/-]*\.(?:md|py|json|npz|toml|yml|cfg))`')
+
+
+@pytest.mark.parametrize('doc', sorted(p.name for p in (ROOT / 'docs').glob('*.md')))
+def test_paths_a_document_cites_are_in_the_repository(doc):
+    """Every backticked path resolves, from the repo root or as `_core/...` shorthand."""
+    p = ROOT / 'docs' / doc
+    missing = []
+    for m in CITED_PATH.finditer(p.read_text(encoding='utf-8')):
+        t = m.group(1)
+        if '/' not in t:
+            continue                                    # a bare filename is prose, not a path
+        if any((base / t).exists() for base in (ROOT, ROOT / 'fieldwave', p.parent)):
+            continue
+        missing.append(t)
+    assert not missing, (
+        f'docs/{doc} cites paths that are not in the repository: {sorted(set(missing))}. '
+        'A path that resolves only on the author\'s disk reads as an in-repo reference and is '
+        'the harder half of the same leak -- see the contract in docs/README.md.')
 
 
 @pytest.mark.parametrize('doc', [p.name for p, _ in docs_with_targets()])
