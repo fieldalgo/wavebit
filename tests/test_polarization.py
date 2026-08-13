@@ -407,7 +407,7 @@ def test_the_pair_field_is_linear_in_the_amplitudes():
 def test_jax_pytree_round_trip_keeps_the_pair():
     """A jitted solve flattens the solver; the pair must survive the rebuild.
 
-    The pair rides as aux data while the ``psi`` child (always present — it is the traced
+    The pair rides as a child while the ``psi`` child (always present — it is the traced
     leaf) is reapplied through ``__init__``, so the rebuild has to restore the pair without
     tripping the very exclusivity check this file pins.
     """
@@ -418,6 +418,49 @@ def test_jax_pytree_round_trip_keeps_the_pair():
     back = jax.tree_util.tree_unflatten(treedef, leaves)
     assert back.polarization == (1, -1j)
     assert back._psi_given == solver._psi_given
+
+
+def test_the_pair_carries_a_gradient_through_the_pytree():
+    """Differentiating *the solver* must reach the pair, not return a zero for it.
+
+    The pair used to ride as aux data, which made it a compile-time constant: this gradient
+    came back as exactly ``0j``. That is the failure mode this file exists to catch — not an
+    error, a zero, and the same slot produces true zeros (pure-s incidence on a mirror
+    symmetric structure), so nothing downstream could tell them apart.
+
+    The value is checked against the ``psi`` path rather than a frozen number: both routes
+    reach the same incidence, so the chain rule through ``(sin v, cos v)`` must land on
+    ``d/dv`` of the ``psi`` solve.
+    """
+    import jax
+    import jax.numpy as jnp
+
+    kw = dict(CFG_2D, ucell=jnp.asarray(UCELL_2D))
+    kw['backend'] = 1
+
+    def total(solver):
+        return solver.conv_solve().T.sum()
+
+    grad = jax.grad(total)(fieldwave.rcwa(polarization=pair_of(0.7), **kw))
+    assert grad.polarization is not None
+    assert all(abs(complex(np.asarray(g))) > 1e-6 for g in grad.polarization), grad.polarization
+
+    v = 0.7
+    via_pair = jax.grad(lambda p: total(fieldwave.rcwa(
+        polarization=(jnp.sin(p), jnp.cos(p)), **kw)))(v)
+    via_psi = jax.grad(lambda p: total(fieldwave.rcwa(psi=p, **kw)))(v)
+    assert float(via_pair) == pytest.approx(float(via_psi), rel=1e-6)
+
+
+def test_a_psi_solver_flattens_with_an_empty_pair_slot():
+    """``None`` is an empty subtree, so nothing about a psi solver's flattening moved."""
+    import jax
+
+    solver = fieldwave.rcwa(backend=1, psi=0.7)
+    leaves, treedef = jax.tree_util.tree_flatten(solver)
+    back = jax.tree_util.tree_unflatten(treedef, leaves)
+    assert back.polarization is None
+    assert float(np.asarray(back.psi)) == pytest.approx(0.7)
 
 
 # ------------------------------------------------------------------ domain and spec

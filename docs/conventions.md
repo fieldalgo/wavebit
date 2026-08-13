@@ -55,7 +55,7 @@ All angles are **radians**.
 | --- | --- |
 | `theta` | polar incidence angle, measured from the stack normal in the incidence medium |
 | `phi` | azimuth of the plane of incidence, from the `+x` axis |
-| `psi` | polarization: the angle of **E** from the p direction in the plane transverse to **k**. `psi = pi/2` is pure s (TE-like), `psi = 0` pure p (TM-like) |
+| `psi` | polarization: the angle of **E** from the p direction in the plane transverse to **k**. `psi = pi/2` is pure s (TE-like), `psi = 0` pure p (TM-like). **Real** — a complex `psi` is refused, see below |
 | `pol` (1D paths) | `0` = TE, `1` = TM — an alias for `psi = pi/2` / `0` on the pure path |
 
 ### General (elliptical) polarization
@@ -74,6 +74,15 @@ spell — `(1, -1j)/sqrt(2)` and `(1, +1j)/sqrt(2)` are the two circular states.
   The overall *phase* is kept, and carries into the complex amplitudes.
 - A 1D structure given a pair is solved on the conical path (the pure 1D TE/TM path is
   single-polarization by construction); the answer is the same physics at conical cost.
+- **A complex `psi` is refused, and is not a shortcut to any of this.** `(sin, cos)` is a
+  unit pair only for a real angle; with `Im(psi) = b` the incident flux becomes `cosh(2b)`
+  and every efficiency carries that factor — invisible on an absorbing stack, where the
+  measured case returned `R + T = 0.998` for a right answer of `0.647`. It cannot reach the
+  circular states either: `a_s/a_p = tan(psi)`, and `tan(z) = ±i` has no solution (it
+  reduces to `exp(±iz) = 0`), so they are exactly the two values `tan` omits — approached
+  only as `Im(psi) -> ±inf`, with the amplitude diverging at the same rate. `psi` is stored
+  in the real dtype for this reason, unlike `theta`, whose complex values are a feature
+  (evanescent incidence); the autodiff leaf is real with it.
 
 #### Which way the circular states rotate
 
@@ -155,6 +164,7 @@ Amplitude fine print, stated once so it never has to be discovered:
 | `incidence_side`, incidence-relative results | `tests/test_backside_incidence.py` (reversed-stack Airy oracle, reciprocity both halves) and the `inc_bottom` cases of `tests/references/test_reticolo_golden.py` |
 | result naming, `order()`, delegation | `tests/test_result_api.py` |
 | the `polarization` pair: `psi` equivalence, unit-flux normalization, circular states | `tests/test_polarization.py` |
+| `psi` is real; the pair carries a gradient through a pytree | `tests/test_polarization.py` (the refusal on all three backends, and the pair's gradient checked against the `psi` path's rather than a frozen number) |
 | the circular states' rotation sense | derived above from two pinned facts: the (s, p)→(x, y) calibration (`tests/test_uniform_anisotropic.py`) and the gyrotropic eigenstate assignment (`tests/test_polarization.py`) |
 | square-root branches behind `kz` | `tests/test_branch_selection.py` |
 | the whole surface, per backend | `tests/test_golden_legacy_parity.py` |

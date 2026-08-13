@@ -9,8 +9,16 @@ class SolverJax(RCWAJax, OptimizerJax):
         OptimizerJax.__init__(self, *args, **kwargs)
 
     def _tree_flatten(self):
+        # `polarization` is a *value* of the incidence, so it is a child rather than aux data.
+        # It used to ride in aux, which made it a compile-time constant: differentiating a
+        # solver whose incidence was a pair returned exactly `0j` for it -- not an error, a
+        # zero, and indistinguishable from the true zeros the same slot produces (a pure-s
+        # incidence on a mirror-symmetric structure gives one). It rides last so the leading
+        # tuple still lines up with `__init__`'s positional parameters; `None` is an empty
+        # subtree, so a solver without a pair flattens exactly as it did before.
         children = (self.n_top, self.n_bot, self.theta, self.phi, self.psi,
-                    self.period, self.wavelength, self.ucell, self.thickness)
+                    self.period, self.wavelength, self.ucell, self.thickness,
+                    self._polarization)
         aux_data = {
             'backend': self.backend,
             'pol': self.pol,
@@ -32,10 +40,8 @@ class SolverJax(RCWAJax, OptimizerJax):
             # A dispatch key like `pol`: the solves branch on it (which cascade blocks are
             # read, which way the stack is walked), so it must come back static, never traced.
             'incidence_side': self.incidence_side,
-            # Static, like `pol`: the pair is a plain tuple, not a traced leaf — `psi` is the
-            # child that carries polarization gradients. Restored directly (see below),
-            # along with the psi-was-explicit flag the psi child would otherwise overwrite.
-            'polarization': self._polarization,
+            # Not the pair itself (that is a child now) but the fact that `psi` was given
+            # explicitly, which the always-present psi child would otherwise overwrite.
             'psi_given': self._psi_given,
         }
 
@@ -48,9 +54,13 @@ class SolverJax(RCWAJax, OptimizerJax):
         # constructor would see both spellings of the incidence and refuse a state that was
         # legal when it was flattened. Rebuild without it, then restore the slot directly.
         aux_data = dict(aux_data)
-        polarization = aux_data.pop('polarization')
         psi_given = aux_data.pop('psi_given')
-        solver = cls(*children, **aux_data)
+        *core, polarization = children
+        solver = cls(*core, **aux_data)
+        # Straight into the slot, bypassing the setter's validation: the pair may now be a
+        # tuple of tracers, and the setter's `(0, 0)` check reads concrete values. It already
+        # guards that with a try/except, but there is nothing left to validate here anyway --
+        # this pair was validated when the solver it came from was built.
         solver._polarization = polarization
         solver._psi_given = psi_given
 
