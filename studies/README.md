@@ -15,6 +15,7 @@ makes them assertions, not studies.
 | `benchmark_backends.py` | Which backend, and whether to freeze the geometry, for a *differentiated* run. Sweeps the vector and raster paths across four modes and a range of `fto`, and reports the compile cost that decides between them. Write-up: [../docs/backend-choice.md](../docs/backend-choice.md). |
 | `benchmark_analytic.py` | How the analytic (staircase-free) shape path converges against the raster and vector staircases, for tilted and curved boundaries. Write-up: [../docs/analytic-modeling.md](../docs/analytic-modeling.md). |
 | `benchmark_truncation_shape.py` | Whether S4's circular cut of the Fourier order set beats the full rectangle FieldWave keeps. Sweeps both shapes through the same permittivity raster and solver, on NVF and on Laurent as a control. Write-up: [../docs/fourier-truncation-shape.md](../docs/fourier-truncation-shape.md). |
+| `benchmark_boundary_normal_field.py` | Whether giving a multi-shape smooth layer the boundary path's gradient-of-distance normal field fixes its position gradient. Integrates the autodiff gradient across a window and compares it against the change in the loss — the one comparison autodiff and finite differences cannot both pass by agreeing with each other. Write-up: [../docs/boundary-modeling.md](../docs/boundary-modeling.md). |
 
 ## Rejected, and why
 

@@ -654,14 +654,15 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype,
     gradient across a six-pixel window on two tilted rectangles and it comes to -3.5e-4 over a
     window the loss *rises* through by +1.4e-4 -- the wrong sign, at all 25 sampled positions,
     at fto 8 and again at fto 12; the sampled field integrates to +1.4e-4 against the same
-    +1.1e-4, high by 22%. A circle pair is worse still: the sampled field is already within
-    0.3-1.1% there and the replacement is 19-128% out. The cost is a pixel scan over every
-    segment of every loop -- 25 ms against 1.9 ms for a rectangle pair at ``normal_grid`` 256,
-    and 1.35 s against 1.6 ms for a circle pair, since ``POLYGON_VERTICES`` is 256; at the 1024
-    this solver defaults to, 414 ms against 49 ms. Its *forward* accuracy is open rather than
-    settled, and the two are not separable at reachable truncations: they still sit 2e-4 apart
-    on a total at fto 24, so neither has reached the limit any ratio between them would have to
-    be measured against. See ``docs/boundary-modeling.md``.
+    +1.1e-4, high by 22%. A circle pair reverses it rather than widening it: there the sampled
+    field accounts for the loss to 1% and the replacement is 19% out. The cost is a pixel scan
+    over every segment of every loop, and ``POLYGON_VERTICES`` is 256, so a circle carries 64x
+    the segments a rectangle does: at the ``normal_grid`` of 1024 this solver defaults to, the
+    swap costs 12x on a rectangle pair and 486x on a circle pair, 0.4 s and 23 s per layer per
+    build. Its *forward* accuracy is open rather than settled, and the two are not separable at
+    reachable truncations: they still sit 2e-4 apart on a total at fto 24, so neither has
+    reached the limit any ratio between them would have to be measured against. Reproduced by
+    ``studies/benchmark_boundary_normal_field.py``; see ``docs/boundary-modeling.md``.
 
     Multi-shape layers therefore keep the sampled field. Both halves of what that costs are
     pinned in ``test_shape_position_gradients.py``, the working one as a test and the broken one

@@ -171,26 +171,38 @@ transform. So `ep_dir` and `delta_ep` are shared bit for bit and the whole diffe
 
 The gradient is the half the swap was reached for, and it is the half that fails. Measured the way
 the previous section says it has to be — across a window six normal-grid pixels wide, with the
-autodiff gradient sampled on the *same* 121-point grid as the loss, so nothing can alias — the
+autodiff gradient sampled on the *same* abscissae as the loss, so nothing can alias — the
 integral of the gradient has to equal the change in the loss across the window. Two tilted
 rectangles, fto 8:
 
 | | ∫ `d/dcx` across the window | loss change across it | ratio |
 |---|---|---|---|
-| sampled field | +1.357e-04 | +1.110e-04 | **+1.22** |
-| grad-of-distance field | -3.520e-04 | +1.388e-04 | **-2.54** |
+| sampled field | +1.3576e-04 | +1.1101e-04 | **+1.22** |
+| grad-of-distance field | -3.5182e-04 | +1.3881e-04 | **-2.53** |
 
-The replacement points the wrong way, and not at one unlucky position: at all 25 positions across
-the window, at fto 8 and again at fto 12, with a spread of 1.4% about the mean — a systematic
-offset rather than sampling noise. A circle pair only widens it. There the sampled field is
-already within 0.3–1.1% and the replacement is 19–128% out, which reaches the same verdict for
-curved shapes that the cost gives, by an independent route.
+The replacement points the wrong way, and not at one unlucky position: at **all 25** positions
+across the window, and again at fto 12, where the gradient scatters by 18% between positions and
+every one of them still has the wrong sign. The sampled field is high by 22% at fto 8 and 24% at
+fto 12, which is the known defect and the thing the swap was supposed to remove.
+
+A circle pair reverses the comparison rather than widening it. There the sampled field accounts
+for the loss to 1% and the replacement is 19% out — so on curved shapes the swap makes the
+gradient worse as well, which is the verdict the cost reaches by an independent route.
+
+`studies/benchmark_boundary_normal_field.py` is that measurement, and it runs in about twenty
+minutes. Two things in it are worth knowing before reading its numbers. The window has to be
+several normal-grid pixels wide, because the jumps are what the two fields disagree about and a
+narrower one steps over them; and the gradient has to be sampled on the *same* abscissae as the
+loss, because the derivative fluctuates on a sub-pixel scale and a coarser gradient grid aliases
+it into whatever the spacing happens to select.
 
 The cost is that other route. The field is a pixel scan over every segment of every loop and
-`POLYGON_VERTICES` is 256, so one curve costs ~64× what a rectangle does: at `normal_grid` 256,
-25 ms against 1.9 ms for a rectangle pair and 1.35 s against 1.6 ms for a circle pair. This solver
-defaults to 1024, where the same two become 414 ms against 49 ms and 23 s against 74 ms. A curved
-layer would also give up the exact Bessel transform for a 256-gon.
+`POLYGON_VERTICES` is 256, so a circle carries 64× the segments a rectangle does — 512 against 8
+for these two pairs. At the 1024 the solver defaults to, the swap costs **12×** on the rectangle
+pair and **486×** on the circle pair, which is 0.4 s and 23 s of normal field per layer per
+build. Read those as ratios: absolute milliseconds move between runs on the same machine, and
+`studies/README.md` says why. A curved layer would also give up the exact Bessel transform for a
+256-gon.
 
 Forward accuracy is **open**, not settled, and the truncations reachable here cannot settle it. At
 fto 24 the two constructions still sit 2e-4 apart on a total — as large as the differences any
