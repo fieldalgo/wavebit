@@ -196,6 +196,45 @@ narrower one steps over them; and the gradient has to be sampled on the *same* a
 loss, because the derivative fluctuates on a sub-pixel scale and a coarser gradient grid aliases
 it into whatever the spacing happens to select.
 
+### But that verdict has a condition, and it is the incidence angle
+
+The measurement above sits at one corner of its own parameter space: high index contrast (3.0 and
+2.2) **and** oblique incidence. Varying those one at a time over a fixed base — same shapes, same
+period, same thickness, same normal grid, fto 8, three window positions each —
+`benchmark_boundary_normal_field_axes.py` gives the swapped field's `err`, where
+`err = |∫ d/dcx − ΔL| / (max L − min L)` and 0 means the gradient accounts for the loss change:
+
+| swapped `err` | oblique | normal |
+|---|---|---|
+| **high contrast** | **2.8 – 4.8** (sign wrong) | 0.19 – 0.36 |
+| **low contrast** | 0.013 – 0.020 | 0.009 – 0.034 |
+
+The sampled field over the same eight configurations runs 0.04 – 0.26 — mediocre everywhere and
+never catastrophic. So the swap is *better than the field it would replace in three of the four
+corners*, by up to 10× (0.013 against 0.128 at low contrast, oblique), and fails only where the
+section above measured it. Rejecting it outright overstates what was measured; so would adopting
+it.
+
+Two further things fall out, and the first removes an axis:
+
+- **Reflectance and transmittance cannot disagree here.** Every `R` row equals its `T` row to
+  every digit printed, which is not a coincidence to be checked but an identity: the structure is
+  lossless, so `T = 1 − R`, and both the integral and the loss change simply change sign while
+  `err` and the ratio are unchanged. Nothing is learned by measuring both.
+- **The angle decides, yet the normal field never sees the angle.** `dC/dcx` is geometry only and
+  is the same at every incidence; only the weights `dL/dC` move. So the defect has to live in a
+  block that oblique incidence weighs and normal incidence barely does — and running the same
+  windowed check per block finds it there. `epz_i`, which touches no normal field, is exact
+  (`err` = 0.000) for both constructions, which is what confirms the geometry chain is not
+  involved. On the diagonal blocks the swap is already good (0.29 – 0.53) where the sampled field
+  is nowhere near (87 – 190). But on **`epxy` / `epyx` both are broken** — 14 – 18 for the swap,
+  33 – 51 for the sampled field — and those are exactly the off-diagonal couplings NVF adds over
+  Li, the ones normal incidence hardly exercises.
+
+That last line is the useful one: the corner where the swap fails is the corner where a defect
+*neither* field escapes gets weighed most heavily. Whether the off-diagonal position gradient can
+be fixed for both is open, and is a better question than which of the two fields to prefer.
+
 The cost is that other route. The field is a pixel scan over every segment of every loop and
 `POLYGON_VERTICES` is 256, so a circle carries 64× the segments a rectangle does — 512 against 8
 for these two pairs. At the 1024 the solver defaults to, the swap costs **12×** on the rectangle
