@@ -353,13 +353,14 @@ def test_field_reconstruction_still_works_on_the_second_order_path():
 
 @pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
 def test_the_first_order_path_gives_the_same_answer_on_every_backend(backend):
-    """Eagerly, all three agree — which is more than the module originally promised.
+    """All three agree — which is more than the module originally promised.
 
-    ``split_forward_backward`` selects modes with a boolean mask, and the note beside it read
-    "numpy-only for now". Measured, the bound is narrower than that: masks are fine on all
-    three eagerly and under ``jax.grad``; it is ``jax.jit`` that cannot have an output shape
-    depending on the values being masked. So this route ships on every backend, without the
-    ``jit`` the second-order one has.
+    ``split_forward_backward`` used to select modes with a boolean mask, and the note beside it
+    read "numpy-only for now". Two things turned out to be wrong with that. Masks were already
+    fine on all three backends eagerly and under ``jax.grad``; and the one case they genuinely
+    broke, ``jax.jit``, was fixable rather than inherent — the mask is now a stable-sort
+    permutation, which keeps the shapes static. See
+    :func:`test_the_first_order_path_traces_under_jit`.
     """
     pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
     ref = solver(thickness=[180.0]).solve_for_conv(WL, *uniform_slots([VOIGT], 1))
@@ -375,6 +376,78 @@ def test_the_first_order_path_gives_the_same_answer_on_every_backend(backend):
     assert mee.formulation_assigned == '4ff'
     gap, where = worst_gap(channels(ref), channels(got))
     assert gap < 1e-12, f'backend {backend} is {gap:.2e} from NumPy on {where}'
+
+
+def test_the_first_order_path_traces_under_jit():
+    """``jax.jit`` — the one thing the boolean-mask mode split genuinely could not do.
+
+    A mask makes the split's output shape depend on the values being masked, and a tracer
+    cannot answer that. The stable-sort permutation gives the same partition with the shapes
+    fixed at trace time, so the whole route traces.
+
+    Both compositions are checked, because they fail differently: ``jit`` alone traces with
+    abstract values (which is what broke), and ``jit(grad)`` also has to get an eig gradient
+    through the same permutation.
+    """
+    jax = pytest.importorskip('jax')
+    solver(thickness=[180.0], backend=1)          # imports the backend, which lifts x64
+    jnp = pytest.importorskip('jax.numpy')
+    slots = [jnp.asarray(s) for s in uniform_slots([VOIGT], 1)]
+
+    def run(thickness):
+        mee = solver(thickness=[thickness], backend=1)
+        return mee.solve_for_conv(WL, *slots).res.T.sum()
+
+    eager = float(run(180.0))
+    assert float(jax.jit(run)(jnp.asarray(180.0))) == pytest.approx(eager, abs=1e-12)
+    assert float(jax.jit(jax.grad(run))(jnp.asarray(180.0))) == pytest.approx(
+        float(jax.grad(run)(180.0)), rel=1e-9)
+
+
+def test_the_gradient_through_the_first_order_path_is_the_real_one():
+    """Tracing is not the same as differentiating correctly — check against a difference.
+
+    ``jax.grad`` returning a number says the permutation did not break the tape. Whether it
+    returns the *right* number is a separate question, and the mode split is exactly the sort
+    of place a wrong one could come from: the sort is a data-dependent reordering, and a
+    gradient that ignored it would still be finite and plausible.
+    """
+    jax = pytest.importorskip('jax')
+    solver(thickness=[180.0], backend=1)
+    jnp = pytest.importorskip('jax.numpy')
+    slots = [jnp.asarray(s) for s in uniform_slots([VOIGT], 1)]
+
+    def run(thickness):
+        mee = solver(thickness=[thickness], backend=1)
+        return mee.solve_for_conv(WL, *slots).res.T.sum()
+
+    h = 1e-4
+    fd = (float(run(180.0 + h)) - float(run(180.0 - h))) / (2 * h)
+    assert float(jax.grad(run)(180.0)) == pytest.approx(fd, rel=1e-6)
+
+
+def test_the_degenerate_mode_guard_still_fires_where_it_can():
+    """The count check survived the rewrite — on concrete values, which is where it can run.
+
+    ``M = i·I`` gives four modes with no flux at all, so every one of them falls through to the
+    decay rule and lands forward: 4 where 2 were expected. That is the ambiguous layer the
+    guard exists for, and refusing beats guessing which half a fluxless mode belongs to.
+
+    Under ``jit`` there is nothing concrete to count and the guard is skipped — a real
+    consequence of tracing, stated here rather than left to be discovered.
+    """
+    from fieldwave._core.solve_2d_4ff import _forward_count, split_forward_backward
+
+    with pytest.raises(ValueError, match='mode split found 4 forward modes'):
+        split_forward_backward(np, np.eye(4, dtype=complex) * 1j, 1)
+
+    assert _forward_count(np, np.array([1.0, 1.0, 0.0, 0.0])) == 2
+
+    jax = pytest.importorskip('jax')
+    jnp = pytest.importorskip('jax.numpy')
+    import array_api_compat as ac
+    traced = jax.jit(lambda k: 0 if _forward_count(ac.array_namespace(k), k) is None else 1)
+    assert int(traced(jnp.array([1.0, 1.0, 0.0, 0.0]))) == 0, 'the guard must skip on a tracer'
 
 
 # ---------------------------------------------------------------------------- the 1D layouts

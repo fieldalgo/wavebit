@@ -215,30 +215,56 @@ def split_forward_backward(xp, M, ff):
     Every order above the light line is that case, so the set-relative version breaks exactly
     where the multi-order path will live.
 
-    Boolean mask indexing here is what bounds this path's backend support, and the bound is
-    narrower than "numpy-only" turned out to be. Measured through the public route on a Voigt
-    tensor: NumPy, JAX and PyTorch all agree to 1e-15 **eagerly**, and ``jax.grad`` works; only
-    ``jax.jit`` refuses, because the mask makes the split's output shape depend on the values
-    in it and a tracer cannot answer ``int(sum(forward))``. That refusal is loud —
-    ``ConcretizationTypeError`` — rather than a wrong answer.
+    **Selection is a stable sort, not a boolean mask**, and that is what lets this path run
+    under ``jax.jit``. A mask makes the output shape depend on the values being masked, which
+    a tracer cannot answer; sorting on a two-valued key and slicing at ``2*ff`` gives the same
+    partition with shapes fixed at trace time. Stability is what makes it *the same*: equal
+    keys keep their original order, so ``lam[forward]`` and ``take(lam, order[:2*ff])`` are the
+    same vector entry for entry, not merely the same set. Verified bit-identical across every
+    shipped path (``tests/test_formulation_dispatch.py``).
 
-    Lifting it means selecting by a sorted permutation instead of a mask, which keeps the
-    shapes static. The count check below would have to go somewhere else at the same time: it
-    is the guard against a degenerate layer leaving an ambiguous mode, and it is also the line
-    ``jit`` trips over first.
+    The count check is the one thing that cannot be traced, so it runs only where the values
+    are concrete — the same eager-only rule :func:`fieldwave._core.backend.check_finite` and
+    ``check_physical`` follow, and for the same reason. Under ``jit`` a degenerate layer
+    therefore gets no complaint; see :func:`_forward_count`.
     """
     lam, psi = eig(M)
     flux = mode_flux_z(xp, psi, ff) / xp.sum(xp.abs(psi) ** 2, axis=0)
     forward = xp.where(xp.abs(flux) > _FLAT, flux > 0, xp.imag(lam) > 0)
-    backward = xp.logical_not(forward)
 
-    n_f = int(xp.sum(xp.astype(forward, xp.int64)))
-    if n_f != 2 * ff:
+    # 1.0 forward / 0.0 backward, in `flux`'s own real dtype -- asking for int64 here is what
+    # made JAX warn and silently narrow to int32 when x64 is off.
+    key = xp.astype(forward, flux.dtype)
+    n_f = _forward_count(xp, key)
+    if n_f is not None and n_f != 2 * ff:
         raise ValueError(
             f'mode split found {n_f} forward modes, expected {2 * ff}. A degenerate layer can '
             'leave a mode with no flux and an ambiguous decay; this refuses rather than '
             'guessing which half it belongs to.')
-    return lam[forward], psi[:, forward], lam[backward], psi[:, backward]
+
+    order = xp.argsort(-key, stable=True)
+    fwd, bwd = order[:2 * ff], order[2 * ff:]
+    return (xp.take(lam, fwd), xp.take(psi, fwd, axis=1),
+            xp.take(lam, bwd), xp.take(psi, bwd, axis=1))
+
+
+def _forward_count(xp, key):
+    """How many modes went forward, or ``None`` when nothing concrete can be read.
+
+    ``None`` means a tracer: ``jax.jit`` traces with abstract values and ``int()`` on one
+    raises rather than returning a number. ``jax.grad`` is *not* that case — its tracer carries
+    a concrete primal, so the guard still runs under a gradient. That asymmetry is the same one
+    every eager decision in this library leans on, and it is tabulated in
+    ``docs/backend-choice.md`` §3: a grad tracer refuses a whole-array conversion but permits
+    narrowing one value; a jit tracer refuses both.
+
+    Catching broadly rather than naming the exception keeps this backend-agnostic, which is the
+    same trade :func:`fieldwave._core.engine._concrete_period` makes two modules over.
+    """
+    try:
+        return int(xp.sum(key))
+    except Exception:
+        return None
 
 
 def vacuum_sp_states(xp, kx, ky, ff, order=0):
