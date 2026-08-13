@@ -646,9 +646,28 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype,
       ``test_analytic_angle_is_smooth_through_normal``, and any value chosen between the two is
       a tuning constant.
 
+    A fourth is *replacing the field wholesale* for multi-shape layers with the boundary path's
+    gradient-of-distance field
+    (:func:`~fieldwave._core.boundary.distance_gradient_normal_field`), which a disjoint layer
+    can be given today by passing ``boundary_plans`` to :func:`to_conv_mat_smooth_layers`.
+    Tried, and rejected on the half it was reached for. Integrate its autodiff position
+    gradient across a six-pixel window on two tilted rectangles and it comes to -3.5e-4 over a
+    window the loss *rises* through by +1.4e-4 -- the wrong sign, at all 25 sampled positions,
+    at fto 8 and again at fto 12; the sampled field integrates to +1.4e-4 against the same
+    +1.1e-4, high by 22%. A circle pair is worse still: the sampled field is already within
+    0.3-1.1% there and the replacement is 19-128% out. The cost is a pixel scan over every
+    segment of every loop -- 25 ms against 1.9 ms for a rectangle pair at ``normal_grid`` 256,
+    and 1.35 s against 1.6 ms for a circle pair, since ``POLYGON_VERTICES`` is 256; at the 1024
+    this solver defaults to, 414 ms against 49 ms. Its *forward* accuracy is open rather than
+    settled, and the two are not separable at reachable truncations: they still sit 2e-4 apart
+    on a total at fto 24, so neither has reached the limit any ratio between them would have to
+    be measured against. See ``docs/boundary-modeling.md``.
+
     Multi-shape layers therefore keep the sampled field. Both halves of what that costs are
     pinned in ``test_shape_position_gradients.py``, the working one as a test and the broken one
-    as a strict xfail, so neither can be inferred from the other.
+    as a strict xfail, so neither can be inferred from the other. Both of those run at
+    ``fto = 4``, where the model's own slope is about twice its fto 12 one, so they hold
+    autodiff to finite differences rather than to the slope the structure has.
 
     **The forward answer is affected too, not only the gradient — keep every shape inside the
     cell.** A shape straddling the boundary may be named in any period; ``cx`` and ``cx + Px``

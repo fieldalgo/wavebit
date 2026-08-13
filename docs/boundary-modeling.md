@@ -142,13 +142,67 @@ matrices of a painted pair, every parameter — `cx` and `cy` included — conve
 autodiff value by `h` = 1e-7 (`d/dcx` = -3.065387e+02 analytic against -3.065387e+02). The
 intermediate-`h` wobble is a real slope sampled across the same pixel jumps, not an absent one.
 
+That last comparison says less than it looks like, and the correction is worth carrying because it
+is easy to repeat. Autodiff and a small-`h` central difference **cannot disagree** on either path:
+both models make the loss piecewise smooth in `cx`, autodiff returns the slope of the smooth
+piece, and an `h` below the pixel spacing stays inside that same piece. Their agreement is
+self-consistency, and both are agreeing while they skip whatever the jumps carry. To see which
+field is actually right you have to regress the loss across a window several pixels wide, so the
+jumps are averaged in rather than stepped over — see the next section, where that is done and the
+answer is not the one the `h`-sweep implies.
+
 The distinction matters for what could be done about it. The measurement above holds for a
 painted **disjoint** pair as well (3.878496e-01 analytic against 3.878512e-01 at `h` = 1e-7), so
 the grad-of-distance field carries a position gradient whether or not anything overlaps — which
 makes "give multi-shape smooth layers this field instead" a route the three already rejected at
-`normal_projector_coeffs` did not consider. It is not free: it is a different NVF choice, so
-forward answers on those layers would move, and that has to be measured against S4 before it
-would be worth taking.
+`normal_projector_coeffs` did not consider. It is not free — it is a different NVF choice, so
+forward answers on those layers move — and it has now been tried.
+
+### Tried: the gradient does not survive the swap
+
+Disjoint layers are the whole affected population: an overlapping one already routes here, and a
+lone shape is exact through the phase trick.
+
+The comparison isolates the field and nothing else, which is what makes it worth making. `epz_i`
+is `inv(ep_dir)` and touches no normal field; between the two paths it agrees to **1e-15** on
+every all-rectangle case, because the polygon FT of a rectangle *is* the closed-form rectangle
+transform. So `ep_dir` and `delta_ep` are shared bit for bit and the whole difference lives in
+`C_xx / C_xy / C_yy`.
+
+The gradient is the half the swap was reached for, and it is the half that fails. Measured the way
+the previous section says it has to be — across a window six normal-grid pixels wide, with the
+autodiff gradient sampled on the *same* 121-point grid as the loss, so nothing can alias — the
+integral of the gradient has to equal the change in the loss across the window. Two tilted
+rectangles, fto 8:
+
+| | ∫ `d/dcx` across the window | loss change across it | ratio |
+|---|---|---|---|
+| sampled field | +1.357e-04 | +1.110e-04 | **+1.22** |
+| grad-of-distance field | -3.520e-04 | +1.388e-04 | **-2.54** |
+
+The replacement points the wrong way, and not at one unlucky position: at all 25 positions across
+the window, at fto 8 and again at fto 12, with a spread of 1.4% about the mean — a systematic
+offset rather than sampling noise. A circle pair only widens it. There the sampled field is
+already within 0.3–1.1% and the replacement is 19–128% out, which reaches the same verdict for
+curved shapes that the cost gives, by an independent route.
+
+The cost is that other route. The field is a pixel scan over every segment of every loop and
+`POLYGON_VERTICES` is 256, so one curve costs ~64× what a rectangle does: at `normal_grid` 256,
+25 ms against 1.9 ms for a rectangle pair and 1.35 s against 1.6 ms for a circle pair. This solver
+defaults to 1024, where the same two become 414 ms against 49 ms and 23 s against 74 ms. A curved
+layer would also give up the exact Bessel transform for a 256-gon.
+
+Forward accuracy is **open**, not settled, and the truncations reachable here cannot settle it. At
+fto 24 the two constructions still sit 2e-4 apart on a total — as large as the differences any
+ratio between them would be reading — so neither has reached the limit such a ratio would have to
+be measured against. Over seven disjoint cases the median per-order ratio comes out anywhere from
+0.32× to 16× depending only on which of the two is called the limit. A number quoted for this has
+to name its reference; without one it is reporting the choice of reference.
+
+One thing the window does settle. At `fto = 4` neither field reproduces the slope — the fto-4
+slope is about twice the fto-12 one — and that is the truncation every gradient test in
+`tests/test_shape_position_gradients.py` runs at. Those tests hold autodiff to finite differences,
+which is the comparison the previous section says cannot fail on either path.
 
 ### Layers of both kinds in one `ucell`
 
