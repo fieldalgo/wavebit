@@ -22,6 +22,9 @@ This file pins the contract stated in ``docs/conventions.md``:
   boundary match with the meaning the docs assign it.
 * **Routing.** A 1D structure given a pair takes the conical path (the pure 1D TE/TM path
   is single-polarization by construction, and refuses a direct call in plain words).
+* **The near field.** Field reconstruction supports the pair only implicitly — the
+  amplitudes ride in ``T1[0]`` and ``calculate_field`` never sees ``polarization`` — so the
+  equivalence and the relative phase are pinned again on the reconstructed cell.
 """
 import numpy as np
 import pytest
@@ -271,6 +274,86 @@ def test_the_two_circular_states_differ():
     t_plus = _scalar_slab(EO + DELTA)[1]
     t_minus = _scalar_slab(EO - DELTA)[1]
     assert abs(abs(t_plus) ** 2 - abs(t_minus) ** 2) > 0.05
+
+
+# ------------------------------------------------------------------ field reconstruction
+
+# The pair reaches the near field only implicitly. The boundary match writes the incident
+# amplitudes into `T1[0]` (`final_matching` in _core/solve_1d.py, `_smm_sp` in
+# _core/scattering.py) and `calculate_field` reconstructs from exactly that column — nothing
+# downstream of the match mentions `polarization` at all. That is why this needs pinning
+# separately from the efficiencies: the equivalence above could hold across the whole result
+# surface and still be dropped on the way to the field.
+FIELD_RES = dict(res_x=5, res_y=4, res_z=6)
+
+
+def _field(**kw):
+    _, field_cell = fieldwave.rcwa(**kw).conv_solve_field(**FIELD_RES)
+    return np.asarray(field_cell)
+
+
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+@pytest.mark.parametrize('path', ['conical', '2d'])
+def test_pair_reproduces_the_psi_field(path, algo):
+    """The same incidence must give the same near field, not merely the same efficiencies."""
+    psi_v = 0.7
+    if path == 'conical':
+        kw = dict(CFG_1D, ucell=UCELL_1D, phi=0.4, connecting_algo=algo)
+    else:
+        kw = dict(CFG_2D, ucell=UCELL_2D, connecting_algo=algo)
+    via_psi = _field(psi=psi_v, **kw)
+    via_pair = _field(polarization=pair_of(psi_v), **kw)
+    assert via_pair.shape == via_psi.shape
+    np.testing.assert_allclose(via_pair, via_psi, atol=1e-12, rtol=0)
+
+
+def test_the_1d_routed_pair_field_matches_the_conical_psi_field():
+    """A 1D structure given a pair takes the conical path, so the reference has to as well.
+
+    ``psi`` with ``phi = None`` would be reconstructed by ``field_1d`` — a different
+    formulation of a different quantity (a TE/TM cell, not a coupled one). ``phi = 0.0`` is
+    the same physical incidence spelled so that both sides land on the conical path, which is
+    what makes the routing an implementation detail here too.
+    """
+    psi_v = 0.7
+    kw = dict(CFG_1D, ucell=UCELL_1D)
+    solver = fieldwave.rcwa(polarization=pair_of(psi_v), **kw)
+    _, via_pair = solver.conv_solve_field(**FIELD_RES)
+    assert solver.grating_type_assigned == 1, 'expected the conical formulation'
+    np.testing.assert_allclose(np.asarray(via_pair), _field(psi=psi_v, phi=0.0, **kw),
+                               atol=1e-12, rtol=0)
+
+
+def test_the_circular_pair_field_is_sound_and_is_not_the_linear_one():
+    """The relative phase has to reach the field, not stop at the efficiencies.
+
+    ``(1, -1j)/sqrt(2)`` and ``psi = pi/4`` carry the same ``|a_s| = |a_p|``; only the
+    quarter turn between them tells the two apart, and it must move the reconstructed cell.
+    """
+    kw = dict(CFG_2D, ucell=UCELL_2D)
+    circular = _field(polarization=(1 / np.sqrt(2), -1j / np.sqrt(2)), **kw)
+    linear = _field(psi=np.pi / 4, **kw)
+
+    assert np.isfinite(circular).all()
+    # Both are unit incident flux, so the cell energy is O(1) and comparable across the two.
+    energy = float((np.abs(circular) ** 2).mean())
+    assert energy == pytest.approx(float((np.abs(linear) ** 2).mean()), rel=0.5)
+    assert np.abs(circular - linear).max() > 1e-2
+
+
+def test_the_pair_field_is_linear_in_the_amplitudes():
+    """The sharp form of the same statement: the match is linear, so the field is too.
+
+    Any pair's cell is its ``a_s`` times the pure-s cell plus its ``a_p`` times the pure-p
+    one — complex coefficients included. A build that carried only ``|a_s|, |a_p|`` (or that
+    re-derived a real ``psi`` from the pair) reproduces every ``psi`` field above and fails
+    here.
+    """
+    kw = dict(CFG_2D, ucell=UCELL_2D)
+    a_s, a_p = 1 / np.sqrt(2), -1j / np.sqrt(2)
+    combined = a_s * _field(psi=np.pi / 2, **kw) + a_p * _field(psi=0.0, **kw)
+    np.testing.assert_allclose(_field(polarization=(a_s, a_p), **kw), combined,
+                               atol=1e-12, rtol=0)
 
 
 # ------------------------------------------------------------------ jax pytree round-trip
