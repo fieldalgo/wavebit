@@ -75,6 +75,39 @@ spell — `(1, -1j)/sqrt(2)` and `(1, +1j)/sqrt(2)` are the two circular states.
 - A 1D structure given a pair is solved on the conical path (the pure 1D TE/TM path is
   single-polarization by construction); the answer is the same physics at conical cost.
 
+#### Which way the circular states rotate
+
+The rows above never say "left" or "right", deliberately: the two naming camps disagree
+about the *same physical field* (optics names handedness from the receiver's viewpoint,
+IEEE from the source's, so optics-RCP **is** IEEE-LHCP), which is why the API takes the
+raw pair and every solver in this ecosystem does likewise. The physical rotation itself,
+however, is fully determined by conventions this page already fixes, so here it is.
+
+Derivation, at normal incidence with `phi = 0`: the (s, p) basis maps to Cartesian as
+`E = (E_x, E_y) = (-a_p, a_s)` (the calibration measured in
+`tests/test_uniform_anisotropic.py`: `t_s = E_y`, `t_p = -E_x`). The pair
+`(1, -1j)/sqrt(2)` is then `E ∝ x̂ - i·ŷ` up to a global phase, and in this library's
+`e^{-iωt}`:
+
+```
+E(t) = Re[(x̂ - i·ŷ)·e^{-iωt}] ∝ x̂·cos(ωt) - ŷ·sin(ωt)
+```
+
+whose rotation vector is `-ẑ` while the wave travels `+z` (down, into the stack). So:
+
+| pair | rotation vs **k** | optics name (receiver's view) | IEEE name (along propagation) |
+| --- | --- | --- | --- |
+| `(1, -1j)/sqrt(2)` | antiparallel | right circular (RCP) | left-hand (LHCP) |
+| `(1, +1j)/sqrt(2)` | parallel | left circular (LCP) | right-hand (RHCP) |
+
+Two anchors keep this paragraph honest rather than derived-once-and-drifting: the basis
+calibration above, and the gyrotropic eigenstate test
+(`tests/test_polarization.py::test_each_circular_pair_is_one_faraday_eigenstate`), which
+pins that `(1, -1j)/sqrt(2)` is the state seeing `ε_d + γ` in a layer with
+`eps = [[ε_d, iγ], [-iγ, ε_d]]`. And the usual seam warning applies to Jones vectors
+exactly as it does to every other amplitude: a pair quoted from an `e^{+jωt}` source is
+the complex conjugate of ours, and its handedness labels flip with it.
+
 ## Diffraction orders
 
 The retained orders are `m = -fto_x..fto_x`, `n = -fto_y..fto_y`, with in-plane
@@ -122,6 +155,7 @@ Amplitude fine print, stated once so it never has to be discovered:
 | `incidence_side`, incidence-relative results | `tests/test_backside_incidence.py` (reversed-stack Airy oracle, reciprocity both halves) and the `inc_bottom` cases of `tests/references/test_reticolo_golden.py` |
 | result naming, `order()`, delegation | `tests/test_result_api.py` |
 | the `polarization` pair: `psi` equivalence, unit-flux normalization, circular states | `tests/test_polarization.py` |
+| the circular states' rotation sense | derived above from two pinned facts: the (s, p)→(x, y) calibration (`tests/test_uniform_anisotropic.py`) and the gyrotropic eigenstate assignment (`tests/test_polarization.py`) |
 | square-root branches behind `kz` | `tests/test_branch_selection.py` |
 | the whole surface, per backend | `tests/test_golden_legacy_parity.py` |
 
