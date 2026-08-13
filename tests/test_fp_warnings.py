@@ -91,16 +91,16 @@ def test_numpy_is_new_enough_to_report_fp_flags_correctly():
 @pytest.mark.parametrize('connecting_algo', ['ETM', 'SMM'])
 def test_thick_2d_stack_is_silent_and_conserves_energy(connecting_algo):
     res, fp = _run(ucell=_ucell_2d(), thickness=[600], period=[700, 700], fto=[8, 8],
-                   pol=1, n_bot=3.48, connecting_algo=connecting_algo)
+                   psi=0.0, n_bot=3.48, connecting_algo=connecting_algo)
     assert fp == []
     assert abs(_energy(res) - 1.0) < 1e-10
 
 
 @pytest.mark.parametrize('connecting_algo', ['ETM', 'SMM'])
-@pytest.mark.parametrize('pol', [0, 1])
-def test_thick_1d_stack_is_silent_and_conserves_energy(connecting_algo, pol):
+@pytest.mark.parametrize('psi', [np.pi / 2, 0.0], ids=['te', 'tm'])
+def test_thick_1d_stack_is_silent_and_conserves_energy(connecting_algo, psi):
     res, fp = _run(ucell=_ucell_1d(), thickness=[800, 400], period=[700], fto=[8, 0],
-                   pol=pol, n_bot=3.48, connecting_algo=connecting_algo)
+                   psi=psi, n_bot=3.48, connecting_algo=connecting_algo)
     assert fp == []
     assert abs(_energy(res) - 1.0) < 1e-10
 
@@ -108,7 +108,7 @@ def test_thick_1d_stack_is_silent_and_conserves_energy(connecting_algo, pol):
 @pytest.mark.parametrize('connecting_algo', ['ETM', 'SMM'])
 def test_conical_stack_is_silent_and_conserves_energy(connecting_algo):
     res, fp = _run(ucell=_ucell_1d(), thickness=[800, 400], period=[700], fto=[8, 0],
-                   pol=0, phi=0.3, n_bot=3.48, connecting_algo=connecting_algo)
+                   psi=np.pi / 2, phi=0.3, n_bot=3.48, connecting_algo=connecting_algo)
     assert fp == []
     assert abs(_energy(res) - 1.0) < 1e-10
 
@@ -120,7 +120,7 @@ def test_conical_stack_is_silent_and_conserves_energy(connecting_algo):
 def test_every_factorization_is_silent(strategy):
     """The convolution builders were the loudest sites of all under the broken NumPy."""
     res, fp = _run(ucell=_ucell_2d(), thickness=[600], period=[700, 700], fto=[6, 6],
-                   pol=1, n_bot=3.48, **strategy)
+                   psi=0.0, n_bot=3.48, **strategy)
     assert fp == []
     assert abs(_energy(res) - 1.0) < 1e-10
 
@@ -135,7 +135,7 @@ def test_analytic_shape_path_is_silent():
         warnings.simplefilter('always')
         res = fieldwave.rcwa(backend=0, ucell=ucell, fto=(6, 6), n_top=1.0, n_bot=1.0,
                              theta=np.deg2rad(5), phi=np.deg2rad(20), period=(1.0, 1.2),
-                             wavelength=1.5, thickness=(0.3,), pol=0.3).conv_solve()
+                             wavelength=1.5, thickness=(0.3,), psi=0.35 * np.pi).conv_solve()
     assert _fp_warnings(rec) == []
     assert abs(_energy(res) - 1.0) < 1e-10
 
@@ -143,7 +143,7 @@ def test_analytic_shape_path_is_silent():
 def test_field_reconstruction_is_silent_and_finite():
     """Reconstruction re-walks the same modal exponentials the solve cascaded."""
     sim = fieldwave.rcwa(backend=0, ucell=_ucell_2d(), thickness=[600], period=[700, 700],
-                         wavelength=WL, fto=[6, 6], pol=1, n_bot=3.48)
+                         wavelength=WL, fto=[6, 6], psi=0.0, n_bot=3.48)
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         res, field = sim.conv_solve_field(res_x=8, res_y=8, res_z=8)
@@ -159,7 +159,7 @@ def test_solving_does_not_touch_global_seterr():
         np.seterr(over='raise', divide='raise', invalid='raise')
         during = np.geterr()
         _run(ucell=_ucell_2d(), thickness=[600], period=[700, 700], fto=[6, 6],
-             pol=1, n_bot=3.48)
+             psi=0.0, n_bot=3.48)
         assert np.geterr() == during
     finally:
         np.seterr(**before)
@@ -176,7 +176,7 @@ def test_caller_raise_policy_survives_a_solve():
     try:
         np.seterr(over='raise', divide='raise', invalid='raise', under='raise')
         res, _ = _run(ucell=_ucell_2d(), thickness=[600], period=[700, 700], fto=[8, 8],
-                      pol=1, n_bot=3.48)
+                      psi=0.0, n_bot=3.48)
         assert abs(_energy(res) - 1.0) < 1e-10
     finally:
         np.seterr(**before)
@@ -290,7 +290,7 @@ def test_healthy_solves_emit_no_unphysical_warning():
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         fieldwave.rcwa(backend=0, ucell=_ucell_2d(), thickness=[600], period=[700, 700],
-                       wavelength=WL, fto=[8, 8], pol=1, n_bot=3.48).conv_solve()
+                       wavelength=WL, fto=[8, 8], psi=0.0, n_bot=3.48).conv_solve()
     assert [r for r in rec if issubclass(r.category, UnphysicalResultWarning)] == []
 
 
@@ -326,7 +326,7 @@ _BRANCH_UCELL = np.array([[[0, 1, 0, 1, 1, 1]]]) * 4 + 1
 
 def _branch_solve(type_complex, n_top=1.0, theta=0.4, phi=0.3, backend=0):
     return fieldwave.rcwa(
-        backend=backend, pol=0, n_top=n_top, n_bot=5.0, theta=theta, phi=phi, fto=[30],
+        backend=backend, psi=np.pi / 2, n_top=n_top, n_bot=5.0, theta=theta, phi=phi, fto=[30],
         wavelength=900e-9, period=[2000e-9], ucell=_BRANCH_UCELL, thickness=[100e-9],
         type_complex=type_complex, fourier_coefficients='integrated',
         factorization='li').conv_solve()
@@ -389,7 +389,7 @@ def test_a_traced_single_precision_solve_says_it_could_not_be_checked():
 
     def amplitude(type_complex, t):
         res = fieldwave.rcwa(
-            backend=1, pol=0, n_top=1.0, n_bot=5.0, theta=t, phi=phi, fto=[10],
+            backend=1, psi=np.pi / 2, n_top=1.0, n_bot=5.0, theta=t, phi=phi, fto=[10],
             wavelength=900e-9, period=[2000e-9], ucell=_BRANCH_UCELL, thickness=[100e-9],
             type_complex=type_complex, fourier_coefficients='sampled',
             factorization='li').conv_solve()
@@ -419,7 +419,7 @@ def test_the_check_does_not_break_tracing():
 
     def R(theta):
         res = fieldwave.rcwa(
-            backend=1, pol=0, n_top=1.0, n_bot=5.0, theta=theta, phi=0.3, fto=[6],
+            backend=1, psi=np.pi / 2, n_top=1.0, n_bot=5.0, theta=theta, phi=0.3, fto=[6],
             wavelength=900e-9, period=[2000e-9], ucell=_BRANCH_UCELL, thickness=[100e-9],
             type_complex=0, fourier_coefficients='sampled',
             factorization='li').conv_solve()
@@ -473,7 +473,7 @@ def _precision_warnings(theta, backend=0, type_complex=0):
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         fieldwave.rcwa(
-            backend=backend, pol=0, n_top=1.0, n_bot=5.0, theta=theta, phi=0.3, fto=[5],
+            backend=backend, psi=np.pi / 2, n_top=1.0, n_bot=5.0, theta=theta, phi=0.3, fto=[5],
             wavelength=900e-9, period=[2000e-9], ucell=_BRANCH_UCELL, thickness=[100e-9],
             type_complex=type_complex, fourier_coefficients='sampled', factorization='li')
     return [r for r in rec if issubclass(r.category, PrecisionLossWarning)]
@@ -560,7 +560,7 @@ def test_the_remaining_x64_ordering_gap_is_reported():
         with warnings.catch_warnings(record=True) as rec:
             warnings.simplefilter('always')
             fieldwave.rcwa(
-                backend=1, pol=0, n_top=1.0, n_bot=5.0, theta=theta, phi=0.3, fto=[5],
+                backend=1, psi=np.pi / 2, n_top=1.0, n_bot=5.0, theta=theta, phi=0.3, fto=[5],
                 wavelength=900e-9, period=[2000e-9],
                 ucell=np.array([[[0, 1, 0, 1, 1, 1]]]) * 4 + 1, thickness=[100e-9],
                 type_complex=0, fourier_coefficients='sampled', factorization='li')

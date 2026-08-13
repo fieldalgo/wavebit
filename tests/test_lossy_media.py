@@ -60,7 +60,7 @@ def _kz(n, k_par):
     return v if v.imag > 0 else -v
 
 
-def analytic_r(ns, thicknesses, wavelength, theta, pol):
+def analytic_r(ns, thicknesses, wavelength, theta, tetm):
     """Reflection coefficient of a uniform stack: ``ns = [n_top, *layers, n_bot]``.
 
     Airy recursion from the bottom interface up — the standard thin-film result, valid for
@@ -70,7 +70,7 @@ def analytic_r(ns, thicknesses, wavelength, theta, pol):
     k = [_kz(n, k_par) for n in ns]
 
     def r_interface(i, j):
-        if pol == 0:                                    # TE
+        if tetm == 'te':                                    # TE
             return (k[i] - k[j]) / (k[i] + k[j])
         return ((complex(ns[j]) ** 2 * k[i] - complex(ns[i]) ** 2 * k[j])
                 / (complex(ns[j]) ** 2 * k[i] + complex(ns[i]) ** 2 * k[j]))
@@ -83,19 +83,19 @@ def analytic_r(ns, thicknesses, wavelength, theta, pol):
     return r
 
 
-def solver_RT(ns, thicknesses, wavelength, theta, pol, algo='ETM'):
+def solver_RT(ns, thicknesses, wavelength, theta, tetm, algo='ETM'):
     """Total ``(R, T)`` of the same stack through the solver (uniform layers, fto=0)."""
     ucell = np.array([[[n, n]] for n in ns[1:-1]])
-    solver = fieldwave.rcwa(backend=0, connecting_algo=algo, pol=pol, n_top=ns[0],
+    solver = fieldwave.rcwa(backend=0, connecting_algo=algo, tetm=tetm, n_top=ns[0],
                            n_bot=ns[-1], theta=theta, fto=0, wavelength=wavelength,
                            period=[wavelength * 2], ucell=ucell, thickness=thicknesses)
     res = solver.conv_solve()
     return float(np.sum(res.R).real), float(np.sum(res.T).real)
 
 
-def solver_R(ns, thicknesses, wavelength, theta, pol, algo='ETM'):
+def solver_R(ns, thicknesses, wavelength, theta, tetm, algo='ETM'):
     """Total reflectance of the same stack through the solver (uniform layers, fto=0)."""
-    return solver_RT(ns, thicknesses, wavelength, theta, pol, algo)[0]
+    return solver_RT(ns, thicknesses, wavelength, theta, tetm, algo)[0]
 
 
 # name, indices, thicknesses
@@ -114,32 +114,32 @@ LOSSY_SUBSTRATE = [
     ('two_layers_on_gold', [1.0, 1.5, 2.2, AU], [20.0, 35.0]),
 ]
 
-INCIDENCE = [(pol, theta) for pol in (0, 1) for theta in (0.0, 0.4)]
-IDS = [f'{"te" if p == 0 else "tm"}_theta{t}' for p, t in INCIDENCE]
+INCIDENCE = [(tetm, theta) for tetm in ('te', 'tm') for theta in (0.0, 0.4)]
+IDS = [f'{p}_theta{t}' for p, t in INCIDENCE]
 
 
-@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
+@pytest.mark.parametrize('tetm,theta', INCIDENCE, ids=IDS)
 @pytest.mark.parametrize('case', KNOWN_GOOD, ids=[c[0] for c in KNOWN_GOOD])
-def test_reference_agrees_where_the_solver_is_known_good(case, pol, theta):
+def test_reference_agrees_where_the_solver_is_known_good(case, tetm, theta):
     """The oracle itself: lossless stacks and lossy *layers* already match to ~1e-15."""
     _, ns, ds = case
-    want = abs(analytic_r(ns, ds, WL, theta, pol)) ** 2
-    assert solver_R(ns, ds, WL, theta, pol) == pytest.approx(want, abs=1e-12)
+    want = abs(analytic_r(ns, ds, WL, theta, tetm)) ** 2
+    assert solver_R(ns, ds, WL, theta, tetm) == pytest.approx(want, abs=1e-12)
 
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
-@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
+@pytest.mark.parametrize('tetm,theta', INCIDENCE, ids=IDS)
 @pytest.mark.parametrize('case', LOSSY_SUBSTRATE, ids=[c[0] for c in LOSSY_SUBSTRATE])
-def test_lossy_substrate_reflection(case, pol, theta, algo):
+def test_lossy_substrate_reflection(case, tetm, theta, algo):
     """Reflection off a stack on an absorbing substrate must match the analytic answer."""
     _, ns, ds = case
-    want = abs(analytic_r(ns, ds, WL, theta, pol)) ** 2
-    assert solver_R(ns, ds, WL, theta, pol, algo) == pytest.approx(want, abs=1e-12)
+    want = abs(analytic_r(ns, ds, WL, theta, tetm)) ** 2
+    assert solver_R(ns, ds, WL, theta, tetm, algo) == pytest.approx(want, abs=1e-12)
 
 
-@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
+@pytest.mark.parametrize('tetm,theta', INCIDENCE, ids=IDS)
 @pytest.mark.parametrize('case', LOSSY_SUBSTRATE, ids=[c[0] for c in LOSSY_SUBSTRATE])
-def test_lossy_substrate_transmission_agrees_between_algorithms(case, pol, theta):
+def test_lossy_substrate_transmission_agrees_between_algorithms(case, tetm, theta):
     """``T`` into an absorbing substrate, ETM against SMM.
 
     The reflection tests above compared only ``R``, and that gap hid a real break for four
@@ -153,28 +153,28 @@ def test_lossy_substrate_transmission_agrees_between_algorithms(case, pol, theta
     conjugate was a leftover of the pre-2026-08 conjugated formulation (see ``conventions``).
     """
     _, ns, ds = case
-    tmm = solver_RT(ns, ds, WL, theta, pol, 'ETM')
-    smm = solver_RT(ns, ds, WL, theta, pol, 'SMM')
+    tmm = solver_RT(ns, ds, WL, theta, tetm, 'ETM')
+    smm = solver_RT(ns, ds, WL, theta, tetm, 'SMM')
     assert smm[0] == pytest.approx(tmm[0], abs=1e-12)
     assert smm[1] == pytest.approx(tmm[1], abs=1e-12)
     assert tmm[1] > 0, 'transmitted power into an absorbing substrate cannot be negative'
 
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
-@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
-def test_lossless_layer_on_absorbing_substrate_conserves_energy(algo, pol, theta):
+@pytest.mark.parametrize('tetm,theta', INCIDENCE, ids=IDS)
+def test_lossless_layer_on_absorbing_substrate_conserves_energy(algo, tetm, theta):
     """``T`` is the power *entering* the substrate, so nothing is lost above it.
 
     With every layer lossless, R + T must be exactly 1 however absorbing the substrate is —
     the sharpest available statement about ``T``'s normalization, and one no reflection-only
     test can make.
     """
-    R, T = solver_RT([1.0, 1.5, AU], [20.0], WL, theta, pol, algo)
+    R, T = solver_RT([1.0, 1.5, AU], [20.0], WL, theta, tetm, algo)
     assert R + T == pytest.approx(1.0, abs=1e-12)
 
 
-@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
-def test_absorbing_layer_identical_to_its_substrate(pol, theta):
+@pytest.mark.parametrize('tetm,theta', INCIDENCE, ids=IDS)
+def test_absorbing_layer_identical_to_its_substrate(tetm, theta):
     """An absorbing layer on a substrate of the same material must vanish into it.
 
     The layer and the substrate have to arrive at the same modes on their own. They did not
@@ -185,10 +185,10 @@ def test_absorbing_layer_identical_to_its_substrate(pol, theta):
     also what makes it a live check on the boundary.
     """
     ns, ds = [1.0, AU, AU], [20.0]
-    want = abs(analytic_r(ns, ds, WL, theta, pol)) ** 2   # == the bare air/gold interface
+    want = abs(analytic_r(ns, ds, WL, theta, tetm)) ** 2   # == the bare air/gold interface
 
     ucell = np.array([[[AU, AU]]])
-    common = dict(backend=0, pol=pol, n_top=1.0, n_bot=AU, theta=theta, fto=0,
+    common = dict(backend=0, tetm=tetm, n_top=1.0, n_bot=AU, theta=theta, fto=0,
                   wavelength=WL, period=[WL * 2], ucell=ucell, thickness=ds)
     tmm = fieldwave.rcwa(connecting_algo='ETM', **common).conv_solve()
     smm = fieldwave.rcwa(connecting_algo='SMM', **common).conv_solve()
@@ -197,17 +197,17 @@ def test_absorbing_layer_identical_to_its_substrate(pol, theta):
     assert float(np.sum(smm.R)) == pytest.approx(want, abs=1e-12)
 
 
-def solver_R_analytic(ns, thicknesses, wavelength, theta, pol):
+def solver_R_analytic(ns, thicknesses, wavelength, theta, tetm):
     """Total reflectance of the same stack built through the ANALYTIC path.
 
     ``shapes=[]`` makes each layer uniform ``n_base``, so the structure is identical to the one
     ``solver_RT`` rasters — only the ``n -> eps`` builder differs. That routes through the 2D
     solve (the smooth path always does), so the polarization comes in as ``psi`` rather than
-    ``pol``, and the period must be 2D.
+    ``tetm``, and the period must be 2D.
     """
     ucell = [dict(n_base=n, shapes=[]) for n in ns[1:-1]]
     solver = fieldwave.rcwa(backend=0, n_top=ns[0], n_bot=ns[-1], theta=theta, phi=0.0,
-                            psi=(np.pi / 2 if pol == 0 else 0.0), fto=0,
+                            psi=(np.pi / 2 if tetm == 'te' else 0.0), fto=0,
                             wavelength=wavelength, period=[wavelength * 2, wavelength * 2],
                             ucell=ucell, thickness=thicknesses)
     return float(np.sum(np.asarray(solver.conv_solve().R)).real)
@@ -216,9 +216,9 @@ def solver_R_analytic(ns, thicknesses, wavelength, theta, pol):
 ANALYTIC_CASES = KNOWN_GOOD + LOSSY_SUBSTRATE
 
 
-@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
+@pytest.mark.parametrize('tetm,theta', INCIDENCE, ids=IDS)
 @pytest.mark.parametrize('case', ANALYTIC_CASES, ids=[c[0] for c in ANALYTIC_CASES])
-def test_absorbing_layer_via_the_analytic_path(case, pol, theta):
+def test_absorbing_layer_via_the_analytic_path(case, tetm, theta):
     """The analytic builder must land on the same physics as the raster one, for complex ``n``.
 
     The smooth path had no complex-index coverage at all: ``tests/test_analytic``
@@ -234,13 +234,13 @@ def test_absorbing_layer_via_the_analytic_path(case, pol, theta):
     other slowly when ``|eps|`` is large.
     """
     _, ns, ds = case
-    want = abs(analytic_r(ns, ds, WL, theta, pol)) ** 2
-    got = solver_R_analytic(ns, ds, WL, theta, pol)
+    want = abs(analytic_r(ns, ds, WL, theta, tetm)) ** 2
+    got = solver_R_analytic(ns, ds, WL, theta, tetm)
     assert got == pytest.approx(want, abs=1e-12)
-    assert got == pytest.approx(solver_R(ns, ds, WL, theta, pol), abs=1e-12)   # == raster
+    assert got == pytest.approx(solver_R(ns, ds, WL, theta, tetm), abs=1e-12)   # == raster
 
 
-def solver_R_painted(n, thickness, wavelength, theta, pol):
+def solver_R_painted(n, thickness, wavelength, theta, tetm):
     """Total reflectance of a *uniform* layer of index ``n`` built through the PAINTED path.
 
     Two overlapping rectangles of the same index, together covering the cell. The overlap is
@@ -255,7 +255,7 @@ def solver_R_painted(n, thickness, wavelength, theta, pol):
               dict(type='rectangle', cx=0.72 * P, cy=0.5 * P, lx=0.75 * P, ly=1.4 * P,
                    n_index=n)]
     solver = fieldwave.rcwa(backend=0, n_top=1.0, n_bot=1.5, theta=theta, phi=0.0,
-                            psi=(np.pi / 2 if pol == 0 else 0.0), fto=(3, 3),
+                            psi=(np.pi / 2 if tetm == 'te' else 0.0), fto=(3, 3),
                             wavelength=wavelength, period=[P, P],
                             ucell=[dict(n_base=n, combine='paint', shapes=shapes)],
                             thickness=[thickness])
@@ -263,9 +263,9 @@ def solver_R_painted(n, thickness, wavelength, theta, pol):
     return float(np.sum(np.asarray(res.R)).real), float(np.sum(np.asarray(res.T)).real)
 
 
-@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
+@pytest.mark.parametrize('tetm,theta', INCIDENCE, ids=IDS)
 @pytest.mark.parametrize('n', [AU, SI], ids=['gold', 'weakly_absorbing'])
-def test_absorbing_layer_via_the_painted_path(n, pol, theta):
+def test_absorbing_layer_via_the_painted_path(n, tetm, theta):
     """The boundary (painted-polygon) builder, for complex ``n``. It was the last one left.
 
     ``_core/boundary.py`` is a later copy of ``_core/analytic.py``'s coefficient assembly, and
@@ -281,8 +281,8 @@ def test_absorbing_layer_via_the_painted_path(n, pol, theta):
     ``R + T <= 1`` is asserted separately from the oracle: it is the statement that survives
     even if the oracle is ever doubted, and it is what the conjugation broke most visibly.
     """
-    R, T = solver_R_painted(n, 60.0, WL, theta, pol)
-    want = abs(analytic_r([1.0, n, 1.5], [60.0], WL, theta, pol)) ** 2
+    R, T = solver_R_painted(n, 60.0, WL, theta, tetm)
+    want = abs(analytic_r([1.0, n, 1.5], [60.0], WL, theta, tetm)) ** 2
     assert R == pytest.approx(want, abs=1e-12)
     assert R + T <= 1.0, 'an absorbing layer cannot return more power than it was given'
 
@@ -302,10 +302,10 @@ def test_complex_n_bot_keeps_full_precision_on_every_backend(backend):
         importlib.import_module('fieldwave.on_jax')       # enables x64
 
     ns, ds = [1.0, 1.5, AU], [20.0]
-    want = solver_R(ns, ds, WL, 0.3, 0)                     # numpy reference
+    want = solver_R(ns, ds, WL, 0.3, 'te')                  # numpy reference
 
     ucell = np.array([[[n, n] for n in ns[1:-1]]][0])[None]
-    solver = fieldwave.rcwa(backend=backend, pol=0, n_top=ns[0], n_bot=ns[-1], theta=0.3,
+    solver = fieldwave.rcwa(backend=backend, tetm='te', n_top=ns[0], n_bot=ns[-1], theta=0.3,
                            fto=2, wavelength=WL, period=[WL * 2], ucell=ucell, thickness=ds)
     got = float(np.sum(np.asarray(solver.conv_solve().R)))
     assert got == pytest.approx(want, abs=1e-12)
@@ -327,7 +327,7 @@ AMPLITUDE_CASES = [
 ]
 
 
-def analytic_t(ns, thicknesses, wavelength, theta, pol):
+def analytic_t(ns, thicknesses, wavelength, theta, tetm):
     """Transmission amplitude (E-field ratio) of a uniform stack, via a 2x2 transfer.
 
     Same conventions as :func:`analytic_r`; for TM the characteristic transfer works in the
@@ -337,7 +337,7 @@ def analytic_t(ns, thicknesses, wavelength, theta, pol):
     k = [_kz(n, k_par) for n in ns]
 
     def eta(i):
-        return k[i] if pol == 0 else k[i] / complex(ns[i]) ** 2
+        return k[i] if tetm == 'te' else k[i] / complex(ns[i]) ** 2
 
     M = np.eye(2, dtype=complex)
     for i in range(1, len(ns) - 1):
@@ -346,12 +346,12 @@ def analytic_t(ns, thicknesses, wavelength, theta, pol):
                           [-1j * eta(i) * np.sin(b), np.cos(b)]])
     e0, eN = eta(0), eta(len(ns) - 1)
     t = 2 * e0 / (e0 * M[0, 0] + eN * M[1, 1] + e0 * eN * M[0, 1] + M[1, 0])
-    if pol == 1:
+    if tetm == 'tm':
         t = t * complex(ns[0]) / complex(ns[-1])
     return t
 
 
-def solver_amps(ns, thicknesses, wavelength, theta, pol, path, algo='ETM'):
+def solver_amps(ns, thicknesses, wavelength, theta, tetm, path, algo='ETM'):
     """The solver's Fresnel amplitudes ``(r, t)`` for the asked polarization.
 
     ``path`` picks which core solve runs: ``'1d'`` (pure TE/TM), ``'conical'`` or ``'2d'``.
@@ -364,33 +364,33 @@ def solver_amps(ns, thicknesses, wavelength, theta, pol, path, algo='ETM'):
     common = dict(backend=0, connecting_algo=algo, n_top=ns[0], n_bot=ns[-1], theta=theta,
                   wavelength=wavelength, thickness=thicknesses)
     if path == '1d':
-        solver = fieldwave.rcwa(pol=pol, fto=0, period=[wavelength * 2],
+        solver = fieldwave.rcwa(tetm=tetm, fto=0, period=[wavelength * 2],
                                 ucell=np.array([[[n, n]] for n in layers]), **common)
     else:
         cell = ([[[n, n]] for n in layers] if path == 'conical'
                 else [[[n, n], [n, n]] for n in layers])
-        solver = fieldwave.rcwa(phi=0.0, psi=(np.pi / 2 if pol == 0 else 0.0), fto=[0, 0],
+        solver = fieldwave.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0), fto=[0, 0],
                                 period=[wavelength * 2, wavelength * 2],
                                 ucell=np.array(cell), **common)
     res = solver.conv_solve().res
-    r = np.asarray(res.r_s if pol == 0 else res.r_p).ravel()
-    t = np.asarray(res.t_s if pol == 0 else res.t_p).ravel()
+    r = np.asarray(res.r_s if tetm == 'te' else res.r_p).ravel()
+    t = np.asarray(res.t_s if tetm == 'te' else res.t_p).ravel()
     return complex(r[len(r) // 2]), complex(t[len(t) // 2])
 
 
-def solver_r(ns, thicknesses, wavelength, theta, pol, path, algo='ETM'):
-    return solver_amps(ns, thicknesses, wavelength, theta, pol, path, algo)[0]
+def solver_r(ns, thicknesses, wavelength, theta, tetm, path, algo='ETM'):
+    return solver_amps(ns, thicknesses, wavelength, theta, tetm, path, algo)[0]
 
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('path', ['1d', 'conical', '2d'])
-@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
+@pytest.mark.parametrize('tetm,theta', INCIDENCE, ids=IDS)
 @pytest.mark.parametrize('case', AMPLITUDE_CASES, ids=[c[0] for c in AMPLITUDE_CASES])
-def test_reflection_amplitude(case, pol, theta, path, algo):
+def test_reflection_amplitude(case, tetm, theta, path, algo):
     """``r_s`` / ``r_p`` are the Fresnel amplitudes, for absorbing media on either side."""
     _, ns, ds = case
-    want = analytic_r(ns, ds, WL, theta, pol)
-    got = solver_r(ns, ds, WL, theta, pol, path, algo)
+    want = analytic_r(ns, ds, WL, theta, tetm)
+    got = solver_r(ns, ds, WL, theta, tetm, path, algo)
     assert abs(got - want) < 1e-12, (got, want)
 
 
@@ -415,7 +415,7 @@ def test_absorbing_superstrate_efficiency_is_convention_bound():
         common = dict(backend=0, n_top=ns[0], n_bot=ns[-1], theta=theta, wavelength=WL,
                       thickness=ds)
         if path == '1d':
-            s = fieldwave.rcwa(pol=1, fto=0, period=[WL * 2],
+            s = fieldwave.rcwa(tetm='tm', fto=0, period=[WL * 2],
                                ucell=np.array([[[n, n]] for n in ns[1:-1]]), **common)
         else:
             s = fieldwave.rcwa(phi=0.0, psi=0.0, fto=[0, 0],
@@ -437,9 +437,9 @@ def test_absorbing_superstrate_efficiency_is_convention_bound():
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('path', ['1d', 'conical', '2d'])
-@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
+@pytest.mark.parametrize('tetm,theta', INCIDENCE, ids=IDS)
 @pytest.mark.parametrize('case', AMPLITUDE_CASES, ids=[c[0] for c in AMPLITUDE_CASES])
-def test_transmission_amplitude(case, pol, theta, path, algo):
+def test_transmission_amplitude(case, tetm, theta, path, algo):
     """``t_s`` / ``t_p`` are the Fresnel amplitudes too — the conversion each pack site owns.
 
     This is the test that distinguishes the three conversions (none for s, ``n_top/n_bot``
@@ -447,6 +447,6 @@ def test_transmission_amplitude(case, pol, theta, path, algo):
     one of them and its path fails here while reflection stays green.
     """
     _, ns, ds = case
-    want = analytic_t(ns, ds, WL, theta, pol)
-    got = solver_amps(ns, ds, WL, theta, pol, path, algo)[1]
+    want = analytic_t(ns, ds, WL, theta, tetm)
+    got = solver_amps(ns, ds, WL, theta, tetm, path, algo)[1]
     assert abs(got - want) < 1e-12, (got, want)

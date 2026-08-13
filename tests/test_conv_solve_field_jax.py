@@ -6,10 +6,10 @@ the NVF and integrated-path geometry — has nothing concrete to branch on. It
 therefore *requires* a ``StaticGeometry`` from ``freeze_geometry()``, and says so rather than
 letting a raw ``TracerBoolConversionError`` escape.
 
-The regression these tests pin: ``pol`` and ``psi`` are one degree of freedom carried twice —
-``psi`` as a traced pytree child, ``pol`` as static aux data because the solve *dispatches* on
-it. Unflattening applied ``psi`` last, whose setter recomputes ``pol``, so the static dispatch
-key silently became a tracer and every caller of this method died on the first ``if pol == 0``.
+The regression these tests pin: ``tetm`` and ``psi`` are one degree of freedom carried twice —
+``psi`` as a traced pytree child, ``tetm`` as static aux data because the solve *dispatches* on
+it. Unflattening applied ``psi`` last, whose setter recomputes ``tetm``, so the static dispatch
+key silently became a tracer and every caller of this method died on the first ``if tetm == 'te'``.
 """
 import numpy as np
 import pytest
@@ -24,10 +24,10 @@ BASE = dict(n_top=1.0, n_bot=1.0, theta=0.1, wavelength=900.0, thickness=[500.0]
 
 # (kwargs, (res_x, res_y, res_z)) per grating type the dispatcher can pick.
 CASES = {
-    '1d_tetm': (dict(pol=0, phi=None, fto=[3], period=[1000.0], ucell=UCELL_1D), (8, 1, 4)),
-    '1d_tm': (dict(pol=1, phi=None, fto=[3], period=[1000.0], ucell=UCELL_1D), (8, 1, 4)),
-    '1d_conical': (dict(pol=0.3, phi=0.2, fto=[3], period=[1000.0], ucell=UCELL_1D), (8, 1, 4)),
-    '2d': (dict(pol=0.3, phi=0.2, fto=[2, 2], period=[1000.0, 1000.0], ucell=UCELL_2D), (4, 4, 4)),
+    '1d_tetm': (dict(tetm='te', phi=None, fto=[3], period=[1000.0], ucell=UCELL_1D), (8, 1, 4)),
+    '1d_tm': (dict(tetm='tm', phi=None, fto=[3], period=[1000.0], ucell=UCELL_1D), (8, 1, 4)),
+    '1d_conical': (dict(psi=0.35 * np.pi, phi=0.2, fto=[3], period=[1000.0], ucell=UCELL_1D), (8, 1, 4)),
+    '2d': (dict(psi=0.35 * np.pi, phi=0.2, fto=[2, 2], period=[1000.0, 1000.0], ucell=UCELL_2D), (4, 4, 4)),
 }
 
 
@@ -171,51 +171,69 @@ def test_resolution_and_field_selection_are_static():
     assert np.asarray(three).shape == (3, 4, 4, 4, 6)
 
 
-@pytest.mark.parametrize('case,pols', [('2d', (0.0, 0.3, 1.0)), ('1d_tetm', (0, 1))])
-def test_changing_pol_is_not_served_from_a_stale_trace(case, pols):
-    """Pinning ``pol`` static must not pin it *stale*.
+@pytest.mark.parametrize('case,slot,values', [
+    ('2d', 'psi', (0.0, 0.35 * np.pi, np.pi / 2)),
+    ('1d_tetm', 'tetm', ('te', 'tm')),
+])
+def test_changing_the_incidence_is_not_served_from_a_stale_trace(case, slot, values):
+    """Pinning ``tetm`` static must not pin it *stale*.
 
     It is a jit cache key, so changing it has to recompile rather than silently reuse the trace
     built for the previous polarization — which would be a wrong answer, not a crash. Checked
     against the eager path at each value, and the values must genuinely differ from each other.
+
+    The two rows are the two kinds of incidence, and they are exercised through the slot each
+    one owns: ``psi`` is a traced child and varies freely, while ``tetm`` is the static
+    declaration and has exactly two values. A 2D structure has no ``tetm`` to change at all —
+    it is refused there — which is why that row sweeps the angle instead.
     """
     solver = _solver(1, case)
     res_x, res_y, res_z = _res(case)
     geometry = solver.freeze_geometry()
 
     fields = {}
-    for pol in pols:
-        solver.pol = pol
+    for value in values:
+        setattr(solver, slot, value)
         _, jitted = solver.conv_solve_field(res_x=res_x, res_y=res_y, res_z=res_z,
                                             geometry=geometry)
         _, eager = solver.conv_solve_field_no_jit(res_x=res_x, res_y=res_y, res_z=res_z)
         assert np.allclose(np.asarray(jitted), np.asarray(eager), rtol=0, atol=1e-10), \
-            f'jit disagrees with eager at pol={pol}'
-        fields[pol] = np.asarray(jitted)
+            f'jit disagrees with eager at {slot}={value}'
+        fields[value] = np.asarray(jitted)
 
-    for a, b in zip(pols, pols[1:]):
+    for a, b in zip(values, values[1:]):
         assert np.abs(fields[a] - fields[b]).max() > 1e-6, \
-            f'pol={a} and pol={b} produced the same field — a stale trace was reused'
+            f'{slot}={a} and {slot}={b} produced the same field — a stale trace was reused'
 
 
-def test_pol_stays_concrete_through_the_pytree_round_trip():
-    """The root cause, pinned directly.
+def test_the_declaration_is_static_and_the_angle_is_traced():
+    """The root cause, pinned directly — and it is the same split the API is built on.
 
-    ``pol`` is aux data precisely because the solve dispatches on it; ``psi`` stays a traced
-    child so gradients still flow through the incident amplitudes. Both must hold at once.
+    ``tetm`` is aux data precisely because the solve dispatches on it, so it must come back
+    from a trace concrete. ``psi`` is a value, so it must come back a tracer. What the two
+    rows below add is that they are *exclusive*: a solver that declared its polarization away
+    reads ``psi is None``, because a declared-away degree of freedom should be absent rather
+    than present-and-ignored. It used to be present — a derived ``pi/2`` whose gradient was
+    quietly zero on this very path, since the pure 1D solve never reads it.
     """
     import jax
 
-    solver = _solver(1, '1d_tetm')
-    seen = {}
+    def peek_at(case):
+        seen = {}
 
-    def peek(s):
-        seen['pol'] = s.pol
-        seen['psi'] = s.psi
-        return s.ucell.sum()
+        def peek(s):
+            seen['tetm'] = s.tetm
+            seen['psi'] = s.psi
+            return s.ucell.sum()
 
-    jax.jit(peek)(solver)
+        jax.jit(peek)(_solver(1, case))
+        return seen
 
-    assert seen['pol'] == 0
-    assert not isinstance(seen['pol'], jax.core.Tracer), 'pol must survive the trace concrete'
-    assert isinstance(seen['psi'], jax.core.Tracer), 'psi must stay differentiable'
+    declared = peek_at('1d_tetm')
+    assert declared['tetm'] == 'te'
+    assert not isinstance(declared['tetm'], jax.core.Tracer), 'tetm must survive concrete'
+    assert declared['psi'] is None, 'a declared-away angle must be absent, not zero'
+
+    angled = peek_at('1d_conical')
+    assert angled['tetm'] is None
+    assert isinstance(angled['psi'], jax.core.Tracer), 'psi must stay differentiable'

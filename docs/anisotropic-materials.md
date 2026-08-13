@@ -428,14 +428,14 @@ on 2026-08-13 noted against each part, because the reasoning is what a future ax
 need and the code alone does not carry it.
 
 **The principle is already in the codebase.** `rcwa.py::_assign_grating_type` reads the `ucell`
-shape, `pol` and `phi` and picks the cheapest formulation that can express the problem — its
+shape, `tetm` and `phi` and picks the cheapest formulation that can express the problem — its
 docstring says so in as many words: *"This decides the efficient formulation for given case."*
 1D TE/TM splits into scalars, 1D conical does not, 2D couples everything. Anisotropy adds axes to
 that same decision rather than a new kind of decision.
 
 | axis | read from | branches |
 |---|---|---|
-| grating dimensionality *(exists)* | `ucell` shape, `pol`, `phi` | 1D TE/TM, 1D conical, 2D |
+| grating dimensionality *(exists)* | `ucell` shape, `tetm`, `phi` | 1D TE/TM, 1D conical, 2D |
 | **z row of the tensor** *(exists)* | whether the four z-row slots were given | 2ff second-order, 4ff first-order |
 | **permeability** | `mu != 1` | existing operator, magnetic operator |
 | **patterned or uniform** | layer has in-plane structure | factorization, or scaled identities |

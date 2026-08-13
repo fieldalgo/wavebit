@@ -65,11 +65,11 @@ def test_raster_1d_parity():
     thickness, period = [0.15], [0.77]
 
     legacy = fieldwave.rcwa(backend=0, n_top=2.0, n_bot=1.0, theta=0.0, phi=None,
-                             pol=Pol.TE, fto=[6, 0], period=period, wavelength=0.777,
+                             tetm=Pol.TE, fto=[6, 0], period=period, wavelength=0.777,
                              thickness=thickness, ucell=ucell).conv_solve()
 
     stack = Stack.from_ucell(ucell, thickness, n_top=2.0, n_bot=1.0, period=period)
-    incidence = Incidence(wavelength=0.777, theta=0.0, phi=None, pol=Pol.TE)
+    incidence = Incidence(wavelength=0.777, theta=0.0, phi=None, tetm=Pol.TE)
     typed = fieldwave.rcwa(backend=0, fto=[6, 0], stack=stack, incidence=incidence).conv_solve()
 
     assert _de(typed) == _de(legacy)
@@ -81,11 +81,11 @@ def test_raster_2d_parity():
     thickness, period = [0.2, 0.3], [1.0, 1.0]
 
     legacy = fieldwave.rcwa(backend=0, n_top=1.0, n_bot=1.5, theta=0.1, phi=0.2,
-                             pol=0.5, fto=[3, 3], period=period, wavelength=0.9,
+                             psi=np.pi / 4, fto=[3, 3], period=period, wavelength=0.9,
                              thickness=thickness, ucell=ucell).conv_solve()
 
     stack = Stack.from_ucell(ucell, thickness, n_top=1.0, n_bot=1.5, period=period)
-    incidence = Incidence(wavelength=0.9, theta=0.1, phi=0.2, pol=0.5)
+    incidence = Incidence(wavelength=0.9, theta=0.1, phi=0.2, psi=np.pi / 4)
     typed = fieldwave.rcwa(backend=0, fto=[3, 3], stack=stack, incidence=incidence).conv_solve()
 
     assert _de(typed) == _de(legacy)

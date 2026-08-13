@@ -127,7 +127,7 @@ until 2026-08-11; `docs/time-convention-audit.md` §6).
 Geometry: `eps = eps(x)`, no `y` variation, `ky = 0`. In Fourier space `∂x̃ → i Kx`
 (diagonal matrix of `kx_m`), `∂z → d/dz̃`.
 
-### 3.1 TE (`pol = 0`)
+### 3.1 TE (`tetm_index = 0`)
 
 Fields: `(Ey, H̃x, H̃z)`. Primary `S = Ey` (vector over orders). From (M1):
 
@@ -151,7 +151,7 @@ S(z̃) = W [ e^{-q z̃} c⁺ + e^{-q(d̃-z̃)} c⁻ ]
 U(z̃) = V [ e^{-q z̃} c⁺ - e^{-q(d̃-z̃)} c⁻ ],        V = W q          (TE2)
 ```
 
-(`U = -S'` applied termwise.) **Code check**: `layer_modes_1d`, `pol == 0`:
+(`U = -S'` applied termwise.) **Code check**: `layer_modes_1d`, `tetm_index == 0`:
 `A = diag(kx)² - epy_conv`, `V = W * q`. Verbatim.
 
 A downward wave in a homogeneous half-space, `S = t exp(+i kz z̃)`, has
@@ -163,7 +163,7 @@ G = -i Kz_bot                                          (TE3)
 
 (code: `G = -1j * _diag(xp, kz_bot)`), and the homogeneous identification is `q = -i kz`.
 
-### 3.2 TM (`pol = 1`)
+### 3.2 TM (`tetm_index = 1`)
 
 Fields: `(H̃y, Ex, Ez)`. Primary `P = H̃y`. From (M2):
 
@@ -190,7 +190,7 @@ and the substrate seed from `P = t e^{+i kz z̃}`: `Q = -i (kz/εbot) P`, i.e.
 G = -i Kz_bot / eps_bot                                (TM3)
 ```
 
-**Code check**: `layer_modes_1d`, `pol == 1`: `B = kx εz⁻¹ kx - I`, `eig(epx_conv @ B)`,
+**Code check**: `layer_modes_1d`, `tetm_index == 1`: `B = kx εz⁻¹ kx - I`, `eig(epx_conv @ B)`,
 `V = inv(epx_conv) @ W * q`; `solve_1d` stage 1: `G = -1j * diag(kz_bot / eps_bot)`.
 Verbatim, including which side `εx` multiplies.
 

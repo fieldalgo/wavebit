@@ -44,7 +44,7 @@ def _frozen_raster():
 FROZEN = None
 
 VECTOR_BASE = dict(period=[300.0, 300.0], thickness=[205.0], theta=0.1, fto=[3, 3],
-                   wavelength=900.0, n_top=1.0, n_bot=1.0, pol=0.5)
+                   wavelength=900.0, n_top=1.0, n_bot=1.0, psi=np.pi / 4)
 
 
 def _backend(name):
@@ -260,7 +260,7 @@ def test_analytic_angle_is_smooth_through_normal():
     one side at a time.
     """
     base = dict(period=[300.0, 300.0], thickness=[205.0], fto=[5, 5], n_top=1.0, n_bot=1.0,
-                wavelength=900.0, pol=0.5, theta=0.1, phi=0.3)
+                wavelength=900.0, psi=np.pi / 4, theta=0.1, phi=0.3)
 
     def analytic(angle):
         shape = dict(type='rectangle', cx=150.0, cy=150.0, lx=80.0, ly=60.0,
@@ -287,7 +287,7 @@ def test_translation_leaves_nothing_behind_within_one_normal_field_cell():
     stays loose here because the sweep no longer probes anything that varies.
     """
     base = dict(period=[300.0, 300.0], thickness=[205.0], fto=[5, 5], n_top=1.0, n_bot=1.0,
-                wavelength=900.0, pol=0.5, theta=0.1, phi=0.3)
+                wavelength=900.0, psi=np.pi / 4, theta=0.1, phi=0.3)
     solver = fieldwave.rcwa(backend=0, period=[300.0, 300.0])
     cell = 300.0 / solver.normal_grid
 

@@ -33,7 +33,7 @@ CFG_2D = dict(backend=0, ucell=ROD, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, ps
 
 # A 1D grating: no interface along y, so every normal points along x. A *constant* normal
 # collapses the NVF projector onto Li's rules exactly (C_xx = I, C_xy = C_yy = 0).
-CFG_1D = dict(backend=0, ucell=np.array([[[3., 3., 1., 1., 3., 1., 1., 1.]]]), pol=1,
+CFG_1D = dict(backend=0, ucell=np.array([[[3., 3., 1., 1., 3., 1., 1., 1.]]]), tetm='tm',
               period=[0.77], thickness=[0.2], theta=0.25, wavelength=0.777,
               n_top=1.0, n_bot=1.5, fto=[10, 0])
 

@@ -425,7 +425,7 @@ def test_a_multishape_layer_is_not_periodic_across_the_cell_edge():
     the centres if an optimizer is moving them.
     """
     cfg = dict(backend=0, period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), fto=(4, 4),
-               n_top=1.0, n_bot=1.45, theta=0.0, phi=None, pol=0.0)
+               n_top=1.0, n_bot=1.45, theta=0.0, phi=None, psi=np.pi / 2)
     fixed = dict(type='rectangle', cx=0.72, cy=0.62, lx=0.26, ly=0.30, angle=0.0, n_index=2.1)
 
     def total(cx, shapes_after):

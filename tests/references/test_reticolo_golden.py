@@ -44,30 +44,30 @@ _TWO_LAYER = np.array([[[3.0] * 6 + [1.0] * 6], [[2.2] * 8 + [1.0] * 4]])
 
 # name -> solver kwargs. `grating_type` picks RETICOLO's branch: 0 for pure TE/TM, 1 conical.
 CASES = {
-    'te_normal': dict(pol=0, theta=0.0, phi=None, n_top=1.0, n_bot=1.5, fto=10,
+    'te_normal': dict(tetm='te', theta=0.0, phi=None, n_top=1.0, n_bot=1.5, fto=10,
                       period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
-    'te_oblique': dict(pol=0, theta=0.2, phi=None, n_top=1.0, n_bot=1.5, fto=10,
+    'te_oblique': dict(tetm='te', theta=0.2, phi=None, n_top=1.0, n_bot=1.5, fto=10,
                        period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
-    'tm_normal': dict(pol=1, theta=0.0, phi=None, n_top=1.0, n_bot=1.5, fto=10,
+    'tm_normal': dict(tetm='tm', theta=0.0, phi=None, n_top=1.0, n_bot=1.5, fto=10,
                       period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
-    'tm_oblique': dict(pol=1, theta=0.2, phi=None, n_top=1.0, n_bot=1.5, fto=10,
+    'tm_oblique': dict(tetm='tm', theta=0.2, phi=None, n_top=1.0, n_bot=1.5, fto=10,
                        period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
     # A duty cycle that is not 1/2 and a higher contrast: the +-1 orders carry real power.
-    'te_quarter': dict(pol=0, theta=0.15, phi=None, n_top=1.0, n_bot=1.5, fto=12,
+    'te_quarter': dict(tetm='te', theta=0.15, phi=None, n_top=1.0, n_bot=1.5, fto=12,
                        period=[0.8], wavelength=0.7, ucell=_QUARTER, thickness=[0.25]),
-    'tm_quarter': dict(pol=1, theta=0.15, phi=None, n_top=1.0, n_bot=1.5, fto=12,
+    'tm_quarter': dict(tetm='tm', theta=0.15, phi=None, n_top=1.0, n_bot=1.5, fto=12,
                        period=[0.8], wavelength=0.7, ucell=_QUARTER, thickness=[0.25]),
     # Two patterned layers: the interface between them is under test, not just the boundary.
-    'te_two_layer': dict(pol=0, theta=0.25, phi=None, n_top=1.0, n_bot=2.0, fto=10,
+    'te_two_layer': dict(tetm='te', theta=0.25, phi=None, n_top=1.0, n_bot=2.0, fto=10,
                          period=[0.7], wavelength=0.85, ucell=_TWO_LAYER,
                          thickness=[0.15, 0.22]),
-    'tm_two_layer': dict(pol=1, theta=0.25, phi=None, n_top=1.0, n_bot=2.0, fto=10,
+    'tm_two_layer': dict(tetm='tm', theta=0.25, phi=None, n_top=1.0, n_bot=2.0, fto=10,
                          period=[0.7], wavelength=0.85, ucell=_TWO_LAYER,
                          thickness=[0.15, 0.22]),
     # Denser truncation, where the two solvers' round-off has the most room to diverge.
-    'te_high_order': dict(pol=0, theta=0.2, phi=None, n_top=1.0, n_bot=1.5, fto=30,
+    'te_high_order': dict(tetm='te', theta=0.2, phi=None, n_top=1.0, n_bot=1.5, fto=30,
                           period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
-    'tm_high_order': dict(pol=1, theta=0.2, phi=None, n_top=1.0, n_bot=1.5, fto=30,
+    'tm_high_order': dict(tetm='tm', theta=0.2, phi=None, n_top=1.0, n_bot=1.5, fto=30,
                           period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
     # Conical (azimuth != 0) — RETICOLO's other branch, and the solver's `solve_1d_conical`.
     'conical_te': dict(psi=np.pi / 2, theta=0.2, phi=0.3, n_top=1.0, n_bot=1.5, fto=10,

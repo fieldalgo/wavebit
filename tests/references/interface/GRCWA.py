@@ -4,7 +4,7 @@ import numpy as np
 
 class GRCWA:
     def __init__(self, n_I=1., n_II=1., theta=0., phi=0., fourier_order=40, period=(100,),
-                 wavelength=900., pol=1, ucell=None, thickness=(325,), *args, **kwargs):
+                 wavelength=900., tetm='tm', ucell=None, thickness=(325,), *args, **kwargs):
 
         # super().__init__(grating_type)
 

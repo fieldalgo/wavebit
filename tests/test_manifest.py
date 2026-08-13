@@ -171,7 +171,7 @@ def test_manifest_is_json_round_trippable():
 def test_enum_lists_match_the_enums():
     enums = manifest()['enums']
     assert enums['backend'] == [m.name.lower() for m in Backend]
-    assert enums['pol'] == [m.name.lower() for m in Pol]
+    assert enums['tetm'] == [m.name.lower() for m in Pol]
     assert enums['factorization'] == [m.value for m in Factorization]
     assert enums['fourier_coefficients'] == [m.value for m in FourierCoefficients]
 

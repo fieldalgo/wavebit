@@ -377,7 +377,7 @@ def test_a_circle_without_ly_is_the_same_circle_on_both_paths(fto):
 def _solve(ucell, fto=6, **over):
     import fieldwave
     cfg = dict(backend=0, fto=(fto, fto), period=PERIOD, thickness=(0.6,), wavelength=1.6,
-               n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, pol=0)
+               n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2)
     cfg.update(over)
     return fieldwave.rcwa(ucell=ucell, **cfg)
 
@@ -494,7 +494,7 @@ def _two_painted(w, curved=False):
 
 
 _PAINT_CFG = dict(period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), fto=(4, 4),
-                  n_top=1.0, n_bot=1.45, theta=0.0, phi=None, pol=0.0, normal_grid=256)
+                  n_top=1.0, n_bot=1.45, theta=0.0, phi=None, psi=np.pi / 2, normal_grid=256)
 
 
 def _painted_total(backend, w, curved=False, geometry=None):
@@ -596,7 +596,7 @@ def test_a_traced_painted_layer_is_refused_without_a_frozen_geometry():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     cfg = dict(period=(1.0, 1.0), wavelength=0.94, fto=(5, 5), n_top=1.0, n_bot=1.45,
-               theta=0.0, phi=None, pol=0.0, thickness=(0.3,), normal_grid=256)
+               theta=0.0, phi=None, psi=np.pi / 2, thickness=(0.3,), normal_grid=256)
     fixed = dict(type='rectangle', cx=0.70, cy=0.62, lx=0.26, ly=0.30, angle=0.0, n_index=2.1)
 
     def ucell(v):
@@ -629,7 +629,7 @@ def test_a_traced_summed_layer_is_not_refused():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     cfg = dict(period=(1.0, 1.0), wavelength=0.94, fto=(5, 5), n_top=1.0, n_bot=1.45,
-               theta=0.0, phi=None, pol=0.0, thickness=(0.3,), normal_grid=256)
+               theta=0.0, phi=None, psi=np.pi / 2, thickness=(0.3,), normal_grid=256)
 
     def total(v):
         u = [dict(n_base=1.0, combine='add', shapes=[
@@ -657,7 +657,7 @@ def test_a_frozen_geometry_answers_the_overlap_question_for_every_layer():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     cfg = dict(period=(1.0, 1.0), wavelength=0.94, fto=(5, 5), n_top=1.0, n_bot=1.45,
-               theta=0.0, phi=None, pol=0.0, thickness=(0.3,), normal_grid=256)
+               theta=0.0, phi=None, psi=np.pi / 2, thickness=(0.3,), normal_grid=256)
     fixed = dict(type='rectangle', cx=0.70, cy=0.5, lx=0.26, ly=0.30, angle=0.0, n_index=2.1)
 
     def ucell(cx):

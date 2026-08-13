@@ -89,20 +89,22 @@ JUMP_CASES = [
 ]
 
 
-def _amp(n_top, n_bot, n_layer, d, theta, pol):
-    solver = fieldwave.rcwa(backend=0, pol=pol, n_top=n_top, n_bot=n_bot, theta=theta,
+#: The declaration is what these cases want: a uniform 1D stack at no azimuth, where the
+#: pure TE/TM formulation is the one under test.
+def _amp(n_top, n_bot, n_layer, d, theta, tetm):
+    solver = fieldwave.rcwa(backend=0, tetm=tetm, n_top=n_top, n_bot=n_bot, theta=theta,
                             fto=0, wavelength=WL, period=[WL * 2],
                             ucell=np.array([[[n_layer, n_layer]]]), thickness=[d])
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         res = solver.conv_solve().res
-    amp = np.asarray(res.r_s if pol == 0 else res.r_p).ravel()
+    amp = np.asarray(res.r_s if tetm == 'te' else res.r_p).ravel()
     return complex(amp[len(amp) // 2])
 
 
-@pytest.mark.parametrize('pol', [0, 1], ids=['te', 'tm'])
+@pytest.mark.parametrize('tetm', ['te', 'tm'], ids=['te', 'tm'])
 @pytest.mark.parametrize('case', JUMP_CASES, ids=[c[0] for c in JUMP_CASES])
-def test_reflection_is_analytic_across_the_branch_change(case, pol):
+def test_reflection_is_analytic_across_the_branch_change(case, tetm):
     """``r(theta)`` must have no step where nothing physical happens.
 
     ``kz_bot**2(theta) = eps_bot - eps_top*sin^2(theta)`` is a straight segment that stays
@@ -125,8 +127,8 @@ def test_reflection_is_analytic_across_the_branch_change(case, pol):
     _, n_top, n_bot, n_layer, d, theta_cut = case
     gaps = []
     for h in (8e-4, 4e-4, 2e-4, 1e-4, 5e-5):
-        a = _amp(n_top, n_bot, n_layer, d, theta_cut - h, pol)
-        b = _amp(n_top, n_bot, n_layer, d, theta_cut + h, pol)
+        a = _amp(n_top, n_bot, n_layer, d, theta_cut - h, tetm)
+        b = _amp(n_top, n_bot, n_layer, d, theta_cut + h, tetm)
         gaps.append(abs(b - a))
     assert 0.05 < gaps[-1] / gaps[0] < 0.08, gaps
 
@@ -183,9 +185,9 @@ LAYER_CASES = [
 ]
 
 
-def _grating(pol, thickness, **kw):
+def _grating(tetm, thickness, **kw):
     cell = np.array([[[1.0] * 8 + [3.4] * 8]])
-    return dict(backend=0, pol=pol, fto=6, wavelength=WL, period=[300.0], ucell=cell,
+    return dict(backend=0, tetm=tetm, fto=6, wavelength=WL, period=[300.0], ucell=cell,
                 thickness=[thickness], **kw)
 
 
@@ -193,12 +195,12 @@ def _run(cfg):
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         res = fieldwave.rcwa(**cfg).conv_solve().res
-    return np.asarray(res.r_s if cfg['pol'] == 0 else res.r_p).ravel()
+    return np.asarray(res.r_s if cfg['tetm'] == 0 else res.r_p).ravel()
 
 
-@pytest.mark.parametrize('pol', [0, 1], ids=['te', 'tm'])
+@pytest.mark.parametrize('tetm', ['te', 'tm'], ids=['te', 'tm'])
 @pytest.mark.parametrize('case', LAYER_CASES, ids=[c[0] for c in LAYER_CASES])
-def test_a_layer_mode_root_is_free(case, pol):
+def test_a_layer_mode_root_is_free(case, tetm):
     """Relabelling which of ``+-q`` is "down" for a layer mode cannot move the answer.
 
     This is what makes ``mode_q`` and ``boundary_kz`` selecting *unrelated* roots at complex
@@ -214,7 +216,7 @@ def test_a_layer_mode_root_is_free(case, pol):
     algebra, and the algebra is what is free.
     """
     _, inc = case
-    cfg = _grating(pol, 40.0, **inc)
+    cfg = _grating(tetm, 40.0, **inc)
     base = _run(cfg)
 
     original = _s1.mode_q
@@ -248,7 +250,7 @@ def test_the_mode_q_tie_break_is_worth_nothing():
         flip = xp.where(xp.abs(xp.real(v)) > 1e-12, xp.real(v) < 0, xp.imag(v) < 0)
         return xp.where(flip, -v, v)
 
-    cfg = _grating(0, 120.0, n_top=1.5 + 0.3j, n_bot=1.5, theta=0.6)
+    cfg = _grating('te', 120.0, n_top=1.5 + 0.3j, n_bot=1.5, theta=0.6)
     base = _run(cfg)
     original = _s1.mode_q
     try:

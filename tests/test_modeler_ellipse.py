@@ -184,7 +184,7 @@ def test_split_counts_below_two_are_rejected():
 # ------------------------------------------------------------------------------- through solve
 
 SOLVE_KW = dict(period=[700.0, 700.0], thickness=[400.0], fto=[4, 4],
-                n_top=1.0, n_bot=1.0, wavelength=500.0, pol=0.5)
+                n_top=1.0, n_bot=1.0, wavelength=500.0, psi=np.pi / 4)
 ELLIPSE = dict(cx=350.0, cy=350.0, lx=400.0, ly=250.0, angle=0.5, n_base=1.0, n_index=3.0)
 
 

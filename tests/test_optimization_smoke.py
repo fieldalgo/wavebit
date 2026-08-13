@@ -20,7 +20,7 @@ import pytest
 import fieldwave
 
 CFG = dict(fto=[2, 2], wavelength=900.0, period=[1000.0, 1000.0], thickness=[300.0],
-           n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, pol=0.0)
+           n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2)
 
 # Small enough that this stays a smoke test. The grid is a smooth ramp rather than random so
 # the starting point is reproducible without seeding anything.

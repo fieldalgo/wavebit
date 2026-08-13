@@ -259,7 +259,7 @@ def manifest() -> dict:
         'fieldwave_version': __version__,
         'enums': {
             'backend': [m.name.lower() for m in Backend],
-            'pol': [m.name.lower() for m in Pol],
+            'tetm': [m.name.lower() for m in Pol],
             'factorization': [m.value for m in Factorization],
             'fourier_coefficients': [m.value for m in FourierCoefficients],
         },

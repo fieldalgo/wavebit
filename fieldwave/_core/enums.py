@@ -1,9 +1,11 @@
 """Typed enumerations for the public API.
 
-``Backend`` and ``Pol`` are ``IntEnum``s equal to the integer codes the solver already uses,
-so they are a drop-in, non-breaking upgrade: ``Pol.TE == 0`` is true and the existing
-``if self.pol == 0`` comparisons keep working unchanged. Users may pass either the enum
-(``pol=Pol.TE``) or the raw int (``pol=0``).
+``Backend`` and ``Pol`` are ``IntEnum``s equal to the integer codes the solver already uses.
+``Pol`` names the two states the ``tetm`` declaration selects, and its integer value is the
+index the pure 1D solves dispatch on (``CoreSolveMixin.tetm_index``). Users write the word --
+``tetm='te'`` or ``tetm=Pol.TE`` -- because the declaration has exactly two values and a
+number invited a third meaning: the retired ``pol`` accepted the interior of ``[0, 1]``,
+where it was a linear angle in a bad unit rather than a declaration at all.
 
 ``FourierCoefficients`` and ``Factorization`` are ``str`` enums, equal to the lowercase
 strings the solver stores, so ``factorization=Factorization.NVF`` and ``factorization='nvf'``
@@ -23,7 +25,7 @@ class Backend(IntEnum):
 
 
 class Pol(IntEnum):
-    """Incident polarization (1D / conical)."""
+    """The two states of the ``tetm`` declaration; the value is ``tetm_index``."""
     TE = 0
     TM = 1
 

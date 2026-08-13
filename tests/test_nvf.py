@@ -22,7 +22,7 @@ def test_nvf_circular_grating():
     ucell_2d[0, dist_from_center <= radius] = 2.0  # Cylinder with n=2.0
 
     option_nvf = dict(
-        pol=1, n_top=1.0, n_bot=1.5, theta=10 * np.pi / 180, phi=20 * np.pi / 180,
+        psi=0.0, n_top=1.0, n_bot=1.5, theta=10 * np.pi / 180, phi=20 * np.pi / 180,
         fto=[3, 3], wavelength=wavelength, period=period,
         ucell=ucell_2d, thickness=[200], factorization='nvf'
     )
@@ -57,7 +57,7 @@ def test_nvf_energy_convergence():
     ucell = np.ones((1, N, N), dtype=complex)
     ucell[0, X ** 2 + Y ** 2 <= 0.3 ** 2] = 2.5  # lossless dielectric rod
 
-    cfg = dict(n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, pol=0.0,
+    cfg = dict(n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2,
                wavelength=0.5, period=[1.0, 1.0], thickness=[0.3])
 
     errs = {}
@@ -95,7 +95,7 @@ def test_nvf_on_a_one_cell_axis_reduces_to_li(kind):
     ucell = np.array([[[3., 3., 1., 1., 3., 1., 1., 1.]]])
     cfg = dict(backend=0, ucell=ucell, period=[0.77], thickness=[0.2], theta=0.25,
                wavelength=0.777, n_top=1.0, n_bot=1.5, fto=[10, 0])
-    cfg |= dict(phi=0.3, psi=0.4) if kind == 'conical' else dict(pol=0 if kind == 'te' else 1)
+    cfg |= dict(phi=0.3, psi=0.4) if kind == 'conical' else dict(psi=np.pi / 2 if kind == 'te' else 1)
 
     def total(**kw):
         res = fieldwave.rcwa(**kw, **cfg).conv_solve()

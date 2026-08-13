@@ -5,6 +5,7 @@
 give byte-identical results to passing the raw value.
 """
 import numpy as np
+import pytest
 
 import fieldwave
 from fieldwave import Backend, Factorization, FourierCoefficients, Pol
@@ -21,18 +22,28 @@ def test_str_enums_equal_their_strings():
     assert Factorization.LI == 'li' and Factorization.NVF == 'nvf'
 
 
-def _solve(pol, backend, **strategy):
+def _solve(tetm, backend, **strategy):
     ucell = np.array([[[3.0, 3.0, 3.0, 1.0, 1.0, 1.0]]])
     solver = fieldwave.rcwa(backend=backend, n_top=2.0, n_bot=1.0, theta=0.0, phi=None,
-                          pol=pol, fto=[6, 0], period=[0.77], wavelength=0.777,
+                          tetm=tetm, fto=[6, 0], period=[0.77], wavelength=0.777,
                           thickness=[0.15], ucell=ucell, **strategy)
     r = solver.conv_solve()
     return float(np.array(r.R).sum()), float(np.array(r.T).sum())
 
 
 def test_enum_matches_raw_api():
-    for pol_e, pol_i in [(Pol.TE, 0), (Pol.TM, 1)]:
-        a = _solve(pol_e, Backend.NUMPY, fourier_coefficients=FourierCoefficients.SAMPLED,
+    """The enum and the word are one input; the retired integer spelling is not.
+
+    ``tetm`` takes ``Pol.TE`` or ``'te'`` and nothing else. A raw ``0`` is refused on
+    purpose -- a number is what let the old ``pol`` mean a fraction, which was an angle in
+    disguise rather than a declaration.
+    """
+    for enum_spelling, word in [(Pol.TE, 'te'), (Pol.TM, 'tm')]:
+        a = _solve(enum_spelling, Backend.NUMPY,
+                   fourier_coefficients=FourierCoefficients.SAMPLED,
                    factorization=Factorization.LI)
-        b = _solve(pol_i, 0, fourier_coefficients='sampled', factorization='li')
-        assert np.allclose(a, b, atol=0, rtol=0), (pol_e, a, b)
+        b = _solve(word, 0, fourier_coefficients='sampled', factorization='li')
+        assert np.allclose(a, b, atol=0, rtol=0), (enum_spelling, a, b)
+
+    with pytest.raises(ValueError, match='tetm'):
+        _solve(0, 0)

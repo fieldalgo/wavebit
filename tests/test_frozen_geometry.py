@@ -160,7 +160,7 @@ def test_a_frozen_geometry_makes_the_vector_path_traceable(name, make, start):
     importlib.import_module('fieldwave.on_jax')
 
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
-               theta=0.15, phi=0.35, pol=0, wavelength=900.0)
+               theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0)
     x = jnp.asarray(start)
     frozen = fieldwave.rcwa(backend=1, ucell=make(x), **cfg).freeze_geometry()
     assert frozen.block_grid is not None, 'the grid plan was not recorded'
@@ -201,7 +201,7 @@ def test_a_stale_frozen_geometry_is_refused_rather_than_answered():
     from fieldwave._core.modeler import StaleGeometryError
 
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
-               theta=0.15, phi=0.35, pol=0, wavelength=900.0)
+               theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0)
     make = lambda lx: [[3.5, [['ellipse', 150.0, 150.0, lx, 55.0, 2.0, 0.27, 9, 9]]]]
 
     def total(lx, geometry=None):
@@ -310,7 +310,7 @@ def test_a_one_cell_axis_makes_every_same_shape_replay_valid():
     that, or NVF on 1D gratings — the case the short-circuit was added for — would refuse every
     replay that changed anything.
     """
-    cfg = dict(n_top=1.0, n_bot=1.0, theta=0.2, phi=0.0, pol=0, fto=[5, 0],
+    cfg = dict(n_top=1.0, n_bot=1.0, theta=0.2, phi=0.0, psi=np.pi / 2, fto=[5, 0],
                period=[700.0], wavelength=900.0, thickness=[200.0])
 
     def grating(width):
@@ -523,7 +523,7 @@ def test_a_length_that_moves_without_reordering_reuses_the_compilation():
     importlib.import_module('fieldwave.on_jax')
 
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
-               theta=0.15, phi=0.35, pol=0, wavelength=900.0)
+               theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0)
     make = lambda lx: [[3.5, [['ellipse', 150.0, 150.0, lx, 55.0, 2.0, 0.27, 4, 4]]]]
 
     def freeze_at(lx):

@@ -62,7 +62,7 @@ def _solve(g, i, j):
     kx, ky = g['kx'], g['ky']
     theta = np.arcsin(np.sqrt(kx[i] ** 2 + ky[j] ** 2 + 0.0001, dtype=np.complex128))
     phi = np.arctan(ky[j] / (kx[i] + 0.0001), dtype=np.complex128)
-    res = fieldwave.rcwa(backend=0, pol=0, n_top=float(g['n_top']), n_bot=float(g['n_bot']),
+    res = fieldwave.rcwa(backend=0, psi=np.pi / 2, n_top=float(g['n_top']), n_bot=float(g['n_bot']),
                          theta=theta, phi=phi, fto=[FTO], wavelength=float(g['wavelength']),
                          period=list(g['period']), ucell=g['ucell'],
                          thickness=list(g['thickness']),
@@ -149,7 +149,7 @@ def test_double_precision_agrees_across_backends_at_a_complex_angle(backend):
     phi = np.arctan(ky / (kx + 0.0001), dtype=np.complex128)
 
     def solve(bk):
-        res = fieldwave.rcwa(backend=bk, pol=0, n_top=float(g['n_top']),
+        res = fieldwave.rcwa(backend=bk, psi=np.pi / 2, n_top=float(g['n_top']),
                              n_bot=float(g['n_bot']), theta=theta, phi=phi, fto=[40],
                              wavelength=float(g['wavelength']), period=list(g['period']),
                              ucell=g['ucell'], thickness=list(g['thickness']),
@@ -177,7 +177,7 @@ def test_uniform_stack_does_not_diffract_at_a_complex_angle():
     """
     uniform = np.full_like(np.asarray(_golden()['ucell'], dtype=float), 2.5)
     g = _golden()
-    res = fieldwave.rcwa(backend=0, pol=0, n_top=float(g['n_top']), n_bot=float(g['n_bot']),
+    res = fieldwave.rcwa(backend=0, psi=np.pi / 2, n_top=float(g['n_top']), n_bot=float(g['n_bot']),
                          theta=np.complex128(0.5 + 0.3j), phi=np.complex128(0.3),
                          fto=[FTO], wavelength=float(g['wavelength']),
                          period=list(g['period']), ucell=uniform,

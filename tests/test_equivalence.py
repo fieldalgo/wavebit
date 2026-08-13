@@ -34,32 +34,40 @@ CFG = dict(backend=0, n_top=1.0, n_bot=1.0, theta=1e-10, fto=[20, 0],
 TOL = 1e-11
 
 
-def _solve(pol, phi, ucell):
-    solver = fieldwave.rcwa(pol=pol, **CFG)
+#: The linear angle each declaration is the pure case of. The two spellings are what this
+#: file compares: ``tetm`` selects the TE/TM formulation, ``psi`` the conical one, and the
+#: whole point is that they answer identically on a structure both can describe.
+_PSI_OF = {'te': np.pi / 2, 'tm': 0.0}
+
+
+def _solve(tetm, phi, ucell):
+    """``phi is None`` takes the declaration (the pure path); any azimuth takes the angle."""
+    incidence = {'tetm': tetm} if phi is None else {'psi': _PSI_OF[tetm]}
+    solver = fieldwave.rcwa(**incidence, **CFG)
     solver.phi = phi
     solver.ucell = ucell
     res = solver.conv_solve().res
     return np.squeeze(np.asarray(res.R)), np.squeeze(np.asarray(res.T))
 
 
-@pytest.mark.parametrize('pol', [0, 1], ids=['TE', 'TM'])
-def test_1d_matches_1d_conical(pol):
+@pytest.mark.parametrize('tetm', ['te', 'tm'], ids=['TE', 'TM'])
+def test_1d_matches_1d_conical(tetm):
     """``phi=None`` and ``phi=0`` are the same physics through different algebra.
 
     The conical formulation carries both polarizations and the azimuthal coupling; at
     ``phi=0`` that coupling is empty, so it has to reduce to the TE/TM formulation exactly.
     A failure here means one of the two lost a term that the other kept.
     """
-    ri_1d, ti_1d = _solve(pol, None, UCELL_1D)
-    ri_1c, ti_1c = _solve(pol, 0.0, UCELL_1D)
+    ri_1d, ti_1d = _solve(tetm, None, UCELL_1D)
+    ri_1c, ti_1c = _solve(tetm, 0.0, UCELL_1D)
 
     assert ri_1d.shape == ri_1c.shape
     assert np.abs(ri_1d - ri_1c).max() < TOL
     assert np.abs(ti_1d - ti_1c).max() < TOL
 
 
-@pytest.mark.parametrize('pol', [0, 1], ids=['TE', 'TM'])
-def test_1d_conical_matches_2d(pol):
+@pytest.mark.parametrize('tetm', ['te', 'tm'], ids=['TE', 'TM'])
+def test_1d_conical_matches_2d(tetm):
     """A y-invariant structure solved by the 2D route must give the 1D conical answer.
 
     The 2D solver couples both in-plane directions and both polarizations. Feeding it a
@@ -67,23 +75,23 @@ def test_1d_conical_matches_2d(pol):
     the check that the general solver degrades to the special case rather than merely
     resembling it.
     """
-    ri_1c, ti_1c = _solve(pol, 0.0, UCELL_1D)
-    ri_2d, ti_2d = _solve(pol, 0.0, UCELL_2D)
+    ri_1c, ti_1c = _solve(tetm, 0.0, UCELL_1D)
+    ri_2d, ti_2d = _solve(tetm, 0.0, UCELL_2D)
 
     assert ri_1c.shape == ri_2d.shape
     assert np.abs(ri_1c - ri_2d).max() < TOL
     assert np.abs(ti_1c - ti_2d).max() < TOL
 
 
-@pytest.mark.parametrize('pol', [0, 1], ids=['TE', 'TM'])
-def test_all_three_conserve_energy(pol):
+@pytest.mark.parametrize('tetm', ['te', 'tm'], ids=['TE', 'TM'])
+def test_all_three_conserve_energy(tetm):
     """The structure is lossless, so each route must return R + T == 1 independently.
 
     Without this, the two tests above would still pass if all three routes were wrong in the
     same way -- agreement is not correctness.
     """
     for phi, ucell in ((None, UCELL_1D), (0.0, UCELL_1D), (0.0, UCELL_2D)):
-        ri, ti = _solve(pol, phi, ucell)
+        ri, ti = _solve(tetm, phi, ucell)
         assert abs(ri.sum() + ti.sum() - 1.0) < 1e-9, (phi, ucell.shape)
 
 
@@ -102,7 +110,7 @@ _N = 3.48
 _RASTER = np.array([[[1.0] * 4 + [_N] * 4 + [1.0] * 4]])
 _BLOCK = [[1.0, [['rectangle', 600.0, 600.0, 400.0, 1200.0, _N, 0, 0, 0]]]]
 
-_CFG = dict(n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, pol=0.0,
+_CFG = dict(n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2,
             fto=[5, 0], wavelength=900.0, period=[1200.0, 1200.0], thickness=[300.0])
 
 

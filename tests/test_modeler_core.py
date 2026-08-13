@@ -15,6 +15,9 @@ import numpy as np
 import pytest
 
 import fieldwave
+
+#: The linear angle each pure declaration is the special case of.
+_PSI_OF = {'te': np.pi / 2, 'tm': 0.0}
 from fieldwave._core.modeler import Modeling
 
 GOLDEN = np.load(pathlib.Path(__file__).parent / 'data' / 'golden_legacy_modeler.npz')
@@ -32,7 +35,7 @@ INSTRUCTIONS = {
     'ellipse_rot': [[SI3N4, [['ellipse', 140, 160, 100, 50, SI, 0.5, 4, 4]]], [SIO2, []]],
 }
 SOLVE_KW = dict(period=PERIOD, thickness=[205.0, 100.0], fto=[3, 3],
-                n_top=1.0, n_bot=1.0, wavelength=900.0, pol=0.5)
+                n_top=1.0, n_bot=1.0, wavelength=900.0, psi=np.pi / 4)
 
 # The ellipse is deliberately not held to its legacy golden. The decomposition those numbers
 # were captured from did not converge — refining the contour changed the structure instead of
@@ -179,7 +182,7 @@ def test_rectangle_has_no_step_where_the_angle_margin_used_to_end():
     across that crossing has to match the slope just outside it.
     """
     cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
-               wavelength=900.0, pol=0.5)
+               wavelength=900.0, psi=np.pi / 4)
 
     def T(angle):
         ucell = [[3.5, [['rectangle', 150.0, 150.0, 80.0, 60.0, 2.0, angle, 8, 8]]]]
@@ -206,7 +209,7 @@ def test_rectangle_angle_carries_gradient_near_an_aligned_angle():
     torch = pytest.importorskip('torch')
     tensor = lambda v: torch.tensor(v, dtype=torch.float64)
     cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
-               wavelength=900.0, pol=0.5)
+               wavelength=900.0, psi=np.pi / 4)
 
     def T(angle):
         ucell = [[3.5, [['rectangle', tensor(150.0), tensor(150.0), tensor(80.0),
@@ -273,7 +276,7 @@ def test_two_objects_sharing_an_edge_keep_their_gradient():
                         ['rectangle', tensor(100.) + p, tensor(150.), p, tensor(60.), 3.0,
                          tensor(0.)]]]]
         cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
-                   wavelength=900.0, pol=0.5)
+                   wavelength=900.0, psi=np.pi / 4)
         return torch.sum(fieldwave.rcwa(backend=2, ucell=ucell, **cfg).conv_solve().T)
 
     p = torch.tensor(80.0, dtype=torch.float64, requires_grad=True)
@@ -342,7 +345,7 @@ def test_jax_device_setter_round_trips():
     jax = pytest.importorskip('jax')
 
     solver = fieldwave.rcwa(
-        backend=1, pol=0, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, fto=[5],
+        backend=1, psi=np.pi / 2, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, fto=[5],
         wavelength=900.0, period=[1000.0], thickness=[500.0],
         ucell=np.array([[[1.0, 3.0, 3.0, 1.0]]]), device=0)
 
@@ -377,7 +380,7 @@ def test_vector_path_differentiates_wrt_edge_positions(backend, name):
         importlib.import_module('fieldwave.on_jax')
 
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3],
-               n_top=1.0, n_bot=1.0, wavelength=900.0, pol=0.5)
+               n_top=1.0, n_bot=1.0, wavelength=900.0, psi=np.pi / 4)
 
     def total(cd, xp_scalar):
         inst = [[3.5, [['rectangle', xp_scalar(150.0), xp_scalar(150.0), cd,
@@ -406,8 +409,8 @@ def test_vector_path_differentiates_wrt_edge_positions(backend, name):
     assert abs(auto - fd) / abs(fd) < 1e-4, (auto, fd)
 
 
-@pytest.mark.parametrize('pol,name', [(0, 'TE'), (1, 'TM')])
-def test_the_staircase_costs_a_kink_at_an_aligned_angle(pol, name):
+@pytest.mark.parametrize('tetm,name', [('te', 'TE'), ('tm', 'TM')])
+def test_the_staircase_costs_a_kink_at_an_aligned_angle(tetm, name):
     """What the rewrite did *not* fix, pinned so nobody reads the missing margin as a fix.
 
     A staircase and a smoothly tilted boundary do not share Fourier coefficients at a finite
@@ -416,12 +419,12 @@ def test_the_staircase_costs_a_kink_at_an_aligned_angle(pol, name):
     instead of equal. Adding blocks does not help — the coefficient is flat in ``n_split`` —
     which is the whole reason an angle fit near normal belongs on the smooth path.
 
-    Checked in pure polarizations. At ``pol=0.5`` the TE and TM amplitudes interfere and the
+    Checked in pure polarizations. At ``psi=np.pi / 4`` the TE and TM amplitudes interfere and the
     cross term is genuinely odd in the angle, which hides this under a real first-order term;
     measuring there is what made it look absent.
     """
     cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
-               wavelength=900.0, pol=pol, theta=0.0, phi=0.0)
+               wavelength=900.0, psi=_PSI_OF[tetm], theta=0.0, phi=0.0)
 
     def T(angle, n_split):
         ucell = [[3.5, [['rectangle', 150.0, 150.0, 80.0, 60.0, 2.0, angle, n_split, n_split]]]]

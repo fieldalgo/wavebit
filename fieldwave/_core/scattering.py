@@ -218,7 +218,7 @@ def _field_state(xp, I, S_ref, S_trn, S_layers, AB, c_inc):
 
 # --------------------------------------------------------------------------------- 1D TE / TM
 
-def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
+def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
            incidence_side='top', full=False):
     """Solve a 1D grating stack by scattering matrices — SMM twin of :func:`solve_1d`.
@@ -258,16 +258,16 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     # Gap medium: eps chosen per order so kz_gap == 1, which keeps V_gap trivially invertible.
     eps_gap = 1 + kx ** 2
 
-    if pol == 0:      # TE — primary variable E_y, partner H_x
+    if tetm_index == 0:      # TE — primary variable E_y, partner H_x
         V_top = -1j * _diag(xp, kz_top)
         V_bot = -1j * _diag(xp, kz_bot)
         V_gap = -1j * I
-    elif pol == 1:    # TM — primary variable H_y, partner scaled by eps
+    elif tetm_index == 1:    # TM — primary variable H_y, partner scaled by eps
         V_top = -1j * _diag(xp, kz_top / n_top ** 2)
         V_bot = -1j * _diag(xp, kz_bot / eps_bot)
         V_gap = -1j * _diag(xp, 1 / eps_gap)
     else:
-        raise ValueError(f'pol must be 0 (TE) or 1 (TM), got {pol!r}')
+        raise ValueError(f'tetm_index must be 0 (TE) or 1 (TM), got {tetm_index!r}')
     W_top = W_bot = W_gap = I    # homogeneous half-spaces are diagonal in this basis
 
     # --- cascade: superstrate interface, every layer top-to-bottom, substrate interface ----
@@ -276,7 +276,7 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     S_layers, AB, modes = [], [], []
     S = S_ref
     for layer_index in range(_n_layers(thickness)):
-        W, V, q = layer_modes_1d(xp, pol, kx, I, epx_conv_all[layer_index],
+        W, V, q = layer_modes_1d(xp, tetm_index, kx, I, epx_conv_all[layer_index],
                                  epy_conv_all[layer_index], epz_conv_i_all[layer_index], C)
         d = thickness[layer_index]
         X = _diag(xp, xp.exp(-k0 * q * d))
@@ -303,7 +303,7 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
 
     cos_t = xp.cos(xp.asarray(theta, dtype=C))
     de_ri = xp.real(R * xp.conj(R) * xp.real(kz_ref / (n_ref * cos_t)))
-    if pol == 0:
+    if tetm_index == 0:
         de_ti = xp.real(Tt * xp.conj(Tt) * xp.real(kz_trn / (n_ref * cos_t)))
     else:
         # Re(kz/eps), not Re(conj(kz)/eps): for TM the downward flux is Re(E_x H_y*) with E_x
@@ -325,7 +325,7 @@ def smm_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     # amplitude; the TM transmission converts H back to E across the index step.
     zeros_amp = xp.zeros_like(R)
     zeros_eff = xp.zeros_like(de_ri)
-    if pol == 0:
+    if tetm_index == 0:
         res = _pack(R, zeros_amp, Tt, zeros_amp, de_ri, zeros_eff, de_ti, zeros_eff)
     else:
         res = _pack(zeros_amp, R, zeros_amp, Tt * (n_ref / n_trn),

@@ -1,3 +1,5 @@
+import numpy as np
+
 import fieldwave
 
 
@@ -14,7 +16,7 @@ def run():
                         fto=[3, 0],
                         n_top=1, n_bot=si,
                         wavelength=900,
-                        pol=0.5,
+                        psi=np.pi / 4,
                         )
 
     ucell = [

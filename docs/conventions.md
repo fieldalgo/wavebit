@@ -56,7 +56,7 @@ All angles are **radians**.
 | `theta` | polar incidence angle, measured from the stack normal in the incidence medium |
 | `phi` | azimuth of the plane of incidence, from the `+x` axis |
 | `psi` | polarization: the angle of **E** from the p direction in the plane transverse to **k**. `psi = pi/2` is pure s (TE-like), `psi = 0` pure p (TM-like). **Real** — a complex `psi` is refused, see below |
-| `pol` (1D paths) | `0` = TE, `1` = TM — an alias for `psi = pi/2` / `0` on the pure path |
+| `tetm` (1D only) | `'te'` / `'tm'` — a **declaration**, not an angle: it says this problem has no polarization and no azimuth degree of freedom, which is what makes the pure 1D TE/TM formulation legal (2-4x faster than conical, measured). Refused on a 2D cell, with `fto[1] != 0`, or beside a nonzero `phi` / a `psi` / a `polarization`. `psi` reads back `None` under it — a declared-away degree of freedom is absent, not defaulted |
 
 ### General (elliptical) polarization
 

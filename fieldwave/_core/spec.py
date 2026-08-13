@@ -41,7 +41,7 @@ SPEC_VERSION = '2'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12
 
 #: Incidence fields a sweep may vary. Geometry sweeps wait for the parametric geometry
 #: layer — sweeping a raster grid point-by-point is not a thing anyone wants to declare.
-SWEEPABLE = ('wavelength', 'theta', 'phi', 'pol', 'psi')
+SWEEPABLE = ('wavelength', 'theta', 'phi', 'psi')
 
 
 class SpecError(ValueError):
@@ -403,11 +403,11 @@ def _eps_to_json(eps):
 
 def _incidence_from_dict(d) -> Incidence:
     d = dict(d or {})
-    _reject_unknown(d, ('wavelength', 'theta', 'phi', 'pol', 'psi', 'incidence_side',
+    _reject_unknown(d, ('wavelength', 'theta', 'phi', 'tetm', 'psi', 'incidence_side',
                         'polarization'),
                     'incidence')
-    if 'pol' in d:
-        d['pol'] = _normalise_pol(d['pol'])
+    if 'tetm' in d:
+        d['tetm'] = _normalise_tetm(d['tetm'])
     if 'theta' in d:
         _check_polar_angle(d['theta'])
     if d.get('incidence_side', 'top') not in ('top', 'bottom'):
@@ -478,30 +478,35 @@ def _check_polar_angle(theta):
             f'the solve returns finite numbers that merely look absorbing.)')
 
 
-def _normalise_pol(pol):
-    """``pol`` as a number, whichever way it was written.
+def _normalise_tetm(tetm):
+    """``tetm`` as ``'te'`` / ``'tm'`` / ``None``, whichever way it was written.
 
-    It is the TM *fraction*, not a two-valued flag: ``Pol.TE`` (0) and ``Pol.TM`` (1) are the
-    named ends of a continuum, and 0.5 is a legitimate value in between. So the numeric form
-    is the general one and the names are sugar — normalising the other way would have to
-    reject the interior of the range. Storing one canonical form is what lets ``pol: 'te'``
-    and ``pol: 0`` hash to the same key.
+    The canonical form is the *word*, not a number. The retired ``pol`` normalised the other
+    way -- to a TM fraction, because it accepted the interior of ``[0, 1]`` -- and that
+    interior was the problem: a fractional ``pol`` was a linear angle in a bad unit, so one
+    key meant two different kinds of thing. ``tetm`` is a declaration with exactly two
+    values, and a spec that wants an angle in between writes ``psi``.
     """
-    if isinstance(pol, str):
-        return int(_enum(pol, Pol, 'incidence.pol'))
-    if isinstance(pol, Pol):
-        return int(pol)
-    if isinstance(pol, bool) or not isinstance(pol, (int, float)):
-        raise SpecError(
-            f"incidence.pol: expected a number in [0, 1] (the TM fraction) or one of "
-            f"{[m.name.lower() for m in Pol]}, got {pol!r}")
-    return pol
+    if tetm is None:
+        return None
+    if isinstance(tetm, Pol):
+        return tetm.name.lower()
+    if isinstance(tetm, str) and tetm.lower() in ('te', 'tm'):
+        return tetm.lower()
+    raise SpecError(
+        f"incidence.tetm: expected 'te', 'tm' or null, got {tetm!r}. It is a declaration "
+        f'that the polarization is not a degree of freedom here, not a quantity; for a '
+        f'linear angle write incidence.psi.')
 
 
 def _incidence_to_dict(inc: Incidence) -> dict:
     d = {'wavelength': _jsonable(inc.wavelength), 'theta': _jsonable(inc.theta),
-         'phi': _jsonable(inc.phi), 'pol': _jsonable(inc.pol), 'psi': _jsonable(inc.psi),
+         'phi': _jsonable(inc.phi), 'psi': _jsonable(inc.psi),
          'incidence_side': _jsonable(inc.incidence_side)}
+    if inc.tetm is not None:
+        # Emitted only when declared, like `polarization` -- a spec that names no declaration
+        # keeps the key set it had.
+        d['tetm'] = _normalise_tetm(inc.tetm)
     if inc.polarization is not None:
         # Written as [re, im] pairs — JSON has no complex type — and only when set, so the
         # key() of every pre-existing spec is unchanged. `+ 0.0` flushes the negative zero

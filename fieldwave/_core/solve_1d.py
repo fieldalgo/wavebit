@@ -75,7 +75,7 @@ def _block(xp, rows):
     return xp.concat([xp.concat(r, axis=1) for r in rows], axis=0)
 
 
-def layer_modes_1d(xp, pol, kx, I, epx_conv, epy_conv, epz_conv_i, C):
+def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C):
     """Eigenmodes ``(W, V, q)`` of one 1D TE / TM layer.
 
     ``W`` expands the continuous primary field (``E_y`` for TE, ``H_y`` for TM), ``V`` its
@@ -85,18 +85,18 @@ def layer_modes_1d(xp, pol, kx, I, epx_conv, epy_conv, epz_conv_i, C):
     Shared by the ETM (:func:`solve_1d`) and SMM (:mod:`fieldwave._core.scattering`) connecting
     algorithms — the mode algebra is a property of the layer, not of how layers are joined.
     """
-    if pol == 0:  # TE
+    if tetm_index == 0:  # TE
         A = _diag(xp, kx) @ _diag(xp, kx) - epy_conv
         w, W = eig(A)
         q = mode_q(xp, xp.astype(w, C))
         V = W * q
-    elif pol == 1:  # TM
+    elif tetm_index == 1:  # TM
         B = kx[:, None] * epz_conv_i * kx[None, :] - I
         w, W = eig(epx_conv @ B)
         q = mode_q(xp, xp.astype(w, C))
         V = xp.linalg.inv(epx_conv) @ W * q
     else:
-        raise ValueError(f'pol must be 0 (TE) or 1 (TM), got {pol!r}')
+        raise ValueError(f'tetm_index must be 0 (TE) or 1 (TM), got {tetm_index!r}')
     return W, V, q
 
 
@@ -143,13 +143,13 @@ def sp_modes_1d_conical(xp, F_c, F_s, W1, W2, V_11, V_12, V_21, V_22):
     return big_W, big_V
 
 
-def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
+def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
              incidence_side='top', full=False):
     """Solve a 1D grating stack for reflection/transmission diffraction efficiency.
 
     Args:
-        pol: ``0`` (TE) or ``1`` (TM).
+        tetm_index: ``0`` (TE) or ``1`` (TM) — the two the ``tetm`` declaration selects.
         wavelength: incident wavelength (sets ``k0 = 2*pi/wavelength``).
         kx: in-plane wavevectors of the retained orders (length ``ff = 2*fto+1``), built
             with the *incidence* medium's index (``n_bot`` for backside illumination).
@@ -196,12 +196,12 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     kz_bot = boundary_kz(xp, n_bot ** 2, kx ** 2)
 
     eps_bot = n_bot ** 2
-    if pol == 0:      # TE
+    if tetm_index == 0:      # TE
         G = -1j * _diag(xp, kz_bot)
-    elif pol == 1:    # TM
+    elif tetm_index == 1:    # TM
         G = -1j * _diag(xp, kz_bot / eps_bot)
     else:
-        raise ValueError(f'pol must be 0 (TE) or 1 (TM), got {pol!r}')
+        raise ValueError(f'tetm_index must be 0 (TE) or 1 (TM), got {tetm_index!r}')
 
     F = I
     T = I
@@ -215,7 +215,7 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
         epz_conv_i = epz_conv_i_all[layer_index]
         d = thickness[layer_index]
 
-        W, V, q = layer_modes_1d(xp, pol, kx, I, epx_conv, epy_conv, epz_conv_i, C)
+        W, V, q = layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C)
 
         X = _diag(xp, xp.exp(-k0 * q * d))
         W_i = xp.linalg.inv(W)
@@ -245,7 +245,7 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     # branches -- see :func:`~fieldwave._core.conventions.incident_kz`.
     kz_inc = incident_kz(kz_top, ff_x // 2)
 
-    if pol == 0:  # TE
+    if tetm_index == 0:  # TE
         inc = -1j * kz_inc * delta
         T1 = xp.linalg.inv(G - 1j * Kz_top @ F) @ (-1j * Kz_top @ delta + inc)
     else:         # TM
@@ -257,7 +257,7 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     Tt = (T @ T1)[None, :]
 
     de_ri = xp.real(R * xp.conj(R) * xp.real(kz_top / (n_top * cos_t)))
-    if pol == 0:  # TE
+    if tetm_index == 0:  # TE
         de_ti = xp.real(Tt * xp.conj(Tt) * xp.real(kz_bot / (n_top * cos_t)))
     else:         # TM
         de_ti = xp.real(Tt * xp.conj(Tt)
@@ -276,7 +276,7 @@ def solve_1d(pol, wavelength, kx, n_top, n_bot, theta, thickness,
     # the index step, t_E = t_H * n_top/n_bot. Measured at 5.6e-16 (tests/test_lossy_media).
     zeros_amp = xp.zeros_like(R)
     zeros_eff = xp.zeros_like(de_ri)
-    if pol == 0:
+    if tetm_index == 0:
         res = _pack(R, zeros_amp, Tt, zeros_amp, de_ri, zeros_eff, de_ti, zeros_eff)
     else:
         res = _pack(zeros_amp, R, zeros_amp, Tt * (n_top / n_bot),

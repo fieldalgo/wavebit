@@ -35,23 +35,23 @@ AU = 0.18 + 3.0j                      # gold at 500nm
 STACKED = ([1.0, 1.5, 1.5, 2.0], [20.0, 35.0])
 
 
-def _airy_R(ns, ds, theta, pol):
+def _airy_R(ns, ds, theta, tetm):
     """Reflectance from the closed-form multilayer oracle in test_lossy_media."""
     from test_lossy_media import analytic_r
-    return abs(analytic_r(ns, ds, WL, theta, pol)) ** 2
+    return abs(analytic_r(ns, ds, WL, theta, tetm)) ** 2
 
 
-def _solver(ns, ds, *, pol=0, theta=0.2, path='1d', fto=0):
+def _solver(ns, ds, *, tetm='te', theta=0.2, path='1d', fto=0):
     """A uniform stack on the requested solve path (see test_lossy_media.solver_r)."""
     layers = ns[1:-1]
     common = dict(backend=0, n_top=ns[0], n_bot=ns[-1], theta=theta, wavelength=WL,
                   thickness=ds)
     if path == '1d':
-        return fieldwave.rcwa(pol=pol, fto=fto, period=[WL * 2],
+        return fieldwave.rcwa(tetm=tetm, fto=fto, period=[WL * 2],
                               ucell=np.array([[[n, n]] for n in layers]), **common)
     cell = ([[[n, n]] for n in layers] if path == 'conical'
             else [[[n, n], [n, n]] for n in layers])
-    return fieldwave.rcwa(phi=0.0, psi=(np.pi / 2 if pol == 0 else 0.0), fto=[fto, fto],
+    return fieldwave.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0), fto=[fto, fto],
                           period=[WL * 2, WL * 2], ucell=np.array(cell), **common)
 
 
@@ -59,16 +59,16 @@ def _R(solver):
     return float(np.sum(np.asarray(solver.conv_solve().R)).real)
 
 
-INCIDENCE = [(p, t) for p in (0, 1) for t in (0.0, 0.4)]
-IDS = [f'{"te" if p == 0 else "tm"}_theta{t}' for p, t in INCIDENCE]
+INCIDENCE = [(p, t) for p in ('te', 'tm') for t in (0.0, 0.4)]
+IDS = [f'{p}_theta{t}' for p, t in INCIDENCE]
 
 
 # ----------------------------------------------------------------------
 # 1. the efficiency, against an absolute oracle
 # ----------------------------------------------------------------------
 @pytest.mark.parametrize('path', ['1d', 'conical', '2d'])
-@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
-def test_stacked_same_material_matches_the_analytic_stack(pol, theta, path):
+@pytest.mark.parametrize('tetm,theta', INCIDENCE, ids=IDS)
+def test_stacked_same_material_matches_the_analytic_stack(tetm, theta, path):
     """Two identical layers on a different substrate: the upper one must still count.
 
     This is the arrangement that was wrong, and an Airy recursion over the same indices
@@ -77,16 +77,16 @@ def test_stacked_same_material_matches_the_analytic_stack(pol, theta, path):
     different mode basis than its own general branch used, so each needs saying separately.
     """
     ns, ds = STACKED
-    solver = _solver(ns, ds, pol=pol, theta=theta, path=path)
-    assert _R(solver) == pytest.approx(_airy_R(ns, ds, theta, pol), abs=1e-12)
+    solver = _solver(ns, ds, tetm=tetm, theta=theta, path=path)
+    assert _R(solver) == pytest.approx(_airy_R(ns, ds, theta, tetm), abs=1e-12)
 
 
-@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
-def test_merging_same_material_layers_is_the_same_structure(pol, theta):
+@pytest.mark.parametrize('tetm,theta', INCIDENCE, ids=IDS)
+def test_merging_same_material_layers_is_the_same_structure(tetm, theta):
     """Splitting a slab in two must not change anything -- the split is not physical."""
     ns, ds = STACKED
-    whole = _solver([1.0, 1.5, 2.0], [sum(ds)], pol=pol, theta=theta)
-    split = _solver(ns, ds, pol=pol, theta=theta)
+    whole = _solver([1.0, 1.5, 2.0], [sum(ds)], tetm=tetm, theta=theta)
+    split = _solver(ns, ds, tetm=tetm, theta=theta)
     assert _R(split) == pytest.approx(_R(whole), abs=1e-12)
 
 
@@ -99,7 +99,7 @@ def test_absorbing_layer_on_its_own_substrate_at_any_thickness(d):
     from the substrate, so any thickness must give the bare air/gold Fresnel reflectance.
     """
     want = _airy_R([1.0, AU, AU], [d], 0.3, 1)
-    assert _R(_solver([1.0, AU, AU], [d], pol=1, theta=0.3)) == pytest.approx(want, abs=1e-12)
+    assert _R(_solver([1.0, AU, AU], [d], tetm='tm', theta=0.3)) == pytest.approx(want, abs=1e-12)
 
 
 def test_a_matched_interface_is_well_conditioned():
@@ -135,8 +135,8 @@ RES = 10
 FIELD_STACK = ([1.0, 1.5, 1.5, 2.0, 1.0], [30.0, 30.0, 40.0])
 
 
-def _field(ns, ds, *, pol=0, theta=0.2, fto=2):
-    solver = _solver(ns, ds, pol=pol, theta=theta, fto=fto)
+def _field(ns, ds, *, tetm='te', theta=0.2, fto=2):
+    solver = _solver(ns, ds, tetm=tetm, theta=theta, fto=fto)
     solver.conv_solve()
     return np.asarray(solver.calculate_field(res_x=RES, res_y=1, res_z=RES))
 
@@ -152,8 +152,8 @@ def test_field_below_a_same_material_layer_is_not_zero():
         assert np.abs(f[i]).max() > 1e-3, f'layer {i} is empty'
 
 
-@pytest.mark.parametrize('pol', [0, 1], ids=['te', 'tm'])
-def test_field_matches_the_merged_stack(pol):
+@pytest.mark.parametrize('tetm', ['te', 'tm'], ids=['te', 'tm'])
+def test_field_matches_the_merged_stack(tetm):
     """And it is not merely non-zero: it is the field the merged stack has.
 
     Writing the two same-material layers as one of their combined thickness is a different
@@ -162,8 +162,8 @@ def test_field_matches_the_merged_stack(pol):
     reconstruction, which is where it was total rather than partial.
     """
     ns, ds = FIELD_STACK
-    got = _field(ns, ds, pol=pol).reshape(3, RES, -1)
-    merged = _field([1.0, 1.5, 2.0, 1.0], [60.0, 40.0], pol=pol).reshape(2, RES, -1)
+    got = _field(ns, ds, tetm=tetm).reshape(3, RES, -1)
+    merged = _field([1.0, 1.5, 2.0, 1.0], [60.0, 40.0], tetm=tetm).reshape(2, RES, -1)
     # Same z sampling per layer, so merged has 2 blocks where this has 3; the bottom (n=2.0)
     # block is the one both describe identically.
     assert np.allclose(got[2], merged[1], atol=1e-12, rtol=0)

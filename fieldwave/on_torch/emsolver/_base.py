@@ -3,7 +3,7 @@ import torch
 import numpy as np
 
 
-from ..._core.engine import CoreSolveMixin
+from ..._core.engine import CoreSolveMixin, _POL_RETIRED
 from fieldwave._core.backend import check_input_precision
 
 
@@ -21,7 +21,7 @@ def _as_tensor(v, device=None, dtype=None):
 
 
 class _BaseRCWA(CoreSolveMixin):
-    def __init__(self, n_top=1., n_bot=1., theta=0., phi=None, psi=None, pol=0., fto=(0, 0),
+    def __init__(self, n_top=1., n_bot=1., theta=0., phi=None, psi=None, tetm=None, fto=(0, 0), pol=None,
                  period=(1., 1.), wavelength=1.,
                  thickness=(0.,), connecting_algo='ETM', perturbation=1E-20,
                  device='cpu', type_complex=torch.complex128, polarization=None):
@@ -51,11 +51,17 @@ class _BaseRCWA(CoreSolveMixin):
         self.n_top = n_top
         self.n_bot = n_bot
 
+        if pol is not None:
+            raise ValueError(_POL_RETIRED)
         self.theta = theta
         self.phi = phi
-        self.pol = pol
+        # Order matters: `tetm` refuses to coexist with a named incidence, so it goes first
+        # and the two spellings below raise against it rather than silently winning.
+        self.tetm = tetm
         self.psi = psi
         self.polarization = polarization
+        if self._tetm is None and self._psi is None and polarization is None:
+            self._default_psi()
 
         self.fto = fto
         self.period = period
@@ -155,28 +161,11 @@ class _BaseRCWA(CoreSolveMixin):
             # `torch.real` rather than `np.real` on a tensor: it is a no-op on a real one and
             # keeps the autograd graph, which `np.real` would drop on the way out to numpy.
             psi = torch.real(psi) if torch.is_tensor(psi) else np.real(psi)
-            self._psi = _as_tensor(psi, dtype=self.type_float)
-            pol = -(2 * psi / torch.pi - 1)
-            self._pol = pol
+            self._psi = _as_tensor(psi, device=self.device, dtype=self.type_float)
 
-    @property
-    def pol(self):
-        """
-        portion of TM. 0: full TE, 1: full TM
-
-        Returns: polarization ratio
-
-        """
-        return self._pol
-
-    @pol.setter
-    def pol(self, pol):
-        if not 0 <= pol <= 1:
-            raise ValueError
-
-        self._pol = pol
-        self._psi = torch.tensor(torch.pi / 2 * (1 - self.pol), device=self.device,
-                                 dtype=self.type_float)
+    def _default_psi(self):
+        """Pure s, applied when no incidence was named and none was declared away."""
+        self._psi = torch.tensor(torch.pi / 2, device=self.device, dtype=self.type_float)
 
     @property
     def fto(self):

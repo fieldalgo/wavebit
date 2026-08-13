@@ -29,29 +29,29 @@ UC_1D_SUB = np.array([[[3., 3., 1., 1., 3., 1.]], [[1., 1., 1., 1., 1., 1.]]])
 UC_2D = np.array([[[3., 3., 1., 1.], [1., 3., 3., 1.], [1., 1., 3., 3.], [3., 1., 1., 3.]]])
 
 CASES_1D = [
-    ('te_1layer', dict(pol=0, ucell=np.array([[[3., 3., 3., 1., 1., 1.]]]), thickness=[0.15],
+    ('te_1layer', dict(tetm='te', ucell=np.array([[[3., 3., 3., 1., 1., 1.]]]), thickness=[0.15],
                        n_top=2.0, n_bot=1.0, theta=0.0, wavelength=0.777, period=[0.77],
                        fto=[6, 0])),
-    ('tm_1layer', dict(pol=1, ucell=np.array([[[3., 3., 3., 1., 1., 1.]]]), thickness=[0.15],
+    ('tm_1layer', dict(tetm='tm', ucell=np.array([[[3., 3., 3., 1., 1., 1.]]]), thickness=[0.15],
                        n_top=2.0, n_bot=1.0, theta=0.0, wavelength=0.777, period=[0.77],
                        fto=[6, 0])),
-    ('te_2layer_oblique', dict(pol=0, ucell=UC_1D, thickness=[0.15, 0.22], n_top=2.0,
+    ('te_2layer_oblique', dict(tetm='te', ucell=UC_1D, thickness=[0.15, 0.22], n_top=2.0,
                                n_bot=1.5, theta=0.3, wavelength=0.777, period=[0.77],
                                fto=[5, 0])),
-    ('tm_2layer_oblique', dict(pol=1, ucell=UC_1D, thickness=[0.15, 0.22], n_top=2.0,
+    ('tm_2layer_oblique', dict(tetm='tm', ucell=UC_1D, thickness=[0.15, 0.22], n_top=2.0,
                                n_bot=1.5, theta=0.3, wavelength=0.777, period=[0.77],
                                fto=[5, 0])),
     # bottom layer uniform and equal to the substrate: ETM short-circuits the interface,
     # SMM has no short-circuit to take — they must still land on the same answer.
-    ('te_same_material', dict(pol=0, ucell=UC_1D_SUB, thickness=[0.2, 0.1], n_top=1.0,
+    ('te_same_material', dict(tetm='te', ucell=UC_1D_SUB, thickness=[0.2, 0.1], n_top=1.0,
                               n_bot=1.0, theta=0.0, wavelength=0.9, period=[0.7],
                               fto=[5, 0])),
-    ('tm_same_material', dict(pol=1, ucell=UC_1D_SUB, thickness=[0.2, 0.1], n_top=1.0,
+    ('tm_same_material', dict(tetm='tm', ucell=UC_1D_SUB, thickness=[0.2, 0.1], n_top=1.0,
                               n_bot=1.0, theta=0.0, wavelength=0.9, period=[0.7],
                               fto=[5, 0])),
     # thick, strongly evanescent: the regime where a connecting algorithm goes wrong if it
     # ever inverts a growing exponential
-    ('tm_thick', dict(pol=1, ucell=np.array([[[4., 4., 4., 4., 1., 1., 1., 1.]]]),
+    ('tm_thick', dict(tetm='tm', ucell=np.array([[[4., 4., 4., 4., 1., 1., 1., 1.]]]),
                       thickness=[20.0], n_top=1.0, n_bot=1.0, theta=0.0, wavelength=0.5,
                       period=[0.6], fto=[12, 0])),
 ]
@@ -133,7 +133,7 @@ def _core_inputs(kwargs):
                   n_bot=solver.n_bot, theta=solver.theta, thickness=solver.thickness,
                   epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
     if solver.grating_type_assigned == 0:
-        return solver, dict(common, pol=solver.pol)
+        return solver, dict(common, tetm_index=solver.tetm_index)
     return solver, dict(common, ky=ky, psi=solver.psi)
 
 
@@ -248,7 +248,7 @@ CUTOFF = dict(ucell=np.array([[[3., 3., 1., 1., 3., 1.]], [[2., 2., 2., 1., 1., 
               wavelength=500.0, period=[2000.0], fto=[8, 0])
 
 
-@pytest.mark.parametrize('extra', [dict(pol=0), dict(pol=1), dict(pol=0.4, phi=0.3)],
+@pytest.mark.parametrize('extra', [dict(tetm='te'), dict(tetm='tm'), dict(psi=0.3 * np.pi, phi=0.3)],
                          ids=['te', 'tm', 'conical'])
 def test_smm_field_with_an_order_exactly_at_the_substrate_cutoff(extra):
     """A retained order sitting at kz_bot = 0 is a real configuration, not a pathology."""
@@ -420,17 +420,17 @@ def test_smm_field_cross_backend(case, backend, name):
     assert np.max(np.abs(cell - reference)) < 1e-10 * np.max(np.abs(reference))
 
 
-@pytest.mark.parametrize('pol', [0, 1], ids=['te', 'tm'])
-def test_gradient_jax_torch_fd(pol):
+@pytest.mark.parametrize('index', [0, 1], ids=['te', 'tm'])
+def test_gradient_jax_torch_fd(index):
     """d(sum T)/ds where s scales a real perturbation of a layer's eps-conv matrix."""
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
     import fieldwave.on_jax          # noqa: F401  (enables x64)
     import jax.numpy as jnp
 
-    kwargs = dict(CASES_1D[pol][1], theta=0.3)
+    kwargs = dict(CASES_1D[index][1], theta=0.3)
     _, inputs = _core_inputs(kwargs)
-    key = 'epy_conv_all' if pol == 0 else 'epx_conv_all'
+    key = 'epy_conv_all' if index == 0 else 'epx_conv_all'
     base = np.array(inputs[key])
     direction = np.real(base).copy()
     conv_keys = ('kx', 'epx_conv_all', 'epy_conv_all', 'epz_conv_i_all')

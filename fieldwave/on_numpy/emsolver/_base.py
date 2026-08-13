@@ -1,11 +1,11 @@
 import numpy as np
 
-from ..._core.engine import CoreSolveMixin
+from ..._core.engine import CoreSolveMixin, _POL_RETIRED
 from fieldwave._core.backend import check_input_precision
 
 
 class _BaseRCWA(CoreSolveMixin):
-    def __init__(self, n_top=1., n_bot=1., theta=0., phi=None, psi=None, pol=0., fto=(0, 0),
+    def __init__(self, n_top=1., n_bot=1., theta=0., phi=None, psi=None, tetm=None, fto=(0, 0), pol=None,
                  period=(1., 1.), wavelength=1.,
                  thickness=(0.,), connecting_algo='ETM', perturbation=1E-20,
                  device=0, type_complex=np.complex128, polarization=None):
@@ -29,11 +29,17 @@ class _BaseRCWA(CoreSolveMixin):
         self.n_top = n_top
         self.n_bot = n_bot
 
+        if pol is not None:
+            raise ValueError(_POL_RETIRED)
         self.theta = theta
         self.phi = phi
-        self.pol = pol
+        # Order matters: `tetm` refuses to coexist with a named incidence, so it goes first
+        # and the two spellings below raise against it rather than silently winning.
+        self.tetm = tetm
         self.psi = psi
         self.polarization = polarization
+        if self._tetm is None and self._psi is None and polarization is None:
+            self._default_psi()
 
         self.fto = fto
         self.period = period
@@ -127,26 +133,14 @@ class _BaseRCWA(CoreSolveMixin):
             # the autodiff leaf real — the imaginary direction it used to carry was the
             # unnormalized cosh path, not physics.
             self._psi = np.array(np.real(psi), dtype=self.type_float)
-            pol = -(2 * np.real(psi) / np.pi - 1)
-            self._pol = pol
 
-    @property
-    def pol(self):
+    def _default_psi(self):
+        """Pure s, applied when no incidence was named and none was declared away.
+
+        Not marked as *given*, so ``polarization`` may still be assigned afterwards — the
+        same courtesy the retired ``pol``-derived ``psi`` had.
         """
-        portion of TM. 0: full TE, 1: full TM
-
-        Returns: polarization ratio
-
-        """
-        return self._pol
-
-    @pol.setter
-    def pol(self, pol):
-        if not 0 <= pol <= 1:
-            raise ValueError
-
-        self._pol = pol
-        self._psi = np.array(np.pi / 2 * (1 - self.pol), dtype=self.type_float)
+        self._psi = np.array(np.pi / 2, dtype=self.type_float)
 
     @property
     def fto(self):

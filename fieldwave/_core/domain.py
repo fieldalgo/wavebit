@@ -2,7 +2,7 @@
 
 Phase 2 of the rewrite: the geometry and illumination a user
 configures become typed objects instead of a bare ``ucell`` array plus loose
-``thickness`` / ``theta`` / ``pol`` scalars. These are a non-breaking, *adapt-in* layer —
+``thickness`` / ``theta`` / ``psi`` scalars. These are a non-breaking, *adapt-in* layer —
 the legacy keyword arguments keep working unchanged, and a ``Stack`` round-trips losslessly
 to and from them (``Stack.from_ucell(ucell, thickness)`` rebuilds the exact ``ucell``).
 
@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from .backend import array_namespace
-from .enums import Pol
+from .enums import Pol  # noqa: F401  (re-exported for spec's tetm parsing)
 
 
 def _is_raster(eps: Any) -> bool:
@@ -117,10 +117,12 @@ class Stack:
 class Incidence:
     """The incident illumination: wavelength, angles, polarization, and which side it hits.
 
-    ``pol`` is the TM fraction (``Pol.TE == 0`` … ``Pol.TM == 1``); ``psi`` / ``phi`` are the
-    conical polarization / azimuth angles (``None`` selects the pure 1D TE/TM path). These map
-    one-to-one onto the existing constructor arguments, so precedence (an explicit ``psi``
-    overriding ``pol``) is whatever the solver already does.
+    The polarization comes in three kinds, and they are not three spellings of one thing.
+    ``tetm`` (``'te'`` / ``'tm'``) is a **declaration** that the polarization and the azimuth
+    are not degrees of freedom here, which is what buys the pure 1D TE/TM formulation; ``psi``
+    is a **linear angle**; ``polarization`` is the **complex pair** below. ``tetm`` refuses to
+    coexist with either of the others, and so do those two with each other. These map
+    one-to-one onto the constructor arguments.
 
     ``incidence_side`` is ``'top'`` or ``'bottom'`` — illumination is part of the incidence,
     not of the scene, which is why it lives here rather than on :class:`Stack`. ``theta`` /
@@ -133,7 +135,7 @@ class Incidence:
     wavelength: Any = 1.0
     theta: Any = 0.0
     phi: Optional[Any] = None
-    pol: Any = Pol.TE
+    tetm: Optional[Any] = None
     psi: Optional[Any] = None
     incidence_side: str = 'top'
     polarization: Optional[Any] = None
@@ -141,5 +143,5 @@ class Incidence:
     def as_kwargs(self) -> dict:
         """The illumination keyword arguments for :func:`fieldwave.rcwa`."""
         return dict(wavelength=self.wavelength, theta=self.theta, phi=self.phi,
-                    pol=self.pol, psi=self.psi, incidence_side=self.incidence_side,
+                    tetm=self.tetm, psi=self.psi, incidence_side=self.incidence_side,
                     polarization=self.polarization)

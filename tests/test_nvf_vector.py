@@ -43,7 +43,7 @@ def test_vector_nvf_energy_conservation():
 
     m = fieldwave.rcwa(
         backend=0, fto=[fto_val, fto_val],
-        pol=1, n_top=1.0, n_bot=1.45,
+        psi=0.0, n_top=1.0, n_bot=1.45,
         theta=10.0 * np.pi / 180, phi=20.0 * np.pi / 180,
         wavelength=1000.0, period=[1000.0, 1000.0], thickness=[300.0],
         ucell=ucell_raster

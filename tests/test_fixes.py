@@ -10,7 +10,7 @@ def test_1_si_glass_branch_cut():
     n_si = 3.8
     n_glass = 1.5
     option = dict(
-        pol=1, n_top=1.0, n_bot=n_glass, theta=0.0, phi=0.0,
+        tetm='tm', n_top=1.0, n_bot=n_glass, theta=0.0, phi=0.0,
         fto=5, wavelength=632.8, period=[1000],
         ucell=np.array([[[n_si, n_si]]]), thickness=[200]
     )
@@ -41,7 +41,7 @@ def test_2_air_au_raw_n_lossy_substrate():
     print(f"Exact Fresnel Analytical R (Air->Au): {R_exact:.6f}")
 
     option = dict(
-        pol=1, n_top=1.0, n_bot=n_au, theta=0.0, phi=0.0,
+        tetm='tm', n_top=1.0, n_bot=n_au, theta=0.0, phi=0.0,
         fto=3, wavelength=500, period=[1000],
         ucell=np.array([[[1.0, 1.0]]]), thickness=[0] # Bare interface
     )
@@ -69,7 +69,7 @@ def test_3_same_material_interface():
 
     # 20nm Au layer on Au substrate
     option = dict(
-        pol=1, n_top=1.0, n_bot=n_au, theta=0.0,
+        tetm='tm', n_top=1.0, n_bot=n_au, theta=0.0,
         fto=3, wavelength=500, period=[1000],
         ucell=np.array([[[n_au, n_au]]]), thickness=[20]
     )
@@ -92,7 +92,7 @@ def test_4_tm_transmittance_conjugation():
     n_au = 0.18 + 3.0j
     # 1D Conical with TM polarization
     option_conical = dict(
-        pol=1, n_top=1.0, n_bot=n_au, theta=10 * np.pi / 180, phi=30 * np.pi / 180,
+        tetm='tm', n_top=1.0, n_bot=n_au, theta=10 * np.pi / 180, phi=30 * np.pi / 180,
         fto=3, wavelength=500, period=[1000],
         ucell=np.array([[[1.0, n_au]]]), thickness=[20]
     )
@@ -135,7 +135,7 @@ def test_6_none_ucell_grating_type():
     print("==================================================")
     
     option = dict(
-        pol=1, n_top=1.0, n_bot=1.5, theta=0.0, phi=0.0,
+        tetm='tm', n_top=1.0, n_bot=1.5, theta=0.0, phi=0.0,
         fto=3, wavelength=500, period=[1000],
         ucell=None, thickness=[100]
     )
@@ -158,7 +158,7 @@ def test_7_none_theta_handling():
     print("==================================================")
     
     option = dict(
-        pol=1, n_top=1.0, n_bot=1.5, theta=None, phi=None,
+        tetm='tm', n_top=1.0, n_bot=1.5, theta=None, phi=None,
         fto=3, wavelength=500, period=[1000],
         ucell=np.array([[[1.5, 1.5]]]), thickness=[100]
     )

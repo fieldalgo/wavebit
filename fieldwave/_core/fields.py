@@ -105,7 +105,7 @@ def _z_slices(xp, res_z, d, C, dev=None):
     return xp.reshape(xp.linspace(0, res_z, res_z, dtype=C, device=dev), (-1, 1, 1)) / res_z * d
 
 
-def field_1d(wavelength, kx, T1, layer_info_list, period, pol,
+def field_1d(wavelength, kx, T1, layer_info_list, period, tetm_index,
              res_x=20, res_y=1, res_z=20):
     """Field of a pure TE/TM 1D stack. Returns ``(res_z*n_layers, res_y, res_x, 3)``."""
     _require_solved(T1, layer_info_list)
@@ -130,10 +130,10 @@ def field_1d(wavelength, kx, T1, layer_info_list, period, pol,
         bwd = _diag_exp(xp, k0 * Qd, ff)
         My = W @ (fwd @ c1 + bwd @ c2)
         Mx = V @ (-fwd @ c1 + bwd @ c2)
-        Mz = 1j * (epz_conv_i @ Kx @ My if pol else Kx @ My)
+        Mz = 1j * (epz_conv_i @ Kx @ My if tetm_index else Kx @ My)
 
         inv_f = _inv_fourier(xp, kx, None, period, res_x, res_y, k0, C)
-        sgn = -1j if pol == 0 else 1j
+        sgn = -1j if tetm_index == 0 else 1j
         Fy = inv_f[:, :, None, :] @ My[:, None, None, :, :]
         Fx = sgn * (inv_f[:, :, None, :] @ Mx[:, None, None, :, :])
         Fz = sgn * (inv_f[:, :, None, :] @ Mz[:, None, None, :, :])
@@ -241,7 +241,7 @@ def field_2d(wavelength, kx, ky, T1, layer_info_list, period,
                           res_x, res_y, res_z, set_field_input, conical=False, lattice=lattice)
 
 
-def field_plot(field_cell, pol=0, plot_indices=(1, 1, 1, 1, 1, 1), y_slice=0, z_slice=-1,
+def field_plot(field_cell, tetm_index=0, plot_indices=(1, 1, 1, 1, 1, 1), y_slice=0, z_slice=-1,
                zx=True, yx=True):
     """Plot |field|^2 slices of a reconstructed cell (side and/or top view).
 
@@ -258,7 +258,7 @@ def field_plot(field_cell, pol=0, plot_indices=(1, 1, 1, 1, 1, 1), y_slice=0, z_
 
     if field_cell.shape[-1] == 6:                     # 2D / conical grating
         title = ['2D Ex', '2D Ey', '2D Ez', '2D Hx', '2D Hy', '2D Hz']
-    elif pol == 0:                                    # 1D TE
+    elif tetm_index == 0:                             # 1D TE
         title = ['1D Ey', '1D Hx', '1D Hz']
     else:                                             # 1D TM
         title = ['1D Hy', '1D Ex', '1D Ez']

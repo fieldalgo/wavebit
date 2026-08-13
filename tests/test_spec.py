@@ -26,7 +26,7 @@ BINARY_GRATING = {
         'n_top': 1.0, 'n_bot': 1.5, 'period': [700.0],
         'layers': [{'thickness': 300.0, 'eps': [[1.0, 1.0, 3.5, 3.5]]}],
     },
-    'incidence': {'wavelength': 900.0, 'theta': 0.0, 'phi': 0.0, 'pol': 'te'},
+    'incidence': {'wavelength': 900.0, 'theta': 0.0, 'phi': 0.0, 'tetm': 'te'},
 }
 
 
@@ -38,7 +38,7 @@ def test_run_matches_the_equivalent_rcwa_call():
 
     reference = fieldwave.rcwa(
         backend=0, wavelength=900., period=[700.], fto=[10, 0],
-        n_top=1., n_bot=1.5, theta=0., phi=0., pol=0.,
+        n_top=1., n_bot=1.5, theta=0., phi=0., tetm='te',
         ucell=np.array([[[1.0, 1.0, 3.5, 3.5]]]), thickness=[300.],
     ).conv_solve()
 
@@ -76,7 +76,7 @@ def test_key_tracks_content_not_spelling():
     # same run, written differently: enum by name vs by int, defaults stated vs omitted
     reworded = dict(BINARY_GRATING)
     reworded['numerics'] = {'backend': 0, 'fto': [10, 0], 'type_complex': 128}
-    reworded['incidence'] = {'wavelength': 900.0, 'theta': 0.0, 'phi': 0.0, 'pol': 0}
+    reworded['incidence'] = {'wavelength': 900.0, 'theta': 0.0, 'phi': 0.0, 'tetm': 'te'}
     assert JobSpec.from_dict(reworded).key() == spec.key()
 
     # a different run
@@ -85,18 +85,25 @@ def test_key_tracks_content_not_spelling():
     assert JobSpec.from_dict(changed).key() != spec.key()
 
 
-def test_pol_normalises_to_a_number_and_keeps_fractions():
-    """``pol`` is the TM fraction, so names are sugar over a continuum — not a two-valued flag."""
-    assert JobSpec.from_dict(BINARY_GRATING).to_dict()['incidence']['pol'] == 0
-    tm = JobSpec.from_dict({**BINARY_GRATING,
-                            'incidence': {**BINARY_GRATING['incidence'], 'pol': 'tm'}})
-    assert tm.to_dict()['incidence']['pol'] == 1
+def test_tetm_normalises_to_the_word_and_has_no_interior():
+    """``tetm`` is a declaration with exactly two values — the canonical form is the word.
 
-    half = JobSpec.from_dict({**BINARY_GRATING,
-                              'incidence': {**BINARY_GRATING['incidence'], 'pol': 0.5}})
-    assert half.to_dict()['incidence']['pol'] == 0.5
-    assert JobSpec.from_json(half.to_json()).key() == half.key()
-    assert half.key() != tm.key()
+    The retired ``pol`` normalised the other way, to a TM *fraction*, because it accepted the
+    interior of ``[0, 1]``. That interior is what made it two different kinds of thing under
+    one key: at the ends a declaration, in between a linear angle in a bad unit. A spec that
+    wants the angle writes ``psi``.
+    """
+    assert JobSpec.from_dict(BINARY_GRATING).to_dict()['incidence']['tetm'] == 'te'
+    tm = JobSpec.from_dict({**BINARY_GRATING,
+                            'incidence': {**BINARY_GRATING['incidence'], 'tetm': 'tm'}})
+    assert tm.to_dict()['incidence']['tetm'] == 'tm'
+    assert JobSpec.from_json(tm.to_json()).key() == tm.key()
+    assert tm.key() != JobSpec.from_dict(BINARY_GRATING).key()
+
+    for interior in (0.5, 0, 1):
+        with pytest.raises(SpecError, match='tetm'):
+            JobSpec.from_dict({**BINARY_GRATING,
+                               'incidence': {**BINARY_GRATING['incidence'], 'tetm': interior}})
 
 
 def test_enums_accept_name_or_value():

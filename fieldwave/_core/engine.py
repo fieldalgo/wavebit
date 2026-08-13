@@ -15,7 +15,7 @@ from . import factorization as _fac
 from . import lattice as _lattice
 from .backend import _device_of, array_namespace
 from .enums import (DEFAULT_FACTORIZATION, DEFAULT_FORMULATION, DEFAULT_FOURIER_COEFFICIENTS,
-                    Factorization, Formulation, FourierCoefficients, coefficients_of,
+                    Factorization, Formulation, FourierCoefficients, Pol, coefficients_of,
                     factorization_of, formulation_of, resolve_fourier_options)
 from .geometry import StaticGeometry
 from .scattering import smm_1d as _smm_1d, smm_1d_conical as _smm_1d_conical, smm_2d as _smm_2d
@@ -106,6 +106,24 @@ _PSI_POLARIZATION_CLASH = (
     'polarization), so one must be dropped rather than silently overridden. '
     'psi = v is exactly polarization = (sin(v), cos(v)).')
 
+#: ``tetm`` declares the polarization away; naming one beside it is the same clash as
+#: ``psi`` with ``polarization``, one level up.
+_TETM_INCIDENCE_CLASH = (
+    'tetm and an incidence polarization (psi or polarization) both given: tetm declares '
+    'that the polarization is not a degree of freedom of this problem, so naming one is a '
+    'contradiction rather than a refinement. Drop tetm to keep the polarization free (the '
+    'conical path, 2-4x slower), or drop psi/polarization to keep the declaration.')
+
+#: ``pol`` was three things at once, and this is the rename. See :attr:`CoreSolveMixin.tetm`.
+_POL_RETIRED = (
+    "pol is gone; use tetm='te' or tetm='tm'. The old name said three things at once: "
+    'which polarization, which solver path, and (through a derived psi) a value that a '
+    'fractional pol -- pol=0.3 was psi = 0.35*pi -- turned into a third spelling of the '
+    'angle. tetm says only the first two, which are the ones that travel together: it '
+    'declares that the incidence has no polarization and no azimuth degree of freedom, '
+    'and that declaration is what buys the pure 1D TE/TM formulation. For a linear angle '
+    'use psi, and for anything elliptical use polarization=(a_s, a_p).')
+
 #: Raised by :meth:`CoreSolveMixin._reject_complex_psi`, which says why at length.
 _COMPLEX_PSI = (
     'psi must be a real angle; a complex psi is not the elliptical spelling it looks '
@@ -195,6 +213,8 @@ class CoreSolveMixin:
         """
         if self._polarization is not None:
             raise ValueError(_PSI_POLARIZATION_CLASH)
+        if self._tetm is not None:
+            raise ValueError(_TETM_INCIDENCE_CLASH)
         self._psi_given = True
 
     def _solve_fn(self, grating_type):
@@ -209,9 +229,112 @@ class CoreSolveMixin:
     _frozen_geometry = None
     _lattice_basis = None
     _polarization = None
-    #: Whether ``psi`` was set explicitly (rather than derived from ``pol``); the backend
-    #: ``psi`` setters maintain it. It is what lets ``polarization`` refuse to coexist with an
-    #: explicit ``psi`` without also refusing the ``psi`` every solver derives from ``pol``.
+    _tetm = None
+    #: ``None`` is a real state now, not an uninitialised one: it is what a solver whose
+    #: polarization was declared away by ``tetm`` reads back. The absence is meant to be
+    #: visible — a declared-away degree of freedom should not answer with a number.
+    _psi = None
+
+    @property
+    def tetm(self):
+        """``'te'`` / ``'tm'`` — or ``None``, the default. A *declaration*, not a value.
+
+        It says the incidence has **no polarization and no azimuth degree of freedom**: not
+        that they happen to be TE and zero right now, but that neither is a parameter of this
+        problem. That is what makes the pure 1D TE/TM formulation legal, and that formulation
+        is 2 to 4 times faster than the conical one it replaces (measured across ``fto``;
+        they agree to 1e-13).
+
+        The distinction is the reason this is not a second spelling of ``polarization=(1, 0)``.
+        Those two describe the same light and give the same numbers; they differ in what is
+        left free. ``polarization=(1, 0)`` keeps the polarization a live parameter — you can
+        differentiate it, sweep it, optimize it, and you pay conical cost for the privilege.
+        ``tetm='te'`` gives that up in exchange for the speed. A declared-away degree of
+        freedom is *absent*, so ``psi`` reads back as ``None`` rather than as a number whose
+        gradient is quietly zero.
+
+        Legal only where the formulation exists: a 1D structure, ``fto[1] == 0``, no azimuth,
+        and no ``psi`` or ``polarization`` beside it. Everywhere else it is refused rather
+        than ignored — ``_assign_grating_type`` does that check, and says which condition
+        failed.
+        """
+        return self._tetm
+
+    @tetm.setter
+    def tetm(self, value):
+        if value is None:
+            self._tetm = None
+            return
+        if isinstance(value, str):
+            key = value.lower()
+        elif isinstance(value, Pol):
+            key = value.name.lower()
+        else:
+            raise ValueError(
+                f"tetm must be 'te', 'tm' or None, got {value!r}. It is a declaration, not "
+                f'a quantity: there is no fraction between the two, and a linear angle '
+                f'between them is psi.')
+        if key not in ('te', 'tm'):
+            raise ValueError(f"tetm must be 'te', 'tm' or None, got {value!r}")
+        if self._psi_given or self._polarization is not None:
+            raise ValueError(_TETM_INCIDENCE_CLASH)
+        self._tetm = key
+
+    @property
+    def tetm_index(self):
+        """``0`` for TE, ``1`` for TM — what the pure 1D solves and ``field_1d`` dispatch on.
+
+        The core takes the index rather than the word because it indexes into the two
+        formulations rather than naming them; the word is the user's spelling.
+        """
+        return None if self._tetm is None else int(self._tetm == 'tm')
+
+    @property
+    def pol(self):
+        raise AttributeError(_POL_RETIRED)
+
+    @pol.setter
+    def pol(self, value):
+        raise AttributeError(_POL_RETIRED)
+
+    def _refuse_illegal_tetm(self, one_dimensional):
+        """``tetm`` is a claim about the problem; where it cannot hold, say which part failed.
+
+        Called from ``_assign_grating_type``, because that is where the structure is known.
+        The old ``pol`` had no such check: on a 2D structure it was accepted and then ignored,
+        and the fast path it was reaching for silently did not happen.
+        """
+        if self._tetm is None:
+            return
+        if not one_dimensional:
+            raise ValueError(
+                'tetm is only for a 1D structure: the pure TE/TM formulation it selects does '
+                'not exist on a 2D cell, where s and p couple. Drop tetm and give the '
+                'incidence as psi (linear) or polarization=(a_s, a_p).')
+        if self.fto[1] != 0:
+            raise ValueError(
+                f'tetm needs fto[1] == 0, got fto={list(self.fto)}. The pure TE/TM '
+                f'formulation keeps one out-of-plane order by construction; asking for '
+                f'y orders means the conical formulation, which is what dropping tetm '
+                f'selects.')
+        if self.phi is not None:
+            import numpy as np
+            try:
+                off_axis = complex(np.asarray(self.phi)) != 0
+            except (TypeError, ValueError):
+                # A traced azimuth is a parameter being differentiated or swept, which is
+                # precisely what the declaration says this problem does not have.
+                off_axis = True
+            if off_axis:
+                raise ValueError(
+                    'tetm and a nonzero phi both given: tetm declares that the azimuth is '
+                    'not a degree of freedom of this problem, so an off-axis plane of '
+                    'incidence contradicts it. Drop tetm for the conical path, which is '
+                    'what carries an azimuth.')
+
+    #: Whether ``psi`` was set explicitly, rather than being the pure-s default a solver
+    #: falls back to when no incidence was named. It is what lets ``polarization`` refuse to
+    #: coexist with a *given* ``psi`` without also refusing that default.
     _psi_given = False
 
     @property
@@ -241,6 +364,8 @@ class CoreSolveMixin:
             return
         if self._psi_given:
             raise ValueError(_PSI_POLARIZATION_CLASH)
+        if self._tetm is not None:
+            raise ValueError(_TETM_INCIDENCE_CLASH)
         pair = tuple(polarization)
         if len(pair) != 2:
             raise ValueError(
@@ -450,7 +575,8 @@ class CoreSolveMixin:
         self._formulation_assigned = Formulation.SECOND
         kx, _ = self.get_kx_ky_vector(wavelength)
         return self._finish(solve(
-            self.pol, wavelength, kx, self.n_top, self.n_bot, self.theta, self.thickness,
+            self.tetm_index, wavelength, kx, self.n_top, self.n_bot, self.theta,
+            self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             incidence_side=self.incidence_side, full=True))
 

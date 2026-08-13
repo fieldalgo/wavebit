@@ -146,7 +146,7 @@ def test_degenerate_eigenvalues_give_a_finite_gradient(name, diag):
 # 3. the RCWA case that motivates all of it
 # ----------------------------------------------------------------------
 UNIFORM = np.full((1, 1, 8), 2.5)
-STACK = dict(n_top=1.0, n_bot=1.0, phi=None, pol=0, fto=[4, 0],
+STACK = dict(n_top=1.0, n_bot=1.0, phi=None, tetm='te', fto=[4, 0],
              period=[0.7], wavelength=0.9, thickness=[0.2])
 
 

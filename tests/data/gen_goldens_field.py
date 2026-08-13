@@ -11,11 +11,11 @@ import fieldwave
 
 CASES = {
     # name: rcwa kwargs -> exercises grating_type 0 / 1 / 2
-    'te_1d':    dict(pol=0, phi=None, ucell=[[[3., 3., 3., 1., 1., 1.]]], thickness=[0.15],
+    'te_1d':    dict(tetm='te', phi=None, ucell=[[[3., 3., 3., 1., 1., 1.]]], thickness=[0.15],
                      n_top=2., n_bot=1., theta=0.2, fto=[4, 0], period=[0.77], wavelength=0.777),
-    'tm_1d':    dict(pol=1, phi=None, ucell=[[[3., 3., 3., 1., 1., 1.]]], thickness=[0.15],
+    'tm_1d':    dict(tetm='tm', phi=None, ucell=[[[3., 3., 3., 1., 1., 1.]]], thickness=[0.15],
                      n_top=2., n_bot=1., theta=0.2, fto=[4, 0], period=[0.77], wavelength=0.777),
-    '1d_2layer': dict(pol=0, phi=None, ucell=[[[3., 3., 1., 1., 3., 1.]], [[2., 2., 2., 1., 1., 1.]]],
+    '1d_2layer': dict(tetm='te', phi=None, ucell=[[[3., 3., 1., 1., 3., 1.]], [[2., 2., 2., 1., 1., 1.]]],
                       thickness=[0.15, 0.22], n_top=1., n_bot=1., theta=0.1, fto=[3, 0],
                       period=[0.7], wavelength=0.9),
     'conical':  dict(psi=0.4, phi=0.3, ucell=[[[3., 3., 3., 1., 1., 1.]]], thickness=[0.15],

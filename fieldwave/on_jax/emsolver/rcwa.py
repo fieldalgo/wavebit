@@ -44,7 +44,8 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                  ucell=None,
                  thickness=(0., ),
                  backend=1,
-                 pol=0.,
+                 tetm=None,
+                 pol=None,   # retired; kept only to say so
                  fto=(0, 0),
                  ucell_materials=None,
                  connecting_algo='ETM',
@@ -74,7 +75,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                  # supersedes psi (naming both raises). See docs/conventions.md.
                  ):
 
-        super().__init__(n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi, pol=pol,
+        super().__init__(n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi, tetm=tetm, pol=pol,
                          fto=fto, period=period, wavelength=wavelength,
                          thickness=thickness, connecting_algo=connecting_algo, perturbation=perturbation,
                          device=device, type_complex=type_complex,
@@ -165,14 +166,14 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
             return
 
         if self.modeling_type_assigned == 0:  # Raster
-            if self.ucell.shape[1] == 1:
-                # A polarization pair mixes s and p, which the pure 1D TE/TM path cannot
-                # carry by construction -- the conical path is the 1D formulation that can.
-                if ((self.pol in (0, 1)) and (self.phi is None) and (self.fto[1] == 0)
-                        and (self.polarization is None)):
-                    self._grating_type_assigned = 0
-                else:
-                    self._grating_type_assigned = 1
+            one_dimensional = self.ucell.shape[1] == 1
+            self._refuse_illegal_tetm(one_dimensional)
+            if one_dimensional:
+                # The declaration selects the path, and nothing else does. A named incidence
+                # -- psi, or a pair, which mixes s and p the pure path cannot carry -- leaves
+                # the polarization a live parameter, and the conical formulation is the 1D
+                # one that carries it.
+                self._grating_type_assigned = 0 if self._tetm is not None else 1
             else:
                 self._grating_type_assigned = 2
 
@@ -234,7 +235,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
 
         if self._grating_type_assigned == 0:
             res_y = 1
-            field_cell = field_1d(self.wavelength, kx, self.T1, self.layer_info_list, self.period, self.pol,
+            field_cell = field_1d(self.wavelength, kx, self.T1, self.layer_info_list, self.period, self.tetm_index,
                                        res_x=res_x, res_y=res_y, res_z=res_z)
         elif self._grating_type_assigned == 1:
             field_cell = field_1d_conical(self.wavelength, kx, ky, self.T1, self.layer_info_list, self.period,
@@ -255,7 +256,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         return field_cell
 
     def field_plot(self, field_cell):
-        field_plot(field_cell, self.pol)
+        field_plot(field_cell, self.tetm_index)
 
     @partial(jax.jit, static_argnums=(1, 2, 3, 4, 5),
              static_argnames=('res_x', 'res_y', 'res_z', 'set_field_input', 'geometry'))

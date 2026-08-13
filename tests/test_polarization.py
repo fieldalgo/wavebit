@@ -172,11 +172,19 @@ def test_assignment_clashes_in_both_orders():
         solver.polarization = (1, 0)
 
 
-def test_pol_derived_psi_does_not_block_the_pair():
-    """Every solver derives a ``psi`` from ``pol``; only a *given* one is exclusive."""
-    solver = fieldwave.rcwa(backend=0, pol=1)
+def test_the_default_psi_does_not_block_the_pair():
+    """A solver that named no incidence falls back to pure s; only a *given* psi is exclusive.
+
+    ``tetm`` is the other story and is refused beside a pair — it declares the polarization
+    away rather than defaulting it, which is the distinction the two tests together pin.
+    """
+    solver = fieldwave.rcwa(backend=0)
+    assert float(np.asarray(solver.psi)) == pytest.approx(np.pi / 2)
     solver.polarization = (1, 0)
     assert solver.polarization == (1, 0)
+
+    with pytest.raises(ValueError, match='tetm and an incidence polarization'):
+        fieldwave.rcwa(backend=0, tetm='tm', polarization=(1, 0))
 
 
 def test_degenerate_pairs_are_refused():
@@ -214,16 +222,28 @@ def test_a_real_angle_written_as_complex_is_accepted(backend):
 
 
 @pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
-@pytest.mark.parametrize('spelling', ['psi', 'pol'])
+@pytest.mark.parametrize('spelling', ['given', 'default'])
 def test_psi_is_stored_real(backend, spelling):
     """Real dtype is what lets the refusal read a dtype, and it keeps the AD leaf real.
 
     ``theta`` is deliberately complex (evanescent incidence); ``psi`` has no such meaning,
     and the imaginary direction it used to carry was the unnormalized ``cosh`` path.
     """
-    kw = {'psi': 0.7} if spelling == 'psi' else {'pol': 0}
+    kw = {'psi': 0.7} if spelling == 'given' else {}
     solver = fieldwave.rcwa(backend=backend, **kw)
     assert not np.iscomplexobj(np.asarray(solver.psi)), np.asarray(solver.psi).dtype
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+def test_a_declared_away_angle_is_absent_rather_than_defaulted(backend):
+    """``tetm`` leaves the ``psi`` slot empty, and that is the point.
+
+    The retired ``pol`` filled it with a derived ``pi/2`` that the pure 1D solve never reads,
+    so its gradient was a silent zero — indistinguishable from a true one.
+    """
+    assert fieldwave.rcwa(backend=backend, tetm='te').psi is None
+    assert fieldwave.rcwa(backend=backend, tetm='tm').tetm == 'tm'
+    assert fieldwave.rcwa(backend=backend, tetm='tm').tetm_index == 1
 
 
 def test_complex_psi_refusal_does_not_reach_the_pair():
@@ -241,11 +261,11 @@ def test_a_1d_structure_with_a_pair_takes_the_conical_path():
     the routing an implementation detail rather than a behavior change.
     """
     kw = dict(CFG_1D, ucell=UCELL_1D)
-    for pair, pol in (((1, 0), 0), ((0, 1), 1)):
+    for pair, tetm in (((1, 0), 'te'), ((0, 1), 'tm')):
         solver = fieldwave.rcwa(polarization=pair, **kw)
         via_pair = solver.conv_solve()
         assert solver.grating_type_assigned == 1, 'expected the conical formulation'
-        via_pure = fieldwave.rcwa(pol=pol, **kw).conv_solve()
+        via_pure = fieldwave.rcwa(tetm=tetm, **kw).conv_solve()
         np.testing.assert_allclose(np.asarray(via_pair.res.R), np.asarray(via_pure.res.R),
                                    atol=1e-11)
         np.testing.assert_allclose(np.asarray(via_pair.res.T), np.asarray(via_pure.res.T),
@@ -481,9 +501,9 @@ _SPEC = {
         'n_top': 1.0, 'n_bot': 1.5, 'period': [700.0],
         'layers': [{'thickness': 300.0, 'eps': [[1.0, 1.0, 3.5, 3.5]]}],
     },
-    # 'pol' stated for the same reason test_spec.py's fixture states it: the untouched
-    # default serializes as the enum name and only normalizes to a number through from_dict.
-    'incidence': {'wavelength': 900.0, 'theta': 0.0, 'phi': 0.0, 'pol': 'te',
+    # No `tetm`: it declares the polarization away, so it cannot sit beside the pair the
+    # rest of this file is about. The spec omits the key entirely when nothing declares it.
+    'incidence': {'wavelength': 900.0, 'theta': 0.0, 'phi': 0.0,
                   'polarization': [[1.0, 0.0], [0.0, -1.0]]},   # (1, -1j) as [re, im]
 }
 
@@ -517,6 +537,6 @@ def test_run_executes_the_pair_spec():
 def test_a_spec_without_the_pair_hashes_as_before():
     """The new key is emitted only when set, so every pre-existing spec key is stable."""
     plain = dict(_SPEC)
-    plain['incidence'] = {'wavelength': 900.0, 'theta': 0.0, 'phi': 0.0, 'pol': 'te'}
+    plain['incidence'] = {'wavelength': 900.0, 'theta': 0.0, 'phi': 0.0}
     d = JobSpec.from_dict(plain).to_dict()
     assert 'polarization' not in d['incidence']

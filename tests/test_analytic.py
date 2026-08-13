@@ -311,7 +311,7 @@ def test_analytic_shape_parameters_are_absolute_lengths():
 # ----------------------------------------------------------------------
 def test_energy_conservation_lossless():
     cfg = dict(n_top=1.0, n_bot=1.0, theta=np.deg2rad(5), phi=np.deg2rad(20),
-               period=(1.0, 1.2), wavelength=1.5, thickness=(0.3, 0.2), pol=0.3)
+               period=(1.0, 1.2), wavelength=1.5, thickness=(0.3, 0.2), psi=0.35 * np.pi)
     ucell = [
         dict(n_base=1.0, shapes=[dict(type='ellipse', cx=0.5, cy=0.6, lx=0.5, ly=0.3,
                                       angle=np.deg2rad(40), n_index=2.4)]),
@@ -331,7 +331,7 @@ def test_energy_conservation_lossless():
 # ----------------------------------------------------------------------
 def test_cross_backend_agreement():
     cfg = dict(n_top=1.0, n_bot=1.0, theta=np.deg2rad(5), phi=np.deg2rad(20),
-               period=(1.0, 1.2), wavelength=1.5, thickness=(0.3,), pol=0.3)
+               period=(1.0, 1.2), wavelength=1.5, thickness=(0.3,), psi=0.35 * np.pi)
     ucell = [dict(n_base=1.0, shapes=[dict(type='ellipse', cx=0.5, cy=0.6, lx=0.5, ly=0.3,
                                            angle=np.deg2rad(40), n_index=2.4),
                                       dict(type='circle', cx=0.3, cy=0.3, lx=0.2,
@@ -351,7 +351,7 @@ def test_cross_backend_agreement():
 # ----------------------------------------------------------------------
 def _fd_grad_lx(shape_type, lx0=0.5):
     cfg = dict(n_top=1.0, n_bot=1.0, theta=0.0, phi=np.deg2rad(10),
-               period=(1.0, 1.0), wavelength=1.5, thickness=(0.4,), pol=0.5)
+               period=(1.0, 1.0), wavelength=1.5, thickness=(0.4,), psi=np.pi / 4)
 
     def T(lx):
         s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, n_index=2.5,
@@ -400,7 +400,7 @@ def test_jax_gradient(shape_type):
 # ----------------------------------------------------------------------
 def test_analytic_beats_staircase_tilted():
     cfg = dict(n_top=1.0, n_bot=1.0, theta=0.0, phi=None,
-               period=(1.0, 1.0), wavelength=1.6, thickness=(0.6,), pol=1.0)
+               period=(1.0, 1.0), wavelength=1.6, thickness=(0.6,), psi=0.0)
     NR, ang, L, c = 3.5, np.deg2rad(30), 0.5, 0.5
     analytic = [dict(n_base=1.0, shapes=[dict(type='rectangle', cx=c, cy=c, lx=L, ly=L,
                                               angle=ang, n_index=NR)])]
@@ -506,7 +506,7 @@ def test_overlapping_shapes_move_the_answer_while_the_vector_path_does_not():
     """
     period, n_base = [300.0, 300.0], 1.0
     cfg = dict(period=period, thickness=[205.0], fto=[6, 6], n_top=1.0, n_bot=1.0,
-               wavelength=900.0, pol=0, theta=0.0, phi=0.0)
+               wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0)
     boxes = [(130.0, 2.0), (190.0, 3.0)]
 
     n_pix = 900
@@ -535,7 +535,7 @@ def test_overlapping_shapes_move_the_answer_while_the_vector_path_does_not():
 # ------------------------------------------------------- the layer has to say how shapes combine
 
 CHECK_CFG = dict(period=[300.0, 300.0], thickness=[205.0], fto=[2, 2], n_top=1.0, n_bot=1.0,
-                 wavelength=900.0, pol=0, theta=0.0, phi=0.0)
+                 wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0)
 
 
 def rod(cx, cy=150.0, lx=120.0, ly=120.0, angle=0.0, n_index=2.0, type='rectangle'):
@@ -769,7 +769,7 @@ def test_the_check_steps_aside_for_a_traced_solve():
 # ------------------------------------------------------------------ the block path's half
 
 VECTOR_CFG = dict(period=[300.0, 300.0], thickness=[205.0], fto=[6, 6], n_top=1.0, n_bot=1.0,
-                  wavelength=900.0, pol=0, theta=0.0, phi=0.0)
+                  wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0)
 
 
 def _vector_box(cx, n_index=2.0):

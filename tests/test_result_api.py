@@ -16,7 +16,7 @@ CELL_2D = np.array([[[1.0, 3.5], [3.5, 1.0]]])
 
 
 def _solve_1d(**kw):
-    args = dict(backend=0, pol=0, n_top=1.0, n_bot=1.5, theta=0.3, fto=2, wavelength=WL,
+    args = dict(backend=0, tetm='te', n_top=1.0, n_bot=1.5, theta=0.3, fto=2, wavelength=WL,
                 period=[900.0], ucell=CELL_1D, thickness=[300.0])
     args.update(kw)
     return fieldwave.rcwa(**args).conv_solve()

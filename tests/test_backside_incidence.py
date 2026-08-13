@@ -50,8 +50,8 @@ STACKS = [
     ('absorbing_incidence_medium', [1.0, SI, AU], [30.0]),
 ]
 
-INCIDENCE = [(pol, theta) for pol in (0, 1) for theta in (0.0, 0.4)]
-IDS = [f'{"te" if p == 0 else "tm"}_theta{t}' for p, t in INCIDENCE]
+INCIDENCE = [(tetm, theta) for tetm in ('te', 'tm') for theta in (0.0, 0.4)]
+IDS = [f'{p}_theta{t}' for p, t in INCIDENCE]
 
 # A 1D grating stack that is asymmetric in z, with an absorbing layer, so nothing about it
 # can hide a side mix-up: two patterned layers of different duty cycle and index.
@@ -62,25 +62,25 @@ GRATING_KW = dict(backend=0, n_top=1.0, n_bot=2.0, fto=10, period=[0.7], wavelen
 _GRATING_LOSSLESS = np.array([[[3.0] * 6 + [1.0] * 6], [[2.2] * 8 + [1.0] * 4]])
 
 
-def _solver(ns, ds, theta, pol, path, algo, side):
+def _solver(ns, ds, theta, tetm, path, algo, side):
     """A solver on the *scene* ``ns`` (top..bottom), illuminated from ``side``."""
     layers = ns[1:-1]
     common = dict(backend=0, connecting_algo=algo, n_top=ns[0], n_bot=ns[-1], theta=theta,
                   wavelength=WL, thickness=ds, incidence_side=side)
     if path == '1d':
-        return fieldwave.rcwa(pol=pol, fto=0, period=[WL * 2],
+        return fieldwave.rcwa(tetm=tetm, fto=0, period=[WL * 2],
                               ucell=np.array([[[n, n]] for n in layers]), **common)
     cell = ([[[n, n]] for n in layers] if path == 'conical'
             else [[[n, n], [n, n]] for n in layers])
-    return fieldwave.rcwa(phi=0.0, psi=(np.pi / 2 if pol == 0 else 0.0),
+    return fieldwave.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0),
                           fto=[0, 0] if path == '2d' else 0,
                           period=[WL * 2, WL * 2], ucell=np.array(cell), **common)
 
 
-def _amps(res, pol):
+def _amps(res, tetm):
     """The centre-order Fresnel pair ``(r, t)`` for the asked polarization."""
-    r = np.asarray(res.res.r_s if pol == 0 else res.res.r_p).ravel()
-    t = np.asarray(res.res.t_s if pol == 0 else res.res.t_p).ravel()
+    r = np.asarray(res.res.r_s if tetm == 'te' else res.res.r_p).ravel()
+    t = np.asarray(res.res.t_s if tetm == 'te' else res.res.t_p).ravel()
     return complex(r[r.size // 2]), complex(t[t.size // 2])
 
 
@@ -88,9 +88,9 @@ def _amps(res, pol):
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('path', ['1d', 'conical', '2d'])
-@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
+@pytest.mark.parametrize('tetm,theta', INCIDENCE, ids=IDS)
 @pytest.mark.parametrize('case', STACKS, ids=[c[0] for c in STACKS])
-def test_backside_amplitudes_match_the_reversed_stack_oracle(case, pol, theta, path, algo):
+def test_backside_amplitudes_match_the_reversed_stack_oracle(case, tetm, theta, path, algo):
     """``r`` / ``t`` from below equal the analytic answer for the hand-reversed stack.
 
     The mirror identity is exact — ``z -> -z`` is a symmetry of Maxwell's equations and a
@@ -101,17 +101,17 @@ def test_backside_amplitudes_match_the_reversed_stack_oracle(case, pol, theta, p
     side of the assertion, which is itself a statement about the contract.
     """
     _, ns, ds = case
-    want_r = analytic_r(ns[::-1], ds[::-1], WL, theta, pol)
-    want_t = analytic_t(ns[::-1], ds[::-1], WL, theta, pol)
-    res = _solver(ns, ds, theta, pol, path, algo, 'bottom').conv_solve()
-    got_r, got_t = _amps(res, pol)
+    want_r = analytic_r(ns[::-1], ds[::-1], WL, theta, tetm)
+    want_t = analytic_t(ns[::-1], ds[::-1], WL, theta, tetm)
+    res = _solver(ns, ds, theta, tetm, path, algo, 'bottom').conv_solve()
+    got_r, got_t = _amps(res, tetm)
     assert abs(got_r - want_r) < 1e-12, (got_r, want_r)
     assert abs(got_t - want_t) < 1e-12, (got_t, want_t)
 
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
-@pytest.mark.parametrize('pol,theta', INCIDENCE, ids=IDS)
-def test_backside_efficiencies_conserve_energy_on_a_lossless_stack(pol, theta, algo):
+@pytest.mark.parametrize('tetm,theta', INCIDENCE, ids=IDS)
+def test_backside_efficiencies_conserve_energy_on_a_lossless_stack(tetm, theta, algo):
     """``R + T == 1`` from below, which pins the ``n_bot*cos(theta_bot)`` normalization.
 
     The amplitude oracle above cannot see a wrong incident-power factor (it never forms a
@@ -119,14 +119,14 @@ def test_backside_efficiencies_conserve_energy_on_a_lossless_stack(pol, theta, a
     from the top-side solve while their sum may not.
     """
     _, ns, ds = STACKS[0]
-    res = _solver(ns, ds, theta, pol, '1d', algo, 'bottom').conv_solve()
+    res = _solver(ns, ds, theta, tetm, '1d', algo, 'bottom').conv_solve()
     assert float(np.sum(res.R) + np.sum(res.T)) == pytest.approx(1.0, abs=1e-12)
 
 
 # ------------------------------------------------------------------------------ reciprocity
 
-@pytest.mark.parametrize('pol', [0, 1], ids=['te', 'tm'])
-def test_transmittance_is_reciprocal_and_reflectance_is_not(pol):
+@pytest.mark.parametrize('tetm', ['te', 'tm'], ids=['te', 'tm'])
+def test_transmittance_is_reciprocal_and_reflectance_is_not(tetm):
     """Same in-plane k both ways: ``T`` equal (absorbing interior included), ``R`` not.
 
     The two sides are compared at the *same* ``k_par`` — ``n_top*sin(theta_top) ==
@@ -140,8 +140,8 @@ def test_transmittance_is_reciprocal_and_reflectance_is_not(pol):
     th_t = float(np.arcsin(kpar / ns[0]))
     th_b = float(np.arcsin(kpar / ns[-1].real))
 
-    top = _solver(ns, ds, th_t, pol, '1d', 'ETM', 'top').conv_solve()
-    bot = _solver(ns, ds, th_b, pol, '1d', 'ETM', 'bottom').conv_solve()
+    top = _solver(ns, ds, th_t, tetm, '1d', 'ETM', 'top').conv_solve()
+    bot = _solver(ns, ds, th_b, tetm, '1d', 'ETM', 'bottom').conv_solve()
 
     T_t, T_b = float(np.sum(top.T)), float(np.sum(bot.T))
     R_t, R_b = float(np.sum(top.R)), float(np.sum(bot.R))
@@ -149,8 +149,8 @@ def test_transmittance_is_reciprocal_and_reflectance_is_not(pol):
     assert abs(R_t - R_b) > 1e-3, 'an asymmetric stack must reflect differently per side'
 
 
-@pytest.mark.parametrize('pol', [0, 1], ids=['te', 'tm'])
-def test_grating_transmittance_is_reciprocal_per_order(pol):
+@pytest.mark.parametrize('tetm', ['te', 'tm'], ids=['te', 'tm'])
+def test_grating_transmittance_is_reciprocal_per_order(tetm):
     """The zeroth order transmits equally both ways at matched (reversed) in-plane k.
 
     Per-order, not summed: the two sides transmit into different order sets, so total ``T``
@@ -164,7 +164,7 @@ def test_grating_transmittance_is_reciprocal_per_order(pol):
     fto = kw['fto']
 
     def T00(side, theta):
-        res = fieldwave.rcwa(pol=pol, theta=theta, incidence_side=side, **kw).conv_solve()
+        res = fieldwave.rcwa(tetm=tetm, theta=theta, incidence_side=side, **kw).conv_solve()
         return float(np.asarray(res.T).ravel()[fto])
 
     assert T00('top', 0.0) == pytest.approx(T00('bottom', 0.0), abs=1e-12)
@@ -173,8 +173,8 @@ def test_grating_transmittance_is_reciprocal_per_order(pol):
     th_b = float(np.arcsin(np.sin(th) * kw['n_top'] / kw['n_bot']))
     assert T00('top', th) == pytest.approx(T00('bottom', -th_b), abs=1e-12)
 
-    res_t = fieldwave.rcwa(pol=pol, theta=0.0, incidence_side='top', **kw).conv_solve()
-    res_b = fieldwave.rcwa(pol=pol, theta=0.0, incidence_side='bottom', **kw).conv_solve()
+    res_t = fieldwave.rcwa(tetm=tetm, theta=0.0, incidence_side='top', **kw).conv_solve()
+    res_b = fieldwave.rcwa(tetm=tetm, theta=0.0, incidence_side='bottom', **kw).conv_solve()
     dR00 = abs(float(np.asarray(res_t.R).ravel()[fto])
                - float(np.asarray(res_b.R).ravel()[fto]))
     assert dR00 > 1e-2, 'an asymmetric grating must reflect differently per side'
@@ -182,8 +182,8 @@ def test_grating_transmittance_is_reciprocal_per_order(pol):
 
 # ------------------------------------------------------------- the two algorithms cross-check
 
-@pytest.mark.parametrize('pol', [0, 1], ids=['te', 'tm'])
-def test_backside_etm_and_smm_agree_per_order(pol):
+@pytest.mark.parametrize('tetm', ['te', 'tm'], ids=['te', 'tm'])
+def test_backside_etm_and_smm_agree_per_order(tetm):
     """One cascade read backwards against one mirrored recursion, order by order.
 
     The two backside implementations are deliberately different (see
@@ -192,13 +192,13 @@ def test_backside_etm_and_smm_agree_per_order(pol):
     this holds the floating-point realizations to 1e-12 on a stack with diffraction, loss
     and oblique incidence in play at once.
     """
-    a = fieldwave.rcwa(connecting_algo='ETM', pol=pol, theta=0.3,
+    a = fieldwave.rcwa(connecting_algo='ETM', tetm=tetm, theta=0.3,
                        incidence_side='bottom', **GRATING_KW).conv_solve()
-    b = fieldwave.rcwa(connecting_algo='SMM', pol=pol, theta=0.3,
+    b = fieldwave.rcwa(connecting_algo='SMM', tetm=tetm, theta=0.3,
                        incidence_side='bottom', **GRATING_KW).conv_solve()
     assert np.abs(np.asarray(a.R) - np.asarray(b.R)).max() < 1e-12
     assert np.abs(np.asarray(a.T) - np.asarray(b.T)).max() < 1e-12
-    r_a, r_b = (a.res.r_s, b.res.r_s) if pol == 0 else (a.res.r_p, b.res.r_p)
+    r_a, r_b = (a.res.r_s, b.res.r_s) if tetm == 'te' else (a.res.r_p, b.res.r_p)
     assert np.abs(np.asarray(r_a) - np.asarray(r_b)).max() < 1e-12
 
 
@@ -223,7 +223,7 @@ def test_field_cell_comes_back_in_scene_coordinates(algo):
     and the comparison fails at O(1) — and for the SMM this is also the only test of its
     backside field-state recovery, which shares no code with its efficiency read.
     """
-    kw = dict(GRATING_KW, connecting_algo=algo, pol=0, theta=0.3)
+    kw = dict(GRATING_KW, connecting_algo=algo, tetm='te', theta=0.3)
     s_b = fieldwave.rcwa(incidence_side='bottom', **kw)
     _, cell_b = s_b.conv_solve_field(res_x=16, res_z=8)
 
@@ -236,7 +236,7 @@ def test_field_cell_comes_back_in_scene_coordinates(algo):
 
 
 def test_backside_field_cells_agree_between_algorithms():
-    kw = dict(GRATING_KW, pol=1, theta=0.3)
+    kw = dict(GRATING_KW, tetm='tm', theta=0.3)
     _, c1 = fieldwave.rcwa(connecting_algo='ETM', incidence_side='bottom',
                            **kw).conv_solve_field(res_x=16, res_z=8)
     _, c2 = fieldwave.rcwa(connecting_algo='SMM', incidence_side='bottom',
@@ -254,9 +254,9 @@ def test_backside_holds_on_every_backend(backend):
         import importlib
         importlib.import_module('fieldwave.on_jax')          # enables x64
 
-    ref = fieldwave.rcwa(pol=0, theta=0.3, incidence_side='bottom',
+    ref = fieldwave.rcwa(tetm='te', theta=0.3, incidence_side='bottom',
                          **GRATING_KW).conv_solve()
-    got = fieldwave.rcwa(pol=0, theta=0.3, incidence_side='bottom',
+    got = fieldwave.rcwa(tetm='te', theta=0.3, incidence_side='bottom',
                          **{**GRATING_KW, 'backend': backend}).conv_solve()
     assert np.abs(np.asarray(ref.R) - np.asarray(got.R)).max() < 1e-12
     assert np.abs(np.asarray(ref.T) - np.asarray(got.T)).max() < 1e-12

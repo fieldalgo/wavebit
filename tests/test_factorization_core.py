@@ -134,7 +134,7 @@ def test_factorization_feeds_solve_bit_exactly():
     wl, n_top, n_bot, theta, period, fto = 0.777, 2.0, 1.0, 0.3, [0.77], [6, 0]
     thickness = [0.15]
 
-    solver = fieldwave.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=None, pol=0,
+    solver = fieldwave.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=None, tetm='te',
                           fto=fto, period=period, wavelength=wl, thickness=thickness, ucell=ucell)
     legacy = solver.conv_solve()
     kx, _ = solver.get_kx_ky_vector(wl)
@@ -163,7 +163,7 @@ def test_end_to_end_gradient_wrt_ucell_1d():
     ucell = np.array([[[3., 3., 3., 1., 1., 1.]]])
     direction = np.ones_like(ucell)
     fto = [6, 0]
-    solver = fieldwave.rcwa(backend=0, n_top=2.0, n_bot=1.0, theta=0.3, phi=None, pol=0,
+    solver = fieldwave.rcwa(backend=0, n_top=2.0, n_bot=1.0, theta=0.3, phi=None, tetm='te',
                           fto=fto, period=[0.77], wavelength=0.777, thickness=[0.15], ucell=ucell)
     kx, _ = solver.get_kx_ky_vector(0.777)
     theta = complex(solver.theta)
@@ -402,7 +402,7 @@ def test_cfs_end_to_end_gradient_wrt_ucell():
     wl, n_top, n_bot, d = 0.777, 2.0, 1.0, 0.15
     compression = [compression_indices(ucell[i]) for i in range(ucell.shape[0])]
 
-    solver = fieldwave.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=0.3, phi=None, pol=0,
+    solver = fieldwave.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=0.3, phi=None, psi=np.pi / 2,
                           fto=fto, period=[0.77], wavelength=wl, thickness=[d], ucell=ucell)
     kx, _ = solver.get_kx_ky_vector(wl)
     theta = complex(solver.theta)
@@ -441,7 +441,7 @@ def _transpose_symmetric_L(N=48):
 def _transmission_map(ucell, factorization, fto, psi):
     res = fieldwave.rcwa(
         backend=0, factorization=factorization, fto=[fto, fto],
-        pol=1, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=psi,
+        n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=psi,
         wavelength=1.3, period=[1.0, 1.0], thickness=[0.4], ucell=ucell).conv_solve()
     t = np.asarray(res.T)
     ff = int(round(t.size ** 0.5))

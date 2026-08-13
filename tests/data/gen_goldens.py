@@ -18,12 +18,12 @@ def rand(shape, seed):
     return np.random.default_rng(seed).uniform(1.0, 4.0, size=shape)
 
 CASES = {
- 'te_1layer':   dict(pol=0, phi=None, ucell=[[[3.,3.,3.,1.,1.,1.]]], thickness=[0.15], n_top=2., n_bot=1., theta=0., fto=[6,0], period=[0.77], wavelength=0.777),
- 'tm_1layer':   dict(pol=1, phi=None, ucell=[[[3.,3.,3.,1.,1.,1.]]], thickness=[0.15], n_top=2., n_bot=1., theta=0., fto=[6,0], period=[0.77], wavelength=0.777),
- 'te_oblique':  dict(pol=0, phi=None, ucell=[[[3.,3.,3.,1.,1.,1.]]], thickness=[0.2], n_top=1., n_bot=1.5, theta=0.3, fto=[6,0], period=[0.77], wavelength=0.777),
- 'tm_oblique':  dict(pol=1, phi=None, ucell=[[[3.,3.,3.,1.,1.,1.]]], thickness=[0.2], n_top=1., n_bot=1.5, theta=0.3, fto=[6,0], period=[0.77], wavelength=0.777),
- 'te_2layer':   dict(pol=0, phi=None, ucell=[[[3.,3.,1.,1.,3.,1.]],[[2.,2.,2.,1.,1.,1.]]], thickness=[0.15,0.22], n_top=1., n_bot=1., theta=0., fto=[5,0], period=[0.7], wavelength=0.9),
- 'te_same_mat': dict(pol=0, phi=None, ucell=[[[3.,3.,1.,1.,3.,1.]],[[1.,1.,1.,1.,1.,1.]]], thickness=[0.2,0.1], n_top=1., n_bot=1., theta=0., fto=[5,0], period=[0.7], wavelength=0.9),
+ 'te_1layer':   dict(tetm='te', phi=None, ucell=[[[3.,3.,3.,1.,1.,1.]]], thickness=[0.15], n_top=2., n_bot=1., theta=0., fto=[6,0], period=[0.77], wavelength=0.777),
+ 'tm_1layer':   dict(tetm='tm', phi=None, ucell=[[[3.,3.,3.,1.,1.,1.]]], thickness=[0.15], n_top=2., n_bot=1., theta=0., fto=[6,0], period=[0.77], wavelength=0.777),
+ 'te_oblique':  dict(tetm='te', phi=None, ucell=[[[3.,3.,3.,1.,1.,1.]]], thickness=[0.2], n_top=1., n_bot=1.5, theta=0.3, fto=[6,0], period=[0.77], wavelength=0.777),
+ 'tm_oblique':  dict(tetm='tm', phi=None, ucell=[[[3.,3.,3.,1.,1.,1.]]], thickness=[0.2], n_top=1., n_bot=1.5, theta=0.3, fto=[6,0], period=[0.77], wavelength=0.777),
+ 'te_2layer':   dict(tetm='te', phi=None, ucell=[[[3.,3.,1.,1.,3.,1.]],[[2.,2.,2.,1.,1.,1.]]], thickness=[0.15,0.22], n_top=1., n_bot=1., theta=0., fto=[5,0], period=[0.7], wavelength=0.9),
+ 'te_same_mat': dict(tetm='te', phi=None, ucell=[[[3.,3.,1.,1.,3.,1.]],[[1.,1.,1.,1.,1.,1.]]], thickness=[0.2,0.1], n_top=1., n_bot=1., theta=0., fto=[5,0], period=[0.7], wavelength=0.9),
  'conical':     dict(psi=0.4, phi=0.3, ucell=[[[3.,3.,3.,1.,1.,1.]]], thickness=[0.15], n_top=2., n_bot=1., theta=0.2, fto=[6,0], period=[0.77], wavelength=0.777),
  'conical_2l':  dict(psi=1.1, phi=0.5, ucell=[[[3.,3.,1.,1.,3.,1.]],[[2.,2.,2.,1.,1.,1.]]], thickness=[0.15,0.22], n_top=1., n_bot=1.5, theta=0.3, fto=[5,0], period=[0.7], wavelength=0.9),
  '2d_normal':   dict(psi=0., phi=0., ucell=rand((1,5,5),0), thickness=[0.2], n_top=1., n_bot=1., theta=0., fto=[2,2], period=[1.,1.], wavelength=0.9),

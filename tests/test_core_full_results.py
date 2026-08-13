@@ -33,13 +33,13 @@ def _assert_all_fields(legacy_sub, got):
             f, np.max(np.abs(want - np.array(got[f]))))
 
 
-@pytest.mark.parametrize('pol', [0, 1], ids=['te', 'tm'])
-def test_solve_1d_full_result_matches_legacy(pol):
-    kw = dict(n_top=2.0, n_bot=1.0, theta=0.3, phi=None, pol=pol, fto=[6, 0],
+@pytest.mark.parametrize('tetm', ['te', 'tm'], ids=['te', 'tm'])
+def test_solve_1d_full_result_matches_legacy(tetm):
+    kw = dict(n_top=2.0, n_bot=1.0, theta=0.3, phi=None, tetm=tetm, fto=[6, 0],
               period=[0.77], wavelength=0.777, thickness=[0.15],
               ucell=np.array([[[3., 3., 3., 1., 1., 1.]]]))
     solver, legacy, conv, kx, _ = _setup(**kw)
-    got = solve_1d(pol, kw['wavelength'], kx, kw['n_top'], kw['n_bot'], solver.theta,
+    got = solve_1d(solver.tetm_index, kw['wavelength'], kx, kw['n_top'], kw['n_bot'], solver.theta,
                    solver.thickness, *conv, full=True)
     _assert_all_fields(legacy.res, got['res'])
 
