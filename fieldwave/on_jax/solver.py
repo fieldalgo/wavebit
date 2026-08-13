@@ -18,7 +18,7 @@ class SolverJax(RCWAJax, OptimizerJax):
         # subtree, so a solver without a pair flattens exactly as it did before.
         children = (self.n_top, self.n_bot, self.theta, self.phi, self.psi,
                     self.period, self.wavelength, self.ucell, self.thickness,
-                    self._polarization)
+                    self._chi, self._polarization)
         aux_data = {
             'backend': self.backend,
             'tetm': self.tetm,
@@ -55,8 +55,8 @@ class SolverJax(RCWAJax, OptimizerJax):
         # legal when it was flattened. Rebuild without it, then restore the slot directly.
         aux_data = dict(aux_data)
         psi_given = aux_data.pop('psi_given')
-        *core, polarization = children
-        solver = cls(*core, **aux_data)
+        *core, chi, polarization = children
+        solver = cls(*core, chi=chi, **aux_data)
         # Straight into the slot, bypassing the setter's validation: the pair may now be a
         # tuple of tracers, and the setter's `(0, 0)` check reads concrete values. It already
         # guards that with a try/except, but there is nothing left to validate here anyway --

@@ -5,7 +5,7 @@ from fieldwave._core.backend import check_input_precision
 
 
 class _BaseRCWA(CoreSolveMixin):
-    def __init__(self, n_top=1., n_bot=1., theta=0., phi=None, psi=None, tetm=None, fto=(0, 0), pol=None,
+    def __init__(self, n_top=1., n_bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None, fto=(0, 0), pol=None,
                  period=(1., 1.), wavelength=1.,
                  thickness=(0.,), connecting_algo='ETM', perturbation=1E-20,
                  device=0, type_complex=np.complex128, polarization=None):
@@ -37,6 +37,7 @@ class _BaseRCWA(CoreSolveMixin):
         # and the two spellings below raise against it rather than silently winning.
         self.tetm = tetm
         self.psi = psi
+        self.chi = chi
         self.polarization = polarization
         if self._tetm is None and self._psi is None and polarization is None:
             self._default_psi()
@@ -126,13 +127,17 @@ class _BaseRCWA(CoreSolveMixin):
     def psi(self, psi):
         if psi is not None:
             self._psi_set_explicitly()
-            self._reject_complex_psi(psi)
+            self._reject_complex_angle(psi)
             # Real dtype, unlike `theta`: a complex theta means evanescent incidence and is
-            # a feature, while a complex psi is only ever the mistake `_reject_complex_psi`
+            # a feature, while a complex psi is only ever the mistake `_reject_complex_angle`
             # describes. Storing it real is what lets the refusal read a dtype, and it keeps
             # the autodiff leaf real — the imaginary direction it used to carry was the
             # unnormalized cosh path, not physics.
             self._psi = np.array(np.real(psi), dtype=self.type_float)
+
+    def _as_real_angle(self, value):
+        """An angle in the real dtype — the storage `chi` shares with `psi`."""
+        return np.array(np.real(value), dtype=self.type_float)
 
     def _default_psi(self):
         """Pure s, applied when no incidence was named and none was declared away.

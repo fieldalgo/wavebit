@@ -63,11 +63,14 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
                  # arrives from. Scene labels (n_top / n_bot / ucell order) never move;
                  # results are incidence-relative and theta/phi are measured in the
                  # incidence medium. See docs/conventions.md.
+                 chi=None,                   # ellipticity angle; with psi it is the
+                 # canonical (psi, chi) chart of the polarization state. Also at the
+                 # end, for the reason above.
                  polarization=None,          # complex incident amplitude pair (a_s, a_p);
                  # supersedes psi (naming both raises). See docs/conventions.md.
                  ):
 
-        super().__init__(n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi, tetm=tetm, pol=pol,
+        super().__init__(n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi, chi=chi, tetm=tetm, pol=pol,
                          fto=fto, period=period, wavelength=wavelength,
                          thickness=thickness, connecting_algo=connecting_algo, perturbation=perturbation,
                          device=device, type_complex=type_complex,

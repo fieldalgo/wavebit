@@ -56,6 +56,7 @@ All angles are **radians**.
 | `theta` | polar incidence angle, measured from the stack normal in the incidence medium |
 | `phi` | azimuth of the plane of incidence, from the `+x` axis |
 | `psi` | polarization: the angle of **E** from the p direction in the plane transverse to **k**. `psi = pi/2` is pure s (TE-like), `psi = 0` pure p (TM-like). **Real** — a complex `psi` is refused, see below |
+| `chi` | ellipticity angle: `tan(chi)` is the polarization ellipse's minor/major axis ratio and its sign is the rotation direction. `chi = 0` is linear (the `psi` spelling), `|chi| = pi/4` circular. Real, like `psi`. Naming it selects the `(psi, chi)` chart — see below |
 | `tetm` (1D only) | `'te'` / `'tm'` — a **declaration**, not an angle: it says this problem has no polarization and no azimuth degree of freedom, which is what makes the pure 1D TE/TM formulation legal (2-4x faster than conical, measured). Refused on a 2D cell, with `fto[1] != 0`, or beside a nonzero `phi` / a `psi` / a `polarization`. `psi` reads back `None` under it — a declared-away degree of freedom is absent, not defaulted |
 
 ### General (elliptical) polarization
@@ -83,6 +84,43 @@ spell — `(1, -1j)/sqrt(2)` and `(1, +1j)/sqrt(2)` are the two circular states.
   only as `Im(psi) -> ±inf`, with the amplitude diverging at the same rate. `psi` is stored
   in the real dtype for this reason, unlike `theta`, whose complex values are a feature
   (evanescent incidence); the autodiff leaf is real with it.
+
+#### The canonical coordinates: `(psi, chi)`
+
+The pair is the normative spelling, but it is not the one to *move*. A polarization state has
+exactly two degrees of freedom, and `(psi, chi)` are their standard coordinates: `2*psi` and
+`2*chi` are longitude and latitude on the Poincaré sphere, so the two angles cover every state
+once, with nothing to normalize.
+
+```
+a_s = sin(psi)*cos(chi) + i*cos(psi)*sin(chi)
+a_p = cos(psi)*cos(chi) - i*sin(psi)*sin(chi)
+```
+
+`chi = 0` returns `(sin psi, cos psi)` — the chart contains the angle it extends — and
+`chi = ±pi/4` gives the two circular states. What it does not carry is an overall phase, which
+is the third real number the pair has and the state does not; that is why the pair stays
+normative and why the two are mutually exclusive, as `chi` is with `tetm`.
+
+The reason to have both is optimization. Of the pair's four real numbers, two are structurally
+null: its overall scale is divided out, and its overall phase cannot move any power. Measured
+on a 2D grating at `(psi, chi) = (0.4, -0.2)`:
+
+| direction | `d(sum T)/d` |
+| --- | --- |
+| `psi` | `+0.048772` |
+| `chi` | `+0.075185` |
+| the pair's overall scale | `2.4e-16` |
+| the pair's overall phase | `-1.8e-16` |
+
+So an optimizer over the raw pair spends half its dimensions on directions that cannot change
+the answer, while `(psi, chi)` is an ordinary unconstrained 2D problem. Both coordinates are
+differentiable on every backend and both are pytree children under JAX.
+
+**Naming `chi` selects the chart, including `chi = 0`.** Leaving it out is not the same as
+passing zero: the `psi`-only path applies no normalization, having nothing to normalize, while
+the chart goes through the pair's — and those differ in the last bit for about one angle in
+five. Same physics; the goldens pin the former.
 
 #### Which way the circular states rotate
 
@@ -164,7 +202,7 @@ Amplitude fine print, stated once so it never has to be discovered:
 | `incidence_side`, incidence-relative results | `tests/test_backside_incidence.py` (reversed-stack Airy oracle, reciprocity both halves) and the `inc_bottom` cases of `tests/references/test_reticolo_golden.py` |
 | result naming, `order()`, delegation | `tests/test_result_api.py` |
 | the `polarization` pair: `psi` equivalence, unit-flux normalization, circular states | `tests/test_polarization.py` |
-| `psi` is real; the pair carries a gradient through a pytree | `tests/test_polarization.py` (the refusal on all three backends, and the pair's gradient checked against the `psi` path's rather than a frozen number) |
+| `psi` and `chi` are real; the chart reaches the circular states; both coordinates and the pair carry gradients through a pytree | `tests/test_polarization.py` (the refusal on all three backends, and the pair's gradient checked against the `psi` path's rather than a frozen number) |
 | the circular states' rotation sense | derived above from two pinned facts: the (s, p)→(x, y) calibration (`tests/test_uniform_anisotropic.py`) and the gyrotropic eigenstate assignment (`tests/test_polarization.py`) |
 | square-root branches behind `kz` | `tests/test_branch_selection.py` |
 | the whole surface, per backend | `tests/test_golden_legacy_parity.py` |

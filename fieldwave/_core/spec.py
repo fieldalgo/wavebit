@@ -41,7 +41,7 @@ SPEC_VERSION = '2'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12
 
 #: Incidence fields a sweep may vary. Geometry sweeps wait for the parametric geometry
 #: layer — sweeping a raster grid point-by-point is not a thing anyone wants to declare.
-SWEEPABLE = ('wavelength', 'theta', 'phi', 'psi')
+SWEEPABLE = ('wavelength', 'theta', 'phi', 'psi', 'chi')
 
 
 class SpecError(ValueError):
@@ -403,8 +403,8 @@ def _eps_to_json(eps):
 
 def _incidence_from_dict(d) -> Incidence:
     d = dict(d or {})
-    _reject_unknown(d, ('wavelength', 'theta', 'phi', 'tetm', 'psi', 'incidence_side',
-                        'polarization'),
+    _reject_unknown(d, ('wavelength', 'theta', 'phi', 'tetm', 'psi', 'chi',
+                        'incidence_side', 'polarization'),
                     'incidence')
     if 'tetm' in d:
         d['tetm'] = _normalise_tetm(d['tetm'])
@@ -503,6 +503,9 @@ def _incidence_to_dict(inc: Incidence) -> dict:
     d = {'wavelength': _jsonable(inc.wavelength), 'theta': _jsonable(inc.theta),
          'phi': _jsonable(inc.phi), 'psi': _jsonable(inc.psi),
          'incidence_side': _jsonable(inc.incidence_side)}
+    if inc.chi is not None:
+        # Emitted only when named, so a spec that stays on the linear angle keeps its key set.
+        d['chi'] = _jsonable(inc.chi)
     if inc.tetm is not None:
         # Emitted only when declared, like `polarization` -- a spec that names no declaration
         # keeps the key set it had.

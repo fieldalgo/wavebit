@@ -21,7 +21,7 @@ def _as_tensor(v, device=None, dtype=None):
 
 
 class _BaseRCWA(CoreSolveMixin):
-    def __init__(self, n_top=1., n_bot=1., theta=0., phi=None, psi=None, tetm=None, fto=(0, 0), pol=None,
+    def __init__(self, n_top=1., n_bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None, fto=(0, 0), pol=None,
                  period=(1., 1.), wavelength=1.,
                  thickness=(0.,), connecting_algo='ETM', perturbation=1E-20,
                  device='cpu', type_complex=torch.complex128, polarization=None):
@@ -59,6 +59,7 @@ class _BaseRCWA(CoreSolveMixin):
         # and the two spellings below raise against it rather than silently winning.
         self.tetm = tetm
         self.psi = psi
+        self.chi = chi
         self.polarization = polarization
         if self._tetm is None and self._psi is None and polarization is None:
             self._default_psi()
@@ -156,12 +157,17 @@ class _BaseRCWA(CoreSolveMixin):
     def psi(self, psi):
         if psi is not None:
             self._psi_set_explicitly()
-            self._reject_complex_psi(psi)
-            # Real dtype: see the numpy twin, and `CoreSolveMixin._reject_complex_psi`.
+            self._reject_complex_angle(psi)
+            # Real dtype: see the numpy twin, and `CoreSolveMixin._reject_complex_angle`.
             # `torch.real` rather than `np.real` on a tensor: it is a no-op on a real one and
             # keeps the autograd graph, which `np.real` would drop on the way out to numpy.
             psi = torch.real(psi) if torch.is_tensor(psi) else np.real(psi)
             self._psi = _as_tensor(psi, device=self.device, dtype=self.type_float)
+
+    def _as_real_angle(self, value):
+        """An angle in the real dtype — the storage `chi` shares with `psi`."""
+        value = torch.real(value) if torch.is_tensor(value) else np.real(value)
+        return _as_tensor(value, device=self.device, dtype=self.type_float)
 
     def _default_psi(self):
         """Pure s, applied when no incidence was named and none was declared away."""

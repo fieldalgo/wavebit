@@ -276,7 +276,7 @@ def incident_sp_amplitudes(xp, C, psi, polarization=None):
     """
     if polarization is None:
         # No normalization here, and that is not an omission. `psi` is real (the setters
-        # refuse a complex one — see `engine.py::_reject_complex_psi`), so `(sin, cos)` is
+        # refuse a complex one — see `engine.py::_reject_complex_angle`), so `(sin, cos)` is
         # already a unit pair by construction, and dividing it by its own norm again is not
         # free: `sqrt(sin^2 + cos^2)` differs from 1.0 by half an ulp for about one angle in
         # five, so the division moves the last bit of the amplitudes on those angles. The

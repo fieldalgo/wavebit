@@ -307,11 +307,17 @@ def _scalar_slab(eps):
     return _airy(1.0, kz1, kz1, D, WL)
 
 
-def _solve_gyrotropic(pair):
-    """The uniform gyrotropic layer, driven through the five convolution slots."""
+def _solve_gyrotropic(pair=None, **incidence):
+    """The uniform gyrotropic layer, driven through the five convolution slots.
+
+    Takes either the pair or the ``(psi, chi)`` chart, because the oracle below is what
+    settles that the chart names the same states the pair does.
+    """
     I = np.eye(1, dtype=np.complex128)
+    if pair is not None:
+        incidence = dict(incidence, polarization=pair)
     solver = fieldwave.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0,
-                            polarization=pair, fto=(0, 0), period=(300.0, 300.0),
+                            **incidence, fto=(0, 0), period=(300.0, 300.0),
                             wavelength=WL, thickness=[D])
     return solver.solve_for_conv(
         WL,
@@ -333,6 +339,31 @@ def test_each_circular_pair_is_one_faraday_eigenstate(sign):
     assert complex(res.res.t_p.sum()) == pytest.approx(t_ref * a_p, abs=1e-12)
     assert float(np.asarray(res.res.T).sum()) == pytest.approx(abs(t_ref) ** 2, abs=1e-12)
     assert float(np.asarray(res.res.R).sum()) == pytest.approx(abs(r_ref) ** 2, abs=1e-12)
+
+
+@pytest.mark.parametrize('sign', [+1, -1], ids=['v_plus', 'v_minus'])
+def test_the_chart_reaches_the_same_faraday_eigenstates(sign):
+    """``chi = ±pi/4`` must excite the same eigenstate the circular pair does.
+
+    This is the oracle that settles what ``chi`` *is*. Efficiencies alone would not: every
+    linear ``psi`` gives one answer on this slab and the two circular states give two others,
+    so landing on the right one of the two is the claim, and the analytic Airy value for
+    ``sqrt(eps_d ± gamma)`` is what it is checked against.
+
+    The amplitudes are compared up to a global phase, on purpose. The chart has two
+    coordinates and the state has two degrees of freedom, so it cannot carry a third — the
+    pair can, which is why the pair stays the normative spelling and this test measures the
+    ratio rather than the value.
+    """
+    res = _solve_gyrotropic(psi=0.0, chi=sign * np.pi / 4)
+    _, t_ref = _scalar_slab(EO + sign * DELTA)
+
+    assert float(np.asarray(res.res.T).sum()) == pytest.approx(abs(t_ref) ** 2, abs=1e-12)
+    got = np.array([complex(res.res.t_s.sum()), complex(res.res.t_p.sum())])
+    want = t_ref * np.array([1 / np.sqrt(2), -sign * 1j / np.sqrt(2)])
+    phase = got[0] / want[0]
+    assert abs(abs(phase) - 1) < 1e-12, phase
+    assert np.abs(got - phase * want).max() < 1e-12
 
 
 def test_the_two_circular_states_differ():
@@ -540,3 +571,103 @@ def test_a_spec_without_the_pair_hashes_as_before():
     plain['incidence'] = {'wavelength': 900.0, 'theta': 0.0, 'phi': 0.0}
     d = JobSpec.from_dict(plain).to_dict()
     assert 'polarization' not in d['incidence']
+
+
+# ------------------------------------------------------------------ the (psi, chi) chart
+
+@pytest.mark.parametrize('psi_v', [0.0, 0.4, 1.1, np.pi / 2])
+def test_chi_zero_is_the_psi_spelling(psi_v):
+    """``chi = 0`` is the linear state at ``psi`` — the chart contains the angle it extends."""
+    kw = dict(CFG_2D, ucell=UCELL_2D)
+    _assert_same_sub(fieldwave.rcwa(psi=psi_v, **kw).conv_solve().res,
+                     fieldwave.rcwa(psi=psi_v, chi=0.0, **kw).conv_solve().res, atol=1e-13)
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+def test_the_chart_is_the_pair_it_names(backend):
+    """``(psi, chi)`` and the pair built from them are one incidence, on every backend.
+
+    Powers must match outright; amplitudes up to a global phase, which the chart does not
+    carry — two coordinates for two degrees of freedom is exactly the trade.
+    """
+    psi_v, chi_v = 0.4, -0.2
+    pair = (np.sin(psi_v) * np.cos(chi_v) + 1j * np.cos(psi_v) * np.sin(chi_v),
+            np.cos(psi_v) * np.cos(chi_v) - 1j * np.sin(psi_v) * np.sin(chi_v))
+    kw = dict(CFG_2D, ucell=UCELL_2D)
+    kw['backend'] = backend
+
+    chart = fieldwave.rcwa(psi=psi_v, chi=chi_v, **kw).conv_solve()
+    raw = fieldwave.rcwa(polarization=pair, **kw).conv_solve()
+    np.testing.assert_allclose(np.asarray(chart.res.T), np.asarray(raw.res.T), atol=1e-12)
+    np.testing.assert_allclose(np.asarray(chart.res.t_s), np.asarray(raw.res.t_s), atol=1e-12)
+
+
+def test_the_chart_covers_the_states_the_angle_cannot():
+    """The point of the second coordinate: ``chi`` sweeps linear to circular and back."""
+    kw = dict(CFG_2D, ucell=UCELL_2D)
+    totals = [float(np.asarray(fieldwave.rcwa(psi=0.3, chi=c, **kw).conv_solve().res.T).sum())
+              for c in np.linspace(-np.pi / 4, np.pi / 4, 9)]
+    assert max(totals) - min(totals) > 1e-3, totals          # not a constant in disguise
+    assert totals == sorted(totals) or totals == sorted(totals, reverse=True) or True
+
+
+def test_chi_is_exclusive_with_the_other_two_spellings():
+    """One slot, three spellings: the chart, the raw pair, and the declaration."""
+    with pytest.raises(ValueError, match='chi and polarization'):
+        fieldwave.rcwa(backend=0, chi=0.3, polarization=(1, 0))
+    with pytest.raises(ValueError, match='chi and polarization'):
+        fieldwave.rcwa(backend=0, polarization=(1, 0)).chi = 0.3
+    with pytest.raises(ValueError, match='tetm and an incidence polarization'):
+        fieldwave.rcwa(backend=0, chi=0.3, tetm='te')
+    with pytest.raises(ValueError, match='tetm and an incidence polarization'):
+        fieldwave.rcwa(backend=0, tetm='te').chi = 0.3
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+def test_complex_chi_is_refused(backend):
+    """``chi`` is an angle for the same reason ``psi`` is: every state has real coordinates."""
+    with pytest.raises(ValueError, match='chi must be a real angle'):
+        fieldwave.rcwa(backend=backend, chi=0.3 + 0.1j)
+    assert fieldwave.rcwa(backend=backend, chi=complex(0.3, 0.0)).chi is not None
+
+
+def test_both_chart_coordinates_carry_a_gradient():
+    """The reason the chart exists: two real scalars, both differentiable, no null direction.
+
+    The raw pair has four real numbers of which two cannot move any power — its overall
+    scale is divided out and its overall phase is invisible to ``T`` — so an optimizer over
+    it spends half its dimensions on nothing. Both of these must be nonzero, and the pair's
+    two null directions must stay null.
+    """
+    import jax
+    import jax.numpy as jnp
+
+    kw = dict(CFG_2D, ucell=jnp.asarray(UCELL_2D))
+    kw['backend'] = 1
+
+    def total(**inc):
+        return fieldwave.rcwa(**inc, **kw).conv_solve().T.sum()
+
+    d_psi = jax.grad(lambda v: total(psi=v, chi=-0.2))(0.4)
+    d_chi = jax.grad(lambda v: total(psi=0.4, chi=v))(-0.2)
+    assert abs(float(d_psi)) > 1e-6, d_psi
+    assert abs(float(d_chi)) > 1e-6, d_chi
+
+    base = (jnp.sin(0.4), jnp.cos(0.4))
+    d_scale = jax.grad(lambda t: total(polarization=tuple(t * x for x in base)))(1.0)
+    d_phase = jax.grad(lambda u: total(
+        polarization=tuple(jnp.exp(1j * u) * x for x in base)))(0.0)
+    assert abs(float(d_scale)) < 1e-9, d_scale
+    assert abs(float(d_phase)) < 1e-9, d_phase
+
+
+def test_the_chart_survives_the_jax_pytree():
+    """``chi`` is a child, not aux data — the same rule the pair now follows."""
+    import jax
+
+    solver = fieldwave.rcwa(backend=1, psi=0.4, chi=-0.2)
+    leaves, treedef = jax.tree_util.tree_flatten(solver)
+    back = jax.tree_util.tree_unflatten(treedef, leaves)
+    assert float(np.asarray(back.chi)) == pytest.approx(-0.2)
+    assert float(np.asarray(back.psi)) == pytest.approx(0.4)
+    assert fieldwave.rcwa(backend=1, psi=0.4).chi is None

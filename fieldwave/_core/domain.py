@@ -120,7 +120,9 @@ class Incidence:
     The polarization comes in three kinds, and they are not three spellings of one thing.
     ``tetm`` (``'te'`` / ``'tm'``) is a **declaration** that the polarization and the azimuth
     are not degrees of freedom here, which is what buys the pure 1D TE/TM formulation; ``psi``
-    is a **linear angle**; ``polarization`` is the **complex pair** below. ``tetm`` refuses to
+    is a **linear angle**, and ``chi`` beside it is the ellipticity angle that makes the two
+    of them the canonical coordinates of any state; ``polarization`` is the **complex pair**
+    below. ``tetm`` refuses to
     coexist with either of the others, and so do those two with each other. These map
     one-to-one onto the constructor arguments.
 
@@ -137,11 +139,13 @@ class Incidence:
     phi: Optional[Any] = None
     tetm: Optional[Any] = None
     psi: Optional[Any] = None
+    chi: Optional[Any] = None
     incidence_side: str = 'top'
     polarization: Optional[Any] = None
 
     def as_kwargs(self) -> dict:
         """The illumination keyword arguments for :func:`fieldwave.rcwa`."""
         return dict(wavelength=self.wavelength, theta=self.theta, phi=self.phi,
-                    tetm=self.tetm, psi=self.psi, incidence_side=self.incidence_side,
+                    tetm=self.tetm, psi=self.psi, chi=self.chi,
+                    incidence_side=self.incidence_side,
                     polarization=self.polarization)
