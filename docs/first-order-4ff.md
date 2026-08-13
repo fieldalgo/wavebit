@@ -3,9 +3,10 @@
 Written: 2026-08-11. Measured on an Apple M4, NumPy 2.5.1 against Accelerate, float64.
 
 Targets:
-- `fieldwave/_core/solve_2d_4ff.py` — the whole path
+- `fieldwave/_core/solve_2d_4ff.py` — the whole path, `::solve_2d_4ff` its public entry
 - `tests/test_solve_2d_4ff.py`, `tests/references/test_4ff_external_goldens.py` — every number here
 - `tests/test_anisotropic_berreman.py` — the Berreman oracle it is judged against
+- `tests/test_formulation_dispatch.py` — which of the two formulations a call takes, and why
 
 Companions. [`anisotropic-materials.md`](anisotropic-materials.md) scopes the whole anisotropy
 question and says what each gap costs; [`five-slot-limit.md`](five-slot-limit.md) explains why the
@@ -53,6 +54,14 @@ Four oracles, in decreasing order of independence:
 | fmmax (external) | uniform tensors, no z row | 1e-15, 12 cases |
 | the 2ff path (ours) | z-decoupled tensors; isotropic gratings | `lam = i q` to 1e-15; gratings to 3e-14 |
 | Berreman 4×4 (ours) | uniform tensors including z-coupling | entry-for-entry to 1e-16 |
+
+Since the public route landed (2026-08-13) each of these judges *it* as well as this module's own
+entry, which matters because the route adds code none of them used to cross: the substrate seed,
+the s/p rotation, and the shared final matching. Two of the rows also reach further than they did.
+The 2ff row is now run on a **patterned** grating through `formulation='4ff'` — the same scene both
+ways, agreeing to 4e-14 — and the Berreman row is run on **stacks**, on a **tilted** magnetisation
+(`xy` and `yz` at once, which RETICOLO cannot arbitrate), and from the **back side**, where the
+mirror has to flip the z row's sign and nothing else.
 
 **No outside solver reaches a tilted magnetisation.** All four surveyed are out, each for a
 measured reason — the table is in [`../tests/references/README.md`](../tests/references/README.md).

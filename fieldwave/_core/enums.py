@@ -40,8 +40,29 @@ class Factorization(str, Enum):
     NVF = 'nvf'  # normal vector field (Schuster et al. 2007); a superset of Li
 
 
+class Formulation(str, Enum):
+    """Which layer formulation the 2D solve uses — how many fields per order it carries.
+
+    ``'2ff'`` reduces a layer to ``d2E_t/dz2 = Omega2 E_t``, which exists only while the
+    permittivity's ``z`` row and column are empty. ``'4ff'`` carries the full transverse state
+    ``(Ex, Ey, Hx, Hy)`` as a first-order system, which is what a z-coupled (magneto-optic,
+    Voigt) tensor needs — at roughly 8x the cost, because the eigenproblem doubles.
+
+    ``'auto'`` is the default and reads the problem: a solve handed any of the four z-row
+    convolution slots takes ``'4ff'``, everything else ``'2ff'``. The override exists because
+    forcing ``'4ff'`` on a problem that does not need it is how the two are cross-checked
+    (``docs/anisotropic-materials.md`` §8); forcing ``'2ff'`` on a z-coupled tensor raises
+    rather than dropping the row, because dropping it answers a different problem while
+    conserving energy to machine precision.
+    """
+    AUTO = 'auto'    # read the slots and decide
+    SECOND = '2ff'   # second-order; refuses a z row
+    FIRST = '4ff'    # first-order; always possible, ~8x
+
+
 DEFAULT_FOURIER_COEFFICIENTS = FourierCoefficients.SAMPLED
 DEFAULT_FACTORIZATION = Factorization.LI
+DEFAULT_FORMULATION = Formulation.AUTO
 
 
 def _one_of(enum_cls, value, keyword):
@@ -64,6 +85,11 @@ def coefficients_of(value):
 def factorization_of(value):
     """Validate a ``factorization`` value."""
     return _one_of(Factorization, value, 'factorization')
+
+
+def formulation_of(value):
+    """Validate a ``formulation`` value."""
+    return _one_of(Formulation, value, 'formulation')
 
 
 def resolve_fourier_options(fourier_coefficients=None, factorization=None, keep_unset=False):

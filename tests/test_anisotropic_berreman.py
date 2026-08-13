@@ -39,12 +39,17 @@ What it pins beyond the existing file:
 * **Oblique incidence with off-diagonal terms.** Nothing else covers it. The closed forms in
   ``test_uniform_anisotropic.py`` are normal-incidence only.
 * **Stacks.** A single slab cannot expose an error in how layers are joined.
-* **Asymmetric tensors** (``eps_xy != eps_yx``): the xfail block below. ``layer_modes_2d`` carries
-  the off-diagonal pair in one order inside ``Omega2_LR`` and the other inside ``Omega_R``, so the
-  modes come from one medium and the H-field from its transpose. Measured against this oracle the
-  error runs from 8e-3 to 8e-1 depending on configuration; exchanging the pair inside ``Omega_R``
-  alone brings every case to ~1e-15. No shipped path can reach it — every producer emits
-  ``-eps_xy`` twice — so these are xfail rather than a bug against a released number.
+* **Asymmetric tensors** (``eps_xy != eps_yx``): the block below that was ``xfail`` until
+  ``layer_modes_2d`` was corrected. It carried the off-diagonal pair in one order inside
+  ``Omega2_LR`` and the other inside ``Omega_R``, so the modes came from one medium and the
+  H-field from that medium's transpose. Measured against this oracle the error ran from 8e-3 to
+  8e-1 depending on configuration; exchanging the pair inside ``Omega_R`` alone brought every case
+  to ~1e-15. No shipped path could reach it — every producer emits ``-eps_xy`` twice.
+* **A populated z row** (the Voigt geometry), which the second-order formulation cannot express
+  at all and which the solver now answers on the first-order one. This is the only oracle that
+  judges the *public* route there at oblique incidence with two off-diagonal pairs at once, and
+  the only one that judges it from the back side — where the mirror has to flip the z row's sign
+  and nothing else. RETICOLO covers a single pair; ``golden_fmmax.npz`` has no z row to give.
 
 Note that the defect *is* visible in power efficiencies here, unlike the sign-convention error in
 ``test_uniform_anisotropic.py``, which only moves a complex amplitude. Those are different claims
@@ -127,69 +132,90 @@ def berreman_efficiencies(layers, theta, wl=WL):
     return out
 
 
+def berreman_efficiencies_from_below(layers, theta, wl=WL):
+    """The same stack illuminated from the bottom — **without mirroring anything**.
+
+    This exists to judge one specific piece of the solver: backside illumination is solved
+    there as top-side illumination of the z-mirrored scene, and for a z-coupled tensor that
+    mirror is not just a reversed layer list. ``z -> -z`` also sends ``eps_xz -> -eps_xz`` (and
+    ``zx``, ``yz``, ``zy`` likewise) while leaving the in-plane block and ``eps_zz`` alone, so
+    a solver that reverses the stack and forgets the signs answers for a different medium.
+
+    Nothing is reversed or negated here. ``P`` is the same top-to-bottom transfer the function
+    above builds; only the matching changes, because now the wave arrives at the bottom
+    travelling ``-z`` (a *backward* mode), the reflection leaves downward and the transmission
+    leaves upward through the top ::
+
+        inc_b + r_s s_f + r_p p_f  =  P @ (t_s s_b + t_p p_b)
+
+    Vacuum on both sides, so the incidence angle and ``kx`` are the same number either way and
+    ``|r|^2`` / ``|t|^2`` are power directly. Powers rather than amplitudes on purpose: the
+    ``p`` direction of an upward wave is a convention, and the two need not share it.
+    """
+    kx = np.sin(theta)
+    k0 = 2 * np.pi / wl
+    P = np.eye(4, dtype=complex)
+    for eps, d in layers:
+        P = expm(1j * k0 * _berreman_M(eps, kx) * d) @ P
+
+    s_f, p_f, s_b, p_b = _vacuum_modes(kx)
+    out = {}
+    for name, inc in (('s', s_b), ('p', p_b)):
+        A = np.column_stack([s_f, p_f, -P @ s_b, -P @ p_b])
+        r_s, r_p, t_s, t_p = np.linalg.solve(A, -inc)
+        out[name] = dict(R_s=abs(r_s) ** 2, R_p=abs(r_p) ** 2,
+                         T_s=abs(t_s) ** 2, T_p=abs(t_p) ** 2)
+    return out
+
+
 # ------------------------------------------------------------------ the solver
 
-def reject_z_coupling(eps, tol=1e-12):
-    """Refuse a tensor whose ``z`` row or column is populated — before it answers.
+def is_z_coupled(eps, tol=1e-12):
+    """Whether the tensor's ``z`` row or column is populated — the Voigt geometry.
 
-    The five slots span ``[[exx, exy, 0], [eyx, eyy, 0], [0, 0, ezz]]`` and nothing more, so
-    ``eps_xz``, ``eps_zx``, ``eps_yz`` and ``eps_zy`` have nowhere to go. Dropping them is what
-    a naive adapter does, and the result is *plausible*: the reduced tensor is a perfectly good
-    medium, so the solve succeeds and energy conserves to 1e-16. It is simply a different
-    problem from the one that was asked.
-
-    Measured, on a gyrotropic tensor at 35 degrees with the magnetisation laid over: dropping
-    the pair moves the efficiencies by 2.1e-2 for ``M`` along x and 6.2e-2 for ``M`` tilted 45
-    degrees, with ``R + T`` sitting at exactly 1 throughout. Nothing downstream is in a position
-    to notice, which is why the refusal has to live at the adapter.
-
-    Physically this is the Voigt geometry — magnetisation lying in the plane rather than along
-    the stack normal. Supporting it means the 4ff first-order system in ``(Ex, Ey, Hx, Hy)``:
-    with a populated ``z`` row the elimination of ``E_z`` leaves a first-derivative term, so
-    ``d2E/dz2 = P Q E`` does not exist and the mode operator this solver is built on has nothing
-    to be. See ``docs/anisotropic-materials.md`` §6.
-
-    The Berreman oracle in this file is already that first-order system and takes such tensors
-    without complaint — which is what makes the gap measurable rather than merely asserted.
+    What this decides for the adapter below is **which slots to fill**, and through that which
+    formulation the solver picks. A z-free tensor is passed as five convolution matrices and
+    runs on the second-order path, exactly as every case in this file did before the
+    first-order one existed; a z-coupled one is passed as nine and runs on the first-order
+    path, at about 8x. Passing the z slots unconditionally would have quietly moved every case
+    here onto the new path and left the old one untested.
     """
     e = np.asarray(eps, dtype=complex)
-    off = {'eps_xz': e[0, 2], 'eps_zx': e[2, 0], 'eps_yz': e[1, 2], 'eps_zy': e[2, 1]}
-    bad = {k: v for k, v in off.items() if abs(v) > tol}
-    if bad:
-        named = ', '.join(f'{k}={v:.4g}' for k, v in bad.items())
-        raise NotImplementedError(
-            f'z-coupling is not expressible in the five convolution slots ({named}). '
-            'The solve would silently drop these and answer for the reduced tensor, which '
-            'conserves energy and looks fine. This is the Voigt geometry; it needs the 4ff '
-            'first-order formulation — see docs/anisotropic-materials.md section 6.')
+    return max(abs(e[0, 2]), abs(e[2, 0]), abs(e[1, 2]), abs(e[2, 1])) > tol
 
 
-def solve_tensor_stack(layers, theta, wl=WL, connecting_algo='ETM'):
+def solve_tensor_stack(layers, theta, wl=WL, connecting_algo='ETM', formulation=None,
+                       incidence_side='top'):
     """Drive the 2D solve with a hand-filled tensor per layer.
 
     ``ucell`` stays ``None``: there is no raster, and it routes ``_assign_grating_type`` to the
-    2D path, the only one with off-diagonal slots. The slot convention is ``-eps_xy`` — see
-    ``docs/off-diagonal-slot-convention.md``.
+    2D path, the only one with off-diagonal slots. **The slot convention is the negative of
+    the tensor component, for every off-diagonal slot** — ``-eps_xy`` and equally ``-eps_xz``,
+    one rule across all six — see ``docs/off-diagonal-slot-convention.md``.
 
-    Refuses a tensor with a populated ``z`` row or column rather than dropping it silently;
-    see :func:`reject_z_coupling`.
+    A tensor with a populated z row is handed over as nine slots rather than refused; the
+    solver reads them and takes the first-order formulation. Passing ``formulation='2ff'``
+    makes it refuse instead, which is what
+    :func:`test_a_z_row_is_refused_by_the_formulation_that_cannot_hold_it` checks.
     """
     I = np.eye(1, dtype=np.complex128)
-    epx, epy, epz_i, epxy, epyx, thick = [], [], [], [], [], []
+    z_coupled = any(is_z_coupled(eps) for eps, _ in layers)
+    slots = [[] for _ in range(9)]
+    thick = []
     for eps, d in layers:
         e = np.asarray(eps, dtype=complex)
-        reject_z_coupling(e)
-        epx.append(e[0, 0] * I)
-        epy.append(e[1, 1] * I)
-        epxy.append(-e[0, 1] * I)
-        epyx.append(-e[1, 0] * I)
-        epz_i.append(np.linalg.inv(e[2, 2] * I))
+        for slot, value in zip(slots, (e[0, 0], e[1, 1], None,
+                                       -e[0, 1], -e[1, 0],
+                                       -e[0, 2], -e[1, 2], -e[2, 0], -e[2, 1])):
+            slot.append(np.linalg.inv(e[2, 2] * I) if value is None else value * I)
         thick.append(d)
+    conv = [np.stack(s) for s in slots]
     mee = fieldwave.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=theta, phi=0.0, psi=0.0,
                          fto=(0, 0), period=(300.0, 300.0), wavelength=wl, thickness=thick,
-                         connecting_algo=connecting_algo)
-    res = mee.solve_for_conv(wl, np.stack(epx), np.stack(epy), np.stack(epz_i),
-                             np.stack(epxy), np.stack(epyx))
+                         connecting_algo=connecting_algo, incidence_side=incidence_side)
+    if formulation is not None:
+        mee.formulation = formulation
+    res = mee.solve_for_conv(wl, *(conv if z_coupled else conv[:5]))
     out = {}
     for name, sub in (('s', res.res_te_inc), ('p', res.res_tm_inc)):
         out[name] = dict(R_s=float(sub.R_s.sum()), R_p=float(sub.R_p.sum()),
@@ -303,28 +329,134 @@ def gyro_along(direction, g=0.45, ed=2.25):
     return e
 
 
-@pytest.mark.parametrize('label,direction', [
+VOIGT_CASES = [
     ('M along x', (1, 0, 0)),
     ('M along y', (0, 1, 0)),
     ('M tilted 45 deg', (np.sin(np.pi / 4), 0, np.cos(np.pi / 4))),
-])
-def test_voigt_geometry_is_refused_rather_than_quietly_reduced(label, direction):
-    """A magnetisation off the stack normal must raise, not answer.
+]
 
-    The failure this guards against is not a crash. Dropping the z row leaves a valid medium,
-    so the solve succeeds, ``R + T`` is 1 to machine precision, and the number is wrong by
-    2e-2 to 6e-2. Every check a caller is likely to run passes.
+
+@pytest.mark.parametrize('label,direction', VOIGT_CASES, ids=[c[0] for c in VOIGT_CASES])
+def test_voigt_geometry_matches_the_oracle(label, direction):
+    """A magnetisation off the stack normal, answered rather than refused.
+
+    This used to assert a ``NotImplementedError``: the five slots span
+    ``[[exx, exy, 0], [eyx, eyy, 0], [0, 0, ezz]]`` and nothing more, so the adapter refused
+    what it could not carry. What made refusing the right answer — rather than dropping the
+    z row — is that dropping it is *plausible*: the reduced tensor is a perfectly good medium,
+    the solve succeeds, ``R + T`` sits at 1 to machine precision, and the efficiencies are
+    wrong by 2.1e-2 for ``M`` along x and 6.2e-2 for ``M`` tilted 45 degrees. Nothing a caller
+    is likely to check would notice.
+
+    Now the solver has somewhere to put them (``formulation='4ff'``, selected automatically by
+    the presence of the slots) and this is the check that it puts them in the *right* place.
+    The oracle is not a rearrangement of the same code: Berreman integrates the first-order
+    system directly with no Fourier orders, no mode split, no transfer recursion and no s/p
+    rotation, and it takes the plain tensor while the solver takes the negated slots — so the
+    slot sign convention is under test here too, in the one place where getting it backwards
+    is *not* invisible to a power efficiency.
+
+    ``M tilted 45 degrees`` populates ``xy`` and ``yz`` at once, which is what an ordinary
+    magnetised film does and is the case RETICOLO cannot arbitrate (it stops conserving energy
+    past one off-diagonal pair). Here it is judged.
     """
-    with pytest.raises(NotImplementedError, match='z-coupling'):
-        solve_tensor_stack([(gyro_along(direction), 220.0)], np.deg2rad(35))
+    layers = [(gyro_along(direction), 220.0)]
+    gap = max_gap(berreman_efficiencies(layers, np.deg2rad(35)),
+                  solve_tensor_stack(layers, np.deg2rad(35)))
+    assert gap < 1e-12, f'{label}: oracle and solver disagree by {gap:.2e}'
 
 
-def test_faraday_geometry_is_not_caught_by_that_guard():
-    """The control: magnetisation along the stack normal has an empty z row and must pass."""
+@pytest.mark.parametrize('label,direction', VOIGT_CASES, ids=[c[0] for c in VOIGT_CASES])
+def test_a_z_row_is_refused_by_the_formulation_that_cannot_hold_it(label, direction):
+    """``formulation='2ff'`` must raise on a z row, not drop it.
+
+    The guard moved from this file into the solver, which is where
+    ``docs/anisotropic-materials.md`` §8 said it belonged once the solver could be handed a
+    tensor directly. The measurement behind it is quoted in the test above.
+    """
+    with pytest.raises(ValueError, match='z row'):
+        solve_tensor_stack([(gyro_along(direction), 220.0)], np.deg2rad(35),
+                           formulation='2ff')
+
+
+def test_faraday_geometry_stays_on_the_second_order_path():
+    """The control: magnetisation along the stack normal has an empty z row.
+
+    It must still agree with the oracle — and it must get there on the cheap path, which is
+    the half of the dispatch that is easy to break by widening a signature.
+    """
     layers = [(gyro_along((0, 0, 1)), 220.0)]
     gap = max_gap(berreman_efficiencies(layers, np.deg2rad(35)),
                   solve_tensor_stack(layers, np.deg2rad(35)))
     assert gap < 1e-12
+    assert not is_z_coupled(gyro_along((0, 0, 1)))
+
+
+@pytest.mark.parametrize('label,direction', VOIGT_CASES, ids=[c[0] for c in VOIGT_CASES])
+def test_the_two_formulations_agree_on_a_stack_holding_both(label, direction):
+    """A z-coupled layer and a z-free one in the same stack, against the oracle.
+
+    A single slab cannot expose an error in how layers are joined, and the ETM recursion is
+    the piece the first-order path had to grow for itself — the second-order one writes the
+    two directions as ``big_W (I + Y)`` / ``big_V (I - Y)``, which assumes the backward modes
+    are the forward ones with the partner field negated. That assumption is exact for a
+    z-free layer and fails at 6.9e-1 for a Voigt tensor at 35 degrees, so this is the
+    arrangement where reusing it would have shown.
+    """
+    layers = [(iso(2.0), 90.0), (gyro_along(direction), 150.0), (iso(4.0), 70.0)]
+    gap = max_gap(berreman_efficiencies(layers, np.deg2rad(35)),
+                  solve_tensor_stack(layers, np.deg2rad(35)))
+    assert gap < 1e-12, f'{label}: oracle and solver disagree by {gap:.2e}'
+
+
+@pytest.mark.parametrize('label,direction', VOIGT_CASES, ids=[c[0] for c in VOIGT_CASES])
+def test_backside_illumination_of_a_z_coupled_stack(label, direction):
+    """``incidence_side='bottom'`` on a tensor whose z row changes sign under the mirror.
+
+    The oracle solves the un-mirrored stack from below directly, so this is a check of the
+    mirror itself rather than a restatement of it. An asymmetric stack, because a symmetric one
+    would pass with the sign flip missing.
+
+    A magneto-optic medium is also the one place where "the two sides agree" is the wrong
+    expectation: non-reciprocity is what the material is for, so the numbers here are not the
+    top-side ones and must not be compared to them.
+    """
+    layers = [(iso(2.0), 90.0), (gyro_along(direction), 150.0), (iso(3.5), 60.0)]
+    theta = np.deg2rad(35)
+    gap = max_gap(berreman_efficiencies_from_below(layers, theta),
+                  solve_tensor_stack(layers, theta, incidence_side='bottom'))
+    assert gap < 1e-12, f'{label}: oracle and solver disagree by {gap:.2e}'
+
+
+@pytest.mark.parametrize('label,direction', VOIGT_CASES, ids=[c[0] for c in VOIGT_CASES])
+def test_the_two_sides_differ_by_exactly_what_the_oracle_says(label, direction):
+    """Guards the test above from passing for the wrong reason — with a measured bound.
+
+    A solver that ignored ``incidence_side`` altogether would satisfy the backside check on
+    any stack whose two sides happen to agree, so the size of the disagreement is part of what
+    has to be right. It cannot be asserted as a flat "> 0", because one of these three is
+    genuinely reciprocal:
+
+    ==================  ==========================
+    magnetisation       two-sided gap, oracle
+    ==================  ==========================
+    ``M`` along x       1.4e-3
+    ``M`` along y       1.2e-15 — reciprocal here
+    ``M`` tilted 45     3.6e-2
+    ==================  ==========================
+
+    ``M`` along y with the plane of incidence at ``phi = 0`` is the transverse arrangement, and
+    the oracle says so independently — which is why the bound is taken from it rather than
+    written down. The other two are the reason this test is not vacuous.
+    """
+    layers = [(iso(2.0), 90.0), (gyro_along(direction), 150.0), (iso(3.5), 60.0)]
+    theta = np.deg2rad(35)
+    oracle = max_gap(berreman_efficiencies(layers, theta),
+                     berreman_efficiencies_from_below(layers, theta))
+    solver = max_gap(solve_tensor_stack(layers, theta),
+                     solve_tensor_stack(layers, theta, incidence_side='bottom'))
+    assert solver == pytest.approx(oracle, abs=1e-12), (
+        f'{label}: the solver puts the two sides {solver:.2e} apart, the oracle {oracle:.2e}')
 
 
 def test_the_oracle_conserves_energy_on_a_lossless_gyrotropic_slab():

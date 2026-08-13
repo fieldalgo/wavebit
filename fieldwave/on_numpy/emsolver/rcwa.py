@@ -2,6 +2,7 @@ import numpy as np
 
 from ._base import _BaseRCWA
 from ..._core.engine import CoreFactorizationMixin
+from ..._core.enums import Formulation
 from ..._core.fields import field_1d, field_1d_conical, field_2d, field_plot
 from ..._core.result import Result, ResultSub
 
@@ -177,15 +178,25 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
     def grating_type_assigned(self, grating_type_assigned):
         self._grating_type_assigned = grating_type_assigned
 
-    def solve_for_conv(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all=None, epyx_conv_all=None):
+    def solve_for_conv(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
+                       epxy_conv_all=None, epyx_conv_all=None,
+                       epxz_conv_all=None, epyz_conv_all=None,
+                       epzx_conv_all=None, epzy_conv_all=None):
         self._assign_grating_type()
+        z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
+        if self._formulation_for(z_row) == Formulation.FIRST:
+            # The 1D paths have no z-row slots to fill, so a z row is also a choice of path:
+            # the first-order solve is written on the 2D layout (a 1D structure is ff_y == 1
+            # there, the same physics the conical path solves at conical cost).
+            self._grating_type_assigned = 2
 
         if self.grating_type_assigned == 0:
             result_dict = self.solve_1d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
         elif self._grating_type_assigned == 1:
             result_dict = self.solve_1d_conical(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
         else:
-            result_dict = self.solve_2d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all)
+            result_dict = self.solve_2d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
+                                        epxy_conv_all, epyx_conv_all, *z_row)
 
         res_psi = ResultSubNumpy(**result_dict['res']) if 'res' in result_dict else None
         res_te_inc = ResultSubNumpy(**result_dict['res_te_inc']) if 'res_te_inc' in result_dict else None
@@ -197,6 +208,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
 
     def calculate_field(self, res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False)):
         # TODO: change res_ to accept array of points.
+        self._require_field_state()
         kx, ky = self._kxy_2d(self.wavelength)
 
         if self._grating_type_assigned == 0:

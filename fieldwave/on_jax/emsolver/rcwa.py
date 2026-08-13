@@ -7,6 +7,7 @@ from functools import partial
 
 from ._base import _BaseRCWA, jax_device_set
 from ..._core.engine import CoreFactorizationMixin
+from ..._core.enums import Formulation
 from ..._core.fields import field_1d, field_1d_conical, field_2d, field_plot
 from ..._core.result import Result, ResultSub
 from ..._core.modeler import Modeling
@@ -191,9 +192,16 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
 
     @jax_device_set
     def solve_for_conv(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
-                       epxy_conv_all=None, epyx_conv_all=None):
+                       epxy_conv_all=None, epyx_conv_all=None,
+                       epxz_conv_all=None, epyz_conv_all=None,
+                       epzx_conv_all=None, epzy_conv_all=None):
 
         self._assign_grating_type()
+        z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
+        if self._formulation_for(z_row) == Formulation.FIRST:
+            # See the NumPy solver: a z row is also a choice of path, since the 1D paths have
+            # no slots to put one in.
+            self._grating_type_assigned = 2
 
         if self._grating_type_assigned == 0:
             result_dict = self.solve_1d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
@@ -201,7 +209,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
             result_dict = self.solve_1d_conical(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
         else:
             result_dict = self.solve_2d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
-                                        epxy_conv_all, epyx_conv_all)
+                                        epxy_conv_all, epyx_conv_all, *z_row)
 
         res_psi = ResultSubJax(**result_dict['res']) if 'res' in result_dict else None
         res_te_inc = ResultSubJax(**result_dict['res_te_inc']) if 'res_te_inc' in result_dict else None
@@ -221,6 +229,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         already concrete by the time it runs. It reads ``self.T1`` / ``self.layer_info_list``,
         so whichever geometry the preceding solve used is the one in force here.
         """
+        self._require_field_state()
         kx, ky = self._kxy_2d(self.wavelength)
 
         if self._grating_type_assigned == 0:

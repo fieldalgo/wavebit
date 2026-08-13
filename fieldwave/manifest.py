@@ -159,9 +159,9 @@ MATERIALS = (
     {
         'case': 'uniform_anisotropic',
         'supported': True,
-        'why': 'the mode operator reads five permittivity slots, so an in-plane tensor '
-               'filling a whole layer already works. Note the off-diagonal slot holds '
-               '-eps_xy, not eps_xy.',
+        'why': 'solve_for_conv reads nine permittivity slots, so a tensor filling a whole '
+               'layer works, z row included. Note that every off-diagonal slot holds the '
+               'negative of its component: -eps_xy, and equally -eps_xz.',
         'source': 'docs/off-diagonal-slot-convention.md',
     },
     {
@@ -180,12 +180,13 @@ MATERIALS = (
     },
     {
         'case': 'z_coupled',
-        'supported': False,
-        'why': 'with eps_xz or eps_yz the elimination of E_z leaves a first-derivative term '
-               'and the second-order reduction fails. The first-order (4ff) operator that '
-               'would handle it is written and pinned, but nothing dispatches to it, its '
-               'stack solve is not yet numerically stable, and there is no field '
-               'reconstruction.',
+        'supported': True,
+        'why': 'with eps_xz or eps_yz the second-order reduction fails, so the solve takes '
+               'the first-order (4ff) formulation instead -- selected automatically by the '
+               'presence of the four z-row slots, or by formulation=4ff, at about 8x. Two '
+               'limits ride with it: connecting_algo must be ETM, and there is no field '
+               'reconstruction (efficiencies and amplitudes are complete). Uniform layers '
+               'only, for the same reason as patterned_anisotropic.',
         'source': 'fieldwave/_core/solve_2d_4ff.py',
     },
 )

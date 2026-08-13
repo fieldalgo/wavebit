@@ -1,15 +1,18 @@
 """First-order (4ff) layer solve — the formulation a z-coupled tensor needs.
 
-**Status: the operator, the mode split and the stack solve are done and pinned; the solve is
-stable for any thickness, correct at any number of Fourier orders, and reproduces the 2ff path on
-a real isotropic grating. Nothing dispatches to it, no *anisotropic* layer can be patterned, and
-there is no field reconstruction.** See "What is not here" at the bottom before building on it.
+**Status: reachable. A z-coupled tensor handed to the public solver arrives here** —
+:func:`solve_2d_4ff` is the entry, and ``formulation='4ff'`` forces it on a problem that does not
+need it. **What is still missing is a patterned *anisotropic* layer and field reconstruction**;
+see "What is not here" at the bottom before building on it.
 
 Pinned by ``tests/test_solve_2d_4ff.py`` against the 2ff path and a Berreman 4x4, and by
 ``tests/references/test_4ff_external_goldens.py`` against RETICOLO and fmmax — 21 cases, worst
-gap 2.4e-15, no convention fitting. Note what that does *not* cover: every case in both goldens
-has an empty z row, because both were frozen for a 2ff consumer. The geometry this module
-exists for is still judged only by our own Berreman.
+gap 2.4e-15, no convention fitting, now run through the public route as well as this module's
+own entry. Note what the goldens do *not* cover: every case in both has an empty z row, because
+both were frozen for a 2ff consumer. The geometry this module exists for is judged by our own
+Berreman — which since dispatch landed judges the public route directly, on stacks, on a tilted
+magnetisation (``xy`` and ``yz`` at once, which RETICOLO cannot arbitrate), and from the back
+side (``tests/test_anisotropic_berreman.py``).
 
 Why it exists. :mod:`fieldwave._core.solve_2d` reduces a layer to the second-order form
 ``d2E_t/dz2 = Omega2 E_t``, which exists only when the permittivity has an empty z row and
@@ -96,36 +99,46 @@ What is not here, in the order it will be wanted:
   layer, where Li's rule does not apply per component because the continuous quantity is a sum of
   three products (``docs/anisotropic-materials.md`` §3). This module takes convolution matrices
   as input and needs no change for it; the matrices do not exist.
-* **Dispatch.** Nothing routes to this, and ``solve_for_conv`` has no argument to put a z row in
-  — its five slots are the whole public surface. The design was worked out on 2026-08-11 and the
-  two facts that decide it are measured, so it need not be re-derived:
-
-  **The mode correspondence is exact and simple.** For a layer both formulations can express,
-  the 2ff triple is recoverable from the 4ff state with no fitting::
-
-      W = psi_f[:2*ff]          the transverse E
-      V = 1j * psi_f[2*ff:]     the partner field, i times the transverse H
-      q  = -1j * lam_f
-
-  Verified to 1e-15 on biaxial and rotated-uniaxial layers at three incidences; the ``1j`` is a
-  clean scalar, identical in every case.
-
-  **But the ETM recursion cannot be reused as it stands.** It writes the two directions as
-  ``big_F = big_W (I + Y)`` and ``big_G = big_V (I - Y)``, which assumes the backward modes are
-  the forward ones with the partner field negated. Measured, that assumption holds to 1e-15 for
-  a z-decoupled layer *and at normal incidence*, and fails at 6.9e-1 (E) / 1.1 (H) for a Voigt
-  tensor at 35 degrees — the same ``+-`` pairing this module exists because of.
-
-  So dispatch is not a branch inside :func:`fieldwave._core.solve_2d.solve_2d`. The 4ff path has
-  to carry its own stack solve, which it does, and hand the shared
-  :func:`fieldwave._core.solve_1d.final_matching` a ``(big_F, big_G, big_T)`` built from its own
-  ``G`` and ``T_acc`` — rotated into the s/p basis by ``varphi`` and carrying the ``1j`` above.
-  Getting that normalisation right is the remaining work: ``big_T`` feeds ``T_s`` / ``T_p``
-  directly, so a per-mode scale that cancels in ``R`` does not cancel in ``T``.
 * **Field reconstruction**, and the ``mu`` rows that
-  ``tests/references/golden_fmmax_magnetic.npz`` is already holding.
+  ``tests/references/golden_fmmax_magnetic.npz`` is already holding. The efficiencies and
+  amplitudes are complete; only the in-cell field is absent, and
+  :meth:`~fieldwave._core.engine.CoreSolveMixin._require_field_state` refuses rather than
+  reconstructing from the ``None`` this path returns in place of a ``layer_info_list``.
+
+How dispatch is built, kept because the two measurements behind it are why
+:func:`solve_2d_4ff` is shaped the way it is:
+
+**The mode correspondence is exact and simple.** For a layer both formulations can express,
+the 2ff triple is recoverable from the 4ff state with no fitting::
+
+    W = psi_f[:2*ff]          the transverse E
+    V = 1j * psi_f[2*ff:]     the partner field, i times the transverse H
+    q  = -1j * lam_f
+
+Verified to 1e-15 on biaxial and rotated-uniaxial layers at three incidences; the ``1j`` is a
+clean scalar, identical in every case.
+
+**But the ETM recursion cannot be reused as it stands.** It writes the two directions as
+``big_F = big_W (I + Y)`` and ``big_G = big_V (I - Y)``, which assumes the backward modes are
+the forward ones with the partner field negated. Measured, that assumption holds to 1e-15 for
+a z-decoupled layer *and at normal incidence*, and fails at 6.9e-1 (E) / 1.1 (H) for a Voigt
+tensor at 35 degrees — the same ``+-`` pairing this module exists because of.
+
+So dispatch is not a branch inside :func:`fieldwave._core.solve_2d.solve_2d`. The 4ff path
+carries its own stack solve and hands the shared
+:func:`fieldwave._core.solve_1d.final_matching` a ``(big_F, big_G, big_T)`` built from its own
+``G`` and ``T_acc`` — rotated into the s/p basis by ``varphi`` and carrying the ``1j`` above.
+
+The normalisation that warning is about is settled by *naming the seed's coordinates*:
+:func:`_half_space_state` writes the substrate wave with its two columns already the 2ff
+path's ``(t_s, t_p)``, so ``big_T`` is ``T_acc`` with nothing applied to it. Eigendecomposing
+the half-space instead — the obvious alternative — leaves ``eig``'s arbitrary column scale
+between ``big_F`` and ``big_T``, and that error is invisible in ``R``.
 """
-from .backend import array_namespace, eig
+from .backend import array_namespace, as_array, eig
+from .conventions import boundary_kz
+from .solve_1d import _block, _diag, _is_backside, _mirrored_scene, final_matching
+from .solve_2d import order_grid_kxy, sp_modes_2d
 
 # Flux below this, on a mode normalised to unit energy, is taken as none — the mode is
 # evanescent and direction is decided by decay instead. See split_forward_backward.
@@ -159,7 +172,6 @@ def layer_matrix_4ff(xp, Kx, Ky, exx, exy, exz, eyx, eyy, eyz, ezx, ezy, ezz_i):
     dy_ex, dy_ey = eyx + eyz @ ez_ex, eyy + eyz @ ez_ey
     dy_hx, dy_hy = eyz @ ez_hx, eyz @ ez_hy
 
-    from .solve_1d import _block
     return _block(xp, [
         [Kx @ ez_ex, Kx @ ez_ey, Kx @ ez_hx, Kx @ ez_hy + I],
         [Ky @ ez_ex, Ky @ ez_ey, Ky @ ez_hx - I, Ky @ ez_hy],
@@ -203,8 +215,17 @@ def split_forward_backward(xp, M, ff):
     Every order above the light line is that case, so the set-relative version breaks exactly
     where the multi-order path will live.
 
-    Boolean mask indexing here means this is numpy-only for now; the rest of ``_core`` is
-    backend-neutral and this will have to be before it can be dispatched to.
+    Boolean mask indexing here is what bounds this path's backend support, and the bound is
+    narrower than "numpy-only" turned out to be. Measured through the public route on a Voigt
+    tensor: NumPy, JAX and PyTorch all agree to 1e-15 **eagerly**, and ``jax.grad`` works; only
+    ``jax.jit`` refuses, because the mask makes the split's output shape depend on the values
+    in it and a tracer cannot answer ``int(sum(forward))``. That refusal is loud —
+    ``ConcretizationTypeError`` — rather than a wrong answer.
+
+    Lifting it means selecting by a sorted permutation instead of a mask, which keeps the
+    shapes static. The count check below would have to go somewhere else at the same time: it
+    is the guard against a degenerate layer leaving an ambiguous mode, and it is also the line
+    ``jit`` trips over first.
     """
     lam, psi = eig(M)
     flux = mode_flux_z(xp, psi, ff) / xp.sum(xp.abs(psi) ** 2, axis=0)
@@ -346,7 +367,28 @@ def _solve_etm(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb):
     redefinition is bookkept separately as ``P^-1 X_f`` per layer, so the transmitted amplitude
     can be recovered at the end.
     """
-    G = psi_vf
+    G, T_acc = _etm_recursion(xp, k0, Kx, Ky, layers, ff, psi_vf)
+
+    # incident + reflected on the top side must be whatever the recursion says arrives there
+    sol = xp.linalg.solve(xp.concat([psi_vb, -G], axis=1),
+                          xp.reshape(-incident, (-1, 1)))[:, 0]
+    return psi_vb @ sol[:2 * ff], psi_vf @ (T_acc @ sol[2 * ff:])
+
+
+def _etm_recursion(xp, k0, Kx, Ky, layers, ff, G):
+    """Sweep the ETM recursion up the stack: ``(G_above, T_acc)`` from the seed ``G`` below it.
+
+    Split out of :func:`_solve_etm` because the recursion is the part
+    :func:`solve_2d_4ff` shares — it seeds a half-space of index ``n_bot`` rather than vacuum
+    and hands the result to the s/p matching instead of matching against a vacuum basis here.
+    The arithmetic is untouched by the split.
+
+    ``G`` maps an unknown amplitude vector to the transverse state; whatever coordinates the
+    seed's columns are in, ``T_acc`` maps the *returned* ``G``'s unknown back into them. The two
+    are only meaningful together, which is why they are returned together: ``big_T`` feeds the
+    transmitted amplitude directly, so a per-mode scale that cancels in the reflection does not
+    cancel there.
+    """
     T_acc = xp.astype(xp.eye(2 * ff), Kx.dtype)
     for eps_blocks, d in reversed(list(layers)):
         lam_f, psi_f, lam_b, psi_b = split_forward_backward(
@@ -358,11 +400,7 @@ def _solve_etm(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb):
         P_i = xp.linalg.inv(PQ[:2 * ff])
         G = psi_f + psi_b @ X_b @ (PQ[2 * ff:] @ P_i) @ X_f
         T_acc = T_acc @ (P_i @ X_f)
-
-    # incident + reflected on the top side must be whatever the recursion says arrives there
-    sol = xp.linalg.solve(xp.concat([psi_vb, -G], axis=1),
-                          xp.reshape(-incident, (-1, 1)))[:, 0]
-    return psi_vb @ sol[:2 * ff], psi_vf @ (T_acc @ sol[2 * ff:])
+    return G, T_acc
 
 
 def _solve_naive(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb):
@@ -450,8 +488,174 @@ def solve_uniform_stack(wavelength, kx, ky, layers, ff, incident, connecting_alg
     return -flux(reflected) / inc, flux(transmitted) / inc
 
 
+def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
+                 epx_conv_all, epy_conv_all, epz_conv_i_all,
+                 epxy_conv_all=None, epyx_conv_all=None,
+                 epxz_conv_all=None, epyz_conv_all=None,
+                 epzx_conv_all=None, epzy_conv_all=None,
+                 incidence_side='top', polarization=None, full=False,
+                 connecting_algo='ETM'):
+    """Solve a 2D stack on the first-order formulation — the public 4ff route.
+
+    Twin of :func:`fieldwave._core.solve_2d.solve_2d`: same arguments, same returns, four more
+    convolution slots. ``epxz_conv_all`` / ``epyz_conv_all`` / ``epzx_conv_all`` /
+    ``epzy_conv_all`` are the ``z`` row and column the second-order form cannot express;
+    ``None`` (the default) is zero, and a call giving none of them is the same physical problem
+    :func:`~fieldwave._core.solve_2d.solve_2d` solves, at about 8x the cost.
+
+    **All four carry the same slot convention as the in-plane pair: the slot holds the
+    negative of the tensor component.** ``epxz = -eps_xz``, and so on for the other three, so
+    that one rule covers every off-diagonal slot in the signature rather than two rules split
+    down the middle of it. ``epz_conv_i`` is still the *inverse* of the ``zz`` block. See
+    ``docs/off-diagonal-slot-convention.md``.
+
+    Three pieces are shared with the 2ff path rather than re-derived, and this is where the
+    mode correspondence at the top of this module is spent:
+
+    * the **substrate seed** — :func:`_half_space_state` writes the same downward half-space
+      wave the 2ff seed ``(big_F, big_G) = ([[I, 0], [0, -i Kz/eps]], [[-i Kz, 0], [0, I]])``
+      spells, as a ``4ff`` state whose two columns are that path's ``(t_s, t_p)``;
+    * the **s/p rotation** — :func:`~fieldwave._core.solve_2d.sp_modes_2d`, given the
+      recursion's ``G`` split as ``W = G[:2ff]`` and ``V = 1j*G[2ff:]``. That ``1j`` is the
+      whole correspondence: with it the four boundary variables come out in the basis
+      :func:`~fieldwave._core.solve_1d.final_matching` already reads;
+    * the **matching** — ``final_matching`` itself, so the incidence, the efficiencies, the
+      Fresnel normalisation and the pure-s/pure-p variants are the same code the rest of the
+      library uses, not a second opinion about them.
+
+    ``big_T`` is ``T_acc`` unchanged, with no rescaling, *because* the seed's columns are
+    already ``(t_s, t_p)``: the transmitted amplitude is read in the coordinates the seed
+    named, so the per-mode scale that would cancel in ``R`` and survive in ``T`` never enters.
+    Feeding ``eig``'s half-space modes instead — the obvious alternative — is what puts an
+    arbitrary column scale between the two, and it is invisible in reflection.
+
+    ``incidence_side='bottom'`` is the same mirrored scene the other solves use, **plus a sign
+    flip on all four z-row slots**: ``z -> -z`` sends ``eps_xz -> -eps_xz`` (and likewise
+    ``zx``, ``yz``, ``zy``) while leaving the in-plane block and ``eps_zz`` alone, which is why
+    the shared :func:`~fieldwave._core.solve_1d._mirrored_scene` cannot be the whole of it
+    here. Pinned against a Berreman stack illuminated from below with no mirror at all
+    (``tests/test_anisotropic_berreman.py``).
+
+    Only ``connecting_algo='ETM'`` is wired: this route needs its stack solve to hand
+    ``final_matching`` a ``(big_F, big_G, big_T)``, and the SMM cascade in :func:`_solve_smm`
+    produces a scattering matrix in the two half-spaces' own mode bases instead. ``'SMM'``
+    raises here rather than silently running the other algorithm.
+    """
+    xp = array_namespace(epx_conv_all)
+    if connecting_algo != 'ETM':
+        raise ValueError(
+            f"connecting_algo={connecting_algo!r} is not available on the first-order (4ff) "
+            "path, which is what a populated z row selects; only 'ETM' is wired. The 4ff "
+            'stack solve has to hand the shared final matching a (big_F, big_G, big_T), and '
+            'the scattering cascade produces a scattering matrix in the half-spaces\' own '
+            "mode bases instead. Use connecting_algo='ETM' for a z-coupled tensor.")
+
+    per_layer = [epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all,
+                 epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all]
+    if _is_backside(incidence_side):
+        n_top, n_bot, thickness, *per_layer = _mirrored_scene(n_top, n_bot, thickness,
+                                                              *per_layer)
+        # The mirror is z -> -z, under which the z row and column change sign. The in-plane
+        # block and eps_zz do not, which is why the shared mirror can carry those untouched.
+        per_layer = per_layer[:5] + [None if s is None else [-m for m in s]
+                                     for s in per_layer[5:]]
+
+    kx = as_array(xp, kx)
+    ky = as_array(xp, ky)
+    if not xp.isdtype(kx.dtype, 'complex floating'):
+        kx = xp.astype(kx, xp.complex128)
+        ky = xp.astype(ky, xp.complex128)
+    C = kx.dtype
+
+    kx_g, ky_g = order_grid_kxy(xp, kx, ky)
+    ff_y, ff_x = kx_g.shape
+    ff = ff_x * ff_y
+    k0 = 2 * 3.141592653589793 / wavelength
+    theta = 0.0 if theta is None else theta
+
+    k_par_sq = kx_g ** 2 + ky_g ** 2
+    kz_top = xp.reshape(boundary_kz(xp, n_top ** 2, k_par_sq), (-1,))
+    kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq), (-1,))
+    varphi = xp.reshape(xp.atan(ky_g / kx_g), (-1,))
+
+    Kx = _diag(xp, xp.reshape(kx_g, (-1,)))
+    Ky = _diag(xp, xp.reshape(ky_g, (-1,)))
+    F_c = _diag(xp, xp.cos(varphi))
+    F_s = _diag(xp, xp.sin(varphi))
+
+    layers = _conv_layers(xp, per_layer, thickness, ff, C)
+    seed = _half_space_state(xp, _diag(xp, kz_bot), n_bot ** 2, F_c, F_s, ff, C)
+    G, big_T = _etm_recursion(xp, k0, Kx, Ky, layers, ff, seed)
+    big_F, big_G = sp_modes_2d(xp, G[:2 * ff], 1j * G[2 * ff:], F_c, F_s, ff)
+
+    out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
+                         n_top, n_bot, ff_x, ff_y, polarization=polarization, full=full)
+    if full:
+        # No field reconstruction on this path yet — the per-layer state the 2ff solves leave
+        # behind has no 4ff counterpart written. `None` rather than an empty list so that
+        # `calculate_field` can say so instead of reconstructing from nothing.
+        out['layer_info_list'] = None
+    return out
+
+
+def _half_space_state(xp, Kz, eps, F_c, F_s, ff, C):
+    """The downward half-space wave as a ``4ff`` state, columns ``(t_s, t_p)``.
+
+    This is the 2ff substrate seed, written in the variables the first-order system carries.
+    Reading it off rather than deriving it: the seed must satisfy
+    ``sp_modes_2d(seed[:2ff], 1j*seed[2ff:]) == (big_F, big_G)`` for the pair
+    :func:`fieldwave._core.solve_2d.solve_2d` starts from, which fixes the four transverse
+    components per column with nothing left to choose ::
+
+        E_s = t_s              E_p = -i kz t_p / eps
+        H_p = -kz t_s          H_s = -i t_p
+
+    and the ``(s, p) -> (x, y)`` rotation ``Ax = F_c A_p - F_s A_s``,
+    ``Ay = F_s A_p + F_c A_s`` puts them in the state's own basis. ``Kz`` comes from
+    :func:`~fieldwave._core.conventions.boundary_kz`, so this path takes the half-space
+    branch from the same place every other solve does rather than from the flux rule
+    :func:`split_forward_backward` applies inside a layer.
+
+    Building the seed instead of eigendecomposing the half-space is not only cheaper. An
+    isotropic half-space has both forward modes at the same ``kz``, so that eigenspace is
+    degenerate and ``eig`` may return any basis of it — including one that mixes s and p, and
+    one whose column scales would land straight in ``big_T``.
+    """
+    I = xp.astype(xp.eye(ff), C)
+    E_s, E_p = I, -1j * Kz / eps          # per unit t_s, per unit t_p
+    H_p, H_s = -Kz, -1j * I
+    return _block(xp, [
+        [-F_s @ E_s, F_c @ E_p],          # Ex = F_c E_p - F_s E_s
+        [F_c @ E_s, F_s @ E_p],           # Ey = F_s E_p + F_c E_s
+        [F_c @ H_p, -F_s @ H_s],          # Hx = F_c H_p - F_s H_s
+        [F_s @ H_p, F_c @ H_s],           # Hy = F_s H_p + F_c H_s
+    ])
+
+
+def _conv_layers(xp, per_layer, thickness, ff, C):
+    """``[(eps_blocks, d), ...]`` for :func:`layer_matrix_4ff`, from the nine slot stacks.
+
+    Where the slot convention is undone: every off-diagonal slot holds the negative of its
+    tensor component (``docs/off-diagonal-slot-convention.md``), and ``layer_matrix_4ff``
+    reads the tensor itself. A missing stack is zero, matching how the 2ff path treats
+    ``epxy_conv_all`` / ``epyx_conv_all``.
+    """
+    epx, epy, epz_i, epxy, epyx, epxz, epyz, epzx, epzy = per_layer
+    O = xp.astype(xp.zeros((ff, ff)), C)
+    n_layers = len(thickness) if not hasattr(thickness, 'shape') else thickness.shape[0]
+
+    def slot(stack, i):
+        return O if stack is None else -stack[i]
+
+    return [(dict(exx=epx[i], eyy=epy[i], ezz_i=epz_i[i],
+                  exy=slot(epxy, i), eyx=slot(epyx, i),
+                  exz=slot(epxz, i), eyz=slot(epyz, i),
+                  ezx=slot(epzx, i), ezy=slot(epzy, i)),
+             thickness[i])
+            for i in range(n_layers)]
+
+
 def _diag_of(xp, v):
-    from .solve_1d import _diag
     return _diag(xp, xp.reshape(xp.asarray(v), (-1,)))
 
 

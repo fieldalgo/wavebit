@@ -7,19 +7,23 @@ Targets:
 - `fieldwave/_core/solve_2d.py::layer_modes_2d` — the two blocks, and why they must order the pair oppositely
 - `fieldwave/_core/factorization.py::_nvf_assemble` — where the sign convention is set
 - `fieldwave/on_numpy/emsolver/rcwa.py::solve_for_conv` — the only way to reach the slots by hand
+- `fieldwave/_core/solve_2d_4ff.py::_conv_layers` — where the negation is undone for the z row
 - `tests/test_uniform_anisotropic.py`, `tests/test_anisotropic_berreman.py`,
   `tests/references/test_reticolo_anisotropic_golden.py` — every number below
 
 Companion to [`anisotropic-materials.md`](anisotropic-materials.md), which answers the scoping
 question ("can I give the solver an anisotropic material, and what does each gap cost?"). This one
-answers a narrower and more practical question: **if I fill the five slots myself, what exactly am
-I supposed to put in them, and where does that go wrong?**
+answers a narrower and more practical question: **if I fill the slots myself — five for an
+in-plane tensor, nine for a full one — what exactly am I supposed to put in them, and where does
+that go wrong?**
 
 ---
 
 ## TL;DR
 
-1. The slot named `epxy` holds **`-eps_xy`**, not `eps_xy`. Same for `epyx`. Nothing in the public
+1. The slot named `epxy` holds **`-eps_xy`**, not `eps_xy`. Same for `epyx` — and, since the z row
+   became reachable on 2026-08-13, for `epxz`, `epyz`, `epzx` and `epzy` too: **every off-diagonal
+   slot holds the negative of its component**, one rule across all six. Nothing in the public
    signature says so.
 2. Getting that sign backwards is **invisible to every power efficiency** — R, T, co-pol, cross-pol
    and total are all bit-identical. Only a complex amplitude changes.
@@ -129,6 +133,28 @@ epxy  = np.stack([-eps_xy * I])        # <-- negate
 epyx  = np.stack([-eps_yx * I])        # <-- negate
 epz_i = np.stack([np.linalg.inv(eps_zz * I)])
 ```
+
+### 2.1 And the z row, which the same rule covers
+
+`layer_modes_2d` has no z-row slots to derive a sign from — a populated z row selects a different
+operator entirely (`solve_2d_4ff.py::layer_matrix_4ff`, which reads the tensor as written). So
+for those four the convention was *chosen* rather than forced, and it was chosen to match:
+
+```python
+epxz  = np.stack([-eps_xz * I])        # <-- negate, same as the pair above
+epyz  = np.stack([-eps_yz * I])
+epzx  = np.stack([-eps_zx * I])
+epzy  = np.stack([-eps_zy * I])
+```
+
+The alternative — plain components for the z row, negated ones for the in-plane pair — would put
+two conventions in one call, which is a worse trap than one surprising convention. `epz_i` stays
+the odd one out either way: it is an *inverse*, not a negation, because that is the form the
+elimination of `E_z` needs.
+
+Unlike the in-plane pair, a wrong sign here is **not** invisible to a power efficiency (§3 is
+about the pair specifically). `tests/test_anisotropic_berreman.py` judges these four against an
+oracle that takes the plain tensor, so a slot filled the other way up fails there.
 
 ## 3. Why a wrong sign will not announce itself
 
@@ -392,7 +418,9 @@ solved with the shipped and exchanged operators:
 Not "agrees to 1e-15" — identical. The full verification suite (1066 tests) is likewise unmoved.
 
 **So: this is reachable only by hand, through `solve_for_conv`, with a deliberately asymmetric
-tensor.** The first person to do that will be someone trying gyrotropy.
+tensor.** The first person to do that will be someone trying gyrotropy — and if their
+magnetisation lies in the plane rather than along the stack normal, they will be filling the four
+z-row slots of §2.1 at the same time.
 
 ## 8. State, and what is still open
 
@@ -405,6 +433,7 @@ tensor.** The first person to do that will be someone trying gyrotropy.
 | Oblique incidence, stacks, complex asymmetric tensors | covered by `tests/test_anisotropic_berreman.py` |
 | Which magnetization `+i·g` means | **open** |
 | A *patterned* anisotropic layer | **out of scope here** — needs the factorization in `anisotropic-materials.md` §3 |
+| The z-row slots (`epxz`, `epyz`, `epzx`, `epzy`) | same sign rule, chosen not forced (§2.1); judged against Berreman, where a wrong sign *does* move a power efficiency |
 
 ### What the oracle is, and is not
 

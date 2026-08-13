@@ -238,8 +238,9 @@ def test_stack_solve_matches_berreman(label, eps, theta_deg):
     """End to end: modes, split, boundary and transfer together.
 
     Four of these cases are z-coupled, which is to say the 2ff path cannot reach them at all —
-    handed one it drops the z row and is 2e-2 to 6e-2 out while conserving energy exactly
-    (``tests/test_anisotropic_berreman.py::test_voigt_geometry_is_refused_rather_than_quietly_reduced``).
+    handed one it would drop the z row and be 2e-2 to 6e-2 out while conserving energy exactly,
+    which is why ``formulation='2ff'`` refuses them
+    (``tests/test_anisotropic_berreman.py::test_a_z_row_is_refused_by_the_formulation_that_cannot_hold_it``).
     """
     from test_anisotropic_berreman import berreman_efficiencies
 

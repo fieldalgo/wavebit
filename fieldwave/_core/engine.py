@@ -14,13 +14,19 @@ from . import boundary as _boundary
 from . import factorization as _fac
 from . import lattice as _lattice
 from .backend import _device_of, array_namespace
-from .enums import (DEFAULT_FACTORIZATION, DEFAULT_FOURIER_COEFFICIENTS, Factorization,
-                    FourierCoefficients, coefficients_of, factorization_of,
-                    resolve_fourier_options)
+from .enums import (DEFAULT_FACTORIZATION, DEFAULT_FORMULATION, DEFAULT_FOURIER_COEFFICIENTS,
+                    Factorization, Formulation, FourierCoefficients, coefficients_of,
+                    factorization_of, formulation_of, resolve_fourier_options)
 from .geometry import StaticGeometry
 from .scattering import smm_1d as _smm_1d, smm_1d_conical as _smm_1d_conical, smm_2d as _smm_2d
 from .solve_1d import solve_1d as _solve_1d, solve_1d_conical as _solve_1d_conical
 from .solve_2d import solve_2d as _solve_2d
+from .solve_2d_4ff import solve_2d_4ff as _solve_2d_4ff
+
+# The four convolution slots that hold the permittivity's z row and column, in the order the
+# solve methods take them. Naming them once keeps the dispatch message specific about which
+# one was given -- see `CoreSolveMixin._formulation_for`.
+_Z_ROW_SLOTS = ('epxz_conv_all', 'epyz_conv_all', 'epzx_conv_all', 'epzy_conv_all')
 
 # Connecting algorithm -> the core solve for each grating type. ETM propagates an enhanced
 # transmittance matrix (Moharam et al. 1995); SMM cascades per-layer scattering matrices. Same modes, same boundary
@@ -294,6 +300,99 @@ class CoreSolveMixin:
         self.T1 = out.pop('T1')
         return out
 
+    _formulation = DEFAULT_FORMULATION
+    _formulation_assigned = None
+
+    @property
+    def formulation(self):
+        """Which layer formulation the 2D solve uses: ``'auto'`` (default), ``'2ff'``, ``'4ff'``.
+
+        ``'2ff'`` is the second-order form the library has always used, one field pair per
+        order. ``'4ff'`` carries the full transverse state and is what a populated
+        permittivity ``z`` row — the Voigt / magneto-optic geometry — needs; it costs about 8x,
+        because the eigenproblem doubles and ``eig`` is cubic.
+
+        The default reads the problem rather than asking: a solve handed any of the four
+        ``ep{xz,yz,zx,zy}_conv_all`` slots takes ``'4ff'``, everything else ``'2ff'``. That
+        decision is the solver's because a caller with a Faraday stack has no way to know that
+        one populated ``eps_yz`` is what would cost them eight times more.
+
+        Setting it overrides that, in the two directions that mean something:
+
+        * ``'4ff'`` forces the first-order path on a problem that does not need it. This is
+          how the two formulations are cross-checked against each other — the same scene run
+          both ways must agree, and no external oracle provides that.
+        * ``'2ff'`` refuses a z row instead of dropping it. Dropping it is the dangerous
+          failure: the reduced tensor is a perfectly good medium, so the solve succeeds and
+          ``R + T`` stays at 1 to machine precision while the efficiencies have moved by 2e-2
+          to 6e-2.
+
+        Which one actually ran is on :attr:`formulation_assigned` afterwards.
+        See ``docs/anisotropic-materials.md`` §8.
+        """
+        return self._formulation
+
+    @formulation.setter
+    def formulation(self, value):
+        self._formulation = formulation_of(value)
+
+    @property
+    def formulation_assigned(self):
+        """The formulation the last solve actually ran on — ``None`` before the first.
+
+        The companion to :attr:`grating_type_assigned`, and exposed for the same reason: a
+        silent 8x is indistinguishable from a slow machine, and a benchmark that cannot say
+        which formulation it measured is not a benchmark.
+
+        Every solve sets it, including the 1D ones, which are second-order and have no choice
+        to make. Leaving those alone would be the worse answer: the attribute would then keep
+        whatever a *previous* 2D solve put there, and a stale ``'4ff'`` reads exactly like a
+        fresh one.
+        """
+        return self._formulation_assigned
+
+    def _formulation_for(self, z_row):
+        """Settle :attr:`formulation` against the z-row slots this call was handed.
+
+        ``z_row`` is the four ``ep{xz,yz,zx,zy}_conv_all`` arguments. The test is whether a
+        slot was *given*, not whether it is nonzero: the branch decides control flow, so it has
+        to be answerable on a JAX tracer, and "passed all-zero matrices" is a claim about the
+        caller rather than about the tensor. Leave them ``None`` — the default — to stay on the
+        cheap path.
+        """
+        given = [name for name, stack in zip(_Z_ROW_SLOTS, z_row) if stack is not None]
+        if self._formulation == Formulation.SECOND and given:
+            raise ValueError(
+                f"formulation='2ff' cannot express the z row, and {', '.join(given)} "
+                f"{'was' if len(given) == 1 else 'were'} given. "
+                'The second-order form d2E/dz2 = Omega2 E exists only while the '
+                'permittivity z row and column are empty; dropping them would answer for the '
+                'reduced tensor, which conserves energy to machine precision while the '
+                "efficiencies move by 2e-2 to 6e-2. Use formulation='auto' (the default) or "
+                "'4ff'. See docs/anisotropic-materials.md section 6.")
+        if self._formulation == Formulation.AUTO:
+            return Formulation.FIRST if given else Formulation.SECOND
+        return self._formulation
+
+    def _require_field_state(self):
+        """Refuse field reconstruction where the last solve left no per-layer state behind.
+
+        Only the 4ff route does: it has no field reconstruction yet, and returns ``None`` in
+        place of the ``layer_info_list`` the 2ff solves fill.
+
+        ``None`` rather than ``[]`` because the two states are different questions and both
+        deserve their own answer. An *empty* list is a solver that has not solved yet (or a
+        stack with no interior), which :func:`~fieldwave._core.fields._require_solved` already
+        reports — and ``_base`` initialises the attribute to ``[]``, so that is the state a
+        fresh solver is in. ``None`` is the one this method exists for.
+        """
+        if getattr(self, 'layer_info_list', None) is None:
+            raise NotImplementedError(
+                'field reconstruction is not implemented on the first-order (4ff) path, '
+                'which is the one a populated permittivity z row selects. The efficiencies '
+                'and amplitudes it returns are complete; only the in-cell field is missing. '
+                'See fieldwave/_core/solve_2d_4ff.py, "What is not here".')
+
     def solve_1d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
         if self._polarization is not None:
             # Unreachable through conv_solve — `_assign_grating_type` sends a structure with a
@@ -304,6 +403,7 @@ class CoreSolveMixin:
                 'take a polarization pair; use solve_1d_conical, which a full solve '
                 '(conv_solve) selects on its own when polarization is set')
         solve = self._solve_fn('1d')
+        self._formulation_assigned = Formulation.SECOND
         kx, _ = self.get_kx_ky_vector(wavelength)
         return self._finish(solve(
             self.pol, wavelength, kx, self.n_top, self.n_bot, self.theta, self.thickness,
@@ -312,6 +412,7 @@ class CoreSolveMixin:
 
     def solve_1d_conical(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
         solve = self._solve_fn('conical')
+        self._formulation_assigned = Formulation.SECOND
         kx, ky = self.get_kx_ky_vector(wavelength)
         return self._finish(solve(
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi, self.thickness,
@@ -320,9 +421,22 @@ class CoreSolveMixin:
             polarization=self._polarization, full=True))
 
     def solve_2d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
-                 epxy_conv_all=None, epyx_conv_all=None):
-        solve = self._solve_fn('2d')
+                 epxy_conv_all=None, epyx_conv_all=None,
+                 epxz_conv_all=None, epyz_conv_all=None,
+                 epzx_conv_all=None, epzy_conv_all=None):
         kx, ky = self._kxy_2d(wavelength)
+        z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
+        self._formulation_assigned = self._formulation_for(z_row)
+        if self._formulation_assigned == Formulation.FIRST:
+            return self._finish(_solve_2d_4ff(
+                wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi,
+                self.thickness, epx_conv_all, epy_conv_all, epz_conv_i_all,
+                epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
+                epxz_conv_all=epxz_conv_all, epyz_conv_all=epyz_conv_all,
+                epzx_conv_all=epzx_conv_all, epzy_conv_all=epzy_conv_all,
+                incidence_side=self.incidence_side, polarization=self._polarization,
+                full=True, connecting_algo=self.connecting_algo))
+        solve = self._solve_fn('2d')
         return self._finish(solve(
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi, self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,

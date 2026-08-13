@@ -20,8 +20,14 @@ uniform anisotropic layer is exact for a diagonal tensor at any mounting and for
 off-diagonal pair at ``delta0 = 0``; past that it returns ``R + T`` up to 1.2e-2 away from one
 on a tensor that is provably lossless. The table and the reasoning are in
 ``gen_goldens_reticolo_anisotropic.py``. So a tilted magnetisation — xy and yz populated at
-once, the ordinary case for a real magnetised film — still has no outside judge, and
-``test_solve_2d_4ff.py`` remains the only thing standing behind it.
+once, the ordinary case for a real magnetised film — still has no outside judge; what stands
+behind it is ``test_solve_2d_4ff.py`` and the Berreman cases in
+``tests/test_anisotropic_berreman.py``, both ours.
+
+Every case here is run **twice** since the public route landed: once through the module's own
+entry, and once through ``solve_for_conv``. The second is not a duplicate — it crosses the
+dispatch, the substrate seed, the s/p rotation and the shared final matching, none of which the
+first touches, and all of which an internal cross-check would share on both sides.
 """
 import pathlib
 import sys
@@ -29,6 +35,7 @@ import sys
 import numpy as np
 import pytest
 
+import fieldwave
 from fieldwave._core.solve_2d_4ff import solve_uniform_stack, vacuum_sp_states
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -57,6 +64,36 @@ def efficiencies(eps, theta_deg, wl, thick):
     r_te, t_te = solve_uniform_stack(wl, kx, ky, layers, 1, psi_s)
     r_tm, t_tm = solve_uniform_stack(wl, kx, ky, layers, 1, psi_p)
     return np.array([r_te, t_te, r_tm, t_tm])
+
+
+def public_efficiencies(eps, theta_deg, wl, thick):
+    """The same four numbers, reached the way a user reaches them.
+
+    :func:`efficiencies` drives the engine directly — its own vacuum half-spaces, its own
+    incident states, its own flux ratio. This goes through ``solve_for_conv`` instead, so it
+    also crosses the parts the engine never touches: the dispatch that reads the z slots, the
+    substrate seed and s/p rotation that put the first-order state into the shared boundary
+    match, and ``final_matching``'s efficiencies and Fresnel normalisation.
+
+    Those are the parts an internal cross-check cannot judge, because both sides of it would
+    share them. Here they answer to RETICOLO and fmmax.
+
+    The slot convention is the negative of the tensor component for every off-diagonal slot,
+    the z row included — ``docs/off-diagonal-slot-convention.md``.
+    """
+    e = np.asarray(eps, dtype=complex)
+    I = np.eye(1, dtype=complex)
+    st = lambda v: np.stack([v * I])                                          # noqa: E731
+    mee = fieldwave.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=np.deg2rad(theta_deg),
+                         phi=0.0, psi=0.0, fto=(0, 0), period=(300.0, 300.0),
+                         wavelength=wl, thickness=[thick])
+    res = mee.solve_for_conv(wl, st(e[0, 0]), st(e[1, 1]),
+                             np.stack([np.linalg.inv(e[2, 2] * I)]),
+                             st(-e[0, 1]), st(-e[1, 0]),
+                             st(-e[0, 2]), st(-e[1, 2]), st(-e[2, 0]), st(-e[2, 1]))
+    assert mee.formulation_assigned == '4ff'
+    return np.array([float(res.res_te_inc.R.sum()), float(res.res_te_inc.T.sum()),
+                     float(res.res_tm_inc.R.sum()), float(res.res_tm_inc.T.sum())])
 
 
 def _golden(name):
@@ -92,6 +129,46 @@ def test_matches_fmmax(name):
     got = efficiencies(eps, theta_deg, FMMAX_WL, FMMAX_THICK)
     gap = np.abs(got - _golden('golden_fmmax.npz')[name]).max()
     assert gap < 1e-12, f'{name}: {gap:.2e} from fmmax'
+
+
+@pytest.mark.parametrize('name', list(RETICOLO_CASES), ids=list(RETICOLO_CASES))
+def test_the_public_route_matches_reticolo(name):
+    """The dispatch, the seed, the s/p rotation and the shared matching, against RETICOLO.
+
+    Same goldens, same tolerance, one more layer of this repo's own code in the way — the
+    layer that did not exist when they were frozen.
+    """
+    eps, theta_deg = RETICOLO_CASES[name]
+    got = public_efficiencies(eps, theta_deg, RETICOLO_WL, RETICOLO_THICK)
+    gap = np.abs(got - _golden('golden_reticolo_anisotropic.npz')[name]).max()
+    assert gap < 1e-12, f'{name}: {gap:.2e} from RETICOLO through the public API'
+
+
+@pytest.mark.parametrize('name', list(FMMAX_CASES), ids=list(FMMAX_CASES))
+def test_the_public_route_matches_fmmax(name):
+    """And the second outside solver, on cases sharing nothing with the RETICOLO set.
+
+    Every tensor here has an empty z row, so these reach the first-order path only because the
+    slots were *given* — which is the dispatch rule under test as much as the physics is.
+    """
+    eps, theta_deg = FMMAX_CASES[name]
+    got = public_efficiencies(eps, theta_deg, FMMAX_WL, FMMAX_THICK)
+    gap = np.abs(got - _golden('golden_fmmax.npz')[name]).max()
+    assert gap < 1e-12, f'{name}: {gap:.2e} from fmmax through the public API'
+
+
+def test_the_two_ways_in_agree_to_the_last_digit():
+    """Engine-direct and public-API, on one case, at a tolerance the goldens cannot state.
+
+    The tests above are both bounded at 1e-12 by what an outside solver can be held to. This
+    one is between two of our own routes, so the only thing between them is arithmetic
+    ordering — a drift larger than this would mean the two are not solving the same problem,
+    long before either golden noticed.
+    """
+    eps, theta_deg = RETICOLO_CASES['voigt_x_35deg']
+    a = efficiencies(eps, theta_deg, RETICOLO_WL, RETICOLO_THICK)
+    b = public_efficiencies(eps, theta_deg, RETICOLO_WL, RETICOLO_THICK)
+    assert np.abs(a - b).max() < 1e-13, f'{np.abs(a - b).max():.2e} between the two routes'
 
 
 def test_the_external_coverage_of_z_coupling_is_what_the_docs_claim():

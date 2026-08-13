@@ -7,7 +7,8 @@ versions checked against PyPI and Zenodo rather than against notes.
 Targets:
 - `fieldwave/_core/solve_2d.py::layer_modes_2d` — the five blocks it reads
 - `fieldwave/_core/solve_2d_4ff.py` — the formulation that reads all nine
-- `tests/test_anisotropic_berreman.py::test_voigt_geometry_is_refused_rather_than_quietly_reduced`
+- `tests/test_anisotropic_berreman.py::test_voigt_geometry_matches_the_oracle` — and its
+  `::test_a_z_row_is_refused_by_the_formulation_that_cannot_hold_it` twin
 - `tests/references/README.md` — the per-solver measurements summarised in §4
 
 Companion to two documents that answer neighbouring questions.
@@ -34,7 +35,8 @@ and what does each solver do when handed them?**
    diverge.
 5. **Energy conservation cannot detect the silent drop.** The reduced tensor is a valid lossless
    medium, so `R + T = 1` holds to machine precision while the answer is wrong by up to 6e-2.
-   This is why FieldWave raises instead.
+   This is why FieldWave never drops: the four components select the first-order formulation,
+   and the one way to ask for 2ff over a z row (`formulation='2ff'`) raises.
 
 ---
 
@@ -119,12 +121,12 @@ decide every row, and neither needs another solver to agree:
 
 | solver | behaviour | evidence |
 |---|---|---|
-| **FieldWave 2ff** | refuses | `NotImplementedError('z-coupling')` |
+| **FieldWave 2ff** | refuses | `ValueError` naming the slot, only reachable by asking for `formulation='2ff'` |
 | **fmmax** 1.7.1 | cannot be asked | no `xz/yz/zx/zy` arguments exist |
 | **inkstone** 0.3.15 | **accepts, silently drops** | takes a `(3,3)` array; output bit-identical to the z row zeroed |
 | **EMpy** 2.2.3 | reads it, diverges | uses the z row, but returns `R + T = 1.6e13` for a plain Faraday tensor at normal incidence |
 | **RETICOLO** V10 | handles it, within a bound | exact for one off-diagonal pair at `delta0 = 0`; past that `R + T` leaves 1 by 2.5e-3 to 1.2e-2 |
-| **FieldWave 4ff** | handles it | `solve_2d_4ff.py`, agreeing with RETICOLO to 1e-15 inside RETICOLO's bound |
+| **FieldWave 4ff** | handles it, and is the default here | `solve_2d_4ff.py`, agreeing with RETICOLO to 1e-15 inside RETICOLO's bound — through the public API as well as directly |
 
 The per-solver numbers, and how each was established, are in
 [`../tests/references/README.md`](../tests/references/README.md).
@@ -142,8 +144,9 @@ back clean:
 | reciprocity | yes |
 | the answer | **wrong by 2e-2 to 6e-2** |
 
-That table is why `test_voigt_geometry_is_refused_rather_than_quietly_reduced` exists, and its
-docstring says the same thing: *"the failure this guards against is not a crash."* It is also
+That table is why `test_a_z_row_is_refused_by_the_formulation_that_cannot_hold_it` exists, and
+why the same numbers are quoted in the test that now *answers* the geometry rather than
+refusing it: the failure being guarded against is not a crash. It is also
 exactly what inkstone was measured doing — thirty lossless configurations conserving energy to
 1.3e-15, every z-decoupled case matching FieldWave to 1e-15, and only the z-coupled ones quietly
 4e-4 to 3e-2 out. Without the refusal, FieldWave would look identical.
@@ -163,8 +166,12 @@ Reading all nine means abandoning the second-order reduction for the first-order
 
 which is roughly **8x** on the layer solve (`eig` is cubic and the problem doubles), and which
 gives up the free `±` mode pairing every 2ff consumer assumes — forward and backward become
-genuinely different mode sets. `fieldwave/_core/solve_2d_4ff.py` implements it; nothing dispatches
-to it yet, and its remaining gaps are listed in that module's docstring.
+genuinely different mode sets. `fieldwave/_core/solve_2d_4ff.py` implements it, and since
+2026-08-13 the public entry does reach it: `solve_for_conv` takes nine slots rather than five,
+and giving any of the four z-row slots selects the first-order path (`formulation='4ff'` forces
+it, `'2ff'` refuses a z row rather than dropping it). What crossing the edge still costs, beyond
+the 8x, is field reconstruction and `connecting_algo='SMM'`; the module's docstring keeps that
+list.
 
 Because no outside solver covers the general z-coupled case, the 4ff path is judged partly by a
 theorem rather than by an oracle: turning the tensor and the incidence azimuth together about the

@@ -102,6 +102,9 @@ layer, a second site for `mu != 1`, a first-order solver for `eps_xz`. Publishin
 deliberate: a consumer that cannot tell "unsupported" from "you spelled it wrong" will send
 users to debug their own input.
 
-The `z_coupled` entry is the one to watch. Its `why` describes work that exists but is not
-reachable — the 4ff operator is written and pinned, nothing dispatches to it, and there is no
-field reconstruction. When that changes, the manifest is where it has to be said.
+The `z_coupled` entry is the one to watch, and it has already turned over once: it used to
+describe work that existed but was not reachable — the 4ff operator written and pinned with
+nothing dispatching to it. It now reads `supported: true`, and its `why` carries the two limits
+that ride with it (`connecting_algo` must be `ETM`, no field reconstruction). That is the shape
+these entries are meant to take: a `true` with its edges named, rather than a `false` that
+quietly becomes stale the day the capability lands.

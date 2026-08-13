@@ -1,0 +1,397 @@
+"""Choosing between the two formulations — and what each choice must not disturb.
+
+``tests/test_solve_2d_4ff.py`` pins the first-order engine itself, and
+``tests/test_anisotropic_berreman.py`` pins the physics it now answers through the public API.
+This file is about the *dispatch*: which path a given call takes, what happens at the edges of
+that decision, and — the half that is easy to lose — that the ordinary path is untouched by the
+existence of the other one.
+
+The four claims worth stating up front, because each was a way this could have gone wrong
+silently:
+
+* **A z-decoupled problem still runs on the second-order path**, and gives what it always gave.
+  Widening a signature with five optional arguments is exactly the change that quietly reroutes
+  everything; ``formulation_assigned`` is checked, not just the number.
+* **Forced ``'4ff'`` reproduces the ``'2ff'`` answer** on problems both can express — including a
+  patterned grating, where the two formulations genuinely disagree about what a layer *is* and
+  agree only about the answer. No external oracle provides this cross-check.
+* **Forced ``'2ff'`` refuses a z row** rather than dropping it.
+* **The transmitted amplitude is checked, not only the reflected one.** ``big_T`` feeds ``T_s`` /
+  ``T_p`` directly, so a per-mode scale that cancels in ``R`` survives in ``T``; a route that got
+  that wrong would match on reflection and be off by a constant factor on transmission, with
+  ``R + T`` still looking sane on a lossless stack. Every comparison below is on amplitudes as
+  well as powers.
+"""
+import numpy as np
+import pytest
+
+import fieldwave
+
+WL = 620.0
+PERIOD = (400.0, 380.0)
+
+
+def uniform_slots(eps_list, ff_xy, z_row=True):
+    """The nine (or five) convolution stacks for a list of uniform tensors.
+
+    Slot convention: every off-diagonal slot holds the **negative** of its tensor component,
+    the z row included; ``epz_i`` is the inverse of the ``zz`` block. See
+    ``docs/off-diagonal-slot-convention.md``.
+    """
+    I = np.eye(ff_xy, dtype=complex)
+    e = [np.asarray(x, dtype=complex) for x in eps_list]
+    stacks = [np.stack([x[0, 0] * I for x in e]),
+              np.stack([x[1, 1] * I for x in e]),
+              np.stack([np.linalg.inv(x[2, 2] * I) for x in e]),
+              np.stack([-x[0, 1] * I for x in e]),
+              np.stack([-x[1, 0] * I for x in e]),
+              np.stack([-x[0, 2] * I for x in e]),
+              np.stack([-x[1, 2] * I for x in e]),
+              np.stack([-x[2, 0] * I for x in e]),
+              np.stack([-x[2, 1] * I for x in e])]
+    return stacks if z_row else stacks[:5]
+
+
+def solver(fto=(0, 0), backend=0, **kw):
+    kw.setdefault('theta', np.deg2rad(28.0))
+    kw.setdefault('phi', np.deg2rad(37.0))
+    kw.setdefault('psi', 0.6)
+    return fieldwave.rcwa(backend=backend, n_top=1.0, n_bot=1.52, fto=fto, period=PERIOD,
+                          wavelength=WL, **kw)
+
+
+def channels(res):
+    """Every public number one incidence produces — powers and amplitudes alike."""
+    out = {}
+    for tag, sub in (('psi', res.res), ('te', res.res_te_inc), ('tm', res.res_tm_inc)):
+        for name in ('R', 'T', 'R_s', 'R_p', 'T_s', 'T_p', 'r_s', 'r_p', 't_s', 't_p'):
+            out[f'{tag}.{name}'] = np.asarray(getattr(sub, name))
+    return out
+
+
+def worst_gap(a, b):
+    """Largest relative-to-scale gap over every channel, and which channel it was."""
+    worst, where = 0.0, ''
+    for key in a:
+        gap = float(np.abs(a[key] - b[key]).max())
+        scale = max(float(np.abs(a[key]).max()), 1e-12)
+        if gap / scale > worst:
+            worst, where = gap / scale, key
+    return worst, where
+
+
+# --------------------------------------------------------------- the ordinary path is intact
+
+DIAGONAL = np.diag([2.4, 3.1, 2.7]).astype(complex)
+IN_PLANE = np.array([[2.4, 0.35, 0], [0.35, 3.1, 0], [0, 0, 2.7]], dtype=complex)
+VOIGT = np.array([[2.4, 0.2j, -0.31j], [-0.2j, 3.1, 0], [0.31j, 0, 2.7]], dtype=complex)
+
+
+@pytest.mark.parametrize('eps', [DIAGONAL, IN_PLANE], ids=['diagonal', 'in-plane pair'])
+def test_a_tensor_without_a_z_row_stays_on_the_second_order_path(eps):
+    """The default reads the slots, and five slots mean the cheap formulation.
+
+    Checking ``formulation_assigned`` rather than only the numbers: the two paths agree to
+    ~1e-13 on this problem, so a dispatch that sent everything to the first-order solve would
+    pass every numerical assertion in this file while costing 8x.
+    """
+    mee = solver(thickness=[180.0])
+    res = mee.solve_for_conv(WL, *uniform_slots([eps], 1, z_row=False))
+    assert mee.formulation_assigned == '2ff'
+    assert np.isfinite(np.asarray(res.res.R)).all()
+
+
+def test_passing_the_z_slots_is_what_selects_the_first_order_path():
+    """Given-ness decides, not the values in them.
+
+    The branch decides control flow, so it has to be answerable without reading an array — on a
+    JAX tracer there is nothing to read. "Passed all-zero matrices" is a claim about the caller
+    rather than about the tensor, and the cheap path is one keyword away.
+    """
+    zero_z = np.zeros((1, 1, 1), dtype=complex)
+    mee = solver(thickness=[180.0])
+    five = uniform_slots([DIAGONAL], 1, z_row=False)
+    res_2ff = mee.solve_for_conv(WL, *five)
+    assert mee.formulation_assigned == '2ff'
+
+    mee = solver(thickness=[180.0])
+    res_4ff = mee.solve_for_conv(WL, *five, zero_z, zero_z, zero_z, zero_z)
+    assert mee.formulation_assigned == '4ff'
+
+    gap, where = worst_gap(channels(res_2ff), channels(res_4ff))
+    assert gap < 1e-11, f'an empty z row changed the answer by {gap:.2e} on {where}'
+
+
+def test_the_default_never_reaches_the_first_order_path_on_a_grating():
+    """A raster solve — the ordinary case — must be untouched by any of this."""
+    ucell = np.ones((2, 20, 20))
+    ucell[0, 5:15, 5:15] = 3.4
+    mee = solver(fto=(3, 3), thickness=[120.0, 90.0], ucell=ucell)
+    mee.conv_solve()
+    assert mee.formulation_assigned == '2ff'
+
+
+def test_the_result_surface_is_the_same_object_the_other_paths_return():
+    """A z-coupled solve must be indistinguishable downstream from any other.
+
+    Three claims at once, because they fail together and are cheap to check together:
+
+    * the **layout** — ``(ff_y, ff_x)``, y first, incident order at the centre, and
+      ``result.order(m, n)`` indexing it by the order indices;
+    * the **naming contract** (``docs/conventions.md``) — uppercase real (power), lowercase
+      complex (amplitude), both incidence variants present;
+    * that the extra orders are *real* orders rather than shape padding. A uniform layer
+      cannot diffract, so every order but ``(0, 0)`` must be empty while ``R + T`` sums to one
+      — a layout error would spread the power instead.
+
+    "Empty" is round-off, not an identical zero: the off-orders come out of the same linear
+    solve as the specular one and land at ~1e-16 in amplitude, hence ~1e-32 in power. The
+    bound is set on the amplitude, where the error actually lives.
+    """
+    fto = (2, 1)
+    ff = (2 * fto[0] + 1) * (2 * fto[1] + 1)
+    mee = solver(fto=fto, thickness=[180.0])
+    res = mee.solve_for_conv(WL, *uniform_slots([VOIGT], ff))
+
+    assert mee.formulation_assigned == '4ff'
+    assert res.res_te_inc is not None and res.res_tm_inc is not None
+    R, T = np.asarray(res.res.R), np.asarray(res.res.T)
+    assert R.shape == (2 * fto[1] + 1, 2 * fto[0] + 1)
+    assert R.dtype == np.float64 and np.asarray(res.res.r_s).dtype == np.complex128
+
+    assert float(R.sum() + T.sum()) == pytest.approx(1.0, abs=1e-12)
+    assert res.order(0, 0).R + res.order(0, 0).T == pytest.approx(1.0, abs=1e-12)
+    for m in range(-fto[0], fto[0] + 1):
+        for n in range(-fto[1], fto[1] + 1):
+            if (m, n) == (0, 0):
+                continue
+            o = res.order(m, n)
+            assert max(abs(o.r_s), abs(o.r_p), abs(o.t_s), abs(o.t_p)) < 1e-14, \
+                f'a uniform layer diffracted into order ({m}, {n})'
+
+
+# ------------------------------------------------------------ the two formulations cross-check
+
+def test_forcing_the_first_order_path_reproduces_a_uniform_anisotropic_answer():
+    """Same scene, both formulations, on a tensor with an in-plane pair and a stack of three."""
+    layers = [IN_PLANE, np.diag([4.0, 4.0, 2.9]).astype(complex), IN_PLANE.conj().T]
+    thickness = [140.0, 75.0, 210.0]
+
+    a = solver(thickness=thickness)
+    res_a = a.solve_for_conv(WL, *uniform_slots(layers, 1, z_row=False))
+    b = solver(thickness=thickness)
+    b.formulation = '4ff'
+    res_b = b.solve_for_conv(WL, *uniform_slots(layers, 1, z_row=False))
+
+    assert (a.formulation_assigned, b.formulation_assigned) == ('2ff', '4ff')
+    gap, where = worst_gap(channels(res_a), channels(res_b))
+    assert gap < 1e-11, f'the two formulations disagree by {gap:.2e} on {where}'
+
+
+@pytest.mark.parametrize('fto', [(1, 1), (2, 2)], ids=['9 orders', '25 orders'])
+def test_forcing_the_first_order_path_reproduces_a_patterned_grating(fto):
+    """The cross-check that matters: full convolution matrices, so the orders genuinely couple.
+
+    A uniform layer's convolution matrices are scaled identities, and the two formulations
+    could agree there for reasons that have nothing to do with a grating — every order
+    decoupled, one mode pair each. Here they are dense and the second-order path's ``eig``
+    sees a completely different matrix from the first-order path's.
+
+    Conical incidence, since a plane of incidence off both axes is what makes the s/p rotation
+    non-trivial, and that rotation is shared code fed from two different places.
+    """
+    ucell = np.ones((2, 24, 24))
+    ucell[0, 6:18, 4:20] = 3.48
+    ucell[1, 10:14, :] = 2.1
+
+    a = solver(fto=fto, thickness=[130.0, 85.0], ucell=ucell)
+    res_a = a.conv_solve()
+    b = solver(fto=fto, thickness=[130.0, 85.0], ucell=ucell)
+    b.formulation = '4ff'
+    res_b = b.conv_solve()
+
+    assert (a.formulation_assigned, b.formulation_assigned) == ('2ff', '4ff')
+    gap, where = worst_gap(channels(res_a), channels(res_b))
+    assert gap < 1e-10, f'the two formulations disagree by {gap:.2e} on {where}'
+
+
+def test_the_transmitted_amplitude_is_not_merely_proportional():
+    """The trap this route was warned about, made into an assertion.
+
+    ``big_T`` feeds ``T_s`` / ``T_p`` directly, so a per-mode scale that cancels in ``R``
+    survives in ``T``. The failure signature is transmission off by a *constant factor* — which
+    ``R + T`` on a lossy stack would not flag and a same-shape comparison would not either. So
+    the ratio is checked against 1 explicitly, on a stack with absorption so that ``R + T`` is
+    not itself pinning the scale.
+    """
+    lossy = np.diag([2.4 + 0.05j, 3.1 + 0.05j, 2.7 + 0.05j]).astype(complex)
+    layers = [IN_PLANE, lossy]
+    thickness = [140.0, 260.0]
+
+    a = solver(thickness=thickness)
+    res_a = a.solve_for_conv(WL, *uniform_slots(layers, 1, z_row=False))
+    b = solver(thickness=thickness)
+    b.formulation = '4ff'
+    res_b = b.solve_for_conv(WL, *uniform_slots(layers, 1, z_row=False))
+
+    assert float(np.asarray(res_a.res.R).sum() + np.asarray(res_a.res.T).sum()) < 0.99
+    for name in ('t_s', 't_p'):
+        u = np.asarray(getattr(res_a.res, name)).ravel()
+        v = np.asarray(getattr(res_b.res, name)).ravel()
+        assert abs(u).max() > 1e-3, f'{name} is too small to carry the test'
+        assert v[np.argmax(abs(u))] / u[np.argmax(abs(u))] == pytest.approx(1.0, abs=1e-10)
+
+
+@pytest.mark.parametrize('n_top,n_bot', [(1.0, 1.46 + 0.35j), (1.2 + 0.02j, 1.46 + 0.35j)],
+                         ids=['absorbing substrate', 'absorbing on both sides'])
+def test_the_two_formulations_agree_across_absorbing_half_spaces(n_top, n_bot):
+    """The substrate seed carries a complex ``eps`` and a complex ``kz``, so it gets its own case.
+
+    The first-order path writes that seed by hand rather than eigendecomposing the half-space,
+    which means its square-root branch is taken from ``boundary_kz`` — the same function every
+    other solve uses — and not from the flux rule the in-layer mode split applies. Getting the
+    branch from somewhere else is exactly the mistake an absorbing half-space would expose and
+    a lossless one would not.
+
+    With an absorbing *superstrate* the incident power is convention-dependent and ``R``/``T``
+    are not comparable to 1 (``docs/conventions.md``); the amplitudes still are, and
+    :func:`channels` compares both.
+    """
+    layers = [IN_PLANE, np.diag([2.4 + 0.05j, 3.1 + 0.05j, 2.7 + 0.05j]).astype(complex)]
+    kw = dict(n_top=n_top, n_bot=n_bot, thickness=[140.0, 260.0])
+
+    a = fieldwave.rcwa(backend=0, fto=(0, 0), period=PERIOD, wavelength=WL,
+                       theta=np.deg2rad(28.0), phi=np.deg2rad(37.0), psi=0.6, **kw)
+    b = fieldwave.rcwa(backend=0, fto=(0, 0), period=PERIOD, wavelength=WL,
+                       theta=np.deg2rad(28.0), phi=np.deg2rad(37.0), psi=0.6, **kw)
+    b.formulation = '4ff'
+
+    res_a = a.solve_for_conv(WL, *uniform_slots(layers, 1, z_row=False))
+    res_b = b.solve_for_conv(WL, *uniform_slots(layers, 1, z_row=False))
+    gap, where = worst_gap(channels(res_a), channels(res_b))
+    assert gap < 1e-11, f'the two formulations disagree by {gap:.2e} on {where}'
+
+
+# ------------------------------------------------------------------------------ the refusals
+
+def test_forcing_the_second_order_path_on_a_z_row_raises():
+    """Naming the slot that cannot be held, rather than reporting a shape mismatch."""
+    mee = solver(thickness=[180.0])
+    mee.formulation = '2ff'
+    with pytest.raises(ValueError, match='epxz_conv_all'):
+        mee.solve_for_conv(WL, *uniform_slots([VOIGT], 1))
+
+
+def test_an_unknown_formulation_is_refused_at_the_setter():
+    with pytest.raises(ValueError, match='formulation'):
+        solver(thickness=[180.0]).formulation = '3ff'
+
+
+def test_the_scattering_algorithm_is_refused_on_the_first_order_path():
+    """``connecting_algo='SMM'`` must say so, not quietly run the enhanced transfer.
+
+    The first-order path needs its stack solve to hand the shared final matching a
+    ``(big_F, big_G, big_T)``; the scattering cascade produces a scattering matrix in the two
+    half-spaces' own mode bases instead, and joining the two is unwritten. Running ETM under an
+    ``'SMM'`` label would make every cross-algorithm check in the suite meaningless.
+    """
+    mee = solver(thickness=[180.0], connecting_algo='SMM')
+    with pytest.raises(ValueError, match='SMM'):
+        mee.solve_for_conv(WL, *uniform_slots([VOIGT], 1))
+
+
+@pytest.mark.parametrize('z_row', [True, False], ids=['with a z row', 'without one'])
+def test_the_unstabilised_transfer_cannot_be_reached_from_the_public_path(z_row):
+    """``'TMM'`` is a diagnostic inside the 4ff module and must not be selectable.
+
+    It is the plain ``Psi exp(...) Psi^-1`` transfer, kept there only to show that the
+    stabilisation is load-bearing — it holds the growing and decaying halves in one matrix and
+    loses relative precision like ``eps*exp(2x)``. Both routes refuse it, and they refuse it
+    for different reasons (one has no entry in the algorithm table, the other only wires ETM),
+    which is why both are checked.
+    """
+    mee = solver(thickness=[180.0], connecting_algo='TMM')
+    slots = uniform_slots([VOIGT if z_row else IN_PLANE], 1, z_row=z_row)
+    with pytest.raises(ValueError, match='TMM'):
+        mee.solve_for_conv(WL, *slots)
+
+
+def test_the_scattering_algorithm_still_works_without_a_z_row():
+    """The control: nothing about the refusal above touches the ordinary SMM path."""
+    mee = solver(thickness=[180.0], connecting_algo='SMM')
+    res = mee.solve_for_conv(WL, *uniform_slots([IN_PLANE], 1, z_row=False))
+    assert mee.formulation_assigned == '2ff'
+    assert np.isfinite(np.asarray(res.res.R)).all()
+
+
+def test_field_reconstruction_says_it_is_missing_rather_than_inventing_one():
+    """The one capability the first-order path does not have, refused where it is asked for.
+
+    The efficiencies and amplitudes are complete; only the in-cell field is absent. The
+    per-layer state the second-order solves leave behind for ``calculate_field`` has no
+    first-order counterpart written, and reconstructing from an empty list would produce a
+    plausible-looking cell of zeros.
+    """
+    mee = solver(thickness=[180.0])
+    mee.solve_for_conv(WL, *uniform_slots([VOIGT], 1))
+    assert mee.formulation_assigned == '4ff'
+    with pytest.raises(NotImplementedError, match='field reconstruction'):
+        mee.calculate_field(res_x=4, res_y=4, res_z=4)
+
+
+def test_field_reconstruction_still_works_on_the_second_order_path():
+    """The control for the guard above — it must not have cost the ordinary path anything."""
+    ucell = np.ones((1, 16, 16))
+    ucell[0, 4:12, 4:12] = 3.0
+    mee = solver(fto=(1, 1), thickness=[150.0], ucell=ucell)
+    mee.conv_solve()
+    cell = mee.calculate_field(res_x=4, res_y=4, res_z=4)
+    assert np.isfinite(np.asarray(cell)).all()
+
+
+# --------------------------------------------------------------------------------- backends
+
+@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+def test_the_first_order_path_gives_the_same_answer_on_every_backend(backend):
+    """Eagerly, all three agree — which is more than the module originally promised.
+
+    ``split_forward_backward`` selects modes with a boolean mask, and the note beside it read
+    "numpy-only for now". Measured, the bound is narrower than that: masks are fine on all
+    three eagerly and under ``jax.grad``; it is ``jax.jit`` that cannot have an output shape
+    depending on the values being masked. So this route ships on every backend, without the
+    ``jit`` the second-order one has.
+    """
+    pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    ref = solver(thickness=[180.0]).solve_for_conv(WL, *uniform_slots([VOIGT], 1))
+
+    # Solver first, arrays second: importing the JAX backend is what lifts `jax_enable_x64`,
+    # and an array built before that is silently complex64 (measured 6.6e-5 out, which reads
+    # as a solver disagreement rather than as the single-precision result it is).
+    mee = solver(thickness=[180.0], backend=backend)
+    xp = pytest.importorskip({1: 'jax.numpy', 2: 'torch'}[backend])
+    to = xp.asarray if backend == 1 else xp.as_tensor
+    got = mee.solve_for_conv(WL, *[to(s) for s in uniform_slots([VOIGT], 1)])
+
+    assert mee.formulation_assigned == '4ff'
+    gap, where = worst_gap(channels(ref), channels(got))
+    assert gap < 1e-12, f'backend {backend} is {gap:.2e} from NumPy on {where}'
+
+
+# ---------------------------------------------------------------------------- the 1D layouts
+
+def test_a_z_row_pulls_a_one_dimensional_structure_onto_the_2d_layout():
+    """The 1D paths have no z-row slots, so a z row is also a choice of grating type.
+
+    Without this the tensor would be handed to ``solve_1d_conical``, which takes three
+    convolution stacks and would drop the other six on the floor — the silent reduction the
+    whole dispatch exists to prevent.
+    """
+    ucell = np.ones((1, 1, 20))
+    ucell[0, 0, 5:15] = 3.4
+    mee = solver(fto=(3, 0), thickness=[150.0], ucell=ucell)
+    mee._assign_grating_type()
+    assert mee.grating_type_assigned in (0, 1)      # what it would have taken on its own
+
+    ff_xy = 2 * 3 + 1
+    mee.solve_for_conv(WL, *uniform_slots([VOIGT], ff_xy))
+    assert (mee.grating_type_assigned, mee.formulation_assigned) == (2, '4ff')

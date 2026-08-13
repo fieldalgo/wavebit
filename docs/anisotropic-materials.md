@@ -1,14 +1,17 @@
 # Anisotropic and magnetic materials — what the solver already takes, and what each gap costs
 
 Written: 2026-08-09, and it was scoping only then. Since 2026-08-11 the z-coupling row is
-implemented — see [`first-order-4ff.md`](first-order-4ff.md) for what that path does and how
-far it is checked. This document keeps the scoping question: what each *remaining* gap costs.
+implemented, and since 2026-08-13 it is *reachable* — `solve_for_conv` takes nine slots and the
+solver picks the formulation (§8, no longer conditional). See
+[`first-order-4ff.md`](first-order-4ff.md) for what that path does and how far it is checked.
+This document keeps the scoping question: what each *remaining* gap costs.
 
 Targets:
 - `fieldwave/_core/solve_2d.py::layer_modes_2d` — the five permittivity slots the mode operator reads
 - `fieldwave/_core/factorization.py` — what `epx` / `epy` / `epz_i` actually are (not what they look like)
 - `fieldwave/_core/conventions.py::boundary_kz` — where `mu` would have to land besides the layer
-- `fieldwave/on_numpy/emsolver/rcwa.py::solve_for_conv` — the injection point that bypasses `ucell`
+- `fieldwave/on_numpy/emsolver/rcwa.py::solve_for_conv` — the injection point that bypasses `ucell`, and where the formulation is chosen
+- `fieldwave/_core/solve_2d_4ff.py::solve_2d_4ff` — the nine-slot twin of the 2D solve
 
 ---
 
@@ -17,7 +20,7 @@ Targets:
 | case | status | what it costs |
 |---|---|---|
 | uniform (unpatterned) anisotropic layer, in-plane tensor | **works today** | a thin wrapper |
-| `eps_xz` / `eps_yz` (z-coupling), uniform | **solved, not wired** | done — a different solver, [`first-order-4ff.md`](first-order-4ff.md); still needs dispatch |
+| `eps_xz` / `eps_yz` (z-coupling), uniform | **works today** | done — a different solver, [`first-order-4ff.md`](first-order-4ff.md), dispatched to automatically at ~8x |
 | patterned anisotropic layer | not supported | a new factorization; **both solvers unchanged** |
 | `mu != 1` | not supported | layer operator **and** the half-space boundary |
 
@@ -163,9 +166,21 @@ epz_i = np.stack([np.linalg.inv(ezz * I)])
 res = mee.solve_for_conv(wavelength, epx, epy, epz_i, epxy, epyx)
 ```
 
+A full tensor adds four more, under the **same** sign rule — one rule for every off-diagonal
+slot, rather than two rules split down the middle of one call:
+
+```python
+epxz, epyz = np.stack([-exz * I]), np.stack([-eyz * I])
+epzx, epzy = np.stack([-ezx * I]), np.stack([-ezy * I])
+
+res = mee.solve_for_conv(wavelength, epx, epy, epz_i, epxy, epyx,
+                         epxz, epyz, epzx, epzy)   # -> formulation_assigned == '4ff'
+```
+
 Two things to watch:
 
-- The **slot sign convention** is `(epx, epy, epxy, epyx, epz_i) = (exx, eyy, -exy, -eyx, ⟦eps⟧⁻¹)`.
+- The **slot sign convention** is `(epx, epy, epxy, epyx, epz_i) = (exx, eyy, -exy, -eyx, ⟦eps⟧⁻¹)`,
+  and the z row extends it unchanged: `(epxz, epyz, epzx, epzy) = (-exz, -eyz, -ezx, -ezy)`.
   It is set by `_nvf_assemble`, not by the mode operator, and getting it backwards is close to
   undetectable: `+eps_xy` mirrors the optic axis about `x`, and **every power efficiency stays
   bit-identical** — co-polarised, cross-polarised and total alike. Only the complex amplitude
@@ -174,7 +189,8 @@ Two things to watch:
   are checking a hand-filled tensor against anything, check an amplitude.
 - The **2D path must be selected**. `rcwa.py::_assign_grating_type` picks the path from the `ucell` shape, so
   a pure multilayer stack with `exy != 0` has to be routed to the 2D solve — the 1D and conical
-  paths have no off-diagonal slots to fill.
+  paths have no off-diagonal slots to fill. A z row does this for itself (§8); the in-plane pair
+  does not, which is the asymmetry to remember.
 
 ## 5. Magnetic materials: `mu` has no slot anywhere
 
@@ -403,10 +419,13 @@ and its `mu = 1` half is gated against the solver today while its magnetic half 
 physical guard. And fmmax and S4 share a formulation lineage, so agreement between *those two* is
 weaker evidence than agreement with RETICOLO or Berreman.
 
-## 8. How the solver would choose, once there is a choice
+## 8. How the solver chooses
 
-Everything above says what is missing. This says how the pieces would be selected once they
-exist, because that decision is not the user's to make and the shape of it constrains the work.
+Everything above says what is missing. This says how the pieces that *do* exist are selected,
+because that decision is not the user's to make. It was written as a design before the dispatch
+existed; it is kept in that order — principle, cost, override, requirement — with what shipped
+on 2026-08-13 noted against each part, because the reasoning is what a future axis (`mu`) will
+need and the code alone does not carry it.
 
 **The principle is already in the codebase.** `rcwa.py::_assign_grating_type` reads the `ucell`
 shape, `pol` and `phi` and picks the cheapest formulation that can express the problem — its
@@ -417,9 +436,15 @@ that same decision rather than a new kind of decision.
 | axis | read from | branches |
 |---|---|---|
 | grating dimensionality *(exists)* | `ucell` shape, `pol`, `phi` | 1D TE/TM, 1D conical, 2D |
-| **z row of the tensor** | `eps_xz`, `eps_zx`, `eps_yz`, `eps_zy` | 2ff second-order, 4ff first-order |
+| **z row of the tensor** *(exists)* | whether the four z-row slots were given | 2ff second-order, 4ff first-order |
 | **permeability** | `mu != 1` | existing operator, magnetic operator |
 | **patterned or uniform** | layer has in-plane structure | factorization, or scaled identities |
+
+One thing about the z-row row came out differently from the sketch. It reads whether the slots
+were **given**, not whether they are nonzero. The branch decides control flow, so it has to be
+answerable on a JAX tracer, where there is nothing to read; and "passed all-zero matrices" is a
+claim about the caller rather than about the tensor. Passing four zero matrices therefore costs
+the 8x, and the cheap path is one omitted argument away.
 
 ### Why it has to be automatic
 
@@ -442,29 +467,36 @@ and no way to check whether their tensor has one without reading this document. 
 
 ```python
 class Formulation(str, Enum):
-    AUTO   = 'auto'   # read the tensor and decide          (default)
+    AUTO   = 'auto'   # read the slots and decide           (default)
     SECOND = '2ff'    # force second-order; refuse z-coupling
     FIRST  = '4ff'    # force first-order; always possible, ~8x
 ```
 
+That is `fieldwave._core.enums.Formulation`, and it is reached as `solver.formulation` — an
+attribute rather than a constructor keyword, because the JAX solver passes its pytree children
+positionally and a new keyword shifts them.
+
 Forcing `'4ff'` on a problem that does not need it is how the 4ff solver gets **validated**: a
 z-decoupled case run both ways must agree, and that is an internal cross-check no external oracle
-provides. It is the same reason `connecting_algo` is selectable — and the same reason
+provides. It is `tests/test_formulation_dispatch.py`, and the case that carries it is a
+*patterned* grating at conical incidence — the two formulations then eig completely different
+matrices and agree to 4e-14, which a uniform layer's scaled identities could not have shown. It is the same reason `connecting_algo` is selectable — and the same reason
 `test_anisotropic_berreman.py` drives SMM as well as ETM, since "the correction reaches the other
 path for free" is exactly the sort of claim that turns out to be false.
 
 Forcing `'2ff'` on a z-coupled tensor must **raise**, not quietly drop the z row. That failure mode
 is already measured: dropping it moves the efficiencies by 2e-2 to 6e-2 while `R + T` stays at 1 to
-machine precision, so every check a caller is likely to run still passes. The guard exists today at
-the tensor adapter (`test_anisotropic_berreman.py::reject_z_coupling`) and belongs in the solver
-once the solver can be handed a tensor directly.
+machine precision, so every check a caller is likely to run still passes. The guard used to live at
+the tensor adapter in `test_anisotropic_berreman.py`; it now lives in the solver, which is where
+this paragraph said it belonged once the solver could be handed a tensor directly.
 
 ### One requirement on the dispatch itself
 
 **Which path ran has to be visible in the result.** `grating_type_assigned` is already exposed for
 exactly this reason. A silent 8x is indistinguishable from a slow machine, and a benchmark that
-cannot say which formulation it measured is not a benchmark. Whatever the attribute ends up being
-called, it needs to survive into whatever a study script reads.
+cannot say which formulation it measured is not a benchmark. The attribute is
+`solver.formulation_assigned`, `'2ff'` or `'4ff'`, set by every 2D solve and `None` before the
+first one.
 
 ## References
 
