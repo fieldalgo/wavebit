@@ -106,6 +106,15 @@ _PSI_POLARIZATION_CLASH = (
     'polarization), so one must be dropped rather than silently overridden. '
     'psi = v is exactly polarization = (sin(v), cos(v)).')
 
+#: Raised by :meth:`CoreSolveMixin._reject_complex_psi`, which says why at length.
+_COMPLEX_PSI = (
+    'psi must be a real angle; a complex psi is not the elliptical spelling it looks '
+    'like. (sin(psi), cos(psi)) stops being a unit pair once psi has an imaginary part, '
+    'so the incident flux silently becomes cosh(2*Im(psi)) and every efficiency is off by '
+    'that factor. It cannot reach the circular states either: they are the two values '
+    'tan(psi) never takes. Use polarization=(a_s, a_p) — (1, -1j) and (1, +1j) are the '
+    'circular states, and its magnitude is normalized for you.')
+
 
 class CoreSolveMixin:
     """Provides ``solve_1d`` / ``solve_1d_conical`` / ``solve_2d`` backed by the core."""
@@ -141,6 +150,41 @@ class CoreSolveMixin:
         for either illumination side with one spelling.
         """
         return self.n_bot if self._incidence_side == 'bottom' else self.n_top
+
+    @staticmethod
+    def _reject_complex_psi(psi):
+        """``psi`` is an angle, and an angle is real. Called by the backend ``psi`` setters.
+
+        A complex ``psi`` is not a wider spelling of the same input — it is a silently wrong
+        one, and it was wrong in a way nothing downstream could catch. ``(sin(psi), cos(psi))``
+        is a unit pair only for real ``psi``; for ``Im(psi) = b`` the incident flux comes out
+        ``cosh(2b)``, so every efficiency is scaled by a factor the solver never applied.
+        On a lossless stack ``R + T > 1`` raises ``UnphysicalResultWarning``, but an absorbing
+        one absorbs the discrepancy: a measured case returned ``R + T = 0.998`` where the
+        right answer was ``0.647``, with no warning anywhere.
+
+        Nor does it buy the states it looks like it should. ``a_s/a_p = tan(psi)``, and
+        ``tan(z) = ±i`` reduces to ``exp(±iz) = 0``, which has no solution — the circular
+        states are the two values ``tan`` omits. A complex ``psi`` approaches them only as
+        ``Im(psi) -> ±inf``, and the incident amplitude diverges at exactly the rate the
+        approach converges. ``polarization=(a_s, a_p)`` is where those states live.
+
+        Anything carrying a ``dtype`` — array, tensor, tracer — is judged on that and its
+        value is never read: a trace has no value to read, and reading a torch tensor that
+        requires grad warns. A plain Python scalar is judged on its imaginary part instead,
+        so ``0.5+0j`` is accepted as a real angle written oddly rather than refused.
+        """
+        dtype = getattr(psi, 'dtype', None)
+        if dtype is not None:
+            if getattr(dtype, 'kind', '') == 'c' or 'complex' in str(dtype):
+                raise ValueError(_COMPLEX_PSI)
+            return
+        try:
+            value = complex(psi)
+        except (TypeError, ValueError):
+            return
+        if value.imag != 0:
+            raise ValueError(_COMPLEX_PSI)
 
     def _psi_set_explicitly(self):
         """Called by the backend ``psi`` setters on a non-``None`` assignment.

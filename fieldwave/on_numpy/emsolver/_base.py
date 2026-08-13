@@ -120,8 +120,14 @@ class _BaseRCWA(CoreSolveMixin):
     def psi(self, psi):
         if psi is not None:
             self._psi_set_explicitly()
-            self._psi = np.array(psi, dtype=self.type_complex)  # TODO: complex, QA
-            pol = -(2 * psi / np.pi - 1)
+            self._reject_complex_psi(psi)
+            # Real dtype, unlike `theta`: a complex theta means evanescent incidence and is
+            # a feature, while a complex psi is only ever the mistake `_reject_complex_psi`
+            # describes. Storing it real is what lets the refusal read a dtype, and it keeps
+            # the autodiff leaf real — the imaginary direction it used to carry was the
+            # unnormalized cosh path, not physics.
+            self._psi = np.array(np.real(psi), dtype=self.type_float)
+            pol = -(2 * np.real(psi) / np.pi - 1)
             self._pol = pol
 
     @property
@@ -140,8 +146,7 @@ class _BaseRCWA(CoreSolveMixin):
             raise ValueError
 
         self._pol = pol
-        psi = np.array(np.pi / 2 * (1 - self.pol), dtype=self.type_complex)
-        self._psi = psi
+        self._psi = np.array(np.pi / 2 * (1 - self.pol), dtype=self.type_float)
 
     @property
     def fto(self):

@@ -150,7 +150,12 @@ class _BaseRCWA(CoreSolveMixin):
     def psi(self, psi):
         if psi is not None:
             self._psi_set_explicitly()
-            self._psi = _as_tensor(psi, dtype=self.type_complex)
+            self._reject_complex_psi(psi)
+            # Real dtype: see the numpy twin, and `CoreSolveMixin._reject_complex_psi`.
+            # `torch.real` rather than `np.real` on a tensor: it is a no-op on a real one and
+            # keeps the autograd graph, which `np.real` would drop on the way out to numpy.
+            psi = torch.real(psi) if torch.is_tensor(psi) else np.real(psi)
+            self._psi = _as_tensor(psi, dtype=self.type_float)
             pol = -(2 * psi / torch.pi - 1)
             self._pol = pol
 
@@ -170,8 +175,8 @@ class _BaseRCWA(CoreSolveMixin):
             raise ValueError
 
         self._pol = pol
-        psi = torch.tensor(torch.pi / 2 * (1 - self.pol), device=self.device, dtype=self.type_complex)
-        self._psi = psi
+        self._psi = torch.tensor(torch.pi / 2 * (1 - self.pol), device=self.device,
+                                 dtype=self.type_float)
 
     @property
     def fto(self):

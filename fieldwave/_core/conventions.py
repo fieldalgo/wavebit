@@ -275,6 +275,13 @@ def incident_sp_amplitudes(xp, C, psi, polarization=None):
     builders, exactly as the ``/(-i*n)`` on the way out belongs to the pack sites.
     """
     if polarization is None:
+        # No normalization here, and that is not an omission. `psi` is real (the setters
+        # refuse a complex one — see `engine.py::_reject_complex_psi`), so `(sin, cos)` is
+        # already a unit pair by construction, and dividing it by its own norm again is not
+        # free: `sqrt(sin^2 + cos^2)` differs from 1.0 by half an ulp for about one angle in
+        # five, so the division moves the last bit of the amplitudes on those angles. The
+        # legacy goldens pin those bits. The two spellings therefore share a rule rather
+        # than a line, and `tests/test_polarization.py` is what keeps them equal.
         psi = as_array(xp, psi, dtype=C)
         return xp.sin(psi), xp.cos(psi)
     a_s = as_array(xp, polarization[0], dtype=C)

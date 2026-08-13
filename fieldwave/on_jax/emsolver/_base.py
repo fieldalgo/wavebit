@@ -149,8 +149,10 @@ class _BaseRCWA(CoreSolveMixin):
     def psi(self, psi):
         if psi is not None:
             self._psi_set_explicitly()
-            self._psi = jnp.array(psi, dtype=self.type_complex)
-            pol = -(2 * psi / jnp.pi - 1)
+            self._reject_complex_psi(psi)
+            # Real dtype: see the numpy twin, and `CoreSolveMixin._reject_complex_psi`.
+            self._psi = jnp.array(jnp.real(psi), dtype=self.type_float)
+            pol = -(2 * jnp.real(psi) / jnp.pi - 1)
             self._pol = pol
 
     @property
@@ -175,8 +177,7 @@ class _BaseRCWA(CoreSolveMixin):
             raise ValueError
 
         self._pol = pol
-        psi = jnp.array(jnp.pi / 2 * (1 - self.pol), dtype=self.type_complex)
-        self._psi = psi
+        self._psi = jnp.array(jnp.pi / 2 * (1 - self.pol), dtype=self.type_float)
 
     @property
     def fto(self):

@@ -186,6 +186,52 @@ def test_degenerate_pairs_are_refused():
         fieldwave.rcwa(backend=0, polarization=(1, 0, 0))
 
 
+# ------------------------------------------------------------------ psi is a real angle
+
+@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+def test_complex_psi_is_refused(backend):
+    """The one input that used to be silently wrong rather than merely unsupported.
+
+    ``(sin(psi), cos(psi))`` is unit only for real ``psi``; with ``Im(psi) = b`` the incident
+    flux becomes ``cosh(2b)`` and the ``psi`` path does not normalize it away (it has nothing
+    to normalize for a real angle). A lossless stack then trips ``UnphysicalResultWarning``,
+    but an absorbing one hides it — the case below returned ``R + T = 0.998`` where the right
+    answer was 0.647.
+    """
+    for bad in (0.7 + 0.5j, 1j, complex(0, 1e-12)):
+        with pytest.raises(ValueError, match='psi must be a real angle'):
+            fieldwave.rcwa(backend=backend, psi=bad)
+    solver = fieldwave.rcwa(backend=backend)
+    with pytest.raises(ValueError, match='psi must be a real angle'):
+        solver.psi = 0.7 + 0.5j
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+def test_a_real_angle_written_as_complex_is_accepted(backend):
+    """``0.7+0j`` is a real angle spelled oddly, not the mistake above."""
+    solver = fieldwave.rcwa(backend=backend, psi=complex(0.7, 0.0))
+    assert float(np.real(np.asarray(solver.psi))) == pytest.approx(0.7)
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('spelling', ['psi', 'pol'])
+def test_psi_is_stored_real(backend, spelling):
+    """Real dtype is what lets the refusal read a dtype, and it keeps the AD leaf real.
+
+    ``theta`` is deliberately complex (evanescent incidence); ``psi`` has no such meaning,
+    and the imaginary direction it used to carry was the unnormalized ``cosh`` path.
+    """
+    kw = {'psi': 0.7} if spelling == 'psi' else {'pol': 0}
+    solver = fieldwave.rcwa(backend=backend, **kw)
+    assert not np.iscomplexobj(np.asarray(solver.psi)), np.asarray(solver.psi).dtype
+
+
+def test_complex_psi_refusal_does_not_reach_the_pair():
+    """The pair is where the imaginary part belongs, so it must stay unrestricted."""
+    res = fieldwave.rcwa(polarization=(1, -1j), ucell=UCELL_2D, **CFG_2D).conv_solve()
+    assert float(np.asarray(res.res.T).sum()) > 0
+
+
 # ------------------------------------------------------------------ the 1D structure routing
 
 def test_a_1d_structure_with_a_pair_takes_the_conical_path():
