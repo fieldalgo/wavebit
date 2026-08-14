@@ -698,6 +698,160 @@ def _nvf_assemble(xp, ep_dir, ep_inv, C_xx, C_xy, C_yy):
     return eps_xx, eps_yy, -eps_xy, -eps_xy, xp.linalg.inv(ep_dir)
 
 
+def _pn_fields(xp, eps33, nx, ny):
+    """Pointwise ``(A, B)`` of the Popov-Neviere rearrangement, for a tensor layer.
+
+    :func:`_nvf_assemble` cannot serve a tensor. Its whole input is ``<eps>`` and ``<1/eps>``,
+    and ``1/eps`` is not a thing a tensor has: Li's rule needs a product of *one* discontinuous
+    factor with a continuous one, while ``D_x = exx Ex + exy Ey + exz Ez`` is a sum of three
+    such products with no per-term rule. The fix is to rearrange until only continuous
+    quantities are being multiplied by discontinuous coefficients.
+
+    At an interface with unit normal ``n`` the continuous quantities are tangential ``E`` and
+    normal ``D``. Eliminating the discontinuous ``n.E`` from ``D = eps E`` gives, with
+    ``a = n.eps.n``, ``p = eps n`` and ``q = eps^T n``::
+
+        (n.E) = [ (n.D) - q.e_t ] / a           e_t = T E
+
+        D = (eps - p q^T / a) e_t + (p / a) (n.D)
+        E = (I   - n q^T / a) e_t + (n / a) (n.D)
+
+    so with the continuous vector ``c = e_t + n (n.D)``::
+
+        A = (eps - p q^T / a) T + (p / a) n^T           D = A c
+        B = (I   - n q^T / a) T + (n / a) n^T           E = B c
+
+    and the factorized tensor is ``[[A]] [[B]]^-1`` — see :func:`pn_conv_matrices`. Every
+    product on the right is one discontinuous coefficient times one continuous quantity, which
+    is exactly the case Laurent's rule converges on.
+
+    **Do the projector algebra pointwise, here, and transform once.** The arrangement that
+    looks equivalent — building ``[[T]]``, ``[[N]]`` and the transfer ``[[M]]`` separately and
+    multiplying the matrices — is not. The normal field is a *unit* field extended into the
+    bulk (see :func:`normal_vector_field`), so it is discontinuous itself, and ``[[T]] @ [[M]]``
+    is Laurent applied to two factors that jump in the same place. Measured, that costs the one
+    property that is not negotiable: a **uniform** layer came back wrong by 0.5, where this
+    form is exact to 1e-15 for any normal field at all (``[[A]] = e [[B]]`` identically when
+    ``eps = e I``).
+    """
+    # The normal field arrives real and the tensor complex. NumPy would promote on contact;
+    # torch raises ("expected scalar type Double but found ComplexDouble") the moment the two
+    # meet in `einsum`, so cast once here rather than at each of the five places they mix.
+    dtype = _complex_dtype(xp, eps33)
+    n = xp.astype(xp.stack([nx, ny, xp.zeros_like(nx)], axis=-1), dtype)
+    eps33 = xp.astype(eps33, dtype)
+    eye = xp.astype(xp.eye(3, device=_device(xp, eps33)), dtype)
+    N_proj = n[..., :, None] * n[..., None, :]
+    T_proj = eye - N_proj
+
+    a = xp.einsum('...i,...ij,...j->...', n, eps33, n)
+    p = xp.einsum('...ij,...j->...i', eps33, n)
+    q = xp.einsum('...ji,...j->...i', eps33, n)
+
+    # The normal field vanishes on the skeleton of the distance transform (`norm == 0` in
+    # `normal_vector_field`). There n = 0, so p, q and n n^T are all zero and T = I -- setting
+    # the divisor to 1 makes the two lines below return A = eps and B = I on their own, which
+    # is the exact limit: no normal to eliminate, so the direct rule, matching what a zero
+    # projector does in `_nvf_assemble`. Guard on the FIELD vanishing, not on `a`: an `a` that
+    # vanishes under a nonzero normal is a null direction of the tensor itself, and patching
+    # that silently would bury a real singularity instead of reporting it.
+    a = xp.where(nx ** 2 + ny ** 2 == 0, xp.ones_like(a), a)[..., None, None]
+
+    A = (eps33 - p[..., :, None] * q[..., None, :] / a) @ T_proj \
+        + p[..., :, None] * n[..., None, :] / a
+    B = (eye - n[..., :, None] * q[..., None, :] / a) @ T_proj \
+        + n[..., :, None] * n[..., None, :] / a
+    return A, B
+
+
+def pn_conv_matrices(xp, eps33, nx, ny, fto_x, fto_y):
+    """Popov-Neviere convolution matrices for one *patterned anisotropic* layer.
+
+    ``eps33`` is the pointwise permittivity tensor on the layer raster, shape ``(Ny, Nx, 3, 3)``.
+    Returns the same five slots as :func:`nvf_conv_matrices`,
+    ``(epx, epy, epxy, epyx, epz_i)``, so the two are interchangeable at the call site.
+
+    Scope: the **in-plane** tensor, i.e. the five slots. The derivation in :func:`_pn_fields`
+    is written for a full 3x3 and stays valid for one, but the z row and column only decouple
+    from the in-plane block when they are empty (with ``nz = 0`` the projectors are block
+    diagonal, so ``A_zz = eps_zz`` and ``B_zz = 1` exactly). A patterned layer that fills them
+    needs the 3x3 block solved together, and — more to the point — nothing available can say
+    whether the answer is right: fmmax, the one oracle that handles a patterned complex
+    off-diagonal, has no z-row arguments at all. That case is left unimplemented rather than
+    written blind.
+    """
+    A, B = _pn_fields(xp, eps33, nx, ny)
+
+    def block(field):
+        return xp.concat([xp.concat([fourier2d_pointwise(xp, field[..., i, j], fto_x, fto_y)
+                                     for j in range(2)], axis=-1) for i in range(2)], axis=-2)
+
+    eps_t = block(A) @ xp.linalg.inv(block(B))
+    ff = eps_t.shape[-1] // 2
+    eps_xx, eps_xy = eps_t[..., :ff, :ff], eps_t[..., :ff, ff:]
+    eps_yx, eps_yy = eps_t[..., ff:, :ff], eps_t[..., ff:, ff:]
+
+    # z decouples: A_zz = eps_zz and B_zz = 1, so the z slot is the plain direct rule inverted,
+    # which is the same expression `_nvf_assemble` closes with.
+    epz_i = xp.linalg.inv(fourier2d_pointwise(xp, eps33[..., 2, 2], fto_x, fto_y))
+
+    return eps_xx, eps_yy, -eps_xy, -eps_yx, epz_i
+
+
+def to_conv_mat_raster_pn(ucell_tensor, fto_x, fto_y, normal_field=None, lattice=None):
+    """Per-layer Popov-Neviere convolution matrices for a **tensor** raster.
+
+    The counterpart of :func:`to_conv_mat_raster_nvf` for a layer stack whose permittivity is a
+    tensor at every pixel rather than a scalar.
+
+    Args:
+        ucell_tensor: ``(n_layers, Ny, Nx, 3, 3)`` — the *permittivity* tensor per pixel, not a
+            refractive index. This differs from ``ucell`` elsewhere in the package on purpose:
+            ``n ** 2`` is a scalar operation and there is no square root of a tensor field worth
+            guessing at, so the caller states eps and the ambiguity never arises.
+        fto_x, fto_y: Fourier truncation orders.
+        normal_field: optional per-layer ``(nx, ny)``. Left ``None`` it is computed from the
+            trace of the in-plane block, which is the isotropic part of the layer and so sees
+            the same geometry a scalar raster would. Supply it to keep the build traceable
+            under JAX, or when the tensor's structure and its *shape* differ — an optic axis
+            that rotates across an otherwise uniform slab has no permittivity interface, and a
+            normal field read off the values would be reading a texture, not a boundary.
+        lattice: cell basis, passed through to :func:`normal_vector_field`.
+
+    Returns:
+        ``(epx, epy, epxy, epyx, epz_i)``, each ``(n_layers, ff_xy, ff_xy)`` — the same five
+        slots :func:`to_conv_mat_raster_nvf` returns, in the same convention.
+    """
+    xp = array_namespace(ucell_tensor)
+
+    if ucell_tensor.shape[-2:] != (3, 3):
+        raise ValueError(
+            f'to_conv_mat_raster_pn takes a permittivity tensor per pixel, shaped '
+            f'(n_layers, Ny, Nx, 3, 3); got {tuple(ucell_tensor.shape)}. A scalar raster goes '
+            f'to to_conv_mat_raster_nvf instead -- and note this one takes eps, not a '
+            f'refractive index.')
+
+    if normal_field is not None and len(normal_field) != ucell_tensor.shape[0]:
+        raise StaleGeometryError(
+            f'the frozen geometry no longer fits this structure: it holds a normal field for '
+            f'{len(normal_field)} layers and this one has {ucell_tensor.shape[0]}. Call '
+            f'freeze_geometry() again, or drop geometry= to rebuild by comparison.')
+
+    out = [[], [], [], [], []]
+    for i in range(ucell_tensor.shape[0]):
+        eps33 = ucell_tensor[i]
+        if normal_field is None:
+            # The in-plane trace: the layer's isotropic part, which is what carries the shape.
+            nx, ny = normal_vector_field(
+                0.5 * (eps33[..., 0, 0] + eps33[..., 1, 1]), lattice=lattice)
+        else:
+            nx, ny = normal_field[i]
+        for slot, mat in zip(out, pn_conv_matrices(xp, eps33, nx, ny, fto_x, fto_y)):
+            slot.append(mat)
+
+    return tuple(xp.stack(slot) for slot in out)
+
+
 def nvf_conv_matrices(xp, eps_matrix, nx, ny, fto_x, fto_y):
     """NVF convolution matrices for one layer, with sampled coefficients."""
     C = _complex_dtype(xp, eps_matrix)

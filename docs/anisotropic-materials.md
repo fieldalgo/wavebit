@@ -21,12 +21,18 @@ Targets:
 |---|---|---|
 | uniform (unpatterned) anisotropic layer, in-plane tensor | **works today** | a thin wrapper |
 | `eps_xz` / `eps_yz` (z-coupling), uniform | **works today** | done — a different solver, [`first-order-4ff.md`](first-order-4ff.md), dispatched to automatically at ~8x |
-| patterned anisotropic layer | not supported | a new factorization; **both solvers unchanged** |
+| patterned anisotropic layer, in-plane tensor | **works today** | done — Popov–Nevière, [`patterned-anisotropic-factorization.md`](patterned-anisotropic-factorization.md); both solvers unchanged, as scoped |
+| patterned **and** z-coupled | not supported | the 3×3 closing step — and no oracle exists for it |
 | `mu != 1` | not supported | layer operator **and** the half-space boundary |
 
 Nothing on this list is impossible. Exactly one of them changed the *shape* of the code rather
 than its content — the z-coupling row, which is why it needed a second solver and got one. The
-remaining two are content: new matrices for the same machinery.
+rest are content: new matrices for the same machinery.
+
+The patterned row landed as §3 predicted — a factorization, both solvers untouched. The row
+below it is the combination, and it is held back by evidence rather than by difficulty: fmmax was
+the only solver that reached the patterned case and it has no z-row arguments, so there is
+nothing to check the answer against.
 
 ## 1. What the mode operator already accepts
 
@@ -134,8 +140,21 @@ rule on `D_x = eps · E_x`. With a tensor, the continuous quantity is a **sum of
 and there is no per-term rule to apply. The standard fix (Popov–Nevière) is to rearrange the
 constitutive relation so that the continuous quantities — tangential `E`, normal `D` — sit on one
 side, invert that block **pointwise in real space**, and then apply the direct rule throughout.
-The resulting `eps̃` matrices are fully populated. That rearrangement is the actual work item, and
-an anisotropic extension of NVF sits on top of it.
+The resulting `eps̃` matrices are fully populated.
+
+**Done, 2026-08-14** — `factorization.py::pn_conv_matrices`, with
+`to_conv_mat_raster_pn` for a stack. Full write-up in
+[`patterned-anisotropic-factorization.md`](patterned-anisotropic-factorization.md); two things
+from it are worth carrying back here, because both contradict what this section assumed:
+
+* "invert that block pointwise in real space" is doing more work than it looks. The projector
+  algebra has to finish *before* anything is transformed. Building `⟦T⟧`, `⟦N⟧` and the transfer
+  `⟦M⟧` separately and multiplying the matrices is the same algebra pointwise and is wrong — the
+  normal field is a unit field extended into the bulk, hence discontinuous itself, so that
+  product is Laurent applied across a concurrent jump. It conserves energy, it is rotation
+  covariant, it sits plausibly near fmmax, and it is **wrong by 0.5 on a uniform slab**.
+* the scope is the *in-plane* tensor. Patterned z-coupling is a further step, held back for lack
+  of an oracle rather than for difficulty — see the TL;DR table.
 
 ## 4. Uniform anisotropic layers work today
 
@@ -395,13 +414,18 @@ is bit-identical either way, so nothing the library builds moved. Pinned by
     │
     └── yes ─> Does the optic axis lie in the xy plane?
                  │
-                 ├── yes ──> new factorization (Popov–Nevière + NVF)      solver unchanged (§3)
+                 ├── yes ──> Popov–Nevière factorization                  WORKS TODAY (§3)
                  │
-                 └── no ───> z-coupling: 4ff first-order solver           solver replaced (§6)
+                 └── no ───> patterned z-coupling: NOT SUPPORTED, no oracle exists
 ```
 
-The first row is a wrapper. The second is real work but reuses the mode operator unchanged. The
-third is a second solver living beside the first.
+(The bottom branch used to read "4ff first-order solver". That solver does exist and handles
+z-coupling — but only for a **uniform** layer, §6. Patterned *and* z-coupled needs the 3×3
+closing step of the factorization as well, and that is the one case with nothing to check it
+against.)
+
+The first row is a wrapper. The second is real work and reuses the mode operator unchanged, as
+predicted. The third is a second solver living beside the first.
 
 That caveat used to read "the existing goldens cannot arbitrate any of this", and it no longer
 holds. Four oracles now cover this ground, three of them external, with goldens checked in:
