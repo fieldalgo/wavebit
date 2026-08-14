@@ -142,16 +142,35 @@ discretisation error, and only the rate tells them apart. The continuity check i
 than asymptotic because the sampling lands on the interface: `linspace(0, res_z, res_z)` is
 inclusive, so a layer's last slice *is* its bottom face.
 
-**The sign convention, which the vacuum slab settled.** A layer of vacuum in vacuum returns the
-incident plane wave exactly, so every entry is known in closed form — and two of the facts it
-gives do not sit together. The phase advances *with* the cell's `z` index, so the wave travels
-that way; the returned Poynting vector points *against* it. The shipped cell therefore carries
-`E_z`, `H_x` and `H_y` with the opposite sign to the right-handed frame in which the index is
-`+z`. That is what the second-order path has always returned and what the legacy field goldens
-froze. The first-order state vector is written in the other frame — `Im(lam_f) >= 0` means "does
-not grow" only with `+z` along propagation — so `field_2d_4ff` applies that `z` parity on
-output and matches, rather than correcting a convention out from under every existing consumer.
-Both paths are pinned to it by the same test.
+**The sign convention, which the vacuum slab settled — and which turned out to be a defect in
+the other three paths.** A layer of vacuum in vacuum returns the incident plane wave exactly,
+so every entry is known in closed form, and two of the facts it gave did not sit together: the
+phase advanced *with* the cell's `z` index, so the wave travelled that way, while the returned
+Poynting vector pointed *against* it.
+
+The first reading was that this is the library's convention and the new path should match it,
+which is what shipped for a day. It is not. `docs/conventions.md` declares `+z` **down, into
+the stack**, and measured against that declaration the second-order cell is not a Maxwell field
+at all: the curl residual on a three-layer slab at 33° was 2.8 as shipped and 8.0e-4
+(converging like the step) once `E_z`, `H_x`, `H_y` were flipped — on all four paths, the two
+1D layouts included. The 4ff state vector was already in the declared frame, because
+`Im(lam_f) >= 0` means "does not grow" only with `+z` along propagation.
+
+The sharper way to say it: [`formulation.md`](formulation.md) §1 had already written the
+answer down as the sanity anchor for `(M1)/(M2)` — a `+z` vacuum wave has `(Ey, H̃x) =
+(1, -kz)` — and `test_anisotropic_berreman.py::_vacuum_modes` writes that pair verbatim. The
+formulation, the Berreman oracle and this module all agreed with each other; the
+reconstruction was the one file that did not. Matching it would have propagated the one wrong
+opinion in the repo, which is what makes "match the shipped behaviour" a rule with an
+exception rather than a rule.
+
+So the parity moved to where it belongs, onto the three second-order paths, and `field_2d_4ff`
+applies none. The legacy field golden is **not** regenerated for it — the implementation it was
+captured from is deleted, so re-freezing would quietly convert the repo's only legacy-parity
+evidence into a change detector; `test_field_core.legacy_to_declared` transforms the golden at
+the comparison instead, and a companion test asserts that transform is not a no-op. What let
+this stand for so long is in [`time-convention-audit.md`](time-convention-audit.md) §8: the
+audit that checked fields probed `|E|` and `E_t`, the two things the parity leaves alone.
 
 ## 5. Two things that were not obvious
 

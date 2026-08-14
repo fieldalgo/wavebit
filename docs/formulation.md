@@ -65,6 +65,14 @@ Sanity anchor: a vacuum plane wave `E = ŷ exp(i k0 z)`, i.e. travelling `+z`. (
 `(Ey, H̃x) = (1, -kz)` is what `tests/test_anisotropic_berreman.py::_vacuum_modes` writes,
 which is the code-side check on (M1)/(M2) themselves.
 
+**`calculate_field` returns these same variables**, so this anchor is a statement about its
+output too, not only about the solve. That was worth leaving unsaid until it wasn't: this
+document had no reference to the reconstruction, the reconstruction had none to it, and from
+2026-08-14 back to the rewrite it returned `E_z`, `H̃x` and `H̃y` negated — a `+z` vacuum wave
+came back with `H̃x = +1` and its energy flowing `-z`, contradicting the anchor above while
+every check in the suite stayed green. See `docs/conventions.md` and
+`tests/test_field_core.py::test_every_path_returns_a_maxwell_field_in_the_declared_frame`.
+
 Loss check: `eps = 1 + iδ`, `kz = sqrt(eps) ≈ 1 + iδ/2`, so `exp(i k0 kz z)` **decays**
 toward `+z`. `Im(eps) > 0` is absorption under this sign of (M1)/(M2) — the two statements
 are one convention, not two.

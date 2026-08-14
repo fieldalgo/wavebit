@@ -461,6 +461,17 @@ cannot see residue they share, which is what §7's independent references are fo
 A leftover conjugation would show up as a field that grows downward, or as a scale factor that
 is not 1. Neither.
 
+> **Both of those checks were blind to the sign defect found on 2026-08-14**, and the way they
+> were blind is the reusable part. Every path was returning `Ez`, `Hx` and `Hy` in the frame
+> whose `+z` points *out* of the stack (`docs/conventions.md` declares the opposite). The first
+> check is a magnitude, and the second compares `E_t` — and `E_t` is exactly the part the
+> parity leaves alone. So a check aimed at the *time* convention passed a *frame* defect
+> through, because both of its probes happened to live in the intersection where the two
+> conventions agree. The lesson is not that the checks were weak: it is that "the field is
+> right" needs a probe that touches `H` and `E_z` **relative to** `E_t`, which is what a curl
+> residual does and a closed-form amplitude comparison does not.
+> Now covered by `tests/test_field_core.py::test_every_path_returns_a_maxwell_field_in_the_declared_frame`.
+
 **`solve_2d_4ff`.** Its `split_forward_backward` splits modes by energy flux with a decay
 fallback, and its docstring claimed that is "the same rule `boundary_kz` applies to a
 half-space". After §3 that is true only for real `k_par` — which is all this path sees, since

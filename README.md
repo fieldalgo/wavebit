@@ -367,7 +367,10 @@ textbook coefficients.
 
 **Axes follow the array.** Row `0` of `ucell` is `y = 0`, for every builder and for the
 reconstructed field cell alike. The flip that renders a field the conventional way up belongs
-to plotting (`field_plot`), not to the data.
+to plotting (`field_plot`), not to the data. `+z` points **down, into the stack**, and the
+reconstructed field's vector components use that same `+z` — so a wave travelling into the
+stack has `H = k̂ × E` and `Sz > 0`. (Before 2026-08-14 `Ez`, `Hx` and `Hy` came back with the
+opposite sign; see [`docs/conventions.md`](docs/conventions.md).)
 
 **Smooth-path shape coordinates are absolute.** On the smooth path, `cx`, `cy`, `lx` and `ly`
 are lengths in the same units as `period` — not fractions of it. Passing fractions builds a

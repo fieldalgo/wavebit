@@ -31,18 +31,23 @@ that between them nothing is left free:
   ``(1 - R)`` above and ``T`` below. Their ratio is the one number that catches a wrong
   normalisation of ``T1``, which is exactly the failure a plausible-looking field hides.
 
-A note on signs, pinned by :func:`test_a_vacuum_slab_comes_back_as_the_incident_plane_wave`
-below: the shipped convention returns ``E_z``, ``H_x`` and ``H_y`` with the opposite sign to
-the right-handed frame whose ``+z`` runs *with* the cell's ``z`` index — measured on a vacuum
-slab, where the incident plane wave's phase advances with the index while the returned
-Poynting vector points against it. The first-order state vector is written in the other frame,
-so :func:`~wavebit._core.fields.field_2d_4ff` converts on output; the checks here undo it
-through :func:`state_frame` rather than working around it, so both halves stay explicit.
+A note on signs. The vacuum slab in :func:`test_a_vacuum_slab_comes_back_as_the_incident_plane_wave`
+below is what found the convention defect this path briefly inherited: for one day every
+reconstruction returned ``E_z``, ``H_x`` and ``H_y`` in the frame whose ``+z`` points *out* of
+the stack, which ``docs/conventions.md`` explicitly does not declare, and this path applied a
+parity on output to match the other three rather than break a caller who flips
+``formulation``. The parity now lives where it belongs — on the three second-order paths — and
+this one needs none, because :mod:`wavebit._core.solve_2d_4ff` already derives in the declared
+frame. So the checks below read the returned cell directly. The frame itself is pinned for
+every path at once by ``tests/test_field_core.py``.
 """
 import numpy as np
 import pytest
 
 import wavebit
+# One residual, shared: it takes the full 3x3 tensor precisely so the z-coupled cases here and
+# the isotropic frame check there measure the same thing the same way.
+from test_field_core import maxwell_residual
 
 WL = 620.0
 PERIOD = (400.0, 380.0)
@@ -80,20 +85,6 @@ def uniform_slots(eps_list):
             np.stack([-x[2, 1] * I for x in e])]
 
 
-def state_frame(cell):
-    """The returned cell in the frame whose ``+z`` runs with its own ``z`` index.
-
-    The ``z`` parity ``(E_z, H_x, H_y) -> -(E_z, H_x, H_y)``, which is the whole of the
-    difference between the shipped sign convention and a right-handed frame — see this
-    module's docstring, and ``test_a_vacuum_slab_comes_back_as_the_incident_plane_wave`` for
-    the measurement that fixes it. Every check below states its physics in this frame, because
-    that is the frame Maxwell's equations were written down in.
-    """
-    out = np.array(cell, dtype=complex, copy=True)
-    out[..., [2, 3, 4]] *= -1
-    return out
-
-
 def z_solver(thickness, theta_deg=28.0, backend=0):
     """A solver for a stack of uniform tensors, at one retained order.
 
@@ -115,7 +106,7 @@ def _to_backend(a, backend):
 
 
 def z_coupled_cell(eps_list, thickness, theta_deg=28.0, res_z=64, backend=0):
-    """``(result, cell_in_state_frame, kx, ky)`` for a stack of uniform tensors.
+    """``(result, cell, kx, ky)`` for a stack of uniform tensors.
 
     ``res_x = res_y = 1`` on purpose: with a single retained order the field is one plane wave,
     so the sample at ``(x, y) = (0, 0)`` **is** its Fourier coefficient and the checks below
@@ -128,12 +119,12 @@ def z_coupled_cell(eps_list, thickness, theta_deg=28.0, res_z=64, backend=0):
     assert mee.formulation_assigned == '4ff'
     cell = np.asarray(mee.calculate_field(res_x=1, res_y=1, res_z=res_z))
     kx, ky = mee.get_kx_ky_vector(WL)
-    return (res, state_frame(cell)[0, :, 0, 0, :],
+    return (res, np.asarray(cell, dtype=complex)[0, :, 0, 0, :],
             complex(np.asarray(kx)[0]), complex(np.asarray(ky)[0]))
 
 
 def z_flux(F):
-    """Time-averaged Poynting ``z``, from a cell already in the state frame."""
+    """Time-averaged Poynting ``z``, in the declared frame (``+z`` down, into the stack)."""
     return 0.5 * np.real(F[..., 0] * np.conj(F[..., 4]) - F[..., 1] * np.conj(F[..., 3]))
 
 
@@ -234,36 +225,6 @@ def test_the_two_formulations_agree_on_the_variants_taken_one_at_a_time():
 
 # ------------------------------------------------------- the z-coupled half, which has no twin
 
-def maxwell_residual(F, kx, ky, eps, d, res_z, layer):
-    """Max curl-equation residual over the interior of one layer, per equation.
-
-    Stated on Fourier coefficients in the state frame: ``d/dx -> i k0 kx``,
-    ``d/dy -> i k0 ky``, and ``d/dz`` by a central difference. ``linspace(0, res_z, res_z)`` is
-    inclusive, so the step is ``d / (res_z - 1)`` and the layer's last sample sits on its
-    bottom face.
-    """
-    k0 = 2 * np.pi / WL
-    h = d / (res_z - 1)
-    s = F[layer * res_z:(layer + 1) * res_z]
-    Ex, Ey, Ez, Hx, Hy, Hz = (s[:, i] for i in range(6))
-    D = [sum(eps[r, c] * (Ex, Ey, Ez)[c] for c in range(3)) for r in range(3)]
-    m = slice(1, -1)
-
-    def dz(v):
-        return (v[2:] - v[:-2]) / (2 * h)
-
-    residuals = [
-        1j * k0 * ky * Ez[m] - dz(Ey) - 1j * k0 * Hx[m],          # (curl E)_x = i k0 Hx
-        dz(Ex) - 1j * k0 * kx * Ez[m] - 1j * k0 * Hy[m],          # (curl E)_y = i k0 Hy
-        1j * k0 * (kx * Ey[m] - ky * Ex[m]) - 1j * k0 * Hz[m],    # (curl E)_z = i k0 Hz
-        1j * k0 * ky * Hz[m] - dz(Hy) + 1j * k0 * D[0][m],        # (curl H)_x = -i k0 Dx
-        dz(Hx) - 1j * k0 * kx * Hz[m] + 1j * k0 * D[1][m],        # (curl H)_y = -i k0 Dy
-        1j * k0 * (kx * Hy[m] - ky * Hx[m]) + 1j * k0 * D[2][m],  # (curl H)_z = -i k0 Dz
-    ]
-    scale = k0 * np.max(np.abs(s))
-    return np.array([np.max(np.abs(r)) / scale for r in residuals])
-
-
 @pytest.mark.parametrize('eps,tag', [(VOIGT, 'voigt'), (TILTED, 'tilted')])
 def test_the_z_coupled_cell_satisfies_maxwell_and_converges_like_it_should(eps, tag):
     """Both curl equations hold inside a z-coupled layer, at second order in the step.
@@ -359,19 +320,18 @@ def test_a_z_coupled_cell_is_not_quietly_the_z_decoupled_one():
 def test_a_vacuum_slab_comes_back_as_the_incident_plane_wave(formulation, psi_v, tag):
     """A layer of vacuum in vacuum: the field inside is the incident wave, exactly.
 
-    Which makes it the place to pin the shipped sign convention, because every entry is known
-    in closed form. Two facts come out of it and they do not sit together comfortably:
+    Every entry is known in closed form, which is what made this the check that found the
+    convention defect — and now the one that keeps it fixed. Three facts, and they agree:
 
     * the phase **advances** with the cell's ``z`` index, so the wave travels that way
       (``e^{-iwt}``, ``exp(+i k0 kz z)``);
-    * the returned Poynting vector points **against** the index.
+    * ``H = khat x E`` with ``khat`` along the index, so the pair is right-handed about it;
+    * the Poynting vector points **along** the index, i.e. into the stack.
 
-    So the shipped cell carries ``E_z``, ``H_x`` and ``H_y`` with the opposite sign to the
-    right-handed frame in which the index is ``+z``. That is what the second-order path has
-    always returned and what the legacy field goldens froze, so the first-order path matches it
-    rather than correcting it — a caller who changes ``formulation`` must not get ``H`` back
-    reversed. Both paths are checked here so the claim is about the library, not about one of
-    them.
+    Until 2026-08-14 the second fact failed and the third came back reversed, on every path.
+    Both formulations are checked here so the claim is about the library rather than one of
+    them; ``tests/test_field_core.py`` makes the same claim for the two 1D layouts and by
+    Maxwell rather than by a closed form.
     """
     mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, fto=(0, 0), period=PERIOD,
                        wavelength=WL, theta=0.0, phi=0.0, psi=psi_v,
@@ -380,10 +340,9 @@ def test_a_vacuum_slab_comes_back_as_the_incident_plane_wave(formulation, psi_v,
     mee.conv_solve()
     cell = np.asarray(mee.calculate_field(res_x=1, res_y=1, res_z=8))[0, :, 0, 0, :]
 
-    # s: E = +y, H = +x as shipped.  p: E = -x, H = +y.  In the state frame the H entries are
-    # negated and both are then `khat x E` with `khat` along the index, as they must be.
-    (e_idx, e_sign), (h_idx, h_sign) = (((1, 1.0), (3, 1.0)) if tag == 's'
-                                        else ((0, -1.0), (4, 1.0)))
+    # khat = +z (the index).  s: E = +y, so H = z x y = -x.  p: E = -x, so H = z x (-x) = -y.
+    (e_idx, e_sign), (h_idx, h_sign) = (((1, 1.0), (3, -1.0)) if tag == 's'
+                                        else ((0, -1.0), (4, -1.0)))
     assert abs(cell[0, e_idx] - e_sign) < 1e-12, cell[0]
     assert abs(cell[0, h_idx] - h_sign) < 1e-12, cell[0]
     quiet = [i for i in range(6) if i not in (e_idx, h_idx)]
@@ -395,9 +354,8 @@ def test_a_vacuum_slab_comes_back_as_the_incident_plane_wave(formulation, psi_v,
         want = e_sign * np.exp(2j * np.pi * j / 7)
         assert abs(cell[j, e_idx] - want) < 1e-12, (j, cell[j, e_idx], want)
 
-    # and the flux points the other way, in the frame where the index is +z
-    assert z_flux(state_frame(cell))[0] > 0
-    assert z_flux(cell)[0] < 0
+    # and the energy flows the way the wave does
+    assert z_flux(cell)[0] > 0
 
 
 # --------------------------------------------------------------------------------- backends

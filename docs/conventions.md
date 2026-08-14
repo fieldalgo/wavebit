@@ -43,6 +43,26 @@ Within a layer the array follows the image convention: row `0` of `ucell` is `y 
 every builder and for the reconstructed field cell alike. The flip that renders a field
 the conventional way up belongs to plotting (`field_plot`), not to the data.
 
+**The reconstructed field's vector components use that same `+z`.** `calculate_field` returns
+`(Ex, Ey, Ez, Hx, Hy, Hz)` (or the 3-component 1D layouts) in the frame declared above, so
+`H = k̂ × E` for a plane wave travelling into the stack and the Poynting vector of a downward
+wave has `Sz > 0` — the same direction the cell's `z` index runs. This is worth stating
+because it was not true before 2026-08-14: every path returned `Ez`, `Hx` and `Hy` with the
+opposite sign.
+
+That was a contradiction inside the repo, not a convention nobody had chosen.
+[`formulation.md`](formulation.md) §1 anchors (M1)/(M2) on a vacuum wave travelling `+z` and
+records the pair `(Ey, H̃x) = (1, -kz)`; `tests/test_anisotropic_berreman.py::_vacuum_modes`
+writes that pair; `solve_2d_4ff` derives in it. The reconstruction was the one place that did
+not. Nothing caught it because nothing external pinned it — the only Reticolo field comparison
+is a print-only script that hand-conjugates its reference — and every check that existed
+compared the reconstruction against itself, or looked only at `E_t`, which the sign change
+leaves alone ([`time-convention-audit.md`](time-convention-audit.md) §8). It is now pinned per
+path by
+`tests/test_field_core.py::test_every_path_returns_a_maxwell_field_in_the_declared_frame`,
+which asserts the curl equations *and* their convergence rate, since a wrong frame does not
+converge rather than merely scoring worse.
+
 ## Units and angles
 
 `wavelength`, `period`, `thickness` and the smooth-path shape coordinates (`cx`, `lx`,
@@ -207,6 +227,7 @@ Amplitude fine print, stated once so it never has to be discovered:
 | `psi` and `chi` are real; the chart reaches the circular states; both coordinates and the pair carry gradients through a pytree | `tests/test_polarization.py` (the refusal on all three backends, and the pair's gradient checked against the `psi` path's rather than a frozen number) |
 | the circular states' rotation sense | derived above from two pinned facts: the (s, p)→(x, y) calibration (`tests/test_uniform_anisotropic.py`) and the gyrotropic eigenstate assignment (`tests/test_polarization.py`) |
 | square-root branches behind `kz` | `tests/test_branch_selection.py` |
+| the field cell's `+z` (that `Ez`, `Hx`, `Hy` share the frame the phase and layer order use) | `tests/test_field_core.py` — the curl residual **and its convergence rate**, per path, plus the control that the pre-2026-08-14 frame fails it. Not the legacy golden, which was frozen in that frame and is transformed at the comparison |
 | the whole surface, per backend | `tests/test_golden_legacy_parity.py` |
 
 Why these choices: [`time-convention-audit.md`](time-convention-audit.md) (the branch

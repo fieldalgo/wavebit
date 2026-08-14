@@ -8,6 +8,25 @@ Axes follow the array, not the picture: row ``0`` of the returned cell is ``y = 
 row of ``ucell`` that the factorization reads as ``y = 0``. Turning that into a conventional
 image is :func:`field_plot`'s job, and it flips there.
 
+**The vector components are in the library's own frame, where ``+z`` points down, into the
+stack** (``docs/conventions.md``) — the same ``+z`` the phase, the layer order and the
+``Im(kz) > 0`` decay rule are stated against. Until 2026-08-14 they were not: every path
+returned ``E_z``, ``H_x`` and ``H_y`` with the opposite sign.
+
+It is worth being precise about what that was, because it was not an undeclared convention.
+``docs/formulation.md`` §1 already carried the answer as its sanity anchor — a vacuum wave
+``E = y exp(i k0 z)`` travelling ``+z`` has ``Hx = -exp(i k0 z)``, the pair ``(Ey, Hx) =
+(1, -kz)`` — and ``tests/test_anisotropic_berreman.py::_vacuum_modes`` writes that pair, and
+:mod:`wavebit._core.solve_2d_4ff` derives in it. The formulation, the oracle and the solver
+agreed; **only this module disagreed with them.** Measured on a three-layer slab at 33
+degrees, the curl-equation residual was 2.8 as shipped and 8.0e-4 (converging like the step)
+once the parity was undone, and a vacuum slab returned a Poynting vector pointing back out of
+the stack.
+
+The three signs are applied at each entry point below rather than in the mode algebra, because
+the mode algebra is shared with the solve and the solve was never wrong. See
+``tests/test_field_core.py::test_every_path_returns_a_maxwell_field_in_the_declared_frame``.
+
 Turns a solved stack back into the field inside it. Each layer's mode amplitudes are
 propagated to a set of z-slices, then inverse-Fourier-transformed onto an (x, y) grid.
 
@@ -140,7 +159,13 @@ def field_1d(wavelength, kx, T1, layer_info_list, period, tetm_index,
         Fy = inv_f[:, :, None, :] @ My[:, None, None, :, :]
         Fx = sgn * (inv_f[:, :, None, :] @ Mx[:, None, None, :, :])
         Fz = sgn * (inv_f[:, :, None, :] @ Mz[:, None, None, :, :])
-        cells.append(xp.concat([Fy[..., 0], Fx[..., 0], Fz[..., 0]], axis=-1))
+        # Into the declared frame (module docstring): E_z, H_x, H_y flip, E_t and H_z do not.
+        # The two layouts fill the same three slots with different components, so the pattern
+        # is not the same one twice -- TE is (Ey, Hx, Hz) and only its middle slot is magnetic
+        # and transverse; TM is (Hy, Ex, Ez) and its *outer* two are what the parity moves.
+        par_y, par_x, par_z = (1, -1, 1) if tetm_index == 0 else (-1, 1, -1)
+        cells.append(xp.concat([par_y * Fy[..., 0], par_x * Fx[..., 0],
+                                par_z * Fz[..., 0]], axis=-1))
 
         T_layer = A_i @ X @ T_layer
 
@@ -218,8 +243,10 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, res_x, res_y
 
         inv_f = _inv_fourier(xp, kx, ky, period, res_x, res_y, k0, C,
                              lattice)[:, :, None, :]
-        comps = [inv_f @ M[:, :, None, None, :, :] for M in (Sx, Sy, Sz)]
-        comps += [-1j * (inv_f @ M[:, :, None, None, :, :]) for M in (Ux, Uy, Uz)]
+        # `-1j` converts out of `U = i H`; the three minus signs on top of it are the parity
+        # into the declared frame (module docstring), so `H_z` keeps the bare conversion.
+        comps = [inv_f @ M[:, :, None, None, :, :] for M in (Sx, Sy, -Sz)]
+        comps += [-1j * (inv_f @ M[:, :, None, None, :, :]) for M in (-Ux, -Uy, Uz)]
         val = xp.concat([c[..., 0] for c in comps], axis=-1)
         cells.append(xp.moveaxis(val, 1, 0))
 
@@ -253,21 +280,17 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, period,
     special case of this one, not a shared one. ``H_z = Kx Ey - Ky Ex`` is unchanged while
     ``mu = 1``, which is all this path admits.
 
-    The returned components are ``(Ex, Ey, Ez, Hx, Hy, Hz)``, matching :func:`field_2d` — and
-    matching it includes **the sign convention it ships, which is not the one this module's
-    state vector is written in**. Measured on a vacuum "slab", where the answer is known
-    exactly: :func:`field_2d` returns ``Ey = +1``, ``Hx = +1`` for a downward s-polarised unit
-    plane wave, whose Poynting vector then points *against* the direction the cell's ``z``
-    index runs, while the phase advances *with* it. The first-order state vector carries the
-    other one — ``Hx = -1``, energy along ``+z`` — because :mod:`wavebit._core.solve_2d_4ff`
-    derives everything with ``+z`` along the propagation direction, which is what makes
-    ``Im(lam_f) >= 0`` mean "does not grow".
+    The returned components are ``(Ex, Ey, Ez, Hx, Hy, Hz)``, matching :func:`field_2d`. This
+    path needs **no** parity at the output, and it is the only one that does not:
+    :mod:`wavebit._core.solve_2d_4ff` already derives everything with ``+z`` down along the
+    propagation direction — which is what makes ``Im(lam_f) >= 0`` mean "does not grow" — and
+    that is the library's declared frame. The state vector is therefore already in it.
 
-    The two differ by the ``z`` parity ``E_z, H_x, H_y -> -E_z, -H_x, -H_y`` (``E_t`` and
-    ``H_z`` are fixed by it, which is exactly the pattern measured), so the conversion is three
-    signs at the output and nothing deeper. It is applied here rather than argued about because
-    a caller who flips ``formulation`` must not get a field back with ``H`` reversed; the 2ff
-    spelling is what the legacy goldens froze and what every existing consumer reads.
+    This is the reverse of how it shipped for one day. When reconstruction landed on this path
+    (2026-08-14) the other three paths were returning ``E_z``, ``H_x``, ``H_y`` in the opposite
+    frame, so this one applied the parity to match them rather than break a caller who flips
+    ``formulation``. The vacuum slab that measurement rested on is what then showed the other
+    three were wrong rather than merely different, and the parity moved to where it belongs.
     """
     _require_solved(T1, layer_info_list)
     xp = array_namespace(T1)
@@ -310,10 +333,9 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, period,
 
         inv_f = _inv_fourier(xp, kx, ky, period, res_x, res_y, k0, C,
                              lattice)[:, :, None, :]
-        # The three signs are the z parity that carries this module's frame into the one
-        # `field_2d` ships -- see the note above; `E_t` and `H_z` are fixed by it.
+        # No parity here, deliberately: the 4ff state vector is already in the declared frame.
         comps = [inv_f @ M[:, :, None, None, :, :]
-                 for M in (Ex, Ey, -Ez, -Hx, -Hy, Hz)]
+                 for M in (Ex, Ey, Ez, Hx, Hy, Hz)]
         val = xp.concat([c[..., 0] for c in comps], axis=-1)
         cells.append(xp.moveaxis(val, 1, 0))
 
