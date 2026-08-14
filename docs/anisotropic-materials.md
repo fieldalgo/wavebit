@@ -23,8 +23,7 @@ Targets:
 | `eps_xz` / `eps_yz` (z-coupling), uniform | **works today** | done — a different solver, [`first-order-4ff.md`](first-order-4ff.md), dispatched to automatically at ~8x |
 | patterned anisotropic layer, in-plane tensor | **works today** | done — Popov–Nevière, [`patterned-anisotropic-factorization.md`](patterned-anisotropic-factorization.md); both solvers unchanged, as scoped |
 | patterned **and** z-coupled | not supported | the 3×3 closing step — and no oracle exists for it |
-| `mu != 1`, layers | **works today** | done — the E/H dual of the five slots, [`magnetic-materials.md`](magnetic-materials.md) |
-| `mu != 1`, half-spaces | not supported | the boundary admittance; `conventions.py`, and no golden reaches it |
+| `mu != 1`, layers and half-spaces | **works today** | done — [`magnetic-materials.md`](magnetic-materials.md); the layers are the E/H dual of the five slots, the half-spaces one pair of admittances |
 
 Nothing on this list is impossible. Exactly one of them changed the *shape* of the code rather
 than its content — the z-coupling row, which is why it needed a second solver and got one. The
@@ -212,7 +211,7 @@ Two things to watch:
   paths have no off-diagonal slots to fill. A z row does this for itself (§8); the in-plane pair
   does not, which is the asymmetry to remember.
 
-## 5. Magnetic materials: `mu` on the layers, not yet on the half-spaces
+## 5. Magnetic materials: `mu` on the layers and the half-spaces
 
 **Layers: done, 2026-08-14.** `layer_modes_2d` takes an optional `mu` — the same five slots as
 the permittivity, in the same convention — and `solve_2d` / `smm_2d` carry it per layer.
@@ -237,20 +236,25 @@ implementation had to correct:
   when the `K` factors commute past a `muz_i` of one. Reusing it conserved energy for scalar
   `mu` and broke it outright for gyromagnetic `mu` (`R + T = 1.035`).
 
-**Half-spaces: still not supported**, and this is the part the original warning was about. They
-are isotropic and non-magnetic by construction:
+**Half-spaces: done too**, and this is the part the original warning was about. They used to be
+isotropic and non-magnetic by construction:
 
 ```python
 kz_top = boundary_kz(xp, n_top ** 2, k_par_sq)          # takes eps alone
 big_F  = _block(xp, [[I, O], [O, -1j * Kz_bot / eps_bot]])   # p-channel admittance
 ```
 
-`boundary_kz` has one material argument, and the `/ eps_bot` in `big_F` is exactly the
-admittance where `mu` belongs. So a magnetic substrate or superstrate means touching the
-boundary conventions — and `conventions.py` is the module that exists because a sign seam there
-once turned absorbing media into gain media. Change it with a golden in hand; the magnetic
-golden is not one, because every case in it sits between **vacuum**, which is what let it
-validate the layer operator on its own.
+and the `/ eps_bot` in `big_F` is exactly the admittance where `mu` belongs. The instruction
+here used to be "change it with a golden in hand", and that is what happened:
+`golden_fmmax_mu_ambient.npz` was frozen first, while there was still nowhere to put a `mu`,
+and it carries a **closed form** on top — the magnetic layer golden could not serve, because
+every case in it sits between vacuum, which is exactly what let it validate the layer operator
+on its own.
+
+`boundary_kz` needed no change at all, as it turns out: it already took `n^2` under the name
+`eps`, and `n_top` / `n_bot` stayed the refractive index. What moved is one pair of
+admittances, `kz/mu` on s and `kz/eps` on p — see
+[`magnetic-materials.md`](magnetic-materials.md) §5.
 
 ## 6. z-coupling: the one gap that changes the solver
 

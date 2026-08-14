@@ -703,12 +703,13 @@ class CoreSolveMixin:
     def solve_2d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None,
                  epxz_conv_all=None, epyz_conv_all=None,
-                 epzx_conv_all=None, epzy_conv_all=None, mu=None):
+                 epzx_conv_all=None, epzy_conv_all=None, mu=None, mu_top=1.0, mu_bot=1.0):
         kx, ky = self._kxy_2d(wavelength)
         z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
         self._formulation_assigned = self._formulation_for(z_row)
         if self._formulation_assigned == Formulation.FIRST:
-            if mu is not None and any(s is not None for s in mu):
+            if (mu is not None and any(s is not None for s in mu)) or \
+                    mu_top != 1.0 or mu_bot != 1.0:
                 raise NotImplementedError(
                     'a permeability was given with a z-coupled permittivity, which routes to '
                     'the first-order (4ff) solve, and mu is not implemented there. Drop the '
@@ -727,7 +728,7 @@ class CoreSolveMixin:
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
             incidence_side=self.incidence_side,
-            full=True, mu=mu))
+            full=True, mu=mu, mu_top=mu_top, mu_bot=mu_bot))
 
 
 # The rule each modeling path actually implements, for the two paths that implement exactly

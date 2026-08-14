@@ -353,7 +353,7 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
 # ------------------------------------------------------------------- coupled s/p (conical, 2D)
 
 def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
-            layer_modes, epz_conv_i_all, backside, full):
+            layer_modes, epz_conv_i_all, backside, full, mu_top=1.0, mu_bot=1.0):
     """Shared SMM cascade + matching for the coupled s/p paths (conical and 2D).
 
     ``layer_modes(layer_index)`` returns that layer's ``(big_W, big_V, q, W, V)``: the mode
@@ -383,18 +383,25 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     k_par_sq = kx_g ** 2 + ky_g ** 2
     kz_top = xp.reshape(boundary_kz(xp, n_top ** 2, k_par_sq), (-1,))
     kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq), (-1,))
-    eps_bot = n_bot ** 2
+    eps_top = n_top ** 2 / mu_top      # n stays the refractive index; eps carries the mu
+    eps_bot = n_bot ** 2 / mu_bot
     eps_gap = xp.reshape(1 + k_par_sq, (-1,))                 # kz_gap == 1 by construction
 
     Kz_top = _diag(xp, kz_top)
     Kz_bot = _diag(xp, kz_bot)
 
     # Half-space and gap modes in the (E_s, F_p) / (H_s, H_p) boundary basis — the same form
-    # the ETM substrate seed (big_F, big_G) has.
-    W_top = _block(xp, [[I, O], [O, -1j * Kz_top / n_top ** 2]])
-    V_top = _block(xp, [[-1j * Kz_top, O], [O, I]])
+    # the ETM substrate seed (big_F, big_G) has, and the same two admittances: `kz/eps` on the
+    # magnetic (p) amplitude, `kz/mu` on the electric (s) one.
+    #
+    # The **gap is left non-magnetic**, deliberately. It is not a medium in the scene; it is a
+    # fictitious layer the cascade inserts so every interface is computed the same way, and it
+    # cancels out of the result. Giving a bookkeeping device a material property would be a
+    # category error that happens to cancel, which is worse than one that does not.
+    W_top = _block(xp, [[I, O], [O, -1j * Kz_top / eps_top]])
+    V_top = _block(xp, [[-1j * Kz_top / mu_top, O], [O, I]])
     W_bot = _block(xp, [[I, O], [O, -1j * Kz_bot / eps_bot]])
-    V_bot = _block(xp, [[-1j * Kz_bot, O], [O, I]])
+    V_bot = _block(xp, [[-1j * Kz_bot / mu_bot, O], [O, I]])
     W_gap = _block(xp, [[I, O], [O, -1j * _diag(xp, 1 / eps_gap)]])
     V_gap = _block(xp, [[-1j * I, O], [O, I]])
 
@@ -417,6 +424,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
 
     kz_ref, kz_trn = (kz_bot, kz_top) if backside else (kz_top, kz_bot)
     n_ref, n_trn = (n_bot, n_top) if backside else (n_top, n_bot)
+    mu_ref, mu_trn = (mu_bot, mu_top) if backside else (mu_top, mu_bot)
 
     # --- incidence ------------------------------------------------------------------------
     # Amplitudes are (E_s, H_p) by construction of W/V above, so the incident column is the
@@ -426,7 +434,9 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     delta = xp.reshape(xp.astype(_unit(xp, ff_xy, ff_xy // 2), C), (ff_xy, 1))
 
     def incident(a_s, a_p):
-        return xp.concat([a_s * delta, -1j * n_ref * a_p * delta], axis=0)
+        # `n_ref/mu_ref`, not `n_ref`: `a_s` and `a_p` are defined at equal incident flux,
+        # and the s flux carries `kz/mu`. Same scale the ETM final matching uses.
+        return xp.concat([a_s * delta, -1j * (n_ref / mu_ref) * a_p * delta], axis=0)
 
     def incident_psi(psi_v):
         return incident(xp.sin(xp.asarray(psi_v, dtype=C)),
@@ -458,8 +468,9 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
 
     kz_ref_2d = xp.reshape(kz_ref, (ff_y, ff_x))
     kz_trn_2d = xp.reshape(kz_trn, (ff_y, ff_x))
-    denom = n_ref * xp.cos(xp.asarray(theta, dtype=C))
-    eff = sp_efficiencies(xp, kz_ref_2d, kz_trn_2d, denom, n_ref, n_trn, R_s, R_p, T_s, T_p)
+    denom = n_ref * xp.cos(xp.asarray(theta, dtype=C)) / mu_ref
+    eff = sp_efficiencies(xp, kz_ref_2d, kz_trn_2d, denom, n_ref, n_trn, R_s, R_p, T_s, T_p,
+                          mu_top=mu_ref, mu_bot=mu_trn)
 
     check_finite(xp, de_ri=eff[0][0] + eff[1][0], de_ti=eff[2][0] + eff[3][0])
     check_physical(xp, eff[0][0] + eff[1][0], eff[2][0] + eff[3][0], n_ref)
@@ -468,7 +479,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
         return eff[0][0] + eff[1][0], eff[2][0] + eff[3][0]
 
     # Coupled-path Fresnel conversion, identical to the ETM final matching's.
-    amps = (R_s, R_p / (-1j * n_ref), T_s, T_p / (-1j * n_trn))
+    amps = (R_s, R_p / (-1j * n_ref / mu_ref), T_s, T_p / (-1j * n_trn / mu_trn))
     packed = [_pack(*(a[i] for a in amps), *(e[i] for e in eff)) for i in range(3)]
 
     if backside:
@@ -528,7 +539,7 @@ def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
 def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
            epxy_conv_all=None, epyx_conv_all=None,
-           incidence_side='top', full=False, mu=None):
+           incidence_side='top', full=False, mu=None, mu_top=1.0, mu_bot=1.0):
     """Solve a 2D grating stack by scattering matrices — SMM twin of :func:`solve_2d`.
 
     Same arguments and returns as :func:`smm_1d`; ``incidence`` is the resolved complex
@@ -570,4 +581,5 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         return big_W, big_V, q, W, V
 
     return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
-                   layer_modes, epz_conv_i_all, backside, full)
+                   layer_modes, epz_conv_i_all, backside, full,
+                   mu_top=mu_top, mu_bot=mu_bot)

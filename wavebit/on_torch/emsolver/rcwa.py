@@ -179,7 +179,8 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
     def solve_for_conv(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
                        epxy_conv_all=None, epyx_conv_all=None,
                        epxz_conv_all=None, epyz_conv_all=None,
-                       epzx_conv_all=None, epzy_conv_all=None, mu=None):
+                       epzx_conv_all=None, epzy_conv_all=None, mu=None,
+                       mu_top=1.0, mu_bot=1.0):
         self._assign_grating_type()
         z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
         if self._formulation_for(z_row) == Formulation.FIRST:
@@ -187,8 +188,9 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
             # no slots to put one in.
             self._grating_type_assigned = 2
 
-        if mu is not None and any(m is not None for m in mu) and \
-                self._grating_type_assigned != 2:
+        magnetic = ((mu is not None and any(m is not None for m in mu))
+                    or mu_top != 1.0 or mu_bot != 1.0)
+        if magnetic and self._grating_type_assigned != 2:
             raise NotImplementedError(
                 'mu is implemented on the 2D path only; this structure routed to a 1D solve. '
                 'The 1D and conical operators carry no permeability slot at all.')
@@ -199,7 +201,8 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
             result_dict = self.solve_1d_conical(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
         else:
             result_dict = self.solve_2d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
-                                        epxy_conv_all, epyx_conv_all, *z_row, mu=mu)
+                                        epxy_conv_all, epyx_conv_all, *z_row, mu=mu,
+                                        mu_top=mu_top, mu_bot=mu_bot)
 
         res_psi = ResultSubTorch(**result_dict['res']) if 'res' in result_dict else None
         res_te_inc = ResultSubTorch(**result_dict['res_te_inc']) if 'res_te_inc' in result_dict else None

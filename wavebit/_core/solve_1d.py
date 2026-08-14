@@ -393,7 +393,7 @@ def _unit(xp, n, i):
 
 
 def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
-                   n_top, n_bot, ff_x, ff_y, full=False):
+                   n_top, n_bot, ff_x, ff_y, full=False, mu_top=1.0, mu_bot=1.0):
     """Boundary match the assembled s/p system to the incident field.
 
     Shared, byte-identical port of ``transfer_1d_conical_4`` / ``transfer_2d_4`` (their final
@@ -432,17 +432,25 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     bG = [[big_G[:ff_xy, :ff_xy], big_G[:ff_xy, ff_xy:]],
           [big_G[ff_xy:, :ff_xy], big_G[ff_xy:, ff_xy:]]]
 
+    # `big_F` holds tangential E and `big_G` tangential H, each split s/p, so the coefficients
+    # below are the half-space admittances: `kz/mu` where the amplitude is electric (s) and
+    # `kz/eps = kz*mu/n**2` where it is magnetic (p). Both reduce to what was here at mu = 1.
     final_A = _block(xp, [
         [I, O, -bF[0][0], -bF[0][1]],
-        [O, 1j * Kz_top / (n_top ** 2), -bF[1][0], -bF[1][1]],
-        [1j * Kz_top, O, -bG[0][0], -bG[0][1]],
+        [O, 1j * Kz_top * mu_top / (n_top ** 2), -bF[1][0], -bF[1][1]],
+        [1j * Kz_top / mu_top, O, -bG[0][0], -bG[0][1]],
         [O, I, -bG[1][0], -bG[1][1]],
     ])
+    # The incident wave in the same four quantities. The p row's magnetic scale is `n/mu`,
+    # not `n`: `a_s` and `a_p` are defined at *equal* incident flux, and with the s flux now
+    # carrying `kz/mu` the p one only matches at that scale. Getting it wrong leaves s and p
+    # normalized to different incident powers, which no energy check can see -- R + T = 1
+    # still holds within each polarization.
     final_B = _block(xp, [
         [-a_s * delta],
         [a_p * (kz_inc / n_top) * delta],
-        [1j * a_s * kz_inc * delta],
-        [1j * n_top * a_p * delta],
+        [1j * a_s * kz_inc / mu_top * delta],
+        [1j * (n_top / mu_top) * a_p * delta],
     ])
 
     final_A_inv = xp.linalg.inv(final_A)
@@ -456,11 +464,11 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     T_s = xp.reshape(big_T[:ff_xy, :], (ff_y, ff_x))
     T_p = xp.reshape(big_T[ff_xy:, :], (ff_y, ff_x))
 
-    denom = n_top * cos_t
+    denom = n_top * cos_t / mu_top          # incident flux carries kz/mu, see sp_efficiencies
 
     def efficiencies(R_s_, R_p_, T_s_, T_p_):
         return sp_efficiencies(xp, kz_top_2d, kz_bot_2d, denom, n_top, n_bot,
-                               R_s_, R_p_, T_s_, T_p_)
+                               R_s_, R_p_, T_s_, T_p_, mu_top=mu_top, mu_bot=mu_bot)
 
     de_ri_s, de_ri_p, de_ti_s, de_ti_p = efficiencies(R_s, R_p, T_s, T_p)
 
@@ -473,7 +481,8 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     # The coupled paths' p boundary variable is a magnetic amplitude; ``/(-i*n)`` on its own
     # side is what makes it the Fresnel E-ratio (measured, tests/test_lossy_media).
     def fresnel(R_s_, R_p_, T_s_, T_p_):
-        return R_s_, R_p_ / (-1j * n_top), T_s_, T_p_ / (-1j * n_bot)
+        return (R_s_, R_p_ / (-1j * n_top / mu_top),
+                T_s_, T_p_ / (-1j * n_bot / mu_bot))
 
     res = _pack(*fresnel(R_s, R_p, T_s, T_p), de_ri_s, de_ri_p, de_ti_s, de_ti_p)
 
@@ -486,8 +495,8 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
         c_p = xp.cos(xp.asarray(psi_v, dtype=C))
         cols.append(_block(xp, [[-s_p * delta],
                                 [c_p * (kz_inc / n_top) * delta],
-                                [1j * s_p * kz_inc * delta],
-                                [1j * n_top * c_p * delta]]))
+                                [1j * s_p * kz_inc / mu_top * delta],
+                                [1j * (n_top / mu_top) * c_p * delta]]))
     final_RT_tetm = final_A_inv @ xp.concat(cols, axis=1)
 
     def split2(M):
@@ -511,17 +520,26 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     return {'res': res, 'res_te_inc': variants[0], 'res_tm_inc': variants[1], 'T1': T1}
 
 
-def sp_efficiencies(xp, kz_top_2d, kz_bot_2d, denom, n_top, n_bot, R_s, R_p, T_s, T_p):
+def sp_efficiencies(xp, kz_top_2d, kz_bot_2d, denom, n_top, n_bot, R_s, R_p, T_s, T_p,
+                    mu_top=1.0, mu_bot=1.0):
     """Power-normalized diffraction efficiencies from the s/p boundary amplitudes.
 
-    ``denom = n_top*cos(theta)`` is the incident-power factor; the s channel carries the
-    electric amplitude and the p channel the magnetic one, hence the ``1/n**2`` on p.
-    Shared by the ETM final matching and the SMM connecting algorithm.
+    ``denom`` is the incident-power factor, ``n_top*cos(theta)/mu_top``; the s channel carries
+    the electric amplitude and the p channel the magnetic one, which is what puts a different
+    material factor on each. Shared by the ETM final matching and the SMM connecting algorithm.
+
+    A half-space's admittance is ``kz/mu`` for s and ``kz/eps`` for p, and with
+    ``eps = n**2/mu`` the second is ``kz*mu/n**2``. That is the *whole* content of a magnetic
+    half-space: ``kz`` itself depends only on the refractive index, so a solver carrying ``n``
+    alone cannot express one — it sees no interface at all between vacuum and an
+    impedance-mismatched medium of the same index.
+
+    ``mu_top`` / ``mu_bot`` default to 1, where every expression is the one that was here.
     """
-    return (xp.real(R_s * xp.conj(R_s) * xp.real(kz_top_2d / denom)),
-            xp.real(R_p * xp.conj(R_p) * xp.real(kz_top_2d / n_top ** 2 / denom)),
-            xp.real(T_s * xp.conj(T_s) * xp.real(kz_bot_2d / denom)),
-            xp.real(T_p * xp.conj(T_p) * xp.real(kz_bot_2d / n_bot ** 2 / denom)))
+    return (xp.real(R_s * xp.conj(R_s) * xp.real(kz_top_2d / mu_top / denom)),
+            xp.real(R_p * xp.conj(R_p) * xp.real(kz_top_2d * mu_top / n_top ** 2 / denom)),
+            xp.real(T_s * xp.conj(T_s) * xp.real(kz_bot_2d / mu_bot / denom)),
+            xp.real(T_p * xp.conj(T_p) * xp.real(kz_bot_2d * mu_bot / n_bot ** 2 / denom)))
 
 
 def _pack(r_s, r_p, t_s, t_p, R_s, R_p, T_s, T_p):

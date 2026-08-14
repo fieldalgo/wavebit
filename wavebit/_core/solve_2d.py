@@ -161,7 +161,7 @@ def sp_modes_2d(xp, W, V, F_c, F_s, ff_xy):
 def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
              epxy_conv_all=None, epyx_conv_all=None,
-             incidence_side='top', full=False, mu=None):
+             incidence_side='top', full=False, mu=None, mu_top=1.0, mu_bot=1.0):
     """Solve a 2D grating stack for the given incidence.
 
     ``incidence`` is the resolved incident amplitude pair ``(a_s, a_p)`` at unit flux — whatever
@@ -173,13 +173,14 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     ``epxy_conv_all`` / ``epyx_conv_all`` are the optional off-diagonal permittivity blocks
     (``None`` -> zero).
 
-    ``mu`` is the optional permeability, as five per-layer stacks
+    ``mu`` is the optional per-layer permeability, as five stacks
     ``(mux_all, muy_all, muz_i_all, muxy_all, muyx_all)`` in the same slots and the same
     convention as the permittivity — see :func:`layer_modes_2d`. Any entry may be ``None``.
-    **The half-spaces stay non-magnetic**: ``mu`` describes the layers only, and a magnetic
-    ``n_top`` / ``n_bot`` would additionally need the boundary admittance, which
-    ``docs/anisotropic-materials.md`` §5 marks as the part to change with a golden in hand and
-    for which there is not one.
+
+    ``mu_top`` / ``mu_bot`` are the **half-spaces'** scalar permeabilities. ``n_top`` / ``n_bot``
+    keep meaning the *refractive index* ``sqrt(eps*mu)``, so nothing about ``kz``, Snell or the
+    order grid changes and every existing call means what it did; ``mu`` enters only through
+    the boundary admittances (:func:`~wavebit._core.solve_1d.sp_efficiencies`).
 
     ``kx`` / ``ky`` are the retained in-plane orders, in either spelling
     :func:`order_grid_kxy` accepts: 1-D of lengths ``ff_x`` / ``ff_y`` for an axis-aligned
@@ -196,6 +197,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
          epxy_conv_all, epyx_conv_all, *mu_all) = _mirrored_scene(
             n_top, n_bot, thickness, epx_conv_all, epy_conv_all, epz_conv_i_all,
             epxy_conv_all, epyx_conv_all, *mu_all)
+        mu_top, mu_bot = mu_bot, mu_top      # the half-spaces swap with the indices they belong to
     kx = as_array(xp, kx)
     ky = as_array(xp, ky)
     if not xp.isdtype(kx.dtype, 'complex floating'):
@@ -218,11 +220,13 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq), (-1,))
     varphi = xp.reshape(xp.atan(ky_g / kx_g), (-1,))
 
-    eps_bot = n_bot ** 2
+    eps_bot = n_bot ** 2 / mu_bot          # n stays the refractive index; eps carries the mu
     Kz_bot = _diag(xp, kz_bot)
 
+    # The substrate's two admittances: kz/eps on the magnetic (p) amplitude, kz/mu on the
+    # electric (s) one. Both are the previous expression at mu_bot = 1.
     big_F = _block(xp, [[I, O], [O, -1j * Kz_bot / eps_bot]])
-    big_G = _block(xp, [[-1j * Kz_bot, O], [O, I]])
+    big_G = _block(xp, [[-1j * Kz_bot / mu_bot, O], [O, I]])
     big_T = xp.astype(xp.eye(2 * ff_xy), C)
 
 
@@ -280,7 +284,8 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
 
     # --- stage 3: final matching -> efficiency (transfer_2d_4 == transfer_1d_conical_4) --
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
-                         n_top, n_bot, ff_x, ff_y, full=full)
+                         n_top, n_bot, ff_x, ff_y, full=full,
+                         mu_top=mu_top, mu_bot=mu_bot)
     if full:
         out['layer_info_list'] = layer_info_list
     return out

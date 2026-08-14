@@ -1,4 +1,4 @@
-# Magnetic layers — `mu` as the dual of the five slots
+# Magnetic materials — `mu` on layers and half-spaces
 
 Landed 2026-08-14. [`anisotropic-materials.md`](anisotropic-materials.md) §5 had scoped this and
 got the location right and the content wrong; §3 below is the difference.
@@ -6,9 +6,8 @@ got the location right and the content wrong; §3 below is the difference.
 Target: `wavebit/_core/solve_2d.py` — `layer_modes_2d`, `solve_2d`;
 `wavebit/_core/scattering.py` — `smm_2d`.
 
-**Scope.** The **layers**, on the **2D path**. Magnetic half-spaces are not implemented (§6),
-and neither the 1D/conical operators nor the first-order 4ff solve take a `mu` — both refuse
-rather than ignore.
+**Scope.** The **2D path** — layers (§1–§4) and half-spaces (§5). Neither the 1D/conical
+operators nor the first-order 4ff solve take a `mu`; both refuse rather than ignore.
 
 ---
 
@@ -116,7 +115,77 @@ feature.
 
 `tests/test_magnetic_layer.py` carries the oracle-free half.
 
-## 5. Reaching it
+## 5. Half-spaces
+
+Landed the same day, against its own golden. `n_top` / `n_bot` keep meaning the **refractive
+index** `sqrt(eps*mu)`, and `mu_top` / `mu_bot` are new; `eps = n^2/mu` follows. That choice is
+what makes the change small: `kz` depends only on the index, so Snell, the order grid and
+`boundary_kz` are untouched — `boundary_kz` was already taking `n^2` under the name `eps`.
+
+Everything that changes is one pair of admittances:
+
+```
+  s (electric amplitude):  Y = kz / mu
+  p (magnetic amplitude):  Y = kz / eps  =  kz * mu / n^2
+```
+
+and it appears in four places that must agree: the substrate seed (`big_F` / `big_G`), the
+superstrate rows of `final_A`, the incident column, and the efficiency normalisation.
+
+**The incident normalisation is the part that is easy to miss.** `a_s` and `a_p` are defined at
+*equal incident flux*; once the s flux carries `kz/mu`, the p amplitude's magnetic scale must be
+`n/mu` rather than `n` for the two to still match. Get it wrong and s and p are normalised to
+different incident powers — and **`R + T = 1` still holds within each polarization**, so no
+energy check sees it.
+
+That is the general shape of the risk here, and why the golden carries a closed form rather than
+leaning on energy: a boundary that used `kz/eps` for *both* polarizations conserves energy
+perfectly. A bare interface has an exact answer, so §6 can check the two admittances separately.
+
+### The gap layer
+
+The SMM cascade inserts a fictitious "gap" medium so every interface is computed the same way.
+It is left non-magnetic deliberately. It is a bookkeeping device, not a medium in the scene, and
+it cancels out of the result — giving it a material property would be a category error that
+happens to cancel, which is harder to notice than one that does not.
+
+## 6. What checks the half-spaces
+
+**A golden frozen before the boundary could hold a `mu`**, same discipline as the layer half:
+`golden_fmmax_mu_ambient.npz`, generated while `boundary_kz` took one material argument.
+Sixteen rows, matched to ~1e-15 under both connecting algorithms.
+
+**A closed form**, which is what replaces the layer golden's `__mu1` gate — there is no
+non-magnetic twin of an ambient under test. Every bare-interface row is checkable by hand:
+
+```
+  R = |(Y_inc - Y_sub)/(Y_inc + Y_sub)|^2,   Y = kz/mu (s), kz/eps (p)
+```
+
+The solver matches it to 4e-16. Both the generator and the test enforce it, so a wrong
+admittance is caught without fmmax being trusted at all.
+
+**One case that cannot be passed by accident.** `impedance_only_mismatch_30deg` is
+`eps = 0.5, mu = 2.0`: index-matched to vacuum, impedance-mismatched. A boundary carrying only
+`n` sees no interface and returns `R = 0`. The answer is 0.111.
+
+**Reciprocity** for the backside mirror, where `mu_top` and `mu_bot` must swap. Transmittance is
+direction-independent for a lossless reciprocal stack — but the **angle has to be converted**,
+because `theta` is stated against the incidence medium's normal. Comparing top-at-33° with
+bottom-at-33° puts `T` out by 9e-3 and reads exactly like a broken mirror; what reciprocity
+equates is one `k_par` seen from both sides, `n_top sin(th_top) = n_bot sin(th_bot)`.
+
+### What a mutation survey added
+
+Two mutants of the incident column survived the first survey, and measuring them showed they
+changed *nothing* — they were not redundant code, they were in the copy of that column the
+tests never reached. Every magnetic assertion at that point read `res_te_inc` / `res_tm_inc`,
+built from a different block than `res`, the psi-specified incidence. The gap was not subtle:
+the psi path returns `R + T = 1.575` with the incident s-flux left non-magnetic. Deleting the
+backside swap survived everything too. With the psi and reciprocity tests added, 15 of 15
+mutants die.
+
+## 7. Reaching it
 
 `mu` is one keyword on `solve_for_conv`, taking the five stacks in the permittivity's convention:
 
@@ -134,14 +203,7 @@ is a scalar refractive index. A patterned magnetic layer would go through the sa
 machinery as a patterned tensor ([`patterned-anisotropic-factorization.md`](patterned-anisotropic-factorization.md)),
 which is untried on `mu` and unvalidated — nothing in the golden is patterned.
 
-## 6. What is not implemented, and why
-
-**Magnetic half-spaces.** `boundary_kz` takes one material argument and the p-channel admittance
-is spelled `-1j * Kz_bot / eps_bot`, which is precisely where `mu` belongs. This is not deferred
-for difficulty: `conventions.py` is the module that exists because a sign seam there once turned
-absorbing media into gain media, and the rule is to change it with a golden in hand. **The
-magnetic golden is not one** — every case in it sits between vacuum, which is exactly what let
-those rows validate the layer operator by itself.
+## 8. What is not implemented, and why
 
 **1D and conical paths.** No permeability slot in either operator. Refused, not ignored.
 
@@ -151,7 +213,7 @@ on whichever path the dispatch picks and silently dropping the other input is th
 
 **Patterned `mu`.** See §5.
 
-## 7. References
+## 9. References
 
 - fmmax's `eigensolve_general_anisotropic_media` — five `eps` and five `mu` components, no z row;
   the same 2ff tensor class this implements, which is why it can arbitrate this and not a
