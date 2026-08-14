@@ -1,21 +1,3 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 415 156" width="415" height="156" role="img" aria-label="Wavebit">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 403 232" role="img" aria-label="Wavebit">
   <title>Wavebit</title>
-
-  <!-- Stacked lockup, for narrow and square placements. Same mark and colours as
-       wavebit_logo.svg; the bars grow to the height of the two-line block. -->
-  <rect x="8"   y="52.6" width="18" height="50.8"  rx="9" fill="#e11d48"/>
-  <rect x="41"  y="27.2" width="18" height="101.5" rx="9" fill="#f59e0b"/>
-  <rect x="74"  y="7.5"  width="18" height="141"   rx="9" fill="#22c55e"/>
-  <rect x="107" y="27.2" width="18" height="101.5" rx="9" fill="#0ea5e9"/>
-  <rect x="140" y="52.6" width="18" height="50.8"  rx="9" fill="#7c3aed"/>
-
-  <!-- "Field" is tracked to 12.9 so its ink measures 217.2 against "Wave" at 217.0:
-       the two lines justify to the same width. SVG adds the letter-spacing after the
-       final glyph too, which is why the value is not the 10.0 that naive matching gives. -->
-  <text x="190" y="70"
-        font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
-        font-size="86" letter-spacing="12.9" font-weight="300" fill="#0d9488">Field</text>
-  <text x="190" y="148"
-        font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
-        font-size="86" letter-spacing="-1.5" font-weight="700" fill="#0d9488">Wave</text>
-</svg>
+<rect x="142" y="35.0" width="14" height="40" rx="7" fill="#e11d48"/><rect x="168" y="15.0" width="14" height="80" rx="7" fill="#f59e0b"/><rect x="194" y="0.0" width="14" height="110" rx="7" fill="#22c55e"/><rect x="220" y="15.0" width="14" height="80" rx="7" fill="#0ea5e9"/><rect x="246" y="35.0" width="14" height="40" rx="7" fill="#7c3aed"/><path transform="translate(12.00,211.20) scale(0.096000,-0.096000)" d="M136 0 34 700H141L225 73H241L349 700H538L646 73H662L745 700H853L750 0H561L451 636H435L326 0Z" fill="#1e293b"/><path transform="translate(97.15,211.20) scale(0.096000,-0.096000)" d="M229 -14Q176 -14 134.5 4.0Q93 22 68.5 57.0Q44 92 44 142Q44 217 97.5 255.5Q151 294 232 294H382V326Q382 368 356.0 394.5Q330 421 276 421Q223 421 195.0 396.0Q167 371 158 331L62 362Q74 401 100.5 434.0Q127 467 170.5 487.0Q214 507 277 507Q373 507 428.0 458.0Q483 409 483 319V116Q483 86 511 86H553V0H476Q442 0 420.0 18.0Q398 36 398 67V70H382Q374 54 358.0 34.5Q342 15 311.0 0.5Q280 -14 229 -14ZM244 71Q305 71 343.5 106.5Q382 142 382 204V214H238Q197 214 172.0 196.5Q147 179 147 145Q147 111 173.0 91.0Q199 71 244 71Z" fill="#1e293b"/><path transform="translate(152.54,211.20) scale(0.096000,-0.096000)" d="M190 0 24 493H133L264 76H280L411 493H520L354 0Z" fill="#1e293b"/><path transform="translate(204.77,211.20) scale(0.096000,-0.096000)" d="M302 -14Q227 -14 171.0 17.5Q115 49 83.5 106.0Q52 163 52 240V252Q52 329 83.5 386.0Q115 443 170.0 475.0Q225 507 298 507Q369 507 422.5 475.5Q476 444 506.0 388.0Q536 332 536 257V218H157Q159 153 200.5 114.5Q242 76 304 76Q362 76 391.5 102.0Q421 128 437 162L523 118Q508 90 482.0 59.0Q456 28 412.0 7.0Q368 -14 302 -14ZM158 297H432Q427 352 391.0 384.0Q355 416 297 416Q239 416 202.5 384.0Q166 352 158 297Z" fill="#1e293b"/><path transform="translate(260.83,211.20) scale(0.096000,-0.096000)" d="M361 -14Q289 -14 250.5 12.0Q212 38 193 70H177V0H76V700H179V426H195Q212 456 250.5 481.5Q289 507 361 507Q423 507 474.5 476.5Q526 446 557.5 389.5Q589 333 589 254V239Q589 159 557.5 102.5Q526 46 474.0 16.0Q422 -14 361 -14ZM331 76Q398 76 441.5 119.0Q485 162 485 242V251Q485 330 441.5 373.0Q398 416 331 416Q264 416 221.0 373.0Q178 330 178 251V242Q178 162 221.5 119.0Q265 76 331 76Z" fill="#1e293b"/><path transform="translate(322.37,211.20) scale(0.096000,-0.096000)" d="M76 0V493H179V0ZM128 560Q98 560 77.5 579.5Q57 599 57 630Q57 661 77.5 680.5Q98 700 128 700Q158 700 178.5 680.5Q199 661 199 630Q199 599 178.5 579.5Q158 560 128 560Z" fill="#1e293b"/><path transform="translate(346.94,211.20) scale(0.096000,-0.096000)" d="M261 0Q216 0 189.5 27.0Q163 54 163 99V406H27V493H163V656H266V493H413V406H266V117Q266 87 294 87H397V0Z" fill="#1e293b"/></svg>

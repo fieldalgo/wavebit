@@ -1,4 +1,9 @@
-<p align="center"><img src="images/wavebit_logo.svg" width=45% alt="Wavebit" /></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="images/wavebit_logo_dark.svg">
+    <img src="images/wavebit_logo.svg" width="45%" alt="Wavebit">
+  </picture>
+</p>
 
 # Wavebit
 
