@@ -102,9 +102,9 @@ as non-finite instead.
 ## 5. What checks it
 
 Nothing in the repo could arbitrate a patterned tensor before this. Of the four reference solvers
-surveyed in `third_party/rcwa/ANALYSIS.md`, RETICOLO takes an anisotropic layer only as diagonal,
-S4 only as real, and inkstone accepts a full 3×3 and returns results bit-identical to the
-z-row-zeroed tensor — it drops what it is handed. **fmmax is the only one that both accepts a
+surveyed for this project, RETICOLO takes an anisotropic layer only as diagonal, S4 only as real,
+and inkstone accepts a full 3×3 and returns results bit-identical to the z-row-zeroed tensor — it
+drops what it is handed. **fmmax is the only one that both accepts a
 patterned complex off-diagonal and demonstrably uses it**, gated before any of this was written:
 a patterned `eps_xy` moves its eigenvalues by 8.9e-2, and patterning the gyrotropy differs from a
 uniform one by 8.2e-2.

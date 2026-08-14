@@ -2,8 +2,8 @@
 
 This is the case that had no oracle. ``test_fmmax_golden.py`` covers uniform tensors, where
 Berreman and RETICOLO also reach; here the tensor varies across the cell, and of the four
-reference solvers surveyed only fmmax both accepts a patterned complex off-diagonal and
-demonstrably uses it (``third_party/rcwa/ANALYSIS.md``). So this file is what stands behind
+reference solvers surveyed for this project only fmmax both accepts a patterned complex
+off-diagonal and demonstrably uses it. So this file is what stands behind
 ``wavebit._core.factorization.pn_conv_matrices``.
 
 **It asserts convergence, not identity, and the tolerance is measured rather than chosen.**

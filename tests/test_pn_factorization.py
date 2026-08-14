@@ -18,7 +18,8 @@ import pytest
 
 import wavebit
 from wavebit._core.factorization import (
-    normal_vector_field, nvf_conv_matrices, pn_conv_matrices)
+    fourier2d_piecewise_constant, fourier2d_pointwise, normal_vector_field,
+    nvf_conv_matrices, pn_conv_matrices)
 
 WL, PERIOD, THICK = 620.0, 340.0, 185.0
 N = 96
@@ -214,6 +215,89 @@ def test_the_two_paths_agree_in_the_limit_where_they_have_to():
     assert relative[0] < relative[1] / 10, (
         f'the paths do not close faster than the field does: relative gaps {relative} '
         f'(ratio {relative[1] / relative[0]:.1f}, measured 17 when this was written)')
+
+
+# ------------------------------------------------------------------------------- the z slot
+
+def test_the_z_slot_is_the_direct_rule_inverted_not_the_inverse_rule():
+    """``epz_i = <eps_zz>^-1``, never ``<1/eps_zz>``. The two are different rules.
+
+    ``E_z`` is *tangential* to a vertical sidewall — the interface normal lies in the plane — so
+    it is continuous there, and a continuous factor times a discontinuous one is exactly what
+    Laurent's rule handles. The inverse rule answers a different continuity argument and does
+    not apply.
+
+    This test exists because a mutation survey said it had to. Swapping the rule changes the
+    answer by 3.5e-6 at normal incidence and 2.4e-5 at 40 degrees — real, growing with angle,
+    and invisible to every other test in this file: it preserves energy, it is *identical* on a
+    uniform layer (``<1/e> = (1/e) I = <e>^-1`` when ``e`` is constant), and at the 8 degrees
+    the rest of the file uses it lands well inside the fmmax band.
+
+    Asserted against the two spellings directly rather than against ``nvf_conv_matrices``,
+    which would be the obvious reference and is the wrong one: it obtains its permittivity
+    coefficients in closed form and this path uses the plain DFT, deliberately — see
+    ``pn_conv_matrices``, and :func:`test_the_z_slot_reads_the_raster_the_way_a_and_b_do`.
+    """
+    eps = pillar(1.6 ** 2)
+    nx, ny = normal_vector_field(eps)
+    for fto in (4, 8):
+        got = pn_conv_matrices(np, tensor(eps), nx, ny, fto, fto)[4]
+        direct = np.linalg.inv(fourier2d_pointwise(np, eps.astype(complex), fto, fto))
+        inverse = fourier2d_pointwise(np, (1.0 / eps).astype(complex), fto, fto)
+        assert np.abs(got - direct).max() < 1e-12
+        assert np.abs(got - inverse).max() > 1e-3, 'the two rules have stopped differing'
+
+
+def test_the_z_slot_reads_the_raster_the_way_a_and_b_do():
+    """The plain DFT, not the closed form — consistency beats per-term accuracy here.
+
+    ``eps_zz`` on its own is a staircase, so ``fourier2d_piecewise_constant`` gives its
+    coefficients *exactly* and is the obvious choice. Taking it costs rotation covariance about
+    z: 1.9e-14 with the DFT, 5.2e-8 with the closed form.
+
+    Not because the closed form is asymmetric — the z matrix is rotation covariant under either
+    transform. The two describe *different layers*: closed form reads the raster as a continuum
+    staircase, the DFT as point samples, and A and B have no choice but the latter since they
+    mix eps with the sampled normal field. Two readings of one layer is the defect, and the
+    broken symmetry is how it surfaces.
+
+    Pinned because "use the exact transform where one exists" is a reasonable-sounding edit that
+    would silently reintroduce it.
+    """
+    eps = pillar(1.6 ** 2)
+    g = pillar(0.30j, 0.0)
+    fto = 6
+
+    def rotated_pair(use_closed_form):
+        out = []
+        for e, gg, psi in ((eps, g, 30.0), (np.rot90(eps), np.rot90(g), 120.0)):
+            nx, ny = normal_vector_field(e)
+            slots = list(pn(tensor(e, gg), e, fto))
+            if use_closed_form:
+                slots[4] = np.linalg.inv(fourier2d_piecewise_constant(
+                    np, tensor(e, gg)[..., 2, 2], fto, fto, inverse_rule=None))
+            out.append(rt(solve(slots, e, fto, psi=psi)))
+        return max(abs(out[0][0] - out[1][0]), abs(out[0][1] - out[1][1]))
+
+    assert rotated_pair(False) < rotated_pair(True) / 100
+
+
+def test_the_z_slot_reaches_the_answer_at_a_steep_angle():
+    """The equality above is a unit check; this is what says the slot is wired to the physics.
+
+    ``epz_i`` enters only through ``Kx epz_i Kx`` and its partners, so at normal incidence it
+    barely moves and a test sited there would pass with the slot mis-built. At 40 degrees it
+    carries several times more weight.
+    """
+    eps = pillar(1.6 ** 2)
+    g = pillar(0.30j, 0.0)
+    fto = 8
+    slots = list(pn(tensor(eps, g), eps, fto))
+    good = rt(solve(slots, eps, fto, theta=40.0, psi=30.0))
+
+    slots[4] = np.linalg.inv(np.eye(slots[4].shape[0]) * np.mean(eps))   # a plausible wrong slot
+    bad = rt(solve(slots, eps, fto, theta=40.0, psi=30.0))
+    assert abs(good[0] - bad[0]) > 1e-5, 'the z slot is not reaching the answer here'
 
 
 # ------------------------------------------------------------------------ theorems, not oracles

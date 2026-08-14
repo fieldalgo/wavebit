@@ -791,8 +791,24 @@ def pn_conv_matrices(xp, eps33, nx, ny, fto_x, fto_y):
     eps_xx, eps_xy = eps_t[..., :ff, :ff], eps_t[..., :ff, ff:]
     eps_yx, eps_yy = eps_t[..., ff:, :ff], eps_t[..., ff:, ff:]
 
-    # z decouples: A_zz = eps_zz and B_zz = 1, so the z slot is the plain direct rule inverted,
-    # which is the same expression `_nvf_assemble` closes with.
+    # z decouples: with nz = 0 the projectors are block diagonal, so A_zz = eps_zz and B_zz = 1
+    # exactly and the slot is the plain direct rule inverted -- the same expression
+    # `_nvf_assemble` closes with, and it must stay the same one: `<1/eps_zz>` is the *inverse*
+    # rule and belongs to a different continuity argument. E_z is TANGENTIAL to a vertical
+    # sidewall (the interface normal is in-plane), hence continuous there, and
+    # continuous-times-discontinuous is precisely the product Laurent handles.
+    #
+    # The plain DFT, matching A and B -- **not** the closed form `nvf_conv_matrices` uses for its
+    # permittivity coefficients, and that difference was measured rather than assumed.
+    #
+    # `eps_zz` alone is a staircase, so `fourier2d_piecewise_constant` would give its coefficients
+    # exactly and looks like the better choice. It is not, because it describes a different
+    # layer: closed form reads the raster as a continuum staircase, the DFT as point samples,
+    # and A and B are stuck with the latter (they mix eps with the sampled normal field, which
+    # has no closed form). Mixing the two descriptions of one layer costs a symmetry the true
+    # answer has -- rotation covariance about z fell from 1.9e-14 to 5.2e-8. The z slot's own
+    # matrix is rotation covariant under either transform; it is the disagreement between the
+    # two readings that shows up. Consistency wins over per-term accuracy here.
     epz_i = xp.linalg.inv(fourier2d_pointwise(xp, eps33[..., 2, 2], fto_x, fto_y))
 
     return eps_xx, eps_yy, -eps_xy, -eps_yx, epz_i
