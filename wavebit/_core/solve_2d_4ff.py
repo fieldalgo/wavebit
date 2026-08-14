@@ -309,16 +309,51 @@ def vacuum_sp_states(xp, kx, ky, ff, order=0):
     At normal incidence the plane of incidence is undefined and ``shat`` is taken as ``y``,
     which is the limit the oblique cases approach.
     """
-    kx0, ky0 = float(xp.reshape(xp.asarray(kx), (-1,))[order]), \
-        float(xp.reshape(xp.asarray(ky), (-1,))[order])
+    # `complex`, not `float`. The cast that was here dropped `Im(kx)`, which is round-off at a
+    # real angle and not remotely round-off at a complex one: it moved the returned state by
+    # 0.12 at `theta = 0.4 + 0.3j` and by 0.47 at `0.2 + 0.9j`, and what came back was no longer
+    # a plane wave at all -- `H != khat x E` by the same amount. Everything below is already
+    # complex-clean, so keeping the imaginary part costs nothing and changes nothing at a real
+    # angle. What a complex `kt` has no answer for is the guard, immediately below.
+    kx0, ky0 = complex(xp.reshape(xp.asarray(kx), (-1,))[order]), \
+        complex(xp.reshape(xp.asarray(ky), (-1,))[order])
     kt = (kx0 ** 2 + ky0 ** 2) ** 0.5
     kz = (1.0 - kt ** 2) ** 0.5
-    if kt ** 2 >= 1.0:
-        raise ValueError(f'order {order} is evanescent in vacuum (|kt| = {kt:.4f}); there is no '
-                         'incident plane wave to define.')
+
+    # The guard asks about `order`, not about the angle. Order m carries `k_par + G_m`, and past
+    # the light line that order is evanescent in vacuum, so there is no incident plane wave for
+    # this function to name -- which is the one thing it exists to do. At a real angle
+    # `kt ** 2 >= 1` states exactly that.
+    #
+    # Two different things get called evanescent here, and only the second is an open question.
+    #
+    # * Real `kx`, `kt > 1`, imaginary `kz`. Refused below, and the refusal is not a missing
+    #   toggle: `solve_uniform_stack` normalises by `flux(incident)`, and a purely evanescent
+    #   state carries no time-averaged z-flux in a lossless medium -- measured 4.3e-01 at
+    #   `kt = 0.5` against 2.0e-17 at `kt = 1.2`. Lifting the guard gives 0/0, so R and T stop
+    #   being defined before the solve is even reached. The band is worth reaching -- in an
+    #   emitting stack it is where the substrate, waveguided and surface-plasmon channels live
+    #   -- but reaching it means a source inside the stack and a power spectrum over `k_par`,
+    #   not an incident plane wave and an efficiency. A separate feature, not this guard.
+    #
+    # * Complex `kx` (a complex incidence angle). TODO: undefined here. Under `e^{-iwt}` with
+    #   `Im(n) > 0` a complex theta is an inhomogeneous wave by construction, so "evanescent,
+    #   therefore refuse" stops being the rule -- `|kt| > 1` would reject the legitimate case
+    #   rather than the unnameable one. `docs/first-order-4ff.md` does not scope complex
+    #   incidence and no test reaches it, so this refuses rather than guessing. The `float()`
+    #   cast that used to sit above admitted it silently and returned the wrong state, and it
+    #   disarmed the line below too: `theta = 0.2 + 0.9j` has a true `|kt| = 1.046` and the
+    #   cast read it as 0.285.
+    if abs(kt.imag) > 1e-12 * max(abs(kt), 1.0):
+        raise NotImplementedError(
+            f'complex incidence angle (kt = {kt:.4g}): whether an order counts as evanescent is '
+            'undefined here, so the vacuum s and p states have no scoped meaning yet.')
+    if kt.real ** 2 >= 1.0:
+        raise ValueError(f'order {order} is evanescent in vacuum (|kt| = {kt.real:.4f}); there '
+                         'is no incident plane wave to define.')
 
     khat = (kx0, ky0, kz)
-    shat = (-ky0 / kt, kx0 / kt, 0.0) if kt > 1e-14 else (0.0, 1.0, 0.0)
+    shat = (-ky0 / kt, kx0 / kt, 0.0) if abs(kt) > 1e-14 else (0.0, 1.0, 0.0)
     cross = lambda a, b: (a[1] * b[2] - a[2] * b[1],   # noqa: E731
                           a[2] * b[0] - a[0] * b[2],
                           a[0] * b[1] - a[1] * b[0])
