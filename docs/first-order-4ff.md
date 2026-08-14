@@ -87,21 +87,41 @@ is principled rather than fitted: `epx` carries the inverse rule along `x` becau
 is a continuous quantity written as a product of discontinuous ones, and `exx` sits in exactly
 that product in the first-order form too.
 
-## 4. The one thing it cannot do
+## 4. What it cannot do
 
-**A patterned anisotropic layer.** Not a solver limitation — this module takes convolution
-matrices as *input* and needs no change. The matrices do not exist: with a tensor, the continuous
-quantity is a sum of three products,
+**A patterned *and* z-coupled layer** — and this is now a narrower gap than it was.
 
-```
-    D_x = exx·E_x + exy·E_y + exz·E_z
-```
+The factorization for a patterned anisotropic layer exists as of 2026-08-14
+([`patterned-anisotropic-factorization.md`](patterned-anisotropic-factorization.md)); this
+module takes convolution matrices as *input* and needs no change to use it. What is missing is
+the 3×3 closing step for a layer that is patterned **and** fills the z row, which is exactly the
+geometry this path was built for.
 
-and Li's rule has no per-term form to apply. The standard fix is the Popov–Nevière rearrangement
-([`anisotropic-materials.md`](anisotropic-materials.md) §3), and an anisotropic NVF sits on top of
-it. Until that exists, the geometry this path was built for cannot be patterned — which is worth
-stating plainly, because "4ff solves z-coupling" and "4ff solves magneto-optic gratings" are not
-the same claim.
+It is held back by evidence rather than by difficulty. fmmax is the only reference solver that
+reaches a patterned complex off-diagonal at all, and it has **no z-row arguments** — so there is
+nothing to check the answer against. Given that the in-plane factorization's first arrangement
+passed energy conservation, rotation covariance *and* an external comparison while being wrong
+by 0.5 on a uniform slab, shipping the harder case with strictly less evidence than that one had
+is not a trade worth taking.
+
+Worth stating plainly either way, because "4ff solves z-coupling" and "4ff solves magneto-optic
+gratings" are still not the same claim.
+
+**Field reconstruction**, which is the other absence a user meets. The efficiencies and
+amplitudes are complete; only the in-cell field is missing, and `_require_field_state` refuses
+rather than reconstructing from the `None` this path leaves behind. That guard is load-bearing:
+`calculate_field` branches on the *grating type*, which this path also sets to 2, so without it
+a 4ff solve would be reconstructed by the 2ff `field_2d` and come back plausible and wrong.
+
+The design is scoped in `solve_2d_4ff.py`'s "What is not here", including the one formula that
+cannot be carried over — with a populated z row, `E_z` keeps two more terms than the 2ff line
+does — and the oracle, which is internal and exact: forcing `formulation='4ff'` on an empty-z-row
+problem makes the two paths solve the same problem, and they already agree on efficiencies to
+1e-14.
+
+**`mu`.** Permeability landed on the 2ff path on 2026-08-14
+([`magnetic-materials.md`](magnetic-materials.md)) and this one refuses it rather than dropping
+it.
 
 ## 5. Two things that were not obvious
 

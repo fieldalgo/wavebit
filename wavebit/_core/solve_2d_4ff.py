@@ -92,18 +92,50 @@ should not be read further.
 
 What is not here, in the order it will be wanted:
 
-* **A patterned anisotropic layer.** Gratings themselves are fine: fed the convolution
-  matrices the 2ff path already builds for an *isotropic* grating, this reproduces that path to
-  3e-14 at up to 49 orders, at normal and conical incidence — full convolution matrices, so
-  orders genuinely couple. What is missing is the factorization for a patterned *anisotropic*
-  layer, where Li's rule does not apply per component because the continuous quantity is a sum of
-  three products (``docs/anisotropic-materials.md`` §3). This module takes convolution matrices
-  as input and needs no change for it; the matrices do not exist.
-* **Field reconstruction**, and the ``mu`` rows that
-  ``tests/references/golden_fmmax_magnetic.npz`` is already holding. The efficiencies and
-  amplitudes are complete; only the in-cell field is absent, and
-  :meth:`~wavebit._core.engine.CoreSolveMixin._require_field_state` refuses rather than
-  reconstructing from the ``None`` this path returns in place of a ``layer_info_list``.
+* **Field reconstruction.** The efficiencies and amplitudes are complete; only the in-cell
+  field is absent, and :meth:`~wavebit._core.engine.CoreSolveMixin._require_field_state`
+  refuses rather than reconstructing from the ``None`` this path returns in place of a
+  ``layer_info_list``. Refusing beats guessing here for a specific reason:
+  ``rcwa.calculate_field`` branches on ``_grating_type_assigned``, which this path also sets to
+  2, so without that guard a 4ff solve would be reconstructed by the *2ff* ``field_2d`` and
+  come back plausible and wrong.
+
+  What it needs, scoped 2026-08-14 (nothing below is written yet):
+
+  1. **Per-layer state.** :func:`_etm_recursion` builds each layer's modes inside the loop and
+     drops them. It has to keep ``(lam_f, psi_f, lam_b, psi_b, d)`` plus the amplitude
+     bookkeeping, the way the 2ff path keeps
+     ``[epz_conv_i, W, V, q, d, big_A_i, big_B]`` (``solve_2d.py``).
+  2. **The transverse components are simpler here, not harder.** The state vector already *is*
+     ``(Ex, Ey, Ux, Uy)``, so there is no ``W`` / ``V`` split to reassemble — reading the four
+     blocks off ``psi`` is the whole of it. The mode correspondence below says how the two
+     line up.
+  3. **``E_z`` is where the paths genuinely differ**, and it is the one formula that cannot be
+     copied. With a populated z row the elimination keeps two more terms::
+
+         Ez = ezz^-1 [ i (Kx Uy - Ky Ux) - ezx Ex - ezy Ey ]
+
+     ``fields.py``'s ``Sz = 1j * epz_conv_i @ (Kx @ Uy - Ky @ Ux)`` is that expression at
+     ``ezx = ezy = 0`` — i.e. the 2ff line is a special case, not a shared one. ``H_z`` is
+     unchanged while ``mu = 1``.
+  4. **Dispatch.** ``calculate_field`` must branch on the *formulation*, not only on
+     ``_grating_type_assigned``.
+
+  **The oracle is internal and exact, and it was checked before any of this was written.**
+  Forcing ``formulation='4ff'`` on a problem with an empty z row makes the two paths solve the
+  same problem, so their reconstructed fields must agree — measured on the efficiencies first,
+  and they match to 1e-14 patterned and unpatterned at 0, 8 and 35 degrees. So a field
+  comparison measures the reconstruction and nothing else. The z-coupled case has no such
+  twin; it is judged by the theorems this module already uses.
+* **``mu`` on this path.** Permeability landed on the 2ff path on 2026-08-14
+  (``docs/magnetic-materials.md``) and this one still refuses it — ``engine.py``'s 2D solve
+  raises when a ``mu`` arrives with a z-coupled ``eps``, rather than dropping it.
+* **A patterned *and* z-coupled layer.** The factorization for a patterned anisotropic layer
+  now exists (``factorization.py::pn_conv_matrices``, 2026-08-14) and this module takes
+  convolution matrices, so the in-plane case needs no change here. What is still missing is the
+  3x3 closing step for a patterned layer that also fills the z row — and, more to the point,
+  any way to check it: fmmax was the only solver that reached the patterned case and it has no
+  z-row arguments.
 
 How dispatch is built, kept because the two measurements behind it are why
 :func:`solve_2d_4ff` is shaped the way it is:
