@@ -1,5 +1,9 @@
 %function [top_refl_info, top_tran_info, bottom_refl_info, bottom_tran_info, e] = reticolo_res3(_pol,
-function [top_refl_info_te, top_tran_info_te, top_refl_info_tm, top_tran_info_tm, bottom_refl_info_te, bottom_tran_info_te, bottom_refl_info_tm, bottom_tran_info_tm, e] = reticolo_res3(_pol,
+% `z` and `o` are res3's own second and third outputs, forwarded rather than dropped. Without
+% them a field cell cannot be located: `z` alone does not say which of its several z==0 rows
+% belongs to a layer and which to a zero-thickness ambient, and `o` -- the refractive index at
+% every sample -- does. They are appended, so callers asking for the first 9 are unaffected.
+function [top_refl_info_te, top_tran_info_te, top_refl_info_tm, top_tran_info_tm, bottom_refl_info_te, bottom_tran_info_te, bottom_refl_info_tm, bottom_tran_info_tm, e, z, o] = reticolo_res3(_pol,
 %function [res] = reticolo_res3(_pol,
     theta, phi, period, n_inc, nn, _textures, _profile, wavelength, grating_type, matlab_plot_field, res3_npts);
 %UNTITLED4 Summary of this function goes here

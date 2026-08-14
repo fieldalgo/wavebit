@@ -96,13 +96,14 @@ class Reticolo:
 
             fto = fto
             Nx = ucell.shape[2]
-            period_x = period
-            grid_x = np.linspace(0, period, Nx + 1)[1:]
-            grid_x -= period_x / 2
-            grid_x = np.linspace(0, period, Nx + 1)[1:]
+            # A texture's x origin used to be in doubt here -- RETICOLO's documentation
+            # describes a texture as running -period/2 .. +period/2, and a `grid_x -= period/2`
+            # sat above, overwritten twice and so never in effect. It is settled by
+            # measurement rather than by reading: res3's third output is the refractive index
+            # at every sample point, and on a binary grating it reproduces this project's own
+            # `ucell` evaluated on `linspace(0, period, res_x)` entry for entry. The two x
+            # origins coincide as written; there is no shift to apply.
             grid_x = np.arange(1, Nx+1) * (period/Nx)
-
-            # grid = np.linspace(0, period, Nx)
 
             ucell_new = []
             for z in range(ucell.shape[0]):
@@ -141,12 +142,13 @@ class Reticolo:
         profile = np.array([[0, *thickness, 0], range(1, len(thickness) + 3)])
 
         (top_refl_info_te, top_tran_info_te, top_refl_info_tm, top_tran_info_tm, bottom_refl_info_te,
-         bottom_tran_info_te, bottom_refl_info_tm, bottom_tran_info_tm, field_cell) = \
+         bottom_tran_info_te, bottom_refl_info_tm, bottom_tran_info_tm, field_cell, z, index_map) = \
             self._run(pol, theta, phi, period, n_top, fto, textures, profile, wavelength, grating_type,
                       cal_field=True, matlab_plot_field=matlab_plot_field, res3_npts=res3_npts)
 
         return (top_refl_info_te, top_tran_info_te, top_refl_info_tm, top_tran_info_tm,
-                bottom_refl_info_te, bottom_tran_info_te, bottom_refl_info_tm, bottom_tran_info_tm, field_cell)
+                bottom_refl_info_te, bottom_tran_info_te, bottom_refl_info_tm, bottom_tran_info_tm,
+                field_cell, z, index_map)
 
     def _run(self, pol, theta, phi, period, n_top, fto,
              textures, profile, wavelength, grating_type, cal_field=False, matlab_plot_field=0, res3_npts=0):
@@ -159,13 +161,13 @@ class Reticolo:
         if cal_field:
             # top_refl_info, top_tran_info, bottom_refl_info, bottom_tran_info, field_cell = \
             (top_refl_info_te, top_tran_info_te, top_refl_info_tm, top_tran_info_tm, bottom_refl_info_te,
-             bottom_tran_info_te, bottom_refl_info_tm, bottom_tran_info_tm, field_cell) = \
+             bottom_tran_info_te, bottom_refl_info_tm, bottom_tran_info_tm, field_cell, z, index_map) = \
                 self.eng.reticolo_res3(pol, theta, phi, period, n_top, fto,
                                        textures, profile, wavelength, grating_type, matlab_plot_field, res3_npts,
-                                       nout=9)
+                                       nout=11)
 
             res = (top_refl_info_te, top_tran_info_te, top_refl_info_tm, top_tran_info_tm, bottom_refl_info_te,
-                   bottom_tran_info_te, bottom_refl_info_tm, bottom_tran_info_tm, field_cell)
+                   bottom_tran_info_te, bottom_refl_info_tm, bottom_tran_info_tm, field_cell, z, index_map)
         else:
             top_refl_info, top_tran_info, bottom_refl_info, bottom_tran_info = \
                 self.eng.reticolo_res2(pol, theta, phi, period, n_top, fto,
@@ -233,7 +235,10 @@ if __name__ == '__main__':
 
 
     reti = Reticolo()
-    reti_de_ri, reti_de_ti, c, d, r_field_cell = reti.run_res3(**option)
+    # Scratch demo, kept only as a worked example of driving the bridge by hand; the tested
+    # path is `tests/references/gen_goldens_reticolo_field.py`. The unpacking was already
+    # stale before `z` / `index_map` were added -- it took 5 values from a 9-tuple.
+    reti_de_ri, reti_de_ti, *_, r_field_cell, _z, _index_map = reti.run_res3(**option)
     print('reti R', np.array(reti_de_ri).flatten())
     print('reti T', np.array(reti_de_ti).flatten())
 
