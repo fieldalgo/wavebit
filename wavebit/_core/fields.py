@@ -24,8 +24,11 @@ once the parity was undone, and a vacuum slab returned a Poynting vector pointin
 the stack.
 
 The three signs are applied at each entry point below rather than in the mode algebra, because
-the mode algebra is shared with the solve and the solve was never wrong. See
-``tests/test_field_core.py::test_every_path_returns_a_maxwell_field_in_the_declared_frame``.
+the mode algebra is shared with the solve and the solve was never wrong. Pinned by
+``tests/test_field_core.py::test_every_path_returns_a_maxwell_field_in_the_declared_frame``
+(the curl equations and their convergence rate) and, for the first time on this subsystem, by
+an outside solver: ``tests/references/test_s4_field_golden.py`` agrees with S4 entry for entry
+at ~1e-15 on uniform stacks, on every path.
 
 Turns a solved stack back into the field inside it. Each layer's mode amplitudes are
 propagated to a set of z-slices, then inverse-Fourier-transformed onto an (x, y) grid.

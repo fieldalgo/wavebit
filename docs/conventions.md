@@ -57,8 +57,10 @@ writes that pair; `solve_2d_4ff` derives in it. The reconstruction was the one p
 not. Nothing caught it because nothing external pinned it — the only Reticolo field comparison
 is a print-only script that hand-conjugates its reference — and every check that existed
 compared the reconstruction against itself, or looked only at `E_t`, which the sign change
-leaves alone ([`time-convention-audit.md`](time-convention-audit.md) §8). It is now pinned per
-path by
+leaves alone ([`time-convention-audit.md`](time-convention-audit.md) §8). Field reconstruction
+now has an outside opinion for the first time — `tests/references/test_s4_field_golden.py`
+compares against S4 entry for entry at 1e-15 on uniform stacks, which is where frames and
+signs are decided — and it is pinned per path by
 `tests/test_field_core.py::test_every_path_returns_a_maxwell_field_in_the_declared_frame`,
 which asserts the curl equations *and* their convergence rate, since a wrong frame does not
 converge rather than merely scoring worse.

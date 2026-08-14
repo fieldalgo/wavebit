@@ -18,10 +18,33 @@ from this codebase, which is exactly what makes them worth having.
 | **RETICOLO**, swept over `(kx, ky)` | conical incidence across the light line, **including complex (evanescent) angles** | nothing — frozen from a 2024-09-09 study, see its generator | `golden_reticolo_conical_sweep.npz` |
 | **fmmax** (Liu & Fan lineage, MIT) | uniform complex tensors, **patterned** tensors, **permeability** | the `fwref` env — see below | `golden_fmmax.npz`, `golden_fmmax_magnetic.npz` |
 | **S4** (same lineage, C++) | real tensors, patterned | the S4 extension, already in the project env | `golden_s4.npz` |
+| **S4**, the in-cell **field** | the six field components on *uniform* stacks — every reconstruction path, all angles and azimuths, exact at ~1e-15 | same | `golden_s4_field.npz` |
 
 A fourth oracle lives outside this directory: the Berreman 4x4 in
 `tests/test_anisotropic_berreman.py` is an independent *formulation* — not RCWA at all — but our
 own implementation, so it sits a tier below these three.
+
+### Why the field row exists, and what it cost to not have it
+
+Until 2026-08-14 every oracle here checked efficiencies or amplitudes, and **field
+reconstruction had none at all**. Its only reference was a golden captured from this project's
+own earlier implementation — a change detector wearing an oracle's name. What it froze was a
+wrong sign convention (`Ez`, `Hx`, `Hy` in the frame whose `+z` points *out* of the stack), and
+the suite stayed green for as long as the file existed, because a self-captured golden agrees
+with whatever produced it. It is gone; `golden_s4_field.npz` replaces the claim it was making,
+and `tests/data/golden_field.npz` keeps the drift-detection job under its own honest name.
+
+S4 stops at **uniform** stacks, and that is not a limitation for this purpose: conventions and
+frames are decided there, and neither solver truncates, so the comparison is exact rather than
+converged. On a patterned layer the two disagree at 1e-3 to 1e-2 (and up to 7.6e-1 on the
+discontinuous `Ez`) purely from differing truncation and factorization — a convergence study,
+not a golden, and deliberately not attempted.
+
+Two conventions had to be measured rather than assumed, and both are recorded in
+`gen_goldens_s4_field.py`: S4's p amplitude is a **global** `-1` against ours (not a frame
+parity — it moves all six components together), and the comparison must sample layer
+**interiors**, because `Ez` is discontinuous at an interface and the two codes may legitimately
+report different one-sided limits there.
 
 ### Where RETICOLO stops being an oracle
 
