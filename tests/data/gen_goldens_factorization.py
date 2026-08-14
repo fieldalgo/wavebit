@@ -3,6 +3,29 @@
 Run while wavebit/on_numpy/emsolver/{convolution_matrix,fourier_analysis,nvf}.py still exist.
 Once frozen, those modules can be deleted and the core still has an oracle to answer to.
 """
+# ---------------------------------------------------------------------------------------
+# REFUSES TO RUN, and the refusal is the point.
+#
+# This was written to capture the legacy convolution-matrix builders, which the rewrite deleted. Nothing here fails on its own
+# any more: it would run to completion and write *the current implementation's* output into a
+# file named for the legacy one -- turning the repo's only legacy-parity evidence into a change
+# detector, silently, with every test still green.
+#
+# That is not hypothetical twice over. It is how a wrong sign convention survived in the field
+# golden until 2026-08-14 (tests/data/gen_goldens_field.py records it); and while this guard was
+# being added the author ran this script "to check that it refuses" -- before the guard was
+# actually in the file -- and overwrote the golden on the spot. It was restored from git and
+# verified byte-identical. The window between "obviously safe to run" and "silently destroyed
+# the reference" is one command wide.
+#
+# Unconditional, because nothing can make it correct again. If the output must change on
+# purpose, transform the golden AT THE COMPARISON and say why in the commit -- the way
+# tests/test_field_core.py does for the 2026-08-14 sign fix.
+import sys as _sys
+_sys.exit('refusing to run: the legacy convolution-matrix builders no longer exists, so this would re-freeze the current '
+          'implementation as its own reference. See the note at the top of this file.')
+# ---------------------------------------------------------------------------------------
+
 import pathlib
 
 import numpy as np

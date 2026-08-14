@@ -489,3 +489,80 @@ def test_li_tells_x_and_y_apart_and_this_is_expected(fto):
     assert 1e-4 < resid < 5e-2, (
         f'li relabelling residue {resid:.2e} left the band this test records; if the nesting '
         f'genuinely changed, docs/factorization-terms.md §6 needs the new numbers')
+
+
+# ------------------------------------------------- what a self-captured golden cannot claim
+#
+# `golden_legacy_factorization.npz` pins these builders against their own earlier output, so it
+# can say "unchanged" and nothing else. That is the exact condition under which a wrong sign
+# convention lived in the field golden for the whole rewrite (tests/data/gen_goldens_field.py
+# records it). The checks below are the other kind: they compare against a closed form, so they
+# would fail on a builder that had always been wrong.
+#
+# `test_dfs_coefficients_are_the_exact_ones` above is the same move, made earlier and for the
+# same reason -- it replaced a bit-parity check with the definition.
+
+@pytest.mark.parametrize('n', [1.0, 1.5, 2.7])
+@pytest.mark.parametrize('rule', ['dfs', 'cfs', 'nvf'])
+def test_a_uniform_cell_factorizes_to_exactly_eps_times_identity(rule, n):
+    """No structure, so every rule must collapse to the same scalar — exactly, not nearly.
+
+    A homogeneous layer has nothing to factorize: Li's rules, the normal-vector projector and
+    the direct rule all reduce to multiplication by ``eps``. There is no truncation to hide
+    behind either, so the target is ``0.0``, and the off-diagonal slots must be identically
+    zero rather than small.
+
+    This is the check that caught the patterned-anisotropic factorization in 2026-08-14: its
+    first arrangement passed energy conservation, rotation covariance *and* an external
+    comparison while being wrong by 0.5 on a uniform slab. Cheap structural checks with exact
+    answers catch what plausibility does not.
+    """
+    builder = {'dfs': core_dfs, 'cfs': core_cfs, 'nvf': core_nvf}[rule]
+    cell = np.full((1, 8, 8), n, dtype=complex)
+    eps = n ** 2
+
+    out = builder(cell, 3, 3)
+    epx, epy = np.asarray(out[0])[0], np.asarray(out[1])[0]
+    epz_i = np.asarray(out[-1])[0]
+    ff = epx.shape[0]
+    I = np.eye(ff)
+
+    assert np.max(np.abs(epx - eps * I)) == 0.0, np.max(np.abs(epx - eps * I))
+    assert np.max(np.abs(epy - eps * I)) == 0.0, np.max(np.abs(epy - eps * I))
+    # `epz_i` is the inverse of the zz block, so its closed form is 1/eps
+    assert np.max(np.abs(epz_i - I / eps)) == 0.0, np.max(np.abs(epz_i - I / eps))
+
+    if rule == 'nvf':                      # (epx, epy, epxy, epyx, epz_i)
+        for k in (2, 3):
+            off = np.asarray(out[k])[0]
+            assert np.max(np.abs(off)) == 0.0, f'slot {k} is not identically zero'
+
+
+@pytest.mark.parametrize('axis', ['x', 'y'])
+def test_the_normal_field_of_a_straight_interface_is_the_axis_normal(axis):
+    """One geometry where the normal field *does* have a closed form, so use it.
+
+    ``test_nvf_permittivity_inputs_are_the_exact_ones`` notes that the normal field "is a
+    continuous vector field sampled on a grid: no closed form replaces it". True in general —
+    and false for the cases that matter most cheaply. A grating whose only interfaces are
+    straight lines parallel to an axis has a normal pointing along the other axis *everywhere*,
+    so one component must vanish identically. That pins the orientation, which is the half of
+    the field a golden captured from the same builder can never arbitrate.
+
+    The x/y pair getting swapped is a live failure mode in this codebase --
+    ``wavebit/_core/lattice.py`` records that unpacking a period as ``(Py, Px)`` is "a mistake
+    nothing reacts to" -- and this is the cheapest statement of it that needs no solve.
+    """
+    cell = np.ones((1, 16, 16), dtype=complex)
+    if axis == 'x':                        # stripes varying along x -> normal is +-x_hat
+        cell[0, :, 6:11] = 2.5
+        vanishing, present = 1, 0
+    else:                                  # stripes varying along y -> normal is +-y_hat
+        cell[0, 6:11, :] = 2.5
+        vanishing, present = 0, 1
+
+    nf = np.asarray(normal_field_for_ucell(cell, 3, 3))[0]
+    assert np.max(np.abs(nf[vanishing])) == 0.0, (
+        f'the {"y" if vanishing else "x"} component must vanish for a {axis}-varying grating, '
+        f'got {np.max(np.abs(nf[vanishing])):.3e}')
+    assert np.max(np.abs(nf[present])) == pytest.approx(1.0, abs=1e-12)
