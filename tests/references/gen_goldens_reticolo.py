@@ -29,6 +29,15 @@ Setup notes, all of them things that cost an afternoon once:
   all 48 arrays **bit for bit**, so nothing in the checked-in data moved.
 * ``fto`` reaches RETICOLO as a scalar for the 1D branches; handing it the solver's
   ``[fto_x, fto_y]`` pair returns an empty efficiency list rather than an error.
+* **The polarisation is read from whichever spelling the case uses.** The pure cases declare
+  ``tetm='te'`` / ``'tm'`` and carry no ``psi``; the conical ones carry ``psi`` and no
+  ``tetm``. Selecting on ``psi`` alone -- which is what this did until 2026-08-15 -- returns
+  TM for *every* pure case, the five ``te_*`` included, so this generator could not reproduce
+  its own committed golden: rerunning it moved 20 arrays by up to 4.6e-1 and failed 17 tests
+  against numbers that had just been called the reference. ``R + T`` stayed exactly 1
+  throughout, so the guard below could not see it either -- solving the wrong polarisation of
+  a lossless stack is still a perfectly lossless answer. Verified by regenerating: with the
+  polarisation read correctly, all 72 arrays come back byte-identical to the committed file.
 * RETICOLO reports only propagating orders, in increasing order index. The order indices are
   recomputed here from the grating equation and checked against that count, so a silent
   disagreement about which orders propagate fails at generation time instead of becoming a
@@ -41,7 +50,7 @@ import sys
 import numpy as np
 
 HERE = pathlib.Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[2]))   # repo root, for `import wavebit`
+sys.path.insert(0, str(HERE.parents[1]))   # repo root, for `import wavebit`
 sys.path.insert(0, str(HERE))              # the bridge and the test module beside it
 
 # No default: where RETICOLO is installed is a property of the machine, not of this project,
@@ -85,7 +94,18 @@ def main():
         conical = kw.get('phi') is not None
         # RETICOLO's conical branch is driven by TE/TM incidence, which is what the solver's
         # psi = pi/2 and psi = 0 select; anything between has no counterpart to compare to.
-        pol = kw.get('pol', 0 if kw.get('psi', 0.0) > 0.1 else 1)
+        # The pure cases declare `tetm` instead and carry no `psi` at all, so reading `psi`
+        # alone silently returned TM for every one of them -- including the five `te_*`. That
+        # made this generator unable to reproduce its own committed golden: regenerating moved
+        # 20 arrays by up to 4.6e-1 while `R + T` stayed exactly 1, so energy conservation
+        # could not see it, and 17 tests failed against freshly generated "reference" numbers.
+        # The two spellings are read separately here; `tetm` is authoritative when present.
+        if 'pol' in kw:
+            pol = kw['pol']
+        elif 'tetm' in kw:
+            pol = 0 if kw['tetm'] == 'te' else 1
+        else:
+            pol = 0 if kw.get('psi', 0.0) > 0.1 else 1
 
         reti_kw = dict(period=kw['period'], fto=kw['fto'], ucell=kw['ucell'],
                        thickness=kw['thickness'], theta=kw['theta'],
