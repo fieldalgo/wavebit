@@ -344,6 +344,11 @@ def vacuum_sp_states(xp, kx, ky, ff, order=0):
     #   cast that used to sit above admitted it silently and returned the wrong state, and it
     #   disarmed the line below too: `theta = 0.2 + 0.9j` has a true `|kt| = 1.046` and the
     #   cast read it as 0.285.
+    #
+    #   The S4 field oracle added in `dacc134` does not close this either, and it is worth
+    #   saying so here because it now looks like it might: it excites propagating plane waves
+    #   only. Scoping a complex angle would still mean scoping it with no external check
+    #   behind it.
     if abs(kt.imag) > 1e-12 * max(abs(kt), 1.0):
         raise NotImplementedError(
             f'complex incidence angle (kt = {kt:.4g}): whether an order counts as evanescent is '
