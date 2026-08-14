@@ -224,7 +224,7 @@ def split_forward_backward(xp, M, ff):
     shipped path (``tests/test_formulation_dispatch.py``).
 
     The count check is the one thing that cannot be traced, so it runs only where the values
-    are concrete — the same eager-only rule :func:`fieldwave._core.backend.check_finite` and
+    are concrete — the same eager-only rule :func:`wavebit._core.backend.check_finite` and
     ``check_physical`` follow, and for the same reason. Under ``jit`` a degenerate layer
     therefore gets no complaint; see :func:`_forward_count`.
     """
@@ -259,7 +259,7 @@ def _forward_count(xp, key):
     narrowing one value; a jit tracer refuses both.
 
     Catching broadly rather than naming the exception keeps this backend-agnostic, which is the
-    same trade :func:`fieldwave._core.engine._concrete_period` makes two modules over.
+    same trade :func:`wavebit._core.engine._concrete_period` makes two modules over.
     """
     try:
         return int(xp.sum(key))

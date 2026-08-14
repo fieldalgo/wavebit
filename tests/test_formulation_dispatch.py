@@ -436,7 +436,7 @@ def test_the_degenerate_mode_guard_still_fires_where_it_can():
     Under ``jit`` there is nothing concrete to count and the guard is skipped — a real
     consequence of tracing, stated here rather than left to be discovered.
     """
-    from fieldwave._core.solve_2d_4ff import _forward_count, split_forward_backward
+    from wavebit._core.solve_2d_4ff import _forward_count, split_forward_backward
 
     with pytest.raises(ValueError, match='mode split found 4 forward modes'):
         split_forward_backward(np, np.eye(4, dtype=complex) * 1j, 1)
