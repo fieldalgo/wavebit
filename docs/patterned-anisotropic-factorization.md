@@ -177,7 +177,15 @@ strictly less evidence than that one had is not a trade worth taking.
 The uniform z-coupled case is unaffected and works — it goes to the 4ff solver,
 [`first-order-4ff.md`](first-order-4ff.md).
 
-## 7. Reaching it
+## 7. It serves `mu` too
+
+Unchanged, by the E/H duality: the rearrangement is about which quantities are continuous at an
+interface, and *tangential H with normal B* is *tangential E with normal D* under a rename. See
+[`magnetic-materials.md`](magnetic-materials.md) §7 for the wrapper and the two traps that are
+specific to the permeability side — the inverted slot order, and a layer whose two tensors have
+different boundaries and therefore need two normal fields.
+
+## 8. Reaching it
 
 `to_conv_mat_raster_pn(ucell_tensor, fto_x, fto_y)` takes `(n_layers, Ny, Nx, 3, 3)` and returns
 the five slots for the stack. Note it takes **eps, not a refractive index**: `n ** 2` is a scalar
@@ -212,7 +220,7 @@ Two ways to get this wrong, both silent: the slot order above is `(epx, epy, epz
 `to_conv_mat_raster_pn` has already applied. See
 [`off-diagonal-slot-convention.md`](off-diagonal-slot-convention.md).
 
-## 8. References
+## 9. References
 
 - M. Nevière and E. Popov, *Light Propagation in Periodic Media* (2003) — the rearrangement.
 - T. Schuster et al., "Normal vector method for convergence improvement using the RCWA for crossed

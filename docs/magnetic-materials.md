@@ -6,8 +6,9 @@ got the location right and the content wrong; §3 below is the difference.
 Target: `wavebit/_core/solve_2d.py` — `layer_modes_2d`, `solve_2d`;
 `wavebit/_core/scattering.py` — `smm_2d`.
 
-**Scope.** The **2D path** — layers (§1–§4) and half-spaces (§5). Neither the 1D/conical
-operators nor the first-order 4ff solve take a `mu`; both refuse rather than ignore.
+**Scope.** The **2D path** — layers (§1–§4), half-spaces (§5–§6), and patterned layers (§7).
+Neither the 1D/conical operators nor the first-order 4ff solve take a `mu`; both refuse rather
+than ignore.
 
 ---
 
@@ -185,7 +186,60 @@ the psi path returns `R + T = 1.575` with the incident s-flux left non-magnetic.
 backside swap survived everything too. With the psi and reciprocity tests added, 15 of 15
 mutants die.
 
-## 7. Reaching it
+## 7. Patterned `mu`
+
+**No new factorization was needed**, and that is the finding rather than a convenience.
+`pn_conv_matrices` — the Popov-Nevière rearrangement written for a patterned tensor `eps`
+([`patterned-anisotropic-factorization.md`](patterned-anisotropic-factorization.md)) — serves
+`mu` verbatim. The rearrangement is driven entirely by which quantities are continuous at an
+interface:
+
+```
+  tangential E and normal D    ->    tangential H and normal B
+```
+
+and the second line is the first with every symbol replaced. `D = eps E` becomes `B = mu H`, so
+`a = n.mu.n`, `p = mu n`, `q = mu^T n`, and every expression after them is unchanged. A separate
+derivation would have been the same derivation.
+
+What is genuinely new is two things that are easy to get wrong and quiet when you do.
+
+**The slot order is inverted between the two sides.** `pn_conv_matrices` returns
+`(x, y, xy, yx, z_i)`; `layer_modes_2d` takes `mu` as `(x, y, z_i, xy, yx)` — the inverted z slot
+is *third* there and *last* here. Passing one straight into the other puts `mu_zz^-1` where
+`mu_xy` belongs, which is a plausible magnetic layer rather than an error.
+`pn_mu_conv_matrices` exists to hold that reorder in one place.
+
+**A layer's two tensors may have different boundaries.** The rearrangement is written around
+*one* interface normal, so each tensor needs the normal field of its own boundary — a magnetic
+inclusion need not sit where the dielectric one does. Sharing the permittivity's field is the
+natural shortcut and passes every case where the two shapes coincide, which is most of them.
+`_fmmax_patterned_mu_cases.different_shapes` is the case that does not.
+
+(The normal field is read off `mu`'s in-plane trace. Reading `mu_zz` would give the *same*
+field for any tensor whose components share a boundary — `normal_vector_field` reads where the
+interface is, not what value sits either side — so a mutation of that line is equivalent, not
+uncovered. Measured at exactly 0.)
+
+### What checks it
+
+`golden_fmmax_patterned_mu.npz`, frozen before `mu` had a builder. Six cases, judged by
+convergence inside the band fmmax's two formulations leave (2.7e-5 to 1.3e-4); the solver lands
+7e-6 to 5e-5 from the nearer, on the **vector** side in five of six — which is the assertion that
+says the factorization reached the answer and not merely the code. A build feeding `mu` through
+the direct rule unfactorized conserves energy, stays inside the band, and sits on the `FFT` side.
+
+fmmax was gated on four questions first, the fourth being the duality: exchanging `eps` and `mu`
+must trade the s and p channels, which it obeys on patterned tensors to 3e-14.
+
+**One thing that is not true**, recorded because it is plausible enough to be re-asserted: the
+three formulations do **not** bracket each other. An earlier test demanded the solver sit
+componentwise between fmmax's two answers, on the reasoning that bracketing is the sharper
+claim; three of six cases sit just outside, near the vector answer but past it. Three
+formulations converging to one limit approach it from whatever side their own truncation puts
+them on.
+
+## 8. Reaching it
 
 `mu` is one keyword on `solve_for_conv`, taking the five stacks in the permittivity's convention:
 
@@ -199,11 +253,10 @@ expressible — the layers without it take the original arithmetic. `mux` / `muy
 identity and the other three to nothing.
 
 There is no `mu` on the `ucell` front door, exactly as there is none for a tensor `eps`: `ucell`
-is a scalar refractive index. A patterned magnetic layer would go through the same factorization
-machinery as a patterned tensor ([`patterned-anisotropic-factorization.md`](patterned-anisotropic-factorization.md)),
-which is untried on `mu` and unvalidated — nothing in the golden is patterned.
+is a scalar refractive index. A patterned magnetic layer goes through
+`to_conv_mat_raster_pn_mu`; see §7.
 
-## 8. What is not implemented, and why
+## 9. What is not implemented, and why
 
 **1D and conical paths.** No permeability slot in either operator. Refused, not ignored.
 
@@ -211,9 +264,9 @@ which is untried on `mu` and unvalidated — nothing in the golden is patterned.
 which has no `mu`. Both features work and the combination refuses, which is the point — landing
 on whichever path the dispatch picks and silently dropping the other input is the failure mode.
 
-**Patterned `mu`.** See §5.
 
-## 9. References
+
+## 10. References
 
 - fmmax's `eigensolve_general_anisotropic_media` — five `eps` and five `mu` components, no z row;
   the same 2ff tensor class this implements, which is why it can arbitrate this and not a

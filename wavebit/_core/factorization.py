@@ -814,6 +814,88 @@ def pn_conv_matrices(xp, eps33, nx, ny, fto_x, fto_y):
     return eps_xx, eps_yy, -eps_xy, -eps_yx, epz_i
 
 
+def pn_mu_conv_matrices(xp, mu33, nx, ny, fto_x, fto_y):
+    """The five **permeability** slots from a patterned ``mu`` tensor.
+
+    ``pn_conv_matrices`` verbatim, in the order :func:`~wavebit._core.solve_2d.layer_modes_2d`
+    takes ``mu``. That the same routine serves both is not a shortcut — it is the E/H duality
+    the whole magnetic implementation rests on. The rearrangement in :func:`_pn_fields` is
+    driven entirely by which quantities are continuous at an interface:
+
+        tangential E and normal D   ->   tangential H and normal B
+
+    and the second line is the first with every symbol replaced. ``D = eps E`` becomes
+    ``B = mu H``, so ``a = n.mu.n``, ``p = mu n``, ``q = mu^T n`` and every expression after
+    them is unchanged. A separate derivation for ``mu`` would be the same derivation.
+
+    **The reorder is the whole reason this exists as a function.** ``pn_conv_matrices`` returns
+    ``(x, y, xy, yx, z_i)`` and ``layer_modes_2d`` takes ``(x, y, z_i, xy, yx)`` — the inverted
+    z slot is *third* there and *last* here. Passing one through to the other unchanged puts
+    ``mu_zz^-1`` where ``mu_xy`` belongs, which is a plausible-looking magnetic layer rather
+    than an error.
+
+    ``nx`` / ``ny`` are the normal field of the **permeability's** boundary, which need not be
+    the permittivity's — see :func:`to_conv_mat_raster_pn_mu`.
+    """
+    mu_xx, mu_yy, mu_xy, mu_yx, mu_z_i = pn_conv_matrices(xp, mu33, nx, ny, fto_x, fto_y)
+    return mu_xx, mu_yy, mu_z_i, mu_xy, mu_yx
+
+
+def to_conv_mat_raster_pn_mu(ucell_tensor, fto_x, fto_y, normal_field=None, lattice=None):
+    """Per-layer permeability slots for a **tensor** ``mu`` raster — the ``mu`` twin of
+    :func:`to_conv_mat_raster_pn`.
+
+    Args:
+        ucell_tensor: ``(n_layers, Ny, Nx, 3, 3)`` permeability tensors per pixel.
+        fto_x, fto_y: Fourier truncation orders.
+        normal_field: optional per-layer ``(nx, ny)``. Left ``None`` it is computed from the
+            in-plane trace of **``mu``**, not of ``eps``. Reading ``mu_zz`` instead would give
+            the same field for any tensor whose components share a boundary — which is every
+            physical one — because :func:`normal_vector_field` reads where the interface *is*,
+            not what value sits either side (measured: identical to 0 for a uniaxial pillar,
+            and 2.0 apart only if ``mu_zz`` is patterned on a different shape, which this
+            single-field builder could not serve anyway). The in-plane trace is named because
+            it is the part the rearrangement is about, not because the other is wrong here.
+        lattice: cell basis, passed to :func:`normal_vector_field`.
+
+    Returns:
+        ``(mux, muy, muz_i, muxy, muyx)``, each ``(n_layers, ff_xy, ff_xy)`` — ready to hand to
+        ``solve_for_conv(..., mu=...)``.
+
+    **A layer's two tensors may have different boundaries**, and this is why the normal field is
+    read off ``mu`` here rather than shared with the permittivity build. A magnetic inclusion
+    need not sit where the dielectric one does; the rearrangement is written around *one*
+    interface normal, so each tensor gets the normal of its own. Reusing the permittivity's
+    field would be correct on every case where the two shapes coincide — which is most of them,
+    and is why ``tests/references/_fmmax_patterned_mu_cases.py`` carries a case where they do
+    not.
+    """
+    xp = array_namespace(ucell_tensor)
+
+    if ucell_tensor.shape[-2:] != (3, 3):
+        raise ValueError(
+            f'to_conv_mat_raster_pn_mu takes a permeability tensor per pixel, shaped '
+            f'(n_layers, Ny, Nx, 3, 3); got {tuple(ucell_tensor.shape)}.')
+
+    if normal_field is not None and len(normal_field) != ucell_tensor.shape[0]:
+        raise StaleGeometryError(
+            f'the frozen geometry no longer fits this structure: it holds a normal field for '
+            f'{len(normal_field)} layers and this one has {ucell_tensor.shape[0]}.')
+
+    out = [[], [], [], [], []]
+    for i in range(ucell_tensor.shape[0]):
+        mu33 = ucell_tensor[i]
+        if normal_field is None:
+            nx, ny = normal_vector_field(
+                0.5 * (mu33[..., 0, 0] + mu33[..., 1, 1]), lattice=lattice)
+        else:
+            nx, ny = normal_field[i]
+        for slot, mat in zip(out, pn_mu_conv_matrices(xp, mu33, nx, ny, fto_x, fto_y)):
+            slot.append(mat)
+
+    return tuple(xp.stack(slot) for slot in out)
+
+
 def to_conv_mat_raster_pn(ucell_tensor, fto_x, fto_y, normal_field=None, lattice=None):
     """Per-layer Popov-Neviere convolution matrices for a **tensor** raster.
 
