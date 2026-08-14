@@ -56,7 +56,7 @@ import pathlib
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 
 # Tight enough that no defect hides under it, loose enough to ignore float reassociation.
 TOL = 1e-12
@@ -109,7 +109,7 @@ CASES = {
 def _run(name):
     kw = dict(CASES[name])
     kw['ucell'] = np.asarray(kw['ucell'], dtype=float)
-    solver = fieldwave.rcwa(backend=0, **kw)
+    solver = wavebit.rcwa(backend=0, **kw)
     return solver, solver.conv_solve()
 
 
@@ -196,7 +196,7 @@ def test_jax_and_torch_match_the_same_golden(name, backend):
     pytest.importorskip('jax' if backend == 1 else 'torch')
     kw = dict(CASES[name])
     kw['ucell'] = np.asarray(kw['ucell'], dtype=float)
-    result = fieldwave.rcwa(backend=backend, **kw).conv_solve()
+    result = wavebit.rcwa(backend=backend, **kw).conv_solve()
 
     for sub in ('res', 'res_te_inc', 'res_tm_inc'):
         got_sub = getattr(result, sub)

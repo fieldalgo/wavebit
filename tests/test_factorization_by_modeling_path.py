@@ -27,8 +27,8 @@ Both halves are pinned below: the refusals, and the silence that must not come b
 import numpy as np
 import pytest
 
-import fieldwave
-from fieldwave._core.enums import Factorization
+import wavebit
+from wavebit._core.enums import Factorization
 
 KW = dict(backend=0, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
           fto=[4, 4], period=[1.0, 1.0], wavelength=1.1, thickness=[0.3])
@@ -58,7 +58,7 @@ UNAVAILABLE = {'smooth': 'li', 'block': 'nvf'}
 
 
 def solver(path, **strategy):
-    return fieldwave.rcwa(ucell=UCELLS[path], **KW, **strategy)
+    return wavebit.rcwa(ucell=UCELLS[path], **KW, **strategy)
 
 
 def totals(path, **strategy):
@@ -149,7 +149,7 @@ def test_a_request_is_refused_however_it_is_spelled(spelling):
     wrong reason -- or, written straight onto the private attribute, silently substitute.
     """
     with pytest.raises(NotImplementedError, match="factorization='li'"):
-        fieldwave.rcwa(ucell=SMOOTH, factorization=spelling, **KW).conv_solve()
+        wavebit.rcwa(ucell=SMOOTH, factorization=spelling, **KW).conv_solve()
 
 
 #: How each refusal is expected to name the rule the path *does* use. Matched as a phrase
@@ -175,11 +175,11 @@ PAINTED_OVERLAP = [{'n_base': 1.0, 'combine': 'paint', 'shapes': [
 
 def test_the_boundary_sub_path_is_classified_and_refused_like_the_rest_of_smooth():
     """The polygon route is the same path by every tell that matters, so it must refuse alike."""
-    s = fieldwave.rcwa(ucell=PAINTED_OVERLAP, **KW)
+    s = wavebit.rcwa(ucell=PAINTED_OVERLAP, **KW)
     assert s.factorization == 'nvf'
     assert sum(m is not None for m in s._conv_matrices()) == 5
     with pytest.raises(NotImplementedError, match="factorization='li'"):
-        fieldwave.rcwa(ucell=PAINTED_OVERLAP, factorization='li', **KW).conv_solve()
+        wavebit.rcwa(ucell=PAINTED_OVERLAP, factorization='li', **KW).conv_solve()
 
 
 def test_the_smooth_refusal_names_the_route_the_refused_layer_actually_takes():
@@ -190,7 +190,7 @@ def test_the_smooth_refusal_names_the_route_the_refused_layer_actually_takes():
     run. Nothing but a test keeps message text honest, hence this one.
     """
     with pytest.raises(NotImplementedError, match='to_conv_mat_boundary_layer'):
-        fieldwave.rcwa(ucell=PAINTED_OVERLAP, factorization='li', **KW).conv_solve()
+        wavebit.rcwa(ucell=PAINTED_OVERLAP, factorization='li', **KW).conv_solve()
     with pytest.raises(NotImplementedError, match='to_conv_mat_smooth_nvf'):
         totals('smooth', factorization='li')
 
@@ -241,7 +241,7 @@ def test_the_refusal_holds_on_every_backend(name, code, path, rule):
     one of the three had grown its own copy."""
     pytest.importorskip(name)
     with pytest.raises(NotImplementedError):
-        fieldwave.rcwa(ucell=UCELLS[path], **dict(KW, backend=code),
+        wavebit.rcwa(ucell=UCELLS[path], **dict(KW, backend=code),
                        factorization=rule).conv_solve()
 
 
@@ -256,8 +256,8 @@ def test_a_skewed_smooth_cell_no_longer_has_to_spell_out_nvf():
     and every skewed smooth-path run had to pass ``factorization='nvf'`` to talk it down.
     """
     hexagonal = np.array([[1.0, 0.5], [0.0, np.sqrt(3) / 2]])
-    default = fieldwave.rcwa(ucell=SMOOTH, lattice=hexagonal, **KW)
-    spelled_out = fieldwave.rcwa(ucell=SMOOTH, lattice=hexagonal, factorization='nvf', **KW)
+    default = wavebit.rcwa(ucell=SMOOTH, lattice=hexagonal, **KW)
+    spelled_out = wavebit.rcwa(ucell=SMOOTH, lattice=hexagonal, factorization='nvf', **KW)
     assert default.factorization == 'nvf'
     assert (float(np.sum(default.conv_solve().T)) ==
             float(np.sum(spelled_out.conv_solve().T)))
@@ -267,7 +267,7 @@ def test_a_skewed_raster_cell_still_refuses_li():
     """The neighbouring refusal is untouched: on a raster, ``'li'`` really is the rule asked for."""
     hexagonal = np.array([[1.0, 0.5], [0.0, np.sqrt(3) / 2]])
     with pytest.raises(NotImplementedError, match="factorization='nvf'"):
-        fieldwave.rcwa(ucell=RASTER, lattice=hexagonal, **KW).conv_solve()
+        wavebit.rcwa(ucell=RASTER, lattice=hexagonal, **KW).conv_solve()
 
 
 def test_a_skewed_block_cell_reports_the_lattice_first_not_the_keyword():
@@ -282,7 +282,7 @@ def test_a_skewed_block_cell_reports_the_lattice_first_not_the_keyword():
     """
     hexagonal = np.array([[1.0, 0.5], [0.0, np.sqrt(3) / 2]])
     with pytest.raises(NotImplementedError, match='block modeler'):
-        fieldwave.rcwa(ucell=BLOCK, lattice=hexagonal, factorization='nvf', **KW).conv_solve()
+        wavebit.rcwa(ucell=BLOCK, lattice=hexagonal, factorization='nvf', **KW).conv_solve()
 
 
 def test_freezing_gives_the_same_diagnosis_the_solve_would():
@@ -294,7 +294,7 @@ def test_freezing_gives_the_same_diagnosis_the_solve_would():
     ``ucell`` if it solved — for one structure that has to change its ``ucell`` either way.
     """
     hexagonal = np.array([[1.0, 0.5], [0.0, np.sqrt(3) / 2]])
-    s = fieldwave.rcwa(ucell=BLOCK, lattice=hexagonal, factorization='nvf', **KW)
+    s = wavebit.rcwa(ucell=BLOCK, lattice=hexagonal, factorization='nvf', **KW)
     with pytest.raises(NotImplementedError, match='block modeler') as frozen:
         s.freeze_geometry()
     with pytest.raises(NotImplementedError, match='block modeler') as solved:
@@ -319,24 +319,24 @@ def test_a_spec_that_does_not_mention_factorization_does_not_request_one():
     would hand every spec an explicit request it never made — and a spec carrying smooth-path
     layers would be refused for asking for a rule its author never named.
     """
-    from fieldwave._core.spec import Numerics
+    from wavebit._core.spec import Numerics
     assert Numerics().factorization is None
     assert 'factorization' not in Numerics().as_kwargs()
     assert Numerics.from_dict(Numerics().to_dict()).factorization is None
 
-    result = fieldwave.run(SPEC)
+    result = wavebit.run(SPEC)
     assert float(np.sum(np.asarray(result.T))) == totals('smooth')[1]
 
 
 def test_a_spec_that_does_mention_it_is_refused_like_any_other_request():
     numerics = dict(SPEC['numerics'], factorization='li')
     with pytest.raises(NotImplementedError, match="factorization='li'"):
-        fieldwave.run({**SPEC, 'numerics': numerics})
+        wavebit.run({**SPEC, 'numerics': numerics})
 
 
 def test_a_spec_may_still_name_the_rule_its_path_does_implement():
-    from fieldwave._core.spec import Numerics
+    from wavebit._core.spec import Numerics
     assert Numerics.from_dict({'factorization': 'nvf'}).factorization is Factorization.NVF
     numerics = dict(SPEC['numerics'], factorization='nvf')
-    assert (float(np.sum(np.asarray(fieldwave.run({**SPEC, 'numerics': numerics}).T))) ==
+    assert (float(np.sum(np.asarray(wavebit.run({**SPEC, 'numerics': numerics}).T))) ==
             totals('smooth')[1])

@@ -37,18 +37,18 @@ which of them is called the limit. Write-up: ``docs/boundary-modeling.md``.
 
 Runs in about 20 minutes on a laptop. From the repo root::
 
-    conda run -n fieldwave python studies/benchmark_boundary_normal_field.py
+    conda run -n wavebit python studies/benchmark_boundary_normal_field.py
 """
 import pathlib
 import time
 
 import numpy as np
 
-import fieldwave
-from fieldwave._core import analytic as _analytic
-from fieldwave._core import boundary as _boundary
-from fieldwave._core import clipper as _clipper
-from fieldwave._core.geometry import StaticGeometry
+import wavebit
+from wavebit._core import analytic as _analytic
+from wavebit._core import boundary as _boundary
+from wavebit._core import clipper as _clipper
+from wavebit._core.geometry import StaticGeometry
 
 RESULTS = pathlib.Path(__file__).resolve().parent / 'results'
 
@@ -113,7 +113,7 @@ def geometries(ucell):
 
 
 def total_reflectance(build, geometry, cx, fto, backend=0):
-    solver = fieldwave.rcwa(backend=backend, ucell=build(cx), fto=[fto, fto],
+    solver = wavebit.rcwa(backend=backend, ucell=build(cx), fto=[fto, fto],
                             normal_grid=NORMAL_GRID, **CFG)
     result = solver.conv_solve(geometry=geometry)
     if backend == 1:

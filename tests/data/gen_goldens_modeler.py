@@ -1,6 +1,6 @@
 """Freeze the legacy block modeler's output as reference data.
 
-Run while fieldwave/on_numpy/modeler/modeling.py still exists.
+Run while wavebit/on_numpy/modeler/modeling.py still exists.
 
 The two ``ellipse`` entries it writes are kept for the record but are no longer asserted
 against: the legacy ellipse decomposition did not converge under refinement, so
@@ -11,7 +11,7 @@ import pathlib
 
 import numpy as np
 
-import fieldwave
+import wavebit
 
 PERIOD = [300.0, 300.0]
 SI, SIO2, SI3N4 = 3.638751670074983, 1.4518, 2.0056
@@ -27,7 +27,7 @@ INSTRUCTIONS = {
 
 out = {}
 for name, instr in INSTRUCTIONS.items():
-    solver = fieldwave.rcwa(backend=0, period=PERIOD, thickness=[205.0, 100.0], fto=[3, 3],
+    solver = wavebit.rcwa(backend=0, period=PERIOD, thickness=[205.0, 100.0], fto=[3, 3],
                           n_top=1.0, n_bot=1.0, wavelength=900.0, psi=np.pi / 4, ucell=instr)
     info = solver.modeling_block_instruction(solver.ucell)
     out[f'{name}__n_layers'] = np.array(len(info))
@@ -40,7 +40,7 @@ for name, instr in INSTRUCTIONS.items():
     out[f'{name}__de_ti'] = np.asarray(res.res.T)
 
 # rectangle_no_approximation / draw, exercised by test_fixes
-solver = fieldwave.rcwa(backend=0, period=[1000.0, 1000.0], thickness=[100.0], fto=[2, 2],
+solver = wavebit.rcwa(backend=0, period=[1000.0, 1000.0], thickness=[100.0], fto=[2, 2],
                       wavelength=900.0, ucell=[[1.0, []]])
 elem = solver.modeler.rectangle_no_approximation(cx=500, cy=500, lx=200, ly=200, base=2.0)
 drawn = solver.modeler.draw([[1.0, elem]])

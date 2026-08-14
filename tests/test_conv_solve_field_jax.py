@@ -14,7 +14,7 @@ key silently became a tracer and every caller of this method died on the first `
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 
 RNG = np.random.default_rng(0)
 UCELL_1D = RNG.uniform(1.0, 4.0, (1, 1, 8))
@@ -33,7 +33,7 @@ CASES = {
 
 def _solver(backend, case, **extra):
     kwargs, _ = CASES[case]
-    return fieldwave.rcwa(backend=backend, **BASE, **kwargs, **extra)
+    return wavebit.rcwa(backend=backend, **BASE, **kwargs, **extra)
 
 
 def _res(case):
@@ -136,7 +136,7 @@ def test_a_freeze_recompiles_only_when_its_content_moves():
     well defined nor hashable — so this pins both halves.
     """
     import jax
-    from fieldwave.on_jax.emsolver.rcwa import RCWAJax
+    from wavebit.on_jax.emsolver.rcwa import RCWAJax
 
     jax.clear_caches()
     solver = _solver(1, '1d_conical')          # ('sampled', 'li'): records nothing at all

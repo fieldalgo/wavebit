@@ -22,7 +22,7 @@ import importlib
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 
 RASTER = np.ones((1, 8, 8))
 RASTER[0, 2:6, 2:6] = 3.0
@@ -37,7 +37,7 @@ ANALYTIC_BASE = dict(period=[0.77, 0.77], thickness=[0.25], theta=0.35, phi=0.4,
 def _frozen_raster():
     global FROZEN
     if FROZEN is None:
-        FROZEN = fieldwave.rcwa(backend=0, ucell=RASTER, **BASE).freeze_geometry()
+        FROZEN = wavebit.rcwa(backend=0, ucell=RASTER, **BASE).freeze_geometry()
     return FROZEN
 
 
@@ -50,7 +50,7 @@ VECTOR_BASE = dict(period=[300.0, 300.0], thickness=[205.0], theta=0.1, fto=[3, 
 def _backend(name):
     pytest.importorskip(name)
     if name == 'jax':
-        importlib.import_module('fieldwave.on_jax')       # enables x64
+        importlib.import_module('wavebit.on_jax')       # enables x64
         import jax.numpy as jnp
         return 1, (lambda v: jnp.asarray(v, dtype=jnp.float64))
     import torch
@@ -112,7 +112,7 @@ def test_raster_scalar_gradients(param, name):
             cfg['period'] = [p, cast(0.77)]
         else:
             cfg[param] = p
-        solver = fieldwave.rcwa(backend=backend, ucell=cast(RASTER), **cfg)
+        solver = wavebit.rcwa(backend=backend, ucell=cast(RASTER), **cfg)
         # No frozen geometry: the default ('sampled', 'li') build has no discrete decision to
         # take, so it traces as is. It used to need one, for a same-material check that no
         # longer exists.
@@ -140,12 +140,12 @@ def test_raster_per_cell_gradient_reaches_every_cell(name):
         if backend == 2:
             import torch
             uc = torch.tensor(RASTER, dtype=torch.float64, requires_grad=True)
-            res = fieldwave.rcwa(backend=2, ucell=uc, **strategy,
+            res = wavebit.rcwa(backend=2, ucell=uc, **strategy,
                                  **BASE).conv_solve(geometry=geometry)
             torch.sum(res.T).backward()
             return int((uc.grad.abs() > 1e-14).sum())
         import jax, jax.numpy as jnp
-        g = jax.grad(lambda u: jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **strategy,
+        g = jax.grad(lambda u: jnp.sum(wavebit.rcwa(backend=1, ucell=u, **strategy,
                      **BASE).conv_solve(geometry=geometry).T).real)
         return int(np.sum(np.abs(np.asarray(g(jnp.asarray(RASTER)))) > 1e-14))
 
@@ -153,7 +153,7 @@ def test_raster_per_cell_gradient_reaches_every_cell(name):
     assert cells() == RASTER.size
 
     integrated = dict(fourier_coefficients='integrated')
-    solver = fieldwave.rcwa(backend=backend, ucell=cast(RASTER), **integrated, **BASE)
+    solver = wavebit.rcwa(backend=backend, ucell=cast(RASTER), **integrated, **BASE)
     assert cells(solver.freeze_geometry(), **integrated) < RASTER.size
 
 
@@ -178,7 +178,7 @@ def test_analytic_shape_gradients(param, name):
             shape[param] = p
         else:
             cfg[param] = p
-        res = fieldwave.rcwa(backend=backend, ucell=[dict(n_base=n_base, shapes=[shape])],
+        res = wavebit.rcwa(backend=backend, ucell=[dict(n_base=n_base, shapes=[shape])],
                              **cfg).conv_solve()
         return res.R.sum()
 
@@ -200,7 +200,7 @@ def test_vector_edge_gradients(param, index, start, name):
     def objective(p):
         rect = ['rectangle', cast(150.0), cast(150.0), cast(80.0), cast(60.0), 2.0, cast(0.4)]
         rect[index] = p
-        res = fieldwave.rcwa(backend=backend, ucell=[[3.5, [rect]]], **VECTOR_BASE).conv_solve()
+        res = wavebit.rcwa(backend=backend, ucell=[[3.5, [rect]]], **VECTOR_BASE).conv_solve()
         return res.T.sum()
 
     auto, fd = _derivative(backend, objective, start)
@@ -224,7 +224,7 @@ def test_rectangle_is_built_the_same_way_on_both_sides_of_zero_angle():
     is now identical rather than merely close, and on the unrotated case still sitting between
     them.
     """
-    m = fieldwave.rcwa(backend=0, period=[300.0, 300.0]).modeler
+    m = wavebit.rcwa(backend=0, period=[300.0, 300.0]).modeler
     blocks = [m.rectangle(150.0, 150.0, 80.0, 60.0, 2.0, a) for a in (-1e-6, 0.0, 1e-6)]
     f = lambda v: float(np.real(np.asarray(v).reshape(-1)[0]))
 
@@ -265,7 +265,7 @@ def test_analytic_angle_is_smooth_through_normal():
     def analytic(angle):
         shape = dict(type='rectangle', cx=150.0, cy=150.0, lx=80.0, ly=60.0,
                      angle=angle, n_index=2.0)
-        res = fieldwave.rcwa(backend=0, ucell=[dict(n_base=3.5, shapes=[shape])],
+        res = wavebit.rcwa(backend=0, ucell=[dict(n_base=3.5, shapes=[shape])],
                              **base).conv_solve()
         return float(np.sum(res.T))
 
@@ -282,19 +282,19 @@ def test_translation_leaves_nothing_behind_within_one_normal_field_cell():
     sampled at the shape's place, so its cell size set a noise floor under every shape gradient
     on this path — 5e-4 at ``normal_grid=256``, which is why the default rose to 1024.
     A lone shape's field is now translated by a phase instead
-    (:func:`fieldwave._core.analytic.normal_projector_coeffs`) and the floor is gone: this reads
+    (:func:`wavebit._core.analytic.normal_projector_coeffs`) and the floor is gone: this reads
     5.8e-13, and ``test_shape_position_gradients`` is where the full statement lives. The bound
     stays loose here because the sweep no longer probes anything that varies.
     """
     base = dict(period=[300.0, 300.0], thickness=[205.0], fto=[5, 5], n_top=1.0, n_bot=1.0,
                 wavelength=900.0, psi=np.pi / 4, theta=0.1, phi=0.3)
-    solver = fieldwave.rcwa(backend=0, period=[300.0, 300.0])
+    solver = wavebit.rcwa(backend=0, period=[300.0, 300.0])
     cell = 300.0 / solver.normal_grid
 
     def total(cx):
         shape = dict(type='rectangle', cx=cx, cy=150.0, lx=80.0, ly=60.0,
                      angle=0.4, n_index=2.0)
-        return float(np.sum(fieldwave.rcwa(backend=0, ucell=[dict(n_base=3.5, shapes=[shape])],
+        return float(np.sum(wavebit.rcwa(backend=0, ucell=[dict(n_base=3.5, shapes=[shape])],
                                            **base).conv_solve().T))
 
     values = [total(150.0 + f * cell) for f in (0.05, 0.35, 0.65, 0.95)]

@@ -25,10 +25,10 @@ import pytest
 os.environ.setdefault('JAX_ENABLE_X64', '1')
 
 import array_api_compat.numpy as xnp
-import fieldwave
-from fieldwave._core import boundary as _b
-from fieldwave._core import clipper as _c
-from fieldwave._core.polygon import polygon_ft, polygon_area, rect_verts, ellipse_verts
+import wavebit
+from wavebit._core import boundary as _b
+from wavebit._core import clipper as _c
+from wavebit._core.polygon import polygon_ft, polygon_area, rect_verts, ellipse_verts
 
 PERIOD = (1.0, 1.0)
 
@@ -239,7 +239,7 @@ def test_permittivity_matches_the_analytic_path_for_one_shape(fto):
     (measured 4.8e-3 flat over fto 4..12), so requiring them to agree would be requiring one
     extension to be the other.
     """
-    from fieldwave._core.analytic import to_conv_mat_smooth_nvf
+    from wavebit._core.analytic import to_conv_mat_smooth_nvf
     shape = dict(type='rectangle', cx=0.5, cy=0.5, lx=0.42, ly=0.31, angle=0.4, n_index=2.0)
     ng = 1024
     (mine, _) = _mats(xnp, [(0.5, 0.5, 0.42, 0.31, 0.4, 2.0)], fto=fto, ng=ng)
@@ -330,7 +330,7 @@ def test_shape_vertices_reads_the_dict_like_the_transform(shape, spelt_out):
     ``rectangle``): a round type has one length, so the form that states two *is* the other
     type. Only the geometry is compared, not the name.
     """
-    from fieldwave._core.analytic import shape_geometry
+    from wavebit._core.analytic import shape_geometry
     assert shape_geometry(shape, *PERIOD)[1:] == shape_geometry(spelt_out, *PERIOD)[1:]
     a = np.asarray(_b.shape_vertices(xnp, shape, PERIOD), float)
     b = np.asarray(_b.shape_vertices(xnp, spelt_out, PERIOD), float)
@@ -355,8 +355,8 @@ def test_a_circle_without_ly_is_the_same_circle_on_both_paths(fto):
     asserts the two paths **agree**, not that the location is right -- there is one default, so
     correcting it later moves both paths together, which is the property worth pinning.
     """
-    from fieldwave._core.analytic import to_conv_mat_smooth_nvf
-    from fieldwave._core.lattice import as_lattice, periods_of
+    from wavebit._core.analytic import to_conv_mat_smooth_nvf
+    from wavebit._core.lattice import as_lattice, periods_of
     ng = 1024
     for name, lat in (('square', None), ('skew', as_lattice(lattice=[[1.0, 0.3], [0.0, 1.0]]))):
         shape = CIRCLE_NO_LY if lat is None else dict(type='circle', lx=0.34, n_index=2.4)
@@ -375,11 +375,11 @@ def test_a_circle_without_ly_is_the_same_circle_on_both_paths(fto):
 
 # --------------------------------------------------------------------------- wiring
 def _solve(ucell, fto=6, **over):
-    import fieldwave
+    import wavebit
     cfg = dict(backend=0, fto=(fto, fto), period=PERIOD, thickness=(0.6,), wavelength=1.6,
                n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2)
     cfg.update(over)
-    return fieldwave.rcwa(ucell=ucell, **cfg)
+    return wavebit.rcwa(ucell=ucell, **cfg)
 
 
 PAINT_SHAPES = [dict(type='rectangle', cx=0.40, cy=0.40, lx=0.34, ly=0.34, angle=0.0,
@@ -498,7 +498,7 @@ _PAINT_CFG = dict(period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), fto=(4,
 
 
 def _painted_total(backend, w, curved=False, geometry=None):
-    solver = fieldwave.rcwa(backend=backend, ucell=_two_painted(w, curved), **_PAINT_CFG)
+    solver = wavebit.rcwa(backend=backend, ucell=_two_painted(w, curved), **_PAINT_CFG)
     res = solver.conv_solve() if geometry is None else solver.conv_solve(geometry=geometry)
     t = res.T
     return float(np.sum(np.asarray(t.detach() if hasattr(t, 'detach') else t)).real)
@@ -569,7 +569,7 @@ def test_freezing_a_painted_layer_works_on_torch():
     """
     torch = pytest.importorskip('torch')
     ucell = _two_painted(lambda v: torch.tensor(v, dtype=torch.float64))
-    solver = fieldwave.rcwa(backend=2, ucell=ucell, **_PAINT_CFG)
+    solver = wavebit.rcwa(backend=2, ucell=ucell, **_PAINT_CFG)
     frozen = solver.freeze_geometry()
     total = float(np.sum(np.asarray(solver.conv_solve(geometry=frozen).T.detach())).real)
     assert total == pytest.approx(_painted_total(0, float), abs=1e-12)
@@ -605,7 +605,7 @@ def test_a_traced_painted_layer_is_refused_without_a_frozen_geometry():
             dict(fixed)])]
 
     def total(v, geometry=None):
-        solver = fieldwave.rcwa(backend=1, ucell=ucell(v), **cfg)
+        solver = wavebit.rcwa(backend=1, ucell=ucell(v), **cfg)
         res = solver.conv_solve() if geometry is None else solver.conv_solve(geometry=geometry)
         return jnp.sum(res.T).real
 
@@ -614,13 +614,13 @@ def test_a_traced_painted_layer_is_refused_without_a_frozen_geometry():
 
     # and the documented route works, and agrees with central differences on the *painted*
     # structure rather than on the summed one
-    frozen = fieldwave.rcwa(backend=0, ucell=ucell(0.34), **cfg).freeze_geometry()
+    frozen = wavebit.rcwa(backend=0, ucell=ucell(0.34), **cfg).freeze_geometry()
     analytic = float(jax.grad(lambda v: total(v, frozen))(jnp.asarray(0.34)))
     h = 1e-4
     plus = float(np.sum(np.asarray(
-        fieldwave.rcwa(backend=0, ucell=ucell(0.34 + h), **cfg).conv_solve().T)).real)
+        wavebit.rcwa(backend=0, ucell=ucell(0.34 + h), **cfg).conv_solve().T)).real)
     minus = float(np.sum(np.asarray(
-        fieldwave.rcwa(backend=0, ucell=ucell(0.34 - h), **cfg).conv_solve().T)).real)
+        wavebit.rcwa(backend=0, ucell=ucell(0.34 - h), **cfg).conv_solve().T)).real)
     assert analytic == pytest.approx((plus - minus) / (2 * h), rel=2e-3)
 
 
@@ -636,7 +636,7 @@ def test_a_traced_summed_layer_is_not_refused():
             dict(type='rectangle', cx=0.46, cy=0.5, lx=v, ly=0.26, angle=0.3, n_index=3.48),
             dict(type='rectangle', cx=0.70, cy=0.62, lx=0.26, ly=0.30, angle=0.0,
                  n_index=2.1)])]
-        return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **cfg).conv_solve().T).real
+        return jnp.sum(wavebit.rcwa(backend=1, ucell=u, **cfg).conv_solve().T).real
 
     assert np.isfinite(float(jax.grad(total)(jnp.asarray(0.34))))
 
@@ -667,17 +667,17 @@ def test_a_frozen_geometry_answers_the_overlap_question_for_every_layer():
 
     # the rods meet at cx = 0.44: 0.44 + 0.13 == 0.70 - 0.13
     for cx, overlapping in ((0.42, False), (0.46, True)):
-        frozen = fieldwave.rcwa(backend=0, ucell=ucell(cx), **cfg).freeze_geometry()
+        frozen = wavebit.rcwa(backend=0, ucell=ucell(cx), **cfg).freeze_geometry()
         assert frozen.boundary_plans is not None, cx
         assert (frozen.boundary_plans[0] is not None) is overlapping, cx
 
         def total(v):
-            return jnp.sum(fieldwave.rcwa(backend=1, ucell=ucell(v), **cfg)
+            return jnp.sum(wavebit.rcwa(backend=1, ucell=ucell(v), **cfg)
                            .conv_solve(geometry=frozen).T).real
 
         analytic = float(jax.grad(total)(jnp.asarray(cx)))
         h = 1e-4
         step = [float(np.sum(np.asarray(
-            fieldwave.rcwa(backend=0, ucell=ucell(cx + s * h), **cfg).conv_solve().T)).real)
+            wavebit.rcwa(backend=0, ucell=ucell(cx + s * h), **cfg).conv_solve().T)).real)
             for s in (1, -1)]
         assert analytic == pytest.approx((step[0] - step[1]) / (2 * h), rel=3e-2), cx

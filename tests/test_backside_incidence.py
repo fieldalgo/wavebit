@@ -32,7 +32,7 @@ amplitudes, absorbing media, fields, and the SMM.
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 
 from test_lossy_media import analytic_r, analytic_t
 
@@ -68,11 +68,11 @@ def _solver(ns, ds, theta, tetm, path, algo, side):
     common = dict(backend=0, connecting_algo=algo, n_top=ns[0], n_bot=ns[-1], theta=theta,
                   wavelength=WL, thickness=ds, incidence_side=side)
     if path == '1d':
-        return fieldwave.rcwa(tetm=tetm, fto=0, period=[WL * 2],
+        return wavebit.rcwa(tetm=tetm, fto=0, period=[WL * 2],
                               ucell=np.array([[[n, n]] for n in layers]), **common)
     cell = ([[[n, n]] for n in layers] if path == 'conical'
             else [[[n, n], [n, n]] for n in layers])
-    return fieldwave.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0),
+    return wavebit.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0),
                           fto=[0, 0] if path == '2d' else 0,
                           period=[WL * 2, WL * 2], ucell=np.array(cell), **common)
 
@@ -164,7 +164,7 @@ def test_grating_transmittance_is_reciprocal_per_order(tetm):
     fto = kw['fto']
 
     def T00(side, theta):
-        res = fieldwave.rcwa(tetm=tetm, theta=theta, incidence_side=side, **kw).conv_solve()
+        res = wavebit.rcwa(tetm=tetm, theta=theta, incidence_side=side, **kw).conv_solve()
         return float(np.asarray(res.T).ravel()[fto])
 
     assert T00('top', 0.0) == pytest.approx(T00('bottom', 0.0), abs=1e-12)
@@ -173,8 +173,8 @@ def test_grating_transmittance_is_reciprocal_per_order(tetm):
     th_b = float(np.arcsin(np.sin(th) * kw['n_top'] / kw['n_bot']))
     assert T00('top', th) == pytest.approx(T00('bottom', -th_b), abs=1e-12)
 
-    res_t = fieldwave.rcwa(tetm=tetm, theta=0.0, incidence_side='top', **kw).conv_solve()
-    res_b = fieldwave.rcwa(tetm=tetm, theta=0.0, incidence_side='bottom', **kw).conv_solve()
+    res_t = wavebit.rcwa(tetm=tetm, theta=0.0, incidence_side='top', **kw).conv_solve()
+    res_b = wavebit.rcwa(tetm=tetm, theta=0.0, incidence_side='bottom', **kw).conv_solve()
     dR00 = abs(float(np.asarray(res_t.R).ravel()[fto])
                - float(np.asarray(res_b.R).ravel()[fto]))
     assert dR00 > 1e-2, 'an asymmetric grating must reflect differently per side'
@@ -192,9 +192,9 @@ def test_backside_etm_and_smm_agree_per_order(tetm):
     this holds the floating-point realizations to 1e-12 on a stack with diffraction, loss
     and oblique incidence in play at once.
     """
-    a = fieldwave.rcwa(connecting_algo='ETM', tetm=tetm, theta=0.3,
+    a = wavebit.rcwa(connecting_algo='ETM', tetm=tetm, theta=0.3,
                        incidence_side='bottom', **GRATING_KW).conv_solve()
-    b = fieldwave.rcwa(connecting_algo='SMM', tetm=tetm, theta=0.3,
+    b = wavebit.rcwa(connecting_algo='SMM', tetm=tetm, theta=0.3,
                        incidence_side='bottom', **GRATING_KW).conv_solve()
     assert np.abs(np.asarray(a.R) - np.asarray(b.R)).max() < 1e-12
     assert np.abs(np.asarray(a.T) - np.asarray(b.T)).max() < 1e-12
@@ -203,9 +203,9 @@ def test_backside_etm_and_smm_agree_per_order(tetm):
 
 
 def test_backside_etm_and_smm_agree_on_the_conical_path():
-    a = fieldwave.rcwa(connecting_algo='ETM', psi=0.7, phi=0.3, theta=0.25,
+    a = wavebit.rcwa(connecting_algo='ETM', psi=0.7, phi=0.3, theta=0.25,
                        incidence_side='bottom', **GRATING_KW).conv_solve()
-    b = fieldwave.rcwa(connecting_algo='SMM', psi=0.7, phi=0.3, theta=0.25,
+    b = wavebit.rcwa(connecting_algo='SMM', psi=0.7, phi=0.3, theta=0.25,
                        incidence_side='bottom', **GRATING_KW).conv_solve()
     assert np.abs(np.asarray(a.R) - np.asarray(b.R)).max() < 1e-12
     assert np.abs(np.asarray(a.T) - np.asarray(b.T)).max() < 1e-12
@@ -224,12 +224,12 @@ def test_field_cell_comes_back_in_scene_coordinates(algo):
     backside field-state recovery, which shares no code with its efficiency read.
     """
     kw = dict(GRATING_KW, connecting_algo=algo, tetm='te', theta=0.3)
-    s_b = fieldwave.rcwa(incidence_side='bottom', **kw)
+    s_b = wavebit.rcwa(incidence_side='bottom', **kw)
     _, cell_b = s_b.conv_solve_field(res_x=16, res_z=8)
 
     kw_rev = dict(kw, ucell=GRATING_KW['ucell'][::-1], thickness=[0.22, 0.15],
                   n_top=GRATING_KW['n_bot'], n_bot=GRATING_KW['n_top'])
-    s_t = fieldwave.rcwa(**kw_rev)
+    s_t = wavebit.rcwa(**kw_rev)
     _, cell_t = s_t.conv_solve_field(res_x=16, res_z=8)
 
     assert np.abs(np.asarray(cell_b) - np.asarray(cell_t)[::-1]).max() < 1e-12
@@ -237,9 +237,9 @@ def test_field_cell_comes_back_in_scene_coordinates(algo):
 
 def test_backside_field_cells_agree_between_algorithms():
     kw = dict(GRATING_KW, tetm='tm', theta=0.3)
-    _, c1 = fieldwave.rcwa(connecting_algo='ETM', incidence_side='bottom',
+    _, c1 = wavebit.rcwa(connecting_algo='ETM', incidence_side='bottom',
                            **kw).conv_solve_field(res_x=16, res_z=8)
-    _, c2 = fieldwave.rcwa(connecting_algo='SMM', incidence_side='bottom',
+    _, c2 = wavebit.rcwa(connecting_algo='SMM', incidence_side='bottom',
                            **kw).conv_solve_field(res_x=16, res_z=8)
     assert np.abs(np.asarray(c1) - np.asarray(c2)).max() < 1e-12
 
@@ -252,11 +252,11 @@ def test_backside_holds_on_every_backend(backend):
     pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
     if backend == 1:
         import importlib
-        importlib.import_module('fieldwave.on_jax')          # enables x64
+        importlib.import_module('wavebit.on_jax')          # enables x64
 
-    ref = fieldwave.rcwa(tetm='te', theta=0.3, incidence_side='bottom',
+    ref = wavebit.rcwa(tetm='te', theta=0.3, incidence_side='bottom',
                          **GRATING_KW).conv_solve()
-    got = fieldwave.rcwa(tetm='te', theta=0.3, incidence_side='bottom',
+    got = wavebit.rcwa(tetm='te', theta=0.3, incidence_side='bottom',
                          **{**GRATING_KW, 'backend': backend}).conv_solve()
     assert np.abs(np.asarray(ref.R) - np.asarray(got.R)).max() < 1e-12
     assert np.abs(np.asarray(ref.T) - np.asarray(got.T)).max() < 1e-12
@@ -269,13 +269,13 @@ def test_an_unknown_side_is_refused_by_name():
     plausible and wrong for exactly the structures where the side matters.
     """
     with pytest.raises(ValueError, match="'top' or 'bottom'"):
-        fieldwave.rcwa(incidence_side='back', **GRATING_KW)
+        wavebit.rcwa(incidence_side='back', **GRATING_KW)
 
-    solver = fieldwave.rcwa(**GRATING_KW)
+    solver = wavebit.rcwa(**GRATING_KW)
     with pytest.raises(ValueError, match="'top' or 'bottom'"):
         solver.incidence_side = 'up'
 
-    from fieldwave._core.solve_1d import solve_1d
+    from wavebit._core.solve_1d import solve_1d
     with pytest.raises(ValueError, match="'top' or 'bottom'"):
         solve_1d(0, 1.0, np.array([0.0]), 1.0, 1.5, 0.0, [0.1],
                  np.ones((1, 1, 1), complex), np.ones((1, 1, 1), complex),

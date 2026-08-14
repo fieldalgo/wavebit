@@ -3,16 +3,16 @@
 Written: 2026-08-11.
 
 Targets:
-- `fieldwave/manifest.py` — the document
+- `wavebit/manifest.py` — the document
 - `tests/test_manifest.py` — what keeps it true
-- `fieldwave/_core/engine.py` — the refusal tables it reads
-- `fieldwave/on_numpy/emsolver/rcwa.py` — the `ucell` setter whose type dispatch it describes
+- `wavebit/_core/engine.py` — the refusal tables it reads
+- `wavebit/on_numpy/emsolver/rcwa.py` — the `ucell` setter whose type dispatch it describes
 
 ---
 
 ## TL;DR
 
-FieldWave has five independent numerical choices — modeling path, Fourier series,
+Wavebit has five independent numerical choices — modeling path, Fourier series,
 factorization rule, backend, lattice spelling — and the rules governing them are scattered
 across nine documents and two refusal tables in `_core/engine.py`. Programs outside this
 process need those rules: documentation, configuration UIs, an assistant that recommends
@@ -20,11 +20,11 @@ conditions. Until now the only way to get them was to read the source and retype
 found, which is how a consumer ends up confidently telling users about a flag that was
 deleted a year ago.
 
-`fieldwave.manifest` publishes them instead, as one JSON document generated from the code
+`wavebit.manifest` publishes them instead, as one JSON document generated from the code
 and checked against it by the suite.
 
 ```bash
-python -m fieldwave.manifest > fieldwave-manifest.json
+python -m wavebit.manifest > wavebit-manifest.json
 ```
 
 **Decision: capabilities and constraints only.** The manifest says what each path implements,
@@ -67,7 +67,7 @@ user's experiment. The section is data *about* the contract; the contract itself
 
 ## Why the tests are not mirror tests
 
-`fieldwave/manifest.py` reads `_core/engine.py`'s tables at import, so asserting that the two
+`wavebit/manifest.py` reads `_core/engine.py`'s tables at import, so asserting that the two
 agree would assert that a variable equals itself. `tests/test_manifest.py` checks the
 manifest against **runtime behaviour** instead:
 

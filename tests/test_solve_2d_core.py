@@ -1,4 +1,4 @@
-"""Single-source 2D solve core (fieldwave._core.solve_2d).
+"""Single-source 2D solve core (wavebit._core.solve_2d).
 
 Cross-backend agreement, cross-backend-consistent gradients, and a check that driving the core
 through ``conv_solve`` matches calling it directly. The physics oracle is the frozen legacy
@@ -7,13 +7,13 @@ reference in test_golden_legacy_parity.py.
 import numpy as np
 import pytest
 
-import fieldwave
-from fieldwave._core.factorization import to_conv_mat_raster_sampled
-from fieldwave._core.solve_2d import solve_2d
+import wavebit
+from wavebit._core.factorization import to_conv_mat_raster_sampled
+from wavebit._core.solve_2d import solve_2d
 
 
 def _run_and_inputs(ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi):
-    solver = fieldwave.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi,
+    solver = wavebit.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi,
                           fto=fto, period=period, wavelength=wl, thickness=thickness, ucell=ucell)
     via_api = solver.conv_solve()
     assert solver.grating_type_assigned == 2, solver.grating_type_assigned    # ensure 2D path

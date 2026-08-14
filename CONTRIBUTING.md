@@ -1,6 +1,6 @@
-# Contributing to FieldWave
+# Contributing to Wavebit
 
-Thanks for your interest in FieldWave! Bug reports, questions, and pull requests are all welcome. FieldWave is currently maintained by a single developer at FieldAlgo — responses are usually quick, but please bear with the occasional delay.
+Thanks for your interest in Wavebit! Bug reports, questions, and pull requests are all welcome. Wavebit is currently maintained by a single developer at FieldAlgo — responses are usually quick, but please bear with the occasional delay.
 
 ## Where does a new file go?
 
@@ -9,14 +9,14 @@ Answer these in order and stop at the first **yes**. The point of the order is t
 | | Question | Where it goes |
 |---|---|---|
 | **0** | Is this going into git at all? A fragment, a probe, an idea being tried out. | **No → your scratch space, outside the repository.** Stop here. |
-| 1 | Is it the implementation? | `fieldwave/` |
+| 1 | Is it the implementation? | `wavebit/` |
 | 2 | Can you write the `assert` line *before* you run it? | `tests/` |
 | 3 | …and does that criterion come from an **outside solver** (RETICOLO, GRCWA, TORCWA)? | the external-oracle machinery — `tests/references/interface/` plus the golden and its test |
 | 4 | Would writing that `assert` mean asserting the very thing you are trying to find out? | `studies/` — **and** a write-up in `docs/` |
 | 5 | Is it prose **about the code** — what it does, why a default is what it is, what was measured? | `docs/` |
 | 6 | Is it prose **about how the project is run** — a plan, a process, a decision about the repository rather than about the physics? | Not here. It is finished work, but it is not documentation of the library. |
 | 7 | Is it a lesson, read in order, for someone who has not used the API? | `tutorials/` |
-| 8 | Is it FieldWave applied to an outside problem? | `examples/` |
+| 8 | Is it Wavebit applied to an outside problem? | `examples/` |
 
 If none of them is a yes, **the file has no home yet.** Say so in the PR rather than inventing a directory.
 
@@ -49,7 +49,7 @@ Two things were considered and rejected, so that they are not proposed again: a 
 Numerical software bugs are often subtle, so a good report makes all the difference. Please include:
 
 - A **minimal script** that reproduces the issue (structure, wavelength, backend, Fourier order).
-- The **backend** (NumPy / JAX / PyTorch) and its version, plus your Python and FieldWave versions.
+- The **backend** (NumPy / JAX / PyTorch) and its version, plus your Python and Wavebit versions.
 - What you expected vs. what you got. For convergence or accuracy issues, a reference value and where it comes from (analytic result, another solver, a paper) is enormously helpful.
 
 If the same case behaves differently on two backends, say so — cross-backend discrepancies are treated as high-priority bugs.
@@ -62,8 +62,8 @@ Not sure whether something is a bug, a usage question, or a feature idea? Open a
 
 - **Keep PRs small and focused.** One fix or one feature per PR reviews much faster than a grab-bag.
 - **Add or extend a test.** Solver changes need a numerical test against a reference value; see `tests/` for the pattern.
-- **Mind the conventions.** All sign and branch-cut choices live in `fieldwave/_core/conventions.py` — never introduce a local `sqrt`/`kz` branch decision elsewhere. FieldWave uses the `e^{-iωt}` time convention (`Im(n) > 0` = loss).
-- **Backend neutrality.** New solver code should be written against the Array API (`fieldwave/_core/backend.py`) rather than importing NumPy/JAX/Torch directly, unless there is a documented reason.
+- **Mind the conventions.** All sign and branch-cut choices live in `wavebit/_core/conventions.py` — never introduce a local `sqrt`/`kz` branch decision elsewhere. Wavebit uses the `e^{-iωt}` time convention (`Im(n) > 0` = loss).
+- **Backend neutrality.** New solver code should be written against the Array API (`wavebit/_core/backend.py`) rather than importing NumPy/JAX/Torch directly, unless there is a documented reason.
 - For anything larger than a bug fix, please open an issue first to discuss the design — it protects your time as much as the maintainer's.
 
 ### Branches: rebase, then fast-forward
@@ -100,12 +100,12 @@ rebase. Found the hard way by a session that thought it had a backup.
 ## Development setup
 
 ```shell
-git clone https://github.com/fieldalgo/fieldwave.git
-cd fieldwave
+git clone https://github.com/fieldalgo/wavebit.git
+cd wavebit
 pip install -e .[jax]      # or .[pytorch], or plain -e . for NumPy only
 pytest tests/ -q
 ```
 
 ## Licensing
 
-FieldWave is licensed under Apache-2.0. By submitting a contribution, you agree that it is your own work and is provided under the same license (inbound = outbound). The third-party notices recorded in [LICENSE](LICENSE) must be preserved.
+Wavebit is licensed under Apache-2.0. By submitting a contribution, you agree that it is your own work and is provided under the same license (inbound = outbound). The third-party notices recorded in [LICENSE](LICENSE) must be preserved.

@@ -1,7 +1,7 @@
 """
 benchmark_backends.py — which backend, and whether to freeze, for a *differentiated* run.
 
-FieldWave can produce the same gradient three ways, and they are not interchangeable:
+Wavebit can produce the same gradient three ways, and they are not interchangeable:
 
     torch      eager autograd. Decides its geometry on every call, so nothing is frozen and
                nothing can go stale.
@@ -46,9 +46,9 @@ import time
 
 import numpy as np
 
-# Ensure the local (worktree) fieldwave is used rather than any installed copy.
+# Ensure the local (worktree) wavebit is used rather than any installed copy.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import fieldwave                                                        # noqa: E402
+import wavebit                                                        # noqa: E402
 
 RESULTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'results', 'backends.json')
 
@@ -100,7 +100,7 @@ def _probe_step():
 
     def step():
         t = torch.tensor(pattern, requires_grad=True)
-        out = fieldwave.rcwa(backend=2, ucell=t, **STRATEGIES['sampled'], **cfg).conv_solve()
+        out = wavebit.rcwa(backend=2, ucell=t, **STRATEGIES['sampled'], **cfg).conv_solve()
         out.res.T.real.sum().backward()
 
     return step
@@ -205,7 +205,7 @@ def vector_builder(fto, split, layers):
 
     def build(backend, lx):
         ucell = [[3.5, [['ellipse', 150.0, 150.0, lx, 55.0, 2.0, 0.27, split, split]]]] * layers
-        return fieldwave.rcwa(backend=backend, ucell=ucell, **cfg)
+        return wavebit.rcwa(backend=backend, ucell=ucell, **cfg)
 
     return build
 
@@ -218,7 +218,7 @@ def raster_builder(n, fto, strategy, layers=1):
                n_top=1.0, n_bot=1.0, theta=0.15, phi=0.35, psi=0.3, wavelength=900.0)
 
     def build(backend, ucell):
-        return fieldwave.rcwa(backend=backend, ucell=ucell, **STRATEGIES[strategy], **cfg)
+        return wavebit.rcwa(backend=backend, ucell=ucell, **STRATEGIES[strategy], **cfg)
 
     return build, pattern
 
@@ -299,11 +299,11 @@ def sweep_recompile(budget, reps):
     make = lambda lx: [[3.5, [['ellipse', 150.0, 150.0, lx, 55.0, 2.0, 0.27, 4, 4]]]]
 
     def loss(v, geometry):
-        return jnp.sum(fieldwave.rcwa(backend=1, ucell=make(v), **cfg)
+        return jnp.sum(wavebit.rcwa(backend=1, ucell=make(v), **cfg)
                        .conv_solve(geometry=geometry).T).real
 
     g = jax.jit(jax.grad(loss), static_argnums=1)
-    freeze = lambda lx: fieldwave.rcwa(backend=1, ucell=make(jnp.asarray(lx)),
+    freeze = lambda lx: wavebit.rcwa(backend=1, ucell=make(jnp.asarray(lx)),
                                        **cfg).freeze_geometry()
     jax.clear_caches()
     out = []
@@ -323,20 +323,20 @@ def sweep_stale_window(budget):
     no longer the recommended loop, but the raster records give no choice.
     """
     import jax.numpy as jnp
-    from fieldwave import StaleGeometryError
+    from wavebit import StaleGeometryError
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
                theta=0.15, phi=0.35, pol=0, wavelength=900.0)
 
     def accepts(make, value, frozen):
         try:
-            fieldwave.rcwa(backend=1, ucell=make(jnp.asarray(value)),
+            wavebit.rcwa(backend=1, ucell=make(jnp.asarray(value)),
                            **cfg).conv_solve(geometry=frozen)
             return True
         except StaleGeometryError:
             return False
 
     def window(make, nominal, lo_probe, hi_probe, tol=1e-4):
-        frozen = fieldwave.rcwa(backend=1, ucell=make(jnp.asarray(nominal)),
+        frozen = wavebit.rcwa(backend=1, ucell=make(jnp.asarray(nominal)),
                                 **cfg).freeze_geometry()
 
         def edge(probe):
@@ -460,11 +460,11 @@ def main():
     ap.add_argument('--budget', type=float, default=7200, help='wall-clock allowance, seconds')
     args = ap.parse_args()
 
-    importlib.import_module('fieldwave.on_jax')
-    importlib.import_module('fieldwave.on_torch')
+    importlib.import_module('wavebit.on_jax')
+    importlib.import_module('wavebit.on_torch')
 
     budget = Budget(args.budget)
-    print(f'# FieldWave backend benchmark  (budget {args.budget:.0f} s, reps {args.reps})\n',
+    print(f'# Wavebit backend benchmark  (budget {args.budget:.0f} s, reps {args.reps})\n',
           flush=True)
 
     warm_up(5 if args.quick else 45)

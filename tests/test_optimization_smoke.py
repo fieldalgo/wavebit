@@ -17,7 +17,7 @@ gradients agree too, step after step, which is where a backend-specific defect w
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 
 CFG = dict(fto=[2, 2], wavelength=900.0, period=[1000.0, 1000.0], thickness=[300.0],
            n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2)
@@ -35,7 +35,7 @@ def _jax_losses():
     import jax.numpy as jnp
     import optax
 
-    solver = fieldwave.rcwa(backend=1, **CFG)
+    solver = wavebit.rcwa(backend=1, **CFG)
 
     def loss(u):
         return -jnp.sum(solver.conv_solve(ucell=u).res.T)
@@ -57,7 +57,7 @@ def _jax_losses():
 def _torch_losses():
     import torch
 
-    solver = fieldwave.rcwa(backend=2, **CFG)
+    solver = wavebit.rcwa(backend=2, **CFG)
 
     u = torch.tensor(UCELL0, dtype=torch.float64, requires_grad=True)
     opt = torch.optim.Adam([u], lr=LR)

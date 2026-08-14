@@ -21,7 +21,7 @@ was *sampled at the shape's actual place*.
   where the shape sits, so the same structure translated was a *different* structure to the
   factorization — 1.6e-3 on ``sum(R)`` for a circle.
 
-:func:`fieldwave._core.analytic.normal_projector_coeffs` now builds a lone shape's field at the
+:func:`wavebit._core.analytic.normal_projector_coeffs` now builds a lone shape's field at the
 centre of the cell and translates the coefficients by a phase, which removes both at once. The
 numbers below are what that is worth, and they are absolute now rather than relative to a
 spread, because there is no longer a spread to measure against.
@@ -29,13 +29,13 @@ spread, because there is no longer a spread to measure against.
 import numpy as np
 import pytest
 
-import fieldwave
-from fieldwave._core import analytic as _an
+import wavebit
+from wavebit._core import analytic as _an
 
 pytest.importorskip('jax')
 import jax                                                     # noqa: E402
 import jax.numpy as jnp                                        # noqa: E402
-import fieldwave.on_jax                                        # noqa: E402,F401  (enables x64)
+import wavebit.on_jax                                        # noqa: E402,F401  (enables x64)
 
 P = 0.77
 BASE = dict(period=[P, P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
@@ -67,7 +67,7 @@ def _shape(kind, param, value):
 def _position_gradients(kind, param):
     """``d(sum R)/d(param)`` at each position. Every entry should be zero."""
     def objective(v):
-        res = fieldwave.rcwa(backend=1, ucell=[dict(n_base=1.0, shapes=[_shape(kind, param, v)])],
+        res = wavebit.rcwa(backend=1, ucell=[dict(n_base=1.0, shapes=[_shape(kind, param, v)])],
                              **BASE).conv_solve()
         return jnp.real(jnp.sum(res.R))
 
@@ -85,7 +85,7 @@ def test_translation_invariance_holds_in_the_objective(kind, param):
     bound is where a real regression, not a rounding difference, would land.
     """
     def total(v):
-        res = fieldwave.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=[_shape(kind, param, v)])],
+        res = wavebit.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=[_shape(kind, param, v)])],
                              **BASE).conv_solve()
         return float(np.sum(np.asarray(res.R)).real)
 
@@ -132,7 +132,7 @@ def test_the_projectors_move_by_a_phase_and_by_nothing_else():
     convolution matrix is ``D X D^-1`` for one diagonal ``D``, the solve is conjugated by it,
     and each order's efficiency cannot move — which is why the assertions above can be absolute.
     """
-    from fieldwave._core.analytic import normal_projector_coeffs
+    from wavebit._core.analytic import normal_projector_coeffs
 
     fto, grid = 4, 256
     cy0, cy = 0.385, 0.31 * P
@@ -156,7 +156,7 @@ def test_the_position_reaches_the_projectors_through_that_phase():
     that moves: ``ky = 1``, whose derivative is ``-2i*pi/Py`` times itself. A difference quotient
     is the independent witness; before the fix autograd returned exactly 0.0 here.
     """
-    from fieldwave._core.analytic import normal_projector_coeffs
+    from wavebit._core.analytic import normal_projector_coeffs
 
     fto, grid = 4, 256
 
@@ -186,7 +186,7 @@ def test_the_rectangle_normal_field_still_cannot_carry_a_position():
     window, not physics: a circle's mean ``nx**2`` is 1/2 by symmetry and reads 1/2 only when it
     sits at the centre of the cell.
     """
-    from fieldwave._core.analytic import normal_vector_field_analytical
+    from wavebit._core.analytic import normal_vector_field_analytical
 
     def mean_nx2(kind, cy):
         nx, _ = normal_vector_field_analytical(
@@ -226,12 +226,12 @@ def _stack(cx0, cx1):
 
 
 def _stack_total(cx0, cx1):
-    res = fieldwave.rcwa(backend=0, ucell=_stack(cx0, cx1), **STACK).conv_solve()
+    res = wavebit.rcwa(backend=0, ucell=_stack(cx0, cx1), **STACK).conv_solve()
     return float(np.real(np.sum(np.asarray(res.R))))
 
 
 def _stack_jtotal(cx0, cx1):
-    res = fieldwave.rcwa(backend=1, ucell=_stack(cx0, cx1), **STACK).conv_solve()
+    res = wavebit.rcwa(backend=1, ucell=_stack(cx0, cx1), **STACK).conv_solve()
     return jnp.real(jnp.sum(res.R))
 
 
@@ -326,12 +326,12 @@ def _two(pair, ca, cb):
 
 
 def _two_total(pair, ca, cb):
-    res = fieldwave.rcwa(backend=0, ucell=_two(pair, ca, cb), **TWO_CFG).conv_solve()
+    res = wavebit.rcwa(backend=0, ucell=_two(pair, ca, cb), **TWO_CFG).conv_solve()
     return float(np.real(np.sum(np.asarray(res.R))))
 
 
 def _two_jtotal(pair, ca, cb):
-    res = fieldwave.rcwa(backend=1, ucell=_two(pair, ca, cb), **TWO_CFG).conv_solve()
+    res = wavebit.rcwa(backend=1, ucell=_two(pair, ca, cb), **TWO_CFG).conv_solve()
     return jnp.real(jnp.sum(res.R))
 
 
@@ -402,7 +402,7 @@ def test_a_layer_of_two_shapes_is_translation_invariant_too():
                  n_index=3.5),
             dict(type='circle', cx=0.70 + d, cy=0.80, lx=0.25, n_index=2.5)])]
         return float(np.sum(np.asarray(
-            fieldwave.rcwa(backend=0, ucell=ucell, **cfg).conv_solve().R)).real)
+            wavebit.rcwa(backend=0, ucell=ucell, **cfg).conv_solve().R)).real)
 
     values = [total(d) for d in np.linspace(0.0, 0.2, 9)]
     assert np.ptp(values) < 1e-12, np.ptp(values)
@@ -433,7 +433,7 @@ def test_a_multishape_layer_is_not_periodic_across_the_cell_edge():
                       n_index=3.48)
         ucell = [dict(n_base=1.0, shapes=[moving] + shapes_after)]
         return float(np.sum(np.asarray(
-            fieldwave.rcwa(ucell=ucell, normal_grid=256, **cfg).conv_solve().T)).real)
+            wavebit.rcwa(ucell=ucell, normal_grid=256, **cfg).conv_solve().T)).real)
 
     # one shape: exact across periods, which is what makes the contrast meaningful
     alone = [total(cx, []) for cx in (0.10, 1.10, 2.10)]

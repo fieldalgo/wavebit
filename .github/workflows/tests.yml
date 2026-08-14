@@ -77,7 +77,7 @@ jobs:
       - name: Install CPU-only PyTorch
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu
 
-      - name: Install FieldWave with both optional backends
+      - name: Install Wavebit with both optional backends
         run: pip install -e '.[jax,pytorch]' pytest
 
       # Fails the run if a backend is missing, which would otherwise turn the
@@ -85,7 +85,7 @@ jobs:
       # pytest.importorskip, so an absent backend drops those tests and still
       # reports success.
       - name: Verify all three backends are importable
-        run: python -c "import numpy, jax, torch, fieldwave; print(fieldwave.__file__)"
+        run: python -c "import numpy, jax, torch, wavebit; print(wavebit.__file__)"
 
       # Single-threaded BLAS, so that two calls with the same inputs give the same bits.
       #
@@ -133,7 +133,7 @@ jobs:
       # `block_2d` on jax, and the two `_verification` ones run all three.
       # No matplotlib: nothing under examples/ plots any more, and it is not a
       # dependency of the library and never should be.
-      - name: Install FieldWave with both optional backends
+      - name: Install Wavebit with both optional backends
         run: pip install -e '.[jax,pytorch]'
 
       # Runs every examples/**/*.py from its own directory under MPLBACKEND=Agg and
@@ -167,11 +167,11 @@ jobs:
           cache: pip
 
       # No extras, and a real (non-editable) install.
-      - name: Install FieldWave alone
+      - name: Install Wavebit alone
         run: pip install .
 
       # Runs outside the checkout on purpose: from the repo root `import
-      # fieldwave` would resolve to the source tree and the installed package
+      # wavebit` would resolve to the source tree and the installed package
       # would never be exercised.
       - name: Import and solve without any optional backend
         working-directory: ${{ runner.temp }}
@@ -179,9 +179,9 @@ jobs:
           python - <<'PY'
           import sys
           import numpy as np
-          import fieldwave
+          import wavebit
 
-          res = fieldwave.rcwa(
+          res = wavebit.rcwa(
               backend=0, pol=1, n_top=1.0, n_bot=1.5, theta=0.0, phi=0.0,
               fto=2, wavelength=632.8, period=[1000],
               ucell=np.array([[[3.8, 3.8]]]), thickness=[200],

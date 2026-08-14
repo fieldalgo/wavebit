@@ -10,7 +10,7 @@ import pathlib
 
 import numpy as np
 
-import fieldwave
+import wavebit
 
 FIELDS = ('R_s','R_p','T_s','T_p','R','R_s','R_p','T','T_s','T_p')
 
@@ -36,7 +36,7 @@ CASES = {
 out = {}
 for name, kw in CASES.items():
     kw = dict(kw); kw['ucell'] = np.asarray(kw['ucell'], dtype=float)
-    solver = fieldwave.rcwa(backend=0, **kw)
+    solver = wavebit.rcwa(backend=0, **kw)
     r = solver.conv_solve()
     out[f'{name}__grating_type'] = np.array(solver.grating_type_assigned)
     for sub in ('res', 'res_te_inc', 'res_tm_inc'):

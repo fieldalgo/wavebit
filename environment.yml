@@ -1,13 +1,13 @@
-# Development environment for FieldWave.
+# Development environment for Wavebit.
 #
 #   conda env create -f environment.yml   # run from the repo root: pip's "-e ." is relative
-#   conda activate fieldwave
+#   conda activate wavebit
 #
 # Only Python and the notebook stack come from conda; the scientific stack is
 # installed with pip, matching how the working env on this machine is built.
 # The dependency floors live in pyproject.toml and are not duplicated here.
 # Last verified 2026-08-04 on macOS arm64.
-name: fieldwave
+name: wavebit
 channels:
   - defaults
 dependencies:
@@ -18,7 +18,7 @@ dependencies:
   - pip:
       - matplotlib>=3.10
       - pytest>=9.1
-      # FieldWave itself, editable. This also pulls the core runtime
+      # Wavebit itself, editable. This also pulls the core runtime
       # dependencies (numpy, scipy, array-api-compat) at the floors declared in
       # pyproject.toml, so they are deliberately not repeated here.
       - -e .[jax,pytorch]

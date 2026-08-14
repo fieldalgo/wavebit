@@ -1,13 +1,13 @@
 """Freeze the legacy field-reconstruction output as reference data.
 
-Run while fieldwave/on_numpy/emsolver/field_distribution.py still exists. Field reconstruction
+Run while wavebit/on_numpy/emsolver/field_distribution.py still exists. Field reconstruction
 had no test coverage at all, so this is the first oracle it has ever had.
 """
 import pathlib
 
 import numpy as np
 
-import fieldwave
+import wavebit
 
 CASES = {
     # name: rcwa kwargs -> exercises grating_type 0 / 1 / 2
@@ -32,7 +32,7 @@ out = {}
 for name, kw in CASES.items():
     kw = dict(kw)
     kw['ucell'] = np.asarray(kw['ucell'], dtype=float)
-    solver = fieldwave.rcwa(backend=0, **kw)
+    solver = wavebit.rcwa(backend=0, **kw)
     solver.conv_solve()
     for tag, sfi in (('default', (True, False, False)), ('all', (True, True, True))):
         field = solver.calculate_field(res_x=5, res_y=4, res_z=6, set_field_input=sfi)

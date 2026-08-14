@@ -18,7 +18,7 @@ path that implements only one of its values in
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 
 # 2D so the NVF projector is not degenerate: a lossless dielectric rod, which is also the
 # structure whose energy conservation the NVF path exists to improve.
@@ -39,7 +39,7 @@ CFG_1D = dict(backend=0, ucell=np.array([[[3., 3., 1., 1., 3., 1., 1., 1.]]]), t
 
 
 def _totals(cfg, **strategy):
-    res = fieldwave.rcwa(**cfg, **strategy).conv_solve()
+    res = wavebit.rcwa(**cfg, **strategy).conv_solve()
     return (float(np.sum(np.asarray(res.R))), float(np.sum(np.asarray(res.T))))
 
 
@@ -56,7 +56,7 @@ def test_the_default_is_sampled_li():
     other two modeling paths implement one rule apiece and resolve the default to it. See
     ``test_factorization_by_modeling_path.py``.
     """
-    solver = fieldwave.rcwa(**CFG_2D)
+    solver = wavebit.rcwa(**CFG_2D)
     assert solver.fourier_coefficients == 'sampled'
     assert solver.factorization == 'li'
 
@@ -81,7 +81,7 @@ def test_the_removed_fourier_type_alias_is_not_silently_swallowed(name, code):
     if name != 'numpy':
         pytest.importorskip(name)
     with pytest.raises(TypeError, match='fourier_type'):
-        fieldwave.rcwa(**dict(CFG_2D, backend=code), fourier_type=2)
+        wavebit.rcwa(**dict(CFG_2D, backend=code), fourier_type=2)
 
 
 @pytest.mark.parametrize('keyword,bad', [('fourier_coefficients', 'discrete'),
@@ -91,12 +91,12 @@ def test_the_removed_fourier_type_alias_is_not_silently_swallowed(name, code):
 def test_an_invalid_value_is_rejected_at_the_keyword_that_took_it(keyword, bad):
     """The error names the keyword, so a typo does not surface as a wrong-physics run."""
     with pytest.raises(ValueError, match=keyword):
-        fieldwave.rcwa(**CFG_2D, **{keyword: bad})
+        wavebit.rcwa(**CFG_2D, **{keyword: bad})
 
 
 @pytest.mark.parametrize('coefficients', ['SAMPLED', 'Integrated'])
 def test_values_are_case_insensitive(coefficients):
-    solver = fieldwave.rcwa(**CFG_2D, fourier_coefficients=coefficients)
+    solver = wavebit.rcwa(**CFG_2D, fourier_coefficients=coefficients)
     assert solver.fourier_coefficients == coefficients.lower()
 
 
@@ -104,7 +104,7 @@ def test_the_axes_are_independent():
     """Neither keyword may quietly change the other — that entanglement was the bug."""
     for coefficients in ('sampled', 'integrated'):
         for factorization in ('li', 'nvf'):
-            solver = fieldwave.rcwa(**CFG_2D, fourier_coefficients=coefficients,
+            solver = wavebit.rcwa(**CFG_2D, fourier_coefficients=coefficients,
                                     factorization=factorization)
             assert (solver.fourier_coefficients, solver.factorization) == (coefficients,
                                                                           factorization)

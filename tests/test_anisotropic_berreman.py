@@ -71,7 +71,7 @@ import numpy as np
 import pytest
 from scipy.linalg import expm
 
-import fieldwave
+import wavebit
 
 WL = 600.0
 
@@ -210,7 +210,7 @@ def solve_tensor_stack(layers, theta, wl=WL, connecting_algo='ETM', formulation=
             slot.append(np.linalg.inv(e[2, 2] * I) if value is None else value * I)
         thick.append(d)
     conv = [np.stack(s) for s in slots]
-    mee = fieldwave.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=theta, phi=0.0, psi=0.0,
+    mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=theta, phi=0.0, psi=0.0,
                          fto=(0, 0), period=(300.0, 300.0), wavelength=wl, thickness=thick,
                          connecting_algo=connecting_algo, incidence_side=incidence_side)
     if formulation is not None:

@@ -37,7 +37,7 @@ import importlib
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 
 WL = 500.0
 AU = 0.18 + 3.0j          # gold at 500nm — strongly absorbing
@@ -86,7 +86,7 @@ def analytic_r(ns, thicknesses, wavelength, theta, tetm):
 def solver_RT(ns, thicknesses, wavelength, theta, tetm, algo='ETM'):
     """Total ``(R, T)`` of the same stack through the solver (uniform layers, fto=0)."""
     ucell = np.array([[[n, n]] for n in ns[1:-1]])
-    solver = fieldwave.rcwa(backend=0, connecting_algo=algo, tetm=tetm, n_top=ns[0],
+    solver = wavebit.rcwa(backend=0, connecting_algo=algo, tetm=tetm, n_top=ns[0],
                            n_bot=ns[-1], theta=theta, fto=0, wavelength=wavelength,
                            period=[wavelength * 2], ucell=ucell, thickness=thicknesses)
     res = solver.conv_solve()
@@ -190,8 +190,8 @@ def test_absorbing_layer_identical_to_its_substrate(tetm, theta):
     ucell = np.array([[[AU, AU]]])
     common = dict(backend=0, tetm=tetm, n_top=1.0, n_bot=AU, theta=theta, fto=0,
                   wavelength=WL, period=[WL * 2], ucell=ucell, thickness=ds)
-    tmm = fieldwave.rcwa(connecting_algo='ETM', **common).conv_solve()
-    smm = fieldwave.rcwa(connecting_algo='SMM', **common).conv_solve()
+    tmm = wavebit.rcwa(connecting_algo='ETM', **common).conv_solve()
+    smm = wavebit.rcwa(connecting_algo='SMM', **common).conv_solve()
 
     assert float(np.sum(tmm.R)) == pytest.approx(want, abs=1e-12)
     assert float(np.sum(smm.R)) == pytest.approx(want, abs=1e-12)
@@ -206,7 +206,7 @@ def solver_R_analytic(ns, thicknesses, wavelength, theta, tetm):
     ``tetm``, and the period must be 2D.
     """
     ucell = [dict(n_base=n, shapes=[]) for n in ns[1:-1]]
-    solver = fieldwave.rcwa(backend=0, n_top=ns[0], n_bot=ns[-1], theta=theta, phi=0.0,
+    solver = wavebit.rcwa(backend=0, n_top=ns[0], n_bot=ns[-1], theta=theta, phi=0.0,
                             psi=(np.pi / 2 if tetm == 'te' else 0.0), fto=0,
                             wavelength=wavelength, period=[wavelength * 2, wavelength * 2],
                             ucell=ucell, thickness=thicknesses)
@@ -254,7 +254,7 @@ def solver_R_painted(n, thickness, wavelength, theta, tetm):
                    n_index=n),
               dict(type='rectangle', cx=0.72 * P, cy=0.5 * P, lx=0.75 * P, ly=1.4 * P,
                    n_index=n)]
-    solver = fieldwave.rcwa(backend=0, n_top=1.0, n_bot=1.5, theta=theta, phi=0.0,
+    solver = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.5, theta=theta, phi=0.0,
                             psi=(np.pi / 2 if tetm == 'te' else 0.0), fto=(3, 3),
                             wavelength=wavelength, period=[P, P],
                             ucell=[dict(n_base=n, combine='paint', shapes=shapes)],
@@ -297,15 +297,15 @@ def test_complex_n_bot_keeps_full_precision_on_every_backend(backend):
     """
     pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
     if backend == 1:
-        # via importlib: a plain `import fieldwave.on_jax` here would rebind `fieldwave`
+        # via importlib: a plain `import wavebit.on_jax` here would rebind `wavebit`
         # as a local for the whole function, breaking the torch branch that skips it.
-        importlib.import_module('fieldwave.on_jax')       # enables x64
+        importlib.import_module('wavebit.on_jax')       # enables x64
 
     ns, ds = [1.0, 1.5, AU], [20.0]
     want = solver_R(ns, ds, WL, 0.3, 'te')                  # numpy reference
 
     ucell = np.array([[[n, n] for n in ns[1:-1]]][0])[None]
-    solver = fieldwave.rcwa(backend=backend, tetm='te', n_top=ns[0], n_bot=ns[-1], theta=0.3,
+    solver = wavebit.rcwa(backend=backend, tetm='te', n_top=ns[0], n_bot=ns[-1], theta=0.3,
                            fto=2, wavelength=WL, period=[WL * 2], ucell=ucell, thickness=ds)
     got = float(np.sum(np.asarray(solver.conv_solve().R)))
     assert got == pytest.approx(want, abs=1e-12)
@@ -313,7 +313,7 @@ def test_complex_n_bot_keeps_full_precision_on_every_backend(backend):
 
 # ------------------------------------------------------- amplitude oracle (absorbing media)
 # Reflectance needs an incident power, which is convention-dependent in an absorbing medium.
-# The complex amplitude is not, and FieldWave reports it in the same e^{-iwt} convention the
+# The complex amplitude is not, and Wavebit reports it in the same e^{-iwt} convention the
 # inputs use, so `R == analytic_r` is an exact check that works with a lossy superstrate too.
 
 WET = 1.5 + 0.02j         # weakly absorbing ambient
@@ -364,12 +364,12 @@ def solver_amps(ns, thicknesses, wavelength, theta, tetm, path, algo='ETM'):
     common = dict(backend=0, connecting_algo=algo, n_top=ns[0], n_bot=ns[-1], theta=theta,
                   wavelength=wavelength, thickness=thicknesses)
     if path == '1d':
-        solver = fieldwave.rcwa(tetm=tetm, fto=0, period=[wavelength * 2],
+        solver = wavebit.rcwa(tetm=tetm, fto=0, period=[wavelength * 2],
                                 ucell=np.array([[[n, n]] for n in layers]), **common)
     else:
         cell = ([[[n, n]] for n in layers] if path == 'conical'
                 else [[[n, n], [n, n]] for n in layers])
-        solver = fieldwave.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0), fto=[0, 0],
+        solver = wavebit.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0), fto=[0, 0],
                                 period=[wavelength * 2, wavelength * 2],
                                 ucell=np.array(cell), **common)
     res = solver.conv_solve().res
@@ -415,10 +415,10 @@ def test_absorbing_superstrate_efficiency_is_convention_bound():
         common = dict(backend=0, n_top=ns[0], n_bot=ns[-1], theta=theta, wavelength=WL,
                       thickness=ds)
         if path == '1d':
-            s = fieldwave.rcwa(tetm='tm', fto=0, period=[WL * 2],
+            s = wavebit.rcwa(tetm='tm', fto=0, period=[WL * 2],
                                ucell=np.array([[[n, n]] for n in ns[1:-1]]), **common)
         else:
-            s = fieldwave.rcwa(phi=0.0, psi=0.0, fto=[0, 0],
+            s = wavebit.rcwa(phi=0.0, psi=0.0, fto=[0, 0],
                                period=[WL * 2, WL * 2],
                                ucell=np.array([[[n, n], [n, n]] for n in ns[1:-1]]), **common)
         res = s.conv_solve()

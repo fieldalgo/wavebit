@@ -3,10 +3,10 @@
 Written: 2026-08-09. Measured on CPU, NumPy backend, float64.
 
 Targets:
-- `fieldwave/_core/lattice.py` — the basis, the reciprocal mapping, the Jacobian
-- `fieldwave/_core/solve_2d.py::order_grid_kxy` — the two k-layouts a cell can have
-- `fieldwave/_core/engine.py::CoreSolveMixin.lattice` — the entry point
-- `fieldwave/_core/engine.py::_reject_unsupported_lattice` — what is still refused, and why
+- `wavebit/_core/lattice.py` — the basis, the reciprocal mapping, the Jacobian
+- `wavebit/_core/solve_2d.py::order_grid_kxy` — the two k-layouts a cell can have
+- `wavebit/_core/engine.py::CoreSolveMixin.lattice` — the entry point
+- `wavebit/_core/engine.py::_reject_unsupported_lattice` — what is still refused, and why
 
 ---
 
@@ -17,12 +17,12 @@ motifs. That doubles the cell area, the retained order count scales with area, a
 `O(N^2.7)` — so it cost about **8x**. Pass the basis instead:
 
 ```python
-import numpy as np, fieldwave
+import numpy as np, wavebit
 
 a = 400.0
 a1, a2 = np.array([a, 0.0]), np.array([a / 2, a * np.sqrt(3) / 2])   # hex
 
-solver = fieldwave.rcwa(
+solver = wavebit.rcwa(
     backend=0, ucell=cell, fto=[10, 10], thickness=[300.0], wavelength=900.0,
     factorization='nvf',                       # required — see "What is refused"
     lattice=np.column_stack((a1, a2)),         # columns are a1, a2
@@ -196,7 +196,7 @@ a square cell it needs two blocks, and on its own primitive cell — a square ro
 which `is_axis_aligned` correctly reports as *not* axis-aligned — it needs one. The paper's
 `dx = dy = 5*sqrt(2)/4 = 1.767767` is exactly that primitive cell's edge.
 
-| order | Li FMM | FEM | FieldWave | vs FEM |
+| order | Li FMM | FEM | Wavebit | vs FEM |
 |---|---|---|---|---|
 | T(-1,-1) | 0.04308 | 0.04333 | 0.04318 | -1.5e-4 |
 | T(-1,0) | 0.12860 | 0.12845 | 0.12850 | +5e-5 |
@@ -215,7 +215,7 @@ closer to FEM than those two sit to each other. `tests/test_oblique_lattice.py` 
 rather than a study.
 
 **Watch the polarisation frame when reproducing it.** `psi0 = 45 deg` in the paper is measured
-from *its* cell axes, and those axes are the rotated basis, so in FieldWave's Cartesian frame it
+from *its* cell axes, and those axes are the rotated basis, so in Wavebit's Cartesian frame it
 is `psi = pi/2`. Getting this wrong is not subtle if you look at the right thing: the wrong frame
 swaps which pairs of orders are degenerate — `psi=0` makes T(-1,-1) equal T(-1,+1) where the
 paper has them split — and the error grows to 1.9e-2 while T(0,0) barely moves, because T(0,0) is
@@ -231,7 +231,7 @@ has it as `test_unimodular_shear_is_the_same_physics`. With the normal field's m
 removed the same comparison drifts to 8.5e-4 — that is the test having teeth.
 
 **S4 as an outside oracle, against a square-lattice control.** S4 supports arbitrary lattice
-vectors, so it checks the reciprocal mapping independently. It sits 6.60e-3 from FieldWave on a
+vectors, so it checks the reciprocal mapping independently. It sits 6.60e-3 from Wavebit on a
 square lattice — where none of this code runs — and 6.77e-3 on hex. The gap is S4's own slow
 convergence, equal on both, so the oblique path adds **1.7e-4** over the already-validated
 orthogonal one. (Use S4's default Laurent rule for this. `PolarizationDecomposition=True`
@@ -254,8 +254,8 @@ Sweeping the pillar diameter from 80 to 260 nm gives a usable library — phase 
 a worst transmission of 0.936. The whole sweep takes 14 s.
 
 Cross-checked against S4 on the same structure, which is the useful part: at D = 150 nm S4
-converges to 0.96675 against FieldWave's 0.96643 (3.5e-4), and at D = 240 nm to 0.99694 against
-0.99905 (2.1e-3) while still climbing. Both gaps are S4's own convergence — and FieldWave is
+converges to 0.96675 against Wavebit's 0.96643 (3.5e-4), and at D = 240 nm to 0.99694 against
+0.99905 (2.1e-3) while still climbing. Both gaps are S4's own convergence — and Wavebit is
 already at its final value with 289 orders, where S4 has not settled at 595. That is the
 staircase-free shape transform and NVF together, not the lattice.
 

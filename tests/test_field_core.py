@@ -1,4 +1,4 @@
-"""Near-field reconstruction (fieldwave._core.fields) against the frozen legacy output.
+"""Near-field reconstruction (wavebit._core.fields) against the frozen legacy output.
 
 Field reconstruction had no coverage at all before the rewrite reached it, so its reference
 values were captured from the legacy per-backend implementation just before that was deleted
@@ -10,7 +10,7 @@ import pathlib
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 
 GOLDEN = np.load(pathlib.Path(__file__).parent / 'data' / 'golden_legacy_field.npz')
 
@@ -38,7 +38,7 @@ VARIANTS = (('default', (True, False, False)), ('all', (True, True, True)))
 def _solved(name, backend=0):
     kw = dict(CASES[name])
     kw['ucell'] = np.asarray(kw['ucell'], dtype=float)
-    solver = fieldwave.rcwa(backend=backend, **kw)
+    solver = wavebit.rcwa(backend=backend, **kw)
     solver.conv_solve()
     return solver
 

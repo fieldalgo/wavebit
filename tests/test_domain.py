@@ -1,14 +1,14 @@
-"""Typed domain objects (fieldwave.Layer / Stack / Incidence) are a non-breaking, adapt-in layer.
+"""Typed domain objects (wavebit.Layer / Stack / Incidence) are a non-breaking, adapt-in layer.
 
 A ``Stack`` round-trips losslessly to and from the legacy ``(ucell, thickness)`` pair, and
-driving :func:`fieldwave.rcwa` through ``stack=`` / ``incidence=`` must give byte-identical
+driving :func:`wavebit.rcwa` through ``stack=`` / ``incidence=`` must give byte-identical
 results to passing the equivalent raw keyword arguments (the Phase 2 "API parity" gate).
 """
 import numpy as np
 import pytest
 
-import fieldwave
-from fieldwave import Stack, Incidence, Pol
+import wavebit
+from wavebit import Stack, Incidence, Pol
 
 
 # ---------------------------------------------------------------- round-trip
@@ -64,13 +64,13 @@ def test_raster_1d_parity():
     ucell = np.array([[[3.0, 3.0, 3.0, 1.0, 1.0, 1.0]]])
     thickness, period = [0.15], [0.77]
 
-    legacy = fieldwave.rcwa(backend=0, n_top=2.0, n_bot=1.0, theta=0.0, phi=None,
+    legacy = wavebit.rcwa(backend=0, n_top=2.0, n_bot=1.0, theta=0.0, phi=None,
                              tetm=Pol.TE, fto=[6, 0], period=period, wavelength=0.777,
                              thickness=thickness, ucell=ucell).conv_solve()
 
     stack = Stack.from_ucell(ucell, thickness, n_top=2.0, n_bot=1.0, period=period)
     incidence = Incidence(wavelength=0.777, theta=0.0, phi=None, tetm=Pol.TE)
-    typed = fieldwave.rcwa(backend=0, fto=[6, 0], stack=stack, incidence=incidence).conv_solve()
+    typed = wavebit.rcwa(backend=0, fto=[6, 0], stack=stack, incidence=incidence).conv_solve()
 
     assert _de(typed) == _de(legacy)
 
@@ -80,13 +80,13 @@ def test_raster_2d_parity():
     ucell = (rng.uniform(1.0, 4.0, size=(2, 8, 8))).astype(np.float64)
     thickness, period = [0.2, 0.3], [1.0, 1.0]
 
-    legacy = fieldwave.rcwa(backend=0, n_top=1.0, n_bot=1.5, theta=0.1, phi=0.2,
+    legacy = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.5, theta=0.1, phi=0.2,
                              psi=np.pi / 4, fto=[3, 3], period=period, wavelength=0.9,
                              thickness=thickness, ucell=ucell).conv_solve()
 
     stack = Stack.from_ucell(ucell, thickness, n_top=1.0, n_bot=1.5, period=period)
     incidence = Incidence(wavelength=0.9, theta=0.1, phi=0.2, psi=np.pi / 4)
-    typed = fieldwave.rcwa(backend=0, fto=[3, 3], stack=stack, incidence=incidence).conv_solve()
+    typed = wavebit.rcwa(backend=0, fto=[3, 3], stack=stack, incidence=incidence).conv_solve()
 
     assert _de(typed) == _de(legacy)
 
@@ -95,13 +95,13 @@ def test_conical_psi_parity():
     ucell = np.array([[[3.0, 3.0, 3.0, 1.0, 1.0, 1.0]]])
     thickness, period = [0.15], [0.77]
 
-    legacy = fieldwave.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=0.3, phi=0.0,
+    legacy = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=0.3, phi=0.0,
                              psi=0.4, fto=[6, 0], period=period, wavelength=0.777,
                              thickness=thickness, ucell=ucell).conv_solve()
 
     stack = Stack.from_ucell(ucell, thickness, period=period)
     incidence = Incidence(wavelength=0.777, theta=0.3, phi=0.0, psi=0.4)
-    typed = fieldwave.rcwa(backend=0, fto=[6, 0], stack=stack, incidence=incidence).conv_solve()
+    typed = wavebit.rcwa(backend=0, fto=[6, 0], stack=stack, incidence=incidence).conv_solve()
 
     assert _de(typed) == _de(legacy)
 
@@ -112,6 +112,6 @@ def test_double_specify_raises():
     ucell = np.array([[[3.0, 1.0]]])
     stack = Stack.from_ucell(ucell, [0.1])
     with pytest.raises(ValueError, match='stack'):
-        fieldwave.rcwa(backend=0, stack=stack, ucell=ucell, fto=[2, 0])
+        wavebit.rcwa(backend=0, stack=stack, ucell=ucell, fto=[2, 0])
     with pytest.raises(ValueError, match='incidence'):
-        fieldwave.rcwa(backend=0, incidence=Incidence(theta=0.1), theta=0.2, fto=[2, 0])
+        wavebit.rcwa(backend=0, incidence=Incidence(theta=0.1), theta=0.2, fto=[2, 0])

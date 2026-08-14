@@ -4,11 +4,11 @@ Written: 2026-08-12. Structure claims below are measured, not asserted; the chec
 §3 and reproduces in seconds.
 
 Targets:
-- `fieldwave/_core/analytic.py::conv_matrix_2d` — the builder the collision used to be in; it
+- `wavebit/_core/analytic.py::conv_matrix_2d` — the builder the collision used to be in; it
   was called `laurent_conv_2d` until this document was written
-- `fieldwave/_core/analytic.py::_grid`, `fieldwave/_core/analytic.py::assemble_eps_coeffs` —
+- `wavebit/_core/analytic.py::_grid`, `wavebit/_core/analytic.py::assemble_eps_coeffs` —
   the doubled reciprocal grid the builder consumes, and why it is doubled
-- `fieldwave/_core/factorization.py::fourier2d_piecewise_constant` — the raster twin, and where
+- `wavebit/_core/factorization.py::fourier2d_piecewise_constant` — the raster twin, and where
   `inverse_rule` chooses the rule
 - `tests/test_analytic.py` — `test_conv_matrix_matches_grid_convention`, which pins the ordering
   the two builders share
@@ -188,8 +188,8 @@ exactly two answers with exactly two consumers:
 
 | Entry point | Grid holds | Callers |
 | --- | --- | --- |
-| `fourier2d_piecewise_constant` | values that hold across their pixel — `eps`, `1/eps` | 5 in `fieldwave/` |
-| `fourier2d_pointwise` | point samples of a continuous field — the NVF normal field | 3 in `fieldwave/` |
+| `fourier2d_piecewise_constant` | values that hold across their pixel — `eps`, `1/eps` | 5 in `wavebit/` |
+| `fourier2d_pointwise` | point samples of a continuous field — the NVF normal field | 3 in `wavebit/` |
 
 A value the caller can never be in doubt about should not be a parameter the caller restates,
 and the default made it worse: `False` was the answer 3 of 8 sites wanted, so the *majority*

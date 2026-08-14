@@ -11,7 +11,7 @@ at all.
 
 It is worth saying what that blind spot cost, because the shape of the bug is the argument
 for keeping this file. The boundary match wrote the incident wave's ``kz`` two ways — once
-as ``n_top * cos(theta)`` and once as :func:`~fieldwave._core.conventions.boundary_kz`'s
+as ``n_top * cos(theta)`` and once as :func:`~wavebit._core.conventions.boundary_kz`'s
 root — and those are *the same number* for a real angle. For a complex one they are
 negatives, the two sides of the match cancelled at the incident order, and the solve
 returned ``R = -delta`` with ``T = 0``. Agreement over the propagating 69 points stayed at
@@ -19,7 +19,7 @@ returned ``R = -delta`` with ``T = 0``. Agreement over the propagating 69 points
 
 The golden is the 2024-09-09 RETICOLO run; see ``gen_goldens_reticolo_conical_sweep.py``
 for where it came from. RETICOLO's amplitude convention is the conjugate of this solver's
-(:mod:`fieldwave._core.conventions`), so every comparison here is on the real part — which
+(:mod:`wavebit._core.conventions`), so every comparison here is on the real part — which
 is what the original study compared too.
 """
 import pathlib
@@ -27,7 +27,7 @@ import pathlib
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 
 GOLDEN_PATH = pathlib.Path(__file__).parent / 'golden_reticolo_conical_sweep.npz'
 
@@ -62,7 +62,7 @@ def _solve(g, i, j):
     kx, ky = g['kx'], g['ky']
     theta = np.arcsin(np.sqrt(kx[i] ** 2 + ky[j] ** 2 + 0.0001, dtype=np.complex128))
     phi = np.arctan(ky[j] / (kx[i] + 0.0001), dtype=np.complex128)
-    res = fieldwave.rcwa(backend=0, psi=np.pi / 2, n_top=float(g['n_top']), n_bot=float(g['n_bot']),
+    res = wavebit.rcwa(backend=0, psi=np.pi / 2, n_top=float(g['n_top']), n_bot=float(g['n_bot']),
                          theta=theta, phi=phi, fto=[FTO], wavelength=float(g['wavelength']),
                          period=list(g['period']), ucell=g['ucell'],
                          thickness=list(g['thickness']),
@@ -113,7 +113,7 @@ def test_evanescent_incidence_matches_reticolo():
 
     Every point here has ``Re(theta) == pi/2`` exactly, because ``arcsin`` of a real greater
     than one always lands there. Until the incident order stopped being handed a ``kz`` from
-    the outgoing-wave branch (:func:`~fieldwave._core.conventions.incident_kz`) the solve
+    the outgoing-wave branch (:func:`~wavebit._core.conventions.incident_kz`) the solve
     returned ``R_s = -1`` at the centre order and exactly zero at every other order, with
     ``T_s = 0`` — a grating that scatters nothing. It plots as a clean flat region, which is
     why the 2024 study that produced this golden did not catch it.
@@ -149,7 +149,7 @@ def test_double_precision_agrees_across_backends_at_a_complex_angle(backend):
     phi = np.arctan(ky / (kx + 0.0001), dtype=np.complex128)
 
     def solve(bk):
-        res = fieldwave.rcwa(backend=bk, psi=np.pi / 2, n_top=float(g['n_top']),
+        res = wavebit.rcwa(backend=bk, psi=np.pi / 2, n_top=float(g['n_top']),
                              n_bot=float(g['n_bot']), theta=theta, phi=phi, fto=[40],
                              wavelength=float(g['wavelength']), period=list(g['period']),
                              ucell=g['ucell'], thickness=list(g['thickness']),
@@ -177,7 +177,7 @@ def test_uniform_stack_does_not_diffract_at_a_complex_angle():
     """
     uniform = np.full_like(np.asarray(_golden()['ucell'], dtype=float), 2.5)
     g = _golden()
-    res = fieldwave.rcwa(backend=0, psi=np.pi / 2, n_top=float(g['n_top']), n_bot=float(g['n_bot']),
+    res = wavebit.rcwa(backend=0, psi=np.pi / 2, n_top=float(g['n_top']), n_bot=float(g['n_bot']),
                          theta=np.complex128(0.5 + 0.3j), phi=np.complex128(0.3),
                          fto=[FTO], wavelength=float(g['wavelength']),
                          period=list(g['period']), ucell=uniform,

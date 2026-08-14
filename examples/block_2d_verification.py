@@ -1,12 +1,12 @@
 import numpy as np
 
-import fieldwave
+import wavebit
 
 
 def run_block(rcwa_options, backend):
 
     rcwa_options['backend'] = backend
-    solver = fieldwave.rcwa(**rcwa_options)
+    solver = wavebit.rcwa(**rcwa_options)
     solver.ucell = ucell_block
 
     res = solver.conv_solve()
@@ -32,7 +32,7 @@ def run_raster(rcwa_options, backend, fourier_coefficients):
 
     rcwa_options['ucell'] = ucell_raster_1
 
-    solver = fieldwave.rcwa(**rcwa_options)
+    solver = wavebit.rcwa(**rcwa_options)
 
     res = solver.conv_solve()
     R, T = res.R, res.T

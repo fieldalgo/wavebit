@@ -7,11 +7,11 @@ solver picks the formulation (§8, no longer conditional). See
 This document keeps the scoping question: what each *remaining* gap costs.
 
 Targets:
-- `fieldwave/_core/solve_2d.py::layer_modes_2d` — the five permittivity slots the mode operator reads
-- `fieldwave/_core/factorization.py` — what `epx` / `epy` / `epz_i` actually are (not what they look like)
-- `fieldwave/_core/conventions.py::boundary_kz` — where `mu` would have to land besides the layer
-- `fieldwave/on_numpy/emsolver/rcwa.py::solve_for_conv` — the injection point that bypasses `ucell`, and where the formulation is chosen
-- `fieldwave/_core/solve_2d_4ff.py::solve_2d_4ff` — the nine-slot twin of the 2D solve
+- `wavebit/_core/solve_2d.py::layer_modes_2d` — the five permittivity slots the mode operator reads
+- `wavebit/_core/factorization.py` — what `epx` / `epy` / `epz_i` actually are (not what they look like)
+- `wavebit/_core/conventions.py::boundary_kz` — where `mu` would have to land besides the layer
+- `wavebit/on_numpy/emsolver/rcwa.py::solve_for_conv` — the injection point that bypasses `ucell`, and where the formulation is chosen
+- `wavebit/_core/solve_2d_4ff.py::solve_2d_4ff` — the nine-slot twin of the 2D solve
 
 ---
 
@@ -286,7 +286,7 @@ reconstruction in `fields.py`. All of it assumes the 2ff shape.
 
 Cost is not only structural: `eig` is `O(N³)`, so 2ff → 4ff is roughly **8x** on the layer solve.
 
-**Part of this now exists.** `fieldwave/_core/solve_2d_4ff.py` carries the first-order operator
+**Part of this now exists.** `wavebit/_core/solve_2d_4ff.py` carries the first-order operator
 `M`, the forward/backward split, and a stack solve, pinned by `tests/test_solve_2d_4ff.py`
 against both the 2ff path (where that path is valid, eigenvalues agree at `lam = i q` to 1e-15)
 and the Berreman oracle (entry for entry, to 1e-16, on tensors 2ff cannot express at all), and
@@ -472,7 +472,7 @@ class Formulation(str, Enum):
     FIRST  = '4ff'    # force first-order; always possible, ~8x
 ```
 
-That is `fieldwave._core.enums.Formulation`, and it is reached as `solver.formulation` — an
+That is `wavebit._core.enums.Formulation`, and it is reached as `solver.formulation` — an
 attribute rather than a constructor keyword, because the JAX solver passes its pytree children
 positionally and a new keyword shifts them.
 

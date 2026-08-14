@@ -1,4 +1,4 @@
-"""Frozen geometry makes the public API traceable (fieldwave.StaticGeometry).
+"""Frozen geometry makes the public API traceable (wavebit.StaticGeometry).
 
 Two pipeline steps decide something structural rather than numeric — the NVF normal field and
 the integrated block compression. Both branch on values, so neither survives ``jax.jit``. (There was
@@ -17,7 +17,7 @@ import importlib
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 
 UCELL = np.random.default_rng(0).uniform(1.0, 4.0, (1, 5, 5))
 KW = dict(n_top=1.0, n_bot=1.0, theta=0.1, phi=0.2, psi=0.3, fto=[2, 2],
@@ -35,7 +35,7 @@ DEFAULT_STRATEGY = dict(fourier_coefficients='sampled', factorization='li')
 @pytest.mark.parametrize('strategy', STRATEGIES, ids=IDS)
 def test_frozen_geometry_does_not_change_the_answer(strategy):
     """Freezing is an optimization, not a different computation."""
-    solver = fieldwave.rcwa(backend=0, ucell=UCELL, **strategy, **KW)
+    solver = wavebit.rcwa(backend=0, ucell=UCELL, **strategy, **KW)
     auto = solver.conv_solve()
     frozen = solver.conv_solve(geometry=solver.freeze_geometry())
     assert np.array_equal(np.asarray(auto.res.R), np.asarray(frozen.res.R))
@@ -48,7 +48,7 @@ def test_jit_and_grad_through_the_public_api(strategy):
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
 
-    solver = fieldwave.rcwa(backend=1, ucell=UCELL, **strategy, **KW)
+    solver = wavebit.rcwa(backend=1, ucell=UCELL, **strategy, **KW)
     geometry = solver.freeze_geometry()
 
     def loss(u):
@@ -70,7 +70,7 @@ def test_jit_and_grad_through_the_public_api(strategy):
 
 def _jit_loss(**strategy):
     import jax.numpy as jnp
-    solver = fieldwave.rcwa(backend=1, ucell=UCELL, **strategy, **KW)
+    solver = wavebit.rcwa(backend=1, ucell=UCELL, **strategy, **KW)
     return lambda u: jnp.sum(solver.conv_solve(ucell=u).res.T).real
 
 
@@ -105,7 +105,7 @@ def test_the_default_pairing_needs_no_frozen_geometry_at_all():
 
     got = float(jax.jit(_jit_loss(**DEFAULT_STRATEGY))(jnp.asarray(UCELL)))
     want = float(np.sum(np.asarray(
-        fieldwave.rcwa(backend=0, ucell=UCELL, **DEFAULT_STRATEGY,
+        wavebit.rcwa(backend=0, ucell=UCELL, **DEFAULT_STRATEGY,
                        **KW).conv_solve().res.T).real))
     assert got == pytest.approx(want, abs=1e-10)
 
@@ -118,7 +118,7 @@ def test_freeze_geometry_reports_what_the_strategy_needs():
     singularity the convention merge had already removed.)
     """
     def geo(**strategy):
-        return fieldwave.rcwa(backend=0, ucell=UCELL, **strategy, **KW).freeze_geometry()
+        return wavebit.rcwa(backend=0, ucell=UCELL, **strategy, **KW).freeze_geometry()
 
     default = geo()
     assert default.normal_field is None and default.compression is None
@@ -157,16 +157,16 @@ def test_a_frozen_geometry_makes_the_vector_path_traceable(name, make, start):
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    importlib.import_module('fieldwave.on_jax')
+    importlib.import_module('wavebit.on_jax')
 
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
                theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0)
     x = jnp.asarray(start)
-    frozen = fieldwave.rcwa(backend=1, ucell=make(x), **cfg).freeze_geometry()
+    frozen = wavebit.rcwa(backend=1, ucell=make(x), **cfg).freeze_geometry()
     assert frozen.block_grid is not None, 'the grid plan was not recorded'
 
     def total(v):
-        return jnp.sum(fieldwave.rcwa(backend=1, ucell=make(v), **cfg)
+        return jnp.sum(wavebit.rcwa(backend=1, ucell=make(v), **cfg)
                        .conv_solve(geometry=frozen).T).real
 
     eager = float(total(x))
@@ -197,18 +197,18 @@ def test_a_stale_frozen_geometry_is_refused_rather_than_answered():
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    importlib.import_module('fieldwave.on_jax')
-    from fieldwave._core.modeler import StaleGeometryError
+    importlib.import_module('wavebit.on_jax')
+    from wavebit._core.modeler import StaleGeometryError
 
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
                theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0)
     make = lambda lx: [[3.5, [['ellipse', 150.0, 150.0, lx, 55.0, 2.0, 0.27, 9, 9]]]]
 
     def total(lx, geometry=None):
-        return float(jnp.sum(fieldwave.rcwa(backend=1, ucell=make(lx), **cfg)
+        return float(jnp.sum(wavebit.rcwa(backend=1, ucell=make(lx), **cfg)
                              .conv_solve(geometry=geometry).T).real)
 
-    frozen = fieldwave.rcwa(backend=1, ucell=make(jnp.asarray(85.0)), **cfg).freeze_geometry()
+    frozen = wavebit.rcwa(backend=1, ucell=make(jnp.asarray(85.0)), **cfg).freeze_geometry()
 
     for lx in (85.0, 100.0):                       # near the freeze: accepted, and exact
         assert total(jnp.asarray(lx), frozen) == total(lx)
@@ -233,7 +233,7 @@ def _rod(width, height=10, n_rod=3.5, n_bg=1.0, n=20):
 
 
 def _de_ti(ucell, strategy, geometry=None):
-    solver = fieldwave.rcwa(backend=0, ucell=ucell, **strategy, **RASTER_KW)
+    solver = wavebit.rcwa(backend=0, ucell=ucell, **strategy, **RASTER_KW)
     return np.asarray(solver.conv_solve(geometry=geometry).res.T).real
 
 
@@ -256,11 +256,11 @@ def test_a_stale_raster_record_is_refused_rather_than_answered(strategy):
     This pins both halves, as the vector-path test does: refused where the record no longer
     fits, and exact where it is accepted, so the check is not merely conservative.
     """
-    frozen = fieldwave.rcwa(backend=0, ucell=_rod(6), **strategy,
+    frozen = wavebit.rcwa(backend=0, ucell=_rod(6), **strategy,
                             **RASTER_KW).freeze_geometry()
 
     for width in (7, 8, 10, 14):                   # the pattern moved: refused, not answered
-        with pytest.raises(fieldwave.StaleGeometryError, match='no longer fits'):
+        with pytest.raises(wavebit.StaleGeometryError, match='no longer fits'):
             _de_ti(_rod(width), strategy, frozen)
 
     for n_rod in (3.5, 3.0, 2.0, 1.4):             # material only: accepted, and bit-exact
@@ -288,7 +288,7 @@ def test_a_compression_that_still_separates_the_blocks_is_kept():
             cell[0, split:, k * width:(k + 1) * width] = 0.5 * v + 0.5
         return cell
 
-    frozen = fieldwave.rcwa(backend=0, ucell=stripes([1.0, 2.0, 3.0, 4.0]),
+    frozen = wavebit.rcwa(backend=0, ucell=stripes([1.0, 2.0, 3.0, 4.0]),
                             fourier_coefficients='integrated',
                             **RASTER_KW).freeze_geometry()
 
@@ -298,7 +298,7 @@ def test_a_compression_that_still_separates_the_blocks_is_kept():
         assert replayed == pytest.approx(_de_ti(ucell, dict(fourier_coefficients='integrated')), abs=1e-13)
 
     for values in ([1.0, 2.0, 3.0], [1.0, 2.0, 3.0, 4.0, 1.5, 2.5, 3.5, 4.5]):
-        with pytest.raises(fieldwave.StaleGeometryError, match='no longer fits'):
+        with pytest.raises(wavebit.StaleGeometryError, match='no longer fits'):
             _de_ti(stripes(values), dict(fourier_coefficients='integrated'), frozen)
 
 
@@ -318,10 +318,10 @@ def test_a_one_cell_axis_makes_every_same_shape_replay_valid():
         cell[0, 0, :width] = 3.5
         return cell
 
-    frozen = fieldwave.rcwa(backend=0, ucell=grating(8), factorization='nvf',
+    frozen = wavebit.rcwa(backend=0, ucell=grating(8), factorization='nvf',
                             **cfg).freeze_geometry()
     for width in (8, 10, 14):
-        solvers = [fieldwave.rcwa(backend=0, ucell=grating(width), factorization='nvf',
+        solvers = [wavebit.rcwa(backend=0, ucell=grating(width), factorization='nvf',
                                   **cfg) for _ in range(2)]
         replayed = np.asarray(solvers[0].conv_solve(geometry=frozen).res.T)
         assert np.array_equal(replayed, np.asarray(solvers[1].conv_solve().res.T))
@@ -337,18 +337,18 @@ def test_a_traced_replay_carries_no_check():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
 
-    solver = fieldwave.rcwa(backend=0, ucell=_rod(6), factorization='nvf', **RASTER_KW)
+    solver = wavebit.rcwa(backend=0, ucell=_rod(6), factorization='nvf', **RASTER_KW)
     frozen = solver.freeze_geometry()
     assert frozen.normal_field_source is not None, 'the tell was not recorded'
 
-    jax_solver = fieldwave.rcwa(backend=1, ucell=_rod(6), factorization='nvf',
+    jax_solver = wavebit.rcwa(backend=1, ucell=_rod(6), factorization='nvf',
                                 **RASTER_KW)
 
     def total(u):
         return jnp.sum(jax_solver.conv_solve(ucell=u, geometry=frozen).res.T).real
 
     moved = jnp.asarray(_rod(14))
-    with pytest.raises(fieldwave.StaleGeometryError):
+    with pytest.raises(wavebit.StaleGeometryError):
         total(moved)                               # eager: refused
     assert np.isfinite(float(jax.jit(total)(moved)))   # traced: answered, unchecked
 
@@ -374,7 +374,7 @@ def test_the_compression_decides_itself_inside_a_gradient():
     import jax.numpy as jnp
 
     def total(u):
-        return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **INTEGRATED_STRATEGY, **KW)
+        return jnp.sum(wavebit.rcwa(backend=1, ucell=u, **INTEGRATED_STRATEGY, **KW)
                        .conv_solve().res.T).real
 
     grad = np.asarray(jax.grad(total)(jnp.asarray(UCELL)))
@@ -402,7 +402,7 @@ def test_a_moving_pattern_needs_no_record_on_the_compression_path():
     design = rng.random((1, 6, 6)) < 0.4
 
     def total(u):
-        return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **INTEGRATED_STRATEGY, **KW)
+        return jnp.sum(wavebit.rcwa(backend=1, ucell=u, **INTEGRATED_STRATEGY, **KW)
                        .conv_solve().res.T).real
 
     for flips in (0, 2, 4):
@@ -441,7 +441,7 @@ def test_the_normal_field_decides_itself_inside_a_gradient_too():
     for strategy in (dict(fourier_coefficients='sampled', factorization='nvf'),
                      dict(fourier_coefficients='integrated', factorization='nvf')):
         def total(u):
-            return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **strategy, **KW)
+            return jnp.sum(wavebit.rcwa(backend=1, ucell=u, **strategy, **KW)
                            .conv_solve().res.T).real
 
         grad = np.asarray(jax.grad(total)(jnp.asarray(UCELL)))
@@ -449,11 +449,11 @@ def test_the_normal_field_decides_itself_inside_a_gradient_too():
 
         # Deriving the mask instead of reading it is meant to be the same mask, so the frozen
         # and unfrozen paths must not merely agree -- they must be the same computation.
-        solver = fieldwave.rcwa(backend=1, ucell=UCELL, **strategy, **KW)
+        solver = wavebit.rcwa(backend=1, ucell=UCELL, **strategy, **KW)
         frozen = solver.freeze_geometry()
 
         def total_frozen(u):
-            return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **strategy, **KW)
+            return jnp.sum(wavebit.rcwa(backend=1, ucell=u, **strategy, **KW)
                            .conv_solve(geometry=frozen).res.T).real
 
         assert np.array_equal(grad, np.asarray(jax.grad(total_frozen)(jnp.asarray(UCELL))))
@@ -473,14 +473,14 @@ def test_the_nvf_gradient_holds_the_interfaces_fixed():
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    from fieldwave._core import factorization as _fac
+    from wavebit._core import factorization as _fac
 
     strategy = dict(fourier_coefficients='sampled', factorization='nvf')
     rng = np.random.default_rng(0)
     ucell = np.where(rng.random((1, 8, 8)) < 0.35, 3.5, 1.0)
 
     def total(u):
-        return jnp.sum(fieldwave.rcwa(backend=1, ucell=u, **strategy, **KW)
+        return jnp.sum(wavebit.rcwa(backend=1, ucell=u, **strategy, **KW)
                        .conv_solve().res.T).real
 
     def mask_size(u):
@@ -520,14 +520,14 @@ def test_a_length_that_moves_without_reordering_reuses_the_compilation():
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    importlib.import_module('fieldwave.on_jax')
+    importlib.import_module('wavebit.on_jax')
 
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
                theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0)
     make = lambda lx: [[3.5, [['ellipse', 150.0, 150.0, lx, 55.0, 2.0, 0.27, 4, 4]]]]
 
     def freeze_at(lx):
-        return fieldwave.rcwa(backend=1, ucell=make(jnp.asarray(lx)), **cfg).freeze_geometry()
+        return wavebit.rcwa(backend=1, ucell=make(jnp.asarray(lx)), **cfg).freeze_geometry()
 
     keys = {}
     for lx in (85.0, 90.0, 100.0, 106.0, 110.0, 115.0, 125.0):
@@ -544,7 +544,7 @@ def test_a_length_that_moves_without_reordering_reuses_the_compilation():
 
     # And the gradient is the one for the structure actually in front of it, each time.
     def total(lx, geometry):
-        return jnp.sum(fieldwave.rcwa(backend=1, ucell=make(lx), **cfg)
+        return jnp.sum(wavebit.rcwa(backend=1, ucell=make(lx), **cfg)
                        .conv_solve(geometry=geometry).T).real
 
     for lx in (100.0, 120.0):

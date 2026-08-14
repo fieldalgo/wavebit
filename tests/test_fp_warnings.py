@@ -30,12 +30,12 @@ import warnings
 import numpy as np
 import pytest
 
-import fieldwave
-from fieldwave._core.backend import (PrecisionLossWarning, UnphysicalResultWarning,
+import wavebit
+from wavebit._core.backend import (PrecisionLossWarning, UnphysicalResultWarning,
                                      UnresolvedBranchWarning,
                                      array_namespace, check_finite,
                                      check_physical)
-from fieldwave._core.solve_1d import final_matching
+from wavebit._core.solve_1d import final_matching
 
 # The messages NumPy emits for the FP status flags. Anything else a solve warns about is a
 # genuine finding and should not be silenced by this file's assertions.
@@ -54,7 +54,7 @@ def _run(**kwargs):
     """Solve, returning ``(result, fp_warning_messages)``."""
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        res = fieldwave.rcwa(backend=0, wavelength=WL, **kwargs).conv_solve()
+        res = wavebit.rcwa(backend=0, wavelength=WL, **kwargs).conv_solve()
     return res, _fp_warnings(rec)
 
 
@@ -133,7 +133,7 @@ def test_analytic_shape_path_is_silent():
                                            n_index=3.0)])]
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        res = fieldwave.rcwa(backend=0, ucell=ucell, fto=(6, 6), n_top=1.0, n_bot=1.0,
+        res = wavebit.rcwa(backend=0, ucell=ucell, fto=(6, 6), n_top=1.0, n_bot=1.0,
                              theta=np.deg2rad(5), phi=np.deg2rad(20), period=(1.0, 1.2),
                              wavelength=1.5, thickness=(0.3,), psi=0.35 * np.pi).conv_solve()
     assert _fp_warnings(rec) == []
@@ -142,7 +142,7 @@ def test_analytic_shape_path_is_silent():
 
 def test_field_reconstruction_is_silent_and_finite():
     """Reconstruction re-walks the same modal exponentials the solve cascaded."""
-    sim = fieldwave.rcwa(backend=0, ucell=_ucell_2d(), thickness=[600], period=[700, 700],
+    sim = wavebit.rcwa(backend=0, ucell=_ucell_2d(), thickness=[600], period=[700, 700],
                          wavelength=WL, fto=[6, 6], psi=0.0, n_bot=3.48)
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
@@ -283,13 +283,13 @@ def test_physical_warning_can_be_escalated_to_an_error():
 
 def test_warning_category_is_exported():
     """Filtering it is a user-facing action, so the name has to be reachable."""
-    assert fieldwave.UnphysicalResultWarning is UnphysicalResultWarning
+    assert wavebit.UnphysicalResultWarning is UnphysicalResultWarning
 
 
 def test_healthy_solves_emit_no_unphysical_warning():
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        fieldwave.rcwa(backend=0, ucell=_ucell_2d(), thickness=[600], period=[700, 700],
+        wavebit.rcwa(backend=0, ucell=_ucell_2d(), thickness=[600], period=[700, 700],
                        wavelength=WL, fto=[8, 8], psi=0.0, n_bot=3.48).conv_solve()
     assert [r for r in rec if issubclass(r.category, UnphysicalResultWarning)] == []
 
@@ -325,7 +325,7 @@ _BRANCH_UCELL = np.array([[[0, 1, 0, 1, 1, 1]]]) * 4 + 1
 
 
 def _branch_solve(type_complex, n_top=1.0, theta=0.4, phi=0.3, backend=0):
-    return fieldwave.rcwa(
+    return wavebit.rcwa(
         backend=backend, psi=np.pi / 2, n_top=n_top, n_bot=5.0, theta=theta, phi=phi, fto=[30],
         wavelength=900e-9, period=[2000e-9], ucell=_BRANCH_UCELL, thickness=[100e-9],
         type_complex=type_complex, fourier_coefficients='integrated',
@@ -381,14 +381,14 @@ def test_a_traced_single_precision_solve_says_it_could_not_be_checked():
     traced double-precision one stays silent, which is what keeps the message meaningful.
     """
     jax = pytest.importorskip('jax')
-    import fieldwave.on_jax          # noqa: F401  -- enables x64 before any array is made
+    import wavebit.on_jax          # noqa: F401  -- enables x64 before any array is made
     import jax.numpy as jnp
 
     theta = np.arcsin(np.sqrt(1.6 ** 2 + 1.2 ** 2 + 1e-4, dtype=np.complex128))
     phi = np.arctan(1.2 / 1.6001, dtype=np.complex128)
 
     def amplitude(type_complex, t):
-        res = fieldwave.rcwa(
+        res = wavebit.rcwa(
             backend=1, psi=np.pi / 2, n_top=1.0, n_bot=5.0, theta=t, phi=phi, fto=[10],
             wavelength=900e-9, period=[2000e-9], ucell=_BRANCH_UCELL, thickness=[100e-9],
             type_complex=type_complex, fourier_coefficients='sampled',
@@ -418,7 +418,7 @@ def test_the_check_does_not_break_tracing():
     import jax.numpy as jnp
 
     def R(theta):
-        res = fieldwave.rcwa(
+        res = wavebit.rcwa(
             backend=1, psi=np.pi / 2, n_top=1.0, n_bot=5.0, theta=theta, phi=0.3, fto=[6],
             wavelength=900e-9, period=[2000e-9], ucell=_BRANCH_UCELL, thickness=[100e-9],
             type_complex=0, fourier_coefficients='sampled',
@@ -436,13 +436,13 @@ def test_branch_warning_message_carries_no_numbers():
 
 
 def test_branch_warning_category_is_exported():
-    assert fieldwave.UnresolvedBranchWarning is UnresolvedBranchWarning
+    assert wavebit.UnresolvedBranchWarning is UnresolvedBranchWarning
 
 
 def test_branch_tolerance_is_scoped_and_restores():
-    import fieldwave._core.conventions as conventions
+    import wavebit._core.conventions as conventions
     before = conventions._FLAT
-    with fieldwave.branch_tolerance(1e-6):
+    with wavebit.branch_tolerance(1e-6):
         assert conventions._FLAT == 1e-6
     assert conventions._FLAT == before
 
@@ -463,7 +463,7 @@ def test_branch_tolerance_rescues_a_complex_angle_at_single_precision():
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         assert err() > 1.0
-        with fieldwave.branch_tolerance(1e-5):
+        with wavebit.branch_tolerance(1e-5):
             assert err() < 1e-5
 
 
@@ -472,7 +472,7 @@ def test_branch_tolerance_rescues_a_complex_angle_at_single_precision():
 def _precision_warnings(theta, backend=0, type_complex=0):
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        fieldwave.rcwa(
+        wavebit.rcwa(
             backend=backend, psi=np.pi / 2, n_top=1.0, n_bot=5.0, theta=theta, phi=0.3, fto=[5],
             wavelength=900e-9, period=[2000e-9], ucell=_BRANCH_UCELL, thickness=[100e-9],
             type_complex=type_complex, fourier_coefficients='sampled', factorization='li')
@@ -510,39 +510,39 @@ def _in_subprocess(body):
     return out.stdout
 
 
-def test_importing_fieldwave_lifts_the_x64_cap_when_jax_is_already_loaded():
+def test_importing_wavebit_lifts_the_x64_cap_when_jax_is_already_loaded():
     """The half of the trap that can be closed rather than merely reported.
 
-    With x64 off JAX cannot be *asked* for float64 — it is a cap, not a default — and fieldwave
+    With x64 off JAX cannot be *asked* for float64 — it is a cap, not a default — and wavebit
     flips it either way, just later. Deferring therefore does not spare the caller the
     process-wide change; it only makes the moment depend on import order, and an array built in
-    the gap is silently complex64. So it also happens at ``import fieldwave``, when JAX is
+    the gap is silently complex64. So it also happens at ``import wavebit``, when JAX is
     already present.
     """
     pytest.importorskip('jax')
     assert 'OK' in _in_subprocess("""
         import jax.numpy as jnp
-        import fieldwave
+        import wavebit
         assert jnp.asarray(0.4 + 0.3j).dtype == jnp.complex128, 'the cap was not lifted'
         print('OK')
     """)
 
 
-def test_importing_fieldwave_does_not_drag_jax_in():
+def test_importing_wavebit_does_not_drag_jax_in():
     """The half of the old rationale that still holds: a NumPy-only caller pays nothing."""
     assert 'OK' in _in_subprocess("""
         import sys
-        import fieldwave
-        assert 'jax' not in sys.modules, 'import fieldwave pulled jax in'
+        import wavebit
+        assert 'jax' not in sys.modules, 'import wavebit pulled jax in'
         print('OK')
     """)
 
 
 def test_the_remaining_x64_ordering_gap_is_reported():
-    """JAX arriving *after* fieldwave is the ordering the early lift cannot reach.
+    """JAX arriving *after* wavebit is the ordering the early lift cannot reach.
 
-    Nothing has imported JAX yet when ``import fieldwave`` runs, so there is no config to
-    change; ``fieldwave.on_jax`` enables x64 later, at the first solve, and an array built
+    Nothing has imported JAX yet when ``import wavebit`` runs, so there is no config to
+    change; ``wavebit.on_jax`` enables x64 later, at the first solve, and an array built
     before that is complex64. The setter widens it without recovering anything — measured
     ``|R| = 3.94`` against a true 0.67, with every dtype in sight reading complex128, which was
     read as a solver bug before it was read as this.
@@ -550,16 +550,16 @@ def test_the_remaining_x64_ordering_gap_is_reported():
     pytest.importorskip('jax')
     assert 'OK' in _in_subprocess("""
         import warnings
-        import fieldwave
+        import wavebit
         import jax.numpy as jnp
         import numpy as np
-        from fieldwave._core.backend import PrecisionLossWarning
+        from wavebit._core.backend import PrecisionLossWarning
 
         theta = jnp.asarray(0.4 + 0.3j)
         assert theta.dtype == jnp.complex64, theta.dtype        # the trap is armed
         with warnings.catch_warnings(record=True) as rec:
             warnings.simplefilter('always')
-            fieldwave.rcwa(
+            wavebit.rcwa(
                 backend=1, psi=np.pi / 2, n_top=1.0, n_bot=5.0, theta=theta, phi=0.3, fto=[5],
                 wavelength=900e-9, period=[2000e-9],
                 ucell=np.array([[[0, 1, 0, 1, 1, 1]]]) * 4 + 1, thickness=[100e-9],
@@ -570,4 +570,4 @@ def test_the_remaining_x64_ordering_gap_is_reported():
     """)
 
 def test_precision_warning_category_is_exported():
-    assert fieldwave.PrecisionLossWarning is PrecisionLossWarning
+    assert wavebit.PrecisionLossWarning is PrecisionLossWarning

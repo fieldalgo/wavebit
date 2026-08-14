@@ -3,15 +3,15 @@
 Written: 2026-08-09. Measured on CPU, NumPy backend, float64.
 
 Targets:
-- `fieldwave/_core/solve_2d.py::solve_2d` — the tensor-product `(ff_y, ff_x)` order layout
-- `fieldwave/_core/factorization.py` — the truncation the convolution builds assume
+- `wavebit/_core/solve_2d.py::solve_2d` — the tensor-product `(ff_y, ff_x)` order layout
+- `wavebit/_core/factorization.py` — the truncation the convolution builds assume
 - `studies/benchmark_truncation_shape.py` — the harness this document reports
 
 ---
 
 ## TL;DR
 
-S4 truncates the Fourier order set on a **disc** in reciprocal space; FieldWave keeps the full
+S4 truncates the Fourier order set on a **disc** in reciprocal space; Wavebit keeps the full
 **rectangle**. At the same maximum order the disc holds about `π/4` of the harmonics, and cost
 scales as `N³`, so the disc looks like a free 2x.
 
@@ -175,7 +175,7 @@ passes `Init_Setup(Gmethod=1)` — parallelogramic — so that benchmark is matc
 ## Reproducing
 
 ```bash
-conda run -n fieldwave python studies/benchmark_truncation_shape.py
+conda run -n wavebit python studies/benchmark_truncation_shape.py
 ```
 
 Run it from the repo root. `main()` takes `fto_ref`, the structure list, the factorization

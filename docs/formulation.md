@@ -3,18 +3,18 @@
 Written: 2026-08-11.
 
 Targets:
-- `fieldwave/_core/solve_1d.py` — `layer_modes_1d`, `layer_modes_1d_conical`, `solve_1d`,
+- `wavebit/_core/solve_1d.py` — `layer_modes_1d`, `layer_modes_1d_conical`, `solve_1d`,
   `final_matching`
-- `fieldwave/_core/solve_2d.py` — `layer_modes_2d`
-- `fieldwave/_core/factorization.py` — `_circulant_index`, `fourier2d_piecewise_constant`
-- `fieldwave/_core/conventions.py` — every square root below
+- `wavebit/_core/solve_2d.py` — `layer_modes_2d`
+- `wavebit/_core/factorization.py` — `_circulant_index`, `fourier2d_piecewise_constant`
+- `wavebit/_core/conventions.py` — every square root below
 - the paper draft (`e^{+jωt}`), via the mapping table in §10
 
 ---
 
 ## TL;DR
 
-FieldWave's algebra was originally written against a paper draft in the engineering
+Wavebit's algebra was originally written against a paper draft in the engineering
 convention `e^{+jωt}` and later flipped to `e^{-iωt}` to match RETICOLO. The flip is complex
 conjugation of the entire problem, and doing it equation-by-equation is exactly how sign
 errors breed — three shipped as gain-media bugs, one as a branch-cut defect
@@ -422,7 +422,7 @@ every physical magnitude is identical. For cross-reading:
 | complex `r`, `t`, fields | conjugates of the code's | |
 | `\|r\|²`, efficiencies, `\|E\|` | identical | |
 
-Practical consequences: efficiency and intensity figures computed with FieldWave drop
+Practical consequences: efficiency and intensity figures computed with Wavebit drop
 into the paper unchanged; any **complex amplitude or field phase** must be conjugated (or
 the paper's convention statement changed); and the paper currently states its convention
 nowhere — the single sentence "we adopt `e^{+jωt}`; a lossy medium has `Im(ε) < 0`" in

@@ -5,7 +5,7 @@ anywhere. Rerun it only to add cases or after deliberately changing what is comp
 never to make a failing test pass, since the whole value of this oracle is that its numbers
 did not come from this codebase.
 
-    conda run -n fieldwave python tests/references/gen_goldens_reticolo.py
+    conda run -n wavebit python tests/references/gen_goldens_reticolo.py
 
 The cases are imported from the test module rather than restated here. The other generators
 in this directory keep a copy with a "must stay identical" comment, and a copy that must
@@ -36,7 +36,7 @@ import sys
 import numpy as np
 
 HERE = pathlib.Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[2]))   # repo root, for `import fieldwave`
+sys.path.insert(0, str(HERE.parents[2]))   # repo root, for `import wavebit`
 sys.path.insert(0, str(HERE))              # the bridge and the test module beside it
 
 # No default: where RETICOLO is installed is a property of the machine, not of this project,

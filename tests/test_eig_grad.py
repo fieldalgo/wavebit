@@ -21,13 +21,13 @@ Two things are pinned here, and they pull in opposite directions:
 import numpy as np
 import pytest
 
-import fieldwave
-from fieldwave._core.backend import eig
+import wavebit
+from wavebit._core.backend import eig
 
 pytest.importorskip('jax')
 import jax                                                    # noqa: E402
 import jax.numpy as jnp                                       # noqa: E402
-import fieldwave.on_jax                                       # noqa: E402,F401  (enables x64)
+import wavebit.on_jax                                       # noqa: E402,F401  (enables x64)
 
 
 def _rand(rng, n):
@@ -154,14 +154,14 @@ def _ucell_grad(theta, backend):
     """d(sum T) / d(ucell) — a derivative that has to cross the eigendecomposition."""
     if backend == 1:
         def loss(u):
-            s = fieldwave.rcwa(backend=1, ucell=u, theta=theta,
+            s = wavebit.rcwa(backend=1, ucell=u, theta=theta,
                                fourier_coefficients='sampled', factorization='li', **STACK)
             return jnp.real(jnp.sum(s.conv_solve().T))
         return np.asarray(jax.grad(loss)(jnp.asarray(UNIFORM)))
 
     torch = pytest.importorskip('torch')
     u = torch.tensor(UNIFORM, dtype=torch.float64, requires_grad=True)
-    s = fieldwave.rcwa(backend=2, ucell=u, theta=theta,
+    s = wavebit.rcwa(backend=2, ucell=u, theta=theta,
                        fourier_coefficients='sampled', factorization='li', **STACK)
     s.conv_solve().T.real.sum().backward()
     return u.grad.numpy()
@@ -195,8 +195,8 @@ def test_the_degeneracy_is_real():
     pairs instead of four for that reason alone.
     """
     import array_api_compat.numpy as xnp
-    from fieldwave._core.factorization import to_conv_mat_raster_sampled
-    from fieldwave._core.solve_1d import layer_modes_1d
+    from wavebit._core.factorization import to_conv_mat_raster_sampled
+    from wavebit._core.solve_1d import layer_modes_1d
 
     epx, epy, epz = to_conv_mat_raster_sampled(UNIFORM ** 2, 4, 0)
     fto = 4

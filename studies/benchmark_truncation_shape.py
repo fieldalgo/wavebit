@@ -2,7 +2,7 @@
 benchmark_truncation_shape.py -- rectangular vs circular Fourier-order truncation.
 
 
-FieldWave keeps a full rectangle of Fourier orders, |m| <= fto_x and |n| <= fto_y, so the
+Wavebit keeps a full rectangle of Fourier orders, |m| <= fto_x and |n| <= fto_y, so the
 harmonic count is always (2*fto_x+1)*(2*fto_y+1).  S4 instead keeps a disc in reciprocal
 space: the orders with the smallest |G|, with the last shell closed so lattice symmetry is
 preserved.  At the same maximum order the disc holds about pi/4 of the harmonics of the box,
@@ -43,12 +43,12 @@ import time
 
 import numpy as np
 
-from fieldwave._core.conventions import boundary_kz
-from fieldwave._core.factorization import (_nvf_assemble, fourier2d_piecewise_constant,
+from wavebit._core.conventions import boundary_kz
+from wavebit._core.factorization import (_nvf_assemble, fourier2d_piecewise_constant,
                                            fourier2d_pointwise, normal_vector_field,
                                            to_conv_mat_raster_nvf)
-from fieldwave._core.solve_1d import _block, _diag, final_matching
-from fieldwave._core.solve_2d import layer_modes_2d, sp_modes_2d
+from wavebit._core.solve_1d import _block, _diag, final_matching
+from wavebit._core.solve_2d import layer_modes_2d, sp_modes_2d
 
 C128 = np.complex128
 
@@ -321,7 +321,7 @@ def selftest():
 
 
 def _core_solve_2d(ucell, fto, epx, epy, epxy, epyx, epz_i):
-    from fieldwave._core.solve_2d import solve_2d
+    from wavebit._core.solve_2d import solve_2d
 
     C = CASE
     rng = np.arange(-fto, fto + 1)

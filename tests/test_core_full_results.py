@@ -8,17 +8,17 @@ against the frozen legacy reference in test_golden_legacy_parity.py.
 import numpy as np
 import pytest
 
-import fieldwave
-from fieldwave._core.factorization import to_conv_mat_raster_sampled
-from fieldwave._core.solve_1d import solve_1d, solve_1d_conical
-from fieldwave._core.solve_2d import solve_2d
+import wavebit
+from wavebit._core.factorization import to_conv_mat_raster_sampled
+from wavebit._core.solve_1d import solve_1d, solve_1d_conical
+from wavebit._core.solve_2d import solve_2d
 
 FIELDS = ('r_s', 'r_p', 't_s', 't_p',
           'R', 'R_s', 'R_p', 'T', 'T_s', 'T_p')
 
 
 def _setup(**kw):
-    solver = fieldwave.rcwa(backend=0, **kw)
+    solver = wavebit.rcwa(backend=0, **kw)
     legacy = solver.conv_solve()
     epx, epy, epz = to_conv_mat_raster_sampled(
         solver.ucell, solver.fto[0], solver.fto[1])

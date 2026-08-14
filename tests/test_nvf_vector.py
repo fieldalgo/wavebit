@@ -1,9 +1,9 @@
 import numpy as np
-import fieldwave
-from fieldwave._core.modeler import Modeling
+import wavebit
+from wavebit._core.modeler import Modeling
 import array_api_compat.numpy as xnp
-from fieldwave._core.analytic import normal_vector_field_analytical as _nvf_analytic
-from fieldwave._core.factorization import nvf_conv_matrices as _nvf_conv
+from wavebit._core.analytic import normal_vector_field_analytical as _nvf_analytic
+from wavebit._core.factorization import nvf_conv_matrices as _nvf_conv
 
 
 def get_normal_vector_field_analytical(grid_shape, shapes, period=(1000.0, 1000.0)):
@@ -41,7 +41,7 @@ def test_vector_nvf_energy_conservation():
     fto_val = 2
     Exx, Eyy, Exy, Eyx, Epz_i = to_conv_mat_nvf_2d(eps_matrix, fto_val, fto_val, nx=nx_vec, ny=ny_vec)
 
-    m = fieldwave.rcwa(
+    m = wavebit.rcwa(
         backend=0, fto=[fto_val, fto_val],
         psi=0.0, n_top=1.0, n_bot=1.45,
         theta=10.0 * np.pi / 180, phi=20.0 * np.pi / 180,

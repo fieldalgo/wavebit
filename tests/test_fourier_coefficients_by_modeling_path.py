@@ -24,8 +24,8 @@ default and cannot be refused on a path where nobody chose it; a spelled-out one
 import numpy as np
 import pytest
 
-import fieldwave
-from fieldwave._core.enums import FourierCoefficients
+import wavebit
+from wavebit._core.enums import FourierCoefficients
 
 KW = dict(backend=0, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
           fto=[4, 4], period=[1.0, 1.0], wavelength=1.1, thickness=[0.3])
@@ -54,7 +54,7 @@ UNAVAILABLE = {'smooth': 'sampled', 'block': 'sampled'}
 
 
 def solver(path, **strategy):
-    return fieldwave.rcwa(ucell=UCELLS[path], **KW, **strategy)
+    return wavebit.rcwa(ucell=UCELLS[path], **KW, **strategy)
 
 
 def totals(path, **strategy):
@@ -181,7 +181,7 @@ def test_the_refusal_holds_on_every_backend(name, code, path, series):
     of the three had grown its own copy."""
     pytest.importorskip(name)
     with pytest.raises(NotImplementedError):
-        fieldwave.rcwa(ucell=UCELLS[path], **dict(KW, backend=code),
+        wavebit.rcwa(ucell=UCELLS[path], **dict(KW, backend=code),
                        fourier_coefficients=series).conv_solve()
 
 
@@ -210,12 +210,12 @@ PAINTED_KW = dict(KW, period=PAINTED_PERIOD, fto=[6, 6], thickness=[0.6], wavele
 
 
 def _painted(**strategy):
-    return fieldwave.rcwa(ucell=PAINTED, **PAINTED_KW, **strategy)
+    return wavebit.rcwa(ucell=PAINTED, **PAINTED_KW, **strategy)
 
 
 def test_the_boundary_sub_path_is_covered_by_the_smooth_row():
     """It really does take the resolving branch, and really does resolve to the smooth pair."""
-    from fieldwave._core import analytic
+    from wavebit._core import analytic
     assert analytic.layer_needs_resolving(PAINTED[0], PAINTED_PERIOD, None)
     s = _painted()
     assert s._modeling_type_assigned == 2
@@ -275,7 +275,7 @@ def test_a_pytree_round_trip_does_not_turn_an_unset_option_into_a_request():
     inside JAX's tree machinery rather than at the solve being refused, which is pinned below.
     """
     jax = pytest.importorskip('jax')
-    s = fieldwave.rcwa(ucell=SMOOTH, **dict(KW, backend=1))
+    s = wavebit.rcwa(ucell=SMOOTH, **dict(KW, backend=1))
     leaves, treedef = jax.tree_util.tree_flatten(s)
     back = jax.tree_util.tree_unflatten(treedef, leaves)
 
@@ -287,7 +287,7 @@ def test_a_pytree_round_trip_does_not_turn_an_unset_option_into_a_request():
 
 def test_a_pytree_round_trip_keeps_a_real_request_and_still_refuses_it_at_the_solve():
     jax = pytest.importorskip('jax')
-    s = fieldwave.rcwa(ucell=SMOOTH, fourier_coefficients='sampled', **dict(KW, backend=1))
+    s = wavebit.rcwa(ucell=SMOOTH, fourier_coefficients='sampled', **dict(KW, backend=1))
     leaves, treedef = jax.tree_util.tree_flatten(s)     # must not raise here
     back = jax.tree_util.tree_unflatten(treedef, leaves)
     assert back._fourier_coefficients == 'sampled'
@@ -327,32 +327,32 @@ def test_a_spec_that_does_not_mention_the_coefficients_does_not_request_them():
     and a spec carrying shape-path layers would be refused for asking for a series its author
     never named. Exactly the failure the ``factorization`` half of this already avoids.
     """
-    from fieldwave._core.spec import Numerics
+    from wavebit._core.spec import Numerics
     assert Numerics().fourier_coefficients is None
     assert 'fourier_coefficients' not in Numerics().as_kwargs()
     assert Numerics.from_dict(Numerics().to_dict()).fourier_coefficients is None
 
-    result = fieldwave.run(SPEC)
+    result = wavebit.run(SPEC)
     assert float(np.sum(np.asarray(result.T))) == totals('smooth')[1]
 
 
 def test_a_spec_that_does_mention_it_is_refused_like_any_other_request():
     numerics = dict(SPEC['numerics'], fourier_coefficients='sampled')
     with pytest.raises(NotImplementedError, match="fourier_coefficients='sampled'"):
-        fieldwave.run({**SPEC, 'numerics': numerics})
+        wavebit.run({**SPEC, 'numerics': numerics})
 
 
 def test_a_spec_may_still_name_the_series_its_path_does_form():
-    from fieldwave._core.spec import Numerics
+    from wavebit._core.spec import Numerics
     assert (Numerics.from_dict({'fourier_coefficients': 'integrated'}).fourier_coefficients
             is FourierCoefficients.INTEGRATED)
     numerics = dict(SPEC['numerics'], fourier_coefficients='integrated')
-    assert (float(np.sum(np.asarray(fieldwave.run({**SPEC, 'numerics': numerics}).T))) ==
+    assert (float(np.sum(np.asarray(wavebit.run({**SPEC, 'numerics': numerics}).T))) ==
             totals('smooth')[1])
 
 
 def test_a_raster_spec_still_carries_the_coefficients_through():
     """Omitting an unset value must not have stopped a set one from reaching the solver."""
-    from fieldwave._core.spec import Numerics
+    from wavebit._core.spec import Numerics
     assert (Numerics(fourier_coefficients=FourierCoefficients.INTEGRATED)
             .as_kwargs()['fourier_coefficients'] == 'integrated')

@@ -1,4 +1,4 @@
-"""Single-source 1D solve core (fieldwave._core.solve_1d).
+"""Single-source 1D solve core (wavebit._core.solve_1d).
 
 Three properties, one implementation:
   * wiring        — driving the core through ``rcwa``/``conv_solve`` gives the same numbers
@@ -13,14 +13,14 @@ in-process would prove nothing now that it dispatches into the core.
 import numpy as np
 import pytest
 
-import fieldwave
-from fieldwave._core.factorization import to_conv_mat_raster_sampled
-from fieldwave._core.solve_1d import solve_1d, solve_1d_conical
+import wavebit
+from wavebit._core.factorization import to_conv_mat_raster_sampled
+from wavebit._core.solve_1d import solve_1d, solve_1d_conical
 
 
 def _run_and_inputs(tetm, ucell, thickness, n_top, n_bot, wl, period, fto, theta):
     """Solve via the public API and return (its R/T, the same inputs)."""
-    solver = fieldwave.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=None,
+    solver = wavebit.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=None,
                           tetm=tetm, fto=fto, period=period, wavelength=wl,
                           thickness=thickness, ucell=ucell)
     via_api = solver.conv_solve()
@@ -158,7 +158,7 @@ def test_core_gradient_jax_torch_fd(tetm):
 
 def _run_and_inputs_conical(ucell, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi):
     """Same, forced onto the conical path."""
-    solver = fieldwave.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi,
+    solver = wavebit.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi,
                           fto=fto, period=period, wavelength=wl, thickness=thickness, ucell=ucell)
     via_api = solver.conv_solve()
     assert solver.grating_type_assigned == 1, solver.grating_type_assigned   # ensure conical path

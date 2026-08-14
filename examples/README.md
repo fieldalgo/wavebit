@@ -1,6 +1,6 @@
 # Examples
 
-FieldWave applied to problems, in plain scripts. Everything here is pure FieldWave — no ML
+Wavebit applied to problems, in plain scripts. Everything here is pure Wavebit — no ML
 frameworks, no vendored dependencies, nothing that needs a dataset or a GPU.
 
 | Entry | Question it answers |
@@ -19,7 +19,7 @@ runs every script from its own directory with `MPLBACKEND=Agg` and fails on a no
 example can run to completion and still be returning R+T > 1. The whole set takes well under a
 minute, which is why it is a separate job from the verification suite rather than part of it.
 
-**It cannot tell you the numbers are right.** All four scripts import FieldWave, but the result
+**It cannot tell you the numbers are right.** All four scripts import Wavebit, but the result
 guards are NumPy-only, and `block_1d.py` solves on PyTorch while `block_2d.py` solves on JAX. So
 the `UnphysicalResultWarning` condition reaches **two scripts**, the two `_verification.py`
 files. For the other two a green tick means the code ran, and says nothing about what it

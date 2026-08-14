@@ -1,4 +1,4 @@
-"""Vector geometry modeler (fieldwave._core.modeler) against the frozen legacy output.
+"""Vector geometry modeler (wavebit._core.modeler) against the frozen legacy output.
 
 The modeler decomposes parametric shapes — rectangles and ellipses, optionally rotated — into
 the piecewise-constant blocks the vector factorization consumes. Its reference values were
@@ -14,11 +14,11 @@ import importlib
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 
 #: The linear angle each pure declaration is the special case of.
 _PSI_OF = {'te': np.pi / 2, 'tm': 0.0}
-from fieldwave._core.modeler import Modeling
+from wavebit._core.modeler import Modeling
 
 GOLDEN = np.load(pathlib.Path(__file__).parent / 'data' / 'golden_legacy_modeler.npz')
 
@@ -187,7 +187,7 @@ def test_rectangle_has_no_step_where_the_angle_margin_used_to_end():
     def T(angle):
         ucell = [[3.5, [['rectangle', 150.0, 150.0, 80.0, 60.0, 2.0, angle, 8, 8]]]]
         return float(np.sum(np.asarray(
-            fieldwave.rcwa(backend=0, ucell=ucell, **cfg).conv_solve().T)))
+            wavebit.rcwa(backend=0, ucell=ucell, **cfg).conv_solve().T)))
 
     across = (T(1.02e-5) - T(0.98e-5)) / (0.04e-5)
     outside = (T(1.10e-5) - T(1.06e-5)) / (0.04e-5)
@@ -214,7 +214,7 @@ def test_rectangle_angle_carries_gradient_near_an_aligned_angle():
     def T(angle):
         ucell = [[3.5, [['rectangle', tensor(150.0), tensor(150.0), tensor(80.0),
                          tensor(60.0), 2.0, angle, 8, 8]]]]
-        return torch.sum(fieldwave.rcwa(backend=2, ucell=ucell, **cfg).conv_solve().T)
+        return torch.sum(wavebit.rcwa(backend=2, ucell=ucell, **cfg).conv_solve().T)
 
     p = torch.tensor(1e-5, dtype=torch.float64, requires_grad=True)
     out = T(p)
@@ -277,7 +277,7 @@ def test_two_objects_sharing_an_edge_keep_their_gradient():
                          tensor(0.)]]]]
         cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
                    wavelength=900.0, psi=np.pi / 4)
-        return torch.sum(fieldwave.rcwa(backend=2, ucell=ucell, **cfg).conv_solve().T)
+        return torch.sum(wavebit.rcwa(backend=2, ucell=ucell, **cfg).conv_solve().T)
 
     p = torch.tensor(80.0, dtype=torch.float64, requires_grad=True)
     total(p).backward()
@@ -297,7 +297,7 @@ def test_vector_solve_matches_legacy_golden(name, backend):
     """End to end: modeled geometry -> factorization -> efficiencies, on every backend."""
     if backend:
         pytest.importorskip('jax' if backend == 1 else 'torch')
-    result = fieldwave.rcwa(backend=backend, ucell=INSTRUCTIONS[name], **SOLVE_KW).conv_solve()
+    result = wavebit.rcwa(backend=backend, ucell=INSTRUCTIONS[name], **SOLVE_KW).conv_solve()
     # Golden keys keep the frozen legacy names (de_ri/de_ti); the attributes were renamed.
     for key, field in (('de_ri', 'R'), ('de_ti', 'T')):
         want = GOLDEN[f'{name}__{key}']
@@ -318,7 +318,7 @@ def test_rectangle_no_approximation_and_draw():
 
 
 def test_torch_device_code_is_not_a_device_index():
-    """``device=0`` is fieldwave's code for CPU, not torch device index 0.
+    """``device=0`` is wavebit's code for CPU, not torch device index 0.
 
     Passing it through raw selects MPS on a Mac, which rejects float64 outright.
     """
@@ -344,7 +344,7 @@ def test_jax_device_setter_round_trips():
     """
     jax = pytest.importorskip('jax')
 
-    solver = fieldwave.rcwa(
+    solver = wavebit.rcwa(
         backend=1, psi=np.pi / 2, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, fto=[5],
         wavelength=900.0, period=[1000.0], thickness=[500.0],
         ucell=np.array([[[1.0, 3.0, 3.0, 1.0]]]), device=0)
@@ -377,7 +377,7 @@ def test_vector_path_differentiates_wrt_edge_positions(backend, name):
     """
     pytest.importorskip(name)
     if backend == 1:
-        importlib.import_module('fieldwave.on_jax')
+        importlib.import_module('wavebit.on_jax')
 
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3],
                n_top=1.0, n_bot=1.0, wavelength=900.0, psi=np.pi / 4)
@@ -385,7 +385,7 @@ def test_vector_path_differentiates_wrt_edge_positions(backend, name):
     def total(cd, xp_scalar):
         inst = [[3.5, [['rectangle', xp_scalar(150.0), xp_scalar(150.0), cd,
                         xp_scalar(60.0), 2.0, xp_scalar(0.0)]]]]
-        res = fieldwave.rcwa(backend=backend, ucell=inst, **cfg).conv_solve()
+        res = wavebit.rcwa(backend=backend, ucell=inst, **cfg).conv_solve()
         return res.T
 
     if backend == 2:
@@ -429,7 +429,7 @@ def test_the_staircase_costs_a_kink_at_an_aligned_angle(tetm, name):
     def T(angle, n_split):
         ucell = [[3.5, [['rectangle', 150.0, 150.0, 80.0, 60.0, 2.0, angle, n_split, n_split]]]]
         return float(np.sum(np.asarray(
-            fieldwave.rcwa(backend=0, ucell=ucell, **cfg).conv_solve().T)))
+            wavebit.rcwa(backend=0, ucell=ucell, **cfg).conv_solve().T)))
 
     step = 1e-4
     at_zero = T(0.0, 64)

@@ -5,8 +5,8 @@ solver at its current release (fmmax 1.7.1, inkstone 0.3.15, EMpy 2.2.3, RETICOL
 versions checked against PyPI and Zenodo rather than against notes.
 
 Targets:
-- `fieldwave/_core/solve_2d.py::layer_modes_2d` — the five blocks it reads
-- `fieldwave/_core/solve_2d_4ff.py` — the formulation that reads all nine
+- `wavebit/_core/solve_2d.py::layer_modes_2d` — the five blocks it reads
+- `wavebit/_core/solve_2d_4ff.py` — the formulation that reads all nine
 - `tests/test_anisotropic_berreman.py::test_voigt_geometry_matches_the_oracle` — and its
   `::test_a_z_row_is_refused_by_the_formulation_that_cannot_hold_it` twin
 - `tests/references/README.md` — the per-solver measurements summarised in §4
@@ -15,7 +15,7 @@ Companion to two documents that answer neighbouring questions.
 [`anisotropic-materials.md`](anisotropic-materials.md) asks what the solver accepts and what each
 gap costs. [`off-diagonal-slot-convention.md`](off-diagonal-slot-convention.md) asks what to put
 in the slots by hand. **This one asks a question neither does: the five-slot shape is not a
-FieldWave decision — every second-order RCWA has it — so what do the other four components mean,
+Wavebit decision — every second-order RCWA has it — so what do the other four components mean,
 and what does each solver do when handed them?**
 
 ---
@@ -35,7 +35,7 @@ and what does each solver do when handed them?**
    diverge.
 5. **Energy conservation cannot detect the silent drop.** The reduced tensor is a valid lossless
    medium, so `R + T = 1` holds to machine precision while the answer is wrong by up to 6e-2.
-   This is why FieldWave never drops: the four components select the first-order formulation,
+   This is why Wavebit never drops: the four components select the first-order formulation,
    and the one way to ask for 2ff over a z row (`formulation='2ff'`) raises.
 
 ---
@@ -95,12 +95,12 @@ about the boundary itself.
 
 ## 3. The shape is not ours
 
-It is tempting to read the five slots as a FieldWave simplification. It is not — it is what a
+It is tempting to read the five slots as a Wavebit simplification. It is not — it is what a
 second-order formulation *is*, and the same five appear wherever one is used:
 
 | | how the five appear |
 |---|---|
-| FieldWave 2ff | `solve_for_conv(wl, epx, epy, epz_i, epxy, epyx)` |
+| Wavebit 2ff | `solve_for_conv(wl, epx, epy, epz_i, epxy, epyx)` |
 | fmmax | `eigensolve_anisotropic_media(..., permittivity_xx, xy, yx, yy, zz, ...)` |
 | S4 | `xy` block plus `zz` |
 
@@ -121,12 +121,12 @@ decide every row, and neither needs another solver to agree:
 
 | solver | behaviour | evidence |
 |---|---|---|
-| **FieldWave 2ff** | refuses | `ValueError` naming the slot, only reachable by asking for `formulation='2ff'` |
+| **Wavebit 2ff** | refuses | `ValueError` naming the slot, only reachable by asking for `formulation='2ff'` |
 | **fmmax** 1.7.1 | cannot be asked | no `xz/yz/zx/zy` arguments exist |
 | **inkstone** 0.3.15 | **accepts, silently drops** | takes a `(3,3)` array; output bit-identical to the z row zeroed |
 | **EMpy** 2.2.3 | reads it, diverges | uses the z row, but returns `R + T = 1.6e13` for a plain Faraday tensor at normal incidence |
 | **RETICOLO** V10 | handles it, within a bound | exact for one off-diagonal pair at `delta0 = 0`; past that `R + T` leaves 1 by 2.5e-3 to 1.2e-2 |
-| **FieldWave 4ff** | handles it, and is the default here | `solve_2d_4ff.py`, agreeing with RETICOLO to 1e-15 inside RETICOLO's bound — through the public API as well as directly |
+| **Wavebit 4ff** | handles it, and is the default here | `solve_2d_4ff.py`, agreeing with RETICOLO to 1e-15 inside RETICOLO's bound — through the public API as well as directly |
 
 The per-solver numbers, and how each was established, are in
 [`../tests/references/README.md`](../tests/references/README.md).
@@ -148,8 +148,8 @@ That table is why `test_a_z_row_is_refused_by_the_formulation_that_cannot_hold_i
 why the same numbers are quoted in the test that now *answers* the geometry rather than
 refusing it: the failure being guarded against is not a crash. It is also
 exactly what inkstone was measured doing — thirty lossless configurations conserving energy to
-1.3e-15, every z-decoupled case matching FieldWave to 1e-15, and only the z-coupled ones quietly
-4e-4 to 3e-2 out. Without the refusal, FieldWave would look identical.
+1.3e-15, every z-decoupled case matching Wavebit to 1e-15, and only the z-coupled ones quietly
+4e-4 to 3e-2 out. Without the refusal, Wavebit would look identical.
 
 **Energy conservation is a necessary check, not a sufficient one.** The same caution appears in
 `tests/test_anisotropic_berreman.py` and in
@@ -166,7 +166,7 @@ Reading all nine means abandoning the second-order reduction for the first-order
 
 which is roughly **8x** on the layer solve (`eig` is cubic and the problem doubles), and which
 gives up the free `±` mode pairing every 2ff consumer assumes — forward and backward become
-genuinely different mode sets. `fieldwave/_core/solve_2d_4ff.py` implements it, and since
+genuinely different mode sets. `wavebit/_core/solve_2d_4ff.py` implements it, and since
 2026-08-13 the public entry does reach it: `solve_for_conv` takes nine slots rather than five,
 and giving any of the four z-row slots selects the first-order path (`formulation='4ff'` forces
 it, `'2ff'` refuses a z row rather than dropping it). What crossing the edge still costs, beyond

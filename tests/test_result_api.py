@@ -8,7 +8,7 @@ indexing, and that the arrays and the accessor agree with each other.
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 
 WL = 500.0
 CELL_1D = np.array([[[1.0, 1.0, 3.5, 3.5]]])
@@ -19,14 +19,14 @@ def _solve_1d(**kw):
     args = dict(backend=0, tetm='te', n_top=1.0, n_bot=1.5, theta=0.3, fto=2, wavelength=WL,
                 period=[900.0], ucell=CELL_1D, thickness=[300.0])
     args.update(kw)
-    return fieldwave.rcwa(**args).conv_solve()
+    return wavebit.rcwa(**args).conv_solve()
 
 
 def _solve_2d(**kw):
     args = dict(backend=0, n_top=1.0, n_bot=1.5, theta=0.3, phi=0.0, psi=0.0, fto=[2, 1],
                 wavelength=WL, period=[900.0, 900.0], ucell=CELL_2D, thickness=[300.0])
     args.update(kw)
-    return fieldwave.rcwa(**args).conv_solve()
+    return wavebit.rcwa(**args).conv_solve()
 
 
 def test_efficiency_arrays_are_the_power_surface():
@@ -71,7 +71,7 @@ def test_unpolarized_delegation_averages_the_two_incidences():
         want = np.asarray(res.res.R)
         assert np.allclose(np.asarray(res.R), want)
     te, tm = np.asarray(res.res_te_inc.R), np.asarray(res.res_tm_inc.R)
-    avg = fieldwave._core.result.Result(None, res.res_te_inc, res.res_tm_inc, fto=res.fto)
+    avg = wavebit._core.result.Result(None, res.res_te_inc, res.res_tm_inc, fto=res.fto)
     assert np.allclose(np.asarray(avg.R), 0.5 * (te + tm))
 
 

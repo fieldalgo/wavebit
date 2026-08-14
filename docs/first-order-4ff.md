@@ -3,7 +3,7 @@
 Written: 2026-08-11. Measured on an Apple M4, NumPy 2.5.1 against Accelerate, float64.
 
 Targets:
-- `fieldwave/_core/solve_2d_4ff.py` — the whole path, `::solve_2d_4ff` its public entry
+- `wavebit/_core/solve_2d_4ff.py` — the whole path, `::solve_2d_4ff` its public entry
 - `tests/test_solve_2d_4ff.py`, `tests/references/test_4ff_external_goldens.py` — every number here
 - `tests/test_anisotropic_berreman.py` — the Berreman oracle it is judged against
 - `tests/test_formulation_dispatch.py` — which of the two formulations a call takes, and why

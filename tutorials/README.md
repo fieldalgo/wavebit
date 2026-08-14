@@ -8,7 +8,7 @@ belongs there as markdown instead.
 
 | Entry | Question it answers |
 | --- | --- |
-| [`01-modeling-and-emsolver.ipynb`](01-modeling-and-emsolver.ipynb) | How do you describe a structure and get a diffraction efficiency out of it? The starting point: modeling, and the electromagnetic solve (FieldWave uses RCWA). |
+| [`01-modeling-and-emsolver.ipynb`](01-modeling-and-emsolver.ipynb) | How do you describe a structure and get a diffraction efficiency out of it? The starting point: modeling, and the electromagnetic solve (Wavebit uses RCWA). |
 | [`02-autograd-and-optimization-jax.ipynb`](02-autograd-and-optimization-jax.ipynb), [`02-autograd-and-optimization-pytorch.ipynb`](02-autograd-and-optimization-pytorch.ipynb) | How do you differentiate a solve and optimize a structure with the gradient? Written twice, once per backend, so neither reader has to translate. |
 | [`03-device-and-datatype-jax.ipynb`](03-device-and-datatype-jax.ipynb), [`03-device-and-datatype-torch.ipynb`](03-device-and-datatype-torch.ipynb) | Where does the solve run (CPU or GPU) and in what precision (64-bit or 32-bit)? Also per backend. |
 | [`04-nvf-fourier-factorization.ipynb`](04-nvf-fourier-factorization.ipynb) | Why does a curved, high-contrast boundary converge so slowly under a plain discrete Fourier sum, and what does `factorization='nvf'` do about it? Also shows `freeze_geometry()`, the object that holds the normal field fixed and keeps a solve traceable. |

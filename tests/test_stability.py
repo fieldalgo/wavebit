@@ -18,7 +18,7 @@ expected to fail.
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 
 
 def _grating(n_hi=4.0, cells=8):
@@ -29,7 +29,7 @@ def _grating(n_hi=4.0, cells=8):
 
 def _solve(*, fto, thickness, n_hi=4.0, algo='ETM', type_complex=np.complex128,
            period=3000.0, wavelength=400.0, n_bot=1.5):
-    return fieldwave.rcwa(
+    return wavebit.rcwa(
         backend=0, wavelength=wavelength, period=[period], fto=[fto, 0],
         n_top=1.0, n_bot=n_bot, theta=0.0, phi=0.0, psi=np.pi / 2,
         ucell=_grating(n_hi), thickness=[thickness],
@@ -113,7 +113,7 @@ def test_tmm_and_smm_fields_agree_through_a_thick_layer(thickness):
     """
     cells = []
     for algo in ('ETM', 'SMM'):
-        solver = fieldwave.rcwa(
+        solver = wavebit.rcwa(
             backend=0, wavelength=400.0, period=[3000.0], fto=[40, 0],
             n_top=1.0, n_bot=1.5, theta=0.0, phi=0.0, psi=np.pi / 2,
             ucell=_grating(), thickness=[thickness], connecting_algo=algo)

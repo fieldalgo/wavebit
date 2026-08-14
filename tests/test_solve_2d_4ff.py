@@ -1,6 +1,6 @@
 """The first-order (4ff) layer solve, against the two things that can arbitrate it.
 
-``fieldwave/_core/solve_2d_4ff.py`` exists because the 2ff reduction does not survive a
+``wavebit/_core/solve_2d_4ff.py`` exists because the 2ff reduction does not survive a
 populated z row — physically, a magnetisation lying in the plane. Nothing dispatches to it yet;
 these tests are what says the formulation is right before anything is built on top.
 
@@ -31,8 +31,8 @@ factorization yet.
 import numpy as np
 import pytest
 
-from fieldwave._core.solve_2d import layer_modes_2d
-from fieldwave._core.solve_2d_4ff import (layer_matrix_4ff, split_forward_backward,
+from wavebit._core.solve_2d import layer_modes_2d
+from wavebit._core.solve_2d_4ff import (layer_matrix_4ff, split_forward_backward,
                                           solve_uniform_stack, vacuum_sp_states)
 
 WL = 600.0
@@ -608,14 +608,14 @@ def test_a_real_grating_matches_the_2ff_solve(fto, theta_deg, phi_deg):
     (``docs/anisotropic-materials.md`` §3) — so the geometry 4ff exists for still cannot be
     patterned. This says the solver is ready for those matrices, not that they exist.
     """
-    import fieldwave
-    from fieldwave._core.factorization import to_conv_mat_raster_sampled
-    from fieldwave._core.solve_2d import order_grid_kxy
+    import wavebit
+    from wavebit._core.factorization import to_conv_mat_raster_sampled
+    from wavebit._core.solve_2d import order_grid_kxy
 
     ucell = np.ones((1, 40, 40))
     ucell[0, 12:28, 12:28] = 2.6
 
-    solver = fieldwave.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=np.deg2rad(theta_deg),
+    solver = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=np.deg2rad(theta_deg),
                             phi=np.deg2rad(phi_deg), psi=0.0, fto=(fto, fto),
                             period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
                             ucell=ucell)

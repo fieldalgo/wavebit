@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 
 
 def test_nvf_circular_grating():
@@ -27,7 +27,7 @@ def test_nvf_circular_grating():
         ucell=ucell_2d, thickness=[200], factorization='nvf'
     )
 
-    mee_nvf = fieldwave.rcwa(backend=0, **option_nvf)
+    mee_nvf = wavebit.rcwa(backend=0, **option_nvf)
     res_nvf = mee_nvf.conv_solve()
 
     assert res_nvf.R is not None and res_nvf.T is not None
@@ -62,7 +62,7 @@ def test_nvf_energy_convergence():
 
     errs = {}
     for fto in (3, 5, 7):
-        res = fieldwave.rcwa(backend=0, ucell=ucell, fto=[fto, fto],
+        res = wavebit.rcwa(backend=0, ucell=ucell, fto=[fto, fto],
                               factorization='nvf', **cfg).conv_solve()
         R = float(np.array(res.R).real.sum())
         T = float(np.array(res.T).real.sum())
@@ -98,7 +98,7 @@ def test_nvf_on_a_one_cell_axis_reduces_to_li(kind):
     cfg |= dict(phi=0.3, psi=0.4) if kind == 'conical' else dict(psi=np.pi / 2 if kind == 'te' else 1)
 
     def total(**kw):
-        res = fieldwave.rcwa(**kw, **cfg).conv_solve()
+        res = wavebit.rcwa(**kw, **cfg).conv_solve()
         return float(np.sum(np.asarray(res.R)))
 
     assert total(factorization='nvf') == pytest.approx(total(factorization='li'), abs=1e-12)

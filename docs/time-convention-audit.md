@@ -4,17 +4,17 @@ Written: 2026-08-11. Measured on an Apple M4 (Accelerate), NumPy 2.5.1 / SciPy 1
 mpmath 1.3.0, float64 throughout.
 
 Targets:
-- `fieldwave/_core/conventions.py` — `boundary_kz`, `_off_principal_branch`, `mode_q`
-- `fieldwave/_core/boundary.py` — `conv_mats`
-- `fieldwave/_core/scattering.py` — the SMM incident amplitude (prose only)
-- `fieldwave/_core/solve_2d_4ff.py` — `split_forward_backward` (scope note only)
+- `wavebit/_core/conventions.py` — `boundary_kz`, `_off_principal_branch`, `mode_q`
+- `wavebit/_core/boundary.py` — `conv_mats`
+- `wavebit/_core/scattering.py` — the SMM incident amplitude (prose only)
+- `wavebit/_core/solve_2d_4ff.py` — `split_forward_backward` (scope note only)
 - `tests/test_branch_selection.py`, `tests/test_lossy_media.py`
 
 ---
 
 ## TL;DR
 
-FieldWave was written under `e^{+iωt}` and now runs `e^{-iωt}` throughout. That flip is
+Wavebit was written under `e^{+iωt}` and now runs `e^{-iωt}` throughout. That flip is
 complex conjugation of the entire problem, so anything holding a hard-coded sign, or a
 root-selection priority chosen under the old convention, is inverted exactly where the two
 conventions differ. This audit went looking. Four results:

@@ -30,7 +30,7 @@ rotated-axis tests are the ones that carry weight.
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 
 WL = 600.0
 D = 220.0
@@ -46,7 +46,7 @@ def solve_uniform(exx, eyy, ezz, exy=0.0, eyx=0.0, *, theta=0.0, d=D, wl=WL):
     ``_assign_grating_type`` to the 2D path, which is the only one with off-diagonal slots.
     """
     I = np.eye(1, dtype=np.complex128)
-    mee = fieldwave.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=theta, phi=0.0, psi=0.0,
+    mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=theta, phi=0.0, psi=0.0,
                          fto=(0, 0), period=(300.0, 300.0), wavelength=wl, thickness=[d])
     return mee.solve_for_conv(
         wl,

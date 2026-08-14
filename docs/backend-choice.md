@@ -5,11 +5,11 @@ Written: 2026-08. Measured on CPU (Apple silicon, single process, float64).
 
 Targets:
 - `studies/benchmark_backends.py` — the sweep this document reports
-- `fieldwave/_core/geometry.py::StaticGeometry` — what a freeze records, and what its equality
+- `wavebit/_core/geometry.py::StaticGeometry` — what a freeze records, and what its equality
   costs
-- `fieldwave/_core/factorization.py::compression_indices`, `normal_field_for_ucell` — the two
+- `wavebit/_core/factorization.py::compression_indices`, `normal_field_for_ucell` — the two
   raster decisions that must be taken eagerly
-- `fieldwave/_core/modeler.py::_check_plan_still_fits` — the block record's staleness check
+- `wavebit/_core/modeler.py::_check_plan_still_fits` — the block record's staleness check
 - [`nvf-upsampling.md`](nvf-upsampling.md) — why NVF's cost fell between the first run of this
   sweep and the one reported here; [`torch-compile.md`](torch-compile.md) — why PyTorch is
   measured eager
@@ -18,7 +18,7 @@ Targets:
 
 ## The question
 
-FieldWave produces the same gradient three ways, and they are not interchangeable:
+Wavebit produces the same gradient three ways, and they are not interchangeable:
 
 | mode | how the discrete geometry is decided | frozen record |
 |---|---|---|
@@ -296,7 +296,7 @@ and, within the freeze's own cost, the fast one.
   a GPU. Do not extrapolate: the per-step times and the compilation cost need not move in the
   same direction, so neither the ratios nor the break-even table carries over on its own.
 - **PyTorch was measured eager, which is the only way it runs today.** `torch.compile` fails
-  on every FieldWave path before torch 2.13, and once it works it measures 0.85–1.02x — see
+  on every Wavebit path before torch 2.13, and once it works it measures 0.85–1.02x — see
   `docs/torch-compile.md`, which also profiles why (97.9% of the runtime at `fto=10` is inside
   LAPACK/BLAS calls Inductor forwards verbatim). So `torch` here means eager torch, and that is
   not a limitation of the measurement.

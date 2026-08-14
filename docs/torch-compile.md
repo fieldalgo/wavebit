@@ -4,16 +4,16 @@ Written: 2026-08. Measured on macOS arm64 (CPU only) against `develop` at `8257e
 NumPy 2.5.1 / SciPy 1.18.0 / jax 0.11.0.
 
 Targets:
-- `fieldwave/_core/modeler.py::Modeling.period` — where the first failure is raised
-- `fieldwave/_core/backend.py::eig` — the primitive the remaining failures are about
+- `wavebit/_core/modeler.py::Modeling.period` — where the first failure is raised
+- `wavebit/_core/backend.py::eig` — the primitive the remaining failures are about
 - `pyproject.toml` — the torch floor, raised from 2.7 to 2.13 as a result; see §3
 
 ---
 
 ## TL;DR
 
-`torch.compile` failed on **every** FieldWave path with `InternalTorchDynamoError`. None of
-the four causes was in FieldWave: all four are PyTorch defects, present in **torch 2.7.0** (the
+`torch.compile` failed on **every** Wavebit path with `InternalTorchDynamoError`. None of
+the four causes was in Wavebit: all four are PyTorch defects, present in **torch 2.7.0** (the
 version the floor used to allow) and **all fixed by torch 2.13.0**, where the failing snippet
 runs unmodified and returns bit-identical values.
 
@@ -33,7 +33,7 @@ against. Eager torch and `.backward()` work fine on 2.7.0; only `torch.compile` 
 ## 1. The failure, and why it hit every path
 
 ```python
-total = lambda x: torch.sum(fieldwave.rcwa(backend=2, ucell=x, **cfg).conv_solve().de_ti)
+total = lambda x: torch.sum(wavebit.rcwa(backend=2, ucell=x, **cfg).conv_solve().de_ti)
 torch.compile(total)(u)      # InternalTorchDynamoError on torch 2.7
 ```
 
@@ -61,7 +61,7 @@ The chain, innermost first:
 That is why every path failed identically: the failure is in object construction, upstream of
 anything path-specific. Every path builds a `Modeling` with a list-valued `period`.
 
-Minimal repro, no FieldWave (fails on 2.7.0, passes on 2.13.0):
+Minimal repro, no Wavebit (fails on 2.7.0, passes on 2.13.0):
 
 ```python
 import torch, array_api_compat.numpy as anp
@@ -80,7 +80,7 @@ Clearing each one exposes the next. All four had to be cleared to get a single n
 | 4 | `RuntimeError: self.stride(-1) must be 1 to view ComplexDouble as Double` | nothing found | PyTorch (Inductor/AOTAutograd) |
 
 **#2 is about `linalg.eig`, the one primitive RCWA cannot do without.** It reduces to three
-lines with no FieldWave involved:
+lines with no Wavebit involved:
 
 ```python
 A = torch.randn(8, 8, dtype=torch.complex128)
@@ -98,7 +98,7 @@ a graph break lands in it. In `_core/solve_1d.py::final_matching` the trigger is
 expression in `variants = [_pack(..., *(e[i] for e in eff2)) for i in (0, 1)]` — a genexp still
 creates a real frame under PEP 709, so it captures `i` and makes it a cellvar of
 `final_matching`. Rewriting `*(...)` as `*[...]` removes the cellvar and the error. **That edit
-was made only to get past the blocker and was reverted**; it is the only FieldWave-side change
+was made only to get past the blocker and was reverted**; it is the only Wavebit-side change
 any of this would have needed, it was behaviour-neutral (results bit-identical), and it is
 unnecessary on 2.13.0.
 
@@ -116,7 +116,7 @@ flags, no source edits — and returns the same value as eager.
 | blocker 1 (`np._CopyMode`) | fails | passes |
 | blocker 2 (`linalg.eig` stride) | fails | passes |
 | blocker 4 (backward complex view) | fails | passes |
-| full FieldWave solve, compiled | fails | passes, `diff = 0.0` |
+| full Wavebit solve, compiled | fails | passes, `diff = 0.0` |
 | compiled `.backward()` | fails | passes, `max|Δgrad| ≤ 8.5e-20` |
 
 Blocker 3 has no standalone repro, so it is only known to be absent from the full 2.13.0 run.
@@ -132,7 +132,7 @@ the frozen goldens.
 
 Versions 2.8–2.12 are untested and therefore excluded; the floor can be relaxed later if
 someone verifies one, which is cheaper than tightening it after a release. At the time of
-writing `fieldwave` was not yet on PyPI and `develop` was unpushed, so this excluded no
+writing `wavebit` was not yet on PyPI and `develop` was unpushed, so this excluded no
 existing user.
 
 Auditing this also turned up that the floors were not being set by one rule — `numpy>=2.3.1`
@@ -190,7 +190,7 @@ the FFT from 8.4 ms to 0.05 ms at `fto=3` (0.34% of the work) and from 157.9 ms 
 Either way it was a library call Inductor forwards untouched, so this did not change the
 conclusion — it only concentrated what remains into LAPACK.
 
-The graph is also broken repeatedly by decisions FieldWave makes on purpose —
+The graph is also broken repeatedly by decisions Wavebit makes on purpose —
 `array_namespace` dispatch chief among them — so what reaches the compiler is fragments of glue
 between library calls.
 

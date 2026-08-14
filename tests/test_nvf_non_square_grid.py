@@ -24,8 +24,8 @@ the *wrong* direction, which is what separates a bug from a discretization resid
 import numpy as np
 import pytest
 
-import fieldwave
-from fieldwave._core.factorization import normal_vector_field
+import wavebit
+from wavebit._core.factorization import normal_vector_field
 
 PX, PY, R = 200.0, 400.0, 70.0          # a 2:1 cell — square pixels need Ny == 2*Nx
 
@@ -100,7 +100,7 @@ def test_energy_is_conserved_anyway():
     cfg = dict(backend=0, period=[PX, PY], fto=[4, 4], wavelength=300.0, thickness=[220.0],
                n_top=1.0, n_bot=1.0, theta=0.2, phi=0.3, psi=0.4, factorization='nvf',
                ucell=ucell[None, :, :])
-    res = fieldwave.rcwa(**cfg).conv_solve()
+    res = wavebit.rcwa(**cfg).conv_solve()
     total = float(np.sum(np.asarray(res.R)) + np.sum(np.asarray(res.T)))
     assert total == pytest.approx(1.0, abs=1e-12)
 
@@ -117,9 +117,9 @@ def test_a_frozen_normal_field_replays_onto_a_non_square_grid(coefficients):
     cfg = dict(backend=0, period=[PX, PY], fto=[3, 3], wavelength=300.0, thickness=[220.0],
                n_top=1.0, n_bot=1.5, theta=0.2, factorization='nvf',
                fourier_coefficients=coefficients, ucell=ucell[None, :, :])
-    solver = fieldwave.rcwa(**cfg)
+    solver = wavebit.rcwa(**cfg)
     replayed = solver.conv_solve(geometry=solver.freeze_geometry()).T
-    eager = fieldwave.rcwa(**cfg).conv_solve().T
+    eager = wavebit.rcwa(**cfg).conv_solve().T
     # Not bit-identity: these are two solves, and `eig` is not bit-reproducible run to run
     # under multithreaded LAPACK. The failure this guards against is not subtle — a basis the
     # replay cannot see either raises StaleGeometryError or moves the answer by ~8e-3.
@@ -135,7 +135,7 @@ def test_the_solver_hands_the_cell_basis_to_the_factorization(coefficients):
     engine's convolution matrices *are* the ones built on ``diag(period)``, and are not the ones
     built on the index grid. Without the second half the test passes either way.
     """
-    import fieldwave._core.factorization as fac
+    import wavebit._core.factorization as fac
 
     _, _, ucell = _disc(64, 64)
     layers = ucell[None, :, :]
@@ -150,7 +150,7 @@ def test_the_solver_hands_the_cell_basis_to_the_factorization(coefficients):
     assert np.abs(np.asarray(on_pixel_shape) - np.asarray(on_index_grid)).max() > 1e-6, \
         'the two builds coincide here, so this test could not tell them apart'
 
-    epx = np.asarray(fieldwave.rcwa(**cfg)._conv_matrices()[0])
+    epx = np.asarray(wavebit.rcwa(**cfg)._conv_matrices()[0])
     assert np.abs(epx - np.asarray(on_pixel_shape)).max() == 0.0
     assert np.abs(epx - np.asarray(on_index_grid)).max() > 1e-6
 
@@ -165,17 +165,17 @@ def test_the_frozen_record_carries_the_pixel_shape():
     same slot has to describe a skewed cell too — where two numbers cannot. For an axis-aligned
     cell it carries exactly the aspect and nothing more, which is what keeps a uniform rescale
     of the cell from reading as a change (see
-    :func:`~fieldwave._core.factorization._lattice_key`).
+    :func:`~wavebit._core.factorization._lattice_key`).
     """
     _, _, ucell = _disc(64, 64)
-    solver = fieldwave.rcwa(backend=0, period=[PX, PY], fto=[3, 3], wavelength=300.0,
+    solver = wavebit.rcwa(backend=0, period=[PX, PY], fto=[3, 3], wavelength=300.0,
                             thickness=[220.0], n_top=1.0, n_bot=1.5, theta=0.2,
                             factorization='nvf', ucell=ucell[None, :, :])
     recorded = solver.freeze_geometry().normal_field_source[0][2]
     assert recorded == pytest.approx((1.0, 0.0, 0.0, PY / PX))   # (400/64) / (200/64) == 2
 
     # A cell twice the size with the same shape is the same normal field, so the same key.
-    doubled = fieldwave.rcwa(backend=0, period=[2 * PX, 2 * PY], fto=[3, 3], wavelength=300.0,
+    doubled = wavebit.rcwa(backend=0, period=[2 * PX, 2 * PY], fto=[3, 3], wavelength=300.0,
                              thickness=[220.0], n_top=1.0, n_bot=1.5, theta=0.2,
                              factorization='nvf', ucell=ucell[None, :, :])
     assert doubled.freeze_geometry().normal_field_source[0][2] == pytest.approx(recorded)
@@ -195,10 +195,10 @@ def test_differentiating_period_does_not_read_as_a_cell_change():
     _, _, ucell = _disc(48, 48)
     base = dict(backend=1, fto=[3, 3], wavelength=300.0, thickness=[220.0], n_top=1.0,
                 n_bot=1.5, theta=0.2, factorization='nvf', ucell=jnp.asarray(ucell[None, :, :]))
-    frozen = fieldwave.rcwa(period=[PX, PY], **base).freeze_geometry()
+    frozen = wavebit.rcwa(period=[PX, PY], **base).freeze_geometry()
 
     def objective(py):
-        return fieldwave.rcwa(period=[PX, py], **base).conv_solve(geometry=frozen).T.sum()
+        return wavebit.rcwa(period=[PX, py], **base).conv_solve(geometry=frozen).T.sum()
 
     assert np.isfinite(float(jax.grad(objective)(jnp.float64(PY))))
     assert np.isfinite(float(jax.jit(objective)(jnp.float64(PY))))

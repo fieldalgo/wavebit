@@ -29,9 +29,9 @@ This file pins the contract stated in ``docs/conventions.md``:
 import numpy as np
 import pytest
 
-import fieldwave
-from fieldwave import JobSpec
-from fieldwave._core.domain import Incidence
+import wavebit
+from wavebit import JobSpec
+from wavebit._core.domain import Incidence
 
 # A lossless two-layer stack, in the 1D (y-invariant) and genuinely-2D spellings.
 _ROW = [1, 1, 1, 3.48, 3.48, 3.48, 1, 1, 1, 1]
@@ -70,8 +70,8 @@ def test_pair_reproduces_psi(path, algo):
         kw = dict(CFG_1D, ucell=UCELL_1D, phi=0.4, connecting_algo=algo)
     else:
         kw = dict(CFG_2D, ucell=UCELL_2D, connecting_algo=algo)
-    via_psi = fieldwave.rcwa(psi=psi_v, **kw).conv_solve()
-    via_pair = fieldwave.rcwa(polarization=pair_of(psi_v), **kw).conv_solve()
+    via_psi = wavebit.rcwa(psi=psi_v, **kw).conv_solve()
+    via_pair = wavebit.rcwa(polarization=pair_of(psi_v), **kw).conv_solve()
     _assert_same_sub(via_psi.res, via_pair.res)
 
 
@@ -80,8 +80,8 @@ def test_pair_reproduces_psi_on_every_backend(backend):
     psi_v = 1.1
     kw = dict(CFG_2D, ucell=UCELL_2D)
     kw['backend'] = backend
-    via_psi = fieldwave.rcwa(psi=psi_v, **kw).conv_solve()
-    via_pair = fieldwave.rcwa(polarization=pair_of(psi_v), **kw).conv_solve()
+    via_psi = wavebit.rcwa(psi=psi_v, **kw).conv_solve()
+    via_pair = wavebit.rcwa(polarization=pair_of(psi_v), **kw).conv_solve()
     np.testing.assert_allclose(np.asarray(via_psi.res.R), np.asarray(via_pair.res.R),
                                atol=1e-14)
     np.testing.assert_allclose(np.asarray(via_psi.res.t_p), np.asarray(via_pair.res.t_p),
@@ -92,22 +92,22 @@ def test_the_pure_pairs_are_the_pure_angles():
     """``(1, 0)`` is ``psi = pi/2`` (pure s) and ``(0, 1)`` is ``psi = 0`` (pure p) exactly."""
     kw = dict(CFG_2D, ucell=UCELL_2D)
     for pair, psi_v in (((1, 0), np.pi / 2), ((0, 1), 0.0)):
-        via_pair = fieldwave.rcwa(polarization=pair, **kw).conv_solve()
-        via_psi = fieldwave.rcwa(psi=psi_v, **kw).conv_solve()
+        via_pair = wavebit.rcwa(polarization=pair, **kw).conv_solve()
+        via_psi = wavebit.rcwa(psi=psi_v, **kw).conv_solve()
         _assert_same_sub(via_pair.res, via_psi.res, atol=1e-13)
 
 
 def test_variants_do_not_depend_on_the_pair():
     """``res_te_inc`` / ``res_tm_inc`` are free columns of the same factorized system."""
     kw = dict(CFG_2D, ucell=UCELL_2D)
-    via_psi = fieldwave.rcwa(psi=0.7, **kw).conv_solve()
-    via_pair = fieldwave.rcwa(polarization=(1, -1j), **kw).conv_solve()
+    via_psi = wavebit.rcwa(psi=0.7, **kw).conv_solve()
+    via_pair = wavebit.rcwa(polarization=(1, -1j), **kw).conv_solve()
     _assert_same_sub(via_psi.res_te_inc, via_pair.res_te_inc)
     _assert_same_sub(via_psi.res_tm_inc, via_pair.res_tm_inc)
 
 
 def test_top_level_efficiencies_delegate_to_the_pair_solve():
-    res = fieldwave.rcwa(polarization=(1, 1j), ucell=UCELL_2D, **CFG_2D).conv_solve()
+    res = wavebit.rcwa(polarization=(1, 1j), ucell=UCELL_2D, **CFG_2D).conv_solve()
     assert res.res is not None
     np.testing.assert_array_equal(res.R, res.res.R)
     np.testing.assert_array_equal(res.T, res.res.T)
@@ -118,17 +118,17 @@ def test_top_level_efficiencies_delegate_to_the_pair_solve():
 def test_the_pair_scale_is_normalized_out():
     """``(3, 4j)`` and ``(0.6, 0.8j)`` are one incidence: unit incident flux, pinned."""
     kw = dict(CFG_2D, ucell=UCELL_2D)
-    small = fieldwave.rcwa(polarization=(0.6, 0.8j), **kw).conv_solve()
-    large = fieldwave.rcwa(polarization=(3, 4j), **kw).conv_solve()
+    small = wavebit.rcwa(polarization=(0.6, 0.8j), **kw).conv_solve()
+    large = wavebit.rcwa(polarization=(3, 4j), **kw).conv_solve()
     _assert_same_sub(small.res, large.res)
 
 
 def test_the_pair_phase_is_kept():
     """A global phase is physics (it rotates the amplitudes) and must not be normalized out."""
     kw = dict(CFG_2D, ucell=UCELL_2D)
-    base = fieldwave.rcwa(polarization=(1, -1j), **kw).conv_solve()
+    base = wavebit.rcwa(polarization=(1, -1j), **kw).conv_solve()
     phase = np.exp(0.4j)
-    rotated = fieldwave.rcwa(polarization=(phase, -1j * phase), **kw).conv_solve()
+    rotated = wavebit.rcwa(polarization=(phase, -1j * phase), **kw).conv_solve()
     np.testing.assert_allclose(np.asarray(rotated.res.t_s),
                                phase * np.asarray(base.res.t_s), atol=1e-14)
     np.testing.assert_allclose(np.asarray(rotated.res.R), np.asarray(base.res.R),
@@ -139,8 +139,8 @@ def test_pair_reproduces_psi_under_backside_illumination():
     """The two incidence features compose: the pair means the same thing from either side."""
     psi_v = 0.7
     kw = dict(CFG_2D, ucell=UCELL_2D, incidence_side='bottom')
-    via_psi = fieldwave.rcwa(psi=psi_v, **kw).conv_solve()
-    via_pair = fieldwave.rcwa(polarization=pair_of(psi_v), **kw).conv_solve()
+    via_psi = wavebit.rcwa(psi=psi_v, **kw).conv_solve()
+    via_pair = wavebit.rcwa(polarization=pair_of(psi_v), **kw).conv_solve()
     _assert_same_sub(via_psi.res, via_pair.res)
 
 
@@ -150,7 +150,7 @@ def test_pair_reproduces_psi_under_backside_illumination():
 def test_lossless_energy_conservation_at_arbitrary_complex_pairs(algo):
     kw = dict(CFG_2D, ucell=UCELL_2D, connecting_algo=algo)
     for pair in ((0.3 + 0.4j, -1.2 + 0.1j), (2.0, 0.5j), (1e-3, 1 + 1j)):
-        res = fieldwave.rcwa(polarization=pair, **kw).conv_solve()
+        res = wavebit.rcwa(polarization=pair, **kw).conv_solve()
         total = float(np.asarray(res.res.R).sum() + np.asarray(res.res.T).sum())
         assert total == pytest.approx(1.0, abs=1e-10), pair
 
@@ -159,11 +159,11 @@ def test_lossless_energy_conservation_at_arbitrary_complex_pairs(algo):
 
 def test_psi_and_polarization_together_raise():
     with pytest.raises(ValueError, match='psi and polarization'):
-        fieldwave.rcwa(backend=0, psi=0.3, polarization=(1, 0))
+        wavebit.rcwa(backend=0, psi=0.3, polarization=(1, 0))
 
 
 def test_assignment_clashes_in_both_orders():
-    solver = fieldwave.rcwa(backend=0, polarization=(1, 1j))
+    solver = wavebit.rcwa(backend=0, polarization=(1, 1j))
     with pytest.raises(ValueError, match='psi and polarization'):
         solver.psi = 0.3
     solver.polarization = None                     # clearing reopens the other spelling
@@ -178,20 +178,20 @@ def test_the_default_psi_does_not_block_the_pair():
     ``tetm`` is the other story and is refused beside a pair — it declares the polarization
     away rather than defaulting it, which is the distinction the two tests together pin.
     """
-    solver = fieldwave.rcwa(backend=0)
+    solver = wavebit.rcwa(backend=0)
     assert float(np.asarray(solver.psi)) == pytest.approx(np.pi / 2)
     solver.polarization = (1, 0)
     assert solver.polarization == (1, 0)
 
     with pytest.raises(ValueError, match='tetm and an incidence polarization'):
-        fieldwave.rcwa(backend=0, tetm='tm', polarization=(1, 0))
+        wavebit.rcwa(backend=0, tetm='tm', polarization=(1, 0))
 
 
 def test_degenerate_pairs_are_refused():
     with pytest.raises(ValueError, match='no incident field'):
-        fieldwave.rcwa(backend=0, polarization=(0, 0))
+        wavebit.rcwa(backend=0, polarization=(0, 0))
     with pytest.raises(ValueError, match='pair'):
-        fieldwave.rcwa(backend=0, polarization=(1, 0, 0))
+        wavebit.rcwa(backend=0, polarization=(1, 0, 0))
 
 
 # ------------------------------------------------------------------ psi is a real angle
@@ -208,8 +208,8 @@ def test_complex_psi_is_refused(backend):
     """
     for bad in (0.7 + 0.5j, 1j, complex(0, 1e-12)):
         with pytest.raises(ValueError, match='psi must be a real angle'):
-            fieldwave.rcwa(backend=backend, psi=bad)
-    solver = fieldwave.rcwa(backend=backend)
+            wavebit.rcwa(backend=backend, psi=bad)
+    solver = wavebit.rcwa(backend=backend)
     with pytest.raises(ValueError, match='psi must be a real angle'):
         solver.psi = 0.7 + 0.5j
 
@@ -217,7 +217,7 @@ def test_complex_psi_is_refused(backend):
 @pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
 def test_a_real_angle_written_as_complex_is_accepted(backend):
     """``0.7+0j`` is a real angle spelled oddly, not the mistake above."""
-    solver = fieldwave.rcwa(backend=backend, psi=complex(0.7, 0.0))
+    solver = wavebit.rcwa(backend=backend, psi=complex(0.7, 0.0))
     assert float(np.real(np.asarray(solver.psi))) == pytest.approx(0.7)
 
 
@@ -230,7 +230,7 @@ def test_psi_is_stored_real(backend, spelling):
     and the imaginary direction it used to carry was the unnormalized ``cosh`` path.
     """
     kw = {'psi': 0.7} if spelling == 'given' else {}
-    solver = fieldwave.rcwa(backend=backend, **kw)
+    solver = wavebit.rcwa(backend=backend, **kw)
     assert not np.iscomplexobj(np.asarray(solver.psi)), np.asarray(solver.psi).dtype
 
 
@@ -241,14 +241,14 @@ def test_a_declared_away_angle_is_absent_rather_than_defaulted(backend):
     The retired ``pol`` filled it with a derived ``pi/2`` that the pure 1D solve never reads,
     so its gradient was a silent zero — indistinguishable from a true one.
     """
-    assert fieldwave.rcwa(backend=backend, tetm='te').psi is None
-    assert fieldwave.rcwa(backend=backend, tetm='tm').tetm == 'tm'
-    assert fieldwave.rcwa(backend=backend, tetm='tm').tetm_index == 1
+    assert wavebit.rcwa(backend=backend, tetm='te').psi is None
+    assert wavebit.rcwa(backend=backend, tetm='tm').tetm == 'tm'
+    assert wavebit.rcwa(backend=backend, tetm='tm').tetm_index == 1
 
 
 def test_complex_psi_refusal_does_not_reach_the_pair():
     """The pair is where the imaginary part belongs, so it must stay unrestricted."""
-    res = fieldwave.rcwa(polarization=(1, -1j), ucell=UCELL_2D, **CFG_2D).conv_solve()
+    res = wavebit.rcwa(polarization=(1, -1j), ucell=UCELL_2D, **CFG_2D).conv_solve()
     assert float(np.asarray(res.res.T).sum()) > 0
 
 
@@ -262,10 +262,10 @@ def test_a_1d_structure_with_a_pair_takes_the_conical_path():
     """
     kw = dict(CFG_1D, ucell=UCELL_1D)
     for pair, tetm in (((1, 0), 'te'), ((0, 1), 'tm')):
-        solver = fieldwave.rcwa(polarization=pair, **kw)
+        solver = wavebit.rcwa(polarization=pair, **kw)
         via_pair = solver.conv_solve()
         assert solver.grating_type_assigned == 1, 'expected the conical formulation'
-        via_pure = fieldwave.rcwa(tetm=tetm, **kw).conv_solve()
+        via_pure = wavebit.rcwa(tetm=tetm, **kw).conv_solve()
         np.testing.assert_allclose(np.asarray(via_pair.res.R), np.asarray(via_pure.res.R),
                                    atol=1e-11)
         np.testing.assert_allclose(np.asarray(via_pair.res.T), np.asarray(via_pure.res.T),
@@ -273,7 +273,7 @@ def test_a_1d_structure_with_a_pair_takes_the_conical_path():
 
 
 def test_the_pure_1d_solve_refuses_the_pair_in_plain_words():
-    solver = fieldwave.rcwa(polarization=(1, 0), ucell=UCELL_1D, **CFG_1D)
+    solver = wavebit.rcwa(polarization=(1, 0), ucell=UCELL_1D, **CFG_1D)
     epx, epy, epz_i, _, _ = solver.conv_matrices()
     with pytest.raises(ValueError, match='single-polarization by construction'):
         solver.solve_1d(CFG_1D['wavelength'], epx, epy, epz_i)
@@ -316,7 +316,7 @@ def _solve_gyrotropic(pair=None, **incidence):
     I = np.eye(1, dtype=np.complex128)
     if pair is not None:
         incidence = dict(incidence, polarization=pair)
-    solver = fieldwave.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0,
+    solver = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0,
                             **incidence, fto=(0, 0), period=(300.0, 300.0),
                             wavelength=WL, thickness=[D])
     return solver.solve_for_conv(
@@ -385,7 +385,7 @@ FIELD_RES = dict(res_x=5, res_y=4, res_z=6)
 
 
 def _field(**kw):
-    _, field_cell = fieldwave.rcwa(**kw).conv_solve_field(**FIELD_RES)
+    _, field_cell = wavebit.rcwa(**kw).conv_solve_field(**FIELD_RES)
     return np.asarray(field_cell)
 
 
@@ -414,7 +414,7 @@ def test_the_1d_routed_pair_field_matches_the_conical_psi_field():
     """
     psi_v = 0.7
     kw = dict(CFG_1D, ucell=UCELL_1D)
-    solver = fieldwave.rcwa(polarization=pair_of(psi_v), **kw)
+    solver = wavebit.rcwa(polarization=pair_of(psi_v), **kw)
     _, via_pair = solver.conv_solve_field(**FIELD_RES)
     assert solver.grating_type_assigned == 1, 'expected the conical formulation'
     np.testing.assert_allclose(np.asarray(via_pair), _field(psi=psi_v, phi=0.0, **kw),
@@ -464,7 +464,7 @@ def test_jax_pytree_round_trip_keeps_the_pair():
     """
     import jax
 
-    solver = fieldwave.rcwa(backend=1, polarization=(1, -1j))
+    solver = wavebit.rcwa(backend=1, polarization=(1, -1j))
     leaves, treedef = jax.tree_util.tree_flatten(solver)
     back = jax.tree_util.tree_unflatten(treedef, leaves)
     assert back.polarization == (1, -1j)
@@ -492,14 +492,14 @@ def test_the_pair_carries_a_gradient_through_the_pytree():
     def total(solver):
         return solver.conv_solve().T.sum()
 
-    grad = jax.grad(total)(fieldwave.rcwa(polarization=pair_of(0.7), **kw))
+    grad = jax.grad(total)(wavebit.rcwa(polarization=pair_of(0.7), **kw))
     assert grad.polarization is not None
     assert all(abs(complex(np.asarray(g))) > 1e-6 for g in grad.polarization), grad.polarization
 
     v = 0.7
-    via_pair = jax.grad(lambda p: total(fieldwave.rcwa(
+    via_pair = jax.grad(lambda p: total(wavebit.rcwa(
         polarization=(jnp.sin(p), jnp.cos(p)), **kw)))(v)
-    via_psi = jax.grad(lambda p: total(fieldwave.rcwa(psi=p, **kw)))(v)
+    via_psi = jax.grad(lambda p: total(wavebit.rcwa(psi=p, **kw)))(v)
     assert float(via_pair) == pytest.approx(float(via_psi), rel=1e-6)
 
 
@@ -507,7 +507,7 @@ def test_a_psi_solver_flattens_with_an_empty_pair_slot():
     """``None`` is an empty subtree, so nothing about a psi solver's flattening moved."""
     import jax
 
-    solver = fieldwave.rcwa(backend=1, psi=0.7)
+    solver = wavebit.rcwa(backend=1, psi=0.7)
     leaves, treedef = jax.tree_util.tree_flatten(solver)
     back = jax.tree_util.tree_unflatten(treedef, leaves)
     assert back.polarization is None
@@ -520,8 +520,8 @@ def test_incidence_carries_the_pair():
     inc = Incidence(wavelength=CFG_2D['wavelength'], theta=CFG_2D['theta'],
                     phi=CFG_2D['phi'], polarization=(1, -1j))
     kw = {k: v for k, v in CFG_2D.items() if k not in ('wavelength', 'theta', 'phi')}
-    via_incidence = fieldwave.rcwa(incidence=inc, ucell=UCELL_2D, **kw).conv_solve()
-    via_kwarg = fieldwave.rcwa(polarization=(1, -1j), ucell=UCELL_2D,
+    via_incidence = wavebit.rcwa(incidence=inc, ucell=UCELL_2D, **kw).conv_solve()
+    via_kwarg = wavebit.rcwa(polarization=(1, -1j), ucell=UCELL_2D,
                                **CFG_2D).conv_solve()
     _assert_same_sub(via_incidence.res, via_kwarg.res)
 
@@ -555,8 +555,8 @@ def test_spec_round_trips_the_pair():
 
 
 def test_run_executes_the_pair_spec():
-    result = fieldwave.run(_SPEC)
-    reference = fieldwave.rcwa(
+    result = wavebit.run(_SPEC)
+    reference = wavebit.rcwa(
         backend=0, wavelength=900.0, period=[700.0], fto=[10, 0],
         n_top=1.0, n_bot=1.5, theta=0.0, phi=0.0, polarization=(1, -1j),
         ucell=np.array([[[1.0, 1.0, 3.5, 3.5]]]), thickness=[300.0],
@@ -579,8 +579,8 @@ def test_a_spec_without_the_pair_hashes_as_before():
 def test_chi_zero_is_the_psi_spelling(psi_v):
     """``chi = 0`` is the linear state at ``psi`` — the chart contains the angle it extends."""
     kw = dict(CFG_2D, ucell=UCELL_2D)
-    _assert_same_sub(fieldwave.rcwa(psi=psi_v, **kw).conv_solve().res,
-                     fieldwave.rcwa(psi=psi_v, chi=0.0, **kw).conv_solve().res, atol=1e-13)
+    _assert_same_sub(wavebit.rcwa(psi=psi_v, **kw).conv_solve().res,
+                     wavebit.rcwa(psi=psi_v, chi=0.0, **kw).conv_solve().res, atol=1e-13)
 
 
 @pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
@@ -596,8 +596,8 @@ def test_the_chart_is_the_pair_it_names(backend):
     kw = dict(CFG_2D, ucell=UCELL_2D)
     kw['backend'] = backend
 
-    chart = fieldwave.rcwa(psi=psi_v, chi=chi_v, **kw).conv_solve()
-    raw = fieldwave.rcwa(polarization=pair, **kw).conv_solve()
+    chart = wavebit.rcwa(psi=psi_v, chi=chi_v, **kw).conv_solve()
+    raw = wavebit.rcwa(polarization=pair, **kw).conv_solve()
     np.testing.assert_allclose(np.asarray(chart.res.T), np.asarray(raw.res.T), atol=1e-12)
     np.testing.assert_allclose(np.asarray(chart.res.t_s), np.asarray(raw.res.t_s), atol=1e-12)
 
@@ -605,7 +605,7 @@ def test_the_chart_is_the_pair_it_names(backend):
 def test_the_chart_covers_the_states_the_angle_cannot():
     """The point of the second coordinate: ``chi`` sweeps linear to circular and back."""
     kw = dict(CFG_2D, ucell=UCELL_2D)
-    totals = [float(np.asarray(fieldwave.rcwa(psi=0.3, chi=c, **kw).conv_solve().res.T).sum())
+    totals = [float(np.asarray(wavebit.rcwa(psi=0.3, chi=c, **kw).conv_solve().res.T).sum())
               for c in np.linspace(-np.pi / 4, np.pi / 4, 9)]
     assert max(totals) - min(totals) > 1e-3, totals          # not a constant in disguise
     assert totals == sorted(totals) or totals == sorted(totals, reverse=True) or True
@@ -614,21 +614,21 @@ def test_the_chart_covers_the_states_the_angle_cannot():
 def test_chi_is_exclusive_with_the_other_two_spellings():
     """One slot, three spellings: the chart, the raw pair, and the declaration."""
     with pytest.raises(ValueError, match='chi and polarization'):
-        fieldwave.rcwa(backend=0, chi=0.3, polarization=(1, 0))
+        wavebit.rcwa(backend=0, chi=0.3, polarization=(1, 0))
     with pytest.raises(ValueError, match='chi and polarization'):
-        fieldwave.rcwa(backend=0, polarization=(1, 0)).chi = 0.3
+        wavebit.rcwa(backend=0, polarization=(1, 0)).chi = 0.3
     with pytest.raises(ValueError, match='tetm and an incidence polarization'):
-        fieldwave.rcwa(backend=0, chi=0.3, tetm='te')
+        wavebit.rcwa(backend=0, chi=0.3, tetm='te')
     with pytest.raises(ValueError, match='tetm and an incidence polarization'):
-        fieldwave.rcwa(backend=0, tetm='te').chi = 0.3
+        wavebit.rcwa(backend=0, tetm='te').chi = 0.3
 
 
 @pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
 def test_complex_chi_is_refused(backend):
     """``chi`` is an angle for the same reason ``psi`` is: every state has real coordinates."""
     with pytest.raises(ValueError, match='chi must be a real angle'):
-        fieldwave.rcwa(backend=backend, chi=0.3 + 0.1j)
-    assert fieldwave.rcwa(backend=backend, chi=complex(0.3, 0.0)).chi is not None
+        wavebit.rcwa(backend=backend, chi=0.3 + 0.1j)
+    assert wavebit.rcwa(backend=backend, chi=complex(0.3, 0.0)).chi is not None
 
 
 def test_both_chart_coordinates_carry_a_gradient():
@@ -646,7 +646,7 @@ def test_both_chart_coordinates_carry_a_gradient():
     kw['backend'] = 1
 
     def total(**inc):
-        return fieldwave.rcwa(**inc, **kw).conv_solve().T.sum()
+        return wavebit.rcwa(**inc, **kw).conv_solve().T.sum()
 
     d_psi = jax.grad(lambda v: total(psi=v, chi=-0.2))(0.4)
     d_chi = jax.grad(lambda v: total(psi=0.4, chi=v))(-0.2)
@@ -665,9 +665,9 @@ def test_the_chart_survives_the_jax_pytree():
     """``chi`` is a child, not aux data — the same rule the pair now follows."""
     import jax
 
-    solver = fieldwave.rcwa(backend=1, psi=0.4, chi=-0.2)
+    solver = wavebit.rcwa(backend=1, psi=0.4, chi=-0.2)
     leaves, treedef = jax.tree_util.tree_flatten(solver)
     back = jax.tree_util.tree_unflatten(treedef, leaves)
     assert float(np.asarray(back.chi)) == pytest.approx(-0.2)
     assert float(np.asarray(back.psi)) == pytest.approx(0.4)
-    assert fieldwave.rcwa(backend=1, psi=0.4).chi is None
+    assert wavebit.rcwa(backend=1, psi=0.4).chi is None

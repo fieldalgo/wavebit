@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-import fieldwave
+import wavebit
 
 
 def run():
@@ -41,7 +41,7 @@ def run():
         ],
     ]
 
-    solver = fieldwave.rcwa(**rcwa_options)
+    solver = wavebit.rcwa(**rcwa_options)
     solver.ucell = ucell
 
     result = solver.conv_solve()

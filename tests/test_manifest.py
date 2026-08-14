@@ -5,7 +5,7 @@ one that was never made: the consumer keeps answering confidently with a fact th
 stopped honouring, and nothing raises anywhere. These tests are the only thing standing
 between that and a published document.
 
-**They are deliberately not mirror tests.** :mod:`fieldwave.manifest` reads
+**They are deliberately not mirror tests.** :mod:`wavebit.manifest` reads
 ``_core/engine.py``'s refusal tables at import, so asserting that the two agree would be
 asserting that a variable equals itself. What is checked instead is the manifest against
 *runtime behaviour*: build the ucell each spelling describes and confirm the solver assigns
@@ -17,9 +17,9 @@ import json
 import numpy as np
 import pytest
 
-import fieldwave
-from fieldwave.manifest import LATTICE, MATERIALS, SPELLINGS, cited_sources, manifest
-from fieldwave._core.enums import Backend, Factorization, FourierCoefficients, Pol
+import wavebit
+from wavebit.manifest import LATTICE, MATERIALS, SPELLINGS, cited_sources, manifest
+from wavebit._core.enums import Backend, Factorization, FourierCoefficients, Pol
 
 import pathlib
 
@@ -67,13 +67,13 @@ def test_each_spelling_selects_the_modeling_type_it_claims(spelling):
     a keyword's would not be: get it wrong and a consumer sends users down a different path
     than the one whose trade-offs it just explained.
     """
-    solver = fieldwave.rcwa(ucell=UCELLS[spelling['path']], **KW)
+    solver = wavebit.rcwa(ucell=UCELLS[spelling['path']], **KW)
     assert solver.modeling_type_assigned == spelling['modeling_type']
 
 
 def test_the_manifest_covers_every_spelling_the_setter_accepts():
     """A path the solver can assign but the manifest omits is a path nobody is told about."""
-    assigned = {fieldwave.rcwa(ucell=u, **KW).modeling_type_assigned for u in UCELLS.values()}
+    assigned = {wavebit.rcwa(ucell=u, **KW).modeling_type_assigned for u in UCELLS.values()}
     assert assigned == {s['modeling_type'] for s in SPELLINGS}
 
 
@@ -88,7 +88,7 @@ def _unavailable(path, axis, enum_cls):
 def test_a_factorization_the_manifest_withholds_is_refused(path):
     for value in _unavailable(path, 'factorization', Factorization):
         with pytest.raises(Exception) as excinfo:
-            fieldwave.rcwa(ucell=UCELLS[path], factorization=value, **KW).conv_solve()
+            wavebit.rcwa(ucell=UCELLS[path], factorization=value, **KW).conv_solve()
         assert value in str(excinfo.value), (
             f'{path}: refused factorization={value!r} without naming it')
 
@@ -97,7 +97,7 @@ def test_a_factorization_the_manifest_withholds_is_refused(path):
 def test_a_series_the_manifest_withholds_is_refused(path):
     for value in _unavailable(path, 'fourier_coefficients', FourierCoefficients):
         with pytest.raises(Exception) as excinfo:
-            fieldwave.rcwa(ucell=UCELLS[path], fourier_coefficients=value,
+            wavebit.rcwa(ucell=UCELLS[path], fourier_coefficients=value,
                            **KW).conv_solve()
         assert value in str(excinfo.value), (
             f'{path}: refused fourier_coefficients={value!r} without naming it')
@@ -107,22 +107,22 @@ def test_a_series_the_manifest_withholds_is_refused(path):
 def test_an_option_the_manifest_offers_actually_builds(path):
     """The other half — a path must not be described as implementing what it refuses."""
     for value in PATHS[path]['factorization']:
-        fieldwave.rcwa(ucell=UCELLS[path], factorization=value, **KW).conv_solve()
+        wavebit.rcwa(ucell=UCELLS[path], factorization=value, **KW).conv_solve()
     for value in PATHS[path]['fourier_coefficients']:
-        fieldwave.rcwa(ucell=UCELLS[path], fourier_coefficients=value, **KW).conv_solve()
+        wavebit.rcwa(ucell=UCELLS[path], fourier_coefficients=value, **KW).conv_solve()
 
 
 # ------------------------------------------------------- the lattice refusals
 
 def test_the_block_path_is_refused_on_a_skewed_cell():
     with pytest.raises(NotImplementedError, match='block modeler'):
-        fieldwave.rcwa(ucell=UCELLS['block'], lattice=HEX, factorization='nvf',
+        wavebit.rcwa(ucell=UCELLS['block'], lattice=HEX, factorization='nvf',
                        **KW).conv_solve()
 
 
 def test_li_is_refused_on_a_skewed_cell():
     with pytest.raises(NotImplementedError, match="factorization='nvf'"):
-        fieldwave.rcwa(ucell=UCELLS['raster'], lattice=HEX, factorization='li',
+        wavebit.rcwa(ucell=UCELLS['raster'], lattice=HEX, factorization='li',
                        **KW).conv_solve()
 
 
@@ -157,7 +157,7 @@ def test_every_named_skewed_refusal_is_a_thing_that_exists():
 
 def test_a_skewed_cell_still_builds_on_the_paths_the_manifest_leaves_open():
     for path in ('raster', 'smooth', 'boundary'):
-        fieldwave.rcwa(ucell=UCELLS[path], lattice=HEX, factorization='nvf',
+        wavebit.rcwa(ucell=UCELLS[path], lattice=HEX, factorization='nvf',
                        **KW).conv_solve()
 
 
@@ -206,10 +206,10 @@ def test_results_section_matches_a_real_result():
     JobSpec facts must match ``_core.spec``. A future rename that misses the manifest fails
     here rather than in a consumer's UI.
     """
-    from fieldwave._core.spec import SPEC_VERSION, JobSpec
+    from wavebit._core.spec import SPEC_VERSION, JobSpec
 
     m = manifest()['results']
-    res = fieldwave.rcwa(ucell=_RASTER, **KW).conv_solve()
+    res = wavebit.rcwa(ucell=_RASTER, **KW).conv_solve()
     sub = res.res if res.res is not None else res.res_te_inc
 
     for name in list(m['efficiencies']['total']) + list(m['efficiencies']['by_outgoing_polarization']):
@@ -247,16 +247,16 @@ def test_incidence_side_claims_match_the_solver():
 
     got = {}
     for side in m['values']:
-        res = fieldwave.rcwa(incidence_side=side, **kw).conv_solve()
+        res = wavebit.rcwa(incidence_side=side, **kw).conv_solve()
         got[side] = float(np.sum(np.asarray(res.R)))
     assert abs(got['top'] - got['bottom']) > 1e-3, \
         'the published sides must select genuinely different solves'
 
-    solver = fieldwave.rcwa(**kw)
+    solver = wavebit.rcwa(**kw)
     assert solver.incidence_side == m['default']
 
     with pytest.raises(ValueError) as excinfo:
-        fieldwave.rcwa(incidence_side='sideways', **kw)
+        wavebit.rcwa(incidence_side='sideways', **kw)
     for side in m['values']:
         assert side in str(excinfo.value), (
             f'the refusal must name {side!r} so a consumer can relay the legal values')
@@ -272,16 +272,16 @@ def test_polarization_claims_match_runtime():
     """
     kw = {k: v for k, v in KW.items() if k != 'psi'}
 
-    via_pair = fieldwave.rcwa(ucell=_RASTER, polarization=(np.sin(0.4), np.cos(0.4)),
+    via_pair = wavebit.rcwa(ucell=_RASTER, polarization=(np.sin(0.4), np.cos(0.4)),
                               **kw).conv_solve()
     assert via_pair.res is not None, 'the pair must fill the specified-incidence slot'
 
-    via_psi = fieldwave.rcwa(ucell=_RASTER, psi=0.4, **kw).conv_solve()
+    via_psi = wavebit.rcwa(ucell=_RASTER, psi=0.4, **kw).conv_solve()
     np.testing.assert_allclose(via_pair.res.R, via_psi.res.R, atol=1e-14)
 
-    scaled = fieldwave.rcwa(ucell=_RASTER, polarization=(5 * np.sin(0.4), 5 * np.cos(0.4)),
+    scaled = wavebit.rcwa(ucell=_RASTER, polarization=(5 * np.sin(0.4), 5 * np.cos(0.4)),
                             **kw).conv_solve()
     np.testing.assert_allclose(scaled.res.R, via_pair.res.R, atol=1e-14)
 
     with pytest.raises(ValueError, match='psi and polarization'):
-        fieldwave.rcwa(ucell=_RASTER, psi=0.4, polarization=(1, 0), **kw)
+        wavebit.rcwa(ucell=_RASTER, psi=0.4, polarization=(1, 0), **kw)

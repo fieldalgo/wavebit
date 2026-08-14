@@ -1,9 +1,9 @@
-"""JobSpec is the serialisable form of a run, and ``fieldwave.run`` executes it statelessly.
+"""JobSpec is the serialisable form of a run, and ``wavebit.run`` executes it statelessly.
 
 Two properties carry the whole design and are gated here:
 
 * **Parity** — a spec must produce byte-identical results to the equivalent
-  :func:`fieldwave.rcwa` call. The spec layer is a new way to *say* a run, never a new way
+  :func:`wavebit.rcwa` call. The spec layer is a new way to *say* a run, never a new way
   to *compute* one.
 * **Round-trip** — a spec must survive JSON unchanged, because it exists to cross process
   and network boundaries. Equal specs must hash equal, and differing ones must not.
@@ -16,8 +16,8 @@ import json
 import numpy as np
 import pytest
 
-import fieldwave
-from fieldwave import JobSpec, Sweep, SpecError, Backend, Factorization
+import wavebit
+from wavebit import JobSpec, Sweep, SpecError, Backend, Factorization
 
 
 BINARY_GRATING = {
@@ -34,9 +34,9 @@ BINARY_GRATING = {
 
 def test_run_matches_the_equivalent_rcwa_call():
     """The gate: a spec computes exactly what the legacy keyword call computes."""
-    result = fieldwave.run(BINARY_GRATING)
+    result = wavebit.run(BINARY_GRATING)
 
-    reference = fieldwave.rcwa(
+    reference = wavebit.rcwa(
         backend=0, wavelength=900., period=[700.], fto=[10, 0],
         n_top=1., n_bot=1.5, theta=0., phi=0., tetm='te',
         ucell=np.array([[[1.0, 1.0, 3.5, 3.5]]]), thickness=[300.],
@@ -50,9 +50,9 @@ def test_run_matches_the_equivalent_rcwa_call():
 def test_run_accepts_spec_object_mapping_and_json():
     """All three input forms are the same run — the caller picks whichever it holds."""
     spec = JobSpec.from_dict(BINARY_GRATING)
-    from_obj = fieldwave.run(spec)
-    from_map = fieldwave.run(BINARY_GRATING)
-    from_str = fieldwave.run(spec.to_json())
+    from_obj = wavebit.run(spec)
+    from_map = wavebit.run(BINARY_GRATING)
+    from_str = wavebit.run(spec.to_json())
 
     for other in (from_map, from_str):
         assert np.array_equal(from_obj.R, other.R)
@@ -155,7 +155,7 @@ def test_linspace_endpoints_are_exact():
 def test_running_a_sweep_spec_is_refused_with_the_way_out():
     spec = JobSpec.from_dict({**BINARY_GRATING, 'sweep': {'wavelength': [500.0, 600.0]}})
     with pytest.raises(SpecError, match=r'expand'):
-        fieldwave.run(spec)
+        wavebit.run(spec)
 
 
 def test_expanded_sweep_points_match_direct_calls():
@@ -166,7 +166,7 @@ def test_expanded_sweep_points_match_direct_calls():
         direct = dict(BINARY_GRATING)
         direct['incidence'] = {**BINARY_GRATING['incidence'],
                                'wavelength': point.incidence.wavelength}
-        assert np.array_equal(fieldwave.run(point).R, fieldwave.run(direct).R)
+        assert np.array_equal(wavebit.run(point).R, wavebit.run(direct).R)
 
 
 # ---------------------------------------------------------------- rejection
@@ -204,7 +204,7 @@ def test_raster_ref_is_refused_by_the_stateless_entry_point():
 
 def test_run_rejects_a_type_it_cannot_interpret():
     with pytest.raises(SpecError, match=r'expected a JobSpec'):
-        fieldwave.run(42)
+        wavebit.run(42)
 
 
 # ---------------------------------------------------------------- units
@@ -233,5 +233,5 @@ def test_real_polar_angles_pass():
     assert len(spec) == 4
     # A lossless stack must still conserve energy at a real angle.
     for point in spec.expand():
-        r = fieldwave.run(point)
+        r = wavebit.run(point)
         assert r.R.sum() + r.T.sum() == pytest.approx(1.0, abs=1e-9)

@@ -1,4 +1,4 @@
-"""Scattering-matrix connecting algorithm (fieldwave._core.scattering).
+"""Scattering-matrix connecting algorithm (wavebit._core.scattering).
 
 SMM has no golden file of its own on purpose: its oracle is the ETM path, which is itself
 pinned to the legacy results in test_golden_legacy_parity.py. So the properties tested are
@@ -16,14 +16,14 @@ pinned to the legacy results in test_golden_legacy_parity.py. So the properties 
 import numpy as np
 import pytest
 
-import fieldwave
-from fieldwave._core.factorization import to_conv_mat_raster_sampled
-from fieldwave._core.scattering import smm_1d, smm_1d_conical, smm_2d
-from fieldwave._core.solve_1d import solve_1d, solve_1d_conical
-from fieldwave._core.solve_2d import solve_2d
+import wavebit
+from wavebit._core.factorization import to_conv_mat_raster_sampled
+from wavebit._core.scattering import smm_1d, smm_1d_conical, smm_2d
+from wavebit._core.solve_1d import solve_1d, solve_1d_conical
+from wavebit._core.solve_2d import solve_2d
 
 # ---------------------------------------------------------------------------------- cases
-# name, kwargs for fieldwave.rcwa (grating type follows from ucell / phi, as in the solver)
+# name, kwargs for wavebit.rcwa (grating type follows from ucell / phi, as in the solver)
 UC_1D = np.array([[[3., 3., 1., 1., 3., 1.]], [[2., 2., 2., 1., 1., 1.]]])
 UC_1D_SUB = np.array([[[3., 3., 1., 1., 3., 1.]], [[1., 1., 1., 1., 1., 1.]]])
 UC_2D = np.array([[[3., 3., 1., 1.], [1., 3., 3., 1.], [1., 1., 3., 3.], [3., 1., 1., 3.]]])
@@ -89,7 +89,7 @@ EFFICIENCIES = ('R', 'R_s', 'R_p', 'T', 'T_s', 'T_p')
 
 
 def _solve(algo, kwargs):
-    return fieldwave.rcwa(backend=0, connecting_algo=algo, **kwargs).conv_solve()
+    return wavebit.rcwa(backend=0, connecting_algo=algo, **kwargs).conv_solve()
 
 
 # ------------------------------------------------------------------------------- agreement
@@ -124,7 +124,7 @@ def test_smm_conserves_energy_when_lossless(name, kwargs, kind):
 
 def _core_inputs(kwargs):
     """Solver-built arguments for a direct core call (same route the mixin takes)."""
-    solver = fieldwave.rcwa(backend=0, connecting_algo='SMM', **kwargs)
+    solver = wavebit.rcwa(backend=0, connecting_algo='SMM', **kwargs)
     solver.conv_solve()                    # assigns the grating type
     epx, epy, epz = to_conv_mat_raster_sampled(
         solver.ucell, solver.fto[0], solver.fto[1])
@@ -177,7 +177,7 @@ def test_unknown_connecting_algo_is_rejected():
 
 
 def _field(algo, kwargs, **res):
-    solver = fieldwave.rcwa(backend=0, connecting_algo=algo, **kwargs)
+    solver = wavebit.rcwa(backend=0, connecting_algo=algo, **kwargs)
     solver.conv_solve()
     cell = solver.calculate_field(set_field_input=(True, True, True), **res)
     return solver, np.array(cell)
@@ -214,8 +214,8 @@ def test_smm_field_state_matches_tmm(name, kwargs, kind):
     reads, and the two algorithms express that one in different bases (see ``_field_state``).
     What is defined there is their product, which is what the reconstruction actually forms.
     """
-    tmm = fieldwave.rcwa(backend=0, connecting_algo='ETM', **kwargs)
-    smm = fieldwave.rcwa(backend=0, connecting_algo='SMM', **kwargs)
+    tmm = wavebit.rcwa(backend=0, connecting_algo='ETM', **kwargs)
+    smm = wavebit.rcwa(backend=0, connecting_algo='SMM', **kwargs)
     tmm.conv_solve()
     smm.conv_solve()
 
@@ -253,7 +253,7 @@ CUTOFF = dict(ucell=np.array([[[3., 3., 1., 1., 3., 1.]], [[2., 2., 2., 1., 1., 
 def test_smm_field_with_an_order_exactly_at_the_substrate_cutoff(extra):
     """A retained order sitting at kz_bot = 0 is a real configuration, not a pathology."""
     kwargs = dict(CUTOFF, **extra)
-    solver = fieldwave.rcwa(backend=0, connecting_algo='SMM', **kwargs)
+    solver = wavebit.rcwa(backend=0, connecting_algo='SMM', **kwargs)
     kz = np.sqrt(np.array(solver.n_bot, dtype=complex) ** 2
                  - np.array(solver.get_kx_ky_vector(kwargs['wavelength'])[0]) ** 2)
     assert np.min(np.abs(kz)) < 1e-12, 'premise: an order must sit exactly at cutoff'
@@ -308,7 +308,7 @@ def test_smm_field_on_a_skewed_cell_matches_tmm():
 
 def test_field_before_solve_raises():
     """No solve, no amplitudes — fail with the reason rather than on a None."""
-    solver = fieldwave.rcwa(backend=0, connecting_algo='SMM', **CASES_1D[0][1])
+    solver = wavebit.rcwa(backend=0, connecting_algo='SMM', **CASES_1D[0][1])
     with pytest.raises(RuntimeError, match='solve'):
         solver.calculate_field(res_x=4, res_z=4)
 
@@ -316,7 +316,7 @@ def test_field_before_solve_raises():
 def test_frozen_geometry_does_not_change_the_smm_answer():
     """SMM decides nothing discrete, so freezing must be a no-op for it, bit for bit."""
     kwargs = dict(CASES_1D[4][1])          # a substrate-matched bottom layer
-    solver = fieldwave.rcwa(backend=0, connecting_algo='SMM', **kwargs)
+    solver = wavebit.rcwa(backend=0, connecting_algo='SMM', **kwargs)
     with_geom = solver.conv_solve(geometry=solver.freeze_geometry())
     without = _solve('SMM', kwargs)
     assert np.allclose(np.array(with_geom.R), np.array(without.R), atol=0, rtol=0)
@@ -372,7 +372,7 @@ def test_smm_2d_matches_conical_on_y_invariant_stack():
 
 def _to(backend, x):
     if backend == 'jax':
-        import fieldwave.on_jax     # noqa: F401  (enables x64; RCWA needs double precision)
+        import wavebit.on_jax     # noqa: F401  (enables x64; RCWA needs double precision)
         import jax.numpy as jnp
         return jnp.asarray(x)
     import torch
@@ -407,12 +407,12 @@ def test_smm_field_cross_backend(case, backend, name):
     """The amplitude recovery is Array-API code like the rest — same field on every backend."""
     pytest.importorskip(name)
     if name == 'jax':
-        # `as _`: a plain `import fieldwave.on_jax` would rebind `fieldwave` as a local.
-        import fieldwave.on_jax as _   # noqa: F401  (enables x64; RCWA needs double precision)
+        # `as _`: a plain `import wavebit.on_jax` would rebind `wavebit` as a local.
+        import wavebit.on_jax as _   # noqa: F401  (enables x64; RCWA needs double precision)
     kwargs = case[1]
     _, reference = _field('SMM', kwargs, res_x=5, res_y=5, res_z=4)
 
-    solver = fieldwave.rcwa(backend=backend, connecting_algo='SMM', **kwargs)
+    solver = wavebit.rcwa(backend=backend, connecting_algo='SMM', **kwargs)
     solver.conv_solve(geometry=solver.freeze_geometry())
     cell = np.asarray(solver.calculate_field(res_x=5, res_y=5, res_z=4,
                                              set_field_input=(True, True, True)))
@@ -425,7 +425,7 @@ def test_gradient_jax_torch_fd(index):
     """d(sum T)/ds where s scales a real perturbation of a layer's eps-conv matrix."""
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
-    import fieldwave.on_jax          # noqa: F401  (enables x64)
+    import wavebit.on_jax          # noqa: F401  (enables x64)
     import jax.numpy as jnp
 
     kwargs = dict(CASES_1D[index][1], theta=0.3)
@@ -468,7 +468,7 @@ def test_gradient_jax_torch_fd(index):
 def test_jit_traceable_jax():
     """The SMM cascade is jittable: no data-dependent branching on traced values."""
     jax = pytest.importorskip('jax')
-    import fieldwave.on_jax          # noqa: F401  (enables x64)
+    import wavebit.on_jax          # noqa: F401  (enables x64)
     import jax.numpy as jnp
 
     _, inputs = _core_inputs(CASES_1D[0][1])

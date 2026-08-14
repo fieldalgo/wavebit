@@ -1,5 +1,5 @@
 import numpy as np
-import fieldwave
+import wavebit
 
 def test_1_si_glass_branch_cut():
     print("==================================================")
@@ -17,7 +17,7 @@ def test_1_si_glass_branch_cut():
 
     for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
         try:
-            solver = fieldwave.rcwa(backend=backend_id, **option)
+            solver = wavebit.rcwa(backend=backend_id, **option)
             res = solver.conv_solve()
             assert res.R is not None and res.T is not None
             R = float(res.R.sum())
@@ -48,7 +48,7 @@ def test_2_air_au_raw_n_lossy_substrate():
 
     for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
         try:
-            solver = fieldwave.rcwa(backend=backend_id, **option)
+            solver = wavebit.rcwa(backend=backend_id, **option)
             res = solver.conv_solve()
             assert res.R is not None
             R = float(res.R.sum())
@@ -75,7 +75,7 @@ def test_3_same_material_interface():
     )
 
     for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
-        solver = fieldwave.rcwa(backend=backend_id, **option)
+        solver = wavebit.rcwa(backend=backend_id, **option)
         res = solver.conv_solve()
         assert res.R is not None
         R = float(res.R.sum())
@@ -99,7 +99,7 @@ def test_4_tm_transmittance_conjugation():
 
     for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
         try:
-            solver = fieldwave.rcwa(backend=backend_id, **option_conical)
+            solver = wavebit.rcwa(backend=backend_id, **option_conical)
             res = solver.conv_solve()
             assert res.res_tm_inc is not None and res.res_tm_inc.T_p is not None
             T_p = float(res.res_tm_inc.T_p.sum())
@@ -115,7 +115,7 @@ def test_5_continuous_raster_convolution_matrix():
     print("Test 5: Continuous Raster Convolution Matrix sign")
     print("==================================================")
     
-    from fieldwave._core.factorization import to_conv_mat_raster_integrated
+    from wavebit._core.factorization import to_conv_mat_raster_integrated
     
     n_compressed = np.array([0.18 + 3.0j])
     ucell = np.array([[[0.18 + 3.0j]]])
@@ -142,7 +142,7 @@ def test_6_none_ucell_grating_type():
 
     for backend_id, backend_name in [(0, 'NumPy'), (1, 'JAX'), (2, 'PyTorch')]:
         try:
-            solver = fieldwave.rcwa(backend=backend_id, **option)
+            solver = wavebit.rcwa(backend=backend_id, **option)
             solver._assign_grating_type()
             print(f"[{backend_name}] ucell=None assigned grating_type: {solver.grating_type_assigned}")
             assert solver.grating_type_assigned == 2, f"Expected grating_type_assigned == 2 for None ucell, got {solver.grating_type_assigned}"
@@ -165,7 +165,7 @@ def test_7_none_theta_handling():
 
     for backend_id, backend_name in [(0, 'NumPy'), (1, 'JAX'), (2, 'PyTorch')]:
         try:
-            solver = fieldwave.rcwa(backend=backend_id, **option)
+            solver = wavebit.rcwa(backend=backend_id, **option)
             res = solver.conv_solve()
             assert res.R is not None
             R = float(res.R.sum())
@@ -183,7 +183,7 @@ def test_8_torch_ucell_numpy_ndarray():
     print("==================================================")
 
     import torch
-    from fieldwave.on_torch.emsolver.rcwa import RCWATorch
+    from wavebit.on_torch.emsolver.rcwa import RCWATorch
 
     solver = RCWATorch()
     # Test float numpy array
@@ -202,7 +202,7 @@ def test_9_vector_modeling_period():
     print("==================================================")
 
     for backend_id, backend_name in [(0, 'NumPy'), (1, 'JAX'), (2, 'PyTorch')]:
-        solver = fieldwave.rcwa(backend=backend_id, period=[1000, 1000])
+        solver = wavebit.rcwa(backend=backend_id, period=[1000, 1000])
         assert solver.modeler.period is not None
         # vector object for layer
         sub_element = solver.modeler.rectangle_no_approximation(cx=500, cy=500, lx=200, ly=200, base=2.0)
@@ -231,7 +231,7 @@ def test_10_shared_mean_permittivity_keeps_the_interface():
         psi=0.4, wavelength=0.5, period=[0.6, 0.6], theta=0.1, phi=0.0, fto=[2, 2])
 
     for algo in ('ETM', 'SMM'):
-        res = fieldwave.rcwa(backend=0, connecting_algo=algo, **option).conv_solve()
+        res = wavebit.rcwa(backend=0, connecting_algo=algo, **option).conv_solve()
         total = float(np.sum(res.R)) + float(np.sum(res.T))
         print(f"[{algo}] R+T = {total:.12f}")
         assert abs(total - 1.0) < 1e-9, f"{algo} energy conservation failed: {total}"

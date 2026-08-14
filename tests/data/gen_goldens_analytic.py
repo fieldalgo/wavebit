@@ -1,12 +1,12 @@
 """Freeze the legacy analytic (shape-based) Fourier builder as reference data.
 
-Run while fieldwave/on_numpy/emsolver/fourier_analytic.py still exists.
+Run while wavebit/on_numpy/emsolver/fourier_analytic.py still exists.
 """
 import pathlib
 
 import numpy as np
 
-from fieldwave.on_numpy.emsolver.fourier_analytic import to_conv_mat_smooth_layers
+from wavebit.on_numpy.emsolver.fourier_analytic import to_conv_mat_smooth_layers
 
 PERIOD = (1.0, 1.2)
 CASES = {

@@ -7,8 +7,8 @@ give byte-identical results to passing the raw value.
 import numpy as np
 import pytest
 
-import fieldwave
-from fieldwave import Backend, Factorization, FourierCoefficients, Pol
+import wavebit
+from wavebit import Backend, Factorization, FourierCoefficients, Pol
 
 
 def test_intenum_equals_int_codes():
@@ -24,7 +24,7 @@ def test_str_enums_equal_their_strings():
 
 def _solve(tetm, backend, **strategy):
     ucell = np.array([[[3.0, 3.0, 3.0, 1.0, 1.0, 1.0]]])
-    solver = fieldwave.rcwa(backend=backend, n_top=2.0, n_bot=1.0, theta=0.0, phi=None,
+    solver = wavebit.rcwa(backend=backend, n_top=2.0, n_bot=1.0, theta=0.0, phi=None,
                           tetm=tetm, fto=[6, 0], period=[0.77], wavelength=0.777,
                           thickness=[0.15], ucell=ucell, **strategy)
     r = solver.conv_solve()

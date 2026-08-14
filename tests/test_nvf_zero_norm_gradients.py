@@ -1,6 +1,6 @@
 """Gradients where the analytic normal field has no direction to report.
 
-:func:`fieldwave._core.analytic.normal_vector_field_analytical` normalizes twice — once per
+:func:`wavebit._core.analytic.normal_vector_field_analytical` normalizes twice — once per
 shape, once over the sum — and both norms reach exactly zero on perfectly ordinary geometry:
 
 * a shape's own centre, where its gradient ``g`` vanishes;
@@ -15,7 +15,7 @@ gradient. The forward pass stays finite throughout, so nothing raises and nothin
 only symptom is a NaN arriving at the caller. The guard now replaces the *radicand*, so the
 root is only ever taken at 1, where the derivative is finite.
 
-The same shape appeared a second time in :func:`fieldwave._core.analytic.shape_ft`: the circle
+The same shape appeared a second time in :func:`wavebit._core.analytic.shape_ft`: the circle
 branch took a bare ``**0.5`` of ``u**2 + v**2`` and handed it to ``jinc``, whose own ``where``
 supplied the ``0``. The ellipse branch beside it was already guarded, which is why
 ``d/d(period)`` used to come back NaN on a circle and finite on an ellipse — the same layer,
@@ -31,14 +31,14 @@ sampling problem those tests already measure, not this one.
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 
 pytest.importorskip('jax')
 import jax                                                     # noqa: E402
 import jax.numpy as jnp                                        # noqa: E402
-import fieldwave.on_jax                                        # noqa: E402,F401  (enables x64)
+import wavebit.on_jax                                        # noqa: E402,F401  (enables x64)
 
-from fieldwave._core.analytic import (                         # noqa: E402
+from wavebit._core.analytic import (                         # noqa: E402
     assemble_eps_coeffs, normal_vector_field_analytical)
 
 P = 0.77
@@ -83,7 +83,7 @@ def test_the_cancelling_configuration_is_actually_reached():
 def test_symmetric_two_shape_layer_has_a_finite_position_gradient():
     """The reported case, through the public API: two shapes, one solve, one ``jax.grad``."""
     def objective(d):
-        res = fieldwave.rcwa(backend=1, ucell=[dict(n_base=1.0, shapes=_twin_circles(d))],
+        res = wavebit.rcwa(backend=1, ucell=[dict(n_base=1.0, shapes=_twin_circles(d))],
                              **BASE).conv_solve()
         return jnp.real(jnp.sum(res.R))
 

@@ -25,7 +25,7 @@ silently:
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 
 WL = 620.0
 PERIOD = (400.0, 380.0)
@@ -56,7 +56,7 @@ def solver(fto=(0, 0), backend=0, **kw):
     kw.setdefault('theta', np.deg2rad(28.0))
     kw.setdefault('phi', np.deg2rad(37.0))
     kw.setdefault('psi', 0.6)
-    return fieldwave.rcwa(backend=backend, n_top=1.0, n_bot=1.52, fto=fto, period=PERIOD,
+    return wavebit.rcwa(backend=backend, n_top=1.0, n_bot=1.52, fto=fto, period=PERIOD,
                           wavelength=WL, **kw)
 
 
@@ -260,9 +260,9 @@ def test_the_two_formulations_agree_across_absorbing_half_spaces(n_top, n_bot):
     layers = [IN_PLANE, np.diag([2.4 + 0.05j, 3.1 + 0.05j, 2.7 + 0.05j]).astype(complex)]
     kw = dict(n_top=n_top, n_bot=n_bot, thickness=[140.0, 260.0])
 
-    a = fieldwave.rcwa(backend=0, fto=(0, 0), period=PERIOD, wavelength=WL,
+    a = wavebit.rcwa(backend=0, fto=(0, 0), period=PERIOD, wavelength=WL,
                        theta=np.deg2rad(28.0), phi=np.deg2rad(37.0), psi=0.6, **kw)
-    b = fieldwave.rcwa(backend=0, fto=(0, 0), period=PERIOD, wavelength=WL,
+    b = wavebit.rcwa(backend=0, fto=(0, 0), period=PERIOD, wavelength=WL,
                        theta=np.deg2rad(28.0), phi=np.deg2rad(37.0), psi=0.6, **kw)
     b.formulation = '4ff'
 

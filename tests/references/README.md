@@ -109,7 +109,7 @@ conda run -n fwref pip install fmmax
 Two consequences worth knowing before touching those generators:
 
 * **The case list cannot live in the test module** the way the RETICOLO pair's does — neither env
-  can import the other's module, since `fwref` has no `fieldwave` and the project env has no
+  can import the other's module, since `fwref` has no `wavebit` and the project env has no
   `fmmax`. It lives in `_fmmax_cases.py`, which imports numpy and nothing else.
 * **JAX defaults to float32.** Without `jax.config.update('jax_enable_x64', True)` an fmmax
   generator agrees with an analytic slab only to ~3e-8, which reads as a mediocre solver and is

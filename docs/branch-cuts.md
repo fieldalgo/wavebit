@@ -4,9 +4,9 @@ Written: 2026-08-11. Measured on CPU (Apple Accelerate), NumPy / JAX / PyTorch, 
 float32.
 
 Targets:
-- `fieldwave/_core/conventions.py` — `mode_q`, `boundary_kz`, `incident_kz`,
+- `wavebit/_core/conventions.py` — `mode_q`, `boundary_kz`, `incident_kz`,
   `_check_resolvable`, `branch_tolerance`
-- `fieldwave/_core/solve_1d.py` — `solve_1d` stage 3, `final_matching`
+- `wavebit/_core/solve_1d.py` — `solve_1d` stage 3, `final_matching`
 - `tests/references/test_reticolo_conical_sweep.py` — the RETICOLO oracle
 - `tests/test_fp_warnings.py` — the three tiers of "this result is not trustworthy"
 
@@ -152,7 +152,7 @@ no diffraction whatsoever — and because that is a smooth constant, it **plots 
 region** rather than as noise:
 
 ```
-   fieldwave BEFORE                fieldwave AFTER
+   wavebit BEFORE                wavebit AFTER
    +---------------+               +---------------+
    |###############|               |  ..:::===:::..|
    |####,-----,####|               |..::==     ==::|
@@ -320,15 +320,15 @@ work.
 
 ### The x64 ordering trap, and why it now warns
 
-`fieldwave/on_jax/__init__.py` enables `jax_enable_x64`, and it does so deliberately late: the
+`wavebit/on_jax/__init__.py` enables `jax_enable_x64`, and it does so deliberately late: the
 setting is process-wide and belongs to the caller, so it happens when the JAX backend is first
-*used*, not on `import fieldwave`. An array built in the gap between the two is silently
+*used*, not on `import wavebit`. An array built in the gap between the two is silently
 complex64:
 
 ```python
-import jax.numpy as jnp, fieldwave
+import jax.numpy as jnp, wavebit
 theta = jnp.asarray(0.4 + 0.3j)                               # complex64 — x64 is not on yet
-fieldwave.rcwa(backend=1, theta=theta, type_complex=0, ...)   # ...but double was asked for
+wavebit.rcwa(backend=1, theta=theta, type_complex=0, ...)   # ...but double was asked for
 ```
 
 The setter's `jnp.array(theta, dtype=complex128)` then widens it without recovering anything,
@@ -339,9 +339,9 @@ the whole argument for reporting it.
 
 Two things address it, because neither is enough alone.
 
-**The cap is lifted earlier.** `import fieldwave` now enables x64 when JAX is *already* loaded
+**The cap is lifted earlier.** `import wavebit` now enables x64 when JAX is *already* loaded
 (`_enable_jax_x64_if_already_imported`). The original rationale was that the setting is
-process-wide and belongs to the caller — but fieldwave flips it either way, just later, so
+process-wide and belongs to the caller — but wavebit flips it either way, just later, so
 deferring never spared the caller the change; it only made the moment depend on import order.
 Note what x64 actually is:
 
@@ -354,9 +354,9 @@ Note what x64 actually is:
 It is a **cap**, not a default, and `type_complex` keeps selecting the solve's precision either
 way (`type_complex=1` still returns complex64 with x64 on). The half of the old rationale that
 survives is that a NumPy-only caller should pay nothing, so this never *imports* JAX — pinned
-by `test_importing_fieldwave_does_not_drag_jax_in`.
+by `test_importing_wavebit_does_not_drag_jax_in`.
 
-**What that cannot reach still warns.** `import fieldwave` before `import jax` leaves no config
+**What that cannot reach still warns.** `import wavebit` before `import jax` leaves no config
 to change, so `check_input_precision` reports (`PrecisionLossWarning`) whenever `theta` or `phi`
 arrives narrower than the working precision. Not JAX-specific — any array handed in below the
 solve's precision loses the same way — and quiet for a Python float, a matching dtype, and
@@ -374,12 +374,12 @@ degeneracy, because its roots are genuinely complex. A solve containing both wan
 | `1e-6` | 1.3e-06 | 7.4e-01 | 1.4e-04 |
 | `1e-5` | 3.4e-07 | 1.75 | 2.21 |
 
-Hence `fieldwave.branch_tolerance`, a context manager rather than a constructor keyword: it
+Hence `wavebit.branch_tolerance`, a context manager rather than a constructor keyword: it
 overrides a convention for a block, which is what it honestly is, and it reaches all 15 call
 sites across four modules without adding a permanent argument to the public API.
 
 ```python
-with fieldwave.branch_tolerance(1e-5):      # lossless superstrate, complex angle, float32
+with wavebit.branch_tolerance(1e-5):      # lossless superstrate, complex angle, float32
     res = solver.conv_solve()
 ```
 

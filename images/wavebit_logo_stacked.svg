@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 415 156" width="415" height="156" role="img" aria-label="Wavebit">
+  <title>Wavebit</title>
+
+  <!-- Stacked lockup, for narrow and square placements. Same mark and colours as
+       wavebit_logo.svg; the bars grow to the height of the two-line block. -->
+  <rect x="8"   y="52.6" width="18" height="50.8"  rx="9" fill="#e11d48"/>
+  <rect x="41"  y="27.2" width="18" height="101.5" rx="9" fill="#f59e0b"/>
+  <rect x="74"  y="7.5"  width="18" height="141"   rx="9" fill="#22c55e"/>
+  <rect x="107" y="27.2" width="18" height="101.5" rx="9" fill="#0ea5e9"/>
+  <rect x="140" y="52.6" width="18" height="50.8"  rx="9" fill="#7c3aed"/>
+
+  <!-- "Field" is tracked to 12.9 so its ink measures 217.2 against "Wave" at 217.0:
+       the two lines justify to the same width. SVG adds the letter-spacing after the
+       final glyph too, which is why the value is not the 10.0 that naive matching gives. -->
+  <text x="190" y="70"
+        font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
+        font-size="86" letter-spacing="12.9" font-weight="300" fill="#0d9488">Field</text>
+  <text x="190" y="148"
+        font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
+        font-size="86" letter-spacing="-1.5" font-weight="700" fill="#0d9488">Wave</text>
+</svg>

@@ -1,4 +1,4 @@
-"""Single-source Fourier factorization (fieldwave._core.factorization) — Phase 4a/4b gate.
+"""Single-source Fourier factorization (wavebit._core.factorization) — Phase 4a/4b gate.
 
 Beyond the usual parity/cross-backend checks, this closes the differentiability gap that
 motivated the port: with the factorization inside the core, the gradient runs end-to-end from
@@ -12,9 +12,9 @@ import pytest
 
 import array_api_compat.numpy as xnp
 
-import fieldwave
-from fieldwave._core.factorization import fourier2d_piecewise_constant
-from fieldwave._core.factorization import (
+import wavebit
+from wavebit._core.factorization import fourier2d_piecewise_constant
+from wavebit._core.factorization import (
     to_conv_mat_raster_sampled as core_dfs,
     to_conv_mat_raster_nvf as core_nvf,
     to_conv_mat_raster_integrated as core_cfs,
@@ -23,8 +23,8 @@ from fieldwave._core.factorization import (
     compression_indices,
     compress_cell,
 )
-from fieldwave._core.solve_1d import solve_1d
-from fieldwave._core.solve_2d import solve_2d
+from wavebit._core.solve_1d import solve_1d
+from wavebit._core.solve_2d import solve_2d
 
 # Enables jax x64, which every jax case here needs: at float32 the cross-backend comparisons
 # miss their 1e-10 tolerance and the gradient checks miss 1e-8. Guarded because jax is
@@ -33,10 +33,10 @@ from fieldwave._core.solve_2d import solve_2d
 # At the top of the module rather than beside each `import jax.numpy`, which is the idiom
 # elsewhere in this suite, because the jax paths here are scattered across `_to` and three
 # gradient tests: a jax case added later would silently inherit float32. That is how this file
-# came to depend on *another* test module importing `fieldwave.on_jax` first -- the whole suite
+# came to depend on *another* test module importing `wavebit.on_jax` first -- the whole suite
 # passed while `pytest tests/test_factorization_core.py` alone failed nine of them.
 try:
-    import fieldwave.on_jax                                    # noqa: E402,F401
+    import wavebit.on_jax                                    # noqa: E402,F401
 except ImportError:
     pass
 
@@ -134,7 +134,7 @@ def test_factorization_feeds_solve_bit_exactly():
     wl, n_top, n_bot, theta, period, fto = 0.777, 2.0, 1.0, 0.3, [0.77], [6, 0]
     thickness = [0.15]
 
-    solver = fieldwave.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=None, tetm='te',
+    solver = wavebit.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=None, tetm='te',
                           fto=fto, period=period, wavelength=wl, thickness=thickness, ucell=ucell)
     legacy = solver.conv_solve()
     kx, _ = solver.get_kx_ky_vector(wl)
@@ -163,7 +163,7 @@ def test_end_to_end_gradient_wrt_ucell_1d():
     ucell = np.array([[[3., 3., 3., 1., 1., 1.]]])
     direction = np.ones_like(ucell)
     fto = [6, 0]
-    solver = fieldwave.rcwa(backend=0, n_top=2.0, n_bot=1.0, theta=0.3, phi=None, tetm='te',
+    solver = wavebit.rcwa(backend=0, n_top=2.0, n_bot=1.0, theta=0.3, phi=None, tetm='te',
                           fto=fto, period=[0.77], wavelength=0.777, thickness=[0.15], ucell=ucell)
     kx, _ = solver.get_kx_ky_vector(0.777)
     theta = complex(solver.theta)
@@ -197,7 +197,7 @@ def test_end_to_end_gradient_wrt_ucell_2d():
     direction = np.ones_like(ucell)
     fto = [1, 1]
     wl, n_top, n_bot = 0.9, 1.0, 1.0
-    solver = fieldwave.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
+    solver = wavebit.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
                           fto=fto, period=[1.0, 1.0], wavelength=wl, thickness=[0.15], ucell=ucell)
     kx, ky = solver.get_kx_ky_vector(wl)
     theta, psi = complex(solver.theta), complex(solver.psi)
@@ -282,10 +282,10 @@ def test_nvf_now_works_on_every_backend():
     opts = dict(n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0, fto=[2, 2],
                 period=[1.0, 1.0], wavelength=0.9, thickness=[0.2], ucell=ucell,
                 factorization='nvf')
-    ref = fieldwave.rcwa(backend=0, **opts).conv_solve()
+    ref = wavebit.rcwa(backend=0, **opts).conv_solve()
     for backend in (1, 2):
         pytest.importorskip('jax' if backend == 1 else 'torch')
-        got = fieldwave.rcwa(backend=backend, **opts).conv_solve()
+        got = wavebit.rcwa(backend=backend, **opts).conv_solve()
         assert np.allclose(np.asarray(ref.res.T), np.asarray(got.res.T),
                            atol=1e-12, rtol=0), backend
 
@@ -306,7 +306,7 @@ def test_nvf_end_to_end_gradient_wrt_ucell():
     wl, n_top, n_bot, d = 0.9, 1.0, 1.0, 0.2
     normal_field = normal_field_for_ucell(ucell, fto[0], fto[1])
 
-    solver = fieldwave.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
+    solver = wavebit.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
                           fto=fto, period=[1.0, 1.0], wavelength=wl, thickness=[d], ucell=ucell)
     kx, ky = solver.get_kx_ky_vector(wl)
     theta, psi = complex(solver.theta), complex(solver.psi)
@@ -402,7 +402,7 @@ def test_cfs_end_to_end_gradient_wrt_ucell():
     wl, n_top, n_bot, d = 0.777, 2.0, 1.0, 0.15
     compression = [compression_indices(ucell[i]) for i in range(ucell.shape[0])]
 
-    solver = fieldwave.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=0.3, phi=None, psi=np.pi / 2,
+    solver = wavebit.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=0.3, phi=None, psi=np.pi / 2,
                           fto=fto, period=[0.77], wavelength=wl, thickness=[d], ucell=ucell)
     kx, _ = solver.get_kx_ky_vector(wl)
     theta = complex(solver.theta)
@@ -439,7 +439,7 @@ def _transpose_symmetric_L(N=48):
 
 
 def _transmission_map(ucell, factorization, fto, psi):
-    res = fieldwave.rcwa(
+    res = wavebit.rcwa(
         backend=0, factorization=factorization, fto=[fto, fto],
         n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=psi,
         wavelength=1.3, period=[1.0, 1.0], thickness=[0.4], ucell=ucell).conv_solve()

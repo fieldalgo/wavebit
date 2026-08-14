@@ -3,9 +3,9 @@
 Written: 2026-08-11. Measured against `mpmath` at 40 digits, CPU, float64 unless stated.
 
 Targets:
-- `fieldwave/_core/backend.py::j1` — the dispatch
+- `wavebit/_core/backend.py::j1` — the dispatch
 - `_J1_THR`, `_J1_THR_F32`, `_J1_ASYM_TERMS` — the constants this document exists to justify
-- `fieldwave/_core/backend.py::jinc` — `2 J_1(z)/z`, the only caller that matters: it is the
+- `wavebit/_core/backend.py::jinc` — `2 J_1(z)/z`, the only caller that matters: it is the
   Fourier coefficient of a circle or an ellipse
 
 ---
@@ -181,9 +181,9 @@ both precisions, the choice is exposed rather than decided for you.
 ## The switch
 
 ```python
-import fieldwave
-fieldwave.set_j1_implementation('hybrid')     # returns the previous setting
-fieldwave.get_j1_implementation()
+import wavebit
+wavebit.set_j1_implementation('hybrid')     # returns the previous setting
+wavebit.get_j1_implementation()
 ```
 
 | setting | torch float64 | torch float32 | jax |

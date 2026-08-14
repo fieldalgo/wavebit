@@ -12,13 +12,13 @@ import warnings
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 import array_api_compat.numpy as xnp
-from fieldwave._core.analytic import (
+from wavebit._core.analytic import (
     shape_ft as _shape_ft, conv_matrix_2d as _conv_matrix_2d,
     assemble_eps_coeffs as _assemble_eps_coeffs, normal_vector_field_analytical as _nvf_analytic)
-from fieldwave._core.backend import UnphysicalResultWarning
-from fieldwave._core.factorization import fourier2d_pointwise as _pointwise
+from wavebit._core.backend import UnphysicalResultWarning
+from wavebit._core.factorization import fourier2d_pointwise as _pointwise
 
 
 # The core builders are namespace-generic; bind NumPy for these convention checks.
@@ -70,7 +70,7 @@ def test_complex_index_is_loss_not_gain(where):
     """``Im(n) > 0`` must come out as ``Im(eps) > 0``, on both the background and the shape.
 
     The builder conjugated on the way in (``conj(n)**2``), which is the convention
-    ``_core/conventions.py`` says FieldWave removed -- so an absorbing index became a gain
+    ``_core/conventions.py`` says Wavebit removed -- so an absorbing index became a gain
     medium, and only on this path: the raster builder (``factorization._layer_eps``) always
     used a raw ``n**2``. Nothing caught it because every case in this file was real, where
     ``conj(n)**2 == n**2``.
@@ -162,7 +162,7 @@ def test_axis_aligned_matches_raster_nvf():
                                               lx=L * P, ly=L * P, angle=0.0, n_index=NR)])]
 
     def total(ucell, psi, **kw):
-        res = fieldwave.rcwa(backend=0, ucell=ucell, psi=psi, **cfg, **kw).conv_solve()
+        res = wavebit.rcwa(backend=0, ucell=ucell, psi=psi, **cfg, **kw).conv_solve()
         return float(np.sum(np.asarray(res.R)))
 
     for psi in (np.pi / 2, 0.0):                       # TE, then TM
@@ -175,7 +175,7 @@ def test_the_analytic_normal_field_gets_the_two_axes_the_right_way_round():
     """A disc's normal is radial in REAL space -- true only if the sample cell is not transposed.
 
     ``period[0]`` is Px everywhere in this package (:func:`shape_ft`,
-    :func:`~fieldwave._core.analytic.shape_geometry`, ``polygon.polygon_ft``,
+    :func:`~wavebit._core.analytic.shape_geometry`, ``polygon.polygon_ft``,
     ``boundary.normal_projector_coeffs``), so the sample grid has to stretch ``u`` -- which
     indexes Nx -- by ``period[0]``. ``normal_vector_field_analytical`` read the pair backwards
     until 2026-08-11 and its one production caller reversed it back, so the path was right and
@@ -189,14 +189,14 @@ def test_the_analytic_normal_field_gets_the_two_axes_the_right_way_round():
     ``g = 2*(dx, dy)/a**2``, exactly parallel to the radius at every sample -- so there is no
     polygonisation angle to allow for and the tolerance is machine epsilon rather than the 1e-3
     its counterpart in ``test_boundary`` needs. The centre pixel is the one exclusion: ``g``
-    vanishes there, :func:`~fieldwave._core.analytic._hypot_safe` returns ``(0, 0)`` by design,
+    vanishes there, :func:`~wavebit._core.analytic._hypot_safe` returns ``(0, 0)`` by design,
     and the grid being odd on both axes lands a sample exactly on it. A swapped pair is not a
     small effect: it takes the worst deviation to 1.0, i.e. somewhere in the cell the field
     comes out square to the radius instead of along it.
 
     **Both branches are checked, and the second one is the ordinary one.** ``lattice=None``
     builds the sample grid from Px / Py directly (in
-    :func:`~fieldwave._core.lattice.sample_grid`, since 2026-08-11 -- one reader for both shape
+    :func:`~wavebit._core.lattice.sample_grid`, since 2026-08-11 -- one reader for both shape
     paths), and a basis makes that read unreachable. Counting the calls says how much a check
     written only that way would pin: ``engine`` hands the shape paths ``as_lattice(period=...)``
     whenever the period is *readable*, so what is left for ``lattice=None`` is direct callers
@@ -265,7 +265,7 @@ def test_metal_rod_absorbs_end_to_end(psi):
 
     with warnings.catch_warnings():
         warnings.simplefilter('error', UnphysicalResultWarning)
-        res = fieldwave.rcwa(backend=0, ucell=ucell, psi=psi, n_top=1.0, n_bot=1.5,
+        res = wavebit.rcwa(backend=0, ucell=ucell, psi=psi, n_top=1.0, n_bot=1.5,
                              theta=0.35, phi=0.4, period=(P, P), wavelength=0.777,
                              thickness=(0.25,), fto=(8, 8)).conv_solve()
 
@@ -293,7 +293,7 @@ def test_analytic_shape_parameters_are_absolute_lengths():
                                               angle=0.0, n_index=NR)])]
 
     def total(ucell, **kw):
-        res = fieldwave.rcwa(backend=0, ucell=ucell, **cfg, **kw).conv_solve()
+        res = wavebit.rcwa(backend=0, ucell=ucell, **cfg, **kw).conv_solve()
         return float(np.sum(np.asarray(res.R)))
 
     # The two readings separate by ~90x, so the threshold is not load-bearing; it is set
@@ -321,7 +321,7 @@ def test_energy_conservation_lossless():
                                       n_index=3.0)]),
     ]
     for fto in (5, 8):
-        res = fieldwave.rcwa(backend=0, ucell=ucell, fto=(fto, fto), **cfg).conv_solve()
+        res = wavebit.rcwa(backend=0, ucell=ucell, fto=(fto, fto), **cfg).conv_solve()
         tot = np.array(res.R).real.sum() + np.array(res.T).real.sum()
         assert abs(tot - 1.0) < 1e-9
 
@@ -338,7 +338,7 @@ def test_cross_backend_agreement():
                                            n_index=3.0)])]
 
     def T(bk):
-        return float(np.array(fieldwave.rcwa(backend=bk, ucell=ucell, fto=(6, 6), **cfg)
+        return float(np.array(wavebit.rcwa(backend=bk, ucell=ucell, fto=(6, 6), **cfg)
                               .conv_solve().T).real.sum())
 
     tn, tj, tt = T(0), T(1), T(2)
@@ -357,7 +357,7 @@ def _fd_grad_lx(shape_type, lx0=0.5):
         s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, n_index=2.5,
                  **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
         uc = [dict(n_base=1.0, shapes=[s])]
-        return float(np.array(fieldwave.rcwa(backend=0, ucell=uc, fto=(6, 6), **cfg)
+        return float(np.array(wavebit.rcwa(backend=0, ucell=uc, fto=(6, 6), **cfg)
                               .conv_solve().T).real.sum())
 
     h = 1e-5
@@ -371,7 +371,7 @@ def test_torch_gradient(shape_type):
     lx = torch.tensor(0.5, dtype=torch.float64, requires_grad=True)
     s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, n_index=2.5,
              **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
-    res = fieldwave.rcwa(backend=2, ucell=[dict(n_base=1.0, shapes=[s])], fto=(6, 6), **cfg).conv_solve()
+    res = wavebit.rcwa(backend=2, ucell=[dict(n_base=1.0, shapes=[s])], fto=(6, 6), **cfg).conv_solve()
     T = res.T.real.sum()
     T.backward()
     assert np.isfinite(float(lx.grad))
@@ -387,7 +387,7 @@ def test_jax_gradient(shape_type):
     def loss(lx):
         s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, n_index=2.5,
                  **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
-        r = fieldwave.rcwa(backend=1, ucell=[dict(n_base=1.0, shapes=[s])], fto=(6, 6), **cfg).conv_solve()
+        r = wavebit.rcwa(backend=1, ucell=[dict(n_base=1.0, shapes=[s])], fto=(6, 6), **cfg).conv_solve()
         return jnp.real(r.T).sum()
 
     g = float(jax.grad(loss)(jnp.array(0.5)))
@@ -410,9 +410,9 @@ def test_analytic_beats_staircase_tilted():
         d = np.array(res.T).real
         return d[d.shape[0] // 2, d.shape[0] // 2]
 
-    ref = t0(fieldwave.rcwa(backend=0, ucell=analytic, fto=(15, 15), **cfg).conv_solve())
-    a11 = t0(fieldwave.rcwa(backend=0, ucell=analytic, fto=(11, 11), **cfg).conv_solve())
-    s11 = t0(fieldwave.rcwa(backend=0, ucell=stair, fto=(11, 11), **cfg).conv_solve())
+    ref = t0(wavebit.rcwa(backend=0, ucell=analytic, fto=(15, 15), **cfg).conv_solve())
+    a11 = t0(wavebit.rcwa(backend=0, ucell=analytic, fto=(11, 11), **cfg).conv_solve())
+    s11 = t0(wavebit.rcwa(backend=0, ucell=stair, fto=(11, 11), **cfg).conv_solve())
 
     err_analytic = abs(a11 - ref)
     err_stair = abs(s11 - ref)
@@ -442,7 +442,7 @@ def test_a_circle_is_written_with_one_length():
     """
     shape = dict(type='circle', cx=0.5 * CIRCLE_P, cy=0.5 * CIRCLE_P, lx=0.5 * CIRCLE_P,
                  n_index=CIRCLE_NR)
-    got = fieldwave.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=[shape])],
+    got = wavebit.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=[shape])],
                          **CIRCLE_CFG).conv_solve()
     # Only a regression anchor, and it rides on ``normal_grid`` — it read
     # 0.161262158771 while that default was 256, and moved 1.1e-4 when the default rose to 1024.
@@ -461,7 +461,7 @@ def test_a_circle_that_names_a_second_length_is_refused(ly, why):
     shape = dict(type='circle', cx=0.5 * CIRCLE_P, cy=0.5 * CIRCLE_P, lx=0.5 * CIRCLE_P,
                  ly=ly, n_index=CIRCLE_NR)
     with pytest.raises(ValueError, match="'ly' would be dropped"):
-        fieldwave.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=[shape])],
+        wavebit.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=[shape])],
                        **CIRCLE_CFG).conv_solve()
 
 
@@ -519,7 +519,7 @@ def test_overlapping_shapes_move_the_answer_while_the_vector_path_does_not():
 
     def total(ucell, **extra):
         return float(np.sum(np.asarray(
-            fieldwave.rcwa(backend=0, ucell=ucell, **extra, **cfg).conv_solve().T)))
+            wavebit.rcwa(backend=0, ucell=ucell, **extra, **cfg).conv_solve().T)))
 
     want = total(raster[None], fourier_coefficients='sampled')
     vector = total([[n_base, [['rectangle', cx, 150.0, 120.0, 120.0, n, 0, 0, 0]
@@ -549,7 +549,7 @@ def rod(cx, cy=150.0, lx=120.0, ly=120.0, angle=0.0, n_index=2.0, type='rectangl
 
 
 def solve(shapes, **layer):
-    return fieldwave.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=shapes, **layer)],
+    return wavebit.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=shapes, **layer)],
                           **CHECK_CFG).conv_solve()
 
 
@@ -670,7 +670,7 @@ def test_a_traced_ly_on_a_circle_is_refused_where_a_comparison_cannot_reach():
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    from fieldwave._core.analytic import check_shape_spec
+    from wavebit._core.analytic import check_shape_spec
 
     def f(ly):
         check_shape_spec(_circle(ly=ly))
@@ -721,7 +721,7 @@ def test_detection_follows_the_shapes_and_not_their_bounding_boxes():
 
 def test_the_check_reports_the_exact_geometry_it_should():
     """The gap itself, against closed forms — the numbers the report is a threshold on."""
-    from fieldwave._core.overlap import primitive, signed_gap
+    from wavebit._core.overlap import primitive, signed_gap
 
     circle = primitive('circle', 0.0, 0.0, 20.0, 20.0, 0.0)
     assert signed_gap(circle, primitive('circle', 24.0, 0.0, 20.0, 20.0, 0.0)) \
@@ -755,10 +755,10 @@ def test_the_check_steps_aside_for_a_traced_solve():
     def layer(cx):
         return [dict(n_base=1.0, shapes=[rod(cx), rod(190.0, n_index=3.0)])]
 
-    frozen = fieldwave.rcwa(backend=1, ucell=layer(60.0), **CHECK_CFG).freeze_geometry()
+    frozen = wavebit.rcwa(backend=1, ucell=layer(60.0), **CHECK_CFG).freeze_geometry()
 
     def total(cx):
-        return jnp.sum(fieldwave.rcwa(backend=1, ucell=layer(cx),
+        return jnp.sum(wavebit.rcwa(backend=1, ucell=layer(cx),
                                       **CHECK_CFG).conv_solve(geometry=frozen).T)
 
     assert float(jax.jit(total)(jnp.asarray(130.0))) > 0.0     # overlapping, and traced: allowed
@@ -779,7 +779,7 @@ def _vector_box(cx, n_index=2.0):
 def _vector_total(objects, *combine):
     layer = [1.0, objects, *combine]
     return float(np.sum(np.asarray(
-        fieldwave.rcwa(backend=0, ucell=[layer], **VECTOR_CFG).conv_solve().T)))
+        wavebit.rcwa(backend=0, ucell=[layer], **VECTOR_CFG).conv_solve().T)))
 
 
 def test_the_vector_path_refuses_the_superposition_it_cannot_draw():
@@ -818,7 +818,7 @@ def test_combine_is_free_while_nothing_overlaps():
     shapes = [dict(type='rectangle', cx=cx, cy=150.0, lx=120.0, ly=120.0, angle=0.0,
                    n_index=2.0) for cx in (80.0, 220.0)]
     analytic = float(np.sum(np.asarray(
-        fieldwave.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=shapes)],
+        wavebit.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=shapes)],
                        **VECTOR_CFG).conv_solve().T)))
     assert analytic == pytest.approx(disjoint, abs=2e-3)
 

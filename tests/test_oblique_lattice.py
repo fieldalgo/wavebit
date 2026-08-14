@@ -12,9 +12,9 @@ skewed cell and returns a plausible wrong number; the tests assert it raises ins
 import numpy as np
 import pytest
 
-import fieldwave
-from fieldwave._core import lattice as lat
-from fieldwave._core.geometry import StaleGeometryError
+import wavebit
+from wavebit._core import lattice as lat
+from wavebit._core.geometry import StaleGeometryError
 
 P = 400.0
 WL = 900.0
@@ -47,7 +47,7 @@ def raster(basis, n=128, radius=R):
 
 def solver(cell, fto=8, lattice=None, **kw):
     kw.setdefault('factorization', 'nvf')
-    return fieldwave.rcwa(backend=0, ucell=cell, period=[P, P], fto=[fto, fto],
+    return wavebit.rcwa(backend=0, ucell=cell, period=[P, P], fto=[fto, fto],
                           thickness=[H], wavelength=WL, n_top=1.0, n_bot=1.0,
                           theta=0.0, phi=0.0, psi=0.0, lattice=lattice, **kw)
 
@@ -155,7 +155,7 @@ def test_an_axis_aligned_basis_changes_nothing():
 
     That first invariant once read ``_geometry_lattice is None`` for both. It is
     ``diag(period)`` for both now — the metric reaches every non-square raster, not only a
-    skewed cell (see :meth:`~fieldwave._core.engine.CoreSolveMixin._geometry_lattice_for`).
+    skewed cell (see :meth:`~wavebit._core.engine.CoreSolveMixin._geometry_lattice_for`).
     What the test is *for* is unchanged, and is what it still says.
     """
     cell = raster(ORTHO)
@@ -219,7 +219,7 @@ def test_hex_lattice_matches_its_rectangular_supercell():
     sup[0][inside] = N_ROD
 
     _, t_hex = totals(hex_cell, fto=8, lattice=HEX)
-    sup_solver = fieldwave.rcwa(backend=0, ucell=sup, period=[a, a * sq3], fto=[8, 14],
+    sup_solver = wavebit.rcwa(backend=0, ucell=sup, period=[a, a * sq3], fto=[8, 14],
                                 thickness=[H], wavelength=WL, n_top=1.0, n_bot=1.0,
                                 theta=0.0, phi=0.0, psi=0.0, factorization='nvf')
     t_sup = float(np.sum(np.asarray(sup_solver.conv_solve().T)))
@@ -238,7 +238,7 @@ def test_oblique_runs_on_every_backend(backend):
     elif backend == 2:
         cell = pytest.importorskip('torch').tensor(cell, dtype=pytest.importorskip(
             'torch').float64)
-    s = fieldwave.rcwa(backend=backend, ucell=cell, period=[P, P], fto=[4, 4],
+    s = wavebit.rcwa(backend=backend, ucell=cell, period=[P, P], fto=[4, 4],
                        thickness=[H], wavelength=WL, n_top=1.0, n_bot=1.0,
                        theta=0.0, phi=0.0, psi=0.0, factorization='nvf', lattice=HEX)
     res = s.conv_solve()
@@ -256,7 +256,7 @@ def test_li_is_refused_on_a_skewed_cell():
 
 def test_the_vector_modeler_is_refused_on_a_skewed_cell():
     with pytest.raises(NotImplementedError, match='block modeler'):
-        s = fieldwave.rcwa(backend=0, ucell=[[1.0, [['rectangle', 100.0, 200.0, 50.0, 50.0,
+        s = wavebit.rcwa(backend=0, ucell=[[1.0, [['rectangle', 100.0, 200.0, 50.0, 50.0,
                                                      2.4, 0, 0, 0]]]],
                            period=[P, P], fto=[4, 4], thickness=[H], wavelength=WL,
                            n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
@@ -271,14 +271,14 @@ def test_a_painted_overlap_survives_a_unimodular_shear():
     no wrapping, and none needed: ``exp(-i G.r)`` carries the lattice periodicity, so a polygon
     straddling an edge transforms correctly wherever it sits. What did need the basis was the
     same three things the summed path needed, plus periodic-image enumeration in
-    :func:`~fieldwave._core.overlap.overlapping_pairs`, which decides whether a layer has an
+    :func:`~wavebit._core.overlap.overlapping_pairs`, which decides whether a layer has an
     overlap at all and shifted by ``(ox*Px, oy*Py)`` rather than along the lattice.
     """
     def painted(lattice):
         ucell = [{'n_base': 1.0, 'combine': 'paint', 'shapes': [
             {'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 160.0, 'n_index': 2.4},
             {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'n_index': 3.0}]}]
-        s = fieldwave.rcwa(backend=0, ucell=ucell, period=[P, P], fto=[6, 6], thickness=[H],
+        s = wavebit.rcwa(backend=0, ucell=ucell, period=[P, P], fto=[6, 6], thickness=[H],
                            wavelength=WL, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                            factorization='nvf', lattice=lattice)
         res = s.conv_solve()
@@ -297,7 +297,7 @@ def test_a_painted_overlap_is_not_the_same_as_summing_it():
               {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'n_index': 3.0}]
 
     def run(combine):
-        s = fieldwave.rcwa(backend=0, ucell=[{'n_base': 1.0, 'combine': combine,
+        s = wavebit.rcwa(backend=0, ucell=[{'n_base': 1.0, 'combine': combine,
                                               'shapes': shapes}],
                            period=[P, P], fto=[6, 6], thickness=[H], wavelength=WL,
                            n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
@@ -313,7 +313,7 @@ def _analytic_totals(g, lattice=None):
     """One circle, stated in absolute Cartesian lengths — the same disc on the same lattice."""
     ucell = [{'n_base': 1.0, 'shapes': [
         {'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 2 * R, 'n_index': N_ROD}]}]
-    s = fieldwave.rcwa(backend=0, ucell=ucell, period=[P, P], fto=[g, g], thickness=[H],
+    s = wavebit.rcwa(backend=0, ucell=ucell, period=[P, P], fto=[g, g], thickness=[H],
                        wavelength=WL, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                        factorization='nvf', lattice=lattice)
     return float(np.sum(np.asarray(s.conv_solve().T)))
@@ -372,7 +372,7 @@ def test_the_reconstructed_field_agrees_across_a_unimodular_shear():
     ucell = [{'n_base': 1.0, 'shapes': []}, {'n_base': 1.0, 'shapes': shapes}]
 
     def field(lattice):
-        s = fieldwave.rcwa(backend=0, ucell=ucell, period=[P, P], fto=[8, 8],
+        s = wavebit.rcwa(backend=0, ucell=ucell, period=[P, P], fto=[8, 8],
                            thickness=[600.0, H], wavelength=WL, n_top=1.0, n_bot=1.0,
                            theta=0.0, phi=0.0, psi=0.0, factorization='nvf', lattice=lattice)
         s.conv_solve()
@@ -456,7 +456,7 @@ def test_li_1997_checkerboard_matches_the_published_table():
     ucell = [{'n_base': 1.0, 'shapes': [
         {'type': 'rectangle', 'cx': float(centre[0]), 'cy': float(centre[1]),
          'lx': LI_SIDE, 'ly': LI_SIDE, 'n_index': 1.5}]}]
-    s = fieldwave.rcwa(backend=0, ucell=ucell, fto=[12, 12], thickness=[1.0], wavelength=1.0,
+    s = wavebit.rcwa(backend=0, ucell=ucell, fto=[12, 12], thickness=[1.0], wavelength=1.0,
                        n_top=1.5, n_bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2,
                        factorization='nvf', lattice=basis)
     res = s.conv_solve().res

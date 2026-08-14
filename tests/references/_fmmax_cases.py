@@ -2,7 +2,7 @@
 
 They live here rather than in the test module — the pattern the RETICOLO pair uses — because
 the two run in *different environments*. fmmax pins its own JAX, so the generator runs in a
-separate ``fwref`` env that has no ``fieldwave`` in it, and the test runs in the project env
+separate ``fwref`` env that has no ``wavebit`` in it, and the test runs in the project env
 that has no ``fmmax``. Neither can import the other's module. This one imports numpy and
 nothing else, so both can read it.
 

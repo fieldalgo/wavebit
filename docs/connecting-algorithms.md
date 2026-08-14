@@ -6,10 +6,10 @@ warm-up matters, and leaving it out reported SMM as **twice as fast** as ETM on 
 before the first-call overhead had been paid.
 
 Targets:
-- `fieldwave/_core/engine.py` — `_SOLVES`, where `connecting_algo` becomes a function
-- `fieldwave/_core/solve_2d.py`, `solve_1d.py` — the ETM recursion (`big_A_i`, `big_T`)
-- `fieldwave/_core/scattering.py` — the SMM cascade
-- `fieldwave/_core/solve_2d_4ff.py` — all three, on the first-order path
+- `wavebit/_core/engine.py` — `_SOLVES`, where `connecting_algo` becomes a function
+- `wavebit/_core/solve_2d.py`, `solve_1d.py` — the ETM recursion (`big_A_i`, `big_T`)
+- `wavebit/_core/scattering.py` — the SMM cascade
+- `wavebit/_core/solve_2d_4ff.py` — all three, on the first-order path
 
 **This document is about the connecting algorithm, not about anisotropy.** The choice is the same
 question for an isotropic grating as for a magneto-optic film — it changes no physics, only how
@@ -90,7 +90,7 @@ overflows:
 | 34.0 | — | 5.1e+25 |
 
 The prediction and the measurement agree, which is what makes the bound derivable rather than
-tuned. `fieldwave/_core/solve_2d_4ff.py::_MAX_EXPONENT` is set from it.
+tuned. `wavebit/_core/solve_2d_4ff.py::_MAX_EXPONENT` is set from it.
 
 **ETM removes the growing term instead of cancelling it.** Sweeping upward with the state below a
 layer written as `psi = G t`, decomposing in that layer's modes gives `a_f = X_f⁻¹ P t` — and

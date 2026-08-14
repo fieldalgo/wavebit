@@ -1,4 +1,4 @@
-"""Backend adapter (fieldwave._core.backend): eig dispatch + differentiability.
+"""Backend adapter (wavebit._core.backend): eig dispatch + differentiability.
 
 Verifies the single per-framework primitive: eigenvalues match NumPy, and gradients through
 eig flow correctly on JAX and PyTorch (matching finite differences).
@@ -6,7 +6,7 @@ eig flow correctly on JAX and PyTorch (matching finite differences).
 import numpy as np
 import pytest
 
-from fieldwave._core.backend import eig, array_namespace
+from wavebit._core.backend import eig, array_namespace
 
 
 A_np = np.array([[2.0 + 0j, 1.0, 0.2],
@@ -104,7 +104,7 @@ def test_j1_matches_scipy_on_every_backend(lib):
     each other -- SciPy is the reference for that reason.
     """
     xp = pytest.importorskip(lib)
-    from fieldwave._core.backend import j1
+    from wavebit._core.backend import j1
     if lib == 'jax':
         import jax
         jax.config.update('jax_enable_x64', True)
@@ -134,8 +134,8 @@ def test_j1_single_precision_uses_its_own_crossover(lib):
     its name -- which is the failure a test like this exists to avoid.
     """
     xp = pytest.importorskip(lib)
-    from fieldwave import set_j1_implementation
-    from fieldwave._core.backend import j1
+    from wavebit import set_j1_implementation
+    from wavebit._core.backend import j1
     previous = set_j1_implementation('hybrid')
     probe = np.linspace(1e-3, 95.0, 1500)
     if lib == 'jax':
@@ -152,7 +152,7 @@ def test_j1_single_precision_uses_its_own_crossover(lib):
 @pytest.fixture
 def j1_default():
     """Restore the global setting, which is global exactly because j1 has no other channel."""
-    from fieldwave import set_j1_implementation
+    from wavebit import set_j1_implementation
     previous = set_j1_implementation('auto')
     yield
     set_j1_implementation(previous)
@@ -167,8 +167,8 @@ def test_j1_switch_picks_the_accurate_one_for_each_precision(j1_default):
     pins that it really is switching rather than doing one thing and calling it two.
     """
     torch = pytest.importorskip('torch')
-    from fieldwave import set_j1_implementation
-    from fieldwave._core.backend import j1
+    from wavebit import set_j1_implementation
+    from wavebit._core.backend import j1
     probe = np.linspace(1e-3, 95.0, 1500)
     ref = _j1_reference(probe)
 
@@ -201,8 +201,8 @@ def test_j1_switch_leaves_jax_alone(j1_default):
     import jax
     jax.config.update('jax_enable_x64', True)
     import jax.numpy as jnp
-    from fieldwave import set_j1_implementation
-    from fieldwave._core.backend import j1
+    from wavebit import set_j1_implementation
+    from wavebit._core.backend import j1
     x = jnp.asarray(np.linspace(1e-3, 95.0, 500), dtype=jnp.float64)
     out = {}
     for mode in ('auto', 'hybrid', 'native'):
@@ -213,7 +213,7 @@ def test_j1_switch_leaves_jax_alone(j1_default):
 
 
 def test_j1_switch_rejects_an_unknown_name(j1_default):
-    from fieldwave import set_j1_implementation, get_j1_implementation
+    from wavebit import set_j1_implementation, get_j1_implementation
     with pytest.raises(ValueError, match='auto'):
         set_j1_implementation('fastest')
     assert get_j1_implementation() == 'auto'      # unchanged by the failed call
@@ -224,8 +224,8 @@ def test_j1_derivative_survives_every_switch_setting(mode, j1_default):
     """The builtin has no backward of its own, so 'native' has to supply one."""
     torch = pytest.importorskip('torch')
     from scipy.special import j0, j1 as scipy_j1
-    from fieldwave import set_j1_implementation
-    from fieldwave._core.backend import j1
+    from wavebit import set_j1_implementation
+    from wavebit._core.backend import j1
     set_j1_implementation(mode)
     for x0 in (0.0, 0.7, 12.4, 12.6, 40.0):
         t = torch.tensor(x0, dtype=torch.float64, requires_grad=True)
@@ -245,7 +245,7 @@ def test_j1_derivative_is_right_including_at_zero(lib):
     """
     pytest.importorskip(lib)
     from scipy.special import j0, j1 as sj1
-    from fieldwave._core.backend import j1
+    from wavebit._core.backend import j1
     probes = [0.0, 0.7, 5.0, 12.4, 12.6, 40.0]
     exact = [0.5 if p == 0 else float(j0(p) - sj1(p) / p) for p in probes]
 

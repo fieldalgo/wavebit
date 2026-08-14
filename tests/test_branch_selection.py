@@ -28,9 +28,9 @@ import warnings
 import numpy as np
 import pytest
 
-import fieldwave
-from fieldwave._core import solve_1d as _s1
-from fieldwave._core.conventions import boundary_kz, mode_q
+import wavebit
+from wavebit._core import solve_1d as _s1
+from wavebit._core.conventions import boundary_kz, mode_q
 
 WL = 500.0
 AU = 0.18 + 3.0j
@@ -92,7 +92,7 @@ JUMP_CASES = [
 #: The declaration is what these cases want: a uniform 1D stack at no azimuth, where the
 #: pure TE/TM formulation is the one under test.
 def _amp(n_top, n_bot, n_layer, d, theta, tetm):
-    solver = fieldwave.rcwa(backend=0, tetm=tetm, n_top=n_top, n_bot=n_bot, theta=theta,
+    solver = wavebit.rcwa(backend=0, tetm=tetm, n_top=n_top, n_bot=n_bot, theta=theta,
                             fto=0, wavelength=WL, period=[WL * 2],
                             ucell=np.array([[[n_layer, n_layer]]]), thickness=[d])
     with warnings.catch_warnings():
@@ -194,7 +194,7 @@ def _grating(tetm, thickness, **kw):
 def _run(cfg):
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        res = fieldwave.rcwa(**cfg).conv_solve().res
+        res = wavebit.rcwa(**cfg).conv_solve().res
     return np.asarray(res.r_s if cfg['tetm'] == 0 else res.r_p).ravel()
 
 

@@ -21,9 +21,9 @@ import sys
 
 import numpy as np
 
-# Ensure the local (worktree) fieldwave is used rather than any installed copy.
+# Ensure the local (worktree) wavebit is used rather than any installed copy.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import fieldwave
+import wavebit
 
 
 def t0_and_energy(res):
@@ -43,7 +43,7 @@ def make_circle_raster(N, R, n_rod, n_bg=1.0):
 
 
 def solve(backend, ucell, fto, **cfg):
-    solver = fieldwave.rcwa(backend=backend, ucell=ucell, fto=(fto, fto), **cfg)
+    solver = wavebit.rcwa(backend=backend, ucell=ucell, fto=(fto, fto), **cfg)
     return t0_and_energy(solver.conv_solve())
 
 
@@ -120,7 +120,7 @@ def bench_energy_and_backends():
 
 
 def main():
-    print("fieldwave ANALYTIC (staircase-free) modeling benchmark")
+    print("wavebit ANALYTIC (staircase-free) modeling benchmark")
     bench_tilted_dielectric()
     bench_metallic_circle()
     bench_energy_and_backends()

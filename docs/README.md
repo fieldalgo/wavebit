@@ -1,6 +1,6 @@
 # Docs
 
-Measurements and decisions, written so they can be cited. `fieldwave/_core/` links to several
+Measurements and decisions, written so they can be cited. `wavebit/_core/` links to several
 of these from code comments — they are why a constant has the value it has, so a document here
 is not finished until it states what its numbers decided.
 
@@ -13,7 +13,7 @@ tables. Say what was measured on what hardware, and where the result stops being
 Every path in `Targets:` must resolve — `tests/test_docs_contract.py` checks it.
 
 Two spellings both count as resolving, and both are intended. A path from the repository root
-(`fieldwave/_core/analytic.py`) always works, and so does the `_core/...` shorthand this
+(`wavebit/_core/analytic.py`) always works, and so does the `_core/...` shorthand this
 codebase uses for its own internals — there is only one `_core/`, and writing the prefix out
 every time is longer without being clearer. `Targets:` lists use the full path; running prose
 may use either.
@@ -66,7 +66,7 @@ somewhere else** — question 6 of the CONTRIBUTING table, not this folder.
 | [`bessel-j1.md`](bessel-j1.md) | Do the three backends compute the same `J_1`, and how accurate is it? | They do now — one shared hybrid, 1e-12, with a crossover per precision |
 | [`torch-compile.md`](torch-compile.md) | Is `torch.compile` worth chasing for this solver? | No — the solve is almost all LAPACK, which the compiler forwards untouched |
 | [`oblique-lattice.md`](oblique-lattice.md) | What does `lattice` do to a non-orthogonal (oblique, hexagonal) cell, and what does it cost? | Implemented — ~8x cheaper than the supercell; NVF only, and the raster is read in lattice coordinates |
-| [`fourier-truncation-shape.md`](fourier-truncation-shape.md) | Does S4's circular cut of the Fourier order set beat the full rectangle FieldWave keeps? | **Not implemented** — structure-dependent, within ±20%, and negative on a common case |
+| [`fourier-truncation-shape.md`](fourier-truncation-shape.md) | Does S4's circular cut of the Fourier order set beat the full rectangle Wavebit keeps? | **Not implemented** — structure-dependent, within ±20%, and negative on a common case |
 | [`anisotropic-materials.md`](anisotropic-materials.md) | Can an anisotropic or magnetic material be given to the solver, and what does each missing case cost? | Uniform tensors work, z-coupling included and dispatched to automatically since 2026-08-13; what is left is a *patterned* anisotropic layer and `mu` |
 | [`off-diagonal-slot-convention.md`](off-diagonal-slot-convention.md) | If I fill the five permittivity slots by hand, what goes in them — and why did an asymmetric tensor come out wrong? | The slot holds `-eps_xy`; an ordering defect on asymmetric pairs, found and fixed |
 | [`connecting-algorithms.md`](connecting-algorithms.md) | Which `connecting_algo`, and why is a plain transfer matrix not one of the choices? | `ETM` — same answer as `SMM` to 8e-16 and 1.25-1.57x cheaper; a plain transfer refuses at 25 orders |

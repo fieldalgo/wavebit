@@ -1,6 +1,6 @@
 # Boundary modeling — painting an overlap without staircasing the edges
 
-Written: 2026-08. Targets `fieldwave/_core/boundary.py`, `_core/clipper.py`, `_core/polygon.py`,
+Written: 2026-08. Targets `wavebit/_core/boundary.py`, `_core/clipper.py`, `_core/polygon.py`,
 and the `combine='paint'` route through `_core/analytic.py::to_conv_mat_smooth_layers`.
 
 ---
@@ -109,7 +109,7 @@ re-freezing a structure whose topology has not changed hits the JAX compilation 
 freeze again every step, as with the block path (see the README on stale geometry).
 
 ```python
-solver = fieldwave.rcwa(backend=1, ucell=ucell, ...)
+solver = wavebit.rcwa(backend=1, ucell=ucell, ...)
 res = solver.conv_solve(geometry=solver.freeze_geometry())
 ```
 

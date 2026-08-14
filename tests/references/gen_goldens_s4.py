@@ -3,7 +3,7 @@
 Run once, in an environment with the S4 extension built; ``test_s4_golden.py`` then runs
 anywhere. Rerun it only to add cases, never to make a failing test pass.
 
-    conda run -n fieldwave python tests/references/gen_goldens_s4.py
+    conda run -n wavebit python tests/references/gen_goldens_s4.py
 
 **Why a fourth oracle, and what it is not.** fmmax generalises the S4 paper (Liu & Fan 2012,
 eq. 28) — so these two are the *same formulation

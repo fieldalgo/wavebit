@@ -23,7 +23,7 @@ A script fails on any of:
 How far the third condition actually reaches, which is less far than it reads. The result guards
 are NumPy-only -- ``check_physical`` returns early on any other namespace, and under ``jit`` it
 has to, since a traced array carries no value to compare. Eager JAX and eager PyTorch could
-carry it and do not today. All four scripts here import FieldWave, but ``block_1d.py`` solves on
+carry it and do not today. All four scripts here import Wavebit, but ``block_1d.py`` solves on
 PyTorch and ``block_2d.py`` on JAX, so this condition reaches the two ``_verification.py`` files
 and nothing else. The exit-status and ``Traceback`` conditions cover all four; for the other two,
 green means the script ran, not that its numbers are right.
@@ -97,8 +97,8 @@ def run_one(script: Path) -> tuple[bool, float, list[str], str]:
     env['MPLBACKEND'] = 'Agg'
 
     # The repository ahead of anything installed. Scripts run from their own directory, so the
-    # cwd shadowing that normally makes a worktree import its own copy of `fieldwave` does not
-    # apply, and `import fieldwave` would resolve to the editable install -- i.e. to the main
+    # cwd shadowing that normally makes a worktree import its own copy of `wavebit` does not
+    # apply, and `import wavebit` would resolve to the editable install -- i.e. to the main
     # checkout, not to the tree being tested. That is a real trap when several worktrees share
     # one install: the examples would pass or fail on somebody else's edits.
     env['PYTHONPATH'] = os.pathsep.join(

@@ -28,7 +28,7 @@ import pytest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 # Directories that ship. `studies/` and `tutorials/` are here because the leak reached both.
-PUBLISHED = ('fieldwave', 'docs', 'tests', 'studies', 'tutorials', 'examples')
+PUBLISHED = ('wavebit', 'docs', 'tests', 'studies', 'tutorials', 'examples')
 TEXT_SUFFIXES = {'.py', '.md', '.ipynb', '.toml', '.cfg', '.yml', '.yaml', '.txt', '.m'}
 
 # A home directory or a user-rooted absolute path. `~/` alone is not enough to match: it is
@@ -125,9 +125,9 @@ def test_paths_cited_anywhere_are_in_the_repository():
             # Three bases, and the middle one is a deliberate house style rather than slack:
             # `_core/analytic.py` is how this codebase refers to its own internals, in 13 files
             # and counting, and there is only one `_core/` for it to mean. Spelling it
-            # `fieldwave/_core/...` everywhere would be longer and no clearer. The third base
+            # `wavebit/_core/...` everywhere would be longer and no clearer. The third base
             # accepts a link relative to the citing file, which is how one doc points at another.
-            if any((base / t).exists() for base in (ROOT, ROOT / 'fieldwave', p.parent)):
+            if any((base / t).exists() for base in (ROOT, ROOT / 'wavebit', p.parent)):
                 continue
             bad.append(f'{rel}: {t}')
 
@@ -143,7 +143,7 @@ def test_every_target_a_document_names_exists(doc):
     """A document explains named code; the names have to be real."""
     text = (ROOT / 'docs' / doc).read_text(encoding='utf-8')
     missing = []
-    for m in re.finditer(r'`(fieldwave/[A-Za-z0-9_./*-]+\.py)', text):
+    for m in re.finditer(r'`(wavebit/[A-Za-z0-9_./*-]+\.py)', text):
         target = m.group(1)
         found = list(ROOT.glob(target)) if '*' in target else [ROOT / target]
         if not any(f.exists() for f in found):

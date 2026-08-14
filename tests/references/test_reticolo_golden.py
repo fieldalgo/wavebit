@@ -32,7 +32,7 @@ import pathlib
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 
 GOLDEN_PATH = pathlib.Path(__file__).parent / 'golden_reticolo.npz'
 
@@ -79,7 +79,7 @@ CASES = {
 
 def _solve(name, backend=0):
     kw = dict(CASES[name])
-    return fieldwave.rcwa(backend=backend, fourier_coefficients='integrated',
+    return wavebit.rcwa(backend=backend, fourier_coefficients='integrated',
                           **kw).conv_solve()
 
 
@@ -132,7 +132,7 @@ def test_reticolo_agreement_holds_on_every_backend(backend):
     pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
     if backend == 1:
         import importlib
-        importlib.import_module('fieldwave.on_jax')          # enables x64
+        importlib.import_module('wavebit.on_jax')          # enables x64
 
     g = _golden()
     name = 'te_oblique'
@@ -171,14 +171,14 @@ def _solve_bottom(name, backend=0):
     """The same scene lit from below, at RETICOLO's own bottom-incidence k_parallel.
 
     RETICOLO answers both sides from one ``res2`` call at one ``k_parallel =
-    n_top*sin(theta)``; FieldWave states the bottom-side angle in the incidence medium
+    n_top*sin(theta)``; Wavebit states the bottom-side angle in the incidence medium
     (``docs/conventions.md``), so the matching solve is ``incidence_side='bottom'`` at
     ``theta_bottom = asin(n_top*sin(theta)/n_bot)`` — same in-plane wavevector, said in the
     other medium's terms. Real for every case here since ``n_bot > n_top`` throughout.
     """
     kw = dict(CASES[name])
     kw['theta'] = float(np.arcsin(kw['n_top'] * np.sin(kw['theta']) / kw['n_bot']))
-    return fieldwave.rcwa(backend=backend, fourier_coefficients='integrated',
+    return wavebit.rcwa(backend=backend, fourier_coefficients='integrated',
                           incidence_side='bottom', **kw).conv_solve()
 
 
@@ -239,7 +239,7 @@ function, and the exact
     """
     g = _golden()
     kw = dict(CASES[name])
-    res = fieldwave.rcwa(backend=0, fourier_coefficients='sampled', **kw).conv_solve()
+    res = wavebit.rcwa(backend=0, fourier_coefficients='sampled', **kw).conv_solve()
     for side, arr in (('ri', res.R), ('ti', res.T)):
         got = np.real(np.asarray(arr)).ravel()[g[f'{name}__idx_{side}']]
         assert np.abs(got - g[f'{name}__de_{side}']).max() < 1e-11, (name, side)

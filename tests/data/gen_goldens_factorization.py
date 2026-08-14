@@ -1,13 +1,13 @@
 """Freeze the legacy convolution-matrix builders as reference data.
 
-Run while fieldwave/on_numpy/emsolver/{convolution_matrix,fourier_analysis,nvf}.py still exist.
+Run while wavebit/on_numpy/emsolver/{convolution_matrix,fourier_analysis,nvf}.py still exist.
 Once frozen, those modules can be deleted and the core still has an oracle to answer to.
 """
 import pathlib
 
 import numpy as np
 
-from fieldwave.on_numpy.emsolver.convolution_matrix import (
+from wavebit.on_numpy.emsolver.convolution_matrix import (
     to_conv_mat_raster_sampled, to_conv_mat_raster_integrated,
     to_conv_mat_raster_nvf, to_conv_mat_block, cell_compression,
 )

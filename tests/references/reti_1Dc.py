@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-import fieldwave
+import wavebit
 
 try:
     from interface.Reticolo import Reticolo
@@ -30,17 +30,17 @@ def run_1dc(option, plot_figure=False):
     reti_field_cell = reti_field_cell.conj()
 
     # Numpy
-    solver = fieldwave.rcwa(backend=0, **option)
+    solver = wavebit.rcwa(backend=0, **option)
     res_numpy = solver.conv_solve()
     field_cell_numpy = solver.calculate_field(res_z=res_z, res_y=res_y, res_x=res_x, set_field_input=(True, True, True))
 
     # JAX
-    solver = fieldwave.rcwa(backend=1, **option)  # JAX
+    solver = wavebit.rcwa(backend=1, **option)  # JAX
     res_jax = solver.conv_solve()
     field_cell_jax = solver.calculate_field(res_z=res_z, res_y=res_y, res_x=res_x, set_field_input=(True, True, True))
 
     # Torch
-    solver = fieldwave.rcwa(backend=2, **option)  # PyTorch
+    solver = wavebit.rcwa(backend=2, **option)  # PyTorch
     res_torch = solver.conv_solve()
     field_cell_torch = solver.calculate_field(res_z=res_z, res_y=res_y, res_x=res_x, set_field_input=(True, True, True)).numpy()
 
@@ -58,7 +58,7 @@ def run_1dc(option, plot_figure=False):
     print(f'jax: {j1}, {j2}')
     print(f'torch: {t1}, {t2}')
 
-    print('Norm of (fieldwave - reti) per backend')
+    print('Norm of (wavebit - reti) per backend')
     for i, res_t in enumerate([res_numpy, res_jax, res_torch]):
         reti_de_ri_te, reti_de_ti_te = np.array(top_refl_info_te.efficiency).T,  np.array(top_tran_info_te.efficiency).T
         reti_de_ri_tm, reti_de_ti_tm = np.array(top_refl_info_tm.efficiency).T, np.array(top_tran_info_tm.efficiency).T

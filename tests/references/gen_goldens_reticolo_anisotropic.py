@@ -4,7 +4,7 @@ Run once, on a machine with Octave and RETICOLO V10; ``test_reticolo_anisotropic
 then runs anywhere. Rerun it only to add cases, never to make a failing test pass — the whole
 value of this oracle is that its numbers did not come from this codebase.
 
-    conda run -n fieldwave python tests/references/gen_goldens_reticolo_anisotropic.py
+    conda run -n wavebit python tests/references/gen_goldens_reticolo_anisotropic.py
 
 Cases are imported from the test module rather than restated, for the reason
 ``gen_goldens_reticolo.py`` gives: a copy that must stay identical is a copy that will not.

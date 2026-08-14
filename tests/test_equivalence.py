@@ -1,6 +1,6 @@
 """The three formulations must describe the same structure.
 
-FieldWave solves a 1D grating three ways, and which one runs is decided by inputs rather
+Wavebit solves a 1D grating three ways, and which one runs is decided by inputs rather
 than by a mode switch: ``phi=None`` takes the 1D TE/TM formulation, ``phi=0`` takes the 1D
 conical one, and a ``ucell`` with more than one row takes the full 2D solver. At normal
 azimuth these are three routes to one answer, so any disagreement is a bug in whichever
@@ -20,7 +20,7 @@ absolute scale, and the same trap applies to a self-consistency check.
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 
 # A binary grating, deliberately y-invariant so all three formulations are describing the
 # identical structure. Two layers, so the stacking is exercised rather than a single slab.
@@ -43,7 +43,7 @@ _PSI_OF = {'te': np.pi / 2, 'tm': 0.0}
 def _solve(tetm, phi, ucell):
     """``phi is None`` takes the declaration (the pure path); any azimuth takes the angle."""
     incidence = {'tetm': tetm} if phi is None else {'psi': _PSI_OF[tetm]}
-    solver = fieldwave.rcwa(**incidence, **CFG)
+    solver = wavebit.rcwa(**incidence, **CFG)
     solver.phi = phi
     solver.ucell = ucell
     res = solver.conv_solve().res
@@ -130,8 +130,8 @@ def test_block_and_raster_describe_the_same_structure(backend, name):
     if name != 'numpy':
         pytest.importorskip(name)
 
-    block = fieldwave.rcwa(backend=backend, ucell=_BLOCK, **_CFG).conv_solve().res
-    raster = fieldwave.rcwa(backend=backend, ucell=_RASTER, **_CFG).conv_solve().res
+    block = wavebit.rcwa(backend=backend, ucell=_BLOCK, **_CFG).conv_solve().res
+    raster = wavebit.rcwa(backend=backend, ucell=_RASTER, **_CFG).conv_solve().res
 
     for a, b, which in ((block.R, raster.R, 'R'),
                         (block.T, raster.T, 'T')):

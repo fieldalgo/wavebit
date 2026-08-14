@@ -21,14 +21,14 @@ reachable from the solver (the legacy entry point ``to_conv_mat_raster_nvf`` had
 parameter) and only ever appeared in a tutorial comparison illustrating that SDF is better.
 
 The third legacy method, ``'analytical'``, was *not* dropped: it lives on as
-``fieldwave._core.analytic.normal_vector_field_analytical`` (see ``test_nvf_vector.py``).
+``wavebit._core.analytic.normal_vector_field_analytical`` (see ``test_nvf_vector.py``).
 """
 import numpy as np
 import pytest
 
 import array_api_compat.numpy as xnp
 
-from fieldwave._core.factorization import (fourier2d_piecewise_constant, fourier2d_pointwise,
+from wavebit._core.factorization import (fourier2d_piecewise_constant, fourier2d_pointwise,
                                            normal_vector_field, nvf_conv_matrices)
 
 
@@ -163,7 +163,7 @@ def test_the_projector_is_built_from_the_sampled_transform():
     staircase = assembled(lambda f: fourier2d_piecewise_constant(xnp, f, fto, fto, inverse_rule=None))
 
     # The projector that shipped is the sampled one, to the last bit of the assembly.
-    from fieldwave._core.factorization import _nvf_assemble
+    from wavebit._core.factorization import _nvf_assemble
     want = np.asarray(_nvf_assemble(xnp, *(np.asarray(fourier2d_piecewise_constant(
         xnp, e.astype(complex), fto, fto, inverse_rule=None)) for e in (eps, 1.0 / eps)), *sampled)[0])
     assert np.allclose(got, want, atol=1e-12, rtol=0), np.abs(got - want).max()

@@ -19,9 +19,9 @@ os.environ.setdefault('JAX_ENABLE_X64', '1')
 sys.path.insert(0, os.path.join(os.getcwd(), 'studies'))
 
 import numpy as np, jax, jax.numpy as jnp
-import fieldwave
-from fieldwave._core import boundary as _boundary
-from fieldwave._core.geometry import StaticGeometry
+import wavebit
+from wavebit._core import boundary as _boundary
+from wavebit._core.geometry import StaticGeometry
 
 WL = 0.777
 P = 2.0 * WL
@@ -52,7 +52,7 @@ def geos(na, nb):
 
 
 def scalar(geometry, cx, na, nb, theta, phi, key, backend):
-    s = fieldwave.rcwa(backend=backend, ucell=build(cx, na, nb), fto=[8, 8],
+    s = wavebit.rcwa(backend=backend, ucell=build(cx, na, nb), fto=[8, 8],
                        normal_grid=NGRID, theta=theta, phi=phi, **BASE)
     r = getattr(s.conv_solve(geometry=geometry), key)
     return jnp.real(jnp.sum(r)) if backend == 1 else float(np.real(np.sum(np.asarray(r))))

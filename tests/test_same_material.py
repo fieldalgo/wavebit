@@ -25,7 +25,7 @@ what these tests now assert the absence of.
 import numpy as np
 import pytest
 
-import fieldwave
+import wavebit
 
 WL = 500.0
 AU = 0.18 + 3.0j                      # gold at 500nm
@@ -47,11 +47,11 @@ def _solver(ns, ds, *, tetm='te', theta=0.2, path='1d', fto=0):
     common = dict(backend=0, n_top=ns[0], n_bot=ns[-1], theta=theta, wavelength=WL,
                   thickness=ds)
     if path == '1d':
-        return fieldwave.rcwa(tetm=tetm, fto=fto, period=[WL * 2],
+        return wavebit.rcwa(tetm=tetm, fto=fto, period=[WL * 2],
                               ucell=np.array([[[n, n]] for n in layers]), **common)
     cell = ([[[n, n]] for n in layers] if path == 'conical'
             else [[[n, n], [n, n]] for n in layers])
-    return fieldwave.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0), fto=[fto, fto],
+    return wavebit.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0), fto=[fto, fto],
                           period=[WL * 2, WL * 2], ucell=np.array(cell), **common)
 
 
@@ -110,8 +110,8 @@ def test_a_matched_interface_is_well_conditioned():
     instead of the solve quietly producing garbage.
     """
     import array_api_compat.numpy as xnp
-    from fieldwave._core.conventions import boundary_kz
-    from fieldwave._core.solve_1d import _diag, layer_modes_1d
+    from wavebit._core.conventions import boundary_kz
+    from wavebit._core.solve_1d import _diag, layer_modes_1d
 
     fto, theta = 2, 0.3
     ff = 2 * fto + 1

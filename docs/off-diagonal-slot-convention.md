@@ -4,10 +4,10 @@ Written: 2026-08-10. Measured on CPU, NumPy backend, float64. The ordering defec
 repaired the same day; the measurements are kept as taken, with it in place.
 
 Targets:
-- `fieldwave/_core/solve_2d.py::layer_modes_2d` — the two blocks, and why they must order the pair oppositely
-- `fieldwave/_core/factorization.py::_nvf_assemble` — where the sign convention is set
-- `fieldwave/on_numpy/emsolver/rcwa.py::solve_for_conv` — the only way to reach the slots by hand
-- `fieldwave/_core/solve_2d_4ff.py::_conv_layers` — where the negation is undone for the z row
+- `wavebit/_core/solve_2d.py::layer_modes_2d` — the two blocks, and why they must order the pair oppositely
+- `wavebit/_core/factorization.py::_nvf_assemble` — where the sign convention is set
+- `wavebit/on_numpy/emsolver/rcwa.py::solve_for_conv` — the only way to reach the slots by hand
+- `wavebit/_core/solve_2d_4ff.py::_conv_layers` — where the negation is undone for the z row
 - `tests/test_uniform_anisotropic.py`, `tests/test_anisotropic_berreman.py`,
   `tests/references/test_reticolo_anisotropic_golden.py` — every number below
 
@@ -345,7 +345,7 @@ asymmetric cases:
 | thickness 40 … 1500 nm at 28 deg | 1.5e-2 … 1.3e-1 | ≤ 1.6e-15 |
 
 Every asymmetric configuration tried, at every angle, lands on the oracle once the pair is
-exchanged. The complex Jones matrix matches too, to ~1e-15, once fieldwave's per-channel s/p phase
+exchanged. The complex Jones matrix matches too, to ~1e-15, once wavebit's per-channel s/p phase
 (`diag(1, -i)` on output, `diag(1, -1)` on input, fitted on a symmetric case) is taken out.
 
 Two corrections this pass forced:
@@ -362,7 +362,7 @@ Pinned by `tests/test_anisotropic_berreman.py`.
 ## 6. It is not a time-convention artefact
 
 A reasonable objection: this repo runs `e^{-iwt}` with `Im(n) > 0` as loss
-([`conventions.py`](../fieldwave/_core/conventions.py)), and handedness conventions decide which
+([`conventions.py`](../wavebit/_core/conventions.py)), and handedness conventions decide which
 circular state is which. Could the reference above simply have the wrong handedness?
 
 No, for two independent reasons.

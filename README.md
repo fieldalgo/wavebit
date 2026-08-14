@@ -1,14 +1,14 @@
-<p align="center"><img src="images/fieldwave_logo.svg" width=45% alt="FieldWave" /></p>
+<p align="center"><img src="images/wavebit_logo.svg" width=45% alt="Wavebit" /></p>
 
-# FieldWave
+# Wavebit
 
-[![tests](https://github.com/fieldalgo/fieldwave/actions/workflows/tests.yml/badge.svg)](https://github.com/fieldalgo/fieldwave/actions/workflows/tests.yml)
+[![tests](https://github.com/fieldalgo/wavebit/actions/workflows/tests.yml/badge.svg)](https://github.com/fieldalgo/wavebit/actions/workflows/tests.yml)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 
 **Differentiable electromagnetic simulation suite — by [FieldAlgo](https://fieldalgo.com)**
 
-FieldWave simulates how light interacts with nanostructures, and differentiates through the
+Wavebit simulates how light interacts with nanostructures, and differentiates through the
 whole calculation — so the same code that predicts a device's response can also optimize it.
 
 * **Modeling** — describe a structure parametrically or as a raster
@@ -17,17 +17,17 @@ whole calculation — so the same code that predicts a device's response can als
 
 ## How to install
 
-FieldWave is not on PyPI yet. Install it from source:
+Wavebit is not on PyPI yet. Install it from source:
 
 ```shell
-pip install git+https://github.com/fieldalgo/fieldwave.git
+pip install git+https://github.com/fieldalgo/wavebit.git
 ```
 
 Or, for a checkout you intend to edit:
 
 ```shell
-git clone https://github.com/fieldalgo/fieldwave.git
-cd fieldwave
+git clone https://github.com/fieldalgo/wavebit.git
+cd wavebit
 pip install -e .
 ```
 
@@ -43,7 +43,7 @@ need:
 
 ```shell
 conda env create -f environment.yml   # run from the repo root
-conda activate fieldwave
+conda activate wavebit
 ```
 
 > The floors are deliberately high: they are the versions the suite is actually verified
@@ -60,12 +60,12 @@ A binary grating, solved on the NumPy backend:
 
 ```python
 import numpy as np
-import fieldwave
+import wavebit
 
 # One 300 nm layer, half air and half n = 3.5, on a glass substrate.
 ucell = np.array([[[1.0, 1.0, 3.5, 3.5]]])   # (layer, y, x) — refractive index
 
-solver = fieldwave.rcwa(
+solver = wavebit.rcwa(
     backend=0,                  # 0 = NumPy, 1 = JAX, 2 = PyTorch
     wavelength=900.,            # every length shares one unit; nm here
     period=[700.],
@@ -91,9 +91,9 @@ are not comparable to 1 and the amplitudes are what mean something.
 The integer codes have named equivalents, if you prefer them to the literals:
 
 ```python
-from fieldwave import Backend, Pol, Factorization
+from wavebit import Backend, Pol, Factorization
 
-solver = fieldwave.rcwa(backend=Backend.JAX, pol=Pol.TM, factorization=Factorization.NVF, ...)
+solver = wavebit.rcwa(backend=Backend.JAX, pol=Pol.TM, factorization=Factorization.NVF, ...)
 ```
 
 ## Backends
@@ -176,7 +176,7 @@ ucell = [dict(n_base=1.0, shapes=[
     dict(type='circle', cx=350., cy=350., lx=200., n_index=3.5),
 ])]
 
-solver = fieldwave.rcwa(backend=0, period=[700., 700.], ucell=ucell, ...)
+solver = wavebit.rcwa(backend=0, period=[700., 700.], ucell=ucell, ...)
 ```
 
 ### Shapes that overlap
@@ -212,7 +212,7 @@ For the raster path, two independent keywords decide how the permittivity become
 matrices. They change how fast the result converges with `fto`, not what it converges to:
 
 ```python
-solver = fieldwave.rcwa(backend=0, fourier_coefficients='sampled', factorization='li', ...)
+solver = wavebit.rcwa(backend=0, fourier_coefficients='sampled', factorization='li', ...)
 ```
 
 `fourier_coefficients` — how a layer's Fourier coefficients are obtained:
@@ -252,7 +252,7 @@ rectangular — hexagonal, or any oblique basis — is given as the two primitiv
 a = 400.
 a1, a2 = np.array([a, 0.]), np.array([a / 2, a * np.sqrt(3) / 2])     # hex
 
-solver = fieldwave.rcwa(backend=0, lattice=np.column_stack((a1, a2)),   # columns are a1, a2
+solver = wavebit.rcwa(backend=0, lattice=np.column_stack((a1, a2)),   # columns are a1, a2
                         factorization='nvf', ucell=ucell, ...)
 ```
 
@@ -284,7 +284,7 @@ transmittance-matrix method (Moharam et al. 1995) — the stabilised transfer, n
 one; the scattering-matrix method is available as an alternative:
 
 ```python
-solver = fieldwave.rcwa(backend=0, connecting_algo='SMM', ...)   # 'ETM' is the default
+solver = wavebit.rcwa(backend=0, connecting_algo='SMM', ...)   # 'ETM' is the default
 ```
 
 Both share the same eigenmodes and boundary conventions and agree to ~1e-14; SMM costs
@@ -300,7 +300,7 @@ unsolvable — all of it is published as one generated JSON document, so a tool 
 does not have to read the source and retype what it finds:
 
 ```bash
-python -m fieldwave.manifest > fieldwave-manifest.json
+python -m wavebit.manifest > wavebit-manifest.json
 ```
 
 `tests/test_manifest.py` checks it against the solver's actual behaviour, so a path that
@@ -317,10 +317,10 @@ The full contract — every sign, axis, name and unit a script can depend on —
 [`docs/conventions.md`](docs/conventions.md). The rows that most often decide whether your
 input means what you think it means:
 
-**Time convention.** FieldWave works in `e^{-iωt}` throughout — inputs, internals and
+**Time convention.** Wavebit works in `e^{-iωt}` throughout — inputs, internals and
 returned amplitudes alike. `Im(n) > 0` is loss, which is how refractive-index databases
 tabulate it (`n + 1j*k`), and a wave travelling in `+z` carries `exp(+i*k0*kz*z)`. There is no
-second convention underneath; see [`fieldwave/_core/conventions.py`](fieldwave/_core/conventions.py).
+second convention underneath; see [`wavebit/_core/conventions.py`](wavebit/_core/conventions.py).
 
 **Layers are listed top to bottom, and `+z` points into the stack.** `ucell[0]` is the layer
 light meets first, arriving from `n_top`. Angles are radians: `theta` from the normal, `phi`
@@ -355,7 +355,7 @@ value, so the decisions read it one at a time and a gradient works straight off 
 ```python
 import jax, jax.numpy as jnp
 
-solver = fieldwave.rcwa(backend=1, ucell=ucell, ...)
+solver = wavebit.rcwa(backend=1, ucell=ucell, ...)
 grad = jax.grad(lambda u: jnp.sum(solver.conv_solve(ucell=u).T))(ucell)
 ```
 
@@ -421,7 +421,7 @@ Jupyter notebooks are prepared in [tutorials](tutorials) to give a brief introdu
 
 ## Examples
 
-Comprehensive examples of computational optics with FieldWave can be found in the
+Comprehensive examples of computational optics with Wavebit can be found in the
 [`examples`](examples) folder.
 
 ## Contributing
@@ -435,7 +435,7 @@ named as they are.
 
 ## Roadmap
 
-FieldWave is being built as a suite rather than a single solver:
+Wavebit is being built as a suite rather than a single solver:
 
 1. **RCWA on a single-source core** — one backend-agnostic implementation of the physics
    behind a thin adapter, so NumPy, JAX and PyTorch cannot drift apart. *(done)*
@@ -444,20 +444,20 @@ FieldWave is being built as a suite rather than a single solver:
 
 ## Citation
 
-If you use FieldWave in your research, please cite the software:
+If you use Wavebit in your research, please cite the software:
 
 ```bibtex
-@software{fieldwave,
-    title  = {FieldWave: Differentiable Electromagnetic Simulation Suite},
+@software{wavebit,
+    title  = {Wavebit: Differentiable Electromagnetic Simulation Suite},
     author = {Kim, Yongha},
     year   = {2026},
-    url    = {https://github.com/fieldalgo/fieldwave},
+    url    = {https://github.com/fieldalgo/wavebit},
 }
 ```
 
 ## License
 
-FieldWave is licensed under Apache-2.0. See [LICENSE](LICENSE), which also records the
+Wavebit is licensed under Apache-2.0. See [LICENSE](LICENSE), which also records the
 third-party notices this project carries.
 
 ## Contact

@@ -4,12 +4,12 @@ Written: 2026-08. Paths updated after the single-source rewrite folded the three
 copies into `_core`.
 
 Targets:
-- `fieldwave/_core/analytic.py` — the analytic Fourier coefficients, and
+- `wavebit/_core/analytic.py` — the analytic Fourier coefficients, and
   `normal_vector_field_analytical` for the normal field
-- `fieldwave/_core/solve_2d.py::layer_modes_2d` — the `epxy` / `epyx` off-diagonal slots the
+- `wavebit/_core/solve_2d.py::layer_modes_2d` — the `epxy` / `epyx` off-diagonal slots the
   NVF form fills
-- `fieldwave/_core/engine.py::_conv_matrices` — the modeling-type-2 dispatch, selected by the
-  `ucell` setter in `fieldwave/on_*/emsolver/rcwa.py`
+- `wavebit/_core/engine.py::_conv_matrices` — the modeling-type-2 dispatch, selected by the
+  `ucell` setter in `wavebit/on_*/emsolver/rcwa.py`
 
 ---
 
@@ -75,7 +75,7 @@ eps_c(k)     = eps_bg·δ_k0 + Σ_s (conj(n_s)² − conj(n_bg)²)·Ŝ_s(k)/(Px 
 inv_eps_c(k) = (1/eps_bg)·δ_k0 + Σ_s (1/conj(n_s)² − 1/conj(n_bg)²)·Ŝ_s(k)/(Px Py)
 ```
 
-`conj(n)²` matches fieldwave's `e^{-iωt}` convention (Im n>0 = loss), i.e. the same as
+`conj(n)²` matches wavebit's `e^{-iωt}` convention (Im n>0 = loss), i.e. the same as
 `to_conv_mat_raster_nvf`. `conv_matrix_2d` builds the block-Toeplitz matrices `⟦ε⟧`,
 `⟦1/ε⟧` from this `(4fto+1)²` coefficient grid in the same ordering as the `dfs2d_*` builders.
 
@@ -127,7 +127,7 @@ ucell = [dict(n_base=1.0, shapes=[
                   angle=np.deg2rad(25), n_index=1.0),
              dict(type='ellipse', cx=0.8, cy=0.9, lx=0.3, ly=0.2,
                   angle=0.6, n_index=3.0)])]
-solver = fieldwave.rcwa(backend=0, ucell=ucell, fto=(11, 11), ...)  # normal_grid=256 (default)
+solver = wavebit.rcwa(backend=0, ucell=ucell, fto=(11, 11), ...)  # normal_grid=256 (default)
 res = solver.conv_solve()
 ```
 
