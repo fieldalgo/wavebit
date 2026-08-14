@@ -379,12 +379,41 @@ class CoreSolveMixin:
     def pol(self, value):
         raise AttributeError(_POL_RETIRED)
 
+    def _refuse_y_orders_on_a_y_invariant_cell(self, one_dimensional):
+        """A one-row ``ucell`` cannot diffract out of plane, so it cannot keep ``y`` orders.
+
+        Both 1D formulations retain the single ``n = 0`` order, which is not a limitation but
+        the physics: with nothing varying in ``y`` there is no grating vector to couple
+        different ``n``, and the orders being asked for are identically zero. Measured on the
+        2D path, which does retain them, for the same structure written with two identical
+        rows: the ``n = ±1`` rows sum to 5e-29, and the ``n = 0`` row reproduces ``fto=[m, 0]``
+        to 3e-15.
+
+        Until this check the request reached ``layer_modes_1d_conical``, where ``Ky2`` is built
+        over the full ``ff_x * ff_y`` order set and the convolution matrices over ``ff_x``
+        alone, and surfaced as ``operands could not be broadcast together with shapes (5,5)
+        (15,15)`` — an error with nothing in it that names the mistake.
+        """
+        if not one_dimensional or self.fto[1] == 0:
+            return
+        raise ValueError(
+            f'fto={list(self.fto)} asks for y diffraction orders, but this ucell has one row '
+            f'in y, so the structure is invariant along it and every n != 0 order is '
+            f'identically zero. Both 1D formulations keep the single n = 0 order for that '
+            f'reason. Use fto=[{self.fto[0]}, 0]; if you meant a structure that varies in y, '
+            f'give a ucell with more than one row (two identical rows is the 2D path solving '
+            f'the same physics, and it returns those zeros explicitly).')
+
     def _refuse_illegal_tetm(self, one_dimensional):
         """``tetm`` is a claim about the problem; where it cannot hold, say which part failed.
 
         Called from ``_assign_grating_type``, because that is where the structure is known.
         The old ``pol`` had no such check: on a 2D structure it was accepted and then ignored,
         and the fast path it was reaching for silently did not happen.
+
+        The ``fto[1]`` half lives in :meth:`_refuse_y_orders_on_a_y_invariant_cell` instead —
+        it is not a fact about the declaration but about the structure, and it applies to
+        every spelling of the incidence.
         """
         if self._tetm is None:
             return
@@ -393,12 +422,6 @@ class CoreSolveMixin:
                 'tetm is only for a 1D structure: the pure TE/TM formulation it selects does '
                 'not exist on a 2D cell, where s and p couple. Drop tetm and give the '
                 'incidence as psi (linear) or polarization=(a_s, a_p).')
-        if self.fto[1] != 0:
-            raise ValueError(
-                f'tetm needs fto[1] == 0, got fto={list(self.fto)}. The pure TE/TM '
-                f'formulation keeps one out-of-plane order by construction; asking for '
-                f'y orders means the conical formulation, which is what dropping tetm '
-                f'selects.')
         if self.phi is not None:
             import numpy as np
             try:

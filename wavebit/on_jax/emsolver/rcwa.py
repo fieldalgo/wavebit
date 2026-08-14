@@ -170,6 +170,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
 
         if self.modeling_type_assigned == 0:  # Raster
             one_dimensional = self.ucell.shape[1] == 1
+            self._refuse_y_orders_on_a_y_invariant_cell(one_dimensional)
             self._refuse_illegal_tetm(one_dimensional)
             if one_dimensional:
                 # The declaration selects the path, and nothing else does. A named incidence

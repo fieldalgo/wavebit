@@ -468,3 +468,49 @@ def test_a_z_row_pulls_a_one_dimensional_structure_onto_the_2d_layout():
     ff_xy = 2 * 3 + 1
     mee.solve_for_conv(WL, *uniform_slots([VOIGT], ff_xy))
     assert (mee.grating_type_assigned, mee.formulation_assigned) == (2, '4ff')
+
+
+# ------------------------------------------------- asking a 1D cell for y diffraction orders
+
+_Y_INVARIANT = np.array([[[3.0, 3.0, 1.0, 1.0]]])          # one row: nothing varies in y
+_Y_ROWS = np.repeat(_Y_INVARIANT, 2, axis=1)               # the same physics, on the 2D path
+_1D_KW = dict(backend=0, n_top=1.0, n_bot=1.5, theta=0.3, phi=0.4, thickness=[0.2],
+              period=[0.7, 0.7], wavelength=0.9)
+
+
+@pytest.mark.parametrize('incidence', [
+    dict(psi=0.4), dict(polarization=(1, -1j)), dict(psi=0.4, chi=0.2),
+], ids=['psi', 'pair', 'chart'])
+def test_y_orders_on_a_y_invariant_cell_are_refused_in_plain_words(incidence):
+    """The refusal is about the structure, so it must not depend on how the light is written.
+
+    It used to reach ``layer_modes_1d_conical`` and surface as ``operands could not be
+    broadcast together with shapes (5,5) (15,15)`` — the ``Ky2`` block is built over
+    ``ff_x * ff_y`` and the convolution matrices over ``ff_x``. Nothing in that names the
+    mistake, and it fired inside the solve rather than at the request.
+    """
+    with pytest.raises(ValueError, match='asks for y diffraction orders'):
+        wavebit.rcwa(ucell=_Y_INVARIANT, fto=[2, 1], **incidence, **_1D_KW).conv_solve()
+
+
+def test_the_refused_orders_are_the_ones_that_are_zero():
+    """Why refusing is right rather than merely convenient: there is nothing there to return.
+
+    Written with two identical rows the same structure takes the 2D path, which *does* keep
+    the y orders — and returns them empty. So the 1D formulations are not withholding an
+    answer, and clamping ``fto[1]`` silently would hand back a different shape than asked for.
+    """
+    res = wavebit.rcwa(ucell=_Y_ROWS, fto=[2, 1], psi=0.4, **_1D_KW).conv_solve()
+    T = np.asarray(res.res.T)
+    assert T.shape == (3, 5)
+    assert T[[0, 2], :].sum() < 1e-25, T                     # every n != 0 order is empty
+
+    flat = np.asarray(wavebit.rcwa(ucell=_Y_ROWS, fto=[2, 0], psi=0.4,
+                                   **_1D_KW).conv_solve().res.T).ravel()
+    assert np.abs(T[1] - flat).max() < 1e-13                 # and n = 0 is the 1D answer
+
+
+def test_fto_y_zero_is_untouched():
+    """The guard must not cost the ordinary 1D call anything."""
+    res = wavebit.rcwa(ucell=_Y_INVARIANT, fto=[2, 0], psi=0.4, **_1D_KW).conv_solve()
+    assert np.asarray(res.res.T).shape == (1, 5)
