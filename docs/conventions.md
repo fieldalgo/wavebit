@@ -117,10 +117,12 @@ So an optimizer over the raw pair spends half its dimensions on directions that 
 the answer, while `(psi, chi)` is an ordinary unconstrained 2D problem. Both coordinates are
 differentiable on every backend and both are pytree children under JAX.
 
-**Naming `chi` selects the chart, including `chi = 0`.** Leaving it out is not the same as
-passing zero: the `psi`-only path applies no normalization, having nothing to normalize, while
-the chart goes through the pair's — and those differ in the last bit for about one angle in
-five. Same physics; the goldens pin the former.
+`chi = 0` is the `psi` spelling exactly — bit-identical, not merely equal. Both angle forms
+are unit by construction (`cos^2(chi) + sin^2(chi) = 1`), so neither is normalized: dividing
+them by their own computed norm could not remove an error, only add one (`sqrt(...)` misses
+`1.0` by up to half an ulp for the angle and 1.5 for the chart). **Only a written
+`polarization` pair is normalized**, because only it can carry a scale the library did not
+choose.
 
 #### Which way the circular states rotate
 

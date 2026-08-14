@@ -200,24 +200,24 @@ def test_end_to_end_gradient_wrt_ucell_2d():
     solver = wavebit.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
                           fto=fto, period=[1.0, 1.0], wavelength=wl, thickness=[0.15], ucell=ucell)
     kx, ky = solver.get_kx_ky_vector(wl)
-    theta, psi = complex(solver.theta), complex(solver.psi)
+    theta, inc = complex(solver.theta), solver._incidence_pair()
 
-    def chain(u, kx_, ky_, th_, ps_):
+    def chain(u, kx_, ky_, th_, inc_):
         epx, epy, epz = core_dfs(u, fto[0], fto[1])
-        _, ti = solve_2d(wl, kx_, ky_, n_top, n_bot, th_, ps_, [0.15], epx, epy, epz)
+        _, ti = solve_2d(wl, kx_, ky_, n_top, n_bot, th_, inc_, [0.15], epx, epy, epz)
         return ti
 
     def f_np(s):
-        return float(np.sum(np.array(chain(ucell + s * direction, kx, ky, theta, psi))))
+        return float(np.sum(np.array(chain(ucell + s * direction, kx, ky, theta, inc))))
     h = 1e-6
     g_fd = (f_np(h) - f_np(-h)) / (2 * h)
 
     g_jax = float(jax.grad(lambda s: jnp.sum(chain(
-        jnp.asarray(ucell) + s * jnp.asarray(direction), jnp.asarray(kx), jnp.asarray(ky), theta, psi)).real)(0.0))
+        jnp.asarray(ucell) + s * jnp.asarray(direction), jnp.asarray(kx), jnp.asarray(ky), theta, inc)).real)(0.0))
 
     s = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
     torch.sum(chain(torch.as_tensor(ucell) + s * torch.as_tensor(direction),
-                    torch.as_tensor(kx), torch.as_tensor(ky), theta, psi)).real.backward()
+                    torch.as_tensor(kx), torch.as_tensor(ky), theta, inc)).real.backward()
     g_torch = float(s.grad)
 
     assert abs(g_jax - g_torch) < 1e-8, (g_jax, g_torch)
@@ -309,25 +309,25 @@ def test_nvf_end_to_end_gradient_wrt_ucell():
     solver = wavebit.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
                           fto=fto, period=[1.0, 1.0], wavelength=wl, thickness=[d], ucell=ucell)
     kx, ky = solver.get_kx_ky_vector(wl)
-    theta, psi = complex(solver.theta), complex(solver.psi)
+    theta, inc = complex(solver.theta), solver._incidence_pair()
 
-    def chain(u, kx_, ky_, th_, ps_):
+    def chain(u, kx_, ky_, th_, inc_):
         epx, epy, epxy, epyx, epz = core_nvf(u, fto[0], fto[1], normal_field=normal_field)
-        _, ti = solve_2d(wl, kx_, ky_, n_top, n_bot, th_, ps_, [d], epx, epy, epz,
+        _, ti = solve_2d(wl, kx_, ky_, n_top, n_bot, th_, inc_, [d], epx, epy, epz,
                          epxy_conv_all=epxy, epyx_conv_all=epyx)
         return ti
 
     def f_np(s):
-        return float(np.sum(np.array(chain(ucell + s * direction, kx, ky, theta, psi))))
+        return float(np.sum(np.array(chain(ucell + s * direction, kx, ky, theta, inc))))
     h = 1e-6
     g_fd = (f_np(h) - f_np(-h)) / (2 * h)
 
     g_jax = float(jax.grad(lambda s: jnp.sum(chain(
-        jnp.asarray(ucell) + s * jnp.asarray(direction), jnp.asarray(kx), jnp.asarray(ky), theta, psi)).real)(0.0))
+        jnp.asarray(ucell) + s * jnp.asarray(direction), jnp.asarray(kx), jnp.asarray(ky), theta, inc)).real)(0.0))
 
     s = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
     torch.sum(chain(torch.as_tensor(ucell) + s * torch.as_tensor(direction),
-                    torch.as_tensor(kx), torch.as_tensor(ky), theta, psi)).real.backward()
+                    torch.as_tensor(kx), torch.as_tensor(ky), theta, inc)).real.backward()
     g_torch = float(s.grad)
 
     assert abs(g_jax - g_torch) < 1e-8, (g_jax, g_torch)

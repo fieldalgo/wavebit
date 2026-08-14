@@ -108,13 +108,13 @@ def sp_modes_2d(xp, W, V, F_c, F_s, ff_xy):
     return big_W, big_V
 
 
-def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
+def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
              epxy_conv_all=None, epyx_conv_all=None,
-             incidence_side='top', polarization=None, full=False):
-    """Solve a 2D grating stack for the given ``psi`` incidence.
+             incidence_side='top', full=False):
+    """Solve a 2D grating stack for the given incidence.
 
-    ``polarization`` is the complex amplitude pair ``(a_s, a_p)`` that supersedes ``psi``
+    ``incidence`` is the resolved incident amplitude pair ``(a_s, a_p)`` at unit flux — whatever
     when given — see :func:`~wavebit._core.conventions.incident_sp_amplitudes`.
 
     See :func:`wavebit._core.solve_1d.solve_1d` for the shared argument conventions —
@@ -127,7 +127,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     :func:`order_grid_kxy` accepts: 1-D of lengths ``ff_x`` / ``ff_y`` for an axis-aligned
     cell, or ``(ff_y, ff_x)`` per-order Cartesian components for any lattice.
 
-    Returns ``(de_ri, de_ti)`` for the ``psi``-specified incidence, shape ``(ff_y, ff_x)``.
+    Returns ``(de_ri, de_ti)`` for that incidence, shape ``(ff_y, ff_x)``.
     """
     xp = array_namespace(epx_conv_all)
     if _is_backside(incidence_side):
@@ -210,8 +210,8 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
         layer_info_list.append([epz_conv_i, W, V, q, d, big_A_i, big_B])
 
     # --- stage 3: final matching -> efficiency (transfer_2d_4 == transfer_1d_conical_4) --
-    out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
-                         n_top, n_bot, ff_x, ff_y, polarization=polarization, full=full)
+    out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
+                         n_top, n_bot, ff_x, ff_y, full=full)
     if full:
         out['layer_info_list'] = layer_info_list
     return out

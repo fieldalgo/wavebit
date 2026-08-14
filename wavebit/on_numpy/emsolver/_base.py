@@ -135,6 +135,10 @@ class _BaseRCWA(CoreSolveMixin):
             # unnormalized cosh path, not physics.
             self._psi = np.array(np.real(psi), dtype=self.type_float)
 
+    def _as_complex(self, value):
+        """An incident amplitude in the solve's complex dtype."""
+        return np.array(value, dtype=self.type_complex)
+
     def _as_real_angle(self, value):
         """An angle in the real dtype — the storage `chi` shares with `psi`."""
         return np.array(np.real(value), dtype=self.type_float)

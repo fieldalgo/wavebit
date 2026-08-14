@@ -284,9 +284,9 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     return {'res': res, 'layer_info_list': layer_info_list, 'T1': T1}
 
 
-def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
+def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                      epx_conv_all, epy_conv_all, epz_conv_i_all,
-                     incidence_side='top', polarization=None, full=False):
+                     incidence_side='top', full=False):
     """Solve a general 1D grating (arbitrary azimuth/polarization) for the given ``psi``.
 
     The conical case couples the s and p polarizations, so the per-layer modes and the
@@ -378,8 +378,8 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
         layer_info_list.append([epz_conv_i, W, V, q, d, big_A_i, big_B])
 
     # --- stage 3: final matching -> efficiency (transfer_1d_conical_4) ------------------
-    out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
-                         n_top, n_bot, ff_x, ff_y, polarization=polarization, full=full)
+    out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
+                         n_top, n_bot, ff_x, ff_y, full=full)
     if full:
         out['layer_info_list'] = layer_info_list
     return out
@@ -392,8 +392,8 @@ def _unit(xp, n, i):
     return xp.asarray(v)
 
 
-def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
-                   n_top, n_bot, ff_x, ff_y, polarization=None, full=False):
+def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
+                   n_top, n_bot, ff_x, ff_y, full=False):
     """Boundary match the assembled s/p system to the incident field.
 
     Shared, byte-identical port of ``transfer_1d_conical_4`` / ``transfer_2d_4`` (their final
@@ -423,7 +423,7 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
     Kz_top = _diag(xp, kz_top)
     kz_top_2d = xp.reshape(kz_top, (ff_y, ff_x))
     kz_bot_2d = xp.reshape(kz_bot, (ff_y, ff_x))
-    a_s, a_p = incident_sp_amplitudes(xp, C, psi, polarization)
+    a_s, a_p = as_array(xp, incidence[0], dtype=C), as_array(xp, incidence[1], dtype=C)
 
     delta = xp.reshape(xp.astype(_unit(xp, ff_xy, ff_xy // 2), C), (ff_xy, 1))
 

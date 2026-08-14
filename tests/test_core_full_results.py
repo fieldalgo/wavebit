@@ -60,7 +60,7 @@ def test_conical_and_2d_full_result_matches_legacy(case):
     solver, legacy, conv, kx, ky = _setup(**kw)
 
     solve_fn = solve_1d_conical if name == 'conical' else solve_2d
-    args = ([kw['wavelength'], kx, ky, kw['n_top'], kw['n_bot'], solver.theta, solver.psi,
+    args = ([kw['wavelength'], kx, ky, kw['n_top'], kw['n_bot'], solver.theta, solver._incidence_pair(),
              solver.thickness] + list(conv))
     got = solve_fn(*args, full=True)
 
@@ -76,7 +76,8 @@ def test_full_flag_is_consistent_with_tuple_form():
               period=[1.0, 1.0], wavelength=0.9, thickness=[0.2],
               ucell=np.random.default_rng(2).uniform(1, 4, (1, 5, 5)))
     solver, _, conv, kx, ky = _setup(**kw)
-    args = [kw['wavelength'], kx, ky, kw['n_top'], kw['n_bot'], solver.theta, solver.psi,
+    args = [kw['wavelength'], kx, ky, kw['n_top'], kw['n_bot'], solver.theta,
+            solver._incidence_pair(),
             solver.thickness] + list(conv)
     R, T = solve_2d(*args)
     full = solve_2d(*args, full=True)

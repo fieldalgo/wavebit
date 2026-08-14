@@ -164,6 +164,10 @@ class _BaseRCWA(CoreSolveMixin):
             psi = torch.real(psi) if torch.is_tensor(psi) else np.real(psi)
             self._psi = _as_tensor(psi, device=self.device, dtype=self.type_float)
 
+    def _as_complex(self, value):
+        """An incident amplitude in the solve's complex dtype."""
+        return _as_tensor(value, device=self.device, dtype=self.type_complex)
+
     def _as_real_angle(self, value):
         """An angle in the real dtype — the storage `chi` shares with `psi`."""
         value = torch.real(value) if torch.is_tensor(value) else np.real(value)

@@ -48,6 +48,11 @@ _AMPLITUDE_FIELDS = ('r_s', 'r_p', 't_s', 't_p')
 _POWER_FIELDS = ('R', 'R_s', 'R_p', 'T', 'T_s', 'T_p')
 
 
+def solved_res(**kw):
+    """The `res` sub-result of one solve — the surface these comparisons read."""
+    return wavebit.rcwa(**kw).conv_solve().res
+
+
 def pair_of(psi):
     return (np.sin(psi), np.cos(psi))
 
@@ -671,3 +676,56 @@ def test_the_chart_survives_the_jax_pytree():
     assert float(np.asarray(back.chi)) == pytest.approx(-0.2)
     assert float(np.asarray(back.psi)) == pytest.approx(0.4)
     assert wavebit.rcwa(backend=1, psi=0.4).chi is None
+
+
+# ------------------------------------------------------------------ one resolved incidence
+
+def test_chi_zero_is_the_psi_spelling_bit_for_bit():
+    """Not merely equal — identical. The chart has to *contain* the angle it extends.
+
+    Both angle forms are unit by construction (``cos^2(chi) + sin^2(chi) = 1``), so neither is
+    normalized. It used to be otherwise: the chart went through the written pair's
+    normalization and the plain angle did not, which split them by a last bit on the ~18% of
+    angles where ``sqrt(sin^2 + cos^2)`` misses 1.0. Checked on those angles specifically,
+    since a random one passes either way.
+    """
+    kw = dict(CFG_2D, ucell=UCELL_2D)
+    picked = [v for v in np.random.default_rng(1).uniform(0.1, 1.5, 300)
+              if np.sqrt(np.sin(v) ** 2 + np.cos(v) ** 2) != 1.0][:8]
+    assert picked, 'no angle with an inexact norm — the test would be vacuous'
+
+    for v in picked:
+        plain = solved_res(psi=v, **kw)
+        chart = solved_res(psi=v, chi=0.0, **kw)
+        for name in _AMPLITUDE_FIELDS + _POWER_FIELDS:
+            np.testing.assert_array_equal(np.asarray(getattr(plain, name)),
+                                          np.asarray(getattr(chart, name)),
+                                          err_msg=f'psi={v!r} {name}')
+
+
+def test_only_a_written_pair_is_normalized():
+    """The scale a caller wrote is divided out; the scale the library computed is not.
+
+    ``(3, 4j)`` and ``(0.6, 0.8j)`` must agree — that is the written pair being normalized —
+    while the angle forms must reach the solve untouched, which the test above pins.
+    """
+    kw = dict(CFG_2D, ucell=UCELL_2D)
+    _assert_same_sub(solved_res(polarization=(0.6, 0.8j), **kw),
+                     solved_res(polarization=(3, 4j), **kw))
+
+
+def test_an_integer_pair_still_carries_a_gradient():
+    """``polarization=(1, -1j)`` is the natural way to write a circular state.
+
+    It is also a tuple with an integer in it, and JAX refuses to differentiate a tree with an
+    integer leaf. The pair is cast on the way in for that reason: a dtype is not something a
+    caller should have to know to get a gradient. Before the cast this raised
+    ``grad requires real- or complex-valued inputs`` while ``(1.0+0j, -1j)`` worked.
+    """
+    import jax
+    import jax.numpy as jnp
+
+    solver = wavebit.rcwa(backend=1, ucell=jnp.asarray(UCELL_2D), polarization=(1, -1j),
+                            **{k: v for k, v in CFG_2D.items() if k != 'backend'})
+    grad = jax.grad(lambda s: s.conv_solve().T.sum())(solver)
+    assert all(abs(complex(np.asarray(g))) > 1e-6 for g in grad.polarization), grad.polarization

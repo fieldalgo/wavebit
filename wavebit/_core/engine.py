@@ -14,6 +14,7 @@ from . import boundary as _boundary
 from . import factorization as _fac
 from . import lattice as _lattice
 from .backend import _device_of, array_namespace
+from .conventions import incident_sp_amplitudes
 from .enums import (DEFAULT_FACTORIZATION, DEFAULT_FORMULATION, DEFAULT_FOURIER_COEFFICIENTS,
                     Factorization, Formulation, FourierCoefficients, Pol, coefficients_of,
                     factorization_of, formulation_of, resolve_fourier_options)
@@ -325,11 +326,10 @@ class CoreSolveMixin:
         The pair keeps what the chart drops — an overall phase — so it stays the normative
         spelling and the two are mutually exclusive, as are ``chi`` and ``tetm``.
 
-        **Naming ``chi`` selects the chart**, including ``chi = 0``. Leaving it ``None`` is
-        not the same as passing zero: the ``psi``-only path applies no normalization (it has
-        nothing to normalize), while the chart goes through the pair's, and those differ in
-        the last bit for about one angle in five. Same physics, and the goldens pin the
-        former.
+        ``chi = 0`` is the ``psi`` spelling exactly — bit-identical, not merely equal. Both
+        angle forms are unit by construction, so neither is normalized; see
+        :func:`~wavebit._core.conventions.incident_sp_amplitudes`, which is where all three
+        spellings become one pair.
         """
         return self._chi
 
@@ -346,21 +346,19 @@ class CoreSolveMixin:
         self._chi = self._as_real_angle(value)
 
     def _incidence_pair(self):
-        """The incident amplitudes to hand the solves — the one canonical form.
+        """The incident amplitudes the solves take — resolved here, once, at the boundary.
 
-        Three spellings arrive and one leaves. ``polarization`` passes through; ``(psi, chi)``
-        is mapped here, since the chart's whole job is to be coordinates *on* the pair; and
-        plain ``psi`` returns ``None``, which leaves the solves on the untouched ``psi`` path
-        rather than routing an already-unit pair through a normalization it does not need.
+        Whatever the user wrote becomes the same thing: a unit ``(a_s, a_p)``. The solves are
+        handed that and nothing else, so "which spelling was this?" is a question asked in one
+        place rather than in each of them.
+
+        ``tetm`` is the exception, and not by omission: it declares that there is no
+        polarization to resolve, and the pure 1D path it selects takes ``tetm_index`` instead.
         """
-        if self._polarization is not None:
-            return self._polarization
-        if self._chi is None:
-            return None
-        xp = array_namespace(self._psi, self._chi)
-        psi, chi = self._psi, self._chi
-        return (xp.sin(psi) * xp.cos(chi) + 1j * xp.cos(psi) * xp.sin(chi),
-                xp.cos(psi) * xp.cos(chi) - 1j * xp.sin(psi) * xp.sin(chi))
+        xp = array_namespace(*(self._polarization if self._polarization is not None
+                               else (self._psi,)))
+        return incident_sp_amplitudes(xp, self.type_complex, self._psi,
+                                      chi=self._chi, polarization=self._polarization)
 
     @property
     def tetm_index(self):
@@ -486,7 +484,12 @@ class CoreSolveMixin:
                     'scale is free)')
         except TypeError:
             pass                      # traced values: concreteness is not theirs to prove
-        self._polarization = pair
+        # Cast on the way in. The pair is a pytree child, and JAX refuses to differentiate a
+        # tree with an integer leaf -- so `polarization=(1, -1j)`, the most natural way to
+        # write a circular state, used to raise `grad requires real- or complex-valued
+        # inputs` while `(1.0+0j, -1j)` worked. A dtype is not something the caller should
+        # have to know to get a gradient.
+        self._polarization = tuple(self._as_complex(v) for v in pair)
 
     @property
     def lattice(self):
@@ -692,10 +695,10 @@ class CoreSolveMixin:
         self._formulation_assigned = Formulation.SECOND
         kx, ky = self.get_kx_ky_vector(wavelength)
         return self._finish(solve(
-            wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi, self.thickness,
+            wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self._incidence_pair(), self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             incidence_side=self.incidence_side,
-            polarization=self._incidence_pair(), full=True))
+            full=True))
 
     def solve_2d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None,
@@ -706,20 +709,20 @@ class CoreSolveMixin:
         self._formulation_assigned = self._formulation_for(z_row)
         if self._formulation_assigned == Formulation.FIRST:
             return self._finish(_solve_2d_4ff(
-                wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi,
+                wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self._incidence_pair(),
                 self.thickness, epx_conv_all, epy_conv_all, epz_conv_i_all,
                 epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
                 epxz_conv_all=epxz_conv_all, epyz_conv_all=epyz_conv_all,
                 epzx_conv_all=epzx_conv_all, epzy_conv_all=epzy_conv_all,
-                incidence_side=self.incidence_side, polarization=self._incidence_pair(),
+                incidence_side=self.incidence_side,
                 full=True, connecting_algo=self.connecting_algo))
         solve = self._solve_fn('2d')
         return self._finish(solve(
-            wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self.psi, self.thickness,
+            wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self._incidence_pair(), self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
             incidence_side=self.incidence_side,
-            polarization=self._incidence_pair(), full=True))
+            full=True))
 
 
 # The rule each modeling path actually implements, for the two paths that implement exactly

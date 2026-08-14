@@ -514,12 +514,12 @@ def solve_uniform_stack(wavelength, kx, ky, layers, ff, incident, connecting_alg
     return -flux(reflected) / inc, flux(transmitted) / inc
 
 
-def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
+def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                  epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None,
                  epxz_conv_all=None, epyz_conv_all=None,
                  epzx_conv_all=None, epzy_conv_all=None,
-                 incidence_side='top', polarization=None, full=False,
+                 incidence_side='top', full=False,
                  connecting_algo='ETM'):
     """Solve a 2D stack on the first-order formulation — the public 4ff route.
 
@@ -614,8 +614,8 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     G, big_T = _etm_recursion(xp, k0, Kx, Ky, layers, ff, seed)
     big_F, big_G = sp_modes_2d(xp, G[:2 * ff], 1j * G[2 * ff:], F_c, F_s, ff)
 
-    out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
-                         n_top, n_bot, ff_x, ff_y, polarization=polarization, full=full)
+    out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
+                         n_top, n_bot, ff_x, ff_y, full=full)
     if full:
         # No field reconstruction on this path yet — the per-layer state the 2ff solves leave
         # behind has no 4ff counterpart written. `None` rather than an empty list so that

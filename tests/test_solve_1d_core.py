@@ -166,7 +166,8 @@ def _run_and_inputs_conical(ucell, thickness, n_top, n_bot, wl, period, fto, the
         solver.ucell, solver.fto[0], solver.fto[1])
     kx, ky = solver.get_kx_ky_vector(wl)
     inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_top, n_bot=n_bot,
-                  theta=solver.theta, psi=solver.psi, thickness=solver.thickness,
+                  theta=solver.theta, incidence=solver._incidence_pair(),
+                  thickness=solver.thickness,
                   epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
     return (np.array(via_api.R), np.array(via_api.T)), inputs
 
@@ -202,7 +203,7 @@ def test_conical_cross_backend(case, backend):
     for k in ('kx', 'ky', 'epx_conv_all', 'epy_conv_all', 'epz_conv_i_all'):
         bk[k] = _to(backend, inp[k])
     bk['theta'] = _to(backend, complex(inp['theta']))
-    bk['psi'] = _to(backend, complex(inp['psi']))
+    bk['incidence'] = tuple(_to(backend, complex(v)) for v in inp['incidence'])
     ri, ti = solve_1d_conical(**bk)
 
     assert np.allclose(np.array(ri0), np.asarray(ri), atol=1e-10, rtol=0)
@@ -239,7 +240,7 @@ def test_conical_gradient_jax_torch_fd():
             d[k] = jnp.asarray(inp[k])
         d[key] = jnp.asarray(base) + s * jnp.asarray(direction)
         d['theta'] = jnp.asarray(complex(inp['theta']))
-        d['psi'] = jnp.asarray(complex(inp['psi']))
+        d['incidence'] = tuple(jnp.asarray(complex(v)) for v in inp['incidence'])
         return jnp.sum(out(d)).real
     g_jax = float(jax.grad(lambda s: f_jax(s))(0.0))
 
@@ -249,7 +250,7 @@ def test_conical_gradient_jax_torch_fd():
             d[k] = torch.as_tensor(np.asarray(inp[k]))
         d[key] = torch.as_tensor(base) + s * torch.as_tensor(direction)
         d['theta'] = torch.as_tensor(complex(inp['theta']))
-        d['psi'] = torch.as_tensor(complex(inp['psi']))
+        d['incidence'] = tuple(torch.as_tensor(complex(v)) for v in inp['incidence'])
         return torch.sum(out(d)).real
     s = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
     val = f_torch(s)

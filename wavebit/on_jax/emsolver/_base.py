@@ -160,6 +160,10 @@ class _BaseRCWA(CoreSolveMixin):
             # Real dtype: see the numpy twin, and `CoreSolveMixin._reject_complex_angle`.
             self._psi = jnp.array(jnp.real(psi), dtype=self.type_float)
 
+    def _as_complex(self, value):
+        """An incident amplitude in the solve's complex dtype."""
+        return jnp.array(value, dtype=self.type_complex)
+
     def _as_real_angle(self, value):
         """An angle in the real dtype — the storage `chi` shares with `psi`."""
         return jnp.array(jnp.real(value), dtype=self.type_float)

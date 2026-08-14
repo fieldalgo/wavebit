@@ -251,44 +251,47 @@ def incident_kz(kz_top, index):
     return kz_top[index]
 
 
-def incident_sp_amplitudes(xp, C, psi, polarization=None):
-    """The incident wave's electric amplitudes ``(a_s, a_p)``, normalized to unit flux.
+def incident_sp_amplitudes(xp, C, psi, chi=None, polarization=None):
+    """The incident electric amplitudes ``(a_s, a_p)``, at unit flux — the one resolver.
 
-    This is the one place the two spellings of the incident polarization meet the solves:
+    Three spellings arrive and one leaves, so the solves never learn there was a choice. This
+    is called once per solve from :meth:`~wavebit._core.engine.CoreSolveMixin._incidence_pair`,
+    at the boundary, rather than from inside the numerics.
 
-    * ``psi`` — the polarization angle: ``(a_s, a_p) = (sin(psi), cos(psi))``, the exact
-      operations the boundary match has always applied, so a ``psi`` solve is bit-identical
-      to what it was before ``polarization`` existed.
-    * ``polarization`` — a pair of complex amplitudes in the same ``(s, p)`` basis, which is
-      what ``psi`` cannot spell: a relative phase. ``(1, -1j)/sqrt(2)`` and ``(1, +1j)/sqrt(2)``
-      are the circular states. When given, it wins and ``psi`` is not read.
+    * ``psi`` — the polarization angle. ``(a_s, a_p) = (sin(psi), cos(psi))``.
+    * ``chi`` — the ellipticity angle beside it. Together they are the canonical coordinates
+      of the state: ``chi = 0`` returns exactly the pair above, ``|chi| = pi/4`` the circular
+      states. Naming ``chi`` is what selects the chart; leaving it ``None`` means zero.
+    * ``polarization`` — a pair of complex amplitudes written directly, which is the only
+      spelling that can carry an overall phase. When given it wins and the angles are unread.
 
-    The pair's overall magnitude is *not* a degree of freedom: it is divided out here, so
-    efficiencies are per unit incident flux and amplitudes per unit incident E-field whatever
-    scale the caller wrote — ``(3, 4j)`` and ``(0.6, 0.8j)`` are the same incidence. The
-    overall *phase* is kept (the norm is real positive), and carries into the returned
-    complex amplitudes. ``psi = v`` and ``polarization = (sin(v), cos(v))`` are equivalent
-    by construction; pinned in ``tests/test_polarization.py``.
+    **Only the written pair is normalized**, and that is a statement about arithmetic rather
+    than about spellings. The two angle forms are unit by construction --
+    ``|a_s|^2 + |a_p|^2 = cos^2(chi) + sin^2(chi) = 1`` -- so dividing them by their own
+    computed norm cannot remove an error, only add one: ``sqrt(...)`` differs from ``1.0`` by
+    up to half an ulp for the angle and 1.5 for the chart, on 18% and 36% of angles
+    respectively. A written pair has no such guarantee (``(3, 4j)`` is a legitimate way to ask
+    for the same incidence), so it is divided, and its overall *phase* survives because the
+    norm is real positive.
 
     Both entries are E-field amplitudes even though the coupled paths carry the p channel as
     a magnetic boundary variable — the ``-i*n_top`` conversion belongs to the incident-column
     builders, exactly as the ``/(-i*n)`` on the way out belongs to the pack sites.
     """
-    if polarization is None:
-        # No normalization here, and that is not an omission. `psi` is real (the setters
-        # refuse a complex one — see `engine.py::_reject_complex_angle`), so `(sin, cos)` is
-        # already a unit pair by construction, and dividing it by its own norm again is not
-        # free: `sqrt(sin^2 + cos^2)` differs from 1.0 by half an ulp for about one angle in
-        # five, so the division moves the last bit of the amplitudes on those angles. The
-        # legacy goldens pin those bits. The two spellings therefore share a rule rather
-        # than a line, and `tests/test_polarization.py` is what keeps them equal.
-        psi = as_array(xp, psi, dtype=C)
+    if polarization is not None:
+        a_s = as_array(xp, polarization[0], dtype=C)
+        a_p = as_array(xp, polarization[1], dtype=C)
+        norm = xp.astype(xp.sqrt(xp.abs(a_s) ** 2 + xp.abs(a_p) ** 2), C)
+        return a_s / norm, a_p / norm
+    psi = as_array(xp, psi, dtype=C)
+    if chi is None:
+        # `chart(psi, 0)` reduces to this exactly -- `cos(0)` is 1.0 and `sin(0)` is 0.0, both
+        # exact -- so the reduction is written out rather than computed, and the plain angle
+        # never pays for the two multiplications and the addition that would be no-ops.
         return xp.sin(psi), xp.cos(psi)
-    a_s = as_array(xp, polarization[0], dtype=C)
-    a_p = as_array(xp, polarization[1], dtype=C)
-    norm = xp.sqrt(xp.abs(a_s) ** 2 + xp.abs(a_p) ** 2)
-    norm = xp.astype(norm, C)
-    return a_s / norm, a_p / norm
+    chi = as_array(xp, chi, dtype=C)
+    return (xp.sin(psi) * xp.cos(chi) + 1j * xp.cos(psi) * xp.sin(chi),
+            xp.cos(psi) * xp.cos(chi) - 1j * xp.sin(psi) * xp.sin(chi))
 
 
 def safe_sqrt(xp, z, eps=1e-30):

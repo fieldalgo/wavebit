@@ -30,7 +30,7 @@ Formulation, in the conventions this codebase already uses (see :func:`solve_1d`
   ``kz_gap == 1`` exactly and the gap's ``V`` can never be singular (the standard trick; the
   gap cancels out of the composed result whatever it is, as long as it is used everywhere).
 * Incidence enters as mode amplitudes directly: ``E_s = a_s`` and ``H_p = -i*n_top*a_p``
-  for the coupled path — ``(a_s, a_p) = (sin(psi), cos(psi))``, or the explicit
+  for the coupled path — the resolved ``(a_s, a_p)`` pair, whichever spelling the
   ``polarization`` pair — and unit primary amplitude for 1D TE/TM.
   These are the same incident amplitudes the ETM final matching solves against. The sign on
   ``H_p`` is the one ``e^{-iωt}`` requires and the one the code has always carried; this
@@ -352,8 +352,8 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
 
 # ------------------------------------------------------------------- coupled s/p (conical, 2D)
 
-def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
-            layer_modes, epz_conv_i_all, backside, polarization, full):
+def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
+            layer_modes, epz_conv_i_all, backside, full):
     """Shared SMM cascade + matching for the coupled s/p paths (conical and 2D).
 
     ``layer_modes(layer_index)`` returns that layer's ``(big_W, big_V, q, W, V)``: the mode
@@ -367,7 +367,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     with the reflection port — in the mirror's frame the reflected wave is the upward one,
     whichever scene medium it returns into.
 
-    ``polarization`` is the complex amplitude pair ``(a_s, a_p)`` superseding ``psi`` — see
+    ``incidence`` is the resolved amplitude pair ``(a_s, a_p)`` at unit flux — see
     :func:`~wavebit._core.conventions.incident_sp_amplitudes`.
     """
     kx_g, ky_g = order_grid_kxy(xp, kx, ky)
@@ -421,7 +421,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     # --- incidence ------------------------------------------------------------------------
     # Amplitudes are (E_s, H_p) by construction of W/V above, so the incident column is the
     # incident field itself: E_s = a_s, H_p = -i*n_ref*a_p in the incidence medium — with
-    # (a_s, a_p) either (sin(psi), cos(psi)) or the explicit `polarization` pair, the same
+    # (a_s, a_p) as resolved at the boundary — one form arrives here, and it is the same
     # amplitudes the ETM final matching solves against (see conventions.incident_sp_amplitudes).
     delta = xp.reshape(xp.astype(_unit(xp, ff_xy, ff_xy // 2), C), (ff_xy, 1))
 
@@ -435,7 +435,8 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
     # The incidence as asked, then the pure-TE / pure-TM variants (free: same scattering
     # matrix). The variants stay spelled as angles so their columns are bit-identical to the
     # pre-`polarization` ones.
-    cols = ([incident(*incident_sp_amplitudes(xp, C, psi, polarization))]
+    cols = ([incident(as_array(xp, incidence[0], dtype=C),
+                      as_array(xp, incidence[1], dtype=C))]
             + ([incident_psi(_PI / 2), incident_psi(0.0)] if full else []))
     c_inc = xp.concat(cols, axis=1)
 
@@ -487,13 +488,13 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
             'layer_info_list': layer_info_list, 'T1': T1}
 
 
-def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
+def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                    epx_conv_all, epy_conv_all, epz_conv_i_all,
-                   incidence_side='top', polarization=None, full=False):
+                   incidence_side='top', full=False):
     """Solve a conical 1D grating by scattering matrices — SMM twin of :func:`solve_1d_conical`.
 
     Same arguments and returns as :func:`smm_1d`; ``polarization`` is the complex amplitude
-    pair ``(a_s, a_p)`` superseding ``psi``, as in the ETM twin.
+    pair ``(a_s, a_p)``, resolved at the boundary as in the ETM twin.
     """
     backside = _is_backside(incidence_side)
     xp, C, kx, ky = _prepare(epx_conv_all, kx, ky)
@@ -520,18 +521,18 @@ def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
         V = _block(xp, [[V_11, V_12], [V_21, V_22]])
         return big_W, big_V, xp.concat([q1, q2]), W, V
 
-    return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
-                   layer_modes, epz_conv_i_all, backside, polarization, full)
+    return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
+                   layer_modes, epz_conv_i_all, backside, full)
 
 
-def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
+def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
            epxy_conv_all=None, epyx_conv_all=None,
-           incidence_side='top', polarization=None, full=False):
+           incidence_side='top', full=False):
     """Solve a 2D grating stack by scattering matrices — SMM twin of :func:`solve_2d`.
 
     Same arguments and returns as :func:`smm_1d`; ``polarization`` is the complex amplitude
-    pair ``(a_s, a_p)`` superseding ``psi``, as in the ETM twin.
+    pair ``(a_s, a_p)``, resolved at the boundary as in the ETM twin.
     """
     backside = _is_backside(incidence_side)
     xp, C, kx, ky = _prepare(epx_conv_all, kx, ky)
@@ -557,5 +558,5 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
         big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, ff_xy)
         return big_W, big_V, q, W, V
 
-    return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, psi, thickness,
-                   layer_modes, epz_conv_i_all, backside, polarization, full)
+    return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
+                   layer_modes, epz_conv_i_all, backside, full)

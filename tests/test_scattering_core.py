@@ -134,7 +134,7 @@ def _core_inputs(kwargs):
                   epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
     if solver.grating_type_assigned == 0:
         return solver, dict(common, tetm_index=solver.tetm_index)
-    return solver, dict(common, ky=ky, psi=solver.psi)
+    return solver, dict(common, ky=ky, incidence=solver._incidence_pair())
 
 
 CORE_FN = {'1d': (smm_1d, solve_1d), 'conical': (smm_1d_conical, solve_1d_conical),
