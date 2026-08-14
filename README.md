@@ -76,16 +76,17 @@ solver = wavebit.rcwa(
     period=[700.],
     fto=[10, 0],                # Fourier truncation order (x, y)
     n_top=1., n_bot=1.5,
-    theta=0., phi=0., pol=0.,   # pol: 0 = TE, 1 = TM
+    theta=0., phi=0.,
+    tetm='te',                  # 'te' | 'tm' — see "Saying what the light is"
     ucell=ucell, thickness=[300.],
 )
 
 result = solver.conv_solve()
-print(result.R.sum(), result.T.sum())   # 0.2053316282584784 0.7946683717415217
+print(result.R.sum(), result.T.sum())   # 0.20533162825847726 0.7946683717415197
 ```
 
 `R` and `T` are the reflected and transmitted diffraction efficiencies, one entry per
-order. Here they sum to 1 within 1e-15, as a lossless structure must.
+order. Here they sum to 1 to within a few times 1e-15, as a lossless structure must.
 
 `n_top` and `n_bot` may be complex: an absorbing substrate or superstrate is given as an index
 like any other, with loss as `Im(n) > 0`, matching the bundled nk tables. `tests/test_lossy_media.py`
@@ -98,7 +99,7 @@ The integer codes have named equivalents, if you prefer them to the literals:
 ```python
 from wavebit import Backend, Pol, Factorization
 
-solver = wavebit.rcwa(backend=Backend.JAX, pol=Pol.TM, factorization=Factorization.NVF, ...)
+solver = wavebit.rcwa(backend=Backend.JAX, tetm=Pol.TM, factorization=Factorization.NVF, ...)
 ```
 
 ## Backends
@@ -155,6 +156,32 @@ Not a matter of taste, and not the same answer for a forward solve as for a diff
 Where the crossover falls, and whether a freeze is worth it at all, is measured in
 [docs/backend-choice.md](docs/backend-choice.md) — on one CPU host, with the run's own
 repeatability printed next to the numbers.
+
+## Saying what the light is
+
+Three keywords describe the incident polarization, and they are three *kinds* of thing rather
+than three spellings of one:
+
+| | write | what it is |
+| --- | --- | --- |
+| **declaration** | `tetm='te'` / `'tm'` | this problem has no polarization and no azimuth degree of freedom. 1D structures only, and it is what buys the pure TE/TM formulation — 2 to 4 times faster than the conical one, which agrees with it to 1e-13 |
+| **coordinates** | `psi`, `chi` | the state's two angles: `psi` the ellipse's tilt, `chi` its ellipticity. `chi=0` is linear (and is exactly the `psi` spelling), `chi=±pi/4` circular. This is the form to sweep and to optimize |
+| **amplitudes** | `polarization=(a_s, a_p)` | the Jones pair itself, in the same (s, p) basis the results come back in. The only form that carries an overall phase; its magnitude is normalized away, so `(3, 4j)` and `(0.6, 0.8j)` are one incidence |
+
+```python
+wavebit.rcwa(tetm='te', ...)                    # fast 1D path; psi reads back as None
+wavebit.rcwa(psi=0.4, ...)                      # linear, at an angle
+wavebit.rcwa(psi=0.4, chi=np.pi / 4, ...)       # circular
+wavebit.rcwa(polarization=(1, -1j), ...)        # the pair, straight from another code
+```
+
+They are mutually exclusive: naming two is an error rather than a silent winner. Which to
+reach for is usually decided by what you are doing rather than by what the light is — the
+coordinates are two real numbers with nothing redundant in them, so a gradient over `(psi,
+chi)` is an ordinary 2D problem, while the pair spends two of its four real numbers on
+directions that cannot change any power (its scale and its overall phase, both measured at
+~1e-16). [`docs/conventions.md`](docs/conventions.md) is the normative statement, and
+[tutorial 6](tutorials/06-polarization-pair.ipynb) works through all three.
 
 ## Describing a structure
 
@@ -329,7 +356,8 @@ second convention underneath; see [`wavebit/_core/conventions.py`](wavebit/_core
 
 **Layers are listed top to bottom, and `+z` points into the stack.** `ucell[0]` is the layer
 light meets first, arriving from `n_top`. Angles are radians: `theta` from the normal, `phi`
-the azimuth of the plane of incidence, `psi` the polarization (`pi/2` = s/TE, `0` = p/TM).
+the azimuth of the plane of incidence, `psi` the polarization angle (`pi/2` = s/TE,
+`0` = p/TM) and `chi` its ellipticity.
 
 **Uppercase is power, lowercase is amplitude.** `R`/`T` are per-order efficiencies, shape
 `(ff_y, ff_x)` — `y` first, the transpose of the `fto=[x, y]` input order — with the incident
