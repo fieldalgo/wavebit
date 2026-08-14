@@ -19,6 +19,7 @@ from this codebase, which is exactly what makes them worth having.
 | **fmmax** (Liu & Fan lineage, MIT) | uniform complex tensors, **patterned** tensors, **permeability** | the `fwref` env — see below | `golden_fmmax.npz`, `golden_fmmax_magnetic.npz` |
 | **S4** (same lineage, C++) | real tensors, patterned | the S4 extension, already in the project env | `golden_s4.npz` |
 | **S4**, the in-cell **field** | the six field components on *uniform* stacks — every reconstruction path, all angles and azimuths, exact at ~1e-15 | same | `golden_s4_field.npz` |
+| **fmmax**, the in-cell **field** | uniform stacks exactly (7.8e-16) **and patterned layers to ~1e-4** — the only outside opinion on a grating's field | the `fwref` env | `golden_fmmax_field.npz` |
 
 A fourth oracle lives outside this directory: the Berreman 4x4 in
 `tests/test_anisotropic_berreman.py` is an independent *formulation* — not RCWA at all — but our
@@ -34,11 +35,28 @@ the suite stayed green for as long as the file existed, because a self-captured 
 with whatever produced it. It is gone; `golden_s4_field.npz` replaces the claim it was making,
 and `tests/data/golden_field.npz` keeps the drift-detection job under its own honest name.
 
-S4 stops at **uniform** stacks, and that is not a limitation for this purpose: conventions and
-frames are decided there, and neither solver truncates, so the comparison is exact rather than
-converged. On a patterned layer the two disagree at 1e-3 to 1e-2 (and up to 7.6e-1 on the
-discontinuous `Ez`) purely from differing truncation and factorization — a convergence study,
-not a golden, and deliberately not attempted.
+S4 stops at **uniform** stacks. Conventions and frames are decided there and neither solver
+truncates, so that comparison is exact rather than converged — but on a patterned layer the two
+disagree at 1e-3 to 1e-2, and up to 7.6e-1 on the discontinuous `Ez`.
+
+**fmmax reaches the patterned case, and the reason is that its two relevant knobs are
+reachable.** Both were found by measurement, on 2026-08-15, and with either one wrong the
+grating cases sit at 1e-1 and read as a solver disagreement:
+
+| what had to match | wrong | right |
+| --- | --- | --- |
+| the **order set** — fmmax's parallelogramic 5x5 against our `fto` | `fto=(8,0)`, 17 orders: **1.2e-1** | `fto=(2,2)`, the same 25: **1.9e-5** |
+| the **factorization** — fmmax's `Formulation` | `FFT`, the plain Laurent rule: **2.7e-1** on p | `JONES_DIRECT`: **7.2e-5** |
+
+That leaves ~1e-4 rather than 1e-13, because the two vector factorizations still differ in
+detail. It is an oracle for *structure*, not for drift: every sign, transpose and
+component error this repository has actually shipped moved fields by 1e-1 or more. Slow
+numerical drift is `tests/data/golden_field.npz`'s job.
+
+One further thing fell out of the calibration and is worth having as a statement rather than a
+constant: fmmax's unit **mode** amplitude relates to our unit **flux** incidence by exactly
+`-cos(theta)` for s and `-1` for p. The test asserts that dependence, so a case added at a new
+angle is checked rather than accommodated.
 
 Two conventions had to be measured rather than assumed, and both are recorded in
 `gen_goldens_s4_field.py`: S4's p amplitude is a **global** `-1` against ours (not a frame
@@ -122,6 +140,16 @@ together with `reti_2d.m` / `reti_2D.py`: that pair was dead the same way, and t
 `FractureGeom` helper of unrecorded provenance, which is not something to keep in a repository
 about to go out. `docs/fourier-truncation-shape.md` still discusses GRCWA's *algorithm*, which is
 unaffected — the code is what went.
+
+`reti_1D.py` / `reti_1Dc.py` went the same day and for the same reason. They compared field
+cells against RETICOLO and printed norms, asserted nothing, and were not collected. They were
+briefly kept as "the only record of how a RETICOLO field cell lines up with ours" — a bad
+reason twice over: git history keeps that record perfectly well, and the hand-applied
+`.conj()` they carried was an **unaudited** convention patch, which is the precise shape of
+the thing that hid the sign defect fixed in `9824f0d`. A calibration worth trusting is
+measured, not inherited: the S4 field oracle beside them was built by measuring the two
+solvers against each other until every component agreed to 1e-15, and read no prior script to
+do it.
 
 ## Attribution, and what each oracle's terms require
 
@@ -207,13 +235,6 @@ Two consequences worth knowing before touching those generators:
 | `gen_goldens_*.py` — freeze the reference numbers | the oracle; run by hand, rarely |
 | `golden_*.npz` — the frozen numbers, committed | nothing |
 | `test_*_golden.py` — the assertions | nothing; **run in CI everywhere** |
-| `reti_1D.py`, `reti_1Dc.py` — live side-by-side **field** comparisons | Octave; exploratory, not asserted |
-
-`reti_1D.py` / `reti_1Dc.py` are kept despite being unasserted: they are the only record of how a
-RETICOLO field cell lines up with ours, and the hand-applied `.conj()` in them is the one clue to
-that calibration. Whoever wires the field oracle starts there — and audits that `conj()` first,
-since an unaudited convention patch is exactly what hid the sign defect fixed in `9824f0d`.
-
 ## A golden frozen ahead of its consumer
 
 `golden_fmmax_magnetic.npz` holds rows nothing in this solver can consume — permeability has no
