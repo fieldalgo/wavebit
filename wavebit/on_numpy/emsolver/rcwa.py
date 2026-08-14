@@ -3,7 +3,7 @@ import numpy as np
 from ._base import _BaseRCWA
 from ..._core.engine import CoreFactorizationMixin
 from ..._core.enums import Formulation
-from ..._core.fields import field_1d, field_1d_conical, field_2d, field_plot
+from ..._core.fields import field_1d, field_1d_conical, field_2d, field_2d_4ff, field_plot
 from ..._core.result import Result, ResultSub
 
 # One shared container (wavebit._core.result); the old per-backend copies are gone.
@@ -222,7 +222,6 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
 
     def calculate_field(self, res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False)):
         # TODO: change res_ to accept array of points.
-        self._require_field_state()
         kx, ky = self._kxy_2d(self.wavelength)
 
         if self._grating_type_assigned == 0:
@@ -234,6 +233,13 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
             field_cell = field_1d_conical(self.wavelength, kx, ky, self.T1, self.layer_info_list, self.period,
                                                res_x=res_x, res_y=res_y, res_z=res_z, set_field_input=set_field_input,
                                        lattice=self.lattice)
+        elif self._formulation_assigned == Formulation.FIRST:
+            # The grating type cannot answer this: the first-order path sets it to 2 as well,
+            # so branching on it alone would hand a 4ff solve to the 2ff reconstruction, which
+            # reads the same state slots and returns a plausible, wrong cell.
+            field_cell = field_2d_4ff(self.wavelength, kx, ky, self.T1, self.layer_info_list, self.period,
+                                      res_x=res_x, res_y=res_y, res_z=res_z, set_field_input=set_field_input,
+                                      lattice=self.lattice)
         else:
             field_cell = field_2d(self.wavelength, kx, ky, self.T1, self.layer_info_list, self.period,
                                        res_x=res_x, res_y=res_y, res_z=res_z, set_field_input=set_field_input,

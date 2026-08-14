@@ -653,25 +653,6 @@ class CoreSolveMixin:
             return Formulation.FIRST if given else Formulation.SECOND
         return self._formulation
 
-    def _require_field_state(self):
-        """Refuse field reconstruction where the last solve left no per-layer state behind.
-
-        Only the 4ff route does: it has no field reconstruction yet, and returns ``None`` in
-        place of the ``layer_info_list`` the 2ff solves fill.
-
-        ``None`` rather than ``[]`` because the two states are different questions and both
-        deserve their own answer. An *empty* list is a solver that has not solved yet (or a
-        stack with no interior), which :func:`~wavebit._core.fields._require_solved` already
-        reports — and ``_base`` initialises the attribute to ``[]``, so that is the state a
-        fresh solver is in. ``None`` is the one this method exists for.
-        """
-        if getattr(self, 'layer_info_list', None) is None:
-            raise NotImplementedError(
-                'field reconstruction is not implemented on the first-order (4ff) path, '
-                'which is the one a populated permittivity z row selects. The efficiencies '
-                'and amplitudes it returns are complete; only the in-cell field is missing. '
-                'See wavebit/_core/solve_2d_4ff.py, "What is not here".')
-
     def solve_1d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
         if self._polarization is not None:
             # Unreachable through conv_solve — `_assign_grating_type` sends a structure with a

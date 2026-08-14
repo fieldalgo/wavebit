@@ -2,8 +2,8 @@
 
 **Status: reachable. A z-coupled tensor handed to the public solver arrives here** —
 :func:`solve_2d_4ff` is the entry, and ``formulation='4ff'`` forces it on a problem that does not
-need it. **What is still missing is a patterned *anisotropic* layer and field reconstruction**;
-see "What is not here" at the bottom before building on it.
+need it. Field reconstruction landed 2026-08-14. **What is still missing is a patterned
+*anisotropic* layer and ``mu``**; see "What is not here" at the bottom before building on it.
 
 Pinned by ``tests/test_solve_2d_4ff.py`` against the 2ff path and a Berreman 4x4, and by
 ``tests/references/test_4ff_external_goldens.py`` against RETICOLO and fmmax — 21 cases, worst
@@ -90,43 +90,34 @@ out to an exponent of 113, and past roughly 700 return NaN. Nothing guards that,
 is the physics rather than an artefact — but the stability claim is about passive media and
 should not be read further.
 
+**Field reconstruction landed 2026-08-14** and is no longer on the list below.
+:func:`_etm_recursion` keeps a ``layer_info_list`` — ``[eps_blocks, psi_f, lam_f, psi_b,
+lam_b, d, P_i, QP_i]`` per layer, bottom-to-top, the counterpart of the 2ff path's
+``[epz_conv_i, W, V, q, d, big_A_i, big_B]`` — and
+:func:`wavebit._core.fields.field_2d_4ff` propagates it. Three notes worth keeping:
+
+* the transverse half is *simpler* here, because the state vector already **is**
+  ``(Ex, Ey, Hx, Hy)`` and there is no ``W`` / ``V`` split to reassemble;
+* ``E_z`` is the one formula that could not be copied — with a populated z row the
+  elimination keeps two more terms, ``Ez = ezz^-1 [ (Ky Hx - Kx Hy) - ezx Ex - ezy Ey ]``,
+  and ``fields.py``'s ``Sz = 1j * epz_conv_i @ (Kx @ Uy - Ky @ Ux)`` is that expression at
+  ``ezx = ezy = 0`` (with ``U = i H``), i.e. a special case rather than a shared line;
+* ``calculate_field`` now branches on the **formulation**. It had to: this path sets
+  ``_grating_type_assigned`` to 2 as well, so the grating type cannot tell the two apart, and
+  the 2ff reconstruction reads the same two state slots — it would have returned a plausible
+  cell built on the wrong ``E_z``.
+
+The oracle was internal and exact, as scoped: forcing ``formulation='4ff'`` on a problem with
+an empty z row makes the two paths solve the same problem, and the reconstructed cells agree to
+1e-11 relative *per component* over four geometries, three angles, both incidence sides and all
+three incidence variants. The z-coupled case has no such twin and is judged by Maxwell (central
+differences down a layer, converging at the second order the step demands), by exact transverse
+continuity at the interfaces, and — because both of those are homogeneous — by tying the cell's
+``z`` flux between lossless spacers to the reported ``T / (1 - R)``.
+See ``tests/test_field_4ff.py``.
+
 What is not here, in the order it will be wanted:
 
-* **Field reconstruction.** The efficiencies and amplitudes are complete; only the in-cell
-  field is absent, and :meth:`~wavebit._core.engine.CoreSolveMixin._require_field_state`
-  refuses rather than reconstructing from the ``None`` this path returns in place of a
-  ``layer_info_list``. Refusing beats guessing here for a specific reason:
-  ``rcwa.calculate_field`` branches on ``_grating_type_assigned``, which this path also sets to
-  2, so without that guard a 4ff solve would be reconstructed by the *2ff* ``field_2d`` and
-  come back plausible and wrong.
-
-  What it needs, scoped 2026-08-14 (nothing below is written yet):
-
-  1. **Per-layer state.** :func:`_etm_recursion` builds each layer's modes inside the loop and
-     drops them. It has to keep ``(lam_f, psi_f, lam_b, psi_b, d)`` plus the amplitude
-     bookkeeping, the way the 2ff path keeps
-     ``[epz_conv_i, W, V, q, d, big_A_i, big_B]`` (``solve_2d.py``).
-  2. **The transverse components are simpler here, not harder.** The state vector already *is*
-     ``(Ex, Ey, Ux, Uy)``, so there is no ``W`` / ``V`` split to reassemble — reading the four
-     blocks off ``psi`` is the whole of it. The mode correspondence below says how the two
-     line up.
-  3. **``E_z`` is where the paths genuinely differ**, and it is the one formula that cannot be
-     copied. With a populated z row the elimination keeps two more terms::
-
-         Ez = ezz^-1 [ i (Kx Uy - Ky Ux) - ezx Ex - ezy Ey ]
-
-     ``fields.py``'s ``Sz = 1j * epz_conv_i @ (Kx @ Uy - Ky @ Ux)`` is that expression at
-     ``ezx = ezy = 0`` — i.e. the 2ff line is a special case, not a shared one. ``H_z`` is
-     unchanged while ``mu = 1``.
-  4. **Dispatch.** ``calculate_field`` must branch on the *formulation*, not only on
-     ``_grating_type_assigned``.
-
-  **The oracle is internal and exact, and it was checked before any of this was written.**
-  Forcing ``formulation='4ff'`` on a problem with an empty z row makes the two paths solve the
-  same problem, so their reconstructed fields must agree — measured on the efficiencies first,
-  and they match to 1e-14 patterned and unpatterned at 0, 8 and 35 degrees. So a field
-  comparison measures the reconstruction and nothing else. The z-coupled case has no such
-  twin; it is judged by the theorems this module already uses.
 * **``mu`` on this path.** Permeability landed on the 2ff path on 2026-08-14
   (``docs/magnetic-materials.md``) and this one still refuses it — ``engine.py``'s 2D solve
   raises when a ``mu`` arrives with a z-coupled ``eps``, rather than dropping it.
@@ -425,7 +416,7 @@ def _solve_etm(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb):
     redefinition is bookkept separately as ``P^-1 X_f`` per layer, so the transmitted amplitude
     can be recovered at the end.
     """
-    G, T_acc = _etm_recursion(xp, k0, Kx, Ky, layers, ff, psi_vf)
+    G, T_acc, _ = _etm_recursion(xp, k0, Kx, Ky, layers, ff, psi_vf)
 
     # incident + reflected on the top side must be whatever the recursion says arrives there
     sol = xp.linalg.solve(xp.concat([psi_vb, -G], axis=1),
@@ -434,7 +425,7 @@ def _solve_etm(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb):
 
 
 def _etm_recursion(xp, k0, Kx, Ky, layers, ff, G):
-    """Sweep the ETM recursion up the stack: ``(G_above, T_acc)`` from the seed ``G`` below it.
+    """Sweep the ETM recursion up the stack: ``(G_above, T_acc, layer_info_list)``.
 
     Split out of :func:`_solve_etm` because the recursion is the part
     :func:`solve_2d_4ff` shares — it seeds a half-space of index ``n_bot`` rather than vacuum
@@ -446,8 +437,24 @@ def _etm_recursion(xp, k0, Kx, Ky, layers, ff, G):
     are only meaningful together, which is why they are returned together: ``big_T`` feeds the
     transmitted amplitude directly, so a per-mode scale that cancels in the reflection does not
     cancel there.
+
+    ``layer_info_list`` is what field reconstruction propagates — the counterpart of the
+    ``[epz_conv_i, W, V, q, d, big_A_i, big_B]`` records
+    :func:`wavebit._core.solve_2d.solve_2d` leaves behind, appended **bottom-to-top** for the
+    same reason (:func:`wavebit._core.fields.field_2d_4ff` walks it in reverse). Each entry is
+    ``[eps_blocks, psi_f, lam_f, psi_b, lam_b, d, P_i, QP_i]``, and the three pieces that are
+    not simply the layer's modes are exactly the two amplitude maps this loop already forms:
+
+    * ``P_i @ X_f`` carries the unknown *down* one layer (``t = P_i X_f t'``), which is what
+      makes ``T_acc`` the product of them;
+    * ``QP_i @ X_f`` turns the same unknown into the backward amplitudes referenced at the
+      layer's **bottom** face, which is where ``X_b`` in the ``G`` update starts from.
+
+    ``eps_blocks`` rides along because ``E_z`` needs ``ezz_i``, ``ezx`` and ``ezy`` — the one
+    part of the reconstruction the 2ff path cannot lend.
     """
     T_acc = xp.astype(xp.eye(2 * ff), Kx.dtype)
+    layer_info_list = []
     for eps_blocks, d in reversed(list(layers)):
         lam_f, psi_f, lam_b, psi_b = split_forward_backward(
             xp, layer_matrix_4ff(xp, Kx, Ky, **eps_blocks), ff)
@@ -456,9 +463,12 @@ def _etm_recursion(xp, k0, Kx, Ky, layers, ff, G):
 
         PQ = xp.linalg.solve(xp.concat([psi_f, psi_b], axis=1), G)
         P_i = xp.linalg.inv(PQ[:2 * ff])
-        G = psi_f + psi_b @ X_b @ (PQ[2 * ff:] @ P_i) @ X_f
+        QP_i = PQ[2 * ff:] @ P_i
+        G = psi_f + psi_b @ X_b @ QP_i @ X_f
         T_acc = T_acc @ (P_i @ X_f)
-    return G, T_acc
+
+        layer_info_list.append([eps_blocks, psi_f, lam_f, psi_b, lam_b, d, P_i, QP_i])
+    return G, T_acc, layer_info_list
 
 
 def _solve_naive(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb):
@@ -643,16 +653,17 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
 
     layers = _conv_layers(xp, per_layer, thickness, ff, C)
     seed = _half_space_state(xp, _diag(xp, kz_bot), n_bot ** 2, F_c, F_s, ff, C)
-    G, big_T = _etm_recursion(xp, k0, Kx, Ky, layers, ff, seed)
+    G, big_T, layer_info_list = _etm_recursion(xp, k0, Kx, Ky, layers, ff, seed)
     big_F, big_G = sp_modes_2d(xp, G[:2 * ff], 1j * G[2 * ff:], F_c, F_s, ff)
 
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
                          n_top, n_bot, ff_x, ff_y, full=full)
     if full:
-        # No field reconstruction on this path yet — the per-layer state the 2ff solves leave
-        # behind has no 4ff counterpart written. `None` rather than an empty list so that
-        # `calculate_field` can say so instead of reconstructing from nothing.
-        out['layer_info_list'] = None
+        # `sp_modes_2d` recombines the *rows* of `G` into the s/p boundary variables and leaves
+        # its columns alone, so `final_matching`'s `T1` is the unknown of the `G` above the top
+        # layer unchanged -- which is that layer's forward amplitudes at its own top face. That
+        # is what `field_2d_4ff` starts from; nothing has to be undone here.
+        out['layer_info_list'] = layer_info_list
     return out
 
 

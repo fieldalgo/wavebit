@@ -1,0 +1,420 @@
+"""Field reconstruction on the first-order (4ff) path.
+
+``tests/test_formulation_dispatch.py`` covers which path a call takes; this file covers the
+in-cell field the first-order path now returns, and — the harder half — what measures it.
+
+**The z-decoupled half has an exact internal oracle.** Forcing ``formulation='4ff'`` on a
+problem whose permittivity ``z`` row is empty makes the two paths solve the same physical
+problem by different algebra, so their reconstructed fields must agree entry for entry. Their
+efficiencies already do to 1e-14, patterned and unpatterned, which is what makes a *field*
+comparison measure the reconstruction and nothing else. That is the workhorse below.
+
+**The z-coupled half has no twin at all** — it is the geometry the path exists for, and the
+one no other solver in the survey reaches. Three checks with exact answers stand in, chosen so
+that between them nothing is left free:
+
+* **Maxwell.** The reconstructed six components must satisfy ``curl E = i k0 H`` and
+  ``curl H = -i k0 D`` for the tensor that was handed in, ``z`` row included. Checked by
+  central differences down a layer, so the *rate* is an assertion too: the field is analytic
+  inside a layer, so halving the step must quarter the residual, and a residual that is merely
+  "small" without converging is a different thing from one that is discretisation error.
+  This is the only check that reaches the two terms ``- ezx Ex - ezy Ey`` that the second-order
+  path's ``E_z`` line does not have.
+* **Continuity.** The four transverse components are continuous across a layer interface, and
+  the sampling lands on it exactly (``linspace(0, res_z, res_z)`` is inclusive, so a layer's
+  last slice *is* its bottom face and the next layer's first slice is the same plane). Exact,
+  not asymptotic. ``E_z`` must jump there, which is asserted too — a reconstruction that
+  quietly returned a continuous ``E_z`` would be returning something other than ``E_z``.
+* **Absolute scale.** Maxwell and continuity are both homogeneous: multiply the whole cell by a
+  constant and neither notices. So the cell is tied to the *reported efficiencies* by sitting
+  the stack between two lossless vacuum spacers, where the ``z`` flux is constant and equals
+  ``(1 - R)`` above and ``T`` below. Their ratio is the one number that catches a wrong
+  normalisation of ``T1``, which is exactly the failure a plausible-looking field hides.
+
+A note on signs, pinned by :func:`test_a_vacuum_slab_comes_back_as_the_incident_plane_wave`
+below: the shipped convention returns ``E_z``, ``H_x`` and ``H_y`` with the opposite sign to
+the right-handed frame whose ``+z`` runs *with* the cell's ``z`` index — measured on a vacuum
+slab, where the incident plane wave's phase advances with the index while the returned
+Poynting vector points against it. The first-order state vector is written in the other frame,
+so :func:`~wavebit._core.fields.field_2d_4ff` converts on output; the checks here undo it
+through :func:`state_frame` rather than working around it, so both halves stay explicit.
+"""
+import numpy as np
+import pytest
+
+import wavebit
+
+WL = 620.0
+PERIOD = (400.0, 380.0)
+
+VAC = np.eye(3, dtype=complex)
+# Voigt: magnetisation along x, so the gyrotropy fills the y-z block and the z row with it.
+VOIGT = np.array([[4.0 + 0.05j, 0, 0],
+                  [0, 4.0 + 0.05j, 0.9j],
+                  [0, -0.9j, 4.0 + 0.05j]], dtype=complex)
+# Tilted, so that all four z-row slots are populated at once and none can hide behind a zero.
+TILTED = np.array([[5.2, 0.3j, -0.4j],
+                   [-0.3j, 4.1, 0.7j],
+                   [0.4j, -0.7j, 3.3]], dtype=complex)
+
+COMPONENTS = ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz')
+
+
+def uniform_slots(eps_list):
+    """The nine convolution stacks for a list of uniform tensors, at one retained order.
+
+    Slot convention: every off-diagonal slot holds the **negative** of its tensor component,
+    the z row included; ``epz_i`` is the inverse of the ``zz`` block. See
+    ``docs/off-diagonal-slot-convention.md``.
+    """
+    I = np.eye(1, dtype=complex)
+    e = [np.asarray(x, dtype=complex) for x in eps_list]
+    return [np.stack([x[0, 0] * I for x in e]),
+            np.stack([x[1, 1] * I for x in e]),
+            np.stack([np.linalg.inv(x[2, 2] * I) for x in e]),
+            np.stack([-x[0, 1] * I for x in e]),
+            np.stack([-x[1, 0] * I for x in e]),
+            np.stack([-x[0, 2] * I for x in e]),
+            np.stack([-x[1, 2] * I for x in e]),
+            np.stack([-x[2, 0] * I for x in e]),
+            np.stack([-x[2, 1] * I for x in e])]
+
+
+def state_frame(cell):
+    """The returned cell in the frame whose ``+z`` runs with its own ``z`` index.
+
+    The ``z`` parity ``(E_z, H_x, H_y) -> -(E_z, H_x, H_y)``, which is the whole of the
+    difference between the shipped sign convention and a right-handed frame — see this
+    module's docstring, and ``test_a_vacuum_slab_comes_back_as_the_incident_plane_wave`` for
+    the measurement that fixes it. Every check below states its physics in this frame, because
+    that is the frame Maxwell's equations were written down in.
+    """
+    out = np.array(cell, dtype=complex, copy=True)
+    out[..., [2, 3, 4]] *= -1
+    return out
+
+
+def z_solver(thickness, theta_deg=28.0, backend=0):
+    """A solver for a stack of uniform tensors, at one retained order.
+
+    The tensors themselves arrive through :func:`uniform_slots`, not through a ``ucell``: a
+    z-coupled permittivity is not something the modeler can paint.
+    """
+    return wavebit.rcwa(backend=backend, n_top=1.0, n_bot=1.52, fto=(0, 0), period=PERIOD,
+                        wavelength=WL, theta=np.deg2rad(theta_deg), phi=np.deg2rad(37.0),
+                        psi=0.6, thickness=thickness)
+
+
+def _to_backend(a, backend):
+    """A convolution stack in the backend's own array type — ``thickness`` is already in it."""
+    if backend == 0:
+        return a
+    if backend == 1:
+        return pytest.importorskip('jax.numpy').asarray(a)
+    return pytest.importorskip('torch').as_tensor(a)
+
+
+def z_coupled_cell(eps_list, thickness, theta_deg=28.0, res_z=64, backend=0):
+    """``(result, cell_in_state_frame, kx, ky)`` for a stack of uniform tensors.
+
+    ``res_x = res_y = 1`` on purpose: with a single retained order the field is one plane wave,
+    so the sample at ``(x, y) = (0, 0)`` **is** its Fourier coefficient and the checks below
+    can be stated on the coefficients without inverting the transform by hand.
+    """
+    # Solver first, arrays second: importing the JAX backend is what lifts `jax_enable_x64`,
+    # and an array built before that is silently complex64 (see test_formulation_dispatch).
+    mee = z_solver(thickness, theta_deg, backend)
+    res = mee.solve_for_conv(WL, *[_to_backend(s, backend) for s in uniform_slots(eps_list)])
+    assert mee.formulation_assigned == '4ff'
+    cell = np.asarray(mee.calculate_field(res_x=1, res_y=1, res_z=res_z))
+    kx, ky = mee.get_kx_ky_vector(WL)
+    return (res, state_frame(cell)[0, :, 0, 0, :],
+            complex(np.asarray(kx)[0]), complex(np.asarray(ky)[0]))
+
+
+def z_flux(F):
+    """Time-averaged Poynting ``z``, from a cell already in the state frame."""
+    return 0.5 * np.real(F[..., 0] * np.conj(F[..., 4]) - F[..., 1] * np.conj(F[..., 3]))
+
+
+# ------------------------------------------------- the exact oracle: the same scene both ways
+
+TWINS = {
+    'a uniform slab': (np.full((1, 1, 1), 2.25), (0, 0), [180.0]),
+    'two uniform slabs': (np.array([[[2.25]], [[4.0]]]), (0, 0), [110.0, 90.0]),
+    'a patterned layer': (np.random.default_rng(0).uniform(1, 4, (1, 8, 8)), (1, 1), [150.0]),
+    'two patterned layers': (np.random.default_rng(1).uniform(1, 4, (2, 8, 8)), (2, 1),
+                             [80.0, 120.0]),
+}
+
+
+def twin_cell(formulation, name, theta_deg, side, backend=0):
+    ucell, fto, thickness = TWINS[name]
+    mee = wavebit.rcwa(backend=backend, n_top=1.0, n_bot=1.52, fto=fto, period=PERIOD,
+                       wavelength=WL, theta=np.deg2rad(theta_deg), phi=np.deg2rad(37.0),
+                       psi=0.6, thickness=thickness, ucell=ucell, incidence_side=side)
+    mee.formulation = formulation
+    mee.conv_solve()
+    assert mee.formulation_assigned == formulation
+    return np.asarray(mee.calculate_field(res_x=7, res_y=5, res_z=6,
+                                          set_field_input=(True, True, True)))
+
+
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+@pytest.mark.parametrize('theta_deg', [0.0, 8.0, 35.0])
+@pytest.mark.parametrize('name', list(TWINS))
+def test_the_two_formulations_reconstruct_the_same_field(name, theta_deg, side):
+    """The oracle: an empty z row makes the two paths the same problem, so the cells must agree.
+
+    Every component is scaled by **its own** magnitude rather than by the cell's. ``E_z`` runs
+    two orders below ``H_y`` at these incidences, so a wholly wrong ``E_z`` measured against
+    the cell's largest entry would come back at 1e-2 and read like a tolerance question rather
+    than a broken formula.
+
+    All three incidence variants are compared at once (``set_field_input=(True, True, True)``):
+    they ride in separate columns of ``T1``, and a reconstruction that dropped the leading axis
+    would still reproduce the first of them.
+    """
+    got = twin_cell('4ff', name, theta_deg, side)
+    want = twin_cell('2ff', name, theta_deg, side)
+    assert got.shape == want.shape, (got.shape, want.shape)
+
+    cell_scale = np.max(np.abs(want))
+    assert np.max(np.abs(want - got)) < 1e-11 * cell_scale
+    for i, comp in enumerate(COMPONENTS):
+        scale = np.max(np.abs(want[..., i]))
+        if scale < 1e-6 * cell_scale:
+            # identically zero in this geometry (E_z and H_z at normal incidence on a uniform
+            # slab); the absolute comparison above is what covers it. That the loop does bite
+            # somewhere is test_every_component_is_actually_present_somewhere.
+            continue
+        gap = np.max(np.abs(want[..., i] - got[..., i])) / scale
+        assert gap < 1e-11, f'{comp}: {gap:.3e}'
+
+
+def test_every_component_is_actually_present_somewhere():
+    """The companion to the skip above: all six are non-negligible in the oblique cases.
+
+    Without this the per-component loop could quietly degrade into the absolute check — which
+    is the whole thing it was written to avoid, since ``E_z`` runs two orders below ``H_y``.
+    """
+    for name in TWINS:
+        cell = twin_cell('2ff', name, 35.0, 'top')
+        scale = np.max(np.abs(cell))
+        smallest = min(np.max(np.abs(cell[..., i])) for i in range(6))
+        assert smallest > 1e-4 * scale, f'{name}: {smallest / scale:.2e}'
+
+
+def test_the_two_formulations_agree_on_the_variants_taken_one_at_a_time():
+    """``set_field_input`` selects columns of ``T1``, and the selection must survive the swap.
+
+    Asking for the variants singly and together must give the same cells; the leading axis is
+    the only place a reconstruction can get the *incidence* right and the *bookkeeping* wrong.
+    """
+    ucell, fto, thickness = TWINS['a patterned layer']
+    cells = {}
+    for formulation in ('2ff', '4ff'):
+        mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.52, fto=fto, period=PERIOD,
+                           wavelength=WL, theta=np.deg2rad(21.0), phi=np.deg2rad(37.0),
+                           psi=0.6, thickness=thickness, ucell=ucell)
+        mee.formulation = formulation
+        mee.conv_solve()
+        cells[formulation] = [
+            np.asarray(mee.calculate_field(res_x=4, res_y=4, res_z=5, set_field_input=sfi))
+            for sfi in ((True, False, False), (False, True, False), (False, False, True),
+                        (True, True, True))]
+    for k, (want, got) in enumerate(zip(cells['2ff'], cells['4ff'])):
+        assert want.shape == got.shape
+        assert np.max(np.abs(want - got)) / np.max(np.abs(want)) < 1e-11, k
+    # and on the new path the three single calls are the three slices of the combined one
+    single, combined = cells['4ff'][:3], cells['4ff'][3]
+    for k in range(3):
+        assert np.allclose(single[k][0], combined[k], rtol=0, atol=1e-12), k
+
+
+# ------------------------------------------------------- the z-coupled half, which has no twin
+
+def maxwell_residual(F, kx, ky, eps, d, res_z, layer):
+    """Max curl-equation residual over the interior of one layer, per equation.
+
+    Stated on Fourier coefficients in the state frame: ``d/dx -> i k0 kx``,
+    ``d/dy -> i k0 ky``, and ``d/dz`` by a central difference. ``linspace(0, res_z, res_z)`` is
+    inclusive, so the step is ``d / (res_z - 1)`` and the layer's last sample sits on its
+    bottom face.
+    """
+    k0 = 2 * np.pi / WL
+    h = d / (res_z - 1)
+    s = F[layer * res_z:(layer + 1) * res_z]
+    Ex, Ey, Ez, Hx, Hy, Hz = (s[:, i] for i in range(6))
+    D = [sum(eps[r, c] * (Ex, Ey, Ez)[c] for c in range(3)) for r in range(3)]
+    m = slice(1, -1)
+
+    def dz(v):
+        return (v[2:] - v[:-2]) / (2 * h)
+
+    residuals = [
+        1j * k0 * ky * Ez[m] - dz(Ey) - 1j * k0 * Hx[m],          # (curl E)_x = i k0 Hx
+        dz(Ex) - 1j * k0 * kx * Ez[m] - 1j * k0 * Hy[m],          # (curl E)_y = i k0 Hy
+        1j * k0 * (kx * Ey[m] - ky * Ex[m]) - 1j * k0 * Hz[m],    # (curl E)_z = i k0 Hz
+        1j * k0 * ky * Hz[m] - dz(Hy) + 1j * k0 * D[0][m],        # (curl H)_x = -i k0 Dx
+        dz(Hx) - 1j * k0 * kx * Hz[m] + 1j * k0 * D[1][m],        # (curl H)_y = -i k0 Dy
+        1j * k0 * (kx * Hy[m] - ky * Hx[m]) + 1j * k0 * D[2][m],  # (curl H)_z = -i k0 Dz
+    ]
+    scale = k0 * np.max(np.abs(s))
+    return np.array([np.max(np.abs(r)) / scale for r in residuals])
+
+
+@pytest.mark.parametrize('eps,tag', [(VOIGT, 'voigt'), (TILTED, 'tilted')])
+def test_the_z_coupled_cell_satisfies_maxwell_and_converges_like_it_should(eps, tag):
+    """Both curl equations hold inside a z-coupled layer, at second order in the step.
+
+    The rate is the load-bearing half. The field is analytic inside a layer, so a correct
+    reconstruction differenced centrally must lose a factor of four per doubling; a formula
+    that is wrong by a *term* leaves a residual that stops converging and sits on a floor.
+    Only the two ``x`` / ``y`` rows carry the ``z`` derivative — the two ``z`` rows are
+    algebraic identities the reconstruction builds ``H_z`` and ``D_z`` from, and they come back
+    at 1e-16, which is worth seeing but proves nothing on its own.
+    """
+    thickness = [90.0, 210.0, 90.0]
+    worst = []
+    for res_z in (32, 64, 128):
+        _, F, kx, ky = z_coupled_cell([VAC, eps, VAC], thickness, res_z=res_z)
+        r = maxwell_residual(F, kx, ky, eps, thickness[1], res_z, layer=1)
+        assert np.max(r[[2, 5]]) < 1e-13, f'the algebraic rows should be exact: {r}'
+        worst.append(np.max(r[[0, 1, 3, 4]]))
+
+    assert worst[0] < 1e-2, worst
+    assert worst[-1] < 1e-3, worst
+    for coarse, fine in zip(worst, worst[1:]):
+        assert 3.4 < coarse / fine < 4.6, f'{tag}: rate {coarse / fine:.2f}, residuals {worst}'
+
+
+@pytest.mark.parametrize('eps,tag', [(VOIGT, 'voigt'), (TILTED, 'tilted')])
+def test_the_transverse_field_is_continuous_across_a_z_coupled_interface(eps, tag):
+    """Exact, not asymptotic: a layer's last slice and the next layer's first are one plane.
+
+    ``E_z`` is asserted to *jump* there in the same breath. It is the component the z row
+    changes, it is discontinuous wherever ``eps_zz`` is, and a reconstruction that returned a
+    continuous one would be returning something that is not ``E_z`` — the shape of error a
+    smoothness check alone rewards.
+    """
+    res_z = 16
+    _, F, _, _ = z_coupled_cell([VAC, eps, VAC], [90.0, 210.0, 90.0], res_z=res_z)
+    scale = np.max(np.abs(F))
+    for k in (1, 2):
+        above, below = F[k * res_z - 1], F[k * res_z]
+        transverse = np.max(np.abs(above[[0, 1, 3, 4]] - below[[0, 1, 3, 4]]))
+        assert transverse / scale < 1e-13, f'{tag} interface {k}: {transverse:.3e}'
+        assert abs(above[2] - below[2]) / scale > 1e-2, f'{tag} interface {k}: E_z did not jump'
+
+
+@pytest.mark.parametrize('theta_deg', [0.0, 28.0, 55.0])
+@pytest.mark.parametrize('eps,tag', [(VOIGT, 'voigt'), (TILTED, 'tilted'), (VAC, 'vacuum')])
+def test_the_flux_the_cell_carries_is_the_efficiency_the_solve_reported(eps, tag, theta_deg):
+    """The one check that fixes the absolute scale, and so the ``T1`` normalisation.
+
+    Maxwell and continuity are homogeneous — scale the whole cell and neither moves — so on
+    their own they would accept a reconstruction that is right in shape and wrong by a
+    constant. That constant is exactly what a mis-normalised ``T1`` would be, and ``big_T``
+    feeds the transmitted amplitude directly, so it is not a hypothetical.
+
+    Sitting the stack between two **lossless** vacuum spacers is what makes the check exact
+    rather than a limit: inside a lossless layer the ``z`` flux does not vary, so the spacers
+    read ``(1 - R)`` above and ``T`` below at every slice, and their ratio is scale-free.
+    The vacuum row is the control — nothing there but the spacers, so the ratio must be 1.
+    """
+    res, F, _, _ = z_coupled_cell([VAC, eps, VAC], [90.0, 210.0, 90.0],
+                                  theta_deg=theta_deg, res_z=16)
+    S = z_flux(F)
+    above, below = S[:16], S[32:]
+    for name, band in (('above', above), ('below', below)):
+        assert np.ptp(band) / abs(np.mean(band)) < 1e-12, f'{tag} {name} spacer is not flat'
+
+    R = float(np.sum(np.asarray(res.res.R)))
+    T = float(np.sum(np.asarray(res.res.T)))
+    got = np.mean(below) / np.mean(above)
+    assert abs(got - T / (1 - R)) < 1e-12, f'{tag}: {got} vs {T / (1 - R)}'
+
+
+def test_a_z_coupled_cell_is_not_quietly_the_z_decoupled_one():
+    """The z row has to *do* something to the field, or none of the above is measuring it.
+
+    Dropping the four z-row slots is the failure mode the formulation guard exists for
+    (``docs/anisotropic-materials.md`` §6); it conserves energy to machine precision, so this
+    states the positive claim instead: the same stack with the z row zeroed reconstructs a
+    visibly different cell.
+    """
+    stack = [VAC, TILTED, VAC]
+    flat = [np.diag(np.diag(TILTED)) if e is TILTED else e for e in stack]
+    _, coupled, _, _ = z_coupled_cell(stack, [90.0, 210.0, 90.0], res_z=16)
+    _, decoupled, _, _ = z_coupled_cell(flat, [90.0, 210.0, 90.0], res_z=16)
+    gap = np.max(np.abs(coupled - decoupled)) / np.max(np.abs(coupled))
+    assert gap > 1e-2, gap
+
+
+# ------------------------------------------------------------------------- the sign convention
+
+@pytest.mark.parametrize('formulation', ['2ff', '4ff'])
+@pytest.mark.parametrize('psi_v,tag', [(np.pi / 2, 's'), (0.0, 'p')])
+def test_a_vacuum_slab_comes_back_as_the_incident_plane_wave(formulation, psi_v, tag):
+    """A layer of vacuum in vacuum: the field inside is the incident wave, exactly.
+
+    Which makes it the place to pin the shipped sign convention, because every entry is known
+    in closed form. Two facts come out of it and they do not sit together comfortably:
+
+    * the phase **advances** with the cell's ``z`` index, so the wave travels that way
+      (``e^{-iwt}``, ``exp(+i k0 kz z)``);
+    * the returned Poynting vector points **against** the index.
+
+    So the shipped cell carries ``E_z``, ``H_x`` and ``H_y`` with the opposite sign to the
+    right-handed frame in which the index is ``+z``. That is what the second-order path has
+    always returned and what the legacy field goldens froze, so the first-order path matches it
+    rather than correcting it — a caller who changes ``formulation`` must not get ``H`` back
+    reversed. Both paths are checked here so the claim is about the library, not about one of
+    them.
+    """
+    mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, fto=(0, 0), period=PERIOD,
+                       wavelength=WL, theta=0.0, phi=0.0, psi=psi_v,
+                       thickness=[WL], ucell=np.ones((1, 1, 1)))
+    mee.formulation = formulation
+    mee.conv_solve()
+    cell = np.asarray(mee.calculate_field(res_x=1, res_y=1, res_z=8))[0, :, 0, 0, :]
+
+    # s: E = +y, H = +x as shipped.  p: E = -x, H = +y.  In the state frame the H entries are
+    # negated and both are then `khat x E` with `khat` along the index, as they must be.
+    (e_idx, e_sign), (h_idx, h_sign) = (((1, 1.0), (3, 1.0)) if tag == 's'
+                                        else ((0, -1.0), (4, 1.0)))
+    assert abs(cell[0, e_idx] - e_sign) < 1e-12, cell[0]
+    assert abs(cell[0, h_idx] - h_sign) < 1e-12, cell[0]
+    quiet = [i for i in range(6) if i not in (e_idx, h_idx)]
+    assert np.max(np.abs(cell[:, quiet])) < 1e-12, cell[0]
+
+    # the phase advances with the index -- one full wavelength over a slab one wavelength thick,
+    # sampled inclusively, so slice j sits at j/7 of a period
+    for j in (1, 3, 5):
+        want = e_sign * np.exp(2j * np.pi * j / 7)
+        assert abs(cell[j, e_idx] - want) < 1e-12, (j, cell[j, e_idx], want)
+
+    # and the flux points the other way, in the frame where the index is +z
+    assert z_flux(state_frame(cell))[0] > 0
+    assert z_flux(cell)[0] < 0
+
+
+# --------------------------------------------------------------------------------- backends
+
+@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+def test_the_reconstruction_is_the_same_on_every_backend(backend):
+    """One implementation, so jax and torch reconstruct the same cell as numpy.
+
+    Both the twin route (a patterned layer forced onto ``'4ff'``) and the z-coupled route,
+    because they reach the reconstruction through different halves of the solver.
+    """
+    pytest.importorskip('jax' if backend == 1 else 'torch')
+    want = twin_cell('4ff', 'a patterned layer', 21.0, 'top')
+    got = twin_cell('4ff', 'a patterned layer', 21.0, 'top', backend=backend)
+    assert np.max(np.abs(want - got)) / np.max(np.abs(want)) < 1e-10
+
+    _, want_z, _, _ = z_coupled_cell([VAC, TILTED, VAC], [90.0, 210.0, 90.0], res_z=16)
+    _, got_z, _, _ = z_coupled_cell([VAC, TILTED, VAC], [90.0, 210.0, 90.0], res_z=16,
+                                    backend=backend)
+    assert np.max(np.abs(want_z - got_z)) / np.max(np.abs(want_z)) < 1e-10

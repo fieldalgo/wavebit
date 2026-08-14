@@ -324,19 +324,41 @@ def test_the_scattering_algorithm_still_works_without_a_z_row():
     assert np.isfinite(np.asarray(res.res.R)).all()
 
 
-def test_field_reconstruction_says_it_is_missing_rather_than_inventing_one():
-    """The one capability the first-order path does not have, refused where it is asked for.
+def test_field_reconstruction_is_dispatched_on_the_formulation_not_the_grating_type(monkeypatch):
+    """The branch ``calculate_field`` has to make, and the reason it cannot be the usual one.
 
-    The efficiencies and amplitudes are complete; only the in-cell field is absent. The
-    per-layer state the second-order solves leave behind for ``calculate_field`` has no
-    first-order counterpart written, and reconstructing from an empty list would produce a
-    plausible-looking cell of zeros.
+    The first-order path sets ``_grating_type_assigned = 2`` as well — a z row is a choice of
+    *layout* as much as of formulation — so a ``calculate_field`` that read only the grating
+    type would hand a 4ff solve to the 2ff ``field_2d``. That is not a crash but a wrong
+    answer: the two reconstructions read the same two state slots and one of them would
+    silently reconstruct with the ``E_z`` line that assumes the z row is empty.
+
+    Asserted by watching which reconstruction actually runs, rather than by trusting the
+    numbers — ``tests/test_field_4ff.py`` is where the numbers are checked.
     """
+    import wavebit.on_numpy.emsolver.rcwa as rcwa_numpy
+
     mee = solver(thickness=[180.0])
     mee.solve_for_conv(WL, *uniform_slots([VOIGT], 1))
     assert mee.formulation_assigned == '4ff'
-    with pytest.raises(NotImplementedError, match='field reconstruction'):
-        mee.calculate_field(res_x=4, res_y=4, res_z=4)
+    assert mee.grating_type_assigned == 2, 'the premise: the grating type cannot tell them apart'
+
+    seen = []
+
+    def spy(name):
+        real = getattr(rcwa_numpy, name)
+
+        def wrapper(*args, **kwargs):
+            seen.append(name)
+            return real(*args, **kwargs)
+        monkeypatch.setattr(rcwa_numpy, name, wrapper)
+
+    spy('field_2d')
+    spy('field_2d_4ff')
+
+    cell = mee.calculate_field(res_x=4, res_y=4, res_z=4)
+    assert seen == ['field_2d_4ff'], seen
+    assert np.isfinite(np.asarray(cell)).all()
 
 
 def test_field_reconstruction_still_works_on_the_second_order_path():

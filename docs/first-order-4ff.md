@@ -5,6 +5,7 @@ Written: 2026-08-11. Measured on an Apple M4, NumPy 2.5.1 against Accelerate, fl
 Targets:
 - `wavebit/_core/solve_2d_4ff.py` — the whole path, `::solve_2d_4ff` its public entry
 - `tests/test_solve_2d_4ff.py`, `tests/references/test_4ff_external_goldens.py` — every number here
+- `wavebit/_core/fields.py::field_2d_4ff`, `tests/test_field_4ff.py` — the in-cell field (§4b)
 - `tests/test_anisotropic_berreman.py` — the Berreman oracle it is judged against
 - `tests/test_formulation_dispatch.py` — which of the two formulations a call takes, and why
 
@@ -79,6 +80,7 @@ exercising `ky != 0`; five mutations that are the identity at `ky = 0` die there
 | any order count | a uniform layer cannot diffract, so 9 and 25 orders must reproduce 1 order — they do, to 1e-14 |
 | **isotropic gratings** | fed the 2ff path's own convolution matrices, reproduces it to **3e-14** at up to 49 orders, normal and conical |
 | lossless ⇒ `R + T = 1` | every Hermitian case, to 1e-10 |
+| **the in-cell field** | the 2ff twin to 1e-11 per component; Maxwell + continuity + flux where there is no twin (below) |
 
 The grating row is the one that exercises **order coupling**: those convolution matrices are full,
 not scaled identities, so orders genuinely mix. It works because an isotropic grating needs no new
@@ -107,21 +109,49 @@ is not a trade worth taking.
 Worth stating plainly either way, because "4ff solves z-coupling" and "4ff solves magneto-optic
 gratings" are still not the same claim.
 
-**Field reconstruction**, which is the other absence a user meets. The efficiencies and
-amplitudes are complete; only the in-cell field is missing, and `_require_field_state` refuses
-rather than reconstructing from the `None` this path leaves behind. That guard is load-bearing:
-`calculate_field` branches on the *grating type*, which this path also sets to 2, so without it
-a 4ff solve would be reconstructed by the 2ff `field_2d` and come back plausible and wrong.
-
-The design is scoped in `solve_2d_4ff.py`'s "What is not here", including the one formula that
-cannot be carried over — with a populated z row, `E_z` keeps two more terms than the 2ff line
-does — and the oracle, which is internal and exact: forcing `formulation='4ff'` on an empty-z-row
-problem makes the two paths solve the same problem, and they already agree on efficiencies to
-1e-14.
-
 **`mu`.** Permeability landed on the 2ff path on 2026-08-14
 ([`magnetic-materials.md`](magnetic-materials.md)) and this one refuses it rather than dropping
 it.
+
+## 4b. Field reconstruction, and the three checks that replace the twin (2026-08-14)
+
+The in-cell field landed on this path on 2026-08-14 (`wavebit/_core/fields.py::field_2d_4ff`,
+`tests/test_field_4ff.py`). It is the same validation question this document is about, one
+level down, so it belongs here rather than in a changelog.
+
+**Where a twin exists it is the whole answer.** Forcing `formulation='4ff'` on an empty-z-row
+problem makes the two paths solve the same problem by different algebra, so the reconstructed
+cells must agree entry for entry — measured to 1e-11 *per component*, over four geometries,
+three angles, both incidence sides and all three incidence variants. Per component matters:
+`E_z` runs two orders below `H_y` at these incidences, so a wholly wrong `E_z` scored against
+the cell's largest entry comes back at 1e-2 and reads like a tolerance question.
+
+**Where none exists — the z-coupled geometry the path is for — three checks divide the work,
+and the division is the point.** Any two of them accept something wrong:
+
+| check | catches | blind to |
+|---|---|---|
+| Maxwell, by central differences down a layer | a wrong term anywhere, `E_z`'s two extra ones included | any constant factor (it is homogeneous) |
+| transverse continuity at an interface, exact | a mis-referenced propagator face | the same constant factor |
+| `z` flux between lossless spacers vs `T / (1 - R)` | exactly that constant — i.e. a mis-normalised `T1` | shape |
+
+The Maxwell check asserts its **rate**, not just its size. The field is analytic inside a
+layer, so halving the step must quarter the residual; measured 4.03–4.13 per doubling. A
+residual that is merely small without converging is a different object from one that is
+discretisation error, and only the rate tells them apart. The continuity check is exact rather
+than asymptotic because the sampling lands on the interface: `linspace(0, res_z, res_z)` is
+inclusive, so a layer's last slice *is* its bottom face.
+
+**The sign convention, which the vacuum slab settled.** A layer of vacuum in vacuum returns the
+incident plane wave exactly, so every entry is known in closed form — and two of the facts it
+gives do not sit together. The phase advances *with* the cell's `z` index, so the wave travels
+that way; the returned Poynting vector points *against* it. The shipped cell therefore carries
+`E_z`, `H_x` and `H_y` with the opposite sign to the right-handed frame in which the index is
+`+z`. That is what the second-order path has always returned and what the legacy field goldens
+froze. The first-order state vector is written in the other frame — `Im(lam_f) >= 0` means "does
+not grow" only with `+z` along propagation — so `field_2d_4ff` applies that `z` parity on
+output and matches, rather than correcting a convention out from under every existing consumer.
+Both paths are pinned to it by the same test.
 
 ## 5. Two things that were not obvious
 

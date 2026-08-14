@@ -15,9 +15,12 @@ Inputs are the ``layer_info_list`` and ``T1`` the solve leaves behind — see
 :mod:`wavebit._core.solve_1d`. Layers arrive bottom-to-top and are walked in reverse, so the
 returned cell runs top-to-bottom in z.
 
-The three entry points mirror the three solve paths: :func:`field_1d` (pure TE/TM, 3 field
-components), :func:`field_1d_conical` and :func:`field_2d` (coupled s/p, 6 components, with a
-leading axis selecting the incidence variants requested via ``set_field_input``).
+The entry points mirror the solve paths: :func:`field_1d` (pure TE/TM, 3 field components),
+:func:`field_1d_conical` and :func:`field_2d` (coupled s/p, 6 components, with a leading axis
+selecting the incidence variants requested via ``set_field_input``), and
+:func:`field_2d_4ff` for the first-order path, which carries a different per-layer state and a
+different ``E_z``. ``calculate_field`` picks between the last two on the *formulation*, not on
+the grating type — the first-order path sets that to 2 as well.
 """
 from .backend import array_namespace
 
@@ -221,6 +224,100 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, res_x, res_y
         cells.append(xp.moveaxis(val, 1, 0))
 
         T_layer = big_A_i @ big_X @ T_layer
+
+    return xp.concat(cells, axis=1)
+
+
+def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, period,
+                 res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False),
+                 lattice=None):
+    """Field of a stack solved on the first-order (4ff) path. Same shape as :func:`field_2d`.
+
+    The transverse half is *simpler* than the second-order reconstruction, not harder. There
+    the layer's state has to be reassembled from ``W`` (the transverse ``E``) and ``V`` (its
+    partner) with a sign per direction; here the eigenvector **is** the state — reading
+    ``(Ex, Ey, Hx, Hy)`` off the four row blocks of ``psi`` is the whole of it. The two
+    directions are separate mode sets rather than one set with a sign, so each is propagated
+    from its own reference face: forward amplitudes are carried at the layer's top, backward
+    ones at its bottom, which is the same split that makes the stack solve stable
+    (:func:`wavebit._core.solve_2d_4ff._propagate_s`).
+
+    ``E_z`` is the one component that cannot be carried over. Eliminating it from the curl
+    equations with a **populated** permittivity ``z`` row keeps two terms the second-order form
+    never has::
+
+        Ez = ezz^-1 [ (Ky Hx - Kx Hy) - ezx Ex - ezy Ey ]
+
+    :func:`_field_coupled`'s ``Sz = 1j * epz_conv_i @ (Kx @ Uy - Ky @ Ux)`` is that expression
+    at ``ezx = ezy = 0`` — the same line with ``U = i H`` substituted — so the 2ff spelling is a
+    special case of this one, not a shared one. ``H_z = Kx Ey - Ky Ex`` is unchanged while
+    ``mu = 1``, which is all this path admits.
+
+    The returned components are ``(Ex, Ey, Ez, Hx, Hy, Hz)``, matching :func:`field_2d` — and
+    matching it includes **the sign convention it ships, which is not the one this module's
+    state vector is written in**. Measured on a vacuum "slab", where the answer is known
+    exactly: :func:`field_2d` returns ``Ey = +1``, ``Hx = +1`` for a downward s-polarised unit
+    plane wave, whose Poynting vector then points *against* the direction the cell's ``z``
+    index runs, while the phase advances *with* it. The first-order state vector carries the
+    other one — ``Hx = -1``, energy along ``+z`` — because :mod:`wavebit._core.solve_2d_4ff`
+    derives everything with ``+z`` along the propagation direction, which is what makes
+    ``Im(lam_f) >= 0`` mean "does not grow".
+
+    The two differ by the ``z`` parity ``E_z, H_x, H_y -> -E_z, -H_x, -H_y`` (``E_t`` and
+    ``H_z`` are fixed by it, which is exactly the pattern measured), so the conversion is three
+    signs at the output and nothing deeper. It is applied here rather than argued about because
+    a caller who flips ``formulation`` must not get a field back with ``H`` reversed; the 2ff
+    spelling is what the legacy goldens froze and what every existing consumer reads.
+    """
+    _require_solved(T1, layer_info_list)
+    xp = array_namespace(T1)
+    C = T1.dtype
+    k0 = 2 * 3.141592653589793 / wavelength
+    if kx.ndim == 2:
+        ff_y, ff_x = kx.shape
+    else:
+        ff_x, ff_y = kx.shape[0], ky.shape[0]
+    ff = ff_x * ff_y
+
+    from .solve_2d import order_grid_kxy
+    kx_g, ky_g = order_grid_kxy(xp, kx, ky)
+    Kx, Ky = xp.diag(xp.reshape(kx_g, (-1,))), xp.diag(xp.reshape(ky_g, (-1,)))
+
+    dev = _dev(T1)
+    keep = [i for i, on in enumerate(set_field_input) if on]
+    T_layer = xp.take(T1, xp.asarray(keep, device=dev), axis=0)
+
+    cells = []
+    for eps, psi_f, lam_f, psi_b, lam_b, d, P_i, QP_i in layer_info_list[::-1]:
+        # The layer's unknown is its forward amplitude at its own top face -- that is what the
+        # ETM redefinition `t' = X_f^-1 P t` bought. The backward half is referenced at the
+        # bottom face, so `QP_i @ X_f` is the map to it.
+        X_f = _diag_exp(xp, 1j * k0 * lam_f * d, 2 * ff)
+        a_f = T_layer
+        a_b = (QP_i @ X_f) @ T_layer
+
+        z = xp.reshape(xp.linspace(0, res_z, res_z, dtype=C, device=dev), (-1,)) / res_z * d
+        fwd = _diag_exp(xp, 1j * k0 * xp.reshape(lam_f, (1, 2 * ff))
+                        * xp.reshape(z, (res_z, 1)), 2 * ff)
+        bwd = _diag_exp(xp, 1j * k0 * xp.reshape(lam_b, (1, 2 * ff))
+                        * xp.reshape(z - d, (res_z, 1)), 2 * ff)
+        psi = psi_f @ (fwd[:, None] @ a_f) + psi_b @ (bwd[:, None] @ a_b)
+
+        Ex, Ey = psi[:, :, :ff], psi[:, :, ff:2 * ff]
+        Hx, Hy = psi[:, :, 2 * ff:3 * ff], psi[:, :, 3 * ff:]
+        Ez = eps['ezz_i'] @ (Ky @ Hx - Kx @ Hy - eps['ezx'] @ Ex - eps['ezy'] @ Ey)
+        Hz = Kx @ Ey - Ky @ Ex
+
+        inv_f = _inv_fourier(xp, kx, ky, period, res_x, res_y, k0, C,
+                             lattice)[:, :, None, :]
+        # The three signs are the z parity that carries this module's frame into the one
+        # `field_2d` ships -- see the note above; `E_t` and `H_z` are fixed by it.
+        comps = [inv_f @ M[:, :, None, None, :, :]
+                 for M in (Ex, Ey, -Ez, -Hx, -Hy, Hz)]
+        val = xp.concat([c[..., 0] for c in comps], axis=-1)
+        cells.append(xp.moveaxis(val, 1, 0))
+
+        T_layer = (P_i @ X_f) @ T_layer
 
     return xp.concat(cells, axis=1)
 

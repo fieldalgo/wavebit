@@ -170,8 +170,9 @@ genuinely different mode sets. `wavebit/_core/solve_2d_4ff.py` implements it, an
 2026-08-13 the public entry does reach it: `solve_for_conv` takes nine slots rather than five,
 and giving any of the four z-row slots selects the first-order path (`formulation='4ff'` forces
 it, `'2ff'` refuses a z row rather than dropping it). What crossing the edge still costs, beyond
-the 8x, is field reconstruction and `connecting_algo='SMM'`; the module's docstring keeps that
-list.
+the 8x, is `mu` and `connecting_algo='SMM'`; the module's docstring keeps that list. Field
+reconstruction was on it until 2026-08-14 and is not any more —
+`calculate_field` reads the formulation, since the grating type cannot tell the two paths apart.
 
 Because no outside solver covers the general z-coupled case, the 4ff path is judged partly by a
 theorem rather than by an oracle: turning the tensor and the incidence azimuth together about the

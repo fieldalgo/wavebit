@@ -348,7 +348,9 @@ point where it is accurate — which on a 220 nm layer means from 25 Fourier ord
 diffraction orders above the light line are strongly evanescent whatever the thickness. That is
 the historical reason RCWA needed the enhanced form, not a preference between two recursions.
 The block layout is checked at 9 and 25 orders; what is still missing is order *coupling*, which
-needs the patterned factorization of §3, and field reconstruction.
+needs the patterned factorization of §3. Field reconstruction landed 2026-08-14
+(`docs/first-order-4ff.md` §4b) — its `E_z` is the one formula the 2ff path could not lend,
+because a populated z row leaves two more terms in the elimination.
 
 Two findings from building it, both invisible until the case existed. The `±` pairing above does
 not merely become unnecessary in 4ff — it becomes *false*: at normal incidence the backward set

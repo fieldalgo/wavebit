@@ -105,6 +105,7 @@ users to debug their own input.
 The `z_coupled` entry is the one to watch, and it has already turned over once: it used to
 describe work that existed but was not reachable — the 4ff operator written and pinned with
 nothing dispatching to it. It now reads `supported: true`, and its `why` carries the two limits
-that ride with it (`connecting_algo` must be `ETM`, no field reconstruction). That is the shape
+that ride with it (`connecting_algo` must be `ETM`, no `mu`) — and it has already been edited
+once more since, when field reconstruction landed and stopped being one of them. That is the shape
 these entries are meant to take: a `true` with its edges named, rather than a `false` that
 quietly becomes stale the day the capability lands.

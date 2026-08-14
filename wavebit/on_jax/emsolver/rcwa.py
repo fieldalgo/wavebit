@@ -8,7 +8,7 @@ from functools import partial
 from ._base import _BaseRCWA, jax_device_set
 from ..._core.engine import CoreFactorizationMixin
 from ..._core.enums import Formulation
-from ..._core.fields import field_1d, field_1d_conical, field_2d, field_plot
+from ..._core.fields import field_1d, field_1d_conical, field_2d, field_2d_4ff, field_plot
 from ..._core.result import Result, ResultSub
 from ..._core.modeler import Modeling
 
@@ -243,7 +243,6 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         already concrete by the time it runs. It reads ``self.T1`` / ``self.layer_info_list``,
         so whichever geometry the preceding solve used is the one in force here.
         """
-        self._require_field_state()
         kx, ky = self._kxy_2d(self.wavelength)
 
         if self._grating_type_assigned == 0:
@@ -254,6 +253,14 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
             field_cell = field_1d_conical(self.wavelength, kx, ky, self.T1, self.layer_info_list, self.period,
                                                res_x=res_x, res_y=res_y, res_z=res_z,  set_field_input=set_field_input,
                                                lattice=self.lattice)
+        elif self._formulation_assigned == Formulation.FIRST:
+            # The grating type cannot answer this: the first-order path sets it to 2 as well,
+            # so branching on it alone would hand a 4ff solve to the 2ff reconstruction, which
+            # reads the same state slots and returns a plausible, wrong cell. Static under jit
+            # for the same reason the side flip below is -- the formulation is settled eagerly.
+            field_cell = field_2d_4ff(self.wavelength, kx, ky, self.T1, self.layer_info_list, self.period,
+                                      res_x=res_x, res_y=res_y, res_z=res_z, set_field_input=set_field_input,
+                                      lattice=self.lattice)
         else:
             field_cell = field_2d(self.wavelength, kx, ky, self.T1, self.layer_info_list, self.period,
                                        res_x=res_x, res_y=res_y, res_z=res_z, set_field_input=set_field_input,

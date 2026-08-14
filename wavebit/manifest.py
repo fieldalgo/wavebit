@@ -184,9 +184,9 @@ MATERIALS = (
         'why': 'with eps_xz or eps_yz the second-order reduction fails, so the solve takes '
                'the first-order (4ff) formulation instead -- selected automatically by the '
                'presence of the four z-row slots, or by formulation=4ff, at about 8x. Two '
-               'limits ride with it: connecting_algo must be ETM, and there is no field '
-               'reconstruction (efficiencies and amplitudes are complete). Uniform layers '
-               'only, for the same reason as patterned_anisotropic.',
+               'limits ride with it: connecting_algo must be ETM, and mu is not implemented '
+               'there. Field reconstruction is (2026-08-14). Uniform layers only, for the '
+               'same reason as patterned_anisotropic.',
         'source': 'wavebit/_core/solve_2d_4ff.py',
     },
 )
