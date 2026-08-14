@@ -703,11 +703,16 @@ class CoreSolveMixin:
     def solve_2d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None,
                  epxz_conv_all=None, epyz_conv_all=None,
-                 epzx_conv_all=None, epzy_conv_all=None):
+                 epzx_conv_all=None, epzy_conv_all=None, mu=None):
         kx, ky = self._kxy_2d(wavelength)
         z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
         self._formulation_assigned = self._formulation_for(z_row)
         if self._formulation_assigned == Formulation.FIRST:
+            if mu is not None and any(s is not None for s in mu):
+                raise NotImplementedError(
+                    'a permeability was given with a z-coupled permittivity, which routes to '
+                    'the first-order (4ff) solve, and mu is not implemented there. Drop the '
+                    'z row to stay on the 2ff path, which does take mu.')
             return self._finish(_solve_2d_4ff(
                 wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self._incidence_pair(),
                 self.thickness, epx_conv_all, epy_conv_all, epz_conv_i_all,
@@ -722,7 +727,7 @@ class CoreSolveMixin:
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
             incidence_side=self.incidence_side,
-            full=True))
+            full=True, mu=mu))
 
 
 # The rule each modeling path actually implements, for the two paths that implement exactly

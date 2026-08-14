@@ -528,11 +528,17 @@ def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
 def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
            epxy_conv_all=None, epyx_conv_all=None,
-           incidence_side='top', full=False):
+           incidence_side='top', full=False, mu=None):
     """Solve a 2D grating stack by scattering matrices — SMM twin of :func:`solve_2d`.
 
-    Same arguments and returns as :func:`smm_1d`; ``polarization`` is the complex amplitude
-    pair ``(a_s, a_p)``, resolved at the boundary as in the ETM twin.
+    Same arguments and returns as :func:`smm_1d`; ``incidence`` is the resolved complex
+    amplitude pair ``(a_s, a_p)``, as in the ETM twin. ``mu`` likewise: the five permeability
+    stacks, handed to the same :func:`~wavebit._core.solve_2d.layer_modes_2d`.
+
+    Carried here rather than refused because the connecting algorithm is a choice about how
+    layers are joined, not about what a layer is made of. A path that accepted ``mu`` under
+    ``'ETM'`` and dropped it under ``'SMM'`` would return a plausible non-magnetic answer for a
+    magnetic stack, and the two algorithms agreeing is one of the things the suite checks.
     """
     backside = _is_backside(incidence_side)
     xp, C, kx, ky = _prepare(epx_conv_all, kx, ky)
@@ -543,6 +549,7 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     I = xp.astype(xp.eye(ff_xy), C)
     O = xp.astype(xp.zeros((ff_xy, ff_xy)), C)
     varphi = xp.reshape(xp.atan(ky_g / kx_g), (-1,))
+    mu_all = (None,) * 5 if mu is None else tuple(mu)
 
     Kx = _diag(xp, xp.reshape(kx_g, (-1,)))
     Ky = _diag(xp, xp.reshape(ky_g, (-1,)))
@@ -552,9 +559,13 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     def layer_modes(layer_index):
         epxy_conv = O if epxy_conv_all is None else epxy_conv_all[layer_index]
         epyx_conv = O if epyx_conv_all is None else epyx_conv_all[layer_index]
+        layer_mu = None if all(t is None for t in mu_all) else (
+            I if mu_all[0] is None else mu_all[0][layer_index],
+            I if mu_all[1] is None else mu_all[1][layer_index],
+            *(None if t is None else t[layer_index] for t in mu_all[2:]))
         W, V, q = layer_modes_2d(xp, Kx, Ky, I, epx_conv_all[layer_index],
                                  epy_conv_all[layer_index], epz_conv_i_all[layer_index],
-                                 epxy_conv, epyx_conv, C)
+                                 epxy_conv, epyx_conv, C, mu=layer_mu)
         big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, ff_xy)
         return big_W, big_V, q, W, V
 

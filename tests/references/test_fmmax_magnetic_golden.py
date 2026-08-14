@@ -1,31 +1,35 @@
-"""Magnetic (``mu != 1``) slabs against fmmax — a golden laid down before its consumer exists.
+"""Magnetic (``mu != 1``) slabs against fmmax — the golden that was frozen before its consumer.
 
-Permeability has no slot anywhere in this solver: ``layer_modes_2d`` writes ``I`` where a
-``mu_conv`` would go, and ``boundary_kz`` takes one material argument
-(``docs/anisotropic-materials.md`` §5). So none of the magnetic rows in
-``golden_fmmax_magnetic.npz`` can be compared against anything here yet.
+Permeability landed on the 2D path on 2026-08-14 (``layer_modes_2d``, ``solve_2d``,
+``smm_2d``), and **this file is why that landing can be believed**. The magnetic rows here were
+generated while the solver had nowhere to put a ``mu`` at all, deliberately: an oracle chosen
+after the work is an oracle chosen to agree. Nothing in the implementation could be fitted to
+them, because they existed first and were not readable as a target — the derivation was settled
+against Maxwell and against the shipped ``mu = 1`` operator, and only then run against these.
 
-Freezing them anyway is the point. **An oracle chosen after the work is an oracle chosen to
-agree** — if the mu rows were generated once ``mu`` support existed, every convention question
-they might have caught would already have been settled by whoever wrote the support, in
-whatever way made their code pass. Recorded first, they are evidence; recorded after, they are
-a mirror.
+It caught a real error on the first run, which is the point of the arrangement. A scalar ``mu``
+came out exact at both normal and oblique incidence while a *uniaxial* one was wrong by 1e-2 in
+s only, and a gyromagnetic one broke energy conservation outright (``R + T = 1.035``). The cause
+was ``Omega2_LR``'s hand-expanded form: its four bare ``K @ K`` terms are not geometry that
+passed through untouched, they are what other terms collapse to when the K factors commute past
+a ``muz_i`` of one. See :func:`~wavebit._core.solve_2d.layer_modes_2d`.
 
-What keeps that from being a leap of faith is the ``__mu1`` half. Every case is generated twice,
-once with its permeability and once with ``mu = 1``, and the ``mu = 1`` rows **are** held to the
-solver below. If the harness, the units, the incidence convention or the flux normalisation
-were wrong, that subset would fail today, while the answer is independently knowable. It is the
-same convention gate the other three oracles passed, applied to the half of an oracle that can
-still be gated.
+What the file holds, and what each half is for:
 
-Two things this does not pin, and should not be read as pinning:
+* the ``__mu1`` rows — every case is generated twice, once with its permeability and once with
+  ``mu = 1``. These were the convention gate while the magnetic half was unreachable, and they
+  keep that job: they are what says the harness, units, incidence convention and flux
+  normalisation are right, independently of anything ``mu`` does. They are also now a
+  **regression gate on the non-magnetic path**, which must be untouched.
+* the magnetic rows — held to the solver directly. Their own guard is still physical rather
+  than comparative: every case is Hermitian in both tensors, hence lossless, so ``R + T = 1``
+  is enforced on the frozen numbers as well as on ours.
 
-* The magnetic rows are *unverified against anything but fmmax itself*. Their guard is
-  physical, not comparative: every one is Hermitian in both tensors, hence lossless, so
-  ``R + T = 1`` is enforced on the frozen numbers.
-* ``eigensolve_general_anisotropic_media`` takes five ``mu`` components with no z row, so this
-  is the same 2ff tensor class extended to ``mu``. A magnetic Voigt geometry is as far out of
-  fmmax's reach as ours.
+Scope. ``eigensolve_general_anisotropic_media`` takes five ``mu`` components with no z row, so
+this is the same 2ff tensor class extended to ``mu``; a magnetic Voigt geometry is as far out of
+fmmax's reach as ours. And both half-spaces are **vacuum** in every case, which is what lets
+these rows validate the layer operator alone — a magnetic ``n_top`` / ``n_bot`` needs the
+boundary admittance, which nothing here checks and which is not implemented.
 """
 import pathlib
 import sys
@@ -42,16 +46,29 @@ from gen_goldens_fmmax_magnetic import CASES, WL, PERIOD, THICK, ONE     # noqa:
 GOLDEN_PATH = HERE / 'golden_fmmax_magnetic.npz'
 
 
-def solve(eps, theta_deg):
-    """``[R_s, T_s, R_p, T_p]``. Only ``eps`` — there is nowhere to put ``mu``."""
-    I = np.eye(1, dtype=np.complex128)
-    e = np.asarray(eps, dtype=complex)
+I1 = np.eye(1, dtype=np.complex128)
+
+
+def _slots(tensor):
+    """A uniform tensor as the five stacks, in the solver's slot convention.
+
+    Diagonal entries as they are, ``zz`` inverted, off-diagonals negated — identical for ``eps``
+    and ``mu``, which is the whole design: ``mu`` is not a second kind of input, it is the same
+    five slots on the dual side.
+    """
+    t = np.asarray(tensor, dtype=complex)
+    return [np.stack([t[0, 0] * I1]), np.stack([t[1, 1] * I1]),
+            np.stack([np.linalg.inv(t[2, 2] * I1)]),
+            np.stack([-t[0, 1] * I1]), np.stack([-t[1, 0] * I1])]
+
+
+def solve(eps, theta_deg, mu=None, algo='ETM'):
+    """``[R_s, T_s, R_p, T_p]`` for one uniform slab between vacuum."""
     mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=np.deg2rad(theta_deg),
                          phi=0.0, psi=0.0, fto=(0, 0), period=(PERIOD, PERIOD),
-                         wavelength=WL, thickness=[THICK])
-    res = mee.solve_for_conv(WL, np.stack([e[0, 0] * I]), np.stack([e[1, 1] * I]),
-                             np.stack([np.linalg.inv(e[2, 2] * I)]),
-                             np.stack([-e[0, 1] * I]), np.stack([-e[1, 0] * I]))
+                         wavelength=WL, thickness=[THICK], connecting_algo=algo)
+    res = mee.solve_for_conv(WL, *_slots(eps),
+                             mu=None if mu is None else tuple(_slots(mu)))
     te, tm = res.res_te_inc, res.res_tm_inc
     return np.array([float(te.R.sum()), float(te.T.sum()),
                      float(tm.R.sum()), float(tm.T.sum())])
@@ -67,17 +84,54 @@ def golden():
 
 @pytest.mark.parametrize('name', list(CASES), ids=list(CASES))
 def test_the_mu1_half_matches(golden, name):
-    """The convention gate. These rows have ``mu = 1``, so the solver can be held to them."""
+    """The convention gate, and now also the non-magnetic regression gate.
+
+    Passing ``mu=None`` has to leave the old arithmetic alone — not merely close to it. These
+    rows say so against numbers that predate the ``mu`` work entirely.
+    """
     eps, _, theta_deg = CASES[name]
     gap = np.abs(solve(eps, theta_deg) - golden[name + '__mu1']).max()
     assert gap < 1e-12, f'{name}__mu1: {gap:.2e} from fmmax'
 
 
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+@pytest.mark.parametrize('name', list(CASES), ids=list(CASES))
+def test_the_magnetic_rows_match(golden, name, algo):
+    """The half that had no consumer until now.
+
+    Run under **both** connecting algorithms. The connecting algorithm is a choice about how
+    layers are joined, not about what a layer is made of, so one accepting ``mu`` while the
+    other quietly ignored it would return a plausible non-magnetic answer for a magnetic stack
+    — and ``smm_2d`` reaches ``layer_modes_2d`` by its own route, so nothing but this makes the
+    two agree.
+    """
+    eps, mu, theta_deg = CASES[name]
+    gap = np.abs(solve(eps, theta_deg, mu=mu, algo=algo) - golden[name]).max()
+    assert gap < 1e-12, f'{name} [{algo}]: {gap:.2e} from fmmax'
+
+
+@pytest.mark.parametrize('name', list(CASES), ids=list(CASES))
+def test_a_magnetic_layer_is_not_silently_solved_as_a_non_magnetic_one(golden, name):
+    """The failure this file exists to prevent, stated as its own assertion.
+
+    Dropping ``mu`` on the floor produces a finite, energy-conserving, entirely plausible
+    number. Only a comparison against what the answer *should not* be catches it, so the
+    magnetic result must differ from the ``mu = 1`` result by more than the tolerance above —
+    except for the one case whose permeability is genuinely unity.
+    """
+    eps, mu, theta_deg = CASES[name]
+    if np.abs(np.asarray(mu, dtype=complex) - ONE).max() <= 1e-12:
+        pytest.skip('this case has mu = 1 by construction; see the twin test below')
+    moved = np.abs(solve(eps, theta_deg, mu=mu) - solve(eps, theta_deg)).max()
+    assert moved > 1e-9, f'{name}: mu changed the answer by only {moved:.2e}'
+
+
 def test_the_magnetic_rows_conserve_energy(golden):
-    """Guards the frozen magnetic rows, which nothing else can check yet.
+    """Guards the frozen magnetic rows themselves, independently of the solver.
 
     Every case is Hermitian in both tensors and therefore lossless, so this is a real
-    constraint rather than a restatement.
+    constraint rather than a restatement. Kept now that the rows have a consumer: it is what
+    would tell a future regeneration apart from a corruption.
     """
     def hermitian(a):
         a = np.asarray(a, dtype=complex)

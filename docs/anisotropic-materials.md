@@ -23,7 +23,8 @@ Targets:
 | `eps_xz` / `eps_yz` (z-coupling), uniform | **works today** | done — a different solver, [`first-order-4ff.md`](first-order-4ff.md), dispatched to automatically at ~8x |
 | patterned anisotropic layer, in-plane tensor | **works today** | done — Popov–Nevière, [`patterned-anisotropic-factorization.md`](patterned-anisotropic-factorization.md); both solvers unchanged, as scoped |
 | patterned **and** z-coupled | not supported | the 3×3 closing step — and no oracle exists for it |
-| `mu != 1` | not supported | layer operator **and** the half-space boundary |
+| `mu != 1`, layers | **works today** | done — the E/H dual of the five slots, [`magnetic-materials.md`](magnetic-materials.md) |
+| `mu != 1`, half-spaces | not supported | the boundary admittance; `conventions.py`, and no golden reaches it |
 
 Nothing on this list is impossible. Exactly one of them changed the *shape* of the code rather
 than its content — the z-coupling row, which is why it needed a second solver and got one. The
@@ -211,31 +212,45 @@ Two things to watch:
   paths have no off-diagonal slots to fill. A z row does this for itself (§8); the in-plane pair
   does not, which is the asymmetry to remember.
 
-## 5. Magnetic materials: `mu` has no slot anywhere
+## 5. Magnetic materials: `mu` on the layers, not yet on the half-spaces
 
-There is no permeability in `develop` at all. The old `meent` code at least carried a dead
-`P_Q_kz(..., mu_conv)` in the scattering utilities; the rewrite dropped even that.
+**Layers: done, 2026-08-14.** `layer_modes_2d` takes an optional `mu` — the same five slots as
+the permittivity, in the same convention — and `solve_2d` / `smm_2d` carry it per layer.
+[`magnetic-materials.md`](magnetic-materials.md) has the derivation and what checks it.
 
-Where it would have to go:
+This section used to point at the two `- I` terms in
 
 ```python
 B = Kx @ epz_conv_i @ Kx - I        #  <- this I is mu_conv
 D = Ky @ epz_conv_i @ Ky - I        #  <- and this one
 ```
 
-Structurally this is benign — `mu` enters as the `E`/`H` dual of `eps`, and a magnetic layer needs
-the same five-slot treatment on the `mu` side. What makes it more than a one-line edit is that the
-**half-spaces** are isotropic and non-magnetic by construction too:
+which is right about the location and wrong about the content in three ways, all of which the
+implementation had to correct:
+
+* the pairing is **crossed** — `B` takes `mu_yy` and `D` takes `mu_xx`. Following the sketch
+  would have been exactly right for an isotropic `mu` and silently transposed a uniaxial one.
+* two more slots exist. `Cc` and `E` take the off-diagonal `mu`, and `mu_zz` enters `Omega_R`
+  between the `K` factors, mirroring where `epz_conv_i` sits in `Omega_L`.
+* `Omega2_LR`'s hand-expanded form **cannot be reused**. Its four bare `K @ K` terms look like
+  geometry that survived the multiplication, and are really what two other terms collapse to
+  when the `K` factors commute past a `muz_i` of one. Reusing it conserved energy for scalar
+  `mu` and broke it outright for gyromagnetic `mu` (`R + T = 1.035`).
+
+**Half-spaces: still not supported**, and this is the part the original warning was about. They
+are isotropic and non-magnetic by construction:
 
 ```python
 kz_top = boundary_kz(xp, n_top ** 2, k_par_sq)          # takes eps alone
 big_F  = _block(xp, [[I, O], [O, -1j * Kz_bot / eps_bot]])   # p-channel admittance
 ```
 
-`boundary_kz` has one material argument, and the `/ eps_bot` in `big_F` is exactly the admittance
-where `mu` belongs. So a magnetic substrate or superstrate means touching the boundary conventions
-— and `conventions.py` is the module that exists because a sign seam there once turned absorbing
-media into gain media. Change it with a golden in hand.
+`boundary_kz` has one material argument, and the `/ eps_bot` in `big_F` is exactly the
+admittance where `mu` belongs. So a magnetic substrate or superstrate means touching the
+boundary conventions — and `conventions.py` is the module that exists because a sign seam there
+once turned absorbing media into gain media. Change it with a golden in hand; the magnetic
+golden is not one, because every case in it sits between **vacuum**, which is what let it
+validate the layer operator on its own.
 
 ## 6. z-coupling: the one gap that changes the solver
 
