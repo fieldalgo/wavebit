@@ -13,9 +13,14 @@ stay identical is a copy that will not.
 
 Setup notes, all of them things that cost an afternoon once:
 
-* Points at a **version-pinned V10 tree**, given by ``RETICOLO_PATH``. RETICOLO is licensed
-  and not redistributable, so it is kept outside this repository beside its licence and
-  provenance notes rather than vendored in.
+* Points at a **version-pinned V10 tree**, given by ``RETICOLO_PATH``. RETICOLO is kept
+  outside this repository beside its licence and provenance notes rather than vendored in.
+  This used to say "not redistributable", which was an assumption rather than a finding: the
+  V10 Zenodo record is CC BY 4.0 and *does* permit redistribution with attribution, while the
+  package's own documentation says only "freeware" and the V8/V9 records declare nothing at
+  all. The three disagree; keeping the tree out is safe under all of them, and pinning by
+  path is what we wanted anyway. The full check is in ``README.md``, and the citation
+  RETICOLO's terms *do* require is there too.
 
   It used to point at a ``V9_pristine`` tree under an unrelated project directory, chosen
   because the modified ``V9`` beside it failed inside ``retb`` under Octave 9.4 with

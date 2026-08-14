@@ -169,8 +169,10 @@ Two implementation notes, if we ever compare against these codes order-for-order
   `1e-10*max(u², v²)`.
 
 Comparing against either code at equal harmonic count is therefore apples-to-oranges twice
-over. Match on maximum order, or on converged values. `tests/references/interface/GRCWA.py` already
-passes `Init_Setup(Gmethod=1)` — parallelogramic — so that benchmark is matched to ours.
+over. Match on maximum order, or on converged values. The GRCWA bridge this repository used to
+carry passed `Init_Setup(Gmethod=1)` — parallelogramic — so that benchmark was matched to ours;
+the bridge was deleted on 2026-08-15 as dead code, and anyone rebuilding one needs that argument
+again.
 
 ## Reproducing
 

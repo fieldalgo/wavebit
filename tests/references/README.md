@@ -115,8 +115,69 @@ Two things to weigh when reading agreement between them:
   polarisation. For anisotropy that is deliberate: S4 is silently wrong when polarisation decomposition
   and anisotropy are combined, so totals are the only sound comparison against it.
 
-The GRCWA and TORCWA bridges in `interface/` predate all of this and have no frozen case. Neither
-supports anisotropy.
+GRCWA and TORCWA bridges used to sit in `interface/`. They predated all of this, never had a
+frozen case, supported no anisotropy, and nothing referenced them — so they were the only
+top-level imports of a third-party solver in the tree while buying nothing. Deleted 2026-08-15,
+together with `reti_2d.m` / `reti_2D.py`: that pair was dead the same way, and the `.m` carried a
+`FractureGeom` helper of unrecorded provenance, which is not something to keep in a repository
+about to go out. `docs/fourier-truncation-shape.md` still discusses GRCWA's *algorithm*, which is
+unaffected — the code is what went.
+
+## Attribution, and what each oracle's terms require
+
+These solvers are not vendored — nothing in this repository contains their implementations,
+none of them is a dependency, and the committed goldens let the suite run without any of them
+installed. What *is* here is our own adapter code plus the numbers they produced. Their terms
+still ask for credit, and RETICOLO's ask is explicit.
+
+**RETICOLO.** Its documentation states: *"In publications and reports, acknowledgments have to
+be provided by referencing to"* —
+
+> J.P. Hugonin and P. Lalanne, *RETICOLO software for grating analysis*, Institut d'Optique,
+> Orsay, France (2005). [arXiv:2101.00901](https://arxiv.org/abs/2101.00901)
+
+and it names one further reference as **required when near-field distributions are shown**,
+which is what a field golden is:
+
+> P. Lalanne and M.P. Jurek, *Computation of the near-field pattern with the coupled-wave
+> method for TM polarization*, J. Mod. Opt. **45**, 1357–1374 (1998).
+
+Two more are asked for "fairly" rather than required, and both are already cited in
+`docs/` for the formulation itself: Moharam et al. (1995) for TE efficiencies, and Lalanne &
+Morris (1996) with Granet & Guizal (1996) for TM.
+
+**S4.**
+
+> V. Liu and S. Fan, *S4: A free electromagnetic solver for layered periodic structures*,
+> Comput. Phys. Commun. **183**, 2233–2244 (2012).
+> [doi:10.1016/j.cpc.2012.04.026](https://doi.org/10.1016/j.cpc.2012.04.026)
+
+**fmmax** (MIT licence).
+
+> M.F. Schubert and A.M. Hammond, *Fourier modal method for inverse design of
+> metasurface-enhanced micro-LEDs* (2023). [arXiv:2308.08573](https://arxiv.org/abs/2308.08573)
+
+### What RETICOLO's licence actually says, since the answer is not tidy
+
+Checked 2026-08-15, because this file previously asserted "not redistributable" without a
+source. The declarations do not agree with each other:
+
+| where | what it says |
+|---|---|
+| the V10 package's own documentation PDF | *"Reticolo is a **freeware** operating under Matlab"*, `copyright © 2005 Institut d'Optique/CNRS`. **No** redistribution clause either way |
+| [Zenodo, V10](https://zenodo.org/records/14631951) — the official download | **CC BY 4.0**, which *does* permit redistribution with attribution |
+| [Zenodo, V9](https://zenodo.org/records/5905381) and [V8](https://zenodo.org/record/3610175/export/json) | no licence declared; the `rights` field is empty |
+
+A GPL-2.0+ attribution circulates in search summaries. It is **not** in any record above, and
+the GitHub repository the Zenodo entries are named after (`Light-in-complex-nanostructures/RETICOLO`)
+returns 404, so it cannot be checked. It is not relied on here.
+
+**The policy does not change: RETICOLO stays outside this repository.** That is safe under
+every reading, and vendoring a 184-file MATLAB tree would buy nothing — version pinning is
+what `RETICOLO_PATH` is for. What changed is the *reason*: it is a deliberate choice, not a
+prohibition we had verified. If redistribution ever becomes useful, CC BY 4.0 on the V10
+record is the thing to re-read — noting that Creative Commons itself advises against applying
+CC licences to software.
 
 ## The `fwref` environment
 
@@ -142,11 +203,16 @@ Two consequences worth knowing before touching those generators:
 
 | Piece | Needs |
 | --- | --- |
-| `interface/` — bridges to RETICOLO, GRCWA and TORCWA | Octave or MATLAB, and the external solver |
+| `interface/` — the RETICOLO bridge (`Reticolo.py` + our `.m` wrappers) | Octave or MATLAB, and RETICOLO |
 | `gen_goldens_*.py` — freeze the reference numbers | the oracle; run by hand, rarely |
 | `golden_*.npz` — the frozen numbers, committed | nothing |
 | `test_*_golden.py` — the assertions | nothing; **run in CI everywhere** |
-| `reti_1D.py`, `reti_1Dc.py`, `reti_2D.py` — live side-by-side comparisons | Octave; exploratory, not asserted |
+| `reti_1D.py`, `reti_1Dc.py` — live side-by-side **field** comparisons | Octave; exploratory, not asserted |
+
+`reti_1D.py` / `reti_1Dc.py` are kept despite being unasserted: they are the only record of how a
+RETICOLO field cell lines up with ours, and the hand-applied `.conj()` in them is the one clue to
+that calibration. Whoever wires the field oracle starts there — and audits that `conj()` first,
+since an unaudited convention patch is exactly what hid the sign defect fixed in `9824f0d`.
 
 ## A golden frozen ahead of its consumer
 
