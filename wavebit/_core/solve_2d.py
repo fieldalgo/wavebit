@@ -124,6 +124,15 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     w, W = eig(Omega2_LR)
     q = mode_q(xp, xp.astype(w, C))
 
+    # Known limitation: at an exact Rayleigh point (an order on a layer's light line, q -> 0)
+    # this product loses the grazing mode's column — `Omega_R @ W` cancels to O(q^2) with
+    # O(eps) absolute round-off, so after `/ q` the column is O(q) with O(1) relative error,
+    # and the layer no longer represents any nearby problem. Measured: 5 of 48 exact-graze 2D
+    # solves came back quietly wrong (R+T 0.96-0.99 on a lossless stack, no warning), the rest
+    # warned or raised. The conical path had the same disease in a different spelling and was
+    # reformulated (see `layer_modes_1d_conical`); no equivalent identity is available here
+    # because W does not diagonalise `Omega_R` alone. Until it is fixed, the answer at an
+    # exact 2D graze is a one-ULP detune away — see `check_finite`'s message.
     V = (Omega_R @ W) / q
     return W, V, q
 

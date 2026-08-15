@@ -107,6 +107,27 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
     Returns ``(W1, W2, q1, q2, V_11, V_12, V_21, V_22)`` — the two decoupled mode families and
     the four blocks that couple them into the s/p system built by :func:`sp_modes_1d_conical`.
     Shared by the ETM and SMM connecting algorithms.
+
+    The ``V`` blocks are, on paper, functions of ``A**-1`` and ``B**-1`` — but neither inverse
+    is formed. On this path ``Ky2 == ky**2 * I`` (``ff_y == 1``), so ``W1`` diagonalises ``A``
+    itself with eigenvalues ``w1 - ky**2``, and ``W2`` does the same for ``B @ epx_conv``;
+    substituting those identities turns every block into an exact function of the computed
+    eigensystem, plus one inverse each of the well-conditioned ``W1`` / ``W2``.
+
+    Why that matters: when an order sits exactly on a layer's light line at ``ky == 0``
+    (``kx_m == n``, a Rayleigh point — D#81), ``A`` and ``B`` are numerically singular, and
+    ``inv(A)`` returns garbage of arbitrary size with nothing raised — measured answers ranged
+    from 0.18 to 626 against a true 0.22, some passing every guard. Built from the eigensystem
+    instead, the layer stays the exact mode set of a *nearby* problem (``eig`` is backward
+    stable, and the physics is continuous across the point), and the solve at the exact
+    Rayleigh point agrees with the one-ULP-detuned answer to 8 digits — the same stability
+    the pure TE/TM path (``V = W * q``, nothing singular inverted) always had. Away from any
+    degeneracy the two spellings agree to 8e-15 in efficiency over 40 random conical solves.
+
+    The one case still refused: an eigenvalue that comes out *exactly* zero (e.g. a uniform
+    layer whose FFT is noiseless, fto=3 on the D#81 stack). Then ``q/w`` is 0/0 and the NaN
+    reaches :func:`~wavebit._core.backend.check_finite`, whose message prescribes the one-ULP
+    detune — where the old spelling died in LAPACK with no advice.
     """
     A = Kx2 - epy_conv
     B = Kx @ epz_conv_i @ Kx - I
@@ -115,12 +136,17 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
     q1 = mode_q(xp, xp.astype(w1, C))
     q2 = mode_q(xp, xp.astype(w2, C))
 
-    A_i = xp.linalg.inv(A)
-    B_i = xp.linalg.inv(B)
-    V_11 = (A_i @ W1) * q1
-    V_12 = Ky @ A_i @ Kx @ W2
-    V_21 = Ky @ B_i @ Kx @ epz_conv_i @ W1
-    V_22 = (B_i @ W2) * q2
+    ky = Ky[0, 0]                    # Ky == ky * I on this path (single y order)
+    ky_sq = Ky2[0, 0]
+    wA = w1 - ky_sq                  # eigenvalues of A, by the shift identity
+    wB = w2 - ky_sq                  # eigenvalues of B @ epx_conv
+    W1_i = xp.linalg.inv(W1)
+    W2_i = xp.linalg.inv(W2)
+
+    V_11 = W1 * (q1 / wA)
+    V_12 = W1 @ ((ky / wA)[:, None] * (W1_i @ Kx @ W2))
+    V_21 = epx_conv @ (W2 * (ky / wB)) @ (W2_i @ Kx @ epz_conv_i @ W1)
+    V_22 = epx_conv @ W2 * (q2 / wB)
     return W1, W2, q1, q2, V_11, V_12, V_21, V_22
 
 

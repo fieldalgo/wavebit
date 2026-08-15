@@ -82,21 +82,18 @@ def check_finite(xp, **named):
     readable and the check is skipped — a traced solve that goes non-finite still returns
     quietly, which is a real remaining gap and not one this formulation can close.
 
-    **The remedy in the message is measured, and the two obvious suggestions are measured to
-    be wrong**, which is why they are not in it. On the case this fires for most often — an
-    order landing exactly on a light line, ``kx_m == n`` — against a true ``R = 0.215``:
-
-    ==========================  =========================================
-    raise ``fto``               3 raises, then 4/6/9/12 return 11.9, 2.9,
-                                29.0, 8.4 — quiet wrong answers instead
-    re-slice into thin layers   1/2/4/8/20 slices give 11.9, 3.6, 1.8,
-                                27.7, 110.2 — monotonically worse
-    detune by one ULP           0.2150, to eight digits
-    ==========================  =========================================
-
-    Both of the old suggestions move a knob that has nothing to do with the degeneracy: it is
-    fixed by ``kx`` against an index, so neither the truncation nor the layer thickness
-    touches it. Detuning moves ``kx`` itself, which is the only thing that does.
+    **The remedy in the message is measured, and the two suggestions it used to make are
+    not remedies**, which is why they are gone. On the case this fires for — an order landing
+    exactly on a light line, ``kx_m == n`` — the degeneracy is fixed by ``kx`` against an
+    index: neither the truncation nor the layer thickness touches it, so changing ``fto`` or
+    re-slicing only re-rolls the round-off. Measured before the conical path was reformulated
+    (see :func:`~wavebit._core.solve_1d.layer_modes_1d_conical`), those re-rolls returned
+    quiet wrong answers scattered from 0.18 to 626 against a true 0.215, re-slicing among
+    them (1/2/4/8/20 slices: 11.9, 3.6, 1.8, 27.7, 110.2); on the 2D path they still do
+    (see :func:`~wavebit._core.solve_2d.layer_modes_2d`). Detuning moves ``kx`` itself, which
+    is the only thing that does anything, and one ULP of wavelength, period or angle is
+    already enough — measured to agree with the exact-point answer of the reformulated paths
+    to eight digits.
     """
     bad = []
     for name, v in named.items():
@@ -114,9 +111,10 @@ def check_finite(xp, **named):
             'near-zero thickness.\n'
             'If it is a grazing order, move off the condition — one ULP of wavelength, '
             'period or angle is enough, and the answer either side of it agrees to eight '
-            'digits. Do NOT reach for fto or thinner slices first: measured on that case, '
-            'raising fto turns this exception into quiet wrong answers, and re-slicing makes '
-            'the error grow monotonically. Neither knob touches the degeneracy.')
+            'digits. Do NOT reach for fto or thinner slices instead: neither knob touches '
+            'the degeneracy (it is fixed by kx against an index), so at best they re-roll '
+            'the round-off — measured to return quiet wrong answers on the paths that have '
+            'not been reformulated against this. See layer_modes_1d_conical.')
 
 
 class UnphysicalResultWarning(UserWarning):

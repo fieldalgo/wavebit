@@ -1,31 +1,38 @@
-"""The guards fire wherever the values are concrete — not only on NumPy.
+"""The exact Rayleigh point solves correctly, and what still refuses does it loudly.
 
 ``tests/test_stability.py`` stresses the *evanescent* regime and does it well, but every case
 in it is 1D TE at normal incidence, one layer, NumPy, ``period=3000`` / ``wavelength=400``.
 That choice puts ``kx_m = 0.1333*m``, which never lands on ``n_top`` or ``n_bot``, so the file
-systematically avoids the singularity this one is about — and being NumPy-only it could not
-have seen the gap either way.
+systematically avoids the singularity this one is about.
 
 **The regime.** At a Rayleigh (grazing) condition a diffraction order has ``kz == 0`` in some
 medium: the order is exactly at the light line of that layer, neither propagating nor decaying.
-The layer's eigenproblem then has a degenerate zero eigenvalue and its mode matrix is singular,
-so the ``inv`` in the stack algebra is inverting a matrix that has no inverse.
+The layer's eigenproblem then has a zero eigenvalue, and the matrices ``A`` / ``B`` the conical
+path used to invert (D#81) are numerically singular — ``inv`` returned garbage of arbitrary
+size, finite, in range, and wrong by orders of magnitude, sometimes with nothing raised.
 
-Exactly on the condition that is loud — LAPACK raises, or the NaN reaches
-:func:`~wavebit._core.backend.check_finite`. The dangerous part is the *band around* it, where
-the matrix is merely near-singular: ``inv`` returns without complaint and the answer is finite,
-in range, and wrong by orders of magnitude. That is what these tests pin, because it is the
-regime a gradient-based optimizer walks into and sits in.
+That inversion is gone: :func:`~wavebit._core.solve_1d.layer_modes_1d_conical` now builds its
+``V`` blocks from the layer eigensystem itself, so the exact-Rayleigh solve is an ordinary
+solve (see its docstring for the identity and the measurements). What this file pins is the
+new contract, on **every** backend:
 
-The stack below puts the condition in an *interior* layer rather than at a half-space, which
-is why it needs two layers: a patterned pillar over a uniform ``n=1.5`` spacer. With
-``period=1000`` and ``wavelength=500``, ``kx_m = 0.5*m``, so order ``m=3`` sits at
-``kx = 1.5 = n_spacer`` exactly.
+* the solve at the exact point equals the one-ULP-detuned solve — the physics is continuous
+  across the condition, the singularity was in the coordinates, not the structure;
+* the lossless stack conserves energy there, with no warning;
+* the one case still refused — an eigenvalue that is *exactly* zero, fto=3 below, where the
+  0/0 has no consistent nearby problem to stand on — refuses loudly, never quietly.
 
-What this file did not used to be able to say: on JAX and PyTorch the same solve returned
-``R = 2.47`` and ``R = 243.9`` against a truth of ``0.215`` / ``0.311`` with no warning and no
-error at all, because both guards keyed their eager-only rule on the *namespace* instead of on
-whether the value was concrete. See :func:`wavebit._core.backend._concrete`.
+The stack puts the condition in an *interior* layer rather than at a half-space, which is why
+it needs two layers: a patterned pillar over a uniform ``n=1.5`` spacer. With ``period=1000``
+and ``wavelength=500``, ``kx_m = 0.5*m``, so order ``m=3`` sits at ``kx = 1.5 = n_spacer``
+exactly.
+
+The concreteness tests at the bottom are the guard-level regression this file originally
+carried: on JAX and PyTorch a wrong answer once returned with no warning at all, because both
+guards keyed their eager-only rule on the *namespace* instead of on whether the value was
+concrete. See :func:`wavebit._core.backend._concrete`. The guards still matter — the 2D path
+at an exact layer graze (``V = (Omega_R @ W) / q`` loses the grazing column to cancellation)
+and any traced-and-jitted solve still rely on them.
 """
 import functools
 import warnings
@@ -51,9 +58,16 @@ _STACK = np.concatenate([_PILLAR, np.full((1, 1, 20), N_SPACER)], axis=0)
 _KW = dict(period=[PERIOD], n_top=1.0, n_bot=N_SPACER, theta=0.0, phi=0.0,
            psi=np.pi / 2, thickness=[200.0, 300.0])
 
-# fto values inside the near-singular band. fto=3 is the first truncation that retains the
-# grazing order at all, and it is the loud one (LAPACK raises); 4, 6 and 9 are the quiet ones.
+# fto values that retain the grazing order. fto=3 is the first truncation that retains it at
+# all, and the one whose eigenvalue comes out exactly zero (the refused 0/0); at 4, 6 and 9
+# the FFT round-off keeps the eigenvalue at ~1e-16 and the solve must simply be right. These
+# were the values that used to come back quietly wrong (R off by 1 to 600 against 0.215).
 BAND_FTO = [4, 6, 9]
+
+# The exact answer and the one-ULP-detuned answer may differ by at most this. The instability
+# this file guards against produced *random* answers — errors of 1e0 to 1e2 — so the margin
+# to a false alarm is ~10 orders; measured agreement is ~1e-9 (see layer_modes_1d_conical).
+TOL = 1e-6
 
 
 def _solve(backend, fto, ucell=None, wavelength=WL, **kw):
@@ -70,16 +84,16 @@ def _totals(result):
 
 @functools.lru_cache(maxsize=None)
 def _truth(fto):
-    """The same stack with the wavelength nudged off the exact Rayleigh point.
+    """The same stack one ULP of wavelength off the exact Rayleigh point.
 
     The physics is continuous across the condition — nothing resonates there, the singularity
-    is in the *coordinates*, not in the structure — so a detuned solve is the correct answer
-    to ~7 digits, and it is an oracle that owes nothing to the code path being tested.
+    is in the *coordinates*, not in the structure — so the detuned solve is the correct
+    answer, and it is an oracle that owes nothing to the exact-point code path being tested:
+    off the condition the layer matrices are ordinarily conditioned.
 
-    Cached because every case below wants it and it is a clean solve: recomputing it per
-    parametrization was most of this file's runtime.
+    Cached because every case below wants it and it is a clean solve.
     """
-    return _totals(_solve(0, fto, wavelength=WL + 1e-4))[0]
+    return _totals(_solve(0, fto, wavelength=np.nextafter(WL, WL + 1)))[0]
 
 
 # ---------------------------------------------------------------- the regime is real
@@ -96,35 +110,21 @@ def test_the_stack_actually_sits_on_a_rayleigh_condition():
         'Rayleigh condition and these tests prove nothing')
 
 
-def test_the_band_really_does_return_a_wrong_answer():
-    """The other half of the premise: these fto values are wrong, not merely suspicious.
-
-    If a future change makes the band converge, these tests would still "pass" on a warning
-    that no longer means anything. Pinning the wrongness keeps them honest.
-    """
-    for fto in BAND_FTO:
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore', UnphysicalResultWarning)
-            got = _totals(_solve(0, fto))[0]
-        assert abs(got - _truth(fto)) > 1.0, (
-            f'fto={fto} no longer returns a badly wrong R; pick a new band')
-
-
 # ---------------------------------------------------------------- the regression itself
 
 @pytest.mark.parametrize('backend, name', [(0, 'numpy'), (1, 'jax'), (2, 'torch')])
 @pytest.mark.parametrize('fto', BAND_FTO)
-def test_near_singular_solve_is_never_silently_wrong(backend, fto, name):
-    """A wrong answer has to announce itself on **every** backend.
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+def test_exact_rayleigh_point_solves_correctly(backend, fto, name, algo):
+    """The exact-point solve equals the detuned one, conserves energy, and says nothing.
 
-    This is the regression. Before the guards were keyed on concreteness, ``backend=1`` and
-    ``backend=2`` returned finite, badly wrong efficiencies here with an empty warning list —
-    the two backends an optimizer actually runs on, silent in exactly the regime that breaks.
-
-    The contract asserted is deliberately weak on *how* it reports: raising and warning are
-    both acceptable answers, and which one happens depends on whether the degeneracy reaches
-    LAPACK or arrives as a NaN, which is a property of the solve path rather than of the
-    problem. Returning quietly is the only outcome ruled out.
+    This is the regression for the D#81 formulation fix. Before it, these exact solves
+    returned finite efficiencies wrong by orders of magnitude — with a warning on a good day
+    (``R = 44.3`` at fto=5 ETM) and without one on a bad day (``R = 0.179`` against a true
+    ``0.222`` at fto=5 SMM, every value in range, R+T = 0.98 reading as ordinary absorption).
+    The error was *random* across fto and connecting algorithm, which is why this asserts
+    tight agreement rather than a looser "not absurd" bound: a re-introduced instability
+    would miss by orders of magnitude, not by a factor near TOL.
     """
     if backend == 1:
         pytest.importorskip('jax')
@@ -134,26 +134,23 @@ def test_near_singular_solve_is_never_silently_wrong(backend, fto, name):
 
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        try:
-            got, _ = _totals(_solve(backend, fto))
-        except (FloatingPointError, np.linalg.LinAlgError, RuntimeError) as exc:
-            # RuntimeError covers torch._C._LinAlgError, which does not derive from NumPy's.
-            # No backend takes this path today — the whole point of these fto values is that
-            # they come back quietly — so a skip appearing here is itself worth reading.
-            pytest.skip(f'{name} raised before returning: {type(exc).__name__}')
+        R, T = _totals(_solve(backend, fto, connecting_algo=algo))
 
     flagged = [r for r in rec if issubclass(r.category, UnphysicalResultWarning)]
-    assert abs(got - _truth(fto)) > 1.0, 'premise: this case should be badly wrong'
-    assert flagged, (
-        f'{name} returned R={got:.6f} against a true {_truth(fto):.6f} with no warning at '
-        'all — a near-singular solve must not come back quietly')
+    assert not flagged, f'{name}/{algo} warned on a solve that is now ordinary: {flagged}'
+    assert abs(R - _truth(fto)) < TOL, (
+        f'{name}/{algo} fto={fto}: exact-point R={R!r} vs detuned {_truth(fto)!r} — the '
+        'exact Rayleigh solve has come apart from its one-ULP neighbour again')
+    assert abs(R + T - 1.0) < TOL, (
+        f'{name}/{algo} fto={fto}: R+T={R + T!r} on a lossless stack')
 
 
-def test_exact_singularity_is_loud_on_every_backend():
-    """``fto=3`` retains the grazing order with nothing to stabilise it.
+def test_exact_zero_eigenvalue_is_loud_on_every_backend():
+    """``fto=3`` retains the grazing order with an eigenvalue that is *exactly* zero.
 
-    NumPy and PyTorch trip LAPACK; JAX propagated a NaN instead and used to hand it straight
-    back. Raising and warning are both fine outcomes — a returned ``nan`` is not.
+    There the mode partner is 0/0 — no nearby problem to stand on — and the NaN must reach
+    :func:`~wavebit._core.backend.check_finite`. Raising and warning are both fine outcomes —
+    a returned ``nan`` is not.
 
     The outcome per backend is collected rather than asserted in the loop, so the test states
     what it saw instead of passing by falling through three ``continue``\\ s.
