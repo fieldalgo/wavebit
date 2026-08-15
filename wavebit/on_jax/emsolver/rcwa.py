@@ -238,10 +238,24 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
     def calculate_field(self, res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False)):
         """Reconstruct the field from the state left behind by the last solve.
 
+        ``res_x`` / ``res_y`` / ``res_z`` each take either a **count** -- a uniform grid, the
+        long-standing behaviour and unchanged to the bit -- or the **coordinates themselves**,
+        as a 1-D array. The reconstruction is pointwise in all three, so explicit points cost
+        the same per point as grid ones and involve no interpolation.
+
+        ``res_x`` / ``res_y`` are lengths in ``period``'s units and are unconstrained.
+        ``res_z`` is absolute, measured from the top of the stack, must lie inside it, and
+        assigns an interface to the layer below it -- which is visible only in ``E_z``, the one
+        component genuinely two-valued there. With explicit ``res_z`` the returned z axis is
+        exactly the request, in the caller's order, rather than ``res_z * n_layers``.
+
         Takes no ``geometry``: it never calls ``conv_solve``, and every discrete decision it
         makes -- the grating type, and which incidences ``set_field_input`` selects -- is
         already concrete by the time it runs. It reads ``self.T1`` / ``self.layer_info_list``,
         so whichever geometry the preceding solve used is the one in force here.
+
+        Explicit ``res_z`` is the one thing here that cannot be traced: bucketing a z into a
+        layer needs the thicknesses as numbers. It raises rather than guessing.
         """
         kx, ky = self._kxy_2d(self.wavelength)
 

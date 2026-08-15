@@ -325,6 +325,42 @@ most published results are stated in. Field reconstruction (`calculate_field`) w
 either — the SMM recovers the per-layer amplitudes from its cascade afterwards, which is what
 takes it to ~1.3-1.6x.
 
+### Sampling the near field where you want it
+
+`calculate_field` takes a **count** or the **coordinates themselves**, per axis:
+
+```python
+solver.conv_solve()
+
+cell = solver.calculate_field(res_x=64, res_y=64, res_z=32)      # a uniform grid, as always
+
+import numpy as np
+cell = solver.calculate_field(                                    # or name the points
+    res_x=np.array([0.0, 133.3, 251.7]),                          # a line cut, 3 columns
+    res_y=1,
+    res_z=np.linspace(0, 410, 200),                               # z through the whole stack
+)
+```
+
+Nothing is interpolated. The transverse kernel is a pointwise `exp(i k·r)` and each z-slice is
+an independent propagation, so a named point costs exactly what a grid point costs and returns
+the identical value — refining a grid leaves the shared points bit-for-bit unchanged, which is
+what makes that a fact rather than a hope. Ask for three columns and you pay for three, not for
+a grid you then throw away.
+
+`res_x` / `res_y` are lengths in `period`'s units and are unconstrained: unsorted, non-uniform,
+and outside the cell all work, the last being the periodic continuation with its Bloch phase.
+
+`res_z` is **absolute, measured from the top of the stack**, and has three rules worth knowing:
+it must lie inside the stack (the half-spaces outside carry mode sets the reconstruction does
+not hold); an interface belongs to the layer **below** it, so `z - 1e-9` gets the upper layer's
+limit — visible only in `Ez`, the one component genuinely two-valued there; and with explicit
+`res_z` the returned z axis is exactly your request, in your order, rather than
+`res_z * n_layers` with every interface appearing twice. Explicit `res_z` is also the one thing
+here that cannot be traced through `jax.grad` with respect to `thickness` — bucketing a `z` into
+a layer needs the thicknesses as numbers, and it raises rather than differentiating the wrong
+geometry. Counts stay fully traceable.
+
 ### Reading these choices from another program
 
 Which path implements which option, what a skewed cell refuses, which material cases are

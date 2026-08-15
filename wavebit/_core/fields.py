@@ -40,6 +40,20 @@ discontinuous across a vertical interface and resolved differently by any two tr
 Turns a solved stack back into the field inside it. Each layer's mode amplitudes are
 propagated to a set of z-slices, then inverse-Fourier-transformed onto an (x, y) grid.
 
+**Where it is sampled is the caller's choice.** ``res_x`` / ``res_y`` / ``res_z`` each take
+either a count — the uniform grid this has always used, unchanged and bit-identical — or the
+coordinates themselves, as a 1-D array. Nothing here has grid structure to respect: the
+transverse kernel is a pointwise ``exp(i k.r)`` and each z-slice is an independent
+propagation, so arbitrary points cost the same per point as grid ones and need no
+interpolation. Refining a grid leaves the shared points bit-identical, which is what says the
+sampling is genuinely pointwise rather than merely appearing to be.
+
+Explicit ``res_x`` / ``res_y`` are lengths in ``period``'s units and are unconstrained —
+unsorted, non-uniform and outside the cell are all fine, the last being a periodic
+continuation. Explicit ``res_z`` is absolute, measured from the **top of the stack**, and is
+the one with rules: it must lie within the stack, an interface belongs to the layer below it,
+and the layer thicknesses have to be concrete. :func:`_z_plan` states each of those and why.
+
 Inputs are the ``layer_info_list`` and ``T1`` the solve leaves behind — see
 :mod:`wavebit._core.solve_1d`. Layers arrive bottom-to-top and are walked in reverse, so the
 returned cell runs top-to-bottom in z.
@@ -51,6 +65,8 @@ selecting the incidence variants requested via ``set_field_input``), and
 different ``E_z``. ``calculate_field`` picks between the last two on the *formulation*, not on
 the grating type — the first-order path sets that to 2 as well.
 """
+import numpy as _np
+
 from .backend import array_namespace
 
 
@@ -81,6 +97,51 @@ def _diag_exp(xp, diag_vals, n):
     return eye * xp.exp(diag_vals)[..., None, :]
 
 
+def _is_count(spec):
+    """Is this sampling argument a *number of points* rather than the points themselves?
+
+    Only a Python/NumPy integer counts. Anything with a length -- list, tuple, ndarray, backend
+    tensor -- is read as explicit coordinates. A bare float is neither, and is rejected by
+    :func:`_check_spec` rather than quietly becoming one of them.
+    """
+    return isinstance(spec, (int, _np.integer)) and not isinstance(spec, bool)
+
+
+def _check_spec(spec, name):
+    """Reject the one spelling that would otherwise mean something the caller did not ask for.
+
+    ``res_z=5`` is five samples and ``res_z=[5.0]`` is one sample at ``z = 5``; ``res_z=5.0``
+    reads like the first and would silently behave like the second. It is a typo often enough
+    that guessing either way is worse than saying so.
+    """
+    if _is_count(spec):
+        return
+    if _np.ndim(spec) != 1:
+        raise TypeError(
+            f'{name} must be an integer count or a 1-D array of coordinates; got '
+            f'{spec!r}. Write {name}=5 for five samples, or {name}=[5.0] for one at 5.')
+
+
+def _n_samples(spec, name='res_*'):
+    _check_spec(spec, name)
+    return int(spec) if _is_count(spec) else len(spec)
+
+
+def _axis_samples(xp, spec, extent, C, dev):
+    """Sample coordinates along one in-plane axis: a count, or the coordinates themselves.
+
+    A count reproduces the uniform inclusive grid this has always used, spelled exactly as it
+    was so those samples stay bit-identical. Explicit coordinates are taken as given, in the
+    same length units as ``period`` -- they need not be uniform, sorted, or inside the cell,
+    because the kernel below is a plain pointwise ``exp(i k.r)`` with no grid structure to
+    respect. That is also why this is cheap: cost is points x orders either way.
+    """
+    _check_spec(spec, 'res_x/res_y')
+    if _is_count(spec):
+        return xp.linspace(0, extent, spec, dtype=C, device=dev)
+    return xp.astype(xp.asarray(spec, device=dev), C)
+
+
 def _inv_fourier(xp, kx, ky, period, res_x, res_y, k0, C, lattice=None):
     """Inverse-transform kernel ``exp(-i k.r)`` sampled on the cell, flattened over orders.
 
@@ -100,6 +161,7 @@ def _inv_fourier(xp, kx, ky, period, res_x, res_y, k0, C, lattice=None):
     branch below, and that branch is left alone so its samples stay bit-identical.
     """
     dev = _dev(kx)
+    nx, ny = _n_samples(res_x, 'res_x'), _n_samples(res_y, 'res_y')
     # Branch on the *layout*, not on whether a basis was supplied: an axis-aligned cell may
     # carry an explicit `diag(period)` and still hand over separable 1-D vectors, in which case
     # the old path is both correct and bit-identical.
@@ -110,36 +172,149 @@ def _inv_fourier(xp, kx, ky, period, res_x, res_y, k0, C, lattice=None):
         ky_f = xp.reshape(ky, (-1,))
         proj_a1 = (kx_f * a1x + ky_f * a1y) * k0          # k . a1, per order
         proj_a2 = (kx_f * a2x + ky_f * a2y) * k0          # k . a2
-        u_1d = xp.linspace(0, 1, res_x, dtype=C, device=dev)
-        v_1d = xp.linspace(0, 1, res_y, dtype=C, device=dev)
-        u_ph = xp.exp(1j * xp.reshape(u_1d, (1, res_x, 1)) * proj_a1)
-        v_ph = xp.exp(1j * xp.reshape(v_1d, (res_y, 1, 1)) * proj_a2)
-        return xp.broadcast_to(u_ph * v_ph, (res_y, res_x, kx_f.shape[0]))
+        # This branch samples the cell's own parallelogram in fractional `(u, v)`, so a count
+        # is `linspace(0, 1, n)` -- unchanged, and stated per axis so that mixing a count with
+        # explicit coordinates on the other axis leaves this one bit-identical. Explicit
+        # coordinates are lengths and have to be converted, and `x` alone does not determine
+        # `u` on a sheared cell: refuse rather than guess. The solver does not support an
+        # oblique lattice anyway, so `u = x / a1x` is exact everywhere this is reachable --
+        # and it divides by the *lattice* vector rather than by `period`, which need not be
+        # the same number.
+        def _frac(spec, a_par, a_perp, axis):
+            if _is_count(spec):
+                return xp.linspace(0, 1, _n_samples(spec), dtype=C, device=dev)
+            if abs(a_perp) > 1e-12 * max(abs(a_par), 1.0):
+                raise NotImplementedError(
+                    f'explicit {axis} coordinates need an axis-aligned cell: on a sheared '
+                    'lattice an (x, y) does not determine the (u, v) this path samples in. '
+                    'Pass a count instead, or describe the cell as a rectangular supercell.')
+            return xp.astype(xp.asarray(spec, device=dev), C) / a_par
+
+        _check_spec(res_x, 'res_x')
+        _check_spec(res_y, 'res_y')
+        u_1d = _frac(res_x, a1x, a1y, 'res_x')
+        v_1d = _frac(res_y, a2y, a2x, 'res_y')
+        u_ph = xp.exp(1j * xp.reshape(u_1d, (1, nx, 1)) * proj_a1)
+        v_ph = xp.exp(1j * xp.reshape(v_1d, (ny, 1, 1)) * proj_a2)
+        return xp.broadcast_to(u_ph * v_ph, (ny, nx, kx_f.shape[0]))
     # `period` stays an array rather than a Python float: all three backends take an array
     # endpoint and give bit-identical samples, and narrowing it would break tracing whenever
     # the solver itself is jitted (period is a traced child of the JAX solver pytree).
-    x_1d = xp.linspace(0, period[0], res_x, dtype=C, device=dev)
-    x_2d = xp.reshape(x_1d, (1, res_x, 1)) * kx * k0
-    x_2d = xp.reshape(xp.broadcast_to(x_2d, (res_y, res_x, kx.shape[0])),
-                      (res_y, res_x, 1, kx.shape[0]))
+    x_1d = _axis_samples(xp, res_x, period[0], C, dev)
+    x_2d = xp.reshape(x_1d, (1, nx, 1)) * kx * k0
+    x_2d = xp.reshape(xp.broadcast_to(x_2d, (ny, nx, kx.shape[0])),
+                      (ny, nx, 1, kx.shape[0]))
     if ky is None:
-        return xp.reshape(xp.exp(1j * x_2d), (res_y, res_x, -1))
+        return xp.reshape(xp.exp(1j * x_2d), (ny, nx, -1))
 
-    y_1d = xp.linspace(0, period[1], res_y, dtype=C, device=dev)
-    y_2d = xp.reshape(y_1d, (res_y, 1, 1)) * ky * k0
-    y_2d = xp.reshape(xp.broadcast_to(y_2d, (res_y, res_x, ky.shape[0])),
-                      (res_y, res_x, ky.shape[0], 1))
-    return xp.reshape(xp.exp(1j * x_2d) * xp.exp(1j * y_2d), (res_y, res_x, -1))
+    y_1d = _axis_samples(xp, res_y, period[1], C, dev)
+    y_2d = xp.reshape(y_1d, (ny, 1, 1)) * ky * k0
+    y_2d = xp.reshape(xp.broadcast_to(y_2d, (ny, nx, ky.shape[0])),
+                      (ny, nx, ky.shape[0], 1))
+    return xp.reshape(xp.exp(1j * x_2d) * xp.exp(1j * y_2d), (ny, nx, -1))
+
+
+def _z_1d(xp, res_z, d, C, dev=None):
+    """Local z samples through one layer, as a flat vector.
+
+    A count keeps the original spelling — ``linspace(0, res_z, res_z) / res_z * d`` rather than
+    ``linspace(0, d, res_z)`` — because the two are not identical in floating point and every
+    committed field golden was captured with this one.
+    """
+    if _is_count(res_z):
+        return xp.reshape(xp.linspace(0, res_z, res_z, dtype=C, device=dev), (-1,)) / res_z * d
+    return xp.astype(xp.asarray(res_z, device=dev), C)
 
 
 def _z_slices(xp, res_z, d, C, dev=None):
     """Sample points through one layer's thickness, shaped for broadcasting over modes."""
-    return xp.reshape(xp.linspace(0, res_z, res_z, dtype=C, device=dev), (-1, 1, 1)) / res_z * d
+    return xp.reshape(_z_1d(xp, res_z, d, C, dev), (-1, 1, 1))
+
+
+def _z_plan(res_z, layer_info_list):
+    """Turn a z request into per-layer local samples, in the order the layers are walked.
+
+    Returns ``(per_layer, unshuffle)``. ``per_layer[k]`` is what layer ``k`` of
+    ``layer_info_list[::-1]`` should be evaluated at — either the caller's count, passed
+    straight through, or that layer's own local depths. ``unshuffle`` is ``None`` for a count
+    and otherwise the permutation that puts the concatenated layers back into the caller's
+    order.
+
+    **A count means what it always did**: every layer gets ``res_z`` samples inclusive of both
+    faces, and the layers concatenate, so the z axis is ``res_z * n_layers`` long and every
+    internal interface appears twice — once as one layer's bottom, once as the next layer's
+    top. Nothing about that path changes.
+
+    **Explicit coordinates are absolute and measured from the top of the stack**, and the
+    returned z axis is exactly as long as the request, in the caller's order. Three rules,
+    which are choices rather than consequences:
+
+    * A point is assigned to the layer whose span contains it, half-open ``[top, bottom)``, so
+      an internal interface belongs to the layer *below* it. This only matters for ``E_z``,
+      which is genuinely two-valued there; ask for ``z - eps`` to get the other limit.
+    * The bottom face of the last layer is included, so the closed end of the stack is
+      reachable.
+    * A point outside the stack is an error, not an extrapolation. The reconstruction only
+      knows the layers — the half-spaces above and below carry different mode sets that this
+      state does not contain.
+
+    Bucketing needs the interfaces as numbers, so this is the one place a *traced* thickness
+    cannot be used. That is reported rather than worked around: which layer a point falls in
+    is genuinely data-dependent, and silently picking a layer would differentiate the wrong
+    geometry.
+    """
+    _check_spec(res_z, 'res_z')
+    if _is_count(res_z):
+        return [res_z] * len(layer_info_list), None
+
+    z_req = _np.asarray(res_z, dtype=float).reshape(-1)
+    ds = []
+    for entry in layer_info_list[::-1]:          # walk order: top of the stack first
+        d = entry[5] if len(entry) == 8 else entry[4]
+        try:
+            ds.append(float(d))
+        except Exception as e:                   # a JAX/torch tracer, typically
+            raise TypeError(
+                'explicit z coordinates need the layer thicknesses as numbers, and this '
+                'stack carries them as traced values. Which layer a z falls in is a '
+                'data-dependent choice, so it cannot be traced through; pass a count for '
+                'res_z, or reconstruct outside the transform.') from e
+
+    edges = _np.concatenate([[0.0], _np.cumsum(ds)])
+    total = edges[-1]
+    if z_req.size and (z_req.min() < -1e-9 or z_req.max() > total + 1e-9):
+        raise ValueError(
+            f'z coordinates must lie inside the stack, 0 to {total:g} measured from its top; '
+            f'got {z_req.min():g} to {z_req.max():g}. The half-spaces outside carry mode sets '
+            'this reconstruction does not hold.')
+
+    # `right=False` gives the half-open [top, bottom) rule; the -1 turns a boundary hit into
+    # the layer below it, and the clip puts the stack's closed bottom face on the last layer.
+    owner = _np.clip(_np.searchsorted(edges, z_req, side='right') - 1, 0, len(ds) - 1)
+
+    per_layer, order = [], []
+    for k in range(len(ds)):
+        sel = _np.flatnonzero(owner == k)
+        order.append(sel)
+        per_layer.append(z_req[sel] - edges[k])          # absolute -> local depth
+    order = _np.concatenate(order) if order else _np.zeros(0, dtype=int)
+    return per_layer, _np.argsort(order)
+
+
+def _unshuffle(xp, cell, unshuffle, axis):
+    """Put concatenated per-layer samples back into the caller's z order."""
+    if unshuffle is None:
+        return cell
+    return xp.take(cell, xp.asarray(unshuffle, device=_dev(cell)), axis=axis)
 
 
 def field_1d(wavelength, kx, T1, layer_info_list, period, tetm_index,
              res_x=20, res_y=1, res_z=20):
-    """Field of a pure TE/TM 1D stack. Returns ``(res_z*n_layers, res_y, res_x, 3)``."""
+    """Field of a pure TE/TM 1D stack.
+
+    Returns ``(nz, res_y, res_x, 3)``, where ``nz`` is ``res_z * n_layers`` for a count and
+    ``len(res_z)`` for explicit coordinates. See the module docstring on sampling.
+    """
     _require_solved(T1, layer_info_list)
     xp = array_namespace(T1)
     C = T1.dtype
@@ -147,16 +322,19 @@ def field_1d(wavelength, kx, T1, layer_info_list, period, tetm_index,
     ff = kx.shape[0]
     Kx = xp.diag(kx)
 
+    z_per_layer, unshuffle = _z_plan(res_z, layer_info_list)
+
     T_layer = T1
     cells = []
-    for epz_conv_i, W, V, q, d, A_i, B in layer_info_list[::-1]:
+    for spec, (epz_conv_i, W, V, q, d, A_i, B) in zip(z_per_layer, layer_info_list[::-1]):
+        nz = _n_samples(spec)
         X = xp.diag(xp.exp(-k0 * q * d))
         c1 = T_layer[:, None]
         c2 = B @ A_i @ X @ T_layer[:, None]
-        z = _z_slices(xp, res_z, d, C, _dev(T1))
-        Qz = xp.reshape(q, (1, 1, ff)) * z            # diagonals of Q*z, shape (res_z, 1, ff)
-        Qz = xp.reshape(Qz, (res_z, ff))
-        Qd = xp.reshape(q, (1, ff)) * xp.reshape(xp.reshape(z, (res_z,)) - d, (res_z, 1))
+        z = _z_slices(xp, spec, d, C, _dev(T1))
+        Qz = xp.reshape(q, (1, 1, ff)) * z            # diagonals of Q*z, shape (nz, 1, ff)
+        Qz = xp.reshape(Qz, (nz, ff))
+        Qd = xp.reshape(q, (1, ff)) * xp.reshape(xp.reshape(z, (nz,)) - d, (nz, 1))
 
         fwd = _diag_exp(xp, -k0 * Qz, ff)
         bwd = _diag_exp(xp, k0 * Qd, ff)
@@ -179,7 +357,7 @@ def field_1d(wavelength, kx, T1, layer_info_list, period, tetm_index,
 
         T_layer = A_i @ X @ T_layer
 
-    return xp.concat(cells, axis=0)
+    return _unshuffle(xp, xp.concat(cells, axis=0), unshuffle, axis=0)
 
 
 def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, res_x, res_y, res_z,
@@ -210,8 +388,12 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, res_x, res_y
     T_layer = xp.take(T1, xp.asarray(keep, device=dev), axis=0)
     big_I = xp.eye(T1.shape[1], dtype=C, device=dev)
 
+    z_per_layer, unshuffle = _z_plan(res_z, layer_info_list)
+
     cells = []
-    for epz_conv_i, W, V, q, d, big_A_i, big_B in layer_info_list[::-1]:
+    for spec, (epz_conv_i, W, V, q, d, big_A_i, big_B) in zip(z_per_layer,
+                                                              layer_info_list[::-1]):
+        nz = _n_samples(spec)
         q_1, q_2 = q[:ff_xy], q[ff_xy:]
         big_X = xp.diag(xp.exp(-k0 * q * d))
 
@@ -219,10 +401,10 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, res_x, res_y
         c1p, c2p = c[:, 0:ff_xy], c[:, ff_xy:2 * ff_xy]
         c1m, c2m = c[:, 2 * ff_xy:3 * ff_xy], c[:, 3 * ff_xy:4 * ff_xy]
 
-        z = xp.reshape(xp.linspace(0, res_z, res_z, dtype=C, device=dev), (-1,)) / res_z * d
+        z = _z_1d(xp, spec, d, C, dev)
         def prop(qi):
-            fwd = _diag_exp(xp, -k0 * xp.reshape(qi, (1, ff_xy)) * xp.reshape(z, (res_z, 1)), ff_xy)
-            bwd = _diag_exp(xp, k0 * xp.reshape(qi, (1, ff_xy)) * xp.reshape(z - d, (res_z, 1)), ff_xy)
+            fwd = _diag_exp(xp, -k0 * xp.reshape(qi, (1, ff_xy)) * xp.reshape(z, (nz, 1)), ff_xy)
+            bwd = _diag_exp(xp, k0 * xp.reshape(qi, (1, ff_xy)) * xp.reshape(z - d, (nz, 1)), ff_xy)
             return fwd[:, None, :, :], bwd[:, None, :, :]
 
         f1, b1 = prop(q_1)
@@ -262,7 +444,7 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, res_x, res_y
 
         T_layer = big_A_i @ big_X @ T_layer
 
-    return xp.concat(cells, axis=1)
+    return _unshuffle(xp, xp.concat(cells, axis=1), unshuffle, axis=1)
 
 
 def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, period,
@@ -320,8 +502,12 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, period,
     keep = [i for i, on in enumerate(set_field_input) if on]
     T_layer = xp.take(T1, xp.asarray(keep, device=dev), axis=0)
 
+    z_per_layer, unshuffle = _z_plan(res_z, layer_info_list)
+
     cells = []
-    for eps, psi_f, lam_f, psi_b, lam_b, d, P_i, QP_i in layer_info_list[::-1]:
+    for spec, (eps, psi_f, lam_f, psi_b, lam_b, d, P_i, QP_i) in zip(z_per_layer,
+                                                                     layer_info_list[::-1]):
+        nz = _n_samples(spec)
         # The layer's unknown is its forward amplitude at its own top face -- that is what the
         # ETM redefinition `t' = X_f^-1 P t` bought. The backward half is referenced at the
         # bottom face, so `QP_i @ X_f` is the map to it.
@@ -329,11 +515,11 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, period,
         a_f = T_layer
         a_b = (QP_i @ X_f) @ T_layer
 
-        z = xp.reshape(xp.linspace(0, res_z, res_z, dtype=C, device=dev), (-1,)) / res_z * d
+        z = _z_1d(xp, spec, d, C, dev)
         fwd = _diag_exp(xp, 1j * k0 * xp.reshape(lam_f, (1, 2 * ff))
-                        * xp.reshape(z, (res_z, 1)), 2 * ff)
+                        * xp.reshape(z, (nz, 1)), 2 * ff)
         bwd = _diag_exp(xp, 1j * k0 * xp.reshape(lam_b, (1, 2 * ff))
-                        * xp.reshape(z - d, (res_z, 1)), 2 * ff)
+                        * xp.reshape(z - d, (nz, 1)), 2 * ff)
         psi = psi_f @ (fwd[:, None] @ a_f) + psi_b @ (bwd[:, None] @ a_b)
 
         Ex, Ey = psi[:, :, :ff], psi[:, :, ff:2 * ff]
@@ -351,13 +537,16 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, period,
 
         T_layer = (P_i @ X_f) @ T_layer
 
-    return xp.concat(cells, axis=1)
+    return _unshuffle(xp, xp.concat(cells, axis=1), unshuffle, axis=1)
 
 
 def field_1d_conical(wavelength, kx, ky, T1, layer_info_list, period,
                      res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False),
                      lattice=None):
-    """Field of a general 1D (conical) stack. ``(n_selected, res_z*n_layers, res_y, res_x, 6)``."""
+    """Field of a general 1D (conical) stack. ``(n_selected, nz, res_y, res_x, 6)``.
+
+    ``nz`` is ``res_z * n_layers`` for a count, ``len(res_z)`` for explicit coordinates.
+    """
     return _field_coupled(wavelength, kx, ky, T1, layer_info_list, period,
                           res_x, res_y, res_z, set_field_input, conical=True, lattice=lattice)
 
@@ -365,7 +554,10 @@ def field_1d_conical(wavelength, kx, ky, T1, layer_info_list, period,
 def field_2d(wavelength, kx, ky, T1, layer_info_list, period,
              res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False),
              lattice=None):
-    """Field of a 2D stack. ``(n_selected, res_z*n_layers, res_y, res_x, 6)``."""
+    """Field of a 2D stack. ``(n_selected, nz, res_y, res_x, 6)``.
+
+    ``nz`` is ``res_z * n_layers`` for a count, ``len(res_z)`` for explicit coordinates.
+    """
     return _field_coupled(wavelength, kx, ky, T1, layer_info_list, period,
                           res_x, res_y, res_z, set_field_input, conical=False, lattice=lattice)
 

@@ -221,7 +221,19 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         return result
 
     def calculate_field(self, res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False)):
-        # TODO: change res_ to accept array of points.
+        """Reconstruct the field from the state left behind by the last solve.
+
+        ``res_x`` / ``res_y`` / ``res_z`` each take either a **count** -- a uniform grid, the
+        long-standing behaviour and unchanged to the bit -- or the **coordinates themselves**,
+        as a 1-D array. The reconstruction is pointwise in all three, so explicit points cost
+        the same per point as grid ones and involve no interpolation.
+
+        ``res_x`` / ``res_y`` are lengths in ``period``'s units and are unconstrained.
+        ``res_z`` is absolute, measured from the top of the stack, must lie inside it, and
+        assigns an interface to the layer below it -- which is visible only in ``E_z``, the one
+        component genuinely two-valued there. With explicit ``res_z`` the returned z axis is
+        exactly the request, in the caller's order, rather than ``res_z * n_layers``.
+        """
         kx, ky = self._kxy_2d(self.wavelength)
 
         if self._grating_type_assigned == 0:
