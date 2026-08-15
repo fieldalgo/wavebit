@@ -30,12 +30,16 @@ the mode algebra is shared with the solve and the solve was never wrong. Pinned 
 an outside solver: ``tests/references/test_s4_field_golden.py`` agrees with S4 entry for entry
 at ~1e-15 on uniform stacks, on every path.
 
-Two more outside opinions have arrived since, and they divide by path.
+Three more outside opinions have arrived since, and they divide by path.
 ``test_fmmax_field_golden.py`` reaches a *patterned* layer through the coupled 2D route, at
 ~1e-4. ``test_reticolo_field_golden.py`` covers :func:`field_1d` specifically — the pure TE/TM
 layouts, which neither of the other two exercises — at 6.3e-14 on gratings, two-layer stacks
-and absorbing ones alike, with no fitted amplitude. Its one exception is TM's ``E_x``,
-discontinuous across a vertical interface and resolved differently by any two truncations.
+and absorbing ones alike, with no fitted amplitude.
+``test_reticolo_conical_field_golden.py`` does the same for :func:`field_1d_conical` on a
+patterned layer, at 9.8e-14, under the *same* frame transform — which is itself the result, the
+coupled path carrying no frame quirk of its own. Both share one exception: the field component
+normal to the grating's vertical interfaces (TM's ``E_x``, and ``E_x`` again in the conical
+layout) is discontinuous there and resolved differently by any two truncations.
 
 Turns a solved stack back into the field inside it. Each layer's mode amplitudes are
 propagated to a set of z-slices, then inverse-Fourier-transformed onto an (x, y) grid.

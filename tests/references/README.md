@@ -21,6 +21,7 @@ from this codebase, which is exactly what makes them worth having.
 | **S4**, the in-cell **field** | the six field components on *uniform* stacks — every reconstruction path, all angles and azimuths, exact at ~1e-15 | same | `golden_s4_field.npz` |
 | **fmmax**, the in-cell **field** | uniform stacks exactly (7.8e-16) **and patterned layers to ~1e-4**, through the coupled 2D path | the `fwref` env | `golden_fmmax_field.npz` |
 | **RETICOLO**, the in-cell **field** | the *pure TE/TM 1D* path (`field_1d`), which the two rows above never reach — **1e-14 on gratings**, five components of six | Octave + `RETICOLO_PATH` | `golden_reticolo_field.npz` |
+| **RETICOLO**, the **conical** field | `field_1d_conical` on a *patterned* layer — an azimuth and a discontinuity at once, which nothing else here reached | same | `golden_reticolo_conical_field.npz` |
 
 A fourth oracle lives outside this directory: the Berreman 4x4 in
 `tests/test_anisotropic_berreman.py` is an independent *formulation* — not RCWA at all — but our
@@ -133,6 +134,46 @@ The case list is in `_reticolo_field_cases.py` and covers uniform, grating, two-
 absorbing stacks at 0/24/41 degrees in both polarisations. The geometry deliberately keeps
 every x sample **off** a permittivity jump: `Ex` is genuinely two-valued there, so a sample
 sitting on one is a harness artefact worth 4e-1 that would drown the real story above.
+
+### The conical field row: the same calibration, and that is the result
+
+Added 2026-08-15, one grating type along from the row above. `field_1d_conical` is a 1D grating
+at a **non-zero azimuth**: s and p no longer decouple, and one coupled mode set produces all six
+components. S4 runs that path but only on uniform stacks; fmmax reaches a patterned layer only
+through the 2D route. So a patterned layer *on the conical path* — an azimuth and a
+discontinuity at once, where the s/p mixing and the factorization have to be right together —
+was checked by nothing outside this repository.
+
+It lands in the same two tiers, measured over 24 cases (4 stacks x 3 angle pairs x s/p):
+
+| | agreement |
+| --- | --- |
+| every component both codes resolve | **9.8e-14** |
+| fitted amplitude, departure from 1 | **4.2e-14** |
+| `Ex` on a patterned layer | 8.6e-2 to 1.2e-1 — the exception, bounded from both sides |
+
+**The finding is that nothing conical-specific had to be discovered.** The transform established
+on the pure TE/TM path — whole-cell z reversal plus the declared frame's z-parity, no
+conjugation, no scale — transfers unchanged. A full search over all 720 component permutations x
+z-flip x conjugation confirms the identity permutation as the unique best fit, which is what
+says there is no hidden frame quirk rather than merely no *observed* one. `Ex` is the slow slot
+again, for the same reason: it is normal to the grating's vertical interfaces and therefore the
+discontinuous component.
+
+The one genuinely new fact is the array shape, and it was measured: `res3`'s conical branch
+returns `(z, x, y, 6)` — **x before y**, the transpose of this project's `(z, y, x, 6)` — with
+`y` of length 1 because the `.m` sets `y = 0` for `grating_type == 1`.
+
+Two structural facts came free with the oracle and are pinned:
+
+* **At `phi = 0` the conical solve decouples exactly.** s leaves `(Ey, Hx, Hz)` and p leaves
+  `(Ex, Ez, Hy)`; the other three are not small, they are *identically* zero — ours returns
+  `0.0` and RETICOLO agrees. That is the one azimuth where the answer is independently known,
+  so it is where the s/p rotation is actually checked rather than merely reproduced.
+* **The two RETICOLO goldens agree with each other at `phi = 0`**, to 1e-12. Two different
+  RETICOLO code paths (`grating_type` 1 and 0) on the same structure, compared without the
+  solver involved at all — which checks both harnesses, both row rules and both array shapes
+  against something that is not this project.
 
 ### A generator that could not reproduce its own golden
 

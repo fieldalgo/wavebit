@@ -104,7 +104,7 @@ def main():
 
         # Guard the row rule at generation time rather than trusting it downstream: every row
         # this golden keeps must sit inside a layer, and every row it drops must be ambient.
-        keep = layer_rows(stack)
+        keep = layer_rows(n_layers(stack))
         amb = np.setdiff1d(np.arange(rows), keep)
         assert np.allclose(o[amb], 1.0), 'a dropped row is not ambient -- the row rule moved'
         assert not np.allclose(o[keep], 1.0), 'a kept row is ambient -- the row rule moved'

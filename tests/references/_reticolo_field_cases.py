@@ -94,16 +94,20 @@ def n_layers(stack):
     return len(STACKS[stack][0])
 
 
-def layer_rows(stack):
-    """Which rows of RETICOLO's cell are the layers, top-to-bottom in *its* z direction.
+def layer_rows(n):
+    """Which rows of RETICOLO's cell are the ``n`` layers, top-to-bottom in *its* z direction.
 
     ``res3`` emits ``RES_Z`` rows per profile entry, and the profile this bridge builds is
     ``[0, *thickness, 0]`` -- a zero-thickness ambient at each end. So entry ``k`` owns rows
-    ``k*RES_Z : (k+1)*RES_Z`` and the layers are entries ``1 .. L``. Established by reading
+    ``k*RES_Z : (k+1)*RES_Z`` and the layers are entries ``1 .. n``. Established by reading
     ``res3``'s index map, not by inspecting ``z``: eight of a single-slab cell's 21 rows carry
     ``z == 0`` and only one of them is the slab's own top face.
+
+    Takes a count rather than a stack name because the conical golden beside this one
+    (``_reticolo_conical_field_cases.py``) has its own stacks and the same rule -- it is a
+    property of how ``res3`` lays a cell out, not of any particular case list.
     """
-    return np.arange(RES_Z, (n_layers(stack) + 1) * RES_Z)
+    return np.arange(RES_Z, (n + 1) * RES_Z)
 
 
 def x_samples():

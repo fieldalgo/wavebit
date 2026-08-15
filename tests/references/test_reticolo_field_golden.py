@@ -198,7 +198,7 @@ def test_the_stored_grids_are_the_ones_the_cases_describe():
         thickness = STACKS[stack][0]
         z = g[f'{stack}__z']
         assert z.shape == (RES_Z * n_layers(stack),), z.shape
-        assert len(layer_rows(stack)) == z.shape[0]
+        assert len(layer_rows(n_layers(stack))) == z.shape[0]
         # RETICOLO's z runs 0 .. sum(thickness) from the far side back; each layer contributes
         # `RES_Z` samples inclusive of both its faces, which is this project's sampling too.
         edges = np.concatenate([[0.0], np.cumsum(thickness[::-1])])
