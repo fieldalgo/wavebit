@@ -20,13 +20,14 @@ A script fails on any of:
   solve that is physically wrong, so this condition is not optional. The solver already emits
   the warning; all this has to do is refuse to ignore it.
 
-How far the third condition actually reaches, which is less far than it reads. The result guards
-are NumPy-only -- ``check_physical`` returns early on any other namespace, and under ``jit`` it
-has to, since a traced array carries no value to compare. Eager JAX and eager PyTorch could
-carry it and do not today. All four scripts here import Wavebit, but ``block_1d.py`` solves on
-PyTorch and ``block_2d.py`` on JAX, so this condition reaches the two ``_verification.py`` files
-and nothing else. The exit-status and ``Traceback`` conditions cover all four; for the other two,
-green means the script ran, not that its numbers are right.
+How far the third condition actually reaches. The result guards run wherever the values are
+concrete, which is every backend solving eagerly -- ``check_physical`` steps aside only for an
+abstract value, and under ``jit`` it has to, since a traced array carries no value to compare.
+``block_1d.py`` solves on PyTorch and ``block_2d.py`` on JAX, both eagerly, so this condition
+reaches all four scripts. It used to reach only the two ``_verification.py`` files, because the
+guards keyed their exemption on the namespace rather than on concreteness; that was the bug
+``tests/test_rayleigh_guard.py`` was written for. Should a script here ever wrap its solve in
+``jax.jit``, the condition goes quiet for that script again and this paragraph stops being true.
 
 Known hole, since honesty about coverage is cheaper than discovering it later: detection is by
 scanning the child's output, so a script that silences the category itself -- ``simplefilter

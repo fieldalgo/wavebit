@@ -18,32 +18,81 @@ def array_namespace(*xs):
     return ac.array_namespace(*xs)
 
 
-def _is_numpy(xp):
-    """True for the eager NumPy namespace — the one backend whose values are always concrete."""
-    name = xp.__name__
-    return 'jax' not in name and 'torch' not in name
+def _readable(v, xp):
+    """``v`` as something ``xp`` can reduce, without disturbing an autograd graph.
+
+    Deliberately not :func:`as_array`, and deliberately not a bare ``xp.asarray``: under
+    PyTorch the latter hands back *the same tensor* with ``requires_grad`` flipped off in
+    place (see :func:`as_array`), which would make a read-only guard silently sever a
+    caller's gradient. An array already belonging to ``xp`` is therefore passed through
+    untouched; a Python scalar or a foreign array — ``n_top`` can arrive as either — has no
+    graph to lose and is converted, which is also what gives ``xp.isdtype`` below a dtype it
+    recognizes.
+    """
+    if hasattr(v, 'dtype') and hasattr(v, 'shape'):
+        try:
+            if ac.array_namespace(v) is xp:
+                return v
+        except Exception:
+            pass
+    return xp.asarray(v)
+
+
+def _concrete(flag):
+    """``bool(flag)`` for a 0-d reduction, or ``None`` when the value cannot be read.
+
+    ``None`` means the value is *abstract* — a ``jax.jit`` tracer, a PyTorch ``FakeTensor``
+    under ``compile`` — where there is genuinely no number to look at. That, and not the
+    namespace, is what the guards below are keyed on. Keying on the namespace was the bug:
+    an ordinary eager ``backend=1`` / ``backend=2`` call has its values right there, and was
+    skipped anyway.
+
+    ``jax.grad`` sits on the *checked* side of the line, which is the whole point. An
+    un-jitted grad tracer carries a concrete primal, so the reduction narrows to a real
+    boolean and the guard runs — and an un-jitted gradient loop is precisely where a
+    silently wrong solve does the most damage. ``jax.jit``, and ``jit(grad)``, refuse the
+    read and are skipped. Measured rather than assumed; the same asymmetry is tabulated in
+    ``docs/backend-choice.md`` §3 and already relied on by
+    :func:`wavebit._core.solve_2d_4ff._forward_count` and
+    :func:`wavebit._core.conventions._check_resolvable`.
+
+    The reduction itself runs in the caller's own namespace, so what crosses the boundary is
+    one boolean rather than a copy of the array — on an accelerator that is a single sync,
+    not a device-to-host transfer.
+
+    Catching broadly rather than naming the exception keeps this backend-agnostic, the same
+    trade :func:`wavebit._core.engine._concrete_period` makes.
+    """
+    try:
+        return bool(flag)
+    except Exception:
+        return None
 
 
 def check_finite(xp, **named):
-    """Raise if any named eager-NumPy result carries a NaN or an infinity.
+    """Raise if any named result carries a NaN or an infinity.
 
     The solve reaches the edges of double precision on purpose — a strongly evanescent mode's
     ``exp(-k0*q*d)`` lands in the subnormal range — so a result that came back non-finite is
     worth stopping on rather than returning. This is the check that says so.
 
-    Only the eager NumPy path is checked. Under JAX the values are tracers during ``jit`` /
-    ``grad`` (reading them would either fail or force a concretization that breaks the trace),
-    and PyTorch's are likewise graph nodes; both follow the same eager-only branch convention
-    the rest of the core uses.
+    Runs on every backend whose values are concrete, which includes eager JAX and eager
+    PyTorch and an un-jitted ``jax.grad``; see :func:`_concrete` for where the line falls and
+    why it is drawn at concreteness rather than at the namespace. Under ``jax.jit`` nothing is
+    readable and the check is skipped — a traced solve that goes non-finite still returns
+    quietly, which is a real remaining gap and not one this formulation can close.
     """
-    if not _is_numpy(xp):
-        return
-    import numpy as np
-    bad = sorted(k for k, v in named.items() if not bool(np.all(np.isfinite(np.asarray(v)))))
+    bad = []
+    for name, v in named.items():
+        ok = _concrete(xp.all(xp.isfinite(_readable(v, xp))))
+        if ok is None:
+            return                              # traced — no value to inspect
+        if not ok:
+            bad.append(name)
     if bad:
         raise FloatingPointError(
-            f"non-finite value in {', '.join(bad)} — the solve did not produce a physical "
-            'result. The usual causes are a degenerate structure (a singular interface: a '
+            f"non-finite value in {', '.join(sorted(bad))} — the solve did not produce a "
+            'physical result. The usual causes are a degenerate structure (a singular interface: a '
             'layer identical to its neighbour that was not detected as such, a zero or '
             'near-zero thickness, an exactly grazing order) or a truncation the geometry '
             'cannot support. Try adjusting fto, or re-slicing the stack into thinner layers.')
@@ -160,19 +209,26 @@ def check_physical(xp, de_ri, de_ti, n_top, atol=1e-3):
     The message carries no numbers, so Python's default filter collapses a sweep's worth of
     occurrences into one report instead of re-emitting per wavelength; escalate the category to
     an error when you want to catch a specific one.
-    """
-    if not _is_numpy(xp):
-        return
-    import numpy as np
-    if bool(np.any(np.imag(np.asarray(n_top)) != 0)):
-        return
 
-    r = np.real(np.asarray(de_ri))
-    t = np.real(np.asarray(de_ti))
+    Runs wherever the values are concrete — eager NumPy, eager JAX, eager PyTorch, and an
+    un-jitted ``jax.grad``. See :func:`_concrete`.
+    """
+    n = _readable(n_top, xp)
+    if xp.isdtype(n.dtype, 'complex floating'):
+        lossy = _concrete(xp.any(xp.imag(n) != 0))
+        if lossy is None or lossy:
+            return
+
+    r, t = xp.real(_readable(de_ri, xp)), xp.real(_readable(de_ti, xp))
+    negative = _concrete(xp.minimum(xp.min(r), xp.min(t)) < -atol)
+    excess = _concrete(xp.sum(r) + xp.sum(t) > 1 + atol)
+    if negative is None or excess is None:
+        return                                  # traced — no value to inspect
+
     problems = []
-    if float(min(np.min(r), np.min(t))) < -atol:
+    if negative:
         problems.append('a negative efficiency (negative power)')
-    if float(np.sum(r) + np.sum(t)) > 1 + atol:
+    if excess:
         problems.append('R+T above 1 for a passive stack (gain out of nothing)')
     if problems:
         import warnings

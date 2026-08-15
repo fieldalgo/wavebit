@@ -295,23 +295,58 @@ def test_healthy_solves_emit_no_unphysical_warning():
     assert [r for r in rec if issubclass(r.category, UnphysicalResultWarning)] == []
 
 
-# --- the traced backends take the no-op branch ----------------------------------------------
+# --- the line is concreteness, not the namespace ---------------------------------------------
+#
+# These two used to assert the opposite: that both guards were no-ops on anything that was not
+# eager NumPy. That was keyed on the namespace, and it meant an ordinary eager `backend=1` /
+# `backend=2` call — where the value is right there to be read — went unguarded. A
+# near-singular stack then returned R = 2.47 (JAX) and 243.9 (PyTorch) against a truth of
+# 0.215, finite and with an empty warning list. tests/test_rayleigh_guard.py pins that case
+# end to end; these pin the adapter-level rule it rests on.
 
-def test_guards_are_no_ops_on_jax():
+def test_guards_read_eager_jax_values():
     jax = pytest.importorskip('jax')
     jax.config.update('jax_enable_x64', True)
     import jax.numpy as jnp
     xp = array_namespace(jnp.zeros(1))
-    # A tracer's value is unreadable during jit; neither guard may look.
-    check_finite(xp, R=jnp.asarray([np.nan]))
-    check_physical(xp, jnp.asarray([9.0]), jnp.asarray([9.0]), 1.0)
+    with pytest.raises(FloatingPointError):
+        check_finite(xp, R=jnp.asarray([np.nan]))
+    with pytest.warns(UnphysicalResultWarning):
+        check_physical(xp, jnp.asarray([9.0]), jnp.asarray([9.0]), 1.0)
 
 
-def test_guards_are_no_ops_on_torch():
+def test_guards_read_eager_torch_values():
     torch = pytest.importorskip('torch')
     xp = array_namespace(torch.zeros(1))
-    check_finite(xp, R=torch.tensor([float('nan')]))
-    check_physical(xp, torch.tensor([9.0]), torch.tensor([9.0]), 1.0)
+    with pytest.raises(FloatingPointError):
+        check_finite(xp, R=torch.tensor([float('nan')]))
+    with pytest.warns(UnphysicalResultWarning):
+        check_physical(xp, torch.tensor([9.0]), torch.tensor([9.0]), 1.0)
+
+
+def test_guards_step_aside_for_a_jit_tracer():
+    """The reason the early return cannot simply be deleted.
+
+    Under ``jit`` the value is abstract: reading it raises, and forcing it concrete would
+    break the trace. So the guards must notice they cannot read and say nothing — which is
+    also why a traced non-finite result still returns quietly. Accepted, and documented on
+    :func:`wavebit._core.backend._concrete`.
+    """
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+
+    def f(x):
+        xp = array_namespace(x)
+        check_finite(xp, R=x)
+        check_physical(xp, x, x, 1.0)
+        return jnp.sum(x)
+
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        out = jax.jit(f)(jnp.asarray([np.nan, 9.0]))
+    assert np.isnan(float(out))
+    assert [r for r in rec if issubclass(r.category, UnphysicalResultWarning)] == []
 
 
 # --- tier three: a branch decided from round-off ---------------------------------------------
