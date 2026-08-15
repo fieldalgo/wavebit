@@ -149,6 +149,58 @@ class PrecisionLossWarning(UserWarning):
     """
 
 
+class RayleighPointWarning(UserWarning):
+    """A layer eigenmode sits numerically on its light line, on a path that loses it there.
+
+    Fired by :func:`check_mode_cutoff` from the 2D mode builder. The result it annotates is
+    finite, in range, and possibly wrong with no other sign — see the caller for the
+    mechanism and :func:`check_finite`'s message for the remedy (a one-ULP detune). Its own
+    category so a sweep that knowingly steps across a Rayleigh anomaly can silence or
+    escalate it on its own.
+    """
+
+
+# Where the 2D mode-cutoff warning fires: below this ratio of min|eigenvalue|/max|eigenvalue|
+# the measured efficiency error exceeds ~1e-5, and it keeps growing as ~eps/ratio down to
+# order-1 at the exact point. Measured on four exact-graze 2D stacks over a detune ladder
+# (2026-08-16): ratio 1e-17 -> err 2e-3..8e0 (some with no other warning), 1e-15 -> ~1e-3,
+# 1e-14 -> ~1e-4, 1e-13 -> ~1e-5, >=1e-12 -> <=2e-6. On the same stacks the ratio crosses
+# this line ~1000 wavelength-ULPs from the condition, so the flagged band is ~1e-13 wide in
+# relative wavelength; 60 random non-grazing 2D solves gave 0 false positives, and the full
+# suite runs green with the check in place.
+_CUTOFF_REL = 1e-13
+
+
+def check_mode_cutoff(xp, eigenvalues):
+    """Warn when a layer eigenvalue is at round-off scale relative to the spectrum.
+
+    The 2D mode builder computes ``V = (Omega_R @ W) / q``, and when ``q**2`` is at round-off
+    scale that product's grazing column is cancellation noise — the layer stops representing
+    any nearby problem, and the answer can be quietly wrong (measured: 5 of 48 exact-graze 2D
+    solves returned R+T of 0.96-0.99 on a lossless stack with nothing else fired). The 1D
+    paths do not need this check: the pure path never had the disease and the conical path
+    was reformulated (see ``layer_modes_1d_conical``).
+
+    A warning rather than an error, deliberately: the error scales as ``~eps/ratio`` (see
+    ``_CUTOFF_REL``), so most of the flagged band is wrong at the 1e-5 level rather than
+    garbage, and a refusal would take working-precision answers away from a sweep that merely
+    steps near the condition. Runs where the eigenvalues are concrete; traced solves skip it,
+    like every other guard here.
+    """
+    aw = xp.abs(_readable(eigenvalues, xp))
+    flag = _concrete(xp.min(aw) < _CUTOFF_REL * xp.max(aw))
+    if flag:
+        import warnings
+        warnings.warn(
+            'a layer eigenmode sits within round-off of its cutoff (a Rayleigh/grazing '
+            'condition) on the 2D path, which loses that mode to cancellation — the result '
+            'is finite and may be wrong at the 1e-5 level near the condition, growing to '
+            'order 1 exactly on it, with no other sign. Move off the condition: one ULP of '
+            'wavelength, period or angle is enough. (The 1D paths solve this point exactly; '
+            'a y-invariant cell routed through the 1D solves does not need the detune.)',
+            RayleighPointWarning, stacklevel=3)
+
+
 def _real_itemsize(dtype):
     """Bytes per real component, or None for anything that is not a float/complex dtype.
 

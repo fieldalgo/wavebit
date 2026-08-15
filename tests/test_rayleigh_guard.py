@@ -145,6 +145,57 @@ def test_exact_rayleigh_point_solves_correctly(backend, fto, name, algo):
         f'{name}/{algo} fto={fto}: R+T={R + T!r} on a lossless stack')
 
 
+# ---------------------------------------------------------------- the 2D path
+
+# The quiet-wrong class: exact-graze 2D stacks that returned R+T of 0.96-0.99 on a lossless
+# stack with no warning at all — the exact signature that reads as ordinary absorption.
+_QUIET_WRONG_2D = [(2.0, 'ETM'), (2.0, 'SMM'), (1.5, 'ETM')]
+
+
+def _solve_2d(n_spacer, algo, wavelength=WL):
+    pillar = np.ones((1, 2, 20))
+    pillar[0, :, 6:14] = 3.5
+    ucell = np.concatenate([pillar, np.full((1, 2, 20), n_spacer)], axis=0)
+    return wavebit.rcwa(backend=0, wavelength=wavelength, fto=[5, 1], ucell=ucell,
+                        period=[PERIOD, PERIOD], n_top=1.0, n_bot=1.5, theta=0.0, phi=0.0,
+                        psi=np.pi / 2, thickness=[200.0, 300.0],
+                        connecting_algo=algo).conv_solve()
+
+
+@pytest.mark.parametrize('n_spacer, algo', _QUIET_WRONG_2D)
+def test_2d_exact_graze_announces_itself(n_spacer, algo):
+    """The 2D path still cannot solve the exact point — so it must say so, every time.
+
+    ``layer_modes_2d`` loses the grazing column of ``V`` to cancellation and no eigen
+    identity ports (see its comment), so the 2D contract is detection, not correctness:
+    :class:`~wavebit._core.backend.RayleighPointWarning` fires whenever a layer eigenvalue is
+    at round-off scale (threshold measured in ``backend._CUTOFF_REL``; 0 false positives over
+    60 random non-grazing 2D solves). Before it, 5 of 48 exact-graze 2D solves returned
+    R+T of 0.96-0.99 on this lossless stack with nothing fired — absorption that isn't there.
+    """
+    from wavebit._core.backend import RayleighPointWarning
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        try:
+            _solve_2d(n_spacer, algo)
+        except Exception:
+            return                              # loud is an acceptable outcome
+    assert any(issubclass(r.category, RayleighPointWarning) for r in rec), (
+        f'2D {algo} n_spacer={n_spacer}: exact-graze solve returned with no '
+        'RayleighPointWarning — the quiet-wrong hole is open again')
+
+
+def test_2d_detection_clears_off_the_condition():
+    """The same stack detuned well off the point must not warn — that is the FP contract."""
+    from wavebit._core.backend import RayleighPointWarning
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        result = _solve_2d(2.0, 'ETM', wavelength=WL * (1 + 1e-8))
+    R, T = _totals(result)
+    assert not any(issubclass(r.category, RayleighPointWarning) for r in rec)
+    assert abs(R + T - 1.0) < 1e-6
+
+
 def test_exact_zero_eigenvalue_is_loud_on_every_backend():
     """``fto=3`` retains the grazing order with an eigenvalue that is *exactly* zero.
 

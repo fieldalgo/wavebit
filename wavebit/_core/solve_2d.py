@@ -11,7 +11,7 @@ convolution blocks (``epxy`` / ``epyx``, produced by the NVF factorization; ``No
 enter the mode operator. ``transfer_2d_1`` and ``transfer_2d_4`` are identical to the conical
 versions, so this module reuses ``solve_1d``'s boundary init and ``final_matching`` verbatim.
 """
-from .backend import array_namespace, as_array, eig
+from .backend import array_namespace, as_array, check_mode_cutoff, eig
 from .conventions import boundary_kz, mode_q, order_azimuth
 from .solve_1d import _block, _diag, _is_backside, _mirrored_scene, final_matching
 
@@ -131,8 +131,9 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     # solves came back quietly wrong (R+T 0.96-0.99 on a lossless stack, no warning), the rest
     # warned or raised. The conical path had the same disease in a different spelling and was
     # reformulated (see `layer_modes_1d_conical`); no equivalent identity is available here
-    # because W does not diagonalise `Omega_R` alone. Until it is fixed, the answer at an
-    # exact 2D graze is a one-ULP detune away — see `check_finite`'s message.
+    # because W does not diagonalise `Omega_R` alone. Until it is fixed, the check below
+    # announces the regime — the answer is a one-ULP detune away, see its message.
+    check_mode_cutoff(xp, w)
     V = (Omega_R @ W) / q
     return W, V, q
 
