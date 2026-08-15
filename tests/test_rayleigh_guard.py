@@ -70,10 +70,13 @@ BAND_FTO = [4, 6, 9]
 TOL = 1e-6
 
 
-def _solve(backend, fto, ucell=None, wavelength=WL, **kw):
+def _solve(backend, fto, ucell=None, wavelength=WL, auto_detune=False, **kw):
+    # auto_detune off by default *here*: these tests pin the exact-point contracts, and the
+    # library default would detune past the very regime under test. The default's own
+    # contract has its own tests below.
     return wavebit.rcwa(backend=backend, wavelength=wavelength, fto=[fto, 0],
                         ucell=_STACK if ucell is None else ucell,
-                        **{**_KW, **kw}).conv_solve()
+                        **{**_KW, **kw}).conv_solve(auto_detune=auto_detune)
 
 
 def _totals(result):
@@ -152,14 +155,14 @@ def test_exact_rayleigh_point_solves_correctly(backend, fto, name, algo):
 _QUIET_WRONG_2D = [(2.0, 'ETM'), (2.0, 'SMM'), (1.5, 'ETM')]
 
 
-def _solve_2d(n_spacer, algo, wavelength=WL):
+def _solve_2d(n_spacer, algo, wavelength=WL, auto_detune=False):
     pillar = np.ones((1, 2, 20))
     pillar[0, :, 6:14] = 3.5
     ucell = np.concatenate([pillar, np.full((1, 2, 20), n_spacer)], axis=0)
     return wavebit.rcwa(backend=0, wavelength=wavelength, fto=[5, 1], ucell=ucell,
                         period=[PERIOD, PERIOD], n_top=1.0, n_bot=1.5, theta=0.0, phi=0.0,
                         psi=np.pi / 2, thickness=[200.0, 300.0],
-                        connecting_algo=algo).conv_solve()
+                        connecting_algo=algo).conv_solve(auto_detune=auto_detune)
 
 
 @pytest.mark.parametrize('n_spacer, algo', _QUIET_WRONG_2D)
@@ -193,6 +196,110 @@ def test_2d_detection_clears_off_the_condition():
         result = _solve_2d(2.0, 'ETM', wavelength=WL * (1 + 1e-8))
     R, T = _totals(result)
     assert not any(issubclass(r.category, RayleighPointWarning) for r in rec)
+    assert abs(R + T - 1.0) < 1e-6
+
+
+@pytest.mark.parametrize('psi', [0.0, np.pi / 4], ids=['tm', 'mixed'])
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+def test_exact_point_solves_for_tm_and_mixed_polarization(psi, algo):
+    """The p family (``V_22`` / ``B``) takes the same reformulated path — pin it too.
+
+    The backend/fto matrix above runs at ``psi = pi/2``, which exercises only the s family's
+    blocks. ``B`` is exactly as singular as ``A`` at the graze (same eigenvalues for a
+    uniform layer), so a regression that broke only the ``B``-side identity would slip past
+    a TE-only file. NumPy only: the backend axis is already covered above.
+    """
+    kw = dict(_KW)
+    kw['psi'] = psi
+    exact = wavebit.rcwa(backend=0, wavelength=WL, fto=[5, 0], ucell=_STACK,
+                         connecting_algo=algo, **kw).conv_solve(auto_detune=False)
+    near = wavebit.rcwa(backend=0, wavelength=np.nextafter(WL, WL + 1), fto=[5, 0],
+                        ucell=_STACK, connecting_algo=algo,
+                        **kw).conv_solve(auto_detune=False)
+    R, T = _totals(exact)
+    R_n, _ = _totals(near)
+    assert abs(R - R_n) < TOL and abs(R + T - 1.0) < TOL
+
+
+def test_exact_point_field_reconstruction_matches_its_neighbour():
+    """The fields were broken over a *band*, not a point — this pins the repaired band.
+
+    Pre-fix, ETM field reconstruction at one ULP off the condition was wrong at 2e18 scale
+    and only converged ~1e4 ULP out, while the efficiencies looked fine — so an
+    efficiency-only file would let that regression back in. Post-fix the exact-point field
+    equals its one-ULP neighbour to ~3e-8 (measured); asserted at 1e-5 for slack across
+    LAPACK builds.
+    """
+    def field(wl):
+        mee = wavebit.rcwa(backend=0, wavelength=wl, fto=[5, 0], ucell=_STACK, **_KW)
+        mee.conv_solve(auto_detune=False)
+        return np.asarray(mee.calculate_field(res_x=16, res_y=1, res_z=16))
+
+    exact = field(WL)
+    near = field(np.nextafter(WL, WL + 1))
+    assert np.all(np.isfinite(exact))
+    scale = np.max(np.abs(near))
+    assert np.max(np.abs(exact - near)) / scale < 1e-5
+
+
+# ---------------------------------------------------------------- auto_detune (the default)
+
+def test_auto_detune_rescues_the_2d_graze_and_says_so():
+    """The library default turns the unreliable exact point into the nearby answer, loudly.
+
+    One retry at ``wavelength*(1+1e-12)``, one :class:`AutoDetuneWarning` naming the
+    wavelength actually used, no :class:`RayleighPointWarning` surviving to the caller, and
+    the result agreeing with a far-detuned solve — on the very stack that once returned
+    R+T = 0.99 with nothing said.
+    """
+    from wavebit._core.backend import AutoDetuneWarning, RayleighPointWarning
+    R_far, T_far = _totals(_solve_2d(2.0, 'ETM', wavelength=WL * (1 + 1e-8)))
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        result = _solve_2d(2.0, 'ETM', auto_detune=True)
+    R, T = _totals(result)
+    notices = [r for r in rec if issubclass(r.category, AutoDetuneWarning)]
+    assert len(notices) == 1, f'expected exactly one AutoDetuneWarning, got {rec}'
+    assert 'wavelength' in str(notices[0].message)
+    assert not any(issubclass(r.category, RayleighPointWarning) for r in rec), (
+        'the first pass\'s RayleighPointWarning must be consumed by the retry, not replayed')
+    assert abs(R - R_far) < 1e-4 and abs(R + T - 1.0) < 1e-4
+
+
+def test_auto_detune_rescues_the_refused_point():
+    """The exact-zero eigenvalue point (fto=3) returns the nearby answer under the default.
+
+    ``auto_detune=False`` keeps the loud refusal (pinned above); the default catches that
+    refusal, retries off the point, and must agree with the one-ULP oracle.
+    """
+    from wavebit._core.backend import AutoDetuneWarning
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        R, T = _totals(_solve(0, 3, auto_detune=True))
+    assert any(issubclass(r.category, AutoDetuneWarning) for r in rec)
+    assert abs(R - _truth(3)) < TOL and abs(R + T - 1.0) < TOL
+
+
+def test_auto_detune_is_silent_on_an_ordinary_solve():
+    """Away from any degeneracy the default must change nothing and say nothing."""
+    from wavebit._core.backend import AutoDetuneWarning
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        R_on, T_on = _totals(_solve(0, 5, wavelength=520.0, auto_detune=True))
+    R_off, T_off = _totals(_solve(0, 5, wavelength=520.0))
+    assert not any(issubclass(r.category, AutoDetuneWarning) for r in rec)
+    assert R_on == R_off and T_on == T_off
+
+
+def test_auto_detune_accepts_an_explicit_step():
+    """A float ``auto_detune`` is the relative step — the complex64 escape hatch."""
+    from wavebit._core.backend import AutoDetuneWarning
+    mee = wavebit.rcwa(backend=0, wavelength=WL, fto=[3, 0], ucell=_STACK, **_KW)
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        R, T = _totals(mee.conv_solve(auto_detune=1e-9))
+    assert any(issubclass(r.category, AutoDetuneWarning) for r in rec)
+    assert mee.wavelength == WL * (1 + 1e-9)
     assert abs(R + T - 1.0) < 1e-6
 
 

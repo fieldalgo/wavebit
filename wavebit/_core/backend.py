@@ -111,10 +111,12 @@ def check_finite(xp, **named):
             'near-zero thickness.\n'
             'If it is a grazing order, move off the condition — one ULP of wavelength, '
             'period or angle is enough, and the answer either side of it agrees to eight '
-            'digits. Do NOT reach for fto or thinner slices instead: neither knob touches '
-            'the degeneracy (it is fixed by kx against an index), so at best they re-roll '
-            'the round-off — measured to return quiet wrong answers on the paths that have '
-            'not been reformulated against this. See layer_modes_1d_conical.')
+            'digits; conv_solve(auto_detune=True), the default, does that retry for you, so '
+            'seeing this means it was disabled or the retry failed too. Do NOT reach for '
+            'fto or thinner slices instead: neither knob touches the degeneracy (it is '
+            'fixed by kx against an index), so at best they re-roll the round-off — '
+            'measured to return quiet wrong answers on the paths that have not been '
+            'reformulated against this. See layer_modes_1d_conical.')
 
 
 class UnphysicalResultWarning(UserWarning):
@@ -160,6 +162,18 @@ class RayleighPointWarning(UserWarning):
     """
 
 
+class AutoDetuneWarning(UserWarning):
+    """An ``auto_detune`` retry moved the solve off the requested point — this is the record.
+
+    Fired once per ``conv_solve(auto_detune=...)`` that actually retried; the message carries
+    the relative step and the wavelength the returned result was evaluated at, and the solver
+    keeps that wavelength so everything downstream (field reconstruction included) describes
+    one consistent problem. Its own category so a sweep can silence the notices while keeping
+    :class:`RayleighPointWarning` escalated, or the reverse. This is the loud replacement for
+    the silent ``perturbation`` knob that was removed — what changed is always said.
+    """
+
+
 # Where the 2D mode-cutoff warning fires: below this ratio of min|eigenvalue|/max|eigenvalue|
 # the measured efficiency error exceeds ~1e-5, and it keeps growing as ~eps/ratio down to
 # order-1 at the exact point. Measured on four exact-graze 2D stacks over a detune ladder
@@ -196,8 +210,9 @@ def check_mode_cutoff(xp, eigenvalues):
             'condition) on the 2D path, which loses that mode to cancellation — the result '
             'is finite and may be wrong at the 1e-5 level near the condition, growing to '
             'order 1 exactly on it, with no other sign. Move off the condition: one ULP of '
-            'wavelength, period or angle is enough. (The 1D paths solve this point exactly; '
-            'a y-invariant cell routed through the 1D solves does not need the detune.)',
+            'wavelength, period or angle is enough, and conv_solve(auto_detune=True), the '
+            'default, does that retry for you. (The 1D paths solve this point exactly; a '
+            'y-invariant cell routed through the 1D solves does not need the detune.)',
             RayleighPointWarning, stacklevel=3)
 
 

@@ -29,6 +29,13 @@ from .solve_2d_4ff import solve_2d_4ff as _solve_2d_4ff
 # one was given -- see `CoreSolveMixin._formulation_for`.
 _Z_ROW_SLOTS = ('epxz_conv_all', 'epyz_conv_all', 'epzx_conv_all', 'epzy_conv_all')
 
+# The relative wavelength step an auto_detune retry applies. Measured on the 2D detune
+# ladder (see backend._CUTOFF_REL): the RayleighPointWarning band clears by ~1e-13 relative
+# and the efficiency error is <= ~2e-6 from ~4e-13 out, so 1e-12 stands clear of the band by
+# an order while staying physically negligible (5e-10 nm at 500 nm). Sized for double
+# precision — at complex64 the step vanishes below the dtype's resolution.
+_AUTO_DETUNE_REL = 1e-12
+
 # Connecting algorithm -> the core solve for each grating type. ETM propagates an enhanced
 # transmittance matrix (Moharam et al. 1995); SMM cascades per-layer scattering matrices. Same modes, same boundary
 # conventions, same answers (~1e-14), both able to reconstruct fields; SMM costs ~1.1-1.4x on
@@ -946,13 +953,29 @@ class CoreFactorizationMixin:
             geometry.boundary_plans = plans
         return geometry
 
-    def conv_solve(self, geometry=None, **kwargs):
+    def conv_solve(self, geometry=None, auto_detune=True, **kwargs):
         """Build the convolution matrices, then solve.
 
         ``geometry`` is an optional :class:`~wavebit._core.geometry.StaticGeometry` — the
         discrete decisions frozen by :meth:`freeze_geometry`. Supply it to keep the whole call
         traceable under ``jax.jit`` / ``jax.grad``; omit it and each decision is auto-detected
         eagerly, which needs concrete values.
+
+        ``auto_detune`` is what happens when the requested point is numerically singular — an
+        order exactly on a light line (``kx_m == n``, a Rayleigh point). On by default: if the
+        solve refuses with a degeneracy (``LinAlgError`` / ``FloatingPointError``) or fires
+        :class:`~wavebit._core.backend.RayleighPointWarning`, it is re-run once at
+        ``wavelength * (1 + 1e-12)`` — off the point, where the answer is measured to agree
+        with the one-sided limit to ~1e-6 — and
+        :class:`~wavebit._core.backend.AutoDetuneWarning` states the wavelength actually
+        used. The solver keeps that wavelength, so field reconstruction and everything else
+        downstream describe one consistent problem. Nothing moves silently, which is what
+        separates this from the ``perturbation`` knob this library removed. Pass ``False``
+        to solve exactly the requested point and let the refusal or the warning through;
+        pass a float to choose the relative step (the default is sized for double precision —
+        complex64 resolves nothing below ~1e-7, use ~1e-5 there). A traced solve
+        (``jax.jit``) skips every guard and therefore never retries — the same line the
+        guards themselves draw.
 
         Raises:
             StaleGeometryError: eagerly, when ``geometry`` no longer describes the structure it
@@ -962,7 +985,47 @@ class CoreFactorizationMixin:
         """
         [setattr(self, k, v) for k, v in kwargs.items()]  # needed for optimization sweeps
         self._frozen_geometry = geometry
-        return self.solve_for_conv(self.wavelength, *self._conv_matrices(geometry))
+        if not auto_detune:
+            return self.solve_for_conv(self.wavelength, *self._conv_matrices(geometry))
+
+        import warnings
+        from numpy.linalg import LinAlgError
+        from .backend import AutoDetuneWarning, RayleighPointWarning
+        step = _AUTO_DETUNE_REL if auto_detune is True else float(auto_detune)
+        original = None
+        try:
+            with warnings.catch_warnings(record=True) as rec:
+                warnings.simplefilter('always')
+                res = self.solve_for_conv(self.wavelength, *self._conv_matrices(geometry))
+            if not any(issubclass(r.category, RayleighPointWarning) for r in rec):
+                for r in rec:                  # not ours to handle: replay for the caller
+                    warnings.warn_explicit(r.message, r.category, r.filename, r.lineno)
+                return res
+            cause = 'RayleighPointWarning fired'
+        except (FloatingPointError, LinAlgError, RuntimeError) as exc:
+            # RuntimeError only for the backend whose LinAlgError spells itself that way
+            # (torch._C._LinAlgError); anything else is not a degeneracy and not ours to retry.
+            if isinstance(exc, RuntimeError) and 'linalg' not in type(exc).__name__.lower():
+                raise
+            cause = f'the solve refused ({type(exc).__name__})'
+            original = exc
+
+        asked = self.wavelength
+        self.wavelength = asked * (1 + step)
+        try:
+            res = self.solve_for_conv(self.wavelength, *self._conv_matrices(geometry))
+        except Exception:
+            self.wavelength = asked            # the retry changed nothing: restore, re-raise
+            if original is not None:
+                raise original from None
+            raise
+        warnings.warn(
+            f'auto_detune: {cause} at wavelength={asked!r}, a numerically singular point. '
+            f'The returned result was evaluated at wavelength*(1+{step:g}) = '
+            f'{self.wavelength!r} instead, and the solver keeps that wavelength. Pass '
+            'auto_detune=False to solve exactly the requested point.',
+            AutoDetuneWarning, stacklevel=2)
+        return res
 
     def conv_matrices(self, geometry=None, **kwargs):
         """The convolution matrices for this structure, without solving.
