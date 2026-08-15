@@ -46,7 +46,6 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                  fto=(0, 0),
                  ucell_materials=None,
                  connecting_algo='ETM',
-                 perturbation=1E-20,
                  type_complex=np.complex128,
                  fourier_coefficients=None,  # 'sampled' | 'integrated'
                  # (closed-form series); the default resolves per modeling path --
@@ -76,7 +75,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
 
         super().__init__(n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi, chi=chi, tetm=tetm, pol=pol,
                          fto=fto, period=period, wavelength=wavelength,
-                         thickness=thickness, connecting_algo=connecting_algo, perturbation=perturbation,
+                         thickness=thickness, connecting_algo=connecting_algo,
                          type_complex=type_complex,
                          polarization=polarization)
         self.incidence_side = incidence_side

@@ -159,7 +159,7 @@ the half-space instead — the obvious alternative — leaves ``eig``'s arbitrar
 between ``big_F`` and ``big_T``, and that error is invisible in ``R``.
 """
 from .backend import array_namespace, as_array, eig
-from .conventions import boundary_kz
+from .conventions import boundary_kz, order_azimuth
 from .solve_1d import _block, _diag, _is_backside, _mirrored_scene, final_matching
 from .solve_2d import order_grid_kxy, sp_modes_2d
 
@@ -603,7 +603,7 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                  epxy_conv_all=None, epyx_conv_all=None,
                  epxz_conv_all=None, epyz_conv_all=None,
                  epzx_conv_all=None, epzy_conv_all=None,
-                 incidence_side='top', full=False,
+                 *, phi, incidence_side='top', full=False,
                  connecting_algo='ETM'):
     """Solve a 2D stack on the first-order formulation — the public 4ff route.
 
@@ -686,7 +686,7 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     k_par_sq = kx_g ** 2 + ky_g ** 2
     kz_top = xp.reshape(boundary_kz(xp, n_top ** 2, k_par_sq), (-1,))
     kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq), (-1,))
-    varphi = xp.reshape(xp.atan(ky_g / kx_g), (-1,))
+    varphi = order_azimuth(xp, ky_g, kx_g, phi)
 
     Kx = _diag(xp, xp.reshape(kx_g, (-1,)))
     Ky = _diag(xp, xp.reshape(ky_g, (-1,)))

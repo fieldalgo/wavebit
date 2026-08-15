@@ -204,7 +204,8 @@ def test_end_to_end_gradient_wrt_ucell_2d():
 
     def chain(u, kx_, ky_, th_, inc_):
         epx, epy, epz = core_dfs(u, fto[0], fto[1])
-        _, ti = solve_2d(wl, kx_, ky_, n_top, n_bot, th_, inc_, [0.15], epx, epy, epz)
+        _, ti = solve_2d(wl, kx_, ky_, n_top, n_bot, th_, inc_, [0.15], epx, epy, epz,
+                         phi=solver.phi)
         return ti
 
     def f_np(s):
@@ -314,7 +315,7 @@ def test_nvf_end_to_end_gradient_wrt_ucell():
     def chain(u, kx_, ky_, th_, inc_):
         epx, epy, epxy, epyx, epz = core_nvf(u, fto[0], fto[1], normal_field=normal_field)
         _, ti = solve_2d(wl, kx_, ky_, n_top, n_bot, th_, inc_, [d], epx, epy, epz,
-                         epxy_conv_all=epxy, epyx_conv_all=epyx)
+                         epxy_conv_all=epxy, epyx_conv_all=epyx, phi=solver.phi)
         return ti
 
     def f_np(s):

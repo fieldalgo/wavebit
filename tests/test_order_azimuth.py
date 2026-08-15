@@ -1,0 +1,425 @@
+"""Normal incidence needs no detour: the order azimuth is defined where it used to be NaN.
+
+Every solve that couples s and p rotates each order into its own frame by ``cos(varphi)`` /
+``sin(varphi)``, with ``varphi = atan(ky/kx)``. That is undefined wherever ``kx == 0``, which
+happens in two places with two *different* answers:
+
+* the ``m == 0`` column of a 2D order grid (``kx == 0``, ``ky != 0``), at any incidence —
+  the wavevector lies along y, so the azimuth is a right angle;
+* the zeroth order at exactly normal incidence (``kx == ky == 0``), where the in-plane
+  wavevector carries no direction at all — and the answer is ``phi``.
+
+The library used to route around both with a ``perturbation`` constructor argument that
+replaced ``theta == 0`` with ``1e-20``. That made ``kx_0 = eps*cos(phi)`` and
+``ky_0 = eps*sin(phi)``, from which ``atan`` recovered both answers by itself. The knob is
+gone and :func:`~wavebit._core.conventions.order_azimuth` fills the singularities directly,
+with ``phi`` passed to the solves explicitly rather than smuggled through ``kx`` and ``ky``.
+
+**The trap, which cost a wrong first attempt.** The origin looks like a gauge point — a wave
+going straight down has a degenerate plane of incidence, so "any azimuth is a valid s/p
+basis" is a tempting argument. It is wrong. The incident *polarization* still needs a
+reference direction in the xy plane, and ``phi`` is what supplies it. Filling the origin with
+``0`` makes ``F_c = 1``, ``F_s = 0``, and every ``theta = 0`` answer stops depending on
+``phi`` at all — silently, and only when ``phi != 0``. It was caught by
+``tests/references/test_s4_field_golden.py`` (twelve ``theta=0, phi=35deg`` cases, field
+components collapsing from O(1) to 1e-17) and *not* by a 14-case bit-identity battery, whose
+normal-incidence cases all used ``phi = 0`` and were therefore right by coincidence.
+
+That is what :func:`test_normal_incidence_still_depends_on_phi` exists to prevent from
+recurring; it is the cheapest statement of the failure and it does not need a golden.
+
+Also pinned here: gradients still flow **through** ``varphi``, which needs a derivative with
+respect to ``period`` or ``wavelength``, since those feed ``kx = m*wl/period``.
+Differentiating the ucell instead never touches this code, and an earlier version of these
+tests did exactly that and proved nothing.
+"""
+import warnings
+
+import numpy as np
+import pytest
+
+import wavebit
+from wavebit._core.backend import array_namespace
+from wavebit._core.conventions import order_azimuth
+
+HALF_PI = 1.5707963267948966
+
+_UC_1D = np.array([[[1.0, 1.0, 1.0, 3.5, 3.5, 3.5, 1.0, 1.0]]])
+_UC_2D = np.ones((1, 8, 8))
+_UC_2D[0, 2:6, 2:6] = 3.5
+
+
+def _xp():
+    return array_namespace(np.zeros(1, dtype=np.complex128))
+
+
+def _solve(backend=0, ucell=None, fto=(6, 0), theta=0.0, phi=0.0, psi=np.pi / 2, **kw):
+    base = dict(backend=backend, wavelength=500.0, period=[700.0, 700.0], n_top=1.0,
+                n_bot=1.5, theta=theta, phi=phi, psi=psi,
+                ucell=_UC_1D if ucell is None else ucell, thickness=[220.0], fto=list(fto))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        return wavebit.rcwa(**{**base, **kw}).conv_solve()
+
+
+def _total_r(result):
+    return float(np.real(np.asarray(result.R, dtype=np.complex128)).sum())
+
+
+def _energy(result):
+    return sum(float(np.real(np.asarray(v, dtype=np.complex128)).sum())
+               for v in (result.R, result.T))
+
+
+# ---------------------------------------------------------------- the singular points
+
+def test_the_origin_carries_the_incidence_azimuth():
+    """``kx == ky == 0``: the answer is ``phi``, not zero and not a free gauge.
+
+    Written as ``atan(tan(phi))`` rather than ``phi`` on purpose — that is the wrap into
+    ``(-pi/2, pi/2)`` the removed detour produced, and it differs from ``phi`` itself once
+    ``|phi| > pi/2``, flipping the sign of the whole rotation when it does.
+    """
+    kx = np.array([0.0, 0.5, -0.5], dtype=np.complex128)
+    ky = np.zeros(3, dtype=np.complex128)
+    for phi in (0.0, 0.3, np.deg2rad(35.0), 1.2, -0.4, 2.0, -2.0):
+        got = np.asarray(order_azimuth(_xp(), ky, kx, phi))
+        assert np.all(np.isfinite(got))
+        assert np.real(got[0]) == pytest.approx(np.arctan(np.tan(phi)), abs=1e-14)
+
+
+def test_the_kx_zero_column_carries_the_right_angle():
+    """``kx == 0`` with ``ky != 0``: the wavevector lies along y, so the azimuth is pi/2.
+
+    The sign follows ``Re(ky)``, and a purely imaginary ``ky`` takes ``+pi/2`` — both of which
+    are what ``atan(ky / 1e-20)`` returned, rather than a fresh convention invented here.
+    This column has nothing to do with ``phi``, and exists at any incidence.
+    """
+    ky = np.array([0.7, -0.7, 0.7 + 0.3j, -0.7 + 0.3j, 0.5j, -0.5j], dtype=np.complex128)
+    kx = np.zeros_like(ky)
+    got = np.asarray(order_azimuth(_xp(), ky, kx, 0.9))
+    expected = np.array([HALF_PI, -HALF_PI, HALF_PI, -HALF_PI, HALF_PI, HALF_PI])
+    assert np.array_equal(np.real(got), expected)
+    assert np.all(np.isfinite(got))
+
+
+def test_ordinary_orders_are_left_alone():
+    """Away from ``kx == 0`` this must still be exactly ``atan(ky/kx)``, branch and all."""
+    kx = np.array([0.5, -0.5, 1.0, -1.0], dtype=np.complex128)
+    ky = np.array([0.2, 0.2, -0.3, -0.3], dtype=np.complex128)
+    got = np.asarray(order_azimuth(_xp(), ky, kx, 0.9))
+    assert np.array_equal(got, np.arctan(ky / kx))
+
+
+# ---------------------------------------------------------------- the premise
+
+def test_the_2d_grid_at_normal_incidence_hits_both_singularities():
+    """Guard the premise: the cases below must actually reach the code they test.
+
+    At ``theta = 0`` the order grid is ``kx_m = m*wl/Px``, ``ky_n = n*wl/Py``, so the whole
+    ``m == 0`` column has ``kx == 0`` — the ``(0, 0)`` entry is the origin and every
+    ``(0, n != 0)`` entry is the right-angle case. Both singular branches are therefore live
+    in one 2D solve, which is why the ``2d`` cases carry most of this file's weight.
+
+    Exactly zero, not nearly: ``m * wl / P`` is a float product with ``m == 0``, so the test
+    is ``== 0`` rather than a tolerance, and the branch really is taken.
+
+    The mirror-image check matters too. Oblique incidence looks like it should reach the
+    column at ``phi = pi/2``, where ``kx_m = sin(theta)*cos(phi) + m*wl/Px`` would lose its
+    first term — but ``cos(pi/2)`` is ``6.1e-17`` in binary floating point, never ``0``, so
+    ``kx_0`` lands near the singularity without ever being on it. There is no float ``phi``
+    that reaches it. Pinning that keeps someone from adding an oblique "coverage" case that
+    silently exercises nothing.
+    """
+    wl, px, py = 500.0, 700.0, 700.0
+    m = np.arange(-4, 5)
+    kx = m * wl / px
+    ky = m * wl / py
+    assert kx[4] == 0.0 and ky[4] == 0.0, 'the origin is not in the retained set'
+    assert ky[5] != 0.0, 'the m==0 column has no ky != 0 entry to exercise'
+
+    for theta in (0.3, 0.6, 1.2):
+        kx0 = np.sin(theta) * np.cos(np.pi / 2)
+        assert kx0 != 0.0, (
+            'cos(pi/2) came out exactly zero, so an oblique case can now reach the column '
+            'singularity and this file should grow one')
+
+
+# ---------------------------------------------------------------- the regression
+
+def test_normal_incidence_still_depends_on_phi():
+    """The one that would have caught the wrong first attempt, without a golden.
+
+    At ``theta = 0`` every order has ``ky == 0`` and ``kx_0 == 0``, so if the origin is
+    filled with a constant then *every* ``varphi`` is zero and the answer stops depending on
+    ``phi`` entirely. These four would then be bit-identical rather than distinct.
+
+    Distinctness is the whole assertion — the values themselves are pinned against S4 in
+    ``tests/references/test_s4_field_golden.py``, which is where a wrong *value* would show.
+    """
+    got = [_total_r(_solve(theta=0.0, phi=phi, psi=0.7))
+           for phi in (0.0, 0.3, np.deg2rad(35.0), 1.2)]
+    for i, a in enumerate(got):
+        for b in got[i + 1:]:
+            assert abs(a - b) > 1e-6, (
+                f'theta=0 gave the same answer for two different phi ({got}) — the incidence '
+                'azimuth is being dropped at the origin')
+
+
+@pytest.mark.parametrize('backend, name', [(0, 'numpy'), (1, 'jax'), (2, 'torch')])
+@pytest.mark.parametrize('case', ['1d', 'conical', '2d', 'smm', '2d_smm'])
+@pytest.mark.parametrize('phi', [0.0, 0.6108652381980153])
+def test_normal_incidence_solves_without_a_nudge(backend, case, phi, name):
+    """Every path, every backend, at exactly ``theta = 0`` — and at both azimuths.
+
+    Before :func:`order_azimuth`, removing the nudge made all of these raise
+    ``FloatingPointError``: the 2D ones for the ``m == 0`` column, the rest for the origin.
+    """
+    if backend == 1:
+        pytest.importorskip('jax')
+        import wavebit.on_jax  # noqa: F401  -- lifts x64 before any array is built
+    elif backend == 2:
+        pytest.importorskip('torch')
+
+    kw = {'1d': {},
+          'conical': dict(psi=0.7),
+          '2d': dict(ucell=_UC_2D, fto=(4, 4)),
+          'smm': dict(connecting_algo='SMM'),
+          '2d_smm': dict(ucell=_UC_2D, fto=(4, 4), connecting_algo='SMM')}[case]
+    result = _solve(backend=backend, phi=phi, **kw)
+    for array in (result.R, result.T):
+        values = np.asarray(array, dtype=np.complex128)
+        assert np.all(np.isfinite(values)), f'{name}/{case} went non-finite at theta=0'
+    assert _energy(result) == pytest.approx(1.0, abs=1e-9)
+
+
+def test_the_first_order_path_gets_the_azimuth_too():
+    """``solve_2d_4ff`` has its own ``order_azimuth`` call and its own ``phi`` to thread.
+
+    Forced onto a problem the second-order path can also express, the two must agree — which
+    is the only oracle available here, and the one ``tests/test_formulation_dispatch.py``
+    already relies on. A ``phi`` that reached 2ff and not 4ff would show up as a disagreement
+    at ``phi != 0`` and nowhere else, so both azimuths are run.
+    """
+    for phi in (0.0, 0.6108652381980153):
+        second = _solve(ucell=_UC_2D, fto=(4, 4), phi=phi, psi=0.7)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            solver = wavebit.rcwa(backend=0, wavelength=500.0, period=[700.0, 700.0],
+                                  n_top=1.0, n_bot=1.5, theta=0.0, phi=phi, psi=0.7,
+                                  ucell=_UC_2D, thickness=[220.0], fto=[4, 4])
+            solver.formulation = '4ff'
+            first = solver.conv_solve()
+        assert str(solver.formulation_assigned).endswith('FIRST'), solver.formulation_assigned
+        assert _total_r(first) == pytest.approx(_total_r(second), abs=1e-11)
+
+
+def test_phi_and_phi_plus_pi_agree_at_normal_incidence():
+    """The wrap, asserted on a solve rather than only on the helper.
+
+    The origin is filled with ``atan(tan(phi))``, which sends ``phi`` and ``phi + pi`` to the
+    same value. That has to be right rather than merely convenient, and it is: turning the
+    reference azimuth through ``pi`` flips ``s`` and ``p`` *together*, so the incident field
+    and the scattered field pick up the same sign and it cancels in every ratio.
+
+    **Compared on the complex amplitudes, not on the efficiencies.** ``R`` is ``|r|**2`` and
+    cannot see a sign at all, so an ``R``-only version of this test passes against a
+    formulation that flips one of the two — measured: dropping the wrap moves ``r_s`` by
+    0.23 while leaving ``sum(R)`` identical to 1.9e-16. Efficiencies are the wrong instrument
+    for this particular claim.
+
+    ``phi`` and ``phi + pi`` land on the same ``varphi`` by construction, so this is the one
+    property the wrap exists to produce, asserted end to end.
+    """
+    for phi in (0.0, 0.3, 0.6108652381980153, 1.2, -0.4):
+        a = _solve(ucell=_UC_2D, fto=(4, 4), phi=phi, psi=0.7)
+        b = _solve(ucell=_UC_2D, fto=(4, 4), phi=phi + np.pi, psi=0.7)
+        for name in ('r_s', 'r_p', 't_s', 't_p'):
+            x = np.asarray(getattr(a.res_te_inc, name), dtype=np.complex128)
+            y = np.asarray(getattr(b.res_te_inc, name), dtype=np.complex128)
+            assert np.allclose(x, y, rtol=0, atol=1e-14), (
+                f'phi={phi}: {name} disagrees with phi+pi'
+                + (' by a sign' if np.allclose(x, -y, rtol=0, atol=1e-14) else ''))
+
+
+def test_phi_plus_pi_agrees_on_the_reconstructed_field_too():
+    """The sharpest form of the same statement: six components over the whole cell.
+
+    The amplitudes above are *ratios*, so a basis flip cancels in them by construction and
+    they cannot report one. The reconstructed field is a vector in the global ``xy`` frame,
+    where a flipped ``s``/``p`` pair would show up directly as a negated cell — which is what
+    a reader expects a ``pi`` rotation to do, and it is worth having the answer on record
+    rather than reasoned about.
+
+    Measured: identical, not negated (``|a - b| = 5e-14`` against a cell scale of 4.35). The
+    incident pair ``(a_s, a_p) = (sin psi, cos psi)`` does not depend on ``phi`` at all;
+    ``varphi`` is what carries ``phi`` into the global frame, and the wrap hands ``phi`` and
+    ``phi + pi`` the same one. So the two are the *same problem* here, not mirror images.
+
+    Stronger than the amplitude check in practice: six components across a grid rather than
+    four scalars, so an error confined to one component has nowhere to hide.
+    """
+    def cell(phi):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            solver = wavebit.rcwa(backend=0, wavelength=500.0, period=[700.0, 700.0],
+                                  n_top=1.0, n_bot=1.5, theta=0.0, phi=phi, psi=0.7,
+                                  ucell=_UC_2D, thickness=[220.0], fto=[4, 4])
+            solver.conv_solve()
+            return np.asarray(solver.calculate_field(res_x=6, res_y=6, res_z=5),
+                              dtype=np.complex128)
+
+    for phi in (0.3, 0.6108652381980153, 1.2):
+        a, b = cell(phi), cell(phi + np.pi)
+        scale = float(np.max(np.abs(a)))
+        assert scale > 1e-6, 'the field came back empty, so this asserts nothing'
+        assert np.max(np.abs(a - b)) < 1e-12 * scale, (
+            f'phi={phi}: the field disagrees with phi+pi'
+            + (' by a global sign' if np.max(np.abs(a + b)) < 1e-12 * scale else ''))
+
+
+@pytest.mark.parametrize('label, kw', [
+    ('backside', dict(incidence_side='bottom')),
+    ('complex64', dict(type_complex=np.complex64)),
+])
+def test_the_azimuth_survives_the_other_solve_variants(label, kw):
+    """Backside incidence and single precision, at ``theta = 0`` with a non-zero ``phi``.
+
+    Neither has its own ``varphi``, but both re-enter the same solves by a different route,
+    and the mirrored stack in particular reorders arguments that this change touched.
+    """
+    tol = 1e-9 if label == 'backside' else 1e-4
+    for phi in (0.0, 0.6108652381980153):
+        result = _solve(phi=phi, psi=0.7, **kw)
+        assert np.all(np.isfinite(np.asarray(result.R, dtype=np.complex128)))
+        assert _energy(result) == pytest.approx(1.0, abs=tol)
+
+
+def test_perturbation_argument_is_gone():
+    """Removed rather than deprecated, so passing it must fail loudly.
+
+    Silently accepting it would be the worst of the three: the name promises a knob that
+    changes the answer, and after this change nothing would.
+    """
+    with pytest.raises(TypeError):
+        _solve(perturbation=1e-14)
+
+
+def test_the_solves_refuse_to_guess_the_azimuth():
+    """``phi`` is keyword-only and required on the core solves, not defaulted to zero.
+
+    A default is what would let the next caller reintroduce exactly the bug this file is
+    about, and it would do it silently — a wrong azimuth is finite, physical-looking and
+    only wrong when ``phi != 0``.
+    """
+    import inspect
+
+    from wavebit._core.scattering import smm_1d_conical, smm_2d
+    from wavebit._core.solve_1d import solve_1d_conical
+    from wavebit._core.solve_2d import solve_2d
+    from wavebit._core.solve_2d_4ff import solve_2d_4ff
+
+    for fn in (solve_1d_conical, solve_2d, solve_2d_4ff, smm_1d_conical, smm_2d):
+        p = inspect.signature(fn).parameters.get('phi')
+        assert p is not None, f'{fn.__name__} lost its phi argument'
+        assert p.kind is inspect.Parameter.KEYWORD_ONLY, f'{fn.__name__}: phi went positional'
+        assert p.default is inspect.Parameter.empty, f'{fn.__name__}: phi acquired a default'
+
+
+# ---------------------------------------------------------------- gradients through varphi
+
+def test_gradient_flows_through_the_azimuth():
+    """Differentiate ``period``, not the ucell — that is what reaches ``varphi``.
+
+    ``kx = n*sin(theta) + m*wl/period``, so a period derivative passes straight through the
+    singular point at ``theta = 0``. A ucell derivative does not touch this code at all,
+    which is why it cannot stand in for this test.
+    """
+    jax = pytest.importorskip('jax')
+    import wavebit.on_jax  # noqa: F401
+    import jax.numpy as jnp
+
+    def loss(period, ucell, fto, phi):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            r = wavebit.rcwa(backend=1, wavelength=500.0, period=[period, period],
+                             n_top=1.0, n_bot=1.5, theta=0.0, phi=phi, psi=np.pi / 2,
+                             ucell=jnp.asarray(ucell), thickness=[220.0],
+                             fto=list(fto)).conv_solve()
+        return jnp.real(r.R).sum()
+
+    for ucell, fto in ((_UC_1D, (6, 0)), (_UC_2D, (4, 4))):
+        for phi in (0.0, 0.6108652381980153):
+            grad = float(jax.grad(loss)(jnp.asarray(700.0), ucell, fto, phi))
+            h = 1e-3
+            fd = (float(loss(jnp.asarray(700.0 + h), ucell, fto, phi))
+                  - float(loss(jnp.asarray(700.0 - h), ucell, fto, phi))) / (2 * h)
+            assert np.isfinite(grad)
+            assert grad == pytest.approx(fd, rel=1e-4, abs=1e-10)
+
+
+def test_torch_agrees_with_jax_on_the_gradient_through_the_azimuth():
+    """The other traced backend, on the same derivative.
+
+    ``order_azimuth`` builds two nested ``where``\\ s and a ``full_like``, and the three
+    frameworks do not agree on what those do to a graph by default. Cheap to check, and the
+    only thing that says the clamp works under PyTorch's autograd rather than JAX's.
+    """
+    torch = pytest.importorskip('torch')
+    pytest.importorskip('jax')
+    import wavebit.on_jax  # noqa: F401
+    import jax
+    import jax.numpy as jnp
+
+    def jax_loss(period):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            r = wavebit.rcwa(backend=1, wavelength=500.0, period=[period, period], n_top=1.0,
+                             n_bot=1.5, theta=0.0, phi=0.7, psi=np.pi / 2,
+                             ucell=jnp.asarray(_UC_2D), thickness=[220.0],
+                             fto=[4, 4]).conv_solve()
+        return jnp.real(r.R).sum()
+
+    p = torch.tensor(700.0, dtype=torch.float64, requires_grad=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        r = wavebit.rcwa(backend=2, wavelength=500.0, period=[p, p], n_top=1.0, n_bot=1.5,
+                         theta=0.0, phi=0.7, psi=np.pi / 2,
+                         ucell=torch.asarray(_UC_2D), thickness=[220.0],
+                         fto=[4, 4]).conv_solve()
+        torch.real(r.R).sum().backward()
+
+    assert torch.isfinite(p.grad)
+    assert float(p.grad) == pytest.approx(float(jax.grad(jax_loss)(jnp.asarray(700.0))),
+                                          rel=1e-9, abs=1e-12)
+
+
+def test_the_denominator_clamp_is_what_saves_the_gradient():
+    """Masking the output alone is not enough, and the forward pass cannot tell you so.
+
+    ``where`` evaluates both branches, so an unclamped ``ky/kx`` still builds a NaN in the
+    discarded one. It never shows up in the value — only in ``0 * NaN`` on the way back.
+    Both spellings run side by side here so the clamp cannot be "simplified" away by someone
+    reading only the forward result.
+    """
+    jax = pytest.importorskip('jax')
+    import wavebit.on_jax  # noqa: F401
+    import jax.numpy as jnp
+
+    ky = jnp.asarray([0.0, 0.2, 0.3], dtype=jnp.complex128)
+
+    def unclamped(kx_real):
+        kx = jnp.astype(kx_real, jnp.complex128)
+        at_origin = (kx == 0) & (ky == 0)
+        v = jnp.atan(ky / kx)
+        return jnp.sum(jnp.real(jnp.where(at_origin, jnp.zeros_like(v), v)))
+
+    def clamped(kx_real):
+        kx = jnp.astype(kx_real, jnp.complex128)
+        return jnp.sum(jnp.real(order_azimuth(array_namespace(kx), ky, kx, 0.0)))
+
+    kx = jnp.asarray([0.0, 0.5, 1.0], dtype=jnp.float64)   # first entry is the origin
+    assert float(unclamped(kx)) == pytest.approx(float(clamped(kx))), 'forward agrees...'
+    assert not np.isfinite(np.asarray(jax.grad(unclamped)(kx))[0]), '...backward does not'
+    assert np.all(np.isfinite(np.asarray(jax.grad(clamped)(kx))))

@@ -7,7 +7,7 @@ from wavebit._core.backend import check_input_precision
 class _BaseRCWA(CoreSolveMixin):
     def __init__(self, n_top=1., n_bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None, fto=(0, 0), pol=None,
                  period=(1., 1.), wavelength=1.,
-                 thickness=(0.,), connecting_algo='ETM', perturbation=1E-20,
+                 thickness=(0.,), connecting_algo='ETM',
                  device=0, type_complex=np.complex128, polarization=None):
 
         self._device = 0
@@ -24,7 +24,6 @@ class _BaseRCWA(CoreSolveMixin):
         # currently these two are not used. Only the torch backend uses them.
         self._type_float = np.float64 if self.type_complex is not np.complex64 else np.float32
         self._type_int = np.int64 if self.type_complex is not np.complex64 else np.int32
-        self.perturbation = perturbation
 
         self.n_top = n_top
         self.n_bot = n_bot
@@ -105,7 +104,6 @@ class _BaseRCWA(CoreSolveMixin):
         else:
             check_input_precision('theta', theta, self.type_complex)
             self._theta = np.array(theta, dtype=self.type_complex)
-            self._theta = np.where(self._theta == 0, self.perturbation, self._theta)  # perturbation
 
     @property
     def phi(self):

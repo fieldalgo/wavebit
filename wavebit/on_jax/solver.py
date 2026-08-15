@@ -25,7 +25,6 @@ class SolverJax(RCWAJax, OptimizerJax):
             'fto': self.fto,
             'ucell_materials': self.ucell_materials,
             'connecting_algo': self.connecting_algo,
-            'perturbation': self.perturbation,
             'device': self.device,
             'type_complex': self.type_complex,
             # The *requested* values, not the resolved ones the properties report. Both axes

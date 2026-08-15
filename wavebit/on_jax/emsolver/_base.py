@@ -23,7 +23,7 @@ class _BaseRCWA(CoreSolveMixin):
 
     def __init__(self, n_top=1., n_bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None, fto=(0, 0), pol=None,
                  period=(1., 1.), wavelength=1.,
-                 thickness=(0.,), connecting_algo='ETM', perturbation=1E-20,
+                 thickness=(0.,), connecting_algo='ETM',
                  device=0, type_complex=jnp.complex128, polarization=None):
 
         self.device = device
@@ -39,7 +39,6 @@ class _BaseRCWA(CoreSolveMixin):
         # currently these two are not used. Only the torch backend uses them.
         self._type_float = jnp.float64 if self._type_complex is not jnp.complex64 else jnp.float32
         self._type_int = jnp.int64 if self._type_complex is not jnp.complex64 else jnp.int32
-        self.perturbation = perturbation
 
         self.n_top = n_top
         self.n_bot = n_bot
@@ -134,7 +133,6 @@ class _BaseRCWA(CoreSolveMixin):
         else:
             check_input_precision('theta', theta, self.type_complex)
             self._theta = jnp.array(theta, dtype=self.type_complex)
-            self._theta = jnp.where(self._theta == 0, self.perturbation, self._theta)  # perturbation
 
     @property
     def phi(self):

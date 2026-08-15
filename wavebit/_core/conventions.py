@@ -297,3 +297,63 @@ def incident_sp_amplitudes(xp, C, psi, chi=None, polarization=None):
 def safe_sqrt(xp, z, eps=1e-30):
     """``sqrt`` with a finite derivative at 0 (guards autodiff NaN at the DC/branch point)."""
     return (z + eps) ** 0.5
+
+
+def order_azimuth(xp, ky, kx, phi):
+    """Azimuth of each retained order's in-plane wavevector, flattened.
+
+    ``cos(varphi)`` and ``sin(varphi)`` rotate an order into its own s/p frame, so every
+    solve that couples the two polarizations needs this. It is ``atan(ky/kx)`` everywhere
+    except where ``kx == 0``, and that is two different places with two different answers.
+
+    **The ``kx == 0`` column with ``ky != 0``** — every order with ``m == 0`` and ``n != 0``
+    on a 2D grid, present at *any* incidence, not only normal. Nothing is ambiguous: the
+    wavevector points along ``y`` and the azimuth is a right angle. ``+-pi/2`` by the sign of
+    ``Re(ky)``, and ``+pi/2`` when that is zero.
+
+    **The origin**, ``kx == ky == 0`` — the zeroth order at exactly normal incidence, where
+    the in-plane wavevector carries no direction at all. The answer is ``phi``, and it is
+    **not** a free gauge, which is the trap here. A wave going straight down does have a
+    degenerate plane of incidence, but the incident *polarization* still needs a reference
+    direction in the ``xy`` plane, and ``phi`` is by convention what supplies it. Filling
+    this with ``0`` instead makes ``F_c = 1``, ``F_s = 0``, collapses the s/p mixing, and
+    sends field components that should be O(1) to 1e-17 — silently, and only when
+    ``phi != 0``. ``tests/references/test_s4_field_golden.py`` is what catches it; twelve
+    ``theta = 0, phi = 35 deg`` cases fail and every ``phi = 0`` case still passes.
+
+    Neither answer is invented; both are the limit the library used to reach the long way
+    round, through a ``perturbation`` constructor argument that no longer exists. ``theta``
+    was replaced by a tiny non-zero value (``1e-20`` by default) whenever it was exactly
+    zero, which made ``kx_0 = eps*cos(phi)`` and ``ky_0 = eps*sin(phi)`` — so ``atan``
+    recovered ``atan(tan(phi))`` for the origin and ``+-pi/2`` for the column, on its own.
+    That is why the origin is written here as ``atan(sin(phi)/cos(phi))`` rather than as
+    ``phi``: it reproduces the same wrap into ``(-pi/2, pi/2)``, which differs from ``phi``
+    itself once ``|phi| > pi/2`` and flips the sign of the whole rotation when it does.
+
+    So the detour was not merely tidy, it was carrying the incidence azimuth into ``kx`` and
+    ``ky`` infinitesimally — which is precisely why nobody could tell what the knob did. It
+    is passed explicitly now.
+
+    The complex dtype is what made the detour load-bearing rather than optional: ``ky / 0``
+    is ``inf + nan*j`` for a complex array rather than the real case's ``inf``, so the NaN
+    reached every element through the block algebra. In real arithmetic IEEE would have
+    carried ``atan(inf) = pi/2`` by itself and no knob would ever have been needed.
+
+    The clamp on the denominator is not cosmetic either. ``where`` evaluates both branches,
+    so an unguarded ``ky/kx`` would still build that NaN in the discarded one — finite in
+    the forward pass, but ``0 * NaN`` in the backward one, which is how a singular point
+    silently destroys a gradient while every value-based test keeps passing.
+    """
+    zero_kx = kx == 0
+    safe_kx = xp.where(zero_kx, xp.ones_like(kx * ky), kx)
+    varphi = xp.atan(ky / safe_kx)
+
+    ky_b = ky + xp.zeros_like(varphi)                 # broadcast to the order grid
+    right_angle = xp.where(xp.real(ky_b) < 0,
+                           xp.full_like(varphi, -1.5707963267948966),
+                           xp.full_like(varphi, 1.5707963267948966))
+    varphi = xp.where(zero_kx, right_angle, varphi)
+
+    p = as_array(xp, 0.0 if phi is None else phi, dtype=varphi.dtype)
+    incident = xp.atan(xp.sin(p) / xp.cos(p)) + xp.zeros_like(varphi)
+    return xp.reshape(xp.where(zero_kx & (ky == 0), incident, varphi), (-1,))

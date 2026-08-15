@@ -23,7 +23,7 @@ def _as_tensor(v, device=None, dtype=None):
 class _BaseRCWA(CoreSolveMixin):
     def __init__(self, n_top=1., n_bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None, fto=(0, 0), pol=None,
                  period=(1., 1.), wavelength=1.,
-                 thickness=(0.,), connecting_algo='ETM', perturbation=1E-20,
+                 thickness=(0.,), connecting_algo='ETM',
                  device='cpu', type_complex=torch.complex128, polarization=None):
 
         # device
@@ -46,7 +46,6 @@ class _BaseRCWA(CoreSolveMixin):
 
         self._type_float = torch.float64 if self._type_complex is not torch.complex64 else torch.float32
         self._type_int = torch.int64 if self._type_complex is not torch.complex64 else torch.int32
-        self.perturbation = perturbation
 
         self.n_top = n_top
         self.n_bot = n_bot
@@ -135,7 +134,6 @@ class _BaseRCWA(CoreSolveMixin):
         else:
             check_input_precision('theta', theta, self.type_complex)
             self._theta = _as_tensor(theta, device=self.device, dtype=self.type_complex)
-            self._theta = torch.where(self._theta == 0, self.perturbation, self._theta)  # perturbation
 
     @property
     def phi(self):

@@ -678,7 +678,7 @@ class CoreSolveMixin:
         return self._finish(solve(
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self._incidence_pair(), self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
-            incidence_side=self.incidence_side,
+            phi=self.phi, incidence_side=self.incidence_side,
             full=True))
 
     def solve_2d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
@@ -701,14 +701,14 @@ class CoreSolveMixin:
                 epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
                 epxz_conv_all=epxz_conv_all, epyz_conv_all=epyz_conv_all,
                 epzx_conv_all=epzx_conv_all, epzy_conv_all=epzy_conv_all,
-                incidence_side=self.incidence_side,
+                phi=self.phi, incidence_side=self.incidence_side,
                 full=True, connecting_algo=self.connecting_algo))
         solve = self._solve_fn('2d')
         return self._finish(solve(
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self._incidence_pair(), self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
-            incidence_side=self.incidence_side,
+            phi=self.phi, incidence_side=self.incidence_side,
             full=True, mu=mu, mu_top=mu_top, mu_bot=mu_bot))
 
 

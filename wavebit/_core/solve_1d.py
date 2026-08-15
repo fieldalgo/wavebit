@@ -21,7 +21,8 @@ Stages (matching the legacy chain, kept as one function each to make bit-parity 
   3. final matching      — incident field -> R, T -> diffraction efficiency
 """
 from .backend import array_namespace, as_array, check_finite, check_physical, eig
-from .conventions import boundary_kz, incident_kz, incident_sp_amplitudes, mode_q
+from .conventions import (boundary_kz, incident_kz, incident_sp_amplitudes, mode_q,
+                          order_azimuth)
 
 
 def _diag(xp, v):
@@ -286,7 +287,7 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
 
 def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                      epx_conv_all, epy_conv_all, epz_conv_i_all,
-                     incidence_side='top', full=False):
+                     *, phi, incidence_side='top', full=False):
     """Solve a general 1D grating (arbitrary azimuth/polarization) for the given ``psi``.
 
     The conical case couples the s and p polarizations, so the per-layer modes and the
@@ -324,7 +325,7 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
     k_par_sq = kx ** 2 + ky_col ** 2
     kz_top = xp.reshape(boundary_kz(xp, n_top ** 2, k_par_sq), (-1,))
     kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq), (-1,))
-    varphi = xp.reshape(xp.atan(ky_col / kx), (-1,))
+    varphi = order_azimuth(xp, ky_col, kx, phi)
 
     eps_bot = n_bot ** 2
     Kz_bot = _diag(xp, kz_bot)

@@ -122,11 +122,10 @@ class Numerics:
     factorization: Optional[Factorization] = None
     type_complex: int = 128
     connecting_algo: str = 'ETM'
-    perturbation: float = 1e-20
     normal_grid: int = 1024
 
     _FIELDS = ('backend', 'fto', 'fourier_coefficients', 'factorization', 'type_complex',
-               'connecting_algo', 'perturbation', 'normal_grid')
+               'connecting_algo', 'normal_grid')
 
     @classmethod
     def from_dict(cls, d) -> 'Numerics':
@@ -167,7 +166,6 @@ class Numerics:
             fto=list(self.fto),
             type_complex=0 if self.type_complex == 128 else 1,
             connecting_algo=self.connecting_algo,
-            perturbation=self.perturbation,
             normal_grid=self.normal_grid,
             **({} if self.fourier_coefficients is None
                else {'fourier_coefficients': self.fourier_coefficients.value}),

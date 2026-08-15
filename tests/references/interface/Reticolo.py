@@ -244,7 +244,7 @@ if __name__ == '__main__':
 
     # Numpy
     backend = 0
-    nmee = wavebit.rcwa(backend=backend, perturbation=1E-30, **option)
+    nmee = wavebit.rcwa(backend=backend, **option)
     n_de_ri, n_de_ti = nmee.conv_solve()
     n_field_cell = nmee.calculate_field(res_z=200, res_x=5)
     print('numpy R', n_de_ri)
@@ -252,7 +252,7 @@ if __name__ == '__main__':
 
     # # JAX
     # backend = 1
-    # jmee = wavebit.rcwa(backend=backend, perturbation=1E-30, **option)
+    # jmee = wavebit.rcwa(backend=backend, **option)
     # j_de_ri, j_de_ti = jmee.conv_solve()
     # j_field_cell = jmee.calculate_field(res_z=200, res_x=5)
     # print('jax R', j_de_ri)
@@ -260,7 +260,7 @@ if __name__ == '__main__':
     #
     # # Torch
     # backend = 2
-    # tmee = wavebit.rcwa(backend=backend, perturbation=1E-30, **option)
+    # tmee = wavebit.rcwa(backend=backend, **option)
     # t_de_ri, t_de_ti = tmee.conv_solve()
     # t_field_cell = tmee.calculate_field(res_z=200, res_x=5)
     # print('torch R', t_de_ri)

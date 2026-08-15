@@ -50,7 +50,7 @@ builders. That recovery is a second pass over the stack, done only under ``full=
 is where the extra ~10-20% in the cost quoted above goes.
 """
 from .backend import array_namespace, as_array, check_finite, check_physical
-from .conventions import boundary_kz, incident_sp_amplitudes
+from .conventions import boundary_kz, incident_sp_amplitudes, order_azimuth
 from .solve_1d import (_block, _diag, _is_backside, _pack, _unit, layer_modes_1d,
                        layer_modes_1d_conical, sp_efficiencies, sp_modes_1d_conical)
 from .solve_2d import layer_modes_2d, order_grid_kxy, sp_modes_2d
@@ -501,7 +501,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
 
 def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                    epx_conv_all, epy_conv_all, epz_conv_i_all,
-                   incidence_side='top', full=False):
+                   *, phi, incidence_side='top', full=False):
     """Solve a conical 1D grating by scattering matrices — SMM twin of :func:`solve_1d_conical`.
 
     Same arguments and returns as :func:`smm_1d`; ``polarization`` is the complex amplitude
@@ -513,7 +513,7 @@ def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     ff_x = kx.shape[0]
     I = xp.astype(xp.eye(ff_x), C)
     ky_col = xp.reshape(ky, (-1, 1))
-    varphi = xp.reshape(xp.atan(ky_col / kx), (-1,))
+    varphi = order_azimuth(xp, ky_col, kx, phi)
 
     Kx = _diag(xp, kx)
     ky_vec = ky[0] * xp.astype(xp.ones((ff_x,)), C)      # ff_y == 1: Ky = diag(ky0 * 1)
@@ -539,7 +539,7 @@ def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
 def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
            epxy_conv_all=None, epyx_conv_all=None,
-           incidence_side='top', full=False, mu=None, mu_top=1.0, mu_bot=1.0):
+           *, phi, incidence_side='top', full=False, mu=None, mu_top=1.0, mu_bot=1.0):
     """Solve a 2D grating stack by scattering matrices — SMM twin of :func:`solve_2d`.
 
     Same arguments and returns as :func:`smm_1d`; ``incidence`` is the resolved complex
@@ -559,7 +559,7 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     ff_xy = ff_x * ff_y
     I = xp.astype(xp.eye(ff_xy), C)
     O = xp.astype(xp.zeros((ff_xy, ff_xy)), C)
-    varphi = xp.reshape(xp.atan(ky_g / kx_g), (-1,))
+    varphi = order_azimuth(xp, ky_g, kx_g, phi)
     mu_all = (None,) * 5 if mu is None else tuple(mu)
 
     Kx = _diag(xp, xp.reshape(kx_g, (-1,)))

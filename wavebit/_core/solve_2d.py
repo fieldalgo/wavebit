@@ -12,7 +12,7 @@ enter the mode operator. ``transfer_2d_1`` and ``transfer_2d_4`` are identical t
 versions, so this module reuses ``solve_1d``'s boundary init and ``final_matching`` verbatim.
 """
 from .backend import array_namespace, as_array, eig
-from .conventions import boundary_kz, mode_q
+from .conventions import boundary_kz, mode_q, order_azimuth
 from .solve_1d import _block, _diag, _is_backside, _mirrored_scene, final_matching
 
 
@@ -161,7 +161,7 @@ def sp_modes_2d(xp, W, V, F_c, F_s, ff_xy):
 def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
              epxy_conv_all=None, epyx_conv_all=None,
-             incidence_side='top', full=False, mu=None, mu_top=1.0, mu_bot=1.0):
+             *, phi, incidence_side='top', full=False, mu=None, mu_top=1.0, mu_bot=1.0):
     """Solve a 2D grating stack for the given incidence.
 
     ``incidence`` is the resolved incident amplitude pair ``(a_s, a_p)`` at unit flux — whatever
@@ -218,7 +218,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     k_par_sq = kx_g ** 2 + ky_g ** 2
     kz_top = xp.reshape(boundary_kz(xp, n_top ** 2, k_par_sq), (-1,))
     kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq), (-1,))
-    varphi = xp.reshape(xp.atan(ky_g / kx_g), (-1,))
+    varphi = order_azimuth(xp, ky_g, kx_g, phi)
 
     eps_bot = n_bot ** 2 / mu_bot          # n stays the refractive index; eps carries the mu
     Kz_bot = _diag(xp, kz_bot)

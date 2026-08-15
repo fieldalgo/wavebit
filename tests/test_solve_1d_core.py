@@ -166,8 +166,8 @@ def _run_and_inputs_conical(ucell, thickness, n_top, n_bot, wl, period, fto, the
         solver.ucell, solver.fto[0], solver.fto[1])
     kx, ky = solver.get_kx_ky_vector(wl)
     inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_top, n_bot=n_bot,
-                  theta=solver.theta, incidence=solver._incidence_pair(),
-                  thickness=solver.thickness,
+                  theta=solver.theta, phi=solver.phi,
+                  incidence=solver._incidence_pair(), thickness=solver.thickness,
                   epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
     return (np.array(via_api.R), np.array(via_api.T)), inputs
 
