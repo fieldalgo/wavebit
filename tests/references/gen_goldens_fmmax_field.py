@@ -46,7 +46,7 @@ def main():
     import jax.numpy as jnp
     import fmmax
 
-    from _fmmax_field_cases import (CASES, FTO, NUM_TERMS, PERIOD, RES_X, RES_Y, RES_Z,
+    from _fmmax_field_cases import (CASES, NUM_TERMS, PERIOD, RES_X, RES_Y, RES_Z,
                                     THICK, WL, raster, x_samples)
 
     lat = fmmax.LatticeVectors(u=jnp.array([PERIOD, 0.0]), v=jnp.array([0.0, PERIOD]))

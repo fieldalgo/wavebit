@@ -37,7 +37,7 @@ import wavebit
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from _fmmax_field_cases import (CASES, FTO, NX, NY, PERIOD, RES_X, RES_Z,  # noqa: E402
+from _fmmax_field_cases import (CASES, FTO, PERIOD, RES_Z,  # noqa: E402
                                 THICK, WL, fine_res_x, raster, x_samples)
 
 GOLDEN = np.load(HERE / 'golden_fmmax_field.npz')
