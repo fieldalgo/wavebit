@@ -83,8 +83,22 @@ boundary:
 **Every column is flat in `N` from 64 to 512.** The error depends on how many *pixels* away
 from the boundary a point is and not on how large a pixel is, which is the statement above made
 sharp: the guess is a property of the staircase, and a finer staircase is the same staircase.
-Worst case in the band is ~40 deg, which is what a 45-degree arc costs when the steps are
-axis-aligned.
+
+The mean hides a structure worth knowing, because it is not spread evenly around the arc. In
+the boundary band at `N=256` the distribution runs 5.2 / 12.3 / 21.7 / 30.1 deg at the 25th /
+50th / 75th / 90th percentile, and by position on the arc:
+
+| arc angle (0 = axis, 45 = diagonal) | 0-10 | 10-25 | 25-40 | 40-50 |
+|---|---|---|---|---|
+| mean angular error | 7.5 deg | 20.0 deg | 16.2 deg | 2.5 deg |
+
+So the guess is at its *best* where the step pattern is commensurate with the direction it has
+to represent -- along the axes, and on the diagonal where steps alternate one-for-one (1.3 deg
+there at `N=128`) -- and at its worst in between, around 18-27 deg, where it locks onto local
+step runs that do not average to the true angle. The extreme outliers are the other way about:
+the worst 3% of pixels, up to ~40 deg, cluster near the diagonal, so a *mean* read at 45 deg and
+a *maximum* read at 45 deg point in opposite directions. No mechanism is claimed for that split
+here; it is what the field does, measured.
 
 It is a curvature effect and nothing else. On a flat interface the same code returns the axis
 normal *exactly* -- `max|n_y|` is 0.0, not small -- so nothing here is a bias in where the
