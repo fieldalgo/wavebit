@@ -325,6 +325,27 @@ def check_physical(xp, de_ri, de_ti, n_top, atol=1e-3):
             UnphysicalResultWarning, stacklevel=2)
 
 
+def forward_strided(v):
+    """``v`` with no negative stride, copying only a NumPy view that has one.
+
+    ``np.rot90``, ``np.flip`` and ``a[::-1]`` all return views with a negative stride, and
+    PyTorch refuses those outright: ``ValueError: At least one stride in the given numpy array
+    is negative``. NumPy and JAX take them without complaint, so the natural spelling of "solve
+    the rotated cell" is a crash on ``backend=2`` and a result on the other two — a backend
+    difference in what the *input contract* accepts, which is exactly what this module exists
+    to absorb.
+
+    Normalising is safe precisely where it applies. Only NumPy arrays are copied, and a NumPy
+    array never carries an autograd graph; a torch tensor cannot have a negative stride in the
+    first place, and copying one would be the silent detach :func:`as_array` is written to
+    avoid. Anything else is returned untouched.
+    """
+    import numpy as np
+    if isinstance(v, np.ndarray) and any(s < 0 for s in v.strides):
+        return np.ascontiguousarray(v)
+    return v
+
+
 def as_array(xp, v, dtype=None, device=None):
     """``v`` as an ``xp`` array, keeping any autograd graph intact.
 
@@ -338,6 +359,10 @@ def as_array(xp, v, dtype=None, device=None):
     Use this anywhere a *user-supplied* quantity enters the algebra — an index, an angle, a
     period, a wavelength, an edge position. `xp.asarray` is still right for values the core
     builds itself, such as index arrays and constants.
+
+    A foreign array crossing into ``xp`` also gets its strides normalised
+    (:func:`forward_strided`), because PyTorch is the one namespace that refuses a reversed
+    NumPy view.
     """
     if hasattr(v, 'dtype') and hasattr(v, 'shape'):
         try:
@@ -346,6 +371,7 @@ def as_array(xp, v, dtype=None, device=None):
             same_ns = False
         if same_ns:
             return v if dtype is None or v.dtype == dtype else xp.astype(v, dtype)
+    v = forward_strided(v)
     if dtype is None:
         return xp.asarray(v, device=device)
     return xp.asarray(v, dtype=dtype, device=device)

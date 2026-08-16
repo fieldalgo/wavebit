@@ -4,7 +4,7 @@ import numpy as np
 
 
 from ..._core.engine import CoreSolveMixin, _POL_RETIRED
-from wavebit._core.backend import check_input_precision
+from wavebit._core.backend import check_input_precision, forward_strided
 
 
 def _as_tensor(v, device=None, dtype=None):
@@ -14,10 +14,15 @@ def _as_tensor(v, device=None, dtype=None):
     the caller is optimizing would silently drop it from the graph — the solve still returns a
     tensor, just one with nothing behind it. Tensors are moved with ``.to()``; everything else
     is created as before.
+
+    This is the boundary where a caller's value becomes a torch value, so it is also where a
+    reversed NumPy view (``np.rot90``, ``np.flip``, ``a[::-1]``) is normalised — torch rejects
+    negative strides outright where the other two backends accept them. See
+    :func:`wavebit._core.backend.forward_strided`.
     """
     if isinstance(v, torch.Tensor):
         return v.to(device=device, dtype=dtype)
-    return torch.tensor(v, device=device, dtype=dtype)
+    return torch.tensor(forward_strided(v), device=device, dtype=dtype)
 
 
 class _BaseRCWA(CoreSolveMixin):

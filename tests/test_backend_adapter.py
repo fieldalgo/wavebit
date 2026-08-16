@@ -1,12 +1,14 @@
 """Backend adapter (wavebit._core.backend): eig dispatch + differentiability.
 
 Verifies the single per-framework primitive: eigenvalues match NumPy, and gradients through
-eig flow correctly on JAX and PyTorch (matching finite differences).
+eig flow correctly on JAX and PyTorch (matching finite differences). Also the input contract
+the adapter has to keep backend-independent -- see the stride section at the end.
 """
 import numpy as np
 import pytest
 
-from wavebit._core.backend import eig, array_namespace
+import wavebit
+from wavebit._core.backend import eig, array_namespace, forward_strided
 
 
 A_np = np.array([[2.0 + 0j, 1.0, 0.2],
@@ -262,3 +264,110 @@ def test_j1_derivative_is_right_including_at_zero(lib):
             got.append(float(t.grad))
 
     assert np.allclose(got, exact, atol=1e-11), list(zip(probes, got, exact))
+
+
+# ------------------------------------------------------------------- reversed NumPy views
+#
+# `np.rot90`, `np.flip` and `a[::-1]` return views with a negative stride. NumPy and JAX take
+# those; PyTorch refuses them ("At least one stride in the given numpy array is negative"), so
+# before `forward_strided` the natural spelling of a rotated cell -- the one a user reaches for
+# to check the phi=90 / transposed-grating equivalence -- was a crash on backend=2 and an answer
+# on backends 0 and 1. The strides are an artifact of how the array was built, not part of the
+# structure being described, so which backend is running must not be able to see them.
+
+STRIDED_CFG = dict(period=(500., 800.), thickness=(180.,), wavelength=620.,
+                   fto=(2, 2), theta=0.2, psi=0.3)
+
+#: Asymmetric on purpose: a cell that equals its own rotation would pass the comparison below
+#: while measuring nothing.
+STRIDED_ROW = [1.0, 2.5, 1.0, 3.5]
+STRIDED_CELL = np.rot90(np.array([[STRIDED_ROW] * 4]), axes=(1, 2))
+
+
+def _totals(res):
+    return float(np.sum(np.asarray(res.R))), float(np.sum(np.asarray(res.T)))
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+def test_a_reversed_raster_solves_the_same_as_its_copy(backend):
+    """Every backend takes a negative-stride `ucell`, and gets the contiguous answer.
+
+    Two claims, and the second is why this is not just a smoke test: torch used to raise here,
+    and a normalisation that copied the buffer the wrong way round would now return a *wrong*
+    number instead. The copy is the reference.
+    """
+    if backend == 1:
+        pytest.importorskip('jax')
+    elif backend == 2:
+        pytest.importorskip('torch')
+    assert any(s < 0 for s in STRIDED_CELL.strides), 'premise: the input is a reversed view'
+
+    strided = wavebit.rcwa(backend=backend, ucell=STRIDED_CELL, **STRIDED_CFG).conv_solve()
+    copied = wavebit.rcwa(backend=backend, ucell=np.ascontiguousarray(STRIDED_CELL),
+                          **STRIDED_CFG).conv_solve()
+    assert _totals(strided) == _totals(copied)
+
+
+def test_torch_takes_a_reversed_period_and_thickness():
+    """Not only the raster: every scalar-ish input crosses the same adapter.
+
+    `period` and `thickness` reach `_as_tensor` as whole arrays, so `np.flip(...)` on either
+    raised exactly like the rotated cell did. Each is written backwards and flipped, so the two
+    solves are handed the same numbers and differ only in how those numbers are laid out.
+    """
+    pytest.importorskip('torch')
+    cell = np.ascontiguousarray(STRIDED_CELL)
+    stack = np.concatenate([cell, 1.0 + 0.5 * cell])
+    cfg = dict(wavelength=620., fto=(2, 2), theta=0.2, psi=0.3)
+
+    reversed_ = wavebit.rcwa(backend=2, ucell=stack, period=np.flip(np.array([800., 500.])),
+                             thickness=np.flip(np.array([90., 180.])), **cfg).conv_solve()
+    plain = wavebit.rcwa(backend=2, ucell=stack, period=(500., 800.),
+                         thickness=(180., 90.), **cfg).conv_solve()
+    assert _totals(reversed_) == _totals(plain)
+
+
+def test_normalising_strides_does_not_detach_the_ucell():
+    """The trap `as_array`'s docstring warns about, on the input this change touched.
+
+    A copy is the obvious way to kill a negative stride and it is also the obvious way to drop
+    a caller's optimizer leaf out of the graph. `forward_strided` copies NumPy only, so a torch
+    `ucell` must reach the solve untouched and every cell must still carry a gradient.
+    """
+    torch = pytest.importorskip('torch')
+    uc = torch.tensor(np.ascontiguousarray(STRIDED_CELL), dtype=torch.float64,
+                      requires_grad=True)
+    torch.sum(wavebit.rcwa(backend=2, ucell=uc, **STRIDED_CFG).conv_solve().T).backward()
+    assert uc.requires_grad, 'the leaf was flipped in place'
+    assert int((uc.grad.abs() > 1e-14).sum()) == uc.numel()
+
+
+def test_as_array_carries_a_reversed_view_into_torch():
+    """The generic adapter, not only the torch solver's own: both had the same hole.
+
+    `as_array` is what every user-supplied scalar and small array in `_core` passes through, so
+    it is the second door the same reversed view can arrive at, and `xp.asarray` raised there
+    for the same reason `torch.tensor` did.
+    """
+    pytest.importorskip('torch')
+    import array_api_compat.torch as txp
+    from wavebit._core.backend import as_array
+    reversed_ = np.flip(np.array([1.0, 2.0, 3.0]))
+    got = as_array(txp, reversed_, dtype=txp.float64)
+    assert np.array_equal(np.asarray(got), reversed_)
+
+
+def test_forward_strided_copies_only_what_it_must():
+    """It is an identity everywhere except the one case it exists for."""
+    torch = pytest.importorskip('torch')
+    contiguous = np.ascontiguousarray(STRIDED_CELL)
+    assert forward_strided(contiguous) is contiguous
+    assert forward_strided(0.4) == 0.4
+    assert forward_strided([1.0, 2.0]) == [1.0, 2.0]
+
+    leaf = torch.tensor([1.0, 2.0], requires_grad=True)
+    assert forward_strided(leaf) is leaf
+
+    fixed = forward_strided(STRIDED_CELL)
+    assert all(s > 0 for s in fixed.strides)
+    assert np.array_equal(fixed, STRIDED_CELL)

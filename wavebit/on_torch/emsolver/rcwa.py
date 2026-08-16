@@ -2,7 +2,7 @@ import torch
 
 import numpy as np
 
-from ._base import _BaseRCWA
+from ._base import _BaseRCWA, _as_tensor
 from ..._core.engine import CoreFactorizationMixin
 from ..._core.enums import Formulation
 from ..._core.fields import field_1d, field_1d_conical, field_2d, field_2d_4ff, field_plot
@@ -109,13 +109,16 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
                 raise ValueError
 
         elif isinstance(ucell, np.ndarray):  # Raster
+            # Through `_as_tensor`, not `torch.tensor`: a rotated or flipped cell is a NumPy
+            # view with a negative stride, which torch alone refuses. Normalising here is the
+            # whole reason a caller's array crosses one adapter rather than several.
             self._modeling_type_assigned = 0
             if ucell.dtype in (np.int64, np.float64, np.int32, np.float32):
                 dtype = self.type_float
-                self._ucell = torch.tensor(ucell, device=self.device, dtype=dtype)
+                self._ucell = _as_tensor(ucell, device=self.device, dtype=dtype)
             elif ucell.dtype in (np.complex128, np.complex64):
                 dtype = self.type_complex
-                self._ucell = torch.tensor(ucell, device=self.device, dtype=dtype)
+                self._ucell = _as_tensor(ucell, device=self.device, dtype=dtype)
             else:
                 raise ValueError
 
