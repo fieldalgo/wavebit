@@ -97,8 +97,24 @@ to represent -- along the axes, and on the diagonal where steps alternate one-fo
 there at `N=128`) -- and at its worst in between, around 18-27 deg, where it locks onto local
 step runs that do not average to the true angle. The extreme outliers are the other way about:
 the worst 3% of pixels, up to ~40 deg, cluster near the diagonal, so a *mean* read at 45 deg and
-a *maximum* read at 45 deg point in opposite directions. No mechanism is claimed for that split
-here; it is what the field does, measured.
+a *maximum* read at 45 deg point in opposite directions.
+
+**The field does not interpolate, and that is the whole of the split.** Every direction it
+returns in the band lands within 0.5 deg of `arctan(p/q)` for small integers -- 3476 of 3476
+band pixels at `N=1024`, with `p, q <= 4`. The output is a short list of directions, not a
+continuum. Walking outward from the axis it returns `0.0 deg` for essentially every pixel out to
+16 deg of true angle, which is why the error there *equals* the arc angle rather than merely
+tracking it: 0.7 / 1.2 / 1.8 / 2.3 deg of error at 0.7 / 1.2 / 1.8 / 2.3 deg of arc, and the same
+identity holds walking outward from 45 deg. The outliers are the pixels that emit a *different*
+entry from the same list -- `45.0` where their neighbours emit `0.0` -- and one substitution is
+worth 30-40 deg by itself.
+
+So 0 and 45 deg are cheap and expensive for the same reason: the true normal is *in* the list
+there, so most pixels are nearly exact, and a pixel that takes the wrong entry is maximally
+wrong. Which entry a pixel takes is decided inside the distance transform's central differences
+and is not resolved here -- but it is not the obvious rule: the returned direction agrees with
+the direction to the nearest mask cell only 39% of the time within 1 deg, median disagreement
+3.95 deg.
 
 ### A zero normal is a different thing, and is not what the outliers are
 
