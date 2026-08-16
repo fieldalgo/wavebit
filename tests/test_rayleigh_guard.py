@@ -303,6 +303,90 @@ def test_auto_detune_accepts_an_explicit_step():
     assert abs(R + T - 1.0) < 1e-6
 
 
+def _theta_exactly_on(n_top, target):
+    """An incidence angle with ``n_top * sin(theta) == target`` *bitwise*, or None.
+
+    The equality this file needs is a property of libm's rounding, not of mathematics, so it
+    is searched for rather than assumed: step outward one ULP at a time from ``arcsin`` and
+    take the first angle whose product lands exactly. A platform whose libm never lands on
+    it makes the caller skip — a skipped premise is honest where a silently-vacuous test is
+    not.
+    """
+    base = float(np.arcsin(target / n_top))
+    lo = hi = base
+    candidates = [base]
+    for _ in range(60):
+        lo = np.nextafter(lo, 0.0)
+        hi = np.nextafter(hi, 2.0)
+        candidates += [lo, hi]
+    for th in candidates:
+        if n_top * np.sin(th) == target:
+            return float(th)
+    return None
+
+
+def test_auto_detune_theta_rung_clears_a_wavelength_invariant_graze():
+    """The second rung: a graze the wavelength cannot move, the incidence angle can.
+
+    ``kx_0 = n_top*sin(theta)`` carries no wavelength, so when the *zeroth* order sits
+    exactly on a uniform layer's index the first rung retries into the identical problem
+    and fails again. The ladder then nudges ``theta``, which moves every order at once.
+    Constructed so the layer eigenvalue is exactly zero (all quantities binary-exact:
+    2.5 * 0.5 == 1.25, 1.25**2 == 1.5625), which is the refusing case.
+    """
+    from wavebit._core.backend import AutoDetuneWarning
+    theta = _theta_exactly_on(2.5, 1.25)
+    if theta is None:
+        pytest.skip("this platform's libm never lands n_top*sin(theta) on 1.25 exactly")
+
+    def solver():
+        return wavebit.rcwa(backend=0, wavelength=WL, fto=[2, 0],
+                            ucell=np.full((1, 1, 16), 1.25), period=[PERIOD],
+                            n_top=2.5, n_bot=1.5, theta=theta, phi=0.0, psi=np.pi / 2,
+                            thickness=[300.0])
+
+    # Premise: the exact point must actually refuse — otherwise the FFT was not noiseless
+    # here and the test would pass without touching the ladder.
+    try:
+        solver().conv_solve(auto_detune=False)
+    except (FloatingPointError, np.linalg.LinAlgError):
+        pass
+    else:
+        pytest.skip('the constructed point did not refuse; premise not reproducible here')
+
+    mee = solver()
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        R, T = _totals(mee.conv_solve())
+    notices = [r for r in rec if issubclass(r.category, AutoDetuneWarning)]
+    assert notices and 'theta' in str(notices[0].message), (
+        f'expected the theta rung to report itself, got {[str(n.message) for n in notices]}')
+    assert mee.theta != theta, 'the solver must keep the nudged angle it solved with'
+    assert abs(R + T - 1.0) < 1e-6
+
+
+def test_auto_detune_keeps_gradients_flowing_through_the_retry():
+    """The retry multiplies the knob, so an autodiff graph survives it.
+
+    ``jax.grad`` through the refused exact-zero point (fto=3): the first pass raises, the
+    ladder re-solves at the detuned wavelength, and the gradient that comes back is the
+    nearby problem's — finite, and nonzero for a parameter the reflectance depends on.
+    """
+    jax = pytest.importorskip('jax')
+    import wavebit.on_jax  # noqa: F401
+    import jax.numpy as jnp
+
+    def loss(thickness):
+        r = wavebit.rcwa(backend=1, wavelength=WL, fto=[3, 0], ucell=_STACK,
+                         **_KW).conv_solve(thickness=[200.0, thickness])
+        return jnp.real(jnp.asarray(r.R)).sum()
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        g = float(jax.grad(loss)(300.0))
+    assert np.isfinite(g) and g != 0.0
+
+
 def test_exact_zero_eigenvalue_is_loud_on_every_backend():
     """``fto=3`` retains the grazing order with an eigenvalue that is *exactly* zero.
 

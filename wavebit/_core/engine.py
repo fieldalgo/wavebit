@@ -964,18 +964,22 @@ class CoreFactorizationMixin:
         ``auto_detune`` is what happens when the requested point is numerically singular — an
         order exactly on a light line (``kx_m == n``, a Rayleigh point). On by default: if the
         solve refuses with a degeneracy (``LinAlgError`` / ``FloatingPointError``) or fires
-        :class:`~wavebit._core.backend.RayleighPointWarning`, it is re-run once at
-        ``wavelength * (1 + 1e-12)`` — off the point, where the answer is measured to agree
-        with the one-sided limit to ~1e-6 — and
-        :class:`~wavebit._core.backend.AutoDetuneWarning` states the wavelength actually
-        used. The solver keeps that wavelength, so field reconstruction and everything else
-        downstream describe one consistent problem. Nothing moves silently, which is what
-        separates this from the ``perturbation`` knob this library removed. Pass ``False``
-        to solve exactly the requested point and let the refusal or the warning through;
-        pass a float to choose the relative step (the default is sized for double precision —
-        complex64 resolves nothing below ~1e-7, use ~1e-5 there). A traced solve
-        (``jax.jit``) skips every guard and therefore never retries — the same line the
-        guards themselves draw.
+        :class:`~wavebit._core.backend.RayleighPointWarning`, it is re-run up a two-rung
+        ladder — ``wavelength * (1 + 1e-12)`` first, and if the condition survives (the
+        ``m == 0`` order carries no wavelength) additionally ``theta * (1 + 1e-12)``, which
+        moves every order at once. Off the point the answer is measured to agree with the
+        one-sided limit to ~1e-6. :class:`~wavebit._core.backend.AutoDetuneWarning` states
+        exactly which knobs were moved and the values actually used; the solver keeps them,
+        so field reconstruction and everything else downstream describe one consistent
+        problem. Nothing moves silently, which is what separates this from the
+        ``perturbation`` knob this library removed. The knobs multiply, so a differentiable
+        ``wavelength`` / ``theta`` keeps its autodiff graph through the retry — the gradient
+        returned is the nearby problem's, which is also the only one that exists (the exact
+        point is a cusp of R(lambda)). Pass ``False`` to solve exactly the requested point
+        and let the refusal or the warning through; pass a float to choose the relative step
+        (the default is sized for double precision — complex64 resolves nothing below ~1e-7,
+        use ~1e-5 there). A traced solve (``jax.jit``) skips every guard and therefore never
+        retries — the same line the guards themselves draw.
 
         Raises:
             StaleGeometryError: eagerly, when ``geometry`` no longer describes the structure it
@@ -1010,21 +1014,64 @@ class CoreFactorizationMixin:
             cause = f'the solve refused ({type(exc).__name__})'
             original = exc
 
-        asked = self.wavelength
-        self.wavelength = asked * (1 + step)
+        # The retry ladder. Wavelength first: it moves every m != 0 order and is the knob a
+        # sweep is already varying. It cannot move the m == 0 order — kx_0 = n_top*sin(theta)
+        # has no wavelength in it — so a condition that survives the first rung gets the
+        # incidence angle nudged as well; theta moves every order at once. theta == 0 has no
+        # second rung and needs none: kx_0 == 0 there, which grazes nothing. The knobs
+        # multiply rather than being replaced, so a differentiable wavelength/theta keeps its
+        # autodiff graph through the retry.
+        knobs = ['wavelength']
         try:
-            res = self.solve_for_conv(self.wavelength, *self._conv_matrices(geometry))
+            if self.theta is not None and bool(self.theta != 0):
+                knobs.append('theta')
         except Exception:
-            self.wavelength = asked            # the retry changed nothing: restore, re-raise
-            if original is not None:
-                raise original from None
-            raise
-        warnings.warn(
-            f'auto_detune: {cause} at wavelength={asked!r}, a numerically singular point. '
-            f'The returned result was evaluated at wavelength*(1+{step:g}) = '
-            f'{self.wavelength!r} instead, and the solver keeps that wavelength. Pass '
-            'auto_detune=False to solve exactly the requested point.',
-            AutoDetuneWarning, stacklevel=2)
+            pass                               # unreadable theta: wavelength rung only
+        saved = {k: getattr(self, k) for k in knobs}
+        candidate = None if original is not None else (res, rec, [])
+        applied = []
+        for knob in knobs:
+            setattr(self, knob, saved[knob] * (1 + step))
+            applied.append(knob)
+            try:
+                with warnings.catch_warnings(record=True) as rung_rec:
+                    warnings.simplefilter('always')
+                    rung_res = self.solve_for_conv(self.wavelength,
+                                                   *self._conv_matrices(geometry))
+            except (FloatingPointError, LinAlgError, RuntimeError) as exc:
+                if isinstance(exc, RuntimeError) and 'linalg' not in type(exc).__name__.lower():
+                    for k in applied:
+                        setattr(self, k, saved[k])
+                    raise                      # not a degeneracy: restore and surface as-is
+                setattr(self, knob, saved[knob])   # this rung did not take
+                applied.pop()
+                continue
+            candidate = (rung_res, rung_rec, list(applied))
+            if not any(issubclass(r.category, RayleighPointWarning) for r in rung_rec):
+                break                          # off the condition: this is the answer
+        if candidate is None:
+            # Every rung refused as well (applied is empty — each failure restored its knob).
+            # The asked-for point is the honest thing to report, message and all.
+            raise original from None
+
+        res, rung_rec, moved = candidate
+        for r in rung_rec:                     # the returned solve's own warnings, replayed
+            warnings.warn_explicit(r.message, r.category, r.filename, r.lineno)
+        cleared = not any(issubclass(r.category, RayleighPointWarning) for r in rung_rec)
+        if moved:
+            where = ', '.join(f'{k}*(1+{step:g}) = {getattr(self, k)!r}' for k in moved)
+            tail = ('The solver keeps these values. Pass auto_detune=False to solve exactly '
+                    'the requested point.' if cleared else
+                    'The condition did not clear — it does not depend on the moved knobs; '
+                    'the RayleighPointWarning above stands. Nudge an index or the period '
+                    'instead.')
+            warnings.warn(f'auto_detune: {cause}; re-solved at {where}. {tail}',
+                          AutoDetuneWarning, stacklevel=2)
+        else:
+            warnings.warn(
+                f'auto_detune: {cause}, and every detuned retry refused; returning the '
+                'exact-point result, warnings and all. Nudge an index or the period instead.',
+                AutoDetuneWarning, stacklevel=2)
         return res
 
     def conv_matrices(self, geometry=None, **kwargs):
