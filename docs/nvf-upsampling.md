@@ -111,10 +111,37 @@ worth 30-40 deg by itself.
 
 So 0 and 45 deg are cheap and expensive for the same reason: the true normal is *in* the list
 there, so most pixels are nearly exact, and a pixel that takes the wrong entry is maximally
-wrong. Which entry a pixel takes is decided inside the distance transform's central differences
-and is not resolved here -- but it is not the obvious rule: the returned direction agrees with
-the direction to the nearest mask cell only 39% of the time within 1 deg, median disagreement
-3.95 deg.
+wrong.
+
+**What decides which entry.** The direction is `arctan2` of the two central differences of the
+distance field, which is what the code computes and nothing more --
+`arctan2(d[r+1,c]-d[r-1,c], d[r,c+1]-d[r,c-1])` reproduces the shipped field to 0.0 deg. The
+quantisation is in those differences: taken over a two-cell span of a distance-to-a-digital-set,
+they land on small integers. In the mask band, 71% of cells have both differences integral, and
+the integer pairs that occur are only `{1,0}`, `{2,0}` and `{1,1}` -- so **only 0 and 45 deg are
+available there at all**, which is the plateau structure exactly.
+
+Which of the two a cell gets is decided by the staircase under it, and the picture is the whole
+argument. `A` is a cell returning 0 deg, `D` one returning 45, `#` interior, `.` exterior, on the
+arc near the axis:
+
+    ####AD...
+    ####AA...
+    ####AA...      <- a flat run: every cell {1,0}, returns 0 deg, and 0 deg is right
+    ####AA...
+    ####AD...      <- the step: {1,1}, returns 45 deg
+    ###DA....
+
+`D` sits on the jog and nowhere else. Along a flat run the distance field rises in one direction
+only, so the cross difference is 0; at the one-pixel jog it rises equally both ways and the cell
+takes `{1,1}`. Near the axis, runs are long and jogs rare -- 32 of 256 band cells within 12 deg
+of the axis, 12.5%, matching the 12% of pixels past 30 deg reported above -- so those few sit 45
+deg away from every neighbour. Near the diagonal every cell is a jog, `{1,1}` is the rule rather
+than the exception, and 45 deg is the right answer, which is why the mean is excellent there and
+the rare non-jog cell becomes the outlier instead.
+
+One candidate is closed on the way: it is *not* the direction to the nearest mask cell, which
+agrees only 39% of the time within 1 deg, median disagreement 3.95 deg.
 
 ### A zero normal is a different thing, and is not what the outliers are
 
