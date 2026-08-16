@@ -2,7 +2,9 @@
 
 Written: 2026-08-16; §6 (the 2D coupled-cluster rebuild) added later the same day.
 Measured on CPU (Apple Accelerate), NumPy / JAX / PyTorch, float64; the single-precision
-caveat is stated where it applies.
+caveat is stated where it applies. This file is the measurement record; for the
+narrative walkthrough of how the pieces hand off to each other at solve time, read
+`rayleigh-handling-walkthrough.md`.
 
 Targets:
 - `wavebit/_core/solve_1d.py` — `layer_modes_1d_conical` (the reformulation), `layer_modes_1d`
