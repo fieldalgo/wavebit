@@ -492,6 +492,278 @@ def test_li_tells_x_and_y_apart_and_this_is_expected(fto):
         f'genuinely changed, docs/factorization-terms.md §6 needs the new numbers')
 
 
+# ------------------------------------------------------ the same symmetry, on a scene that can see it
+#
+# `_relabelling_residue` above is the shipped path, but it is degenerate three times over for a
+# turn of the whole scene: normal incidence, a SQUARE period, and a transpose-symmetric cell. No
+# raster is ever rotated and no period pair is ever swapped, so most of what a quarter turn has
+# to carry is never exercised. Its two neighbours are degenerate the same way --
+# `test_pn_factorization.py::test_it_is_covariant_under_a_quarter_turn_about_z` does a real
+# `np.rot90` but on the internal PN path at normal incidence with a square period, and
+# `test_solve_2d_4ff.py::test_rotating_the_whole_problem_about_z_changes_nothing` turns uniform
+# tensors with no raster and no period pair at all.
+#
+# What follows turns the scene where all four moving parts are live: oblique incidence, unequal
+# periods, unequal fto, and a chiral cell.
+
+def _chiral_L(N=80, n_hi=2.4):
+    """An L with unequal arms -- no mirror axis, and not equal to its own transpose.
+
+    The chirality is the whole point. On a shape symmetric under a reflection the rotation and
+    reflection spellings of a quarter turn collapse onto each other and the ``psi`` sign stops
+    mattering, which is exactly how the three tests named above ended up unable to see any of
+    this. The asserts are the premise of every test below, checked rather than assumed, so that
+    an edit to the arms cannot quietly make them vacuous.
+    """
+    u = np.ones((N, N))
+    u[N // 8:N // 2, N // 8:5 * N // 16] = n_hi        # rows are y: a tall narrow arm
+    u[N // 8:N // 5, N // 8:13 * N // 16] = n_hi       # a long flat arm, different length *and* width
+    assert not np.array_equal(u, u.T), 'cell is transpose-symmetric; the relabelling is vacuous'
+    assert not np.array_equal(u, np.flipud(u)), 'cell is y-symmetric; the mirror test is vacuous'
+    assert not np.array_equal(u, np.fliplr(u)), 'cell is x-symmetric'
+    assert not np.array_equal(u, np.rot90(u)), 'cell is quarter-turn symmetric'
+    return u[None, :, :]
+
+
+#: Unequal periods and a wavelength short enough to put many orders above the light line. Both
+#: matter: at 620 nm only 2 of 77 entries are nonzero, every order map agrees on a mostly-zero
+#: array, and an earlier pass at this fooled itself that way. 250 nm leaves 15 propagating.
+_TURN_PERIOD = [500.0, 800.0]
+_TURN_FTO = [5, 3]
+_TURN_WAVELENGTH = 250.0
+_TURN_THETA = np.deg2rad(25.0)
+_TURN_PSI = np.deg2rad(37.0)
+
+
+def _turn_scene(ucell, period, fto, phi, psi, factorization='nvf'):
+    """One solve of the turnable scene. Returns ``(R, T, fto)`` -- see :func:`_by_order`."""
+    res = wavebit.rcwa(
+        backend=0, factorization=factorization, fto=[int(fto[0]), int(fto[1])],
+        n_top=1.0, n_bot=1.0, theta=_TURN_THETA, phi=phi, psi=psi,
+        wavelength=_TURN_WAVELENGTH, period=[period[0], period[1]], thickness=[120.0],
+        ucell=ucell).conv_solve()
+    return np.asarray(res.R), np.asarray(res.T), (int(fto[0]), int(fto[1]))
+
+
+def _by_order(scene):
+    """``{(m, n): (R, T)}`` -- keyed by the diffraction order, not by array position.
+
+    Two of the four moving parts below change the *shape* of the returned grids (swapping the
+    ``fto`` pair transposes it; relabelling the orders is the map onto it), so a comparison
+    written as array arithmetic either cannot be expressed or silently compares the wrong
+    entries. Keying by ``(m, n)`` states which physical order is being matched to which and
+    leaves the shape out of it.
+
+    ``R`` and ``T`` are ``(ff_y, ff_x)`` with the incident order at the centre -- the transpose
+    of the ``fto=[x, y]`` input order, which is itself one of the swaps under test.
+    """
+    R, T, (fto_x, fto_y) = scene
+    return {(m, n): (R[fto_y + n, fto_x + m], T[fto_y + n, fto_x + m])
+            for n in range(-fto_y, fto_y + 1) for m in range(-fto_x, fto_x + 1)}
+
+
+def _residue(scene_a, scene_b, relabel):
+    """``max |a(m, n) - b(relabel(m, n))|`` over the orders both solves retain."""
+    a, b = _by_order(scene_a), _by_order(scene_b)
+    worst = 0.0
+    for order, (r_a, t_a) in a.items():
+        pair = b.get(relabel(*order))
+        if pair is not None:
+            worst = max(worst, abs(r_a - pair[0]), abs(t_a - pair[1]))
+    return float(worst)
+
+
+_SWAP = lambda m, n: (n, m)          # noqa: E731 -- the x<->y relabelling, as an order map
+_MIRROR_Y = lambda m, n: (m, -n)     # noqa: E731
+
+
+def test_the_turned_scene_is_a_scene_that_can_actually_see_the_turn():
+    """The premise of the two tests below: enough orders propagate to tell the maps apart.
+
+    Without this the suite can go green on a degeneracy rather than on the physics. At 620 nm
+    with these periods only 2 of 77 entries are nonzero, so the identity map, the transpose and
+    the quarter-turn map all agree to roundoff on a grid that is almost entirely zero.
+    """
+    scene = _turn_scene(_chiral_L(), _TURN_PERIOD, _TURN_FTO, np.deg2rad(90.0), _TURN_PSI)
+    propagating = int((np.abs(scene[0]) > 1e-14).sum())
+    assert propagating >= 10, (
+        f'only {propagating} of {scene[0].size} reflected orders propagate; this scene is too '
+        f'close to the degenerate one to distinguish the order maps')
+
+
+@pytest.mark.parametrize('fto', [[5, 3], [8, 6], [11, 9]])
+def test_nvf_is_covariant_when_the_whole_scene_is_turned(fto):
+    """A layer at ``phi=90`` equals its turned counterpart at ``phi=0`` -- exactly, on nvf.
+
+    A theorem-oracle: it needs no reference implementation, only the same physics set up twice.
+    Four things have to move together, and :func:`test_every_part_of_the_turn_is_load_bearing`
+    pins that each one is genuinely carrying weight rather than being along for the ride.
+
+    **The spelling is a reflection, not a rotation, and that is a real choice.** Transposing the
+    raster maps ``eps(x, y)`` to ``eps(y, x)``, which is a reflection across the diagonal, so it
+    reverses orientation and the s direction flips with it: ``psi -> -psi``, i.e. ``a_s -> -a_s``
+    (``chi`` likewise, when named). The rotation spelling ``np.rot90(U, 1)`` keeps ``psi`` instead,
+    and since ``np.rot90(A, 1) == np.flipud(A.T)`` identically, the two spellings differ by exactly
+    one y-mirror. Both are exact as of 2026-08-16; until then this one was 1e-15 and the rotation
+    1.4e-03, because the mirror between them was broken -- see
+    :func:`test_a_y_mirror_is_exact_on_both_factorizations` for the defect and the fix.
+
+    This test is therefore the *decomposition*, not the whole theorem: it isolates the x<->y
+    relabelling half. The theorem as a physicist would state it -- a plain ``np.rot90`` -- is
+    :func:`test_a_plain_quarter_turn_of_the_whole_scene_is_exact`, and that is the one to reach for
+    first. Neither substitutes for the other: they now agree on every fault they can both see, but
+    a regression that moved only one of them would mean the decomposition itself needs re-deriving,
+    and that is the case no single test can report.
+
+    Measured on the shipped path over N in {40, 80, 160} x fto in {4..12} x three
+    (theta, psi) pairs: 8.6e-16 to 2.7e-13, so 1e-12 keeps roughly two decades of headroom at
+    the configurations parametrized here and about 4x at the worst corner of that wider sweep.
+    Exact on all three backends (numpy 1.4e-15, jax 1.8e-15, torch 3.3e-15) -- torch used to
+    refuse ``np.rot90``'s negative strides, which ``_core.backend.forward_strided`` fixed.
+
+    **What this is structurally blind to, measured rather than assumed.** A relabelling
+    covariance test cannot see a bug that is *itself* a consistent relabelling of the two axes:
+    the mutation gets conjugated by the very transformation under test, so both halves move
+    together and the residue stays at roundoff. Swapping the distance transform's
+    ``sampling=(step_j, step_i)`` pair in ``normal_vector_field`` is exactly that shape of bug --
+    a live mutant, moving ``R`` by 2.0e-03 -- and it passes every one of the 67 tests in this
+    file, this one included. The class is not unguarded, it is just guarded elsewhere: it dies
+    in ``tests/test_nvf_non_square_grid.py::test_the_metric_is_what_makes_a_non_square_grid_point_the_right_way``,
+    which pins the normal *direction* against the true geometry and so is absolute where this is
+    relative. The two are complements, and neither substitutes for the other. What does die here
+    is a bug with a hand to it: building ``ny`` from the x gradient kills all three
+    parametrizations below.
+    """
+    ucell = _chiral_L()
+    upright = _turn_scene(ucell, _TURN_PERIOD, fto, np.deg2rad(90.0), _TURN_PSI)
+    turned = _turn_scene(ucell.transpose(0, 2, 1), _TURN_PERIOD[::-1], fto[::-1],
+                         0.0, -_TURN_PSI)
+    resid = _residue(upright, turned, _SWAP)
+    assert resid < 1e-12, f'nvf is not covariant under a turn of the whole scene: {resid:.2e}'
+
+
+def test_every_part_of_the_turn_is_load_bearing():
+    """Each of the four changes, omitted alone, must break the equivalence.
+
+    This is what keeps the test above from passing for the wrong reason. A covariance check is
+    only as strong as the transformation it applies, and three of these four are the kind of
+    thing that is easy to leave out and easy not to notice: on a square period the period swap
+    is a no-op, on an equal ``fto`` pair so is that swap, and on a mirror-symmetric cell the
+    ``psi`` sign is free. Every one of them is a no-op in the three tests this file's header
+    block names, which is why none of them could see a turn go wrong.
+
+    The measured cost of each omission, at ``fto=[5, 3]``, N=80 -- all of them four to fourteen
+    orders of magnitude above the 1e-12 the full recipe meets.
+    """
+    ucell = _chiral_L()
+    turned_cell = ucell.transpose(0, 2, 1)
+    upright = _turn_scene(ucell, _TURN_PERIOD, _TURN_FTO, np.deg2rad(90.0), _TURN_PSI)
+
+    omissions = {
+        # period pair left unswapped -- the turned cell solved in the upright cell's box
+        'period': (_residue(upright, _turn_scene(
+            turned_cell, _TURN_PERIOD, _TURN_FTO[::-1], 0.0, -_TURN_PSI), _SWAP), 1.2e-1),
+        # fto pair left unswapped -- the orders retained along the wrong axis
+        'fto': (_residue(upright, _turn_scene(
+            turned_cell, _TURN_PERIOD[::-1], _TURN_FTO, 0.0, -_TURN_PSI), _SWAP), 2.8e-2),
+        # psi left unnegated -- the reflection's s-flip dropped
+        'psi': (_residue(upright, _turn_scene(
+            turned_cell, _TURN_PERIOD[::-1], _TURN_FTO[::-1], 0.0, +_TURN_PSI), _SWAP), 3.4e-2),
+    }
+    # ...and the order map itself, against the same correct solve the test above uses
+    correct = _turn_scene(turned_cell, _TURN_PERIOD[::-1], _TURN_FTO[::-1], 0.0, -_TURN_PSI)
+    omissions['order map (identity)'] = (
+        _residue(upright, correct, lambda m, n: (m, n)), 6.3e-2)
+    omissions['order map (quarter turn)'] = (
+        _residue(upright, correct, lambda m, n: (n, -m)), 3.8e-2)
+
+    for name, (resid, measured) in omissions.items():
+        assert resid > 1e-4, (
+            f'omitting the {name} left a residue of only {resid:.2e} (it measured {measured:.1e} '
+            f'when this was written); that part of the turn has stopped being load-bearing and '
+            f'the covariance test above is correspondingly weaker')
+
+
+@pytest.mark.parametrize('factorization', ['li', 'nvf'])
+@pytest.mark.parametrize('fto', [[4, 2], [6, 4], [8, 6]])
+def test_a_y_mirror_is_exact_on_both_factorizations(fto, factorization):
+    """Flip the cell in y and the polarisation with it; at ``phi=0`` the orders must flip too.
+
+    ``phi=0`` because the x-z plane of incidence is what a y-mirror leaves invariant. Note this
+    is not the same symmetry as the x<->y relabelling higher up, and the two factorizations do
+    not hold them for the same reasons: ``li`` fixes one axis inside the other, so it *breaks*
+    the relabelling (``test_li_tells_x_and_y_apart_and_this_is_expected``) while holding a
+    single-axis mirror exactly, because that axis' nesting is untouched by the flip.
+
+    **``nvf`` used to break this, at 7.6e-04 to 8.4e-03, and the defect was real.** The normal
+    field is a *pointwise* sample while the permittivity is *piecewise constant*, and only the
+    latter was given the half-pixel phase that puts a value at its cell centre rather than at
+    the cell's left edge -- so the normal field sat half a pixel off the permittivity it
+    multiplies. A lateral shift of the whole structure cannot absorb that, because it is a
+    *relative* offset between two grids read from the same raster. Mirror the layer and the
+    offset has to change sign; it did not, the two landed a full pixel apart, and the result was
+    an O(1/N) asymmetry. Fixed 2026-08-16 by giving the sampled path the same phase and not the
+    ``sinc`` (:func:`~wavebit._core.factorization._half_pixel_phase`); ``nvf`` now runs
+    1.8e-15 to 1.6e-14 here, and ``|nvf - li|`` at matched truncation improved in all six
+    resolutions measured -- roughly 1.5x to 2x at ``fto=10``.
+
+    **Nothing the suite already had could see it**, which is why it survived the whole rewrite:
+    energy conservation, the projector identity ``C_xx + C_yy = I``, the x<->y relabelling, and
+    every golden are all even in the half-pixel offset. It took a mirror on a chiral cell.
+    """
+    ucell = _chiral_L()
+    upright = _turn_scene(ucell, _TURN_PERIOD, fto, 0.0, +_TURN_PSI,
+                          factorization=factorization)
+    mirrored = _turn_scene(np.flip(ucell, axis=1), _TURN_PERIOD, fto, 0.0, -_TURN_PSI,
+                           factorization=factorization)
+    resid = _residue(upright, mirrored, _MIRROR_Y)
+    assert resid < 1e-12, f'{factorization} broke a y-mirror by {resid:.2e}'
+
+
+@pytest.mark.parametrize('fto', [[5, 3], [8, 6], [11, 9]])
+def test_a_plain_quarter_turn_of_the_whole_scene_is_exact(fto):
+    """The theorem as it would be stated: turn the scene a quarter turn, the answer follows.
+
+    This is the natural form -- an actual ``np.rot90``, with ``psi`` untouched because a rotation
+    preserves handedness -- and it is the one to reach for first. The transpose spelling above is
+    a *decomposition* of the same turn, kept because of what it isolates, not because it is the
+    statement anybody means.
+
+    The period and fto pairs swap here exactly as they do there. That is not a property of either
+    spelling: a quarter turn exchanges the axes, so a 500x800 box becomes 800x500 however the
+    raster is written, and omitting the swap costs 1.2e-01 on both.
+
+    **This did not hold until 2026-08-16, and the reason is worth keeping.** Since
+    ``np.rot90(A, 1) == np.flipud(A.T)`` identically, this spelling is the transpose one composed
+    with a y-mirror::
+
+        quarter turn  =  x<->y relabelling  o  y-mirror
+
+    The relabelling half was always exact; the mirror half was not, and this test inherited the
+    whole of that defect -- 5.1e-04 to 4.4e-03, with the two turned solves compared directly
+    against each other reproducing it to every digit, which is what said the gap was the mirror
+    and contained nothing else. Fixing the half-pixel offset behind it (see
+    :func:`test_a_y_mirror_is_exact_on_both_factorizations`) closed this at the same stroke.
+
+    Keeping all three is not redundancy: the decomposition is what localises a regression. A
+    handed error injected into the normal field at amplitude 1e-4, 1e-3 and 1e-2 moves the
+    transpose spelling to 2.3e-05, 2.3e-04 and 2.3e-03 while this one -- when it was banded at
+    the mirror's noise floor -- stayed inside its band and saw none of them. Now that both are
+    bounded at 1e-12 they catch the same faults, but they still fail in distinguishable
+    combinations: relabelling alone moves the transpose test, a mirror alone moves the mirror
+    test, and only a broken *composition* moves this one while both halves stay green.
+
+    Measured 1.6e-15 to 3.7e-14 across the truncations parametrized here.
+    """
+    ucell = _chiral_L()
+    upright = _turn_scene(ucell, _TURN_PERIOD, fto, np.deg2rad(90.0), _TURN_PSI)
+    turned = _turn_scene(np.rot90(ucell, 1, axes=(1, 2)), _TURN_PERIOD[::-1], fto[::-1],
+                         0.0, _TURN_PSI)                      # psi kept: a rotation, not a mirror
+    resid = _residue(upright, turned, lambda m, n: (n, -m))
+    assert resid < 1e-12, (
+        f'a plain quarter turn of the whole scene is not covariant: {resid:.2e}')
+
+
 # ------------------------------------------------- what a self-captured golden cannot claim
 #
 # `golden_legacy_factorization.npz` pins these builders against their own earlier output, so it
