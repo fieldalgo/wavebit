@@ -69,6 +69,36 @@ Raising the real raster resolution behaves as it should:
 |---|---|---|---|---|---|
 | NVF error (dielectric circle, `fto=6`) | 7.63e-03 | 5.03e-03 | 1.43e-03 | 1.33e-03 | 3.65e-04 |
 
+### How far off the guess is, as an angle
+
+The efficiencies above say the guess costs something; this says how wrong the field itself is,
+which is what makes "it does not converge" concrete. Measured 2026-08-16 against the exact
+radial normal of the circle the staircase stands for, in bands by distance from the true
+boundary:
+
+| distance from boundary | 0-1 px | 1-2 px | 2-4 px | 4-8 px | 8-16 px |
+|---|---|---|---|---|---|
+| mean angular error | 14.4 deg | 10.4 deg | 7.5 deg | 5.1 deg | 3.6 deg |
+
+**Every column is flat in `N` from 64 to 512.** The error depends on how many *pixels* away
+from the boundary a point is and not on how large a pixel is, which is the statement above made
+sharp: the guess is a property of the staircase, and a finer staircase is the same staircase.
+Worst case in the band is ~40 deg, which is what a 45-degree arc costs when the steps are
+axis-aligned.
+
+It is a curvature effect and nothing else. On a flat interface the same code returns the axis
+normal *exactly* -- `max|n_y|` is 0.0, not small -- so nothing here is a bias in where the
+boundary is taken to sit. That was checked separately, since a mask built from "cells that
+differ from a 4-neighbour" marks both sides of an edge and could plausibly have sat half a
+pixel off: the marked band's mean radius tracks the true radius to within 0.03 px at every `N`
+up to 1024, with the sign alternating rather than accumulating, and a halfwidth of 0.53 px. The
+band straddles the boundary symmetrically, so no sub-pixel offset enters and the mirror
+symmetry of the field is exact (`normal_vector_field` is bit-exactly covariant under a flip).
+
+None of this is a defect to fix on the raster path -- it is the reason the analytic, boundary
+and levelset paths exist, all three of which build the normal field from the shape instead of
+from its raster.
+
 ## The sweep
 
 Base raster 240x240 (fine enough that the staircase error is small), truth from the analytic
