@@ -202,6 +202,36 @@ None of this is a defect to fix on the raster path -- it is the reason the analy
 and levelset paths exist, all three of which build the normal field from the shape instead of
 from its raster.
 
+### One comparison against `li`, on the same raster
+
+Everything above describes how crude the normal field is and says nothing about what that costs
+next to the alternative that does not use one. This is a single measurement of that, recorded
+because it was not otherwise in this file. **It is one shape at one incidence and is not a claim
+about either factorization in general.**
+
+Setup: a circle of radius 0.30 in a unit cell, index 2.4 in vacuum, thickness 0.30, wavelength
+0.55, `theta` 12 deg, `phi` 30 deg, `psi` 40 deg. Reference is the analytic (staircase-free)
+path on the exact circle at `fto=14`. The two raster runs take the identical raster and differ
+only in `factorization`. Error is the largest per-order difference in R or T against the
+reference, over the orders both retain.
+
+| N | `fto` | raster `nvf` | raster `li` |
+|---|---|---|---|
+| 32 | 6 | 6.95e-02 | 8.89e-02 |
+| 32 | 10 | 5.63e-02 | 7.45e-02 |
+| 64 | 6 | 2.15e-02 | 3.90e-02 |
+| 64 | 10 | 8.75e-03 | 2.37e-02 |
+| 128 | 6 | 1.95e-02 | 3.98e-02 |
+| 128 | 10 | 8.00e-03 | 2.36e-02 |
+| 256 | 6 | 1.43e-02 | 3.75e-02 |
+| 256 | 10 | 3.51e-03 | 2.08e-02 |
+
+**The reference carries 1.7e-3 of its own**: `|fto=12 - fto=14|` on the same measure. Read the
+last row with that in mind -- 3.51e-03 is close enough to that floor that what separates the two
+columns there is not resolved by this experiment, while the `N=128` rows sit clearly above it.
+Nothing here says what happens on a shape with corners, at another incidence, or at truncations
+where either column has stopped converging.
+
 ## The sweep
 
 Base raster 240x240 (fine enough that the staircase error is small), truth from the analytic
