@@ -30,9 +30,10 @@ exactly.
 The concreteness tests at the bottom are the guard-level regression this file originally
 carried: on JAX and PyTorch a wrong answer once returned with no warning at all, because both
 guards keyed their eager-only rule on the *namespace* instead of on whether the value was
-concrete. See :func:`wavebit._core.backend._concrete`. The guards still matter — the 2D path
-at an exact layer graze (``V = (Omega_R @ W) / q`` loses the grazing column to cancellation)
-and any traced-and-jitted solve still rely on them.
+concrete. See :func:`wavebit._core.backend._concrete`. The guards still matter — the 2D
+rebuild's fallback paths (a graze under ``jax.grad`` or a grad-carrying tensor ships the old
+construction plus the warning; see ``solve_2d._rebuild_grazing_cluster``) and any
+traced-and-jitted solve still rely on them.
 """
 import functools
 import warnings
@@ -150,9 +151,13 @@ def test_exact_rayleigh_point_solves_correctly(backend, fto, name, algo):
 
 # ---------------------------------------------------------------- the 2D path
 
-# The quiet-wrong class: exact-graze 2D stacks that returned R+T of 0.96-0.99 on a lossless
-# stack with no warning at all — the exact signature that reads as ordinary absorption.
-_QUIET_WRONG_2D = [(2.0, 'ETM'), (2.0, 'SMM'), (1.5, 'ETM')]
+# The former quiet-wrong class: exact-graze 2D stacks that once returned R+T of 0.96-0.99
+# on a lossless stack with no warning at all. The 2D contract is now correct-or-loud (see
+# ``solve_2d._rebuild_grazing_cluster``): which of the two a stack gets is a property of
+# this platform's round-off (the graze cluster's coupled mode rates are noise-split), so
+# the portable assertion is on the *pair* of outcomes, and the platform-specific ones skip
+# when their premise does not reproduce.
+_GRAZE_2D = [(2.0, 'ETM'), (2.0, 'SMM'), (1.5, 'ETM'), (1.5, 'SMM')]
 
 
 def _solve_2d(n_spacer, algo, wavelength=WL, auto_detune=False):
@@ -165,27 +170,72 @@ def _solve_2d(n_spacer, algo, wavelength=WL, auto_detune=False):
                         connecting_algo=algo).conv_solve(auto_detune=auto_detune)
 
 
-@pytest.mark.parametrize('n_spacer, algo', _QUIET_WRONG_2D)
-def test_2d_exact_graze_announces_itself(n_spacer, algo):
-    """The 2D path still cannot solve the exact point — so it must say so, every time.
+@pytest.mark.parametrize('n_spacer, algo', _GRAZE_2D)
+def test_2d_exact_graze_is_correct_or_loud(n_spacer, algo):
+    """An exact-graze 2D solve either refuses loudly or returns the right answer.
 
-    ``layer_modes_2d`` loses the grazing column of ``V`` to cancellation and no eigen
-    identity ports (see its comment), so the 2D contract is detection, not correctness:
-    :class:`~wavebit._core.backend.RayleighPointWarning` fires whenever a layer eigenvalue is
-    at round-off scale (threshold measured in ``backend._CUTOFF_REL``; 0 false positives over
-    60 random non-grazing 2D solves). Before it, 5 of 48 exact-graze 2D solves returned
-    R+T of 0.96-0.99 on this lossless stack with nothing fired — absorption that isn't there.
+    This is the flip of the old ``announces_itself`` detection pin, made possible by the
+    coupled-cluster rebuild in ``layer_modes_2d``: a representable graze cluster is now
+    re-derived from the first-order problem and solves exactly (measured: inside the
+    two-sided sqrt-extrapolated oracle bracket, where the old construction was off by
+    4.5e-3 .. 4.1e0 with R+T up to 42); a numerically defective one (the ``{1, z}``
+    regime) raises with the detune advice. What may never happen again is the third
+    outcome this test's predecessor guarded: finite, in-range, quietly wrong.
     """
-    from wavebit._core.backend import RayleighPointWarning
+    R_far, T_far = _totals(_solve_2d(n_spacer, algo, wavelength=WL * (1 + 1e-8)))
+    try:
+        R, T = _totals(_solve_2d(n_spacer, algo))
+    except (FloatingPointError, np.linalg.LinAlgError):
+        return                                  # loud is one of the two allowed outcomes
+    assert abs(R - R_far) < 1e-4 and abs(R + T - 1.0) < 1e-4, (
+        f'2D {algo} n_spacer={n_spacer}: exact-graze solve returned quietly with '
+        f'R={R!r} (far-detuned truth {R_far!r}), R+T={R + T!r} — the quiet-wrong hole '
+        'is open again')
+
+
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+def test_2d_representable_graze_solves_exactly(algo):
+    """On this platform the n=2.0 graze cluster is representable — pin the exact solve.
+
+    The rebuilt exact point must agree with its one-ULP neighbour (both through the
+    rebuild; the physics is continuous across the condition), conserve energy, and say
+    nothing at all — the same contract the conical path earned. Measured agreement is
+    ~1e-9 against a two-sided sqrt-extrapolated oracle; asserted at TOL for slack across
+    LAPACK builds. If this platform's round-off makes the cluster defective instead, the
+    premise is gone and the test skips — ``correct_or_loud`` above still covers the stack.
+    """
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         try:
-            _solve_2d(n_spacer, algo)
-        except Exception:
-            return                              # loud is an acceptable outcome
-    assert any(issubclass(r.category, RayleighPointWarning) for r in rec), (
-        f'2D {algo} n_spacer={n_spacer}: exact-graze solve returned with no '
-        'RayleighPointWarning — the quiet-wrong hole is open again')
+            R, T = _totals(_solve_2d(2.0, algo))
+            R_ulp, _ = _totals(_solve_2d(2.0, algo, wavelength=np.nextafter(WL, WL + 1)))
+        except (FloatingPointError, np.linalg.LinAlgError):
+            pytest.skip('this platform rounds the n=2.0 graze cluster defective; the '
+                        'correct-or-loud contract is pinned separately')
+    said = [r for r in rec if issubclass(r.category, UserWarning)]
+    assert not said, f'2D {algo}: the rebuilt exact solve warned: {[str(r.message) for r in said]}'
+    assert abs(R - R_ulp) < TOL and abs(R + T - 1.0) < TOL
+
+
+def test_2d_defective_graze_refuses_with_advice():
+    """On this platform the n=1.5 graze cluster is numerically defective — pin the refusal.
+
+    Its coupled mode rates split below working precision (the true limit basis is
+    ``{1, z}``, which no exponential mode basis represents — the same fact §5 of
+    ``docs/rayleigh-points.md`` records for the exactly-zero eigenvalue), so returning
+    numbers here would mean returning the measured 1e-4..1e0 errors quietly. The refusal
+    must carry the remedy. If this platform's round-off splits the cluster representable
+    instead, the premise is gone and the test skips.
+    """
+    try:
+        _solve_2d(1.5, 'ETM')
+    except FloatingPointError as exc:
+        assert 'auto_detune' in str(exc), f'refusal without the remedy: {exc}'
+        return
+    except np.linalg.LinAlgError:
+        return                                  # loud in LAPACK's own voice — acceptable
+    pytest.skip('this platform rounds the n=1.5 graze cluster representable; the '
+                'correct-or-loud contract is pinned separately')
 
 
 def test_2d_detection_clears_off_the_condition():
@@ -244,26 +294,33 @@ def test_exact_point_field_reconstruction_matches_its_neighbour():
 
 # ---------------------------------------------------------------- auto_detune (the default)
 
-def test_auto_detune_rescues_the_2d_graze_and_says_so():
-    """The library default turns the unreliable exact point into the nearby answer, loudly.
+def test_auto_detune_default_lands_every_2d_graze_correct():
+    """The library default returns the right answer on every graze stack, however it goes.
 
-    One retry at ``wavelength*(1+1e-12)``, one :class:`AutoDetuneWarning` naming the
-    wavelength actually used, no :class:`RayleighPointWarning` surviving to the caller, and
-    the result agreeing with a far-detuned solve — on the very stack that once returned
-    R+T = 0.99 with nothing said.
+    A representable cluster solves exactly on the first pass and the ladder stays silent —
+    the flip of this test's predecessor, which pinned a retry on the very stack the rebuild
+    now solves. A defective cluster refuses, the ladder retries at
+    ``wavelength*(1+1e-12)``, says so in an :class:`AutoDetuneWarning`, and the landing
+    point sits inside the rebuild's regime (that is what sizes ``solve_2d._COUPLED_REL``),
+    so the rescued answer is the nearby problem's, not the degraded band's. Either way no
+    :class:`RayleighPointWarning` reaches the caller and the answer matches a far-detuned
+    solve — on stacks that once returned R+T of 0.96-0.99 with nothing said.
     """
     from wavebit._core.backend import AutoDetuneWarning, RayleighPointWarning
-    R_far, T_far = _totals(_solve_2d(2.0, 'ETM', wavelength=WL * (1 + 1e-8)))
-    with warnings.catch_warnings(record=True) as rec:
-        warnings.simplefilter('always')
-        result = _solve_2d(2.0, 'ETM', auto_detune=True)
-    R, T = _totals(result)
-    notices = [r for r in rec if issubclass(r.category, AutoDetuneWarning)]
-    assert len(notices) == 1, f'expected exactly one AutoDetuneWarning, got {rec}'
-    assert 'wavelength' in str(notices[0].message)
-    assert not any(issubclass(r.category, RayleighPointWarning) for r in rec), (
-        'the first pass\'s RayleighPointWarning must be consumed by the retry, not replayed')
-    assert abs(R - R_far) < 1e-4 and abs(R + T - 1.0) < 1e-4
+    for n_spacer, algo in _GRAZE_2D:
+        R_far, T_far = _totals(_solve_2d(n_spacer, algo, wavelength=WL * (1 + 1e-8)))
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter('always')
+            result = _solve_2d(n_spacer, algo, auto_detune=True)
+        R, T = _totals(result)
+        assert not any(issubclass(r.category, RayleighPointWarning) for r in rec), (
+            f'{algo} n={n_spacer}: a RayleighPointWarning reached the caller: {rec}')
+        notices = [r for r in rec if issubclass(r.category, AutoDetuneWarning)]
+        for n in notices:
+            assert 'wavelength' in str(n.message)
+        assert abs(R - R_far) < 1e-4 and abs(R + T - 1.0) < 1e-4, (
+            f'{algo} n={n_spacer}: default solve returned R={R!r} against far-detuned '
+            f'{R_far!r} (detuned retry: {bool(notices)})')
 
 
 def test_auto_detune_rescues_the_refused_point():

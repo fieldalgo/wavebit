@@ -154,9 +154,14 @@ class PrecisionLossWarning(UserWarning):
 class RayleighPointWarning(UserWarning):
     """A layer eigenmode sits numerically on its light line, on a path that loses it there.
 
-    Fired by :func:`check_mode_cutoff` from the 2D mode builder. The result it annotates is
-    finite, in range, and possibly wrong with no other sign — see the caller for the
-    mechanism and :func:`check_finite`'s message for the remedy (a one-ULP detune). Its own
+    Fired by :func:`check_mode_cutoff` from the 2D mode builder — since the coupled-cluster
+    rebuild (see :func:`wavebit._core.solve_2d._rebuild_grazing_cluster`) only on its
+    fallback paths: a grazing cluster whose E- and H-side sizes disagree, or eigenvalues
+    that are concrete but not materializable (a tensor carrying grad, an un-jitted
+    ``jax.grad`` tracer). There the old product construction is what ships, and the result
+    it annotates is finite, in range, and possibly wrong with no other sign — see the
+    caller for the mechanism and :func:`check_finite`'s message for the remedy (a one-ULP
+    detune, which ``conv_solve``'s default ladder applies on seeing this warning). Its own
     category so a sweep that knowingly steps across a Rayleigh anomaly can silence or
     escalate it on its own.
     """
@@ -188,12 +193,17 @@ _CUTOFF_REL = 1e-13
 def check_mode_cutoff(xp, eigenvalues):
     """Warn when a layer eigenvalue is at round-off scale relative to the spectrum.
 
-    The 2D mode builder computes ``V = (Omega_R @ W) / q``, and when ``q**2`` is at round-off
-    scale that product's grazing column is cancellation noise — the layer stops representing
-    any nearby problem, and the answer can be quietly wrong (measured: 5 of 48 exact-graze 2D
-    solves returned R+T of 0.96-0.99 on a lossless stack with nothing else fired). The 1D
-    paths do not need this check: the pure path never had the disease and the conical path
-    was reformulated (see ``layer_modes_1d_conical``).
+    In this regime the 2D product construction ``V = (Omega_R @ W) / q`` no longer
+    represents any nearby problem — the grazing cluster's product eigvecs are eps-unstable
+    against the factor split, and the answer can be quietly wrong (measured: 5 of 48
+    exact-graze 2D solves returned R+T of 0.96-0.99 on a lossless stack with nothing else
+    fired). Since the coupled-cluster rebuild
+    (:func:`wavebit._core.solve_2d._rebuild_grazing_cluster`) the 2D builder handles the
+    regime itself — exactly, or with a loud refusal — and reaches this check only on its
+    fallback paths, where the old construction is what ships; the warning is then what
+    drives ``conv_solve``'s default detune ladder. The 1D paths do not need this check: the
+    pure path never had the disease and the conical path was reformulated (see
+    ``layer_modes_1d_conical``).
 
     A warning rather than an error, deliberately: the error scales as ``~eps/ratio`` (see
     ``_CUTOFF_REL``), so most of the flagged band is wrong at the 1e-5 level rather than

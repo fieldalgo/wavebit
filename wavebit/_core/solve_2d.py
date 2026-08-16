@@ -11,9 +11,35 @@ convolution blocks (``epxy`` / ``epyx``, produced by the NVF factorization; ``No
 enter the mode operator. ``transfer_2d_1`` and ``transfer_2d_4`` are identical to the conical
 versions, so this module reuses ``solve_1d``'s boundary init and ``final_matching`` verbatim.
 """
-from .backend import array_namespace, as_array, check_mode_cutoff, eig
+from .backend import _concrete, _readable, array_namespace, as_array, check_mode_cutoff, eig
 from .conventions import boundary_kz, mode_q, order_azimuth
 from .solve_1d import _block, _diag, _is_backside, _mirrored_scene, final_matching
+
+# Engage the coupled-cluster rebuild (see `_rebuild_grazing_cluster`) below this
+# min|w|/max|w| ratio. Well above `backend._CUTOFF_REL` (the warn threshold) on purpose,
+# for two measured reasons: the product-eigvec construction degrades as ~eps/ratio through
+# the whole band (2e-6 at 1e-12, per ``docs/rayleigh-points.md`` §3) while the rebuild is
+# exact everywhere in it; and `conv_solve`'s default detune step (1e-12 relative) lands a
+# rescued solve at ratio ~1e-11 — with a 1e-12 gate the retry fell back into the shipped
+# construction's degraded band and returned 1e-6..8e-6 errors on the harder graze stacks,
+# with 1e-9 it lands in the rebuild's regime and matches the extrapolated exact-point
+# oracle to its own uncertainty. Above the gate the function is bit-identical to what it
+# always returned; a random non-grazing solve reaches ratio 1e-9 with probability ~1e-8
+# per solve (an order within 4e-9 of a cutoff), measured as 0 engagements over the
+# 40-config validation sweep.
+_COUPLED_REL = 1e-9
+
+# Below this modal rate (relative to sqrt(max|w|), the layer's largest rate) a rebuilt
+# cluster mode is numerically indistinguishable from the exactly-defective ``{1, z}`` pair,
+# and no exponential mode basis represents the layer: the intrinsic error of any such basis
+# is ~eps/(k0*d*|mu|). Measured on exact-graze stacks: |mu| = 2e-9 solves to 6.5e-9, while
+# |mu| ~ 5e-16 is wrong at 1e-4..1e-3 across every basis choice tried (eigvec pairing,
+# volume-maximal selection, |mu| floors — the floor repeats the epsilon-floor dead end of
+# ``docs/rayleigh-points.md`` §5 in miniature: any q inconsistent with its own mode pair is
+# amplified by exactly the conditioning that consistency lets cancel). 1e-10 puts the
+# representable side at <= ~1e-6 for k0*d >~ 0.4; below it the only honest outcome is the
+# loud refusal, which `conv_solve`'s default ladder then retries off the condition.
+_DEFECTIVE_REL = 1e-10
 
 
 def order_grid_kxy(xp, kx, ky):
@@ -37,6 +63,108 @@ def order_grid_kxy(xp, kx, ky):
     ff_x, ff_y = kx.shape[0], ky.shape[0]
     return (xp.broadcast_to(kx[None, :], (ff_y, ff_x)),
             xp.broadcast_to(xp.reshape(ky, (-1, 1)), (ff_y, ff_x)))
+
+
+def _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R):
+    """Re-derive the grazing eigenvalue cluster from the coupled first-order problem.
+
+    Returns ``(W, V, q)`` as NumPy arrays with the cluster columns replaced, ``None`` to
+    bail (caller keeps the shipped construction and its warning), or raises
+    ``FloatingPointError`` when the cluster is numerically defective.
+
+    Why the shipped construction cannot be repaired in place: the cluster eigvecs of the
+    product ``Omega2 = Omega_L @ Omega_R`` are determined by round-off (the eigenvalues are
+    separated by ~eps), so no choice of ``V`` makes the pair ``(W_j, V_j, q_j)`` satisfy
+    both first-order relations ``Omega_R W = V q`` and ``Omega_L V = W q`` — and the
+    interface algebra inverts ``big_W`` and ``big_V`` separately, so it amplifies whichever
+    relation is broken by the cluster's 1/q conditioning. What does hold to eps is the
+    *invariant subspace pair*: ``S_E`` (from the product's cluster, gap O(1) to the rest of
+    the spectrum) and ``S_H`` (same for the swapped product ``Omega_R @ Omega_L``). Restrict
+    the factors to those subspaces —
+
+        ``R_r = Q_H^H Omega_R Q_E``,   ``L_r = Q_E^H Omega_L Q_H``      (k x k)
+
+    — and take eigenpairs of the small first-order matrix ``[[0, L_r], [R_r, 0]]``: each
+    eigenvector ``[gE; gH]`` with eigenvalue ``mu`` satisfies *both* relations to
+    eps*||M_r|| by the standard eigenpair residual, so ``(Q_E gE, Q_H gH, mu)`` is a mode of
+    a problem within eps of the requested one. Measured on the exact-graze repro stacks:
+    the exact point lands inside the two-sided sqrt-extrapolated oracle bracket (~6e-9
+    wide), where the shipped construction was off by 4.5e-3 .. 4.1e0.
+
+    The eigenvectors come in ``+-mu`` pairs sharing one field pattern (one physical chain
+    each), and near-degenerate chains make ``eig`` return an arbitrary — possibly nearly
+    parallel — basis, so the k modes are chosen greedily to keep the E-parts *and* H-parts
+    jointly independent (both matrices are inverted downstream); a ``+-`` twin scores ~0 on
+    both sides once its partner is in and is never double-picked. Per column the member is
+    branch-fixed to the root :func:`~wavebit._core.conventions.mode_q` would take, and kept
+    at ``eig``'s joint normalization: a mode may then carry a tiny E-part (a pure-H graze)
+    or a tiny H-part (the classic E-graze) but never both, which is the structure the
+    interface inversions tolerate — normalizing either part to unit instead was measured to
+    plant an inconsistent O(1/eps) column and lose three digits.
+
+    Everything here runs in NumPy: the caller only enters when the eigenvalues were
+    concretely readable, which is also the regime where no autograd graph is at stake.
+    """
+    import numpy as np
+
+    w, W, V, q, Omega_L, Omega_R = (np.asarray(a) for a in (w, W, V, q, Omega_L, Omega_R))
+    aw = np.abs(w)
+    J = np.where(aw < _COUPLED_REL * aw.max())[0]
+    wh, Vh = np.linalg.eig(Omega_R @ Omega_L)
+    Jh = np.where(np.abs(wh) < _COUPLED_REL * np.abs(wh).max())[0]
+    if len(Jh) != len(J):
+        return None                              # structure not understood — detect, don't guess
+    k = len(J)
+    Q_E = np.linalg.qr(W[:, J])[0]
+    Q_H = np.linalg.qr(Vh[:, Jh])[0]
+    R_r = Q_H.conj().T @ (Omega_R @ Q_E)
+    L_r = Q_E.conj().T @ (Omega_L @ Q_H)
+    Z = np.zeros((k, k), dtype=W.dtype)
+    mu_e, g = np.linalg.eig(np.block([[Z, L_r], [R_r, Z]]))
+    g = g / np.linalg.norm(g, axis=0, keepdims=True)
+
+    sel = []
+    residE, residH = g[:k, :].copy(), g[k:, :].copy()
+    for _ in range(k):
+        score = (np.linalg.norm(residE, axis=0) ** 2
+                 + np.linalg.norm(residH, axis=0) ** 2)
+        score[sel] = -1.0
+        pick = int(np.argmax(score))
+        sel.append(pick)
+        for resid in (residE, residH):
+            col = resid[:, pick]
+            n = np.linalg.norm(col)
+            if n > 1e-150:
+                d = col / n
+                resid -= d[:, None] * (d.conj() @ resid)[None, :]
+
+    if np.abs(mu_e[sel]).min() < _DEFECTIVE_REL * np.sqrt(aw.max()):
+        raise FloatingPointError(
+            'a 2D layer eigenmode pair is numerically defective at a grazing condition (an '
+            'order sitting on the layer light line, so its q**2 is 0): the coupled mode '
+            'rates split by less than 1e-10 of the layer modal scale, and the exponential '
+            'mode basis this formulation uses does not exist there at working precision — '
+            'the true limit basis is {1, z}, and any exponential spelling returns quietly '
+            'wrong efficiencies (measured 1e-4 up to 1e0). Move off the condition: one ULP '
+            'of wavelength, period or angle is enough, and conv_solve(auto_detune=True), '
+            'the default, does that retry for you.')
+
+    Wc = np.empty((W.shape[0], k), dtype=W.dtype)
+    Vc = np.empty_like(Wc)
+    qc = np.empty(k, dtype=W.dtype)
+    for i, col in enumerate(sel):
+        mu_i = mu_e[col]
+        q_i = mode_q(np, np.asarray([mu_i ** 2]))[0]
+        gE, gH = g[:k, col], g[k:, col]
+        if abs(q_i - mu_i) > abs(q_i + mu_i):
+            gH = -gH                             # took the -q member; its H part flips
+        Wc[:, i] = Q_E @ gE
+        Vc[:, i] = Q_H @ gH
+        qc[i] = q_i
+
+    W, V, q = W.copy(), V.copy(), q.copy()
+    W[:, J], V[:, J], q[J] = Wc, Vc, qc
+    return W, V, q
 
 
 def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epyx_conv, C,
@@ -123,18 +251,34 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
 
     w, W = eig(Omega2_LR)
     q = mode_q(xp, xp.astype(w, C))
-
-    # Known limitation: at an exact Rayleigh point (an order on a layer's light line, q -> 0)
-    # this product loses the grazing mode's column — `Omega_R @ W` cancels to O(q^2) with
-    # O(eps) absolute round-off, so after `/ q` the column is O(q) with O(1) relative error,
-    # and the layer no longer represents any nearby problem. Measured: 5 of 48 exact-graze 2D
-    # solves came back quietly wrong (R+T 0.96-0.99 on a lossless stack, no warning), the rest
-    # warned or raised. The conical path had the same disease in a different spelling and was
-    # reformulated (see `layer_modes_1d_conical`); no equivalent identity is available here
-    # because W does not diagonalise `Omega_R` alone. Until it is fixed, the check below
-    # announces the regime — the answer is a one-ULP detune away, see its message.
-    check_mode_cutoff(xp, w)
     V = (Omega_R @ W) / q
+
+    # At an exact Rayleigh point (an order on a layer's light line, q -> 0) this V is wrong
+    # with no arithmetic to blame: the grazing cluster's eigvecs of the *product* Omega2 are
+    # eps-unstable with respect to the factor split, so even the bit-exact `Omega_R @ W`
+    # (measured: it agrees with 200-bit arithmetic to 1e-22 on the repro stack) yields a
+    # column that satisfies `Omega_R W = V q` while violating `Omega_L V = W q` at order 1 —
+    # the layer is then the mode set of *no* nearby problem, and the answers were quietly
+    # wrong at 1e-5 (band edge) up to 1e0 (exact point). The rebuild below re-derives the
+    # cluster from the coupled first-order problem, which restores both relations to eps;
+    # where the cluster is numerically defective (the `{1, z}` regime) it refuses loudly
+    # instead. Traced or otherwise unreadable values keep the old detect-and-warn contract.
+    aw = xp.abs(_readable(w, xp))
+    grazing = _concrete(xp.min(aw) < _COUPLED_REL * xp.max(aw))
+    if grazing:
+        Omega_L = _block(xp, [[-Cc, B], [-D, E]])
+        try:
+            rebuilt = _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R)
+        except FloatingPointError:
+            raise                                # the defective-cluster refusal, on purpose
+        except Exception:
+            # Concrete but not materializable to NumPy (a torch tensor carrying grad, an
+            # un-jitted jax.grad tracer): keep the detect-and-warn contract; the default
+            # auto_detune ladder then re-solves off the point with the graph intact.
+            rebuilt = None
+        if rebuilt is not None:
+            return tuple(xp.astype(xp.asarray(a), C) for a in rebuilt)
+    check_mode_cutoff(xp, w)
     return W, V, q
 
 
