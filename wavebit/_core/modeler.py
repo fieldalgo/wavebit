@@ -849,7 +849,14 @@ class Modeling:
                 _edge_list(xp, row_list, F, C, dev))
 
     def draw(self, layer_info_list, plans=None):
-        """Grid every layer. Returns a list of ``[cell, x_list, y_list]``, bottom layer first.
+        """Grid every layer. Returns a list of ``[cell, x_list, y_list]``, top layer first.
+
+        Input order is preserved, and ``ucell`` is indexed top-down (``docs/conventions.md``:
+        ``ucell[0]`` is the layer light meets first), so entry 0 is the top. This said "bottom
+        layer first" until 2026-08-16, which is the *field-reconstruction* ``layer_info_list``
+        convention -- :func:`wavebit._core.scattering` builds that one reversed -- borrowed for
+        a differently-shaped object that happens to share the argument name. A user rendering a
+        stack z-by-z off the old line drew it upside down.
 
         ``plans`` is a per-layer sequence of :class:`VectorGridPlan` to replay; omit it and the
         grid decisions are taken by comparison, which needs concrete coordinates. Either way
