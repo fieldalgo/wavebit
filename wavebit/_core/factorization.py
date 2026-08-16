@@ -129,7 +129,29 @@ def _pixel_correction(xp, orders, n, dtype, device=None):
     num = xp.sin(pi * t)
     den = xp.where(t == 0, xp.ones_like(t), pi * t)
     sinc = xp.where(t == 0, xp.ones_like(t), num / den)
-    return sinc * xp.exp(-1j * pi * t)
+    return sinc * _half_pixel_phase(xp, orders, n, dtype, device)
+
+
+def _half_pixel_phase(xp, orders, n, dtype, device=None):
+    """The cell-centre offset alone, for a grid holding *point samples*.
+
+    Grid index ``j`` names the pixel spanning ``[j/n, (j+1)/n)``, so a value attached to that
+    pixel sits at its centre ``(j+0.5)/n`` -- but a bare DFT places sample ``j`` at ``j/n``,
+    the left edge. The difference is the half-pixel shift ``exp(-i*pi*k/n)``, and it applies to
+    a sampled field exactly as it does to a staircase; what does *not* apply is the ``sinc``,
+    which is the box transform of a value held across the pixel and would assert an averaging
+    a point sample never had.
+
+    Left out of the pointwise path until 2026-08-16, which put the normal field half a pixel
+    off the permittivity it multiplies. Both are read off the same raster, so the offset is a
+    *relative* one and no lateral shift of the whole structure can absorb it. It hid because it
+    is invisible to every symmetry the suite had: mirror the layer in y and the relative offset
+    must change sign, does not, and the two land a full pixel apart -- an O(1/N) error that
+    reads as a broken mirror symmetry. Energy conservation, the projector identity
+    ``C_xx + C_yy = I``, and the x<->y relabelling all survive it untouched.
+    """
+    k = xp.astype(xp.asarray(orders, device=device), dtype)
+    return xp.exp(-1j * 3.141592653589793 * k / n)
 
 
 def fourier2d_piecewise_constant(xp, cell, fto_x, fto_y, *, inverse_rule):
@@ -252,8 +274,10 @@ def _fourier2d_grid(xp, cell, fto_x, fto_y, *, inverse_rule, piecewise_constant)
     # of at least 4*fto+1 to stay in range, which is the whole reason the raster used to be
     # upsampled before anything else was considered.
     coeff_y = dfs1d[:, xp.asarray(_wrap(orders_y, n_y), device=dev)]
-    if piecewise_constant:
-        coeff_y = coeff_y * _pixel_correction(xp, orders_y, n_y, coeff_y.dtype, dev)
+    # Both kinds of grid carry the half-pixel offset; only a staircase also carries
+    # the box transform. See :func:`_half_pixel_phase`.
+    _correct = _pixel_correction if piecewise_constant else _half_pixel_phase
+    coeff_y = coeff_y * _correct(xp, orders_y, n_y, coeff_y.dtype, dev)
     conv1d = coeff_y[:, _circulant_gather(xp, fto_y, dev)]
 
     if inv_x or inv_y:    # Li's inner step, whichever direction asked for it
@@ -266,8 +290,10 @@ def _fourier2d_grid(xp, cell, fto_x, fto_y, *, inverse_rule, piecewise_constant)
     dfs_2d = xp.fft.fft(conv1d_t / n_x)
 
     coeff_x = dfs_2d[:, xp.asarray(_wrap(orders_x, n_x), device=dev)]
-    if piecewise_constant:
-        coeff_x = coeff_x * _pixel_correction(xp, orders_x, n_x, coeff_x.dtype, dev)
+    # Both kinds of grid carry the half-pixel offset; only a staircase also carries
+    # the box transform. See :func:`_half_pixel_phase`.
+    _correct = _pixel_correction if piecewise_constant else _half_pixel_phase
+    coeff_x = coeff_x * _correct(xp, orders_x, n_x, coeff_x.dtype, dev)
     conv2d = coeff_x[:, _circulant_gather(xp, fto_x, dev)]
     conv2d = xp.reshape(conv2d, (ff_y, ff_y, ff_x, ff_x))
     conv2d = xp.moveaxis(conv2d, 1, 2)

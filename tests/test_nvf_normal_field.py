@@ -169,7 +169,16 @@ def test_the_projector_is_built_from_the_sampled_transform():
     assert np.allclose(got, want, atol=1e-12, rtol=0), np.abs(got - want).max()
 
     # ... and the other build is far enough away that the check above has teeth.
+    #
+    # 1e-4 rather than the 1e-3 this carried until 2026-08-16. The two builds used to be
+    # separated by *two* factors, the box transform and the half-pixel cell-centre phase, and
+    # only the first of those is a real difference between a staircase and a point sample. The
+    # phase belongs to both and is now applied to both
+    # (:func:`~wavebit._core.factorization._half_pixel_phase`), which closed a genuine defect --
+    # the normal field sat half a pixel off the permittivity -- and left the legitimate gap of
+    # 4.8e-04 here. Lowered because the separation shrank for a good reason, not to accommodate
+    # a regression: the remaining gap is the ``sinc`` alone, which is what this is checking for.
     gap = max(np.abs(a - b).max() for a, b in zip(sampled, staircase))
-    assert gap > 1e-3, (
+    assert gap > 1e-4, (
         f'the two builds of the projector differ by only {gap:.2e}, so the assertion above '
         f'no longer distinguishes them')

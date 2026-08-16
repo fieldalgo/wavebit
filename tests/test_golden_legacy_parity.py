@@ -44,6 +44,17 @@ reference exists, the over-refined grid was worse in 27 of 32 combinations
 What that costs is worth naming: for those seven, and now for ``2d_nvf`` a second time, this
 file pins continuity against this implementation rather than against the one it replaced.
 
+Then on 2026-08-16 ``2d_nvf`` left this file altogether, into ``data/golden_nvf.npz`` with a
+generator of its own. Not a third recomputation dressed up: ``gen_goldens.py`` refuses to run,
+and rightly, because re-freezing the legacy file against today's solver would convert the
+repo's only legacy-parity evidence into a change detector with every test still green. The
+prescribed route out is the one ``test_field_core.py`` took for the 2026-08-14 sign fix --
+retire the entry and re-freeze it once, under a name that stops claiming legacy provenance. So
+``golden_legacy.npz`` is untouched, byte-identical, and the twelve cases in it are still what
+this file's title says they are. The occasion was the half-pixel cell-centre phase missing from
+the sampled transform (``_half_pixel_phase``); the evidence that the new values are the better
+ones is quadrature order, not this file, and ``gen_goldens_nvf.py`` carries it.
+
 Compared to ``atol=1e-12``, not bit-for-bit. Bit-exactness was the right test while the port
 was being *proved* equal to the legacy chain; as a standing guard it fails on things that are
 not defects — reassociating a sum moves the last digit (``(a-b)-c`` and ``a-(b+c)`` differ by
@@ -61,7 +72,35 @@ import wavebit
 # Tight enough that no defect hides under it, loose enough to ignore float reassociation.
 TOL = 1e-12
 
-GOLDEN = np.load(pathlib.Path(__file__).parent / 'data' / 'golden_legacy.npz')
+_DATA = pathlib.Path(__file__).parent / 'data'
+
+
+class _Goldens:
+    """``golden_legacy.npz``, with ``2d_nvf`` served from its own self-captured file.
+
+    Twelve cases are legacy-derived and stay in the legacy file, byte-identical. ``2d_nvf`` is
+    not, and has not been since 2026-08-07; keeping it there let one file carry two provenances
+    under a name that claimed only the stronger one. It now lives in ``golden_nvf.npz``, written
+    by a generator that *runs* and states what it captures -- while ``gen_goldens.py`` goes on
+    refusing, which is what protects the twelve.
+
+    Reading is one lookup either way, and the entries share a schema, so nothing downstream
+    branches on which file an array came from -- a case cannot be compared more loosely just by
+    moving house.
+    """
+
+    def __init__(self):
+        self._legacy = np.load(_DATA / 'golden_legacy.npz')
+        self._nvf = np.load(_DATA / 'golden_nvf.npz')
+
+    def __getitem__(self, key):
+        return self._nvf[key] if key.startswith('2d_nvf__') else self._legacy[key]
+
+    def __contains__(self, key):
+        return key in (self._nvf if key.startswith('2d_nvf__') else self._legacy)
+
+
+GOLDEN = _Goldens()
 
 # The golden stores the legacy field layout: efficiencies as R/T and the raw
 # *boundary* amplitudes as R_s..T_p. The 2026-08-12 result rename kept every efficiency

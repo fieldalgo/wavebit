@@ -16,7 +16,8 @@ import wavebit
 import array_api_compat.numpy as xnp
 from wavebit._core.analytic import (
     shape_ft as _shape_ft, conv_matrix_2d as _conv_matrix_2d,
-    assemble_eps_coeffs as _assemble_eps_coeffs, normal_vector_field_analytical as _nvf_analytic)
+    assemble_eps_coeffs as _assemble_eps_coeffs, normal_vector_field_analytical as _nvf_analytic,
+    _sampled_coeffs)
 from wavebit._core.backend import UnphysicalResultWarning
 from wavebit._core.factorization import fourier2d_pointwise as _pointwise
 
@@ -35,6 +36,11 @@ def conv_matrix_2d(coeff2d, fto_x, fto_y):
     return _conv_matrix_2d(xnp, coeff2d, fto_x, fto_y)
 
 
+def sampled_coeffs(field, fx, fy):
+    """The analytic path's spelling of the sampled transform's coefficients."""
+    return _sampled_coeffs(xnp, field, fx, fy)
+
+
 def assemble_eps_coeffs(shapes, n_base, fto_x, fto_y, period):
     return _assemble_eps_coeffs(xnp, shapes, n_base, fto_x, fto_y, period, xnp.complex128)
 
@@ -49,20 +55,33 @@ def to_conv_mat_smooth(shapes, n_base, fto_x, fto_y, period):
 # 1. coefficient-builder conventions: ordering, and n -> eps
 # ----------------------------------------------------------------------
 def test_conv_matrix_matches_grid_convention():
+    """The sampled transform is written twice; the two spellings must stay one transform.
+
+    ``fourier2d_pointwise`` (raster path) and ``_sampled_coeffs`` + ``conv_matrix_2d`` (analytic
+    path) are the same Fourier transform of the same kind of data, reached by different routes.
+    Nothing forces them to agree, and the NVF projectors go through one on a raster layer and
+    the other on a shape layer -- so a change applied to one alone silently splits the two
+    modelling paths apart while every per-path test stays green.
+
+    That is not hypothetical. This test used to compare ``fourier2d_pointwise`` against a
+    hand-rolled ``np.fft.fft2`` here in the test file, which made the *test* the second
+    implementation rather than the analytic path. When the half-pixel cell-centre phase was
+    added to the raster side on 2026-08-16 this failed, correctly reporting that the two had
+    diverged -- and it was briefly misread as a stale convention probe rather than as the
+    finding it was. Comparing the two shipped spellings instead is what makes the failure
+    legible: it names the path that was missed.
+    """
     rng = np.random.default_rng(0)
-    Ny, Nx = 12, 10
-    cell = rng.random((Ny, Nx)) + 1.0
+    cell = (rng.random((12, 10)) + 1.0).astype(complex)
     fto_x, fto_y = 2, 3
 
-    M_dfs = raw_dft(cell.astype(complex), fto_x, fto_y)
+    M_raster = raw_dft(cell, fto_x, fto_y)
+    M_analytic = conv_matrix_2d(sampled_coeffs(cell, fto_x, fto_y), fto_x, fto_y)
 
-    F = np.fft.fft2(cell) / (Nx * Ny)
-    KY = np.arange(-2 * fto_y, 2 * fto_y + 1)
-    KX = np.arange(-2 * fto_x, 2 * fto_x + 1)
-    coeff2d = np.array([[F[ky % Ny, kx % Nx] for kx in KX] for ky in KY])
-    M_lau = conv_matrix_2d(coeff2d, fto_x, fto_y)
-
-    assert np.abs(M_dfs - M_lau).max() < 1e-12
+    gap = np.abs(M_raster - M_analytic).max()
+    assert gap < 1e-12, (
+        f'the raster and analytic spellings of the sampled transform differ by {gap:.2e}; '
+        f'a correction was applied to one of them and not the other')
 
 
 @pytest.mark.parametrize('where', ['n_base', 'n_index'])
@@ -446,7 +465,13 @@ def test_a_circle_is_written_with_one_length():
                          **CIRCLE_CFG).conv_solve()
     # Only a regression anchor, and it rides on ``normal_grid`` — it read
     # 0.161262158771 while that default was 256, and moved 1.1e-4 when the default rose to 1024.
-    assert float(np.sum(np.asarray(got.R))) == pytest.approx(0.161153064902, abs=1e-9)
+    # 0.161153064902 until 2026-08-16, when the sampled transform gained the half-pixel
+    # cell-centre phase it had been missing (`_half_pixel_phase`). The analytic normal field is
+    # sampled at `(i + 0.5)/N` by `sample_grid`, so its coefficients were half a pixel off the
+    # permittivity they multiply; correcting it moves this anchor by 3.6e-5, which is the size an
+    # O(1/N) term has at this `normal_grid`. Self-captured either way -- it says the number has
+    # not drifted, not that it is right.
+    assert float(np.sum(np.asarray(got.R))) == pytest.approx(0.161117311218, abs=1e-9)
 
 
 @pytest.mark.parametrize('ly, why', [(0.5 * CIRCLE_P, 'a second length that agrees'),

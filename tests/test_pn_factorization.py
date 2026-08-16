@@ -255,14 +255,27 @@ def test_the_z_slot_reads_the_raster_the_way_a_and_b_do():
     coefficients *exactly* and is the obvious choice. Taking it costs rotation covariance about
     z: 1.9e-14 with the DFT, 5.2e-8 with the closed form.
 
-    Not because the closed form is asymmetric — the z matrix is rotation covariant under either
-    transform. The two describe *different layers*: closed form reads the raster as a continuum
-    staircase, the DFT as point samples, and A and B have no choice but the latter since they
-    mix eps with the sampled normal field. Two readings of one layer is the defect, and the
-    broken symmetry is how it surfaces.
+    Not because either transform is asymmetric on its own -- the z matrix is rotation covariant
+    under both. They described *different layers*: the closed form reads the raster as a
+    continuum staircase, the DFT as point samples, and A and B have no choice but the latter
+    since they mix eps with the sampled normal field. Two readings of one layer was the defect,
+    and the broken symmetry was how it surfaced.
 
-    Pinned because "use the exact transform where one exists" is a reasonable-sounding edit that
-    would silently reintroduce it.
+    **Half of that gap turned out to be a bug, and it is fixed.** The two readings also disagreed
+    about *where in the pixel* a value sits: the closed form places it at the cell centre (the
+    ``exp(-i*pi*k/n)`` half of ``_pixel_correction``) while a bare DFT places it at the cell's
+    left edge. That was a straight defect in the sampled transform, corrected on 2026-08-16 by
+    :func:`~wavebit._core.factorization._half_pixel_phase`, and it collapsed the closed-form arm
+    here from 5.2e-8 to 1.5e-14. What still separates the two readings is the ``sinc`` alone --
+    the box transform of a value held across its pixel, which a point sample never had -- and
+    that part is a real difference in what the layer *is*, not a misalignment.
+
+    So this no longer asserts that one arm beats the other by a hundredfold; it asserts both hold
+    the quarter turn. That is the stronger statement, and it keeps the guard the test was written
+    for: strip the half-pixel phase from either transform and the two origins part company again,
+    the closed-form arm returns to ~1e-8, and this fires. The shipped slot stays the DFT for the
+    consistency reason above, which ``test_the_z_slot_reaches_the_answer_at_a_steep_angle`` below
+    pins is load-bearing at all.
     """
     eps = pillar(1.6 ** 2)
     g = pillar(0.30j, 0.0)
@@ -279,7 +292,12 @@ def test_the_z_slot_reads_the_raster_the_way_a_and_b_do():
             out.append(rt(solve(slots, e, fto, psi=psi)))
         return max(abs(out[0][0] - out[1][0]), abs(out[0][1] - out[1][1]))
 
-    assert rotated_pair(False) < rotated_pair(True) / 100
+    sampled, closed = rotated_pair(False), rotated_pair(True)
+    assert sampled < 1e-12, f'the shipped z slot broke the quarter turn: {sampled:.2e}'
+    assert closed < 1e-12, (
+        f'the closed-form z slot breaks the quarter turn by {closed:.2e}; it agreed to 1.5e-14 '
+        f'once both transforms placed a pixel value at the same point, so this is the '
+        f'half-pixel cell-centre phase having gone missing from one of them')
 
 
 def test_the_z_slot_reaches_the_answer_at_a_steep_angle():

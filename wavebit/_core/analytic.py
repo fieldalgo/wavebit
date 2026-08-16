@@ -636,7 +636,20 @@ def _sampled_coeffs(xp, field, fto_x, fto_y):
     F = xp.fft.fft2(field) / (Ny * Nx)
     iy = xp.asarray([k % Ny for k in range(-2 * fto_y, 2 * fto_y + 1)], device=dev)
     ix = xp.asarray([k % Nx for k in range(-2 * fto_x, 2 * fto_x + 1)], device=dev)
-    return F[iy[:, None], ix[None, :]]
+    coeff = F[iy[:, None], ix[None, :]]
+    # The cell-centre half-pixel shift, the same one
+    # :func:`~wavebit._core.factorization._half_pixel_phase` applies on the raster side. The
+    # samples come from `sample_grid`, which places index `i` at `(i + 0.5)/N` -- so a bare DFT,
+    # which places it at `i/N`, describes a field shifted half a pixel against the permittivity
+    # these coefficients are multiplied by. Applied here as well as there because these two are
+    # the *same transform written twice*, and `test_conv_matrix_matches_grid_convention` is what
+    # says so; correcting one alone silently splits the analytic path from the raster one.
+    ky = xp.asarray([float(k) for k in range(-2 * fto_y, 2 * fto_y + 1)], device=dev)
+    kx = xp.asarray([float(k) for k in range(-2 * fto_x, 2 * fto_x + 1)], device=dev)
+    pi = 3.141592653589793
+    phase = (xp.exp(-1j * pi * xp.astype(ky, coeff.dtype) / Ny)[:, None]
+             * xp.exp(-1j * pi * xp.astype(kx, coeff.dtype) / Nx)[None, :])
+    return coeff * phase
 
 
 def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype, lattice=None):
