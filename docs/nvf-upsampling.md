@@ -198,9 +198,15 @@ up to 1024, with the sign alternating rather than accumulating, and a halfwidth 
 band straddles the boundary symmetrically, so no sub-pixel offset enters and the mirror
 symmetry of the field is exact (`normal_vector_field` is bit-exactly covariant under a flip).
 
-None of this is a defect to fix on the raster path -- it is the reason the analytic, boundary
-and levelset paths exist, all three of which build the normal field from the shape instead of
-from its raster.
+None of this is a defect *refinement* can fix -- that is the finding of this file -- and it is
+part of why the analytic, boundary and levelset paths exist, all three of which build the
+normal field from the shape instead of from its raster. It did, however, turn out to be a
+defect a different construction can fix on the raster itself: the quantization lives in the
+integer-grid differencing, not in the raster, and smoothing the indicator before
+differentiating removes it. Three such constructions were measured and shipped behind the
+`normal_method` keyword (default unchanged) -- see
+[`nvf-normal-methods.md`](nvf-normal-methods.md), which reads this file's tables as its
+baseline.
 
 ### One comparison against `li`, on the same raster
 
@@ -289,10 +295,12 @@ for a smooth boundary, and a random raster has none. The justification is this d
 ## Reproduce
 
 The sweeps here are not checked in as a benchmark; they are one-off measurements against the
-analytic shape path. Two neighbouring write-ups cover the questions either side of this one:
+analytic shape path. Three neighbouring write-ups cover the questions around this one:
 [`analytic-modeling.md`](analytic-modeling.md) on how the smooth path compares to the raster
-and staircase representations, and [`backend-choice.md`](backend-choice.md) on what the change
-here did to the cost of NVF relative to the other two strategies (it removed the difference).
+and staircase representations, [`backend-choice.md`](backend-choice.md) on what the change
+here did to the cost of NVF relative to the other two strategies (it removed the difference),
+and [`nvf-normal-methods.md`](nvf-normal-methods.md) on the raster constructions that remove
+the quantization this file measured (the `normal_method` keyword).
 
 ### References
 
