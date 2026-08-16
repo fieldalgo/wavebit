@@ -42,6 +42,27 @@ class Factorization(str, Enum):
     NVF = 'nvf'  # normal vector field (Schuster et al. 2007); a superset of Li
 
 
+class NormalMethod(str, Enum):
+    """How the raster NVF normal field is constructed from the pixel grid.
+
+    Only the raster path with ``factorization='nvf'`` reads this — the shape paths build
+    their normal fields from the geometry itself and have nothing to choose here.
+
+    All four run eagerly in NumPy/SciPy and hand the solve a constant field, whatever the
+    backend (the normal field is frozen geometry — see
+    :func:`wavebit._core.factorization.normal_vector_field`). What separates them is how the
+    staircase is read: the raw distance-transform gradient quantizes to the {0, 45} degree
+    directions integer central differences can spell, and the other three smooth the
+    *indicator* before differentiating, which is the one move every raster-native
+    construction in the literature shares (``docs/nvf-normal-methods.md`` records the
+    measurements that rank them; ``docs/nvf-upsampling.md`` diagnosed the defect).
+    """
+    DISTANCE = 'distance'  # unsigned distance-to-interface gradient (the original)
+    CONTOUR = 'contour'    # subpixel level-set polylines, exact distance-to-curve direction
+    SPECTRAL = 'spectral'  # band-limited spectral gradient at the interface, bulk-propagated
+    SMOOTH = 'smooth'      # signed distance, derivative-of-Gaussian (rounds corners; see docs)
+
+
 class Formulation(str, Enum):
     """Which layer formulation the 2D solve uses — how many fields per order it carries.
 
@@ -65,6 +86,7 @@ class Formulation(str, Enum):
 DEFAULT_FOURIER_COEFFICIENTS = FourierCoefficients.SAMPLED
 DEFAULT_FACTORIZATION = Factorization.LI
 DEFAULT_FORMULATION = Formulation.AUTO
+DEFAULT_NORMAL_METHOD = NormalMethod.DISTANCE
 
 
 def _one_of(enum_cls, value, keyword):
@@ -92,6 +114,11 @@ def factorization_of(value):
 def formulation_of(value):
     """Validate a ``formulation`` value."""
     return _one_of(Formulation, value, 'formulation')
+
+
+def normal_method_of(value):
+    """Validate a ``normal_method`` value."""
+    return _one_of(NormalMethod, value, 'normal_method')
 
 
 def resolve_fourier_options(fourier_coefficients=None, factorization=None, keep_unset=False):

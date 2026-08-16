@@ -408,28 +408,47 @@ def _to_numpy(x):
     return np.asarray(x)
 
 
-def normal_vector_field(eps_matrix, interface_mask=None, lattice=None):
-    """Unit normal vector field ``(nx, ny)`` of a raster layer, via a signed-distance field.
+def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=None,
+                        base_shape=None):
+    """Unit normal vector field ``(nx, ny)`` of a raster layer.
 
     This is a **geometry** quantity — it depends on where the material interfaces sit, not on
     the permittivity values carried between them — so it is computed eagerly in NumPy/SciPy
-    and then held fixed while gradients flow through the permittivity.
+    and then held fixed while gradients flow through the permittivity. That holds for every
+    ``method``: the field is a constant to the solve, whatever the backend.
 
-    ``interface_mask`` is the one input the whole construction reads (see
+    ``method`` selects the construction (:class:`~wavebit._core.enums.NormalMethod`;
+    ``None`` means ``'distance'``, the original). The default body below is ``'distance'``:
+    the gradient of the unsigned distance to the interface set. Its directions quantize to
+    the {0, 45} degree list integer central differences can spell — ~14 degrees mean in the
+    boundary band, flat in N — which is what the other three constructions remove; they
+    live in :mod:`wavebit._core.normal_methods`, and ``docs/nvf-normal-methods.md`` carries
+    the measurements that rank them (``'contour'`` is the one that lost nowhere).
+
+    ``base_shape`` is the layer's shape before the ``4*fto+1`` floor lift, when the caller
+    lifted it. The smoothing constructions state their pixel-unit policies on the base grid
+    — a lifted raster is the same staircase spelled with more pixels, so smoothing scales
+    stated on the lifted grid would shrink under the lift instead of holding still.
+    ``'distance'`` has no scale and ignores it.
+
+    ``interface_mask`` is the one input the ``'distance'`` construction reads (see
     :func:`_interface_mask`). Supplying it lets a caller that can obtain the mask some other
     way skip the whole-array NumPy conversion this would otherwise need, which is what lets the
     NVF paths differentiate without a frozen geometry — see
     :func:`_upsampled_interface_mask`. Left ``None``, the mask is read off ``eps_matrix``,
-    which needs concrete values.
+    which needs concrete values. The other three constructions read the *values* too (their
+    indicators need to know which phase is which), so a traced layer without concrete values
+    can take them only through ``freeze_geometry()`` — asked to anyway, they raise and say
+    so rather than silently answering with ``'distance'``.
 
-    The signed-distance field is the only raster method offered, deliberately. The
-    factorization needs a normal field that is unit magnitude across the *whole* cell — that
-    is what makes ``C_xx + C_yy = I`` in :func:`nvf_conv_matrices`. The distance transform
-    extends the interface normal into the bulk and delivers exactly that; the legacy
-    ``method='sobel'`` alternative (a raw ``grad(eps)``) is nonzero only in the one-pixel band
-    at the interface, so it is not a unit field and collapses the projector toward 0, which
-    degenerates the scheme back toward the plain direct rule. It was never reachable from the
-    solver and was dropped in the port. See ``tests/test_nvf_normal_field.py``.
+    The factorization needs a normal field that is unit magnitude across the *whole* cell —
+    that is what makes ``C_xx + C_yy = I`` in :func:`nvf_conv_matrices`. Every method
+    delivers that (zeros only on skeleton-type points, which the assembly collapses to the
+    direct rule); the legacy ``method='sobel'`` alternative (a raw ``grad(eps)``) is nonzero
+    only in the one-pixel band at the interface, so it is not a unit field and collapses the
+    projector toward 0, which degenerates the scheme back toward the plain direct rule. It
+    was never reachable from the solver and was dropped in the port. See
+    ``tests/test_nvf_normal_field.py``.
     For the shape-based (non-raster) normal field, see
     :func:`wavebit._core.analytic.normal_vector_field_analytical`.
 
@@ -449,17 +468,35 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None):
     """
     import numpy as np
     from scipy.ndimage import distance_transform_edt
+    from .enums import NormalMethod, normal_method_of
 
     shape = tuple(eps_matrix.shape)
+    method = NormalMethod.DISTANCE if method is None else normal_method_of(method)
 
     # A one-cell axis carries no interface of its own: the structure cannot vary along it, so
     # every normal points along the other axis. Say so directly -- `np.gradient` needs three
     # cells and would otherwise raise, which is what made NVF unusable on 1D gratings. With a
     # constant normal the NVF projector reduces to Li's rules exactly (C_xx = I, C_xy = C_yy =
     # 0 gives eps_xx = <1/eps>^-1 and eps_yy = <eps>), so this is not an approximation.
+    # Shared across methods: nothing about the constant field depends on the construction.
     if 1 in shape:
         along_x = np.ones(shape), np.zeros(shape)
         return along_x if shape[0] == 1 else (along_x[1], along_x[0])
+
+    if method != NormalMethod.DISTANCE:
+        from .normal_methods import DISPATCH
+        try:
+            eps = _to_numpy(eps_matrix)
+        except Exception:
+            raise TypeError(
+                f"normal_method={method.value!r} reads the layer's values (its indicator "
+                f"needs to know which phase is which), and this layer is a tracer without "
+                f"concrete ones. Precompute the field eagerly with freeze_geometry() and "
+                f"hand it to conv_solve(geometry=...), or use normal_method='distance', "
+                f"whose mask-only path a trace can take.") from None
+        mask = (_interface_mask(eps) if interface_mask is None
+                else np.asarray(interface_mask, dtype=bool))
+        return DISPATCH[method.value](eps, mask, lattice, base_shape)
 
     if interface_mask is None:
         interface_mask = _interface_mask(_to_numpy(eps_matrix))
@@ -583,51 +620,71 @@ def _lattice_key(lattice):
     return tuple((A / scale).reshape(-1).tolist())
 
 
-def _normal_field_source(eps, lattice=None):
+def _normal_field_source(eps, lattice=None, method=None):
     """Everything :func:`normal_vector_field` reads off a layer, and nothing else.
 
     That is the shape, plus — unless an axis is a single cell, where the field is the constant
-    along-axis one whatever the pattern — the interface mask, plus the cell basis. Two layers
-    with the same source have the same normal field, bit for bit, which is what makes this the
-    tell: it accepts a replay exactly when replaying is the same computation as rebuilding.
+    along-axis one whatever the pattern — the interface mask, plus the cell basis, plus the
+    construction (``normal_method``). Two layers with the same source have the same normal
+    field, bit for bit, which is what makes this the tell: it accepts a replay exactly when
+    replaying is the same computation as rebuilding.
 
     The basis belongs here for the same reason the mask does. It is an *input* to the field
     (see :func:`normal_vector_field`), so a field frozen on one cell and replayed on a skewed
     one describes interfaces pointing the wrong way — with nothing to notice, since the NVF
-    assembly stays Hermitian and energy still conserves.
+    assembly stays Hermitian and energy still conserves. The method belongs here for the same
+    reason again: same mask, different construction, different field — a record frozen under
+    ``'contour'`` and replayed on a solver configured ``'distance'`` would be answering with
+    a field the configuration never asked for.
+
+    The smoothing constructions read the layer's values only through two
+    value-relabeling-invariant facts, and both are captured: the interface mask (their
+    indicators mark the not-the-corner-REGION phase, so relabeling the values moves
+    nothing — see ``normal_methods._two_phase_indicator``), and the number of distinct
+    phases (which decides the delegation to ``'distance'``, and which a merge of two
+    non-adjacent phases can change without moving a single interface — hence the fifth
+    element). The pre-lift ``base_shape`` is not captured because it follows from the
+    shape the record already pins plus the solver's own ``fto``.
     """
+    import numpy as np
+    from .enums import NormalMethod, normal_method_of
+    method = (NormalMethod.DISTANCE if method is None else normal_method_of(method)).value
     if 1 in eps.shape:
-        return eps.shape, None, _lattice_key(lattice)
-    return eps.shape, _interface_mask(eps), _lattice_key(lattice)
+        return eps.shape, None, _lattice_key(lattice), method, None
+    return (eps.shape, _interface_mask(eps), _lattice_key(lattice), method,
+            int(np.unique(eps).size))
 
 
-def normal_field_for_ucell(ucell, fto_x, fto_y, lattice=None):
+def normal_field_for_ucell(ucell, fto_x, fto_y, lattice=None, method=None):
     """Per-layer ``(nx, ny)`` normal fields for ``ucell``, on the grid the NVF build uses.
 
     Precompute this once from the concrete geometry and hand it to
     :func:`to_conv_mat_raster_nvf` as ``normal_field=`` to keep the build traceable under a
-    JAX transform (the SciPy distance transform cannot run on tracers).
+    JAX transform (none of the constructions can run on tracers).
 
-    ``lattice`` is the cell basis; see :func:`normal_vector_field` for what it changes.
+    ``lattice`` is the cell basis and ``method`` the construction; see
+    :func:`normal_vector_field` for what each changes.
     """
     xp = array_namespace(ucell)
-    return [normal_vector_field(eps, lattice=lattice)
-            for eps, _, _, _ in _layer_eps_for_normal_field(xp, ucell, fto_x, fto_y)]
+    return [normal_vector_field(eps, lattice=lattice, method=method,
+                                base_shape=tuple(base.shape))
+            for eps, base, _, _ in _layer_eps_for_normal_field(xp, ucell, fto_x, fto_y)]
 
 
-def normal_field_source_for_ucell(ucell, fto_x, fto_y, lattice=None):
+def normal_field_source_for_ucell(ucell, fto_x, fto_y, lattice=None, method=None):
     """What :func:`normal_field_for_ucell` derived its answer from, per layer.
 
     Freeze this alongside the normal field and hand both back to
     :func:`to_conv_mat_raster_nvf`; the replay compares it against the layer actually in front
-    of it and refuses a field that was sampled from a different one.
+    of it and refuses a field that was sampled from a different one — a different pattern, a
+    different basis, or a different ``normal_method``.
     """
     xp = array_namespace(ucell)
-    return [_normal_field_source(_to_numpy(eps), lattice)
+    return [_normal_field_source(_to_numpy(eps), lattice, method)
             for eps, _, _, _ in _layer_eps_for_normal_field(xp, ucell, fto_x, fto_y)]
 
 
-def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None):
+def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None, method=None):
     """Refuse a frozen normal field sampled from interfaces that have since moved.
 
     The field says which way each interface points. Move the pattern in the raster and it is
@@ -657,18 +714,33 @@ def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None):
     entry = source[index]
     shape, mask = entry[0], entry[1]
     lat = entry[2] if len(entry) > 2 else None      # records frozen before the basis was one
-    now_shape, now_mask, now_lat = _normal_field_source(eps, lattice)
-    if (shape == now_shape and lat == now_lat
+    meth = entry[3] if len(entry) > 3 else 'distance'   # ... or before the method was one
+    phases = entry[4] if len(entry) > 4 else None       # ... or before the count was one
+    now_shape, now_mask, now_lat, now_meth, now_phases = _normal_field_source(
+        eps, lattice, method)
+    # The phase count only decides anything off the 'distance' construction, and old
+    # records carry none — compare it exactly when both sides have one and it matters.
+    phases_agree = (phases is None or now_phases is None or meth != now_meth
+                    or meth == 'distance' or phases == now_phases)
+    if (shape == now_shape and lat == now_lat and meth == now_meth and phases_agree
             and (mask is None or np.array_equal(mask, now_mask))):
         return                            # equal shapes agree on whether a mask exists at all
 
-    if lat != now_lat:
+    if meth != now_meth:
+        moved = (f'the normal field was built with normal_method={meth!r} and this solver '
+                 f'is configured normal_method={now_meth!r} — same interfaces, different '
+                 f'construction, different field')
+    elif lat != now_lat:
         moved = (f'the cell basis is now {now_lat}, where the normal field was sampled on '
                  f'{lat} — the interfaces point the same way in the raster but a different '
                  f'way in space')
     elif shape != now_shape:
         moved = (f'layer {index} is now {now_shape}, where the normal field was sampled on '
                  f'{shape}')
+    elif not phases_agree:
+        moved = (f'layer {index} now carries {now_phases} distinct phases, where the normal '
+                 f'field was sampled on {phases} — merging or splitting phases can leave '
+                 f'every interface where it was and still change which construction runs')
     else:
         moved = (f"layer {index}'s material interfaces have moved — "
                  f'{int(np.count_nonzero(mask != now_mask))} of {mask.size} cells of the '
@@ -867,7 +939,8 @@ def pn_mu_conv_matrices(xp, mu33, nx, ny, fto_x, fto_y):
     return mu_xx, mu_yy, mu_z_i, mu_xy, mu_yx
 
 
-def to_conv_mat_raster_pn_mu(ucell_tensor, fto_x, fto_y, normal_field=None, lattice=None):
+def to_conv_mat_raster_pn_mu(ucell_tensor, fto_x, fto_y, normal_field=None, lattice=None,
+                             normal_method=None):
     """Per-layer permeability slots for a **tensor** ``mu`` raster — the ``mu`` twin of
     :func:`to_conv_mat_raster_pn`.
 
@@ -883,6 +956,8 @@ def to_conv_mat_raster_pn_mu(ucell_tensor, fto_x, fto_y, normal_field=None, latt
             single-field builder could not serve anyway). The in-plane trace is named because
             it is the part the rearrangement is about, not because the other is wrong here.
         lattice: cell basis, passed to :func:`normal_vector_field`.
+        normal_method: the raster construction, as in :func:`to_conv_mat_raster_nvf`;
+            read only when ``normal_field`` is not supplied.
 
     Returns:
         ``(mux, muy, muz_i, muxy, muyx)``, each ``(n_layers, ff_xy, ff_xy)`` — ready to hand to
@@ -913,7 +988,8 @@ def to_conv_mat_raster_pn_mu(ucell_tensor, fto_x, fto_y, normal_field=None, latt
         mu33 = ucell_tensor[i]
         if normal_field is None:
             nx, ny = normal_vector_field(
-                0.5 * (mu33[..., 0, 0] + mu33[..., 1, 1]), lattice=lattice)
+                0.5 * (mu33[..., 0, 0] + mu33[..., 1, 1]), lattice=lattice,
+                method=normal_method)
         else:
             nx, ny = normal_field[i]
         for slot, mat in zip(out, pn_mu_conv_matrices(xp, mu33, nx, ny, fto_x, fto_y)):
@@ -922,7 +998,8 @@ def to_conv_mat_raster_pn_mu(ucell_tensor, fto_x, fto_y, normal_field=None, latt
     return tuple(xp.stack(slot) for slot in out)
 
 
-def to_conv_mat_raster_pn(ucell_tensor, fto_x, fto_y, normal_field=None, lattice=None):
+def to_conv_mat_raster_pn(ucell_tensor, fto_x, fto_y, normal_field=None, lattice=None,
+                          normal_method=None):
     """Per-layer Popov-Neviere convolution matrices for a **tensor** raster.
 
     The counterpart of :func:`to_conv_mat_raster_nvf` for a layer stack whose permittivity is a
@@ -941,6 +1018,8 @@ def to_conv_mat_raster_pn(ucell_tensor, fto_x, fto_y, normal_field=None, lattice
             that rotates across an otherwise uniform slab has no permittivity interface, and a
             normal field read off the values would be reading a texture, not a boundary.
         lattice: cell basis, passed through to :func:`normal_vector_field`.
+        normal_method: the raster construction, as in :func:`to_conv_mat_raster_nvf`;
+            read only when ``normal_field`` is not supplied.
 
     Returns:
         ``(epx, epy, epxy, epyx, epz_i)``, each ``(n_layers, ff_xy, ff_xy)`` — the same five
@@ -967,7 +1046,8 @@ def to_conv_mat_raster_pn(ucell_tensor, fto_x, fto_y, normal_field=None, lattice
         if normal_field is None:
             # The in-plane trace: the layer's isotropic part, which is what carries the shape.
             nx, ny = normal_vector_field(
-                0.5 * (eps33[..., 0, 0] + eps33[..., 1, 1]), lattice=lattice)
+                0.5 * (eps33[..., 0, 0] + eps33[..., 1, 1]), lattice=lattice,
+                method=normal_method)
         else:
             nx, ny = normal_field[i]
         for slot, mat in zip(out, pn_conv_matrices(xp, eps33, nx, ny, fto_x, fto_y)):
@@ -1011,7 +1091,7 @@ def nvf_conv_matrices_integrated(xp, eps_comp, x, y, nx, ny, fto_x, fto_y):
 
 
 def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
-                           normal_field_source=None, lattice=None):
+                           normal_field_source=None, lattice=None, normal_method=None):
     """Per-layer NVF convolution matrices for a raster ``ucell``.
 
     Args:
@@ -1024,6 +1104,10 @@ def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
             :func:`normal_field_source_for_ucell`. Supply it and an eager replay is checked
             against the layer in front of it (see :func:`_check_normal_field_still_fits`);
             leave it ``None`` and the field is replayed on trust.
+        normal_method: how the normal field is constructed from the raster
+            (:class:`~wavebit._core.enums.NormalMethod`; ``None`` means ``'distance'``).
+            Ignored when ``normal_field`` is supplied — the record was built under its own
+            method, which the source check compares against this one.
 
     The normal field is taken on the raster as given, lifted only to the floor its transform
     needs (:func:`_normal_field_floor`). Lifting it further used to be offered and is not: the
@@ -1051,9 +1135,10 @@ def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
         if normal_field is None:
             nx, ny = normal_vector_field(
                 eps_matrix, _interface_mask_of(xp, eps_matrix, base_eps, repeat_y, repeat_x),
-                lattice=lattice)
+                lattice=lattice, method=normal_method, base_shape=tuple(base_eps.shape))
         else:
-            _check_normal_field_still_fits(eps_matrix, normal_field_source, i, lattice)
+            _check_normal_field_still_fits(eps_matrix, normal_field_source, i, lattice,
+                                           normal_method)
             nx, ny = normal_field[i]
 
         for slot, mat in zip(out, nvf_conv_matrices(
@@ -1358,7 +1443,7 @@ def to_conv_mat_raster_integrated(ucell, fto_x, fto_y, compression=None):
 
 def to_conv_mat_raster_integrated_nvf(ucell, fto_x, fto_y, normal_field=None,
                                       normal_field_source=None, compression=None,
-                                      lattice=None):
+                                      lattice=None, normal_method=None):
     """Per-layer convolution matrices for a raster ``ucell`` via closed-form Fourier + NVF.
 
     The pairing that needs both axes named independently. It buys the staircase-free
@@ -1376,6 +1461,7 @@ def to_conv_mat_raster_integrated_nvf(ucell, fto_x, fto_y, normal_field=None,
         compression: optional per-layer ``(row_idx, col_idx, x, y)`` from
             :func:`compression_indices`. Replayed eagerly it is checked too.
         lattice: the cell basis, as in :func:`to_conv_mat_raster_nvf`.
+        normal_method: the construction, as in :func:`to_conv_mat_raster_nvf`.
 
     Both ``normal_field`` and ``compression`` are static geometry; supply both to keep the
     build traceable under JAX (this path is the only one that needs both).
@@ -1398,9 +1484,10 @@ def to_conv_mat_raster_integrated_nvf(ucell, fto_x, fto_y, normal_field=None,
         if normal_field is None:
             nx, ny = normal_vector_field(
                 eps_grid, _interface_mask_of(xp, eps_grid, base_eps, repeat_y, repeat_x),
-                lattice=lattice)
+                lattice=lattice, method=normal_method, base_shape=tuple(base_eps.shape))
         else:
-            _check_normal_field_still_fits(eps_grid, normal_field_source, i, lattice)
+            _check_normal_field_still_fits(eps_grid, normal_field_source, i, lattice,
+                                           normal_method)
             nx, ny = normal_field[i]
 
         layer = ucell[i]

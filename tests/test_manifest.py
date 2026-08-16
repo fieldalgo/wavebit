@@ -19,7 +19,8 @@ import pytest
 
 import wavebit
 from wavebit.manifest import LATTICE, MATERIALS, SPELLINGS, cited_sources, manifest
-from wavebit._core.enums import Backend, Factorization, FourierCoefficients, Pol
+from wavebit._core.enums import (Backend, Factorization, FourierCoefficients, NormalMethod,
+                                   Pol)
 
 import pathlib
 
@@ -104,12 +105,26 @@ def test_a_series_the_manifest_withholds_is_refused(path):
 
 
 @pytest.mark.parametrize('path', sorted(UCELLS))
+def test_a_normal_method_the_manifest_withholds_is_refused(path):
+    """The shape paths list no raster construction; naming one there must refuse."""
+    for value in _unavailable(path, 'normal_method', NormalMethod):
+        with pytest.raises(Exception) as excinfo:
+            wavebit.rcwa(ucell=UCELLS[path], normal_method=value, **KW).conv_solve()
+        assert value in str(excinfo.value), (
+            f'{path}: refused normal_method={value!r} without naming it')
+
+
+@pytest.mark.parametrize('path', sorted(UCELLS))
 def test_an_option_the_manifest_offers_actually_builds(path):
     """The other half — a path must not be described as implementing what it refuses."""
     for value in PATHS[path]['factorization']:
         wavebit.rcwa(ucell=UCELLS[path], factorization=value, **KW).conv_solve()
     for value in PATHS[path]['fourier_coefficients']:
         wavebit.rcwa(ucell=UCELLS[path], fourier_coefficients=value, **KW).conv_solve()
+    for value in PATHS[path]['normal_method']:
+        # The manifest's own caveat: the axis is read only under factorization='nvf'.
+        wavebit.rcwa(ucell=UCELLS[path], factorization='nvf',
+                       normal_method=value, **KW).conv_solve()
 
 
 # ------------------------------------------------------- the lattice refusals
@@ -126,11 +141,12 @@ def test_li_is_refused_on_a_skewed_cell():
                        **KW).conv_solve()
 
 
-def test_the_manifest_lists_both_skewed_refusals():
+def test_the_manifest_lists_every_skewed_refusal():
     """Guards against one being dropped from the document while the solver still enforces it."""
     listed = ' '.join(r['what'] for r in LATTICE['refused_on_oblique'])
     assert 'block path' in listed
     assert "factorization='li'" in listed
+    assert 'normal_method' in listed
 
 
 def test_the_named_and_described_skewed_refusals_agree():
@@ -140,11 +156,15 @@ def test_the_named_and_described_skewed_refusals_agree():
     on, so a mismatch would mean the document reads correctly and behaves wrongly.
     """
     named = (set(LATTICE['paths_refused_on_oblique'])
-             | set(LATTICE['factorizations_refused_on_oblique']))
+             | set(LATTICE['factorizations_refused_on_oblique'])
+             | set(LATTICE['normal_methods_refused_on_oblique']))
     described = ' '.join(r['what'] for r in LATTICE['refused_on_oblique'])
     for name in named:
         assert name in described, f'{name!r} is refused but not described'
-    assert len(named) == len(LATTICE['refused_on_oblique'])
+    # Every described refusal must name at least one machine-checkable member — an entry
+    # naming none would be prose with no name to test membership on.
+    for r in LATTICE['refused_on_oblique']:
+        assert any(name in r['what'] for name in named | {'block'}), r['what']
 
 
 def test_every_named_skewed_refusal_is_a_thing_that_exists():
@@ -153,6 +173,15 @@ def test_every_named_skewed_refusal_is_a_thing_that_exists():
     assert set(LATTICE['paths_refused_on_oblique']) <= paths
     assert set(LATTICE['factorizations_refused_on_oblique']) <= {
         m.value for m in Factorization}
+    assert set(LATTICE['normal_methods_refused_on_oblique']) <= {
+        m.value for m in NormalMethod}
+
+
+def test_a_smoothing_normal_method_is_refused_on_a_skewed_cell():
+    """Only 'distance' carries the Jacobian pullback; the others must refuse, by name."""
+    with pytest.raises(NotImplementedError, match='normal_method'):
+        wavebit.rcwa(ucell=UCELLS['raster'], lattice=HEX, factorization='nvf',
+                       normal_method='contour', **KW).conv_solve()
 
 
 def test_a_skewed_cell_still_builds_on_the_paths_the_manifest_leaves_open():

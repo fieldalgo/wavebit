@@ -36,6 +36,7 @@ class SolverJax(RCWAJax, OptimizerJax):
             # machinery, rather than at the solve that is actually being refused.
             'fourier_coefficients': self._fourier_coefficients,
             'factorization': self._factorization,
+            'normal_method': self._normal_method,
             # A dispatch key like `pol`: the solves branch on it (which cascade blocks are
             # read, which way the stack is walked), so it must come back static, never traced.
             'incidence_side': self.incidence_side,

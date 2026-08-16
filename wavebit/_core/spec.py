@@ -35,7 +35,7 @@ import json
 import math
 
 from .domain import Layer, Stack, Incidence
-from .enums import Backend, Factorization, FourierCoefficients, Pol
+from .enums import Backend, Factorization, FourierCoefficients, NormalMethod, Pol
 
 SPEC_VERSION = '2'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12)
 
@@ -120,12 +120,17 @@ class Numerics:
     #: hand every spec an explicit request it never made, so a spec carrying analytic layers
     #: would be refused for asking for Li.
     factorization: Optional[Factorization] = None
+    #: ``None`` = unset, same shape as the two above though the reason is simpler: the
+    #: default ('distance') is path-independent, but an explicit value is *refused* on any
+    #: build that constructs no raster normal field, so a spec that never asked must not be
+    #: made to ask.
+    normal_method: Optional[NormalMethod] = None
     type_complex: int = 128
     connecting_algo: str = 'ETM'
     normal_grid: int = 1024
 
-    _FIELDS = ('backend', 'fto', 'fourier_coefficients', 'factorization', 'type_complex',
-               'connecting_algo', 'normal_grid')
+    _FIELDS = ('backend', 'fto', 'fourier_coefficients', 'factorization', 'normal_method',
+               'type_complex', 'connecting_algo', 'normal_grid')
 
     @classmethod
     def from_dict(cls, d) -> 'Numerics':
@@ -139,6 +144,9 @@ class Numerics:
         if d.get('factorization') is not None:
             d['factorization'] = _enum(d['factorization'], Factorization,
                                        'numerics.factorization')
+        if d.get('normal_method') is not None:
+            d['normal_method'] = _enum(d['normal_method'], NormalMethod,
+                                       'numerics.normal_method')
         if 'fto' in d:
             fto = d['fto']
             fto = (fto, 0) if isinstance(fto, int) else tuple(fto)
@@ -171,6 +179,8 @@ class Numerics:
                else {'fourier_coefficients': self.fourier_coefficients.value}),
             **({} if self.factorization is None
                else {'factorization': self.factorization.value}),
+            **({} if self.normal_method is None
+               else {'normal_method': self.normal_method.value}),
         )
 
 

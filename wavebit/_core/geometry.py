@@ -60,9 +60,10 @@ class StaticGeometry:
 
     Attributes:
         normal_field: per-layer ``(nx, ny)`` for the NVF factorization.
-        normal_field_source: per-layer ``(shape, interface mask)`` that ``normal_field`` was
-            derived from — carried so a replay can tell whether it still fits, not consumed by
-            the build. Left ``None``, the NVF replay is unchecked.
+        normal_field_source: per-layer ``(shape, interface mask, lattice key,
+            normal_method, phase count)`` that ``normal_field`` was derived from — carried
+            so a replay can tell whether it still fits, not consumed by the build. Left
+            ``None``, the NVF replay is unchecked.
         compression: per-layer ``(row_idx, col_idx, x, y)`` for the integrated path's factorization.
         block_grid: per-layer ``VectorGridPlan`` for the block modeler's grid build.
         shape_choices: per-shape discrete branch outcomes taken inside ``Modeling.rectangle``.

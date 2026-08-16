@@ -16,6 +16,7 @@ from . import lattice as _lattice
 from .backend import _device_of, array_namespace
 from .conventions import incident_sp_amplitudes
 from .enums import (DEFAULT_FACTORIZATION, DEFAULT_FORMULATION, DEFAULT_FOURIER_COEFFICIENTS,
+                    DEFAULT_NORMAL_METHOD, normal_method_of,
                     Factorization, Formulation, FourierCoefficients, Pol, coefficients_of,
                     factorization_of, formulation_of, resolve_fourier_options)
 from .geometry import StaticGeometry
@@ -811,6 +812,11 @@ class CoreFactorizationMixin:
     #: Likewise, and for the same reason — see :attr:`fourier_coefficients`. Read through the
     #: property.
     _fourier_coefficients = None
+    #: Likewise unset-vs-default, though the resolution is simpler: ``'distance'`` is the
+    #: default everywhere, and the keyword is only *read* where a raster normal field is
+    #: built. What the None distinguishes is an explicit request on a build that would never
+    #: read it, which :meth:`_reject_unread_normal_method` refuses instead of ignoring.
+    _normal_method = None
 
     def _set_fourier_options(self, fourier_coefficients, factorization):
         """Settle ``fourier_coefficients`` / ``factorization`` from a constructor's arguments."""
@@ -886,6 +892,51 @@ class CoreFactorizationMixin:
     def factorization(self, value):
         self._factorization = factorization_of(value)
 
+    @property
+    def normal_method(self):
+        """How the raster NVF normal field is constructed: ``'distance'`` | ``'contour'`` |
+        ``'spectral'`` | ``'smooth'``.
+
+        Read only where a raster normal field is built — the raster path under
+        ``factorization='nvf'`` (and the tensor-raster builders, called directly). Unlike
+        :attr:`factorization` there is nothing to resolve per path: ``'distance'`` is the
+        default everywhere, so this just reports it when nothing was asked. What *is*
+        refused is an explicit request on a build that would never read it — see
+        :meth:`_reject_unread_normal_method`, which fires from the same place the other
+        refusals do, because only the build knows whether a normal field exists at all.
+        """
+        return DEFAULT_NORMAL_METHOD if self._normal_method is None else self._normal_method
+
+    @normal_method.setter
+    def normal_method(self, value):
+        self._normal_method = None if value is None else normal_method_of(value)
+
+    def _reject_unread_normal_method(self, factorization):
+        """Refuse an explicit ``normal_method`` on a build that constructs no raster normal
+        field — before it silently decides nothing.
+
+        The keyword is read exactly when the raster path builds a normal field, which is
+        ``factorization='nvf'`` on ``modeling_type == 0``. Everywhere else — Li on a raster,
+        either shape path — the build would run to completion with the request ignored,
+        which is the same silent non-choice the ``enhanced_dfs`` parameter used to be
+        (``docs/nvf-upsampling.md``): a knob whose reader does not exist. The default is
+        exempt for the same reason as everywhere else: an untouched keyword is not a request.
+        """
+        if self._normal_method is None:
+            return
+        if self._modeling_type_assigned == 0 and factorization == Factorization.NVF:
+            return
+        if self._modeling_type_assigned == 1:
+            where = "the block path applies Li's rules only and builds no normal field"
+        elif self._modeling_type_assigned == 2:
+            where = 'the smooth shape path builds its normal field from the geometry itself'
+        else:
+            where = "factorization='li' builds no normal field at all"
+        raise NotImplementedError(
+            f"normal_method={normal_method_of(self._normal_method).value!r} has no reader "
+            f"here: {where}. It selects the raster NVF normal-field construction, so it "
+            f"needs a raster ucell and factorization='nvf'.")
+
     def freeze_geometry(self, **kwargs):
         """Take this structure's discrete geometry decisions once, eagerly.
 
@@ -906,6 +957,7 @@ class CoreFactorizationMixin:
         self._reject_unsupported_lattice()
         factorization = self.factorization
         coefficients = self.fourier_coefficients
+        self._reject_unread_normal_method(factorization)
         fto_x, fto_y = self.fto[0], self.fto[1]
 
         # The two axes decide independently what has to be frozen: NVF needs the normal
@@ -916,9 +968,9 @@ class CoreFactorizationMixin:
             if factorization == Factorization.NVF:
                 basis = self._geometry_lattice_for(None)
                 normal_field = _fac.normal_field_for_ucell(
-                    self.ucell, fto_x, fto_y, lattice=basis)
+                    self.ucell, fto_x, fto_y, lattice=basis, method=self.normal_method)
                 normal_field_source = _fac.normal_field_source_for_ucell(
-                    self.ucell, fto_x, fto_y, lattice=basis)
+                    self.ucell, fto_x, fto_y, lattice=basis, method=self.normal_method)
             if coefficients == FourierCoefficients.INTEGRATED:
                 compression = [_fac.compression_indices(self.ucell[i])
                                for i in range(self.ucell.shape[0])]
@@ -1161,6 +1213,18 @@ class CoreFactorizationMixin:
                 common + f"factorization={factorization.value!r} applies the inverse "
                 f'rule along the raster axes, which are not x and y once the cell is skewed, '
                 f"so it would answer plausibly and wrongly. Use factorization='nvf'.")
+        if (self._modeling_type_assigned == 0
+                and self.normal_method != DEFAULT_NORMAL_METHOD):
+            # Only the original construction carries the Jacobian pullback that makes an
+            # index-space gradient a Cartesian normal on a skewed cell; the smoothing
+            # constructions are not ported there. Refused here, with the others, rather
+            # than from inside the build — same reason as everything in this method.
+            # Scoped to the raster path: on the shape paths the option has no reader at
+            # all, skewed or not, and _reject_unread_normal_method owns that message.
+            raise NotImplementedError(
+                common + f'normal_method={self.normal_method.value!r} is not implemented '
+                f"for a skewed cell; only 'distance' carries the Jacobian pullback there. "
+                f'Drop normal_method or use an axis-aligned cell.')
 
     def _conv_matrices(self, geometry=None):
         """Convolution matrices for the current structure: ``(epx, epy, epz_i, epxy, epyx)``."""
@@ -1177,6 +1241,7 @@ class CoreFactorizationMixin:
         # the axis a user is far likelier to have meant something by.
         factorization = self.factorization
         coefficients = self.fourier_coefficients
+        self._reject_unread_normal_method(factorization)
         fto_x, fto_y = self.fto[0], self.fto[1]
         epxy_conv_all = epyx_conv_all = None
 
@@ -1205,7 +1270,8 @@ class CoreFactorizationMixin:
                         self.ucell, fto_x, fto_y,
                         normal_field=normal_field,
                         normal_field_source=normal_field_source,
-                        lattice=self._geometry_lattice_for(geometry))
+                        lattice=self._geometry_lattice_for(geometry),
+                        normal_method=self.normal_method)
                 else:
                     (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all,
                      epz_conv_i_all) = _fac.to_conv_mat_raster_integrated_nvf(
@@ -1213,7 +1279,8 @@ class CoreFactorizationMixin:
                         normal_field=normal_field,
                         normal_field_source=normal_field_source,
                         compression=compression,
-                        lattice=self._geometry_lattice_for(geometry))
+                        lattice=self._geometry_lattice_for(geometry),
+                        normal_method=self.normal_method)
 
         elif self._modeling_type_assigned == 1:      # block -- Li on integrated coefficients
             # No branch on either option here, and that is not an oversight: this path has one

@@ -71,6 +71,14 @@ pytorch = [
     "tqdm>=4.67",
 ]
 
+# Only normal_method='contour' reads this (subpixel level-set extraction); everything else
+# in the package runs without it, so it stays optional. The floor is the version the
+# construction was measured with. contourpy ships with matplotlib, so most environments
+# already have it.
+contour = [
+    "contourpy>=1.3",
+]
+
 [project.urls]
 Homepage = "https://github.com/fieldalgo/wavebit"
 

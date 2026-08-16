@@ -71,6 +71,11 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                  # end, for the reason above.
                  polarization=None,          # complex incident amplitude pair (a_s, a_p);
                  # supersedes psi (naming both raises). See docs/conventions.md.
+                 normal_method=None,         # raster NVF normal-field construction:
+                 # 'distance' (default) | 'contour' | 'spectral' | 'smooth'. Read only
+                 # where a raster normal field is built (factorization='nvf' on a raster);
+                 # explicitly set anywhere else it is refused rather than ignored.
+                 # See docs/nvf-normal-methods.md for the measurements that rank them.
                  ):
 
         super().__init__(n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi, chi=chi, tetm=tetm, pol=pol,
@@ -91,6 +96,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
 
         self.backend = backend
         self._set_fourier_options(fourier_coefficients, factorization)
+        self.normal_method = normal_method
         self.normal_grid = normal_grid
         self.lattice = lattice      # after period: assigning a basis overwrites period
 

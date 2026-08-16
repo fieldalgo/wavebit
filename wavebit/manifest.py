@@ -27,7 +27,7 @@ Regenerate the JSON with::
 """
 import json
 
-from ._core.enums import Backend, Factorization, FourierCoefficients, Pol
+from ._core.enums import Backend, Factorization, FourierCoefficients, NormalMethod, Pol
 from ._core.engine import (_COEFFICIENTS_IMPLEMENTED_BY, _COEFFICIENTS_REASON,
                            _FACTORIZATION_IMPLEMENTED_BY, _FACTORIZATION_REASON)
 from ._core.spec import SPEC_VERSION
@@ -36,7 +36,10 @@ from ._core.spec import SPEC_VERSION
 #: Independent of the Wavebit version, which moves whenever the content does.
 #: '2': the ``results`` section — the solve's output contract joined the document when the
 #: result surface was renamed for the first release (2026-08-12).
-MANIFEST_VERSION = '2'
+#: '3': the ``normal_method`` axis — per-path availability (with the contourpy probe) and
+#: reasons, the ``enums`` entry, and ``normal_methods_refused_on_oblique`` in ``lattice``
+#: (2026-08-17).
+MANIFEST_VERSION = '3'
 
 
 # ------------------------------------------------------------------ how a ucell is spelled
@@ -106,7 +109,31 @@ def _options_for(modeling_type):
             else [coefficients.value]),
         'fourier_coefficients_reason': (
             None if coefficients is None else _COEFFICIENTS_REASON[modeling_type]),
+        # The third axis exists only where a raster normal field is built. On the raster
+        # path the constructions are probed rather than assumed -- 'contour' needs the
+        # optional contourpy dependency, and offering an option this environment cannot
+        # build is exactly the drift the manifest tests exist to prevent -- and the axis is
+        # read only under factorization='nvf' (explicitly set anywhere it has no reader, it
+        # is refused rather than ignored). The block path applies Li's rules and builds no
+        # normal field at all; the smooth shape path builds its normal field from the
+        # geometry itself. Neither has a raster construction to select.
+        'normal_method': _raster_normal_methods() if modeling_type == 0 else [],
+        'normal_method_reason': (
+            "read only under factorization='nvf'" if modeling_type == 0
+            else ("the block path applies Li's rules only and builds no normal field"
+                  if modeling_type == 1
+                  else 'the smooth shape path builds its normal field from the geometry '
+                       'itself') + '; there is no raster construction to select'),
     }
+
+
+def _raster_normal_methods():
+    """The constructions this environment can actually build, probed not assumed."""
+    import importlib.util
+    methods = [m.value for m in NormalMethod]
+    if importlib.util.find_spec('contourpy') is None:
+        methods.remove(NormalMethod.CONTOUR.value)
+    return methods
 
 
 # ------------------------------------------------------------------ lattice
@@ -129,6 +156,7 @@ LATTICE = {
     #: agree.
     'paths_refused_on_oblique': ('block',),
     'factorizations_refused_on_oblique': ('li',),
+    'normal_methods_refused_on_oblique': ('contour', 'spectral', 'smooth'),
     'refused_on_oblique': (
         {
             'what': 'the block path (modeling_type=1)',
@@ -139,6 +167,12 @@ LATTICE = {
             'what': "factorization='li'",
             'why': 'the inverse rule is applied along the raster axes, which are a1 and a2 '
                    'rather than x and y once the cell is skewed. Use NVF.',
+        },
+        {
+            'what': "normal_method='contour' / 'spectral' / 'smooth'",
+            'why': "only 'distance' carries the Jacobian pullback that makes an index-space "
+                   'gradient a Cartesian normal on a skewed cell; the smoothing '
+                   'constructions are not ported there',
         },
     ),
 }
@@ -262,6 +296,7 @@ def manifest() -> dict:
             'tetm': [m.name.lower() for m in Pol],
             'factorization': [m.value for m in Factorization],
             'fourier_coefficients': [m.value for m in FourierCoefficients],
+            'normal_method': [m.value for m in NormalMethod],
         },
         'shape_coordinates': SHAPE_COORDINATES,
         'paths': [
@@ -275,6 +310,8 @@ def manifest() -> dict:
             'paths_refused_on_oblique': list(LATTICE['paths_refused_on_oblique']),
             'factorizations_refused_on_oblique': list(
                 LATTICE['factorizations_refused_on_oblique']),
+            'normal_methods_refused_on_oblique': list(
+                LATTICE['normal_methods_refused_on_oblique']),
             'refused_on_oblique': [dict(r) for r in LATTICE['refused_on_oblique']],
         },
         'materials': [dict(m) for m in MATERIALS],
