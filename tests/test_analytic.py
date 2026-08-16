@@ -625,6 +625,83 @@ def test_unknown_combine_modes_are_refused_even_without_an_overlap():
         solve([rod(150.0)], combine='superpose')
 
 
+# ------------------------------------------- which side of `combine` each builder sits on
+#
+# `assemble_eps_coeffs` sums. `to_conv_mat_smooth_layers` reads the layer and routes a painted
+# overlap to the boundary path instead. Reading only the first of those looks exactly like a
+# solver that ignores `combine`, which is a diagnosis worth being able to settle with a number:
+# `<eps>` is the DC coefficient, so the two rules give it in closed form and nothing about
+# truncation, factorization or the normal field is in the way.
+
+PAINT_PERIOD = (1000.0, 1000.0)
+
+#: 300x300 rods of index 2 and 3, overlapping over 100x300 of a 1000x1000 cell. Summed that is
+#: 1 + 3*0.09 + 8*0.09 = 1.99; painted, the earlier rod keeps only its unshared 60000, giving
+#: 1 + 3*0.06 + 8*0.09 = 1.90. A 4.7% gap, and both are plausible numbers.
+PAINT_RODS = [dict(type='rectangle', cx=400.0, cy=500.0, lx=300.0, ly=300.0, n_index=2.0),
+              dict(type='rectangle', cx=600.0, cy=500.0, lx=300.0, ly=300.0, n_index=3.0)]
+EPS_SUMMED, EPS_PAINTED = 1.99, 1.90
+
+
+def _solver_mean_eps(combine, shapes=PAINT_RODS):
+    """``<eps>`` as the solve reads it: the DC entry of ``ep_dir``, recovered from ``epz_i``."""
+    from wavebit._core.analytic import to_conv_mat_smooth_layers
+    layer = dict(n_base=1.0, shapes=shapes, combine=combine)
+    mats = to_conv_mat_smooth_layers([layer], 6, 6, PAINT_PERIOD, normal_grid=256,
+                                     type_complex=np.complex128, xp=xnp)
+    return float(np.real(np.linalg.inv(np.asarray(mats[4][0]))[0, 0]))
+
+
+def test_the_solve_path_integrates_the_painted_structure_not_the_summed_one():
+    """The solver honours ``combine``; only the bare coefficient builder does not.
+
+    Both numbers are exact, not converged-to: ``<eps>`` is one Fourier coefficient and each
+    rule fixes it in closed form. So this is not "close enough" — a solver that ignored
+    ``combine`` would land on 1.99 for both rows and this would fail by 4.7%.
+    """
+    assert _solver_mean_eps('paint') == pytest.approx(EPS_PAINTED, abs=1e-9)
+    assert _solver_mean_eps('add') == pytest.approx(EPS_SUMMED, abs=1e-9)
+
+
+def test_assemble_eps_coeffs_sums_whatever_it_is_handed():
+    """The precondition, pinned as behaviour so the docstring cannot drift off it.
+
+    This is the misuse that reads as a solver bug: pull ``shapes`` out of a painted layer, hand
+    them here, and get the summed structure back with nothing said. Both spellings give 1.99
+    because the layer's rule was never in the argument list.
+    """
+    eps_c, _ = assemble_eps_coeffs(PAINT_RODS, 1.0, 6, 6, PAINT_PERIOD)
+    assert float(np.real(eps_c[12, 12])) == pytest.approx(EPS_SUMMED, abs=1e-12)
+
+
+def test_assemble_eps_coeffs_refuses_a_painted_overlap_when_told_the_rule():
+    """Told what it cannot build, it refuses instead of answering plausibly.
+
+    The message has to name the shapes and the path that *can* build it, for the same reason
+    the layer-level refusal does: an error a caller cannot act on leaves them where they were.
+    """
+    with pytest.raises(ValueError) as raised:
+        _assemble_eps_coeffs(xnp, PAINT_RODS, 1.0, 6, 6, PAINT_PERIOD, xnp.complex128,
+                             combine='paint')
+    message = str(raised.value)
+    assert '0 (rectangle)' in message and '1 (rectangle)' in message
+    assert 'boundary' in message
+
+
+def test_a_disjoint_painted_layer_still_reaches_the_closed_form_builder():
+    """The guard must not push the cheap exact path away from layers it handles correctly.
+
+    Nothing intersects, so painting and summing are the same structure and this builder is
+    both right and cheaper than resolving polygons that have nothing to resolve — which is
+    also why the shipped dispatch sends such a layer here with ``combine='paint'`` still on it.
+    """
+    disjoint = [dict(PAINT_RODS[0], cx=200.0), dict(PAINT_RODS[1], cx=700.0)]
+    eps_c, _ = _assemble_eps_coeffs(xnp, disjoint, 1.0, 6, 6, PAINT_PERIOD, xnp.complex128,
+                                    combine='paint')
+    assert float(np.real(eps_c[12, 12])) == pytest.approx(EPS_SUMMED, abs=1e-12)
+    assert _solver_mean_eps('paint', disjoint) == pytest.approx(EPS_SUMMED, abs=1e-9)
+
+
 # ------------------------------------------------------- what a shape dict may say
 def _circle(**over):
     return dict(dict(type='circle', cx=150.0, cy=150.0, lx=120.0, n_index=2.0), **over)

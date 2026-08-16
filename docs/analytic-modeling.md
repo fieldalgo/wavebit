@@ -242,7 +242,12 @@ keep passing.
   discrete series of, and there is no raster axis for Li's nested 1D rule to run along.
   For a non-NVF pure-Laurent comparison, call the two builders directly:
   `_core.analytic.assemble_eps_coeffs` returns the coefficient grids for `eps` and `1/eps`, and
-  `_core.analytic.conv_matrix_2d` turns either into a block-Toeplitz matrix.
+  `_core.analytic.conv_matrix_2d` turns either into a block-Toeplitz matrix. That first builder
+  takes a *shape list*, not a layer, and implements `combine='add'` only — hand it the shapes of
+  an overlapping `combine='paint'` layer and it silently returns the summed structure instead
+  (`<eps>` 1.99 against the 1.90 the solver integrates, for two 300x300 rods of index 2 and 3).
+  Pass the layer's `combine=` to have that refused rather than answered; the painted layer's
+  own coefficients come from `_core.boundary` (see [boundary-modeling.md](boundary-modeling.md)).
 
 ### References
 - L. Li, *Use of Fourier series in the analysis of discontinuous periodic structures*, JOSA A

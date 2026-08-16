@@ -426,7 +426,37 @@ def shape_ft(xp, shape, ky, kx, period, lattice=None):
     return phase * s / area
 
 
-def assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype, lattice=None):
+def _refuse_paint_overlap(shapes, period, lattice=None):
+    """Raise if these shapes overlap — the case the superposition below cannot represent."""
+    if len(shapes) < 2:
+        return
+    try:
+        Px, Py = float(period[0]), float(period[1])
+        prims = _primitives(shapes, Px, Py)
+    except Exception:                                  # noqa: BLE001 - traced parameters
+        return          # the concrete pass already answered this; see `layer_needs_resolving`
+    if prims is None:
+        return
+    hits = _overlap.overlapping_pairs(prims, Px, Py, OVERLAP_TOL_REL * max(Px, Py), lattice)
+    if not hits:
+        return          # nothing to resolve: painting and adding are the same structure here
+
+    i, j = hits[0][0], hits[0][1]
+    what = (f'shape {_shape_name(shapes, i)} runs into its own periodic image' if i == j else
+            f'shapes {_shape_name(shapes, i)} and {_shape_name(shapes, j)} overlap')
+    raise ValueError(
+        f"combine='paint' cannot be built here: {what}, and this builder sums every shape's "
+        f'(eps_shape - eps_base) * FT(indicator). Summing an overlap is a different structure '
+        f'from painting it -- measured 1.99 against 1.90 in <eps> for two 300x300 rods of '
+        f'index 2 and 3 -- so returning the sum under the name of the paint would be a '
+        f'plausible wrong answer rather than a refusal.\n'
+        f'  For the painted layer, go through wavebit._core.boundary.to_conv_mat_boundary_layer '
+        f'(or analytic.to_conv_mat_smooth_layers, which routes to it), where the overlap is '
+        f'resolved into disjoint polygons before anything is transformed.')
+
+
+def assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype, lattice=None,
+                        combine=None):
     """Analytic Fourier coefficients of ``eps`` and ``1/eps`` for one layer.
 
     Each grid has shape ``(4*fto_y+1, 4*fto_x+1)``, indexed ``[ky+2*fto_y, kx+2*fto_x]`` — the
@@ -434,7 +464,24 @@ def assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype, lattice
     §2 for why it doubles). The ``n**2`` maps refractive index
     to permittivity: Wavebit works in ``e^{-iwt}`` throughout (``Im(n) > 0`` = loss), with no
     conjugation on the way in.
+
+    **This builds ``combine='add'`` and nothing else.** It takes a shape *list*, not a layer,
+    so the layer's ``combine`` is not in front of it — and where two shapes overlap the two
+    rules describe two different structures. Reconstructing a painted layer from this function
+    is therefore wrong, silently: two 300x300 rods of index 2 and 3 in a 1000x1000 cell come
+    back at ``<eps> = 1.99`` where the solver integrates ``1.90``, a 4.7% error that looks
+    entirely plausible. The solver itself does not make that mistake —
+    :func:`to_conv_mat_smooth_layers` routes a painted *and overlapping* layer to
+    :mod:`.boundary` and only reaches this builder where the two rules coincide — so this is a
+    precondition on the caller, which is what ``combine`` is here to let you state.
+
+    Pass ``combine`` (the layer's own value) to have that checked rather than assumed: an
+    overlapping ``'paint'`` layer is refused instead of summed. Omitting it keeps the old
+    behaviour, which is the ``'add'`` rule unconditionally.
     """
+    if combine == 'paint':
+        _refuse_paint_overlap(shapes, period, lattice)
+
     dev = getattr(n_base, 'device', None) if hasattr(n_base, 'device') else None
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
     KKY, KKX = _grid(xp, fto_x, fto_y, dev, real_dtype)
@@ -721,7 +768,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype,
 
 
 def to_conv_mat_smooth_nvf(xp, shapes, n_base, fto_x, fto_y, period, dtype,
-                             normal_grid=256, lattice=None):
+                             normal_grid=256, lattice=None, combine=None):
     """The five 2D-solve convolution matrices for one analytic layer, via NVF.
 
     ``eps`` / ``1/eps`` come from the exact shape transform (no staircase); the normal
@@ -731,9 +778,12 @@ def to_conv_mat_smooth_nvf(xp, shapes, n_base, fto_x, fto_y, period, dtype,
     Every one of the five is ``D X D^-1`` for the shape's translation phase ``D`` and a
     position-free ``X`` (see :func:`normal_projector_coeffs`), so sliding a single-shape layer
     conjugates the whole solve by a diagonal and leaves each order's efficiency alone.
+
+    ``combine`` is passed straight to :func:`assemble_eps_coeffs`, which sums; see there for
+    why an overlapping painted layer must not arrive at this function.
     """
     eps_c, inv_eps_c = assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype,
-                                           lattice)
+                                           lattice, combine=combine)
     c_xx, c_xy, c_yy = normal_projector_coeffs(
         xp, shapes, (normal_grid, normal_grid), period, fto_x, fto_y, dtype, lattice)
     return nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, fto_x, fto_y)
@@ -812,9 +862,14 @@ def to_conv_mat_smooth_layers(layer_shapes, fto_x, fto_y, period,
                 xp, layer.get('shapes', []), n_base, fto_x, fto_y, period, dtype,
                 normal_grid=normal_grid, plan=plan, lattice=lattice)
         else:
+            # `combine` goes down with the shapes rather than being dropped here. Reaching
+            # this branch already means the two rules agree on this layer, so the check below
+            # never fires from here -- it is a second reading of the dispatch just above, on
+            # the one branch where getting it wrong returns a plausible number instead of an
+            # error. That failure has happened once already (see `layer_needs_resolving`).
             mats = to_conv_mat_smooth_nvf(
                 xp, layer.get('shapes', []), n_base, fto_x, fto_y, period, dtype,
-                normal_grid=normal_grid, lattice=lattice)
+                normal_grid=normal_grid, lattice=lattice, combine=layer.get('combine'))
         for slot, m in zip(out, mats):
             slot.append(m)
 
