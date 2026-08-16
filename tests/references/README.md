@@ -295,6 +295,45 @@ at any residual near machine precision, and what the flip really needs beside it
 component parity. Deleting them and re-measuring cost an afternoon and produced a tighter
 oracle than either script had ever asserted.
 
+### Two S4 traps that only show on a *patterned* isotropic layer
+
+Both found on 2026-08-16, cross-checking the half-pixel cell-centre phase
+(`_half_pixel_phase`) against all three outside solvers on a chiral L cut into two disjoint
+rectangles. Neither is visible from the anisotropic uniform-slab work above, which is the only
+S4 use this repository had before.
+
+**The `x`/`y` exchange is a tensor-indexing convention, not a coordinate one.**
+`gen_goldens_s4.py` records that S4 indexes the permittivity tensor with `x` and `y` swapped
+against this repo, and `SWAP @ eps @ SWAP` is what its uniform slabs need. It does *not* follow
+that geometry needs the same treatment, and it does not: `SetRegionRectangle` takes `Center` and
+`Halfwidths` in the frame this repo already uses. Swapping them there put a grating that varies
+in `x` alone 1.5e-1 (s) and 4.1e-1 (p) away from the 1D path; leaving them alone brought it to
+4.3e-3 and 2.9e-3, which is the truncation gap between two different order sets. Established on
+a one-axis structure precisely because a 2D one cannot tell the two readings apart.
+
+**`PolarizationDecomposition` does not converge on a corner-rich layer.** S4's vector
+formulation is the natural counterpart to NVF and is the obvious thing to reach for. On this L
+it wanders instead, while the plain direct rule settles:
+
+| NumBasis | direct rule, `R_s` | `PolarizationDecomposition=True`, `R_s` |
+|---|---|---|
+| 121 | 0.171476 | 0.089167 |
+| 241 | 0.153653 | 0.102906 |
+| 441 | 0.147913 | 0.141349 |
+| 761 | 0.146175 | 0.171986 |
+
+The direct rule's steps shrink by roughly a factor of three per refinement; the decomposed one
+moves 8e-2 across the same span with no sign of settling. So S4 arbitrates a patterned layer
+through its direct rule only, and a comparison built on the vector formulation would be reading
+its own truncation. Same shape of caveat as the anisotropy one above, reached independently.
+
+For the record, since it is the only place this repository has compared all three outside
+solvers on one patterned 2D case: on that L at 16x16, `R_s` came out 0.1426 (RETICOLO, fto 14),
+0.1462 (S4 direct, NumBasis 761) and 0.1396 (fmmax FFT, fto 22), against this solver's 0.1419 --
+a 7e-3 spread with ours inside it and RETICOLO nearest. All four are still converging on a
+staircase with this many corners, which is the honest reading of that spread rather than a
+tolerance anybody should inherit.
+
 ## Attribution, and what each oracle's terms require
 
 These solvers are not vendored — nothing in this repository contains their implementations,

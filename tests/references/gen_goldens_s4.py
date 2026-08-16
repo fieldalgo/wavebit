@@ -20,7 +20,10 @@ exactly the kind of place two implementations of one formulation can part compan
   the world like a physics disagreement. ``SWAP @ eps @ SWAP`` brings it to 5.6e-16. This was
   first misdiagnosed as an angle-convention problem, which it is not: ``IncidenceAngles`` is
   ``(polar, azimuth)`` exactly as written, checked against an analytic slab at 0, 20 and 45
-  degrees.
+  degrees. The swap is about *tensor indexing* and does not carry over to geometry --
+  ``SetRegionRectangle`` takes its centre and halfwidths in this repo's own frame, and applying
+  the swap there puts a one-axis grating 1.5e-1 out. See ``README.md``, "Two S4 traps that only
+  show on a *patterned* isotropic layer".
 * ANALYSIS.md §2.1 records that S4 is **silently wrong when polarisation decomposition and
   anisotropy are combined**. So this reads total power flux per incident polarisation and never
   order-resolved s/p amplitudes. Do not "improve" it into the latter.
