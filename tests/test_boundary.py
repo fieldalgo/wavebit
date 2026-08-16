@@ -35,14 +35,20 @@ PERIOD = (1.0, 1.0)
 
 # --------------------------------------------------------------------------- helpers
 def resolve(xp, params, plan=None):
-    """Plan with NumPy on concrete values, then replay against (possibly traced) vertices."""
+    """Plan with NumPy on concrete values, then replay against (possibly traced) vertices.
+
+    The ``(loop, sign)`` pairs are carried through verbatim -- this helper used to drop the
+    sign, mirroring the defect in ``boundary.to_conv_mat_boundary_layer`` it was written
+    alongside, and every case here happens to be sign-free (``TWO_RODS`` overlap without either
+    enclosing the other), so the helper agreed with the bug rather than exposing it.
+    """
     verts = [rect_verts(xp, *p[:5]) for p in params]
     if plan is None:
         concrete = [np.asarray(rect_verts(np, *p[:5]), float) for p in params]
         plan = _c.resolve_painting(concrete)
     recs, regions = plan
     vals = _c.eval_table(xp, recs, verts)
-    regs = [(p[5], [_c.loop_verts(xp, lp, vals) for lp, s in region])
+    regs = [(p[5], [(_c.loop_verts(xp, lp, vals), s) for lp, s in region])
             for p, region in zip(params, regions)]
     return regs, plan
 
@@ -92,7 +98,7 @@ def test_polygon_ft_hole_subtracts_itself():
 def test_resolved_regions_reproduce_the_painted_area():
     """Painting order is the whole point: the later rod wins, and the areas have to say so."""
     regs, _ = resolve(xnp, TWO_RODS)
-    areas = {n: sum(float(polygon_area(xnp, V)) for V in loops) for n, loops in regs}
+    areas = {n: sum(s * float(polygon_area(xnp, V)) for V, s in loops) for n, loops in regs}
     total = sum(areas.values())
     a0, a1 = 0.36 * 0.29, 0.31 * 0.38
     assert abs(areas[3.0] - a1) < 1e-12          # the later rod is untouched
@@ -110,7 +116,7 @@ def test_resolved_regions_are_disjoint_on_a_fine_raster():
     hits = np.zeros((n, n), dtype=int)
     for _, loops in regs:
         inside = np.zeros((n, n), dtype=bool)
-        for V in loops:
+        for V, _s in loops:
             V = np.asarray(V)
             wind = np.zeros((n, n))
             for i in range(len(V)):
@@ -130,8 +136,8 @@ def test_plan_replays_against_moved_vertices():
     regs, plan = resolve(xnp, TWO_RODS)
     moved = [(p[0] + 0.01, p[1] - 0.005) + p[2:] for p in TWO_RODS]
     regs2, _ = resolve(xnp, moved, plan)
-    a1 = sum(float(polygon_area(xnp, V)) for _, loops in regs for V in loops)
-    a2 = sum(float(polygon_area(xnp, V)) for _, loops in regs2 for V in loops)
+    a1 = sum(s * float(polygon_area(xnp, V)) for _, loops in regs for V, s in loops)
+    a2 = sum(s * float(polygon_area(xnp, V)) for _, loops in regs2 for V, s in loops)
     assert a1 != a2                       # it really did move
     assert abs(a2 - a1) < 0.02            # and only by about the nudge
 
@@ -479,6 +485,181 @@ def test_a_painted_ellipse_is_polygonised():
     t = _total(r)
     assert 0.0 < t < 1.0
     assert abs(t + float(np.asarray(r.R).real.sum()) - 1.0) < 1e-9    # lossless
+
+
+# ------------------------------------------------------- a shape painted entirely inside another
+#
+# The case the rest of this file never reaches. Every overlap above is a *partial* one, where
+# the clipper's difference walk finds crossings and returns disjoint simple pieces -- all
+# ``sign = +1``, so a caller that drops the sign is indistinguishable from one that applies it.
+# Full enclosure is the branch that produces a ``sign = -1`` loop (`clipper.plan_difference`,
+# the ``n_x == 0`` containment case), and it was answered wrongly for as long as it existed.
+
+#: A disc of index 3 sitting wholly inside a square of index 2. Concentric on purpose: it is
+#: the arrangement whose exact cell-average permittivity is a one-line closed form.
+ENCLOSED_SHAPES = [dict(type='rectangle', cx=0.5, cy=0.5, lx=0.6, ly=0.6, angle=0.0,
+                        n_index=2.0),
+                   dict(type='circle', cx=0.5, cy=0.5, lx=0.2, n_index=3.0)]
+
+#: The same two shapes moved so they overlap without either containing the other -- the control
+#: that says the boundary path as a whole is sound and only enclosure was broken.
+CLIPPED_SHAPES = [dict(type='rectangle', cx=0.43, cy=0.50, lx=0.30, ly=0.30, angle=0.0,
+                       n_index=2.0),
+                  dict(type='circle', cx=0.60, cy=0.52, lx=0.32, n_index=3.0)]
+
+
+def _raster_of(shapes, n):
+    """The same instruction drawn as an `n x n` index raster, painting order preserved."""
+    axis = (np.arange(n) + 0.5) / n
+    X, Y = np.meshgrid(axis, axis)             # X indexes x (axis 1), Y indexes y (axis 0)
+    cell = np.ones((1, n, n))
+    for s in shapes:
+        if s['type'] == 'rectangle':
+            hit = ((np.abs(X - s['cx']) <= s['lx'] / 2)
+                   & (np.abs(Y - s['cy']) <= s['ly'] / 2))
+        else:
+            hit = (X - s['cx']) ** 2 + (Y - s['cy']) ** 2 <= (s['lx'] / 2) ** 2
+        cell[0][hit] = s['n_index']
+    return cell
+
+
+@pytest.mark.parametrize('fto', [6, 12])
+def test_an_enclosed_shape_is_cut_out_of_its_host_not_added_to_it(fto):
+    """The cell-average permittivity, against the closed form -- the truncation-free instrument.
+
+    ``epz_i`` is ``inv(ep_dir)``, so inverting it back recovers the matrix the solve holds, and
+    that matrix's centre element is the ``k = 0`` coefficient: the cell average of ``eps``. It
+    is an *exact* quantity, identical at every ``fto``, which is what makes it the right probe
+    here -- a wrong answer that does not move with truncation cannot be argued away as a series
+    that has not converged, and this one does not move at all.
+
+    Exactly: background 1, a 0.6 x 0.6 square of index 2 with a disc of index 3 cut out of it,
+    and the disc laid back in. ``polygon.ellipse_verts`` is **area-matched**, so the 256-gon's
+    area is ``pi * 0.1**2`` to about 1e-13 and the closed form below is not a polygonisation
+    approximation.
+
+    The number this returned before the fix was 2.4256 -- the disc counted *twice*, once as
+    part of the square and once as itself, because ``clipper`` returns the hole loop
+    counter-clockwise with ``sign = -1`` and ``boundary.conv_mats`` was reading only the loop.
+    Note what that failure is not: the matrices stayed Hermitian and ``R + T`` stayed exactly
+    1.000000000000 (see the raster test below), so no conservation check could have seen it.
+    """
+    area = float(polygon_area(xnp, _b.shape_vertices(xnp, ENCLOSED_SHAPES[1], PERIOD)))
+    assert abs(area - np.pi * 0.1 ** 2) < 1e-12, area
+    exact = 1.0 + (2.0 ** 2 - 1.0) * (0.36 - area) + (3.0 ** 2 - 1.0) * area
+    wrong = 1.0 + (2.0 ** 2 - 1.0) * (0.36 + area) + (3.0 ** 2 - 1.0) * area   # sign dropped
+
+    solver = _solve([dict(n_base=1.0, combine='paint', shapes=ENCLOSED_SHAPES)], fto=fto,
+                    normal_grid=256)
+    assert solver.freeze_geometry().boundary_plans[0] is not None      # it really painted
+    direct = np.linalg.inv(np.asarray(solver.conv_matrices()[2])[0])
+    ff = (2 * fto + 1) ** 2
+    got = complex(direct[ff // 2, ff // 2])
+
+    assert abs(got.imag) < 1e-12, got
+    assert abs(got.real - exact) < 1e-12, (got.real, exact)
+    assert abs(got.real - wrong) > 0.18                                 # the old answer
+
+
+def test_paint_with_an_enclosed_shape_agrees_with_a_fine_raster():
+    """The end-to-end statement, against the one path that draws enclosure without a clipper.
+
+    A raster simply overwrites pixels in painting order, so it has no sign convention to get
+    wrong and is the independent reading of "a disc of index 3 inside a square of index 2".
+    Both resolutions are here rather than one so the convergence is *visible*: 800 and 1600
+    sit 3.6e-5 apart, which is a fifty-fold smaller number than the gap being asserted, so the
+    raster is a fixed reference and not the thing under test.
+
+    The remaining 1.8e-3 is not error in either path -- it is the normal field. The boundary
+    path takes it from the distance gradient off the exact polygons, the raster path from the
+    pixel grid, and the two are different valid NVF choices whose gap does not shrink with the
+    raster (it is the same at N=800 and N=1600). The control below fixes the size of that gap
+    independently, on geometry that never produces a hole: 5.1e-4 there, same configuration.
+
+    Before the fix this stood at 9.9e-2 -- 54x the tolerance. **A test that only checked
+    ``R + T`` would have passed throughout**: energy came out 1.000000000000 with the sign
+    dropped, because summing a hole instead of subtracting it still leaves a lossless,
+    Hermitian permittivity -- just of a different structure. That is why the assertion here is
+    against an outside reading of the geometry rather than an internal consistency check.
+    """
+    painted = _total(_solve([dict(n_base=1.0, combine='paint', shapes=ENCLOSED_SHAPES)],
+                            normal_grid=256).conv_solve())
+    coarse = _total(_solve(_raster_of(ENCLOSED_SHAPES, 800), normal_grid=256).conv_solve())
+    fine = _total(_solve(_raster_of(ENCLOSED_SHAPES, 1600), normal_grid=256).conv_solve())
+
+    assert abs(coarse - fine) < 2e-4, (coarse, fine)          # the raster has converged
+    assert abs(painted - fine) < 4e-3, (painted, fine)
+
+
+def test_a_partial_overlap_was_never_affected():
+    """The control: the same two shapes moved apart until neither contains the other.
+
+    This is what says the fix is about the enclosure branch and not about the boundary path in
+    general. With crossings present the difference walk returns disjoint simple pieces, every
+    one of them ``sign = +1`` -- asserted below rather than assumed, because that is the whole
+    reason dropping the sign and applying it are the same arithmetic here, and so the reason
+    this number is bit-identical across the fix.
+    """
+    _recs, regions = _b.plan_layer(CLIPPED_SHAPES, PERIOD)
+    assert [s for region in regions for _lp, s in region] == [1, 1]
+
+    painted = _total(_solve([dict(n_base=1.0, combine='paint', shapes=CLIPPED_SHAPES)],
+                            normal_grid=256).conv_solve())
+    fine = _total(_solve(_raster_of(CLIPPED_SHAPES, 1600), normal_grid=256).conv_solve())
+    assert abs(painted - fine) < 2e-3, (painted, fine)
+
+
+def test_the_normal_field_does_not_care_which_way_a_hole_is_wound():
+    """Why the sign is applied to the transform and *not* by reversing the hole's winding.
+
+    Both spellings give the same permittivity -- ``polygon_ft`` is a signed contour integral,
+    so a reversed loop and a ``-1`` factor agree to 2e-16. They differ in what they hand the
+    normal field, which takes the loops with no sign at all. That is correct: the field is the
+    direction to the nearest boundary *point*, so it depends on which segments exist and not on
+    how they are wound, and only ``nx**2``, ``nx*ny``, ``ny**2`` are used, so even the overall
+    sign of the vector cancels.
+
+    Correct, but not bit-identical, and the difference is worth stating precisely rather than
+    hiding under a loose tolerance: reversing a loop renumbers its edges, so ``argmin`` breaks
+    its ties the other way where two edges are equidistant. Measured on this geometry, **20
+    pixels out of 65536** move, every one of them by 0.02454 in ``nx**2`` -- which is
+    ``2*pi/256``, the 256-gon's angular step, i.e. the tie is between two adjacent facets of
+    the polygonised disc. Integrated into the coefficients that is 6.0e-6 in ``c_xx`` and
+    ``c_yy`` and 7.0e-18 in ``c_xy``.
+
+    Applying the sign to the transform leaves the field untouched instead, which is why that is
+    the shape the fix took: it moves the permittivity, which was wrong, and nothing else.
+    """
+    recs, regions = _b.plan_layer(ENCLOSED_SHAPES, PERIOD)
+    verts = [_b.shape_vertices(xnp, s, PERIOD) for s in ENCLOSED_SHAPES]
+    vals = _c.eval_table(xnp, recs, verts)
+    pairs = [(_c.loop_verts(xnp, lp, vals), s)
+             for region in regions for lp, s in region]
+    assert sorted(s for _V, s in pairs) == [-1, 1, 1], [s for _V, s in pairs]
+
+    asis = [V for V, _s in pairs]
+    flipped = [xnp.flip(V, axis=0) if s < 0 else V for V, s in pairs]
+    for loops in (asis, flipped):
+        assert all(float(polygon_area(xnp, V)) != 0.0 for V in loops)
+
+    a = _b.normal_projector_coeffs(xnp, asis, (256, 256), PERIOD, 6, 6,
+                                   xnp.float64, xnp.complex128)
+    b = _b.normal_projector_coeffs(xnp, flipped, (256, 256), PERIOD, 6, 6,
+                                   xnp.float64, xnp.complex128)
+    for got, want in zip(a, b):
+        assert np.abs(np.asarray(got) - np.asarray(want)).max() < 1e-5
+
+    fa = _b.distance_gradient_normal_field(xnp, asis, (256, 256), PERIOD, xnp.float64)
+    fb = _b.distance_gradient_normal_field(xnp, flipped, (256, 256), PERIOD, xnp.float64)
+    for u, v in zip(fa, fb):
+        # squared, because the field's own sign is meaningless -- see the docstring
+        d = np.abs(np.asarray(u) ** 2 - np.asarray(v) ** 2)
+        moved = d > 1e-12
+        # counted, not bounded: a genuine dependence on the winding would move the *field*,
+        # not twenty pixels of it, and a plain max() would read the same either way.
+        assert int(moved.sum()) < 100, int(moved.sum())
+        if moved.any():
+            assert abs(float(d[moved].max()) - 2 * np.pi / 256) < 1e-4, float(d[moved].max())
 
 
 # ------------------------------------------------- the painting plan across backends

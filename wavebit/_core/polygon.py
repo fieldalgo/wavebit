@@ -16,8 +16,11 @@ above because the sign and factor-of-two conventions have to match
 
 :func:`polygon_area` is the shoelace formula (Gauss's area formula).
 
-A hole needs no special case. The transform is a signed contour integral, so a loop wound the
-other way subtracts by itself, and :mod:`.clipper` returns holes exactly that way.
+The transform is a signed contour integral, so a loop wound the other way does subtract by
+itself. **That is not how :mod:`.clipper` returns a hole**, and reading it as though it were
+cost a silent wrong answer: :func:`.clipper.subtract_loop` normalises every loop to
+counter-clockwise and carries the orientation in a separate ``sign``, so a hole arrives with a
+*positive* area and its caller has to apply that sign. See :func:`.boundary.conv_mats`.
 """
 
 

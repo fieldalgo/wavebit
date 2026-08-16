@@ -43,11 +43,17 @@ shapes in painting order
   -> the five NVF convolution matrices
 ```
 
-A region is a list of `(loop, sign)`. Both the area and the polygon transform are signed contour
-integrals, so a hole subtracts by itself and nothing downstream special-cases one. That is what
-closes the recursion: subtracting from a region is subtracting from each loop and keeping the
-signs, so every clipper call stays a simple-polygon pair and the loop count grows roughly
-linearly instead of the `2^m` an inclusion–exclusion formulation would need.
+A region is a list of `(loop, sign)`, and **every loop is stored counter-clockwise** -- the
+orientation lives in `sign`, not in the winding. That is what closes the recursion: subtracting
+from a region is subtracting from each loop and keeping the signs, so every clipper call stays a
+simple-polygon pair and the loop count grows roughly linearly instead of the `2^m` an
+inclusion–exclusion formulation would need.
+
+The price is that every consumer of a region has to multiply by `sign`; the winding will not do
+it for them, even though `polygon.polygon_ft` is a signed contour integral and would have. Both
+`clipper.region_area` and `clipper.region_ft` do. `boundary.conv_mats` did not, for a while, and
+a shape painted entirely inside another one was silently solved as a *thicker* one -- with the
+matrices still Hermitian and `R + T` still exactly 1.
 
 ## Using it
 
