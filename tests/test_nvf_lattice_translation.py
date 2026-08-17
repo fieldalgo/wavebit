@@ -32,7 +32,8 @@ through, and needed both a full-cell pad and the clipped-fragment handling; the 
 separate those two halves are parametrized at the end of this file.
 
 The sibling defect in the *analytic* (non-raster) path is older and pinned elsewhere:
-``test_shape_position_gradients.test_a_multishape_layer_is_not_periodic_across_the_cell_edge``.
+``test_shape_position_gradients.test_a_multishape_layer_is_periodic_across_the_cell_edge`` --
+which pinned the defect under the opposite name until ``c128fd8`` fixed it.
 """
 import numpy as np
 import pytest

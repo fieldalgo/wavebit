@@ -94,7 +94,8 @@ epz_i = inv(⟦ε⟧)
 ```
 
 The projectors `Cxx=⟦nx²⟧` etc. are obtained by sampling the **analytic unit normal field**
-(`_core/analytic.py::normal_vector_field_analytical`, a level-set gradient) on a fine grid
+(`_core/analytic.py::normal_vector_field_analytical` — a level-set gradient per shape until
+2026-08-17, a distance-product blend of per-shape surface normals since) on a fine grid
 and transforming it (`normal_projector_coeffs`). Unlike the SDF normals of a staircased
 boundary, these are the true-boundary normals, so the full NVF benefit is realized.
 

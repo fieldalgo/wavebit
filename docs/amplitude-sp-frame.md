@@ -102,11 +102,14 @@ mask is neither: it takes exactly two values, and it is a function of the order'
 *wavevector* -- it changes sign where `kx` and `ky` cross zero, and those crossings move when
 `theta`, `phi`, `wl` or the period move, which no lattice translation's mask can do.
 
-(`li` rather than `nvf` for this control on purpose. The NVF path is *not* translation-
-covariant -- the same roll moves `R` by 1.2e-02, and that does not converge away with `fto`
--- so it cannot isolate a translation. That is a separate, pre-existing property of the
-normal-field construction, unrelated to the frame, and it predates every change described
-here.)
+(`li` rather than `nvf` for this control on purpose, *at the time*. The NVF path was not
+translation-covariant -- the same roll moved `R` by 1.2e-02 and it did not converge away with
+`fto` -- so it could not isolate a translation. That was a separate, pre-existing property of
+the normal-field construction, unrelated to the frame, and it predated every change described
+here. **It was in fact a defect, and was fixed on 2026-08-17** (`339df21`, `5b4c891`): the cell
+is periodic and three places in the construction read it as a flat array. The same roll now
+moves `nvf` by 9.1e-15 against `li`'s 9.6e-15, so either path can carry this control today.
+`li` is kept here because it is what the measurement was made on.)
 
 **(b) The reconstructed field, as the arbiter.** Section 2 says the field cannot see the reversal,
 which is exactly what qualifies it to judge: it is right either way, and it is pinned entry

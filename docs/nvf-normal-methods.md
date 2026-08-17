@@ -23,7 +23,9 @@ cells, 11 are resolved by the reference floor and it won all 11, losing none, by
 to 14x. `'smooth'` had the *best* angular numbers and still lost every resolved cell on the
 corner-bearing scene (5 of 5, the sixth unresolved) — the measured demonstration that the
 best angular field is not the best solver field. The default stays `'distance'`: every
-existing result is bit-identical unless the keyword is set.
+existing result is bit-identical unless the keyword is set. (True of the *keyword*, and no
+longer of the construction: `339df21` made `'distance'` itself periodic, which moved its answers
+— see [the periodicity section](#periodicity-the-cell-is-a-torus).)
 
 ```python
 wavebit.rcwa(ucell=raster, factorization='nvf', normal_method='contour', ...)
@@ -283,14 +285,20 @@ return bit-identical numbers on one — which is what hid the defect's location 
 Use a two-phase raster to tell the constructions apart.
 
 Pinned by [`tests/test_nvf_lattice_translation.py`](../tests/test_nvf_lattice_translation.py),
-which parametrizes three placements deliberately (a partial fix passes some) and carries
-`'contour'` as a strict xfail. The sibling defect in the *analytic* path is older and pinned
-by `test_shape_position_gradients.test_a_multishape_layer_is_not_periodic_across_the_cell_edge`.
+which parametrizes three placements deliberately (a partial fix passes some). `'contour'` was
+carried there as a strict xfail until the aperture fix above promoted it; all four constructions
+are covariant now and the file has no xfail left. The sibling defect in the *analytic* path was
+older and is also fixed (`c128fd8`) — its normal field was distance-blind, not merely aperiodic,
+and `test_shape_position_gradients.test_a_multishape_layer_is_periodic_across_the_cell_edge` now
+states the property where a test of the opposite name used to pin the defect.
 
 ## Semantics worth knowing
 
 - **The default is untouched.** `normal_method='distance'` and an unset keyword are
-  bit-identical, pinned by test. No golden moved.
+  bit-identical, pinned by test — the two spellings select the same construction. That is a
+  statement about the keyword only. The construction it selects was itself changed on
+  2026-08-17 (`339df21`, periodicity) and `tests/data/golden_nvf.npz` was re-frozen with it, so
+  "no golden moved" held when this option landed and does not hold across that commit.
 - **Refused where unread.** Explicitly set with `factorization='li'` or on either shape
   path, the solve raises `NotImplementedError` naming the keyword. The shape paths build
   their normal fields from the geometry itself (`analytic.normal_vector_field_analytical`);

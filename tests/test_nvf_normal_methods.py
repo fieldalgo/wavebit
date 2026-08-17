@@ -8,7 +8,9 @@ the one that lost no resolved solver cell on either measured scene).
 
 What this file pins, and why each pin is the one that matters:
 
-- **The untouched default is bit-identical to the code before the option existed** — the
+- **The untouched default is bit-identical to the explicit spelling** (it was also bit-identical
+  to the code before the option existed, until `339df21` made the `'distance'` construction
+  periodic; that is a change to what the default selects, not to the selection) — the
   option must be opt-in, not a quiet renumbering of every NVF user's results.
 - **An explicit request nothing would read is refused, not ignored** — the shape paths
   build normals from geometry and Li builds none, so a ``normal_method`` there would be the

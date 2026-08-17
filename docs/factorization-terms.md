@@ -188,12 +188,16 @@ exactly two answers with exactly two consumers:
 
 | Entry point | Grid holds | Callers |
 | --- | --- | --- |
-| `fourier2d_piecewise_constant` | values that hold across their pixel — `eps`, `1/eps` | 5 in `wavebit/` |
-| `fourier2d_pointwise` | point samples of a continuous field — the NVF normal field | 3 in `wavebit/` |
+| `fourier2d_piecewise_constant` | values that hold across their pixel — `eps`, `1/eps` | 7 in `wavebit/` |
+| `fourier2d_pointwise` | point samples of a continuous field — the NVF normal field | 5 in `wavebit/` |
+
+The counts drift as sites are added and are re-checked rather than trusted; they were 5 and 3
+when this was written, and one site moved from pointwise to piecewise on 2026-08-17 (`ee715df`,
+the PN z slot). What does not drift is the split itself.
 
 A value the caller can never be in doubt about should not be a parameter the caller restates,
-and the default made it worse: `False` was the answer 3 of 8 sites wanted, so the *majority*
-case was the one you got by forgetting. `_fourier2d_grid` is now private with the flag keyword-only and
+and the default made it worse: at the time of the change `False` was the answer 3 of 8 sites
+wanted, so the *majority* case was the one you got by forgetting. `_fourier2d_grid` is now private with the flag keyword-only and
 undefaulted, so even a direct call has to say which it means.
 
 `fourier2d_pointwise` also drops the rule argument rather than defaulting it. Every call in the
