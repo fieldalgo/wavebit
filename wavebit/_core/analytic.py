@@ -623,8 +623,15 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype, lattic
     # 1e-4 -> 1e-5 -> 1e-6, which is a correct gradient with the difference converging onto it.
     # What this leaves: the coefficients are a midpoint sum of a field that is continuous but
     # not smooth, so a fractional-pixel translation resamples it and moves the answer by ~7e-5
-    # at the default grid. A LONE shape does not have it -- no blend, and the self-convergence
-    # is a clean O(1/N**2) three orders lower (5.8e-7 at N = 256, ratio 4.00 per refinement).
+    # at the default grid. A LONE shape does not have it -- self-convergence is a clean
+    # O(1/N**2) three orders lower (5.8e-7 at N = 256, ratio 4.00 per refinement) -- and the
+    # reason is NOT simply that there is no blend. The minimum-image fold reflects a shape's
+    # normal at its own half-period line, which is a jump; a lone shape is built centred by
+    # `normal_projector_coeffs`, which puts that seam on the cell edge where the (i+0.5)/N grid
+    # is antisymmetric and the aliasing cancels. Sample the same lone circle off-centre without
+    # the phase and the sequence stalls (ratio 6.7 then 1.2, floored near 7e-8). With several
+    # shapes each seam sits wherever its shape does and the reflected normal enters the blend
+    # before normalisation, so nothing is aligned to cancel.
     # With several shapes the same measurement starts at ratio ~2, the signature of a feature
     # too sharp for a coarse grid, and steepens past 4 as the crossover band resolves. The
     # remedy is `normal_grid`, not a change here; removing it would need the coefficients
@@ -834,11 +841,21 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype,
       bias being removed.
     * *Centring on the mean of the shape centres* (which reduces to the rule above for one
       shape) fixes the common-translation half exactly, 1.2e-4 to 6.6e-15 on a rectangle pair.
-      It manufactures the degeneracy it needs to avoid: two shapes then sit exactly opposed
+      It manufactured the degeneracy it needs to avoid: two shapes then sit exactly opposed
       about the centre of the cell, their unit fields cancel exactly along the segment between
       them, and for two identical circles 16 grid points reach ``|n_total| == 0`` — where
       :func:`_hypot_safe` is finite but its gradient is ``0 * inf``. The common-translation
-      gradient comes back NaN. It also moved the relative-position error for rectangles from
+      gradient came back NaN.
+
+      **That rejection is dated and the route is worth re-measuring before it is dismissed
+      again.** It was decided against the *sum of unit vectors*, where ``n1 + n2 = 0`` along
+      the whole segment between two opposed centres — a curve the grid samples. The
+      distance-product blend that replaced it (2026-08-17) does not cancel there: off the
+      midpoint ``w1 != w2``, so the zero set collapses to the single midpoint, which the
+      ``(i+0.5)/N`` grid never contains. Measured on two identical circles on the cell
+      diagonal, zero grid points reach ``|n| == 0`` at N = 256, 512 and 1024, against 85, 144
+      and 303 under the old rule. What has not been re-measured is whether the route is *good*:
+      it makes the common translation exact and appears to cost 1.5-3.4x on relative jitter. It also moved the relative-position error for rectangles from
       1.6e-1 to 2.9e-1.
     * *Mollifying* ``sign()`` (``tanh(xr/w)``) removes the zero derivative at the source and
       would serve both halves, but the width that makes the position gradient accurate is not
