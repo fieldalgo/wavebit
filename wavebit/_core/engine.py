@@ -1156,6 +1156,23 @@ class CoreFactorizationMixin:
         [setattr(self, k, v) for k, v in kwargs.items()]
         return self._conv_matrices(geometry)
 
+    def structure_slice(self, layer=0, n=512, show='eps', band_limited=False):
+        """One layer's structure as an array. See :func:`wavebit._core.draw.structure_slice`."""
+        from .draw import structure_slice
+        return structure_slice(self, layer=layer, n=n, show=show, band_limited=band_limited)
+
+    def structure_plot(self, layer=0, n=512, show='eps', ax=None, band_limited=False):
+        """Draw one layer of the structure. See :func:`wavebit._core.draw.structure_plot`.
+
+        Here rather than on the three backend solvers because the picture is NumPy either way,
+        which is the argument ``field_plot`` already makes; the difference is that this one
+        reads the *solver* rather than an array it was handed, so the per-backend wrapper had
+        nothing left to do.
+        """
+        from .draw import structure_plot
+        return structure_plot(self, layer=layer, n=n, show=show, ax=ax,
+                              band_limited=band_limited)
+
     def _reject_unsupported_lattice(self):
         """Refuse the build paths a skewed cell has no implementation for — before they answer.
 
