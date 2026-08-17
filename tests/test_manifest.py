@@ -13,6 +13,7 @@ the path claimed, then ask for each option the manifest says is unavailable and 
 build refuses it. That closes the loop the tables sit in the middle of.
 """
 import json
+import warnings
 
 import numpy as np
 import pytest
@@ -314,3 +315,125 @@ def test_polarization_claims_match_runtime():
 
     with pytest.raises(ValueError, match='psi and polarization'):
         wavebit.rcwa(ucell=_RASTER, psi=0.4, polarization=(1, 0), **kw)
+
+# ------------------------------------------------- the material flags, against the solver
+
+#: ``supported`` was the only claim in this document that nothing exercised, and it is the one
+#: that drifted: ``patterned_anisotropic`` and ``magnetic`` both stayed False for days after
+#: they started working, and ``z_coupled`` before them.
+#:
+#: Each case is required to *run and conserve energy*. Reachability alone would be the weaker
+#: claim and it was the first draft here, until it turned out that a slot order mistake sails
+#: straight through "did it return something" while producing R+T = 1.9. Every layer below is
+#: lossless and passive, so R + T = 1 is a real constraint rather than a smoke test, and it is
+#: the cheapest statement that fails when the case is wired up wrong.
+#:
+#: Absolute accuracy is still the goldens' job — ``tests/references/test_fmmax_patterned_golden.py``
+#: and ``test_fmmax_magnetic_golden.py``, against oracles frozen before the code existed.
+_I1 = np.eye(1, dtype=complex)
+_MAT_KW = dict(backend=0, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+               period=(1.0, 1.0), wavelength=1.1, thickness=[0.3])
+
+
+def _tensor(xx, yy, zz, xy=0.0, yx=0.0, xz=0.0, zx=0.0):
+    return np.array([[xx, xy, xz], [yx, yy, 0.0], [zx, 0.0, zz]], dtype=complex)
+
+
+def _in_plane(t):
+    """The five in-plane slots for a uniform tensor. Off-diagonals hold the negative."""
+    return [np.stack([t[0, 0] * _I1]), np.stack([t[1, 1] * _I1]),
+            np.stack([np.linalg.inv(t[2, 2] * _I1)]),
+            np.stack([-t[0, 1] * _I1]), np.stack([-t[1, 0] * _I1])]
+
+
+def _z_row(t):
+    """The four z-row slots. Handing them over *at all* is what selects the 4ff formulation,
+    so they go only to the case that has a z row — a zero-filled set is a different request."""
+    return [np.stack([-t[0, 2] * _I1]), np.stack([-t[1, 2] * _I1]),
+            np.stack([-t[2, 0] * _I1]), np.stack([-t[2, 1] * _I1])]
+
+
+def _run_uniform(eps, mu=None):
+    mee = wavebit.rcwa(fto=[0, 0], **_MAT_KW)
+    z = _z_row(eps) if np.any(eps[2, :2]) or np.any(eps[:2, 2]) else []
+    return mee.solve_for_conv(_MAT_KW['wavelength'], *_in_plane(eps), *z,
+                              mu=None if mu is None else tuple(_in_plane(mu)))
+
+
+def _run_patterned():
+    """A pillar of a real symmetric tensor in vacuum, through the Popov-Neviere builder.
+
+    The unpacking is written out rather than splatted on purpose. The builders return
+    ``(epx, epy, epxy, epyx, epz_i)`` and :meth:`solve_for_conv` takes
+    ``(epx, epy, epz_i, epxy, epyx)`` — both documented, and different. Splatting one into
+    the other puts the inverted zz slot where epxy belongs, and nothing objects: the solve
+    returns a full set of plausible efficiencies that happen to sum to 1.9. That is how this
+    test was first written, and the energy assertion below is what caught it.
+    """
+    from wavebit._core.factorization import to_conv_mat_raster_pn
+    grid, fto = 48, 4
+    eps = np.zeros((1, grid, grid, 3, 3), dtype=complex)
+    for i in range(3):
+        eps[..., i, i] = 1.0
+    eps[0, 14:34, 18:30] = _tensor(2.25, 2.25, 2.89)
+    epx, epy, epxy, epyx, epz_i = to_conv_mat_raster_pn(eps, fto, fto)
+    mee = wavebit.rcwa(fto=[fto, fto], **_MAT_KW)
+    return mee.solve_for_conv(_MAT_KW['wavelength'], epx, epy, epz_i, epxy, epyx)
+
+
+MATERIAL_RUNS = {
+    'isotropic': lambda: _run_uniform(_tensor(2.6, 2.6, 2.6)),
+    'uniform_anisotropic': lambda: _run_uniform(_tensor(2.3, 3.0, 2.6, xy=0.2, yx=0.2)),
+    'magnetic': lambda: _run_uniform(_tensor(2.6, 2.6, 2.6), mu=_tensor(1.4, 1.4, 2.2)),
+    'z_coupled': lambda: _run_uniform(_tensor(2.6, 2.6, 2.6, xz=0.4, zx=0.4)),
+    'patterned_anisotropic': _run_patterned,
+}
+
+
+def test_every_supported_material_is_one_this_file_performs():
+    """No supported case may be added without something here that actually runs it."""
+    named = {e['case'] for e in MATERIALS if e['supported']}
+    assert named == set(MATERIAL_RUNS), (
+        f'not exercised: {sorted(named - set(MATERIAL_RUNS))}; '
+        f'exercised but not claimed: {sorted(set(MATERIAL_RUNS) - named)}')
+
+
+@pytest.mark.parametrize('case', sorted(MATERIAL_RUNS), ids=sorted(MATERIAL_RUNS))
+def test_a_supported_material_solves_and_conserves_energy(case):
+    """A stale True sends a consumer's user into a traceback. This is what stops that.
+
+    Every layer here is lossless and passive, so ``R + T == 1`` holds at any truncation and
+    is not a convergence claim. It is asserted because "it returned" does not distinguish a
+    working case from a misconfigured one.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', wavebit.UnphysicalResultWarning)
+        res = MATERIAL_RUNS[case]()
+    total = float(np.asarray(res.res.R).sum() + np.asarray(res.res.T).sum())
+    assert abs(total - 1.0) < 1e-6, f'{case}: R + T = {total!r} on a lossless passive layer'
+
+
+def test_a_patterned_z_row_has_no_builder_to_come_from():
+    """``patterned_z_coupled: False`` is structural, so it is checked as structure.
+
+    Nothing raises if a z-coupled tensor raster goes to the Popov-Neviere builder: it returns
+    the same five in-plane slots and the z row is simply dropped. The honest statement of the
+    gap is that no builder emits the four z-row slots from a raster at all, and that is what
+    this pins. The day one does, this fails — which is the day the flag should be revisited.
+
+    Worth flagging for whoever gets there: silently dropping the row sits oddly beside the
+    rest of this solver, which refuses rather than ignores.
+    """
+    from wavebit._core import factorization
+    cell = np.zeros((1, 16, 16, 3, 3), dtype=complex)
+    for i in range(3):
+        cell[..., i, i] = 1.0
+    cell[0, 4:12, 4:12] = _tensor(2.9, 2.6, 2.9, xy=0.3, yx=0.3, xz=0.4, zx=0.4)
+    for name in (n for n in dir(factorization) if n.startswith('to_conv_mat')):
+        try:
+            out = getattr(factorization, name)(cell, 2, 2)
+        except Exception:
+            continue                      # not a tensor-raster builder; nothing to claim
+        assert len(out) == 5, (
+            f'{name} returned {len(out)} slots — if it now emits the z row, patterned and '
+            'z-coupled may be reachable and MATERIALS should say so')

@@ -200,17 +200,22 @@ MATERIALS = (
     },
     {
         'case': 'patterned_anisotropic',
-        'supported': False,
-        'why': 'the solver is unchanged — what is missing is a factorization that produces '
-               'the five slots for a patterned tensor',
-        'source': 'docs/anisotropic-materials.md',
+        'supported': True,
+        'why': 'the in-plane tensor -- the five slots epx, epy, epz_i, epxy, epyx -- through '
+               'the Popov-Neviere rearrangement: finish the projector algebra pointwise, '
+               'transform once. Both solvers are unchanged, as it was scoped. A patterned '
+               'layer that also fills the z row is patterned_z_coupled below, not this.',
+        'source': 'docs/patterned-anisotropic-factorization.md',
     },
     {
         'case': 'magnetic',
-        'supported': False,
-        'why': 'mu enters both the layer operator and the half-space boundary, so it is not '
-               'a material substitution',
-        'source': 'docs/anisotropic-materials.md',
+        'supported': True,
+        'why': 'mu is the same five slots on the other side of the (E, H, eps, mu) -> '
+               '(H, -E, mu, eps) duality: layers as the E/H dual, half-spaces as one pair '
+               'of admittances, patterned layers through the same Popov-Neviere '
+               'rearrangement. The 2D path only -- the 1D/conical operators and the '
+               'first-order 4ff solve take no mu, and refuse rather than ignore one.',
+        'source': 'docs/magnetic-materials.md',
     },
     {
         'case': 'z_coupled',
@@ -219,9 +224,18 @@ MATERIALS = (
                'the first-order (4ff) formulation instead -- selected automatically by the '
                'presence of the four z-row slots, or by formulation=4ff, at about 8x. Two '
                'limits ride with it: connecting_algo must be ETM, and mu is not implemented '
-               'there. Field reconstruction is (2026-08-14). Uniform layers only, for the '
-               'same reason as patterned_anisotropic.',
+               'there. Field reconstruction is (2026-08-14). Uniform layers only; a '
+               'patterned z row is patterned_z_coupled below.',
         'source': 'wavebit/_core/solve_2d_4ff.py',
+    },
+    {
+        'case': 'patterned_z_coupled',
+        'supported': False,
+        'why': 'patterned *and* z-coupled: the 3x3 closing step. The two halves that exist '
+               'reach this from opposite sides and neither extends to it -- the in-plane '
+               'factorization has no z row, and the 4ff solve takes no pattern. No oracle '
+               'exists for it either, which is the harder half.',
+        'source': 'docs/anisotropic-materials.md',
     },
 )
 
