@@ -80,9 +80,14 @@ which is what convergence *is* here.
 FFT the indicator, multiply by an isotropic Gaussian low-pass at a **fixed 8 orders per
 period**, read the spectral gradient (`i*k`), normalize on the interface band, and give
 every other pixel its nearest band pixel's normal (EDT with `return_indices`). Periodic
-by construction — `np.gradient` is one-sided at the array edge, so `'distance'` is
-structurally wrong for a shape crossing the wrap and this construction is not. No
-dependency beyond NumPy/SciPy.
+by construction, in both stages. No dependency beyond NumPy/SciPy.
+
+This used to read "`np.gradient` is one-sided at the array edge, so `'distance'` is
+structurally wrong for a shape crossing the wrap and this construction is not." True as
+far as it went, and it went nowhere — the observation sat here as a selling point for
+`'spectral'` for two months without anyone chasing it into `'distance'`, where it was a
+defect rather than a trade-off. It was also only a third of the story. See
+[the periodicity section](#periodicity-the-cell-is-a-torus).
 
 The cutoff is fixed in physical orders deliberately: every N-tied cutoff plateaus exactly
 like `'distance'` (tying the band to the raster re-admits the staircase harmonics), and
@@ -193,6 +198,73 @@ all six circle cells (1.5-9.1x) and loses 4 of 6 resolved rect30 cells — the f
 jax + fmmax dependency (or a reimplementation), it was not integrated. The transferable
 part of its design — the cutoff tied to the expansion rather than to the raster — is
 exactly what `'spectral'` adopts.
+
+## Periodicity: the cell is a torus
+
+Fixed 2026-08-17, pre-existing since the port. **`'distance'` was not periodic**, so
+rolling a raster by whole pixels — an exact lattice translation, the same structure named
+differently — moved `max|dR|` by ~1e-2, at every `fto`, non-monotonically. Li's rules are
+exact to 1e-15 on the same rolls.
+
+It does not converge away, and that is what makes it a defect rather than a residual: the
+lift to the `4*fto+1` floor is a block repeat, the same staircase spelled with more pixels
+([`nvf-upsampling.md`](nvf-upsampling.md)), so raising `fto` never refines the field. It
+only lets the convolution matrices read more orders of a field that is wrong by the same
+amount.
+
+**Three ingredients, and no partial fix helps.** The construction read the cell as a flat
+array in three places:
+
+| | before | after |
+|---|---|---|
+| `_interface_mask` | compared inside the array only — the last row's neighbour was not the first | wrapping comparison on both axes |
+| `distance_transform_edt` | measured to the in-cell interface | 3x3 tiling, cropped back — the periodically nearest one |
+| `np.gradient` | one-sided on the first/last row and column | wrapping central differences |
+
+Every one- and two-way combination still leaves 7e-2 to 1e0 on some placement; only all
+three give exact zero. `_upsampled_interface_mask` (the tracer route) gained the matching
+wrap pair, so the two mask paths stay identical.
+
+**It is not a features-touch-the-edge bug**, which is the natural guess and the wrong one.
+A shape three clear pixels from either wall, before and after the roll, still moved by a
+full 90 degrees at 74 of 256 pixels — the distance map is nonzero right up to the array
+border whatever the shape does.
+
+**What it cost, and what it did not.** The reported case goes 1.7e-2 to ~2e-15 at every
+`fto`. Cost is ~3 ms on an 11.6 s solve at `fto=[16,12]` (the EDT is 11x dearer in
+isolation and irrelevant in context). Accuracy against a converged reference is a wash —
+neither arm is better, because this was never an accuracy fix. Two test thresholds moved,
+both calibrated against the *old* non-periodic reading rather than against the field:
+
+- a stripe's medial set is **two** full columns in a periodic cell, not one, so its
+  zero-gradient share was understated by exactly one column;
+- `test_nvf_non_square_grid`'s whole-cell alignment against a radial-from-the-centre
+  oracle fell 0.9903 to 0.9887 at n=64, because that oracle stops describing the bulk once
+  wall pixels point at the nearest *copy*. Restricted to a band around the circle the
+  numbers are **bit-identical** before and after, at all three n — nothing moved at the
+  interface.
+
+**Status of the other three.** `'smooth'` was already exactly covariant and needed nothing
+— it already tiled 3x3 and smoothed with `mode='wrap'`, which is the in-repo evidence that
+periodicity is the answer rather than a tuned tolerance. `'spectral'` leaked only through
+the shared mask and is fixed by it. **`'contour'` is still not covariant**, by an unrelated
+mechanism: `_contour_polylines` pads by `4*sigma+3` px, far narrower than a period, so the
+level set is extracted through a window that cuts the periodic copies at a fixed place
+while the roll slides the shape past it — the set of cut fragments changes with the roll
+(171/187/224 resampled points at rolls 0/4/9) and a fragment's arbitrary endpoint can win
+a nearest-point query. Widening the pad to a full cell makes it exact off-wrap and leaves
+a p99 ~4 deg resampling tie-break on the medial ridge, the same class already documented
+for mirrors. Left open here: separate defect, separate construction, and it overlaps work
+in flight on `claude/nvf-grayscale-contour`.
+
+Note that a raster with 3+ distinct values delegates to `'distance'`, so all four methods
+return bit-identical numbers on one — which is what hid the defect's location originally.
+Use a two-phase raster to tell the constructions apart.
+
+Pinned by [`tests/test_nvf_lattice_translation.py`](../tests/test_nvf_lattice_translation.py),
+which parametrizes three placements deliberately (a partial fix passes some) and carries
+`'contour'` as a strict xfail. The sibling defect in the *analytic* path is older and pinned
+by `test_shape_position_gradients.test_a_multishape_layer_is_not_periodic_across_the_cell_edge`.
 
 ## Semantics worth knowing
 

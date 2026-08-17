@@ -39,13 +39,32 @@ def _disc(nx, ny, px=PX, py=PY, r=R):
                                             3.0, 1.0)
 
 
-def _alignment(nx, ny, lattice):
-    """Mean ``|cos|`` between the computed normal and the circle's exact one, over the cell."""
+def _alignment(nx, ny, lattice, band=None):
+    """Mean ``|cos|`` between the computed normal and the circle's exact one.
+
+    ``band`` restricts the average to pixels within that many x-pixels of the circle, and the
+    restriction matters for a reason worth stating: **the radial-from-the-centre reference is
+    only the right answer near the shape.** The distance field's bulk extension is periodic —
+    far from the disc a pixel's nearest interface belongs to whichever *copy* of the disc is
+    closest, which near the cell walls is not the one at the centre. Averaged over the whole
+    cell, those wall pixels are counted as misalignment against an oracle that does not apply
+    to them, and the score drifts with how much empty cell the case happens to have.
+
+    Since the transform was made periodic (2026-08-17) that drift is visible: whole-cell
+    alignment fell from 0.9903 to 0.9887 at ``n = 64`` while the *banded* figure did not move a
+    single bit (0.938835 at +-2 px, 0.962047 at +-5 px, identical before and after at all three
+    ``n``). Nothing changed at the interface; only the bulk did, and it changed to the
+    periodically correct extension. The banded form is therefore the one that measures what
+    this file is about.
+    """
     dx, dy, ucell = _disc(nx, ny)
     rho = np.hypot(dx, dy)
     rho[rho == 0] = 1.0
     n_x, n_y = normal_vector_field(ucell ** 2, lattice=lattice)
-    return float(np.abs(n_x * dx / rho + n_y * dy / rho).mean())
+    cos = np.abs(n_x * dx / rho + n_y * dy / rho)
+    if band is None:
+        return float(cos.mean())
+    return float(cos[np.abs(rho - R) <= band * (PX / nx)].mean())
 
 
 @pytest.mark.parametrize('n', [64, 128, 256])
@@ -65,12 +84,32 @@ def test_square_pixels_are_untouched_by_the_metric(n):
 
 @pytest.mark.parametrize('n', [64, 128, 256])
 def test_the_metric_is_what_makes_a_non_square_grid_point_the_right_way(n):
-    """Same raster, same shape: only the physical step of an index differs."""
+    """Same raster, same shape: only the physical step of an index differs.
+
+    Measured over the whole cell, which is the instrument that separates the two arms here: the
+    aspect-ratio rotation is a *bulk* effect, so restricting to the interface band buries it
+    under the staircase quantization both arms share (0.930 vs 0.939 at +-2 px, against 0.966
+    vs 0.989 over the cell).
+
+    The 0.99 floor this used to carry became 0.9887 at ``n = 64`` when the distance transform
+    was made periodic on 2026-08-17, and that is a change in the *oracle's* domain of validity
+    rather than in the field's accuracy — radial-from-the-centre stops describing the bulk once
+    pixels near the wall point at the nearest periodic copy (see :func:`_alignment`). The
+    interface band is bit-identical across that change, which is the evidence that nothing got
+    worse; the banded assertion below is what keeps that claim under test rather than in a
+    comment.
+    """
     legacy = _alignment(n, n, lattice=None)
     metric = _alignment(n, n, lattice=np.diag([PX, PY]))
     assert legacy < 0.975, f'the uncorrected field is not wrong here; test is vacuous ({legacy})'
     assert metric > legacy + 0.02
-    assert metric > 0.99
+    assert metric > 0.985
+
+    # The correction reaches the interface too, where the oracle is unambiguous.
+    band_legacy = _alignment(n, n, lattice=None, band=5)
+    band_metric = _alignment(n, n, lattice=np.diag([PX, PY]), band=5)
+    assert band_metric > band_legacy + 0.01, (
+        f'the metric buys nothing at the interface: {band_legacy:.6f} -> {band_metric:.6f}')
 
 
 def test_the_error_is_a_bias_refinement_cannot_remove():

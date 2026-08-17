@@ -47,7 +47,15 @@ def _rect(N, half=0.25, n_in=2.0, n_out=1.0):
 
 
 def _stripe(N, n_in=2.0, n_out=1.0):
-    """A 1D grating — the worst case for the ridge defect: the medial axis is a full column."""
+    """A 1D grating — the worst case for the ridge defect: **two** full medial columns.
+
+    One inside the stripe, one outside it. The outside ridge exists because the cell is
+    periodic: the gap between the stripe's right face and the *next copy's* left face has a
+    midline of its own. Before the distance transform was made periodic (2026-08-17) only the
+    inside ridge appeared, because the unwrapped transform let the distance grow monotonically
+    to the array border instead of turning over halfway to the next copy — so this geometry's
+    zero-gradient share was understated by exactly one column.
+    """
     eps = np.full((N, N), n_out ** 2, dtype=complex)
     eps[:, N // 4:N // 2] = n_in ** 2
     return eps
@@ -90,9 +98,26 @@ def _projector_defect(nx, ny, fto=3):
 
 @pytest.mark.parametrize('name,geom', GEOMETRIES, ids=IDS)
 def test_sdf_normal_field_is_unit_magnitude(name, geom):
-    """The SDF field is a unit vector essentially everywhere, not only at the interface."""
-    frac = _unit_fraction(*normal_vector_field(geom(100)))
-    assert frac > 0.98, f'{name}: only {frac:.4f} of cells carry a unit normal'
+    """The SDF field is a unit vector essentially everywhere, not only at the interface.
+
+    The bound is stated as *a few medial columns' worth* rather than as a bare fraction,
+    because that is the shape of the only legitimate exception. Zero-gradient pixels live on
+    the medial axis of the distance map, and for the worst geometry here — a stripe, whose
+    medial set is straight — that axis is whole columns: two of them in a periodic cell (see
+    :func:`_stripe`), so ``2 * N`` of ``N**2`` pixels, i.e. ``1 - 2/N``. A fixed 0.98 encoded
+    ``N = 100`` and one column, both by accident; ``1 - 3/N`` allows three columns and tightens
+    as the raster refines, which is the property actually being claimed.
+
+    It is also parity-sensitive in a way a fixed number hides: at ``N = 100`` the stripe's two
+    ridges land exactly on pixel columns (200 non-unit pixels) and at ``N = 200`` they fall
+    between them (zero). Curved geometries never approach the bound — circle and rectangle sit
+    at 4 pixels total, whatever ``N``.
+    """
+    N = 100
+    frac = _unit_fraction(*normal_vector_field(geom(N)))
+    floor = 1.0 - 3.0 / N
+    assert frac > floor, (f'{name}: only {frac:.4f} of cells carry a unit normal, below the '
+                          f'{floor:.4f} that three medial columns would leave')
 
 
 @pytest.mark.parametrize('name,geom', GEOMETRIES, ids=IDS)

@@ -452,6 +452,16 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
     For the shape-based (non-raster) normal field, see
     :func:`wavebit._core.analytic.normal_vector_field_analytical`.
 
+    **Everything here is periodic, and all three pieces of it have to be.** The cell is a torus,
+    so rolling the raster by whole pixels is an exact lattice translation — the same structure
+    named differently — and every efficiency must come back unchanged. It did not: the mask
+    compared only inside the array, the distance transform measured to the in-cell interface
+    rather than the periodically nearest one, and ``np.gradient`` is one-sided on the first and
+    last row and column. Together they moved ``max|dR|`` by ~1e-2 at every ``fto``, and no
+    subset of the three fixes it (fixed 2026-08-17; ``docs/nvf-normal-methods.md`` has the
+    table, ``tests/test_nvf_lattice_translation.py`` the guard). The defect did not shrink with
+    ``fto`` because the floor lift is a block repeat, so a finer grid is the same staircase.
+
     ``lattice`` is the cell basis the raster indexes into. It matters because this is the one
     piece of the NVF construction that is *Cartesian-geometric* rather than index-based: the
     distance transform and ``np.gradient`` both work in index steps, and only a basis whose
@@ -501,9 +511,30 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
     if interface_mask is None:
         interface_mask = _interface_mask(_to_numpy(eps_matrix))
 
+    ny_, nx_ = shape
+
+    def _periodic_edt(sampling=None):
+        """The distance transform on a 3x3 tiling, cropped back. A cell is periodic, so a
+        pixel's nearest interface may sit in the next copy; the untiled transform measures
+        to the in-cell one instead and the two differ near every wall.
+        """
+        tiled = np.tile(~interface_mask, (3, 3))
+        full = (distance_transform_edt(tiled) if sampling is None
+                else distance_transform_edt(tiled, sampling=sampling))
+        return full[ny_:2 * ny_, nx_:2 * nx_]
+
+    def _periodic_gradient(f):
+        """Central differences that wrap. ``np.gradient`` is one-sided on the first and last
+        row/column -- a different stencil there, and on its own enough to break covariance
+        under a lattice translation even for a shape nowhere near the wall, because the
+        distance map it differentiates is nonzero right up to the array edge.
+        """
+        return ((np.roll(f, -1, axis=0) - np.roll(f, 1, axis=0)) / 2.0,
+                (np.roll(f, -1, axis=1) - np.roll(f, 1, axis=1)) / 2.0)
+
     if lattice is None:
-        dist_map = distance_transform_edt(~interface_mask)
-        g_j, g_i = np.gradient(dist_map)
+        dist_map = _periodic_edt()
+        g_j, g_i = _periodic_gradient(dist_map)
     else:
         from .lattice import jacobian
         ny, nx = shape
@@ -522,10 +553,10 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
         step_j = float(np.hypot(J[0, 1], J[1, 1]))
         step_i = float(np.hypot(J[0, 0], J[1, 0]))
         if step_j == step_i == 1.0:
-            dist_map = distance_transform_edt(~interface_mask)
+            dist_map = _periodic_edt()
         else:
-            dist_map = distance_transform_edt(~interface_mask, sampling=(step_j, step_i))
-        g_j, g_i = np.gradient(dist_map)
+            dist_map = _periodic_edt(sampling=(step_j, step_i))
+        g_j, g_i = _periodic_gradient(dist_map)
         # grad_xy f = J^-T @ (df/di, df/dj) -- the inverse transpose, not the Jacobian: index
         # steps push forward, gradients pull back.
         Jinv_T = np.linalg.inv(J).T
@@ -539,13 +570,19 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
 
 
 def _interface_mask(eps):
-    """Cells that differ from a 4-neighbour — where the material interfaces sit."""
+    """Cells that differ from a 4-neighbour — where the material interfaces sit.
+
+    The neighbour relation **wraps**: the cell is periodic, so the last row's neighbour is
+    the first row. Comparing only inside the array misses the interface across the wall, and
+    then the whole construction stops being covariant under a lattice translation of the
+    raster — a shape rolled across the boundary loses the mask on one of its faces.
+    """
     import numpy as np
     border = np.zeros(eps.shape, dtype=bool)
-    border[1:, :] |= (eps[1:, :] != eps[:-1, :])
-    border[:-1, :] |= (eps[:-1, :] != eps[1:, :])
-    border[:, 1:] |= (eps[:, 1:] != eps[:, :-1])
-    border[:, :-1] |= (eps[:, :-1] != eps[:, 1:])
+    for axis in (0, 1):
+        differs = eps != np.roll(eps, 1, axis=axis)
+        border |= differs
+        border |= np.roll(differs, -1, axis=axis)
     return border
 
 
@@ -572,6 +609,10 @@ def _upsampled_interface_mask(xp, base_eps, repeat_y, repeat_x):
     base_ny, base_nx = tuple(base_eps.shape)
     border = np.zeros((base_ny * repeat_y, base_nx * repeat_x), dtype=bool)
 
+    # The wrap pair is the last base row/column against the first: on a periodic cell that is
+    # a neighbour relation like any other, and leaving it out is what made the field
+    # non-covariant under a lattice translation (see :func:`_interface_mask`). It marks the
+    # last row of the last block and the first row of the first block.
     if base_ny > 1:
         differs = _as_bools(xp, base_eps[:-1, :] != base_eps[1:, :])
         differs = np.repeat(differs, repeat_x, axis=1)
@@ -579,12 +620,20 @@ def _upsampled_interface_mask(xp, base_eps, repeat_y, repeat_x):
         border[last_of_block, :] |= differs
         border[last_of_block + 1, :] |= differs
 
+        wrap = np.repeat(_as_bools(xp, base_eps[-1, :] != base_eps[0, :]), repeat_x)
+        border[-1, :] |= wrap
+        border[0, :] |= wrap
+
     if base_nx > 1:
         differs = _as_bools(xp, base_eps[:, :-1] != base_eps[:, 1:])
         differs = np.repeat(differs, repeat_y, axis=0)
         last_of_block = np.arange(base_nx - 1) * repeat_x + repeat_x - 1
         border[:, last_of_block] |= differs
         border[:, last_of_block + 1] |= differs
+
+        wrap = np.repeat(_as_bools(xp, base_eps[:, -1] != base_eps[:, 0]), repeat_y)
+        border[:, -1] |= wrap
+        border[:, 0] |= wrap
 
     return border
 
