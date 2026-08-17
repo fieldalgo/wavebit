@@ -204,17 +204,34 @@ rectangles, fto 8:
 
 | | ∫ `d/dcx` across the window | loss change across it | ratio |
 |---|---|---|---|
-| sampled field | +1.3576e-04 | +1.1101e-04 | **+1.22** |
-| grad-of-distance field | -3.5182e-04 | +1.3881e-04 | **-2.53** |
+| sampled field | +1.5341e-04 | +1.4216e-04 | **+1.08** |
+| grad-of-distance field | -3.4743e-04 | +1.3942e-04 | **-2.49** |
 
 The replacement points the wrong way, and not at one unlucky position: at **all 25** positions
 across the window, and again at fto 12, where the gradient scatters by 18% between positions and
-every one of them still has the wrong sign. The sampled field is high by 22% at fto 8 and 24% at
-fto 12, which is the known defect and the thing the swap was supposed to remove.
+every one of them still has the wrong sign. The sampled field is high by 8% at fto 8 and 14% at
+fto 12.
 
 A circle pair reverses the comparison rather than widening it. There the sampled field accounts
-for the loss to 1% and the replacement is 19% out — so on curved shapes the swap makes the
+for the loss to 5% and the replacement is 21% out — so on curved shapes the swap makes the
 gradient worse as well, which is the verdict the cost reaches by an independent route.
+
+**Re-measured 2026-08-18, and the sampled column is not the field it was.** `c128fd8` replaced
+the analytic normal field, so every number above with "sampled" on it was re-run; the
+grad-of-distance column moved only by run-to-run noise (-2.53 to -2.49, 0.81 to 0.79), which is
+the control that says the re-run is comparable. The verdict is unchanged and the reasoning below
+stands. What moved:
+
+| | before `c128fd8` | now |
+|---|---|---|
+| sampled, rectangles fto 8 | +1.22 | **+1.08** |
+| sampled, rectangles fto 12 | +1.24 | **+1.14** |
+| sampled, circles fto 8 | +0.99 | **+0.95** |
+
+The rectangle pair improved because that commit is what gave a rectangle a position gradient at
+all — 22% high is the defect it removed, and 8% is what is left. The circle pair went the other
+way, 1% to 5%, which was not predicted: the distance-product blend changed the field for curved
+shapes too, and on the one case where the sampled field was already good it gave a little back.
 
 `studies/benchmark_boundary_normal_field.py` is that measurement, and it runs in about twenty
 minutes. Two things in it are worth knowing before reading its numbers. The window has to be
@@ -264,9 +281,17 @@ be fixed for both is open, and is a better question than which of the two fields
 
 The cost is that other route. The field is a pixel scan over every segment of every loop and
 `POLYGON_VERTICES` is 256, so a circle carries 64× the segments a rectangle does — 512 against 8
-for these two pairs. At the 1024 the solver defaults to, the swap costs **12×** on the rectangle
-pair and **486×** on the circle pair, which is 0.4 s and 23 s of normal field per layer per
-build. Read those as ratios: absolute milliseconds move between runs on the same machine, and
+for these two pairs. At the 1024 the solver defaults to, the swap costs **2×** on the rectangle
+pair and **182×** on the circle pair, which is 0.7 s and 29 s of normal field per layer per
+build.
+
+**Those ratios used to be 12× and 486×, and they fell because the baseline got slower, not
+because the replacement got faster.** `c128fd8` made the sampled field a distance-product blend
+— an SDF per shape and a product over the others, and four blended faces per rectangle on top —
+which costs 31.9 ms to 378.6 ms on the rectangle pair and 47.4 ms to 161.6 ms on the circles, at
+grid 1024. That is a 12× and 3.4× build-cost regression, paid for the boundary exactness and the
+position gradient that commit bought, and it is recorded there. Read the swap ratios as ratios
+between two things that both moved. Read those as ratios: absolute milliseconds move between runs on the same machine, and
 `studies/README.md` says why. A curved layer would also give up the exact Bessel transform for a
 256-gon.
 

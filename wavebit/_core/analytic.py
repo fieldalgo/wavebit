@@ -83,6 +83,20 @@ nothing (5.7e-13).
 
 The same weighting removed ``sign()`` from the rectangle branch, which the position gradient
 had been blocked on -- see :func:`_shape_surface_normal`.
+
+**What it costs, which the commit that made the change did not measure.** The blend evaluates a
+signed distance per shape and a product over the others, and a rectangle adds four blended faces
+on top, so building the field is far dearer than the sum of level-set gradients it replaced:
+31.9 ms to **378.6 ms** on a tilted-rectangle pair and 47.4 ms to **161.6 ms** on a circle pair,
+at the ``normal_grid`` of 1024 the solver defaults to. That is 12x and 3.4x, and it is the price
+of the boundary exactness and the position gradient above rather than an accident -- but it was
+paid before it was counted, and it moves what is worth optimising: the field now costs 4-5x the
+three FFTs that transform it (0.36 s against 0.08 s at N = 1024), so the transform is not the
+place to look. Whole-solve share falls away with ``fto`` as the eigendecomposition takes over,
+from 8.5% at fto 4 to 0.13% at fto 16, which is the range where it might matter to an optimizer
+looping at low truncation. Side effect worth knowing when reading
+``docs/boundary-modeling.md``: the cost ratio it quotes for swapping in the boundary path's field
+fell from 12x/486x to 2x/182x because this side got slower, not because that one got faster.
 """
 from . import overlap as _overlap
 from .backend import array_namespace, as_array, j1, jinc, sinc
