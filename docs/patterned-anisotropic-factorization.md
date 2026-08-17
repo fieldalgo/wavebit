@@ -177,7 +177,123 @@ strictly less evidence than that one had is not a trade worth taking.
 The uniform z-coupled case is unaffected and works — it goes to the 4ff solver,
 [`first-order-4ff.md`](first-order-4ff.md).
 
-## 7. It serves `mu` too
+## 7. The z slot reads the raster as a staircase
+
+`epz_i` is built with `fourier2d_piecewise_constant`, the exact closed form for a staircase — not
+with `fourier2d_pointwise`, which the in-plane block `A` and `B` are stuck with. It was the other
+way round until 2026-08-17, and the switch is recorded here because the argument that put the DFT
+there was reading a bug, and because nothing cheap can arbitrate the replacement.
+
+**The old argument.** `eps_zz` alone is a staircase, so the closed form is exact for it and was
+always the obvious choice. It was rejected on consistency: the closed form reads the raster as a
+continuum staircase and the DFT as point samples, `A` and `B` cannot have the closed form (they mix
+eps with the sampled normal field), and mixing two readings of one layer appeared to cost a symmetry
+the true answer has — rotation covariance about z fell from 1.9e-14 to 5.2e-8.
+
+**Why it no longer holds.** That gap was the grid origin, not the description. The sampled transform
+was placing a pixel value at its left edge while the closed form placed it at the cell centre;
+`da4762a` added `_half_pixel_phase` and took the closed-form arm to 1.5e-14. Both arms hold the
+quarter turn now.
+
+**And the consistency it appealed to was never the operative one.** With `nz = 0` the projectors are
+block diagonal, so `A_zz = eps_zz` and `B_zz = 1` and the z slot is never multiplied against `A` or
+`B` — it decouples, and has no reason to match how they read the grid. What it does have to match is
+the package: a permittivity raster names the material *occupying* each pixel, so it is a staircase
+wherever wavebit reads one. `nvf_conv_matrices` mixes these same two transforms the same way, closed
+form for `ep_dir` / `ep_inv` and sampled for the projector, for this same reason. The PN z slot was
+the one place that did not.
+
+### What could not decide it
+
+Rotation covariance sits at ~1e-14 on either arm, so it separates nothing. Energy conservation never
+could: the tensor is Hermitian at every pixel, so `R + T = 1` holds however the layer is factorized —
+that is precisely what makes it the check §5 values, and precisely why it cannot rank two arms that
+are both correct. No external solver can rank them either: what separates the two transforms is the
+`sinc` factor, which is a coarse-grid term, so —
+exactly as in `da4762a` — the signal vanishes where an oracle would be sharp. **And an ensemble
+median cannot**, which is the trap this measurement nearly fell into: over 24 incidences at fto 6 and
+10 the median error ratio is 0.98, apparently favouring the DFT. That median is the shallow-angle
+regime, where the slot barely contributes at all.
+
+### Against the transform's own exact limit
+
+The model is `da4762a`'s: compare with the exact coefficients rather than with a rival formulation.
+`fourier2d_integrated` supplies them, integrating over the rectangle's real edges. On a rectangle
+whose edges are grid lines the raster **is** the layer, so the closed form has nothing to
+approximate and any residue in the other arm is the `sinc` alone. Max relative coefficient error,
+fto=6:
+
+| N | closed form | DFT | DFT order |
+|---|---|---|---|
+| 16 | 1.8e-16 | 3.0e-2 | |
+| 32 | 1.8e-16 | 3.5e-3 | 3.08 |
+| 64 | 1.8e-16 | 7.7e-4 | 2.19 |
+| 128 | 1.8e-16 | 1.9e-4 | 2.04 |
+| 256 | 1.8e-16 | 4.6e-5 | 2.01 |
+| 512 | 1.8e-16 | 1.2e-5 | 2.00 |
+
+Exact at every N against `1/N**2` — the midpoint rule's own order, the same one the half-pixel phase
+bought. Move the edges off the grid and pixelation contributes a shared `O(1/N)` term to both arms:
+the closed form still leads at coarse N (2.5e-2 against 4.3e-2 at N=16) and the two merge from N≈64.
+
+### At the solve, it reaches the answer through the angle
+
+`epz_i` enters only through `Kx epz_i Kx` and its partners, so its weight grows with incidence. The
+measurement is a raster sweep at **fixed fto against a fine-grid reference**, on a pillar whose edges
+are grid lines at every N — the layer is then literally the same function throughout and only the
+transform's grid moves. The reference is N=768, where the two arms agree to ≤5e-7 — some 60x below
+the smallest error being compared — so it favours neither; doubling it to N=1536 moves the ratios in
+the third digit.
+
+L2 error over all orders, fto=6, N=64, gyrotropic pillar, `n_bot=1.45`:
+
+| theta | closed form | DFT | DFT / closed |
+|---|---|---|---|
+| 30 | 3.83e-5 | 3.58e-5 | 0.94 |
+| 39 | 3.77e-5 | 3.87e-5 | 1.03 |
+| 45 | 3.58e-5 | 4.85e-5 | 1.35 |
+| 48 | 3.38e-5 | 5.79e-5 | 1.72 |
+| 51 | 3.05e-5 | 7.31e-5 | 2.39 |
+| 54 | 2.78e-5 | 1.03e-4 | **3.69** |
+| 60 | 5.96e-5 | 9.58e-5 | 1.61 |
+| 75 | 7.26e-5 | 8.79e-5 | 1.21 |
+
+Smooth in theta and reproduced at other settings, so it is a trend and not a Rayleigh spike: at
+wl=655 / psi=30 the crossover sits near 48° and the peak is 1.94 at 66°, and at fto=10 the peak is
+2.84 at 54°. The closed-form error is also far flatter in angle — the DFT arm's grows with incidence
+because that is what `Kx epz_i Kx` does to it.
+
+Below the crossover near 38° the DFT does lead, by about 5%. That is the honest half of the median
+above, and it is worth 2.5e-6 absolute against the 7.5e-5 the closed form is worth at 54° — a factor
+of 30, in the regime the slot was built for.
+
+Raster convergence at theta=54°, same pillar:
+
+| N | closed form | DFT | DFT / closed |
+|---|---|---|---|
+| 32 | 1.27e-4 | 4.40e-4 | 3.46 |
+| 48 | 5.59e-5 | 1.91e-4 | 3.42 |
+| 64 | 2.78e-5 | 1.03e-4 | 3.69 |
+| 96 | 8.78e-6 | 4.03e-5 | 4.59 |
+| 128 | 4.11e-6 | 1.98e-5 | 4.82 |
+| 192 | 3.06e-6 | 6.57e-6 | 2.14 |
+| 256 | 2.70e-6 | 2.73e-6 | 1.01 |
+
+The two converge to the same answer — this is a coarse-grid term throughout, as it must be — and the
+closed form gets there roughly a raster doubling sooner.
+
+**On a curved boundary neither arm is the limit.** The same sweep on a disc is dominated by the
+shape's own pixelation, which both arms carry equally: the error is non-monotone in N and the ratio
+wanders between 0.6 and 1.6 with no trend. That is not evidence against the switch, it is the
+statement that the z slot is not what limits a curved layer — the staircase is
+([`analytic-modeling.md`](analytic-modeling.md), the path where it is gone).
+
+`tests/test_pn_factorization.py::test_the_z_slot_reads_the_raster_as_the_staircase_it_is` pins the
+choice, by the invariance that *is* exactness: pixel-repeating a raster respells the same staircase,
+so the closed form cannot move and the DFT does. The angle measurement above is too slow to live in
+that file.
+
+## 8. It serves `mu` too
 
 Unchanged, by the E/H duality: the rearrangement is about which quantities are continuous at an
 interface, and *tangential H with normal B* is *tangential E with normal D* under a rename. See
@@ -185,7 +301,7 @@ interface, and *tangential H with normal B* is *tangential E with normal D* unde
 specific to the permeability side — the inverted slot order, and a layer whose two tensors have
 different boundaries and therefore need two normal fields.
 
-## 8. Reaching it
+## 9. Reaching it
 
 `to_conv_mat_raster_pn(ucell_tensor, fto_x, fto_y)` takes `(n_layers, Ny, Nx, 3, 3)` and returns
 the five slots for the stack. Note it takes **eps, not a refractive index**: `n ** 2` is a scalar
@@ -220,7 +336,7 @@ Two ways to get this wrong, both silent: the slot order above is `(epx, epy, epz
 `to_conv_mat_raster_pn` has already applied. See
 [`off-diagonal-slot-convention.md`](off-diagonal-slot-convention.md).
 
-## 9. References
+## 10. References
 
 - M. Nevière and E. Popov, *Light Propagation in Periodic Media* (2003) — the rearrangement.
 - T. Schuster et al., "Normal vector method for convergence improvement using the RCWA for crossed

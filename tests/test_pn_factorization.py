@@ -235,68 +235,103 @@ def test_the_z_slot_is_the_direct_rule_inverted_not_the_inverse_rule():
 
     Asserted against the two spellings directly rather than against ``nvf_conv_matrices``,
     which would be the obvious reference and is the wrong one: it obtains its permittivity
-    coefficients in closed form and this path uses the plain DFT, deliberately — see
-    ``pn_conv_matrices``, and :func:`test_the_z_slot_reads_the_raster_the_way_a_and_b_do`.
+    coefficients the same way this slot does but closes over the projector as well, so a
+    disagreement there would not name this slot. Which *transform* the two spellings are taken
+    with is the separate question
+    :func:`test_the_z_slot_reads_the_raster_as_the_staircase_it_is` settles; both are in closed
+    form here so that this test sees only the rule.
     """
     eps = pillar(1.6 ** 2)
     nx, ny = normal_vector_field(eps)
     for fto in (4, 8):
         got = pn_conv_matrices(np, tensor(eps), nx, ny, fto, fto)[4]
-        direct = np.linalg.inv(fourier2d_pointwise(np, eps.astype(complex), fto, fto))
-        inverse = fourier2d_pointwise(np, (1.0 / eps).astype(complex), fto, fto)
+        direct = np.linalg.inv(fourier2d_piecewise_constant(
+            np, eps.astype(complex), fto, fto, inverse_rule=None))
+        inverse = fourier2d_piecewise_constant(
+            np, (1.0 / eps).astype(complex), fto, fto, inverse_rule=None)
         assert np.abs(got - direct).max() < 1e-12
         assert np.abs(got - inverse).max() > 1e-3, 'the two rules have stopped differing'
 
 
-def test_the_z_slot_reads_the_raster_the_way_a_and_b_do():
-    """The plain DFT, not the closed form — consistency beats per-term accuracy here.
+def test_the_z_slot_reads_the_raster_as_the_staircase_it_is():
+    """The closed form, not the plain DFT — per-term accuracy, and nothing pulling against it.
 
     ``eps_zz`` on its own is a staircase, so ``fourier2d_piecewise_constant`` gives its
-    coefficients *exactly* and is the obvious choice. Taking it costs rotation covariance about
-    z: 1.9e-14 with the DFT, 5.2e-8 with the closed form.
+    coefficients *exactly*. A and B cannot have that (they mix eps with the sampled normal
+    field), but they do not constrain this slot either: with ``nz = 0`` the projectors are block
+    diagonal, so the z slot is never multiplied against them. It decouples, and the reading it
+    has to match is the rest of the package's — every other permittivity raster in wavebit is
+    read as the staircase it is, ``nvf_conv_matrices`` included, which mixes these same two
+    transforms for these same reasons.
 
-    Not because either transform is asymmetric on its own -- the z matrix is rotation covariant
-    under both. They described *different layers*: the closed form reads the raster as a
-    continuum staircase, the DFT as point samples, and A and B have no choice but the latter
-    since they mix eps with the sampled normal field. Two readings of one layer was the defect,
-    and the broken symmetry was how it surfaced.
+    **This line held the DFT until 2026-08-17, on a measurement that was reading a bug.** The
+    argument was that the two transforms described different layers and that mixing them cost
+    rotation covariance about z — 1.9e-14 against 5.2e-8. They did disagree, but about *where in
+    the pixel* a value sits: the closed form places it at the cell centre (the
+    ``exp(-i*pi*k/n)`` half of ``_pixel_correction``) and a bare DFT at the cell's left edge.
+    That was a defect in the sampled transform, corrected in ``da4762a`` by
+    :func:`~wavebit._core.factorization._half_pixel_phase`, and it took the closed-form arm to
+    1.5e-14. Both arms hold the quarter turn now, so covariance cannot choose between them, and
+    neither can energy conservation.
 
-    **Half of that gap turned out to be a bug, and it is fixed.** The two readings also disagreed
-    about *where in the pixel* a value sits: the closed form places it at the cell centre (the
-    ``exp(-i*pi*k/n)`` half of ``_pixel_correction``) while a bare DFT places it at the cell's
-    left edge. That was a straight defect in the sampled transform, corrected on 2026-08-16 by
-    :func:`~wavebit._core.factorization._half_pixel_phase`, and it collapsed the closed-form arm
-    here from 5.2e-8 to 1.5e-14. What still separates the two readings is the ``sinc`` alone --
-    the box transform of a value held across its pixel, which a point sample never had -- and
-    that part is a real difference in what the layer *is*, not a misalignment.
+    What is left between them is the ``sinc`` alone — the box transform of a value held across
+    its pixel, which a point sample never had. The first assertion below is what that means, and
+    it is the reason for the switch: pixel-repeating a raster respells the *same* staircase, so
+    an exact transform of it cannot move. The closed form does not (8.4e-17); the DFT moves by
+    2.7e-4, because a finer grid of point samples is a different set of samples. That gap is the
+    ``sinc`` at this truncation -- ``sinc(12/96)`` is 0.9974 -- so it widens with fto and the
+    1e-4 floor below is not a tight one to have picked.
 
-    So this no longer asserts that one arm beats the other by a hundredfold; it asserts both hold
-    the quarter turn. That is the stronger statement, and it keeps the guard the test was written
-    for: strip the half-pixel phase from either transform and the two origins part company again,
-    the closed-form arm returns to ~1e-8, and this fires. The shipped slot stays the DFT for the
-    consistency reason above, which ``test_the_z_slot_reaches_the_answer_at_a_steep_angle`` below
-    pins is load-bearing at all.
+    The quarter turn is kept on both arms, still as the ``_half_pixel_phase`` guard: strip that
+    phase from either transform and the two origins part company again, the two arms land ~1e-8
+    apart, and this fires.
+
+    Accuracy at the solve is measured in ``docs/patterned-anisotropic-factorization.md`` §7
+    rather than here — it needs a raster sweep against a fine-grid reference, which is far too
+    slow for this file. The verdict: at fixed fto and a frozen geometry the DFT arm carries 3.5x
+    to 4.8x the closed form's error from 45 to 55 degrees, crossing over near 38 degrees, below
+    which it leads by 5% of a term 30x smaller.
     """
     eps = pillar(1.6 ** 2)
     g = pillar(0.30j, 0.0)
     fto = 6
+    e33 = tensor(eps, g)
 
-    def rotated_pair(use_closed_form):
+    # Exactness, stated as the invariance it *is*: the same staircase spelled on a 2x finer grid.
+    def z_slot(raster, transform):
+        return transform(np, raster[..., 2, 2], fto, fto)
+
+    fine = np.repeat(np.repeat(e33, 2, axis=0), 2, axis=1)
+    closed = [z_slot(r, lambda *a: fourier2d_piecewise_constant(*a, inverse_rule=None))
+              for r in (e33, fine)]
+    sampled = [z_slot(r, fourier2d_pointwise) for r in (e33, fine)]
+    moved_closed = np.abs(closed[0] - closed[1]).max()
+    moved_sampled = np.abs(sampled[0] - sampled[1]).max()
+    assert moved_closed < 1e-13, (
+        f'the closed form moved by {moved_closed:.2e} when the same staircase was respelled on '
+        f'a finer grid; it is meant to be exact for it, so this is not a tolerance to relax')
+    assert moved_sampled > 1e-4, (
+        f'the DFT arm no longer moves under pixel repetition ({moved_sampled:.2e}), so the two '
+        f'transforms have stopped differing and this test has stopped comparing anything')
+
+    # The shipped slot is the closed-form one.
+    shipped = pn(e33, eps, fto)[4]
+    assert np.abs(shipped - np.linalg.inv(closed[0])).max() < 1e-13
+
+    def rotated_pair(slot_transform):
         out = []
         for e, gg, psi in ((eps, g, 30.0), (np.rot90(eps), np.rot90(g), 120.0)):
-            nx, ny = normal_vector_field(e)
             slots = list(pn(tensor(e, gg), e, fto))
-            if use_closed_form:
-                slots[4] = np.linalg.inv(fourier2d_piecewise_constant(
-                    np, tensor(e, gg)[..., 2, 2], fto, fto, inverse_rule=None))
+            slots[4] = np.linalg.inv(z_slot(tensor(e, gg), slot_transform))
             out.append(rt(solve(slots, e, fto, psi=psi)))
         return max(abs(out[0][0] - out[1][0]), abs(out[0][1] - out[1][1]))
 
-    sampled, closed = rotated_pair(False), rotated_pair(True)
-    assert sampled < 1e-12, f'the shipped z slot broke the quarter turn: {sampled:.2e}'
-    assert closed < 1e-12, (
-        f'the closed-form z slot breaks the quarter turn by {closed:.2e}; it agreed to 1.5e-14 '
-        f'once both transforms placed a pixel value at the same point, so this is the '
+    shipped_turn = rotated_pair(lambda *a: fourier2d_piecewise_constant(*a, inverse_rule=None))
+    sampled_turn = rotated_pair(fourier2d_pointwise)
+    assert shipped_turn < 1e-12, f'the shipped z slot broke the quarter turn: {shipped_turn:.2e}'
+    assert sampled_turn < 1e-12, (
+        f'the DFT z slot breaks the quarter turn by {sampled_turn:.2e}; the two arms agreed to '
+        f'1.5e-14 once both transforms placed a pixel value at the same point, so this is the '
         f'half-pixel cell-centre phase having gone missing from one of them')
 
 

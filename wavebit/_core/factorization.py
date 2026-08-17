@@ -945,18 +945,36 @@ def pn_conv_matrices(xp, eps33, nx, ny, fto_x, fto_y):
     # sidewall (the interface normal is in-plane), hence continuous there, and
     # continuous-times-discontinuous is precisely the product Laurent handles.
     #
-    # The plain DFT, matching A and B -- **not** the closed form `nvf_conv_matrices` uses for its
-    # permittivity coefficients, and that difference was measured rather than assumed.
+    # The closed form, exactly as `nvf_conv_matrices` reads its permittivity -- **not** the plain
+    # DFT that A and B above are stuck with. `eps_zz` alone is a staircase, so
+    # `fourier2d_piecewise_constant` gives its coefficients exactly, and unlike A and B it has no
+    # normal field mixed into it to force the sampled reading.
     #
-    # `eps_zz` alone is a staircase, so `fourier2d_piecewise_constant` would give its coefficients
-    # exactly and looks like the better choice. It is not, because it describes a different
-    # layer: closed form reads the raster as a continuum staircase, the DFT as point samples,
-    # and A and B are stuck with the latter (they mix eps with the sampled normal field, which
-    # has no closed form). Mixing the two descriptions of one layer costs a symmetry the true
-    # answer has -- rotation covariance about z fell from 1.9e-14 to 5.2e-8. The z slot's own
-    # matrix is rotation covariant under either transform; it is the disagreement between the
-    # two readings that shows up. Consistency wins over per-term accuracy here.
-    epz_i = xp.linalg.inv(fourier2d_pointwise(xp, eps33[..., 2, 2], fto_x, fto_y))
+    # A and B do not constrain this slot. Decoupling means it is never multiplied against either
+    # of them, so nothing here has to agree with how they read the grid. What it *does* have to
+    # agree with is the rest of the package: a permittivity raster names the material at each pixel
+    # rather than sampling something that varies inside it, so it is a
+    # staircase wherever it is read (`to_conv_mat_raster_sampled`, and the `ep_dir` / `ep_inv` of
+    # `nvf_conv_matrices`, which mixes the two transforms this same way and for this same reason).
+    #
+    # This line held the DFT until 2026-08-17 on a consistency argument -- that the closed form
+    # described a different layer than A and B, and that mixing the two cost rotation covariance
+    # about z, 1.9e-14 against 5.2e-8. That penalty was a bug, not a description mismatch: the
+    # sampled transform was placing a pixel value at its left edge rather than its centre, and
+    # `_half_pixel_phase` (da4762a) took the closed-form arm to 1.5e-14. Both arms now hold the
+    # quarter turn, so covariance cannot choose between them and neither can energy conservation.
+    #
+    # Measured against the transform's own exact limit instead; the sweeps are in §7 of
+    # `docs/patterned-anisotropic-factorization.md`. What separates the two is the `sinc` alone --
+    # the box transform of a value held across its pixel, which the point sample never had -- and
+    # on a rectangle whose edges are grid lines, where the raster *is* the layer, the closed form
+    # is exact at every N while the DFT converges to it as 1/N**2 (3.0e-2 at N=16, 1.2e-5 at
+    # N=512, fto=6). That reaches the answer through `Kx epz_i Kx`, so it grows with angle: at
+    # fixed fto and a frozen geometry the DFT arm's error runs 3.5x to 4.8x the closed form's
+    # across 45 to 55 degrees, and the crossover is near 38 degrees, below which the DFT leads by
+    # 5% of a term 30x smaller.
+    epz_i = xp.linalg.inv(
+        fourier2d_piecewise_constant(xp, eps33[..., 2, 2], fto_x, fto_y, inverse_rule=None))
 
     return eps_xx, eps_yy, -eps_xy, -eps_yx, epz_i
 
