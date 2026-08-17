@@ -231,17 +231,22 @@ keep passing.
 
 - Shapes are assumed **non-overlapping** (indicator addition). Overlap support needs
   inclusion–exclusion handling.
-- The normal field for multiple shapes is a superposition of level-set gradients
-  (heuristic). A single shape is exact.
-- A multi-shape layer's position gradients keep the defect described in §2, in two halves.
-  Translating such a layer bodily still moves `sum(de_ri)` by 7.1e−4, against 1.5e−14 for a
-  single shape; and moving one shape *relative* to another is right for smooth shapes (4.7e−6
-  against central differences) but 11–105% wrong for rectangles. Centring on the mean of the
-  shape centres fixes the first half (1.2e−4 → 6.6e−15) and was rejected: it places two shapes
-  exactly opposed about the cell centre, their unit fields cancel exactly on grid points, and
-  the gradient there is `0*inf`. The second half needs a rectangle normal field that is
-  differentiable in position to begin with, which is the `tanh` mollification already rejected
-  for breaking smoothness through `angle = 0`.
+- The normal field for multiple shapes is a **distance-product blend** of each shape's own
+  field, exact at every surface. It was a superposition of level-set gradients until
+  2026-08-17 (`c128fd8`), which weighted a shape ten cells away as heavily as the one
+  underfoot and left the normal 40 deg off at a boundary with two shapes in the layer.
+- ~~A multi-shape layer's position gradients keep the defect described in §2~~ — **fixed in
+  the same commit, and the two rejected routes recorded here are worth keeping.** Translating
+  a layer bodily used to move `sum(de_ri)` by 7.1e−4 and now moves 1e−14 on the sampling grid;
+  moving one shape *relative* to another was 11–105% wrong for rectangles and now reads 1e−5.
+  Centring on the mean of the shape centres was the rejected fix for the first half: it places
+  two shapes exactly opposed about the cell centre, their unit fields cancel exactly on grid
+  points, and the gradient there is `0*inf`. Folding the displacement to the nearest image
+  fixes that half without manufacturing the degeneracy, because it makes each shape's own
+  field periodic rather than re-centring the pair. The second half was thought to need a
+  `tanh` mollification of `sign()`, rejected for breaking smoothness through `angle = 0`; it
+  needed no mollifier at all. Treating +x and −x (and +y, −y) as four faces blended the same
+  way makes them cancel exactly at the centre line, so `sign()` is not smoothed but gone.
 - The normal projectors still depend on `normal_grid` sampling (default 1024) — the
   coefficients themselves are analytic, and the shape's *position* is now carried
   analytically too, but the field's shape (size, rotation) retains grid error. Increase the
