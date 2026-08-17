@@ -221,11 +221,30 @@ exactly what `'spectral'` adopts.
   the frozen record carries the phase count — the one value-derived fact the interface
   mask cannot see (merging two never-adjacent phases moves no interface but changes
   which construction runs; the replay refuses it).
-- **Grayscale/continuous rasters take `'distance'` today.** All three constructions are
-  two-phase; 3+ distinct values — including the filtered densities of a mid-run topology
-  optimization — delegate to `'distance'`, documented rather than silent-by-omission.
-  The SSP-style filtered-density indicator (arXiv:2503.20189) is the known follow-up if
-  that case matters to you.
+- **Grayscale/continuous rasters take `'distance'`, and that is now a measured choice
+  rather than a gap.** All three constructions are two-phase; 3+ distinct values —
+  including the filtered densities of a mid-run topology optimization — delegate to
+  `'distance'`, documented rather than silent-by-omission. The SSP-style filtered-density
+  indicator (arXiv:2503.20189) this paragraph used to name as the follow-up has since
+  been built and measured (2026-08-17, branch `claude/nvf-grayscale-contour`): read the
+  graded band's own mid-range level set of `Re(eps)` subpixel, take the exact
+  distance-to-curve directions off it, delegate binary layers to `'contour'`, and extend
+  the frozen record with a digest of the normalized values (a graded band can move
+  *inside* its pixels without moving the interface mask, which the geometry-only record
+  cannot see — that record fix is the one part a future attempt should keep). Its
+  angular fidelity is dramatic — 1.2 deg mean on a graded band against 52 deg for
+  `'distance'`, whose mask degenerates over a thick band — **and the advantage does not
+  reach the solve.** On SSP-projected scenes at `beta = inf` against same-`fto` exact
+  references, no construction dominates: smoothing-based variants win a round scene by
+  up to 3.3x and lose a cornered one ~2-3x on resolved cells, the raw level set roughly
+  ties `'distance'` on corners and trails on circles, and at moderate `beta` the
+  projection's own blur floors every method equally. The graded permittivity already
+  carries the subpixel boundary, so the normal field's job shrinks to a scene-dependent
+  residual — the same eps-normal error correlation the staircase decomposition measured,
+  now on the other side of the fence. A converged topology-optimization A/B
+  independently put contour-vs-distance normals at 0.13% of the outcome. Keep
+  `'distance'` on graded rasters; revisit only with a construction that survives the
+  corner scene.
 - **Covariance under a mirror** is bit-exact both ways for `'distance'` and `'smooth'`.
   `'contour'` and `'spectral'` carry tie-break and resampling-phase asymmetries (worst
   along x, concentrated on the periodic medial ridge where the direction is genuinely
