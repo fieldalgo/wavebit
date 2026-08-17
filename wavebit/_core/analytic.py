@@ -560,6 +560,15 @@ def _device(x):
 # blend is too soft -- p = 1 leaves 0.59 deg at the surface band and misses the gradient at
 # 3.3e-3; above it the blend approaches a hard nearest-shape pick and the jump it exists to
 # avoid comes back, 1.0e-3 by p = 12. Four is the interior of that window.
+#
+# A third axis was measured afterwards and does not move the choice: the sampling error of the
+# projector coefficients, |f(N) - f(2N)|, falls monotonically as p RISES (1.9e-3, 1.5e-3,
+# 1.3e-3, 1.1e-3, 7.3e-4 at p = 2, 3, 4, 6, 8 on two circles at N = 256). The reasoning that
+# predicted the opposite is worth recording as wrong: a sharper crossover looks like it should
+# integrate worse and integrates better, because a high p leaves the field equal to one shape's
+# own smooth field over most of the cell and mixed only in a narrow band, while a low p mixes
+# everywhere. Trading p = 4 for p = 8 buys 1.3x there and gives back 1.7x on the position
+# gradient (2.5e-4 -> 4.3e-4), so the middle stays.
 _BLEND_EXPONENT = 4
 
 
@@ -612,6 +621,14 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype, lattic
     # seeing the boundary move too and the two agree on being wrong together). This weighting
     # has no jump to sweep: the same comparison falls 1.5e-2 -> 6.5e-4 -> 6.3e-5 as h goes
     # 1e-4 -> 1e-5 -> 1e-6, which is a correct gradient with the difference converging onto it.
+    # What this leaves: the coefficients are a midpoint sum of a field that is continuous but
+    # not smooth, so a fractional-pixel translation resamples it and moves the answer by ~7e-5
+    # at the default grid. A LONE shape does not have it -- no blend, and the self-convergence
+    # is a clean O(1/N**2) three orders lower (5.8e-7 at N = 256, ratio 4.00 per refinement).
+    # With several shapes the same measurement starts at ratio ~2, the signature of a feature
+    # too sharp for a coarse grid, and steepens past 4 as the crossover band resolves. The
+    # remedy is `normal_grid`, not a change here; removing it would need the coefficients
+    # integrated in closed form rather than sampled, which the blend has no obvious form for.
     dists = [g[0] for g in got]
     scale = sum(dists) / len(dists)
     # A common positive factor cancels in the normalised sum; this only conditions the product.
