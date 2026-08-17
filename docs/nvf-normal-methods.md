@@ -244,18 +244,39 @@ both calibrated against the *old* non-periodic reading rather than against the f
   numbers are **bit-identical** before and after, at all three n — nothing moved at the
   interface.
 
-**Status of the other three.** `'smooth'` was already exactly covariant and needed nothing
-— it already tiled 3x3 and smoothed with `mode='wrap'`, which is the in-repo evidence that
+**The other three.** `'smooth'` was already exactly covariant and needed nothing — it
+already tiled 3x3 and smoothed with `mode='wrap'`, which is the in-repo evidence that
 periodicity is the answer rather than a tuned tolerance. `'spectral'` leaked only through
-the shared mask and is fixed by it. **`'contour'` is still not covariant**, by an unrelated
-mechanism: `_contour_polylines` pads by `4*sigma+3` px, far narrower than a period, so the
-level set is extracted through a window that cuts the periodic copies at a fixed place
-while the roll slides the shape past it — the set of cut fragments changes with the roll
-(171/187/224 resampled points at rolls 0/4/9) and a fragment's arbitrary endpoint can win
-a nearest-point query. Widening the pad to a full cell makes it exact off-wrap and leaves
-a p99 ~4 deg resampling tie-break on the medial ridge, the same class already documented
-for mirrors. Left open here: separate defect, separate construction, and it overlaps work
-in flight on `claude/nvf-grayscale-contour`.
+the shared mask and is fixed by it.
+
+`'contour'` had a **second, independent defect**, and it needed two changes rather than
+one. Its level set was extracted through a `4*sigma+3` px window — about five pixels on a
+16 px cell, far narrower than a period — so the aperture cut the periodic copies at a
+fixed place while a roll slid the shape past it.
+
+Widening the pad to a full cell is only half of it, and measuring the half is what showed
+the other: it takes an interior roll from 1.7e-3 to 1.5e-14 and a *wrap-crossing* one from
+2.1e-3 to 9.8e-4, sometimes worse. Even at a full cell a straddling shape still has copies
+clipped by the outer boundary — nine whole loops become six whole and six fragments — and
+a fragment is harmful twice: its endpoints are not curve ends, so `_assemble` points them
+at themselves and the segment normal there is one-sided; and `_resample` samples an open
+curve by `linspace` and a closed one by `arange`, so fragments inject sample positions no
+whole loop has (67 distinct points became 129). So each closed loop is folded back to the
+centre cell and deduplicated, leaving one representative, and the 3x3 tiling regenerates
+the copies. Open curves survive only when no closed loop does — a percolating stripe has
+no closed 0.5 crossing at all.
+
+Both halves together: 1e-14 on every shape tried, including nested loops, several disjoint
+loops, and both roll axes. Cost is neutral to favourable, because the dedup shrinks the
+kd-tree's input — 1.06x at N=64, 0.79x at N=1024.
+
+**This one is a covariance fix too, not an accuracy fix, and the temptation is to oversell
+it.** The placement dependence it removes is worth ~0.06 deg on a resolved circle
+(1.79/1.75/1.81 across centred/wrap/corner at N=64, against 1.79/1.79/1.78 after) and the
+angular error itself does not move at all: 1.79 at N=64, 0.86 at N=128, 0.49 at N=256,
+before and after alike. A 20% gap does appear at N=48 with r=0.22 — a circle with almost no
+pixels on its boundary — and generalizing from it would have been wrong. What is bought is
+that the same structure gives the same answer: 1e-4 to 1e-15 at the solve.
 
 Note that a raster with 3+ distinct values delegates to `'distance'`, so all four methods
 return bit-identical numbers on one — which is what hid the defect's location originally.

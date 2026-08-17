@@ -128,10 +128,36 @@ _CONTOUR_RESAMPLE_H = 0.25    # polyline resampling step (px)
 
 
 def _contour_polylines(smoothed, sigma_yx):
-    """0.5 level set of the wrap-padded smoothed indicator, as ``(points, closed)`` pairs
-    in unpadded index coordinates (x = column, y = row). Padding by the kernel's support
-    before extraction is what lets a shape crossing the cell edge keep its cut pieces —
-    they continue into the padded copies and the 3x3 tiling downstream owns periodicity.
+    """0.5 level set of the wrap-padded smoothed indicator — **one whole copy of each loop**.
+
+    Returns ``(points, closed)`` pairs in unpadded index coordinates (x = column, y = row).
+    Two things here are load-bearing, and the construction was not covariant under a lattice
+    translation of the raster until both were (see ``docs/nvf-normal-methods.md``).
+
+    **Pad by a full cell, not by the kernel's support.** The pad used to be ``4*sigma+3``,
+    which on a 16 px cell is about five pixels — far narrower than a period. The level set is
+    then extracted through a window that cuts the periodic copies at a *fixed* place while a
+    roll slides the shape past it, so which copies come back whole depends on where the
+    structure happens to sit. A full cell is the smallest pad that guarantees at least one
+    complete copy of every loop, whatever its extent.
+
+    **Keep one whole copy of each loop, not every fragment.** Even at a full cell, a shape
+    straddling the wrap still has copies clipped by the outer boundary: measured on a rod
+    rolled across it, nine whole loops become six whole and six fragments. Fragments are not
+    new geometry — the 3x3 tiling in :func:`contour_normal_field` regenerates every periodic
+    copy downstream — but they are actively harmful twice over: a fragment's endpoint is not a
+    curve end, so ``_assemble`` points it at itself and the segment normal there is one-sided;
+    and :func:`_resample` samples an open curve by ``linspace`` and a closed one by
+    ``arange``, so fragments inject sample positions the whole loops do not have (67 distinct
+    points became 129 on that rod). A pixel's nearest sample then depends on the placement.
+
+    So each closed loop is folded back to the centre cell by whole periods and deduplicated
+    there, leaving exactly one representative per loop. Open curves are kept only when *no*
+    closed loop survived: those are percolating level sets — a stripe spanning the cell has no
+    closed 0.5 crossing at all — and there is no whole copy of them to prefer.
+
+    Cost is neutral to favourable despite the wider window, because the dedup shrinks what the
+    kd-tree downstream indexes: measured 1.06x at N=64 and 0.79x at N=1024.
     """
     try:
         import contourpy
@@ -140,22 +166,39 @@ def _contour_polylines(smoothed, sigma_yx):
             "normal_method='contour' extracts subpixel level sets with contourpy, which "
             "is not installed. `pip install contourpy` (it ships with matplotlib), or use "
             "normal_method='spectral', which needs nothing beyond NumPy/SciPy.") from None
-    pad = int(np.ceil(4.0 * max(sigma_yx))) + 3
+    del sigma_yx                      # the pad is set by the period now, not by the kernel
+    ny, nx = smoothed.shape
+    pad = max(ny, nx)
     padded = np.pad(smoothed, pad, mode='wrap')
     gen = contourpy.contour_generator(z=padded, line_type=contourpy.LineType.Separate)
-    out = []
+    closed_loops, open_curves = [], []
     for pts in gen.lines(0.5):
         pts = np.asarray(pts, dtype=float)
         if pts.shape[0] < 2:
             continue
         pts = pts - pad
-        closed = np.allclose(pts[0], pts[-1])
-        if closed:
+        if np.allclose(pts[0], pts[-1]):
             pts = pts[:-1]
             if pts.shape[0] < 3:
                 continue
-        out.append((pts, closed))
-    return out
+            closed_loops.append(pts)
+        else:
+            open_curves.append(pts)
+
+    out, seen = [], set()
+    for pts in closed_loops:
+        centre = pts.mean(0)
+        folded = pts - np.array([np.round(centre[0] / nx) * nx,
+                                 np.round(centre[1] / ny) * ny])
+        centre = folded.mean(0)
+        key = (round(float(centre[0]), 3), round(float(centre[1]), 3), folded.shape[0])
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append((folded, True))
+    if out:
+        return out
+    return [(pts, False) for pts in open_curves]
 
 
 def _resample(pts, closed, h):

@@ -27,8 +27,9 @@ one-sided gradient corrupts wall pixels regardless.
 ``'smooth'`` was already exactly covariant before any of this -- it already tiled 3x3 and
 smoothed with ``mode='wrap'`` -- and is kept here as the control that says periodicity is the
 right answer rather than a tolerance being tuned. ``'spectral'`` leaked only through the shared
-mask. ``'contour'`` is still broken, by a different mechanism, and is pinned as a strict xfail
-below rather than quietly omitted.
+mask. ``'contour'`` had a second defect of its own, in the aperture its level set is extracted
+through, and needed both a full-cell pad and the clipped-fragment handling; the shapes that
+separate those two halves are parametrized at the end of this file.
 
 The sibling defect in the *analytic* (non-raster) path is older and pinned elsewhere:
 ``test_shape_position_gradients.test_a_multishape_layer_is_not_periodic_across_the_cell_edge``.
@@ -73,8 +74,7 @@ PLACEMENTS = [
     pytest.param(5, 0, id='crosses-the-wrap-in-y'),
 ]
 
-#: ``'contour'`` is excluded and pinned separately below.
-COVARIANT_METHODS = ['distance', 'spectral', 'smooth']
+COVARIANT_METHODS = ['distance', 'contour', 'spectral', 'smooth']
 
 
 @pytest.mark.parametrize('method', COVARIANT_METHODS)
@@ -99,18 +99,53 @@ def test_a_shape_that_never_approaches_the_wall_is_covariant_too(method):
     assert defect < 1e-12, f'{method}: interior-only roll moved n n^T by {defect:.2e}'
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "'contour' has a second, unrelated periodicity defect: _contour_polylines pads by "
-    "4*sigma+3 px, which on a 16 px cell is far narrower than a full period, so the level set "
-    "is extracted from a window that cuts the periodic copies at a FIXED place while the roll "
-    "moves the shape past it. The set of cut fragments therefore changes with the roll (171 / "
-    "187 / 224 resampled points at rolls 0 / 4 / 9), and a fragment's arbitrary endpoint can "
-    "win a nearest-point query. Widening the pad to a full cell makes it exact off-wrap and "
-    "leaves a p99 ~4 deg resampling tie-break on the medial ridge -- the same class already "
-    "documented for mirrors. Not fixed here: it is a separate defect in a separate "
-    "construction, and it overlaps work in flight on claude/nvf-grayscale-contour."))
-def test_contour_is_not_yet_covariant():
-    assert _field_defect(_block(), 4, 1, 'contour') < 1e-12
+#: Shapes whose level set exercises the fragment handling: a wrap-crossing rod, two disjoint
+#: rods (several loops at once), a ring (nested loops), and a stripe (percolating — no closed
+#: 0.5 crossing exists at all, so the open curves are all there is to keep).
+def _ring(n=20, outer=8.0, inner=4.0):
+    eps = np.ones((n, n))
+    gy, gx = np.ogrid[:n, :n]
+    r = np.hypot(gx - (n / 2 - 0.5), gy - (n / 2 - 0.5))
+    eps[(r <= outer) & (r >= inner)] = 3.48
+    return eps
+
+
+def _two_rods():
+    eps = np.ones((16, 16))
+    eps[2:6, 2:6] = 3.48
+    eps[9:14, 8:13] = 3.48
+    return eps
+
+
+def _stripe():
+    eps = np.ones((16, 16))
+    eps[:, 4:9] = 3.48
+    return eps
+
+
+@pytest.mark.parametrize('name,eps,shift,axis', [
+    ('wrap-crossing rod', _block(), 9, 1),
+    ('wrap-crossing rod in y', _block(), 5, 0),
+    ('two disjoint loops', _two_rods(), 11, 1),
+    ('nested loops', _ring(), 13, 1),
+    ('percolating, no closed loop', _stripe(), 7, 1),
+])
+def test_contour_survives_the_shapes_that_stress_its_fragment_handling(name, eps, shift, axis):
+    """``'contour'`` was the last construction to become covariant, and it needed both halves.
+
+    Its window used to be ``4*sigma+3`` px wide, so the level set was extracted through an
+    aperture narrower than a period and the roll slid the shape past a fixed cut. Widening it
+    to a full cell fixes the shapes that stay clear of the wrap and *not* the ones that cross
+    it — measured 1.7e-3 to 1.5e-14 on an interior roll, and 2.1e-3 to 9.8e-4 on a wrapping
+    one, sometimes worse. The rest is the fragments: a clipped copy carries endpoints that are
+    not curve ends and is resampled by a different rule than a whole loop, so it contributes
+    sample positions no whole loop has.
+
+    These five shapes are the ones that separate a half-fix from a whole one. A single centred
+    rod does not: it passes on the pad change alone.
+    """
+    defect = _field_defect(eps, shift, axis, 'contour')
+    assert defect < 1e-12, f'{name}: n n^T moved by {defect:.2e}'
 
 
 @pytest.mark.parametrize('shift,axis', [(7, 2), (5, 1)])
