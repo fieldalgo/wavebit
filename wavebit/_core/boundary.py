@@ -221,32 +221,43 @@ def conv_mats(xp, regions, n_base, fto_x, fto_y, period, normal_grid, dtype, cdt
               lattice=None):
     """``(epx, epy, epxy, epyx, epz_i)`` for one boundary-resolved layer.
 
-    ``regions`` is ``[(n_index, [(loop, sign), ...]), ...]`` -- disjoint, painting already
-    resolved by the clipper, ``sign`` being ``+1`` material and ``-1`` hole.
+    ``regions`` is ``[(n_index, [loop, ...]), ...]`` -- disjoint, painting already resolved by
+    the clipper. Hole loops arrive wound clockwise and need no special case here: the polygon
+    FT is a signed contour integral, so a hole subtracts by itself.
 
-    **The sign has to be applied here.** It used to be dropped, on the reasoning that a hole
-    carries a reversed winding and so subtracts itself through the signed contour integral.
-    The polygon FT is indeed signed, but :func:`~.clipper.subtract_loop` *normalises every loop
-    to counter-clockwise* and carries the orientation in ``sign`` instead -- precisely so the
-    next subtraction can hand the loop straight back to the clipper. A hole therefore arrives
-    with a **positive** ``signed_area``, and dropping the sign adds it where it should have
-    been taken away. :func:`~.clipper.region_area` and :func:`~.clipper.region_ft` both
-    multiply by it; this was the one reader that did not.
+    That last sentence was once in this docstring as an *assumption*, and it was wrong, because
+    :func:`~.clipper.subtract_loop` was at the time normalising every loop to counter-clockwise
+    and carrying the orientation in a separate ``sign`` that this function never read. It is
+    true now because the clipper is written to make it true -- see
+    :func:`~.clipper.subtract_loop`, which is where the convention is established and where the
+    reason it is a convention rather than a coincidence is set out. Do not re-derive it from
+    "the FT is signed": that says a *clockwise* loop subtracts, not that the clipper hands you
+    one.
 
-    Nothing catches that downstream: the resulting matrices are still Hermitian and the solve
-    still conserves energy exactly. A shape painted *entirely inside* another one was solved as
-    a different structure -- measured ``<eps> = 2.4256`` against an exact 2.2371 for a disc of
-    index 3 inside a square of index 2, at every ``fto`` alike, and ``sum(R) = 0.1798`` against
-    a converged raster's 0.4164.
+    Why it matters that the invariant lives in the data: nothing downstream can catch it being
+    dropped. The matrices stay Hermitian and the solve conserves energy exactly, so a shape
+    painted entirely inside another was solved as a different structure in silence -- measured
+    ``<eps> = 2.4256`` against an exact 2.2371 for a disc of index 3 inside a square of index 2,
+    at every ``fto`` alike, and ``sum(R) = 0.1798`` against a converged raster's 0.4164.
 
-    The normal field takes the loops **unsigned**, and that is not an oversight. It is the
-    direction to the nearest boundary *point*, so it depends on which segments exist and not on
-    how they are wound; only ``nx**2``, ``nx*ny``, ``ny**2`` are used, so even the overall sign
-    of the vector cancels. Measured by reversing every hole loop before building the field:
-    the coefficient grids move by 5.99e-6 (``c_xx``, ``c_yy``) and 7.0e-18 (``c_xy``), which is
-    ``argmin`` tie-breaking on the medial axis rather than a different field. That measurement
-    is also why the sign is applied to the transform rather than by reversing the winding: both
-    give the same permittivity to 2e-16, but reversing perturbs the normal field by that 6e-6.
+    The normal field is handed the loops as they are, orientation included, and that is safe by
+    construction rather than by luck: it is the direction to the nearest boundary *point*, so it
+    depends on which segments exist and not on how they are wound, and only ``nx**2``,
+    ``nx*ny``, ``ny**2`` are consumed, so the vector's overall sign cancels too.
+
+    It is not, however, bit-invariant, and the choice made here is a measured one rather than an
+    omission. Winding a hole clockwise renumbers its edges, so ``argmin`` breaks its exact ties
+    the other way: on a disc inside a square, 20 pixels of 65536 move, each by 0.024541 in
+    ``nx**2`` -- that is ``sin(2*pi/256)``, one facet of the 256-gon, so the tie is between two
+    adjacent facets. It reaches ``c_xx`` and ``c_yy`` as 6.0e-6 and ``c_xy`` as 7.0e-18, and the
+    solve as 1.3e-7 in ``sum(T)``.
+
+    Neither answer is better, and that was checked rather than assumed: against the *ideal*
+    circle's radial normal both choices are off by 0.7031 degrees on every one of those pixels,
+    summing to 1.4062 = 360/256, exactly one facet step. An exact tie. So the loops are not
+    re-normalised here. Doing so would reintroduce the orientation conversion this path exists
+    to delete, in order to pin a bit-pattern the measurement says is arbitrary and that sits
+    1.5e4 times below this path's own 1.8e-3 agreement with a converged raster.
     """
     Px, Py = period
     KY, KX = _k_grids(xp, fto_x, fto_y, dtype)
@@ -267,12 +278,12 @@ def conv_mats(xp, regions, n_base, fto_x, fto_y, period, normal_grid, dtype, cdt
     for n_index, polys in regions:
         eps_s = xp.astype(xp.asarray(n_index, dtype=cdtype), cdtype) ** 2
         ft = zero
-        for V, sgn in polys:
-            ft = ft + sgn * polygon_ft(xp, V, KY, KX, (Px, Py), lattice)
+        for V in polys:
+            ft = ft + polygon_ft(xp, V, KY, KX, (Px, Py), lattice)
         eps_c = eps_c + (eps_s - eps_bg) * ft
         inv_c = inv_c + (1.0 / eps_s - 1.0 / eps_bg) * ft
 
-    all_loops = [V for _, polys in regions for V, _sgn in polys]
+    all_loops = [V for _, polys in regions for V in polys]
     c_xx, c_xy, c_yy = normal_projector_coeffs(
         xp, all_loops, (normal_grid, normal_grid), (Px, Py), fto_x, fto_y, dtype, cdtype,
         lattice=lattice)
@@ -363,7 +374,7 @@ def to_conv_mat_boundary_layer(xp, shapes, n_base, fto_x, fto_y, period, dtype,
     verts = [shape_vertices(xp, s, period, n_poly) for s in shapes]
     recs, regions = plan_layer(shapes, period, n_poly) if plan is None else plan
     vals = _clipper.eval_table(xp, recs, verts)
-    regs = [(s['n_index'], [(_clipper.loop_verts(xp, lp, vals), sgn) for lp, sgn in region])
+    regs = [(s['n_index'], [_clipper.loop_verts(xp, lp, vals) for lp in region])
             for s, region in zip(shapes, regions)]
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
     return conv_mats(xp, regs, n_base, fto_x, fto_y, period, normal_grid, real_dtype, dtype,

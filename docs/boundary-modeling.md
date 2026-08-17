@@ -43,17 +43,23 @@ shapes in painting order
   -> the five NVF convolution matrices
 ```
 
-A region is a list of `(loop, sign)`, and **every loop is stored counter-clockwise** -- the
-orientation lives in `sign`, not in the winding. That is what closes the recursion: subtracting
-from a region is subtracting from each loop and keeping the signs, so every clipper call stays a
-simple-polygon pair and the loop count grows roughly linearly instead of the `2^m` an
-inclusion–exclusion formulation would need.
+A region is a list of loops, and **the orientation is the bookkeeping**: counter-clockwise is
+material, clockwise is a hole. That is what closes the recursion: subtracting from a region is
+subtracting from each loop, so every clipper call stays a simple-polygon pair and the loop count
+grows roughly linearly instead of the `2^m` an inclusion–exclusion formulation would need. A
+hole inside a hole comes out counter-clockwise again -- material -- by composition, with no sign
+arithmetic anywhere.
 
-The price is that every consumer of a region has to multiply by `sign`; the winding will not do
-it for them, even though `polygon.polygon_ft` is a signed contour integral and would have. Both
-`clipper.region_area` and `clipper.region_ft` do. `boundary.conv_mats` did not, for a while, and
+Both the area (shoelace) and the transform (`polygon.polygon_ft`) are signed contour integrals,
+so a region's value is the plain sum over its loops and no consumer has anything to remember.
+
+That is worth stating as a design rule rather than a convenience, because the alternative was
+tried and failed. For a while every loop was stored counter-clockwise with the orientation in a
+separate `sign` field. The information is the same, but it then has to be re-applied by hand at
+every use: `clipper.region_area` and `clipper.region_ft` did, `boundary.conv_mats` did not, and
 a shape painted entirely inside another one was silently solved as a *thicker* one -- with the
-matrices still Hermitian and `R + T` still exactly 1.
+matrices still Hermitian and `R + T` still exactly 1. The conversion was also self-defeating:
+`plan_difference` already emits a hole clockwise, and `subtract_loop` was flipping it back.
 
 ## Using it
 

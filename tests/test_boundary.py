@@ -35,20 +35,14 @@ PERIOD = (1.0, 1.0)
 
 # --------------------------------------------------------------------------- helpers
 def resolve(xp, params, plan=None):
-    """Plan with NumPy on concrete values, then replay against (possibly traced) vertices.
-
-    The ``(loop, sign)`` pairs are carried through verbatim -- this helper used to drop the
-    sign, mirroring the defect in ``boundary.to_conv_mat_boundary_layer`` it was written
-    alongside, and every case here happens to be sign-free (``TWO_RODS`` overlap without either
-    enclosing the other), so the helper agreed with the bug rather than exposing it.
-    """
+    """Plan with NumPy on concrete values, then replay against (possibly traced) vertices."""
     verts = [rect_verts(xp, *p[:5]) for p in params]
     if plan is None:
         concrete = [np.asarray(rect_verts(np, *p[:5]), float) for p in params]
         plan = _c.resolve_painting(concrete)
     recs, regions = plan
     vals = _c.eval_table(xp, recs, verts)
-    regs = [(p[5], [(_c.loop_verts(xp, lp, vals), s) for lp, s in region])
+    regs = [(p[5], [_c.loop_verts(xp, lp, vals) for lp in region])
             for p, region in zip(params, regions)]
     return regs, plan
 
@@ -98,7 +92,7 @@ def test_polygon_ft_hole_subtracts_itself():
 def test_resolved_regions_reproduce_the_painted_area():
     """Painting order is the whole point: the later rod wins, and the areas have to say so."""
     regs, _ = resolve(xnp, TWO_RODS)
-    areas = {n: sum(s * float(polygon_area(xnp, V)) for V, s in loops) for n, loops in regs}
+    areas = {n: sum(float(polygon_area(xnp, V)) for V in loops) for n, loops in regs}
     total = sum(areas.values())
     a0, a1 = 0.36 * 0.29, 0.31 * 0.38
     assert abs(areas[3.0] - a1) < 1e-12          # the later rod is untouched
@@ -116,7 +110,7 @@ def test_resolved_regions_are_disjoint_on_a_fine_raster():
     hits = np.zeros((n, n), dtype=int)
     for _, loops in regs:
         inside = np.zeros((n, n), dtype=bool)
-        for V, _s in loops:
+        for V in loops:
             V = np.asarray(V)
             wind = np.zeros((n, n))
             for i in range(len(V)):
@@ -136,8 +130,8 @@ def test_plan_replays_against_moved_vertices():
     regs, plan = resolve(xnp, TWO_RODS)
     moved = [(p[0] + 0.01, p[1] - 0.005) + p[2:] for p in TWO_RODS]
     regs2, _ = resolve(xnp, moved, plan)
-    a1 = sum(s * float(polygon_area(xnp, V)) for _, loops in regs for V, s in loops)
-    a2 = sum(s * float(polygon_area(xnp, V)) for _, loops in regs2 for V, s in loops)
+    a1 = sum(float(polygon_area(xnp, V)) for _, loops in regs for V in loops)
+    a2 = sum(float(polygon_area(xnp, V)) for _, loops in regs2 for V in loops)
     assert a1 != a2                       # it really did move
     assert abs(a2 - a1) < 0.02            # and only by about the nudge
 
@@ -596,12 +590,16 @@ def test_a_partial_overlap_was_never_affected():
 
     This is what says the fix is about the enclosure branch and not about the boundary path in
     general. With crossings present the difference walk returns disjoint simple pieces, every
-    one of them ``sign = +1`` -- asserted below rather than assumed, because that is the whole
-    reason dropping the sign and applying it are the same arithmetic here, and so the reason
-    this number is bit-identical across the fix.
+    one of them counter-clockwise -- asserted below rather than assumed, because a region with
+    no reversed loop in it is exactly a region no orientation convention can get wrong, which
+    is why this number is bit-identical across both the sign fix and the move to windings.
     """
-    _recs, regions = _b.plan_layer(CLIPPED_SHAPES, PERIOD)
-    assert [s for region in regions for _lp, s in region] == [1, 1]
+    recs, regions = _b.plan_layer(CLIPPED_SHAPES, PERIOD)
+    verts = [_b.shape_vertices(xnp, s, PERIOD) for s in CLIPPED_SHAPES]
+    vals = _c.eval_table(xnp, recs, verts)
+    areas = [float(polygon_area(xnp, _c.loop_verts(xnp, lp, vals)))
+             for region in regions for lp in region]
+    assert len(areas) == 2 and all(a > 0 for a in areas), areas
 
     painted = _total(_solve([dict(n_base=1.0, combine='paint', shapes=CLIPPED_SHAPES)],
                             normal_grid=256).conv_solve())
@@ -609,57 +607,134 @@ def test_a_partial_overlap_was_never_affected():
     assert abs(painted - fine) < 2e-3, (painted, fine)
 
 
-def test_the_normal_field_does_not_care_which_way_a_hole_is_wound():
-    """Why the sign is applied to the transform and *not* by reversing the hole's winding.
+def test_an_enclosed_shape_comes_back_wound_clockwise():
+    """The convention itself, stated where a reader will look for it.
 
-    Both spellings give the same permittivity -- ``polygon_ft`` is a signed contour integral,
-    so a reversed loop and a ``-1`` factor agree to 2e-16. They differ in what they hand the
-    normal field, which takes the loops with no sign at all. That is correct: the field is the
-    direction to the nearest boundary *point*, so it depends on which segments exist and not on
-    how they are wound, and only ``nx**2``, ``nx*ny``, ``ny**2`` are used, so even the overall
-    sign of the vector cancels.
-
-    Correct, but not bit-identical, and the difference is worth stating precisely rather than
-    hiding under a loose tolerance: reversing a loop renumbers its edges, so ``argmin`` breaks
-    its ties the other way where two edges are equidistant. Measured on this geometry, **20
-    pixels out of 65536** move, every one of them by 0.02454 in ``nx**2`` -- which is
-    ``2*pi/256``, the 256-gon's angular step, i.e. the tie is between two adjacent facets of
-    the polygonised disc. Integrated into the coefficients that is 6.0e-6 in ``c_xx`` and
-    ``c_yy`` and 7.0e-18 in ``c_xy``.
-
-    Applying the sign to the transform leaves the field untouched instead, which is why that is
-    the shape the fix took: it moves the permittivity, which was wrong, and nothing else.
+    This is the whole of the hole bookkeeping: the orientation *is* the data. ``plan_difference``
+    emits a contained subtractor walked backwards, and ``subtract_loop`` keeps it that way, so
+    the signed shoelace and the signed contour integral both subtract it with no sign to carry
+    alongside them and therefore none for a consumer to forget. One consumer did forget, back
+    when the orientation was normalised away into a separate ``sign`` field, and the enclosure
+    tests above are what that cost.
     """
     recs, regions = _b.plan_layer(ENCLOSED_SHAPES, PERIOD)
     verts = [_b.shape_vertices(xnp, s, PERIOD) for s in ENCLOSED_SHAPES]
     vals = _c.eval_table(xnp, recs, verts)
-    pairs = [(_c.loop_verts(xnp, lp, vals), s)
-             for region in regions for lp, s in region]
-    assert sorted(s for _V, s in pairs) == [-1, 1, 1], [s for _V, s in pairs]
+    areas = [[float(polygon_area(xnp, _c.loop_verts(xnp, lp, vals))) for lp in region]
+             for region in regions]
 
-    asis = [V for V, _s in pairs]
-    flipped = [xnp.flip(V, axis=0) if s < 0 else V for V, s in pairs]
-    for loops in (asis, flipped):
-        assert all(float(polygon_area(xnp, V)) != 0.0 for V in loops)
+    assert len(areas[0]) == 2 and len(areas[1]) == 1, areas
+    disc = np.pi * 0.1 ** 2
+    assert areas[0][0] == pytest.approx(0.36, abs=1e-12)          # the square, material
+    assert areas[0][1] == pytest.approx(-disc, abs=1e-12)         # the disc, a hole: CLOCKWISE
+    assert areas[1][0] == pytest.approx(+disc, abs=1e-12)         # the disc itself, material
+
+    # and the region sums to the visible area with no sign arithmetic at all
+    assert float(_c.region_area(xnp, regions[0], vals)) == pytest.approx(0.36 - disc, abs=1e-12)
+
+
+def test_a_hole_inside_a_hole_is_material_again():
+    """Nested enclosure has to compose by geometry, because there is no longer any sign to
+    multiply.
+
+    Three concentric squares, each painted over the last. The middle one cuts a hole in the
+    outer one; the inner one then cuts a hole in *both*, and cutting it out of the middle
+    square's hole has to put the material back. Under the old representation that was the
+    ``sign * rel`` product; here it is a loop being reversed twice and arriving counter-clockwise.
+
+    Both readings are asserted, because the loop list is the thing that has to be right and the
+    total is what a consumer sees: the outer region comes back as four loops whose areas are
+    ``+0.64, -0.04, -0.25, +0.04`` -- note the small square appearing with *both* signs, which
+    is the composition working -- and they sum to 0.39, the visible area. The cell average is
+    then checked against the closed form at two ``fto``, since it is exact and truncation-free.
+    """
+    nested = [dict(type='rectangle', cx=0.5, cy=0.5, lx=0.80, ly=0.80, angle=0.0, n_index=2.0),
+              dict(type='rectangle', cx=0.5, cy=0.5, lx=0.50, ly=0.50, angle=0.0, n_index=3.0),
+              dict(type='rectangle', cx=0.5, cy=0.5, lx=0.20, ly=0.20, angle=0.0, n_index=4.0)]
+    recs, regions = _b.plan_layer(nested, PERIOD)
+    verts = [_b.shape_vertices(xnp, s, PERIOD) for s in nested]
+    vals = _c.eval_table(xnp, recs, verts)
+
+    got = [sorted(float(polygon_area(xnp, _c.loop_verts(xnp, lp, vals))) for lp in region)
+           for region in regions]
+    assert got[0] == pytest.approx([-0.25, -0.04, 0.04, 0.64], abs=1e-12), got[0]
+    assert got[1] == pytest.approx([-0.04, 0.25], abs=1e-12), got[1]
+    assert got[2] == pytest.approx([0.04], abs=1e-12), got[2]
+
+    visible = [0.64 - 0.25, 0.25 - 0.04, 0.04]
+    for region, want in zip(regions, visible):
+        assert float(_c.region_area(xnp, region, vals)) == pytest.approx(want, abs=1e-12)
+
+    exact = 1.0 + (2.0 ** 2 - 1) * visible[0] + (3.0 ** 2 - 1) * visible[1] \
+        + (4.0 ** 2 - 1) * visible[2]
+    for fto in (6, 12):
+        solver = _solve([dict(n_base=1.0, combine='paint', shapes=nested)], fto=fto,
+                        normal_grid=256)
+        direct = np.linalg.inv(np.asarray(solver.conv_matrices()[2])[0])
+        ff = (2 * fto + 1) ** 2
+        assert complex(direct[ff // 2, ff // 2]).real == pytest.approx(exact, abs=1e-12), fto
+
+
+def test_the_normal_field_does_not_care_which_way_a_hole_is_wound():
+    """The one output the winding *does* touch, and the measurement that says to accept it.
+
+    ``conv_mats`` hands the loops to the normal field exactly as the clipper produced them,
+    holes wound clockwise included. That is safe by construction: the field is the direction to
+    the nearest boundary *point*, so it depends on which segments exist and not on how they are
+    wound, and only ``nx**2``, ``nx*ny``, ``ny**2`` are consumed, so the vector's own sign
+    cancels as well.
+
+    Safe, but not bit-invariant, and the difference is pinned here precisely rather than hidden
+    under a loose tolerance. Reversing a loop renumbers its edges, so ``argmin`` breaks its
+    *exact* ties the other way. Measured: 20 pixels of 65536 move, each by 0.024541 in
+    ``nx**2`` -- ``sin(2*pi/256)``, one facet of the polygonised disc, so the tie is between two
+    adjacent facets. That is 6.0e-6 in ``c_xx`` and ``c_yy``, 7.0e-18 in ``c_xy``.
+
+    The last block is the part that decides it: against the **ideal** circle's radial normal,
+    both windings are wrong by 0.7031 degrees on every one of those pixels, and the two errors
+    sum to 1.4062 = 360/256, exactly one facet step. An exact tie -- so there is no accuracy
+    argument for normalising the loops before the field, and normalising would put back the
+    orientation conversion the clipper was rewritten to remove.
+    """
+    recs, regions = _b.plan_layer(ENCLOSED_SHAPES, PERIOD)
+    verts = [_b.shape_vertices(xnp, s, PERIOD) for s in ENCLOSED_SHAPES]
+    vals = _c.eval_table(xnp, recs, verts)
+    asis = [_c.loop_verts(xnp, lp, vals) for region in regions for lp in region]
+    ccw = [xnp.flip(V, axis=0) if float(polygon_area(xnp, V)) < 0 else V for V in asis]
+    assert any(float(polygon_area(xnp, V)) < 0 for V in asis)      # there IS a hole to reverse
 
     a = _b.normal_projector_coeffs(xnp, asis, (256, 256), PERIOD, 6, 6,
                                    xnp.float64, xnp.complex128)
-    b = _b.normal_projector_coeffs(xnp, flipped, (256, 256), PERIOD, 6, 6,
+    b = _b.normal_projector_coeffs(xnp, ccw, (256, 256), PERIOD, 6, 6,
                                    xnp.float64, xnp.complex128)
     for got, want in zip(a, b):
         assert np.abs(np.asarray(got) - np.asarray(want)).max() < 1e-5
 
     fa = _b.distance_gradient_normal_field(xnp, asis, (256, 256), PERIOD, xnp.float64)
-    fb = _b.distance_gradient_normal_field(xnp, flipped, (256, 256), PERIOD, xnp.float64)
+    fb = _b.distance_gradient_normal_field(xnp, ccw, (256, 256), PERIOD, xnp.float64)
+    moved = None
     for u, v in zip(fa, fb):
         # squared, because the field's own sign is meaningless -- see the docstring
         d = np.abs(np.asarray(u) ** 2 - np.asarray(v) ** 2)
-        moved = d > 1e-12
+        m = d > 1e-12
         # counted, not bounded: a genuine dependence on the winding would move the *field*,
         # not twenty pixels of it, and a plain max() would read the same either way.
-        assert int(moved.sum()) < 100, int(moved.sum())
-        if moved.any():
-            assert abs(float(d[moved].max()) - 2 * np.pi / 256) < 1e-4, float(d[moved].max())
+        assert int(m.sum()) < 100, int(m.sum())
+        assert float(d[m].max()) == pytest.approx(np.sin(2 * np.pi / 256), abs=1e-6)
+        moved = m if moved is None else (moved | m)
+
+    # neither winding is closer to the true normal of the circle the polygon approximates
+    axis = (np.arange(256) + 0.5) / 256
+    X, Y = np.meshgrid(axis, axis)
+    dx, dy = X - 0.5, Y - 0.5
+    rad = np.hypot(dx, dy)
+    ux, uy = dx / rad, dy / rad
+    errs = []
+    for f in (fa, fb):
+        cos = np.abs(np.asarray(f[0]) * ux + np.asarray(f[1]) * uy)
+        errs.append(np.degrees(np.arccos(np.clip(cos[moved], -1.0, 1.0))))
+    assert errs[0].mean() == pytest.approx(errs[1].mean(), abs=1e-9)      # an exact tie
+    assert errs[0].mean() + errs[1].mean() == pytest.approx(360.0 / 256, abs=1e-3)
 
 
 # ------------------------------------------------- the painting plan across backends

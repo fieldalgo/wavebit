@@ -21,12 +21,20 @@ comment:
   *not* consistent between loops, so each loop's orientation is normalised on its own. When
   crossings exist the difference has no holes, which is what justifies forcing counter-clockwise.
 
-Painting several shapes closes on a **signed loop** representation: a region is a list of
-``(loop, sign)``, +1 material and -1 hole. Both the area and the polygon transform are signed
-contour integrals, so a region's value is the signed sum and nothing downstream special-cases a
-hole. Subtracting from a region is then subtracting from each loop and keeping the signs, so
-every clipper call stays a simple-polygon pair and the loop count grows roughly linearly
-instead of the 2^m an inclusion-exclusion formulation would need.
+Painting several shapes closes on an **oriented loop** representation: a region is a list of
+loops, counter-clockwise for material and clockwise for a hole. Both the area and the polygon
+transform are signed contour integrals, so a region's value is the plain sum over its loops and
+nothing downstream special-cases a hole -- or *can* forget to. Subtracting from a region is
+then subtracting from each loop, so every clipper call stays a simple-polygon pair and the loop
+count grows roughly linearly instead of the 2^m an inclusion-exclusion formulation would need.
+
+The orientation was carried in a separate ``sign`` field for a while, with every loop stored
+counter-clockwise. That is the same information, but it is information *about* the data rather
+than *in* it, and it has to be re-applied by hand at every use: `boundary.conv_mats` did not,
+and a shape painted entirely inside another one was silently solved as a different structure
+while staying Hermitian and conserving energy exactly. The conversion was also self-defeating --
+:func:`plan_difference` already emits a hole clockwise, and :func:`subtract_loop` was flipping
+it back.
 """
 import numpy as np
 
@@ -381,19 +389,47 @@ def _disjoint(P, Q):
     return bool((p1 < q0).any() or (q1 < p0).any())
 
 
-def subtract_loop(table, ids, sign, sub_ids):
-    """``loop \\ subtractor`` as a list of ``(ids, sign)``, appending crossings to the table."""
+def subtract_loop(table, ids, sub_ids):
+    """``loop \\ subtractor`` as a list of loops, appending crossings to the table.
+
+    **The orientation is the answer, not a label attached to it.** A hole comes back wound
+    clockwise, which is what makes it subtract itself in every consumer -- the signed shoelace
+    and the signed contour integral both read it directly, with no sign to carry alongside and
+    so no sign for a consumer to forget. :func:`plan_difference` already emits it that way (the
+    containment branch walks ``B`` backwards on purpose); this function used to flip it back to
+    counter-clockwise and record a separate ``-1``, which is the conversion that put the
+    invariant somewhere a reader had to re-apply it. One of four readers did not, and a shape
+    painted entirely inside another was solved as a different structure.
+
+    What genuinely needs counter-clockwise input is :func:`plan_difference`: its entry/exit flag
+    convention is oriented ("walk A forward where it is OUTSIDE B, and B backward where it is
+    INSIDE A"), so a clockwise ``A`` would invert the walk. That is handled where it belongs --
+    turn a clockwise input the right way up, difference it, and turn the results back. The plan
+    holds indices into whatever array it was handed, so ``ids`` is reversed *before* the call
+    and the reversed list is what the records are read against.
+
+    Turning the results back is exactly the old ``sign * rel`` product, spelled as geometry:
+    subtracting from a hole leaves a hole, and the pieces a hole is cut into are holes too.
+    """
     A, B = table.poly(ids), table.poly(sub_ids)
     if _disjoint(A, B):
-        return [(ids, sign)]
+        return [ids]
 
-    plan, polys, _ = plan_difference_robust(A, B)
+    # `plan_difference` needs A counter-clockwise; see the docstring.
+    flipped = signed_area(A) < 0
+    if flipped:
+        ids = ids[::-1]
+        A = table.poly(ids)
+
+    # The concrete polygons are not needed any more: the winding they would have been consulted
+    # for is now carried by `flipped` and the plan's own order.
+    plan, _polys, _nudge = plan_difference_robust(A, B)
     if not plan:
         return []                                   # the loop is entirely covered
 
     out = []
     na, nb = len(ids), len(sub_ids)
-    for rec_loop, poly in zip(plan, polys):
+    for rec_loop in plan:
         new = []
         for rec in rec_loop:
             if rec[0] == 'src':
@@ -402,14 +438,10 @@ def subtract_loop(table, ids, sign, sub_ids):
                 _, i, j = rec
                 new.append(table.cross(ids[i], ids[(i + 1) % na],
                                        sub_ids[j], sub_ids[(j + 1) % nb]))
-        # Store counter-clockwise and carry the orientation in the sign, so the next
-        # subtraction can hand this loop straight back to the clipper.
-        if signed_area(poly) < 0:
-            new, rel = new[::-1], -1
-        else:
-            rel = 1
+        if flipped:
+            new = new[::-1]
         if len(new) >= 3:
-            out.append((new, sign * rel))
+            out.append(new)
     return out
 
 
@@ -418,7 +450,10 @@ def resolve_painting(shapes):
 
     ``shapes`` is a list of counter-clockwise vertex arrays, earliest drawn first; later
     shapes paint over earlier ones. Returns ``(table_records, regions)`` where ``regions[i]``
-    is a list of ``(loop_ids, sign)`` for shape ``i``'s visible part.
+    is a list of ``loop_ids`` for shape ``i``'s visible part -- **counter-clockwise for
+    material, clockwise for a hole**, which is the whole of the bookkeeping. A hole inside a
+    hole comes back counter-clockwise again, i.e. material, by composition rather than by
+    multiplying signs.
     """
     table = Table(shapes)
     ids = [[table.src(i, k) for k in range(len(table.shapes[i]))]
@@ -426,11 +461,11 @@ def resolve_painting(shapes):
 
     regions = []
     for i in range(len(shapes)):
-        region = [(ids[i], 1)]
+        region = [ids[i]]
         for j in range(i + 1, len(shapes)):
             nxt = []
-            for lp, s in region:
-                nxt.extend(subtract_loop(table, lp, s, ids[j]))
+            for lp in region:
+                nxt.extend(subtract_loop(table, lp, ids[j]))
             region = nxt
             if not region:
                 break
@@ -439,17 +474,19 @@ def resolve_painting(shapes):
 
 
 def region_area(xp, region, vals):
+    """Area of a region. The shoelace is signed, so a clockwise hole subtracts itself."""
     tot = 0.0
-    for lp, s in region:
+    for lp in region:
         V = loop_verts(xp, lp, vals)
         x, y = V[:, 0], V[:, 1]
-        tot = tot + s * 0.5 * xp.sum(x * xp.roll(y, -1) - xp.roll(x, -1) * y)
+        tot = tot + 0.5 * xp.sum(x * xp.roll(y, -1) - xp.roll(x, -1) * y)
     return tot
 
 
 def region_ft(xp, region, vals, ky, kx, period, polygon_ft):
+    """FT of a region. The contour integral is signed, so a clockwise hole subtracts itself."""
     tot = None
-    for lp, s in region:
-        f = s * polygon_ft(xp, loop_verts(xp, lp, vals), ky, kx, period)
+    for lp in region:
+        f = polygon_ft(xp, loop_verts(xp, lp, vals), ky, kx, period)
         tot = f if tot is None else tot + f
     return tot

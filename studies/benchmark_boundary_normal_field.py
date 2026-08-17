@@ -146,7 +146,7 @@ def normal_field_cost(build, cx0, grid, repeats=3):
     verts = [_boundary.shape_vertices(np, s, (P, P)) for s in shapes]
     values = _clipper.eval_table(np, records, verts)
     loops = [_clipper.loop_verts(np, loop, values)
-             for _shape, region in zip(shapes, regions) for loop, _sign in region]
+             for _shape, region in zip(shapes, regions) for loop in region]
 
     def timed(fn):
         fn()
