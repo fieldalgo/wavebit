@@ -34,6 +34,26 @@ rather than against a rival formulation, so unlike this file it can say which an
 
 The same argument shape as the 2026-08-07 re-freeze, which moved this case further (0.684 to
 0.352) and justified it on smooth shapes via ``docs/nvf-upsampling.md``.
+
+**Why it was re-frozen again (2026-08-17), and why this one is a stronger case than either.**
+The normal field was not periodic. A unit cell is a torus, and the ``'distance'`` construction
+read it as a flat array in three places -- the interface mask compared only inside the array,
+the distance transform measured to the in-cell interface rather than the periodically nearest
+one, and ``np.gradient`` is one-sided on the first and last row and column. Transmitted
+efficiency moves 0.714 to 0.643 here; energy is conserved to 1.000000000000 either way.
+
+The two earlier re-freezes had to argue their new values were better from *somewhere else* --
+smooth shapes for the 2026-08-07 lift, midpoint-rule quadrature order for the half-pixel phase
+-- precisely because a random 5x5 raster cannot arbitrate a normal field. **This one does not
+need an outside argument, because the case arbitrates itself.** Rolling a raster by whole
+pixels is an exact lattice translation: the same structure, named differently, so every
+efficiency must be unchanged. On this very case, rolled two pixels in x, the old field moved
+``max|dR|`` by 5.7e-02 and the new one by 2.3e-15. An implementation that fails an exact
+invariant on the golden's own geometry is wrong on that geometry, whatever any other case says.
+
+That invariant is now under test in its own right (``tests/test_nvf_lattice_translation.py``),
+so this file is no longer the only thing standing between the fix and a silent regression --
+which is the condition under which a self-captured golden is doing its proper job.
 """
 import pathlib
 import sys
@@ -71,6 +91,31 @@ def amplitude_entries(n_top, n_bot):
             ('T_s', 't_s', 1.0), ('T_p', 't_p', 1.0 / (-1j * n_bot)))
 
 
+def frame_sign(solver):
+    """The per-order ``+-1`` that :func:`test_golden_legacy_parity._frame_sign` applies.
+
+    **The amplitudes here are stored in the LEGACY s/p frame, deliberately.** The legacy solver
+    built each order's frame as ``atan(ky/kx)``, which cannot see ``sign(kx)``, so every order
+    with ``Re(kx) < 0`` was quoted in ``-s_hat``, ``-p_hat``; that was fixed on 2026-08-17 in
+    :func:`~wavebit._core.conventions.order_azimuth`. The comparison treats the difference as a
+    convention conversion -- one more factor beside the ``H -> E`` ones in ``_amp_map`` -- and
+    applies it to all thirteen cases uniformly, this one included.
+
+    So this generator has to divide it back out, exactly as it already divides out the ``H -> E``
+    factors, or the freeze lands in the new frame, the comparison flips it again, and the
+    ``Re(kx) < 0`` orders come back negated. Keeping the freeze frame-neutral is what lets
+    ``_frame_sign`` stay one uniform rule rather than gaining a branch for the one case whose
+    generator happens to run.
+
+    Must stay identical to ``_frame_sign``; the two are checked against each other by
+    ``test_results_match_legacy_golden[2d_nvf]`` every run.
+    """
+    if solver.grating_type_assigned == 0:
+        return 1.0
+    kx = np.asarray(solver.get_kx_ky_vector(solver.wavelength)[0], dtype=np.complex128)
+    return np.where(np.real(np.reshape(kx, (1, -1))) < 0, -1.0, 1.0)
+
+
 def main():
     kw = dict(CASE)
     kw['ucell'] = np.asarray(kw['ucell'], dtype=float)
@@ -78,6 +123,7 @@ def main():
     result = solver.conv_solve()
 
     out = {f'{NAME}__grating_type': np.array(solver.grating_type_assigned)}
+    sign = frame_sign(solver)
     for sub in ('res', 'res_te_inc', 'res_tm_inc'):
         s = getattr(result, sub)
         if s is None:
@@ -85,7 +131,7 @@ def main():
         for key, attr in EFFICIENCIES:
             out[f'{NAME}__{sub}__{key}'] = np.asarray(getattr(s, attr))
         for key, attr, factor in amplitude_entries(CASE['n_top'], CASE['n_bot']):
-            out[f'{NAME}__{sub}__{key}'] = np.asarray(getattr(s, attr)) / factor
+            out[f'{NAME}__{sub}__{key}'] = np.asarray(getattr(s, attr)) / factor / sign
 
     out[f'{NAME}__T1'] = np.asarray(solver.T1)
     for i, li in enumerate(solver.layer_info_list):
