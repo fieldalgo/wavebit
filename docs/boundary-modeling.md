@@ -128,28 +128,40 @@ res = solver.conv_solve(geometry=solver.freeze_geometry())
 A gradient runs from `(cx, cy, lx, ly, angle)` through the replay, the polygon transform and the
 normal field to the convolution matrices, and matches finite differences to 2.3e-08.
 
-### It also carries a position gradient the smooth path cannot
+### It carried a position gradient the smooth path could not — and no longer does
 
-A multi-shape *smooth* layer differentiates correctly with respect to `lx`, `ly` and `angle`, and
-**not** with respect to `cx` and `cy`. The reason is stated in full at
-`analytic.normal_projector_coeffs`; the short version is that a rectangle's level-set gradient is
-piecewise constant, so the position reaches its sampled normal field only through `sign()`, whose
-derivative is zero. The variation lives entirely on the wedge lines, which sweep across pixels as
-the shape moves.
+**This section's advantage is gone as of 2026-08-17 (`c128fd8`), and the reasoning is kept
+because the diagnosis in it is what eventually closed the gap.** The smooth path now carries the
+`cx`/`cy` gradient too, so what separates the two paths is the paint-vs-add semantics this
+document opens with, and nothing about differentiability.
 
-The failure is sharper than "inaccurate", and worth seeing stated as a number. On the projector
-coefficients of two rectangles, `d/dcx` by autodiff is **exactly 0.0** — and so is a central
-difference once `h` is small enough to stay between two pixel crossings (0.0 at `h` = 1e-7, 1e-8,
-1e-9, against -1.0 at 1e-6). The two agree perfectly. The field really is locally constant in
-`cx`; every bit of the translation dependence sits in jumps, so there is no slope for a gradient
-to be wrong about. Two *circles*, whose normal is radial and so genuinely smooth in the centre,
-agree to nine digits (2.624456e-02 both ways) — the mechanism confirming itself, since only the
-shape changed. A single shape of any type is exact through the phase trick. The gap is pinned as
-`xfail` in `tests/test_shape_position_gradients.py`.
+What used to be true: a multi-shape *smooth* layer differentiated correctly with respect to
+`lx`, `ly` and `angle`, and **not** with respect to `cx` and `cy`, because a rectangle's
+level-set gradient was piecewise constant and the position reached the sampled field only
+through `sign()`, whose derivative is zero. The variation lived entirely on the wedge lines,
+which sweep across pixels as the shape moves.
 
-**This path does not have it**, because the normal field here is the gradient of the distance to
+The failure was sharper than "inaccurate", and the number is worth keeping. On the projector
+coefficients of two rectangles, `d/dcx` by autodiff was **exactly 0.0** — and so was a central
+difference once `h` was small enough to stay between two pixel crossings (0.0 at `h` = 1e-7,
+1e-8, 1e-9, against -1.0 at 1e-6). The two agreed perfectly, and were agreeing about nothing:
+every bit of the translation dependence sat in jumps. Two *circles*, whose normal is radial and
+so genuinely smooth, agreed to nine digits (2.624456e-02 both ways) — the mechanism confirming
+itself, since only the shape changed.
+
+That last contrast is what the fix was eventually built on. The seams, not the sampling, were
+the problem — confirmed by refining `normal_grid` from 1024 to 4096 and watching the rectangle
+error stay flat at 1.8e-2 while the circle pair converged — so the answer was to remove them
+rather than to mollify them, which the `tanh` route had tried and failed. Treating +x and -x
+(and +y, -y) as four separate faces blended by distance products makes them cancel exactly at
+the centre line, with no width anywhere. `sign()` is gone from the branch and the two-rectangle
+relative position gradient reads 1e-5 against central differences. Both `xfail`s in
+`tests/test_shape_position_gradients.py` are lifted.
+
+**This path never had the problem**, because its normal field is the gradient of the distance to
 the resolved boundary: a vertex coordinate reaches it as arithmetic rather than through a sign,
-and there is no normalized sum of per-shape fields at all. Sweeping `h` on the five convolution
+and there was no normalized sum of per-shape fields at all. That is still true; it is simply no
+longer a point of difference. Sweeping `h` on the five convolution
 matrices of a painted pair, every parameter — `cx` and `cy` included — converges onto the
 autodiff value by `h` = 1e-7 (`d/dcx` = -3.065387e+02 analytic against -3.065387e+02). The
 intermediate-`h` wobble is a real slope sampled across the same pixel jumps, not an absent one.
@@ -168,7 +180,10 @@ painted **disjoint** pair as well (3.878496e-01 analytic against 3.878512e-01 at
 the grad-of-distance field carries a position gradient whether or not anything overlaps — which
 makes "give multi-shape smooth layers this field instead" a route the three already rejected at
 `normal_projector_coeffs` did not consider. It is not free — it is a different NVF choice, so
-forward answers on those layers move — and it has now been tried.
+forward answers on those layers move — and it has now been tried. (It is also moot since
+`c128fd8`: the smooth path carries the gradient on its own field, so there is nothing left for
+the swap to buy. The measurement below stands as the record of why the swap was rejected on its
+own terms.)
 
 ### Tried: the gradient does not survive the swap
 

@@ -100,15 +100,28 @@ boundary, these are the true-boundary normals, so the full NVF benefit is realiz
 
 For a layer holding **one** shape the field is sampled with the shape at the centre of the
 cell and the coefficients are then translated to `(cx, cy)` by `e^{-i k·(c − P/2)}` — the same
-phase `⟦ε⟧` already carries. Sampling it in place instead does two things, both wrong: it
-sends `cx`/`cy` through `sign()`, whose derivative is zero, so `d/dcy` lost the projectors'
-share of an exact cancellation and came out at −1.7e−1 instead of 0; and it clips a field that
-is defined over the whole plane against a fixed cell, so a translated structure was a
-*different* structure (1.6e−3 on `sum(de_ri)`, unchanged from 256 to 4096 samples). With the
-phase, every one of the five matrices is `D X D⁻¹` for one diagonal `D`, so a translated layer
-reproduces the centred one to 1e−14 and `d/dcx`, `d/dcy` come out at 5e−9. Several shapes take
-a *normalized sum* of their fields, which no single phase translates, and stay on the sampled
-route. Why the `½`-symmetrization is
+phase `⟦ε⟧` already carries. Every one of the five matrices is then `D X D⁻¹` for one diagonal
+`D`, so a translated layer reproduces the centred one to 1e−14 and `d/dcx`, `d/dcy` come out at
+5e−9. That is exact rather than merely good, which is why it stays.
+
+**The two reasons this paragraph used to give for the phase are both obsolete** (2026-08-17,
+`c128fd8`), and they are worth reading as a pair, because each was a defect wearing the phase
+as a workaround. Sampling in place sent `cx`/`cy` through `sign()`, whose derivative is zero;
+`sign()` is gone from the rectangle branch, which now blends its four faces so they cancel
+exactly at the centre line. And it clipped a field defined over the whole plane against a fixed
+cell, so a translated structure was a *different* structure; the displacement now folds to the
+nearest image, so the field is periodic and a circle's mean `nx²` reads its symmetric ½ from
+anywhere in the cell rather than only from the centre.
+
+Several shapes therefore still stay on the sampled route — no phase describes a nonlinear
+combination — but the route is no longer the broken one. They are combined by **distance-product
+weights** rather than the *normalized sum of unit vectors* this used to describe, and that
+difference is not cosmetic: a sum weights a shape ten cells away exactly as heavily as the one
+underfoot, which put the normal 40 deg off at a boundary with two shapes in the layer and 43 with
+three. The weights collapse to one shape's own normal exactly at its surface, so boundaries read
+0.000 deg for any number of shapes, naming a shape a period over moves 5.3e−15, and the position
+gradient survives for rectangles as well as circles. See
+`analytic.normal_vector_field_analytical` and `_shape_surface_normal`. Why the `½`-symmetrization is
 needed — the plain product `Δ C` is not Hermitian, which gives complex `q²` and gross
 energy-conservation violation on curved boundaries — is written out in the
 `nvf_conv_matrices` docstring in `_core/factorization.py`.
