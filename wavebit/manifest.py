@@ -252,6 +252,9 @@ RESULTS = {
         'meaning': 'complex Fresnel amplitudes in e^{-iwt}: E-field ratios against a unit '
                    'incident E-field, comparable to the textbook coefficients',
         'p_sign': 'the convention where a normal-incidence interface gives r_p = -r_s',
+        'per_order_frame': 'each order is resolved in its own s/p frame, s_hat = zhat x '
+                           'khat_par; at theta = 0 the zeroth order has no in-plane '
+                           'direction and phi supplies it',
     },
     'incidences': {
         'fields': ('res', 'res_te_inc', 'res_tm_inc'),

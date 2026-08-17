@@ -55,6 +55,16 @@ this file's title says they are. The occasion was the half-pixel cell-centre pha
 the sampled transform (``_half_pixel_phase``); the evidence that the new values are the better
 ones is quadrature order, not this file, and ``gen_goldens_nvf.py`` carries it.
 
+A change the same week needed **no** recomputation at all, and that distinction is the one to
+keep. The per-order s/p frame was reversed on the ``Re(kx) < 0`` half-plane, in the legacy
+solver and in the rewrite alike (``docs/amplitude-sp-frame.md``); fixing it moved the complex
+amplitudes of the seven coupled cases by a sign on those orders and left all six efficiencies
+of all thirteen untouched, since a half-turn cannot survive ``|r|**2``. That is a *convention*
+difference between the frozen numbers and today's, exactly like the ``H -> E`` factors already
+in :func:`_amp_map`, so it is applied as one -- see :func:`_frame_sign`. Both ``.npz`` files
+stay byte-identical, including the one frozen days earlier, which is the strongest available
+statement that nothing here was re-frozen to make a test pass.
+
 Compared to ``atol=1e-12``, not bit-for-bit. Bit-exactness was the right test while the port
 was being *proved* equal to the legacy chain; as a standing guard it fails on things that are
 not defects — reassociating a sum moves the last digit (``(a-b)-c`` and ``a-(b+c)`` differ by
@@ -123,6 +133,41 @@ def _amp_map(grating_type, n_top, n_bot):
             ('T_s', 't_s', 1.0), ('T_p', 't_p', 1.0 / (-1j * n_bot)))
 
 
+def _frame_sign(solver, grating_type):
+    """The second convention conversion the amplitudes need: a per-order ``+-1``.
+
+    The legacy solver built each order's s/p frame as ``atan(ky/kx)``, which reads a ratio and
+    so cannot see ``sign(kx)``; every order with ``Re(kx) < 0`` came back in ``-s_hat``,
+    ``-p_hat``. That was carried into the rewrite unchanged and fixed in
+    :func:`~wavebit._core.conventions.order_azimuth` (see ``docs/amplitude-sp-frame.md``), so
+    the frozen amplitudes are in the old frame on that half-plane and today's are not.
+
+    A conversion rather than a regeneration, and the distinction matters here. The factors in
+    :func:`_amp_map` exist because the golden stores *legacy* values in the *legacy*
+    convention; this is one more of those, and it keeps the frozen magnitudes and phases
+    exactly as the run that produced them left them instead of refreezing anything from the
+    implementation under test. It is closed-form and checkable by hand -- ``kx`` is
+    ``n_top*sin(theta)*cos(phi) + m*wl/Px``, read here off the solver's geometry so no
+    formula is restated, and nothing about the amplitude path is consulted.
+
+    Applied to ``2d_nvf`` as well, on the same grounds and not by oversight. That case is
+    self-captured rather than legacy-derived, and its generator *runs* -- so re-freezing it
+    was available and was not taken. It was captured before the fix, which puts it in the old
+    frame exactly like the twelve; converting keeps ``golden_nvf.npz`` byte-identical to the
+    freeze that ``gen_goldens_nvf.py`` documents, whose stated reason was the half-pixel
+    phase and nothing else. Two re-freezes in one week for unrelated reasons would leave that
+    record unreadable.
+
+    A half-turn cancels in ``|r|**2``, so the efficiency comparisons above are untouched and
+    stay a pure legacy check. Pure-1D cases have no s/p rotation at all and get ``1``, which
+    is why six of the thirteen cases needed nothing.
+    """
+    if grating_type == 0:
+        return 1.0
+    kx = np.asarray(solver.get_kx_ky_vector(solver.wavelength)[0], dtype=np.complex128)
+    return np.where(np.real(np.reshape(kx, (1, -1))) < 0, -1.0, 1.0)
+
+
 def _rand(shape, seed):
     return np.random.default_rng(seed).uniform(1.0, 4.0, size=shape)
 
@@ -172,8 +217,9 @@ def test_results_match_legacy_golden(name):
             assert np.allclose(want, got, atol=TOL, rtol=0), (
                 sub, key, np.max(np.abs(want - got)))
             checked += 1
+        frame = _frame_sign(solver, solver.grating_type_assigned)
         for key, attr, factor in amp_map:
-            want = GOLDEN[f'{name}__{sub}__{key}'] * factor
+            want = GOLDEN[f'{name}__{sub}__{key}'] * factor * frame
             got = np.asarray(getattr(got_sub, attr))
             assert np.allclose(want, got, atol=TOL, rtol=0), (
                 sub, key, np.max(np.abs(want - got)))

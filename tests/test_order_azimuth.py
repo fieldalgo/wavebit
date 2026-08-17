@@ -79,6 +79,14 @@ def test_the_origin_carries_the_incidence_azimuth():
     Written as ``atan(tan(phi))`` rather than ``phi`` on purpose — that is the wrap into
     ``(-pi/2, pi/2)`` the removed detour produced, and it differs from ``phi`` itself once
     ``|phi| > pi/2``, flipping the sign of the whole rotation when it does.
+
+    That wrap is the same ``atan``-of-a-ratio spelling that was a defect on the
+    ``Re(kx) < 0`` half-plane (see :func:`order_azimuth`), and it is kept here anyway,
+    which is worth stating so the two are not "fixed" together by someone who notices the
+    resemblance. On the half-plane the wrap bought nothing and broke continuity; here it buys
+    ``phi``/``phi + pi`` equivalence, pinned two tests below, and that is incompatible with
+    continuity in ``phi`` rather than merely additional to it. The cost is measured in
+    ``docs/amplitude-sp-frame.md`` §4.
     """
     kx = np.array([0.0, 0.5, -0.5], dtype=np.complex128)
     ky = np.zeros(3, dtype=np.complex128)
@@ -103,12 +111,49 @@ def test_the_kx_zero_column_carries_the_right_angle():
     assert np.all(np.isfinite(got))
 
 
-def test_ordinary_orders_are_left_alone():
-    """Away from ``kx == 0`` this must still be exactly ``atan(ky/kx)``, branch and all."""
-    kx = np.array([0.5, -0.5, 1.0, -1.0], dtype=np.complex128)
-    ky = np.array([0.2, 0.2, -0.3, -0.3], dtype=np.complex128)
+def test_ordinary_orders_point_along_their_own_wavevector():
+    """Away from ``kx == 0`` the frame is ``s_hat = z_hat x k_hat_par`` — i.e. ``atan2``.
+
+    This used to assert ``atan(ky/kx)`` exactly, "branch and all", and that is the defect
+    rather than the contract: ``atan`` reads a *ratio*, which has already discarded
+    ``sign(kx)``, so ``(kx, ky)`` and ``(-kx, -ky)`` came back with the same frame instead of
+    opposite ones. Every ``Re(kx) < 0`` order was therefore handed ``-s_hat``, ``-p_hat``.
+
+    Stated as the parallelism it actually means — ``(cos, sin)`` must be ``(kx, ky)``
+    normalised, *with* its direction — so that it holds for the complex ``kx`` an absorbing
+    superstrate produces and not only on the real axis, where ``atan2`` would say the same.
+    """
+    kx = np.array([0.5, -0.5, 1.0, -1.0, 0.4 + 0.2j, -0.4 - 0.2j], dtype=np.complex128)
+    ky = np.array([0.2, 0.2, -0.3, -0.3, 0.6 - 0.1j, 0.6 - 0.1j], dtype=np.complex128)
     got = np.asarray(order_azimuth(_xp(), ky, kx, 0.9))
-    assert np.array_equal(got, np.arctan(ky / kx))
+
+    norm = np.sqrt(kx ** 2 + ky ** 2)
+    assert np.cos(got) == pytest.approx(kx / norm, abs=1e-15)
+    assert np.sin(got) == pytest.approx(ky / norm, abs=1e-15)
+
+    # And the half-turn is real: the reversed wavevector must give the reversed frame.
+    flipped = np.asarray(order_azimuth(_xp(), -ky, -kx, 0.9))
+    assert np.cos(flipped) == pytest.approx(-np.cos(got), abs=1e-15)
+    assert np.sin(flipped) == pytest.approx(-np.sin(got), abs=1e-15)
+
+
+def test_the_frame_is_continuous_where_kx_crosses_zero():
+    """The strongest statement that the old half-turn was a defect and not a convention.
+
+    A convention may be surprising; it may not be discontinuous in the inputs. ``atan(ky/kx)``
+    was: at ``kx = -1e-12`` it returned ``sin(varphi) = -1`` and at ``kx = 0`` — three lines
+    later, in the branch it special-cases — ``+1``. The function disagreed with its own
+    special case, which is what marks this as an accident of spelling rather than a choice.
+    """
+    ky = np.full(5, 0.7 + 0j)
+    kx = np.array([-1e-3, -1e-12, 0.0, 1e-12, 1e-3], dtype=np.complex128)
+    got = np.asarray(order_azimuth(_xp(), ky, kx, 0.0))
+
+    assert np.real(np.sin(got)) == pytest.approx(np.ones(5), abs=1e-5)
+    # cos must be kx/|k| and pass smoothly through zero *with its sign*, which is the whole
+    # claim -- `rel` because cos is read back off an angle atan built from a ratio of 700, so
+    # it carries ~1e-6 relative round-off, and the exactly-zero entry needs the abs floor.
+    assert np.real(np.cos(got)) == pytest.approx(np.real(kx) / 0.7, rel=1e-5, abs=1e-15)
 
 
 # ---------------------------------------------------------------- the premise

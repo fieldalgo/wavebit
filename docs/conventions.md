@@ -203,6 +203,14 @@ user code never needs the previous paragraph.
 
 Amplitude fine print, stated once so it never has to be discovered:
 
+- each order is quoted in **its own** s/p frame, the standard one: `s_hat = z_hat x k_hat_par`,
+  with `k_par` that order's in-plane wavevector, and `p_hat` completing the right-handed
+  triad. Until 2026-08-16 every order with `Re(kx) < 0` came back in the *reversed* frame
+  (`-s_hat`, `-p_hat`) on the conical and 2D paths — invisible in `R`/`T`, which are
+  `|r|^2`, and in the reconstructed field, and therefore in every golden this project has.
+  See [`amplitude-sp-frame.md`](amplitude-sp-frame.md). At `theta = 0` the zeroth order has
+  no in-plane wavevector to take a direction from and `phi` supplies it, with the one
+  caveat in that document's section 4;
 - the p sign convention is the one where a single interface at normal incidence gives
   `r_p = (n2 - n1)/(n2 + n1) = -r_s`;
 - phase reference: `r` at the incidence-side interface, `t` at the far one (top and
@@ -222,6 +230,7 @@ Amplitude fine print, stated once so it never has to be discovered:
 | rows | tests |
 | --- | --- |
 | time/loss, amplitudes | `tests/test_lossy_media.py` (Airy oracle, absorbing media both sides) |
+| the per-order s/p frame the amplitudes are quoted in | `tests/test_amplitude_sp_frame.py` — a transposed twin, the reconstructed field as arbiter, and continuity across `kx = 0`. Efficiencies cannot pin this row at all: a reversed frame is `\|r\|^2`-invariant |
 | order layout, order-index sign | `tests/references/test_reticolo_golden.py` (mirrors orders if wrong, conserving energy) |
 | `incidence_side`, incidence-relative results | `tests/test_backside_incidence.py` (reversed-stack Airy oracle, reciprocity both halves) and the `inc_bottom` cases of `tests/references/test_reticolo_golden.py` |
 | result naming, `order()`, delegation | `tests/test_result_api.py` |

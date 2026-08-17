@@ -39,6 +39,9 @@ from .backend import UnresolvedBranchWarning, as_array
 
 _FLAT = 1e-12      # below this, a real part counts as zero and the tie-break decides
 
+_PI = 3.141592653589793
+_HALF_PI = 1.5707963267948966
+
 
 @contextlib.contextmanager
 def branch_tolerance(value):
@@ -303,8 +306,10 @@ def order_azimuth(xp, ky, kx, phi):
     """Azimuth of each retained order's in-plane wavevector, flattened.
 
     ``cos(varphi)`` and ``sin(varphi)`` rotate an order into its own s/p frame, so every
-    solve that couples the two polarizations needs this. It is ``atan(ky/kx)`` everywhere
-    except where ``kx == 0``, and that is two different places with two different answers.
+    solve that couples the two polarizations needs this. The frame is the standard one,
+    ``s_hat = z_hat x k_hat_par`` — i.e. ``(cos(varphi), sin(varphi))`` is the *direction* of
+    ``(kx, ky)``, not merely a line parallel to it. That is ``atan2(ky, kx)``, and it is
+    ``atan(ky/kx)`` only on the ``Re(kx) >= 0`` half-plane; see **the half-turn** below.
 
     **The ``kx == 0`` column with ``ky != 0``** — every order with ``m == 0`` and ``n != 0``
     on a 2D grid, present at *any* incidence, not only normal. Nothing is ambiguous: the
@@ -325,14 +330,48 @@ def order_azimuth(xp, ky, kx, phi):
     round, through a ``perturbation`` constructor argument that no longer exists. ``theta``
     was replaced by a tiny non-zero value (``1e-20`` by default) whenever it was exactly
     zero, which made ``kx_0 = eps*cos(phi)`` and ``ky_0 = eps*sin(phi)`` — so ``atan``
-    recovered ``atan(tan(phi))`` for the origin and ``+-pi/2`` for the column, on its own.
-    That is why the origin is written here as ``atan(sin(phi)/cos(phi))`` rather than as
-    ``phi``: it reproduces the same wrap into ``(-pi/2, pi/2)``, which differs from ``phi``
-    itself once ``|phi| > pi/2`` and flips the sign of the whole rotation when it does.
+    recovered the origin and ``+-pi/2`` for the column, on its own.
 
     So the detour was not merely tidy, it was carrying the incidence azimuth into ``kx`` and
     ``ky`` infinitesimally — which is precisely why nobody could tell what the knob did. It
     is passed explicitly now.
+
+    **The half-turn**, which is the whole reason the ``+ pi`` term below exists. ``atan``
+    is handed the *ratio* ``ky/kx``, and a ratio has already thrown ``sign(kx)`` away: the
+    orders ``(kx, ky)`` and ``(-kx, -ky)`` produce the same ``atan``, so its answer is wrong
+    by ``pi`` over the whole ``Re(kx) < 0`` half-plane. A half-turn negates both ``cos`` and
+    ``sin``, so it does not tilt the s/p frame — it reverses it, ``s_hat -> -s_hat`` and
+    ``p_hat -> -p_hat``, for that order alone.
+
+    That reversal is a diagonal ``+-1`` similarity on the whole stack algebra, so it cancels
+    out of every power quantity and out of the reconstructed field, and shows up in exactly
+    one place: the sign of the reported ``r_s`` / ``r_p`` / ``t_s`` / ``t_p`` of each
+    ``Re(kx) < 0`` order. It was invisible for as long as nothing compared amplitudes across
+    orders. Three measurements say it is a defect rather than a convention, and they are what
+    ``tests/test_amplitude_sp_frame.py`` now pins:
+
+    * **it is discontinuous.** Sweep ``theta`` so one order's own ``kx`` crosses zero and
+      nothing physical happens — the order stays propagating, ``R`` and ``|r_s|`` sail
+      through — but ``r_s`` changes sign. No convention can do that.
+    * **it disagreed with the ``kx == 0`` column handled just below.** That column takes its
+      sign from ``Re(ky)``, which is the ``z_hat x k_hat`` rule; the ``Re(kx) < 0``
+      half-plane did not. The function was discontinuous at the very column it special-cases.
+    * **it disagreed with this library's own reconstructed field.** Decompose the field at
+      the top face into orders and project onto ``z_hat x k_hat``: the ``Re(kx) > 0`` orders
+      matched ``r_s`` to 1e-15 and the ``Re(kx) < 0`` orders matched ``-r_s``.
+
+    The flip is keyed on ``Re(kx)`` rather than on a norm so that the ``kx == 0`` column —
+    including its purely-imaginary-``ky`` corner, where the branch is a genuine choice rather
+    than a mistake — comes out bit-identical to what it was before.
+
+    **The origin is deliberately not part of this**, though it is the same ``atan``-of-a-ratio
+    spelling and does lose ``sign(cos(phi))`` the same way. There it buys something: it sends
+    ``phi`` and ``phi + pi`` to the same frame, which is the property
+    ``test_phi_and_phi_plus_pi_agree_at_normal_incidence`` exists to hold. That property and
+    continuity in ``phi`` cannot both be had — a map from ``phi`` to a frame is either
+    ``2pi``-periodic and continuous or ``pi``-periodic and not — so the origin is a real
+    convention choice where the half-plane was not, and it is left where it was found. What
+    it costs is written down in ``docs/amplitude-sp-frame.md`` for whoever revisits it.
 
     The complex dtype is what made the detour load-bearing rather than optional: ``ky / 0``
     is ``inf + nan*j`` for a complex array rather than the real case's ``inf``, so the NaN
@@ -347,11 +386,14 @@ def order_azimuth(xp, ky, kx, phi):
     zero_kx = kx == 0
     safe_kx = xp.where(zero_kx, xp.ones_like(kx * ky), kx)
     varphi = xp.atan(ky / safe_kx)
+    # Put back the sign the ratio discarded. `pi`, not `-pi`: only cos and sin are read, and
+    # they cannot tell the two apart, so the cheaper spelling is also the only one.
+    varphi = varphi + _PI * xp.astype(xp.real(kx + xp.zeros_like(varphi)) < 0, varphi.dtype)
 
     ky_b = ky + xp.zeros_like(varphi)                 # broadcast to the order grid
     right_angle = xp.where(xp.real(ky_b) < 0,
-                           xp.full_like(varphi, -1.5707963267948966),
-                           xp.full_like(varphi, 1.5707963267948966))
+                           xp.full_like(varphi, -_HALF_PI),
+                           xp.full_like(varphi, _HALF_PI))
     varphi = xp.where(zero_kx, right_angle, varphi)
 
     p = as_array(xp, 0.0 if phi is None else phi, dtype=varphi.dtype)
