@@ -76,24 +76,29 @@ def _energy(result):
 def test_the_origin_carries_the_incidence_azimuth():
     """``kx == ky == 0``: the answer is ``phi``, not zero and not a free gauge.
 
-    Written as ``atan(tan(phi))`` rather than ``phi`` on purpose — that is the wrap into
-    ``(-pi/2, pi/2)`` the removed detour produced, and it differs from ``phi`` itself once
-    ``|phi| > pi/2``, flipping the sign of the whole rotation when it does.
+    ``phi``, with its *direction*. This used to assert ``atan(tan(phi))`` — the wrap into
+    ``(-pi/2, pi/2)`` the removed ``perturbation`` detour produced, kept deliberately as the
+    limit it reached — which agrees with ``phi`` while ``|phi| < pi/2`` and is ``phi -+ pi``
+    beyond it. That is the same ``atan``-of-a-ratio spelling that was a defect on the
+    ``Re(kx) < 0`` half-plane, and for the same reason: a ratio has already discarded
+    ``sign(cos(phi))``. At the origin the "``kx``" whose sign went missing *is* ``cos(phi)``.
 
-    That wrap is the same ``atan``-of-a-ratio spelling that was a defect on the
-    ``Re(kx) < 0`` half-plane (see :func:`order_azimuth`), and it is kept here anyway,
-    which is worth stating so the two are not "fixed" together by someone who notices the
-    resemblance. On the half-plane the wrap bought nothing and broke continuity; here it buys
-    ``phi``/``phi + pi`` equivalence, pinned two tests below, and that is incompatible with
-    continuity in ``phi`` rather than merely additional to it. The cost is measured in
-    ``docs/amplitude-sp-frame.md`` §4.
+    It survived one round longer than the half-plane because it looked like it bought
+    something — ``phi`` and ``phi + pi`` landing on one frame. It does not; see
+    :func:`test_the_two_spellings_of_one_incidence_agree`, which is the measurement that
+    settles it.
+
+    Asserted on ``cos`` and ``sin`` rather than on the angle, because those are the only two
+    things any caller reads: ``phi`` and ``phi + 2pi`` must both pass and ``phi + pi`` must
+    not.
     """
     kx = np.array([0.0, 0.5, -0.5], dtype=np.complex128)
     ky = np.zeros(3, dtype=np.complex128)
-    for phi in (0.0, 0.3, np.deg2rad(35.0), 1.2, -0.4, 2.0, -2.0):
+    for phi in (0.0, 0.3, np.deg2rad(35.0), 1.2, -0.4, 2.0, -2.0, 3.0, -3.0):
         got = np.asarray(order_azimuth(_xp(), ky, kx, phi))
         assert np.all(np.isfinite(got))
-        assert np.real(got[0]) == pytest.approx(np.arctan(np.tan(phi)), abs=1e-14)
+        assert np.real(np.cos(got[0])) == pytest.approx(np.cos(phi), abs=1e-14)
+        assert np.real(np.sin(got[0])) == pytest.approx(np.sin(phi), abs=1e-14)
 
 
 def test_the_kx_zero_column_carries_the_right_angle():
@@ -260,68 +265,102 @@ def test_the_first_order_path_gets_the_azimuth_too():
         assert _total_r(first) == pytest.approx(_total_r(second), abs=1e-11)
 
 
-def test_phi_and_phi_plus_pi_agree_at_normal_incidence():
-    """The wrap, asserted on a solve rather than only on the helper.
+def test_the_two_spellings_of_one_incidence_agree():
+    """The measurement that says the origin wrap was a defect, not a convention.
 
-    The origin is filled with ``atan(tan(phi))``, which sends ``phi`` and ``phi + pi`` to the
-    same value. That has to be right rather than merely convenient, and it is: turning the
-    reference azimuth through ``pi`` flips ``s`` and ``p`` *together*, so the incident field
-    and the scattered field pick up the same sign and it cancels in every ratio.
+    At ``theta = 0`` the incident field is ``a_s*s_hat(phi) + a_p*p_hat(phi)``, and turning
+    the reference azimuth through ``pi`` reverses both basis vectors — so ``(phi + pi, psi)``
+    and ``(phi, polarization=(-a_s, -a_p))`` are **the same physical incident field**, written
+    two ways. Whatever frame the library reports in, the two spellings must agree wherever
+    they share a frame.
 
-    **Compared on the complex amplitudes, not on the efficiencies.** ``R`` is ``|r|**2`` and
-    cannot see a sign at all, so an ``R``-only version of this test passes against a
-    formulation that flips one of the two — measured: dropping the wrap moves ``r_s`` by
-    0.23 while leaving ``sum(R)`` identical to 1.9e-16. Efficiencies are the wrong instrument
-    for this particular claim.
+    They share a frame everywhere but the origin, and provably: at ``theta = 0`` the order
+    grid is ``kx_m = m*wl/Px``, ``ky_n = n*wl/Py``, which does not contain ``phi`` at all. So
+    every order except ``(0, 0)`` is reported against the identical basis in both runs, and
+    the amplitudes must be equal outright — not equal up to a sign, not equal in modulus.
 
-    ``phi`` and ``phi + pi`` land on the same ``varphi`` by construction, so this is the one
-    property the wrap exists to produce, asserted end to end.
+    That is what the wrap broke. It sent ``phi + pi`` to the same ``varphi`` as ``phi``, which
+    means the solve silently answered for ``phi`` — an incident field of the opposite sign to
+    the one asked for. The two spellings then came back negated on all 80 off-centre orders
+    (measured 2.8e-01 apart, and 1.2e-15 apart after negating), while ``R`` agreed to 2.8e-16
+    and hid it.
+
+    The ``(0, 0)`` order *is* allowed to differ by a sign here, and does: it is the one order
+    whose own reporting frame is the one being turned. Asserted rather than skipped, because
+    "the zeroth order flips too" and "nothing flips" are different states and only one of them
+    is right.
+
+    The old form of this test asserted the opposite — that ``phi`` and ``phi + pi`` agree
+    outright — on the reasoning that turning the frame flips ``s`` and ``p`` together so the
+    sign cancels in every ratio. It cancels for the zeroth order. It does not cancel for any
+    other, whose frame does not turn with ``phi``.
     """
+    psi = 0.7
+    pair = (-np.sin(psi), -np.cos(psi))
     for phi in (0.0, 0.3, 0.6108652381980153, 1.2, -0.4):
-        a = _solve(ucell=_UC_2D, fto=(4, 4), phi=phi, psi=0.7)
-        b = _solve(ucell=_UC_2D, fto=(4, 4), phi=phi + np.pi, psi=0.7)
+        by_azimuth = _solve(ucell=_UC_2D, fto=(4, 4), phi=phi + np.pi, psi=psi)
+        by_pair = _solve(ucell=_UC_2D, fto=(4, 4), phi=phi, psi=None, polarization=pair)
         for name in ('r_s', 'r_p', 't_s', 't_p'):
-            x = np.asarray(getattr(a.res_te_inc, name), dtype=np.complex128)
-            y = np.asarray(getattr(b.res_te_inc, name), dtype=np.complex128)
-            assert np.allclose(x, y, rtol=0, atol=1e-14), (
-                f'phi={phi}: {name} disagrees with phi+pi'
-                + (' by a sign' if np.allclose(x, -y, rtol=0, atol=1e-14) else ''))
+            x = np.asarray(getattr(by_azimuth.res, name), dtype=np.complex128)
+            y = np.asarray(getattr(by_pair.res, name), dtype=np.complex128)
+            assert np.abs(x).max() > 1e-3, f'{name} came back empty, so this asserts nothing'
+            off = np.ones(x.shape, dtype=bool)
+            off[4, 4] = False                       # the origin: its own frame is what turned
+            assert np.allclose(x[off], y[off], rtol=0, atol=1e-13), (
+                f'phi={phi}: {name} disagrees with the same field spelled as an amplitude '
+                'pair' + (' by a sign' if np.allclose(x[off], -y[off], rtol=0, atol=1e-13)
+                          else ''))
+            assert np.allclose(x[4, 4], -y[4, 4], rtol=0, atol=1e-13), (
+                f'phi={phi}: {name} at the zeroth order should differ by exactly a sign — '
+                'that is the order whose reporting frame the azimuth turned')
 
 
-def test_phi_plus_pi_agrees_on_the_reconstructed_field_too():
-    """The sharpest form of the same statement: six components over the whole cell.
+def test_phi_plus_pi_negates_the_reconstructed_field():
+    """The same statement in the global frame, where there is no basis to hide behind.
 
-    The amplitudes above are *ratios*, so a basis flip cancels in them by construction and
-    they cannot report one. The reconstructed field is a vector in the global ``xy`` frame,
-    where a flipped ``s``/``p`` pair would show up directly as a negated cell — which is what
-    a reader expects a ``pi`` rotation to do, and it is worth having the answer on record
-    rather than reasoned about.
+    The amplitudes are quoted in each order's own s/p frame, so someone can always argue about
+    which frame they are in. The reconstructed field is a vector in the global ``xy`` frame and
+    admits no such argument: turning the reference azimuth through ``pi`` reverses ``s_hat``
+    and ``p_hat``, hence the incident field, hence — Maxwell being linear — the whole cell.
 
-    Measured: identical, not negated (``|a - b| = 5e-14`` against a cell scale of 4.35). The
-    incident pair ``(a_s, a_p) = (sin psi, cos psi)`` does not depend on ``phi`` at all;
-    ``varphi`` is what carries ``phi`` into the global frame, and the wrap hands ``phi`` and
-    ``phi + pi`` the same one. So the two are the *same problem* here, not mirror images.
+    So the field must come back **negated**, exactly, and that is the assertion. Measured
+    ``|a + b| = 3.7e-14`` against a cell scale of 4.26, with ``|a - b| = 8.5``.
 
-    Stronger than the amplitude check in practice: six components across a grid rather than
-    four scalars, so an error confined to one component has nowhere to hide.
+    This test asserted the opposite until 2026-08-16, and was right about what the code did:
+    the origin wrap sent ``phi`` and ``phi + pi`` to one ``varphi``, so the solve answered for
+    ``phi`` either way and the cell came back identical. Identical is the wrong answer. The
+    incident pair ``(a_s, a_p)`` is written *against* the reference direction ``phi`` supplies,
+    so reversing that direction reverses the field it describes; a solve that returns the same
+    cell for both is quietly ignoring half of what ``phi`` means.
+
+    Six components across a grid rather than four scalars, so a sign confined to one component
+    has nowhere to hide.
     """
-    def cell(phi):
+    def cell(**kw):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             solver = wavebit.rcwa(backend=0, wavelength=500.0, period=[700.0, 700.0],
-                                  n_top=1.0, n_bot=1.5, theta=0.0, phi=phi, psi=0.7,
-                                  ucell=_UC_2D, thickness=[220.0], fto=[4, 4])
+                                  n_top=1.0, n_bot=1.5, theta=0.0,
+                                  ucell=_UC_2D, thickness=[220.0], fto=[4, 4], **kw)
             solver.conv_solve()
             return np.asarray(solver.calculate_field(res_x=6, res_y=6, res_z=5),
                               dtype=np.complex128)
 
+    psi = 0.7
     for phi in (0.3, 0.6108652381980153, 1.2):
-        a, b = cell(phi), cell(phi + np.pi)
+        a, b = cell(phi=phi, psi=psi), cell(phi=phi + np.pi, psi=psi)
         scale = float(np.max(np.abs(a)))
         assert scale > 1e-6, 'the field came back empty, so this asserts nothing'
-        assert np.max(np.abs(a - b)) < 1e-12 * scale, (
-            f'phi={phi}: the field disagrees with phi+pi'
-            + (' by a global sign' if np.max(np.abs(a + b)) < 1e-12 * scale else ''))
+        assert np.max(np.abs(a + b)) < 1e-12 * scale, (
+            f'phi={phi}: the field is not the negative of the phi+pi one'
+            + ('  (it is identical -- the azimuth is being read as a line, not a direction)'
+               if np.max(np.abs(a - b)) < 1e-12 * scale else ''))
+
+        # And the other spelling of that same reversal must land on the same cell.
+        pair = cell(phi=phi, psi=None, polarization=(-np.sin(psi), -np.cos(psi)))
+        assert np.max(np.abs(pair - b)) < 1e-12 * scale, (
+            f'phi={phi}: the amplitude-pair spelling of the same incident field gives a '
+            'different cell')
 
 
 @pytest.mark.parametrize('label, kw', [

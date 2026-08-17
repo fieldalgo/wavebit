@@ -364,14 +364,19 @@ def order_azimuth(xp, ky, kx, phi):
     including its purely-imaginary-``ky`` corner, where the branch is a genuine choice rather
     than a mistake — comes out bit-identical to what it was before.
 
-    **The origin is deliberately not part of this**, though it is the same ``atan``-of-a-ratio
-    spelling and does lose ``sign(cos(phi))`` the same way. There it buys something: it sends
-    ``phi`` and ``phi + pi`` to the same frame, which is the property
-    ``test_phi_and_phi_plus_pi_agree_at_normal_incidence`` exists to hold. That property and
-    continuity in ``phi`` cannot both be had — a map from ``phi`` to a frame is either
-    ``2pi``-periodic and continuous or ``pi``-periodic and not — so the origin is a real
-    convention choice where the half-plane was not, and it is left where it was found. What
-    it costs is written down in ``docs/amplitude-sp-frame.md`` for whoever revisits it.
+    **The origin is the same bug**, and gets the same term. There the "``kx``" whose sign the
+    ratio discards is ``cos(phi)``, so ``phi`` and ``phi + pi`` landed on one frame and a solve
+    handed ``phi + pi`` quietly answered for ``phi`` — an incident field of the opposite sign
+    to the one asked for.
+
+    It survived a round longer because it looked like it bought ``phi``/``phi + pi``
+    equivalence, on the argument that turning the reference azimuth flips ``s_hat`` and
+    ``p_hat`` together so the sign cancels in every ratio. It cancels for the zeroth order and
+    for no other: at ``theta = 0`` the grid is ``kx_m = m*wl/Px``, ``ky_n = n*wl/Py``, which
+    does not contain ``phi``, so no other order's frame turns with it. ``(phi + pi, psi)`` and
+    ``(phi, polarization=(-a_s, -a_p))`` are the same physical field written two ways, and they
+    disagreed by a sign on all 80 off-centre orders while ``R`` agreed to 2.8e-16 and hid it.
+    ``test_the_two_spellings_of_one_incidence_agree`` is that measurement.
 
     The complex dtype is what made the detour load-bearing rather than optional: ``ky / 0``
     is ``inf + nan*j`` for a complex array rather than the real case's ``inf``, so the NaN
@@ -397,5 +402,7 @@ def order_azimuth(xp, ky, kx, phi):
     varphi = xp.where(zero_kx, right_angle, varphi)
 
     p = as_array(xp, 0.0 if phi is None else phi, dtype=varphi.dtype)
-    incident = xp.atan(xp.sin(p) / xp.cos(p)) + xp.zeros_like(varphi)
+    # Same term, same reason: at the origin the "kx" whose sign the ratio dropped is cos(phi).
+    incident = (xp.atan(xp.sin(p) / xp.cos(p))
+                + _PI * xp.astype(xp.real(xp.cos(p)) < 0, varphi.dtype)) + xp.zeros_like(varphi)
     return xp.reshape(xp.where(zero_kx & (ky == 0), incident, varphi), (-1,))

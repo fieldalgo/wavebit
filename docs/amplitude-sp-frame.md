@@ -13,8 +13,12 @@ algebra: it cancels out of every efficiency, out of energy conservation, out of 
 reconstructed field, and out of every external golden this project has. It survived in exactly
 one observable, the sign of the reported amplitudes, and nothing in the suite compared those
 across orders. Fixed by adding back the sign the ratio dropped; `R` and `T` are unchanged to
-the bit on every case measured. The origin (`kx == ky == 0`) is the same spelling and is
-**deliberately left alone** -- Sec. 4.
+the bit on every case measured.
+
+The origin (`kx == ky == 0`, the zeroth order at exactly `theta = 0`) is the same spelling with
+`cos(phi)` in place of `kx`, and had the same defect: `phi` and `phi + pi` landed on one frame,
+so a solve handed `phi + pi` quietly answered for `phi`. Fixed in a second commit -- Sec. 4,
+which is also the record of why it was mistaken for a convention for one round.
 
 ---
 
@@ -140,42 +144,45 @@ case**. The `kx == 0` column three lines below took its sign from `Re(ky)`, whic
 `z_hat x k_hat` rule, while the `Re(kx) < 0` half-plane did not -- so at `kx = -1e-12` it
 returned `sin(varphi) = -1` and at `kx = 0` it returned `+1`.
 
-## 4. What was *not* changed, and why
+## 4. The origin, which is the same bug
 
-The origin, `kx == ky == 0`, is filled with `atan(sin(phi)/cos(phi))`. That is the same
-`atan`-of-a-ratio spelling and it loses `sign(cos(phi))` the same way, sending `phi` and
-`phi + pi` to the same frame. It is left exactly as it was.
+`kx == ky == 0` -- the zeroth order at exactly `theta = 0`, where the in-plane wavevector
+carries no direction and `phi` supplies one -- was filled with `atan(sin(phi)/cos(phi))`. Same
+`atan`-of-a-ratio spelling, same missing sign: at the origin the "`kx`" whose sign the ratio
+discards *is* `cos(phi)`. So `phi` and `phi + pi` landed on one frame.
 
-The reason is that here the wrap **buys something**, and the two properties are mutually
-exclusive:
+This was fixed one round later than the half-plane, because it looked like it bought something
+-- `phi` and `phi + pi` giving the same answer, which two tests pinned with an argument. The
+argument was that turning the reference azimuth through `pi` flips `s_hat` and `p_hat`
+*together*, so the incident field and the scattered field pick up the same sign and it cancels
+in every ratio. It cancels for the zeroth order. **It does not cancel for any other**, because
+at `theta = 0` the order grid is `kx_m = m*wl/Px`, `ky_n = n*wl/Py` -- which does not contain
+`phi` at all, so no other order's frame turns with it.
 
-* `phi` and `phi + pi` give the same answer -- pinned by
-  `test_phi_and_phi_plus_pi_agree_at_normal_incidence` and, on the field,
-  `test_phi_plus_pi_agrees_on_the_reconstructed_field_too`;
-* the frame is continuous in `phi`.
+**The measurement that settles it.** The incident field at `theta = 0` is
+`a_s*s_hat(phi) + a_p*p_hat(phi)`, so `(phi + pi, psi)` and `(phi, polarization=(-a_s, -a_p))`
+are the *same physical incident field* written two ways -- and every order but `(0, 0)` is
+reported against an identical basis in both. 8x8 cell, `fto = [4, 4]`, `psi = 0.7`, `phi = 0.3`:
 
-A map from `phi` to a frame is either `2pi`-periodic and continuous or `pi`-periodic and not;
-no spelling has both. On the `Re(kx) < 0` half-plane there was no such trade -- the wrap bought
-nothing and cost continuity, so it was a defect. At the origin it is a genuine choice, and
-changing it is a decision about the public amplitude convention rather than a bug fix.
+| | before | after |
+| --- | --- | --- |
+| the two spellings, 80 off-centre orders | **2.8e-01** apart (1.2e-15 after negating) | 1.6e-15 |
+| the two spellings, `(0, 0)` | -- | a sign, which is correct: that order's frame is the one that turned |
+| the two spellings, reconstructed field | -- | 3.7e-14 on a cell scale of 4.26 |
+| `R` | 2.8e-16 -- agreed throughout, and hid all of it | unchanged |
 
-What the current choice costs, measured rather than reasoned, so the next reader does not have
-to re-derive it. A 8x8 cell, `theta = 0`, `fto = [4, 4]`, `psi = 0.7`, solved at
-`phi = pi/2 -+ 1e-9`:
+Negating `(a_s, a_p)` negates every reported amplitude, bit-exactly (`0.00e+00`) -- the library
+keeps overall phase, as `conventions.md` says it does. Turning `phi` by `pi` is the same
+operation on the same field. The two disagreeing is a contradiction, not a convention.
 
-| | across `phi = pi/2` |
-| --- | --- |
-| `R` | 2.1e-11 -- continuous |
-| `r_s`, `abs(a - b)` | 2.3e-01 |
-| `r_s(m, n) ratio`, every order but `(0, 0)` | exactly `-1` |
-| `r_s(0, 0) ratio` | `+1` |
+The field says it most plainly, and it is what the second rewritten test now asserts: with
+`phi + pi` the reconstructed cell must come back **negated** (`|a + b| = 3.7e-14` against a
+scale of 4.26). It used to come back identical, which is a solve quietly answering for `phi`
+when it was handed `phi + pi`.
 
-The wrap reverses the frame of the zeroth order alone, and since that order is also what the
-incident polarization is written in, the whole scattered field negates with it -- leaving every
-*other* order's amplitude negated relative to the specular one. It is the same class of
-discontinuity as Sec. 3(c), confined to `theta = 0` and to `phi` crossing `+-pi/2`. Anyone
-revisiting this should decide which of the two properties the library wants and say so on
-`conventions.md`; it cannot keep both.
+Continuity falls out for free: sweeping `phi` through `pi/2` at `theta = 0` used to flip every
+order's `r_s` except the zeroth (`2.3e-01`) while `R` sailed through; it is now `2.3e-10`,
+which is the `1e-9` step in `phi` itself.
 
 ## 5. What the fix touches
 
