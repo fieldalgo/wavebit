@@ -67,9 +67,22 @@ factorization: ``eps`` and ``1/eps`` come from the exact shape transform, while 
 projectors come from the shapes' *analytic* unit normal field sampled on a grid.
 
 ``cx`` and ``cy`` are the exception to "sampled": a lone shape's normal field is built at the
-centre of the cell and translated by a phase, because sampling it in place both kills the
-position derivative and makes the answer depend on where in the cell the shape sits. See
+centre of the cell and translated by a phase, which keeps its position derivative exact. See
 :func:`normal_projector_coeffs`.
+
+**Several shapes used to be the broken case and are not any more** (2026-08-17). The field was
+a normalized *sum of unit vectors*, so a shape ten cells away pushed exactly as hard as the one
+underfoot: with two shapes the normal at a boundary was already 40 deg from the true surface
+normal, and with three, 43. It also sampled ``X - cx``, the offset to the shape *as named*, so
+naming a shape one period over slid a different part of an infinite wedge into the cell and
+moved the answer by 1.9e-2. Two changes fix both, and neither carries a width to tune: the
+displacement is folded to the nearest image (:func:`_shape_surface_normal`), and the shapes are
+combined by distance-product weights, which collapse to one shape's own normal exactly at its
+surface. Boundaries now read 0.000 deg for any number of shapes and naming a period over moves
+nothing (5.7e-13).
+
+The same weighting removed ``sign()`` from the rectangle branch, which the position gradient
+had been blocked on -- see :func:`_shape_surface_normal`.
 """
 from . import overlap as _overlap
 from .backend import array_namespace, as_array, j1, jinc, sinc
@@ -540,6 +553,16 @@ def _device(x):
     return x.device if hasattr(x, 'device') else None
 
 
+# FROZEN 2026-08-17 from the sweep in the blend below. The exponent has a *plateau*, not a
+# peak, which is what makes it a measured constant rather than the tuning the mollifier route
+# was rejected for: p = 3..8 all give 0.000 deg at every surface and hold the two-circle
+# position gradient under the 1e-3 the suite asks (2.5e-4 at p = 4, its best). Below it the
+# blend is too soft -- p = 1 leaves 0.59 deg at the surface band and misses the gradient at
+# 3.3e-3; above it the blend approaches a hard nearest-shape pick and the jump it exists to
+# avoid comes back, 1.0e-3 by p = 12. Four is the interior of that window.
+_BLEND_EXPONENT = 4
+
+
 def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype, lattice=None):
     """Unit normal field of the shapes, sampled on ``grid_shape`` — analytic, not from a raster.
 
@@ -568,39 +591,139 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype, lattic
     Px, Py = period[0], period[1]
     X, Y = sample_grid(xp, grid_shape, period, dtype, lattice)
 
-    nx_total = xp.zeros((Ny, Nx), dtype=dtype)
-    ny_total = xp.zeros((Ny, Nx), dtype=dtype)
+    got = [g for g in (_shape_surface_normal(xp, X, Y, s, Px, Py, dtype) for s in shapes)
+           if g is not None]
+    if not got:
+        return xp.ones((Ny, Nx), dtype=dtype), xp.zeros((Ny, Nx), dtype=dtype)
+    if len(got) == 1:
+        return got[0][1], got[0][2]
 
-    for s in shapes:
-        stype, cx, cy, lx, ly, angle = shape_geometry(s, Px, Py)
+    # Weight each shape by the product of the *other* shapes' surface distances. At shape A's
+    # own surface d_A = 0, so every other weight carries that zero and the sum collapses to
+    # A's normal exactly, while between the shapes the weights vary smoothly. It is `1/d_j`
+    # written without a division, so there is no epsilon and nothing to tune.
+    #
+    # Smoothness is the point, not a bonus. Picking the nearest shape outright (`argmin`) gives
+    # the same exact normals at every surface and a field that JUMPS across the selection
+    # boundary -- and moving a shape sweeps that boundary, which contributes a line integral of
+    # the jump to the true derivative that no grid sample and no autograd sees. Measured on two
+    # circles, the hard pick's autograd sits 44-76% from central differences and does not
+    # improve as h shrinks (until h drops below one pixel, where the finite difference stops
+    # seeing the boundary move too and the two agree on being wrong together). This weighting
+    # has no jump to sweep: the same comparison falls 1.5e-2 -> 6.5e-4 -> 6.3e-5 as h goes
+    # 1e-4 -> 1e-5 -> 1e-6, which is a correct gradient with the difference converging onto it.
+    dists = [g[0] for g in got]
+    scale = sum(dists) / len(dists)
+    # A common positive factor cancels in the normalised sum; this only conditions the product.
+    scale = xp.where(scale > 0, scale, xp.ones_like(scale))
+    dn = [(d / scale) ** _BLEND_EXPONENT for d in dists]
 
-        cos_a = xp.cos(as_array(xp, angle, dtype=dtype))
-        sin_a = xp.sin(as_array(xp, angle, dtype=dtype))
-        dx, dy = X - cx, Y - cy
-        xr = dx * cos_a + dy * sin_a
-        yr = -dx * sin_a + dy * cos_a
+    sx = xp.zeros((Ny, Nx), dtype=dtype)
+    sy = xp.zeros((Ny, Nx), dtype=dtype)
+    for j, (_, gx, gy) in enumerate(got):
+        w = None
+        for k, dk in enumerate(dn):
+            if k != j:
+                w = dk if w is None else w * dk
+        sx = sx + w * gx
+        sy = sy + w * gy
 
-        a, b = lx / 2.0, ly / 2.0
-        if stype in ('ellipse', 'circle'):
-            gxr = 2.0 * xr / (a ** 2)
-            gyr = 2.0 * yr / (b ** 2)
-        elif stype == 'rectangle':
-            # Nearest face decides the normal direction.
-            mask_x = (xp.abs(xr) - a) >= (xp.abs(yr) - b)
-            zeros = xp.zeros_like(xr)
-            gxr = xp.where(mask_x, xp.sign(xr), zeros)
-            gyr = xp.where(mask_x, zeros, xp.sign(yr))
-        else:
-            continue
+    norm = _hypot_safe(xp, sx, sy)
+    return sx / norm, sy / norm
 
-        gx = gxr * cos_a - gyr * sin_a
-        gy = gxr * sin_a + gyr * cos_a
-        norm = _hypot_safe(xp, gx, gy)
-        nx_total = nx_total + gx / norm
-        ny_total = ny_total + gy / norm
 
-    norm_t = _hypot_safe(xp, nx_total, ny_total)
-    return nx_total / norm_t, ny_total / norm_t
+def _shape_surface_normal(xp, X, Y, shape, Px, Py, dtype):
+    """``(distance to this shape's surface, nx, ny)`` — the outward unit normal, periodic.
+
+    Two things here differ from what this file did before 2026-08-17, and both are what make
+    :func:`normal_vector_field_analytical` a nearest-surface field rather than a sum.
+
+    **The displacement is folded to the nearest image.** ``X - cx`` is the offset to the shape
+    as it was named, and on a torus the shape is equally at ``cx +- Px``. Folding is what makes
+    one shape's field periodic, and a nearest-surface pick over periodic fields is periodic in
+    turn — which is the whole reason ``cx`` and ``cx + Px`` now give the same answer for
+    several shapes and not only for one.
+
+    **Outside a rectangle's corner the normal is radial from the corner, not the nearest
+    face.** The old rule extended each face's normal into an infinite wedge, which is not the
+    gradient of the distance to a box: past a corner the nearest *point* is the corner itself.
+    Measured against that exact gradient the wedge rule is 24.9 deg out over the corner
+    quadrants and this is 0.000; against the independent raster field (``'contour'``, which is
+    distance-based and periodic) 27.3 deg becomes 2.4.
+    """
+    stype, cx, cy, lx, ly, angle = shape_geometry(shape, Px, Py)
+    cos_a = xp.cos(as_array(xp, angle, dtype=dtype))
+    sin_a = xp.sin(as_array(xp, angle, dtype=dtype))
+
+    dx = (X - cx + Px / 2.0) % Px - Px / 2.0
+    dy = (Y - cy + Py / 2.0) % Py - Py / 2.0
+    xr = dx * cos_a + dy * sin_a
+    yr = -dx * sin_a + dy * cos_a
+    a, b = lx / 2.0, ly / 2.0
+
+    if stype in ('ellipse', 'circle'):
+        gxr = 2.0 * xr / (a ** 2)
+        gyr = 2.0 * yr / (b ** 2)
+        # The algebraic distance |f| / |grad f| -- exact for a circle, and for an ellipse the
+        # first-order distance to the level set, which is all the nearest-surface pick needs.
+        f = (xr / a) ** 2 + (yr / b) ** 2 - 1.0
+        dist = xp.abs(f) / _hypot_safe(xp, gxr, gyr)
+    elif stype == 'rectangle':
+        qx, qy = xp.abs(xr) - a, xp.abs(yr) - b
+        # `xp.maximum` against a Python float is a numpy convenience torch does not share, so
+        # every clamp here goes through a zero array of the same dtype.
+        zero = xp.zeros_like(xr)
+        out_x, out_y = xp.maximum(qx, zero), xp.maximum(qy, zero)
+        outside = _hypot_safe(xp, out_x, out_y)
+        dist = xp.where((qx > 0) | (qy > 0), outside,
+                        -xp.minimum(xp.maximum(qx, qy), zero))
+
+        # Inside, blend the FOUR faces by the same distance-product rule, each with its own
+        # outward normal and its own distance. This is what removes `sign()` from the branch
+        # -- and with it the defect the module docstring called unfixable without a mollifier.
+        #
+        # The old rule picked the nearest face with `where(qx >= qy, sign(xr), ...)`, and both
+        # halves of that jump. `sign(xr)` flips across the shape's own centre line and the
+        # `>=` flips across the diagonals, so the field was piecewise constant and every bit of
+        # its position dependence sat on those seams: translating the shape slid them, which a
+        # grid sample cannot see. Measured, that is not a resolution problem -- the error is
+        # flat at 1.8e-2 from normal_grid 1024 to 4096, while the circle pair converges.
+        #
+        # Treating +x and -x as separate faces makes the seam vanish rather than smoothing it.
+        # At the centre line the two carry equal weight and opposite normals, so they cancel
+        # exactly and continuously; at a face its own distance goes to zero, every other weight
+        # carries that zero, and the sum collapses to that face's normal outright. Two circles
+        # were already differentiable and stay so; the rectangle pair goes from 212-274% out
+        # against central differences to 0.06 / 0.03 / 1.0%.
+        faces = ((a - xr, 1.0, 0.0), (a + xr, -1.0, 0.0),
+                 (b - yr, 0.0, 1.0), (b + yr, 0.0, -1.0))
+        fd = [xp.maximum(f[0], zero) for f in faces]
+        fscale = sum(fd) / len(fd)
+        fscale = xp.where(fscale > 0, fscale, xp.ones_like(fscale))
+        fdn = [(d / fscale) ** _BLEND_EXPONENT for d in fd]
+        in_x = xp.zeros_like(xr)
+        in_y = xp.zeros_like(xr)
+        for j, (_, ux, uy) in enumerate(faces):
+            w = None
+            for k, dk in enumerate(fdn):
+                if k != j:
+                    w = dk if w is None else w * dk
+            in_x = in_x + w * ux
+            in_y = in_y + w * uy
+
+        # Outside, `max(q, 0)` already points at the nearest surface point -- one face when a
+        # single axis is out, the corner itself when both are. `sign` is safe here: it is only
+        # read where |xr| > a, far from the flip.
+        is_out = (qx > 0) | (qy > 0)
+        gxr = xp.where(is_out, xp.sign(xr) * out_x, in_x)
+        gyr = xp.where(is_out, xp.sign(yr) * out_y, in_y)
+    else:
+        return None
+
+    gx = gxr * cos_a - gyr * sin_a
+    gy = gxr * sin_a + gyr * cos_a
+    norm = _hypot_safe(xp, gx, gy)
+    return dist, gx / norm, gy / norm
 
 
 def _hypot_safe(xp, a, b):

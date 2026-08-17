@@ -1,11 +1,15 @@
 """Gradients where the analytic normal field has no direction to report.
 
 :func:`wavebit._core.analytic.normal_vector_field_analytical` normalizes twice — once per
-shape, once over the sum — and both norms reach exactly zero on perfectly ordinary geometry:
+shape, once over the combination — and the norm reaches exactly zero on perfectly ordinary
+geometry: **a shape's own centre**, where its level-set gradient ``g`` vanishes.
 
-* a shape's own centre, where its gradient ``g`` vanishes;
-* the locus between two symmetrically placed shapes, where their unit normals are exactly
-  opposed and cancel.
+A second zero used to sit beside it — the locus between two symmetrically placed shapes, where
+their unit normals opposed and cancelled. That one belonged to the old *sum of unit vectors*;
+the distance-product combination that replaced it on 2026-08-17 cannot cancel, and
+``test_a_zero_norm_configuration_is_actually_reached`` records that it is no longer reachable.
+The guard below is unchanged and still needed: the per-shape zero is the one the NaN came
+through, and it is reachable with a single shape.
 
 Zero was already guarded, but on the *output* of the root: ``n = (a*a + b*b)**0.5`` followed by
 ``where(n == 0, 1, n)``. That fixes the forward value and nothing else. Autograd still
@@ -63,21 +67,39 @@ def _grid_point(i, n=NORMAL_GRID):
     return (i + 0.5) * P / n
 
 
-def test_the_cancelling_configuration_is_actually_reached():
+def test_a_zero_norm_configuration_is_actually_reached():
     """First: that the case exists at all, so the tests below cannot pass by missing it.
 
-    The zeros are exact, not merely small, and they are what the guard keys on. Half a grid
-    cell away there are none — which is why the NaN read as intermittent rather than as a
-    property of the geometry.
+    **One of the two zeros this file was written for is gone**, and the other is what this now
+    guards. The header describes a field that normalized twice -- once per shape, once over the
+    sum of unit vectors -- and the second normalization reached zero wherever two shapes' unit
+    normals opposed exactly. Since 2026-08-17 the shapes are combined by distance-product
+    weights instead of summed as unit vectors, so that cancellation has no way to occur:
+    ``_twin_circles(0.0)``, built for exactly this, now yields no zeros at all.
+
+    The remaining zero is the one inside the per-shape loop: a shape's own centre, where its
+    level-set gradient ``g`` vanishes and no weighting can put a direction back. It is reachable
+    with a single shape whose centre lands on a sample, which is what this asserts -- and it
+    keeps the guard live, because that is the zero the NaN came through. Note it takes a *lone*
+    shape: with a second shape in the layer the blend contributes a direction at the first
+    shape's centre, so the zero closes.
     """
-    def zeros_at(d):
-        nx, ny = normal_vector_field_analytical(
-            jnp, (NORMAL_GRID, NORMAL_GRID), _twin_circles(d), (P, P), jnp.float64)
-        # The normalized field is zero exactly where the guard fired.
+    def zeros_for(shapes, n=NORMAL_GRID):
+        nx, ny = normal_vector_field_analytical(jnp, (n, n), shapes, (P, P), jnp.float64)
         return int(np.count_nonzero(np.asarray(nx) ** 2 + np.asarray(ny) ** 2 == 0))
 
-    assert zeros_at(0.0) > 0
-    assert zeros_at(0.03) == 0
+    n = 256
+    c = _grid_point(100, n)
+    for kind in ('circle', 'ellipse', 'rectangle'):
+        centred = dict(type=kind, cx=c, cy=c, lx=0.20 * P, ly=0.10 * P, n_index=3.0)
+        assert zeros_for([centred], n) > 0, kind
+
+    # Half a grid cell away there are none, which is why the NaN read as intermittent.
+    off = dict(type='circle', cx=c + 0.5 * P / n, cy=c, lx=0.20 * P, n_index=3.0)
+    assert zeros_for([off], n) == 0
+
+    # And the cancellation the sum used to produce is simply not reachable any more.
+    assert zeros_for(_twin_circles(0.0)) == 0
 
 
 def test_symmetric_two_shape_layer_has_a_finite_position_gradient():

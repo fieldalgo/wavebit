@@ -173,36 +173,41 @@ def test_the_position_reaches_the_projectors_through_that_phase():
     assert abs(auto - fd) < 1e-6 * abs(fd), (auto, fd)
 
 
-def test_the_rectangle_normal_field_still_cannot_carry_a_position():
-    """Why the phase exists, pinned where it happens.
+def test_the_sampled_field_no_longer_depends_on_where_in_the_cell_a_shape_SITS():
+    """What ``sign()`` used to hide, and what removing it exposed instead.
 
-    ``<nx**2>`` over the cell moves when the shape moves — finite differences say so for all
-    three shapes. Autograd agrees for the ellipse and the circle and returns *exactly* zero for
-    the rectangle, which is what ``sign()`` does: it is silent, it raises nothing, and zero is
-    indistinguishable from "this term does not contribute". Nothing here is fixed and nothing
-    here needs to be; ``normal_projector_coeffs`` simply stopped sending a position through it.
+    This replaced ``test_the_rectangle_normal_field_still_cannot_carry_a_position`` on
+    2026-08-17. That test asserted ``autograd == 0.0`` for a rectangle -- the signature of
+    ``sign()``, whose derivative vanishes -- against a finite central difference, and called
+    the difference real. It was not. Its own docstring said so: "That ``<nx**2>`` moves at all
+    is the clipped window, not physics: a circle's mean ``nx**2`` is 1/2 by symmetry and reads
+    1/2 only when it sits at the centre of the cell."
 
-    Its other half is the finite difference itself. That ``<nx**2>`` moves at all is the clipped
-    window, not physics: a circle's mean ``nx**2`` is 1/2 by symmetry and reads 1/2 only when it
-    sits at the centre of the cell.
+    Folding the displacement to the nearest image removed the window, so the quantity that
+    test differentiated is now flat. A circle reads 1/2 wherever it sits (2.7e-7 across a whole
+    period, against a construction that used to swing 0.44 to 1.00), and a rectangle is flat to
+    7e-5. What is left inside one pixel is a sawtooth of that amplitude which returns exactly
+    at the next sample -- resampling, not geometry, and it flips sign with the grid
+    (-4.4e-2 / +6.7e-2 / -3.7e-2 at N = 128 / 256 / 512). Differentiating it measures the
+    resampling, which is why the replacement asserts flatness rather than a derivative.
+
+    The position gradient that *is* physical -- one shape moving relative to another -- is
+    measured at the solve in the two tests above, where it converges under grid refinement
+    rather than changing sign.
     """
     from wavebit._core.analytic import normal_vector_field_analytical
 
     def mean_nx2(kind, cy):
         nx, _ = normal_vector_field_analytical(
             jnp, (256, 256), [_shape(kind, 'cy', cy)], (P, P), jnp.float64)
-        return jnp.mean(nx ** 2)
+        return float(jnp.mean(nx ** 2))
 
-    cy, h = 0.31 * P, 1e-4
-    for kind in ('rectangle', 'ellipse', 'circle'):
-        auto = float(jax.grad(lambda v: mean_nx2(kind, v))(jnp.asarray(cy)))
-        fd = float((mean_nx2(kind, jnp.asarray(cy + h))
-                    - mean_nx2(kind, jnp.asarray(cy - h))) / (2 * h))
-        assert abs(fd) > 1e-3, (kind, fd)          # the field really does depend on cy
-        if kind == 'rectangle':
-            assert auto == 0.0, (kind, auto)       # ...and autograd says it does not
-        else:
-            assert abs(auto - fd) < 0.05 * abs(fd), (kind, auto, fd)
+    for kind, tol in (('circle', 1e-5), ('ellipse', 1e-4), ('rectangle', 1e-3)):
+        seen = [mean_nx2(kind, c * P) for c in (0.10, 0.31, 0.50, 0.77, 1.31)]
+        assert np.ptp(seen) < tol, (kind, seen)
+
+    # A circle's mean nx**2 is 1/2 by symmetry, and now reads it from anywhere in the cell.
+    assert abs(mean_nx2('circle', 0.13 * P) - 0.5) < 1e-4
 
 
 # ------------------------------------------------------------------ more than one layer
@@ -352,21 +357,25 @@ def test_two_smooth_shapes_already_carry_a_correct_relative_gradient():
         assert abs(auto - fd) < 1e-3 * abs(fd), (d, auto, fd)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="a rectangle's normals end in sign(), and with a second shape in the layer there is "
-           'no phase to route its position around that: moving it relative to the other really '
-           'does reshape the normalized sum, and a grid cannot see a piecewise-constant '
-           "field's derivative")
 def test_two_rectangles_carry_a_correct_relative_gradient_too():
-    """The half that is broken, at the point where it breaks.
+    """The half that used to be impossible, and what made it possible.
 
-    Same question as above with rectangles instead of circles, and autograd is off by 11% to
-    105% against central differences. This is ``sign()`` again — the same zero derivative the
-    single-shape case had — but here the phase cannot be used to route around it, because the
-    field genuinely changes shape rather than translating.
+    Until 2026-08-17 a rectangle's normals ended in ``sign()`` and the nearest face was picked
+    with a hard ``where``, so the field was piecewise constant: all of its position dependence
+    sat on seams that translating the shape slid across, and a grid sample cannot see a seam
+    move. That is not a resolution problem -- the error was flat at 1.8e-2 from normal_grid
+    1024 to 4096 while the circle pair converged -- and the only escape on offer was a ``tanh``
+    mollification, rejected because no width served both this and
+    ``test_analytic_angle_is_smooth_through_normal``.
+
+    The seams are gone rather than smoothed. Treating +x and -x (and +y, -y) as four separate
+    faces blended by distance products makes them cancel exactly at the centre line and
+    collapse exactly at each face, with no width anywhere: autograd goes from 212-274% out to
+    1e-5. ``h`` is 1e-6 rather than 1e-5 because the difference, not the derivative, is the
+    limiting party here -- at 1e-5 the d = 0.08 point sits at 1.00e-2 on truncation alone, and
+    every point converges as h shrinks.
     """
-    h = 1e-5
+    h = 1e-6
     for d in (0.02, 0.05, 0.08):
         auto = float(jax.grad(lambda c: _two_jtotal(TWO_RECTANGLES, c, CB))(jnp.asarray(CA + d)))
         fd = (_two_total(TWO_RECTANGLES, CA + d + h, CB)
@@ -375,54 +384,56 @@ def test_two_rectangles_carry_a_correct_relative_gradient_too():
         assert abs(auto - fd) < 1e-2 * abs(fd), (d, auto, fd)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason='a layer of several shapes takes a normalized sum of their fields, which no single '
-           'phase translates, so its normal field is still sampled in place; centring on the '
-           'mean of the shape centres fixes this but manufactures exact cancellations (see the '
-           'note above this test)')
 def test_a_layer_of_two_shapes_is_translation_invariant_too():
-    """The other half: a common translation, which is the same zero a lone shape gets exactly.
+    """Sliding every shape together is one structure named twice, and no phase carries it.
 
-    Moving *both* shapes by the same amount is one physical translation, so this is the same
-    statement ``test_translation_invariance_holds_in_the_objective`` makes. A multi-shape layer
-    keeps the sampled field and the clipped window: 7.1e-4 on ``sum(R)`` here, 1.2e-4 for
-    the tighter pairs above, against the 1.5e-14 a lone shape gets.
+    A lone shape is translated by a phase on its coefficients, which is exact. Several shapes
+    combine nonlinearly, so a common shift is not a common factor and the field has to be
+    right about the shift itself. It now is: fold the displacement to the nearest image and the
+    combination of periodic fields is periodic.
 
-    Interpolating each shape's field onto the common grid was tried and rejected — it brings the
-    forward spread down to 7e-5 but the residue oscillates over one grid cell, so the *gradient*
-    lands at 2e-1, worse than the bias it would remove.
+    Stated at two tolerances because two different things are being measured. A shift that
+    lands on the sampling grid is exact -- the same field read at the same points. A
+    fractional-pixel shift resamples it elsewhere and leaves a discretization residual that
+    converges with the grid (7.3e-6, 5.2e-6, 1.8e-6, 7.6e-7 at normal_grid 256 to 2048), which
+    is what separates it from the clipped window this used to measure at 1e-2.
     """
-    cfg = dict(period=[1.0, 1.2], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
-               wavelength=0.777, n_top=1.0, n_bot=1.5, fto=[4, 4])
+    cfg = dict(backend=0, period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), fto=(4, 4),
+               n_top=1.0, n_bot=1.45, theta=0.0, phi=None, psi=np.pi / 2)
 
-    def total(d):
-        ucell = [dict(n_base=1.0, shapes=[
-            dict(type='rectangle', cx=0.30 + d, cy=0.40, lx=0.25, ly=0.20, angle=0.4,
-                 n_index=3.5),
-            dict(type='circle', cx=0.70 + d, cy=0.80, lx=0.25, n_index=2.5)])]
+    def total(d, grid=256):
+        shapes = [dict(type='rectangle', cx=0.30 + d, cy=0.5, lx=0.30, ly=0.24, angle=0.0,
+                       n_index=3.48),
+                  dict(type='circle', cx=0.70 + d, cy=0.30, lx=0.22, angle=0.0, n_index=2.4)]
+        ucell = [dict(n_base=1.0, shapes=shapes)]
         return float(np.sum(np.asarray(
-            wavebit.rcwa(backend=0, ucell=ucell, **cfg).conv_solve().R)).real)
+            wavebit.rcwa(ucell=ucell, normal_grid=grid, **cfg).conv_solve().T)).real)
 
-    values = [total(d) for d in np.linspace(0.0, 0.2, 9)]
-    assert np.ptp(values) < 1e-12, np.ptp(values)
+    on_grid = [total(k / 256) for k in (0, 8, 16, 32, 64)]
+    assert np.ptp(on_grid) < 1e-11, np.ptp(on_grid)
+
+    coarse = np.ptp([total(d, 256) for d in np.linspace(0.0, 0.2, 5)])
+    fine = np.ptp([total(d, 1024) for d in np.linspace(0.0, 0.2, 5)])
+    assert coarse < 1e-4, coarse
+    assert fine < coarse, (coarse, fine)
 
 
-def test_a_multishape_layer_is_not_periodic_across_the_cell_edge():
-    """Pins the *forward* half of the same defect, which is easy to meet by accident.
+def test_a_multishape_layer_is_periodic_across_the_cell_edge():
+    """The invariant the normalized-sum field could not hold, and this one does.
 
-    A shape straddling the cell boundary can be named in any period -- ``cx`` and ``cx + Px``
-    are one structure -- and a single-shape layer agrees across periods exactly, because the
-    phase in ``normal_projector_coeffs`` carries it. A multi-shape layer does not: its field is
-    a normalized sum that no single phase translates, so the clipped window comes back and the
-    answer depends on which period the shape was named in.
+    A shape straddling the cell boundary may be named in any period -- ``cx`` and ``cx + Px``
+    are one structure -- so every efficiency must be unchanged. A single-shape layer always
+    agreed, because the phase in ``normal_projector_coeffs`` carries it. A multi-shape layer
+    did not, and could not: the field was a normalized sum of each shape's field sampled at
+    ``X - cx``, which is the displacement to the shape *as named*, so naming it a period over
+    slid a different part of an infinite wedge into the window. Spread was 1.9e-2 on this case,
+    and the caller's only defence was the docstring telling them to clamp the centres.
 
-    This is an assertion of what the code *does*, not of what it should do. It is here so the
-    day someone fixes ``normal_projector_coeffs`` for several shapes, this fails loudly and
-    gets deleted rather than quietly continuing to describe a repaired path.
-
-    The practical consequence is in the docstring: keep every shape inside the cell, and clamp
-    the centres if an optimizer is moving them.
+    Both halves of the fix show here. The displacement is folded to the nearest image, so one
+    shape's field is periodic; and the shapes are combined by distance-product weights rather
+    than as a sum of unit vectors, so the combination of periodic fields stays periodic. This
+    test replaced ``test_a_multishape_layer_is_not_periodic_across_the_cell_edge`` on
+    2026-08-17, which existed to fail loudly on the day the path was repaired.
     """
     cfg = dict(backend=0, period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), fto=(4, 4),
                n_top=1.0, n_bot=1.45, theta=0.0, phi=None, psi=np.pi / 2)
@@ -435,15 +446,14 @@ def test_a_multishape_layer_is_not_periodic_across_the_cell_edge():
         return float(np.sum(np.asarray(
             wavebit.rcwa(ucell=ucell, normal_grid=256, **cfg).conv_solve().T)).real)
 
-    # one shape: exact across periods, which is what makes the contrast meaningful
     alone = [total(cx, []) for cx in (0.10, 1.10, 2.10)]
     assert np.ptp(alone) < 1e-12, alone
 
-    # two shapes: not periodic. Spread is ~1.5e-2 -- far above any tolerance a caller would set
     pair = [total(cx, [fixed]) for cx in (0.10, 1.10, 2.10)]
-    assert np.ptp(pair) > 1e-3, pair
+    assert np.ptp(pair) < 1e-9, pair
 
-    # and it is the normal field alone: the permittivity coefficients are periodic
+    # The projector coefficients are what used to move; the permittivity never did. Comparing
+    # both keeps this a statement about the normal field rather than about the solve.
     shapes = lambda cx: [dict(type='rectangle', cx=cx, cy=0.5, lx=0.30, ly=0.24, angle=0.0,
                               n_index=3.48), fixed]
     eps = [np.asarray(_an.assemble_eps_coeffs(np, shapes(cx), 1.0, 4, 4, (1.0, 1.0),
@@ -452,4 +462,29 @@ def test_a_multishape_layer_is_not_periodic_across_the_cell_edge():
     nxx = [np.asarray(_an.normal_projector_coeffs(np, shapes(cx), (256, 256), (1.0, 1.0),
                                                   4, 4, np.complex128)[0])
            for cx in (0.10, 1.10)]
-    assert np.max(np.abs(nxx[0] - nxx[1])) > 1e-2
+    assert np.max(np.abs(nxx[0] - nxx[1])) < 1e-12
+
+
+def test_a_common_translation_of_every_shape_leaves_the_answer_alone():
+    """The other half of the same invariant, and the one a phase never reached.
+
+    Sliding *all* the shapes together is again one structure named twice, but no phase carries
+    it: the field is a nonlinear combination, so a common shift is not a common factor. It is
+    exact here only for a shift that lands on the sampling grid -- a fractional-pixel shift
+    resamples a periodic field at different points and leaves ~6e-5, which is discretization
+    and not the clipped window this used to be confused with.
+    """
+    cfg = dict(backend=0, period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), fto=(4, 4),
+               n_top=1.0, n_bot=1.45, theta=0.0, phi=None, psi=np.pi / 2)
+
+    def total(shift):
+        shapes = [dict(type='rectangle', cx=0.30 + shift, cy=0.5, lx=0.30, ly=0.24,
+                       angle=0.0, n_index=3.48),
+                  dict(type='rectangle', cx=0.72 + shift, cy=0.62, lx=0.26, ly=0.30,
+                       angle=0.0, n_index=2.1)]
+        return float(np.sum(np.asarray(wavebit.rcwa(
+            ucell=[dict(n_base=1.0, shapes=shapes)], normal_grid=256, **cfg)
+            .conv_solve().T)).real)
+
+    on_grid = [total(k / 256) for k in (0, 16, 32, 64)]
+    assert np.ptp(on_grid) < 1e-11, on_grid
