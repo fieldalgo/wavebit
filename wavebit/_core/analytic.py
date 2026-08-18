@@ -103,6 +103,7 @@ from .backend import array_namespace, as_array, j1, jinc, sinc
 from .factorization import ConvSlots5      # one slot layout for every builder
 from .lattice import sample_grid
 from .overlap import COMBINE_MODES, OVERLAP_TOL_REL      # re-exported; both paths read them
+from .geometry import StaleGeometryError
 
 
 def _grid(xp, fto_x, fto_y, dev, dtype):
@@ -1056,6 +1057,41 @@ def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, fto_x, fto_y):
     return ConvSlots5(eps_xx, eps_yy, xp.linalg.inv(ep_dir), -eps_xy, -eps_xy)
 
 
+def check_no_plan_still_fits(layer, period, index, lattice=None):
+    """Refuse a frozen *"this layer does not overlap"* that the layer has since outgrown.
+
+    A frozen record answers the overlap question for every layer, and a ``None`` plan is one of
+    its two answers -- "looked at while the numbers were concrete, and nothing overlapped" --
+    rather than an absence. That distinction is what
+    ``test_a_frozen_geometry_answers_the_overlap_question_for_every_layer`` settled; this is its
+    other half, because an answer that is recorded can also stop being true. Move a shape until
+    it does overlap and the answer is exactly as stale as a plan whose loops have been re-cut.
+
+    It used to go stale in a worse place. The dispatch below summed on the record's word, and
+    :func:`_refuse_paint_overlap` stopped it there with a ``ValueError`` about *this* builder --
+    naming neither the frozen record nor the fix, and pointing at the boundary path the caller
+    was already trying to reach. Reproduced by freezing a disjoint rectangle-and-circle layer and
+    sliding the rectangle onto the circle; the same call without ``geometry=`` returns
+    0.933226529 quite happily.
+
+    Eagerly the question can simply be re-asked, which is the same test the unfrozen call makes
+    and costs one primitive overlap check. Under a trace there is nothing to re-ask -- the limit
+    every other check on this record has.
+    """
+    try:
+        needs = layer_needs_resolving(layer, period, lattice)
+    except ValueError:
+        return                      # traced: no concrete values to re-ask with
+    if not needs:
+        return
+    raise StaleGeometryError(
+        f'the frozen geometry no longer fits this structure: it recorded layer {index} as '
+        f'painted but not overlapping, and its shapes overlap now. That record is what routes '
+        f'the layer, so replaying it would sum a layer that has to be painted -- a different '
+        f'structure. Call freeze_geometry() again, or drop geometry= to route by comparison. '
+        f'(Moving a shape never trips this on its own; moving it into another shape does.)')
+
+
 def to_conv_mat_smooth_layers(layer_shapes, fto_x, fto_y, period,
                                 normal_grid=256, type_complex=None, xp=None,
                                 boundary_plans=None, lattice=None):
@@ -1087,6 +1123,8 @@ def to_conv_mat_smooth_layers(layer_shapes, fto_x, fto_y, period,
         # values that cannot answer it.
         frozen = boundary_plans is not None
         plan = boundary_plans[index] if frozen else None
+        if frozen and plan is None:
+            check_no_plan_still_fits(layer, period, index, lattice)
         check_layer_combination(layer, period, index, lattice=lattice)
         n_base = layer.get('n_base', layer.get('base', 1.0))
         if plan is not None or (not frozen
@@ -1101,10 +1139,14 @@ def to_conv_mat_smooth_layers(layer_shapes, fto_x, fto_y, period,
                 normal_grid=normal_grid, plan=plan, lattice=lattice)
         else:
             # `combine` goes down with the shapes rather than being dropped here. Reaching
-            # this branch already means the two rules agree on this layer, so the check below
-            # never fires from here -- it is a second reading of the dispatch just above, on
-            # the one branch where getting it wrong returns a plausible number instead of an
-            # error. That failure has happened once already (see `layer_needs_resolving`).
+            # this branch means the two rules agree on this layer, so the check below never
+            # fires from here -- it is a second reading of the dispatch just above, on the one
+            # branch where getting it wrong returns a plausible number instead of an error.
+            # That failure has happened once already (see `layer_needs_resolving`). It held
+            # only for the unfrozen route until `check_no_plan_still_fits` was added: a record
+            # frozen while the shapes were disjoint routes by its own answer, not by the two
+            # rules, and once the shapes moved together the check below is what fired -- with
+            # a message about this builder rather than about the stale record.
             mats = to_conv_mat_smooth_nvf(
                 xp, layer.get('shapes', []), n_base, fto_x, fto_y, period, dtype,
                 normal_grid=normal_grid, lattice=lattice, combine=layer.get('combine'))

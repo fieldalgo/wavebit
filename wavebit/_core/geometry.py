@@ -36,11 +36,21 @@ it.* Each path has its own reading of that, because each record depends on somet
 ``block_grid``         the replayed grid lines must still be in order
 ``normal_field``        the interfaces it was sampled from must still be where they were
 ``compression``         the cut it recorded must still separate every block the layer has
+``boundary_plans``      the shapes must still overlap the way the painting was resolved for
 ======================  ==================================================================
 
-All three raise :class:`StaleGeometryError`, and all three run **only eagerly**: under a trace
+All four raise :class:`StaleGeometryError`, and all four run **only eagerly**: under a trace
 the comparison is itself the thing the record exists to avoid, so a jitted call carries no
 check and a long fit should re-freeze on a schedule rather than wait to be told.
+
+``boundary_plans`` reads that rule differently from the other three, because it holds no
+coordinates at all. A shape *moving* is what it is built to survive -- that is what makes the
+boundary path differentiable -- so only the combinatorics changing makes it stale: shapes that
+begin to overlap, or stop, or a shape that was covered coming out from under the one covering
+it. Its ``None`` entry is a recorded answer too ("painted, and nothing overlapped"), and goes
+stale the same way. Both are checked by re-asking, which costs a re-plan -- 0.2% of a frozen
+solve for two overlapping shapes and 1.2% for ten, falling as ``fto`` rises. The freeze here buys
+traceability, not speed, so no plateau is given up for it.
 
 On the raster paths the sweep a frozen record serves is over the *material values* — those
 never move an interface, so they are always accepted, exactly. A sweep that moves the pattern
@@ -70,7 +80,10 @@ class StaticGeometry:
         boundary_plans: per-layer ``(table_records, regions)`` for the boundary path — which
             loop holds which vertex and which edges cross, once the painting is resolved. Like
             the vector records these are pure Python indices, never coordinates, so a replay
-            carries a gradient to the vertices and they compare by content.
+            carries a gradient to the vertices and they compare by content. ``None`` for a layer
+            is an answer rather than a gap: painted, looked at while concrete, and nothing
+            overlapped, so it is summed. Both answers are re-asked eagerly
+            (:func:`boundary.check_plan_still_fits`, :func:`analytic.check_no_plan_still_fits`).
 
     A field left ``None`` means "auto-detect", which is what the strategy in use does not need
     (a sampled build never touches ``normal_field``, for instance).

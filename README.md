@@ -444,6 +444,11 @@ exactly; moving the geometry does not, and an eager `conv_solve` raises `StaleGe
 rather than answering from a record that no longer fits. A traced call cannot check — the
 comparison is what the freeze exists to avoid.
 
+The painted-shape path reads "moving the geometry" more narrowly, because its record holds
+combinatorics rather than coordinates: a shape sliding is what it replays, bit for bit, and only
+a change in which shape covers which makes it stale. `docs/boundary-modeling.md` says which
+motions those are.
+
 So take the freeze again every step. On the block path it costs a few milliseconds and
 recompiles only when the recorded *ordering* changes, which is the same moment a held record
 would have gone stale — a length can move 47% for two compilations. That makes re-freezing both

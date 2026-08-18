@@ -327,6 +327,40 @@ not a check. `jax.jit` over a painted, overlapping layer with **no** frozen geom
 raise and does not resolve: it sums the shapes and returns a different structure's answer. So the
 freeze is not only what makes the call fast, it is what makes it correct — take it, every step.
 
+### What a frozen plan does and does not survive
+
+A plan holds no coordinates, only combinatorics — which loop holds which vertex, which edges
+cross. That is what makes a shape *moving* the case it is built for: slide a rectangle and the
+replay tracks it exactly, bit for bit, which is where the gradient comes from. What it cannot
+survive is the combinatorics changing underneath it — which shapes cover which. Three motions
+do that, and they overlap as descriptions rather than partitioning the space:
+
+- two shapes that were disjoint begin to overlap, or stop;
+- a shape that was completely covered by a later one comes out from under it;
+- the resolved loops get re-cut, so a vertex ends up on a different loop.
+
+Eagerly all three now raise `StaleGeometryError`. Before they did, the replay took them. On a
+two-rectangle layer it stayed bit-identical while the overlap held and then read 3.9e-4, 2.3e-2,
+3.3e-2 wrong as the first rectangle crossed the second, with no step in between to notice. The
+covered case is starker: a small circle painted under a larger one has *no loops at all*, so
+sliding it out returned the identical number — 0.929791164 at every position tried — while the
+true answers ran 0.9295 to 0.9536. The shape had left the structure.
+
+The same motions reach a second kind of record, and that one used to fail somewhere else entirely.
+A painted layer with nothing overlapping is summed, which is exact and cheaper, and the freeze
+records that decision as a `None` plan — an answer, not a gap. Drag a shape onto another and the
+answer is stale too, but the dispatch summed on the record's word and
+`analytic._refuse_paint_overlap` stopped it with a `ValueError` about the summing builder, pointing
+at the boundary path the caller was already inside and naming neither the record nor the fix. The
+same call with no `geometry=` solves the layer fine.
+
+Checking costs one re-plan. That is **0.2%** of a frozen `conv_solve` for the two-rectangle
+layer above and **1.2%** for ten overlapping shapes at `fto = 4`, falling as `fto` rises (0.4% for
+those ten at `fto = 8`) since the solve grows faster than the painting does. The freeze on this
+path buys traceability rather than a speed plateau, so that is not traded against anything. Under a trace there is nothing to
+re-ask and the replay goes through on trust, the same documented limit every record here has,
+and the reason the instruction above is *every step* rather than *once*.
+
 ## Two properties worth knowing before you trust a number
 
 **The normal field is discontinuous on the medial axis**, where the closest boundary point swaps

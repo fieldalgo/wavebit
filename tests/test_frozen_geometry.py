@@ -553,3 +553,164 @@ def test_a_length_that_moves_without_reordering_reuses_the_compilation():
         fd = (float(total(jnp.asarray(lx + step), freeze_at(lx + step))) -
               float(total(jnp.asarray(lx - step), freeze_at(lx - step)))) / (2 * step)
         assert grad == pytest.approx(fd, rel=2e-3), (lx, grad, fd)
+
+
+PAINT_KW = dict(period=(1., 1.), thickness=(0.32,), wavelength=0.94, n_top=1., n_bot=1.45,
+                theta=0.2, phi=0.3, psi=0.7, fto=(4, 4), normal_grid=256)
+
+
+def _painted(cx, n_index=3.4):
+    """Two painted rectangles; the first crosses the second as ``cx`` runs past ~0.52."""
+    return [dict(n_base=1.0, combine='paint', shapes=[
+        dict(type='rectangle', cx=cx, cy=0.5, lx=0.34, ly=0.26, angle=0.3, n_index=n_index),
+        dict(type='rectangle', cx=0.55, cy=0.55, lx=0.30, ly=0.24, angle=0.0, n_index=2.1)])]
+
+
+def _painted_t(cx, frozen=None, n_index=3.4):
+    solver = wavebit.rcwa(backend=0, ucell=_painted(cx, n_index), **PAINT_KW)
+    return np.asarray(solver.conv_solve(geometry=frozen).T)
+
+
+def test_a_stale_painting_plan_is_refused_rather_than_answered():
+    """A painting plan survives a shape *moving*; it does not survive the overlap changing.
+
+    This record is unlike the others here. It holds no coordinates at all -- only which loop
+    holds which vertex and which edges cross -- and that is deliberate: it is what lets a replay
+    carry a gradient to vertices that have moved, which is the whole reason the boundary path
+    can be traced. So the usual reading of "stale" is wrong for it. Moving a shape is *exactly*
+    what it is built to survive, and the first loop below pins that, bit-for-bit.
+
+    What it cannot survive is the combinatorics changing underneath it. Slide the first
+    rectangle far enough and it begins to overlap the second; the recorded loops then describe a
+    painting nobody asked for. Before the check, the replay took it: bit-identical through
+    ``cx = 0.50`` and then 3.9e-4, 2.3e-2, 3.3e-2 wrong at 0.55, 0.62, 0.75, with no step in
+    between to notice. Re-planning to compare costs 0.2% of a frozen ``conv_solve`` on this layer
+    (1.2% on one of ten overlapping shapes, less as ``fto`` rises) -- the freeze here buys
+    traceability rather than a speed plateau, so that is not what is being traded.
+    """
+    frozen = wavebit.rcwa(backend=0, ucell=_painted(0.40), **PAINT_KW).freeze_geometry()
+    assert frozen.boundary_plans is not None, 'the plan was not recorded'
+
+    for cx in (0.40, 0.405, 0.42, 0.45, 0.50):     # moved, same overlap: accepted, and exact
+        assert np.array_equal(_painted_t(cx, frozen), _painted_t(cx))
+
+    for cx in (0.55, 0.62, 0.75):                  # the overlap changed: refused, not answered
+        with pytest.raises(wavebit.StaleGeometryError, match='no longer fits'):
+            _painted_t(cx, frozen)
+
+    for n_index in (3.0, 2.0, 1.4):                # material only: never moves a vertex
+        assert np.array_equal(_painted_t(0.40, frozen, n_index),
+                              _painted_t(0.40, n_index=n_index))
+
+
+def test_the_painting_plan_check_is_skipped_under_a_trace_too():
+    """Same documented limit as the raster records, reached a different way.
+
+    A tracer has no coordinates to re-plan from, so there is nothing to compare and the replay
+    goes through on trust -- including onto an overlap the plan does not describe. Pinned so it
+    stays a decision: ``docs/boundary-modeling.md`` tells a fit to re-freeze every step, and
+    this is why that instruction is not optional.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+
+    def total(cx, frozen):
+        solver = wavebit.rcwa(backend=1, ucell=_painted(cx), **PAINT_KW)
+        return jnp.sum(solver.conv_solve(geometry=frozen).T).real
+
+    frozen = wavebit.rcwa(backend=1, ucell=_painted(0.40), **PAINT_KW).freeze_geometry()
+
+    with pytest.raises(wavebit.StaleGeometryError):        # eagerly, jax converts: checked
+        total(0.75, frozen)
+
+    jitted = jax.jit(total, static_argnums=1)              # traced: not checked, and finite
+    assert np.isfinite(float(jitted(jnp.asarray(0.75), frozen)))
+    assert np.isfinite(float(jax.grad(total)(jnp.asarray(0.40), frozen)))
+
+
+def _hidden(cx, n_index=2.0):
+    """A small circle painted *under* a larger one — completely covered, so it has no loops."""
+    return [dict(n_base=1.0, combine='paint', shapes=[
+        dict(type='circle', cx=cx, cy=0.43, lx=0.12, n_index=n_index),
+        dict(type='circle', cx=0.35, cy=0.45, lx=0.25, n_index=3.0)])]
+
+
+def test_a_shape_the_plan_recorded_as_covered_cannot_be_slid_out_from_under_it():
+    """The sharpest reading of a stale plan: a shape the record says is not there.
+
+    The first circle sits entirely inside the second (centres 0.036 apart, radii 0.12 and 0.25),
+    and the second is painted over it, so the plan gives shape 0 **zero** loops. Slide it out and
+    the replay keeps every loop it recorded, which is the same structure it always was: before
+    the check it returned 0.929791164 for *every* position tried — 0.42, 0.55, 0.60, 0.70 — while
+    the true answers ran 0.9295, 0.9536, 0.9483, 0.9382. The shape had simply left the structure.
+
+    This case also pins *what* is compared. From ``cx = 0.55`` on, the crossing table is
+    identical and only the loop assignment differs, so a check that compared the table alone
+    would pass all three of those and answer with a circle that is not in the layer.
+    """
+    frozen = wavebit.rcwa(backend=0, ucell=_hidden(0.38), **PAINT_KW).freeze_geometry()
+    assert frozen.boundary_plans[0][1][0] == [], 'the covered shape was expected to have no loops'
+
+    def total(cx, geometry=None, n_index=2.0):
+        solver = wavebit.rcwa(backend=0, ucell=_hidden(cx, n_index), **PAINT_KW)
+        return np.asarray(solver.conv_solve(geometry=geometry).T)
+
+    for cx in (0.38, 0.40):                        # still covered: accepted, and exact
+        assert np.array_equal(total(cx, frozen), total(cx))
+
+    for n_index in (2.6, 1.5):                     # material only: never uncovers anything
+        assert np.array_equal(total(0.38, frozen, n_index), total(0.38, n_index=n_index))
+
+    for cx in (0.42, 0.55, 0.60, 0.70):            # out from under it: refused, not answered
+        with pytest.raises(wavebit.StaleGeometryError, match='no longer fits'):
+            total(cx, frozen)
+
+
+def _disjoint(cx):
+    """A rectangle and a circle that do not touch until ``cx`` is dragged down onto the circle."""
+    return [dict(n_base=1.0, combine='paint', shapes=[
+        dict(type='rectangle', cx=cx, cy=0.407, lx=0.30, ly=0.24, angle=0.3, n_index=3.4),
+        dict(type='circle', cx=0.225, cy=0.354, lx=0.18, n_index=2.1)])]
+
+
+def test_a_frozen_no_overlap_is_a_claim_about_the_layer_and_is_checked_too():
+    """``plan is None`` is one of the record's two answers, not the absence of one.
+
+    A painted layer with nothing overlapping is summed, which is exact and cheaper, and the
+    freeze records that decision as a ``None`` plan. It is a claim about the geometry, and it
+    goes stale the same way a plan does — but for a long time it went stale silently in a
+    different place: the dispatch took the summing branch on the record's word, and the summing
+    builder refused with a ``ValueError`` naming *itself* and pointing at the boundary path the
+    caller was already inside. Nothing in it mentioned the frozen record or said to re-freeze,
+    and the same call without ``geometry=`` returns 0.933226529 quite happily.
+    """
+    frozen = wavebit.rcwa(backend=0, ucell=_disjoint(0.629), **PAINT_KW).freeze_geometry()
+    assert frozen.boundary_plans == [None], 'the layer was expected to be recorded as disjoint'
+
+    def total(cx, geometry=None):
+        solver = wavebit.rcwa(backend=0, ucell=_disjoint(cx), **PAINT_KW)
+        return np.asarray(solver.conv_solve(geometry=geometry).T)
+
+    for cx in (0.629, 0.60, 0.70):                 # still disjoint: accepted, and exact
+        assert np.array_equal(total(cx, frozen), total(cx))
+
+    with pytest.raises(wavebit.StaleGeometryError, match='not overlapping'):
+        total(0.374, frozen)                       # dragged onto the circle
+    assert np.isfinite(total(0.374).sum()), 'the unfrozen call solves this layer fine'
+
+    # And the re-asking has to stay eager. A tracer cannot answer the overlap question at all --
+    # `layer_needs_resolving` raises rather than guess, which is the whole reason the record
+    # carries the answer -- so a check that re-asked unconditionally would take the one path this
+    # record exists to enable and break it, with an error reading "needs a frozen geometry" at a
+    # call that was given one.
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+
+    def traced_total(cx):
+        solver = wavebit.rcwa(backend=1, ucell=_disjoint(cx), **PAINT_KW)
+        return jnp.sum(solver.conv_solve(geometry=frozen_jax).T).real
+
+    frozen_jax = wavebit.rcwa(backend=1, ucell=_disjoint(0.629), **PAINT_KW).freeze_geometry()
+    assert frozen_jax.boundary_plans == [None]
+    assert np.isfinite(float(jax.jit(traced_total)(jnp.asarray(0.629))))
+    assert np.isfinite(float(jax.grad(traced_total)(jnp.asarray(0.629))))

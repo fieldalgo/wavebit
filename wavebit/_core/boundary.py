@@ -35,6 +35,7 @@ block path, while tying on axis-aligned overlap where the block path has no stai
 """
 from . import clipper as _clipper
 from .analytic import nvf_from_coeffs, shape_geometry, _sampled_coeffs
+from .geometry import StaleGeometryError
 from .lattice import sample_grid
 from .polygon import ellipse_verts, polygon_ft, rect_verts
 
@@ -355,10 +356,91 @@ def plan_layer(shapes, period, n_poly=POLYGON_VERTICES):
     (:meth:`~wavebit._core.engine.RCWAEngine.freeze_geometry`) and every later step replays
     it against traced vertices.
     """
+    return _clipper.resolve_painting(_plan_vertices(shapes, period, n_poly))
+
+
+def _plan_vertices(shapes, period, n_poly):
+    """Every shape's vertices as plain float arrays -- the concrete half of building a plan.
+
+    Split out so :func:`check_plan_still_fits` can tell the two ways a re-plan fails apart. This
+    step is the one a tracer cannot survive, so its refusal means "skip the check"; anything
+    ``resolve_painting`` then raises is about the layer and has to be heard.
+    """
     import numpy as _np
-    concrete = [_np.asarray(shape_vertices(_np, _concrete_shape(s), period, n_poly), float)
-                for s in shapes]
-    return _clipper.resolve_painting(concrete)
+    return [_np.asarray(shape_vertices(_np, _concrete_shape(s), period, n_poly), float)
+            for s in shapes]
+
+
+def _plan_key(plan):
+    """A painting plan as nested lists, so a record compares by content whatever holds it."""
+    recs, regions = plan
+    return ([tuple(r) for r in recs],
+            [[list(loop) for loop in region] for region in regions])
+
+
+def check_plan_still_fits(shapes, period, plan, n_poly=POLYGON_VERTICES):
+    """Refuse a frozen painting plan that the layer in front of it has outgrown.
+
+    A plan records *combinatorics* -- which loop holds which vertex, which edges cross -- and
+    deliberately holds no coordinates, which is exactly what lets a replay carry a gradient to
+    vertices that have moved. Move them far enough and the combinatorics change with them: two
+    shapes that did not overlap begin to, and the recorded loops describe a painting that is no
+    longer the one being asked for. Nothing about the result says so -- on a two-rectangle layer
+    a replay stays bit-identical while the overlap holds and then drifts to 3.3e-2 in total
+    transmission once it does not, with no step in between to notice.
+
+    Re-planning is the whole cost of the comparison, and it scales with the shape count rather
+    than with the solve: 0.2% of a frozen ``conv_solve`` for the two-rectangle layer above, 1.2%
+    for ten overlapping shapes at ``fto = 4``, and falling as ``fto`` rises (0.4% for those ten at
+    ``fto = 8``) because the solve grows faster than the painting does. The freeze on this path
+    buys traceability, not speed, so there is no plateau being given up for it.
+    Under a trace it is skipped -- a tracer has no coordinates to re-plan from, which is the same
+    reading of "not concrete" that :func:`analytic._primitives` takes, and for the same reason.
+    """
+    try:
+        verts = _plan_vertices(shapes, period, n_poly)
+    except (TypeError, ValueError):
+        return                      # traced: nothing concrete to re-plan from
+    fresh = _clipper.resolve_painting(verts)
+    fresh_key, plan_key = _plan_key(fresh), _plan_key(plan)
+    if fresh_key == plan_key:
+        return
+
+    raise StaleGeometryError(
+        f'the frozen geometry no longer fits this structure: {_what_moved(fresh_key, plan_key)}. '
+        f'The recorded plan resolves a painting this layer no longer has, so replaying it paints '
+        f'a different structure. Call freeze_geometry() again, or drop geometry= to resolve '
+        f'eagerly. (Moving a shape never trips this on its own; moving it far enough to change '
+        f'which shapes cover which does.)')
+
+
+def _what_moved(fresh_key, plan_key):
+    """The one clause of the refusal that names what the re-plan found, in the layer's terms."""
+    fresh, held = fresh_key[1], plan_key[1]
+    if len(fresh) != len(held):
+        return (f'it was resolved from {len(held)} painted shapes and this layer has '
+                f'{len(fresh)}')
+
+    recut = [i for i, (a, b) in enumerate(zip(fresh, held)) if a != b]
+    if not recut:
+        return 'the same loops are now cut from a different table of crossings'
+
+    parts = []
+    for i in recut:
+        now, was = len(fresh[i]), len(held[i])
+        if now == was:
+            parts.append(f"shape {i}'s {now} loop{'s' if now != 1 else ''} now run through "
+                         f'different vertices')
+        elif was == 0:
+            parts.append(f'shape {i} was completely covered and now shows {now} '
+                         f"loop{'s' if now != 1 else ''}")
+        elif now == 0:
+            parts.append(f'shape {i} is completely covered now and the record gives it '
+                         f'{was} loop{"s" if was != 1 else ""}')
+        else:
+            parts.append(f'shape {i} now resolves into {now} loop{"s" if now != 1 else ""} '
+                         f'where the record holds {was}')
+    return '; '.join(parts)
 
 
 def to_conv_mat_boundary_layer(xp, shapes, n_base, fto_x, fto_y, period, dtype,
@@ -372,7 +454,11 @@ def to_conv_mat_boundary_layer(xp, shapes, n_base, fto_x, fto_y, period, dtype,
     painting is resolved eagerly, which needs concrete shape parameters.
     """
     verts = [shape_vertices(xp, s, period, n_poly) for s in shapes]
-    recs, regions = plan_layer(shapes, period, n_poly) if plan is None else plan
+    if plan is None:
+        recs, regions = plan_layer(shapes, period, n_poly)
+    else:
+        check_plan_still_fits(shapes, period, plan, n_poly)
+        recs, regions = plan
     vals = _clipper.eval_table(xp, recs, verts)
     regs = [(s['n_index'], [_clipper.loop_verts(xp, lp, vals) for lp in region])
             for s, region in zip(shapes, regions)]
