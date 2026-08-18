@@ -5,15 +5,13 @@ motivated the port: with the factorization inside the core, the gradient runs en
 the *design variable* — the ``ucell`` raster — through to diffraction efficiency, rather than
 stopping at the convolution matrices.
 """
-import pathlib
-
 import numpy as np
 import pytest
 
 import array_api_compat.numpy as xnp
 
 import wavebit
-from wavebit._core.factorization import fourier2d_piecewise_constant
+from wavebit._core.factorization import fourier2d_piecewise_constant, fourier2d_integrated
 from wavebit._core.factorization import (
     to_conv_mat_raster_sampled as core_dfs,
     to_conv_mat_raster_nvf as core_nvf,
@@ -45,11 +43,6 @@ def _rand(shape, seed):
     return np.random.default_rng(seed).uniform(1.0, 4.0, size=shape)
 
 
-# The legacy builders these were originally checked against are gone; their outputs live on
-# as frozen reference data (tests/data/gen_goldens_factorization.py).
-GOLDEN = np.load(pathlib.Path(__file__).parent / 'data' / 'golden_legacy_factorization.npz')
-
-
 CASES = [
     # name, ucell, fto_x, fto_y
     ('1d_1layer', _rand((1, 1, 8), 0), 4, 0),
@@ -59,39 +52,68 @@ CASES = [
 ]
 
 
-def _exact_coeff(eps, ky, kx):
-    """Fourier coefficient of a pixel raster, by integrating each pixel analytically.
+def _axis_int(k, a, b):
+    """``integral over [a, b] of exp(-2 pi i k t) dt`` — the one elementary integral here."""
+    if k == 0:
+        return b - a
+    return (np.exp(-2j * np.pi * k * b) - np.exp(-2j * np.pi * k * a)) / (-2j * np.pi * k)
 
-    The definition, spelled out with no shortcut: ``eps`` is constant on
-    ``[j/Ny, (j+1)/Ny) x [i/Nx, (i+1)/Nx)``, so the transform is a finite sum of elementary
-    integrals. Deliberately not the closed form the builder uses — a reference that shared its
-    derivation would only confirm the arithmetic.
+
+def _exact_coeff_segments(eps, x, y, ky, kx):
+    """Fourier coefficient of a piecewise-constant cell on **arbitrary** segment edges.
+
+    ``x`` / ``y`` are right-hand edges normalized to end at 1, exactly as
+    :func:`~wavebit._core.factorization.compression_indices` returns them, so ``eps[j, i]``
+    covers ``[y[j-1], y[j]) x [x[i-1], x[i])`` with ``0`` implied before the first.
+
+    The definition spelled out with no shortcut, and deliberately not the closed form any
+    builder uses — a reference that shared its derivation would only confirm the arithmetic.
+    One oracle serves the sampled path (uniform edges, :func:`_exact_coeff`), the integrated
+    path and the vector path, which is the point: they claim to transform the *same* staircase
+    and differ only in where its steps may sit.
     """
+    xr = np.asarray(x, dtype=float).ravel()
+    yr = np.asarray(y, dtype=float).ravel()
+    xl = np.concatenate([[0.0], xr[:-1]])
+    yl = np.concatenate([[0.0], yr[:-1]])
+
+    return sum(eps[j, i] * _axis_int(ky, yl[j], yr[j]) * _axis_int(kx, xl[i], xr[i])
+               for j in range(eps.shape[0]) for i in range(eps.shape[1]))
+
+
+def _exact_coeff(eps, ky, kx):
+    """:func:`_exact_coeff_segments` on the uniform pixel grid — ``eps`` as a raster."""
     Ny, Nx = eps.shape
+    return _exact_coeff_segments(eps, np.arange(1, Nx + 1) / Nx, np.arange(1, Ny + 1) / Ny,
+                                 ky, kx)
 
-    def axis(k, N, n):
-        a, b = n / N, (n + 1) / N
-        if k == 0:
-            return b - a
-        return (np.exp(-2j * np.pi * k * b) - np.exp(-2j * np.pi * k * a)) / (-2j * np.pi * k)
 
-    return sum(eps[j, i] * axis(ky, Ny, j) * axis(kx, Nx, i)
-               for j in range(Ny) for i in range(Nx))
+def _exact_matrix(eps, x, y, fto_x, fto_y):
+    """The whole direct-rule convolution matrix from the definition, index by index."""
+    ff_x, ff_y = 2 * fto_x + 1, 2 * fto_y + 1
+    n = ff_y * ff_x
+    want = np.empty((n, n), dtype=complex)
+    for r in range(n):
+        for c in range(n):
+            want[r, c] = _exact_coeff_segments(
+                eps, x, y, r // ff_x - c // ff_x, r % ff_x - c % ff_x)
+    return want
 
 
 @pytest.mark.parametrize('case', CASES, ids=[c[0] for c in CASES])
 def test_dfs_coefficients_are_the_exact_ones(case):
     """``<eps>`` must be the raster's own Fourier coefficients, to round-off.
 
-    This replaces a bit-parity check against the legacy builder, which is gone: that builder
+    This replaced a bit-parity check against the legacy builder, which is gone: that builder
     resampled the raster onto a grid resolving ``4*fto+1`` harmonics and transformed *that*,
     approaching these values as ``1/R`` and stopping ~1e-2 short on the coefficients (~1e-5
     on efficiency, measured against RETICOLO). The exact route made the frozen values wrong to
-    hold, and ``gen_goldens_factorization.py`` cannot be re-run — it imports modules deleted in
-    ``306c9ea``.
+    hold, and the generator could not be re-run — it imported modules deleted in ``306c9ea``.
 
     So the oracle moved rather than being regenerated. It is stronger for it: this compares
-    against the definition instead of against another implementation, and needs no golden.
+    against the definition instead of against another implementation, and needs no golden. The
+    same move was made for the integrated, vector and compression checks on 2026-08-18, which
+    is what retired the golden entirely — see the note further down this file.
     """
     name, ucell, fto_x, fto_y = case
     eps = np.asarray(ucell, dtype=float)[0] ** 2
@@ -346,13 +368,28 @@ INTEGRATED_CASES = [
 
 
 @pytest.mark.parametrize('case', INTEGRATED_CASES, ids=[c[0] for c in INTEGRATED_CASES])
-def test_cfs_bit_parity_vs_legacy(case):
-    name, ucell, fto_x, fto_y = case
-    got = core_cfs(ucell, fto_x, fto_y)
-    for slot, b in zip(('epx', 'epy', 'epz_i'), got):
-        a = GOLDEN[f'cfs__{name}__{slot}']
-        assert np.allclose(a, np.array(b), atol=1e-12, rtol=0), (
-            slot, np.max(np.abs(a - np.array(b))))
+def test_integrated_coefficients_are_the_exact_ones(case):
+    """The integrated path's ``<eps>`` must be the staircase's own coefficients, to round-off.
+
+    The integrated twin of :func:`test_dfs_coefficients_are_the_exact_ones`, and it replaced a
+    bit-parity check against the legacy builder for the same reason: parity says "unchanged",
+    the definition says "right". Asserted at both ends of the path — the coefficient engine
+    directly, and the builder's ``epz_i``, which is that matrix inverted and so pins the slot
+    the solve actually eliminates ``E_z`` with.
+    """
+    _, ucell, fto_x, fto_y = case
+    layer = np.asarray(ucell)[0]
+    row_idx, col_idx, x, y = compression_indices(layer)
+    eps = np.asarray(compress_cell(xnp, layer, row_idx, col_idx)).astype(complex) ** 2
+
+    want = _exact_matrix(eps, x, y, fto_x, fto_y)
+    scale = max(1.0, np.abs(want).max())
+
+    got = np.asarray(fourier2d_integrated(xnp, eps, x, y, fto_x, fto_y, inverse_rule=None))
+    assert np.abs(got - want).max() < 1e-12 * scale, np.abs(got - want).max()
+
+    inv_z = np.linalg.inv(np.asarray(core_cfs(ucell, fto_x, fto_y).epz_i[0]))
+    assert np.abs(inv_z - want).max() < 1e-11 * scale, np.abs(inv_z - want).max()
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
@@ -368,27 +405,65 @@ def test_cfs_cross_backend(case, backend):
         assert np.allclose(np.array(a), np.asarray(b), atol=1e-12, rtol=0), name
 
 
-def test_vector_path_bit_parity_vs_legacy():
-    """Vector-modelled layers (explicit segment edges, no compression) match the legacy integrated build."""
-    info = [[GOLDEN[f'vector__in{i}__cell'], GOLDEN[f'vector__in{i}__x'],
-             GOLDEN[f'vector__in{i}__y']] for i in (0, 1)]
-    got = core_vector(info, 2, 2)
-    for slot, b in zip(('epx', 'epy', 'epz_i'), got):
-        a = GOLDEN[f'vector__{slot}']
-        assert np.allclose(a, np.array(b), atol=1e-12, rtol=0), (
-            slot, np.max(np.abs(a - np.array(b))))
+def test_the_vector_path_integrates_its_segments_exactly():
+    """Segment edges given directly, on a grid no raster could express.
+
+    The vector path's whole reason to exist is that its steps need not sit at ``j/N``, so the
+    case is built with deliberately uneven edges — a raster would have to snap them. Nothing is
+    frozen: the cell and its edges are written here, and the answer comes from the definition.
+    """
+    cell = np.array([[1.0, 3.5, 2.0],
+                     [2.5, 1.0, 3.0]])
+    # column vectors, the shape `compression_indices` hands the builder
+    x = np.array([[0.17], [0.61], [1.0]])          # uneven on purpose
+    y = np.array([[0.43], [1.0]])
+    fto_x = fto_y = 2
+
+    got = core_vector([(cell, x, y)], fto_x, fto_y)
+    want = _exact_matrix(cell.astype(complex) ** 2, x, y, fto_x, fto_y)
+    scale = max(1.0, np.abs(want).max())
+
+    inv_z = np.linalg.inv(np.asarray(got.epz_i[0]))
+    assert np.abs(inv_z - want).max() < 1e-11 * scale, np.abs(inv_z - want).max()
 
 
-def test_compression_indices_match_legacy():
-    """The extracted static geometry step reproduces the legacy compression exactly."""
-    import array_api_compat as ac
-    for seed in (26, 27):
-        ucell = GOLDEN[f'compress__{seed}__ucell']
-        row_idx, col_idx, x, y = compression_indices(ucell)
-        got_cell = compress_cell(ac.array_namespace(ucell), ucell, row_idx, col_idx)
-        assert np.array_equal(GOLDEN[f'compress__{seed}__cell'], np.array(got_cell))
-        assert np.array_equal(GOLDEN[f'compress__{seed}__x'], x)
-        assert np.array_equal(GOLDEN[f'compress__{seed}__y'], y)
+@pytest.mark.parametrize('seed', [26, 27, 28])
+def test_compression_is_lossless_and_minimal(seed):
+    """Compression must lose nothing and merge everything it can — both, or it is not it.
+
+    This replaced a check that the indices matched the legacy implementation's byte for byte,
+    which could only say "unchanged". These two properties are what the step is *for*, and they
+    are checkable without a reference: expanding the compressed cell back over its segment
+    widths has to give the original raster (lossless), and no two neighbouring segments may be
+    equal, or a merge was missed (minimal).
+
+    The raster is built with duplicated rows and columns so there is something to merge; a
+    fully random one compresses to itself and would assert nothing.
+    """
+    base = _rand((3, 4), seed)
+    layer = np.repeat(np.repeat(base, 3, axis=0), 2, axis=1)      # 9 x 8, blocks of 3 x 2
+
+    row_idx, col_idx, x, y = compression_indices(layer)
+    cell = np.asarray(compress_cell(xnp, layer, row_idx, col_idx))
+    xr = np.asarray(x, dtype=float).ravel()
+    yr = np.asarray(y, dtype=float).ravel()
+
+    # lossless: widths are whole pixel counts, so expanding by them rebuilds the raster
+    ny, nx = layer.shape
+    rows = np.rint(np.diff(np.concatenate([[0.0], yr])) * ny).astype(int)
+    cols = np.rint(np.diff(np.concatenate([[0.0], xr])) * nx).astype(int)
+    assert rows.sum() == ny and cols.sum() == nx, (rows, cols)
+    rebuilt = np.repeat(np.repeat(cell, rows, axis=0), cols, axis=1)
+    assert np.array_equal(rebuilt, layer), 'compression lost something'
+
+    # minimal: neighbouring segments differ, or a merge was missed
+    assert not any(np.array_equal(cell[j], cell[j + 1]) for j in range(cell.shape[0] - 1)), (
+        'two neighbouring rows are equal -- they should have merged')
+    assert not any(np.array_equal(cell[:, i], cell[:, i + 1]) for i in range(cell.shape[1] - 1)), (
+        'two neighbouring columns are equal -- they should have merged')
+
+    # and it actually compressed this one, or the assertions above are vacuous
+    assert cell.shape == base.shape, (cell.shape, base.shape)
 
 
 def test_cfs_end_to_end_gradient_wrt_ucell():
@@ -766,14 +841,23 @@ def test_a_plain_quarter_turn_of_the_whole_scene_is_exact(fto):
 
 # ------------------------------------------------- what a self-captured golden cannot claim
 #
-# `golden_legacy_factorization.npz` pins these builders against their own earlier output, so it
-# can say "unchanged" and nothing else. That is the exact condition under which a wrong sign
-# convention lived in the field golden for the whole rewrite (tests/data/gen_goldens_field.py
-# records it). The checks below are the other kind: they compare against a closed form, so they
+# This file had a companion golden, `golden_legacy_factorization.npz`, that pinned these
+# builders against their own earlier output. Such a golden can say "unchanged" and nothing
+# else, which is the exact condition under which a wrong sign convention lived in the field
+# golden for the whole rewrite (tests/data/gen_goldens_field.py records it). The checks below
+# and in the two sections above are the other kind: they compare against a closed form, so they
 # would fail on a builder that had always been wrong.
 #
-# `test_dfs_coefficients_are_the_exact_ones` above is the same move, made earlier and for the
-# same reason -- it replaced a bit-parity check with the definition.
+# The golden is gone as of 2026-08-18, and every check it carried is now definitional:
+# `test_dfs_coefficients_are_the_exact_ones` (done earlier, and the precedent for the rest),
+# `test_integrated_coefficients_are_the_exact_ones`,
+# `test_the_vector_path_integrates_its_segments_exactly` and
+# `test_compression_is_lossless_and_minimal`. Nothing was dropped in the trade.
+#
+# It was worth finishing rather than leaving half-migrated: 39 of that file's 68 arrays were
+# already read by nothing -- residue of the dfs migration above -- and the rewrite it was
+# evidence for has long since landed, on a solver that has never been released. Legacy parity
+# was protecting no user, and it cost two wrong turns in one session to keep straight.
 
 @pytest.mark.parametrize('n', [1.0, 1.5, 2.7])
 @pytest.mark.parametrize('rule', ['dfs', 'cfs', 'nvf'])

@@ -14,6 +14,14 @@ deliberately changing what is compared — and say which in the commit message.
 **Never regenerate a golden to make a failing test pass.** That converts a detected regression
 into an accepted one, silently, and the evidence that it happened is gone.
 
-Two of the generators (`gen_goldens_analytic.py`, `gen_goldens_factorization.py`) import modules
-the rewrite deleted, so they no longer run; their `.npz` files remain valid, since the whole
-point is that they outlive the code that made them.
+One generator (`gen_goldens_analytic.py`) imports modules the rewrite deleted, so it no longer
+runs; its `.npz` remains valid, since the whole point is that a golden outlives the code that
+made it.
+
+A golden that cannot be regenerated is on a clock, though, and `golden_legacy_factorization.npz`
+ran out on 2026-08-18. It was retired rather than kept: 39 of its 68 arrays were already read by
+nothing, the rewrite it was evidence for had long since landed, and nothing has ever been
+released that could depend on matching the pre-rewrite numbers. Every check it carried is now
+definitional -- closed-form Fourier coefficients, and losslessness/minimality for the compression
+step -- in `tests/test_factorization_core.py`, which needs no reference data at all. Prefer that
+trade wherever a golden's only claim is "unchanged".
