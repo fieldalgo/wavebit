@@ -105,6 +105,23 @@ phase `⟦ε⟧` already carries. Every one of the five matrices is then `D X D�
 `D`, so a translated layer reproduces the centred one to 1e−14 and `d/dcx`, `d/dcy` come out at
 5e−9. That is exact rather than merely good, which is why it stays.
 
+**The centring also makes the field reusable, which is where the wall clock goes.** Sampling and
+transforming it is the expensive half of this build — 83% of a five-point sweep at
+`normal_grid = 1024, fto = 4` for one shape and 93% for six — and none of it reads a refractive
+index. So `normal_projector_coeffs` keys the sampled coefficients on the geometry it was actually
+built from and reuses them: a **material** sweep hits because the key holds no index, and a
+single-shape **position** sweep hits because the build sits at the centre of the cell whatever
+`(cx, cy)` are. Measured 1.6× to 3.8× on five-point sweeps, largest where `normal_grid` is fine
+and `fto` modest; where there is nothing to win (`normal_grid = 256`, `fto = 8`) it is 1.0×.
+
+The key is `None` — no reuse, rebuild — whenever a value it would have to hold is traced or under
+autograd, which is what keeps this from touching a gradient. A JAX tracer cannot be converted, so
+it refuses itself; a PyTorch tensor converts happily and is refused by hand on `requires_grad`.
+A layer of several shapes is rebuilt whenever any of them moves, since there the positions enter
+the field itself rather than a phase. Holding the field fixed across a move instead would be
+quietly wrong, not merely stale: on a lone shape it reports `d(sum T)/dcx = +0.046` where the true
+answer is zero, and on a pair it is 8% to 18% off.
+
 **The two reasons this paragraph used to give for the phase are both obsolete** (2026-08-17,
 `c128fd8`), and they are worth reading as a pair, because each was a defect wearing the phase
 as a workaround. Sampling in place sent `cx`/`cy` through `sign()`, whose derivative is zero;

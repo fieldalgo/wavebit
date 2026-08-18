@@ -985,3 +985,171 @@ def test_only_numpy_takes_the_tiled_path():
     # not take it. This assertion is the one that caught it.
     jax = pytest.importorskip('jax')
     assert not _an._tiles_pay(jax.numpy.zeros((4, 4)), 1024, 1024, 2)
+
+
+PROJ_KW = dict(period=(1.0, 1.0), thickness=(0.32,), wavelength=0.94, n_top=1.0, n_bot=1.45,
+               theta=0.2, phi=0.3, psi=0.0, fto=(4, 4), normal_grid=512)
+
+
+def _one(cx, n_index=3.4):
+    return [dict(n_base=1.0, shapes=[
+        dict(type='rectangle', cx=cx, cy=0.35, lx=0.30, ly=0.20, angle=0.3, n_index=n_index)])]
+
+
+def _two(cx, n_index=3.4):
+    return [dict(n_base=1.0, shapes=[
+        dict(type='rectangle', cx=cx, cy=0.30, lx=0.30, ly=0.18, angle=0.3, n_index=n_index),
+        dict(type='circle', cx=0.72, cy=0.80, lx=0.20, n_index=2.3)])]
+
+
+@pytest.mark.parametrize('build', [_one, _two], ids=['one-shape', 'two-shapes'])
+def test_the_projector_cache_never_changes_an_answer(build):
+    """A hit and a miss have to return the same bits, or the cache is a second implementation.
+
+    ``normal_projector_coeffs`` is the expensive half of the analytic NVF build -- 83% of a
+    five-point sweep at ``normal_grid = 1024, fto = 4`` for one shape, 93% for six -- and none of
+    it reads a refractive index, so a material sweep rebuilds a field it already had. What makes
+    the reuse safe rather than merely fast is that the *build* is position-free for a single
+    shape: it is done at the centre of the cell and carried to ``(cx, cy)`` by a phase computed
+    fresh every call.
+    """
+    import wavebit
+    from wavebit._core import analytic as _an
+
+    def total(cell):
+        return np.asarray(wavebit.rcwa(backend=0, ucell=cell, **PROJ_KW).conv_solve().T)
+
+    for cx in (0.30, 0.45, 0.60):
+        for n_index in (3.4, 2.7):
+            cell = build(cx, n_index)
+            _an._PROJECTOR_CACHE.clear()
+            cold = total(cell)                       # nothing cached: the field is built
+            assert np.array_equal(cold, total(cell))  # warm: the same entry, the same bits
+
+
+def test_the_cache_holds_no_refractive_index_so_a_material_sweep_reuses_one_field():
+    """The point of the key: the build reads geometry only, so only geometry may enter it."""
+    import wavebit
+    from wavebit._core import analytic as _an
+
+    built = []
+    original = _an.normal_vector_field_analytical
+    _an.normal_vector_field_analytical = lambda *a, **k: (built.append(1), original(*a, **k))[1]
+    try:
+        _an._PROJECTOR_CACHE.clear()
+        for n_index in (3.4, 3.0, 2.6, 2.2, 1.8):
+            wavebit.rcwa(backend=0, ucell=_one(0.40, n_index), **PROJ_KW).conv_solve()
+        assert len(built) == 1, f'the field was rebuilt {len(built)} times for one geometry'
+
+        for cx in (0.41, 0.42, 0.43):                # and a *single* shape sliding is the same
+            wavebit.rcwa(backend=0, ucell=_one(cx), **PROJ_KW).conv_solve()
+        assert len(built) == 1, 'position enters through the phase, not through the build'
+
+        wavebit.rcwa(backend=0, ucell=_one(0.40, n_index=3.4)                     # a real change
+                     , **PROJ_KW).conv_solve()
+        _an._PROJECTOR_CACHE.clear()
+        wavebit.rcwa(backend=0, ucell=_one(0.40), **PROJ_KW).conv_solve()
+        assert len(built) == 2, 'a cleared cache must rebuild'
+    finally:
+        _an.normal_vector_field_analytical = original
+
+
+def test_a_traced_or_autograd_value_is_never_served_from_the_cache():
+    """The gradient runs through the build, so a differentiated value must not key it.
+
+    Two refusals, and only one of them is automatic. A JAX tracer cannot be turned into a key at
+    all. A PyTorch tensor *can* -- the trap ``layer_needs_resolving`` documents -- so
+    ``requires_grad`` is refused by hand. Pinned here on the quantity that shows it: sliding a
+    lone shape cannot change any order's efficiency, so ``d(sum T)/dcx`` is zero, and a field
+    frozen at the wrong place reports a force instead -- measured +0.046 when the projector
+    coefficients were held fixed across the move, against a numerical floor of 1.7e-9 here. The
+    floor is not the cache's doing: with the cache disabled outright the same process gives 0.0
+    on its first ``jax.grad`` and 1.7e-9 on every one after, so ``ZERO_FORCE`` is set to separate
+    zero from the failure rather than to chase that.
+    """
+    import wavebit
+    from wavebit._core import analytic as _an
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+
+    def total(cx):
+        return jnp.sum(wavebit.rcwa(backend=1, ucell=_one(cx), **PROJ_KW).conv_solve().T).real
+
+    ZERO_FORCE = 1e-6          # 1.7e-9 measured, 0.046 for the failure it has to catch
+    _an._PROJECTOR_CACHE.clear()
+    assert abs(float(jax.grad(total)(jnp.asarray(0.40)))) < ZERO_FORCE
+    assert abs(float(jax.grad(total)(jnp.asarray(0.40)))) < ZERO_FORCE   # again, now warm
+
+    def pair(cx):
+        return jnp.sum(wavebit.rcwa(backend=1, ucell=_two(cx), **PROJ_KW).conv_solve().T).real
+
+    h = 1e-5
+    fd = (float(pair(jnp.asarray(0.40 + h))) - float(pair(jnp.asarray(0.40 - h)))) / (2 * h)
+    assert float(jax.grad(pair)(jnp.asarray(0.40))) == pytest.approx(fd, rel=1e-3)
+
+    torch = pytest.importorskip('torch')
+    _an._PROJECTOR_CACHE.clear()
+    cx = torch.tensor(0.40, requires_grad=True)
+    cell = [dict(n_base=1.0, shapes=[
+        dict(type='rectangle', cx=cx, cy=0.35, lx=0.30, ly=0.20, angle=0.3, n_index=3.4)])]
+    torch.sum(wavebit.rcwa(backend=2, ucell=cell, **PROJ_KW).conv_solve().T).real.backward()
+    assert abs(float(cx.grad)) < ZERO_FORCE
+
+    lx = torch.tensor(0.30, requires_grad=True)      # a length *does* reach the build
+    assert _an._projector_cache_key(
+        None, [dict(type='rectangle', cx=0.4, cy=0.35, lx=lx, ly=0.2, angle=0.3)],
+        (512, 512), (1.0, 1.0), 4, 4, 'complex128', None) is None
+
+
+def test_the_cache_key_carries_everything_the_build_depends_on():
+    """One geometry, several *builds* — the entries must not collide.
+
+    The key is a promise that two calls sharing it produce the same coefficients. Geometry is the
+    interesting half and the easy half to get right; the rest of the arguments are the half that
+    is easy to leave out, and leaving one out is not a slow path but a wrong answer served from
+    the wrong entry. Both of the ones that change the result independently of the shapes are
+    swept here against a cache that has been cleared, which is the only reference that cannot
+    itself be a cache hit.
+    """
+    import wavebit
+    from wavebit._core import analytic as _an
+
+    def total(fto, normal_grid):
+        kw = dict(PROJ_KW, fto=(fto, fto), normal_grid=normal_grid)
+        return np.asarray(wavebit.rcwa(backend=0, ucell=_one(0.40), **kw).conv_solve().T)
+
+    _an._PROJECTOR_CACHE.clear()
+    alone = {(fto, ng): total(fto, ng)                       # each built with nothing cached
+             for fto in (3, 4, 6) for ng in (256, 512)
+             if not _an._PROJECTOR_CACHE.clear()}
+
+    for (fto, ng), expected in alone.items():                # now with all six entries resident
+        assert np.array_equal(total(fto, ng), expected), (fto, ng)
+    assert len(_an._PROJECTOR_CACHE) == 6, 'the six builds shared an entry'
+
+
+def test_one_geometry_solved_on_three_backends_gets_three_entries():
+    """A cached array belongs to the backend that made it, so the three must not share an entry.
+
+    Nothing about the *shapes* changes between backends, so a key built from geometry alone would
+    hand a NumPy array to a JAX trace and a JAX array to Torch. The three answers below agree to
+    double precision — that is the point, and it is also why a collision would not announce
+    itself as a type error every time. What actually separates them today is ``str(dtype)``, which
+    spells the namespace into it (``numpy.complex128`` against ``torch.complex128``); the
+    namespace goes in the key as well because relying on that is an accident, and this test pins
+    the outcome rather than either mechanism.
+    """
+    import wavebit
+    from wavebit._core import analytic as _an
+    jax = pytest.importorskip('jax')
+    torch = pytest.importorskip('torch')
+
+    _an._PROJECTOR_CACHE.clear()
+    answers = {}
+    for name, backend in (('numpy', 0), ('jax', 1), ('torch', 2)):
+        out = wavebit.rcwa(backend=backend, ucell=_one(0.40), **PROJ_KW).conv_solve().T
+        answers[name] = np.asarray(out.detach() if hasattr(out, 'detach') else out, dtype=float)
+
+    assert len(_an._PROJECTOR_CACHE) == 3, 'the backends shared one entry'
+    assert answers['jax'] == pytest.approx(answers['numpy'], rel=1e-10, abs=1e-12)
+    assert answers['torch'] == pytest.approx(answers['numpy'], rel=1e-10, abs=1e-12)

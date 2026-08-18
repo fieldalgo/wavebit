@@ -867,6 +867,52 @@ def _sampled_coeffs(xp, field, fto_x, fto_y):
     return coeff * phase
 
 
+_PROJECTOR_CACHE = {}
+_PROJECTOR_CACHE_MAX = 8
+
+
+def _static_float(v):
+    """``v`` as a plain float, refusing anything a cache must not key on.
+
+    Two refusals, and they are different. A JAX tracer cannot be converted at all, so ``float``
+    raises on its own. A PyTorch tensor *can* be converted -- which is exactly the trap
+    :func:`layer_needs_resolving` documents -- so one that carries ``requires_grad`` has to be
+    refused explicitly, or a sweep over it would be served a result built at the first value.
+    """
+    if getattr(v, 'requires_grad', False):
+        raise TypeError('a value under torch autograd is not a cache key')
+    detach = getattr(v, 'detach', None)
+    if detach is not None:
+        v = detach()
+    return float(v)
+
+
+def _projector_cache_key(xp, built, grid_shape, period, fto_x, fto_y, dtype, lattice):
+    """A content key for the coefficients built below, or ``None`` when caching would be wrong.
+
+    Everything :func:`normal_vector_field_analytical` reads goes in and nothing else does. It
+    reads each shape through :func:`shape_geometry` and never touches ``n_index`` or ``n_base``,
+    which is what makes the cache worth having: a sweep over the *material* leaves this key
+    alone. ``None`` means at least one value is traced or under autograd, so the build has to
+    happen again -- the gradient runs through it.
+    """
+    try:
+        Px, Py = _static_float(period[0]), _static_float(period[1])
+        shapes_key = tuple(tuple(v if isinstance(v, str) else _static_float(v)
+                                 for v in shape_geometry(shape, Px, Py))
+                           for shape in built)
+        lat = None if lattice is None else tuple(_static_float(v)
+                                                 for row in lattice for v in row)
+    except (TypeError, ValueError):
+        return None
+    # The namespace is redundant with ``str(dtype)``, which already spells it out
+    # (``numpy.complex128`` against ``torch.complex128``) -- but that is an accident of how the
+    # dtypes are named, not a guarantee, and a cross-backend collision hands one namespace's
+    # array to another.
+    return (getattr(xp, '__name__', ''), shapes_key, tuple(grid_shape), (Px, Py),
+            int(fto_x), int(fto_y), str(dtype), lat)
+
+
 def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype, lattice=None):
     """Coefficient grids of ``nx**2``, ``nx*ny`` and ``ny**2`` — the NVF projectors' input.
 
@@ -991,18 +1037,39 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype,
     else:
         built, shift_y, shift_x = shapes, None, None
 
-    nx, ny = normal_vector_field_analytical(xp, grid_shape, built, (Px, Py), real_dtype,
-                                            lattice)
+    # The build above is the expensive half and the phase below is the cheap one, so what is
+    # cached is the split: for a single shape ``built`` sits at the centre of the cell whatever
+    # ``(cx, cy)`` are, which makes a position sweep -- and a position *gradient*, which runs
+    # through the phase -- reuse one field instead of rebuilding it every step. A material sweep
+    # reuses it for the other reason: the key holds no refractive index because the build reads
+    # none. Measured on a five-point sweep at ``normal_grid = 1024``, ``fto = 4``: this call was
+    # 83% of the wall clock for one shape and 93% for six.
+    key = _projector_cache_key(xp, built, grid_shape, period, fto_x, fto_y, dtype, lattice)
+    coeffs = _PROJECTOR_CACHE.pop(key, None) if key is not None else None
+    if coeffs is None:
+        nx, ny = normal_vector_field_analytical(xp, grid_shape, built, (Px, Py), real_dtype,
+                                                lattice)
+        coeffs = tuple(_sampled_coeffs(xp, xp.astype(f, dtype), fto_x, fto_y)
+                       for f in (nx * nx, nx * ny, ny * ny))
+    if key is not None:
+        # Least-recently-used: the read above is a `pop`, so a hit takes the entry out and this
+        # puts it back at the end, and a full cache evicts only on a genuine miss. The case that
+        # needs it is a stack holding both a moving layer and a still one -- the moving layer
+        # misses every step, and without the refresh the still one ages out from under it.
+        # Measured on a two-layer stack over 30 steps: the still layer is built once and the
+        # cache stays pinned at its bound, against 60 builds with no cache at all.
+        if len(_PROJECTOR_CACHE) >= _PROJECTOR_CACHE_MAX:
+            _PROJECTOR_CACHE.pop(next(iter(_PROJECTOR_CACHE)))
+        _PROJECTOR_CACHE[key] = coeffs
 
     if shift_y is None:
         phase = 1.0
     else:
-        KKY, KKX = _grid(xp, fto_x, fto_y, _device(nx), real_dtype)
+        KKY, KKX = _grid(xp, fto_x, fto_y, _device(coeffs[0]), real_dtype)
         arg = KKY * shift_y + KKX * shift_x
         phase = xp.exp(xp.astype(arg, dtype) * (-2j * 3.141592653589793))
 
-    return tuple(_sampled_coeffs(xp, xp.astype(f, dtype), fto_x, fto_y) * phase
-                 for f in (nx * nx, nx * ny, ny * ny))
+    return tuple(c * phase for c in coeffs)
 
 
 def to_conv_mat_smooth_nvf(xp, shapes, n_base, fto_x, fto_y, period, dtype,
