@@ -614,6 +614,9 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype, lattic
     Px, Py = period[0], period[1]
     X, Y = sample_grid(xp, grid_shape, period, dtype, lattice)
 
+    if _tiles_pay(X, Ny, Nx, len(shapes)):
+        return _blend_tiled(xp, X, Y, shapes, Px, Py, dtype, (Ny, Nx))
+
     got = [g for g in (_shape_surface_normal(xp, X, Y, s, Px, Py, dtype) for s in shapes)
            if g is not None]
     if not got:
@@ -624,7 +627,8 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype, lattic
     # Weight each shape by the product of the *other* shapes' surface distances. At shape A's
     # own surface d_A = 0, so every other weight carries that zero and the sum collapses to
     # A's normal exactly, while between the shapes the weights vary smoothly. It is `1/d_j`
-    # written without a division, so there is no epsilon and nothing to tune.
+    # written without a division, so there is no epsilon and nothing to tune. See :func:`_blend`
+    # for the body, which the tiled traversal above shares.
     #
     # Smoothness is the point, not a bonus. Picking the nearest shape outright (`argmin`) gives
     # the same exact normals at every surface and a field that JUMPS across the selection
@@ -635,29 +639,78 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype, lattic
     # seeing the boundary move too and the two agree on being wrong together). This weighting
     # has no jump to sweep: the same comparison falls 1.5e-2 -> 6.5e-4 -> 6.3e-5 as h goes
     # 1e-4 -> 1e-5 -> 1e-6, which is a correct gradient with the difference converging onto it.
-    # What this leaves: the coefficients are a midpoint sum of a field that is continuous but
-    # not smooth, so a fractional-pixel translation resamples it and moves the answer by ~7e-5
-    # at the default grid. A LONE shape does not have it -- self-convergence is a clean
-    # O(1/N**2) three orders lower (5.8e-7 at N = 256, ratio 4.00 per refinement) -- and the
-    # reason is NOT simply that there is no blend. The minimum-image fold reflects a shape's
-    # normal at its own half-period line, which is a jump; a lone shape is built centred by
-    # `normal_projector_coeffs`, which puts that seam on the cell edge where the (i+0.5)/N grid
-    # is antisymmetric and the aliasing cancels. Sample the same lone circle off-centre without
-    # the phase and the sequence stalls (ratio 6.7 then 1.2, floored near 7e-8). With several
-    # shapes each seam sits wherever its shape does and the reflected normal enters the blend
-    # before normalisation, so nothing is aligned to cancel.
-    # With several shapes the same measurement starts at ratio ~2, the signature of a feature
-    # too sharp for a coarse grid, and steepens past 4 as the crossover band resolves. The
-    # remedy is `normal_grid`, not a change here; removing it would need the coefficients
-    # integrated in closed form rather than sampled, which the blend has no obvious form for.
+    return _blend(xp, got, (Ny, Nx), dtype)
+
+
+#: Side of the square block :func:`_blend_tiled` works in. 64 doubles is 32 KB per array, so
+#: the ten-odd live arrays of one shape's evaluation stay inside L2 and the whole pipeline runs
+#: without touching memory again. Measured against 128 / 192 / 256 on two and four shapes at
+#: N = 512 / 1024 / 2048: 64 wins or ties everywhere, by up to 1.3x over the next size.
+_TILE = 64
+
+#: Below this many pixels the full-grid arrays already fit in cache and tiling only adds Python
+#: loop overhead — measured 1.00x at N = 256 and 1.09-1.24x at N = 512.
+_TILE_MIN_PIXELS = 512 * 512
+
+
+def _tiles_pay(sample, ny, nx, n_shapes):
+    """Whether to evaluate the blend block by block instead of over the whole grid.
+
+    **NumPy only, and that is the point rather than a limitation.** The win here is cache
+    residency, which is a property of eager elementwise evaluation: each of the ~50 array
+    operations per shape reads and writes the whole grid, so at N = 1024 a two-shape layer
+    moves roughly 800 MB through memory to do a few tens of megaflops. JAX and Torch under a
+    trace do not have that problem — XLA and the compiler fuse the same chain into one pass —
+    and a Python loop over 256 tiles would instead unroll into the graph and wreck compile
+    time. So the tiling is taken only where it helps and skipped where it would hurt.
+
+    Decided on the **array**, not on the namespace's name. The obvious spelling,
+    ``xp.__name__.endswith('numpy')``, is wrong and quietly so: ``jax.numpy`` ends with
+    ``numpy`` too, and it would have turned the tiling on for exactly the backend the paragraph
+    above says to keep it off. ``test_only_numpy_takes_the_tiled_path`` is what caught that.
+    """
+    import numpy as np
+    return (n_shapes > 1 and ny * nx >= _TILE_MIN_PIXELS
+            and type(sample) is np.ndarray)
+
+
+def _blend_tiled(xp, X, Y, shapes, Px, Py, dtype, grid_shape):
+    """:func:`normal_vector_field_analytical`'s blend, evaluated one cache-sized block at a time.
+
+    Bit-identical to the whole-grid path by construction: same operations on the same values in
+    the same order, only the traversal differs. Pinned by
+    ``test_the_tiled_blend_is_bit_identical_to_the_whole_grid_one``.
+    """
+    import numpy as np
+    ny, nx = grid_shape
+    out_x = np.empty(grid_shape, dtype=dtype)
+    out_y = np.empty(grid_shape, dtype=dtype)
+    for i0 in range(0, ny, _TILE):
+        for j0 in range(0, nx, _TILE):
+            block = (slice(i0, min(i0 + _TILE, ny)), slice(j0, min(j0 + _TILE, nx)))
+            bx = np.ascontiguousarray(X[block])
+            by = np.ascontiguousarray(Y[block])
+            got = [g for g in (_shape_surface_normal(xp, bx, by, s, Px, Py, dtype)
+                               for s in shapes) if g is not None]
+            if not got:
+                out_x[block], out_y[block] = 1.0, 0.0
+                continue
+            if len(got) == 1:
+                out_x[block], out_y[block] = got[0][1], got[0][2]
+                continue
+            out_x[block], out_y[block] = _blend(xp, got, bx.shape, dtype)
+    return out_x, out_y
+
+
+def _blend(xp, got, shape, dtype):
+    """The distance-product combination of several shapes' fields — see the caller for why."""
     dists = [g[0] for g in got]
     scale = sum(dists) / len(dists)
-    # A common positive factor cancels in the normalised sum; this only conditions the product.
     scale = xp.where(scale > 0, scale, xp.ones_like(scale))
     dn = [(d / scale) ** _BLEND_EXPONENT for d in dists]
 
-    sx = xp.zeros((Ny, Nx), dtype=dtype)
-    sy = xp.zeros((Ny, Nx), dtype=dtype)
+    sx = xp.zeros(shape, dtype=dtype)
+    sy = xp.zeros(shape, dtype=dtype)
     for j, (_, gx, gy) in enumerate(got):
         w = None
         for k, dk in enumerate(dn):
@@ -665,7 +718,6 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype, lattic
                 w = dk if w is None else w * dk
         sx = sx + w * gx
         sy = sy + w * gy
-
     norm = _hypot_safe(xp, sx, sy)
     return sx / norm, sy / norm
 

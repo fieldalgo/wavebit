@@ -928,3 +928,60 @@ def test_combine_is_free_while_nothing_overlaps():
 def test_a_misspelled_combine_is_refused_on_the_vector_path_too():
     with pytest.raises(ValueError, match='is not one of'):
         _vector_total([_vector_box(80.0)], 'union')
+
+
+def test_the_tiled_blend_is_bit_identical_to_the_whole_grid_one():
+    """The tiled traversal is an optimization and must be invisible in the answer.
+
+    ``normal_vector_field_analytical`` evaluates the multi-shape blend one cache-sized block at
+    a time on NumPy, because each of the ~50 array operations per shape otherwise reads and
+    writes the whole grid: at N = 1024 a two-shape layer moves roughly 800 MB through memory to
+    do a few tens of megaflops. Blocking it is worth 1.4x at that size and 1.6x at 2048.
+
+    The claim that makes it acceptable is that it changes nothing — same operations, same
+    values, same order, different traversal — so this compares the two paths bit-for-bit rather
+    than to a tolerance. A tolerance here would pass for a version that had quietly become an
+    approximation.
+
+    Both branches are exercised by flipping the pixel threshold rather than the grid size, so
+    the two arms see an identical layer.
+    """
+    from wavebit._core import analytic as _an
+
+    shapes = [dict(type='rectangle', cx=0.31, cy=0.44, lx=0.30, ly=0.22, angle=0.4, n_index=3.5),
+              dict(type='circle', cx=0.70, cy=0.62, lx=0.22, n_index=2.1),
+              dict(type='ellipse', cx=0.20, cy=0.80, lx=0.18, ly=0.11, angle=1.1, n_index=1.8)]
+    guard = _an._TILE_MIN_PIXELS
+    try:
+        for n in (256, 512, 640):                      # 640 is not a multiple of the tile
+            _an._TILE_MIN_PIXELS = 10 ** 12            # force the whole-grid path
+            whole = _an.normal_vector_field_analytical(xnp, (n, n), shapes, (1.0, 1.0),
+                                                       np.float64)
+            _an._TILE_MIN_PIXELS = 0                   # force the tiled path
+            tiled = _an.normal_vector_field_analytical(xnp, (n, n), shapes, (1.0, 1.0),
+                                                       np.float64)
+            for a, b in zip(whole, tiled):
+                assert np.array_equal(np.asarray(a), np.asarray(b)), n
+    finally:
+        _an._TILE_MIN_PIXELS = guard
+
+
+def test_only_numpy_takes_the_tiled_path():
+    """JAX and Torch must keep the whole-grid path, and not because it is faster there.
+
+    A Python loop over 256 blocks unrolls into a trace, so on those backends the optimization
+    would trade a memory win it does not need — XLA and the compiler already fuse the chain
+    into one pass — for a compile time that scales with the tile count.
+    """
+    from wavebit._core import analytic as _an
+
+    numpy_grid = np.zeros((4, 4))
+    assert _an._tiles_pay(numpy_grid, 1024, 1024, 2)
+    assert not _an._tiles_pay(numpy_grid, 1024, 1024, 1)   # a lone shape never blends
+    assert not _an._tiles_pay(numpy_grid, 64, 64, 2)       # already cache-resident
+
+    # The decision reads the array, not the namespace's name -- `jax.numpy` ends with `numpy`,
+    # so the obvious spelling would have switched the tiling ON for the one backend that must
+    # not take it. This assertion is the one that caught it.
+    jax = pytest.importorskip('jax')
+    assert not _an._tiles_pay(jax.numpy.zeros((4, 4)), 1024, 1024, 2)
