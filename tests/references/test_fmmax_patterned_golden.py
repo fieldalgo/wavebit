@@ -50,7 +50,7 @@ def solve(n_in, g, fto=FTO):
     eps33[..., 0, 1], eps33[..., 1, 0] = gyro, -gyro         # the physical tensor
 
     nx, ny = normal_vector_field(eps)
-    epx, epy, epxy, epyx, epz_i = pn_conv_matrices(np, eps33, nx, ny, fto, fto)
+    epx, epy, epz_i, epxy, epyx = pn_conv_matrices(np, eps33, nx, ny, fto, fto)
 
     mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
                        psi=0.0, fto=(fto, fto), period=(PERIOD, PERIOD), wavelength=WL,

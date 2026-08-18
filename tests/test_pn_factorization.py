@@ -48,7 +48,7 @@ def tensor(eps, gyro=None, ezz=None):
 
 
 def solve(slots, eps, fto, theta=0.0, phi=0.0, psi=0.0):
-    epx, epy, epxy, epyx, epz_i = slots
+    epx, epy, epz_i, epxy, epyx = slots
     mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=np.deg2rad(theta),
                        phi=np.deg2rad(phi), psi=np.deg2rad(psi), fto=(fto, fto),
                        period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
@@ -138,7 +138,7 @@ def test_a_uniform_layer_comes_back_as_the_tensor_it_was_given(fto, gyro):
     """
     uni = np.full((N, N), 2.25, dtype=complex)
     g = None if gyro is None else np.full((N, N), gyro)
-    epx, epy, epxy, epyx, epz_i = pn(tensor(uni, g), uni, fto)
+    epx, epy, epz_i, epxy, epyx = pn(tensor(uni, g), uni, fto)
 
     ff = (2 * fto + 1) ** 2
     I = np.eye(ff)
@@ -244,7 +244,7 @@ def test_the_z_slot_is_the_direct_rule_inverted_not_the_inverse_rule():
     eps = pillar(1.6 ** 2)
     nx, ny = normal_vector_field(eps)
     for fto in (4, 8):
-        got = pn_conv_matrices(np, tensor(eps), nx, ny, fto, fto)[4]
+        got = pn_conv_matrices(np, tensor(eps), nx, ny, fto, fto)[2]
         direct = np.linalg.inv(fourier2d_piecewise_constant(
             np, eps.astype(complex), fto, fto, inverse_rule=None))
         inverse = fourier2d_piecewise_constant(
@@ -315,14 +315,14 @@ def test_the_z_slot_reads_the_raster_as_the_staircase_it_is():
         f'transforms have stopped differing and this test has stopped comparing anything')
 
     # The shipped slot is the closed-form one.
-    shipped = pn(e33, eps, fto)[4]
+    shipped = pn(e33, eps, fto).epz_i
     assert np.abs(shipped - np.linalg.inv(closed[0])).max() < 1e-13
 
     def rotated_pair(slot_transform):
         out = []
         for e, gg, psi in ((eps, g, 30.0), (np.rot90(eps), np.rot90(g), 120.0)):
             slots = list(pn(tensor(e, gg), e, fto))
-            slots[4] = np.linalg.inv(z_slot(tensor(e, gg), slot_transform))
+            slots[2] = np.linalg.inv(z_slot(tensor(e, gg), slot_transform))
             out.append(rt(solve(slots, e, fto, psi=psi)))
         return max(abs(out[0][0] - out[1][0]), abs(out[0][1] - out[1][1]))
 
@@ -348,7 +348,7 @@ def test_the_z_slot_reaches_the_answer_at_a_steep_angle():
     slots = list(pn(tensor(eps, g), eps, fto))
     good = rt(solve(slots, eps, fto, theta=40.0, psi=30.0))
 
-    slots[4] = np.linalg.inv(np.eye(slots[4].shape[0]) * np.mean(eps))   # a plausible wrong slot
+    slots[2] = np.linalg.inv(np.eye(slots[2].shape[0]) * np.mean(eps))   # a plausible wrong slot
     bad = rt(solve(slots, eps, fto, theta=40.0, psi=30.0))
     assert abs(good[0] - bad[0]) > 1e-5, 'the z slot is not reaching the answer here'
 

@@ -39,7 +39,7 @@ def test_vector_nvf_energy_conservation():
     nx_vec, ny_vec = get_normal_vector_field_analytical((N, N), shapes, period=(1000.0, 1000.0))
 
     fto_val = 2
-    Exx, Eyy, Exy, Eyx, Epz_i = to_conv_mat_nvf_2d(eps_matrix, fto_val, fto_val, nx=nx_vec, ny=ny_vec)
+    Exx, Eyy, Epz_i, Exy, Eyx = to_conv_mat_nvf_2d(eps_matrix, fto_val, fto_val, nx=nx_vec, ny=ny_vec)
 
     m = wavebit.rcwa(
         backend=0, fto=[fto_val, fto_val],

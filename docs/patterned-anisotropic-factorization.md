@@ -324,16 +324,23 @@ t = np.zeros(eps.shape + (3, 3), dtype=complex)
 t[..., 0, 0] = t[..., 1, 1] = t[..., 2, 2] = eps
 t[..., 0, 1], t[..., 1, 0] = g, -g                       # the physical tensor
 
-epx, epy, epxy, epyx, epz_i = to_conv_mat_raster_pn(t[None], fto, fto)
+epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn(t[None], fto, fto)
 
 mee = wavebit.rcwa(backend=0, fto=(fto, fto), period=(p, p), wavelength=wl,
                    thickness=[d], ucell=np.sqrt(eps)[None])
 res = mee.solve_for_conv(wl, epx, epy, epz_i, epxy, epyx)   # epz_i is THIRD
 ```
 
-Two ways to get this wrong, both silent: the slot order above is `(epx, epy, epz_i, epxy, epyx)`
-— `epz_i` third, not last — and the off-diagonal **slots hold the negation**, which
-`to_conv_mat_raster_pn` has already applied. See
+Equivalently `mee.solve_for_conv(wl, *to_conv_mat_raster_pn(t[None], fto, fto))`: since
+2026-08-18 every builder returns its slots in `solve_for_conv`'s own parameter order, so the
+splat is correct rather than merely shorter. It was not always — the five-slot builders used to
+group the in-plane pair together and put `epz_i` last, and splatting then landed the inverted zz
+matrix in the `epxy` slot. Nothing raised; `R + T` came back 1.61 on a lossless passive pillar
+against 1.0000000000 for the same structure, with only `UnphysicalResultWarning` to show for it.
+`tests/test_slot_order.py` is what stops that returning.
+
+The remaining way to get this wrong is silent in the same way: the off-diagonal **slots hold the
+negation**, which `to_conv_mat_raster_pn` has already applied. See
 [`off-diagonal-slot-convention.md`](off-diagonal-slot-convention.md).
 
 ## 10. References

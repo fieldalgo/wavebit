@@ -105,7 +105,7 @@ def toeplitz_conv(f, mm, nn, piecewise_constant):
 
 
 def conv_mats(eps, normal_field, mm, nn, keep, fto_box, mode):
-    """``(epx, epy, epxy, epyx, epz_i)`` for the selected order set."""
+    """``(epx, epy, epz_i, epxy, epyx)`` for the selected order set."""
     m, n = mm[keep], nn[keep]
 
     if mode == 'nvf':
@@ -124,7 +124,7 @@ def conv_mats(eps, normal_field, mm, nn, keep, fto_box, mode):
         E = toeplitz_conv(eps, m, n, True)
         O = np.zeros_like(E)
 
-        return E, E, O, O, np.linalg.inv(E)
+        return E, E, np.linalg.inv(E), O, O
 
     if mode == 'li':
         if not keep.all():
@@ -135,14 +135,14 @@ def conv_mats(eps, normal_field, mm, nn, keep, fto_box, mode):
         epx = fourier2d_piecewise_constant(np, eps, fto_x, fto_y, inverse_rule='x')
         O = np.zeros_like(epz)
 
-        return epx, epy, O, O, np.linalg.inv(epz)
+        return epx, epy, np.linalg.inv(epz), O, O
 
     raise ValueError(mode)
 
 
 # ------------------------------------------------------------------- solver
 
-def solve_flat(mm, nn, epx, epy, epxy, epyx, epz_i, wavelength, period, thickness,
+def solve_flat(mm, nn, epx, epy, epz_i, epxy, epyx, wavelength, period, thickness,
                n_top, n_bot, theta, phi, psi):
     """2D RCWA (TMM) for an arbitrary flat set of Fourier orders.
 
@@ -309,8 +309,8 @@ def selftest():
 
     # flat solver vs the production NVF path, on a rectangular set
     ucell = cell[None, :, :]
-    epx, epy, epxy, epyx, epz_i = to_conv_mat_raster_nvf(ucell, fto, fto)
-    de_ri_ref, de_ti_ref = _core_solve_2d(ucell, fto, epx, epy, epxy, epyx, epz_i)
+    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_nvf(ucell, fto, fto)
+    de_ri_ref, de_ti_ref = _core_solve_2d(ucell, fto, epx, epy, epz_i, epxy, epyx)
 
     nf = normal_vector_field(eps)
     r = run_one(eps, nf, mm, nn, np.ones(mm.shape, bool), (fto, fto), 'nvf')
@@ -320,7 +320,7 @@ def selftest():
     assert err < 1e-12, err
 
 
-def _core_solve_2d(ucell, fto, epx, epy, epxy, epyx, epz_i):
+def _core_solve_2d(ucell, fto, epx, epy, epz_i, epxy, epyx):
     from wavebit._core.solve_2d import solve_2d
 
     C = CASE

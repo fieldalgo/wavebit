@@ -674,7 +674,7 @@ def _solver_mean_eps(combine, shapes=PAINT_RODS):
     layer = dict(n_base=1.0, shapes=shapes, combine=combine)
     mats = to_conv_mat_smooth_layers([layer], 6, 6, PAINT_PERIOD, normal_grid=256,
                                      type_complex=np.complex128, xp=xnp)
-    return float(np.real(np.linalg.inv(np.asarray(mats[4][0]))[0, 0]))
+    return float(np.real(np.linalg.inv(np.asarray(mats.epz_i[0]))[0, 0]))
 
 
 def test_the_solve_path_integrates_the_painted_structure_not_the_summed_one():

@@ -245,8 +245,8 @@ def test_permittivity_matches_the_analytic_path_for_one_shape(fto):
     (mine, _) = _mats(xnp, [(0.5, 0.5, 0.42, 0.31, 0.4, 2.0)], fto=fto, ng=ng)
     theirs = to_conv_mat_smooth_nvf(xnp, [shape], 1.0, fto, fto, PERIOD, xnp.complex128,
                                       normal_grid=ng)
-    rel = (np.abs(np.asarray(mine[4]) - np.asarray(theirs[4])).max()
-           / np.abs(np.asarray(theirs[4])).max())
+    rel = (np.abs(np.asarray(mine.epz_i) - np.asarray(theirs.epz_i)).max()
+           / np.abs(np.asarray(theirs.epz_i)).max())
     assert rel < 1e-13, rel
 
 
@@ -365,8 +365,8 @@ def test_a_circle_without_ly_is_the_same_circle_on_both_paths(fto):
                                              xnp.complex128, normal_grid=ng, lattice=lat)
         theirs = to_conv_mat_smooth_nvf(xnp, [shape], 1.0, fto, fto, period,
                                           xnp.complex128, normal_grid=ng, lattice=lat)
-        rel = (np.abs(np.asarray(mine[4]) - np.asarray(theirs[4])).max()
-               / np.abs(np.asarray(theirs[4])).max())
+        rel = (np.abs(np.asarray(mine.epz_i) - np.asarray(theirs.epz_i)).max()
+               / np.abs(np.asarray(theirs.epz_i)).max())
         # Measured 3.2e-10 (fto 4) and 6.2e-10 (fto 8), square and skew alike. Set just
         # above that, not at a round number: dropping the area matching puts it back at
         # 1.6e-5 and a 1e-4 tolerance would have absorbed that silently.

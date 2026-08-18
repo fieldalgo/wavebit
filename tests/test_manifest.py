@@ -363,12 +363,15 @@ def _run_uniform(eps, mu=None):
 def _run_patterned():
     """A pillar of a real symmetric tensor in vacuum, through the Popov-Neviere builder.
 
-    The unpacking is written out rather than splatted on purpose. The builders return
-    ``(epx, epy, epxy, epyx, epz_i)`` and :meth:`solve_for_conv` takes
-    ``(epx, epy, epz_i, epxy, epyx)`` — both documented, and different. Splatting one into
-    the other puts the inverted zz slot where epxy belongs, and nothing objects: the solve
-    returns a full set of plausible efficiencies that happen to sum to 1.9. That is how this
-    test was first written, and the energy assertion below is what caught it.
+    The unpacking is written out rather than splatted, which since 2026-08-18 is a style
+    choice rather than a requirement: the builders and :meth:`solve_for_conv` now agree on
+    ``(epx, epy, epz_i, epxy, epyx)``, so ``solve_for_conv(wl, *build(...))`` is correct too.
+    It was not. The builders grouped the in-plane pair together and put ``epz_i`` last, so
+    splatting landed the inverted zz matrix in the ``epxy`` slot and nothing objected — the
+    solve returned a full set of plausible efficiencies summing to 1.9. That is how this test
+    was first written, and the energy assertion below is what caught it. ``tests/test_slot_order.py``
+    now pins the agreement for every builder; this case is left spelled out because naming the
+    slots is what makes the structure under test readable.
     """
     from wavebit._core.factorization import to_conv_mat_raster_pn
     grid, fto = 48, 4
@@ -376,7 +379,7 @@ def _run_patterned():
     for i in range(3):
         eps[..., i, i] = 1.0
     eps[0, 14:34, 18:30] = _tensor(2.25, 2.25, 2.89)
-    epx, epy, epxy, epyx, epz_i = to_conv_mat_raster_pn(eps, fto, fto)
+    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn(eps, fto, fto)
     mee = wavebit.rcwa(fto=[fto, fto], **_MAT_KW)
     return mee.solve_for_conv(_MAT_KW['wavelength'], epx, epy, epz_i, epxy, epyx)
 

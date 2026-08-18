@@ -1,7 +1,7 @@
 """A *uniform* anisotropic layer, driven straight through the five convolution slots.
 
 The 2D mode operator has read five permittivity blocks since the NVF factorization landed
-(``epx, epy, epxy, epyx, epz_i`` — see ``_core/solve_2d.py::layer_modes_2d``), which makes the
+(``epx, epy, epz_i, epxy, epyx`` — see ``_core/solve_2d.py::layer_modes_2d``), which makes the
 tensor ``[[exx, exy, 0], [eyx, eyy, 0], [0, 0, ezz]]`` solvable today even though no user-facing
 input builds one: ``ucell`` is a scalar refractive index and is squared into an isotropic ``eps``.
 ``docs/anisotropic-materials.md`` §4 says so and shows the call; this file is what keeps that

@@ -219,7 +219,7 @@ def normal_projector_coeffs(xp, loops, grid_shape, period, fto_x, fto_y, dtype, 
 
 def conv_mats(xp, regions, n_base, fto_x, fto_y, period, normal_grid, dtype, cdtype,
               lattice=None):
-    """``(epx, epy, epxy, epyx, epz_i)`` for one boundary-resolved layer.
+    """``(epx, epy, epz_i, epxy, epyx)`` for one boundary-resolved layer.
 
     ``regions`` is ``[(n_index, [loop, ...]), ...]`` -- disjoint, painting already resolved by
     the clipper. Hole loops arrive wound clockwise and need no special case here: the polygon

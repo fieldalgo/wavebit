@@ -198,7 +198,7 @@ res = mee.solve_for_conv(wavelength, epx, epy, epz_i, epxy, epyx,
 
 Two things to watch:
 
-- The **slot sign convention** is `(epx, epy, epxy, epyx, epz_i) = (exx, eyy, -exy, -eyx, ⟦eps⟧⁻¹)`,
+- The **slot sign convention** is `(epx, epy, epz_i, epxy, epyx) = (exx, eyy, ⟦eps⟧⁻¹, -exy, -eyx)`,
   and the z row extends it unchanged: `(epxz, epyz, epzx, epzy) = (-exz, -eyz, -ezx, -ezy)`.
   It is set by `_nvf_assemble`, not by the mode operator, and getting it backwards is close to
   undetectable: `+eps_xy` mirrors the optic axis about `x`, and **every power efficiency stays

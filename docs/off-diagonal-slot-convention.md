@@ -119,8 +119,12 @@ Read the tensor straight off:
 ```
 
 **The slot holds the negative.** This agrees with `_nvf_assemble`, which returns
-`(eps_xx, eps_yy, -eps_xy, -eps_xy, inv(⟦eps⟧))` — the negation is applied there, on the way in,
+`(eps_xx, eps_yy, inv(⟦eps⟧), -eps_xy, -eps_xy)` — the negation is applied there, on the way in,
 and every consumer downstream has been written against it ever since.
+
+(That tuple was ordered `(eps_xx, eps_yy, -eps_xy, -eps_xy, inv(⟦eps⟧))` when this document was
+written, and was reordered on 2026-08-18 so that builders and `solve_for_conv` agree; see §7.1.
+Nothing about the *sign* convention changed, which is what this document is about.)
 
 So the correct hand-filled call for a uniform layer is:
 
@@ -394,12 +398,12 @@ question, and anyone building a Faraday isolator will have to answer it.
 Every producer in the library returns the off-diagonal value **twice**:
 
 ```
-     factorization.py:590   return eps_xx, eps_yy, -eps_xy, -eps_xy, inv(ep_dir)
-     boundary.py:268        return eps_xx, eps_yy, -eps_xy, -eps_xy, inv(ep_dir)
-     analytic.py:646        return eps_xx, eps_yy, -eps_xy, -eps_xy, inv(ep_dir)
-                                                   └────┬────┘
-                                              the same value, so the
-                                              ordering cannot matter
+     factorization.py::_nvf_assemble    return eps_xx, eps_yy, inv(ep_dir), -eps_xy, -eps_xy
+     analytic.py::nvf_from_coeffs       return eps_xx, eps_yy, inv(ep_dir), -eps_xy, -eps_xy
+     boundary.py                        (funnels into nvf_from_coeffs)
+                                                                          └────┬────┘
+                                                                 the same value, so the
+                                                                 ordering cannot matter
 ```
 
 and the Li path passes `None`, which `solve_2d` turns into zeros. The symmetry is not a
@@ -422,11 +426,49 @@ tensor.** The first person to do that will be someone trying gyrotropy — and i
 magnetisation lies in the plane rather than along the stack normal, they will be filling the four
 z-row slots of §2.1 at the same time.
 
+## 7.1 The slot *order* changed on 2026-08-18; the sign convention did not
+
+Everything above is about which **value** goes in a slot. A separate defect concerned which
+**position** — and it is worth stating here because §1's `solve_for_conv` call is the entry point
+both are reached through.
+
+The builders returned five slots as `(epx, epy, epxy, epyx, epz_i)`, grouping the in-plane 2x2
+block and putting the inverted zz matrix last. `solve_for_conv` takes
+`(epx, epy, epz_i, epxy, epyx)`, and its order is forced: `epz_i` is required on every solve
+because it eliminates `E_z`, while the off-diagonal pair defaults to `None`, and Python will not
+accept a required parameter after a defaulted one. So
+
+```python
+res = mee.solve_for_conv(wavelength, *to_conv_mat_raster_pn(tensor, fto, fto))
+```
+
+put `epz_i` in the `epxy` slot. Nothing raised. On a lossless passive pillar it returned a full
+set of plausible efficiencies summing to `R + T = 1.61`, against `1.0000000000` for the same
+structure solved properly — only `UnphysicalResultWarning` fired. The same idiom was correct for
+the three-slot isotropic builders throughout, which is what made it a trap rather than a mistake.
+
+It had already been found once, inside `factorization.py`: `pn_mu_conv_matrices` existed solely
+to swap the two groups on the way to `layer_modes_2d`, its docstring describing the identical
+failure for `mu_zz^-1`. A local wrapper could not reach `solve_for_conv`, so the fix was to make
+it **one order everywhere** — every builder now returns `solve_for_conv`'s parameter order, and
+`pn_mu_conv_matrices` rearranges nothing.
+
+`tests/test_slot_order.py` pins it for every builder, two ways: energy on a lossless passive
+layer, and the structural identity that slot 2 is `inv(⟦eps⟧)` (the only slot held as an inverse,
+so it is identifiable without knowing the answer — and it still discriminates on a lossy
+structure, where the energy assertion says nothing). Reverting either producer to the old order
+fails eight of its cases and leaves the three-slot builders passing, which is the discrimination
+the test is for.
+
+Nothing about the sign convention in §2 changed, and no shipped path moved: every consumer inside
+the library unpacks by name, so the reorder is invisible to `conv_solve`.
+
 ## 8. State, and what is still open
 
 | | |
 |---|---|
 | Sign convention (`slot = -eps`) | derived, measured, pinned by a test |
+| Slot *order* (builders vs `solve_for_conv`) | mismatched until 2026-08-18, silent and worth `R + T = 1.61`; **fixed** by making it one order everywhere (§7.1), pinned by `tests/test_slot_order.py` |
 | Asymmetric-tensor ordering | defect confirmed symbolically, numerically, and against an outside oracle; **fixed** |
 | The repair (exchange the pair in `Omega_R`) | applied; lands on both oracles at ~1e-15 across every configuration tried |
 | Effect on released behaviour | none — verified bit-identical on real gratings |

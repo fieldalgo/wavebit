@@ -1282,16 +1282,16 @@ class CoreFactorizationMixin:
                             self.ucell, fto_x, fto_y, compression=compression)
             else:
                 if sampled:
-                    (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all,
-                     epz_conv_i_all) = _fac.to_conv_mat_raster_nvf(
+                    (epx_conv_all, epy_conv_all, epz_conv_i_all,
+                     epxy_conv_all, epyx_conv_all) = _fac.to_conv_mat_raster_nvf(
                         self.ucell, fto_x, fto_y,
                         normal_field=normal_field,
                         normal_field_source=normal_field_source,
                         lattice=self._geometry_lattice_for(geometry),
                         normal_method=self.normal_method)
                 else:
-                    (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all,
-                     epz_conv_i_all) = _fac.to_conv_mat_raster_integrated_nvf(
+                    (epx_conv_all, epy_conv_all, epz_conv_i_all,
+                     epxy_conv_all, epyx_conv_all) = _fac.to_conv_mat_raster_integrated_nvf(
                         self.ucell, fto_x, fto_y,
                         normal_field=normal_field,
                         normal_field_source=normal_field_source,
@@ -1317,8 +1317,8 @@ class CoreFactorizationMixin:
             # integral over the cell, so the coefficients are integrated ones. Naming
             # `factorization='li'` or `fourier_coefficients='sampled'` was refused above.
             xp = _namespace_for_backend(self.backend)
-            (epx_conv_all, epy_conv_all, epxy_conv_all, epyx_conv_all,
-             epz_conv_i_all) = _analytic.to_conv_mat_smooth_layers(
+            (epx_conv_all, epy_conv_all, epz_conv_i_all,
+             epxy_conv_all, epyx_conv_all) = _analytic.to_conv_mat_smooth_layers(
                 self.ucell, fto_x, fto_y, self.period,
                 normal_grid=self.normal_grid,
                 type_complex=xp.complex128, xp=xp,

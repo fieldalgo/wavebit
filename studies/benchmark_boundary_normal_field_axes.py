@@ -98,7 +98,7 @@ WL = 0.777
 P = 2.0 * WL
 NGRID, HALF_PX, NPTS, FTO = 512, 6.0, 25, 8
 PIX, CX0 = P / NGRID, 0.28 * P
-NAMES = ('epx', 'epy', 'epxy', 'epyx', 'epz_i')
+NAMES = ('epx', 'epy', 'epz_i', 'epxy', 'epyx')
 
 
 def build(cx, na, nb):

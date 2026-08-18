@@ -57,9 +57,74 @@ share. Material values never move a pattern, so the sweeps this split exists to 
 untouched. A fit whose *pattern* moves every step is a different matter: on the compression it
 should simply drop ``geometry=`` and differentiate, which cannot go stale because it records
 nothing.
+
+Slot order
+----------
+
+**Every builder here returns its slots in ``solve_for_conv``'s parameter order**, so that
+
+.. code-block:: python
+
+    res = mee.solve_for_conv(wavelength, *to_conv_mat_raster_nvf(ucell, fto_x, fto_y))
+
+is correct for any of them. Concretely, three slots are ``(epx, epy, epz_i)`` and five are
+``(epx, epy, epz_i, epxy, epyx)`` — the inverted zz matrix is **third**, not last, because
+``solve_for_conv`` requires it on every solve (it eliminates ``E_z``) while the off-diagonal
+pair defaults to ``None``, and Python will not put a required parameter after a defaulted one.
+
+Grouping the in-plane 2x2 block together and putting ``epz_i`` last reads better and was the
+order the five-slot builders used until 2026-08-18. It is not used because the difference is
+undetectable: splatting a five-slot builder into ``solve_for_conv`` then lands ``epz_i`` in the
+``epxy`` slot, and the solve returns a full set of plausible efficiencies rather than raising —
+measured ``R + T = 1.61`` against ``1.0000000000`` for the same structure. The same idiom being
+correct for the three-slot builders is what makes it a trap rather than a mistake. It was found
+twice: once inside this module (see :func:`pn_mu_conv_matrices`, which existed only to reorder
+around it) and once through ``solve_for_conv`` itself, by the energy assertion in
+``tests/test_manifest.py``.
+
+``solve_for_conv``'s order is the one that won rather than the builders' for a second reason
+besides being the forced one: the public ``conv_matrices()`` accessor already returned it, so
+``solve_for_conv(wl, *solver.conv_matrices())`` was the one splat in the package that always
+worked (``tests/test_conv_matrices_accessor.py``). The builders are what disagreed with it.
+
+``tests/test_slot_order.py`` pins the property directly, for every builder.
 """
+from typing import NamedTuple
+
 from .backend import array_namespace
 from .geometry import StaleGeometryError
+
+
+class ConvSlots3(NamedTuple):
+    """The three permittivity slots of a scalar (Li-rule) layer, in ``solve_for_conv`` order.
+
+    A ``NamedTuple``, so every way these have ever been consumed still works — splatting into
+    ``solve_for_conv``, unpacking into five names, ``len``, indexing, ``zip``. What it adds is
+    ``slots.epz_i``, which is the point: an index written as ``[2]`` is correct only for as
+    long as nobody reorders, and the reorder that prompted all this was invisible precisely
+    because positional access cannot notice one. Prefer the attribute at any site that reaches
+    for a single slot.
+    """
+    epx: object
+    epy: object
+    epz_i: object
+
+
+class ConvSlots5(NamedTuple):
+    """The five slots of an NVF / Popov-Neviere layer, in ``solve_for_conv`` order.
+
+    :class:`ConvSlots3` with the off-diagonal pair appended; see that docstring, and "Slot
+    order" above, for why ``epz_i`` sits third rather than last.
+
+    Used for the permeability slots too, where the fields read ``mux``, ``muy``, ``muz_i``,
+    ``muxy``, ``muyx`` — the E/H duality means one layout serves both (see
+    :func:`pn_mu_conv_matrices`).
+    """
+    epx: object
+    epy: object
+    epz_i: object
+    epxy: object
+    epyx: object
 
 
 def _inverse_axes(inverse_rule):
@@ -388,7 +453,7 @@ def to_conv_mat_raster_sampled(ucell, fto_x, fto_y):
         epy_list.append(epy_conv)
         epz_i_list.append(xp.linalg.inv(epz_conv))
 
-    return xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list)
+    return ConvSlots3(xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list))
 
 
 def _complex_dtype(xp, x):
@@ -834,7 +899,8 @@ def _nvf_assemble(xp, ep_dir, ep_inv, C_xx, C_xy, C_yy):
     obtained, which is what lets the sampled and integrated builders share this step.
 
     Returns the five matrices in the slot convention the 2D solve expects:
-    ``(epx, epy, epxy, epyx, epz_i) = (eps_xx, eps_yy, -eps_xy, -eps_yx, inv(<eps>))``.
+    ``(epx, epy, epz_i, epxy, epyx) = (eps_xx, eps_yy, inv(<eps>), -eps_xy, -eps_yx)`` --
+    ``solve_for_conv``'s parameter order; see "Slot order" in this module's docstring.
     """
     delta_ep = ep_dir - xp.linalg.inv(ep_inv)
 
@@ -842,7 +908,7 @@ def _nvf_assemble(xp, ep_dir, ep_inv, C_xx, C_xy, C_yy):
     eps_yy = ep_dir - 0.5 * (delta_ep @ C_yy + C_yy @ delta_ep)
     eps_xy = -0.5 * (delta_ep @ C_xy + C_xy @ delta_ep)      # == eps_yx (symmetric)
 
-    return eps_xx, eps_yy, -eps_xy, -eps_xy, xp.linalg.inv(ep_dir)
+    return ConvSlots5(eps_xx, eps_yy, xp.linalg.inv(ep_dir), -eps_xy, -eps_xy)
 
 
 def _pn_fields(xp, eps33, nx, ny):
@@ -916,7 +982,7 @@ def pn_conv_matrices(xp, eps33, nx, ny, fto_x, fto_y):
 
     ``eps33`` is the pointwise permittivity tensor on the layer raster, shape ``(Ny, Nx, 3, 3)``.
     Returns the same five slots as :func:`nvf_conv_matrices`,
-    ``(epx, epy, epxy, epyx, epz_i)``, so the two are interchangeable at the call site.
+    ``(epx, epy, epz_i, epxy, epyx)``, so the two are interchangeable at the call site.
 
     Scope: the **in-plane** tensor, i.e. the five slots. The derivation in :func:`_pn_fields`
     is written for a full 3x3 and stays valid for one, but the z row and column only decouple
@@ -976,16 +1042,15 @@ def pn_conv_matrices(xp, eps33, nx, ny, fto_x, fto_y):
     epz_i = xp.linalg.inv(
         fourier2d_piecewise_constant(xp, eps33[..., 2, 2], fto_x, fto_y, inverse_rule=None))
 
-    return eps_xx, eps_yy, -eps_xy, -eps_yx, epz_i
+    return ConvSlots5(eps_xx, eps_yy, epz_i, -eps_xy, -eps_yx)
 
 
 def pn_mu_conv_matrices(xp, mu33, nx, ny, fto_x, fto_y):
     """The five **permeability** slots from a patterned ``mu`` tensor.
 
-    ``pn_conv_matrices`` verbatim, in the order :func:`~wavebit._core.solve_2d.layer_modes_2d`
-    takes ``mu``. That the same routine serves both is not a shortcut — it is the E/H duality
-    the whole magnetic implementation rests on. The rearrangement in :func:`_pn_fields` is
-    driven entirely by which quantities are continuous at an interface:
+    ``pn_conv_matrices`` verbatim. That the same routine serves both is not a shortcut — it is
+    the E/H duality the whole magnetic implementation rests on. The rearrangement in
+    :func:`_pn_fields` is driven entirely by which quantities are continuous at an interface:
 
         tangential E and normal D   ->   tangential H and normal B
 
@@ -993,17 +1058,20 @@ def pn_mu_conv_matrices(xp, mu33, nx, ny, fto_x, fto_y):
     ``B = mu H``, so ``a = n.mu.n``, ``p = mu n``, ``q = mu^T n`` and every expression after
     them is unchanged. A separate derivation for ``mu`` would be the same derivation.
 
-    **The reorder is the whole reason this exists as a function.** ``pn_conv_matrices`` returns
-    ``(x, y, xy, yx, z_i)`` and ``layer_modes_2d`` takes ``(x, y, z_i, xy, yx)`` — the inverted
-    z slot is *third* there and *last* here. Passing one through to the other unchanged puts
+    **This used to exist in order to reorder, and that is worth keeping on the record.**
+    ``pn_conv_matrices`` returned ``(x, y, xy, yx, z_i)`` while
+    :func:`~wavebit._core.solve_2d.layer_modes_2d` takes ``(x, y, z_i, xy, yx)``, so this
+    function swapped the two groups on the way through; passing one to the other unchanged put
     ``mu_zz^-1`` where ``mu_xy`` belongs, which is a plausible-looking magnetic layer rather
-    than an error.
+    than an error. The same mismatch then bit a second time through ``solve_for_conv``, which
+    a local fix here could not reach, so the order was made one order everywhere (see "Slot
+    order" in this module's docstring) and the swap below went away. What remains is a name for
+    the ``mu`` half of the duality and for the normal-field note below — nothing is rearranged.
 
     ``nx`` / ``ny`` are the normal field of the **permeability's** boundary, which need not be
     the permittivity's — see :func:`to_conv_mat_raster_pn_mu`.
     """
-    mu_xx, mu_yy, mu_xy, mu_yx, mu_z_i = pn_conv_matrices(xp, mu33, nx, ny, fto_x, fto_y)
-    return mu_xx, mu_yy, mu_z_i, mu_xy, mu_yx
+    return pn_conv_matrices(xp, mu33, nx, ny, fto_x, fto_y)
 
 
 def to_conv_mat_raster_pn_mu(ucell_tensor, fto_x, fto_y, normal_field=None, lattice=None,
@@ -1062,7 +1130,7 @@ def to_conv_mat_raster_pn_mu(ucell_tensor, fto_x, fto_y, normal_field=None, latt
         for slot, mat in zip(out, pn_mu_conv_matrices(xp, mu33, nx, ny, fto_x, fto_y)):
             slot.append(mat)
 
-    return tuple(xp.stack(slot) for slot in out)
+    return ConvSlots5(*(xp.stack(slot) for slot in out))
 
 
 def to_conv_mat_raster_pn(ucell_tensor, fto_x, fto_y, normal_field=None, lattice=None,
@@ -1089,7 +1157,7 @@ def to_conv_mat_raster_pn(ucell_tensor, fto_x, fto_y, normal_field=None, lattice
             read only when ``normal_field`` is not supplied.
 
     Returns:
-        ``(epx, epy, epxy, epyx, epz_i)``, each ``(n_layers, ff_xy, ff_xy)`` — the same five
+        ``(epx, epy, epz_i, epxy, epyx)``, each ``(n_layers, ff_xy, ff_xy)`` — the same five
         slots :func:`to_conv_mat_raster_nvf` returns, in the same convention.
     """
     xp = array_namespace(ucell_tensor)
@@ -1120,7 +1188,7 @@ def to_conv_mat_raster_pn(ucell_tensor, fto_x, fto_y, normal_field=None, lattice
         for slot, mat in zip(out, pn_conv_matrices(xp, eps33, nx, ny, fto_x, fto_y)):
             slot.append(mat)
 
-    return tuple(xp.stack(slot) for slot in out)
+    return ConvSlots5(*(xp.stack(slot) for slot in out))
 
 
 def nvf_conv_matrices(xp, eps_matrix, nx, ny, fto_x, fto_y):
@@ -1183,7 +1251,7 @@ def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
     27 of 32 combinations (``docs/nvf-upsampling.md``).
 
     Returns:
-        ``(epx, epy, epxy, epyx, epz_i)``, each ``(n_layers, ff_xy, ff_xy)``.
+        ``(epx, epy, epz_i, epxy, epyx)``, each ``(n_layers, ff_xy, ff_xy)``.
     """
     xp = array_namespace(ucell)
 
@@ -1212,7 +1280,7 @@ def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
                 xp, eps_matrix, nx, ny, fto_x, fto_y)):
             slot.append(mat)
 
-    return tuple(xp.stack(slot) for slot in out)
+    return ConvSlots5(*(xp.stack(slot) for slot in out))
 
 
 # ============================================ integrated Fourier series (closed form, analytic)
@@ -1505,7 +1573,7 @@ def to_conv_mat_raster_integrated(ucell, fto_x, fto_y, compression=None):
         epy_list.append(fourier2d_integrated(xp, eps, x, y, fto_x, fto_y, inverse_rule='y'))
         epz_i_list.append(xp.linalg.inv(epz_list))
 
-    return xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list)
+    return ConvSlots3(xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list))
 
 
 def to_conv_mat_raster_integrated_nvf(ucell, fto_x, fto_y, normal_field=None,
@@ -1540,7 +1608,7 @@ def to_conv_mat_raster_integrated_nvf(ucell, fto_x, fto_y, normal_field=None,
     path consistent with the record it consumes, not a second implementation of the skew.
 
     Returns:
-        ``(epx, epy, epxy, epyx, epz_i)``, each ``(n_layers, ff_xy, ff_xy)``.
+        ``(epx, epy, epz_i, epxy, epyx)``, each ``(n_layers, ff_xy, ff_xy)``.
     """
     xp = array_namespace(ucell)
 
@@ -1570,7 +1638,7 @@ def to_conv_mat_raster_integrated_nvf(ucell, fto_x, fto_y, normal_field=None,
                 xp, eps_comp, x, y, nx, ny, fto_x, fto_y)):
             slot.append(mat)
 
-    return tuple(xp.stack(slot) for slot in out)
+    return ConvSlots5(*(xp.stack(slot) for slot in out))
 
 
 def to_conv_mat_block(ucell_info_list, fto_x, fto_y):
@@ -1589,4 +1657,4 @@ def to_conv_mat_block(ucell_info_list, fto_x, fto_y):
         epy_list.append(fourier2d_integrated(xp, eps, x, y, fto_x, fto_y, inverse_rule='y'))
         epz_i_list.append(xp.linalg.inv(fourier2d_integrated(xp, eps, x, y, fto_x, fto_y, inverse_rule=None)))
 
-    return xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list)
+    return ConvSlots3(xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list))

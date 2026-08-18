@@ -796,7 +796,7 @@ def test_a_uniform_cell_factorizes_to_exactly_eps_times_identity(rule, n):
 
     out = builder(cell, 3, 3)
     epx, epy = np.asarray(out[0])[0], np.asarray(out[1])[0]
-    epz_i = np.asarray(out[-1])[0]
+    epz_i = np.asarray(out[2])[0]
     ff = epx.shape[0]
     I = np.eye(ff)
 
@@ -805,8 +805,8 @@ def test_a_uniform_cell_factorizes_to_exactly_eps_times_identity(rule, n):
     # `epz_i` is the inverse of the zz block, so its closed form is 1/eps
     assert np.max(np.abs(epz_i - I / eps)) == 0.0, np.max(np.abs(epz_i - I / eps))
 
-    if rule == 'nvf':                      # (epx, epy, epxy, epyx, epz_i)
-        for k in (2, 3):
+    if rule == 'nvf':                      # (epx, epy, epz_i, epxy, epyx)
+        for k in (3, 4):
             off = np.asarray(out[k])[0]
             assert np.max(np.abs(off)) == 0.0, f'slot {k} is not identically zero'
 

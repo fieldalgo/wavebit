@@ -204,11 +204,19 @@ derivation would have been the same derivation.
 
 What is genuinely new is two things that are easy to get wrong and quiet when you do.
 
-**The slot order is inverted between the two sides.** `pn_conv_matrices` returns
-`(x, y, xy, yx, z_i)`; `layer_modes_2d` takes `mu` as `(x, y, z_i, xy, yx)` — the inverted z slot
-is *third* there and *last* here. Passing one straight into the other puts `mu_zz^-1` where
-`mu_xy` belongs, which is a plausible magnetic layer rather than an error.
-`pn_mu_conv_matrices` exists to hold that reorder in one place.
+**The slot order used to be inverted between the two sides, and the repair is worth recording.**
+`pn_conv_matrices` returned `(x, y, xy, yx, z_i)` while `layer_modes_2d` takes `mu` as
+`(x, y, z_i, xy, yx)` — the inverted z slot *last* there and *third* here. Passing one straight
+into the other put `mu_zz^-1` where `mu_xy` belongs, which is a plausible magnetic layer rather
+than an error, and `pn_mu_conv_matrices` existed to hold that reorder in one place.
+
+Holding it in one place was not enough. The same mismatch bit a second time on the permittivity
+side, through `solve_for_conv`, which a wrapper here could not reach: splatting a five-slot
+builder into it returned `R + T = 1.61` on a lossless passive pillar. So on 2026-08-18 the order
+was made one order everywhere — every builder now returns `solve_for_conv`'s own parameter order
+— and the reorder inside `pn_mu_conv_matrices` went away. The function remains as the name for
+the `mu` half of the duality; it rearranges nothing. `tests/test_slot_order.py` pins the
+property for every builder, and the mismatch cannot be reintroduced in one place only.
 
 **A layer's two tensors may have different boundaries.** The rearrangement is written around
 *one* interface normal, so each tensor needs the normal field of its own boundary — a magnetic

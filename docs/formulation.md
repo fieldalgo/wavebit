@@ -122,7 +122,7 @@ layer varying in `x`:
 | `Ez` via `Dz = -Kx H̃y`-type eliminations | — | inverse of `eps`-conv | `epz_conv_i` |
 
 For 2D-patterned layers the same logic produces the five slots
-`(epx, epy, epxy, epyx, epz_i)`; the off-diagonal slot convention (`-eps_xy` in the slot)
+`(epx, epy, epz_i, epxy, epyx)`; the off-diagonal slot convention (`-eps_xy` in the slot)
 is documented in `docs/off-diagonal-slot-convention.md` and is not re-derived here. The
 `n → eps` map is `n**2` with **no conjugation** (`factorization._layer_eps`,
 `analytic.assemble_eps_coeffs`, `boundary.conv_mats` — the last one held the conjugate

@@ -63,7 +63,7 @@ def solve(case, fto=FTO, algo='ETM'):
     """``[R_s, T_s, R_p, T_p]`` for one layer with both tensors patterned."""
     eps, eps_xy, mu, mu_xy = tensors(case)
 
-    epx, epy, epxy, epyx, epz_i = to_conv_mat_raster_pn(_as33(eps, eps_xy)[None], fto, fto)
+    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn(_as33(eps, eps_xy)[None], fto, fto)
     mu_slots = to_conv_mat_raster_pn_mu(_as33(mu, mu_xy)[None], fto, fto)
 
     mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
@@ -149,7 +149,7 @@ def test_the_two_tensors_get_their_own_normal_fields(golden):
     correct = solve(case)
 
     fto = FTO
-    epx, epy, epxy, epyx, epz_i = to_conv_mat_raster_pn(_as33(eps, eps_xy)[None], fto, fto)
+    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn(_as33(eps, eps_xy)[None], fto, fto)
     wrong_field = [normal_vector_field(eps)]        # eps's boundary, applied to mu
     wrong_mu = to_conv_mat_raster_pn_mu(_as33(mu, mu_xy)[None], fto, fto,
                                         normal_field=wrong_field)
