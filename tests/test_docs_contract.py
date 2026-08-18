@@ -121,7 +121,19 @@ def test_paths_cited_anywhere_are_in_the_repository():
         for m in CITED_PATH.finditer(text):
             t = m.group(1)
             if '/' not in t or t in CITED_BUT_ABSENT:
-                continue                                # a bare filename is prose, not a path
+                # A bare filename is prose, not a path -- and that skip is a measured choice,
+                # not an oversight. It does let a stale name through: `tests/data/README.md`
+                # described `gen_goldens_analytic.py` as still present for months after
+                # `ee70470` deleted it. Widening the rule was tried and rejected on the
+                # numbers. Resolving a bare name *beside the citing file* flags 84 of 330
+                # citations, almost all correct prose (`docs/` saying `boundary.py` for
+                # `wavebit/_core/boundary.py`). Resolving it *anywhere in the tree* is far
+                # better at 17, but 14 of those 17 are legitimate too: files of other projects
+                # (GRCWA's `kbloch.py`, fmmax's `utils.py`), names the prose itself marks as
+                # former (`golden_legacy_field.npz`), things deliberately deleted, and a script
+                # that lives on an unmerged branch. Buying one real catch with fourteen
+                # exemptions to write and maintain is a worse document than the one stale line.
+                continue
             # Three bases, and the middle one is a deliberate house style rather than slack:
             # `_core/analytic.py` is how this codebase refers to its own internals, in 13 files
             # and counting, and there is only one `_core/` for it to mean. Spelling it

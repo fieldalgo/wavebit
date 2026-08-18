@@ -8,15 +8,14 @@ nothing about whether the behaviour was right. The oracles that do speak to corr
 [`../references/`](../references) (an outside solver) and in the physics invariants asserted
 throughout the suite.
 
-Each `gen_goldens_*.py` writes the `.npz` beside it. Run one only to add cases, or after
-deliberately changing what is compared — and say which in the commit message.
+Each `gen_goldens_*.py` writes the `.npz` beside it, but most of them will not run for you:
+`gen_goldens.py`, `gen_goldens_field.py` and `gen_goldens_modeler.py` refuse outright, because
+they captured implementations the rewrite deleted and would now re-freeze *today's* code under
+a name that claims otherwise. `gen_goldens_nvf.py` is the exception and is meant to be run --
+it re-freezes from this solver deliberately, and says so at the top.
 
 **Never regenerate a golden to make a failing test pass.** That converts a detected regression
 into an accepted one, silently, and the evidence that it happened is gone.
-
-One generator (`gen_goldens_analytic.py`) imports modules the rewrite deleted, so it no longer
-runs; its `.npz` remains valid, since the whole point is that a golden outlives the code that
-made it.
 
 A golden that cannot be regenerated is on a clock, though, and `golden_legacy_factorization.npz`
 ran out on 2026-08-18. It was retired rather than kept: 39 of its 68 arrays were already read by
