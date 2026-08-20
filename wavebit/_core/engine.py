@@ -1541,10 +1541,18 @@ class CoreFactorizationMixin:
         [setattr(self, k, v) for k, v in kwargs.items()]
         return self._mu_conv_matrices(geometry)
 
-    def structure_slice(self, layer=0, n=512, show='eps', band_limited=False):
-        """One layer's structure as an array. See :func:`wavebit._core.draw.structure_slice`."""
-        from .draw import structure_slice
-        return structure_slice(self, layer=layer, n=n, show=show, band_limited=band_limited)
+    def slice_structure(self, layer=0, n=512, show='eps', band_limited=False):
+        """One layer's structure as an array. See :func:`wavebit._core.draw.slice_structure`.
+
+        Verb-first to match :meth:`plot_structure`, which is this call with ``plot()`` around
+        it -- same arguments, one returning the array and one drawing it. It was
+        ``structure_slice`` beside a ``structure_plot`` until 2026-08-20, a matched noun-first
+        pair; moving only the plotting half left the two halves of one pair reading in
+        opposite directions. The field pair says the same thing the same way
+        (:meth:`reconstruct_field` / :meth:`plot_field`).
+        """
+        from .draw import slice_structure
+        return slice_structure(self, layer=layer, n=n, show=show, band_limited=band_limited)
 
     def plot_structure(self, layer=0, n=512, show='eps', ax=None, band_limited=False):
         """Draw one layer of the structure. See :func:`wavebit._core.draw.plot_structure`.

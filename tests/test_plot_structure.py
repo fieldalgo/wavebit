@@ -1,5 +1,5 @@
 """
-Verification tests for `structure_slice` / `plot_structure` -- the picture of the *input*.
+Verification tests for `slice_structure` / `plot_structure` -- the picture of the *input*.
 
 The reason this file exists is one hazard, and most of it is spent on that hazard: a
 ``Modeling.draw()`` edge list is not guaranteed increasing, so the obvious render of a
@@ -31,7 +31,7 @@ import wavebit
 from wavebit._core import boundary as _b
 from wavebit._core import clipper as _c
 from wavebit._core.analytic import assemble_eps_coeffs
-from wavebit._core.draw import _render_block, structure_slice
+from wavebit._core.draw import _render_block, slice_structure
 
 P = 1000.0
 COMMON = dict(backend=0, period=(P, P), thickness=(300.,), wavelength=900.,
@@ -178,12 +178,12 @@ def test_the_raster_path_is_the_raster():
     cell[1] = 4.0
     solver = wavebit.rcwa(structure=cell, **COMMON)
 
-    got = solver.structure_slice(layer=0, n=999)
+    got = solver.slice_structure(layer=0, n=999)
     assert got.shape == (N, N)
     np.testing.assert_array_equal(got.real, cell[0])
     assert got[0, 0].real == 9.0 and got[-1, 0].real == 1.0
 
-    assert solver.structure_slice(layer=1).real.mean() == pytest.approx(4.0)
+    assert solver.slice_structure(layer=1).real.mean() == pytest.approx(4.0)
 
 
 def test_layer_is_indexed_the_way_the_structure_is():
@@ -192,11 +192,11 @@ def test_layer_is_indexed_the_way_the_structure_is():
     layers = [dict(background=1.0, shapes=[]), dict(background=1.0, shapes=shapes)]
     solver = wavebit.rcwa(structure=layers, **COMMON)
 
-    assert solver.structure_slice(layer=0, n=128).real.mean() == pytest.approx(1.0)
-    assert solver.structure_slice(layer=1, n=128).real.mean() > 1.2
-    assert solver.structure_slice(layer=-1, n=128).real.mean() > 1.2
+    assert solver.slice_structure(layer=0, n=128).real.mean() == pytest.approx(1.0)
+    assert solver.slice_structure(layer=1, n=128).real.mean() > 1.2
+    assert solver.slice_structure(layer=-1, n=128).real.mean() > 1.2
     with pytest.raises(IndexError, match='light meets first'):
-        solver.structure_slice(layer=2)
+        solver.slice_structure(layer=2)
 
 
 @pytest.mark.parametrize('lattice', [None, [[P, P * 0.5], [0.0, P * 0.866]]])
@@ -216,7 +216,7 @@ def test_the_analytic_sampler_agrees_with_its_own_dc_coefficient(lattice):
     dc = assemble_eps_coeffs(xnp, shapes, 1.0, fx, fy, solver.period, xnp.complex128,
                              lattice=solver.lattice)[0][2 * fy, 2 * fx].real
 
-    assert solver.structure_slice(n=1024).real.mean() == pytest.approx(dc, rel=1e-4)
+    assert solver.slice_structure(n=1024).real.mean() == pytest.approx(dc, rel=1e-4)
 
 
 def test_a_circle_is_read_through_shape_geometry():
@@ -229,7 +229,7 @@ def test_a_circle_is_read_through_shape_geometry():
     solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=[
         dict(type='circle', cx=500.0, cy=500.0, lx=400.0, material=9.0)])], **COMMON)
     area = np.pi * 200.0 ** 2 / (P * P)
-    assert solver.structure_slice(n=1024).real.mean() == pytest.approx(
+    assert solver.slice_structure(n=1024).real.mean() == pytest.approx(
         1.0 + area * (9.0 - 1.0), rel=1e-3)
 
 
@@ -266,9 +266,9 @@ def test_the_paint_renderer_matches_the_boundary_path_loops():
     solver = wavebit.rcwa(structure=[dict(background=1.0, combine='paint', shapes=OVERLAP)], **COMMON)
     want = loop_mean_eps(OVERLAP)
 
-    assert solver.structure_slice(n=64, band_limited=True).real.mean() == pytest.approx(
+    assert solver.slice_structure(n=64, band_limited=True).real.mean() == pytest.approx(
         want, abs=1e-13)
-    assert solver.structure_slice(n=2048).real.mean() == pytest.approx(want, abs=2e-4)
+    assert solver.slice_structure(n=2048).real.mean() == pytest.approx(want, abs=2e-4)
 
 
 def test_painting_and_adding_are_drawn_as_the_different_structures_they_are():
@@ -281,8 +281,8 @@ def test_painting_and_adding_are_drawn_as_the_different_structures_they_are():
     paint = wavebit.rcwa(structure=[dict(background=1.0, combine='paint', shapes=OVERLAP)], **COMMON)
     add = wavebit.rcwa(structure=[dict(background=1.0, combine='add', shapes=OVERLAP)], **COMMON)
 
-    e_paint = paint.structure_slice(n=2048).real.mean()
-    e_add = add.structure_slice(n=2048).real.mean()
+    e_paint = paint.slice_structure(n=2048).real.mean()
+    e_add = add.slice_structure(n=2048).real.mean()
     assert e_paint == pytest.approx(1.8158, abs=1e-3)
     assert e_add == pytest.approx(1.9134, abs=1e-3)
     assert (e_add - e_paint) / e_paint == pytest.approx(0.054, abs=2e-3)
@@ -303,7 +303,7 @@ def test_a_hole_is_drawn_as_a_hole():
 
     hole_area = np.pi * 100.0 ** 2
     geometry = 1.0 + 3.0 * (360000.0 - hole_area) / (P * P) + 8.0 * hole_area / (P * P)
-    assert solver.structure_slice(n=2048).real.mean() == pytest.approx(geometry, abs=2e-3)
+    assert solver.slice_structure(n=2048).real.mean() == pytest.approx(geometry, abs=2e-3)
     assert loop_mean_eps(shapes) == pytest.approx(geometry, rel=1e-4)
     assert 2.4256 - geometry > 0.18                    # what ignoring the winding would give
 
@@ -330,12 +330,12 @@ def test_band_limited_converges_on_the_geometry():
                    angle=0.45, material=4.840000000000001)]
     cfg = {k: v for k, v in COMMON.items() if k != 'max_order'}
     geometry = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], max_order=(3, 3),
-                            **cfg).structure_slice(n=512).real
+                            **cfg).slice_structure(n=512).real
 
     errors = []
     for max_order in (3, 9, 25):
         solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], max_order=(max_order, max_order), **cfg)
-        band = solver.structure_slice(n=512, band_limited=True).real
+        band = solver.slice_structure(n=512, band_limited=True).real
         errors.append(np.linalg.norm(band - geometry) / np.linalg.norm(geometry))
         # `<eps>` is converged from the start; the picture is not. That gap is the warning.
         assert band.mean() == pytest.approx(geometry.mean(), abs=1e-3)
@@ -354,12 +354,12 @@ def test_the_truncated_series_leaves_the_material_range():
               dict(type='rectangle', cx=740.0, cy=650.0, lx=300.0, ly=180.0,
                    angle=0.45, material=4.840000000000001)]
     solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], **COMMON)
-    band = solver.structure_slice(n=512, band_limited=True).real
+    band = solver.slice_structure(n=512, band_limited=True).real
 
     assert band.min() == pytest.approx(-0.186, abs=5e-3)
     assert band.max() == pytest.approx(13.85, abs=5e-2)
-    assert 1.0 <= solver.structure_slice(n=512).real.min()
-    assert solver.structure_slice(n=512).real.max() <= 12.25
+    assert 1.0 <= solver.slice_structure(n=512).real.min()
+    assert solver.slice_structure(n=512).real.max() <= 12.25
 
 
 def test_the_block_path_draws_the_blocks_not_the_rectangle():
@@ -380,7 +380,7 @@ def test_the_block_path_draws_the_blocks_not_the_rectangle():
     diffs = []
     for n_split in (4, 16, 64):
         instruction = [[1.0, [['rectangle', cx, cy, lx, ly, 12.25, angle, n_split, n_split]]]]
-        drawn = structure_slice(wavebit.rcwa(structure=instruction, **COMMON), n=n).real > 1.5
+        drawn = slice_structure(wavebit.rcwa(structure=instruction, **COMMON), n=n).real > 1.5
         diffs.append(np.logical_xor(drawn, exact).sum() / exact.sum())
 
     np.testing.assert_allclose(diffs, [0.077, 0.019, 0.005], atol=3e-3)
@@ -388,24 +388,24 @@ def test_the_block_path_draws_the_blocks_not_the_rectangle():
 
 
 def test_an_absorbing_layer_keeps_its_imaginary_part():
-    """`structure_slice` returns complex; taking the real part is the *plot*'s decision."""
+    """`slice_structure` returns complex; taking the real part is the *plot*'s decision."""
     solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=[
         # (3.5 + 0.4j)**2 -- the same absorbing medium, as permittivity.
         dict(type='circle', cx=500.0, cy=500.0, lx=300.0,
              material=12.09 + 2.8000000000000003j)])], **COMMON)
-    values = solver.structure_slice(n=128)
+    values = solver.slice_structure(n=128)
 
     assert np.abs(values.imag).max() == pytest.approx(2.0 * 3.5 * 0.4, rel=1e-12)
-    np.testing.assert_allclose(solver.structure_slice(n=128, show='n').max(),
+    np.testing.assert_allclose(solver.slice_structure(n=128, show='n').max(),
                                3.5 + 0.4j, rtol=1e-12)
 
 
 def test_show_takes_one_of_two_words():
     solver = wavebit.rcwa(structure=np.ones((1, 8, 8)) * 4.0, **COMMON)   # eps 4 is n 2
-    np.testing.assert_allclose(solver.structure_slice(show='eps').real, 4.0)
-    np.testing.assert_allclose(solver.structure_slice(show='n').real, 2.0)
+    np.testing.assert_allclose(solver.slice_structure(show='eps').real, 4.0)
+    np.testing.assert_allclose(solver.slice_structure(show='n').real, 2.0)
     with pytest.raises(ValueError, match="'eps' or 'n'"):
-        solver.structure_slice(show='epsilon')
+        solver.slice_structure(show='epsilon')
 
 
 def test_it_draws():

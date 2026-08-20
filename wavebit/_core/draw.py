@@ -22,7 +22,7 @@ x from the low side, from the high side, and in both axes at once) and puts
 ``<eps>`` at 1.2700 / 1.2520 / 1.2025 where the solver integrates 1.3600 in all three. At
 ``cx = 960`` the edge array actually *decreases*, so ``pcolormesh`` draws overlapping quads
 without complaining. :func:`_render_block` below does the signed accumulation instead, and
-``tests/test_structure_plot.py`` pins it at max\\|render - truth\\| = 0 on those positions --
+``tests/test_plot_structure.py`` pins it at max\\|render - truth\\| = 0 on those positions --
 with the naive render checked in alongside, failing, so the hazard stays demonstrated.
 """
 import array_api_compat.numpy as xnp
@@ -85,7 +85,7 @@ def _passive(eps):
     caller: the band-limited reconstruction is a truncated Fourier sum, so a *lossless* layer
     comes back with imaginary parts of both signs at the 1e-16 level, and the ones that land on
     a pixel whose real part went negative (Gibbs overshoot below zero, which the docstring of
-    :func:`structure_slice` measures at ``[-0.186, 13.850]`` for a lossless pair of shapes)
+    :func:`slice_structure` measures at ``[-0.186, 13.850]`` for a lossless pair of shapes)
     take the lower lip of the cut. Their root is then ``-0.43j`` -- **gain**, drawn on a
     structure that has none, on 24 of 16384 pixels of the measured case.
 
@@ -154,7 +154,7 @@ def _render_block(cell, x_list, y_list, period, xs, ys):
     the builder this mirrors: a picture that squared what the solve does not would show a
     different structure from the one being solved, which is the one thing a structure picture
     must not do. Exact for the staircase the modeler built -- which is not the same thing as
-    exact for the shape the user typed; see :func:`structure_slice`.
+    exact for the shape the user typed; see :func:`slice_structure`.
     """
     Px, Py = float(period[0]), float(period[1])
     Cx = _signed_coverage(*_segments(x_list), xs, Px)
@@ -380,7 +380,7 @@ def _refuse_layer(solver, layer):
             f'(docs/conventions.md).')
 
 
-def structure_slice(solver, layer=0, n=512, show='eps', band_limited=False):
+def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
     """The structure of one layer, as a NumPy array. **Geometry, not the truncated series.**
 
     ``layer`` indexes the way ``structure`` does: ``0`` is the layer light meets first
@@ -478,7 +478,7 @@ def structure_slice(solver, layer=0, n=512, show='eps', band_limited=False):
 
 
 def plot_structure(solver, layer=0, n=512, show='eps', ax=None, band_limited=False):
-    """Draw one layer of the structure. Arguments are :func:`structure_slice`'s; read it first.
+    """Draw one layer of the structure. Arguments are :func:`slice_structure`'s; read it first.
 
     Returns the axes. An axis-aligned cell is drawn with ``imshow(origin='lower')`` and a
     skewed one with ``pcolormesh`` on ``u*a1 + v*a2``, as ``docs/oblique-lattice.md`` does for
@@ -491,7 +491,7 @@ def plot_structure(solver, layer=0, n=512, show='eps', ax=None, band_limited=Fal
     except ImportError as e:
         raise ImportError('plot_structure() needs matplotlib installed') from e
 
-    values = structure_slice(solver, layer=layer, n=n, show=show, band_limited=band_limited)
+    values = slice_structure(solver, layer=layer, n=n, show=show, band_limited=band_limited)
     complex_valued = bool(np.max(np.abs(values.imag)) > 1e-12 * max(
         1.0, float(np.max(np.abs(values.real)))))
     image = values.real

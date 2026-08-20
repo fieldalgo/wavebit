@@ -36,7 +36,7 @@ from ._core.backend import (AutoDetuneWarning, PrecisionLossWarning, RayleighPoi
                             UnphysicalResultWarning, UnresolvedBranchWarning,
                             get_j1_implementation, set_j1_implementation)
 from ._core.conventions import branch_tolerance
-from ._core.draw import plot_structure, structure_slice
+from ._core.draw import plot_structure, slice_structure
 from ._core.enums import (Answers, Backend, Tetm, FourierCoefficients, Factorization,
                           Formulation, NormalMethod)
 from ._core.domain import (Layer, Stack, Incidence, Material,
