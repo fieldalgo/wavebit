@@ -438,7 +438,7 @@ because it eliminates `E_z`, while the off-diagonal pair defaults to `None`, and
 accept a required parameter after a defaulted one. So
 
 ```python
-res = mee.solve_conv(*to_conv_mat_raster_pn(tensor, max_order, max_order))
+res = mee.solve_conv(*to_conv_mat_raster_pn_eps(tensor, max_order, max_order))
 ```
 
 put `epz_i` in the `epxy` slot. Nothing raised. On a lossless passive pillar it returned a full

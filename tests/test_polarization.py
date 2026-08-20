@@ -281,7 +281,7 @@ def test_a_1d_structure_with_a_pair_takes_the_conical_path():
 
 def test_the_pure_1d_solve_refuses_the_pair_in_plain_words():
     solver = wavebit.rcwa(polarization=(1, 0), structure=STRUCTURE_1D, **CFG_1D)
-    epx, epy, epz_i, _, _ = solver.conv_matrices()
+    epx, epy, epz_i, _, _ = solver.eps_conv_matrices()
     with pytest.raises(ValueError, match='single-polarization by construction'):
         solver._solve_1d(CFG_1D['wavelength'], epx, epy, epz_i)
 

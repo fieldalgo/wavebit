@@ -227,7 +227,7 @@ def test_the_boundary_sub_path_is_covered_by_the_smooth_row():
     s = _painted()
     assert s._modeling_type_assigned == 2
     assert s.fourier_coefficients == 'integrated' and s.factorization == 'nvf'
-    assert sum(m is not None for m in s._conv_matrices()) == 5
+    assert sum(m is not None for m in s._eps_conv_matrices()) == 5
 
 
 def test_the_boundary_sub_path_default_is_unmoved_on_both_axes():
@@ -305,7 +305,7 @@ def test_a_pytree_round_trip_keeps_a_real_request_and_still_refuses_it_at_the_so
 # ------------------------------------------------------ both axes unavailable at once
 
 def test_a_smooth_call_naming_both_unavailable_values_is_told_about_the_rule():
-    """Two true refusals apply at once, and ``_conv_matrices`` reads the factorization first.
+    """Two true refusals apply at once, and ``_eps_conv_matrices`` reads the factorization first.
 
     The order is a judgement rather than a necessity -- unlike the lattice/keyword order next
     door, either message here is actionable. It goes to the factorization because that is the

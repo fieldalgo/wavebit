@@ -6,7 +6,7 @@ the one thing they share has to import numpy and nothing else. A copy that must 
 is a copy that will not.
 
 These are the **patterned** anisotropic cases — a gyrotropic pillar in vacuum, which is what
-``pn_conv_matrices`` was written for and what nothing in the repo could arbitrate before.
+``pn_eps_conv_matrices`` was written for and what nothing in the repo could arbitrate before.
 ``gen_goldens_fmmax.py`` anticipated exactly this file: "None of the cases below are patterned
 yet, because nothing in the solver can express one, but the wiring will be here when that
 changes."

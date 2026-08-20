@@ -8,7 +8,7 @@ Targets:
   `normal_vector_field_analytical` for the normal field
 - `wavebit/_core/solve_2d.py::layer_modes_2d` — the `epxy` / `epyx` off-diagonal slots the
   NVF form fills
-- `wavebit/_core/engine.py::_conv_matrices` — the modeling-type-2 dispatch, selected by the
+- `wavebit/_core/engine.py::_eps_conv_matrices` — the modeling-type-2 dispatch, selected by the
   `structure` setter in `wavebit/on_*/emsolver/rcwa.py`
 
 ---

@@ -41,7 +41,7 @@ from ._core.enums import (Answers, Backend, Tetm, FourierCoefficients, Factoriza
                           Formulation, NormalMethod)
 from ._core.domain import (Layer, Stack, Incidence, Material,
                            eps_from_index, index_from_eps)
-# The type `conv_matrices()` hands back and `solve_conv()` takes: a NamedTuple, so the five
+# The type `eps_conv_matrices()` hands back and `solve_conv()` takes: a NamedTuple, so the five
 # slots still splat and unpack, but `conv.epz_i` reaches one by name.
 from ._core.factorization import ConvMatrices
 from ._core.geometry import StaticGeometry, StaleGeometryError

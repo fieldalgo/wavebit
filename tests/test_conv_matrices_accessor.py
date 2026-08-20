@@ -1,5 +1,5 @@
 """
-`RCWAEngine.conv_matrices` — the public way to see what a modeling path built.
+`RCWAEngine.eps_conv_matrices` — the public way to see what a modeling path built.
 
 `solve_conv` has always *taken* these five matrices; nothing returned them, so a caller who
 wanted to compare two modeling paths, check a geometry, or build a path of their own had to reach
@@ -32,7 +32,7 @@ def test_it_is_exactly_what_solve_conv_takes():
     """The round trip is the contract: feeding the result back reproduces solve()."""
     solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **BASE)
     direct = solver.solve().given.T
-    relayed = solver.solve_conv(*solver.conv_matrices()).given.T
+    relayed = solver.solve_conv(*solver.eps_conv_matrices()).given.T
     assert np.abs(np.asarray(direct) - np.asarray(relayed)).max() == 0.0
 
 
@@ -48,7 +48,7 @@ def test_every_modeling_path_answers_with_the_same_shaped_object():
                  material=9.0)])], **BASE),
     }
     for name, solver in paths.items():
-        epx, epy, epz_i, epxy, epyx = solver.conv_matrices()
+        epx, epy, epz_i, epxy, epyx = solver.eps_conv_matrices()
         for tag, m in (('epx', epx), ('epy', epy), ('epz_i', epz_i)):
             assert np.asarray(m).shape == (1, n_orders, n_orders), (name, tag, np.asarray(m).shape)
             assert np.isfinite(np.asarray(m)).all(), (name, tag)
@@ -57,8 +57,8 @@ def test_every_modeling_path_answers_with_the_same_shaped_object():
 
 def test_a_frozen_geometry_is_accepted_the_same_way_solve_accepts_one():
     solver = wavebit.rcwa(structure=disc_raster(96), factorization='nvf', **BASE)
-    eager = solver.conv_matrices()
-    replayed = solver.conv_matrices(geometry=solver.freeze_geometry())
+    eager = solver.eps_conv_matrices()
+    replayed = solver.eps_conv_matrices(geometry=solver.freeze_geometry())
     for a, b in zip(eager, replayed):
         if a is None:
             assert b is None
@@ -71,11 +71,11 @@ def test_it_does_not_solve():
     it separately, and a sweep over geometries would pay for a solve it discards."""
     import time
     solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **dict(BASE, max_order=[8, 8]))
-    solver.conv_matrices(), solver.solve()             # warm
+    solver.eps_conv_matrices(), solver.solve()             # warm
 
     t = time.perf_counter()
     for _ in range(3):
-        solver.conv_matrices()
+        solver.eps_conv_matrices()
     build = time.perf_counter() - t
 
     t = time.perf_counter()

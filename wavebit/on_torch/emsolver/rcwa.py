@@ -237,11 +237,11 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
                    mu_top=None, mu_bot=None, eps_top=None, eps_bot=None):
         """Solve a stack whose convolution matrices are already built.
 
-        The nine permittivity slots in :meth:`conv_matrices` order -- the in-plane
-        ``(epx, epy, epz_i, epxy, epyx)``, then the z row ``(epxz, epyz, epzx, epzy)`` --
-        followed by ``mu`` and the half-space terms. ``solver.solve_conv(*solver.conv_matrices())``
-        is ``solver.solve()``; see :mod:`wavebit._core.factorization` for why ``epz_i`` sits
-        third rather than last.
+        The nine permittivity slots in :meth:`eps_conv_matrices` order -- the in-plane ``(epx,
+        epy, epz_i, epxy, epyx)``, then the z row ``(epxz, epyz, epzx, epzy)`` -- followed by
+        ``mu`` and the half-space terms. ``solver.solve_conv(*solver.eps_conv_matrices())`` is
+        ``solver.solve()``; see :mod:`wavebit._core.factorization` for why ``epz_i`` sits third
+        rather than last.
 
         Takes no wavelength. The solver already has one, and a second spelling of it was a
         second thing that could disagree: the k vectors, the field reconstruction and the

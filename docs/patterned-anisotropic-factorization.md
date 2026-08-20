@@ -3,8 +3,8 @@
 Landed 2026-08-14. [`anisotropic-materials.md`](anisotropic-materials.md) §3 scoped this as "the
 actual work item"; this is what it turned into.
 
-Target: `wavebit/_core/factorization.py` — `_pn_fields`, `pn_conv_matrices`,
-`to_conv_mat_raster_pn`.
+Target: `wavebit/_core/factorization.py` — `_pn_fields`, `pn_eps_conv_matrices`,
+`to_conv_mat_raster_pn_eps`.
 
 **Scope.** The **in-plane** tensor — the five slots `epx, epy, epz_i, epxy, epyx`. A patterned
 layer that also fills the z row (`eps_xz`, `eps_yz`) is *not* implemented, and §6 below says why
@@ -303,7 +303,7 @@ different boundaries and therefore need two normal fields.
 
 ## 9. Reaching it
 
-`to_conv_mat_raster_pn(tensor_raster, max_order_x, max_order_y)` takes `(n_layers, Ny, Nx, 3, 3)` and
+`to_conv_mat_raster_pn_eps(tensor_raster, max_order_x, max_order_y)` takes `(n_layers, Ny, Nx, 3, 3)` and
 returns the five slots for the stack. It takes **permittivity**, and always did — `n ** 2` is a
 scalar operation and there is no square root of a tensor field worth guessing at. Since
 2026-08-20 that is no longer a special rule for this builder: the scalar front door takes
@@ -318,7 +318,7 @@ Wiring a tensor `structure` through the front door is a separate piece of work a
 ```python
 import numpy as np
 import wavebit
-from wavebit._core.factorization import to_conv_mat_raster_pn
+from wavebit._core.factorization import to_conv_mat_raster_pn_eps
 
 eps = np.where(mask, 2.56, 1.0).astype(complex)          # (Ny, Nx)
 g   = np.where(mask, 0.30j, 0.0).astype(complex)
@@ -327,14 +327,14 @@ t = np.zeros(eps.shape + (3, 3), dtype=complex)
 t[..., 0, 0] = t[..., 1, 1] = t[..., 2, 2] = eps
 t[..., 0, 1], t[..., 1, 0] = g, -g                       # the physical tensor
 
-epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn(t[None], max_order, max_order)
+epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn_eps(t[None], max_order, max_order)
 
 mee = wavebit.rcwa(backend=0, max_order=(max_order, max_order), period=(p, p), wavelength=wl,
                    thickness=[d], structure=eps[None])     # the scalar stand-in, in eps
 res = mee.solve_conv(epx, epy, epz_i, epxy, epyx)   # epz_i is THIRD
 ```
 
-Equivalently `mee.solve_conv(*to_conv_mat_raster_pn(t[None], max_order, max_order))`: since
+Equivalently `mee.solve_conv(*to_conv_mat_raster_pn_eps(t[None], max_order, max_order))`: since
 2026-08-18 every builder returns its slots in `solve_conv`'s own parameter order, so the
 splat is correct rather than merely shorter. It was not always — the five-slot builders used to
 group the in-plane pair together and put `epz_i` last, and splatting then landed the inverted zz
@@ -343,7 +343,7 @@ against 1.0000000000 for the same structure, with only `UnphysicalResultWarning`
 `tests/test_slot_order.py` is what stops that returning.
 
 The remaining way to get this wrong is silent in the same way: the off-diagonal **slots hold the
-negation**, which `to_conv_mat_raster_pn` has already applied. See
+negation**, which `to_conv_mat_raster_pn_eps` has already applied. See
 [`off-diagonal-slot-convention.md`](off-diagonal-slot-convention.md).
 
 ## 10. References

@@ -199,7 +199,7 @@ mutants die.
 ## 7. Patterned `mu`
 
 **No new factorization was needed**, and that is the finding rather than a convenience.
-`pn_conv_matrices` — the Popov-Nevière rearrangement written for a patterned tensor `eps`
+`pn_eps_conv_matrices` — the Popov-Nevière rearrangement written for a patterned tensor `eps`
 ([`patterned-anisotropic-factorization.md`](patterned-anisotropic-factorization.md)) — serves
 `mu` verbatim. The rearrangement is driven entirely by which quantities are continuous at an
 interface:
@@ -215,7 +215,7 @@ derivation would have been the same derivation.
 What is genuinely new is two things that are easy to get wrong and quiet when you do.
 
 **The slot order used to be inverted between the two sides, and the repair is worth recording.**
-`pn_conv_matrices` returned `(x, y, xy, yx, z_i)` while `layer_modes_2d` takes `mu` as
+`pn_eps_conv_matrices` returned `(x, y, xy, yx, z_i)` while `layer_modes_2d` takes `mu` as
 `(x, y, z_i, xy, yx)` — the inverted z slot *last* there and *third* here. Passing one straight
 into the other put `mu_zz^-1` where `mu_xy` belongs, which is a plausible magnetic layer rather
 than an error, and `pn_mu_conv_matrices` existed to hold that reorder in one place.
@@ -282,7 +282,7 @@ solver = wavebit.rcwa(backend=0, structure=eps_raster, mu=mu_raster, ...)
 layer-shaped array to attach itself to there — and a mismatched raster shape is refused too,
 since the two fields are sampled on one grid.
 
-What happens underneath is one sentence: `_conv_matrices` builds the permeability slots
+What happens underneath is one sentence: `_eps_conv_matrices` builds the permeability slots
 whenever anything in the scene carries `mu != 1`, by running the **same builder a second
 time** on a view of the structure with each material's `mu` where its `epsilon` was. That is
 why the permeability slots are the E/H dual of the permittivity ones by construction rather

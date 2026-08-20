@@ -3,7 +3,7 @@
 ``_nvf_assemble`` cannot serve a tensor. Its entire input is ``<eps>`` and ``<1/eps>``, and
 ``1/eps`` is not a thing a tensor has: Li's rule needs one discontinuous factor times one
 continuous one, while ``D_x = exx Ex + exy Ey + exz Ez`` is a sum of three such products with no
-per-term rule. :func:`~wavebit._core.factorization.pn_conv_matrices` rearranges instead —
+per-term rule. :func:`~wavebit._core.factorization.pn_eps_conv_matrices` rearranges instead —
 eliminate the discontinuous ``n.E`` in favour of the continuous ``n.D``, then every product has
 the shape Laurent converges on. That function's docstring carries the algebra.
 
@@ -19,7 +19,7 @@ import pytest
 import wavebit
 from wavebit._core.factorization import (
     fourier2d_piecewise_constant, fourier2d_pointwise, normal_vector_field,
-    nvf_conv_matrices, pn_conv_matrices)
+    nvf_conv_matrices, pn_eps_conv_matrices)
 
 WL, PERIOD, THICK = 620.0, 340.0, 185.0
 N = 96
@@ -59,7 +59,7 @@ def solve(slots, eps, max_order, theta=0.0, phi=0.0, psi=0.0):
 
 def pn(eps33, eps_scalar, max_order):
     nx, ny = normal_vector_field(eps_scalar)
-    return pn_conv_matrices(np, eps33, nx, ny, max_order, max_order)
+    return pn_eps_conv_matrices(np, eps33, nx, ny, max_order, max_order)
 
 
 def rt(res):
@@ -88,7 +88,7 @@ def test_it_builds_and_differentiates_on_every_backend(name):
     g = pillar(0.30j, 0.0, grid=48)
     e33 = tensor(eps, g)
     nx, ny = normal_vector_field(eps)
-    ref = [np.asarray(m) for m in pn_conv_matrices(np, e33, nx, ny, 4, 4)]
+    ref = [np.asarray(m) for m in pn_eps_conv_matrices(np, e33, nx, ny, 4, 4)]
 
     if name == 'jax':
         import jax
@@ -97,19 +97,19 @@ def test_it_builds_and_differentiates_on_every_backend(name):
         args = (jnp.asarray(e33), jnp.asarray(nx), jnp.asarray(ny))
         xp = array_namespace(args[0])
         grad = jax.grad(lambda e: jnp.abs(
-            pn_conv_matrices(xp, e, args[1], args[2], 2, 2)[0]).sum())(args[0])
+            pn_eps_conv_matrices(xp, e, args[1], args[2], 2, 2)[0]).sum())(args[0])
     else:
         import torch
         args = (torch.as_tensor(e33).clone().requires_grad_(True),
                 torch.as_tensor(np.asarray(nx)), torch.as_tensor(np.asarray(ny)))
         xp = array_namespace(args[0])
-        pn_conv_matrices(xp, args[0], args[1], args[2], 2, 2)[0].abs().sum().backward()
+        pn_eps_conv_matrices(xp, args[0], args[1], args[2], 2, 2)[0].abs().sum().backward()
         grad = args[0].grad
 
     def numpy(a):                     # torch refuses .numpy() on a grad-tracking tensor
         return np.asarray(a.detach() if hasattr(a, 'detach') else a)
 
-    got = pn_conv_matrices(xp, args[0], args[1], args[2], 4, 4)
+    got = pn_eps_conv_matrices(xp, args[0], args[1], args[2], 4, 4)
     assert max(np.abs(numpy(a) - b).max() for a, b in zip(got, ref)) < 1e-12
     assert np.isfinite(numpy(grad)).all() and np.abs(numpy(grad)).max() > 0
 
@@ -244,7 +244,7 @@ def test_the_z_slot_is_the_direct_rule_inverted_not_the_inverse_rule():
     eps = pillar(1.6 ** 2)
     nx, ny = normal_vector_field(eps)
     for max_order in (4, 8):
-        got = pn_conv_matrices(np, tensor(eps), nx, ny, max_order, max_order)[2]
+        got = pn_eps_conv_matrices(np, tensor(eps), nx, ny, max_order, max_order)[2]
         direct = np.linalg.inv(fourier2d_piecewise_constant(
             np, eps.astype(complex), max_order, max_order, inverse_rule=None))
         inverse = fourier2d_piecewise_constant(
@@ -459,5 +459,5 @@ def test_a_null_direction_of_the_tensor_is_not_quietly_patched():
     assert hit.any(), 'this column was supposed to carry an x-pointing normal'
 
     with np.errstate(divide='ignore', invalid='ignore'):    # the division is the point here
-        out = pn_conv_matrices(np, e33, nx, ny, 4, 4)
+        out = pn_eps_conv_matrices(np, e33, nx, ny, 4, 4)
     assert not all(np.isfinite(m).all() for m in out)

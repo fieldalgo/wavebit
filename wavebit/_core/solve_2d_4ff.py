@@ -128,7 +128,7 @@ What is not here, in the order it will be wanted:
   that can express a z row at all, the ``mu_zx H_x`` / ``mu_zy H_y`` terms as well, exactly as
   ``E_z`` already keeps ``ezx`` / ``ezy``.
 * **A patterned *and* z-coupled layer.** The factorization for a patterned anisotropic layer
-  now exists (``factorization.py::pn_conv_matrices``, 2026-08-14) and this module takes
+  now exists (``factorization.py::pn_eps_conv_matrices``, 2026-08-14) and this module takes
   convolution matrices, so the in-plane case needs no change here. What is still missing is the
   3x3 closing step for a patterned layer that also fills the z row — and, more to the point,
   any way to check it: fmmax was the only solver that reached the patterned case and it has no

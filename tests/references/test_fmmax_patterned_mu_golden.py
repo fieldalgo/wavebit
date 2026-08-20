@@ -5,7 +5,7 @@ caller supplies; nothing built those from a patterned raster. These rows were ge
 state, so nothing in ``pn_mu_conv_matrices`` / ``to_conv_mat_raster_pn_mu`` could be fitted to
 them.
 
-**The claim under test is that no new factorization was needed.** ``pn_conv_matrices`` serves
+**The claim under test is that no new factorization was needed.** ``pn_eps_conv_matrices`` serves
 ``mu`` verbatim, because the Popov-Neviere rearrangement is driven entirely by which quantities
 are continuous at an interface — tangential ``E`` and normal ``D`` for the permittivity,
 tangential ``H`` and normal ``B`` for the permeability — and the second line is the first with
@@ -29,7 +29,7 @@ import numpy as np
 import pytest
 
 import wavebit
-from wavebit._core.factorization import to_conv_mat_raster_pn, to_conv_mat_raster_pn_mu
+from wavebit._core.factorization import to_conv_mat_raster_pn_eps, to_conv_mat_raster_pn_mu
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -63,7 +63,7 @@ def solve(case, max_order=MAX_ORDER, algo='ETM'):
     """``[R_s, T_s, R_p, T_p]`` for one layer with both tensors patterned."""
     eps, eps_xy, mu, mu_xy = tensors(case)
 
-    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn(_as33(eps, eps_xy)[None], max_order, max_order)
+    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn_eps(_as33(eps, eps_xy)[None], max_order, max_order)
     mu_slots = to_conv_mat_raster_pn_mu(_as33(mu, mu_xy)[None], max_order, max_order)
 
     # The scalar permittivity raster as it stands -- the `np.sqrt` here was undoing the
@@ -154,7 +154,7 @@ def test_the_two_tensors_get_their_own_normal_fields(golden):
     correct = solve(case)
 
     max_order = MAX_ORDER
-    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn(_as33(eps, eps_xy)[None], max_order, max_order)
+    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn_eps(_as33(eps, eps_xy)[None], max_order, max_order)
     wrong_field = [normal_vector_field(eps)]        # eps's boundary, applied to mu
     wrong_mu = to_conv_mat_raster_pn_mu(_as33(mu, mu_xy)[None], max_order, max_order,
                                         normal_field=wrong_field)

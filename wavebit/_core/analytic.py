@@ -525,7 +525,7 @@ def assemble_eps_coeffs(xp, shapes, background, max_order_x, max_order_y, period
     throughout (``Im(eps) > 0`` = loss), with no conjugation on the way in.
 
     ``mu`` is not read here and must not be: this function is called a second time by
-    ``CoreFactorizationMixin._mu_matrices``, on a layer whose materials have had their ``mu``
+    ``CoreFactorizationMixin._mu_conv_matrices``, on a layer whose materials have had their ``mu``
     put where their ``epsilon`` was, and that second pass is what builds the permeability
     slots. Reading both here would build one of them twice and the other never.
 

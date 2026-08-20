@@ -11,7 +11,7 @@ bit-identical to the z-row-zeroed tensor — i.e. it drops what it was given. fm
 same way before any of this was written (does a *patterned* off-diagonal change the
 eigenvalues, and does the pattern itself matter) and it passed both.
 
-**It arbitrates by convergence, not by identity.** ``pn_conv_matrices`` is a Popov-Neviere
+**It arbitrates by convergence, not by identity.** ``pn_eps_conv_matrices`` is a Popov-Neviere
 rearrangement; fmmax's ``FFT`` is the plain direct rule and its ``JONES_DIRECT`` is a vector
 formulation of a different construction. Three different formulations of the same physics agree
 only in the limit, so this generator freezes **both** fmmax formulations and the test asserts

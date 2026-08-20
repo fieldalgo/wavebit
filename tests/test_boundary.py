@@ -549,7 +549,7 @@ def test_an_enclosed_shape_is_cut_out_of_its_host_not_added_to_it(max_order):
     solver = _solve([dict(background=1.0, combine='paint', shapes=ENCLOSED_SHAPES)], max_order=max_order,
                     normal_grid=256)
     assert solver.freeze_geometry().boundary_plans[0] is not None      # it really painted
-    direct = np.linalg.inv(np.asarray(solver.conv_matrices()[2])[0])
+    direct = np.linalg.inv(np.asarray(solver.eps_conv_matrices()[2])[0])
     n_orders = (2 * max_order + 1) ** 2
     got = complex(direct[n_orders // 2, n_orders // 2])
 
@@ -673,7 +673,7 @@ def test_a_hole_inside_a_hole_is_material_again():
     for max_order in (6, 12):
         solver = _solve([dict(background=1.0, combine='paint', shapes=nested)], max_order=max_order,
                         normal_grid=256)
-        direct = np.linalg.inv(np.asarray(solver.conv_matrices()[2])[0])
+        direct = np.linalg.inv(np.asarray(solver.eps_conv_matrices()[2])[0])
         n_orders = (2 * max_order + 1) ** 2
         assert complex(direct[n_orders // 2, n_orders // 2]).real == pytest.approx(exact, abs=1e-12), max_order
 

@@ -17,8 +17,8 @@ the whole content of the flip -- see ``docs/conventions.md``.
 The same builders serve the *permeability* when a structure carries one, unchanged and by
 name: Maxwell's two curl equations map onto each other under
 ``(E, H, eps, mu) -> (H, -E, mu, eps)``, so a rule derived for one closes the other term for
-term (:func:`pn_mu_conv_matrices` is :func:`pn_conv_matrices` under a second name for exactly
-this reason). ``CoreFactorizationMixin._mu_matrices`` is what runs them twice.
+term (:func:`pn_mu_conv_matrices` is :func:`pn_eps_conv_matrices` under a second name for exactly
+this reason). ``CoreFactorizationMixin._mu_conv_matrices`` is what runs them twice.
 
 All the strategies live here. The raster builders are the cross product of two independent
 choices — how the Fourier coefficients are obtained, and which rule closes the products of
@@ -94,8 +94,8 @@ around it) and once through ``solve_conv`` itself, by the energy assertion in
 ``tests/test_manifest.py``.
 
 ``solve_conv``'s order is the one that won rather than the builders' for a second reason
-besides being the forced one: the public ``conv_matrices()`` accessor already returned it, so
-``solve_conv(*solver.conv_matrices())`` was the one splat in the package that always
+besides being the forced one: the public ``eps_conv_matrices()`` accessor already returned it, so
+``solve_conv(*solver.eps_conv_matrices())`` was the one splat in the package that always
 worked (``tests/test_conv_matrices_accessor.py``). The builders are what disagreed with it.
 
 ``tests/test_slot_order.py`` pins the property directly, for every builder.
@@ -110,7 +110,7 @@ class ConvSlots3(NamedTuple):
     """The three permittivity slots of a scalar (Li-rule) layer, in ``solve_conv`` order.
 
     Keeps its ``Slots`` name while the five-slot one became :class:`ConvMatrices`, because
-    only the five-slot one is public: ``conv_matrices()`` pads a three-slot build out to five
+    only the five-slot one is public: ``eps_conv_matrices()`` pads a three-slot build out to five
     before returning it, so nothing outside ``_core`` ever holds one of these.
 
     A ``NamedTuple``, so every way these have ever been consumed still works — splatting into
@@ -128,8 +128,8 @@ class ConvSlots3(NamedTuple):
 class ConvMatrices(NamedTuple):
     """The five convolution matrices of a layer stack, in ``solve_conv`` order.
 
-    What :meth:`~wavebit._core.engine.CoreFactorizationMixin.conv_matrices` returns, and what
-    ``solve_conv`` takes first — ``solver.solve_conv(*solver.conv_matrices())`` is
+    What :meth:`~wavebit._core.engine.CoreFactorizationMixin.eps_conv_matrices` returns, and what
+    ``solve_conv`` takes first — ``solver.solve_conv(*solver.eps_conv_matrices())`` is
     ``solver.solve()``. :class:`ConvSlots3` with the off-diagonal pair appended; see that
     docstring, and "Slot order" above, for why ``epz_i`` sits third rather than last.
 
@@ -966,7 +966,7 @@ def _pn_fields(xp, eps33, nx, ny):
         A = (eps - p q^T / a) T + (p / a) n^T           D = A c
         B = (I   - n q^T / a) T + (n / a) n^T           E = B c
 
-    and the factorized tensor is ``[[A]] [[B]]^-1`` — see :func:`pn_conv_matrices`. Every
+    and the factorized tensor is ``[[A]] [[B]]^-1`` — see :func:`pn_eps_conv_matrices`. Every
     product on the right is one discontinuous coefficient times one continuous quantity, which
     is exactly the case Laurent's rule converges on.
 
@@ -1009,7 +1009,7 @@ def _pn_fields(xp, eps33, nx, ny):
     return A, B
 
 
-def pn_conv_matrices(xp, eps33, nx, ny, max_order_x, max_order_y):
+def pn_eps_conv_matrices(xp, eps33, nx, ny, max_order_x, max_order_y):
     """Popov-Neviere convolution matrices for one *patterned anisotropic* layer.
 
     ``eps33`` is the pointwise permittivity tensor on the layer raster, shape ``(Ny, Nx, 3, 3)``.
@@ -1080,7 +1080,7 @@ def pn_conv_matrices(xp, eps33, nx, ny, max_order_x, max_order_y):
 def pn_mu_conv_matrices(xp, mu33, nx, ny, max_order_x, max_order_y):
     """The five **permeability** slots from a patterned ``mu`` tensor.
 
-    ``pn_conv_matrices`` verbatim. That the same routine serves both is not a shortcut — it is
+    ``pn_eps_conv_matrices`` verbatim. That one routine serves both is not a shortcut — it is
     the E/H duality the whole magnetic implementation rests on. The rearrangement in
     :func:`_pn_fields` is driven entirely by which quantities are continuous at an interface:
 
@@ -1091,7 +1091,7 @@ def pn_mu_conv_matrices(xp, mu33, nx, ny, max_order_x, max_order_y):
     them is unchanged. A separate derivation for ``mu`` would be the same derivation.
 
     **This used to exist in order to reorder, and that is worth keeping on the record.**
-    ``pn_conv_matrices`` returned ``(x, y, xy, yx, z_i)`` while
+    ``pn_eps_conv_matrices`` returned ``(x, y, xy, yx, z_i)`` while
     :func:`~wavebit._core.solve_2d.layer_modes_2d` takes ``(x, y, z_i, xy, yx)``, so this
     function swapped the two groups on the way through; passing one to the other unchanged put
     ``mu_zz^-1`` where ``mu_xy`` belongs, which is a plausible-looking magnetic layer rather
@@ -1103,13 +1103,13 @@ def pn_mu_conv_matrices(xp, mu33, nx, ny, max_order_x, max_order_y):
     ``nx`` / ``ny`` are the normal field of the **permeability's** boundary, which need not be
     the permittivity's — see :func:`to_conv_mat_raster_pn_mu`.
     """
-    return pn_conv_matrices(xp, mu33, nx, ny, max_order_x, max_order_y)
+    return pn_eps_conv_matrices(xp, mu33, nx, ny, max_order_x, max_order_y)
 
 
 def to_conv_mat_raster_pn_mu(tensor_raster, max_order_x, max_order_y, normal_field=None, lattice=None,
                              normal_method=None):
     """Per-layer permeability slots for a **tensor** ``mu`` raster — the ``mu`` twin of
-    :func:`to_conv_mat_raster_pn`.
+    :func:`to_conv_mat_raster_pn_eps`.
 
     Args:
         tensor_raster: ``(n_layers, Ny, Nx, 3, 3)`` permeability tensors per pixel.
@@ -1165,8 +1165,8 @@ def to_conv_mat_raster_pn_mu(tensor_raster, max_order_x, max_order_y, normal_fie
     return ConvMatrices(*(xp.stack(slot) for slot in out))
 
 
-def to_conv_mat_raster_pn(tensor_raster, max_order_x, max_order_y, normal_field=None, lattice=None,
-                          normal_method=None):
+def to_conv_mat_raster_pn_eps(tensor_raster, max_order_x, max_order_y, normal_field=None,
+                              lattice=None, normal_method=None):
     """Per-layer Popov-Neviere convolution matrices for a **tensor** raster.
 
     The counterpart of :func:`to_conv_mat_raster_nvf` for a layer stack whose permittivity is a
@@ -1197,7 +1197,7 @@ def to_conv_mat_raster_pn(tensor_raster, max_order_x, max_order_y, normal_field=
 
     if tensor_raster.shape[-2:] != (3, 3):
         raise ValueError(
-            f'to_conv_mat_raster_pn takes a permittivity tensor per pixel, shaped '
+            f'to_conv_mat_raster_pn_eps takes a permittivity tensor per pixel, shaped '
             f'(n_layers, Ny, Nx, 3, 3); got {tuple(tensor_raster.shape)}. A scalar raster goes '
             f'to to_conv_mat_raster_nvf instead; both take relative permittivity.')
 
@@ -1217,7 +1217,8 @@ def to_conv_mat_raster_pn(tensor_raster, max_order_x, max_order_y, normal_field=
                 method=normal_method)
         else:
             nx, ny = normal_field[i]
-        for slot, mat in zip(out, pn_conv_matrices(xp, eps33, nx, ny, max_order_x, max_order_y)):
+        for slot, mat in zip(
+                out, pn_eps_conv_matrices(xp, eps33, nx, ny, max_order_x, max_order_y)):
             slot.append(mat)
 
     return ConvMatrices(*(xp.stack(slot) for slot in out))

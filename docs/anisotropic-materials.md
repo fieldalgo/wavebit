@@ -141,8 +141,8 @@ constitutive relation so that the continuous quantities — tangential `E`, norm
 side, invert that block **pointwise in real space**, and then apply the direct rule throughout.
 The resulting `eps̃` matrices are fully populated.
 
-**Done, 2026-08-14** — `factorization.py::pn_conv_matrices`, with
-`to_conv_mat_raster_pn` for a stack. Full write-up in
+**Done, 2026-08-14** — `factorization.py::pn_eps_conv_matrices`, with
+`to_conv_mat_raster_pn_eps` for a stack. Full write-up in
 [`patterned-anisotropic-factorization.md`](patterned-anisotropic-factorization.md); two things
 from it are worth carrying back here, because both contradict what this section assumed:
 

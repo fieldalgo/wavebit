@@ -75,7 +75,7 @@ def n_conv_matrices(path, **strategy):
     y so ``epxy`` / ``epyx`` stop being zero. On the block path NVF is therefore not merely
     unimplemented but structurally absent — there are only ever three matrices to return.
     """
-    return sum(m is not None for m in solver(path, **strategy)._conv_matrices())
+    return sum(m is not None for m in solver(path, **strategy)._eps_conv_matrices())
 
 
 # ------------------------------------------------------- an untouched default is not a request
@@ -178,7 +178,7 @@ def test_the_boundary_sub_path_is_classified_and_refused_like_the_rest_of_smooth
     """The polygon route is the same path by every tell that matters, so it must refuse alike."""
     s = wavebit.rcwa(structure=PAINTED_OVERLAP, **KW)
     assert s.factorization == 'nvf'
-    assert sum(m is not None for m in s._conv_matrices()) == 5
+    assert sum(m is not None for m in s._eps_conv_matrices()) == 5
     with pytest.raises(NotImplementedError, match="factorization='li'"):
         wavebit.rcwa(structure=PAINTED_OVERLAP, factorization='li', **KW).solve()
 
@@ -276,7 +276,7 @@ def test_a_skewed_block_cell_reports_the_lattice_first_not_the_keyword():
 
     A block structure on a skewed cell is unbuildable *whatever* rule is named — the modeler
     rasterises onto a rectangular grid of its own. So naming the keyword instead would send
-    the user to change the one thing that cannot help. `_conv_matrices` therefore checks the
+    the user to change the one thing that cannot help. `_eps_conv_matrices` therefore checks the
     lattice before it reads the rule, and this pins that: with the refusals swapped, the
     message below is the ``factorization='nvf'`` one and
     ``test_oblique_lattice.py::test_the_vector_modeler_is_refused_on_a_skewed_cell`` fails too.
@@ -289,7 +289,7 @@ def test_a_skewed_block_cell_reports_the_lattice_first_not_the_keyword():
 def test_freezing_gives_the_same_diagnosis_the_solve_would():
     """One structure must not get two different explanations depending on the entry point.
 
-    ``freeze_geometry`` refuses the same two things in the same order as ``_conv_matrices``.
+    ``freeze_geometry`` refuses the same two things in the same order as ``_eps_conv_matrices``.
     Before that, the keyword check landed first here and the lattice check first there, so a
     skewed block cell was told to fix its ``factorization`` if it froze and to fix its
     ``structure`` if it solved — for one scene that has to change its ``structure`` either way.

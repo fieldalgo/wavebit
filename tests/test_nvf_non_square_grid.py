@@ -204,7 +204,7 @@ def test_the_solver_hands_the_cell_basis_to_the_factorization(coefficients):
     assert np.abs(np.asarray(on_pixel_shape) - np.asarray(on_index_grid)).max() > 1e-6, \
         'the two builds coincide here, so this test could not tell them apart'
 
-    epx = np.asarray(wavebit.rcwa(**cfg)._conv_matrices()[0])
+    epx = np.asarray(wavebit.rcwa(**cfg)._eps_conv_matrices()[0])
     assert np.abs(epx - np.asarray(on_pixel_shape)).max() == 0.0
     assert np.abs(epx - np.asarray(on_index_grid)).max() > 1e-6
 

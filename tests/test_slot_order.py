@@ -110,7 +110,7 @@ BUILDERS = {
     'raster_nvf': lambda: _fac.to_conv_mat_raster_nvf(_raster(), MAX_ORDER, MAX_ORDER),
     'raster_integrated_nvf': lambda: _fac.to_conv_mat_raster_integrated_nvf(
         _raster(), MAX_ORDER, MAX_ORDER),
-    'raster_pn': lambda: _fac.to_conv_mat_raster_pn(_tensor_raster(), MAX_ORDER, MAX_ORDER),
+    'raster_pn_eps': lambda: _fac.to_conv_mat_raster_pn_eps(_tensor_raster(), MAX_ORDER, MAX_ORDER),
     'smooth_layers': lambda: _analytic.to_conv_mat_smooth_layers(
         _shapes(), MAX_ORDER, MAX_ORDER, KW['period'], normal_grid=256,
         complex_dtype=np.complex128, xp=np),

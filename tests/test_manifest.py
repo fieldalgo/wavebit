@@ -445,13 +445,13 @@ def _run_patterned():
     now pins the agreement for every builder; this case is left spelled out because naming the
     slots is what makes the structure under test readable.
     """
-    from wavebit._core.factorization import to_conv_mat_raster_pn
+    from wavebit._core.factorization import to_conv_mat_raster_pn_eps
     grid, max_order = 48, 4
     eps = np.zeros((1, grid, grid, 3, 3), dtype=complex)
     for i in range(3):
         eps[..., i, i] = 1.0
     eps[0, 14:34, 18:30] = _tensor(2.25, 2.25, 2.89)
-    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn(eps, max_order, max_order)
+    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn_eps(eps, max_order, max_order)
     mee = wavebit.rcwa(max_order=[max_order, max_order], **_MAT_KW)
     return mee.solve_conv(epx, epy, epz_i, epxy, epyx)
 

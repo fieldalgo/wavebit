@@ -15,7 +15,7 @@ Fourier-transformed analytically rather than off a raster.
 ``Material(epsilon=x)``); what lands in ``cell`` is that material's ``epsilon``, unsquared.
 Nothing here reads a material's ``mu``: the permeability slots are built by running this whole
 module a second time on a structure whose materials carry ``mu`` where ``epsilon`` was --
-see ``CoreFactorizationMixin._mu_matrices`` -- which is what makes the two quantities land on
+see ``CoreFactorizationMixin._mu_conv_matrices`` -- which is what makes the two quantities land on
 one grid instead of on two that happen to agree.
 
 Two conventions carry over from the already-ported modules:

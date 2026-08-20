@@ -1284,7 +1284,7 @@ class CoreFactorizationMixin:
         each record checks and why a traced replay cannot.
         """
         [setattr(self, k, v) for k, v in kwargs.items()]
-        # Same two refusals as `_conv_matrices`, in the same order, for the same reason: a
+        # Same two refusals as `_eps_conv_matrices`, in the same order, for the same reason: a
         # record of a build that cannot happen is worth nothing, and a structure that gets one
         # diagnosis from `freeze_geometry` and a different one from `solve` sends the
         # reader to the wrong place depending on which they called.
@@ -1332,7 +1332,7 @@ class CoreFactorizationMixin:
         if self._modeling_type_assigned == 1:
             # The block modeler records its plans while it builds, so run the build once to
             # get them -- the *modeler*, not the whole factorization. Freezing used to go
-            # through `_conv_matrices` and throw the convolution matrices away, which it paid
+            # through `_eps_conv_matrices` and throw the convolution matrices away, which it paid
             # for only because the same-material detector read them; that detector is gone.
             # Dropping them takes a freeze from 25.6 ms to 10.4 ms, which is what makes
             # re-freezing every step of a fit cheaper than nursing one along.
@@ -1482,12 +1482,12 @@ class CoreFactorizationMixin:
                 AutoDetuneWarning, stacklevel=2)
         return res
 
-    def conv_matrices(self, geometry=None, **kwargs):
-        """The convolution matrices for this structure, without solving.
+    def eps_conv_matrices(self, geometry=None, **kwargs):
+        """The permittivity convolution matrices for this structure, without solving.
 
         Returns a :class:`~wavebit._core.factorization.ConvMatrices` — the five slots ``(epx,
         epy, epz_i, epxy, epyx)``, which are exactly :meth:`solve_conv`'s leading parameters, so
-        ``solver.solve_conv(*solver.conv_matrices())`` is ``solve()``. It is a ``NamedTuple``:
+        ``solver.solve_conv(*solver.eps_conv_matrices())`` is ``solve()``. It is a ``NamedTuple``:
         splatting, unpacking, indexing and ``len`` all behave as they did when this returned a
         bare tuple, and ``conv.epz_i`` now reaches one slot by name rather than by an index that
         is correct only until somebody reorders. Each slot is ``(n_layers, n_orders, n_orders)``
@@ -1511,22 +1511,24 @@ class CoreFactorizationMixin:
         geometry means comparing the permittivity coefficients instead, which is a narrower
         question and is left to the caller that has it.
 
-        **Permittivity only.** A magnetic structure also builds five permeability slots, and
-        they are not returned here: this is a five-tuple whose fields are named ``ep``, and
-        widening it would change what every existing caller unpacks. :meth:`mu_matrices`
-        returns the other five, in the same five-slot layout.
+        **Permittivity only**, which since 2026-08-20 the name says: this was ``conv_matrices``
+        beside a ``mu_matrices``, one named for the operation and one for the quantity, so the
+        pair did not read as a pair and the unmarked half had to carry this paragraph instead.
+        A magnetic structure also builds five permeability slots and they are not returned here
+        -- widening the tuple would change what every existing caller unpacks.
+        :meth:`mu_conv_matrices` returns the other five, in the same five-slot layout.
 
         ``geometry`` behaves as in :meth:`solve`.
         """
         [setattr(self, k, v) for k, v in kwargs.items()]
-        return self._conv_matrices(geometry)
+        return self._eps_conv_matrices(geometry)
 
-    def mu_matrices(self, geometry=None, **kwargs):
+    def mu_conv_matrices(self, geometry=None, **kwargs):
         """The permeability convolution matrices, or ``None`` for a non-magnetic structure.
 
         ``(mux_conv, muy_conv, muz_conv_i, muxy_conv, muyx_conv)`` — the same five slots as
-        :meth:`conv_matrices` on
-        the other side of the ``(E, H, eps, mu) -> (H, -E, mu, eps)`` duality, which is why
+        :meth:`eps_conv_matrices`, on the other side of the
+        ``(E, H, eps, mu) -> (H, -E, mu, eps)`` duality, which is why
         one layout serves both, and why this is a
         :class:`~wavebit._core.factorization.ConvMatrices` as well: its field names are the
         permittivity's, and the duality is what makes reading ``mu`` out of ``.epx`` correct
@@ -1537,7 +1539,7 @@ class CoreFactorizationMixin:
         ``geometry`` behaves as in :meth:`solve`.
         """
         [setattr(self, k, v) for k, v in kwargs.items()]
-        return self._mu_matrices(geometry)
+        return self._mu_conv_matrices(geometry)
 
     def structure_slice(self, layer=0, n=512, show='eps', band_limited=False):
         """One layer's structure as an array. See :func:`wavebit._core.draw.structure_slice`."""
@@ -1626,12 +1628,12 @@ class CoreFactorizationMixin:
                 f"for a skewed cell; only 'distance' carries the Jacobian pullback there. "
                 f'Drop normal_method or use an axis-aligned cell.')
 
-    def _conv_matrices(self, geometry=None):
+    def _eps_conv_matrices(self, geometry=None):
         """Convolution matrices for the current structure: ``(epx, epy, epz_i, epxy, epyx)``."""
         self._check_before_building()
         return self._slots_for(self.structure, geometry, quantity='permittivity')
 
-    def _mu_matrices(self, geometry=None):
+    def _mu_conv_matrices(self, geometry=None):
         """The five permeability slots, or ``None`` when nothing in the scene is magnetic.
 
         The permeability is built by the *same* builder as the permittivity, on the same
@@ -1639,7 +1641,7 @@ class CoreFactorizationMixin:
         map onto each other under ``(E, H, eps, mu) -> (H, -E, mu, eps)``, so a factorization
         rule derived for one holds for the other term for term -- see
         :func:`~wavebit._core.factorization.pn_mu_conv_matrices`, which is
-        :func:`~wavebit._core.factorization.pn_conv_matrices` under a different name for
+        :func:`~wavebit._core.factorization.pn_eps_conv_matrices` under a different name for
         exactly this reason. Rebuilding the rules for ``mu`` would be rederiving them.
 
         Two things the shared build gives that a separate one would have to re-earn: the two
@@ -1899,10 +1901,10 @@ class CoreFactorizationMixin:
         permeability pass replays the grid plans the permittivity pass has just recorded, so
         the order is what puts the two quantities on one grid.
         """
-        eps = self._conv_matrices(geometry)
+        eps = self._eps_conv_matrices(geometry)
         if not self._is_magnetic():
             return self.solve_conv(*eps)
-        return self.solve_conv(*eps, mu=self._mu_matrices(geometry),
+        return self.solve_conv(*eps, mu=self._mu_conv_matrices(geometry),
                                mu_top=self._top.mu, mu_bot=self._bot.mu,
                                eps_top=self._top.epsilon, eps_bot=self._bot.epsilon)
 

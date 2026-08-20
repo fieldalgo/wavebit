@@ -4,7 +4,7 @@ This is the case that had no oracle. ``test_fmmax_golden.py`` covers uniform ten
 Berreman and RETICOLO also reach; here the tensor varies across the cell, and of the four
 reference solvers surveyed for this project only fmmax both accepts a patterned complex
 off-diagonal and demonstrably uses it. So this file is what stands behind
-``wavebit._core.factorization.pn_conv_matrices``.
+``wavebit._core.factorization.pn_eps_conv_matrices``.
 
 **It asserts convergence, not identity, and the tolerance is measured rather than chosen.**
 Three formulations are in play — the Popov-Neviere rearrangement under test, fmmax's ``FFT``
@@ -31,7 +31,7 @@ import numpy as np
 import pytest
 
 import wavebit
-from wavebit._core.factorization import normal_vector_field, pn_conv_matrices
+from wavebit._core.factorization import normal_vector_field, pn_eps_conv_matrices
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -50,7 +50,7 @@ def solve(n_in, g, max_order=MAX_ORDER):
     eps33[..., 0, 1], eps33[..., 1, 0] = gyro, -gyro         # the physical tensor
 
     nx, ny = normal_vector_field(eps)
-    epx, epy, epz_i, epxy, epyx = pn_conv_matrices(np, eps33, nx, ny, max_order, max_order)
+    epx, epy, epz_i, epxy, epyx = pn_eps_conv_matrices(np, eps33, nx, ny, max_order, max_order)
 
     # `structure` is the scalar permittivity raster, handed over as it stands: the `np.sqrt`
     # that used to sit here existed only because the constructor took an index and squared it
