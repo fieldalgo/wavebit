@@ -120,7 +120,13 @@ What is not here, in the order it will be wanted:
 
 * **``mu`` on this path.** Permeability landed on the 2ff path on 2026-08-14
   (``docs/magnetic-materials.md``) and this one still refuses it — ``engine.py``'s 2D solve
-  raises when a ``mu`` arrives with a z-coupled ``eps``, rather than dropping it.
+  raises when a ``mu`` reaches the first-order formulation, by either route in (a z-coupled
+  ``eps``, or ``formulation='4ff'`` asked for directly), rather than dropping it. That refusal
+  covers the *field* too: :func:`wavebit._core.fields.field_2d_4ff` spells ``H_z`` as
+  ``Kx Ey - Ky Ex``, Faraday's z row at ``mu = 1``, where its 2ff twin carries the general
+  ``muz_i (Kx Ey - Ky Ex)``. Adding ``mu`` here means both — and, this being the formulation
+  that can express a z row at all, the ``mu_zx H_x`` / ``mu_zy H_y`` terms as well, exactly as
+  ``E_z`` already keeps ``ezx`` / ``ezy``.
 * **A patterned *and* z-coupled layer.** The factorization for a patterned anisotropic layer
   now exists (``factorization.py::pn_conv_matrices``, 2026-08-14) and this module takes
   convolution matrices, so the in-plane case needs no change here. What is still missing is the

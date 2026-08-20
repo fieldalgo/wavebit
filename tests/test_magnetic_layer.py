@@ -274,3 +274,25 @@ def test_clearing_the_mu_first_makes_the_swap_legal():
     mee.structure = SHAPE_LAYER
     assert mee.mu is None
     assert mee.modeling_type_assigned == 2
+
+
+def test_mu_on_the_first_order_path_is_refused_whichever_way_it_got_there():
+    """``formulation='4ff'`` reaches the 4ff solve with no z row, and must say *that*.
+
+    Companion to :func:`test_mu_with_a_z_coupled_permittivity_is_refused`, which covers the
+    other route in. Both refusals are what make ``fields.field_2d_4ff``'s
+    ``H_z = Kx Ey - Ky Ex`` -- Faraday's z row at ``mu = 1`` -- a correct line rather than an
+    unchecked assumption: that path cannot be handed a permeability, so it never needs the
+    ``muz_i`` its 2ff twin carries.
+
+    The message is asserted, not just the exception type. Naming a z-coupled permittivity that
+    was never given sends the reader to look for one, and the two routes are told apart by
+    nothing else.
+    """
+    mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+                       fto=(0, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK])
+    mee.formulation = '4ff'
+    e = slots(tensor(2.6, 2.6, 2.6))
+    m = tuple(slots(tensor(1.7, 1.7, 1.7)))
+    with pytest.raises(NotImplementedError, match="formulation='4ff' was asked for"):
+        mee.solve_for_conv(WL, *e, mu=m)

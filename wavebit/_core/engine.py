@@ -943,10 +943,20 @@ class CoreSolveMixin:
         if self._formulation_assigned == Formulation.FIRST:
             if (mu is not None and any(s is not None for s in mu)) or \
                     mu_top is not None or mu_bot is not None:
+                # Name the reason this call is on the 4ff path, not a reason it could have
+                # been: `formulation='4ff'` reaches here with an empty z row, and blaming a
+                # z-coupled permittivity then sends the user to look for one that is not
+                # there. This refusal is also what makes
+                # `wavebit._core.fields.field_2d_4ff`'s `H_z = Kx Ey - Ky Ex` correct -- that
+                # line holds only at `mu = 1`, and holds because nothing else can arrive.
+                why = ('a z-coupled permittivity was given, which routes to'
+                       if any(s is not None for s in z_row) else
+                       "formulation='4ff' was asked for, which routes to")
                 raise NotImplementedError(
-                    'a permeability was given with a z-coupled permittivity, which routes to '
-                    'the first-order (4ff) solve, and mu is not implemented there. Drop the '
-                    'z row to stay on the 2ff path, which does take mu.')
+                    f'a permeability was given and {why} the first-order (4ff) solve, and mu '
+                    'is not implemented there -- neither in the layer operator nor in the '
+                    'field reconstruction, whose H_z carries no mu_zz. Stay on the 2ff path, '
+                    'which does take mu: drop the z row, or leave formulation at its default.')
             return self._finish(_solve_2d_4ff(
                 wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self._incidence_pair(),
                 self.thickness, epx_conv_all, epy_conv_all, epz_conv_i_all,

@@ -111,7 +111,11 @@ gratings" are still not the same claim.
 
 **`mu`.** Permeability landed on the 2ff path on 2026-08-14
 ([`magnetic-materials.md`](magnetic-materials.md)) and this one refuses it rather than dropping
-it.
+it — by either route in, a z-coupled `eps` or `formulation='4ff'` asked for directly, and the
+message names which. The refusal covers §4b's field as well: `field_2d_4ff` spells `H_z` as
+`Kx Ey - Ky Ex`, which is Faraday's z row only at `mu = 1`. The 2ff twin has carried the
+general form since 2026-08-20; putting `mu` here means that factor plus the `mu_zx` / `mu_zy`
+terms this formulation would be the one able to express.
 
 ## 4b. Field reconstruction, and the three checks that replace the twin (2026-08-14)
 
