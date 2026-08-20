@@ -33,6 +33,7 @@ CASES = {
 
 def _solver(backend, case, **extra):
     kwargs, _ = CASES[case]
+    extra.setdefault('answers', 'field')      # every solver in this file is reconstructed from
     return wavebit.rcwa(backend=backend, **BASE, **kwargs, **extra)
 
 

@@ -35,7 +35,8 @@ import json
 import math
 
 from .domain import Layer, Stack, Incidence
-from .enums import Backend, Factorization, FourierCoefficients, NormalMethod, Pol
+from .enums import (Answers, Backend, Factorization, FourierCoefficients, NormalMethod,
+                    Pol, answers_of)
 
 SPEC_VERSION = '2'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12)
 
@@ -83,7 +84,7 @@ def _jsonable(value):
     """Plain-Python form of a value, so ``to_dict`` output survives ``json.dumps``."""
     if isinstance(value, bool) or value is None:
         return value
-    if isinstance(value, (Backend, Pol, FourierCoefficients, Factorization)):
+    if isinstance(value, (Answers, Backend, Pol, FourierCoefficients, Factorization)):
         return value.name.lower()
     if isinstance(value, (str, int, float)):
         return value
@@ -128,9 +129,15 @@ class Numerics:
     type_complex: int = 128
     connecting_algo: str = 'ETM'
     normal_grid: int = 1024
+    #: What the solve keeps the state to answer. Unlike the three above this has a real
+    #: default rather than ``None``: it resolves against nothing -- no modeling path, no
+    #: geometry -- so ``'amplitude'`` here is the same claim a bare ``rcwa()`` makes, and
+    #: writing it into every spec costs a spec nothing. It lives in ``numerics`` and not in
+    #: ``incidence`` because it describes the job, not the light.
+    answers: Answers = Answers.AMPLITUDE
 
     _FIELDS = ('backend', 'fto', 'fourier_coefficients', 'factorization', 'normal_method',
-               'type_complex', 'connecting_algo', 'normal_grid')
+               'type_complex', 'connecting_algo', 'normal_grid', 'answers')
 
     @classmethod
     def from_dict(cls, d) -> 'Numerics':
@@ -147,6 +154,8 @@ class Numerics:
         if d.get('normal_method') is not None:
             d['normal_method'] = _enum(d['normal_method'], NormalMethod,
                                        'numerics.normal_method')
+        if 'answers' in d:
+            d['answers'] = _enum(d['answers'], Answers, 'numerics.answers')
         if 'fto' in d:
             fto = d['fto']
             fto = (fto, 0) if isinstance(fto, int) else tuple(fto)
@@ -175,6 +184,7 @@ class Numerics:
             type_complex=0 if self.type_complex == 128 else 1,
             connecting_algo=self.connecting_algo,
             normal_grid=self.normal_grid,
+            answers=answers_of(self.answers).value,
             **({} if self.fourier_coefficients is None
                else {'fourier_coefficients': self.fourier_coefficients.value}),
             **({} if self.factorization is None

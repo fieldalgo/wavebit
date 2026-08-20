@@ -160,6 +160,7 @@ between ``big_F`` and ``big_T``, and that error is invisible in ``R``.
 """
 from .backend import array_namespace, as_array, eig
 from .conventions import boundary_kz, order_azimuth
+from .enums import Answers, answers_of
 from .solve_1d import _block, _diag, _is_backside, _mirrored_scene, final_matching
 from .solve_2d import order_grid_kxy, sp_modes_2d
 
@@ -458,7 +459,7 @@ def _solve_etm(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb):
     redefinition is bookkept separately as ``P^-1 X_f`` per layer, so the transmitted amplitude
     can be recovered at the end.
     """
-    G, T_acc, _ = _etm_recursion(xp, k0, Kx, Ky, layers, ff, psi_vf)
+    G, T_acc, _ = _etm_recursion(xp, k0, Kx, Ky, layers, ff, psi_vf, keep_field=False)
 
     # incident + reflected on the top side must be whatever the recursion says arrives there
     sol = xp.linalg.solve(xp.concat([psi_vb, -G], axis=1),
@@ -466,7 +467,7 @@ def _solve_etm(xp, k0, Kx, Ky, layers, ff, incident, psi_vf, psi_vb):
     return psi_vb @ sol[:2 * ff], psi_vf @ (T_acc @ sol[2 * ff:])
 
 
-def _etm_recursion(xp, k0, Kx, Ky, layers, ff, G):
+def _etm_recursion(xp, k0, Kx, Ky, layers, ff, G, keep_field=True):
     """Sweep the ETM recursion up the stack: ``(G_above, T_acc, layer_info_list)``.
 
     Split out of :func:`_solve_etm` because the recursion is the part
@@ -509,7 +510,11 @@ def _etm_recursion(xp, k0, Kx, Ky, layers, ff, G):
         G = psi_f + psi_b @ X_b @ QP_i @ X_f
         T_acc = T_acc @ (P_i @ X_f)
 
-        layer_info_list.append([eps_blocks, psi_f, lam_f, psi_b, lam_b, d, P_i, QP_i])
+        # `keep_field=False` lets each layer's eight-slot state be collected as the loop
+        # moves on; only `G` and `T_acc` have to survive an iteration. `_solve_etm` above
+        # discards the list outright and so never builds it.
+        if keep_field:
+            layer_info_list.append([eps_blocks, psi_f, lam_f, psi_b, lam_b, d, P_i, QP_i])
     return G, T_acc, layer_info_list
 
 
@@ -603,7 +608,7 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                  epxy_conv_all=None, epyx_conv_all=None,
                  epxz_conv_all=None, epyz_conv_all=None,
                  epzx_conv_all=None, epzy_conv_all=None,
-                 *, phi, incidence_side='top', full=False,
+                 *, phi, incidence_side='top', answers=Answers.EFFICIENCY,
                  connecting_algo='ETM'):
     """Solve a 2D stack on the first-order formulation — the public 4ff route.
 
@@ -695,12 +700,14 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
 
     layers = _conv_layers(xp, per_layer, thickness, ff, C)
     seed = _half_space_state(xp, _diag(xp, kz_bot), n_bot ** 2, F_c, F_s, ff, C)
-    G, big_T, layer_info_list = _etm_recursion(xp, k0, Kx, Ky, layers, ff, seed)
+    keep_field = answers_of(answers).covers(Answers.FIELD)
+    G, big_T, layer_info_list = _etm_recursion(xp, k0, Kx, Ky, layers, ff, seed,
+                                               keep_field=keep_field)
     big_F, big_G = sp_modes_2d(xp, G[:2 * ff], 1j * G[2 * ff:], F_c, F_s, ff)
 
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
-                         n_top, n_bot, ff_x, ff_y, full=full)
-    if full:
+                         n_top, n_bot, ff_x, ff_y, answers=answers)
+    if keep_field:
         # `sp_modes_2d` recombines the *rows* of `G` into the s/p boundary variables and leaves
         # its columns alone, so `final_matching`'s `T1` is the unknown of the `G` above the top
         # layer unchanged -- which is that layer's forward amplitudes at its own top face. That

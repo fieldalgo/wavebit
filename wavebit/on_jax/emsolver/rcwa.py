@@ -80,6 +80,12 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                  # where a raster normal field is built (factorization='nvf' on a raster);
                  # explicitly set anywhere else it is refused rather than ignored.
                  # See docs/nvf-normal-methods.md for the measurements that rank them.
+                 answers='amplitude',        # what this solve keeps the state to answer:
+                 # 'efficiency' | 'amplitude' (default) | 'field'. A declaration, like
+                 # tetm -- calculate_field is refused below 'field' rather than served,
+                 # because the per-layer state it walks is 4.25 matrices of side
+                 # 2*ff_x*ff_y per layer (240 MB at fto=(15, 15)) and is kept as the
+                 # solve runs or not at all. See CoreSolveMixin.answers.
                  ):
 
         super().__init__(n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi, chi=chi, tetm=tetm, pol=pol,
@@ -88,6 +94,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                          device=device, type_complex=type_complex,
                          polarization=polarization)
         self.incidence_side = incidence_side
+        self.answers = answers
 
         self.modeler = Modeling(period=self.period, type_complex=type_complex)
 
@@ -262,6 +269,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         Explicit ``res_z`` is the one thing here that cannot be traced: bucketing a z into a
         layer needs the thicknesses as numbers. It raises rather than guessing.
         """
+        self._require_field_declaration()
         kx, ky = self._kxy_2d(self.wavelength)
 
         if self._grating_type_assigned == 0:
@@ -328,6 +336,10 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                 '    result, field_cell = solver.conv_solve_field(..., geometry=geometry)\n'
                 'Reuse that one geometry across calls to compile only once. '
                 'For the eager, auto-detecting path use solver.conv_solve_field_no_jit(...).')
+        # Naming the field here does not declare one: `answers` is aux data, so it is static
+        # by the time this traces, and the solve below keeps the state or does not according
+        # to what was declared. Checked before the trace rather than inside it.
+        self._require_field_declaration()
 
         [setattr(self, k, v) for k, v in kwargs.items()]  # needed for optimization
 
@@ -340,6 +352,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                                 geometry=None):
         """Eager solve-and-field. ``geometry`` is optional: omit it and each discrete decision
         is auto-detected from the concrete structure."""
+        self._require_field_declaration()
         res = self.conv_solve(geometry=geometry)
         field_cell = self.calculate_field(res_x, res_y, res_z, set_field_input)
         return res, field_cell

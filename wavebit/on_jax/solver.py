@@ -40,6 +40,16 @@ class SolverJax(RCWAJax, OptimizerJax):
             # A dispatch key like `pol`: the solves branch on it (which cascade blocks are
             # read, which way the stack is walked), so it must come back static, never traced.
             'incidence_side': self.incidence_side,
+            # Aux data, and it has to be. A plain instance attribute survives __init__ but
+            # nothing puts it here, so `_tree_unflatten` never passes it to the constructor
+            # and the rebuilt solver takes the default: measured on this pair, a solver that
+            # declared 'field' comes back reporting 'amplitude' and retaining 0.000 MB where
+            # it should hold 1.253. And with the key absent the two declarations produce
+            # *identical* aux_data, so their treedefs coincide and one jit compilation serves
+            # both -- the loss cannot even be recovered by recompiling. Static here, so the
+            # core's `covers` branches are read at trace time, the only time they can be.
+            # See docs/what-a-solve-answers.md section 6.
+            'answers': self.answers,
             # Not the pair itself (that is a child now) but the fact that `psi` was given
             # explicitly, which the always-present psi child would otherwise overwrite.
             'psi_given': self._psi_given,

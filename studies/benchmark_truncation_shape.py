@@ -198,7 +198,7 @@ def solve_flat(mm, nn, epx, epy, epz_i, epxy, epyx, wavelength, period, thicknes
     # ff_x = ff_xy, ff_y = 1: the flat set *is* the layout. The incident delta lands at
     # ff_xy // 2, which is the zero order for both shapes (see circular_select).
     R, T = final_matching(xp, C128, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
-                                 n_top, n_bot, ff_xy, 1, full=False)
+                                 n_top, n_bot, ff_xy, 1, answers='efficiency')
 
     return R.flatten(), T.flatten(), kz_top, kz_bot
 

@@ -23,6 +23,7 @@ Stages (matching the legacy chain, kept as one function each to make bit-parity 
 from .backend import array_namespace, as_array, check_finite, check_physical, eig
 from .conventions import (boundary_kz, incident_kz, incident_sp_amplitudes, mode_q,
                           order_azimuth)
+from .enums import Answers, answers_of
 
 
 def _diag(xp, v):
@@ -172,7 +173,7 @@ def sp_modes_1d_conical(xp, F_c, F_s, W1, W2, V_11, V_12, V_21, V_22):
 
 def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
-             incidence_side='top', full=False):
+             incidence_side='top', answers=Answers.EFFICIENCY):
     """Solve a 1D grating stack for reflection/transmission diffraction efficiency.
 
     Args:
@@ -192,11 +193,20 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
             results are incidence-relative either way — ``de_ri`` is power back into the
             incidence medium, ``de_ti`` power through the far side.
 
+        answers: how far up the ladder this solve goes -- see
+            :class:`~wavebit._core.enums.Answers`. The core's default is the cheapest rung,
+            so a caller that names nothing pays for nothing; the solver classes declare
+            their own (``'amplitude'``).
+
     Returns:
         ``(de_ri, de_ti)`` — reflected / transmitted efficiency per order, shape ``(1, ff)``.
-        With ``full=True``, the complete legacy result mapping instead (amplitudes and s/p
-        split; the pure TE/TM path carries all of one polarization, the other side is zero).
+        From ``answers='amplitude'`` up, the full result mapping instead (amplitudes and s/p
+        split; the pure TE/TM path carries all of one polarization, the other side is zero),
+        and from ``'field'`` up that mapping also carries the ``layer_info_list`` / ``T1``
+        state field reconstruction consumes.
     """
+    answers = answers_of(answers)
+    keep_field = answers.covers(Answers.FIELD)
     xp = array_namespace(epx_conv_all)
     if _is_backside(incidence_side):
         # After the namespace read: the mirror rebinds the per-layer stacks to plain lists
@@ -260,7 +270,12 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         T = T @ a_i @ X
 
         # Bottom-to-top, matching the legacy append order; consumed by field reconstruction.
-        layer_info_list.append([epz_conv_i, W, V, q, d, a_i, b])
+        # Conditional, and that is a *peak* saving on top of the lifetime one: `W`, `V`, `q`,
+        # `a_i` and `b` are the loop's own working set, and without this append the previous
+        # layer's five become garbage as soon as the next iteration rebinds them. Only `F`,
+        # `G` and `T` have to survive an iteration.
+        if keep_field:
+            layer_info_list.append([epz_conv_i, W, V, q, d, a_i, b])
 
     # --- stage 3: final matching -> efficiency (transfer_1d_4) -------------------------
     Kz_top = _diag(xp, kz_top)
@@ -293,7 +308,7 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     check_finite(xp, de_ri=de_ri, de_ti=de_ti)
     check_physical(xp, de_ri, de_ti, n_top)
 
-    if not full:
+    if not answers.covers(Answers.AMPLITUDE):
         return de_ri, de_ti
 
     # TE carries everything on s, TM everything on p; the opposite side is identically zero.
@@ -308,12 +323,14 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     else:
         res = _pack(zeros_amp, R, zeros_amp, Tt * (n_top / n_bot),
                     zeros_eff, de_ri, zeros_eff, de_ti)
+    if not keep_field:
+        return {'res': res}
     return {'res': res, 'layer_info_list': layer_info_list, 'T1': T1}
 
 
 def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                      epx_conv_all, epy_conv_all, epz_conv_i_all,
-                     *, phi, incidence_side='top', full=False):
+                     *, phi, incidence_side='top', answers=Answers.EFFICIENCY):
     """Solve a general 1D grating (arbitrary azimuth/polarization) for the given ``psi``.
 
     The conical case couples the s and p polarizations, so the per-layer modes and the
@@ -369,6 +386,7 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
     F_c = _diag(xp, xp.cos(varphi))
     F_s = _diag(xp, xp.sin(varphi))
 
+    keep_field = answers_of(answers).covers(Answers.FIELD)
     layer_info_list = []
     n_layers = len(thickness) if not hasattr(thickness, 'shape') else thickness.shape[0]
     for layer_index in range(n_layers)[::-1]:
@@ -402,12 +420,16 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
         big_G = big_V @ (big_I - Y)
         big_T = big_T @ big_A_i @ big_X
 
-        layer_info_list.append([epz_conv_i, W, V, q, d, big_A_i, big_B])
+        # Conditional for the reason `solve_1d`'s append is: the per-layer matrices are the
+        # loop's working set, and only `big_F`, `big_G` and `big_T` have to outlive an
+        # iteration.
+        if keep_field:
+            layer_info_list.append([epz_conv_i, W, V, q, d, big_A_i, big_B])
 
     # --- stage 3: final matching -> efficiency (transfer_1d_conical_4) ------------------
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
-                         n_top, n_bot, ff_x, ff_y, full=full)
-    if full:
+                         n_top, n_bot, ff_x, ff_y, answers=answers)
+    if keep_field:
         out['layer_info_list'] = layer_info_list
     return out
 
@@ -420,7 +442,8 @@ def _unit(xp, n, i):
 
 
 def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
-                   n_top, n_bot, ff_x, ff_y, full=False, mu_top=1.0, mu_bot=1.0):
+                   n_top, n_bot, ff_x, ff_y, answers=Answers.EFFICIENCY,
+                   mu_top=1.0, mu_bot=1.0):
     """Boundary match the assembled s/p system to the incident field.
 
     Shared, byte-identical port of ``transfer_1d_conical_4`` / ``transfer_2d_4`` (their final
@@ -433,11 +456,17 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     ``polarization = (sin(v), cos(v))`` are the same incidence).
 
     Returns ``(de_ri, de_ti)`` for that incidence, shape ``(ff_y, ff_x)``.
-    With ``full=True`` returns the complete legacy result mapping instead: the reflected and
-    transmitted amplitudes and their s/p-resolved efficiencies for the given incidence, plus
-    the pure-TE and pure-TM incidence variants (which reuse the same factorized ``final_A``,
-    so they cost one extra solve rather than two full passes).
+    From ``answers='amplitude'`` up it returns the full result mapping instead: the reflected
+    and transmitted amplitudes and their s/p-resolved efficiencies for the given incidence,
+    plus the pure-TE and pure-TM incidence variants (which reuse the same factorized
+    ``final_A``, so they cost one extra solve rather than two full passes).
+
+    ``T1`` joins that mapping only at ``'field'``. It is *built from* the variants' columns,
+    which is why the two cannot be ordered the other way round: a solve that kept ``T1``
+    while dropping ``res_te_inc`` would be doing the extra solve and then throwing away the
+    cheap half of its result.
     """
+    answers = answers_of(answers)
     ff_xy = ff_x * ff_y
     I = xp.astype(xp.eye(ff_xy), C)
     O = xp.astype(xp.zeros((ff_xy, ff_xy)), C)
@@ -502,7 +531,7 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     check_finite(xp, de_ri=de_ri_s + de_ri_p, de_ti=de_ti_s + de_ti_p)
     check_physical(xp, de_ri_s + de_ri_p, de_ti_s + de_ti_p, n_top)
 
-    if not full:
+    if not answers.covers(Answers.AMPLITUDE):
         return de_ri_s + de_ri_p, de_ti_s + de_ti_p
 
     # The coupled paths' p boundary variable is a magnetic amplitude; ``/(-i*n)`` on its own
@@ -541,10 +570,11 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     amps2 = fresnel(R_s_2, R_p_2, T_s_2, T_p_2)
     variants = [_pack(*(a[i] for a in amps2), *(e[i] for e in eff2)) for i in (0, 1)]
 
-    # Field reconstruction consumes T1 for the given incidence plus the two variants.
-    T1 = xp.stack([big_T1, big_T1_tetm[:, 0:1], big_T1_tetm[:, 1:2]])
-
-    return {'res': res, 'res_te_inc': variants[0], 'res_tm_inc': variants[1], 'T1': T1}
+    out = {'res': res, 'res_te_inc': variants[0], 'res_tm_inc': variants[1]}
+    if answers.covers(Answers.FIELD):
+        # Field reconstruction consumes T1 for the given incidence plus the two variants.
+        out['T1'] = xp.stack([big_T1, big_T1_tetm[:, 0:1], big_T1_tetm[:, 1:2]])
+    return out
 
 
 def sp_efficiencies(xp, kz_top_2d, kz_bot_2d, denom, n_top, n_bot, R_s, R_p, T_s, T_p,

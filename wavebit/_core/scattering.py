@@ -46,11 +46,13 @@ over the same ``layer_info_list`` / ``T1`` state (see :func:`_field_state`). Sam
 literal: the recovered blocks match the ETM's to ~1e-15 for every layer but the bottom one,
 where the two differ by a basis the reconstruction never resolves. They have to match, because
 the amplitudes they describe are unique given the modes, and the modes come from the same
-builders. That recovery is a second pass over the stack, done only under ``full=True``, and it
-is where the extra ~10-20% in the cost quoted above goes.
+builders. That recovery is a second pass over the stack, done only from ``answers='field'``
+up, so declaring anything lower skips it outright — it is where the extra ~10-20% in the cost
+quoted above goes, and it is the one rung of the ladder that buys time rather than memory.
 """
 from .backend import array_namespace, as_array, check_finite, check_physical
 from .conventions import boundary_kz, incident_sp_amplitudes, order_azimuth
+from .enums import Answers, answers_of
 from .solve_1d import (_block, _diag, _is_backside, _pack, _unit, layer_modes_1d,
                        layer_modes_1d_conical, sp_efficiencies, sp_modes_1d_conical)
 from .solve_2d import layer_modes_2d, order_grid_kxy, sp_modes_2d
@@ -220,7 +222,7 @@ def _field_state(xp, I, S_ref, S_trn, S_layers, AB, c_inc):
 
 def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
-           incidence_side='top', full=False):
+           incidence_side='top', answers=Answers.EFFICIENCY):
     """Solve a 1D grating stack by scattering matrices — SMM twin of :func:`solve_1d`.
 
     Same arguments and same returns as :func:`wavebit._core.solve_1d.solve_1d`, so the two are
@@ -236,11 +238,14 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     against the ETM backside solve at 1e-16 on efficiencies and 1e-14 on field cells
     (``tests/test_backside_incidence.py``).
 
-    With ``full=True`` the returned mapping also carries the ``layer_info_list`` / ``T1`` state
-    field reconstruction consumes, recovered from the cascade by :func:`_field_state` — for
-    the backside, from the mirrored cascade's interface matrices, so the state describes the
-    mirrored scene exactly as the ETM path's does.
+    From ``answers='field'`` up the returned mapping also carries the ``layer_info_list`` /
+    ``T1`` state field reconstruction consumes, recovered from the cascade by
+    :func:`_field_state` — for the backside, from the mirrored cascade's interface matrices,
+    so the state describes the mirrored scene exactly as the ETM path's does. Below that rung
+    neither the per-layer matrices nor the recovery pass happen at all.
     """
+    answers = answers_of(answers)
+    keep_field = answers.covers(Answers.FIELD)
     backside = _is_backside(incidence_side)
     xp, C, kx, _ = _prepare(epx_conv_all, kx)
 
@@ -283,7 +288,7 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         A, B = _ab_matrices(xp, W, V, W_gap, V_gap)
         S_layer = _s_layer(xp, A, B, X)
         S = redheffer_star(xp, I, S, S_layer)
-        if full:
+        if keep_field:
             S_layers.append(S_layer)
             AB.append((A, B))
             modes.append([epz_conv_i_all[layer_index], W, V, q, d])
@@ -318,7 +323,7 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     check_finite(xp, de_ri=de_ri, de_ti=de_ti)
     check_physical(xp, de_ri, de_ti, n_ref)
 
-    if not full:
+    if not answers.covers(Answers.AMPLITUDE):
         return de_ri, de_ti
 
     # Same Fresnel conversion as the ETM pure path: reflection primaries are already the
@@ -330,6 +335,9 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     else:
         res = _pack(zeros_amp, R, zeros_amp, Tt * (n_ref / n_trn),
                     zeros_eff, de_ri, zeros_eff, de_ti)
+
+    if not keep_field:
+        return {'res': res}
 
     if backside:
         # The mirrored scene's own cascade pieces, assembled from what this pass already
@@ -353,7 +361,7 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
 # ------------------------------------------------------------------- coupled s/p (conical, 2D)
 
 def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
-            layer_modes, epz_conv_i_all, backside, full, mu_top=1.0, mu_bot=1.0):
+            layer_modes, epz_conv_i_all, backside, answers, mu_top=1.0, mu_bot=1.0):
     """Shared SMM cascade + matching for the coupled s/p paths (conical and 2D).
 
     ``layer_modes(layer_index)`` returns that layer's ``(big_W, big_V, q, W, V)``: the mode
@@ -369,7 +377,14 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
 
     ``incidence`` is the resolved amplitude pair ``(a_s, a_p)`` at unit flux — see
     :func:`~wavebit._core.conventions.incident_sp_amplitudes`.
+
+    ``answers`` is the rung this solve was declared for; it decides how many incidence
+    columns the cascade is asked about (one, or three once the pure-TE/TM variants are
+    wanted) and whether the per-layer pieces are kept for :func:`_field_state` to walk.
     """
+    answers = answers_of(answers)
+    keep_amplitude = answers.covers(Answers.AMPLITUDE)
+    keep_field = answers.covers(Answers.FIELD)
     kx_g, ky_g = order_grid_kxy(xp, kx, ky)
     ff_y, ff_x = kx_g.shape
     ff_xy = ff_x * ff_y
@@ -416,7 +431,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
         A, B = _ab_matrices(xp, big_W, big_V, W_gap, V_gap)
         S_layer = _s_layer(xp, A, B, big_X)
         S = redheffer_star(xp, big_I, S, S_layer)
-        if full:
+        if keep_field:
             S_layers.append(S_layer)
             AB.append((A, B))
             modes.append([epz_conv_i_all[layer_index], W, V, q, d])
@@ -447,7 +462,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     # pre-`polarization` ones.
     cols = ([incident(as_array(xp, incidence[0], dtype=C),
                       as_array(xp, incidence[1], dtype=C))]
-            + ([incident_psi(_PI / 2), incident_psi(0.0)] if full else []))
+            + ([incident_psi(_PI / 2), incident_psi(0.0)] if keep_amplitude else []))
     c_inc = xp.concat(cols, axis=1)
 
     c_ref = (S[3] if backside else S[0]) @ c_inc
@@ -475,12 +490,15 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     check_finite(xp, de_ri=eff[0][0] + eff[1][0], de_ti=eff[2][0] + eff[3][0])
     check_physical(xp, eff[0][0] + eff[1][0], eff[2][0] + eff[3][0], n_ref)
 
-    if not full:
+    if not keep_amplitude:
         return eff[0][0] + eff[1][0], eff[2][0] + eff[3][0]
 
     # Coupled-path Fresnel conversion, identical to the ETM final matching's.
     amps = (R_s, R_p / (-1j * n_ref / mu_ref), T_s, T_p / (-1j * n_trn / mu_trn))
     packed = [_pack(*(a[i] for a in amps), *(e[i] for e in eff)) for i in range(3)]
+
+    if not keep_field:
+        return {'res': packed[0], 'res_te_inc': packed[1], 'res_tm_inc': packed[2]}
 
     if backside:
         # Mirrored-scene field state, same construction as `smm_1d`'s backside branch.
@@ -501,7 +519,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
 
 def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                    epx_conv_all, epy_conv_all, epz_conv_i_all,
-                   *, phi, incidence_side='top', full=False):
+                   *, phi, incidence_side='top', answers=Answers.EFFICIENCY):
     """Solve a conical 1D grating by scattering matrices — SMM twin of :func:`solve_1d_conical`.
 
     Same arguments and returns as :func:`smm_1d`; ``polarization`` is the complex amplitude
@@ -533,13 +551,14 @@ def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
         return big_W, big_V, xp.concat([q1, q2]), W, V
 
     return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
-                   layer_modes, epz_conv_i_all, backside, full)
+                   layer_modes, epz_conv_i_all, backside, answers)
 
 
 def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
            epxy_conv_all=None, epyx_conv_all=None,
-           *, phi, incidence_side='top', full=False, mu=None, mu_top=1.0, mu_bot=1.0):
+           *, phi, incidence_side='top', answers=Answers.EFFICIENCY,
+           mu=None, mu_top=1.0, mu_bot=1.0):
     """Solve a 2D grating stack by scattering matrices — SMM twin of :func:`solve_2d`.
 
     Same arguments and returns as :func:`smm_1d`; ``incidence`` is the resolved complex
@@ -581,5 +600,5 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         return big_W, big_V, q, W, V
 
     return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
-                   layer_modes, epz_conv_i_all, backside, full,
+                   layer_modes, epz_conv_i_all, backside, answers,
                    mu_top=mu_top, mu_bot=mu_bot)

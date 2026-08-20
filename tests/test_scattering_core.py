@@ -177,7 +177,7 @@ def test_unknown_connecting_algo_is_rejected():
 
 
 def _field(algo, kwargs, **res):
-    solver = wavebit.rcwa(backend=0, connecting_algo=algo, **kwargs)
+    solver = wavebit.rcwa(backend=0, connecting_algo=algo, answers='field', **kwargs)
     solver.conv_solve()
     cell = solver.calculate_field(set_field_input=(True, True, True), **res)
     return solver, np.array(cell)
@@ -214,8 +214,8 @@ def test_smm_field_state_matches_tmm(name, kwargs, kind):
     reads, and the two algorithms express that one in different bases (see ``_field_state``).
     What is defined there is their product, which is what the reconstruction actually forms.
     """
-    tmm = wavebit.rcwa(backend=0, connecting_algo='ETM', **kwargs)
-    smm = wavebit.rcwa(backend=0, connecting_algo='SMM', **kwargs)
+    tmm = wavebit.rcwa(backend=0, connecting_algo='ETM', answers='field', **kwargs)
+    smm = wavebit.rcwa(backend=0, connecting_algo='SMM', answers='field', **kwargs)
     tmm.conv_solve()
     smm.conv_solve()
 
@@ -307,9 +307,14 @@ def test_smm_field_on_a_skewed_cell_matches_tmm():
 
 
 def test_field_before_solve_raises():
-    """No solve, no amplitudes — fail with the reason rather than on a None."""
-    solver = wavebit.rcwa(backend=0, connecting_algo='SMM', **CASES_1D[0][1])
-    with pytest.raises(RuntimeError, match='solve'):
+    """No solve, no amplitudes — fail with the reason rather than on a None.
+
+    Declared for the field, so the refusal under test is `_require_solved` and not the
+    `answers` check ahead of it; that one has its own coverage in
+    `test_answers_declaration.py` and matches on a different sentence.
+    """
+    solver = wavebit.rcwa(backend=0, connecting_algo='SMM', answers='field', **CASES_1D[0][1])
+    with pytest.raises(RuntimeError, match='run conv_solve'):
         solver.calculate_field(res_x=4, res_z=4)
 
 
@@ -412,7 +417,7 @@ def test_smm_field_cross_backend(case, backend, name):
     kwargs = case[1]
     _, reference = _field('SMM', kwargs, res_x=5, res_y=5, res_z=4)
 
-    solver = wavebit.rcwa(backend=backend, connecting_algo='SMM', **kwargs)
+    solver = wavebit.rcwa(backend=backend, connecting_algo='SMM', answers='field', **kwargs)
     solver.conv_solve(geometry=solver.freeze_geometry())
     cell = np.asarray(solver.calculate_field(res_x=5, res_y=5, res_z=4,
                                              set_field_input=(True, True, True)))

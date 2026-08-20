@@ -83,10 +83,84 @@ class Formulation(str, Enum):
     FIRST = '4ff'    # first-order; always possible, ~8x
 
 
+class Answers(str, Enum):
+    """What a solve keeps the state to answer afterwards — a *declaration*, not a value.
+
+    Like ``tetm``, this says what is not a question of this problem rather than what its
+    answer happens to be. ``tetm`` declares a degree of freedom away; this declares a
+    *question* away, and the state that would have answered it is never kept.
+
+    The three are a ladder, not a menu — each rung answers everything below it:
+
+    ==================  ==========================================================
+    ``'efficiency'``    ``R`` / ``T`` per order, and nothing else
+    ``'amplitude'``     **default** — the Fresnel amplitudes ``r_s``/``r_p``/``t_s``/
+                        ``t_p``, their s/p-resolved efficiencies, and the pure-TE /
+                        pure-TM incidence variants ``res_te_inc`` / ``res_tm_inc``
+    ``'field'``         the per-layer modes and amplitudes ``calculate_field`` walks
+    ==================  ==========================================================
+
+    The seam that matters is between the last two, and it is not a matter of taste. The
+    amplitudes are boundary data — a few vectors, already solved for — while the field state
+    is ``4.25`` matrices of side ``dim`` *per layer* on the 2D path (``3.75`` conical, ``5``
+    pure 1D), with ``dim = 2*ff_x*ff_y`` on the coupled paths. At ``fto=(15, 15)`` that is one
+    56 MB block per matrix. The 2D figure is the one to quote: ``3.75`` is what you get by
+    assuming that path's ``W`` is the conical one's half-height block, and it is not. A phase-target optimization needs the amplitudes and never calls
+    ``calculate_field``; putting both behind one flag would have made it buy the second to
+    get the first.
+
+    Why a declaration rather than a runtime argument to the solve: it is known when the
+    problem is set up, which is when the caller knows what they are solving for; it lands in
+    the JAX pytree's ``aux_data``, where it is static under ``jit`` rather than a traced
+    value that cannot branch; and asking for something it excludes is a contradiction the
+    code can refuse by name (see :meth:`wavebit._core.engine.CoreSolveMixin.answers`) instead
+    of silently satisfying at every scale.
+    """
+    EFFICIENCY = 'efficiency'
+    AMPLITUDE = 'amplitude'
+    FIELD = 'field'
+
+    def covers(self, other):
+        """Does a solve declared for this rung also answer ``other``?
+
+        The ladder is ordered by what each rung *retains*, so this is the whole of the
+        containment relation — a solve declared for the field answers amplitudes too, and no
+        caller has to spell that out.
+        """
+        return _ANSWERS_LADDER.index(self) >= _ANSWERS_LADDER.index(answers_of(other))
+
+
+#: The ladder, cheapest first. A new rung is added here and to :class:`Answers` together;
+#: ``covers`` reads the order from this tuple and nothing else does.
+#:
+#: The rung this is waiting for is ``'scattering'``, above ``'field'``: the SMM cascade builds
+#: ``S``, the per-layer ``S_layer``, the below-plane reflections ``gamma`` and the gap<->layer
+#: interface coefficients ``AB`` (:func:`~wavebit._core.scattering._ab_matrices`), uses them,
+#: and drops them -- the same "computed and thrown away" shape the field state had before
+#: ``answers`` existed. Two constraints go with it, written here because here is where someone
+#: adding the rung will be standing:
+#:
+#: * **``AB`` ships with the blocks or the blocks do not ship.** ``S_layers`` and ``gamma`` are
+#:   expressed in the gap basis (``eps_gap`` chosen per order so ``kz_gap == 1``), and that
+#:   basis is a gauge: change ``eps_gap`` and the physical observables hold at 1e-16 while the
+#:   raw blocks move by O(1) against their own magnitude. What they encode is gauge-invariant;
+#:   their numbers are not readable without the gap -> half-space conversion, and
+#:   ``_ab_matrices`` is that conversion. Exposing the blocks while withholding it would
+#:   document a footgun and withhold the safety. (Measured in a separate session; the raw
+#:   record is not in this repository.)
+#: * **``S_ref`` / ``S_trn`` should not ship.** They are gauge like the rest, and converted to a
+#:   physical (E, H) transfer ``S_ref`` is exactly the identity -- it encodes nothing -- while
+#:   the two of them are most of the fixed matrices such a mapping would retain.
+_ANSWERS_LADDER = (Answers.EFFICIENCY, Answers.AMPLITUDE, Answers.FIELD)
+
+
 DEFAULT_FOURIER_COEFFICIENTS = FourierCoefficients.SAMPLED
 DEFAULT_FACTORIZATION = Factorization.LI
 DEFAULT_FORMULATION = Formulation.AUTO
 DEFAULT_NORMAL_METHOD = NormalMethod.DISTANCE
+#: Amplitudes, not fields. The field state is three orders of magnitude larger and most
+#: large runs -- an optimization sweep against a fixed objective -- never reconstruct one.
+DEFAULT_ANSWERS = Answers.AMPLITUDE
 
 
 def _one_of(enum_cls, value, keyword):
@@ -119,6 +193,11 @@ def formulation_of(value):
 def normal_method_of(value):
     """Validate a ``normal_method`` value."""
     return _one_of(NormalMethod, value, 'normal_method')
+
+
+def answers_of(value):
+    """Validate an ``answers`` value."""
+    return _one_of(Answers, value, 'answers')
 
 
 def resolve_fourier_options(fourier_coefficients=None, factorization=None, keep_unset=False):

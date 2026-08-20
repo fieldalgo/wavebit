@@ -143,7 +143,7 @@ def test_analytic_shape_path_is_silent():
 def test_field_reconstruction_is_silent_and_finite():
     """Reconstruction re-walks the same modal exponentials the solve cascaded."""
     sim = wavebit.rcwa(backend=0, ucell=_ucell_2d(), thickness=[600], period=[700, 700],
-                         wavelength=WL, fto=[6, 6], psi=0.0, n_bot=3.48)
+                         wavelength=WL, fto=[6, 6], psi=0.0, n_bot=3.48, answers='field')
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         res, field = sim.conv_solve_field(res_x=8, res_y=8, res_z=8)

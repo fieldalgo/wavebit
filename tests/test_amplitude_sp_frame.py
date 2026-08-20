@@ -129,7 +129,7 @@ def test_the_amplitudes_are_the_field_projected_on_zhat_cross_k():
     """
     solver = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, thickness=_THICK, wavelength=_WL,
                           theta=_THETA, phi=np.pi / 2, psi=_PSI, factorization='nvf',
-                          ucell=_UC, period=[_PX, _PY], fto=[_FX, _FY])
+                          ucell=_UC, period=[_PX, _PY], fto=[_FX, _FY], answers='field')
     res = solver.conv_solve().res
 
     # More sample points than retained orders, so the decomposition is overdetermined and a

@@ -84,11 +84,20 @@ def _require_solved(T1, layer_info_list):
 
     Both connecting algorithms fill this state (the SMM recovers it from its cascade), so an
     empty one means no solve has run — or a stack with no layers, which has no interior.
+
+    A solver that declared ``answers='amplitude'`` never reaches here: the backends'
+    ``calculate_field`` refuses first, naming the declaration
+    (:meth:`wavebit._core.engine.CoreSolveMixin._require_field_declaration`). That split is
+    deliberate — "run a solve first" is false advice for a solver whose solves are not
+    keeping the state, and running another one would change nothing. This message is for the
+    two cases where a solve genuinely has not happened yet, plus the direct core caller who
+    passed a lower rung to a solve and then walked its output.
     """
     if T1 is None or len(layer_info_list) == 0:
         raise RuntimeError(
             'field reconstruction needs the per-layer amplitudes a solve leaves behind: '
-            'run conv_solve (or solve) first, on a stack with at least one layer.')
+            'run conv_solve (or solve) first, on a stack with at least one layer, and with '
+            "answers='field' declared so the solve keeps them.")
 
 
 def _diag_exp(xp, diag_vals, n):

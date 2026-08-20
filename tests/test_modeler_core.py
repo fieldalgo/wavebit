@@ -347,7 +347,7 @@ def test_jax_device_setter_round_trips():
     solver = wavebit.rcwa(
         backend=1, psi=np.pi / 2, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, fto=[5],
         wavelength=900.0, period=[1000.0], thickness=[500.0],
-        ucell=np.array([[[1.0, 3.0, 3.0, 1.0]]]), device=0)
+        ucell=np.array([[[1.0, 3.0, 3.0, 1.0]]]), device=0, answers='field')
 
     solver.device = solver.device                      # the round-trip that used to raise
     solver.device = jax.devices('cpu')[0]              # a bare device, not a list

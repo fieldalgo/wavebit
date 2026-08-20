@@ -41,11 +41,11 @@ def _airy_R(ns, ds, theta, tetm):
     return abs(analytic_r(ns, ds, WL, theta, tetm)) ** 2
 
 
-def _solver(ns, ds, *, tetm='te', theta=0.2, path='1d', fto=0):
+def _solver(ns, ds, *, tetm='te', theta=0.2, path='1d', fto=0, answers='amplitude'):
     """A uniform stack on the requested solve path (see test_lossy_media.solver_r)."""
     layers = ns[1:-1]
     common = dict(backend=0, n_top=ns[0], n_bot=ns[-1], theta=theta, wavelength=WL,
-                  thickness=ds)
+                  thickness=ds, answers=answers)
     if path == '1d':
         return wavebit.rcwa(tetm=tetm, fto=fto, period=[WL * 2],
                               ucell=np.array([[[n, n]] for n in layers]), **common)
@@ -136,7 +136,7 @@ FIELD_STACK = ([1.0, 1.5, 1.5, 2.0, 1.0], [30.0, 30.0, 40.0])
 
 
 def _field(ns, ds, *, tetm='te', theta=0.2, fto=2):
-    solver = _solver(ns, ds, tetm=tetm, theta=theta, fto=fto)
+    solver = _solver(ns, ds, tetm=tetm, theta=theta, fto=fto, answers='field')
     solver.conv_solve()
     return np.asarray(solver.calculate_field(res_x=RES, res_y=1, res_z=RES))
 

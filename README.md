@@ -321,15 +321,45 @@ solver = wavebit.rcwa(backend=0, connecting_algo='SMM', ...)   # 'ETM' is the de
 
 Both share the same eigenmodes and boundary conventions and agree to ~1e-14; SMM costs
 ~1.1-1.4x, cascades layer responses that can be reused independently, and is the formulation
-most published results are stated in. Field reconstruction (`calculate_field`) works from
-either — the SMM recovers the per-layer amplitudes from its cascade afterwards, which is what
-takes it to ~1.3-1.6x.
+most published results are stated in. Field reconstruction works from either — the SMM
+recovers the per-layer amplitudes from its cascade afterwards, which is what takes it to
+~1.3-1.6x, and which it skips outright unless a field was declared.
+
+### Declaring what a solve is for
+
+`answers` says which questions a solve keeps the state to answer. It is a **declaration**, in
+the sense `tetm` is one: not a request to be economical, but a statement that a near field is
+not something this problem asks about — and the state that would answer one is then never
+built, rather than built and thrown away.
+
+| `answers=` | what you get back |
+| --- | --- |
+| `'efficiency'` | `R` / `T` per order, and nothing else |
+| `'amplitude'` | **the default** — the Fresnel amplitudes, their s/p split, and the pure-TE / pure-TM variants |
+| `'field'` | all of the above, plus the per-layer state `calculate_field` walks |
+
+Each rung answers everything below it, so `'field'` is a superset rather than a mode.
+
+```python
+solver = wavebit.rcwa(backend=0, answers='field', ...)   # 'amplitude' is the default
+```
+
+The default sits where the cost cliff is. The amplitudes are boundary vectors already solved
+for; the field state is 4.25 matrices of side `2*ff_x*ff_y` **per layer** on the 2D path —
+21.7 MB at `fto=(8, 8)`, 240 MB at `(15, 15)`, 733 MB at `(20, 20)`, and again for every
+layer. The two differ by three orders of magnitude, and the runs big enough to care are
+optimization sweeps against a fixed objective, which never reconstruct a field at all.
+
+Asking for a field without declaring one is refused rather than served, and the refusal names
+the keyword to change. It has to be a refusal: the state is kept *while the solve runs* or not
+at all, so there is nothing an argument to `calculate_field` could recover afterwards.
 
 ### Sampling the near field where you want it
 
 `calculate_field` takes a **count** or the **coordinates themselves**, per axis:
 
 ```python
+solver = wavebit.rcwa(backend=0, answers='field', ...)
 solver.conv_solve()
 
 cell = solver.calculate_field(res_x=64, res_y=64, res_z=32)      # a uniform grid, as always

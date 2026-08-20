@@ -338,7 +338,7 @@ def test_field_reconstruction_is_dispatched_on_the_formulation_not_the_grating_t
     """
     import wavebit.on_numpy.emsolver.rcwa as rcwa_numpy
 
-    mee = solver(thickness=[180.0])
+    mee = solver(thickness=[180.0], answers='field')
     mee.solve_for_conv(WL, *uniform_slots([VOIGT], 1))
     assert mee.formulation_assigned == '4ff'
     assert mee.grating_type_assigned == 2, 'the premise: the grating type cannot tell them apart'
@@ -365,7 +365,7 @@ def test_field_reconstruction_still_works_on_the_second_order_path():
     """The control for the guard above — it must not have cost the ordinary path anything."""
     ucell = np.ones((1, 16, 16))
     ucell[0, 4:12, 4:12] = 3.0
-    mee = solver(fto=(1, 1), thickness=[150.0], ucell=ucell)
+    mee = solver(fto=(1, 1), thickness=[150.0], ucell=ucell, answers='field')
     mee.conv_solve()
     cell = mee.calculate_field(res_x=4, res_y=4, res_z=4)
     assert np.isfinite(np.asarray(cell)).all()

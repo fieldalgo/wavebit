@@ -13,6 +13,7 @@ versions, so this module reuses ``solve_1d``'s boundary init and ``final_matchin
 """
 from .backend import _concrete, _readable, array_namespace, as_array, check_mode_cutoff, eig
 from .conventions import boundary_kz, mode_q, order_azimuth
+from .enums import Answers, answers_of
 from .solve_1d import _block, _diag, _is_backside, _mirrored_scene, final_matching
 
 # Engage the coupled-cluster rebuild (see `_rebuild_grazing_cluster`) below this
@@ -315,7 +316,8 @@ def sp_modes_2d(xp, W, V, F_c, F_s, ff_xy):
 def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
              epxy_conv_all=None, epyx_conv_all=None,
-             *, phi, incidence_side='top', full=False, mu=None, mu_top=1.0, mu_bot=1.0):
+             *, phi, incidence_side='top', answers=Answers.EFFICIENCY,
+             mu=None, mu_top=1.0, mu_bot=1.0):
     """Solve a 2D grating stack for the given incidence.
 
     ``incidence`` is the resolved incident amplitude pair ``(a_s, a_p)`` at unit flux — whatever
@@ -394,6 +396,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
 
     # --- stage 2/3: per-layer eig + coupled block transfer (transfer_2d_2 / transfer_2d_3)
     big_I = xp.astype(xp.eye(2 * ff_xy), C)
+    keep_field = answers_of(answers).covers(Answers.FIELD)
     layer_info_list = []
     n_layers = len(thickness) if not hasattr(thickness, 'shape') else thickness.shape[0]
     for layer_index in range(n_layers)[::-1]:
@@ -434,12 +437,16 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         big_T = big_T @ big_A_i @ big_X
 
         # Bottom-to-top, matching the legacy append order; consumed by field reconstruction.
-        layer_info_list.append([epz_conv_i, W, V, q, d, big_A_i, big_B])
+        # Conditional for the reason `solve_1d`'s append is -- and this is the path where it
+        # costs the most: `W`, `V`, `big_A_i` and `big_B` are each a full `2*ff_xy` square,
+        # 4.25 of them per layer once `epz_conv_i` is counted at its quarter.
+        if keep_field:
+            layer_info_list.append([epz_conv_i, W, V, q, d, big_A_i, big_B])
 
     # --- stage 3: final matching -> efficiency (transfer_2d_4 == transfer_1d_conical_4) --
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
-                         n_top, n_bot, ff_x, ff_y, full=full,
+                         n_top, n_bot, ff_x, ff_y, answers=answers,
                          mu_top=mu_top, mu_bot=mu_bot)
-    if full:
+    if keep_field:
         out['layer_info_list'] = layer_info_list
     return out

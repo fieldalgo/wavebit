@@ -390,7 +390,7 @@ FIELD_RES = dict(res_x=5, res_y=4, res_z=6)
 
 
 def _field(**kw):
-    _, field_cell = wavebit.rcwa(**kw).conv_solve_field(**FIELD_RES)
+    _, field_cell = wavebit.rcwa(answers='field', **kw).conv_solve_field(**FIELD_RES)
     return np.asarray(field_cell)
 
 
@@ -419,7 +419,7 @@ def test_the_1d_routed_pair_field_matches_the_conical_psi_field():
     """
     psi_v = 0.7
     kw = dict(CFG_1D, ucell=UCELL_1D)
-    solver = wavebit.rcwa(polarization=pair_of(psi_v), **kw)
+    solver = wavebit.rcwa(polarization=pair_of(psi_v), answers='field', **kw)
     _, via_pair = solver.conv_solve_field(**FIELD_RES)
     assert solver.grating_type_assigned == 1, 'expected the conical formulation'
     np.testing.assert_allclose(np.asarray(via_pair), _field(psi=psi_v, phi=0.0, **kw),

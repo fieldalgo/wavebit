@@ -201,6 +201,15 @@ user code never needs the previous paragraph.
 | `r_s`, `r_p`, `t_s`, `t_p` | complex **Fresnel amplitudes**: E-field ratios against a unit incident E-field, directly comparable to the textbook Fresnel/Airy coefficients (pinned to 1e-12 against them, absorbing media included) |
 | `res`, `res_te_inc`, `res_tm_inc` | the incidence as specified (`psi`, or the `polarization` pair), plus the pure-s and pure-p variants the coupled solves produce for free; top-level `R`/`T` average the two variants when no specified solve exists (unpolarized illumination) |
 
+**Which of these rows exist is what `answers` declares**, and the table above is the default
+(`answers='amplitude'`) in full. `answers='efficiency'` keeps `R` and `T` and leaves every
+other slot `None`, including `res_te_inc` / `res_tm_inc` — so on that rung there is no
+unpolarized average to take and `res` is the only incidence. `answers='field'` adds nothing
+here: what it adds is the per-layer state `calculate_field` walks, which is not part of the
+result surface at all, and below that rung reconstruction is refused by name rather than
+served. The ladder is monotone, so a lower rung is always a *smaller* answer and never a
+different one — pinned bit-for-bit, not to a tolerance.
+
 Amplitude fine print, stated once so it never has to be discovered:
 
 - each order is quoted in **its own** s/p frame, the standard one: `s_hat = z_hat x k_hat_par`,
@@ -235,6 +244,7 @@ Amplitude fine print, stated once so it never has to be discovered:
 | rows | tests |
 | --- | --- |
 | time/loss, amplitudes | `tests/test_lossy_media.py` (Airy oracle, absorbing media both sides) |
+| which rows exist at all, per `answers` rung | `tests/test_answers_declaration.py` — each rung's surface, the rungs agreeing bit-for-bit on what they share, and the refusal naming the declaration |
 | the per-order s/p frame the amplitudes are quoted in | `tests/test_amplitude_sp_frame.py` — a transposed twin, the reconstructed field as arbiter, and continuity across `kx = 0`. Efficiencies cannot pin this row at all: a reversed frame is `\|r\|^2`-invariant |
 | order layout, order-index sign | `tests/references/test_reticolo_golden.py` (mirrors orders if wrong, conserving energy) |
 | `incidence_side`, incidence-relative results | `tests/test_backside_incidence.py` (reversed-stack Airy oracle, reciprocity both halves) and the `inc_bottom` cases of `tests/references/test_reticolo_golden.py` |

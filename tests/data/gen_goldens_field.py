@@ -76,7 +76,7 @@ def solved(name, backend=0):
     kw = dict(CASES[name])
     formulation = kw.pop('formulation', None)
     kw['ucell'] = np.asarray(kw['ucell'], dtype=float)
-    solver = wavebit.rcwa(backend=backend, **kw)
+    solver = wavebit.rcwa(backend=backend, answers='field', **kw)
     if formulation:
         solver.formulation = formulation
     solver.conv_solve()

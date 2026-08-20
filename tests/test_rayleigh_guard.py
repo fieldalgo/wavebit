@@ -281,7 +281,8 @@ def test_exact_point_field_reconstruction_matches_its_neighbour():
     LAPACK builds.
     """
     def field(wl):
-        mee = wavebit.rcwa(backend=0, wavelength=wl, fto=[5, 0], ucell=_STACK, **_KW)
+        mee = wavebit.rcwa(backend=0, wavelength=wl, fto=[5, 0], ucell=_STACK,
+                           answers='field', **_KW)
         mee.conv_solve(auto_detune=False)
         return np.asarray(mee.calculate_field(res_x=16, res_y=1, res_z=16))
 

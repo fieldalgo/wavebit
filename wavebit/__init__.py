@@ -37,8 +37,8 @@ from ._core.backend import (AutoDetuneWarning, PrecisionLossWarning, RayleighPoi
                             get_j1_implementation, set_j1_implementation)
 from ._core.conventions import branch_tolerance
 from ._core.draw import structure_plot, structure_slice
-from ._core.enums import (Backend, Pol, FourierCoefficients, Factorization, Formulation,
-                          NormalMethod)
+from ._core.enums import (Answers, Backend, Pol, FourierCoefficients, Factorization,
+                          Formulation, NormalMethod)
 from ._core.domain import Layer, Stack, Incidence
 from ._core.geometry import StaticGeometry, StaleGeometryError
 from ._core.spec import JobSpec, Numerics, Sweep, SpecError, run

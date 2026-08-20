@@ -76,6 +76,12 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                  # where a raster normal field is built (factorization='nvf' on a raster);
                  # explicitly set anywhere else it is refused rather than ignored.
                  # See docs/nvf-normal-methods.md for the measurements that rank them.
+                 answers='amplitude',        # what this solve keeps the state to answer:
+                 # 'efficiency' | 'amplitude' (default) | 'field'. A declaration, like
+                 # tetm -- calculate_field is refused below 'field' rather than served,
+                 # because the per-layer state it walks is 4.25 matrices of side
+                 # 2*ff_x*ff_y per layer (240 MB at fto=(15, 15)) and is kept as the
+                 # solve runs or not at all. See CoreSolveMixin.answers.
                  ):
 
         super().__init__(n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi, chi=chi, tetm=tetm, pol=pol,
@@ -84,6 +90,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                          type_complex=type_complex,
                          polarization=polarization)
         self.incidence_side = incidence_side
+        self.answers = answers
 
         self.modeler = Modeling(period=self.period, type_complex=type_complex)
 
@@ -239,6 +246,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         component genuinely two-valued there. With explicit ``res_z`` the returned z axis is
         exactly the request, in the caller's order, rather than ``res_z * n_layers``.
         """
+        self._require_field_declaration()
         kx, ky = self._kxy_2d(self.wavelength)
 
         if self._grating_type_assigned == 0:
@@ -273,7 +281,13 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
     def conv_solve_field(self, res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False),
                          geometry=None):
         """``geometry`` is optional here — NumPy is always eager, so auto-detection works. It is
-        accepted so backend-agnostic code can pass the same frozen geometry JAX requires."""
+        accepted so backend-agnostic code can pass the same frozen geometry JAX requires.
+
+        Naming the field here does not declare one: ``answers='field'`` still has to be on the
+        solver, because it is the *solve* below that either keeps the per-layer state or does
+        not. Checked before that solve rather than after, so the refusal does not arrive on the
+        far side of the expensive part."""
+        self._require_field_declaration()
         res = self.conv_solve(geometry=geometry)
         field_cell = self.calculate_field(res_x, res_y, res_z, set_field_input)
         return res, field_cell

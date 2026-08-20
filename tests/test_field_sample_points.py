@@ -47,7 +47,7 @@ TOTAL = float(sum(THICK))
 
 def _solver(path, backend=0):
     kw = dict(backend=backend, n_top=1.0, n_bot=1.0, wavelength=WL, thickness=THICK,
-              theta=np.deg2rad(24.0), fourier_coefficients='integrated')
+              theta=np.deg2rad(24.0), fourier_coefficients='integrated', answers='field')
     if path in ('te', 'tm'):
         kw.update(tetm=path, phi=None, fto=6, period=[PERIOD[0]], ucell=TWO_LAYER)
     elif path == 'conical':
@@ -266,7 +266,7 @@ def test_traced_thickness_with_explicit_z_says_why_it_cannot():
         s = wavebit.rcwa(backend=1, n_top=1.0, n_bot=1.0, wavelength=WL,
                          thickness=thick, theta=np.deg2rad(24.0), tetm='tm', phi=None,
                          fto=4, period=[PERIOD[0]], ucell=jnp.asarray(TWO_LAYER),
-                         fourier_coefficients='integrated')
+                         fourier_coefficients='integrated', answers='field')
         s.conv_solve()
         return jnp.sum(jnp.abs(s.calculate_field(res_x=5, res_y=1, res_z=res_z)) ** 2)
 

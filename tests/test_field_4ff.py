@@ -93,7 +93,7 @@ def z_solver(thickness, theta_deg=28.0, backend=0):
     """
     return wavebit.rcwa(backend=backend, n_top=1.0, n_bot=1.52, fto=(0, 0), period=PERIOD,
                         wavelength=WL, theta=np.deg2rad(theta_deg), phi=np.deg2rad(37.0),
-                        psi=0.6, thickness=thickness)
+                        psi=0.6, thickness=thickness, answers='field')
 
 
 def _to_backend(a, backend):
@@ -143,7 +143,8 @@ def twin_cell(formulation, name, theta_deg, side, backend=0):
     ucell, fto, thickness = TWINS[name]
     mee = wavebit.rcwa(backend=backend, n_top=1.0, n_bot=1.52, fto=fto, period=PERIOD,
                        wavelength=WL, theta=np.deg2rad(theta_deg), phi=np.deg2rad(37.0),
-                       psi=0.6, thickness=thickness, ucell=ucell, incidence_side=side)
+                       psi=0.6, thickness=thickness, ucell=ucell, incidence_side=side,
+                       answers='field')
     mee.formulation = formulation
     mee.conv_solve()
     assert mee.formulation_assigned == formulation
@@ -207,7 +208,7 @@ def test_the_two_formulations_agree_on_the_variants_taken_one_at_a_time():
     for formulation in ('2ff', '4ff'):
         mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.52, fto=fto, period=PERIOD,
                            wavelength=WL, theta=np.deg2rad(21.0), phi=np.deg2rad(37.0),
-                           psi=0.6, thickness=thickness, ucell=ucell)
+                           psi=0.6, thickness=thickness, ucell=ucell, answers='field')
         mee.formulation = formulation
         mee.conv_solve()
         cells[formulation] = [
@@ -335,7 +336,7 @@ def test_a_vacuum_slab_comes_back_as_the_incident_plane_wave(formulation, psi_v,
     """
     mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, fto=(0, 0), period=PERIOD,
                        wavelength=WL, theta=0.0, phi=0.0, psi=psi_v,
-                       thickness=[WL], ucell=np.ones((1, 1, 1)))
+                       thickness=[WL], ucell=np.ones((1, 1, 1)), answers='field')
     mee.formulation = formulation
     mee.conv_solve()
     cell = np.asarray(mee.calculate_field(res_x=1, res_y=1, res_z=8))[0, :, 0, 0, :]

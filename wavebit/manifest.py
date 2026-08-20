@@ -27,7 +27,8 @@ Regenerate the JSON with::
 """
 import json
 
-from ._core.enums import Backend, Factorization, FourierCoefficients, NormalMethod, Pol
+from ._core.enums import (Answers, Backend, DEFAULT_ANSWERS, Factorization,
+                          FourierCoefficients, NormalMethod, Pol)
 from ._core.engine import (_COEFFICIENTS_IMPLEMENTED_BY, _COEFFICIENTS_REASON,
                            _FACTORIZATION_IMPLEMENTED_BY, _FACTORIZATION_REASON)
 from ._core.spec import SPEC_VERSION
@@ -39,7 +40,9 @@ from ._core.spec import SPEC_VERSION
 #: '3': the ``normal_method`` axis — per-path availability (with the contourpy probe) and
 #: reasons, the ``enums`` entry, and ``normal_methods_refused_on_oblique`` in ``lattice``
 #: (2026-08-17).
-MANIFEST_VERSION = '3'
+#: '4': the ``answers`` axis — the construction-time declaration of what a solve is for, its
+#: ladder and default, and the ``enums`` entry (2026-08-20).
+MANIFEST_VERSION = '4'
 
 
 # ------------------------------------------------------------------ how a ucell is spelled
@@ -292,6 +295,20 @@ RESULTS = {
                    'the far side, theta/phi are measured against the incidence medium\'s '
                    'normal — so post-processing is identical for both sides',
     },
+    'answers': {
+        'values': tuple(m.value for m in Answers),
+        'default': DEFAULT_ANSWERS.value,
+        'ladder': tuple(m.value for m in Answers),
+        'meaning': 'what a solve keeps the state to answer, declared at construction. A '
+                   'ladder, not a menu: each rung answers everything below it. '
+                   "'efficiency' is R/T per order; 'amplitude' adds the Fresnel amplitudes, "
+                   'their s/p-resolved efficiencies and the pure-TE/pure-TM incidence '
+                   "variants; 'field' adds the per-layer modes and amplitudes "
+                   'calculate_field walks. Below that rung calculate_field is refused rather '
+                   'than served, because the state is kept while the solve runs or not at '
+                   'all -- it is 4.25 matrices of side 2*ff_x*ff_y per layer on the 2D path '
+                   '(3.75 conical, 5 pure 1D), against boundary vectors for the amplitudes',
+    },
     'jobspec': {
         'outputs_default': ('R', 'T'),
         'spec_version': SPEC_VERSION,
@@ -314,6 +331,7 @@ def manifest() -> dict:
             'factorization': [m.value for m in Factorization],
             'fourier_coefficients': [m.value for m in FourierCoefficients],
             'normal_method': [m.value for m in NormalMethod],
+            'answers': [m.value for m in Answers],
         },
         'shape_coordinates': SHAPE_COORDINATES,
         'paths': [

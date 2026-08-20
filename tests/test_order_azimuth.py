@@ -341,7 +341,8 @@ def test_phi_plus_pi_negates_the_reconstructed_field():
             warnings.simplefilter('ignore')
             solver = wavebit.rcwa(backend=0, wavelength=500.0, period=[700.0, 700.0],
                                   n_top=1.0, n_bot=1.5, theta=0.0,
-                                  ucell=_UC_2D, thickness=[220.0], fto=[4, 4], **kw)
+                                  ucell=_UC_2D, thickness=[220.0], fto=[4, 4],
+                                  answers='field', **kw)
             solver.conv_solve()
             return np.asarray(solver.calculate_field(res_x=6, res_y=6, res_z=5),
                               dtype=np.complex128)

@@ -244,7 +244,7 @@ if __name__ == '__main__':
 
     # Numpy
     backend = 0
-    nmee = wavebit.rcwa(backend=backend, **option)
+    nmee = wavebit.rcwa(backend=backend, answers='field', **option)
     n_de_ri, n_de_ti = nmee.conv_solve()
     n_field_cell = nmee.calculate_field(res_z=200, res_x=5)
     print('numpy R', n_de_ri)

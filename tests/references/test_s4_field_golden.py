@@ -62,7 +62,7 @@ def _reconstruct(path, stack, theta, phi, pol):
     n = np.array([x[1] for x in stack]).reshape(-1, 1, 1)
     d = [float(x[0]) for x in stack]
     kw = dict(backend=0, n_top=1.0, n_bot=1.0, wavelength=WL, thickness=d,
-              theta=np.deg2rad(theta))
+              theta=np.deg2rad(theta), answers='field')
     if path in ('te', 'tm'):
         kw.update(tetm=path, phi=None, fto=(0, 0), period=[PERIOD[0]], ucell=n)
     elif path == 'conical':

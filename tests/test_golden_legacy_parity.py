@@ -191,9 +191,11 @@ CASES = {
 
 
 def _run(name):
+    # `answers='field'` for every case, not only the two that reconstruct: the goldens pinned
+    # here include the per-layer state, so the parity being checked is the state's too.
     kw = dict(CASES[name])
     kw['ucell'] = np.asarray(kw['ucell'], dtype=float)
-    solver = wavebit.rcwa(backend=0, **kw)
+    solver = wavebit.rcwa(backend=0, answers='field', **kw)
     return solver, solver.conv_solve()
 
 

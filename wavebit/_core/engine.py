@@ -15,8 +15,9 @@ from . import factorization as _fac
 from . import lattice as _lattice
 from .backend import _device_of, array_namespace
 from .conventions import incident_sp_amplitudes
-from .enums import (DEFAULT_FACTORIZATION, DEFAULT_FORMULATION, DEFAULT_FOURIER_COEFFICIENTS,
-                    DEFAULT_NORMAL_METHOD, normal_method_of,
+from .enums import (Answers, DEFAULT_ANSWERS, DEFAULT_FACTORIZATION, DEFAULT_FORMULATION,
+                    DEFAULT_FOURIER_COEFFICIENTS, DEFAULT_NORMAL_METHOD, answers_of,
+                    normal_method_of,
                     Factorization, Formulation, FourierCoefficients, Pol, coefficients_of,
                     factorization_of, formulation_of, resolve_fourier_options)
 from .geometry import StaticGeometry
@@ -108,6 +109,35 @@ def _recorded_lattice(normal_field_source):
     return np.asarray(key, dtype=float).reshape(2, 2)
 
 
+#: Raised by :meth:`CoreSolveMixin._require_field_declaration` — the refusal the ``answers``
+#: declaration exists to be able to give. It names the keyword to change, because the thing
+#: that went wrong is a declaration and not a missing call: by the time ``calculate_field``
+#: runs, the state it wants was never built, and no argument here can bring it back.
+_FIELD_NOT_DECLARED = (
+    "calculate_field needs the per-layer modes and amplitudes the solve keeps as it goes, "
+    "and this solver declared answers={got!r}, which does not keep them. That is a "
+    "construction-time declaration rather than an argument to this call on purpose: the "
+    "state has to be retained *during* the solve, so there is nothing left to reconstruct "
+    "from once it has returned. Set answers='field' and solve again.\n"
+    "The default is 'amplitude' because the field state is 4.25 matrices of side "
+    "2*ff_x*ff_y per layer on the 2D path (3.75 conical, 5 pure 1D) -- 21.7 MB at "
+    "fto=(8, 8), 240 MB at (15, 15), 733 MB at (20, 20), per layer -- while the amplitudes "
+    "it does keep are boundary vectors. An optimization against a fixed objective needs the "
+    "amplitudes and never reconstructs a field.")
+
+
+def _efficiency_only(de_ri, de_ti):
+    """The ``ResultSub`` payload of a solve declared ``answers='efficiency'``.
+
+    Every amplitude slot is ``None`` rather than absent, because ``ResultSub`` has a fixed
+    field list and a fixed pytree structure — ``None`` is an empty subtree, so a result from
+    this rung flattens to fewer leaves without becoming a different kind of object. The s/p
+    split of the efficiencies is ``None`` for a plainer reason: this rung never formed it.
+    """
+    return {'r_s': None, 'r_p': None, 't_s': None, 't_p': None,
+            'R': de_ri, 'R_s': None, 'R_p': None, 'T': de_ti, 'T_s': None, 'T_p': None}
+
+
 #: One message for both directions of the same mistake — the ``psi`` setters raise it when a
 #: pair is already set, the ``polarization`` setter when ``psi`` was given explicitly.
 _PSI_POLARIZATION_CLASH = (
@@ -183,6 +213,60 @@ class CoreSolveMixin:
             raise ValueError(
                 f"incidence_side must be 'top' or 'bottom', got {value!r}")
         self._incidence_side = value
+
+    _answers = DEFAULT_ANSWERS
+
+    @property
+    def answers(self):
+        """What this solve keeps the state to answer: ``'amplitude'`` (default) or ``'field'``
+        — or ``'efficiency'``. A *declaration*, in the sense :attr:`tetm` is one.
+
+        ``tetm`` declares a degree of freedom away; this declares a *question* away. Saying
+        ``answers='amplitude'`` is not a request to be economical, it is a statement that a
+        near field is not something this problem asks about — and the per-layer state that
+        would answer one is then never built, rather than built and discarded.
+
+        ====================  ======================================================
+        ``'efficiency'``      ``R`` / ``T`` per order and nothing else
+        ``'amplitude'``       **default** — the Fresnel amplitudes, their s/p-resolved
+                              efficiencies, and ``res_te_inc`` / ``res_tm_inc``
+        ``'field'``           what :meth:`calculate_field` walks
+        ====================  ======================================================
+
+        Each rung answers everything below it, so ``'field'`` is a superset and not a mode.
+
+        The default is ``'amplitude'`` because that is where the cost cliff is. The
+        amplitudes are boundary vectors already solved for; the field state is 4.25 matrices
+        of side ``2*ff_x*ff_y`` per layer on the 2D path — 240 MB per layer at
+        ``fto=(15, 15)``, 733 MB at ``(20, 20)``. The two differ by three orders of
+        magnitude, and the runs that are large enough to care are optimization sweeps
+        against a fixed objective, which never call :meth:`calculate_field` at all.
+
+        Why it is settled at construction rather than passed to the solve: this is a claim
+        about the problem, which is knowable when the problem is set up; it rides in the JAX
+        pytree's ``aux_data``, where it is static under ``jit`` instead of a traced value a
+        branch cannot read; and asking for a field it excludes is a contradiction, which the
+        code refuses by name (see :meth:`_require_field_declaration`) rather than silently
+        satisfying at every scale.
+
+        Assigning it after a solve is legal and takes effect on the *next* one — the state is
+        kept as the solve runs, so nothing here can recover what an earlier one did not keep.
+        """
+        return self._answers
+
+    @answers.setter
+    def answers(self, value):
+        self._answers = answers_of(value)
+
+    def _require_field_declaration(self):
+        """Refuse :meth:`calculate_field` on a solver that declared no field, by name.
+
+        Called before the state is read, so the failure names the declaration to change
+        rather than surfacing as ``_require_solved``'s "run a solve first" — which would be
+        false advice here, since running another solve of the same solver changes nothing.
+        """
+        if not self._answers.covers(Answers.FIELD):
+            raise RuntimeError(_FIELD_NOT_DECLARED.format(got=self._answers.value))
 
     @property
     def n_inc(self):
@@ -582,9 +666,19 @@ class CoreSolveMixin:
                                   dtype=kx.dtype, device=_device_of(kx))
 
     def _finish(self, out):
-        """Store the field-reconstruction state and return just the result mapping."""
-        self.layer_info_list = out.pop('layer_info_list')
-        self.T1 = out.pop('T1')
+        """Store the field-reconstruction state and return just the result mapping.
+
+        Both slots are *reset*, not merely filled: below ``answers='field'`` the core hands
+        back a mapping without them, and clearing them here is what stops a later
+        reconstruction from walking the state of some earlier, unrelated solve. The
+        ``'efficiency'`` rung returns a bare ``(de_ri, de_ti)`` pair — the core's oldest
+        contract, kept because a caller who wants only power should not have to unpack a
+        mapping — so it is widened into one here, at the boundary, once.
+        """
+        if not isinstance(out, dict):
+            out = {'res': _efficiency_only(*out)}
+        self.layer_info_list = out.pop('layer_info_list', [])
+        self.T1 = out.pop('T1', None)
         return out
 
     _formulation = DEFAULT_FORMULATION
@@ -677,7 +771,7 @@ class CoreSolveMixin:
             self.tetm_index, wavelength, kx, self.n_top, self.n_bot, self.theta,
             self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
-            incidence_side=self.incidence_side, full=True))
+            incidence_side=self.incidence_side, answers=self._answers))
 
     def solve_1d_conical(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
         solve = self._solve_fn('conical')
@@ -687,7 +781,7 @@ class CoreSolveMixin:
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self._incidence_pair(), self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             phi=self.phi, incidence_side=self.incidence_side,
-            full=True))
+            answers=self._answers))
 
     def solve_2d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None,
@@ -710,14 +804,14 @@ class CoreSolveMixin:
                 epxz_conv_all=epxz_conv_all, epyz_conv_all=epyz_conv_all,
                 epzx_conv_all=epzx_conv_all, epzy_conv_all=epzy_conv_all,
                 phi=self.phi, incidence_side=self.incidence_side,
-                full=True, connecting_algo=self.connecting_algo))
+                answers=self._answers, connecting_algo=self.connecting_algo))
         solve = self._solve_fn('2d')
         return self._finish(solve(
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self._incidence_pair(), self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
             phi=self.phi, incidence_side=self.incidence_side,
-            full=True, mu=mu, mu_top=mu_top, mu_bot=mu_bot))
+            answers=self._answers, mu=mu, mu_top=mu_top, mu_bot=mu_bot))
 
 
 # The rule each modeling path actually implements, for the two paths that implement exactly

@@ -75,7 +75,7 @@ def _reconstruct(name, theta, pol):
     solver = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, period=(PERIOD, PERIOD),
                           fto=(FTO, FTO), wavelength=WL, thickness=[THICK],
                           ucell=ucell, theta=np.deg2rad(theta), phi=0.0,
-                          psi=np.pi / 2 if pol == 's' else 0.0)
+                          psi=np.pi / 2 if pol == 's' else 0.0, answers='field')
     solver.conv_solve()
     cell = np.asarray(solver.calculate_field(res_x=fine_res_x(), res_y=1, res_z=RES_Z))
     if cell.ndim == 5:

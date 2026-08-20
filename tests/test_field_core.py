@@ -133,7 +133,8 @@ def _frame_cell(path, res_z, formulation=None):
                     [[FRAME_N, FRAME_N], [FRAME_N, FRAME_N]],
                     [[1.0, 1.0], [1.0, 1.0]]])
     kw = dict(backend=0, n_top=1.0, n_bot=1.0, wavelength=FRAME_WL, thickness=FRAME_D,
-              theta=np.deg2rad(33.0), ucell=two if path == '2d' else one, **FRAME_PATHS[path])
+              theta=np.deg2rad(33.0), ucell=two if path == '2d' else one,
+              answers='field', **FRAME_PATHS[path])
     solver = wavebit.rcwa(**kw)
     if formulation:
         solver.formulation = formulation

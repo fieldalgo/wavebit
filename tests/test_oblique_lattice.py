@@ -343,7 +343,7 @@ def test_integrated_coefficients_survive_a_unimodular_shear():
 
 def test_field_reconstruction_runs_on_a_skewed_cell():
     """Samples land on the cell's parallelogram, so the grid is indexed by ``(v, u)``."""
-    s = solver(raster(HEX), lattice=HEX)
+    s = solver(raster(HEX), lattice=HEX, answers='field')
     s.conv_solve()
     field = np.asarray(s.calculate_field(res_x=6, res_y=6, res_z=4))
     assert field.shape[-1] == 6 and np.all(np.isfinite(field))
@@ -374,7 +374,8 @@ def test_the_reconstructed_field_agrees_across_a_unimodular_shear():
     def field(lattice):
         s = wavebit.rcwa(backend=0, ucell=ucell, period=[P, P], fto=[8, 8],
                            thickness=[600.0, H], wavelength=WL, n_top=1.0, n_bot=1.0,
-                           theta=0.0, phi=0.0, psi=0.0, factorization='nvf', lattice=lattice)
+                           theta=0.0, phi=0.0, psi=0.0, factorization='nvf', lattice=lattice,
+                           answers='field')
         s.conv_solve()
         return np.asarray(s.calculate_field(res_x=n, res_y=n, res_z=12))
 
@@ -390,7 +391,7 @@ def test_the_reconstructed_field_agrees_across_a_unimodular_shear():
 
 
 def test_field_reconstruction_still_works_when_axis_aligned():
-    s = solver(raster(ORTHO))
+    s = solver(raster(ORTHO), answers='field')
     s.conv_solve()
     assert s.calculate_field(res_x=4, res_y=4, res_z=4) is not None
 
