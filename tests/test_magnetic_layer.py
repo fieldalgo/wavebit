@@ -395,8 +395,8 @@ def _uniform_cell(eps, mu, thick, eps_bot, mu_bot, theta, z_abs, algo='ETM'):
     solver.structure = tile(eps)
     solver.mu = None if all(m == 1.0 for m in mu) else tile(mu)
     solver.solve()
-    # `(False, True, False)` is the TE-incidence column: E along the s direction, which is the
-    # polarization the closed form is written for and the only one with an `H_z` at all.
+    # `S_INC` names the pure-s incidence: E along the s direction, which is the polarization
+    # the closed form is written for and the only one with an `H_z` at all.
     cell = np.asarray(solver.reconstruct_field(
         sample_x=1, sample_y=1, sample_z=np.asarray(z_abs, dtype=float), incidences=S_INC))
     return cell[0, :, 0, 0, :]                          # (nz, 6) = Ex Ey Ez Hx Hy Hz

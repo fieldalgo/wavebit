@@ -87,6 +87,83 @@ def test_nothing_published_points_outside_the_repository():
         '\n\nState the substance instead of the address -- see the contract in docs/README.md.')
 
 
+# `path.py::symbol` -- how this codebase points at one function inside a file. The path half
+# was already checked by CITED_PATH above; the *symbol* half was not, because that regex stops
+# at `.py`. All 78 of these went stale silently, which is the same shape as the bare-filename
+# gap the comment above measures and rejects -- except that a `::symbol` is never prose. It is
+# always a claim about a definition, so it can be checked without exemption pressure, and the
+# 2026-08-20 rename set is what made it worth checking: every one of them named a method or a
+# function, and several named ones that were about to move.
+SYMBOL_REF = re.compile(r'`([A-Za-z0-9_./-]+\.py)::([A-Za-z0-9_.]+)')
+
+# Symbols named on purpose that no definition backs. Listed rather than pattern-matched, for
+# the same reason CITED_BUT_ABSENT is.
+SYMBOL_EXEMPT = {
+    # a glob over the `dfs2d_*` builder family, not one name
+    '_core/factorization.py::dfs2d_',
+    # `_block` is defined in solve_1d.py and imported into solve_2d.py, which is where the
+    # document is describing its use
+    'solve_2d.py::_block',
+    # a meent file the prose marks as gone ("meent carried a regularized rule for this")
+    'on_torch/emsolver/primitives.py::Eig',
+}
+
+
+def test_every_symbol_a_document_names_exists():
+    """`file.py::name` has to name a real definition, not only a real file.
+
+    A stale one reads exactly like a live one and sends the reader looking for a function that
+    was renamed out from under the sentence.
+    """
+    bad = []
+    for p in published_files():
+        rel = p.relative_to(ROOT).as_posix()
+        if rel in EXEMPT:            # this file quotes the shapes it checks for
+            continue
+        try:
+            text = p.read_text(encoding='utf-8')
+        except UnicodeDecodeError:
+            continue
+        for m in SYMBOL_REF.finditer(text):
+            path, symbol = m.group(1), m.group(2)
+            if f'{path}::{symbol}' in SYMBOL_EXEMPT:
+                continue
+            sources = _sources_named(path, p)
+            if not sources:
+                bad.append(f'{rel}: no such file: {path}::{symbol}')
+                continue
+            if not any(_defines(src, symbol) for src in sources):
+                bad.append(f'{rel}: no such symbol: {path}::{symbol}')
+
+    assert not bad, (
+        'these name symbols that do not exist:\n  ' + '\n  '.join(sorted(set(bad))) +
+        '\n\nA `file.py::name` is a claim about a definition. Renaming the definition without '
+        'the sentence leaves prose that typesets perfectly and points nowhere.')
+
+
+def _sources_named(path, citing):
+    """Every file the citation could mean, as text. Same three bases as the path check, plus
+    a basename match, because `factorization.py::x` is how this repo writes a `_core` file."""
+    out = []
+    for base in (ROOT, ROOT / 'wavebit', citing.parent):
+        candidate = base / path
+        if candidate.is_file():
+            out.append(candidate)
+    if not out:
+        out = [q for q in ROOT.rglob(pathlib.Path(path).name)
+               if q.is_file() and q.as_posix().endswith(path) and '__pycache__' not in q.parts]
+    return [q.read_text(encoding='utf-8', errors='ignore') for q in out]
+
+
+def _defines(src, symbol):
+    """A definition, an assignment, or -- for `file.py::214` -- a line that exists."""
+    last = symbol.split('.')[-1]
+    if last.isdigit():
+        return int(last) <= len(src.splitlines())
+    return bool(re.search(rf'^\s*(def|class)\s+{re.escape(last)}\b', src, re.M)
+                or re.search(rf'^\s*{re.escape(last)}\s*[:=]', src, re.M))
+
+
 def docs_with_targets():
     for p in sorted((ROOT / 'docs').glob('*.md')):
         text = p.read_text(encoding='utf-8')

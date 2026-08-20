@@ -178,7 +178,7 @@ def main():
         % (HALF_PIXELS, HALF_PIXELS * PIX, N_POINTS, NORMAL_GRID))
     say('a ratio of +1 would mean the gradient accounts for the loss exactly')
     say()
-    header = ('%-24s %5s %-18s %12s %12s %8s %8s %6s'
+    header = ('%-24s %9s %-18s %12s %12s %8s %8s %6s'
               % ('case', 'max_order', 'normal field', 'int d/dcx', 'loss change', 'ratio',
                  'spread', 'wrong'))
     say(header)
@@ -188,7 +188,7 @@ def main():
             for use_boundary in (False, True):
                 start = time.perf_counter()
                 out = integral_test(build, cx0, max_order, use_boundary)
-                say('%-24s %5d %-18s %+12.4e %+12.4e %8.2f %7.1f%% %3d/%d   (%.0fs)'
+                say('%-24s %9d %-18s %+12.4e %+12.4e %8.2f %7.1f%% %3d/%d   (%.0fs)'
                     % (name, max_order,
                        'grad-of-distance' if use_boundary else 'sampled',
                        out['integral'], out['change'], out['integral'] / out['change'],
