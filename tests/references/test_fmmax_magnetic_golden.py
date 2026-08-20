@@ -12,7 +12,7 @@ came out exact at both normal and oblique incidence while a *uniaxial* one was w
 s only, and a gyromagnetic one broke energy conservation outright (``R + T = 1.035``). The cause
 was ``Omega2_LR``'s hand-expanded form: its four bare ``K @ K`` terms are not geometry that
 passed through untouched, they are what other terms collapse to when the K factors commute past
-a ``muz_i`` of one. See :func:`~wavebit._core.solve_2d.layer_modes_2d`.
+a ``muz_conv_i`` of one. See :func:`~wavebit._core.solve_2d.layer_modes_2d`.
 
 What the file holds, and what each half is for:
 

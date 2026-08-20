@@ -188,20 +188,25 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     ``docs/off-diagonal-slot-convention.md`` §4, and ``tests/test_anisotropic_berreman.py`` /
     ``tests/references/test_reticolo_anisotropic_golden.py`` for what pins it.
 
-    ``mu`` is an optional ``(mux, muy, muz_i, muxy, muyx)`` permeability tuple in **the same
-    five slots and the same convention as the permittivity** — ``muz_i`` inverted, the
-    off-diagonals negated. Left ``None`` the layer is non-magnetic and every expression below
-    is the one that was here before, unchanged, so a non-magnetic solve is bit-identical.
+    ``mu`` is an optional ``(mux_conv, muy_conv, muz_conv_i, muxy_conv, muyx_conv)``
+    permeability tuple in **the same five slots and the same convention as the
+    permittivity** — ``muz_conv_i`` inverted, the off-diagonals negated. Left ``None`` the
+    layer is non-magnetic and every expression below is the one that was here before,
+    unchanged, so a non-magnetic solve is bit-identical.
 
     Where it enters is a duality, not a patch. Under ``(E, H, eps, mu) -> (H, -E, mu, eps)``
     the two curl equations map onto each other, so ``Omega_L`` — which eliminates ``E_z``
     through ``eps_zz`` — carries the *transverse* ``mu``, and ``Omega_R`` — which eliminates
     ``H_z`` through ``mu_zz`` — carries the transverse ``eps``. Concretely the four blocks
     below each acquire one slot, uniformly, and ``Omega_R``'s three geometry products gain
-    ``muz_i`` between their ``K`` factors::
+    ``muz_conv_i`` between their ``K`` factors::
 
         B  = Kx epz_i Kx - muy          Cc = Kx epz_i Ky - muyx
         D  = Ky epz_i Ky - mux          E  = Ky epz_i Kx - muxy
+
+    (Abbreviated on both sides — ``epz_i`` is ``epz_conv_i`` and ``muy`` is ``muy_conv``.
+    Every one of these eight operands is a convolution matrix; the permeability is built by
+    the same builder as the permittivity, which is what the shared ``_conv`` says.)
 
     Note the **cross** pairing: ``B`` takes ``mu_yy`` and ``D`` takes ``mu_xx``, not the other
     way round. ``docs/anisotropic-materials.md`` §5 pointed at the two ``- I`` terms and stopped
@@ -209,25 +214,26 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     ``mu``. The placement was settled by requiring the derived ``Omega_L @ Omega_R`` to
     reproduce the shipped ``Omega2_LR`` term for term at ``mu = 1``.
     """
-    mux, muy, muz_i, muxy, muyx = (I, I, None, None, None) if mu is None else mu
+    mux_conv, muy_conv, muz_conv_i, muxy_conv, muyx_conv = (
+        (I, I, None, None, None) if mu is None else mu)
 
-    B = Kx @ epz_conv_i @ Kx - muy
-    D = Ky @ epz_conv_i @ Ky - mux
+    B = Kx @ epz_conv_i @ Kx - muy_conv
+    D = Ky @ epz_conv_i @ Ky - mux_conv
     Cc = Kx @ epz_conv_i @ Ky
     E = Ky @ epz_conv_i @ Kx
-    if muyx is not None:
-        Cc = Cc - muyx
-    if muxy is not None:
-        E = E - muxy
+    if muyx_conv is not None:
+        Cc = Cc - muyx_conv
+    if muxy_conv is not None:
+        E = E - muxy_conv
 
-    # `Omega_R`'s three geometry products carry `muz_i` between the K factors, exactly as
+    # `Omega_R`'s three geometry products carry `muz_conv_i` between the K factors, exactly as
     # `epz_conv_i` sits between them in `Omega_L`. Skipped entirely when non-magnetic rather
     # than multiplying an identity through, so the arithmetic stays the operations it was.
-    if muz_i is None:
+    if muz_conv_i is None:
         KxKy, KxKx, KyKy, KyKx = Kx @ Ky, Kx @ Kx, Ky @ Ky, Ky @ Kx
     else:
-        KxKy, KxKx = Kx @ muz_i @ Ky, Kx @ muz_i @ Kx
-        KyKy, KyKx = Ky @ muz_i @ Ky, Ky @ muz_i @ Kx
+        KxKy, KxKx = Kx @ muz_conv_i @ Ky, Kx @ muz_conv_i @ Kx
+        KyKy, KyKx = Ky @ muz_conv_i @ Ky, Ky @ muz_conv_i @ Kx
 
     Omega_R = _block(xp, [
         [-KxKy + epyx_conv, KxKx - epy_conv],
@@ -237,8 +243,8 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     if mu is None:
         # The hand-expanded product. Its four bare ``K @ K`` terms are not geometry that
         # survived the multiplication untouched — they are what two *other* terms collapse to
-        # when the K factors commute past a `muz_i` of one. Written out, the (0,0) block is
-        #   Cc Kx muz_i Ky - B Ky muz_i Ky + B epx - Cc epyx,
+        # when the K factors commute past a `muz_conv_i` of one. Written out, the (0,0) block is
+        #   Cc Kx muz_i Ky - B Ky muz_i Ky + B epx - Cc epyx,          (abbreviated, as above)
         # where the first pair leaves `muy Ky muz_i Ky + muyx Kx muz_i Ky` behind, which is
         # `Ky @ Ky` only when `muy = 1`, `muyx = 0` and `muz_i = 1`. So this form cannot be
         # reused with a permeability, and reusing it is not a small error: it costs energy
@@ -330,8 +336,9 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     (``None`` -> zero).
 
     ``mu`` is the optional per-layer permeability, as five stacks
-    ``(mux_all, muy_all, muz_i_all, muxy_all, muyx_all)`` in the same slots and the same
-    convention as the permittivity — see :func:`layer_modes_2d`. Any entry may be ``None``.
+    ``(mux_conv_all, muy_conv_all, muz_conv_i_all, muxy_conv_all, muyx_conv_all)`` in the
+    same slots and the same convention as the permittivity — see :func:`layer_modes_2d`. Any
+    entry may be ``None``.
 
     ``mu_top`` / ``mu_bot`` are the **half-spaces'** scalar permeabilities. ``n_top`` / ``n_bot``
     keep meaning the *refractive index* ``sqrt(eps*mu)``, so nothing about ``kz``, Snell or the
@@ -426,7 +433,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         epyx_conv = O if epyx_conv_all is None else epyx_conv_all[layer_index]
         d = thickness[layer_index]
 
-        # `mux`/`muy` fall back to I and the other three to None, which is what
+        # `mux_conv`/`muy_conv` fall back to I and the other three to None, which is what
         # `layer_modes_2d` reads as non-magnetic -- so a stack with mu on some layers and not
         # others is expressible, and the layers without it take the original arithmetic.
         layer_mu = None if all(s is None for s in mu_all) else (
@@ -459,11 +466,11 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         # Conditional for the reason `solve_1d`'s append is -- and this is the path where it
         # costs the most: `W`, `V`, `big_A_i` and `big_B` are each a full `2*ff_xy` square,
         # 4.25 of them per layer once `epz_conv_i` is counted at its quarter (4.5 on a
-        # magnetic layer, where `muz_i` is the second quarter).
+        # magnetic layer, where `muz_conv_i` is the second quarter).
         #
-        # `muz_i` rides last, and it is there for the same reason `epz_conv_i` is: the two
+        # `muz_conv_i` rides last, and it is there for the same reason `epz_conv_i` is: the two
         # longitudinal components are algebraic rather than propagated, and each is recovered
-        # by dividing out the z slot of its own tensor. `H_z = muz_i (Kx Ey - Ky Ex)` is
+        # by dividing out the z slot of its own tensor. `H_z = muz_conv_i (Kx Ey - Ky Ex)` is
         # Faraday's z row, dual to Ampere's z row that gives `E_z` -- see
         # :func:`wavebit._core.fields._field_coupled`. `None` is "non-magnetic", the spelling
         # `layer_mu` and `Material.mu` already use.

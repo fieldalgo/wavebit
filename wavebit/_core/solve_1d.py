@@ -423,7 +423,7 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
         # loop's working set, and only `big_F`, `big_G` and `big_T` have to outlive an
         # iteration.
         #
-        # The trailing `None` is the `muz_i` slot -- one entry layout for the one function
+        # The trailing `None` is the `muz_conv_i` slot -- one entry layout for the one function
         # that reads both this list and `solve_2d`'s
         # (:func:`wavebit._core.fields._field_coupled`), rather than two lengths it would have
         # to tell apart. It is always `None` here and structurally must be: the conical

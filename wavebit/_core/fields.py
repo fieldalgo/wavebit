@@ -358,7 +358,7 @@ def field_1d(wavelength, kx, T1, layer_info_list, period, tetm_index,
         bwd = _diag_exp(xp, k0 * Qd, ff)
         My = W @ (fwd @ c1 + bwd @ c2)
         Mx = V @ (-fwd @ c1 + bwd @ c2)
-        # TE's ``H_z = Kx Ey`` is Faraday's z row and would carry ``muz_i`` on a magnetic
+        # TE's ``H_z = Kx Ey`` is Faraday's z row and would carry ``muz_conv_i`` on a magnetic
         # layer, as the coupled path's does. It has none to carry: the pure TE/TM operator
         # has no permeability slot, and `solve_for_conv` refuses a `mu` that reaches this
         # path by name ("2D path only") rather than dropping it here.
@@ -391,18 +391,19 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, res_x, res_y
 
     **The two longitudinal components are algebraic, and each divides by the z slot of its own
     tensor.** ``E_z`` comes from Ampere's z row and carries ``epz_conv_i``; ``H_z`` comes from
-    Faraday's z row and carries ``muz_i``, which is the layer's ``mu_zz^-1`` or ``None`` where
-    the layer is non-magnetic. Written out, in the ``U = i H`` variables this function works
+    Faraday's z row and carries ``muz_conv_i``, which is the layer's ``mu_zz^-1`` or ``None``
+    where the layer is non-magnetic. Written out, in the ``U = i H`` variables this function works
     in and with ``Kx`` / ``Ky`` normalised by ``k0``::
 
         eps_zz E_z =   Ky Hx - Kx Hy          ->  Sz = 1j epz_conv_i (Kx Uy - Ky Ux)
-        mu_zz  H_z =   Kx Ey - Ky Ex          ->  Uz = 1j muz_i      (Kx Sy - Ky Sx)
+        mu_zz  H_z =   Kx Ey - Ky Ex          ->  Uz = 1j muz_conv_i (Kx Sy - Ky Sx)
 
     which is one line under the other's duality ``(E, H, eps, mu) -> (H, -E, mu, eps)`` --
     the same duality :func:`wavebit._core.solve_2d.layer_modes_2d` places ``mu`` by, and the
-    reason ``Omega_R`` (which eliminates ``H_z``) is the block that carries ``muz_i`` there.
+    reason ``Omega_R`` (which eliminates ``H_z``) is the block that carries ``muz_conv_i``
+    there.
 
-    ``muz_i`` is a **convolution**, not a scalar: on a patterned magnetic layer ``mu_zz``
+    ``muz_conv_i`` is a **convolution**, not a scalar: on a patterned magnetic layer ``mu_zz``
     varies over the cell, so dividing it out is a matrix solve against the same inverse-rule
     slot the solve used, exactly as ``epz_conv_i`` is for ``E_z``. Until 2026-08-20 this line
     carried the ``mu = 1`` form and a magnetic layer's ``H_z`` came back scaled by ``mu_zz``
@@ -433,8 +434,8 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, res_x, res_y
     z_per_layer, unshuffle = _z_plan(res_z, layer_info_list, 4)
 
     cells = []
-    for spec, (epz_conv_i, W, V, q, d, big_A_i, big_B, muz_i) in zip(z_per_layer,
-                                                                     layer_info_list[::-1]):
+    for spec, (epz_conv_i, W, V, q, d, big_A_i, big_B, muz_conv_i) in zip(
+            z_per_layer, layer_info_list[::-1]):
         nz = _n_samples(spec)
         q_1, q_2 = q[:ff_xy], q[ff_xy:]
         big_X = xp.diag(xp.exp(-k0 * q * d))
@@ -476,9 +477,9 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, res_x, res_y
         Uz = 1j * (Kx @ Sy - Ky @ Sx)
         # Skipped rather than multiplied through by an identity where the layer is
         # non-magnetic, so a non-magnetic cell stays bit-identical; and asked structurally
-        # (`is not None`), which is the one form a traced `muz_i` can answer.
-        if muz_i is not None:
-            Uz = muz_i @ Uz
+        # (`is not None`), which is the one form a traced `muz_conv_i` can answer.
+        if muz_conv_i is not None:
+            Uz = muz_conv_i @ Uz
 
         inv_f = _inv_fourier(xp, kx, ky, period, res_x, res_y, k0, C,
                              lattice)[:, :, None, :]
@@ -522,8 +523,9 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, period,
     this path can be handed: :meth:`wavebit._core.engine.CoreSolveMixin.solve_2d` refuses a
     permeability before routing here, by name. That refusal is what makes this line correct,
     so it is not an assumption to be checked here — it is a precondition held elsewhere, and
-    the two move together. The 2ff twin carries the general form, ``H_z = muz_i (Kx Ey - Ky
-    Ex)``; should ``mu`` ever land on this path it needs that factor *and* the two z-row terms
+    the two move together. The 2ff twin carries the general form,
+    ``H_z = muz_conv_i (Kx Ey - Ky Ex)``; should ``mu`` ever land on this path it needs that
+    factor *and* the two z-row terms
     ``mu_zx H_x`` / ``mu_zy H_y`` this formulation would then be the one able to express,
     exactly as ``E_z`` above keeps ``ezx`` / ``ezy``.
 

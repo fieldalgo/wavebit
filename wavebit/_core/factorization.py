@@ -127,8 +127,9 @@ class ConvSlots5(NamedTuple):
     :class:`ConvSlots3` with the off-diagonal pair appended; see that docstring, and "Slot
     order" above, for why ``epz_i`` sits third rather than last.
 
-    Used for the permeability slots too, where the fields read ``mux``, ``muy``, ``muz_i``,
-    ``muxy``, ``muyx`` — the E/H duality means one layout serves both (see
+    Used for the permeability slots too, where the fields read ``mux_conv``, ``muy_conv``,
+    ``muz_conv_i``, ``muxy_conv``, ``muyx_conv`` — the E/H duality means one layout serves
+    both (see
     :func:`pn_mu_conv_matrices`).
     """
     epx: object
@@ -1115,7 +1116,8 @@ def to_conv_mat_raster_pn_mu(tensor_raster, fto_x, fto_y, normal_field=None, lat
             read only when ``normal_field`` is not supplied.
 
     Returns:
-        ``(mux, muy, muz_i, muxy, muyx)``, each ``(n_layers, ff_xy, ff_xy)`` — ready to hand to
+        ``(mux_conv, muy_conv, muz_conv_i, muxy_conv, muyx_conv)``, each
+        ``(n_layers, ff_xy, ff_xy)`` — ready to hand to
         ``solve_for_conv(..., mu=...)``.
 
     **A layer's two tensors may have different boundaries**, and this is why the normal field is

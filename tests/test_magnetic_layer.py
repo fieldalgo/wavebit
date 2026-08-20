@@ -26,8 +26,8 @@ def tensor(xx, yy, zz, xy=0.0, yx=0.0):
 ONE = tensor(1.0, 1.0, 1.0)
 
 # (label, eps, mu). Chosen so each one reaches a different part of the operator: scalar touches
-# only the diagonal, uniaxial only `muz_i`, biaxial breaks the x/y symmetry, and gyromagnetic is
-# the only one that reaches the off-diagonal slots.
+# only the diagonal, uniaxial only `muz_conv_i`, biaxial breaks the x/y symmetry, and
+# gyromagnetic is the only one that reaches the off-diagonal slots.
 CASES = [
     ('scalar_mu', tensor(2.6, 2.6, 2.6), tensor(1.7, 1.7, 1.7)),
     ('uniaxial_mu', tensor(2.6, 2.6, 2.6), tensor(1.4, 1.4, 2.2)),
@@ -478,7 +478,7 @@ def test_the_closed_form_separates_a_magnetic_hz_from_a_non_magnetic_one(
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 def test_both_connecting_algorithms_reconstruct_the_magnetic_field(algo):
-    """``muz_i`` reaches field reconstruction by two independent routes, one per algorithm.
+    """``muz_conv_i`` reaches field reconstruction by two independent routes, one per algorithm.
 
     The SMM builds its own per-layer state (``wavebit._core.scattering._smm_sp``) rather than
     reusing the ETM's, so the slot had to be added twice and could have been added once --
@@ -495,7 +495,7 @@ def test_both_connecting_algorithms_reconstruct_the_magnetic_field(algo):
 
 # The two layers differ in `mu_zz` *and* in pattern, which is what makes the backside case
 # below able to fail: the SMM reverses its per-layer state for a substrate-side solve, and a
-# `muz_i` list left out of that reversal hands each layer the other one's permeability.
+# `muz_conv_i` list left out of that reversal hands each layer the other one's permeability.
 TWO_LAYER_EPS = np.array([[[2.6, 2.6, 1.0, 1.0], [2.6, 1.0, 1.0, 1.0]],
                           [[1.0, 4.0, 4.0, 1.0], [1.0, 1.0, 4.0, 4.0]]])
 TWO_LAYER_MU = np.array([[[1.8, 1.0, 1.0, 1.4], [1.0, 1.0, 1.4, 1.4]],
@@ -521,7 +521,7 @@ def test_the_two_algorithms_agree_on_a_magnetic_cell_from_either_side(side):
     ``incidence_side='bottom'`` is where the per-layer permeability has to travel with its
     layer through a reversal, and the two connecting algorithms reverse by different means --
     the ETM mirrors the whole scene before it solves, the SMM reverses the state it kept. A
-    ``muz_i`` left behind by either reversal gives each layer the other one's ``mu_zz``, which
+    ``muz_conv_i`` left behind by either reversal gives each layer the other one's ``mu_zz``, which
     is a plausible magnetic cell rather than an obviously broken one: it is still magnetic,
     still energy-conserving, and still identical in ``R`` and ``T``.
     """
@@ -597,7 +597,7 @@ def test_the_field_duality_is_not_vacuous_on_the_longitudinal_components():
 
 @pytest.mark.parametrize('backend,name', [(1, 'jax'), (2, 'torch')])
 def test_the_other_backends_reconstruct_the_magnetic_field_too(backend, name):
-    """One implementation, three namespaces, and ``muz_i @ Uz`` is new arithmetic in each.
+    """One implementation, three namespaces, and ``muz_conv_i @ Uz`` is new arithmetic in each.
 
     Against numpy rather than against the closed form: what is under test here is that the
     backend dispatch reaches the same line, and numpy is already pinned absolutely above.
@@ -617,7 +617,7 @@ def test_the_permeability_a_reconstructed_hz_depends_on_is_differentiable():
 
     The point is *which* dependence it checks. The loss reads `H_z` and nothing else, so the
     only route from the permeability raster to it that this can be measuring is the
-    ``muz_i @ Uz`` added on 2026-08-20 -- plus the solve's own, which was already there. A fix
+    ``muz_conv_i @ Uz`` added on 2026-08-20 -- plus the solve's own, which was already there. A fix
     that reached the right number by detaching ``mu``, or by reading it as a constant, would
     leave every value test above green and this one at zero.
 
@@ -657,7 +657,7 @@ def test_mu_on_the_first_order_path_is_refused_whichever_way_it_got_there():
     other route in. Both refusals are what make ``fields.field_2d_4ff``'s
     ``H_z = Kx Ey - Ky Ex`` -- Faraday's z row at ``mu = 1`` -- a correct line rather than an
     unchecked assumption: that path cannot be handed a permeability, so it never needs the
-    ``muz_i`` its 2ff twin carries.
+    ``muz_conv_i`` its 2ff twin carries.
 
     The message is asserted, not just the exception type. Naming a z-coupled permittivity that
     was never given sends the reader to look for one, and the two routes are told apart by

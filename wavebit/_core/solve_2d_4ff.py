@@ -124,7 +124,7 @@ What is not here, in the order it will be wanted:
   ``eps``, or ``formulation='4ff'`` asked for directly), rather than dropping it. That refusal
   covers the *field* too: :func:`wavebit._core.fields.field_2d_4ff` spells ``H_z`` as
   ``Kx Ey - Ky Ex``, Faraday's z row at ``mu = 1``, where its 2ff twin carries the general
-  ``muz_i (Kx Ey - Ky Ex)``. Adding ``mu`` here means both — and, this being the formulation
+  ``muz_conv_i (Kx Ey - Ky Ex)``. Adding ``mu`` here means both — and, this being the formulation
   that can express a z row at all, the ``mu_zx H_x`` / ``mu_zy H_y`` terms as well, exactly as
   ``E_z`` already keeps ``ezx`` / ``ezy``.
 * **A patterned *and* z-coupled layer.** The factorization for a patterned anisotropic layer

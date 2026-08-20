@@ -233,7 +233,7 @@ implementation had to correct:
   between the `K` factors, mirroring where `epz_conv_i` sits in `Omega_L`.
 * `Omega2_LR`'s hand-expanded form **cannot be reused**. Its four bare `K @ K` terms look like
   geometry that survived the multiplication, and are really what two other terms collapse to
-  when the `K` factors commute past a `muz_i` of one. Reusing it conserved energy for scalar
+  when the `K` factors commute past a `muz_conv_i` of one. Reusing it conserved energy for scalar
   `mu` and broke it outright for gyromagnetic `mu` (`R + T = 1.035`).
 
 **Half-spaces: done too**, and this is the part the original warning was about. They used to be

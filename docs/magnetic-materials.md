@@ -300,13 +300,20 @@ repository refuses elsewhere too.
 permittivity's convention:
 
 ```python
-mu = (mux_all, muy_all, muz_i_all, muxy_all, muyx_all)      # any entry may be None
-res = mee.solve_for_conv(wl, epx, epy, epz_i, epxy, epyx, mu=mu)
+mu = (mux_conv_all, muy_conv_all, muz_conv_i_all,
+      muxy_conv_all, muyx_conv_all)                 # any entry may be None
+res = mee.solve_for_conv(wl, epx_conv_all, epy_conv_all, epz_conv_i_all,
+                         epxy_conv_all, epyx_conv_all, mu=mu)
 ```
 
+Slot for slot, the two tuples are now spelled the same way, which is the point: `mu` is
+convolved by the *same* builder as `eps` (§7), so the `_conv` in the name is as true of one as
+of the other. It was `(mux, muy, muz_i, ...)` until 2026-08-20, sitting beside `epz_conv_i` in
+the same expressions, and read as though the permeability skipped the factorization.
+
 Each entry is `(n_layers, ff_xy, ff_xy)`, so a stack with `mu` on some layers and not others is
-expressible — the layers without it take the original arithmetic. `mux` / `muy` fall back to the
-identity and the other three to nothing.
+expressible — the layers without it take the original arithmetic. `mux_conv` / `muy_conv`
+fall back to the identity and the other three to nothing.
 
 A *tensor* `mu` still has no front door, exactly as a tensor `eps` has none: `structure` is a
 scalar quantity per region or per pixel. A patterned magnetic tensor goes through
@@ -324,7 +331,7 @@ dividing out the z slot of its own tensor:
 
 ```
 eps_zz E_z  =  Ky Hx - Kx Hy          Ampere's z row      ->  epz_conv_i
-mu_zz  H_z  =  Kx Ey - Ky Ex          Faraday's z row     ->  muz_i
+mu_zz  H_z  =  Kx Ey - Ky Ex          Faraday's z row     ->  muz_conv_i
 ```
 
 One line is the other under the same `(E, H, eps, mu) -> (H, -E, mu, eps)` duality §1 places
@@ -352,11 +359,12 @@ called field reconstruction at all.
 - the **duality, on the cell**. A patterned `mu_zz^-1` is a convolution matrix, and omitting it
   is a different mistake from applying it on the wrong side. Exchanging the two patterns and
   trading the incidence maps `E` onto `H` entry for entry with unit scale, which checks the
-  patterned `muz_i` in `H_z` against the patterned `epz_conv_i` in `E_z` — a line that predates
-  permeability and is pinned from outside by `test_fmmax_field_golden.py`. This is the one that
-  catches an operand-order error; the uniform closed form cannot, because a scalar commutes.
+  patterned `muz_conv_i` in `H_z` against the patterned `epz_conv_i` in `E_z` — a line that
+  predates permeability and is pinned from outside by `test_fmmax_field_golden.py`. This is
+  the one that catches an operand-order error; the uniform closed form cannot, because a
+  scalar commutes.
 
-`muz_i` reaches the reconstruction as an eighth slot on each `layer_info_list` entry, beside
+`muz_conv_i` reaches the reconstruction as an eighth slot on each `layer_info_list` entry, beside
 the `epz_conv_i` it is dual to, `None` where the layer is non-magnetic. Both connecting
 algorithms build that list by their own route, so the slot had to be added twice —
 `solve_2d` and `_smm_sp` — and a stack whose `H_z` was magnetic under `'ETM'` and
@@ -365,7 +373,7 @@ non-magnetic under `'SMM'` would have had identical `R` and `T` under both.
 Two consequences of it being per-layer state rather than a solver attribute. It has to travel
 with its layer through the **backside** reversal, and the two algorithms reverse by different
 means — the ETM mirrors the scene before solving, the SMM reverses the state it kept — so a
-`muz_i` left out of either gives each layer the other's `mu_zz`: still magnetic, still
+`muz_conv_i` left out of either gives each layer the other's `mu_zz`: still magnetic, still
 energy-conserving, `R` and `T` untouched. And the slot is *appended*, not inserted, because
 `tests/test_scattering_core.py` compares the two algorithms' transfer blocks by index and the
 legacy goldens name the first seven; `_z_plan`'s thickness lookup, which used to infer the
@@ -383,9 +391,9 @@ there — a z-coupled `eps`, or `formulation='4ff'` asked for directly — and t
 which one happened, because blaming a z row that was never given sends the reader to look for
 one. Both features work and the combination refuses, which is the point: landing on whichever
 path the dispatch picks and silently dropping the other input is the failure mode. Should `mu`
-ever land there it needs the `muz_i` factor *and* the two z-row terms `mu_zx H_x` / `mu_zy H_y`
-that formulation would then be the one able to express — exactly as its `E_z` already keeps
-`ezx` / `ezy`.
+ever land there it needs the `muz_conv_i` factor *and* the two z-row terms `mu_zx H_x` /
+`mu_zy H_y` that formulation would then be the one able to express — exactly as its `E_z`
+already keeps `ezx` / `ezy`.
 
 
 

@@ -1510,7 +1510,8 @@ class CoreFactorizationMixin:
     def mu_matrices(self, geometry=None, **kwargs):
         """The permeability convolution matrices, or ``None`` for a non-magnetic structure.
 
-        ``(mux, muy, muz_i, muxy, muyx)`` — the same five slots as :meth:`conv_matrices` on
+        ``(mux_conv, muy_conv, muz_conv_i, muxy_conv, muyx_conv)`` — the same five slots as
+        :meth:`conv_matrices` on
         the other side of the ``(E, H, eps, mu) -> (H, -E, mu, eps)`` duality, which is why
         one layout serves both. ``None`` rather than five identity matrices when nothing is
         magnetic: the solve reads that ``None`` as "take the non-magnetic arithmetic", which
