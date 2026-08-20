@@ -326,8 +326,7 @@ def _solve_gyrotropic(pair=None, **incidence):
     solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0,
                             **incidence, fto=(0, 0), period=(300.0, 300.0),
                             wavelength=WL, thickness=[D])
-    return solver.solve_for_conv(
-        WL,
+    return solver.solve_conv(
         np.stack([EO * I]),
         np.stack([EO * I]),
         np.stack([np.linalg.inv(EO * I)]),

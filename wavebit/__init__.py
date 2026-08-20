@@ -41,6 +41,9 @@ from ._core.enums import (Answers, Backend, Pol, FourierCoefficients, Factorizat
                           Formulation, NormalMethod)
 from ._core.domain import (Layer, Stack, Incidence, Material,
                            eps_from_index, index_from_eps)
+# The type `conv_matrices()` hands back and `solve_conv()` takes: a NamedTuple, so the five
+# slots still splat and unpack, but `conv.epz_i` reaches one by name.
+from ._core.factorization import ConvMatrices
 from ._core.geometry import StaticGeometry, StaleGeometryError
 # The nk front door. Exported here rather than left importable from `_core.modeler` because
 # the bundled `nk_data` ships in the wheel and these two are its only readers -- data with no

@@ -111,7 +111,7 @@ fell from 12x/486x to 2x/182x because this side got slower, not because that one
 from . import overlap as _overlap
 from .backend import array_namespace, as_array, j1, jinc, sinc
 from .domain import as_material, retired_material_name
-from .factorization import ConvSlots5      # one slot layout for every builder
+from .factorization import ConvMatrices      # one slot layout for every builder
 from .lattice import sample_grid
 from .overlap import COMBINE_MODES, OVERLAP_TOL_REL      # re-exported; both paths read them
 from .geometry import StaleGeometryError
@@ -1142,7 +1142,7 @@ def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, fto_x, fto_y):
 
     ``eps_c`` / ``inv_eps_c`` are the ``eps`` and ``1/eps`` coefficients on the doubled
     reciprocal grid; ``c_xx`` / ``c_xy`` / ``c_yy`` those of ``nx**2``, ``nx*ny``, ``ny**2``.
-    Returns ``(eps_xx, eps_yy, epz_i, eps_xy, eps_yx)`` — ``solve_for_conv``'s parameter order,
+    Returns ``(eps_xx, eps_yy, epz_i, eps_xy, eps_yx)`` — ``solve_conv``'s parameter order,
     as every builder does; see "Slot order" in :mod:`wavebit._core.factorization`.
     """
     ep_dir = conv_matrix_2d(xp, eps_c, fto_x, fto_y)
@@ -1158,7 +1158,7 @@ def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, fto_x, fto_y):
     eps_yy = ep_dir - 0.5 * (delta_ep @ C_yy + C_yy @ delta_ep)
     eps_xy = -0.5 * (delta_ep @ C_xy + C_xy @ delta_ep)          # == eps_yx (symmetric)
 
-    return ConvSlots5(eps_xx, eps_yy, xp.linalg.inv(ep_dir), -eps_xy, -eps_xy)
+    return ConvMatrices(eps_xx, eps_yy, xp.linalg.inv(ep_dir), -eps_xy, -eps_xy)
 
 
 def check_no_plan_still_fits(layer, period, index, lattice=None):
@@ -1257,7 +1257,7 @@ def to_conv_mat_smooth_layers(layer_shapes, fto_x, fto_y, period,
         for slot, m in zip(out, mats):
             slot.append(m)
 
-    return ConvSlots5(*(xp.stack(slot) for slot in out))
+    return ConvMatrices(*(xp.stack(slot) for slot in out))
 
 
 def _material_value(value):

@@ -51,7 +51,7 @@ def test_vector_nvf_energy_conservation():
         structure=structure_raster
     )
     
-    res = m.solve_for_conv(1000.0, np.array([Exx]), np.array([Eyy]), np.array([Epz_i]), np.array([Exy]), np.array([Eyx]))
+    res = m.solve_conv(np.array([Exx]), np.array([Eyy]), np.array([Epz_i]), np.array([Exy]), np.array([Eyx]))
     
     R = float(res.R.sum())
     T = float(res.T.sum())

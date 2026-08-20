@@ -252,7 +252,7 @@ MATERIALS = (
     {
         'case': 'uniform_anisotropic',
         'supported': True,
-        'why': 'solve_for_conv reads nine permittivity slots, so a tensor filling a whole '
+        'why': 'solve_conv reads nine permittivity slots, so a tensor filling a whole '
                'layer works, z row included. Note that every off-diagonal slot holds the '
                'negative of its component: -eps_xy, and equally -eps_xz.',
         'source': 'docs/off-diagonal-slot-convention.md',

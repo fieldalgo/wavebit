@@ -96,7 +96,7 @@ def test_a_tensor_without_a_z_row_stays_on_the_second_order_path(eps):
     pass every numerical assertion in this file while costing 8x.
     """
     mee = solver(thickness=[180.0])
-    res = mee.solve_for_conv(WL, *uniform_slots([eps], 1, z_row=False))
+    res = mee.solve_conv(*uniform_slots([eps], 1, z_row=False))
     assert mee.formulation_assigned == '2ff'
     assert np.isfinite(np.asarray(res.res.R)).all()
 
@@ -111,11 +111,11 @@ def test_passing_the_z_slots_is_what_selects_the_first_order_path():
     zero_z = np.zeros((1, 1, 1), dtype=complex)
     mee = solver(thickness=[180.0])
     five = uniform_slots([DIAGONAL], 1, z_row=False)
-    res_2ff = mee.solve_for_conv(WL, *five)
+    res_2ff = mee.solve_conv(*five)
     assert mee.formulation_assigned == '2ff'
 
     mee = solver(thickness=[180.0])
-    res_4ff = mee.solve_for_conv(WL, *five, zero_z, zero_z, zero_z, zero_z)
+    res_4ff = mee.solve_conv(*five, zero_z, zero_z, zero_z, zero_z)
     assert mee.formulation_assigned == '4ff'
 
     gap, where = worst_gap(channels(res_2ff), channels(res_4ff))
@@ -151,7 +151,7 @@ def test_the_result_surface_is_the_same_object_the_other_paths_return():
     fto = (2, 1)
     ff = (2 * fto[0] + 1) * (2 * fto[1] + 1)
     mee = solver(fto=fto, thickness=[180.0])
-    res = mee.solve_for_conv(WL, *uniform_slots([VOIGT], ff))
+    res = mee.solve_conv(*uniform_slots([VOIGT], ff))
 
     assert mee.formulation_assigned == '4ff'
     assert res.res_te_inc is not None and res.res_tm_inc is not None
@@ -178,10 +178,10 @@ def test_forcing_the_first_order_path_reproduces_a_uniform_anisotropic_answer():
     thickness = [140.0, 75.0, 210.0]
 
     a = solver(thickness=thickness)
-    res_a = a.solve_for_conv(WL, *uniform_slots(layers, 1, z_row=False))
+    res_a = a.solve_conv(*uniform_slots(layers, 1, z_row=False))
     b = solver(thickness=thickness)
     b.formulation = '4ff'
-    res_b = b.solve_for_conv(WL, *uniform_slots(layers, 1, z_row=False))
+    res_b = b.solve_conv(*uniform_slots(layers, 1, z_row=False))
 
     assert (a.formulation_assigned, b.formulation_assigned) == ('2ff', '4ff')
     gap, where = worst_gap(channels(res_a), channels(res_b))
@@ -229,10 +229,10 @@ def test_the_transmitted_amplitude_is_not_merely_proportional():
     thickness = [140.0, 260.0]
 
     a = solver(thickness=thickness)
-    res_a = a.solve_for_conv(WL, *uniform_slots(layers, 1, z_row=False))
+    res_a = a.solve_conv(*uniform_slots(layers, 1, z_row=False))
     b = solver(thickness=thickness)
     b.formulation = '4ff'
-    res_b = b.solve_for_conv(WL, *uniform_slots(layers, 1, z_row=False))
+    res_b = b.solve_conv(*uniform_slots(layers, 1, z_row=False))
 
     assert float(np.asarray(res_a.res.R).sum() + np.asarray(res_a.res.T).sum()) < 0.99
     for name in ('t_s', 't_p'):
@@ -269,8 +269,8 @@ def test_the_two_formulations_agree_across_absorbing_half_spaces(eps_top, eps_bo
                        theta=np.deg2rad(28.0), phi=np.deg2rad(37.0), psi=0.6, **kw)
     b.formulation = '4ff'
 
-    res_a = a.solve_for_conv(WL, *uniform_slots(layers, 1, z_row=False))
-    res_b = b.solve_for_conv(WL, *uniform_slots(layers, 1, z_row=False))
+    res_a = a.solve_conv(*uniform_slots(layers, 1, z_row=False))
+    res_b = b.solve_conv(*uniform_slots(layers, 1, z_row=False))
     gap, where = worst_gap(channels(res_a), channels(res_b))
     assert gap < 1e-11, f'the two formulations disagree by {gap:.2e} on {where}'
 
@@ -282,7 +282,7 @@ def test_forcing_the_second_order_path_on_a_z_row_raises():
     mee = solver(thickness=[180.0])
     mee.formulation = '2ff'
     with pytest.raises(ValueError, match='epxz_conv_all'):
-        mee.solve_for_conv(WL, *uniform_slots([VOIGT], 1))
+        mee.solve_conv(*uniform_slots([VOIGT], 1))
 
 
 def test_an_unknown_formulation_is_refused_at_the_setter():
@@ -300,7 +300,7 @@ def test_the_scattering_algorithm_is_refused_on_the_first_order_path():
     """
     mee = solver(thickness=[180.0], connecting_algo='SMM')
     with pytest.raises(ValueError, match='SMM'):
-        mee.solve_for_conv(WL, *uniform_slots([VOIGT], 1))
+        mee.solve_conv(*uniform_slots([VOIGT], 1))
 
 
 @pytest.mark.parametrize('z_row', [True, False], ids=['with a z row', 'without one'])
@@ -316,13 +316,13 @@ def test_the_unstabilised_transfer_cannot_be_reached_from_the_public_path(z_row)
     mee = solver(thickness=[180.0], connecting_algo='TMM')
     slots = uniform_slots([VOIGT if z_row else IN_PLANE], 1, z_row=z_row)
     with pytest.raises(ValueError, match='TMM'):
-        mee.solve_for_conv(WL, *slots)
+        mee.solve_conv(*slots)
 
 
 def test_the_scattering_algorithm_still_works_without_a_z_row():
     """The control: nothing about the refusal above touches the ordinary SMM path."""
     mee = solver(thickness=[180.0], connecting_algo='SMM')
-    res = mee.solve_for_conv(WL, *uniform_slots([IN_PLANE], 1, z_row=False))
+    res = mee.solve_conv(*uniform_slots([IN_PLANE], 1, z_row=False))
     assert mee.formulation_assigned == '2ff'
     assert np.isfinite(np.asarray(res.res.R)).all()
 
@@ -342,7 +342,7 @@ def test_field_reconstruction_is_dispatched_on_the_formulation_not_the_grating_t
     import wavebit.on_numpy.emsolver.rcwa as rcwa_numpy
 
     mee = solver(thickness=[180.0], answers='field')
-    mee.solve_for_conv(WL, *uniform_slots([VOIGT], 1))
+    mee.solve_conv(*uniform_slots([VOIGT], 1))
     assert mee.formulation_assigned == '4ff'
     assert mee.grating_type_assigned == 2, 'the premise: the grating type cannot tell them apart'
 
@@ -388,7 +388,7 @@ def test_the_first_order_path_gives_the_same_answer_on_every_backend(backend):
     :func:`test_the_first_order_path_traces_under_jit`.
     """
     pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
-    ref = solver(thickness=[180.0]).solve_for_conv(WL, *uniform_slots([VOIGT], 1))
+    ref = solver(thickness=[180.0]).solve_conv(*uniform_slots([VOIGT], 1))
 
     # Solver first, arrays second: importing the JAX backend is what lifts `jax_enable_x64`,
     # and an array built before that is silently complex64 (measured 6.6e-5 out, which reads
@@ -396,7 +396,7 @@ def test_the_first_order_path_gives_the_same_answer_on_every_backend(backend):
     mee = solver(thickness=[180.0], backend=backend)
     xp = pytest.importorskip({1: 'jax.numpy', 2: 'torch'}[backend])
     to = xp.asarray if backend == 1 else xp.as_tensor
-    got = mee.solve_for_conv(WL, *[to(s) for s in uniform_slots([VOIGT], 1)])
+    got = mee.solve_conv(*[to(s) for s in uniform_slots([VOIGT], 1)])
 
     assert mee.formulation_assigned == '4ff'
     gap, where = worst_gap(channels(ref), channels(got))
@@ -421,7 +421,7 @@ def test_the_first_order_path_traces_under_jit():
 
     def run(thickness):
         mee = solver(thickness=[thickness], backend=1)
-        return mee.solve_for_conv(WL, *slots).res.T.sum()
+        return mee.solve_conv(*slots).res.T.sum()
 
     eager = float(run(180.0))
     assert float(jax.jit(run)(jnp.asarray(180.0))) == pytest.approx(eager, abs=1e-12)
@@ -444,7 +444,7 @@ def test_the_gradient_through_the_first_order_path_is_the_real_one():
 
     def run(thickness):
         mee = solver(thickness=[thickness], backend=1)
-        return mee.solve_for_conv(WL, *slots).res.T.sum()
+        return mee.solve_conv(*slots).res.T.sum()
 
     h = 1e-4
     fd = (float(run(180.0 + h)) - float(run(180.0 - h))) / (2 * h)
@@ -491,7 +491,7 @@ def test_a_z_row_pulls_a_one_dimensional_structure_onto_the_2d_layout():
     assert mee.grating_type_assigned in (0, 1)      # what it would have taken on its own
 
     ff_xy = 2 * 3 + 1
-    mee.solve_for_conv(WL, *uniform_slots([VOIGT], ff_xy))
+    mee.solve_conv(*uniform_slots([VOIGT], ff_xy))
     assert (mee.grating_type_assigned, mee.formulation_assigned) == (2, '4ff')
 
 

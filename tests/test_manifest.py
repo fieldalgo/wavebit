@@ -424,16 +424,16 @@ def _z_row(t):
 def _run_uniform(eps, mu=None):
     mee = wavebit.rcwa(fto=[0, 0], **_MAT_KW)
     z = _z_row(eps) if np.any(eps[2, :2]) or np.any(eps[:2, 2]) else []
-    return mee.solve_for_conv(_MAT_KW['wavelength'], *_in_plane(eps), *z,
-                              mu=None if mu is None else tuple(_in_plane(mu)))
+    return mee.solve_conv(*_in_plane(eps), *z,
+                          mu=None if mu is None else tuple(_in_plane(mu)))
 
 
 def _run_patterned():
     """A pillar of a real symmetric tensor in vacuum, through the Popov-Neviere builder.
 
     The unpacking is written out rather than splatted, which since 2026-08-18 is a style
-    choice rather than a requirement: the builders and :meth:`solve_for_conv` now agree on
-    ``(epx, epy, epz_i, epxy, epyx)``, so ``solve_for_conv(wl, *build(...))`` is correct too.
+    choice rather than a requirement: the builders and :meth:`solve_conv` now agree on
+    ``(epx, epy, epz_i, epxy, epyx)``, so ``solve_conv(*build(...))`` is correct too.
     It was not. The builders grouped the in-plane pair together and put ``epz_i`` last, so
     splatting landed the inverted zz matrix in the ``epxy`` slot and nothing objected — the
     solve returned a full set of plausible efficiencies summing to 1.9. That is how this test
@@ -449,7 +449,7 @@ def _run_patterned():
     eps[0, 14:34, 18:30] = _tensor(2.25, 2.25, 2.89)
     epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn(eps, fto, fto)
     mee = wavebit.rcwa(fto=[fto, fto], **_MAT_KW)
-    return mee.solve_for_conv(_MAT_KW['wavelength'], epx, epy, epz_i, epxy, epyx)
+    return mee.solve_conv(epx, epy, epz_i, epxy, epyx)
 
 
 MATERIAL_RUNS = {

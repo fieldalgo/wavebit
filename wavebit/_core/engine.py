@@ -271,7 +271,7 @@ class CoreSolveMixin:
     three take convolution matrices already built and each does strictly less than ``solve``
     does, so leaving them public put three longer ``solve_*`` names beside the shortest one
     that does the most. Handing in matrices you built yourself is still a supported thing to
-    do -- that is ``solve_for_conv``, which routes to these.
+    do -- that is ``solve_conv``, which routes to these.
     """
 
     _incidence_side = 'top'
@@ -1482,13 +1482,17 @@ class CoreFactorizationMixin:
     def conv_matrices(self, geometry=None, **kwargs):
         """The convolution matrices for this structure, without solving.
 
-        Returns ``(epx, epy, epz_i, epxy, epyx)`` — exactly the tuple :meth:`solve_for_conv`
-        takes after the wavelength, so ``solver.solve_for_conv(wl, *solver.conv_matrices())``
-        is ``solve()``. Each is ``(n_layers, ff_xy, ff_xy)`` with ``ff_xy =
-        (2*fto_x+1) * (2*fto_y+1)``; ``epxy`` and ``epyx`` are ``None`` on the paths that
-        produce three rather than five (see :func:`~._core.factorization.nvf_conv_matrices`).
+        Returns a :class:`~wavebit._core.factorization.ConvMatrices` — the five slots
+        ``(epx, epy, epz_i, epxy, epyx)``, which are exactly :meth:`solve_conv`'s leading
+        parameters, so ``solver.solve_conv(*solver.conv_matrices())`` is ``solve()``. It is
+        a ``NamedTuple``: splatting, unpacking, indexing and ``len`` all behave as they did
+        when this returned a bare tuple, and ``conv.epz_i`` now reaches one slot by name
+        rather than by an index that is correct only until somebody reorders. Each slot is
+        ``(n_layers, ff_xy, ff_xy)`` with ``ff_xy = (2*fto_x+1) * (2*fto_y+1)``; ``epxy`` and
+        ``epyx`` are ``None`` on the paths that produce three rather than five (see
+        :func:`~._core.factorization.nvf_conv_matrices`).
 
-        **This exists because the boundary was one-way.** ``solve_for_conv`` has always accepted
+        **This exists because the boundary was one-way.** ``solve_conv`` has always accepted
         these matrices, so a caller could put them *in*; nothing returned them, so anyone who
         wanted to look at what a modeling path actually built had to reach into ``_core`` and
         reassemble it. That is not hypothetical: three separate attempts to hand-rebuild this
@@ -1505,9 +1509,9 @@ class CoreFactorizationMixin:
         question and is left to the caller that has it.
 
         **Permittivity only.** A magnetic structure also builds five permeability slots, and
-        they are not returned here: this is a five-tuple with a name that says ``ep``, and
+        they are not returned here: this is a five-tuple whose fields are named ``ep``, and
         widening it would change what every existing caller unpacks. :meth:`mu_matrices`
-        returns the other five.
+        returns the other five, in the same five-slot layout.
 
         ``geometry`` behaves as in :meth:`solve`.
         """
@@ -1520,7 +1524,10 @@ class CoreFactorizationMixin:
         ``(mux_conv, muy_conv, muz_conv_i, muxy_conv, muyx_conv)`` — the same five slots as
         :meth:`conv_matrices` on
         the other side of the ``(E, H, eps, mu) -> (H, -E, mu, eps)`` duality, which is why
-        one layout serves both. ``None`` rather than five identity matrices when nothing is
+        one layout serves both, and why this is a
+        :class:`~wavebit._core.factorization.ConvMatrices` as well: its field names are the
+        permittivity's, and the duality is what makes reading ``mu`` out of ``.epx`` correct
+        rather than a mislabelling. ``None`` rather than five identity matrices when nothing is
         magnetic: the solve reads that ``None`` as "take the non-magnetic arithmetic", which
         is bit-identical to the code that existed before ``mu`` did.
 
@@ -1639,7 +1646,7 @@ class CoreFactorizationMixin:
 
         Where ``mu`` *cannot* be expressed the refusal is by name and lives elsewhere, close
         to what cannot express it: the 1D and conical operators carry no permeability slot at
-        all and ``solve_for_conv`` says so, and the first-order (4ff) solve does not implement
+        all and ``solve_conv`` says so, and the first-order (4ff) solve does not implement
         one -- :meth:`CoreSolveMixin._solve_2d` says so. Nothing here drops a ``mu`` quietly,
         which is the whole reason it is wired at all: a material property the solve ignored
         would be the unread knob :meth:`_reject_unread_normal_method` exists to refuse.
@@ -1764,7 +1771,8 @@ class CoreFactorizationMixin:
         else:
             raise ValueError("Check 'modeling_type' in 'solve'.")
 
-        return epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all
+        return _fac.ConvMatrices(epx_conv_all, epy_conv_all, epz_conv_i_all,
+                                 epxy_conv_all, epyx_conv_all)
 
     # ------------------------------------------------------------------------- permeability
 
@@ -1862,7 +1870,7 @@ class CoreFactorizationMixin:
         """Build this structure's convolution matrices and hand them to the solve.
 
         The one place the two halves meet. The half-space quantities ride together as keywords
-        or not at all: ``solve_for_conv`` recovers ``eps_top`` from ``n_top**2 / mu_top`` when
+        or not at all: ``solve_conv`` recovers ``eps_top`` from ``n_top**2 / mu_top`` when
         it is not told, so supplying one of the pair without the other would leave the solve
         reading a permittivity that disagrees with the material the caller set. A non-magnetic
         scene passes none of them and takes that recovery, where dividing by ``mu_top = 1.0``
@@ -1878,7 +1886,7 @@ class CoreFactorizationMixin:
 
         The two half-space permeabilities go over as ``Material.mu`` and not
         :attr:`~wavebit._core.domain.Material.mu_value`, which is to say ``None`` when the
-        material named none. ``solve_for_conv`` asks the same structural question of them that
+        material named none. ``solve_conv`` asks the same structural question of them that
         :meth:`_is_magnetic` asked of the scene, so the "was it named" bit has to survive the
         call; resolving it to ``1.0`` here would tell the backend a permeability was named for
         a half-space that never mentioned one, and on a scene routed to a 1D path that is the
@@ -1890,11 +1898,10 @@ class CoreFactorizationMixin:
         """
         eps = self._conv_matrices(geometry)
         if not self._is_magnetic():
-            return self.solve_for_conv(self.wavelength, *eps)
-        return self.solve_for_conv(
-            self.wavelength, *eps, mu=self._mu_matrices(geometry),
-            mu_top=self._top.mu, mu_bot=self._bot.mu,
-            eps_top=self._top.epsilon, eps_bot=self._bot.epsilon)
+            return self.solve_conv(*eps)
+        return self.solve_conv(*eps, mu=self._mu_matrices(geometry),
+                               mu_top=self._top.mu, mu_bot=self._bot.mu,
+                               eps_top=self._top.epsilon, eps_bot=self._bot.epsilon)
 
 
 def _namespace_for_backend(backend):

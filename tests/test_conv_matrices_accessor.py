@@ -1,7 +1,7 @@
 """
 `RCWAEngine.conv_matrices` — the public way to see what a modeling path built.
 
-`solve_for_conv` has always *taken* these five matrices; nothing returned them, so a caller who
+`solve_conv` has always *taken* these five matrices; nothing returned them, so a caller who
 wanted to compare two modeling paths, check a geometry, or build a path of their own had to reach
 into `_core` and reassemble the quantity from the doubled reciprocal grid, reproducing its layout
 and the order-index sign convention by hand. That fails silently when guessed — three separate
@@ -28,11 +28,11 @@ def disc_raster(N, r=0.30):
     return np.where(r - np.hypot(X - 0.5, Y - 0.5) > 0, 3.0, 1.0)[None, :, :]
 
 
-def test_it_is_exactly_what_solve_for_conv_takes():
+def test_it_is_exactly_what_solve_conv_takes():
     """The round trip is the contract: feeding the result back reproduces solve()."""
     solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **BASE)
     direct = solver.solve().res.T
-    relayed = solver.solve_for_conv(solver.wavelength, *solver.conv_matrices()).res.T
+    relayed = solver.solve_conv(*solver.conv_matrices()).res.T
     assert np.abs(np.asarray(direct) - np.asarray(relayed)).max() == 0.0
 
 

@@ -130,7 +130,7 @@ Since the material flip (2026-08-20) the half-space *is* a `Material`: `top` and
 alongside `mu_top` / `mu_bot`, and both 2D solves (`solve_2d` and `smm_2d`) read them where
 they used to reconstruct. The old recovery `eps = n^2/mu` is still
 there and still correct, but it is now the *fallback* for a caller who reaches
-`solve_for_conv` holding only an index — going through a square root and back loses digits the
+`solve_conv` holding only an index — going through a square root and back loses digits the
 material was carrying exactly.
 
 Everything that changes is one pair of admittances:
@@ -221,9 +221,9 @@ into the other put `mu_zz^-1` where `mu_xy` belongs, which is a plausible magnet
 than an error, and `pn_mu_conv_matrices` existed to hold that reorder in one place.
 
 Holding it in one place was not enough. The same mismatch bit a second time on the permittivity
-side, through `solve_for_conv`, which a wrapper here could not reach: splatting a five-slot
+side, through `solve_conv`, which a wrapper here could not reach: splatting a five-slot
 builder into it returned `R + T = 1.61` on a lossless passive pillar. So on 2026-08-18 the order
-was made one order everywhere — every builder now returns `solve_for_conv`'s own parameter order
+was made one order everywhere — every builder now returns `solve_conv`'s own parameter order
 — and the reorder inside `pn_mu_conv_matrices` went away. The function remains as the name for
 the `mu` half of the duality; it rearranges nothing. `tests/test_slot_order.py` pins the
 property for every builder, and the mismatch cannot be reintroduced in one place only.
@@ -296,14 +296,14 @@ operators carry no permeability slot at all, and the first-order (4ff) solve a z
 routes to does not implement one. A knob the solve silently ignored is the failure this
 repository refuses elsewhere too.
 
-**By hand.** `mu` is also one keyword on `solve_for_conv`, taking the five stacks in the
+**By hand.** `mu` is also one keyword on `solve_conv`, taking the five stacks in the
 permittivity's convention:
 
 ```python
 mu = (mux_conv_all, muy_conv_all, muz_conv_i_all,
       muxy_conv_all, muyx_conv_all)                 # any entry may be None
-res = mee.solve_for_conv(wl, epx_conv_all, epy_conv_all, epz_conv_i_all,
-                         epxy_conv_all, epyx_conv_all, mu=mu)
+res = mee.solve_conv(epx_conv_all, epy_conv_all, epz_conv_i_all,
+                     epxy_conv_all, epyx_conv_all, mu=mu)
 ```
 
 Slot for slot, the two tuples are now spelled the same way, which is the point: `mu` is

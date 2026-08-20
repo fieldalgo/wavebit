@@ -49,7 +49,7 @@ def solve(eps, mu=None, theta=0.0, algo='ETM', backend=0, fto=(0, 0), period=Non
     mee = wavebit.rcwa(backend=backend, top=1.0, bot=1.0, theta=np.deg2rad(theta),
                        phi=0.0, psi=0.0, fto=fto, period=period or (PERIOD, PERIOD),
                        wavelength=WL, thickness=[THICK], connecting_algo=algo)
-    res = mee.solve_for_conv(WL, *slots(eps), mu=None if mu is None else tuple(slots(mu)))
+    res = mee.solve_conv(*slots(eps), mu=None if mu is None else tuple(slots(mu)))
     te, tm = res.res_te_inc, res.res_tm_inc
     f = lambda v: float(np.asarray(v.detach() if hasattr(v, 'detach') else v).sum())
     return np.array([f(te.R), f(te.T), f(tm.R), f(tm.T)])
@@ -135,7 +135,7 @@ def test_the_other_backends_carry_mu_too(backend, name):
     mee = wavebit.rcwa(backend=backend, top=1.0, bot=1.0, theta=np.deg2rad(39.0), phi=0.0,
                        psi=0.0, fto=(0, 0), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK])
-    res = mee.solve_for_conv(WL, *[lift(s) for s in slots(eps)],
+    res = mee.solve_conv(*[lift(s) for s in slots(eps)],
                              mu=tuple(lift(s) for s in slots(mu)))
     f = lambda v: float(np.asarray(v.detach() if hasattr(v, 'detach') else v).sum())
     got = np.array([f(res.res_te_inc.R), f(res.res_te_inc.T),
@@ -176,7 +176,7 @@ def test_mu_on_a_one_dimensional_structure_is_refused():
     e = [np.stack([np.eye(7, dtype=complex) * v]) for v in (2.6, 2.6, 1 / 2.6)]
     m = tuple(np.stack([np.eye(7, dtype=complex) * v]) for v in (1.7, 1.7, 1 / 1.7, 0.0, 0.0))
     with pytest.raises(NotImplementedError, match='2D path only'):
-        mee.solve_for_conv(WL, *e, mu=m)
+        mee.solve_conv(*e, mu=m)
 
 
 def test_mu_with_a_z_coupled_permittivity_is_refused():
@@ -191,7 +191,7 @@ def test_mu_with_a_z_coupled_permittivity_is_refused():
     z_row = [np.stack([0.2j * I1])] + [np.stack([0.0 * I1])] * 3
     m = tuple(slots(tensor(1.7, 1.7, 1.7)))
     with pytest.raises(NotImplementedError, match='first-order'):
-        mee.solve_for_conv(WL, *e, *z_row, mu=m)
+        mee.solve_conv(*e, *z_row, mu=m)
 
 
 # ------------------------------------------------------- the raster pair, checked both ways
@@ -669,4 +669,4 @@ def test_mu_on_the_first_order_path_is_refused_whichever_way_it_got_there():
     e = slots(tensor(2.6, 2.6, 2.6))
     m = tuple(slots(tensor(1.7, 1.7, 1.7)))
     with pytest.raises(NotImplementedError, match="formulation='4ff' was asked for"):
-        mee.solve_for_conv(WL, *e, mu=m)
+        mee.solve_conv(*e, mu=m)

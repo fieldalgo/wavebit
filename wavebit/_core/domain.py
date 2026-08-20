@@ -107,7 +107,7 @@ class Material:
     also what refractive-index tables mean by ``n + 1j*k`` (``docs/conventions.md``).
 
     **Why permittivity rather than index.** Everything past the front door already works in
-    permittivity -- the Fourier factorizations, the tensor builders and ``solve_for_conv`` all
+    permittivity -- the Fourier factorizations, the tensor builders and ``solve_conv`` all
     take it -- and the front door used to square an index on the way in. One quantity had to
     win, and an index cannot carry the pair: ``mu`` was always taken raw, so a single material
     argument spelled as an index would have meant "index" for one of its two numbers and
@@ -190,7 +190,7 @@ class Material:
         ``jax.jit`` is a tracer whose truth cannot be taken.
 
         The property exists so that no reader has to write that comparison inline, and the
-        reason it is worth a property is that the three backends' ``solve_for_conv`` did write
+        reason it is worth a property is that the three backends' ``solve_conv`` did write
         it: ``mu_top != 1.0`` raised ``TracerBoolConversionError`` for *every* traced solve,
         magnetic or not, which took the ``jax.jit``-decorated ``conv_solve_field`` out of
         service for every scene there is. A predicate that can only be evaluated eagerly is not
@@ -218,7 +218,7 @@ class Material:
         It is deliberately *not* what :attr:`is_magnetic` reads, and the two must not be
         collapsed into one accessor: the whole point of the ``None`` spelling is that the
         question ("was one named?") stays answerable inside a trace while the value need not
-        be. Consumers that only ask the question -- the routing in ``solve_for_conv``, the
+        be. Consumers that only ask the question -- the routing in ``solve_conv``, the
         ``sqrt(eps*mu)`` of :func:`wavebit._core.engine._half_space_index` -- read
         :attr:`is_magnetic` and then ``mu`` itself, so a non-magnetic medium's index stays
         ``sqrt(eps)`` to the bit rather than being multiplied by a manufactured one.

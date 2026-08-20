@@ -1,7 +1,7 @@
 # Anisotropic and magnetic materials — what the solver already takes, and what each gap costs
 
 Written: 2026-08-09, and it was scoping only then. Since 2026-08-11 the z-coupling row is
-implemented, and since 2026-08-13 it is *reachable* — `solve_for_conv` takes nine slots and the
+implemented, and since 2026-08-13 it is *reachable* — `solve_conv` takes nine slots and the
 solver picks the formulation (§8, no longer conditional). See
 [`first-order-4ff.md`](first-order-4ff.md) for what that path does and how far it is checked.
 This document keeps the scoping question: what each *remaining* gap costs.
@@ -10,7 +10,7 @@ Targets:
 - `wavebit/_core/solve_2d.py::layer_modes_2d` — the five permittivity slots the mode operator reads
 - `wavebit/_core/factorization.py` — what `epx` / `epy` / `epz_i` actually are (not what they look like)
 - `wavebit/_core/conventions.py::boundary_kz` — where `mu` would have to land besides the layer
-- `wavebit/on_numpy/emsolver/rcwa.py::solve_for_conv` — the injection point that bypasses `structure`, and where the formulation is chosen
+- `wavebit/on_numpy/emsolver/rcwa.py::solve_conv` — the injection point that bypasses `structure`, and where the formulation is chosen
 - `wavebit/_core/solve_2d_4ff.py::solve_2d_4ff` — the nine-slot twin of the 2D solve
 
 ---
@@ -80,12 +80,11 @@ correctly**; see §6.1. The `ezz` entry enters only as its
 inverse because `E_z` is eliminated algebraically as `E_z = ezz⁻¹ D_z`, which is also why field
 reconstruction reads nothing but `epz_conv_i` (`fields.py::214`).
 
-The slots reach the user through `solve_for_conv`, on every backend:
+The slots reach the user through `solve_conv`, on every backend:
 
 ```python
-res = mee.solve_for_conv(wavelength,
-                         epx_conv_all, epy_conv_all, epz_conv_i_all,
-                         epxy_conv_all, epyx_conv_all)
+res = mee.solve_conv(epx_conv_all, epy_conv_all, epz_conv_i_all,
+                     epxy_conv_all, epyx_conv_all)
 ```
 
 The 1D and 1D-conical paths take three, not five (`engine.py::_solve_1d`, `::_solve_1d_conical`), so
@@ -182,7 +181,7 @@ epxy  = np.stack([-exy * I])      # slot convention is (-exy, -eyx); see _nvf_as
 epyx  = np.stack([-eyx * I])
 epz_i = np.stack([np.linalg.inv(ezz * I)])
 
-res = mee.solve_for_conv(wavelength, epx, epy, epz_i, epxy, epyx)
+res = mee.solve_conv(epx, epy, epz_i, epxy, epyx)
 ```
 
 A full tensor adds four more, under the **same** sign rule — one rule for every off-diagonal
@@ -192,8 +191,8 @@ slot, rather than two rules split down the middle of one call:
 epxz, epyz = np.stack([-exz * I]), np.stack([-eyz * I])
 epzx, epzy = np.stack([-ezx * I]), np.stack([-ezy * I])
 
-res = mee.solve_for_conv(wavelength, epx, epy, epz_i, epxy, epyx,
-                         epxz, epyz, epzx, epzy)   # -> formulation_assigned == '4ff'
+res = mee.solve_conv(epx, epy, epz_i, epxy, epyx,
+                     epxz, epyz, epzx, epzy)   # -> formulation_assigned == '4ff'
 ```
 
 Two things to watch:
@@ -422,7 +421,7 @@ solver reproduces the tensor it is handed — not what that tensor means physica
 **Nothing shipped can reach this.** `_nvf_assemble`, `boundary.py` and `analytic.py` each return
 `-eps_xy` *twice*, so every tensor the library builds is symmetric, and for a symmetric pair the
 exchange is a no-op — bit-identical. The defect is reachable only by hand through
-`solve_for_conv`, which is exactly what a gyrotropy experiment would do first.
+`solve_conv`, which is exactly what a gyrotropy experiment would do first.
 
 **Fixed.** `Omega_R` now takes `epyx` where it took `epxy` and vice versa; every symmetric tensor
 is bit-identical either way, so nothing the library builds moved. Pinned by

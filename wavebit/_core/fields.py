@@ -96,7 +96,7 @@ def _require_solved(T1, layer_info_list):
     if T1 is None or len(layer_info_list) == 0:
         raise RuntimeError(
             'field reconstruction needs the per-layer amplitudes a solve leaves behind: '
-            'run solve() -- or solve_for_conv(), if you built the convolution matrices '
+            'run solve() -- or solve_conv(), if you built the convolution matrices '
             'yourself -- first, on a stack with at least one layer, and with '
             "answers='field' declared so the solve keeps them.")
 
@@ -361,7 +361,7 @@ def field_1d(wavelength, kx, T1, layer_info_list, period, tetm_index,
         Mx = V @ (-fwd @ c1 + bwd @ c2)
         # TE's ``H_z = Kx Ey`` is Faraday's z row and would carry ``muz_conv_i`` on a magnetic
         # layer, as the coupled path's does. It has none to carry: the pure TE/TM operator
-        # has no permeability slot, and `solve_for_conv` refuses a `mu` that reaches this
+        # has no permeability slot, and `solve_conv` refuses a `mu` that reaches this
         # path by name ("2D path only") rather than dropping it here.
         Mz = 1j * (epz_conv_i @ Kx @ My if tetm_index else Kx @ My)
 

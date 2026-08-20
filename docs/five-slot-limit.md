@@ -100,7 +100,7 @@ second-order formulation *is*, and the same five appear wherever one is used:
 
 | | how the five appear |
 |---|---|
-| Wavebit 2ff | `solve_for_conv(wl, epx, epy, epz_i, epxy, epyx)` |
+| Wavebit 2ff | `solve_conv(epx, epy, epz_i, epxy, epyx)` |
 | fmmax | `eigensolve_anisotropic_media(..., permittivity_xx, xy, yx, yy, zz, ...)` |
 | S4 | `xy` block plus `zz` |
 
@@ -167,7 +167,7 @@ Reading all nine means abandoning the second-order reduction for the first-order
 which is roughly **8x** on the layer solve (`eig` is cubic and the problem doubles), and which
 gives up the free `±` mode pairing every 2ff consumer assumes — forward and backward become
 genuinely different mode sets. `wavebit/_core/solve_2d_4ff.py` implements it, and since
-2026-08-13 the public entry does reach it: `solve_for_conv` takes nine slots rather than five,
+2026-08-13 the public entry does reach it: `solve_conv` takes nine slots rather than five,
 and giving any of the four z-row slots selects the first-order path (`formulation='4ff'` forces
 it, `'2ff'` refuses a z row rather than dropping it). What crossing the edge still costs, beyond
 the 8x, is `mu` and `connecting_algo='SMM'`; the module's docstring keeps that list. Field

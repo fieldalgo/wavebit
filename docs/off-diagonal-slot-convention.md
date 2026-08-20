@@ -6,7 +6,7 @@ repaired the same day; the measurements are kept as taken, with it in place.
 Targets:
 - `wavebit/_core/solve_2d.py::layer_modes_2d` — the two blocks, and why they must order the pair oppositely
 - `wavebit/_core/factorization.py::_nvf_assemble` — where the sign convention is set
-- `wavebit/on_numpy/emsolver/rcwa.py::solve_for_conv` — the only way to reach the slots by hand
+- `wavebit/on_numpy/emsolver/rcwa.py::solve_conv` — the only way to reach the slots by hand
 - `wavebit/_core/solve_2d_4ff.py::_conv_layers` — where the negation is undone for the z row
 - `tests/test_uniform_anisotropic.py`, `tests/test_anisotropic_berreman.py`,
   `tests/references/test_reticolo_anisotropic_golden.py` — every number below
@@ -67,9 +67,8 @@ The 2D mode operator reads five permittivity blocks. They correspond to a tensor
 and they arrive through the public entry point:
 
 ```python
-res = mee.solve_for_conv(wavelength,
-                         epx_conv_all, epy_conv_all, epz_conv_i_all,
-                         epxy_conv_all, epyx_conv_all)
+res = mee.solve_conv(epx_conv_all, epy_conv_all, epz_conv_i_all,
+                     epxy_conv_all, epyx_conv_all)
 ```
 
 The docstring calls the last two "the optional off-diagonal permittivity blocks". That phrasing is
@@ -123,7 +122,7 @@ Read the tensor straight off:
 and every consumer downstream has been written against it ever since.
 
 (That tuple was ordered `(eps_xx, eps_yy, -eps_xy, -eps_xy, inv(⟦eps⟧))` when this document was
-written, and was reordered on 2026-08-18 so that builders and `solve_for_conv` agree; see §7.1.
+written, and was reordered on 2026-08-18 so that builders and `solve_conv` agree; see §7.1.
 Nothing about the *sign* convention changed, which is what this document is about.)
 
 So the correct hand-filled call for a uniform layer is:
@@ -421,7 +420,7 @@ solved with the shipped and exchanged operators:
 
 Not "agrees to 1e-15" — identical. The full verification suite (1066 tests) is likewise unmoved.
 
-**So: this is reachable only by hand, through `solve_for_conv`, with a deliberately asymmetric
+**So: this is reachable only by hand, through `solve_conv`, with a deliberately asymmetric
 tensor.** The first person to do that will be someone trying gyrotropy — and if their
 magnetisation lies in the plane rather than along the stack normal, they will be filling the four
 z-row slots of §2.1 at the same time.
@@ -429,17 +428,17 @@ z-row slots of §2.1 at the same time.
 ## 7.1 The slot *order* changed on 2026-08-18; the sign convention did not
 
 Everything above is about which **value** goes in a slot. A separate defect concerned which
-**position** — and it is worth stating here because §1's `solve_for_conv` call is the entry point
+**position** — and it is worth stating here because §1's `solve_conv` call is the entry point
 both are reached through.
 
 The builders returned five slots as `(epx, epy, epxy, epyx, epz_i)`, grouping the in-plane 2x2
-block and putting the inverted zz matrix last. `solve_for_conv` takes
+block and putting the inverted zz matrix last. `solve_conv` takes
 `(epx, epy, epz_i, epxy, epyx)`, and its order is forced: `epz_i` is required on every solve
 because it eliminates `E_z`, while the off-diagonal pair defaults to `None`, and Python will not
 accept a required parameter after a defaulted one. So
 
 ```python
-res = mee.solve_for_conv(wavelength, *to_conv_mat_raster_pn(tensor, fto, fto))
+res = mee.solve_conv(*to_conv_mat_raster_pn(tensor, fto, fto))
 ```
 
 put `epz_i` in the `epxy` slot. Nothing raised. On a lossless passive pillar it returned a full
@@ -449,8 +448,8 @@ the three-slot isotropic builders throughout, which is what made it a trap rathe
 
 It had already been found once, inside `factorization.py`: `pn_mu_conv_matrices` existed solely
 to swap the two groups on the way to `layer_modes_2d`, its docstring describing the identical
-failure for `mu_zz^-1`. A local wrapper could not reach `solve_for_conv`, so the fix was to make
-it **one order everywhere** — every builder now returns `solve_for_conv`'s parameter order, and
+failure for `mu_zz^-1`. A local wrapper could not reach `solve_conv`, so the fix was to make
+it **one order everywhere** — every builder now returns `solve_conv`'s parameter order, and
 `pn_mu_conv_matrices` rearranges nothing.
 
 `tests/test_slot_order.py` pins it for every builder, two ways: energy on a lossless passive
@@ -468,7 +467,7 @@ the library unpacks by name, so the reorder is invisible to `solve`.
 | | |
 |---|---|
 | Sign convention (`slot = -eps`) | derived, measured, pinned by a test |
-| Slot *order* (builders vs `solve_for_conv`) | mismatched until 2026-08-18, silent and worth `R + T = 1.61`; **fixed** by making it one order everywhere (§7.1), pinned by `tests/test_slot_order.py` |
+| Slot *order* (builders vs `solve_conv`) | mismatched until 2026-08-18, silent and worth `R + T = 1.61`; **fixed** by making it one order everywhere (§7.1), pinned by `tests/test_slot_order.py` |
 | Asymmetric-tensor ordering | defect confirmed symbolically, numerically, and against an outside oracle; **fixed** |
 | The repair (exchange the pair in `Omega_R`) | applied; lands on both oracles at ~1e-15 across every configuration tried |
 | Effect on released behaviour | none — verified bit-identical on real gratings |

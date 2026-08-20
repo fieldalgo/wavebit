@@ -55,11 +55,11 @@ def solve(n_in, g, fto=FTO):
     # `structure` is the scalar permittivity raster, handed over as it stands: the `np.sqrt`
     # that used to sit here existed only because the constructor took an index and squared it
     # back. It selects the modeling path and the grating type; the convolution matrices the
-    # solve actually uses are the ones passed to `solve_for_conv` below.
+    # solve actually uses are the ones passed to `solve_conv` below.
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
                        psi=0.0, fto=(fto, fto), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK], structure=np.expand_dims(eps, axis=0))
-    res = mee.solve_for_conv(WL, np.stack([epx]), np.stack([epy]), np.stack([epz_i]),
+    res = mee.solve_conv(np.stack([epx]), np.stack([epy]), np.stack([epz_i]),
                              np.stack([epxy]), np.stack([epyx]))
     te, tm = res.res_te_inc, res.res_tm_inc
     return np.array([float(te.R.sum()), float(te.T.sum()),

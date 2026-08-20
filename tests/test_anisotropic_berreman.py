@@ -216,7 +216,7 @@ def solve_tensor_stack(layers, theta, wl=WL, connecting_algo='ETM', formulation=
                          connecting_algo=connecting_algo, incidence_side=incidence_side)
     if formulation is not None:
         mee.formulation = formulation
-    res = mee.solve_for_conv(wl, *(conv if z_coupled else conv[:5]))
+    res = mee.solve_conv(*(conv if z_coupled else conv[:5]))
     out = {}
     for name, sub in (('s', res.res_te_inc), ('p', res.res_tm_inc)):
         out[name] = dict(R_s=float(sub.R_s.sum()), R_p=float(sub.R_p.sum()),

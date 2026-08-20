@@ -243,11 +243,24 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
     def grating_type_assigned(self, grating_type_assigned):
         self._grating_type_assigned = grating_type_assigned
 
-    def solve_for_conv(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
-                       epxy_conv_all=None, epyx_conv_all=None,
-                       epxz_conv_all=None, epyz_conv_all=None,
-                       epzx_conv_all=None, epzy_conv_all=None, mu=None,
-                       mu_top=None, mu_bot=None, eps_top=None, eps_bot=None):
+    def solve_conv(self, epx_conv_all, epy_conv_all, epz_conv_i_all,
+                   epxy_conv_all=None, epyx_conv_all=None,
+                   epxz_conv_all=None, epyz_conv_all=None,
+                   epzx_conv_all=None, epzy_conv_all=None, mu=None,
+                   mu_top=None, mu_bot=None, eps_top=None, eps_bot=None):
+        """Solve a stack whose convolution matrices are already built.
+
+        The nine permittivity slots in :meth:`conv_matrices` order -- the in-plane
+        ``(epx, epy, epz_i, epxy, epyx)``, then the z row ``(epxz, epyz, epzx, epzy)`` --
+        followed by ``mu`` and the half-space terms. ``solver.solve_conv(*solver.conv_matrices())``
+        is ``solver.solve()``; see :mod:`wavebit._core.factorization` for why ``epz_i`` sits
+        third rather than last.
+
+        Takes no wavelength. The solver already has one, and a second spelling of it was a
+        second thing that could disagree: the k vectors, the field reconstruction and the
+        auto-detune ladder all read ``self.wavelength``, so an argument that differed would
+        have answered one problem while the rest of the object described another.
+        """
         self._assign_grating_type()
         z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
         if self._formulation_for(z_row) == Formulation.FIRST:
@@ -270,14 +283,14 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                 'The 1D and conical operators carry no permeability slot at all.')
 
         if self.grating_type_assigned == 0:
-            result_dict = self._solve_1d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
+            result_dict = self._solve_1d(self.wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
         elif self._grating_type_assigned == 1:
-            result_dict = self._solve_1d_conical(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
+            result_dict = self._solve_1d_conical(self.wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
         else:
-            result_dict = self._solve_2d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
-                                        epxy_conv_all, epyx_conv_all, *z_row, mu=mu,
-                                        mu_top=mu_top, mu_bot=mu_bot,
-                                        eps_top=eps_top, eps_bot=eps_bot)
+            result_dict = self._solve_2d(self.wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
+                                         epxy_conv_all, epyx_conv_all, *z_row, mu=mu,
+                                         mu_top=mu_top, mu_bot=mu_bot,
+                                         eps_top=eps_top, eps_bot=eps_bot)
 
         res_psi = ResultSubNumpy(**result_dict['res']) if 'res' in result_dict else None
         res_te_inc = ResultSubNumpy(**result_dict['res_te_inc']) if 'res_te_inc' in result_dict else None

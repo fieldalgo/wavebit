@@ -68,14 +68,14 @@ def solve(case, fto=FTO, algo='ETM'):
 
     # The scalar permittivity raster as it stands -- the `np.sqrt` here was undoing the
     # constructor's squaring, and neither exists now. Note what is *not* passed: `mu=`, which
-    # this file supplies as finished convolution slots to `solve_for_conv` rather than as the
+    # this file supplies as finished convolution slots to `solve_conv` rather than as the
     # raster field the constructor takes, because the point of the golden is the factorization
     # under test and not the build in front of it.
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
                        psi=0.0, fto=(fto, fto), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK], structure=np.expand_dims(eps, axis=0),
                        connecting_algo=algo)
-    res = mee.solve_for_conv(WL, epx, epy, epz_i, epxy, epyx, mu=mu_slots)
+    res = mee.solve_conv(epx, epy, epz_i, epxy, epyx, mu=mu_slots)
     te, tm = res.res_te_inc, res.res_tm_inc
     return np.array([float(te.R.sum()), float(te.T.sum()),
                      float(tm.R.sum()), float(tm.T.sum())])
@@ -161,7 +161,7 @@ def test_the_two_tensors_get_their_own_normal_fields(golden):
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
                        psi=0.0, fto=(fto, fto), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK], structure=np.expand_dims(eps, axis=0))
-    res = mee.solve_for_conv(WL, epx, epy, epz_i, epxy, epyx, mu=wrong_mu)
+    res = mee.solve_conv(epx, epy, epz_i, epxy, epyx, mu=wrong_mu)
     wrong = np.array([float(res.res_te_inc.R.sum()), float(res.res_te_inc.T.sum()),
                       float(res.res_tm_inc.R.sum()), float(res.res_tm_inc.T.sum())])
 

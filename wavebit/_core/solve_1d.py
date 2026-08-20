@@ -427,7 +427,7 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
         # that reads both this list and `solve_2d`'s
         # (:func:`wavebit._core.fields._field_coupled`), rather than two lengths it would have
         # to tell apart. It is always `None` here and structurally must be: the conical
-        # operator carries no permeability, and `solve_for_conv` refuses a `mu` that reaches
+        # operator carries no permeability, and `solve_conv` refuses a `mu` that reaches
         # it by name ("2D path only").
         if keep_field:
             layer_info_list.append([epz_conv_i, W, V, q, d, big_A_i, big_B, None])

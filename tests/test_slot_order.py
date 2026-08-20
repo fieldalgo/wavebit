@@ -1,15 +1,15 @@
-"""Every builder returns its slots in ``solve_for_conv``'s parameter order.
+"""Every builder returns its slots in ``solve_conv``'s parameter order.
 
-That property is what makes ``solve_for_conv(wl, *build(...))`` correct, and it is asserted
+That property is what makes ``solve_conv(*build(...))`` correct, and it is asserted
 here rather than left to each builder's docstring because the failure is silent. Until
 2026-08-18 the five-slot builders returned ``(epx, epy, epxy, epyx, epz_i)`` while
-``solve_for_conv`` took ``(epx, epy, epz_i, epxy, epyx)``; splatting one into the other put the
+``solve_conv`` took ``(epx, epy, epz_i, epxy, epyx)``; splatting one into the other put the
 inverted zz matrix in the ``epxy`` slot, and the solve answered with a full set of plausible
 efficiencies rather than raising. On a lossless passive pillar it returned ``R + T = 1.61``
 where the same structure gives ``1.0000000000`` -- only ``UnphysicalResultWarning`` fired, and
 the three-slot builders splatted correctly the whole time, which is what made it a trap.
 
-``solve_for_conv``'s order is the fixed one: ``epz_i`` is required (it eliminates ``E_z`` on
+``solve_conv``'s order is the fixed one: ``epz_i`` is required (it eliminates ``E_z`` on
 every solve) and the off-diagonal pair defaults to ``None``, so Python cannot take ``epz_i``
 last. The builders are what moved.
 
@@ -27,7 +27,7 @@ Three assertions, because they fail on different mistakes:
 The third exists because the first sweep of this repair *missed five call sites* -- positional
 ``[4]`` indexing in ``test_boundary.py`` and a local wrapper in ``test_nvf_vector.py`` -- and a
 grep for the old spelling could not see them, since ``mats[4]`` names no slot at all. That is
-what :class:`~wavebit._core.factorization.ConvSlots5` is for: reaching a single slot by name
+what :class:`~wavebit._core.factorization.ConvMatrices` is for: reaching a single slot by name
 (``mats.epz_i``) survives a reorder, and reaching it by number does not.
 
 Oracle tier: **physics** (energy on a lossless passive layer), plus a structural identity and a
@@ -102,7 +102,7 @@ def _mean_eps():
     return frac * EPS_ROD + (1.0 - frac) * EPS_BASE
 
 
-#: ``(name, callable)`` -- every builder a caller can splat into ``solve_for_conv``, at the
+#: ``(name, callable)`` -- every builder a caller can splat into ``solve_conv``, at the
 #: arity it returns. Adding a builder without adding it here is what the pairing test catches.
 BUILDERS = {
     'raster_sampled': lambda: _fac.to_conv_mat_raster_sampled(_raster(), FTO, FTO),
@@ -119,7 +119,7 @@ BUILDERS = {
 
 @pytest.mark.parametrize('name', sorted(BUILDERS), ids=sorted(BUILDERS))
 def test_a_splatted_builder_conserves_energy(name):
-    """``solve_for_conv(wl, *build(...))`` on a lossless passive layer must give R + T = 1.
+    """``solve_conv(*build(...))`` on a lossless passive layer must give R + T = 1.
 
     Not a convergence claim: the layer is lossless and passive, so this holds at any
     truncation. It is the cheapest assertion that fails when the slots arrive in the wrong
@@ -129,12 +129,12 @@ def test_a_splatted_builder_conserves_energy(name):
     assert len(slots) in (3, 5), f'{name} returned {len(slots)} slots'
 
     with _no_unphysical_warning():
-        res = wavebit.rcwa(fto=[FTO, FTO], **KW).solve_for_conv(KW['wavelength'], *slots)
+        res = wavebit.rcwa(fto=[FTO, FTO], **KW).solve_conv(*slots)
 
     total = float(np.asarray(res.res.R).sum() + np.asarray(res.res.T).sum())
     assert abs(total - 1.0) < 1e-6, (
-        f'{name}: splatting it into solve_for_conv gives R + T = {total!r} on a lossless '
-        f'passive layer -- its slots are not in solve_for_conv\'s parameter order')
+        f'{name}: splatting it into solve_conv gives R + T = {total!r} on a lossless '
+        f'passive layer -- its slots are not in solve_conv\'s parameter order')
 
 
 @pytest.mark.parametrize('name', sorted(BUILDERS), ids=sorted(BUILDERS))
@@ -161,7 +161,7 @@ def test_a_builder_returns_the_named_slot_type(name):
     """The order is a named contract, not a convention held in docstrings.
 
     Every builder returns :class:`~wavebit._core.factorization.ConvSlots3` or
-    :class:`~wavebit._core.factorization.ConvSlots5`, so a reorder cannot be made without
+    :class:`~wavebit._core.factorization.ConvMatrices`, so a reorder cannot be made without
     editing ``_fields`` here -- which is the point of naming them at all. The two tests above
     would catch a reorder by its physics; this one catches it at the declaration, and names
     what changed instead of reporting a wrong number.
@@ -171,15 +171,15 @@ def test_a_builder_returns_the_named_slot_type(name):
     while satisfying the field check.
     """
     slots = BUILDERS[name]()
-    assert isinstance(slots, (_fac.ConvSlots3, _fac.ConvSlots5)), (
-        f'{name} returned a bare {type(slots).__name__}; use ConvSlots3/ConvSlots5 so the slot '
+    assert isinstance(slots, (_fac.ConvSlots3, _fac.ConvMatrices)), (
+        f'{name} returned a bare {type(slots).__name__}; use ConvSlots3/ConvMatrices so the slot '
         f'order is declared rather than positional')
     assert isinstance(slots, tuple), f'{name}: slots must stay tuple-compatible'
 
     expected = (('epx', 'epy', 'epz_i') if len(slots) == 3
                 else ('epx', 'epy', 'epz_i', 'epxy', 'epyx'))
     assert slots._fields == expected, (
-        f'{name} returns {slots._fields}, not {expected} -- solve_for_conv takes epz_i third')
+        f'{name} returns {slots._fields}, not {expected} -- solve_conv takes epz_i third')
 
 
 def test_every_five_slot_builder_is_exercised():
@@ -193,7 +193,7 @@ def test_every_five_slot_builder_is_exercised():
         # takes an already-modelled block instruction, not a structure -- covered via the solver
         # path in test_factorization_core.py
         'to_conv_mat_block',
-        # permeability, not permittivity: its slots go to solve_for_conv's `mu=`, not
+        # permeability, not permittivity: its slots go to solve_conv's `mu=`, not
         # positionally. Pinned against fmmax in tests/references/.
         'to_conv_mat_raster_pn_mu',
         # one layer, and it takes resolved polygons rather than a structure; reached through

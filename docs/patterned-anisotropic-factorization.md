@@ -311,7 +311,7 @@ permittivity too, so the raster below and the tensor beside it are now the same 
 rank apart.
 
 The public `structure` is still a *scalar* raster, so a patterned tensor reaches the solver
-the same way a uniform one does — through `solve_for_conv` with the slots filled directly, exactly
+the same way a uniform one does — through `solve_conv` with the slots filled directly, exactly
 as [`anisotropic-materials.md`](anisotropic-materials.md) §4 describes for the uniform case.
 Wiring a tensor `structure` through the front door is a separate piece of work and is not done.
 
@@ -331,11 +331,11 @@ epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn(t[None], fto, fto)
 
 mee = wavebit.rcwa(backend=0, fto=(fto, fto), period=(p, p), wavelength=wl,
                    thickness=[d], structure=eps[None])     # the scalar stand-in, in eps
-res = mee.solve_for_conv(wl, epx, epy, epz_i, epxy, epyx)   # epz_i is THIRD
+res = mee.solve_conv(epx, epy, epz_i, epxy, epyx)   # epz_i is THIRD
 ```
 
-Equivalently `mee.solve_for_conv(wl, *to_conv_mat_raster_pn(t[None], fto, fto))`: since
-2026-08-18 every builder returns its slots in `solve_for_conv`'s own parameter order, so the
+Equivalently `mee.solve_conv(*to_conv_mat_raster_pn(t[None], fto, fto))`: since
+2026-08-18 every builder returns its slots in `solve_conv`'s own parameter order, so the
 splat is correct rather than merely shorter. It was not always — the five-slot builders used to
 group the in-plane pair together and put `epz_i` last, and splatting then landed the inverted zz
 matrix in the `epxy` slot. Nothing raised; `R + T` came back 1.61 on a lossless passive pillar

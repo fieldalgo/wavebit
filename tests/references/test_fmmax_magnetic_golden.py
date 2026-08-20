@@ -67,7 +67,7 @@ def solve(eps, theta_deg, mu=None, algo='ETM'):
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
                          phi=0.0, psi=0.0, fto=(0, 0), period=(PERIOD, PERIOD),
                          wavelength=WL, thickness=[THICK], connecting_algo=algo)
-    res = mee.solve_for_conv(WL, *_slots(eps),
+    res = mee.solve_conv(*_slots(eps),
                              mu=None if mu is None else tuple(_slots(mu)))
     te, tm = res.res_te_inc, res.res_tm_inc
     return np.array([float(te.R.sum()), float(te.T.sum()),

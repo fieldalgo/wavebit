@@ -70,7 +70,7 @@ def solve(top, bot, layer_eps, layer_mu, theta_deg, thick=THICK, algo='ETM'):
     the order grid are written — which is why none of those changed when permeability arrived,
     and why this file no longer takes that root itself.
 
-    The two half-space quantities are then passed to :meth:`solve_for_conv` **explicitly**, and
+    The two half-space quantities are then passed to :meth:`solve_conv` **explicitly**, and
     they have to be: this is the low-level door, below the point where ``solve`` reads them
     off ``self.top`` / ``self.bot``. They ride together rather than singly — ``mu`` without its
     ``eps`` would leave the solve recovering ``eps = n**2/mu`` from an index built out of the
@@ -83,7 +83,7 @@ def solve(top, bot, layer_eps, layer_mu, theta_deg, thick=THICK, algo='ETM'):
                        theta=np.deg2rad(theta_deg), phi=0.0, psi=0.0, fto=(0, 0),
                        period=(PERIOD, PERIOD), wavelength=WL, thickness=[thick],
                        connecting_algo=algo)
-    res = mee.solve_for_conv(WL, *_slots(layer_eps),
+    res = mee.solve_conv(*_slots(layer_eps),
                              mu=None if _is_unit(layer_mu) else tuple(_slots(layer_mu)),
                              mu_top=mu_t, mu_bot=mu_b, eps_top=eps_t, eps_bot=eps_b)
     te, tm = res.res_te_inc, res.res_tm_inc
@@ -183,7 +183,7 @@ def _solve_psi(top, bot, layer_eps, theta_deg, psi_deg, algo='ETM', side='top'):
                        theta=np.deg2rad(theta_deg), phi=0.0, psi=np.deg2rad(psi_deg),
                        fto=(0, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
                        incidence_side=side, connecting_algo=algo)
-    res = mee.solve_for_conv(WL, *_slots(layer_eps), mu_top=mu_t, mu_bot=mu_b,
+    res = mee.solve_conv(*_slots(layer_eps), mu_top=mu_t, mu_bot=mu_b,
                              eps_top=eps_t, eps_bot=eps_b)
     return res
 
@@ -270,4 +270,4 @@ def test_a_magnetic_ambient_on_a_one_dimensional_structure_is_refused():
                        structure=np.ones((1, 1, 8)) * 2.25)
     e = [np.stack([np.eye(7, dtype=complex) * v]) for v in (2.6, 2.6, 1 / 2.6)]
     with pytest.raises(NotImplementedError, match='2D path only'):
-        mee.solve_for_conv(WL, *e, mu_bot=1.7)
+        mee.solve_conv(*e, mu_bot=1.7)

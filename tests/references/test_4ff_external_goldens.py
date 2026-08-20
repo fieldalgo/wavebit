@@ -25,7 +25,7 @@ behind it is ``test_solve_2d_4ff.py`` and the Berreman cases in
 ``tests/test_anisotropic_berreman.py``, both ours.
 
 Every case here is run **twice** since the public route landed: once through the module's own
-entry, and once through ``solve_for_conv``. The second is not a duplicate — it crosses the
+entry, and once through ``solve_conv``. The second is not a duplicate — it crosses the
 dispatch, the substrate seed, the s/p rotation and the shared final matching, none of which the
 first touches, and all of which an internal cross-check would share on both sides.
 """
@@ -70,7 +70,7 @@ def public_efficiencies(eps, theta_deg, wl, thick):
     """The same four numbers, reached the way a user reaches them.
 
     :func:`efficiencies` drives the engine directly — its own vacuum half-spaces, its own
-    incident states, its own flux ratio. This goes through ``solve_for_conv`` instead, so it
+    incident states, its own flux ratio. This goes through ``solve_conv`` instead, so it
     also crosses the parts the engine never touches: the dispatch that reads the z slots, the
     substrate seed and s/p rotation that put the first-order state into the shared boundary
     match, and ``final_matching``'s efficiencies and Fresnel normalisation.
@@ -87,7 +87,7 @@ def public_efficiencies(eps, theta_deg, wl, thick):
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
                          phi=0.0, psi=0.0, fto=(0, 0), period=(300.0, 300.0),
                          wavelength=wl, thickness=[thick])
-    res = mee.solve_for_conv(wl, st(e[0, 0]), st(e[1, 1]),
+    res = mee.solve_conv(st(e[0, 0]), st(e[1, 1]),
                              np.stack([np.linalg.inv(e[2, 2] * I)]),
                              st(-e[0, 1]), st(-e[1, 0]),
                              st(-e[0, 2]), st(-e[1, 2]), st(-e[2, 0]), st(-e[2, 1]))

@@ -72,30 +72,30 @@ nothing.
 Slot order
 ----------
 
-**Every builder here returns its slots in ``solve_for_conv``'s parameter order**, so that
+**Every builder here returns its slots in ``solve_conv``'s parameter order**, so that
 
 .. code-block:: python
 
-    res = mee.solve_for_conv(wavelength, *to_conv_mat_raster_nvf(structure, fto_x, fto_y))
+    res = mee.solve_conv(*to_conv_mat_raster_nvf(structure, fto_x, fto_y))
 
 is correct for any of them. Concretely, three slots are ``(epx, epy, epz_i)`` and five are
 ``(epx, epy, epz_i, epxy, epyx)`` — the inverted zz matrix is **third**, not last, because
-``solve_for_conv`` requires it on every solve (it eliminates ``E_z``) while the off-diagonal
+``solve_conv`` requires it on every solve (it eliminates ``E_z``) while the off-diagonal
 pair defaults to ``None``, and Python will not put a required parameter after a defaulted one.
 
 Grouping the in-plane 2x2 block together and putting ``epz_i`` last reads better and was the
 order the five-slot builders used until 2026-08-18. It is not used because the difference is
-undetectable: splatting a five-slot builder into ``solve_for_conv`` then lands ``epz_i`` in the
+undetectable: splatting a five-slot builder into ``solve_conv`` then lands ``epz_i`` in the
 ``epxy`` slot, and the solve returns a full set of plausible efficiencies rather than raising —
 measured ``R + T = 1.61`` against ``1.0000000000`` for the same structure. The same idiom being
 correct for the three-slot builders is what makes it a trap rather than a mistake. It was found
 twice: once inside this module (see :func:`pn_mu_conv_matrices`, which existed only to reorder
-around it) and once through ``solve_for_conv`` itself, by the energy assertion in
+around it) and once through ``solve_conv`` itself, by the energy assertion in
 ``tests/test_manifest.py``.
 
-``solve_for_conv``'s order is the one that won rather than the builders' for a second reason
+``solve_conv``'s order is the one that won rather than the builders' for a second reason
 besides being the forced one: the public ``conv_matrices()`` accessor already returned it, so
-``solve_for_conv(wl, *solver.conv_matrices())`` was the one splat in the package that always
+``solve_conv(*solver.conv_matrices())`` was the one splat in the package that always
 worked (``tests/test_conv_matrices_accessor.py``). The builders are what disagreed with it.
 
 ``tests/test_slot_order.py`` pins the property directly, for every builder.
@@ -107,10 +107,14 @@ from .geometry import StaleGeometryError
 
 
 class ConvSlots3(NamedTuple):
-    """The three permittivity slots of a scalar (Li-rule) layer, in ``solve_for_conv`` order.
+    """The three permittivity slots of a scalar (Li-rule) layer, in ``solve_conv`` order.
+
+    Keeps its ``Slots`` name while the five-slot one became :class:`ConvMatrices`, because
+    only the five-slot one is public: ``conv_matrices()`` pads a three-slot build out to five
+    before returning it, so nothing outside ``_core`` ever holds one of these.
 
     A ``NamedTuple``, so every way these have ever been consumed still works — splatting into
-    ``solve_for_conv``, unpacking into five names, ``len``, indexing, ``zip``. What it adds is
+    ``solve_conv``, unpacking into five names, ``len``, indexing, ``zip``. What it adds is
     ``slots.epz_i``, which is the point: an index written as ``[2]`` is correct only for as
     long as nobody reorders, and the reorder that prompted all this was invisible precisely
     because positional access cannot notice one. Prefer the attribute at any site that reaches
@@ -121,16 +125,22 @@ class ConvSlots3(NamedTuple):
     epz_i: object
 
 
-class ConvSlots5(NamedTuple):
-    """The five slots of an NVF / Popov-Neviere layer, in ``solve_for_conv`` order.
+class ConvMatrices(NamedTuple):
+    """The five convolution matrices of a layer stack, in ``solve_conv`` order.
 
-    :class:`ConvSlots3` with the off-diagonal pair appended; see that docstring, and "Slot
-    order" above, for why ``epz_i`` sits third rather than last.
+    What :meth:`~wavebit._core.engine.CoreFactorizationMixin.conv_matrices` returns, and what
+    ``solve_conv`` takes first — ``solver.solve_conv(*solver.conv_matrices())`` is
+    ``solver.solve()``. :class:`ConvSlots3` with the off-diagonal pair appended; see that
+    docstring, and "Slot order" above, for why ``epz_i`` sits third rather than last.
 
-    Used for the permeability slots too, where the fields read ``mux_conv``, ``muy_conv``,
+    Splatting, unpacking, ``len``, indexing and ``zip`` all work as they did when the builders
+    returned bare tuples; what it adds is ``conv.epz_i``, reaching one slot by a name instead
+    of by an index that stays correct only until somebody reorders.
+
+    Used for the permeability slots too, where the five mean ``mux_conv``, ``muy_conv``,
     ``muz_conv_i``, ``muxy_conv``, ``muyx_conv`` — the E/H duality means one layout serves
-    both (see
-    :func:`pn_mu_conv_matrices`).
+    both (see :func:`pn_mu_conv_matrices`), and the ``ep`` field names are that duality
+    showing rather than a mislabelling.
     """
     epx: object
     epy: object
@@ -921,7 +931,7 @@ def _nvf_assemble(xp, ep_dir, ep_inv, C_xx, C_xy, C_yy):
 
     Returns the five matrices in the slot convention the 2D solve expects:
     ``(epx, epy, epz_i, epxy, epyx) = (eps_xx, eps_yy, inv(<eps>), -eps_xy, -eps_yx)`` --
-    ``solve_for_conv``'s parameter order; see "Slot order" in this module's docstring.
+    ``solve_conv``'s parameter order; see "Slot order" in this module's docstring.
     """
     delta_ep = ep_dir - xp.linalg.inv(ep_inv)
 
@@ -929,7 +939,7 @@ def _nvf_assemble(xp, ep_dir, ep_inv, C_xx, C_xy, C_yy):
     eps_yy = ep_dir - 0.5 * (delta_ep @ C_yy + C_yy @ delta_ep)
     eps_xy = -0.5 * (delta_ep @ C_xy + C_xy @ delta_ep)      # == eps_yx (symmetric)
 
-    return ConvSlots5(eps_xx, eps_yy, xp.linalg.inv(ep_dir), -eps_xy, -eps_xy)
+    return ConvMatrices(eps_xx, eps_yy, xp.linalg.inv(ep_dir), -eps_xy, -eps_xy)
 
 
 def _pn_fields(xp, eps33, nx, ny):
@@ -1063,7 +1073,7 @@ def pn_conv_matrices(xp, eps33, nx, ny, fto_x, fto_y):
     epz_i = xp.linalg.inv(
         fourier2d_piecewise_constant(xp, eps33[..., 2, 2], fto_x, fto_y, inverse_rule=None))
 
-    return ConvSlots5(eps_xx, eps_yy, epz_i, -eps_xy, -eps_yx)
+    return ConvMatrices(eps_xx, eps_yy, epz_i, -eps_xy, -eps_yx)
 
 
 def pn_mu_conv_matrices(xp, mu33, nx, ny, fto_x, fto_y):
@@ -1084,7 +1094,7 @@ def pn_mu_conv_matrices(xp, mu33, nx, ny, fto_x, fto_y):
     :func:`~wavebit._core.solve_2d.layer_modes_2d` takes ``(x, y, z_i, xy, yx)``, so this
     function swapped the two groups on the way through; passing one to the other unchanged put
     ``mu_zz^-1`` where ``mu_xy`` belongs, which is a plausible-looking magnetic layer rather
-    than an error. The same mismatch then bit a second time through ``solve_for_conv``, which
+    than an error. The same mismatch then bit a second time through ``solve_conv``, which
     a local fix here could not reach, so the order was made one order everywhere (see "Slot
     order" in this module's docstring) and the swap below went away. What remains is a name for
     the ``mu`` half of the duality and for the normal-field note below — nothing is rearranged.
@@ -1117,8 +1127,7 @@ def to_conv_mat_raster_pn_mu(tensor_raster, fto_x, fto_y, normal_field=None, lat
 
     Returns:
         ``(mux_conv, muy_conv, muz_conv_i, muxy_conv, muyx_conv)``, each
-        ``(n_layers, ff_xy, ff_xy)`` — ready to hand to
-        ``solve_for_conv(..., mu=...)``.
+        ``(n_layers, ff_xy, ff_xy)`` — ready to hand to ``solve_conv(..., mu=...)``.
 
     **A layer's two tensors may have different boundaries**, and this is why the normal field is
     read off ``mu`` here rather than shared with the permittivity build. A magnetic inclusion
@@ -1152,7 +1161,7 @@ def to_conv_mat_raster_pn_mu(tensor_raster, fto_x, fto_y, normal_field=None, lat
         for slot, mat in zip(out, pn_mu_conv_matrices(xp, mu33, nx, ny, fto_x, fto_y)):
             slot.append(mat)
 
-    return ConvSlots5(*(xp.stack(slot) for slot in out))
+    return ConvMatrices(*(xp.stack(slot) for slot in out))
 
 
 def to_conv_mat_raster_pn(tensor_raster, fto_x, fto_y, normal_field=None, lattice=None,
@@ -1210,7 +1219,7 @@ def to_conv_mat_raster_pn(tensor_raster, fto_x, fto_y, normal_field=None, lattic
         for slot, mat in zip(out, pn_conv_matrices(xp, eps33, nx, ny, fto_x, fto_y)):
             slot.append(mat)
 
-    return ConvSlots5(*(xp.stack(slot) for slot in out))
+    return ConvMatrices(*(xp.stack(slot) for slot in out))
 
 
 def nvf_conv_matrices(xp, eps_matrix, nx, ny, fto_x, fto_y):
@@ -1302,7 +1311,7 @@ def to_conv_mat_raster_nvf(structure, fto_x, fto_y, normal_field=None,
                 xp, eps_matrix, nx, ny, fto_x, fto_y)):
             slot.append(mat)
 
-    return ConvSlots5(*(xp.stack(slot) for slot in out))
+    return ConvMatrices(*(xp.stack(slot) for slot in out))
 
 
 # ============================================ integrated Fourier series (closed form, analytic)
@@ -1660,7 +1669,7 @@ def to_conv_mat_raster_integrated_nvf(structure, fto_x, fto_y, normal_field=None
                 xp, eps_comp, x, y, nx, ny, fto_x, fto_y)):
             slot.append(mat)
 
-    return ConvSlots5(*(xp.stack(slot) for slot in out))
+    return ConvMatrices(*(xp.stack(slot) for slot in out))
 
 
 def to_conv_mat_block(block_info_list, fto_x, fto_y):

@@ -115,7 +115,7 @@ def z_coupled_cell(eps_list, thickness, theta_deg=28.0, res_z=64, backend=0):
     # Solver first, arrays second: importing the JAX backend is what lifts `jax_enable_x64`,
     # and an array built before that is silently complex64 (see test_formulation_dispatch).
     mee = z_solver(thickness, theta_deg, backend)
-    res = mee.solve_for_conv(WL, *[_to_backend(s, backend) for s in uniform_slots(eps_list)])
+    res = mee.solve_conv(*[_to_backend(s, backend) for s in uniform_slots(eps_list)])
     assert mee.formulation_assigned == '4ff'
     cell = np.asarray(mee.calculate_field(res_x=1, res_y=1, res_z=res_z))
     kx, ky = mee.get_kx_ky_vector(WL)
