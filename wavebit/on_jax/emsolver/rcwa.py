@@ -86,7 +86,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                  # See docs/nvf-normal-methods.md for the measurements that rank them.
                  answers='amplitude',        # what this solve keeps the state to answer:
                  # 'efficiency' | 'amplitude' (default) | 'field'. A declaration, like
-                 # tetm -- calculate_field is refused below 'field' rather than served,
+                 # tetm -- reconstruct_field is refused below 'field' rather than served,
                  # because the per-layer state it walks is 4.25 matrices of side
                  # 2*ff_x*ff_y per layer (240 MB at fto=(15, 15)) and is kept as the
                  # solve runs or not at all. See CoreSolveMixin.answers.
@@ -280,7 +280,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         # *named*, not when its value differs from one. This used to read `mu_top != 1.0`, and
         # under `jax.jit` a named `mu` is a tracer -- so the comparison produced a traced
         # boolean and `or` raised TracerBoolConversionError on every traced solve, which took
-        # the jitted `conv_solve_field` below out of service for magnetic and non-magnetic
+        # the jitted `solve_field` below out of service for magnetic and non-magnetic
         # scenes alike. `None` is an empty pytree subtree and comes through a trace as itself,
         # which is the whole reason it is how absence is spelled.
         magnetic = ((mu is not None and any(m is not None for m in mu))
@@ -310,51 +310,67 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
 
 
     @jax_device_set
-    def calculate_field(self, res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False)):
+    def reconstruct_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('given',)):
         """Reconstruct the field from the state left behind by the last solve.
 
-        ``res_x`` / ``res_y`` / ``res_z`` each take either a **count** -- a uniform grid, the
-        long-standing behaviour and unchanged to the bit -- or the **coordinates themselves**,
-        as a 1-D array. The reconstruction is pointwise in all three, so explicit points cost
-        the same per point as grid ones and involve no interpolation.
+        ``sample_x`` / ``sample_y`` / ``sample_z`` each take either a **count** -- a uniform
+        grid, the long-standing behaviour and unchanged to the bit -- or the **coordinates
+        themselves**, as a 1-D array. The reconstruction is pointwise in all three, so
+        explicit points cost the same per point as grid ones and involve no interpolation.
+        They are named for taking either; a count is one way to say where to sample.
 
-        ``res_x`` / ``res_y`` are lengths in ``period``'s units and are unconstrained.
-        ``res_z`` is absolute, measured from the top of the stack, must lie inside it, and
+        ``sample_x`` / ``sample_y`` are lengths in ``period``'s units and are unconstrained.
+        ``sample_z`` is absolute, measured from the top of the stack, must lie inside it, and
         assigns an interface to the layer below it -- which is visible only in ``E_z``, the one
-        component genuinely two-valued there. With explicit ``res_z`` the returned z axis is
-        exactly the request, in the caller's order, rather than ``res_z * n_layers``.
+        component genuinely two-valued there. With explicit ``sample_z`` the returned z axis is
+        exactly the request, in the caller's order, rather than ``sample_z * n_layers``.
+
+        ``incidences`` names which of the incidences the solve carries to reconstruct, one
+        leading axis entry each, **in the order asked for**: ``'given'`` is the incidence the
+        solve was posed with (``psi``, or the ``polarization`` pair), and ``'s'`` / ``'p'``
+        are the pure variants the coupled paths produce for free -- the same three the result
+        object calls ``given`` / ``s_inc`` / ``p_inc``. It was a positional triple of booleans
+        (``set_field_input``) until 2026-08-20; booleans are now refused by name, since a
+        reconstruction of the wrong incidence is a complete and plausible field cell.
 
         Takes no ``geometry``: it never calls ``solve``, and every discrete decision it
-        makes -- the grating type, and which incidences ``set_field_input`` selects -- is
+        makes -- the grating type, and which incidences ``incidences`` selects -- is
         already concrete by the time it runs. It reads ``self.T1`` / ``self.layer_info_list``,
         so whichever geometry the preceding solve used is the one in force here.
 
-        Explicit ``res_z`` is the one thing here that cannot be traced: bucketing a z into a
+        Explicit ``sample_z`` is the one thing here that cannot be traced: bucketing a z into a
         layer needs the thicknesses as numbers. It raises rather than guessing.
         """
         self._require_field_declaration()
         kx, ky = self._kxy_2d(self.wavelength)
 
         if self._grating_type_assigned == 0:
-            res_y = 1
-            field_cell = field_1d(self.wavelength, kx, self.T1, self.layer_info_list, self.period, self.tetm_index,
-                                       res_x=res_x, res_y=res_y, res_z=res_z)
+            sample_y = 1
+            field_cell = field_1d(self.wavelength, kx, self.T1, self.layer_info_list,
+                                  self.period, self.tetm_index,
+                                  sample_x=sample_x, sample_y=sample_y, sample_z=sample_z)
         elif self._grating_type_assigned == 1:
-            field_cell = field_1d_conical(self.wavelength, kx, ky, self.T1, self.layer_info_list, self.period,
-                                               res_x=res_x, res_y=res_y, res_z=res_z,  set_field_input=set_field_input,
-                                               lattice=self.lattice)
+            field_cell = field_1d_conical(self.wavelength, kx, ky, self.T1,
+                                          self.layer_info_list, self.period,
+                                          sample_x=sample_x, sample_y=sample_y,
+                                          sample_z=sample_z, incidences=incidences,
+                                          lattice=self.lattice)
         elif self._formulation_assigned == Formulation.FIRST:
             # The grating type cannot answer this: the first-order path sets it to 2 as well,
             # so branching on it alone would hand a 4ff solve to the 2ff reconstruction, which
             # reads the same state slots and returns a plausible, wrong cell. Static under jit
             # for the same reason the side flip below is -- the formulation is settled eagerly.
-            field_cell = field_2d_4ff(self.wavelength, kx, ky, self.T1, self.layer_info_list, self.period,
-                                      res_x=res_x, res_y=res_y, res_z=res_z, set_field_input=set_field_input,
+            field_cell = field_2d_4ff(self.wavelength, kx, ky, self.T1,
+                                      self.layer_info_list, self.period,
+                                      sample_x=sample_x, sample_y=sample_y,
+                                      sample_z=sample_z, incidences=incidences,
                                       lattice=self.lattice)
         else:
-            field_cell = field_2d(self.wavelength, kx, ky, self.T1, self.layer_info_list, self.period,
-                                       res_x=res_x, res_y=res_y, res_z=res_z, set_field_input=set_field_input,
-                                       lattice=self.lattice)
+            field_cell = field_2d(self.wavelength, kx, ky, self.T1,
+                                  self.layer_info_list, self.period,
+                                  sample_x=sample_x, sample_y=sample_y,
+                                  sample_z=sample_z, incidences=incidences,
+                                  lattice=self.lattice)
 
         if self.incidence_side == 'bottom':
             # The backside solve leaves its state in the mirrored frame (z reversed); un-flip
@@ -369,10 +385,10 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         field_plot(field_cell, self.tetm_index)
 
     @partial(jax.jit, static_argnums=(1, 2, 3, 4, 5),
-             static_argnames=('res_x', 'res_y', 'res_z', 'set_field_input', 'geometry'))
+             static_argnames=('sample_x', 'sample_y', 'sample_z', 'incidences', 'geometry'))
     @jax_device_set
-    def conv_solve_field(self, res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False),
-                         geometry=None, **kwargs):
+    def solve_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('given',),
+                    geometry=None, **kwargs):
         """Solve and reconstruct the field in one jit-compiled call.
 
         ``geometry`` is required here, unlike on :meth:`solve`. This method jits over
@@ -387,18 +403,18 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         comparison that would catch it is the thing the freeze exists to avoid. ``solve``
         refuses one eagerly, so check a long fit there, or re-freeze on a schedule.
 
-        ``res_x`` / ``res_y`` / ``res_z`` and ``set_field_input`` are static too: they set the
+        ``sample_x`` / ``sample_y`` / ``sample_z`` and ``incidences`` are static too: they set the
         output shape and select which incidences to reconstruct.
 
-        Use :meth:`conv_solve_field_no_jit` for the eager equivalent that auto-detects.
+        Use :meth:`solve_field_eager` for the eager equivalent that auto-detects.
         """
         if geometry is None:
             raise ValueError(
-                'conv_solve_field is jit-compiled and needs the geometry frozen up front:\n'
+                'solve_field is jit-compiled and needs the geometry frozen up front:\n'
                 '    geometry = solver.freeze_geometry()\n'
-                '    result, field_cell = solver.conv_solve_field(..., geometry=geometry)\n'
+                '    result, field_cell = solver.solve_field(..., geometry=geometry)\n'
                 'Reuse that one geometry across calls to compile only once. '
-                'For the eager, auto-detecting path use solver.conv_solve_field_no_jit(...).')
+                'For the eager, auto-detecting path use solver.solve_field_eager(...).')
         # Naming the field here does not declare one: `answers` is aux data, so it is static
         # by the time this traces, and the solve below keeps the state or does not according
         # to what was declared. Checked before the trace rather than inside it.
@@ -407,17 +423,17 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         [setattr(self, k, v) for k, v in kwargs.items()]  # needed for optimization
 
         res = self.solve(geometry=geometry)
-        field_cell = self.calculate_field(res_x, res_y, res_z, set_field_input)
+        field_cell = self.reconstruct_field(sample_x, sample_y, sample_z, incidences)
         return res, field_cell
 
     @jax_device_set
-    def conv_solve_field_no_jit(self, res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False),
-                                geometry=None):
+    def solve_field_eager(self, sample_x=20, sample_y=20, sample_z=20,
+                          incidences=('given',), geometry=None):
         """Eager solve-and-field. ``geometry`` is optional: omit it and each discrete decision
         is auto-detected from the concrete structure."""
         self._require_field_declaration()
         res = self.solve(geometry=geometry)
-        field_cell = self.calculate_field(res_x, res_y, res_z, set_field_input)
+        field_cell = self.reconstruct_field(sample_x, sample_y, sample_z, incidences)
         return res, field_cell
 
     def run_structure_vmap(self, structure_list):

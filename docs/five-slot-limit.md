@@ -172,7 +172,7 @@ and giving any of the four z-row slots selects the first-order path (`formulatio
 it, `'2ff'` refuses a z row rather than dropping it). What crossing the edge still costs, beyond
 the 8x, is `mu` and `connecting_algo='SMM'`; the module's docstring keeps that list. Field
 reconstruction was on it until 2026-08-14 and is not any more —
-`calculate_field` reads the formulation, since the grating type cannot tell the two paths apart.
+`reconstruct_field` reads the formulation, since the grating type cannot tell the two paths apart.
 
 Because no outside solver covers the general z-coupled case, the 4ff path is judged partly by a
 theorem rather than by an oracle: turning the tensor and the incidence azimuth together about the

@@ -11,7 +11,7 @@ file's history.
   continuity and the flux-to-efficiency tie.
 * **Has it moved?** Answered by ``data/golden_field.npz``, frozen from this solver over cases
   the checks above cannot reach — patterned layers, many orders, several layers, every
-  ``set_field_input`` variant, the inverse-Fourier kernel and the array layout.
+  ``incidences`` variant, the inverse-Fourier kernel and the array layout.
 
 That second file used to be called ``golden_legacy_field.npz``, was captured from the
 project's own earlier implementation, and was described by its generator as "the first oracle
@@ -40,9 +40,9 @@ from gen_goldens_field import CASES, RES, VARIANTS, solved  # noqa: E402
 GOLDEN = np.load(pathlib.Path(__file__).parent / 'data' / 'golden_field.npz')
 
 
-@pytest.mark.parametrize('tag,sfi', VARIANTS, ids=[v[0] for v in VARIANTS])
+@pytest.mark.parametrize('tag,which', VARIANTS, ids=[v[0] for v in VARIANTS])
 @pytest.mark.parametrize('name', list(CASES))
-def test_the_reconstruction_has_not_drifted(name, tag, sfi):
+def test_the_reconstruction_has_not_drifted(name, tag, which):
     """The frozen cells, unchanged — a change detector, and only that.
 
     It cannot say the reconstruction is correct; it says nobody moved it by accident. The
@@ -59,7 +59,7 @@ def test_the_reconstruction_has_not_drifted(name, tag, sfi):
     # Both sides forced to plain str: a str-Enum compared against a numpy string array
     # is True whatever the array holds, which made this assertion vacuous once.
     assert solver.formulation_assigned.value == str(GOLDEN[f'{name}__formulation'])
-    got = np.asarray(solver.calculate_field(set_field_input=sfi, **RES))
+    got = np.asarray(solver.reconstruct_field(incidences=which, **RES))
     want = GOLDEN[f'{name}__{tag}']
     assert got.shape == want.shape, (got.shape, want.shape)
     assert np.allclose(want, got, atol=1e-12, rtol=0), np.max(np.abs(want - got))
@@ -72,24 +72,24 @@ FRAME_EPS = 2.25                   # permittivity: the index 1.5 squared
 FRAME_D = [90.0, 260.0, 90.0]
 
 
-def maxwell_residual(F, kx, ky, eps, d, res_z, layer, wavelength=FRAME_WL):
+def maxwell_residual(F, kx, ky, eps, d, sample_z, layer, wavelength=FRAME_WL):
     """Max curl-equation residual over one layer's interior, per equation.
 
     On Fourier coefficients, in the frame where ``+z`` runs *with* the cell's ``z`` index:
     ``d/dx -> i k0 kx``, ``d/dy -> i k0 ky``, ``d/dz`` by a central difference.
-    ``linspace(0, res_z, res_z)`` is inclusive, so the step is ``d / (res_z - 1)``.
+    ``linspace(0, sample_z, sample_z)`` is inclusive, so the step is ``d / (sample_z - 1)``.
 
     ``eps`` is the full 3x3 tensor, so ``tests/test_field_4ff.py`` can share this on a
     z-coupled layer; a scalar is promoted. ``F`` is ``(n_z, 6)``, which is what a single
-    retained order gives at ``res_x = res_y = 1`` — the field is then one plane wave and the
+    retained order gives at ``sample_x = sample_y = 1`` — the field is then one plane wave and the
     sample at the origin *is* its Fourier coefficient.
     """
     eps = np.asarray(eps, dtype=complex)
     if eps.ndim == 0:
         eps = eps * np.eye(3, dtype=complex)
     k0 = 2 * np.pi / wavelength
-    h = d / (res_z - 1)
-    s = np.asarray(F[layer * res_z:(layer + 1) * res_z], dtype=complex)
+    h = d / (sample_z - 1)
+    s = np.asarray(F[layer * sample_z:(layer + 1) * sample_z], dtype=complex)
     Ex, Ey, Ez, Hx, Hy, Hz = (s[:, i] for i in range(6))
     D = [sum(eps[r, c] * (Ex, Ey, Ez)[c] for c in range(3)) for r in range(3)]
     m = slice(1, -1)
@@ -127,7 +127,7 @@ FRAME_PATHS = {
 }
 
 
-def _frame_cell(path, res_z, formulation=None):
+def _frame_cell(path, sample_z, formulation=None):
     one = np.array([[[1.0]], [[FRAME_EPS]], [[1.0]]])
     two = np.array([[[1.0, 1.0], [1.0, 1.0]],
                     [[FRAME_EPS, FRAME_EPS], [FRAME_EPS, FRAME_EPS]],
@@ -139,7 +139,7 @@ def _frame_cell(path, res_z, formulation=None):
     if formulation:
         solver.formulation = formulation
     solver.solve()
-    raw = np.asarray(solver.calculate_field(res_x=1, res_y=1, res_z=res_z))
+    raw = np.asarray(solver.reconstruct_field(sample_x=1, sample_y=1, sample_z=sample_z))
     kx, ky = solver.get_kx_ky_vector(FRAME_WL)
     if raw.ndim == 5:
         raw = raw[0]
@@ -175,9 +175,9 @@ def test_every_path_returns_a_maxwell_field_in_the_declared_frame(path, formulat
     sits at O(1). Size alone would be a tolerance argument.
     """
     worst = []
-    for res_z in (32, 64, 128):
-        F, kx, ky = _frame_cell(path, res_z, formulation)
-        r = maxwell_residual(F, kx, ky, FRAME_EPS, FRAME_D[1], res_z, layer=1)
+    for sample_z in (32, 64, 128):
+        F, kx, ky = _frame_cell(path, sample_z, formulation)
+        r = maxwell_residual(F, kx, ky, FRAME_EPS, FRAME_D[1], sample_z, layer=1)
         worst.append(np.max(r))
 
     assert worst[0] < 1e-2, worst
@@ -212,7 +212,7 @@ def test_field_cross_backend(name, backend):
     the old golden existed. This is a port check.
     """
     pytest.importorskip('jax' if backend == 1 else 'torch')
-    got = np.asarray(solved(name, backend=backend).calculate_field(**RES))
+    got = np.asarray(solved(name, backend=backend).reconstruct_field(**RES))
     want = GOLDEN[f'{name}__default']
     assert got.shape == want.shape, (got.shape, want.shape)
     assert np.allclose(want, got, atol=1e-10, rtol=0), np.max(np.abs(want - got))

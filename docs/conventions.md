@@ -129,7 +129,7 @@ Within a layer the array follows the image convention: row `0` of a raster `stru
 `y = 0`, for every builder and for the reconstructed field cell alike. The flip that renders a
 field the conventional way up belongs to plotting (`field_plot`), not to the data.
 
-**The reconstructed field's vector components use that same `+z`.** `calculate_field` returns
+**The reconstructed field's vector components use that same `+z`.** `reconstruct_field` returns
 `(Ex, Ey, Ez, Hx, Hy, Hz)` (or the 3-component 1D layouts) in the frame declared above, so
 `H = k̂ × E` for a plane wave travelling into the stack and the Poynting vector of a downward
 wave has `Sz > 0` — the same direction the cell's `z` index runs. This is worth stating
@@ -294,7 +294,7 @@ user code never needs the previous paragraph.
 (`answers='amplitude'`) in full. `answers='efficiency'` keeps `R` and `T` and leaves every
 other slot `None`, including `res_te_inc` / `res_tm_inc` — so on that rung there is no
 unpolarized average to take and `res` is the only incidence. `answers='field'` adds nothing
-here: what it adds is the per-layer state `calculate_field` walks, which is not part of the
+here: what it adds is the per-layer state `reconstruct_field` walks, which is not part of the
 result surface at all, and below that rung reconstruction is refused by name rather than
 served. The ladder is monotone, so a lower rung is always a *smaller* answer and never a
 different one — pinned bit-for-bit, not to a tolerance.

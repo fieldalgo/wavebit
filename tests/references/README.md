@@ -146,7 +146,7 @@ refractive index at every sample point — can. `interface/reticolo_res3.m` now 
 (appended, so callers asking for the first 9 are unaffected). `o` earns its keep four times
 over: it settles the **x origin** (RETICOLO's docs describe a texture as running
 `-period/2 .. +period/2`, and a correspondingly dead `grid_x -= period/2` sat in the bridge —
-but `o` reproduces our own structure on `linspace(0, period, res_x)` entry for entry, so the two
+but `o` reproduces our own structure on `linspace(0, period, sample_x)` entry for entry, so the two
 origins coincide as written and there is no shift; that line is now gone, with the measurement
 in its place), it is what the generator asserts the row rule against, on the `lossy` case it
 comes back as `2+0.05j` — RETICOLO spelling loss the same way this project does — and since the

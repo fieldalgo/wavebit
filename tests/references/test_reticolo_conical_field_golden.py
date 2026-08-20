@@ -87,7 +87,7 @@ def _reconstruct(stack, theta, phi, pol):
                           # truncations differ and nothing lands at 1e-13.
                           fourier_coefficients='integrated', answers='field')
     solver.solve()
-    cell = np.asarray(solver.calculate_field(res_x=RES_X, res_y=1, res_z=RES_Z))
+    cell = np.asarray(solver.reconstruct_field(sample_x=RES_X, sample_y=1, sample_z=RES_Z))
     return cell[0]                                 # the one incidence requested
 
 

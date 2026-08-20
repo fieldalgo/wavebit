@@ -133,7 +133,7 @@ class Reticolo:
             # sat above, overwritten twice and so never in effect. It is settled by
             # measurement rather than by reading: res3's third output is the refractive index
             # at every sample point, and on a binary grating it reproduces this project's own
-            # structure -- converted by `_index` -- evaluated on `linspace(0, period, res_x)`
+            # structure -- converted by `_index` -- evaluated on `linspace(0, period, sample_x)`
             # entry for entry. The two x origins coincide as written; no shift to apply.
             grid_x = np.arange(1, Nx+1) * (period/Nx)
 
@@ -281,7 +281,7 @@ if __name__ == '__main__':
     backend = 0
     nmee = wavebit.rcwa(backend=backend, answers='field', **option)
     n_de_ri, n_de_ti = nmee.solve()
-    n_field_cell = nmee.calculate_field(res_z=200, res_x=5)
+    n_field_cell = nmee.reconstruct_field(sample_z=200, sample_x=5)
     print('numpy R', n_de_ri)
     print('numpy T', n_de_ti)
 
@@ -289,7 +289,7 @@ if __name__ == '__main__':
     # backend = 1
     # jmee = wavebit.rcwa(backend=backend, **option)
     # j_de_ri, j_de_ti = jmee.solve()
-    # j_field_cell = jmee.calculate_field(res_z=200, res_x=5)
+    # j_field_cell = jmee.reconstruct_field(sample_z=200, sample_x=5)
     # print('jax R', j_de_ri)
     # print('jax T', j_de_ti)
     #
@@ -297,7 +297,7 @@ if __name__ == '__main__':
     # backend = 2
     # tmee = wavebit.rcwa(backend=backend, **option)
     # t_de_ri, t_de_ti = tmee.solve()
-    # t_field_cell = tmee.calculate_field(res_z=200, res_x=5)
+    # t_field_cell = tmee.reconstruct_field(sample_z=200, sample_x=5)
     # print('torch R', t_de_ri)
     # print('torch T', t_de_ti)
 

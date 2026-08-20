@@ -226,7 +226,7 @@ def test_unknown_connecting_algo_is_rejected():
 def _field(algo, kwargs, **res):
     solver = wavebit.rcwa(backend=0, connecting_algo=algo, answers='field', **kwargs)
     solver.solve()
-    cell = solver.calculate_field(set_field_input=(True, True, True), **res)
+    cell = solver.reconstruct_field(incidences=('given', 's', 'p'), **res)
     return solver, np.array(cell)
 
 
@@ -239,8 +239,8 @@ def test_smm_field_matches_tmm(name, kwargs, kind):
     recovery is the same physical state and not merely a plausible one — including for the
     TE / TM incidence variants, which have their own amplitude columns.
     """
-    _, tmm = _field('ETM', kwargs, res_x=6, res_y=6, res_z=5)
-    _, smm = _field('SMM', kwargs, res_x=6, res_y=6, res_z=5)
+    _, tmm = _field('ETM', kwargs, sample_x=6, sample_y=6, sample_z=5)
+    _, smm = _field('SMM', kwargs, sample_x=6, sample_y=6, sample_z=5)
     assert tmm.shape == smm.shape
     scale = np.max(np.abs(tmm))
     assert np.max(np.abs(tmm - smm)) < 1e-10 * scale, np.max(np.abs(tmm - smm)) / scale
@@ -305,8 +305,8 @@ def test_smm_field_with_an_order_exactly_at_the_substrate_cutoff(extra):
                  - np.array(solver.get_kx_ky_vector(kwargs['wavelength'])[0]) ** 2)
     assert np.min(np.abs(kz)) < 1e-12, 'premise: an order must sit exactly at cutoff'
 
-    _, tmm = _field('ETM', kwargs, res_x=6, res_y=6, res_z=4)
-    _, smm = _field('SMM', kwargs, res_x=6, res_y=6, res_z=4)
+    _, tmm = _field('ETM', kwargs, sample_x=6, sample_y=6, sample_z=4)
+    _, smm = _field('SMM', kwargs, sample_x=6, sample_y=6, sample_z=4)
     assert np.all(np.isfinite(np.abs(smm)))
     assert np.max(np.abs(tmm - smm)) < 1e-10 * np.max(np.abs(tmm))
 
@@ -346,8 +346,8 @@ def test_smm_field_on_a_skewed_cell_matches_tmm():
     kwargs = dict(structure=_hex_rod(), period=[HEX_P, HEX_P], fto=[4, 4], thickness=[150.0],
                   wavelength=900.0, top=1.0, bot=1.0, theta=0.1, phi=0.3, psi=0.4,
                   lattice=HEX, factorization='nvf')
-    _, tmm = _field('ETM', kwargs, res_x=6, res_y=6, res_z=4)
-    _, smm = _field('SMM', kwargs, res_x=6, res_y=6, res_z=4)
+    _, tmm = _field('ETM', kwargs, sample_x=6, sample_y=6, sample_z=4)
+    _, smm = _field('SMM', kwargs, sample_x=6, sample_y=6, sample_z=4)
     assert tmm.shape == smm.shape
     assert np.all(np.isfinite(np.abs(smm)))
     assert np.max(np.abs(tmm - smm)) < 1e-10 * np.max(np.abs(tmm))
@@ -362,7 +362,7 @@ def test_field_before_solve_raises():
     """
     solver = wavebit.rcwa(backend=0, connecting_algo='SMM', answers='field', **CASES_1D[0][1])
     with pytest.raises(RuntimeError, match='run solve'):
-        solver.calculate_field(res_x=4, res_z=4)
+        solver.reconstruct_field(sample_x=4, sample_z=4)
 
 
 def test_frozen_geometry_does_not_change_the_smm_answer():
@@ -462,12 +462,12 @@ def test_smm_field_cross_backend(case, backend, name):
         # `as _`: a plain `import wavebit.on_jax` would rebind `wavebit` as a local.
         import wavebit.on_jax as _   # noqa: F401  (enables x64; RCWA needs double precision)
     kwargs = case[1]
-    _, reference = _field('SMM', kwargs, res_x=5, res_y=5, res_z=4)
+    _, reference = _field('SMM', kwargs, sample_x=5, sample_y=5, sample_z=4)
 
     solver = wavebit.rcwa(backend=backend, connecting_algo='SMM', answers='field', **kwargs)
     solver.solve(geometry=solver.freeze_geometry())
-    cell = np.asarray(solver.calculate_field(res_x=5, res_y=5, res_z=4,
-                                             set_field_input=(True, True, True)))
+    cell = np.asarray(solver.reconstruct_field(sample_x=5, sample_y=5, sample_z=4,
+                                             incidences=('given', 's', 'p')))
     assert cell.shape == reference.shape
     assert np.max(np.abs(cell - reference)) < 1e-10 * np.max(np.abs(reference))
 

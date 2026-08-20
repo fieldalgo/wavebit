@@ -158,7 +158,7 @@ def test_setting_the_attribute_after_construction_is_refused_too(path, series):
 
 
 @pytest.mark.parametrize('path,series', sorted(UNAVAILABLE.items()))
-def test_passing_it_through_conv_solve_is_refused_too(path, series):
+def test_passing_it_through_solve_is_refused_too(path, series):
     """``solve(**kwargs)`` sets attributes for optimization sweeps, so it is a real seam."""
     with pytest.raises(NotImplementedError):
         solver(path).solve(fourier_coefficients=series)

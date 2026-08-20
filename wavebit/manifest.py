@@ -366,8 +366,8 @@ RESULTS = {
                    "'efficiency' is R/T per order; 'amplitude' adds the Fresnel amplitudes, "
                    'their s/p-resolved efficiencies and the pure-TE/pure-TM incidence '
                    "variants; 'field' adds the per-layer modes and amplitudes "
-                   'calculate_field walks. Below that rung calculate_field is refused rather '
-                   'than served, because the state is kept while the solve runs or not at '
+                   'reconstruct_field walks. Below that rung reconstruct_field is refused '
+                   'rather than served, because the state is kept while the solve runs or not at '
                    'all -- it is 4.25 matrices of side 2*ff_x*ff_y per layer on the 2D path '
                    '(3.75 conical, 5 pure 1D), against boundary vectors for the amplitudes',
     },

@@ -143,7 +143,7 @@ The Maxwell check asserts its **rate**, not just its size. The field is analytic
 layer, so halving the step must quarter the residual; measured 4.03–4.13 per doubling. A
 residual that is merely small without converging is a different object from one that is
 discretisation error, and only the rate tells them apart. The continuity check is exact rather
-than asymptotic because the sampling lands on the interface: `linspace(0, res_z, res_z)` is
+than asymptotic because the sampling lands on the interface: `linspace(0, sample_z, sample_z)` is
 inclusive, so a layer's last slice *is* its bottom face.
 
 **The sign convention, which the vacuum slab settled — and which turned out to be a defect in

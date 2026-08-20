@@ -128,12 +128,12 @@ wavelength, normal incidence — but the containment above is structural and hol
 
 ## Fields on a skewed cell
 
-`calculate_field` works, with one change you have to handle when plotting: **samples land on the
+`reconstruct_field` works, with one change you have to handle when plotting: **samples land on the
 cell's parallelogram**, `r = u*a1 + v*a2` for `u, v` in `[0, 1]`, so the returned grid is indexed
 by `(v, u)` and not by `(y, x)`. Convert before drawing:
 
 ```python
-u = np.linspace(0, 1, res_x); v = np.linspace(0, 1, res_y)
+u = np.linspace(0, 1, sample_x); v = np.linspace(0, 1, sample_y)
 U, V = np.meshgrid(u, v)
 X = U * a1[0] + V * a2[0]
 Y = U * a1[1] + V * a2[1]

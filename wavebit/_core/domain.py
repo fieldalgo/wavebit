@@ -192,7 +192,7 @@ class Material:
         The property exists so that no reader has to write that comparison inline, and the
         reason it is worth a property is that the three backends' ``solve_conv`` did write
         it: ``mu_top != 1.0`` raised ``TracerBoolConversionError`` for *every* traced solve,
-        magnetic or not, which took the ``jax.jit``-decorated ``conv_solve_field`` out of
+        magnetic or not, which took the ``jax.jit``-decorated ``solve_field`` out of
         service for every scene there is. A predicate that can only be evaluated eagerly is not
         a predicate a jitted solver can use.
 

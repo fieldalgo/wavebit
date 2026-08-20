@@ -82,7 +82,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                  # See docs/nvf-normal-methods.md for the measurements that rank them.
                  answers='amplitude',        # what this solve keeps the state to answer:
                  # 'efficiency' | 'amplitude' (default) | 'field'. A declaration, like
-                 # tetm -- calculate_field is refused below 'field' rather than served,
+                 # tetm -- reconstruct_field is refused below 'field' rather than served,
                  # because the per-layer state it walks is 4.25 matrices of side
                  # 2*ff_x*ff_y per layer (240 MB at fto=(15, 15)) and is kept as the
                  # solve runs or not at all. See CoreSolveMixin.answers.
@@ -300,43 +300,59 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
 
         return result
 
-    def calculate_field(self, res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False)):
+    def reconstruct_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('given',)):
         """Reconstruct the field from the state left behind by the last solve.
 
-        ``res_x`` / ``res_y`` / ``res_z`` each take either a **count** -- a uniform grid, the
-        long-standing behaviour and unchanged to the bit -- or the **coordinates themselves**,
-        as a 1-D array. The reconstruction is pointwise in all three, so explicit points cost
-        the same per point as grid ones and involve no interpolation.
+        ``sample_x`` / ``sample_y`` / ``sample_z`` each take either a **count** -- a uniform
+        grid, the long-standing behaviour and unchanged to the bit -- or the **coordinates
+        themselves**, as a 1-D array. The reconstruction is pointwise in all three, so
+        explicit points cost the same per point as grid ones and involve no interpolation.
+        They are named for taking either; a count is one way to say where to sample.
 
-        ``res_x`` / ``res_y`` are lengths in ``period``'s units and are unconstrained.
-        ``res_z`` is absolute, measured from the top of the stack, must lie inside it, and
+        ``sample_x`` / ``sample_y`` are lengths in ``period``'s units and are unconstrained.
+        ``sample_z`` is absolute, measured from the top of the stack, must lie inside it, and
         assigns an interface to the layer below it -- which is visible only in ``E_z``, the one
-        component genuinely two-valued there. With explicit ``res_z`` the returned z axis is
-        exactly the request, in the caller's order, rather than ``res_z * n_layers``.
+        component genuinely two-valued there. With explicit ``sample_z`` the returned z axis is
+        exactly the request, in the caller's order, rather than ``sample_z * n_layers``.
+
+        ``incidences`` names which of the incidences the solve carries to reconstruct, one
+        leading axis entry each, **in the order asked for**: ``'given'`` is the incidence the
+        solve was posed with (``psi``, or the ``polarization`` pair), and ``'s'`` / ``'p'``
+        are the pure variants the coupled paths produce for free -- the same three the result
+        object calls ``given`` / ``s_inc`` / ``p_inc``. It was a positional triple of booleans
+        (``set_field_input``) until 2026-08-20; booleans are now refused by name, since a
+        reconstruction of the wrong incidence is a complete and plausible field cell.
         """
         self._require_field_declaration()
         kx, ky = self._kxy_2d(self.wavelength)
 
         if self._grating_type_assigned == 0:
-            res_y = 1
-            field_cell = field_1d(self.wavelength, kx, self.T1, self.layer_info_list, self.period, self.tetm_index,
-                                       res_x=res_x, res_y=res_y, res_z=res_z)
+            sample_y = 1
+            field_cell = field_1d(self.wavelength, kx, self.T1, self.layer_info_list,
+                                  self.period, self.tetm_index,
+                                  sample_x=sample_x, sample_y=sample_y, sample_z=sample_z)
         elif self._grating_type_assigned == 1:
             # TODO other bds
-            field_cell = field_1d_conical(self.wavelength, kx, ky, self.T1, self.layer_info_list, self.period,
-                                               res_x=res_x, res_y=res_y, res_z=res_z, set_field_input=set_field_input,
-                                       lattice=self.lattice)
+            field_cell = field_1d_conical(self.wavelength, kx, ky, self.T1,
+                                          self.layer_info_list, self.period,
+                                          sample_x=sample_x, sample_y=sample_y,
+                                          sample_z=sample_z, incidences=incidences,
+                                          lattice=self.lattice)
         elif self._formulation_assigned == Formulation.FIRST:
             # The grating type cannot answer this: the first-order path sets it to 2 as well,
             # so branching on it alone would hand a 4ff solve to the 2ff reconstruction, which
             # reads the same state slots and returns a plausible, wrong cell.
-            field_cell = field_2d_4ff(self.wavelength, kx, ky, self.T1, self.layer_info_list, self.period,
-                                      res_x=res_x, res_y=res_y, res_z=res_z, set_field_input=set_field_input,
+            field_cell = field_2d_4ff(self.wavelength, kx, ky, self.T1,
+                                      self.layer_info_list, self.period,
+                                      sample_x=sample_x, sample_y=sample_y,
+                                      sample_z=sample_z, incidences=incidences,
                                       lattice=self.lattice)
         else:
-            field_cell = field_2d(self.wavelength, kx, ky, self.T1, self.layer_info_list, self.period,
-                                       res_x=res_x, res_y=res_y, res_z=res_z, set_field_input=set_field_input,
-                                       lattice=self.lattice)
+            field_cell = field_2d(self.wavelength, kx, ky, self.T1,
+                                  self.layer_info_list, self.period,
+                                  sample_x=sample_x, sample_y=sample_y,
+                                  sample_z=sample_z, incidences=incidences,
+                                  lattice=self.lattice)
 
         if self.incidence_side == 'bottom':
             # The backside solve leaves its state in the mirrored frame (z reversed); un-flip
@@ -346,8 +362,8 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
 
         return field_cell
 
-    def conv_solve_field(self, res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False),
-                         geometry=None):
+    def solve_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('given',),
+                    geometry=None):
         """``geometry`` is optional here — NumPy is always eager, so auto-detection works. It is
         accepted so backend-agnostic code can pass the same frozen geometry JAX requires.
 
@@ -357,7 +373,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         far side of the expensive part."""
         self._require_field_declaration()
         res = self.solve(geometry=geometry)
-        field_cell = self.calculate_field(res_x, res_y, res_z, set_field_input)
+        field_cell = self.reconstruct_field(sample_x, sample_y, sample_z, incidences)
         return res, field_cell
 
     def field_plot(self, field_cell):

@@ -242,7 +242,7 @@ def test_results_match_legacy_golden(name):
 
 @pytest.mark.parametrize('name', list(CASES))
 def test_field_reconstruction_state_is_a_valid_mode_basis(name):
-    """``layer_info_list`` holds the per-layer modes ``calculate_field`` propagates.
+    """``layer_info_list`` holds the per-layer modes ``reconstruct_field`` propagates.
 
     Compares only what is *defined*. An eigendecomposition fixes each mode's constant up to
     sign and each eigenvector up to scale, phase and ordering, so ``W`` / ``V`` / ``q`` / the
@@ -272,10 +272,10 @@ def test_field_reconstruction_state_is_a_valid_mode_basis(name):
         assert float(layer[4]) == float(GOLDEN[f'{name}__layer{i}__d'])
 
 
-def test_calculate_field_still_runs():
+def test_reconstruct_field_still_runs():
     """Smoke-cover field reconstruction end to end — it reads the state pinned above."""
     solver, _ = _run('2d_oblique')
-    field = solver.calculate_field(res_x=4, res_y=4, res_z=4)
+    field = solver.reconstruct_field(sample_x=4, sample_y=4, sample_z=4)
     field = np.asarray(field)
     assert field.ndim >= 3 and np.isfinite(field).all()
 

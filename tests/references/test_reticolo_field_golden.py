@@ -97,8 +97,8 @@ def _reconstruct(stack, theta, pol):
                           # this the two truncations differ and nothing lands at 1e-14.
                           fourier_coefficients='integrated', answers='field')
     solver.solve()
-    cell = np.asarray(solver.calculate_field(res_x=RES_X, res_y=1, res_z=RES_Z))
-    return cell[:, 0, :, :]                       # (res_z*n_layers, res_x, 3)
+    cell = np.asarray(solver.reconstruct_field(sample_x=RES_X, sample_y=1, sample_z=RES_Z))
+    return cell[:, 0, :, :]                       # (sample_z*n_layers, sample_x, 3)
 
 
 def _exact_slots(stack, pol):

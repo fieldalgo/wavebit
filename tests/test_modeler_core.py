@@ -366,7 +366,7 @@ def test_jax_device_setter_round_trips():
     """``solver.device = solver.device`` must be accepted on the jax backend.
 
     The getter returns resolved ``jax.Device`` objects, and several paths re-assign the
-    property, so rejecting them breaks ``conv_solve_field``. The old check compared the
+    property, so rejecting them breaks ``solve_field``. The old check compared the
     repr of the implementation class, which stopped matching when jaxlib moved ``Device``
     from ``xla_extension`` to ``_jax``.
     """
@@ -385,10 +385,10 @@ def test_jax_device_setter_round_trips():
         solver.device = 'not-a-device'
 
     # The caller-visible symptom was here: @jax_device_set re-assigns the property, so the
-    # rejected round-trip surfaced as a bare ValueError out of conv_solve_field. The jitted
+    # rejected round-trip surfaced as a bare ValueError out of solve_field. The jitted
     # variant requires a frozen geometry passed up front by contract, so pin the no-jit one,
     # which goes through the same decorator.
-    solver.conv_solve_field_no_jit(res_x=10, res_y=1, res_z=10)
+    solver.solve_field_eager(sample_x=10, sample_y=1, sample_z=10)
 
 
 @pytest.mark.parametrize('backend,name', [(1, 'jax'), (2, 'torch')])

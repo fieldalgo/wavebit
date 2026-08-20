@@ -238,12 +238,12 @@ def test_field_cell_comes_back_in_scene_coordinates(algo):
     """
     kw = dict(GRATING_KW, connecting_algo=algo, tetm='te', theta=0.3, answers='field')
     s_b = wavebit.rcwa(incidence_side='bottom', **kw)
-    _, cell_b = s_b.conv_solve_field(res_x=16, res_z=8)
+    _, cell_b = s_b.solve_field(sample_x=16, sample_z=8)
 
     kw_rev = dict(kw, structure=GRATING_KW['structure'][::-1], thickness=[0.22, 0.15],
                   top=GRATING_KW['bot'], bot=GRATING_KW['top'])
     s_t = wavebit.rcwa(**kw_rev)
-    _, cell_t = s_t.conv_solve_field(res_x=16, res_z=8)
+    _, cell_t = s_t.solve_field(sample_x=16, sample_z=8)
 
     assert np.abs(np.asarray(cell_b) - np.asarray(cell_t)[::-1]).max() < 1e-12
 
@@ -251,9 +251,9 @@ def test_field_cell_comes_back_in_scene_coordinates(algo):
 def test_backside_field_cells_agree_between_algorithms():
     kw = dict(GRATING_KW, tetm='tm', theta=0.3, answers='field')
     _, c1 = wavebit.rcwa(connecting_algo='ETM', incidence_side='bottom',
-                           **kw).conv_solve_field(res_x=16, res_z=8)
+                           **kw).solve_field(sample_x=16, sample_z=8)
     _, c2 = wavebit.rcwa(connecting_algo='SMM', incidence_side='bottom',
-                           **kw).conv_solve_field(res_x=16, res_z=8)
+                           **kw).solve_field(sample_x=16, sample_z=8)
     assert np.abs(np.asarray(c1) - np.asarray(c2)).max() < 1e-12
 
 

@@ -150,7 +150,7 @@ def test_field_reconstruction_is_silent_and_finite():
                          wavelength=WL, fto=[6, 6], psi=0.0, bot=EPS_SI, answers='field')
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        res, field = sim.conv_solve_field(res_x=8, res_y=8, res_z=8)
+        res, field = sim.solve_field(sample_x=8, sample_y=8, sample_z=8)
     assert _fp_warnings(rec) == []
     assert bool(np.all(np.isfinite(field)))
     assert abs(_energy(res) - 1.0) < 1e-10

@@ -345,7 +345,7 @@ def test_phi_plus_pi_negates_the_reconstructed_field():
                                   structure=_UC_2D, thickness=[220.0], fto=[4, 4],
                                   answers='field', **kw)
             solver.solve()
-            return np.asarray(solver.calculate_field(res_x=6, res_y=6, res_z=5),
+            return np.asarray(solver.reconstruct_field(sample_x=6, sample_y=6, sample_z=5),
                               dtype=np.complex128)
 
     psi = 0.7

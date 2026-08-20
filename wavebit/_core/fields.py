@@ -44,7 +44,7 @@ layout) is discontinuous there and resolved differently by any two truncations.
 Turns a solved stack back into the field inside it. Each layer's mode amplitudes are
 propagated to a set of z-slices, then inverse-Fourier-transformed onto an (x, y) grid.
 
-**Where it is sampled is the caller's choice.** ``res_x`` / ``res_y`` / ``res_z`` each take
+**Where it is sampled is the caller's choice.** ``sample_x`` / ``sample_y`` / ``sample_z`` each take
 either a count — the uniform grid this has always used, unchanged and bit-identical — or the
 coordinates themselves, as a 1-D array. Nothing here has grid structure to respect: the
 transverse kernel is a pointwise ``exp(i k.r)`` and each z-slice is an independent
@@ -52,9 +52,9 @@ propagation, so arbitrary points cost the same per point as grid ones and need n
 interpolation. Refining a grid leaves the shared points bit-identical, which is what says the
 sampling is genuinely pointwise rather than merely appearing to be.
 
-Explicit ``res_x`` / ``res_y`` are lengths in ``period``'s units and are unconstrained —
+Explicit ``sample_x`` / ``sample_y`` are lengths in ``period``'s units and are unconstrained —
 unsorted, non-uniform and outside the cell are all fine, the last being a periodic
-continuation. Explicit ``res_z`` is absolute, measured from the **top of the stack**, and is
+continuation. Explicit ``sample_z`` is absolute, measured from the **top of the stack**, and is
 the one with rules: it must lie within the stack, an interface belongs to the layer below it,
 and the layer thicknesses have to be concrete. :func:`_z_plan` states each of those and why.
 
@@ -64,14 +64,59 @@ returned cell runs top-to-bottom in z.
 
 The entry points mirror the solve paths: :func:`field_1d` (pure TE/TM, 3 field components),
 :func:`field_1d_conical` and :func:`field_2d` (coupled s/p, 6 components, with a leading axis
-selecting the incidence variants requested via ``set_field_input``), and
+selecting the incidence variants named by ``incidences``), and
 :func:`field_2d_4ff` for the first-order path, which carries a different per-layer state and a
-different ``E_z``. ``calculate_field`` picks between the last two on the *formulation*, not on
+different ``E_z``. ``reconstruct_field`` picks between the last two on the *formulation*, not on
 the grating type — the first-order path sets that to 2 as well.
 """
 import numpy as _np
 
 from .backend import array_namespace
+
+
+#: The three incidences a coupled solve leaves stacked in ``T1``, in the order it stacks
+#: them: ``'given'`` is the incidence actually asked for (``psi``, or the ``polarization``
+#: pair), and ``'s'`` / ``'p'`` are the pure variants the coupled solves produce for free.
+#: The same three the result object calls ``given`` / ``s_inc`` / ``p_inc``.
+INCIDENCE_NAMES = ('given', 's', 'p')
+
+
+def incidence_indices(incidences):
+    """``incidences`` as rows of ``T1``, in the caller's own order.
+
+    Names rather than the positional ``(True, False, False)`` triple this took until
+    2026-08-20. The triple had the failure mode a boolean flag always has -- nothing at the
+    call site said which slot meant what, and a reconstruction of the wrong incidence is a
+    complete, plausible field cell -- and it could not express the thing a caller most often
+    wants to say, which is *which* incidence, in what order the slabs come back.
+
+    Booleans are refused by name for that reason: the old triple is still a legal Python
+    tuple, and read as names it would otherwise produce an error about ``True`` far from
+    where it was written.
+    """
+    if isinstance(incidences, str):
+        raise ValueError(
+            f'incidences: expected a tuple of names, got the bare string {incidences!r} -- '
+            f'write ({incidences!r},). One name is still a tuple.')
+    names = tuple(incidences)
+    if not names:
+        raise ValueError(
+            'incidences: nothing requested, so there is no field to reconstruct. Pass one or '
+            f'more of {INCIDENCE_NAMES}.')
+    for name in names:
+        if not isinstance(name, str) or isinstance(name, bool):
+            raise ValueError(
+                f'incidences: expected names from {INCIDENCE_NAMES}, got {name!r}. This was '
+                f'a tuple of booleans until 2026-08-20; the names replaced it so the request '
+                f'says which incidence it means, and so the returned slabs can be asked for '
+                f'in any order.')
+        if name not in INCIDENCE_NAMES:
+            raise ValueError(
+                f'incidences: {name!r} is not an incidence this solve carries; expected names '
+                f'from {INCIDENCE_NAMES}.')
+    if len(set(names)) != len(names):
+        raise ValueError(f'incidences: {names} repeats an incidence.')
+    return [INCIDENCE_NAMES.index(name) for name in names]
 
 
 def _dev(x):
@@ -86,7 +131,7 @@ def _require_solved(T1, layer_info_list):
     empty one means no solve has run — or a stack with no layers, which has no interior.
 
     A solver that declared ``answers='amplitude'`` never reaches here: the backends'
-    ``calculate_field`` refuses first, naming the declaration
+    ``reconstruct_field`` refuses first, naming the declaration
     (:meth:`wavebit._core.engine.CoreSolveMixin._require_field_declaration`). That split is
     deliberate — "run a solve first" is false advice for a solver whose solves are not
     keeping the state, and running another one would change nothing. This message is for the
@@ -124,7 +169,7 @@ def _is_count(spec):
 def _check_spec(spec, name):
     """Reject the one spelling that would otherwise mean something the caller did not ask for.
 
-    ``res_z=5`` is five samples and ``res_z=[5.0]`` is one sample at ``z = 5``; ``res_z=5.0``
+    ``sample_z=5`` is five samples and ``sample_z=[5.0]`` is one sample at ``z = 5``; ``sample_z=5.0``
     reads like the first and would silently behave like the second. It is a typo often enough
     that guessing either way is worse than saying so.
     """
@@ -150,13 +195,13 @@ def _axis_samples(xp, spec, extent, C, dev):
     because the kernel below is a plain pointwise ``exp(i k.r)`` with no grid structure to
     respect. That is also why this is cheap: cost is points x orders either way.
     """
-    _check_spec(spec, 'res_x/res_y')
+    _check_spec(spec, 'sample_x/sample_y')
     if _is_count(spec):
         return xp.linspace(0, extent, spec, dtype=C, device=dev)
     return xp.astype(xp.asarray(spec, device=dev), C)
 
 
-def _inv_fourier(xp, kx, ky, period, res_x, res_y, k0, C, lattice=None):
+def _inv_fourier(xp, kx, ky, period, sample_x, sample_y, k0, C, lattice=None):
     """Inverse-transform kernel ``exp(-i k.r)`` sampled on the cell, flattened over orders.
 
     With ``lattice`` given (and ``kx`` / ``ky`` therefore per-order, ``(ff_y, ff_x)``) the
@@ -175,7 +220,7 @@ def _inv_fourier(xp, kx, ky, period, res_x, res_y, k0, C, lattice=None):
     branch below, and that branch is left alone so its samples stay bit-identical.
     """
     dev = _dev(kx)
-    nx, ny = _n_samples(res_x, 'res_x'), _n_samples(res_y, 'res_y')
+    nx, ny = _n_samples(sample_x, 'sample_x'), _n_samples(sample_y, 'sample_y')
     # Branch on the *layout*, not on whether a basis was supplied: an axis-aligned cell may
     # carry an explicit `diag(period)` and still hand over separable 1-D vectors, in which case
     # the old path is both correct and bit-identical.
@@ -204,48 +249,48 @@ def _inv_fourier(xp, kx, ky, period, res_x, res_y, k0, C, lattice=None):
                     'Pass a count instead, or describe the cell as a rectangular supercell.')
             return xp.astype(xp.asarray(spec, device=dev), C) / a_par
 
-        _check_spec(res_x, 'res_x')
-        _check_spec(res_y, 'res_y')
-        u_1d = _frac(res_x, a1x, a1y, 'res_x')
-        v_1d = _frac(res_y, a2y, a2x, 'res_y')
+        _check_spec(sample_x, 'sample_x')
+        _check_spec(sample_y, 'sample_y')
+        u_1d = _frac(sample_x, a1x, a1y, 'sample_x')
+        v_1d = _frac(sample_y, a2y, a2x, 'sample_y')
         u_ph = xp.exp(1j * xp.reshape(u_1d, (1, nx, 1)) * proj_a1)
         v_ph = xp.exp(1j * xp.reshape(v_1d, (ny, 1, 1)) * proj_a2)
         return xp.broadcast_to(u_ph * v_ph, (ny, nx, kx_f.shape[0]))
     # `period` stays an array rather than a Python float: all three backends take an array
     # endpoint and give bit-identical samples, and narrowing it would break tracing whenever
     # the solver itself is jitted (period is a traced child of the JAX solver pytree).
-    x_1d = _axis_samples(xp, res_x, period[0], C, dev)
+    x_1d = _axis_samples(xp, sample_x, period[0], C, dev)
     x_2d = xp.reshape(x_1d, (1, nx, 1)) * kx * k0
     x_2d = xp.reshape(xp.broadcast_to(x_2d, (ny, nx, kx.shape[0])),
                       (ny, nx, 1, kx.shape[0]))
     if ky is None:
         return xp.reshape(xp.exp(1j * x_2d), (ny, nx, -1))
 
-    y_1d = _axis_samples(xp, res_y, period[1], C, dev)
+    y_1d = _axis_samples(xp, sample_y, period[1], C, dev)
     y_2d = xp.reshape(y_1d, (ny, 1, 1)) * ky * k0
     y_2d = xp.reshape(xp.broadcast_to(y_2d, (ny, nx, ky.shape[0])),
                       (ny, nx, ky.shape[0], 1))
     return xp.reshape(xp.exp(1j * x_2d) * xp.exp(1j * y_2d), (ny, nx, -1))
 
 
-def _z_1d(xp, res_z, d, C, dev=None):
+def _z_1d(xp, sample_z, d, C, dev=None):
     """Local z samples through one layer, as a flat vector.
 
-    A count keeps the original spelling — ``linspace(0, res_z, res_z) / res_z * d`` rather than
-    ``linspace(0, d, res_z)`` — because the two are not identical in floating point and every
+    A count keeps the original spelling — ``linspace(0, sample_z, sample_z) / sample_z * d`` rather than
+    ``linspace(0, d, sample_z)`` — because the two are not identical in floating point and every
     committed field golden was captured with this one.
     """
-    if _is_count(res_z):
-        return xp.reshape(xp.linspace(0, res_z, res_z, dtype=C, device=dev), (-1,)) / res_z * d
-    return xp.astype(xp.asarray(res_z, device=dev), C)
+    if _is_count(sample_z):
+        return xp.reshape(xp.linspace(0, sample_z, sample_z, dtype=C, device=dev), (-1,)) / sample_z * d
+    return xp.astype(xp.asarray(sample_z, device=dev), C)
 
 
-def _z_slices(xp, res_z, d, C, dev=None):
+def _z_slices(xp, sample_z, d, C, dev=None):
     """Sample points through one layer's thickness, shaped for broadcasting over modes."""
-    return xp.reshape(_z_1d(xp, res_z, d, C, dev), (-1, 1, 1))
+    return xp.reshape(_z_1d(xp, sample_z, d, C, dev), (-1, 1, 1))
 
 
-def _z_plan(res_z, layer_info_list, d_index):
+def _z_plan(sample_z, layer_info_list, d_index):
     """Turn a z request into per-layer local samples, in the order the layers are walked.
 
     ``d_index`` is where the thickness sits in one layer's entry, which differs by path and is
@@ -259,8 +304,8 @@ def _z_plan(res_z, layer_info_list, d_index):
     and otherwise the permutation that puts the concatenated layers back into the caller's
     order.
 
-    **A count means what it always did**: every layer gets ``res_z`` samples inclusive of both
-    faces, and the layers concatenate, so the z axis is ``res_z * n_layers`` long and every
+    **A count means what it always did**: every layer gets ``sample_z`` samples inclusive of both
+    faces, and the layers concatenate, so the z axis is ``sample_z * n_layers`` long and every
     internal interface appears twice — once as one layer's bottom, once as the next layer's
     top. Nothing about that path changes.
 
@@ -282,11 +327,11 @@ def _z_plan(res_z, layer_info_list, d_index):
     is genuinely data-dependent, and silently picking a layer would differentiate the wrong
     geometry.
     """
-    _check_spec(res_z, 'res_z')
-    if _is_count(res_z):
-        return [res_z] * len(layer_info_list), None
+    _check_spec(sample_z, 'sample_z')
+    if _is_count(sample_z):
+        return [sample_z] * len(layer_info_list), None
 
-    z_req = _np.asarray(res_z, dtype=float).reshape(-1)
+    z_req = _np.asarray(sample_z, dtype=float).reshape(-1)
     ds = []
     for entry in layer_info_list[::-1]:          # walk order: top of the stack first
         d = entry[d_index]
@@ -297,7 +342,7 @@ def _z_plan(res_z, layer_info_list, d_index):
                 'explicit z coordinates need the layer thicknesses as numbers, and this '
                 'stack carries them as traced values. Which layer a z falls in is a '
                 'data-dependent choice, so it cannot be traced through; pass a count for '
-                'res_z, or reconstruct outside the transform.') from e
+                'sample_z, or reconstruct outside the transform.') from e
 
     edges = _np.concatenate([[0.0], _np.cumsum(ds)])
     total = edges[-1]
@@ -328,11 +373,11 @@ def _unshuffle(xp, cell, unshuffle, axis):
 
 
 def field_1d(wavelength, kx, T1, layer_info_list, period, tetm_index,
-             res_x=20, res_y=1, res_z=20):
+             sample_x=20, sample_y=1, sample_z=20):
     """Field of a pure TE/TM 1D stack.
 
-    Returns ``(nz, res_y, res_x, 3)``, where ``nz`` is ``res_z * n_layers`` for a count and
-    ``len(res_z)`` for explicit coordinates. See the module docstring on sampling.
+    Returns ``(nz, sample_y, sample_x, 3)``, where ``nz`` is ``sample_z * n_layers`` for a count and
+    ``len(sample_z)`` for explicit coordinates. See the module docstring on sampling.
     """
     _require_solved(T1, layer_info_list)
     xp = array_namespace(T1)
@@ -341,7 +386,7 @@ def field_1d(wavelength, kx, T1, layer_info_list, period, tetm_index,
     ff = kx.shape[0]
     Kx = xp.diag(kx)
 
-    z_per_layer, unshuffle = _z_plan(res_z, layer_info_list, 4)
+    z_per_layer, unshuffle = _z_plan(sample_z, layer_info_list, 4)
 
     T_layer = T1
     cells = []
@@ -365,7 +410,7 @@ def field_1d(wavelength, kx, T1, layer_info_list, period, tetm_index,
         # path by name ("2D path only") rather than dropping it here.
         Mz = 1j * (epz_conv_i @ Kx @ My if tetm_index else Kx @ My)
 
-        inv_f = _inv_fourier(xp, kx, None, period, res_x, res_y, k0, C)
+        inv_f = _inv_fourier(xp, kx, None, period, sample_x, sample_y, k0, C)
         sgn = -1j if tetm_index == 0 else 1j
         Fy = inv_f[:, :, None, :] @ My[:, None, None, :, :]
         Fx = sgn * (inv_f[:, :, None, :] @ Mx[:, None, None, :, :])
@@ -383,8 +428,8 @@ def field_1d(wavelength, kx, T1, layer_info_list, period, tetm_index,
     return _unshuffle(xp, xp.concat(cells, axis=0), unshuffle, axis=0)
 
 
-def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, res_x, res_y, res_z,
-                   set_field_input, conical, lattice=None):
+def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, sample_x, sample_y, sample_z,
+                   incidences, conical, lattice=None):
     """Shared body of the conical and 2D reconstructions.
 
     They differ only in how the layer's mode matrices assemble into ``(Sx, Sy, Ux, Uy)``; the
@@ -428,11 +473,11 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, res_x, res_y
     Kx, Ky = xp.diag(xp.reshape(kx_g, (-1,))), xp.diag(xp.reshape(ky_g, (-1,)))
 
     dev = _dev(T1)
-    keep = [i for i, on in enumerate(set_field_input) if on]
+    keep = incidence_indices(incidences)
     T_layer = xp.take(T1, xp.asarray(keep, device=dev), axis=0)
     big_I = xp.eye(T1.shape[1], dtype=C, device=dev)
 
-    z_per_layer, unshuffle = _z_plan(res_z, layer_info_list, 4)
+    z_per_layer, unshuffle = _z_plan(sample_z, layer_info_list, 4)
 
     cells = []
     for spec, (epz_conv_i, W, V, q, d, big_A_i, big_B, muz_conv_i) in zip(
@@ -482,7 +527,7 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, res_x, res_y
         if muz_conv_i is not None:
             Uz = muz_conv_i @ Uz
 
-        inv_f = _inv_fourier(xp, kx, ky, period, res_x, res_y, k0, C,
+        inv_f = _inv_fourier(xp, kx, ky, period, sample_x, sample_y, k0, C,
                              lattice)[:, :, None, :]
         # `-1j` converts out of `U = i H`; the three minus signs on top of it are the parity
         # into the declared frame (module docstring), so `H_z` keeps the bare conversion.
@@ -497,7 +542,7 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, res_x, res_y
 
 
 def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, period,
-                 res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False),
+                 sample_x=20, sample_y=20, sample_z=20, incidences=('given',),
                  lattice=None):
     """Field of a stack solved on the first-order (4ff) path. Same shape as :func:`field_2d`.
 
@@ -557,10 +602,10 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, period,
     Kx, Ky = xp.diag(xp.reshape(kx_g, (-1,))), xp.diag(xp.reshape(ky_g, (-1,)))
 
     dev = _dev(T1)
-    keep = [i for i, on in enumerate(set_field_input) if on]
+    keep = incidence_indices(incidences)
     T_layer = xp.take(T1, xp.asarray(keep, device=dev), axis=0)
 
-    z_per_layer, unshuffle = _z_plan(res_z, layer_info_list, 5)
+    z_per_layer, unshuffle = _z_plan(sample_z, layer_info_list, 5)
 
     cells = []
     for spec, (eps, psi_f, lam_f, psi_b, lam_b, d, P_i, QP_i) in zip(z_per_layer,
@@ -585,7 +630,7 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, period,
         Ez = eps['ezz_i'] @ (Ky @ Hx - Kx @ Hy - eps['ezx'] @ Ex - eps['ezy'] @ Ey)
         Hz = Kx @ Ey - Ky @ Ex
 
-        inv_f = _inv_fourier(xp, kx, ky, period, res_x, res_y, k0, C,
+        inv_f = _inv_fourier(xp, kx, ky, period, sample_x, sample_y, k0, C,
                              lattice)[:, :, None, :]
         # No parity here, deliberately: the 4ff state vector is already in the declared frame.
         comps = [inv_f @ M[:, :, None, None, :, :]
@@ -599,25 +644,25 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, period,
 
 
 def field_1d_conical(wavelength, kx, ky, T1, layer_info_list, period,
-                     res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False),
+                     sample_x=20, sample_y=20, sample_z=20, incidences=('given',),
                      lattice=None):
-    """Field of a general 1D (conical) stack. ``(n_selected, nz, res_y, res_x, 6)``.
+    """Field of a general 1D (conical) stack. ``(n_selected, nz, sample_y, sample_x, 6)``.
 
-    ``nz`` is ``res_z * n_layers`` for a count, ``len(res_z)`` for explicit coordinates.
+    ``nz`` is ``sample_z * n_layers`` for a count, ``len(sample_z)`` for explicit coordinates.
     """
     return _field_coupled(wavelength, kx, ky, T1, layer_info_list, period,
-                          res_x, res_y, res_z, set_field_input, conical=True, lattice=lattice)
+                          sample_x, sample_y, sample_z, incidences, conical=True, lattice=lattice)
 
 
 def field_2d(wavelength, kx, ky, T1, layer_info_list, period,
-             res_x=20, res_y=20, res_z=20, set_field_input=(True, False, False),
+             sample_x=20, sample_y=20, sample_z=20, incidences=('given',),
              lattice=None):
-    """Field of a 2D stack. ``(n_selected, nz, res_y, res_x, 6)``.
+    """Field of a 2D stack. ``(n_selected, nz, sample_y, sample_x, 6)``.
 
-    ``nz`` is ``res_z * n_layers`` for a count, ``len(res_z)`` for explicit coordinates.
+    ``nz`` is ``sample_z * n_layers`` for a count, ``len(sample_z)`` for explicit coordinates.
     """
     return _field_coupled(wavelength, kx, ky, T1, layer_info_list, period,
-                          res_x, res_y, res_z, set_field_input, conical=False, lattice=lattice)
+                          sample_x, sample_y, sample_z, incidences, conical=False, lattice=lattice)
 
 
 def field_plot(field_cell, tetm_index=0, plot_indices=(1, 1, 1, 1, 1, 1), y_slice=0, z_slice=-1,

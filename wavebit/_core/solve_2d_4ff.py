@@ -102,7 +102,7 @@ lam_b, d, P_i, QP_i]`` per layer, bottom-to-top, the counterpart of the 2ff path
   elimination keeps two more terms, ``Ez = ezz^-1 [ (Ky Hx - Kx Hy) - ezx Ex - ezy Ey ]``,
   and ``fields.py``'s ``Sz = 1j * epz_conv_i @ (Kx @ Uy - Ky @ Ux)`` is that expression at
   ``ezx = ezy = 0`` (with ``U = i H``), i.e. a special case rather than a shared line;
-* ``calculate_field`` now branches on the **formulation**. It had to: this path sets
+* ``reconstruct_field`` now branches on the **formulation**. It had to: this path sets
   ``_grating_type_assigned`` to 2 as well, so the grating type cannot tell the two apart, and
   the 2ff reconstruction reads the same two state slots — it would have returned a plausible
   cell built on the wrong ``E_z``.

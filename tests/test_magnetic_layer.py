@@ -294,10 +294,10 @@ def test_clearing_the_mu_first_makes_the_swap_legal():
 
 FIELD_WL = 700.0
 
-# The three incidence columns a coupled solve carries are (psi, TE, TM); these select the
-# second and third. TE is E along the s direction -- the only linear polarization with an
-# `H_z` at all, which is why every case below drives with it.
-TE_INC, TM_INC = (False, True, False), (False, False, True)
+# The three incidences a coupled solve carries are ('given', 's', 'p'); these name the second
+# and third. Pure s is E along the s direction -- the only linear polarization with an `H_z`
+# at all, which is why every case below drives with it.
+S_INC, P_INC = ('s',), ('p',)
 
 
 def _kz_mu(eps, mu, kx):
@@ -397,9 +397,8 @@ def _uniform_cell(eps, mu, thick, eps_bot, mu_bot, theta, z_abs, algo='ETM'):
     solver.solve()
     # `(False, True, False)` is the TE-incidence column: E along the s direction, which is the
     # polarization the closed form is written for and the only one with an `H_z` at all.
-    cell = np.asarray(solver.calculate_field(res_x=1, res_y=1,
-                                            res_z=np.asarray(z_abs, dtype=float),
-                                            set_field_input=TE_INC))
+    cell = np.asarray(solver.reconstruct_field(
+        sample_x=1, sample_y=1, sample_z=np.asarray(z_abs, dtype=float), incidences=S_INC))
     return cell[0, :, 0, 0, :]                          # (nz, 6) = Ex Ey Ez Hx Hy Hz
 
 
@@ -510,8 +509,8 @@ def _two_layer_cell(algo, side):
     solver.structure = TWO_LAYER_EPS
     solver.mu = TWO_LAYER_MU
     solver.solve()
-    return np.asarray(solver.calculate_field(res_x=5, res_y=5, res_z=4,
-                                             set_field_input=TE_INC))
+    return np.asarray(solver.reconstruct_field(sample_x=5, sample_y=5, sample_z=4,
+                                               incidences=S_INC))
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
@@ -552,7 +551,7 @@ def _patterned_cell(eps, mu, variant, backend=0):
     solver.structure = eps if backend == 0 else _lift(backend, eps)
     solver.mu = mu if backend == 0 else _lift(backend, mu)
     solver.solve()
-    cell = solver.calculate_field(res_x=5, res_y=5, res_z=4, set_field_input=variant)
+    cell = solver.reconstruct_field(sample_x=5, sample_y=5, sample_z=4, incidences=variant)
     return np.asarray(cell.detach() if hasattr(cell, 'detach') else cell)[0]
 
 
@@ -572,8 +571,8 @@ def test_a_patterned_magnetic_cell_obeys_the_field_level_duality():
     Off-normal in *both* angles. At ``phi = 0`` the swap leaves ``Ky`` out of ``H_z``, so the
     half of the term that a patterned ``mu`` most easily breaks never gets exercised.
     """
-    straight = _patterned_cell(EPS_PATTERN, MU_PATTERN, TE_INC)
-    swapped = _patterned_cell(MU_PATTERN, EPS_PATTERN, TM_INC)
+    straight = _patterned_cell(EPS_PATTERN, MU_PATTERN, S_INC)
+    swapped = _patterned_cell(MU_PATTERN, EPS_PATTERN, P_INC)
     scale = float(np.abs(straight).max())
 
     assert np.abs(swapped[..., :3] - straight[..., 3:]).max() < 1e-10 * scale     # E' = H
@@ -587,8 +586,8 @@ def test_the_field_duality_is_not_vacuous_on_the_longitudinal_components():
     above -- and so would one that dropped ``mu_zz`` if the two patterns happened to be close
     enough for the error to hide.
     """
-    a = _patterned_cell(EPS_PATTERN, MU_PATTERN, TE_INC)
-    b = _patterned_cell(MU_PATTERN, EPS_PATTERN, TE_INC)      # same incidence, so not a trade
+    a = _patterned_cell(EPS_PATTERN, MU_PATTERN, S_INC)
+    b = _patterned_cell(MU_PATTERN, EPS_PATTERN, S_INC)      # same incidence, so not a trade
     for idx, label in ((2, 'Ez'), (5, 'Hz')):
         assert float(np.abs(a[..., idx]).max()) > 1e-3, f'{label} is identically zero'
         moved = np.abs(a[..., idx] - b[..., idx]).max() / np.abs(a[..., idx]).max()
@@ -607,8 +606,8 @@ def test_the_other_backends_reconstruct_the_magnetic_field_too(backend, name):
     and an array built before that is silently ``complex64``.
     """
     pytest.importorskip(name)
-    want = _patterned_cell(EPS_PATTERN, MU_PATTERN, TE_INC)
-    got = _patterned_cell(EPS_PATTERN, MU_PATTERN, TE_INC, backend=backend)
+    want = _patterned_cell(EPS_PATTERN, MU_PATTERN, S_INC)
+    got = _patterned_cell(EPS_PATTERN, MU_PATTERN, S_INC, backend=backend)
     assert np.abs(got - want).max() < 1e-9 * float(np.abs(want).max())
 
 
@@ -636,8 +635,8 @@ def test_the_permeability_a_reconstructed_hz_depends_on_is_differentiable():
         solver.structure = jnp.asarray(EPS_PATTERN)
         solver.mu = mu
         solver.solve()
-        cell = solver.calculate_field(res_x=4, res_y=4, res_z=3,
-                                      set_field_input=TE_INC)
+        cell = solver.reconstruct_field(sample_x=4, sample_y=4, sample_z=3,
+                                        incidences=S_INC)
         return jnp.sum(jnp.abs(cell[..., 5]) ** 2)       # H_z alone
 
     mu0 = jnp.asarray(MU_PATTERN)

@@ -125,11 +125,11 @@ def test_the_rungs_agree_bit_for_bit_on_what_they_share(algo):
 
 # ------------------------------------------------------------------------- the refusal
 
-def test_calculate_field_is_refused_by_naming_the_declaration():
+def test_reconstruct_field_is_refused_by_naming_the_declaration():
     s = _solver()
     s.solve()
     with pytest.raises(RuntimeError, match=r"answers='field'") as e:
-        s.calculate_field(res_x=4, res_y=4, res_z=4)
+        s.reconstruct_field(sample_x=4, sample_y=4, sample_z=4)
     assert "answers='amplitude'" in str(e.value), 'the message states what was declared'
 
 
@@ -141,13 +141,13 @@ def test_the_refusal_beats_require_solved_to_it():
     """
     s = _solver()
     with pytest.raises(RuntimeError, match=r"answers='field'"):
-        s.calculate_field(res_x=4, res_y=4, res_z=4)
+        s.reconstruct_field(sample_x=4, sample_y=4, sample_z=4)
 
 
 def test_a_declared_field_solve_reconstructs():
     s = _solver(answers='field')
     s.solve()
-    assert s.calculate_field(res_x=4, res_y=4, res_z=4).shape == (1, 4, 4, 4, 6)
+    assert s.reconstruct_field(sample_x=4, sample_y=4, sample_z=4).shape == (1, 4, 4, 4, 6)
 
 
 def test_the_declaration_is_assignable_and_takes_effect_on_the_next_solve():
@@ -157,9 +157,9 @@ def test_the_declaration_is_assignable_and_takes_effect_on_the_next_solve():
     with pytest.raises(RuntimeError):
         # The declaration moved, but the solve that would honour it has not run yet, so the
         # state is still absent -- and this is the case _require_solved is for.
-        s.calculate_field(res_x=4, res_y=4, res_z=4)
+        s.reconstruct_field(sample_x=4, sample_y=4, sample_z=4)
     s.solve()
-    assert s.calculate_field(res_x=4, res_y=4, res_z=4).shape == (1, 4, 4, 4, 6)
+    assert s.reconstruct_field(sample_x=4, sample_y=4, sample_z=4).shape == (1, 4, 4, 4, 6)
 
 
 def test_dropping_back_down_clears_the_state_rather_than_leaving_it_stale():

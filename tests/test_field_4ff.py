@@ -21,7 +21,7 @@ that between them nothing is left free:
   This is the only check that reaches the two terms ``- ezx Ex - ezy Ey`` that the second-order
   path's ``E_z`` line does not have.
 * **Continuity.** The four transverse components are continuous across a layer interface, and
-  the sampling lands on it exactly (``linspace(0, res_z, res_z)`` is inclusive, so a layer's
+  the sampling lands on it exactly (``linspace(0, sample_z, sample_z)`` is inclusive, so a layer's
   last slice *is* its bottom face and the next layer's first slice is the same plane). Exact,
   not asymptotic. ``E_z`` must jump there, which is asserted too — a reconstruction that
   quietly returned a continuous ``E_z`` would be returning something other than ``E_z``.
@@ -105,10 +105,10 @@ def _to_backend(a, backend):
     return pytest.importorskip('torch').as_tensor(a)
 
 
-def z_coupled_cell(eps_list, thickness, theta_deg=28.0, res_z=64, backend=0):
+def z_coupled_cell(eps_list, thickness, theta_deg=28.0, sample_z=64, backend=0):
     """``(result, cell, kx, ky)`` for a stack of uniform tensors.
 
-    ``res_x = res_y = 1`` on purpose: with a single retained order the field is one plane wave,
+    ``sample_x = sample_y = 1`` on purpose: with a single retained order the field is one plane wave,
     so the sample at ``(x, y) = (0, 0)`` **is** its Fourier coefficient and the checks below
     can be stated on the coefficients without inverting the transform by hand.
     """
@@ -117,7 +117,7 @@ def z_coupled_cell(eps_list, thickness, theta_deg=28.0, res_z=64, backend=0):
     mee = z_solver(thickness, theta_deg, backend)
     res = mee.solve_conv(*[_to_backend(s, backend) for s in uniform_slots(eps_list)])
     assert mee.formulation_assigned == '4ff'
-    cell = np.asarray(mee.calculate_field(res_x=1, res_y=1, res_z=res_z))
+    cell = np.asarray(mee.reconstruct_field(sample_x=1, sample_y=1, sample_z=sample_z))
     kx, ky = mee.get_kx_ky_vector(WL)
     return (res, np.asarray(cell, dtype=complex)[0, :, 0, 0, :],
             complex(np.asarray(kx)[0]), complex(np.asarray(ky)[0]))
@@ -151,8 +151,8 @@ def twin_cell(formulation, name, theta_deg, side, backend=0):
     mee.formulation = formulation
     mee.solve()
     assert mee.formulation_assigned == formulation
-    return np.asarray(mee.calculate_field(res_x=7, res_y=5, res_z=6,
-                                          set_field_input=(True, True, True)))
+    return np.asarray(mee.reconstruct_field(sample_x=7, sample_y=5, sample_z=6,
+                                          incidences=('given', 's', 'p')))
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
@@ -166,7 +166,7 @@ def test_the_two_formulations_reconstruct_the_same_field(name, theta_deg, side):
     the cell's largest entry would come back at 1e-2 and read like a tolerance question rather
     than a broken formula.
 
-    All three incidence variants are compared at once (``set_field_input=(True, True, True)``):
+    All three incidence variants are compared at once (``incidences=('given', 's', 'p')``):
     they ride in separate columns of ``T1``, and a reconstruction that dropped the leading axis
     would still reproduce the first of them.
     """
@@ -201,7 +201,7 @@ def test_every_component_is_actually_present_somewhere():
 
 
 def test_the_two_formulations_agree_on_the_variants_taken_one_at_a_time():
-    """``set_field_input`` selects columns of ``T1``, and the selection must survive the swap.
+    """``incidences`` selects columns of ``T1``, and the selection must survive the swap.
 
     Asking for the variants singly and together must give the same cells; the leading axis is
     the only place a reconstruction can get the *incidence* right and the *bookkeeping* wrong.
@@ -215,9 +215,9 @@ def test_the_two_formulations_agree_on_the_variants_taken_one_at_a_time():
         mee.formulation = formulation
         mee.solve()
         cells[formulation] = [
-            np.asarray(mee.calculate_field(res_x=4, res_y=4, res_z=5, set_field_input=sfi))
-            for sfi in ((True, False, False), (False, True, False), (False, False, True),
-                        (True, True, True))]
+            np.asarray(mee.reconstruct_field(sample_x=4, sample_y=4, sample_z=5,
+                                             incidences=which))
+            for which in (('given',), ('s',), ('p',), ('given', 's', 'p'))]
     for k, (want, got) in enumerate(zip(cells['2ff'], cells['4ff'])):
         assert want.shape == got.shape
         assert np.max(np.abs(want - got)) / np.max(np.abs(want)) < 1e-11, k
@@ -242,9 +242,9 @@ def test_the_z_coupled_cell_satisfies_maxwell_and_converges_like_it_should(eps, 
     """
     thickness = [90.0, 210.0, 90.0]
     worst = []
-    for res_z in (32, 64, 128):
-        _, F, kx, ky = z_coupled_cell([VAC, eps, VAC], thickness, res_z=res_z)
-        r = maxwell_residual(F, kx, ky, eps, thickness[1], res_z, layer=1)
+    for sample_z in (32, 64, 128):
+        _, F, kx, ky = z_coupled_cell([VAC, eps, VAC], thickness, sample_z=sample_z)
+        r = maxwell_residual(F, kx, ky, eps, thickness[1], sample_z, layer=1)
         assert np.max(r[[2, 5]]) < 1e-13, f'the algebraic rows should be exact: {r}'
         worst.append(np.max(r[[0, 1, 3, 4]]))
 
@@ -263,11 +263,11 @@ def test_the_transverse_field_is_continuous_across_a_z_coupled_interface(eps, ta
     continuous one would be returning something that is not ``E_z`` — the shape of error a
     smoothness check alone rewards.
     """
-    res_z = 16
-    _, F, _, _ = z_coupled_cell([VAC, eps, VAC], [90.0, 210.0, 90.0], res_z=res_z)
+    sample_z = 16
+    _, F, _, _ = z_coupled_cell([VAC, eps, VAC], [90.0, 210.0, 90.0], sample_z=sample_z)
     scale = np.max(np.abs(F))
     for k in (1, 2):
-        above, below = F[k * res_z - 1], F[k * res_z]
+        above, below = F[k * sample_z - 1], F[k * sample_z]
         transverse = np.max(np.abs(above[[0, 1, 3, 4]] - below[[0, 1, 3, 4]]))
         assert transverse / scale < 1e-13, f'{tag} interface {k}: {transverse:.3e}'
         assert abs(above[2] - below[2]) / scale > 1e-2, f'{tag} interface {k}: E_z did not jump'
@@ -289,7 +289,7 @@ def test_the_flux_the_cell_carries_is_the_efficiency_the_solve_reported(eps, tag
     The vacuum row is the control — nothing there but the spacers, so the ratio must be 1.
     """
     res, F, _, _ = z_coupled_cell([VAC, eps, VAC], [90.0, 210.0, 90.0],
-                                  theta_deg=theta_deg, res_z=16)
+                                  theta_deg=theta_deg, sample_z=16)
     S = z_flux(F)
     above, below = S[:16], S[32:]
     for name, band in (('above', above), ('below', below)):
@@ -311,8 +311,8 @@ def test_a_z_coupled_cell_is_not_quietly_the_z_decoupled_one():
     """
     stack = [VAC, TILTED, VAC]
     flat = [np.diag(np.diag(TILTED)) if e is TILTED else e for e in stack]
-    _, coupled, _, _ = z_coupled_cell(stack, [90.0, 210.0, 90.0], res_z=16)
-    _, decoupled, _, _ = z_coupled_cell(flat, [90.0, 210.0, 90.0], res_z=16)
+    _, coupled, _, _ = z_coupled_cell(stack, [90.0, 210.0, 90.0], sample_z=16)
+    _, decoupled, _, _ = z_coupled_cell(flat, [90.0, 210.0, 90.0], sample_z=16)
     gap = np.max(np.abs(coupled - decoupled)) / np.max(np.abs(coupled))
     assert gap > 1e-2, gap
 
@@ -342,7 +342,7 @@ def test_a_vacuum_slab_comes_back_as_the_incident_plane_wave(formulation, psi_v,
                        thickness=[WL], structure=np.ones((1, 1, 1)), answers='field')
     mee.formulation = formulation
     mee.solve()
-    cell = np.asarray(mee.calculate_field(res_x=1, res_y=1, res_z=8))[0, :, 0, 0, :]
+    cell = np.asarray(mee.reconstruct_field(sample_x=1, sample_y=1, sample_z=8))[0, :, 0, 0, :]
 
     # khat = +z (the index).  s: E = +y, so H = z x y = -x.  p: E = -x, so H = z x (-x) = -y.
     (e_idx, e_sign), (h_idx, h_sign) = (((1, 1.0), (3, -1.0)) if tag == 's'
@@ -376,7 +376,7 @@ def test_the_reconstruction_is_the_same_on_every_backend(backend):
     got = twin_cell('4ff', 'a patterned layer', 21.0, 'top', backend=backend)
     assert np.max(np.abs(want - got)) / np.max(np.abs(want)) < 1e-10
 
-    _, want_z, _, _ = z_coupled_cell([VAC, TILTED, VAC], [90.0, 210.0, 90.0], res_z=16)
-    _, got_z, _, _ = z_coupled_cell([VAC, TILTED, VAC], [90.0, 210.0, 90.0], res_z=16,
+    _, want_z, _, _ = z_coupled_cell([VAC, TILTED, VAC], [90.0, 210.0, 90.0], sample_z=16)
+    _, got_z, _, _ = z_coupled_cell([VAC, TILTED, VAC], [90.0, 210.0, 90.0], sample_z=16,
                                     backend=backend)
     assert np.max(np.abs(want_z - got_z)) / np.max(np.abs(want_z)) < 1e-10

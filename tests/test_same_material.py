@@ -144,7 +144,7 @@ FIELD_STACK = ([1.0, 1.5, 1.5, 2.0, 1.0], [30.0, 30.0, 40.0])
 def _field(ns, ds, *, tetm='te', theta=0.2, fto=2):
     solver = _solver(ns, ds, tetm=tetm, theta=theta, fto=fto, answers='field')
     solver.solve()
-    return np.asarray(solver.calculate_field(res_x=RES, res_y=1, res_z=RES))
+    return np.asarray(solver.reconstruct_field(sample_x=RES, sample_y=1, sample_z=RES))
 
 
 def test_field_below_a_same_material_layer_is_not_zero():

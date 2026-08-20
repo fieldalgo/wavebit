@@ -36,8 +36,8 @@ convergence study, not a frozen tolerance, and it is deliberately not attempted 
   right. Sampling the interfaces made ``E_z`` look like the one component that disagreed —
   ratios scattered over 3 orders while everything else sat at 1e-15 — which reads exactly like
   a bug in the component this project had just finished fixing. It was the sample points.
-  ``calculate_field`` puts a sample on both faces of every layer (``linspace`` is inclusive),
-  so the interior is indices ``1 .. res_z-2``.
+  ``reconstruct_field`` puts a sample on both faces of every layer (``linspace`` is inclusive),
+  so the interior is indices ``1 .. sample_z-2``.
 
 **Real permittivity only** — this S4 build rejects a complex ``Epsilon``, so the cases below
 are lossless. Absorption is covered against the Airy closed form in ``tests/test_lossy_media.py``
@@ -82,7 +82,7 @@ POLS = ('s', 'p')
 
 
 def z_samples(stack):
-    """Interior sample points of every layer, in the order ``calculate_field`` returns them.
+    """Interior sample points of every layer, in the order ``reconstruct_field`` returns them.
 
     Reads only the thicknesses, so it is unaffected by which quantity the second column holds
     — which is what lets ``test_s4_field_golden`` call it on the committed golden's ``__stack``

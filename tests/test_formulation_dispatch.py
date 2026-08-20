@@ -328,10 +328,10 @@ def test_the_scattering_algorithm_still_works_without_a_z_row():
 
 
 def test_field_reconstruction_is_dispatched_on_the_formulation_not_the_grating_type(monkeypatch):
-    """The branch ``calculate_field`` has to make, and the reason it cannot be the usual one.
+    """The branch ``reconstruct_field`` has to make, and the reason it cannot be the usual one.
 
     The first-order path sets ``_grating_type_assigned = 2`` as well — a z row is a choice of
-    *layout* as much as of formulation — so a ``calculate_field`` that read only the grating
+    *layout* as much as of formulation — so a ``reconstruct_field`` that read only the grating
     type would hand a 4ff solve to the 2ff ``field_2d``. That is not a crash but a wrong
     answer: the two reconstructions read the same two state slots and one of them would
     silently reconstruct with the ``E_z`` line that assumes the z row is empty.
@@ -359,7 +359,7 @@ def test_field_reconstruction_is_dispatched_on_the_formulation_not_the_grating_t
     spy('field_2d')
     spy('field_2d_4ff')
 
-    cell = mee.calculate_field(res_x=4, res_y=4, res_z=4)
+    cell = mee.reconstruct_field(sample_x=4, sample_y=4, sample_z=4)
     assert seen == ['field_2d_4ff'], seen
     assert np.isfinite(np.asarray(cell)).all()
 
@@ -370,7 +370,7 @@ def test_field_reconstruction_still_works_on_the_second_order_path():
     structure[0, 4:12, 4:12] = 9.0
     mee = solver(fto=(1, 1), thickness=[150.0], structure=structure, answers='field')
     mee.solve()
-    cell = mee.calculate_field(res_x=4, res_y=4, res_z=4)
+    cell = mee.reconstruct_field(sample_x=4, sample_y=4, sample_z=4)
     assert np.isfinite(np.asarray(cell)).all()
 
 

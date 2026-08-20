@@ -74,7 +74,7 @@ def raster(name):
 def x_samples():
     """fmmax's cell-centred x grid, ``(j + 0.5) * PERIOD / RES_X``.
 
-    This project samples ``linspace(0, period, res_x)`` inclusive, so the grids do not line up.
+    This project samples ``linspace(0, period, sample_x)`` inclusive, so the grids do not line up.
     Asking it for ``2*RES_X + 1`` points puts index ``2j+1`` exactly on fmmax's ``j``-th — no
     interpolation anywhere in the comparison.
     """

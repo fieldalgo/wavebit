@@ -120,7 +120,7 @@ def test_tmm_and_smm_fields_agree_through_a_thick_layer(thickness):
             structure=_grating(), thickness=[thickness], connecting_algo=algo,
             answers='field')
         solver.solve()
-        cells.append(np.asarray(solver.calculate_field(res_x=8, res_y=1, res_z=6)))
+        cells.append(np.asarray(solver.reconstruct_field(sample_x=8, sample_y=1, sample_z=6)))
 
     tmm, smm = cells
     assert np.all(np.isfinite(np.abs(tmm))) and np.all(np.isfinite(np.abs(smm)))

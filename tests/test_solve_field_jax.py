@@ -1,4 +1,4 @@
-"""``SolverJax.conv_solve_field`` — the jit-compiled solve-and-reconstruct entry point.
+"""``SolverJax.solve_field`` — the jit-compiled solve-and-reconstruct entry point.
 
 This method jits over ``self``, which is what makes it different from ``solve``: the whole
 structure arrives as tracers, so every discrete decision downstream — the grating-type dispatch,
@@ -24,7 +24,7 @@ UCELL_2D = RNG.uniform(1.0, 4.0, (1, 5, 5)) ** 2
 
 BASE = dict(top=1.0, bot=1.0, theta=0.1, wavelength=900.0, thickness=[500.0])
 
-# (kwargs, (res_x, res_y, res_z)) per grating type the dispatcher can pick.
+# (kwargs, (sample_x, sample_y, sample_z)) per grating type the dispatcher can pick.
 CASES = {
     '1d_tetm': (dict(tetm='te', phi=None, fto=[3], period=[1000.0], structure=UCELL_1D), (8, 1, 4)),
     '1d_tm': (dict(tetm='tm', phi=None, fto=[3], period=[1000.0], structure=UCELL_1D), (8, 1, 4)),
@@ -50,17 +50,17 @@ def _require_jax():
 
 @pytest.mark.parametrize('case', list(CASES))
 def test_jit_matches_the_eager_path(case):
-    """The jitted method reproduces ``conv_solve_field_no_jit`` exactly, for every grating type.
+    """The jitted method reproduces ``solve_field_eager`` exactly, for every grating type.
 
     Freezing the geometry is an optimization, not a different computation — same contract as
     ``solve(geometry=...)``.
     """
     solver = _solver(1, case)
-    res_x, res_y, res_z = _res(case)
+    sample_x, sample_y, sample_z = _res(case)
 
-    jitted, field = solver.conv_solve_field(res_x=res_x, res_y=res_y, res_z=res_z,
+    jitted, field = solver.solve_field(sample_x=sample_x, sample_y=sample_y, sample_z=sample_z,
                                             geometry=solver.freeze_geometry())
-    eager, field_eager = solver.conv_solve_field_no_jit(res_x=res_x, res_y=res_y, res_z=res_z)
+    eager, field_eager = solver.solve_field_eager(sample_x=sample_x, sample_y=sample_y, sample_z=sample_z)
 
     assert np.allclose(np.asarray(field), np.asarray(field_eager), rtol=0, atol=1e-10)
     assert np.allclose(np.asarray(jitted.T), np.asarray(eager.T), rtol=0, atol=1e-12)
@@ -70,12 +70,12 @@ def test_jit_matches_the_eager_path(case):
 @pytest.mark.parametrize('case', list(CASES))
 def test_jit_matches_the_numpy_backend(case):
     """Physics check: the jitted JAX field agrees with NumPy, not merely with itself."""
-    res_x, res_y, res_z = _res(case)
+    sample_x, sample_y, sample_z = _res(case)
 
     jax_solver = _solver(1, case)
-    _, jax_field = jax_solver.conv_solve_field(res_x=res_x, res_y=res_y, res_z=res_z,
+    _, jax_field = jax_solver.solve_field(sample_x=sample_x, sample_y=sample_y, sample_z=sample_z,
                                                geometry=jax_solver.freeze_geometry())
-    _, np_field = _solver(0, case).conv_solve_field(res_x=res_x, res_y=res_y, res_z=res_z)
+    _, np_field = _solver(0, case).solve_field(sample_x=sample_x, sample_y=sample_y, sample_z=sample_z)
 
     assert np.asarray(jax_field).shape == np.asarray(np_field).shape
     assert np.allclose(np.asarray(jax_field), np.asarray(np_field), rtol=1e-8, atol=1e-8)
@@ -84,27 +84,27 @@ def test_jit_matches_the_numpy_backend(case):
 def test_omitting_the_geometry_names_freeze_geometry():
     """The whole point of the guard: a directive, not a TracerBoolConversionError.
 
-    Before this was added, every call to ``conv_solve_field`` on the JAX backend died inside the
+    Before this was added, every call to ``solve_field`` on the JAX backend died inside the
     trace with a message about ``self[4]``, which points at nothing a caller can act on.
     """
     solver = _solver(1, '1d_conical')
 
     with pytest.raises(ValueError, match=r'freeze_geometry\(\)'):
-        solver.conv_solve_field(res_x=8, res_y=1, res_z=4)
+        solver.solve_field(sample_x=8, sample_y=1, sample_z=4)
 
     # ...and it stays raised — a failed trace caches nothing, so the second call is not silently
     # served from the jit cache.
-    with pytest.raises(ValueError, match=r'conv_solve_field_no_jit'):
-        solver.conv_solve_field(res_x=8, res_y=1, res_z=4)
+    with pytest.raises(ValueError, match=r'solve_field_eager'):
+        solver.solve_field(sample_x=8, sample_y=1, sample_z=4)
 
 
 def test_no_jit_still_auto_detects_without_a_geometry():
-    """``conv_solve_field_no_jit`` keeps ``geometry`` optional: eager code needs no freeze."""
+    """``solve_field_eager`` keeps ``geometry`` optional: eager code needs no freeze."""
     solver = _solver(1, '1d_conical')
-    res_x, res_y, res_z = _res('1d_conical')
+    sample_x, sample_y, sample_z = _res('1d_conical')
 
-    auto, auto_field = solver.conv_solve_field_no_jit(res_x=res_x, res_y=res_y, res_z=res_z)
-    frozen, frozen_field = solver.conv_solve_field_no_jit(res_x=res_x, res_y=res_y, res_z=res_z,
+    auto, auto_field = solver.solve_field_eager(sample_x=sample_x, sample_y=sample_y, sample_z=sample_z)
+    frozen, frozen_field = solver.solve_field_eager(sample_x=sample_x, sample_y=sample_y, sample_z=sample_z,
                                                           geometry=solver.freeze_geometry())
 
     assert np.array_equal(np.asarray(auto_field), np.asarray(frozen_field))
@@ -119,7 +119,7 @@ def test_every_traceable_fourier_strategy_runs_under_jit(fourier_coefficients):
     closed-form path — a silent wrong-arity return that no caller could unpack.
     """
     solver = _solver(1, '2d', fourier_coefficients=fourier_coefficients)
-    result, field = solver.conv_solve_field(res_x=4, res_y=4, res_z=4,
+    result, field = solver.solve_field(sample_x=4, sample_y=4, sample_z=4,
                                             geometry=solver.freeze_geometry())
 
     assert np.asarray(field).shape == (1, 4, 4, 4, 6)
@@ -144,21 +144,21 @@ def test_a_freeze_recompiles_only_when_its_content_moves():
     jax.clear_caches()
     solver = _solver(1, '1d_conical')          # ('sampled', 'li'): records nothing at all
     geometry = solver.freeze_geometry()
-    before = RCWAJax.conv_solve_field._cache_size()
+    before = RCWAJax.solve_field._cache_size()
 
-    solver.conv_solve_field(res_x=8, res_y=1, res_z=4, geometry=geometry)
-    solver.conv_solve_field(res_x=8, res_y=1, res_z=4, geometry=geometry)
-    assert RCWAJax.conv_solve_field._cache_size() == before + 1
+    solver.solve_field(sample_x=8, sample_y=1, sample_z=4, geometry=geometry)
+    solver.solve_field(sample_x=8, sample_y=1, sample_z=4, geometry=geometry)
+    assert RCWAJax.solve_field._cache_size() == before + 1
 
     # Freezing again on the same structure records the same thing, so it is the same program.
-    solver.conv_solve_field(res_x=8, res_y=1, res_z=4, geometry=solver.freeze_geometry())
-    assert RCWAJax.conv_solve_field._cache_size() == before + 1
+    solver.solve_field(sample_x=8, sample_y=1, sample_z=4, geometry=solver.freeze_geometry())
+    assert RCWAJax.solve_field._cache_size() == before + 1
 
     # A record carrying arrays cannot compare by content, and says so by compiling again.
     nvf = _solver(1, '1d_conical', factorization='nvf')
-    nvf.conv_solve_field(res_x=8, res_y=1, res_z=4, geometry=nvf.freeze_geometry())
-    nvf.conv_solve_field(res_x=8, res_y=1, res_z=4, geometry=nvf.freeze_geometry())
-    assert RCWAJax.conv_solve_field._cache_size() == before + 3
+    nvf.solve_field(sample_x=8, sample_y=1, sample_z=4, geometry=nvf.freeze_geometry())
+    nvf.solve_field(sample_x=8, sample_y=1, sample_z=4, geometry=nvf.freeze_geometry())
+    assert RCWAJax.solve_field._cache_size() == before + 3
 
 
 def test_resolution_and_field_selection_are_static():
@@ -166,9 +166,9 @@ def test_resolution_and_field_selection_are_static():
     solver = _solver(1, '2d')
     geometry = solver.freeze_geometry()
 
-    _, one = solver.conv_solve_field(res_x=4, res_y=4, res_z=4, geometry=geometry)
-    _, three = solver.conv_solve_field(res_x=4, res_y=4, res_z=4, geometry=geometry,
-                                       set_field_input=(True, True, True))
+    _, one = solver.solve_field(sample_x=4, sample_y=4, sample_z=4, geometry=geometry)
+    _, three = solver.solve_field(sample_x=4, sample_y=4, sample_z=4, geometry=geometry,
+                                       incidences=('given', 's', 'p'))
 
     assert np.asarray(one).shape == (1, 4, 4, 4, 6)
     assert np.asarray(three).shape == (3, 4, 4, 4, 6)
@@ -191,15 +191,15 @@ def test_changing_the_incidence_is_not_served_from_a_stale_trace(case, slot, val
     it is refused there — which is why that row sweeps the angle instead.
     """
     solver = _solver(1, case)
-    res_x, res_y, res_z = _res(case)
+    sample_x, sample_y, sample_z = _res(case)
     geometry = solver.freeze_geometry()
 
     fields = {}
     for value in values:
         setattr(solver, slot, value)
-        _, jitted = solver.conv_solve_field(res_x=res_x, res_y=res_y, res_z=res_z,
+        _, jitted = solver.solve_field(sample_x=sample_x, sample_y=sample_y, sample_z=sample_z,
                                             geometry=geometry)
-        _, eager = solver.conv_solve_field_no_jit(res_x=res_x, res_y=res_y, res_z=res_z)
+        _, eager = solver.solve_field_eager(sample_x=sample_x, sample_y=sample_y, sample_z=sample_z)
         assert np.allclose(np.asarray(jitted), np.asarray(eager), rtol=0, atol=1e-10), \
             f'jit disagrees with eager at {slot}={value}'
         fields[value] = np.asarray(jitted)

@@ -28,7 +28,7 @@ field at all.
 | --- | --- | --- |
 | `'efficiency'` | `R`, `T` per order | — |
 | `'amplitude'` (default) | `r_s`/`r_p`/`t_s`/`t_p`, their s/p-resolved efficiencies, `res_te_inc` / `res_tm_inc` | one extra solve against an already-factorized matrix |
-| `'field'` | the per-layer modes and amplitudes `calculate_field` walks | §2 |
+| `'field'` | the per-layer modes and amplitudes `reconstruct_field` walks | §2 |
 
 It is a ladder and not a menu: each rung answers everything below it, and `Answers.covers`
 reads that order out of `_ANSWERS_LADDER` so nothing else has to know it. A lower rung is
@@ -209,7 +209,7 @@ eager, `fto=(6, 6)`, 2 layers, `requires_grad` on the permittivity `structure`:
 So the state costs **5.9x** its own arrays once autograd is holding the graph behind it, and
 declaring it away drops the graph with it rather than merely the matrices. This is the
 optimization case — the one where the run is long, the solve is repeated, and nobody is going
-to call `calculate_field`.
+to call `reconstruct_field`.
 
 ## 8. What is not on the ladder yet
 

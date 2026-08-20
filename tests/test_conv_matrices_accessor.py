@@ -55,7 +55,7 @@ def test_every_modeling_path_answers_with_the_same_shaped_object():
         assert epxy is not None and epyx is not None, name       # all three are NVF paths
 
 
-def test_a_frozen_geometry_is_accepted_the_same_way_conv_solve_accepts_one():
+def test_a_frozen_geometry_is_accepted_the_same_way_solve_accepts_one():
     solver = wavebit.rcwa(structure=disc_raster(96), factorization='nvf', **BASE)
     eager = solver.conv_matrices()
     replayed = solver.conv_matrices(geometry=solver.freeze_geometry())

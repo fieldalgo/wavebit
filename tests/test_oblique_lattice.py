@@ -345,7 +345,7 @@ def test_field_reconstruction_runs_on_a_skewed_cell():
     """Samples land on the cell's parallelogram, so the grid is indexed by ``(v, u)``."""
     s = solver(raster(HEX), lattice=HEX, answers='field')
     s.solve()
-    field = np.asarray(s.calculate_field(res_x=6, res_y=6, res_z=4))
+    field = np.asarray(s.reconstruct_field(sample_x=6, sample_y=6, sample_z=4))
     assert field.shape[-1] == 6 and np.all(np.isfinite(field))
 
 
@@ -377,7 +377,7 @@ def test_the_reconstructed_field_agrees_across_a_unimodular_shear():
                            theta=0.0, phi=0.0, psi=0.0, factorization='nvf', lattice=lattice,
                            answers='field')
         s.solve()
-        return np.asarray(s.calculate_field(res_x=n, res_y=n, res_z=12))
+        return np.asarray(s.reconstruct_field(sample_x=n, sample_y=n, sample_z=12))
 
     f_o, f_s = field(None), field(SHEAR)
     aligned = np.empty_like(f_s)
@@ -393,7 +393,7 @@ def test_the_reconstructed_field_agrees_across_a_unimodular_shear():
 def test_field_reconstruction_still_works_when_axis_aligned():
     s = solver(raster(ORTHO), answers='field')
     s.solve()
-    assert s.calculate_field(res_x=4, res_y=4, res_z=4) is not None
+    assert s.reconstruct_field(sample_x=4, sample_y=4, sample_z=4) is not None
 
 
 def test_a_frozen_normal_field_is_refused_across_a_lattice_change():

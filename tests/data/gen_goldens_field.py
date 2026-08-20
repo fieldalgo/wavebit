@@ -23,8 +23,8 @@ So this file is deliberately scoped to the job it can do:
   reference. ``tests/test_field_4ff.py`` adds the cross-formulation twin, interface continuity
   and the flux-to-efficiency tie.
 * **What this file does** is catch drift across breadth those cannot reach: patterned layers,
-  many orders, multiple layers, every ``set_field_input`` variant, the inverse-Fourier kernel
-  and the ``(res_z, res_y, res_x, comp)`` layout — cheaply, on every push.
+  many orders, multiple layers, every ``incidences`` variant, the inverse-Fourier kernel
+  and the ``(sample_z, sample_y, sample_x, comp)`` layout — cheaply, on every push.
 
 **Regenerating is not how a failing test gets fixed.** It needs ``--rebaseline`` and prints
 what moves, so re-freezing is a decision someone made and a reviewer can see, not a reflex. If
@@ -99,8 +99,8 @@ CASES = {
                       thickness=[0.18, 0.13], top=1., bot=1.9599999999999997, theta=0.25,
                       fto=[2, 1], period=[0.85, 0.8], wavelength=0.66, formulation='4ff'),
 }
-VARIANTS = (('default', (True, False, False)), ('all', (True, True, True)))
-RES = dict(res_x=5, res_y=4, res_z=6)
+VARIANTS = (('default', ('given',)), ('all', ('given', 's', 'p')))
+RES = dict(sample_x=5, sample_y=4, sample_z=6)
 
 
 def solved(name, backend=0):
@@ -118,9 +118,9 @@ def build():
     out = {}
     for name in CASES:
         solver = solved(name)
-        for tag, sfi in VARIANTS:
+        for tag, which in VARIANTS:
             out[f'{name}__{tag}'] = np.asarray(
-                solver.calculate_field(set_field_input=sfi, **RES))
+                solver.reconstruct_field(incidences=which, **RES))
         out[f'{name}__grating_type'] = np.array(solver.grating_type_assigned)
         # `.value`, not the enum: numpy reads a str-Enum's data ('2ff') for the
         # itemsize but its __str__ ('Formulation.SECOND') for the content, storing

@@ -1,6 +1,6 @@
 """Sampling the field where the caller asks, rather than only on a uniform grid.
 
-``calculate_field`` used to take three *counts* and lay out ``linspace`` grids from them. It now
+``reconstruct_field`` used to take three *counts* and lay out ``linspace`` grids from them. It now
 also takes the coordinates themselves. The claim this file defends is not that some new
 approximation is accurate — it is that **there is no approximation**: the reconstruction was
 already pointwise in x, y and z, so naming the points changes which ones come back and nothing
@@ -66,7 +66,7 @@ def _solver(path, backend=0):
 
 
 def _field(path, backend=0, **kw):
-    return np.asarray(_solver(path, backend).calculate_field(**kw))
+    return np.asarray(_solver(path, backend).reconstruct_field(**kw))
 
 
 def _zaxis(cell):
@@ -78,14 +78,14 @@ def _zaxis(cell):
 def test_explicit_points_reproduce_the_grid_they_were_taken_from(path):
     """Ask for the grid's own coordinates and get the grid back, to the bit.
 
-    This is the whole claim in one assertion. ``res_z`` is left as a count here so that the
+    This is the whole claim in one assertion. ``sample_z`` is left as a count here so that the
     comparison is against an unchanged z axis and only x is under test; z gets its own tests
     below, where the interface rule has to be accounted for.
     """
-    grid = _field(path, res_x=11, res_y=5, res_z=4)
-    named = _field(path, res_x=np.linspace(0, PERIOD[0], 11),
-                   res_y=np.linspace(0, PERIOD[1], 5) if path in ('2d', '4ff') else 5,
-                   res_z=4)
+    grid = _field(path, sample_x=11, sample_y=5, sample_z=4)
+    named = _field(path, sample_x=np.linspace(0, PERIOD[0], 11),
+                   sample_y=np.linspace(0, PERIOD[1], 5) if path in ('2d', '4ff') else 5,
+                   sample_z=4)
     assert named.shape == grid.shape
     assert np.array_equal(named, grid), np.max(np.abs(named - grid))
 
@@ -99,8 +99,8 @@ def test_a_subset_costs_nothing_in_accuracy(path):
     """
     fine = np.linspace(0, PERIOD[0], 41)
     pick = [3, 17, 38]
-    full = _field(path, res_x=fine, res_y=1, res_z=3)
-    few = _field(path, res_x=fine[pick], res_y=1, res_z=3)
+    full = _field(path, sample_x=fine, sample_y=1, sample_z=3)
+    few = _field(path, sample_x=fine[pick], sample_y=1, sample_z=3)
     assert np.array_equal(few, np.take(full, pick, axis=-2))
 
 
@@ -113,12 +113,12 @@ def test_the_x_points_need_not_be_sorted_or_uniform_or_inside_the_cell(path):
     it repeats, which is a statement about the physics rather than about the indexing.
     """
     xs = np.array([310.0, 0.0, 97.3, 41.0])
-    got = _field(path, res_x=xs, res_y=1, res_z=3)
-    shifted = _field(path, res_x=xs + PERIOD[0], res_y=1, res_z=3)
+    got = _field(path, sample_x=xs, sample_y=1, sample_z=3)
+    shifted = _field(path, sample_x=xs + PERIOD[0], sample_y=1, sample_z=3)
 
     # unsorted / non-uniform: each entry equals the same coordinate asked for on its own
     for j, x in enumerate(xs):
-        one = _field(path, res_x=np.array([x]), res_y=1, res_z=3)
+        one = _field(path, sample_x=np.array([x]), sample_y=1, sample_z=3)
         assert np.array_equal(np.take(got, [j], axis=-2), one)
 
     # one period over: the Bloch phase, not equality
@@ -132,16 +132,16 @@ def test_the_x_points_need_not_be_sorted_or_uniform_or_inside_the_cell(path):
 def test_explicit_z_reproduces_the_grid_away_from_interfaces(path):
     """Every z the count spelling visits, except the doubled interface, comes back identical.
 
-    A count puts ``res_z`` samples in each layer inclusive of both faces, so the internal
+    A count puts ``sample_z`` samples in each layer inclusive of both faces, so the internal
     interface appears twice. Those two rows are the only ones explicit coordinates cannot
     reproduce together, and they are excluded here and tested on their own next.
     """
     nz = 5
-    grid = _field(path, res_x=7, res_y=1, res_z=nz)
+    grid = _field(path, sample_x=7, sample_y=1, sample_z=nz)
     per = [np.linspace(0, d, nz) for d in THICK]
     z_abs = np.concatenate([per[0], per[1] + THICK[0]])
 
-    named = _field(path, res_x=7, res_y=1, res_z=z_abs)
+    named = _field(path, sample_x=7, sample_y=1, sample_z=z_abs)
     assert named.shape == grid.shape
 
     ax = _zaxis(grid)
@@ -164,15 +164,15 @@ def test_an_interface_returns_the_lower_layers_limit(path):
     honest: if TE ever *did* differ at an interface, something is wrong with it.
     """
     nz = 5
-    grid = _field(path, res_x=7, res_y=1, res_z=nz)
+    grid = _field(path, sample_x=7, sample_y=1, sample_z=nz)
     ax = _zaxis(grid)
     upper = np.take(grid, [nz - 1], axis=ax)      # layer 0's bottom face
     lower = np.take(grid, [nz], axis=ax)          # layer 1's top face
 
-    at = _field(path, res_x=7, res_y=1, res_z=np.array([THICK[0]]))
+    at = _field(path, sample_x=7, sample_y=1, sample_z=np.array([THICK[0]]))
     assert np.array_equal(at, lower)
 
-    just_above = _field(path, res_x=7, res_y=1, res_z=np.array([THICK[0] - 1e-9]))
+    just_above = _field(path, sample_x=7, sample_y=1, sample_z=np.array([THICK[0] - 1e-9]))
     assert np.allclose(just_above, upper, rtol=0, atol=1e-6)
 
     jump = np.max(np.abs(upper - lower)) / np.max(np.abs(grid))
@@ -192,8 +192,8 @@ def test_the_caller_s_z_order_is_preserved(path):
     """
     z = np.array([0.0, 300.0, 75.0, TOTAL, 150.0, 20.0])
     perm = np.array([4, 0, 5, 2, 3, 1])
-    a = _field(path, res_x=5, res_y=1, res_z=z)
-    b = _field(path, res_x=5, res_y=1, res_z=z[perm])
+    a = _field(path, sample_x=5, sample_y=1, sample_z=z)
+    b = _field(path, sample_x=5, sample_y=1, sample_z=z[perm])
     ax = _zaxis(a)
     assert np.array_equal(np.take(a, perm, axis=ax), b)
 
@@ -202,7 +202,7 @@ def test_the_caller_s_z_order_is_preserved(path):
 def test_a_repeated_z_is_returned_twice(path):
     """No implicit de-duplication — a request of length n returns n samples."""
     z = np.array([80.0, 80.0, 300.0])
-    got = _field(path, res_x=5, res_y=1, res_z=z)
+    got = _field(path, sample_x=5, sample_y=1, sample_z=z)
     ax = _zaxis(got)
     assert got.shape[ax] == 3
     assert np.array_equal(np.take(got, [0], axis=ax), np.take(got, [1], axis=ax))
@@ -211,9 +211,9 @@ def test_a_repeated_z_is_returned_twice(path):
 @pytest.mark.parametrize('path', PATHS)
 def test_the_stack_s_own_faces_are_reachable(path):
     """z = 0 and z = total, the closed ends, must not fall off either rule."""
-    got = _field(path, res_x=5, res_y=1, res_z=np.array([0.0, TOTAL]))
+    got = _field(path, sample_x=5, sample_y=1, sample_z=np.array([0.0, TOTAL]))
     assert np.all(np.isfinite(np.asarray(got)))
-    grid = _field(path, res_x=5, res_y=1, res_z=3)
+    grid = _field(path, sample_x=5, sample_y=1, sample_z=3)
     ax = _zaxis(grid)
     assert np.array_equal(np.take(got, [0], axis=ax), np.take(grid, [0], axis=ax))
     assert np.array_equal(np.take(got, [1], axis=ax), np.take(grid, [-1], axis=ax))
@@ -223,22 +223,22 @@ def test_the_stack_s_own_faces_are_reachable(path):
 def test_z_outside_the_stack_is_refused(z):
     """Not extrapolated: the half-spaces carry mode sets this state does not hold."""
     with pytest.raises(ValueError, match='inside the stack'):
-        _field('tm', res_x=5, res_y=1, res_z=np.array([z]))
+        _field('tm', sample_x=5, sample_y=1, sample_z=np.array([z]))
 
 
 def test_a_float_count_is_not_silently_a_coordinate():
-    """``res_z=5.0`` is a mistake, and it should look like one rather than mean ``[5.0]``."""
-    got = _field('tm', res_x=5, res_y=1, res_z=np.array([5.0]))
+    """``sample_z=5.0`` is a mistake, and it should look like one rather than mean ``[5.0]``."""
+    got = _field('tm', sample_x=5, sample_y=1, sample_z=np.array([5.0]))
     ax = _zaxis(got)
     assert got.shape[ax] == 1                      # an array of one z is one sample
 
     # a bare float is neither, and reading it as either would be a silent wrong answer.
-    # `res_y` is checked on a 2-D path: the pure 1-D solves overwrite it with 1, because the
+    # `sample_y` is checked on a 2-D path: the pure 1-D solves overwrite it with 1, because the
     # structure is y-invariant and one row is the whole answer, so nothing there can see it.
-    for path, kw in (('tm', dict(res_z=5.0)), ('tm', dict(res_x=5.0)),
-                     ('2d', dict(res_z=5.0)), ('2d', dict(res_x=5.0)),
-                     ('2d', dict(res_y=5.0))):
-        call = dict(res_x=5, res_y=2, res_z=3)
+    for path, kw in (('tm', dict(sample_z=5.0)), ('tm', dict(sample_x=5.0)),
+                     ('2d', dict(sample_z=5.0)), ('2d', dict(sample_x=5.0)),
+                     ('2d', dict(sample_y=5.0))):
+        call = dict(sample_x=5, sample_y=2, sample_z=3)
         call.update(kw)
         with pytest.raises(TypeError, match='integer count or a 1-D array'):
             _field(path, **call)
@@ -249,8 +249,8 @@ def test_every_backend_samples_the_same_points(backend, bid):
     """The helpers are in ``_core`` and shared, so all three must agree — and with the grid."""
     z = np.array([0.0, 60.0, 150.0, 275.0, TOTAL])
     x = np.array([0.0, 133.3, 251.7, 400.0])
-    ref = _field('tm', backend=0, res_x=x, res_y=1, res_z=z)
-    got = _field('tm', backend=backend, res_x=x, res_y=1, res_z=z)
+    ref = _field('tm', backend=0, sample_x=x, sample_y=1, sample_z=z)
+    got = _field('tm', backend=backend, sample_x=x, sample_y=1, sample_z=z)
     assert got.shape == ref.shape
     assert np.allclose(got, ref, rtol=0, atol=1e-10 * np.max(np.abs(ref)))
 
@@ -259,18 +259,18 @@ def test_traced_thickness_with_explicit_z_says_why_it_cannot():
     """Bucketing a z into a layer is data-dependent, so it refuses instead of guessing.
 
     Counts stay traceable — that path never asks which layer a point is in — so the refusal is
-    specific to explicit ``res_z``, and the message says what to do instead.
+    specific to explicit ``sample_z``, and the message says what to do instead.
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
 
-    def run(thick, res_z):
+    def run(thick, sample_z):
         s = wavebit.rcwa(backend=1, top=1.0, bot=1.0, wavelength=WL,
                          thickness=thick, theta=np.deg2rad(24.0), tetm='tm', phi=None,
                          fto=4, period=[PERIOD[0]], structure=jnp.asarray(TWO_LAYER),
                          fourier_coefficients='integrated', answers='field')
         s.solve()
-        return jnp.sum(jnp.abs(s.calculate_field(res_x=5, res_y=1, res_z=res_z)) ** 2)
+        return jnp.sum(jnp.abs(s.reconstruct_field(sample_x=5, sample_y=1, sample_z=sample_z)) ** 2)
 
     # a count traces fine, gradient and all
     g = jax.grad(lambda t: run(t, 3))(jnp.asarray(THICK))

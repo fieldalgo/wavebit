@@ -97,7 +97,7 @@ class Answers(str, Enum):
     ``'amplitude'``     **default** — the Fresnel amplitudes ``r_s``/``r_p``/``t_s``/
                         ``t_p``, their s/p-resolved efficiencies, and the pure-TE /
                         pure-TM incidence variants ``res_te_inc`` / ``res_tm_inc``
-    ``'field'``         the per-layer modes and amplitudes ``calculate_field`` walks
+    ``'field'``         the per-layer modes and amplitudes ``reconstruct_field`` walks
     ==================  ==========================================================
 
     The seam that matters is between the last two, and it is not a matter of taste. The
@@ -106,7 +106,7 @@ class Answers(str, Enum):
     pure 1D), with ``dim = 2*ff_x*ff_y`` on the coupled paths. At ``fto=(15, 15)`` that is one
     56 MB block per matrix. The 2D figure is the one to quote: ``3.75`` is what you get by
     assuming that path's ``W`` is the conical one's half-height block, and it is not. A phase-target optimization needs the amplitudes and never calls
-    ``calculate_field``; putting both behind one flag would have made it buy the second to
+    ``reconstruct_field``; putting both behind one flag would have made it buy the second to
     get the first.
 
     Why a declaration rather than a runtime argument to the solve: it is known when the

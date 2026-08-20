@@ -78,7 +78,7 @@ def _reconstruct(name, theta, pol):
                           structure=structure, theta=np.deg2rad(theta), phi=0.0,
                           psi=np.pi / 2 if pol == 's' else 0.0, answers='field')
     solver.solve()
-    cell = np.asarray(solver.calculate_field(res_x=fine_res_x(), res_y=1, res_z=RES_Z))
+    cell = np.asarray(solver.reconstruct_field(sample_x=fine_res_x(), sample_y=1, sample_z=RES_Z))
     if cell.ndim == 5:
         cell = cell[0]
     return cell[:, 0, 1::2, :]                      # the only layer, at fmmax's x points

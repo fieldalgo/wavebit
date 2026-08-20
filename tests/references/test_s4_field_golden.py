@@ -43,8 +43,8 @@ PATHS = ('te', 'tm', 'conical', '2d', '4ff')
 def _interior(cell):
     """Drop the two face samples of every layer, leaving what the golden stores.
 
-    ``calculate_field`` samples ``linspace(0, d, res_z)`` inclusive, so index 0 and index
-    ``res_z-1`` sit exactly on the layer boundaries -- where ``E_z`` is discontinuous and two
+    ``reconstruct_field`` samples ``linspace(0, d, sample_z)`` inclusive, so index 0 and index
+    ``sample_z-1`` sit exactly on the layer boundaries -- where ``E_z`` is discontinuous and two
     solvers may report different one-sided limits and both be right.
     """
     n_layers = cell.shape[0] // RES_Z
@@ -91,7 +91,7 @@ def _reconstruct(path, stack_name, theta, phi, pol):
     if path == '4ff':
         solver.formulation = '4ff'
     solver.solve()
-    cell = np.asarray(solver.calculate_field(res_x=1, res_y=1, res_z=RES_Z))
+    cell = np.asarray(solver.reconstruct_field(sample_x=1, sample_y=1, sample_z=RES_Z))
     if cell.ndim == 5:
         cell = cell[0]
     return _as_six(_interior(cell[:, 0, 0, :]), path)

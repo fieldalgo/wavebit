@@ -23,7 +23,7 @@ This file pins the contract stated in ``docs/conventions.md``:
 * **Routing.** A 1D structure given a pair takes the conical path (the pure 1D TE/TM path
   is single-polarization by construction, and refuses a direct call in plain words).
 * **The near field.** Field reconstruction supports the pair only implicitly — the
-  amplitudes ride in ``T1[0]`` and ``calculate_field`` never sees ``polarization`` — so the
+  amplitudes ride in ``T1[0]`` and ``reconstruct_field`` never sees ``polarization`` — so the
   equivalence and the relative phase are pinned again on the reconstructed cell.
 """
 import numpy as np
@@ -383,15 +383,15 @@ def test_the_two_circular_states_differ():
 
 # The pair reaches the near field only implicitly. The boundary match writes the incident
 # amplitudes into `T1[0]` (`final_matching` in _core/solve_1d.py, `_smm_sp` in
-# _core/scattering.py) and `calculate_field` reconstructs from exactly that column — nothing
+# _core/scattering.py) and `reconstruct_field` reconstructs from exactly that column — nothing
 # downstream of the match mentions `polarization` at all. That is why this needs pinning
 # separately from the efficiencies: the equivalence above could hold across the whole result
 # surface and still be dropped on the way to the field.
-FIELD_RES = dict(res_x=5, res_y=4, res_z=6)
+FIELD_RES = dict(sample_x=5, sample_y=4, sample_z=6)
 
 
 def _field(**kw):
-    _, field_cell = wavebit.rcwa(answers='field', **kw).conv_solve_field(**FIELD_RES)
+    _, field_cell = wavebit.rcwa(answers='field', **kw).solve_field(**FIELD_RES)
     return np.asarray(field_cell)
 
 
@@ -421,7 +421,7 @@ def test_the_1d_routed_pair_field_matches_the_conical_psi_field():
     psi_v = 0.7
     kw = dict(CFG_1D, structure=STRUCTURE_1D)
     solver = wavebit.rcwa(polarization=pair_of(psi_v), answers='field', **kw)
-    _, via_pair = solver.conv_solve_field(**FIELD_RES)
+    _, via_pair = solver.solve_field(**FIELD_RES)
     assert solver.grating_type_assigned == 1, 'expected the conical formulation'
     np.testing.assert_allclose(np.asarray(via_pair), _field(psi=psi_v, phi=0.0, **kw),
                                atol=1e-12, rtol=0)

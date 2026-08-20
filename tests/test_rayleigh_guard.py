@@ -291,7 +291,7 @@ def test_exact_point_field_reconstruction_matches_its_neighbour():
         mee = wavebit.rcwa(backend=0, wavelength=wl, fto=[5, 0], structure=_STACK,
                            answers='field', **_KW)
         mee.solve(auto_detune=False)
-        return np.asarray(mee.calculate_field(res_x=16, res_y=1, res_z=16))
+        return np.asarray(mee.reconstruct_field(sample_x=16, sample_y=1, sample_z=16))
 
     exact = field(WL)
     near = field(np.nextafter(WL, WL + 1))

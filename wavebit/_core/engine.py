@@ -143,10 +143,10 @@ def _recorded_lattice(normal_field_source):
 
 #: Raised by :meth:`CoreSolveMixin._require_field_declaration` — the refusal the ``answers``
 #: declaration exists to be able to give. It names the keyword to change, because the thing
-#: that went wrong is a declaration and not a missing call: by the time ``calculate_field``
+#: that went wrong is a declaration and not a missing call: by the time ``reconstruct_field``
 #: runs, the state it wants was never built, and no argument here can bring it back.
 _FIELD_NOT_DECLARED = (
-    "calculate_field needs the per-layer modes and amplitudes the solve keeps as it goes, "
+    "reconstruct_field needs the per-layer modes and amplitudes the solve keeps as it goes, "
     "and this solver declared answers={got!r}, which does not keep them. That is a "
     "construction-time declaration rather than an argument to this call on purpose: the "
     "state has to be retained *during* the solve, so there is nothing left to reconstruct "
@@ -312,7 +312,7 @@ class CoreSolveMixin:
         ``'efficiency'``      ``R`` / ``T`` per order and nothing else
         ``'amplitude'``       **default** — the Fresnel amplitudes, their s/p-resolved
                               efficiencies, and ``res_te_inc`` / ``res_tm_inc``
-        ``'field'``           what :meth:`calculate_field` walks
+        ``'field'``           what :meth:`reconstruct_field` walks
         ====================  ======================================================
 
         Each rung answers everything below it, so ``'field'`` is a superset and not a mode.
@@ -322,7 +322,7 @@ class CoreSolveMixin:
         of side ``2*ff_x*ff_y`` per layer on the 2D path — 240 MB per layer at
         ``fto=(15, 15)``, 733 MB at ``(20, 20)``. The two differ by three orders of
         magnitude, and the runs that are large enough to care are optimization sweeps
-        against a fixed objective, which never call :meth:`calculate_field` at all.
+        against a fixed objective, which never call :meth:`reconstruct_field` at all.
 
         Why it is settled at construction rather than passed to the solve: this is a claim
         about the problem, which is knowable when the problem is set up; it rides in the JAX
@@ -341,7 +341,7 @@ class CoreSolveMixin:
         self._answers = answers_of(value)
 
     def _require_field_declaration(self):
-        """Refuse :meth:`calculate_field` on a solver that declared no field, by name.
+        """Refuse :meth:`reconstruct_field` on a solver that declared no field, by name.
 
         Called before the state is read, so the failure names the declaration to change
         rather than surfacing as ``_require_solved``'s "run a solve first" — which would be
