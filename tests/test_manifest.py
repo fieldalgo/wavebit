@@ -325,7 +325,11 @@ def test_results_section_matches_a_real_result():
     assert R.shape == (2 * fy + 1, 2 * fx + 1)
     assert float(res.order(1, -1).R) == R[fy - 1, fx + 1]
 
-    assert tuple(m['jobspec']['outputs_default']) == tuple(JobSpec().outputs)
+    # `outputs_default` is deliberately absent: `JobSpec.outputs` was removed in spec
+    # version 4 (never read, but hashed into `key()`), so publishing a default for it would
+    # promise a field the schema no longer has.
+    assert 'outputs_default' not in m['jobspec']
+    assert not hasattr(JobSpec(), 'outputs')
     assert m['jobspec']['spec_version'] == SPEC_VERSION
 
 

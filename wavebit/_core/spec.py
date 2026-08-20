@@ -67,7 +67,9 @@ SPEC_VERSION = '4'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12
 #                     energy-conserving, different structure, so it must be refused rather
 #                     than migrated by guess.
 #                     '4': the pre-release rename set (2026-08-20). `numerics.fto` ->
-#                     `numerics.max_order`. Unlike '3' this one cannot be got wrong quietly
+#                     `numerics.max_order`, `.type_complex` -> `.complex_dtype`,
+#                     `.connecting_algo` -> `.layer_algorithm`; and `spec.outputs` is gone
+#                     rather than renamed. Unlike '3' none of this can be got wrong quietly
 #                     -- an unknown key is refused by `_reject_unknown` and a missing one
 #                     takes the default -- but the document's shape changed, so the version
 #                     says so rather than leaving two spellings both looking current.
@@ -475,11 +477,25 @@ class JobSpec:
     incidence: Incidence = field(default_factory=Incidence)
     numerics: Numerics = field(default_factory=Numerics)
     sweep: Sweep = field(default_factory=Sweep)
-    outputs: tuple = ('R', 'T')
     solver: str = 'rcwa'
     version: str = SPEC_VERSION
 
-    _FIELDS = ('version', 'solver', 'numerics', 'stack', 'incidence', 'sweep', 'outputs')
+    _FIELDS = ('version', 'solver', 'numerics', 'stack', 'incidence', 'sweep')
+
+    #: Removed in SPEC_VERSION 4, and refused by name rather than as an unknown field. It
+    #: declared which result quantities to return and **nothing ever read it** -- `run`
+    #: returns the whole `Result` either way -- while `key()` hashed it, so two specs with
+    #: byte-identical results got different cache keys whenever one spelled it differently.
+    #: An unread knob is the same defect as an unread `normal_method`, and this library
+    #: refuses those rather than ignoring them; the difference here is that it was silent
+    #: for as long as it existed, so the removal has to say what a caller who wrote it was
+    #: promised. A `Result` carries `R`, `T` and the Fresnel amplitudes together; select
+    #: from it after the run.
+    _RETIRED_OUTPUTS = (
+        "spec.outputs: removed in spec version 4. It was never read -- `run` returns the "
+        "whole Result, with R, T and the Fresnel amplitudes on it -- while `JobSpec.key()` "
+        "hashed it, so two specs that produce identical results got different cache keys. "
+        "Drop the field and select the quantities you want off the returned Result.")
 
     # -------------------------------------------------------------- construction
 
@@ -500,6 +516,8 @@ class JobSpec:
         if not isinstance(d, dict):
             raise SpecError(f"spec: expected a mapping, got {type(d).__name__}")
         d = dict(d)
+        if 'outputs' in d:
+            raise SpecError(cls._RETIRED_OUTPUTS)
         _reject_unknown(d, cls._FIELDS, 'spec')
 
         if 'version' not in d:
@@ -513,16 +531,11 @@ class JobSpec:
         if solver != 'rcwa':
             raise SpecError(f"spec.solver: only 'rcwa' exists so far, got {solver!r}")
 
-        outputs = tuple(d.get('outputs', ('R', 'T')))
-        if not outputs:
-            raise SpecError("spec.outputs: no outputs requested — the run would return nothing")
-
         return cls(
             stack=_stack_from_dict(d.get('stack')),
             incidence=_incidence_from_dict(d.get('incidence')),
             numerics=Numerics.from_dict(d.get('numerics')),
             sweep=Sweep.from_dict(d.get('sweep')),
-            outputs=outputs,
             solver=solver,
             version=SPEC_VERSION,
         )
@@ -541,7 +554,6 @@ class JobSpec:
             'stack': _stack_to_dict(self.stack),
             'incidence': _incidence_to_dict(self.incidence),
             'sweep': self.sweep.to_dict(),
-            'outputs': list(self.outputs),
         }
 
     def to_json(self, **kwargs) -> str:

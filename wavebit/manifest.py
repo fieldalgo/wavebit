@@ -382,7 +382,9 @@ RESULTS = {
                    '(3.75 conical, 5 pure 1D), against boundary vectors for the amplitudes',
     },
     'jobspec': {
-        'outputs_default': ('R', 'T'),
+        #: No `outputs_default` since spec version 4: `JobSpec.outputs` was removed rather
+        #: than made to work. It was never read -- a run returns the whole Result -- while
+        #: `key()` hashed it, so two specs with identical results got different cache keys.
         'spec_version': SPEC_VERSION,
     },
     'source': 'docs/conventions.md',

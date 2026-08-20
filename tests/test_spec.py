@@ -185,7 +185,10 @@ def test_expanded_sweep_points_match_direct_calls():
     ({**BINARY_GRATING, 'numerics': {'complex_dtype': 32}}, r'128 or 64'),
     ({**BINARY_GRATING, 'version': '99'}, r'version'),
     ({**BINARY_GRATING, 'solver': 'fdtd'}, r'only .rcwa.'),
-    ({**BINARY_GRATING, 'outputs': []}, r'no outputs'),
+    # removed in version 4, and refused by name: it was never read, so a caller who wrote
+    # it was promised something that never happened and needs to be told which half was true
+    ({**BINARY_GRATING, 'outputs': []}, r'never read'),
+    ({**BINARY_GRATING, 'outputs': ['R']}, r'never read'),
     ({**BINARY_GRATING, 'sweep': {'thickness': [1.0]}}, r'unknown field'),
     ({**BINARY_GRATING, 'sweep': {'wavelength': {}}}, r"one of 'values' or 'linspace'"),
     ({**BINARY_GRATING, 'sweep': {'wavelength': {'values': [], }}}, r'no values'),
