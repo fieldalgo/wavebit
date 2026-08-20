@@ -21,8 +21,7 @@ Stages (matching the legacy chain, kept as one function each to make bit-parity 
   3. final matching      — incident field -> R, T -> diffraction efficiency
 """
 from .backend import array_namespace, as_array, check_finite, check_physical, eig
-from .conventions import (boundary_kz, incident_kz, incident_sp_amplitudes, mode_q,
-                          order_azimuth)
+from .conventions import boundary_kz, incident_kz, mode_q, order_azimuth
 from .enums import Answers, answers_of
 
 

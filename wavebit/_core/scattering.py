@@ -51,7 +51,7 @@ up, so declaring anything lower skips it outright — it is where the extra ~10-
 quoted above goes, and it is the one rung of the ladder that buys time rather than memory.
 """
 from .backend import array_namespace, as_array, check_finite, check_physical
-from .conventions import boundary_kz, incident_sp_amplitudes, order_azimuth
+from .conventions import boundary_kz, order_azimuth
 from .enums import Answers, answers_of
 from .solve_1d import (_block, _diag, _is_backside, _pack, _unit, layer_modes_1d,
                        layer_modes_1d_conical, sp_efficiencies, sp_modes_1d_conical)
