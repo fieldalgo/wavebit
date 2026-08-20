@@ -53,6 +53,29 @@ class SolverJax(RCWAJax, OptimizerJax):
             # Not the pair itself (that is a child now) but the fact that `psi` was given
             # explicitly, which the always-present psi child would otherwise overwrite.
             'psi_given': self._psi_given,
+            # Both of these were missing, and both are silent when they are. `conv_solve_field`
+            # is `jax.jit`-decorated at class level, so `self` is flattened on every call --
+            # which means the solve ran on whatever the *rebuilt* solver carries, not on what
+            # the caller configured. Measured on a 60-degree cell: the basis came back `None`,
+            # `lattice_is_axis_aligned` flipped False -> True (taking `_reject_unsupported_lattice`'s
+            # guard with it), and the jitted call answered the rectangular-cell problem --
+            # T = 0.6565 against a correct 0.5460, energy conserving throughout. `normal_grid`
+            # fell 4096 -> 1024, which moves a shape gradient's sawtooth floor by an order of
+            # magnitude.
+            #
+            # The basis rides as a nested tuple because aux_data has to be hashable and this is
+            # a `(2, 2)` ndarray; `lattice.as_lattice` takes it back through `np.asarray`, so
+            # the round trip is exact. It belongs in aux rather than in children for the reason
+            # its own docstring gives -- a basis decides control flow and reaches SciPy, so it
+            # is concrete by construction and can never be a tracer.
+            #
+            # Ordering note for anyone adding to this dict: `__init__` assigns `lattice` after
+            # `period` because the setter derives `period` from the basis. That still holds on
+            # the way back in, and it is correct: with a basis in play `period` is a reported
+            # quantity rather than an independent one.
+            'lattice': (None if self._lattice_basis is None
+                        else tuple(map(tuple, self._lattice_basis.tolist()))),
+            'normal_grid': self.normal_grid,
         }
 
         return children, aux_data
