@@ -211,7 +211,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                 'mu is implemented on the 2D path only; this structure routed to a 1D solve. '
                 'The 1D and conical operators carry no permeability slot at all.')
 
-        if self.grating_type_assigned == 0:
+        if self._grating_type_assigned == 0:
             result_dict = self._solve_1d(epx_conv_all, epy_conv_all, epz_conv_i_all)
         elif self._grating_type_assigned == 1:
             result_dict = self._solve_1d_conical(epx_conv_all, epy_conv_all, epz_conv_i_all)

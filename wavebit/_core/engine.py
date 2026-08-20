@@ -987,21 +987,38 @@ class CoreSolveMixin:
                 self._grating_type_assigned = 2
 
         elif self.modeling_type_assigned == 1:                    # block
-            self.grating_type_assigned = 2                        # TODO: 1d conical case
+            self._grating_type_assigned = 2                       # TODO: 1d conical case
 
         elif self.modeling_type_assigned == 2:                    # analytic, staircase-free
             self._grating_type_assigned = 2
 
     @property
     def grating_type_assigned(self):
-        return self._grating_type_assigned
+        """Which formulation the routing picked: ``0`` pure 1D TE/TM, ``1`` conical, ``2`` 2D.
 
-    @grating_type_assigned.setter
-    def grating_type_assigned(self, grating_type_assigned):
-        self._grating_type_assigned = grating_type_assigned
+        ``None`` before a structure has been assigned. The companion to
+        :attr:`formulation_assigned`, exposed for the reason that one gives -- a path that
+        costs 3.75 blocks per layer and one that costs 4.25 are not distinguishable from the
+        outside, and a scene that silently reroutes is compared against the right numbers
+        through the wrong code. ``tests/data/golden_field.npz`` stores it beside every case
+        for exactly that.
+
+        Read-only. It was writable until 2026-08-21, for one internal assignment that its
+        three sibling branches already spelled ``self._grating_type_assigned``; no caller
+        anywhere set it. Writing it could not mean anything anyway -- ``_assign_grating_type``
+        runs at the top of every ``solve_conv`` and settles it again from the structure.
+        """
+        return self._grating_type_assigned
 
     @property
     def modeling_type_assigned(self):
+        """Which modeling path the structure selected: ``0`` raster, ``1`` block, ``2`` shapes.
+
+        ``None`` before a structure has been assigned. The *type of the object* passed as
+        ``structure`` is the choice -- there is no separate mode switch -- so this is the only
+        place that says which one was read, and it is what ``_core.draw`` reads to label a
+        picture with the path that drew it.
+        """
         return self._modeling_type_assigned
 
     # -------------------------------------------------------------- modeller pass-throughs
