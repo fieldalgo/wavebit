@@ -422,8 +422,15 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
         # Conditional for the reason `solve_1d`'s append is: the per-layer matrices are the
         # loop's working set, and only `big_F`, `big_G` and `big_T` have to outlive an
         # iteration.
+        #
+        # The trailing `None` is the `muz_i` slot -- one entry layout for the one function
+        # that reads both this list and `solve_2d`'s
+        # (:func:`wavebit._core.fields._field_coupled`), rather than two lengths it would have
+        # to tell apart. It is always `None` here and structurally must be: the conical
+        # operator carries no permeability, and `solve_for_conv` refuses a `mu` that reaches
+        # it by name ("2D path only").
         if keep_field:
-            layer_info_list.append([epz_conv_i, W, V, q, d, big_A_i, big_B])
+            layer_info_list.append([epz_conv_i, W, V, q, d, big_A_i, big_B, None])
 
     # --- stage 3: final matching -> efficiency (transfer_1d_conical_4) ------------------
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,

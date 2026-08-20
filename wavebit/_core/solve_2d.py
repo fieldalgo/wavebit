@@ -458,9 +458,18 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         # Bottom-to-top, matching the legacy append order; consumed by field reconstruction.
         # Conditional for the reason `solve_1d`'s append is -- and this is the path where it
         # costs the most: `W`, `V`, `big_A_i` and `big_B` are each a full `2*ff_xy` square,
-        # 4.25 of them per layer once `epz_conv_i` is counted at its quarter.
+        # 4.25 of them per layer once `epz_conv_i` is counted at its quarter (4.5 on a
+        # magnetic layer, where `muz_i` is the second quarter).
+        #
+        # `muz_i` rides last, and it is there for the same reason `epz_conv_i` is: the two
+        # longitudinal components are algebraic rather than propagated, and each is recovered
+        # by dividing out the z slot of its own tensor. `H_z = muz_i (Kx Ey - Ky Ex)` is
+        # Faraday's z row, dual to Ampere's z row that gives `E_z` -- see
+        # :func:`wavebit._core.fields._field_coupled`. `None` is "non-magnetic", the spelling
+        # `layer_mu` and `Material.mu` already use.
         if keep_field:
-            layer_info_list.append([epz_conv_i, W, V, q, d, big_A_i, big_B])
+            layer_info_list.append([epz_conv_i, W, V, q, d, big_A_i, big_B,
+                                    None if layer_mu is None else layer_mu[2]])
 
     # --- stage 3: final matching -> efficiency (transfer_2d_4 == transfer_1d_conical_4) --
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,

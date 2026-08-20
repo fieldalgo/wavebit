@@ -362,13 +362,20 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
 
 def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
             layer_modes, epz_conv_i_all, backside, answers, mu_top=1.0, mu_bot=1.0,
-            eps_top=None, eps_bot=None):
+            eps_top=None, eps_bot=None, muz_i_all=None):
     """Shared SMM cascade + matching for the coupled s/p paths (conical and 2D).
 
     ``layer_modes(layer_index)`` returns that layer's ``(big_W, big_V, q, W, V)``: the mode
     matrices in the s/p boundary basis that the cascade joins layers through, then the raw
     (unrotated) pair that field reconstruction expands the same amplitudes with. Everything
     else — half-spaces, gap, cascade, incidence, efficiencies — is common.
+
+    ``muz_i_all`` is the per-layer ``mu_zz^-1``, carried for one reason: field reconstruction
+    recovers ``H_z`` algebraically from it, exactly as it recovers ``E_z`` from
+    ``epz_conv_i_all``, and the cascade itself never looks at either. Absent on the conical
+    caller, which has no permeability at all. Dropping it here would leave the SMM answering a
+    magnetic stack's ``H_z`` non-magnetically while the ETM twin answered it correctly — the
+    one asymmetry :func:`smm_2d`'s docstring exists to rule out.
 
     ``backside`` selects the substrate-port reads (see :func:`smm_1d` for why that read *is*
     the mirrored-scene solve): the incident column is built with the incidence medium's index,
@@ -429,7 +436,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
 
     S_ref = _s_reflection(xp, W_top, V_top, W_gap, V_gap)
     S_trn = _s_transmission(xp, W_bot, V_bot, W_gap, V_gap)
-    S_layers, AB, modes = [], [], []
+    S_layers, AB, modes, muz = [], [], [], []
     S = S_ref
     for layer_index in range(_n_layers(thickness)):
         big_W, big_V, q, W, V = layer_modes(layer_index)
@@ -442,6 +449,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
             S_layers.append(S_layer)
             AB.append((A, B))
             modes.append([epz_conv_i_all[layer_index], W, V, q, d])
+            muz.append(None if muz_i_all is None else muz_i_all[layer_index])
     S = redheffer_star(xp, big_I, S, S_trn)
 
     kz_ref, kz_trn = (kz_bot, kz_top) if backside else (kz_top, kz_bot)
@@ -514,9 +522,14 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
         blocks, T1 = _field_state(xp, big_I, S_ref_m, S_trn_m,
                                   S_layers[::-1], AB[::-1], c_inc)
         modes = modes[::-1]
+        muz = muz[::-1]
     else:
         blocks, T1 = _field_state(xp, big_I, S_ref, S_trn, S_layers, AB, c_inc)
-    layer_info_list = [m + list(b) for m, b in zip(modes, blocks)][::-1]
+    # `muz_i` last, after the transfer blocks, so slots 0..6 stay where the ETM twin puts
+    # them: `tests/test_scattering_core.py` compares the two algorithms' `A_i` / `B` by index,
+    # and the legacy goldens name the first seven.
+    layer_info_list = [m + list(b) + [z]
+                       for m, b, z in zip(modes, blocks, muz)][::-1]
     if T1 is not None:
         # One column per incidence variant (psi, TE, TM), as the ETM stacks them.
         T1 = xp.stack([T1[:, i:i + 1] for i in range(n_inc)])
@@ -612,4 +625,5 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
 
     return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                    layer_modes, epz_conv_i_all, backside, answers,
-                   mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot)
+                   mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot,
+                   muz_i_all=mu_all[2])

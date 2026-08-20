@@ -276,7 +276,9 @@ MATERIALS = (
                'paths and as a mu= array beside the raster; the same builders run twice, so '
                'both quantities land on one geometry. The 2D path only -- the 1D/conical '
                'operators and the first-order 4ff solve take no mu, and refuse rather than '
-               'ignore one.',
+               'ignore one. Field reconstruction carries mu since 2026-08-20: H_z is '
+               'Faraday z row, mu_zz^-1 (Kx Ey - Ky Ex), and before that date it came back '
+               'scaled by mu_zz while every other component was exact.',
         'source': 'docs/magnetic-materials.md',
     },
     {

@@ -4,11 +4,11 @@ Landed 2026-08-14. [`anisotropic-materials.md`](anisotropic-materials.md) §5 ha
 got the location right and the content wrong; §3 below is the difference.
 
 Target: `wavebit/_core/solve_2d.py` — `layer_modes_2d`, `solve_2d`;
-`wavebit/_core/scattering.py` — `smm_2d`.
+`wavebit/_core/scattering.py` — `smm_2d`; `wavebit/_core/fields.py` — `_field_coupled`.
 
-**Scope.** The **2D path** — layers (§1–§4), half-spaces (§5–§6), and patterned layers (§7).
-Neither the 1D/conical operators nor the first-order 4ff solve take a `mu`; both refuse rather
-than ignore.
+**Scope.** The **2D path** — layers (§1–§4), half-spaces (§5–§6), patterned layers (§7), and
+field reconstruction (§9, added 2026-08-20). Neither the 1D/conical operators nor the
+first-order 4ff solve take a `mu`; both refuse rather than ignore.
 
 ---
 
@@ -312,17 +312,84 @@ A *tensor* `mu` still has no front door, exactly as a tensor `eps` has none: `st
 scalar quantity per region or per pixel. A patterned magnetic tensor goes through
 `to_conv_mat_raster_pn_mu`; see §7.
 
-## 9. What is not implemented, and why
+## 9. Field reconstruction
 
-**1D and conical paths.** No permeability slot in either operator. Refused, not ignored.
+Added 2026-08-20, and it is the part of this feature that shipped wrong for six days.
 
-**Magnetic `mu` with a z-coupled `eps`.** That combination routes to the first-order 4ff solve,
-which has no `mu`. Both features work and the combination refuses, which is the point — landing
-on whichever path the dispatch picks and silently dropping the other input is the failure mode.
+`R` and `T` were right from the start; so were `E`, and the transverse `H`, inside the cell.
+What was wrong was `H_z`, and only `H_z`. The transverse field is what the solve hands over —
+it comes out of mode matrices that do account for `mu` — but the two **longitudinal**
+components are not propagated at all. They are recovered algebraically at the end, each by
+dividing out the z slot of its own tensor:
+
+```
+eps_zz E_z  =  Ky Hx - Kx Hy          Ampere's z row      ->  epz_conv_i
+mu_zz  H_z  =  Kx Ey - Ky Ex          Faraday's z row     ->  muz_i
+```
+
+One line is the other under the same `(E, H, eps, mu) -> (H, -E, mu, eps)` duality §1 places
+`mu` by. `_field_coupled` carried the first and, for the second, the `mu = 1` form
+`H_z = Kx Ey - Ky Ex`, with nothing marking it as conditional. The condition was written down
+one function away — `field_2d_4ff`'s docstring said `H_z` "is unchanged while `mu = 1`, which
+is all this path admits" — and that sentence was true of the path it was written on and false
+of the one beside it, with no refusal anywhere making either claim hold. Before the front door
+(`Material(epsilon, mu)`, and `mu=` beside a raster) the combination was barely reachable;
+after it, it was ordinary user input.
+
+**Why nothing caught it.** A magnetic layer's `H_z` came back scaled by `mu_zz` while every
+other component stayed exact. `R + T` was still 1, the duality of §4 still closed, both
+connecting algorithms still agreed, and fmmax still matched — none of those read the interior
+`H_z`. The proximate gap is simpler than any of that: `tests/test_magnetic_layer.py` never
+called field reconstruction at all.
+
+**What pins it now**, in `tests/test_magnetic_layer.py`:
+
+- a **closed form**. A uniform magnetic slab's s-polarized interior field comes out of a
+  characteristic-matrix recursion in `(Ey, Hx)` with the admittance `kz/mu` — no wavebit
+  anywhere in it, so it cannot be co-migrated the way a regenerated golden can. The comparison
+  is absolute: unit incident amplitude, depths measured from the top of the stack, no fitted
+  scale or phase. It reaches `mu_zz` as a *scalar*.
+- the **duality, on the cell**. A patterned `mu_zz^-1` is a convolution matrix, and omitting it
+  is a different mistake from applying it on the wrong side. Exchanging the two patterns and
+  trading the incidence maps `E` onto `H` entry for entry with unit scale, which checks the
+  patterned `muz_i` in `H_z` against the patterned `epz_conv_i` in `E_z` — a line that predates
+  permeability and is pinned from outside by `test_fmmax_field_golden.py`. This is the one that
+  catches an operand-order error; the uniform closed form cannot, because a scalar commutes.
+
+`muz_i` reaches the reconstruction as an eighth slot on each `layer_info_list` entry, beside
+the `epz_conv_i` it is dual to, `None` where the layer is non-magnetic. Both connecting
+algorithms build that list by their own route, so the slot had to be added twice —
+`solve_2d` and `_smm_sp` — and a stack whose `H_z` was magnetic under `'ETM'` and
+non-magnetic under `'SMM'` would have had identical `R` and `T` under both.
+
+Two consequences of it being per-layer state rather than a solver attribute. It has to travel
+with its layer through the **backside** reversal, and the two algorithms reverse by different
+means — the ETM mirrors the scene before solving, the SMM reverses the state it kept — so a
+`muz_i` left out of either gives each layer the other's `mu_zz`: still magnetic, still
+energy-conserving, `R` and `T` untouched. And the slot is *appended*, not inserted, because
+`tests/test_scattering_core.py` compares the two algorithms' transfer blocks by index and the
+legacy goldens name the first seven; `_z_plan`'s thickness lookup, which used to infer the
+layout from the entry's length, now takes the index from its caller instead.
+
+## 10. What is not implemented, and why
+
+**1D and conical paths.** No permeability slot in either operator. Refused, not ignored. Their
+reconstructions carry the same `mu = 1` form for `H_z` (`field_1d`'s TE branch is
+`Mz = 1j * Kx @ My`) and are correct because that refusal holds.
+
+**Magnetic `mu` on the first-order 4ff solve.** No `mu` in the operator, and
+`fields.field_2d_4ff`'s `H_z = Kx Ey - Ky Ex` likewise has no `mu_zz` in it. Two ways to land
+there — a z-coupled `eps`, or `formulation='4ff'` asked for directly — and the refusal names
+which one happened, because blaming a z row that was never given sends the reader to look for
+one. Both features work and the combination refuses, which is the point: landing on whichever
+path the dispatch picks and silently dropping the other input is the failure mode. Should `mu`
+ever land there it needs the `muz_i` factor *and* the two z-row terms `mu_zx H_x` / `mu_zy H_y`
+that formulation would then be the one able to express — exactly as its `E_z` already keeps
+`ezx` / `ezy`.
 
 
 
-## 10. References
+## 11. References
 
 - fmmax's `eigensolve_general_anisotropic_media` — five `eps` and five `mu` components, no z row;
   the same 2ff tensor class this implements, which is why it can arbitrate this and not a
