@@ -132,10 +132,16 @@ claim.
 | In-process device parallelism |  ○   | ● (`pmap`) | ○ |
 | TPU                          |   ○   |  ○  |    ○    |
 
-\*The eigendecomposition has no GPU-native implementation in either framework: it is moved to
-the CPU and the result sent back. Nothing here has been measured on a GPU, so read that column
-as "the framework supports it", not as a performance claim. TPU is out entirely, because a
-32-bit eigendecomposition has no route there at all.
+\*The nonsymmetric eigendecomposition is the operation whose GPU story needs stating, and it
+has moved recently — what follows is current as of 2026-08. `jax.lax.linalg.eig` chooses
+between LAPACK on the host CPU, MAGMA on the GPU and cuSOLVER on the GPU, automatically by
+cuSOLVER version, by whether left eigenvectors were asked for (this solver never asks) and by
+`jax_use_magma`. PyTorch still documents that a CUDA input to `torch.linalg.eig` "synchronizes
+that device with the CPU", but 2.10 added a native `cusolverDnXgeev` path on CUDA 12.8 or newer
+— both hold for every version this project supports (`jax>=0.11`, `torch>=2.13`). None of those
+paths has been run here — nothing in this repository has been measured on a GPU — so read that
+column as "the framework supports it", not as a performance claim. TPU is out entirely, because
+a 32-bit eigendecomposition has no route there at all.
 
 That last row is about splitting *one* computation across devices, which only JAX does. It says
 nothing about the parallelism a sweep wants: a wavelength, angle or parameter sweep is a set of
