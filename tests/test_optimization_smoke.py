@@ -39,7 +39,7 @@ def _jax_losses():
     solver = wavebit.rcwa(backend=1, **CFG)
 
     def loss(u):
-        return -jnp.sum(solver.solve(structure=u).res.T)
+        return -jnp.sum(solver.solve(structure=u).given.T)
 
     u = jnp.asarray(UCELL0)
     opt = optax.adam(LR)
@@ -66,7 +66,7 @@ def _torch_losses():
     out = []
     for _ in range(STEPS):
         opt.zero_grad()
-        value = -torch.sum(solver.solve(structure=u).res.T)
+        value = -torch.sum(solver.solve(structure=u).given.T)
         value.backward()
         assert torch.all(torch.isfinite(u.grad)), 'torch gradient went non-finite'
         out.append(float(value.detach()))

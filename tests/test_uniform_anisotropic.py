@@ -100,9 +100,9 @@ def test_isotropic_tensor_reproduces_a_plain_slab():
     res = solve_uniform(EO, EO, EO)
     r, t = slab_s(EO)
     R, T = eff(r, t)
-    assert float(res.res_te_inc.T.sum()) == pytest.approx(T, abs=1e-12)
-    assert float(res.res_tm_inc.T.sum()) == pytest.approx(T, abs=1e-12)
-    assert float(res.res_te_inc.R.sum()) == pytest.approx(R, abs=1e-12)
+    assert float(res.s_inc.T.sum()) == pytest.approx(T, abs=1e-12)
+    assert float(res.p_inc.T.sum()) == pytest.approx(T, abs=1e-12)
+    assert float(res.s_inc.R.sum()) == pytest.approx(R, abs=1e-12)
 
 
 def test_diagonal_tensor_splits_te_and_tm():
@@ -116,10 +116,10 @@ def test_diagonal_tensor_splits_te_and_tm():
     # The split has to be large, or the assignment is not actually being tested.
     assert abs(T_s - T_p) > 0.3
 
-    assert float(res.res_te_inc.T.sum()) == pytest.approx(T_s, abs=1e-12)
-    assert float(res.res_te_inc.R.sum()) == pytest.approx(R_s, abs=1e-12)
-    assert float(res.res_tm_inc.T.sum()) == pytest.approx(T_p, abs=1e-12)
-    assert float(res.res_tm_inc.R.sum()) == pytest.approx(R_p, abs=1e-12)
+    assert float(res.s_inc.T.sum()) == pytest.approx(T_s, abs=1e-12)
+    assert float(res.s_inc.R.sum()) == pytest.approx(R_s, abs=1e-12)
+    assert float(res.p_inc.T.sum()) == pytest.approx(T_p, abs=1e-12)
+    assert float(res.p_inc.R.sum()) == pytest.approx(R_p, abs=1e-12)
 
 
 @pytest.mark.parametrize('theta_deg', [0.0, 35.0, 60.0])
@@ -132,10 +132,10 @@ def test_extraordinary_branch_sees_eps_zz(theta_deg):
     R_s, T_s = eff(*slab_s(EO, st), ct)
     R_p, T_p = eff(*slab_p(EO, EE, st), ct)
 
-    assert float(res.res_te_inc.T.sum()) == pytest.approx(T_s, abs=1e-12)
-    assert float(res.res_te_inc.R.sum()) == pytest.approx(R_s, abs=1e-12)
-    assert float(res.res_tm_inc.T.sum()) == pytest.approx(T_p, abs=1e-12)
-    assert float(res.res_tm_inc.R.sum()) == pytest.approx(R_p, abs=1e-12)
+    assert float(res.s_inc.T.sum()) == pytest.approx(T_s, abs=1e-12)
+    assert float(res.s_inc.R.sum()) == pytest.approx(R_s, abs=1e-12)
+    assert float(res.p_inc.T.sum()) == pytest.approx(T_p, abs=1e-12)
+    assert float(res.p_inc.R.sum()) == pytest.approx(R_p, abs=1e-12)
 
 
 @pytest.mark.parametrize('theta_deg', [0.0, 35.0])
@@ -148,10 +148,10 @@ def test_eps_zz_moves_tm_only(theta_deg):
     aniso = solve_uniform(EO, EO, EE, theta=th)
     iso = solve_uniform(EO, EO, EO, theta=th)
 
-    te_a = float(aniso.res_te_inc.T.sum())
-    te_i = float(iso.res_te_inc.T.sum())
-    tm_a = float(aniso.res_tm_inc.T.sum())
-    tm_i = float(iso.res_tm_inc.T.sum())
+    te_a = float(aniso.s_inc.T.sum())
+    te_i = float(iso.s_inc.T.sum())
+    tm_a = float(aniso.p_inc.T.sum())
+    tm_i = float(iso.p_inc.T.sum())
 
     assert te_a == pytest.approx(te_i, abs=1e-14), 'eps_zz must never reach the ordinary wave'
     if theta_deg == 0.0:
@@ -187,7 +187,7 @@ def test_rotated_axis_converts_polarization(phi_deg):
     Ex_t, Ey_t = T_j @ incident_s
     Ex_r, Ey_r = R_j @ incident_s
 
-    te = res.res_te_inc
+    te = res.s_inc
     assert abs(Ex_t) ** 2 > 1e-3, 'no conversion to compare — pick a rotation off the axes'
     assert float(te.T_s.sum()) == pytest.approx(abs(Ey_t) ** 2, abs=1e-12)
     assert float(te.T_p.sum()) == pytest.approx(abs(Ex_t) ** 2, abs=1e-12)
@@ -214,8 +214,8 @@ def test_off_diagonal_sign_shows_up_in_the_amplitude_only():
     eyy = EE * s ** 2 + EO * c ** 2
     exy = (EE - EO) * s * c
 
-    right = solve_uniform(exx, eyy, EO, exy=exy, eyx=exy).res_te_inc
-    flipped = solve_uniform(exx, eyy, EO, exy=-exy, eyx=-exy).res_te_inc
+    right = solve_uniform(exx, eyy, EO, exy=exy, eyx=exy).s_inc
+    flipped = solve_uniform(exx, eyy, EO, exy=-exy, eyx=-exy).s_inc
 
     for name in ('T_s', 'T_p', 'R_s', 'R_p'):
         assert float(getattr(right, name).sum()) == pytest.approx(
@@ -256,7 +256,7 @@ def jones_from_solver(res):
     sign — the same one that makes ``r_p = -r_s`` at a normal-incidence interface); TM
     incidence fills the other column and is ``E`` along ``-x`` in the same basis.
     """
-    te, tm = res.res_te_inc, res.res_tm_inc
+    te, tm = res.s_inc, res.p_inc
     col_y = np.array([-complex(te.t_p.sum()), complex(te.t_s.sum())])
     col_x = -np.array([-complex(tm.t_p.sum()), complex(tm.t_s.sum())])
     return np.column_stack([col_x, col_y])
@@ -281,8 +281,8 @@ def test_gyrotropic_layer_has_the_right_shape():
     J = jones_from_solver(res)
     assert J[0, 0] == pytest.approx(J[1, 1], abs=1e-12), 'diagonal must stay degenerate'
     assert J[0, 1] == pytest.approx(-J[1, 0], abs=1e-12), 'off-diagonal must be antisymmetric'
-    assert float(res.res_te_inc.T.sum()
-                 + res.res_te_inc.R.sum()) == pytest.approx(1.0, abs=1e-12)
+    assert float(res.s_inc.T.sum()
+                 + res.s_inc.R.sum()) == pytest.approx(1.0, abs=1e-12)
 
 
 def test_gyrotropic_layer_matches_faraday():

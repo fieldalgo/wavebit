@@ -148,8 +148,11 @@ def main():
 
     out = {f'{NAME}__grating_type': np.array(solver.grating_type_assigned)}
     sign = frame_sign(solver)
-    for sub in ('res', 'res_te_inc', 'res_tm_inc'):
-        s = getattr(result, sub)
+    # The golden's key component is the legacy attribute name; today's is beside it.
+    # See SUBS in tests/test_golden_legacy_parity.py for why the file keeps the old
+    # vocabulary rather than being rewritten.
+    for sub, attr_name in (('res', 'given'), ('res_te_inc', 's_inc'), ('res_tm_inc', 'p_inc')):
+        s = getattr(result, attr_name)
         if s is None:
             continue
         for key, attr in EFFICIENCIES:
@@ -163,7 +166,7 @@ def main():
         for j, nm in enumerate(('epz_i', 'W', 'V', 'q', 'd', 'A_i', 'B')):
             out[f'{NAME}__layer{i}__{nm}'] = np.asarray(li[j])
 
-    energy = float(np.sum(np.asarray(result.res.R)) + np.sum(np.asarray(result.res.T)))
+    energy = float(np.sum(np.asarray(result.given.R)) + np.sum(np.asarray(result.given.T)))
     if abs(energy - 1.0) > 1e-11:
         raise SystemExit(f'R + T = {energy:.12f} on a lossless stack - do not freeze this')
 

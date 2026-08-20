@@ -76,7 +76,7 @@ def solve(case, max_order=MAX_ORDER, algo='ETM'):
                        thickness=[THICK], structure=np.expand_dims(eps, axis=0),
                        connecting_algo=algo)
     res = mee.solve_conv(epx, epy, epz_i, epxy, epyx, mu=mu_slots)
-    te, tm = res.res_te_inc, res.res_tm_inc
+    te, tm = res.s_inc, res.p_inc
     return np.array([float(te.R.sum()), float(te.T.sum()),
                      float(tm.R.sum()), float(tm.T.sum())])
 
@@ -162,8 +162,8 @@ def test_the_two_tensors_get_their_own_normal_fields(golden):
                        psi=0.0, max_order=(max_order, max_order), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK], structure=np.expand_dims(eps, axis=0))
     res = mee.solve_conv(epx, epy, epz_i, epxy, epyx, mu=wrong_mu)
-    wrong = np.array([float(res.res_te_inc.R.sum()), float(res.res_te_inc.T.sum()),
-                      float(res.res_tm_inc.R.sum()), float(res.res_tm_inc.T.sum())])
+    wrong = np.array([float(res.s_inc.R.sum()), float(res.s_inc.T.sum()),
+                      float(res.p_inc.R.sum()), float(res.p_inc.T.sum())])
 
     assert np.abs(correct - wrong).max() > 1e-7, (
         'sharing one normal field between two differently-shaped tensors changed nothing; '

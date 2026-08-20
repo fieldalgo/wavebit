@@ -79,8 +79,11 @@ for name, kw in CASES.items():
     solver = wavebit.rcwa(backend=0, answers='field', **kw)
     r = solver.solve()
     out[f'{name}__grating_type'] = np.array(solver.grating_type_assigned)
-    for sub in ('res', 'res_te_inc', 'res_tm_inc'):
-        s = getattr(r, sub)
+    # The golden's key component is the legacy attribute name; today's is beside it.
+    # See SUBS in tests/test_golden_legacy_parity.py for why the file keeps the old
+    # vocabulary rather than being rewritten.
+    for sub, attr_name in (('res', 'given'), ('res_te_inc', 's_inc'), ('res_tm_inc', 'p_inc')):
+        s = getattr(r, attr_name)
         if s is None:
             continue
         for f in FIELDS:

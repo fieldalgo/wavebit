@@ -104,7 +104,7 @@ def test_smm_matches_tmm(name, kwargs, kind):
     tmm = _solve('ETM', kwargs)
     smm = _solve('SMM', kwargs)
 
-    for variant in ('res', 'res_te_inc', 'res_tm_inc'):
+    for variant in ('given', 's_inc', 'p_inc'):
         a, b = getattr(tmm, variant), getattr(smm, variant)
         if a is None:                      # 1D TE/TM reports only the psi incidence
             assert b is None, variant

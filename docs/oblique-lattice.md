@@ -156,7 +156,7 @@ boundaries, or at matched order sets.
 
 ## Reading the complex amplitude (not lattice-specific, but everyone hits it)
 
-Efficiencies come out of `res.de_ti` and are polarisation-summed, so they are always safe. The
+Efficiencies come out of `result.T` and are polarisation-summed, so they are always safe. The
 **complex** amplitudes are split into s and p, and the one carrying the light depends on `psi`:
 
 | `psi` | incidence | the amplitude is in |
@@ -170,7 +170,7 @@ solve computes anyway, where the assignment is unambiguous:
 
 ```python
 res = solver.solve()
-ts = np.asarray(res.res_te_inc.T_s)          # pure-TE incidence: T_s is the whole amplitude
+ts = np.asarray(res.s_inc.T_s)          # pure-TE incidence: T_s is the whole amplitude
 c = (ts.shape[0] // 2, ts.shape[1] // 2)     # the zero order sits at the centre
 t0 = complex(ts[c])
 amplitude, phase = abs(t0), np.angle(t0)
@@ -178,7 +178,7 @@ amplitude, phase = abs(t0), np.angle(t0)
 
 Note that `|t0|**2` is not the transmitted efficiency: power into a substrate of index `n_sub`
 carries a factor of `n_sub` (at normal incidence). On a metalens cell with `n_sub = 1.46`,
-`|t0|**2 = 0.67` and `sum(de_ti) = 0.98` are the same result — check that they agree before
+`|t0|**2 = 0.67` and `sum(T) = 0.98` are the same result — check that they agree before
 trusting either.
 
 ## How it was validated, and how to validate your own use

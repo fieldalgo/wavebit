@@ -74,8 +74,8 @@ for name, instr in INSTRUCTIONS.items():
         out[f'{name}__L{i}__x'] = np.asarray(x)
         out[f'{name}__L{i}__y'] = np.asarray(y)
     res = solver.solve()
-    out[f'{name}__de_ri'] = np.asarray(res.res.R)
-    out[f'{name}__de_ti'] = np.asarray(res.res.T)
+    out[f'{name}__de_ri'] = np.asarray(res.given.R)
+    out[f'{name}__de_ti'] = np.asarray(res.given.T)
 
 # rectangle_no_approximation / draw, exercised by test_fixes.
 # `material=4.0` is the index-2 rectangle this has always drawn; the keyword was `base=` and

@@ -93,16 +93,16 @@ def test_each_rung_delivers_exactly_its_own_surface(algo):
 
     eff, _ = surfaces['efficiency']
     assert eff.R is not None and eff.T is not None
-    assert eff.res.r_s is None, 'the efficiency rung never formed an amplitude'
-    assert eff.res_te_inc is None and eff.res_tm_inc is None
+    assert eff.given.r_s is None, 'the efficiency rung never formed an amplitude'
+    assert eff.s_inc is None and eff.p_inc is None
 
     amp, amp_solver = surfaces['amplitude']
-    assert amp.res.r_s is not None and amp.res.t_p is not None
-    assert amp.res_te_inc is not None and amp.res_tm_inc is not None
+    assert amp.given.r_s is not None and amp.given.t_p is not None
+    assert amp.s_inc is not None and amp.p_inc is not None
     assert amp_solver.layer_info_list == [] and amp_solver.T1 is None
 
     fld, fld_solver = surfaces['field']
-    assert fld.res.r_s is not None
+    assert fld.given.r_s is not None
     assert len(fld_solver.layer_info_list) == 1 and fld_solver.T1 is not None
 
 
@@ -115,9 +115,9 @@ def test_the_rungs_agree_bit_for_bit_on_what_they_share(algo):
         for rung in ('amplitude', 'field'):
             assert np.array_equal(ref, np.asarray(getattr(out[rung], field))), (field, rung)
     for field in ('r_s', 'r_p', 't_s', 't_p', 'R_s', 'R_p', 'T_s', 'T_p'):
-        ref = np.asarray(getattr(out['amplitude'].res, field))
-        assert np.array_equal(ref, np.asarray(getattr(out['field'].res, field))), field
-    for variant in ('res_te_inc', 'res_tm_inc'):
+        ref = np.asarray(getattr(out['amplitude'].given, field))
+        assert np.array_equal(ref, np.asarray(getattr(out['field'].given, field))), field
+    for variant in ('s_inc', 'p_inc'):
         a = np.asarray(getattr(getattr(out['amplitude'], variant), 'R'))
         f = np.asarray(getattr(getattr(out['field'], variant), 'R'))
         assert np.array_equal(a, f), variant

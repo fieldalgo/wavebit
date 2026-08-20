@@ -54,9 +54,9 @@ def run():
 
     result = solver.solve()
 
-    result_given_pol = result.res
-    result_te_incidence = result.res_te_inc
-    result_tm_incidence = result.res_tm_inc
+    result_given_pol = result.given
+    result_te_incidence = result.s_inc
+    result_tm_incidence = result.p_inc
 
     R, T = result_given_pol.R, result_given_pol.T
     de_ri1, de_ti1 = result_te_incidence.R, result_te_incidence.T

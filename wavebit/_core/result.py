@@ -81,33 +81,40 @@ class OrderView:
 class Result:
     """Solve result: the specified incidence plus the pure-s/p variants.
 
-    ``res`` holds the incidence actually asked for — by ``psi``, or by the complex
-    amplitude pair ``polarization=(a_s, a_p)``; ``res_te_inc`` / ``res_tm_inc`` the
-    pure-TE and pure-TM variants the coupled solves produce for free. The top-level
-    ``R`` / ``T`` delegate to ``res`` when it exists and otherwise average the two pure
-    incidences — unpolarized illumination.
+    ``given`` holds the incidence actually asked for — by ``psi``, or by the complex
+    amplitude pair ``polarization=(a_s, a_p)``; ``s_inc`` / ``p_inc`` the pure-s and pure-p
+    variants the coupled solves produce for free. The top-level ``R`` / ``T`` delegate to
+    ``given`` when it exists and otherwise average the two pure incidences — unpolarized
+    illumination.
+
+    All three were spelled ``res`` / ``res_te_inc`` / ``res_tm_inc`` until 2026-08-20:
+    ``res`` was a result inside a Result and also the universal local name for the whole
+    object, and the ``te``/``tm`` pair contradicted the prose beside it, which has always
+    called these the pure-s and pure-p variants. ``.s_inc``/``.p_inc`` rather than ``.s``/
+    ``.p`` because ``R_s`` and ``r_s`` on the sub-result are about the *outgoing*
+    polarization; the suffix says this one names the incidence.
     """
 
-    def __init__(self, res=None, res_te_inc=None, res_tm_inc=None, max_order=None):
-        self.res = res
-        self.res_te_inc = res_te_inc
-        self.res_tm_inc = res_tm_inc
+    def __init__(self, given=None, s_inc=None, p_inc=None, max_order=None):
+        self.given = given
+        self.s_inc = s_inc
+        self.p_inc = p_inc
         #: (max_order_x, max_order_y) — static metadata for order(); not a pytree child.
         self.max_order = tuple(int(v) for v in max_order) if max_order is not None else None
 
     # pytree protocol (see ResultSub)
     def tree_flatten(self):
-        return (self.res, self.res_te_inc, self.res_tm_inc), self.max_order
+        return (self.given, self.s_inc, self.p_inc), self.max_order
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         return cls(*children, max_order=aux_data)
 
     def _delegate(self, name):
-        if self.res is not None:
-            return getattr(self.res, name)
-        te = getattr(self.res_te_inc, name) if self.res_te_inc is not None else None
-        tm = getattr(self.res_tm_inc, name) if self.res_tm_inc is not None else None
+        if self.given is not None:
+            return getattr(self.given, name)
+        te = getattr(self.s_inc, name) if self.s_inc is not None else None
+        tm = getattr(self.p_inc, name) if self.p_inc is not None else None
         if te is not None and tm is not None:
             return 0.5 * (te + tm)
         return te if te is not None else tm
@@ -123,16 +130,15 @@ class Result:
         return self._delegate('T')
 
     def order(self, m, n=0):
-        """Scalars for diffraction order ``(m, n)`` of the solved (``res``) incidence.
+        """Scalars for diffraction order ``(m, n)`` of the solved (``given``) incidence.
 
         Spares the caller the array layout: efficiencies and amplitudes are stored as
         ``(n_orders_y, n_orders_x)`` grids — note ``y`` first, the transpose of the
-        ``max_order=[x, y]``
-        input order — with the incident order at the centre. This indexes them by the
-        order indices themselves.
+        ``max_order=[x, y]`` input order — with the incident order at the centre. This
+        indexes them by the order indices themselves.
         """
-        sub = self.res if self.res is not None else (
-            self.res_te_inc if self.res_te_inc is not None else self.res_tm_inc)
+        sub = self.given if self.given is not None else (
+            self.s_inc if self.s_inc is not None else self.p_inc)
         if sub is None:
             raise ValueError('no solved incidence to index into')
         if self.max_order is None:

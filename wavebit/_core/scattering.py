@@ -337,7 +337,7 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
                     zeros_eff, de_ri, zeros_eff, de_ti)
 
     if not keep_field:
-        return {'res': res}
+        return {'given': res}
 
     if backside:
         # The mirrored scene's own cascade pieces, assembled from what this pass already
@@ -355,7 +355,7 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     layer_info_list = [m + list(b) for m, b in zip(modes, blocks)][::-1]
     if T1 is not None:
         T1 = xp.reshape(T1, (n_orders_x,))    # the 1D path carries T1 as a plain vector
-    return {'res': res, 'layer_info_list': layer_info_list, 'T1': T1}
+    return {'given': res, 'layer_info_list': layer_info_list, 'T1': T1}
 
 
 # ------------------------------------------------------------------- coupled s/p (conical, 2D)
@@ -513,7 +513,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     packed = [_pack(*(a[i] for a in amps), *(e[i] for e in eff)) for i in range(3)]
 
     if not keep_field:
-        return {'res': packed[0], 'res_te_inc': packed[1], 'res_tm_inc': packed[2]}
+        return {'given': packed[0], 's_inc': packed[1], 'p_inc': packed[2]}
 
     if backside:
         # Mirrored-scene field state, same construction as `smm_1d`'s backside branch.
@@ -533,7 +533,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     if T1 is not None:
         # One column per incidence variant (psi, TE, TM), as the ETM stacks them.
         T1 = xp.stack([T1[:, i:i + 1] for i in range(n_inc)])
-    return {'res': packed[0], 'res_te_inc': packed[1], 'res_tm_inc': packed[2],
+    return {'given': packed[0], 's_inc': packed[1], 'p_inc': packed[2],
             'layer_info_list': layer_info_list, 'T1': T1}
 
 

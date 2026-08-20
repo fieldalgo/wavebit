@@ -38,7 +38,7 @@ def test_efficiency_arrays_are_the_power_surface():
 
 
 def test_polarization_split_sums_to_the_total():
-    sub = _solve_2d().res
+    sub = _solve_2d().given
     assert np.allclose(np.asarray(sub.R), np.asarray(sub.R_s) + np.asarray(sub.R_p))
     assert np.allclose(np.asarray(sub.T), np.asarray(sub.T_s) + np.asarray(sub.T_p))
 
@@ -68,16 +68,16 @@ def test_order_accessor_rejects_out_of_range_orders():
 def test_unpolarized_delegation_averages_the_two_incidences():
     """With no ``psi``-specified solve, top-level R/T average pure TE and pure TM."""
     res = _solve_2d()
-    if res.res is not None:
-        want = np.asarray(res.res.R)
+    if res.given is not None:
+        want = np.asarray(res.given.R)
         assert np.allclose(np.asarray(res.R), want)
-    te, tm = np.asarray(res.res_te_inc.R), np.asarray(res.res_tm_inc.R)
-    avg = wavebit._core.result.Result(None, res.res_te_inc, res.res_tm_inc, max_order=res.max_order)
+    te, tm = np.asarray(res.s_inc.R), np.asarray(res.p_inc.R)
+    avg = wavebit._core.result.Result(None, res.s_inc, res.p_inc, max_order=res.max_order)
     assert np.allclose(np.asarray(avg.R), 0.5 * (te + tm))
 
 
 def test_amplitudes_are_lowercase_and_complex():
-    sub = _solve_2d().res
+    sub = _solve_2d().given
     for name in ('r_s', 'r_p', 't_s', 't_p'):
         assert np.iscomplexobj(np.asarray(getattr(sub, name))), name
 
@@ -91,4 +91,4 @@ def test_old_names_are_gone():
     res = _solve_1d()
     for stale in ('de_ri', 'de_ti'):
         assert not hasattr(res, stale)
-        assert not hasattr(res.res, stale)
+        assert not hasattr(res.given, stale)

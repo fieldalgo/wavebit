@@ -92,8 +92,8 @@ def public_efficiencies(eps, theta_deg, wl, thick):
                              st(-e[0, 1]), st(-e[1, 0]),
                              st(-e[0, 2]), st(-e[1, 2]), st(-e[2, 0]), st(-e[2, 1]))
     assert mee.formulation_assigned == '4ff'
-    return np.array([float(res.res_te_inc.R.sum()), float(res.res_te_inc.T.sum()),
-                     float(res.res_tm_inc.R.sum()), float(res.res_tm_inc.T.sum())])
+    return np.array([float(res.s_inc.R.sum()), float(res.s_inc.T.sum()),
+                     float(res.p_inc.R.sum()), float(res.p_inc.T.sum())])
 
 
 def _golden(name):

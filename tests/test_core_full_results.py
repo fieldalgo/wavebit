@@ -44,7 +44,7 @@ def test_solve_1d_full_result_matches_legacy(tetm):
     solver, legacy, conv, kx, _ = _setup(**kw)
     got = solve_1d(solver.tetm_index, kw['wavelength'], kx, solver.n_top, solver.n_bot, solver.theta,
                    solver.thickness, *conv, answers='amplitude')
-    _assert_all_fields(legacy.res, got['res'])
+    _assert_all_fields(legacy.given, got['given'])
 
 
 CONICAL_2D = [
@@ -68,9 +68,9 @@ def test_conical_and_2d_full_result_matches_legacy(case):
     got = solve_fn(*args, phi=solver.phi, answers='amplitude')
 
     # all three incidence variants, every field
-    _assert_all_fields(legacy.res, got['res'])
-    _assert_all_fields(legacy.res_te_inc, got['res_te_inc'])
-    _assert_all_fields(legacy.res_tm_inc, got['res_tm_inc'])
+    _assert_all_fields(legacy.given, got['given'])
+    _assert_all_fields(legacy.s_inc, got['s_inc'])
+    _assert_all_fields(legacy.p_inc, got['p_inc'])
 
 
 def test_amplitude_rung_is_consistent_with_efficiency_rung():
@@ -85,5 +85,5 @@ def test_amplitude_rung_is_consistent_with_efficiency_rung():
     R, T = solve_2d(*args, phi=solver.phi)
     for rung in ('amplitude', 'field'):
         up = solve_2d(*args, phi=solver.phi, answers=rung)
-        assert np.array_equal(np.array(R), np.array(up['res']['R'])), rung
-        assert np.array_equal(np.array(T), np.array(up['res']['T'])), rung
+        assert np.array_equal(np.array(R), np.array(up['given']['R'])), rung
+        assert np.array_equal(np.array(T), np.array(up['given']['T'])), rung

@@ -328,7 +328,7 @@ def test_vector_solve_matches_legacy_golden(name, backend):
     # Golden keys keep the frozen legacy names (de_ri/de_ti); the attributes were renamed.
     for key, field in (('de_ri', 'R'), ('de_ti', 'T')):
         want = GOLDEN[f'{name}__{key}']
-        got = np.asarray(getattr(result.res, field))
+        got = np.asarray(getattr(result.given, field))
         tol = 1e-12   # not bit-exact: the block path's inverses do not commute
                       # with the 2026-08 order-index flip to the last digit
         assert np.allclose(want, got, atol=tol, rtol=0), (field, np.max(np.abs(want - got)))

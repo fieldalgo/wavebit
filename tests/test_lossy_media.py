@@ -387,7 +387,7 @@ def solver_amps(ns, thicknesses, wavelength, theta, tetm, path, algo='ETM'):
         solver = wavebit.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0), max_order=[0, 0],
                                 period=[wavelength * 2, wavelength * 2],
                                 structure=eps_from_index(np.array(cell)), **common)
-    res = solver.solve().res
+    res = solver.solve().given
     r = np.asarray(res.r_s if tetm == 'te' else res.r_p).ravel()
     t = np.asarray(res.t_s if tetm == 'te' else res.t_p).ravel()
     return complex(r[len(r) // 2]), complex(t[len(t) // 2])
@@ -445,10 +445,10 @@ def test_absorbing_superstrate_efficiency_is_convention_bound():
     R_2d, res_2d = eff('2d')
     factor = abs(n_top) ** 2 * (1 / n_top ** 2).real
 
-    r_1d = complex(np.asarray(res_1d.res.r_p).ravel()[0])
+    r_1d = complex(np.asarray(res_1d.given.r_p).ravel()[0])
     assert R_1d == pytest.approx(abs(r_1d) ** 2, abs=1e-12)          # 1d: R == |r_p|^2
     assert R_2d == pytest.approx(R_1d * factor, abs=1e-12)           # coupled: the factor
-    r_2d = complex(np.asarray(res_2d.res.r_p).ravel()[0])
+    r_2d = complex(np.asarray(res_2d.given.r_p).ravel()[0])
     assert abs(r_2d - r_1d) < 1e-12                                  # amplitudes agree
 
 

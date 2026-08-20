@@ -46,7 +46,7 @@ def _solve(tetm, phi, structure):
     solver = wavebit.rcwa(**incidence, **CFG)
     solver.phi = phi
     solver.structure = structure
-    res = solver.solve().res
+    res = solver.solve().given
     return np.squeeze(np.asarray(res.R)), np.squeeze(np.asarray(res.T))
 
 
@@ -132,8 +132,8 @@ def test_block_and_raster_describe_the_same_structure(backend, name):
     if name != 'numpy':
         pytest.importorskip(name)
 
-    block = wavebit.rcwa(backend=backend, structure=_BLOCK, **_CFG).solve().res
-    raster = wavebit.rcwa(backend=backend, structure=_RASTER, **_CFG).solve().res
+    block = wavebit.rcwa(backend=backend, structure=_BLOCK, **_CFG).solve().given
+    raster = wavebit.rcwa(backend=backend, structure=_RASTER, **_CFG).solve().given
 
     for a, b, which in ((block.R, raster.R, 'R'),
                         (block.T, raster.T, 'T')):

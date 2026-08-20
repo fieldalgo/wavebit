@@ -324,7 +324,7 @@ def test_nvf_now_works_on_every_backend():
     for backend in (1, 2):
         pytest.importorskip('jax' if backend == 1 else 'torch')
         got = wavebit.rcwa(backend=backend, **opts).solve()
-        assert np.allclose(np.asarray(ref.res.T), np.asarray(got.res.T),
+        assert np.allclose(np.asarray(ref.given.T), np.asarray(got.given.T),
                            atol=1e-12, rtol=0), backend
 
 

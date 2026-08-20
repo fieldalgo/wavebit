@@ -33,7 +33,7 @@ against. Eager torch and `.backward()` work fine on 2.7.0; only `torch.compile` 
 ## 1. The failure, and why it hit every path
 
 ```python
-total = lambda x: torch.sum(wavebit.rcwa(backend=2, structure=x, **cfg).solve().de_ti)
+total = lambda x: torch.sum(wavebit.rcwa(backend=2, structure=x, **cfg).solve().T)
 torch.compile(total)(u)      # InternalTorchDynamoError on torch 2.7
 ```
 

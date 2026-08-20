@@ -63,7 +63,7 @@ def solver(max_order=(0, 0), backend=0, **kw):
 def channels(res):
     """Every public number one incidence produces — powers and amplitudes alike."""
     out = {}
-    for tag, sub in (('psi', res.res), ('te', res.res_te_inc), ('tm', res.res_tm_inc)):
+    for tag, sub in (('psi', res.given), ('te', res.s_inc), ('tm', res.p_inc)):
         for name in ('R', 'T', 'R_s', 'R_p', 'T_s', 'T_p', 'r_s', 'r_p', 't_s', 't_p'):
             out[f'{tag}.{name}'] = np.asarray(getattr(sub, name))
     return out
@@ -98,7 +98,7 @@ def test_a_tensor_without_a_z_row_stays_on_the_second_order_path(eps):
     mee = solver(thickness=[180.0])
     res = mee.solve_conv(*uniform_slots([eps], 1, z_row=False))
     assert mee.formulation_assigned == '2ff'
-    assert np.isfinite(np.asarray(res.res.R)).all()
+    assert np.isfinite(np.asarray(res.given.R)).all()
 
 
 def test_passing_the_z_slots_is_what_selects_the_first_order_path():
@@ -154,10 +154,10 @@ def test_the_result_surface_is_the_same_object_the_other_paths_return():
     res = mee.solve_conv(*uniform_slots([VOIGT], n_orders))
 
     assert mee.formulation_assigned == '4ff'
-    assert res.res_te_inc is not None and res.res_tm_inc is not None
-    R, T = np.asarray(res.res.R), np.asarray(res.res.T)
+    assert res.s_inc is not None and res.p_inc is not None
+    R, T = np.asarray(res.given.R), np.asarray(res.given.T)
     assert R.shape == (2 * max_order[1] + 1, 2 * max_order[0] + 1)
-    assert R.dtype == np.float64 and np.asarray(res.res.r_s).dtype == np.complex128
+    assert R.dtype == np.float64 and np.asarray(res.given.r_s).dtype == np.complex128
 
     assert float(R.sum() + T.sum()) == pytest.approx(1.0, abs=1e-12)
     assert res.order(0, 0).R + res.order(0, 0).T == pytest.approx(1.0, abs=1e-12)
@@ -234,10 +234,10 @@ def test_the_transmitted_amplitude_is_not_merely_proportional():
     b.formulation = '4ff'
     res_b = b.solve_conv(*uniform_slots(layers, 1, z_row=False))
 
-    assert float(np.asarray(res_a.res.R).sum() + np.asarray(res_a.res.T).sum()) < 0.99
+    assert float(np.asarray(res_a.given.R).sum() + np.asarray(res_a.given.T).sum()) < 0.99
     for name in ('t_s', 't_p'):
-        u = np.asarray(getattr(res_a.res, name)).ravel()
-        v = np.asarray(getattr(res_b.res, name)).ravel()
+        u = np.asarray(getattr(res_a.given, name)).ravel()
+        v = np.asarray(getattr(res_b.given, name)).ravel()
         assert abs(u).max() > 1e-3, f'{name} is too small to carry the test'
         assert v[np.argmax(abs(u))] / u[np.argmax(abs(u))] == pytest.approx(1.0, abs=1e-10)
 
@@ -324,7 +324,7 @@ def test_the_scattering_algorithm_still_works_without_a_z_row():
     mee = solver(thickness=[180.0], connecting_algo='SMM')
     res = mee.solve_conv(*uniform_slots([IN_PLANE], 1, z_row=False))
     assert mee.formulation_assigned == '2ff'
-    assert np.isfinite(np.asarray(res.res.R)).all()
+    assert np.isfinite(np.asarray(res.given.R)).all()
 
 
 def test_field_reconstruction_is_dispatched_on_the_formulation_not_the_grating_type(monkeypatch):
@@ -421,7 +421,7 @@ def test_the_first_order_path_traces_under_jit():
 
     def run(thickness):
         mee = solver(thickness=[thickness], backend=1)
-        return mee.solve_conv(*slots).res.T.sum()
+        return mee.solve_conv(*slots).given.T.sum()
 
     eager = float(run(180.0))
     assert float(jax.jit(run)(jnp.asarray(180.0))) == pytest.approx(eager, abs=1e-12)
@@ -444,7 +444,7 @@ def test_the_gradient_through_the_first_order_path_is_the_real_one():
 
     def run(thickness):
         mee = solver(thickness=[thickness], backend=1)
-        return mee.solve_conv(*slots).res.T.sum()
+        return mee.solve_conv(*slots).given.T.sum()
 
     h = 1e-4
     fd = (float(run(180.0 + h)) - float(run(180.0 - h))) / (2 * h)
@@ -526,16 +526,16 @@ def test_the_refused_orders_are_the_ones_that_are_zero():
     answer, and clamping ``max_order[1]`` silently would hand back a different shape than asked for.
     """
     res = wavebit.rcwa(structure=_Y_ROWS, max_order=[2, 1], psi=0.4, **_1D_KW).solve()
-    T = np.asarray(res.res.T)
+    T = np.asarray(res.given.T)
     assert T.shape == (3, 5)
     assert T[[0, 2], :].sum() < 1e-25, T                     # every n != 0 order is empty
 
     flat = np.asarray(wavebit.rcwa(structure=_Y_ROWS, max_order=[2, 0], psi=0.4,
-                                   **_1D_KW).solve().res.T).ravel()
+                                   **_1D_KW).solve().given.T).ravel()
     assert np.abs(T[1] - flat).max() < 1e-13                 # and n = 0 is the 1D answer
 
 
 def test_max_order_y_zero_is_untouched():
     """The guard must not cost the ordinary 1D call anything."""
     res = wavebit.rcwa(structure=_Y_INVARIANT, max_order=[2, 0], psi=0.4, **_1D_KW).solve()
-    assert np.asarray(res.res.T).shape == (1, 5)
+    assert np.asarray(res.given.T).shape == (1, 5)

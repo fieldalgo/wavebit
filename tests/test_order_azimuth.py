@@ -302,8 +302,8 @@ def test_the_two_spellings_of_one_incidence_agree():
         by_azimuth = _solve(structure=_UC_2D, max_order=(4, 4), phi=phi + np.pi, psi=psi)
         by_pair = _solve(structure=_UC_2D, max_order=(4, 4), phi=phi, psi=None, polarization=pair)
         for name in ('r_s', 'r_p', 't_s', 't_p'):
-            x = np.asarray(getattr(by_azimuth.res, name), dtype=np.complex128)
-            y = np.asarray(getattr(by_pair.res, name), dtype=np.complex128)
+            x = np.asarray(getattr(by_azimuth.given, name), dtype=np.complex128)
+            y = np.asarray(getattr(by_pair.given, name), dtype=np.complex128)
             assert np.abs(x).max() > 1e-3, f'{name} came back empty, so this asserts nothing'
             off = np.ones(x.shape, dtype=bool)
             off[4, 4] = False                       # the origin: its own frame is what turned

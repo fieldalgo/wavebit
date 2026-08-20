@@ -47,7 +47,7 @@ def solve(eps, theta_deg):
     res = mee.solve_conv(np.stack([e[0, 0] * I]), np.stack([e[1, 1] * I]),
                              np.stack([np.linalg.inv(e[2, 2] * I)]),
                              np.stack([-e[0, 1] * I]), np.stack([-e[1, 0] * I]))
-    te, tm = res.res_te_inc, res.res_tm_inc
+    te, tm = res.s_inc, res.p_inc
     return np.array([float(te.R.sum()), float(te.T.sum()),
                      float(tm.R.sum()), float(tm.T.sum())])
 

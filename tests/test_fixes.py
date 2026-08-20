@@ -107,8 +107,8 @@ def test_4_tm_transmittance_conjugation():
         try:
             solver = wavebit.rcwa(backend=backend_id, **option_conical)
             res = solver.solve()
-            assert res.res_tm_inc is not None and res.res_tm_inc.T_p is not None
-            T_p = float(res.res_tm_inc.T_p.sum())
+            assert res.p_inc is not None and res.p_inc.T_p is not None
+            T_p = float(res.p_inc.T_p.sum())
             print(f"[{backend_name} Conical TM] Transmittance T_p = {T_p:.6f}")
             assert T_p >= 0.0, f"Negative transmittance found in {backend_name}: T_p = {T_p}"
         except Exception as e:

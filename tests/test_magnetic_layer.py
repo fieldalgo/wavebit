@@ -50,7 +50,7 @@ def solve(eps, mu=None, theta=0.0, algo='ETM', backend=0, max_order=(0, 0), peri
                        phi=0.0, psi=0.0, max_order=max_order, period=period or (PERIOD, PERIOD),
                        wavelength=WL, thickness=[THICK], connecting_algo=algo)
     res = mee.solve_conv(*slots(eps), mu=None if mu is None else tuple(slots(mu)))
-    te, tm = res.res_te_inc, res.res_tm_inc
+    te, tm = res.s_inc, res.p_inc
     f = lambda v: float(np.asarray(v.detach() if hasattr(v, 'detach') else v).sum())
     return np.array([f(te.R), f(te.T), f(tm.R), f(tm.T)])
 
@@ -138,8 +138,8 @@ def test_the_other_backends_carry_mu_too(backend, name):
     res = mee.solve_conv(*[lift(s) for s in slots(eps)],
                              mu=tuple(lift(s) for s in slots(mu)))
     f = lambda v: float(np.asarray(v.detach() if hasattr(v, 'detach') else v).sum())
-    got = np.array([f(res.res_te_inc.R), f(res.res_te_inc.T),
-                    f(res.res_tm_inc.R), f(res.res_tm_inc.T)])
+    got = np.array([f(res.s_inc.R), f(res.s_inc.T),
+                    f(res.p_inc.R), f(res.p_inc.T)])
     assert np.abs(got - want).max() < 1e-12
 
 

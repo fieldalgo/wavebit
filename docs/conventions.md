@@ -288,12 +288,12 @@ user code never needs the previous paragraph.
 | `R`, `T` | per-order diffraction efficiency: power returned to the incidence medium / leaving through the far side, as a fraction of incident power |
 | `R_s`, `R_p`, `T_s`, `T_p` | the same, resolved by outgoing polarization; `R = R_s + R_p` |
 | `r_s`, `r_p`, `t_s`, `t_p` | complex **Fresnel amplitudes**: E-field ratios against a unit incident E-field, directly comparable to the textbook Fresnel/Airy coefficients (pinned to 1e-12 against them, absorbing media included) |
-| `res`, `res_te_inc`, `res_tm_inc` | the incidence as specified (`psi`, or the `polarization` pair), plus the pure-s and pure-p variants the coupled solves produce for free; top-level `R`/`T` average the two variants when no specified solve exists (unpolarized illumination) |
+| `given`, `s_inc`, `p_inc` | the incidence as specified (`psi`, or the `polarization` pair), plus the pure-s and pure-p variants the coupled solves produce for free; top-level `R`/`T` average the two variants when no specified solve exists (unpolarized illumination) |
 
 **Which of these rows exist is what `answers` declares**, and the table above is the default
 (`answers='amplitude'`) in full. `answers='efficiency'` keeps `R` and `T` and leaves every
-other slot `None`, including `res_te_inc` / `res_tm_inc` — so on that rung there is no
-unpolarized average to take and `res` is the only incidence. `answers='field'` adds nothing
+other slot `None`, including `s_inc` / `p_inc` — so on that rung there is no
+unpolarized average to take and `given` is the only incidence. `answers='field'` adds nothing
 here: what it adds is the per-layer state `reconstruct_field` walks, which is not part of the
 result surface at all, and below that rung reconstruction is refused by name rather than
 served. The ladder is monotone, so a lower rung is always a *smaller* answer and never a

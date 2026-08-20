@@ -27,7 +27,7 @@ field at all.
 | rung | adds | costs |
 | --- | --- | --- |
 | `'efficiency'` | `R`, `T` per order | — |
-| `'amplitude'` (default) | `r_s`/`r_p`/`t_s`/`t_p`, their s/p-resolved efficiencies, `res_te_inc` / `res_tm_inc` | one extra solve against an already-factorized matrix |
+| `'amplitude'` (default) | `r_s`/`r_p`/`t_s`/`t_p`, their s/p-resolved efficiencies, `s_inc` / `p_inc` | one extra solve against an already-factorized matrix |
 | `'field'` | the per-layer modes and amplitudes `reconstruct_field` walks | §2 |
 
 It is a ladder and not a menu: each rung answers everything below it, and `Answers.covers`
@@ -77,11 +77,11 @@ a 2D metasurface at `max_order=(15, 15)` or `(20, 20)` — where the absolute nu
 
 Because a phase-target optimization needs them and does not need a field, and the old `full`
 flag made it buy both. `full=False` returned `(de_ri, de_ti)` and nothing else: no Fresnel
-amplitudes, and no `res_te_inc` / `res_tm_inc`, which the unpolarized average is built from.
+amplitudes, and no `s_inc` / `p_inc`, which the unpolarized average is built from.
 
 The two are also ordered, not independent, and the ordering is forced by the code rather than
 chosen: `final_matching` builds `T1` — the thing field reconstruction starts from — *out of*
-the pure-TE/TM incidence columns. A solve that kept `T1` while dropping `res_te_inc` would be
+the pure-TE/TM incidence columns. A solve that kept `T1` while dropping `s_inc` would be
 doing the extra solve and then discarding the cheap half of its own result. So `'field'`
 implies `'amplitude'`, and the ladder is monotone for a structural reason.
 

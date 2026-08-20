@@ -295,8 +295,8 @@ def test_the_flux_the_cell_carries_is_the_efficiency_the_solve_reported(eps, tag
     for name, band in (('above', above), ('below', below)):
         assert np.ptp(band) / abs(np.mean(band)) < 1e-12, f'{tag} {name} spacer is not flat'
 
-    R = float(np.sum(np.asarray(res.res.R)))
-    T = float(np.sum(np.asarray(res.res.T)))
+    R = float(np.sum(np.asarray(res.given.R)))
+    T = float(np.sum(np.asarray(res.given.T)))
     got = np.mean(below) / np.mean(above)
     assert abs(got - T / (1 - R)) < 1e-12, f'{tag}: {got} vs {T / (1 - R)}'
 

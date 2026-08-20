@@ -59,7 +59,7 @@ def _run(**kwargs):
 
 
 def _energy(res):
-    return float(np.sum(res.res.R) + np.sum(res.res.T))
+    return float(np.sum(res.given.R) + np.sum(res.given.T))
 
 
 # --- the structures: thick, high-truncation, deeply evanescent -----------------------------
@@ -440,7 +440,7 @@ def test_a_traced_single_precision_solve_says_it_could_not_be_checked():
             wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
             type_complex=type_complex, fourier_coefficients='sampled',
             factorization='li').solve()
-        return jnp.asarray(res.res_te_inc.r_s).ravel()[10]
+        return jnp.asarray(res.s_inc.r_s).ravel()[10]
 
     def traced(type_complex):
         with warnings.catch_warnings(record=True) as rec:
@@ -470,7 +470,7 @@ def test_the_check_does_not_break_tracing():
             wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
             type_complex=0, fourier_coefficients='sampled',
             factorization='li').solve()
-        return jnp.sum(jnp.real(jnp.asarray(res.res_te_inc.R_s)))
+        return jnp.sum(jnp.real(jnp.asarray(res.s_inc.R_s)))
 
     grad = jax.jit(jax.grad(R))(jnp.asarray(0.4))
     assert np.isfinite(float(grad))
@@ -501,10 +501,10 @@ def test_branch_tolerance_rescues_a_complex_angle_at_single_precision():
     raising the cutoff brings it to ~1e-6. The same setting is *wrong* for a weak absorber —
     that trade is the documented reason this is a scoped override and not a new default.
     """
-    ref = np.asarray(_branch_solve(0, **_REGIMES['complex angle']).res_te_inc.r_s).ravel()
+    ref = np.asarray(_branch_solve(0, **_REGIMES['complex angle']).s_inc.r_s).ravel()
 
     def err():
-        got = np.asarray(_branch_solve(1, **_REGIMES['complex angle']).res_te_inc.r_s).ravel()
+        got = np.asarray(_branch_solve(1, **_REGIMES['complex angle']).s_inc.r_s).ravel()
         return float(np.abs(got - ref).max())
 
     with warnings.catch_warnings():

@@ -335,9 +335,9 @@ RESULTS = {
                            'direction and phi supplies it',
     },
     'incidences': {
-        'fields': ('res', 'res_te_inc', 'res_tm_inc'),
+        'fields': ('given', 's_inc', 'p_inc'),
         'meaning': 'the solve for the incidence as specified — psi, or the complex '
-                   'amplitude pair polarization=(a_s, a_p) — plus the pure-TE and pure-TM '
+                   'amplitude pair polarization=(a_s, a_p) — plus the pure-s and pure-p '
                    'variants; top-level R/T average the two variants when no specified '
                    'solve exists',
         'polarization_input': 'polarization=(a_s, a_p) supersedes psi (naming both raises); '

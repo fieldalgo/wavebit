@@ -86,7 +86,7 @@ def solve(top, bot, layer_eps, layer_mu, theta_deg, thick=THICK, algo='ETM'):
     res = mee.solve_conv(*_slots(layer_eps),
                              mu=None if _is_unit(layer_mu) else tuple(_slots(layer_mu)),
                              mu_top=mu_t, mu_bot=mu_b, eps_top=eps_t, eps_bot=eps_b)
-    te, tm = res.res_te_inc, res.res_tm_inc
+    te, tm = res.s_inc, res.p_inc
     return np.array([float(te.R.sum()), float(te.T.sum()),
                      float(tm.R.sum()), float(tm.T.sum())])
 
@@ -191,26 +191,26 @@ def _solve_psi(top, bot, layer_eps, theta_deg, psi_deg, algo='ETM', side='top'):
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('psi_deg', [0.0, 30.0, 90.0])
 def test_the_psi_incidence_path_carries_the_ambient_permeability(psi_deg, algo):
-    """``res`` — the psi-specified incidence — as opposed to the TE/TM variants.
+    """``given`` — the psi-specified incidence — as opposed to the pure-s/pure-p variants.
 
     Added because a mutation survey said it was uncovered, and the way it said so is worth
     recording: two mutants of the incident column *survived*, and measuring them showed they
     changed nothing at all. They were not redundant code — they were in the copy of that column
-    the tests never reached. Every magnetic assertion up to that point read ``res_te_inc`` /
-    ``res_tm_inc``, which are built from a different block.
+    the tests never reached. Every magnetic assertion up to that point read ``s_inc`` /
+    ``p_inc``, which are built from a different block.
 
     The gap was not small. With the incident s-flux left non-magnetic, this path returns
     ``R + T = 1.575``.
     """
     top, bot = (1.9, 1.3), (2.6, 1.7)
     res = _solve_psi(top, bot, np.eye(3) * 2.2, 28.0, psi_deg, algo=algo)
-    r, t = float(res.res.R.sum()), float(res.res.T.sum())
+    r, t = float(res.given.R.sum()), float(res.given.T.sum())
     assert r + t == pytest.approx(1.0, abs=1e-10), f'psi={psi_deg} [{algo}]: R+T = {r + t}'
 
     # psi = 90 is pure s and psi = 0 pure p, by the definition of (a_s, a_p) = (sin, cos), so
     # each has to reproduce the corresponding variant exactly. That is what ties the two
     # incident columns together rather than leaving them free to drift apart.
-    twin = {90.0: res.res_te_inc, 0.0: res.res_tm_inc}.get(psi_deg)
+    twin = {90.0: res.s_inc, 0.0: res.p_inc}.get(psi_deg)
     if twin is not None:
         assert abs(r - float(twin.R.sum())) < 1e-12
         assert abs(t - float(twin.T.sum())) < 1e-12
@@ -244,8 +244,8 @@ def test_backside_incidence_is_reciprocal_with_magnetic_ambients(theta_top, algo
 
     down = solve(top, bot, np.eye(3) * 2.2, np.eye(3), theta_top, algo=algo)
     mee_up = _solve_psi(top, bot, np.eye(3) * 2.2, theta_bot, 0.0, algo=algo, side='bottom')
-    up_s = float(mee_up.res_te_inc.T.sum())
-    up_p = float(mee_up.res_tm_inc.T.sum())
+    up_s = float(mee_up.s_inc.T.sum())
+    up_p = float(mee_up.p_inc.T.sum())
 
     assert abs(down[1] - up_s) < 1e-10, f'T_s {down[1]} vs {up_s}'
     assert abs(down[3] - up_p) < 1e-10, f'T_p {down[3]} vs {up_p}'

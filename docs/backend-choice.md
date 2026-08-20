@@ -55,7 +55,7 @@ the speed of a wrong answer.
 
 ## Vector path — the design variable is a *length*
 
-An ellipse stack, `d(sum de_ti)/d(lx)`. This is what the closed-form series exists for: the
+An ellipse stack, `d(sum T)/d(lx)`. This is what the closed-form series exists for: the
 segment edges enter the Fourier transform analytically, so the gradient reaches CD, sidewall
 angle and pitch. Times are ms per step.
 
@@ -169,7 +169,7 @@ are the same event. Re-freezing every step converts a silent wrong answer into a
 
 ## Raster path — the design variable is the *permittivity grid*
 
-A binary permittivity raster, `d(sum de_ti)/d(structure)`, swept across all three Fourier
+A binary permittivity raster, `d(sum T)/d(structure)`, swept across all three Fourier
 strategies.
 
 | config | torch | jax eager | jit (one freeze) | jit (re-freeze) | compile | freeze |

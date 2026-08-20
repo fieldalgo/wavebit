@@ -308,7 +308,7 @@ def test_results_section_matches_a_real_result():
 
     m = manifest()['results']
     res = wavebit.rcwa(structure=_RASTER, **KW).solve()
-    sub = res.res if res.res is not None else res.res_te_inc
+    sub = res.given if res.given is not None else res.s_inc
 
     for name in list(m['efficiencies']['total']) + list(m['efficiencies']['by_outgoing_polarization']):
         arr = np.asarray(getattr(sub, name))
@@ -372,14 +372,14 @@ def test_polarization_claims_match_runtime():
 
     via_pair = wavebit.rcwa(structure=_RASTER, polarization=(np.sin(0.4), np.cos(0.4)),
                               **kw).solve()
-    assert via_pair.res is not None, 'the pair must fill the specified-incidence slot'
+    assert via_pair.given is not None, 'the pair must fill the specified-incidence slot'
 
     via_psi = wavebit.rcwa(structure=_RASTER, psi=0.4, **kw).solve()
-    np.testing.assert_allclose(via_pair.res.R, via_psi.res.R, atol=1e-14)
+    np.testing.assert_allclose(via_pair.given.R, via_psi.given.R, atol=1e-14)
 
     scaled = wavebit.rcwa(structure=_RASTER, polarization=(5 * np.sin(0.4), 5 * np.cos(0.4)),
                             **kw).solve()
-    np.testing.assert_allclose(scaled.res.R, via_pair.res.R, atol=1e-14)
+    np.testing.assert_allclose(scaled.given.R, via_pair.given.R, atol=1e-14)
 
     with pytest.raises(ValueError, match='psi and polarization'):
         wavebit.rcwa(structure=_RASTER, psi=0.4, polarization=(1, 0), **kw)
@@ -480,7 +480,7 @@ def test_a_supported_material_solves_and_conserves_energy(case):
     with warnings.catch_warnings():
         warnings.simplefilter('error', wavebit.UnphysicalResultWarning)
         res = MATERIAL_RUNS[case]()
-    total = float(np.asarray(res.res.R).sum() + np.asarray(res.res.T).sum())
+    total = float(np.asarray(res.given.R).sum() + np.asarray(res.given.T).sum())
     assert abs(total - 1.0) < 1e-6, f'{case}: R + T = {total!r} on a lossless passive layer'
 
 

@@ -295,11 +295,11 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                                          mu_top=mu_top, mu_bot=mu_bot,
                                          eps_top=eps_top, eps_bot=eps_bot)
 
-        res_psi = ResultSubNumpy(**result_dict['res']) if 'res' in result_dict else None
-        res_te_inc = ResultSubNumpy(**result_dict['res_te_inc']) if 'res_te_inc' in result_dict else None
-        res_tm_inc = ResultSubNumpy(**result_dict['res_tm_inc']) if 'res_tm_inc' in result_dict else None
+        given = ResultSubNumpy(**result_dict['given']) if 'given' in result_dict else None
+        s_inc = ResultSubNumpy(**result_dict['s_inc']) if 's_inc' in result_dict else None
+        p_inc = ResultSubNumpy(**result_dict['p_inc']) if 'p_inc' in result_dict else None
 
-        result = ResultNumpy(res_psi, res_te_inc, res_tm_inc, max_order=self.max_order)
+        result = ResultNumpy(given, s_inc, p_inc, max_order=self.max_order)
 
         return result
 

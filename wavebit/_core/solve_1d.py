@@ -325,8 +325,8 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         res = _pack(zeros_amp, R, zeros_amp, Tt * (n_top / n_bot),
                     zeros_eff, de_ri, zeros_eff, de_ti)
     if not keep_field:
-        return {'res': res}
-    return {'res': res, 'layer_info_list': layer_info_list, 'T1': T1}
+        return {'given': res}
+    return {'given': res, 'layer_info_list': layer_info_list, 'T1': T1}
 
 
 def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
@@ -483,7 +483,7 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
 
     ``T1`` joins that mapping only at ``'field'``. It is *built from* the variants' columns,
     which is why the two cannot be ordered the other way round: a solve that kept ``T1``
-    while dropping ``res_te_inc`` would be doing the extra solve and then throwing away the
+    while dropping ``s_inc`` would be doing the extra solve and then throwing away the
     cheap half of its result.
     """
     answers = answers_of(answers)
@@ -614,7 +614,7 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     amps2 = fresnel(R_s_2, R_p_2, T_s_2, T_p_2)
     variants = [_pack(*(a[i] for a in amps2), *(e[i] for e in eff2)) for i in (0, 1)]
 
-    out = {'res': res, 'res_te_inc': variants[0], 'res_tm_inc': variants[1]}
+    out = {'given': res, 's_inc': variants[0], 'p_inc': variants[1]}
     if answers.covers(Answers.FIELD):
         # Field reconstruction consumes T1 for the given incidence plus the two variants.
         out['T1'] = xp.stack([big_T1, big_T1_tetm[:, 0:1], big_T1_tetm[:, 1:2]])

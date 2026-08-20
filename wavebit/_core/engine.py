@@ -312,7 +312,7 @@ class CoreSolveMixin:
         ====================  ======================================================
         ``'efficiency'``      ``R`` / ``T`` per order and nothing else
         ``'amplitude'``       **default** — the Fresnel amplitudes, their s/p-resolved
-                              efficiencies, and ``res_te_inc`` / ``res_tm_inc``
+                              efficiencies, and ``s_inc`` / ``p_inc``
         ``'field'``           what :meth:`reconstruct_field` walks
         ====================  ======================================================
 
@@ -830,7 +830,7 @@ class CoreSolveMixin:
         mapping — so it is widened into one here, at the boundary, once.
         """
         if not isinstance(out, dict):
-            out = {'res': _efficiency_only(*out)}
+            out = {'given': _efficiency_only(*out)}
         self.layer_info_list = out.pop('layer_info_list', [])
         self.T1 = out.pop('T1', None)
         return out

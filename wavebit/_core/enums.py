@@ -96,7 +96,7 @@ class Answers(str, Enum):
     ``'efficiency'``    ``R`` / ``T`` per order, and nothing else
     ``'amplitude'``     **default** — the Fresnel amplitudes ``r_s``/``r_p``/``t_s``/
                         ``t_p``, their s/p-resolved efficiencies, and the pure-TE /
-                        pure-TM incidence variants ``res_te_inc`` / ``res_tm_inc``
+                        pure-TM incidence variants ``s_inc`` / ``p_inc``
     ``'field'``         the per-layer modes and amplitudes ``reconstruct_field`` walks
     ==================  ==========================================================
 

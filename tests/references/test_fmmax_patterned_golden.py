@@ -61,7 +61,7 @@ def solve(n_in, g, max_order=MAX_ORDER):
                        thickness=[THICK], structure=np.expand_dims(eps, axis=0))
     res = mee.solve_conv(np.stack([epx]), np.stack([epy]), np.stack([epz_i]),
                              np.stack([epxy]), np.stack([epyx]))
-    te, tm = res.res_te_inc, res.res_tm_inc
+    te, tm = res.s_inc, res.p_inc
     return np.array([float(te.R.sum()), float(te.T.sum()),
                      float(tm.R.sum()), float(tm.T.sum())])
 

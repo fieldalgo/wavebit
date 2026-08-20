@@ -461,7 +461,7 @@ def test_li_1997_checkerboard_matches_the_published_table():
     s = wavebit.rcwa(backend=0, structure=structure, max_order=[12, 12], thickness=[1.0], wavelength=1.0,
                        top=2.25, bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2,
                        factorization='nvf', lattice=basis)
-    res = s.solve().res
+    res = s.solve().given
     ti = np.asarray(res.T)
     c = (ti.shape[0] // 2, ti.shape[1] // 2)
 

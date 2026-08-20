@@ -124,6 +124,18 @@ GOLDEN = _Goldens()
 EFFICIENCIES = (('de_ri', 'R'), ('de_ri_s', 'R_s'), ('de_ri_p', 'R_p'),
                 ('de_ti', 'T'), ('de_ti_s', 'T_s'), ('de_ti_p', 'T_p'))
 
+# The third axis of the same translation, added 2026-08-20 when `Result.res` /
+# `.res_te_inc` / `.res_tm_inc` became `.given` / `.s_inc` / `.p_inc`. The golden's key
+# component is the *legacy* attribute name, and it stays that way for the same reason
+# `de_ri` above does: `golden_legacy.npz` cannot be recaptured -- the implementation that
+# produced it was deleted -- so its keys are a record of what that implementation called
+# things, and `gen_goldens.py`'s own note prescribes transforming AT THE COMPARISON rather
+# than rewriting the file. `golden_nvf.npz` follows it rather than diverging: one reader,
+# one key vocabulary.
+#
+#   golden key component   today's attribute
+SUBS = (('res', 'given'), ('res_te_inc', 's_inc'), ('res_tm_inc', 'p_inc'))
+
 
 def _amp_map(grating_type, n_top, n_bot):
     if grating_type == 0:                              # pure 1D: primary is the amplitude
@@ -219,8 +231,8 @@ def test_results_match_legacy_golden(name):
     amp_map = _amp_map(solver.grating_type_assigned, solver.n_top, solver.n_bot)
 
     checked = 0
-    for sub in ('res', 'res_te_inc', 'res_tm_inc'):
-        got_sub = getattr(result, sub)
+    for sub, attr_name in SUBS:
+        got_sub = getattr(result, attr_name)
         if got_sub is None:
             assert f'{name}__{sub}__de_ri' not in GOLDEN, f'{sub} was present in the legacy run'
             continue
@@ -296,8 +308,8 @@ def test_jax_and_torch_match_the_same_golden(name, backend):
     kw['structure'] = np.asarray(kw['structure'], dtype=float)
     result = wavebit.rcwa(backend=backend, **kw).solve()
 
-    for sub in ('res', 'res_te_inc', 'res_tm_inc'):
-        got_sub = getattr(result, sub)
+    for sub, attr_name in SUBS:
+        got_sub = getattr(result, attr_name)
         if got_sub is None:
             continue
         for key, attr in (('de_ri', 'R'), ('de_ti', 'T')):
