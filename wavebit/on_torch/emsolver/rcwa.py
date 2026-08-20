@@ -3,10 +3,9 @@ import torch
 import numpy as np
 
 from ._base import _BaseRCWA, _as_tensor
-from ..._core.domain import retired_material_name
 from ..._core.engine import CoreFactorizationMixin, _refuse_retired
 from ..._core.enums import Formulation
-from ..._core.fields import field_1d, field_1d_conical, field_2d, field_2d_4ff, plot_field
+from ..._core.fields import field_1d, field_1d_conical, field_2d, field_2d_4ff
 from ..._core.modeler import Modeling
 from ..._core.result import Result, ResultSub
 
@@ -17,15 +16,6 @@ ResultSubTorch = ResultSub
 
 
 class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
-    def modeling_block_instruction(self, *args, **kwargs):
-        return self.modeler.modeling_block_instruction(*args, **kwargs)
-
-    def rectangle(self, *args, **kwargs):
-        return self.modeler.rectangle(*args, **kwargs)
-
-    def ellipse(self, *args, **kwargs):
-        return self.modeler.ellipse(*args, **kwargs)
-
     def __init__(self,
                  top=1.,                     # superstrate: a Material, or a bare relative
                  # permittivity (the scalar shorthand for Material(epsilon=x)). Was `n_top`
@@ -131,14 +121,6 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
         """
         return self._structure
 
-    @property
-    def ucell(self):
-        raise AttributeError(retired_material_name('ucell'))
-
-    @ucell.setter
-    def ucell(self, value):
-        raise AttributeError(retired_material_name('ucell'))
-
     @structure.setter
     def structure(self, structure):
 
@@ -191,53 +173,6 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
         else:
             raise ValueError(f'{where}: unsupported dtype {grid.dtype}')
         return _as_tensor(grid, device=self.device, dtype=dtype)
-
-    @property
-    def modeling_type_assigned(self):
-        return self._modeling_type_assigned
-
-
-    def _assign_grating_type(self):
-        if self.structure is None:
-            if self._grating_type_assigned is None:
-                self._grating_type_assigned = 2
-            return
-
-        if self.modeling_type_assigned == 0:
-            one_row = self.structure.shape[1] == 1
-            self._refuse_y_orders_on_a_y_invariant_cell(one_row)
-            # One raster row means invariant along `a2`, which is a 1D grating -- but only on
-            # an axis-aligned cell is it one the 1D operators can express. A skewed cell's
-            # `b1` is perpendicular to `a2` rather than parallel to `a1`, so order `m` carries
-            # `m*b1_y` of `ky` that the separable layout has no slot for, and the grooves do
-            # not run along y. Routed to the 1D path anyway it answers the *rectangular*
-            # problem: measured on a 50% binary grating, R out by 0.132 and T by 0.090 at a
-            # 60-degree skew, energy conserving to 1e-15 throughout. See
-            # `tests/test_oblique_lattice.py::test_a_one_row_skewed_cell_is_the_grating_it_draws`.
-            one_dimensional = one_row and self.lattice_is_axis_aligned
-            self._refuse_illegal_tetm(one_dimensional, one_row=one_row)
-            if one_dimensional:
-                # The declaration selects the path, and nothing else does. A named incidence
-                # -- psi, or a pair, which mixes s and p the pure path cannot carry -- leaves
-                # the polarization a live parameter, and the conical formulation is the 1D
-                # one that carries it.
-                self._grating_type_assigned = 0 if self._tetm is not None else 1
-            else:
-                self._grating_type_assigned = 2
-
-        elif self.modeling_type_assigned == 1:
-            self.grating_type_assigned = 2
-
-        elif self.modeling_type_assigned == 2:  # Analytic (staircase-free shapes)
-            self._grating_type_assigned = 2
-
-    @property
-    def grating_type_assigned(self):
-        return self._grating_type_assigned
-
-    @grating_type_assigned.setter
-    def grating_type_assigned(self, grating_type_assigned):
-        self._grating_type_assigned = grating_type_assigned
 
     def solve_conv(self, epx_conv_all, epy_conv_all, epz_conv_i_all,
                    epxy_conv_all=None, epyx_conv_all=None,
@@ -372,6 +307,3 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
         res = self.solve(geometry=geometry)
         field_cell = self.reconstruct_field(sample_x, sample_y, sample_z, incidences)
         return res, field_cell
-
-    def plot_field(self, field_cell):
-        plot_field(field_cell, self.tetm_index)

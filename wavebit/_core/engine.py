@@ -941,6 +941,93 @@ class CoreSolveMixin:
             return Formulation.FOUR_FIELD if given else Formulation.TWO_FIELD
         return self._formulation
 
+    # ------------------------------------------------------------------ path selection
+
+    def _assign_grating_type(self):
+        """Pick the formulation this scene needs: pure 1D TE/TM, 1D conical, or 2D.
+
+        Reads the structure and the declaration, and nothing about the backend -- which is why
+        it lives here rather than in triplicate on the three solver classes, where it sat until
+        2026-08-21. It had been copied verbatim into all three, so the skewed-cell routing bug
+        `3c7d166` fixed existed three times and had to be fixed three times. Same argument as
+        the one that put the solve methods here (see this class's docstring).
+
+        * ``0`` -- pure 1D TE/TM: one grating vector, no azimuth, and a ``tetm`` declaration
+          that says the other polarization is not a degree of freedom of this problem.
+        * ``1`` -- 1D conical: the same one grating vector with the azimuth and the
+          polarization both live. ``phi=None`` is what distinguishes it from ``phi=0``; a
+          stated zero azimuth is still a stated one.
+        * ``2`` -- 2D: everything else, and every scene whose k layout is not separable.
+        """
+        if self.structure is None:
+            if self._grating_type_assigned is None:
+                self._grating_type_assigned = 2
+            return
+
+        if self.modeling_type_assigned == 0:                      # raster
+            one_row = self.structure.shape[1] == 1
+            self._refuse_y_orders_on_a_y_invariant_cell(one_row)
+            # One raster row means invariant along `a2`, which is a 1D grating -- but only on
+            # an axis-aligned cell is it one the 1D operators can express. A skewed cell's
+            # `b1` is perpendicular to `a2` rather than parallel to `a1`, so order `m` carries
+            # `m*b1_y` of `ky` that the separable layout has no slot for, and the grooves do
+            # not run along y. Routed to the 1D path anyway it answers the *rectangular*
+            # problem: measured on a 50% binary grating, R out by 0.132 and T by 0.090 at a
+            # 60-degree skew, energy conserving to 1e-15 throughout. See
+            # `tests/test_oblique_lattice.py::test_a_one_row_skewed_cell_is_the_grating_it_draws`.
+            one_dimensional = one_row and self.lattice_is_axis_aligned
+            self._refuse_illegal_tetm(one_dimensional, one_row=one_row)
+            if one_dimensional:
+                # The declaration selects the path, and nothing else does. A named incidence
+                # -- psi, or a pair, which mixes s and p the pure path cannot carry -- leaves
+                # the polarization a live parameter, and the conical formulation is the 1D
+                # one that carries it.
+                self._grating_type_assigned = 0 if self._tetm is not None else 1
+            else:
+                self._grating_type_assigned = 2
+
+        elif self.modeling_type_assigned == 1:                    # block
+            self.grating_type_assigned = 2                        # TODO: 1d conical case
+
+        elif self.modeling_type_assigned == 2:                    # analytic, staircase-free
+            self._grating_type_assigned = 2
+
+    @property
+    def grating_type_assigned(self):
+        return self._grating_type_assigned
+
+    @grating_type_assigned.setter
+    def grating_type_assigned(self, grating_type_assigned):
+        self._grating_type_assigned = grating_type_assigned
+
+    @property
+    def modeling_type_assigned(self):
+        return self._modeling_type_assigned
+
+    # -------------------------------------------------------------- modeller pass-throughs
+
+    def modeling_block_instruction(self, *args, **kwargs):
+        return self.modeler.modeling_block_instruction(*args, **kwargs)
+
+    def rectangle(self, *args, **kwargs):
+        return self.modeler.rectangle(*args, **kwargs)
+
+    def ellipse(self, *args, **kwargs):
+        return self.modeler.ellipse(*args, **kwargs)
+
+    @property
+    def ucell(self):
+        raise AttributeError(retired_material_name('ucell'))
+
+    @ucell.setter
+    def ucell(self, value):
+        raise AttributeError(retired_material_name('ucell'))
+
+    def plot_field(self, field_cell):
+        """Draw a reconstructed cell. See :func:`wavebit._core.fields.plot_field`."""
+        from .fields import plot_field
+        plot_field(field_cell, self.tetm_index)
+
     def _solve_1d(self, epx_conv_all, epy_conv_all, epz_conv_i_all):
         if self._polarization is not None:
             # Unreachable through solve — `_assign_grating_type` sends a structure with a
