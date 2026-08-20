@@ -2,8 +2,8 @@
 
 An order with ``|kx| > n·k0`` is evanescent, and its ``exp(|kz|·d)`` grows without bound in
 the layer thickness. That growth is what makes a naive transfer-matrix formulation blow up,
-and it is the open problem named in the roadmap for eig-free GPU modes — so it is worth
-knowing precisely where the *current* solver stands.
+and it is the failure any eig-free fast path would have to survive — so it is worth knowing
+precisely where the *current* solver stands.
 
 It stands well, and these tests pin that down. The point is not that the physics is right —
 other tests cover that — but that the same physics survives being asked for in the ways
