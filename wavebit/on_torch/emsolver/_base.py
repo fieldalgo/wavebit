@@ -261,7 +261,7 @@ class _BaseRCWA(CoreSolveMixin):
         else:
             raise ValueError
 
-    def get_kx_ky_vector(self, wavelength):
+    def _separable_kxy(self, wavelength):
 
         max_order_x_range = torch.arange(-self.max_order[0], self.max_order[0] + 1, device=self.device,
                                    dtype=self.float_dtype)

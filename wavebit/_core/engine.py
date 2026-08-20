@@ -424,7 +424,7 @@ class CoreSolveMixin:
     def n_inc(self):
         """The incidence medium's index — the one ``theta`` / ``phi`` / ``kx`` live in.
 
-        The in-plane wavevector build (each backend's ``get_kx_ky_vector``) reads this
+        The in-plane wavevector build (each backend's ``_separable_kxy``) reads this
         rather than ``n_top``, so ``kx_m = n_inc*sin(theta)*cos(phi) + m*wl/period`` holds
         for either illumination side with one spelling.
         """
@@ -795,21 +795,39 @@ class CoreSolveMixin:
             return _lattice.as_lattice(period=period)
         return None if geometry is None else _recorded_lattice(geometry.normal_field_source)
 
-    def _kxy_2d(self, wavelength):
-        """Per-order ``(kx, ky)`` for the 2D solve, in whichever layout the lattice admits.
+    def order_kxy(self):
+        """Per-order in-plane wavevectors ``(kx, ky)``, normalized by ``k0``.
 
-        Axis-aligned cells keep the two 1-D vectors untouched — same objects, same values, so
-        nothing downstream can tell this method was added. A skewed cell cannot be written that
-        way and gets the ``(n_orders_y, n_orders_x)`` Cartesian components instead; both
-        spellings are what :func:`wavebit._core.solve_2d.order_grid_kxy` accepts.
+        What the 2D solve uses, in whichever layout the lattice admits. Axis-aligned cells get
+        the two 1-D vectors, lengths ``(n_orders_x,)`` and ``(n_orders_y,)`` — handed straight
+        back from the separable build behind it, untouched, so on a rectangular cell this *is*
+        that build and nothing downstream can tell the lattice step is there.
+        A skewed cell cannot be written that way and gets the ``(n_orders_y, n_orders_x)``
+        Cartesian components instead; both spellings are what
+        :func:`wavebit._core.solve_2d.order_grid_kxy` accepts.
+
+        The 1D and conical operators take the 1-D pair and ``diag`` it, so they read the
+        separable build directly (:meth:`_solve_1d`) -- which is the same thing on an
+        axis-aligned cell, and is what they have always done on a skewed one.
+
+        **This is public because the separable half is a trap on its own.** Until 2026-08-20
+        the public accessor was ``get_kx_ky_vector``, which builds only the 1-D pair, and on a
+        skewed cell that pair describes the rectangular problem rather than the one being
+        solved -- measured on a 60-degree hexagonal cell at ``max_order=(2, 2)``, ``ky`` is out
+        by up to ``0.805 k0`` across a retained band of about ``+-2``, silently, with nothing
+        in the docs saying so. The correct answer was the private one. They swapped places.
 
         The incident components are read back out of the 1-D vectors at ``m = n = 0`` rather
         than recomputed. That entry *is* ``k_inc`` by construction, so the backend's own
         ``sin(theta)`` handling — which differs between NumPy, JAX and Torch for tracing
         reasons — stays the single source for incidence, and the lattice basis is the only new
         arithmetic here.
+
+        Takes no wavelength, for the reason ``solve_conv`` takes none: the solver has one, and
+        every caller passed exactly that.
         """
-        kx, ky = self.get_kx_ky_vector(wavelength)
+        wavelength = self.wavelength
+        kx, ky = self._separable_kxy(wavelength)
         A = self._lattice_basis
         if A is None or _lattice.is_axis_aligned(A):
             return kx, ky
@@ -909,7 +927,7 @@ class CoreSolveMixin:
             return Formulation.FOUR_FIELD if given else Formulation.TWO_FIELD
         return self._formulation
 
-    def _solve_1d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
+    def _solve_1d(self, epx_conv_all, epy_conv_all, epz_conv_i_all):
         if self._polarization is not None:
             # Unreachable through solve — `_assign_grating_type` sends a structure with a
             # pair to the conical path, which carries both polarizations — so this only
@@ -920,24 +938,29 @@ class CoreSolveMixin:
                 'its own when polarization is set')
         solve = self._solve_fn('1d')
         self._formulation_assigned = Formulation.TWO_FIELD
-        kx, _ = self.get_kx_ky_vector(wavelength)
+        wavelength = self.wavelength
+        # The separable pair, not :meth:`order_kxy`: the 1D operator takes a 1-D ``kx`` and
+        # ``diag``s it. They are the same object on an axis-aligned cell; on a skewed one this
+        # keeps the solve exactly what it was before `order_kxy` became the public accessor.
+        kx, _ = self._separable_kxy(wavelength)
         return self._finish(solve(
             self.tetm_index, wavelength, kx, self.n_top, self.n_bot, self.theta,
             self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             incidence_side=self.incidence_side, answers=self._answers))
 
-    def _solve_1d_conical(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
+    def _solve_1d_conical(self, epx_conv_all, epy_conv_all, epz_conv_i_all):
         solve = self._solve_fn('conical')
         self._formulation_assigned = Formulation.TWO_FIELD
-        kx, ky = self.get_kx_ky_vector(wavelength)
+        wavelength = self.wavelength
+        kx, ky = self._separable_kxy(wavelength)   # 1-D pair; see :meth:`_solve_1d`
         return self._finish(solve(
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self._incidence_pair(), self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             phi=self.phi, incidence_side=self.incidence_side,
             answers=self._answers))
 
-    def _solve_2d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
+    def _solve_2d(self, epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None,
                  epxz_conv_all=None, epyz_conv_all=None,
                  epzx_conv_all=None, epzy_conv_all=None, mu=None, mu_top=None, mu_bot=None,
@@ -947,7 +970,8 @@ class CoreSolveMixin:
         # structural question, and `mu_top != 1.0` on a traced permeability is a traced boolean
         # no `if` can take. The numeric default lives at the one place that multiplies by it,
         # at the bottom of this method -- absence is resolved to `1.0` exactly once.
-        kx, ky = self._kxy_2d(wavelength)
+        wavelength = self.wavelength
+        kx, ky = self.order_kxy()
         z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
         self._formulation_assigned = self._formulation_for(z_row)
         if self._formulation_assigned == Formulation.FOUR_FIELD:

@@ -173,7 +173,7 @@ def order_kxy(xp, A, max_order_x, max_order_y, wavelength, k_inc_x, k_inc_y, dty
     ``(n_orders_y, n_orders_x)`` arrays.
 
     Both are normalized by ``k0`` — i.e. these are ``kx/k0``, matching what
-    ``get_kx_ky_vector`` has always returned — and laid out so that ``reshape(-1)`` gives the
+    ``order_kxy`` returns — and laid out so that ``reshape(-1)`` gives the
     flat order list the convolution matrices are indexed by (``m`` fastest, matching
     ``_fourier2d_grid``'s final ``(n_orders_y, n_orders_x)`` reshape).
 

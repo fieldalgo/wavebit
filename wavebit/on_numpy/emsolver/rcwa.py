@@ -286,11 +286,11 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                 'The 1D and conical operators carry no permeability slot at all.')
 
         if self.grating_type_assigned == 0:
-            result_dict = self._solve_1d(self.wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
+            result_dict = self._solve_1d(epx_conv_all, epy_conv_all, epz_conv_i_all)
         elif self._grating_type_assigned == 1:
-            result_dict = self._solve_1d_conical(self.wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
+            result_dict = self._solve_1d_conical(epx_conv_all, epy_conv_all, epz_conv_i_all)
         else:
-            result_dict = self._solve_2d(self.wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
+            result_dict = self._solve_2d(epx_conv_all, epy_conv_all, epz_conv_i_all,
                                          epxy_conv_all, epyx_conv_all, *z_row, mu=mu,
                                          mu_top=mu_top, mu_bot=mu_bot,
                                          eps_top=eps_top, eps_bot=eps_bot)
@@ -332,7 +332,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         rather than ignored, which is what it was until 2026-08-20.
         """
         self._require_field_declaration()
-        kx, ky = self._kxy_2d(self.wavelength)
+        kx, ky = self.order_kxy()
 
         if self._grating_type_assigned == 0:
             sample_y = 1

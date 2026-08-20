@@ -40,7 +40,7 @@ def _run_and_inputs(structure, thickness, n_top, n_bot, wl, period, max_order, t
     assert solver.grating_type_assigned == 2, solver.grating_type_assigned    # ensure 2D path
     epx, epy, epz = to_conv_mat_raster_sampled(
         solver.structure, solver.max_order[0], solver.max_order[1])
-    kx, ky = solver.get_kx_ky_vector(wl)
+    kx, ky = solver.order_kxy()
     inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_top, n_bot=n_bot,
                   theta=solver.theta, phi=solver.phi,
                   incidence=solver._incidence_pair(), thickness=solver.thickness,

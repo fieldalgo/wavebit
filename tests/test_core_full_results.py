@@ -23,7 +23,7 @@ def _setup(**kw):
     legacy = solver.solve()
     epx, epy, epz = to_conv_mat_raster_sampled(
         solver.structure, solver.max_order[0], solver.max_order[1])
-    kx, ky = solver.get_kx_ky_vector(kw['wavelength'])
+    kx, ky = solver.order_kxy()
     return solver, legacy, (epx, epy, epz), kx, ky
 
 

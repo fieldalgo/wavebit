@@ -161,7 +161,7 @@ def test_6_none_structure_grating_type():
 
 def test_7_none_theta_handling():
     print("==================================================")
-    print("Test 7: theta=None Handling in get_kx_ky_vector & transfer_method")
+    print("Test 7: theta=None Handling in _separable_kxy and the solve")
     print("==================================================")
     
     option = dict(

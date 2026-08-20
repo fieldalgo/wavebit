@@ -215,7 +215,7 @@ class _BaseRCWA(CoreSolveMixin):
         else:
             raise ValueError
 
-    def get_kx_ky_vector(self, wavelength):
+    def _separable_kxy(self, wavelength):
 
         max_order_x_range = np.arange(-self.max_order[0], self.max_order[0] + 1)
         max_order_y_range = np.arange(-self.max_order[1], self.max_order[1] + 1)

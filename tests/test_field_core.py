@@ -207,7 +207,7 @@ def _frame_cell(path, sample_z, formulation=None):
         solver.formulation = formulation
     solver.solve()
     raw = np.asarray(solver.reconstruct_field(sample_x=1, sample_y=1, sample_z=sample_z))
-    kx, ky = solver.get_kx_ky_vector(FRAME_WL)
+    kx, ky = solver.order_kxy()
     if raw.ndim == 5:
         raw = raw[0]
     return (_as_six(raw[:, 0, 0, :], path),

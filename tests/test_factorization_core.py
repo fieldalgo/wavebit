@@ -173,7 +173,7 @@ def test_factorization_feeds_solve_bit_exactly():
                           tetm='te',
                           max_order=max_order, period=period, wavelength=wl, thickness=thickness, structure=structure)
     legacy = solver.solve()
-    kx, _ = solver.get_kx_ky_vector(wl)
+    kx, _ = solver.order_kxy()
 
     epx, epy, epz = core_dfs(structure, max_order[0], max_order[1])
     ri, ti = solve_1d(0, wl, kx, n_top, n_bot, solver.theta, solver.thickness, epx, epy, epz)
@@ -202,7 +202,7 @@ def test_end_to_end_gradient_wrt_structure_1d():
     # top: eps 4.0 is the index 2.0 the `_chain_1d` core call below still takes.
     solver = wavebit.rcwa(backend=0, top=4.0, bot=1.0, theta=0.3, phi=None, tetm='te',
                           max_order=max_order, period=[0.77], wavelength=0.777, thickness=[0.15], structure=structure)
-    kx, _ = solver.get_kx_ky_vector(0.777)
+    kx, _ = solver.order_kxy()
     theta = complex(solver.theta)
     fk = dict(max_order_x=max_order[0], max_order_y=max_order[1])
 
@@ -236,7 +236,7 @@ def test_end_to_end_gradient_wrt_structure_2d():
     wl, n_top, n_bot = 0.9, 1.0, 1.0
     solver = wavebit.rcwa(backend=0, top=n_top, bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
                           max_order=max_order, period=[1.0, 1.0], wavelength=wl, thickness=[0.15], structure=structure)
-    kx, ky = solver.get_kx_ky_vector(wl)
+    kx, ky = solver.order_kxy()
     theta, inc = complex(solver.theta), solver._incidence_pair()
 
     def chain(u, kx_, ky_, th_, inc_):
@@ -346,7 +346,7 @@ def test_nvf_end_to_end_gradient_wrt_structure():
 
     solver = wavebit.rcwa(backend=0, top=n_top, bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
                           max_order=max_order, period=[1.0, 1.0], wavelength=wl, thickness=[d], structure=structure)
-    kx, ky = solver.get_kx_ky_vector(wl)
+    kx, ky = solver.order_kxy()
     theta, inc = complex(solver.theta), solver._incidence_pair()
 
     def chain(u, kx_, ky_, th_, inc_):
@@ -497,7 +497,7 @@ def test_cfs_end_to_end_gradient_wrt_structure():
     solver = wavebit.rcwa(backend=0, top=n_top ** 2, bot=n_bot ** 2, theta=0.3, phi=None,
                           psi=np.pi / 2,
                           max_order=max_order, period=[0.77], wavelength=wl, thickness=[d], structure=structure)
-    kx, _ = solver.get_kx_ky_vector(wl)
+    kx, _ = solver.order_kxy()
     theta = complex(solver.theta)
 
     def chain(u, kx_):

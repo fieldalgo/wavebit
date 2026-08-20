@@ -173,7 +173,7 @@ def _core_inputs(kwargs):
     solver.solve()                    # assigns the grating type
     epx, epy, epz = to_conv_mat_raster_sampled(
         solver.structure, solver.max_order[0], solver.max_order[1])
-    kx, ky = solver.get_kx_ky_vector(kwargs['wavelength'])
+    kx, ky = solver.order_kxy()
     # The core solves take an INDEX: `n_top` / `n_bot` are amplitude ratios there, and the
     # solver's read-only properties are exactly the derived roots to hand them.
     common = dict(wavelength=kwargs['wavelength'], kx=kx, n_top=solver.n_top,
@@ -314,7 +314,7 @@ def test_smm_field_with_an_order_exactly_at_the_substrate_cutoff(extra):
     kwargs = dict(CUTOFF, **extra)
     solver = wavebit.rcwa(backend=0, layer_algorithm='SMM', **kwargs)
     kz = np.sqrt(np.array(solver.n_bot, dtype=complex) ** 2
-                 - np.array(solver.get_kx_ky_vector(kwargs['wavelength'])[0]) ** 2)
+                 - np.array(solver.order_kxy()[0]) ** 2)
     assert np.min(np.abs(kz)) < 1e-12, 'premise: an order must sit exactly at cutoff'
 
     _, tmm = _field('ETM', kwargs, sample_x=6, sample_y=6, sample_z=4)

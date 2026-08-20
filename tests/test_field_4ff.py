@@ -118,7 +118,7 @@ def z_coupled_cell(eps_list, thickness, theta_deg=28.0, sample_z=64, backend=0):
     res = mee.solve_conv(*[_to_backend(s, backend) for s in uniform_slots(eps_list)])
     assert mee.formulation_assigned == '4ff'
     cell = np.asarray(mee.reconstruct_field(sample_x=1, sample_y=1, sample_z=sample_z))
-    kx, ky = mee.get_kx_ky_vector(WL)
+    kx, ky = mee.order_kxy()
     return (res, np.asarray(cell, dtype=complex)[0, :, 0, 0, :],
             complex(np.asarray(kx)[0]), complex(np.asarray(ky)[0]))
 

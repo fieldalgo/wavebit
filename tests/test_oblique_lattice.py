@@ -164,10 +164,38 @@ def test_an_axis_aligned_basis_changes_nothing():
     assert np.array_equal(plain._geometry_lattice_for(None),
                           explicit._geometry_lattice_for(None))
     for s in (plain, explicit):
-        kx, ky = s._kxy_2d(WL)
+        kx, ky = s.order_kxy()
         assert kx.ndim == 1 and ky.ndim == 1
     assert totals(cell) == pytest.approx(totals(cell, lattice=ORTHO), abs=1e-12)
 
+
+def test_the_public_wavevectors_are_the_ones_the_skewed_solve_uses():
+    """``order_kxy`` answers for the cell that was given, not for a rectangle.
+
+    Until 2026-08-20 the public accessor was ``get_kx_ky_vector``, which builds only the
+    separable 1-D pair ``(kx[m], ky[n])``. That form cannot express a skewed cell at all --
+    there each order's components mix both indices -- so it returned the rectangular problem's
+    answer, silently, while the solve used the private lattice-aware build. Measured on this
+    60-degree cell at ``max_order=(2, 2)``: ``ky`` out by **0.805 k0** across a retained band
+    of about ``+-2``. Nothing raised, and no document said so.
+
+    The two swapped places. This pins the swap from both sides: the skewed answer must *not*
+    be the separable one, and on a rectangular cell it must be exactly the separable one --
+    the second half is what says the fix did not move any existing result.
+    """
+    from wavebit._core.solve_2d import order_grid_kxy
+
+    skewed = solver(raster(HEX), max_order=2, lattice=HEX)
+    grid = order_grid_kxy(np, *(np.asarray(v) for v in skewed.order_kxy()))
+    flat = order_grid_kxy(np, *(np.asarray(v) for v in skewed._separable_kxy(skewed.wavelength)))
+    assert grid[0].shape == grid[1].shape == (5, 5)
+    apart = max(float(np.max(np.abs(a - b))) for a, b in zip(grid, flat))
+    assert apart > 0.5, apart          # the separable pair is a different problem, not a rounding
+
+    aligned = solver(raster(ORTHO), max_order=2, lattice=ORTHO)
+    for public, separable in zip(aligned.order_kxy(),
+                                 aligned._separable_kxy(aligned.wavelength)):
+        assert np.array_equal(np.asarray(public), np.asarray(separable))
 
 def test_unimodular_shear_is_the_same_physics():
     """``a2' = a2 + a1`` generates the identical lattice, so the answers must agree.

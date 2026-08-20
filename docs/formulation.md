@@ -90,7 +90,7 @@ Ey(x̃, z̃) = Σ_m  S_m(z̃) exp(+i kx_m x̃),      kx_m = n_I sinθ cosφ + m 
 ```
 
 with `m` running `-M..M` — the sign of `m` here and the `+i` in the phase are one choice.
-Code: `get_kx_ky_vector` builds exactly this vector (`max_order_x_range = arange(-M, M+1)`).
+Code: `_separable_kxy` builds exactly this vector (`max_order_x_range = arange(-M, M+1)`).
 
 The permittivity expands in the **same** sign:
 

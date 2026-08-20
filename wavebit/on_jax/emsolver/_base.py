@@ -248,7 +248,7 @@ class _BaseRCWA(CoreSolveMixin):
 
 
     @jax_device_set
-    def get_kx_ky_vector(self, wavelength):
+    def _separable_kxy(self, wavelength):
 
         max_order_x_range = jnp.arange(-self.max_order[0], self.max_order[0] + 1)
         max_order_y_range = jnp.arange(-self.max_order[1], self.max_order[1] + 1)

@@ -176,7 +176,7 @@ def _frame_sign(solver, grating_type):
     """
     if grating_type == 0:
         return 1.0
-    kx = np.asarray(solver.get_kx_ky_vector(solver.wavelength)[0], dtype=np.complex128)
+    kx = np.asarray(solver.order_kxy()[0], dtype=np.complex128)
     return np.where(np.real(np.reshape(kx, (1, -1))) < 0, -1.0, 1.0)
 
 
