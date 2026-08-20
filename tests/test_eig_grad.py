@@ -156,14 +156,14 @@ def _ucell_grad(theta, backend):
         def loss(u):
             s = wavebit.rcwa(backend=1, structure=u, theta=theta,
                                fourier_coefficients='sampled', factorization='li', **STACK)
-            return jnp.real(jnp.sum(s.conv_solve().T))
+            return jnp.real(jnp.sum(s.solve().T))
         return np.asarray(jax.grad(loss)(jnp.asarray(UNIFORM)))
 
     torch = pytest.importorskip('torch')
     u = torch.tensor(UNIFORM, dtype=torch.float64, requires_grad=True)
     s = wavebit.rcwa(backend=2, structure=u, theta=theta,
                        fourier_coefficients='sampled', factorization='li', **STACK)
-    s.conv_solve().T.real.sum().backward()
+    s.solve().T.real.sum().backward()
     return u.grad.numpy()
 
 

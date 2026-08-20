@@ -35,7 +35,7 @@ def _solve(*, fto, thickness, eps_hi=16.0, algo='ETM', type_complex=np.complex12
         top=1.0, bot=eps_bot, theta=0.0, phi=0.0, psi=np.pi / 2,
         structure=_grating(eps_hi), thickness=[thickness],
         connecting_algo=algo, type_complex=type_complex,
-    ).conv_solve()
+    ).solve()
 
 
 def _energy(result):
@@ -119,7 +119,7 @@ def test_tmm_and_smm_fields_agree_through_a_thick_layer(thickness):
             top=1.0, bot=2.25, theta=0.0, phi=0.0, psi=np.pi / 2,
             structure=_grating(), thickness=[thickness], connecting_algo=algo,
             answers='field')
-        solver.conv_solve()
+        solver.solve()
         cells.append(np.asarray(solver.calculate_field(res_x=8, res_y=1, res_z=6)))
 
     tmm, smm = cells

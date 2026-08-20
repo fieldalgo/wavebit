@@ -83,7 +83,7 @@ def _solve(eps_stack, thickness, eps_top, eps_bot, *, theta=0.0, tetm='te', wave
         structure=structure if len(eps_stack) else np.array([[[_api_material(EPS_AIR)]]]),
         thickness=list(thickness) if len(thickness) else [0.],
     )
-    res = solver.conv_solve()
+    res = solver.solve()
     return complex(np.asarray(res.R).sum()), complex(np.asarray(res.T).sum())
 
 

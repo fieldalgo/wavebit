@@ -120,7 +120,7 @@ def geometries(structure):
 def total_reflectance(build, geometry, cx, fto, backend=0):
     solver = wavebit.rcwa(backend=backend, structure=build(cx), fto=[fto, fto],
                           normal_grid=NORMAL_GRID, **CFG)
-    result = solver.conv_solve(geometry=geometry)
+    result = solver.solve(geometry=geometry)
     if backend == 1:
         import jax.numpy as jnp
         return jnp.real(jnp.sum(result.R))

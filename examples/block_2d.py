@@ -52,7 +52,7 @@ def run():
     solver = wavebit.rcwa(**rcwa_options)
     solver.structure = structure
 
-    result = solver.conv_solve()
+    result = solver.solve()
 
     result_given_pol = result.res
     result_te_incidence = result.res_te_inc

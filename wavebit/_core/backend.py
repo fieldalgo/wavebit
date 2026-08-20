@@ -111,7 +111,7 @@ def check_finite(xp, **named):
             'near-zero thickness.\n'
             'If it is a grazing order, move off the condition — one ULP of wavelength, '
             'period or angle is enough, and the answer either side of it agrees to eight '
-            'digits; conv_solve(auto_detune=True), the default, does that retry for you, so '
+            'digits; solve(auto_detune=True), the default, does that retry for you, so '
             'seeing this means it was disabled or the retry failed too. Do NOT reach for '
             'fto or thinner slices instead: neither knob touches the degeneracy (it is '
             'fixed by kx against an index), so at best they re-roll the round-off — '
@@ -161,7 +161,7 @@ class RayleighPointWarning(UserWarning):
     ``jax.grad`` tracer). There the old product construction is what ships, and the result
     it annotates is finite, in range, and possibly wrong with no other sign — see the
     caller for the mechanism and :func:`check_finite`'s message for the remedy (a one-ULP
-    detune, which ``conv_solve``'s default ladder applies on seeing this warning). Its own
+    detune, which ``solve``'s default ladder applies on seeing this warning). Its own
     category so a sweep that knowingly steps across a Rayleigh anomaly can silence or
     escalate it on its own.
     """
@@ -170,7 +170,7 @@ class RayleighPointWarning(UserWarning):
 class AutoDetuneWarning(UserWarning):
     """An ``auto_detune`` retry moved the solve off the requested point — this is the record.
 
-    Fired once per ``conv_solve(auto_detune=...)`` that actually retried; the message carries
+    Fired once per ``solve(auto_detune=...)`` that actually retried; the message carries
     the relative step and the wavelength the returned result was evaluated at, and the solver
     keeps that wavelength so everything downstream (field reconstruction included) describes
     one consistent problem. Its own category so a sweep can silence the notices while keeping
@@ -201,7 +201,7 @@ def check_mode_cutoff(xp, eigenvalues):
     (:func:`wavebit._core.solve_2d._rebuild_grazing_cluster`) the 2D builder handles the
     regime itself — exactly, or with a loud refusal — and reaches this check only on its
     fallback paths, where the old construction is what ships; the warning is then what
-    drives ``conv_solve``'s default detune ladder. The 1D paths do not need this check: the
+    drives ``solve``'s default detune ladder. The 1D paths do not need this check: the
     pure path never had the disease and the conical path was reformulated (see
     ``layer_modes_1d_conical``).
 
@@ -220,7 +220,7 @@ def check_mode_cutoff(xp, eigenvalues):
             'condition) on the 2D path, which loses that mode to cancellation — the result '
             'is finite and may be wrong at the 1e-5 level near the condition, growing to '
             'order 1 exactly on it, with no other sign. Move off the condition: one ULP of '
-            'wavelength, period or angle is enough, and conv_solve(auto_detune=True), the '
+            'wavelength, period or angle is enough, and solve(auto_detune=True), the '
             'default, does that retry for you. (The 1D paths solve this point exactly; a '
             'y-invariant cell routed through the 1D solves does not need the detune.)',
             RayleighPointWarning, stacklevel=3)

@@ -199,7 +199,7 @@ def test_mu_with_a_z_coupled_permittivity_is_refused():
 # `structure` and `mu` are two fields of one raster and either setter can be the one that
 # completes the pair. Only the `mu` setter used to check it, so the same mistake was refused or
 # accepted purely on the order the two assignments were written in -- and the accepted spelling
-# was the dangerous one: the `mu` stayed on the solver, reached no build, and `conv_solve()`
+# was the dangerous one: the `mu` stayed on the solver, reached no build, and `solve()`
 # answered bit-identically to the same scene with no `mu` at all.
 #
 # Parametrized over all three backends because the check is one shared method called from three
@@ -258,7 +258,7 @@ def test_a_same_shaped_raster_swap_keeps_the_mu(backend, name):
     mee = _raster_solver_with_mu(backend)
     mee.structure = np.array([[[9.0, 9.0, 1.0, 1.0], [9.0, 1.0, 1.0, 1.0]]])
     assert mee.mu is not None
-    total = mee.conv_solve().R
+    total = mee.solve().R
     assert float(np.asarray(total.detach() if hasattr(total, 'detach') else total).sum()) > 0
 
 
@@ -394,7 +394,7 @@ def _uniform_cell(eps, mu, thick, eps_bot, mu_bot, theta, z_abs, algo='ETM'):
                           thickness=list(thick), connecting_algo=algo, answers='field')
     solver.structure = tile(eps)
     solver.mu = None if all(m == 1.0 for m in mu) else tile(mu)
-    solver.conv_solve()
+    solver.solve()
     # `(False, True, False)` is the TE-incidence column: E along the s direction, which is the
     # polarization the closed form is written for and the only one with an `H_z` at all.
     cell = np.asarray(solver.calculate_field(res_x=1, res_y=1,
@@ -509,7 +509,7 @@ def _two_layer_cell(algo, side):
                           connecting_algo=algo, incidence_side=side)
     solver.structure = TWO_LAYER_EPS
     solver.mu = TWO_LAYER_MU
-    solver.conv_solve()
+    solver.solve()
     return np.asarray(solver.calculate_field(res_x=5, res_y=5, res_z=4,
                                              set_field_input=TE_INC))
 
@@ -551,7 +551,7 @@ def _patterned_cell(eps, mu, variant, backend=0):
                           wavelength=FIELD_WL, thickness=[THICK], answers='field')
     solver.structure = eps if backend == 0 else _lift(backend, eps)
     solver.mu = mu if backend == 0 else _lift(backend, mu)
-    solver.conv_solve()
+    solver.solve()
     cell = solver.calculate_field(res_x=5, res_y=5, res_z=4, set_field_input=variant)
     return np.asarray(cell.detach() if hasattr(cell, 'detach') else cell)[0]
 
@@ -635,7 +635,7 @@ def test_the_permeability_a_reconstructed_hz_depends_on_is_differentiable():
                               wavelength=FIELD_WL, thickness=[THICK], answers='field')
         solver.structure = jnp.asarray(EPS_PATTERN)
         solver.mu = mu
-        solver.conv_solve()
+        solver.solve()
         cell = solver.calculate_field(res_x=4, res_y=4, res_z=3,
                                       set_field_input=TE_INC)
         return jnp.sum(jnp.abs(cell[..., 5]) ** 2)       # H_z alone

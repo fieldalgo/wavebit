@@ -116,7 +116,7 @@ def test_backside_amplitudes_match_the_reversed_stack_oracle(case, tetm, theta, 
     _, ns, ds = case
     want_r = analytic_r(ns[::-1], ds[::-1], WL, theta, tetm)
     want_t = analytic_t(ns[::-1], ds[::-1], WL, theta, tetm)
-    res = _solver(ns, ds, theta, tetm, path, algo, 'bottom').conv_solve()
+    res = _solver(ns, ds, theta, tetm, path, algo, 'bottom').solve()
     got_r, got_t = _amps(res, tetm)
     assert abs(got_r - want_r) < 1e-12, (got_r, want_r)
     assert abs(got_t - want_t) < 1e-12, (got_t, want_t)
@@ -132,7 +132,7 @@ def test_backside_efficiencies_conserve_energy_on_a_lossless_stack(tetm, theta, 
     from the top-side solve while their sum may not.
     """
     _, ns, ds = STACKS[0]
-    res = _solver(ns, ds, theta, tetm, '1d', algo, 'bottom').conv_solve()
+    res = _solver(ns, ds, theta, tetm, '1d', algo, 'bottom').solve()
     assert float(np.sum(res.R) + np.sum(res.T)) == pytest.approx(1.0, abs=1e-12)
 
 
@@ -153,8 +153,8 @@ def test_transmittance_is_reciprocal_and_reflectance_is_not(tetm):
     th_t = float(np.arcsin(kpar / ns[0]))
     th_b = float(np.arcsin(kpar / ns[-1].real))
 
-    top = _solver(ns, ds, th_t, tetm, '1d', 'ETM', 'top').conv_solve()
-    bot = _solver(ns, ds, th_b, tetm, '1d', 'ETM', 'bottom').conv_solve()
+    top = _solver(ns, ds, th_t, tetm, '1d', 'ETM', 'top').solve()
+    bot = _solver(ns, ds, th_b, tetm, '1d', 'ETM', 'bottom').solve()
 
     T_t, T_b = float(np.sum(top.T)), float(np.sum(bot.T))
     R_t, R_b = float(np.sum(top.R)), float(np.sum(bot.R))
@@ -177,7 +177,7 @@ def test_grating_transmittance_is_reciprocal_per_order(tetm):
     fto = kw['fto']
 
     def T00(side, theta):
-        res = wavebit.rcwa(tetm=tetm, theta=theta, incidence_side=side, **kw).conv_solve()
+        res = wavebit.rcwa(tetm=tetm, theta=theta, incidence_side=side, **kw).solve()
         return float(np.asarray(res.T).ravel()[fto])
 
     assert T00('top', 0.0) == pytest.approx(T00('bottom', 0.0), abs=1e-12)
@@ -186,8 +186,8 @@ def test_grating_transmittance_is_reciprocal_per_order(tetm):
     th_b = float(np.arcsin(np.sin(th) * 1.0 / N_SUB))     # Snell, in indices
     assert T00('top', th) == pytest.approx(T00('bottom', -th_b), abs=1e-12)
 
-    res_t = wavebit.rcwa(tetm=tetm, theta=0.0, incidence_side='top', **kw).conv_solve()
-    res_b = wavebit.rcwa(tetm=tetm, theta=0.0, incidence_side='bottom', **kw).conv_solve()
+    res_t = wavebit.rcwa(tetm=tetm, theta=0.0, incidence_side='top', **kw).solve()
+    res_b = wavebit.rcwa(tetm=tetm, theta=0.0, incidence_side='bottom', **kw).solve()
     dR00 = abs(float(np.asarray(res_t.R).ravel()[fto])
                - float(np.asarray(res_b.R).ravel()[fto]))
     assert dR00 > 1e-2, 'an asymmetric grating must reflect differently per side'
@@ -206,9 +206,9 @@ def test_backside_etm_and_smm_agree_per_order(tetm):
     and oblique incidence in play at once.
     """
     a = wavebit.rcwa(connecting_algo='ETM', tetm=tetm, theta=0.3,
-                       incidence_side='bottom', **GRATING_KW).conv_solve()
+                       incidence_side='bottom', **GRATING_KW).solve()
     b = wavebit.rcwa(connecting_algo='SMM', tetm=tetm, theta=0.3,
-                       incidence_side='bottom', **GRATING_KW).conv_solve()
+                       incidence_side='bottom', **GRATING_KW).solve()
     assert np.abs(np.asarray(a.R) - np.asarray(b.R)).max() < 1e-12
     assert np.abs(np.asarray(a.T) - np.asarray(b.T)).max() < 1e-12
     r_a, r_b = (a.res.r_s, b.res.r_s) if tetm == 'te' else (a.res.r_p, b.res.r_p)
@@ -217,9 +217,9 @@ def test_backside_etm_and_smm_agree_per_order(tetm):
 
 def test_backside_etm_and_smm_agree_on_the_conical_path():
     a = wavebit.rcwa(connecting_algo='ETM', psi=0.7, phi=0.3, theta=0.25,
-                       incidence_side='bottom', **GRATING_KW).conv_solve()
+                       incidence_side='bottom', **GRATING_KW).solve()
     b = wavebit.rcwa(connecting_algo='SMM', psi=0.7, phi=0.3, theta=0.25,
-                       incidence_side='bottom', **GRATING_KW).conv_solve()
+                       incidence_side='bottom', **GRATING_KW).solve()
     assert np.abs(np.asarray(a.R) - np.asarray(b.R)).max() < 1e-12
     assert np.abs(np.asarray(a.T) - np.asarray(b.T)).max() < 1e-12
 
@@ -268,9 +268,9 @@ def test_backside_holds_on_every_backend(backend):
         importlib.import_module('wavebit.on_jax')          # enables x64
 
     ref = wavebit.rcwa(tetm='te', theta=0.3, incidence_side='bottom',
-                         **GRATING_KW).conv_solve()
+                         **GRATING_KW).solve()
     got = wavebit.rcwa(tetm='te', theta=0.3, incidence_side='bottom',
-                         **{**GRATING_KW, 'backend': backend}).conv_solve()
+                         **{**GRATING_KW, 'backend': backend}).solve()
     assert np.abs(np.asarray(ref.R) - np.asarray(got.R)).max() < 1e-12
     assert np.abs(np.asarray(ref.T) - np.asarray(got.T)).max() < 1e-12
 

@@ -73,7 +73,7 @@ for name, instr in INSTRUCTIONS.items():
         out[f'{name}__L{i}__cell'] = np.asarray(cell)
         out[f'{name}__L{i}__x'] = np.asarray(x)
         out[f'{name}__L{i}__y'] = np.asarray(y)
-    res = solver.conv_solve()
+    res = solver.solve()
     out[f'{name}__de_ri'] = np.asarray(res.res.R)
     out[f'{name}__de_ti'] = np.asarray(res.res.T)
 

@@ -278,11 +278,11 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                 'The 1D and conical operators carry no permeability slot at all.')
 
         if self._grating_type_assigned == 0:
-            result_dict = self.solve_1d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
+            result_dict = self._solve_1d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
         elif self._grating_type_assigned == 1:
-            result_dict = self.solve_1d_conical(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
+            result_dict = self._solve_1d_conical(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
         else:
-            result_dict = self.solve_2d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
+            result_dict = self._solve_2d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
                                         epxy_conv_all, epyx_conv_all, *z_row, mu=mu,
                                         mu_top=mu_top, mu_bot=mu_bot,
                                         eps_top=eps_top, eps_bot=eps_bot)
@@ -311,7 +311,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         component genuinely two-valued there. With explicit ``res_z`` the returned z axis is
         exactly the request, in the caller's order, rather than ``res_z * n_layers``.
 
-        Takes no ``geometry``: it never calls ``conv_solve``, and every discrete decision it
+        Takes no ``geometry``: it never calls ``solve``, and every discrete decision it
         makes -- the grating type, and which incidences ``set_field_input`` selects -- is
         already concrete by the time it runs. It reads ``self.T1`` / ``self.layer_info_list``,
         so whichever geometry the preceding solve used is the one in force here.
@@ -362,7 +362,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                          geometry=None, **kwargs):
         """Solve and reconstruct the field in one jit-compiled call.
 
-        ``geometry`` is required here, unlike on :meth:`conv_solve`. This method jits over
+        ``geometry`` is required here, unlike on :meth:`solve`. This method jits over
         ``self``, so the structure arrives as tracers and the discrete decisions inside the
         factorization and the solve have nothing concrete to branch on; a
         :class:`~wavebit._core.geometry.StaticGeometry` from
@@ -371,7 +371,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         once.
 
         Because this method always traces, a stale ``geometry`` is replayed on trust here: the
-        comparison that would catch it is the thing the freeze exists to avoid. ``conv_solve``
+        comparison that would catch it is the thing the freeze exists to avoid. ``solve``
         refuses one eagerly, so check a long fit there, or re-freeze on a schedule.
 
         ``res_x`` / ``res_y`` / ``res_z`` and ``set_field_input`` are static too: they set the
@@ -393,7 +393,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
 
         [setattr(self, k, v) for k, v in kwargs.items()]  # needed for optimization
 
-        res = self.conv_solve(geometry=geometry)
+        res = self.solve(geometry=geometry)
         field_cell = self.calculate_field(res_x, res_y, res_z, set_field_input)
         return res, field_cell
 
@@ -403,7 +403,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         """Eager solve-and-field. ``geometry`` is optional: omit it and each discrete decision
         is auto-detected from the concrete structure."""
         self._require_field_declaration()
-        res = self.conv_solve(geometry=geometry)
+        res = self.solve(geometry=geometry)
         field_cell = self.calculate_field(res_x, res_y, res_z, set_field_input)
         return res, field_cell
 
@@ -412,7 +412,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         under development
         """
 
-        R, T = jax.vmap(self.conv_solve)(structure_list)
+        R, T = jax.vmap(self.solve)(structure_list)
 
         return R, T
 
@@ -421,6 +421,6 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         under development
         """
 
-        R, T = jax.pmap(self.conv_solve)(structure_list)
+        R, T = jax.pmap(self.solve)(structure_list)
 
         return jnp.array(R), jnp.array(T)

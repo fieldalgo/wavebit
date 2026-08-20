@@ -96,7 +96,7 @@ def _reconstruct(stack, theta, pol):
                           # coefficients are the ones that describe the same layer. Without
                           # this the two truncations differ and nothing lands at 1e-14.
                           fourier_coefficients='integrated', answers='field')
-    solver.conv_solve()
+    solver.solve()
     cell = np.asarray(solver.calculate_field(res_x=RES_X, res_y=1, res_z=RES_Z))
     return cell[:, 0, :, :]                       # (res_z*n_layers, res_x, 3)
 

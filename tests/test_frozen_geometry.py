@@ -4,7 +4,7 @@ Two pipeline steps decide something structural rather than numeric — the NVF n
 the integrated block compression. Both branch on values, so neither survives ``jax.jit``. (There was
 a third, the same-material short-circuit; removing it is what left the sampled path with nothing to
 freeze.) ``freeze_geometry()`` takes those decisions once against the concrete
-structure; handing the result back to ``conv_solve`` makes the whole call jit- and
+structure; handing the result back to ``solve`` makes the whole call jit- and
 grad-traceable without changing a single number.
 
 ``jax.grad`` on its own is the weaker bar and the two steps part company there: the
@@ -38,15 +38,15 @@ DEFAULT_STRATEGY = dict(fourier_coefficients='sampled', factorization='li')
 def test_frozen_geometry_does_not_change_the_answer(strategy):
     """Freezing is an optimization, not a different computation."""
     solver = wavebit.rcwa(backend=0, structure=STRUCTURE, **strategy, **KW)
-    auto = solver.conv_solve()
-    frozen = solver.conv_solve(geometry=solver.freeze_geometry())
+    auto = solver.solve()
+    frozen = solver.solve(geometry=solver.freeze_geometry())
     assert np.array_equal(np.asarray(auto.res.R), np.asarray(frozen.res.R))
     assert np.array_equal(np.asarray(auto.res.T), np.asarray(frozen.res.T))
 
 
 @pytest.mark.parametrize('strategy', STRATEGIES, ids=IDS)
 def test_jit_and_grad_through_the_public_api(strategy):
-    """jax.jit and jax.grad over rcwa/conv_solve, for every Fourier strategy."""
+    """jax.jit and jax.grad over rcwa/solve, for every Fourier strategy."""
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
 
@@ -54,7 +54,7 @@ def test_jit_and_grad_through_the_public_api(strategy):
     geometry = solver.freeze_geometry()
 
     def loss(u):
-        return jnp.sum(solver.conv_solve(structure=u, geometry=geometry).res.T).real
+        return jnp.sum(solver.solve(structure=u, geometry=geometry).res.T).real
 
     u = jnp.asarray(STRUCTURE)
     eager = float(loss(u))
@@ -73,7 +73,7 @@ def test_jit_and_grad_through_the_public_api(strategy):
 def _jit_loss(**strategy):
     import jax.numpy as jnp
     solver = wavebit.rcwa(backend=1, structure=STRUCTURE, **strategy, **KW)
-    return lambda u: jnp.sum(solver.conv_solve(structure=u).res.T).real
+    return lambda u: jnp.sum(solver.solve(structure=u).res.T).real
 
 
 # The default pairing is left out on purpose: it decides nothing, so it traces unfrozen.
@@ -99,7 +99,7 @@ def test_the_default_pairing_needs_no_frozen_geometry_at_all():
     """('sampled', 'li') decides nothing, so it jits straight off the public API.
 
     It used to raise here. The one discrete decision on this path was the same-material
-    short-circuit, and removing that left nothing between ``conv_solve`` and a trace --
+    short-circuit, and removing that left nothing between ``solve`` and a trace --
     ``freeze_geometry()`` is now optional for the sampled path rather than the price of admission.
     """
     jax = pytest.importorskip('jax')
@@ -108,7 +108,7 @@ def test_the_default_pairing_needs_no_frozen_geometry_at_all():
     got = float(jax.jit(_jit_loss(**DEFAULT_STRATEGY))(jnp.asarray(STRUCTURE)))
     want = float(np.sum(np.asarray(
         wavebit.rcwa(backend=0, structure=STRUCTURE, **DEFAULT_STRATEGY,
-                       **KW).conv_solve().res.T).real))
+                       **KW).solve().res.T).real))
     assert got == pytest.approx(want, abs=1e-10)
 
 
@@ -169,7 +169,7 @@ def test_a_frozen_geometry_makes_the_vector_path_traceable(name, make, start):
 
     def total(v):
         return jnp.sum(wavebit.rcwa(backend=1, structure=make(v), **cfg)
-                       .conv_solve(geometry=frozen).T).real
+                       .solve(geometry=frozen).T).real
 
     eager = float(total(x))
     assert float(jax.jit(total)(x)) == pytest.approx(eager, rel=1e-11)
@@ -208,7 +208,7 @@ def test_a_stale_frozen_geometry_is_refused_rather_than_answered():
 
     def total(lx, geometry=None):
         return float(jnp.sum(wavebit.rcwa(backend=1, structure=make(lx), **cfg)
-                             .conv_solve(geometry=geometry).T).real)
+                             .solve(geometry=geometry).T).real)
 
     frozen = wavebit.rcwa(backend=1, structure=make(jnp.asarray(85.0)), **cfg).freeze_geometry()
 
@@ -240,7 +240,7 @@ def _rod(width, height=10, eps_rod=12.25, eps_bg=1.0, n=20):
 
 def _de_ti(structure, strategy, geometry=None):
     solver = wavebit.rcwa(backend=0, structure=structure, **strategy, **RASTER_KW)
-    return np.asarray(solver.conv_solve(geometry=geometry).res.T).real
+    return np.asarray(solver.solve(geometry=geometry).res.T).real
 
 
 @pytest.mark.parametrize('strategy', [dict(factorization='nvf'),
@@ -330,8 +330,8 @@ def test_a_one_cell_axis_makes_every_same_shape_replay_valid():
     for width in (8, 10, 14):
         solvers = [wavebit.rcwa(backend=0, structure=grating(width), factorization='nvf',
                                   **cfg) for _ in range(2)]
-        replayed = np.asarray(solvers[0].conv_solve(geometry=frozen).res.T)
-        assert np.array_equal(replayed, np.asarray(solvers[1].conv_solve().res.T))
+        replayed = np.asarray(solvers[0].solve(geometry=frozen).res.T)
+        assert np.array_equal(replayed, np.asarray(solvers[1].solve().res.T))
 
 
 def test_a_traced_replay_carries_no_check():
@@ -352,7 +352,7 @@ def test_a_traced_replay_carries_no_check():
                                 **RASTER_KW)
 
     def total(u):
-        return jnp.sum(jax_solver.conv_solve(structure=u, geometry=frozen).res.T).real
+        return jnp.sum(jax_solver.solve(structure=u, geometry=frozen).res.T).real
 
     moved = jnp.asarray(_rod(14))
     with pytest.raises(wavebit.StaleGeometryError):
@@ -382,7 +382,7 @@ def test_the_compression_decides_itself_inside_a_gradient():
 
     def total(u):
         return jnp.sum(wavebit.rcwa(backend=1, structure=u, **INTEGRATED_STRATEGY, **KW)
-                       .conv_solve().res.T).real
+                       .solve().res.T).real
 
     grad = np.asarray(jax.grad(total)(jnp.asarray(STRUCTURE)))
     assert grad.shape == STRUCTURE.shape and np.isfinite(grad).all()
@@ -410,7 +410,7 @@ def test_a_moving_pattern_needs_no_record_on_the_compression_path():
 
     def total(u):
         return jnp.sum(wavebit.rcwa(backend=1, structure=u, **INTEGRATED_STRATEGY, **KW)
-                       .conv_solve().res.T).real
+                       .solve().res.T).real
 
     for flips in (0, 2, 4):
         pattern = design.copy()
@@ -449,7 +449,7 @@ def test_the_normal_field_decides_itself_inside_a_gradient_too():
                      dict(fourier_coefficients='integrated', factorization='nvf')):
         def total(u):
             return jnp.sum(wavebit.rcwa(backend=1, structure=u, **strategy, **KW)
-                           .conv_solve().res.T).real
+                           .solve().res.T).real
 
         grad = np.asarray(jax.grad(total)(jnp.asarray(STRUCTURE)))
         assert grad.shape == STRUCTURE.shape and np.isfinite(grad).all()
@@ -461,7 +461,7 @@ def test_the_normal_field_decides_itself_inside_a_gradient_too():
 
         def total_frozen(u):
             return jnp.sum(wavebit.rcwa(backend=1, structure=u, **strategy, **KW)
-                           .conv_solve(geometry=frozen).res.T).real
+                           .solve(geometry=frozen).res.T).real
 
         assert np.array_equal(grad, np.asarray(jax.grad(total_frozen)(jnp.asarray(STRUCTURE))))
 
@@ -488,7 +488,7 @@ def test_the_nvf_gradient_holds_the_interfaces_fixed():
 
     def total(u):
         return jnp.sum(wavebit.rcwa(backend=1, structure=u, **strategy, **KW)
-                       .conv_solve().res.T).real
+                       .solve().res.T).real
 
     def mask_size(u):
         return int(_fac.normal_field_source_for_raster(u, KW['fto'][0], KW['fto'][1])[0][1].sum())
@@ -552,7 +552,7 @@ def test_a_length_that_moves_without_reordering_reuses_the_compilation():
     # And the gradient is the one for the structure actually in front of it, each time.
     def total(lx, geometry):
         return jnp.sum(wavebit.rcwa(backend=1, structure=make(lx), **cfg)
-                       .conv_solve(geometry=geometry).T).real
+                       .solve(geometry=geometry).T).real
 
     for lx in (100.0, 120.0):
         grad = float(jax.grad(total)(jnp.asarray(lx), freeze_at(lx)))
@@ -580,7 +580,7 @@ def _painted(cx, material=EPS_A):
 
 def _painted_t(cx, frozen=None, material=EPS_A):
     solver = wavebit.rcwa(backend=0, structure=_painted(cx, material), **PAINT_KW)
-    return np.asarray(solver.conv_solve(geometry=frozen).T)
+    return np.asarray(solver.solve(geometry=frozen).T)
 
 
 def test_a_stale_painting_plan_is_refused_rather_than_answered():
@@ -596,7 +596,7 @@ def test_a_stale_painting_plan_is_refused_rather_than_answered():
     rectangle far enough and it begins to overlap the second; the recorded loops then describe a
     painting nobody asked for. Before the check, the replay took it: bit-identical through
     ``cx = 0.50`` and then 3.9e-4, 2.3e-2, 3.3e-2 wrong at 0.55, 0.62, 0.75, with no step in
-    between to notice. Re-planning to compare costs 0.2% of a frozen ``conv_solve`` on this layer
+    between to notice. Re-planning to compare costs 0.2% of a frozen ``solve`` on this layer
     (1.2% on one of ten overlapping shapes, less as ``fto`` rises) -- the freeze here buys
     traceability rather than a speed plateau, so that is not what is being traded.
     """
@@ -628,7 +628,7 @@ def test_the_painting_plan_check_is_skipped_under_a_trace_too():
 
     def total(cx, frozen):
         solver = wavebit.rcwa(backend=1, structure=_painted(cx), **PAINT_KW)
-        return jnp.sum(solver.conv_solve(geometry=frozen).T).real
+        return jnp.sum(solver.solve(geometry=frozen).T).real
 
     frozen = wavebit.rcwa(backend=1, structure=_painted(0.40), **PAINT_KW).freeze_geometry()
 
@@ -665,7 +665,7 @@ def test_a_shape_the_plan_recorded_as_covered_cannot_be_slid_out_from_under_it()
 
     def total(cx, geometry=None, material=4.0):
         solver = wavebit.rcwa(backend=0, structure=_hidden(cx, material), **PAINT_KW)
-        return np.asarray(solver.conv_solve(geometry=geometry).T)
+        return np.asarray(solver.solve(geometry=geometry).T)
 
     for cx in (0.38, 0.40):                        # still covered: accepted, and exact
         assert np.array_equal(total(cx, frozen), total(cx))
@@ -701,7 +701,7 @@ def test_a_frozen_no_overlap_is_a_claim_about_the_layer_and_is_checked_too():
 
     def total(cx, geometry=None):
         solver = wavebit.rcwa(backend=0, structure=_disjoint(cx), **PAINT_KW)
-        return np.asarray(solver.conv_solve(geometry=geometry).T)
+        return np.asarray(solver.solve(geometry=geometry).T)
 
     for cx in (0.629, 0.60, 0.70):                 # still disjoint: accepted, and exact
         assert np.array_equal(total(cx, frozen), total(cx))
@@ -720,7 +720,7 @@ def test_a_frozen_no_overlap_is_a_claim_about_the_layer_and_is_checked_too():
 
     def traced_total(cx):
         solver = wavebit.rcwa(backend=1, structure=_disjoint(cx), **PAINT_KW)
-        return jnp.sum(solver.conv_solve(geometry=frozen_jax).T).real
+        return jnp.sum(solver.solve(geometry=frozen_jax).T).real
 
     frozen_jax = wavebit.rcwa(backend=1, structure=_disjoint(0.629), **PAINT_KW).freeze_geometry()
     assert frozen_jax.boundary_plans == [None]

@@ -159,7 +159,7 @@ def test_a_solver_answer_does_not_move_with_the_rod():
     moves ``<eps>`` by 0.09, twelve orders above any BLAS-dependent noise here.
     """
     totals = [float(np.sum(wavebit.rcwa(structure=rod_instruction(cx, 500.0),
-                                        **COMMON).conv_solve().R).real)
+                                        **COMMON).solve().R).real)
               for cx, _, _, _ in STRADDLES[:4]]
     assert np.ptp(totals) < 1e-11, totals
 

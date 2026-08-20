@@ -400,7 +400,7 @@ def check_plan_still_fits(shapes, period, plan, n_poly=POLYGON_VERTICES):
     transmission once it does not, with no step in between to notice.
 
     Re-planning is the whole cost of the comparison, and it scales with the shape count rather
-    than with the solve: 0.2% of a frozen ``conv_solve`` for the two-rectangle layer above, 1.2%
+    than with the solve: 0.2% of a frozen ``solve`` for the two-rectangle layer above, 1.2%
     for ten overlapping shapes at ``fto = 4``, and falling as ``fto`` rises (0.4% for those ten at
     ``fto = 8``) because the solve grows faster than the painting does. The freeze on this path
     buys traceability, not speed, so there is no plateau being given up for it.

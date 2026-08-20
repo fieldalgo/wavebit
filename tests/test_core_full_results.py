@@ -20,7 +20,7 @@ FIELDS = ('r_s', 'r_p', 't_s', 't_p',
 
 def _setup(**kw):
     solver = wavebit.rcwa(backend=0, **kw)
-    legacy = solver.conv_solve()
+    legacy = solver.solve()
     epx, epy, epz = to_conv_mat_raster_sampled(
         solver.structure, solver.fto[0], solver.fto[1])
     kx, ky = solver.get_kx_ky_vector(kw['wavelength'])

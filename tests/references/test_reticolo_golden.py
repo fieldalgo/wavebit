@@ -87,7 +87,7 @@ CASES = {
 def _solve(name, backend=0):
     kw = dict(CASES[name])
     return wavebit.rcwa(backend=backend, fourier_coefficients='integrated',
-                          **kw).conv_solve()
+                          **kw).solve()
 
 
 def _golden():
@@ -193,7 +193,7 @@ def _solve_bottom(name, backend=0):
     n_bot = wavebit.index_from_eps(kw['bot']).real
     kw['theta'] = float(np.arcsin(n_top * np.sin(kw['theta']) / n_bot))
     return wavebit.rcwa(backend=backend, fourier_coefficients='integrated',
-                          incidence_side='bottom', **kw).conv_solve()
+                          incidence_side='bottom', **kw).solve()
 
 
 @pytest.mark.parametrize('name', list(CASES))
@@ -253,7 +253,7 @@ function, and the exact
     """
     g = _golden()
     kw = dict(CASES[name])
-    res = wavebit.rcwa(backend=0, fourier_coefficients='sampled', **kw).conv_solve()
+    res = wavebit.rcwa(backend=0, fourier_coefficients='sampled', **kw).solve()
     for side, arr in (('ri', res.R), ('ti', res.T)):
         got = np.real(np.asarray(arr)).ravel()[g[f'{name}__idx_{side}']]
         assert np.abs(got - g[f'{name}__de_{side}']).max() < 1e-11, (name, side)

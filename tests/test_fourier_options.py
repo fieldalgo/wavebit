@@ -39,7 +39,7 @@ CFG_1D = dict(backend=0, structure=np.array([[[9., 9., 1., 1., 9., 1., 1., 1.]]]
 
 
 def _totals(cfg, **strategy):
-    res = wavebit.rcwa(**cfg, **strategy).conv_solve()
+    res = wavebit.rcwa(**cfg, **strategy).solve()
     return (float(np.sum(np.asarray(res.R))), float(np.sum(np.asarray(res.T))))
 
 

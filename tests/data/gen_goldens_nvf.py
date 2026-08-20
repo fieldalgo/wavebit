@@ -144,7 +144,7 @@ def main():
     # `answers='field'` because this generator pins the per-layer state as well as the
     # result surface; without it `solver.T1` is None and the goldens regenerate empty.
     solver = wavebit.rcwa(backend=0, answers='field', **kw)
-    result = solver.conv_solve()
+    result = solver.solve()
 
     out = {f'{NAME}__grating_type': np.array(solver.grating_type_assigned)}
     sign = frame_sign(solver)

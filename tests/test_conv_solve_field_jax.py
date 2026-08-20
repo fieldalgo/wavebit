@@ -1,6 +1,6 @@
 """``SolverJax.conv_solve_field`` — the jit-compiled solve-and-reconstruct entry point.
 
-This method jits over ``self``, which is what makes it different from ``conv_solve``: the whole
+This method jits over ``self``, which is what makes it different from ``solve``: the whole
 structure arrives as tracers, so every discrete decision downstream — the grating-type dispatch,
 the NVF and integrated-path geometry — has nothing concrete to branch on. It
 therefore *requires* a ``StaticGeometry`` from ``freeze_geometry()``, and says so rather than
@@ -53,7 +53,7 @@ def test_jit_matches_the_eager_path(case):
     """The jitted method reproduces ``conv_solve_field_no_jit`` exactly, for every grating type.
 
     Freezing the geometry is an optimization, not a different computation — same contract as
-    ``conv_solve(geometry=...)``.
+    ``solve(geometry=...)``.
     """
     solver = _solver(1, case)
     res_x, res_y, res_z = _res(case)

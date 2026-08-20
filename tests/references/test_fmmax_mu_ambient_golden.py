@@ -71,7 +71,7 @@ def solve(top, bot, layer_eps, layer_mu, theta_deg, thick=THICK, algo='ETM'):
     and why this file no longer takes that root itself.
 
     The two half-space quantities are then passed to :meth:`solve_for_conv` **explicitly**, and
-    they have to be: this is the low-level door, below the point where ``conv_solve`` reads them
+    they have to be: this is the low-level door, below the point where ``solve`` reads them
     off ``self.top`` / ``self.bot``. They ride together rather than singly — ``mu`` without its
     ``eps`` would leave the solve recovering ``eps = n**2/mu`` from an index built out of the
     pair, which agrees to round-off but says the same thing twice.

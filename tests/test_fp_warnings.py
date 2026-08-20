@@ -54,7 +54,7 @@ def _run(**kwargs):
     """Solve, returning ``(result, fp_warning_messages)``."""
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        res = wavebit.rcwa(backend=0, wavelength=WL, **kwargs).conv_solve()
+        res = wavebit.rcwa(backend=0, wavelength=WL, **kwargs).solve()
     return res, _fp_warnings(rec)
 
 
@@ -139,7 +139,7 @@ def test_analytic_shape_path_is_silent():
         warnings.simplefilter('always')
         res = wavebit.rcwa(backend=0, structure=structure, fto=(6, 6), top=1.0, bot=1.0,
                              theta=np.deg2rad(5), phi=np.deg2rad(20), period=(1.0, 1.2),
-                             wavelength=1.5, thickness=(0.3,), psi=0.35 * np.pi).conv_solve()
+                             wavelength=1.5, thickness=(0.3,), psi=0.35 * np.pi).solve()
     assert _fp_warnings(rec) == []
     assert abs(_energy(res) - 1.0) < 1e-10
 
@@ -300,7 +300,7 @@ def test_healthy_solves_emit_no_unphysical_warning():
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         wavebit.rcwa(backend=0, structure=_structure_2d(), thickness=[600], period=[700, 700],
-                       wavelength=WL, fto=[8, 8], psi=0.0, bot=EPS_SI).conv_solve()
+                       wavelength=WL, fto=[8, 8], psi=0.0, bot=EPS_SI).solve()
     assert [r for r in rec if issubclass(r.category, UnphysicalResultWarning)] == []
 
 
@@ -375,7 +375,7 @@ def _branch_solve(type_complex, top=1.0, theta=0.4, phi=0.3, backend=0):
         backend=backend, psi=np.pi / 2, top=top, bot=25.0, theta=theta, phi=phi, fto=[30],
         wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
         type_complex=type_complex, fourier_coefficients='integrated',
-        factorization='li').conv_solve()
+        factorization='li').solve()
 
 
 def _branch_warnings(**kw):
@@ -439,7 +439,7 @@ def test_a_traced_single_precision_solve_says_it_could_not_be_checked():
             backend=1, psi=np.pi / 2, top=1.0, bot=25.0, theta=t, phi=phi, fto=[10],
             wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
             type_complex=type_complex, fourier_coefficients='sampled',
-            factorization='li').conv_solve()
+            factorization='li').solve()
         return jnp.asarray(res.res_te_inc.r_s).ravel()[10]
 
     def traced(type_complex):
@@ -469,7 +469,7 @@ def test_the_check_does_not_break_tracing():
             backend=1, psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, fto=[6],
             wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
             type_complex=0, fourier_coefficients='sampled',
-            factorization='li').conv_solve()
+            factorization='li').solve()
         return jnp.sum(jnp.real(jnp.asarray(res.res_te_inc.R_s)))
 
     grad = jax.jit(jax.grad(R))(jnp.asarray(0.4))

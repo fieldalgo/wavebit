@@ -1,13 +1,13 @@
 """Single-source 1D solve core (wavebit._core.solve_1d).
 
 Three properties, one implementation:
-  * wiring        — driving the core through ``rcwa``/``conv_solve`` gives the same numbers
+  * wiring        — driving the core through ``rcwa``/``solve`` gives the same numbers
                     as calling it directly (the mixin passes the right arguments);
   * cross-backend — the same core on numpy / jax / torch agrees to ~1e-10;
   * gradients     — d(sum T)/ds through the complex chain agrees across jax / torch / FD.
 
 The physics oracle lives in test_golden_legacy_parity.py: reference values frozen from the
-legacy transfer-matrix chains before they were replaced. Comparing against ``conv_solve``
+legacy transfer-matrix chains before they were replaced. Comparing against ``solve``
 in-process would prove nothing now that it dispatches into the core.
 """
 import numpy as np
@@ -43,7 +43,7 @@ def _run_and_inputs(tetm, structure, thickness, n_top, n_bot, wl, period, fto, t
     solver = wavebit.rcwa(backend=0, top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=None,
                           tetm=tetm, fto=fto, period=period, wavelength=wl,
                           thickness=thickness, structure=structure)
-    via_api = solver.conv_solve()
+    via_api = solver.solve()
     epx, epy, epz = to_conv_mat_raster_sampled(
         solver.structure, solver.fto[0], solver.fto[1])
     kx, _ = solver.get_kx_ky_vector(wl)
@@ -183,7 +183,7 @@ def _run_and_inputs_conical(structure, thickness, n_top, n_bot, wl, period, fto,
     solver = wavebit.rcwa(backend=0, top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=phi,
                           psi=psi, fto=fto, period=period, wavelength=wl,
                           thickness=thickness, structure=structure)
-    via_api = solver.conv_solve()
+    via_api = solver.solve()
     assert solver.grating_type_assigned == 1, solver.grating_type_assigned   # ensure conical path
     epx, epy, epz = to_conv_mat_raster_sampled(
         solver.structure, solver.fto[0], solver.fto[1])

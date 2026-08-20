@@ -106,7 +106,7 @@ def test_symmetric_two_shape_layer_has_a_finite_position_gradient():
     """The reported case, through the public API: two shapes, one solve, one ``jax.grad``."""
     def objective(d):
         res = wavebit.rcwa(backend=1, structure=[dict(background=1.0, shapes=_twin_circles(d))],
-                             **BASE).conv_solve()
+                             **BASE).solve()
         return jnp.real(jnp.sum(res.R))
 
     at_zero = float(jax.grad(objective)(jnp.asarray(0.0)))

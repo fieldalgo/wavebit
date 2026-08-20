@@ -22,7 +22,7 @@ side and the problem is ordinary: the singularity is in the coordinates, not the
 | `solve_2d._rebuild_grazing_cluster` | re-derives the grazing modes from the coupled first-order problem — the fix |
 | `backend.check_mode_cutoff` / `RayleighPointWarning` | the fallback announcer, when the rebuild cannot run |
 | `backend.check_finite` | the last-resort tripwire for non-finite results |
-| `engine.conv_solve(auto_detune=True)` | the default retry ladder — the "engineering mode" |
+| `engine.solve(auto_detune=True)` | the default retry ladder — the "engineering mode" |
 
 ## The decision flow
 
@@ -57,7 +57,7 @@ Every 2D layer, every solve:
                                  -> keep the ordinary construction + RayleighPointWarning.
                                  Detected, not guessed.
 
-    conv_solve, auto_detune=True (the default), catches (b) and (c):
+    solve, auto_detune=True (the default), catches (b) and (c):
         retry at wavelength * (1 + 1e-12)   [then theta * (1 + 1e-12) if needed]
         -> the retried solve has ratio ~1e-11, which is INSIDE the 1e-9 gate,
            so the rebuild solves the nearby point exactly -> AutoDetuneWarning

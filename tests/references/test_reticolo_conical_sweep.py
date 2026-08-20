@@ -86,7 +86,7 @@ def _solve(g, i, j):
                          period=list(g['period']),
                          thickness=list(g['thickness']),
                          fourier_coefficients='integrated',
-                         factorization='li').conv_solve()
+                         factorization='li').solve()
     return res.res_te_inc
 
 
@@ -173,7 +173,7 @@ def test_double_precision_agrees_across_backends_at_a_complex_angle(backend):
                              wavelength=float(g['wavelength']), period=list(g['period']),
                              thickness=list(g['thickness']),
                              type_complex=0, fourier_coefficients='integrated',
-                             factorization='li').conv_solve()
+                             factorization='li').solve()
         return complex(np.asarray(res.res_te_inc.r_s).ravel()[40])
 
     reference, got = solve(0), solve(backend)
@@ -205,7 +205,7 @@ def test_uniform_stack_does_not_diffract_at_a_complex_angle():
                          period=list(g['period']),
                          thickness=list(g['thickness']),
                          fourier_coefficients='integrated',
-                         factorization='li').conv_solve()
+                         factorization='li').solve()
     R = np.asarray(res.res_te_inc.r_s).ravel()
     off_centre = np.abs(np.delete(R, FTO)).max()
     assert off_centre < 1e-12, off_centre

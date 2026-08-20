@@ -127,7 +127,7 @@ def test_the_default_never_reaches_the_first_order_path_on_a_grating():
     structure = np.ones((2, 20, 20))
     structure[0, 5:15, 5:15] = 11.559999999999999           # permittivity: 3.4**2
     mee = solver(fto=(3, 3), thickness=[120.0, 90.0], structure=structure)
-    mee.conv_solve()
+    mee.solve()
     assert mee.formulation_assigned == '2ff'
 
 
@@ -205,10 +205,10 @@ def test_forcing_the_first_order_path_reproduces_a_patterned_grating(fto):
     structure[1, 10:14, :] = 4.41                           # 2.1**2
 
     a = solver(fto=fto, thickness=[130.0, 85.0], structure=structure)
-    res_a = a.conv_solve()
+    res_a = a.solve()
     b = solver(fto=fto, thickness=[130.0, 85.0], structure=structure)
     b.formulation = '4ff'
-    res_b = b.conv_solve()
+    res_b = b.solve()
 
     assert (a.formulation_assigned, b.formulation_assigned) == ('2ff', '4ff')
     gap, where = worst_gap(channels(res_a), channels(res_b))
@@ -369,7 +369,7 @@ def test_field_reconstruction_still_works_on_the_second_order_path():
     structure = np.ones((1, 16, 16))
     structure[0, 4:12, 4:12] = 9.0
     mee = solver(fto=(1, 1), thickness=[150.0], structure=structure, answers='field')
-    mee.conv_solve()
+    mee.solve()
     cell = mee.calculate_field(res_x=4, res_y=4, res_z=4)
     assert np.isfinite(np.asarray(cell)).all()
 
@@ -515,7 +515,7 @@ def test_y_orders_on_a_y_invariant_cell_are_refused_in_plain_words(incidence):
     mistake, and it fired inside the solve rather than at the request.
     """
     with pytest.raises(ValueError, match='asks for y diffraction orders'):
-        wavebit.rcwa(structure=_Y_INVARIANT, fto=[2, 1], **incidence, **_1D_KW).conv_solve()
+        wavebit.rcwa(structure=_Y_INVARIANT, fto=[2, 1], **incidence, **_1D_KW).solve()
 
 
 def test_the_refused_orders_are_the_ones_that_are_zero():
@@ -525,17 +525,17 @@ def test_the_refused_orders_are_the_ones_that_are_zero():
     the y orders — and returns them empty. So the 1D formulations are not withholding an
     answer, and clamping ``fto[1]`` silently would hand back a different shape than asked for.
     """
-    res = wavebit.rcwa(structure=_Y_ROWS, fto=[2, 1], psi=0.4, **_1D_KW).conv_solve()
+    res = wavebit.rcwa(structure=_Y_ROWS, fto=[2, 1], psi=0.4, **_1D_KW).solve()
     T = np.asarray(res.res.T)
     assert T.shape == (3, 5)
     assert T[[0, 2], :].sum() < 1e-25, T                     # every n != 0 order is empty
 
     flat = np.asarray(wavebit.rcwa(structure=_Y_ROWS, fto=[2, 0], psi=0.4,
-                                   **_1D_KW).conv_solve().res.T).ravel()
+                                   **_1D_KW).solve().res.T).ravel()
     assert np.abs(T[1] - flat).max() < 1e-13                 # and n = 0 is the 1D answer
 
 
 def test_fto_y_zero_is_untouched():
     """The guard must not cost the ordinary 1D call anything."""
-    res = wavebit.rcwa(structure=_Y_INVARIANT, fto=[2, 0], psi=0.4, **_1D_KW).conv_solve()
+    res = wavebit.rcwa(structure=_Y_INVARIANT, fto=[2, 0], psi=0.4, **_1D_KW).solve()
     assert np.asarray(res.res.T).shape == (1, 5)

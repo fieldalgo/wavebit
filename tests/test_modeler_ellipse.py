@@ -195,7 +195,7 @@ def solve_vector(n_split, backend=0):
     e = ELLIPSE
     structure = [[e['background'], [['ellipse', e['cx'], e['cy'], e['lx'], e['ly'], e['material'],
                              e['angle'], n_split, n_split]]]]
-    T = wavebit.rcwa(backend=backend, structure=structure, **SOLVE_KW).conv_solve().T
+    T = wavebit.rcwa(backend=backend, structure=structure, **SOLVE_KW).solve().T
     return float(np.sum(np.asarray(T)))
 
 
@@ -227,7 +227,7 @@ def test_converged_efficiency_matches_a_raster_of_the_same_ellipse():
 
     raster = float(np.sum(wavebit.rcwa(backend=0, structure=structure,
                                          fourier_coefficients='sampled', factorization='li',
-                                         **SOLVE_KW).conv_solve().T))
+                                         **SOLVE_KW).solve().T))
 
     assert solve_vector(320) == pytest.approx(raster, abs=2e-4)
 
@@ -249,11 +249,11 @@ def test_converged_efficiency_matches_the_analytic_shape_path():
         structure = [dict(background=e['background'],
                       shapes=[dict(type='ellipse', cx=e['cx'], cy=e['cy'], lx=e['lx'],
                                    ly=e['ly'], angle=angle, material=e['material'])])]
-        return float(np.sum(wavebit.rcwa(backend=0, structure=structure, **kw).conv_solve().T))
+        return float(np.sum(wavebit.rcwa(backend=0, structure=structure, **kw).solve().T))
 
     structure = [[e['background'], [['ellipse', e['cx'], e['cy'], e['lx'], e['ly'], e['material'],
                              e['angle'], 240, 240]]]]
-    vector = float(np.sum(wavebit.rcwa(backend=0, structure=structure, **kw).conv_solve().T))
+    vector = float(np.sum(wavebit.rcwa(backend=0, structure=structure, **kw).solve().T))
 
     assert vector == pytest.approx(analytic(e['angle']), rel=0.01)
     assert abs(vector - analytic(-e['angle'])) > 10 * abs(vector - analytic(e['angle']))
@@ -279,7 +279,7 @@ def _grad_and_difference(param, value, step, angle, n_split):
                   [['ellipse', args['cx'], args['cy'], args['lx'], args['ly'],
                     ELLIPSE['material'], args['angle'], n_split, n_split]]]]
         kw = dict(SOLVE_KW, fto=[3, 3])
-        return torch.sum(wavebit.rcwa(backend=2, structure=structure, **kw).conv_solve().T)
+        return torch.sum(wavebit.rcwa(backend=2, structure=structure, **kw).solve().T)
 
     p = torch.tensor(value, dtype=torch.float64, requires_grad=True)
     total({param: p}).backward()

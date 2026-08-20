@@ -302,9 +302,9 @@ def test_a_reversed_raster_solves_the_same_as_its_copy(backend):
         pytest.importorskip('torch')
     assert any(s < 0 for s in STRIDED_CELL.strides), 'premise: the input is a reversed view'
 
-    strided = wavebit.rcwa(backend=backend, structure=STRIDED_CELL, **STRIDED_CFG).conv_solve()
+    strided = wavebit.rcwa(backend=backend, structure=STRIDED_CELL, **STRIDED_CFG).solve()
     copied = wavebit.rcwa(backend=backend, structure=np.ascontiguousarray(STRIDED_CELL),
-                          **STRIDED_CFG).conv_solve()
+                          **STRIDED_CFG).solve()
     assert _totals(strided) == _totals(copied)
 
 
@@ -321,9 +321,9 @@ def test_torch_takes_a_reversed_period_and_thickness():
     cfg = dict(wavelength=620., fto=(2, 2), theta=0.2, psi=0.3)
 
     reversed_ = wavebit.rcwa(backend=2, structure=stack, period=np.flip(np.array([800., 500.])),
-                             thickness=np.flip(np.array([90., 180.])), **cfg).conv_solve()
+                             thickness=np.flip(np.array([90., 180.])), **cfg).solve()
     plain = wavebit.rcwa(backend=2, structure=stack, period=(500., 800.),
-                         thickness=(180., 90.), **cfg).conv_solve()
+                         thickness=(180., 90.), **cfg).solve()
     assert _totals(reversed_) == _totals(plain)
 
 
@@ -337,7 +337,7 @@ def test_normalising_strides_does_not_detach_the_structure():
     torch = pytest.importorskip('torch')
     uc = torch.tensor(np.ascontiguousarray(STRIDED_CELL), dtype=torch.float64,
                       requires_grad=True)
-    torch.sum(wavebit.rcwa(backend=2, structure=uc, **STRIDED_CFG).conv_solve().T).backward()
+    torch.sum(wavebit.rcwa(backend=2, structure=uc, **STRIDED_CFG).solve().T).backward()
     assert uc.requires_grad, 'the leaf was flipped in place'
     assert int((uc.grad.abs() > 1e-14).sum()) == uc.numel()
 

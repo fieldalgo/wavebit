@@ -83,7 +83,7 @@ solver = wavebit.rcwa(
     structure=structure, thickness=[300.],
 )
 
-result = solver.conv_solve()
+result = solver.solve()
 print(result.R.sum(), result.T.sum())   # 0.20533162825847726 0.7946683717415197
 ```
 
@@ -411,7 +411,7 @@ at all, so there is nothing an argument to `calculate_field` could recover after
 
 ```python
 solver = wavebit.rcwa(backend=0, answers='field', ...)
-solver.conv_solve()
+solver.solve()
 
 cell = solver.calculate_field(res_x=64, res_y=64, res_z=32)      # a uniform grid, as always
 
@@ -520,7 +520,7 @@ value, so the decisions read it one at a time and a gradient works straight off 
 import jax, jax.numpy as jnp
 
 solver = wavebit.rcwa(backend=1, structure=structure, ...)
-grad = jax.grad(lambda u: jnp.sum(solver.conv_solve(structure=u).T))(structure)
+grad = jax.grad(lambda u: jnp.sum(solver.solve(structure=u).T))(structure)
 ```
 
 `jax.jit` is the harder bar, and that is what `freeze_geometry()` is for — it takes those
@@ -528,11 +528,11 @@ decisions once against the concrete structure and hands them back as data:
 
 ```python
 geometry = solver.freeze_geometry()
-step = jax.jit(lambda u: jnp.sum(solver.conv_solve(structure=u, geometry=geometry).T))
+step = jax.jit(lambda u: jnp.sum(solver.solve(structure=u, geometry=geometry).T))
 ```
 
 A freeze describes the structure it was taken on. Sweeping the *material values* reuses it
-exactly; moving the geometry does not, and an eager `conv_solve` raises `StaleGeometryError`
+exactly; moving the geometry does not, and an eager `solve` raises `StaleGeometryError`
 rather than answering from a record that no longer fits. A traced call cannot check — the
 comparison is what the freeze exists to avoid.
 

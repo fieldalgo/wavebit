@@ -119,7 +119,7 @@ def _probe_step():
 
     def step():
         t = torch.tensor(pattern, requires_grad=True)
-        out = wavebit.rcwa(backend=2, structure=t, **STRATEGIES['sampled'], **cfg).conv_solve()
+        out = wavebit.rcwa(backend=2, structure=t, **STRATEGIES['sampled'], **cfg).solve()
         out.res.T.real.sum().backward()
 
     return step
@@ -166,7 +166,7 @@ def torch_grad(build, seed):
 
     def step():
         v = torch.tensor(np.asarray(seed, dtype=np.float64), requires_grad=True)
-        out = build(2, v).conv_solve().res.T.real.sum()
+        out = build(2, v).solve().res.T.real.sum()
         out.backward()
         return _fingerprint(v.grad.detach().numpy())
 
@@ -179,7 +179,7 @@ def jax_eager_grad(build, seed):
     import jax.numpy as jnp
 
     def loss(v):
-        return jnp.sum(build(1, v).conv_solve().res.T).real
+        return jnp.sum(build(1, v).solve().res.T).real
 
     x = jnp.asarray(np.asarray(seed, dtype=np.float64))
     g = jax.grad(loss)
@@ -198,7 +198,7 @@ def jax_jit_grad(build, seed):
     import jax.numpy as jnp
 
     def loss(v, geometry):
-        return jnp.sum(build(1, v).conv_solve(geometry=geometry).res.T).real
+        return jnp.sum(build(1, v).solve(geometry=geometry).res.T).real
 
     x = jnp.asarray(np.asarray(seed, dtype=np.float64))
     freeze = lambda: build(1, x).freeze_geometry()
@@ -320,7 +320,7 @@ def sweep_recompile(budget, reps):
 
     def loss(v, geometry):
         return jnp.sum(wavebit.rcwa(backend=1, structure=make(v), **cfg)
-                       .conv_solve(geometry=geometry).T).real
+                       .solve(geometry=geometry).T).real
 
     g = jax.jit(jax.grad(loss), static_argnums=1)
     freeze = lambda lx: wavebit.rcwa(backend=1, structure=make(jnp.asarray(lx)),
@@ -350,7 +350,7 @@ def sweep_stale_window(budget):
     def accepts(make, value, frozen):
         try:
             wavebit.rcwa(backend=1, structure=make(jnp.asarray(value)),
-                         **cfg).conv_solve(geometry=frozen)
+                         **cfg).solve(geometry=frozen)
             return True
         except StaleGeometryError:
             return False

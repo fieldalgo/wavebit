@@ -187,7 +187,7 @@ def test_axis_aligned_matches_raster_nvf():
                                               lx=L * P, ly=L * P, angle=0.0, material=EPS_R)])]
 
     def total(structure, psi, **kw):
-        res = wavebit.rcwa(backend=0, structure=structure, psi=psi, **cfg, **kw).conv_solve()
+        res = wavebit.rcwa(backend=0, structure=structure, psi=psi, **cfg, **kw).solve()
         return float(np.sum(np.asarray(res.R)))
 
     for psi in (np.pi / 2, 0.0):                       # TE, then TM
@@ -295,7 +295,7 @@ def test_metal_rod_absorbs_end_to_end(psi):
         warnings.simplefilter('error', UnphysicalResultWarning)
         res = wavebit.rcwa(backend=0, structure=structure, psi=psi, top=1.0, bot=2.25,
                              theta=0.35, phi=0.4, period=(P, P), wavelength=0.777,
-                             thickness=(0.25,), fto=(8, 8)).conv_solve()
+                             thickness=(0.25,), fto=(8, 8)).solve()
 
     total = float(np.sum(np.asarray(res.R)).real + np.sum(np.asarray(res.T)).real)
     assert 0.5 < total < 0.95, total       # absorbing, and absorbing by a visible margin
@@ -321,7 +321,7 @@ def test_analytic_shape_parameters_are_absolute_lengths():
                                               angle=0.0, material=EPS_R)])]
 
     def total(structure, **kw):
-        res = wavebit.rcwa(backend=0, structure=structure, **cfg, **kw).conv_solve()
+        res = wavebit.rcwa(backend=0, structure=structure, **cfg, **kw).solve()
         return float(np.sum(np.asarray(res.R)))
 
     # The two readings separate by ~90x, so the threshold is not load-bearing; it is set
@@ -349,7 +349,7 @@ def test_energy_conservation_lossless():
                                        material=9.0)]),
     ]
     for fto in (5, 8):
-        res = wavebit.rcwa(backend=0, structure=structure, fto=(fto, fto), **cfg).conv_solve()
+        res = wavebit.rcwa(backend=0, structure=structure, fto=(fto, fto), **cfg).solve()
         tot = np.array(res.R).real.sum() + np.array(res.T).real.sum()
         assert abs(tot - 1.0) < 1e-9
 
@@ -367,7 +367,7 @@ def test_cross_backend_agreement():
 
     def T(bk):
         return float(np.array(wavebit.rcwa(backend=bk, structure=structure, fto=(6, 6), **cfg)
-                              .conv_solve().T).real.sum())
+                              .solve().T).real.sum())
 
     tn, tj, tt = T(0), T(1), T(2)
     assert abs(tn - tj) < 1e-10
@@ -386,7 +386,7 @@ def _fd_grad_lx(shape_type, lx0=0.5):
                  **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
         uc = [dict(background=1.0, shapes=[s])]
         return float(np.array(wavebit.rcwa(backend=0, structure=uc, fto=(6, 6), **cfg)
-                              .conv_solve().T).real.sum())
+                              .solve().T).real.sum())
 
     h = 1e-5
     return (T(lx0 + h) - T(lx0 - h)) / (2 * h), cfg
@@ -399,7 +399,7 @@ def test_torch_gradient(shape_type):
     lx = torch.tensor(0.5, dtype=torch.float64, requires_grad=True)
     s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, material=6.25,
              **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
-    res = wavebit.rcwa(backend=2, structure=[dict(background=1.0, shapes=[s])], fto=(6, 6), **cfg).conv_solve()
+    res = wavebit.rcwa(backend=2, structure=[dict(background=1.0, shapes=[s])], fto=(6, 6), **cfg).solve()
     T = res.T.real.sum()
     T.backward()
     assert np.isfinite(float(lx.grad))
@@ -415,7 +415,7 @@ def test_jax_gradient(shape_type):
     def loss(lx):
         s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, material=6.25,
                  **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
-        r = wavebit.rcwa(backend=1, structure=[dict(background=1.0, shapes=[s])], fto=(6, 6), **cfg).conv_solve()
+        r = wavebit.rcwa(backend=1, structure=[dict(background=1.0, shapes=[s])], fto=(6, 6), **cfg).solve()
         return jnp.real(r.T).sum()
 
     g = float(jax.grad(loss)(jnp.array(0.5)))
@@ -439,9 +439,9 @@ def test_analytic_beats_staircase_tilted():
         d = np.array(res.T).real
         return d[d.shape[0] // 2, d.shape[0] // 2]
 
-    ref = t0(wavebit.rcwa(backend=0, structure=analytic, fto=(15, 15), **cfg).conv_solve())
-    a11 = t0(wavebit.rcwa(backend=0, structure=analytic, fto=(11, 11), **cfg).conv_solve())
-    s11 = t0(wavebit.rcwa(backend=0, structure=stair, fto=(11, 11), **cfg).conv_solve())
+    ref = t0(wavebit.rcwa(backend=0, structure=analytic, fto=(15, 15), **cfg).solve())
+    a11 = t0(wavebit.rcwa(backend=0, structure=analytic, fto=(11, 11), **cfg).solve())
+    s11 = t0(wavebit.rcwa(backend=0, structure=stair, fto=(11, 11), **cfg).solve())
 
     err_analytic = abs(a11 - ref)
     err_stair = abs(s11 - ref)
@@ -472,7 +472,7 @@ def test_a_circle_is_written_with_one_length():
     shape = dict(type='circle', cx=0.5 * CIRCLE_P, cy=0.5 * CIRCLE_P, lx=0.5 * CIRCLE_P,
                  material=CIRCLE_EPS)
     got = wavebit.rcwa(backend=0, structure=[dict(background=1.0, shapes=[shape])],
-                         **CIRCLE_CFG).conv_solve()
+                         **CIRCLE_CFG).solve()
     # Only a regression anchor, and it rides on ``normal_grid`` — it read
     # 0.161262158771 while that default was 256, and moved 1.1e-4 when the default rose to 1024.
     # 0.161153064902 until 2026-08-16, when the sampled transform gained the half-pixel
@@ -497,7 +497,7 @@ def test_a_circle_that_names_a_second_length_is_refused(ly, why):
                  ly=ly, material=CIRCLE_EPS)
     with pytest.raises(ValueError, match="'ly' would be dropped"):
         wavebit.rcwa(backend=0, structure=[dict(background=1.0, shapes=[shape])],
-                       **CIRCLE_CFG).conv_solve()
+                       **CIRCLE_CFG).solve()
 
 
 def test_shapes_superpose_where_they_overlap():
@@ -555,7 +555,7 @@ def test_overlapping_shapes_move_the_answer_while_the_vector_path_does_not():
 
     def total(structure, **extra):
         return float(np.sum(np.asarray(
-            wavebit.rcwa(backend=0, structure=structure, **extra, **cfg).conv_solve().T)))
+            wavebit.rcwa(backend=0, structure=structure, **extra, **cfg).solve().T)))
 
     want = total(raster[None], fourier_coefficients='sampled')
     vector = total([[eps_base, [['rectangle', cx, 150.0, 120.0, 120.0, eps, 0, 0, 0]
@@ -586,7 +586,7 @@ def rod(cx, cy=150.0, lx=120.0, ly=120.0, angle=0.0, material=4.0, type='rectang
 
 def solve(shapes, **layer):
     return wavebit.rcwa(backend=0, structure=[dict(background=1.0, shapes=shapes, **layer)],
-                          **CHECK_CFG).conv_solve()
+                          **CHECK_CFG).solve()
 
 
 def test_overlapping_shapes_are_refused_until_the_layer_says_how_to_combine():
@@ -872,7 +872,7 @@ def test_the_check_steps_aside_for_a_traced_solve():
 
     def total(cx):
         return jnp.sum(wavebit.rcwa(backend=1, structure=layer(cx),
-                                      **CHECK_CFG).conv_solve(geometry=frozen).T)
+                                      **CHECK_CFG).solve(geometry=frozen).T)
 
     assert float(jax.jit(total)(jnp.asarray(130.0))) > 0.0     # overlapping, and traced: allowed
     with pytest.raises(ValueError, match='overlap'):
@@ -892,7 +892,7 @@ def _vector_box(cx, material=4.0):
 def _vector_total(objects, *combine):
     layer = [1.0, objects, *combine]
     return float(np.sum(np.asarray(
-        wavebit.rcwa(backend=0, structure=[layer], **VECTOR_CFG).conv_solve().T)))
+        wavebit.rcwa(backend=0, structure=[layer], **VECTOR_CFG).solve().T)))
 
 
 def test_the_vector_path_refuses_the_superposition_it_cannot_draw():
@@ -932,7 +932,7 @@ def test_combine_is_free_while_nothing_overlaps():
                    material=4.0) for cx in (80.0, 220.0)]
     analytic = float(np.sum(np.asarray(
         wavebit.rcwa(backend=0, structure=[dict(background=1.0, shapes=shapes)],
-                       **VECTOR_CFG).conv_solve().T)))
+                       **VECTOR_CFG).solve().T)))
     assert analytic == pytest.approx(disjoint, abs=2e-3)
 
 
@@ -1035,7 +1035,7 @@ def test_the_projector_cache_never_changes_an_answer(build):
     from wavebit._core import analytic as _an
 
     def total(cell):
-        return np.asarray(wavebit.rcwa(backend=0, structure=cell, **PROJ_KW).conv_solve().T)
+        return np.asarray(wavebit.rcwa(backend=0, structure=cell, **PROJ_KW).solve().T)
 
     for cx in (0.30, 0.45, 0.60):
         for eps in (EPS_ROD, EPS_ROD_ALT):
@@ -1056,17 +1056,17 @@ def test_the_cache_holds_no_material_value_so_a_material_sweep_reuses_one_field(
     try:
         _an._PROJECTOR_CACHE.clear()
         for eps in (11.559999999999999, 9.0, 6.760000000000001, 4.840000000000001, 3.24):
-            wavebit.rcwa(backend=0, structure=_one(0.40, eps), **PROJ_KW).conv_solve()
+            wavebit.rcwa(backend=0, structure=_one(0.40, eps), **PROJ_KW).solve()
         assert len(built) == 1, f'the field was rebuilt {len(built)} times for one geometry'
 
         for cx in (0.41, 0.42, 0.43):                # and a *single* shape sliding is the same
-            wavebit.rcwa(backend=0, structure=_one(cx), **PROJ_KW).conv_solve()
+            wavebit.rcwa(backend=0, structure=_one(cx), **PROJ_KW).solve()
         assert len(built) == 1, 'position enters through the phase, not through the build'
 
         wavebit.rcwa(backend=0, structure=_one(0.40, material=EPS_ROD)                 # a real change
-                     , **PROJ_KW).conv_solve()
+                     , **PROJ_KW).solve()
         _an._PROJECTOR_CACHE.clear()
-        wavebit.rcwa(backend=0, structure=_one(0.40), **PROJ_KW).conv_solve()
+        wavebit.rcwa(backend=0, structure=_one(0.40), **PROJ_KW).solve()
         assert len(built) == 2, 'a cleared cache must rebuild'
     finally:
         _an.normal_vector_field_analytical = original
@@ -1091,7 +1091,7 @@ def test_a_traced_or_autograd_value_is_never_served_from_the_cache():
     import jax.numpy as jnp
 
     def total(cx):
-        return jnp.sum(wavebit.rcwa(backend=1, structure=_one(cx), **PROJ_KW).conv_solve().T).real
+        return jnp.sum(wavebit.rcwa(backend=1, structure=_one(cx), **PROJ_KW).solve().T).real
 
     ZERO_FORCE = 1e-6          # 1.7e-9 measured, 0.046 for the failure it has to catch
     _an._PROJECTOR_CACHE.clear()
@@ -1099,7 +1099,7 @@ def test_a_traced_or_autograd_value_is_never_served_from_the_cache():
     assert abs(float(jax.grad(total)(jnp.asarray(0.40)))) < ZERO_FORCE   # again, now warm
 
     def pair(cx):
-        return jnp.sum(wavebit.rcwa(backend=1, structure=_two(cx), **PROJ_KW).conv_solve().T).real
+        return jnp.sum(wavebit.rcwa(backend=1, structure=_two(cx), **PROJ_KW).solve().T).real
 
     h = 1e-5
     fd = (float(pair(jnp.asarray(0.40 + h))) - float(pair(jnp.asarray(0.40 - h)))) / (2 * h)
@@ -1111,7 +1111,7 @@ def test_a_traced_or_autograd_value_is_never_served_from_the_cache():
     cell = [dict(background=1.0, shapes=[
         dict(type='rectangle', cx=cx, cy=0.35, lx=0.30, ly=0.20, angle=0.3,
              material=EPS_ROD)])]
-    torch.sum(wavebit.rcwa(backend=2, structure=cell, **PROJ_KW).conv_solve().T).real.backward()
+    torch.sum(wavebit.rcwa(backend=2, structure=cell, **PROJ_KW).solve().T).real.backward()
     assert abs(float(cx.grad)) < ZERO_FORCE
 
     lx = torch.tensor(0.30, requires_grad=True)      # a length *does* reach the build
@@ -1135,7 +1135,7 @@ def test_the_cache_key_carries_everything_the_build_depends_on():
 
     def total(fto, normal_grid):
         kw = dict(PROJ_KW, fto=(fto, fto), normal_grid=normal_grid)
-        return np.asarray(wavebit.rcwa(backend=0, structure=_one(0.40), **kw).conv_solve().T)
+        return np.asarray(wavebit.rcwa(backend=0, structure=_one(0.40), **kw).solve().T)
 
     _an._PROJECTOR_CACHE.clear()
     alone = {(fto, ng): total(fto, ng)                       # each built with nothing cached
@@ -1166,7 +1166,7 @@ def test_one_geometry_solved_on_three_backends_gets_three_entries():
     _an._PROJECTOR_CACHE.clear()
     answers = {}
     for name, backend in (('numpy', 0), ('jax', 1), ('torch', 2)):
-        out = wavebit.rcwa(backend=backend, structure=_one(0.40), **PROJ_KW).conv_solve().T
+        out = wavebit.rcwa(backend=backend, structure=_one(0.40), **PROJ_KW).solve().T
         answers[name] = np.asarray(out.detach() if hasattr(out, 'detach') else out, dtype=float)
 
     assert len(_an._PROJECTOR_CACHE) == 3, 'the backends shared one entry'

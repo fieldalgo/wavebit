@@ -163,7 +163,7 @@ structure = [dict(background=1.0, shapes=[
                  dict(type='ellipse', cx=0.8, cy=0.9, lx=0.3, ly=0.2,
                       angle=0.6, material=9.0)])]
 solver = wavebit.rcwa(backend=0, structure=structure, fto=(11, 11), ...)  # normal_grid=256 (default)
-res = solver.conv_solve()
+res = solver.solve()
 ```
 
 Both material slots are **relative permittivity** — `12.25` is the `n = 3.5` this example used

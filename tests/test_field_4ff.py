@@ -149,7 +149,7 @@ def twin_cell(formulation, name, theta_deg, side, backend=0):
                        psi=0.6, thickness=thickness, structure=structure, incidence_side=side,
                        answers='field')
     mee.formulation = formulation
-    mee.conv_solve()
+    mee.solve()
     assert mee.formulation_assigned == formulation
     return np.asarray(mee.calculate_field(res_x=7, res_y=5, res_z=6,
                                           set_field_input=(True, True, True)))
@@ -213,7 +213,7 @@ def test_the_two_formulations_agree_on_the_variants_taken_one_at_a_time():
                            wavelength=WL, theta=np.deg2rad(21.0), phi=np.deg2rad(37.0),
                            psi=0.6, thickness=thickness, structure=structure, answers='field')
         mee.formulation = formulation
-        mee.conv_solve()
+        mee.solve()
         cells[formulation] = [
             np.asarray(mee.calculate_field(res_x=4, res_y=4, res_z=5, set_field_input=sfi))
             for sfi in ((True, False, False), (False, True, False), (False, False, True),
@@ -341,7 +341,7 @@ def test_a_vacuum_slab_comes_back_as_the_incident_plane_wave(formulation, psi_v,
                        wavelength=WL, theta=0.0, phi=0.0, psi=psi_v,
                        thickness=[WL], structure=np.ones((1, 1, 1)), answers='field')
     mee.formulation = formulation
-    mee.conv_solve()
+    mee.solve()
     cell = np.asarray(mee.calculate_field(res_x=1, res_y=1, res_z=8))[0, :, 0, 0, :]
 
     # khat = +z (the index).  s: E = +y, so H = z x y = -x.  p: E = -x, so H = z x (-x) = -y.

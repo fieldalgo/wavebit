@@ -59,7 +59,7 @@ def solver(path, **strategy):
 
 
 def totals(path, **strategy):
-    res = solver(path, **strategy).conv_solve()
+    res = solver(path, **strategy).solve()
     return (float(np.sum(np.asarray(res.R))), float(np.sum(np.asarray(res.T))))
 
 
@@ -154,14 +154,14 @@ def test_setting_the_attribute_after_construction_is_refused_too(path, series):
     s = solver(path)
     s.fourier_coefficients = series
     with pytest.raises(NotImplementedError):
-        s.conv_solve()
+        s.solve()
 
 
 @pytest.mark.parametrize('path,series', sorted(UNAVAILABLE.items()))
 def test_passing_it_through_conv_solve_is_refused_too(path, series):
-    """``conv_solve(**kwargs)`` sets attributes for optimization sweeps, so it is a real seam."""
+    """``solve(**kwargs)`` sets attributes for optimization sweeps, so it is a real seam."""
     with pytest.raises(NotImplementedError):
-        solver(path).conv_solve(fourier_coefficients=series)
+        solver(path).solve(fourier_coefficients=series)
 
 
 @pytest.mark.parametrize('path,series', sorted(UNAVAILABLE.items()))
@@ -183,7 +183,7 @@ def test_the_refusal_holds_on_every_backend(name, code, path, series):
     pytest.importorskip(name)
     with pytest.raises(NotImplementedError):
         wavebit.rcwa(structure=STRUCTURES[path], **dict(KW, backend=code),
-                       fourier_coefficients=series).conv_solve()
+                       fourier_coefficients=series).solve()
 
 
 # ------------------------------------------------- the boundary sub-path of modeling_type=2
@@ -231,10 +231,10 @@ def test_the_boundary_sub_path_is_covered_by_the_smooth_row():
 
 
 def test_the_boundary_sub_path_default_is_unmoved_on_both_axes():
-    base = float(np.asarray(_painted().conv_solve().T).real.sum())
+    base = float(np.asarray(_painted().solve().T).real.sum())
     for strategy in (dict(fourier_coefficients='integrated'), dict(factorization='nvf'),
                      dict(fourier_coefficients='integrated', factorization='nvf')):
-        assert float(np.asarray(_painted(**strategy).conv_solve().T).real.sum()) == base
+        assert float(np.asarray(_painted(**strategy).solve().T).real.sum()) == base
 
 
 @pytest.mark.parametrize('strategy,named', [(dict(fourier_coefficients='sampled'),
@@ -242,7 +242,7 @@ def test_the_boundary_sub_path_default_is_unmoved_on_both_axes():
                                             (dict(factorization='li'), "factorization='li'")])
 def test_the_boundary_sub_path_refuses_what_the_smooth_path_refuses(strategy, named):
     with pytest.raises(NotImplementedError, match=named):
-        _painted(**strategy).conv_solve()
+        _painted(**strategy).solve()
 
 
 def test_the_refusal_names_the_transform_an_overlapping_layer_actually_runs():
@@ -259,7 +259,7 @@ def test_the_refusal_names_the_transform_an_overlapping_layer_actually_runs():
     wording here would make this file fail on a rewording that is theirs to make.
     """
     with pytest.raises(NotImplementedError, match='to_conv_mat_boundary_layer'):
-        _painted(fourier_coefficients='sampled').conv_solve()
+        _painted(fourier_coefficients='sampled').solve()
 
 
 def test_the_boundary_sub_path_still_freezes():
@@ -288,8 +288,8 @@ def test_a_pytree_round_trip_does_not_turn_an_unset_option_into_a_request():
 
     assert back._fourier_coefficients is None and back._factorization is None
     assert back.fourier_coefficients == 'integrated' and back.factorization == 'nvf'
-    assert (float(np.sum(np.asarray(back.conv_solve().T))) ==
-            float(np.sum(np.asarray(s.conv_solve().T))))
+    assert (float(np.sum(np.asarray(back.solve().T))) ==
+            float(np.sum(np.asarray(s.solve().T))))
 
 
 def test_a_pytree_round_trip_keeps_a_real_request_and_still_refuses_it_at_the_solve():
@@ -299,7 +299,7 @@ def test_a_pytree_round_trip_keeps_a_real_request_and_still_refuses_it_at_the_so
     back = jax.tree_util.tree_unflatten(treedef, leaves)
     assert back._fourier_coefficients == 'sampled'
     with pytest.raises(NotImplementedError, match="fourier_coefficients='sampled'"):
-        back.conv_solve()
+        back.solve()
 
 
 # ------------------------------------------------------ both axes unavailable at once

@@ -60,7 +60,7 @@ def _solve(backend=0, structure=None, fto=(6, 0), theta=0.0, phi=0.0, psi=np.pi 
                 structure=_UC_1D if structure is None else structure, thickness=[220.0], fto=list(fto))
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        return wavebit.rcwa(**{**base, **kw}).conv_solve()
+        return wavebit.rcwa(**{**base, **kw}).solve()
 
 
 def _total_r(result):
@@ -261,7 +261,7 @@ def test_the_first_order_path_gets_the_azimuth_too():
                                   top=1.0, bot=2.25, theta=0.0, phi=phi, psi=0.7,
                                   structure=_UC_2D, thickness=[220.0], fto=[4, 4])
             solver.formulation = '4ff'
-            first = solver.conv_solve()
+            first = solver.solve()
         assert str(solver.formulation_assigned).endswith('FIRST'), solver.formulation_assigned
         assert _total_r(first) == pytest.approx(_total_r(second), abs=1e-11)
 
@@ -344,7 +344,7 @@ def test_phi_plus_pi_negates_the_reconstructed_field():
                                   top=1.0, bot=2.25, theta=0.0,
                                   structure=_UC_2D, thickness=[220.0], fto=[4, 4],
                                   answers='field', **kw)
-            solver.conv_solve()
+            solver.solve()
             return np.asarray(solver.calculate_field(res_x=6, res_y=6, res_z=5),
                               dtype=np.complex128)
 
@@ -432,7 +432,7 @@ def test_gradient_flows_through_the_azimuth():
             r = wavebit.rcwa(backend=1, wavelength=500.0, period=[period, period],
                              top=1.0, bot=2.25, theta=0.0, phi=phi, psi=np.pi / 2,
                              structure=jnp.asarray(structure), thickness=[220.0],
-                             fto=list(fto)).conv_solve()
+                             fto=list(fto)).solve()
         return jnp.real(r.R).sum()
 
     for structure, fto in ((_UC_1D, (6, 0)), (_UC_2D, (4, 4))):
@@ -464,7 +464,7 @@ def test_torch_agrees_with_jax_on_the_gradient_through_the_azimuth():
             r = wavebit.rcwa(backend=1, wavelength=500.0, period=[period, period], top=1.0,
                              bot=2.25, theta=0.0, phi=0.7, psi=np.pi / 2,
                              structure=jnp.asarray(_UC_2D), thickness=[220.0],
-                             fto=[4, 4]).conv_solve()
+                             fto=[4, 4]).solve()
         return jnp.real(r.R).sum()
 
     p = torch.tensor(700.0, dtype=torch.float64, requires_grad=True)
@@ -473,7 +473,7 @@ def test_torch_agrees_with_jax_on_the_gradient_through_the_azimuth():
         r = wavebit.rcwa(backend=2, wavelength=500.0, period=[p, p], top=1.0, bot=2.25,
                          theta=0.0, phi=0.7, psi=np.pi / 2,
                          structure=torch.asarray(_UC_2D), thickness=[220.0],
-                         fto=[4, 4]).conv_solve()
+                         fto=[4, 4]).solve()
         torch.real(r.R).sum().backward()
 
     assert torch.isfinite(p.grad)

@@ -619,7 +619,7 @@ def test_a_real_grating_matches_the_2ff_solve(fto, theta_deg, phi_deg):
                             phi=np.deg2rad(phi_deg), psi=0.0, fto=(fto, fto),
                             period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
                             structure=structure)
-    ref = solver.conv_solve()
+    ref = solver.solve()
 
     KX, KY = order_grid_kxy(np, np.asarray(solver.get_kx_ky_vector(WL)[0], complex),
                             np.asarray(solver.get_kx_ky_vector(WL)[1], complex))

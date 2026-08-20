@@ -110,7 +110,7 @@ def solved(name, backend=0):
     solver = wavebit.rcwa(backend=backend, answers='field', **kw)
     if formulation:
         solver.formulation = formulation
-    solver.conv_solve()
+    solver.solve()
     return solver
 
 

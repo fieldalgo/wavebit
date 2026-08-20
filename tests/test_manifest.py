@@ -93,7 +93,7 @@ def _unavailable(path, axis, enum_cls):
 def test_a_factorization_the_manifest_withholds_is_refused(path):
     for value in _unavailable(path, 'factorization', Factorization):
         with pytest.raises(Exception) as excinfo:
-            wavebit.rcwa(structure=STRUCTURES[path], factorization=value, **KW).conv_solve()
+            wavebit.rcwa(structure=STRUCTURES[path], factorization=value, **KW).solve()
         assert value in str(excinfo.value), (
             f'{path}: refused factorization={value!r} without naming it')
 
@@ -103,7 +103,7 @@ def test_a_series_the_manifest_withholds_is_refused(path):
     for value in _unavailable(path, 'fourier_coefficients', FourierCoefficients):
         with pytest.raises(Exception) as excinfo:
             wavebit.rcwa(structure=STRUCTURES[path], fourier_coefficients=value,
-                           **KW).conv_solve()
+                           **KW).solve()
         assert value in str(excinfo.value), (
             f'{path}: refused fourier_coefficients={value!r} without naming it')
 
@@ -113,7 +113,7 @@ def test_a_normal_method_the_manifest_withholds_is_refused(path):
     """The shape paths list no raster construction; naming one there must refuse."""
     for value in _unavailable(path, 'normal_method', NormalMethod):
         with pytest.raises(Exception) as excinfo:
-            wavebit.rcwa(structure=STRUCTURES[path], normal_method=value, **KW).conv_solve()
+            wavebit.rcwa(structure=STRUCTURES[path], normal_method=value, **KW).solve()
         assert value in str(excinfo.value), (
             f'{path}: refused normal_method={value!r} without naming it')
 
@@ -122,13 +122,13 @@ def test_a_normal_method_the_manifest_withholds_is_refused(path):
 def test_an_option_the_manifest_offers_actually_builds(path):
     """The other half — a path must not be described as implementing what it refuses."""
     for value in PATHS[path]['factorization']:
-        wavebit.rcwa(structure=STRUCTURES[path], factorization=value, **KW).conv_solve()
+        wavebit.rcwa(structure=STRUCTURES[path], factorization=value, **KW).solve()
     for value in PATHS[path]['fourier_coefficients']:
-        wavebit.rcwa(structure=STRUCTURES[path], fourier_coefficients=value, **KW).conv_solve()
+        wavebit.rcwa(structure=STRUCTURES[path], fourier_coefficients=value, **KW).solve()
     for value in PATHS[path]['normal_method']:
         # The manifest's own caveat: the axis is read only under factorization='nvf'.
         wavebit.rcwa(structure=STRUCTURES[path], factorization='nvf',
-                       normal_method=value, **KW).conv_solve()
+                       normal_method=value, **KW).solve()
 
 
 # ------------------------------------------------------- the lattice refusals
@@ -136,13 +136,13 @@ def test_an_option_the_manifest_offers_actually_builds(path):
 def test_the_block_path_is_refused_on_a_skewed_cell():
     with pytest.raises(NotImplementedError, match='block modeler'):
         wavebit.rcwa(structure=STRUCTURES['block'], lattice=HEX, factorization='nvf',
-                       **KW).conv_solve()
+                       **KW).solve()
 
 
 def test_li_is_refused_on_a_skewed_cell():
     with pytest.raises(NotImplementedError, match="factorization='nvf'"):
         wavebit.rcwa(structure=STRUCTURES['raster'], lattice=HEX, factorization='li',
-                       **KW).conv_solve()
+                       **KW).solve()
 
 
 def test_the_manifest_lists_every_skewed_refusal():
@@ -185,13 +185,13 @@ def test_a_smoothing_normal_method_is_refused_on_a_skewed_cell():
     """Only 'distance' carries the Jacobian pullback; the others must refuse, by name."""
     with pytest.raises(NotImplementedError, match='normal_method'):
         wavebit.rcwa(structure=STRUCTURES['raster'], lattice=HEX, factorization='nvf',
-                       normal_method='contour', **KW).conv_solve()
+                       normal_method='contour', **KW).solve()
 
 
 def test_a_skewed_cell_still_builds_on_the_paths_the_manifest_leaves_open():
     for path in ('raster', 'smooth', 'boundary'):
         wavebit.rcwa(structure=STRUCTURES[path], lattice=HEX, factorization='nvf',
-                       **KW).conv_solve()
+                       **KW).solve()
 
 
 # ------------------------------------------------------- the document itself
@@ -250,7 +250,7 @@ def test_the_published_material_quantity_is_the_one_the_solver_takes():
     kw = dict(backend=0, top=1.0, bot=eps_sub, theta=0.0, phi=0.0, tetm='te',
               fto=[0, 0], period=[1.0], wavelength=0.5, thickness=[0.0],
               structure=np.ones((1, 1, 1)))
-    got = float(np.sum(np.asarray(wavebit.rcwa(**kw).conv_solve().R)))
+    got = float(np.sum(np.asarray(wavebit.rcwa(**kw).solve().R)))
 
     kz_top, kz_bot = np.sqrt(1.0), np.sqrt(eps_sub)
     want = abs((kz_top - kz_bot) / (kz_top + kz_bot)) ** 2
@@ -307,7 +307,7 @@ def test_results_section_matches_a_real_result():
     from wavebit._core.spec import SPEC_VERSION, JobSpec
 
     m = manifest()['results']
-    res = wavebit.rcwa(structure=_RASTER, **KW).conv_solve()
+    res = wavebit.rcwa(structure=_RASTER, **KW).solve()
     sub = res.res if res.res is not None else res.res_te_inc
 
     for name in list(m['efficiencies']['total']) + list(m['efficiencies']['by_outgoing_polarization']):
@@ -345,7 +345,7 @@ def test_incidence_side_claims_match_the_solver():
 
     got = {}
     for side in m['values']:
-        res = wavebit.rcwa(incidence_side=side, **kw).conv_solve()
+        res = wavebit.rcwa(incidence_side=side, **kw).solve()
         got[side] = float(np.sum(np.asarray(res.R)))
     assert abs(got['top'] - got['bottom']) > 1e-3, \
         'the published sides must select genuinely different solves'
@@ -371,14 +371,14 @@ def test_polarization_claims_match_runtime():
     kw = {k: v for k, v in KW.items() if k != 'psi'}
 
     via_pair = wavebit.rcwa(structure=_RASTER, polarization=(np.sin(0.4), np.cos(0.4)),
-                              **kw).conv_solve()
+                              **kw).solve()
     assert via_pair.res is not None, 'the pair must fill the specified-incidence slot'
 
-    via_psi = wavebit.rcwa(structure=_RASTER, psi=0.4, **kw).conv_solve()
+    via_psi = wavebit.rcwa(structure=_RASTER, psi=0.4, **kw).solve()
     np.testing.assert_allclose(via_pair.res.R, via_psi.res.R, atol=1e-14)
 
     scaled = wavebit.rcwa(structure=_RASTER, polarization=(5 * np.sin(0.4), 5 * np.cos(0.4)),
-                            **kw).conv_solve()
+                            **kw).solve()
     np.testing.assert_allclose(scaled.res.R, via_pair.res.R, atol=1e-14)
 
     with pytest.raises(ValueError, match='psi and polarization'):

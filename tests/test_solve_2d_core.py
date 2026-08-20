@@ -1,7 +1,7 @@
 """Single-source 2D solve core (wavebit._core.solve_2d).
 
 Cross-backend agreement, cross-backend-consistent gradients, and a check that driving the core
-through ``conv_solve`` matches calling it directly. The physics oracle is the frozen legacy
+through ``solve`` matches calling it directly. The physics oracle is the frozen legacy
 reference in test_golden_legacy_parity.py.
 """
 import numpy as np
@@ -36,7 +36,7 @@ def _run_and_inputs(structure, thickness, n_top, n_bot, wl, period, fto, theta, 
     solver = wavebit.rcwa(backend=0, top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=phi,
                           psi=psi, fto=fto, period=period, wavelength=wl,
                           thickness=thickness, structure=structure)
-    via_api = solver.conv_solve()
+    via_api = solver.solve()
     assert solver.grating_type_assigned == 2, solver.grating_type_assigned    # ensure 2D path
     epx, epy, epz = to_conv_mat_raster_sampled(
         solver.structure, solver.fto[0], solver.fto[1])

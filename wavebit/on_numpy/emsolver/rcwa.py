@@ -270,11 +270,11 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                 'The 1D and conical operators carry no permeability slot at all.')
 
         if self.grating_type_assigned == 0:
-            result_dict = self.solve_1d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
+            result_dict = self._solve_1d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
         elif self._grating_type_assigned == 1:
-            result_dict = self.solve_1d_conical(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
+            result_dict = self._solve_1d_conical(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all)
         else:
-            result_dict = self.solve_2d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
+            result_dict = self._solve_2d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
                                         epxy_conv_all, epyx_conv_all, *z_row, mu=mu,
                                         mu_top=mu_top, mu_bot=mu_bot,
                                         eps_top=eps_top, eps_bot=eps_bot)
@@ -343,7 +343,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         not. Checked before that solve rather than after, so the refusal does not arrive on the
         far side of the expensive part."""
         self._require_field_declaration()
-        res = self.conv_solve(geometry=geometry)
+        res = self.solve(geometry=geometry)
         field_cell = self.calculate_field(res_x, res_y, res_z, set_field_input)
         return res, field_cell
 

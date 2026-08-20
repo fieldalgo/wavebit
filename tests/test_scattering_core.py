@@ -93,7 +93,7 @@ EFFICIENCIES = ('R', 'R_s', 'R_p', 'T', 'T_s', 'T_p')
 
 
 def _solve(algo, kwargs):
-    return wavebit.rcwa(backend=0, connecting_algo=algo, **kwargs).conv_solve()
+    return wavebit.rcwa(backend=0, connecting_algo=algo, **kwargs).solve()
 
 
 # ------------------------------------------------------------------------------- agreement
@@ -170,7 +170,7 @@ def test_half_space_permittivity_reaches_both_connecting_algorithms(slot):
 def _core_inputs(kwargs):
     """Solver-built arguments for a direct core call (same route the mixin takes)."""
     solver = wavebit.rcwa(backend=0, connecting_algo='SMM', **kwargs)
-    solver.conv_solve()                    # assigns the grating type
+    solver.solve()                    # assigns the grating type
     epx, epy, epz = to_conv_mat_raster_sampled(
         solver.structure, solver.fto[0], solver.fto[1])
     kx, ky = solver.get_kx_ky_vector(kwargs['wavelength'])
@@ -225,7 +225,7 @@ def test_unknown_connecting_algo_is_rejected():
 
 def _field(algo, kwargs, **res):
     solver = wavebit.rcwa(backend=0, connecting_algo=algo, answers='field', **kwargs)
-    solver.conv_solve()
+    solver.solve()
     cell = solver.calculate_field(set_field_input=(True, True, True), **res)
     return solver, np.array(cell)
 
@@ -263,8 +263,8 @@ def test_smm_field_state_matches_tmm(name, kwargs, kind):
     """
     tmm = wavebit.rcwa(backend=0, connecting_algo='ETM', answers='field', **kwargs)
     smm = wavebit.rcwa(backend=0, connecting_algo='SMM', answers='field', **kwargs)
-    tmm.conv_solve()
-    smm.conv_solve()
+    tmm.solve()
+    smm.solve()
 
     a, b = np.array(tmm.T1), np.array(smm.T1)
     assert a.shape == b.shape
@@ -361,7 +361,7 @@ def test_field_before_solve_raises():
     `test_answers_declaration.py` and matches on a different sentence.
     """
     solver = wavebit.rcwa(backend=0, connecting_algo='SMM', answers='field', **CASES_1D[0][1])
-    with pytest.raises(RuntimeError, match='run conv_solve'):
+    with pytest.raises(RuntimeError, match='run solve'):
         solver.calculate_field(res_x=4, res_z=4)
 
 
@@ -369,7 +369,7 @@ def test_frozen_geometry_does_not_change_the_smm_answer():
     """SMM decides nothing discrete, so freezing must be a no-op for it, bit for bit."""
     kwargs = dict(CASES_1D[4][1])          # a substrate-matched bottom layer
     solver = wavebit.rcwa(backend=0, connecting_algo='SMM', **kwargs)
-    with_geom = solver.conv_solve(geometry=solver.freeze_geometry())
+    with_geom = solver.solve(geometry=solver.freeze_geometry())
     without = _solve('SMM', kwargs)
     assert np.allclose(np.array(with_geom.R), np.array(without.R), atol=0, rtol=0)
     assert np.allclose(np.array(with_geom.T), np.array(without.T), atol=0, rtol=0)
@@ -465,7 +465,7 @@ def test_smm_field_cross_backend(case, backend, name):
     _, reference = _field('SMM', kwargs, res_x=5, res_y=5, res_z=4)
 
     solver = wavebit.rcwa(backend=backend, connecting_algo='SMM', answers='field', **kwargs)
-    solver.conv_solve(geometry=solver.freeze_geometry())
+    solver.solve(geometry=solver.freeze_geometry())
     cell = np.asarray(solver.calculate_field(res_x=5, res_y=5, res_z=4,
                                              set_field_input=(True, True, True)))
     assert cell.shape == reference.shape

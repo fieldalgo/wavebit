@@ -96,7 +96,8 @@ def _require_solved(T1, layer_info_list):
     if T1 is None or len(layer_info_list) == 0:
         raise RuntimeError(
             'field reconstruction needs the per-layer amplitudes a solve leaves behind: '
-            'run conv_solve (or solve) first, on a stack with at least one layer, and with '
+            'run solve() -- or solve_for_conv(), if you built the convolution matrices '
+            'yourself -- first, on a stack with at least one layer, and with '
             "answers='field' declared so the solve keeps them.")
 
 

@@ -56,7 +56,7 @@ def make_circle_raster(N, R, n_rod, n_bg=1.0):
 
 def solve(backend, structure, fto, **cfg):
     solver = wavebit.rcwa(backend=backend, structure=structure, fto=(fto, fto), **cfg)
-    return t0_and_energy(solver.conv_solve())
+    return t0_and_energy(solver.solve())
 
 
 # ----------------------------------------------------------------------

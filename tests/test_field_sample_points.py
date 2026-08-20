@@ -61,7 +61,7 @@ def _solver(path, backend=0):
     s = wavebit.rcwa(**kw)
     if path == '4ff':
         s.formulation = '4ff'
-    s.conv_solve()
+    s.solve()
     return s
 
 
@@ -269,7 +269,7 @@ def test_traced_thickness_with_explicit_z_says_why_it_cannot():
                          thickness=thick, theta=np.deg2rad(24.0), tetm='tm', phi=None,
                          fto=4, period=[PERIOD[0]], structure=jnp.asarray(TWO_LAYER),
                          fourier_coefficients='integrated', answers='field')
-        s.conv_solve()
+        s.solve()
         return jnp.sum(jnp.abs(s.calculate_field(res_x=5, res_y=1, res_z=res_z)) ** 2)
 
     # a count traces fine, gradient and all

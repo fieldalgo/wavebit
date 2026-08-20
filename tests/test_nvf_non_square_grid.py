@@ -154,7 +154,7 @@ def test_energy_is_conserved_anyway():
     cfg = dict(backend=0, period=[PX, PY], fto=[4, 4], wavelength=300.0, thickness=[220.0],
                top=1.0, bot=1.0, theta=0.2, phi=0.3, psi=0.4, factorization='nvf',
                structure=structure[None, :, :])
-    res = wavebit.rcwa(**cfg).conv_solve()
+    res = wavebit.rcwa(**cfg).solve()
     total = float(np.sum(np.asarray(res.R)) + np.sum(np.asarray(res.T)))
     assert total == pytest.approx(1.0, abs=1e-12)
 
@@ -172,8 +172,8 @@ def test_a_frozen_normal_field_replays_onto_a_non_square_grid(coefficients):
                top=1.0, bot=2.25, theta=0.2, factorization='nvf',
                fourier_coefficients=coefficients, structure=structure[None, :, :])
     solver = wavebit.rcwa(**cfg)
-    replayed = solver.conv_solve(geometry=solver.freeze_geometry()).T
-    eager = wavebit.rcwa(**cfg).conv_solve().T
+    replayed = solver.solve(geometry=solver.freeze_geometry()).T
+    eager = wavebit.rcwa(**cfg).solve().T
     # Not bit-identity: these are two solves, and `eig` is not bit-reproducible run to run
     # under multithreaded LAPACK. The failure this guards against is not subtle — a basis the
     # replay cannot see either raises StaleGeometryError or moves the answer by ~8e-3.
@@ -252,7 +252,7 @@ def test_differentiating_period_does_not_read_as_a_cell_change():
     frozen = wavebit.rcwa(period=[PX, PY], **base).freeze_geometry()
 
     def objective(py):
-        return wavebit.rcwa(period=[PX, py], **base).conv_solve(geometry=frozen).T.sum()
+        return wavebit.rcwa(period=[PX, py], **base).solve(geometry=frozen).T.sum()
 
     assert np.isfinite(float(jax.grad(objective)(jnp.float64(PY))))
     assert np.isfinite(float(jax.jit(objective)(jnp.float64(PY))))

@@ -11,7 +11,7 @@ Targets:
 - `wavebit/_core/solve_2d.py` — `layer_modes_2d`, `_rebuild_grazing_cluster` (§6)
 - `wavebit/_core/backend.py` — `check_mode_cutoff`, `check_finite`,
   `RayleighPointWarning`, `AutoDetuneWarning`
-- `wavebit/_core/engine.py` — `conv_solve` (the `auto_detune` ladder)
+- `wavebit/_core/engine.py` — `solve` (the `auto_detune` ladder)
 - `tests/test_rayleigh_guard.py` — every contract below, pinned
 
 ---
@@ -37,7 +37,7 @@ hunt for a *configuration* that separates failing from working cases found none,
 | 2D | **correct or loud since the rebuild (§6)** | the grazing cluster is re-derived from the coupled first-order problem: representable clusters solve exactly, numerically defective ones refuse with the detune advice; quiet-wrong is gone |
 | any path, eigenvalue *exactly* `0.0` — and, on 2D, any cluster whose coupled rates split below ~1e-10 of the modal scale | refuses, unless the ladder clears it | the exponential mode basis is degenerate at the point itself (the limit basis is `{1, z}`) |
 
-`conv_solve` handles the practical side by default: `auto_detune=True` retries a solve that
+`solve` handles the practical side by default: `auto_detune=True` retries a solve that
 refused or fired `RayleighPointWarning`, first at `wavelength*(1+1e-12)`, then also
 `theta*(1+1e-12)` for the one graze wavelength cannot move — and reports every knob it
 moved in an `AutoDetuneWarning`. Nothing is ever moved silently.

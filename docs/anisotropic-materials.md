@@ -88,7 +88,7 @@ res = mee.solve_for_conv(wavelength,
                          epxy_conv_all, epyx_conv_all)
 ```
 
-The 1D and 1D-conical paths take three, not five (`engine.py::solve_1d`, `::solve_1d_conical`), so
+The 1D and 1D-conical paths take three, not five (`engine.py::_solve_1d`, `::_solve_1d_conical`), so
 in-plane off-diagonal terms are a 2D-path capability only.
 
 ## 2. The trap: `epx` / `epy` / `epz_i` are not tensor components

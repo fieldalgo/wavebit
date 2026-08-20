@@ -169,7 +169,7 @@ noise that looks like a plausible phase. The safe route is the pure-TE / pure-TM
 solve computes anyway, where the assignment is unambiguous:
 
 ```python
-res = solver.conv_solve()
+res = solver.solve()
 ts = np.asarray(res.res_te_inc.T_s)          # pure-TE incidence: T_s is the whole amplitude
 c = (ts.shape[0] // 2, ts.shape[1] // 2)     # the zero order sits at the centre
 t0 = complex(ts[c])

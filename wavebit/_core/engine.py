@@ -24,8 +24,8 @@ from .enums import (Answers, DEFAULT_ANSWERS, DEFAULT_FACTORIZATION, DEFAULT_FOR
                     factorization_of, formulation_of, resolve_fourier_options)
 from .geometry import StaticGeometry
 from .scattering import smm_1d as _smm_1d, smm_1d_conical as _smm_1d_conical, smm_2d as _smm_2d
-from .solve_1d import solve_1d as _solve_1d, solve_1d_conical as _solve_1d_conical
-from .solve_2d import solve_2d as _solve_2d
+from .solve_1d import solve_1d as _etm_1d, solve_1d_conical as _etm_1d_conical
+from .solve_2d import solve_2d as _etm_2d
 from .solve_2d_4ff import solve_2d_4ff as _solve_2d_4ff
 
 # The four convolution slots that hold the permittivity's z row and column, in the order the
@@ -46,7 +46,7 @@ _AUTO_DETUNE_REL = 1e-12
 # efficiencies and a little more once it also recovers the per-layer amplitudes. The two
 # solves in each row take identical arguments, which is what makes the dispatch a lookup.
 _SOLVES = {
-    'ETM': {'1d': _solve_1d, 'conical': _solve_1d_conical, '2d': _solve_2d},
+    'ETM': {'1d': _etm_1d, 'conical': _etm_1d_conical, '2d': _etm_2d},
     'SMM': {'1d': _smm_1d, 'conical': _smm_1d_conical, '2d': _smm_2d},
 }
 
@@ -265,7 +265,14 @@ _COMPLEX_PSI = (
 
 
 class CoreSolveMixin:
-    """Provides ``solve_1d`` / ``solve_1d_conical`` / ``solve_2d`` backed by the core."""
+    """Provides ``_solve_1d`` / ``_solve_1d_conical`` / ``_solve_2d`` backed by the core.
+
+    Private since the public entry point became :meth:`CoreFactorizationMixin.solve`. All
+    three take convolution matrices already built and each does strictly less than ``solve``
+    does, so leaving them public put three longer ``solve_*`` names beside the shortest one
+    that does the most. Handing in matrices you built yourself is still a supported thing to
+    do -- that is ``solve_for_conv``, which routes to these.
+    """
 
     _incidence_side = 'top'
 
@@ -899,15 +906,15 @@ class CoreSolveMixin:
             return Formulation.FIRST if given else Formulation.SECOND
         return self._formulation
 
-    def solve_1d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
+    def _solve_1d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
         if self._polarization is not None:
-            # Unreachable through conv_solve — `_assign_grating_type` sends a structure with a
+            # Unreachable through solve — `_assign_grating_type` sends a structure with a
             # pair to the conical path, which carries both polarizations — so this only
             # answers a direct call.
             raise ValueError(
                 'the pure 1D TE/TM path is single-polarization by construction and cannot '
-                'take a polarization pair; use solve_1d_conical, which a full solve '
-                '(conv_solve) selects on its own when polarization is set')
+                'take a polarization pair; use _solve_1d_conical, which solve() selects on '
+                'its own when polarization is set')
         solve = self._solve_fn('1d')
         self._formulation_assigned = Formulation.SECOND
         kx, _ = self.get_kx_ky_vector(wavelength)
@@ -917,7 +924,7 @@ class CoreSolveMixin:
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             incidence_side=self.incidence_side, answers=self._answers))
 
-    def solve_1d_conical(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
+    def _solve_1d_conical(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
         solve = self._solve_fn('conical')
         self._formulation_assigned = Formulation.SECOND
         kx, ky = self.get_kx_ky_vector(wavelength)
@@ -927,7 +934,7 @@ class CoreSolveMixin:
             phi=self.phi, incidence_side=self.incidence_side,
             answers=self._answers))
 
-    def solve_2d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
+    def _solve_2d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None,
                  epxz_conv_all=None, epyz_conv_all=None,
                  epzx_conv_all=None, epzy_conv_all=None, mu=None, mu_top=None, mu_bot=None,
@@ -1034,9 +1041,9 @@ _COEFFICIENTS_REASON = {
 
 
 class CoreFactorizationMixin:
-    """Provides ``conv_solve`` — factorization through the core, then the core solve.
+    """Provides ``solve`` — factorization through the core, then the core solve.
 
-    Dispatches the same way the per-backend ``conv_solve`` implementations did (modeling type,
+    Dispatches the same way the per-backend ``solve`` implementations did (modeling type,
     then the Fourier options) but builds every convolution matrix with
     :mod:`wavebit._core.factorization`. Two consequences beyond de-duplication:
 
@@ -1131,7 +1138,7 @@ class CoreFactorizationMixin:
         and the shared-grid shape -- and until this existed the ``structure`` setter checked
         nothing when ``structure`` landed second, so the same mistake was refused or accepted
         depending only on the order the two lines were written in. Assigning a shape recipe
-        over a raster left ``solver.mu`` set and reaching no build: ``conv_solve()`` returned
+        over a raster left ``solver.mu`` set and reaching no build: ``solve()`` returned
         results bit-identical to the same scene with no ``mu`` at all, which is exactly the
         silently-dropped knob :data:`_MU_ON_A_SHAPE_PATH` is worded to prevent.
 
@@ -1265,9 +1272,9 @@ class CoreFactorizationMixin:
         """Take this structure's discrete geometry decisions once, eagerly.
 
         Captures whatever the active Fourier strategy decides from the concrete ``structure``.
-        Hand the result back to :meth:`conv_solve` as ``geometry=`` to make the call
+        Hand the result back to :meth:`solve` as ``geometry=`` to make the call
         traceable. The default ('sampled', 'li') build decides nothing, so its frozen geometry
-        is empty — passing it is still what keeps ``conv_solve`` off the eager path.
+        is empty — passing it is still what keeps ``solve`` off the eager path.
 
         The record describes *this* structure. Replaying it onto one whose geometry has moved
         is refused rather than answered, eagerly — see :mod:`wavebit._core.geometry` for what
@@ -1276,7 +1283,7 @@ class CoreFactorizationMixin:
         [setattr(self, k, v) for k, v in kwargs.items()]
         # Same two refusals as `_conv_matrices`, in the same order, for the same reason: a
         # record of a build that cannot happen is worth nothing, and a structure that gets one
-        # diagnosis from `freeze_geometry` and a different one from `conv_solve` sends the
+        # diagnosis from `freeze_geometry` and a different one from `solve` sends the
         # reader to the wrong place depending on which they called.
         self._reject_unsupported_lattice()
         factorization = self.factorization
@@ -1352,7 +1359,7 @@ class CoreFactorizationMixin:
             geometry.boundary_plans = plans
         return geometry
 
-    def conv_solve(self, geometry=None, auto_detune=True, **kwargs):
+    def solve(self, geometry=None, auto_detune=True, **kwargs):
         """Build the convolution matrices, then solve.
 
         ``geometry`` is an optional :class:`~wavebit._core.geometry.StaticGeometry` — the
@@ -1477,7 +1484,7 @@ class CoreFactorizationMixin:
 
         Returns ``(epx, epy, epz_i, epxy, epyx)`` — exactly the tuple :meth:`solve_for_conv`
         takes after the wavelength, so ``solver.solve_for_conv(wl, *solver.conv_matrices())``
-        is ``conv_solve()``. Each is ``(n_layers, ff_xy, ff_xy)`` with ``ff_xy =
+        is ``solve()``. Each is ``(n_layers, ff_xy, ff_xy)`` with ``ff_xy =
         (2*fto_x+1) * (2*fto_y+1)``; ``epxy`` and ``epyx`` are ``None`` on the paths that
         produce three rather than five (see :func:`~._core.factorization.nvf_conv_matrices`).
 
@@ -1502,7 +1509,7 @@ class CoreFactorizationMixin:
         widening it would change what every existing caller unpacks. :meth:`mu_matrices`
         returns the other five.
 
-        ``geometry`` behaves as in :meth:`conv_solve`.
+        ``geometry`` behaves as in :meth:`solve`.
         """
         [setattr(self, k, v) for k, v in kwargs.items()]
         return self._conv_matrices(geometry)
@@ -1517,7 +1524,7 @@ class CoreFactorizationMixin:
         magnetic: the solve reads that ``None`` as "take the non-magnetic arithmetic", which
         is bit-identical to the code that existed before ``mu`` did.
 
-        ``geometry`` behaves as in :meth:`conv_solve`.
+        ``geometry`` behaves as in :meth:`solve`.
         """
         [setattr(self, k, v) for k, v in kwargs.items()]
         return self._mu_matrices(geometry)
@@ -1633,7 +1640,7 @@ class CoreFactorizationMixin:
         Where ``mu`` *cannot* be expressed the refusal is by name and lives elsewhere, close
         to what cannot express it: the 1D and conical operators carry no permeability slot at
         all and ``solve_for_conv`` says so, and the first-order (4ff) solve does not implement
-        one -- :meth:`CoreSolveMixin.solve_2d` says so. Nothing here drops a ``mu`` quietly,
+        one -- :meth:`CoreSolveMixin._solve_2d` says so. Nothing here drops a ``mu`` quietly,
         which is the whole reason it is wired at all: a material property the solve ignored
         would be the unread knob :meth:`_reject_unread_normal_method` exists to refuse.
 
@@ -1755,7 +1762,7 @@ class CoreFactorizationMixin:
                 lattice=self._geometry_lattice_for(geometry))
 
         else:
-            raise ValueError("Check 'modeling_type' in 'conv_solve'.")
+            raise ValueError("Check 'modeling_type' in 'solve'.")
 
         return epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all
 

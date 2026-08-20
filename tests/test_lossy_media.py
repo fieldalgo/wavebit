@@ -98,7 +98,7 @@ def solver_RT(ns, thicknesses, wavelength, theta, tetm, algo='ETM'):
                            theta=theta, fto=0, wavelength=wavelength,
                            period=[wavelength * 2], structure=structure,
                            thickness=thicknesses)
-    res = solver.conv_solve()
+    res = solver.solve()
     return float(np.sum(res.R).real), float(np.sum(res.T).real)
 
 
@@ -199,8 +199,8 @@ def test_absorbing_layer_identical_to_its_substrate(tetm, theta):
     structure = eps_from_index(np.array([[[AU, AU]]]))
     common = dict(backend=0, tetm=tetm, top=1.0, bot=eps_from_index(AU), theta=theta, fto=0,
                   wavelength=WL, period=[WL * 2], structure=structure, thickness=ds)
-    tmm = wavebit.rcwa(connecting_algo='ETM', **common).conv_solve()
-    smm = wavebit.rcwa(connecting_algo='SMM', **common).conv_solve()
+    tmm = wavebit.rcwa(connecting_algo='ETM', **common).solve()
+    smm = wavebit.rcwa(connecting_algo='SMM', **common).solve()
 
     assert float(np.sum(tmm.R)) == pytest.approx(want, abs=1e-12)
     assert float(np.sum(smm.R)) == pytest.approx(want, abs=1e-12)
@@ -220,7 +220,7 @@ def solver_R_analytic(ns, thicknesses, wavelength, theta, tetm):
                             psi=(np.pi / 2 if tetm == 'te' else 0.0), fto=0,
                             wavelength=wavelength, period=[wavelength * 2, wavelength * 2],
                             structure=structure, thickness=thicknesses)
-    return float(np.sum(np.asarray(solver.conv_solve().R)).real)
+    return float(np.sum(np.asarray(solver.solve().R)).real)
 
 
 ANALYTIC_CASES = KNOWN_GOOD + LOSSY_SUBSTRATE
@@ -270,7 +270,7 @@ def solver_R_painted(n, thickness, wavelength, theta, tetm):
                             wavelength=wavelength, period=[P, P],
                             structure=[dict(background=eps, combine='paint', shapes=shapes)],
                             thickness=[thickness])
-    res = solver.conv_solve()
+    res = solver.solve()
     return float(np.sum(np.asarray(res.R)).real), float(np.sum(np.asarray(res.T)).real)
 
 
@@ -320,7 +320,7 @@ def test_complex_n_bot_keeps_full_precision_on_every_backend(backend):
                            bot=eps_from_index(ns[-1]), theta=0.3,
                            fto=2, wavelength=WL, period=[WL * 2], structure=structure,
                            thickness=ds)
-    got = float(np.sum(np.asarray(solver.conv_solve().R)))
+    got = float(np.sum(np.asarray(solver.solve().R)))
     assert got == pytest.approx(want, abs=1e-12)
 
 
@@ -387,7 +387,7 @@ def solver_amps(ns, thicknesses, wavelength, theta, tetm, path, algo='ETM'):
         solver = wavebit.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0), fto=[0, 0],
                                 period=[wavelength * 2, wavelength * 2],
                                 structure=eps_from_index(np.array(cell)), **common)
-    res = solver.conv_solve().res
+    res = solver.solve().res
     r = np.asarray(res.r_s if tetm == 'te' else res.r_p).ravel()
     t = np.asarray(res.t_s if tetm == 'te' else res.t_p).ravel()
     return complex(r[len(r) // 2]), complex(t[len(t) // 2])
@@ -438,7 +438,7 @@ def test_absorbing_superstrate_efficiency_is_convention_bound():
                                period=[WL * 2, WL * 2],
                                structure=eps_from_index(
                                    np.array([[[n, n], [n, n]] for n in ns[1:-1]])), **common)
-        res = s.conv_solve()
+        res = s.solve()
         return float(np.sum(np.asarray(res.R))), res
 
     R_1d, res_1d = eff('1d')

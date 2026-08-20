@@ -588,7 +588,7 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
                 f"normal_method={method.value!r} reads the layer's values (its indicator "
                 f"needs to know which phase is which), and this layer is a tracer without "
                 f"concrete ones. Precompute the field eagerly with freeze_geometry() and "
-                f"hand it to conv_solve(geometry=...), or use normal_method='distance', "
+                f"hand it to solve(geometry=...), or use normal_method='distance', "
                 f"whose mask-only path a trace can take.") from None
         mask = (_interface_mask(eps) if interface_mask is None
                 else np.asarray(interface_mask, dtype=bool))

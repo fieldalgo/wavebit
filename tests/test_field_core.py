@@ -138,7 +138,7 @@ def _frame_cell(path, res_z, formulation=None):
     solver = wavebit.rcwa(**kw)
     if formulation:
         solver.formulation = formulation
-    solver.conv_solve()
+    solver.solve()
     raw = np.asarray(solver.calculate_field(res_x=1, res_y=1, res_z=res_z))
     kx, ky = solver.get_kx_ky_vector(FRAME_WL)
     if raw.ndim == 5:

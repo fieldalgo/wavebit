@@ -45,7 +45,7 @@ def test_run_matches_the_equivalent_rcwa_call():
         backend=0, wavelength=900., period=[700.], fto=[10, 0],
         top=1., bot=2.25, theta=0., phi=0., tetm='te',
         structure=np.array([[[1.0, 1.0, 12.25, 12.25]]]), thickness=[300.],
-    ).conv_solve()
+    ).solve()
 
     assert np.array_equal(result.R, reference.R)
     assert np.array_equal(result.T, reference.T)

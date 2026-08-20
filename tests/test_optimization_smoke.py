@@ -1,7 +1,7 @@
 """An optimizer loop has to run, reduce the loss, and do it the same way on both backends.
 
 ``test_gradients.py`` already checks single gradients against finite differences, which is the
-harder numerical question. What it does not check is the loop: repeated ``conv_solve`` calls
+harder numerical question. What it does not check is the loop: repeated ``solve`` calls
 through a real optimizer, where state is carried between steps and a NaN or a silently
 detached graph shows up as "it optimized nothing" rather than as a wrong number.
 
@@ -39,7 +39,7 @@ def _jax_losses():
     solver = wavebit.rcwa(backend=1, **CFG)
 
     def loss(u):
-        return -jnp.sum(solver.conv_solve(structure=u).res.T)
+        return -jnp.sum(solver.solve(structure=u).res.T)
 
     u = jnp.asarray(UCELL0)
     opt = optax.adam(LR)
@@ -66,7 +66,7 @@ def _torch_losses():
     out = []
     for _ in range(STEPS):
         opt.zero_grad()
-        value = -torch.sum(solver.conv_solve(structure=u).res.T)
+        value = -torch.sum(solver.solve(structure=u).res.T)
         value.backward()
         assert torch.all(torch.isfinite(u.grad)), 'torch gradient went non-finite'
         out.append(float(value.detach()))

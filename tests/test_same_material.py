@@ -62,7 +62,7 @@ def _solver(ns, ds, *, tetm='te', theta=0.2, path='1d', fto=0, answers='amplitud
 
 
 def _R(solver):
-    return float(np.sum(np.asarray(solver.conv_solve().R)).real)
+    return float(np.sum(np.asarray(solver.solve().R)).real)
 
 
 INCIDENCE = [(p, t) for p in ('te', 'tm') for t in (0.0, 0.4)]
@@ -143,7 +143,7 @@ FIELD_STACK = ([1.0, 1.5, 1.5, 2.0, 1.0], [30.0, 30.0, 40.0])
 
 def _field(ns, ds, *, tetm='te', theta=0.2, fto=2):
     solver = _solver(ns, ds, tetm=tetm, theta=theta, fto=fto, answers='field')
-    solver.conv_solve()
+    solver.solve()
     return np.asarray(solver.calculate_field(res_x=RES, res_y=1, res_z=RES))
 
 

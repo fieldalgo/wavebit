@@ -20,7 +20,7 @@ from .solve_1d import _block, _diag, _is_backside, _mirrored_scene, final_matchi
 # min|w|/max|w| ratio. Well above `backend._CUTOFF_REL` (the warn threshold) on purpose,
 # for two measured reasons: the product-eigvec construction degrades as ~eps/ratio through
 # the whole band (2e-6 at 1e-12, per ``docs/rayleigh-points.md`` §3) while the rebuild is
-# exact everywhere in it; and `conv_solve`'s default detune step (1e-12 relative) lands a
+# exact everywhere in it; and `solve`'s default detune step (1e-12 relative) lands a
 # rescued solve at ratio ~1e-11 — with a 1e-12 gate the retry fell back into the shipped
 # construction's degraded band and returned 1e-6..8e-6 errors on the harder graze stacks,
 # with 1e-9 it lands in the rebuild's regime and matches the extrapolated exact-point
@@ -39,7 +39,7 @@ _COUPLED_REL = 1e-9
 # ``docs/rayleigh-points.md`` §5 in miniature: any q inconsistent with its own mode pair is
 # amplified by exactly the conditioning that consistency lets cancel). 1e-10 puts the
 # representable side at <= ~1e-6 for k0*d >~ 0.4; below it the only honest outcome is the
-# loud refusal, which `conv_solve`'s default ladder then retries off the condition.
+# loud refusal, which `solve`'s default ladder then retries off the condition.
 _DEFECTIVE_REL = 1e-10
 
 
@@ -147,7 +147,7 @@ def _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R):
             'mode basis this formulation uses does not exist there at working precision — '
             'the true limit basis is {1, z}, and any exponential spelling returns quietly '
             'wrong efficiencies (measured 1e-4 up to 1e0). Move off the condition: one ULP '
-            'of wavelength, period or angle is enough, and conv_solve(auto_detune=True), '
+            'of wavelength, period or angle is enough, and solve(auto_detune=True), '
             'the default, does that retry for you.')
 
     Wc = np.empty((W.shape[0], k), dtype=W.dtype)

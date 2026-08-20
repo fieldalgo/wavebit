@@ -9,7 +9,7 @@ def run_block(rcwa_options, backend):
     solver = wavebit.rcwa(**rcwa_options)
     solver.structure = structure_block
 
-    res = solver.conv_solve()
+    res = solver.solve()
 
     return res.R, res.T
 
@@ -32,7 +32,7 @@ def run_raster(rcwa_options, backend, fourier_coefficients):
 
     solver = wavebit.rcwa(**rcwa_options)
 
-    res = solver.conv_solve()
+    res = solver.solve()
     R, T = res.R, res.T
 
     return R, T

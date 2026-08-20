@@ -172,7 +172,7 @@ def test_factorization_feeds_solve_bit_exactly():
     solver = wavebit.rcwa(backend=0, top=eps_top, bot=eps_bot, theta=theta, phi=None,
                           tetm='te',
                           fto=fto, period=period, wavelength=wl, thickness=thickness, structure=structure)
-    legacy = solver.conv_solve()
+    legacy = solver.solve()
     kx, _ = solver.get_kx_ky_vector(wl)
 
     epx, epy, epz = core_dfs(structure, fto[0], fto[1])
@@ -311,7 +311,7 @@ def test_nvf_runs_on_every_backend(case, backend):
 
 
 def test_nvf_now_works_on_every_backend():
-    """NVF used to be NumPy-only; conv_solve now routes every backend through the core.
+    """NVF used to be NumPy-only; solve now routes every backend through the core.
 
     ``rcwa(backend=1|2, factorization='nvf')`` raised ValueError before the factorization was
     wired — the per-backend builders simply had no NVF branch.
@@ -320,10 +320,10 @@ def test_nvf_now_works_on_every_backend():
     opts = dict(top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, fto=[2, 2],
                 period=[1.0, 1.0], wavelength=0.9, thickness=[0.2], structure=structure,
                 factorization='nvf')
-    ref = wavebit.rcwa(backend=0, **opts).conv_solve()
+    ref = wavebit.rcwa(backend=0, **opts).solve()
     for backend in (1, 2):
         pytest.importorskip('jax' if backend == 1 else 'torch')
-        got = wavebit.rcwa(backend=backend, **opts).conv_solve()
+        got = wavebit.rcwa(backend=backend, **opts).solve()
         assert np.allclose(np.asarray(ref.res.T), np.asarray(got.res.T),
                            atol=1e-12, rtol=0), backend
 
@@ -535,7 +535,7 @@ def _transmission_map(structure, factorization, fto, psi):
     res = wavebit.rcwa(
         backend=0, factorization=factorization, fto=[fto, fto],
         top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=psi,
-        wavelength=1.3, period=[1.0, 1.0], thickness=[0.4], structure=structure).conv_solve()
+        wavelength=1.3, period=[1.0, 1.0], thickness=[0.4], structure=structure).solve()
     t = np.asarray(res.T)
     ff = int(round(t.size ** 0.5))
     return t.reshape(ff, ff)
@@ -633,7 +633,7 @@ def _turn_scene(structure, period, fto, phi, psi, factorization='nvf'):
         backend=0, factorization=factorization, fto=[int(fto[0]), int(fto[1])],
         top=1.0, bot=1.0, theta=_TURN_THETA, phi=phi, psi=psi,
         wavelength=_TURN_WAVELENGTH, period=[period[0], period[1]], thickness=[120.0],
-        structure=structure).conv_solve()
+        structure=structure).solve()
     return np.asarray(res.R), np.asarray(res.T), (int(fto[0]), int(fto[1]))
 
 

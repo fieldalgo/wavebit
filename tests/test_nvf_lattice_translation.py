@@ -166,7 +166,7 @@ def test_the_solve_is_covariant_on_a_multi_phase_raster(shift, axis):
 
     def efficiencies(uc):
         solver = wavebit.rcwa(structure=uc, fto=[5, 3], factorization='nvf', **SOLVE_KW)
-        return np.asarray(solver.conv_solve().res.R, dtype=complex)
+        return np.asarray(solver.solve().res.R, dtype=complex)
 
     moved = np.abs(efficiencies(structure) - efficiencies(np.roll(structure, shift, axis=axis))).max()
     assert moved < 1e-12, f'R moved by {moved:.2e} under an exact lattice translation'
@@ -189,7 +189,7 @@ def test_the_defect_did_not_converge_with_fto_which_is_why_it_was_a_defect():
     for fto in ([3, 2], [5, 3], [8, 5]):
         def efficiencies(uc):
             solver = wavebit.rcwa(structure=uc, fto=fto, factorization='nvf', **SOLVE_KW)
-            return np.asarray(solver.conv_solve().res.R, dtype=complex)
+            return np.asarray(solver.solve().res.R, dtype=complex)
 
         moved = np.abs(efficiencies(structure) - efficiencies(rolled)).max()
         assert moved < 1e-12, f'fto={fto}: R moved by {moved:.2e}'

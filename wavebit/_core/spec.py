@@ -801,4 +801,4 @@ def run(spec, geometry=None):
     solver = rcwa(**spec.numerics.as_kwargs(),
                   **spec.stack.as_kwargs(),
                   **spec.incidence.as_kwargs())
-    return solver.conv_solve(geometry=geometry)
+    return solver.solve(geometry=geometry)

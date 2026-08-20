@@ -88,9 +88,9 @@ SOLVE_KW = dict(backend=0, period=[1., 1.], wavelength=.55, thickness=[.3],
 def test_explicit_distance_is_bit_identical_to_the_untouched_default():
     """The option must be opt-in: naming the default changes nothing, to the bit."""
     structure = circle_raster(32)[None]
-    base = wavebit.rcwa(structure=structure, fto=[4, 4], factorization='nvf', **SOLVE_KW).conv_solve()
+    base = wavebit.rcwa(structure=structure, fto=[4, 4], factorization='nvf', **SOLVE_KW).solve()
     named = wavebit.rcwa(structure=structure, fto=[4, 4], factorization='nvf',
-                         normal_method='distance', **SOLVE_KW).conv_solve()
+                         normal_method='distance', **SOLVE_KW).solve()
     assert np.array_equal(np.asarray(base.R), np.asarray(named.R))
     assert np.array_equal(np.asarray(base.T), np.asarray(named.T))
 
@@ -109,7 +109,7 @@ def test_a_method_nothing_reads_is_refused_not_ignored(cfg):
     s = wavebit.rcwa(structure=circle_raster(16)[None], fto=[2, 2],
                      normal_method='contour', **SOLVE_KW, **cfg)
     with pytest.raises(NotImplementedError, match='no reader'):
-        s.conv_solve()
+        s.solve()
 
 
 def test_a_method_on_the_smooth_shape_path_is_refused():
@@ -118,7 +118,7 @@ def test_a_method_on_the_smooth_shape_path_is_refused():
                                               'lx': 0.6, 'material': 5.76}]}]
     s = wavebit.rcwa(structure=smooth, fto=[2, 2], normal_method='contour', **SOLVE_KW)
     with pytest.raises(NotImplementedError, match='no reader'):
-        s.conv_solve()
+        s.solve()
 
 
 @pytest.mark.parametrize('method', NEW_METHODS)
@@ -128,20 +128,20 @@ def test_freeze_replay_is_bit_identical_and_method_mismatch_is_stale(method):
     s = wavebit.rcwa(structure=structure, fto=[3, 3], factorization='nvf',
                      normal_method=method, **SOLVE_KW)
     geo = s.freeze_geometry()
-    replayed = s.conv_solve(geometry=geo)
+    replayed = s.solve(geometry=geo)
     rebuilt = wavebit.rcwa(structure=structure, fto=[3, 3], factorization='nvf',
-                           normal_method=method, **SOLVE_KW).conv_solve()
+                           normal_method=method, **SOLVE_KW).solve()
     assert np.array_equal(np.asarray(replayed.R), np.asarray(rebuilt.R))
 
     other = wavebit.rcwa(structure=structure, fto=[3, 3], factorization='nvf', **SOLVE_KW)
     with pytest.raises(StaleGeometryError, match='different construction'):
-        other.conv_solve(geometry=geo)
+        other.solve(geometry=geo)
 
 
 @pytest.mark.parametrize('method', NEW_METHODS)
 def test_energy_is_conserved_by_every_construction(method):
     res = wavebit.rcwa(structure=circle_raster(48)[None], fto=[5, 5], factorization='nvf',
-                       normal_method=method, **SOLVE_KW).conv_solve()
+                       normal_method=method, **SOLVE_KW).solve()
     total = float(np.sum(res.R) + np.sum(res.T))
     assert abs(total - 1.0) < 1e-10
 
@@ -216,9 +216,9 @@ def test_mirror_asymmetry_of_the_solve_is_bounded(method, limit):
     eps = circle_raster(48, cx=0.4, cy=0.55)
     cfg = dict(backend=0, period=[1., 1.], wavelength=.55, thickness=[.3], theta=0.,
                phi=0., psi=0., top=1., bot=1., fto=[5, 5], factorization='nvf')
-    r1 = wavebit.rcwa(structure=eps[None], normal_method=method, **cfg).conv_solve()
+    r1 = wavebit.rcwa(structure=eps[None], normal_method=method, **cfg).solve()
     r2 = wavebit.rcwa(structure=eps[:, ::-1].copy()[None], normal_method=method,
-                      **cfg).conv_solve()
+                      **cfg).solve()
     gap = float(np.abs(np.asarray(r1.R) - np.asarray(r2.R)[:, ::-1]).max())
     assert gap < limit
 
@@ -336,7 +336,7 @@ def test_the_floor_lift_keeps_the_base_grids_smoothing_scale(method, base_n):
 @pytest.mark.parametrize('method', NEW_METHODS)
 def test_the_lifted_solve_runs_and_conserves_energy(method):
     res = wavebit.rcwa(structure=circle_raster(16)[None], fto=[10, 10],
-                       factorization='nvf', normal_method=method, **SOLVE_KW).conv_solve()
+                       factorization='nvf', normal_method=method, **SOLVE_KW).solve()
     assert abs(float(np.sum(res.R) + np.sum(res.T)) - 1.0) < 1e-10
 
 
@@ -361,7 +361,7 @@ def test_a_tracer_is_told_to_freeze_instead_of_failing_inside_scipy():
     def loss(u):
         res = wavebit.rcwa(backend=1, structure=u, fto=[2, 2], factorization='nvf',
                            normal_method='contour', **{k: v for k, v in SOLVE_KW.items()
-                                                       if k != 'backend'}).conv_solve()
+                                                       if k != 'backend'}).solve()
         return jax.numpy.sum(res.R)
 
     with pytest.raises(TypeError, match='freeze_geometry'):
@@ -387,7 +387,7 @@ def test_merging_two_non_adjacent_phases_is_stale_not_silently_replayed():
     other = wavebit.rcwa(structure=merged[None], fto=[3, 3], factorization='nvf',
                          normal_method='spectral', **SOLVE_KW)
     with pytest.raises(StaleGeometryError, match='distinct phases'):
-        other.conv_solve(geometry=geo)
+        other.solve(geometry=geo)
 
 
 # ------------------------------------------------------------- the public surfaces

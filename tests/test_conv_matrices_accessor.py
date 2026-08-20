@@ -29,9 +29,9 @@ def disc_raster(N, r=0.30):
 
 
 def test_it_is_exactly_what_solve_for_conv_takes():
-    """The round trip is the contract: feeding the result back reproduces conv_solve()."""
+    """The round trip is the contract: feeding the result back reproduces solve()."""
     solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **BASE)
-    direct = solver.conv_solve().res.T
+    direct = solver.solve().res.T
     relayed = solver.solve_for_conv(solver.wavelength, *solver.conv_matrices()).res.T
     assert np.abs(np.asarray(direct) - np.asarray(relayed)).max() == 0.0
 
@@ -67,11 +67,11 @@ def test_a_frozen_geometry_is_accepted_the_same_way_conv_solve_accepts_one():
 
 
 def test_it_does_not_solve():
-    """Cheaper than conv_solve by the whole eigenproblem — otherwise there is no reason to have
+    """Cheaper than solve by the whole eigenproblem — otherwise there is no reason to have
     it separately, and a sweep over geometries would pay for a solve it discards."""
     import time
     solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **dict(BASE, fto=[8, 8]))
-    solver.conv_matrices(), solver.conv_solve()             # warm
+    solver.conv_matrices(), solver.solve()             # warm
 
     t = time.perf_counter()
     for _ in range(3):
@@ -80,7 +80,7 @@ def test_it_does_not_solve():
 
     t = time.perf_counter()
     for _ in range(3):
-        solver.conv_solve()
+        solver.solve()
     whole = time.perf_counter() - t
 
     assert build < 0.7 * whole, (build, whole)
@@ -94,7 +94,7 @@ def test_a_misspelled_layer_key_is_refused_rather_than_ignored():
     Found the hard way, on a layer whose one meaningful key went to a build that did not read it.
     """
     with pytest.raises(ValueError, match='not read by any path'):
-        wavebit.rcwa(structure=[dict(background=1.0, shapez=[CIRCLE])], **BASE).conv_solve()
+        wavebit.rcwa(structure=[dict(background=1.0, shapez=[CIRCLE])], **BASE).solve()
     with pytest.raises(ValueError, match='not read by any path'):
         wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE], combyne='add')],
-                       **BASE).conv_solve()
+                       **BASE).solve()

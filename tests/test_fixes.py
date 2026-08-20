@@ -23,7 +23,7 @@ def test_1_si_glass_branch_cut():
     for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
         try:
             solver = wavebit.rcwa(backend=backend_id, **option)
-            res = solver.conv_solve()
+            res = solver.solve()
             assert res.R is not None and res.T is not None
             R = float(res.R.sum())
             T = float(res.T.sum())
@@ -54,7 +54,7 @@ def test_2_air_au_raw_n_lossy_substrate():
     for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
         try:
             solver = wavebit.rcwa(backend=backend_id, **option)
-            res = solver.conv_solve()
+            res = solver.solve()
             assert res.R is not None
             R = float(res.R.sum())
             print(f"[{backend_name}] Calculated R = {R:.6f} (Diff: {abs(R - R_exact):.6e})")
@@ -81,7 +81,7 @@ def test_3_same_material_interface():
 
     for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
         solver = wavebit.rcwa(backend=backend_id, **option)
-        res = solver.conv_solve()
+        res = solver.solve()
         assert res.R is not None
         R = float(res.R.sum())
         print(f"[{backend_name}] Au(20nm)/Au R = {R:.6f} (Exact: {R_exact:.6f})")
@@ -106,7 +106,7 @@ def test_4_tm_transmittance_conjugation():
     for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
         try:
             solver = wavebit.rcwa(backend=backend_id, **option_conical)
-            res = solver.conv_solve()
+            res = solver.solve()
             assert res.res_tm_inc is not None and res.res_tm_inc.T_p is not None
             T_p = float(res.res_tm_inc.T_p.sum())
             print(f"[{backend_name} Conical TM] Transmittance T_p = {T_p:.6f}")
@@ -173,7 +173,7 @@ def test_7_none_theta_handling():
     for backend_id, backend_name in [(0, 'NumPy'), (1, 'JAX'), (2, 'PyTorch')]:
         try:
             solver = wavebit.rcwa(backend=backend_id, **option)
-            res = solver.conv_solve()
+            res = solver.solve()
             assert res.R is not None
             R = float(res.R.sum())
             print(f"[{backend_name}] theta=None solve succeeded: R = {R:.6f}")
@@ -239,7 +239,7 @@ def test_10_shared_mean_permittivity_keeps_the_interface():
         psi=0.4, wavelength=0.5, period=[0.6, 0.6], theta=0.1, phi=0.0, fto=[2, 2])
 
     for algo in ('ETM', 'SMM'):
-        res = wavebit.rcwa(backend=0, connecting_algo=algo, **option).conv_solve()
+        res = wavebit.rcwa(backend=0, connecting_algo=algo, **option).solve()
         total = float(np.sum(res.R)) + float(np.sum(res.T))
         print(f"[{algo}] R+T = {total:.12f}")
         assert abs(total - 1.0) < 1e-9, f"{algo} energy conservation failed: {total}"

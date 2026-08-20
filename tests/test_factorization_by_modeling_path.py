@@ -63,7 +63,7 @@ def solver(path, **strategy):
 
 
 def totals(path, **strategy):
-    res = solver(path, **strategy).conv_solve()
+    res = solver(path, **strategy).solve()
     return (float(np.sum(np.asarray(res.R))), float(np.sum(np.asarray(res.T))))
 
 
@@ -150,7 +150,7 @@ def test_a_request_is_refused_however_it_is_spelled(spelling):
     wrong reason -- or, written straight onto the private attribute, silently substitute.
     """
     with pytest.raises(NotImplementedError, match="factorization='li'"):
-        wavebit.rcwa(structure=SMOOTH, factorization=spelling, **KW).conv_solve()
+        wavebit.rcwa(structure=SMOOTH, factorization=spelling, **KW).solve()
 
 
 #: How each refusal is expected to name the rule the path *does* use. Matched as a phrase
@@ -180,7 +180,7 @@ def test_the_boundary_sub_path_is_classified_and_refused_like_the_rest_of_smooth
     assert s.factorization == 'nvf'
     assert sum(m is not None for m in s._conv_matrices()) == 5
     with pytest.raises(NotImplementedError, match="factorization='li'"):
-        wavebit.rcwa(structure=PAINTED_OVERLAP, factorization='li', **KW).conv_solve()
+        wavebit.rcwa(structure=PAINTED_OVERLAP, factorization='li', **KW).solve()
 
 
 def test_the_smooth_refusal_names_the_route_the_refused_layer_actually_takes():
@@ -191,7 +191,7 @@ def test_the_smooth_refusal_names_the_route_the_refused_layer_actually_takes():
     run. Nothing but a test keeps message text honest, hence this one.
     """
     with pytest.raises(NotImplementedError, match='to_conv_mat_boundary_layer'):
-        wavebit.rcwa(structure=PAINTED_OVERLAP, factorization='li', **KW).conv_solve()
+        wavebit.rcwa(structure=PAINTED_OVERLAP, factorization='li', **KW).solve()
     with pytest.raises(NotImplementedError, match='to_conv_mat_smooth_nvf'):
         totals('smooth', factorization='li')
 
@@ -214,14 +214,14 @@ def test_setting_the_attribute_after_construction_is_refused_too(path, rule):
     s = solver(path)
     s.factorization = rule
     with pytest.raises(NotImplementedError):
-        s.conv_solve()
+        s.solve()
 
 
 @pytest.mark.parametrize('path,rule', sorted(UNAVAILABLE.items()))
 def test_passing_it_through_conv_solve_is_refused_too(path, rule):
-    """``conv_solve(**kwargs)`` sets attributes for optimization sweeps, so it is a real seam."""
+    """``solve(**kwargs)`` sets attributes for optimization sweeps, so it is a real seam."""
     with pytest.raises(NotImplementedError):
-        solver(path).conv_solve(factorization=rule)
+        solver(path).solve(factorization=rule)
 
 
 @pytest.mark.parametrize('path,rule', sorted(UNAVAILABLE.items()))
@@ -243,7 +243,7 @@ def test_the_refusal_holds_on_every_backend(name, code, path, rule):
     pytest.importorskip(name)
     with pytest.raises(NotImplementedError):
         wavebit.rcwa(structure=STRUCTURES[path], **dict(KW, backend=code),
-                       factorization=rule).conv_solve()
+                       factorization=rule).solve()
 
 
 # ------------------------------------------------------------------- the knock-on consequences
@@ -260,15 +260,15 @@ def test_a_skewed_smooth_cell_no_longer_has_to_spell_out_nvf():
     default = wavebit.rcwa(structure=SMOOTH, lattice=hexagonal, **KW)
     spelled_out = wavebit.rcwa(structure=SMOOTH, lattice=hexagonal, factorization='nvf', **KW)
     assert default.factorization == 'nvf'
-    assert (float(np.sum(default.conv_solve().T)) ==
-            float(np.sum(spelled_out.conv_solve().T)))
+    assert (float(np.sum(default.solve().T)) ==
+            float(np.sum(spelled_out.solve().T)))
 
 
 def test_a_skewed_raster_cell_still_refuses_li():
     """The neighbouring refusal is untouched: on a raster, ``'li'`` really is the rule asked for."""
     hexagonal = np.array([[1.0, 0.5], [0.0, np.sqrt(3) / 2]])
     with pytest.raises(NotImplementedError, match="factorization='nvf'"):
-        wavebit.rcwa(structure=RASTER, lattice=hexagonal, **KW).conv_solve()
+        wavebit.rcwa(structure=RASTER, lattice=hexagonal, **KW).solve()
 
 
 def test_a_skewed_block_cell_reports_the_lattice_first_not_the_keyword():
@@ -283,7 +283,7 @@ def test_a_skewed_block_cell_reports_the_lattice_first_not_the_keyword():
     """
     hexagonal = np.array([[1.0, 0.5], [0.0, np.sqrt(3) / 2]])
     with pytest.raises(NotImplementedError, match='block modeler'):
-        wavebit.rcwa(structure=BLOCK, lattice=hexagonal, factorization='nvf', **KW).conv_solve()
+        wavebit.rcwa(structure=BLOCK, lattice=hexagonal, factorization='nvf', **KW).solve()
 
 
 def test_freezing_gives_the_same_diagnosis_the_solve_would():
@@ -299,7 +299,7 @@ def test_freezing_gives_the_same_diagnosis_the_solve_would():
     with pytest.raises(NotImplementedError, match='block modeler') as frozen:
         s.freeze_geometry()
     with pytest.raises(NotImplementedError, match='block modeler') as solved:
-        s.conv_solve()
+        s.solve()
     assert str(frozen.value) == str(solved.value)
 
 

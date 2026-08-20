@@ -77,7 +77,7 @@ for name, kw in CASES.items():
     # `answers='field'` because this generator pins the per-layer state as well as the
     # result surface; without it `solver.T1` is None and the goldens regenerate empty.
     solver = wavebit.rcwa(backend=0, answers='field', **kw)
-    r = solver.conv_solve()
+    r = solver.solve()
     out[f'{name}__grating_type'] = np.array(solver.grating_type_assigned)
     for sub in ('res', 'res_te_inc', 'res_tm_inc'):
         s = getattr(r, sub)

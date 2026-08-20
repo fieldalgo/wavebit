@@ -118,7 +118,7 @@ def test_raster_scalar_gradients(param, name):
         # No frozen geometry: the default ('sampled', 'li') build has no discrete decision to
         # take, so it traces as is. It used to need one, for a same-material check that no
         # longer exists.
-        return solver.conv_solve().T.sum()
+        return solver.solve().T.sum()
 
     # `top` / `bot` are permittivities now, so the gradient measured here is d/d(eps) --
     # a different number from the old d/dn, and the finite difference moves with it.
@@ -145,12 +145,12 @@ def test_raster_per_cell_gradient_reaches_every_cell(name):
             import torch
             uc = torch.tensor(RASTER, dtype=torch.float64, requires_grad=True)
             res = wavebit.rcwa(backend=2, structure=uc, **strategy,
-                                 **BASE).conv_solve(geometry=geometry)
+                                 **BASE).solve(geometry=geometry)
             torch.sum(res.T).backward()
             return int((uc.grad.abs() > 1e-14).sum())
         import jax, jax.numpy as jnp
         g = jax.grad(lambda u: jnp.sum(wavebit.rcwa(backend=1, structure=u, **strategy,
-                     **BASE).conv_solve(geometry=geometry).T).real)
+                     **BASE).solve(geometry=geometry).T).real)
         return int(np.sum(np.abs(np.asarray(g(jnp.asarray(RASTER)))) > 1e-14))
 
     # No strategy keywords at all: this is the *default* that has to carry every cell.
@@ -184,7 +184,7 @@ def test_analytic_shape_gradients(param, name):
             cfg[param] = p
         res = wavebit.rcwa(backend=backend,
                              structure=[dict(background=background, shapes=[shape])],
-                             **cfg).conv_solve()
+                             **cfg).solve()
         return res.R.sum()
 
     start = dict(SHAPE, background=1.0, theta=0.35, wavelength=0.777, thickness=0.25)[param]
@@ -206,7 +206,7 @@ def test_vector_edge_gradients(param, index, start, name):
         rect = ['rectangle', cast(150.0), cast(150.0), cast(80.0), cast(60.0), 4.0, cast(0.4)]
         rect[index] = p
         res = wavebit.rcwa(backend=backend, structure=[[12.25, [rect]]],
-                             **VECTOR_BASE).conv_solve()
+                             **VECTOR_BASE).solve()
         return res.T.sum()
 
     auto, fd = _derivative(backend, objective, start)
@@ -272,7 +272,7 @@ def test_analytic_angle_is_smooth_through_normal():
         shape = dict(type='rectangle', cx=150.0, cy=150.0, lx=80.0, ly=60.0,
                      angle=angle, material=4.0)
         res = wavebit.rcwa(backend=0, structure=[dict(background=12.25, shapes=[shape])],
-                             **base).conv_solve()
+                             **base).solve()
         return float(np.sum(res.T))
 
     h = 1e-5
@@ -301,7 +301,7 @@ def test_translation_leaves_nothing_behind_within_one_normal_field_cell():
         shape = dict(type='rectangle', cx=cx, cy=150.0, lx=80.0, ly=60.0,
                      angle=0.4, material=4.0)
         return float(np.sum(wavebit.rcwa(backend=0, structure=[dict(background=12.25, shapes=[shape])],
-                                           **base).conv_solve().T))
+                                           **base).solve().T))
 
     values = [total(150.0 + f * cell) for f in (0.05, 0.35, 0.65, 0.95)]
     assert np.ptp(values) < 5e-5, np.ptp(values)

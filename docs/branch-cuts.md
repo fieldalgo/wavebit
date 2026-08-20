@@ -380,7 +380,7 @@ sites across four modules without adding a permanent argument to the public API.
 
 ```python
 with wavebit.branch_tolerance(1e-5):      # lossless superstrate, complex angle, float32
-    res = solver.conv_solve()
+    res = solver.solve()
 ```
 
 **Raise it for a lossless superstrate at a complex incidence angle; leave it alone if the

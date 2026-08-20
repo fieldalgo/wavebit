@@ -401,7 +401,7 @@ def layer_needs_resolving(layer, period, lattice=None):
             "would solve a different structure than the one asked for, without saying so.\n"
             "  Freeze once, outside the trace, and replay:\n"
             "    geometry = solver.freeze_geometry()\n"
-            "    result = solver.conv_solve(geometry=geometry)\n"
+            "    result = solver.solve(geometry=geometry)\n"
             "  Re-take the freeze whenever the shapes may have started or stopped "
             "overlapping; the plan compares by content, so an unchanged one is free.")
     return bool(_overlap.overlapping_pairs(prims, Px, Py, OVERLAP_TOL_REL * max(Px, Py),

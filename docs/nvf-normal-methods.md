@@ -304,7 +304,7 @@ states the property where a test of the opposite name used to pin the defect.
   their normal fields from the geometry itself (`analytic.normal_vector_field_analytical`);
   there is nothing to select.
 - **The frozen-geometry record carries the method.** `freeze_geometry()` under one method
-  and `conv_solve(geometry=...)` under another raises `StaleGeometryError`: same raster,
+  and `solve(geometry=...)` under another raises `StaleGeometryError`: same raster,
   same mask, different construction is a different field. Records frozen before this
   option existed replay as `'distance'`.
 - **Tracers.** The three replacements read the layer's *values* (their indicators need to
@@ -353,10 +353,10 @@ states the property where a test of the opposite name used to pin the defect.
   against ~1e-15 for the exact two — an order below these methods' accuracy gains at the
   same settings, and pinned by test at 5e-4. Need exact output mirror symmetry? Use
   `'smooth'` or `'distance'`.
-- **Sweeps should freeze.** An unfrozen `conv_solve` rebuilds every layer's normal field
+- **Sweeps should freeze.** An unfrozen `solve` rebuilds every layer's normal field
   each call; the smoothing constructions raise that cost from milliseconds to
   0.2-5 s/layer at large N. A wavelength sweep over fixed geometry wants
-  `freeze_geometry()` once and `conv_solve(geometry=...)` per point — the pattern
+  `freeze_geometry()` once and `solve(geometry=...)` per point — the pattern
   [`backend-choice.md`](backend-choice.md) already recommends for fits.
 - **Multi-phase rasters** (3+ distinct values) delegate to `'distance'` under `'contour'`
   and `'smooth'` — the two-phase indicator cannot say which of three materials is inside,

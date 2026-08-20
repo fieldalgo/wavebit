@@ -90,7 +90,7 @@ def _reconstruct(path, stack_name, theta, phi, pol):
     solver = wavebit.rcwa(**kw)
     if path == '4ff':
         solver.formulation = '4ff'
-    solver.conv_solve()
+    solver.solve()
     cell = np.asarray(solver.calculate_field(res_x=1, res_y=1, res_z=RES_Z))
     if cell.ndim == 5:
         cell = cell[0]

@@ -461,7 +461,7 @@ fails eight of its cases and leaves the three-slot builders passing, which is th
 the test is for.
 
 Nothing about the sign convention in §2 changed, and no shipped path moved: every consumer inside
-the library unpacks by name, so the reorder is invisible to `conv_solve`.
+the library unpacks by name, so the reorder is invisible to `solve`.
 
 ## 8. State, and what is still open
 

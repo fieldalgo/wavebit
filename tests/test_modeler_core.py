@@ -214,7 +214,7 @@ def test_rectangle_has_no_step_where_the_angle_margin_used_to_end():
     def T(angle):
         structure = [[12.25, [['rectangle', 150.0, 150.0, 80.0, 60.0, 4.0, angle, 8, 8]]]]
         return float(np.sum(np.asarray(
-            wavebit.rcwa(backend=0, structure=structure, **cfg).conv_solve().T)))
+            wavebit.rcwa(backend=0, structure=structure, **cfg).solve().T)))
 
     across = (T(1.02e-5) - T(0.98e-5)) / (0.04e-5)
     outside = (T(1.10e-5) - T(1.06e-5)) / (0.04e-5)
@@ -241,7 +241,7 @@ def test_rectangle_angle_carries_gradient_near_an_aligned_angle():
     def T(angle):
         structure = [[12.25, [['rectangle', tensor(150.0), tensor(150.0), tensor(80.0),
                            tensor(60.0), 4.0, angle, 8, 8]]]]
-        return torch.sum(wavebit.rcwa(backend=2, structure=structure, **cfg).conv_solve().T)
+        return torch.sum(wavebit.rcwa(backend=2, structure=structure, **cfg).solve().T)
 
     p = torch.tensor(1e-5, dtype=torch.float64, requires_grad=True)
     out = T(p)
@@ -304,7 +304,7 @@ def test_two_objects_sharing_an_edge_keep_their_gradient():
                          tensor(0.)]]]]
         cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], top=1.0, bot=1.0,
                    wavelength=900.0, psi=np.pi / 4)
-        return torch.sum(wavebit.rcwa(backend=2, structure=structure, **cfg).conv_solve().T)
+        return torch.sum(wavebit.rcwa(backend=2, structure=structure, **cfg).solve().T)
 
     p = torch.tensor(80.0, dtype=torch.float64, requires_grad=True)
     total(p).backward()
@@ -324,7 +324,7 @@ def test_vector_solve_matches_legacy_golden(name, backend):
     """End to end: modeled geometry -> factorization -> efficiencies, on every backend."""
     if backend:
         pytest.importorskip('jax' if backend == 1 else 'torch')
-    result = wavebit.rcwa(backend=backend, structure=INSTRUCTIONS[name], **SOLVE_KW).conv_solve()
+    result = wavebit.rcwa(backend=backend, structure=INSTRUCTIONS[name], **SOLVE_KW).solve()
     # Golden keys keep the frozen legacy names (de_ri/de_ti); the attributes were renamed.
     for key, field in (('de_ri', 'R'), ('de_ti', 'T')):
         want = GOLDEN[f'{name}__{key}']
@@ -413,7 +413,7 @@ def test_vector_path_differentiates_wrt_edge_positions(backend, name):
     def total(cd, xp_scalar):
         inst = [[12.25, [['rectangle', xp_scalar(150.0), xp_scalar(150.0), cd,
                           xp_scalar(60.0), 4.0, xp_scalar(0.0)]]]]
-        res = wavebit.rcwa(backend=backend, structure=inst, **cfg).conv_solve()
+        res = wavebit.rcwa(backend=backend, structure=inst, **cfg).solve()
         return res.T
 
     if backend == 2:
@@ -458,7 +458,7 @@ def test_the_staircase_costs_a_kink_at_an_aligned_angle(tetm, name):
         structure = [[12.25, [['rectangle', 150.0, 150.0, 80.0, 60.0, 4.0, angle,
                            n_split, n_split]]]]
         return float(np.sum(np.asarray(
-            wavebit.rcwa(backend=0, structure=structure, **cfg).conv_solve().T)))
+            wavebit.rcwa(backend=0, structure=structure, **cfg).solve().T)))
 
     step = 1e-4
     at_zero = T(0.0, 64)

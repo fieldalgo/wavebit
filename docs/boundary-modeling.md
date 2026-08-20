@@ -128,7 +128,7 @@ freeze again every step, as with the block path (see the README on stale geometr
 
 ```python
 solver = wavebit.rcwa(backend=1, structure=structure, ...)
-res = solver.conv_solve(geometry=solver.freeze_geometry())
+res = solver.solve(geometry=solver.freeze_geometry())
 ```
 
 A gradient runs from `(cx, cy, lx, ly, angle)` through the replay, the polygon transform and the
@@ -360,7 +360,7 @@ answer is stale too, but the dispatch summed on the record's word and
 at the boundary path the caller was already inside and naming neither the record nor the fix. The
 same call with no `geometry=` solves the layer fine.
 
-Checking costs one re-plan. That is **0.2%** of a frozen `conv_solve` for the two-rectangle
+Checking costs one re-plan. That is **0.2%** of a frozen `solve` for the two-rectangle
 layer above and **1.2%** for ten overlapping shapes at `fto = 4`, falling as `fto` rises (0.4% for
 those ten at `fto = 8`) since the solve grows faster than the painting does. The freeze on this
 path buys traceability rather than a speed plateau, so that is not traded against anything. Under a trace there is nothing to

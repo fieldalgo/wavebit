@@ -60,7 +60,7 @@ def geos(na, nb):
 def scalar(geometry, cx, na, nb, theta, phi, key, backend):
     s = wavebit.rcwa(backend=backend, structure=build(cx, na, nb), fto=[8, 8],
                      normal_grid=NGRID, theta=theta, phi=phi, **BASE)
-    r = getattr(s.conv_solve(geometry=geometry), key)
+    r = getattr(s.solve(geometry=geometry), key)
     return jnp.real(jnp.sum(r)) if backend == 1 else float(np.real(np.sum(np.asarray(r))))
 
 

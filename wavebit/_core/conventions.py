@@ -75,7 +75,7 @@ def branch_tolerance(value):
     Not thread-safe — it swaps a module-level constant for the duration of the block::
 
         with wavebit.branch_tolerance(1e-6):
-            res = solver.conv_solve()
+            res = solver.solve()
     """
     global _FLAT
     old = _FLAT

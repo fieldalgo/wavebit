@@ -82,7 +82,7 @@ def _solve(backend, fto, structure=None, wavelength=WL, auto_detune=False, **kw)
     # contract has its own tests below.
     return wavebit.rcwa(backend=backend, wavelength=wavelength, fto=[fto, 0],
                         structure=_STACK if structure is None else structure,
-                        **{**_KW, **kw}).conv_solve(auto_detune=auto_detune)
+                        **{**_KW, **kw}).solve(auto_detune=auto_detune)
 
 
 def _totals(result):
@@ -174,7 +174,7 @@ def _solve_2d(n_spacer, algo, wavelength=WL, auto_detune=False):
     return wavebit.rcwa(backend=0, wavelength=wavelength, fto=[5, 1], structure=cell,
                         period=[PERIOD, PERIOD], top=1.0, bot=2.25, theta=0.0, phi=0.0,
                         psi=np.pi / 2, thickness=[200.0, 300.0],
-                        connecting_algo=algo).conv_solve(auto_detune=auto_detune)
+                        connecting_algo=algo).solve(auto_detune=auto_detune)
 
 
 @pytest.mark.parametrize('n_spacer, algo', _GRAZE_2D)
@@ -269,10 +269,10 @@ def test_exact_point_solves_for_tm_and_mixed_polarization(psi, algo):
     kw = dict(_KW)
     kw['psi'] = psi
     exact = wavebit.rcwa(backend=0, wavelength=WL, fto=[5, 0], structure=_STACK,
-                         connecting_algo=algo, **kw).conv_solve(auto_detune=False)
+                         connecting_algo=algo, **kw).solve(auto_detune=False)
     near = wavebit.rcwa(backend=0, wavelength=np.nextafter(WL, WL + 1), fto=[5, 0],
                         structure=_STACK, connecting_algo=algo,
-                        **kw).conv_solve(auto_detune=False)
+                        **kw).solve(auto_detune=False)
     R, T = _totals(exact)
     R_n, _ = _totals(near)
     assert abs(R - R_n) < TOL and abs(R + T - 1.0) < TOL
@@ -290,7 +290,7 @@ def test_exact_point_field_reconstruction_matches_its_neighbour():
     def field(wl):
         mee = wavebit.rcwa(backend=0, wavelength=wl, fto=[5, 0], structure=_STACK,
                            answers='field', **_KW)
-        mee.conv_solve(auto_detune=False)
+        mee.solve(auto_detune=False)
         return np.asarray(mee.calculate_field(res_x=16, res_y=1, res_z=16))
 
     exact = field(WL)
@@ -362,7 +362,7 @@ def test_auto_detune_accepts_an_explicit_step():
     mee = wavebit.rcwa(backend=0, wavelength=WL, fto=[3, 0], structure=_STACK, **_KW)
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        R, T = _totals(mee.conv_solve(auto_detune=1e-9))
+        R, T = _totals(mee.solve(auto_detune=1e-9))
     assert any(issubclass(r.category, AutoDetuneWarning) for r in rec)
     assert mee.wavelength == WL * (1 + 1e-9)
     assert abs(R + T - 1.0) < 1e-6
@@ -413,7 +413,7 @@ def test_auto_detune_theta_rung_clears_a_wavelength_invariant_graze():
     # Premise: the exact point must actually refuse — otherwise the FFT was not noiseless
     # here and the test would pass without touching the ladder.
     try:
-        solver().conv_solve(auto_detune=False)
+        solver().solve(auto_detune=False)
     except (FloatingPointError, np.linalg.LinAlgError):
         pass
     else:
@@ -422,7 +422,7 @@ def test_auto_detune_theta_rung_clears_a_wavelength_invariant_graze():
     mee = solver()
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        R, T = _totals(mee.conv_solve())
+        R, T = _totals(mee.solve())
     notices = [r for r in rec if issubclass(r.category, AutoDetuneWarning)]
     assert notices and 'theta' in str(notices[0].message), (
         f'expected the theta rung to report itself, got {[str(n.message) for n in notices]}')
@@ -443,7 +443,7 @@ def test_auto_detune_keeps_gradients_flowing_through_the_retry():
 
     def loss(thickness):
         r = wavebit.rcwa(backend=1, wavelength=WL, fto=[3, 0], structure=_STACK,
-                         **_KW).conv_solve(thickness=[200.0, thickness])
+                         **_KW).solve(thickness=[200.0, thickness])
         return jnp.real(jnp.asarray(r.R)).sum()
 
     with warnings.catch_warnings():
@@ -561,7 +561,7 @@ def test_grad_is_guarded_and_still_differentiates():
                       + [jnp.ones((), dtype=jnp.complex128)] * 3), (1, 1, 8))
         r = wavebit.rcwa(backend=1, wavelength=550.0, period=[700.0], fto=[10, 0],
                          top=1.0, bot=2.25, theta=0.1, phi=0.0, psi=np.pi / 2,
-                         structure=structure, thickness=[220.0]).conv_solve()
+                         structure=structure, thickness=[220.0]).solve()
         return jnp.real(r.R).sum()
 
     with warnings.catch_warnings(record=True) as rec:

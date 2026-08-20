@@ -68,7 +68,7 @@ def _position_gradients(kind, param):
     """``d(sum R)/d(param)`` at each position. Every entry should be zero."""
     def objective(v):
         res = wavebit.rcwa(backend=1, structure=[dict(background=1.0, shapes=[_shape(kind, param, v)])],
-                             **BASE).conv_solve()
+                             **BASE).solve()
         return jnp.real(jnp.sum(res.R))
 
     return np.array([float(jax.grad(objective)(jnp.asarray(x))) for x in POSITIONS])
@@ -86,7 +86,7 @@ def test_translation_invariance_holds_in_the_objective(kind, param):
     """
     def total(v):
         res = wavebit.rcwa(backend=0, structure=[dict(background=1.0, shapes=[_shape(kind, param, v)])],
-                             **BASE).conv_solve()
+                             **BASE).solve()
         return float(np.sum(np.asarray(res.R)).real)
 
     values = [total(x) for x in POSITIONS]
@@ -231,12 +231,12 @@ def _stack(cx0, cx1):
 
 
 def _stack_total(cx0, cx1):
-    res = wavebit.rcwa(backend=0, structure=_stack(cx0, cx1), **STACK).conv_solve()
+    res = wavebit.rcwa(backend=0, structure=_stack(cx0, cx1), **STACK).solve()
     return float(np.real(np.sum(np.asarray(res.R))))
 
 
 def _stack_jtotal(cx0, cx1):
-    res = wavebit.rcwa(backend=1, structure=_stack(cx0, cx1), **STACK).conv_solve()
+    res = wavebit.rcwa(backend=1, structure=_stack(cx0, cx1), **STACK).solve()
     return jnp.real(jnp.sum(res.R))
 
 
@@ -331,12 +331,12 @@ def _two(pair, ca, cb):
 
 
 def _two_total(pair, ca, cb):
-    res = wavebit.rcwa(backend=0, structure=_two(pair, ca, cb), **TWO_CFG).conv_solve()
+    res = wavebit.rcwa(backend=0, structure=_two(pair, ca, cb), **TWO_CFG).solve()
     return float(np.real(np.sum(np.asarray(res.R))))
 
 
 def _two_jtotal(pair, ca, cb):
-    res = wavebit.rcwa(backend=1, structure=_two(pair, ca, cb), **TWO_CFG).conv_solve()
+    res = wavebit.rcwa(backend=1, structure=_two(pair, ca, cb), **TWO_CFG).solve()
     return jnp.real(jnp.sum(res.R))
 
 
@@ -407,7 +407,7 @@ def test_a_layer_of_two_shapes_is_translation_invariant_too():
                   dict(type='circle', cx=0.70 + d, cy=0.30, lx=0.22, angle=0.0, material=5.76)]
         structure = [dict(background=1.0, shapes=shapes)]
         return float(np.sum(np.asarray(
-            wavebit.rcwa(structure=structure, normal_grid=grid, **cfg).conv_solve().T)).real)
+            wavebit.rcwa(structure=structure, normal_grid=grid, **cfg).solve().T)).real)
 
     on_grid = [total(k / 256) for k in (0, 8, 16, 32, 64)]
     assert np.ptp(on_grid) < 1e-11, np.ptp(on_grid)
@@ -444,7 +444,7 @@ def test_a_multishape_layer_is_periodic_across_the_cell_edge():
                       material=12.1104)
         structure = [dict(background=1.0, shapes=[moving] + shapes_after)]
         return float(np.sum(np.asarray(
-            wavebit.rcwa(structure=structure, normal_grid=256, **cfg).conv_solve().T)).real)
+            wavebit.rcwa(structure=structure, normal_grid=256, **cfg).solve().T)).real)
 
     alone = [total(cx, []) for cx in (0.10, 1.10, 2.10)]
     assert np.ptp(alone) < 1e-12, alone
@@ -484,7 +484,7 @@ def test_a_common_translation_of_every_shape_leaves_the_answer_alone():
                        angle=0.0, material=4.41)]
         return float(np.sum(np.asarray(wavebit.rcwa(
             structure=[dict(background=1.0, shapes=shapes)], normal_grid=256, **cfg)
-            .conv_solve().T)).real)
+            .solve().T)).real)
 
     on_grid = [total(k / 256) for k in (0, 16, 32, 64)]
     assert np.ptp(on_grid) < 1e-11, on_grid

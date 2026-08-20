@@ -89,7 +89,7 @@ def test_each_rung_delivers_exactly_its_own_surface(algo):
     surfaces = {}
     for rung in RUNGS:
         s = _solver(answers=rung, connecting_algo=algo)
-        surfaces[rung] = (s.conv_solve(), s)
+        surfaces[rung] = (s.solve(), s)
 
     eff, _ = surfaces['efficiency']
     assert eff.R is not None and eff.T is not None
@@ -109,7 +109,7 @@ def test_each_rung_delivers_exactly_its_own_surface(algo):
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 def test_the_rungs_agree_bit_for_bit_on_what_they_share(algo):
     """A cheaper declaration must be a smaller answer, never a different one."""
-    out = {r: _solver(answers=r, connecting_algo=algo).conv_solve() for r in RUNGS}
+    out = {r: _solver(answers=r, connecting_algo=algo).solve() for r in RUNGS}
     for field in ('R', 'T'):
         ref = np.asarray(getattr(out['efficiency'], field))
         for rung in ('amplitude', 'field'):
@@ -127,7 +127,7 @@ def test_the_rungs_agree_bit_for_bit_on_what_they_share(algo):
 
 def test_calculate_field_is_refused_by_naming_the_declaration():
     s = _solver()
-    s.conv_solve()
+    s.solve()
     with pytest.raises(RuntimeError, match=r"answers='field'") as e:
         s.calculate_field(res_x=4, res_y=4, res_z=4)
     assert "answers='amplitude'" in str(e.value), 'the message states what was declared'
@@ -136,7 +136,7 @@ def test_calculate_field_is_refused_by_naming_the_declaration():
 def test_the_refusal_beats_require_solved_to_it():
     """Never solved *and* never declared: the declaration is the one to name.
 
-    ``_require_solved``'s "run conv_solve first" is true here but useless — running one on
+    ``_require_solved``'s "run solve first" is true here but useless — running one on
     this solver keeps nothing, so following that advice reproduces the same failure.
     """
     s = _solver()
@@ -146,28 +146,28 @@ def test_the_refusal_beats_require_solved_to_it():
 
 def test_a_declared_field_solve_reconstructs():
     s = _solver(answers='field')
-    s.conv_solve()
+    s.solve()
     assert s.calculate_field(res_x=4, res_y=4, res_z=4).shape == (1, 4, 4, 4, 6)
 
 
 def test_the_declaration_is_assignable_and_takes_effect_on_the_next_solve():
     s = _solver()
-    s.conv_solve()
+    s.solve()
     s.answers = 'field'
     with pytest.raises(RuntimeError):
         # The declaration moved, but the solve that would honour it has not run yet, so the
         # state is still absent -- and this is the case _require_solved is for.
         s.calculate_field(res_x=4, res_y=4, res_z=4)
-    s.conv_solve()
+    s.solve()
     assert s.calculate_field(res_x=4, res_y=4, res_z=4).shape == (1, 4, 4, 4, 6)
 
 
 def test_dropping_back_down_clears_the_state_rather_than_leaving_it_stale():
     s = _solver(answers='field')
-    s.conv_solve()
+    s.solve()
     assert s.T1 is not None
     s.answers = 'amplitude'
-    s.conv_solve()
+    s.solve()
     assert s.layer_info_list == [] and s.T1 is None
 
 
@@ -178,7 +178,7 @@ def test_the_amplitude_rung_retains_no_matrices_and_the_field_rung_scales_with_d
     kept = {}
     for rung in ('amplitude', 'field'):
         s = _solver(answers=rung, n_layers=n_layers)
-        s.conv_solve()
+        s.solve()
         kept[rung] = sum(_owned_bytes([s.layer_info_list, s.T1]).values())
     assert kept['amplitude'] == 0
 
@@ -217,7 +217,7 @@ def test_the_declaration_holds_across_a_jit_boundary():
 
     @jax.jit
     def solved(solver):
-        return solver.conv_solve().R
+        return solver.solve().R
 
     ref = None
     for rung in ('amplitude', 'field'):
