@@ -9,7 +9,7 @@
 
 [![tests](https://github.com/fieldalgo/wavebit/actions/workflows/tests.yml/badge.svg)](https://github.com/fieldalgo/wavebit/actions/workflows/tests.yml)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
 
 **Differentiable electromagnetic simulation suite — by [FieldAlgo](https://fieldalgo.com)**
 
@@ -36,7 +36,7 @@ cd wavebit
 pip install -e .
 ```
 
-The base install needs only Python ≥ 3.10, NumPy ≥ 2.5.1, SciPy ≥ 1.18 and array-api-compat.
+The base install needs only Python ≥ 3.12, NumPy ≥ 2.5.1, SciPy ≥ 1.18 and array-api-compat.
 JAX and PyTorch are optional and bring autodiff and GPU support:
 
 ```shell
