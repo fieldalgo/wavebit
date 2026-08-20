@@ -647,21 +647,35 @@ class CoreSolveMixin:
             f'give a structure with more than one row (two identical rows is the 2D path solving '
             f'the same physics, and it returns those zeros explicitly).')
 
-    def _refuse_illegal_tetm(self, one_dimensional):
+    def _refuse_illegal_tetm(self, one_dimensional, one_row=None):
         """``tetm`` is a claim about the problem; where it cannot hold, say which part failed.
 
         Called from ``_assign_grating_type``, because that is where the structure is known.
         The old ``pol`` had no such check: on a 2D structure it was accepted and then ignored,
         and the fast path it was reaching for silently did not happen.
 
+        ``one_row`` separates the two ways the claim fails, because they need different
+        advice. A 2D cell has no pure TE/TM at all. A **one-row raster on a skewed cell** is a
+        1D grating, but its grooves run along ``a2`` rather than along y, so ``E`` along y --
+        which is what ``tetm`` names -- is a *mixture* of that grating's two decoupled
+        polarizations rather than one of them. Telling that caller "this is not a 1D
+        structure" would be answering a question they did not ask.
+
         The ``max_order[1]`` half lives in :meth:`_refuse_y_orders_on_a_y_invariant_cell`
         instead — it is not a fact about the declaration but about the structure, and it
-        applies to
-        every spelling of the incidence.
+        applies to every spelling of the incidence.
         """
         if self._tetm is None:
             return
         if not one_dimensional:
+            if one_row:
+                raise ValueError(
+                    'tetm was given on a one-row raster with a skewed lattice. That is a 1D '
+                    'grating, but its grooves run along a2, not along y -- so the pure TE/TM '
+                    'pair tetm names is not this grating\'s pair, and E along y is a mixture '
+                    'of both. Give the incidence as psi (linear) or '
+                    'polarization=(a_s, a_p), which carries the mixture; the solve then takes '
+                    'the 2D path, which is the one whose k layout a skewed cell has.')
             raise ValueError(
                 'tetm is only for a 1D structure: the pure TE/TM formulation it selects does '
                 'not exist on a 2D cell, where s and p couple. Drop tetm and give the '

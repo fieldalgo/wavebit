@@ -581,14 +581,29 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
     method = NormalMethod.DISTANCE if method is None else normal_method_of(method)
 
     # A one-cell axis carries no interface of its own: the structure cannot vary along it, so
-    # every normal points along the other axis. Say so directly -- `np.gradient` needs three
-    # cells and would otherwise raise, which is what made NVF unusable on 1D gratings. With a
-    # constant normal the NVF projector reduces to Li's rules exactly (C_xx = I, C_xy = C_yy =
-    # 0 gives eps_xx = <1/eps>^-1 and eps_yy = <eps>), so this is not an approximation.
+    # the normal is constant. Say so directly -- `np.gradient` needs three cells and would
+    # otherwise raise, which is what made NVF unusable on 1D gratings. With a constant normal
+    # the NVF projector reduces to Li's rules exactly (C_xx = I, C_xy = C_yy = 0 gives
+    # eps_xx = <1/eps>^-1 and eps_yy = <eps>), so this is not an approximation.
     # Shared across methods: nothing about the constant field depends on the construction.
+    #
+    # *Which* constant is the part a skewed cell changes. A raster invariant along `a2` has
+    # interfaces that contain `a2`, so the normal is along `b1` -- perpendicular to `a2`, not
+    # parallel to `a1` -- and only on an axis-aligned cell are those the same direction. This
+    # is the shortcut's version of the `J^-T` pullback the general path below applies: with
+    # `df/dj == 0`, `J^-T @ (df/di, 0)` is the first row of `J^-1`, which is `b1` up to the
+    # scale normalisation removes. Returning `x_hat` there instead cost R 0.132 and T 0.090 on
+    # a 50% binary grating at a 60-degree skew, energy conserving throughout
+    # (`tests/test_oblique_lattice.py::test_a_one_row_skewed_cell_is_the_grating_it_draws`).
+    # An axis-aligned cell gives back exactly (1.0, 0.0) / (0.0, 1.0), to the bit.
     if 1 in shape:
-        along_x = np.ones(shape), np.zeros(shape)
-        return along_x if shape[0] == 1 else (along_x[1], along_x[0])
+        if lattice is None:
+            ux, uy = (1.0, 0.0) if shape[0] == 1 else (0.0, 1.0)
+        else:
+            recip = np.linalg.inv(np.asarray(lattice, dtype=float))
+            b = recip[0] if shape[0] == 1 else recip[1]
+            ux, uy = b / np.hypot(b[0], b[1])
+        return np.full(shape, ux), np.full(shape, uy)
 
     if method != NormalMethod.DISTANCE:
         from .normal_methods import DISPATCH

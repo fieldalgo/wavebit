@@ -197,6 +197,105 @@ def test_the_public_wavevectors_are_the_ones_the_skewed_solve_uses():
                                  aligned._separable_kxy(aligned.wavelength)):
         assert np.array_equal(np.asarray(public), np.asarray(separable))
 
+# ------------------------------------------------- a 1D grating whose grooves are not along y
+
+#: One raster row: eps varies along ``a1`` and is invariant along ``a2``. On any lattice that
+#: is a 1D grating -- but its grooves run along ``a2``, and its period is measured along ``b1``,
+#: which is perpendicular to ``a2`` rather than parallel to ``a1``. Both facts are invisible in
+#: the raster, which is why this shape got routed and factorized as though the cell were square.
+_GROOVE_N = 64
+_GROOVE = np.where((np.arange(_GROOVE_N) >= _GROOVE_N // 4)
+                   & (np.arange(_GROOVE_N) < 3 * _GROOVE_N // 4), 5.76, 1.0)[None, None, :]
+
+
+def _skewed(deg, rows=1, **kw):
+    a2 = P * np.array([np.cos(np.deg2rad(deg)), np.sin(np.deg2rad(deg))])
+    basis = np.column_stack((np.array([P, 0.0]), a2))
+    return wavebit.rcwa(backend=0, structure=np.tile(_GROOVE, (1, rows, 1)), thickness=[H],
+                        wavelength=WL, lattice=basis, factorization='nvf', theta=0.0,
+                        max_order=(6, 0), **kw)
+
+
+def _rotated_frame_reference(deg):
+    """The same grating written in its own frame, which shares no code with the skewed path.
+
+    Invariant along ``a2`` means the permittivity depends only on ``b1 . r``, so in the frame
+    whose x runs along ``b1`` this is an ordinary rectangular 1D grating of period
+    ``1/|b1| = P sin(gamma)``, grooves along y, at normal incidence. Its TE and TM decouple
+    exactly there (classical mount, ``k_par = 0``), and the scene's ``E || y`` decomposes onto
+    that pair as ``(-cos g, sin g)`` — so the per-order power is ``sin^2 g`` of one plus
+    ``cos^2 g`` of the other. Nothing in this reference is skewed, and nothing in it is a
+    second spelling of the code under test.
+    """
+    g = np.deg2rad(deg)
+    out = {}
+    for tetm in ('te', 'tm'):
+        solved = wavebit.rcwa(backend=0, structure=_GROOVE, thickness=[H], wavelength=WL,
+                              period=[P * np.sin(g)], theta=0.0, phi=None, tetm=tetm,
+                              max_order=(6, 0)).solve()
+        out[tetm] = (np.asarray(solved.R).ravel(), np.asarray(solved.T).ravel())
+    w_te, w_tm = np.sin(g) ** 2, np.cos(g) ** 2
+    return tuple(w_te * out['te'][i] + w_tm * out['tm'][i] for i in (0, 1))
+
+
+@pytest.mark.parametrize('rows', [1, 8], ids=['one_row', 'tiled'])
+@pytest.mark.parametrize('deg', [90.0, 75.0, 60.0, 45.0])
+def test_a_one_row_skewed_cell_is_the_grating_it_draws(deg, rows):
+    """It answered the *rectangular* grating, twice over, and conserved energy while doing it.
+
+    Two independent defects, both fixed 2026-08-20, and both needing a skewed cell **and** a
+    structure invariant along ``a2`` to show:
+
+    * **Routing.** ``_assign_grating_type`` read "one raster row" as "the 1D operators can
+      express this". They cannot on a skewed cell: order ``m`` carries ``m*b1_y`` of ``ky``
+      that the separable k layout has no slot for. Off by R 0.132 / T 0.090 at 60 degrees.
+    * **The constant normal.** ``normal_vector_field``'s one-cell-axis shortcut returned
+      ``x_hat`` — right in *index* space, right in Cartesian space only for a square cell,
+      where the general path's ``J^-T`` pullback would have given ``b1_hat``. Off by a further
+      0.061 on the same scene, and it survived the routing fix because it is a different bug.
+
+    ``rows=8`` tiles the identical row: the same physical structure, routed to the 2D path
+    whatever the lattice, so it is the half of this test that was already right. The two halves
+    must land on the same numbers, and both on the reference.
+
+    At ``deg=90`` the cell is square, the routing sends it to the 1D path as before, and the
+    reference is the same grating with no rotation at all — that entry is what says neither fix
+    moved a rectangular answer.
+    """
+    R_ref, T_ref = _rotated_frame_reference(deg)
+    result = _skewed(deg, rows=rows, psi=np.pi / 2, phi=0.0).solve()
+    assert np.allclose(np.asarray(result.R).ravel(), R_ref, atol=1e-12, rtol=0)
+    assert np.allclose(np.asarray(result.T).ravel(), T_ref, atol=1e-12, rtol=0)
+
+
+def test_the_skewed_one_row_answer_is_not_the_rectangular_one():
+    """The guard the assertion above cannot make: that the reference *moved*.
+
+    Every number here would also pass if the solver ignored the lattice and the reference
+    ignored it too. It does not -- the effective period is ``P sin(gamma)`` -- so pin the size
+    of the effect once, at the scene the docstrings above quote.
+    """
+    square = _rotated_frame_reference(90.0)[1]
+    skewed = _rotated_frame_reference(60.0)[1]
+    assert np.max(np.abs(square - skewed)) > 5e-2, np.max(np.abs(square - skewed))
+
+
+def test_tetm_is_refused_on_a_one_row_skewed_cell():
+    """``tetm`` names a pure pair this grating does not have, so it cannot be honoured.
+
+    The grooves run along ``a2``; ``tetm`` means E along y. Those coincide only on a square
+    cell, so on a skewed one the declaration is false rather than merely unhelpful -- E along
+    y is a mixture of the grating's two decoupled polarizations, which is exactly what the
+    reference above has to weight by ``sin^2`` and ``cos^2``.
+
+    Refused rather than rerouted: ``psi`` and ``polarization`` carry a mixture and ``tetm``
+    does not, so there is nothing for it to mean here.
+    """
+    with pytest.raises(ValueError, match='grooves run along a2'):
+        _skewed(60.0, tetm='te', phi=None).solve()
+    # ...and it is still accepted on the square cell, where the claim holds
+    assert _skewed(90.0, tetm='te', phi=None).solve().T is not None
+
 def test_unimodular_shear_is_the_same_physics():
     """``a2' = a2 + a1`` generates the identical lattice, so the answers must agree.
 

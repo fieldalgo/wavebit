@@ -226,9 +226,18 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
             return
 
         if self.modeling_type_assigned == 0:  # Raster
-            one_dimensional = self.structure.shape[1] == 1
-            self._refuse_y_orders_on_a_y_invariant_cell(one_dimensional)
-            self._refuse_illegal_tetm(one_dimensional)
+            one_row = self.structure.shape[1] == 1
+            self._refuse_y_orders_on_a_y_invariant_cell(one_row)
+            # One raster row means invariant along `a2`, which is a 1D grating -- but only on
+            # an axis-aligned cell is it one the 1D operators can express. A skewed cell's
+            # `b1` is perpendicular to `a2` rather than parallel to `a1`, so order `m` carries
+            # `m*b1_y` of `ky` that the separable layout has no slot for, and the grooves do
+            # not run along y. Routed to the 1D path anyway it answers the *rectangular*
+            # problem: measured on a 50% binary grating, R out by 0.132 and T by 0.090 at a
+            # 60-degree skew, energy conserving to 1e-15 throughout. See
+            # `tests/test_oblique_lattice.py::test_a_one_row_skewed_cell_is_the_grating_it_draws`.
+            one_dimensional = one_row and self.lattice_is_axis_aligned
+            self._refuse_illegal_tetm(one_dimensional, one_row=one_row)
             if one_dimensional:
                 # The declaration selects the path, and nothing else does. A named incidence
                 # -- psi, or a pair, which mixes s and p the pure path cannot carry -- leaves
