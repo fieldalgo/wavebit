@@ -280,7 +280,7 @@ STRIDED_CFG = dict(period=(500., 800.), thickness=(180.,), wavelength=620.,
 
 #: Asymmetric on purpose: a cell that equals its own rotation would pass the comparison below
 #: while measuring nothing.
-STRIDED_ROW = [1.0, 2.5, 1.0, 3.5]
+STRIDED_ROW = [1.0, 6.25, 1.0, 12.25]        # permittivity: 2.5**2 and 3.5**2
 STRIDED_CELL = np.rot90(np.array([[STRIDED_ROW] * 4]), axes=(1, 2))
 
 
@@ -290,7 +290,7 @@ def _totals(res):
 
 @pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
 def test_a_reversed_raster_solves_the_same_as_its_copy(backend):
-    """Every backend takes a negative-stride `ucell`, and gets the contiguous answer.
+    """Every backend takes a negative-stride `structure`, and gets the contiguous answer.
 
     Two claims, and the second is why this is not just a smoke test: torch used to raise here,
     and a normalisation that copied the buffer the wrong way round would now return a *wrong*
@@ -302,8 +302,8 @@ def test_a_reversed_raster_solves_the_same_as_its_copy(backend):
         pytest.importorskip('torch')
     assert any(s < 0 for s in STRIDED_CELL.strides), 'premise: the input is a reversed view'
 
-    strided = wavebit.rcwa(backend=backend, ucell=STRIDED_CELL, **STRIDED_CFG).conv_solve()
-    copied = wavebit.rcwa(backend=backend, ucell=np.ascontiguousarray(STRIDED_CELL),
+    strided = wavebit.rcwa(backend=backend, structure=STRIDED_CELL, **STRIDED_CFG).conv_solve()
+    copied = wavebit.rcwa(backend=backend, structure=np.ascontiguousarray(STRIDED_CELL),
                           **STRIDED_CFG).conv_solve()
     assert _totals(strided) == _totals(copied)
 
@@ -320,24 +320,24 @@ def test_torch_takes_a_reversed_period_and_thickness():
     stack = np.concatenate([cell, 1.0 + 0.5 * cell])
     cfg = dict(wavelength=620., fto=(2, 2), theta=0.2, psi=0.3)
 
-    reversed_ = wavebit.rcwa(backend=2, ucell=stack, period=np.flip(np.array([800., 500.])),
+    reversed_ = wavebit.rcwa(backend=2, structure=stack, period=np.flip(np.array([800., 500.])),
                              thickness=np.flip(np.array([90., 180.])), **cfg).conv_solve()
-    plain = wavebit.rcwa(backend=2, ucell=stack, period=(500., 800.),
+    plain = wavebit.rcwa(backend=2, structure=stack, period=(500., 800.),
                          thickness=(180., 90.), **cfg).conv_solve()
     assert _totals(reversed_) == _totals(plain)
 
 
-def test_normalising_strides_does_not_detach_the_ucell():
+def test_normalising_strides_does_not_detach_the_structure():
     """The trap `as_array`'s docstring warns about, on the input this change touched.
 
     A copy is the obvious way to kill a negative stride and it is also the obvious way to drop
     a caller's optimizer leaf out of the graph. `forward_strided` copies NumPy only, so a torch
-    `ucell` must reach the solve untouched and every cell must still carry a gradient.
+    `structure` must reach the solve untouched and every cell must still carry a gradient.
     """
     torch = pytest.importorskip('torch')
     uc = torch.tensor(np.ascontiguousarray(STRIDED_CELL), dtype=torch.float64,
                       requires_grad=True)
-    torch.sum(wavebit.rcwa(backend=2, ucell=uc, **STRIDED_CFG).conv_solve().T).backward()
+    torch.sum(wavebit.rcwa(backend=2, structure=uc, **STRIDED_CFG).conv_solve().T).backward()
     assert uc.requires_grad, 'the leaf was flipped in place'
     assert int((uc.grad.abs() > 1e-14).sum()) == uc.numel()
 

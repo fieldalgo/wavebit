@@ -64,11 +64,17 @@ matrices still Hermitian and `R + T` still exactly 1. The conversion was also se
 ## Using it
 
 ```python
-ucell = [dict(n_base=1.0, combine='paint', shapes=[
-    dict(type='rectangle', cx=0.40, cy=0.40, lx=0.34, ly=0.34, angle=0.0, n_index=2.0),
-    dict(type='rectangle', cx=0.56, cy=0.56, lx=0.34, ly=0.34, angle=0.3, n_index=3.0),
+structure = [dict(background=1.0, combine='paint', shapes=[
+    dict(type='rectangle', cx=0.40, cy=0.40, lx=0.34, ly=0.34, angle=0.0, material=4.0),
+    dict(type='rectangle', cx=0.56, cy=0.56, lx=0.34, ly=0.34, angle=0.3, material=9.0),
 ])]
 ```
+
+Every material slot is a **relative permittivity** (`4.0` and `9.0` are the `n = 2` and
+`n = 3` rods this example used to spell as `n_index`), or a `wavebit.Material` when the region
+is magnetic as well; the retired `n_base` / `n_index` keys are refused by name, since keeping
+their numbers under the new keys would paint a different structure. See
+[`conventions.md`](conventions.md).
 
 Shapes are in painting order — a later shape covers an earlier one. `rectangle`, `square`,
 `circle`, `disk` and `ellipse` are accepted; the curved ones are polygonised at
@@ -84,16 +90,16 @@ apart on disjoint rods, because the two paths extend the normal differently.
 ### Which path a layer took
 
 **There is no `modeling_type` for this path**, and the omission is deliberate rather than
-pending. `modeling_type` is a property of the whole solver, decided from the *type* of `ucell`
+pending. `modeling_type` is a property of the whole solver, decided from the *type* of `structure`
 alone — 0 raster, 1 block, 2 smooth. The choice between boundary and the closed form is taken
 **per layer**, by the loop in `to_conv_mat_smooth_layers`, from the shapes' actual coordinates.
-One smooth `ucell` can have its first layer resolved into polygons and its second transformed in
+One smooth `structure` can have its first layer resolved into polygons and its second transformed in
 closed form; a solver-wide integer cannot say that. Both layers report `modeling_type == 2`.
 
 Two consequences worth keeping straight:
 
 - The four rows of the table above are not four settings to pick between. The first three are
-  `ucell` types; the fourth is what the third *becomes*, layer by layer, where it has to.
+  `structure` types; the fourth is what the third *becomes*, layer by layer, where it has to.
 - What records the choice is `geometry.boundary_plans`: a layer's slot holds a plan if that layer
   resolved, and `None` if it stayed on the closed form. That, not `modeling_type`, is what to
   read when you want to know which happened.
@@ -121,7 +127,7 @@ re-freezing a structure whose topology has not changed hits the JAX compilation 
 freeze again every step, as with the block path (see the README on stale geometry).
 
 ```python
-solver = wavebit.rcwa(backend=1, ucell=ucell, ...)
+solver = wavebit.rcwa(backend=1, structure=structure, ...)
 res = solver.conv_solve(geometry=solver.freeze_geometry())
 ```
 
@@ -307,7 +313,7 @@ slope is about twice the fto-12 one — and that is the truncation every gradien
 `tests/test_shape_position_gradients.py` runs at. Those tests hold autodiff to finite differences,
 which is the comparison the previous section says cannot fail on either path.
 
-### Layers of both kinds in one `ucell`
+### Layers of both kinds in one `structure`
 
 They differentiate together, and the mixture costs nothing: the branch is on `plan is not None`,
 which is static under a trace, and the per-layer results are only `stack`ed. Verified on a

@@ -110,8 +110,8 @@ growth is the physics rather than an artefact, and nothing guards it.
 
 ## 3. They agree
 
-A square pillar array, `n_top = 1.0`, `n_bot = 1.45`, 17° at azimuth 31°, four 200 nm layers
-unless noted:
+A square pillar array, `top = 1.0`, `bot = 2.1025` (vacuum over an `n = 1.45` substrate), 17°
+at azimuth 31°, four 200 nm layers unless noted:
 
 | fto | orders | layers | \|ETM − SMM\| | R + T | ETM | SMM | SMM/ETM |
 |---|---|---|---|---|---|---|---|

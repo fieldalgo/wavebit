@@ -30,7 +30,7 @@ recurring; it is the cheapest statement of the failure and it does not need a go
 
 Also pinned here: gradients still flow **through** ``varphi``, which needs a derivative with
 respect to ``period`` or ``wavelength``, since those feed ``kx = m*wl/period``.
-Differentiating the ucell instead never touches this code, and an earlier version of these
+Differentiating the raster instead never touches this code, and an earlier version of these
 tests did exactly that and proved nothing.
 """
 import warnings
@@ -44,19 +44,20 @@ from wavebit._core.conventions import order_azimuth
 
 HALF_PI = 1.5707963267948966
 
-_UC_1D = np.array([[[1.0, 1.0, 1.0, 3.5, 3.5, 3.5, 1.0, 1.0]]])
+# Permittivity rasters: 12.25 is the index 3.5 these cells carried before the material flip.
+_UC_1D = np.array([[[1.0, 1.0, 1.0, 12.25, 12.25, 12.25, 1.0, 1.0]]])
 _UC_2D = np.ones((1, 8, 8))
-_UC_2D[0, 2:6, 2:6] = 3.5
+_UC_2D[0, 2:6, 2:6] = 12.25
 
 
 def _xp():
     return array_namespace(np.zeros(1, dtype=np.complex128))
 
 
-def _solve(backend=0, ucell=None, fto=(6, 0), theta=0.0, phi=0.0, psi=np.pi / 2, **kw):
-    base = dict(backend=backend, wavelength=500.0, period=[700.0, 700.0], n_top=1.0,
-                n_bot=1.5, theta=theta, phi=phi, psi=psi,
-                ucell=_UC_1D if ucell is None else ucell, thickness=[220.0], fto=list(fto))
+def _solve(backend=0, structure=None, fto=(6, 0), theta=0.0, phi=0.0, psi=np.pi / 2, **kw):
+    base = dict(backend=backend, wavelength=500.0, period=[700.0, 700.0], top=1.0,
+                bot=2.25, theta=theta, phi=phi, psi=psi,
+                structure=_UC_1D if structure is None else structure, thickness=[220.0], fto=list(fto))
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         return wavebit.rcwa(**{**base, **kw}).conv_solve()
@@ -233,9 +234,9 @@ def test_normal_incidence_solves_without_a_nudge(backend, case, phi, name):
 
     kw = {'1d': {},
           'conical': dict(psi=0.7),
-          '2d': dict(ucell=_UC_2D, fto=(4, 4)),
+          '2d': dict(structure=_UC_2D, fto=(4, 4)),
           'smm': dict(connecting_algo='SMM'),
-          '2d_smm': dict(ucell=_UC_2D, fto=(4, 4), connecting_algo='SMM')}[case]
+          '2d_smm': dict(structure=_UC_2D, fto=(4, 4), connecting_algo='SMM')}[case]
     result = _solve(backend=backend, phi=phi, **kw)
     for array in (result.R, result.T):
         values = np.asarray(array, dtype=np.complex128)
@@ -252,13 +253,13 @@ def test_the_first_order_path_gets_the_azimuth_too():
     at ``phi != 0`` and nowhere else, so both azimuths are run.
     """
     for phi in (0.0, 0.6108652381980153):
-        second = _solve(ucell=_UC_2D, fto=(4, 4), phi=phi, psi=0.7)
+        second = _solve(structure=_UC_2D, fto=(4, 4), phi=phi, psi=0.7)
 
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             solver = wavebit.rcwa(backend=0, wavelength=500.0, period=[700.0, 700.0],
-                                  n_top=1.0, n_bot=1.5, theta=0.0, phi=phi, psi=0.7,
-                                  ucell=_UC_2D, thickness=[220.0], fto=[4, 4])
+                                  top=1.0, bot=2.25, theta=0.0, phi=phi, psi=0.7,
+                                  structure=_UC_2D, thickness=[220.0], fto=[4, 4])
             solver.formulation = '4ff'
             first = solver.conv_solve()
         assert str(solver.formulation_assigned).endswith('FIRST'), solver.formulation_assigned
@@ -298,8 +299,8 @@ def test_the_two_spellings_of_one_incidence_agree():
     psi = 0.7
     pair = (-np.sin(psi), -np.cos(psi))
     for phi in (0.0, 0.3, 0.6108652381980153, 1.2, -0.4):
-        by_azimuth = _solve(ucell=_UC_2D, fto=(4, 4), phi=phi + np.pi, psi=psi)
-        by_pair = _solve(ucell=_UC_2D, fto=(4, 4), phi=phi, psi=None, polarization=pair)
+        by_azimuth = _solve(structure=_UC_2D, fto=(4, 4), phi=phi + np.pi, psi=psi)
+        by_pair = _solve(structure=_UC_2D, fto=(4, 4), phi=phi, psi=None, polarization=pair)
         for name in ('r_s', 'r_p', 't_s', 't_p'):
             x = np.asarray(getattr(by_azimuth.res, name), dtype=np.complex128)
             y = np.asarray(getattr(by_pair.res, name), dtype=np.complex128)
@@ -340,8 +341,8 @@ def test_phi_plus_pi_negates_the_reconstructed_field():
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             solver = wavebit.rcwa(backend=0, wavelength=500.0, period=[700.0, 700.0],
-                                  n_top=1.0, n_bot=1.5, theta=0.0,
-                                  ucell=_UC_2D, thickness=[220.0], fto=[4, 4],
+                                  top=1.0, bot=2.25, theta=0.0,
+                                  structure=_UC_2D, thickness=[220.0], fto=[4, 4],
                                   answers='field', **kw)
             solver.conv_solve()
             return np.asarray(solver.calculate_field(res_x=6, res_y=6, res_z=5),
@@ -415,31 +416,31 @@ def test_the_solves_refuse_to_guess_the_azimuth():
 # ---------------------------------------------------------------- gradients through varphi
 
 def test_gradient_flows_through_the_azimuth():
-    """Differentiate ``period``, not the ucell — that is what reaches ``varphi``.
+    """Differentiate ``period``, not the raster — that is what reaches ``varphi``.
 
     ``kx = n*sin(theta) + m*wl/period``, so a period derivative passes straight through the
-    singular point at ``theta = 0``. A ucell derivative does not touch this code at all,
+    singular point at ``theta = 0``. A raster derivative does not touch this code at all,
     which is why it cannot stand in for this test.
     """
     jax = pytest.importorskip('jax')
     import wavebit.on_jax  # noqa: F401
     import jax.numpy as jnp
 
-    def loss(period, ucell, fto, phi):
+    def loss(period, structure, fto, phi):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             r = wavebit.rcwa(backend=1, wavelength=500.0, period=[period, period],
-                             n_top=1.0, n_bot=1.5, theta=0.0, phi=phi, psi=np.pi / 2,
-                             ucell=jnp.asarray(ucell), thickness=[220.0],
+                             top=1.0, bot=2.25, theta=0.0, phi=phi, psi=np.pi / 2,
+                             structure=jnp.asarray(structure), thickness=[220.0],
                              fto=list(fto)).conv_solve()
         return jnp.real(r.R).sum()
 
-    for ucell, fto in ((_UC_1D, (6, 0)), (_UC_2D, (4, 4))):
+    for structure, fto in ((_UC_1D, (6, 0)), (_UC_2D, (4, 4))):
         for phi in (0.0, 0.6108652381980153):
-            grad = float(jax.grad(loss)(jnp.asarray(700.0), ucell, fto, phi))
+            grad = float(jax.grad(loss)(jnp.asarray(700.0), structure, fto, phi))
             h = 1e-3
-            fd = (float(loss(jnp.asarray(700.0 + h), ucell, fto, phi))
-                  - float(loss(jnp.asarray(700.0 - h), ucell, fto, phi))) / (2 * h)
+            fd = (float(loss(jnp.asarray(700.0 + h), structure, fto, phi))
+                  - float(loss(jnp.asarray(700.0 - h), structure, fto, phi))) / (2 * h)
             assert np.isfinite(grad)
             assert grad == pytest.approx(fd, rel=1e-4, abs=1e-10)
 
@@ -460,18 +461,18 @@ def test_torch_agrees_with_jax_on_the_gradient_through_the_azimuth():
     def jax_loss(period):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            r = wavebit.rcwa(backend=1, wavelength=500.0, period=[period, period], n_top=1.0,
-                             n_bot=1.5, theta=0.0, phi=0.7, psi=np.pi / 2,
-                             ucell=jnp.asarray(_UC_2D), thickness=[220.0],
+            r = wavebit.rcwa(backend=1, wavelength=500.0, period=[period, period], top=1.0,
+                             bot=2.25, theta=0.0, phi=0.7, psi=np.pi / 2,
+                             structure=jnp.asarray(_UC_2D), thickness=[220.0],
                              fto=[4, 4]).conv_solve()
         return jnp.real(r.R).sum()
 
     p = torch.tensor(700.0, dtype=torch.float64, requires_grad=True)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        r = wavebit.rcwa(backend=2, wavelength=500.0, period=[p, p], n_top=1.0, n_bot=1.5,
+        r = wavebit.rcwa(backend=2, wavelength=500.0, period=[p, p], top=1.0, bot=2.25,
                          theta=0.0, phi=0.7, psi=np.pi / 2,
-                         ucell=torch.asarray(_UC_2D), thickness=[220.0],
+                         structure=torch.asarray(_UC_2D), thickness=[220.0],
                          fto=[4, 4]).conv_solve()
         torch.real(r.R).sum().backward()
 

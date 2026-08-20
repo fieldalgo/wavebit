@@ -2,7 +2,7 @@
 
 Wavebit solves a 1D grating three ways, and which one runs is decided by inputs rather
 than by a mode switch: ``phi=None`` takes the 1D TE/TM formulation, ``phi=0`` takes the 1D
-conical one, and a ``ucell`` with more than one row takes the full 2D solver. At normal
+conical one, and a ``structure`` with more than one row takes the full 2D solver. At normal
 azimuth these are three routes to one answer, so any disagreement is a bug in whichever
 route drifted -- there is no discretization difference to hide behind, because all three are
 handed the same raster.
@@ -24,11 +24,11 @@ import wavebit
 
 # A binary grating, deliberately y-invariant so all three formulations are describing the
 # identical structure. Two layers, so the stacking is exercised rather than a single slab.
-_ROW = [1, 1, 1, 3.48, 3.48, 3.48, 1, 1, 1, 1]
+_ROW = [1, 1, 1, 12.1104, 12.1104, 12.1104, 1, 1, 1, 1]   # eps: the index 3.48 squared
 UCELL_1D = np.array([[_ROW], [_ROW]], dtype=float)
 UCELL_2D = np.repeat(UCELL_1D, 2, axis=1)          # same structure, two identical y rows
 
-CFG = dict(backend=0, n_top=1.0, n_bot=1.0, theta=1e-10, fto=[20, 0],
+CFG = dict(backend=0, top=1.0, bot=1.0, theta=1e-10, fto=[20, 0],
            wavelength=300.0, period=[700.0, 700.0], thickness=[460.0, 22.0])
 
 TOL = 1e-11
@@ -40,12 +40,12 @@ TOL = 1e-11
 _PSI_OF = {'te': np.pi / 2, 'tm': 0.0}
 
 
-def _solve(tetm, phi, ucell):
+def _solve(tetm, phi, structure):
     """``phi is None`` takes the declaration (the pure path); any azimuth takes the angle."""
     incidence = {'tetm': tetm} if phi is None else {'psi': _PSI_OF[tetm]}
     solver = wavebit.rcwa(**incidence, **CFG)
     solver.phi = phi
-    solver.ucell = ucell
+    solver.structure = structure
     res = solver.conv_solve().res
     return np.squeeze(np.asarray(res.R)), np.squeeze(np.asarray(res.T))
 
@@ -90,9 +90,9 @@ def test_all_three_conserve_energy(tetm):
     Without this, the two tests above would still pass if all three routes were wrong in the
     same way -- agreement is not correctness.
     """
-    for phi, ucell in ((None, UCELL_1D), (0.0, UCELL_1D), (0.0, UCELL_2D)):
-        ri, ti = _solve(tetm, phi, ucell)
-        assert abs(ri.sum() + ti.sum() - 1.0) < 1e-9, (phi, ucell.shape)
+    for phi, structure in ((None, UCELL_1D), (0.0, UCELL_1D), (0.0, UCELL_2D)):
+        ri, ti = _solve(tetm, phi, structure)
+        assert abs(ri.sum() + ti.sum() - 1.0) < 1e-9, (phi, structure.shape)
 
 
 # --------------------------------------------------------- block path vs raster, per backend
@@ -103,14 +103,16 @@ def test_all_three_conserve_energy(tetm):
 # The raster is 12 cells over a 1200 nm period, so cells 4..7 are x = 400..800 -- a 400 nm
 # rectangle centred at 600. `ly` spans the full period because the structure is y-invariant.
 # These are absolute lengths in the units of `period`, not fractions of it.
-# n = 3.48 rather than a round number on purpose: 3.5 is exactly representable in float32, so
-# a single-precision raster would round-trip through it unharmed and this test would pass while
-# blind to the very defect it exists for. 3.48 is not, and it separates the two by ~3e-8.
-_N = 3.48
-_RASTER = np.array([[[1.0] * 4 + [_N] * 4 + [1.0] * 4]])
-_BLOCK = [[1.0, [['rectangle', 600.0, 600.0, 400.0, 1200.0, _N, 0, 0, 0]]]]
+# eps = 3.48**2 rather than a round number on purpose: a value exactly representable in
+# float32 would round-trip through a single-precision raster unharmed and this test would pass
+# while blind to the very defect it exists for. 12.1104 is not, and it separates the two by
+# ~3e-8 -- the same argument the pre-flip index 3.48 carried, since squaring an inexact value
+# does not make it exact.
+_EPS = 12.1104
+_RASTER = np.array([[[1.0] * 4 + [_EPS] * 4 + [1.0] * 4]])
+_BLOCK = [[1.0, [['rectangle', 600.0, 600.0, 400.0, 1200.0, _EPS, 0, 0, 0]]]]
 
-_CFG = dict(n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2,
+_CFG = dict(top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2,
             fto=[5, 0], wavelength=900.0, period=[1200.0, 1200.0], thickness=[300.0])
 
 
@@ -130,8 +132,8 @@ def test_block_and_raster_describe_the_same_structure(backend, name):
     if name != 'numpy':
         pytest.importorskip(name)
 
-    block = wavebit.rcwa(backend=backend, ucell=_BLOCK, **_CFG).conv_solve().res
-    raster = wavebit.rcwa(backend=backend, ucell=_RASTER, **_CFG).conv_solve().res
+    block = wavebit.rcwa(backend=backend, structure=_BLOCK, **_CFG).conv_solve().res
+    raster = wavebit.rcwa(backend=backend, structure=_RASTER, **_CFG).conv_solve().res
 
     for a, b, which in ((block.R, raster.R, 'R'),
                         (block.T, raster.T, 'T')):

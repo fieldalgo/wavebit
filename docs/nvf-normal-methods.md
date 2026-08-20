@@ -28,10 +28,10 @@ longer of the construction: `339df21` made `'distance'` itself periodic, which m
 — see [the periodicity section](#periodicity-the-cell-is-a-torus).)
 
 ```python
-wavebit.rcwa(ucell=raster, factorization='nvf', normal_method='contour', ...)
+wavebit.rcwa(structure=raster, factorization='nvf', normal_method='contour', ...)
 ```
 
-The keyword is read exactly where a raster normal field is built — a raster `ucell` under
+The keyword is read exactly where a raster normal field is built — a raster `structure` under
 `factorization='nvf'` (and the tensor-raster builders, called directly). Explicitly set
 anywhere else it is refused rather than ignored, for the same reason `enhanced_dfs` was
 removed outright: a knob nothing reads is a lie waiting to be believed.

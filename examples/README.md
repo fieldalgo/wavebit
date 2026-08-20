@@ -26,10 +26,19 @@ files. For the other two a green tick means the code ran, and says nothing about
 printed.
 
 Nor does it check what a verification example is *for*. Until 2026-08-11 the 2D one compared a
-block `ucell` against a raster that was the vertical mirror of it — a defect that survived
+block `structure` against a raster that was the vertical mirror of it — a defect that survived
 because a mirrored structure radiates into the specular order exactly like the original, so the
 two paths agreed to 1e-15 for as long as the only propagating order was the zeroth. Energy was
 conserved throughout. If you add a case here, give it a propagating higher order.
+
+**It cannot see a material read as the wrong quantity either**, and that is worth stating next
+to the mirror, because it is the same shape of defect. `structure` is **relative
+permittivity** everywhere — raster pixels, `Material(epsilon)`, `top` and `bot`. A refractive
+index left in one of those slots is a legal medium, so the run exits 0, prints numbers and
+conserves energy; only the structure is different. The retired spellings (`ucell`, `n_top`,
+`n_bot`, `n_base`, `n_index`) are refused by name for that reason, but a *value* nobody
+renamed is invisible here. `wavebit.eps_from_index(n)` is the conversion, and these scripts
+write it out at the point the datasheet number arrives rather than folding it into a literal.
 
 The same check runs locally, from the repository root:
 

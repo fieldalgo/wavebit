@@ -26,7 +26,7 @@ def _as_tensor(v, device=None, dtype=None):
 
 
 class _BaseRCWA(CoreSolveMixin):
-    def __init__(self, n_top=1., n_bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None, fto=(0, 0), pol=None,
+    def __init__(self, top=1., bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None, fto=(0, 0), pol=None,
                  period=(1., 1.), wavelength=1.,
                  thickness=(0.,), connecting_algo='ETM',
                  device='cpu', type_complex=torch.complex128, polarization=None):
@@ -52,8 +52,10 @@ class _BaseRCWA(CoreSolveMixin):
         self._type_float = torch.float64 if self._type_complex is not torch.complex64 else torch.float32
         self._type_int = torch.int64 if self._type_complex is not torch.complex64 else torch.int32
 
-        self.n_top = n_top
-        self.n_bot = n_bot
+        # Materials in, an index out: the two setters store the Material and derive the
+        # `sqrt(eps*mu)` every solve reads. See `CoreSolveMixin.top`.
+        self.top = top
+        self.bot = bot
 
         if pol is not None:
             raise ValueError(_POL_RETIRED)

@@ -15,6 +15,8 @@ from . import factorization as _fac
 from . import lattice as _lattice
 from .backend import _device_of, array_namespace
 from .conventions import incident_sp_amplitudes
+from .domain import (Material, RETIRED_MATERIAL_NAMES, as_material, index_from_eps,
+                     retired_material_name)
 from .enums import (Answers, DEFAULT_ANSWERS, DEFAULT_FACTORIZATION, DEFAULT_FORMULATION,
                     DEFAULT_FOURIER_COEFFICIENTS, DEFAULT_NORMAL_METHOD, answers_of,
                     normal_method_of,
@@ -80,6 +82,36 @@ def _concrete_period(value):
     if p.size == 1:
         return float(p[0]), float(p[0])
     return float(p[0]), float(p[1])
+
+
+def _half_space_index(material):
+    """``sqrt(eps*mu)`` -- the one place a half-space material becomes an index.
+
+    **The branch is verified, not chosen.** A passive medium has ``Im(eps) >= 0`` in this
+    project's ``e^{-iwt}`` convention, so ``eps*mu`` lies in the closed upper half plane, whose
+    principal square root lies in the first quadrant: ``Im(n) >= 0``, which is loss again. That
+    is the same argument :func:`~wavebit._core.conventions.boundary_kz` rests on, and it is why
+    :func:`~wavebit._core.domain.index_from_eps` -- which is the principal root and nothing
+    else -- is already the right function here. No branch rule is invented.
+
+    ``mu`` multiplies in rather than being dropped: the index of a magnetic medium is
+    ``sqrt(eps*mu)``, and every ``kz``, every Snell relation and the whole order grid are
+    written in terms of it. The two admittances the boundary needs -- ``kz/eps`` and ``kz/mu``
+    -- are recovered from ``mu`` separately (see :func:`wavebit._core.solve_2d.solve_2d`), so
+    nothing here has to keep them apart.
+
+    An **unnamed** ``mu`` is left out of the product entirely rather than folded in as a
+    literal one. That is not a micro-optimisation: it keeps ``sqrt(eps)`` bit-for-bit what it
+    was for every non-magnetic medium, which is all of them by default, so no golden moves by a
+    rounding step for a feature the scene does not use. The test is
+    :attr:`~wavebit._core.domain.Material.is_magnetic`, so it is "was a permeability named"
+    rather than "does it equal one" -- which is why this reads the same eagerly and under
+    ``jax.jit`` where the value would be a tracer. A material that names ``mu = 1`` takes the
+    second line and multiplies by an exact one, so the two answers agree anyway.
+    """
+    if not material.is_magnetic:
+        return index_from_eps(material.epsilon)
+    return index_from_eps(material.epsilon * material.mu)
 
 
 def _recorded_lattice(normal_field_source):
@@ -171,6 +203,49 @@ _POL_RETIRED = (
     'and that declaration is what buys the pure 1D TE/TM formulation. For a linear angle '
     'use psi, and for anything elliptical use polarization=(a_s, a_p).')
 
+#: ``ucell_materials`` had a reader once and lost it. Deleted rather than renamed, so the
+#: message says that rather than pointing at a replacement that does not exist.
+_UCELL_MATERIALS_DELETED = (
+    'ucell_materials is gone. It was assigned in all three backends and carried in the JAX '
+    "pytree's aux_data -- where it took part in the jit cache key -- and read by nothing at "
+    'all. A material is named where it is used now: wavebit.Material(epsilon, mu) in a shape '
+    'or block slot, and permittivity samples in the raster itself.')
+
+def _refuse_retired(kwargs):
+    """Refuse the retired constructor keywords by name, before anything else runs.
+
+    The three solver constructors collect these through ``**retired`` rather than listing
+    them, because what has to be said is not "no such argument" -- Python says that already --
+    but *which* argument replaced it and that the number it carried has to change too. A
+    ``TypeError: unexpected keyword argument 'n_top'`` sends a reader to rename the keyword and
+    keep the value, and a refractive index reread as a permittivity is a legal,
+    energy-conserving, wrong medium that nothing downstream can flag.
+
+    Anything else still raises ``TypeError``, from here rather than from Python, so a typo in a
+    live keyword is not silently swallowed by the catch-all this refusal needs.
+    """
+    if not kwargs:
+        return
+    for name in kwargs:
+        if name == 'ucell_materials':
+            raise TypeError(_UCELL_MATERIALS_DELETED)
+        if name in RETIRED_MATERIAL_NAMES:
+            raise TypeError(retired_material_name(name))
+    raise TypeError(
+        f'unexpected keyword argument(s) {sorted(kwargs)!r}')
+
+
+#: ``mu`` is a *field*, and only the raster states a layer as fields. Refused by name on the
+#: two shape paths rather than ignored, because a permeability that reached no solve would be
+#: exactly the unread knob ``_reject_unread_normal_method`` exists to refuse one level down.
+_MU_ON_A_SHAPE_PATH = (
+    'mu= is the raster path\'s permeability field and has no meaning here: this structure is '
+    'written as shapes, where the permeability belongs to the material that fills each region '
+    '-- wavebit.Material(epsilon, mu). A layer-shaped mu beside a shape recipe has no region '
+    'to attach itself to, so it is refused rather than dropped. The two fields are one pair '
+    'and either may be assigned second, so this is also what assigning a shape structure over '
+    'a solver that already holds a mu raises -- clear the mu first if the swap is intended.')
+
 #: ``chi`` is an angle too, and the same argument applies one coordinate over.
 _COMPLEX_CHI = (
     'chi must be a real angle: it is the ellipticity angle, and tan(chi) is the '
@@ -198,7 +273,7 @@ class CoreSolveMixin:
     def incidence_side(self):
         """Which medium the illumination arrives from: ``'top'`` (default) or ``'bottom'``.
 
-        ``n_top`` / ``n_bot`` / ``ucell`` order are *scene* labels and never move — this
+        ``top`` / ``bot`` / ``structure`` order are *scene* labels and never move — this
         selects the illumination only. Results are incidence-relative (the port model):
         ``R`` is power back into the incidence medium, ``T`` power through the far side,
         the Fresnel amplitudes keep their contract, and ``theta`` / ``phi`` are measured
@@ -267,6 +342,75 @@ class CoreSolveMixin:
         """
         if not self._answers.covers(Answers.FIELD):
             raise RuntimeError(_FIELD_NOT_DECLARED.format(got=self._answers.value))
+
+    # ------------------------------------------------------------------ the two half-spaces
+    #
+    # Stored as Materials, read by the solves as an index. The conversion happens **once, at
+    # ingest**, and that asymmetry with the layers is deliberate rather than an inconsistency
+    # left behind. A layer's material is squared nowhere any more -- the factorizers take
+    # permittivity and now get it. A half-space is not: `n_top` appears to the *first* power
+    # at about sixteen sites where the quantity genuinely is an amplitude ratio (the
+    # incident-power normalisation, the efficiency denominators, the Fresnel `-i*n`
+    # conversion, the TM `n_ref/n_trn` step, `check_physical`'s argument), and flipping those
+    # would put a complex square root, with a branch choice, at each one -- in a codebase whose
+    # own trap list names "the half-space sqrt branch". So the setter takes the root once,
+    # where the branch can be argued about in one place, and the ~43 internal readers keep
+    # working unchanged.
+    _top = Material(1.0)
+    _bot = Material(1.0)
+    _n_top = index_from_eps(1.0)
+    _n_bot = index_from_eps(1.0)
+
+    @property
+    def top(self):
+        """The superstrate, as a :class:`~wavebit._core.domain.Material`.
+
+        Takes a ``Material`` or a bare number (the scalar shorthand for
+        ``Material(epsilon=x)``) -- relative permittivity, with ``Im(eps) > 0`` for loss.
+        Assigning it also refreshes :attr:`n_top`, which is what the solves read.
+        """
+        return self._top
+
+    @top.setter
+    def top(self, value):
+        self._top = as_material(value, 'top')
+        self._n_top = _half_space_index(self._top)
+
+    @property
+    def bot(self):
+        """The substrate, as a :class:`~wavebit._core.domain.Material`. See :attr:`top`."""
+        return self._bot
+
+    @bot.setter
+    def bot(self, value):
+        self._bot = as_material(value, 'bot')
+        self._n_bot = _half_space_index(self._bot)
+
+    @property
+    def n_top(self):
+        """The superstrate's refractive index, ``sqrt(eps*mu)`` -- **derived, read-only**.
+
+        Every solve reads this rather than :attr:`top`, and it is not settable: two spellings
+        of one medium that could disagree is exactly the state this type exists to remove.
+        Assign :attr:`top` instead.
+        """
+        return self._n_top
+
+    @n_top.setter
+    def n_top(self, value):
+        raise AttributeError(retired_material_name('n_top'))
+
+    @property
+    def n_bot(self):
+        """The substrate's refractive index, ``sqrt(eps*mu)`` -- derived, read-only.
+
+        See :attr:`n_top`.
+        """
+        return self._n_bot
+
+    @n_bot.setter
+    def n_bot(self, value):
+        raise AttributeError(retired_material_name('n_bot'))
 
     @property
     def n_inc(self):
@@ -470,7 +614,7 @@ class CoreSolveMixin:
         raise AttributeError(_POL_RETIRED)
 
     def _refuse_y_orders_on_a_y_invariant_cell(self, one_dimensional):
-        """A one-row ``ucell`` cannot diffract out of plane, so it cannot keep ``y`` orders.
+        """A one-row raster cannot diffract out of plane, so it cannot keep ``y`` orders.
 
         Both 1D formulations retain the single ``n = 0`` order, which is not a limitation but
         the physics: with nothing varying in ``y`` there is no grating vector to couple
@@ -487,11 +631,11 @@ class CoreSolveMixin:
         if not one_dimensional or self.fto[1] == 0:
             return
         raise ValueError(
-            f'fto={list(self.fto)} asks for y diffraction orders, but this ucell has one row '
+            f'fto={list(self.fto)} asks for y diffraction orders, but this structure has one row '
             f'in y, so the structure is invariant along it and every n != 0 order is '
             f'identically zero. Both 1D formulations keep the single n = 0 order for that '
             f'reason. Use fto=[{self.fto[0]}, 0]; if you meant a structure that varies in y, '
-            f'give a ucell with more than one row (two identical rows is the 2D path solving '
+            f'give a structure with more than one row (two identical rows is the 2D path solving '
             f'the same physics, and it returns those zeros explicitly).')
 
     def _refuse_illegal_tetm(self, one_dimensional):
@@ -595,7 +739,7 @@ class CoreSolveMixin:
 
         Assigning a basis selects the non-orthogonal path; ``period`` then reports the
         basis-vector lengths (see :func:`wavebit._core.lattice.periods_of`), and the raster
-        is read in lattice coordinates — ``ucell[layer][j, i]`` sampling
+        is read in lattice coordinates — ``structure[layer][j, i]`` sampling
         ``r = (i+0.5)/Nx * a1 + (j+0.5)/Ny * a2``.
         """
         return self._lattice_basis
@@ -786,13 +930,19 @@ class CoreSolveMixin:
     def solve_2d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None,
                  epxz_conv_all=None, epyz_conv_all=None,
-                 epzx_conv_all=None, epzy_conv_all=None, mu=None, mu_top=1.0, mu_bot=1.0):
+                 epzx_conv_all=None, epzy_conv_all=None, mu=None, mu_top=None, mu_bot=None,
+                 eps_top=None, eps_bot=None):
+        # `mu_top` / `mu_bot` are `None` when no half-space permeability was named, the same
+        # spelling `Material.mu` uses and for the same reason: the refusal just below is a
+        # structural question, and `mu_top != 1.0` on a traced permeability is a traced boolean
+        # no `if` can take. The numeric default lives at the one place that multiplies by it,
+        # at the bottom of this method -- absence is resolved to `1.0` exactly once.
         kx, ky = self._kxy_2d(wavelength)
         z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
         self._formulation_assigned = self._formulation_for(z_row)
         if self._formulation_assigned == Formulation.FIRST:
             if (mu is not None and any(s is not None for s in mu)) or \
-                    mu_top != 1.0 or mu_bot != 1.0:
+                    mu_top is not None or mu_bot is not None:
                 raise NotImplementedError(
                     'a permeability was given with a z-coupled permittivity, which routes to '
                     'the first-order (4ff) solve, and mu is not implemented there. Drop the '
@@ -811,7 +961,10 @@ class CoreSolveMixin:
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
             phi=self.phi, incidence_side=self.incidence_side,
-            answers=self._answers, mu=mu, mu_top=mu_top, mu_bot=mu_bot))
+            answers=self._answers, mu=mu,
+            mu_top=1.0 if mu_top is None else mu_top,
+            mu_bot=1.0 if mu_bot is None else mu_bot,
+            eps_top=eps_top, eps_bot=eps_bot))
 
 
 # The rule each modeling path actually implements, for the two paths that implement exactly
@@ -827,7 +980,7 @@ _FACTORIZATION_IMPLEMENTED_BY = {
 _FACTORIZATION_REASON = {
     1: ("the block path (modeling_type=1) applies Li's rules to the rectangles its modeler "
         "paints (wavebit._core.factorization.to_conv_mat_block); no normal field is computed "
-        "there, so NVF is not implemented on it. Use a raster ucell (modeling_type=0) or "
+        "there, so NVF is not implemented on it. Use a raster structure (modeling_type=0) or "
         "smooth shapes (modeling_type=2), which both have it"),
     2: ("the smooth shape path (modeling_type=2) builds eps from an analytic normal field -- "
         "the shapes' own (wavebit._core.analytic.to_conv_mat_smooth_nvf), or, for a painted "
@@ -856,7 +1009,7 @@ _COEFFICIENTS_REASON = {
         "(wavebit._core.factorization.fourier2d_integrated, via to_conv_mat_block). The edges are the "
         "geometry, at whatever real coordinates the modeler put them, so there is no raster "
         "underneath to sample -- rasterising one first is what modeling_type=0 is. Use a "
-        "raster ucell, which implements both"),
+        "raster structure, which implements both"),
     2: ("the smooth shape path (modeling_type=2) transforms geometry analytically -- each "
         "shape in turn (wavebit._core.analytic.shape_ft), or, for a painted layer whose "
         "shapes overlap, the disjoint polygons the painting resolves into "
@@ -893,10 +1046,12 @@ class CoreFactorizationMixin:
     nobody asked) and resolved against the modeling path on read.
     """
 
-    #: Which of the three modeling paths the current ``ucell`` selected; the concrete solver
-    #: classes assign it. Defaulted here because both option properties resolve against it, so
-    #: the mixin would otherwise only work inside a class that happens to set it first.
+    #: Which of the three modeling paths the current ``structure`` selected; the concrete
+    #: solver classes assign it. Defaulted here because both option properties resolve against
+    #: it, so the mixin would otherwise only work inside a class that happens to set it first.
     _modeling_type_assigned = None
+    #: The raster permeability field; ``None`` is non-magnetic. Read through :attr:`mu`.
+    _mu = None
     #: What was *asked for*, with ``None`` meaning "nobody said". Read through the
     #: :attr:`factorization` property, never directly: only two of the three modeling paths
     #: implement both rules, so the requested value and the effective one are not the same
@@ -918,6 +1073,71 @@ class CoreFactorizationMixin:
             fourier_coefficients, factorization, keep_unset=True)
 
     @property
+    def mu(self):
+        """The raster path's relative permeability field — ``(n_layers, Ny, Nx)``, or ``None``.
+
+        The companion of ``structure``, and the *only* place a permeability is written as a
+        field. That asymmetry is the point of the whole material type: three of the four
+        modeling paths state a layer as **assignments** ("this region is made of that"), and
+        an assignment carries both quantities together as
+        :class:`~wavebit._core.domain.Material`. The raster states a layer as a **sampled
+        field**, one number per pixel, which is exactly why topology optimisation reaches for
+        it -- and a field has one quantity in it, so a second quantity needs a second array.
+
+        Naming it on a shape path is refused rather than ignored (:data:`_MU_ON_A_SHAPE_PATH`):
+        there is no region for a layer-shaped array to attach itself to there, and a
+        permeability the build silently dropped would be a knob with no reader.
+
+        ``None`` is not ``1.0``. It means non-magnetic, and the solve takes the arithmetic that
+        existed before ``mu`` did -- bit-identical, not merely equal.
+        """
+        return self._mu
+
+    @mu.setter
+    def mu(self, value):
+        if value is None:
+            self._mu = None
+            return
+        if self._modeling_type_assigned in (1, 2):
+            raise ValueError(_MU_ON_A_SHAPE_PATH)
+        field = self._coerce_raster('mu', value)
+        # Same grid or nothing. The two fields are sampled on one raster and are transformed
+        # layer by layer against each other, so a mismatch is not a broadcast to resolve --
+        # it means the two describe different structures. Left to the builders it surfaces
+        # much later as a shape error inside a Fourier transform, naming neither field.
+        if self._structure is not None and tuple(field.shape) != tuple(self._structure.shape):
+            raise ValueError(
+                f'mu is {tuple(field.shape)} and structure is '
+                f'{tuple(self._structure.shape)}: the permittivity and the permeability are '
+                f'two fields sampled on one raster, so they share a shape exactly. Resample '
+                f'whichever is coarser, or write the uniform one as a full grid.')
+        self._mu = field
+
+    def _revalidate_mu(self):
+        """Re-run the ``mu`` setter's checks against a ``structure`` that just replaced one.
+
+        The two fields are one pair, and **either** setter can be the one that completes it.
+        The ``mu`` setter checks the pair when ``mu`` lands second -- the shape-path refusal,
+        and the shared-grid shape -- and until this existed the ``structure`` setter checked
+        nothing when ``structure`` landed second, so the same mistake was refused or accepted
+        depending only on the order the two lines were written in. Assigning a shape recipe
+        over a raster left ``solver.mu`` set and reaching no build: ``conv_solve()`` returned
+        results bit-identical to the same scene with no ``mu`` at all, which is exactly the
+        silently-dropped knob :data:`_MU_ON_A_SHAPE_PATH` is worded to prevent.
+
+        It re-*assigns* rather than re-checking inline on purpose: the rules for what a ``mu``
+        may sit beside belong to the setter, and a second copy of them here would be a second
+        thing to keep in step with the first. The cost is one re-coercion of a field that is
+        already coerced, which is a value-preserving ``astype`` and only happens on a solver
+        that named a ``mu`` in the first place.
+
+        Called by each backend's ``structure`` setter, at the end -- after
+        ``_modeling_type_assigned`` is settled, since that is the thing being checked against.
+        """
+        if self._mu is not None:
+            self.mu = self._mu
+
+    @property
     def fourier_coefficients(self):
         """How each layer's Fourier coefficients are obtained: ``'sampled'`` | ``'integrated'``.
 
@@ -935,7 +1155,7 @@ class CoreFactorizationMixin:
                 series both paths always ran.
         """
         implemented = _COEFFICIENTS_IMPLEMENTED_BY.get(self._modeling_type_assigned)
-        if implemented is None:                       # raster, or no ucell yet: free choice
+        if implemented is None:                       # raster, or no structure yet: free choice
             return (DEFAULT_FOURIER_COEFFICIENTS if self._fourier_coefficients is None
                     else self._fourier_coefficients)
         if self._fourier_coefficients is not None and self._fourier_coefficients != implemented:
@@ -971,7 +1191,7 @@ class CoreFactorizationMixin:
                 and NVF on smooth shapes, which is what each path always did.
         """
         implemented = _FACTORIZATION_IMPLEMENTED_BY.get(self._modeling_type_assigned)
-        if implemented is None:                       # raster, or no ucell yet: free choice
+        if implemented is None:                       # raster, or no structure yet: free choice
             return DEFAULT_FACTORIZATION if self._factorization is None else self._factorization
         if self._factorization is not None and self._factorization != implemented:
             # `!=`, not `is not`: `Factorization` is a str enum, so a value written straight
@@ -1029,12 +1249,12 @@ class CoreFactorizationMixin:
         raise NotImplementedError(
             f"normal_method={normal_method_of(self._normal_method).value!r} has no reader "
             f"here: {where}. It selects the raster NVF normal-field construction, so it "
-            f"needs a raster ucell and factorization='nvf'.")
+            f"needs a raster structure and factorization='nvf'.")
 
     def freeze_geometry(self, **kwargs):
         """Take this structure's discrete geometry decisions once, eagerly.
 
-        Captures whatever the active Fourier strategy decides from the concrete ``ucell``.
+        Captures whatever the active Fourier strategy decides from the concrete ``structure``.
         Hand the result back to :meth:`conv_solve` as ``geometry=`` to make the call
         traceable. The default ('sampled', 'li') build decides nothing, so its frozen geometry
         is empty — passing it is still what keeps ``conv_solve`` off the eager path.
@@ -1058,19 +1278,37 @@ class CoreFactorizationMixin:
         # field, the integrated series needs the block compression, and ('integrated', 'nvf')
         # -- the combination the old integer could not spell -- needs both.
         normal_field = normal_field_source = compression = None
+        mu_normal_field = mu_normal_field_source = mu_compression = None
         if self._modeling_type_assigned == 0:
             if factorization == Factorization.NVF:
                 basis = self._geometry_lattice_for(None)
-                normal_field = _fac.normal_field_for_ucell(
-                    self.ucell, fto_x, fto_y, lattice=basis, method=self.normal_method)
-                normal_field_source = _fac.normal_field_source_for_ucell(
-                    self.ucell, fto_x, fto_y, lattice=basis, method=self.normal_method)
+                normal_field = _fac.normal_field_for_raster(
+                    self.structure, fto_x, fto_y, lattice=basis, method=self.normal_method)
+                normal_field_source = _fac.normal_field_source_for_raster(
+                    self.structure, fto_x, fto_y, lattice=basis, method=self.normal_method)
+                if self._mu is not None:
+                    # A separate record, off `mu`'s own raster. A magnetic inclusion need not
+                    # sit where the dielectric one does, and the NVF rearrangement is written
+                    # around *one* interface normal, so each tensor gets the normal of its own
+                    # -- the same argument `to_conv_mat_raster_pn_mu` makes. Sharing the
+                    # permittivity's field would be right on every case where the two patterns
+                    # coincide, which is most of them, and silently wrong on the rest.
+                    mu_normal_field = _fac.normal_field_for_raster(
+                        self._mu, fto_x, fto_y, lattice=basis, method=self.normal_method)
+                    mu_normal_field_source = _fac.normal_field_source_for_raster(
+                        self._mu, fto_x, fto_y, lattice=basis, method=self.normal_method)
             if coefficients == FourierCoefficients.INTEGRATED:
-                compression = [_fac.compression_indices(self.ucell[i])
-                               for i in range(self.ucell.shape[0])]
+                compression = [_fac.compression_indices(self.structure[i])
+                               for i in range(self.structure.shape[0])]
+                if self._mu is not None:
+                    mu_compression = [_fac.compression_indices(self._mu[i])
+                                      for i in range(self._mu.shape[0])]
 
         geometry = StaticGeometry(normal_field=normal_field, compression=compression,
-                                  normal_field_source=normal_field_source)
+                                  normal_field_source=normal_field_source,
+                                  mu_normal_field=mu_normal_field,
+                                  mu_normal_field_source=mu_normal_field_source,
+                                  mu_compression=mu_compression)
         if self._modeling_type_assigned == 1:
             # The block modeler records its plans while it builds, so run the build once to
             # get them -- the *modeler*, not the whole factorization. Freezing used to go
@@ -1078,7 +1316,12 @@ class CoreFactorizationMixin:
             # for only because the same-material detector read them; that detector is gone.
             # Dropping them takes a freeze from 25.6 ms to 10.4 ms, which is what makes
             # re-freezing every step of a fit cheaper than nursing one along.
-            self.modeling_block_instruction(self.ucell)
+            #
+            # One record serves the permeability build too, and has to: the mu pass paints the
+            # *same* shapes at the *same* coordinates, so replaying these plans is what
+            # guarantees the two quantities land on one grid rather than on two that happen to
+            # agree.
+            self.modeling_block_instruction(self.structure)
             geometry.block_grid = self.modeler.grid_plans
             geometry.shape_choices = self.modeler.shape_choices
         if self._modeling_type_assigned == 2:
@@ -1089,7 +1332,7 @@ class CoreFactorizationMixin:
             plans = [_boundary.plan_layer(layer.get('shapes', []), self.period)
                      if _analytic.layer_needs_resolving(
                          layer, self.period, self._geometry_lattice_for(None)) else None
-                     for layer in self.ucell]
+                     for layer in self.structure]
             # Recorded whether or not anything needed a plan. The entry *is* the decision:
             # `None` here means "looked at while the numbers were concrete, and it does not
             # overlap". Setting the attribute only when something overlapped made those two
@@ -1136,7 +1379,7 @@ class CoreFactorizationMixin:
         [setattr(self, k, v) for k, v in kwargs.items()]  # needed for optimization sweeps
         self._frozen_geometry = geometry
         if not auto_detune:
-            return self.solve_for_conv(self.wavelength, *self._conv_matrices(geometry))
+            return self._solve_built(geometry)
 
         import warnings
         from numpy.linalg import LinAlgError
@@ -1146,7 +1389,7 @@ class CoreFactorizationMixin:
         try:
             with warnings.catch_warnings(record=True) as rec:
                 warnings.simplefilter('always')
-                res = self.solve_for_conv(self.wavelength, *self._conv_matrices(geometry))
+                res = self._solve_built(geometry)
             if not any(issubclass(r.category, RayleighPointWarning) for r in rec):
                 for r in rec:                  # not ours to handle: replay for the caller
                     warnings.warn_explicit(r.message, r.category, r.filename, r.lineno)
@@ -1182,8 +1425,7 @@ class CoreFactorizationMixin:
             try:
                 with warnings.catch_warnings(record=True) as rung_rec:
                     warnings.simplefilter('always')
-                    rung_res = self.solve_for_conv(self.wavelength,
-                                                   *self._conv_matrices(geometry))
+                    rung_res = self._solve_built(geometry)
             except (FloatingPointError, LinAlgError, RuntimeError) as exc:
                 if isinstance(exc, RuntimeError) and 'linalg' not in type(exc).__name__.lower():
                     for k in applied:
@@ -1245,10 +1487,29 @@ class CoreFactorizationMixin:
         geometry means comparing the permittivity coefficients instead, which is a narrower
         question and is left to the caller that has it.
 
+        **Permittivity only.** A magnetic structure also builds five permeability slots, and
+        they are not returned here: this is a five-tuple with a name that says ``ep``, and
+        widening it would change what every existing caller unpacks. :meth:`mu_matrices`
+        returns the other five.
+
         ``geometry`` behaves as in :meth:`conv_solve`.
         """
         [setattr(self, k, v) for k, v in kwargs.items()]
         return self._conv_matrices(geometry)
+
+    def mu_matrices(self, geometry=None, **kwargs):
+        """The permeability convolution matrices, or ``None`` for a non-magnetic structure.
+
+        ``(mux, muy, muz_i, muxy, muyx)`` — the same five slots as :meth:`conv_matrices` on
+        the other side of the ``(E, H, eps, mu) -> (H, -E, mu, eps)`` duality, which is why
+        one layout serves both. ``None`` rather than five identity matrices when nothing is
+        magnetic: the solve reads that ``None`` as "take the non-magnetic arithmetic", which
+        is bit-identical to the code that existed before ``mu`` did.
+
+        ``geometry`` behaves as in :meth:`conv_solve`.
+        """
+        [setattr(self, k, v) for k, v in kwargs.items()]
+        return self._mu_matrices(geometry)
 
     def structure_slice(self, layer=0, n=512, show='eps', band_limited=False):
         """One layer's structure as an array. See :func:`wavebit._core.draw.structure_slice`."""
@@ -1316,7 +1577,7 @@ class CoreFactorizationMixin:
         if self._modeling_type_assigned == 1:
             raise NotImplementedError(
                 common + 'the block modeler (modeling_type=1) rasterises onto a rectangular '
-                'grid, which is not implemented yet for a skewed cell. Use a raster ucell '
+                'grid, which is not implemented yet for a skewed cell. Use a raster structure '
                 '(modeling_type=0) or smooth shapes (modeling_type=2).')
         factorization = self.factorization
         if factorization != Factorization.NVF:
@@ -1339,6 +1600,42 @@ class CoreFactorizationMixin:
 
     def _conv_matrices(self, geometry=None):
         """Convolution matrices for the current structure: ``(epx, epy, epz_i, epxy, epyx)``."""
+        self._check_before_building()
+        return self._slots_for(self.structure, geometry, quantity='permittivity')
+
+    def _mu_matrices(self, geometry=None):
+        """The five permeability slots, or ``None`` when nothing in the scene is magnetic.
+
+        The permeability is built by the *same* builder as the permittivity, on the same
+        geometry, and that is the whole content of this method. Maxwell's two curl equations
+        map onto each other under ``(E, H, eps, mu) -> (H, -E, mu, eps)``, so a factorization
+        rule derived for one holds for the other term for term -- see
+        :func:`~wavebit._core.factorization.pn_mu_conv_matrices`, which is
+        :func:`~wavebit._core.factorization.pn_conv_matrices` under a different name for
+        exactly this reason. Rebuilding the rules for ``mu`` would be rederiving them.
+
+        Two things the shared build gives that a separate one would have to re-earn: the two
+        quantities land on one grid (the block path replays the *same* plans, the shape paths
+        the same boundary plans, so the geometry cannot drift between them), and every
+        refusal that applies to the permittivity build applies here once rather than twice.
+
+        Where ``mu`` *cannot* be expressed the refusal is by name and lives elsewhere, close
+        to what cannot express it: the 1D and conical operators carry no permeability slot at
+        all and ``solve_for_conv`` says so, and the first-order (4ff) solve does not implement
+        one -- :meth:`CoreSolveMixin.solve_2d` says so. Nothing here drops a ``mu`` quietly,
+        which is the whole reason it is wired at all: a material property the solve ignored
+        would be the unread knob :meth:`_reject_unread_normal_method` exists to refuse.
+
+        A magnetic *half-space* over ordinary layers answers ``None`` here and enters through
+        ``mu_top`` / ``mu_bot`` instead; see :meth:`_layers_are_magnetic`.
+        """
+        if not self._layers_are_magnetic():
+            return None
+        self._check_before_building()
+        return self._slots_for(self._mu_structure(), geometry, quantity='permeability')
+
+    def _check_before_building(self):
+        """The refusals every build goes through, in the order they have to be read in."""
         # Lattice first, then the rule -- the order is load-bearing. A skewed cell on the block
         # path is unbuildable whatever rule is named, so reporting the *keyword* there would
         # send the user to change the one thing that cannot help. The other way round is safe:
@@ -1351,9 +1648,22 @@ class CoreFactorizationMixin:
         # so that a smooth-path call naming *both* unavailable values is told about the rule --
         # the axis a user is far likelier to have meant something by.
         factorization = self.factorization
-        coefficients = self.fourier_coefficients
+        self.fourier_coefficients   # read for the refusal it may raise, not for its value
         self._reject_unread_normal_method(factorization)
+
+    def _slots_for(self, structure, geometry, quantity):
+        """Five convolution slots for one *quantity* of the current structure.
+
+        ``quantity`` is ``'permittivity'`` or ``'permeability'`` and selects nothing about the
+        arithmetic -- the duality means both are the same build -- only which frozen records
+        are replayed, since a magnetic pattern need not sit where the dielectric one does.
+        Paths that return three slots are padded with ``None``, which every consumer already
+        reads as "this rule does not couple x and y".
+        """
+        factorization = self.factorization
+        coefficients = self.fourier_coefficients
         fto_x, fto_y = self.fto[0], self.fto[1]
+        mu_pass = quantity == 'permeability'
         epxy_conv_all = epyx_conv_all = None
 
         if self._modeling_type_assigned == 0:                      # raster
@@ -1361,24 +1671,31 @@ class CoreFactorizationMixin:
             # first is not arbitrary: Li's rules return three matrices and NVF returns five
             # (it couples x and y, so epxy / epyx stop being zero).
             sampled = coefficients == FourierCoefficients.SAMPLED
-            normal_field = None if geometry is None else geometry.normal_field
-            normal_field_source = None if geometry is None else geometry.normal_field_source
-            compression = None if geometry is None else geometry.compression
+            if geometry is None:
+                normal_field = normal_field_source = compression = None
+            elif mu_pass:
+                normal_field = geometry.mu_normal_field
+                normal_field_source = geometry.mu_normal_field_source
+                compression = geometry.mu_compression
+            else:
+                normal_field = geometry.normal_field
+                normal_field_source = geometry.normal_field_source
+                compression = geometry.compression
 
             if factorization == Factorization.LI:
                 if sampled:
                     epx_conv_all, epy_conv_all, epz_conv_i_all = \
                         _fac.to_conv_mat_raster_sampled(
-                            self.ucell, fto_x, fto_y)
+                            structure, fto_x, fto_y)
                 else:
                     epx_conv_all, epy_conv_all, epz_conv_i_all = \
                         _fac.to_conv_mat_raster_integrated(
-                            self.ucell, fto_x, fto_y, compression=compression)
+                            structure, fto_x, fto_y, compression=compression)
             else:
                 if sampled:
                     (epx_conv_all, epy_conv_all, epz_conv_i_all,
                      epxy_conv_all, epyx_conv_all) = _fac.to_conv_mat_raster_nvf(
-                        self.ucell, fto_x, fto_y,
+                        structure, fto_x, fto_y,
                         normal_field=normal_field,
                         normal_field_source=normal_field_source,
                         lattice=self._geometry_lattice_for(geometry),
@@ -1386,7 +1703,7 @@ class CoreFactorizationMixin:
                 else:
                     (epx_conv_all, epy_conv_all, epz_conv_i_all,
                      epxy_conv_all, epyx_conv_all) = _fac.to_conv_mat_raster_integrated_nvf(
-                        self.ucell, fto_x, fto_y,
+                        structure, fto_x, fto_y,
                         normal_field=normal_field,
                         normal_field_source=normal_field_source,
                         compression=compression,
@@ -1399,11 +1716,18 @@ class CoreFactorizationMixin:
             # _COEFFICIENTS_IMPLEMENTED_BY) -- `to_conv_mat_block` integrates eps over the
             # painted rectangles with `fourier2d_integrated`, unconditionally. Asking it for the other of
             # either was refused above rather than answered with this.
-            ucell_block = self.modeling_block_instruction(
-                self.ucell, plans=None if geometry is None else geometry.block_grid,
-                shape_choices=None if geometry is None else geometry.shape_choices)
+            #
+            # The permeability pass replays the plans the permittivity pass recorded (or the
+            # frozen ones), never re-decides them: the two passes paint the same shapes at the
+            # same coordinates, so a second independent gridding could only agree by luck.
+            plans = None if geometry is None else geometry.block_grid
+            choices = None if geometry is None else geometry.shape_choices
+            if mu_pass and plans is None:
+                plans, choices = self.modeler.grid_plans, self.modeler.shape_choices
+            structure_block = self.modeling_block_instruction(
+                structure, plans=plans, shape_choices=choices)
             epx_conv_all, epy_conv_all, epz_conv_i_all = _fac.to_conv_mat_block(
-                ucell_block, fto_x, fto_y)
+                structure_block, fto_x, fto_y)
 
         elif self._modeling_type_assigned == 2:      # smooth shapes -- NVF on exact transforms
             # Likewise fixed on both axes: the epsilon tensor comes from the shapes' analytic
@@ -1413,7 +1737,7 @@ class CoreFactorizationMixin:
             xp = _namespace_for_backend(self.backend)
             (epx_conv_all, epy_conv_all, epz_conv_i_all,
              epxy_conv_all, epyx_conv_all) = _analytic.to_conv_mat_smooth_layers(
-                self.ucell, fto_x, fto_y, self.period,
+                structure, fto_x, fto_y, self.period,
                 normal_grid=self.normal_grid,
                 type_complex=xp.complex128, xp=xp,
                 boundary_plans=None if geometry is None else geometry.boundary_plans,
@@ -1423,6 +1747,136 @@ class CoreFactorizationMixin:
             raise ValueError("Check 'modeling_type' in 'conv_solve'.")
 
         return epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all
+
+    # ------------------------------------------------------------------------- permeability
+
+    def _is_magnetic(self):
+        """Whether anything in the scene -- layers or half-spaces -- carries a permeability.
+
+        Structural rather than physical, and answered the way
+        :attr:`~wavebit._core.domain.Material.is_magnetic` answers it: a permeability that was
+        *named* counts, whatever its value, and one that was never named does not. Nothing here
+        reads a number, which is what lets the same call decide the same way eagerly and inside
+        a ``jax.jit`` trace -- the property this method most needs, since it chooses which
+        branch of :meth:`_solve_built` runs and a branch cannot be taken on a tracer.
+
+        A scene that never mentions permeability therefore stays on exactly the arithmetic it
+        had before ``mu`` existed, and pays nothing for it.
+        """
+        return (self._top.is_magnetic or self._bot.is_magnetic
+                or self._layers_are_magnetic())
+
+    def _layers_are_magnetic(self):
+        """Whether any *layer* is magnetic -- the narrower question the slot build asks.
+
+        Separate from :meth:`_is_magnetic` because the two halves of the permeability enter
+        the solve by different doors. A magnetic half-space is two scalars on the boundary
+        admittances; magnetic *layers* need five convolution matrices apiece. A scene with a
+        magnetic substrate over ordinary layers must pass the scalars and no matrices, and
+        building five identities for it instead would be an eigenproblem's worth of work to
+        express "nothing here is magnetic".
+        """
+        if self._modeling_type_assigned == 0:
+            return self._mu is not None
+        return any(m.is_magnetic for m in self._structure_materials())
+
+    def _block_material_slots(self, layer):
+        """``(background, [object materials...])`` of one block layer, as raw slot values.
+
+        One reader for the two places that take a block layer apart, so the positional layout
+        -- ``[background, [[name, cx, cy, lx, ly, material, angle], ...], combine]`` -- is
+        written down once. A shape written without its material slot is left to the modeler to
+        complain about; answering "vacuum" here would turn a missing material into a silent
+        one, and this method only ever asks whether something is magnetic.
+        """
+        objects = layer[1] if len(layer) > 1 else []
+        return layer[0], [(obj[5] if len(obj) > 5 else 1.0) for obj in objects]
+
+    def _structure_materials(self):
+        """Every :class:`~wavebit._core.domain.Material` named inside a shape structure."""
+        out = []
+        for layer in (self.structure or []):
+            if self._modeling_type_assigned == 1:
+                background, materials = self._block_material_slots(layer)
+                out.append(as_material(background, 'block layer background'))
+                out.extend(as_material(m, 'block shape material') for m in materials)
+            else:
+                out.append(as_material(layer.get('background', 1.0), 'layer background'))
+                for shape in layer.get('shapes', []):
+                    out.append(as_material(shape.get('material', 1.0), 'shape material'))
+        return out
+
+    def _mu_structure(self):
+        """The current structure with every material's ``mu`` where its ``epsilon`` was.
+
+        A *view*, built fresh each call and never stored: it exists only to be handed to the
+        same builder the permittivity went through, which is what makes the permeability slots
+        the E/H dual of the permittivity ones by construction rather than by a second
+        derivation. Geometry is shared verbatim -- the shape dicts are copied key for key and
+        only the material slot is swapped -- so the two passes cannot describe different
+        shapes.
+
+        The swap reads :attr:`~wavebit._core.domain.Material.mu_value`, not ``.mu``: this is a
+        *consumer* of the number, and the builder it feeds does arithmetic on every slot. A
+        region whose material named no permeability is non-magnetic vacuum-permeability
+        material sitting in a scene something else made magnetic, and ``1.0`` is what that
+        means; handing the builder a ``None`` would raise, and defaulting it here to anything
+        else would be a second, quieter statement of a convention the type already owns.
+        """
+        if self._modeling_type_assigned == 0:
+            return self._mu
+        out = []
+        for layer in self.structure:
+            if self._modeling_type_assigned == 1:
+                objects = [list(obj[:5]) + [as_material(obj[5]).mu_value] + list(obj[6:])
+                           for obj in (layer[1] if len(layer) > 1 else [])]
+                out.append([as_material(layer[0]).mu_value, objects] + list(layer[2:]))
+            else:
+                shapes = [dict(shape, material=as_material(shape.get('material', 1.0)).mu_value)
+                          for shape in layer.get('shapes', [])]
+                out.append(dict(layer,
+                                background=as_material(
+                                    layer.get('background', 1.0)).mu_value,
+                                shapes=shapes))
+        return out
+
+    def _solve_built(self, geometry=None):
+        """Build this structure's convolution matrices and hand them to the solve.
+
+        The one place the two halves meet. The half-space quantities ride together as keywords
+        or not at all: ``solve_for_conv`` recovers ``eps_top`` from ``n_top**2 / mu_top`` when
+        it is not told, so supplying one of the pair without the other would leave the solve
+        reading a permittivity that disagrees with the material the caller set. A non-magnetic
+        scene passes none of them and takes that recovery, where dividing by ``mu_top = 1.0``
+        is exact -- so the boundary admittances are the ones computed before ``mu`` existed, to
+        the bit. One term is not: the incident wave's tangential-E row is now spelled from
+        ``eps_top`` rather than from the index, so that it and the reflected column read one
+        medium, and the two spellings agree only to a last bit for a general ``n_top``. See
+        :func:`~wavebit._core.solve_1d.final_matching`, which measures the difference and says
+        why it is the right way round.
+
+        ``mu`` itself is ``None`` whenever no *layer* is magnetic, even in a scene whose
+        substrate is -- see :meth:`_layers_are_magnetic`.
+
+        The two half-space permeabilities go over as ``Material.mu`` and not
+        :attr:`~wavebit._core.domain.Material.mu_value`, which is to say ``None`` when the
+        material named none. ``solve_for_conv`` asks the same structural question of them that
+        :meth:`_is_magnetic` asked of the scene, so the "was it named" bit has to survive the
+        call; resolving it to ``1.0`` here would tell the backend a permeability was named for
+        a half-space that never mentioned one, and on a scene routed to a 1D path that is the
+        difference between solving it and refusing it.
+
+        Permittivity first, and it matters on the block path: without a frozen geometry the
+        permeability pass replays the grid plans the permittivity pass has just recorded, so
+        the order is what puts the two quantities on one grid.
+        """
+        eps = self._conv_matrices(geometry)
+        if not self._is_magnetic():
+            return self.solve_for_conv(self.wavelength, *eps)
+        return self.solve_for_conv(
+            self.wavelength, *eps, mu=self._mu_matrices(geometry),
+            mu_top=self._top.mu, mu_bot=self._bot.mu,
+            eps_top=self._top.epsilon, eps_bot=self._bot.epsilon)
 
 
 def _namespace_for_backend(backend):

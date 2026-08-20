@@ -22,7 +22,7 @@ def _setup(**kw):
     solver = wavebit.rcwa(backend=0, **kw)
     legacy = solver.conv_solve()
     epx, epy, epz = to_conv_mat_raster_sampled(
-        solver.ucell, solver.fto[0], solver.fto[1])
+        solver.structure, solver.fto[0], solver.fto[1])
     kx, ky = solver.get_kx_ky_vector(kw['wavelength'])
     return solver, legacy, (epx, epy, epz), kx, ky
 
@@ -36,32 +36,34 @@ def _assert_all_fields(legacy_sub, got):
 
 @pytest.mark.parametrize('tetm', ['te', 'tm'], ids=['te', 'tm'])
 def test_solve_1d_full_result_matches_legacy(tetm):
-    kw = dict(n_top=2.0, n_bot=1.0, theta=0.3, phi=None, tetm=tetm, fto=[6, 0],
+    # Permittivities at the public boundary: top eps 4 is the index 2, and the raster's 9 is
+    # the index 3. The core solves below still take the index, which `solver.n_top` derives.
+    kw = dict(top=4.0, bot=1.0, theta=0.3, phi=None, tetm=tetm, fto=[6, 0],
               period=[0.77], wavelength=0.777, thickness=[0.15],
-              ucell=np.array([[[3., 3., 3., 1., 1., 1.]]]))
+              structure=np.array([[[9., 9., 9., 1., 1., 1.]]]))
     solver, legacy, conv, kx, _ = _setup(**kw)
-    got = solve_1d(solver.tetm_index, kw['wavelength'], kx, kw['n_top'], kw['n_bot'], solver.theta,
+    got = solve_1d(solver.tetm_index, kw['wavelength'], kx, solver.n_top, solver.n_bot, solver.theta,
                    solver.thickness, *conv, answers='amplitude')
     _assert_all_fields(legacy.res, got['res'])
 
 
 CONICAL_2D = [
-    ('conical', np.array([[[3., 3., 3., 1., 1., 1.]]]), [0.15], [6, 0], [0.77]),
-    ('2d', np.random.default_rng(0).uniform(1, 4, (1, 5, 5)), [0.2], [2, 2], [1.0, 1.0]),
-    ('2d_2layer', np.random.default_rng(1).uniform(1, 4, (2, 4, 4)), [0.15, 0.22], [2, 2],
-     [1.0, 1.0]),
+    ('conical', np.array([[[9., 9., 9., 1., 1., 1.]]]), [0.15], [6, 0], [0.77]),
+    ('2d', np.random.default_rng(0).uniform(1, 4, (1, 5, 5)) ** 2, [0.2], [2, 2], [1.0, 1.0]),
+    ('2d_2layer', np.random.default_rng(1).uniform(1, 4, (2, 4, 4)) ** 2, [0.15, 0.22],
+     [2, 2], [1.0, 1.0]),
 ]
 
 
 @pytest.mark.parametrize('case', CONICAL_2D, ids=[c[0] for c in CONICAL_2D])
 def test_conical_and_2d_full_result_matches_legacy(case):
-    name, ucell, thickness, fto, period = case
-    kw = dict(n_top=1.5, n_bot=1.0, theta=0.2, phi=0.3, psi=0.7, fto=fto, period=period,
-              wavelength=0.9, thickness=thickness, ucell=ucell)
+    name, structure, thickness, fto, period = case
+    kw = dict(top=2.25, bot=1.0, theta=0.2, phi=0.3, psi=0.7, fto=fto, period=period,
+              wavelength=0.9, thickness=thickness, structure=structure)
     solver, legacy, conv, kx, ky = _setup(**kw)
 
     solve_fn = solve_1d_conical if name == 'conical' else solve_2d
-    args = ([kw['wavelength'], kx, ky, kw['n_top'], kw['n_bot'], solver.theta, solver._incidence_pair(),
+    args = ([kw['wavelength'], kx, ky, solver.n_top, solver.n_bot, solver.theta, solver._incidence_pair(),
              solver.thickness] + list(conv))
     got = solve_fn(*args, phi=solver.phi, answers='amplitude')
 
@@ -73,11 +75,11 @@ def test_conical_and_2d_full_result_matches_legacy(case):
 
 def test_amplitude_rung_is_consistent_with_efficiency_rung():
     """Climbing the ladder must not perturb the numbers the rung below returns."""
-    kw = dict(n_top=1.5, n_bot=1.0, theta=0.2, phi=0.3, psi=0.7, fto=[2, 2],
+    kw = dict(top=2.25, bot=1.0, theta=0.2, phi=0.3, psi=0.7, fto=[2, 2],
               period=[1.0, 1.0], wavelength=0.9, thickness=[0.2],
-              ucell=np.random.default_rng(2).uniform(1, 4, (1, 5, 5)))
+              structure=np.random.default_rng(2).uniform(1, 4, (1, 5, 5)) ** 2)
     solver, _, conv, kx, ky = _setup(**kw)
-    args = [kw['wavelength'], kx, ky, kw['n_top'], kw['n_bot'], solver.theta,
+    args = [kw['wavelength'], kx, ky, solver.n_top, solver.n_bot, solver.theta,
             solver._incidence_pair(),
             solver.thickness] + list(conv)
     R, T = solve_2d(*args, phi=solver.phi)

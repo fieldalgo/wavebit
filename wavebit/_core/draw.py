@@ -32,6 +32,7 @@ from . import analytic as _analytic
 from . import boundary as _boundary
 from . import clipper as _clipper
 from . import factorization as _fac
+from .domain import as_material, index_from_eps
 from .lattice import sample_grid
 
 #: Periodic images drawn around the cell. A shape's transform is periodic by construction, so
@@ -57,6 +58,44 @@ def _np_complex(x):
     if hasattr(x, 'cpu'):
         x = x.cpu()
     return np.asarray(x, dtype=complex)
+
+
+def _eps_of(material):
+    """One material slot's relative permittivity, as a plain Python ``complex``.
+
+    Through :func:`~wavebit._core.domain.as_material`, so the scalar shorthand and a real
+    :class:`~wavebit._core.domain.Material` are read the same way here as in the builder --
+    which is the point. A picture that read a shape dict by its own rules is how this module's
+    two predecessors came to disagree with the transform about what a dict meant (see
+    :func:`~wavebit._core.analytic.shape_geometry`), and a material is the slot where the
+    disagreement would be invisible: the shape would be in the right place, made of the wrong
+    stuff.
+    """
+    return complex(np.asarray(as_material(material).epsilon, dtype=complex))
+
+
+def _passive(eps):
+    """``eps`` with round-off-level *negative* imaginary parts flushed to ``+0``.
+
+    Only for the ``show='n'`` conversion, and only because this is the one caller that can
+    honestly tell round-off from a medium. :func:`~wavebit._core.domain.index_from_eps` takes
+    the principal root and deliberately does not repair the branch -- a helper cannot know
+    whether a tiny negative ``Im`` is noise or a deliberately active medium -- and hands that
+    responsibility to callers that build a permittivity by subtraction. This is exactly such a
+    caller: the band-limited reconstruction is a truncated Fourier sum, so a *lossless* layer
+    comes back with imaginary parts of both signs at the 1e-16 level, and the ones that land on
+    a pixel whose real part went negative (Gibbs overshoot below zero, which the docstring of
+    :func:`structure_slice` measures at ``[-0.186, 13.850]`` for a lossless pair of shapes)
+    take the lower lip of the cut. Their root is then ``-0.43j`` -- **gain**, drawn on a
+    structure that has none, on 24 of 16384 pixels of the measured case.
+
+    The flush is relative and tiny: an imaginary part below ``1e-12`` of the value's own
+    magnitude is noise at double precision, and a real absorber or a real gain medium is orders
+    above that. Nothing is clamped on the positive side, so an absorbing layer is untouched.
+    """
+    eps = np.asarray(eps, dtype=complex)
+    noise = (eps.imag < 0) & (np.abs(eps.imag) <= 1e-12 * np.maximum(np.abs(eps), 1.0))
+    return np.where(noise, eps.real + 0j, eps)
 
 
 def _basis(solver):
@@ -109,15 +148,18 @@ def _signed_coverage(lo, hi, s, L):
 def _render_block(cell, x_list, y_list, period, xs, ys):
     """``eps`` on the grid ``(ys, xs)`` for one entry of :meth:`.Modeling.draw`.
 
-    ``cell`` is refractive index, indexed ``[row, col]`` = ``[y, x]``, so ``eps = cell**2`` and
-    row 0 is ``y = 0`` (``docs/conventions.md``). Exact for the staircase the modeler built --
-    which is not the same thing as exact for the shape the user typed; see
-    :func:`structure_slice`.
+    ``cell`` is permittivity already -- the modeler takes Materials and writes out their
+    ``epsilon`` -- indexed ``[row, col]`` = ``[y, x]``, with row 0 at ``y = 0``
+    (``docs/conventions.md``). There is no squaring here for the same reason there is none in
+    the builder this mirrors: a picture that squared what the solve does not would show a
+    different structure from the one being solved, which is the one thing a structure picture
+    must not do. Exact for the staircase the modeler built -- which is not the same thing as
+    exact for the shape the user typed; see :func:`structure_slice`.
     """
     Px, Py = float(period[0]), float(period[1])
     Cx = _signed_coverage(*_segments(x_list), xs, Px)
     Cy = _signed_coverage(*_segments(y_list), ys, Py)
-    return Cy.T @ (_np_complex(cell) ** 2) @ Cx
+    return Cy.T @ _np_complex(cell) @ Cx
 
 
 # =========================================================== path 2: analytic shape sampling
@@ -156,10 +198,10 @@ def _render_analytic_add(layer, X, Y, basis, Px, Py):
     and the centres have defaults, and a second reader is a second chance to disagree with the
     transform about what the dict meant.
     """
-    eps_b = complex(np.asarray(layer.get('n_base', 1.0), dtype=complex)) ** 2
+    eps_b = _eps_of(layer.get('background', 1.0))
     out = np.full(X.shape, eps_b, dtype=complex)
     for shape in layer.get('shapes', []):
-        eps_s = complex(np.asarray(shape['n_index'], dtype=complex)) ** 2
+        eps_s = _eps_of(shape['material'])
         out = out + (eps_s - eps_b) * _shape_inside(shape, X, Y, basis, Px, Py)
     return out
 
@@ -182,7 +224,7 @@ def _resolved_regions(shapes, period):
     vals = _clipper.eval_table(xnp, recs, verts)
     out = []
     for shape, region in zip(shapes, regions):
-        eps_s = complex(np.asarray(shape['n_index'], dtype=complex)) ** 2
+        eps_s = _eps_of(shape['material'])
         loops = [np.asarray(_clipper.loop_verts(xnp, lp, vals), dtype=float)
                  for lp in region]
         out.append((eps_s, loops))
@@ -230,7 +272,7 @@ def _winding(V, xs, ys):
 
 def _render_paint(layer, xs, ys, basis, period):
     """The painted structure, from the same disjoint loops the boundary path integrates."""
-    eps_b = complex(np.asarray(layer.get('n_base', 1.0), dtype=complex)) ** 2
+    eps_b = _eps_of(layer.get('background', 1.0))
     out = np.full((ys.size, xs.size), eps_b, dtype=complex)
     for eps_s, loops in _resolved_regions(layer.get('shapes', []), period):
         cover = np.zeros((ys.size, xs.size), dtype=int)
@@ -288,25 +330,25 @@ def _band_limited(solver, layer, n):
     period = _periods(solver)
 
     if mt == 0:
-        eps = _np_complex(solver.ucell[layer]) ** 2
+        eps = _np_complex(solver.structure[layer])
         grid = _grid_from_conv_matrix(
             _fac.fourier2d_piecewise_constant(xnp, eps, fto_x, fto_y, inverse_rule=None),
             fto_x, fto_y)
     elif mt == 1:
-        cell, x_list, y_list = solver.modeling_block_instruction(solver.ucell)[layer]
+        cell, x_list, y_list = solver.modeling_block_instruction(solver.structure)[layer]
         grid = _grid_from_conv_matrix(
-            _fac.fourier2d_integrated(xnp, _np_complex(cell) ** 2, _np_complex(x_list),
+            _fac.fourier2d_integrated(xnp, _np_complex(cell), _np_complex(x_list),
                                       _np_complex(y_list), fto_x, fto_y, inverse_rule=None),
             fto_x, fto_y)
     else:
-        lay = solver.ucell[layer]
+        lay = solver.structure[layer]
         # The solver's own choice of basis, not `solver.lattice`: an axis-aligned cell gets
         # `diag(period)` here rather than `None`, and taking it from the same accessor is what
         # keeps this reconstruction the transform the solve holds instead of a lookalike.
         basis = solver._geometry_lattice_for(None)
         if _analytic.layer_needs_resolving(lay, period, basis):
             KY, KX = _boundary._k_grids(xnp, fto_x, fto_y, np.float64)
-            eps_b = complex(np.asarray(lay.get('n_base', 1.0), dtype=complex)) ** 2
+            eps_b = _eps_of(lay.get('background', 1.0))
             grid = np.zeros(KY.shape, dtype=complex)
             grid[2 * fto_y, 2 * fto_x] = eps_b
             for eps_s, loops in _resolved_regions(lay.get('shapes', []), period):
@@ -319,7 +361,7 @@ def _band_limited(solver, layer, n):
             # and refuses an overlapping painted layer rather than answering for it. The branch
             # above means the refusal never fires from here -- which is the point of stating it.
             grid = np.asarray(_analytic.assemble_eps_coeffs(
-                xnp, lay.get('shapes', []), lay.get('n_base', 1.0), fto_x, fto_y, period,
+                xnp, lay.get('shapes', []), lay.get('background', 1.0), fto_x, fto_y, period,
                 np.complex128, lattice=basis, combine=lay.get('combine'))[0])
     return _inverse_series(grid, fto_x, fto_y, n, n)
 
@@ -327,30 +369,32 @@ def _band_limited(solver, layer, n):
 # ==================================================================== the two public entries
 
 def _refuse_layer(solver, layer):
-    if solver.modeling_type_assigned is None or solver.ucell is None:
-        raise ValueError('this solver has no ucell to draw.')
-    n_layers = len(solver.ucell)
+    if solver.modeling_type_assigned is None or solver.structure is None:
+        raise ValueError('this solver has no structure to draw.')
+    n_layers = len(solver.structure)
     if not (-n_layers <= layer < n_layers):
         raise IndexError(
             f'layer {layer} is out of range for a {n_layers}-layer stack. `layer` indexes the '
-            f'way `ucell` does -- 0 is the layer light meets first (docs/conventions.md).')
+            f'way `structure` does -- 0 is the layer light meets first '
+            f'(docs/conventions.md).')
 
 
 def structure_slice(solver, layer=0, n=512, show='eps', band_limited=False):
     """The structure of one layer, as a NumPy array. **Geometry, not the truncated series.**
 
-    ``layer`` indexes the way ``ucell`` does: ``0`` is the layer light meets first
+    ``layer`` indexes the way ``structure`` does: ``0`` is the layer light meets first
     (``docs/conventions.md``). Row 0 of the result is ``y = 0``, so it draws with
     ``origin='lower'`` -- the same way up ``field_plot``'s top view ends at.
 
-    Returns complex values (``show='eps'`` for ``n**2``, ``show='n'`` for the refractive
-    index); an absorbing layer has a non-zero imaginary part and :func:`structure_plot` draws
-    the real part and says so.
+    Returns complex values -- ``show='eps'`` for the relative permittivity the solve works in,
+    ``show='n'`` for the refractive index derived from it. An absorbing layer has a non-zero
+    imaginary part and :func:`structure_plot` draws the real part and says so.
 
     What ``n`` means depends on the path, and the difference is deliberate:
 
-    * **raster** (``modeling_type=0``) -- ``ucell[layer]**2``, at the raster's own resolution.
-      ``n`` is ignored, because resampling a raster invents detail it does not carry.
+    * **raster** (``modeling_type=0``) -- ``structure[layer]`` itself, at the raster's own
+      resolution. ``n`` is ignored, because resampling a raster invents detail it does not
+      carry.
     * **block** (``modeling_type=1``) -- ``n x n`` samples of the modeler's staircase, by
       signed segment accumulation (see the module docstring; the naive read is wrong on any
       shape that crosses the cell boundary).
@@ -359,14 +403,16 @@ def structure_slice(solver, layer=0, n=512, show='eps', band_limited=False):
       whose shapes overlap is resolved into disjoint loops by
       :mod:`~wavebit._core.boundary` first, exactly as the solver resolves it: falling back to
       the summed rule there is a 5.4% lie in ``<eps>`` (1.9134 against 1.8158 for a 300x300
-      rod of index 2 under a 320-diameter disc of index 3 in a 1000x1000 cell).
+      rod of permittivity 4 under a 320-diameter disc of permittivity 9 in a 1000x1000
+      cell).
 
     Three things this picture is *not*, each measured:
 
     1. **It is the geometry; the solver holds a truncated transform of it.** Pass
        ``band_limited=True`` to see that instead -- the layer's own coefficients, evaluated
-       rather than sampled. A ``circle(lx=260, n=3.5)`` plus a rectangle rotated 0.45 rad in a
-       1000x1000 cell comes back at ``fto=9`` with ``eps`` in ``[-0.186, 13.850]`` where the
+       rather than sampled. A ``circle(lx=260, material=12.25)`` plus a rectangle rotated
+       0.45 rad in a 1000x1000 cell comes back at ``fto=9`` with ``eps`` in
+       ``[-0.186, 13.850]`` where the
        geometry is ``[1.0, 12.25]``: negative permittivity and 13% overshoot, pure Gibbs.
        Relative L2 against the sampled geometry is 28.4% / 16.8% / 10.2% at ``fto`` 3 / 9 / 25,
        while ``<eps>`` agrees to 1e-4 throughout -- so an integrated quantity can be converged
@@ -398,18 +444,18 @@ def structure_slice(solver, layer=0, n=512, show='eps', band_limited=False):
         period = _periods(solver)
         basis = _basis(solver)
         if mt == 0:
-            values = _np_complex(solver.ucell[layer]) ** 2
+            values = _np_complex(solver.structure[layer])
         elif mt == 1:
             xs = (np.arange(n) + 0.5) * period[0] / n
             ys = (np.arange(n) + 0.5) * period[1] / n
-            # Re-run rather than read `modeler.ucell_info_list`, which may be left over from an
-            # earlier `ucell`. This is the same call every solve makes, and it leaves the same
-            # marks on the modeler (`grid_plans`, `shape_choices`) that a solve would -- a
+            # Re-run rather than read `modeler.block_info_list`, which may be left over from
+            # an earlier `structure`. This is the same call every solve makes, and it leaves
+            # the same marks on the modeler (`grid_plans`, `shape_choices`) that a solve would -- a
             # frozen `StaticGeometry` is a copy and is not disturbed.
-            cell, x_list, y_list = solver.modeling_block_instruction(solver.ucell)[layer]
+            cell, x_list, y_list = solver.modeling_block_instruction(solver.structure)[layer]
             values = _render_block(cell, x_list, y_list, period, xs, ys)
         elif mt == 2:
-            lay = solver.ucell[layer]
+            lay = solver.structure[layer]
             if _analytic.layer_needs_resolving(lay, period,
                                                solver._geometry_lattice_for(None)):
                 # Fractional samples mapped through the basis, so the loops -- which are
@@ -420,7 +466,7 @@ def structure_slice(solver, layer=0, n=512, show='eps', band_limited=False):
                         'loops are Cartesian polygons and the scanline fill runs on cell rows, '
                         'which stop being rows once the cell is sheared. Draw it with '
                         "combine='add' if the shapes do not overlap, or raise the structure "
-                        'as a raster ucell.')
+                        'as a raster structure.')
                 xs = (np.arange(n) + 0.5) * period[0] / n
                 ys = (np.arange(n) + 0.5) * period[1] / n
                 values = _render_paint(lay, xs, ys, basis, period)
@@ -428,7 +474,7 @@ def structure_slice(solver, layer=0, n=512, show='eps', band_limited=False):
                 X, Y = sample_grid(xnp, (n, n), period, np.float64, solver.lattice)
                 values = _render_analytic_add(lay, X, Y, basis, *period)
 
-    return values if show == 'eps' else np.sqrt(values)
+    return values if show == 'eps' else index_from_eps(_passive(values))
 
 
 def structure_plot(solver, layer=0, n=512, show='eps', ax=None, band_limited=False):

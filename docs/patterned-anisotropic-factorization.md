@@ -245,7 +245,7 @@ transform's grid moves. The reference is N=768, where the two arms agree to ≤5
 the smallest error being compared — so it favours neither; doubling it to N=1536 moves the ratios in
 the third digit.
 
-L2 error over all orders, fto=6, N=64, gyrotropic pillar, `n_bot=1.45`:
+L2 error over all orders, fto=6, N=64, gyrotropic pillar, substrate `bot=2.1025` (`n = 1.45`):
 
 | theta | closed form | DFT | DFT / closed |
 |---|---|---|---|
@@ -303,14 +303,17 @@ different boundaries and therefore need two normal fields.
 
 ## 9. Reaching it
 
-`to_conv_mat_raster_pn(ucell_tensor, fto_x, fto_y)` takes `(n_layers, Ny, Nx, 3, 3)` and returns
-the five slots for the stack. Note it takes **eps, not a refractive index**: `n ** 2` is a scalar
-operation and there is no square root of a tensor field worth guessing at.
+`to_conv_mat_raster_pn(tensor_raster, fto_x, fto_y)` takes `(n_layers, Ny, Nx, 3, 3)` and
+returns the five slots for the stack. It takes **permittivity**, and always did — `n ** 2` is a
+scalar operation and there is no square root of a tensor field worth guessing at. Since
+2026-08-20 that is no longer a special rule for this builder: the scalar front door takes
+permittivity too, so the raster below and the tensor beside it are now the same quantity one
+rank apart.
 
-The public `ucell` is still a scalar refractive index, so a patterned tensor reaches the solver
+The public `structure` is still a *scalar* raster, so a patterned tensor reaches the solver
 the same way a uniform one does — through `solve_for_conv` with the slots filled directly, exactly
 as [`anisotropic-materials.md`](anisotropic-materials.md) §4 describes for the uniform case.
-Wiring a tensor `ucell` through the front door is a separate piece of work and is not done.
+Wiring a tensor `structure` through the front door is a separate piece of work and is not done.
 
 ```python
 import numpy as np
@@ -327,7 +330,7 @@ t[..., 0, 1], t[..., 1, 0] = g, -g                       # the physical tensor
 epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn(t[None], fto, fto)
 
 mee = wavebit.rcwa(backend=0, fto=(fto, fto), period=(p, p), wavelength=wl,
-                   thickness=[d], ucell=np.sqrt(eps)[None])
+                   thickness=[d], structure=eps[None])     # the scalar stand-in, in eps
 res = mee.solve_for_conv(wl, epx, epy, epz_i, epxy, epyx)   # epz_i is THIRD
 ```
 

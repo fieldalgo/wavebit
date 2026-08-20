@@ -145,23 +145,23 @@ def test_degenerate_eigenvalues_give_a_finite_gradient(name, diag):
 # ----------------------------------------------------------------------
 # 3. the RCWA case that motivates all of it
 # ----------------------------------------------------------------------
-UNIFORM = np.full((1, 1, 8), 2.5)
-STACK = dict(n_top=1.0, n_bot=1.0, phi=None, tetm='te', fto=[4, 0],
+UNIFORM = np.full((1, 1, 8), 6.25)      # permittivity: 2.5**2
+STACK = dict(top=1.0, bot=1.0, phi=None, tetm='te', fto=[4, 0],
              period=[0.7], wavelength=0.9, thickness=[0.2])
 
 
 def _ucell_grad(theta, backend):
-    """d(sum T) / d(ucell) — a derivative that has to cross the eigendecomposition."""
+    """d(sum T) / d(structure) — a derivative that has to cross the eigendecomposition."""
     if backend == 1:
         def loss(u):
-            s = wavebit.rcwa(backend=1, ucell=u, theta=theta,
+            s = wavebit.rcwa(backend=1, structure=u, theta=theta,
                                fourier_coefficients='sampled', factorization='li', **STACK)
             return jnp.real(jnp.sum(s.conv_solve().T))
         return np.asarray(jax.grad(loss)(jnp.asarray(UNIFORM)))
 
     torch = pytest.importorskip('torch')
     u = torch.tensor(UNIFORM, dtype=torch.float64, requires_grad=True)
-    s = wavebit.rcwa(backend=2, ucell=u, theta=theta,
+    s = wavebit.rcwa(backend=2, structure=u, theta=theta,
                        fourier_coefficients='sampled', factorization='li', **STACK)
     s.conv_solve().T.real.sum().backward()
     return u.grad.numpy()

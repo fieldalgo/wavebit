@@ -317,7 +317,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
              epxy_conv_all=None, epyx_conv_all=None,
              *, phi, incidence_side='top', answers=Answers.EFFICIENCY,
-             mu=None, mu_top=1.0, mu_bot=1.0):
+             mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None):
     """Solve a 2D grating stack for the given incidence.
 
     ``incidence`` is the resolved incident amplitude pair ``(a_s, a_p)`` at unit flux — whatever
@@ -338,6 +338,21 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     order grid changes and every existing call means what it did; ``mu`` enters only through
     the boundary admittances (:func:`~wavebit._core.solve_1d.sp_efficiencies`).
 
+    ``eps_top`` / ``eps_bot`` are those half-spaces' permittivities. Optional, and recovered as
+    ``n**2/mu`` when they are not given -- which is what this function did unconditionally, and
+    is still right for a caller holding only an index. The engine passes them because it holds
+    both numbers already: the recovery is a round trip through ``sqrt`` and back, exact only up
+    to rounding, and there is no reason to take it when the value is in hand. Supply them with
+    ``mu_top`` / ``mu_bot`` or with neither -- half a pair would describe a medium whose index
+    and permittivity disagree.
+
+    Each is read exactly once, as the p-channel admittance ``kz/eps`` of its own half-space:
+    ``eps_bot`` in the substrate seed ``big_F`` below, ``eps_top`` in
+    :func:`~wavebit._core.solve_1d.final_matching`'s top row. Both are the *same* two reads the
+    SMM twin makes in ``W_bot`` / ``W_top``, which is the property that keeps the two
+    connecting algorithms answering one question -- ``eps_top`` reached this signature before
+    it reached the ETM matching, and for a while the two algorithms honoured different inputs.
+
     ``kx`` / ``ky`` are the retained in-plane orders, in either spelling
     :func:`order_grid_kxy` accepts: 1-D of lengths ``ff_x`` / ``ff_y`` for an axis-aligned
     cell, or ``(ff_y, ff_x)`` per-order Cartesian components for any lattice.
@@ -353,7 +368,10 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
          epxy_conv_all, epyx_conv_all, *mu_all) = _mirrored_scene(
             n_top, n_bot, thickness, epx_conv_all, epy_conv_all, epz_conv_i_all,
             epxy_conv_all, epyx_conv_all, *mu_all)
-        mu_top, mu_bot = mu_bot, mu_top      # the half-spaces swap with the indices they belong to
+        # The half-spaces swap with the indices they belong to -- all three quantities of
+        # each, or the mirrored scene would take its permittivity from the far side.
+        mu_top, mu_bot = mu_bot, mu_top
+        eps_top, eps_bot = eps_bot, eps_top
     kx = as_array(xp, kx)
     ky = as_array(xp, ky)
     if not xp.isdtype(kx.dtype, 'complex floating'):
@@ -376,7 +394,8 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq), (-1,))
     varphi = order_azimuth(xp, ky_g, kx_g, phi)
 
-    eps_bot = n_bot ** 2 / mu_bot          # n stays the refractive index; eps carries the mu
+    if eps_bot is None:
+        eps_bot = n_bot ** 2 / mu_bot      # n stays the refractive index; eps carries the mu
     Kz_bot = _diag(xp, kz_bot)
 
     # The substrate's two admittances: kz/eps on the magnetic (p) amplitude, kz/mu on the
@@ -446,7 +465,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     # --- stage 3: final matching -> efficiency (transfer_2d_4 == transfer_1d_conical_4) --
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
                          n_top, n_bot, ff_x, ff_y, answers=answers,
-                         mu_top=mu_top, mu_bot=mu_bot)
+                         mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top)
     if keep_field:
         out['layer_info_list'] = layer_info_list
     return out

@@ -5,9 +5,20 @@ core consumes, written once against the Array-API namespace instead of once per 
 
 Why this matters beyond de-duplication: until the factorization is inside the differentiable
 chain, autodiff can only reach the *convolution matrices*, not the permittivity that produced
-them. With this module the gradient runs end-to-end from the design variable — the ``ucell``
-raster — through to the diffraction efficiency, which is what an inverse-design user actually
-differentiates.
+them. With this module the gradient runs end-to-end from the design variable — the
+``structure`` raster — through to the diffraction efficiency, which is what an inverse-design
+user actually differentiates.
+
+**Every raster here is relative permittivity, one sample per pixel.** Nothing in this module
+squares anything on the way in: the front door takes the quantity the factorizers work in, so
+there is no conversion left to place. That was not always so, and the conversion's removal is
+the whole content of the flip -- see ``docs/conventions.md``.
+
+The same builders serve the *permeability* when a structure carries one, unchanged and by
+name: Maxwell's two curl equations map onto each other under
+``(E, H, eps, mu) -> (H, -E, mu, eps)``, so a rule derived for one closes the other term for
+term (:func:`pn_mu_conv_matrices` is :func:`pn_conv_matrices` under a second name for exactly
+this reason). ``CoreFactorizationMixin._mu_matrices`` is what runs them twice.
 
 All the strategies live here. The raster builders are the cross product of two independent
 choices — how the Fourier coefficients are obtained, and which rule closes the products of
@@ -23,7 +34,7 @@ discontinuous functions:
 - ``('integrated', 'nvf')``   -> :func:`to_conv_mat_raster_integrated_nvf`, closed-form
   Fourier with NVF.
 
-Vector-modelled layers (:func:`to_conv_mat_block`) are the closed-form series on explicitly
+Block-modelled layers (:func:`to_conv_mat_block`) are the closed-form series on explicitly
 given segment edges, with Li's rules; the analytic *shape* path lives in
 :mod:`wavebit._core.analytic` and is always NVF.
 
@@ -33,7 +44,7 @@ decisions here are geometry, not material — the NVF normal field (where the in
 compression (where the piecewise-constant blocks start and stop). Both branch on values, and
 the compression's output shape depends on the answer, so neither survives ``jax.jit``. Each is
 therefore split into an eager step that yields a static description
-(:func:`normal_field_for_ucell`, :func:`compression_indices`) and a differentiable step that
+(:func:`normal_field_for_raster`, :func:`compression_indices`) and a differentiable step that
 consumes it. Pass those precomputed descriptions to stay traceable; the permittivity riding on
 top of them is what gradients see.
 
@@ -65,7 +76,7 @@ Slot order
 
 .. code-block:: python
 
-    res = mee.solve_for_conv(wavelength, *to_conv_mat_raster_nvf(ucell, fto_x, fto_y))
+    res = mee.solve_for_conv(wavelength, *to_conv_mat_raster_nvf(structure, fto_x, fto_y))
 
 is correct for any of them. Concretely, three slots are ``(epx, epy, epz_i)`` and five are
 ``(epx, epy, epz_i, epxy, epyx)`` — the inverted zz matrix is **third**, not last, because
@@ -222,7 +233,7 @@ def _half_pixel_phase(xp, orders, n, dtype, device=None):
 def fourier2d_piecewise_constant(xp, cell, fto_x, fto_y, *, inverse_rule):
     """2D discrete Fourier series of a grid whose values *hold across* their pixels.
 
-    A permittivity raster is this case: ``ucell`` names the material occupying each cell, so
+    A permittivity raster is this case: ``structure`` names the material occupying each cell, so
     the layer is a staircase and its Fourier coefficients have an exact closed form, which
     :func:`_pixel_correction` supplies. Exact for any order, including past the point where
     the DFT itself wraps — which is why this path needs no grid floor.
@@ -289,7 +300,7 @@ def _fourier2d_grid(xp, cell, fto_x, fto_y, *, inverse_rule, piecewise_constant)
     false there is no exact value to reach from the grid at all, and the transform is left
     alone.
 
-    A permittivity raster is the first case — ``ucell`` names the material *occupying* each
+    A permittivity raster is the first case — ``structure`` names the material *occupying* each
     cell, and a coarser or finer spelling of the same structure is the same function. A normal
     field is the second: it is a continuous vector field this code evaluates on a grid, so
     refining the grid changes the field itself. Applying the correction there would assert a
@@ -375,11 +386,17 @@ def _device(xp, x):
     return x.device if hasattr(x, 'device') else None
 
 
-def _layer_eps(xp, ucell):
+def _layer_eps(xp, structure):
     """Yield each layer's permittivity grid, on the raster exactly as given.
 
-    The ``n**2`` maps refractive index to permittivity: Wavebit works in ``e^{-iwt}``
-    throughout (``Im(n) > 0`` = loss), with no conjugation on the way in.
+    **Cast, and nothing else.** The raster already holds relative permittivity, so this widens
+    it to the working complex dtype and hands it on. There used to be an ``n ** 2`` here, and
+    its removal is one of the sites the convention flip is *made of*: a squaring left behind
+    would not raise, it would quietly solve a medium of ``eps**2`` -- legal, energy-conserving,
+    and wrong by the square (``docs/conventions.md``).
+
+    Complex either way, and untouched otherwise: Wavebit works in ``e^{-iwt}`` throughout
+    (``Im(eps) > 0`` = loss), with no conjugation on the way in.
 
     Nothing is resampled. :func:`fourier2d_piecewise_constant` obtains the raster's
     coefficients in closed form (:func:`_pixel_correction`), so a finer grid of the same
@@ -387,9 +404,9 @@ def _layer_eps(xp, ucell):
     function and buys nothing. The NVF path is the one that still needs a floor, and states
     that itself — see :func:`_layer_eps_for_normal_field`.
     """
-    for i in range(ucell.shape[0]):
-        layer = ucell[i]
-        yield xp.astype(layer, _complex_dtype(xp, layer)) ** 2
+    for i in range(structure.shape[0]):
+        layer = structure[i]
+        yield xp.astype(layer, _complex_dtype(xp, layer))
 
 
 def _normal_field_floor(shape, fto_x, fto_y):
@@ -411,40 +428,43 @@ def _normal_field_floor(shape, fto_x, fto_y):
             max(1, (4 * fto_x + 1) // shape[1] + 1) if shape[1] < 4 * fto_x + 1 else 1)
 
 
-def _layer_eps_for_normal_field(xp, ucell, fto_x, fto_y):
+def _layer_eps_for_normal_field(xp, structure, fto_x, fto_y):
     """Each layer's permittivity grid for the NVF path, with the base it was repeated from.
 
     Yields ``(eps, base_eps, repeat_y, repeat_x)``. The base is what
     :func:`_upsampled_interface_mask` derives the interface mask from when the values cannot be
     read whole, which is what lets NVF differentiate without a frozen geometry.
+
+    Like :func:`_layer_eps` this only casts: the raster is permittivity already.
     """
-    for i in range(ucell.shape[0]):
-        layer = ucell[i]
-        base = xp.astype(layer, _complex_dtype(xp, layer)) ** 2
+    for i in range(structure.shape[0]):
+        layer = structure[i]
+        base = xp.astype(layer, _complex_dtype(xp, layer))
         repeat_y, repeat_x = _normal_field_floor(layer.shape, fto_x, fto_y)
         if repeat_y > 1:
             layer = xp.repeat(layer, repeat_y, axis=0)
         if repeat_x > 1:
             layer = xp.repeat(layer, repeat_x, axis=1)
-        yield xp.astype(layer, _complex_dtype(xp, layer)) ** 2, base, repeat_y, repeat_x
+        yield xp.astype(layer, _complex_dtype(xp, layer)), base, repeat_y, repeat_x
 
 
-def to_conv_mat_raster_sampled(ucell, fto_x, fto_y):
-    """Per-layer convolution matrices for a raster ``ucell`` via the sampled path.
+def to_conv_mat_raster_sampled(structure, fto_x, fto_y):
+    """Per-layer convolution matrices for a raster ``structure`` via the sampled path.
 
     Args:
-        ucell: refractive-index raster, shape ``(n_layers, Ny, Nx)``. This is the design
-            variable — gradients flow back to it.
+        structure: relative-permittivity raster, shape ``(n_layers, Ny, Nx)``. This is the
+            design variable — gradients flow back to it. Permittivity, not an index: nothing
+            here squares it (``docs/conventions.md``).
         fto_x, fto_y: Fourier truncation orders.
 
     Returns:
         ``(epx_conv_all, epy_conv_all, epz_conv_i_all)``, each ``(n_layers, ff_xy, ff_xy)``.
     """
-    xp = array_namespace(ucell)
+    xp = array_namespace(structure)
 
     epx_list, epy_list, epz_i_list = [], [], []
 
-    for eps_matrix in _layer_eps(xp, ucell):
+    for eps_matrix in _layer_eps(xp, structure):
         epz_conv = fourier2d_piecewise_constant(xp, eps_matrix, fto_x, fto_y, inverse_rule=None)
         epy_conv = fourier2d_piecewise_constant(xp, eps_matrix, fto_x, fto_y, inverse_rule='y')
         epx_conv = fourier2d_piecewise_constant(xp, eps_matrix, fto_x, fto_y, inverse_rule='x')
@@ -769,8 +789,8 @@ def _normal_field_source(eps, lattice=None, method=None):
             int(np.unique(eps).size))
 
 
-def normal_field_for_ucell(ucell, fto_x, fto_y, lattice=None, method=None):
-    """Per-layer ``(nx, ny)`` normal fields for ``ucell``, on the grid the NVF build uses.
+def normal_field_for_raster(structure, fto_x, fto_y, lattice=None, method=None):
+    """Per-layer ``(nx, ny)`` normal fields for ``structure``, on the grid the NVF build uses.
 
     Precompute this once from the concrete geometry and hand it to
     :func:`to_conv_mat_raster_nvf` as ``normal_field=`` to keep the build traceable under a
@@ -779,23 +799,23 @@ def normal_field_for_ucell(ucell, fto_x, fto_y, lattice=None, method=None):
     ``lattice`` is the cell basis and ``method`` the construction; see
     :func:`normal_vector_field` for what each changes.
     """
-    xp = array_namespace(ucell)
+    xp = array_namespace(structure)
     return [normal_vector_field(eps, lattice=lattice, method=method,
                                 base_shape=tuple(base.shape))
-            for eps, base, _, _ in _layer_eps_for_normal_field(xp, ucell, fto_x, fto_y)]
+            for eps, base, _, _ in _layer_eps_for_normal_field(xp, structure, fto_x, fto_y)]
 
 
-def normal_field_source_for_ucell(ucell, fto_x, fto_y, lattice=None, method=None):
-    """What :func:`normal_field_for_ucell` derived its answer from, per layer.
+def normal_field_source_for_raster(structure, fto_x, fto_y, lattice=None, method=None):
+    """What :func:`normal_field_for_raster` derived its answer from, per layer.
 
     Freeze this alongside the normal field and hand both back to
     :func:`to_conv_mat_raster_nvf`; the replay compares it against the layer actually in front
     of it and refuses a field that was sampled from a different one — a different pattern, a
     different basis, or a different ``normal_method``.
     """
-    xp = array_namespace(ucell)
+    xp = array_namespace(structure)
     return [_normal_field_source(_to_numpy(eps), lattice, method)
-            for eps, _, _, _ in _layer_eps_for_normal_field(xp, ucell, fto_x, fto_y)]
+            for eps, _, _, _ in _layer_eps_for_normal_field(xp, structure, fto_x, fto_y)]
 
 
 def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None, method=None):
@@ -863,7 +883,7 @@ def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None, meth
         f'the frozen geometry no longer fits this structure: {moved}. The recorded field '
         f'points along interfaces that are not there any more, so it describes a different '
         f'layer. Call freeze_geometry() again, or drop geometry= to rebuild by comparison. '
-        f'(Changing the refractive index of a layer never trips this; moving its pattern '
+        f'(Changing the permittivity of a layer never trips this; moving its pattern '
         f'does.)')
 
 
@@ -1074,13 +1094,13 @@ def pn_mu_conv_matrices(xp, mu33, nx, ny, fto_x, fto_y):
     return pn_conv_matrices(xp, mu33, nx, ny, fto_x, fto_y)
 
 
-def to_conv_mat_raster_pn_mu(ucell_tensor, fto_x, fto_y, normal_field=None, lattice=None,
+def to_conv_mat_raster_pn_mu(tensor_raster, fto_x, fto_y, normal_field=None, lattice=None,
                              normal_method=None):
     """Per-layer permeability slots for a **tensor** ``mu`` raster — the ``mu`` twin of
     :func:`to_conv_mat_raster_pn`.
 
     Args:
-        ucell_tensor: ``(n_layers, Ny, Nx, 3, 3)`` permeability tensors per pixel.
+        tensor_raster: ``(n_layers, Ny, Nx, 3, 3)`` permeability tensors per pixel.
         fto_x, fto_y: Fourier truncation orders.
         normal_field: optional per-layer ``(nx, ny)``. Left ``None`` it is computed from the
             in-plane trace of **``mu``**, not of ``eps``. Reading ``mu_zz`` instead would give
@@ -1106,21 +1126,21 @@ def to_conv_mat_raster_pn_mu(ucell_tensor, fto_x, fto_y, normal_field=None, latt
     and is why ``tests/references/_fmmax_patterned_mu_cases.py`` carries a case where they do
     not.
     """
-    xp = array_namespace(ucell_tensor)
+    xp = array_namespace(tensor_raster)
 
-    if ucell_tensor.shape[-2:] != (3, 3):
+    if tensor_raster.shape[-2:] != (3, 3):
         raise ValueError(
             f'to_conv_mat_raster_pn_mu takes a permeability tensor per pixel, shaped '
-            f'(n_layers, Ny, Nx, 3, 3); got {tuple(ucell_tensor.shape)}.')
+            f'(n_layers, Ny, Nx, 3, 3); got {tuple(tensor_raster.shape)}.')
 
-    if normal_field is not None and len(normal_field) != ucell_tensor.shape[0]:
+    if normal_field is not None and len(normal_field) != tensor_raster.shape[0]:
         raise StaleGeometryError(
             f'the frozen geometry no longer fits this structure: it holds a normal field for '
-            f'{len(normal_field)} layers and this one has {ucell_tensor.shape[0]}.')
+            f'{len(normal_field)} layers and this one has {tensor_raster.shape[0]}.')
 
     out = [[], [], [], [], []]
-    for i in range(ucell_tensor.shape[0]):
-        mu33 = ucell_tensor[i]
+    for i in range(tensor_raster.shape[0]):
+        mu33 = tensor_raster[i]
         if normal_field is None:
             nx, ny = normal_vector_field(
                 0.5 * (mu33[..., 0, 0] + mu33[..., 1, 1]), lattice=lattice,
@@ -1133,7 +1153,7 @@ def to_conv_mat_raster_pn_mu(ucell_tensor, fto_x, fto_y, normal_field=None, latt
     return ConvSlots5(*(xp.stack(slot) for slot in out))
 
 
-def to_conv_mat_raster_pn(ucell_tensor, fto_x, fto_y, normal_field=None, lattice=None,
+def to_conv_mat_raster_pn(tensor_raster, fto_x, fto_y, normal_field=None, lattice=None,
                           normal_method=None):
     """Per-layer Popov-Neviere convolution matrices for a **tensor** raster.
 
@@ -1141,10 +1161,11 @@ def to_conv_mat_raster_pn(ucell_tensor, fto_x, fto_y, normal_field=None, lattice
     tensor at every pixel rather than a scalar.
 
     Args:
-        ucell_tensor: ``(n_layers, Ny, Nx, 3, 3)`` — the *permittivity* tensor per pixel, not a
-            refractive index. This differs from ``ucell`` elsewhere in the package on purpose:
-            ``n ** 2`` is a scalar operation and there is no square root of a tensor field worth
-            guessing at, so the caller states eps and the ambiguity never arises.
+        tensor_raster: ``(n_layers, Ny, Nx, 3, 3)`` — the permittivity tensor per pixel. Same
+            quantity as the scalar ``structure`` raster everywhere else, one rank up; this
+            builder was already stated in permittivity before the scalar paths were, because
+            ``n ** 2`` is a scalar operation and there is no square root of a tensor field
+            worth guessing at.
         fto_x, fto_y: Fourier truncation orders.
         normal_field: optional per-layer ``(nx, ny)``. Left ``None`` it is computed from the
             trace of the in-plane block, which is the isotropic part of the layer and so sees
@@ -1160,24 +1181,23 @@ def to_conv_mat_raster_pn(ucell_tensor, fto_x, fto_y, normal_field=None, lattice
         ``(epx, epy, epz_i, epxy, epyx)``, each ``(n_layers, ff_xy, ff_xy)`` — the same five
         slots :func:`to_conv_mat_raster_nvf` returns, in the same convention.
     """
-    xp = array_namespace(ucell_tensor)
+    xp = array_namespace(tensor_raster)
 
-    if ucell_tensor.shape[-2:] != (3, 3):
+    if tensor_raster.shape[-2:] != (3, 3):
         raise ValueError(
             f'to_conv_mat_raster_pn takes a permittivity tensor per pixel, shaped '
-            f'(n_layers, Ny, Nx, 3, 3); got {tuple(ucell_tensor.shape)}. A scalar raster goes '
-            f'to to_conv_mat_raster_nvf instead -- and note this one takes eps, not a '
-            f'refractive index.')
+            f'(n_layers, Ny, Nx, 3, 3); got {tuple(tensor_raster.shape)}. A scalar raster goes '
+            f'to to_conv_mat_raster_nvf instead; both take relative permittivity.')
 
-    if normal_field is not None and len(normal_field) != ucell_tensor.shape[0]:
+    if normal_field is not None and len(normal_field) != tensor_raster.shape[0]:
         raise StaleGeometryError(
             f'the frozen geometry no longer fits this structure: it holds a normal field for '
-            f'{len(normal_field)} layers and this one has {ucell_tensor.shape[0]}. Call '
+            f'{len(normal_field)} layers and this one has {tensor_raster.shape[0]}. Call '
             f'freeze_geometry() again, or drop geometry= to rebuild by comparison.')
 
     out = [[], [], [], [], []]
-    for i in range(ucell_tensor.shape[0]):
-        eps33 = ucell_tensor[i]
+    for i in range(tensor_raster.shape[0]):
+        eps33 = tensor_raster[i]
         if normal_field is None:
             # The in-plane trace: the layer's isotropic part, which is what carries the shape.
             nx, ny = normal_vector_field(
@@ -1225,18 +1245,18 @@ def nvf_conv_matrices_integrated(xp, eps_comp, x, y, nx, ny, fto_x, fto_y):
                          *_nvf_projector(xp, nx, ny, fto_x, fto_y, C, dev))
 
 
-def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
+def to_conv_mat_raster_nvf(structure, fto_x, fto_y, normal_field=None,
                            normal_field_source=None, lattice=None, normal_method=None):
-    """Per-layer NVF convolution matrices for a raster ``ucell``.
+    """Per-layer NVF convolution matrices for a raster ``structure``.
 
     Args:
-        ucell: refractive-index raster ``(n_layers, Ny, Nx)`` — the design variable.
+        structure: relative-permittivity raster ``(n_layers, Ny, Nx)`` — the design variable.
         fto_x, fto_y: Fourier truncation orders.
         normal_field: optional per-layer ``(nx, ny)`` pairs for the *upsampled* layer grid.
             Supply this to keep the build traceable under JAX (the default computes the field
             with SciPy, which needs concrete values). It is static geometry either way.
         normal_field_source: what that field was sampled from, from
-            :func:`normal_field_source_for_ucell`. Supply it and an eager replay is checked
+            :func:`normal_field_source_for_raster`. Supply it and an eager replay is checked
             against the layer in front of it (see :func:`_check_normal_field_still_fits`);
             leave it ``None`` and the field is replayed on trust.
         normal_method: how the normal field is constructed from the raster
@@ -1253,19 +1273,19 @@ def to_conv_mat_raster_nvf(ucell, fto_x, fto_y, normal_field=None,
     Returns:
         ``(epx, epy, epz_i, epxy, epyx)``, each ``(n_layers, ff_xy, ff_xy)``.
     """
-    xp = array_namespace(ucell)
+    xp = array_namespace(structure)
 
     for name, record in (('normal field', normal_field),
                          ('normal-field source', normal_field_source)):
-        if record is not None and len(record) != ucell.shape[0]:
+        if record is not None and len(record) != structure.shape[0]:
             raise StaleGeometryError(
                 f'the frozen geometry no longer fits this structure: it holds a {name} for '
-                f'{len(record)} layers and this one has {ucell.shape[0]}. Call '
+                f'{len(record)} layers and this one has {structure.shape[0]}. Call '
                 f'freeze_geometry() again, or drop geometry= to rebuild by comparison.')
 
     out = [[], [], [], [], []]
 
-    layers = _layer_eps_for_normal_field(xp, ucell, fto_x, fto_y)
+    layers = _layer_eps_for_normal_field(xp, structure, fto_x, fto_y)
     for i, (eps_matrix, base_eps, repeat_y, repeat_x) in enumerate(layers):
         if normal_field is None:
             nx, ny = normal_vector_field(
@@ -1503,7 +1523,7 @@ def _check_compression_still_fits(cell, record, index):
             f'the frozen geometry no longer fits this structure: layer {index} {detail}. The '
             f'recorded compression would gather blocks that are not the ones this layer has, '
             f'so it describes a different layer. Call freeze_geometry() again, or drop '
-            f'geometry= to rebuild by comparison. (Changing the refractive index of a layer '
+            f'geometry= to rebuild by comparison. (Changing the permittivity of a layer '
             f'never trips this on its own; moving its pattern does.)')
 
     if not len(col_idx) or not len(row_idx) or col_idx[-1] != n_col - 1 \
@@ -1534,11 +1554,11 @@ def compress_cell(xp, cell, row_idx, col_idx):
     return xp.take(cell, xp.asarray(row_idx, device=dev), axis=0)
 
 
-def to_conv_mat_raster_integrated(ucell, fto_x, fto_y, compression=None):
+def to_conv_mat_raster_integrated(structure, fto_x, fto_y, compression=None):
     """Per-layer convolution matrices via the analytic (staircase-free) integrated path.
 
     Args:
-        ucell: refractive-index raster ``(n_layers, Ny, Nx)`` — the design variable.
+        structure: relative-permittivity raster ``(n_layers, Ny, Nx)`` — the design variable.
         fto_x, fto_y: Fourier truncation orders.
         compression: optional per-layer ``(row_idx, col_idx, x, y)`` from
             :func:`compression_indices`. Supply it to stay traceable under JAX; it is static
@@ -1548,25 +1568,25 @@ def to_conv_mat_raster_integrated(ucell, fto_x, fto_y, compression=None):
     Returns:
         ``(epx_conv_all, epy_conv_all, epz_conv_i_all)``, each ``(n_layers, ff_xy, ff_xy)``.
     """
-    xp = array_namespace(ucell)
+    xp = array_namespace(structure)
 
-    if compression is not None and len(compression) != ucell.shape[0]:
+    if compression is not None and len(compression) != structure.shape[0]:
         raise StaleGeometryError(
             f'the frozen geometry no longer fits this structure: it holds a compression for '
-            f'{len(compression)} layers and this one has {ucell.shape[0]}. Call '
+            f'{len(compression)} layers and this one has {structure.shape[0]}. Call '
             f'freeze_geometry() again, or drop geometry= to rebuild by comparison.')
 
     epx_list, epy_list, epz_i_list = [], [], []
 
-    for i in range(ucell.shape[0]):
-        layer = ucell[i]
+    for i in range(structure.shape[0]):
+        layer = structure[i]
         if compression is None:
             row_idx, col_idx, x, y = compression_indices(layer)
         else:
             _check_compression_still_fits(layer, compression[i], i)
             row_idx, col_idx, x, y = compression[i]
-        n_comp = compress_cell(xp, layer, row_idx, col_idx)
-        eps = xp.astype(n_comp, _complex_dtype(xp, n_comp)) ** 2
+        comp = compress_cell(xp, layer, row_idx, col_idx)
+        eps = xp.astype(comp, _complex_dtype(xp, comp))
 
         epz_list = fourier2d_integrated(xp, eps, x, y, fto_x, fto_y, inverse_rule=None)
         epx_list.append(fourier2d_integrated(xp, eps, x, y, fto_x, fto_y, inverse_rule='x'))
@@ -1576,10 +1596,10 @@ def to_conv_mat_raster_integrated(ucell, fto_x, fto_y, compression=None):
     return ConvSlots3(xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list))
 
 
-def to_conv_mat_raster_integrated_nvf(ucell, fto_x, fto_y, normal_field=None,
+def to_conv_mat_raster_integrated_nvf(structure, fto_x, fto_y, normal_field=None,
                                       normal_field_source=None, compression=None,
                                       lattice=None, normal_method=None):
-    """Per-layer convolution matrices for a raster ``ucell`` via closed-form Fourier + NVF.
+    """Per-layer convolution matrices for a raster ``structure`` via closed-form Fourier + NVF.
 
     The pairing that needs both axes named independently. It buys the staircase-free
     permittivity series of the integrated path *and* the vector factorization that handles
@@ -1587,9 +1607,9 @@ def to_conv_mat_raster_integrated_nvf(ucell, fto_x, fto_y, normal_field=None,
     wants from a raster.
 
     Args:
-        ucell: refractive-index raster ``(n_layers, Ny, Nx)`` — the design variable.
+        structure: relative-permittivity raster ``(n_layers, Ny, Nx)`` — the design variable.
         fto_x, fto_y: Fourier truncation orders.
-        normal_field: optional per-layer ``(nx, ny)`` from :func:`normal_field_for_ucell`.
+        normal_field: optional per-layer ``(nx, ny)`` from :func:`normal_field_for_raster`.
         normal_field_source: what that field was sampled from, as in
             :func:`to_conv_mat_raster_nvf` — this path replays the same record and is checked
             the same way.
@@ -1610,10 +1630,10 @@ def to_conv_mat_raster_integrated_nvf(ucell, fto_x, fto_y, normal_field=None,
     Returns:
         ``(epx, epy, epz_i, epxy, epyx)``, each ``(n_layers, ff_xy, ff_xy)``.
     """
-    xp = array_namespace(ucell)
+    xp = array_namespace(structure)
 
     out = [[], [], [], [], []]
-    eps_grids = _layer_eps_for_normal_field(xp, ucell, fto_x, fto_y)
+    eps_grids = _layer_eps_for_normal_field(xp, structure, fto_x, fto_y)
 
     for i, (eps_grid, base_eps, repeat_y, repeat_x) in enumerate(eps_grids):
         if normal_field is None:
@@ -1625,14 +1645,14 @@ def to_conv_mat_raster_integrated_nvf(ucell, fto_x, fto_y, normal_field=None,
                                            normal_method)
             nx, ny = normal_field[i]
 
-        layer = ucell[i]
+        layer = structure[i]
         if compression is None:
             row_idx, col_idx, x, y = compression_indices(layer)
         else:
             _check_compression_still_fits(layer, compression[i], i)
             row_idx, col_idx, x, y = compression[i]
-        n_comp = compress_cell(xp, layer, row_idx, col_idx)
-        eps_comp = xp.astype(n_comp, _complex_dtype(xp, n_comp)) ** 2
+        comp = compress_cell(xp, layer, row_idx, col_idx)
+        eps_comp = xp.astype(comp, _complex_dtype(xp, comp))
 
         for slot, mat in zip(out, nvf_conv_matrices_integrated(
                 xp, eps_comp, x, y, nx, ny, fto_x, fto_y)):
@@ -1641,18 +1661,18 @@ def to_conv_mat_raster_integrated_nvf(ucell, fto_x, fto_y, normal_field=None,
     return ConvSlots5(*(xp.stack(slot) for slot in out))
 
 
-def to_conv_mat_block(ucell_info_list, fto_x, fto_y):
+def to_conv_mat_block(block_info_list, fto_x, fto_y):
     """Per-layer convolution matrices for vector-modelled layers (integrated over explicit segments).
 
-    Each entry of ``ucell_info_list`` is ``(layer, x_list, y_list)`` — the segment values and
+    Each entry of ``block_info_list`` is ``(layer, x_list, y_list)`` — the segment values and
     their edges — so no compression step is needed.
     """
-    xp = array_namespace(ucell_info_list[0][0])
+    xp = array_namespace(block_info_list[0][0])
 
     epx_list, epy_list, epz_i_list = [], [], []
 
-    for layer, x, y in ucell_info_list:
-        eps = xp.astype(layer, _complex_dtype(xp, layer)) ** 2
+    for layer, x, y in block_info_list:
+        eps = xp.astype(layer, _complex_dtype(xp, layer))
         epx_list.append(fourier2d_integrated(xp, eps, x, y, fto_x, fto_y, inverse_rule='x'))
         epy_list.append(fourier2d_integrated(xp, eps, x, y, fto_x, fto_y, inverse_rule='y'))
         epz_i_list.append(xp.linalg.inv(fourier2d_integrated(xp, eps, x, y, fto_x, fto_y, inverse_rule=None)))

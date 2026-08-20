@@ -39,7 +39,7 @@ import wavebit.on_jax                                        # noqa: E402,F401  
 
 P = 0.77
 BASE = dict(period=[P, P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
-            wavelength=0.777, n_top=1.0, n_bot=1.5, fto=[4, 4])
+            wavelength=0.777, top=1.0, bot=2.25, fto=[4, 4])
 
 # Nine positions, spaced so no two land on the same normal-field grid line — when this file was
 # written that mattered, because the answer moved between grid lines. It no longer does, and
@@ -54,7 +54,7 @@ IDS = [f'{s}_{p}' for s, p in CASES]
 
 
 def _shape(kind, param, value):
-    s = dict(type=kind, cx=0.385, cy=0.385, lx=0.385, ly=0.231, angle=0.4, n_index=3.5)
+    s = dict(type=kind, cx=0.385, cy=0.385, lx=0.385, ly=0.231, angle=0.4, material=12.25)
     if kind == 'circle':
         # Same geometry as the `ly = lx` this used to write -- `lx` is the diameter and
         # `shape_geometry` resolves the second axis to it -- but a circle has no second length
@@ -67,7 +67,7 @@ def _shape(kind, param, value):
 def _position_gradients(kind, param):
     """``d(sum R)/d(param)`` at each position. Every entry should be zero."""
     def objective(v):
-        res = wavebit.rcwa(backend=1, ucell=[dict(n_base=1.0, shapes=[_shape(kind, param, v)])],
+        res = wavebit.rcwa(backend=1, structure=[dict(background=1.0, shapes=[_shape(kind, param, v)])],
                              **BASE).conv_solve()
         return jnp.real(jnp.sum(res.R))
 
@@ -85,7 +85,7 @@ def test_translation_invariance_holds_in_the_objective(kind, param):
     bound is where a real regression, not a rounding difference, would land.
     """
     def total(v):
-        res = wavebit.rcwa(backend=0, ucell=[dict(n_base=1.0, shapes=[_shape(kind, param, v)])],
+        res = wavebit.rcwa(backend=0, structure=[dict(background=1.0, shapes=[_shape(kind, param, v)])],
                              **BASE).conv_solve()
         return float(np.sum(np.asarray(res.R)).real)
 
@@ -219,24 +219,24 @@ def test_the_sampled_field_no_longer_depends_on_where_in_the_cell_a_shape_SITS()
 # nothing to do with each layer being right.
 
 STACK = dict(period=[P, P], thickness=[0.25, 0.30], theta=0.35, phi=0.4, psi=0.0,
-             wavelength=0.777, n_top=1.0, n_bot=1.5, fto=[4, 4])
+             wavelength=0.777, top=1.0, bot=2.25, fto=[4, 4])
 CX0, CX1 = 0.35 * P, 0.55 * P
 
 
 def _stack(cx0, cx1):
-    return [dict(n_base=1.0, shapes=[dict(type='rectangle', cx=cx0, cy=0.385, lx=0.385,
-                                          ly=0.231, angle=0.4, n_index=3.5)]),
-            dict(n_base=1.0, shapes=[dict(type='circle', cx=cx1, cy=0.462, lx=0.385,
-                                          n_index=2.5)])]
+    return [dict(background=1.0, shapes=[dict(type='rectangle', cx=cx0, cy=0.385, lx=0.385,
+                                          ly=0.231, angle=0.4, material=12.25)]),
+            dict(background=1.0, shapes=[dict(type='circle', cx=cx1, cy=0.462, lx=0.385,
+                                          material=6.25)])]
 
 
 def _stack_total(cx0, cx1):
-    res = wavebit.rcwa(backend=0, ucell=_stack(cx0, cx1), **STACK).conv_solve()
+    res = wavebit.rcwa(backend=0, structure=_stack(cx0, cx1), **STACK).conv_solve()
     return float(np.real(np.sum(np.asarray(res.R))))
 
 
 def _stack_jtotal(cx0, cx1):
-    res = wavebit.rcwa(backend=1, ucell=_stack(cx0, cx1), **STACK).conv_solve()
+    res = wavebit.rcwa(backend=1, structure=_stack(cx0, cx1), **STACK).conv_solve()
     return jnp.real(jnp.sum(res.R))
 
 
@@ -315,28 +315,28 @@ def test_moving_one_layer_of_two_moves_the_answer_and_the_gradient_says_by_how_m
 # both. Both halves are pinned below so that neither can be assumed from the other.
 
 TWO_CFG = dict(period=[P, P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
-               wavelength=0.777, n_top=1.0, n_bot=1.5, fto=[4, 4])
+               wavelength=0.777, top=1.0, bot=2.25, fto=[4, 4])
 CA, CB = 0.28 * P, 0.68 * P
 
-TWO_CIRCLES = (dict(type='circle', cy=0.30 * P, lx=0.20 * P, n_index=3.0),
-               dict(type='circle', cy=0.70 * P, lx=0.20 * P, n_index=2.2))
+TWO_CIRCLES = (dict(type='circle', cy=0.30 * P, lx=0.20 * P, material=9.0),
+               dict(type='circle', cy=0.70 * P, lx=0.20 * P, material=4.840000000000001))
 TWO_RECTANGLES = (dict(type='rectangle', cy=0.30 * P, lx=0.20 * P, ly=0.15 * P, angle=0.4,
-                       n_index=3.0),
+                       material=9.0),
                   dict(type='rectangle', cy=0.70 * P, lx=0.20 * P, ly=0.15 * P, angle=0.9,
-                       n_index=2.2))
+                       material=4.840000000000001))
 
 
 def _two(pair, ca, cb):
-    return [dict(n_base=1.0, shapes=[dict(pair[0], cx=ca), dict(pair[1], cx=cb)])]
+    return [dict(background=1.0, shapes=[dict(pair[0], cx=ca), dict(pair[1], cx=cb)])]
 
 
 def _two_total(pair, ca, cb):
-    res = wavebit.rcwa(backend=0, ucell=_two(pair, ca, cb), **TWO_CFG).conv_solve()
+    res = wavebit.rcwa(backend=0, structure=_two(pair, ca, cb), **TWO_CFG).conv_solve()
     return float(np.real(np.sum(np.asarray(res.R))))
 
 
 def _two_jtotal(pair, ca, cb):
-    res = wavebit.rcwa(backend=1, ucell=_two(pair, ca, cb), **TWO_CFG).conv_solve()
+    res = wavebit.rcwa(backend=1, structure=_two(pair, ca, cb), **TWO_CFG).conv_solve()
     return jnp.real(jnp.sum(res.R))
 
 
@@ -399,15 +399,15 @@ def test_a_layer_of_two_shapes_is_translation_invariant_too():
     is what separates it from the clipped window this used to measure at 1e-2.
     """
     cfg = dict(backend=0, period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), fto=(4, 4),
-               n_top=1.0, n_bot=1.45, theta=0.0, phi=None, psi=np.pi / 2)
+               top=1.0, bot=2.1025, theta=0.0, phi=None, psi=np.pi / 2)
 
     def total(d, grid=256):
         shapes = [dict(type='rectangle', cx=0.30 + d, cy=0.5, lx=0.30, ly=0.24, angle=0.0,
-                       n_index=3.48),
-                  dict(type='circle', cx=0.70 + d, cy=0.30, lx=0.22, angle=0.0, n_index=2.4)]
-        ucell = [dict(n_base=1.0, shapes=shapes)]
+                       material=12.1104),
+                  dict(type='circle', cx=0.70 + d, cy=0.30, lx=0.22, angle=0.0, material=5.76)]
+        structure = [dict(background=1.0, shapes=shapes)]
         return float(np.sum(np.asarray(
-            wavebit.rcwa(ucell=ucell, normal_grid=grid, **cfg).conv_solve().T)).real)
+            wavebit.rcwa(structure=structure, normal_grid=grid, **cfg).conv_solve().T)).real)
 
     on_grid = [total(k / 256) for k in (0, 8, 16, 32, 64)]
     assert np.ptp(on_grid) < 1e-11, np.ptp(on_grid)
@@ -436,15 +436,15 @@ def test_a_multishape_layer_is_periodic_across_the_cell_edge():
     2026-08-17, which existed to fail loudly on the day the path was repaired.
     """
     cfg = dict(backend=0, period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), fto=(4, 4),
-               n_top=1.0, n_bot=1.45, theta=0.0, phi=None, psi=np.pi / 2)
-    fixed = dict(type='rectangle', cx=0.72, cy=0.62, lx=0.26, ly=0.30, angle=0.0, n_index=2.1)
+               top=1.0, bot=2.1025, theta=0.0, phi=None, psi=np.pi / 2)
+    fixed = dict(type='rectangle', cx=0.72, cy=0.62, lx=0.26, ly=0.30, angle=0.0, material=4.41)
 
     def total(cx, shapes_after):
         moving = dict(type='rectangle', cx=cx, cy=0.5, lx=0.30, ly=0.24, angle=0.0,
-                      n_index=3.48)
-        ucell = [dict(n_base=1.0, shapes=[moving] + shapes_after)]
+                      material=12.1104)
+        structure = [dict(background=1.0, shapes=[moving] + shapes_after)]
         return float(np.sum(np.asarray(
-            wavebit.rcwa(ucell=ucell, normal_grid=256, **cfg).conv_solve().T)).real)
+            wavebit.rcwa(structure=structure, normal_grid=256, **cfg).conv_solve().T)).real)
 
     alone = [total(cx, []) for cx in (0.10, 1.10, 2.10)]
     assert np.ptp(alone) < 1e-12, alone
@@ -455,7 +455,7 @@ def test_a_multishape_layer_is_periodic_across_the_cell_edge():
     # The projector coefficients are what used to move; the permittivity never did. Comparing
     # both keeps this a statement about the normal field rather than about the solve.
     shapes = lambda cx: [dict(type='rectangle', cx=cx, cy=0.5, lx=0.30, ly=0.24, angle=0.0,
-                              n_index=3.48), fixed]
+                              material=12.1104), fixed]
     eps = [np.asarray(_an.assemble_eps_coeffs(np, shapes(cx), 1.0, 4, 4, (1.0, 1.0),
                                               np.complex128)) for cx in (0.10, 1.10)]
     assert np.max(np.abs(eps[0] - eps[1])) < 1e-13
@@ -475,15 +475,15 @@ def test_a_common_translation_of_every_shape_leaves_the_answer_alone():
     and not the clipped window this used to be confused with.
     """
     cfg = dict(backend=0, period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), fto=(4, 4),
-               n_top=1.0, n_bot=1.45, theta=0.0, phi=None, psi=np.pi / 2)
+               top=1.0, bot=2.1025, theta=0.0, phi=None, psi=np.pi / 2)
 
     def total(shift):
         shapes = [dict(type='rectangle', cx=0.30 + shift, cy=0.5, lx=0.30, ly=0.24,
-                       angle=0.0, n_index=3.48),
+                       angle=0.0, material=12.1104),
                   dict(type='rectangle', cx=0.72 + shift, cy=0.62, lx=0.26, ly=0.30,
-                       angle=0.0, n_index=2.1)]
+                       angle=0.0, material=4.41)]
         return float(np.sum(np.asarray(wavebit.rcwa(
-            ucell=[dict(n_base=1.0, shapes=shapes)], normal_grid=256, **cfg)
+            structure=[dict(background=1.0, shapes=shapes)], normal_grid=256, **cfg)
             .conv_solve().T)).real)
 
     on_grid = [total(k / 256) for k in (0, 16, 32, 64)]

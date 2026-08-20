@@ -21,7 +21,7 @@ def jax_device_set(func):
 
 class _BaseRCWA(CoreSolveMixin):
 
-    def __init__(self, n_top=1., n_bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None, fto=(0, 0), pol=None,
+    def __init__(self, top=1., bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None, fto=(0, 0), pol=None,
                  period=(1., 1.), wavelength=1.,
                  thickness=(0.,), connecting_algo='ETM',
                  device=0, type_complex=jnp.complex128, polarization=None):
@@ -40,8 +40,10 @@ class _BaseRCWA(CoreSolveMixin):
         self._type_float = jnp.float64 if self._type_complex is not jnp.complex64 else jnp.float32
         self._type_int = jnp.int64 if self._type_complex is not jnp.complex64 else jnp.int32
 
-        self.n_top = n_top
-        self.n_bot = n_bot
+        # Materials in, an index out: the two setters store the Material and derive the
+        # `sqrt(eps*mu)` every solve reads. See `CoreSolveMixin.top`.
+        self.top = top
+        self.bot = bot
 
         if pol is not None:
             raise ValueError(_POL_RETIRED)

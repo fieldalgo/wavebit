@@ -57,47 +57,49 @@ def _no_unphysical_warning():
 
 
 GRID, FTO = 48, 4
-KW = dict(backend=0, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+KW = dict(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
           period=(1.0, 1.0), wavelength=1.1, thickness=[0.3])
 
 #: A lossless, passive pillar -- the same shape in every spelling a builder accepts, so the
 #: builders are being compared on one structure rather than on one number each. The raster rod
 #: is stated in pixels and the analytic one derived from it, so the two describe one rod
 #: exactly rather than nearly; ``_mean_eps`` below is then a single number for both.
-N_ROD, N_BASE = 1.5, 1.0
+#: The rod and its surround as PERMITTIVITY -- 2.25 is the index 1.5 this pillar used to be
+#: written with, and the tensor builders below took the square themselves.
+EPS_ROD, EPS_BASE = 2.25, 1.0
 ROW0, ROW1, COL0, COL1 = 14, 34, 18, 30       # y extent, x extent, in pixels
 ROD = (slice(ROW0, ROW1), slice(COL0, COL1))
 
 
 def _raster():
-    ucell = np.full((1, GRID, GRID), float(N_BASE))
-    ucell[0][ROD] = N_ROD
-    return ucell
+    cell = np.full((1, GRID, GRID), float(EPS_BASE))
+    cell[0][ROD] = EPS_ROD
+    return cell
 
 
 def _tensor_raster():
     """The same pillar as an isotropic 3x3 tensor per pixel, for the Popov-Neviere builders."""
     eps = np.zeros((1, GRID, GRID, 3, 3), dtype=complex)
     for i in range(3):
-        eps[..., i, i] = N_BASE ** 2
-        eps[0][ROD][..., i, i] = N_ROD ** 2
+        eps[..., i, i] = EPS_BASE
+        eps[0][ROD][..., i, i] = EPS_ROD
     return eps
 
 
 def _shapes():
     """The same rod as :func:`_raster`, in absolute lengths (never fractions of the period)."""
     px, py = KW['period']
-    return [dict(n_base=N_BASE, shapes=[dict(
+    return [dict(background=EPS_BASE, shapes=[dict(
         type='rectangle',
         cx=px * 0.5 * (COL0 + COL1) / GRID, cy=py * 0.5 * (ROW0 + ROW1) / GRID,
         lx=px * (COL1 - COL0) / GRID, ly=py * (ROW1 - ROW0) / GRID,
-        n_index=N_ROD)])]
+        material=EPS_ROD)])]
 
 
 def _mean_eps():
     """Area-weighted ``<eps>`` of the pillar -- the DC entry ``inv(epz_i)`` must reproduce."""
     frac = ((ROW1 - ROW0) * (COL1 - COL0)) / GRID ** 2
-    return frac * N_ROD ** 2 + (1.0 - frac) * N_BASE ** 2
+    return frac * EPS_ROD + (1.0 - frac) * EPS_BASE
 
 
 #: ``(name, callable)`` -- every builder a caller can splat into ``solve_for_conv``, at the
@@ -188,13 +190,13 @@ def test_every_five_slot_builder_is_exercised():
     deliberately out of scope.
     """
     exempt = {
-        # takes an already-modelled block instruction, not a ucell -- covered via the solver
+        # takes an already-modelled block instruction, not a structure -- covered via the solver
         # path in test_factorization_core.py
         'to_conv_mat_block',
         # permeability, not permittivity: its slots go to solve_for_conv's `mu=`, not
         # positionally. Pinned against fmmax in tests/references/.
         'to_conv_mat_raster_pn_mu',
-        # one layer, and it takes resolved polygons rather than a ucell; reached through
+        # one layer, and it takes resolved polygons rather than a structure; reached through
         # to_conv_mat_smooth_layers, which is exercised above.
         'to_conv_mat_boundary_layer',
         'to_conv_mat_smooth_nvf',

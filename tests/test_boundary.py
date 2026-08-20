@@ -47,8 +47,10 @@ def resolve(xp, params, plan=None):
     return regs, plan
 
 
-TWO_RODS = [(0.40, 0.43, 0.36, 0.29, 0.17, 2.0),
-            (0.57, 0.55, 0.31, 0.38, 0.41, 3.0)]
+#: Slot 5 is the material -- a permittivity since the flip, so 4 and 9 where the pre-flip
+#: file wrote the indices 2 and 3. Nothing here reads it as physics; it labels the region.
+TWO_RODS = [(0.40, 0.43, 0.36, 0.29, 0.17, 4.0),
+            (0.57, 0.55, 0.31, 0.38, 0.41, 9.0)]
 
 
 # --------------------------------------------------------------------------- polygon FT
@@ -95,8 +97,8 @@ def test_resolved_regions_reproduce_the_painted_area():
     areas = {n: sum(float(polygon_area(xnp, V)) for V in loops) for n, loops in regs}
     total = sum(areas.values())
     a0, a1 = 0.36 * 0.29, 0.31 * 0.38
-    assert abs(areas[3.0] - a1) < 1e-12          # the later rod is untouched
-    assert areas[2.0] < a0 - 1e-3                 # the earlier one lost the overlap
+    assert abs(areas[9.0] - a1) < 1e-12          # the later rod is untouched
+    assert areas[4.0] < a0 - 1e-3                 # the earlier one lost the overlap
     assert total < a0 + a1                        # and the union is less than the sum
     assert abs(total - (a0 + a1 - (a0 + a1 - total))) < 1e-12
 
@@ -240,9 +242,9 @@ def test_permittivity_matches_the_analytic_path_for_one_shape(fto):
     extension to be the other.
     """
     from wavebit._core.analytic import to_conv_mat_smooth_nvf
-    shape = dict(type='rectangle', cx=0.5, cy=0.5, lx=0.42, ly=0.31, angle=0.4, n_index=2.0)
+    shape = dict(type='rectangle', cx=0.5, cy=0.5, lx=0.42, ly=0.31, angle=0.4, material=4.0)
     ng = 1024
-    (mine, _) = _mats(xnp, [(0.5, 0.5, 0.42, 0.31, 0.4, 2.0)], fto=fto, ng=ng)
+    (mine, _) = _mats(xnp, [(0.5, 0.5, 0.42, 0.31, 0.4, 4.0)], fto=fto, ng=ng)
     theirs = to_conv_mat_smooth_nvf(xnp, [shape], 1.0, fto, fto, PERIOD, xnp.complex128,
                                       normal_grid=ng)
     rel = (np.abs(np.asarray(mine.epz_i) - np.asarray(theirs.epz_i)).max()
@@ -298,7 +300,7 @@ def test_gradient_reaches_the_shape_parameters():
 # --------------------------------------------------------------- one dict, one reading
 #: A circle written the natural way: the diameter given once. Summing this used to work and
 #: painting it used to raise ``KeyError: 'ly'``, because the two paths read the dict apart.
-CIRCLE_NO_LY = dict(type='circle', cx=0.42, cy=0.38, lx=0.34, n_index=2.4)
+CIRCLE_NO_LY = dict(type='circle', cx=0.42, cy=0.38, lx=0.34, material=5.76)
 
 
 @pytest.mark.parametrize('shape, spelt_out', [
@@ -307,15 +309,15 @@ CIRCLE_NO_LY = dict(type='circle', cx=0.42, cy=0.38, lx=0.34, n_index=2.4)
     (CIRCLE_NO_LY,
      dict(type='ellipse', cx=0.42, cy=0.38, lx=0.34, ly=0.34, angle=0.0)),
     # no centre either -- the transform centres a shape in the cell, so this path must too
-    (dict(type='circle', lx=0.34, n_index=2.4),
+    (dict(type='circle', lx=0.34, material=5.76),
      dict(type='ellipse', cx=0.5, cy=0.5, lx=0.34, ly=0.34, angle=0.0)),
     # a square is square, and `rectangle` is where the second side goes
-    (dict(type='square', cx=0.4, cy=0.6, lx=0.3, angle=0.2, n_index=2.4),
+    (dict(type='square', cx=0.4, cy=0.6, lx=0.3, angle=0.2, material=5.76),
      dict(type='rectangle', cx=0.4, cy=0.6, lx=0.3, ly=0.3, angle=0.2)),
     # `l` is the both-axes spelling of a length
-    (dict(type='rectangle', cx=0.4, cy=0.6, l=0.3, n_index=2.4),
+    (dict(type='rectangle', cx=0.4, cy=0.6, l=0.3, material=5.76),
      dict(type='rectangle', cx=0.4, cy=0.6, lx=0.3, ly=0.3, angle=0.0)),
-    (dict(type='ellipse', cx=0.4, cy=0.6, lx=0.3, ly=0.2, angle=-0.7, n_index=2.4),
+    (dict(type='ellipse', cx=0.4, cy=0.6, lx=0.3, ly=0.2, angle=-0.7, material=5.76),
      dict(type='ellipse', cx=0.4, cy=0.6, lx=0.3, ly=0.2, angle=-0.7)),
 ])
 def test_shape_vertices_reads_the_dict_like_the_transform(shape, spelt_out):
@@ -359,7 +361,7 @@ def test_a_circle_without_ly_is_the_same_circle_on_both_paths(fto):
     from wavebit._core.lattice import as_lattice, periods_of
     ng = 1024
     for name, lat in (('square', None), ('skew', as_lattice(lattice=[[1.0, 0.3], [0.0, 1.0]]))):
-        shape = CIRCLE_NO_LY if lat is None else dict(type='circle', lx=0.34, n_index=2.4)
+        shape = CIRCLE_NO_LY if lat is None else dict(type='circle', lx=0.34, material=5.76)
         period = PERIOD if lat is None else periods_of(lat)
         mine = _b.to_conv_mat_boundary_layer(xnp, [shape], 1.0, fto, fto, period,
                                              xnp.complex128, normal_grid=ng, lattice=lat)
@@ -374,18 +376,18 @@ def test_a_circle_without_ly_is_the_same_circle_on_both_paths(fto):
 
 
 # --------------------------------------------------------------------------- wiring
-def _solve(ucell, fto=6, **over):
+def _solve(structure, fto=6, **over):
     import wavebit
     cfg = dict(backend=0, fto=(fto, fto), period=PERIOD, thickness=(0.6,), wavelength=1.6,
-               n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2)
+               top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2)
     cfg.update(over)
-    return wavebit.rcwa(ucell=ucell, **cfg)
+    return wavebit.rcwa(structure=structure, **cfg)
 
 
 PAINT_SHAPES = [dict(type='rectangle', cx=0.40, cy=0.40, lx=0.34, ly=0.34, angle=0.0,
-                     n_index=2.0),
+                     material=4.0),
                 dict(type='rectangle', cx=0.56, cy=0.56, lx=0.34, ly=0.34, angle=0.0,
-                     n_index=3.0)]
+                     material=9.0)]
 
 
 def _total(res):
@@ -394,31 +396,31 @@ def _total(res):
 
 def test_paint_is_accepted_and_is_not_add():
     """The two rules are two structures; asking for one must not quietly give the other."""
-    painted = _total(_solve([dict(n_base=1.0, combine='paint', shapes=PAINT_SHAPES)]).conv_solve())
-    added = _total(_solve([dict(n_base=1.0, combine='add', shapes=PAINT_SHAPES)]).conv_solve())
+    painted = _total(_solve([dict(background=1.0, combine='paint', shapes=PAINT_SHAPES)]).conv_solve())
+    added = _total(_solve([dict(background=1.0, combine='add', shapes=PAINT_SHAPES)]).conv_solve())
     assert abs(painted - added) > 0.1, (painted, added)
 
 
 def test_paint_agrees_with_the_vector_path():
     """The block path paints too, so on axis-aligned shapes both describe the same structure."""
-    painted = _total(_solve([dict(n_base=1.0, combine='paint', shapes=PAINT_SHAPES)]).conv_solve())
-    vec = [[1.0, [['rectangle', s['cx'], s['cy'], s['lx'], s['ly'], s['n_index'], s['angle'],
+    painted = _total(_solve([dict(background=1.0, combine='paint', shapes=PAINT_SHAPES)]).conv_solve())
+    vec = [[1.0, [['rectangle', s['cx'], s['cy'], s['lx'], s['ly'], s['material'], s['angle'],
                    2, 2] for s in PAINT_SHAPES]]]
     assert abs(painted - _total(_solve(vec).conv_solve())) < 5e-3
 
 
 def test_paint_without_overlap_equals_add():
     """While nothing intersects, the two rules mean the same thing and must agree exactly."""
-    apart = [dict(type='rectangle', cx=0.22, cy=0.22, lx=0.26, ly=0.26, angle=0.3, n_index=2.0),
-             dict(type='rectangle', cx=0.74, cy=0.74, lx=0.26, ly=0.26, angle=-0.4, n_index=3.0)]
-    a = _total(_solve([dict(n_base=1.0, combine='paint', shapes=apart)]).conv_solve())
-    b = _total(_solve([dict(n_base=1.0, combine='add', shapes=apart)]).conv_solve())
+    apart = [dict(type='rectangle', cx=0.22, cy=0.22, lx=0.26, ly=0.26, angle=0.3, material=4.0),
+             dict(type='rectangle', cx=0.74, cy=0.74, lx=0.26, ly=0.26, angle=-0.4, material=9.0)]
+    a = _total(_solve([dict(background=1.0, combine='paint', shapes=apart)]).conv_solve())
+    b = _total(_solve([dict(background=1.0, combine='add', shapes=apart)]).conv_solve())
     assert abs(a - b) < 2e-3, (a, b)
 
 
 def test_freeze_geometry_records_a_plan_only_for_painted_layers():
-    solver = _solve([dict(n_base=1.0, combine='paint', shapes=PAINT_SHAPES),
-                     dict(n_base=1.0, combine='add', shapes=PAINT_SHAPES)],
+    solver = _solve([dict(background=1.0, combine='paint', shapes=PAINT_SHAPES),
+                     dict(background=1.0, combine='add', shapes=PAINT_SHAPES)],
                     thickness=(0.3, 0.3))
     g = solver.freeze_geometry()
     assert g.boundary_plans is not None
@@ -427,7 +429,7 @@ def test_freeze_geometry_records_a_plan_only_for_painted_layers():
 
 
 def test_frozen_plan_reproduces_the_eager_answer():
-    solver = _solve([dict(n_base=1.0, combine='paint', shapes=PAINT_SHAPES)])
+    solver = _solve([dict(background=1.0, combine='paint', shapes=PAINT_SHAPES)])
     eager = _total(solver.conv_solve())
     replayed = _total(solver.conv_solve(geometry=solver.freeze_geometry()))
     assert abs(eager - replayed) < 1e-12
@@ -444,9 +446,9 @@ def test_a_circle_without_ly_paints_and_sums_to_the_same_answer():
     """
     apart = [CIRCLE_NO_LY,
              dict(type='rectangle', cx=0.80, cy=0.82, lx=0.22, ly=0.18, angle=-0.4,
-                  n_index=3.0)]
-    a = _total(_solve([dict(n_base=1.0, combine='paint', shapes=apart)]).conv_solve())
-    b = _total(_solve([dict(n_base=1.0, combine='add', shapes=apart)]).conv_solve())
+                  material=9.0)]
+    a = _total(_solve([dict(background=1.0, combine='paint', shapes=apart)]).conv_solve())
+    b = _total(_solve([dict(background=1.0, combine='add', shapes=apart)]).conv_solve())
     assert abs(a - b) < 2e-3, (a, b)
 
 
@@ -459,13 +461,13 @@ def test_a_circle_without_ly_survives_the_polygon_path():
     genuinely takes two lengths instead: an equal-axis ``ellipse`` is the same structure, and
     has to give the same number.
     """
-    over = dict(type='rectangle', cx=0.60, cy=0.58, lx=0.34, ly=0.26, angle=0.4, n_index=3.0)
+    over = dict(type='rectangle', cx=0.60, cy=0.58, lx=0.34, ly=0.26, angle=0.4, material=9.0)
     circle = dict(CIRCLE_NO_LY, cx=0.44, cy=0.44, lx=0.36)
     spelt = dict(circle, type='ellipse', ly=circle['lx'], angle=0.0)
 
     got = []
     for shapes in ([circle, over], [spelt, over]):
-        solver = _solve([dict(n_base=1.0, combine='paint', shapes=shapes)])
+        solver = _solve([dict(background=1.0, combine='paint', shapes=shapes)])
         assert solver.freeze_geometry().boundary_plans[0] is not None    # it really painted
         got.append(_total(solver.conv_solve()))
     assert got[0] == got[1], got
@@ -473,9 +475,9 @@ def test_a_circle_without_ly_survives_the_polygon_path():
 
 def test_a_painted_ellipse_is_polygonised():
     """Curved primitives are polygonised for this path; the answer must still be sane."""
-    shapes = [dict(type='ellipse', cx=0.42, cy=0.46, lx=0.44, ly=0.28, angle=0.5, n_index=2.0),
-              dict(type='circle', cx=0.60, cy=0.58, lx=0.30, angle=0.0, n_index=3.0)]
-    r = _solve([dict(n_base=1.0, combine='paint', shapes=shapes)]).conv_solve()
+    shapes = [dict(type='ellipse', cx=0.42, cy=0.46, lx=0.44, ly=0.28, angle=0.5, material=4.0),
+              dict(type='circle', cx=0.60, cy=0.58, lx=0.30, angle=0.0, material=9.0)]
+    r = _solve([dict(background=1.0, combine='paint', shapes=shapes)]).conv_solve()
     t = _total(r)
     assert 0.0 < t < 1.0
     assert abs(t + float(np.asarray(r.R).real.sum()) - 1.0) < 1e-9    # lossless
@@ -489,21 +491,22 @@ def test_a_painted_ellipse_is_polygonised():
 # Full enclosure is the branch that produces a ``sign = -1`` loop (`clipper.plan_difference`,
 # the ``n_x == 0`` containment case), and it was answered wrongly for as long as it existed.
 
-#: A disc of index 3 sitting wholly inside a square of index 2. Concentric on purpose: it is
+#: A disc of permittivity 9 wholly inside a square of permittivity 4. Concentric on purpose:
+#: it is
 #: the arrangement whose exact cell-average permittivity is a one-line closed form.
 ENCLOSED_SHAPES = [dict(type='rectangle', cx=0.5, cy=0.5, lx=0.6, ly=0.6, angle=0.0,
-                        n_index=2.0),
-                   dict(type='circle', cx=0.5, cy=0.5, lx=0.2, n_index=3.0)]
+                        material=4.0),
+                   dict(type='circle', cx=0.5, cy=0.5, lx=0.2, material=9.0)]
 
 #: The same two shapes moved so they overlap without either containing the other -- the control
 #: that says the boundary path as a whole is sound and only enclosure was broken.
 CLIPPED_SHAPES = [dict(type='rectangle', cx=0.43, cy=0.50, lx=0.30, ly=0.30, angle=0.0,
-                       n_index=2.0),
-                  dict(type='circle', cx=0.60, cy=0.52, lx=0.32, n_index=3.0)]
+                       material=4.0),
+                  dict(type='circle', cx=0.60, cy=0.52, lx=0.32, material=9.0)]
 
 
 def _raster_of(shapes, n):
-    """The same instruction drawn as an `n x n` index raster, painting order preserved."""
+    """The same instruction drawn as an `n x n` permittivity raster, painting order kept."""
     axis = (np.arange(n) + 0.5) / n
     X, Y = np.meshgrid(axis, axis)             # X indexes x (axis 1), Y indexes y (axis 0)
     cell = np.ones((1, n, n))
@@ -513,7 +516,7 @@ def _raster_of(shapes, n):
                    & (np.abs(Y - s['cy']) <= s['ly'] / 2))
         else:
             hit = (X - s['cx']) ** 2 + (Y - s['cy']) ** 2 <= (s['lx'] / 2) ** 2
-        cell[0][hit] = s['n_index']
+        cell[0][hit] = s['material']
     return cell
 
 
@@ -527,7 +530,7 @@ def test_an_enclosed_shape_is_cut_out_of_its_host_not_added_to_it(fto):
     here -- a wrong answer that does not move with truncation cannot be argued away as a series
     that has not converged, and this one does not move at all.
 
-    Exactly: background 1, a 0.6 x 0.6 square of index 2 with a disc of index 3 cut out of it,
+    Exactly: background 1, a 0.6 x 0.6 square of eps 4 with a disc of eps 9 cut out of it,
     and the disc laid back in. ``polygon.ellipse_verts`` is **area-matched**, so the 256-gon's
     area is ``pi * 0.1**2`` to about 1e-13 and the closed form below is not a polygonisation
     approximation.
@@ -540,10 +543,10 @@ def test_an_enclosed_shape_is_cut_out_of_its_host_not_added_to_it(fto):
     """
     area = float(polygon_area(xnp, _b.shape_vertices(xnp, ENCLOSED_SHAPES[1], PERIOD)))
     assert abs(area - np.pi * 0.1 ** 2) < 1e-12, area
-    exact = 1.0 + (2.0 ** 2 - 1.0) * (0.36 - area) + (3.0 ** 2 - 1.0) * area
-    wrong = 1.0 + (2.0 ** 2 - 1.0) * (0.36 + area) + (3.0 ** 2 - 1.0) * area   # sign dropped
+    exact = 1.0 + (4.0 - 1.0) * (0.36 - area) + (9.0 - 1.0) * area
+    wrong = 1.0 + (4.0 - 1.0) * (0.36 + area) + (9.0 - 1.0) * area              # sign dropped
 
-    solver = _solve([dict(n_base=1.0, combine='paint', shapes=ENCLOSED_SHAPES)], fto=fto,
+    solver = _solve([dict(background=1.0, combine='paint', shapes=ENCLOSED_SHAPES)], fto=fto,
                     normal_grid=256)
     assert solver.freeze_geometry().boundary_plans[0] is not None      # it really painted
     direct = np.linalg.inv(np.asarray(solver.conv_matrices()[2])[0])
@@ -576,7 +579,7 @@ def test_paint_with_an_enclosed_shape_agrees_with_a_fine_raster():
     Hermitian permittivity -- just of a different structure. That is why the assertion here is
     against an outside reading of the geometry rather than an internal consistency check.
     """
-    painted = _total(_solve([dict(n_base=1.0, combine='paint', shapes=ENCLOSED_SHAPES)],
+    painted = _total(_solve([dict(background=1.0, combine='paint', shapes=ENCLOSED_SHAPES)],
                             normal_grid=256).conv_solve())
     coarse = _total(_solve(_raster_of(ENCLOSED_SHAPES, 800), normal_grid=256).conv_solve())
     fine = _total(_solve(_raster_of(ENCLOSED_SHAPES, 1600), normal_grid=256).conv_solve())
@@ -601,7 +604,7 @@ def test_a_partial_overlap_was_never_affected():
              for region in regions for lp in region]
     assert len(areas) == 2 and all(a > 0 for a in areas), areas
 
-    painted = _total(_solve([dict(n_base=1.0, combine='paint', shapes=CLIPPED_SHAPES)],
+    painted = _total(_solve([dict(background=1.0, combine='paint', shapes=CLIPPED_SHAPES)],
                             normal_grid=256).conv_solve())
     fine = _total(_solve(_raster_of(CLIPPED_SHAPES, 1600), normal_grid=256).conv_solve())
     assert abs(painted - fine) < 2e-3, (painted, fine)
@@ -648,9 +651,9 @@ def test_a_hole_inside_a_hole_is_material_again():
     is the composition working -- and they sum to 0.39, the visible area. The cell average is
     then checked against the closed form at two ``fto``, since it is exact and truncation-free.
     """
-    nested = [dict(type='rectangle', cx=0.5, cy=0.5, lx=0.80, ly=0.80, angle=0.0, n_index=2.0),
-              dict(type='rectangle', cx=0.5, cy=0.5, lx=0.50, ly=0.50, angle=0.0, n_index=3.0),
-              dict(type='rectangle', cx=0.5, cy=0.5, lx=0.20, ly=0.20, angle=0.0, n_index=4.0)]
+    nested = [dict(type='rectangle', cx=0.5, cy=0.5, lx=0.80, ly=0.80, angle=0.0, material=4.0),
+              dict(type='rectangle', cx=0.5, cy=0.5, lx=0.50, ly=0.50, angle=0.0, material=9.0),
+              dict(type='rectangle', cx=0.5, cy=0.5, lx=0.20, ly=0.20, angle=0.0, material=16.0)]
     recs, regions = _b.plan_layer(nested, PERIOD)
     verts = [_b.shape_vertices(xnp, s, PERIOD) for s in nested]
     vals = _c.eval_table(xnp, recs, verts)
@@ -665,10 +668,10 @@ def test_a_hole_inside_a_hole_is_material_again():
     for region, want in zip(regions, visible):
         assert float(_c.region_area(xnp, region, vals)) == pytest.approx(want, abs=1e-12)
 
-    exact = 1.0 + (2.0 ** 2 - 1) * visible[0] + (3.0 ** 2 - 1) * visible[1] \
-        + (4.0 ** 2 - 1) * visible[2]
+    exact = 1.0 + (4.0 - 1) * visible[0] + (9.0 - 1) * visible[1] \
+        + (16.0 - 1) * visible[2]
     for fto in (6, 12):
-        solver = _solve([dict(n_base=1.0, combine='paint', shapes=nested)], fto=fto,
+        solver = _solve([dict(background=1.0, combine='paint', shapes=nested)], fto=fto,
                         normal_grid=256)
         direct = np.linalg.inv(np.asarray(solver.conv_matrices()[2])[0])
         ff = (2 * fto + 1) ** 2
@@ -741,20 +744,20 @@ def test_the_normal_field_does_not_care_which_way_a_hole_is_wound():
 
 def _two_painted(w, curved=False):
     """Two overlapping shapes, painted, with every geometry value wrapped by `w`."""
-    first = (dict(type='circle', cx=w(0.55), cy=w(0.5), lx=w(0.30), n_index=3.48) if curved
+    first = (dict(type='circle', cx=w(0.55), cy=w(0.5), lx=w(0.30), material=12.1104) if curved
              else dict(type='rectangle', cx=w(0.55), cy=w(0.5), lx=w(0.26), ly=w(0.24),
-                       angle=w(0.0), n_index=3.48))
-    return [dict(n_base=1.0, combine='paint', shapes=[
+                       angle=w(0.0), material=12.1104))
+    return [dict(background=1.0, combine='paint', shapes=[
         first,
-        dict(type='rectangle', cx=0.68, cy=0.58, lx=0.26, ly=0.30, angle=0.0, n_index=2.1)])]
+        dict(type='rectangle', cx=0.68, cy=0.58, lx=0.26, ly=0.30, angle=0.0, material=4.41)])]
 
 
 _PAINT_CFG = dict(period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), fto=(4, 4),
-                  n_top=1.0, n_bot=1.45, theta=0.0, phi=None, psi=np.pi / 2, normal_grid=256)
+                  top=1.0, bot=2.1025, theta=0.0, phi=None, psi=np.pi / 2, normal_grid=256)
 
 
 def _painted_total(backend, w, curved=False, geometry=None):
-    solver = wavebit.rcwa(backend=backend, ucell=_two_painted(w, curved), **_PAINT_CFG)
+    solver = wavebit.rcwa(backend=backend, structure=_two_painted(w, curved), **_PAINT_CFG)
     res = solver.conv_solve() if geometry is None else solver.conv_solve(geometry=geometry)
     t = res.T
     return float(np.sum(np.asarray(t.detach() if hasattr(t, 'detach') else t)).real)
@@ -824,8 +827,8 @@ def test_freezing_a_painted_layer_works_on_torch():
     It is the call that runs ``plan_layer``, so taking the freeze was itself the failure.
     """
     torch = pytest.importorskip('torch')
-    ucell = _two_painted(lambda v: torch.tensor(v, dtype=torch.float64))
-    solver = wavebit.rcwa(backend=2, ucell=ucell, **_PAINT_CFG)
+    structure = _two_painted(lambda v: torch.tensor(v, dtype=torch.float64))
+    solver = wavebit.rcwa(backend=2, structure=structure, **_PAINT_CFG)
     frozen = solver.freeze_geometry()
     total = float(np.sum(np.asarray(solver.conv_solve(geometry=frozen).T.detach())).real)
     assert total == pytest.approx(_painted_total(0, float), abs=1e-12)
@@ -851,17 +854,17 @@ def test_a_traced_painted_layer_is_refused_without_a_frozen_geometry():
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    cfg = dict(period=(1.0, 1.0), wavelength=0.94, fto=(5, 5), n_top=1.0, n_bot=1.45,
+    cfg = dict(period=(1.0, 1.0), wavelength=0.94, fto=(5, 5), top=1.0, bot=2.1025,
                theta=0.0, phi=None, psi=np.pi / 2, thickness=(0.3,), normal_grid=256)
-    fixed = dict(type='rectangle', cx=0.70, cy=0.62, lx=0.26, ly=0.30, angle=0.0, n_index=2.1)
+    fixed = dict(type='rectangle', cx=0.70, cy=0.62, lx=0.26, ly=0.30, angle=0.0, material=4.41)
 
-    def ucell(v):
-        return [dict(n_base=1.0, combine='paint', shapes=[
-            dict(type='rectangle', cx=0.46, cy=0.5, lx=v, ly=0.26, angle=0.3, n_index=3.48),
+    def structure(v):
+        return [dict(background=1.0, combine='paint', shapes=[
+            dict(type='rectangle', cx=0.46, cy=0.5, lx=v, ly=0.26, angle=0.3, material=12.1104),
             dict(fixed)])]
 
     def total(v, geometry=None):
-        solver = wavebit.rcwa(backend=1, ucell=ucell(v), **cfg)
+        solver = wavebit.rcwa(backend=1, structure=structure(v), **cfg)
         res = solver.conv_solve() if geometry is None else solver.conv_solve(geometry=geometry)
         return jnp.sum(res.T).real
 
@@ -870,13 +873,13 @@ def test_a_traced_painted_layer_is_refused_without_a_frozen_geometry():
 
     # and the documented route works, and agrees with central differences on the *painted*
     # structure rather than on the summed one
-    frozen = wavebit.rcwa(backend=0, ucell=ucell(0.34), **cfg).freeze_geometry()
+    frozen = wavebit.rcwa(backend=0, structure=structure(0.34), **cfg).freeze_geometry()
     analytic = float(jax.grad(lambda v: total(v, frozen))(jnp.asarray(0.34)))
     h = 1e-4
     plus = float(np.sum(np.asarray(
-        wavebit.rcwa(backend=0, ucell=ucell(0.34 + h), **cfg).conv_solve().T)).real)
+        wavebit.rcwa(backend=0, structure=structure(0.34 + h), **cfg).conv_solve().T)).real)
     minus = float(np.sum(np.asarray(
-        wavebit.rcwa(backend=0, ucell=ucell(0.34 - h), **cfg).conv_solve().T)).real)
+        wavebit.rcwa(backend=0, structure=structure(0.34 - h), **cfg).conv_solve().T)).real)
     # 2e-2, not the 2e-3 this carried until 2026-08-16. The two sides do not compute the same
     # thing by construction: the AD side holds the *frozen* normal field while the finite
     # difference rebuilds it at each `v`, so the gap is the frozen-geometry approximation, not a
@@ -898,15 +901,15 @@ def test_a_traced_summed_layer_is_not_refused():
     """The refusal is for `paint` only -- a summed layer has no overlap question to ask."""
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    cfg = dict(period=(1.0, 1.0), wavelength=0.94, fto=(5, 5), n_top=1.0, n_bot=1.45,
+    cfg = dict(period=(1.0, 1.0), wavelength=0.94, fto=(5, 5), top=1.0, bot=2.1025,
                theta=0.0, phi=None, psi=np.pi / 2, thickness=(0.3,), normal_grid=256)
 
     def total(v):
-        u = [dict(n_base=1.0, combine='add', shapes=[
-            dict(type='rectangle', cx=0.46, cy=0.5, lx=v, ly=0.26, angle=0.3, n_index=3.48),
+        u = [dict(background=1.0, combine='add', shapes=[
+            dict(type='rectangle', cx=0.46, cy=0.5, lx=v, ly=0.26, angle=0.3, material=12.1104),
             dict(type='rectangle', cx=0.70, cy=0.62, lx=0.26, ly=0.30, angle=0.0,
-                 n_index=2.1)])]
-        return jnp.sum(wavebit.rcwa(backend=1, ucell=u, **cfg).conv_solve().T).real
+                 material=4.41)])]
+        return jnp.sum(wavebit.rcwa(backend=1, structure=u, **cfg).conv_solve().T).real
 
     assert np.isfinite(float(jax.grad(total)(jnp.asarray(0.34))))
 
@@ -926,28 +929,28 @@ def test_a_frozen_geometry_answers_the_overlap_question_for_every_layer():
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    cfg = dict(period=(1.0, 1.0), wavelength=0.94, fto=(5, 5), n_top=1.0, n_bot=1.45,
+    cfg = dict(period=(1.0, 1.0), wavelength=0.94, fto=(5, 5), top=1.0, bot=2.1025,
                theta=0.0, phi=None, psi=np.pi / 2, thickness=(0.3,), normal_grid=256)
-    fixed = dict(type='rectangle', cx=0.70, cy=0.5, lx=0.26, ly=0.30, angle=0.0, n_index=2.1)
+    fixed = dict(type='rectangle', cx=0.70, cy=0.5, lx=0.26, ly=0.30, angle=0.0, material=4.41)
 
-    def ucell(cx):
-        return [dict(n_base=1.0, combine='paint', shapes=[
-            dict(type='rectangle', cx=cx, cy=0.5, lx=0.26, ly=0.30, angle=0.0, n_index=3.48),
+    def structure(cx):
+        return [dict(background=1.0, combine='paint', shapes=[
+            dict(type='rectangle', cx=cx, cy=0.5, lx=0.26, ly=0.30, angle=0.0, material=12.1104),
             dict(fixed)])]
 
     # the rods meet at cx = 0.44: 0.44 + 0.13 == 0.70 - 0.13
     for cx, overlapping in ((0.42, False), (0.46, True)):
-        frozen = wavebit.rcwa(backend=0, ucell=ucell(cx), **cfg).freeze_geometry()
+        frozen = wavebit.rcwa(backend=0, structure=structure(cx), **cfg).freeze_geometry()
         assert frozen.boundary_plans is not None, cx
         assert (frozen.boundary_plans[0] is not None) is overlapping, cx
 
         def total(v):
-            return jnp.sum(wavebit.rcwa(backend=1, ucell=ucell(v), **cfg)
+            return jnp.sum(wavebit.rcwa(backend=1, structure=structure(v), **cfg)
                            .conv_solve(geometry=frozen).T).real
 
         analytic = float(jax.grad(total)(jnp.asarray(cx)))
         h = 1e-4
         step = [float(np.sum(np.asarray(
-            wavebit.rcwa(backend=0, ucell=ucell(cx + s * h), **cfg).conv_solve().T)).real)
+            wavebit.rcwa(backend=0, structure=structure(cx + s * h), **cfg).conv_solve().T)).real)
             for s in (1, -1)]
         assert analytic == pytest.approx((step[0] - step[1]) / (2 * h), rel=3e-2), cx

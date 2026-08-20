@@ -6,6 +6,17 @@ The two ``ellipse`` entries it writes are kept for the record but are no longer 
 against: the legacy ellipse decomposition did not converge under refinement, so
 test_modeler_core.py holds only the rectangles to parity and test_modeler_ellipse.py checks
 the ellipse against geometry instead.
+
+**``INSTRUCTIONS`` is stated in permittivity, and the golden it produced is not.** The eleven
+``*__cell`` arrays in ``golden_legacy_modeler.npz`` literally hold refractive index, because
+that is what a block modeler painted in 2026-08 and this file cannot be rerun to say otherwise.
+They are squared at the comparison instead (``tests/test_modeler_core.py``), which is the trade
+this directory's README prescribes for a golden that has outlived its generator.
+
+The list is migrated all the same, for the same reason as ``gen_goldens.py``: it has a twin in
+``test_modeler_core.py`` marked "must stay identical", and that twin is live code driving
+today's modeler. The pair is worth more than the fiction that these lines are a transcript of
+the 2026-08 run — the refusal below already says they are not.
 """
 # ---------------------------------------------------------------------------------------
 # REFUSES TO RUN, and the refusal is the point.
@@ -37,7 +48,11 @@ import numpy as np
 import wavebit
 
 PERIOD = [300.0, 300.0]
-SI, SIO2, SI3N4 = 3.638751670074983, 1.4518, 2.0056
+# Permittivities, at the indices these three materials have at 900 nm: n = 3.638751670074983,
+# 1.4518 and 2.0056 respectively. Written as the squared doubles rather than as
+# `eps_from_index(n)` because the copy in `test_modeler_core.py` has to match this one
+# character for character, and a helper call is one more thing for the two to disagree about.
+SI, SIO2, SI3N4 = 13.24051371647348, 2.10772324, 4.02243136
 
 INSTRUCTIONS = {
     'rect_1d': [[SI3N4, [['rectangle', 50, 150, 31, 300, SI, 0, 0, 0]]], [SI, []]],
@@ -51,8 +66,8 @@ INSTRUCTIONS = {
 out = {}
 for name, instr in INSTRUCTIONS.items():
     solver = wavebit.rcwa(backend=0, period=PERIOD, thickness=[205.0, 100.0], fto=[3, 3],
-                          n_top=1.0, n_bot=1.0, wavelength=900.0, psi=np.pi / 4, ucell=instr)
-    info = solver.modeling_block_instruction(solver.ucell)
+                          top=1.0, bot=1.0, wavelength=900.0, psi=np.pi / 4, structure=instr)
+    info = solver.modeling_block_instruction(solver.structure)
     out[f'{name}__n_layers'] = np.array(len(info))
     for i, (cell, x, y) in enumerate(info):
         out[f'{name}__L{i}__cell'] = np.asarray(cell)
@@ -62,10 +77,13 @@ for name, instr in INSTRUCTIONS.items():
     out[f'{name}__de_ri'] = np.asarray(res.res.R)
     out[f'{name}__de_ti'] = np.asarray(res.res.T)
 
-# rectangle_no_approximation / draw, exercised by test_fixes
+# rectangle_no_approximation / draw, exercised by test_fixes.
+# `material=4.0` is the index-2 rectangle this has always drawn; the keyword was `base=` and
+# took an index. The `draw__L0__cell` array in the golden therefore holds 1 and 2, not 1 and 4
+# — the eleventh of the eleven index-valued cells named in the docstring above.
 solver = wavebit.rcwa(backend=0, period=[1000.0, 1000.0], thickness=[100.0], fto=[2, 2],
-                      wavelength=900.0, ucell=[[1.0, []]])
-elem = solver.modeler.rectangle_no_approximation(cx=500, cy=500, lx=200, ly=200, base=2.0)
+                      wavelength=900.0, structure=[[1.0, []]])
+elem = solver.modeler.rectangle_no_approximation(cx=500, cy=500, lx=200, ly=200, material=4.0)
 drawn = solver.modeler.draw([[1.0, elem]])
 for i, (cell, x, y) in enumerate(drawn):
     out[f'draw__L{i}__cell'] = np.asarray(cell)

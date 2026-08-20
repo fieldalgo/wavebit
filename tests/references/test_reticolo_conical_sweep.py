@@ -45,6 +45,25 @@ def _golden():
     return np.load(GOLDEN_PATH)
 
 
+def _scene(g):
+    """The golden's scene as the solver now states one: ``structure`` / ``top`` / ``bot``, in
+    **permittivity**.
+
+    The stored arrays are called ``ucell`` / ``n_top`` / ``n_bot`` and hold a refractive
+    **index**. That is not an oversight left lying around — this golden is a slice of a
+    2024-09-09 RETICOLO run, and its generator cannot re-emit it under the new names: the 7-19 MB
+    ``.mat`` inputs are not in this repository and the sweep is not reproducible without them.
+    A golden that cannot be regenerated is converted at the *read*, which is the same trade
+    ``tests/test_modeler_core.py`` makes for the legacy modeler cells.
+
+    Squaring rather than renaming is the entire content of this function, and it is not
+    cosmetic. ``n_bot = 5`` is ``eps = 25``; handing 5 to ``bot=`` describes a substrate of
+    index 2.24 instead — a legal medium, energy-conserving, and not the one RETICOLO swept.
+    """
+    return dict(structure=np.asarray(g['ucell']) ** 2,
+                top=float(g['n_top']) ** 2, bot=float(g['n_bot']) ** 2)
+
+
 def _grid(g):
     """``(propagating, evanescent)`` index pairs, subsampled."""
     kx, ky = g['kx'], g['ky']
@@ -62,9 +81,9 @@ def _solve(g, i, j):
     kx, ky = g['kx'], g['ky']
     theta = np.arcsin(np.sqrt(kx[i] ** 2 + ky[j] ** 2 + 0.0001, dtype=np.complex128))
     phi = np.arctan(ky[j] / (kx[i] + 0.0001), dtype=np.complex128)
-    res = wavebit.rcwa(backend=0, psi=np.pi / 2, n_top=float(g['n_top']), n_bot=float(g['n_bot']),
+    res = wavebit.rcwa(backend=0, psi=np.pi / 2, **_scene(g),
                          theta=theta, phi=phi, fto=[FTO], wavelength=float(g['wavelength']),
-                         period=list(g['period']), ucell=g['ucell'],
+                         period=list(g['period']),
                          thickness=list(g['thickness']),
                          fourier_coefficients='integrated',
                          factorization='li').conv_solve()
@@ -149,10 +168,10 @@ def test_double_precision_agrees_across_backends_at_a_complex_angle(backend):
     phi = np.arctan(ky / (kx + 0.0001), dtype=np.complex128)
 
     def solve(bk):
-        res = wavebit.rcwa(backend=bk, psi=np.pi / 2, n_top=float(g['n_top']),
-                             n_bot=float(g['n_bot']), theta=theta, phi=phi, fto=[40],
+        res = wavebit.rcwa(backend=bk, psi=np.pi / 2, **_scene(g),
+                             theta=theta, phi=phi, fto=[40],
                              wavelength=float(g['wavelength']), period=list(g['period']),
-                             ucell=g['ucell'], thickness=list(g['thickness']),
+                             thickness=list(g['thickness']),
                              type_complex=0, fourier_coefficients='integrated',
                              factorization='li').conv_solve()
         return complex(np.asarray(res.res_te_inc.r_s).ravel()[40])
@@ -175,12 +194,15 @@ def test_uniform_stack_does_not_diffract_at_a_complex_angle():
     stack legitimately exceeds unity (1.01 at ``pi/2 + 0.3j``). Orders that must be identically
     zero are the honest invariant.
     """
-    uniform = np.full_like(np.asarray(_golden()['ucell'], dtype=float), 2.5)
     g = _golden()
-    res = wavebit.rcwa(backend=0, psi=np.pi / 2, n_top=float(g['n_top']), n_bot=float(g['n_bot']),
+    scene = _scene(g)
+    # 6.25 is the permittivity of the index-2.5 slab this test has always used; the value is
+    # arbitrary, but it has to be *a permittivity* or the slab is not the one described.
+    scene['structure'] = np.full_like(np.asarray(scene['structure'], dtype=float), 6.25)
+    res = wavebit.rcwa(backend=0, psi=np.pi / 2, **scene,
                          theta=np.complex128(0.5 + 0.3j), phi=np.complex128(0.3),
                          fto=[FTO], wavelength=float(g['wavelength']),
-                         period=list(g['period']), ucell=uniform,
+                         period=list(g['period']),
                          thickness=list(g['thickness']),
                          fourier_coefficients='integrated',
                          factorization='li').conv_solve()

@@ -1,6 +1,6 @@
 """Backside illumination — ``incidence_side='bottom'`` — against oracles that predate it.
 
-The contract under test (``docs/conventions.md``): ``n_top`` / ``n_bot`` / ``ucell`` order are
+The contract under test (``docs/conventions.md``): ``top`` / ``bot`` / ``structure`` order are
 *scene* labels and never move; ``incidence_side`` selects the illumination only. Results are
 incidence-relative — ``R`` is power back into the incidence medium, ``T`` power through the
 far side, the amplitudes keep the Fresnel contract, and ``theta`` / ``phi`` are measured
@@ -33,8 +33,13 @@ import numpy as np
 import pytest
 
 import wavebit
+from wavebit import eps_from_index
 
 from test_lossy_media import analytic_r, analytic_t
+
+# Same arrangement as ``test_lossy_media``: the stacks stay lists of refractive INDEX, since
+# the Airy oracles imported above are written that way, and `eps_from_index` is applied where
+# each one enters wavebit.
 
 WL = 500.0
 AU = 0.18 + 3.0j          # gold at 500nm — strongly absorbing
@@ -55,26 +60,34 @@ IDS = [f'{p}_theta{t}' for p, t in INCIDENCE]
 
 # A 1D grating stack that is asymmetric in z, with an absorbing layer, so nothing about it
 # can hide a side mix-up: two patterned layers of different duty cycle and index.
-_GRATING = np.array([[[3.0] * 6 + [1.0] * 6], [[2.2 + 0.3j] * 8 + [1.0] * 4]])
-GRATING_KW = dict(backend=0, n_top=1.0, n_bot=2.0, fto=10, period=[0.7], wavelength=0.85,
-                  ucell=_GRATING, thickness=[0.15, 0.22])
+_GRATING = eps_from_index(np.array([[[3.0] * 6 + [1.0] * 6],
+                                    [[2.2 + 0.3j] * 8 + [1.0] * 4]]))
+#: The substrate's index, kept beside its permittivity: the reciprocity angle below is a
+#: Snell relation and needs the index, while the constructor takes the square.
+N_SUB = 2.0
+GRATING_KW = dict(backend=0, top=1.0, bot=eps_from_index(N_SUB), fto=10, period=[0.7],
+                  wavelength=0.85, structure=_GRATING, thickness=[0.15, 0.22])
 
-_GRATING_LOSSLESS = np.array([[[3.0] * 6 + [1.0] * 6], [[2.2] * 8 + [1.0] * 4]])
+_GRATING_LOSSLESS = eps_from_index(np.array([[[3.0] * 6 + [1.0] * 6],
+                                             [[2.2] * 8 + [1.0] * 4]]))
 
 
 def _solver(ns, ds, theta, tetm, path, algo, side):
     """A solver on the *scene* ``ns`` (top..bottom), illuminated from ``side``."""
     layers = ns[1:-1]
-    common = dict(backend=0, connecting_algo=algo, n_top=ns[0], n_bot=ns[-1], theta=theta,
+    common = dict(backend=0, connecting_algo=algo, top=eps_from_index(ns[0]),
+                  bot=eps_from_index(ns[-1]), theta=theta,
                   wavelength=WL, thickness=ds, incidence_side=side)
     if path == '1d':
         return wavebit.rcwa(tetm=tetm, fto=0, period=[WL * 2],
-                              ucell=np.array([[[n, n]] for n in layers]), **common)
+                              structure=eps_from_index(
+                                  np.array([[[n, n]] for n in layers])), **common)
     cell = ([[[n, n]] for n in layers] if path == 'conical'
             else [[[n, n], [n, n]] for n in layers])
     return wavebit.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0),
                           fto=[0, 0] if path == '2d' else 0,
-                          period=[WL * 2, WL * 2], ucell=np.array(cell), **common)
+                          period=[WL * 2, WL * 2],
+                          structure=eps_from_index(np.array(cell)), **common)
 
 
 def _amps(res, tetm):
@@ -160,7 +173,7 @@ def test_grating_transmittance_is_reciprocal_per_order(tetm):
     the bottom angle is the pairing reciprocity states (``k -> -k``); at normal incidence it
     degenerates to the plain equal-``T00`` statement, which is asserted too.
     """
-    kw = dict(GRATING_KW, ucell=_GRATING_LOSSLESS)
+    kw = dict(GRATING_KW, structure=_GRATING_LOSSLESS)
     fto = kw['fto']
 
     def T00(side, theta):
@@ -170,7 +183,7 @@ def test_grating_transmittance_is_reciprocal_per_order(tetm):
     assert T00('top', 0.0) == pytest.approx(T00('bottom', 0.0), abs=1e-12)
 
     th = 0.2
-    th_b = float(np.arcsin(np.sin(th) * kw['n_top'] / kw['n_bot']))
+    th_b = float(np.arcsin(np.sin(th) * 1.0 / N_SUB))     # Snell, in indices
     assert T00('top', th) == pytest.approx(T00('bottom', -th_b), abs=1e-12)
 
     res_t = wavebit.rcwa(tetm=tetm, theta=0.0, incidence_side='top', **kw).conv_solve()
@@ -227,8 +240,8 @@ def test_field_cell_comes_back_in_scene_coordinates(algo):
     s_b = wavebit.rcwa(incidence_side='bottom', **kw)
     _, cell_b = s_b.conv_solve_field(res_x=16, res_z=8)
 
-    kw_rev = dict(kw, ucell=GRATING_KW['ucell'][::-1], thickness=[0.22, 0.15],
-                  n_top=GRATING_KW['n_bot'], n_bot=GRATING_KW['n_top'])
+    kw_rev = dict(kw, structure=GRATING_KW['structure'][::-1], thickness=[0.22, 0.15],
+                  top=GRATING_KW['bot'], bot=GRATING_KW['top'])
     s_t = wavebit.rcwa(**kw_rev)
     _, cell_t = s_t.conv_solve_field(res_x=16, res_z=8)
 

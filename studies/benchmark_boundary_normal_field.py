@@ -56,8 +56,13 @@ WL = 0.777
 P = 2.0 * WL                    # wide enough that orders other than (0, 0) propagate
 NORMAL_GRID = 512
 PIX = P / NORMAL_GRID
+# Materials are **relative permittivity** throughout -- `top` / `bot` and every shape's
+# `material`. The scene is unchanged from the one the header's numbers were measured on: the
+# indices it was written in are converted here, at the point they are written down, rather
+# than folded into literals. `eps_from_index` is `n**2` and nothing else.
+EPS = wavebit.eps_from_index
 CFG = dict(period=[P, P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
-           wavelength=WL, n_top=1.0, n_bot=1.5)
+           wavelength=WL, top=1.0, bot=EPS(1.5))
 
 #: Half-width of the window, in normal-grid pixels, and how many points span it. The window has
 #: to be several pixels wide or the jumps are stepped over rather than averaged in; the point
@@ -68,22 +73,22 @@ N_POINTS = 25
 
 def _rect(cx, cy, lx, ly, angle, n):
     return dict(type='rectangle', cx=cx * P, cy=cy * P, lx=lx * P, ly=ly * P, angle=angle,
-                n_index=n)
+                material=EPS(n))
 
 
 def _circle(cx, cy, d, n):
-    return dict(type='circle', cx=cx * P, cy=cy * P, lx=d * P, n_index=n)
+    return dict(type='circle', cx=cx * P, cy=cy * P, lx=d * P, material=EPS(n))
 
 
 def two_rectangles(cx):
     """Two disjoint tilted rectangles; the first one's centre is the swept parameter."""
-    return [dict(n_base=1.0, combine='paint', shapes=[
+    return [dict(background=1.0, combine='paint', shapes=[
         dict(_rect(0.28, 0.30, 0.20, 0.15, 0.4, 3.0), cx=cx),
         _rect(0.68, 0.70, 0.20, 0.15, 0.9, 2.2)])]
 
 
 def two_circles(cx):
-    return [dict(n_base=1.0, combine='paint', shapes=[
+    return [dict(background=1.0, combine='paint', shapes=[
         dict(_circle(0.28, 0.30, 0.22, 3.0), cx=cx),
         _circle(0.70, 0.72, 0.20, 2.2)])]
 
@@ -92,7 +97,7 @@ CASES = {'two tilted rectangles': (two_rectangles, 0.28 * P, (8, 12)),
          'two circles': (two_circles, 0.28 * P, (8,))}
 
 
-def geometries(ucell):
+def geometries(structure):
     """The two frozen geometries the comparison needs, differing only in the normal field.
 
     A ``combine='paint'`` layer has to be frozen before it is traced -- whether the shapes
@@ -106,15 +111,15 @@ def geometries(ucell):
     and so swaps its normal field -- the permittivity coefficients are untouched, agreeing to
     1e-15 between the two, so the field is the only thing that moves.
     """
-    sampled = StaticGeometry(boundary_plans=[None for _ in ucell])
+    sampled = StaticGeometry(boundary_plans=[None for _ in structure])
     swapped = StaticGeometry(boundary_plans=[
-        _boundary.plan_layer(layer.get('shapes', []), (P, P)) for layer in ucell])
+        _boundary.plan_layer(layer.get('shapes', []), (P, P)) for layer in structure])
     return sampled, swapped
 
 
 def total_reflectance(build, geometry, cx, fto, backend=0):
-    solver = wavebit.rcwa(backend=backend, ucell=build(cx), fto=[fto, fto],
-                            normal_grid=NORMAL_GRID, **CFG)
+    solver = wavebit.rcwa(backend=backend, structure=build(cx), fto=[fto, fto],
+                          normal_grid=NORMAL_GRID, **CFG)
     result = solver.conv_solve(geometry=geometry)
     if backend == 1:
         import jax.numpy as jnp

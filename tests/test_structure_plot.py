@@ -35,17 +35,17 @@ from wavebit._core.draw import _render_block, structure_slice
 
 P = 1000.0
 COMMON = dict(backend=0, period=(P, P), thickness=(300.,), wavelength=900.,
-              n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0, fto=(9, 9))
+              top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, fto=(9, 9))
 
-#: A 200x160 rod of index 3.5 in a 1000x1000 cell of index 1: `<eps>` is
+#: A 200x160 rod of permittivity 12.25 in a 1000x1000 cell of permittivity 1: `<eps>` is
 #: `1 + 0.032*(12.25 - 1) = 1.36` wherever it is placed, since a translation is not a
 #: different structure. Every straddle case below is that same rod.
-ROD = dict(lx=200.0, ly=160.0, n=3.5)
+ROD = dict(lx=200.0, ly=160.0, eps=12.25)
 ROD_EPS = 1.36
 
 
 def rod_instruction(cx, cy):
-    return [[1.0, [['rectangle', cx, cy, ROD['lx'], ROD['ly'], ROD['n'], 0.0, 0, 0]]]]
+    return [[1.0, [['rectangle', cx, cy, ROD['lx'], ROD['ly'], ROD['eps'], 0.0, 0, 0]]]]
 
 
 def rod_truth(cx, cy, n):
@@ -55,7 +55,7 @@ def rod_truth(cx, cy, n):
     dx = (X - cx + P / 2) % P - P / 2
     dy = (Y - cy + P / 2) % P - P / 2
     return np.where((np.abs(dx) <= ROD['lx'] / 2) & (np.abs(dy) <= ROD['ly'] / 2),
-                    ROD['n'] ** 2, 1.0)
+                    ROD['eps'], 1.0)
 
 
 def naive_render(cell, x_list, y_list, n):
@@ -70,11 +70,12 @@ def naive_render(cell, x_list, y_list, n):
     s = (np.arange(n) + 0.5) * P / n
     ci = np.clip(np.searchsorted(xe, s, 'left'), 0, len(xe) - 1)
     ri = np.clip(np.searchsorted(ye, s, 'left'), 0, len(ye) - 1)
-    return (np.real(np.asarray(cell)) ** 2)[np.ix_(ri, ci)]
+    # `cell` is permittivity, as `_render_block` reads it -- no squaring on either side.
+    return np.real(np.asarray(cell))[np.ix_(ri, ci)]
 
 
 def block_layer(instruction):
-    solver = wavebit.rcwa(ucell=instruction, **COMMON)
+    solver = wavebit.rcwa(structure=instruction, **COMMON)
     return solver, solver.modeling_block_instruction(instruction)[0]
 
 
@@ -157,7 +158,7 @@ def test_a_solver_answer_does_not_move_with_the_rod():
     the failure this guards against is the *picture*'s failure -- dropping the wrapped part
     moves ``<eps>`` by 0.09, twelve orders above any BLAS-dependent noise here.
     """
-    totals = [float(np.sum(wavebit.rcwa(ucell=rod_instruction(cx, 500.0),
+    totals = [float(np.sum(wavebit.rcwa(structure=rod_instruction(cx, 500.0),
                                         **COMMON).conv_solve().R).real)
               for cx, _, _, _ in STRADDLES[:4]]
     assert np.ptp(totals) < 1e-11, totals
@@ -166,30 +167,30 @@ def test_a_solver_answer_does_not_move_with_the_rod():
 # --------------------------------------------------------------------------- the other paths
 
 def test_the_raster_path_is_the_raster():
-    """`ucell[layer]**2`, untouched, at its own resolution -- `n` is deliberately ignored.
+    """`structure[layer]`, untouched, at its own resolution -- `n` is deliberately ignored.
 
     Also pins the way up: row 0 is ``y = 0`` (``docs/conventions.md``), which is what makes
     ``origin='lower'`` line up with ``field_plot``'s top view.
     """
     N = 64
-    ucell = np.ones((2, N, N))
-    ucell[0, :N // 4, :] = 3.0            # a stripe at small y, in the top layer only
-    ucell[1] = 2.0
-    solver = wavebit.rcwa(ucell=ucell, **COMMON)
+    cell = np.ones((2, N, N))
+    cell[0, :N // 4, :] = 9.0             # a stripe at small y, in the top layer only
+    cell[1] = 4.0
+    solver = wavebit.rcwa(structure=cell, **COMMON)
 
     got = solver.structure_slice(layer=0, n=999)
     assert got.shape == (N, N)
-    np.testing.assert_array_equal(got.real, ucell[0] ** 2)
+    np.testing.assert_array_equal(got.real, cell[0])
     assert got[0, 0].real == 9.0 and got[-1, 0].real == 1.0
 
     assert solver.structure_slice(layer=1).real.mean() == pytest.approx(4.0)
 
 
-def test_layer_is_indexed_the_way_ucell_is():
+def test_layer_is_indexed_the_way_the_structure_is():
     """0 is the layer light meets first, on every path -- and out of range says so."""
-    shapes = [dict(type='circle', cx=500.0, cy=500.0, lx=200.0, n_index=3.0)]
-    ucell = [dict(n_base=1.0, shapes=[]), dict(n_base=1.0, shapes=shapes)]
-    solver = wavebit.rcwa(ucell=ucell, **COMMON)
+    shapes = [dict(type='circle', cx=500.0, cy=500.0, lx=200.0, material=9.0)]
+    layers = [dict(background=1.0, shapes=[]), dict(background=1.0, shapes=shapes)]
+    solver = wavebit.rcwa(structure=layers, **COMMON)
 
     assert solver.structure_slice(layer=0, n=128).real.mean() == pytest.approx(1.0)
     assert solver.structure_slice(layer=1, n=128).real.mean() > 1.2
@@ -207,10 +208,10 @@ def test_the_analytic_sampler_agrees_with_its_own_dc_coefficient(lattice):
     this layer has a rectangle at ``cy = 650`` with a 300 length across a sheared cell, so it
     does.
     """
-    shapes = [dict(type='circle', cx=300.0, cy=300.0, lx=260.0, n_index=3.5),
+    shapes = [dict(type='circle', cx=300.0, cy=300.0, lx=260.0, material=12.25),
               dict(type='rectangle', cx=740.0, cy=650.0, lx=300.0, ly=180.0,
-                   angle=0.45, n_index=2.2)]
-    solver = wavebit.rcwa(ucell=[dict(n_base=1.0, shapes=shapes)], lattice=lattice, **COMMON)
+                   angle=0.45, material=4.840000000000001)]
+    solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], lattice=lattice, **COMMON)
     fx, fy = int(solver.fto[0]), int(solver.fto[1])
     dc = assemble_eps_coeffs(xnp, shapes, 1.0, fx, fy, solver.period, xnp.complex128,
                              lattice=solver.lattice)[0][2 * fy, 2 * fx].real
@@ -225,8 +226,8 @@ def test_a_circle_is_read_through_shape_geometry():
     ``lx`` for a circle rather than to 0 or to 500. A second reader gets that wrong quietly --
     which is the defect that function was written to end.
     """
-    solver = wavebit.rcwa(ucell=[dict(n_base=1.0, shapes=[
-        dict(type='circle', cx=500.0, cy=500.0, lx=400.0, n_index=3.0)])], **COMMON)
+    solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=[
+        dict(type='circle', cx=500.0, cy=500.0, lx=400.0, material=9.0)])], **COMMON)
     area = np.pi * 200.0 ** 2 / (P * P)
     assert solver.structure_slice(n=1024).real.mean() == pytest.approx(
         1.0 + area * (9.0 - 1.0), rel=1e-3)
@@ -234,22 +235,22 @@ def test_a_circle_is_read_through_shape_geometry():
 
 # ------------------------------------------------------------------- painted, overlapping
 
-OVERLAP = [dict(type='rectangle', cx=430.0, cy=500.0, lx=300.0, ly=300.0, n_index=2.0),
-           dict(type='circle', cx=600.0, cy=520.0, lx=320.0, n_index=3.0)]
+OVERLAP = [dict(type='rectangle', cx=430.0, cy=500.0, lx=300.0, ly=300.0, material=4.0),
+           dict(type='circle', cx=600.0, cy=520.0, lx=320.0, material=9.0)]
 
 
-def loop_mean_eps(shapes, n_base=1.0):
+def loop_mean_eps(shapes, background=1.0):
     """`<eps>` straight off the boundary path's resolved loops -- areas, no sampling at all."""
     recs, regions = _b.plan_layer(shapes, (P, P))
     verts = [_b.shape_vertices(xnp, s, (P, P)) for s in shapes]
     vals = _c.eval_table(xnp, recs, verts)
-    total = n_base ** 2 * P * P
+    total = background * P * P
     for shape, region in zip(shapes, regions):
-        eps_s = complex(shape['n_index']).real ** 2
+        eps_s = complex(shape['material']).real
         for loop in region:
             V = np.asarray(_c.loop_verts(xnp, loop, vals), float)
             # No sign factor: a hole arrives wound clockwise, so its shoelace is negative.
-            total += (eps_s - n_base ** 2) * _c.signed_area(V)
+            total += (eps_s - background) * _c.signed_area(V)
     return total / (P * P)
 
 
@@ -262,7 +263,7 @@ def test_the_paint_renderer_matches_the_boundary_path_loops():
     n = 128 / 1024 / 2048 -- and that is what says the scanline fill lands on the loops rather
     than merely averaging to them.
     """
-    solver = wavebit.rcwa(ucell=[dict(n_base=1.0, combine='paint', shapes=OVERLAP)], **COMMON)
+    solver = wavebit.rcwa(structure=[dict(background=1.0, combine='paint', shapes=OVERLAP)], **COMMON)
     want = loop_mean_eps(OVERLAP)
 
     assert solver.structure_slice(n=64, band_limited=True).real.mean() == pytest.approx(
@@ -277,8 +278,8 @@ def test_painting_and_adding_are_drawn_as_the_different_structures_they_are():
     the overlap is drawn at ``eps_a + eps_b - eps_base`` instead of ``eps_b``, which looks like
     a structure someone might have meant.
     """
-    paint = wavebit.rcwa(ucell=[dict(n_base=1.0, combine='paint', shapes=OVERLAP)], **COMMON)
-    add = wavebit.rcwa(ucell=[dict(n_base=1.0, combine='add', shapes=OVERLAP)], **COMMON)
+    paint = wavebit.rcwa(structure=[dict(background=1.0, combine='paint', shapes=OVERLAP)], **COMMON)
+    add = wavebit.rcwa(structure=[dict(background=1.0, combine='add', shapes=OVERLAP)], **COMMON)
 
     e_paint = paint.structure_slice(n=2048).real.mean()
     e_add = add.structure_slice(n=2048).real.mean()
@@ -296,9 +297,9 @@ def test_a_hole_is_drawn_as_a_hole():
     2.4256 where the geometry is 2.2371, which is what the solver itself did until the
     orientation stopped being carried in a separate field.
     """
-    shapes = [dict(type='rectangle', cx=500.0, cy=500.0, lx=600.0, ly=600.0, n_index=2.0),
-              dict(type='circle', cx=500.0, cy=500.0, lx=200.0, n_index=3.0)]
-    solver = wavebit.rcwa(ucell=[dict(n_base=1.0, combine='paint', shapes=shapes)], **COMMON)
+    shapes = [dict(type='rectangle', cx=500.0, cy=500.0, lx=600.0, ly=600.0, material=4.0),
+              dict(type='circle', cx=500.0, cy=500.0, lx=200.0, material=9.0)]
+    solver = wavebit.rcwa(structure=[dict(background=1.0, combine='paint', shapes=shapes)], **COMMON)
 
     hole_area = np.pi * 100.0 ** 2
     geometry = 1.0 + 3.0 * (360000.0 - hole_area) / (P * P) + 8.0 * hole_area / (P * P)
@@ -324,16 +325,16 @@ def test_band_limited_converges_on_the_geometry():
     the geometry does not fall with ``fto`` at all, so monotone convergence is what pins the
     convention here without restating it.
     """
-    shapes = [dict(type='circle', cx=300.0, cy=300.0, lx=260.0, n_index=3.5),
+    shapes = [dict(type='circle', cx=300.0, cy=300.0, lx=260.0, material=12.25),
               dict(type='rectangle', cx=740.0, cy=650.0, lx=300.0, ly=180.0,
-                   angle=0.45, n_index=2.2)]
+                   angle=0.45, material=4.840000000000001)]
     cfg = {k: v for k, v in COMMON.items() if k != 'fto'}
-    geometry = wavebit.rcwa(ucell=[dict(n_base=1.0, shapes=shapes)], fto=(3, 3),
+    geometry = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], fto=(3, 3),
                             **cfg).structure_slice(n=512).real
 
     errors = []
     for fto in (3, 9, 25):
-        solver = wavebit.rcwa(ucell=[dict(n_base=1.0, shapes=shapes)], fto=(fto, fto), **cfg)
+        solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], fto=(fto, fto), **cfg)
         band = solver.structure_slice(n=512, band_limited=True).real
         errors.append(np.linalg.norm(band - geometry) / np.linalg.norm(geometry))
         # `<eps>` is converged from the start; the picture is not. That gap is the warning.
@@ -349,10 +350,10 @@ def test_the_truncated_series_leaves_the_material_range():
     Nothing is wrong with the solve; this is what a truncated transform of a discontinuous
     function looks like, and it is the reason ``band_limited`` is not the default.
     """
-    shapes = [dict(type='circle', cx=300.0, cy=300.0, lx=260.0, n_index=3.5),
+    shapes = [dict(type='circle', cx=300.0, cy=300.0, lx=260.0, material=12.25),
               dict(type='rectangle', cx=740.0, cy=650.0, lx=300.0, ly=180.0,
-                   angle=0.45, n_index=2.2)]
-    solver = wavebit.rcwa(ucell=[dict(n_base=1.0, shapes=shapes)], **COMMON)
+                   angle=0.45, material=4.840000000000001)]
+    solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], **COMMON)
     band = solver.structure_slice(n=512, band_limited=True).real
 
     assert band.min() == pytest.approx(-0.186, abs=5e-3)
@@ -378,8 +379,8 @@ def test_the_block_path_draws_the_blocks_not_the_rectangle():
 
     diffs = []
     for n_split in (4, 16, 64):
-        instruction = [[1.0, [['rectangle', cx, cy, lx, ly, 3.5, angle, n_split, n_split]]]]
-        drawn = structure_slice(wavebit.rcwa(ucell=instruction, **COMMON), n=n).real > 1.5
+        instruction = [[1.0, [['rectangle', cx, cy, lx, ly, 12.25, angle, n_split, n_split]]]]
+        drawn = structure_slice(wavebit.rcwa(structure=instruction, **COMMON), n=n).real > 1.5
         diffs.append(np.logical_xor(drawn, exact).sum() / exact.sum())
 
     np.testing.assert_allclose(diffs, [0.077, 0.019, 0.005], atol=3e-3)
@@ -388,8 +389,10 @@ def test_the_block_path_draws_the_blocks_not_the_rectangle():
 
 def test_an_absorbing_layer_keeps_its_imaginary_part():
     """`structure_slice` returns complex; taking the real part is the *plot*'s decision."""
-    solver = wavebit.rcwa(ucell=[dict(n_base=1.0, shapes=[
-        dict(type='circle', cx=500.0, cy=500.0, lx=300.0, n_index=3.5 + 0.4j)])], **COMMON)
+    solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=[
+        # (3.5 + 0.4j)**2 -- the same absorbing medium, as permittivity.
+        dict(type='circle', cx=500.0, cy=500.0, lx=300.0,
+             material=12.09 + 2.8000000000000003j)])], **COMMON)
     values = solver.structure_slice(n=128)
 
     assert np.abs(values.imag).max() == pytest.approx(2.0 * 3.5 * 0.4, rel=1e-12)
@@ -398,7 +401,7 @@ def test_an_absorbing_layer_keeps_its_imaginary_part():
 
 
 def test_show_takes_one_of_two_words():
-    solver = wavebit.rcwa(ucell=np.ones((1, 8, 8)) * 2.0, **COMMON)
+    solver = wavebit.rcwa(structure=np.ones((1, 8, 8)) * 4.0, **COMMON)   # eps 4 is n 2
     np.testing.assert_allclose(solver.structure_slice(show='eps').real, 4.0)
     np.testing.assert_allclose(solver.structure_slice(show='n').real, 2.0)
     with pytest.raises(ValueError, match="'eps' or 'n'"):
@@ -409,13 +412,13 @@ def test_it_draws():
     """The drawing half, once per coordinate system. Presentation, so it only has to run."""
     plt = pytest.importorskip('matplotlib.pyplot')
     plt.switch_backend('Agg')
-    shapes = [dict(type='circle', cx=300.0, cy=300.0, lx=260.0, n_index=3.5)]
+    shapes = [dict(type='circle', cx=300.0, cy=300.0, lx=260.0, material=12.25)]
 
-    axis_aligned = wavebit.rcwa(ucell=[dict(n_base=1.0, shapes=shapes)], **COMMON)
+    axis_aligned = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], **COMMON)
     ax = axis_aligned.structure_plot(n=64)
     assert ax.images and not ax.collections          # imshow on an axis-aligned cell
 
-    skewed = wavebit.rcwa(ucell=[dict(n_base=1.0, shapes=shapes)],
+    skewed = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)],
                           lattice=[[P, P * 0.5], [0.0, P * 0.866]], **COMMON)
     ax = skewed.structure_plot(n=64)
     assert ax.collections and not ax.images          # pcolormesh on the parallelogram

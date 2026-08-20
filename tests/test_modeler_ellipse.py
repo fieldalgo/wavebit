@@ -39,7 +39,7 @@ def _f(v):
 
 def blocks(lx, ly, angle, n_split, cx=CX, cy=CY):
     """``[(y_lo, x_lo, y_hi, x_hi), ...]``, top block first."""
-    raw = Modeling(period=PERIOD).ellipse(cx, cy, lx, ly, 2.0, angle, n_split, n_split)
+    raw = Modeling(period=PERIOD).ellipse(cx, cy, lx, ly, 4.0, angle, n_split, n_split)
     return [(_f(b[0][0]), _f(b[0][1]), _f(b[1][0]), _f(b[1][1])) for b in raw]
 
 
@@ -178,21 +178,24 @@ def test_an_unrotated_ellipse_survives_a_sampling_that_hits_its_vertex(n_split):
 
 def test_split_counts_below_two_are_rejected():
     with pytest.raises(ValueError, match='at least 2 slabs'):
-        Modeling(period=PERIOD).ellipse(CX, CY, 90.0, 60.0, 2.0, 0.4, 1, 1)
+        Modeling(period=PERIOD).ellipse(CX, CY, 90.0, 60.0, 4.0, 0.4, 1, 1)
 
 
 # ------------------------------------------------------------------------------- through solve
 
 SOLVE_KW = dict(period=[700.0, 700.0], thickness=[400.0], fto=[4, 4],
-                n_top=1.0, n_bot=1.0, wavelength=500.0, psi=np.pi / 4)
-ELLIPSE = dict(cx=350.0, cy=350.0, lx=400.0, ly=250.0, angle=0.5, n_base=1.0, n_index=3.0)
+                top=1.0, bot=1.0, wavelength=500.0, psi=np.pi / 4)
+#: One ellipse, described once and reached through four paths. ``material`` / ``background``
+#: are permittivities: 9.0 is the index 3.0 this rod used to be written with.
+ELLIPSE = dict(cx=350.0, cy=350.0, lx=400.0, ly=250.0, angle=0.5, background=1.0,
+               material=9.0)
 
 
 def solve_vector(n_split, backend=0):
     e = ELLIPSE
-    ucell = [[e['n_base'], [['ellipse', e['cx'], e['cy'], e['lx'], e['ly'], e['n_index'],
+    structure = [[e['background'], [['ellipse', e['cx'], e['cy'], e['lx'], e['ly'], e['material'],
                              e['angle'], n_split, n_split]]]]
-    T = wavebit.rcwa(backend=backend, ucell=ucell, **SOLVE_KW).conv_solve().T
+    T = wavebit.rcwa(backend=backend, structure=structure, **SOLVE_KW).conv_solve().T
     return float(np.sum(np.asarray(T)))
 
 
@@ -220,9 +223,9 @@ def test_converged_efficiency_matches_a_raster_of_the_same_ellipse():
     X, Y = np.meshgrid(axis, axis)
     inside = implicit(X, Y, ELLIPSE['lx'], ELLIPSE['ly'], ELLIPSE['angle'],
                       ELLIPSE['cx'], ELLIPSE['cy']) <= 1.0
-    ucell = np.where(inside, ELLIPSE['n_index'], ELLIPSE['n_base'])[None]
+    structure = np.where(inside, ELLIPSE['material'], ELLIPSE['background'])[None]
 
-    raster = float(np.sum(wavebit.rcwa(backend=0, ucell=ucell,
+    raster = float(np.sum(wavebit.rcwa(backend=0, structure=structure,
                                          fourier_coefficients='sampled', factorization='li',
                                          **SOLVE_KW).conv_solve().T))
 
@@ -243,14 +246,14 @@ def test_converged_efficiency_matches_the_analytic_shape_path():
     e = ELLIPSE
 
     def analytic(angle):
-        ucell = [dict(n_base=e['n_base'],
+        structure = [dict(background=e['background'],
                       shapes=[dict(type='ellipse', cx=e['cx'], cy=e['cy'], lx=e['lx'],
-                                   ly=e['ly'], angle=angle, n_index=e['n_index'])])]
-        return float(np.sum(wavebit.rcwa(backend=0, ucell=ucell, **kw).conv_solve().T))
+                                   ly=e['ly'], angle=angle, material=e['material'])])]
+        return float(np.sum(wavebit.rcwa(backend=0, structure=structure, **kw).conv_solve().T))
 
-    ucell = [[e['n_base'], [['ellipse', e['cx'], e['cy'], e['lx'], e['ly'], e['n_index'],
+    structure = [[e['background'], [['ellipse', e['cx'], e['cy'], e['lx'], e['ly'], e['material'],
                              e['angle'], 240, 240]]]]
-    vector = float(np.sum(wavebit.rcwa(backend=0, ucell=ucell, **kw).conv_solve().T))
+    vector = float(np.sum(wavebit.rcwa(backend=0, structure=structure, **kw).conv_solve().T))
 
     assert vector == pytest.approx(analytic(e['angle']), rel=0.01)
     assert abs(vector - analytic(-e['angle'])) > 10 * abs(vector - analytic(e['angle']))
@@ -272,11 +275,11 @@ def _grad_and_difference(param, value, step, angle, n_split):
         args.update(overrides)
         args = {k: v if torch.is_tensor(v) else torch.tensor(v, dtype=torch.float64)
                 for k, v in args.items()}
-        ucell = [[ELLIPSE['n_base'],
+        structure = [[ELLIPSE['background'],
                   [['ellipse', args['cx'], args['cy'], args['lx'], args['ly'],
-                    ELLIPSE['n_index'], args['angle'], n_split, n_split]]]]
+                    ELLIPSE['material'], args['angle'], n_split, n_split]]]]
         kw = dict(SOLVE_KW, fto=[3, 3])
-        return torch.sum(wavebit.rcwa(backend=2, ucell=ucell, **kw).conv_solve().T)
+        return torch.sum(wavebit.rcwa(backend=2, structure=structure, **kw).conv_solve().T)
 
     p = torch.tensor(value, dtype=torch.float64, requires_grad=True)
     total({param: p}).backward()

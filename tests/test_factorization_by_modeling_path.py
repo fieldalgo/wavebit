@@ -30,24 +30,25 @@ import pytest
 import wavebit
 from wavebit._core.enums import Factorization
 
-KW = dict(backend=0, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+KW = dict(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
           fto=[4, 4], period=[1.0, 1.0], wavelength=1.1, thickness=[0.3])
 
 # One structure per modeling path, as close to the same circle as each path can state it.
-# `modeling_type` is inferred from the type of `ucell`, never passed. A `circle` takes `lx`
+# `modeling_type` is inferred from the type of `structure`, never passed. A `circle` takes `lx`
 # alone -- passing `ly` to one is refused by `analytic.check_shape_spec`.
-SMOOTH = [{'n_base': 1.0,
+# Permittivity throughout: 6.25 is the index 2.5 all three used to be written with.
+SMOOTH = [{'background': 1.0,
            'shapes': [{'type': 'circle', 'cx': 0.5, 'cy': 0.5,
-                       'lx': 0.6, 'n_index': 2.5}]}]
-BLOCK = [[1.0, [['ellipse', 0.5, 0.5, 0.6, 0.6, 2.5, 0.0, 24, 24]]]]
+                       'lx': 0.6, 'material': 6.25}]}]
+BLOCK = [[1.0, [['ellipse', 0.5, 0.5, 0.6, 0.6, 6.25, 0.0, 24, 24]]]]
 
 _N = 32
 _axis = (np.arange(_N) + 0.5) / _N - 0.5
 _X, _Y = np.meshgrid(_axis, _axis)
 RASTER = np.ones((1, _N, _N))
-RASTER[0, _X ** 2 + _Y ** 2 <= 0.3 ** 2] = 2.5
+RASTER[0, _X ** 2 + _Y ** 2 <= 0.3 ** 2] = 6.25
 
-UCELLS = {'smooth': SMOOTH, 'block': BLOCK, 'raster': RASTER}
+STRUCTURES = {'smooth': SMOOTH, 'block': BLOCK, 'raster': RASTER}
 
 #: The rule each path implements, and therefore the one an untouched default resolves to.
 IMPLEMENTED = {'smooth': 'nvf', 'block': 'li', 'raster': 'li'}
@@ -58,7 +59,7 @@ UNAVAILABLE = {'smooth': 'li', 'block': 'nvf'}
 
 
 def solver(path, **strategy):
-    return wavebit.rcwa(ucell=UCELLS[path], **KW, **strategy)
+    return wavebit.rcwa(structure=STRUCTURES[path], **KW, **strategy)
 
 
 def totals(path, **strategy):
@@ -149,7 +150,7 @@ def test_a_request_is_refused_however_it_is_spelled(spelling):
     wrong reason -- or, written straight onto the private attribute, silently substitute.
     """
     with pytest.raises(NotImplementedError, match="factorization='li'"):
-        wavebit.rcwa(ucell=SMOOTH, factorization=spelling, **KW).conv_solve()
+        wavebit.rcwa(structure=SMOOTH, factorization=spelling, **KW).conv_solve()
 
 
 #: How each refusal is expected to name the rule the path *does* use. Matched as a phrase
@@ -168,18 +169,18 @@ def test_the_refusal_names_the_rule_the_path_does_use(path, rule):
 # A painted layer whose shapes actually overlap is still `modeling_type=2`, but it does not
 # reach `to_conv_mat_smooth_nvf` at all: `to_conv_mat_smooth_layers` resolves the painting into
 # disjoint polygons and transforms those instead (`boundary.to_conv_mat_boundary_layer`).
-PAINTED_OVERLAP = [{'n_base': 1.0, 'combine': 'paint', 'shapes': [
-    {'type': 'rectangle', 'cx': 0.45, 'cy': 0.5, 'lx': 0.4, 'ly': 0.4, 'n_index': 2.0},
-    {'type': 'rectangle', 'cx': 0.60, 'cy': 0.5, 'lx': 0.4, 'ly': 0.4, 'n_index': 3.0}]}]
+PAINTED_OVERLAP = [{'background': 1.0, 'combine': 'paint', 'shapes': [
+    {'type': 'rectangle', 'cx': 0.45, 'cy': 0.5, 'lx': 0.4, 'ly': 0.4, 'material': 4.0},
+    {'type': 'rectangle', 'cx': 0.60, 'cy': 0.5, 'lx': 0.4, 'ly': 0.4, 'material': 9.0}]}]
 
 
 def test_the_boundary_sub_path_is_classified_and_refused_like_the_rest_of_smooth():
     """The polygon route is the same path by every tell that matters, so it must refuse alike."""
-    s = wavebit.rcwa(ucell=PAINTED_OVERLAP, **KW)
+    s = wavebit.rcwa(structure=PAINTED_OVERLAP, **KW)
     assert s.factorization == 'nvf'
     assert sum(m is not None for m in s._conv_matrices()) == 5
     with pytest.raises(NotImplementedError, match="factorization='li'"):
-        wavebit.rcwa(ucell=PAINTED_OVERLAP, factorization='li', **KW).conv_solve()
+        wavebit.rcwa(structure=PAINTED_OVERLAP, factorization='li', **KW).conv_solve()
 
 
 def test_the_smooth_refusal_names_the_route_the_refused_layer_actually_takes():
@@ -190,7 +191,7 @@ def test_the_smooth_refusal_names_the_route_the_refused_layer_actually_takes():
     run. Nothing but a test keeps message text honest, hence this one.
     """
     with pytest.raises(NotImplementedError, match='to_conv_mat_boundary_layer'):
-        wavebit.rcwa(ucell=PAINTED_OVERLAP, factorization='li', **KW).conv_solve()
+        wavebit.rcwa(structure=PAINTED_OVERLAP, factorization='li', **KW).conv_solve()
     with pytest.raises(NotImplementedError, match='to_conv_mat_smooth_nvf'):
         totals('smooth', factorization='li')
 
@@ -241,7 +242,7 @@ def test_the_refusal_holds_on_every_backend(name, code, path, rule):
     one of the three had grown its own copy."""
     pytest.importorskip(name)
     with pytest.raises(NotImplementedError):
-        wavebit.rcwa(ucell=UCELLS[path], **dict(KW, backend=code),
+        wavebit.rcwa(structure=STRUCTURES[path], **dict(KW, backend=code),
                        factorization=rule).conv_solve()
 
 
@@ -256,8 +257,8 @@ def test_a_skewed_smooth_cell_no_longer_has_to_spell_out_nvf():
     and every skewed smooth-path run had to pass ``factorization='nvf'`` to talk it down.
     """
     hexagonal = np.array([[1.0, 0.5], [0.0, np.sqrt(3) / 2]])
-    default = wavebit.rcwa(ucell=SMOOTH, lattice=hexagonal, **KW)
-    spelled_out = wavebit.rcwa(ucell=SMOOTH, lattice=hexagonal, factorization='nvf', **KW)
+    default = wavebit.rcwa(structure=SMOOTH, lattice=hexagonal, **KW)
+    spelled_out = wavebit.rcwa(structure=SMOOTH, lattice=hexagonal, factorization='nvf', **KW)
     assert default.factorization == 'nvf'
     assert (float(np.sum(default.conv_solve().T)) ==
             float(np.sum(spelled_out.conv_solve().T)))
@@ -267,13 +268,13 @@ def test_a_skewed_raster_cell_still_refuses_li():
     """The neighbouring refusal is untouched: on a raster, ``'li'`` really is the rule asked for."""
     hexagonal = np.array([[1.0, 0.5], [0.0, np.sqrt(3) / 2]])
     with pytest.raises(NotImplementedError, match="factorization='nvf'"):
-        wavebit.rcwa(ucell=RASTER, lattice=hexagonal, **KW).conv_solve()
+        wavebit.rcwa(structure=RASTER, lattice=hexagonal, **KW).conv_solve()
 
 
 def test_a_skewed_block_cell_reports_the_lattice_first_not_the_keyword():
     """Two true refusals apply at once here, and the order between them is load-bearing.
 
-    A block ucell on a skewed cell is unbuildable *whatever* rule is named — the modeler
+    A block structure on a skewed cell is unbuildable *whatever* rule is named — the modeler
     rasterises onto a rectangular grid of its own. So naming the keyword instead would send
     the user to change the one thing that cannot help. `_conv_matrices` therefore checks the
     lattice before it reads the rule, and this pins that: with the refusals swapped, the
@@ -282,7 +283,7 @@ def test_a_skewed_block_cell_reports_the_lattice_first_not_the_keyword():
     """
     hexagonal = np.array([[1.0, 0.5], [0.0, np.sqrt(3) / 2]])
     with pytest.raises(NotImplementedError, match='block modeler'):
-        wavebit.rcwa(ucell=BLOCK, lattice=hexagonal, factorization='nvf', **KW).conv_solve()
+        wavebit.rcwa(structure=BLOCK, lattice=hexagonal, factorization='nvf', **KW).conv_solve()
 
 
 def test_freezing_gives_the_same_diagnosis_the_solve_would():
@@ -291,10 +292,10 @@ def test_freezing_gives_the_same_diagnosis_the_solve_would():
     ``freeze_geometry`` refuses the same two things in the same order as ``_conv_matrices``.
     Before that, the keyword check landed first here and the lattice check first there, so a
     skewed block cell was told to fix its ``factorization`` if it froze and to fix its
-    ``ucell`` if it solved — for one structure that has to change its ``ucell`` either way.
+    ``structure`` if it solved — for one scene that has to change its ``structure`` either way.
     """
     hexagonal = np.array([[1.0, 0.5], [0.0, np.sqrt(3) / 2]])
-    s = wavebit.rcwa(ucell=BLOCK, lattice=hexagonal, factorization='nvf', **KW)
+    s = wavebit.rcwa(structure=BLOCK, lattice=hexagonal, factorization='nvf', **KW)
     with pytest.raises(NotImplementedError, match='block modeler') as frozen:
         s.freeze_geometry()
     with pytest.raises(NotImplementedError, match='block modeler') as solved:
@@ -305,9 +306,10 @@ def test_freezing_gives_the_same_diagnosis_the_solve_would():
 # --------------------------------------------------------------------------- through the spec
 
 SPEC = {
+    'version': '3',                 # a parsed document states its schema; see tests/test_spec.py
     'numerics': {'backend': 'numpy', 'fto': [4, 4]},
-    'stack': {'n_top': 1.0, 'n_bot': 1.0, 'period': [1.0, 1.0],
-              'layers': [{'thickness': 0.3, 'eps': SMOOTH[0]}]},
+    'stack': {'top': 1.0, 'bot': 1.0, 'period': [1.0, 1.0],
+              'layers': [{'thickness': 0.3, 'structure': SMOOTH[0]}]},
     'incidence': {'wavelength': 1.1, 'theta': 0.0, 'phi': 0.0, 'psi': 0.0},
 }
 

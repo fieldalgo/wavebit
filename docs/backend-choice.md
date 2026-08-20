@@ -7,7 +7,7 @@ Targets:
 - `studies/benchmark_backends.py` — the sweep this document reports
 - `wavebit/_core/geometry.py::StaticGeometry` — what a freeze records, and what its equality
   costs
-- `wavebit/_core/factorization.py::compression_indices`, `normal_field_for_ucell` — the two
+- `wavebit/_core/factorization.py::compression_indices`, `normal_field_for_raster` — the two
   raster decisions that must be taken eagerly
 - `wavebit/_core/modeler.py::_check_plan_still_fits` — the block record's staleness check
 - [`nvf-upsampling.md`](nvf-upsampling.md) — why NVF's cost fell between the first run of this
@@ -169,7 +169,8 @@ are the same event. Re-freezing every step converts a silent wrong answer into a
 
 ## Raster path — the design variable is the *permittivity grid*
 
-A binary raster, `d(sum de_ti)/d(ucell)`, swept across all three Fourier strategies.
+A binary permittivity raster, `d(sum de_ti)/d(structure)`, swept across all three Fourier
+strategies.
 
 | config | torch | jax eager | jit (one freeze) | jit (re-freeze) | compile | freeze |
 |---|---|---|---|---|---|---|

@@ -68,7 +68,7 @@ def test_the_reconstruction_has_not_drifted(name, tag, sfi):
 # ------------------------------------------------------- the frame the components live in
 
 FRAME_WL = 620.0
-FRAME_N = 1.5
+FRAME_EPS = 2.25                   # permittivity: the index 1.5 squared
 FRAME_D = [90.0, 260.0, 90.0]
 
 
@@ -128,12 +128,12 @@ FRAME_PATHS = {
 
 
 def _frame_cell(path, res_z, formulation=None):
-    one = np.array([[[1.0]], [[FRAME_N]], [[1.0]]])
+    one = np.array([[[1.0]], [[FRAME_EPS]], [[1.0]]])
     two = np.array([[[1.0, 1.0], [1.0, 1.0]],
-                    [[FRAME_N, FRAME_N], [FRAME_N, FRAME_N]],
+                    [[FRAME_EPS, FRAME_EPS], [FRAME_EPS, FRAME_EPS]],
                     [[1.0, 1.0], [1.0, 1.0]]])
-    kw = dict(backend=0, n_top=1.0, n_bot=1.0, wavelength=FRAME_WL, thickness=FRAME_D,
-              theta=np.deg2rad(33.0), ucell=two if path == '2d' else one,
+    kw = dict(backend=0, top=1.0, bot=1.0, wavelength=FRAME_WL, thickness=FRAME_D,
+              theta=np.deg2rad(33.0), structure=two if path == '2d' else one,
               answers='field', **FRAME_PATHS[path])
     solver = wavebit.rcwa(**kw)
     if formulation:
@@ -177,7 +177,7 @@ def test_every_path_returns_a_maxwell_field_in_the_declared_frame(path, formulat
     worst = []
     for res_z in (32, 64, 128):
         F, kx, ky = _frame_cell(path, res_z, formulation)
-        r = maxwell_residual(F, kx, ky, FRAME_N ** 2, FRAME_D[1], res_z, layer=1)
+        r = maxwell_residual(F, kx, ky, FRAME_EPS, FRAME_D[1], res_z, layer=1)
         worst.append(np.max(r))
 
     assert worst[0] < 1e-2, worst
@@ -198,7 +198,7 @@ def test_the_declared_frame_is_the_one_that_converges(path, formulation):
     F, kx, ky = _frame_cell(path, 64, formulation)
     F_old = np.asarray(F, dtype=complex).copy()
     F_old[:, [2, 3, 4]] *= -1                      # back into the pre-2026-08-14 frame
-    r = maxwell_residual(F_old, kx, ky, FRAME_N ** 2, FRAME_D[1], 64, layer=1)
+    r = maxwell_residual(F_old, kx, ky, FRAME_EPS, FRAME_D[1], 64, layer=1)
     assert np.max(r) > 0.5, np.max(r)
 
 

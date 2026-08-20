@@ -16,14 +16,28 @@ class SolverJax(RCWAJax, OptimizerJax):
         # incidence on a mirror-symmetric structure gives one). It rides last so the leading
         # tuple still lines up with `__init__`'s positional parameters; `None` is an empty
         # subtree, so a solver without a pair flattens exactly as it did before.
-        children = (self.n_top, self.n_bot, self.theta, self.phi, self.psi,
-                    self.period, self.wavelength, self.ucell, self.thickness,
-                    self._chi, self._polarization)
+        #
+        # `top` and `bot` are the two Materials, not the derived indices. They ride as
+        # *children* because a Material is a registered pytree whose children are
+        # `(epsilon, mu)`, so a swept or differentiated half-space permittivity is a traced
+        # leaf here rather than a compile-time constant hashed into the cache key -- the same
+        # argument `polarization` makes just below. Handing back the derived `n_top` instead
+        # would also be lossy: `sqrt(eps*mu)` cannot be taken apart again, so a magnetic
+        # half-space would come back through `_tree_unflatten` as a non-magnetic one of a
+        # different permittivity, silently.
+        #
+        # `mu` is the raster permeability field, a child for the same reason `structure` is:
+        # it is material values, and material values are what gradients are for. It rides
+        # last, after `polarization`, so the leading tuple still lines up with `__init__`'s
+        # positional parameters; `None` is an empty subtree, so a non-magnetic solver
+        # flattens exactly as it did before.
+        children = (self.top, self.bot, self.theta, self.phi, self.psi,
+                    self.period, self.wavelength, self.structure, self.thickness,
+                    self._chi, self._polarization, self._mu)
         aux_data = {
             'backend': self.backend,
             'tetm': self.tetm,
             'fto': self.fto,
-            'ucell_materials': self.ucell_materials,
             'connecting_algo': self.connecting_algo,
             'device': self.device,
             'type_complex': self.type_complex,
@@ -88,8 +102,8 @@ class SolverJax(RCWAJax, OptimizerJax):
         # legal when it was flattened. Rebuild without it, then restore the slot directly.
         aux_data = dict(aux_data)
         psi_given = aux_data.pop('psi_given')
-        *core, chi, polarization = children
-        solver = cls(*core, chi=chi, **aux_data)
+        *core, chi, polarization, mu = children
+        solver = cls(*core, chi=chi, mu=mu, **aux_data)
         # Straight into the slot, bypassing the setter's validation: the pair may now be a
         # tuple of tracers, and the setter's `(0, 0)` check reads concrete values. It already
         # guards that with a try/except, but there is nothing left to validate here anyway --

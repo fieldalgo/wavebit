@@ -49,22 +49,29 @@ SLOW_SLOT = 0
 ZERO_SLOT_UNIFORM = {'s': 2, 'p': 5}
 
 
-def _bar(lo_nm, hi_nm, n_bg, n_hi):
+def _bar(lo_nm, hi_nm, eps_bg, eps_hi):
     """One binary bar per period, given by its edges in nm. Edges avoid the x samples."""
-    row = np.full(NX, n_bg, dtype=complex)
-    row[int(round(lo_nm / _CELL)):int(round(hi_nm / _CELL))] = n_hi
+    row = np.full(NX, eps_bg, dtype=complex)
+    row[int(round(lo_nm / _CELL)):int(round(hi_nm / _CELL))] = eps_hi
     return row
 
 
-# name -> (thicknesses, ucell), `ucell` shaped (layer, 1, NX) as this project rasters a 1D cell.
-# The same four shapes the pure 1D golden uses, so a disagreement that appears only here is
-# about the conical coupling rather than about the geometry.
+# name -> (thicknesses, structure), of relative **permittivity** shaped (layer, 1, NX) as this
+# project rasters a 1D cell. The same four shapes the pure 1D golden uses, so a disagreement
+# that appears only here is about the conical coupling rather than about the geometry -- and
+# ``test_at_zero_azimuth_the_two_reticolo_goldens_agree`` asserts the two lists still hold the
+# same arrays, which is what keeps "the same shapes" true rather than merely intended.
+#
+# Permittivity since 2026-08-20, and identical to the pure 1D list value for value: each is the
+# square of the index frozen into the golden, so the scene has not moved. The untidy entries are
+# `1.3 ** 2` and `1.6 ** 2` as doubles, not roundings of them.
 STACKS = {
-    'uniform': ([260.0], np.full((1, 1, NX), 1.5, dtype=complex)),
-    'grating': ([260.0], _bar(50.0, 230.0, 1.0, 2.0).reshape(1, 1, NX)),
-    'bilayer': ([150.0, 260.0], np.stack([_bar(50.0, 230.0, 1.0, 2.0),
-                                          _bar(130.0, 330.0, 1.3, 1.6)])[:, None, :]),
-    'lossy': ([260.0], _bar(50.0, 230.0, 1.0, 2.0 + 0.05j).reshape(1, 1, NX)),
+    'uniform': ([260.0], np.full((1, 1, NX), 2.25, dtype=complex)),
+    'grating': ([260.0], _bar(50.0, 230.0, 1.0, 4.0).reshape(1, 1, NX)),
+    'bilayer': ([150.0, 260.0], np.stack([_bar(50.0, 230.0, 1.0, 4.0),
+                                          _bar(130.0, 330.0, 1.6900000000000002,
+                                               2.5600000000000005)])[:, None, :]),
+    'lossy': ([260.0], _bar(50.0, 230.0, 1.0, 3.9975 + 0.2j).reshape(1, 1, NX)),
 }
 
 # (theta_deg, phi_deg). `phi = 0` is the control: the conical solve must reproduce the decoupled

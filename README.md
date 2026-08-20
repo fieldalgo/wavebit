@@ -67,18 +67,20 @@ A binary grating, solved on the NumPy backend:
 import numpy as np
 import wavebit
 
-# One 300 nm layer, half air and half n = 3.5, on a glass substrate.
-ucell = np.array([[[1.0, 1.0, 3.5, 3.5]]])   # (layer, y, x) — refractive index
+# One 300 nm layer, half air and half n = 3.5, on a glass substrate. Every material is a
+# *relative permittivity*, so an index off a datasheet goes through `eps_from_index` first.
+eps_hi = wavebit.eps_from_index(3.5)                    # 12.25
+structure = np.array([[[1.0, 1.0, eps_hi, eps_hi]]])    # (layer, y, x) — permittivity
 
 solver = wavebit.rcwa(
     backend=0,                  # 0 = NumPy, 1 = JAX, 2 = PyTorch
     wavelength=900.,            # every length shares one unit; nm here
     period=[700.],
     fto=[10, 0],                # Fourier truncation order (x, y)
-    n_top=1., n_bot=1.5,
+    top=1., bot=wavebit.eps_from_index(1.5),   # the two half-spaces, as materials
     theta=0., phi=0.,
     tetm='te',                  # 'te' | 'tm' — see "Saying what the light is"
-    ucell=ucell, thickness=[300.],
+    structure=structure, thickness=[300.],
 )
 
 result = solver.conv_solve()
@@ -88,11 +90,13 @@ print(result.R.sum(), result.T.sum())   # 0.20533162825847726 0.7946683717415197
 `R` and `T` are the reflected and transmitted diffraction efficiencies, one entry per
 order. Here they sum to 1 to within a few times 1e-15, as a lossless structure must.
 
-`n_top` and `n_bot` may be complex: an absorbing substrate or superstrate is given as an index
-like any other, with loss as `Im(n) > 0`, matching the bundled nk tables. `tests/test_lossy_media.py`
-pins both against the closed-form multilayer answer. One caveat at the top boundary — incident
-power in an absorbing medium is convention-dependent, so with a complex `n_top` the efficiencies
-are not comparable to 1 and the amplitudes are what mean something.
+`top` and `bot` may be complex: an absorbing substrate or superstrate is given as a
+permittivity like any other, with loss as `Im(eps) > 0` — the same convention the bundled nk
+tables state as `n + 1j*k`, since `eps_from_index` maps the upper half plane into itself.
+`tests/test_lossy_media.py` pins both against the closed-form multilayer answer. One caveat at
+the top boundary — incident power in an absorbing medium is convention-dependent, so with a
+complex `top` the efficiencies are not comparable to 1 and the amplitudes are what mean
+something.
 
 The integer codes have named equivalents, if you prefer them to the literals:
 
@@ -183,20 +187,61 @@ directions that cannot change any power (its scale and its overall phase, both m
 ~1e-16). [`docs/conventions.md`](docs/conventions.md) is the normative statement, and
 [tutorial 6](tutorials/06-polarization-pair.ipynb) works through all three.
 
+## Saying what a thing is made of
+
+`wavebit.Material(epsilon, mu=1.0)` — **relative** permittivity and the permeability that goes
+with it, because a medium has both. Anywhere a material is accepted a bare number is the
+shorthand for `Material(epsilon=x)`; non-magnetic is the overwhelming default and costs nothing
+to write.
+
+```python
+from wavebit import Material, eps_from_index, index_from_eps
+
+Material(12.25)                # a dielectric, n = 3.5, non-magnetic
+Material(-12.2475 + 0.35j)     # a metal, n = 0.05 + 3.5j; Im(eps) > 0 is loss
+Material(4.0, mu=1.5)          # magnetic
+eps_from_index(3.5)            # 12.25 — the conversion for a datasheet index
+index_from_eps(12.25)          # (3.5+0j) — and back, on the passive root
+```
+
+The values are **permittivity, not refractive index**, and that is the one thing to carry over
+from older scripts. An index cannot hold the pair — `mu` was always taken raw, so a single
+material spelled as an index would mean "index" for one of its two numbers and "permeability"
+for the other. It is also the direction with no branch cut in it: `eps = n**2` is unambiguous
+where `n = sqrt(eps)` is a choice. `index_from_eps` is that choice made explicitly, taking the
+passive root (`Im(n) >= 0`).
+
+The retired spellings — `ucell`, `n_top`, `n_bot`, `n_base`, `n_index` — are **refused by
+name**, and the refusal says the value changed too. That is why they raise rather than being
+quietly accepted: `3.5` reread as a permittivity is a legal, energy-conserving, *different*
+medium, and nothing downstream can tell.
+
+`Material` is frozen and a registered JAX pytree whose children are `(epsilon, mu)`, so a
+material is a design variable like any other — `jax.grad` reaches inside it.
+
 ## Describing a structure
 
-The type of `ucell` selects the modeling path; there is no separate mode switch.
+The type of `structure` selects the modeling path; there is no separate mode switch.
 
-| `ucell` | Path | What it is |
+| `structure` | Path | What it is |
 | --- | --- | --- |
-| `ndarray`, shape `(n_layers, Ny, Nx)` | **raster** | refractive index sampled on a grid |
-| `list` of `[n_base, [shape, ...]]` per layer | **block** | drawn shapes reduced to piecewise-constant blocks, then Fourier-transformed analytically instead of off a grid — see [`examples/block_1d.py`](examples/block_1d.py) |
-| `list` of `dict(n_base=..., shapes=[...])` per layer | **smooth** | smooth primitives (rotated rectangle, circle, ellipse) with exact Fourier coefficients — no staircase at all |
+| `ndarray`, shape `(n_layers, Ny, Nx)` | **raster** | relative permittivity sampled on a grid |
+| `list` of `[background, [shape, ...]]` per layer | **block** | drawn shapes reduced to piecewise-constant blocks, then Fourier-transformed analytically instead of off a grid — see [`examples/block_1d.py`](examples/block_1d.py) |
+| `list` of `dict(background=..., shapes=[...])` per layer | **smooth** | smooth primitives (rotated rectangle, circle, ellipse) with exact Fourier coefficients — no staircase at all |
 
-There is a fourth, **boundary**, which the `ucell` type alone cannot select: it is what a smooth
-layer becomes when its shapes actually overlap and it asks for `combine='paint'`, and it is the
-only path that keeps a tilted edge exact *and* paints. It is decided per layer, not per solver,
-so one smooth `ucell` can hold layers of both kinds. See
+Three of those four material slots — the block background, the block object's own slot, the
+smooth shape's `material` — are **assignments**: a name for the stuff filling a region, which
+is exactly what `Material` is. The raster is the odd one out and stays arrays, because it is
+not an assignment but a *sampled field*, one number per pixel, which is why topology
+optimisation reaches for it. A field carries one quantity, so a magnetic raster needs a second
+array: `mu=`, the same shape as `structure`. Naming `mu=` on either shape path is refused —
+there the permeability lives inside each `Material`, and a layer-shaped array would have no
+region to attach itself to.
+
+There is a fourth path, **boundary**, which the `structure` type alone cannot select: it is
+what a smooth layer becomes when its shapes actually overlap and it asks for `combine='paint'`,
+and it is the only path that keeps a tilted edge exact *and* paints. It is decided per layer,
+not per solver, so one smooth `structure` can hold layers of both kinds. See
 [Shapes that overlap](#shapes-that-overlap) below and
 [`docs/boundary-modeling.md`](docs/boundary-modeling.md).
 
@@ -204,11 +249,11 @@ The smooth path takes one dict per layer. Note that `cx`, `cy`, `lx` and `ly` ar
 lengths in the units of `period`, not fractions of it:
 
 ```python
-ucell = [dict(n_base=1.0, shapes=[
-    dict(type='circle', cx=350., cy=350., lx=200., n_index=3.5),
+structure = [dict(background=1.0, shapes=[
+    dict(type='circle', cx=350., cy=350., lx=200., material=wavebit.eps_from_index(3.5)),
 ])]
 
-solver = wavebit.rcwa(backend=0, period=[700., 700.], ucell=ucell, ...)
+solver = wavebit.rcwa(backend=0, period=[700., 700.], structure=structure, ...)
 ```
 
 ### Shapes that overlap
@@ -220,17 +265,17 @@ the overlap ends up as neither shape's material. Same recipe, two different stru
 `combine` is how a layer says which it means — `'paint'` or `'add'`:
 
 ```python
-ucell = [dict(n_base=1.0, combine='add', shapes=[...])]     # superpose, in closed form
-ucell = [dict(n_base=1.0, combine='paint', shapes=[...])]   # paint, edges still exact
-ucell = [[1.0, [['rectangle', ...], ...], 'paint']]         # block path: paint, edges staircased
+structure = [dict(background=1.0, combine='add', shapes=[...])]     # superpose, in closed form
+structure = [dict(background=1.0, combine='paint', shapes=[...])]   # paint, edges still exact
+structure = [[1.0, [['rectangle', ...], ...], 'paint']]             # block path: paint, staircased
 ```
 
 Both are built on the shape paths now. `'paint'` with an actual overlap resolves the painting
 into polygons first and transforms those — so a layer can be painted *and* keep a tilted edge
 exact, which no single path used to offer. See
 [`docs/boundary-modeling.md`](docs/boundary-modeling.md). The block path still refuses
-`'add'`: a staircase of blocks holds one index per block, so an overlap can only take one of
-them.
+`'add'`: a staircase of blocks holds one permittivity per block, so an overlap can only take
+one of them.
 
 While no two shapes intersect, both rules describe the same structure, so `combine` is
 optional, nothing is refused, and both spellings give the same numbers. It only has to be
@@ -285,7 +330,7 @@ a = 400.
 a1, a2 = np.array([a, 0.]), np.array([a / 2, a * np.sqrt(3) / 2])     # hex
 
 solver = wavebit.rcwa(backend=0, lattice=np.column_stack((a1, a2)),   # columns are a1, a2
-                        factorization='nvf', ucell=ucell, ...)
+                        factorization='nvf', structure=structure, ...)
 ```
 
 Setting `lattice` makes `period` report the basis-vector lengths `(|a1|, |a2|)`. A hexagonal
@@ -293,7 +338,7 @@ array spelled as an `a x a*sqrt(3)` rectangular supercell needs twice the cell a
 the retained orders, and the solve is `O(N^2.7)` — so the native cell is about **8x** cheaper on
 a converged high-contrast structure (~3x on a lightly-truncated sweep).
 
-**The raster is read in lattice coordinates.** `ucell[layer][j, i]` is the permittivity at
+**The raster is read in lattice coordinates.** `structure[layer][j, i]` is the permittivity at
 `r = (i + 0.5)/Nx * a1 + (j + 0.5)/Ny * a2`. Building a raster on a Cartesian grid and passing a
 tilted basis therefore describes a *different structure*, silently — energy still conserves to
 1e-15. Analytic shapes are immune: their lengths are absolute Cartesian quantities, so a
@@ -404,6 +449,11 @@ python -m wavebit.manifest > wavebit-manifest.json
 `tests/test_manifest.py` checks it against the solver's actual behaviour, so a path that
 grows or loses an option fails the suite rather than going stale in a consumer.
 
+It carries `material_quantity` as a machine-readable key, so a generator can *test* which
+quantity the materials are in rather than parse prose for it — and the document's version
+number moves whenever that answer does, which is what lets a consumer that only knows the old
+answer refuse instead of emitting legal, energy-conserving, wrong scenes.
+
 **Capabilities and constraints only** — the manifest never recommends anything. Choosing
 between the options is advice about your problem rather than a property of the solver, and it
 belongs to whoever is giving the advice. See
@@ -416,12 +466,18 @@ The full contract — every sign, axis, name and unit a script can depend on —
 input means what you think it means:
 
 **Time convention.** Wavebit works in `e^{-iωt}` throughout — inputs, internals and
-returned amplitudes alike. `Im(n) > 0` is loss, which is how refractive-index databases
-tabulate it (`n + 1j*k`), and a wave travelling in `+z` carries `exp(+i*k0*kz*z)`. There is no
-second convention underneath; see [`wavebit/_core/conventions.py`](wavebit/_core/conventions.py).
+returned amplitudes alike. `Im(eps) > 0` is loss — equivalently `Im(n) > 0`, which is how
+refractive-index databases tabulate it (`n + 1j*k`) — and a wave travelling in `+z` carries
+`exp(+i*k0*kz*z)`. There is no second convention underneath; see
+[`wavebit/_core/conventions.py`](wavebit/_core/conventions.py).
 
-**Layers are listed top to bottom, and `+z` points into the stack.** `ucell[0]` is the layer
-light meets first, arriving from `n_top`. Angles are radians: `theta` from the normal, `phi`
+**Materials are relative permittivity.** `structure`, `top`, `bot` and every `Material` state
+`eps` (and `mu`), not an index; `eps_from_index` / `index_from_eps` convert, and the retired
+index-shaped keywords are refused by name. See
+[Saying what a thing is made of](#saying-what-a-thing-is-made-of).
+
+**Layers are listed top to bottom, and `+z` points into the stack.** `structure[0]` is the
+layer light meets first, arriving from `top`. Angles are radians: `theta` from the normal, `phi`
 the azimuth of the plane of incidence, `psi` the polarization angle (`pi/2` = s/TE,
 `0` = p/TM) and `chi` its ellipticity.
 
@@ -431,7 +487,7 @@ order at the centre; `result.order(m, n)` indexes by order so you never touch th
 `r_s`/`r_p`/`t_s`/`t_p` are the complex Fresnel amplitudes, directly comparable to the
 textbook coefficients.
 
-**Axes follow the array.** Row `0` of `ucell` is `y = 0`, for every builder and for the
+**Axes follow the array.** Row `0` of `structure` is `y = 0`, for every builder and for the
 reconstructed field cell alike. The flip that renders a field the conventional way up belongs
 to plotting (`field_plot`), not to the data. `+z` points **down, into the stack**, and the
 reconstructed field's vector components use that same `+z` — so a wave travelling into the
@@ -457,8 +513,8 @@ value, so the decisions read it one at a time and a gradient works straight off 
 ```python
 import jax, jax.numpy as jnp
 
-solver = wavebit.rcwa(backend=1, ucell=ucell, ...)
-grad = jax.grad(lambda u: jnp.sum(solver.conv_solve(ucell=u).T))(ucell)
+solver = wavebit.rcwa(backend=1, structure=structure, ...)
+grad = jax.grad(lambda u: jnp.sum(solver.conv_solve(structure=u).T))(structure)
 ```
 
 `jax.jit` is the harder bar, and that is what `freeze_geometry()` is for — it takes those
@@ -466,7 +522,7 @@ decisions once against the concrete structure and hands them back as data:
 
 ```python
 geometry = solver.freeze_geometry()
-step = jax.jit(lambda u: jnp.sum(solver.conv_solve(ucell=u, geometry=geometry).T))
+step = jax.jit(lambda u: jnp.sum(solver.conv_solve(structure=u, geometry=geometry).T))
 ```
 
 A freeze describes the structure it was taken on. Sweeping the *material values* reuses it
@@ -519,7 +575,7 @@ Every solve also checks what it is about to hand back. A NaN or infinity in `R` 
 raises `FloatingPointError` naming the contaminated array; a result that stayed finite but
 cannot be physical — a negative efficiency, or R+T above 1 out of a passive stack — warns
 `UnphysicalResultWarning`. Both are eager-NumPy only, so JAX and PyTorch tracing is untouched.
-If you are modelling gain (`Im(n) < 0` here), R+T above 1 is correct and the warning is a
+If you are modelling gain (`Im(eps) < 0` here), R+T above 1 is correct and the warning is a
 false positive — filter that category.
 
 ## Tutorials

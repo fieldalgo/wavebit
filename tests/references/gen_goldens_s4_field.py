@@ -42,6 +42,17 @@ convergence study, not a frozen tolerance, and it is deliberately not attempted 
 **Real permittivity only** — this S4 build rejects a complex ``Epsilon``, so the cases below
 are lossless. Absorption is covered against the Airy closed form in ``tests/test_lossy_media.py``
 and by the ``|E|``-decay check in ``docs/time-convention-audit.md`` section 8.
+
+**The stacks are stated in permittivity, and the ``** 2`` that used to sit at ``SetMaterial`` is
+gone rather than moved.** S4's ``Epsilon`` always wanted a permittivity; what changed on
+2026-08-20 is that wavebit does too, so the conversion this generator was performing has no
+remaining side to be on. One consequence is worth knowing before rerunning this: the
+``__stack`` arrays in the **committed** golden were written before that flip and hold a
+refractive index in their second column. ``test_s4_field_golden`` reads them through
+``index_from_eps`` and says so; rerun this and they become permittivities, at which point that
+conversion has to come out. Nothing else in the file moves — the physics is identical and the
+field arrays are bit-for-bit the same, which is the only reason this is a safe thing to leave
+half-migrated.
 """
 import pathlib
 import sys
@@ -55,12 +66,15 @@ WL = 620.0
 PERIOD = (400.0, 380.0)
 RES_Z = 7                       # per layer, inclusive of both faces; interior is 1..RES_Z-2
 
-# (thickness, refractive index) top to bottom. Both start and end in vacuum so the incident
-# and transmitted sides are unambiguous, and both put a high-index layer in the middle so the
-# interior samples sit where the field is actually structured.
+# (thickness, relative permittivity) top to bottom. Both start and end in vacuum so the
+# incident and transmitted sides are unambiguous, and both put a high-index layer in the middle
+# so the interior samples sit where the field is actually structured.
+#
+# 2.25 and 4.41 are the index-1.5 and index-2.1 layers this list has always described; the
+# scene is unchanged and the committed golden still applies to it.
 STACKS = {
-    'two_media': [(90.0, 1.0), (260.0, 1.5), (90.0, 1.0)],
-    'three_media': [(90.0, 1.0), (260.0, 1.5), (140.0, 2.1), (90.0, 1.0)],
+    'two_media': [(90.0, 1.0), (260.0, 2.25), (90.0, 1.0)],
+    'three_media': [(90.0, 1.0), (260.0, 2.25), (140.0, 4.41), (90.0, 1.0)],
 }
 THETAS = (0.0, 24.0, 47.0)
 PHIS = (0.0, 35.0)
@@ -68,7 +82,12 @@ POLS = ('s', 'p')
 
 
 def z_samples(stack):
-    """Interior sample points of every layer, in the order ``calculate_field`` returns them."""
+    """Interior sample points of every layer, in the order ``calculate_field`` returns them.
+
+    Reads only the thicknesses, so it is unaffected by which quantity the second column holds
+    — which is what lets ``test_s4_field_golden`` call it on the committed golden's ``__stack``
+    as well as on ``STACKS``.
+    """
     zs, off = [], 0.0
     for d, _ in stack:
         zs += [off + j * d / (RES_Z - 1) for j in range(1, RES_Z - 1)]
@@ -79,8 +98,8 @@ def z_samples(stack):
 def s4_field(stack, theta, phi, pol, zs):
     import S4
     S = S4.New(Lattice=((PERIOD[0], 0), (0, PERIOD[1])), NumBasis=1)
-    for i, (d, n) in enumerate(stack):
-        S.SetMaterial(Name=f'm{i}', Epsilon=float(n) ** 2)
+    for i, (d, eps) in enumerate(stack):
+        S.SetMaterial(Name=f'm{i}', Epsilon=float(eps))
         S.AddLayer(Name=f'L{i}', Thickness=float(d), Material=f'm{i}')
     S.SetFrequency(1.0 / WL)
     S.SetExcitationPlanewave(IncidenceAngles=(float(theta), float(phi)),

@@ -18,9 +18,9 @@ while gradients flow through the material values.
 
 That is what :class:`StaticGeometry` carries. Freeze it once from a concrete structure::
 
-    solver = wavebit.rcwa(backend=Backend.JAX, ucell=ucell, ...)
+    solver = wavebit.rcwa(backend=Backend.JAX, structure=eps, ...)
     geometry = solver.freeze_geometry()
-    grad = jax.grad(lambda u: jnp.sum(solver.conv_solve(ucell=u, geometry=geometry).res.T))
+    grad = jax.grad(lambda e: jnp.sum(solver.conv_solve(structure=e, geometry=geometry).res.T))
 
 Without it, ``conv_solve`` still auto-detects — the eager path that reproduces the legacy
 result exactly — but nothing survives ``jax.jit``, and ``fourier_coefficients='sampled'``
@@ -75,11 +75,20 @@ class StaticGeometry:
             so a replay can tell whether it still fits, not consumed by the build. Left
             ``None``, the NVF replay is unchecked.
         compression: per-layer ``(row_idx, col_idx, x, y)`` for the integrated path's factorization.
-        block_grid: per-layer ``VectorGridPlan`` for the block modeler's grid build.
+        mu_normal_field, mu_normal_field_source, mu_compression: the same three records, taken
+            off the raster ``mu`` field instead of the permittivity. Separate rather than
+            shared because a magnetic inclusion need not sit where the dielectric one does,
+            and the NVF rearrangement is written around *one* interface normal -- so each
+            quantity is built on the normal of its own boundary. All three are ``None``
+            unless the structure carries a raster ``mu``; the two shape paths need no twin
+            here at all, since their records hold the geometry both quantities share.
+        block_grid: per-layer ``VectorGridPlan`` for the block modeler's grid build. One
+            record for both quantities: the permeability pass paints the same shapes at the
+            same coordinates, so replaying this is what puts eps and mu on one grid.
         shape_choices: per-shape discrete branch outcomes taken inside ``Modeling.rectangle``.
         boundary_plans: per-layer ``(table_records, regions)`` for the boundary path — which
             loop holds which vertex and which edges cross, once the painting is resolved. Like
-            the vector records these are pure Python indices, never coordinates, so a replay
+            the block records these are pure Python indices, never coordinates, so a replay
             carries a gradient to the vertices and they compare by content. ``None`` for a layer
             is an answer rather than a gap: painted, looked at while concrete, and nothing
             overlapped, so it is summed. Both answers are re-asked eagerly
@@ -92,7 +101,7 @@ class StaticGeometry:
     argument to a jitted call, so its ``__eq__``/``__hash__`` decide when JAX recompiles. Two
     records answer that question differently:
 
-    * The vector records are pure Python — which block edge becomes which grid line, in what
+    * The block records are pure Python — which block edge becomes which grid line, in what
       order. Nothing but *ordering*: the edge coordinates themselves stay traced, which is what
       carries a gradient to a length. So they compare **by content**, and a freeze taken again
       on a structure whose ordering has not changed hits the compilation cache. That is the
@@ -113,6 +122,9 @@ class StaticGeometry:
     block_grid: Optional[Any] = None
     shape_choices: Optional[Any] = None
     boundary_plans: Optional[Any] = None
+    mu_normal_field: Optional[Any] = None
+    mu_normal_field_source: Optional[Any] = None
+    mu_compression: Optional[Any] = None
 
     def _cache_key(self):
         """What ``__eq__``/``__hash__`` compare: the content when that is well defined.
@@ -120,9 +132,20 @@ class StaticGeometry:
         Falls back to identity the moment an array-bearing record is present, or if the vector
         records turn out to hold something unhashable — a conservative answer costs a
         recompilation, a wrong one would serve a cached program for a different structure.
+
+        All six array-bearing slots are tested, the three ``mu_*`` records included, even
+        though today they are only ever filled beside their permittivity twins -- so the twins
+        alone would in fact decide it. Testing them anyway costs three ``is None`` comparisons
+        and does not depend on that: "the permeability pass runs whenever the permittivity one
+        did" is a property of ``freeze_geometry``, one module over, and a cache key that
+        inferred its answer from another module's fill order would go wrong silently the first
+        time that order changed. The failure it would produce is the expensive kind -- a
+        content key hashed over ``block_grid`` alone while an array sits in ``mu_normal_field``,
+        which serves a cached program compiled for a different structure.
         """
         if self.normal_field is None and self.normal_field_source is None \
-                and self.compression is None:
+                and self.compression is None and self.mu_normal_field is None \
+                and self.mu_normal_field_source is None and self.mu_compression is None:
             try:
                 key = ('content', _hashable(self.block_grid), _hashable(self.shape_choices),
                        _hashable(self.boundary_plans))

@@ -2,7 +2,7 @@
 
 Beyond the usual parity/cross-backend checks, this closes the differentiability gap that
 motivated the port: with the factorization inside the core, the gradient runs end-to-end from
-the *design variable* — the ``ucell`` raster — through to diffraction efficiency, rather than
+the *design variable* — the permittivity raster — through to diffraction efficiency, rather than
 stopping at the convolution matrices.
 """
 import numpy as np
@@ -17,7 +17,7 @@ from wavebit._core.factorization import (
     to_conv_mat_raster_nvf as core_nvf,
     to_conv_mat_raster_integrated as core_cfs,
     to_conv_mat_block as core_vector,
-    normal_field_for_ucell,
+    normal_field_for_raster,
     compression_indices,
     compress_cell,
 )
@@ -40,11 +40,19 @@ except ImportError:
 
 
 def _rand(shape, seed):
-    return np.random.default_rng(seed).uniform(1.0, 4.0, size=shape)
+    """A random **permittivity** raster -- what ``structure`` holds since the material flip.
+
+    Drawn uniform over an index range and squared, rather than drawn uniform in eps: every
+    case in this file used to hand the solver an index in [1, 4], which it squared, so this
+    is the same raster the pre-flip file measured. Drawing eps uniform on [1, 4] instead
+    would have been tidier and would have quietly changed the contrast every tolerance here
+    was set against.
+    """
+    return np.random.default_rng(seed).uniform(1.0, 4.0, size=shape) ** 2
 
 
 CASES = [
-    # name, ucell, fto_x, fto_y
+    # name, structure, fto_x, fto_y
     ('1d_1layer', _rand((1, 1, 8), 0), 4, 0),
     ('2d_1layer', _rand((1, 5, 5), 1), 2, 2),
     ('2layer_rect', _rand((2, 4, 6), 2), 2, 1),
@@ -115,8 +123,8 @@ def test_dfs_coefficients_are_the_exact_ones(case):
     same move was made for the integrated, vector and compression checks on 2026-08-18, which
     is what retired the golden entirely — see the note further down this file.
     """
-    name, ucell, fto_x, fto_y = case
-    eps = np.asarray(ucell, dtype=float)[0] ** 2
+    name, structure, fto_x, fto_y = case
+    eps = np.asarray(structure, dtype=float)[0]      # the raster *is* the permittivity now
 
     got = np.asarray(fourier2d_piecewise_constant(xnp, eps.astype(complex), fto_x, fto_y, inverse_rule=None))
     ff_x, ff_y = 2 * fto_x + 1, 2 * fto_y + 1
@@ -143,25 +151,31 @@ def _to(backend, x):
 @pytest.mark.parametrize('case', CASES, ids=[c[0] for c in CASES])
 def test_factorization_cross_backend(case, backend):
     pytest.importorskip(backend)
-    _, ucell, fto_x, fto_y = case
-    ref = core_dfs(ucell, fto_x, fto_y)
-    got = core_dfs(_to(backend, ucell), fto_x, fto_y)
+    _, structure, fto_x, fto_y = case
+    ref = core_dfs(structure, fto_x, fto_y)
+    got = core_dfs(_to(backend, structure), fto_x, fto_y)
     for name, a, b in zip(('epx', 'epy', 'epz_i'), ref, got):
         assert np.allclose(np.array(a), np.asarray(b), atol=1e-10, rtol=0), name
 
 
 def test_factorization_feeds_solve_bit_exactly():
     """core factorization -> core solve reproduces the legacy end-to-end result exactly."""
-    ucell = np.array([[[3., 3., 3., 1., 1., 1.]]])
+    structure = np.array([[[9., 9., 9., 1., 1., 1.]]])
     wl, n_top, n_bot, theta, period, fto = 0.777, 2.0, 1.0, 0.3, [0.77], [6, 0]
     thickness = [0.15]
 
-    solver = wavebit.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=theta, phi=None, tetm='te',
-                          fto=fto, period=period, wavelength=wl, thickness=thickness, ucell=ucell)
+    # Two spellings of one pair of half-spaces, on purpose. `solve_1d` is the core, and there
+    # the quantity genuinely is an amplitude ratio -- an index. The constructor is the public
+    # boundary and takes a permittivity, converting once in the `top` / `bot` setters.
+    eps_top, eps_bot = n_top ** 2, n_bot ** 2
+
+    solver = wavebit.rcwa(backend=0, top=eps_top, bot=eps_bot, theta=theta, phi=None,
+                          tetm='te',
+                          fto=fto, period=period, wavelength=wl, thickness=thickness, structure=structure)
     legacy = solver.conv_solve()
     kx, _ = solver.get_kx_ky_vector(wl)
 
-    epx, epy, epz = core_dfs(ucell, fto[0], fto[1])
+    epx, epy, epz = core_dfs(structure, fto[0], fto[1])
     ri, ti = solve_1d(0, wl, kx, n_top, n_bot, solver.theta, solver.thickness, epx, epy, epz)
 
     assert np.array_equal(np.array(legacy.R), np.array(ri))
@@ -170,38 +184,39 @@ def test_factorization_feeds_solve_bit_exactly():
 
 # ------------------------------------------------- end-to-end differentiability (the point)
 
-def _chain_1d(fac_kwargs, ucell, kx, theta):
-    epx, epy, epz = core_dfs(ucell, **fac_kwargs)
+def _chain_1d(fac_kwargs, structure, kx, theta):
+    epx, epy, epz = core_dfs(structure, **fac_kwargs)
     _, ti = solve_1d(0, 0.777, kx, 2.0, 1.0, theta, [0.15], epx, epy, epz)
     return ti
 
 
-def test_end_to_end_gradient_wrt_ucell_1d():
-    """d(sum T)/d(ucell raster): jax == torch == finite-diff, through factorization."""
+def test_end_to_end_gradient_wrt_structure_1d():
+    """d(sum T)/d(structure raster): jax == torch == finite-diff, through factorization."""
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
     import jax.numpy as jnp
 
-    ucell = np.array([[[3., 3., 3., 1., 1., 1.]]])
-    direction = np.ones_like(ucell)
+    structure = np.array([[[9., 9., 9., 1., 1., 1.]]])
+    direction = np.ones_like(structure)
     fto = [6, 0]
-    solver = wavebit.rcwa(backend=0, n_top=2.0, n_bot=1.0, theta=0.3, phi=None, tetm='te',
-                          fto=fto, period=[0.77], wavelength=0.777, thickness=[0.15], ucell=ucell)
+    # top: eps 4.0 is the index 2.0 the `_chain_1d` core call below still takes.
+    solver = wavebit.rcwa(backend=0, top=4.0, bot=1.0, theta=0.3, phi=None, tetm='te',
+                          fto=fto, period=[0.77], wavelength=0.777, thickness=[0.15], structure=structure)
     kx, _ = solver.get_kx_ky_vector(0.777)
     theta = complex(solver.theta)
     fk = dict(fto_x=fto[0], fto_y=fto[1])
 
     def f_np(s):
-        return float(np.sum(np.array(_chain_1d(fk, ucell + s * direction, kx, theta))))
+        return float(np.sum(np.array(_chain_1d(fk, structure + s * direction, kx, theta))))
     h = 1e-6
     g_fd = (f_np(h) - f_np(-h)) / (2 * h)
 
     g_jax = float(jax.grad(lambda s: jnp.sum(_chain_1d(
-        fk, jnp.asarray(ucell) + s * jnp.asarray(direction),
+        fk, jnp.asarray(structure) + s * jnp.asarray(direction),
         jnp.asarray(kx), theta)).real)(0.0))
 
     s = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
-    torch.sum(_chain_1d(fk, torch.as_tensor(ucell) + s * torch.as_tensor(direction),
+    torch.sum(_chain_1d(fk, torch.as_tensor(structure) + s * torch.as_tensor(direction),
                         torch.as_tensor(kx), theta)).real.backward()
     g_torch = float(s.grad)
 
@@ -209,18 +224,18 @@ def test_end_to_end_gradient_wrt_ucell_1d():
     assert abs(g_jax - g_fd) < 1e-6, (g_jax, g_fd)
 
 
-def test_end_to_end_gradient_wrt_ucell_2d():
+def test_end_to_end_gradient_wrt_structure_2d():
     """Same end-to-end gradient through the 2D coupled block chain."""
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
     import jax.numpy as jnp
 
-    ucell = _rand((1, 4, 4), 7)
-    direction = np.ones_like(ucell)
+    structure = _rand((1, 4, 4), 7)
+    direction = np.ones_like(structure)
     fto = [1, 1]
     wl, n_top, n_bot = 0.9, 1.0, 1.0
-    solver = wavebit.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
-                          fto=fto, period=[1.0, 1.0], wavelength=wl, thickness=[0.15], ucell=ucell)
+    solver = wavebit.rcwa(backend=0, top=n_top, bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
+                          fto=fto, period=[1.0, 1.0], wavelength=wl, thickness=[0.15], structure=structure)
     kx, ky = solver.get_kx_ky_vector(wl)
     theta, inc = complex(solver.theta), solver._incidence_pair()
 
@@ -231,15 +246,15 @@ def test_end_to_end_gradient_wrt_ucell_2d():
         return ti
 
     def f_np(s):
-        return float(np.sum(np.array(chain(ucell + s * direction, kx, ky, theta, inc))))
+        return float(np.sum(np.array(chain(structure + s * direction, kx, ky, theta, inc))))
     h = 1e-6
     g_fd = (f_np(h) - f_np(-h)) / (2 * h)
 
     g_jax = float(jax.grad(lambda s: jnp.sum(chain(
-        jnp.asarray(ucell) + s * jnp.asarray(direction), jnp.asarray(kx), jnp.asarray(ky), theta, inc)).real)(0.0))
+        jnp.asarray(structure) + s * jnp.asarray(direction), jnp.asarray(kx), jnp.asarray(ky), theta, inc)).real)(0.0))
 
     s = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
-    torch.sum(chain(torch.as_tensor(ucell) + s * torch.as_tensor(direction),
+    torch.sum(chain(torch.as_tensor(structure) + s * torch.as_tensor(direction),
                     torch.as_tensor(kx), torch.as_tensor(ky), theta, inc)).real.backward()
     g_torch = float(s.grad)
 
@@ -252,7 +267,7 @@ def test_end_to_end_gradient_wrt_ucell_2d():
 NVF_CASES = [
     ('nvf_5x5', _rand((1, 5, 5), 10), 2, 2),
     ('nvf_2layer', _rand((2, 4, 6), 11), 2, 2),
-    ('nvf_binary', np.where(_rand((1, 8, 8), 12) > 2.5, 3.5, 1.0), 2, 2),
+    ('nvf_binary', np.where(_rand((1, 8, 8), 12) > 6.25, 12.25, 1.0), 2, 2),
 ]
 
 
@@ -266,8 +281,8 @@ def test_nvf_permittivity_inputs_are_the_exact_ones(case):
     is a continuous vector field sampled on a grid: no closed form replaces it, refining the
     grid is the only thing that helps, and nothing about it moved.
     """
-    name, ucell, fto_x, fto_y = case
-    eps = np.asarray(ucell, dtype=float)[0] ** 2
+    name, structure, fto_x, fto_y = case
+    eps = np.asarray(structure, dtype=float)[0]
 
     for label, cell in (('eps', eps), ('1/eps', 1.0 / eps)):
         got = np.asarray(fourier2d_piecewise_constant(xnp, cell.astype(complex), fto_x, fto_y, inverse_rule=None))
@@ -288,9 +303,9 @@ def test_nvf_runs_on_every_backend(case, backend):
     single-source builder makes the same factorization available on all three.
     """
     pytest.importorskip(backend)
-    _, ucell, fto_x, fto_y = case
-    ref = core_nvf(ucell, fto_x, fto_y)
-    got = core_nvf(_to(backend, ucell), fto_x, fto_y)
+    _, structure, fto_x, fto_y = case
+    ref = core_nvf(structure, fto_x, fto_y)
+    got = core_nvf(_to(backend, structure), fto_x, fto_y)
     for a, b in zip(ref, got):
         assert np.allclose(np.array(a), np.asarray(b), atol=1e-12, rtol=0)
 
@@ -301,9 +316,9 @@ def test_nvf_now_works_on_every_backend():
     ``rcwa(backend=1|2, factorization='nvf')`` raised ValueError before the factorization was
     wired — the per-backend builders simply had no NVF branch.
     """
-    ucell = _rand((1, 5, 5), 13)
-    opts = dict(n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0, fto=[2, 2],
-                period=[1.0, 1.0], wavelength=0.9, thickness=[0.2], ucell=ucell,
+    structure = _rand((1, 5, 5), 13)
+    opts = dict(top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, fto=[2, 2],
+                period=[1.0, 1.0], wavelength=0.9, thickness=[0.2], structure=structure,
                 factorization='nvf')
     ref = wavebit.rcwa(backend=0, **opts).conv_solve()
     for backend in (1, 2):
@@ -313,8 +328,8 @@ def test_nvf_now_works_on_every_backend():
                            atol=1e-12, rtol=0), backend
 
 
-def test_nvf_end_to_end_gradient_wrt_ucell():
-    """d(sum T)/d(ucell) through the NVF factorization: jax == torch == finite-diff.
+def test_nvf_end_to_end_gradient_wrt_structure():
+    """d(sum T)/d(structure) through the NVF factorization: jax == torch == finite-diff.
 
     The normal vector field is static geometry (precomputed once), so gradients measure the
     permittivity dependence with the interface directions held fixed.
@@ -323,14 +338,14 @@ def test_nvf_end_to_end_gradient_wrt_ucell():
     torch = pytest.importorskip('torch')
     import jax.numpy as jnp
 
-    ucell = np.where(_rand((1, 6, 6), 14) > 2.5, 3.5, 1.0)
-    direction = np.ones_like(ucell)
+    structure = np.where(_rand((1, 6, 6), 14) > 6.25, 12.25, 1.0)
+    direction = np.ones_like(structure)
     fto = [1, 1]
     wl, n_top, n_bot, d = 0.9, 1.0, 1.0, 0.2
-    normal_field = normal_field_for_ucell(ucell, fto[0], fto[1])
+    normal_field = normal_field_for_raster(structure, fto[0], fto[1])
 
-    solver = wavebit.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
-                          fto=fto, period=[1.0, 1.0], wavelength=wl, thickness=[d], ucell=ucell)
+    solver = wavebit.rcwa(backend=0, top=n_top, bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
+                          fto=fto, period=[1.0, 1.0], wavelength=wl, thickness=[d], structure=structure)
     kx, ky = solver.get_kx_ky_vector(wl)
     theta, inc = complex(solver.theta), solver._incidence_pair()
 
@@ -341,15 +356,15 @@ def test_nvf_end_to_end_gradient_wrt_ucell():
         return ti
 
     def f_np(s):
-        return float(np.sum(np.array(chain(ucell + s * direction, kx, ky, theta, inc))))
+        return float(np.sum(np.array(chain(structure + s * direction, kx, ky, theta, inc))))
     h = 1e-6
     g_fd = (f_np(h) - f_np(-h)) / (2 * h)
 
     g_jax = float(jax.grad(lambda s: jnp.sum(chain(
-        jnp.asarray(ucell) + s * jnp.asarray(direction), jnp.asarray(kx), jnp.asarray(ky), theta, inc)).real)(0.0))
+        jnp.asarray(structure) + s * jnp.asarray(direction), jnp.asarray(kx), jnp.asarray(ky), theta, inc)).real)(0.0))
 
     s = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
-    torch.sum(chain(torch.as_tensor(ucell) + s * torch.as_tensor(direction),
+    torch.sum(chain(torch.as_tensor(structure) + s * torch.as_tensor(direction),
                     torch.as_tensor(kx), torch.as_tensor(ky), theta, inc)).real.backward()
     g_torch = float(s.grad)
 
@@ -362,7 +377,7 @@ def test_nvf_end_to_end_gradient_wrt_ucell():
 INTEGRATED_CASES = [
     ('cfs_1d', _rand((1, 1, 8), 20), 4, 0),
     ('cfs_2d', _rand((1, 5, 5), 21), 2, 2),
-    ('cfs_binary', np.where(_rand((1, 6, 6), 22) > 2.5, 3.5, 1.0), 2, 2),
+    ('cfs_binary', np.where(_rand((1, 6, 6), 22) > 6.25, 12.25, 1.0), 2, 2),
     ('cfs_2layer', _rand((2, 4, 6), 23), 2, 1),
 ]
 
@@ -377,10 +392,10 @@ def test_integrated_coefficients_are_the_exact_ones(case):
     directly, and the builder's ``epz_i``, which is that matrix inverted and so pins the slot
     the solve actually eliminates ``E_z`` with.
     """
-    _, ucell, fto_x, fto_y = case
-    layer = np.asarray(ucell)[0]
+    _, structure, fto_x, fto_y = case
+    layer = np.asarray(structure)[0]
     row_idx, col_idx, x, y = compression_indices(layer)
-    eps = np.asarray(compress_cell(xnp, layer, row_idx, col_idx)).astype(complex) ** 2
+    eps = np.asarray(compress_cell(xnp, layer, row_idx, col_idx)).astype(complex)
 
     want = _exact_matrix(eps, x, y, fto_x, fto_y)
     scale = max(1.0, np.abs(want).max())
@@ -388,7 +403,7 @@ def test_integrated_coefficients_are_the_exact_ones(case):
     got = np.asarray(fourier2d_integrated(xnp, eps, x, y, fto_x, fto_y, inverse_rule=None))
     assert np.abs(got - want).max() < 1e-12 * scale, np.abs(got - want).max()
 
-    inv_z = np.linalg.inv(np.asarray(core_cfs(ucell, fto_x, fto_y).epz_i[0]))
+    inv_z = np.linalg.inv(np.asarray(core_cfs(structure, fto_x, fto_y).epz_i[0]))
     assert np.abs(inv_z - want).max() < 1e-11 * scale, np.abs(inv_z - want).max()
 
 
@@ -396,11 +411,11 @@ def test_integrated_coefficients_are_the_exact_ones(case):
 @pytest.mark.parametrize('case', INTEGRATED_CASES, ids=[c[0] for c in INTEGRATED_CASES])
 def test_cfs_cross_backend(case, backend):
     pytest.importorskip(backend)
-    _, ucell, fto_x, fto_y = case
-    ref = core_cfs(ucell, fto_x, fto_y)
+    _, structure, fto_x, fto_y = case
+    ref = core_cfs(structure, fto_x, fto_y)
     # Compression is static geometry, so it is shared rather than recomputed per backend.
-    compression = [compression_indices(ucell[i]) for i in range(ucell.shape[0])]
-    got = core_cfs(_to(backend, ucell), fto_x, fto_y, compression=compression)
+    compression = [compression_indices(structure[i]) for i in range(structure.shape[0])]
+    got = core_cfs(_to(backend, structure), fto_x, fto_y, compression=compression)
     for name, a, b in zip(('epx', 'epy', 'epz_i'), ref, got):
         assert np.allclose(np.array(a), np.asarray(b), atol=1e-12, rtol=0), name
 
@@ -412,15 +427,16 @@ def test_the_vector_path_integrates_its_segments_exactly():
     case is built with deliberately uneven edges — a raster would have to snap them. Nothing is
     frozen: the cell and its edges are written here, and the answer comes from the definition.
     """
-    cell = np.array([[1.0, 3.5, 2.0],
-                     [2.5, 1.0, 3.0]])
+    # Permittivities, not indices: the block path's cell holds what the transform integrates.
+    cell = np.array([[1.0, 12.25, 4.0],
+                     [6.25, 1.0, 9.0]])
     # column vectors, the shape `compression_indices` hands the builder
     x = np.array([[0.17], [0.61], [1.0]])          # uneven on purpose
     y = np.array([[0.43], [1.0]])
     fto_x = fto_y = 2
 
     got = core_vector([(cell, x, y)], fto_x, fto_y)
-    want = _exact_matrix(cell.astype(complex) ** 2, x, y, fto_x, fto_y)
+    want = _exact_matrix(cell.astype(complex), x, y, fto_x, fto_y)
     scale = max(1.0, np.abs(want).max())
 
     inv_z = np.linalg.inv(np.asarray(got.epz_i[0]))
@@ -466,20 +482,21 @@ def test_compression_is_lossless_and_minimal(seed):
     assert cell.shape == base.shape, (cell.shape, base.shape)
 
 
-def test_cfs_end_to_end_gradient_wrt_ucell():
-    """d(sum T)/d(ucell) through the analytic integrated path: jax == torch == finite-diff."""
+def test_cfs_end_to_end_gradient_wrt_structure():
+    """d(sum T)/d(structure) through the analytic integrated path: jax == torch == finite-diff."""
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
     import jax.numpy as jnp
 
-    ucell = np.array([[[3., 3., 3., 1., 1., 1.]]])
-    direction = np.ones_like(ucell)
+    structure = np.array([[[9., 9., 9., 1., 1., 1.]]])
+    direction = np.ones_like(structure)
     fto = [6, 0]
-    wl, n_top, n_bot, d = 0.777, 2.0, 1.0, 0.15
-    compression = [compression_indices(ucell[i]) for i in range(ucell.shape[0])]
+    wl, n_top, n_bot, d = 0.777, 2.0, 1.0, 0.15      # indices: `solve_1d` takes them below
+    compression = [compression_indices(structure[i]) for i in range(structure.shape[0])]
 
-    solver = wavebit.rcwa(backend=0, n_top=n_top, n_bot=n_bot, theta=0.3, phi=None, psi=np.pi / 2,
-                          fto=fto, period=[0.77], wavelength=wl, thickness=[d], ucell=ucell)
+    solver = wavebit.rcwa(backend=0, top=n_top ** 2, bot=n_bot ** 2, theta=0.3, phi=None,
+                          psi=np.pi / 2,
+                          fto=fto, period=[0.77], wavelength=wl, thickness=[d], structure=structure)
     kx, _ = solver.get_kx_ky_vector(wl)
     theta = complex(solver.theta)
 
@@ -489,15 +506,15 @@ def test_cfs_end_to_end_gradient_wrt_ucell():
         return ti
 
     def f_np(s):
-        return float(np.sum(np.array(chain(ucell + s * direction, kx))))
+        return float(np.sum(np.array(chain(structure + s * direction, kx))))
     h = 1e-6
     g_fd = (f_np(h) - f_np(-h)) / (2 * h)
 
     g_jax = float(jax.grad(lambda s: jnp.sum(chain(
-        jnp.asarray(ucell) + s * jnp.asarray(direction), jnp.asarray(kx))).real)(0.0))
+        jnp.asarray(structure) + s * jnp.asarray(direction), jnp.asarray(kx))).real)(0.0))
 
     s = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
-    torch.sum(chain(torch.as_tensor(ucell) + s * torch.as_tensor(direction),
+    torch.sum(chain(torch.as_tensor(structure) + s * torch.as_tensor(direction),
                     torch.as_tensor(kx))).real.backward()
     g_torch = float(s.grad)
 
@@ -508,17 +525,17 @@ def test_cfs_end_to_end_gradient_wrt_ucell():
 def _transpose_symmetric_L(N=48):
     """An L-shape with ``eps(x, y) == eps(y, x)``, deliberately not 4-fold symmetric."""
     u = np.ones((N, N))
-    u[N // 8:N // 2, N // 8:N // 4] = 3.2
+    u[N // 8:N // 2, N // 8:N // 4] = 10.240000000000002       # 3.2**2, to the bit
     u = np.maximum(u, u.T)
     assert np.array_equal(u, u.T)
     return u[None, :, :]
 
 
-def _transmission_map(ucell, factorization, fto, psi):
+def _transmission_map(structure, factorization, fto, psi):
     res = wavebit.rcwa(
         backend=0, factorization=factorization, fto=[fto, fto],
-        n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=psi,
-        wavelength=1.3, period=[1.0, 1.0], thickness=[0.4], ucell=ucell).conv_solve()
+        top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=psi,
+        wavelength=1.3, period=[1.0, 1.0], thickness=[0.4], structure=structure).conv_solve()
     t = np.asarray(res.T)
     ff = int(round(t.size ** 0.5))
     return t.reshape(ff, ff)
@@ -531,9 +548,9 @@ def _relabelling_residue(factorization, fto):
     diffraction map has to come back transposed. Any residue is the builder telling x and y
     apart.
     """
-    ucell = _transpose_symmetric_L()
-    a = _transmission_map(ucell, factorization, fto, 0.0)
-    b = _transmission_map(ucell, factorization, fto, np.pi / 2)
+    structure = _transpose_symmetric_L()
+    a = _transmission_map(structure, factorization, fto, 0.0)
+    b = _transmission_map(structure, factorization, fto, np.pi / 2)
     return float(np.abs(a - b.T).max())
 
 
@@ -581,7 +598,7 @@ def test_li_tells_x_and_y_apart_and_this_is_expected(fto):
 # What follows turns the scene where all four moving parts are live: oblique incidence, unequal
 # periods, unequal fto, and a chiral cell.
 
-def _chiral_L(N=80, n_hi=2.4):
+def _chiral_L(N=80, eps_hi=5.76):                   # 2.4**2
     """An L with unequal arms -- no mirror axis, and not equal to its own transpose.
 
     The chirality is the whole point. On a shape symmetric under a reflection the rotation and
@@ -591,8 +608,8 @@ def _chiral_L(N=80, n_hi=2.4):
     an edit to the arms cannot quietly make them vacuous.
     """
     u = np.ones((N, N))
-    u[N // 8:N // 2, N // 8:5 * N // 16] = n_hi        # rows are y: a tall narrow arm
-    u[N // 8:N // 5, N // 8:13 * N // 16] = n_hi       # a long flat arm, different length *and* width
+    u[N // 8:N // 2, N // 8:5 * N // 16] = eps_hi      # rows are y: a tall narrow arm
+    u[N // 8:N // 5, N // 8:13 * N // 16] = eps_hi     # a long flat arm, different length *and* width
     assert not np.array_equal(u, u.T), 'cell is transpose-symmetric; the relabelling is vacuous'
     assert not np.array_equal(u, np.flipud(u)), 'cell is y-symmetric; the mirror test is vacuous'
     assert not np.array_equal(u, np.fliplr(u)), 'cell is x-symmetric'
@@ -610,13 +627,13 @@ _TURN_THETA = np.deg2rad(25.0)
 _TURN_PSI = np.deg2rad(37.0)
 
 
-def _turn_scene(ucell, period, fto, phi, psi, factorization='nvf'):
+def _turn_scene(structure, period, fto, phi, psi, factorization='nvf'):
     """One solve of the turnable scene. Returns ``(R, T, fto)`` -- see :func:`_by_order`."""
     res = wavebit.rcwa(
         backend=0, factorization=factorization, fto=[int(fto[0]), int(fto[1])],
-        n_top=1.0, n_bot=1.0, theta=_TURN_THETA, phi=phi, psi=psi,
+        top=1.0, bot=1.0, theta=_TURN_THETA, phi=phi, psi=psi,
         wavelength=_TURN_WAVELENGTH, period=[period[0], period[1]], thickness=[120.0],
-        ucell=ucell).conv_solve()
+        structure=structure).conv_solve()
     return np.asarray(res.R), np.asarray(res.T), (int(fto[0]), int(fto[1]))
 
 
@@ -709,9 +726,9 @@ def test_nvf_is_covariant_when_the_whole_scene_is_turned(fto):
     is a bug with a hand to it: building ``ny`` from the x gradient kills all three
     parametrizations below.
     """
-    ucell = _chiral_L()
-    upright = _turn_scene(ucell, _TURN_PERIOD, fto, np.deg2rad(90.0), _TURN_PSI)
-    turned = _turn_scene(ucell.transpose(0, 2, 1), _TURN_PERIOD[::-1], fto[::-1],
+    structure = _chiral_L()
+    upright = _turn_scene(structure, _TURN_PERIOD, fto, np.deg2rad(90.0), _TURN_PSI)
+    turned = _turn_scene(structure.transpose(0, 2, 1), _TURN_PERIOD[::-1], fto[::-1],
                          0.0, -_TURN_PSI)
     resid = _residue(upright, turned, _SWAP)
     assert resid < 1e-12, f'nvf is not covariant under a turn of the whole scene: {resid:.2e}'
@@ -730,9 +747,9 @@ def test_every_part_of_the_turn_is_load_bearing():
     The measured cost of each omission, at ``fto=[5, 3]``, N=80 -- all of them four to fourteen
     orders of magnitude above the 1e-12 the full recipe meets.
     """
-    ucell = _chiral_L()
-    turned_cell = ucell.transpose(0, 2, 1)
-    upright = _turn_scene(ucell, _TURN_PERIOD, _TURN_FTO, np.deg2rad(90.0), _TURN_PSI)
+    structure = _chiral_L()
+    turned_cell = structure.transpose(0, 2, 1)
+    upright = _turn_scene(structure, _TURN_PERIOD, _TURN_FTO, np.deg2rad(90.0), _TURN_PSI)
 
     omissions = {
         # period pair left unswapped -- the turned cell solved in the upright cell's box
@@ -786,10 +803,10 @@ def test_a_y_mirror_is_exact_on_both_factorizations(fto, factorization):
     energy conservation, the projector identity ``C_xx + C_yy = I``, the x<->y relabelling, and
     every golden are all even in the half-pixel offset. It took a mirror on a chiral cell.
     """
-    ucell = _chiral_L()
-    upright = _turn_scene(ucell, _TURN_PERIOD, fto, 0.0, +_TURN_PSI,
+    structure = _chiral_L()
+    upright = _turn_scene(structure, _TURN_PERIOD, fto, 0.0, +_TURN_PSI,
                           factorization=factorization)
-    mirrored = _turn_scene(np.flip(ucell, axis=1), _TURN_PERIOD, fto, 0.0, -_TURN_PSI,
+    mirrored = _turn_scene(np.flip(structure, axis=1), _TURN_PERIOD, fto, 0.0, -_TURN_PSI,
                            factorization=factorization)
     resid = _residue(upright, mirrored, _MIRROR_Y)
     assert resid < 1e-12, f'{factorization} broke a y-mirror by {resid:.2e}'
@@ -830,9 +847,9 @@ def test_a_plain_quarter_turn_of_the_whole_scene_is_exact(fto):
 
     Measured 1.6e-15 to 3.7e-14 across the truncations parametrized here.
     """
-    ucell = _chiral_L()
-    upright = _turn_scene(ucell, _TURN_PERIOD, fto, np.deg2rad(90.0), _TURN_PSI)
-    turned = _turn_scene(np.rot90(ucell, 1, axes=(1, 2)), _TURN_PERIOD[::-1], fto[::-1],
+    structure = _chiral_L()
+    upright = _turn_scene(structure, _TURN_PERIOD, fto, np.deg2rad(90.0), _TURN_PSI)
+    turned = _turn_scene(np.rot90(structure, 1, axes=(1, 2)), _TURN_PERIOD[::-1], fto[::-1],
                          0.0, _TURN_PSI)                      # psi kept: a rotation, not a mirror
     resid = _residue(upright, turned, lambda m, n: (n, -m))
     assert resid < 1e-12, (
@@ -859,9 +876,11 @@ def test_a_plain_quarter_turn_of_the_whole_scene_is_exact(fto):
 # evidence for has long since landed, on a solver that has never been released. Legacy parity
 # was protecting no user, and it cost two wrong turns in one session to keep straight.
 
-@pytest.mark.parametrize('n', [1.0, 1.5, 2.7])
+#: 1.0, 1.5**2 and 2.7**2 -- the squares spelled to the bit, because the assertions below are
+#: exact equalities and `7.29` is not `2.7 ** 2`.
+@pytest.mark.parametrize('eps', [1.0, 2.25, 7.290000000000001])
 @pytest.mark.parametrize('rule', ['dfs', 'cfs', 'nvf'])
-def test_a_uniform_cell_factorizes_to_exactly_eps_times_identity(rule, n):
+def test_a_uniform_cell_factorizes_to_exactly_eps_times_identity(rule, eps):
     """No structure, so every rule must collapse to the same scalar — exactly, not nearly.
 
     A homogeneous layer has nothing to factorize: Li's rules, the normal-vector projector and
@@ -875,8 +894,7 @@ def test_a_uniform_cell_factorizes_to_exactly_eps_times_identity(rule, n):
     answers catch what plausibility does not.
     """
     builder = {'dfs': core_dfs, 'cfs': core_cfs, 'nvf': core_nvf}[rule]
-    cell = np.full((1, 8, 8), n, dtype=complex)
-    eps = n ** 2
+    cell = np.full((1, 8, 8), eps, dtype=complex)
 
     out = builder(cell, 3, 3)
     epx, epy = np.asarray(out[0])[0], np.asarray(out[1])[0]
@@ -912,13 +930,13 @@ def test_the_normal_field_of_a_straight_interface_is_the_axis_normal(axis):
     """
     cell = np.ones((1, 16, 16), dtype=complex)
     if axis == 'x':                        # stripes varying along x -> normal is +-x_hat
-        cell[0, :, 6:11] = 2.5
+        cell[0, :, 6:11] = 6.25
         vanishing, present = 1, 0
     else:                                  # stripes varying along y -> normal is +-y_hat
-        cell[0, 6:11, :] = 2.5
+        cell[0, 6:11, :] = 6.25
         vanishing, present = 0, 1
 
-    nf = np.asarray(normal_field_for_ucell(cell, 3, 3))[0]
+    nf = np.asarray(normal_field_for_raster(cell, 3, 3))[0]
     assert np.max(np.abs(nf[vanishing])) == 0.0, (
         f'the {"y" if vanishing else "x"} component must vanish for a {axis}-varying grating, '
         f'got {np.max(np.abs(nf[vanishing])):.3e}')

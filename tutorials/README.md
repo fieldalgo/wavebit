@@ -6,6 +6,14 @@ while a document in `docs/` is cited — including from code comments — and re
 measured or why a default is what it is. A notebook whose purpose is to record a measurement
 belongs there as markdown instead.
 
+Every scene below states its materials as **relative permittivity** — `structure`, `top` and
+`bot`, and the `Material(epsilon, mu=1.0)` a shape names. Where a notebook starts from a
+datasheet refractive index it converts once, visibly, with `wavebit.eps_from_index(n)`. The
+contract is [`../docs/conventions.md`](../docs/conventions.md); the retired spellings
+(`ucell`, `n_top`, `n_bot`, `n_base`, `n_index`) are refused by name, because the quantity
+changed with them and a script that only renames its keywords would solve a different
+structure without saying so.
+
 | Entry | Question it answers |
 | --- | --- |
 | [`01-modeling-and-emsolver.ipynb`](01-modeling-and-emsolver.ipynb) | How do you describe a structure and get a diffraction efficiency out of it? The starting point: modeling, and the electromagnetic solve (Wavebit uses RCWA). |

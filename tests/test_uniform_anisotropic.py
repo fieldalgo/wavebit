@@ -3,7 +3,7 @@
 The 2D mode operator has read five permittivity blocks since the NVF factorization landed
 (``epx, epy, epz_i, epxy, epyx`` — see ``_core/solve_2d.py::layer_modes_2d``), which makes the
 tensor ``[[exx, exy, 0], [eyx, eyy, 0], [0, 0, ezz]]`` solvable today even though no user-facing
-input builds one: ``ucell`` is a scalar refractive index and is squared into an isotropic ``eps``.
+input builds one: ``structure`` is a permittivity raster and becomes an isotropic ``eps``.
 ``docs/anisotropic-materials.md`` §4 says so and shows the call; this file is what keeps that
 claim true.
 
@@ -42,11 +42,11 @@ EO, EE = 2.25, 4.0          # ordinary / extraordinary permittivity
 def solve_uniform(exx, eyy, ezz, exy=0.0, eyx=0.0, *, theta=0.0, d=D, wl=WL):
     """One uniform anisotropic layer, fed to the 2D solve through ``solve_for_conv``.
 
-    ``ucell`` is left ``None``: there is no raster to build, and it also routes
+    ``structure`` is left ``None``: there is no raster to build, and it also routes
     ``_assign_grating_type`` to the 2D path, which is the only one with off-diagonal slots.
     """
     I = np.eye(1, dtype=np.complex128)
-    mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=theta, phi=0.0, psi=0.0,
+    mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=theta, phi=0.0, psi=0.0,
                          fto=(0, 0), period=(300.0, 300.0), wavelength=wl, thickness=[d])
     return mee.solve_for_conv(
         wl,

@@ -41,7 +41,10 @@ square root and are not covered by it.
 - A consequence worth knowing before you sweep: **that branch is out of scope for API renames and
   for `develop`-wide refactors.** Its tree predates the result API rename and the
   `factorization.py` renaming, so it still reads `de_ri` / `de_ti` and
-  `to_conv_mat_raster_discrete`. That is expected, not a defect to fix.
+  `to_conv_mat_raster_discrete`. That is expected, not a defect to fix. It also predates the
+  material convention, so its structures are **refractive index** where everything here is now
+  relative permittivity — do not carry a scene across in either direction without converting,
+  since neither reading raises.
 - `git diff develop..claude/rcwa-no-eigendecomposition-b92d89` looks enormous. That is staleness,
   not a revert; `git log develop..<branch>` shows the two commits that are actually there.
 

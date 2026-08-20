@@ -1,4 +1,4 @@
-"""Vector geometry modeler (wavebit._core.modeler) against the frozen legacy output.
+"""Block geometry modeler (wavebit._core.modeler) against the frozen legacy output.
 
 The modeler decomposes parametric shapes — rectangles and ellipses, optionally rotated — into
 the piecewise-constant blocks the vector factorization consumes. Its reference values were
@@ -23,19 +23,45 @@ from wavebit._core.modeler import Modeling
 GOLDEN = np.load(pathlib.Path(__file__).parent / 'data' / 'golden_legacy_modeler.npz')
 
 PERIOD = [300.0, 300.0]
+#: The three media as refractive INDEX -- the quantity the generator wrote and the quantity
+#: the frozen ``*__cell`` arrays still hold. Only the names below carry it; everything handed
+#: to the modeler uses the squares.
 SI, SIO2, SI3N4 = 3.638751670074983, 1.4518, 2.0056
+EPS_SI, EPS_SIO2, EPS_SI3N4 = SI ** 2, SIO2 ** 2, SI3N4 ** 2
 
-# Must stay identical to gen_goldens_modeler.py.
+
+def golden_cell(key):
+    """One frozen ``cell`` array, as PERMITTIVITY.
+
+    ``golden_legacy_modeler.npz`` stores eleven ``*__cell`` arrays that literally hold a
+    refractive index, because the modeler used to emit one; it emits permittivity now. The
+    square happens here, at the comparison, rather than in a regenerated file: three of the
+    four generators in ``tests/data`` ``sys.exit()`` unconditionally and cannot be re-run, and
+    the whole point of a legacy golden is that it is not re-derived from the code under test.
+
+    Exact, not approximate: ``EPS_SI`` above is ``SI ** 2`` by the same float operation, so
+    the comparisons stay ``array_equal`` rather than becoming tolerances.
+    """
+    return np.asarray(GOLDEN[key]) ** 2
+
+
+# Must stay identical to gen_goldens_modeler.py -- as a *scene*. The generator names each
+# material by its index; here every one of them is squared, which is the conversion the
+# solver used to apply between the two.
 INSTRUCTIONS = {
-    'rect_1d': [[SI3N4, [['rectangle', 50, 150, 31, 300, SI, 0, 0, 0]]], [SI, []]],
-    'rect_2d': [[SI3N4, [['rectangle', 80, 120, 60, 90, SI, 0, 0, 0],
-                         ['rectangle', 200, 180, 50, 70, SIO2, 0, 0, 0]]], [SI, []]],
-    'rect_rot': [[SI3N4, [['rectangle', 150, 150, 80, 60, SI, 0.4, 4, 4]]], [SIO2, []]],
-    'ellipse': [[SI3N4, [['ellipse', 150, 150, 90, 60, SI, 0.0, 4, 4]]], [SIO2, []]],
-    'ellipse_rot': [[SI3N4, [['ellipse', 140, 160, 100, 50, SI, 0.5, 4, 4]]], [SIO2, []]],
+    'rect_1d': [[EPS_SI3N4, [['rectangle', 50, 150, 31, 300, EPS_SI, 0, 0, 0]]], [EPS_SI, []]],
+    'rect_2d': [[EPS_SI3N4, [['rectangle', 80, 120, 60, 90, EPS_SI, 0, 0, 0],
+                             ['rectangle', 200, 180, 50, 70, EPS_SIO2, 0, 0, 0]]],
+                [EPS_SI, []]],
+    'rect_rot': [[EPS_SI3N4, [['rectangle', 150, 150, 80, 60, EPS_SI, 0.4, 4, 4]]],
+                 [EPS_SIO2, []]],
+    'ellipse': [[EPS_SI3N4, [['ellipse', 150, 150, 90, 60, EPS_SI, 0.0, 4, 4]]],
+                [EPS_SIO2, []]],
+    'ellipse_rot': [[EPS_SI3N4, [['ellipse', 140, 160, 100, 50, EPS_SI, 0.5, 4, 4]]],
+                    [EPS_SIO2, []]],
 }
 SOLVE_KW = dict(period=PERIOD, thickness=[205.0, 100.0], fto=[3, 3],
-                n_top=1.0, n_bot=1.0, wavelength=900.0, psi=np.pi / 4)
+                top=1.0, bot=1.0, wavelength=900.0, psi=np.pi / 4)
 
 # The ellipse is deliberately not held to its legacy golden. The decomposition those numbers
 # were captured from did not converge — refining the contour changed the structure instead of
@@ -61,7 +87,7 @@ _OFF_LATTICE = 0.3183098861837907
 
 
 def material_at(cell, x, y, n=600, period=300.0):
-    """The layer's refractive index sampled on an ``n`` x ``n`` grid of points.
+    """The layer's permittivity sampled on an ``n`` x ``n`` grid of points.
 
     Comparing *this* rather than the raw arrays is what survives a change in how grid lines are
     ordered or how many of them a boundary is spelled with: it asks what the solver would see
@@ -91,7 +117,8 @@ def test_vector_blocks_match_legacy_golden(name):
     assert len(info) == int(GOLDEN[f'{name}__n_layers'])
     for i, (cell, x, y) in enumerate(info):
         for tag, got in (('cell', cell), ('x', x), ('y', y)):
-            want = GOLDEN[f'{name}__L{i}__{tag}']
+            key = f'{name}__L{i}__{tag}'
+            want = golden_cell(key) if tag == 'cell' else GOLDEN[key]
             got = np.asarray(got)
             assert got.shape == want.shape, (i, tag, want.shape, got.shape)
             assert np.array_equal(want, got), (i, tag, np.max(np.abs(want - got)))
@@ -127,7 +154,7 @@ def test_rotated_rectangle_grid_keeps_the_legacy_layer_with_fewer_lines():
         assert np.max(nearest) < 1e-9, (i, np.max(nearest))
 
         assert np.array_equal(material_at(cell, x, y),
-                              material_at(GOLDEN[f'rect_rot__L{i}__cell'],
+                              material_at(golden_cell(f'rect_rot__L{i}__cell'),
                                           GOLDEN[f'rect_rot__L{i}__x'],
                                           GOLDEN[f'rect_rot__L{i}__y'])), i
 
@@ -148,9 +175,9 @@ def test_axis_aligned_rectangle_is_the_exact_single_block(angle, swapped, n_spli
     including the side swap past a quarter turn.
     """
     modeler = Modeling(period=PERIOD)
-    got = modeler.rectangle(150.0, 150.0, 80.0, 60.0, 2.0, angle, n_split, n_split)
+    got = modeler.rectangle(150.0, 150.0, 80.0, 60.0, 4.0, angle, n_split, n_split)
     lx, ly = (60.0, 80.0) if swapped else (80.0, 60.0)
-    want = modeler.rectangle_no_approximation(150.0, 150.0, lx, ly, 2.0)
+    want = modeler.rectangle_no_approximation(150.0, 150.0, lx, ly, 4.0)
 
     assert len(got) == 1
     for got_corner, want_corner in zip(got[0][:2], want[0][:2]):
@@ -166,7 +193,7 @@ def test_rectangle_blocks_sum_to_the_true_area(angle):
     The chord is linear in height between the two inner corners, and those corners are slab
     boundaries, so reading the chord at the middle of a slab gives that slab its exact area.
     """
-    blocks = Modeling(period=PERIOD).rectangle(150.0, 150.0, 80.0, 60.0, 2.0, angle, 4, 4)
+    blocks = Modeling(period=PERIOD).rectangle(150.0, 150.0, 80.0, 60.0, 4.0, angle, 4, 4)
     f = lambda v: float(np.real(np.asarray(v).reshape(-1)[0]))
     area = sum((f(b[1][0]) - f(b[0][0])) * (f(b[1][1]) - f(b[0][1])) for b in blocks)
 
@@ -181,13 +208,13 @@ def test_rectangle_has_no_step_where_the_angle_margin_used_to_end():
     step at the edge — a step that did not shrink from ``n_split`` 4 to 1024. Here the slope
     across that crossing has to match the slope just outside it.
     """
-    cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
+    cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], top=1.0, bot=1.0,
                wavelength=900.0, psi=np.pi / 4)
 
     def T(angle):
-        ucell = [[3.5, [['rectangle', 150.0, 150.0, 80.0, 60.0, 2.0, angle, 8, 8]]]]
+        structure = [[12.25, [['rectangle', 150.0, 150.0, 80.0, 60.0, 4.0, angle, 8, 8]]]]
         return float(np.sum(np.asarray(
-            wavebit.rcwa(backend=0, ucell=ucell, **cfg).conv_solve().T)))
+            wavebit.rcwa(backend=0, structure=structure, **cfg).conv_solve().T)))
 
     across = (T(1.02e-5) - T(0.98e-5)) / (0.04e-5)
     outside = (T(1.10e-5) - T(1.06e-5)) / (0.04e-5)
@@ -208,13 +235,13 @@ def test_rectangle_angle_carries_gradient_near_an_aligned_angle():
     """
     torch = pytest.importorskip('torch')
     tensor = lambda v: torch.tensor(v, dtype=torch.float64)
-    cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
+    cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], top=1.0, bot=1.0,
                wavelength=900.0, psi=np.pi / 4)
 
     def T(angle):
-        ucell = [[3.5, [['rectangle', tensor(150.0), tensor(150.0), tensor(80.0),
-                         tensor(60.0), 2.0, angle, 8, 8]]]]
-        return torch.sum(wavebit.rcwa(backend=2, ucell=ucell, **cfg).conv_solve().T)
+        structure = [[12.25, [['rectangle', tensor(150.0), tensor(150.0), tensor(80.0),
+                           tensor(60.0), 4.0, angle, 8, 8]]]]
+        return torch.sum(wavebit.rcwa(backend=2, structure=structure, **cfg).conv_solve().T)
 
     p = torch.tensor(1e-5, dtype=torch.float64, requires_grad=True)
     out = T(p)
@@ -233,9 +260,9 @@ def test_rectangle_angle_carries_gradient_near_an_aligned_angle():
 @pytest.mark.parametrize('shape,args', [
     ('ellipse', (350., 350., 400., 250., 3.0, 0.0, 24, 24)),     # symmetric: edges coincide
     ('ellipse', (350., 350., 400., 250., 3.0, 0.0, 25, 25)),     # the other parity
-    ('ellipse', (350., 350., 400., 250., 3.0, 0.4, 80, 80)),
-    ('rectangle', (150., 150., 80., 60., 2.0, 0.4, 16, 16)),
-    ('rectangle', (150., 150., 80., 60., 2.0, 0.4, 64, 64)),
+    ('ellipse', (350., 350., 400., 250., 9.0, 0.4, 80, 80)),
+    ('rectangle', (150., 150., 80., 60., 4.0, 0.4, 16, 16)),
+    ('rectangle', (150., 150., 80., 60., 4.0, 0.4, 64, 64)),
 ])
 def test_grid_lines_come_back_strictly_increasing(shape, args):
     """``x_list`` / ``y_list`` are segment edges; out of order they are a negative width.
@@ -271,13 +298,13 @@ def test_two_objects_sharing_an_edge_keep_their_gradient():
     tensor = lambda v: torch.tensor(v, dtype=torch.float64)
 
     def total(p):
-        ucell = [[1.0, [['rectangle', tensor(100.), tensor(150.), p, tensor(60.), 2.0,
+        structure = [[1.0, [['rectangle', tensor(100.), tensor(150.), p, tensor(60.), 4.0,
                          tensor(0.)],
-                        ['rectangle', tensor(100.) + p, tensor(150.), p, tensor(60.), 3.0,
+                        ['rectangle', tensor(100.) + p, tensor(150.), p, tensor(60.), 9.0,
                          tensor(0.)]]]]
-        cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
+        cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], top=1.0, bot=1.0,
                    wavelength=900.0, psi=np.pi / 4)
-        return torch.sum(wavebit.rcwa(backend=2, ucell=ucell, **cfg).conv_solve().T)
+        return torch.sum(wavebit.rcwa(backend=2, structure=structure, **cfg).conv_solve().T)
 
     p = torch.tensor(80.0, dtype=torch.float64, requires_grad=True)
     total(p).backward()
@@ -297,7 +324,7 @@ def test_vector_solve_matches_legacy_golden(name, backend):
     """End to end: modeled geometry -> factorization -> efficiencies, on every backend."""
     if backend:
         pytest.importorskip('jax' if backend == 1 else 'torch')
-    result = wavebit.rcwa(backend=backend, ucell=INSTRUCTIONS[name], **SOLVE_KW).conv_solve()
+    result = wavebit.rcwa(backend=backend, structure=INSTRUCTIONS[name], **SOLVE_KW).conv_solve()
     # Golden keys keep the frozen legacy names (de_ri/de_ti); the attributes were renamed.
     for key, field in (('de_ri', 'R'), ('de_ti', 'T')):
         want = GOLDEN[f'{name}__{key}']
@@ -310,10 +337,11 @@ def test_vector_solve_matches_legacy_golden(name, backend):
 def test_rectangle_no_approximation_and_draw():
     """The exact-rectangle helper and ``draw`` (used directly, not via instructions)."""
     modeler = Modeling(period=[1000.0, 1000.0])
-    element = modeler.rectangle_no_approximation(cx=500, cy=500, lx=200, ly=200, base=2.0)
+    element = modeler.rectangle_no_approximation(cx=500, cy=500, lx=200, ly=200, material=4.0)
     for i, (cell, x, y) in enumerate(modeler.draw([[1.0, element]])):
         for tag, got in (('cell', cell), ('x', x), ('y', y)):
-            want = GOLDEN[f'draw__L{i}__{tag}']
+            key = f'draw__L{i}__{tag}'
+            want = golden_cell(key) if tag == 'cell' else GOLDEN[key]
             assert np.array_equal(want, np.asarray(got)), (i, tag)
 
 
@@ -345,9 +373,9 @@ def test_jax_device_setter_round_trips():
     jax = pytest.importorskip('jax')
 
     solver = wavebit.rcwa(
-        backend=1, psi=np.pi / 2, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, fto=[5],
+        backend=1, psi=np.pi / 2, top=1.0, bot=1.0, theta=0.0, phi=0.0, fto=[5],
         wavelength=900.0, period=[1000.0], thickness=[500.0],
-        ucell=np.array([[[1.0, 3.0, 3.0, 1.0]]]), device=0, answers='field')
+        structure=np.array([[[1.0, 3.0, 3.0, 1.0]]]), device=0, answers='field')
 
     solver.device = solver.device                      # the round-trip that used to raise
     solver.device = jax.devices('cpu')[0]              # a bare device, not a list
@@ -380,12 +408,12 @@ def test_vector_path_differentiates_wrt_edge_positions(backend, name):
         importlib.import_module('wavebit.on_jax')
 
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3],
-               n_top=1.0, n_bot=1.0, wavelength=900.0, psi=np.pi / 4)
+               top=1.0, bot=1.0, wavelength=900.0, psi=np.pi / 4)
 
     def total(cd, xp_scalar):
-        inst = [[3.5, [['rectangle', xp_scalar(150.0), xp_scalar(150.0), cd,
-                        xp_scalar(60.0), 2.0, xp_scalar(0.0)]]]]
-        res = wavebit.rcwa(backend=backend, ucell=inst, **cfg).conv_solve()
+        inst = [[12.25, [['rectangle', xp_scalar(150.0), xp_scalar(150.0), cd,
+                          xp_scalar(60.0), 4.0, xp_scalar(0.0)]]]]
+        res = wavebit.rcwa(backend=backend, structure=inst, **cfg).conv_solve()
         return res.T
 
     if backend == 2:
@@ -423,13 +451,14 @@ def test_the_staircase_costs_a_kink_at_an_aligned_angle(tetm, name):
     cross term is genuinely odd in the angle, which hides this under a real first-order term;
     measuring there is what made it look absent.
     """
-    cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
+    cfg = dict(period=PERIOD, thickness=[205.0], fto=[3, 3], top=1.0, bot=1.0,
                wavelength=900.0, psi=_PSI_OF[tetm], theta=0.0, phi=0.0)
 
     def T(angle, n_split):
-        ucell = [[3.5, [['rectangle', 150.0, 150.0, 80.0, 60.0, 2.0, angle, n_split, n_split]]]]
+        structure = [[12.25, [['rectangle', 150.0, 150.0, 80.0, 60.0, 4.0, angle,
+                           n_split, n_split]]]]
         return float(np.sum(np.asarray(
-            wavebit.rcwa(backend=0, ucell=ucell, **cfg).conv_solve().T)))
+            wavebit.rcwa(backend=0, structure=structure, **cfg).conv_solve().T)))
 
     step = 1e-4
     at_zero = T(0.0, 64)

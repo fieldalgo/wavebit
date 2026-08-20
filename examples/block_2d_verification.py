@@ -7,7 +7,7 @@ def run_block(rcwa_options, backend):
 
     rcwa_options['backend'] = backend
     solver = wavebit.rcwa(**rcwa_options)
-    solver.ucell = ucell_block
+    solver.structure = structure_block
 
     res = solver.conv_solve()
 
@@ -15,8 +15,6 @@ def run_block(rcwa_options, backend):
 
 
 def run_raster(rcwa_options, backend, fourier_coefficients):
-
-    # ucell_raster = ucell_raster.numpy()
 
     rcwa_options['backend'] = backend
     rcwa_options['fourier_coefficients'] = fourier_coefficients
@@ -28,9 +26,9 @@ def run_raster(rcwa_options, backend, fourier_coefficients):
     # constructor already dropped. That showed up here as torch disagreeing with the block
     # path by 5.6e-5 while numpy and jax agreed to 1e-13, which reads as a solver defect and
     # is not one.
-    ucell_raster_1 = np.asarray(ucell_raster)
+    structure_raster_1 = np.asarray(structure_raster)
 
-    rcwa_options['ucell'] = ucell_raster_1
+    rcwa_options['structure'] = structure_raster_1
 
     solver = wavebit.rcwa(**rcwa_options)
 
@@ -41,21 +39,29 @@ def run_raster(rcwa_options, backend, fourier_coefficients):
 
 
 if __name__ == '__main__':
-    # Absorbing Si would be 3.638751670074983+0.007498295841854125j — Im(n) > 0 is loss
-    # here, the same convention the bundled nk tables use (n + 1j*k). n_bot takes a complex
-    # index just as a layer does.
-    si = 3.638751670074983
-    sio2 = 1.4518
-    si3n4 = 2.0056
+    # Permittivity, not refractive index -- that is the quantity the API takes, and
+    # `eps_from_index` is the conversion for the nk datasheet these came off. Written as bare
+    # numbers rather than as `Material(...)` on purpose: the same value has to serve both
+    # paths compared here, and only one of them takes materials. The block path below reads a
+    # bare number through the scalar shorthand, `Material(epsilon=x)`; the raster is a
+    # *sampled field* rather than an assignment, so its pixels are permittivity samples and a
+    # Material could not go in an ndarray at all. That asymmetry is the whole reason the
+    # raster keeps arrays.
+    #
+    # Absorbing Si would be eps_from_index(3.638751670074983+0.007498295841854125j).
+    # Im(eps) > 0 is loss here, the same convention the bundled nk tables use (n + 1j*k).
+    si = wavebit.eps_from_index(3.638751670074983)
+    sio2 = wavebit.eps_from_index(1.4518)
+    si3n4 = wavebit.eps_from_index(2.0056)
 
-    # The silicon underneath is the substrate, so it goes in n_bot.
+    # The silicon underneath is the substrate, so it goes in `bot`.
     rcwa_options = dict(backend=0, thickness=[205], period=[300, 300],
                         fto=[3, 3],
-                        n_top=1, n_bot=si,
+                        top=1, bot=si,
                         wavelength=900,
                         )
 
-    ucell_block = [
+    structure_block = [
         # layer 1
         [si3n4,
             [
@@ -73,13 +79,13 @@ if __name__ == '__main__':
 
     # Row 0 is y = 0 and the column index is x, on every path in the package -- the same
     # convention the block modeler grids with. Typed the other way up, this raster is the
-    # vertical mirror of the ucell above and not the same structure: obj 1 (cy 250) lands at
-    # y 0-100 and obj 2 (cy 40) at y 230-290. With vacuum on both sides only the specular
-    # order propagates, so the mirror image radiates exactly like the original and the two
-    # paths still agree to 1e-15. Let a higher order propagate -- an index other than 1 on
-    # either half-space is enough -- and the disagreement appears. The n_bot above is silicon,
-    # so this file sits in that regime and would catch the mirror today.
-    ucell_raster = [
+    # vertical mirror of the block structure above and not the same structure: obj 1 (cy 250)
+    # lands at y 0-100 and obj 2 (cy 40) at y 230-290. With vacuum on both sides only the
+    # specular order propagates, so the mirror image radiates exactly like the original and
+    # the two paths still agree to 1e-15. Let a higher order propagate -- a permittivity other
+    # than 1 on either half-space is enough -- and the disagreement appears. The `bot` above
+    # is silicon, so this file sits in that regime and would catch the mirror today.
+    structure_raster = [
         [
             # y 0-10: background
             [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a] + [a,a,a,a,a,a,a,a,a,a],

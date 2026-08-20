@@ -46,7 +46,7 @@ def slots(t):
 
 
 def solve(eps, mu=None, theta=0.0, algo='ETM', backend=0, fto=(0, 0), period=None):
-    mee = wavebit.rcwa(backend=backend, n_top=1.0, n_bot=1.0, theta=np.deg2rad(theta),
+    mee = wavebit.rcwa(backend=backend, top=1.0, bot=1.0, theta=np.deg2rad(theta),
                        phi=0.0, psi=0.0, fto=fto, period=period or (PERIOD, PERIOD),
                        wavelength=WL, thickness=[THICK], connecting_algo=algo)
     res = mee.solve_for_conv(WL, *slots(eps), mu=None if mu is None else tuple(slots(mu)))
@@ -132,7 +132,7 @@ def test_the_other_backends_carry_mu_too(backend, name):
     eps, mu = CASES[3][1], CASES[3][2]                # the gyromagnetic one
     want = solve(eps, mu, theta=39.0)
 
-    mee = wavebit.rcwa(backend=backend, n_top=1.0, n_bot=1.0, theta=np.deg2rad(39.0), phi=0.0,
+    mee = wavebit.rcwa(backend=backend, top=1.0, bot=1.0, theta=np.deg2rad(39.0), phi=0.0,
                        psi=0.0, fto=(0, 0), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK])
     res = mee.solve_for_conv(WL, *[lift(s) for s in slots(eps)],
@@ -170,9 +170,9 @@ def test_mu_on_a_one_dimensional_structure_is_refused():
     Refusing beats ignoring: a dropped ``mu`` returns a finite, energy-conserving,
     entirely plausible non-magnetic answer.
     """
-    mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+    mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                        fto=(3, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
-                       ucell=np.ones((1, 1, 8)) * 1.5)
+                       structure=np.ones((1, 1, 8)) * 2.25)
     e = [np.stack([np.eye(7, dtype=complex) * v]) for v in (2.6, 2.6, 1 / 2.6)]
     m = tuple(np.stack([np.eye(7, dtype=complex) * v]) for v in (1.7, 1.7, 1 / 1.7, 0.0, 0.0))
     with pytest.raises(NotImplementedError, match='2D path only'):
@@ -185,10 +185,92 @@ def test_mu_with_a_z_coupled_permittivity_is_refused():
     The two features are independent and both implemented, which is exactly why the
     *combination* has to say so rather than silently taking whichever path it lands on.
     """
-    mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+    mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                        fto=(0, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK])
     e = slots(tensor(2.6, 2.6, 2.6))
     z_row = [np.stack([0.2j * I1])] + [np.stack([0.0 * I1])] * 3
     m = tuple(slots(tensor(1.7, 1.7, 1.7)))
     with pytest.raises(NotImplementedError, match='first-order'):
         mee.solve_for_conv(WL, *e, *z_row, mu=m)
+
+
+# ------------------------------------------------------- the raster pair, checked both ways
+#
+# `structure` and `mu` are two fields of one raster and either setter can be the one that
+# completes the pair. Only the `mu` setter used to check it, so the same mistake was refused or
+# accepted purely on the order the two assignments were written in -- and the accepted spelling
+# was the dangerous one: the `mu` stayed on the solver, reached no build, and `conv_solve()`
+# answered bit-identically to the same scene with no `mu` at all.
+#
+# Parametrized over all three backends because the check is one shared method called from three
+# `structure` setters, one per backend, and a copy that forgot the call would leave exactly the
+# silent drop above on that backend alone -- with the other two green.
+
+BACKENDS = [(0, 'numpy'), (1, 'jax'), (2, 'torch')]
+
+# Two rows in y: with one, the scene routes to a 1D solve, where `mu` is refused for an
+# unrelated (and correct) reason and the refusal under test would not be the one observed.
+RASTER = np.array([[[2.6, 2.6, 1.0, 1.0], [2.6, 1.0, 1.0, 1.0]]])
+MU_RASTER = np.array([[[1.7, 1.7, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]]])
+SHAPE_LAYER = [dict(background=1.0,
+                    shapes=[dict(type='rectangle', cx=PERIOD / 4, cy=PERIOD / 4,
+                                 lx=PERIOD / 4, ly=PERIOD / 4, angle=0.0, material=2.6)])]
+BLOCK_LAYER = [[1.0, [['rectangle', PERIOD / 4, PERIOD / 4, PERIOD / 4, PERIOD / 4, 2.6, 0.0]]]]
+
+
+def _raster_solver_with_mu(backend=0):
+    return wavebit.rcwa(backend=backend, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+                        fto=(2, 2), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
+                        structure=RASTER, mu=MU_RASTER)
+
+
+@pytest.mark.parametrize('backend,name', BACKENDS)
+@pytest.mark.parametrize('replacement,match', [
+    (SHAPE_LAYER, 'no region'),
+    (BLOCK_LAYER, 'no region'),
+    (np.array([[[2.6, 2.6, 2.6, 1.0, 1.0, 1.0]]]), 'sampled on one raster'),
+], ids=['analytic', 'block', 'wrong_grid'])
+def test_replacing_the_structure_rechecks_the_mu_beside_it(replacement, match, backend, name):
+    """Assigning over the permittivity re-asks what the permeability may sit beside.
+
+    Two ways for the swap to invalidate the pair, and both are checked because both are the
+    *same* omission: a shape recipe leaves a layer-shaped ``mu`` with no region to attach to,
+    and a differently-shaped raster leaves two fields that no longer sample one grid.
+    """
+    if backend:
+        pytest.importorskip(name)
+    mee = _raster_solver_with_mu(backend)
+    with pytest.raises(ValueError, match=match):
+        mee.structure = replacement
+
+
+@pytest.mark.parametrize('backend,name', BACKENDS)
+def test_a_same_shaped_raster_swap_keeps_the_mu(backend, name):
+    """The re-check must not become a refusal of every reassignment.
+
+    The legal swap -- a new permittivity raster on the same grid -- has to go through with the
+    permeability still attached and still reaching the solve. Without this the cheapest way to
+    pass the test above is to clear or reject ``mu`` on any ``structure`` write, which trades a
+    silently dropped field for a loudly dropped one.
+    """
+    if backend:
+        pytest.importorskip(name)
+    mee = _raster_solver_with_mu(backend)
+    mee.structure = np.array([[[9.0, 9.0, 1.0, 1.0], [9.0, 1.0, 1.0, 1.0]]])
+    assert mee.mu is not None
+    total = mee.conv_solve().R
+    assert float(np.asarray(total.detach() if hasattr(total, 'detach') else total).sum()) > 0
+
+
+def test_clearing_the_mu_first_makes_the_swap_legal():
+    """The refusal is about the pair, not about the solver having ever been magnetic.
+
+    Worth its own case: a check written as "this solver once had a ``mu``" would pass the test
+    above while making the documented way out -- drop the permeability, then change the
+    structure -- impossible.
+    """
+    mee = _raster_solver_with_mu()
+    mee.mu = None
+    mee.structure = SHAPE_LAYER
+    assert mee.mu is None
+    assert mee.modeling_type_assigned == 2

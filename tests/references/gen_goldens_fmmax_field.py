@@ -65,9 +65,12 @@ def main():
             vac = fmmax.eigensolve_isotropic_media(
                 wl, kx, lat, jnp.ones((1, 1), dtype=complex), expansion,
                 formulation=fmmax.Formulation.FFT)
-            # `.T`: this project's [y, x] raster is fmmax's [x, y].
+            # `.T`: this project's [y, x] raster is fmmax's [x, y]. No squaring: `raster`
+            # states a permittivity now, which is what this entry point always wanted -- the
+            # `** 2` that used to sit here was converting an index case list, and that case
+            # list is gone rather than the conversion having moved somewhere else.
             lay = fmmax.eigensolve_isotropic_media(
-                wl, kx, lat, jnp.asarray(raster(name).T ** 2, dtype=complex), expansion,
+                wl, kx, lat, jnp.asarray(raster(name).T, dtype=complex), expansion,
                 formulation=fmmax.Formulation.JONES_DIRECT)
             th = [jnp.asarray(0.0), jnp.asarray(THICK), jnp.asarray(0.0)]
             solved[key] = (lay,

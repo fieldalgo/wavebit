@@ -5,7 +5,7 @@ Fields come back in the same ``e^{-iωt}`` convention as everything else (see
 and the in-plane kernel matches the order-index sign the convolution matrices are built with.
 
 Axes follow the array, not the picture: row ``0`` of the returned cell is ``y = 0``, the same
-row of ``ucell`` that the factorization reads as ``y = 0``. Turning that into a conventional
+row of ``structure`` that the factorization reads as ``y = 0``. Turning that into a conventional
 image is :func:`field_plot`'s job, and it flips there.
 
 **The vector components are in the library's own frame, where ``+z`` points down, into the

@@ -1,9 +1,10 @@
 """Every design parameter, every path, against a finite difference.
 
-The suite had gradient tests for the raster ``ucell`` and for a few shape parameters, and they
-all passed while ``wavelength`` was 38-85% wrong, ``n_top`` 49% wrong, and ``theta`` / ``phi`` /
-``psi`` / ``period`` / ``n_index`` / ``n_base`` / ``angle`` carried no gradient at all on
-PyTorch. Nothing was checking the scalars.
+The suite had gradient tests for the raster ``structure`` and for a few shape parameters, and
+they all passed while ``wavelength`` was 38-85% wrong, the superstrate 49% wrong, and
+``theta`` / ``phi`` / ``psi`` / ``period`` / a shape's ``material`` / a layer's
+``background`` / ``angle`` carried no gradient at all on PyTorch. Nothing was checking the
+scalars.
 
 Two failure modes to keep apart, because only one of them announces itself:
 
@@ -25,26 +26,27 @@ import pytest
 import wavebit
 
 RASTER = np.ones((1, 8, 8))
-RASTER[0, 2:6, 2:6] = 3.0
+RASTER[0, 2:6, 2:6] = 9.0             # permittivity: 3.0**2
 
 BASE = dict(period=[0.77, 0.77], thickness=[0.2], theta=0.2, phi=0.3, psi=0.4,
-            wavelength=0.777, n_top=1.0, n_bot=1.5, fto=[3, 3])
+            wavelength=0.777, top=1.0, bot=2.25, fto=[3, 3])
 
-SHAPE = dict(type='rectangle', cx=0.385, cy=0.385, lx=0.385, ly=0.231, angle=0.4, n_index=3.5)
+SHAPE = dict(type='rectangle', cx=0.385, cy=0.385, lx=0.385, ly=0.231, angle=0.4,
+             material=12.25)                            # 3.5**2
 ANALYTIC_BASE = dict(period=[0.77, 0.77], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
-                     wavelength=0.777, n_top=1.0, n_bot=1.5, fto=[4, 4])
+                     wavelength=0.777, top=1.0, bot=2.25, fto=[4, 4])
 
 def _frozen_raster():
     global FROZEN
     if FROZEN is None:
-        FROZEN = wavebit.rcwa(backend=0, ucell=RASTER, **BASE).freeze_geometry()
+        FROZEN = wavebit.rcwa(backend=0, structure=RASTER, **BASE).freeze_geometry()
     return FROZEN
 
 
 FROZEN = None
 
 VECTOR_BASE = dict(period=[300.0, 300.0], thickness=[205.0], theta=0.1, fto=[3, 3],
-                   wavelength=900.0, n_top=1.0, n_bot=1.0, psi=np.pi / 4)
+                   wavelength=900.0, top=1.0, bot=1.0, psi=np.pi / 4)
 
 
 def _backend(name):
@@ -96,7 +98,7 @@ def _total(res):
 
 # --------------------------------------------------------------------------- raster (topology)
 
-RASTER_SCALARS = ['theta', 'phi', 'psi', 'wavelength', 'n_top', 'n_bot', 'thickness', 'period']
+RASTER_SCALARS = ['theta', 'phi', 'psi', 'wavelength', 'top', 'bot', 'thickness', 'period']
 
 
 @pytest.mark.parametrize('name', ['torch', 'jax'])
@@ -112,14 +114,16 @@ def test_raster_scalar_gradients(param, name):
             cfg['period'] = [p, cast(0.77)]
         else:
             cfg[param] = p
-        solver = wavebit.rcwa(backend=backend, ucell=cast(RASTER), **cfg)
+        solver = wavebit.rcwa(backend=backend, structure=cast(RASTER), **cfg)
         # No frozen geometry: the default ('sampled', 'li') build has no discrete decision to
         # take, so it traces as is. It used to need one, for a same-material check that no
         # longer exists.
         return solver.conv_solve().T.sum()
 
-    start = {'theta': 0.2, 'phi': 0.3, 'psi': 0.4, 'wavelength': 0.777, 'n_top': 1.0,
-             'n_bot': 1.5, 'thickness': 0.2, 'period': 0.77}[param]
+    # `top` / `bot` are permittivities now, so the gradient measured here is d/d(eps) --
+    # a different number from the old d/dn, and the finite difference moves with it.
+    start = {'theta': 0.2, 'phi': 0.3, 'psi': 0.4, 'wavelength': 0.777, 'top': 1.0,
+             'bot': 2.25, 'thickness': 0.2, 'period': 0.77}[param]
     auto, fd = _derivative(backend, objective, start)
     assert abs(fd) > 1e-8, f'the objective does not depend on {param}; test is vacuous'
     assert abs(auto - fd) / abs(fd) < 1e-4, (param, auto, fd)
@@ -140,12 +144,12 @@ def test_raster_per_cell_gradient_reaches_every_cell(name):
         if backend == 2:
             import torch
             uc = torch.tensor(RASTER, dtype=torch.float64, requires_grad=True)
-            res = wavebit.rcwa(backend=2, ucell=uc, **strategy,
+            res = wavebit.rcwa(backend=2, structure=uc, **strategy,
                                  **BASE).conv_solve(geometry=geometry)
             torch.sum(res.T).backward()
             return int((uc.grad.abs() > 1e-14).sum())
         import jax, jax.numpy as jnp
-        g = jax.grad(lambda u: jnp.sum(wavebit.rcwa(backend=1, ucell=u, **strategy,
+        g = jax.grad(lambda u: jnp.sum(wavebit.rcwa(backend=1, structure=u, **strategy,
                      **BASE).conv_solve(geometry=geometry).T).real)
         return int(np.sum(np.abs(np.asarray(g(jnp.asarray(RASTER)))) > 1e-14))
 
@@ -153,13 +157,13 @@ def test_raster_per_cell_gradient_reaches_every_cell(name):
     assert cells() == RASTER.size
 
     integrated = dict(fourier_coefficients='integrated')
-    solver = wavebit.rcwa(backend=backend, ucell=cast(RASTER), **integrated, **BASE)
+    solver = wavebit.rcwa(backend=backend, structure=cast(RASTER), **integrated, **BASE)
     assert cells(solver.freeze_geometry(), **integrated) < RASTER.size
 
 
 # ------------------------------------------------------------------------- analytic (shape/OCD)
 
-ANALYTIC_PARAMS = ['lx', 'ly', 'angle', 'n_index', 'n_base',
+ANALYTIC_PARAMS = ['lx', 'ly', 'angle', 'material', 'background',
                    'theta', 'wavelength', 'thickness']
 
 
@@ -169,20 +173,21 @@ def test_analytic_shape_gradients(param, name):
     backend, cast = _backend(name)
 
     def objective(p):
-        shape, cfg, n_base = dict(SHAPE), dict(ANALYTIC_BASE), 1.0
-        if param == 'n_base':
-            n_base = p
+        shape, cfg, background = dict(SHAPE), dict(ANALYTIC_BASE), 1.0
+        if param == 'background':
+            background = p
         elif param == 'thickness':
             cfg['thickness'] = [p]
         elif param in shape:
             shape[param] = p
         else:
             cfg[param] = p
-        res = wavebit.rcwa(backend=backend, ucell=[dict(n_base=n_base, shapes=[shape])],
+        res = wavebit.rcwa(backend=backend,
+                             structure=[dict(background=background, shapes=[shape])],
                              **cfg).conv_solve()
         return res.R.sum()
 
-    start = dict(SHAPE, n_base=1.0, theta=0.35, wavelength=0.777, thickness=0.25)[param]
+    start = dict(SHAPE, background=1.0, theta=0.35, wavelength=0.777, thickness=0.25)[param]
     auto, fd = _derivative(backend, objective, float(start), rel_step=1e-8)
     assert abs(fd) > 1e-8, f'the objective does not depend on {param}; test is vacuous'
     assert abs(auto - fd) / abs(fd) < 1e-3, (param, auto, fd)
@@ -198,9 +203,10 @@ def test_vector_edge_gradients(param, index, start, name):
     backend, cast = _backend(name)
 
     def objective(p):
-        rect = ['rectangle', cast(150.0), cast(150.0), cast(80.0), cast(60.0), 2.0, cast(0.4)]
+        rect = ['rectangle', cast(150.0), cast(150.0), cast(80.0), cast(60.0), 4.0, cast(0.4)]
         rect[index] = p
-        res = wavebit.rcwa(backend=backend, ucell=[[3.5, [rect]]], **VECTOR_BASE).conv_solve()
+        res = wavebit.rcwa(backend=backend, structure=[[12.25, [rect]]],
+                             **VECTOR_BASE).conv_solve()
         return res.T.sum()
 
     auto, fd = _derivative(backend, objective, start)
@@ -225,7 +231,7 @@ def test_rectangle_is_built_the_same_way_on_both_sides_of_zero_angle():
     them.
     """
     m = wavebit.rcwa(backend=0, period=[300.0, 300.0]).modeler
-    blocks = [m.rectangle(150.0, 150.0, 80.0, 60.0, 2.0, a) for a in (-1e-6, 0.0, 1e-6)]
+    blocks = [m.rectangle(150.0, 150.0, 80.0, 60.0, 4.0, a) for a in (-1e-6, 0.0, 1e-6)]
     f = lambda v: float(np.real(np.asarray(v).reshape(-1)[0]))
 
     def bbox(bs):
@@ -259,13 +265,13 @@ def test_analytic_angle_is_smooth_through_normal():
     free to differ. A central difference hides that, so it only bites an optimizer, which sees
     one side at a time.
     """
-    base = dict(period=[300.0, 300.0], thickness=[205.0], fto=[5, 5], n_top=1.0, n_bot=1.0,
+    base = dict(period=[300.0, 300.0], thickness=[205.0], fto=[5, 5], top=1.0, bot=1.0,
                 wavelength=900.0, psi=np.pi / 4, theta=0.1, phi=0.3)
 
     def analytic(angle):
         shape = dict(type='rectangle', cx=150.0, cy=150.0, lx=80.0, ly=60.0,
-                     angle=angle, n_index=2.0)
-        res = wavebit.rcwa(backend=0, ucell=[dict(n_base=3.5, shapes=[shape])],
+                     angle=angle, material=4.0)
+        res = wavebit.rcwa(backend=0, structure=[dict(background=12.25, shapes=[shape])],
                              **base).conv_solve()
         return float(np.sum(res.T))
 
@@ -286,15 +292,15 @@ def test_translation_leaves_nothing_behind_within_one_normal_field_cell():
     5.8e-13, and ``test_shape_position_gradients`` is where the full statement lives. The bound
     stays loose here because the sweep no longer probes anything that varies.
     """
-    base = dict(period=[300.0, 300.0], thickness=[205.0], fto=[5, 5], n_top=1.0, n_bot=1.0,
+    base = dict(period=[300.0, 300.0], thickness=[205.0], fto=[5, 5], top=1.0, bot=1.0,
                 wavelength=900.0, psi=np.pi / 4, theta=0.1, phi=0.3)
     solver = wavebit.rcwa(backend=0, period=[300.0, 300.0])
     cell = 300.0 / solver.normal_grid
 
     def total(cx):
         shape = dict(type='rectangle', cx=cx, cy=150.0, lx=80.0, ly=60.0,
-                     angle=0.4, n_index=2.0)
-        return float(np.sum(wavebit.rcwa(backend=0, ucell=[dict(n_base=3.5, shapes=[shape])],
+                     angle=0.4, material=4.0)
+        return float(np.sum(wavebit.rcwa(backend=0, structure=[dict(background=12.25, shapes=[shape])],
                                            **base).conv_solve().T))
 
     values = [total(150.0 + f * cell) for f in (0.05, 0.35, 0.65, 0.95)]

@@ -17,17 +17,19 @@ import pytest
 import wavebit
 
 RNG = np.random.default_rng(0)
-UCELL_1D = RNG.uniform(1.0, 4.0, (1, 1, 8))
-UCELL_2D = RNG.uniform(1.0, 4.0, (1, 5, 5))
+# Permittivity rasters -- an index draw, squared, so these are the same two layers this file
+# traced before the material convention flipped.
+UCELL_1D = RNG.uniform(1.0, 4.0, (1, 1, 8)) ** 2
+UCELL_2D = RNG.uniform(1.0, 4.0, (1, 5, 5)) ** 2
 
-BASE = dict(n_top=1.0, n_bot=1.0, theta=0.1, wavelength=900.0, thickness=[500.0])
+BASE = dict(top=1.0, bot=1.0, theta=0.1, wavelength=900.0, thickness=[500.0])
 
 # (kwargs, (res_x, res_y, res_z)) per grating type the dispatcher can pick.
 CASES = {
-    '1d_tetm': (dict(tetm='te', phi=None, fto=[3], period=[1000.0], ucell=UCELL_1D), (8, 1, 4)),
-    '1d_tm': (dict(tetm='tm', phi=None, fto=[3], period=[1000.0], ucell=UCELL_1D), (8, 1, 4)),
-    '1d_conical': (dict(psi=0.35 * np.pi, phi=0.2, fto=[3], period=[1000.0], ucell=UCELL_1D), (8, 1, 4)),
-    '2d': (dict(psi=0.35 * np.pi, phi=0.2, fto=[2, 2], period=[1000.0, 1000.0], ucell=UCELL_2D), (4, 4, 4)),
+    '1d_tetm': (dict(tetm='te', phi=None, fto=[3], period=[1000.0], structure=UCELL_1D), (8, 1, 4)),
+    '1d_tm': (dict(tetm='tm', phi=None, fto=[3], period=[1000.0], structure=UCELL_1D), (8, 1, 4)),
+    '1d_conical': (dict(psi=0.35 * np.pi, phi=0.2, fto=[3], period=[1000.0], structure=UCELL_1D), (8, 1, 4)),
+    '2d': (dict(psi=0.35 * np.pi, phi=0.2, fto=[2, 2], period=[1000.0, 1000.0], structure=UCELL_2D), (4, 4, 4)),
 }
 
 
@@ -225,7 +227,7 @@ def test_the_declaration_is_static_and_the_angle_is_traced():
         def peek(s):
             seen['tetm'] = s.tetm
             seen['psi'] = s.psi
-            return s.ucell.sum()
+            return s.structure.sum()
 
         jax.jit(peek)(_solver(1, case))
         return seen

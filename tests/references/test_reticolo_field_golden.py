@@ -88,9 +88,9 @@ def _in_our_frame(e, pol):
 
 
 def _reconstruct(stack, theta, pol):
-    thickness, ucell = STACKS[stack]
-    solver = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, period=[PERIOD], fto=FTO,
-                          wavelength=WL, thickness=thickness, ucell=ucell,
+    thickness, structure = STACKS[stack]
+    solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, period=[PERIOD], fto=FTO,
+                          wavelength=WL, thickness=thickness, structure=structure,
                           theta=np.deg2rad(theta), phi=None, tetm=pol,
                           # RETICOLO's texture is analytic piecewise-constant, so the exact
                           # coefficients are the ones that describe the same layer. Without
@@ -213,20 +213,29 @@ def test_the_patterned_stacks_are_actually_patterned(stack):
 
     ``o`` is what settled the x origin in the first place; asserting against it here means the
     two codes are still describing the same structure, not merely the same numbers.
+
+    **It is also the check on the quantity, and that is new.** ``o`` is a refractive index and
+    ``STACKS`` is a permittivity, so this comparison only closes if the bridge really does take
+    the root on the way out -- a bridge that forwarded ``eps`` unconverted would put ``4`` where
+    RETICOLO reports ``2`` and fail here by O(1), *before* any field is compared. That matters
+    because the failure it stands in front of is otherwise silent: an unconverted permittivity
+    is a legal medium, and the field tests would read the disagreement as a solver defect.
     """
     g = _golden()
     o = g[f'{stack}__o']
     assert o.shape == (RES_Z * n_layers(stack), RES_X)
     assert np.abs(o - o[:, :1]).max() > 1e-9, 'RETICOLO saw a uniform layer'
 
-    # and the index map must be our own ucell sampled on the same x, **complex** — the `lossy`
-    # stack is where that matters, and it doubles as a convention check: RETICOLO stores
-    # `2+0.05j`, the same `Im(n) > 0 = loss` spelling this project uses.
-    ucell = STACKS[stack][1]
-    idx = np.clip((x_samples() / (PERIOD / ucell.shape[2])).astype(int), 0,
-                  ucell.shape[2] - 1)
+    # and the index map must be our own structure, rooted and sampled on the same x, **complex**
+    # — the `lossy` stack is where that matters, and it doubles as a convention check on the
+    # branch: `index_from_eps(3.9975+0.2j)` is `2+0.05j`, which is what RETICOLO stores, so both
+    # codes spell loss as `Im(n) > 0` and the principal root is the one that lands there.
+    structure = STACKS[stack][1]
+    ours_index = wavebit.index_from_eps(structure)
+    idx = np.clip((x_samples() / (PERIOD / structure.shape[2])).astype(int), 0,
+                  structure.shape[2] - 1)
     for k in range(n_layers(stack)):
         # RETICOLO's layer order is reversed relative to ours
-        ours = ucell[n_layers(stack) - 1 - k, 0, idx]
+        ours = ours_index[n_layers(stack) - 1 - k, 0, idx]
         theirs = o[k * RES_Z:(k + 1) * RES_Z]
         assert np.allclose(theirs, ours[None, :], atol=1e-9), (k, theirs[0], ours)

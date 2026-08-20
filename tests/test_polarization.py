@@ -33,15 +33,17 @@ import wavebit
 from wavebit import JobSpec
 from wavebit._core.domain import Incidence
 
-# A lossless two-layer stack, in the 1D (y-invariant) and genuinely-2D spellings.
-_ROW = [1, 1, 1, 3.48, 3.48, 3.48, 1, 1, 1, 1]
-UCELL_1D = np.array([[_ROW], [_ROW]], dtype=float)
-UCELL_2D = np.array([[[2.0, 1.0, 1.5, 1.0],
-                      [1.0, 3.0, 1.0, 2.0]]] * 2)
+# A lossless two-layer stack, in the 1D (y-invariant) and genuinely-2D spellings. Both are
+# PERMITTIVITY rasters: 12.1104 / 4 / 2.25 / 9 are the squares of the indices 3.48 / 2 / 1.5
+# / 3 these cells held before the material flip, so the physics is untouched.
+_ROW = [1, 1, 1, 12.1104, 12.1104, 12.1104, 1, 1, 1, 1]
+STRUCTURE_1D = np.array([[_ROW], [_ROW]], dtype=float)
+STRUCTURE_2D = np.array([[[4.0, 1.0, 2.25, 1.0],
+                          [1.0, 9.0, 1.0, 4.0]]] * 2)
 
-CFG_1D = dict(backend=0, n_top=1.0, n_bot=1.0, theta=1e-10, fto=[8, 0],
+CFG_1D = dict(backend=0, top=1.0, bot=1.0, theta=1e-10, fto=[8, 0],
               wavelength=300.0, period=[700.0, 700.0], thickness=[460.0, 22.0])
-CFG_2D = dict(backend=0, n_top=1.0, n_bot=1.5, theta=0.3, phi=0.4, fto=[2, 1],
+CFG_2D = dict(backend=0, top=1.0, bot=2.25, theta=0.3, phi=0.4, fto=[2, 1],
               wavelength=900.0, period=[700.0, 700.0], thickness=[100.0, 200.0])
 
 _AMPLITUDE_FIELDS = ('r_s', 'r_p', 't_s', 't_p')
@@ -72,9 +74,9 @@ def test_pair_reproduces_psi(path, algo):
     """``polarization = (sin(v), cos(v))`` must be ``psi = v`` — the whole result surface."""
     psi_v = 0.7
     if path == 'conical':
-        kw = dict(CFG_1D, ucell=UCELL_1D, phi=0.4, connecting_algo=algo)
+        kw = dict(CFG_1D, structure=STRUCTURE_1D, phi=0.4, connecting_algo=algo)
     else:
-        kw = dict(CFG_2D, ucell=UCELL_2D, connecting_algo=algo)
+        kw = dict(CFG_2D, structure=STRUCTURE_2D, connecting_algo=algo)
     via_psi = wavebit.rcwa(psi=psi_v, **kw).conv_solve()
     via_pair = wavebit.rcwa(polarization=pair_of(psi_v), **kw).conv_solve()
     _assert_same_sub(via_psi.res, via_pair.res)
@@ -83,7 +85,7 @@ def test_pair_reproduces_psi(path, algo):
 @pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
 def test_pair_reproduces_psi_on_every_backend(backend):
     psi_v = 1.1
-    kw = dict(CFG_2D, ucell=UCELL_2D)
+    kw = dict(CFG_2D, structure=STRUCTURE_2D)
     kw['backend'] = backend
     via_psi = wavebit.rcwa(psi=psi_v, **kw).conv_solve()
     via_pair = wavebit.rcwa(polarization=pair_of(psi_v), **kw).conv_solve()
@@ -95,7 +97,7 @@ def test_pair_reproduces_psi_on_every_backend(backend):
 
 def test_the_pure_pairs_are_the_pure_angles():
     """``(1, 0)`` is ``psi = pi/2`` (pure s) and ``(0, 1)`` is ``psi = 0`` (pure p) exactly."""
-    kw = dict(CFG_2D, ucell=UCELL_2D)
+    kw = dict(CFG_2D, structure=STRUCTURE_2D)
     for pair, psi_v in (((1, 0), np.pi / 2), ((0, 1), 0.0)):
         via_pair = wavebit.rcwa(polarization=pair, **kw).conv_solve()
         via_psi = wavebit.rcwa(psi=psi_v, **kw).conv_solve()
@@ -104,7 +106,7 @@ def test_the_pure_pairs_are_the_pure_angles():
 
 def test_variants_do_not_depend_on_the_pair():
     """``res_te_inc`` / ``res_tm_inc`` are free columns of the same factorized system."""
-    kw = dict(CFG_2D, ucell=UCELL_2D)
+    kw = dict(CFG_2D, structure=STRUCTURE_2D)
     via_psi = wavebit.rcwa(psi=0.7, **kw).conv_solve()
     via_pair = wavebit.rcwa(polarization=(1, -1j), **kw).conv_solve()
     _assert_same_sub(via_psi.res_te_inc, via_pair.res_te_inc)
@@ -112,7 +114,7 @@ def test_variants_do_not_depend_on_the_pair():
 
 
 def test_top_level_efficiencies_delegate_to_the_pair_solve():
-    res = wavebit.rcwa(polarization=(1, 1j), ucell=UCELL_2D, **CFG_2D).conv_solve()
+    res = wavebit.rcwa(polarization=(1, 1j), structure=STRUCTURE_2D, **CFG_2D).conv_solve()
     assert res.res is not None
     np.testing.assert_array_equal(res.R, res.res.R)
     np.testing.assert_array_equal(res.T, res.res.T)
@@ -122,7 +124,7 @@ def test_top_level_efficiencies_delegate_to_the_pair_solve():
 
 def test_the_pair_scale_is_normalized_out():
     """``(3, 4j)`` and ``(0.6, 0.8j)`` are one incidence: unit incident flux, pinned."""
-    kw = dict(CFG_2D, ucell=UCELL_2D)
+    kw = dict(CFG_2D, structure=STRUCTURE_2D)
     small = wavebit.rcwa(polarization=(0.6, 0.8j), **kw).conv_solve()
     large = wavebit.rcwa(polarization=(3, 4j), **kw).conv_solve()
     _assert_same_sub(small.res, large.res)
@@ -130,7 +132,7 @@ def test_the_pair_scale_is_normalized_out():
 
 def test_the_pair_phase_is_kept():
     """A global phase is physics (it rotates the amplitudes) and must not be normalized out."""
-    kw = dict(CFG_2D, ucell=UCELL_2D)
+    kw = dict(CFG_2D, structure=STRUCTURE_2D)
     base = wavebit.rcwa(polarization=(1, -1j), **kw).conv_solve()
     phase = np.exp(0.4j)
     rotated = wavebit.rcwa(polarization=(phase, -1j * phase), **kw).conv_solve()
@@ -143,7 +145,7 @@ def test_the_pair_phase_is_kept():
 def test_pair_reproduces_psi_under_backside_illumination():
     """The two incidence features compose: the pair means the same thing from either side."""
     psi_v = 0.7
-    kw = dict(CFG_2D, ucell=UCELL_2D, incidence_side='bottom')
+    kw = dict(CFG_2D, structure=STRUCTURE_2D, incidence_side='bottom')
     via_psi = wavebit.rcwa(psi=psi_v, **kw).conv_solve()
     via_pair = wavebit.rcwa(polarization=pair_of(psi_v), **kw).conv_solve()
     _assert_same_sub(via_psi.res, via_pair.res)
@@ -153,7 +155,7 @@ def test_pair_reproduces_psi_under_backside_illumination():
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 def test_lossless_energy_conservation_at_arbitrary_complex_pairs(algo):
-    kw = dict(CFG_2D, ucell=UCELL_2D, connecting_algo=algo)
+    kw = dict(CFG_2D, structure=STRUCTURE_2D, connecting_algo=algo)
     for pair in ((0.3 + 0.4j, -1.2 + 0.1j), (2.0, 0.5j), (1e-3, 1 + 1j)):
         res = wavebit.rcwa(polarization=pair, **kw).conv_solve()
         total = float(np.asarray(res.res.R).sum() + np.asarray(res.res.T).sum())
@@ -253,7 +255,7 @@ def test_a_declared_away_angle_is_absent_rather_than_defaulted(backend):
 
 def test_complex_psi_refusal_does_not_reach_the_pair():
     """The pair is where the imaginary part belongs, so it must stay unrestricted."""
-    res = wavebit.rcwa(polarization=(1, -1j), ucell=UCELL_2D, **CFG_2D).conv_solve()
+    res = wavebit.rcwa(polarization=(1, -1j), structure=STRUCTURE_2D, **CFG_2D).conv_solve()
     assert float(np.asarray(res.res.T).sum()) > 0
 
 
@@ -265,7 +267,7 @@ def test_a_1d_structure_with_a_pair_takes_the_conical_path():
     The endpoints must still agree with the pure path's own answers, which is what makes
     the routing an implementation detail rather than a behavior change.
     """
-    kw = dict(CFG_1D, ucell=UCELL_1D)
+    kw = dict(CFG_1D, structure=STRUCTURE_1D)
     for pair, tetm in (((1, 0), 'te'), ((0, 1), 'tm')):
         solver = wavebit.rcwa(polarization=pair, **kw)
         via_pair = solver.conv_solve()
@@ -278,7 +280,7 @@ def test_a_1d_structure_with_a_pair_takes_the_conical_path():
 
 
 def test_the_pure_1d_solve_refuses_the_pair_in_plain_words():
-    solver = wavebit.rcwa(polarization=(1, 0), ucell=UCELL_1D, **CFG_1D)
+    solver = wavebit.rcwa(polarization=(1, 0), structure=STRUCTURE_1D, **CFG_1D)
     epx, epy, epz_i, _, _ = solver.conv_matrices()
     with pytest.raises(ValueError, match='single-polarization by construction'):
         solver.solve_1d(CFG_1D['wavelength'], epx, epy, epz_i)
@@ -321,7 +323,7 @@ def _solve_gyrotropic(pair=None, **incidence):
     I = np.eye(1, dtype=np.complex128)
     if pair is not None:
         incidence = dict(incidence, polarization=pair)
-    solver = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0,
+    solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0,
                             **incidence, fto=(0, 0), period=(300.0, 300.0),
                             wavelength=WL, thickness=[D])
     return solver.solve_for_conv(
@@ -400,9 +402,9 @@ def test_pair_reproduces_the_psi_field(path, algo):
     """The same incidence must give the same near field, not merely the same efficiencies."""
     psi_v = 0.7
     if path == 'conical':
-        kw = dict(CFG_1D, ucell=UCELL_1D, phi=0.4, connecting_algo=algo)
+        kw = dict(CFG_1D, structure=STRUCTURE_1D, phi=0.4, connecting_algo=algo)
     else:
-        kw = dict(CFG_2D, ucell=UCELL_2D, connecting_algo=algo)
+        kw = dict(CFG_2D, structure=STRUCTURE_2D, connecting_algo=algo)
     via_psi = _field(psi=psi_v, **kw)
     via_pair = _field(polarization=pair_of(psi_v), **kw)
     assert via_pair.shape == via_psi.shape
@@ -418,7 +420,7 @@ def test_the_1d_routed_pair_field_matches_the_conical_psi_field():
     what makes the routing an implementation detail here too.
     """
     psi_v = 0.7
-    kw = dict(CFG_1D, ucell=UCELL_1D)
+    kw = dict(CFG_1D, structure=STRUCTURE_1D)
     solver = wavebit.rcwa(polarization=pair_of(psi_v), answers='field', **kw)
     _, via_pair = solver.conv_solve_field(**FIELD_RES)
     assert solver.grating_type_assigned == 1, 'expected the conical formulation'
@@ -432,7 +434,7 @@ def test_the_circular_pair_field_is_sound_and_is_not_the_linear_one():
     ``(1, -1j)/sqrt(2)`` and ``psi = pi/4`` carry the same ``|a_s| = |a_p|``; only the
     quarter turn between them tells the two apart, and it must move the reconstructed cell.
     """
-    kw = dict(CFG_2D, ucell=UCELL_2D)
+    kw = dict(CFG_2D, structure=STRUCTURE_2D)
     circular = _field(polarization=(1 / np.sqrt(2), -1j / np.sqrt(2)), **kw)
     linear = _field(psi=np.pi / 4, **kw)
 
@@ -451,7 +453,7 @@ def test_the_pair_field_is_linear_in_the_amplitudes():
     re-derived a real ``psi`` from the pair) reproduces every ``psi`` field above and fails
     here.
     """
-    kw = dict(CFG_2D, ucell=UCELL_2D)
+    kw = dict(CFG_2D, structure=STRUCTURE_2D)
     a_s, a_p = 1 / np.sqrt(2), -1j / np.sqrt(2)
     combined = a_s * _field(psi=np.pi / 2, **kw) + a_p * _field(psi=0.0, **kw)
     np.testing.assert_allclose(_field(polarization=(a_s, a_p), **kw), combined,
@@ -491,7 +493,7 @@ def test_the_pair_carries_a_gradient_through_the_pytree():
     import jax
     import jax.numpy as jnp
 
-    kw = dict(CFG_2D, ucell=jnp.asarray(UCELL_2D))
+    kw = dict(CFG_2D, structure=jnp.asarray(STRUCTURE_2D))
     kw['backend'] = 1
 
     def total(solver):
@@ -525,17 +527,18 @@ def test_incidence_carries_the_pair():
     inc = Incidence(wavelength=CFG_2D['wavelength'], theta=CFG_2D['theta'],
                     phi=CFG_2D['phi'], polarization=(1, -1j))
     kw = {k: v for k, v in CFG_2D.items() if k not in ('wavelength', 'theta', 'phi')}
-    via_incidence = wavebit.rcwa(incidence=inc, ucell=UCELL_2D, **kw).conv_solve()
-    via_kwarg = wavebit.rcwa(polarization=(1, -1j), ucell=UCELL_2D,
+    via_incidence = wavebit.rcwa(incidence=inc, structure=STRUCTURE_2D, **kw).conv_solve()
+    via_kwarg = wavebit.rcwa(polarization=(1, -1j), structure=STRUCTURE_2D,
                                **CFG_2D).conv_solve()
     _assert_same_sub(via_incidence.res, via_kwarg.res)
 
 
 _SPEC = {
+    'version': '3',                 # a parsed document states its schema; see tests/test_spec.py
     'numerics': {'backend': 'numpy', 'fto': [10, 0]},
     'stack': {
-        'n_top': 1.0, 'n_bot': 1.5, 'period': [700.0],
-        'layers': [{'thickness': 300.0, 'eps': [[1.0, 1.0, 3.5, 3.5]]}],
+        'top': 1.0, 'bot': 2.25, 'period': [700.0],
+        'layers': [{'thickness': 300.0, 'structure': [[1.0, 1.0, 12.25, 12.25]]}],
     },
     # No `tetm`: it declares the polarization away, so it cannot sit beside the pair the
     # rest of this file is about. The spec omits the key entirely when nothing declares it.
@@ -563,8 +566,8 @@ def test_run_executes_the_pair_spec():
     result = wavebit.run(_SPEC)
     reference = wavebit.rcwa(
         backend=0, wavelength=900.0, period=[700.0], fto=[10, 0],
-        n_top=1.0, n_bot=1.5, theta=0.0, phi=0.0, polarization=(1, -1j),
-        ucell=np.array([[[1.0, 1.0, 3.5, 3.5]]]), thickness=[300.0],
+        top=1.0, bot=2.25, theta=0.0, phi=0.0, polarization=(1, -1j),
+        structure=np.array([[[1.0, 1.0, 12.25, 12.25]]]), thickness=[300.0],
     ).conv_solve()
     np.testing.assert_array_equal(result.R, reference.R)
     np.testing.assert_array_equal(result.T, reference.T)
@@ -583,7 +586,7 @@ def test_a_spec_without_the_pair_hashes_as_before():
 @pytest.mark.parametrize('psi_v', [0.0, 0.4, 1.1, np.pi / 2])
 def test_chi_zero_is_the_psi_spelling(psi_v):
     """``chi = 0`` is the linear state at ``psi`` — the chart contains the angle it extends."""
-    kw = dict(CFG_2D, ucell=UCELL_2D)
+    kw = dict(CFG_2D, structure=STRUCTURE_2D)
     _assert_same_sub(wavebit.rcwa(psi=psi_v, **kw).conv_solve().res,
                      wavebit.rcwa(psi=psi_v, chi=0.0, **kw).conv_solve().res, atol=1e-13)
 
@@ -598,7 +601,7 @@ def test_the_chart_is_the_pair_it_names(backend):
     psi_v, chi_v = 0.4, -0.2
     pair = (np.sin(psi_v) * np.cos(chi_v) + 1j * np.cos(psi_v) * np.sin(chi_v),
             np.cos(psi_v) * np.cos(chi_v) - 1j * np.sin(psi_v) * np.sin(chi_v))
-    kw = dict(CFG_2D, ucell=UCELL_2D)
+    kw = dict(CFG_2D, structure=STRUCTURE_2D)
     kw['backend'] = backend
 
     chart = wavebit.rcwa(psi=psi_v, chi=chi_v, **kw).conv_solve()
@@ -609,7 +612,7 @@ def test_the_chart_is_the_pair_it_names(backend):
 
 def test_the_chart_covers_the_states_the_angle_cannot():
     """The point of the second coordinate: ``chi`` sweeps linear to circular and back."""
-    kw = dict(CFG_2D, ucell=UCELL_2D)
+    kw = dict(CFG_2D, structure=STRUCTURE_2D)
     totals = [float(np.asarray(wavebit.rcwa(psi=0.3, chi=c, **kw).conv_solve().res.T).sum())
               for c in np.linspace(-np.pi / 4, np.pi / 4, 9)]
     assert max(totals) - min(totals) > 1e-3, totals          # not a constant in disguise
@@ -647,7 +650,7 @@ def test_both_chart_coordinates_carry_a_gradient():
     import jax
     import jax.numpy as jnp
 
-    kw = dict(CFG_2D, ucell=jnp.asarray(UCELL_2D))
+    kw = dict(CFG_2D, structure=jnp.asarray(STRUCTURE_2D))
     kw['backend'] = 1
 
     def total(**inc):
@@ -689,7 +692,7 @@ def test_chi_zero_is_the_psi_spelling_bit_for_bit():
     angles where ``sqrt(sin^2 + cos^2)`` misses 1.0. Checked on those angles specifically,
     since a random one passes either way.
     """
-    kw = dict(CFG_2D, ucell=UCELL_2D)
+    kw = dict(CFG_2D, structure=STRUCTURE_2D)
     picked = [v for v in np.random.default_rng(1).uniform(0.1, 1.5, 300)
               if np.sqrt(np.sin(v) ** 2 + np.cos(v) ** 2) != 1.0][:8]
     assert picked, 'no angle with an inexact norm — the test would be vacuous'
@@ -709,7 +712,7 @@ def test_only_a_written_pair_is_normalized():
     ``(3, 4j)`` and ``(0.6, 0.8j)`` must agree — that is the written pair being normalized —
     while the angle forms must reach the solve untouched, which the test above pins.
     """
-    kw = dict(CFG_2D, ucell=UCELL_2D)
+    kw = dict(CFG_2D, structure=STRUCTURE_2D)
     _assert_same_sub(solved_res(polarization=(0.6, 0.8j), **kw),
                      solved_res(polarization=(3, 4j), **kw))
 
@@ -725,7 +728,7 @@ def test_an_integer_pair_still_carries_a_gradient():
     import jax
     import jax.numpy as jnp
 
-    solver = wavebit.rcwa(backend=1, ucell=jnp.asarray(UCELL_2D), polarization=(1, -1j),
+    solver = wavebit.rcwa(backend=1, structure=jnp.asarray(STRUCTURE_2D), polarization=(1, -1j),
                             **{k: v for k, v in CFG_2D.items() if k != 'backend'})
     grad = jax.grad(lambda s: s.conv_solve().T.sum())(solver)
     assert all(abs(complex(np.asarray(g))) > 1e-6 for g in grad.polarization), grad.polarization

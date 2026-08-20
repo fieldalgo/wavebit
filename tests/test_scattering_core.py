@@ -13,6 +13,8 @@ pinned to the legacy results in test_golden_legacy_parity.py. So the properties 
                    it is built from, match the ETM's, on an axis-aligned and a skewed cell;
   * portability  — same numbers on numpy / jax / torch, and gradients still flow.
 """
+import warnings
+
 import numpy as np
 import pytest
 
@@ -23,59 +25,61 @@ from wavebit._core.solve_1d import solve_1d, solve_1d_conical
 from wavebit._core.solve_2d import solve_2d
 
 # ---------------------------------------------------------------------------------- cases
-# name, kwargs for wavebit.rcwa (grating type follows from ucell / phi, as in the solver)
-UC_1D = np.array([[[3., 3., 1., 1., 3., 1.]], [[2., 2., 2., 1., 1., 1.]]])
-UC_1D_SUB = np.array([[[3., 3., 1., 1., 3., 1.]], [[1., 1., 1., 1., 1., 1.]]])
-UC_2D = np.array([[[3., 3., 1., 1.], [1., 3., 3., 1.], [1., 1., 3., 3.], [3., 1., 1., 3.]]])
+# name, kwargs for wavebit.rcwa (grating type follows from `structure` / phi, as in the
+# solver). Every raster below is PERMITTIVITY: 9 and 4 where the pre-flip file wrote the
+# indices 3 and 2, so each case is the same stack it always was.
+UC_1D = np.array([[[9., 9., 1., 1., 9., 1.]], [[4., 4., 4., 1., 1., 1.]]])
+UC_1D_SUB = np.array([[[9., 9., 1., 1., 9., 1.]], [[1., 1., 1., 1., 1., 1.]]])
+UC_2D = np.array([[[9., 9., 1., 1.], [1., 9., 9., 1.], [1., 1., 9., 9.], [9., 1., 1., 9.]]])
 
 CASES_1D = [
-    ('te_1layer', dict(tetm='te', ucell=np.array([[[3., 3., 3., 1., 1., 1.]]]), thickness=[0.15],
-                       n_top=2.0, n_bot=1.0, theta=0.0, wavelength=0.777, period=[0.77],
+    ('te_1layer', dict(tetm='te', structure=np.array([[[9., 9., 9., 1., 1., 1.]]]), thickness=[0.15],
+                       top=4.0, bot=1.0, theta=0.0, wavelength=0.777, period=[0.77],
                        fto=[6, 0])),
-    ('tm_1layer', dict(tetm='tm', ucell=np.array([[[3., 3., 3., 1., 1., 1.]]]), thickness=[0.15],
-                       n_top=2.0, n_bot=1.0, theta=0.0, wavelength=0.777, period=[0.77],
+    ('tm_1layer', dict(tetm='tm', structure=np.array([[[9., 9., 9., 1., 1., 1.]]]), thickness=[0.15],
+                       top=4.0, bot=1.0, theta=0.0, wavelength=0.777, period=[0.77],
                        fto=[6, 0])),
-    ('te_2layer_oblique', dict(tetm='te', ucell=UC_1D, thickness=[0.15, 0.22], n_top=2.0,
-                               n_bot=1.5, theta=0.3, wavelength=0.777, period=[0.77],
+    ('te_2layer_oblique', dict(tetm='te', structure=UC_1D, thickness=[0.15, 0.22], top=4.0,
+                               bot=2.25, theta=0.3, wavelength=0.777, period=[0.77],
                                fto=[5, 0])),
-    ('tm_2layer_oblique', dict(tetm='tm', ucell=UC_1D, thickness=[0.15, 0.22], n_top=2.0,
-                               n_bot=1.5, theta=0.3, wavelength=0.777, period=[0.77],
+    ('tm_2layer_oblique', dict(tetm='tm', structure=UC_1D, thickness=[0.15, 0.22], top=4.0,
+                               bot=2.25, theta=0.3, wavelength=0.777, period=[0.77],
                                fto=[5, 0])),
     # bottom layer uniform and equal to the substrate: ETM short-circuits the interface,
     # SMM has no short-circuit to take — they must still land on the same answer.
-    ('te_same_material', dict(tetm='te', ucell=UC_1D_SUB, thickness=[0.2, 0.1], n_top=1.0,
-                              n_bot=1.0, theta=0.0, wavelength=0.9, period=[0.7],
+    ('te_same_material', dict(tetm='te', structure=UC_1D_SUB, thickness=[0.2, 0.1], top=1.0,
+                              bot=1.0, theta=0.0, wavelength=0.9, period=[0.7],
                               fto=[5, 0])),
-    ('tm_same_material', dict(tetm='tm', ucell=UC_1D_SUB, thickness=[0.2, 0.1], n_top=1.0,
-                              n_bot=1.0, theta=0.0, wavelength=0.9, period=[0.7],
+    ('tm_same_material', dict(tetm='tm', structure=UC_1D_SUB, thickness=[0.2, 0.1], top=1.0,
+                              bot=1.0, theta=0.0, wavelength=0.9, period=[0.7],
                               fto=[5, 0])),
     # thick, strongly evanescent: the regime where a connecting algorithm goes wrong if it
     # ever inverts a growing exponential
-    ('tm_thick', dict(tetm='tm', ucell=np.array([[[4., 4., 4., 4., 1., 1., 1., 1.]]]),
-                      thickness=[20.0], n_top=1.0, n_bot=1.0, theta=0.0, wavelength=0.5,
+    ('tm_thick', dict(tetm='tm', structure=np.array([[[16., 16., 16., 16., 1., 1., 1., 1.]]]),
+                      thickness=[20.0], top=1.0, bot=1.0, theta=0.0, wavelength=0.5,
                       period=[0.6], fto=[12, 0])),
 ]
 
 CASES_CONICAL = [
-    ('con_1layer', dict(ucell=np.array([[[3., 3., 3., 1., 1., 1.]]]), thickness=[0.15],
-                        n_top=2.0, n_bot=1.0, theta=0.2, phi=0.3, psi=0.4, wavelength=0.777,
+    ('con_1layer', dict(structure=np.array([[[9., 9., 9., 1., 1., 1.]]]), thickness=[0.15],
+                        top=4.0, bot=1.0, theta=0.2, phi=0.3, psi=0.4, wavelength=0.777,
                         period=[0.77], fto=[6, 0])),
-    ('con_2layer_lossy_sub', dict(ucell=UC_1D, thickness=[0.15, 0.22], n_top=1.0, n_bot=1.5,
+    ('con_2layer_lossy_sub', dict(structure=UC_1D, thickness=[0.15, 0.22], top=1.0, bot=2.25,
                                   theta=0.3, phi=0.5, psi=1.1, wavelength=0.9, period=[0.7],
                                   fto=[5, 0])),
-    ('con_phi0', dict(ucell=np.array([[[4., 4., 1., 1., 1., 1.]]]), thickness=[0.3],
-                      n_top=1.5, n_bot=1.0, theta=0.25, phi=0.0, psi=0.7, wavelength=0.6,
+    ('con_phi0', dict(structure=np.array([[[16., 16., 1., 1., 1., 1.]]]), thickness=[0.3],
+                      top=2.25, bot=1.0, theta=0.25, phi=0.0, psi=0.7, wavelength=0.6,
                       period=[0.5], fto=[4, 0])),
 ]
 
 CASES_2D = [
-    ('2d_1layer', dict(ucell=UC_2D, thickness=[0.3], n_top=1.0, n_bot=1.5, theta=0.2,
+    ('2d_1layer', dict(structure=UC_2D, thickness=[0.3], top=1.0, bot=2.25, theta=0.2,
                        phi=0.4, psi=0.7, wavelength=0.9, period=[0.7, 0.7], fto=[3, 3])),
     # The two layers differ in *mean* permittivity, not just in pattern. Equal means used to
     # trip a ETM misdetection (see the DEGENERATE_MEAN note below); that path is gone, and
     # this stays the way it is because the case is a cross-algorithm check, not a probe of it.
-    ('2d_2layer_normal', dict(ucell=np.concat([UC_2D, 1 + UC_2D[:, ::-1]]),
-                              thickness=[0.2, 0.3], n_top=1.0, n_bot=1.0, theta=0.0,
+    ('2d_2layer_normal', dict(structure=np.concat([UC_2D, 1 + UC_2D[:, ::-1]]),
+                              thickness=[0.2, 0.3], top=1.0, bot=1.0, theta=0.0,
                               phi=0.0, psi=0.4, wavelength=0.5, period=[0.6, 0.6],
                               fto=[2, 2])),
 ]
@@ -120,6 +124,47 @@ def test_smm_conserves_energy_when_lossless(name, kwargs, kind):
     assert abs(total - 1.0) < 1e-9, total
 
 
+@pytest.mark.parametrize('slot', ['eps_top', 'eps_bot'])
+def test_half_space_permittivity_reaches_both_connecting_algorithms(slot):
+    """``eps_top`` / ``eps_bot`` are read by ETM and by SMM, and read the same way.
+
+    The 2D solves take each half-space as three numbers -- the index ``n``, the permeability
+    ``mu`` and the permittivity ``eps`` -- of which only two are independent, since
+    ``n**2 == eps*mu``. Every scene the engine builds supplies a consistent triple, and *that
+    is what hides a missing reader*: while ``eps == n**2/mu`` the ETM matching's ``kz*mu/n**2``
+    and the SMM's ``kz/eps`` are the same number to within rounding, so ETM could -- and for a
+    while did -- declare ``eps_top``, document it, mirror it under backside incidence, and
+    never read a line of it, with the whole suite green. ``eps_bot`` was read on both paths the
+    whole time, which is the asymmetry that makes this worth parametrizing rather than
+    asserting once.
+
+    Breaking the consistency on purpose is what makes a reader visible. The probe hands one
+    slot a permittivity far from ``n**2/mu`` and asks two things: that the answer *moves* (a
+    slot nothing reads cannot move it), and that both connecting algorithms move to the same
+    place. The second is the one that failed: with ``eps_top = 100`` against ``n_top = 2``, SMM
+    followed the permittivity and ETM did not, so the same scene answered differently
+    depending on a keyword that is supposed to select an algorithm, not a structure.
+
+    The probe is deliberately **not** a physical scene -- an index and a permittivity that
+    disagree describe no medium, so ``R + T`` leaves 1 and the solve says so. That warning is
+    the honest report of the input and is not what is under test, so it is filtered rather
+    than asserted; a case where it happened not to fire would prove nothing either way.
+    """
+    _, inputs = _core_inputs(CASES_2D[0][1])
+    base = solve_2d(**inputs)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', wavebit.UnphysicalResultWarning)
+        etm = solve_2d(**inputs, **{slot: 100.0})
+        smm = smm_2d(**inputs, **{slot: 100.0})
+
+    moved = max(float(np.max(np.abs(np.array(etm[i]) - np.array(base[i])))) for i in (0, 1))
+    assert moved > 1e-3, f'{slot} moved the ETM answer by only {moved:.3e}: nothing reads it'
+    for i, port in enumerate(('R', 'T')):
+        np.testing.assert_allclose(np.array(etm[i]), np.array(smm[i]),
+                                   rtol=1e-10, atol=1e-14,
+                                   err_msg=f'{slot}: ETM and SMM disagree in {port}')
+
+
 # ---------------------------------------------------------------------------------- wiring
 
 def _core_inputs(kwargs):
@@ -127,8 +172,10 @@ def _core_inputs(kwargs):
     solver = wavebit.rcwa(backend=0, connecting_algo='SMM', **kwargs)
     solver.conv_solve()                    # assigns the grating type
     epx, epy, epz = to_conv_mat_raster_sampled(
-        solver.ucell, solver.fto[0], solver.fto[1])
+        solver.structure, solver.fto[0], solver.fto[1])
     kx, ky = solver.get_kx_ky_vector(kwargs['wavelength'])
+    # The core solves take an INDEX: `n_top` / `n_bot` are amplitude ratios there, and the
+    # solver's read-only properties are exactly the derived roots to hand them.
     common = dict(wavelength=kwargs['wavelength'], kx=kx, n_top=solver.n_top,
                   n_bot=solver.n_bot, theta=solver.theta, thickness=solver.thickness,
                   epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
@@ -239,12 +286,12 @@ def test_smm_field_state_matches_tmm(name, kwargs, kind):
             close(np.array(li_t[j]), np.array(li_s[j]), (i, nm))
 
 
-# theta=0, n_bot=1.5 and lambda/period=1/4 put order m=+-6 exactly at the substrate cutoff:
+# theta=0, bot=2.25 (index 1.5) and lambda/period=1/4 put order m=+-6 exactly at the substrate cutoff:
 # kx = 1.5 = n_bot, so kz_bot = 0 and the substrate's own mode basis is singular. Recovering
 # the amplitudes in that basis is the natural-looking choice and it dies here; the gap basis
 # the recovery actually uses cannot, by construction of eps_gap.
-CUTOFF = dict(ucell=np.array([[[3., 3., 1., 1., 3., 1.]], [[2., 2., 2., 1., 1., 1.]]]),
-              thickness=[300.0, 500.0], n_top=1.0, n_bot=1.5, theta=0.0,
+CUTOFF = dict(structure=np.array([[[9., 9., 1., 1., 9., 1.]], [[4., 4., 4., 1., 1., 1.]]]),
+              thickness=[300.0, 500.0], top=1.0, bot=2.25, theta=0.0,
               wavelength=500.0, period=[2000.0], fto=[8, 0])
 
 
@@ -284,7 +331,7 @@ def _hex_rod(n=48, radius=90.0):
             inside |= ((pts[..., 0] - centre[0] - s[0]) ** 2
                        + (pts[..., 1] - centre[1] - s[1]) ** 2) <= radius ** 2
     cell = np.full((1, n, n), 1.0)
-    cell[0][inside] = 2.4
+    cell[0][inside] = 5.76           # 2.4**2
     return cell
 
 
@@ -296,8 +343,8 @@ def test_smm_field_on_a_skewed_cell_matches_tmm():
     recovery reads the lattice -- it works in the mode and gap bases, which the basis change
     never touches -- and this is the test that says so rather than assuming it.
     """
-    kwargs = dict(ucell=_hex_rod(), period=[HEX_P, HEX_P], fto=[4, 4], thickness=[150.0],
-                  wavelength=900.0, n_top=1.0, n_bot=1.0, theta=0.1, phi=0.3, psi=0.4,
+    kwargs = dict(structure=_hex_rod(), period=[HEX_P, HEX_P], fto=[4, 4], thickness=[150.0],
+                  wavelength=900.0, top=1.0, bot=1.0, theta=0.1, phi=0.3, psi=0.4,
                   lattice=HEX, factorization='nvf')
     _, tmm = _field('ETM', kwargs, res_x=6, res_y=6, res_z=4)
     _, smm = _field('SMM', kwargs, res_x=6, res_y=6, res_z=4)
@@ -337,7 +384,7 @@ def test_frozen_geometry_does_not_change_the_smm_answer():
 # either now, so no solver can skip an interface; kept as what would catch either of them
 # growing one back.
 DEGENERATE_MEAN = dict(
-    ucell=np.concat([UC_2D, UC_2D[:, ::-1]]), thickness=[0.2, 0.3], n_top=1.0, n_bot=1.0,
+    structure=np.concat([UC_2D, UC_2D[:, ::-1]]), thickness=[0.2, 0.3], top=1.0, bot=1.0,
     psi=0.4, wavelength=0.5, period=[0.6, 0.6], fto=[2, 2])
 
 
@@ -361,12 +408,12 @@ def test_smm_2d_matches_conical_on_y_invariant_stack():
     The two go through different mode algebra (2D block operator vs the conical s/p pair), so
     agreement here is evidence about the physics, not just about the connecting algorithm.
     """
-    pattern = np.array([[[3., 3., 1., 1., 3., 1., 1., 1.]],
-                        [[2., 2., 2., 1., 1., 1., 2., 2.]]])
-    common = dict(thickness=[0.2, 0.3], n_top=1.0, n_bot=1.0, psi=0.4, wavelength=0.5,
+    pattern = np.array([[[9., 9., 1., 1., 9., 1., 1., 1.]],
+                        [[4., 4., 4., 1., 1., 1., 4., 4.]]])
+    common = dict(thickness=[0.2, 0.3], top=1.0, bot=1.0, psi=0.4, wavelength=0.5,
                   period=[0.6, 0.6], theta=0.1, phi=0.0, fto=[2, 0])
-    conical = _solve('SMM', dict(common, ucell=pattern))
-    two_d = _solve('SMM', dict(common, ucell=np.repeat(pattern, 8, axis=1)))
+    conical = _solve('SMM', dict(common, structure=pattern))
+    two_d = _solve('SMM', dict(common, structure=np.repeat(pattern, 8, axis=1)))
     for field in ('R', 'T'):
         a = np.array(getattr(conical, field)).ravel()
         b = np.array(getattr(two_d, field)).ravel()

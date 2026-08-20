@@ -25,8 +25,14 @@ index and drops the permeability sees no interface and returns ``R = 0``; the an
 Nothing else in the suite distinguishes "the boundary reads mu" from "the boundary happens to
 agree".
 
-Ambients are stated as physical ``(eps, mu)`` and converted here — see the case module for why
-the golden does not encode the solver's spelling of a magnetic half-space.
+**The case module's ambients now need no conversion at all, and that is the payoff of a
+decision it made before the answer was known.** It states each half-space as a physical
+``(eps, mu)`` pair on the explicit grounds that "the solver's spelling of a magnetic half-space
+is an API decision that came after this file, and a golden that encoded it would have to be
+regenerated if it changed". The decision came on 2026-08-20 and it is
+:class:`wavebit.Material`, which is that same pair — so ``top=Material(eps, mu)`` is now a
+transcription rather than a conversion, and the ``sqrt(eps*mu)`` this file used to compute has
+moved inside the solver, where the branch is argued once.
 """
 import pathlib
 import sys
@@ -59,20 +65,27 @@ def _is_unit(t):
 def solve(top, bot, layer_eps, layer_mu, theta_deg, thick=THICK, algo='ETM'):
     """``[R_s, T_s, R_p, T_p]``. ``top`` / ``bot`` are physical ``(eps, mu)`` pairs.
 
-    ``n_top`` / ``n_bot`` stay the **refractive index** ``sqrt(eps*mu)`` — that is the spelling
-    the solver chose, and it is why nothing about ``kz``, Snell or the order grid changed when
-    permeability arrived. ``mu`` enters only through the boundary admittances.
+    Each becomes a :class:`wavebit.Material` verbatim. The solver derives the refractive index
+    ``sqrt(eps*mu)`` from it once, at the setter, and reads *that* everywhere ``kz``, Snell and
+    the order grid are written — which is why none of those changed when permeability arrived,
+    and why this file no longer takes that root itself.
+
+    The two half-space quantities are then passed to :meth:`solve_for_conv` **explicitly**, and
+    they have to be: this is the low-level door, below the point where ``conv_solve`` reads them
+    off ``self.top`` / ``self.bot``. They ride together rather than singly — ``mu`` without its
+    ``eps`` would leave the solve recovering ``eps = n**2/mu`` from an index built out of the
+    pair, which agrees to round-off but says the same thing twice.
     """
     (eps_t, mu_t), (eps_b, mu_b) = top, bot
     mee = wavebit.rcwa(backend=0,
-                       n_top=float(np.sqrt(eps_t * mu_t).real),
-                       n_bot=float(np.sqrt(eps_b * mu_b).real),
+                       top=wavebit.Material(eps_t, mu_t),
+                       bot=wavebit.Material(eps_b, mu_b),
                        theta=np.deg2rad(theta_deg), phi=0.0, psi=0.0, fto=(0, 0),
                        period=(PERIOD, PERIOD), wavelength=WL, thickness=[thick],
                        connecting_algo=algo)
     res = mee.solve_for_conv(WL, *_slots(layer_eps),
                              mu=None if _is_unit(layer_mu) else tuple(_slots(layer_mu)),
-                             mu_top=mu_t, mu_bot=mu_b)
+                             mu_top=mu_t, mu_bot=mu_b, eps_top=eps_t, eps_bot=eps_b)
     te, tm = res.res_te_inc, res.res_tm_inc
     return np.array([float(te.R.sum()), float(te.T.sum()),
                      float(tm.R.sum()), float(tm.T.sum())])
@@ -165,12 +178,13 @@ def test_the_ambient_permeability_is_not_silently_dropped(name):
 def _solve_psi(top, bot, layer_eps, theta_deg, psi_deg, algo='ETM', side='top'):
     (eps_t, mu_t), (eps_b, mu_b) = top, bot
     mee = wavebit.rcwa(backend=0,
-                       n_top=float(np.sqrt(eps_t * mu_t).real),
-                       n_bot=float(np.sqrt(eps_b * mu_b).real),
+                       top=wavebit.Material(eps_t, mu_t),
+                       bot=wavebit.Material(eps_b, mu_b),
                        theta=np.deg2rad(theta_deg), phi=0.0, psi=np.deg2rad(psi_deg),
                        fto=(0, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
                        incidence_side=side, connecting_algo=algo)
-    res = mee.solve_for_conv(WL, *_slots(layer_eps), mu_top=mu_t, mu_bot=mu_b)
+    res = mee.solve_for_conv(WL, *_slots(layer_eps), mu_top=mu_t, mu_bot=mu_b,
+                             eps_top=eps_t, eps_bot=eps_b)
     return res
 
 
@@ -221,8 +235,11 @@ def test_backside_incidence_is_reciprocal_with_magnetic_ambients(theta_top, algo
     reflection is direction-independent in general.
     """
     top, bot = (1.9, 1.3), (2.6, 1.7)
-    n_t = float(np.sqrt(top[0] * top[1]).real)
-    n_b = float(np.sqrt(bot[0] * bot[1]).real)
+    # Snell is written in indices, and a magnetic medium's is `sqrt(eps*mu)` -- so the product
+    # goes into `index_from_eps` rather than the permittivity alone. Dropping the `mu` here
+    # would not raise; it would just state the wrong angle and read as a broken mirror.
+    n_t = float(wavebit.index_from_eps(top[0] * top[1]).real)
+    n_b = float(wavebit.index_from_eps(bot[0] * bot[1]).real)
     theta_bot = np.rad2deg(np.arcsin(n_t * np.sin(np.deg2rad(theta_top)) / n_b))
 
     down = solve(top, bot, np.eye(3) * 2.2, np.eye(3), theta_top, algo=algo)
@@ -245,9 +262,12 @@ def test_the_reciprocity_check_can_tell_the_two_ambients_apart():
 
 def test_a_magnetic_ambient_on_a_one_dimensional_structure_is_refused():
     """The 1D and conical boundaries carry no permeability either. Refused, not ignored."""
-    mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=2.1, theta=0.0, phi=0.0, psi=0.0,
+    # 4.41 and 2.25 are the index-2.1 substrate and index-1.5 grating this case always had,
+    # said as permittivities. Neither matters to the refusal; both matter to it being a
+    # recognisable scene rather than an arbitrary one.
+    mee = wavebit.rcwa(backend=0, top=1.0, bot=4.41, theta=0.0, phi=0.0, psi=0.0,
                        fto=(3, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
-                       ucell=np.ones((1, 1, 8)) * 1.5)
+                       structure=np.ones((1, 1, 8)) * 2.25)
     e = [np.stack([np.eye(7, dtype=complex) * v]) for v in (2.6, 2.6, 1 / 2.6)]
     with pytest.raises(NotImplementedError, match='2D path only'):
         mee.solve_for_conv(WL, *e, mu_bot=1.7)

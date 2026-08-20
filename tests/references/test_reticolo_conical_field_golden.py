@@ -77,9 +77,9 @@ def _in_our_frame(e):
 
 
 def _reconstruct(stack, theta, phi, pol):
-    thickness, ucell = STACKS[stack]
-    solver = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, period=[PERIOD], fto=FTO,
-                          wavelength=WL, thickness=thickness, ucell=ucell,
+    thickness, structure = STACKS[stack]
+    solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, period=[PERIOD], fto=FTO,
+                          wavelength=WL, thickness=thickness, structure=structure,
                           theta=np.deg2rad(theta), phi=np.deg2rad(phi),
                           psi=np.pi / 2 if pol == 's' else 0.0,
                           # RETICOLO's texture is analytic piecewise-constant, so the exact
@@ -258,16 +258,21 @@ def test_the_stored_grids_are_the_ones_the_cases_describe():
 
 @pytest.mark.parametrize('stack', [s for s in STACKS if s != 'uniform'])
 def test_the_patterned_stacks_are_actually_patterned(stack):
-    """Guard the premise on RETICOLO's own index map, not on our raster."""
+    """Guard the premise on RETICOLO's own index map, not on our raster.
+
+    And on the *quantity* too, as its pure-1D twin explains: ``o`` is an index, ``STACKS`` is a
+    permittivity, so the comparison closes only if the bridge took the root on the way out.
+    """
     g = _golden()
     o = g[f'{stack}__o']
     assert o.shape == (RES_Z * n_layers(stack), RES_X)
     assert np.abs(o - o[:, :1]).max() > 1e-9, 'RETICOLO saw a uniform layer'
 
-    ucell = STACKS[stack][1]
-    idx = np.clip((x_samples() / (PERIOD / ucell.shape[2])).astype(int), 0,
-                  ucell.shape[2] - 1)
+    structure = STACKS[stack][1]
+    ours_index = wavebit.index_from_eps(structure)
+    idx = np.clip((x_samples() / (PERIOD / structure.shape[2])).astype(int), 0,
+                  structure.shape[2] - 1)
     for k in range(n_layers(stack)):
-        ours = ucell[n_layers(stack) - 1 - k, 0, idx]     # RETICOLO's layer order is reversed
+        ours = ours_index[n_layers(stack) - 1 - k, 0, idx]  # RETICOLO's layer order is reversed
         theirs = o[k * RES_Z:(k + 1) * RES_Z]
         assert np.allclose(theirs, ours[None, :], atol=1e-9), (k, theirs[0], ours)

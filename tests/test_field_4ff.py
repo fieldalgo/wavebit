@@ -88,10 +88,10 @@ def uniform_slots(eps_list):
 def z_solver(thickness, theta_deg=28.0, backend=0):
     """A solver for a stack of uniform tensors, at one retained order.
 
-    The tensors themselves arrive through :func:`uniform_slots`, not through a ``ucell``: a
+    The tensors themselves arrive through :func:`uniform_slots`, not through a ``structure``: a
     z-coupled permittivity is not something the modeler can paint.
     """
-    return wavebit.rcwa(backend=backend, n_top=1.0, n_bot=1.52, fto=(0, 0), period=PERIOD,
+    return wavebit.rcwa(backend=backend, top=1.0, bot=2.3104, fto=(0, 0), period=PERIOD,
                         wavelength=WL, theta=np.deg2rad(theta_deg), phi=np.deg2rad(37.0),
                         psi=0.6, thickness=thickness, answers='field')
 
@@ -130,20 +130,23 @@ def z_flux(F):
 
 # ------------------------------------------------- the exact oracle: the same scene both ways
 
+#: Permittivity rasters -- each entry is the square of the index the pre-flip file wrote, so
+#: the twins compare the same two formulations on the same four structures as before.
 TWINS = {
-    'a uniform slab': (np.full((1, 1, 1), 2.25), (0, 0), [180.0]),
-    'two uniform slabs': (np.array([[[2.25]], [[4.0]]]), (0, 0), [110.0, 90.0]),
-    'a patterned layer': (np.random.default_rng(0).uniform(1, 4, (1, 8, 8)), (1, 1), [150.0]),
-    'two patterned layers': (np.random.default_rng(1).uniform(1, 4, (2, 8, 8)), (2, 1),
+    'a uniform slab': (np.full((1, 1, 1), 5.0625), (0, 0), [180.0]),
+    'two uniform slabs': (np.array([[[5.0625]], [[16.0]]]), (0, 0), [110.0, 90.0]),
+    'a patterned layer': (np.random.default_rng(0).uniform(1, 4, (1, 8, 8)) ** 2, (1, 1),
+                          [150.0]),
+    'two patterned layers': (np.random.default_rng(1).uniform(1, 4, (2, 8, 8)) ** 2, (2, 1),
                              [80.0, 120.0]),
 }
 
 
 def twin_cell(formulation, name, theta_deg, side, backend=0):
-    ucell, fto, thickness = TWINS[name]
-    mee = wavebit.rcwa(backend=backend, n_top=1.0, n_bot=1.52, fto=fto, period=PERIOD,
+    structure, fto, thickness = TWINS[name]
+    mee = wavebit.rcwa(backend=backend, top=1.0, bot=2.3104, fto=fto, period=PERIOD,
                        wavelength=WL, theta=np.deg2rad(theta_deg), phi=np.deg2rad(37.0),
-                       psi=0.6, thickness=thickness, ucell=ucell, incidence_side=side,
+                       psi=0.6, thickness=thickness, structure=structure, incidence_side=side,
                        answers='field')
     mee.formulation = formulation
     mee.conv_solve()
@@ -203,12 +206,12 @@ def test_the_two_formulations_agree_on_the_variants_taken_one_at_a_time():
     Asking for the variants singly and together must give the same cells; the leading axis is
     the only place a reconstruction can get the *incidence* right and the *bookkeeping* wrong.
     """
-    ucell, fto, thickness = TWINS['a patterned layer']
+    structure, fto, thickness = TWINS['a patterned layer']
     cells = {}
     for formulation in ('2ff', '4ff'):
-        mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.52, fto=fto, period=PERIOD,
+        mee = wavebit.rcwa(backend=0, top=1.0, bot=2.3104, fto=fto, period=PERIOD,
                            wavelength=WL, theta=np.deg2rad(21.0), phi=np.deg2rad(37.0),
-                           psi=0.6, thickness=thickness, ucell=ucell, answers='field')
+                           psi=0.6, thickness=thickness, structure=structure, answers='field')
         mee.formulation = formulation
         mee.conv_solve()
         cells[formulation] = [
@@ -334,9 +337,9 @@ def test_a_vacuum_slab_comes_back_as_the_incident_plane_wave(formulation, psi_v,
     them; ``tests/test_field_core.py`` makes the same claim for the two 1D layouts and by
     Maxwell rather than by a closed form.
     """
-    mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, fto=(0, 0), period=PERIOD,
+    mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, fto=(0, 0), period=PERIOD,
                        wavelength=WL, theta=0.0, phi=0.0, psi=psi_v,
-                       thickness=[WL], ucell=np.ones((1, 1, 1)), answers='field')
+                       thickness=[WL], structure=np.ones((1, 1, 1)), answers='field')
     mee.formulation = formulation
     mee.conv_solve()
     cell = np.asarray(mee.calculate_field(res_x=1, res_y=1, res_z=8))[0, :, 0, 0, :]

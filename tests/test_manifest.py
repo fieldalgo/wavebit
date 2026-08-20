@@ -8,7 +8,7 @@ between that and a published document.
 **They are deliberately not mirror tests.** :mod:`wavebit.manifest` reads
 ``_core/engine.py``'s refusal tables at import, so asserting that the two agree would be
 asserting that a variable equals itself. What is checked instead is the manifest against
-*runtime behaviour*: build the ucell each spelling describes and confirm the solver assigns
+*runtime behaviour*: build the structure each spelling describes and confirm the solver assigns
 the path claimed, then ask for each option the manifest says is unavailable and confirm the
 build refuses it. That closes the loop the tables sit in the middle of.
 """
@@ -19,7 +19,8 @@ import numpy as np
 import pytest
 
 import wavebit
-from wavebit.manifest import LATTICE, MATERIALS, SPELLINGS, cited_sources, manifest
+from wavebit.manifest import (LATTICE, MATERIAL_QUANTITY, MATERIALS, SPELLINGS,
+                              cited_sources, manifest)
 from wavebit._core.enums import (Backend, Factorization, FourierCoefficients, NormalMethod,
                                    Pol)
 
@@ -27,7 +28,7 @@ import pathlib
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 
-KW = dict(backend=0, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+KW = dict(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
           fto=[4, 4], period=[1.0, 1.0], wavelength=1.1, thickness=[0.3])
 
 #: A hexagonal basis, for the two refusals a skewed cell carries.
@@ -37,22 +38,24 @@ _N = 32
 _axis = (np.arange(_N) + 0.5) / _N - 0.5
 _X, _Y = np.meshgrid(_axis, _axis)
 _RASTER = np.ones((1, _N, _N))
-_RASTER[0, _X ** 2 + _Y ** 2 <= 0.3 ** 2] = 2.5
+_RASTER[0, _X ** 2 + _Y ** 2 <= 0.3 ** 2] = 6.25          # permittivity: 2.5**2
 
 #: One structure per spelling in the manifest, written the way the manifest says to write it.
-#: The point is that these are transcribed *from* the manifest's `ucell` field — if that
-#: description stops matching what the setter accepts, this is where it shows.
-UCELLS = {
+#: The point is that these are transcribed *from* the manifest's `structure` field — if that
+#: description stops matching what the setter accepts, this is where it shows. Every material
+#: number here is a relative permittivity, which is the other half of that description and
+#: what `material_quantity` publishes.
+STRUCTURES = {
     'raster': _RASTER,
-    'block': [[1.0, [['ellipse', 0.5, 0.5, 0.6, 0.6, 2.5, 0.0, 24, 24]]]],
-    'smooth': [{'n_base': 1.0, 'combine': 'add',
+    'block': [[1.0, [['ellipse', 0.5, 0.5, 0.6, 0.6, 6.25, 0.0, 24, 24]]]],
+    'smooth': [{'background': 1.0, 'combine': 'add',
                 'shapes': [{'type': 'circle', 'cx': 0.5, 'cy': 0.5,
-                            'lx': 0.6, 'n_index': 2.5}]}],
-    'boundary': [{'n_base': 1.0, 'combine': 'paint', 'shapes': [
+                            'lx': 0.6, 'material': 6.25}]}],
+    'boundary': [{'background': 1.0, 'combine': 'paint', 'shapes': [
         {'type': 'rectangle', 'cx': 0.40, 'cy': 0.40, 'lx': 0.34, 'ly': 0.34,
-         'angle': 0.0, 'n_index': 2.0},
+         'angle': 0.0, 'material': 4.0},
         {'type': 'rectangle', 'cx': 0.56, 'cy': 0.56, 'lx': 0.34, 'ly': 0.34,
-         'angle': 0.3, 'n_index': 3.0},
+         'angle': 0.3, 'material': 9.0},
     ]}],
 }
 
@@ -63,19 +66,19 @@ PATHS = {entry['path']: entry for entry in manifest()['paths']}
 
 @pytest.mark.parametrize('spelling', SPELLINGS, ids=[s['path'] for s in SPELLINGS])
 def test_each_spelling_selects_the_modeling_type_it_claims(spelling):
-    """`ucell`'s *type* is the path selector — there is no keyword to check it against.
+    """`structure`'s *type* is the path selector — there is no keyword to check it against.
 
     So the manifest's prose description of how to spell a structure is load-bearing in a way
     a keyword's would not be: get it wrong and a consumer sends users down a different path
     than the one whose trade-offs it just explained.
     """
-    solver = wavebit.rcwa(ucell=UCELLS[spelling['path']], **KW)
+    solver = wavebit.rcwa(structure=STRUCTURES[spelling['path']], **KW)
     assert solver.modeling_type_assigned == spelling['modeling_type']
 
 
 def test_the_manifest_covers_every_spelling_the_setter_accepts():
     """A path the solver can assign but the manifest omits is a path nobody is told about."""
-    assigned = {wavebit.rcwa(ucell=u, **KW).modeling_type_assigned for u in UCELLS.values()}
+    assigned = {wavebit.rcwa(structure=u, **KW).modeling_type_assigned for u in STRUCTURES.values()}
     assert assigned == {s['modeling_type'] for s in SPELLINGS}
 
 
@@ -86,45 +89,45 @@ def _unavailable(path, axis, enum_cls):
     return [m.value for m in enum_cls if m.value not in PATHS[path][axis]]
 
 
-@pytest.mark.parametrize('path', sorted(UCELLS))
+@pytest.mark.parametrize('path', sorted(STRUCTURES))
 def test_a_factorization_the_manifest_withholds_is_refused(path):
     for value in _unavailable(path, 'factorization', Factorization):
         with pytest.raises(Exception) as excinfo:
-            wavebit.rcwa(ucell=UCELLS[path], factorization=value, **KW).conv_solve()
+            wavebit.rcwa(structure=STRUCTURES[path], factorization=value, **KW).conv_solve()
         assert value in str(excinfo.value), (
             f'{path}: refused factorization={value!r} without naming it')
 
 
-@pytest.mark.parametrize('path', sorted(UCELLS))
+@pytest.mark.parametrize('path', sorted(STRUCTURES))
 def test_a_series_the_manifest_withholds_is_refused(path):
     for value in _unavailable(path, 'fourier_coefficients', FourierCoefficients):
         with pytest.raises(Exception) as excinfo:
-            wavebit.rcwa(ucell=UCELLS[path], fourier_coefficients=value,
+            wavebit.rcwa(structure=STRUCTURES[path], fourier_coefficients=value,
                            **KW).conv_solve()
         assert value in str(excinfo.value), (
             f'{path}: refused fourier_coefficients={value!r} without naming it')
 
 
-@pytest.mark.parametrize('path', sorted(UCELLS))
+@pytest.mark.parametrize('path', sorted(STRUCTURES))
 def test_a_normal_method_the_manifest_withholds_is_refused(path):
     """The shape paths list no raster construction; naming one there must refuse."""
     for value in _unavailable(path, 'normal_method', NormalMethod):
         with pytest.raises(Exception) as excinfo:
-            wavebit.rcwa(ucell=UCELLS[path], normal_method=value, **KW).conv_solve()
+            wavebit.rcwa(structure=STRUCTURES[path], normal_method=value, **KW).conv_solve()
         assert value in str(excinfo.value), (
             f'{path}: refused normal_method={value!r} without naming it')
 
 
-@pytest.mark.parametrize('path', sorted(UCELLS))
+@pytest.mark.parametrize('path', sorted(STRUCTURES))
 def test_an_option_the_manifest_offers_actually_builds(path):
     """The other half — a path must not be described as implementing what it refuses."""
     for value in PATHS[path]['factorization']:
-        wavebit.rcwa(ucell=UCELLS[path], factorization=value, **KW).conv_solve()
+        wavebit.rcwa(structure=STRUCTURES[path], factorization=value, **KW).conv_solve()
     for value in PATHS[path]['fourier_coefficients']:
-        wavebit.rcwa(ucell=UCELLS[path], fourier_coefficients=value, **KW).conv_solve()
+        wavebit.rcwa(structure=STRUCTURES[path], fourier_coefficients=value, **KW).conv_solve()
     for value in PATHS[path]['normal_method']:
         # The manifest's own caveat: the axis is read only under factorization='nvf'.
-        wavebit.rcwa(ucell=UCELLS[path], factorization='nvf',
+        wavebit.rcwa(structure=STRUCTURES[path], factorization='nvf',
                        normal_method=value, **KW).conv_solve()
 
 
@@ -132,13 +135,13 @@ def test_an_option_the_manifest_offers_actually_builds(path):
 
 def test_the_block_path_is_refused_on_a_skewed_cell():
     with pytest.raises(NotImplementedError, match='block modeler'):
-        wavebit.rcwa(ucell=UCELLS['block'], lattice=HEX, factorization='nvf',
+        wavebit.rcwa(structure=STRUCTURES['block'], lattice=HEX, factorization='nvf',
                        **KW).conv_solve()
 
 
 def test_li_is_refused_on_a_skewed_cell():
     with pytest.raises(NotImplementedError, match="factorization='nvf'"):
-        wavebit.rcwa(ucell=UCELLS['raster'], lattice=HEX, factorization='li',
+        wavebit.rcwa(structure=STRUCTURES['raster'], lattice=HEX, factorization='li',
                        **KW).conv_solve()
 
 
@@ -181,13 +184,13 @@ def test_every_named_skewed_refusal_is_a_thing_that_exists():
 def test_a_smoothing_normal_method_is_refused_on_a_skewed_cell():
     """Only 'distance' carries the Jacobian pullback; the others must refuse, by name."""
     with pytest.raises(NotImplementedError, match='normal_method'):
-        wavebit.rcwa(ucell=UCELLS['raster'], lattice=HEX, factorization='nvf',
+        wavebit.rcwa(structure=STRUCTURES['raster'], lattice=HEX, factorization='nvf',
                        normal_method='contour', **KW).conv_solve()
 
 
 def test_a_skewed_cell_still_builds_on_the_paths_the_manifest_leaves_open():
     for path in ('raster', 'smooth', 'boundary'):
-        wavebit.rcwa(ucell=UCELLS[path], lattice=HEX, factorization='nvf',
+        wavebit.rcwa(structure=STRUCTURES[path], lattice=HEX, factorization='nvf',
                        **KW).conv_solve()
 
 
@@ -223,6 +226,71 @@ def test_every_material_case_states_a_reason():
         assert isinstance(entry['supported'], bool)
 
 
+# --------------------------------------------- what a material number means, against runtime
+
+def test_the_published_material_quantity_is_the_one_the_solver_takes():
+    """``material_quantity`` is the claim a generating consumer bets its numbers on.
+
+    Every other section of this document is about *shape*: which keyword, which enum value,
+    which path. This one is about a *number*, and it is the only claim here whose failure is
+    silent end to end -- an index handed to a permittivity solver builds a legal,
+    energy-conserving, different scene. So it is checked against arithmetic rather than against
+    a table: a uniform slab of the published quantity has to match the closed-form Fresnel
+    reflectance computed from that same quantity, and the two readings of one literal are far
+    enough apart that no tolerance could confuse them.
+
+    Written with ``kz`` and ``eps`` and no refractive index anywhere, for the reason
+    ``tests/test_material_convention_anchor.py`` gives at length: an oracle that spelled the
+    quantity the way the API does could be co-migrated into agreement with a wrong flip.
+    """
+    assert MATERIAL_QUANTITY['quantity'] == 'permittivity'
+    assert MATERIAL_QUANTITY['relative'] is True
+
+    eps_sub = 12.25
+    kw = dict(backend=0, top=1.0, bot=eps_sub, theta=0.0, phi=0.0, tetm='te',
+              fto=[0, 0], period=[1.0], wavelength=0.5, thickness=[0.0],
+              structure=np.ones((1, 1, 1)))
+    got = float(np.sum(np.asarray(wavebit.rcwa(**kw).conv_solve().R)))
+
+    kz_top, kz_bot = np.sqrt(1.0), np.sqrt(eps_sub)
+    want = abs((kz_top - kz_bot) / (kz_top + kz_bot)) ** 2
+    assert got == pytest.approx(want, rel=1e-12)
+    # and the other reading of 12.25 is nowhere near, so this is a convention check and not a
+    # tolerance check
+    other = abs((1.0 - np.sqrt(eps_sub ** 2)) / (1.0 + np.sqrt(eps_sub ** 2))) ** 2
+    assert abs(want - other) > 0.15
+
+
+def test_every_retired_material_name_the_manifest_lists_is_actually_refused():
+    """The ``retired`` map is migration advice, and stale advice is worse than none.
+
+    A consumer reading it will rewrite ``n_top`` to ``top`` -- so each entry has to be a name
+    the solver still refuses (or the map is telling people to fix something that is no longer
+    broken) and each replacement has to be a name it accepts. The refusal text must also carry
+    the *value* change, because a consumer that renames the key and keeps the number gets a
+    different scene and no warning; ``'PERMITTIVITY'`` in the message is that sentence's
+    fingerprint.
+    """
+    constructor = {'ucell': 'structure', 'n_top': 'top', 'n_bot': 'bot'}
+    for old, new in MATERIAL_QUANTITY['retired'].items():
+        assert new in ('structure', 'top', 'bot', 'background', 'material'), (old, new)
+        if old not in constructor:
+            continue                       # a dict key, refused by the analytic funnel instead
+        with pytest.raises(TypeError) as excinfo:
+            wavebit.rcwa(**{old: STRUCTURES['raster'] if old == 'ucell' else 1.0},
+                         **{k: v for k, v in KW.items() if k != 'structure'})
+        message = str(excinfo.value)
+        assert new in message and 'PERMITTIVITY' in message, (old, message)
+
+
+def test_the_published_conversions_exist_and_invert_each_other():
+    """``conversions`` names the way out of the flip; a name that is not exported is no way out."""
+    for name in MATERIAL_QUANTITY['conversions']:
+        assert hasattr(wavebit, name), f'manifest names wavebit.{name}, which is not exported'
+    assert wavebit.eps_from_index(3.5) == 12.25
+    assert complex(wavebit.index_from_eps(12.25)) == pytest.approx(3.5)
+
+
 # ------------------------------------------------ the results contract, against a real result
 
 def test_results_section_matches_a_real_result():
@@ -239,7 +307,7 @@ def test_results_section_matches_a_real_result():
     from wavebit._core.spec import SPEC_VERSION, JobSpec
 
     m = manifest()['results']
-    res = wavebit.rcwa(ucell=_RASTER, **KW).conv_solve()
+    res = wavebit.rcwa(structure=_RASTER, **KW).conv_solve()
     sub = res.res if res.res is not None else res.res_te_inc
 
     for name in list(m['efficiencies']['total']) + list(m['efficiencies']['by_outgoing_polarization']):
@@ -272,8 +340,8 @@ def test_incidence_side_claims_match_the_solver():
     this closes the document-vs-solver loop only.
     """
     m = manifest()['results']['incidence_side']
-    asym = np.array([[[3.0] * 16 + [1.0] * 16]])
-    kw = dict(KW, phi=None, psi=None, fto=[4, 0], n_bot=2.0, ucell=asym, thickness=[0.3])
+    asym = np.array([[[9.0] * 16 + [1.0] * 16]])
+    kw = dict(KW, phi=None, psi=None, fto=[4, 0], bot=4.0, structure=asym, thickness=[0.3])
 
     got = {}
     for side in m['values']:
@@ -302,19 +370,19 @@ def test_polarization_claims_match_runtime():
     """
     kw = {k: v for k, v in KW.items() if k != 'psi'}
 
-    via_pair = wavebit.rcwa(ucell=_RASTER, polarization=(np.sin(0.4), np.cos(0.4)),
+    via_pair = wavebit.rcwa(structure=_RASTER, polarization=(np.sin(0.4), np.cos(0.4)),
                               **kw).conv_solve()
     assert via_pair.res is not None, 'the pair must fill the specified-incidence slot'
 
-    via_psi = wavebit.rcwa(ucell=_RASTER, psi=0.4, **kw).conv_solve()
+    via_psi = wavebit.rcwa(structure=_RASTER, psi=0.4, **kw).conv_solve()
     np.testing.assert_allclose(via_pair.res.R, via_psi.res.R, atol=1e-14)
 
-    scaled = wavebit.rcwa(ucell=_RASTER, polarization=(5 * np.sin(0.4), 5 * np.cos(0.4)),
+    scaled = wavebit.rcwa(structure=_RASTER, polarization=(5 * np.sin(0.4), 5 * np.cos(0.4)),
                             **kw).conv_solve()
     np.testing.assert_allclose(scaled.res.R, via_pair.res.R, atol=1e-14)
 
     with pytest.raises(ValueError, match='psi and polarization'):
-        wavebit.rcwa(ucell=_RASTER, psi=0.4, polarization=(1, 0), **kw)
+        wavebit.rcwa(structure=_RASTER, psi=0.4, polarization=(1, 0), **kw)
 
 # ------------------------------------------------- the material flags, against the solver
 
@@ -331,7 +399,7 @@ def test_polarization_claims_match_runtime():
 #: Absolute accuracy is still the goldens' job — ``tests/references/test_fmmax_patterned_golden.py``
 #: and ``test_fmmax_magnetic_golden.py``, against oracles frozen before the code existed.
 _I1 = np.eye(1, dtype=complex)
-_MAT_KW = dict(backend=0, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+_MAT_KW = dict(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                period=(1.0, 1.0), wavelength=1.1, thickness=[0.3])
 
 

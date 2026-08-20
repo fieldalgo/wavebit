@@ -31,7 +31,7 @@ import wavebit
 # Chiral on purpose -- no mirror line in x or in y, so no order can come out right by a
 # symmetry the cell happens to have. Two arms of different index hanging off one bar.
 _UC = np.ones((1, 16, 16))
-_UC[0, 2:7, 3:12] = 3.48
+_UC[0, 2:7, 3:12] = 12.1104          # permittivity: 3.48**2
 _UC[0, 6:13, 9:13] = 2.10
 _UC[0, 11:14, 2:6] = 1.60
 
@@ -42,10 +42,10 @@ _PX, _PY, _FX, _FY = 500.0, 800.0, 5, 3
 _THICK = [120.0]
 
 
-def _solve(ucell, period, fto, phi, psi, theta=_THETA, backend=0, **kw):
-    return wavebit.rcwa(backend=backend, n_top=1.0, n_bot=1.0, thickness=_THICK,
+def _solve(structure, period, fto, phi, psi, theta=_THETA, backend=0, **kw):
+    return wavebit.rcwa(backend=backend, top=1.0, bot=1.0, thickness=_THICK,
                         wavelength=_WL, theta=theta, phi=phi, psi=psi, factorization='nvf',
-                        ucell=ucell, period=list(period), fto=list(fto),
+                        structure=structure, period=list(period), fto=list(fto),
                         **kw).conv_solve().res
 
 
@@ -127,9 +127,9 @@ def test_the_amplitudes_are_the_field_projected_on_zhat_cross_k():
     says ``r_s`` *is* that field amplitude against a unit incident one, the contract
     ``_core/result.py`` states.
     """
-    solver = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, thickness=_THICK, wavelength=_WL,
+    solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, thickness=_THICK, wavelength=_WL,
                           theta=_THETA, phi=np.pi / 2, psi=_PSI, factorization='nvf',
-                          ucell=_UC, period=[_PX, _PY], fto=[_FX, _FY], answers='field')
+                          structure=_UC, period=[_PX, _PY], fto=[_FX, _FY], answers='field')
     res = solver.conv_solve().res
 
     # More sample points than retained orders, so the decomposition is overdetermined and a

@@ -10,7 +10,7 @@ Targets:
 - `wavebit/_core/solve_2d.py::layer_modes_2d` — the five permittivity slots the mode operator reads
 - `wavebit/_core/factorization.py` — what `epx` / `epy` / `epz_i` actually are (not what they look like)
 - `wavebit/_core/conventions.py::boundary_kz` — where `mu` would have to land besides the layer
-- `wavebit/on_numpy/emsolver/rcwa.py::solve_for_conv` — the injection point that bypasses `ucell`, and where the formulation is chosen
+- `wavebit/on_numpy/emsolver/rcwa.py::solve_for_conv` — the injection point that bypasses `structure`, and where the formulation is chosen
 - `wavebit/_core/solve_2d_4ff.py::solve_2d_4ff` — the nine-slot twin of the 2D solve
 
 ---
@@ -96,9 +96,9 @@ in-plane off-diagonal terms are a 2D-path capability only.
 They are **one scalar permittivity** put through three different factorization rules:
 
 ```
-                 ucell   (one refractive index per pixel)
+             structure   (one relative permittivity per pixel)
                                  │
-                          eps = ucell ** 2
+                        eps = structure          (no squaring since 2026-08-20)
                                  │
           ┌──────────────────────┼──────────────────────┐
   ..._piecewise_constant  ..._piecewise_constant  ..._piecewise_constant
@@ -206,7 +206,7 @@ Two things to watch:
   moves, `T_p` flipping sign while `T_s` does not. Measured, not argued; see
   `test_uniform_anisotropic.py::test_off_diagonal_sign_shows_up_in_the_amplitude_only`. If you
   are checking a hand-filled tensor against anything, check an amplitude.
-- The **2D path must be selected**. `rcwa.py::_assign_grating_type` picks the path from the `ucell` shape, so
+- The **2D path must be selected**. `rcwa.py::_assign_grating_type` picks the path from the `structure` shape, so
   a pure multilayer stack with `exy != 0` has to be routed to the 2D solve — the 1D and conical
   paths have no off-diagonal slots to fill. A z row does this for itself (§8); the in-plane pair
   does not, which is the asymmetry to remember.
@@ -252,7 +252,10 @@ every case in it sits between vacuum, which is exactly what let it validate the 
 on its own.
 
 `boundary_kz` needed no change at all, as it turns out: it already took `n^2` under the name
-`eps`, and `n_top` / `n_bot` stayed the refractive index. What moved is one pair of
+`eps`, and `n_top` / `n_bot` stayed the refractive index. They still are — since 2026-08-20 they
+are *derived* from the `top` / `bot` materials (`n = sqrt(eps*mu)`) and read-only, which is why
+the flip to permittivity at the front door left this half of the code untouched
+([`conventions.md`](conventions.md)). What moved is one pair of
 admittances, `kz/mu` on s and `kz/eps` on p — see
 [`magnetic-materials.md`](magnetic-materials.md) §5.
 
@@ -472,7 +475,7 @@ existed; it is kept in that order — principle, cost, override, requirement —
 on 2026-08-13 noted against each part, because the reasoning is what a future axis (`mu`) will
 need and the code alone does not carry it.
 
-**The principle is already in the codebase.** `rcwa.py::_assign_grating_type` reads the `ucell`
+**The principle is already in the codebase.** `rcwa.py::_assign_grating_type` reads the `structure`
 shape, `tetm` and `phi` and picks the cheapest formulation that can express the problem — its
 docstring says so in as many words: *"This decides the efficient formulation for given case."*
 1D TE/TM splits into scalars, 1D conical does not, 2D couples everything. Anisotropy adds axes to
@@ -480,7 +483,7 @@ that same decision rather than a new kind of decision.
 
 | axis | read from | branches |
 |---|---|---|
-| grating dimensionality *(exists)* | `ucell` shape, `tetm`, `phi` | 1D TE/TM, 1D conical, 2D |
+| grating dimensionality *(exists)* | `structure` shape, `tetm`, `phi` | 1D TE/TM, 1D conical, 2D |
 | **z row of the tensor** *(exists)* | whether the four z-row slots were given | 2ff second-order, 4ff first-order |
 | **permeability** | `mu != 1` | existing operator, magnetic operator |
 | **patterned or uniform** | layer has in-plane structure | factorization, or scaled identities |

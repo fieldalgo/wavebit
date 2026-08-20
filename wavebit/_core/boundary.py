@@ -7,7 +7,7 @@ The fourth modeling path, and the only one that gets both halves of the problem 
 path             tilted edge         overlapping shapes
 ===============  ==================  =====================
 raster           staircase           as drawn
-vector           staircase           **painted**
+block            staircase           **painted**
 analytic         **exact**           added (superposed)
 **this one**     **exact**           **painted**
 ===============  ==================  =====================
@@ -35,6 +35,7 @@ block path, while tying on axis-aligned overlap where the block path has no stai
 """
 from . import clipper as _clipper
 from .analytic import nvf_from_coeffs, shape_geometry, _sampled_coeffs
+from .domain import as_material
 from .geometry import StaleGeometryError
 from .lattice import sample_grid
 from .polygon import ellipse_verts, polygon_ft, rect_verts
@@ -218,13 +219,15 @@ def normal_projector_coeffs(xp, loops, grid_shape, period, fto_x, fto_y, dtype, 
     return out
 
 
-def conv_mats(xp, regions, n_base, fto_x, fto_y, period, normal_grid, dtype, cdtype,
+def conv_mats(xp, regions, background, fto_x, fto_y, period, normal_grid, dtype, cdtype,
               lattice=None):
     """``(epx, epy, epz_i, epxy, epyx)`` for one boundary-resolved layer.
 
-    ``regions`` is ``[(n_index, [loop, ...]), ...]`` -- disjoint, painting already resolved by
-    the clipper. Hole loops arrive wound clockwise and need no special case here: the polygon
-    FT is a signed contour integral, so a hole subtracts by itself.
+    ``regions`` is ``[(material, [loop, ...]), ...]`` -- disjoint, painting already resolved by
+    the clipper, each ``material`` a :class:`~wavebit._core.domain.Material` or the bare
+    permittivity that is shorthand for one. Hole loops arrive wound clockwise and need no
+    special case here: the polygon FT is a signed contour integral, so a hole subtracts by
+    itself.
 
     That last sentence was once in this docstring as an *assumption*, and it was wrong, because
     :func:`~.clipper.subtract_loop` was at the time normalising every loop to counter-clockwise
@@ -238,7 +241,7 @@ def conv_mats(xp, regions, n_base, fto_x, fto_y, period, normal_grid, dtype, cdt
     Why it matters that the invariant lives in the data: nothing downstream can catch it being
     dropped. The matrices stay Hermitian and the solve conserves energy exactly, so a shape
     painted entirely inside another was solved as a different structure in silence -- measured
-    ``<eps> = 2.4256`` against an exact 2.2371 for a disc of index 3 inside a square of index 2,
+    ``<eps> = 2.4256`` against an exact 2.2371 for a disc of permittivity 9 inside a square of 4,
     at every ``fto`` alike, and ``sum(R) = 0.1798`` against a converged raster's 0.4164.
 
     The normal field is handed the loops as they are, orientation included, and that is safe by
@@ -265,19 +268,25 @@ def conv_mats(xp, regions, n_base, fto_x, fto_y, period, normal_grid, dtype, cdt
     is_dc = (KY == 0) & (KX == 0)
     zero = xp.zeros(KY.shape, dtype=cdtype)
 
-    # `n**2`, not `conj(n)**2`. Wavebit works in `e^{-iwt}` throughout (`Im(n) > 0` = loss)
+    # `eps`, not `conj(eps)`. Wavebit works in `e^{-iwt}` throughout (`Im(eps) > 0` = loss)
     # with no conjugation on the way in — the same sentence `analytic.assemble_eps_coeffs`
     # carries, and this builder is its later copy. It kept the conjugate that the smooth path
     # was moved off in 2026-08, which turned an absorbing painted layer into a gain medium:
     # `R + T` up to 1.11 and reflectance off by 0.16 on gold. Invisible to `test_boundary.py`,
-    # which builds every shape with a real `n_index`, where the two spellings are identical.
+    # which builds every shape with a real material, where the two spellings are identical.
     # See `docs/time-convention-audit.md` §6.
-    eps_bg = xp.astype(xp.asarray(n_base, dtype=cdtype), cdtype) ** 2
+    #
+    # No squaring either, on either line: both slots hold permittivity now, and the `** 2`
+    # that used to sit here was the front door's index-to-eps conversion. Its removal is what
+    # the convention flip *is* on this path (`docs/conventions.md`).
+    eps_bg = xp.astype(xp.asarray(as_material(background, 'layer background').epsilon,
+                                  dtype=cdtype), cdtype)
     eps_c = xp.where(is_dc, eps_bg, zero)
     inv_c = xp.where(is_dc, 1.0 / eps_bg, zero)
 
-    for n_index, polys in regions:
-        eps_s = xp.astype(xp.asarray(n_index, dtype=cdtype), cdtype) ** 2
+    for material, polys in regions:
+        eps_s = xp.astype(xp.asarray(as_material(material, 'shape material').epsilon,
+                                     dtype=cdtype), cdtype)
         ft = zero
         for V in polys:
             ft = ft + polygon_ft(xp, V, KY, KX, (Px, Py), lattice)
@@ -333,8 +342,9 @@ def _concrete_shape(shape):
     multiplies against a NumPy array, which raises. Enforcing the contract here is what makes
     the planning stage namespace-agnostic, which is what it always claimed to be.
 
-    Values that are not numbers are passed through untouched: a shape's ``type``, and a complex
-    ``n_index``, which ``float()`` would refuse and which the planner never reads anyway.
+    Values that are not numbers are passed through untouched: a shape's ``type``, and its
+    ``material`` -- a ``Material``, or a complex permittivity, which ``float()`` would refuse
+    and which the planner never reads anyway.
     """
     out = {}
     for k, v in shape.items():
@@ -443,7 +453,7 @@ def _what_moved(fresh_key, plan_key):
     return '; '.join(parts)
 
 
-def to_conv_mat_boundary_layer(xp, shapes, n_base, fto_x, fto_y, period, dtype,
+def to_conv_mat_boundary_layer(xp, shapes, background, fto_x, fto_y, period, dtype,
                                normal_grid=256, n_poly=POLYGON_VERTICES, plan=None,
                                lattice=None):
     """The five convolution matrices for one layer whose shapes are *painted*.
@@ -460,8 +470,8 @@ def to_conv_mat_boundary_layer(xp, shapes, n_base, fto_x, fto_y, period, dtype,
         check_plan_still_fits(shapes, period, plan, n_poly)
         recs, regions = plan
     vals = _clipper.eval_table(xp, recs, verts)
-    regs = [(s['n_index'], [_clipper.loop_verts(xp, lp, vals) for lp in region])
+    regs = [(s['material'], [_clipper.loop_verts(xp, lp, vals) for lp in region])
             for s, region in zip(shapes, regions)]
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
-    return conv_mats(xp, regs, n_base, fto_x, fto_y, period, normal_grid, real_dtype, dtype,
+    return conv_mats(xp, regs, background, fto_x, fto_y, period, normal_grid, real_dtype, dtype,
                      lattice=lattice)

@@ -188,7 +188,8 @@ def solve_tensor_stack(layers, theta, wl=WL, connecting_algo='ETM', formulation=
                        incidence_side='top'):
     """Drive the 2D solve with a hand-filled tensor per layer.
 
-    ``ucell`` stays ``None``: there is no raster, and it routes ``_assign_grating_type`` to the
+    ``structure`` stays ``None``: there is no raster, and it routes ``_assign_grating_type`` to
+    the
     2D path, the only one with off-diagonal slots. **The slot convention is the negative of
     the tensor component, for every off-diagonal slot** — ``-eps_xy`` and equally ``-eps_xz``,
     one rule across all six — see ``docs/off-diagonal-slot-convention.md``.
@@ -210,7 +211,7 @@ def solve_tensor_stack(layers, theta, wl=WL, connecting_algo='ETM', formulation=
             slot.append(np.linalg.inv(e[2, 2] * I) if value is None else value * I)
         thick.append(d)
     conv = [np.stack(s) for s in slots]
-    mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=theta, phi=0.0, psi=0.0,
+    mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=theta, phi=0.0, psi=0.0,
                          fto=(0, 0), period=(300.0, 300.0), wavelength=wl, thickness=thick,
                          connecting_algo=connecting_algo, incidence_side=incidence_side)
     if formulation is not None:

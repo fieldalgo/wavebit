@@ -18,8 +18,8 @@ import wavebit
 
 P = 1.0
 BASE = dict(period=[P, P], thickness=[0.4], wavelength=0.8, theta=0.0, phi=0.0,
-            n_top=1.0, n_bot=1.5, fto=[4, 4])
-CIRCLE = dict(type='circle', cx=0.5, cy=0.5, lx=0.6, n_index=3.0)
+            top=1.0, bot=2.25, fto=[4, 4])
+CIRCLE = dict(type='circle', cx=0.5, cy=0.5, lx=0.6, material=9.0)   # eps 9 is the old n = 3
 
 
 def disc_raster(N, r=0.30):
@@ -30,7 +30,7 @@ def disc_raster(N, r=0.30):
 
 def test_it_is_exactly_what_solve_for_conv_takes():
     """The round trip is the contract: feeding the result back reproduces conv_solve()."""
-    solver = wavebit.rcwa(ucell=[dict(n_base=1.0, shapes=[CIRCLE])], **BASE)
+    solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **BASE)
     direct = solver.conv_solve().res.T
     relayed = solver.solve_for_conv(solver.wavelength, *solver.conv_matrices()).res.T
     assert np.abs(np.asarray(direct) - np.asarray(relayed)).max() == 0.0
@@ -40,12 +40,12 @@ def test_every_modeling_path_answers_with_the_same_shaped_object():
     """The point of the accessor: one quantity, comparable across paths that share nothing."""
     ff = (2 * 4 + 1) ** 2
     paths = {
-        'raster+nvf': wavebit.rcwa(ucell=disc_raster(96), factorization='nvf', **BASE),
-        'smooth': wavebit.rcwa(ucell=[dict(n_base=1.0, shapes=[CIRCLE])], **BASE),
-        'boundary': wavebit.rcwa(ucell=[dict(n_base=1.0, combine='paint', shapes=[
-            dict(type='rectangle', cx=0.40, cy=0.40, lx=0.34, ly=0.34, n_index=2.0),
+        'raster+nvf': wavebit.rcwa(structure=disc_raster(96), factorization='nvf', **BASE),
+        'smooth': wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **BASE),
+        'boundary': wavebit.rcwa(structure=[dict(background=1.0, combine='paint', shapes=[
+            dict(type='rectangle', cx=0.40, cy=0.40, lx=0.34, ly=0.34, material=4.0),
             dict(type='rectangle', cx=0.56, cy=0.56, lx=0.34, ly=0.34, angle=0.3,
-                 n_index=3.0)])], **BASE),
+                 material=9.0)])], **BASE),
     }
     for name, solver in paths.items():
         epx, epy, epz_i, epxy, epyx = solver.conv_matrices()
@@ -56,7 +56,7 @@ def test_every_modeling_path_answers_with_the_same_shaped_object():
 
 
 def test_a_frozen_geometry_is_accepted_the_same_way_conv_solve_accepts_one():
-    solver = wavebit.rcwa(ucell=disc_raster(96), factorization='nvf', **BASE)
+    solver = wavebit.rcwa(structure=disc_raster(96), factorization='nvf', **BASE)
     eager = solver.conv_matrices()
     replayed = solver.conv_matrices(geometry=solver.freeze_geometry())
     for a, b in zip(eager, replayed):
@@ -70,7 +70,7 @@ def test_it_does_not_solve():
     """Cheaper than conv_solve by the whole eigenproblem — otherwise there is no reason to have
     it separately, and a sweep over geometries would pay for a solve it discards."""
     import time
-    solver = wavebit.rcwa(ucell=[dict(n_base=1.0, shapes=[CIRCLE])], **dict(BASE, fto=[8, 8]))
+    solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **dict(BASE, fto=[8, 8]))
     solver.conv_matrices(), solver.conv_solve()             # warm
 
     t = time.perf_counter()
@@ -88,12 +88,13 @@ def test_it_does_not_solve():
 
 def test_a_misspelled_layer_key_is_refused_rather_than_ignored():
     """The failure this guards is silent: no shapes and nothing else read is a legal *uniform*
-    layer, so a typo comes back as a slab of `n_base` that solves and conserves energy to 1e-14.
+    layer, so a typo comes back as a slab of `background` that solves and conserves energy to
+    1e-14.
 
     Found the hard way, on a layer whose one meaningful key went to a build that did not read it.
     """
     with pytest.raises(ValueError, match='not read by any path'):
-        wavebit.rcwa(ucell=[dict(n_base=1.0, shapez=[CIRCLE])], **BASE).conv_solve()
+        wavebit.rcwa(structure=[dict(background=1.0, shapez=[CIRCLE])], **BASE).conv_solve()
     with pytest.raises(ValueError, match='not read by any path'):
-        wavebit.rcwa(ucell=[dict(n_base=1.0, shapes=[CIRCLE], combyne='add')],
+        wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE], combyne='add')],
                        **BASE).conv_solve()

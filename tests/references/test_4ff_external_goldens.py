@@ -84,7 +84,7 @@ def public_efficiencies(eps, theta_deg, wl, thick):
     e = np.asarray(eps, dtype=complex)
     I = np.eye(1, dtype=complex)
     st = lambda v: np.stack([v * I])                                          # noqa: E731
-    mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=np.deg2rad(theta_deg),
+    mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
                          phi=0.0, psi=0.0, fto=(0, 0), period=(300.0, 300.0),
                          wavelength=wl, thickness=[thick])
     res = mee.solve_for_conv(wl, st(e[0, 0]), st(e[1, 1]),

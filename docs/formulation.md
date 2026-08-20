@@ -124,9 +124,12 @@ layer varying in `x`:
 For 2D-patterned layers the same logic produces the five slots
 `(epx, epy, epz_i, epxy, epyx)`; the off-diagonal slot convention (`-eps_xy` in the slot)
 is documented in `docs/off-diagonal-slot-convention.md` and is not re-derived here. The
-`n → eps` map is `n**2` with **no conjugation** (`factorization._layer_eps`,
-`analytic.assemble_eps_coeffs`, `boundary.conv_mats` — the last one held the conjugate
-until 2026-08-11; `docs/time-convention-audit.md` §6).
+`eps` these builders read is the layer material **as written** — since 2026-08-20 the front
+door takes relative permittivity, so there is no `n → eps` map left at
+`factorization._layer_eps`, `analytic.assemble_eps_coeffs` or `boundary.conv_mats`, and
+there is **no conjugation** either (the last of the three held the conjugate until
+2026-08-11; `docs/time-convention-audit.md` §6). Loss is `Im(eps) > 0`, as written, in
+`e^{-iωt}`.
 
 ---
 

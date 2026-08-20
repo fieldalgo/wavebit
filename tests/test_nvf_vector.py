@@ -33,7 +33,9 @@ def test_vector_nvf_energy_conservation():
     dist = np.sqrt((grid_x - N//2)**2 + (grid_y - N//2)**2)
     eps_matrix = np.ones((N, N), dtype=complex)
     eps_matrix[dist <= radius] = 2.0**2
-    ucell_raster = np.expand_dims(np.sqrt(eps_matrix), axis=0)
+    # `structure` is permittivity now, so the raster IS `eps_matrix` -- no root on the way
+    # in and no square on the way back out.
+    structure_raster = np.expand_dims(eps_matrix, axis=0)
 
     shapes = [dict(type='circle', cx=500.0, cy=500.0, lx=600.0)]
     nx_vec, ny_vec = get_normal_vector_field_analytical((N, N), shapes, period=(1000.0, 1000.0))
@@ -43,10 +45,10 @@ def test_vector_nvf_energy_conservation():
 
     m = wavebit.rcwa(
         backend=0, fto=[fto_val, fto_val],
-        psi=0.0, n_top=1.0, n_bot=1.45,
+        psi=0.0, top=1.0, bot=2.1025,
         theta=10.0 * np.pi / 180, phi=20.0 * np.pi / 180,
         wavelength=1000.0, period=[1000.0, 1000.0], thickness=[300.0],
-        ucell=ucell_raster
+        structure=structure_raster
     )
     
     res = m.solve_for_conv(1000.0, np.array([Exx]), np.array([Eyy]), np.array([Epz_i]), np.array([Exy]), np.array([Eyx]))

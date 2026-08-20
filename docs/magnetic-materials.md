@@ -119,9 +119,19 @@ feature.
 ## 5. Half-spaces
 
 Landed the same day, against its own golden. `n_top` / `n_bot` keep meaning the **refractive
-index** `sqrt(eps*mu)`, and `mu_top` / `mu_bot` are new; `eps = n^2/mu` follows. That choice is
+index** `sqrt(eps*mu)`, and `mu_top` / `mu_bot` are new. That choice is
 what makes the change small: `kz` depends only on the index, so Snell, the order grid and
 `boundary_kz` are untouched — `boundary_kz` was already taking `n^2` under the name `eps`.
+
+Since the material flip (2026-08-20) the half-space *is* a `Material`: `top` and `bot` hold
+`(epsilon, mu)`, and `n_top` / `n_bot` are read-only properties derived from them,
+`sqrt(eps*mu)`, taken once at ingest so the ~43 places that read an index keep working
+([`conventions.md`](conventions.md)). The engine therefore passes `eps_top` / `eps_bot`
+alongside `mu_top` / `mu_bot`, and both 2D solves (`solve_2d` and `smm_2d`) read them where
+they used to reconstruct. The old recovery `eps = n^2/mu` is still
+there and still correct, but it is now the *fallback* for a caller who reaches
+`solve_for_conv` holding only an index — going through a square root and back loses digits the
+material was carrying exactly.
 
 Everything that changes is one pair of admittances:
 
@@ -249,7 +259,45 @@ them on.
 
 ## 8. Reaching it
 
-`mu` is one keyword on `solve_for_conv`, taking the five stacks in the permittivity's convention:
+**Through the front door, since 2026-08-20.** A permeability travels with the material it
+belongs to, so on the three *assignment* paths there is nothing extra to pass:
+
+```python
+structure = [dict(background=1.0, shapes=[
+    dict(type='circle', cx=150., cy=150., lx=180.,
+         material=wavebit.Material(12.25, mu=2.0))])]
+solver = wavebit.rcwa(backend=0, structure=structure,
+                      top=1.0, bot=wavebit.Material(2.25, mu=1.5), ...)
+```
+
+The raster is the exception, and it is the same asymmetry the material type is built around: a
+raster is a sampled *field*, not an assignment, and a field holds one quantity, so its
+permeability is a second array of the same shape.
+
+```python
+solver = wavebit.rcwa(backend=0, structure=eps_raster, mu=mu_raster, ...)
+```
+
+`mu=` is refused by name on the two shape paths rather than ignored — there is no region for a
+layer-shaped array to attach itself to there — and a mismatched raster shape is refused too,
+since the two fields are sampled on one grid.
+
+What happens underneath is one sentence: `_conv_matrices` builds the permeability slots
+whenever anything in the scene carries `mu != 1`, by running the **same builder a second
+time** on a view of the structure with each material's `mu` where its `epsilon` was. That is
+why the permeability slots are the E/H dual of the permittivity ones by construction rather
+than by a second derivation, and why the two quantities cannot land on different geometry —
+the block path replays the same grid plans, the shape paths the same boundary plans. A
+non-magnetic scene builds nothing and takes the arithmetic that existed before `mu` did, bit
+for bit.
+
+A `mu` the chosen path cannot express is refused by name, never dropped: the 1D and conical
+operators carry no permeability slot at all, and the first-order (4ff) solve a z-coupled `eps`
+routes to does not implement one. A knob the solve silently ignored is the failure this
+repository refuses elsewhere too.
+
+**By hand.** `mu` is also one keyword on `solve_for_conv`, taking the five stacks in the
+permittivity's convention:
 
 ```python
 mu = (mux_all, muy_all, muz_i_all, muxy_all, muyx_all)      # any entry may be None
@@ -260,8 +308,8 @@ Each entry is `(n_layers, ff_xy, ff_xy)`, so a stack with `mu` on some layers an
 expressible — the layers without it take the original arithmetic. `mux` / `muy` fall back to the
 identity and the other three to nothing.
 
-There is no `mu` on the `ucell` front door, exactly as there is none for a tensor `eps`: `ucell`
-is a scalar refractive index. A patterned magnetic layer goes through
+A *tensor* `mu` still has no front door, exactly as a tensor `eps` has none: `structure` is a
+scalar quantity per region or per pixel. A patterned magnetic tensor goes through
 `to_conv_mat_raster_pn_mu`; see §7.
 
 ## 9. What is not implemented, and why

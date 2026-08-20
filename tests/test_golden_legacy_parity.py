@@ -13,7 +13,7 @@ reconstruction reads.
 
 Two rounds of entries are no longer legacy-derived.
 
-``2d_cfs`` exercised the integrated builder, which read the ``ucell``'s first row as the *last* y
+``2d_cfs`` exercised the integrated builder, which read the raster's first row as the *last* y
 while the sampled and NVF builders read it as the first -- so the frozen values were the answer to the mirrored
 structure, and no transform recovers them. Those entries were recomputed after the axis was
 unified (2026-08-05), checked against Reticolo rather than against this implementation: pure TE
@@ -169,24 +169,34 @@ def _frame_sign(solver, grating_type):
 
 
 def _rand(shape, seed):
-    return np.random.default_rng(seed).uniform(1.0, 4.0, size=shape)
+    """The same raster the generator drew, restated as PERMITTIVITY.
+
+    The draw is unchanged and the square is what the solver used to apply on the way in, so
+    every case below is bit-for-bit the structure the frozen run solved. That is the whole
+    constraint here: these numbers were captured from a solver that no longer exists, so the
+    scene handed to today's API has to be the same scene, not merely a similar one.
+    """
+    return np.random.default_rng(seed).uniform(1.0, 4.0, size=shape) ** 2
 
 
-# Must stay identical to gen_goldens.py.
+# Must stay identical to gen_goldens.py -- which states the same scenes in the pre-flip
+# spelling (an index in `ucell`, `n_top` / `n_bot`). Identical *scene*, not identical text:
+# every material below is the square of the generator's, which is exactly the conversion the
+# solver used to do between the two.
 CASES = {
-    'te_1layer':   dict(tetm='te', phi=None, ucell=[[[3., 3., 3., 1., 1., 1.]]], thickness=[0.15], n_top=2., n_bot=1., theta=0., fto=[6, 0], period=[0.77], wavelength=0.777),
-    'tm_1layer':   dict(tetm='tm', phi=None, ucell=[[[3., 3., 3., 1., 1., 1.]]], thickness=[0.15], n_top=2., n_bot=1., theta=0., fto=[6, 0], period=[0.77], wavelength=0.777),
-    'te_oblique':  dict(tetm='te', phi=None, ucell=[[[3., 3., 3., 1., 1., 1.]]], thickness=[0.2], n_top=1., n_bot=1.5, theta=0.3, fto=[6, 0], period=[0.77], wavelength=0.777),
-    'tm_oblique':  dict(tetm='tm', phi=None, ucell=[[[3., 3., 3., 1., 1., 1.]]], thickness=[0.2], n_top=1., n_bot=1.5, theta=0.3, fto=[6, 0], period=[0.77], wavelength=0.777),
-    'te_2layer':   dict(tetm='te', phi=None, ucell=[[[3., 3., 1., 1., 3., 1.]], [[2., 2., 2., 1., 1., 1.]]], thickness=[0.15, 0.22], n_top=1., n_bot=1., theta=0., fto=[5, 0], period=[0.7], wavelength=0.9),
-    'te_same_mat': dict(tetm='te', phi=None, ucell=[[[3., 3., 1., 1., 3., 1.]], [[1., 1., 1., 1., 1., 1.]]], thickness=[0.2, 0.1], n_top=1., n_bot=1., theta=0., fto=[5, 0], period=[0.7], wavelength=0.9),
-    'conical':     dict(psi=0.4, phi=0.3, ucell=[[[3., 3., 3., 1., 1., 1.]]], thickness=[0.15], n_top=2., n_bot=1., theta=0.2, fto=[6, 0], period=[0.77], wavelength=0.777),
-    'conical_2l':  dict(psi=1.1, phi=0.5, ucell=[[[3., 3., 1., 1., 3., 1.]], [[2., 2., 2., 1., 1., 1.]]], thickness=[0.15, 0.22], n_top=1., n_bot=1.5, theta=0.3, fto=[5, 0], period=[0.7], wavelength=0.9),
-    '2d_normal':   dict(psi=0., phi=0., ucell=_rand((1, 5, 5), 0), thickness=[0.2], n_top=1., n_bot=1., theta=0., fto=[2, 2], period=[1., 1.], wavelength=0.9),
-    '2d_oblique':  dict(psi=0.9, phi=0.4, ucell=_rand((1, 6, 6), 1), thickness=[0.3], n_top=1., n_bot=1.5, theta=0.3, fto=[2, 2], period=[1., 1.2], wavelength=0.8),
-    '2d_2layer':   dict(psi=1.1, phi=0.5, ucell=_rand((2, 4, 4), 2), thickness=[0.15, 0.22], n_top=1.2, n_bot=1., theta=0.2, fto=[2, 2], period=[0.9, 0.9], wavelength=0.7),
-    '2d_nvf':      dict(psi=0.9, phi=0.4, ucell=_rand((1, 5, 5), 3), thickness=[0.2], n_top=1., n_bot=1., theta=0.2, fto=[2, 2], period=[1., 1.], wavelength=0.9, factorization='nvf'),
-    '2d_cfs':      dict(psi=0.7, phi=0.3, ucell=_rand((1, 5, 5), 4), thickness=[0.2], n_top=1.5, n_bot=1., theta=0.2, fto=[2, 2], period=[1., 1.], wavelength=0.9, fourier_coefficients='integrated'),
+    'te_1layer':   dict(tetm='te', phi=None, structure=[[[9., 9., 9., 1., 1., 1.]]], thickness=[0.15], top=4., bot=1., theta=0., fto=[6, 0], period=[0.77], wavelength=0.777),
+    'tm_1layer':   dict(tetm='tm', phi=None, structure=[[[9., 9., 9., 1., 1., 1.]]], thickness=[0.15], top=4., bot=1., theta=0., fto=[6, 0], period=[0.77], wavelength=0.777),
+    'te_oblique':  dict(tetm='te', phi=None, structure=[[[9., 9., 9., 1., 1., 1.]]], thickness=[0.2], top=1., bot=2.25, theta=0.3, fto=[6, 0], period=[0.77], wavelength=0.777),
+    'tm_oblique':  dict(tetm='tm', phi=None, structure=[[[9., 9., 9., 1., 1., 1.]]], thickness=[0.2], top=1., bot=2.25, theta=0.3, fto=[6, 0], period=[0.77], wavelength=0.777),
+    'te_2layer':   dict(tetm='te', phi=None, structure=[[[9., 9., 1., 1., 9., 1.]], [[4., 4., 4., 1., 1., 1.]]], thickness=[0.15, 0.22], top=1., bot=1., theta=0., fto=[5, 0], period=[0.7], wavelength=0.9),
+    'te_same_mat': dict(tetm='te', phi=None, structure=[[[9., 9., 1., 1., 9., 1.]], [[1., 1., 1., 1., 1., 1.]]], thickness=[0.2, 0.1], top=1., bot=1., theta=0., fto=[5, 0], period=[0.7], wavelength=0.9),
+    'conical':     dict(psi=0.4, phi=0.3, structure=[[[9., 9., 9., 1., 1., 1.]]], thickness=[0.15], top=4., bot=1., theta=0.2, fto=[6, 0], period=[0.77], wavelength=0.777),
+    'conical_2l':  dict(psi=1.1, phi=0.5, structure=[[[9., 9., 1., 1., 9., 1.]], [[4., 4., 4., 1., 1., 1.]]], thickness=[0.15, 0.22], top=1., bot=2.25, theta=0.3, fto=[5, 0], period=[0.7], wavelength=0.9),
+    '2d_normal':   dict(psi=0., phi=0., structure=_rand((1, 5, 5), 0), thickness=[0.2], top=1., bot=1., theta=0., fto=[2, 2], period=[1., 1.], wavelength=0.9),
+    '2d_oblique':  dict(psi=0.9, phi=0.4, structure=_rand((1, 6, 6), 1), thickness=[0.3], top=1., bot=2.25, theta=0.3, fto=[2, 2], period=[1., 1.2], wavelength=0.8),
+    '2d_2layer':   dict(psi=1.1, phi=0.5, structure=_rand((2, 4, 4), 2), thickness=[0.15, 0.22], top=1.44, bot=1., theta=0.2, fto=[2, 2], period=[0.9, 0.9], wavelength=0.7),
+    '2d_nvf':      dict(psi=0.9, phi=0.4, structure=_rand((1, 5, 5), 3), thickness=[0.2], top=1., bot=1., theta=0.2, fto=[2, 2], period=[1., 1.], wavelength=0.9, factorization='nvf'),
+    '2d_cfs':      dict(psi=0.7, phi=0.3, structure=_rand((1, 5, 5), 4), thickness=[0.2], top=2.25, bot=1., theta=0.2, fto=[2, 2], period=[1., 1.], wavelength=0.9, fourier_coefficients='integrated'),
 }
 
 
@@ -194,7 +204,7 @@ def _run(name):
     # `answers='field'` for every case, not only the two that reconstruct: the goldens pinned
     # here include the per-layer state, so the parity being checked is the state's too.
     kw = dict(CASES[name])
-    kw['ucell'] = np.asarray(kw['ucell'], dtype=float)
+    kw['structure'] = np.asarray(kw['structure'], dtype=float)
     solver = wavebit.rcwa(backend=0, answers='field', **kw)
     return solver, solver.conv_solve()
 
@@ -204,8 +214,9 @@ def test_results_match_legacy_golden(name):
     solver, result = _run(name)
     assert solver.grating_type_assigned == GOLDEN[f'{name}__grating_type']
 
-    kw = CASES[name]
-    amp_map = _amp_map(solver.grating_type_assigned, kw['n_top'], kw['n_bot'])
+    # `n_top` / `n_bot` are the derived indices, which is what the legacy amplitude
+    # normalisation was written in -- the case dicts above now hold the permittivity.
+    amp_map = _amp_map(solver.grating_type_assigned, solver.n_top, solver.n_bot)
 
     checked = 0
     for sub in ('res', 'res_te_inc', 'res_tm_inc'):
@@ -282,7 +293,7 @@ def test_jax_and_torch_match_the_same_golden(name, backend):
     """
     pytest.importorskip('jax' if backend == 1 else 'torch')
     kw = dict(CASES[name])
-    kw['ucell'] = np.asarray(kw['ucell'], dtype=float)
+    kw['structure'] = np.asarray(kw['structure'], dtype=float)
     result = wavebit.rcwa(backend=backend, **kw).conv_solve()
 
     for sub in ('res', 'res_te_inc', 'res_tm_inc'):

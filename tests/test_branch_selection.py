@@ -29,6 +29,7 @@ import numpy as np
 import pytest
 
 import wavebit
+from wavebit import eps_from_index
 from wavebit._core import solve_1d as _s1
 from wavebit._core.conventions import boundary_kz, mode_q
 
@@ -92,9 +93,14 @@ JUMP_CASES = [
 #: The declaration is what these cases want: a uniform 1D stack at no azimuth, where the
 #: pure TE/TM formulation is the one under test.
 def _amp(n_top, n_bot, n_layer, d, theta, tetm):
-    solver = wavebit.rcwa(backend=0, tetm=tetm, n_top=n_top, n_bot=n_bot, theta=theta,
+    # The cases are written in refractive index because ``theta_cut`` is derived from the
+    # half-space *permittivities* below and would read circularly if both were the same
+    # spelling. The conversion happens here, where the public API takes over.
+    solver = wavebit.rcwa(backend=0, tetm=tetm, top=eps_from_index(n_top),
+                            bot=eps_from_index(n_bot), theta=theta,
                             fto=0, wavelength=WL, period=[WL * 2],
-                            ucell=np.array([[[n_layer, n_layer]]]), thickness=[d])
+                            structure=eps_from_index(np.array([[[n_layer, n_layer]]])),
+                            thickness=[d])
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         res = solver.conv_solve().res
@@ -179,15 +185,17 @@ def test_the_root_is_the_continuation_from_normal_incidence(case):
 # ---------------------------------------------------------------- a layer's root is free
 
 LAYER_CASES = [
-    ('real_angle', dict(n_top=1.0, n_bot=1.5, theta=0.2)),
-    ('absorbing_superstrate', dict(n_top=1.5 + 0.3j, n_bot=1.5, theta=0.6)),
-    ('absorbing_superstrate_on_gold', dict(n_top=1.5 + 0.4j, n_bot=AU, theta=1.3)),
+    ('real_angle', dict(top=1.0, bot=eps_from_index(1.5), theta=0.2)),
+    ('absorbing_superstrate', dict(top=eps_from_index(1.5 + 0.3j),
+                                   bot=eps_from_index(1.5), theta=0.6)),
+    ('absorbing_superstrate_on_gold', dict(top=eps_from_index(1.5 + 0.4j),
+                                           bot=eps_from_index(AU), theta=1.3)),
 ]
 
 
 def _grating(tetm, thickness, **kw):
-    cell = np.array([[[1.0] * 8 + [3.4] * 8]])
-    return dict(backend=0, tetm=tetm, fto=6, wavelength=WL, period=[300.0], ucell=cell,
+    cell = eps_from_index(np.array([[[1.0] * 8 + [3.4] * 8]]))
+    return dict(backend=0, tetm=tetm, fto=6, wavelength=WL, period=[300.0], structure=cell,
                 thickness=[thickness], **kw)
 
 
@@ -250,7 +258,8 @@ def test_the_mode_q_tie_break_is_worth_nothing():
         flip = xp.where(xp.abs(xp.real(v)) > 1e-12, xp.real(v) < 0, xp.imag(v) < 0)
         return xp.where(flip, -v, v)
 
-    cfg = _grating('te', 120.0, n_top=1.5 + 0.3j, n_bot=1.5, theta=0.6)
+    cfg = _grating('te', 120.0, top=eps_from_index(1.5 + 0.3j), bot=eps_from_index(1.5),
+                   theta=0.6)
     base = _run(cfg)
     original = _s1.mode_q
     try:

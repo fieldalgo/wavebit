@@ -63,5 +63,12 @@ def tensor_rasters(n_in, g, grid=GRID):
 
     The physical tensor is ``eps_xy = +gyro``, ``eps_yx = -gyro``. Slot negation happens at the
     caller — see ``docs/off-diagonal-slot-convention.md``.
+
+    **The ``n_in ** 2`` is not a leftover of the index convention.** This module has always
+    produced permittivity — fmmax's tensor entry point takes nothing else — and ``CASES`` is
+    keyed on the *index* only because the case names say so (``gyro_pillar_n115_g010``), which
+    the golden's own keys then depend on. So the squaring stayed put through the 2026-08-20
+    flip while the ones at the API boundaries were deleted. Anything reaching for it should
+    change the case names too, and that moves the golden.
     """
     return pillar(n_in ** 2, 1.0, grid), pillar(g, 0.0, grid)

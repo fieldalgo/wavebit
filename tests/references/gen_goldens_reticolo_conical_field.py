@@ -72,14 +72,17 @@ def main():
     reti = Reticolo()
     out = {}
     for stack, theta, phi, pol in CASES:
-        thickness, ucell = STACKS[stack]
+        thickness, structure = STACKS[stack]
         # The `.m`'s conical branch drives RETICOLO with `einc = [0, 1]` for TE and `[1, 0]`
         # for TM, which is what `pol` selects -- the same two incidences `psi = pi/2` and
         # `psi = 0` name on this side.
+        #
+        # `structure` is permittivity and the bridge converts it to RETICOLO's index; see
+        # `interface/Reticolo.py::_index`.
         *_, e, z, o = reti.run_res3(
-            grating_type=1, period=[PERIOD], fto=FTO, ucell=ucell, thickness=thickness,
+            grating_type=1, period=[PERIOD], fto=FTO, structure=structure, thickness=thickness,
             theta=np.deg2rad(theta), phi=np.deg2rad(phi), pol=0 if pol == 's' else 1,
-            wavelength=WL, n_top=1.0, n_bot=1.0, res3_npts=RES_Z)
+            wavelength=WL, top=1.0, bot=1.0, res3_npts=RES_Z)
         e, z, o = np.asarray(e), np.asarray(z).ravel(), np.asarray(o)
 
         rows = (n_layers(stack) + 2) * RES_Z

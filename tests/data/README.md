@@ -17,6 +17,27 @@ it re-freezes from this solver deliberately, and says so at the top.
 **Never regenerate a golden to make a failing test pass.** That converts a detected regression
 into an accepted one, silently, and the evidence that it happened is gone.
 
+## The permittivity flip (2026-08-20), and why none of these were re-frozen
+
+The solver took a refractive index and now takes a relative permittivity, so every case list
+here was rewritten: `structure` / `top` / `bot`, with each number squared. The scene is the
+same one — `eps = 9` and `n = 3` are the same slab — which is what lets the frozen numbers
+stand. Measured rather than asserted:
+
+* **`golden_nvf.npz`: all 39 arrays bit for bit.** Not a foregone conclusion, since NVF reads
+  the raster a second time to build its interface normal; squaring turns out not to move a
+  *direction*. Its generator records the argument and the measurement.
+* **`golden_field.npz`: unchanged inside `atol=1e-12`**, which is what both its own diff and
+  `tests/test_field_core.py` compare at. The layer flip is exact — the one case with vacuum on
+  both sides reproduces bit for bit — and the 1.0e-14 to 2.4e-13 the other six move by is the
+  half-space index becoming complex (`2+0j` where `2.0` sat), which reassociates arithmetic
+  without changing an answer.
+* **`golden_legacy.npz` and `golden_legacy_modeler.npz` are untouched**, and their generators'
+  case lists were migrated anyway. Both lists have a twin in `tests/` marked "must stay
+  identical", and that twin is live code; splitting the pair would cost more than the fiction
+  that a refusing script is a transcript. The modeler golden's eleven `*__cell` arrays still
+  hold refractive index and are squared at the comparison, which is the trade below.
+
 A golden that cannot be regenerated is on a clock, though, and `golden_legacy_factorization.npz`
 ran out on 2026-08-18. It was retired rather than kept: 39 of its 68 arrays were already read by
 nothing, the rewrite it was evidence for had long since landed, and nothing has ever been

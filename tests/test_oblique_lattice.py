@@ -19,7 +19,7 @@ from wavebit._core.geometry import StaleGeometryError
 P = 400.0
 WL = 900.0
 H = 150.0
-N_ROD, N_AIR = 2.4, 1.0
+EPS_ROD, EPS_AIR = 5.76, 1.0                       # 2.4**2 and 1.0, as permittivity
 R = 90.0
 
 ORTHO = np.column_stack(([P, 0.0], [0.0, P]))
@@ -40,15 +40,15 @@ def raster(basis, n=128, radius=R):
             s = i * a1 + j * a2
             inside |= (((pts[..., 0] - centre[0] - s[0]) ** 2
                         + (pts[..., 1] - centre[1] - s[1]) ** 2) <= radius ** 2)
-    cell = np.full((1, n, n), N_AIR)
-    cell[0][inside] = N_ROD
+    cell = np.full((1, n, n), EPS_AIR)
+    cell[0][inside] = EPS_ROD
     return cell
 
 
 def solver(cell, fto=8, lattice=None, **kw):
     kw.setdefault('factorization', 'nvf')
-    return wavebit.rcwa(backend=0, ucell=cell, period=[P, P], fto=[fto, fto],
-                          thickness=[H], wavelength=WL, n_top=1.0, n_bot=1.0,
+    return wavebit.rcwa(backend=0, structure=cell, period=[P, P], fto=[fto, fto],
+                          thickness=[H], wavelength=WL, top=1.0, bot=1.0,
                           theta=0.0, phi=0.0, psi=0.0, lattice=lattice, **kw)
 
 
@@ -215,12 +215,12 @@ def test_hex_lattice_matches_its_rectangular_supercell():
             for j in (-1, 0, 1):
                 inside |= (((X - cx - i * a) ** 2
                             + (Y - cy - j * a * sq3) ** 2) <= 80.0 ** 2)
-    sup = np.full((1, ny, nx), N_AIR)
-    sup[0][inside] = N_ROD
+    sup = np.full((1, ny, nx), EPS_AIR)
+    sup[0][inside] = EPS_ROD
 
     _, t_hex = totals(hex_cell, fto=8, lattice=HEX)
-    sup_solver = wavebit.rcwa(backend=0, ucell=sup, period=[a, a * sq3], fto=[8, 14],
-                                thickness=[H], wavelength=WL, n_top=1.0, n_bot=1.0,
+    sup_solver = wavebit.rcwa(backend=0, structure=sup, period=[a, a * sq3], fto=[8, 14],
+                                thickness=[H], wavelength=WL, top=1.0, bot=1.0,
                                 theta=0.0, phi=0.0, psi=0.0, factorization='nvf')
     t_sup = float(np.sum(np.asarray(sup_solver.conv_solve().T)))
     assert t_hex == pytest.approx(t_sup, abs=5e-3)
@@ -238,8 +238,8 @@ def test_oblique_runs_on_every_backend(backend):
     elif backend == 2:
         cell = pytest.importorskip('torch').tensor(cell, dtype=pytest.importorskip(
             'torch').float64)
-    s = wavebit.rcwa(backend=backend, ucell=cell, period=[P, P], fto=[4, 4],
-                       thickness=[H], wavelength=WL, n_top=1.0, n_bot=1.0,
+    s = wavebit.rcwa(backend=backend, structure=cell, period=[P, P], fto=[4, 4],
+                       thickness=[H], wavelength=WL, top=1.0, bot=1.0,
                        theta=0.0, phi=0.0, psi=0.0, factorization='nvf', lattice=HEX)
     res = s.conv_solve()
     total = float(np.sum(np.asarray(res.R))) + float(np.sum(np.asarray(res.T)))
@@ -256,10 +256,10 @@ def test_li_is_refused_on_a_skewed_cell():
 
 def test_the_vector_modeler_is_refused_on_a_skewed_cell():
     with pytest.raises(NotImplementedError, match='block modeler'):
-        s = wavebit.rcwa(backend=0, ucell=[[1.0, [['rectangle', 100.0, 200.0, 50.0, 50.0,
-                                                     2.4, 0, 0, 0]]]],
+        s = wavebit.rcwa(backend=0, structure=[[1.0, [['rectangle', 100.0, 200.0, 50.0, 50.0,
+                                                       5.76, 0, 0, 0]]]],
                            period=[P, P], fto=[4, 4], thickness=[H], wavelength=WL,
-                           n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+                           top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                            factorization='nvf', lattice=HEX)
         s.conv_solve()
 
@@ -275,11 +275,11 @@ def test_a_painted_overlap_survives_a_unimodular_shear():
     overlap at all and shifted by ``(ox*Px, oy*Py)`` rather than along the lattice.
     """
     def painted(lattice):
-        ucell = [{'n_base': 1.0, 'combine': 'paint', 'shapes': [
-            {'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 160.0, 'n_index': 2.4},
-            {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'n_index': 3.0}]}]
-        s = wavebit.rcwa(backend=0, ucell=ucell, period=[P, P], fto=[6, 6], thickness=[H],
-                           wavelength=WL, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+        structure = [{'background': 1.0, 'combine': 'paint', 'shapes': [
+            {'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 160.0, 'material': 5.76},
+            {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'material': 9.0}]}]
+        s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], fto=[6, 6], thickness=[H],
+                           wavelength=WL, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                            factorization='nvf', lattice=lattice)
         res = s.conv_solve()
         return float(np.sum(np.asarray(res.T)))
@@ -293,14 +293,14 @@ def test_a_painted_overlap_is_not_the_same_as_summing_it():
     If painting and summing agreed here, agreeing across the shear would say nothing about the
     resolver having run.
     """
-    shapes = [{'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 160.0, 'n_index': 2.4},
-              {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'n_index': 3.0}]
+    shapes = [{'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 160.0, 'material': 5.76},
+              {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'material': 9.0}]
 
     def run(combine):
-        s = wavebit.rcwa(backend=0, ucell=[{'n_base': 1.0, 'combine': combine,
+        s = wavebit.rcwa(backend=0, structure=[{'background': 1.0, 'combine': combine,
                                               'shapes': shapes}],
                            period=[P, P], fto=[6, 6], thickness=[H], wavelength=WL,
-                           n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+                           top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                            factorization='nvf', lattice=SHEAR)
         return float(np.sum(np.asarray(s.conv_solve().T)))
 
@@ -311,10 +311,10 @@ def test_a_painted_overlap_is_not_the_same_as_summing_it():
 
 def _analytic_totals(g, lattice=None):
     """One circle, stated in absolute Cartesian lengths — the same disc on the same lattice."""
-    ucell = [{'n_base': 1.0, 'shapes': [
-        {'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 2 * R, 'n_index': N_ROD}]}]
-    s = wavebit.rcwa(backend=0, ucell=ucell, period=[P, P], fto=[g, g], thickness=[H],
-                       wavelength=WL, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+    structure = [{'background': 1.0, 'shapes': [
+        {'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 2 * R, 'material': EPS_ROD}]}]
+    s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], fto=[g, g], thickness=[H],
+                       wavelength=WL, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                        factorization='nvf', lattice=lattice)
     return float(np.sum(np.asarray(s.conv_solve().T)))
 
@@ -368,12 +368,12 @@ def test_the_reconstructed_field_agrees_across_a_unimodular_shear():
     2.0e-4: a 500x drop across the same field.
     """
     n = 21
-    shapes = [{'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 2 * R, 'n_index': N_ROD}]
-    ucell = [{'n_base': 1.0, 'shapes': []}, {'n_base': 1.0, 'shapes': shapes}]
+    shapes = [{'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 2 * R, 'material': EPS_ROD}]
+    structure = [{'background': 1.0, 'shapes': []}, {'background': 1.0, 'shapes': shapes}]
 
     def field(lattice):
-        s = wavebit.rcwa(backend=0, ucell=ucell, period=[P, P], fto=[8, 8],
-                           thickness=[600.0, H], wavelength=WL, n_top=1.0, n_bot=1.0,
+        s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], fto=[8, 8],
+                           thickness=[600.0, H], wavelength=WL, top=1.0, bot=1.0,
                            theta=0.0, phi=0.0, psi=0.0, factorization='nvf', lattice=lattice,
                            answers='field')
         s.conv_solve()
@@ -426,7 +426,8 @@ def test_a_frozen_normal_field_replays_onto_the_same_lattice():
 
 # Li, JOSA A 14(10), 2758 (1997), as tabulated by Demesy et al., "Gratings: Theory and Numeric
 # Applications" (2012), Table 5.4. phi0 = theta0 = 0, psi0 = 45 deg measured from the cell axes,
-# dx = dy = 5*lambda*sqrt(2)/4, h = lambda, eps+ = 2.25, eps- = 1.
+# dx = dy = 5*lambda*sqrt(2)/4, h = lambda, eps+ = 2.25, eps- = 1. Those are permittivities
+# in the paper too, and now also in the arguments below -- no conversion either way.
 LI_FEM = {(-1, -1): 0.04333, (-1, 0): 0.12845, (-1, 1): 0.06176,
           (0, -1): 0.12838, (0, 0): 0.17577, (0, 1): 0.12839,
           (1, -1): 0.06177, (1, 0): 0.12843, (1, 1): 0.04332}
@@ -454,11 +455,11 @@ def test_li_1997_checkerboard_matches_the_published_table():
     assert np.linalg.norm(a1) == pytest.approx(5 * np.sqrt(2) / 4)
 
     centre = 0.5 * (a1 + a2)
-    ucell = [{'n_base': 1.0, 'shapes': [
+    structure = [{'background': 1.0, 'shapes': [
         {'type': 'rectangle', 'cx': float(centre[0]), 'cy': float(centre[1]),
-         'lx': LI_SIDE, 'ly': LI_SIDE, 'n_index': 1.5}]}]
-    s = wavebit.rcwa(backend=0, ucell=ucell, fto=[12, 12], thickness=[1.0], wavelength=1.0,
-                       n_top=1.5, n_bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2,
+         'lx': LI_SIDE, 'ly': LI_SIDE, 'material': 2.25}]}]
+    s = wavebit.rcwa(backend=0, structure=structure, fto=[12, 12], thickness=[1.0], wavelength=1.0,
+                       top=2.25, bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2,
                        factorization='nvf', lattice=basis)
     res = s.conv_solve().res
     ti = np.asarray(res.T)

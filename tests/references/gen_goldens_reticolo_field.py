@@ -91,11 +91,15 @@ def main():
     reti = Reticolo()
     out = {}
     for stack, theta, pol in CASES:
-        thickness, ucell = STACKS[stack]
+        thickness, structure = STACKS[stack]
+        # Permittivity in, index out: the bridge converts (`interface/Reticolo.py::_index`), so
+        # the numbers here are the same ones the test hands the solver. `top` / `bot` are
+        # vacuum, where eps and n happen to be the same 1.0 -- which is exactly why they are a
+        # bad place to notice a missing conversion, and why the layers are not.
         *_, e, z, o = reti.run_res3(
-            grating_type=0, period=[PERIOD], fto=FTO, ucell=ucell, thickness=thickness,
+            grating_type=0, period=[PERIOD], fto=FTO, structure=structure, thickness=thickness,
             theta=np.deg2rad(theta), phi=None, pol=0 if pol == 'te' else 1,
-            wavelength=WL, n_top=1.0, n_bot=1.0, res3_npts=RES_Z)
+            wavelength=WL, top=1.0, bot=1.0, res3_npts=RES_Z)
         e, z, o = np.asarray(e), np.asarray(z).ravel(), np.asarray(o)
 
         rows = (n_layers(stack) + 2) * RES_Z

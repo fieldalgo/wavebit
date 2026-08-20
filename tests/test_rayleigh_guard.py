@@ -47,16 +47,21 @@ from wavebit._core.backend import (UnphysicalResultWarning, array_namespace,
 
 PERIOD = 1000.0
 WL = 500.0
+# Both spellings of one spacer, and both are needed. The Rayleigh condition is a statement
+# about `kx`, which is an index-scale quantity -- order m=3 lands on `N_SPACER` exactly -- so
+# the assertion that pins the premise reads the index. Everything handed to wavebit reads the
+# permittivity. 1.5**2 is exact, so the coincidence stays exact through the conversion.
 N_SPACER = 1.5
+EPS_SPACER = 2.25
 
 # Patterned pillar (n=3.5 in air) over a uniform n=1.5 spacer. The spacer is the layer whose
 # eigenproblem goes singular; the pillar is there to make the case an ordinary metasurface
 # rather than a contrived one, and to populate the orders that reach the spacer.
 _PILLAR = np.ones((1, 1, 20))
-_PILLAR[0, 0, 6:14] = 3.5
-_STACK = np.concatenate([_PILLAR, np.full((1, 1, 20), N_SPACER)], axis=0)
+_PILLAR[0, 0, 6:14] = 12.25
+_STACK = np.concatenate([_PILLAR, np.full((1, 1, 20), EPS_SPACER)], axis=0)
 
-_KW = dict(period=[PERIOD], n_top=1.0, n_bot=N_SPACER, theta=0.0, phi=0.0,
+_KW = dict(period=[PERIOD], top=1.0, bot=EPS_SPACER, theta=0.0, phi=0.0,
            psi=np.pi / 2, thickness=[200.0, 300.0])
 
 # fto values that retain the grazing order. fto=3 is the first truncation that retains it at
@@ -71,12 +76,12 @@ BAND_FTO = [4, 6, 9]
 TOL = 1e-6
 
 
-def _solve(backend, fto, ucell=None, wavelength=WL, auto_detune=False, **kw):
+def _solve(backend, fto, structure=None, wavelength=WL, auto_detune=False, **kw):
     # auto_detune off by default *here*: these tests pin the exact-point contracts, and the
     # library default would detune past the very regime under test. The default's own
     # contract has its own tests below.
     return wavebit.rcwa(backend=backend, wavelength=wavelength, fto=[fto, 0],
-                        ucell=_STACK if ucell is None else ucell,
+                        structure=_STACK if structure is None else structure,
                         **{**_KW, **kw}).conv_solve(auto_detune=auto_detune)
 
 
@@ -132,7 +137,7 @@ def test_exact_rayleigh_point_solves_correctly(backend, fto, name, algo):
     """
     if backend == 1:
         pytest.importorskip('jax')
-        import wavebit.on_jax  # noqa: F401  -- lifts x64 before the ucell is built
+        import wavebit.on_jax  # noqa: F401  -- lifts x64 before the structure is built
     elif backend == 2:
         pytest.importorskip('torch')
 
@@ -162,10 +167,12 @@ _GRAZE_2D = [(2.0, 'ETM'), (2.0, 'SMM'), (1.5, 'ETM'), (1.5, 'SMM')]
 
 def _solve_2d(n_spacer, algo, wavelength=WL, auto_detune=False):
     pillar = np.ones((1, 2, 20))
-    pillar[0, :, 6:14] = 3.5
-    ucell = np.concatenate([pillar, np.full((1, 2, 20), n_spacer)], axis=0)
-    return wavebit.rcwa(backend=0, wavelength=wavelength, fto=[5, 1], ucell=ucell,
-                        period=[PERIOD, PERIOD], n_top=1.0, n_bot=1.5, theta=0.0, phi=0.0,
+    pillar[0, :, 6:14] = 12.25
+    # `n_spacer` names the index, because that is the quantity the graze condition is about;
+    # squaring it here is the only conversion, and it is exact for both 2.0 and 1.5.
+    cell = np.concatenate([pillar, np.full((1, 2, 20), n_spacer ** 2)], axis=0)
+    return wavebit.rcwa(backend=0, wavelength=wavelength, fto=[5, 1], structure=cell,
+                        period=[PERIOD, PERIOD], top=1.0, bot=2.25, theta=0.0, phi=0.0,
                         psi=np.pi / 2, thickness=[200.0, 300.0],
                         connecting_algo=algo).conv_solve(auto_detune=auto_detune)
 
@@ -261,10 +268,10 @@ def test_exact_point_solves_for_tm_and_mixed_polarization(psi, algo):
     """
     kw = dict(_KW)
     kw['psi'] = psi
-    exact = wavebit.rcwa(backend=0, wavelength=WL, fto=[5, 0], ucell=_STACK,
+    exact = wavebit.rcwa(backend=0, wavelength=WL, fto=[5, 0], structure=_STACK,
                          connecting_algo=algo, **kw).conv_solve(auto_detune=False)
     near = wavebit.rcwa(backend=0, wavelength=np.nextafter(WL, WL + 1), fto=[5, 0],
-                        ucell=_STACK, connecting_algo=algo,
+                        structure=_STACK, connecting_algo=algo,
                         **kw).conv_solve(auto_detune=False)
     R, T = _totals(exact)
     R_n, _ = _totals(near)
@@ -281,7 +288,7 @@ def test_exact_point_field_reconstruction_matches_its_neighbour():
     LAPACK builds.
     """
     def field(wl):
-        mee = wavebit.rcwa(backend=0, wavelength=wl, fto=[5, 0], ucell=_STACK,
+        mee = wavebit.rcwa(backend=0, wavelength=wl, fto=[5, 0], structure=_STACK,
                            answers='field', **_KW)
         mee.conv_solve(auto_detune=False)
         return np.asarray(mee.calculate_field(res_x=16, res_y=1, res_z=16))
@@ -352,7 +359,7 @@ def test_auto_detune_is_silent_on_an_ordinary_solve():
 def test_auto_detune_accepts_an_explicit_step():
     """A float ``auto_detune`` is the relative step — the complex64 escape hatch."""
     from wavebit._core.backend import AutoDetuneWarning
-    mee = wavebit.rcwa(backend=0, wavelength=WL, fto=[3, 0], ucell=_STACK, **_KW)
+    mee = wavebit.rcwa(backend=0, wavelength=WL, fto=[3, 0], structure=_STACK, **_KW)
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         R, T = _totals(mee.conv_solve(auto_detune=1e-9))
@@ -399,8 +406,8 @@ def test_auto_detune_theta_rung_clears_a_wavelength_invariant_graze():
 
     def solver():
         return wavebit.rcwa(backend=0, wavelength=WL, fto=[2, 0],
-                            ucell=np.full((1, 1, 16), 1.25), period=[PERIOD],
-                            n_top=2.5, n_bot=1.5, theta=theta, phi=0.0, psi=np.pi / 2,
+                            structure=np.full((1, 1, 16), 1.5625), period=[PERIOD],
+                            top=6.25, bot=2.25, theta=theta, phi=0.0, psi=np.pi / 2,
                             thickness=[300.0])
 
     # Premise: the exact point must actually refuse — otherwise the FFT was not noiseless
@@ -435,7 +442,7 @@ def test_auto_detune_keeps_gradients_flowing_through_the_retry():
     import jax.numpy as jnp
 
     def loss(thickness):
-        r = wavebit.rcwa(backend=1, wavelength=WL, fto=[3, 0], ucell=_STACK,
+        r = wavebit.rcwa(backend=1, wavelength=WL, fto=[3, 0], structure=_STACK,
                          **_KW).conv_solve(thickness=[200.0, thickness])
         return jnp.real(jnp.asarray(r.R)).sum()
 
@@ -548,18 +555,18 @@ def test_grad_is_guarded_and_still_differentiates():
     import jax.numpy as jnp
 
     def loss(n):
-        ucell = jnp.reshape(
+        structure = jnp.reshape(
             jnp.stack([jnp.ones((), dtype=jnp.complex128)] * 2
                       + [jnp.astype(n, jnp.complex128)] * 3
                       + [jnp.ones((), dtype=jnp.complex128)] * 3), (1, 1, 8))
         r = wavebit.rcwa(backend=1, wavelength=550.0, period=[700.0], fto=[10, 0],
-                         n_top=1.0, n_bot=1.5, theta=0.1, phi=0.0, psi=np.pi / 2,
-                         ucell=ucell, thickness=[220.0]).conv_solve()
+                         top=1.0, bot=2.25, theta=0.1, phi=0.0, psi=np.pi / 2,
+                         structure=structure, thickness=[220.0]).conv_solve()
         return jnp.real(r.R).sum()
 
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        g = float(jax.grad(loss)(jnp.asarray(3.5)))
+        g = float(jax.grad(loss)(jnp.asarray(12.25)))   # a permittivity: the old n = 3.5
     assert np.isfinite(g) and g != 0.0
     # A healthy solve: the guard ran (grad is readable) and found nothing to say.
     assert [r for r in rec if issubclass(r.category, UnphysicalResultWarning)] == []

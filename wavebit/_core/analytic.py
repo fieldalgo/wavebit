@@ -1,20 +1,28 @@
 """Single-source analytic (staircase-free) Fourier modeling.
 
-A layer is described by a background index plus a list of parametric shapes — rectangles,
+A layer is described by a background material plus a list of parametric shapes — rectangles,
 circles, ellipses — and its permittivity is Fourier-transformed *analytically* rather than
 sampled onto a raster. That removes staircase error entirely, so the same accuracy needs far
 fewer harmonics on curved or tilted boundaries.
 
-A layer is ``dict(n_base=..., shapes=[...], combine=...)`` and a shape is
-``dict(type='rectangle'|'circle'|'ellipse', cx=, cy=, lx=, ly=, angle=, n_index=)``.
+A layer is ``dict(background=..., shapes=[...], combine=...)`` and a shape is
+``dict(type='rectangle'|'circle'|'ellipse', cx=, cy=, lx=, ly=, angle=, material=...)``.
+
+Both material slots take a :class:`~wavebit._core.domain.Material` -- relative permittivity
+and the permeability that goes with it -- or a bare number, which is the scalar shorthand for
+``Material(epsilon=x)``. They were ``n_base`` and ``n_index`` and held a refractive index; both
+spellings are refused by name now, because the *quantity* changed with them and a rename that
+kept the number would build a different, legal, energy-conserving structure
+(``docs/conventions.md``).
 
 **Shapes superpose; they do not paint over each other.** Each one contributes
 ``(eps_shape - eps_base) * FT(indicator)``, so where two overlap the layer gets *both*
-contributions and the permittivity there is neither shape's. Two 120x120 rods of index 2 and 3
-in a background of 1, overlapping by 7200 of a 90000 cell, come out at a mean permittivity of
-2.76 where painting the second over the first gives 2.52 -- and the efficiency follows, 0.9856
-against the 0.9792 a raster and the block path agree on. The block path
-(``ucell=[[n_base, [[shape, ...], ...]]]``) is the one that paints, later object over earlier,
+contributions and the permittivity there is neither shape's. Two 120x120 rods of permittivity
+4 and 9 in a background of 1, overlapping by 7200 of a 90000 cell, come out at a mean
+permittivity of 2.76 where painting the second over the first gives 2.52 -- and the efficiency
+follows, 0.9856 against the 0.9792 a raster and the block path agree on. The block path
+(``structure=[[background, [[shape, ...], ...]]]``) is the one that paints, later object over
+earlier,
 so the same recipe means two different structures depending on which path it is handed to.
 
 ``combine`` is what makes that choice explicit. It is a property of the *layer*, not of this
@@ -57,7 +65,9 @@ fractions builds a rod ``1/period`` times too large and says nothing about it, s
 ``test_analytic_shape_parameters_are_absolute_lengths`` pins the distinction.
 
 Everything here is differentiable with respect to the shape parameters (``cx``, ``cy``, ``lx``,
-``ly``, ``angle``, ``n_index``) — those are what an inverse-design user actually optimizes. The
+``ly``, ``angle``, ``material``) — those are what an inverse-design user actually optimizes. A
+material is a design variable like any other, which is why :class:`Material` is a registered
+JAX pytree rather than an opaque leaf. The
 one primitive that made this hard, Bessel ``J1``, lives in :mod:`wavebit._core.backend`: SciPy
 has it, PyTorch's has no autograd backward, and JAX's returns NaN near zero, so each backend
 reaches it a different way behind one name.
@@ -100,6 +110,7 @@ fell from 12x/486x to 2x/182x because this side got slower, not because that one
 """
 from . import overlap as _overlap
 from .backend import array_namespace, as_array, j1, jinc, sinc
+from .domain import as_material, retired_material_name
 from .factorization import ConvSlots5      # one slot layout for every builder
 from .lattice import sample_grid
 from .overlap import COMBINE_MODES, OVERLAP_TOL_REL      # re-exported; both paths read them
@@ -177,7 +188,7 @@ def _across(ox, oy):
 
 
 #: Keys every shape takes, whatever its type.
-_COMMON_KEYS = frozenset({'type', 'cx', 'cy', 'angle', 'n_index'})
+_COMMON_KEYS = frozenset({'type', 'cx', 'cy', 'angle', 'material'})
 
 #: The length keys each type takes, on top of :data:`_COMMON_KEYS`. ``l`` is the both-axes
 #: spelling. The round types have no ``ly`` **because they have no second length** — that is
@@ -189,6 +200,14 @@ _LENGTH_KEYS = {
     'circle': frozenset({'lx', 'l'}),
     'disk': frozenset({'lx', 'l'}),
 }
+
+
+#: Retired spellings a *layer* dict may still be carrying, and a *shape* dict likewise. Both
+#: are refused by name through :func:`~wavebit._core.domain.retired_material_name`, which says
+#: the quantity changed as well as the key -- the half a plain "unknown key" message would
+#: leave out, and the half that decides whether the number the user kept is still right.
+_RETIRED_LAYER_KEYS = ('n_base', 'base')
+_RETIRED_SHAPE_KEYS = ('n_index',)
 
 
 def check_shape_spec(shape, shape_index=0, layer_index=0):
@@ -233,6 +252,9 @@ def check_shape_spec(shape, shape_index=0, layer_index=0):
             f"is the size you meant, or use type={alt!r} to give two lengths.")
 
     unknown = set(shape) - (lengths | _COMMON_KEYS)
+    for key in _RETIRED_SHAPE_KEYS:
+        if key in unknown:
+            raise ValueError(retired_material_name(key, where))
     if unknown:
         import difflib
         known = sorted(lengths | _COMMON_KEYS)
@@ -246,7 +268,7 @@ def check_shape_spec(shape, shape_index=0, layer_index=0):
 
 
 #: Everything a layer dict may say. Keep this in step with what the builders below read.
-_LAYER_KEYS = frozenset({'n_base', 'base', 'shapes', 'combine'})
+_LAYER_KEYS = frozenset({'background', 'shapes', 'combine'})
 
 
 def check_layer_spec(layer, layer_index=0):
@@ -256,17 +278,20 @@ def check_layer_spec(layer, layer_index=0):
     every key is read with ``.get`` and a default, so a misspelling is not an error, it is a
     *different structure* returned without complaint. A layer whose ``phi`` is spelled ``pih``
     has no shapes either, and an empty shape list is perfectly legal — so it comes back as a
-    uniform slab of ``n_base``, solves, conserves energy, and is wrong. There is nothing
+    uniform slab of ``background``, solves, conserves energy, and is wrong. There is nothing
     downstream that could notice.
     """
     unknown = sorted(set(layer) - _LAYER_KEYS)
+    for key in unknown:
+        if key in _RETIRED_LAYER_KEYS:
+            raise ValueError(retired_material_name(key, f'Analytic layer {layer_index}'))
     if unknown:
         raise ValueError(
             f'Analytic layer {layer_index}: {unknown} is not read by any path here. A layer '
             f'takes {sorted(_LAYER_KEYS)}. Refused rather than ignored, because an unread key '
             f'leaves a layer that still *builds*: a dict carrying nothing this reads has no '
             f'shapes either, and an empty shape list is legal, so it comes back as a uniform '
-            f'slab of n_base — which solves, conserves energy to 1e-14, and is not the '
+            f'slab of the background — which solves, conserves energy to 1e-14, and is not the '
             f'structure that was asked for.')
 
 
@@ -334,7 +359,7 @@ def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_RE
         f"ends up as neither shape's material, while the block path paints one over the "
         f'other — the same recipe, two different structures. Say which you mean:\n'
         f"  - combine='add' in the layer dict to keep the superposition computed here;\n"
-        f'  - the block path, ucell=[[n_base, [[shape, ...], ...]]], to paint later shapes '
+        f'  - the block path, structure=[[background, [[shape, ...], ...]]], to paint later shapes '
         f'over earlier ones.')
 
 
@@ -477,28 +502,38 @@ def _refuse_paint_overlap(shapes, period, lattice=None):
         f"combine='paint' cannot be built here: {what}, and this builder sums every shape's "
         f'(eps_shape - eps_base) * FT(indicator). Summing an overlap is a different structure '
         f'from painting it -- measured 1.99 against 1.90 in <eps> for two 300x300 rods of '
-        f'index 2 and 3 -- so returning the sum under the name of the paint would be a '
-        f'plausible wrong answer rather than a refusal.\n'
+        f'permittivity 4 and 9 -- so returning the sum under the name of the paint would '
+        f'be a plausible wrong answer rather than a refusal.\n'
         f'  For the painted layer, go through wavebit._core.boundary.to_conv_mat_boundary_layer '
         f'(or analytic.to_conv_mat_smooth_layers, which routes to it), where the overlap is '
         f'resolved into disjoint polygons before anything is transformed.')
 
 
-def assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype, lattice=None,
+def assemble_eps_coeffs(xp, shapes, background, fto_x, fto_y, period, dtype, lattice=None,
                         combine=None):
     """Analytic Fourier coefficients of ``eps`` and ``1/eps`` for one layer.
 
     Each grid has shape ``(4*fto_y+1, 4*fto_x+1)``, indexed ``[ky+2*fto_y, kx+2*fto_x]`` — the
     doubled range a ``(2*fto+1)**2`` convolution matrix needs (``docs/factorization-terms.md``
-    §2 for why it doubles). The ``n**2`` maps refractive index
-    to permittivity: Wavebit works in ``e^{-iwt}`` throughout (``Im(n) > 0`` = loss), with no
-    conjugation on the way in.
+    §2 for why it doubles).
+
+    ``background`` and each shape's ``material`` are read through
+    :func:`~wavebit._core.domain.as_material`, so a bare number means ``Material(epsilon=x)``
+    and the permittivity is taken straight out -- **there is no squaring here any more**, which
+    is one of the sites the convention flip is made of. Wavebit works in ``e^{-iwt}``
+    throughout (``Im(eps) > 0`` = loss), with no conjugation on the way in.
+
+    ``mu`` is not read here and must not be: this function is called a second time by
+    ``CoreFactorizationMixin._mu_matrices``, on a layer whose materials have had their ``mu``
+    put where their ``epsilon`` was, and that second pass is what builds the permeability
+    slots. Reading both here would build one of them twice and the other never.
 
     **This builds ``combine='add'`` and nothing else.** It takes a shape *list*, not a layer,
     so the layer's ``combine`` is not in front of it — and where two shapes overlap the two
     rules describe two different structures. Reconstructing a painted layer from this function
-    is therefore wrong, silently: two 300x300 rods of index 2 and 3 in a 1000x1000 cell come
-    back at ``<eps> = 1.99`` where the solver integrates ``1.90``, a 4.7% error that looks
+    is therefore wrong, silently: two 300x300 rods of permittivity 4 and 9 in a 1000x1000
+    cell come back at ``<eps> = 1.99`` where the solver integrates ``1.90``, a 4.7% error that
+    looks
     entirely plausible. The solver itself does not make that mistake —
     :func:`to_conv_mat_smooth_layers` routes a painted *and overlapping* layer to
     :mod:`.boundary` and only reaches this builder where the two rules coincide — so this is a
@@ -511,11 +546,12 @@ def assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype, lattice
     if combine == 'paint':
         _refuse_paint_overlap(shapes, period, lattice)
 
-    dev = getattr(n_base, 'device', None) if hasattr(n_base, 'device') else None
+    eps_base = as_material(background, 'layer background').epsilon
+    dev = getattr(eps_base, 'device', None) if hasattr(eps_base, 'device') else None
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
     KKY, KKX = _grid(xp, fto_x, fto_y, dev, real_dtype)
 
-    eps_bg = as_array(xp, n_base, dtype=dtype) ** 2
+    eps_bg = as_array(xp, eps_base, dtype=dtype)
     inv_bg = 1.0 / eps_bg
 
     # DC term only: the background is constant over the whole cell.
@@ -525,7 +561,8 @@ def assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype, lattice
     inv_eps_c = xp.where(is_dc, inv_bg, zero)
 
     for shape in shapes:
-        eps_s = as_array(xp, shape['n_index'], dtype=dtype) ** 2
+        eps_s = as_array(xp, as_material(shape['material'], 'shape material').epsilon,
+                         dtype=dtype)
         ft = xp.astype(shape_ft(xp, shape, KKY, KKX, period, lattice), dtype)
         eps_c = eps_c + (eps_s - eps_bg) * ft
         inv_eps_c = inv_eps_c + (1.0 / eps_s - inv_bg) * ft
@@ -891,8 +928,8 @@ def _projector_cache_key(xp, built, grid_shape, period, fto_x, fto_y, dtype, lat
     """A content key for the coefficients built below, or ``None`` when caching would be wrong.
 
     Everything :func:`normal_vector_field_analytical` reads goes in and nothing else does. It
-    reads each shape through :func:`shape_geometry` and never touches ``n_index`` or ``n_base``,
-    which is what makes the cache worth having: a sweep over the *material* leaves this key
+    reads each shape through :func:`shape_geometry` and never touches ``material`` or
+    ``background``, which is what makes the cache worth having: a sweep over the *material* leaves this key
     alone. ``None`` means at least one value is traced or under autograd, so the build has to
     happen again -- the gradient runs through it.
     """
@@ -1041,7 +1078,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype,
     # cached is the split: for a single shape ``built`` sits at the centre of the cell whatever
     # ``(cx, cy)`` are, which makes a position sweep -- and a position *gradient*, which runs
     # through the phase -- reuse one field instead of rebuilding it every step. A material sweep
-    # reuses it for the other reason: the key holds no refractive index because the build reads
+    # reuses it for the other reason: the key holds no material at all because the build reads
     # none. Measured on a five-point sweep at ``normal_grid = 1024``, ``fto = 4``: this call was
     # 83% of the wall clock for one shape and 93% for six.
     key = _projector_cache_key(xp, built, grid_shape, period, fto_x, fto_y, dtype, lattice)
@@ -1072,7 +1109,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype,
     return tuple(c * phase for c in coeffs)
 
 
-def to_conv_mat_smooth_nvf(xp, shapes, n_base, fto_x, fto_y, period, dtype,
+def to_conv_mat_smooth_nvf(xp, shapes, background, fto_x, fto_y, period, dtype,
                              normal_grid=256, lattice=None, combine=None):
     """The five 2D-solve convolution matrices for one analytic layer, via NVF.
 
@@ -1087,7 +1124,7 @@ def to_conv_mat_smooth_nvf(xp, shapes, n_base, fto_x, fto_y, period, dtype,
     ``combine`` is passed straight to :func:`assemble_eps_coeffs`, which sums; see there for
     why an overlapping painted layer must not arrive at this function.
     """
-    eps_c, inv_eps_c = assemble_eps_coeffs(xp, shapes, n_base, fto_x, fto_y, period, dtype,
+    eps_c, inv_eps_c = assemble_eps_coeffs(xp, shapes, background, fto_x, fto_y, period, dtype,
                                            lattice, combine=combine)
     c_xx, c_xy, c_yy = normal_projector_coeffs(
         xp, shapes, (normal_grid, normal_grid), period, fto_x, fto_y, dtype, lattice)
@@ -1164,7 +1201,7 @@ def to_conv_mat_smooth_layers(layer_shapes, fto_x, fto_y, period,
                                 boundary_plans=None, lattice=None):
     """Stack the analytic-NVF convolution matrices over layers.
 
-    ``layer_shapes`` is one ``dict(n_base=..., shapes=[...])`` per layer, with the shapes'
+    ``layer_shapes`` is one ``dict(background=..., shapes=[...])`` per layer, with the shapes'
     ``cx`` / ``cy`` / ``lx`` / ``ly`` as absolute lengths in the units of ``period`` (see the
     module docstring). Returns ``(epx, epy, epz_i, epxy, epyx)``, each
     ``(n_layers, ff_xy, ff_xy)``.
@@ -1193,7 +1230,7 @@ def to_conv_mat_smooth_layers(layer_shapes, fto_x, fto_y, period,
         if frozen and plan is None:
             check_no_plan_still_fits(layer, period, index, lattice)
         check_layer_combination(layer, period, index, lattice=lattice)
-        n_base = layer.get('n_base', layer.get('base', 1.0))
+        background = layer.get('background', 1.0)
         if plan is not None or (not frozen
                                 and layer_needs_resolving(layer, period, lattice)):
             # A painted layer that actually overlaps is a different structure from a summed
@@ -1202,7 +1239,7 @@ def to_conv_mat_smooth_layers(layer_shapes, fto_x, fto_y, period,
             # structure either way, so it stays here -- exact, and cheaper.
             from .boundary import to_conv_mat_boundary_layer
             mats = to_conv_mat_boundary_layer(
-                xp, layer.get('shapes', []), n_base, fto_x, fto_y, period, dtype,
+                xp, layer.get('shapes', []), background, fto_x, fto_y, period, dtype,
                 normal_grid=normal_grid, plan=plan, lattice=lattice)
         else:
             # `combine` goes down with the shapes rather than being dropped here. Reaching
@@ -1215,7 +1252,7 @@ def to_conv_mat_smooth_layers(layer_shapes, fto_x, fto_y, period,
             # rules, and once the shapes moved together the check below is what fired -- with
             # a message about this builder rather than about the stale record.
             mats = to_conv_mat_smooth_nvf(
-                xp, layer.get('shapes', []), n_base, fto_x, fto_y, period, dtype,
+                xp, layer.get('shapes', []), background, fto_x, fto_y, period, dtype,
                 normal_grid=normal_grid, lattice=lattice, combine=layer.get('combine'))
         for slot, m in zip(out, mats):
             slot.append(m)
@@ -1223,13 +1260,27 @@ def to_conv_mat_smooth_layers(layer_shapes, fto_x, fto_y, period,
     return ConvSlots5(*(xp.stack(slot) for slot in out))
 
 
+def _material_value(value):
+    """A material slot's ``epsilon``, or the raw value, or ``None`` -- for namespace sniffing.
+
+    The point is to look *inside* a :class:`~wavebit._core.domain.Material`. A material is a
+    legitimate design variable, so its ``epsilon`` may be the only backend array in a layer
+    written entirely with Python floats; missing it would build the whole layer in NumPy and
+    drop the gradient at the very parameter being optimised.
+    """
+    if value is None:
+        return None
+    return as_material(value).epsilon
+
+
 def _infer_namespace(layer_shapes):
     """Namespace of the first array-like shape parameter; NumPy when everything is a scalar."""
     for layer in layer_shapes:
-        candidates = [layer.get('n_base'), layer.get('base')]
+        candidates = [_material_value(layer.get('background'))]
         for shape in layer.get('shapes', []):
             candidates.extend(shape.get(k) for k in
-                              ('cx', 'cy', 'lx', 'ly', 'l', 'angle', 'n_index'))
+                              ('cx', 'cy', 'lx', 'ly', 'l', 'angle'))
+            candidates.append(_material_value(shape.get('material')))
         for c in candidates:
             if c is not None and hasattr(c, 'dtype') and hasattr(c, 'shape'):
                 return array_namespace(c)

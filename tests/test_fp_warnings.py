@@ -66,16 +66,20 @@ def _energy(res):
 # A 600nm rod at 500nm wavelength with fto=8 retains orders whose decay over one layer is
 # ~exp(-100): the regime that made the broken NumPy shout loudest.
 
-def _ucell_2d():
+#: 3.48**2 and 2.0**2 -- the same two media, as the permittivity `structure` now holds.
+EPS_SI, EPS_MID = 12.1104, 4.0
+
+
+def _structure_2d():
     u = np.ones((1, 64, 64))
-    u[0, 16:48, 16:48] = 3.48
+    u[0, 16:48, 16:48] = EPS_SI
     return u
 
 
-def _ucell_1d():
+def _structure_1d():
     u = np.ones((2, 1, 256))
-    u[0, 0, 64:192] = 3.48
-    u[1, 0, :] = 2.0
+    u[0, 0, 64:192] = EPS_SI
+    u[1, 0, :] = EPS_MID
     return u
 
 
@@ -90,8 +94,8 @@ def test_numpy_is_new_enough_to_report_fp_flags_correctly():
 
 @pytest.mark.parametrize('connecting_algo', ['ETM', 'SMM'])
 def test_thick_2d_stack_is_silent_and_conserves_energy(connecting_algo):
-    res, fp = _run(ucell=_ucell_2d(), thickness=[600], period=[700, 700], fto=[8, 8],
-                   psi=0.0, n_bot=3.48, connecting_algo=connecting_algo)
+    res, fp = _run(structure=_structure_2d(), thickness=[600], period=[700, 700], fto=[8, 8],
+                   psi=0.0, bot=EPS_SI, connecting_algo=connecting_algo)
     assert fp == []
     assert abs(_energy(res) - 1.0) < 1e-10
 
@@ -99,16 +103,16 @@ def test_thick_2d_stack_is_silent_and_conserves_energy(connecting_algo):
 @pytest.mark.parametrize('connecting_algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('psi', [np.pi / 2, 0.0], ids=['te', 'tm'])
 def test_thick_1d_stack_is_silent_and_conserves_energy(connecting_algo, psi):
-    res, fp = _run(ucell=_ucell_1d(), thickness=[800, 400], period=[700], fto=[8, 0],
-                   psi=psi, n_bot=3.48, connecting_algo=connecting_algo)
+    res, fp = _run(structure=_structure_1d(), thickness=[800, 400], period=[700], fto=[8, 0],
+                   psi=psi, bot=EPS_SI, connecting_algo=connecting_algo)
     assert fp == []
     assert abs(_energy(res) - 1.0) < 1e-10
 
 
 @pytest.mark.parametrize('connecting_algo', ['ETM', 'SMM'])
 def test_conical_stack_is_silent_and_conserves_energy(connecting_algo):
-    res, fp = _run(ucell=_ucell_1d(), thickness=[800, 400], period=[700], fto=[8, 0],
-                   psi=np.pi / 2, phi=0.3, n_bot=3.48, connecting_algo=connecting_algo)
+    res, fp = _run(structure=_structure_1d(), thickness=[800, 400], period=[700], fto=[8, 0],
+                   psi=np.pi / 2, phi=0.3, bot=EPS_SI, connecting_algo=connecting_algo)
     assert fp == []
     assert abs(_energy(res) - 1.0) < 1e-10
 
@@ -119,21 +123,21 @@ def test_conical_stack_is_silent_and_conserves_energy(connecting_algo):
                          ids=['sampled-li', 'sampled-nvf', 'integrated-li', 'integrated-nvf'])
 def test_every_factorization_is_silent(strategy):
     """The convolution builders were the loudest sites of all under the broken NumPy."""
-    res, fp = _run(ucell=_ucell_2d(), thickness=[600], period=[700, 700], fto=[6, 6],
-                   psi=0.0, n_bot=3.48, **strategy)
+    res, fp = _run(structure=_structure_2d(), thickness=[600], period=[700, 700], fto=[6, 6],
+                   psi=0.0, bot=EPS_SI, **strategy)
     assert fp == []
     assert abs(_energy(res) - 1.0) < 1e-10
 
 
 def test_analytic_shape_path_is_silent():
     """The analytic (staircase-free) builder carries its own copy of the NVF assembly."""
-    ucell = [dict(n_base=1.0, shapes=[dict(type='ellipse', cx=0.5, cy=0.6, lx=0.5, ly=0.3,
-                                           angle=np.deg2rad(40), n_index=2.4),
+    structure = [dict(background=1.0, shapes=[dict(type='ellipse', cx=0.5, cy=0.6, lx=0.5,
+                                              ly=0.3, angle=np.deg2rad(40), material=5.76),
                                       dict(type='circle', cx=0.3, cy=0.3, lx=0.2,
-                                           n_index=3.0)])]
+                                              material=9.0)])]
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        res = wavebit.rcwa(backend=0, ucell=ucell, fto=(6, 6), n_top=1.0, n_bot=1.0,
+        res = wavebit.rcwa(backend=0, structure=structure, fto=(6, 6), top=1.0, bot=1.0,
                              theta=np.deg2rad(5), phi=np.deg2rad(20), period=(1.0, 1.2),
                              wavelength=1.5, thickness=(0.3,), psi=0.35 * np.pi).conv_solve()
     assert _fp_warnings(rec) == []
@@ -142,8 +146,8 @@ def test_analytic_shape_path_is_silent():
 
 def test_field_reconstruction_is_silent_and_finite():
     """Reconstruction re-walks the same modal exponentials the solve cascaded."""
-    sim = wavebit.rcwa(backend=0, ucell=_ucell_2d(), thickness=[600], period=[700, 700],
-                         wavelength=WL, fto=[6, 6], psi=0.0, n_bot=3.48, answers='field')
+    sim = wavebit.rcwa(backend=0, structure=_structure_2d(), thickness=[600], period=[700, 700],
+                         wavelength=WL, fto=[6, 6], psi=0.0, bot=EPS_SI, answers='field')
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         res, field = sim.conv_solve_field(res_x=8, res_y=8, res_z=8)
@@ -158,8 +162,8 @@ def test_solving_does_not_touch_global_seterr():
     try:
         np.seterr(over='raise', divide='raise', invalid='raise')
         during = np.geterr()
-        _run(ucell=_ucell_2d(), thickness=[600], period=[700, 700], fto=[6, 6],
-             psi=0.0, n_bot=3.48)
+        _run(structure=_structure_2d(), thickness=[600], period=[700, 700], fto=[6, 6],
+             psi=0.0, bot=EPS_SI)
         assert np.geterr() == during
     finally:
         np.seterr(**before)
@@ -175,8 +179,8 @@ def test_caller_raise_policy_survives_a_solve():
     before = np.geterr()
     try:
         np.seterr(over='raise', divide='raise', invalid='raise', under='raise')
-        res, _ = _run(ucell=_ucell_2d(), thickness=[600], period=[700, 700], fto=[8, 8],
-                      psi=0.0, n_bot=3.48)
+        res, _ = _run(structure=_structure_2d(), thickness=[600], period=[700, 700], fto=[8, 8],
+                      psi=0.0, bot=EPS_SI)
         assert abs(_energy(res) - 1.0) < 1e-10
     finally:
         np.seterr(**before)
@@ -222,7 +226,12 @@ def test_finiteness_guard_fires_from_the_solve_path():
 # --- tier 2: finite, but not a physical result ----------------------------------------------
 
 def _physical(R, T, n_top=1.0):
-    """Run the plausibility check, returning the warnings it emitted."""
+    """Run the plausibility check, returning the warnings it emitted.
+
+    ``n_top`` and not ``top``: :func:`check_physical` is a core function, and there the
+    quantity genuinely is a refractive index -- it normalises the incident power. Only the
+    public boundary flipped to permittivity.
+    """
     xp = array_namespace(np.zeros(1))
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
@@ -290,8 +299,8 @@ def test_warning_category_is_exported():
 def test_healthy_solves_emit_no_unphysical_warning():
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        wavebit.rcwa(backend=0, ucell=_ucell_2d(), thickness=[600], period=[700, 700],
-                       wavelength=WL, fto=[8, 8], psi=0.0, n_bot=3.48).conv_solve()
+        wavebit.rcwa(backend=0, structure=_structure_2d(), thickness=[600], period=[700, 700],
+                       wavelength=WL, fto=[8, 8], psi=0.0, bot=EPS_SI).conv_solve()
     assert [r for r in rec if issubclass(r.category, UnphysicalResultWarning)] == []
 
 
@@ -357,13 +366,14 @@ def test_guards_step_aside_for_a_jit_tracer():
 # pure round-off. The answer stays finite and stays physical (the degenerate case is perfectly
 # unitary), so neither tier above it fires. See docs/branch-cuts.md.
 
-_BRANCH_UCELL = np.array([[[0, 1, 0, 1, 1, 1]]]) * 4 + 1
+#: A 1/5 index grating, written as its permittivities: 1 and 25.
+_BRANCH_STRUCTURE = np.array([[[0, 1, 0, 1, 1, 1]]]) * 24 + 1
 
 
-def _branch_solve(type_complex, n_top=1.0, theta=0.4, phi=0.3, backend=0):
+def _branch_solve(type_complex, top=1.0, theta=0.4, phi=0.3, backend=0):
     return wavebit.rcwa(
-        backend=backend, psi=np.pi / 2, n_top=n_top, n_bot=5.0, theta=theta, phi=phi, fto=[30],
-        wavelength=900e-9, period=[2000e-9], ucell=_BRANCH_UCELL, thickness=[100e-9],
+        backend=backend, psi=np.pi / 2, top=top, bot=25.0, theta=theta, phi=phi, fto=[30],
+        wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
         type_complex=type_complex, fourier_coefficients='integrated',
         factorization='li').conv_solve()
 
@@ -383,7 +393,8 @@ _REGIMES = {
     'complex angle': dict(theta=_COMPLEX_THETA, phi=_COMPLEX_PHI),
     # Its genuine Re(kz) sits at the same scale as the round-off above; that overlap is why
     # no fixed cutoff serves both, and why this warns rather than being repaired.
-    'weak absorber': dict(n_top=1.4 + 1e-5j, theta=0.6, phi=0.4),
+    # (1.4 + 1e-5j)**2 -- the weak absorber, as permittivity.
+    'weak absorber': dict(top=1.9599999998999997 + 2.8e-05j, theta=0.6, phi=0.4),
 }
 
 
@@ -425,8 +436,8 @@ def test_a_traced_single_precision_solve_says_it_could_not_be_checked():
 
     def amplitude(type_complex, t):
         res = wavebit.rcwa(
-            backend=1, psi=np.pi / 2, n_top=1.0, n_bot=5.0, theta=t, phi=phi, fto=[10],
-            wavelength=900e-9, period=[2000e-9], ucell=_BRANCH_UCELL, thickness=[100e-9],
+            backend=1, psi=np.pi / 2, top=1.0, bot=25.0, theta=t, phi=phi, fto=[10],
+            wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
             type_complex=type_complex, fourier_coefficients='sampled',
             factorization='li').conv_solve()
         return jnp.asarray(res.res_te_inc.r_s).ravel()[10]
@@ -455,8 +466,8 @@ def test_the_check_does_not_break_tracing():
 
     def R(theta):
         res = wavebit.rcwa(
-            backend=1, psi=np.pi / 2, n_top=1.0, n_bot=5.0, theta=theta, phi=0.3, fto=[6],
-            wavelength=900e-9, period=[2000e-9], ucell=_BRANCH_UCELL, thickness=[100e-9],
+            backend=1, psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, fto=[6],
+            wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
             type_complex=0, fourier_coefficients='sampled',
             factorization='li').conv_solve()
         return jnp.sum(jnp.real(jnp.asarray(res.res_te_inc.R_s)))
@@ -509,8 +520,8 @@ def _precision_warnings(theta, backend=0, type_complex=0):
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         wavebit.rcwa(
-            backend=backend, psi=np.pi / 2, n_top=1.0, n_bot=5.0, theta=theta, phi=0.3, fto=[5],
-            wavelength=900e-9, period=[2000e-9], ucell=_BRANCH_UCELL, thickness=[100e-9],
+            backend=backend, psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, fto=[5],
+            wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
             type_complex=type_complex, fourier_coefficients='sampled', factorization='li')
     return [r for r in rec if issubclass(r.category, PrecisionLossWarning)]
 
@@ -596,9 +607,9 @@ def test_the_remaining_x64_ordering_gap_is_reported():
         with warnings.catch_warnings(record=True) as rec:
             warnings.simplefilter('always')
             wavebit.rcwa(
-                backend=1, psi=np.pi / 2, n_top=1.0, n_bot=5.0, theta=theta, phi=0.3, fto=[5],
+                backend=1, psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, fto=[5],
                 wavelength=900e-9, period=[2000e-9],
-                ucell=np.array([[[0, 1, 0, 1, 1, 1]]]) * 4 + 1, thickness=[100e-9],
+                structure=np.array([[[0, 1, 0, 1, 1, 1]]]) * 24 + 1, thickness=[100e-9],
                 type_complex=0, fourier_coefficients='sampled', factorization='li')
         assert any(issubclass(r.category, PrecisionLossWarning) for r in rec), \\
             'the remaining ordering gap went unreported'

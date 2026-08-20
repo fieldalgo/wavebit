@@ -173,6 +173,22 @@ jobs:
       # Runs outside the checkout on purpose: from the repo root `import
       # wavebit` would resolve to the source tree and the installed package
       # would never be exercised.
+      #
+      # Written in today's public spelling, and it has to be: every retired
+      # keyword raises by name, so a stale call here fails the job rather than
+      # solving something else. It was stale exactly once, which is why this
+      # note exists -- the call below survived two renames untouched because no
+      # test imports this file. The scene is the one it always was, restated:
+      #
+      #   pol=1        -> tetm='tm'     (retired earlier and separately -- `pol`
+      #                                  said polarization, solver path and a
+      #                                  derived psi all at once)
+      #   n_top/n_bot  -> top/bot
+      #   ucell        -> structure
+      #   and the values are relative PERMITTIVITY now, so the substrate's
+      #   n = 1.5 is 2.25 and the film's n = 3.8 is 14.44. Renaming without
+      #   squaring is the silent half-migration: 3.8 is a legal permittivity,
+      #   the solve still conserves energy, and it answers a different question.
       - name: Import and solve without any optional backend
         working-directory: ${{ runner.temp }}
         run: |
@@ -182,9 +198,9 @@ jobs:
           import wavebit
 
           res = wavebit.rcwa(
-              backend=0, pol=1, n_top=1.0, n_bot=1.5, theta=0.0, phi=0.0,
+              backend=0, tetm='tm', top=1.0, bot=2.25, theta=0.0, phi=0.0,
               fto=2, wavelength=632.8, period=[1000],
-              ucell=np.array([[[3.8, 3.8]]]), thickness=[200],
+              structure=np.array([[[14.44, 14.44]]]), thickness=[200],
           ).conv_solve()
 
           R, T = float(res.R.sum()), float(res.T.sum())

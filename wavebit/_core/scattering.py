@@ -361,7 +361,8 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
 # ------------------------------------------------------------------- coupled s/p (conical, 2D)
 
 def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
-            layer_modes, epz_conv_i_all, backside, answers, mu_top=1.0, mu_bot=1.0):
+            layer_modes, epz_conv_i_all, backside, answers, mu_top=1.0, mu_bot=1.0,
+            eps_top=None, eps_bot=None):
     """Shared SMM cascade + matching for the coupled s/p paths (conical and 2D).
 
     ``layer_modes(layer_index)`` returns that layer's ``(big_W, big_V, q, W, V)``: the mode
@@ -398,8 +399,14 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     k_par_sq = kx_g ** 2 + ky_g ** 2
     kz_top = xp.reshape(boundary_kz(xp, n_top ** 2, k_par_sq), (-1,))
     kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq), (-1,))
-    eps_top = n_top ** 2 / mu_top      # n stays the refractive index; eps carries the mu
-    eps_bot = n_bot ** 2 / mu_bot
+    # `n` stays the refractive index and `eps` carries the `mu`, so the two are recoverable
+    # from each other -- but only up to rounding, since the index reached this call through a
+    # square root. The engine holds both numbers and passes them; a caller that holds only an
+    # index leaves these `None` and gets the recovery, which is what this always did.
+    if eps_top is None:
+        eps_top = n_top ** 2 / mu_top
+    if eps_bot is None:
+        eps_bot = n_bot ** 2 / mu_bot
     eps_gap = xp.reshape(1 + k_par_sq, (-1,))                 # kz_gap == 1 by construction
 
     Kz_top = _diag(xp, kz_top)
@@ -558,7 +565,7 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
            epxy_conv_all=None, epyx_conv_all=None,
            *, phi, incidence_side='top', answers=Answers.EFFICIENCY,
-           mu=None, mu_top=1.0, mu_bot=1.0):
+           mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None):
     """Solve a 2D grating stack by scattering matrices — SMM twin of :func:`solve_2d`.
 
     Same arguments and returns as :func:`smm_1d`; ``incidence`` is the resolved complex
@@ -569,6 +576,10 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     layers are joined, not about what a layer is made of. A path that accepted ``mu`` under
     ``'ETM'`` and dropped it under ``'SMM'`` would return a plausible non-magnetic answer for a
     magnetic stack, and the two algorithms agreeing is one of the things the suite checks.
+
+    ``eps_top`` / ``eps_bot`` are the half-spaces' permittivities, as in :func:`solve_2d`:
+    optional, recovered as ``n**2/mu`` when absent, and supplied together with the ``mu``
+    pair by callers that hold both.
     """
     backside = _is_backside(incidence_side)
     xp, C, kx, ky = _prepare(epx_conv_all, kx, ky)
@@ -601,4 +612,4 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
 
     return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                    layer_modes, epz_conv_i_all, backside, answers,
-                   mu_top=mu_top, mu_bot=mu_bot)
+                   mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot)

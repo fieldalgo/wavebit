@@ -306,10 +306,19 @@ eps_bg = xp.conj(...(n_base)...) ** 2
 eps_s  = xp.conj(...(n_index)...) ** 2
 ```
 
-`_core/analytic.py::assemble_eps_coeffs` — of which this is a later copy — carries the
-sentence *"`e^{-iwt}` throughout (`Im(n) > 0` = loss), with no conjugation on the way in"* and
-does `n ** 2`. The copy kept the conjugate the original was moved off in 2026-08. An absorbing
-painted layer therefore came out as a **gain medium**.
+`_core/analytic.py::assemble_eps_coeffs` — of which this is a later copy — carried the
+sentence *"`e^{-iwt}` throughout, with no conjugation on the way in"* and did `n ** 2`. The
+copy kept the conjugate the original was moved off in 2026-08. An absorbing painted layer
+therefore came out as a **gain medium**.
+
+Both expressions are quoted as they stood. Neither survives: the material convention flip
+(2026-08-20) took the squaring out of every layer site, so both builders now read a relative
+permittivity straight off the layer's materials, and the sentence about conjugation is the
+half that is still load-bearing — `Im(eps) > 0` is loss, as written
+([`conventions.md`](conventions.md)). The keys are `background` and `material` now, and the
+quantity in them is `eps`, not `n`. What the section is about is unchanged: a copy that keeps
+a conversion its original has dropped, and the fact that a real-valued test set cannot see
+it.
 
 Measured on a uniform absorbing layer (two overlapping rectangles of the same index covering
 the cell, so the painting resolves into polygons and the closed-form Airy answer still applies):
@@ -322,8 +331,8 @@ the cell, so the painting resolves into polygons and the closed-form Airy answer
 
 After: every row agrees with the oracle to **3.3e-16** and `R + T` sits below 1.
 
-**Why nothing objected.** `test_boundary.py` builds every shape with a real `n_index`, where
-`conj(n)**2 == n**2`. It cross-checks the two builders against each other to 5e-9 — and both
+**Why nothing objected.** `test_boundary.py` built every shape with a real material (`n_index`,
+as the key was spelled then), where `conj(n)**2 == n**2`. It cross-checks the two builders against each other to 5e-9 — and both
 were on real indices, so agreeing proved nothing about this. The same blind-spot shape as the
 analytic path had before `test_absorbing_layer_via_the_analytic_path` was written, and the
 same shape as the NVF goldens all being 1D or square-pixel.

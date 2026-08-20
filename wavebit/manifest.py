@@ -1,14 +1,14 @@
 """What this solver supports, in a form another program can read.
 
 Wavebit already knows this about itself, in pieces: ``_core/enums.py`` holds the legal
-values, the ``ucell`` setter decides which modeling path a structure takes, and
+values, the ``structure`` setter decides which modeling path a structure takes, and
 ``_core/engine.py`` carries the tables that refuse an option a path cannot express. This
 module collects those into one JSON-round-trippable document, so a caller outside the
 process — documentation, a configuration UI, an assistant that recommends conditions — can
 read the same facts the solver enforces instead of restating them.
 
 **Capabilities and constraints only.** What each path implements, what is refused and why,
-and which spelling of ``ucell`` selects which path. Deliberately not here:
+and which spelling of ``structure`` selects which path. Deliberately not here:
 
 * *Recommendations.* "PyTorch below ``fto≈5``" is a measurement about a workload, not a
   property of the solver, and it belongs to whoever is giving advice. The manifest says
@@ -27,6 +27,7 @@ Regenerate the JSON with::
 """
 import json
 
+from ._core.domain import RETIRED_MATERIAL_NAMES
 from ._core.enums import (Answers, Backend, DEFAULT_ANSWERS, Factorization,
                           FourierCoefficients, NormalMethod, Pol)
 from ._core.engine import (_COEFFICIENTS_IMPLEMENTED_BY, _COEFFICIENTS_REASON,
@@ -42,46 +43,100 @@ from ._core.spec import SPEC_VERSION
 #: (2026-08-17).
 #: '4': the ``answers`` axis — the construction-time declaration of what a solve is for, its
 #: ladder and default, and the ``enums`` entry (2026-08-20).
-MANIFEST_VERSION = '4'
+#: '5': the material convention — ``material_quantity``, and the ``structure`` key on every
+#: path entry where ``ucell`` used to be. The *value* a caller writes changed with the name
+#: (refractive index -> relative permittivity), so a consumer that recognised the old shape
+#: and kept generating old numbers would generate legal, energy-conserving, wrong scenes:
+#: this bump is what lets it refuse instead (2026-08-20).
+MANIFEST_VERSION = '5'
 
 
-# ------------------------------------------------------------------ how a ucell is spelled
+# --------------------------------------------------------------- how a structure is spelled
 
-#: What a caller passes as ``ucell``, and the modeling path it selects. There is no separate
-#: mode switch — the type of the object *is* the choice, which is why a consumer that wants
-#: to tell a user how to spell their structure has to be told this rather than inferring it
-#: from a keyword.
+#: What a caller passes as ``structure``, and the modeling path it selects. There is no
+#: separate mode switch — the type of the object *is* the choice, which is why a consumer that
+#: wants to tell a user how to spell their structure has to be told this rather than inferring
+#: it from a keyword.
+#:
+#: ``material_form`` is the second half of the same fact and is what :data:`MATERIAL_QUANTITY`
+#: is stated against: three of the four paths name a material per region ('assignment') and
+#: one samples a field ('field'), which is why only the raster takes a ``mu=`` array while the
+#: other three carry permeability inside each ``Material``.
 SPELLINGS = (
     {
         'path': 'raster',
         'modeling_type': 0,
-        'ucell': 'a NumPy array of refractive indices, one 2D grid per layer',
+        'structure': 'a NumPy array of relative permittivity, one 2D grid per layer',
+        'material_form': 'field',
+        'mu': 'a second array of the same shape, passed as mu=',
         'summary': 'Permittivity as samples. The only path that implements both Fourier '
-                   'series and both factorization rules.',
+                   'series and both factorization rules, and the one topology optimisation '
+                   'uses.',
     },
     {
         'path': 'block',
         'modeling_type': 1,
-        'ucell': 'a list of [n_base, [shape, ...]] layers, each shape a list starting with '
-                 "'rectangle' or 'ellipse'",
+        'structure': 'a list of [background, [shape, ...]] layers, each shape a list '
+                     "starting with 'rectangle' or 'ellipse' and carrying its Material in "
+                     'position 5',
+        'material_form': 'assignment',
+        'mu': 'inside each Material',
         'summary': 'Shapes decomposed into axis-aligned blocks, painted in order. Edges that '
                    'are not axis-aligned become a staircase.',
     },
     {
         'path': 'smooth',
         'modeling_type': 2,
-        'ucell': "a list of dict(n_base=..., shapes=[...], combine='add') layers",
+        'structure': "a list of dict(background=..., shapes=[...], combine='add') layers, "
+                     "each shape dict carrying material=",
+        'material_form': 'assignment',
+        'mu': 'inside each Material',
         'summary': 'Shape edges enter the Fourier transform in closed form, so a tilted or '
                    'curved boundary carries no staircase error. Overlapping shapes are summed.',
     },
     {
         'path': 'boundary',
         'modeling_type': 2,
-        'ucell': "the smooth spelling with combine='paint'",
+        'structure': "the smooth spelling with combine='paint'",
+        'material_form': 'assignment',
+        'mu': 'inside each Material',
         'summary': 'The smooth path with overlaps resolved into disjoint polygons first, so '
                    'later shapes cover earlier ones without losing edge exactness.',
     },
 )
+
+
+#: **Which quantity a material number is.** Machine-readable, because the answer changed:
+#: every material slot took a refractive index until 2026-08-20 and takes relative
+#: permittivity now. A consumer that generated scenes against the old answer would keep
+#: generating numbers that are still *legal* -- ``3.5`` is a fine permittivity -- so nothing
+#: downstream raises and no energy check fires. Prose cannot be tested for; this can, which is
+#: the whole reason it is a dict of names rather than a sentence in ``summary``.
+#:
+#: ``retired`` maps each old spelling to the new one, and is *read from the table the
+#: refusals themselves use* (:data:`wavebit._core.domain.RETIRED_MATERIAL_NAMES`) rather than
+#: restated here. Every entry is refused **by name** at the boundary rather than accepted, so
+#: a consumer can rely on an old document failing loudly instead of being reinterpreted -- and
+#: deriving the list is what keeps that promise true of the list rather than of a copy of it.
+MATERIAL_QUANTITY = {
+    'quantity': 'permittivity',
+    'relative': True,
+    'complex': True,
+    'loss_sign': 'Im(epsilon) > 0',
+    'time_convention': 'exp(-i*omega*t)',
+    'type': 'wavebit.Material(epsilon, mu=None)',
+    'scalar_shorthand': 'a bare number means Material(epsilon=x)',
+    'magnetic_slot': 'mu',
+    # Absence and the value one are different inputs, and a consumer generating scenes has to
+    # know which it is writing: mu=None (the default, and what the scalar shorthand produces)
+    # says no permeability was named and keeps the solve off the permeability path entirely,
+    # while mu=1.0 names it and builds that path for the same numbers. The distinction is
+    # structural so that it can be read inside a jax.jit trace, where a value cannot be.
+    'non_magnetic_spelling': 'mu=None',
+    'conversions': ('eps_from_index', 'index_from_eps'),
+    'retired': {old: new for old, (new, _what) in RETIRED_MATERIAL_NAMES.items()},
+    'source': 'docs/conventions.md',
+}
 
 #: Shape lengths on both parametric paths are absolute, in the units of ``period`` — not
 #: fractions of it. Stated here because passing a fraction is not an error: it solves a
@@ -190,7 +245,8 @@ MATERIALS = (
     {
         'case': 'isotropic',
         'supported': True,
-        'why': 'a scalar index per material, complex for a lossy one',
+        'why': 'a scalar relative permittivity per material, complex for a lossy one '
+               '(Im(eps) > 0); see material_quantity for what a material number means',
         'source': 'wavebit/_core/solve_2d.py',
     },
     {
@@ -216,8 +272,11 @@ MATERIALS = (
         'why': 'mu is the same five slots on the other side of the (E, H, eps, mu) -> '
                '(H, -E, mu, eps) duality: layers as the E/H dual, half-spaces as one pair '
                'of admittances, patterned layers through the same Popov-Neviere '
-               'rearrangement. The 2D path only -- the 1D/conical operators and the '
-               'first-order 4ff solve take no mu, and refuse rather than ignore one.',
+               'rearrangement. Written as Material(epsilon, mu) on the three assignment '
+               'paths and as a mu= array beside the raster; the same builders run twice, so '
+               'both quantities land on one geometry. The 2D path only -- the 1D/conical '
+               'operators and the first-order 4ff solve take no mu, and refuse rather than '
+               'ignore one.',
         'source': 'docs/magnetic-materials.md',
     },
     {
@@ -289,8 +348,9 @@ RESULTS = {
     'incidence_side': {
         'values': ('top', 'bottom'),
         'default': 'top',
-        'meaning': "which medium the illumination arrives from ('bottom' = n_bot). "
-                   'n_top / n_bot / ucell order are scene labels and never move; results '
+        'meaning': "which medium the illumination arrives from ('bottom' = the `bot` "
+                   "material). top / bot / structure order are scene labels and never move; "
+                   'results '
                    'are incidence-relative — R returns into the incidence medium, T exits '
                    'the far side, theta/phi are measured against the incidence medium\'s '
                    'normal — so post-processing is identical for both sides',
@@ -334,6 +394,7 @@ def manifest() -> dict:
             'answers': [m.value for m in Answers],
         },
         'shape_coordinates': SHAPE_COORDINATES,
+        'material_quantity': _jsonable_material_quantity(),
         'paths': [
             dict(spelling, **_options_for(spelling['modeling_type']))
             for spelling in SPELLINGS
@@ -354,6 +415,14 @@ def manifest() -> dict:
     }
 
 
+def _jsonable_material_quantity() -> dict:
+    """:data:`MATERIAL_QUANTITY` with its tuples as lists, so it round-trips through JSON."""
+    out = dict(MATERIAL_QUANTITY)
+    out['conversions'] = list(out['conversions'])
+    out['retired'] = dict(out['retired'])
+    return out
+
+
 def _jsonable_results() -> dict:
     """``RESULTS`` with tuples as lists, so the document round-trips through JSON."""
     def conv(v):
@@ -367,7 +436,7 @@ def _jsonable_results() -> dict:
 
 def cited_sources() -> set:
     """Every repository path the manifest points at, for the staleness check."""
-    return {m['source'] for m in MATERIALS}
+    return {m['source'] for m in MATERIALS} | {MATERIAL_QUANTITY['source']}
 
 
 def main():

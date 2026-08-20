@@ -56,7 +56,7 @@ def solver(fto=(0, 0), backend=0, **kw):
     kw.setdefault('theta', np.deg2rad(28.0))
     kw.setdefault('phi', np.deg2rad(37.0))
     kw.setdefault('psi', 0.6)
-    return wavebit.rcwa(backend=backend, n_top=1.0, n_bot=1.52, fto=fto, period=PERIOD,
+    return wavebit.rcwa(backend=backend, top=1.0, bot=2.3104, fto=fto, period=PERIOD,
                           wavelength=WL, **kw)
 
 
@@ -124,9 +124,9 @@ def test_passing_the_z_slots_is_what_selects_the_first_order_path():
 
 def test_the_default_never_reaches_the_first_order_path_on_a_grating():
     """A raster solve — the ordinary case — must be untouched by any of this."""
-    ucell = np.ones((2, 20, 20))
-    ucell[0, 5:15, 5:15] = 3.4
-    mee = solver(fto=(3, 3), thickness=[120.0, 90.0], ucell=ucell)
+    structure = np.ones((2, 20, 20))
+    structure[0, 5:15, 5:15] = 11.559999999999999           # permittivity: 3.4**2
+    mee = solver(fto=(3, 3), thickness=[120.0, 90.0], structure=structure)
     mee.conv_solve()
     assert mee.formulation_assigned == '2ff'
 
@@ -200,13 +200,13 @@ def test_forcing_the_first_order_path_reproduces_a_patterned_grating(fto):
     Conical incidence, since a plane of incidence off both axes is what makes the s/p rotation
     non-trivial, and that rotation is shared code fed from two different places.
     """
-    ucell = np.ones((2, 24, 24))
-    ucell[0, 6:18, 4:20] = 3.48
-    ucell[1, 10:14, :] = 2.1
+    structure = np.ones((2, 24, 24))
+    structure[0, 6:18, 4:20] = 12.1104                      # 3.48**2
+    structure[1, 10:14, :] = 4.41                           # 2.1**2
 
-    a = solver(fto=fto, thickness=[130.0, 85.0], ucell=ucell)
+    a = solver(fto=fto, thickness=[130.0, 85.0], structure=structure)
     res_a = a.conv_solve()
-    b = solver(fto=fto, thickness=[130.0, 85.0], ucell=ucell)
+    b = solver(fto=fto, thickness=[130.0, 85.0], structure=structure)
     b.formulation = '4ff'
     res_b = b.conv_solve()
 
@@ -242,9 +242,12 @@ def test_the_transmitted_amplitude_is_not_merely_proportional():
         assert v[np.argmax(abs(u))] / u[np.argmax(abs(u))] == pytest.approx(1.0, abs=1e-10)
 
 
-@pytest.mark.parametrize('n_top,n_bot', [(1.0, 1.46 + 0.35j), (1.2 + 0.02j, 1.46 + 0.35j)],
+#: The half-spaces as PERMITTIVITY: (1.46 + 0.35j)**2 and (1.2 + 0.02j)**2, the same two media
+#: this case has always used.
+@pytest.mark.parametrize('eps_top,eps_bot', [(1.0, 2.0091 + 1.022j),
+                                             (1.4396 + 0.048j, 2.0091 + 1.022j)],
                          ids=['absorbing substrate', 'absorbing on both sides'])
-def test_the_two_formulations_agree_across_absorbing_half_spaces(n_top, n_bot):
+def test_the_two_formulations_agree_across_absorbing_half_spaces(eps_top, eps_bot):
     """The substrate seed carries a complex ``eps`` and a complex ``kz``, so it gets its own case.
 
     The first-order path writes that seed by hand rather than eigendecomposing the half-space,
@@ -258,7 +261,7 @@ def test_the_two_formulations_agree_across_absorbing_half_spaces(n_top, n_bot):
     :func:`channels` compares both.
     """
     layers = [IN_PLANE, np.diag([2.4 + 0.05j, 3.1 + 0.05j, 2.7 + 0.05j]).astype(complex)]
-    kw = dict(n_top=n_top, n_bot=n_bot, thickness=[140.0, 260.0])
+    kw = dict(top=eps_top, bot=eps_bot, thickness=[140.0, 260.0])
 
     a = wavebit.rcwa(backend=0, fto=(0, 0), period=PERIOD, wavelength=WL,
                        theta=np.deg2rad(28.0), phi=np.deg2rad(37.0), psi=0.6, **kw)
@@ -363,9 +366,9 @@ def test_field_reconstruction_is_dispatched_on_the_formulation_not_the_grating_t
 
 def test_field_reconstruction_still_works_on_the_second_order_path():
     """The control for the guard above — it must not have cost the ordinary path anything."""
-    ucell = np.ones((1, 16, 16))
-    ucell[0, 4:12, 4:12] = 3.0
-    mee = solver(fto=(1, 1), thickness=[150.0], ucell=ucell, answers='field')
+    structure = np.ones((1, 16, 16))
+    structure[0, 4:12, 4:12] = 9.0
+    mee = solver(fto=(1, 1), thickness=[150.0], structure=structure, answers='field')
     mee.conv_solve()
     cell = mee.calculate_field(res_x=4, res_y=4, res_z=4)
     assert np.isfinite(np.asarray(cell)).all()
@@ -481,9 +484,9 @@ def test_a_z_row_pulls_a_one_dimensional_structure_onto_the_2d_layout():
     convolution stacks and would drop the other six on the floor — the silent reduction the
     whole dispatch exists to prevent.
     """
-    ucell = np.ones((1, 1, 20))
-    ucell[0, 0, 5:15] = 3.4
-    mee = solver(fto=(3, 0), thickness=[150.0], ucell=ucell)
+    structure = np.ones((1, 1, 20))
+    structure[0, 0, 5:15] = 11.559999999999999
+    mee = solver(fto=(3, 0), thickness=[150.0], structure=structure)
     mee._assign_grating_type()
     assert mee.grating_type_assigned in (0, 1)      # what it would have taken on its own
 
@@ -494,9 +497,9 @@ def test_a_z_row_pulls_a_one_dimensional_structure_onto_the_2d_layout():
 
 # ------------------------------------------------- asking a 1D cell for y diffraction orders
 
-_Y_INVARIANT = np.array([[[3.0, 3.0, 1.0, 1.0]]])          # one row: nothing varies in y
+_Y_INVARIANT = np.array([[[9.0, 9.0, 1.0, 1.0]]])          # one row: nothing varies in y
 _Y_ROWS = np.repeat(_Y_INVARIANT, 2, axis=1)               # the same physics, on the 2D path
-_1D_KW = dict(backend=0, n_top=1.0, n_bot=1.5, theta=0.3, phi=0.4, thickness=[0.2],
+_1D_KW = dict(backend=0, top=1.0, bot=2.25, theta=0.3, phi=0.4, thickness=[0.2],
               period=[0.7, 0.7], wavelength=0.9)
 
 
@@ -512,7 +515,7 @@ def test_y_orders_on_a_y_invariant_cell_are_refused_in_plain_words(incidence):
     mistake, and it fired inside the solve rather than at the request.
     """
     with pytest.raises(ValueError, match='asks for y diffraction orders'):
-        wavebit.rcwa(ucell=_Y_INVARIANT, fto=[2, 1], **incidence, **_1D_KW).conv_solve()
+        wavebit.rcwa(structure=_Y_INVARIANT, fto=[2, 1], **incidence, **_1D_KW).conv_solve()
 
 
 def test_the_refused_orders_are_the_ones_that_are_zero():
@@ -522,17 +525,17 @@ def test_the_refused_orders_are_the_ones_that_are_zero():
     the y orders — and returns them empty. So the 1D formulations are not withholding an
     answer, and clamping ``fto[1]`` silently would hand back a different shape than asked for.
     """
-    res = wavebit.rcwa(ucell=_Y_ROWS, fto=[2, 1], psi=0.4, **_1D_KW).conv_solve()
+    res = wavebit.rcwa(structure=_Y_ROWS, fto=[2, 1], psi=0.4, **_1D_KW).conv_solve()
     T = np.asarray(res.res.T)
     assert T.shape == (3, 5)
     assert T[[0, 2], :].sum() < 1e-25, T                     # every n != 0 order is empty
 
-    flat = np.asarray(wavebit.rcwa(ucell=_Y_ROWS, fto=[2, 0], psi=0.4,
+    flat = np.asarray(wavebit.rcwa(structure=_Y_ROWS, fto=[2, 0], psi=0.4,
                                    **_1D_KW).conv_solve().res.T).ravel()
     assert np.abs(T[1] - flat).max() < 1e-13                 # and n = 0 is the 1D answer
 
 
 def test_fto_y_zero_is_untouched():
     """The guard must not cost the ordinary 1D call anything."""
-    res = wavebit.rcwa(ucell=_Y_INVARIANT, fto=[2, 0], psi=0.4, **_1D_KW).conv_solve()
+    res = wavebit.rcwa(structure=_Y_INVARIANT, fto=[2, 0], psi=0.4, **_1D_KW).conv_solve()
     assert np.asarray(res.res.T).shape == (1, 5)

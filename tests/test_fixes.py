@@ -1,5 +1,10 @@
 import numpy as np
 import wavebit
+from wavebit import eps_from_index
+
+# The Fresnel closed forms below are written in refractive index, so every `n_*` here stays
+# an index and is converted where it enters wavebit -- which since 2026-08-20 takes relative
+# permittivity at `top`, `bot` and in the raster.
 
 def test_1_si_glass_branch_cut():
     print("==================================================")
@@ -10,9 +15,9 @@ def test_1_si_glass_branch_cut():
     n_si = 3.8
     n_glass = 1.5
     option = dict(
-        tetm='tm', n_top=1.0, n_bot=n_glass, theta=0.0, phi=0.0,
+        tetm='tm', top=1.0, bot=eps_from_index(n_glass), theta=0.0, phi=0.0,
         fto=5, wavelength=632.8, period=[1000],
-        ucell=np.array([[[n_si, n_si]]]), thickness=[200]
+        structure=eps_from_index(np.array([[[n_si, n_si]]])), thickness=[200]
     )
 
     for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
@@ -41,9 +46,9 @@ def test_2_air_au_raw_n_lossy_substrate():
     print(f"Exact Fresnel Analytical R (Air->Au): {R_exact:.6f}")
 
     option = dict(
-        tetm='tm', n_top=1.0, n_bot=n_au, theta=0.0, phi=0.0,
+        tetm='tm', top=1.0, bot=eps_from_index(n_au), theta=0.0, phi=0.0,
         fto=3, wavelength=500, period=[1000],
-        ucell=np.array([[[1.0, 1.0]]]), thickness=[0] # Bare interface
+        structure=np.array([[[1.0, 1.0]]]), thickness=[0] # Bare interface
     )
 
     for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
@@ -69,9 +74,9 @@ def test_3_same_material_interface():
 
     # 20nm Au layer on Au substrate
     option = dict(
-        tetm='tm', n_top=1.0, n_bot=n_au, theta=0.0,
+        tetm='tm', top=1.0, bot=eps_from_index(n_au), theta=0.0,
         fto=3, wavelength=500, period=[1000],
-        ucell=np.array([[[n_au, n_au]]]), thickness=[20]
+        structure=eps_from_index(np.array([[[n_au, n_au]]])), thickness=[20]
     )
 
     for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
@@ -92,9 +97,10 @@ def test_4_tm_transmittance_conjugation():
     n_au = 0.18 + 3.0j
     # 1D Conical with TM polarization
     option_conical = dict(
-        tetm='tm', n_top=1.0, n_bot=n_au, theta=10 * np.pi / 180, phi=30 * np.pi / 180,
+        tetm='tm', top=1.0, bot=eps_from_index(n_au), theta=10 * np.pi / 180,
+        phi=30 * np.pi / 180,
         fto=3, wavelength=500, period=[1000],
-        ucell=np.array([[[1.0, n_au]]]), thickness=[20]
+        structure=eps_from_index(np.array([[[1.0, n_au]]])), thickness=[20]
     )
 
     for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
@@ -117,35 +123,36 @@ def test_5_continuous_raster_convolution_matrix():
     
     from wavebit._core.factorization import to_conv_mat_raster_integrated
     
-    n_compressed = np.array([0.18 + 3.0j])
-    ucell = np.array([[[0.18 + 3.0j]]])
-    
-    epx, epy, epz_i = to_conv_mat_raster_integrated(ucell, fto_x=1, fto_y=1)
-    # eps = n**2 with no conjugation: Im(n) > 0 is loss, so Im(eps) > 0 as well. This
-    # asserted the opposite until 2026-08, when the solver stopped conjugating on the way in.
+    structure = eps_from_index(np.array([[[0.18 + 3.0j]]]))
+
+    epx, epy, epz_i = to_conv_mat_raster_integrated(structure, fto_x=1, fto_y=1)
+    # No conjugation anywhere on the way in: Im(n) > 0 is loss, and the permittivity the
+    # raster now carries has Im(eps) > 0 to match. This asserted the opposite until 2026-08,
+    # when the solver stopped conjugating; the squaring the builder used to do is gone too,
+    # which leaves the raster's own value as the only thing that can be flipped here.
     imag_part = epx[0, 0, 0].imag
     print(f"[on_numpy continuous raster] eps[0,0,0] imag part = {imag_part:.4f}")
     assert imag_part > 0, f"Expected positive imaginary part for lossy material, got {imag_part}"
     print("SUCCESS: Test 5 Passed!\n")
 
 
-def test_6_none_ucell_grating_type():
+def test_6_none_structure_grating_type():
     print("==================================================")
-    print("Test 6: None ucell Grating Type Assignment Handling")
+    print("Test 6: None structure Grating Type Assignment Handling")
     print("==================================================")
     
     option = dict(
-        tetm='tm', n_top=1.0, n_bot=1.5, theta=0.0, phi=0.0,
+        tetm='tm', top=1.0, bot=2.25, theta=0.0, phi=0.0,
         fto=3, wavelength=500, period=[1000],
-        ucell=None, thickness=[100]
+        structure=None, thickness=[100]
     )
 
     for backend_id, backend_name in [(0, 'NumPy'), (1, 'JAX'), (2, 'PyTorch')]:
         try:
             solver = wavebit.rcwa(backend=backend_id, **option)
             solver._assign_grating_type()
-            print(f"[{backend_name}] ucell=None assigned grating_type: {solver.grating_type_assigned}")
-            assert solver.grating_type_assigned == 2, f"Expected grating_type_assigned == 2 for None ucell, got {solver.grating_type_assigned}"
+            print(f"[{backend_name}] structure=None assigned grating_type: {solver.grating_type_assigned}")
+            assert solver.grating_type_assigned == 2, f"Expected grating_type_assigned == 2 for structure=None, got {solver.grating_type_assigned}"
         except Exception as e:
             print(f"[{backend_name}] Error: {e}")
             raise e
@@ -158,9 +165,9 @@ def test_7_none_theta_handling():
     print("==================================================")
     
     option = dict(
-        tetm='tm', n_top=1.0, n_bot=1.5, theta=None, phi=None,
+        tetm='tm', top=1.0, bot=2.25, theta=None, phi=None,
         fto=3, wavelength=500, period=[1000],
-        ucell=np.array([[[1.5, 1.5]]]), thickness=[100]
+        structure=np.array([[[2.25, 2.25]]]), thickness=[100]
     )
 
     for backend_id, backend_name in [(0, 'NumPy'), (1, 'JAX'), (2, 'PyTorch')]:
@@ -177,9 +184,9 @@ def test_7_none_theta_handling():
     print("SUCCESS: Test 7 Passed!\n")
 
 
-def test_8_torch_ucell_numpy_ndarray():
+def test_8_torch_structure_numpy_ndarray():
     print("==================================================")
-    print("Test 8: RCWATorch ucell numpy ndarray setter test")
+    print("Test 8: RCWATorch structure numpy ndarray setter test")
     print("==================================================")
 
     import torch
@@ -187,12 +194,12 @@ def test_8_torch_ucell_numpy_ndarray():
 
     solver = RCWATorch()
     # Test float numpy array
-    solver.ucell = np.array([[[1.5, 2.0]]])
-    assert isinstance(solver.ucell, torch.Tensor)
+    solver.structure = np.array([[[1.5, 2.0]]])
+    assert isinstance(solver.structure, torch.Tensor)
 
     # Test complex numpy array
-    solver.ucell = np.array([[[1.5 + 0.5j, 2.0 + 1.0j]]])
-    assert isinstance(solver.ucell, torch.Tensor)
+    solver.structure = np.array([[[1.5 + 0.5j, 2.0 + 1.0j]]])
+    assert isinstance(solver.structure, torch.Tensor)
     print("SUCCESS: Test 8 Passed!\n")
 
 
@@ -205,11 +212,12 @@ def test_9_vector_modeling_period():
         solver = wavebit.rcwa(backend=backend_id, period=[1000, 1000])
         assert solver.modeler.period is not None
         # vector object for layer
-        sub_element = solver.modeler.rectangle_no_approximation(cx=500, cy=500, lx=200, ly=200, base=2.0)
+        sub_element = solver.modeler.rectangle_no_approximation(
+            cx=500, cy=500, lx=200, ly=200, material=4.0)
         layer_info_list = [[1.0, sub_element]]
-        ucell_block = solver.modeler.draw(layer_info_list)
-        assert ucell_block is not None
-        assert len(ucell_block) == 1
+        blocks = solver.modeler.draw(layer_info_list)
+        assert blocks is not None
+        assert len(blocks) == 1
         print(f"[{backend_name}] Vector modeling period test passed")
     print("SUCCESS: Test 9 Passed!\n")
 
@@ -224,10 +232,10 @@ def test_10_shared_mean_permittivity_keeps_the_interface():
     # layer as identical to the one below, and skip the interface between them -- which cost
     # this lossless stack its energy conservation by ~50x. The short-circuit is gone entirely
     # now, so nothing can skip an interface; this holds the energy statement that caught it.
-    UC = np.array([[[3., 3., 1., 1.], [1., 3., 3., 1.],
-                    [1., 1., 3., 3.], [3., 1., 1., 3.]]])
+    UC = np.array([[[9., 9., 1., 1.], [1., 9., 9., 1.],
+                    [1., 1., 9., 9.], [9., 1., 1., 9.]]])
     option = dict(
-        ucell=np.concat([UC, UC[:, ::-1]]), thickness=[0.2, 0.3], n_top=1.0, n_bot=1.0,
+        structure=np.concat([UC, UC[:, ::-1]]), thickness=[0.2, 0.3], top=1.0, bot=1.0,
         psi=0.4, wavelength=0.5, period=[0.6, 0.6], theta=0.1, phi=0.0, fto=[2, 2])
 
     for algo in ('ETM', 'SMM'):
@@ -244,9 +252,9 @@ if __name__ == "__main__":
     test_3_same_material_interface()
     test_4_tm_transmittance_conjugation()
     test_5_continuous_raster_convolution_matrix()
-    test_6_none_ucell_grating_type()
+    test_6_none_structure_grating_type()
     test_7_none_theta_handling()
-    test_8_torch_ucell_numpy_ndarray()
+    test_8_torch_structure_numpy_ndarray()
     test_9_vector_modeling_period()
     test_10_shared_mean_permittivity_keeps_the_interface()
     print("==================================================")

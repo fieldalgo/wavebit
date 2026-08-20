@@ -10,6 +10,31 @@ machine that has the tools; what CI checks on every push is the committed number
 **Regenerating a golden is not a way to make a failing test pass.** These numbers did not come
 from this codebase, which is exactly what makes them worth having.
 
+## What the permittivity flip did to this directory (2026-08-20)
+
+Wavebit took a refractive index at its front door until 2026-08-20 and takes a relative
+permittivity now. The oracles did not all move the same way, and it is worth reading the
+directions off rather than assuming a single rule:
+
+| oracle | what it takes | what changed here |
+| --- | --- | --- |
+| **S4** (`Epsilon`) | permittivity, always did | the generators' `** 2` is **deleted**. Nothing was added |
+| **fmmax** (`eigensolve_*`) | permittivity, always did | same: `gen_goldens_fmmax_field.py` lost its `** 2`, and `_fmmax_cases.py`, `_fmmax_mu_ambient_cases.py` and `_fmmax_patterned_mu_cases.py` were **already** stating tensors as `eps` and were not touched at all |
+| **RETICOLO** (textures) | refractive **index** | the only place that gained a conversion. `interface/Reticolo.py::_index` takes the principal root on the way into Octave, in one function, for both half-spaces and every layer |
+
+Two goldens store a material and could not follow: `golden_reticolo_conical_sweep.npz` (a
+2024-09-09 study whose `.mat` inputs are not in this repository) and `golden_s4_field.npz`'s
+`__stack` arrays. Both hold a refractive index still, both are converted **at the read**, and
+both say so where the conversion sits.
+
+The RETICOLO change is the one that could have moved numbers, so it was checked the way this
+directory's own note on a generator that could not reproduce its own golden prescribes:
+regenerating `golden_reticolo.npz` (72 arrays), `golden_reticolo_field.npz` (33) and
+`golden_reticolo_conical_field.npz` (33) against V10 after the flip reproduces **every array
+bit for bit**. Nothing in the frozen data moved, so the scenes are the ones they always were.
+`gen_goldens_s4_field.py` was rerun too: 26 of its 28 arrays are bit-identical and the two that
+differ are exactly the `__stack` pair above.
+
 ## The oracles
 
 | Oracle | Reaches | Generator needs | Golden |
@@ -118,13 +143,16 @@ Three things had to be measured, each worth O(1) when guessed wrong:
 outputs.** `[e,z,o]=res3(...)` and only `e` reached Python, which is very likely why this
 comparison had defeated earlier attempts: `z` cannot locate a layer on its own, and `o` — the
 refractive index at every sample point — can. `interface/reticolo_res3.m` now forwards both
-(appended, so callers asking for the first 9 are unaffected). `o` earns its keep three more
-times: it settles the **x origin** (RETICOLO's docs describe a texture as running
+(appended, so callers asking for the first 9 are unaffected). `o` earns its keep four times
+over: it settles the **x origin** (RETICOLO's docs describe a texture as running
 `-period/2 .. +period/2`, and a correspondingly dead `grid_x -= period/2` sat in the bridge —
-but `o` reproduces our own `ucell` on `linspace(0, period, res_x)` entry for entry, so the two
+but `o` reproduces our own structure on `linspace(0, period, res_x)` entry for entry, so the two
 origins coincide as written and there is no shift; that line is now gone, with the measurement
-in its place), it is what the generator asserts the row rule against, and on the `lossy` case it
-comes back as `2+0.05j` — RETICOLO spelling loss the same way this project does.
+in its place), it is what the generator asserts the row rule against, on the `lossy` case it
+comes back as `2+0.05j` — RETICOLO spelling loss the same way this project does — and since the
+permittivity flip it is also what checks the **quantity**: `o` is an index and our stacks are
+`eps`, so `test_the_patterned_stacks_are_actually_patterned` closes only if the bridge really
+took the root, and it fails by O(1) before any field is compared if it did not.
 
 With the frame transform applied there is **no free amplitude at all**: not a fitted scale as
 the fmmax golden needs, but exactly 1, to 2.7e-14. The test asserts that rather than fitting it,

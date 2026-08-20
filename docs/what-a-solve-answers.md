@@ -179,7 +179,7 @@ declarations produce *different* treedefs, and that the numbers agree across the
 ## 7. Under autograd it is worth several times the arrays
 
 A retained tensor anchors its `grad_fn`, and through it everything the graph reaches. PyTorch
-eager, `fto=(6, 6)`, 2 layers, `requires_grad` on the `ucell`:
+eager, `fto=(6, 6)`, 2 layers, `requires_grad` on the permittivity `structure`:
 
 | | retained tensors | arrays | graph nodes | pinned by the graph | total |
 | --- | --- | --- | --- | --- | --- |

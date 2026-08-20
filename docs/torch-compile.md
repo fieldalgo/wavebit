@@ -33,7 +33,7 @@ against. Eager torch and `.backward()` work fine on 2.7.0; only `torch.compile` 
 ## 1. The failure, and why it hit every path
 
 ```python
-total = lambda x: torch.sum(wavebit.rcwa(backend=2, ucell=x, **cfg).conv_solve().de_ti)
+total = lambda x: torch.sum(wavebit.rcwa(backend=2, structure=x, **cfg).conv_solve().de_ti)
 torch.compile(total)(u)      # InternalTorchDynamoError on torch 2.7
 ```
 
@@ -142,7 +142,7 @@ verified on 2.5.1 and 1.18.0. They were aligned to the stated rule at the same t
 
 ## 4. The prize, measured
 
-Raster path, 64×64 `ucell`, one CPU, best-of-3..7 per cell, **torch 2.13.0** where everything
+Raster path, 64×64 permittivity `structure`, one CPU, best-of-3..7 per cell, **torch 2.13.0** where everything
 works:
 
 | `fto` | forward eager | forward compiled | | fwd+bwd eager | fwd+bwd compiled | |

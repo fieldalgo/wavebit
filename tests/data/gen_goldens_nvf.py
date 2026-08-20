@@ -54,6 +54,17 @@ invariant on the golden's own geometry is wrong on that geometry, whatever any o
 That invariant is now under test in its own right (``tests/test_nvf_lattice_translation.py``),
 so this file is no longer the only thing standing between the fix and a silent regression --
 which is the condition under which a self-captured golden is doing its proper job.
+
+**Why the permittivity flip (2026-08-20) did *not* re-freeze it, which was not obvious in
+advance.** NVF reads the raster twice over -- once as the permittivity it factorizes and once
+as the field whose gradient is the interface normal -- so squaring the raster is a change to
+the normal field's input, not only to the layer's material. It turns out to change nothing:
+regenerated with the raster stated as ``eps`` instead of ``n``, all 39 arrays come back **bit
+for bit** identical to the committed file. The reason is that squaring is monotone and the
+normal is a *direction*: ``grad(u**2) = 2u grad(u)`` points where ``grad(u)`` points, and the
+construction normalises. Measured on this case rather than argued in general -- a construction
+that thresholded the raster somewhere would not have this property, and the check is one
+command.
 """
 import pathlib
 import sys
@@ -69,8 +80,13 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 import wavebit                                                          # noqa: E402
 
 NAME = '2d_nvf'
-CASE = dict(psi=0.9, phi=0.4, ucell=np.random.default_rng(3).uniform(1.0, 4.0, size=(1, 5, 5)),
-            thickness=[0.2], n_top=1., n_bot=1., theta=0.2, fto=[2, 2], period=[1., 1.],
+# The same random raster this case has always used, squared: it was drawn as a refractive index
+# from `uniform(1, 4)` and the solver squared it on the way in, which it stopped doing on
+# 2026-08-20. Squaring the draw keeps the *permittivities* identical, where re-drawing from
+# `uniform(1, 16)` would have produced a different structure from the same seed.
+CASE = dict(psi=0.9, phi=0.4,
+            structure=np.random.default_rng(3).uniform(1.0, 4.0, size=(1, 5, 5)) ** 2,
+            thickness=[0.2], top=1., bot=1., theta=0.2, fto=[2, 2], period=[1., 1.],
             wavelength=0.9, factorization='nvf')
 
 #: Efficiency keys, stored under the legacy spelling the comparison already speaks.
@@ -86,6 +102,12 @@ def amplitude_entries(n_top, n_bot):
     number the legacy solver would have written for today's physics. Storing it that way keeps
     the schema identical to ``golden_legacy.npz``, so the comparison needs no branch for this
     case and cannot drift away from how the other twelve are read.
+
+    The two arguments are **refractive indices**, not the permittivities the case now states:
+    the factor is the Fresnel ``H -> E`` conversion ``-i*n``, which is an amplitude ratio and
+    has an index in it however the scene is spelled. Both half-spaces here are vacuum, so the
+    two readings coincide numerically -- which is exactly why the caller converts explicitly
+    rather than relying on that.
     """
     return (('R_s', 'r_s', 1.0), ('R_p', 'r_p', 1.0 / (-1j * n_top)),
             ('T_s', 't_s', 1.0), ('T_p', 't_p', 1.0 / (-1j * n_bot)))
@@ -118,7 +140,7 @@ def frame_sign(solver):
 
 def main():
     kw = dict(CASE)
-    kw['ucell'] = np.asarray(kw['ucell'], dtype=float)
+    kw['structure'] = np.asarray(kw['structure'], dtype=float)
     # `answers='field'` because this generator pins the per-layer state as well as the
     # result surface; without it `solver.T1` is None and the goldens regenerate empty.
     solver = wavebit.rcwa(backend=0, answers='field', **kw)
@@ -132,7 +154,8 @@ def main():
             continue
         for key, attr in EFFICIENCIES:
             out[f'{NAME}__{sub}__{key}'] = np.asarray(getattr(s, attr))
-        for key, attr, factor in amplitude_entries(CASE['n_top'], CASE['n_bot']):
+        for key, attr, factor in amplitude_entries(wavebit.index_from_eps(CASE['top']),
+                                                   wavebit.index_from_eps(CASE['bot'])):
             out[f'{NAME}__{sub}__{key}'] = np.asarray(getattr(s, attr)) / factor / sign
 
     out[f'{NAME}__T1'] = np.asarray(solver.T1)

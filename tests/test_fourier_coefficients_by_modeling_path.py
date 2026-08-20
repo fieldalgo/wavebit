@@ -27,23 +27,24 @@ import pytest
 import wavebit
 from wavebit._core.enums import FourierCoefficients
 
-KW = dict(backend=0, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+KW = dict(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
           fto=[4, 4], period=[1.0, 1.0], wavelength=1.1, thickness=[0.3])
 
 # One structure per modeling path, as close to the same circle as each path can state it --
 # the same three the factorization file uses, for the same reason.
-SMOOTH = [{'n_base': 1.0,
+# Permittivity throughout: 6.25 is the index 2.5 all three used to be written with.
+SMOOTH = [{'background': 1.0,
            'shapes': [{'type': 'circle', 'cx': 0.5, 'cy': 0.5,
-                       'lx': 0.6, 'n_index': 2.5}]}]
-BLOCK = [[1.0, [['ellipse', 0.5, 0.5, 0.6, 0.6, 2.5, 0.0, 24, 24]]]]
+                       'lx': 0.6, 'material': 6.25}]}]
+BLOCK = [[1.0, [['ellipse', 0.5, 0.5, 0.6, 0.6, 6.25, 0.0, 24, 24]]]]
 
 _N = 32
 _axis = (np.arange(_N) + 0.5) / _N - 0.5
 _X, _Y = np.meshgrid(_axis, _axis)
 RASTER = np.ones((1, _N, _N))
-RASTER[0, _X ** 2 + _Y ** 2 <= 0.3 ** 2] = 2.5
+RASTER[0, _X ** 2 + _Y ** 2 <= 0.3 ** 2] = 6.25
 
-UCELLS = {'smooth': SMOOTH, 'block': BLOCK, 'raster': RASTER}
+STRUCTURES = {'smooth': SMOOTH, 'block': BLOCK, 'raster': RASTER}
 
 #: The series each path forms, and therefore the one an untouched default resolves to.
 IMPLEMENTED = {'smooth': 'integrated', 'block': 'integrated', 'raster': 'sampled'}
@@ -54,7 +55,7 @@ UNAVAILABLE = {'smooth': 'sampled', 'block': 'sampled'}
 
 
 def solver(path, **strategy):
-    return wavebit.rcwa(ucell=UCELLS[path], **KW, **strategy)
+    return wavebit.rcwa(structure=STRUCTURES[path], **KW, **strategy)
 
 
 def totals(path, **strategy):
@@ -181,7 +182,7 @@ def test_the_refusal_holds_on_every_backend(name, code, path, series):
     of the three had grown its own copy."""
     pytest.importorskip(name)
     with pytest.raises(NotImplementedError):
-        wavebit.rcwa(ucell=UCELLS[path], **dict(KW, backend=code),
+        wavebit.rcwa(structure=STRUCTURES[path], **dict(KW, backend=code),
                        fourier_coefficients=series).conv_solve()
 
 
@@ -200,17 +201,23 @@ def test_the_refusal_holds_on_every_backend(name, code, path, series):
 # is an accurate refusal -- both messages used to name only the per-shape transform, which is
 # the one thing an overlapping layer never runs. Pinned here on both axes because the tables
 # cannot distinguish the two sub-paths and so cannot be trusted to have thought about this one.
+#
+# Permittivity here too, on the same rule as the three structures at the top of the file: 4.0
+# and 9.0 are the indices 2.0 and 3.0 these rectangles used to be written with. The two differ
+# so that the overlap resolves to a third region rather than merging away, which is the whole
+# reason the layer takes the resolving branch -- keeping them distinct after the flip is what
+# the numbers had to preserve, not their literal text.
 PAINTED_PERIOD = [1.2, 1.2]
-PAINTED = [dict(n_base=1.0, combine='paint',
+PAINTED = [dict(background=1.0, combine='paint',
                 shapes=[dict(type='rectangle', cx=0.40, cy=0.40, lx=0.34, ly=0.34,
-                             angle=0.0, n_index=2.0),
+                             angle=0.0, material=4.0),
                         dict(type='rectangle', cx=0.56, cy=0.56, lx=0.34, ly=0.34,
-                             angle=0.0, n_index=3.0)])]
+                             angle=0.0, material=9.0)])]
 PAINTED_KW = dict(KW, period=PAINTED_PERIOD, fto=[6, 6], thickness=[0.6], wavelength=1.6)
 
 
 def _painted(**strategy):
-    return wavebit.rcwa(ucell=PAINTED, **PAINTED_KW, **strategy)
+    return wavebit.rcwa(structure=PAINTED, **PAINTED_KW, **strategy)
 
 
 def test_the_boundary_sub_path_is_covered_by_the_smooth_row():
@@ -270,12 +277,12 @@ def test_a_pytree_round_trip_does_not_turn_an_unset_option_into_a_request():
     It is the one seam that rebuilds a solver from its own attributes, so flattening the
     resolved values would quietly promote both axes: a smooth-path solver that had merely
     accepted its path's only series would come back out asserting it, and one traced under a
-    different ``ucell`` -- which is the whole point of the pytree -- would then be refused for a
+    different ``structure`` -- which is the whole point of the pytree -- would then be refused for a
     request its author never made. Reading the resolved values here would also fire the refusal
     inside JAX's tree machinery rather than at the solve being refused, which is pinned below.
     """
     jax = pytest.importorskip('jax')
-    s = wavebit.rcwa(ucell=SMOOTH, **dict(KW, backend=1))
+    s = wavebit.rcwa(structure=SMOOTH, **dict(KW, backend=1))
     leaves, treedef = jax.tree_util.tree_flatten(s)
     back = jax.tree_util.tree_unflatten(treedef, leaves)
 
@@ -287,7 +294,7 @@ def test_a_pytree_round_trip_does_not_turn_an_unset_option_into_a_request():
 
 def test_a_pytree_round_trip_keeps_a_real_request_and_still_refuses_it_at_the_solve():
     jax = pytest.importorskip('jax')
-    s = wavebit.rcwa(ucell=SMOOTH, fourier_coefficients='sampled', **dict(KW, backend=1))
+    s = wavebit.rcwa(structure=SMOOTH, fourier_coefficients='sampled', **dict(KW, backend=1))
     leaves, treedef = jax.tree_util.tree_flatten(s)     # must not raise here
     back = jax.tree_util.tree_unflatten(treedef, leaves)
     assert back._fourier_coefficients == 'sampled'
@@ -312,9 +319,10 @@ def test_a_smooth_call_naming_both_unavailable_values_is_told_about_the_rule():
 # --------------------------------------------------------------------------- through the spec
 
 SPEC = {
+    'version': '3',                 # a parsed document states its schema; see tests/test_spec.py
     'numerics': {'backend': 'numpy', 'fto': [4, 4]},
-    'stack': {'n_top': 1.0, 'n_bot': 1.0, 'period': [1.0, 1.0],
-              'layers': [{'thickness': 0.3, 'eps': SMOOTH[0]}]},
+    'stack': {'top': 1.0, 'bot': 1.0, 'period': [1.0, 1.0],
+              'layers': [{'thickness': 0.3, 'structure': SMOOTH[0]}]},
     'incidence': {'wavelength': 1.1, 'theta': 0.0, 'phi': 0.0, 'psi': 0.0},
 }
 

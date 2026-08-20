@@ -11,20 +11,21 @@ import pytest
 import wavebit
 
 WL = 500.0
-CELL_1D = np.array([[[1.0, 1.0, 3.5, 3.5]]])
-CELL_2D = np.array([[[1.0, 3.5], [3.5, 1.0]]])
+# Permittivity: 12.25 is the index 3.5 these cells were written with before the flip.
+CELL_1D = np.array([[[1.0, 1.0, 12.25, 12.25]]])
+CELL_2D = np.array([[[1.0, 12.25], [12.25, 1.0]]])
 
 
 def _solve_1d(**kw):
-    args = dict(backend=0, tetm='te', n_top=1.0, n_bot=1.5, theta=0.3, fto=2, wavelength=WL,
-                period=[900.0], ucell=CELL_1D, thickness=[300.0])
+    args = dict(backend=0, tetm='te', top=1.0, bot=2.25, theta=0.3, fto=2, wavelength=WL,
+                period=[900.0], structure=CELL_1D, thickness=[300.0])
     args.update(kw)
     return wavebit.rcwa(**args).conv_solve()
 
 
 def _solve_2d(**kw):
-    args = dict(backend=0, n_top=1.0, n_bot=1.5, theta=0.3, phi=0.0, psi=0.0, fto=[2, 1],
-                wavelength=WL, period=[900.0, 900.0], ucell=CELL_2D, thickness=[300.0])
+    args = dict(backend=0, top=1.0, bot=2.25, theta=0.3, phi=0.0, psi=0.0, fto=[2, 1],
+                wavelength=WL, period=[900.0, 900.0], structure=CELL_2D, thickness=[300.0])
     args.update(kw)
     return wavebit.rcwa(**args).conv_solve()
 

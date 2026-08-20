@@ -612,20 +612,20 @@ def test_a_real_grating_matches_the_2ff_solve(fto, theta_deg, phi_deg):
     from wavebit._core.factorization import to_conv_mat_raster_sampled
     from wavebit._core.solve_2d import order_grid_kxy
 
-    ucell = np.ones((1, 40, 40))
-    ucell[0, 12:28, 12:28] = 2.6
+    structure = np.ones((1, 40, 40))
+    structure[0, 12:28, 12:28] = 6.760000000000001     # permittivity: 2.6**2
 
-    solver = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=np.deg2rad(theta_deg),
+    solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
                             phi=np.deg2rad(phi_deg), psi=0.0, fto=(fto, fto),
                             period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
-                            ucell=ucell)
+                            structure=structure)
     ref = solver.conv_solve()
 
     KX, KY = order_grid_kxy(np, np.asarray(solver.get_kx_ky_vector(WL)[0], complex),
                             np.asarray(solver.get_kx_ky_vector(WL)[1], complex))
     kx, ky = KX.ravel(), KY.ravel()
     ff = kx.size
-    epx, epy, epz_i = to_conv_mat_raster_sampled(np.asarray(ucell, dtype=complex), fto, fto)
+    epx, epy, epz_i = to_conv_mat_raster_sampled(np.asarray(structure, dtype=complex), fto, fto)
     O = np.zeros((ff, ff), dtype=complex)
     layers = [(dict(exx=epx[0], exy=O, exz=O, eyx=O, eyy=epy[0], eyz=O, ezx=O, ezy=O,
                     ezz_i=epz_i[0]), THICK)]

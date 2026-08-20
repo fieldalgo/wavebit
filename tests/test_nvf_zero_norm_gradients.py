@@ -47,7 +47,7 @@ from wavebit._core.analytic import (                         # noqa: E402
 
 P = 0.77
 BASE = dict(period=[P, P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
-            wavelength=0.777, n_top=1.0, n_bot=1.5, fto=[4, 4])
+            wavelength=0.777, top=1.0, bot=2.25, fto=[4, 4])
 
 NORMAL_GRID = 1024                                             # the solver's default
 
@@ -58,8 +58,8 @@ def _twin_circles(d):
     At ``d == 0`` they sit symmetrically about the centre, so on the diagonal between them the
     two unit normals are exactly opposed and their sum is exactly zero.
     """
-    return [dict(type='circle', cx=P / 2 - 0.1 + d, cy=P / 2 - 0.1, lx=0.20 * P, n_index=3.0),
-            dict(type='circle', cx=P / 2 + 0.1 + d, cy=P / 2 + 0.1, lx=0.20 * P, n_index=3.0)]
+    return [dict(type='circle', cx=P / 2 - 0.1 + d, cy=P / 2 - 0.1, lx=0.20 * P, material=9.0),
+            dict(type='circle', cx=P / 2 + 0.1 + d, cy=P / 2 + 0.1, lx=0.20 * P, material=9.0)]
 
 
 def _grid_point(i, n=NORMAL_GRID):
@@ -91,11 +91,11 @@ def test_a_zero_norm_configuration_is_actually_reached():
     n = 256
     c = _grid_point(100, n)
     for kind in ('circle', 'ellipse', 'rectangle'):
-        centred = dict(type=kind, cx=c, cy=c, lx=0.20 * P, ly=0.10 * P, n_index=3.0)
+        centred = dict(type=kind, cx=c, cy=c, lx=0.20 * P, ly=0.10 * P, material=9.0)
         assert zeros_for([centred], n) > 0, kind
 
     # Half a grid cell away there are none, which is why the NaN read as intermittent.
-    off = dict(type='circle', cx=c + 0.5 * P / n, cy=c, lx=0.20 * P, n_index=3.0)
+    off = dict(type='circle', cx=c + 0.5 * P / n, cy=c, lx=0.20 * P, material=9.0)
     assert zeros_for([off], n) == 0
 
     # And the cancellation the sum used to produce is simply not reachable any more.
@@ -105,7 +105,7 @@ def test_a_zero_norm_configuration_is_actually_reached():
 def test_symmetric_two_shape_layer_has_a_finite_position_gradient():
     """The reported case, through the public API: two shapes, one solve, one ``jax.grad``."""
     def objective(d):
-        res = wavebit.rcwa(backend=1, ucell=[dict(n_base=1.0, shapes=_twin_circles(d))],
+        res = wavebit.rcwa(backend=1, structure=[dict(background=1.0, shapes=_twin_circles(d))],
                              **BASE).conv_solve()
         return jnp.real(jnp.sum(res.R))
 
@@ -130,7 +130,7 @@ def test_shape_centred_on_a_grid_point_has_a_finite_gradient(kind):
     c = _grid_point(100, n)
 
     def mean_nx2(dy):
-        shape = dict(type=kind, cx=c, cy=c + dy, lx=0.20 * P, ly=0.10 * P, n_index=3.0)
+        shape = dict(type=kind, cx=c, cy=c + dy, lx=0.20 * P, ly=0.10 * P, material=9.0)
         nx, _ = normal_vector_field_analytical(jnp, (n, n), [shape], (P, P), jnp.float64)
         return jnp.mean(nx ** 2)
 
@@ -148,7 +148,7 @@ def test_dc_coefficient_gradient_in_period_is_finite(kind, extra):
     not, so this pins them to the same answer.
     """
     def total(px):
-        shape = dict(type=kind, cx=P / 2, cy=P / 2, lx=0.20 * P, n_index=3.0, **extra)
+        shape = dict(type=kind, cx=P / 2, cy=P / 2, lx=0.20 * P, material=9.0, **extra)
         eps_c, _ = assemble_eps_coeffs(jnp, [shape], 1.0, 2, 2, (px, px), jnp.complex128)
         return jnp.real(jnp.sum(eps_c))
 

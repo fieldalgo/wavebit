@@ -18,13 +18,13 @@ def test_nvf_circular_grating():
     radius = 30
     dist_from_center = np.sqrt((grid_x - center_x) ** 2 + (grid_y - center_y) ** 2)
 
-    ucell_2d = np.ones((1, 100, 100), dtype=complex) * 1.0
-    ucell_2d[0, dist_from_center <= radius] = 2.0  # Cylinder with n=2.0
+    structure_2d = np.ones((1, 100, 100), dtype=complex) * 1.0
+    structure_2d[0, dist_from_center <= radius] = 4.0  # cylinder of eps 4 (the old n = 2)
 
     option_nvf = dict(
-        psi=0.0, n_top=1.0, n_bot=1.5, theta=10 * np.pi / 180, phi=20 * np.pi / 180,
+        psi=0.0, top=1.0, bot=2.25, theta=10 * np.pi / 180, phi=20 * np.pi / 180,
         fto=[3, 3], wavelength=wavelength, period=period,
-        ucell=ucell_2d, thickness=[200], factorization='nvf'
+        structure=structure_2d, thickness=[200], factorization='nvf'
     )
 
     mee_nvf = wavebit.rcwa(backend=0, **option_nvf)
@@ -54,15 +54,15 @@ def test_nvf_energy_convergence():
     N = 120
     x = (np.arange(N) + 0.5) / N - 0.5
     X, Y = np.meshgrid(x, x)
-    ucell = np.ones((1, N, N), dtype=complex)
-    ucell[0, X ** 2 + Y ** 2 <= 0.3 ** 2] = 2.5  # lossless dielectric rod
+    structure = np.ones((1, N, N), dtype=complex)
+    structure[0, X ** 2 + Y ** 2 <= 0.3 ** 2] = 6.25  # lossless dielectric rod, eps 6.25
 
-    cfg = dict(n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2,
+    cfg = dict(top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2,
                wavelength=0.5, period=[1.0, 1.0], thickness=[0.3])
 
     errs = {}
     for fto in (3, 5, 7):
-        res = wavebit.rcwa(backend=0, ucell=ucell, fto=[fto, fto],
+        res = wavebit.rcwa(backend=0, structure=structure, fto=[fto, fto],
                               factorization='nvf', **cfg).conv_solve()
         R = float(np.array(res.R).real.sum())
         T = float(np.array(res.T).real.sum())
@@ -86,15 +86,15 @@ def test_nvf_on_a_one_cell_axis_reduces_to_li(kind):
     """A 1D grating has no interface along y, so NVF must *be* Li there — and must run.
 
     ``np.gradient`` needs three cells, so the distance-transform normal field used to raise on
-    a ``(layers, 1, N)`` ucell and NVF was simply unusable on 1D. The fix states the normal
+    a ``(layers, 1, N)`` raster and NVF was simply unusable on 1D. The fix states the normal
     directly: with a one-cell axis every normal points along the other one, and a constant
     normal collapses the NVF projector onto Li's rules (``C_xx = I``, ``C_xy = C_yy = 0``).
 
     So this asserts equality, not closeness — anything else means the collapse is not exact.
     """
-    ucell = np.array([[[3., 3., 1., 1., 3., 1., 1., 1.]]])
-    cfg = dict(backend=0, ucell=ucell, period=[0.77], thickness=[0.2], theta=0.25,
-               wavelength=0.777, n_top=1.0, n_bot=1.5, fto=[10, 0])
+    structure = np.array([[[9., 9., 1., 1., 9., 1., 1., 1.]]])
+    cfg = dict(backend=0, structure=structure, period=[0.77], thickness=[0.2], theta=0.25,
+               wavelength=0.777, top=1.0, bot=2.25, fto=[10, 0])
     cfg |= dict(phi=0.3, psi=0.4) if kind == 'conical' else dict(psi=np.pi / 2 if kind == 'te' else 1)
 
     def total(**kw):

@@ -38,6 +38,12 @@ Setup notes, all of them things that cost an afternoon once:
   throughout, so the guard below could not see it either -- solving the wrong polarisation of
   a lossless stack is still a perfectly lossless answer. Verified by regenerating: with the
   polarisation read correctly, all 72 arrays come back byte-identical to the committed file.
+* **The cases are permittivities and RETICOLO takes an index**, since 2026-08-20. The one
+  conversion is in the bridge (``interface/Reticolo.py::_index``), so this file hands the same
+  numbers to Octave that ``test_reticolo_golden.py`` hands to the solver -- which is the whole
+  point of the two sharing a case list. Verified the only way it can be: with the flip applied
+  on both sides, regenerating reproduces all 72 committed arrays **bit for bit**, so nothing in
+  the frozen data moved and the physical scene is the one it always was.
 * RETICOLO reports only propagating orders, in increasing order index. The order indices are
   recomputed here from the grating equation and checked against that count, so a silent
   disagreement about which orders propagate fails at generation time instead of becoming a
@@ -53,6 +59,8 @@ HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))   # repo root, for `import wavebit`
 sys.path.insert(0, str(HERE))              # the bridge and the test module beside it
 
+from wavebit import index_from_eps         # noqa: E402  (after the sys.path lines above)
+
 # No default: where RETICOLO is installed is a property of the machine, not of this project,
 # and a default that happens to match one checkout silently resolves to nothing everywhere else.
 RETICOLO_PATH = os.environ.get('RETICOLO_PATH')
@@ -64,6 +72,22 @@ RETICOLO_PATH = os.path.expanduser(RETICOLO_PATH)
 OUT = HERE / 'golden_reticolo.npz'
 
 
+def _index(eps):
+    """The refractive index of a half-space stated as a permittivity.
+
+    The grating equation below is written in indices, and the cases carry permittivities, so
+    the conversion has to happen somewhere. Doing it here rather than reaching for the bridge's
+    own ``_index`` keeps this file readable without Octave loaded, and both are the same
+    principal root -- see ``interface/Reticolo.py`` for why that branch is the right one.
+
+    ``.real`` is safe for exactly these cases and is not a general rule: every half-space in
+    ``CASES`` is a real, non-absorbing medium, so its index is real and the imaginary part is
+    an exact zero. An absorbing ambient would need the complex index, and the count below would
+    need a different criterion than ``|k_par| < n`` anyway.
+    """
+    return float(np.real(index_from_eps(eps)))
+
+
 def _propagating_indices(kw, n_side):
     """Indices into the solver's flat order axis whose order propagates in ``n_side``.
 
@@ -72,7 +96,7 @@ def _propagating_indices(kw, n_side):
     """
     fto = kw['fto']
     fto = fto if np.isscalar(fto) else fto[0]
-    kpar = kw['n_top'] * np.sin(kw['theta'])
+    kpar = _index(kw['top']) * np.sin(kw['theta'])
     if kw.get('phi'):                       # conical: the azimuth tilts k_parallel off x
         kpar = kpar * np.cos(kw['phi'])
     step = kw['wavelength'] / kw['period'][0]
@@ -107,10 +131,13 @@ def main():
         else:
             pol = 0 if kw.get('psi', 0.0) > 0.1 else 1
 
-        reti_kw = dict(period=kw['period'], fto=kw['fto'], ucell=kw['ucell'],
+        # Permittivity straight through: the bridge is what converts to RETICOLO's index, so
+        # the same numbers reach Octave and the solver and neither can be migrated without the
+        # other. See `interface/Reticolo.py::_index`.
+        reti_kw = dict(period=kw['period'], fto=kw['fto'], structure=kw['structure'],
                        thickness=kw['thickness'], theta=kw['theta'],
                        phi=kw.get('phi'), wavelength=kw['wavelength'],
-                       n_top=kw['n_top'], n_bot=kw['n_bot'])
+                       top=kw['top'], bot=kw['bot'])
         # One res2 call answers both illumination sides: RETICOLO's inc_bottom_* results are
         # its own bottom-incidence solve at the same k_parallel = n_top*sin(theta). The
         # bottom-side reflection propagates in n_bot and the transmission in n_top, so the
@@ -122,8 +149,8 @@ def main():
         R_bot = np.asarray(R_bot, dtype=float).ravel()
         T_bot = np.asarray(T_bot, dtype=float).ravel()
 
-        idx_ri = _propagating_indices(kw, kw['n_top'])
-        idx_ti = _propagating_indices(kw, kw['n_bot'])
+        idx_ri = _propagating_indices(kw, _index(kw['top']))
+        idx_ti = _propagating_indices(kw, _index(kw['bot']))
         if (len(idx_ri) != len(R) or len(idx_ti) != len(T)
                 or len(idx_ti) != len(R_bot) or len(idx_ri) != len(T_bot)):
             raise SystemExit(

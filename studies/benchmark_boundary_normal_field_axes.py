@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.join(os.getcwd(), 'studies'))
 
 import numpy as np, jax, jax.numpy as jnp
 import wavebit
+from wavebit._core import analytic as _analytic
 from wavebit._core import boundary as _boundary
 from wavebit._core.geometry import StaticGeometry
 
@@ -29,7 +30,11 @@ NGRID, HALF_PX, NPTS = 512, 6.0, 25
 PIX = P / NGRID
 CX0 = 0.28 * P
 
-BASE = dict(period=[P, P], thickness=[0.25], psi=0.0, wavelength=WL, n_top=1.0, n_bot=1.5)
+# Materials are **relative permittivity**. The contrast axis keeps naming its media by
+# refractive index, because that is what the printed row labels say and what the two earlier
+# measurements were posed in; `eps_from_index` converts where the shape is built.
+EPS = wavebit.eps_from_index
+BASE = dict(period=[P, P], thickness=[0.25], psi=0.0, wavelength=WL, top=1.0, bot=EPS(1.5))
 AXES = dict(contrast={'high': (3.0, 2.2), 'low': (1.9, 1.6)},
             incidence={'oblique': (0.35, 0.4), 'normal': (0.0, 0.0)},
             readout={'R': 'R', 'T': 'T'})
@@ -38,22 +43,23 @@ AXES = dict(contrast={'high': (3.0, 2.2), 'low': (1.9, 1.6)},
 def build(cx, na, nb):
     def rect(cx_, cy, lx, ly, ang, n):
         return dict(type='rectangle', cx=cx_ * P, cy=cy * P, lx=lx * P, ly=ly * P,
-                    angle=ang, n_index=n)
+                    angle=ang, material=EPS(n))
     first = rect(0.28, 0.30, 0.20, 0.15, 0.4, na)
     first['cx'] = cx
-    return [dict(n_base=1.0, combine='paint',
+    return [dict(background=1.0, combine='paint',
                  shapes=[first, rect(0.68, 0.70, 0.20, 0.15, 0.9, nb)])]
 
 
 def geos(na, nb):
-    ucell = build(CX0, na, nb)
+    structure = build(CX0, na, nb)
     return (StaticGeometry(boundary_plans=[None]),
-            StaticGeometry(boundary_plans=[_boundary.plan_layer(ucell[0]['shapes'], (P, P))]))
+            StaticGeometry(boundary_plans=[
+                _boundary.plan_layer(structure[0]['shapes'], (P, P))]))
 
 
 def scalar(geometry, cx, na, nb, theta, phi, key, backend):
-    s = wavebit.rcwa(backend=backend, ucell=build(cx, na, nb), fto=[8, 8],
-                       normal_grid=NGRID, theta=theta, phi=phi, **BASE)
+    s = wavebit.rcwa(backend=backend, structure=build(cx, na, nb), fto=[8, 8],
+                     normal_grid=NGRID, theta=theta, phi=phi, **BASE)
     r = getattr(s.conv_solve(geometry=geometry), key)
     return jnp.real(jnp.sum(r)) if backend == 1 else float(np.real(np.sum(np.asarray(r))))
 
@@ -99,16 +105,6 @@ P = 2.0 * WL
 NGRID, HALF_PX, NPTS, FTO = 512, 6.0, 25, 8
 PIX, CX0 = P / NGRID, 0.28 * P
 NAMES = ('epx', 'epy', 'epz_i', 'epxy', 'epyx')
-
-
-def build(cx, na, nb):
-    def rect(cx_, cy, lx, ly, ang, n):
-        return dict(type='rectangle', cx=cx_ * P, cy=cy * P, lx=lx * P, ly=ly * P,
-                    angle=ang, n_index=n)
-    first = rect(0.28, 0.30, 0.20, 0.15, 0.4, na)
-    first['cx'] = cx
-    return [dict(n_base=1.0, combine='paint',
-                 shapes=[first, rect(0.68, 0.70, 0.20, 0.15, 0.9, nb)])]
 
 
 PLAN = _boundary.plan_layer(build(CX0, 3.0, 2.2)[0]['shapes'], (P, P))

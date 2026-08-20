@@ -266,7 +266,8 @@ Two controls make the separation exact:
 
 - **The permittivity coefficients are invariant under upsampling** — measured at 1e-16, so
   everything above is the normal field and nothing else.
-- **Repeating the `ucell` manually and repeating it via `enhanced_dfs=True` are bit-identical**
+- **Repeating the `structure` raster manually and repeating it via `enhanced_dfs=True` are
+  bit-identical**
   (0.00e+00), so the manual sweep measures the real setting.
 
 ## Why the floor stays

@@ -4,28 +4,55 @@ Replaces the three near-identical copies in ``wavebit/on_{numpy,jax,torch}/model
 with one Array-API implementation, in the same style as :mod:`wavebit._core.factorization` and
 :mod:`wavebit._core.fields`.
 
-What this module produces is the *vector* (staircase-free) description of a layer: a list of
-``(cell, x_list, y_list)`` triples, where ``cell`` holds the refractive index of each
-piecewise-constant block and ``x_list`` / ``y_list`` the block edges. That is exactly the input
-:func:`wavebit._core.factorization.to_conv_mat_block` consumes, so a shape drawn here is
+What this module produces is the *block* (staircase-free in x and y) description of a layer:
+a list of ``(cell, x_list, y_list)`` triples, where ``cell`` holds the relative permittivity of
+each piecewise-constant block and ``x_list`` / ``y_list`` the block edges. That is exactly the
+input :func:`wavebit._core.factorization.to_conv_mat_block` consumes, so a shape drawn here is
 Fourier-transformed analytically rather than off a raster.
+
+**Materials in, permittivity out.** A layer's background and each shape's own slot take a
+:class:`~wavebit._core.domain.Material` (or a bare number, the scalar shorthand for
+``Material(epsilon=x)``); what lands in ``cell`` is that material's ``epsilon``, unsquared.
+Nothing here reads a material's ``mu``: the permeability slots are built by running this whole
+module a second time on a structure whose materials carry ``mu`` where ``epsilon`` was --
+see ``CoreFactorizationMixin._mu_matrices`` -- which is what makes the two quantities land on
+one grid instead of on two that happen to agree.
 
 Two conventions carry over from the already-ported modules:
 
 * **No in-place assignment.** The legacy builders wrote into preallocated arrays
-  (``rotate[0, 0] = ...``, ``ucell_layer[r0:r1, c0:c1] = pmty``, ``arr[:, ::2] = ...``). Each is
+  (``rotate[0, 0] = ...``, ``cell[r0:r1, c0:c1] = pmty``, ``arr[:, ::2] = ...``). Each is
   rewritten as a build-then-``stack``/``concat``, or as a ``where`` over a statically computed
   index mask, so the values stay in the differentiable chain on every backend.
 * **Geometry decisions are eager, material values flow through.** Sorting the block edges and
   picking the rectangle's rotation octant branch on values and are narrowed to Python with
-  ``bool()`` / ``int()``. The coordinates and refractive indices themselves are never narrowed,
-  so gradients still reach ``cx``, ``cy``, ``lx``, ``ly``, ``angle`` and ``n_index``. The
+  ``bool()`` / ``int()``. The coordinates and the material values themselves are never
+  narrowed, so gradients still reach ``cx``, ``cy``, ``lx``, ``ly``, ``angle`` and the
+  material's ``epsilon``. The
   ellipse needs no such decision at all: its blocks are one closed-form expression of the
   shape parameters, valid at every angle.
 
-The one genuinely backend-specific corner is the material table: it is read off disk
-(``np.loadtxt`` / ``scipy.io.loadmat``) and interpolated with NumPy, because there is no
-Array-API ``interp`` and the table is static data rather than a design variable.
+**The nk table at the bottom of this file draws nothing.** :func:`read_material_table` and
+:func:`find_nk_index` are the readers for the dispersion data shipped in ``wavebit/nk_data``,
+and they are here rather than anywhere else because their only caller used to be this module's
+``put_refractive_index_in_ucell``, which is gone. What replaced that caller is the pair itself:
+both are exported as ``wavebit.read_material_table`` / ``wavebit.find_nk_index``, so the path
+from a wavelength to a material is one a user walks explicitly ::
+
+    table = wavebit.read_material_table()
+    n = wavebit.find_nk_index('Si', table, wavelength)     # a refractive index, n + 1j*k
+    material = wavebit.Material(wavebit.eps_from_index(n))
+
+The :func:`wavebit.eps_from_index` step in the middle is not decoration. A table holds an
+*index* -- that is what nk means -- and every material slot in this package takes a relative
+permittivity, so the one place the two quantities meet is a call the reader can see. It also
+stays a lookup the caller performs, never one a material slot performs for them:
+:func:`wavebit._core.domain.as_material` refuses a string on purpose, because a name silently
+resolving to a medium is a lookup nobody asked for and cannot audit.
+
+That corner is also the one genuinely backend-specific thing in this module: the table is read
+off disk (``np.loadtxt`` / ``scipy.io.loadmat``) and interpolated with NumPy, because there is
+no Array-API ``interp`` and static data is not a design variable.
 """
 from os import walk
 from typing import NamedTuple
@@ -35,6 +62,7 @@ import numpy as np
 
 from . import overlap as _overlap
 from .backend import array_namespace
+from .domain import as_material
 from .geometry import StaleGeometryError      # raised here too; one home for the contract
 from .overlap import COMBINE_MODES, OVERLAP_TOL_REL
 
@@ -159,7 +187,7 @@ def _result_dtype(xp, dtypes):
 def _block_primitives(objects):
     """The layer's drawing instructions as convex primitives, or ``None`` if not concrete.
 
-    Every vector instruction is ``[name, cx, cy, lx, ly, n_index, angle, ...]``, so the
+    Every block instruction is ``[name, cx, cy, lx, ly, material, angle, ...]``, so the
     geometry sits at the same offsets whatever the shape is. A parameter that will not become
     a float is a tracer, and that means *skip the check* rather than fail the build — the same
     bargain the analytic side makes.
@@ -180,7 +208,7 @@ def _block_shape_name(objects, i):
 
 
 def check_block_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_REL):
-    """Refuse a vector layer that asks for a combination this path cannot draw.
+    """Refuse a block layer that asks for a combination this path cannot draw.
 
     The mirror of :func:`wavebit._core.analytic.check_layer_combination`. This path paints,
     later object over earlier, and that is what an unlabelled layer gets — painting is this
@@ -196,7 +224,7 @@ def check_block_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_
     combine = layer[2] if len(layer) > 2 else None
     if combine is not None and combine not in COMBINE_MODES:
         raise ValueError(
-            f'Vector layer {layer_index}: combine={combine!r} is not one of {COMBINE_MODES}.')
+            f'Block layer {layer_index}: combine={combine!r} is not one of {COMBINE_MODES}.')
     if combine != 'add':
         return                                         # painting is what this path does
 
@@ -223,11 +251,11 @@ def check_block_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_
             f'shapes {_block_shape_name(objects, i)} and {_block_shape_name(objects, j)} '
             f'overlap')
     raise NotImplementedError(
-        f'Vector layer {layer_index}: {what}{more}, and this path cannot add them. '
+        f'Block layer {layer_index}: {what}{more}, and this path cannot add them. '
         f"combine='add' superposes every shape's contribution, which this path has no way to "
         f'express: it draws a staircase of blocks and each block holds one index, so an '
         f'overlap can only take one of them. Use the smooth path, '
-        f"ucell=[dict(n_base=..., shapes=[...], combine='add')], which superposes, or "
+        f"structure=[dict(background=..., shapes=[...], combine='add')], which superposes, or "
         f"combine='paint' to keep what this path draws.")
 
 
@@ -330,7 +358,7 @@ def _bisect_left(seq, value):
 
 
 class Modeling:
-    """Vector modeler: draws rectangles / ellipses and reduces them to block-edge lists.
+    """Block modeler: draws rectangles / ellipses and reduces them to block-edge lists.
 
     The namespace is inferred from whatever arrays it is handed — the shape parameters of
     :meth:`rectangle` / :meth:`ellipse`, or ``period`` — and falls back to NumPy, so a modeler
@@ -339,16 +367,18 @@ class Modeling:
 
     def __init__(self, period=(1., 1.), type_complex=None, xp=None, device=None,
                  *args, **kwargs):
-        self._ucell = None
-        self.ucell_block = None
         self.grid_plans = None
         self._last_plan = None
         self.shape_choices = None
         self._shape_replay = self._shape_record = None
         self.x_list = None
         self.y_list = None
-        self.mat_table = None
-        self.ucell_info_list = None
+        # No `mat_table` slot. It was assigned `None` here and read by nothing once
+        # `put_refractive_index_in_ucell` went: a modeler does not hold materials, it draws
+        # regions, and the nk table belongs to whoever looked one up (see the module
+        # docstring). An attribute that is only ever its own default is a place for a reader
+        # to conclude the object caches something.
+        self.block_info_list = None
         self.shapes_list = []
         self.film_layer = None
 
@@ -438,25 +468,17 @@ class Modeling:
         else:
             self._period = xp.asarray(vals, dtype=F, device=dev)
 
-    @property
-    def ucell(self):
-        return self._ucell
-
-    @ucell.setter
-    def ucell(self, ucell):
-        self._ucell = ucell
-
     # ------------------------------------------------------------------------------ shapes
 
     @staticmethod
-    def rectangle_no_approximation(cx, cy, lx, ly, base):
-        """Axis-aligned rectangle: one block, given as ``[top_left, bottom_right, index]``."""
+    def rectangle_no_approximation(cx, cy, lx, ly, material):
+        """Axis-aligned rectangle: one block, ``[top_left, bottom_right, permittivity]``."""
         a = [cy - ly / 2, cx - lx / 2]  # row, col
         b = [cy + ly / 2, cx + lx / 2]  # row, col
 
-        return [[a, b, base]]  # top_left, bottom_right
+        return [[a, b, as_material(material, 'rectangle material').epsilon]]
 
-    def rectangle(self, cx, cy, lx, ly, n_index, angle=0, n_split_triangle=2,
+    def rectangle(self, cx, cy, lx, ly, material, angle=0, n_split_triangle=2,
                   n_split_parallelogram=2, angle_margin=1E-5):
         """Rectangle, rotated by ``angle`` (radians), decomposed into axis-aligned blocks.
 
@@ -501,7 +523,7 @@ class Modeling:
         The smooth path builds the rotated shape's coefficients in closed form, and its kink
         is not small but *absent* — measured at 4e-4 or below at every one of those counts. It
         is also where the block path is heading: at 0.4 rad the analytic answer settles by
-        ``fto`` 8 and moves by 4e-4 after, while the vector one is still coming down at 17
+        ``fto`` 8 and moves by 4e-4 after, while the block one is still coming down at 17
         (0.3746 / 0.3606 / 0.3484 against 0.3081 / 0.3363 / 0.3367). Use it for angle fits, as
         :mod:`wavebit._core.analytic` says.
 
@@ -514,7 +536,10 @@ class Modeling:
         the single block :meth:`rectangle_no_approximation` returns, sides swapped past a
         quarter turn — it just no longer needs a special case to get there.
         """
-        xp = self._ns(cx, cy, lx, ly, angle, self._period)
+        # The material's permittivity is what a block holds; taken here so the namespace sniff
+        # below sees it too, since a differentiable material may be the layer's only array.
+        eps = as_material(material, 'rectangle material').epsilon
+        xp = self._ns(cx, cy, lx, ly, angle, eps, self._period)
         dev = self._dev(cx, cy, lx, ly, angle)
         C, F = self._complex(xp), self._float(xp)
 
@@ -592,13 +617,13 @@ class Modeling:
                     else (cos_p * dy - B) / sin_p)
             strips.append((right_on_cos, left_on_cos))
 
-            res.append([[cy + bottom, cx + left], [cy + top, cx + right], n_index])
+            res.append([[cy + bottom, cx + left], [cy + top, cx + right], eps])
 
         choice['strips'] = tuple(strips)
         self._record_shape_choice(choice)
         return res
 
-    def ellipse(self, cx, cy, lx, ly, n_index, angle=0, n_split_w=2, n_split_h=2,
+    def ellipse(self, cx, cy, lx, ly, material, angle=0, n_split_w=2, n_split_h=2,
                 angle_margin=1E-5, debug=False):
         """Ellipse (axes ``lx`` / ``ly``, rotated by ``angle``) as a stack of blocks.
 
@@ -632,7 +657,8 @@ class Modeling:
         interleave produced nothing, and every block collapsed to the origin — the ellipse
         vanished from the layer with no error raised.
         """
-        xp = self._ns(cx, cy, lx, ly, angle, self._period)
+        eps = as_material(material, 'ellipse material').epsilon
+        xp = self._ns(cx, cy, lx, ly, angle, eps, self._period)
         dev = self._dev(cx, cy, lx, ly, angle)
         C, F = self._complex(xp), self._float(xp)
 
@@ -669,7 +695,7 @@ class Modeling:
         x_half = a * b * xp.sin(s_mid) / R
 
         res = [[[y_edge[i + 1], x_center[i] - x_half[i]],
-                [y_edge[i], x_center[i] + x_half[i]], n_index]
+                [y_edge[i], x_center[i] + x_half[i]], eps]
                for i in range(n_slab)]
 
         if debug:
@@ -712,16 +738,16 @@ class Modeling:
         _check_plan_still_fits(xp, row_list, col_list)
 
         n_row, n_col = len(row_list), len(col_list)
-        ucell_layer = xp.ones((n_row, n_col), dtype=datatype, device=dev) * pmtvy_base
+        block_cell = xp.ones((n_row, n_col), dtype=datatype, device=dev) * pmtvy_base
         rows = xp.arange(n_row, device=dev)
         cols = xp.arange(n_col, device=dev)
 
         for obj, (row_begin, row_end, col_begin, col_end) in zip(obj_list, plan.ranges):
             mask = (xp.reshape((rows >= row_begin) & (rows < row_end), (-1, 1))
                     & xp.reshape((cols >= col_begin) & (cols < col_end), (1, -1)))
-            ucell_layer = xp.where(mask, _cast(xp, obj[2], datatype, dev), ucell_layer)
+            block_cell = xp.where(mask, _cast(xp, obj[2], datatype, dev), block_cell)
 
-        return ucell_layer, _edge_list(xp, col_list, F, C, dev), _edge_list(xp, row_list, F, C, dev)
+        return block_cell, _edge_list(xp, col_list, F, C, dev), _edge_list(xp, row_list, F, C, dev)
 
     def block_per_layer_numeric(self, layer_info, x64=True, plan=None):
         """Reduce one layer's block list to ``(cell, x_list, y_list)``.
@@ -820,7 +846,7 @@ class Modeling:
             col_list, col_src = col_list[1:], col_src[1:]
 
         n_row, n_col = len(row_list), len(col_list)
-        ucell_layer = xp.ones((n_row, n_col), dtype=datatype, device=dev) * pmtvy_base
+        block_cell = xp.ones((n_row, n_col), dtype=datatype, device=dev) * pmtvy_base
 
         rows = xp.arange(n_row, device=dev)
         cols = xp.arange(n_col, device=dev)
@@ -840,19 +866,20 @@ class Modeling:
             # through it is not, and stays differentiable.
             mask = (xp.reshape((rows >= row_begin) & (rows < row_end), (-1, 1))
                     & xp.reshape((cols >= col_begin) & (cols < col_end), (1, -1)))
-            ucell_layer = xp.where(mask, _cast(xp, pmty, datatype, dev), ucell_layer)
+            block_cell = xp.where(mask, _cast(xp, pmty, datatype, dev), block_cell)
 
         self._last_plan = VectorGridPlan(row_sources=tuple(row_src), col_sources=tuple(col_src),
                                         ranges=tuple(ranges))
 
-        return (ucell_layer, _edge_list(xp, col_list, F, C, dev),
+        return (block_cell, _edge_list(xp, col_list, F, C, dev),
                 _edge_list(xp, row_list, F, C, dev))
 
     def draw(self, layer_info_list, plans=None):
         """Grid every layer. Returns a list of ``[cell, x_list, y_list]``, top layer first.
 
-        Input order is preserved, and ``ucell`` is indexed top-down (``docs/conventions.md``:
-        ``ucell[0]`` is the layer light meets first), so entry 0 is the top. This said "bottom
+        Input order is preserved, and ``structure`` is indexed top-down
+        (``docs/conventions.md``: ``structure[0]`` is the layer light meets first), so entry 0
+        is the top. This said "bottom
         layer first" until 2026-08-16, which is the *field-reconstruction* ``layer_info_list``
         convention -- :func:`wavebit._core.scattering` builds that one reversed -- borrowed for
         a differently-shaped object that happens to share the argument name. A user rendering a
@@ -862,52 +889,32 @@ class Modeling:
         grid decisions are taken by comparison, which needs concrete coordinates. Either way
         the plans used end up on ``self.grid_plans``, which is what ``freeze_geometry`` reads.
         """
-        ucell_info_list = []
+        block_info_list = []
         film_flags = []
         used_plans = []
 
         for i, layer_info in enumerate(layer_info_list):
             plan = None if plans is None else plans[i]
-            ucell_layer, x_list, y_list = self.block_per_layer_numeric(layer_info, plan=plan)
+            block_cell, x_list, y_list = self.block_per_layer_numeric(layer_info, plan=plan)
             used_plans.append(plan if plan is not None else self._last_plan)
-            ucell_info_list.append([ucell_layer, x_list, y_list])
+            block_info_list.append([block_cell, x_list, y_list])
             # TODO: eig for homo layer
             film_flags.append(1.0 if x_list.shape[0] == y_list.shape[0] == 1 else 0.0)
 
-        xp = self._ns(*[info[0] for info in ucell_info_list])
-        dev = self._dev(*[info[0] for info in ucell_info_list])
+        xp = self._ns(*[info[0] for info in block_info_list])
+        dev = self._dev(*[info[0] for info in block_info_list])
         self.film_layer = xp.asarray(film_flags, dtype=self._float(xp), device=dev)
-        self.ucell_info_list = ucell_info_list
+        self.block_info_list = block_info_list
         self.grid_plans = used_plans
 
-        return ucell_info_list
-
-    # ------------------------------------------------------------------------------ material
-
-    def put_refractive_index_in_ucell(self, ucell, mat_list, wl, type_complex=None, device=None):
-        """Replace the material *indices* of a raster ``ucell`` with refractive index values."""
-        xp = self._ns(ucell)
-        dev = device if device is not None else self._dev(ucell)
-        C = self._complex(xp) if type_complex is None else (
-            xp.complex128 if _precision_is_double(type_complex) else xp.complex64)
-
-        ucell_mask = _cast(xp, ucell, C, dev)
-        res = xp.zeros(ucell_mask.shape, dtype=C, device=dev)
-
-        for i_mat, material in enumerate(mat_list):
-            if isinstance(material, str):
-                if not self.mat_table:
-                    self.mat_table = read_material_table()
-                assign_value = find_nk_index(material, self.mat_table, wl)
-            else:
-                assign_value = material
-
-            res = xp.where(ucell_mask == i_mat, _cast(xp, assign_value, C, dev), res)
-
-        return res
+        return block_info_list
 
     def modeling_block_instruction(self, instructions, plans=None, shape_choices=None):
-        """Run a full instruction set: ``[[base_index, [[shape, *params], ...], combine], ...]``.
+        """Run a full instruction set: ``[[background, [[shape, *params], ...], combine], ...]``.
+
+        ``background`` and each shape's own material slot take a
+        :class:`~wavebit._core.domain.Material` or the bare permittivity that is shorthand for
+        one; what comes back holds permittivity.
 
         ``combine`` is optional and, on this path, defaults to what this path does: paint.
         Supplying ``'add'`` asks for the smooth path's superposition, which a staircase of
@@ -920,12 +927,13 @@ class Modeling:
         for index, layer in enumerate(instructions):
             check_block_layer_combination(layer, self.period, index)
             obj_list_per_layer = []
-            base_refractive_index = layer[0]
+            background = as_material(
+                layer[0], f'block layer {index} background').epsilon
             for block_object in layer[1]:
                 func = getattr(self, block_object[0])
                 obj_list_per_layer += func(*block_object[1:])
 
-            layer_info_list.append([base_refractive_index, obj_list_per_layer])
+            layer_info_list.append([background, obj_list_per_layer])
 
         self.shape_choices = (list(shape_choices) if shape_choices is not None
                               else self._shape_record)
@@ -937,12 +945,30 @@ class Modeling:
 #
 # The nk tables are static data read off disk, not design variables, so they are held and
 # interpolated in NumPy: there is no Array-API ``interp``, and nothing downstream
-# differentiates through the table lookup.
+# differentiates through the table lookup. Both functions are public
+# (``wavebit.read_material_table`` / ``wavebit.find_nk_index``) -- see the module docstring for
+# the three-line path from a wavelength to a Material, and for why the permittivity conversion
+# is left to the caller.
 
 def find_nk_index(material, mat_table, wl):
     """Complex refractive index of ``material`` at ``wl``, interpolated from the nk table.
 
-    A ``__real`` suffix on the name asks for ``n`` only (no absorption).
+    ``mat_table`` is what :func:`read_material_table` returns and ``material`` is one of its
+    keys, matched case-insensitively (``'si'``, ``'Si'`` and ``'SI'`` are one material).
+
+    Returns ``n + 1j*k``, an **index** -- so a caller filling a material slot wants
+    ``wavebit.Material(wavebit.eps_from_index(n))``. Passing this number straight into a slot
+    is the exact mistake the retired-name refusals exist to catch, and here no refusal can fire
+    because a number carries no name.
+
+    Loss comes back as ``+1j*k``, which is already this project's convention
+    (``Im > 0`` is loss under ``e^{-iwt}``, ``docs/conventions.md``) and survives
+    ``eps_from_index`` because squaring maps the upper half plane into itself. Nothing has to
+    be conjugated on the way in.
+
+    A ``__real`` suffix on the name asks for ``n`` only (no absorption) -- ``'si__real'``.
+    It exists for the convergence question "is this feature doing anything, or is the layer
+    just absorbing?", which is otherwise a hand-edit of the table.
     """
     if material[-6:] == '__real':
         material = material[:-6]
@@ -962,7 +988,24 @@ def find_nk_index(material, mat_table, wl):
 
 
 def read_material_table(nk_path=None, type_complex=None):
-    """Load every nk table under ``nk_path`` (defaults to the bundled ``nk_data``)."""
+    """Load every nk table under ``nk_path`` (defaults to the bundled ``wavebit/nk_data``).
+
+    Returns ``{NAME: (n_rows, 3) array}`` with columns ``(wavelength, n, k)``, keyed by the
+    file's stem upper-cased, walking the directory recursively and reading both ``.txt``
+    (whitespace, one header line) and MATLAB ``.mat`` (``WL`` / ``n`` / ``k``). Directory
+    layout carries no meaning: two files of the same stem in different subdirectories are one
+    key, and the last one walked wins.
+
+    The wavelength column is in **whatever unit the file uses**, and nothing here converts it.
+    A solve has one length unit shared by ``wavelength``, ``period`` and ``thickness``, so the
+    table has to be in that unit too -- and since a table's own unit is not recorded anywhere
+    in the format, this cannot check it for you. The bundled ``filmetrics`` tables are in nm.
+
+    ``type_complex`` only sets the stored float width (single or double); it takes any spelling
+    the solver does. Reading the whole directory is deliberate over a per-material open: the
+    tables are small, and a caller who has the dict can ask which materials exist rather than
+    guessing at filenames.
+    """
     dtype = np.float64 if _precision_is_double(type_complex) else np.float32
 
     mat_table = {}

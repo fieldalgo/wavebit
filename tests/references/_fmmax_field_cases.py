@@ -36,7 +36,8 @@ RES_X = 9                 # fmmax grid_shape[0]; its x samples are CELL-CENTRED
 RES_Y = 5                 # fmmax refuses a grid smaller than the expansion on either axis
 RES_Z = 7                 # inclusive over [0, THICK] on both sides
 
-N_HI = 2.0
+EPS_HI = 4.0              # the index-2 bar this case list has always used, as a permittivity
+EPS_BG = 2.25             # and the index-1.5 uniform slab
 FILL = 0.4
 
 # (name, theta_deg, polarisation)
@@ -50,17 +51,23 @@ CASES = [
 
 
 def raster(name):
-    """The layer's refractive index as ``[y, x]``, which is this project's raster layout.
+    """The layer's **permittivity** as ``[y, x]``, which is this project's raster layout.
 
     fmmax wants ``[x, y]``; its generator transposes. That transpose is not cosmetic — see
     ``docs`` on the fmmax raster convention, where getting it wrong reverses the s/p split and
     reads like a sign error.
+
+    Permittivity is now what *both* consumers want, which is why the squaring that used to sit
+    in the generator is gone rather than moved: fmmax's ``eigensolve_isotropic_media`` always
+    took a permittivity, and since 2026-08-20 so does ``wavebit.rcwa``. One quantity, stated
+    once — and the numbers are the squares of the indices frozen into the golden, so the scene
+    behind it has not moved.
     """
     if name == 'uniform':
-        return np.full((NY, NX), 1.5)
+        return np.full((NY, NX), EPS_BG)
     row = np.ones(NX)
     lo = int((0.5 - FILL / 2) * NX)
-    row[lo:lo + int(FILL * NX)] = N_HI
+    row[lo:lo + int(FILL * NX)] = EPS_HI
     return np.tile(row[None, :], (NY, 1))
 
 

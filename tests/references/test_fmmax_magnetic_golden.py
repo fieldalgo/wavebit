@@ -64,7 +64,7 @@ def _slots(tensor):
 
 def solve(eps, theta_deg, mu=None, algo='ETM'):
     """``[R_s, T_s, R_p, T_p]`` for one uniform slab between vacuum."""
-    mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=np.deg2rad(theta_deg),
+    mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
                          phi=0.0, psi=0.0, fto=(0, 0), period=(PERIOD, PERIOD),
                          wavelength=WL, thickness=[THICK], connecting_algo=algo)
     res = mee.solve_for_conv(WL, *_slots(eps),

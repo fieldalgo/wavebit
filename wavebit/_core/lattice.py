@@ -31,7 +31,7 @@ this module.
 differences survives the skew. The exact structure is BTTB; ``docs/factorization-terms.md`` §3
 has the distinction and the check.)
 
-The raster follows that substitution: ``ucell[layer][j, i]`` is the permittivity at
+The raster follows that substitution: ``structure[layer][j, i]`` is the permittivity at
 ``r = (i + 0.5)/Nx * a1 + (j + 0.5)/Ny * a2``. Axis 1 runs along ``a1`` (and pairs with
 ``fto[0]`` / ``m``), axis 0 along ``a2`` (with ``fto[1]`` / ``n``) — the same pairing the
 axis-aligned case has always used, read in lattice coordinates rather than Cartesian ones.

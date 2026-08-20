@@ -185,7 +185,7 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
             side the light arrives from.
         theta: incident polar angle (``None`` -> 0; matches the legacy ``cos(theta)`` factor),
             measured from the incidence medium's normal.
-        thickness: per-layer thicknesses, top-to-bottom (``ucell``/first-axis order).
+        thickness: per-layer thicknesses, top-to-bottom (``structure``/first-axis order).
         epx_conv_all, epy_conv_all, epz_conv_i_all: per-layer convolution matrices,
             indexed ``[layer]`` on the first axis, as produced by the factorization stage.
         incidence_side: ``'top'`` (default) or ``'bottom'``. Backside illumination is solved
@@ -443,7 +443,7 @@ def _unit(xp, n, i):
 
 def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
                    n_top, n_bot, ff_x, ff_y, answers=Answers.EFFICIENCY,
-                   mu_top=1.0, mu_bot=1.0):
+                   mu_top=1.0, mu_bot=1.0, eps_top=None):
     """Boundary match the assembled s/p system to the incident field.
 
     Shared, byte-identical port of ``transfer_1d_conical_4`` / ``transfer_2d_4`` (their final
@@ -454,6 +454,18 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     which supersedes ``psi`` when given (see
     :func:`~wavebit._core.conventions.incident_sp_amplitudes`; ``psi = v`` and
     ``polarization = (sin(v), cos(v))`` are the same incidence).
+
+    ``eps_top`` is the superstrate's permittivity, the one half-space quantity this function
+    consumes that is not recoverable for free: ``n_top`` stays the refractive index
+    ``sqrt(eps*mu)``, so the p-channel admittance ``kz/eps`` has to be spelled either as
+    ``kz*mu/n**2`` -- a round trip through a square root and back, exact only to rounding --
+    or from the number itself. ``None`` takes the round trip, which is what a caller holding
+    only an index has and is what this always did; a caller holding both passes it. The
+    argument exists at all because the SMM twin
+    (:func:`wavebit._core.scattering.smm_2d`) already read the value, and a boundary condition
+    that two connecting algorithms build from different inputs is not one boundary condition.
+    ``test_half_space_permittivity_reaches_both_connecting_algorithms`` in
+    ``tests/test_scattering_core.py`` is the check that keeps them reading it together.
 
     Returns ``(de_ri, de_ti)`` for that incidence, shape ``(ff_y, ff_x)``.
     From ``answers='amplitude'`` up it returns the full result mapping instead: the reflected
@@ -490,23 +502,45 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
 
     # `big_F` holds tangential E and `big_G` tangential H, each split s/p, so the coefficients
     # below are the half-space admittances: `kz/mu` where the amplitude is electric (s) and
-    # `kz/eps = kz*mu/n**2` where it is magnetic (p). Both reduce to what was here at mu = 1.
+    # `kz/eps` where it is magnetic (p). Both reduce to what was here at mu = 1: dividing by
+    # `mu_top = 1.0` is exact, so this row is the `kz/n**2` the function computed before there
+    # was a `mu` at all, to the bit.
+    if eps_top is None:
+        eps_top = n_top ** 2 / mu_top
     final_A = _block(xp, [
         [I, O, -bF[0][0], -bF[0][1]],
-        [O, 1j * Kz_top * mu_top / (n_top ** 2), -bF[1][0], -bF[1][1]],
+        [O, 1j * Kz_top / eps_top, -bF[1][0], -bF[1][1]],
         [1j * Kz_top / mu_top, O, -bG[0][0], -bG[0][1]],
         [O, I, -bG[1][0], -bG[1][1]],
     ])
-    # The incident wave in the same four quantities. The p row's magnetic scale is `n/mu`,
-    # not `n`: `a_s` and `a_p` are defined at *equal* incident flux, and with the s flux now
-    # carrying `kz/mu` the p one only matches at that scale. Getting it wrong leaves s and p
-    # normalized to different incident powers, which no energy check can see -- R + T = 1
-    # still holds within each polarization.
+    # The incident wave in the same four quantities. Its p component appears twice, as the
+    # magnetic amplitude `h_p_inc` in the last row and as the tangential E that amplitude
+    # carries in the second, and the two have to describe **one** wave: `E = (kz/eps) * H` is
+    # the same top half-space relation the reflected column above is built from, so it reads
+    # the same `eps_top`. Spelling the E row `kz_inc/n_top` instead -- algebraically identical
+    # while `eps*mu == n**2`, which is the only way a caller should ever supply them -- made
+    # the incident wave and the reflected one see different media the moment they disagreed.
+    #
+    # The magnetic scale is `n/mu`, not `n`: `a_s` and `a_p` are defined at *equal* incident
+    # flux, and with the s flux carrying `kz/mu` the p one only matches at that scale. Getting
+    # it wrong leaves s and p normalized to different incident powers, which no energy check
+    # can see -- R + T = 1 still holds within each polarization. It is also the scale the SMM
+    # twin's incident column uses, so the two connecting algorithms share it verbatim.
+    #
+    # `e_p_inc` is the one expression in this function that is *not* bit-identical to its
+    # pre-`mu` form. `(n/mu)*kz/eps` and `kz/n` agree exactly whenever `n_top` is a power of
+    # two and to within one ulp otherwise; measured end to end, 13 of 324 reported values move,
+    # by at most 4e-16 relative. Taken deliberately: the alternative is to keep `kz_inc/n_top`
+    # when `eps_top` was recovered and use the permittivity only when it was supplied, which
+    # would put two spellings of one medium back in the file -- agreeing until they do not,
+    # which is the shape of the bug this argument was added to close.
+    h_p_inc = n_top / mu_top
+    e_p_inc = h_p_inc * kz_inc / eps_top
     final_B = _block(xp, [
         [-a_s * delta],
-        [a_p * (kz_inc / n_top) * delta],
+        [a_p * e_p_inc * delta],
         [1j * a_s * kz_inc / mu_top * delta],
-        [1j * (n_top / mu_top) * a_p * delta],
+        [1j * h_p_inc * a_p * delta],
     ])
 
     final_A_inv = xp.linalg.inv(final_A)
@@ -543,16 +577,18 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     res = _pack(*fresnel(R_s, R_p, T_s, T_p), de_ri_s, de_ri_p, de_ti_s, de_ti_p)
 
     # Pure-TE (psi = pi/2) and pure-TM (psi = 0) incidence, solved together against the same
-    # already-inverted final_A.
+    # already-inverted final_A. Same four rows as `final_B`, `(sin psi, cos psi)` in place of
+    # `(a_s, a_p)` -- including the same `e_p_inc`, or the variants would be lit by a wave
+    # from a different superstrate than the psi incidence they are reported beside.
     half_pi = 3.141592653589793 / 2
     cols = []
     for psi_v in (half_pi, 0.0):
         s_p = xp.sin(xp.asarray(psi_v, dtype=C))
         c_p = xp.cos(xp.asarray(psi_v, dtype=C))
         cols.append(_block(xp, [[-s_p * delta],
-                                [c_p * (kz_inc / n_top) * delta],
+                                [c_p * e_p_inc * delta],
                                 [1j * s_p * kz_inc / mu_top * delta],
-                                [1j * (n_top / mu_top) * c_p * delta]]))
+                                [1j * h_p_inc * c_p * delta]]))
     final_RT_tetm = final_A_inv @ xp.concat(cols, axis=1)
 
     def split2(M):

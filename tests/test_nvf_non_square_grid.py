@@ -31,12 +31,27 @@ PX, PY, R = 200.0, 400.0, 70.0          # a 2:1 cell — square pixels need Ny =
 
 
 def _disc(nx, ny, px=PX, py=PY, r=R):
-    """A centred circular rod, sampled on an ``(ny, nx)`` raster of a ``px`` by ``py`` cell."""
+    """A centred circular rod, sampled on an ``(ny, nx)`` raster of a ``px`` by ``py`` cell.
+
+    **Relative permittivity**, which is what both consumers of this array take: the solver's
+    ``structure`` keyword and ``normal_vector_field``'s ``eps_matrix``. The rod used to be
+    written as the index ``3.0`` and squared at the two direct ``normal_vector_field`` calls,
+    back when only one of the two consumers wanted a permittivity. Squaring it here instead
+    keeps the scene identical -- ``eps = 9`` is the same rod ``n = 3`` was -- and, more to the
+    point, leaves one array with one meaning: the alternative spelling after the flip is a
+    file where the same variable is a permittivity of 9 three lines up and a permittivity of 3
+    at every solver call, which is what it briefly was.
+
+    The alignment figures quoted in the docstrings below were re-measured across the change and
+    are bit-identical at all three ``n``, both lattices and both bands. That is not luck: the
+    normal field is a geometry quantity, so it reads *where* the interface is and never the
+    contrast across it.
+    """
     x = (np.arange(nx) + 0.5) / nx * px
     y = (np.arange(ny) + 0.5) / ny * py
     X, Y = np.meshgrid(x, y)
     return X - px / 2, Y - py / 2, np.where((X - px / 2) ** 2 + (Y - py / 2) ** 2 <= r ** 2,
-                                            3.0, 1.0)
+                                            9.0, 1.0)
 
 
 def _alignment(nx, ny, lattice, band=None):
@@ -57,10 +72,10 @@ def _alignment(nx, ny, lattice, band=None):
     periodically correct extension. The banded form is therefore the one that measures what
     this file is about.
     """
-    dx, dy, ucell = _disc(nx, ny)
+    dx, dy, structure = _disc(nx, ny)
     rho = np.hypot(dx, dy)
     rho[rho == 0] = 1.0
-    n_x, n_y = normal_vector_field(ucell ** 2, lattice=lattice)
+    n_x, n_y = normal_vector_field(structure, lattice=lattice)
     cos = np.abs(n_x * dx / rho + n_y * dy / rho)
     if band is None:
         return float(cos.mean())
@@ -75,9 +90,9 @@ def test_square_pixels_are_untouched_by_the_metric(n):
     grid lands on ``sampling=(1.0, 1.0)`` — bit-identical to passing no sampling at all — and a
     division by ``1.0``, which is exact. Nothing a square-pixel user has ever run can move.
     """
-    dx, dy, ucell = _disc(n, 2 * n)
-    legacy = normal_vector_field(ucell ** 2, lattice=None)
-    metric = normal_vector_field(ucell ** 2, lattice=np.diag([PX, PY]))
+    dx, dy, structure = _disc(n, 2 * n)
+    legacy = normal_vector_field(structure, lattice=None)
+    metric = normal_vector_field(structure, lattice=np.diag([PX, PY]))
     for a, b in zip(legacy, metric):
         assert np.array_equal(a, b)
 
@@ -135,10 +150,10 @@ def test_the_error_is_a_bias_refinement_cannot_remove():
 
 def test_energy_is_conserved_anyway():
     """Why nothing caught this. The wrong normal costs nothing the usual tell can see."""
-    _, _, ucell = _disc(96, 96)
+    _, _, structure = _disc(96, 96)
     cfg = dict(backend=0, period=[PX, PY], fto=[4, 4], wavelength=300.0, thickness=[220.0],
-               n_top=1.0, n_bot=1.0, theta=0.2, phi=0.3, psi=0.4, factorization='nvf',
-               ucell=ucell[None, :, :])
+               top=1.0, bot=1.0, theta=0.2, phi=0.3, psi=0.4, factorization='nvf',
+               structure=structure[None, :, :])
     res = wavebit.rcwa(**cfg).conv_solve()
     total = float(np.sum(np.asarray(res.R)) + np.sum(np.asarray(res.T)))
     assert total == pytest.approx(1.0, abs=1e-12)
@@ -152,10 +167,10 @@ def test_a_frozen_normal_field_replays_onto_a_non_square_grid(coefficients):
     Freezing with it and rebuilding without — which is what an unplumbed builder does — reads
     as a cell change and refuses the replay outright.
     """
-    _, _, ucell = _disc(64, 64)
+    _, _, structure = _disc(64, 64)
     cfg = dict(backend=0, period=[PX, PY], fto=[3, 3], wavelength=300.0, thickness=[220.0],
-               n_top=1.0, n_bot=1.5, theta=0.2, factorization='nvf',
-               fourier_coefficients=coefficients, ucell=ucell[None, :, :])
+               top=1.0, bot=2.25, theta=0.2, factorization='nvf',
+               fourier_coefficients=coefficients, structure=structure[None, :, :])
     solver = wavebit.rcwa(**cfg)
     replayed = solver.conv_solve(geometry=solver.freeze_geometry()).T
     eager = wavebit.rcwa(**cfg).conv_solve().T
@@ -176,11 +191,11 @@ def test_the_solver_hands_the_cell_basis_to_the_factorization(coefficients):
     """
     import wavebit._core.factorization as fac
 
-    _, _, ucell = _disc(64, 64)
-    layers = ucell[None, :, :]
+    _, _, structure = _disc(64, 64)
+    layers = structure[None, :, :]
     cfg = dict(backend=0, period=[PX, PY], fto=[3, 3], wavelength=300.0, thickness=[220.0],
-               n_top=1.0, n_bot=1.5, theta=0.2, factorization='nvf',
-               fourier_coefficients=coefficients, ucell=layers)
+               top=1.0, bot=2.25, theta=0.2, factorization='nvf',
+               fourier_coefficients=coefficients, structure=layers)
     build = (fac.to_conv_mat_raster_nvf if coefficients == 'sampled'
              else fac.to_conv_mat_raster_integrated_nvf)
 
@@ -206,17 +221,17 @@ def test_the_frozen_record_carries_the_pixel_shape():
     of the cell from reading as a change (see
     :func:`~wavebit._core.factorization._lattice_key`).
     """
-    _, _, ucell = _disc(64, 64)
+    _, _, structure = _disc(64, 64)
     solver = wavebit.rcwa(backend=0, period=[PX, PY], fto=[3, 3], wavelength=300.0,
-                            thickness=[220.0], n_top=1.0, n_bot=1.5, theta=0.2,
-                            factorization='nvf', ucell=ucell[None, :, :])
+                            thickness=[220.0], top=1.0, bot=2.25, theta=0.2,
+                            factorization='nvf', structure=structure[None, :, :])
     recorded = solver.freeze_geometry().normal_field_source[0][2]
     assert recorded == pytest.approx((1.0, 0.0, 0.0, PY / PX))   # (400/64) / (200/64) == 2
 
     # A cell twice the size with the same shape is the same normal field, so the same key.
     doubled = wavebit.rcwa(backend=0, period=[2 * PX, 2 * PY], fto=[3, 3], wavelength=300.0,
-                             thickness=[220.0], n_top=1.0, n_bot=1.5, theta=0.2,
-                             factorization='nvf', ucell=ucell[None, :, :])
+                             thickness=[220.0], top=1.0, bot=2.25, theta=0.2,
+                             factorization='nvf', structure=structure[None, :, :])
     assert doubled.freeze_geometry().normal_field_source[0][2] == pytest.approx(recorded)
 
 
@@ -231,9 +246,9 @@ def test_differentiating_period_does_not_read_as_a_cell_change():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
 
-    _, _, ucell = _disc(48, 48)
-    base = dict(backend=1, fto=[3, 3], wavelength=300.0, thickness=[220.0], n_top=1.0,
-                n_bot=1.5, theta=0.2, factorization='nvf', ucell=jnp.asarray(ucell[None, :, :]))
+    _, _, structure = _disc(48, 48)
+    base = dict(backend=1, fto=[3, 3], wavelength=300.0, thickness=[220.0], top=1.0,
+                bot=2.25, theta=0.2, factorization='nvf', structure=jnp.asarray(structure[None, :, :]))
     frozen = wavebit.rcwa(period=[PX, PY], **base).freeze_geometry()
 
     def objective(py):

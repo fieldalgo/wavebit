@@ -23,19 +23,19 @@ from wavebit._core.enums import Answers, answers_of
 RUNGS = ('efficiency', 'amplitude', 'field')
 
 
-def _ucell(n_layers=1):
+def _structure(n_layers=1):
     u = np.ones((n_layers, 8, 8))
-    u[:, 2:6, 2:6] = 4.0
+    u[:, 2:6, 2:6] = 16.0                # permittivity: the index 4 squared
     return u
 
 
 def _solver(backend=0, n_layers=1, **kw):
-    xp_ucell = _ucell(n_layers)
+    grid = _structure(n_layers)
     if backend == 1:
         import jax.numpy as jnp
-        xp_ucell = jnp.asarray(xp_ucell)
+        grid = jnp.asarray(grid)
     return wavebit.rcwa(backend=backend, fto=(3, 3), period=(300., 300.), wavelength=500.,
-                        thickness=(120.,) * n_layers, n_top=1., n_bot=1.45, ucell=xp_ucell,
+                        thickness=(120.,) * n_layers, top=1., bot=2.1025, structure=grid,
                         psi=0.3, theta=0.2, phi=0.1, **kw)
 
 

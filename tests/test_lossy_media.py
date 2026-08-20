@@ -38,6 +38,13 @@ import numpy as np
 import pytest
 
 import wavebit
+from wavebit import eps_from_index
+
+# Every stack in this file is written as a list of refractive INDICES, and stays that way:
+# the Airy/transfer oracles below are written in n, and restating them in permittivity would
+# make them inherit the quantity the solver takes -- which is the one thing an oracle must
+# not do. `eps_from_index` is applied at each call into wavebit instead, which is exactly the
+# migration a user with an nk table performs.
 
 WL = 500.0
 AU = 0.18 + 3.0j          # gold at 500nm — strongly absorbing
@@ -85,10 +92,12 @@ def analytic_r(ns, thicknesses, wavelength, theta, tetm):
 
 def solver_RT(ns, thicknesses, wavelength, theta, tetm, algo='ETM'):
     """Total ``(R, T)`` of the same stack through the solver (uniform layers, fto=0)."""
-    ucell = np.array([[[n, n]] for n in ns[1:-1]])
-    solver = wavebit.rcwa(backend=0, connecting_algo=algo, tetm=tetm, n_top=ns[0],
-                           n_bot=ns[-1], theta=theta, fto=0, wavelength=wavelength,
-                           period=[wavelength * 2], ucell=ucell, thickness=thicknesses)
+    structure = eps_from_index(np.array([[[n, n]] for n in ns[1:-1]]))
+    solver = wavebit.rcwa(backend=0, connecting_algo=algo, tetm=tetm,
+                           top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
+                           theta=theta, fto=0, wavelength=wavelength,
+                           period=[wavelength * 2], structure=structure,
+                           thickness=thicknesses)
     res = solver.conv_solve()
     return float(np.sum(res.R).real), float(np.sum(res.T).real)
 
@@ -187,9 +196,9 @@ def test_absorbing_layer_identical_to_its_substrate(tetm, theta):
     ns, ds = [1.0, AU, AU], [20.0]
     want = abs(analytic_r(ns, ds, WL, theta, tetm)) ** 2   # == the bare air/gold interface
 
-    ucell = np.array([[[AU, AU]]])
-    common = dict(backend=0, tetm=tetm, n_top=1.0, n_bot=AU, theta=theta, fto=0,
-                  wavelength=WL, period=[WL * 2], ucell=ucell, thickness=ds)
+    structure = eps_from_index(np.array([[[AU, AU]]]))
+    common = dict(backend=0, tetm=tetm, top=1.0, bot=eps_from_index(AU), theta=theta, fto=0,
+                  wavelength=WL, period=[WL * 2], structure=structure, thickness=ds)
     tmm = wavebit.rcwa(connecting_algo='ETM', **common).conv_solve()
     smm = wavebit.rcwa(connecting_algo='SMM', **common).conv_solve()
 
@@ -200,16 +209,17 @@ def test_absorbing_layer_identical_to_its_substrate(tetm, theta):
 def solver_R_analytic(ns, thicknesses, wavelength, theta, tetm):
     """Total reflectance of the same stack built through the ANALYTIC path.
 
-    ``shapes=[]`` makes each layer uniform ``n_base``, so the structure is identical to the one
-    ``solver_RT`` rasters — only the ``n -> eps`` builder differs. That routes through the 2D
+    ``shapes=[]`` makes each layer uniform ``background``, so the structure is identical to the
+    one ``solver_RT`` rasters — only the coefficient builder differs. That routes through the 2D
     solve (the smooth path always does), so the polarization comes in as ``psi`` rather than
     ``tetm``, and the period must be 2D.
     """
-    ucell = [dict(n_base=n, shapes=[]) for n in ns[1:-1]]
-    solver = wavebit.rcwa(backend=0, n_top=ns[0], n_bot=ns[-1], theta=theta, phi=0.0,
+    structure = [dict(background=eps_from_index(n), shapes=[]) for n in ns[1:-1]]
+    solver = wavebit.rcwa(backend=0, top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
+                            theta=theta, phi=0.0,
                             psi=(np.pi / 2 if tetm == 'te' else 0.0), fto=0,
                             wavelength=wavelength, period=[wavelength * 2, wavelength * 2],
-                            ucell=ucell, thickness=thicknesses)
+                            structure=structure, thickness=thicknesses)
     return float(np.sum(np.asarray(solver.conv_solve().R)).real)
 
 
@@ -225,7 +235,7 @@ def test_absorbing_layer_via_the_analytic_path(case, tetm, theta):
     was entirely real, where ``conj(n)**2 == n**2``. Running the *uniform* stack through it puts
     it against the absolute oracle rather than against another solver — gold as a layer landed
     ~9% off here and tripped the ``R + T > 1`` guard, because the conjugation turned it into a
-    gain medium. Nothing about the shape machinery is exercised; the ``n -> eps`` convention is
+    gain medium. Nothing about the shape machinery is exercised; the material convention is
     the entire point.
 
     Uniform layers are also the only place the two builders can be held to 1e-12 against each
@@ -247,17 +257,18 @@ def solver_R_painted(n, thickness, wavelength, theta, tetm):
     what routes the layer to ``_core.boundary.to_conv_mat_boundary_layer`` (a non-overlapping
     ``paint`` stays on the summed closed form), and same-index-everywhere is what leaves a
     uniform slab at the end of it, so the Airy oracle applies exactly and none of the shape
-    machinery is under test. The ``n -> eps`` convention is the entire point, again.
+    machinery is under test. The material convention is the entire point, again.
     """
     P = 400.0
+    eps = eps_from_index(n)
     shapes = [dict(type='rectangle', cx=0.30 * P, cy=0.5 * P, lx=0.75 * P, ly=1.4 * P,
-                   n_index=n),
+                   material=eps),
               dict(type='rectangle', cx=0.72 * P, cy=0.5 * P, lx=0.75 * P, ly=1.4 * P,
-                   n_index=n)]
-    solver = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.5, theta=theta, phi=0.0,
+                   material=eps)]
+    solver = wavebit.rcwa(backend=0, top=1.0, bot=2.25, theta=theta, phi=0.0,
                             psi=(np.pi / 2 if tetm == 'te' else 0.0), fto=(3, 3),
                             wavelength=wavelength, period=[P, P],
-                            ucell=[dict(n_base=n, combine='paint', shapes=shapes)],
+                            structure=[dict(background=eps, combine='paint', shapes=shapes)],
                             thickness=[thickness])
     res = solver.conv_solve()
     return float(np.sum(np.asarray(res.R)).real), float(np.sum(np.asarray(res.T)).real)
@@ -274,9 +285,9 @@ def test_absorbing_layer_via_the_painted_path(n, tetm, theta):
     with ``R + T`` up to 1.11.
 
     Nothing objected, for the same reason the analytic path went uncovered before it:
-    ``test_boundary.py`` builds every shape with a **real** ``n_index``, where ``conj(n)**2``
-    and ``n**2`` are the same number. Its two builders are cross-checked against each other to
-    5e-9 and both were on the same real indices, so agreeing proved nothing about this.
+    ``test_boundary.py`` builds every shape with a **real** material, where ``conj(eps)``
+    and ``eps`` are the same number. Its two builders are cross-checked against each other to
+    5e-9 and both were on the same real materials, so agreeing proved nothing about this.
 
     ``R + T <= 1`` is asserted separately from the oracle: it is the statement that survives
     even if the oracle is ever doubted, and it is what the conjugation broke most visibly.
@@ -304,9 +315,11 @@ def test_complex_n_bot_keeps_full_precision_on_every_backend(backend):
     ns, ds = [1.0, 1.5, AU], [20.0]
     want = solver_R(ns, ds, WL, 0.3, 'te')                  # numpy reference
 
-    ucell = np.array([[[n, n] for n in ns[1:-1]]][0])[None]
-    solver = wavebit.rcwa(backend=backend, tetm='te', n_top=ns[0], n_bot=ns[-1], theta=0.3,
-                           fto=2, wavelength=WL, period=[WL * 2], ucell=ucell, thickness=ds)
+    structure = eps_from_index(np.array([[[n, n] for n in ns[1:-1]]][0])[None])
+    solver = wavebit.rcwa(backend=backend, tetm='te', top=eps_from_index(ns[0]),
+                           bot=eps_from_index(ns[-1]), theta=0.3,
+                           fto=2, wavelength=WL, period=[WL * 2], structure=structure,
+                           thickness=ds)
     got = float(np.sum(np.asarray(solver.conv_solve().R)))
     assert got == pytest.approx(want, abs=1e-12)
 
@@ -361,17 +374,19 @@ def solver_amps(ns, thicknesses, wavelength, theta, tetm, path, algo='ETM'):
     footnote that conversion now lives without.)
     """
     layers = ns[1:-1]
-    common = dict(backend=0, connecting_algo=algo, n_top=ns[0], n_bot=ns[-1], theta=theta,
+    common = dict(backend=0, connecting_algo=algo, top=eps_from_index(ns[0]),
+                  bot=eps_from_index(ns[-1]), theta=theta,
                   wavelength=wavelength, thickness=thicknesses)
     if path == '1d':
         solver = wavebit.rcwa(tetm=tetm, fto=0, period=[wavelength * 2],
-                                ucell=np.array([[[n, n]] for n in layers]), **common)
+                                structure=eps_from_index(
+                                    np.array([[[n, n]] for n in layers])), **common)
     else:
         cell = ([[[n, n]] for n in layers] if path == 'conical'
                 else [[[n, n], [n, n]] for n in layers])
         solver = wavebit.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0), fto=[0, 0],
                                 period=[wavelength * 2, wavelength * 2],
-                                ucell=np.array(cell), **common)
+                                structure=eps_from_index(np.array(cell)), **common)
     res = solver.conv_solve().res
     r = np.asarray(res.r_s if tetm == 'te' else res.r_p).ravel()
     t = np.asarray(res.t_s if tetm == 'te' else res.t_p).ravel()
@@ -412,15 +427,17 @@ def test_absorbing_superstrate_efficiency_is_convention_bound():
     ns, ds = [n_top, 2.0, 1.0], [30.0]
 
     def eff(path):
-        common = dict(backend=0, n_top=ns[0], n_bot=ns[-1], theta=theta, wavelength=WL,
-                      thickness=ds)
+        common = dict(backend=0, top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
+                      theta=theta, wavelength=WL, thickness=ds)
         if path == '1d':
             s = wavebit.rcwa(tetm='tm', fto=0, period=[WL * 2],
-                               ucell=np.array([[[n, n]] for n in ns[1:-1]]), **common)
+                               structure=eps_from_index(
+                                   np.array([[[n, n]] for n in ns[1:-1]])), **common)
         else:
             s = wavebit.rcwa(phi=0.0, psi=0.0, fto=[0, 0],
                                period=[WL * 2, WL * 2],
-                               ucell=np.array([[[n, n], [n, n]] for n in ns[1:-1]]), **common)
+                               structure=eps_from_index(
+                                   np.array([[[n, n], [n, n]] for n in ns[1:-1]])), **common)
         res = s.conv_solve()
         return float(np.sum(np.asarray(res.R))), res
 

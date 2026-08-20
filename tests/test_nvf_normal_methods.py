@@ -19,7 +19,7 @@ What this file pins, and why each pin is the one that matters:
   construction is a *different field*, and a replay across methods must be refused by the
   staleness tell, not silently answered with the wrong field.
 - **Angular accuracy against an exact normal, on a y-asymmetric case** — every external
-  oracle this suite ever ran was blind to a y-flip (see the ucell row-order history), so
+  oracle this suite ever ran was blind to a y-flip (see the raster row-order history), so
   the accuracy pin uses an off-center circle, where a transposed or flipped field cannot
   score well.
 - **The floor lift keeps the base grid's smoothing scale** — a lifted raster is the same
@@ -51,11 +51,12 @@ NEW_METHODS = [_param(m.value) for m in NormalMethod if m.value != 'distance']
 
 # ---------------------------------------------------------------- rasters and helpers
 
-def circle_raster(N, cx=0.5, cy=0.5, r=0.3, n_in=2.4):
+def circle_raster(N, cx=0.5, cy=0.5, r=0.3, eps_in=5.76):
+    """A centred disc as a PERMITTIVITY raster; 5.76 is the index 2.4 it used to hold."""
     ax = (np.arange(N) + 0.5) / N
     X, Y = np.meshgrid(ax, ax)
     eps = np.ones((N, N))
-    eps[(X - cx) ** 2 + (Y - cy) ** 2 <= r ** 2] = n_in
+    eps[(X - cx) ** 2 + (Y - cy) ** 2 <= r ** 2] = eps_in
     return eps
 
 
@@ -79,16 +80,16 @@ def band_error(eps, nx, ny, cx=0.5, cy=0.5, r=0.3, width_px=2):
 
 SOLVE_KW = dict(backend=0, period=[1., 1.], wavelength=.55, thickness=[.3],
                 theta=np.deg2rad(12), phi=np.deg2rad(30), psi=np.deg2rad(40),
-                n_top=1., n_bot=1.)
+                top=1., bot=1.)
 
 
 # ------------------------------------------------------------------------ plumbing
 
 def test_explicit_distance_is_bit_identical_to_the_untouched_default():
     """The option must be opt-in: naming the default changes nothing, to the bit."""
-    ucell = circle_raster(32)[None]
-    base = wavebit.rcwa(ucell=ucell, fto=[4, 4], factorization='nvf', **SOLVE_KW).conv_solve()
-    named = wavebit.rcwa(ucell=ucell, fto=[4, 4], factorization='nvf',
+    structure = circle_raster(32)[None]
+    base = wavebit.rcwa(structure=structure, fto=[4, 4], factorization='nvf', **SOLVE_KW).conv_solve()
+    named = wavebit.rcwa(structure=structure, fto=[4, 4], factorization='nvf',
                          normal_method='distance', **SOLVE_KW).conv_solve()
     assert np.array_equal(np.asarray(base.R), np.asarray(named.R))
     assert np.array_equal(np.asarray(base.T), np.asarray(named.T))
@@ -96,7 +97,7 @@ def test_explicit_distance_is_bit_identical_to_the_untouched_default():
 
 def test_an_invalid_method_is_refused_by_name():
     with pytest.raises(ValueError, match='normal_method'):
-        wavebit.rcwa(ucell=circle_raster(16)[None], fto=[2, 2],
+        wavebit.rcwa(structure=circle_raster(16)[None], fto=[2, 2],
                      factorization='nvf', normal_method='sobel', **SOLVE_KW)
 
 
@@ -105,7 +106,7 @@ def test_an_invalid_method_is_refused_by_name():
     dict(),                     # untouched default resolves to Li on a raster
 ])
 def test_a_method_nothing_reads_is_refused_not_ignored(cfg):
-    s = wavebit.rcwa(ucell=circle_raster(16)[None], fto=[2, 2],
+    s = wavebit.rcwa(structure=circle_raster(16)[None], fto=[2, 2],
                      normal_method='contour', **SOLVE_KW, **cfg)
     with pytest.raises(NotImplementedError, match='no reader'):
         s.conv_solve()
@@ -113,9 +114,9 @@ def test_a_method_nothing_reads_is_refused_not_ignored(cfg):
 
 def test_a_method_on_the_smooth_shape_path_is_refused():
     """The shape paths build their normal fields from the geometry itself."""
-    smooth = [{'n_base': 1.0, 'shapes': [{'type': 'circle', 'cx': 0.5, 'cy': 0.5,
-                                          'lx': 0.6, 'n_index': 2.4}]}]
-    s = wavebit.rcwa(ucell=smooth, fto=[2, 2], normal_method='contour', **SOLVE_KW)
+    smooth = [{'background': 1.0, 'shapes': [{'type': 'circle', 'cx': 0.5, 'cy': 0.5,
+                                              'lx': 0.6, 'material': 5.76}]}]
+    s = wavebit.rcwa(structure=smooth, fto=[2, 2], normal_method='contour', **SOLVE_KW)
     with pytest.raises(NotImplementedError, match='no reader'):
         s.conv_solve()
 
@@ -123,23 +124,23 @@ def test_a_method_on_the_smooth_shape_path_is_refused():
 @pytest.mark.parametrize('method', NEW_METHODS)
 def test_freeze_replay_is_bit_identical_and_method_mismatch_is_stale(method):
     """The record carries the construction; replaying it under another is refused."""
-    ucell = circle_raster(32)[None]
-    s = wavebit.rcwa(ucell=ucell, fto=[3, 3], factorization='nvf',
+    structure = circle_raster(32)[None]
+    s = wavebit.rcwa(structure=structure, fto=[3, 3], factorization='nvf',
                      normal_method=method, **SOLVE_KW)
     geo = s.freeze_geometry()
     replayed = s.conv_solve(geometry=geo)
-    rebuilt = wavebit.rcwa(ucell=ucell, fto=[3, 3], factorization='nvf',
+    rebuilt = wavebit.rcwa(structure=structure, fto=[3, 3], factorization='nvf',
                            normal_method=method, **SOLVE_KW).conv_solve()
     assert np.array_equal(np.asarray(replayed.R), np.asarray(rebuilt.R))
 
-    other = wavebit.rcwa(ucell=ucell, fto=[3, 3], factorization='nvf', **SOLVE_KW)
+    other = wavebit.rcwa(structure=structure, fto=[3, 3], factorization='nvf', **SOLVE_KW)
     with pytest.raises(StaleGeometryError, match='different construction'):
         other.conv_solve(geometry=geo)
 
 
 @pytest.mark.parametrize('method', NEW_METHODS)
 def test_energy_is_conserved_by_every_construction(method):
-    res = wavebit.rcwa(ucell=circle_raster(48)[None], fto=[5, 5], factorization='nvf',
+    res = wavebit.rcwa(structure=circle_raster(48)[None], fto=[5, 5], factorization='nvf',
                        normal_method=method, **SOLVE_KW).conv_solve()
     total = float(np.sum(res.R) + np.sum(res.T))
     assert abs(total - 1.0) < 1e-10
@@ -214,9 +215,9 @@ def test_mirror_asymmetry_of_the_solve_is_bounded(method, limit):
     settings, but real, which is why the bound is stated rather than pretended away."""
     eps = circle_raster(48, cx=0.4, cy=0.55)
     cfg = dict(backend=0, period=[1., 1.], wavelength=.55, thickness=[.3], theta=0.,
-               phi=0., psi=0., n_top=1., n_bot=1., fto=[5, 5], factorization='nvf')
-    r1 = wavebit.rcwa(ucell=eps[None], normal_method=method, **cfg).conv_solve()
-    r2 = wavebit.rcwa(ucell=eps[:, ::-1].copy()[None], normal_method=method,
+               phi=0., psi=0., top=1., bot=1., fto=[5, 5], factorization='nvf')
+    r1 = wavebit.rcwa(structure=eps[None], normal_method=method, **cfg).conv_solve()
+    r2 = wavebit.rcwa(structure=eps[:, ::-1].copy()[None], normal_method=method,
                       **cfg).conv_solve()
     gap = float(np.abs(np.asarray(r1.R) - np.asarray(r2.R)[:, ::-1]).max())
     assert gap < limit
@@ -227,7 +228,7 @@ def test_the_field_ignores_which_value_is_which(method):
     """Swap the two material values (identical geometry, identical mask): the field is a
     function of the REGIONS, not the values — the corner-canonical indicator's job, and
     what lets the frozen-record staleness tell stay honest."""
-    A = circle_raster(48, cx=0.4, cy=0.55, n_in=4.0)
+    A = circle_raster(48, cx=0.4, cy=0.55, eps_in=4.0)
     B = np.where(A == 4.0, 1.0, 4.0)                   # same partition, values exchanged
     na = normal_vector_field(A, method=method)
     nb = normal_vector_field(B, method=method)
@@ -319,12 +320,12 @@ def test_the_floor_lift_keeps_the_base_grids_smoothing_scale(method, base_n):
     smooth's is linear (N/16), where base-aware and base-blind coincide *except* below
     the one-pixel floor — base 8 puts it there (1 base px = 6 lifted px against the
     blind reading's 3)."""
-    from wavebit._core.factorization import _normal_field_floor, normal_field_for_ucell
+    from wavebit._core.factorization import _normal_field_floor, normal_field_for_raster
     base = circle_raster(base_n)
     repeat = _normal_field_floor(base.shape, 10, 10)[0]
     lifted = np.repeat(np.repeat(base, repeat, axis=0), repeat, axis=1)
 
-    [(nx, ny)] = normal_field_for_ucell(base[None], 10, 10, method=method)
+    [(nx, ny)] = normal_field_for_raster(base[None], 10, 10, method=method)
     ex, ey = normal_vector_field(lifted, method=method, base_shape=(base_n, base_n))
     assert np.array_equal(nx, ex) and np.array_equal(ny, ey)
 
@@ -334,7 +335,7 @@ def test_the_floor_lift_keeps_the_base_grids_smoothing_scale(method, base_n):
 
 @pytest.mark.parametrize('method', NEW_METHODS)
 def test_the_lifted_solve_runs_and_conserves_energy(method):
-    res = wavebit.rcwa(ucell=circle_raster(16)[None], fto=[10, 10],
+    res = wavebit.rcwa(structure=circle_raster(16)[None], fto=[10, 10],
                        factorization='nvf', normal_method=method, **SOLVE_KW).conv_solve()
     assert abs(float(np.sum(res.R) + np.sum(res.T)) - 1.0) < 1e-10
 
@@ -346,8 +347,8 @@ def test_three_phases_delegate_to_distance(method):
     """The two-phase indicator cannot say which of three materials is inside; the honest
     fallback is the construction whose mask sees every interface."""
     eps = np.ones((32, 32))
-    eps[4:14, 4:14] = 2.0
-    eps[18:28, 18:28] = 3.0
+    eps[4:14, 4:14] = 4.0
+    eps[18:28, 18:28] = 9.0
     got = normal_vector_field(eps, method=method)
     want = normal_vector_field(eps, method='distance')
     assert np.array_equal(got[0], want[0]) and np.array_equal(got[1], want[1])
@@ -355,16 +356,16 @@ def test_three_phases_delegate_to_distance(method):
 
 def test_a_tracer_is_told_to_freeze_instead_of_failing_inside_scipy():
     jax = pytest.importorskip('jax')
-    ucell = circle_raster(24)[None]
+    structure = circle_raster(24)[None]
 
     def loss(u):
-        res = wavebit.rcwa(backend=1, ucell=u, fto=[2, 2], factorization='nvf',
+        res = wavebit.rcwa(backend=1, structure=u, fto=[2, 2], factorization='nvf',
                            normal_method='contour', **{k: v for k, v in SOLVE_KW.items()
                                                        if k != 'backend'}).conv_solve()
         return jax.numpy.sum(res.R)
 
     with pytest.raises(TypeError, match='freeze_geometry'):
-        jax.grad(loss)(jax.numpy.asarray(ucell))
+        jax.grad(loss)(jax.numpy.asarray(structure))
 
 
 # ------------------------------------------------- the record's value-derived inputs
@@ -380,10 +381,10 @@ def test_merging_two_non_adjacent_phases_is_stale_not_silently_replayed():
     merged = np.where(eps == 3.0, 2.0, eps)
     assert np.array_equal(_interface_mask(eps), _interface_mask(merged))
 
-    s = wavebit.rcwa(ucell=eps[None], fto=[3, 3], factorization='nvf',
+    s = wavebit.rcwa(structure=eps[None], fto=[3, 3], factorization='nvf',
                      normal_method='spectral', **SOLVE_KW)
     geo = s.freeze_geometry()
-    other = wavebit.rcwa(ucell=merged[None], fto=[3, 3], factorization='nvf',
+    other = wavebit.rcwa(structure=merged[None], fto=[3, 3], factorization='nvf',
                          normal_method='spectral', **SOLVE_KW)
     with pytest.raises(StaleGeometryError, match='distinct phases'):
         other.conv_solve(geometry=geo)

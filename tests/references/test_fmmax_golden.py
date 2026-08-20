@@ -44,7 +44,7 @@ def solve(eps, theta_deg):
     """
     I = np.eye(1, dtype=np.complex128)
     e = np.asarray(eps, dtype=complex)
-    mee = wavebit.rcwa(backend=0, n_top=1.0, n_bot=1.0, theta=np.deg2rad(theta_deg),
+    mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
                          phi=0.0, psi=0.0, fto=(0, 0), period=(PERIOD, PERIOD),
                          wavelength=WL, thickness=[THICK])
     res = mee.solve_for_conv(WL, np.stack([e[0, 0] * I]), np.stack([e[1, 1] * I]),

@@ -23,6 +23,11 @@ for how, and ``README.md`` for what each was worth):
   reverses, layer order included. That is a frame difference, and it carries the matching
   component parity: ``Z_PARITY``.
 
+**The stacks are stated in permittivity**, as everywhere in wavebit since 2026-08-20; RETICOLO
+wants a refractive index and ``interface/Reticolo.py`` converts on the way out, in one place.
+Both sides of this comparison therefore read the same numbers, which is the reason the case
+list is shared at all.
+
 **The geometry deliberately keeps every x sample off a permittivity jump.** In TM, ``E_x`` is
 discontinuous across a vertical interface, so a sample sitting exactly on one has two correct
 values and the two codes need not pick the same. That is a harness artefact rather than a
@@ -53,29 +58,40 @@ NAMES = {'te': ('Ey', 'Hx', 'Hz'), 'tm': ('Hy', 'Ex', 'Ez')}
 SLOW_SLOT = {'te': None, 'tm': 1}
 
 
-def _bar(lo_nm, hi_nm, n_bg, n_hi):
+def _bar(lo_nm, hi_nm, eps_bg, eps_hi):
     """One binary bar per period, given by its edges in nm. Edges avoid the x samples."""
-    row = np.full(NX, n_bg, dtype=complex)
-    row[int(round(lo_nm / _CELL)):int(round(hi_nm / _CELL))] = n_hi
+    row = np.full(NX, eps_bg, dtype=complex)
+    row[int(round(lo_nm / _CELL)):int(round(hi_nm / _CELL))] = eps_hi
     return row
 
 
-# name -> (thicknesses, ucell). `ucell` is (layer, 1, NX), this project's raster layout.
+# name -> (thicknesses, structure). `structure` is (layer, 1, NX) of relative **permittivity**,
+# this project's raster layout.
+#
+# **The scene is exactly the one the golden was frozen against.** Every value here is the square
+# of the refractive index this file carried before 2026-08-20, so the committed RETICOLO numbers
+# still describe it: 2.25 was 1.5, 4 was 2, and 3.9975+0.2j was 2+0.05j. The untidy ones --
+# `1.6900000000000002`, `2.5600000000000005` -- are `1.3 ** 2` and `1.6 ** 2` as doubles, and
+# the tidy decimals beside them are different numbers; the bridge's `index_from_eps` carries
+# that difference straight back into the texture Octave is handed.
 STACKS = {
     # No truncation and no factorization question: this is where the frame and the amplitude
     # normalisation are decided, and it must be exact on all three components in both polarisations.
-    'uniform': ([260.0], np.full((1, 1, NX), 1.5, dtype=complex)),
+    'uniform': ([260.0], np.full((1, 1, NX), 2.25, dtype=complex)),
     # Asymmetric about the cell centre on purpose: a mirror-symmetric bar makes the +m and -m
     # orders equal, which is exactly the case a wrong Fourier order-index sign survives.
-    'grating': ([260.0], _bar(50.0, 230.0, 1.0, 2.0).reshape(1, 1, NX)),
+    'grating': ([260.0], _bar(50.0, 230.0, 1.0, 4.0).reshape(1, 1, NX)),
     # Two *different* patterned layers: the interface between them is under test, and so is
     # the layer walk -- the reconstruction returns layers top-to-bottom and RETICOLO the other
     # way round, which one layer cannot distinguish from a plain z reversal.
-    'bilayer': ([150.0, 260.0], np.stack([_bar(50.0, 230.0, 1.0, 2.0),
-                                          _bar(130.0, 330.0, 1.3, 1.6)])[:, None, :]),
-    # Absorbing: `Im(n) > 0` is loss in this project's `e^{-iwt}` convention, and a field cell
+    'bilayer': ([150.0, 260.0], np.stack([_bar(50.0, 230.0, 1.0, 4.0),
+                                          _bar(130.0, 330.0, 1.6900000000000002,
+                                               2.5600000000000005)])[:, None, :]),
+    # Absorbing: `Im(eps) > 0` is loss in this project's `e^{-iwt}` convention, and it survives
+    # the conversion the bridge makes -- the principal root of `3.9975+0.2j` is `2+0.05j`, so
+    # RETICOLO is handed a lossy index and its own index map comes back saying so. A field cell
     # is where a wrong sqrt branch shows as growth into the stack rather than decay.
-    'lossy': ([260.0], _bar(50.0, 230.0, 1.0, 2.0 + 0.05j).reshape(1, 1, NX)),
+    'lossy': ([260.0], _bar(50.0, 230.0, 1.0, 3.9975 + 0.2j).reshape(1, 1, NX)),
 }
 
 # (stack, theta_deg, pol). Normal incidence has no k_parallel to get wrong and is the control;

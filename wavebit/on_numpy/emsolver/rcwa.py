@@ -1,7 +1,8 @@
 import numpy as np
 
 from ._base import _BaseRCWA
-from ..._core.engine import CoreFactorizationMixin
+from ..._core.domain import retired_material_name
+from ..._core.engine import CoreFactorizationMixin, _refuse_retired
 from ..._core.enums import Formulation
 from ..._core.fields import field_1d, field_1d_conical, field_2d, field_2d_4ff, field_plot
 from ..._core.result import Result, ResultSub
@@ -24,27 +25,30 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
     def ellipse(self, *args, **kwargs):
         return self.modeler.ellipse(*args, **kwargs)
 
-    def run_ucell_vmap(self, ucell_list):
+    def run_structure_vmap(self, structure_list):
         """
         under development
         """
         pass
 
     def __init__(self,
-                 n_top=1.,
-                 n_bot=1.,
+                 top=1.,                     # superstrate: a Material, or a bare relative
+                 # permittivity (the scalar shorthand for Material(epsilon=x)). Was `n_top`
+                 # and held a refractive index; both the name and the quantity changed.
+                 bot=1.,                     # substrate, same reading as `top`.
                  theta=0.,
                  phi=None,
                  psi=None,
                  period=(1., 1.),
                  wavelength=1.,
-                 ucell=None,
+                 structure=None,             # the layer stack. A raster is an
+                 # (n_layers, Ny, Nx) array of relative PERMITTIVITY; the two shape spellings
+                 # name a Material per region instead. Was `ucell`, and held index samples.
                  thickness=(0.,),
                  backend=0,
                  tetm=None,
                  pol=None,   # retired; kept only to say so
                  fto=(0, 0),
-                 ucell_materials=None,
                  connecting_algo='ETM',
                  type_complex=np.complex128,
                  fourier_coefficients=None,  # 'sampled' | 'integrated'
@@ -53,7 +57,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                  # the only series either can form. Naming the other one raises.
                  factorization=None,         # 'li' | 'nvf' (normal vector field); the
                  # default resolves per modeling path -- 'li' on a raster and on the
-                 # vector modeler, 'nvf' on analytic shapes, which is the only rule
+                 # block modeler, 'nvf' on analytic shapes, which is the only rule
                  # each of those last two implements. Naming the other one raises.
                  normal_grid=1024,  # normal-field sampling; sets the floor on shape gradients
                  # (a translation-invariant structure should give d/dcx == 0 exactly; the
@@ -63,7 +67,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                  # New parameters go at the end on purpose: SolverJax._tree_unflatten passes
                  # the children positionally, so one added earlier silently shifts them.
                  incidence_side='top',       # 'top' | 'bottom': which medium the light
-                 # arrives from. Scene labels (n_top / n_bot / ucell order) never move;
+                 # arrives from. Scene labels (top / bot / structure order) never move;
                  # results are incidence-relative and theta/phi are measured in the
                  # incidence medium. See docs/conventions.md.
                  chi=None,                   # ellipticity angle; with psi it is the
@@ -82,9 +86,19 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                  # because the per-layer state it walks is 4.25 matrices of side
                  # 2*ff_x*ff_y per layer (240 MB at fto=(15, 15)) and is kept as the
                  # solve runs or not at all. See CoreSolveMixin.answers.
+                 mu=None,                    # raster path only: the permeability field,
+                 # (n_layers, Ny, Nx) beside `structure`. On the two shape paths a
+                 # permeability belongs to the Material filling each region, so naming it
+                 # here is refused rather than ignored. New parameters go at the end -- see
+                 # the note on `lattice` above.
+                 **retired,                  # ucell / n_top / n_bot / ucell_materials, so
+                 # each can say what replaced it *and* that the quantity changed with the
+                 # name. A TypeError alone would send a reader to rename the keyword and keep
+                 # the number, which is a different, legal, energy-conserving structure.
                  ):
+        _refuse_retired(retired)
 
-        super().__init__(n_top=n_top, n_bot=n_bot, theta=theta, phi=phi, psi=psi, chi=chi, tetm=tetm, pol=pol,
+        super().__init__(top=top, bot=bot, theta=theta, phi=phi, psi=psi, chi=chi, tetm=tetm, pol=pol,
                          fto=fto, period=period, wavelength=wavelength,
                          thickness=thickness, connecting_algo=connecting_algo,
                          type_complex=type_complex,
@@ -96,10 +110,12 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
 
         self._modeling_type_assigned = None
         self._grating_type_assigned = None
-        self._ucell = None
+        self._structure = None
 
-        self.ucell = ucell
-        self.ucell_materials = ucell_materials
+        self.structure = structure
+        # After `structure`: `mu` is refused on the two shape paths, and which path this is
+        # only becomes known when the structure is assigned.
+        self.mu = mu
 
         self.backend = backend
         self._set_fourier_options(fourier_coefficients, factorization)
@@ -108,39 +124,71 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         self.lattice = lattice      # after period: assigning a basis overwrites period
 
     @property
+    def structure(self):
+        """The layer stack, in whichever of the three encodings it was given in.
+
+        A raster is an ``(n_layers, Ny, Nx)`` array of **relative permittivity**; the block
+        and analytic spellings are per-layer lists that name a
+        :class:`~wavebit._core.domain.Material` per region. Assigning it settles
+        :attr:`modeling_type_assigned`, which is the only thing that selects the modeling
+        path -- there is no separate mode switch.
+        """
+        return self._structure
+
+    @property
     def ucell(self):
-        return self._ucell
+        raise AttributeError(retired_material_name('ucell'))
 
     @ucell.setter
-    def ucell(self, ucell):
+    def ucell(self, value):
+        raise AttributeError(retired_material_name('ucell'))
 
-        if isinstance(ucell, np.ndarray):  # Raster
+    @structure.setter
+    def structure(self, structure):
+
+        if isinstance(structure, np.ndarray):  # Raster
             self._modeling_type_assigned = 0
-            if ucell.dtype in (np.int64, np.float64, np.int32, np.float32):
-                dtype = self.type_float
-            elif ucell.dtype in (np.complex128, np.complex64):
-                dtype = self.type_complex
-            else:
-                raise ValueError
-            self._ucell = ucell.astype(dtype)
+            self._structure = self._coerce_raster('structure', structure)
 
-        elif type(ucell) is list:
-            # Analytic: one dict(n_base=..., shapes=[...], combine=...) per layer.
+        elif type(structure) is list:
+            # Analytic: one dict(background=..., shapes=[...], combine=...) per layer.
             # Shape coordinates are absolute lengths in the units of `period`, not
             # fractions of it, and `combine` picks what overlapping shapes mean --
             # this path adds them where the block path paints. See
             # wavebit._core.analytic; overlaps are refused until it is set.
-            if len(ucell) > 0 and isinstance(ucell[0], dict):
+            if len(structure) > 0 and isinstance(structure[0], dict):
                 self._modeling_type_assigned = 2
-                self._ucell = ucell
-            else:  # Vector
+                self._structure = structure
+            else:  # Block
                 self._modeling_type_assigned = 1
-                self._ucell = ucell
-        elif ucell is None:
-            self._ucell = ucell
+                self._structure = structure
+        elif structure is None:
+            self._structure = structure
             self._modeling_type_assigned = None
         else:
             raise ValueError
+        # `mu` and `structure` are one raster pair and either can be assigned second, so the
+        # pair is checked from whichever side completes it -- see `_revalidate_mu`.
+        self._revalidate_mu()
+
+    def _coerce_raster(self, where, grid):
+        """A raster field on this backend at the solve's precision.
+
+        Shared by ``structure`` and ``mu`` -- they are two fields of the same shape sampled on
+        the same grid, so a second copy of this would be a second chance for them to disagree
+        about dtype.
+        """
+        if not isinstance(grid, np.ndarray):
+            raise ValueError(
+                f'{where}: expected a NumPy array on this backend, got '
+                f'{type(grid).__name__}')
+        if grid.dtype in (np.int64, np.float64, np.int32, np.float32):
+            dtype = self.type_float
+        elif grid.dtype in (np.complex128, np.complex64):
+            dtype = self.type_complex
+        else:
+            raise ValueError
+        return grid.astype(dtype)
 
     @property
     def modeling_type_assigned(self):
@@ -163,13 +211,13 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         Returns:
 
         """
-        if self.ucell is None:
+        if self.structure is None:
             if self._grating_type_assigned is None:
                 self._grating_type_assigned = 2
             return
 
         if self.modeling_type_assigned == 0:  # Raster
-            one_dimensional = self.ucell.shape[1] == 1
+            one_dimensional = self.structure.shape[1] == 1
             self._refuse_y_orders_on_a_y_invariant_cell(one_dimensional)
             self._refuse_illegal_tetm(one_dimensional)
             if one_dimensional:
@@ -181,7 +229,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
             else:
                 self._grating_type_assigned = 2  # else
 
-        elif self.modeling_type_assigned == 1:  # Vector
+        elif self.modeling_type_assigned == 1:  # Block
             self.grating_type_assigned = 2  # TODO: 1d conical case
 
         elif self.modeling_type_assigned == 2:  # Analytic (shape-based, staircase-free)
@@ -199,7 +247,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                        epxy_conv_all=None, epyx_conv_all=None,
                        epxz_conv_all=None, epyz_conv_all=None,
                        epzx_conv_all=None, epzy_conv_all=None, mu=None,
-                       mu_top=1.0, mu_bot=1.0):
+                       mu_top=None, mu_bot=None, eps_top=None, eps_bot=None):
         self._assign_grating_type()
         z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
         if self._formulation_for(z_row) == Formulation.FIRST:
@@ -208,8 +256,14 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
             # there, the same physics the conical path solves at conical cost).
             self._grating_type_assigned = 2
 
+        # "Was a permeability named?", the structural question `Material.is_magnetic` answers,
+        # rather than "does it differ from one?". `None` means no half-space permeability was
+        # given; any value, 1.0 included, means one was. NumPy could have kept the old value
+        # comparison, but the three backends have to agree on which scenes route where -- and
+        # the JAX copy of this line cannot read a value at all, since a named `mu` is a tracer
+        # there. See the note in on_jax/emsolver/rcwa.py.
         magnetic = ((mu is not None and any(m is not None for m in mu))
-                    or mu_top != 1.0 or mu_bot != 1.0)
+                    or mu_top is not None or mu_bot is not None)
         if magnetic and self._grating_type_assigned != 2:
             raise NotImplementedError(
                 'mu is implemented on the 2D path only; this structure routed to a 1D solve. '
@@ -222,7 +276,8 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         else:
             result_dict = self.solve_2d(wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all,
                                         epxy_conv_all, epyx_conv_all, *z_row, mu=mu,
-                                        mu_top=mu_top, mu_bot=mu_bot)
+                                        mu_top=mu_top, mu_bot=mu_bot,
+                                        eps_top=eps_top, eps_bot=eps_bot)
 
         res_psi = ResultSubNumpy(**result_dict['res']) if 'res' in result_dict else None
         res_te_inc = ResultSubNumpy(**result_dict['res_te_inc']) if 'res_te_inc' in result_dict else None
@@ -273,7 +328,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         if self.incidence_side == 'bottom':
             # The backside solve leaves its state in the mirrored frame (z reversed); un-flip
             # once here so the returned cell is in SCENE coordinates for either side: index 0
-            # of the z axis is the top of `ucell[0]` regardless of where the light came from.
+            # of the z axis is the top of `structure[0]` regardless of where light came from.
             field_cell = np.flip(field_cell, axis=0 if self._grating_type_assigned == 0 else 1)
 
         return field_cell

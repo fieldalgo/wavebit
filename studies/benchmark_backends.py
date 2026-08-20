@@ -27,6 +27,12 @@ Two paths are swept, because they differentiate different things:
     raster     the permittivity grid is the design variable (inverse design). Swept across
                all three Fourier strategies, since they freeze different things.
 
+Every material below is a **relative permittivity**: ``structure`` (raster pixels, or a block
+layer's background and each object's own slot) and the ``top`` / ``bot`` half-spaces alike.
+The structures are written from refractive indices through ``wavebit.eps_from_index`` so the
+scenes stay the ones these timings were taken on -- the quantity changed with the keyword
+names, and a datasheet index left in a material slot is a legal, different medium.
+
 Run from the repo root::
 
     python studies/benchmark_backends.py                    # ~2 h, the full sweep
@@ -57,6 +63,19 @@ STRATEGIES = {
     'integrated': dict(fourier_coefficients='integrated', factorization='li'),
     'NVF': dict(fourier_coefficients='sampled', factorization='nvf'),
 }
+
+# The three media every structure below is built from, as **relative permittivity** -- named
+# by the refractive index they came from, because that is how they were written before the
+# flip and keeping the timings comparable means keeping the same scenes. `eps_from_index` is
+# `n**2` and nothing else; it is spelled out rather than inlined as a literal because the
+# rounding matters elsewhere in this repository and a tidy decimal is not the same number.
+EPS_HIGH = wavebit.eps_from_index(3.5)          # 12.25
+EPS_MID = wavebit.eps_from_index(2.0)           # 4.0
+EPS_LOW = wavebit.eps_from_index(1.0)           # 1.0
+
+#: TE, as a polarization angle. This was `pol=0`, which additionally declared a solver path;
+#: `psi` says only the angle, which is what these 2D scenes can use.
+TE_PSI = np.pi / 2
 
 
 # ------------------------------------------------------------------ timing helpers
@@ -94,13 +113,13 @@ def _probe_step():
     """One fixed, mid-sized solve. Not a result — a ruler for the machine itself."""
     import torch
     rng = np.random.default_rng(0)
-    pattern = np.where(rng.random((1, 64, 64)) < 0.35, 3.5, 1.0)
-    cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[5, 5], n_top=1.0, n_bot=1.0,
+    pattern = np.where(rng.random((1, 64, 64)) < 0.35, EPS_HIGH, EPS_LOW)
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[5, 5], top=1.0, bot=1.0,
                theta=0.15, phi=0.35, psi=0.3, wavelength=900.0)
 
     def step():
         t = torch.tensor(pattern, requires_grad=True)
-        out = wavebit.rcwa(backend=2, ucell=t, **STRATEGIES['sampled'], **cfg).conv_solve()
+        out = wavebit.rcwa(backend=2, structure=t, **STRATEGIES['sampled'], **cfg).conv_solve()
         out.res.T.real.sum().backward()
 
     return step
@@ -201,11 +220,12 @@ def jax_jit_grad(build, seed):
 def vector_builder(fto, split, layers):
     """A stack of ellipse layers whose ``lx`` is the design variable."""
     cfg = dict(period=[300.0, 300.0], thickness=[205.0] * layers, fto=[fto, fto],
-               n_top=1.0, n_bot=1.0, theta=0.15, phi=0.35, pol=0, wavelength=900.0)
+               top=1.0, bot=1.0, theta=0.15, phi=0.35, psi=TE_PSI, wavelength=900.0)
 
     def build(backend, lx):
-        ucell = [[3.5, [['ellipse', 150.0, 150.0, lx, 55.0, 2.0, 0.27, split, split]]]] * layers
-        return wavebit.rcwa(backend=backend, ucell=ucell, **cfg)
+        structure = [[EPS_HIGH,
+                      [['ellipse', 150.0, 150.0, lx, 55.0, EPS_MID, 0.27, split, split]]]] * layers
+        return wavebit.rcwa(backend=backend, structure=structure, **cfg)
 
     return build
 
@@ -213,12 +233,12 @@ def vector_builder(fto, split, layers):
 def raster_builder(n, fto, strategy, layers=1):
     """A binary raster stack whose permittivity grid *is* the design variable."""
     rng = np.random.default_rng(0)
-    pattern = np.where(rng.random((layers, n, n)) < 0.35, 3.5, 1.0)
+    pattern = np.where(rng.random((layers, n, n)) < 0.35, EPS_HIGH, EPS_LOW)
     cfg = dict(period=[300.0, 300.0], thickness=[205.0] * layers, fto=[fto, fto],
-               n_top=1.0, n_bot=1.0, theta=0.15, phi=0.35, psi=0.3, wavelength=900.0)
+               top=1.0, bot=1.0, theta=0.15, phi=0.35, psi=0.3, wavelength=900.0)
 
-    def build(backend, ucell):
-        return wavebit.rcwa(backend=backend, ucell=ucell, **STRATEGIES[strategy], **cfg)
+    def build(backend, structure):
+        return wavebit.rcwa(backend=backend, structure=structure, **STRATEGIES[strategy], **cfg)
 
     return build, pattern
 
@@ -294,17 +314,17 @@ def sweep_recompile(budget, reps):
     """How much a *content* change costs, against the steady step it interrupts."""
     import jax
     import jax.numpy as jnp
-    cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
-               theta=0.15, phi=0.35, pol=0, wavelength=900.0)
-    make = lambda lx: [[3.5, [['ellipse', 150.0, 150.0, lx, 55.0, 2.0, 0.27, 4, 4]]]]
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3], top=1.0, bot=1.0,
+               theta=0.15, phi=0.35, psi=TE_PSI, wavelength=900.0)
+    make = lambda lx: [[EPS_HIGH, [['ellipse', 150.0, 150.0, lx, 55.0, EPS_MID, 0.27, 4, 4]]]]
 
     def loss(v, geometry):
-        return jnp.sum(wavebit.rcwa(backend=1, ucell=make(v), **cfg)
+        return jnp.sum(wavebit.rcwa(backend=1, structure=make(v), **cfg)
                        .conv_solve(geometry=geometry).T).real
 
     g = jax.jit(jax.grad(loss), static_argnums=1)
-    freeze = lambda lx: wavebit.rcwa(backend=1, ucell=make(jnp.asarray(lx)),
-                                       **cfg).freeze_geometry()
+    freeze = lambda lx: wavebit.rcwa(backend=1, structure=make(jnp.asarray(lx)),
+                                     **cfg).freeze_geometry()
     jax.clear_caches()
     out = []
     for lx in [85.0, 90.0, 95.0, 100.0, 103.0, 106.0, 110.0, 115.0, 120.0, 125.0]:
@@ -324,20 +344,20 @@ def sweep_stale_window(budget):
     """
     import jax.numpy as jnp
     from wavebit import StaleGeometryError
-    cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3], n_top=1.0, n_bot=1.0,
-               theta=0.15, phi=0.35, pol=0, wavelength=900.0)
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3], top=1.0, bot=1.0,
+               theta=0.15, phi=0.35, psi=TE_PSI, wavelength=900.0)
 
     def accepts(make, value, frozen):
         try:
-            wavebit.rcwa(backend=1, ucell=make(jnp.asarray(value)),
-                           **cfg).conv_solve(geometry=frozen)
+            wavebit.rcwa(backend=1, structure=make(jnp.asarray(value)),
+                         **cfg).conv_solve(geometry=frozen)
             return True
         except StaleGeometryError:
             return False
 
     def window(make, nominal, lo_probe, hi_probe, tol=1e-4):
-        frozen = wavebit.rcwa(backend=1, ucell=make(jnp.asarray(nominal)),
-                                **cfg).freeze_geometry()
+        frozen = wavebit.rcwa(backend=1, structure=make(jnp.asarray(nominal)),
+                              **cfg).freeze_geometry()
 
         def edge(probe):
             if accepts(make, probe, frozen):
@@ -352,11 +372,14 @@ def sweep_stale_window(budget):
 
     cases = [
         ('ellipse', 'lx', 85.0, 5.0, 295.0, [3, 4, 6, 9, 12, 20],
-         lambda s: (lambda v: [[3.5, [['ellipse', 150., 150., v, 55., 2., 0.27, s, s]]]])),
+         lambda s: (lambda v: [[EPS_HIGH,
+                                [['ellipse', 150., 150., v, 55., EPS_MID, 0.27, s, s]]]])),
         ('rectangle', 'angle', 0.27, -1.5, 1.5, [1, 2, 4, 8, 12, 20],
-         lambda s: (lambda v: [[3.5, [['rectangle', 150., 150., 85., 55., 2., v, s, s]]]])),
+         lambda s: (lambda v: [[EPS_HIGH,
+                                [['rectangle', 150., 150., 85., 55., EPS_MID, v, s, s]]]])),
         ('rectangle', 'lx (angle=0)', 85.0, 5.0, 295.0, [1, 4, 12, 20],
-         lambda s: (lambda v: [[3.5, [['rectangle', 150., 150., v, 55., 2., 0.0, s, s]]]])),
+         lambda s: (lambda v: [[EPS_HIGH,
+                                [['rectangle', 150., 150., v, 55., EPS_MID, 0.0, s, s]]]])),
     ]
     out = []
     for shape, param, nominal, lo_probe, hi_probe, splits, make_for in cases:

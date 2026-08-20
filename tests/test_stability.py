@@ -21,18 +21,19 @@ import pytest
 import wavebit
 
 
-def _grating(n_hi=4.0, cells=8):
-    """Half air, half high index — the contrast is what populates the evanescent orders."""
+def _grating(eps_hi=16.0, cells=8):
+    """Half air, half high permittivity — the contrast populates the evanescent orders."""
     half = cells // 2
-    return np.array([[[1.0] * half + [n_hi] * half]])
+    return np.array([[[1.0] * half + [eps_hi] * half]])
 
 
-def _solve(*, fto, thickness, n_hi=4.0, algo='ETM', type_complex=np.complex128,
-           period=3000.0, wavelength=400.0, n_bot=1.5):
+# eps 16 is the index 4; eps 2.25 the index 1.5.
+def _solve(*, fto, thickness, eps_hi=16.0, algo='ETM', type_complex=np.complex128,
+           period=3000.0, wavelength=400.0, eps_bot=2.25):
     return wavebit.rcwa(
         backend=0, wavelength=wavelength, period=[period], fto=[fto, 0],
-        n_top=1.0, n_bot=n_bot, theta=0.0, phi=0.0, psi=np.pi / 2,
-        ucell=_grating(n_hi), thickness=[thickness],
+        top=1.0, bot=eps_bot, theta=0.0, phi=0.0, psi=np.pi / 2,
+        structure=_grating(eps_hi), thickness=[thickness],
         connecting_algo=algo, type_complex=type_complex,
     ).conv_solve()
 
@@ -77,7 +78,7 @@ def test_absorbing_metal_stays_physical_when_thick():
     """With loss, R + T < 1 — but it must stay in [0, 1] and not drift with thickness."""
     previous = 1.0
     for thickness in (200.0, 2_000.0, 20_000.0):
-        total = _energy(_solve(fto=30, thickness=thickness, n_hi=0.15 + 3.5j,
+        total = _energy(_solve(fto=30, thickness=thickness, eps_hi=-12.2275 + 1.05j,
                                period=2000.0, wavelength=500.0))
         assert 0.0 <= total <= 1.0 + 1e-9
         assert total <= previous + 1e-9, 'absorption cannot decrease with thickness'
@@ -115,8 +116,8 @@ def test_tmm_and_smm_fields_agree_through_a_thick_layer(thickness):
     for algo in ('ETM', 'SMM'):
         solver = wavebit.rcwa(
             backend=0, wavelength=400.0, period=[3000.0], fto=[40, 0],
-            n_top=1.0, n_bot=1.5, theta=0.0, phi=0.0, psi=np.pi / 2,
-            ucell=_grating(), thickness=[thickness], connecting_algo=algo,
+            top=1.0, bot=2.25, theta=0.0, phi=0.0, psi=np.pi / 2,
+            structure=_grating(), thickness=[thickness], connecting_algo=algo,
             answers='field')
         solver.conv_solve()
         cells.append(np.asarray(solver.calculate_field(res_x=8, res_y=1, res_z=6)))
@@ -127,9 +128,9 @@ def test_tmm_and_smm_fields_agree_through_a_thick_layer(thickness):
 
 
 def test_tmm_and_smm_agree_on_a_lossy_stack():
-    tmm = _solve(fto=30, thickness=5_000.0, n_hi=0.15 + 3.5j, period=2000.0,
+    tmm = _solve(fto=30, thickness=5_000.0, eps_hi=-12.2275 + 1.05j, period=2000.0,
                  wavelength=500.0, algo='ETM')
-    smm = _solve(fto=30, thickness=5_000.0, n_hi=0.15 + 3.5j, period=2000.0,
+    smm = _solve(fto=30, thickness=5_000.0, eps_hi=-12.2275 + 1.05j, period=2000.0,
                  wavelength=500.0, algo='SMM')
     assert np.allclose(tmm.R, smm.R, rtol=1e-8, atol=1e-11)
     assert np.allclose(tmm.T, smm.T, rtol=1e-8, atol=1e-11)

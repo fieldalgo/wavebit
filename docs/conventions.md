@@ -14,8 +14,8 @@ the diff looks like.
 | | convention |
 | --- | --- |
 | time factor | `e^{-iωt}` — a physical field is `Re[E(r) e^{-iωt}]` |
-| loss | `Im(n) > 0`, `Im(eps) > 0` — indices as databases tabulate them (`n + 1j*k`) |
-| gain | `Im(n) < 0`; a solve may then legitimately return `R + T > 1` (the `UnphysicalResultWarning` is a false positive there — filter it) |
+| loss | `Im(eps) > 0`, equivalently `Im(n) > 0` — the sign indices are tabulated with (`n + 1j*k`) |
+| gain | `Im(eps) < 0`; a solve may then legitimately return `R + T > 1` (the `UnphysicalResultWarning` is a false positive there — filter it) |
 
 Same statement as fmmax's; RETICOLO's efficiencies and amplitudes agree with this
 convention with no conversion (pinned to 4e-14 by the RETICOLO goldens). All complex
@@ -23,25 +23,111 @@ amplitudes this library returns are in this convention; results quoted from an
 `e^{+jωt}` source (older papers, meent-era scripts writing `n - jk`) are the complex
 conjugates of ours.
 
+## Materials — what a material number is
+
+**Every material value a script writes is a relative permittivity**, and every permeability
+beside it is relative too. Complex is normal: `Im(eps) > 0` is loss, as in the table above.
+
+This is the one entry on this page whose *value* changed and not merely its name (2026-08-20).
+Every material slot took a refractive index before, and the number a script wrote for one is
+still a legal value for the other — which is why the old spellings are refused at the keyword
+rather than accepted. See "the retired spellings" below.
+
+`Material` is the type that carries one:
+
+```python
+wavebit.Material(epsilon, mu=1.0)
+```
+
+Frozen, and a registered JAX pytree whose children are `(epsilon, mu)` — a material is a
+legitimate design variable, so it holds tracers and carries gradients rather than being an
+opaque leaf. **A bare number is the shorthand for `Material(epsilon=x)`** anywhere a material
+is accepted; non-magnetic is the overwhelming default and costs nothing to write.
+
+The scene is stated with four keywords:
+
+| keyword | what it holds |
+| --- | --- |
+| `structure` | the layer stack, layer-major on its first axis — one of the three encodings below |
+| `top`, `bot` | the two half-space materials: a `Material`, or a bare relative permittivity |
+| `mu` | the **raster path only**: the permeability field, `(n_layers, Ny, Nx)`, beside `structure`. Named on a shape path it is refused, not ignored — there a permeability belongs to the `Material` filling the region |
+| `thickness` | per-layer thicknesses, in the shared length unit |
+
+The *type* of `structure` selects the modeling path; there is no separate mode switch:
+
+| encoding | `structure` |
+| --- | --- |
+| raster | ndarray `(n_layers, Ny, Nx)` of **relative permittivity** — one sample per pixel |
+| block | `[[background, [['rectangle', cx, cy, lx, ly, material, angle], ...]], ...]` — a `Material` in slot 0 and in positional slot 5 |
+| analytic | `[dict(background=..., shapes=[dict(type=..., cx=..., cy=..., lx=..., ly=..., angle=..., material=...)], combine=...), ...]` |
+
+Three of those four ways of saying what fills a region — the block background, the block
+object's own slot, the analytic shape's `material` — are **assignments**: a name for the stuff
+in a region, and a medium has both a permittivity and a permeability, which is why one type
+carries the pair. The raster is the fourth and is not an assignment at all but a **sampled
+field**, one number per pixel, which is exactly why topology optimisation reaches for it. A
+field has one quantity in it, so the raster's permeability is a second array (`mu=`) rather
+than a second slot on an object.
+
+### The retired spellings, and why they are refused by name
+
+| retired | now | what it names |
+| --- | --- | --- |
+| `ucell` | `structure` | the layer stack |
+| `n_top` / `n_bot` | `top` / `bot` | the two half-space materials |
+| `n_base` / `base` (analytic layer keys) | `background` | a layer's background material |
+| `n_index` (analytic shape key) | `material` | a shape's material |
+| `ucell_materials` | — | deleted; it was assigned by every backend and read by nothing |
+
+Every one of these raises, naming its replacement **and** saying that the quantity changed
+with it. That second half is the point. A user who renames the keyword and keeps the number
+has not made a mistake anything downstream can see: `3.5` is a perfectly good permittivity, so
+the solve runs, conserves energy, and answers a different question — the README quickstart with
+every material literal left at the index it used to be sums `R` to 0.1753 where the migrated
+scene gives 0.2053, with no warning. The two are close on purpose, as an argument: a migration
+that broke loudly would announce itself, where a shift the size of a truncation wobble gets
+believed. Silence is not available here, so the refusal is.
+
+Two conversions are exported for callers holding the other quantity:
+
+| function | value |
+| --- | --- |
+| `wavebit.eps_from_index(n)` | `n**2`. Unambiguous, and deliberately more to type than `3.5` was: an index silently reread as a permittivity is a legal wrong answer, so the conversion is worth seeing at the call site |
+| `wavebit.index_from_eps(eps)` | the **principal** root, always complex. A passive medium has `Im(eps) >= 0`, which is the closed upper half plane, whose principal root has `Im(n) >= 0` — loss again. The hazard is the negative side of zero: `-2 + 0j` gives `+1.414j` (decaying, right) and `-2 - 0j` gives `-1.414j` (gain), and a lossless value that has been through arithmetic can come out as `4 - 1e-18j`. Neither is repaired, because nothing can tell round-off from a deliberately active medium; keep `Im(eps)` non-negative yourself before taking a root |
+
+For a magnetic medium the index is `index_from_eps(eps*mu)`, written out rather than hidden in
+a keyword, because that is where a forgotten `mu` would otherwise hide.
+
+### Where the refractive index is still the quantity
+
+The flip is about what a *material slot* holds; it does not rename the physics. The index
+remains the right quantity in Snell's law, in the incident wavevector (`kx_m` below), and in
+the half-space relation `n = sqrt(eps*mu)` itself.
+
+Concretely, `n_top` and `n_bot` still exist and still mean the refractive index — as
+**derived, read-only** properties. Assigning `top` stores the material and refreshes
+`n_top = sqrt(eps*mu)`; assigning `n_top` raises. Two spellings of one medium that could
+disagree is exactly the state the type exists to remove.
+
 ## Geometry and propagation
 
-Layers are listed **top to bottom**, and `+z` points down, into the stack: `ucell[0]` is
-the layer light meets first, `n_top` the medium it arrives from, `n_bot` the medium it
+Layers are listed **top to bottom**, and `+z` points down, into the stack: `structure[0]` is
+the layer light meets first, `top` the medium it arrives from, `bot` the medium it
 exits into. A wave travelling `+z` carries `exp(+i*k0*kz*z)` with `Re(kz) > 0`; decay
 toward `+z` is `Im(kz) > 0`.
 
 "Top/bottom" name the *scene*, not the illumination. `incidence_side` (`'top'` by
 default, `'bottom'` for back-side illumination) selects which medium the light arrives
-from; nothing on this page renames or reorders when it changes — `ucell[0]` is the top
+from; nothing on this page renames or reorders when it changes — `structure[0]` is the top
 layer whichever way the light travels. Results are **incidence-relative** (the port
 model): `R` is power back into the incidence medium, `T` power through the far side,
-`theta`/`phi` are measured against the incidence medium's normal (`n_bot`'s, for
+`theta`/`phi` are measured against the incidence medium's normal (`bot`'s, for
 `'bottom'`), and the amplitudes keep the Fresnel contract below — so user
 post-processing is identical for both sides.
 
-Within a layer the array follows the image convention: row `0` of `ucell` is `y = 0`, for
-every builder and for the reconstructed field cell alike. The flip that renders a field
-the conventional way up belongs to plotting (`field_plot`), not to the data.
+Within a layer the array follows the image convention: row `0` of a raster `structure` is
+`y = 0`, for every builder and for the reconstructed field cell alike. The flip that renders a
+field the conventional way up belongs to plotting (`field_plot`), not to the data.
 
 **The reconstructed field's vector components use that same `+z`.** `calculate_field` returns
 `(Ex, Ey, Ez, Hx, Hy, Hz)` (or the 3-component 1D layouts) in the frame declared above, so
@@ -182,7 +268,10 @@ the complex conjugate of ours, and its handedness labels flip with it.
 ## Diffraction orders
 
 The retained orders are `m = -fto_x..fto_x`, `n = -fto_y..fto_y`, with in-plane
-wavevectors `kx_m = n_top·sinθ·cosφ + m·λ/Λx` (and correspondingly `ky_n`). Per-order
+wavevectors `kx_m = n_top·sinθ·cosφ + m·λ/Λx` (and correspondingly `ky_n`). This is one of
+the places the **index** is genuinely the quantity: it is `n_top`, the derived
+`sqrt(eps*mu)` of the `top` material, and it is `n_bot`'s under
+`incidence_side='bottom'` — `theta` lives in the incidence medium. Per-order
 arrays have shape `(ff_y, ff_x)` — **`y` first, the transpose of the `fto=[x, y]` input
 order** — with the incident order at the centre `[fto_y, fto_x]` and `m` increasing along
 the last axis.
@@ -244,6 +333,8 @@ Amplitude fine print, stated once so it never has to be discovered:
 | rows | tests |
 | --- | --- |
 | time/loss, amplitudes | `tests/test_lossy_media.py` (Airy oracle, absorbing media both sides) |
+| **which quantity a material number is** | `tests/test_material_convention_anchor.py` — every expected value there comes from a closed-form Fresnel/Airy recursion written in `eps` and `kz`, so it cannot be co-migrated into agreement with a flip. One function in it, `_api_material`, knows the convention; nothing else in the file may move when the convention does. The rest of the suite cannot pin this row at all: a golden regenerated by a script that imports wavebit agrees with whatever the package now believes, and reading `3.5` as the other quantity conserves energy exactly |
+| the `Material` type: the scalar shorthand, both values as pytree children (so a permittivity differentiates), and the two conversions including `index_from_eps`'s branch and its signed-zero hazard | `tests/test_material.py` |
 | which rows exist at all, per `answers` rung | `tests/test_answers_declaration.py` — each rung's surface, the rungs agreeing bit-for-bit on what they share, and the refusal naming the declaration |
 | the per-order s/p frame the amplitudes are quoted in | `tests/test_amplitude_sp_frame.py` — a transposed twin, the reconstructed field as arbiter, and continuity across `kx = 0`. Efficiencies cannot pin this row at all: a reversed frame is `\|r\|^2`-invariant |
 | order layout, order-index sign | `tests/references/test_reticolo_golden.py` (mirrors orders if wrong, conserving energy) |

@@ -39,8 +39,14 @@ from ._core.conventions import branch_tolerance
 from ._core.draw import structure_plot, structure_slice
 from ._core.enums import (Answers, Backend, Pol, FourierCoefficients, Factorization,
                           Formulation, NormalMethod)
-from ._core.domain import Layer, Stack, Incidence
+from ._core.domain import (Layer, Stack, Incidence, Material,
+                           eps_from_index, index_from_eps)
 from ._core.geometry import StaticGeometry, StaleGeometryError
+# The nk front door. Exported here rather than left importable from `_core.modeler` because
+# the bundled `nk_data` ships in the wheel and these two are its only readers -- data with no
+# public reader is the same dead end as a keyword with no reader. They hand back an *index*,
+# so `eps_from_index` above is the step between them and a Material.
+from ._core.modeler import find_nk_index, read_material_table
 from ._core.spec import JobSpec, Numerics, Sweep, SpecError, run
 
 __version__ = "0.1.0"

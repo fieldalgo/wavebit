@@ -26,6 +26,10 @@ import numpy as np
 import pytest
 
 import wavebit
+from wavebit import eps_from_index
+
+# Stacks are lists of refractive INDEX here, because the Airy oracle imported from
+# ``test_lossy_media`` is written that way; the conversion happens where wavebit is called.
 
 WL = 500.0
 AU = 0.18 + 3.0j                      # gold at 500nm
@@ -44,15 +48,17 @@ def _airy_R(ns, ds, theta, tetm):
 def _solver(ns, ds, *, tetm='te', theta=0.2, path='1d', fto=0, answers='amplitude'):
     """A uniform stack on the requested solve path (see test_lossy_media.solver_r)."""
     layers = ns[1:-1]
-    common = dict(backend=0, n_top=ns[0], n_bot=ns[-1], theta=theta, wavelength=WL,
-                  thickness=ds, answers=answers)
+    common = dict(backend=0, top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
+                  theta=theta, wavelength=WL, thickness=ds, answers=answers)
     if path == '1d':
         return wavebit.rcwa(tetm=tetm, fto=fto, period=[WL * 2],
-                              ucell=np.array([[[n, n]] for n in layers]), **common)
+                              structure=eps_from_index(
+                                  np.array([[[n, n]] for n in layers])), **common)
     cell = ([[[n, n]] for n in layers] if path == 'conical'
             else [[[n, n], [n, n]] for n in layers])
     return wavebit.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0), fto=[fto, fto],
-                          period=[WL * 2, WL * 2], ucell=np.array(cell), **common)
+                          period=[WL * 2, WL * 2],
+                          structure=eps_from_index(np.array(cell)), **common)
 
 
 def _R(solver):

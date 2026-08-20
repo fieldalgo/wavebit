@@ -1,8 +1,11 @@
 """Centralized sign / branch-cut conventions.
 
 Wavebit works in the ``e^{-iωt}`` time convention throughout — inputs, internals and
-returned amplitudes alike. ``Im(n) > 0`` is loss, which is what refractive-index databases
-tabulate (``n + 1j*k``), and a wave travelling in ``+z`` carries ``exp(+i*k0*kz*z)``.
+returned amplitudes alike. ``Im(eps) > 0`` is loss — equivalently ``Im(n) > 0``, which is what
+refractive-index databases tabulate (``n + 1j*k``) — and a wave travelling in ``+z`` carries
+``exp(+i*k0*kz*z)``. The quantity a *user* writes is the permittivity
+(:class:`~wavebit._core.domain.Material`); the sign convention is the same one either way,
+since the principal root maps the upper half plane into the first quadrant.
 
 There is no second convention hiding underneath. Until 2026-08 there was: ``kx`` and the
 permittivity were conjugated on the way in, the algebra ran on the conjugated problem, and the

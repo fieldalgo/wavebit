@@ -26,16 +26,16 @@ N = 48
 _x = (np.arange(N) + 0.5) / N - 0.5
 _X, _Y = np.meshgrid(_x, _x)
 ROD = np.ones((1, N, N))
-ROD[0, _X ** 2 + _Y ** 2 <= 0.3 ** 2] = 2.5
+ROD[0, _X ** 2 + _Y ** 2 <= 0.3 ** 2] = 6.25       # permittivity: 2.5**2
 
-CFG_2D = dict(backend=0, ucell=ROD, n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+CFG_2D = dict(backend=0, structure=ROD, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
               fto=[3, 3], period=[1.0, 1.0], wavelength=1.1, thickness=[0.3])
 
 # A 1D grating: no interface along y, so every normal points along x. A *constant* normal
 # collapses the NVF projector onto Li's rules exactly (C_xx = I, C_xy = C_yy = 0).
-CFG_1D = dict(backend=0, ucell=np.array([[[3., 3., 1., 1., 3., 1., 1., 1.]]]), tetm='tm',
+CFG_1D = dict(backend=0, structure=np.array([[[9., 9., 1., 1., 9., 1., 1., 1.]]]), tetm='tm',
               period=[0.77], thickness=[0.2], theta=0.25, wavelength=0.777,
-              n_top=1.0, n_bot=1.5, fto=[10, 0])
+              top=1.0, bot=2.25, fto=[10, 0])
 
 
 def _totals(cfg, **strategy):
@@ -156,7 +156,7 @@ def test_integrated_nvf_runs_on_every_backend(name):
     strategy = dict(fourier_coefficients='integrated', factorization='nvf')
 
     ref = _totals(CFG_2D, **strategy)
-    got = _totals(dict(CFG_2D, backend=backend, ucell=_cast(name, ROD)), **strategy)
+    got = _totals(dict(CFG_2D, backend=backend, structure=_cast(name, ROD)), **strategy)
     assert got == pytest.approx(ref, abs=1e-10)
 
 

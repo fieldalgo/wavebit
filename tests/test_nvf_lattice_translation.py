@@ -41,7 +41,7 @@ import pytest
 import wavebit
 from wavebit._core.factorization import normal_vector_field
 
-SOLVE_KW = dict(backend=0, n_top=1.0, n_bot=1.0, thickness=[120.0], wavelength=250.0,
+SOLVE_KW = dict(backend=0, top=1.0, bot=1.0, thickness=[120.0], wavelength=250.0,
                 theta=np.deg2rad(25.0), phi=np.pi / 2, psi=0.7, period=[500.0, 800.0])
 
 #: Sign is free -- the factorization consumes ``n n^T`` only -- so covariance is compared on the
@@ -159,16 +159,16 @@ def test_the_solve_is_covariant_on_a_multi_phase_raster(shift, axis):
     defect's location originally -- ``'contour'`` and ``'spectral'`` looked equally broken while
     neither was being exercised.
     """
-    ucell = np.ones((1, 16, 16))
-    ucell[0, 2:7, 3:12] = 3.48
-    ucell[0, 6:13, 9:13] = 2.10
-    ucell[0, 11:14, 2:6] = 1.60
+    structure = np.ones((1, 16, 16))
+    structure[0, 2:7, 3:12] = 3.48
+    structure[0, 6:13, 9:13] = 2.10
+    structure[0, 11:14, 2:6] = 1.60
 
     def efficiencies(uc):
-        solver = wavebit.rcwa(ucell=uc, fto=[5, 3], factorization='nvf', **SOLVE_KW)
+        solver = wavebit.rcwa(structure=uc, fto=[5, 3], factorization='nvf', **SOLVE_KW)
         return np.asarray(solver.conv_solve().res.R, dtype=complex)
 
-    moved = np.abs(efficiencies(ucell) - efficiencies(np.roll(ucell, shift, axis=axis))).max()
+    moved = np.abs(efficiencies(structure) - efficiencies(np.roll(structure, shift, axis=axis))).max()
     assert moved < 1e-12, f'R moved by {moved:.2e} under an exact lattice translation'
 
 
@@ -181,15 +181,15 @@ def test_the_defect_did_not_converge_with_fto_which_is_why_it_was_a_defect():
     factor, and the lift is a block repeat, so a genuinely non-periodic field stays non-periodic
     however fine the grid is.
     """
-    ucell = np.ones((1, 16, 16))
-    ucell[0, 2:7, 3:12] = 3.48
-    ucell[0, 6:13, 9:13] = 2.10
+    structure = np.ones((1, 16, 16))
+    structure[0, 2:7, 3:12] = 3.48
+    structure[0, 6:13, 9:13] = 2.10
 
-    rolled = np.roll(ucell, 7, axis=2)
+    rolled = np.roll(structure, 7, axis=2)
     for fto in ([3, 2], [5, 3], [8, 5]):
         def efficiencies(uc):
-            solver = wavebit.rcwa(ucell=uc, fto=fto, factorization='nvf', **SOLVE_KW)
+            solver = wavebit.rcwa(structure=uc, fto=fto, factorization='nvf', **SOLVE_KW)
             return np.asarray(solver.conv_solve().res.R, dtype=complex)
 
-        moved = np.abs(efficiencies(ucell) - efficiencies(rolled)).max()
+        moved = np.abs(efficiencies(structure) - efficiencies(rolled)).max()
         assert moved < 1e-12, f'fto={fto}: R moved by {moved:.2e}'

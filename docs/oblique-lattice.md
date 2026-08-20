@@ -23,7 +23,7 @@ a = 400.0
 a1, a2 = np.array([a, 0.0]), np.array([a / 2, a * np.sqrt(3) / 2])   # hex
 
 solver = wavebit.rcwa(
-    backend=0, ucell=cell, fto=[10, 10], thickness=[300.0], wavelength=900.0,
+    backend=0, structure=cell, fto=[10, 10], thickness=[300.0], wavelength=900.0,
     factorization='nvf',                       # required — see "What is refused"
     lattice=np.column_stack((a1, a2)),         # columns are a1, a2
 )
@@ -34,7 +34,7 @@ report the basis-vector lengths `(|a1|, |a2|)`.
 
 ## The one thing that will bite you
 
-**The raster is read in lattice coordinates.** `ucell[layer][j, i]` is the permittivity at
+**The raster is read in lattice coordinates.** `structure[layer][j, i]` is the permittivity at
 
     r = (i + 0.5)/Nx * a1  +  (j + 0.5)/Ny * a2
 

@@ -9,7 +9,7 @@ Targets:
 - `wavebit/_core/solve_2d.py::layer_modes_2d` — the `epxy` / `epyx` off-diagonal slots the
   NVF form fills
 - `wavebit/_core/engine.py::_conv_matrices` — the modeling-type-2 dispatch, selected by the
-  `ucell` setter in `wavebit/on_*/emsolver/rcwa.py`
+  `structure` setter in `wavebit/on_*/emsolver/rcwa.py`
 
 ---
 
@@ -71,12 +71,15 @@ midpoint DFT (`tests/test_analytic.py`).
 A layer's coefficients are assembled as background + sum of (non-overlapping) shapes:
 
 ```
-eps_c(k)     = eps_bg·δ_k0 + Σ_s (conj(n_s)² − conj(n_bg)²)·Ŝ_s(k)/(Px Py)
-inv_eps_c(k) = (1/eps_bg)·δ_k0 + Σ_s (1/conj(n_s)² − 1/conj(n_bg)²)·Ŝ_s(k)/(Px Py)
+eps_c(k)     = eps_bg·δ_k0 + Σ_s (eps_s − eps_bg)·Ŝ_s(k)/(Px Py)
+inv_eps_c(k) = (1/eps_bg)·δ_k0 + Σ_s (1/eps_s − 1/eps_bg)·Ŝ_s(k)/(Px Py)
 ```
 
-`conj(n)²` matches wavebit's `e^{-iωt}` convention (Im n>0 = loss), i.e. the same as
-`to_conv_mat_raster_nvf`. `conv_matrix_2d` builds the block-Toeplitz matrices `⟦ε⟧`,
+`eps_s` and `eps_bg` are read straight off the layer's materials — **the squaring that used to
+stand in those two expressions is gone**, which is one of the sites the flip to permittivity is
+made of, and there is no conjugation on the way in either: wavebit is `e^{-iωt}` throughout,
+so `Im(eps) > 0` is loss as written. Same reading as `to_conv_mat_raster_nvf`.
+`conv_matrix_2d` builds the block-Toeplitz matrices `⟦ε⟧`,
 `⟦1/ε⟧` from this `(4fto+1)²` coefficient grid in the same ordering as the `dfs2d_*` builders.
 
 ## 2. Coupling with the NVF factorization
@@ -107,9 +110,10 @@ phase `⟦ε⟧` already carries. Every one of the five matrices is then `D X D�
 
 **The centring also makes the field reusable, which is where the wall clock goes.** Sampling and
 transforming it is the expensive half of this build — 83% of a five-point sweep at
-`normal_grid = 1024, fto = 4` for one shape and 93% for six — and none of it reads a refractive
-index. So `normal_projector_coeffs` keys the sampled coefficients on the geometry it was actually
-built from and reuses them: a **material** sweep hits because the key holds no index, and a
+`normal_grid = 1024, fto = 4` for one shape and 93% for six — and none of it reads a material.
+The normal field is a property of where the boundaries are, not of what sits either side of
+them. So `normal_projector_coeffs` keys the sampled coefficients on the geometry it was actually
+built from and reuses them: a **material** sweep hits because the key holds no permittivity, and a
 single-shape **position** sweep hits because the build sits at the centre of the cell whatever
 `(cx, cy)` are. Measured 1.6× to 3.8× on five-point sweeps, largest where `normal_grid` is fine
 and `fto` modest; where there is nothing to win (`normal_grid = 256`, `fto = 8`) it is 1.0×.
@@ -146,23 +150,33 @@ energy-conservation violation on curved boundaries — is written out in the
 
 ## 3. Usage (new modeling type)
 
-Passing `ucell` as a **list of layer dicts** dispatches to the smooth path (modeling type
+Passing `structure` as a **list of layer dicts** dispatches to the smooth path (modeling type
 2, grating type 2). The existing raster (ndarray) and block (nested list) paths keep
 working.
 
 ```python
-ucell = [dict(n_base=1.0, shapes=[
-             dict(type='circle', cx=0.5, cy=0.5, lx=0.6, n_index=3.5)]),
-         dict(n_base=1.5, shapes=[
-             dict(type='rectangle', cx=0.4, cy=0.5, lx=0.4, ly=0.5,
-                  angle=np.deg2rad(25), n_index=1.0),
-             dict(type='ellipse', cx=0.8, cy=0.9, lx=0.3, ly=0.2,
-                  angle=0.6, n_index=3.0)])]
-solver = wavebit.rcwa(backend=0, ucell=ucell, fto=(11, 11), ...)  # normal_grid=256 (default)
+structure = [dict(background=1.0, shapes=[
+                 dict(type='circle', cx=0.5, cy=0.5, lx=0.6, material=12.25)]),
+             dict(background=2.25, shapes=[
+                 dict(type='rectangle', cx=0.4, cy=0.5, lx=0.4, ly=0.5,
+                      angle=np.deg2rad(25), material=1.0),
+                 dict(type='ellipse', cx=0.8, cy=0.9, lx=0.3, ly=0.2,
+                      angle=0.6, material=9.0)])]
+solver = wavebit.rcwa(backend=0, structure=structure, fto=(11, 11), ...)  # normal_grid=256 (default)
 res = solver.conv_solve()
 ```
 
-`lx/ly/angle/cx/cy/n_index` may be tensors (torch/jax) and are differentiable w.r.t. them.
+Both material slots are **relative permittivity** — `12.25` is the `n = 3.5` this example used
+to spell, `2.25` the `n = 1.5` background, `9.0` the `n = 3` ellipse. A bare number is the
+shorthand for `wavebit.Material(epsilon=x)`; write the object out to give a region a
+permeability as well (`material=wavebit.Material(12.25, mu=2.0)`), and
+`wavebit.eps_from_index(3.5)` if what you hold is a datasheet index. The retired keys
+`n_base` and `n_index` are refused by name, because renaming them and keeping the number
+builds a different structure that solves and conserves energy — see
+[`conventions.md`](conventions.md).
+
+`lx/ly/angle/cx/cy/material` may be tensors (torch/jax) and are differentiable w.r.t. them;
+`Material` is a registered JAX pytree for exactly that reason.
 
 ## 4. Results (`studies/benchmark_analytic.py`)
 
@@ -281,7 +295,8 @@ keep passing.
   `_core.analytic.conv_matrix_2d` turns either into a block-Toeplitz matrix. That first builder
   takes a *shape list*, not a layer, and implements `combine='add'` only — hand it the shapes of
   an overlapping `combine='paint'` layer and it silently returns the summed structure instead
-  (`<eps>` 1.99 against the 1.90 the solver integrates, for two 300x300 rods of index 2 and 3).
+  (`<eps>` 1.99 against the 1.90 the solver integrates, for two 300x300 rods of permittivity
+  4 and 9).
   Pass the layer's `combine=` to have that refused rather than answered; the painted layer's
   own coefficients come from `_core.boundary` (see [boundary-modeling.md](boundary-modeling.md)).
 

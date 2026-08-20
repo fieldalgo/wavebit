@@ -43,7 +43,8 @@ import time
 
 import numpy as np
 
-from wavebit._core.conventions import boundary_kz
+from wavebit import eps_from_index
+from wavebit._core.conventions import boundary_kz, order_azimuth
 from wavebit._core.factorization import (_nvf_assemble, fourier2d_piecewise_constant,
                                            fourier2d_pointwise, normal_vector_field,
                                            to_conv_mat_raster_nvf)
@@ -78,11 +79,27 @@ def circular_select(mm, nn, period, radius):
 
 # ------------------------------------------------------- convolution matrices
 
+def _half_pixel_phase(k, n):
+    """Cell-centre offset alone, matching ``factorization._half_pixel_phase``.
+
+    *Both* kinds of grid carry this. Index ``j`` names the pixel spanning ``[j/n, (j+1)/n)``
+    and the value attached to it sits at the centre ``(j+0.5)/n``, while a bare DFT places
+    sample ``j`` at the left edge; the difference is ``exp(-i*pi*k/n)`` whether or not the
+    value is held across the pixel.  Only a staircase additionally carries the ``sinc``.
+
+    This script omitted it on the pointwise branch, which is the one the normal field goes
+    through -- so the field sat half a pixel off the permittivity it multiplies.  The
+    production path was fixed in 2026-08 and this copy was not, which is what the first
+    selftest below now catches.
+    """
+    return np.exp(-1j * np.pi * k / n)
+
+
 def _pixel_correction(k, n):
-    """Exact-for-constant-pixels factor, matching factorization._pixel_correction."""
+    """Exact-for-constant-pixels factor, matching ``factorization._pixel_correction``."""
     t = k / n
 
-    return np.sinc(t) * np.exp(-1j * np.pi * t)
+    return np.sinc(t) * _half_pixel_phase(k, n)
 
 
 def toeplitz_conv(f, mm, nn, piecewise_constant):
@@ -100,6 +117,8 @@ def toeplitz_conv(f, mm, nn, piecewise_constant):
 
     if piecewise_constant:
         E = E * _pixel_correction(dn, ny) * _pixel_correction(dm, nx)
+    else:
+        E = E * _half_pixel_phase(dn, ny) * _half_pixel_phase(dm, nx)
 
     return E
 
@@ -142,6 +161,16 @@ def conv_mats(eps, normal_field, mm, nn, keep, fto_box, mode):
 
 # ------------------------------------------------------------------- solver
 
+def amplitude_pair(psi):
+    """The incident ``(a_s, a_p)`` at unit flux for a linear polarization angle ``psi``.
+
+    Both ``final_matching`` and ``solve_2d`` take the resolved pair, not the angle -- the
+    engine resolves it, and this script calls them underneath the engine.  ``psi = v`` is
+    ``(sin v, cos v)``, so ``psi = 0`` is TM and ``pi/2`` is TE.
+    """
+    return (np.sin(psi), np.cos(psi))
+
+
 def solve_flat(mm, nn, epx, epy, epz_i, epxy, epyx, wavelength, period, thickness,
                n_top, n_bot, theta, phi, psi):
     """2D RCWA (TMM) for an arbitrary flat set of Fourier orders.
@@ -149,6 +178,13 @@ def solve_flat(mm, nn, epx, epy, epz_i, epxy, epyx, wavelength, period, thicknes
     Same chain as ``_core.solve_2d.solve_2d`` -- and reusing its ``layer_modes_2d`` /
     ``sp_modes_2d`` / ``final_matching`` verbatim -- with the (ff_y, ff_x) tensor-product
     layout replaced by an explicit order list so non-rectangular sets work.  Single layer.
+
+    ``n_top`` / ``n_bot`` are refractive indices, and stay so: this reimplements the solver
+    *core*, which is the half of the codebase the permittivity flip deliberately did not
+    touch.  ``top`` / ``bot`` take a material at the public front door and the setter derives
+    the index once; below that line every reader still wants ``n``, because at ~16 of the
+    sites the quantity genuinely is an amplitude ratio.  The one conversion this file does
+    make is the raster's, in :func:`make_cell`.
     """
     xp = np
     ff_xy = len(mm)
@@ -162,7 +198,11 @@ def solve_flat(mm, nn, epx, epy, epz_i, epxy, epyx, wavelength, period, thicknes
     k_par_sq = kx ** 2 + ky ** 2
     kz_top = boundary_kz(xp, n_top ** 2, k_par_sq)
     kz_bot = boundary_kz(xp, n_bot ** 2, k_par_sq)
-    varphi = np.atan(ky / kx)
+    # `order_azimuth` rather than a bare `atan(ky/kx)`: a ratio has already discarded
+    # `sign(kx)`, so the frame of every `Re(kx) < 0` order is reversed.  That cancels out of R
+    # and T -- it is a diagonal +-1 similarity -- but it is NaN at `kx == 0`, and this script
+    # exists to compare order sets that differ in exactly which orders they contain.
+    varphi = order_azimuth(xp, ky, kx, phi)
 
     I = np.astype(np.eye(ff_xy), C128)
     O = np.astype(np.zeros((ff_xy, ff_xy)), C128)
@@ -197,16 +237,26 @@ def solve_flat(mm, nn, epx, epy, epz_i, epxy, epyx, wavelength, period, thicknes
 
     # ff_x = ff_xy, ff_y = 1: the flat set *is* the layout. The incident delta lands at
     # ff_xy // 2, which is the zero order for both shapes (see circular_select).
-    R, T = final_matching(xp, C128, big_F, big_G, big_T, kz_top, kz_bot, psi, theta,
-                                 n_top, n_bot, ff_xy, 1, answers='efficiency')
+    R, T = final_matching(xp, C128, big_F, big_G, big_T, kz_top, kz_bot,
+                          amplitude_pair(psi), theta,
+                          n_top, n_bot, ff_xy, 1, answers='efficiency')
 
     return R.flatten(), T.flatten(), kz_top, kz_bot
 
 
 # ---------------------------------------------------------------- structures
 
-def make_cell(kind, ngrid=512, n_ridge=3.48, n_base=1.0, fill=0.4, rotation=0.):
-    """Square-lattice pillar with a fixed fill factor, as a refractive index raster."""
+def make_cell(kind, ngrid=512, n_ridge=3.48, n_bg=1.0, fill=0.4, rotation=0.):
+    """Square-lattice pillar with a fixed fill factor, as a **permittivity** raster.
+
+    The two materials are named by refractive index because that is how the structures are
+    labelled in the tables below and in the write-up, and :func:`wavebit.eps_from_index` is
+    the conversion.  Written out rather than folded into the literals so the quantity is
+    visible at the point the datasheet number arrives: a raster is what
+    ``to_conv_mat_raster_nvf`` and ``normal_vector_field`` take, and both read permittivity
+    now -- the ``n ** 2`` that used to sit inside them is gone, so an index left here is a
+    legal, energy-conserving, different pillar.
+    """
     t = (np.arange(ngrid) + 0.5) / ngrid
     yy, xx = np.meshgrid(t, t, indexing='ij')
 
@@ -224,11 +274,14 @@ def make_cell(kind, ngrid=512, n_ridge=3.48, n_base=1.0, fill=0.4, rotation=0.):
     else:
         raise ValueError(kind)
 
-    return np.where(mask, n_ridge, n_base)
+    return np.where(mask, eps_from_index(n_ridge), eps_from_index(n_bg))
 
 
 # ------------------------------------------------------------------ driver
 
+# `n_top` / `n_bot` are refractive indices: they are the arguments of the solver-core entry
+# points this script calls directly (`solve_flat` below, and `_core.solve_2d.solve_2d`), which
+# the permittivity flip left alone.  The *materials* -- the raster -- are permittivity.
 CASE = dict(
     wavelength=900.,
     period=(1200., 1200.),
@@ -294,8 +347,7 @@ def equivalent_rect_N(rect_rows, err):
 
 def selftest():
     """Pin the G-difference build and the flat solver against the production code."""
-    cell = make_cell('circle', ngrid=64)
-    eps = cell.astype(C128) ** 2
+    eps = make_cell('circle', ngrid=64).astype(C128)
     fto = 3
     mm, nn = order_grid(fto, fto)
 
@@ -308,9 +360,9 @@ def selftest():
         assert err < 1e-12, err
 
     # flat solver vs the production NVF path, on a rectangular set
-    ucell = cell[None, :, :]
-    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_nvf(ucell, fto, fto)
-    de_ri_ref, de_ti_ref = _core_solve_2d(ucell, fto, epx, epy, epz_i, epxy, epyx)
+    structure = eps[None, :, :]
+    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_nvf(structure, fto, fto)
+    de_ri_ref, de_ti_ref = _core_solve_2d(fto, epx, epy, epz_i, epxy, epyx)
 
     nf = normal_vector_field(eps)
     r = run_one(eps, nf, mm, nn, np.ones(mm.shape, bool), (fto, fto), 'nvf')
@@ -320,7 +372,7 @@ def selftest():
     assert err < 1e-12, err
 
 
-def _core_solve_2d(ucell, fto, epx, epy, epz_i, epxy, epyx):
+def _core_solve_2d(fto, epx, epy, epz_i, epxy, epyx):
     from wavebit._core.solve_2d import solve_2d
 
     C = CASE
@@ -328,8 +380,9 @@ def _core_solve_2d(ucell, fto, epx, epy, epz_i, epxy, epyx):
     kx = C['n_top'] * np.sin(C['theta']) * np.cos(C['phi']) + rng * (C['wavelength'] / C['period'][0])
     ky = C['n_top'] * np.sin(C['theta']) * np.sin(C['phi']) + rng * (C['wavelength'] / C['period'][1])
 
-    return solve_2d(C['wavelength'], kx, ky, C['n_top'], C['n_bot'], C['theta'], C['psi'],
-                    [C['thickness']], epx, epy, epz_i, epxy, epyx)
+    return solve_2d(C['wavelength'], kx, ky, C['n_top'], C['n_bot'], C['theta'],
+                    amplitude_pair(C['psi']), [C['thickness']],
+                    epx, epy, epz_i, epxy, epyx, phi=C['phi'])
 
 
 # -------------------------------------------------------------------- sweep
@@ -398,7 +451,7 @@ def main(fto_ref=20, ftos=(3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
 
     blocks = []
     for label, kwargs in structures:
-        eps = make_cell(**kwargs).astype(C128) ** 2
+        eps = make_cell(**kwargs).astype(C128)
         normal_field = normal_vector_field(eps)
         for mode in modes:
             blocks.append(sweep(eps, normal_field, mode, fto_ref, ftos, radii, label))

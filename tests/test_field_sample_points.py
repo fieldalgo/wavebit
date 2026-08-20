@@ -34,28 +34,30 @@ BACKEND_IDS = ['numpy', 'jax', 'torch']
 PATHS = ('te', 'tm', 'conical', '2d', '4ff')
 
 
-def _bar(n_bg, n_hi):
-    row = np.full(NX, n_bg, dtype=complex)
-    row[NX // 4:NX // 2] = n_hi
+def _bar(eps_bg, eps_hi):
+    row = np.full(NX, eps_bg, dtype=complex)
+    row[NX // 4:NX // 2] = eps_hi
     return row
 
 
-TWO_LAYER = np.stack([_bar(1.0, 2.0), _bar(1.3, 1.6)])[:, None, :]
+# Permittivities: the squares of the indices 1.0 / 2.0 and 1.3 / 1.6 these bars used to hold.
+TWO_LAYER = np.stack([_bar(1.0, 4.0),
+                      _bar(1.6900000000000002, 2.5600000000000005)])[:, None, :]
 THICK = [150.0, 260.0]
 TOTAL = float(sum(THICK))
 
 
 def _solver(path, backend=0):
-    kw = dict(backend=backend, n_top=1.0, n_bot=1.0, wavelength=WL, thickness=THICK,
+    kw = dict(backend=backend, top=1.0, bot=1.0, wavelength=WL, thickness=THICK,
               theta=np.deg2rad(24.0), fourier_coefficients='integrated', answers='field')
     if path in ('te', 'tm'):
-        kw.update(tetm=path, phi=None, fto=6, period=[PERIOD[0]], ucell=TWO_LAYER)
+        kw.update(tetm=path, phi=None, fto=6, period=[PERIOD[0]], structure=TWO_LAYER)
     elif path == 'conical':
         kw.update(psi=np.pi / 2, phi=np.deg2rad(15.0), fto=6, period=[PERIOD[0]],
-                  ucell=TWO_LAYER)
+                  structure=TWO_LAYER)
     else:
         kw.update(psi=np.pi / 2, phi=np.deg2rad(15.0), fto=(3, 3), period=PERIOD,
-                  ucell=np.repeat(TWO_LAYER, 4, axis=1))
+                  structure=np.repeat(TWO_LAYER, 4, axis=1))
     s = wavebit.rcwa(**kw)
     if path == '4ff':
         s.formulation = '4ff'
@@ -263,9 +265,9 @@ def test_traced_thickness_with_explicit_z_says_why_it_cannot():
     import jax.numpy as jnp
 
     def run(thick, res_z):
-        s = wavebit.rcwa(backend=1, n_top=1.0, n_bot=1.0, wavelength=WL,
+        s = wavebit.rcwa(backend=1, top=1.0, bot=1.0, wavelength=WL,
                          thickness=thick, theta=np.deg2rad(24.0), tetm='tm', phi=None,
-                         fto=4, period=[PERIOD[0]], ucell=jnp.asarray(TWO_LAYER),
+                         fto=4, period=[PERIOD[0]], structure=jnp.asarray(TWO_LAYER),
                          fourier_coefficients='integrated', answers='field')
         s.conv_solve()
         return jnp.sum(jnp.abs(s.calculate_field(res_x=5, res_y=1, res_z=res_z)) ** 2)

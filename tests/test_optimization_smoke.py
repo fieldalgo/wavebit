@@ -20,11 +20,12 @@ import pytest
 import wavebit
 
 CFG = dict(fto=[2, 2], wavelength=900.0, period=[1000.0, 1000.0], thickness=[300.0],
-           n_top=1.0, n_bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2)
+           top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2)
 
 # Small enough that this stays a smoke test. The grid is a smooth ramp rather than random so
 # the starting point is reproducible without seeding anything.
-UCELL0 = np.linspace(1.0, 3.5, 6 * 6).reshape(1, 6, 6)
+# A permittivity ramp: the squares of the index ramp 1.0 .. 3.5 this used to start from.
+UCELL0 = np.linspace(1.0, 3.5, 6 * 6).reshape(1, 6, 6) ** 2
 
 STEPS = 4
 LR = 0.1
@@ -38,7 +39,7 @@ def _jax_losses():
     solver = wavebit.rcwa(backend=1, **CFG)
 
     def loss(u):
-        return -jnp.sum(solver.conv_solve(ucell=u).res.T)
+        return -jnp.sum(solver.conv_solve(structure=u).res.T)
 
     u = jnp.asarray(UCELL0)
     opt = optax.adam(LR)
@@ -65,7 +66,7 @@ def _torch_losses():
     out = []
     for _ in range(STEPS):
         opt.zero_grad()
-        value = -torch.sum(solver.conv_solve(ucell=u).res.T)
+        value = -torch.sum(solver.conv_solve(structure=u).res.T)
         value.backward()
         assert torch.all(torch.isfinite(u.grad)), 'torch gradient went non-finite'
         out.append(float(value.detach()))

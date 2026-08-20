@@ -29,6 +29,16 @@ So this file is deliberately scoped to the job it can do:
 **Regenerating is not how a failing test gets fixed.** It needs ``--rebaseline`` and prints
 what moves, so re-freezing is a decision someone made and a reviewer can see, not a reflex. If
 the output changes on purpose, the reason belongs in the commit message.
+
+**The permittivity flip (2026-08-20) left these numbers in place, and the small residue it did
+leave is worth naming so nobody re-freezes for it.** The layers are exact: ``1d_2layer``, whose
+half-spaces are both vacuum, reproduces every array **bit for bit** with its raster rewritten
+from ``3`` to ``9``, which is what says the flip itself moves nothing. Six of the seven cases
+*do* move, by 1.0e-14 to 2.4e-13, and all six are the ones with a non-vacuum half-space: a
+half-space material now reaches the solve as ``index_from_eps(eps)``, which is complex by
+construction (``2+0j`` where ``2.0`` used to sit), and complex arithmetic reassociates the same
+expression. That is round-off from a dtype, not a change of answer, and it sits an order inside
+the ``atol=1e-12`` both this file's own diff and ``tests/test_field_core.py`` compare at.
 """
 import pathlib
 import sys
@@ -39,34 +49,55 @@ import wavebit
 
 OUT = pathlib.Path(__file__).resolve().parent / 'golden_field.npz'
 
+def _rand_eps(shape, seed):
+    """A random **permittivity** raster: the same draw as before, squared.
+
+    These cases were written as refractive-index rasters drawn from ``uniform(1, 4)``, and the
+    solver squared them on the way in. It no longer does (2026-08-20), so the squaring moves
+    here and the numbers reaching the solve are bit-for-bit the ones the golden was frozen
+    against — verified by regenerating and diffing, which is what ``main`` below prints.
+
+    Squaring the *draw* rather than widening the range is deliberate: ``uniform(1, 16)`` would
+    be a different set of permittivities from the same seed, and the golden would move for a
+    reason that has nothing to do with the flip.
+    """
+    return np.random.default_rng(seed).uniform(1, 4, shape) ** 2
+
+
 # Chosen to hit every reconstruction path and both 1D layouts, at more than one layer and more
 # than one order. `formulation` is the only key not passed to the constructor.
+#
+# **Permittivity, and the scene is the one the golden holds.** Every literal is the square of
+# the index this list carried before 2026-08-20 -- 9 was 3, 4 was 2, `top=4.` was `n_top=2.`,
+# `bot=2.25` was `n_bot=1.5`. `1.9599999999999997` is `1.4 ** 2` as a double and not a rounding
+# of it: this file's goldens are compared at atol=1e-12, but the habit of writing the tidy
+# decimal is what breaks the bit-exact assertions elsewhere in the suite.
 CASES = {
-    'te_1d':     dict(tetm='te', phi=None, ucell=[[[3., 3., 3., 1., 1., 1.]]], thickness=[0.15],
-                      n_top=2., n_bot=1., theta=0.2, fto=[4, 0], period=[0.77],
+    'te_1d':     dict(tetm='te', phi=None, structure=[[[9., 9., 9., 1., 1., 1.]]],
+                      thickness=[0.15], top=4., bot=1., theta=0.2, fto=[4, 0], period=[0.77],
                       wavelength=0.777),
-    'tm_1d':     dict(tetm='tm', phi=None, ucell=[[[3., 3., 3., 1., 1., 1.]]], thickness=[0.15],
-                      n_top=2., n_bot=1., theta=0.2, fto=[4, 0], period=[0.77],
+    'tm_1d':     dict(tetm='tm', phi=None, structure=[[[9., 9., 9., 1., 1., 1.]]],
+                      thickness=[0.15], top=4., bot=1., theta=0.2, fto=[4, 0], period=[0.77],
                       wavelength=0.777),
     '1d_2layer': dict(tetm='te', phi=None,
-                      ucell=[[[3., 3., 1., 1., 3., 1.]], [[2., 2., 2., 1., 1., 1.]]],
-                      thickness=[0.15, 0.22], n_top=1., n_bot=1., theta=0.1, fto=[3, 0],
+                      structure=[[[9., 9., 1., 1., 9., 1.]], [[4., 4., 4., 1., 1., 1.]]],
+                      thickness=[0.15, 0.22], top=1., bot=1., theta=0.1, fto=[3, 0],
                       period=[0.7], wavelength=0.9),
-    'conical':   dict(psi=0.4, phi=0.3, ucell=[[[3., 3., 3., 1., 1., 1.]]], thickness=[0.15],
-                      n_top=2., n_bot=1., theta=0.2, fto=[4, 0], period=[0.77],
+    'conical':   dict(psi=0.4, phi=0.3, structure=[[[9., 9., 9., 1., 1., 1.]]],
+                      thickness=[0.15], top=4., bot=1., theta=0.2, fto=[4, 0], period=[0.77],
                       wavelength=0.777),
-    '2d':        dict(psi=0.9, phi=0.4, ucell=np.random.default_rng(0).uniform(1, 4, (1, 5, 5)),
-                      thickness=[0.2], n_top=1., n_bot=1.5, theta=0.3, fto=[2, 2],
+    '2d':        dict(psi=0.9, phi=0.4, structure=_rand_eps((1, 5, 5), 0),
+                      thickness=[0.2], top=1., bot=2.25, theta=0.3, fto=[2, 2],
                       period=[1., 1.], wavelength=0.9),
-    '2d_2layer': dict(psi=1.1, phi=0.5, ucell=np.random.default_rng(1).uniform(1, 4, (2, 4, 4)),
-                      thickness=[0.15, 0.22], n_top=1.2, n_bot=1., theta=0.2, fto=[2, 2],
+    '2d_2layer': dict(psi=1.1, phi=0.5, structure=_rand_eps((2, 4, 4), 1),
+                      thickness=[0.15, 0.22], top=1.44, bot=1., theta=0.2, fto=[2, 2],
                       period=[0.9, 0.9], wavelength=0.7),
     # The first-order route, forced onto a problem the second-order one can also express. Its
     # own physics is covered by tests/test_field_4ff.py; what this adds is the public path and
     # the same drift net the others get.
-    '2d_4ff':    dict(psi=0.7, phi=0.35, ucell=np.random.default_rng(2).uniform(1, 4, (2, 4, 4)),
-                      thickness=[0.18, 0.13], n_top=1., n_bot=1.4, theta=0.25, fto=[2, 1],
-                      period=[0.85, 0.8], wavelength=0.66, formulation='4ff'),
+    '2d_4ff':    dict(psi=0.7, phi=0.35, structure=_rand_eps((2, 4, 4), 2),
+                      thickness=[0.18, 0.13], top=1., bot=1.9599999999999997, theta=0.25,
+                      fto=[2, 1], period=[0.85, 0.8], wavelength=0.66, formulation='4ff'),
 }
 VARIANTS = (('default', (True, False, False)), ('all', (True, True, True)))
 RES = dict(res_x=5, res_y=4, res_z=6)
@@ -75,7 +106,7 @@ RES = dict(res_x=5, res_y=4, res_z=6)
 def solved(name, backend=0):
     kw = dict(CASES[name])
     formulation = kw.pop('formulation', None)
-    kw['ucell'] = np.asarray(kw['ucell'], dtype=float)
+    kw['structure'] = np.asarray(kw['structure'], dtype=float)
     solver = wavebit.rcwa(backend=backend, answers='field', **kw)
     if formulation:
         solver.formulation = formulation

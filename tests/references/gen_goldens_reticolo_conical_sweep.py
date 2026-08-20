@@ -16,6 +16,15 @@ is committed. It holds::
 Pass that directory as the first argument and run this file with Octave-free Python; the golden
 it writes is what CI reads. There is no default: the path is machine-specific, and a stale
 default that silently resolves to nothing is worse than being asked for it.
+
+**The scene keys below hold a refractive INDEX, and they stay that way.** ``ucell`` / ``n_top``
+/ ``n_bot`` are the spellings and the quantity of 2024-09-09; wavebit took permittivity from
+2026-08-20. Renaming them here would be a lie about a file that cannot be regenerated to match
+-- the ``.mat`` inputs are not in this repository -- and squaring them would leave the committed
+golden and this script describing different substrates. So the conversion lives at the read
+instead, in ``test_reticolo_conical_sweep._scene``, which says the same thing from the other
+end. If the study directory ever comes back and this is rerun, move the squaring here and
+delete it there; do not have both.
 """
 import pathlib
 import sys

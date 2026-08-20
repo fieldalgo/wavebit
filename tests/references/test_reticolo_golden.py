@@ -36,44 +36,51 @@ import wavebit
 
 GOLDEN_PATH = pathlib.Path(__file__).parent / 'golden_reticolo.npz'
 
-# 1D binary grating, exact edges on both sides. `ucell` is a raster only in spelling: the integrated
-# path reads the block edges off it, and RETICOLO is handed those same edges.
-_HALF = np.array([[[3.0] * 5 + [1.0] * 5]])
-_QUARTER = np.array([[[3.5] * 3 + [1.0] * 9]])
-_TWO_LAYER = np.array([[[3.0] * 6 + [1.0] * 6], [[2.2] * 8 + [1.0] * 4]])
+# 1D binary grating, exact edges on both sides. `structure` is a raster only in spelling: the
+# integrated path reads the block edges off it, and RETICOLO is handed those same edges.
+#
+# **These are permittivities, and the physical scene is unchanged.** Every value below is the
+# square of the refractive index this file carried before 2026-08-20 -- 9 was 3, 12.25 was 3.5,
+# 4.84 was 2.2 -- so the frozen RETICOLO numbers still describe it and are not regenerated.
+# `4.840000000000001` is `2.2 ** 2` as a double and not a typo for `4.84`; the tidy decimal is a
+# different number by 8.9e-16, and it is the bridge's `index_from_eps` that would carry the
+# difference back into the texture Octave is handed.
+_HALF = np.array([[[9.0] * 5 + [1.0] * 5]])
+_QUARTER = np.array([[[12.25] * 3 + [1.0] * 9]])
+_TWO_LAYER = np.array([[[9.0] * 6 + [1.0] * 6], [[4.840000000000001] * 8 + [1.0] * 4]])
 
 # name -> solver kwargs. `grating_type` picks RETICOLO's branch: 0 for pure TE/TM, 1 conical.
 CASES = {
-    'te_normal': dict(tetm='te', theta=0.0, phi=None, n_top=1.0, n_bot=1.5, fto=10,
-                      period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
-    'te_oblique': dict(tetm='te', theta=0.2, phi=None, n_top=1.0, n_bot=1.5, fto=10,
-                       period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
-    'tm_normal': dict(tetm='tm', theta=0.0, phi=None, n_top=1.0, n_bot=1.5, fto=10,
-                      period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
-    'tm_oblique': dict(tetm='tm', theta=0.2, phi=None, n_top=1.0, n_bot=1.5, fto=10,
-                       period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
+    'te_normal': dict(tetm='te', theta=0.0, phi=None, top=1.0, bot=2.25, fto=10,
+                      period=[0.7], wavelength=0.9, structure=_HALF, thickness=[0.15]),
+    'te_oblique': dict(tetm='te', theta=0.2, phi=None, top=1.0, bot=2.25, fto=10,
+                       period=[0.7], wavelength=0.9, structure=_HALF, thickness=[0.15]),
+    'tm_normal': dict(tetm='tm', theta=0.0, phi=None, top=1.0, bot=2.25, fto=10,
+                      period=[0.7], wavelength=0.9, structure=_HALF, thickness=[0.15]),
+    'tm_oblique': dict(tetm='tm', theta=0.2, phi=None, top=1.0, bot=2.25, fto=10,
+                       period=[0.7], wavelength=0.9, structure=_HALF, thickness=[0.15]),
     # A duty cycle that is not 1/2 and a higher contrast: the +-1 orders carry real power.
-    'te_quarter': dict(tetm='te', theta=0.15, phi=None, n_top=1.0, n_bot=1.5, fto=12,
-                       period=[0.8], wavelength=0.7, ucell=_QUARTER, thickness=[0.25]),
-    'tm_quarter': dict(tetm='tm', theta=0.15, phi=None, n_top=1.0, n_bot=1.5, fto=12,
-                       period=[0.8], wavelength=0.7, ucell=_QUARTER, thickness=[0.25]),
+    'te_quarter': dict(tetm='te', theta=0.15, phi=None, top=1.0, bot=2.25, fto=12,
+                       period=[0.8], wavelength=0.7, structure=_QUARTER, thickness=[0.25]),
+    'tm_quarter': dict(tetm='tm', theta=0.15, phi=None, top=1.0, bot=2.25, fto=12,
+                       period=[0.8], wavelength=0.7, structure=_QUARTER, thickness=[0.25]),
     # Two patterned layers: the interface between them is under test, not just the boundary.
-    'te_two_layer': dict(tetm='te', theta=0.25, phi=None, n_top=1.0, n_bot=2.0, fto=10,
-                         period=[0.7], wavelength=0.85, ucell=_TWO_LAYER,
+    'te_two_layer': dict(tetm='te', theta=0.25, phi=None, top=1.0, bot=4.0, fto=10,
+                         period=[0.7], wavelength=0.85, structure=_TWO_LAYER,
                          thickness=[0.15, 0.22]),
-    'tm_two_layer': dict(tetm='tm', theta=0.25, phi=None, n_top=1.0, n_bot=2.0, fto=10,
-                         period=[0.7], wavelength=0.85, ucell=_TWO_LAYER,
+    'tm_two_layer': dict(tetm='tm', theta=0.25, phi=None, top=1.0, bot=4.0, fto=10,
+                         period=[0.7], wavelength=0.85, structure=_TWO_LAYER,
                          thickness=[0.15, 0.22]),
     # Denser truncation, where the two solvers' round-off has the most room to diverge.
-    'te_high_order': dict(tetm='te', theta=0.2, phi=None, n_top=1.0, n_bot=1.5, fto=30,
-                          period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
-    'tm_high_order': dict(tetm='tm', theta=0.2, phi=None, n_top=1.0, n_bot=1.5, fto=30,
-                          period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
+    'te_high_order': dict(tetm='te', theta=0.2, phi=None, top=1.0, bot=2.25, fto=30,
+                          period=[0.7], wavelength=0.9, structure=_HALF, thickness=[0.15]),
+    'tm_high_order': dict(tetm='tm', theta=0.2, phi=None, top=1.0, bot=2.25, fto=30,
+                          period=[0.7], wavelength=0.9, structure=_HALF, thickness=[0.15]),
     # Conical (azimuth != 0) — RETICOLO's other branch, and the solver's `solve_1d_conical`.
-    'conical_te': dict(psi=np.pi / 2, theta=0.2, phi=0.3, n_top=1.0, n_bot=1.5, fto=10,
-                       period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
-    'conical_tm': dict(psi=0.0, theta=0.2, phi=0.3, n_top=1.0, n_bot=1.5, fto=10,
-                       period=[0.7], wavelength=0.9, ucell=_HALF, thickness=[0.15]),
+    'conical_te': dict(psi=np.pi / 2, theta=0.2, phi=0.3, top=1.0, bot=2.25, fto=10,
+                       period=[0.7], wavelength=0.9, structure=_HALF, thickness=[0.15]),
+    'conical_tm': dict(psi=0.0, theta=0.2, phi=0.3, top=1.0, bot=2.25, fto=10,
+                       period=[0.7], wavelength=0.9, structure=_HALF, thickness=[0.15]),
 }
 
 
@@ -175,9 +182,16 @@ def _solve_bottom(name, backend=0):
     (``docs/conventions.md``), so the matching solve is ``incidence_side='bottom'`` at
     ``theta_bottom = asin(n_top*sin(theta)/n_bot)`` — same in-plane wavevector, said in the
     other medium's terms. Real for every case here since ``n_bot > n_top`` throughout.
+
+    Snell is a statement about **indices**, so the two half-space permittivities are converted
+    here rather than used raw. Skipping that conversion is not a type error and does not raise:
+    ``asin(1.0 * sin(0.25) / 4.0)`` is a perfectly good angle, just the wrong one, and the
+    comparison would then fail as a solver disagreement.
     """
     kw = dict(CASES[name])
-    kw['theta'] = float(np.arcsin(kw['n_top'] * np.sin(kw['theta']) / kw['n_bot']))
+    n_top = wavebit.index_from_eps(kw['top']).real
+    n_bot = wavebit.index_from_eps(kw['bot']).real
+    kw['theta'] = float(np.arcsin(n_top * np.sin(kw['theta']) / n_bot))
     return wavebit.rcwa(backend=backend, fourier_coefficients='integrated',
                           incidence_side='bottom', **kw).conv_solve()
 
