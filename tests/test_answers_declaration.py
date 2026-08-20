@@ -88,7 +88,7 @@ def test_the_default_is_amplitude():
 def test_each_rung_delivers_exactly_its_own_surface(algo):
     surfaces = {}
     for rung in RUNGS:
-        s = _solver(answers=rung, connecting_algo=algo)
+        s = _solver(answers=rung, layer_algorithm=algo)
         surfaces[rung] = (s.solve(), s)
 
     eff, _ = surfaces['efficiency']
@@ -109,7 +109,7 @@ def test_each_rung_delivers_exactly_its_own_surface(algo):
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 def test_the_rungs_agree_bit_for_bit_on_what_they_share(algo):
     """A cheaper declaration must be a smaller answer, never a different one."""
-    out = {r: _solver(answers=r, connecting_algo=algo).solve() for r in RUNGS}
+    out = {r: _solver(answers=r, layer_algorithm=algo).solve() for r in RUNGS}
     for field in ('R', 'T'):
         ref = np.asarray(getattr(out['efficiency'], field))
         for rung in ('amplitude', 'field'):

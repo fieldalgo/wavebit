@@ -1,6 +1,6 @@
 """Typed enums are a non-breaking upgrade over the raw values the solver stores.
 
-``Pol`` / ``Backend`` are ``IntEnum``s equal to their int codes; ``FourierCoefficients`` /
+``Tetm`` / ``Backend`` are ``IntEnum``s equal to their int codes; ``FourierCoefficients`` /
 ``Factorization`` are ``str`` enums equal to their lowercase strings. Passing the enum must
 give byte-identical results to passing the raw value.
 """
@@ -8,11 +8,11 @@ import numpy as np
 import pytest
 
 import wavebit
-from wavebit import Backend, Factorization, FourierCoefficients, Pol
+from wavebit import Backend, Factorization, FourierCoefficients, Tetm
 
 
 def test_intenum_equals_int_codes():
-    assert Pol.TE == 0 and Pol.TM == 1
+    assert Tetm.TE == 0 and Tetm.TM == 1
     assert Backend.NUMPY == 0 and Backend.JAX == 1 and Backend.TORCH == 2
 
 
@@ -34,11 +34,11 @@ def _solve(tetm, backend, **strategy):
 def test_enum_matches_raw_api():
     """The enum and the word are one input; the retired integer spelling is not.
 
-    ``tetm`` takes ``Pol.TE`` or ``'te'`` and nothing else. A raw ``0`` is refused on
+    ``tetm`` takes ``Tetm.TE`` or ``'te'`` and nothing else. A raw ``0`` is refused on
     purpose -- a number is what let the old ``pol`` mean a fraction, which was an angle in
     disguise rather than a declaration.
     """
-    for enum_spelling, word in [(Pol.TE, 'te'), (Pol.TM, 'tm')]:
+    for enum_spelling, word in [(Tetm.TE, 'te'), (Tetm.TM, 'tm')]:
         a = _solve(enum_spelling, Backend.NUMPY,
                    fourier_coefficients=FourierCoefficients.SAMPLED,
                    factorization=Factorization.LI)

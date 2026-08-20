@@ -98,7 +98,7 @@ def _vertex_dtype(xp, *args):
     own precision through; ``float64`` otherwise.
 
     The fallback is the point. ``xp.asarray([1.0, ...])`` takes the *namespace default*, and
-    torch's is ``float32`` no matter what ``type_complex`` the solver was given. A layer whose
+    torch's is ``float32`` no matter what ``complex_dtype`` the solver was given. A layer whose
     shape parameters are plain Python floats -- the ordinary case -- therefore had its geometry
     built in single precision on PyTorch alone, silently.
     """

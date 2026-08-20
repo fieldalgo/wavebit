@@ -184,7 +184,7 @@ def is_z_coupled(eps, tol=1e-12):
     return max(abs(e[0, 2]), abs(e[2, 0]), abs(e[1, 2]), abs(e[2, 1])) > tol
 
 
-def solve_tensor_stack(layers, theta, wl=WL, connecting_algo='ETM', formulation=None,
+def solve_tensor_stack(layers, theta, wl=WL, layer_algorithm='ETM', formulation=None,
                        incidence_side='top'):
     """Drive the 2D solve with a hand-filled tensor per layer.
 
@@ -213,7 +213,7 @@ def solve_tensor_stack(layers, theta, wl=WL, connecting_algo='ETM', formulation=
     conv = [np.stack(s) for s in slots]
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=theta, phi=0.0, psi=0.0,
                          max_order=(0, 0), period=(300.0, 300.0), wavelength=wl, thickness=thick,
-                         connecting_algo=connecting_algo, incidence_side=incidence_side)
+                         layer_algorithm=layer_algorithm, incidence_side=incidence_side)
     if formulation is not None:
         mee.formulation = formulation
     res = mee.solve_conv(*(conv if z_coupled else conv[:5]))
@@ -308,7 +308,7 @@ def test_scattering_algorithm_agrees_on_asymmetric_tensors(label, layers, theta_
     """
     theta = np.deg2rad(theta_deg)
     ref = berreman_efficiencies(layers, theta)
-    got = solve_tensor_stack(layers, theta, connecting_algo='SMM')
+    got = solve_tensor_stack(layers, theta, layer_algorithm='SMM')
     gap = max_gap(ref, got)
     assert gap < 1e-12, f'{label}: SMM is {gap:.2e} from the oracle'
 

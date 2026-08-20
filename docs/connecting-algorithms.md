@@ -6,10 +6,15 @@ warm-up matters, and leaving it out reported SMM as **twice as fast** as ETM on 
 before the first-call overhead had been paid.
 
 Targets:
-- `wavebit/_core/engine.py` — `_SOLVES`, where `connecting_algo` becomes a function
+- `wavebit/_core/engine.py` — `_SOLVES`, where `layer_algorithm` becomes a function
 - `wavebit/_core/solve_2d.py`, `solve_1d.py` — the ETM recursion (`big_A_i`, `big_T`)
 - `wavebit/_core/scattering.py` — the SMM cascade
 - `wavebit/_core/solve_2d_4ff.py` — all three, on the first-order path
+
+**The keyword is `layer_algorithm`** (it was `connecting_algo` until 2026-08-20; the values
+`'ETM'` / `'SMM'` / `'TMM'` did not move). "Connecting algorithm" stays the name of the *idea*
+throughout this document, because that is what the literature calls it; the keyword says what
+it selects — how the per-layer solutions are chained into a stack — without an abbreviation.
 
 **This document is about the connecting algorithm, not about anisotropy.** The choice is the same
 question for an isotropic grating as for a magneto-optic film — it changes no physics, only how

@@ -803,7 +803,7 @@ def test_painted_geometry_follows_the_dtype_it_was_given():
     """float32 parameters give a float32 answer, and that is the caller's choice, not a bug.
 
     Worth pinning because ``torch.tensor(0.55)`` is float32 under torch's stock default,
-    regardless of ``type_complex`` -- so the natural way to write a traced parameter quietly
+    regardless of ``complex_dtype`` -- so the natural way to write a traced parameter quietly
     halves the precision of the geometry. The library follows the input rather than overriding
     it; this records that it does, and how much it costs.
 

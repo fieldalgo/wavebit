@@ -130,13 +130,13 @@ def test_forgetting_the_conversion_is_legal_and_wrong():
 
 
 def test_the_stored_width_follows_type_complex():
-    """``type_complex`` reaches the table, in every spelling the solver accepts.
+    """``complex_dtype`` reaches the table, in every spelling the solver accepts.
 
     The only knob these functions have. Worth a line because it is the sort of argument that
     gets declared, threaded through, and then not applied -- which is the defect this whole
     round of work is about.
     """
     assert wavebit.read_material_table()['SI'].dtype == np.float64
-    assert wavebit.read_material_table(type_complex=0)['SI'].dtype == np.float64
-    assert wavebit.read_material_table(type_complex=1)['SI'].dtype == np.float32
-    assert wavebit.read_material_table(type_complex=np.complex64)['SI'].dtype == np.float32
+    assert wavebit.read_material_table(complex_dtype=0)['SI'].dtype == np.float64
+    assert wavebit.read_material_table(complex_dtype=1)['SI'].dtype == np.float32
+    assert wavebit.read_material_table(complex_dtype=np.complex64)['SI'].dtype == np.float32

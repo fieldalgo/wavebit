@@ -1198,7 +1198,7 @@ def check_no_plan_still_fits(layer, period, index, lattice=None):
 
 
 def to_conv_mat_smooth_layers(layer_shapes, max_order_x, max_order_y, period,
-                                normal_grid=256, type_complex=None, xp=None,
+                                normal_grid=256, complex_dtype=None, xp=None,
                                 boundary_plans=None, lattice=None):
     """Stack the analytic-NVF convolution matrices over layers.
 
@@ -1217,7 +1217,7 @@ def to_conv_mat_smooth_layers(layer_shapes, max_order_x, max_order_y, period,
     """
     if xp is None:
         xp = _infer_namespace(layer_shapes)
-    dtype = xp.complex128 if type_complex is None else type_complex
+    dtype = xp.complex128 if complex_dtype is None else complex_dtype
 
     out = [[], [], [], [], []]
     for index, layer in enumerate(layer_shapes):

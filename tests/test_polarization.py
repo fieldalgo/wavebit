@@ -74,9 +74,9 @@ def test_pair_reproduces_psi(path, algo):
     """``polarization = (sin(v), cos(v))`` must be ``psi = v`` — the whole result surface."""
     psi_v = 0.7
     if path == 'conical':
-        kw = dict(CFG_1D, structure=STRUCTURE_1D, phi=0.4, connecting_algo=algo)
+        kw = dict(CFG_1D, structure=STRUCTURE_1D, phi=0.4, layer_algorithm=algo)
     else:
-        kw = dict(CFG_2D, structure=STRUCTURE_2D, connecting_algo=algo)
+        kw = dict(CFG_2D, structure=STRUCTURE_2D, layer_algorithm=algo)
     via_psi = wavebit.rcwa(psi=psi_v, **kw).solve()
     via_pair = wavebit.rcwa(polarization=pair_of(psi_v), **kw).solve()
     _assert_same_sub(via_psi.given, via_pair.given)
@@ -155,7 +155,7 @@ def test_pair_reproduces_psi_under_backside_illumination():
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 def test_lossless_energy_conservation_at_arbitrary_complex_pairs(algo):
-    kw = dict(CFG_2D, structure=STRUCTURE_2D, connecting_algo=algo)
+    kw = dict(CFG_2D, structure=STRUCTURE_2D, layer_algorithm=algo)
     for pair in ((0.3 + 0.4j, -1.2 + 0.1j), (2.0, 0.5j), (1e-3, 1 + 1j)):
         res = wavebit.rcwa(polarization=pair, **kw).solve()
         total = float(np.asarray(res.given.R).sum() + np.asarray(res.given.T).sum())
@@ -401,9 +401,9 @@ def test_pair_reproduces_the_psi_field(path, algo):
     """The same incidence must give the same near field, not merely the same efficiencies."""
     psi_v = 0.7
     if path == 'conical':
-        kw = dict(CFG_1D, structure=STRUCTURE_1D, phi=0.4, connecting_algo=algo)
+        kw = dict(CFG_1D, structure=STRUCTURE_1D, phi=0.4, layer_algorithm=algo)
     else:
-        kw = dict(CFG_2D, structure=STRUCTURE_2D, connecting_algo=algo)
+        kw = dict(CFG_2D, structure=STRUCTURE_2D, layer_algorithm=algo)
     via_psi = _field(psi=psi_v, **kw)
     via_pair = _field(polarization=pair_of(psi_v), **kw)
     assert via_pair.shape == via_psi.shape

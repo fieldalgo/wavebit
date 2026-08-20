@@ -342,7 +342,7 @@ a real magnetised film has — is past that edge, so it still rests on our own B
 measurements and the reasoning are in `tests/references/README.md`.
 
 Nothing dispatches to it. It is, however, stable for any thickness: layers are joined by an
-enhanced-transmittance recursion (`connecting_algo='ETM'`, the same string and the same
+enhanced-transmittance recursion (`layer_algorithm='ETM'`, the same string and the same
 technique as the 2ff path) or by scattering matrices (`'SMM'`), and both hold ~1e-13 relative accuracy out
 to a modal exponent of 2500, where they reproduce the closed-form single-interface Fresnel
 reflectance to 4e-16. An unstabilised transfer is kept as `'TMM'` for cross-checking and refuses past the
@@ -515,8 +515,8 @@ and no way to check whether their tensor has one without reading this document. 
 ```python
 class Formulation(str, Enum):
     AUTO   = 'auto'   # read the slots and decide           (default)
-    SECOND = '2ff'    # force second-order; refuse z-coupling
-    FIRST  = '4ff'    # force first-order; always possible, ~8x
+    TWO_FIELD  = '2ff'   # force second-order; refuse z-coupling
+    FOUR_FIELD = '4ff'   # force first-order; always possible, ~8x
 ```
 
 That is `wavebit._core.enums.Formulation`, and it is reached as `solver.formulation` — an
@@ -527,7 +527,7 @@ Forcing `'4ff'` on a problem that does not need it is how the 4ff solver gets **
 z-decoupled case run both ways must agree, and that is an internal cross-check no external oracle
 provides. It is `tests/test_formulation_dispatch.py`, and the case that carries it is a
 *patterned* grating at conical incidence — the two formulations then eig completely different
-matrices and agree to 4e-14, which a uniform layer's scaled identities could not have shown. It is the same reason `connecting_algo` is selectable — and the same reason
+matrices and agree to 4e-14, which a uniform layer's scaled identities could not have shown. It is the same reason `layer_algorithm` is selectable — and the same reason
 `test_anisotropic_berreman.py` drives SMM as well as ETM, since "the correction reaches the other
 path for free" is exactly the sort of claim that turns out to be false.
 

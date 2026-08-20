@@ -93,7 +93,7 @@ def analytic_r(ns, thicknesses, wavelength, theta, tetm):
 def solver_RT(ns, thicknesses, wavelength, theta, tetm, algo='ETM'):
     """Total ``(R, T)`` of the same stack through the solver (uniform layers, max_order=0)."""
     structure = eps_from_index(np.array([[[n, n]] for n in ns[1:-1]]))
-    solver = wavebit.rcwa(backend=0, connecting_algo=algo, tetm=tetm,
+    solver = wavebit.rcwa(backend=0, layer_algorithm=algo, tetm=tetm,
                            top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
                            theta=theta, max_order=0, wavelength=wavelength,
                            period=[wavelength * 2], structure=structure,
@@ -199,8 +199,8 @@ def test_absorbing_layer_identical_to_its_substrate(tetm, theta):
     structure = eps_from_index(np.array([[[AU, AU]]]))
     common = dict(backend=0, tetm=tetm, top=1.0, bot=eps_from_index(AU), theta=theta, max_order=0,
                   wavelength=WL, period=[WL * 2], structure=structure, thickness=ds)
-    tmm = wavebit.rcwa(connecting_algo='ETM', **common).solve()
-    smm = wavebit.rcwa(connecting_algo='SMM', **common).solve()
+    tmm = wavebit.rcwa(layer_algorithm='ETM', **common).solve()
+    smm = wavebit.rcwa(layer_algorithm='SMM', **common).solve()
 
     assert float(np.sum(tmm.R)) == pytest.approx(want, abs=1e-12)
     assert float(np.sum(smm.R)) == pytest.approx(want, abs=1e-12)
@@ -374,7 +374,7 @@ def solver_amps(ns, thicknesses, wavelength, theta, tetm, path, algo='ETM'):
     footnote that conversion now lives without.)
     """
     layers = ns[1:-1]
-    common = dict(backend=0, connecting_algo=algo, top=eps_from_index(ns[0]),
+    common = dict(backend=0, layer_algorithm=algo, top=eps_from_index(ns[0]),
                   bot=eps_from_index(ns[-1]), theta=theta,
                   wavelength=wavelength, thickness=thicknesses)
     if path == '1d':

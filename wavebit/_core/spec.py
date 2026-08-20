@@ -56,7 +56,7 @@ import math
 
 from .domain import Layer, Material, Stack, Incidence, retired_material_name
 from .enums import (Answers, Backend, Factorization, FourierCoefficients, NormalMethod,
-                    Pol, answers_of)
+                    Tetm, answers_of)
 
 SPEC_VERSION = '4'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12)
 #                     '3': the material convention. `stack.layers[i].eps` -> `.structure`,
@@ -152,7 +152,7 @@ def _jsonable(value):
     """
     if isinstance(value, bool) or value is None:
         return value
-    if isinstance(value, (Answers, Backend, Pol, FourierCoefficients, Factorization)):
+    if isinstance(value, (Answers, Backend, Tetm, FourierCoefficients, Factorization)):
         return value.name.lower()
     if isinstance(value, Material):
         return _material_to_json(value)
@@ -306,7 +306,7 @@ def _revive_materials(value, where='material'):
 class Numerics:
     """Discretisation and backend choices — everything that is not the physical scene.
 
-    ``type_complex`` is the bit width (128 / 64) rather than a dtype object, so the spec
+    ``complex_dtype`` is the bit width (128 / 64) rather than a dtype object, so the spec
     stays backend-neutral; :func:`run` maps it onto the solver's code.
     """
     backend: Backend = Backend.NUMPY
@@ -329,8 +329,8 @@ class Numerics:
     #: build that constructs no raster normal field, so a spec that never asked must not be
     #: made to ask.
     normal_method: Optional[NormalMethod] = None
-    type_complex: int = 128
-    connecting_algo: str = 'ETM'
+    complex_dtype: int = 128
+    layer_algorithm: str = 'ETM'
     normal_grid: int = 1024
     #: What the solve keeps the state to answer. Unlike the three above this has a real
     #: default rather than ``None``: it resolves against nothing -- no modeling path, no
@@ -340,7 +340,7 @@ class Numerics:
     answers: Answers = Answers.AMPLITUDE
 
     _FIELDS = ('backend', 'max_order', 'fourier_coefficients', 'factorization', 'normal_method',
-               'type_complex', 'connecting_algo', 'normal_grid', 'answers')
+               'complex_dtype', 'layer_algorithm', 'normal_grid', 'answers')
 
     @classmethod
     def from_dict(cls, d) -> 'Numerics':
@@ -366,16 +366,16 @@ class Numerics:
                 raise SpecError(
                     f"numerics.max_order: expected two non-negative ints (x, y), got {d['max_order']!r}")
             d['max_order'] = max_order
-        if d.get('type_complex', 128) not in (128, 64):
+        if d.get('complex_dtype', 128) not in (128, 64):
             raise SpecError(
-                f"numerics.type_complex: expected 128 or 64, got {d['type_complex']!r}")
+                f"numerics.complex_dtype: expected 128 or 64, got {d['complex_dtype']!r}")
         return cls(**d)
 
     def to_dict(self) -> dict:
         return {f: _jsonable(getattr(self, f)) for f in self._FIELDS}
 
     def as_kwargs(self) -> dict:
-        """Solver keyword arguments. ``type_complex`` becomes the solver's 0/1 code.
+        """Solver keyword arguments. ``complex_dtype`` becomes the solver's 0/1 code.
 
         An unset ``fourier_coefficients`` or ``factorization`` is *omitted* rather than filled
         in, so that the solver sees the same "nobody asked" it would from a bare ``rcwa()``
@@ -384,8 +384,8 @@ class Numerics:
         return dict(
             backend=int(self.backend),
             max_order=list(self.max_order),
-            type_complex=0 if self.type_complex == 128 else 1,
-            connecting_algo=self.connecting_algo,
+            complex_dtype=0 if self.complex_dtype == 128 else 1,
+            layer_algorithm=self.layer_algorithm,
             normal_grid=self.normal_grid,
             answers=answers_of(self.answers).value,
             **({} if self.fourier_coefficients is None
@@ -745,7 +745,7 @@ def _normalise_tetm(tetm):
     """
     if tetm is None:
         return None
-    if isinstance(tetm, Pol):
+    if isinstance(tetm, Tetm):
         return tetm.name.lower()
     if isinstance(tetm, str) and tetm.lower() in ('te', 'tm'):
         return tetm.lower()

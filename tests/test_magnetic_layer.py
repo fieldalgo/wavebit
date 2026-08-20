@@ -48,7 +48,7 @@ def slots(t):
 def solve(eps, mu=None, theta=0.0, algo='ETM', backend=0, max_order=(0, 0), period=None):
     mee = wavebit.rcwa(backend=backend, top=1.0, bot=1.0, theta=np.deg2rad(theta),
                        phi=0.0, psi=0.0, max_order=max_order, period=period or (PERIOD, PERIOD),
-                       wavelength=WL, thickness=[THICK], connecting_algo=algo)
+                       wavelength=WL, thickness=[THICK], layer_algorithm=algo)
     res = mee.solve_conv(*slots(eps), mu=None if mu is None else tuple(slots(mu)))
     te, tm = res.s_inc, res.p_inc
     f = lambda v: float(np.asarray(v.detach() if hasattr(v, 'detach') else v).sum())
@@ -391,7 +391,7 @@ def _uniform_cell(eps, mu, thick, eps_bot, mu_bot, theta, z_abs, algo='ETM'):
     bot = eps_bot if mu_bot == 1.0 else wavebit.Material(eps_bot, mu=mu_bot)
     solver = wavebit.rcwa(backend=0, top=1.0, bot=bot, theta=theta, phi=0.0,
                           max_order=(0, 0), period=(PERIOD, PERIOD), wavelength=FIELD_WL,
-                          thickness=list(thick), connecting_algo=algo, answers='field')
+                          thickness=list(thick), layer_algorithm=algo, answers='field')
     solver.structure = tile(eps)
     solver.mu = None if all(m == 1.0 for m in mu) else tile(mu)
     solver.solve()
@@ -505,7 +505,7 @@ def _two_layer_cell(algo, side):
     solver = wavebit.rcwa(backend=0, top=1.0, bot=2.25, theta=np.deg2rad(31.0),
                           phi=np.deg2rad(17.0), max_order=(2, 2), period=(PERIOD, PERIOD),
                           wavelength=FIELD_WL, thickness=[180.0, 120.0], answers='field',
-                          connecting_algo=algo, incidence_side=side)
+                          layer_algorithm=algo, incidence_side=side)
     solver.structure = TWO_LAYER_EPS
     solver.mu = TWO_LAYER_MU
     solver.solve()

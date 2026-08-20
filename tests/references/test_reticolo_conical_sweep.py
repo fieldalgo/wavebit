@@ -172,7 +172,7 @@ def test_double_precision_agrees_across_backends_at_a_complex_angle(backend):
                              theta=theta, phi=phi, max_order=[40],
                              wavelength=float(g['wavelength']), period=list(g['period']),
                              thickness=list(g['thickness']),
-                             type_complex=0, fourier_coefficients='integrated',
+                             complex_dtype=0, fourier_coefficients='integrated',
                              factorization='li').solve()
         return complex(np.asarray(res.s_inc.r_s).ravel()[40])
 

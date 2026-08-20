@@ -6,7 +6,7 @@ and the in-plane kernel matches the order-index sign the convolution matrices ar
 
 Axes follow the array, not the picture: row ``0`` of the returned cell is ``y = 0``, the same
 row of ``structure`` that the factorization reads as ``y = 0``. Turning that into a conventional
-image is :func:`field_plot`'s job, and it flips there.
+image is :func:`plot_field`'s job, and it flips there.
 
 **The vector components are in the library's own frame, where ``+z`` points down, into the
 stack** (``docs/conventions.md``) — the same ``+z`` the phase, the layer order and the
@@ -666,7 +666,7 @@ def field_2d(wavelength, kx, ky, T1, layer_info_list, period,
                           sample_x, sample_y, sample_z, incidences, conical=False, lattice=lattice)
 
 
-def field_plot(field_cell, tetm_index=0, plot_indices=(1, 1, 1, 1, 1, 1), y_slice=0, z_slice=-1,
+def plot_field(field_cell, tetm_index=0, plot_indices=(1, 1, 1, 1, 1, 1), y_slice=0, z_slice=-1,
                zx=True, yx=True):
     """Plot |field|^2 slices of a reconstructed cell (side and/or top view).
 
@@ -676,7 +676,7 @@ def field_plot(field_cell, tetm_index=0, plot_indices=(1, 1, 1, 1, 1, 1), y_slic
     try:
         import matplotlib.pyplot as plt
     except ImportError as e:
-        raise ImportError('field_plot() needs matplotlib installed') from e
+        raise ImportError('plot_field() needs matplotlib installed') from e
     import numpy as np
 
     field_cell = np.asarray(field_cell)

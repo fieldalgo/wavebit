@@ -235,8 +235,8 @@ def test_normal_incidence_solves_without_a_nudge(backend, case, phi, name):
     kw = {'1d': {},
           'conical': dict(psi=0.7),
           '2d': dict(structure=_UC_2D, max_order=(4, 4)),
-          'smm': dict(connecting_algo='SMM'),
-          '2d_smm': dict(structure=_UC_2D, max_order=(4, 4), connecting_algo='SMM')}[case]
+          'smm': dict(layer_algorithm='SMM'),
+          '2d_smm': dict(structure=_UC_2D, max_order=(4, 4), layer_algorithm='SMM')}[case]
     result = _solve(backend=backend, phi=phi, **kw)
     for array in (result.R, result.T):
         values = np.asarray(array, dtype=np.complex128)
@@ -262,7 +262,8 @@ def test_the_first_order_path_gets_the_azimuth_too():
                                   structure=_UC_2D, thickness=[220.0], max_order=[4, 4])
             solver.formulation = '4ff'
             first = solver.solve()
-        assert str(solver.formulation_assigned).endswith('FIRST'), solver.formulation_assigned
+        assert str(solver.formulation_assigned).endswith('FOUR_FIELD'), \
+            solver.formulation_assigned
         assert _total_r(first) == pytest.approx(_total_r(second), abs=1e-11)
 
 
@@ -367,7 +368,7 @@ def test_phi_plus_pi_negates_the_reconstructed_field():
 
 @pytest.mark.parametrize('label, kw', [
     ('backside', dict(incidence_side='bottom')),
-    ('complex64', dict(type_complex=np.complex64)),
+    ('complex64', dict(complex_dtype=np.complex64)),
 ])
 def test_the_azimuth_survives_the_other_solve_variants(label, kw):
     """Backside incidence and single precision, at ``theta = 0`` with a non-zero ``phi``.

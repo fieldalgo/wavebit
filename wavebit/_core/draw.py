@@ -1,11 +1,11 @@
 """Constant-z pictures of the *structure*, one recipe per modeling path.
 
-:func:`~wavebit._core.fields.field_plot` draws what came out of a solve. This draws what went
+:func:`~wavebit._core.fields.plot_field` draws what came out of a solve. This draws what went
 in, which had no helper at all: every tutorial that shows a layer builds the array itself,
 before Wavebit sees it, so the two paths where rendering is not trivial -- the block modeler
 and the analytic shapes -- were never pictured by anything the library ships.
 
-Presentation rather than physics, and like ``field_plot`` there is no reason for it to exist
+Presentation rather than physics, and like ``plot_field`` there is no reason for it to exist
 per backend: it only needs the geometry as NumPy. Everything here converts on the way in.
 
 **Why a hand-rolled version is worth replacing.** The obvious reading of
@@ -184,7 +184,7 @@ def _shape_inside(shape, X, Y, basis, Px, Py):
                 inside = (np.abs(u) <= lx / 2.0) & (np.abs(v) <= ly / 2.0)
             else:
                 raise NotImplementedError(
-                    f"structure_plot cannot draw a {kind!r} yet. Supported: rectangle, "
+                    f"plot_structure cannot draw a {kind!r} yet. Supported: rectangle, "
                     f"square, circle, disk, ellipse.")
             count = count + inside
     return count
@@ -385,11 +385,11 @@ def structure_slice(solver, layer=0, n=512, show='eps', band_limited=False):
 
     ``layer`` indexes the way ``structure`` does: ``0`` is the layer light meets first
     (``docs/conventions.md``). Row 0 of the result is ``y = 0``, so it draws with
-    ``origin='lower'`` -- the same way up ``field_plot``'s top view ends at.
+    ``origin='lower'`` -- the same way up ``plot_field``'s top view ends at.
 
     Returns complex values -- ``show='eps'`` for the relative permittivity the solve works in,
     ``show='n'`` for the refractive index derived from it. An absorbing layer has a non-zero
-    imaginary part and :func:`structure_plot` draws the real part and says so.
+    imaginary part and :func:`plot_structure` draws the real part and says so.
 
     What ``n`` means depends on the path, and the difference is deliberate:
 
@@ -477,7 +477,7 @@ def structure_slice(solver, layer=0, n=512, show='eps', band_limited=False):
     return values if show == 'eps' else index_from_eps(_passive(values))
 
 
-def structure_plot(solver, layer=0, n=512, show='eps', ax=None, band_limited=False):
+def plot_structure(solver, layer=0, n=512, show='eps', ax=None, band_limited=False):
     """Draw one layer of the structure. Arguments are :func:`structure_slice`'s; read it first.
 
     Returns the axes. An axis-aligned cell is drawn with ``imshow(origin='lower')`` and a
@@ -489,7 +489,7 @@ def structure_plot(solver, layer=0, n=512, show='eps', ax=None, band_limited=Fal
     try:
         import matplotlib.pyplot as plt
     except ImportError as e:
-        raise ImportError('structure_plot() needs matplotlib installed') from e
+        raise ImportError('plot_structure() needs matplotlib installed') from e
 
     values = structure_slice(solver, layer=layer, n=n, show=show, band_limited=band_limited)
     complex_valued = bool(np.max(np.abs(values.imag)) > 1e-12 * max(

@@ -24,22 +24,22 @@ class _BaseRCWA(CoreSolveMixin):
     def __init__(self, top=1., bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None,
                  max_order=(0, 0), pol=None,
                  period=(1., 1.), wavelength=1.,
-                 thickness=(0.,), connecting_algo='ETM',
-                 device=0, type_complex=jnp.complex128, polarization=None):
+                 thickness=(0.,), layer_algorithm='ETM',
+                 device=0, complex_dtype=jnp.complex128, polarization=None):
 
         self.device = device
 
-        # type_complex
-        if type_complex in (0, jnp.complex128, np.complex128):
-            self._type_complex = jnp.complex128
-        elif type_complex in (1, jnp.complex64, np.complex64):
-            self._type_complex = jnp.complex64
+        # complex_dtype
+        if complex_dtype in (0, jnp.complex128, np.complex128):
+            self._complex_dtype = jnp.complex128
+        elif complex_dtype in (1, jnp.complex64, np.complex64):
+            self._complex_dtype = jnp.complex64
         else:
-            raise ValueError('JAX type_complex')
+            raise ValueError('JAX complex_dtype')
 
         # currently these two are not used. Only the torch backend uses them.
-        self._type_float = jnp.float64 if self._type_complex is not jnp.complex64 else jnp.float32
-        self._type_int = jnp.int64 if self._type_complex is not jnp.complex64 else jnp.int32
+        self._float_dtype = jnp.float64 if self._complex_dtype is not jnp.complex64 else jnp.float32
+        self._int_dtype = jnp.int64 if self._complex_dtype is not jnp.complex64 else jnp.int32
 
         # Materials in, an index out: the two setters store the Material and derive the
         # `sqrt(eps*mu)` every solve reads. See `CoreSolveMixin.top`.
@@ -64,7 +64,7 @@ class _BaseRCWA(CoreSolveMixin):
         self.period = period
         self.wavelength = wavelength
         self.thickness = thickness
-        self.connecting_algo = connecting_algo
+        self.layer_algorithm = layer_algorithm
 
         self.layer_info_list = []
         self.T1 = None
@@ -92,21 +92,21 @@ class _BaseRCWA(CoreSolveMixin):
             raise ValueError(f'unsupported jax device: {device!r}')
 
     @property
-    def type_complex(self):
-        return self._type_complex
+    def complex_dtype(self):
+        return self._complex_dtype
 
-    @type_complex.setter
-    def type_complex(self, type_complex):
-        # type_complex
-        if type_complex in (0, jnp.complex128, np.complex128):
-            self._type_complex = jnp.complex128
-        elif type_complex in (1, jnp.complex64, np.complex64):
-            self._type_complex = jnp.complex64
+    @complex_dtype.setter
+    def complex_dtype(self, complex_dtype):
+        # complex_dtype
+        if complex_dtype in (0, jnp.complex128, np.complex128):
+            self._complex_dtype = jnp.complex128
+        elif complex_dtype in (1, jnp.complex64, np.complex64):
+            self._complex_dtype = jnp.complex64
         else:
-            raise ValueError('JAX type_complex')
+            raise ValueError('JAX complex_dtype')
 
-        self._type_float = jnp.float64 if self.type_complex is not jnp.complex64 else jnp.float32
-        self._type_int = jnp.int64 if self.type_complex is not jnp.complex64 else jnp.int32
+        self._float_dtype = jnp.float64 if self.complex_dtype is not jnp.complex64 else jnp.float32
+        self._int_dtype = jnp.int64 if self.complex_dtype is not jnp.complex64 else jnp.int32
         self.theta = self.theta
         self.phi = self.phi
         self._psi = self.psi
@@ -115,15 +115,15 @@ class _BaseRCWA(CoreSolveMixin):
         self.thickness = self.thickness
 
         if hasattr(self, 'modeler') and self.modeler is not None:
-            self.modeler.type_complex = self._type_complex
+            self.modeler.complex_dtype = self._complex_dtype
 
     @property
-    def type_float(self):
-        return self._type_float
+    def float_dtype(self):
+        return self._float_dtype
 
     @property
-    def type_int(self):
-        return self._type_int
+    def int_dtype(self):
+        return self._int_dtype
 
     @property
     def theta(self):
@@ -134,8 +134,8 @@ class _BaseRCWA(CoreSolveMixin):
         if theta is None:
             self._theta = None
         else:
-            check_input_precision('theta', theta, self.type_complex)
-            self._theta = jnp.array(theta, dtype=self.type_complex)
+            check_input_precision('theta', theta, self.complex_dtype)
+            self._theta = jnp.array(theta, dtype=self.complex_dtype)
 
     @property
     def phi(self):
@@ -146,8 +146,8 @@ class _BaseRCWA(CoreSolveMixin):
         if phi is None:
             self._phi = None
         else:
-            check_input_precision('phi', phi, self.type_complex)
-            self._phi = jnp.array(phi, dtype=self.type_complex)
+            check_input_precision('phi', phi, self.complex_dtype)
+            self._phi = jnp.array(phi, dtype=self.complex_dtype)
 
     @property
     def psi(self):
@@ -159,19 +159,19 @@ class _BaseRCWA(CoreSolveMixin):
             self._psi_set_explicitly()
             self._reject_complex_angle(psi)
             # Real dtype: see the numpy twin, and `CoreSolveMixin._reject_complex_angle`.
-            self._psi = jnp.array(jnp.real(psi), dtype=self.type_float)
+            self._psi = jnp.array(jnp.real(psi), dtype=self.float_dtype)
 
     def _as_complex(self, value):
         """An incident amplitude in the solve's complex dtype."""
-        return jnp.array(value, dtype=self.type_complex)
+        return jnp.array(value, dtype=self.complex_dtype)
 
     def _as_real_angle(self, value):
         """An angle in the real dtype — the storage `chi` shares with `psi`."""
-        return jnp.array(jnp.real(value), dtype=self.type_float)
+        return jnp.array(jnp.real(value), dtype=self.float_dtype)
 
     def _default_psi(self):
         """Pure s, applied when no incidence was named and none was declared away."""
-        self._psi = jnp.array(jnp.pi / 2, dtype=self.type_float)
+        self._psi = jnp.array(jnp.pi / 2, dtype=self.float_dtype)
 
     @property
     def max_order(self):
@@ -212,11 +212,11 @@ class _BaseRCWA(CoreSolveMixin):
     @period.setter
     def period(self, period):
         if type(period) in (int, float):
-            self._period = jnp.array([period, period], dtype=self.type_float)
+            self._period = jnp.array([period, period], dtype=self.float_dtype)
         elif type(period) in (list, tuple, np.ndarray) or isinstance(period, jnp.ndarray):
             if len(period) == 1:
                 period = [period[0], period[0]]
-            self._period = jnp.array(period, dtype=self.type_float)
+            self._period = jnp.array(period, dtype=self.float_dtype)
         elif type(period) is jax.interpreters.partial_eval.DynamicJaxprTracer:
             print('init period')
             jax.debug.print('init period')
@@ -234,11 +234,11 @@ class _BaseRCWA(CoreSolveMixin):
     @thickness.setter
     def thickness(self, thickness):
         if type(thickness) in (int, float):
-            self._thickness = jnp.array([thickness], dtype=self.type_float)
+            self._thickness = jnp.array([thickness], dtype=self.float_dtype)
         elif type(thickness) in (list, tuple, np.ndarray):
-            self._thickness = jnp.array(thickness, dtype=self.type_float)
+            self._thickness = jnp.array(thickness, dtype=self.float_dtype)
         elif isinstance(thickness, jnp.ndarray):
-            self._thickness = jnp.array(thickness, dtype=self.type_float)
+            self._thickness = jnp.array(thickness, dtype=self.float_dtype)
         elif type(thickness) is jax.interpreters.partial_eval.DynamicJaxprTracer:
             print('init period')
             jax.debug.print('init period')
@@ -268,10 +268,10 @@ class _BaseRCWA(CoreSolveMixin):
 
         # n_inc, not n_top: theta lives in the incidence medium, which incidence_side picks.
         kx = (self.n_inc * sin_theta * jnp.cos(phi) + max_order_x_range * (
-                wavelength / self.period[0])).astype(self.type_complex)
+                wavelength / self.period[0])).astype(self.complex_dtype)
 
         ky = (self.n_inc * sin_theta * jnp.sin(phi) + max_order_y_range * (
-                wavelength / self.period[1])).astype(self.type_complex)
+                wavelength / self.period[1])).astype(self.complex_dtype)
 
         return kx, ky
 

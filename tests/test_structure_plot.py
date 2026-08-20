@@ -1,5 +1,5 @@
 """
-Verification tests for `structure_slice` / `structure_plot` -- the picture of the *input*.
+Verification tests for `structure_slice` / `plot_structure` -- the picture of the *input*.
 
 The reason this file exists is one hazard, and most of it is spent on that hazard: a
 ``Modeling.draw()`` edge list is not guaranteed increasing, so the obvious render of a
@@ -170,7 +170,7 @@ def test_the_raster_path_is_the_raster():
     """`structure[layer]`, untouched, at its own resolution -- `n` is deliberately ignored.
 
     Also pins the way up: row 0 is ``y = 0`` (``docs/conventions.md``), which is what makes
-    ``origin='lower'`` line up with ``field_plot``'s top view.
+    ``origin='lower'`` line up with ``plot_field``'s top view.
     """
     N = 64
     cell = np.ones((2, N, N))
@@ -415,11 +415,11 @@ def test_it_draws():
     shapes = [dict(type='circle', cx=300.0, cy=300.0, lx=260.0, material=12.25)]
 
     axis_aligned = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], **COMMON)
-    ax = axis_aligned.structure_plot(n=64)
+    ax = axis_aligned.plot_structure(n=64)
     assert ax.images and not ax.collections          # imshow on an axis-aligned cell
 
     skewed = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)],
                           lattice=[[P, P * 0.5], [0.0, P * 0.866]], **COMMON)
-    ax = skewed.structure_plot(n=64)
+    ax = skewed.plot_structure(n=64)
     assert ax.collections and not ax.images          # pcolormesh on the parallelogram
     plt.close('all')

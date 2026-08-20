@@ -684,7 +684,7 @@ def _solver_mean_eps(combine, shapes=PAINT_RODS):
     from wavebit._core.analytic import to_conv_mat_smooth_layers
     layer = dict(background=1.0, shapes=shapes, combine=combine)
     mats = to_conv_mat_smooth_layers([layer], 6, 6, PAINT_PERIOD, normal_grid=256,
-                                     type_complex=np.complex128, xp=xnp)
+                                     complex_dtype=np.complex128, xp=xnp)
     return float(np.real(np.linalg.inv(np.asarray(mats.epz_i[0]))[0, 0]))
 
 

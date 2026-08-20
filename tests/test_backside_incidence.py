@@ -75,7 +75,7 @@ _GRATING_LOSSLESS = eps_from_index(np.array([[[3.0] * 6 + [1.0] * 6],
 def _solver(ns, ds, theta, tetm, path, algo, side):
     """A solver on the *scene* ``ns`` (top..bottom), illuminated from ``side``."""
     layers = ns[1:-1]
-    common = dict(backend=0, connecting_algo=algo, top=eps_from_index(ns[0]),
+    common = dict(backend=0, layer_algorithm=algo, top=eps_from_index(ns[0]),
                   bot=eps_from_index(ns[-1]), theta=theta,
                   wavelength=WL, thickness=ds, incidence_side=side)
     if path == '1d':
@@ -205,9 +205,9 @@ def test_backside_etm_and_smm_agree_per_order(tetm):
     this holds the floating-point realizations to 1e-12 on a stack with diffraction, loss
     and oblique incidence in play at once.
     """
-    a = wavebit.rcwa(connecting_algo='ETM', tetm=tetm, theta=0.3,
+    a = wavebit.rcwa(layer_algorithm='ETM', tetm=tetm, theta=0.3,
                        incidence_side='bottom', **GRATING_KW).solve()
-    b = wavebit.rcwa(connecting_algo='SMM', tetm=tetm, theta=0.3,
+    b = wavebit.rcwa(layer_algorithm='SMM', tetm=tetm, theta=0.3,
                        incidence_side='bottom', **GRATING_KW).solve()
     assert np.abs(np.asarray(a.R) - np.asarray(b.R)).max() < 1e-12
     assert np.abs(np.asarray(a.T) - np.asarray(b.T)).max() < 1e-12
@@ -216,9 +216,9 @@ def test_backside_etm_and_smm_agree_per_order(tetm):
 
 
 def test_backside_etm_and_smm_agree_on_the_conical_path():
-    a = wavebit.rcwa(connecting_algo='ETM', psi=0.7, phi=0.3, theta=0.25,
+    a = wavebit.rcwa(layer_algorithm='ETM', psi=0.7, phi=0.3, theta=0.25,
                        incidence_side='bottom', **GRATING_KW).solve()
-    b = wavebit.rcwa(connecting_algo='SMM', psi=0.7, phi=0.3, theta=0.25,
+    b = wavebit.rcwa(layer_algorithm='SMM', psi=0.7, phi=0.3, theta=0.25,
                        incidence_side='bottom', **GRATING_KW).solve()
     assert np.abs(np.asarray(a.R) - np.asarray(b.R)).max() < 1e-12
     assert np.abs(np.asarray(a.T) - np.asarray(b.T)).max() < 1e-12
@@ -236,7 +236,7 @@ def test_field_cell_comes_back_in_scene_coordinates(algo):
     and the comparison fails at O(1) — and for the SMM this is also the only test of its
     backside field-state recovery, which shares no code with its efficiency read.
     """
-    kw = dict(GRATING_KW, connecting_algo=algo, tetm='te', theta=0.3, answers='field')
+    kw = dict(GRATING_KW, layer_algorithm=algo, tetm='te', theta=0.3, answers='field')
     s_b = wavebit.rcwa(incidence_side='bottom', **kw)
     _, cell_b = s_b.solve_field(sample_x=16, sample_z=8)
 
@@ -250,9 +250,9 @@ def test_field_cell_comes_back_in_scene_coordinates(algo):
 
 def test_backside_field_cells_agree_between_algorithms():
     kw = dict(GRATING_KW, tetm='tm', theta=0.3, answers='field')
-    _, c1 = wavebit.rcwa(connecting_algo='ETM', incidence_side='bottom',
+    _, c1 = wavebit.rcwa(layer_algorithm='ETM', incidence_side='bottom',
                            **kw).solve_field(sample_x=16, sample_z=8)
-    _, c2 = wavebit.rcwa(connecting_algo='SMM', incidence_side='bottom',
+    _, c2 = wavebit.rcwa(layer_algorithm='SMM', incidence_side='bottom',
                            **kw).solve_field(sample_x=16, sample_z=8)
     assert np.abs(np.asarray(c1) - np.asarray(c2)).max() < 1e-12
 

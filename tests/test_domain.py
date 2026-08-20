@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import wavebit
-from wavebit import Stack, Incidence, Material, Pol
+from wavebit import Stack, Incidence, Material, Tetm
 from wavebit._core.domain import (Layer, RETIRED_MATERIAL_NAMES, _VALUE_CHANGED_TOO,
                                   retired_material_name)
 
@@ -71,11 +71,11 @@ def test_raster_1d_parity():
     thickness, period = [0.15], [0.77]
 
     legacy = wavebit.rcwa(backend=0, top=4.0, bot=1.0, theta=0.0, phi=None,
-                             tetm=Pol.TE, max_order=[6, 0], period=period, wavelength=0.777,
+                             tetm=Tetm.TE, max_order=[6, 0], period=period, wavelength=0.777,
                              thickness=thickness, structure=structure).solve()
 
     stack = Stack.from_structure(structure, thickness, top=4.0, bot=1.0, period=period)
-    incidence = Incidence(wavelength=0.777, theta=0.0, phi=None, tetm=Pol.TE)
+    incidence = Incidence(wavelength=0.777, theta=0.0, phi=None, tetm=Tetm.TE)
     typed = wavebit.rcwa(backend=0, max_order=[6, 0], stack=stack, incidence=incidence).solve()
 
     assert _de(typed) == _de(legacy)
@@ -124,7 +124,7 @@ def test_material_half_spaces_are_the_same_physics_as_the_shorthand():
     """
     structure = np.array([[[9.0, 9.0, 9.0, 1.0, 1.0, 1.0]]])
     kw = dict(backend=0, max_order=[6, 0], period=[0.77], wavelength=0.777,
-              thickness=[0.15], structure=structure, theta=0.0, phi=None, tetm=Pol.TE)
+              thickness=[0.15], structure=structure, theta=0.0, phi=None, tetm=Tetm.TE)
 
     plain = wavebit.rcwa(top=4.0, bot=1.0, **kw).solve()
     typed = wavebit.rcwa(top=Material(4.0), bot=Material(1.0), **kw).solve()
@@ -136,7 +136,7 @@ def test_material_half_spaces_are_the_same_physics_as_the_shorthand():
     assert stack.as_kwargs()['top'] == Material(4.0)
     through = wavebit.rcwa(backend=0, max_order=[6, 0], stack=stack,
                            incidence=Incidence(wavelength=0.777, theta=0.0, phi=None,
-                                               tetm=Pol.TE)).solve()
+                                               tetm=Tetm.TE)).solve()
     assert _de(through) == _de(plain)
 
 

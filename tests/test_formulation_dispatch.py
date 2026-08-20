@@ -291,14 +291,14 @@ def test_an_unknown_formulation_is_refused_at_the_setter():
 
 
 def test_the_scattering_algorithm_is_refused_on_the_first_order_path():
-    """``connecting_algo='SMM'`` must say so, not quietly run the enhanced transfer.
+    """``layer_algorithm='SMM'`` must say so, not quietly run the enhanced transfer.
 
     The first-order path needs its stack solve to hand the shared final matching a
     ``(big_F, big_G, big_T)``; the scattering cascade produces a scattering matrix in the two
     half-spaces' own mode bases instead, and joining the two is unwritten. Running ETM under an
     ``'SMM'`` label would make every cross-algorithm check in the suite meaningless.
     """
-    mee = solver(thickness=[180.0], connecting_algo='SMM')
+    mee = solver(thickness=[180.0], layer_algorithm='SMM')
     with pytest.raises(ValueError, match='SMM'):
         mee.solve_conv(*uniform_slots([VOIGT], 1))
 
@@ -313,7 +313,7 @@ def test_the_unstabilised_transfer_cannot_be_reached_from_the_public_path(z_row)
     for different reasons (one has no entry in the algorithm table, the other only wires ETM),
     which is why both are checked.
     """
-    mee = solver(thickness=[180.0], connecting_algo='TMM')
+    mee = solver(thickness=[180.0], layer_algorithm='TMM')
     slots = uniform_slots([VOIGT if z_row else IN_PLANE], 1, z_row=z_row)
     with pytest.raises(ValueError, match='TMM'):
         mee.solve_conv(*slots)
@@ -321,7 +321,7 @@ def test_the_unstabilised_transfer_cannot_be_reached_from_the_public_path(z_row)
 
 def test_the_scattering_algorithm_still_works_without_a_z_row():
     """The control: nothing about the refusal above touches the ordinary SMM path."""
-    mee = solver(thickness=[180.0], connecting_algo='SMM')
+    mee = solver(thickness=[180.0], layer_algorithm='SMM')
     res = mee.solve_conv(*uniform_slots([IN_PLANE], 1, z_row=False))
     assert mee.formulation_assigned == '2ff'
     assert np.isfinite(np.asarray(res.given.R)).all()

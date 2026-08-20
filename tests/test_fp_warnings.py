@@ -92,27 +92,27 @@ def test_numpy_is_new_enough_to_report_fp_flags_correctly():
         'pyproject.toml requires numpy>=2.3.1.')
 
 
-@pytest.mark.parametrize('connecting_algo', ['ETM', 'SMM'])
-def test_thick_2d_stack_is_silent_and_conserves_energy(connecting_algo):
+@pytest.mark.parametrize('layer_algorithm', ['ETM', 'SMM'])
+def test_thick_2d_stack_is_silent_and_conserves_energy(layer_algorithm):
     res, fp = _run(structure=_structure_2d(), thickness=[600], period=[700, 700], max_order=[8, 8],
-                   psi=0.0, bot=EPS_SI, connecting_algo=connecting_algo)
+                   psi=0.0, bot=EPS_SI, layer_algorithm=layer_algorithm)
     assert fp == []
     assert abs(_energy(res) - 1.0) < 1e-10
 
 
-@pytest.mark.parametrize('connecting_algo', ['ETM', 'SMM'])
+@pytest.mark.parametrize('layer_algorithm', ['ETM', 'SMM'])
 @pytest.mark.parametrize('psi', [np.pi / 2, 0.0], ids=['te', 'tm'])
-def test_thick_1d_stack_is_silent_and_conserves_energy(connecting_algo, psi):
+def test_thick_1d_stack_is_silent_and_conserves_energy(layer_algorithm, psi):
     res, fp = _run(structure=_structure_1d(), thickness=[800, 400], period=[700], max_order=[8, 0],
-                   psi=psi, bot=EPS_SI, connecting_algo=connecting_algo)
+                   psi=psi, bot=EPS_SI, layer_algorithm=layer_algorithm)
     assert fp == []
     assert abs(_energy(res) - 1.0) < 1e-10
 
 
-@pytest.mark.parametrize('connecting_algo', ['ETM', 'SMM'])
-def test_conical_stack_is_silent_and_conserves_energy(connecting_algo):
+@pytest.mark.parametrize('layer_algorithm', ['ETM', 'SMM'])
+def test_conical_stack_is_silent_and_conserves_energy(layer_algorithm):
     res, fp = _run(structure=_structure_1d(), thickness=[800, 400], period=[700], max_order=[8, 0],
-                   psi=np.pi / 2, phi=0.3, bot=EPS_SI, connecting_algo=connecting_algo)
+                   psi=np.pi / 2, phi=0.3, bot=EPS_SI, layer_algorithm=layer_algorithm)
     assert fp == []
     assert abs(_energy(res) - 1.0) < 1e-10
 
@@ -370,11 +370,11 @@ def test_guards_step_aside_for_a_jit_tracer():
 _BRANCH_STRUCTURE = np.array([[[0, 1, 0, 1, 1, 1]]]) * 24 + 1
 
 
-def _branch_solve(type_complex, top=1.0, theta=0.4, phi=0.3, backend=0):
+def _branch_solve(complex_dtype, top=1.0, theta=0.4, phi=0.3, backend=0):
     return wavebit.rcwa(
         backend=backend, psi=np.pi / 2, top=top, bot=25.0, theta=theta, phi=phi, max_order=[30],
         wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
-        type_complex=type_complex, fourier_coefficients='integrated',
+        complex_dtype=complex_dtype, fourier_coefficients='integrated',
         factorization='li').solve()
 
 
@@ -402,7 +402,7 @@ _REGIMES = {
 @pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
 def test_double_precision_resolves_every_branch(backend, regime):
     """Silence at complex128 is the claim that makes the warning worth having."""
-    assert _branch_warnings(type_complex=0, backend=backend, **_REGIMES[regime]) == []
+    assert _branch_warnings(complex_dtype=0, backend=backend, **_REGIMES[regime]) == []
 
 
 @pytest.mark.parametrize('regime', list(_REGIMES))
@@ -415,7 +415,7 @@ def test_single_precision_reports_an_unresolvable_branch(backend, regime):
     NumPy 1.80, JAX 4.12, PyTorch 5.68 at the same point — and they are the paths taken for
     gradients and GPUs.
     """
-    assert _branch_warnings(type_complex=1, backend=backend, **_REGIMES[regime])
+    assert _branch_warnings(complex_dtype=1, backend=backend, **_REGIMES[regime])
 
 
 def test_a_traced_single_precision_solve_says_it_could_not_be_checked():
@@ -434,18 +434,18 @@ def test_a_traced_single_precision_solve_says_it_could_not_be_checked():
     theta = np.arcsin(np.sqrt(1.6 ** 2 + 1.2 ** 2 + 1e-4, dtype=np.complex128))
     phi = np.arctan(1.2 / 1.6001, dtype=np.complex128)
 
-    def amplitude(type_complex, t):
+    def amplitude(complex_dtype, t):
         res = wavebit.rcwa(
             backend=1, psi=np.pi / 2, top=1.0, bot=25.0, theta=t, phi=phi, max_order=[10],
             wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
-            type_complex=type_complex, fourier_coefficients='sampled',
+            complex_dtype=complex_dtype, fourier_coefficients='sampled',
             factorization='li').solve()
         return jnp.asarray(res.s_inc.r_s).ravel()[10]
 
-    def traced(type_complex):
+    def traced(complex_dtype):
         with warnings.catch_warnings(record=True) as rec:
             warnings.simplefilter('always')
-            jax.jit(lambda t: amplitude(type_complex, t))(jnp.asarray(theta))
+            jax.jit(lambda t: amplitude(complex_dtype, t))(jnp.asarray(theta))
         return [str(r.message) for r in rec
                 if issubclass(r.category, UnresolvedBranchWarning)]
 
@@ -468,7 +468,7 @@ def test_the_check_does_not_break_tracing():
         res = wavebit.rcwa(
             backend=1, psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, max_order=[6],
             wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
-            type_complex=0, fourier_coefficients='sampled',
+            complex_dtype=0, fourier_coefficients='sampled',
             factorization='li').solve()
         return jnp.sum(jnp.real(jnp.asarray(res.s_inc.R_s)))
 
@@ -477,8 +477,8 @@ def test_the_check_does_not_break_tracing():
 
 
 def test_branch_warning_message_carries_no_numbers():
-    a = str(_branch_warnings(type_complex=1)[0].message)
-    b = str(_branch_warnings(type_complex=1, **_REGIMES['complex angle'])[0].message)
+    a = str(_branch_warnings(complex_dtype=1)[0].message)
+    b = str(_branch_warnings(complex_dtype=1, **_REGIMES['complex angle'])[0].message)
     assert a == b
 
 
@@ -516,25 +516,25 @@ def test_branch_tolerance_rescues_a_complex_angle_at_single_precision():
 
 # --- tier four: a value that arrived below the precision it was asked to be solved at --------
 
-def _precision_warnings(theta, backend=0, type_complex=0):
+def _precision_warnings(theta, backend=0, complex_dtype=0):
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         wavebit.rcwa(
             backend=backend, psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, max_order=[5],
             wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
-            type_complex=type_complex, fourier_coefficients='sampled', factorization='li')
+            complex_dtype=complex_dtype, fourier_coefficients='sampled', factorization='li')
     return [r for r in rec if issubclass(r.category, PrecisionLossWarning)]
 
 
-@pytest.mark.parametrize('theta, type_complex, expected', [
+@pytest.mark.parametrize('theta, complex_dtype, expected', [
     (np.float64(0.4), 0, False),        # matches the solve
     (0.4, 0, False),                    # a Python float has no dtype to lose
     (np.float32(0.4), 1, False),        # single data, single solve — consistent
     (np.float32(0.4), 0, True),         # double was asked for; widening recovers nothing
     (np.complex64(0.4 + 0.3j), 0, True),
 ])
-def test_an_input_below_the_solve_precision_is_reported(theta, type_complex, expected):
-    assert bool(_precision_warnings(theta, type_complex=type_complex)) is expected
+def test_an_input_below_the_solve_precision_is_reported(theta, complex_dtype, expected):
+    assert bool(_precision_warnings(theta, complex_dtype=complex_dtype)) is expected
 
 
 def _in_subprocess(body):
@@ -610,7 +610,7 @@ def test_the_remaining_x64_ordering_gap_is_reported():
                 backend=1, psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, max_order=[5],
                 wavelength=900e-9, period=[2000e-9],
                 structure=np.array([[[0, 1, 0, 1, 1, 1]]]) * 24 + 1, thickness=[100e-9],
-                type_complex=0, fourier_coefficients='sampled', factorization='li')
+                complex_dtype=0, fourier_coefficients='sampled', factorization='li')
         assert any(issubclass(r.category, PrecisionLossWarning) for r in rec), \\
             'the remaining ordering gap went unreported'
         print('OK')

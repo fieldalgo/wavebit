@@ -527,7 +527,7 @@ def _etm_recursion(xp, k0, Kx, Ky, layers, n_orders, G, keep_field=True):
 def _solve_naive(xp, k0, Kx, Ky, layers, n_orders, incident, psi_vf, psi_vb):
     """Unstabilised eigen-decomposition transfer, kept only as a third opinion.
 
-    Not ``connecting_algo='ETM'``, which is the enhanced form in :func:`_solve_etm` and is what
+    Not ``layer_algorithm='ETM'``, which is the enhanced form in :func:`_solve_etm` and is what
     :mod:`wavebit._core.solve_2d` uses. This one exists so the stabilisation can be shown to
     be doing something, and refuses where it would be inaccurate.
     """
@@ -540,7 +540,7 @@ def _solve_naive(xp, k0, Kx, Ky, layers, n_orders, incident, psi_vf, psi_vb):
         if exponent > _MAX_EXPONENT:
             raise ValueError(
                 f'layer exponent {exponent:.1f} is past what the unstabilised transfer can '
-                "carry in float64. Use connecting_algo='ETM' or 'SMM', either of "
+                "carry in float64. Use layer_algorithm='ETM' or 'SMM', either of "
                 'which is bounded for any thickness.')
         Psi = xp.concat([psi_f, psi_b], axis=1)
         E = _diag_of(xp, xp.exp(1j * k0 * lam * d))
@@ -553,7 +553,7 @@ def _solve_naive(xp, k0, Kx, Ky, layers, n_orders, incident, psi_vf, psi_vb):
     return psi_vb @ sol[:2 * n_orders], psi_vf @ sol[2 * n_orders:]
 
 
-def solve_uniform_stack(wavelength, kx, ky, layers, n_orders, incident, connecting_algo='ETM'):
+def solve_uniform_stack(wavelength, kx, ky, layers, n_orders, incident, layer_algorithm='ETM'):
     """``(R, T)`` for one incident state, through a stack of uniform anisotropic layers.
 
     ``layers`` is ``[(eps_blocks, thickness), ...]`` where ``eps_blocks`` is the mapping
@@ -567,7 +567,7 @@ def solve_uniform_stack(wavelength, kx, ky, layers, n_orders, incident, connecti
     of per-mode fluxes. Those agree only when the modes are flux-orthogonal, which holds for a
     lossless medium and stops holding exactly where it would be least noticed.
 
-    ``connecting_algo`` selects how layers are joined. Three, and the choice matters here in a
+    ``layer_algorithm`` selects how layers are joined. Three, and the choice matters here in a
     way it does not in the 2ff path, where both shipped options are already stable:
 
     * ``'ETM'`` (default) is the enhanced-transmittance recursion — **the same option, under
@@ -589,18 +589,18 @@ def solve_uniform_stack(wavelength, kx, ky, layers, n_orders, incident, connecti
     vac = _identity_blocks(xp, n_orders, Kx.dtype)
     _, psi_vf, _, psi_vb = split_forward_backward(xp, layer_matrix_4ff(xp, Kx, Ky, **vac), n_orders)
 
-    if connecting_algo == 'SMM':
+    if layer_algorithm == 'SMM':
         S11, _, S21, _ = _solve_smm(xp, k0, Kx, Ky, layers, n_orders, psi_vf, psi_vb)
         a_inc = _forward_amplitudes(xp, incident, psi_vf, psi_vb, n_orders)
         reflected, transmitted = psi_vb @ (S11 @ a_inc), psi_vf @ (S21 @ a_inc)
-    elif connecting_algo == 'ETM':
+    elif layer_algorithm == 'ETM':
         reflected, transmitted = _solve_etm(xp, k0, Kx, Ky, layers, n_orders, incident, psi_vf, psi_vb)
-    elif connecting_algo == 'TMM':
+    elif layer_algorithm == 'TMM':
         reflected, transmitted = _solve_naive(xp, k0, Kx, Ky, layers, n_orders, incident,
                                               psi_vf, psi_vb)
     else:
         raise ValueError(
-            f"connecting_algo must be 'ETM', 'SMM' or 'TMM', got {connecting_algo!r}")
+            f"layer_algorithm must be 'ETM', 'SMM' or 'TMM', got {layer_algorithm!r}")
 
     def flux(v):
         return float(mode_flux_z(xp, xp.reshape(v, (-1, 1)), n_orders)[0])
@@ -615,7 +615,7 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                  epxz_conv_all=None, epyz_conv_all=None,
                  epzx_conv_all=None, epzy_conv_all=None,
                  *, phi, incidence_side='top', answers=Answers.EFFICIENCY,
-                 connecting_algo='ETM'):
+                 layer_algorithm='ETM'):
     """Solve a 2D stack on the first-order formulation — the public 4ff route.
 
     Twin of :func:`wavebit._core.solve_2d.solve_2d`: same arguments, same returns, four more
@@ -657,19 +657,19 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     here. Pinned against a Berreman stack illuminated from below with no mirror at all
     (``tests/test_anisotropic_berreman.py``).
 
-    Only ``connecting_algo='ETM'`` is wired: this route needs its stack solve to hand
+    Only ``layer_algorithm='ETM'`` is wired: this route needs its stack solve to hand
     ``final_matching`` a ``(big_F, big_G, big_T)``, and the SMM cascade in :func:`_solve_smm`
     produces a scattering matrix in the two half-spaces' own mode bases instead. ``'SMM'``
     raises here rather than silently running the other algorithm.
     """
     xp = array_namespace(epx_conv_all)
-    if connecting_algo != 'ETM':
+    if layer_algorithm != 'ETM':
         raise ValueError(
-            f"connecting_algo={connecting_algo!r} is not available on the first-order (4ff) "
+            f"layer_algorithm={layer_algorithm!r} is not available on the first-order (4ff) "
             "path, which is what a populated z row selects; only 'ETM' is wired. The 4ff "
             'stack solve has to hand the shared final matching a (big_F, big_G, big_T), and '
             'the scattering cascade produces a scattering matrix in the half-spaces\' own '
-            "mode bases instead. Use connecting_algo='ETM' for a z-coupled tensor.")
+            "mode bases instead. Use layer_algorithm='ETM' for a z-coupled tensor.")
 
     per_layer = [epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all,
                  epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all]

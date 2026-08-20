@@ -114,7 +114,7 @@ def probe(na, nb, plans, block):
     def loss(cx):
         m = _analytic.to_conv_mat_smooth_layers(
             build(cx, na, nb), MAX_ORDER, MAX_ORDER, (P, P), normal_grid=NGRID,
-            type_complex=jnp.complex128, xp=jnp, boundary_plans=plans)[block]
+            complex_dtype=jnp.complex128, xp=jnp, boundary_plans=plans)[block]
         return jnp.real(jnp.sum(m * jnp.conj(m)))
     f = jax.jit(jax.value_and_grad(loss))
     xs = CX0 + np.linspace(-HALF_PX * PIX, HALF_PX * PIX, NPTS)

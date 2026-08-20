@@ -143,7 +143,7 @@ def test_exact_rayleigh_point_solves_correctly(backend, max_order, name, algo):
 
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        R, T = _totals(_solve(backend, max_order, connecting_algo=algo))
+        R, T = _totals(_solve(backend, max_order, layer_algorithm=algo))
 
     flagged = [r for r in rec if issubclass(r.category, UnphysicalResultWarning)]
     assert not flagged, f'{name}/{algo} warned on a solve that is now ordinary: {flagged}'
@@ -174,7 +174,7 @@ def _solve_2d(n_spacer, algo, wavelength=WL, auto_detune=False):
     return wavebit.rcwa(backend=0, wavelength=wavelength, max_order=[5, 1], structure=cell,
                         period=[PERIOD, PERIOD], top=1.0, bot=2.25, theta=0.0, phi=0.0,
                         psi=np.pi / 2, thickness=[200.0, 300.0],
-                        connecting_algo=algo).solve(auto_detune=auto_detune)
+                        layer_algorithm=algo).solve(auto_detune=auto_detune)
 
 
 @pytest.mark.parametrize('n_spacer, algo', _GRAZE_2D)
@@ -269,9 +269,9 @@ def test_exact_point_solves_for_tm_and_mixed_polarization(psi, algo):
     kw = dict(_KW)
     kw['psi'] = psi
     exact = wavebit.rcwa(backend=0, wavelength=WL, max_order=[5, 0], structure=_STACK,
-                         connecting_algo=algo, **kw).solve(auto_detune=False)
+                         layer_algorithm=algo, **kw).solve(auto_detune=False)
     near = wavebit.rcwa(backend=0, wavelength=np.nextafter(WL, WL + 1), max_order=[5, 0],
-                        structure=_STACK, connecting_algo=algo,
+                        structure=_STACK, layer_algorithm=algo,
                         **kw).solve(auto_detune=False)
     R, T = _totals(exact)
     R_n, _ = _totals(near)

@@ -12,7 +12,7 @@ Targets:
 Companions. [`anisotropic-materials.md`](anisotropic-materials.md) scopes the whole anisotropy
 question and says what each gap costs; [`five-slot-limit.md`](five-slot-limit.md) explains why the
 2ff path has five permittivity slots and what other solvers do at that edge;
-[`connecting-algorithms.md`](connecting-algorithms.md) covers `connecting_algo`, a general
+[`connecting-algorithms.md`](connecting-algorithms.md) covers `layer_algorithm`, a general
 question this path happens to be the best test bed for.
 
 **This one answers a narrower question: how do you validate a solver when no other solver can

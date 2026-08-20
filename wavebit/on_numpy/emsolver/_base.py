@@ -8,23 +8,23 @@ class _BaseRCWA(CoreSolveMixin):
     def __init__(self, top=1., bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None,
                  max_order=(0, 0), pol=None,
                  period=(1., 1.), wavelength=1.,
-                 thickness=(0.,), connecting_algo='ETM',
-                 device=0, type_complex=np.complex128, polarization=None):
+                 thickness=(0.,), layer_algorithm='ETM',
+                 device=0, complex_dtype=np.complex128, polarization=None):
 
         self._device = 0
 
-        # type_complex
-        self._type_complex: type
-        if type_complex in (0, np.complex128):
-            self._type_complex = np.complex128
-        elif type_complex in (1, np.complex64):
-            self._type_complex = np.complex64
+        # complex_dtype
+        self._complex_dtype: type
+        if complex_dtype in (0, np.complex128):
+            self._complex_dtype = np.complex128
+        elif complex_dtype in (1, np.complex64):
+            self._complex_dtype = np.complex64
         else:
-            raise ValueError('Numpy type_complex')
+            raise ValueError('Numpy complex_dtype')
 
         # currently these two are not used. Only the torch backend uses them.
-        self._type_float = np.float64 if self.type_complex is not np.complex64 else np.float32
-        self._type_int = np.int64 if self.type_complex is not np.complex64 else np.int32
+        self._float_dtype = np.float64 if self.complex_dtype is not np.complex64 else np.float32
+        self._int_dtype = np.int64 if self.complex_dtype is not np.complex64 else np.int32
 
         # Materials in, an index out: the two setters store the Material and derive the
         # `sqrt(eps*mu)` every solve reads. See `CoreSolveMixin.top`.
@@ -48,7 +48,7 @@ class _BaseRCWA(CoreSolveMixin):
         self.period = period
         self.wavelength = wavelength
         self.thickness = thickness
-        self.connecting_algo = connecting_algo
+        self.layer_algorithm = layer_algorithm
 
         self.layer_info_list = []
         self.T1 = None
@@ -62,22 +62,22 @@ class _BaseRCWA(CoreSolveMixin):
         print('The NumPy backend runs on CPU only.')
 
     @property
-    def type_complex(self):
-        return self._type_complex
+    def complex_dtype(self):
+        return self._complex_dtype
 
-    @type_complex.setter
-    def type_complex(self, type_complex):
-        if type_complex == 0:
-            self._type_complex = np.complex128
-        elif type_complex == 1:
-            self._type_complex = np.complex64
-        elif type_complex in (np.complex128, np.complex64):
-            self._type_complex = type_complex
+    @complex_dtype.setter
+    def complex_dtype(self, complex_dtype):
+        if complex_dtype == 0:
+            self._complex_dtype = np.complex128
+        elif complex_dtype == 1:
+            self._complex_dtype = np.complex64
+        elif complex_dtype in (np.complex128, np.complex64):
+            self._complex_dtype = complex_dtype
         else:
             raise ValueError
 
-        self._type_float = np.float64 if self.type_complex is not np.complex64 else np.float32
-        self._type_int = np.int64 if self.type_complex is not np.complex64 else np.int32
+        self._float_dtype = np.float64 if self.complex_dtype is not np.complex64 else np.float32
+        self._int_dtype = np.int64 if self.complex_dtype is not np.complex64 else np.int32
         self.theta = self.theta
         self.phi = self.phi
         self._psi = self.psi
@@ -86,15 +86,15 @@ class _BaseRCWA(CoreSolveMixin):
         self.thickness = self.thickness
 
         if hasattr(self, 'modeler') and self.modeler is not None:
-            self.modeler.type_complex = self._type_complex
+            self.modeler.complex_dtype = self._complex_dtype
 
     @property
-    def type_float(self):
-        return self._type_float
+    def float_dtype(self):
+        return self._float_dtype
 
     @property
-    def type_int(self):
-        return self._type_int
+    def int_dtype(self):
+        return self._int_dtype
 
     @property
     def theta(self):
@@ -105,8 +105,8 @@ class _BaseRCWA(CoreSolveMixin):
         if theta is None:
             self._theta = None
         else:
-            check_input_precision('theta', theta, self.type_complex)
-            self._theta = np.array(theta, dtype=self.type_complex)
+            check_input_precision('theta', theta, self.complex_dtype)
+            self._theta = np.array(theta, dtype=self.complex_dtype)
 
     @property
     def phi(self):
@@ -117,8 +117,8 @@ class _BaseRCWA(CoreSolveMixin):
         if phi is None:
             self._phi = None
         else:
-            check_input_precision('phi', phi, self.type_complex)
-            self._phi = np.array(phi, dtype=self.type_complex)
+            check_input_precision('phi', phi, self.complex_dtype)
+            self._phi = np.array(phi, dtype=self.complex_dtype)
 
     @property
     def psi(self):
@@ -134,15 +134,15 @@ class _BaseRCWA(CoreSolveMixin):
             # describes. Storing it real is what lets the refusal read a dtype, and it keeps
             # the autodiff leaf real — the imaginary direction it used to carry was the
             # unnormalized cosh path, not physics.
-            self._psi = np.array(np.real(psi), dtype=self.type_float)
+            self._psi = np.array(np.real(psi), dtype=self.float_dtype)
 
     def _as_complex(self, value):
         """An incident amplitude in the solve's complex dtype."""
-        return np.array(value, dtype=self.type_complex)
+        return np.array(value, dtype=self.complex_dtype)
 
     def _as_real_angle(self, value):
         """An angle in the real dtype — the storage `chi` shares with `psi`."""
-        return np.array(np.real(value), dtype=self.type_float)
+        return np.array(np.real(value), dtype=self.float_dtype)
 
     def _default_psi(self):
         """Pure s, applied when no incidence was named and none was declared away.
@@ -150,7 +150,7 @@ class _BaseRCWA(CoreSolveMixin):
         Not marked as *given*, so ``polarization`` may still be assigned afterwards — the
         same courtesy the retired ``pol``-derived ``psi`` had.
         """
-        self._psi = np.array(np.pi / 2, dtype=self.type_float)
+        self._psi = np.array(np.pi / 2, dtype=self.float_dtype)
 
     @property
     def max_order(self):
@@ -191,11 +191,11 @@ class _BaseRCWA(CoreSolveMixin):
     @period.setter
     def period(self, period):
         if type(period) in (int, float):
-            self._period = np.array([period, period], dtype=self.type_float)
+            self._period = np.array([period, period], dtype=self.float_dtype)
         elif type(period) in (list, tuple, np.ndarray):
             if len(period) == 1:
                 period = [period[0], period[0]]
-            self._period = np.array(period, dtype=self.type_float)
+            self._period = np.array(period, dtype=self.float_dtype)
         else:
             raise ValueError
 
@@ -209,9 +209,9 @@ class _BaseRCWA(CoreSolveMixin):
     @thickness.setter
     def thickness(self, thickness):
         if type(thickness) in (int, float):
-            self._thickness = np.array([thickness], dtype=self.type_float)
+            self._thickness = np.array([thickness], dtype=self.float_dtype)
         elif type(thickness) in (list, tuple, np.ndarray):
-            self._thickness = np.array(thickness, dtype=self.type_float)
+            self._thickness = np.array(thickness, dtype=self.float_dtype)
         else:
             raise ValueError
 
@@ -232,10 +232,10 @@ class _BaseRCWA(CoreSolveMixin):
 
         # n_inc, not n_top: theta lives in the incidence medium, which incidence_side picks.
         kx = (self.n_inc * sin_theta * np.cos(phi) + max_order_x_range * (
-                wavelength / self.period[0])).astype(self.type_complex)
+                wavelength / self.period[0])).astype(self.complex_dtype)
 
         ky = (self.n_inc * sin_theta * np.sin(phi) + max_order_y_range * (
-                wavelength / self.period[1])).astype(self.type_complex)
+                wavelength / self.period[1])).astype(self.complex_dtype)
 
         return kx, ky
 

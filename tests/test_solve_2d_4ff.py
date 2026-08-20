@@ -341,7 +341,7 @@ def test_a_thick_absorbing_slab_is_a_single_interface(theta_deg, algo):
     want_s, want_p = _fresnel(ABSORBING_N, theta_deg)
 
     for psi, want, pol in ((psi_s, want_s, 's'), (psi_p, want_p, 'p')):
-        R, T = solve_uniform_stack(WL, kx, ky, layers, 1, psi, connecting_algo=algo)
+        R, T = solve_uniform_stack(WL, kx, ky, layers, 1, psi, layer_algorithm=algo)
         assert R == pytest.approx(want, abs=1e-12), f'{algo}, {pol}-pol at {theta_deg} deg'
         assert T == 0.0, f'{algo}: nothing may survive 100 wavelengths of this'
 
@@ -379,7 +379,7 @@ def test_the_cascade_matches_the_closed_form_across_thicknesses(n, thick, algo):
     kx, ky = _kxky(35.0)
     layers = [(blocks(np.diag([n ** 2] * 3).astype(complex)), thick)]
     R, T = solve_uniform_stack(WL, kx, ky, layers, 1, vacuum_sp_states(np, kx, ky, 1)[0],
-                               connecting_algo=algo)
+                               layer_algorithm=algo)
     want_r, want_t = _airy_slab(n, 35.0, thick)
 
     assert R == pytest.approx(want_r, rel=1e-11), f'{algo}, n={n}, d={thick}'
@@ -407,14 +407,14 @@ def test_the_unstabilised_transfer_refuses_before_it_becomes_inaccurate():
     # just inside the bound: it answers, and its answer is still worth having
     ok = [(blocks(absorbing), 7000.0)]
     good = solve_uniform_stack(WL, kx, ky, ok, 1, psi)
-    naive = solve_uniform_stack(WL, kx, ky, ok, 1, psi, connecting_algo='TMM')
+    naive = solve_uniform_stack(WL, kx, ky, ok, 1, psi, layer_algorithm='TMM')
     for a, b in zip(good, naive):
         assert a == pytest.approx(b, rel=1e-6), 'accepted a case it cannot do accurately'
 
     # past it: refused, and told where to go instead
-    with pytest.raises(ValueError, match="connecting_algo='ETM'"):
+    with pytest.raises(ValueError, match="layer_algorithm='ETM'"):
         solve_uniform_stack(WL, kx, ky, [(blocks(absorbing), 30000.0)], 1, psi,
-                            connecting_algo='TMM')
+                            layer_algorithm='TMM')
 
 
 @pytest.mark.parametrize('theta_deg', [0.0, 35.0])
@@ -432,7 +432,7 @@ def test_the_connecting_algorithms_agree_where_all_are_valid(label, eps, theta_d
     kx, ky = _kxky(theta_deg)
     layers = [(blocks(eps), THICK)]
     for psi, pol in zip(vacuum_sp_states(np, kx, ky, 1), ('s', 'p')):
-        got = {a: solve_uniform_stack(WL, kx, ky, layers, 1, psi, connecting_algo=a)
+        got = {a: solve_uniform_stack(WL, kx, ky, layers, 1, psi, layer_algorithm=a)
                for a in ('ETM', 'SMM', 'TMM')}
         gap = max(abs(x - y) for u, v in (('ETM', 'SMM'), ('ETM', 'TMM'))
                   for x, y in zip(got[u], got[v]))
@@ -463,7 +463,7 @@ def test_a_multilayer_stack_matches_berreman(theta_deg, algo):
     ref = berreman_efficiencies(stack, np.deg2rad(theta_deg))
 
     for psi, pol in zip(vacuum_sp_states(np, kx, ky, 1), ('s', 'p')):
-        got = solve_uniform_stack(WL, kx, ky, layers, 1, psi, connecting_algo=algo)
+        got = solve_uniform_stack(WL, kx, ky, layers, 1, psi, layer_algorithm=algo)
         want = (ref[pol]['R_s'] + ref[pol]['R_p'], ref[pol]['T_s'] + ref[pol]['T_p'])
         gap = max(abs(g - w) for g, w in zip(got, want))
         assert gap < 1e-12, f'{algo}, {theta_deg} deg, {pol}-pol: {gap:.2e}'
@@ -504,10 +504,10 @@ def test_adding_orders_to_a_uniform_stack_changes_nothing(label, eps, theta_deg,
     for j, pol in enumerate(('s', 'p')):
         want = solve_uniform_stack(WL, kx1, ky1, layers1, ff1,
                                    vacuum_sp_states(np, kx1, ky1, ff1, order=c1)[j],
-                                   connecting_algo=algo)
+                                   layer_algorithm=algo)
         got = solve_uniform_stack(WL, kx, ky, layers, n_orders,
                                   vacuum_sp_states(np, kx, ky, n_orders, order=centre)[j],
-                                  connecting_algo=algo)
+                                  layer_algorithm=algo)
         gap = max(abs(a - b) for a, b in zip(got, want))
         assert gap < 1e-12, (f'{algo}, {label}, {theta_deg}/{phi_deg} deg, {pol}-pol, '
                              f'n_orders={n_orders}: {gap:.2e}')
@@ -573,17 +573,17 @@ def test_the_plain_transfer_cannot_do_a_realistic_order_count():
     layers = [(blocks(eps, n_orders), THICK)]
 
     # 9 orders: inside the bound, and must still agree with the stable paths
-    plain = solve_uniform_stack(WL, kx, ky, layers, n_orders, psi, connecting_algo='TMM')
+    plain = solve_uniform_stack(WL, kx, ky, layers, n_orders, psi, layer_algorithm='TMM')
     good = solve_uniform_stack(WL, kx, ky, layers, n_orders, psi)
     for a, b in zip(plain, good):
         assert a == pytest.approx(b, abs=1e-10), '9 orders should still be within reach'
 
     # 25 orders: refused, on a layer thin enough that thickness is plainly not the cause
     kx, ky, n_orders, centre = order_grid((2, 2), 35.0, 40.0)
-    with pytest.raises(ValueError, match="connecting_algo='ETM'"):
+    with pytest.raises(ValueError, match="layer_algorithm='ETM'"):
         solve_uniform_stack(WL, kx, ky, [(blocks(eps, n_orders), THICK)], n_orders,
                             vacuum_sp_states(np, kx, ky, n_orders, order=centre)[0],
-                            connecting_algo='TMM')
+                            layer_algorithm='TMM')
 
 
 @pytest.mark.parametrize('theta_deg,phi_deg', [(0.0, 0.0), (35.0, 40.0)],

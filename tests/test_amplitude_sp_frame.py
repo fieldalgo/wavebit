@@ -230,8 +230,8 @@ def test_the_traced_backends_quote_the_same_frame(backend, name):
         assert np.abs(x - y).max() < 1e-12, f'{name}: {attr}'
 
 
-@pytest.mark.parametrize('connecting_algo', ['ETM', 'SMM'])
-def test_both_stack_algorithms_quote_the_same_frame(connecting_algo):
+@pytest.mark.parametrize('layer_algorithm', ['ETM', 'SMM'])
+def test_both_stack_algorithms_quote_the_same_frame(layer_algorithm):
     """``scattering.py`` calls the azimuth twice more, on paths the tests above do not take.
 
     The two stack algorithms are separate code that must land on one answer; comparing them
@@ -239,8 +239,8 @@ def test_both_stack_algorithms_quote_the_same_frame(connecting_algo):
     duplicate of ``test_stability.py``.
     """
     a = _solve(_UC, (_PX, _PY), (_FX, _FY), np.pi / 2, _PSI)
-    b = _solve(_UC, (_PX, _PY), (_FX, _FY), np.pi / 2, _PSI, connecting_algo=connecting_algo)
+    b = _solve(_UC, (_PX, _PY), (_FX, _FY), np.pi / 2, _PSI, layer_algorithm=layer_algorithm)
     for name in ('r_s', 'r_p', 't_s', 't_p'):
         x = np.asarray(getattr(a, name), dtype=np.complex128)
         y = np.asarray(getattr(b, name), dtype=np.complex128)
-        assert np.abs(x - y).max() < 1e-11, f'{connecting_algo}: {name}'
+        assert np.abs(x - y).max() < 1e-11, f'{layer_algorithm}: {name}'

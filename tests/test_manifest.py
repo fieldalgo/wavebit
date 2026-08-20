@@ -22,7 +22,7 @@ import wavebit
 from wavebit.manifest import (LATTICE, MATERIAL_QUANTITY, MATERIALS, SPELLINGS,
                               cited_sources, manifest)
 from wavebit._core.enums import (Backend, Factorization, FourierCoefficients, NormalMethod,
-                                   Pol)
+                                   Tetm)
 
 import pathlib
 
@@ -204,7 +204,7 @@ def test_manifest_is_json_round_trippable():
 def test_enum_lists_match_the_enums():
     enums = manifest()['enums']
     assert enums['backend'] == [m.name.lower() for m in Backend]
-    assert enums['tetm'] == [m.name.lower() for m in Pol]
+    assert enums['tetm'] == [m.name.lower() for m in Tetm]
     assert enums['factorization'] == [m.value for m in Factorization]
     assert enums['fourier_coefficients'] == [m.value for m in FourierCoefficients]
 

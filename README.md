@@ -101,9 +101,9 @@ something.
 The integer codes have named equivalents, if you prefer them to the literals:
 
 ```python
-from wavebit import Backend, Pol, Factorization
+from wavebit import Backend, Tetm, Factorization
 
-solver = wavebit.rcwa(backend=Backend.JAX, tetm=Pol.TM, factorization=Factorization.NVF, ...)
+solver = wavebit.rcwa(backend=Backend.JAX, tetm=Tetm.TM, factorization=Factorization.NVF, ...)
 ```
 
 ## Backends
@@ -367,7 +367,7 @@ transmittance-matrix method (Moharam et al. 1995) — the stabilised transfer, n
 one; the scattering-matrix method is available as an alternative:
 
 ```python
-solver = wavebit.rcwa(backend=0, connecting_algo='SMM', ...)   # 'ETM' is the default
+solver = wavebit.rcwa(backend=0, layer_algorithm='SMM', ...)   # 'ETM' is the default
 ```
 
 Both share the same eigenmodes and boundary conventions and agree to ~1e-14; SMM costs
@@ -495,7 +495,7 @@ textbook coefficients.
 
 **Axes follow the array.** Row `0` of `structure` is `y = 0`, for every builder and for the
 reconstructed field cell alike. The flip that renders a field the conventional way up belongs
-to plotting (`field_plot`), not to the data. `+z` points **down, into the stack**, and the
+to plotting (`plot_field`), not to the data. `+z` points **down, into the stack**, and the
 reconstructed field's vector components use that same `+z` — so a wave travelling into the
 stack has `H = k̂ × E` and `Sz > 0`. (Before 2026-08-14 `Ez`, `Hx` and `Hy` came back with the
 opposite sign; see [`docs/conventions.md`](docs/conventions.md).)

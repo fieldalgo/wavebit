@@ -20,7 +20,7 @@ from .domain import (Material, RETIRED_MATERIAL_NAMES, as_material, index_from_e
 from .enums import (Answers, DEFAULT_ANSWERS, DEFAULT_FACTORIZATION, DEFAULT_FORMULATION,
                     DEFAULT_FOURIER_COEFFICIENTS, DEFAULT_NORMAL_METHOD, answers_of,
                     normal_method_of,
-                    Factorization, Formulation, FourierCoefficients, Pol, coefficients_of,
+                    Factorization, Formulation, FourierCoefficients, Tetm, coefficients_of,
                     factorization_of, formulation_of, resolve_fourier_options)
 from .geometry import StaticGeometry
 from .scattering import smm_1d as _smm_1d, smm_1d_conical as _smm_1d_conical, smm_2d as _smm_2d
@@ -480,12 +480,12 @@ class CoreSolveMixin:
         self._psi_given = True
 
     def _solve_fn(self, grating_type):
-        """The core solve for this instance's ``connecting_algo`` and the given grating type."""
+        """The core solve for this instance's ``layer_algorithm`` and the given grating type."""
         try:
-            return _SOLVES[self.connecting_algo][grating_type]
+            return _SOLVES[self.layer_algorithm][grating_type]
         except KeyError:
             raise ValueError(
-                f'connecting_algo {self.connecting_algo!r} is not supported '
+                f'layer_algorithm {self.layer_algorithm!r} is not supported '
                 f'(expected one of {sorted(_SOLVES)})') from None
 
     _frozen_geometry = None
@@ -530,7 +530,7 @@ class CoreSolveMixin:
             return
         if isinstance(value, str):
             key = value.lower()
-        elif isinstance(value, Pol):
+        elif isinstance(value, Tetm):
             key = value.name.lower()
         else:
             raise ValueError(
@@ -601,7 +601,7 @@ class CoreSolveMixin:
         """
         xp = array_namespace(*(self._polarization if self._polarization is not None
                                else (self._psi,)))
-        return incident_sp_amplitudes(xp, self.type_complex, self._psi,
+        return incident_sp_amplitudes(xp, self.complex_dtype, self._psi,
                                       chi=self._chi, polarization=self._polarization)
 
     @property
@@ -896,7 +896,7 @@ class CoreSolveMixin:
         cheap path.
         """
         given = [name for name, stack in zip(_Z_ROW_SLOTS, z_row) if stack is not None]
-        if self._formulation == Formulation.SECOND and given:
+        if self._formulation == Formulation.TWO_FIELD and given:
             raise ValueError(
                 f"formulation='2ff' cannot express the z row, and {', '.join(given)} "
                 f"{'was' if len(given) == 1 else 'were'} given. "
@@ -906,7 +906,7 @@ class CoreSolveMixin:
                 "efficiencies move by 2e-2 to 6e-2. Use formulation='auto' (the default) or "
                 "'4ff'. See docs/anisotropic-materials.md section 6.")
         if self._formulation == Formulation.AUTO:
-            return Formulation.FIRST if given else Formulation.SECOND
+            return Formulation.FOUR_FIELD if given else Formulation.TWO_FIELD
         return self._formulation
 
     def _solve_1d(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
@@ -919,7 +919,7 @@ class CoreSolveMixin:
                 'take a polarization pair; use _solve_1d_conical, which solve() selects on '
                 'its own when polarization is set')
         solve = self._solve_fn('1d')
-        self._formulation_assigned = Formulation.SECOND
+        self._formulation_assigned = Formulation.TWO_FIELD
         kx, _ = self.get_kx_ky_vector(wavelength)
         return self._finish(solve(
             self.tetm_index, wavelength, kx, self.n_top, self.n_bot, self.theta,
@@ -929,7 +929,7 @@ class CoreSolveMixin:
 
     def _solve_1d_conical(self, wavelength, epx_conv_all, epy_conv_all, epz_conv_i_all):
         solve = self._solve_fn('conical')
-        self._formulation_assigned = Formulation.SECOND
+        self._formulation_assigned = Formulation.TWO_FIELD
         kx, ky = self.get_kx_ky_vector(wavelength)
         return self._finish(solve(
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self._incidence_pair(), self.thickness,
@@ -950,7 +950,7 @@ class CoreSolveMixin:
         kx, ky = self._kxy_2d(wavelength)
         z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
         self._formulation_assigned = self._formulation_for(z_row)
-        if self._formulation_assigned == Formulation.FIRST:
+        if self._formulation_assigned == Formulation.FOUR_FIELD:
             if (mu is not None and any(s is not None for s in mu)) or \
                     mu_top is not None or mu_bot is not None:
                 # Name the reason this call is on the 4ff path, not a reason it could have
@@ -974,7 +974,7 @@ class CoreSolveMixin:
                 epxz_conv_all=epxz_conv_all, epyz_conv_all=epyz_conv_all,
                 epzx_conv_all=epzx_conv_all, epzy_conv_all=epzy_conv_all,
                 phi=self.phi, incidence_side=self.incidence_side,
-                answers=self._answers, connecting_algo=self.connecting_algo))
+                answers=self._answers, layer_algorithm=self.layer_algorithm))
         solve = self._solve_fn('2d')
         return self._finish(solve(
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self._incidence_pair(), self.thickness,
@@ -1544,16 +1544,16 @@ class CoreFactorizationMixin:
         from .draw import structure_slice
         return structure_slice(self, layer=layer, n=n, show=show, band_limited=band_limited)
 
-    def structure_plot(self, layer=0, n=512, show='eps', ax=None, band_limited=False):
-        """Draw one layer of the structure. See :func:`wavebit._core.draw.structure_plot`.
+    def plot_structure(self, layer=0, n=512, show='eps', ax=None, band_limited=False):
+        """Draw one layer of the structure. See :func:`wavebit._core.draw.plot_structure`.
 
         Here rather than on the three backend solvers because the picture is NumPy either way,
-        which is the argument ``field_plot`` already makes; the difference is that this one
+        which is the argument ``plot_field`` already makes; the difference is that this one
         reads the *solver* rather than an array it was handed, so the per-backend wrapper had
         nothing left to do.
         """
-        from .draw import structure_plot
-        return structure_plot(self, layer=layer, n=n, show=show, ax=ax,
+        from .draw import plot_structure
+        return plot_structure(self, layer=layer, n=n, show=show, ax=ax,
                               band_limited=band_limited)
 
     def _reject_unsupported_lattice(self):
@@ -1767,7 +1767,7 @@ class CoreFactorizationMixin:
              epxy_conv_all, epyx_conv_all) = _analytic.to_conv_mat_smooth_layers(
                 structure, max_order_x, max_order_y, self.period,
                 normal_grid=self.normal_grid,
-                type_complex=xp.complex128, xp=xp,
+                complex_dtype=xp.complex128, xp=xp,
                 boundary_plans=None if geometry is None else geometry.boundary_plans,
                 lattice=self._geometry_lattice_for(geometry))
 

@@ -80,7 +80,7 @@ def test_key_tracks_content_not_spelling():
 
     # same run, written differently: enum by name vs by int, defaults stated vs omitted
     reworded = dict(BINARY_GRATING)
-    reworded['numerics'] = {'backend': 0, 'max_order': [10, 0], 'type_complex': 128}
+    reworded['numerics'] = {'backend': 0, 'max_order': [10, 0], 'complex_dtype': 128}
     reworded['incidence'] = {'wavelength': 900.0, 'theta': 0.0, 'phi': 0.0, 'tetm': 'te'}
     assert JobSpec.from_dict(reworded).key() == spec.key()
 
@@ -182,7 +182,7 @@ def test_expanded_sweep_points_match_direct_calls():
     ({**BINARY_GRATING, 'numerics': {'backend': 'cupy'}}, r'not a Backend'),
     ({**BINARY_GRATING, 'numerics': {'max_order': [1, 2, 3]}}, r'two non-negative ints'),
     ({**BINARY_GRATING, 'numerics': {'max_order': [-1, 0]}}, r'two non-negative ints'),
-    ({**BINARY_GRATING, 'numerics': {'type_complex': 32}}, r'128 or 64'),
+    ({**BINARY_GRATING, 'numerics': {'complex_dtype': 32}}, r'128 or 64'),
     ({**BINARY_GRATING, 'version': '99'}, r'version'),
     ({**BINARY_GRATING, 'solver': 'fdtd'}, r'only .rcwa.'),
     ({**BINARY_GRATING, 'outputs': []}, r'no outputs'),

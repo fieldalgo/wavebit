@@ -38,9 +38,9 @@ class SolverJax(RCWAJax, OptimizerJax):
             'backend': self.backend,
             'tetm': self.tetm,
             'max_order': self.max_order,
-            'connecting_algo': self.connecting_algo,
+            'layer_algorithm': self.layer_algorithm,
             'device': self.device,
-            'type_complex': self.type_complex,
+            'complex_dtype': self.complex_dtype,
             # The *requested* values, not the resolved ones the properties report. Both axes
             # resolve against the modeling path, and a pytree round-trip has to reconstruct the
             # solver it flattened: writing the resolved value here would hand the rebuilt solver

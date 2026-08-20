@@ -1,9 +1,9 @@
 """Typed enumerations for the public API.
 
-``Backend`` and ``Pol`` are ``IntEnum``s equal to the integer codes the solver already uses.
-``Pol`` names the two states the ``tetm`` declaration selects, and its integer value is the
+``Backend`` and ``Tetm`` are ``IntEnum``s equal to the integer codes the solver already uses.
+``Tetm`` names the two states the ``tetm`` declaration selects, and its integer value is the
 index the pure 1D solves dispatch on (``CoreSolveMixin.tetm_index``). Users write the word --
-``tetm='te'`` or ``tetm=Pol.TE`` -- because the declaration has exactly two values and a
+``tetm='te'`` or ``tetm=Tetm.TE`` -- because the declaration has exactly two values and a
 number invited a third meaning: the retired ``pol`` accepted the interior of ``[0, 1]``,
 where it was a linear angle in a bad unit rather than a declaration at all.
 
@@ -24,7 +24,7 @@ class Backend(IntEnum):
     TORCH = 2
 
 
-class Pol(IntEnum):
+class Tetm(IntEnum):
     """The two states of the ``tetm`` declaration; the value is ``tetm_index``."""
     TE = 0
     TM = 1
@@ -71,6 +71,10 @@ class Formulation(str, Enum):
     ``(Ex, Ey, Hx, Hy)`` as a first-order system, which is what a z-coupled (magneto-optic,
     Voigt) tensor needs — at roughly 8x the cost, because the eigenproblem doubles.
 
+    The members are named for the *value* they carry, not for the ODE order: ``TWO_FIELD``
+    is the second-order form in two field components and ``FOUR_FIELD`` the first-order form
+    in four, so the pair used to read inverted as ``SECOND = '2ff'`` / ``FIRST = '4ff'``.
+
     ``'auto'`` is the default and reads the problem: a solve handed any of the four z-row
     convolution slots takes ``'4ff'``, everything else ``'2ff'``. The override exists because
     forcing ``'4ff'`` on a problem that does not need it is how the two are cross-checked
@@ -78,9 +82,9 @@ class Formulation(str, Enum):
     rather than dropping the row, because dropping it answers a different problem while
     conserving energy to machine precision.
     """
-    AUTO = 'auto'    # read the slots and decide
-    SECOND = '2ff'   # second-order; refuses a z row
-    FIRST = '4ff'    # first-order; always possible, ~8x
+    AUTO = 'auto'          # read the slots and decide
+    TWO_FIELD = '2ff'      # second-order ODE, two transverse E components; refuses a z row
+    FOUR_FIELD = '4ff'     # first-order ODE, four transverse components; always possible, ~8x
 
 
 class Answers(str, Enum):

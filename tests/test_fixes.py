@@ -239,7 +239,7 @@ def test_10_shared_mean_permittivity_keeps_the_interface():
         psi=0.4, wavelength=0.5, period=[0.6, 0.6], theta=0.1, phi=0.0, max_order=[2, 2])
 
     for algo in ('ETM', 'SMM'):
-        res = wavebit.rcwa(backend=0, connecting_algo=algo, **option).solve()
+        res = wavebit.rcwa(backend=0, layer_algorithm=algo, **option).solve()
         total = float(np.sum(res.R)) + float(np.sum(res.T))
         print(f"[{algo}] R+T = {total:.12f}")
         assert abs(total - 1.0) < 1e-9, f"{algo} energy conservation failed: {total}"

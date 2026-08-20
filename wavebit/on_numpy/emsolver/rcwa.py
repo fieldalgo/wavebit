@@ -4,7 +4,7 @@ from ._base import _BaseRCWA
 from ..._core.domain import retired_material_name
 from ..._core.engine import CoreFactorizationMixin, _refuse_retired
 from ..._core.enums import Formulation
-from ..._core.fields import field_1d, field_1d_conical, field_2d, field_2d_4ff, field_plot
+from ..._core.fields import field_1d, field_1d_conical, field_2d, field_2d_4ff, plot_field
 from ..._core.result import Result, ResultSub
 
 # One shared container (wavebit._core.result); the old per-backend copies are gone.
@@ -49,8 +49,8 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                  tetm=None,
                  pol=None,   # retired; kept only to say so
                  max_order=(0, 0),
-                 connecting_algo='ETM',
-                 type_complex=np.complex128,
+                 layer_algorithm='ETM',
+                 complex_dtype=np.complex128,
                  fourier_coefficients=None,  # 'sampled' | 'integrated'
                  # (closed-form series); the default resolves per modeling path --
                  # 'sampled' on a raster, 'integrated' on both shape paths, which is
@@ -100,13 +100,13 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
 
         super().__init__(top=top, bot=bot, theta=theta, phi=phi, psi=psi, chi=chi, tetm=tetm, pol=pol,
                          max_order=max_order, period=period, wavelength=wavelength,
-                         thickness=thickness, connecting_algo=connecting_algo,
-                         type_complex=type_complex,
+                         thickness=thickness, layer_algorithm=layer_algorithm,
+                         complex_dtype=complex_dtype,
                          polarization=polarization)
         self.incidence_side = incidence_side
         self.answers = answers
 
-        self.modeler = Modeling(period=self.period, type_complex=type_complex)
+        self.modeler = Modeling(period=self.period, complex_dtype=complex_dtype)
 
         self._modeling_type_assigned = None
         self._grating_type_assigned = None
@@ -183,9 +183,9 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                 f'{where}: expected a NumPy array on this backend, got '
                 f'{type(grid).__name__}')
         if grid.dtype in (np.int64, np.float64, np.int32, np.float32):
-            dtype = self.type_float
+            dtype = self.float_dtype
         elif grid.dtype in (np.complex128, np.complex64):
-            dtype = self.type_complex
+            dtype = self.complex_dtype
         else:
             raise ValueError
         return grid.astype(dtype)
@@ -266,7 +266,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         """
         self._assign_grating_type()
         z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
-        if self._formulation_for(z_row) == Formulation.FIRST:
+        if self._formulation_for(z_row) == Formulation.FOUR_FIELD:
             # The 1D paths have no z-row slots to fill, so a z row is also a choice of path:
             # the first-order solve is written on the 2D layout (a 1D structure is n_orders_y == 1
             # there, the same physics the conical path solves at conical cost).
@@ -341,7 +341,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                                           sample_x=sample_x, sample_y=sample_y,
                                           sample_z=sample_z, incidences=incidences,
                                           lattice=self.lattice)
-        elif self._formulation_assigned == Formulation.FIRST:
+        elif self._formulation_assigned == Formulation.FOUR_FIELD:
             # The grating type cannot answer this: the first-order path sets it to 2 as well,
             # so branching on it alone would hand a 4ff solve to the 2ff reconstruction, which
             # reads the same state slots and returns a plausible, wrong cell.
@@ -379,5 +379,5 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         field_cell = self.reconstruct_field(sample_x, sample_y, sample_z, incidences)
         return res, field_cell
 
-    def field_plot(self, field_cell):
-        field_plot(field_cell, self.tetm_index)
+    def plot_field(self, field_cell):
+        plot_field(field_cell, self.tetm_index)

@@ -15,7 +15,7 @@ def _enable_jax_x64_if_already_imported():
 
     Note this lifts a *cap* rather than forcing a choice: with x64 off, ``jnp.asarray(x,
     jnp.float64)`` still yields float32, so double precision cannot be opted into at all; with
-    it on, ``jnp.asarray(x, jnp.float32)`` still yields float32, and ``type_complex`` continues
+    it on, ``jnp.asarray(x, jnp.float32)`` still yields float32, and ``complex_dtype`` continues
     to select the solve's precision either way. The cost is that JAX's *default* dtype becomes
     64-bit for the caller's own code too, which is why this stays limited to callers who have
     already imported JAX, and why `PrecisionLossWarning` still covers the ordering this cannot
@@ -36,8 +36,8 @@ from ._core.backend import (AutoDetuneWarning, PrecisionLossWarning, RayleighPoi
                             UnphysicalResultWarning, UnresolvedBranchWarning,
                             get_j1_implementation, set_j1_implementation)
 from ._core.conventions import branch_tolerance
-from ._core.draw import structure_plot, structure_slice
-from ._core.enums import (Answers, Backend, Pol, FourierCoefficients, Factorization,
+from ._core.draw import plot_structure, structure_slice
+from ._core.enums import (Answers, Backend, Tetm, FourierCoefficients, Factorization,
                           Formulation, NormalMethod)
 from ._core.domain import (Layer, Stack, Incidence, Material,
                            eps_from_index, index_from_eps)

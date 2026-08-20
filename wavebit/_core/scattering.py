@@ -5,7 +5,7 @@ The *connecting algorithm* is how per-layer eigenmodes are joined into a stack r
 transmittance matrix; SMM composes per-layer scattering matrices with the Redheffer star
 product. Both consume the same modes — this module imports the mode builders from the ETM
 solves rather than restating the eigen-algebra — and both use the same boundary conventions,
-so ``connecting_algo='SMM'`` returns the same efficiencies as ``'ETM'``, not a second opinion.
+so ``layer_algorithm='SMM'`` returns the same efficiencies as ``'ETM'``, not a second opinion.
 
 Why have it: a layer's scattering matrix depends only on that layer and the shared gap medium,
 and the star product is associative. Layer responses can therefore be built once and cascaded,
@@ -226,7 +226,7 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     """Solve a 1D grating stack by scattering matrices — SMM twin of :func:`solve_1d`.
 
     Same arguments and same returns as :func:`wavebit._core.solve_1d.solve_1d`, so the two are
-    interchangeable behind ``connecting_algo``.
+    interchangeable behind ``layer_algorithm``.
 
     ``incidence_side='bottom'`` costs nothing here: the cascade composes all four blocks
     whichever side is lit, so backside illumination is *reading* ``S22`` / ``S12`` where the

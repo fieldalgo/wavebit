@@ -123,7 +123,7 @@ def build():
                 solver.reconstruct_field(incidences=which, **RES))
         out[f'{name}__grating_type'] = np.array(solver.grating_type_assigned)
         # `.value`, not the enum: numpy reads a str-Enum's data ('2ff') for the
-        # itemsize but its __str__ ('Formulation.SECOND') for the content, storing
+        # itemsize but its __str__ ('Formulation.TWO_FIELD') for the content, storing
         # 'For'. Worse, `enum == that_array` is True anyway, so the assertion that
         # reads it back looks like it checks something and does not.
         out[f'{name}__formulation'] = np.array(solver.formulation_assigned.value)

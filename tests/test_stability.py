@@ -28,13 +28,13 @@ def _grating(eps_hi=16.0, cells=8):
 
 
 # eps 16 is the index 4; eps 2.25 the index 1.5.
-def _solve(*, max_order, thickness, eps_hi=16.0, algo='ETM', type_complex=np.complex128,
+def _solve(*, max_order, thickness, eps_hi=16.0, algo='ETM', complex_dtype=np.complex128,
            period=3000.0, wavelength=400.0, eps_bot=2.25):
     return wavebit.rcwa(
         backend=0, wavelength=wavelength, period=[period], max_order=[max_order, 0],
         top=1.0, bot=eps_bot, theta=0.0, phi=0.0, psi=np.pi / 2,
         structure=_grating(eps_hi), thickness=[thickness],
-        connecting_algo=algo, type_complex=type_complex,
+        layer_algorithm=algo, complex_dtype=complex_dtype,
     ).solve()
 
 
@@ -117,7 +117,7 @@ def test_tmm_and_smm_fields_agree_through_a_thick_layer(thickness):
         solver = wavebit.rcwa(
             backend=0, wavelength=400.0, period=[3000.0], max_order=[40, 0],
             top=1.0, bot=2.25, theta=0.0, phi=0.0, psi=np.pi / 2,
-            structure=_grating(), thickness=[thickness], connecting_algo=algo,
+            structure=_grating(), thickness=[thickness], layer_algorithm=algo,
             answers='field')
         solver.solve()
         cells.append(np.asarray(solver.reconstruct_field(sample_x=8, sample_y=1, sample_z=6)))
@@ -141,14 +141,14 @@ def test_tmm_and_smm_agree_on_a_lossy_stack():
 @pytest.mark.parametrize('thickness', [500.0, 5_000.0])
 def test_single_precision_still_conserves_energy(thickness):
     """complex64 overflows at exp(88), so this is where a carried exponential would show."""
-    total = _energy(_solve(max_order=40, thickness=thickness, type_complex=np.complex64))
+    total = _energy(_solve(max_order=40, thickness=thickness, complex_dtype=np.complex64))
     assert total == pytest.approx(1.0, abs=1e-4)
 
 
 def test_single_precision_tracks_double():
     """32-bit should cost accuracy, not correctness."""
-    wide = _solve(max_order=40, thickness=5_000.0, type_complex=np.complex128)
-    narrow = _solve(max_order=40, thickness=5_000.0, type_complex=np.complex64)
+    wide = _solve(max_order=40, thickness=5_000.0, complex_dtype=np.complex128)
+    narrow = _solve(max_order=40, thickness=5_000.0, complex_dtype=np.complex64)
     assert np.allclose(np.real(wide.R), np.real(narrow.R), atol=1e-4)
     assert np.allclose(np.real(wide.T), np.real(narrow.T), atol=1e-4)
 

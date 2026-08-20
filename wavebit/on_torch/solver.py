@@ -7,7 +7,7 @@ from .optimizer.optimizer import OptimizerTorch
 
 class SolverTorch(RCWATorch, OptimizerTorch):
 
-    def __init__(self, device=0, type_complex=0, *args, **kwargs):
+    def __init__(self, device=0, complex_dtype=0, *args, **kwargs):
 
         # device
         if device in (0, 'cpu'):
@@ -19,16 +19,17 @@ class SolverTorch(RCWATorch, OptimizerTorch):
         else:
             raise ValueError('device')
         #
-        # type_complex
-        if type_complex in (0, torch.complex128, np.complex128):
-            self._type_complex = torch.complex128
-        elif type_complex in (1, torch.complex64, np.complex64):
-            self._type_complex = torch.complex64
+        # complex_dtype
+        if complex_dtype in (0, torch.complex128, np.complex128):
+            self._complex_dtype = torch.complex128
+        elif complex_dtype in (1, torch.complex64, np.complex64):
+            self._complex_dtype = torch.complex64
         else:
-            raise ValueError('Torch type_complex')
-        self._type_float = torch.float64 if self._type_complex is not torch.complex64 else torch.float32
-        self._type_int = torch.int64 if self._type_complex is not torch.complex64 else torch.int32
+            raise ValueError('Torch complex_dtype')
+        self._float_dtype = (torch.float64 if self._complex_dtype is not torch.complex64
+                             else torch.float32)
+        self._int_dtype = torch.int64 if self._complex_dtype is not torch.complex64 else torch.int32
         self.device = device
 
-        RCWATorch.__init__(self, device=device, type_complex=type_complex, *args, **kwargs)
-        OptimizerTorch.__init__(self, device=device, type_complex=type_complex, *args, **kwargs)
+        RCWATorch.__init__(self, device=device, complex_dtype=complex_dtype, *args, **kwargs)
+        OptimizerTorch.__init__(self, device=device, complex_dtype=complex_dtype, *args, **kwargs)

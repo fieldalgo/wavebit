@@ -29,7 +29,7 @@ import json
 
 from ._core.domain import RETIRED_MATERIAL_NAMES
 from ._core.enums import (Answers, Backend, DEFAULT_ANSWERS, Factorization,
-                          FourierCoefficients, NormalMethod, Pol)
+                          FourierCoefficients, NormalMethod, Tetm)
 from ._core.engine import (_COEFFICIENTS_IMPLEMENTED_BY, _COEFFICIENTS_REASON,
                            _FACTORIZATION_IMPLEMENTED_BY, _FACTORIZATION_REASON)
 from ._core.spec import SPEC_VERSION
@@ -48,7 +48,16 @@ from ._core.spec import SPEC_VERSION
 #: (refractive index -> relative permittivity), so a consumer that recognised the old shape
 #: and kept generating old numbers would generate legal, energy-conserving, wrong scenes:
 #: this bump is what lets it refuse instead (2026-08-20).
-MANIFEST_VERSION = '5'
+#: '6': the pre-release rename set (2026-08-20). What a consumer sees move:
+#: ``results.incidences.fields`` goes ``('res', 'res_te_inc', 'res_tm_inc')`` ->
+#: ``('given', 's_inc', 'p_inc')``, and the constructor keywords named in ``why`` and
+#: ``meaning`` prose move with them (``fto`` -> ``max_order``, ``type_complex`` ->
+#: ``complex_dtype``, ``connecting_algo`` -> ``layer_algorithm``). ``docs/capability-manifest.md``
+#: says a rename alone does not earn a bump, because a consumer reading unknown keys degrades
+#: gracefully -- but ``fields`` is a *recognisable* key whose contents are attribute names a
+#: consumer indexes a result object with, so the old contents keep their shape while ceasing
+#: to resolve. That is the same failure the '5' bump exists for, one level down.
+MANIFEST_VERSION = '6'
 
 
 # --------------------------------------------------------------- how a structure is spelled
@@ -287,7 +296,7 @@ MATERIALS = (
         'why': 'with eps_xz or eps_yz the second-order reduction fails, so the solve takes '
                'the first-order (4ff) formulation instead -- selected automatically by the '
                'presence of the four z-row slots, or by formulation=4ff, at about 8x. Two '
-               'limits ride with it: connecting_algo must be ETM, and mu is not implemented '
+               'limits ride with it: layer_algorithm must be ETM, and mu is not implemented '
                'there. Field reconstruction is (2026-08-14). Uniform layers only; a '
                'patterned z row is patterned_z_coupled below.',
         'source': 'wavebit/_core/solve_2d_4ff.py',
@@ -390,7 +399,7 @@ def manifest() -> dict:
         'wavebit_version': __version__,
         'enums': {
             'backend': [m.name.lower() for m in Backend],
-            'tetm': [m.name.lower() for m in Pol],
+            'tetm': [m.name.lower() for m in Tetm],
             'factorization': [m.value for m in Factorization],
             'fourier_coefficients': [m.value for m in FourierCoefficients],
             'normal_method': [m.value for m in NormalMethod],

@@ -328,7 +328,7 @@ complex64:
 ```python
 import jax.numpy as jnp, wavebit
 theta = jnp.asarray(0.4 + 0.3j)                               # complex64 — x64 is not on yet
-wavebit.rcwa(backend=1, theta=theta, type_complex=0, ...)   # ...but double was asked for
+wavebit.rcwa(backend=1, theta=theta, complex_dtype=0, ...)   # ...but double was asked for
 ```
 
 The setter's `jnp.array(theta, dtype=complex128)` then widens it without recovering anything,
@@ -351,8 +351,8 @@ Note what x64 actually is:
 | `jnp.asarray(0.4, jnp.float64)` | **float32** — cannot opt in | float64 |
 | `jnp.asarray(0.4, jnp.float32)` | float32 | float32 — can still opt out |
 
-It is a **cap**, not a default, and `type_complex` keeps selecting the solve's precision either
-way (`type_complex=1` still returns complex64 with x64 on). The half of the old rationale that
+It is a **cap**, not a default, and `complex_dtype` keeps selecting the solve's precision either
+way (`complex_dtype=1` still returns complex64 with x64 on). The half of the old rationale that
 survives is that a NumPy-only caller should pay nothing, so this never *imports* JAX — pinned
 by `test_importing_wavebit_does_not_drag_jax_in`.
 

@@ -82,7 +82,7 @@ def solve(top, bot, layer_eps, layer_mu, theta_deg, thick=THICK, algo='ETM'):
                        bot=wavebit.Material(eps_b, mu_b),
                        theta=np.deg2rad(theta_deg), phi=0.0, psi=0.0, max_order=(0, 0),
                        period=(PERIOD, PERIOD), wavelength=WL, thickness=[thick],
-                       connecting_algo=algo)
+                       layer_algorithm=algo)
     res = mee.solve_conv(*_slots(layer_eps),
                              mu=None if _is_unit(layer_mu) else tuple(_slots(layer_mu)),
                              mu_top=mu_t, mu_bot=mu_b, eps_top=eps_t, eps_bot=eps_b)
@@ -182,7 +182,7 @@ def _solve_psi(top, bot, layer_eps, theta_deg, psi_deg, algo='ETM', side='top'):
                        bot=wavebit.Material(eps_b, mu_b),
                        theta=np.deg2rad(theta_deg), phi=0.0, psi=np.deg2rad(psi_deg),
                        max_order=(0, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
-                       incidence_side=side, connecting_algo=algo)
+                       incidence_side=side, layer_algorithm=algo)
     res = mee.solve_conv(*_slots(layer_eps), mu_top=mu_t, mu_bot=mu_b,
                              eps_top=eps_t, eps_bot=eps_b)
     return res

@@ -127,7 +127,7 @@ post-processing is identical for both sides.
 
 Within a layer the array follows the image convention: row `0` of a raster `structure` is
 `y = 0`, for every builder and for the reconstructed field cell alike. The flip that renders a
-field the conventional way up belongs to plotting (`field_plot`), not to the data.
+field the conventional way up belongs to plotting (`plot_field`), not to the data.
 
 **The reconstructed field's vector components use that same `+z`.** `reconstruct_field` returns
 `(Ex, Ey, Ez, Hx, Hy, Hz)` (or the 3-component 1D layouts) in the frame declared above, so

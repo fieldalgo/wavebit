@@ -22,9 +22,9 @@ fourth and stays arrays: it is not an assignment but a *sampled field*, one numb
 which is exactly why topology optimisation reaches for it -- so it keeps a separate array per
 quantity rather than a grid of objects (``structure`` for permittivity, ``mu`` beside it).
 
-``Stack`` therefore holds the ordered layers plus the surrounding media (``top``,
-``bot``, ``period``); ``Incidence`` holds the illumination. Numerics and backend choice
-(``max_order``, ``fourier_coefficients``, ``factorization``, ``backend``, ``type_complex``) stay as
+``Stack`` therefore holds the ordered layers plus the surrounding media (``top``, ``bot``,
+``period``); ``Incidence`` holds the illumination. Numerics and backend choice (``max_order``,
+``fourier_coefficients``, ``factorization``, ``backend``, ``complex_dtype``) stay as
 :func:`wavebit.rcwa` arguments -- they are not part of the physical scene.
 
 Backend-agnostic throughout: a raster grid, and equally a :class:`Material`'s ``epsilon``, may
@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from .backend import array_namespace
-from .enums import Pol  # noqa: F401  (re-exported for spec's tetm parsing)
+from .enums import Tetm  # noqa: F401  (re-exported for spec's tetm parsing)
 
 
 def _is_raster(value: Any) -> bool:

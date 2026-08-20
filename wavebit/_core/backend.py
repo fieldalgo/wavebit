@@ -259,7 +259,7 @@ def check_input_precision(name, value, target_dtype):
 
         import jax.numpy as jnp, wavebit
         theta = jnp.asarray(0.4 + 0.3j)          # complex64 -- x64 is not on yet
-        wavebit.rcwa(backend=1, theta=theta, type_complex=0, ...)   # asks for double
+        wavebit.rcwa(backend=1, theta=theta, complex_dtype=0, ...)   # asks for double
 
     ``jnp.array(theta, dtype=complex128)`` in the setter then promotes it without recovering
     anything, and the solve runs with ~8 significant digits missing from its incidence angle.

@@ -144,7 +144,7 @@ def _check_resolvable(xp, v):
                 'this solve is traced, so whether its square-root branches are resolvable '
                 'could not be checked — and it is running in single precision, where they '
                 'often are not. A wrong branch here is finite and silent. Run at double '
-                'precision (type_complex=0), or trace a double-precision solve if you need '
+                'precision (complex_dtype=0), or trace a double-precision solve if you need '
                 'jit; see docs/branch-cuts.md.',
                 UnresolvedBranchWarning, stacklevel=3)
         return
@@ -154,7 +154,7 @@ def _check_resolvable(xp, v):
             'a square-root branch was decided from a real part smaller than this dtype can '
             'resolve, so the choice came from round-off rather than from the physics. The '
             'result is finite and may be badly wrong. Re-run at double precision '
-            '(type_complex=0); docs/branch-cuts.md covers the single-precision case.',
+            '(complex_dtype=0); docs/branch-cuts.md covers the single-precision case.',
             UnresolvedBranchWarning, stacklevel=3)
 
 

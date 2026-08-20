@@ -74,7 +74,7 @@ def solve(case, max_order=MAX_ORDER, algo='ETM'):
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
                        psi=0.0, max_order=(max_order, max_order), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK], structure=np.expand_dims(eps, axis=0),
-                       connecting_algo=algo)
+                       layer_algorithm=algo)
     res = mee.solve_conv(epx, epy, epz_i, epxy, epyx, mu=mu_slots)
     te, tm = res.s_inc, res.p_inc
     return np.array([float(te.R.sum()), float(te.T.sum()),

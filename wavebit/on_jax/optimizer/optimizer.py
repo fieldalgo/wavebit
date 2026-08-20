@@ -26,15 +26,15 @@ class OptimizerJax:
         loss_value, grads = jax.value_and_grad(forward_pass)(params, forward, loss_fn)
         return loss_value, grads
 
-    def grad(self, pois, forward, loss_fn):
-        params = {poi: (getattr(self, poi)) for poi in pois}
+    def grad(self, parameters, forward, loss_fn):
+        params = {name: (getattr(self, name)) for name in parameters}
         _, grads = self._grad(params, forward, loss_fn)
-        [setattr(self, poi, params[poi]) for poi in pois]
+        [setattr(self, name, params[name]) for name in parameters]
 
         return grads
 
-    def fit(self, pois, forward, loss_fn, optimizer, iteration=1):
-        params = {poi: (getattr(self, poi)) for poi in pois}
+    def fit(self, parameters, forward, loss_fn, optimizer, iteration=1):
+        params = {name: (getattr(self, name)) for name in parameters}
         opt_state = optimizer.init(params)
 
         @jax.jit
@@ -48,6 +48,6 @@ class OptimizerJax:
         for _ in tqdm(range(iteration)):
             params, opt_state, loss_value = step(params, opt_state)
 
-        [setattr(self, poi, params[poi]) for poi in pois]
+        [setattr(self, name, params[name]) for name in parameters]
 
         return params

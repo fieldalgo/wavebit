@@ -351,7 +351,7 @@ def test_torch_device_code_is_not_a_device_index():
     Passing it through raw selects MPS on a Mac, which rejects float64 outright.
     """
     torch = pytest.importorskip('torch')
-    modeler = Modeling(period=PERIOD, type_complex=torch.complex128, device=0,
+    modeler = Modeling(period=PERIOD, complex_dtype=torch.complex128, device=0,
                        xp=__import__('array_api_compat').array_namespace(torch.zeros(1)))
     info = modeler.modeling_block_instruction(INSTRUCTIONS['rect_rot'])
 

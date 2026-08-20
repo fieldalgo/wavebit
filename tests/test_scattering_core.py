@@ -7,7 +7,7 @@ pinned to the legacy results in test_golden_legacy_parity.py. So the properties 
                    amplitudes, for the psi incidence and both pure-TE / pure-TM variants;
   * conservation — lossless stacks keep their energy (a check ETM agreement alone would pass
                    even if both were wrong the same way, so it is worth its own assertion);
-  * wiring       — connecting_algo='SMM' reaches the core solve, and an unknown algo is
+  * wiring       — layer_algorithm='SMM' reaches the core solve, and an unknown algo is
                    rejected with a useful message;
   * fields       — the near field reconstructed after an SMM solve, and the per-layer state
                    it is built from, match the ETM's, on an axis-aligned and a skewed cell;
@@ -93,7 +93,7 @@ EFFICIENCIES = ('R', 'R_s', 'R_p', 'T', 'T_s', 'T_p')
 
 
 def _solve(algo, kwargs):
-    return wavebit.rcwa(backend=0, connecting_algo=algo, **kwargs).solve()
+    return wavebit.rcwa(backend=0, layer_algorithm=algo, **kwargs).solve()
 
 
 # ------------------------------------------------------------------------------- agreement
@@ -169,7 +169,7 @@ def test_half_space_permittivity_reaches_both_connecting_algorithms(slot):
 
 def _core_inputs(kwargs):
     """Solver-built arguments for a direct core call (same route the mixin takes)."""
-    solver = wavebit.rcwa(backend=0, connecting_algo='SMM', **kwargs)
+    solver = wavebit.rcwa(backend=0, layer_algorithm='SMM', **kwargs)
     solver.solve()                    # assigns the grating type
     epx, epy, epz = to_conv_mat_raster_sampled(
         solver.structure, solver.max_order[0], solver.max_order[1])
@@ -190,7 +190,7 @@ CORE_FN = {'1d': (smm_1d, solve_1d), 'conical': (smm_1d_conical, solve_1d_conica
 
 @pytest.mark.parametrize('name,kwargs,kind', ALL_CASES, ids=[c[0] for c in ALL_CASES])
 def test_wiring_matches_direct_core_call(name, kwargs, kind):
-    """connecting_algo='SMM' dispatches to the core with the arguments it expects."""
+    """layer_algorithm='SMM' dispatches to the core with the arguments it expects."""
     smm_fn, _ = CORE_FN[kind]
     solver, inputs = _core_inputs(kwargs)
     via_api = _solve('SMM', kwargs)
@@ -224,7 +224,7 @@ def test_unknown_connecting_algo_is_rejected():
 
 
 def _field(algo, kwargs, **res):
-    solver = wavebit.rcwa(backend=0, connecting_algo=algo, answers='field', **kwargs)
+    solver = wavebit.rcwa(backend=0, layer_algorithm=algo, answers='field', **kwargs)
     solver.solve()
     cell = solver.reconstruct_field(incidences=('given', 's', 'p'), **res)
     return solver, np.array(cell)
@@ -261,8 +261,8 @@ def test_smm_field_state_matches_tmm(name, kwargs, kind):
     reads, and the two algorithms express that one in different bases (see ``_field_state``).
     What is defined there is their product, which is what the reconstruction actually forms.
     """
-    tmm = wavebit.rcwa(backend=0, connecting_algo='ETM', answers='field', **kwargs)
-    smm = wavebit.rcwa(backend=0, connecting_algo='SMM', answers='field', **kwargs)
+    tmm = wavebit.rcwa(backend=0, layer_algorithm='ETM', answers='field', **kwargs)
+    smm = wavebit.rcwa(backend=0, layer_algorithm='SMM', answers='field', **kwargs)
     tmm.solve()
     smm.solve()
 
@@ -300,7 +300,7 @@ CUTOFF = dict(structure=np.array([[[9., 9., 1., 1., 9., 1.]], [[4., 4., 4., 1., 
 def test_smm_field_with_an_order_exactly_at_the_substrate_cutoff(extra):
     """A retained order sitting at kz_bot = 0 is a real configuration, not a pathology."""
     kwargs = dict(CUTOFF, **extra)
-    solver = wavebit.rcwa(backend=0, connecting_algo='SMM', **kwargs)
+    solver = wavebit.rcwa(backend=0, layer_algorithm='SMM', **kwargs)
     kz = np.sqrt(np.array(solver.n_bot, dtype=complex) ** 2
                  - np.array(solver.get_kx_ky_vector(kwargs['wavelength'])[0]) ** 2)
     assert np.min(np.abs(kz)) < 1e-12, 'premise: an order must sit exactly at cutoff'
@@ -360,7 +360,7 @@ def test_field_before_solve_raises():
     `answers` check ahead of it; that one has its own coverage in
     `test_answers_declaration.py` and matches on a different sentence.
     """
-    solver = wavebit.rcwa(backend=0, connecting_algo='SMM', answers='field', **CASES_1D[0][1])
+    solver = wavebit.rcwa(backend=0, layer_algorithm='SMM', answers='field', **CASES_1D[0][1])
     with pytest.raises(RuntimeError, match='run solve'):
         solver.reconstruct_field(sample_x=4, sample_z=4)
 
@@ -368,7 +368,7 @@ def test_field_before_solve_raises():
 def test_frozen_geometry_does_not_change_the_smm_answer():
     """SMM decides nothing discrete, so freezing must be a no-op for it, bit for bit."""
     kwargs = dict(CASES_1D[4][1])          # a substrate-matched bottom layer
-    solver = wavebit.rcwa(backend=0, connecting_algo='SMM', **kwargs)
+    solver = wavebit.rcwa(backend=0, layer_algorithm='SMM', **kwargs)
     with_geom = solver.solve(geometry=solver.freeze_geometry())
     without = _solve('SMM', kwargs)
     assert np.allclose(np.array(with_geom.R), np.array(without.R), atol=0, rtol=0)
@@ -464,7 +464,7 @@ def test_smm_field_cross_backend(case, backend, name):
     kwargs = case[1]
     _, reference = _field('SMM', kwargs, sample_x=5, sample_y=5, sample_z=4)
 
-    solver = wavebit.rcwa(backend=backend, connecting_algo='SMM', answers='field', **kwargs)
+    solver = wavebit.rcwa(backend=backend, layer_algorithm='SMM', answers='field', **kwargs)
     solver.solve(geometry=solver.freeze_geometry())
     cell = np.asarray(solver.reconstruct_field(sample_x=5, sample_y=5, sample_z=4,
                                              incidences=('given', 's', 'p')))

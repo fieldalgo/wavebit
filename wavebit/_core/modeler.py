@@ -164,11 +164,11 @@ def _shape_param(xp, v, dtype, device=None):
     return a if a.dtype == dtype else xp.astype(a, dtype)
 
 
-def _flat(xp, v, type_float, type_complex, device=None):
+def _flat(xp, v, float_dtype, complex_dtype, device=None):
     """``v`` flattened to 1-D, creating scalars at the modeler's working precision."""
     if _is_array(v):
         return xp.reshape(_to_ns(xp, v, device), (-1,))
-    dtype = type_complex if isinstance(v, complex) else type_float
+    dtype = complex_dtype if isinstance(v, complex) else float_dtype
     return xp.asarray([v], dtype=dtype, device=device)
 
 
@@ -259,31 +259,31 @@ def check_block_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_
         f"combine='paint' to keep what this path draws.")
 
 
-def _precision_is_double(type_complex):
+def _precision_is_double(complex_dtype):
     """Map any spelling of the complex dtype onto the double / single precision flag.
 
     Accepts the legacy shorthands (``0`` = complex128, ``1`` = complex64) as well as any
     backend's dtype object — matching on the bit width keeps this free of ``if torch:``.
     """
-    if type_complex is None:
+    if complex_dtype is None:
         return True
-    if isinstance(type_complex, int) and not isinstance(type_complex, bool):
-        if type_complex == 0:
+    if isinstance(complex_dtype, int) and not isinstance(complex_dtype, bool):
+        if complex_dtype == 0:
             return True
-        if type_complex == 1:
+        if complex_dtype == 1:
             return False
-        raise ValueError(f'unsupported type_complex: {type_complex}')
-    s = str(type_complex).lower()
+        raise ValueError(f'unsupported complex_dtype: {complex_dtype}')
+    s = str(complex_dtype).lower()
     if '128' in s:
         return True
     if '64' in s or '32' in s:
         return False
-    raise ValueError(f'unsupported type_complex: {type_complex}')
+    raise ValueError(f'unsupported complex_dtype: {complex_dtype}')
 
 
-def _edge_list(xp, parts, type_float, type_complex, device):
+def _edge_list(xp, parts, float_dtype, complex_dtype, device):
     """The ``(n, 1)`` grid line column both the eager build and the replay hand back."""
-    flat = [_flat(xp, v, type_float, type_complex, device) for v in parts]
+    flat = [_flat(xp, v, float_dtype, complex_dtype, device) for v in parts]
     dtype = _result_dtype(xp, [p.dtype for p in flat])
     return xp.reshape(xp.concat([xp.astype(p, dtype) for p in flat]), (-1, 1))
 
@@ -365,7 +365,7 @@ class Modeling:
     built from Python scalars still works and one fed ``torch`` tensors stays on torch.
     """
 
-    def __init__(self, period=(1., 1.), type_complex=None, xp=None, device=None,
+    def __init__(self, period=(1., 1.), complex_dtype=None, xp=None, device=None,
                  *args, **kwargs):
         self.grid_plans = None
         self._last_plan = None
@@ -387,7 +387,7 @@ class Modeling:
 
         self._double = True
         self._period = None
-        self.type_complex = type_complex
+        self.complex_dtype = complex_dtype
         self.period = period
 
     # ---------------------------------------------------------------- namespace & precision
@@ -414,21 +414,21 @@ class Modeling:
         return xp.int64 if self._double else xp.int32
 
     @property
-    def type_complex(self):
+    def complex_dtype(self):
         return self._complex(self._xp)
 
-    @type_complex.setter
-    def type_complex(self, type_complex):
-        self._double = _precision_is_double(type_complex)
+    @complex_dtype.setter
+    def complex_dtype(self, complex_dtype):
+        self._double = _precision_is_double(complex_dtype)
         if getattr(self, '_period', None) is not None:
             self._period = _cast(self._xp, self._period, self._float(self._xp), self.device)
 
     @property
-    def type_float(self):
+    def float_dtype(self):
         return self._float(self._xp)
 
     @property
-    def type_int(self):
+    def int_dtype(self):
         return self._int(self._xp)
 
     # ---------------------------------------------------------------------------- geometry
@@ -987,7 +987,7 @@ def find_nk_index(material, mat_table, wl):
     return n_index + 1j * k_index
 
 
-def read_material_table(nk_path=None, type_complex=None):
+def read_material_table(nk_path=None, complex_dtype=None):
     """Load every nk table under ``nk_path`` (defaults to the bundled ``wavebit/nk_data``).
 
     Returns ``{NAME: (n_rows, 3) array}`` with columns ``(wavelength, n, k)``, keyed by the
@@ -1001,12 +1001,12 @@ def read_material_table(nk_path=None, type_complex=None):
     table has to be in that unit too -- and since a table's own unit is not recorded anywhere
     in the format, this cannot check it for you. The bundled ``filmetrics`` tables are in nm.
 
-    ``type_complex`` only sets the stored float width (single or double); it takes any spelling
+    ``complex_dtype`` only sets the stored float width (single or double); it takes any spelling
     the solver does. Reading the whole directory is deliberate over a per-material open: the
     tables are small, and a caller who has the dict can ask which materials exist rather than
     guessing at filenames.
     """
-    dtype = np.float64 if _precision_is_double(type_complex) else np.float32
+    dtype = np.float64 if _precision_is_double(complex_dtype) else np.float32
 
     mat_table = {}
 
