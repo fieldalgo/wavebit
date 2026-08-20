@@ -936,6 +936,116 @@ def test_combine_is_free_while_nothing_overlaps():
     assert analytic == pytest.approx(disjoint, abs=2e-3)
 
 
+def test_the_vector_path_refuses_a_shape_larger_than_the_period():
+    """The one overlap painting cannot reach: a shape running into its own image.
+
+    An in-cell overlap is painted exactly here (the test above), and a shape that merely
+    *crosses* the cell boundary is drawn exactly too (the test below). Past one full period the
+    same machinery stops describing either: the block is gridded in unwrapped coordinates and
+    its wrapped part is a **signed** segment, so the image adds to the shape instead of covering
+    it, and painting a shape over its own image can only mean their union.
+
+    The default, an explicit ``'paint'``, and ``'add'`` all have to say so -- the default is
+    where it was silent.
+    """
+    big = ['rectangle', 150.0, 150.0, 340.0, 340.0, 4.0, 0.0, 0, 0]
+
+    for combine in ((), ('paint',)):
+        with pytest.raises(NotImplementedError, match='larger than the period'):
+            _vector_total([big], *combine)
+    with pytest.raises(NotImplementedError, match='larger than the period'):
+        _vector_total([big], 'add')
+
+    ellipse = ['ellipse', 150.0, 150.0, 340.0, 200.0, 4.0, 0.0, 0, 0]
+    with pytest.raises(NotImplementedError, match='larger than the period'):
+        _vector_total([ellipse])
+
+    # A turned shape has to be judged by the shape and not by its bounding box. A 440 x 40
+    # bar at 45 degrees does run into its own image -- diagonally, which is the only direction
+    # that catches it -- and is refused.
+    with pytest.raises(NotImplementedError, match='larger than the period'):
+        _vector_total([['rectangle', 150.0, 150.0, 440.0, 40.0, 4.0, np.pi / 4, 0, 0]])
+
+
+def test_a_shape_up_to_the_period_is_still_drawn_by_the_vector_path():
+    """The refusal must stop exactly where painting stops working, and not one step earlier.
+
+    Two cases sit right against it. A shape *exactly* the period is touching, not overlapping,
+    and is the filled cell -- built here to the last digit of a uniform slab of the same
+    material. A sub-period shape straddling the cell boundary is the case the signed-width
+    reading exists for, and is unaffected by where it sits.
+    """
+    filled = _vector_total([['rectangle', 150.0, 150.0, 300.0, 300.0, 4.0, 0.0, 0, 0]])
+    slab = float(np.sum(np.asarray(
+        wavebit.rcwa(backend=0, structure=[[4.0, []]], **VECTOR_CFG).solve().T)))
+    assert filled == pytest.approx(slab, abs=1e-12)
+
+    straddling = [_vector_total([_vector_box(cx)]) for cx in (140.0, 20.0, 290.0, 0.0)]
+    assert max(straddling) - min(straddling) < 1e-12
+
+    # And the bound follows the shape, not its bounding box: the same bar 40 shorter misses
+    # its own image in every direction while its axis-aligned box is 311 across a 300 cell,
+    # so it is built -- and what gets built holds the two materials of the recipe and no
+    # others, which is the property the refusal above protects.
+    thin = wavebit.rcwa(backend=0, structure=[[1.0, [
+        ['rectangle', 150.0, 150.0, 400.0, 40.0, 4.0, np.pi / 4, 0, 0]]]], **VECTOR_CFG)
+    drawn = np.unique(np.round(
+        np.real(np.asarray(wavebit._core.draw.slice_structure(thin, layer=0, n=301))), 6))
+    assert drawn.tolist() == [1.0, 4.0]
+
+
+def test_what_the_block_grid_built_instead_was_not_a_structure_at_all():
+    """Why this is refused rather than documented as a second meaning of ``paint``.
+
+    Read as a superposition the old build was self-consistent on one side only. This takes the
+    edge list the modeler produces for the case in the report -- a 1.3-wide rod of eps 5.76 at
+    the centre of a unit cell, whose columns come back as ``[-0.15, 1.15, 1.0]``, outside the
+    cell -- and transforms ``eps`` and ``1/eps`` through it exactly as
+    :func:`wavebit._core.factorization.fourier2d_integrated` does. Against the profile that
+    edge list actually describes (cover count 1 or 2, so eps 5.76 or 10.52 along a row):
+
+    * the ``eps`` coefficients are that profile's, on every mode and down to the accuracy of
+      the quadrature it is being compared against;
+    * the ``1/eps`` coefficients are not, and not by a little -- the mean reciprocal
+      permittivity comes back **negative** on a layer whose permittivity is everywhere above 5.
+
+    Li's rule feeds both halves into the same solve, so the number that came out was neither
+    the union's nor the superposition's. That is the claim the docstring of
+    :func:`wavebit._core.modeler.check_block_layer_combination` makes, and it is the reason
+    there is nothing here to keep.
+    """
+    from wavebit._core.factorization import _fourier1d_integrated
+    from wavebit._core.modeler import Modeling
+
+    modeler = Modeling(period=[1.0, 1.0])
+    cell, x_list, _ = modeler.block_per_layer_numeric(
+        [1.0, modeler.rectangle(0.5, 0.5, 1.3, 1.3, 5.76)])
+
+    edges = np.real(np.asarray(x_list)).reshape(-1)
+    assert edges.min() < 0.0 and edges.max() > 1.0, edges      # the grid leaves the cell
+
+    row = np.asarray(cell)[1:2]                                # one row straight through the rod
+    assert sorted(np.real(row).reshape(-1).tolist()) == [1.0, 1.0, 5.76]
+
+    max_order, period = 6, np.asarray(1.0, dtype=complex)
+    got_eps = np.asarray(_fourier1d_integrated(xnp, x_list, row, max_order, period))[0]
+    got_inv = np.asarray(_fourier1d_integrated(xnp, x_list, 1 / row, max_order, period))[0]
+
+    # The profile that edge list describes, by dense quadrature: 1 + 4.76 * (cover count).
+    s = (np.arange(400_000) + 0.5) / 400_000
+    covers = sum((np.abs(s - 0.5 - m) <= 0.65).astype(float) for m in (-1, 0, 1))
+    profile = 1.0 + 4.76 * covers
+    modes = np.arange(-2 * max_order, 2 * max_order + 1)
+    truth = lambda f: np.array([np.mean(f * np.exp(-1j * 2 * np.pi * m * s)) for m in modes])
+
+    assert np.abs(got_eps - truth(profile)).max() < 1e-8      # quadrature, not the transform
+    assert np.abs(got_inv - truth(1.0 / profile)).max() > 0.2
+
+    dc = 2 * max_order
+    assert np.real(truth(1.0 / profile)[dc]) > 0.0            # it must be: eps >= 5.76 > 0
+    assert np.real(got_inv[dc]) < 0.0                         # what the grid handed the solve
+
+
 def test_a_misspelled_combine_is_refused_on_the_vector_path_too():
     with pytest.raises(ValueError, match='is not one of'):
         _vector_total([_vector_box(80.0)], 'union')

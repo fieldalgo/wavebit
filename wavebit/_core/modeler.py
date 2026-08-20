@@ -212,11 +212,46 @@ def check_block_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_
 
     The mirror of :func:`wavebit._core.analytic.check_layer_combination`. This path paints,
     later object over earlier, and that is what an unlabelled layer gets — painting is this
-    path's own rule, and a raster of the same structure agrees with it, so there is nothing
-    surprising to refuse. What it cannot do is superpose: ``combine='add'`` asks for every
-    shape's contribution to be *summed*, which is a property of a Fourier series, not of a
-    staircase of blocks that each hold one index. Asking for it here used to be painted
-    silently, which is the same trap the analytic side had in the other direction.
+    path's own rule, and a raster of the same structure agrees with it, so an overlap *inside*
+    the cell is nothing this has to refuse. What it cannot do is superpose: ``combine='add'``
+    asks for every shape's contribution to be *summed*, which is a property of a Fourier
+    series, not of a staircase of blocks that each hold one index. Asking for it here used to
+    be painted silently, which is the same trap the analytic side had in the other direction.
+
+    **The one thing painting cannot reach is a shape's own image.** A shape larger than the
+    period covers some of the cell twice, and painting a shape over itself is its union — the
+    only reading of "later over earlier" that means anything when the two are the same shape.
+    A block grid has no way to say it. Blocks are gridded in *unwrapped* coordinates and
+    :func:`wavebit._core.factorization._fourier1d_integrated` weights each segment by its
+    **signed** width, which is exactly what draws the wrapped part of a sub-period shape
+    correctly; past one period the same arithmetic counts the covered strip twice, so the image
+    *adds* to the shape instead of covering it. Measured on a 1.3-wide rod of eps 5.76 at the
+    centre of a unit cell over a background of 1.0: the drawn layer takes 5.76 / 10.52 / 20.04,
+    i.e. ``1 + n*4.76`` for cover counts n = 1, 2, 4 — three materials, none of them in the
+    recipe, where the union is 5.76 everywhere.
+
+    That superposition is not even self-consistent, which is why this is refused rather than
+    documented as a second meaning. Li's rule transforms ``1/eps`` through the same signed
+    segments, so the two halves of the same layer describe different functions: on that rod the
+    coefficients of ``eps`` match a dense quadrature of the superposition profile to 7e-12,
+    while the coefficients of ``1/eps`` come back with a DC term of **-0.074** — a negative mean
+    reciprocal permittivity on a structure whose permittivity is between 5.76 and 20.04, against
+    +0.150 for the profile itself. The number the solver then returns is no structure's, and the
+    tell is that it does not settle on one: over ``max_order`` 6 / 10 / 15 / 20 / 25 this path
+    answers ``sum(T)`` = 0.4403 / 0.4147 / 0.4165 / 0.3697 / 0.4011, where a fine raster of the
+    superposition it claims to draw converges (0.8346 / 0.7136 / 0.7178 / 0.7185 / 0.7189) and
+    the filled cell — the union — is a uniform slab and so is 0.9722 at every one of them. The same rod at 0.6
+    wide, no self-overlap, matches a raster of itself to every digit printed at every count,
+    which is what says the disagreement is the self-overlap and not the comparison.
+    ``docs/analytic-modeling.md`` carries the table.
+
+    The limitation is not this path's alone: nothing in :mod:`wavebit._core.analytic` or
+    :mod:`wavebit._core.boundary` clips a shape against a translated copy of itself either, so
+    ``combine='paint'`` cannot mean the union there either. What *is* built on purpose is the
+    superposition — ``combine='add'`` on the smooth path sums the images deliberately, and is
+    the spelling for anyone who wants that. (That path forms its ``1/eps`` by superposing too,
+    so it inherits the second half of the inconsistency above; that is the smooth path's own
+    question, not this refusal's.)
 
     Only an actual overlap raises: while no two shapes intersect, painting and adding describe
     the same structure and any spelling is accepted.
@@ -225,8 +260,6 @@ def check_block_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_
     if combine is not None and combine not in COMBINE_MODES:
         raise ValueError(
             f'Block layer {layer_index}: combine={combine!r} is not one of {COMBINE_MODES}.')
-    if combine != 'add':
-        return                                         # painting is what this path does
 
     objects = layer[1]
     if len(objects) < 1:
@@ -240,9 +273,31 @@ def check_block_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_
     if prims is None:
         return
 
-    hits = _overlap.overlapping_pairs(prims, Px, Py, tol_rel * max(Px, Py))
+    # Painting is what this path does, and it paints a genuine overlap exactly; only a shape
+    # running into its own image defeats it, so that is all the paint branch asks about — and
+    # asking for less is what keeps the check off the quadratic sweep on every rebuild.
+    paints = combine != 'add'
+    hits = _overlap.overlapping_pairs(prims, Px, Py, tol_rel * max(Px, Py), self_only=paints)
     if not hits:
         return
+
+    if paints:
+        i = hits[0][0]
+        more = f' (and {len(hits) - 1} more such shape(s))' if len(hits) > 1 else ''
+        raise NotImplementedError(
+            f'Block layer {layer_index}: shape {_block_shape_name(objects, i)} is larger than '
+            f'the period and runs into its own image{more}, and this path cannot paint it. '
+            f'Painting a shape over its own image means their union, and a grid of blocks has '
+            f'no way to express it: a block is gridded in unwrapped coordinates and the part '
+            f'that leaves the cell comes back as a *signed* segment, so past one period the '
+            f'image adds to the shape instead of covering it. What that builds is a '
+            f'superposition made of materials no recipe named, and one whose eps and 1/eps '
+            f'disagree, so the answer is neither the union nor the superposition. Shrink the '
+            f'shape to at most the period — one that merely crosses the cell boundary is drawn '
+            f'exactly — or, if you meant the union and it fills the cell, name that material as '
+            f'the layer background. If the superposition of the images really is what you '
+            f"want, structure=[dict(background=..., shapes=[...], combine='add')] on the "
+            f'smooth path is where it is built on purpose.')
 
     i, j, _ox, _oy, _ = hits[0]
     more = f' (and {len(hits) - 1} more such pair(s))' if len(hits) > 1 else ''
