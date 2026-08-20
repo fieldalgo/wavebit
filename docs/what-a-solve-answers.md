@@ -138,11 +138,31 @@ where "the extra ~10-20%" of SMM's cost goes, and that was a quoted number rathe
 measured one. It measures at 14.8%, inside the claimed band. So on the SMM, declaring anything
 below `'field'` buys time and not only memory; on the ETM it buys memory alone.
 
-The `'efficiency'` rung buys **neither**: 1.283 s against 1.284 s on the ETM and 1.935 s
+The `'efficiency'` rung buys **no time at all**: 1.283 s against 1.284 s on the ETM and 1.935 s
 against 1.923 s on the SMM, at `fto=(10, 10)`, one layer, best of 5 — differences of one part
-in a thousand, which is noise. It exists so a caller can say that a run is about power, and so
-the core's cheapest cut has a name in the same vocabulary as the rest; it is not a speed knob,
-and this document would rather say so than let someone discover it.
+in a thousand, which is noise. Re-measured 2026-08-20 at `fto=(8, 8)` (0.536 s against 0.524 s)
+and `(15, 15)` (17.0 s against 17.4 s), same answer. It is not a speed knob and never was: what
+it skips is one extra linear solve on an already-factorized `final_A`, plus the Fresnel packing,
+against a cost the eigendecomposition owns.
+
+What it *does* buy is **the size of the result**, which the timing above cannot see and which
+an earlier draft of this section wrongly reported as nothing. Measured on the same scenes:
+
+| | result payload | JAX pytree |
+| --- | --- | --- |
+| `'efficiency'` | 4.5 KB at `fto=(8, 8)`, 15.0 KB at `(15, 15)` | **2 leaves** |
+| `'amplitude'` | 94.8 KB, 315.3 KB | **30 leaves** |
+
+A factor of 21, because the amplitude rung carries ten per-order arrays across three incidence
+variants where this one carries two. Whether that matters is exactly the kind of thing the
+caller knows and the library does not: an optimisation loop takes `.T.sum()` and drops the rest,
+so it buys that caller nothing — while a 200-point spectrum sweep that keeps its results is
+0.5 MB against 10.8 MB, and under `vmap` the wider tree is materialised per batch element
+whether anything reads it or not.
+
+So the ladder's bottom rung is a real cut, just not on the axis the rest of this document is
+about. The lesson is worth more than the rung: **"buys nothing" was a measurement of one axis
+reported as a verdict**, and it nearly cost the rung its place.
 
 ## 6. Why a declaration and not an argument
 
