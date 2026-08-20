@@ -29,7 +29,7 @@ import pathlib
 REPO = pathlib.Path(__file__).resolve().parents[1]
 
 KW = dict(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
-          fto=[4, 4], period=[1.0, 1.0], wavelength=1.1, thickness=[0.3])
+          max_order=[4, 4], period=[1.0, 1.0], wavelength=1.1, thickness=[0.3])
 
 #: A hexagonal basis, for the two refusals a skewed cell carries.
 HEX = np.column_stack((np.array([1.0, 0.0]), np.array([0.5, np.sqrt(3) / 2])))
@@ -248,7 +248,7 @@ def test_the_published_material_quantity_is_the_one_the_solver_takes():
 
     eps_sub = 12.25
     kw = dict(backend=0, top=1.0, bot=eps_sub, theta=0.0, phi=0.0, tetm='te',
-              fto=[0, 0], period=[1.0], wavelength=0.5, thickness=[0.0],
+              max_order=[0, 0], period=[1.0], wavelength=0.5, thickness=[0.0],
               structure=np.ones((1, 1, 1)))
     got = float(np.sum(np.asarray(wavebit.rcwa(**kw).solve().R)))
 
@@ -320,7 +320,7 @@ def test_results_section_matches_a_real_result():
         assert hasattr(res, name), name
 
     # the layout claim and the accessor claim, against each other
-    fx, fy = res.fto
+    fx, fy = res.max_order
     R = np.asarray(res.R)
     assert R.shape == (2 * fy + 1, 2 * fx + 1)
     assert float(res.order(1, -1).R) == R[fy - 1, fx + 1]
@@ -341,7 +341,7 @@ def test_incidence_side_claims_match_the_solver():
     """
     m = manifest()['results']['incidence_side']
     asym = np.array([[[9.0] * 16 + [1.0] * 16]])
-    kw = dict(KW, phi=None, psi=None, fto=[4, 0], bot=4.0, structure=asym, thickness=[0.3])
+    kw = dict(KW, phi=None, psi=None, max_order=[4, 0], bot=4.0, structure=asym, thickness=[0.3])
 
     got = {}
     for side in m['values']:
@@ -422,7 +422,7 @@ def _z_row(t):
 
 
 def _run_uniform(eps, mu=None):
-    mee = wavebit.rcwa(fto=[0, 0], **_MAT_KW)
+    mee = wavebit.rcwa(max_order=[0, 0], **_MAT_KW)
     z = _z_row(eps) if np.any(eps[2, :2]) or np.any(eps[:2, 2]) else []
     return mee.solve_conv(*_in_plane(eps), *z,
                           mu=None if mu is None else tuple(_in_plane(mu)))
@@ -442,13 +442,13 @@ def _run_patterned():
     slots is what makes the structure under test readable.
     """
     from wavebit._core.factorization import to_conv_mat_raster_pn
-    grid, fto = 48, 4
+    grid, max_order = 48, 4
     eps = np.zeros((1, grid, grid, 3, 3), dtype=complex)
     for i in range(3):
         eps[..., i, i] = 1.0
     eps[0, 14:34, 18:30] = _tensor(2.25, 2.25, 2.89)
-    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn(eps, fto, fto)
-    mee = wavebit.rcwa(fto=[fto, fto], **_MAT_KW)
+    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn(eps, max_order, max_order)
+    mee = wavebit.rcwa(max_order=[max_order, max_order], **_MAT_KW)
     return mee.solve_conv(epx, epy, epz_i, epxy, epyx)
 
 

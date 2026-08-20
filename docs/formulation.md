@@ -90,7 +90,7 @@ Ey(x̃, z̃) = Σ_m  S_m(z̃) exp(+i kx_m x̃),      kx_m = n_I sinθ cosφ + m 
 ```
 
 with `m` running `-M..M` — the sign of `m` here and the `+i` in the phase are one choice.
-Code: `get_kx_ky_vector` builds exactly this vector (`fto_x_range = arange(-M, M+1)`).
+Code: `get_kx_ky_vector` builds exactly this vector (`max_order_x_range = arange(-M, M+1)`).
 
 The permittivity expands in the **same** sign:
 
@@ -215,7 +215,7 @@ together.
 ## 4. One 2D layer: the first-order system
 
 Geometry: `eps = eps(x, y)`, both transverse field components coupled. Collect
-`S = [Ex; Ey]` and `U = +i [H̃x; H̃y]` (each block a vector over the `ff_y·ff_x` order
+`S = [Ex; Ey]` and `U = +i [H̃x; H̃y]` (each block a vector over the `n_orders_y·n_orders_x` order
 grid). Eliminate the longitudinal components using (M1)/(M2)'s `z`-rows:
 
 ```
@@ -366,7 +366,7 @@ Eliminating `R`:
 Then `R = F T1 - δ` and the substrate amplitudes are `T T1`.
 
 The conical/2D final match (`final_matching`) is the same elimination in the s/p block
-basis, solved as one `4·ff` system (`final_A`, `final_B`). The boundary variables it uses
+basis, solved as one `4·n_orders` system (`final_A`, `final_B`). The boundary variables it uses
 are **definitions carried over from the legacy chain** — s carries the electric amplitude
 (`E_s`), p carries the magnetic one (an incident p wave of unit E has `H̃ = n_top`), which
 is why `final_B`'s rows read `(-sinψ, cosψ kz_inc/n_top, i sinψ kz_inc, i n_top cosψ)`.

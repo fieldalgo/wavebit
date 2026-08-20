@@ -16,7 +16,7 @@ def test_1_si_glass_branch_cut():
     n_glass = 1.5
     option = dict(
         tetm='tm', top=1.0, bot=eps_from_index(n_glass), theta=0.0, phi=0.0,
-        fto=5, wavelength=632.8, period=[1000],
+        max_order=5, wavelength=632.8, period=[1000],
         structure=eps_from_index(np.array([[[n_si, n_si]]])), thickness=[200]
     )
 
@@ -47,7 +47,7 @@ def test_2_air_au_raw_n_lossy_substrate():
 
     option = dict(
         tetm='tm', top=1.0, bot=eps_from_index(n_au), theta=0.0, phi=0.0,
-        fto=3, wavelength=500, period=[1000],
+        max_order=3, wavelength=500, period=[1000],
         structure=np.array([[[1.0, 1.0]]]), thickness=[0] # Bare interface
     )
 
@@ -75,7 +75,7 @@ def test_3_same_material_interface():
     # 20nm Au layer on Au substrate
     option = dict(
         tetm='tm', top=1.0, bot=eps_from_index(n_au), theta=0.0,
-        fto=3, wavelength=500, period=[1000],
+        max_order=3, wavelength=500, period=[1000],
         structure=eps_from_index(np.array([[[n_au, n_au]]])), thickness=[20]
     )
 
@@ -99,7 +99,7 @@ def test_4_tm_transmittance_conjugation():
     option_conical = dict(
         tetm='tm', top=1.0, bot=eps_from_index(n_au), theta=10 * np.pi / 180,
         phi=30 * np.pi / 180,
-        fto=3, wavelength=500, period=[1000],
+        max_order=3, wavelength=500, period=[1000],
         structure=eps_from_index(np.array([[[1.0, n_au]]])), thickness=[20]
     )
 
@@ -125,7 +125,7 @@ def test_5_continuous_raster_convolution_matrix():
     
     structure = eps_from_index(np.array([[[0.18 + 3.0j]]]))
 
-    epx, epy, epz_i = to_conv_mat_raster_integrated(structure, fto_x=1, fto_y=1)
+    epx, epy, epz_i = to_conv_mat_raster_integrated(structure, max_order_x=1, max_order_y=1)
     # No conjugation anywhere on the way in: Im(n) > 0 is loss, and the permittivity the
     # raster now carries has Im(eps) > 0 to match. This asserted the opposite until 2026-08,
     # when the solver stopped conjugating; the squaring the builder used to do is gone too,
@@ -143,7 +143,7 @@ def test_6_none_structure_grating_type():
     
     option = dict(
         tetm='tm', top=1.0, bot=2.25, theta=0.0, phi=0.0,
-        fto=3, wavelength=500, period=[1000],
+        max_order=3, wavelength=500, period=[1000],
         structure=None, thickness=[100]
     )
 
@@ -166,7 +166,7 @@ def test_7_none_theta_handling():
     
     option = dict(
         tetm='tm', top=1.0, bot=2.25, theta=None, phi=None,
-        fto=3, wavelength=500, period=[1000],
+        max_order=3, wavelength=500, period=[1000],
         structure=np.array([[[2.25, 2.25]]]), thickness=[100]
     )
 
@@ -236,7 +236,7 @@ def test_10_shared_mean_permittivity_keeps_the_interface():
                     [1., 1., 9., 9.], [9., 1., 1., 9.]]])
     option = dict(
         structure=np.concat([UC, UC[:, ::-1]]), thickness=[0.2, 0.3], top=1.0, bot=1.0,
-        psi=0.4, wavelength=0.5, period=[0.6, 0.6], theta=0.1, phi=0.0, fto=[2, 2])
+        psi=0.4, wavelength=0.5, period=[0.6, 0.6], theta=0.1, phi=0.0, max_order=[2, 2])
 
     for algo in ('ETM', 'SMM'):
         res = wavebit.rcwa(backend=0, connecting_algo=algo, **option).solve()

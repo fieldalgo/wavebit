@@ -27,14 +27,14 @@ choice; nothing that shares a formulation can.
 
 **The exception, and it is a real one.** TM's ``E_x`` is discontinuous across the grating's
 vertical interfaces, and the two codes resolve it differently at any finite truncation:
-7.0e-2 to 1.0e-1 across these cases at ``fto=8``. On the ``grating`` case at 24 degrees it
+7.0e-2 to 1.0e-1 across these cases at ``max_order=8``. On the ``grating`` case at 24 degrees it
 decreases with truncation but **not monotonically** -- 3.1e-1, 2.3e-1, 9.7e-2, 1.1e-1, 3.8e-2,
-4.4e-2 at ``fto = 2, 4, 8, 16, 32, 64``, roughly 8x for a 32x increase in orders. That is Gibbs
+4.4e-2 at ``max_order = 2, 4, 8, 16, 32, 64``, roughly 8x for a 32x increase in orders. That is Gibbs
 ringing: the gap is set by the samples nearest a discontinuity (10 nm away here) and the local
 error there oscillates with the number of retained terms. It is **not** a rescaling (a
 per-component complex fit does not remove it) and **not** a disagreement about which side of
 the interface to divide by -- forming ``D_x = eps*E_x`` leaves a gap of the same order,
-1.7e-1 / 1.6e-1 / 8.1e-2 / 4.8e-2 at ``fto = 4, 8, 16, 32``.
+1.7e-1 / 1.6e-1 / 8.1e-2 / 4.8e-2 at ``max_order = 4, 8, 16, 32``.
 
 Which code is closer to the true ``E_x`` is **not** established here, and nothing in this
 directory can settle it: that needs a reference finer than either. The test excludes the slot
@@ -85,7 +85,7 @@ def main():
     octave.addpath(octave.genpath(RETICOLO_PATH))
 
     from interface.Reticolo import Reticolo
-    from _reticolo_field_cases import (CASES, FTO, PERIOD, RES_X, RES_Z, STACKS, WL,
+    from _reticolo_field_cases import (CASES, MAX_ORDER, PERIOD, RES_X, RES_Z, STACKS, WL,
                                        key, layer_rows, n_layers, x_samples)
 
     reti = Reticolo()
@@ -97,7 +97,7 @@ def main():
         # vacuum, where eps and n happen to be the same 1.0 -- which is exactly why they are a
         # bad place to notice a missing conversion, and why the layers are not.
         *_, e, z, o = reti.run_res3(
-            grating_type=0, period=[PERIOD], fto=FTO, structure=structure, thickness=thickness,
+            grating_type=0, period=[PERIOD], max_order=MAX_ORDER, structure=structure, thickness=thickness,
             theta=np.deg2rad(theta), phi=None, pol=0 if pol == 'te' else 1,
             wavelength=WL, top=1.0, bot=1.0, res3_npts=RES_Z)
         e, z, o = np.asarray(e), np.asarray(z).ravel(), np.asarray(o)
@@ -122,8 +122,8 @@ def main():
     out['x'] = np.linspace(0, PERIOD, RES_X)     # what the .m hardcodes
     assert np.allclose(out['x'], x_samples())
     np.savez_compressed(str(OUT), **out)
-    print(f'wrote {len(out)} arrays to {OUT.name}; {len(CASES)} cases, fto={FTO}, '
-          f'{2 * FTO + 1} orders')
+    print(f'wrote {len(out)} arrays to {OUT.name}; {len(CASES)} cases, max_order={MAX_ORDER}, '
+          f'{2 * MAX_ORDER + 1} orders')
 
 
 if __name__ == '__main__':

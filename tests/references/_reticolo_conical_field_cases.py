@@ -30,7 +30,7 @@ from _reticolo_field_cases import RES_X, RES_Z, layer_rows  # noqa: F401  (re-ex
 
 WL = 620.0
 PERIOD = 400.0
-FTO = 8                    # 17 retained orders
+MAX_ORDER = 8                    # 17 retained orders
 NX = 40                    # raster columns; 10 nm cells
 _CELL = PERIOD / NX
 

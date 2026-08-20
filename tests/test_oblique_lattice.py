@@ -45,15 +45,15 @@ def raster(basis, n=128, radius=R):
     return cell
 
 
-def solver(cell, fto=8, lattice=None, **kw):
+def solver(cell, max_order=8, lattice=None, **kw):
     kw.setdefault('factorization', 'nvf')
-    return wavebit.rcwa(backend=0, structure=cell, period=[P, P], fto=[fto, fto],
+    return wavebit.rcwa(backend=0, structure=cell, period=[P, P], max_order=[max_order, max_order],
                           thickness=[H], wavelength=WL, top=1.0, bot=1.0,
                           theta=0.0, phi=0.0, psi=0.0, lattice=lattice, **kw)
 
 
-def totals(cell, fto=8, lattice=None, **kw):
-    res = solver(cell, fto, lattice, **kw).solve()
+def totals(cell, max_order=8, lattice=None, **kw):
+    res = solver(cell, max_order, lattice, **kw).solve()
     return float(np.sum(np.asarray(res.R))), float(np.sum(np.asarray(res.T)))
 
 
@@ -131,11 +131,11 @@ def test_the_sample_grid_gets_the_two_axes_the_right_way_round():
 
 def test_order_kxy_reduces_to_the_separable_formula():
     """The generalisation must be exactly the old expression on a diagonal basis."""
-    fto_x, fto_y, lx, ly = 3, 2, 300.0, 700.0
-    kx, ky = lat.order_kxy(np, np.diag([lx, ly]), fto_x, fto_y, WL,
+    max_order_x, max_order_y, lx, ly = 3, 2, 300.0, 700.0
+    kx, ky = lat.order_kxy(np, np.diag([lx, ly]), max_order_x, max_order_y, WL,
                            0.25, -0.5, dtype=np.complex128)
-    m = np.arange(-fto_x, fto_x + 1)[None, :]
-    n = np.arange(-fto_y, fto_y + 1)[:, None]
+    m = np.arange(-max_order_x, max_order_x + 1)[None, :]
+    n = np.arange(-max_order_y, max_order_y + 1)[:, None]
     # Not bit-identical: the general form divides by det once and multiplies back, so the
     # rounding differs in the last place. Equal to well under any physical significance.
     assert np.allclose(np.asarray(kx), 0.25 + m * (WL / lx), rtol=1e-14, atol=0)
@@ -177,7 +177,7 @@ def test_unimodular_shear_is_the_same_physics():
     tolerance is 1e-3 rather than machine epsilon and why it tightens with resolution.
 
     Guarding this specifically because it fails *quietly*. With the metric correction removed
-    from the normal field the same comparison drifts to ~8.5e-4 at n=512/fto=14 and ~7x that
+    from the normal field the same comparison drifts to ~8.5e-4 at n=512/max_order=14 and ~7x that
     here, while both runs still conserve energy to 1e-15.
     """
     r_o, t_o = totals(raster(ORTHO))
@@ -218,8 +218,8 @@ def test_hex_lattice_matches_its_rectangular_supercell():
     sup = np.full((1, ny, nx), EPS_AIR)
     sup[0][inside] = EPS_ROD
 
-    _, t_hex = totals(hex_cell, fto=8, lattice=HEX)
-    sup_solver = wavebit.rcwa(backend=0, structure=sup, period=[a, a * sq3], fto=[8, 14],
+    _, t_hex = totals(hex_cell, max_order=8, lattice=HEX)
+    sup_solver = wavebit.rcwa(backend=0, structure=sup, period=[a, a * sq3], max_order=[8, 14],
                                 thickness=[H], wavelength=WL, top=1.0, bot=1.0,
                                 theta=0.0, phi=0.0, psi=0.0, factorization='nvf')
     t_sup = float(np.sum(np.asarray(sup_solver.solve().T)))
@@ -238,7 +238,7 @@ def test_oblique_runs_on_every_backend(backend):
     elif backend == 2:
         cell = pytest.importorskip('torch').tensor(cell, dtype=pytest.importorskip(
             'torch').float64)
-    s = wavebit.rcwa(backend=backend, structure=cell, period=[P, P], fto=[4, 4],
+    s = wavebit.rcwa(backend=backend, structure=cell, period=[P, P], max_order=[4, 4],
                        thickness=[H], wavelength=WL, top=1.0, bot=1.0,
                        theta=0.0, phi=0.0, psi=0.0, factorization='nvf', lattice=HEX)
     res = s.solve()
@@ -258,7 +258,7 @@ def test_the_vector_modeler_is_refused_on_a_skewed_cell():
     with pytest.raises(NotImplementedError, match='block modeler'):
         s = wavebit.rcwa(backend=0, structure=[[1.0, [['rectangle', 100.0, 200.0, 50.0, 50.0,
                                                        5.76, 0, 0, 0]]]],
-                           period=[P, P], fto=[4, 4], thickness=[H], wavelength=WL,
+                           period=[P, P], max_order=[4, 4], thickness=[H], wavelength=WL,
                            top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                            factorization='nvf', lattice=HEX)
         s.solve()
@@ -278,7 +278,7 @@ def test_a_painted_overlap_survives_a_unimodular_shear():
         structure = [{'background': 1.0, 'combine': 'paint', 'shapes': [
             {'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 160.0, 'material': 5.76},
             {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'material': 9.0}]}]
-        s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], fto=[6, 6], thickness=[H],
+        s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], max_order=[6, 6], thickness=[H],
                            wavelength=WL, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                            factorization='nvf', lattice=lattice)
         res = s.solve()
@@ -299,7 +299,7 @@ def test_a_painted_overlap_is_not_the_same_as_summing_it():
     def run(combine):
         s = wavebit.rcwa(backend=0, structure=[{'background': 1.0, 'combine': combine,
                                               'shapes': shapes}],
-                           period=[P, P], fto=[6, 6], thickness=[H], wavelength=WL,
+                           period=[P, P], max_order=[6, 6], thickness=[H], wavelength=WL,
                            top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                            factorization='nvf', lattice=SHEAR)
         return float(np.sum(np.asarray(s.solve().T)))
@@ -313,7 +313,7 @@ def _analytic_totals(g, lattice=None):
     """One circle, stated in absolute Cartesian lengths — the same disc on the same lattice."""
     structure = [{'background': 1.0, 'shapes': [
         {'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 2 * R, 'material': EPS_ROD}]}]
-    s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], fto=[g, g], thickness=[H],
+    s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], max_order=[g, g], thickness=[H],
                        wavelength=WL, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                        factorization='nvf', lattice=lattice)
     return float(np.sum(np.asarray(s.solve().T)))
@@ -362,7 +362,7 @@ def test_the_reconstructed_field_agrees_across_a_unimodular_shear():
     ``(m, n)`` where the other has a square. Converged quantities cannot tell (the efficiencies
     agree to 2e-6), but a field is a finite sum over exactly that set, and near a material
     discontinuity the tails the two sets disagree about decay far too slowly to cancel. Measured
-    on this structure the interface slice sits at 1.1e-1 and does **not** improve from fto 4 to
+    on this structure the interface slice sits at 1.1e-1 and does **not** improve from max_order 4 to
     12 — which is the truncation shape, not an error. In the homogeneous cap, where every
     surviving order is propagating and both sets hold all of them, the same comparison is
     2.0e-4: a 500x drop across the same field.
@@ -372,7 +372,7 @@ def test_the_reconstructed_field_agrees_across_a_unimodular_shear():
     structure = [{'background': 1.0, 'shapes': []}, {'background': 1.0, 'shapes': shapes}]
 
     def field(lattice):
-        s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], fto=[8, 8],
+        s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], max_order=[8, 8],
                            thickness=[600.0, H], wavelength=WL, top=1.0, bot=1.0,
                            theta=0.0, phi=0.0, psi=0.0, factorization='nvf', lattice=lattice,
                            answers='field')
@@ -458,7 +458,7 @@ def test_li_1997_checkerboard_matches_the_published_table():
     structure = [{'background': 1.0, 'shapes': [
         {'type': 'rectangle', 'cx': float(centre[0]), 'cy': float(centre[1]),
          'lx': LI_SIDE, 'ly': LI_SIDE, 'material': 2.25}]}]
-    s = wavebit.rcwa(backend=0, structure=structure, fto=[12, 12], thickness=[1.0], wavelength=1.0,
+    s = wavebit.rcwa(backend=0, structure=structure, max_order=[12, 12], thickness=[1.0], wavelength=1.0,
                        top=2.25, bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2,
                        factorization='nvf', lattice=basis)
     res = s.solve().res

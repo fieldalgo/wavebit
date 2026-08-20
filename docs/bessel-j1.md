@@ -126,14 +126,14 @@ Large argument is the easy end: the asymptotic expansion improves as `z` grows.
 
 58 combinations — circle, 3:1 ellipse, rotated ellipse, a 0.04-diameter circle, a
 0.85-diameter circle, rectangle + circle, lossy circle × normal TE, oblique TM, conical ×
-`fto` 3, 8, 15 — comparing every backend's `R` and `T` against NumPy:
+`max_order` 3, 8, 15 — comparing every backend's `R` and `T` against NumPy:
 
 | | worst over all 58 |
 |---|---:|
 | cross-backend difference | **4.7e-12** |
 | energy, `\|R+T-1\|`, lossless cases | **3.8e-12** |
 
-Most rows are below 1e-14; the larger values occur only at `fto = 15` and are accumulated
+Most rows are below 1e-14; the larger values occur only at `max_order = 15` and are accumulated
 round-off in bigger matrices, not a property of `J_1`. The curved-shape penalty on PyTorch does
 not reappear in any combination.
 
@@ -155,10 +155,10 @@ The hybrid is **29-170x slower than `torch.special.bessel_j1`** as a function. I
 | 40401 | 10.7 ms | 373 us | 29x |
 
 It does not matter, and that is measured rather than assumed. `jinc` is called once per layer
-to build the permittivity coefficients, on an array of `(4*fto+1)^2` points, against a solve
+to build the permittivity coefficients, on an array of `(4*max_order+1)^2` points, against a solve
 dominated by a dense complex eigendecomposition:
 
-| `fto` | total solve | J1 | share |
+| `max_order` | total solve | J1 | share |
 |---:|---:|---:|---:|
 | 5 | 88.5 ms | 0.26 ms | **0.30%** |
 | 9 | 1184 ms | 0.51 ms | **0.04%** |

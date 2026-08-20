@@ -34,14 +34,14 @@ from wavebit._core.factorization import to_conv_mat_raster_pn, to_conv_mat_raste
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from _fmmax_patterned_mu_cases import (                                        # noqa: E402
-    CASES, FTO, GRID, PERIOD, THETA, THICK, WL, tensors)
+    CASES, MAX_ORDER, GRID, PERIOD, THETA, THICK, WL, tensors)
 
 GOLDEN_PATH = HERE / 'golden_fmmax_patterned_mu.npz'
 
 # Cases where the solver sits nearer the vector formulation. `different_shapes` is excluded,
 # and only that one: its reflectances are ~1.5e-5, where fmmax's own two answers (2.2e-5 and
 # 1.2e-5) are a factor of two apart, so "which is nearer" stops being a statement about
-# formulations. It sits between them there, stably across fto 8..14.
+# formulations. It sits between them there, stably across max_order 8..14.
 #
 # An earlier version of this file asserted **bracketing** instead — componentwise between the
 # two fmmax answers — on the reasoning that it is the sharper claim. Measured, it is false:
@@ -59,12 +59,12 @@ def _as33(diag, off):
     return t
 
 
-def solve(case, fto=FTO, algo='ETM'):
+def solve(case, max_order=MAX_ORDER, algo='ETM'):
     """``[R_s, T_s, R_p, T_p]`` for one layer with both tensors patterned."""
     eps, eps_xy, mu, mu_xy = tensors(case)
 
-    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn(_as33(eps, eps_xy)[None], fto, fto)
-    mu_slots = to_conv_mat_raster_pn_mu(_as33(mu, mu_xy)[None], fto, fto)
+    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn(_as33(eps, eps_xy)[None], max_order, max_order)
+    mu_slots = to_conv_mat_raster_pn_mu(_as33(mu, mu_xy)[None], max_order, max_order)
 
     # The scalar permittivity raster as it stands -- the `np.sqrt` here was undoing the
     # constructor's squaring, and neither exists now. Note what is *not* passed: `mu=`, which
@@ -72,7 +72,7 @@ def solve(case, fto=FTO, algo='ETM'):
     # raster field the constructor takes, because the point of the golden is the factorization
     # under test and not the build in front of it.
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
-                       psi=0.0, fto=(fto, fto), period=(PERIOD, PERIOD), wavelength=WL,
+                       psi=0.0, max_order=(max_order, max_order), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK], structure=np.expand_dims(eps, axis=0),
                        connecting_algo=algo)
     res = mee.solve_conv(epx, epy, epz_i, epxy, epyx, mu=mu_slots)
@@ -153,13 +153,13 @@ def test_the_two_tensors_get_their_own_normal_fields(golden):
     eps, eps_xy, mu, mu_xy = tensors(case)
     correct = solve(case)
 
-    fto = FTO
-    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn(_as33(eps, eps_xy)[None], fto, fto)
+    max_order = MAX_ORDER
+    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn(_as33(eps, eps_xy)[None], max_order, max_order)
     wrong_field = [normal_vector_field(eps)]        # eps's boundary, applied to mu
-    wrong_mu = to_conv_mat_raster_pn_mu(_as33(mu, mu_xy)[None], fto, fto,
+    wrong_mu = to_conv_mat_raster_pn_mu(_as33(mu, mu_xy)[None], max_order, max_order,
                                         normal_field=wrong_field)
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
-                       psi=0.0, fto=(fto, fto), period=(PERIOD, PERIOD), wavelength=WL,
+                       psi=0.0, max_order=(max_order, max_order), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK], structure=np.expand_dims(eps, axis=0))
     res = mee.solve_conv(epx, epy, epz_i, epxy, epyx, mu=wrong_mu)
     wrong = np.array([float(res.res_te_inc.R.sum()), float(res.res_te_inc.T.sum()),

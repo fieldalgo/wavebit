@@ -21,7 +21,8 @@ def jax_device_set(func):
 
 class _BaseRCWA(CoreSolveMixin):
 
-    def __init__(self, top=1., bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None, fto=(0, 0), pol=None,
+    def __init__(self, top=1., bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None,
+                 max_order=(0, 0), pol=None,
                  period=(1., 1.), wavelength=1.,
                  thickness=(0.,), connecting_algo='ETM',
                  device=0, type_complex=jnp.complex128, polarization=None):
@@ -59,7 +60,7 @@ class _BaseRCWA(CoreSolveMixin):
         if self._tetm is None and self._psi is None and polarization is None:
             self._default_psi()
 
-        self.fto = fto
+        self.max_order = max_order
         self.period = period
         self.wavelength = wavelength
         self.thickness = thickness
@@ -110,7 +111,7 @@ class _BaseRCWA(CoreSolveMixin):
         self.phi = self.phi
         self._psi = self.psi
 
-        self.fto = self.fto
+        self.max_order = self.max_order
         self.thickness = self.thickness
 
         if hasattr(self, 'modeler') and self.modeler is not None:
@@ -173,34 +174,34 @@ class _BaseRCWA(CoreSolveMixin):
         self._psi = jnp.array(jnp.pi / 2, dtype=self.type_float)
 
     @property
-    def fto(self):
-        return self._fto
+    def max_order(self):
+        return self._max_order
 
-    @fto.setter
-    def fto(self, fto):
+    @max_order.setter
+    def max_order(self, max_order):
 
-        if isinstance(fto, (list, tuple)):
-            if len(fto) == 1:
-                self._fto = [int(fto[0]), 0]
-            elif len(fto) == 2:
-                self._fto = [int(v) for v in fto]
+        if isinstance(max_order, (list, tuple)):
+            if len(max_order) == 1:
+                self._max_order = [int(max_order[0]), 0]
+            elif len(max_order) == 2:
+                self._max_order = [int(v) for v in max_order]
             else:
                 raise ValueError
-        elif isinstance(fto, (np.ndarray, jnp.ndarray)):
-            fto_list = fto.tolist()
-            if isinstance(fto_list, list):
-                if len(fto_list) == 1:
-                    self._fto = [int(fto_list[0]), 0]
-                elif len(fto_list) == 2:
-                    self._fto = [int(v) for v in fto_list]
+        elif isinstance(max_order, (np.ndarray, jnp.ndarray)):
+            max_order_list = max_order.tolist()
+            if isinstance(max_order_list, list):
+                if len(max_order_list) == 1:
+                    self._max_order = [int(max_order_list[0]), 0]
+                elif len(max_order_list) == 2:
+                    self._max_order = [int(v) for v in max_order_list]
                 else:
                     raise ValueError
-            elif isinstance(fto_list, (int, float)):
-                self._fto = [int(fto_list), 0]
+            elif isinstance(max_order_list, (int, float)):
+                self._max_order = [int(max_order_list), 0]
             else:
                 raise ValueError
-        elif isinstance(fto, (int, float)):
-            self._fto = [int(fto), 0]
+        elif isinstance(max_order, (int, float)):
+            self._max_order = [int(max_order), 0]
         else:
             raise ValueError
 
@@ -249,8 +250,8 @@ class _BaseRCWA(CoreSolveMixin):
     @jax_device_set
     def get_kx_ky_vector(self, wavelength):
 
-        fto_x_range = jnp.arange(-self.fto[0], self.fto[0] + 1)
-        fto_y_range = jnp.arange(-self.fto[1], self.fto[1] + 1)
+        max_order_x_range = jnp.arange(-self.max_order[0], self.max_order[0] + 1)
+        max_order_y_range = jnp.arange(-self.max_order[1], self.max_order[1] + 1)
 
         def adjust_theta():
             theta = 0 if self.theta is None else self.theta
@@ -266,10 +267,10 @@ class _BaseRCWA(CoreSolveMixin):
         phi = 0 if self.phi is None else self.phi  # phi is None -> 1D TE TM case
 
         # n_inc, not n_top: theta lives in the incidence medium, which incidence_side picks.
-        kx = (self.n_inc * sin_theta * jnp.cos(phi) + fto_x_range * (
+        kx = (self.n_inc * sin_theta * jnp.cos(phi) + max_order_x_range * (
                 wavelength / self.period[0])).astype(self.type_complex)
 
-        ky = (self.n_inc * sin_theta * jnp.sin(phi) + fto_y_range * (
+        ky = (self.n_inc * sin_theta * jnp.sin(phi) + max_order_y_range * (
                 wavelength / self.period[1])).astype(self.type_complex)
 
         return kx, ky

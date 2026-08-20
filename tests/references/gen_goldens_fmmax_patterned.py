@@ -18,7 +18,7 @@ only in the limit, so this generator freezes **both** fmmax formulations and the
 against their spread. A tolerance tighter than the spread between two of the oracle's own
 answers would be a claim about noise.
 
-Measured, at fto=14: the spread is 4.8e-6 / 3.0e-5 / 1.7e-4 across the three contrasts, and the
+Measured, at max_order=14: the spread is 4.8e-6 / 3.0e-5 / 1.7e-4 across the three contrasts, and the
 solver's answer sits inside it every time — landing on ``JONES_DIRECT`` to 3e-7, 1.4e-7 and
 2.0e-5 respectively, which is the agreement one expects between two vector formulations with
 the direct rule as the outlier.
@@ -42,10 +42,10 @@ def main():
     import jax.numpy as jnp
     import fmmax
 
-    from _fmmax_patterned_cases import CASES, FTO, PERIOD, THETA, THICK, WL, tensor_rasters
+    from _fmmax_patterned_cases import CASES, MAX_ORDER, PERIOD, THETA, THICK, WL, tensor_rasters
 
     lat = fmmax.LatticeVectors(u=jnp.array([PERIOD, 0.0]), v=jnp.array([0.0, PERIOD]))
-    expansion = fmmax.generate_expansion(lat, approximate_num_terms=(2 * FTO + 1) ** 2,
+    expansion = fmmax.generate_expansion(lat, approximate_num_terms=(2 * MAX_ORDER + 1) ** 2,
                                          truncation=fmmax.Truncation.PARALLELOGRAMIC)
     kx = jnp.asarray([2 * np.pi / WL * np.sin(np.deg2rad(THETA)), 0.0])
     wl = jnp.asarray(WL)
@@ -88,8 +88,8 @@ def main():
         #     convolution matrix and energy closes to machine precision. That makes it a sharp
         #     wiring check -- if the bridge is wrong, it shows here.
         #   JONES_DIRECT is a vector formulation; truncating it breaks the Hermiticity slightly
-        #     and the residual shrinks with fto rather than vanishing. Measured at 1.4e-5 for
-        #     fto=4 and ~1e-6 here. That is a property of the oracle, to be recorded, not a
+        #     and the residual shrinks with max_order rather than vanishing. Measured at 1.4e-5 for
+        #     max_order=4 and ~1e-6 here. That is a property of the oracle, to be recorded, not a
         #     defect to refuse.
         drift = max(abs(jones[0] + jones[1] - 1.0), abs(jones[2] + jones[3] - 1.0))
         for pol, (r, t) in (('s', fft[:2]), ('p', fft[2:])):

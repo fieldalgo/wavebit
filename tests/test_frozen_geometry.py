@@ -22,7 +22,7 @@ import wavebit
 #: A permittivity raster. Drawn as an index and squared, so it is the same layer this file
 #: measured before `structure` started holding permittivity.
 STRUCTURE = np.random.default_rng(0).uniform(1.0, 4.0, (1, 5, 5)) ** 2
-KW = dict(top=1.0, bot=1.0, theta=0.1, phi=0.2, psi=0.3, fto=[2, 2],
+KW = dict(top=1.0, bot=1.0, theta=0.1, phi=0.2, psi=0.3, max_order=[2, 2],
           period=[1.0, 1.0], wavelength=0.9, thickness=[0.2])
 
 # Every point of the two-axis cross product, including ('integrated', 'nvf') -- the pairing
@@ -161,7 +161,7 @@ def test_a_frozen_geometry_makes_the_vector_path_traceable(name, make, start):
     import jax.numpy as jnp
     importlib.import_module('wavebit.on_jax')
 
-    cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3], top=1.0, bot=1.0,
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0], max_order=[3, 3], top=1.0, bot=1.0,
                theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0)
     x = jnp.asarray(start)
     frozen = wavebit.rcwa(backend=1, structure=make(x), **cfg).freeze_geometry()
@@ -202,7 +202,7 @@ def test_a_stale_frozen_geometry_is_refused_rather_than_answered():
     importlib.import_module('wavebit.on_jax')
     from wavebit._core.modeler import StaleGeometryError
 
-    cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3], top=1.0, bot=1.0,
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0], max_order=[3, 3], top=1.0, bot=1.0,
                theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0)
     make = lambda lx: [[12.25, [['ellipse', 150.0, 150.0, lx, 55.0, 4.0, 0.27, 9, 9]]]]
 
@@ -222,7 +222,7 @@ def test_a_stale_frozen_geometry_is_refused_rather_than_answered():
 
 # --------------------------------------------------------------- the raster records
 
-RASTER_KW = dict(top=1.0, bot=1.0, theta=0.1, phi=0.2, psi=0.3, fto=[2, 2],
+RASTER_KW = dict(top=1.0, bot=1.0, theta=0.1, phi=0.2, psi=0.3, max_order=[2, 2],
                  period=[1000.0, 1000.0], wavelength=900.0, thickness=[300.0])
 
 
@@ -317,7 +317,7 @@ def test_a_one_cell_axis_makes_every_same_shape_replay_valid():
     that, or NVF on 1D gratings — the case the short-circuit was added for — would refuse every
     replay that changed anything.
     """
-    cfg = dict(top=1.0, bot=1.0, theta=0.2, phi=0.0, psi=np.pi / 2, fto=[5, 0],
+    cfg = dict(top=1.0, bot=1.0, theta=0.2, phi=0.0, psi=np.pi / 2, max_order=[5, 0],
                period=[700.0], wavelength=900.0, thickness=[200.0])
 
     def grating(width):
@@ -491,7 +491,7 @@ def test_the_nvf_gradient_holds_the_interfaces_fixed():
                        .solve().res.T).real
 
     def mask_size(u):
-        return int(_fac.normal_field_source_for_raster(u, KW['fto'][0], KW['fto'][1])[0][1].sum())
+        return int(_fac.normal_field_source_for_raster(u, KW['max_order'][0], KW['max_order'][1])[0][1].sum())
 
     grad = np.asarray(jax.grad(total)(jnp.asarray(structure)))
     step = 1e-4
@@ -529,7 +529,7 @@ def test_a_length_that_moves_without_reordering_reuses_the_compilation():
     import jax.numpy as jnp
     importlib.import_module('wavebit.on_jax')
 
-    cfg = dict(period=[300.0, 300.0], thickness=[205.0], fto=[3, 3], top=1.0, bot=1.0,
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0], max_order=[3, 3], top=1.0, bot=1.0,
                theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0)
     make = lambda lx: [[12.25, [['ellipse', 150.0, 150.0, lx, 55.0, 4.0, 0.27, 4, 4]]]]
 
@@ -563,7 +563,7 @@ def test_a_length_that_moves_without_reordering_reuses_the_compilation():
 
 
 PAINT_KW = dict(period=(1., 1.), thickness=(0.32,), wavelength=0.94, top=1., bot=2.1025,
-                theta=0.2, phi=0.3, psi=0.7, fto=(4, 4), normal_grid=256)
+                theta=0.2, phi=0.3, psi=0.7, max_order=(4, 4), normal_grid=256)
 
 
 #: 3.4**2 and 2.1**2 -- the materials these two rectangles always had, as permittivity.
@@ -597,7 +597,7 @@ def test_a_stale_painting_plan_is_refused_rather_than_answered():
     painting nobody asked for. Before the check, the replay took it: bit-identical through
     ``cx = 0.50`` and then 3.9e-4, 2.3e-2, 3.3e-2 wrong at 0.55, 0.62, 0.75, with no step in
     between to notice. Re-planning to compare costs 0.2% of a frozen ``solve`` on this layer
-    (1.2% on one of ten overlapping shapes, less as ``fto`` rises) -- the freeze here buys
+    (1.2% on one of ten overlapping shapes, less as ``max_order`` rises) -- the freeze here buys
     traceability rather than a speed plateau, so that is not what is being traded.
     """
     frozen = wavebit.rcwa(backend=0, structure=_painted(0.40), **PAINT_KW).freeze_geometry()

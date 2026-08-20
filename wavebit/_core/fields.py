@@ -44,13 +44,13 @@ layout) is discontinuous there and resolved differently by any two truncations.
 Turns a solved stack back into the field inside it. Each layer's mode amplitudes are
 propagated to a set of z-slices, then inverse-Fourier-transformed onto an (x, y) grid.
 
-**Where it is sampled is the caller's choice.** ``sample_x`` / ``sample_y`` / ``sample_z`` each take
-either a count — the uniform grid this has always used, unchanged and bit-identical — or the
-coordinates themselves, as a 1-D array. Nothing here has grid structure to respect: the
-transverse kernel is a pointwise ``exp(i k.r)`` and each z-slice is an independent
-propagation, so arbitrary points cost the same per point as grid ones and need no
-interpolation. Refining a grid leaves the shared points bit-identical, which is what says the
-sampling is genuinely pointwise rather than merely appearing to be.
+**Where it is sampled is the caller's choice.** ``sample_x`` / ``sample_y`` / ``sample_z`` each
+take either a count — the uniform grid this has always used, unchanged and bit-identical — or
+the coordinates themselves, as a 1-D array. Nothing here has grid structure to respect: the
+transverse kernel is a pointwise ``exp(i k.r)`` and each z-slice is an independent propagation,
+so arbitrary points cost the same per point as grid ones and need no interpolation. Refining a
+grid leaves the shared points bit-identical, which is what says the sampling is genuinely
+pointwise rather than merely appearing to be.
 
 Explicit ``sample_x`` / ``sample_y`` are lengths in ``period``'s units and are unconstrained —
 unsorted, non-uniform and outside the cell are all fine, the last being a periodic
@@ -169,9 +169,9 @@ def _is_count(spec):
 def _check_spec(spec, name):
     """Reject the one spelling that would otherwise mean something the caller did not ask for.
 
-    ``sample_z=5`` is five samples and ``sample_z=[5.0]`` is one sample at ``z = 5``; ``sample_z=5.0``
-    reads like the first and would silently behave like the second. It is a typo often enough
-    that guessing either way is worse than saying so.
+    ``sample_z=5`` is five samples and ``sample_z=[5.0]`` is one sample at ``z = 5``;
+    ``sample_z=5.0`` reads like the first and would silently behave like the second. It is a
+    typo often enough that guessing either way is worse than saying so.
     """
     if _is_count(spec):
         return
@@ -204,9 +204,10 @@ def _axis_samples(xp, spec, extent, C, dev):
 def _inv_fourier(xp, kx, ky, period, sample_x, sample_y, k0, C, lattice=None):
     """Inverse-transform kernel ``exp(-i k.r)`` sampled on the cell, flattened over orders.
 
-    With ``lattice`` given (and ``kx`` / ``ky`` therefore per-order, ``(ff_y, ff_x)``) the
-    samples are taken on the cell's own parallelogram, ``r = u*a1 + v*a2`` for ``u, v`` in
-    ``[0, 1]``, and the returned grid is indexed by ``(v, u)`` rather than ``(y, x)``.
+    With ``lattice`` given (and ``kx`` / ``ky`` therefore per-order, ``(n_orders_y,
+    n_orders_x)``) the samples are taken on the cell's own parallelogram, ``r = u*a1 + v*a2``
+    for ``u, v`` in ``[0, 1]``, and the returned grid is indexed by ``(v, u)`` rather than ``(y,
+    x)``.
 
     Separability survives that, which is the whole reason this is a few lines rather than a
     rewrite::
@@ -276,9 +277,9 @@ def _inv_fourier(xp, kx, ky, period, sample_x, sample_y, k0, C, lattice=None):
 def _z_1d(xp, sample_z, d, C, dev=None):
     """Local z samples through one layer, as a flat vector.
 
-    A count keeps the original spelling — ``linspace(0, sample_z, sample_z) / sample_z * d`` rather than
-    ``linspace(0, d, sample_z)`` — because the two are not identical in floating point and every
-    committed field golden was captured with this one.
+    A count keeps the original spelling — ``linspace(0, sample_z, sample_z) / sample_z * d``
+    rather than ``linspace(0, d, sample_z)`` — because the two are not identical in floating
+    point and every committed field golden was captured with this one.
     """
     if _is_count(sample_z):
         return xp.reshape(xp.linspace(0, sample_z, sample_z, dtype=C, device=dev), (-1,)) / sample_z * d
@@ -376,14 +377,14 @@ def field_1d(wavelength, kx, T1, layer_info_list, period, tetm_index,
              sample_x=20, sample_y=1, sample_z=20):
     """Field of a pure TE/TM 1D stack.
 
-    Returns ``(nz, sample_y, sample_x, 3)``, where ``nz`` is ``sample_z * n_layers`` for a count and
-    ``len(sample_z)`` for explicit coordinates. See the module docstring on sampling.
+    Returns ``(nz, sample_y, sample_x, 3)``, where ``nz`` is ``sample_z * n_layers`` for a count
+    and ``len(sample_z)`` for explicit coordinates. See the module docstring on sampling.
     """
     _require_solved(T1, layer_info_list)
     xp = array_namespace(T1)
     C = T1.dtype
     k0 = 2 * 3.141592653589793 / wavelength
-    ff = kx.shape[0]
+    n_orders = kx.shape[0]
     Kx = xp.diag(kx)
 
     z_per_layer, unshuffle = _z_plan(sample_z, layer_info_list, 4)
@@ -396,12 +397,12 @@ def field_1d(wavelength, kx, T1, layer_info_list, period, tetm_index,
         c1 = T_layer[:, None]
         c2 = B @ A_i @ X @ T_layer[:, None]
         z = _z_slices(xp, spec, d, C, _dev(T1))
-        Qz = xp.reshape(q, (1, 1, ff)) * z            # diagonals of Q*z, shape (nz, 1, ff)
-        Qz = xp.reshape(Qz, (nz, ff))
-        Qd = xp.reshape(q, (1, ff)) * xp.reshape(xp.reshape(z, (nz,)) - d, (nz, 1))
+        Qz = xp.reshape(q, (1, 1, n_orders)) * z       # diagonals of Q*z, (nz, 1, n_orders)
+        Qz = xp.reshape(Qz, (nz, n_orders))
+        Qd = xp.reshape(q, (1, n_orders)) * xp.reshape(xp.reshape(z, (nz,)) - d, (nz, 1))
 
-        fwd = _diag_exp(xp, -k0 * Qz, ff)
-        bwd = _diag_exp(xp, k0 * Qd, ff)
+        fwd = _diag_exp(xp, -k0 * Qz, n_orders)
+        bwd = _diag_exp(xp, k0 * Qd, n_orders)
         My = W @ (fwd @ c1 + bwd @ c2)
         Mx = V @ (-fwd @ c1 + bwd @ c2)
         # TE's ``H_z = Kx Ey`` is Faraday's z row and would carry ``muz_conv_i`` on a magnetic
@@ -461,10 +462,10 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, sample_x, sa
     C = T1.dtype
     k0 = 2 * 3.141592653589793 / wavelength
     if kx.ndim == 2:
-        ff_y, ff_x = kx.shape
+        n_orders_y, n_orders_x = kx.shape
     else:
-        ff_x, ff_y = kx.shape[0], ky.shape[0]
-    ff_xy = ff_x * ff_y
+        n_orders_x, n_orders_y = kx.shape[0], ky.shape[0]
+    n_orders = n_orders_x * n_orders_y
 
     # Same two spellings the solve accepts, resolved by the same helper — 1-D separable for an
     # axis-aligned cell (broadcast exactly as before), per-order for any lattice.
@@ -483,17 +484,17 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, sample_x, sa
     for spec, (epz_conv_i, W, V, q, d, big_A_i, big_B, muz_conv_i) in zip(
             z_per_layer, layer_info_list[::-1]):
         nz = _n_samples(spec)
-        q_1, q_2 = q[:ff_xy], q[ff_xy:]
+        q_1, q_2 = q[:n_orders], q[n_orders:]
         big_X = xp.diag(xp.exp(-k0 * q * d))
 
         c = xp.concat([big_I, big_B @ big_A_i @ big_X], axis=0) @ T_layer
-        c1p, c2p = c[:, 0:ff_xy], c[:, ff_xy:2 * ff_xy]
-        c1m, c2m = c[:, 2 * ff_xy:3 * ff_xy], c[:, 3 * ff_xy:4 * ff_xy]
+        c1p, c2p = c[:, 0:n_orders], c[:, n_orders:2 * n_orders]
+        c1m, c2m = c[:, 2 * n_orders:3 * n_orders], c[:, 3 * n_orders:4 * n_orders]
 
         z = _z_1d(xp, spec, d, C, dev)
         def prop(qi):
-            fwd = _diag_exp(xp, -k0 * xp.reshape(qi, (1, ff_xy)) * xp.reshape(z, (nz, 1)), ff_xy)
-            bwd = _diag_exp(xp, k0 * xp.reshape(qi, (1, ff_xy)) * xp.reshape(z - d, (nz, 1)), ff_xy)
+            fwd = _diag_exp(xp, -k0 * xp.reshape(qi, (1, n_orders)) * xp.reshape(z, (nz, 1)), n_orders)
+            bwd = _diag_exp(xp, k0 * xp.reshape(qi, (1, n_orders)) * xp.reshape(z - d, (nz, 1)), n_orders)
             return fwd[:, None, :, :], bwd[:, None, :, :]
 
         f1, b1 = prop(q_1)
@@ -502,18 +503,18 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, sample_x, sa
         a2p, a2m = f2 @ c2p, b2 @ c2m
 
         if conical:
-            W_1, W_2 = W[:, :ff_xy], W[:, ff_xy:]
-            V_11, V_12 = V[:ff_xy, :ff_xy], V[:ff_xy, ff_xy:]
-            V_21, V_22 = V[ff_xy:, :ff_xy], V[ff_xy:, ff_xy:]
+            W_1, W_2 = W[:, :n_orders], W[:, n_orders:]
+            V_11, V_12 = V[:n_orders, :n_orders], V[:n_orders, n_orders:]
+            V_21, V_22 = V[n_orders:, :n_orders], V[n_orders:, n_orders:]
             Sx = W_2 @ (a2p + a2m)
             Sy = V_11 @ (a1p + a1m) + V_12 @ (a2p + a2m)
             Ux = W_1 @ (-a1p + a1m)
             Uy = V_21 @ (-a1p + a1m) + V_22 @ (-a2p + a2m)
         else:
-            W_11, W_12 = W[:ff_xy, :ff_xy], W[:ff_xy, ff_xy:]
-            W_21, W_22 = W[ff_xy:, :ff_xy], W[ff_xy:, ff_xy:]
-            V_11, V_12 = V[:ff_xy, :ff_xy], V[:ff_xy, ff_xy:]
-            V_21, V_22 = V[ff_xy:, :ff_xy], V[ff_xy:, ff_xy:]
+            W_11, W_12 = W[:n_orders, :n_orders], W[:n_orders, n_orders:]
+            W_21, W_22 = W[n_orders:, :n_orders], W[n_orders:, n_orders:]
+            V_11, V_12 = V[:n_orders, :n_orders], V[:n_orders, n_orders:]
+            V_21, V_22 = V[n_orders:, :n_orders], V[n_orders:, n_orders:]
             Sx = W_11 @ (a1p + a1m) + W_12 @ (a2p + a2m)
             Sy = W_21 @ (a1p + a1m) + W_22 @ (a2p + a2m)
             Ux = V_11 @ (-a1p + a1m) + V_12 @ (-a2p + a2m)
@@ -592,10 +593,10 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, period,
     C = T1.dtype
     k0 = 2 * 3.141592653589793 / wavelength
     if kx.ndim == 2:
-        ff_y, ff_x = kx.shape
+        n_orders_y, n_orders_x = kx.shape
     else:
-        ff_x, ff_y = kx.shape[0], ky.shape[0]
-    ff = ff_x * ff_y
+        n_orders_x, n_orders_y = kx.shape[0], ky.shape[0]
+    n_orders = n_orders_x * n_orders_y
 
     from .solve_2d import order_grid_kxy
     kx_g, ky_g = order_grid_kxy(xp, kx, ky)
@@ -614,19 +615,19 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, period,
         # The layer's unknown is its forward amplitude at its own top face -- that is what the
         # ETM redefinition `t' = X_f^-1 P t` bought. The backward half is referenced at the
         # bottom face, so `QP_i @ X_f` is the map to it.
-        X_f = _diag_exp(xp, 1j * k0 * lam_f * d, 2 * ff)
+        X_f = _diag_exp(xp, 1j * k0 * lam_f * d, 2 * n_orders)
         a_f = T_layer
         a_b = (QP_i @ X_f) @ T_layer
 
         z = _z_1d(xp, spec, d, C, dev)
-        fwd = _diag_exp(xp, 1j * k0 * xp.reshape(lam_f, (1, 2 * ff))
-                        * xp.reshape(z, (nz, 1)), 2 * ff)
-        bwd = _diag_exp(xp, 1j * k0 * xp.reshape(lam_b, (1, 2 * ff))
-                        * xp.reshape(z - d, (nz, 1)), 2 * ff)
+        fwd = _diag_exp(xp, 1j * k0 * xp.reshape(lam_f, (1, 2 * n_orders))
+                        * xp.reshape(z, (nz, 1)), 2 * n_orders)
+        bwd = _diag_exp(xp, 1j * k0 * xp.reshape(lam_b, (1, 2 * n_orders))
+                        * xp.reshape(z - d, (nz, 1)), 2 * n_orders)
         psi = psi_f @ (fwd[:, None] @ a_f) + psi_b @ (bwd[:, None] @ a_b)
 
-        Ex, Ey = psi[:, :, :ff], psi[:, :, ff:2 * ff]
-        Hx, Hy = psi[:, :, 2 * ff:3 * ff], psi[:, :, 3 * ff:]
+        Ex, Ey = psi[:, :, :n_orders], psi[:, :, n_orders:2 * n_orders]
+        Hx, Hy = psi[:, :, 2 * n_orders:3 * n_orders], psi[:, :, 3 * n_orders:]
         Ez = eps['ezz_i'] @ (Ky @ Hx - Kx @ Hy - eps['ezx'] @ Ex - eps['ezy'] @ Ey)
         Hz = Kx @ Ey - Ky @ Ex
 

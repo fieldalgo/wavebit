@@ -37,7 +37,7 @@ import wavebit
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from _fmmax_field_cases import (CASES, FTO, PERIOD, RES_Z,  # noqa: E402
+from _fmmax_field_cases import (CASES, MAX_ORDER, PERIOD, RES_Z,  # noqa: E402
                                 THICK, WL, fine_res_x, raster, x_samples)
 
 GOLDEN = np.load(HERE / 'golden_fmmax_field.npz')
@@ -74,7 +74,7 @@ def _reconstruct(name, theta, pol):
     """
     structure = raster(name)[None, :, :]
     solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, period=(PERIOD, PERIOD),
-                          fto=(FTO, FTO), wavelength=WL, thickness=[THICK],
+                          max_order=(MAX_ORDER, MAX_ORDER), wavelength=WL, thickness=[THICK],
                           structure=structure, theta=np.deg2rad(theta), phi=0.0,
                           psi=np.pi / 2 if pol == 's' else 0.0, answers='field')
     solver.solve()

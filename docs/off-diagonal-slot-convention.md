@@ -128,7 +128,7 @@ Nothing about the *sign* convention changed, which is what this document is abou
 So the correct hand-filled call for a uniform layer is:
 
 ```python
-I = np.eye(ff_xy, dtype=np.complex128)
+I = np.eye(n_orders, dtype=np.complex128)
 
 epx   = np.stack([eps_xx * I])
 epy   = np.stack([eps_yy * I])
@@ -410,7 +410,7 @@ coincidence: it comes from the ½-symmetrization inside `_nvf_assemble`, which e
 un-symmetrized product is not Hermitian.
 
 Verified rather than argued — a real 2D crossed grating (Si pillar, 400 nm pitch, 300 nm tall,
-lambda 900 nm, `theta = 12°`, `phi = 33°`, `psi = 21°`, `fto = (6, 6)`, 169 retained orders),
+lambda 900 nm, `theta = 12°`, `phi = 33°`, `psi = 21°`, `max_order = (6, 6)`, 169 retained orders),
 solved with the shipped and exchanged operators:
 
 | factorization | max Δ`de_ri` | max Δ`de_ti` | bit-identical |
@@ -438,7 +438,7 @@ because it eliminates `E_z`, while the off-diagonal pair defaults to `None`, and
 accept a required parameter after a defaulted one. So
 
 ```python
-res = mee.solve_conv(*to_conv_mat_raster_pn(tensor, fto, fto))
+res = mee.solve_conv(*to_conv_mat_raster_pn(tensor, max_order, max_order))
 ```
 
 put `epz_i` in the `epxy` slot. Nothing raised. On a lossless passive pillar it returned a full
@@ -536,7 +536,7 @@ patterned region and runs (checked at 49 orders). That is the oracle the factori
 `anisotropic-materials.md` §3 will need, and it exists today.
 
 **Every case is a uniform film.** Not one of them has structure in the plane. Concretely, that
-means all of this runs at `fto=(0, 0)` — a single Fourier order — with convolution matrices
+means all of this runs at `max_order=(0, 0)` — a single Fourier order — with convolution matrices
 hand-filled as scaled identities. So the machinery that turns a *pattern* into those matrices is
 never touched: not the `dfs2d_*` builders, not Li's rules, not NVF, not the analytic or boundary
 builders, not

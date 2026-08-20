@@ -102,11 +102,12 @@ at the ``normal_grid`` of 1024 the solver defaults to. That is 12x and 3.4x, and
 of the boundary exactness and the position gradient above rather than an accident -- but it was
 paid before it was counted, and it moves what is worth optimising: the field now costs 4-5x the
 three FFTs that transform it (0.36 s against 0.08 s at N = 1024), so the transform is not the
-place to look. Whole-solve share falls away with ``fto`` as the eigendecomposition takes over,
-from 8.5% at fto 4 to 0.13% at fto 16, which is the range where it might matter to an optimizer
-looping at low truncation. Side effect worth knowing when reading
-``docs/boundary-modeling.md``: the cost ratio it quotes for swapping in the boundary path's field
-fell from 12x/486x to 2x/182x because this side got slower, not because that one got faster.
+place to look. Whole-solve share falls away with ``max_order`` as the eigendecomposition takes
+over, from 8.5% at max_order 4 to 0.13% at max_order 16, which is the range where it might
+matter to an optimizer looping at low truncation. Side effect worth knowing when reading
+``docs/boundary-modeling.md``: the cost ratio it quotes for swapping in the boundary path's
+field fell from 12x/486x to 2x/182x because this side got slower, not because that one got
+faster.
 """
 from . import overlap as _overlap
 from .backend import array_namespace, as_array, j1, jinc, sinc
@@ -117,15 +118,15 @@ from .overlap import COMBINE_MODES, OVERLAP_TOL_REL      # re-exported; both pat
 from .geometry import StaleGeometryError
 
 
-def _grid(xp, fto_x, fto_y, dev, dtype):
+def _grid(xp, max_order_x, max_order_y, dev, dtype):
     """Integer reciprocal grid ``(KY, KX)`` spanning the doubled range a convolution matrix needs.
 
     Doubled because the matrix is indexed by *differences*: ``r - c`` and ``s - d`` each reach
-    ``+-2*fto``, so a grid of ``2*fto+1`` per axis cannot fill its corners. See
+    ``+-2*max_order``, so a grid of ``2*max_order+1`` per axis cannot fill its corners. See
     ``docs/factorization-terms.md`` for the layout and why the result is BTTB, not Toeplitz.
     """
-    ky = xp.asarray([float(m) for m in range(-2 * fto_y, 2 * fto_y + 1)], dtype=dtype, device=dev)
-    kx = xp.asarray([float(m) for m in range(-2 * fto_x, 2 * fto_x + 1)], dtype=dtype, device=dev)
+    ky = xp.asarray([float(m) for m in range(-2 * max_order_y, 2 * max_order_y + 1)], dtype=dtype, device=dev)
+    kx = xp.asarray([float(m) for m in range(-2 * max_order_x, 2 * max_order_x + 1)], dtype=dtype, device=dev)
     return ky[:, None] + 0.0 * kx[None, :], 0.0 * ky[:, None] + kx[None, :]
 
 
@@ -509,13 +510,13 @@ def _refuse_paint_overlap(shapes, period, lattice=None):
         f'resolved into disjoint polygons before anything is transformed.')
 
 
-def assemble_eps_coeffs(xp, shapes, background, fto_x, fto_y, period, dtype, lattice=None,
+def assemble_eps_coeffs(xp, shapes, background, max_order_x, max_order_y, period, dtype, lattice=None,
                         combine=None):
     """Analytic Fourier coefficients of ``eps`` and ``1/eps`` for one layer.
 
-    Each grid has shape ``(4*fto_y+1, 4*fto_x+1)``, indexed ``[ky+2*fto_y, kx+2*fto_x]`` — the
-    doubled range a ``(2*fto+1)**2`` convolution matrix needs (``docs/factorization-terms.md``
-    §2 for why it doubles).
+    Each grid has shape ``(4*max_order_y+1, 4*max_order_x+1)``, indexed ``[ky+2*max_order_y,
+    kx+2*max_order_x]`` — the doubled range a ``(2*max_order+1)**2`` convolution matrix needs
+    (``docs/factorization-terms.md`` §2 for why it doubles).
 
     ``background`` and each shape's ``material`` are read through
     :func:`~wavebit._core.domain.as_material`, so a bare number means ``Material(epsilon=x)``
@@ -549,7 +550,7 @@ def assemble_eps_coeffs(xp, shapes, background, fto_x, fto_y, period, dtype, lat
     eps_base = as_material(background, 'layer background').epsilon
     dev = getattr(eps_base, 'device', None) if hasattr(eps_base, 'device') else None
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
-    KKY, KKX = _grid(xp, fto_x, fto_y, dev, real_dtype)
+    KKY, KKX = _grid(xp, max_order_x, max_order_y, dev, real_dtype)
 
     eps_bg = as_array(xp, eps_base, dtype=dtype)
     inv_bg = 1.0 / eps_bg
@@ -570,7 +571,7 @@ def assemble_eps_coeffs(xp, shapes, background, fto_x, fto_y, period, dtype, lat
     return eps_c, inv_eps_c
 
 
-def conv_matrix_2d(xp, coeff2d, fto_x, fto_y):
+def conv_matrix_2d(xp, coeff2d, max_order_x, max_order_y):
     """Convolution matrix from a 2D coefficient grid.
 
     ``M[(r,s),(c,d)] = coeff(ky=r-c, kx=s-d)`` — the ordering the ``fourier2d_*`` builders
@@ -589,17 +590,17 @@ def conv_matrix_2d(xp, coeff2d, fto_x, fto_y):
     and column pairs flattened, ``i - j`` does not determine ``(r-c, s-d)``, so the diagonals
     are not constant. ``docs/factorization-terms.md`` has the check and the vocabulary.
     """
-    ff_x = 2 * fto_x + 1
-    ff_y = 2 * fto_y + 1
+    n_orders_x = 2 * max_order_x + 1
+    n_orders_y = 2 * max_order_y + 1
     dev = _device(coeff2d)
 
-    iy = xp.asarray([[[[r - c + 2 * fto_y]]] for r in range(ff_y) for c in range(ff_y)],
+    iy = xp.asarray([[[[r - c + 2 * max_order_y]]] for r in range(n_orders_y) for c in range(n_orders_y)],
                     device=dev)
-    iy = xp.reshape(iy, (ff_y, ff_y))
-    ix = xp.asarray([[s - d + 2 * fto_x for d in range(ff_x)] for s in range(ff_x)], device=dev)
+    iy = xp.reshape(iy, (n_orders_y, n_orders_y))
+    ix = xp.asarray([[s - d + 2 * max_order_x for d in range(n_orders_x)] for s in range(n_orders_x)], device=dev)
 
     m4 = coeff2d[iy[:, None, :, None], ix[None, :, None, :]]      # [r, s, c, d]
-    return xp.reshape(m4, (ff_y * ff_x, ff_y * ff_x))
+    return xp.reshape(m4, (n_orders_y * n_orders_x, n_orders_y * n_orders_x))
 
 
 def _device(x):
@@ -874,7 +875,7 @@ def _hypot_safe(xp, a, b):
     return xp.where(n2 == 0, xp.ones_like(n2), n2) ** 0.5
 
 
-def _sampled_coeffs(xp, field, fto_x, fto_y):
+def _sampled_coeffs(xp, field, max_order_x, max_order_y):
     """Fourier coefficients of a sampled field on the doubled reciprocal grid.
 
     ``c(ky, kx) = 1/(Ny*Nx) * sum f[iy, ix] exp(-2i*pi*(ky*iy/Ny + kx*ix/Nx))``, laid out the
@@ -886,8 +887,8 @@ def _sampled_coeffs(xp, field, fto_x, fto_y):
     Ny, Nx = field.shape
     dev = _device(field)
     F = xp.fft.fft2(field) / (Ny * Nx)
-    iy = xp.asarray([k % Ny for k in range(-2 * fto_y, 2 * fto_y + 1)], device=dev)
-    ix = xp.asarray([k % Nx for k in range(-2 * fto_x, 2 * fto_x + 1)], device=dev)
+    iy = xp.asarray([k % Ny for k in range(-2 * max_order_y, 2 * max_order_y + 1)], device=dev)
+    ix = xp.asarray([k % Nx for k in range(-2 * max_order_x, 2 * max_order_x + 1)], device=dev)
     coeff = F[iy[:, None], ix[None, :]]
     # The cell-centre half-pixel shift, the same one
     # :func:`~wavebit._core.factorization._half_pixel_phase` applies on the raster side. The
@@ -896,8 +897,8 @@ def _sampled_coeffs(xp, field, fto_x, fto_y):
     # these coefficients are multiplied by. Applied here as well as there because these two are
     # the *same transform written twice*, and `test_conv_matrix_matches_grid_convention` is what
     # says so; correcting one alone silently splits the analytic path from the raster one.
-    ky = xp.asarray([float(k) for k in range(-2 * fto_y, 2 * fto_y + 1)], device=dev)
-    kx = xp.asarray([float(k) for k in range(-2 * fto_x, 2 * fto_x + 1)], device=dev)
+    ky = xp.asarray([float(k) for k in range(-2 * max_order_y, 2 * max_order_y + 1)], device=dev)
+    kx = xp.asarray([float(k) for k in range(-2 * max_order_x, 2 * max_order_x + 1)], device=dev)
     pi = 3.141592653589793
     phase = (xp.exp(-1j * pi * xp.astype(ky, coeff.dtype) / Ny)[:, None]
              * xp.exp(-1j * pi * xp.astype(kx, coeff.dtype) / Nx)[None, :])
@@ -924,14 +925,14 @@ def _static_float(v):
     return float(v)
 
 
-def _projector_cache_key(xp, built, grid_shape, period, fto_x, fto_y, dtype, lattice):
+def _projector_cache_key(xp, built, grid_shape, period, max_order_x, max_order_y, dtype, lattice):
     """A content key for the coefficients built below, or ``None`` when caching would be wrong.
 
     Everything :func:`normal_vector_field_analytical` reads goes in and nothing else does. It
     reads each shape through :func:`shape_geometry` and never touches ``material`` or
-    ``background``, which is what makes the cache worth having: a sweep over the *material* leaves this key
-    alone. ``None`` means at least one value is traced or under autograd, so the build has to
-    happen again -- the gradient runs through it.
+    ``background``, which is what makes the cache worth having: a sweep over the *material*
+    leaves this key alone. ``None`` means at least one value is traced or under autograd, so the
+    build has to happen again -- the gradient runs through it.
     """
     try:
         Px, Py = _static_float(period[0]), _static_float(period[1])
@@ -947,10 +948,10 @@ def _projector_cache_key(xp, built, grid_shape, period, fto_x, fto_y, dtype, lat
     # dtypes are named, not a guarantee, and a cross-backend collision hands one namespace's
     # array to another.
     return (getattr(xp, '__name__', ''), shapes_key, tuple(grid_shape), (Px, Py),
-            int(fto_x), int(fto_y), str(dtype), lat)
+            int(max_order_x), int(max_order_y), str(dtype), lat)
 
 
-def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype, lattice=None):
+def normal_projector_coeffs(xp, shapes, grid_shape, period, max_order_x, max_order_y, dtype, lattice=None):
     """Coefficient grids of ``nx**2``, ``nx*ny`` and ``ny**2`` — the NVF projectors' input.
 
     **One shape is built at the centre of the cell and carried to ``(cx, cy)`` by a phase**,
@@ -971,7 +972,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype,
     the shape sits. That is not a discretization: ``<nx**2>`` for a circle moves 2.4e-2 between
     0.30 and 0.50 of the period and does not budge when the grid goes from 256 to 4096. It
     reached ``sum(R)`` as 1.6e-3, so the same structure translated gave a different answer.
-    Built here it reproduces the centred one to 1e-14, at every ``fto``.
+    Built here it reproduces the centred one to 1e-14, at every ``max_order``.
 
     Several shapes cannot use it, and the reason is worth stating precisely because it is two
     reasons. The field is a *normalized sum* (``sum(g/|g|)``, divided by its own norm), so a
@@ -999,15 +1000,15 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype,
       gradient came back NaN.
 
       **That rejection is dated and the route is worth re-measuring before it is dismissed
-      again.** It was decided against the *sum of unit vectors*, where ``n1 + n2 = 0`` along
-      the whole segment between two opposed centres — a curve the grid samples. The
-      distance-product blend that replaced it (2026-08-17) does not cancel there: off the
-      midpoint ``w1 != w2``, so the zero set collapses to the single midpoint, which the
-      ``(i+0.5)/N`` grid never contains. Measured on two identical circles on the cell
-      diagonal, zero grid points reach ``|n| == 0`` at N = 256, 512 and 1024, against 85, 144
-      and 303 under the old rule. What has not been re-measured is whether the route is *good*:
-      it makes the common translation exact and appears to cost 1.5-3.4x on relative jitter. It also moved the relative-position error for rectangles from
-      1.6e-1 to 2.9e-1.
+      again.** It was decided against the *sum of unit vectors*, where ``n1 + n2 = 0`` along the
+      whole segment between two opposed centres — a curve the grid samples. The distance-product
+      blend that replaced it (2026-08-17) does not cancel there: off the midpoint ``w1 != w2``,
+      so the zero set collapses to the single midpoint, which the ``(i+0.5)/N`` grid never
+      contains. Measured on two identical circles on the cell diagonal, zero grid points reach
+      ``|n| == 0`` at N = 256, 512 and 1024, against 85, 144 and 303 under the old rule. What
+      has not been re-measured is whether the route is *good*: it makes the common translation
+      exact and appears to cost 1.5-3.4x on relative jitter. It also moved the relative-position
+      error for rectangles from 1.6e-1 to 2.9e-1.
     * *Mollifying* ``sign()`` (``tanh(xr/w)``) removes the zero derivative at the source and
       would serve both halves, but the width that makes the position gradient accurate is not
       the width that keeps the answer smooth through ``angle = 0``: it broke
@@ -1021,22 +1022,22 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype,
     Tried, and rejected on the half it was reached for. Integrate its autodiff position
     gradient across a six-pixel window on two tilted rectangles and it comes to -3.5e-4 over a
     window the loss *rises* through by +1.4e-4 -- the wrong sign, at all 25 sampled positions,
-    at fto 8 and again at fto 12; the sampled field integrates to +1.4e-4 against the same
+    at max_order 8 and again at max_order 12; the sampled field integrates to +1.4e-4 against
     +1.1e-4, high by 22%. A circle pair reverses it rather than widening it: there the sampled
     field accounts for the loss to 1% and the replacement is 19% out. The cost is a pixel scan
     over every segment of every loop, and ``POLYGON_VERTICES`` is 256, so a circle carries 64x
     the segments a rectangle does: at the ``normal_grid`` of 1024 this solver defaults to, the
     swap costs 12x on a rectangle pair and 486x on a circle pair, 0.4 s and 23 s per layer per
     build. Its *forward* accuracy is open rather than settled, and the two are not separable at
-    reachable truncations: they still sit 2e-4 apart on a total at fto 24, so neither has
+    reachable truncations: they still sit 2e-4 apart on a total at max_order 24, so neither has
     reached the limit any ratio between them would have to be measured against. Reproduced by
     ``studies/benchmark_boundary_normal_field.py``; see ``docs/boundary-modeling.md``.
 
     Multi-shape layers therefore keep the sampled field. Both halves of what that costs are
     pinned in ``test_shape_position_gradients.py``, the working one as a test and the broken one
     as a strict xfail, so neither can be inferred from the other. Both of those run at
-    ``fto = 4``, where the model's own slope is about twice its fto 12 one, so they hold
-    autodiff to finite differences rather than to the slope the structure has.
+    ``max_order = 4``, where the model's own slope is about twice its max_order 12 one, so they
+    hold autodiff to finite differences rather than to the slope the structure has.
 
     **The forward answer is affected too, not only the gradient — keep every shape inside the
     cell.** A shape straddling the boundary may be named in any period; ``cx`` and ``cx + Px``
@@ -1079,14 +1080,14 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype,
     # ``(cx, cy)`` are, which makes a position sweep -- and a position *gradient*, which runs
     # through the phase -- reuse one field instead of rebuilding it every step. A material sweep
     # reuses it for the other reason: the key holds no material at all because the build reads
-    # none. Measured on a five-point sweep at ``normal_grid = 1024``, ``fto = 4``: this call was
+    # none. Measured on a five-point sweep at ``normal_grid = 1024``, ``max_order = 4``: the call
     # 83% of the wall clock for one shape and 93% for six.
-    key = _projector_cache_key(xp, built, grid_shape, period, fto_x, fto_y, dtype, lattice)
+    key = _projector_cache_key(xp, built, grid_shape, period, max_order_x, max_order_y, dtype, lattice)
     coeffs = _PROJECTOR_CACHE.pop(key, None) if key is not None else None
     if coeffs is None:
         nx, ny = normal_vector_field_analytical(xp, grid_shape, built, (Px, Py), real_dtype,
                                                 lattice)
-        coeffs = tuple(_sampled_coeffs(xp, xp.astype(f, dtype), fto_x, fto_y)
+        coeffs = tuple(_sampled_coeffs(xp, xp.astype(f, dtype), max_order_x, max_order_y)
                        for f in (nx * nx, nx * ny, ny * ny))
     if key is not None:
         # Least-recently-used: the read above is a `pop`, so a hit takes the entry out and this
@@ -1102,14 +1103,14 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, fto_x, fto_y, dtype,
     if shift_y is None:
         phase = 1.0
     else:
-        KKY, KKX = _grid(xp, fto_x, fto_y, _device(coeffs[0]), real_dtype)
+        KKY, KKX = _grid(xp, max_order_x, max_order_y, _device(coeffs[0]), real_dtype)
         arg = KKY * shift_y + KKX * shift_x
         phase = xp.exp(xp.astype(arg, dtype) * (-2j * 3.141592653589793))
 
     return tuple(c * phase for c in coeffs)
 
 
-def to_conv_mat_smooth_nvf(xp, shapes, background, fto_x, fto_y, period, dtype,
+def to_conv_mat_smooth_nvf(xp, shapes, background, max_order_x, max_order_y, period, dtype,
                              normal_grid=256, lattice=None, combine=None):
     """The five 2D-solve convolution matrices for one analytic layer, via NVF.
 
@@ -1124,14 +1125,14 @@ def to_conv_mat_smooth_nvf(xp, shapes, background, fto_x, fto_y, period, dtype,
     ``combine`` is passed straight to :func:`assemble_eps_coeffs`, which sums; see there for
     why an overlapping painted layer must not arrive at this function.
     """
-    eps_c, inv_eps_c = assemble_eps_coeffs(xp, shapes, background, fto_x, fto_y, period, dtype,
+    eps_c, inv_eps_c = assemble_eps_coeffs(xp, shapes, background, max_order_x, max_order_y, period, dtype,
                                            lattice, combine=combine)
     c_xx, c_xy, c_yy = normal_projector_coeffs(
-        xp, shapes, (normal_grid, normal_grid), period, fto_x, fto_y, dtype, lattice)
-    return nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, fto_x, fto_y)
+        xp, shapes, (normal_grid, normal_grid), period, max_order_x, max_order_y, dtype, lattice)
+    return nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, max_order_x, max_order_y)
 
 
-def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, fto_x, fto_y):
+def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, max_order_x, max_order_y):
     """Assemble the five convolution matrices from coefficient grids — the NVF tensor itself.
 
     The last step of every non-raster NVF path, and the same step for all of them: what differs
@@ -1145,14 +1146,14 @@ def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, fto_x, fto_y):
     Returns ``(eps_xx, eps_yy, epz_i, eps_xy, eps_yx)`` — ``solve_conv``'s parameter order,
     as every builder does; see "Slot order" in :mod:`wavebit._core.factorization`.
     """
-    ep_dir = conv_matrix_2d(xp, eps_c, fto_x, fto_y)
-    ep_inv = conv_matrix_2d(xp, inv_eps_c, fto_x, fto_y)
+    ep_dir = conv_matrix_2d(xp, eps_c, max_order_x, max_order_y)
+    ep_inv = conv_matrix_2d(xp, inv_eps_c, max_order_x, max_order_y)
 
     delta_ep = ep_dir - xp.linalg.inv(ep_inv)
 
-    C_xx = conv_matrix_2d(xp, c_xx, fto_x, fto_y)
-    C_xy = conv_matrix_2d(xp, c_xy, fto_x, fto_y)
-    C_yy = conv_matrix_2d(xp, c_yy, fto_x, fto_y)
+    C_xx = conv_matrix_2d(xp, c_xx, max_order_x, max_order_y)
+    C_xy = conv_matrix_2d(xp, c_xy, max_order_x, max_order_y)
+    C_yy = conv_matrix_2d(xp, c_yy, max_order_x, max_order_y)
 
     eps_xx = ep_dir - 0.5 * (delta_ep @ C_xx + C_xx @ delta_ep)
     eps_yy = ep_dir - 0.5 * (delta_ep @ C_yy + C_yy @ delta_ep)
@@ -1196,7 +1197,7 @@ def check_no_plan_still_fits(layer, period, index, lattice=None):
         f'(Moving a shape never trips this on its own; moving it into another shape does.)')
 
 
-def to_conv_mat_smooth_layers(layer_shapes, fto_x, fto_y, period,
+def to_conv_mat_smooth_layers(layer_shapes, max_order_x, max_order_y, period,
                                 normal_grid=256, type_complex=None, xp=None,
                                 boundary_plans=None, lattice=None):
     """Stack the analytic-NVF convolution matrices over layers.
@@ -1204,7 +1205,7 @@ def to_conv_mat_smooth_layers(layer_shapes, fto_x, fto_y, period,
     ``layer_shapes`` is one ``dict(background=..., shapes=[...])`` per layer, with the shapes'
     ``cx`` / ``cy`` / ``lx`` / ``ly`` as absolute lengths in the units of ``period`` (see the
     module docstring). Returns ``(epx, epy, epz_i, epxy, epyx)``, each
-    ``(n_layers, ff_xy, ff_xy)``.
+    ``(n_layers, n_orders, n_orders)``.
 
     Every layer goes through :func:`check_layer_combination` first — this is the funnel the
     smooth path reaches the solver through, so it is the one place that can guarantee an
@@ -1239,7 +1240,7 @@ def to_conv_mat_smooth_layers(layer_shapes, fto_x, fto_y, period,
             # structure either way, so it stays here -- exact, and cheaper.
             from .boundary import to_conv_mat_boundary_layer
             mats = to_conv_mat_boundary_layer(
-                xp, layer.get('shapes', []), background, fto_x, fto_y, period, dtype,
+                xp, layer.get('shapes', []), background, max_order_x, max_order_y, period, dtype,
                 normal_grid=normal_grid, plan=plan, lattice=lattice)
         else:
             # `combine` goes down with the shapes rather than being dropped here. Reaching
@@ -1252,7 +1253,7 @@ def to_conv_mat_smooth_layers(layer_shapes, fto_x, fto_y, period,
             # rules, and once the shapes moved together the check below is what fired -- with
             # a message about this builder rather than about the stale record.
             mats = to_conv_mat_smooth_nvf(
-                xp, layer.get('shapes', []), background, fto_x, fto_y, period, dtype,
+                xp, layer.get('shapes', []), background, max_order_x, max_order_y, period, dtype,
                 normal_grid=normal_grid, lattice=lattice, combine=layer.get('combine'))
         for slot, m in zip(out, mats):
             slot.append(m)

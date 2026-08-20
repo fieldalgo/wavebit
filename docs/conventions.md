@@ -165,7 +165,7 @@ All angles are **radians**.
 | `phi` | azimuth of the plane of incidence, from the `+x` axis |
 | `psi` | polarization: the angle of **E** from the p direction in the plane transverse to **k**. `psi = pi/2` is pure s (TE-like), `psi = 0` pure p (TM-like). **Real** — a complex `psi` is refused, see below |
 | `chi` | ellipticity angle: `tan(chi)` is the polarization ellipse's minor/major axis ratio and its sign is the rotation direction. `chi = 0` is linear (the `psi` spelling), `|chi| = pi/4` circular. Real, like `psi`. Naming it selects the `(psi, chi)` chart — see below |
-| `tetm` (1D only) | `'te'` / `'tm'` — a **declaration**, not an angle: it says this problem has no polarization and no azimuth degree of freedom, which is what makes the pure 1D TE/TM formulation legal (2-4x faster than conical, measured). Refused on a 2D cell, with `fto[1] != 0`, or beside a nonzero `phi` / a `psi` / a `polarization`. `psi` reads back `None` under it — a declared-away degree of freedom is absent, not defaulted |
+| `tetm` (1D only) | `'te'` / `'tm'` — a **declaration**, not an angle: it says this problem has no polarization and no azimuth degree of freedom, which is what makes the pure 1D TE/TM formulation legal (2-4x faster than conical, measured). Refused on a 2D cell, with `max_order[1] != 0`, or beside a nonzero `phi` / a `psi` / a `polarization`. `psi` reads back `None` under it — a declared-away degree of freedom is absent, not defaulted |
 
 ### General (elliptical) polarization
 
@@ -267,13 +267,13 @@ the complex conjugate of ours, and its handedness labels flip with it.
 
 ## Diffraction orders
 
-The retained orders are `m = -fto_x..fto_x`, `n = -fto_y..fto_y`, with in-plane
+The retained orders are `m = -max_order_x..max_order_x`, `n = -max_order_y..max_order_y`, with in-plane
 wavevectors `kx_m = n_top·sinθ·cosφ + m·λ/Λx` (and correspondingly `ky_n`). This is one of
 the places the **index** is genuinely the quantity: it is `n_top`, the derived
 `sqrt(eps*mu)` of the `top` material, and it is `n_bot`'s under
 `incidence_side='bottom'` — `theta` lives in the incidence medium. Per-order
-arrays have shape `(ff_y, ff_x)` — **`y` first, the transpose of the `fto=[x, y]` input
-order** — with the incident order at the centre `[fto_y, fto_x]` and `m` increasing along
+arrays have shape `(n_orders_y, n_orders_x)` — **`y` first, the transpose of the `max_order=[x, y]` input
+order** — with the incident order at the centre `[max_order_y, max_order_x]` and `m` increasing along
 the last axis.
 
 `result.order(m, n)` indexes all per-order quantities by the order indices themselves, so

@@ -74,7 +74,7 @@ What makes this worth a section is how the wrong version behaved:
 | lossless tensor, `R + T = 1` | holds | holds |
 | rotation covariance about z | holds | holds |
 | distance to fmmax | plausible | plausible |
-| non-hermiticity of `eps̃` | 4.4e-2, **plateaus** with fto | truncation only |
+| non-hermiticity of `eps̃` | 4.4e-2, **plateaus** with max_order | truncation only |
 | **uniform layer** | **wrong by 0.5** | exact to 1e-15 |
 
 Three of those five pass on a formulation that is wrong by 50% on a slab of glass. The one that
@@ -115,7 +115,7 @@ different construction) — and they agree only in the limit. So the golden free
 answers and the tolerance is the spread between them. No claim can be sharper than the distance
 between two of the oracle's own results.
 
-At `fto=14`, gyrotropic pillar in vacuum:
+At `max_order=14`, gyrotropic pillar in vacuum:
 
 | case | fmmax FFT vs JONES | this solver, to the nearer |
 |---|---|---|
@@ -148,13 +148,13 @@ invariant under the axis swap and would have passed while wrong.
 ### What holds without any oracle
 
 - **`R + T = 1`** — the tensor is Hermitian at every pixel, so the layer is lossless however it is
-  patterned. Residual 1.7e-5 / 1.7e-6 / 5.8e-7 at fto 4 / 8 / 12; the *trend* is asserted too,
+  patterned. Residual 1.7e-5 / 1.7e-6 / 5.8e-7 at max_order 4 / 8 / 12; the *trend* is asserted too,
   because an early arrangement conserved energy to ~1e-2 at every order and a fixed tolerance
   would have called that a pass.
 - **Rotation covariance about z** at normal incidence, to 1e-12. At oblique incidence the raster
   rotation has to be matched against the `phi` convention, and the shipped NVF path shows the same
   residual there — so that combination measures the harness, not this code.
-- **Agreement with the scalar NVF** where they overlap. Not by converging in fto — measured, that
+- **Agreement with the scalar NVF** where they overlap. Not by converging in max_order — measured, that
   gap sits near 1.3e-5 and does not fall, which is fine: two vector formulations differ at any
   finite truncation, and 1.3e-5 is an order tighter than fmmax's own 1.8e-4 on the same structure.
   What is forced is the *contrast* limit, and there the gap falls 17x faster than the reflectance
@@ -211,7 +211,7 @@ that is precisely what makes it the check §5 values, and precisely why it canno
 are both correct. No external solver can rank them either: what separates the two transforms is the
 `sinc` factor, which is a coarse-grid term, so —
 exactly as in `da4762a` — the signal vanishes where an oracle would be sharp. **And an ensemble
-median cannot**, which is the trap this measurement nearly fell into: over 24 incidences at fto 6 and
+median cannot**, which is the trap this measurement nearly fell into: over 24 incidences at max_order 6 and
 10 the median error ratio is 0.98, apparently favouring the DFT. That median is the shallow-angle
 regime, where the slot barely contributes at all.
 
@@ -221,7 +221,7 @@ The model is `da4762a`'s: compare with the exact coefficients rather than with a
 `fourier2d_integrated` supplies them, integrating over the rectangle's real edges. On a rectangle
 whose edges are grid lines the raster **is** the layer, so the closed form has nothing to
 approximate and any residue in the other arm is the `sinc` alone. Max relative coefficient error,
-fto=6:
+max_order=6:
 
 | N | closed form | DFT | DFT order |
 |---|---|---|---|
@@ -239,13 +239,13 @@ the closed form still leads at coarse N (2.5e-2 against 4.3e-2 at N=16) and the 
 ### At the solve, it reaches the answer through the angle
 
 `epz_i` enters only through `Kx epz_i Kx` and its partners, so its weight grows with incidence. The
-measurement is a raster sweep at **fixed fto against a fine-grid reference**, on a pillar whose edges
+measurement is a raster sweep at **fixed max_order against a fine-grid reference**, on a pillar whose edges
 are grid lines at every N — the layer is then literally the same function throughout and only the
 transform's grid moves. The reference is N=768, where the two arms agree to ≤5e-7 — some 60x below
 the smallest error being compared — so it favours neither; doubling it to N=1536 moves the ratios in
 the third digit.
 
-L2 error over all orders, fto=6, N=64, gyrotropic pillar, substrate `bot=2.1025` (`n = 1.45`):
+L2 error over all orders, max_order=6, N=64, gyrotropic pillar, substrate `bot=2.1025` (`n = 1.45`):
 
 | theta | closed form | DFT | DFT / closed |
 |---|---|---|---|
@@ -259,7 +259,7 @@ L2 error over all orders, fto=6, N=64, gyrotropic pillar, substrate `bot=2.1025`
 | 75 | 7.26e-5 | 8.79e-5 | 1.21 |
 
 Smooth in theta and reproduced at other settings, so it is a trend and not a Rayleigh spike: at
-wl=655 / psi=30 the crossover sits near 48° and the peak is 1.94 at 66°, and at fto=10 the peak is
+wl=655 / psi=30 the crossover sits near 48° and the peak is 1.94 at 66°, and at max_order=10 the peak is
 2.84 at 54°. The closed-form error is also far flatter in angle — the DFT arm's grows with incidence
 because that is what `Kx epz_i Kx` does to it.
 
@@ -303,7 +303,7 @@ different boundaries and therefore need two normal fields.
 
 ## 9. Reaching it
 
-`to_conv_mat_raster_pn(tensor_raster, fto_x, fto_y)` takes `(n_layers, Ny, Nx, 3, 3)` and
+`to_conv_mat_raster_pn(tensor_raster, max_order_x, max_order_y)` takes `(n_layers, Ny, Nx, 3, 3)` and
 returns the five slots for the stack. It takes **permittivity**, and always did — `n ** 2` is a
 scalar operation and there is no square root of a tensor field worth guessing at. Since
 2026-08-20 that is no longer a special rule for this builder: the scalar front door takes
@@ -327,14 +327,14 @@ t = np.zeros(eps.shape + (3, 3), dtype=complex)
 t[..., 0, 0] = t[..., 1, 1] = t[..., 2, 2] = eps
 t[..., 0, 1], t[..., 1, 0] = g, -g                       # the physical tensor
 
-epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn(t[None], fto, fto)
+epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn(t[None], max_order, max_order)
 
-mee = wavebit.rcwa(backend=0, fto=(fto, fto), period=(p, p), wavelength=wl,
+mee = wavebit.rcwa(backend=0, max_order=(max_order, max_order), period=(p, p), wavelength=wl,
                    thickness=[d], structure=eps[None])     # the scalar stand-in, in eps
 res = mee.solve_conv(epx, epy, epz_i, epxy, epyx)   # epz_i is THIRD
 ```
 
-Equivalently `mee.solve_conv(*to_conv_mat_raster_pn(t[None], fto, fto))`: since
+Equivalently `mee.solve_conv(*to_conv_mat_raster_pn(t[None], max_order, max_order))`: since
 2026-08-18 every builder returns its slots in `solve_conv`'s own parameter order, so the
 splat is correct rather than merely shorter. It was not always — the five-slot builders used to
 group the in-plane pair together and put `epz_i` last, and splatting then landed the inverted zz

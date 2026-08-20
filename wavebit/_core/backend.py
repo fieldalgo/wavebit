@@ -85,7 +85,7 @@ def check_finite(xp, **named):
     **The remedy in the message is measured, and the two suggestions it used to make are
     not remedies**, which is why they are gone. On the case this fires for — an order landing
     exactly on a light line, ``kx_m == n`` — the degeneracy is fixed by ``kx`` against an
-    index: neither the truncation nor the layer thickness touches it, so changing ``fto`` or
+    index: neither the truncation nor the layer thickness touches it, so changing ``max_order`` or
     re-slicing only re-rolls the round-off. Measured before the conical path was reformulated
     (see :func:`~wavebit._core.solve_1d.layer_modes_1d_conical`), those re-rolls returned
     quiet wrong answers scattered from 0.18 to 626 against a true 0.215, re-slicing among
@@ -113,7 +113,7 @@ def check_finite(xp, **named):
             'period or angle is enough, and the answer either side of it agrees to eight '
             'digits; solve(auto_detune=True), the default, does that retry for you, so '
             'seeing this means it was disabled or the retry failed too. Do NOT reach for '
-            'fto or thinner slices instead: neither knob touches the degeneracy (it is '
+            'max_order or thinner slices instead: neither knob touches the degeneracy (it is '
             'fixed by kx against an index), so at best they re-roll the round-off — '
             'measured to return quiet wrong answers on the paths that have not been '
             'reformulated against this. See layer_modes_1d_conical.')
@@ -331,7 +331,7 @@ def check_physical(xp, de_ri, de_ti, n_top, atol=1e-3):
         warnings.warn(
             f"solve returned {' and '.join(problems)}. The result is finite but not physical, "
             'so treat it as a failed solve: check for a degenerate structure, and try adjusting '
-            'fto or re-slicing the stack into thinner layers.',
+            'max_order or re-slicing the stack into thinner layers.',
             UnphysicalResultWarning, stacklevel=2)
 
 

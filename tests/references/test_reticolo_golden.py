@@ -14,7 +14,7 @@ off the pixel grid. These gratings have their edges on pixel boundaries, so the 
 the structure and all three land on each other at round-off, 1e-15 to 1e-13.
 
 That is true of sampled only since 2026-08. It used to resample the raster onto a grid fine
-enough to resolve ``4*fto+1`` harmonics and transform *that*, which approaches the same
+enough to resolve ``4*max_order+1`` harmonics and transform *that*, which approaches the same
 expression as 1/R — leaving it ~1e-5 from RETICOLO where it now sits at ~1e-14. The test that
 holds sampled to this tolerance used to assert the opposite.
 
@@ -51,35 +51,35 @@ _TWO_LAYER = np.array([[[9.0] * 6 + [1.0] * 6], [[4.840000000000001] * 8 + [1.0]
 
 # name -> solver kwargs. `grating_type` picks RETICOLO's branch: 0 for pure TE/TM, 1 conical.
 CASES = {
-    'te_normal': dict(tetm='te', theta=0.0, phi=None, top=1.0, bot=2.25, fto=10,
+    'te_normal': dict(tetm='te', theta=0.0, phi=None, top=1.0, bot=2.25, max_order=10,
                       period=[0.7], wavelength=0.9, structure=_HALF, thickness=[0.15]),
-    'te_oblique': dict(tetm='te', theta=0.2, phi=None, top=1.0, bot=2.25, fto=10,
+    'te_oblique': dict(tetm='te', theta=0.2, phi=None, top=1.0, bot=2.25, max_order=10,
                        period=[0.7], wavelength=0.9, structure=_HALF, thickness=[0.15]),
-    'tm_normal': dict(tetm='tm', theta=0.0, phi=None, top=1.0, bot=2.25, fto=10,
+    'tm_normal': dict(tetm='tm', theta=0.0, phi=None, top=1.0, bot=2.25, max_order=10,
                       period=[0.7], wavelength=0.9, structure=_HALF, thickness=[0.15]),
-    'tm_oblique': dict(tetm='tm', theta=0.2, phi=None, top=1.0, bot=2.25, fto=10,
+    'tm_oblique': dict(tetm='tm', theta=0.2, phi=None, top=1.0, bot=2.25, max_order=10,
                        period=[0.7], wavelength=0.9, structure=_HALF, thickness=[0.15]),
     # A duty cycle that is not 1/2 and a higher contrast: the +-1 orders carry real power.
-    'te_quarter': dict(tetm='te', theta=0.15, phi=None, top=1.0, bot=2.25, fto=12,
+    'te_quarter': dict(tetm='te', theta=0.15, phi=None, top=1.0, bot=2.25, max_order=12,
                        period=[0.8], wavelength=0.7, structure=_QUARTER, thickness=[0.25]),
-    'tm_quarter': dict(tetm='tm', theta=0.15, phi=None, top=1.0, bot=2.25, fto=12,
+    'tm_quarter': dict(tetm='tm', theta=0.15, phi=None, top=1.0, bot=2.25, max_order=12,
                        period=[0.8], wavelength=0.7, structure=_QUARTER, thickness=[0.25]),
     # Two patterned layers: the interface between them is under test, not just the boundary.
-    'te_two_layer': dict(tetm='te', theta=0.25, phi=None, top=1.0, bot=4.0, fto=10,
+    'te_two_layer': dict(tetm='te', theta=0.25, phi=None, top=1.0, bot=4.0, max_order=10,
                          period=[0.7], wavelength=0.85, structure=_TWO_LAYER,
                          thickness=[0.15, 0.22]),
-    'tm_two_layer': dict(tetm='tm', theta=0.25, phi=None, top=1.0, bot=4.0, fto=10,
+    'tm_two_layer': dict(tetm='tm', theta=0.25, phi=None, top=1.0, bot=4.0, max_order=10,
                          period=[0.7], wavelength=0.85, structure=_TWO_LAYER,
                          thickness=[0.15, 0.22]),
     # Denser truncation, where the two solvers' round-off has the most room to diverge.
-    'te_high_order': dict(tetm='te', theta=0.2, phi=None, top=1.0, bot=2.25, fto=30,
+    'te_high_order': dict(tetm='te', theta=0.2, phi=None, top=1.0, bot=2.25, max_order=30,
                           period=[0.7], wavelength=0.9, structure=_HALF, thickness=[0.15]),
-    'tm_high_order': dict(tetm='tm', theta=0.2, phi=None, top=1.0, bot=2.25, fto=30,
+    'tm_high_order': dict(tetm='tm', theta=0.2, phi=None, top=1.0, bot=2.25, max_order=30,
                           period=[0.7], wavelength=0.9, structure=_HALF, thickness=[0.15]),
     # Conical (azimuth != 0) — RETICOLO's other branch, and the solver's `solve_1d_conical`.
-    'conical_te': dict(psi=np.pi / 2, theta=0.2, phi=0.3, top=1.0, bot=2.25, fto=10,
+    'conical_te': dict(psi=np.pi / 2, theta=0.2, phi=0.3, top=1.0, bot=2.25, max_order=10,
                        period=[0.7], wavelength=0.9, structure=_HALF, thickness=[0.15]),
-    'conical_tm': dict(psi=0.0, theta=0.2, phi=0.3, top=1.0, bot=2.25, fto=10,
+    'conical_tm': dict(psi=0.0, theta=0.2, phi=0.3, top=1.0, bot=2.25, max_order=10,
                        period=[0.7], wavelength=0.9, structure=_HALF, thickness=[0.15]),
 }
 

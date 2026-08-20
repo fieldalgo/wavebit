@@ -29,12 +29,12 @@ RASTER = np.ones((1, 8, 8))
 RASTER[0, 2:6, 2:6] = 9.0             # permittivity: 3.0**2
 
 BASE = dict(period=[0.77, 0.77], thickness=[0.2], theta=0.2, phi=0.3, psi=0.4,
-            wavelength=0.777, top=1.0, bot=2.25, fto=[3, 3])
+            wavelength=0.777, top=1.0, bot=2.25, max_order=[3, 3])
 
 SHAPE = dict(type='rectangle', cx=0.385, cy=0.385, lx=0.385, ly=0.231, angle=0.4,
              material=12.25)                            # 3.5**2
 ANALYTIC_BASE = dict(period=[0.77, 0.77], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
-                     wavelength=0.777, top=1.0, bot=2.25, fto=[4, 4])
+                     wavelength=0.777, top=1.0, bot=2.25, max_order=[4, 4])
 
 def _frozen_raster():
     global FROZEN
@@ -45,7 +45,7 @@ def _frozen_raster():
 
 FROZEN = None
 
-VECTOR_BASE = dict(period=[300.0, 300.0], thickness=[205.0], theta=0.1, fto=[3, 3],
+VECTOR_BASE = dict(period=[300.0, 300.0], thickness=[205.0], theta=0.1, max_order=[3, 3],
                    wavelength=900.0, top=1.0, bot=1.0, psi=np.pi / 4)
 
 
@@ -265,7 +265,7 @@ def test_analytic_angle_is_smooth_through_normal():
     free to differ. A central difference hides that, so it only bites an optimizer, which sees
     one side at a time.
     """
-    base = dict(period=[300.0, 300.0], thickness=[205.0], fto=[5, 5], top=1.0, bot=1.0,
+    base = dict(period=[300.0, 300.0], thickness=[205.0], max_order=[5, 5], top=1.0, bot=1.0,
                 wavelength=900.0, psi=np.pi / 4, theta=0.1, phi=0.3)
 
     def analytic(angle):
@@ -292,7 +292,7 @@ def test_translation_leaves_nothing_behind_within_one_normal_field_cell():
     5.8e-13, and ``test_shape_position_gradients`` is where the full statement lives. The bound
     stays loose here because the sweep no longer probes anything that varies.
     """
-    base = dict(period=[300.0, 300.0], thickness=[205.0], fto=[5, 5], top=1.0, bot=1.0,
+    base = dict(period=[300.0, 300.0], thickness=[205.0], max_order=[5, 5], top=1.0, bot=1.0,
                 wavelength=900.0, psi=np.pi / 4, theta=0.1, phi=0.3)
     solver = wavebit.rcwa(backend=0, period=[300.0, 300.0])
     cell = 300.0 / solver.normal_grid

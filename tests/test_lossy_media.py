@@ -2,7 +2,7 @@
 
 A uniform stack has a closed-form reflection coefficient, so this file needs no golden: the
 oracle is the Fresnel/Airy recursion below, and the solver is driven with uniform layers at
-``fto=0`` where only the zeroth order exists. That makes any disagreement a statement about
+``max_order=0`` where only the zeroth order exists. That makes any disagreement a statement about
 physics rather than about a frozen number.
 
 The reference is itself checked (``test_reference_agrees_where_the_solver_is_known_good``)
@@ -91,11 +91,11 @@ def analytic_r(ns, thicknesses, wavelength, theta, tetm):
 
 
 def solver_RT(ns, thicknesses, wavelength, theta, tetm, algo='ETM'):
-    """Total ``(R, T)`` of the same stack through the solver (uniform layers, fto=0)."""
+    """Total ``(R, T)`` of the same stack through the solver (uniform layers, max_order=0)."""
     structure = eps_from_index(np.array([[[n, n]] for n in ns[1:-1]]))
     solver = wavebit.rcwa(backend=0, connecting_algo=algo, tetm=tetm,
                            top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
-                           theta=theta, fto=0, wavelength=wavelength,
+                           theta=theta, max_order=0, wavelength=wavelength,
                            period=[wavelength * 2], structure=structure,
                            thickness=thicknesses)
     res = solver.solve()
@@ -103,7 +103,7 @@ def solver_RT(ns, thicknesses, wavelength, theta, tetm, algo='ETM'):
 
 
 def solver_R(ns, thicknesses, wavelength, theta, tetm, algo='ETM'):
-    """Total reflectance of the same stack through the solver (uniform layers, fto=0)."""
+    """Total reflectance of the same stack through the solver (uniform layers, max_order=0)."""
     return solver_RT(ns, thicknesses, wavelength, theta, tetm, algo)[0]
 
 
@@ -197,7 +197,7 @@ def test_absorbing_layer_identical_to_its_substrate(tetm, theta):
     want = abs(analytic_r(ns, ds, WL, theta, tetm)) ** 2   # == the bare air/gold interface
 
     structure = eps_from_index(np.array([[[AU, AU]]]))
-    common = dict(backend=0, tetm=tetm, top=1.0, bot=eps_from_index(AU), theta=theta, fto=0,
+    common = dict(backend=0, tetm=tetm, top=1.0, bot=eps_from_index(AU), theta=theta, max_order=0,
                   wavelength=WL, period=[WL * 2], structure=structure, thickness=ds)
     tmm = wavebit.rcwa(connecting_algo='ETM', **common).solve()
     smm = wavebit.rcwa(connecting_algo='SMM', **common).solve()
@@ -217,7 +217,7 @@ def solver_R_analytic(ns, thicknesses, wavelength, theta, tetm):
     structure = [dict(background=eps_from_index(n), shapes=[]) for n in ns[1:-1]]
     solver = wavebit.rcwa(backend=0, top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
                             theta=theta, phi=0.0,
-                            psi=(np.pi / 2 if tetm == 'te' else 0.0), fto=0,
+                            psi=(np.pi / 2 if tetm == 'te' else 0.0), max_order=0,
                             wavelength=wavelength, period=[wavelength * 2, wavelength * 2],
                             structure=structure, thickness=thicknesses)
     return float(np.sum(np.asarray(solver.solve().R)).real)
@@ -240,7 +240,7 @@ def test_absorbing_layer_via_the_analytic_path(case, tetm, theta):
 
     Uniform layers are also the only place the two builders can be held to 1e-12 against each
     other. Put a *patterned* absorbing structure through both and they disagree by ~3e-3 at
-    ``fto=8`` — not a convention difference but the two NVF factorizations converging to each
+    ``max_order=8`` — not a convention difference but the two NVF factorizations converging to each
     other slowly when ``|eps|`` is large.
     """
     _, ns, ds = case
@@ -266,7 +266,7 @@ def solver_R_painted(n, thickness, wavelength, theta, tetm):
               dict(type='rectangle', cx=0.72 * P, cy=0.5 * P, lx=0.75 * P, ly=1.4 * P,
                    material=eps)]
     solver = wavebit.rcwa(backend=0, top=1.0, bot=2.25, theta=theta, phi=0.0,
-                            psi=(np.pi / 2 if tetm == 'te' else 0.0), fto=(3, 3),
+                            psi=(np.pi / 2 if tetm == 'te' else 0.0), max_order=(3, 3),
                             wavelength=wavelength, period=[P, P],
                             structure=[dict(background=eps, combine='paint', shapes=shapes)],
                             thickness=[thickness])
@@ -318,7 +318,7 @@ def test_complex_n_bot_keeps_full_precision_on_every_backend(backend):
     structure = eps_from_index(np.array([[[n, n] for n in ns[1:-1]]][0])[None])
     solver = wavebit.rcwa(backend=backend, tetm='te', top=eps_from_index(ns[0]),
                            bot=eps_from_index(ns[-1]), theta=0.3,
-                           fto=2, wavelength=WL, period=[WL * 2], structure=structure,
+                           max_order=2, wavelength=WL, period=[WL * 2], structure=structure,
                            thickness=ds)
     got = float(np.sum(np.asarray(solver.solve().R)))
     assert got == pytest.approx(want, abs=1e-12)
@@ -378,13 +378,13 @@ def solver_amps(ns, thicknesses, wavelength, theta, tetm, path, algo='ETM'):
                   bot=eps_from_index(ns[-1]), theta=theta,
                   wavelength=wavelength, thickness=thicknesses)
     if path == '1d':
-        solver = wavebit.rcwa(tetm=tetm, fto=0, period=[wavelength * 2],
+        solver = wavebit.rcwa(tetm=tetm, max_order=0, period=[wavelength * 2],
                                 structure=eps_from_index(
                                     np.array([[[n, n]] for n in layers])), **common)
     else:
         cell = ([[[n, n]] for n in layers] if path == 'conical'
                 else [[[n, n], [n, n]] for n in layers])
-        solver = wavebit.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0), fto=[0, 0],
+        solver = wavebit.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0), max_order=[0, 0],
                                 period=[wavelength * 2, wavelength * 2],
                                 structure=eps_from_index(np.array(cell)), **common)
     res = solver.solve().res
@@ -430,11 +430,11 @@ def test_absorbing_superstrate_efficiency_is_convention_bound():
         common = dict(backend=0, top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
                       theta=theta, wavelength=WL, thickness=ds)
         if path == '1d':
-            s = wavebit.rcwa(tetm='tm', fto=0, period=[WL * 2],
+            s = wavebit.rcwa(tetm='tm', max_order=0, period=[WL * 2],
                                structure=eps_from_index(
                                    np.array([[[n, n]] for n in ns[1:-1]])), **common)
         else:
-            s = wavebit.rcwa(phi=0.0, psi=0.0, fto=[0, 0],
+            s = wavebit.rcwa(phi=0.0, psi=0.0, max_order=[0, 0],
                                period=[WL * 2, WL * 2],
                                structure=eps_from_index(
                                    np.array([[[n, n], [n, n]] for n in ns[1:-1]])), **common)

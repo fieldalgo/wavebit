@@ -39,7 +39,7 @@ import numpy as np
 
 WL = 620.0
 PERIOD = 400.0
-FTO = 8                    # 17 retained orders
+MAX_ORDER = 8                    # 17 retained orders
 RES_X = 11                 # fixed by reticolo_res3.m's `x = linspace(0, period(1), 11)`
 RES_Z = 7                  # per layer, inclusive of both faces, on both sides
 

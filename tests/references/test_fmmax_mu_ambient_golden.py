@@ -80,7 +80,7 @@ def solve(top, bot, layer_eps, layer_mu, theta_deg, thick=THICK, algo='ETM'):
     mee = wavebit.rcwa(backend=0,
                        top=wavebit.Material(eps_t, mu_t),
                        bot=wavebit.Material(eps_b, mu_b),
-                       theta=np.deg2rad(theta_deg), phi=0.0, psi=0.0, fto=(0, 0),
+                       theta=np.deg2rad(theta_deg), phi=0.0, psi=0.0, max_order=(0, 0),
                        period=(PERIOD, PERIOD), wavelength=WL, thickness=[thick],
                        connecting_algo=algo)
     res = mee.solve_conv(*_slots(layer_eps),
@@ -181,7 +181,7 @@ def _solve_psi(top, bot, layer_eps, theta_deg, psi_deg, algo='ETM', side='top'):
                        top=wavebit.Material(eps_t, mu_t),
                        bot=wavebit.Material(eps_b, mu_b),
                        theta=np.deg2rad(theta_deg), phi=0.0, psi=np.deg2rad(psi_deg),
-                       fto=(0, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
+                       max_order=(0, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
                        incidence_side=side, connecting_algo=algo)
     res = mee.solve_conv(*_slots(layer_eps), mu_top=mu_t, mu_bot=mu_b,
                              eps_top=eps_t, eps_bot=eps_b)
@@ -266,7 +266,7 @@ def test_a_magnetic_ambient_on_a_one_dimensional_structure_is_refused():
     # said as permittivities. Neither matters to the refusal; both matter to it being a
     # recognisable scene rather than an arbitrary one.
     mee = wavebit.rcwa(backend=0, top=1.0, bot=4.41, theta=0.0, phi=0.0, psi=0.0,
-                       fto=(3, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
+                       max_order=(3, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
                        structure=np.ones((1, 1, 8)) * 2.25)
     e = [np.stack([np.eye(7, dtype=complex) * v]) for v in (2.6, 2.6, 1 / 2.6)]
     with pytest.raises(NotImplementedError, match='2D path only'):

@@ -76,7 +76,7 @@ solver = wavebit.rcwa(
     backend=0,                  # 0 = NumPy, 1 = JAX, 2 = PyTorch
     wavelength=900.,            # every length shares one unit; nm here
     period=[700.],
-    fto=[10, 0],                # Fourier truncation order (x, y)
+    max_order=[10, 0],                # Fourier truncation order (x, y)
     top=1., bot=wavebit.eps_from_index(1.5),   # the two half-spaces, as materials
     theta=0., phi=0.,
     tetm='te',                  # 'te' | 'tm' — see "Saying what the light is"
@@ -158,9 +158,9 @@ Not a matter of taste, and not the same answer for a forward solve as for a diff
 
 * **Forward solves, small to medium.** NumPy — lightest to install, and the one that warns when
   a result cannot be physical.
-* **Differentiated, `fto ≲ 5`.** Eager PyTorch beats a jitted JAX step outright; JAX's
+* **Differentiated, `max_order ≲ 5`.** Eager PyTorch beats a jitted JAX step outright; JAX's
   compilation never repays itself at that size.
-* **Differentiated, `fto ≳ 7`, long run.** A jitted JAX step is roughly 2x PyTorch and repays
+* **Differentiated, `max_order ≳ 7`, long run.** A jitted JAX step is roughly 2x PyTorch and repays
   its compilation in under a dozen steps.
 
 Where the crossover falls, and whether a freeze is worth it at all, is measured in
@@ -292,7 +292,7 @@ what it always did and what a raster of the same recipe agrees with.
 ### Fourier factorization
 
 For the raster path, two independent keywords decide how the permittivity becomes convolution
-matrices. They change how fast the result converges with `fto`, not what it converges to:
+matrices. They change how fast the result converges with `max_order`, not what it converges to:
 
 ```python
 solver = wavebit.rcwa(backend=0, fourier_coefficients='sampled', factorization='li', ...)
@@ -396,8 +396,8 @@ solver = wavebit.rcwa(backend=0, answers='field', ...)   # 'amplitude' is the de
 ```
 
 The default sits where the cost cliff is. The amplitudes are boundary vectors already solved
-for; the field state is 4.25 matrices of side `2*ff_x*ff_y` **per layer** on the 2D path —
-21.7 MB at `fto=(8, 8)`, 240 MB at `(15, 15)`, 733 MB at `(20, 20)`, and again for every
+for; the field state is 4.25 matrices of side `2*n_orders_x*n_orders_y` **per layer** on the 2D path —
+21.7 MB at `max_order=(8, 8)`, 240 MB at `(15, 15)`, 733 MB at `(20, 20)`, and again for every
 layer. The two differ by three orders of magnitude, and the runs big enough to care are
 optimization sweeps against a fixed objective, which never reconstruct a field at all.
 
@@ -488,7 +488,7 @@ the azimuth of the plane of incidence, `psi` the polarization angle (`pi/2` = s/
 `0` = p/TM) and `chi` its ellipticity.
 
 **Uppercase is power, lowercase is amplitude.** `R`/`T` are per-order efficiencies, shape
-`(ff_y, ff_x)` — `y` first, the transpose of the `fto=[x, y]` input order — with the incident
+`(n_orders_y, n_orders_x)` — `y` first, the transpose of the `max_order=[x, y]` input order — with the incident
 order at the centre; `result.order(m, n)` indexes by order so you never touch that layout.
 `r_s`/`r_p`/`t_s`/`t_p` are the complex Fresnel amplitudes, directly comparable to the
 textbook coefficients.
@@ -547,7 +547,7 @@ would have gone stale — a length can move 47% for two compilations. That makes
 the fastest way to run a moving fit and the only one that cannot carry a stale record forward.
 
 Which backend to use, and whether to jit at all, is not obvious and is not a matter of taste:
-below `fto ~ 5` eager PyTorch beats a jitted JAX step outright, and the crossover moves with
+below `max_order ~ 5` eager PyTorch beats a jitted JAX step outright, and the crossover moves with
 problem size. Measurements are in [docs/backend-choice.md](docs/backend-choice.md).
 
 On PyTorch, eager and `.backward()` are the supported path. `torch.compile` is not: it buys

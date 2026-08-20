@@ -24,7 +24,7 @@ quantity rather than a grid of objects (``structure`` for permittivity, ``mu`` b
 
 ``Stack`` therefore holds the ordered layers plus the surrounding media (``top``,
 ``bot``, ``period``); ``Incidence`` holds the illumination. Numerics and backend choice
-(``fto``, ``fourier_coefficients``, ``factorization``, ``backend``, ``type_complex``) stay as
+(``max_order``, ``fourier_coefficients``, ``factorization``, ``backend``, ``type_complex``) stay as
 :func:`wavebit.rcwa` arguments -- they are not part of the physical scene.
 
 Backend-agnostic throughout: a raster grid, and equally a :class:`Material`'s ``epsilon``, may

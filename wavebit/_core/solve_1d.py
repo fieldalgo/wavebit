@@ -109,8 +109,8 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
     Shared by the ETM and SMM connecting algorithms.
 
     The ``V`` blocks are, on paper, functions of ``A**-1`` and ``B**-1`` — but neither inverse
-    is formed. On this path ``Ky2 == ky**2 * I`` (``ff_y == 1``), so ``W1`` diagonalises ``A``
-    itself with eigenvalues ``w1 - ky**2``, and ``W2`` does the same for ``B @ epx_conv``;
+    is formed. On this path ``Ky2 == ky**2 * I`` (``n_orders_y == 1``), so ``W1`` diagonalises
+    ``A`` itself with eigenvalues ``w1 - ky**2``, and ``W2`` does the same for ``B @ epx_conv``;
     substituting those identities turns every block into an exact function of the computed
     eigensystem, plus one inverse each of the well-conditioned ``W1`` / ``W2``.
 
@@ -125,7 +125,7 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
     degeneracy the two spellings agree to 8e-15 in efficiency over 40 random conical solves.
 
     The one case still refused: an eigenvalue that comes out *exactly* zero (e.g. a uniform
-    layer whose FFT is noiseless, fto=3 on the D#81 stack). Then ``q/w`` is 0/0 and the NaN
+    layer whose FFT is noiseless, max_order=3 on the D#81 stack). Then ``q/w`` is 0/0 and the NaN
     reaches :func:`~wavebit._core.backend.check_finite`, whose message prescribes the one-ULP
     detune — where the old spelling died in LAPACK with no advice.
     """
@@ -178,7 +178,8 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     Args:
         tetm_index: ``0`` (TE) or ``1`` (TM) — the two the ``tetm`` declaration selects.
         wavelength: incident wavelength (sets ``k0 = 2*pi/wavelength``).
-        kx: in-plane wavevectors of the retained orders (length ``ff = 2*fto+1``), built
+        kx: in-plane wavevectors of the retained orders (length ``n_orders = 2*max_order+1``),
+            built
             with the *incidence* medium's index (``n_bot`` for backside illumination).
         n_top, n_bot: superstrate / substrate refractive indices — scene labels, whichever
             side the light arrives from.
@@ -198,7 +199,8 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
             their own (``'amplitude'``).
 
     Returns:
-        ``(de_ri, de_ti)`` — reflected / transmitted efficiency per order, shape ``(1, ff)``.
+        ``(de_ri, de_ti)`` — reflected / transmitted efficiency per order, shape
+        ``(1, n_orders)``.
         From ``answers='amplitude'`` up, the full result mapping instead (amplitudes and s/p
         split; the pure TE/TM path carries all of one polarization, the other side is zero),
         and from ``'field'`` up that mapping also carries the ``layer_info_list`` / ``T1``
@@ -219,11 +221,11 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         kx = xp.astype(kx, xp.complex128)
     C = kx.dtype
 
-    ff_x = kx.shape[0]
+    n_orders_x = kx.shape[0]
     k0 = 2 * 3.141592653589793 / wavelength
     theta = 0.0 if theta is None else theta
 
-    I = xp.astype(xp.eye(ff_x), C)
+    I = xp.astype(xp.eye(n_orders_x), C)
 
     # --- stage 1: boundary init (port of transfer_1d_1) --------------------------------
     # One kz per half-space on the downward branch; it serves both the substrate admittance
@@ -278,13 +280,13 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
 
     # --- stage 3: final matching -> efficiency (transfer_1d_4) -------------------------
     Kz_top = _diag(xp, kz_top)
-    delta = xp.astype(_unit(xp, ff_x, ff_x // 2), C)
+    delta = xp.astype(_unit(xp, n_orders_x, n_orders_x // 2), C)
     cos_t = xp.cos(as_array(xp, theta, dtype=C))
     # The incident wave's own kz, read off the same vector the reflected orders use. It equals
     # `n_top * cos(theta)` for a real incidence angle, and must be *taken from* `kz_top` rather
     # than recomputed so that a complex angle cannot put the two sides of the match on opposite
     # branches -- see :func:`~wavebit._core.conventions.incident_kz`.
-    kz_inc = incident_kz(kz_top, ff_x // 2)
+    kz_inc = incident_kz(kz_top, n_orders_x // 2)
 
     if tetm_index == 0:  # TE
         inc = -1j * kz_inc * delta
@@ -332,13 +334,13 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
                      *, phi, incidence_side='top', answers=Answers.EFFICIENCY):
     """Solve a general 1D grating (arbitrary azimuth/polarization) for the given ``psi``.
 
-    The conical case couples the s and p polarizations, so the per-layer modes and the
-    boundary system are ``2*ff`` block matrices. Port of ``transfer_1d_conical_1..4``; returns
-    the ``(de_ri, de_ti)`` of the ``psi``-specified incidence (shape ``(ff_y, ff_x)`` with
-    ``ff_y == 1``). See :func:`solve_1d` for the argument conventions — including
-    ``incidence_side``, handled by the same mirror; ``ky`` is the single
-    out-of-plane order and ``psi`` the polarization angle. ``polarization`` is the complex
-    amplitude pair ``(a_s, a_p)`` that supersedes ``psi`` when given — see
+    The conical case couples the s and p polarizations, so the per-layer modes and the boundary
+    system are ``2*n_orders`` block matrices. Port of ``transfer_1d_conical_1..4``; returns the
+    ``(de_ri, de_ti)`` of the ``psi``-specified incidence (shape ``(n_orders_y, n_orders_x)``
+    with ``n_orders_y == 1``). See :func:`solve_1d` for the argument conventions — including
+    ``incidence_side``, handled by the same mirror; ``ky`` is the single out-of-plane order and
+    ``psi`` the polarization angle. ``polarization`` is the complex amplitude pair ``(a_s,
+    a_p)`` that supersedes ``psi`` when given — see
     :func:`~wavebit._core.conventions.incident_sp_amplitudes`.
     """
     xp = array_namespace(epx_conv_all)
@@ -353,14 +355,14 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
         ky = xp.astype(ky, xp.complex128)
     C = kx.dtype
 
-    ff_x = kx.shape[0]
-    ff_y = ky.shape[0]
-    ff_xy = ff_x * ff_y
+    n_orders_x = kx.shape[0]
+    n_orders_y = ky.shape[0]
+    n_orders = n_orders_x * n_orders_y
     k0 = 2 * 3.141592653589793 / wavelength
     theta = 0.0 if theta is None else theta
 
-    I = xp.astype(xp.eye(ff_xy), C)
-    O = xp.astype(xp.zeros((ff_xy, ff_xy)), C)
+    I = xp.astype(xp.eye(n_orders), C)
+    O = xp.astype(xp.zeros((n_orders, n_orders)), C)
     ky_col = xp.reshape(ky, (-1, 1))
 
     # --- stage 1: boundary init (transfer_1d_conical_1) --------------------------------
@@ -374,11 +376,11 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
 
     big_F = _block(xp, [[I, O], [O, -1j * Kz_bot / eps_bot]])
     big_G = _block(xp, [[-1j * Kz_bot, O], [O, I]])
-    big_T = xp.astype(xp.eye(2 * ff_xy), C)
+    big_T = xp.astype(xp.eye(2 * n_orders), C)
 
     # --- stage 2/3: per-layer eig + coupled s/p transfer (conical_2 / conical_3) --------
     Kx = _diag(xp, kx)
-    ky_vec = ky[0] * xp.astype(xp.ones((ff_x,)), C)      # ff_y == 1: Ky = diag(ky0 * 1)
+    ky_vec = ky[0] * xp.astype(xp.ones((n_orders_x,)), C)      # n_orders_y == 1: Ky = diag(ky0 * 1)
     Ky = _diag(xp, ky_vec)
     Kx2 = _diag(xp, kx * kx)
     Ky2 = _diag(xp, ky_vec * ky_vec)
@@ -399,7 +401,7 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
 
         X_1 = _diag(xp, xp.exp(-k0 * q1 * d))
         X_2 = _diag(xp, xp.exp(-k0 * q2 * d))
-        big_I = xp.astype(xp.eye(2 * ff_xy), C)
+        big_I = xp.astype(xp.eye(2 * n_orders), C)
         big_X = _block(xp, [[X_1, O], [O, X_2]])
 
         W = _block(xp, [[W1, W2]])
@@ -434,7 +436,7 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
 
     # --- stage 3: final matching -> efficiency (transfer_1d_conical_4) ------------------
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
-                         n_top, n_bot, ff_x, ff_y, answers=answers)
+                         n_top, n_bot, n_orders_x, n_orders_y, answers=answers)
     if keep_field:
         out['layer_info_list'] = layer_info_list
     return out
@@ -448,7 +450,7 @@ def _unit(xp, n, i):
 
 
 def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
-                   n_top, n_bot, ff_x, ff_y, answers=Answers.EFFICIENCY,
+                   n_top, n_bot, n_orders_x, n_orders_y, answers=Answers.EFFICIENCY,
                    mu_top=1.0, mu_bot=1.0, eps_top=None):
     """Boundary match the assembled s/p system to the incident field.
 
@@ -473,7 +475,7 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     ``test_half_space_permittivity_reaches_both_connecting_algorithms`` in
     ``tests/test_scattering_core.py`` is the check that keeps them reading it together.
 
-    Returns ``(de_ri, de_ti)`` for that incidence, shape ``(ff_y, ff_x)``.
+    Returns ``(de_ri, de_ti)`` for that incidence, shape ``(n_orders_y, n_orders_x)``.
     From ``answers='amplitude'`` up it returns the full result mapping instead: the reflected
     and transmitted amplitudes and their s/p-resolved efficiencies for the given incidence,
     plus the pure-TE and pure-TM incidence variants (which reuse the same factorized
@@ -485,26 +487,26 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     cheap half of its result.
     """
     answers = answers_of(answers)
-    ff_xy = ff_x * ff_y
-    I = xp.astype(xp.eye(ff_xy), C)
-    O = xp.astype(xp.zeros((ff_xy, ff_xy)), C)
+    n_orders = n_orders_x * n_orders_y
+    I = xp.astype(xp.eye(n_orders), C)
+    O = xp.astype(xp.zeros((n_orders, n_orders)), C)
 
     cos_t = xp.cos(as_array(xp, theta, dtype=C))
     # See :func:`~wavebit._core.conventions.incident_kz`: an identity for a real angle, and
     # the difference between a solve and a degenerate R = -delta for a complex one.
-    kz_inc = incident_kz(kz_top, ff_xy // 2)
+    kz_inc = incident_kz(kz_top, n_orders // 2)
 
     Kz_top = _diag(xp, kz_top)
-    kz_top_2d = xp.reshape(kz_top, (ff_y, ff_x))
-    kz_bot_2d = xp.reshape(kz_bot, (ff_y, ff_x))
+    kz_top_2d = xp.reshape(kz_top, (n_orders_y, n_orders_x))
+    kz_bot_2d = xp.reshape(kz_bot, (n_orders_y, n_orders_x))
     a_s, a_p = as_array(xp, incidence[0], dtype=C), as_array(xp, incidence[1], dtype=C)
 
-    delta = xp.reshape(xp.astype(_unit(xp, ff_xy, ff_xy // 2), C), (ff_xy, 1))
+    delta = xp.reshape(xp.astype(_unit(xp, n_orders, n_orders // 2), C), (n_orders, 1))
 
-    bF = [[big_F[:ff_xy, :ff_xy], big_F[:ff_xy, ff_xy:]],
-          [big_F[ff_xy:, :ff_xy], big_F[ff_xy:, ff_xy:]]]
-    bG = [[big_G[:ff_xy, :ff_xy], big_G[:ff_xy, ff_xy:]],
-          [big_G[ff_xy:, :ff_xy], big_G[ff_xy:, ff_xy:]]]
+    bF = [[big_F[:n_orders, :n_orders], big_F[:n_orders, n_orders:]],
+          [big_F[n_orders:, :n_orders], big_F[n_orders:, n_orders:]]]
+    bG = [[big_G[:n_orders, :n_orders], big_G[:n_orders, n_orders:]],
+          [big_G[n_orders:, :n_orders], big_G[n_orders:, n_orders:]]]
 
     # `big_F` holds tangential E and `big_G` tangential H, each split s/p, so the coefficients
     # below are the half-space admittances: `kz/mu` where the amplitude is electric (s) and
@@ -551,14 +553,14 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
 
     final_A_inv = xp.linalg.inv(final_A)
     final_RT = final_A_inv @ final_B
-    R_s = xp.reshape(final_RT[:ff_xy, :], (ff_y, ff_x))
-    R_p = xp.reshape(final_RT[ff_xy:2 * ff_xy, :], (ff_y, ff_x))
+    R_s = xp.reshape(final_RT[:n_orders, :], (n_orders_y, n_orders_x))
+    R_p = xp.reshape(final_RT[n_orders:2 * n_orders, :], (n_orders_y, n_orders_x))
 
-    big_T1 = final_RT[2 * ff_xy:, :]
+    big_T1 = final_RT[2 * n_orders:, :]
     big_T_tetm = big_T
     big_T = big_T @ big_T1
-    T_s = xp.reshape(big_T[:ff_xy, :], (ff_y, ff_x))
-    T_p = xp.reshape(big_T[ff_xy:, :], (ff_y, ff_x))
+    T_s = xp.reshape(big_T[:n_orders, :], (n_orders_y, n_orders_x))
+    T_p = xp.reshape(big_T[n_orders:, :], (n_orders_y, n_orders_x))
 
     denom = n_top * cos_t / mu_top          # incident flux carries kz/mu, see sp_efficiencies
 
@@ -598,15 +600,15 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     final_RT_tetm = final_A_inv @ xp.concat(cols, axis=1)
 
     def split2(M):
-        """Two incidence columns -> (2, ff_y, ff_x), matching the legacy ``.T.reshape``."""
-        return xp.reshape(xp.matrix_transpose(M), (2, ff_y, ff_x))
+        """Two incidence columns -> (2, n_orders_y, n_orders_x), the legacy ``.T.reshape``."""
+        return xp.reshape(xp.matrix_transpose(M), (2, n_orders_y, n_orders_x))
 
-    R_s_2 = split2(final_RT_tetm[:ff_xy, :])
-    R_p_2 = split2(final_RT_tetm[ff_xy:2 * ff_xy, :])
-    big_T1_tetm = final_RT_tetm[2 * ff_xy:, :]
+    R_s_2 = split2(final_RT_tetm[:n_orders, :])
+    R_p_2 = split2(final_RT_tetm[n_orders:2 * n_orders, :])
+    big_T1_tetm = final_RT_tetm[2 * n_orders:, :]
     big_T_tetm = big_T_tetm @ big_T1_tetm
-    T_s_2 = split2(big_T_tetm[:ff_xy, :])
-    T_p_2 = split2(big_T_tetm[ff_xy:, :])
+    T_s_2 = split2(big_T_tetm[:n_orders, :])
+    T_p_2 = split2(big_T_tetm[n_orders:, :])
 
     eff2 = efficiencies(R_s_2, R_p_2, T_s_2, T_p_2)
     amps2 = fresnel(R_s_2, R_p_2, T_s_2, T_p_2)

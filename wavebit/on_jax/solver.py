@@ -37,7 +37,7 @@ class SolverJax(RCWAJax, OptimizerJax):
         aux_data = {
             'backend': self.backend,
             'tetm': self.tetm,
-            'fto': self.fto,
+            'max_order': self.max_order,
             'connecting_algo': self.connecting_algo,
             'device': self.device,
             'type_complex': self.type_complex,
@@ -67,15 +67,15 @@ class SolverJax(RCWAJax, OptimizerJax):
             # Not the pair itself (that is a child now) but the fact that `psi` was given
             # explicitly, which the always-present psi child would otherwise overwrite.
             'psi_given': self._psi_given,
-            # Both of these were missing, and both are silent when they are. `solve_field`
-            # is `jax.jit`-decorated at class level, so `self` is flattened on every call --
-            # which means the solve ran on whatever the *rebuilt* solver carries, not on what
-            # the caller configured. Measured on a 60-degree cell: the basis came back `None`,
-            # `lattice_is_axis_aligned` flipped False -> True (taking `_reject_unsupported_lattice`'s
-            # guard with it), and the jitted call answered the rectangular-cell problem --
-            # T = 0.6565 against a correct 0.5460, energy conserving throughout. `normal_grid`
-            # fell 4096 -> 1024, which moves a shape gradient's sawtooth floor by an order of
-            # magnitude.
+            # Both of these were missing, and both are silent when they are. `solve_field` is
+            # `jax.jit`-decorated at class level, so `self` is flattened on every call -- which
+            # means the solve ran on whatever the *rebuilt* solver carries, not on what the
+            # caller configured. Measured on a 60-degree cell: the basis came back `None`,
+            # `lattice_is_axis_aligned` flipped False -> True (taking
+            # `_reject_unsupported_lattice`'s guard with it), and the jitted call answered the
+            # rectangular-cell problem -- T = 0.6565 against a correct 0.5460, energy conserving
+            # throughout. `normal_grid` fell 4096 -> 1024, which moves a shape gradient's
+            # sawtooth floor by an order of magnitude.
             #
             # The basis rides as a nested tuple because aux_data has to be hashable and this is
             # a `(2, 2)` ndarray; `lattice.as_lattice` takes it back through `np.asarray`, so

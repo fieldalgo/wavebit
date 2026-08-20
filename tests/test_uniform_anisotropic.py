@@ -7,7 +7,7 @@ input builds one: ``structure`` is a permittivity raster and becomes an isotropi
 ``docs/anisotropic-materials.md`` §4 says so and shows the call; this file is what keeps that
 claim true.
 
-The oracle is analytic, not a golden. A uniform layer at ``fto=(0, 0)`` is a plane-wave problem,
+The oracle is analytic, not a golden. A uniform layer at ``max_order=(0, 0)`` is a plane-wave problem,
 so the answer is an Airy slab per eigen-polarisation — stated before the run, and independent of
 how the solver reaches it.
 
@@ -47,7 +47,7 @@ def solve_uniform(exx, eyy, ezz, exy=0.0, eyx=0.0, *, theta=0.0, d=D, wl=WL):
     """
     I = np.eye(1, dtype=np.complex128)
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=theta, phi=0.0, psi=0.0,
-                         fto=(0, 0), period=(300.0, 300.0), wavelength=wl, thickness=[d])
+                         max_order=(0, 0), period=(300.0, 300.0), wavelength=wl, thickness=[d])
     return mee.solve_conv(
         np.stack([exx * I]),
         np.stack([eyy * I]),

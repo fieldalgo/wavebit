@@ -34,7 +34,7 @@ def _solver(backend=0, n_layers=1, **kw):
     if backend == 1:
         import jax.numpy as jnp
         grid = jnp.asarray(grid)
-    return wavebit.rcwa(backend=backend, fto=(3, 3), period=(300., 300.), wavelength=500.,
+    return wavebit.rcwa(backend=backend, max_order=(3, 3), period=(300., 300.), wavelength=500.,
                         thickness=(120.,) * n_layers, top=1., bot=2.1025, structure=grid,
                         psi=0.3, theta=0.2, phi=0.1, **kw)
 
@@ -182,7 +182,7 @@ def test_the_amplitude_rung_retains_no_matrices_and_the_field_rung_scales_with_d
         kept[rung] = sum(_owned_bytes([s.layer_info_list, s.T1]).values())
     assert kept['amplitude'] == 0
 
-    # 4.25 blocks of side 2*ff_xy per layer: W, V, big_A_i, big_B whole and epz_conv_i at a
+    # 4.25 blocks of side 2*n_orders per layer: W, V, big_A_i, big_B whole and epz_conv_i at a
     # quarter. The tolerance covers `q` and `T1`, which are vectors.
     dim = 2 * (2 * 3 + 1) ** 2
     block = dim * dim * 16

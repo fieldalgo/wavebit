@@ -91,7 +91,7 @@ def z_solver(thickness, theta_deg=28.0, backend=0):
     The tensors themselves arrive through :func:`uniform_slots`, not through a ``structure``: a
     z-coupled permittivity is not something the modeler can paint.
     """
-    return wavebit.rcwa(backend=backend, top=1.0, bot=2.3104, fto=(0, 0), period=PERIOD,
+    return wavebit.rcwa(backend=backend, top=1.0, bot=2.3104, max_order=(0, 0), period=PERIOD,
                         wavelength=WL, theta=np.deg2rad(theta_deg), phi=np.deg2rad(37.0),
                         psi=0.6, thickness=thickness, answers='field')
 
@@ -143,8 +143,8 @@ TWINS = {
 
 
 def twin_cell(formulation, name, theta_deg, side, backend=0):
-    structure, fto, thickness = TWINS[name]
-    mee = wavebit.rcwa(backend=backend, top=1.0, bot=2.3104, fto=fto, period=PERIOD,
+    structure, max_order, thickness = TWINS[name]
+    mee = wavebit.rcwa(backend=backend, top=1.0, bot=2.3104, max_order=max_order, period=PERIOD,
                        wavelength=WL, theta=np.deg2rad(theta_deg), phi=np.deg2rad(37.0),
                        psi=0.6, thickness=thickness, structure=structure, incidence_side=side,
                        answers='field')
@@ -206,10 +206,10 @@ def test_the_two_formulations_agree_on_the_variants_taken_one_at_a_time():
     Asking for the variants singly and together must give the same cells; the leading axis is
     the only place a reconstruction can get the *incidence* right and the *bookkeeping* wrong.
     """
-    structure, fto, thickness = TWINS['a patterned layer']
+    structure, max_order, thickness = TWINS['a patterned layer']
     cells = {}
     for formulation in ('2ff', '4ff'):
-        mee = wavebit.rcwa(backend=0, top=1.0, bot=2.3104, fto=fto, period=PERIOD,
+        mee = wavebit.rcwa(backend=0, top=1.0, bot=2.3104, max_order=max_order, period=PERIOD,
                            wavelength=WL, theta=np.deg2rad(21.0), phi=np.deg2rad(37.0),
                            psi=0.6, thickness=thickness, structure=structure, answers='field')
         mee.formulation = formulation
@@ -337,7 +337,7 @@ def test_a_vacuum_slab_comes_back_as_the_incident_plane_wave(formulation, psi_v,
     them; ``tests/test_field_core.py`` makes the same claim for the two 1D layouts and by
     Maxwell rather than by a closed form.
     """
-    mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, fto=(0, 0), period=PERIOD,
+    mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, max_order=(0, 0), period=PERIOD,
                        wavelength=WL, theta=0.0, phi=0.0, psi=psi_v,
                        thickness=[WL], structure=np.ones((1, 1, 1)), answers='field')
     mee.formulation = formulation

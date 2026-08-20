@@ -311,7 +311,7 @@ convolved by the *same* builder as `eps` (§7), so the `_conv` in the name is as
 of the other. It was `(mux, muy, muz_i, ...)` until 2026-08-20, sitting beside `epz_conv_i` in
 the same expressions, and read as though the permeability skipped the factorization.
 
-Each entry is `(n_layers, ff_xy, ff_xy)`, so a stack with `mu` on some layers and not others is
+Each entry is `(n_layers, n_orders, n_orders)`, so a stack with `mu` on some layers and not others is
 expressible — the layers without it take the original arithmetic. `mux_conv` / `muy_conv`
 fall back to the identity and the other three to nothing.
 

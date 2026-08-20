@@ -58,8 +58,8 @@ to the true `q = 0` on *every* path — consistency is what matters, not closene
 - **Conical 1D, before**: `V_11 = (inv(A) @ W1) * q1` with `A` exactly singular
   (cond ~1e18). LU of a singular matrix returns garbage of arbitrary size with nothing
   raised, and the garbage is consistent with no problem at all. Measured on the defect
-  case (D#81): `R` from 0.18 to 626 against a true 0.22, scattered randomly across `fto`
-  and connecting algorithm — one draw (`SMM`, `fto=5`) returned `R+T = 0.981` with every
+  case (D#81): `R` from 0.18 to 626 against a true 0.22, scattered randomly across `max_order`
+  and connecting algorithm — one draw (`SMM`, `max_order=5`) returned `R+T = 0.981` with every
   guard green, reading as ordinary absorption on a lossless stack.
 - **Conical 1D, after**: `Ky2 == ky^2 * I` on this path, so `W1` diagonalises `A` itself
   and `W2` does `B @ epx_conv`. The `V` blocks are rewritten as exact functions of the
@@ -82,7 +82,7 @@ to the true `q = 0` on *every* path — consistency is what matters, not closene
 | energy at the exact point | `R+T = 1` to 1e-10 (lossless stacks) |
 | no behaviour change off the point | old vs new ≤ 8.2e-15 over 40 random conical solves; full suite green |
 | fields | the old path's field reconstruction was wrong **over a band** — at one ULP off it erred at 2e18 scale and converged only ~1e4 ULP out, while efficiencies looked fine; the new path is smooth from the exact point (2.9e-8 to its neighbour, ETM) |
-| cost | none — median solve times equal within noise at `fto` 20/60/100 (the per-layer `eig` dominates both spellings) |
+| cost | none — median solve times equal within noise at `max_order` 20/60/100 (the per-layer `eig` dominates both spellings) |
 
 ## 3. The 2D detection (now the fallback contract)
 
@@ -216,7 +216,7 @@ solves fell back into the old construction's degraded band and returned 1e-6..8e
 
 **Validation** (all on the exact point unless said otherwise): five graze stacks
 (spacer n=2.0; n=1.5 with and without the coincident bottom half-space graze; a
-24-mode ky-graze at n=2.5, fto=[5,5]; a theta-graze at n=2.25 with
+24-mode ky-graze at n=2.5, max_order=[5,5]; a theta-graze at n=2.25 with
 `n_top·sin(theta) == 0.25` bitwise) × {ETM, SMM} × psi {pi/2, pi/4, 0} × {NumPy, JAX,
 PyTorch}: every solve is **correct** (≤1e-6 of the extrapolated oracle, most ≤1e-8,
 energy to ≤1e-9) **or loud**, and with `auto_detune` on (the default) every one of the

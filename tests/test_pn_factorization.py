@@ -47,19 +47,19 @@ def tensor(eps, gyro=None, ezz=None):
     return e
 
 
-def solve(slots, eps, fto, theta=0.0, phi=0.0, psi=0.0):
+def solve(slots, eps, max_order, theta=0.0, phi=0.0, psi=0.0):
     epx, epy, epz_i, epxy, epyx = slots
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(theta),
-                       phi=np.deg2rad(phi), psi=np.deg2rad(psi), fto=(fto, fto),
+                       phi=np.deg2rad(phi), psi=np.deg2rad(psi), max_order=(max_order, max_order),
                        period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
                        structure=np.expand_dims(np.sqrt(eps), axis=0))
     return mee.solve_conv(np.stack([epx]), np.stack([epy]), np.stack([epz_i]),
                               np.stack([epxy]), np.stack([epyx]))
 
 
-def pn(eps33, eps_scalar, fto):
+def pn(eps33, eps_scalar, max_order):
     nx, ny = normal_vector_field(eps_scalar)
-    return pn_conv_matrices(np, eps33, nx, ny, fto, fto)
+    return pn_conv_matrices(np, eps33, nx, ny, max_order, max_order)
 
 
 def rt(res):
@@ -116,9 +116,9 @@ def test_it_builds_and_differentiates_on_every_backend(name):
 
 # --------------------------------------------------------------- the gate that caught the bug
 
-@pytest.mark.parametrize('fto', [2, 4, 6])
+@pytest.mark.parametrize('max_order', [2, 4, 6])
 @pytest.mark.parametrize('gyro', [None, 0.30j], ids=['isotropic', 'gyrotropic'])
-def test_a_uniform_layer_comes_back_as_the_tensor_it_was_given(fto, gyro):
+def test_a_uniform_layer_comes_back_as_the_tensor_it_was_given(max_order, gyro):
     """No interface, so the factorization has nothing to do and must do nothing — exactly.
 
     This is the check that rejected the first version of this code, and it is worth
@@ -138,10 +138,10 @@ def test_a_uniform_layer_comes_back_as_the_tensor_it_was_given(fto, gyro):
     """
     uni = np.full((N, N), 2.25, dtype=complex)
     g = None if gyro is None else np.full((N, N), gyro)
-    epx, epy, epz_i, epxy, epyx = pn(tensor(uni, g), uni, fto)
+    epx, epy, epz_i, epxy, epyx = pn(tensor(uni, g), uni, max_order)
 
-    ff = (2 * fto + 1) ** 2
-    I = np.eye(ff)
+    n_orders = (2 * max_order + 1) ** 2
+    I = np.eye(n_orders)
     assert np.abs(epx - 2.25 * I).max() < 1e-13
     assert np.abs(epy - 2.25 * I).max() < 1e-13
     assert np.abs(epz_i - I / 2.25).max() < 1e-13
@@ -160,8 +160,8 @@ def test_the_uniform_gate_is_not_vacuous():
     """
     eps = pillar(1.6 ** 2)
     epx = pn(tensor(eps), eps, 4)[0]
-    ff = (2 * 4 + 1) ** 2
-    assert np.abs(epx - np.mean(eps) * np.eye(ff)).max() > 1e-3
+    n_orders = (2 * 4 + 1) ** 2
+    assert np.abs(epx - np.mean(eps) * np.eye(n_orders)).max() > 1e-3
 
 
 # ------------------------------------------------------- agreement with the path it generalizes
@@ -176,10 +176,10 @@ def test_an_isotropic_tensor_reproduces_the_shipped_scalar_nvf(n_in):
     truncation errors; a single number across all three would be slack on two of them.
     """
     eps = pillar(n_in ** 2)
-    fto = 8
-    a = rt(solve(pn(tensor(eps), eps, fto), eps, fto, theta=8.0))
+    max_order = 8
+    a = rt(solve(pn(tensor(eps), eps, max_order), eps, max_order, theta=8.0))
     nx, ny = normal_vector_field(eps)
-    b = rt(solve(nvf_conv_matrices(np, eps, nx, ny, fto, fto), eps, fto, theta=8.0))
+    b = rt(solve(nvf_conv_matrices(np, eps, nx, ny, max_order, max_order), eps, max_order, theta=8.0))
     tol = 3e-5 * (n_in ** 2 - 1.0) ** 2
     assert max(abs(a[0] - b[0]), abs(a[1] - b[1])) < tol
 
@@ -187,10 +187,10 @@ def test_an_isotropic_tensor_reproduces_the_shipped_scalar_nvf(n_in):
 def test_the_two_paths_agree_in_the_limit_where_they_have_to():
     """The claim above is agreement, so something has to watch a trend, not just one number.
 
-    **Not the trend in fto.** Measured, that gap does not fall: it sits near 1.3e-5 from fto=6
-    to fto=14 on the strongest contrast here. Nor should it — two vector formulations differ at
+    **Not the trend in max_order.** Measured, that gap does not fall: it sits near 1.3e-5 from max_order=6
+    to max_order=14 on the strongest contrast here. Nor should it — two vector formulations differ at
     any finite truncation, and 1.3e-5 is an order tighter than the 1.8e-4 between fmmax's own
-    two formulations on the same structure. An earlier version of this test asserted the fto
+    two formulations on the same structure. An earlier version of this test asserted the max_order
     trend and was simply wrong about the physics.
 
     The limit that *is* forced is the contrast. As ``n_in -> 1`` the layer becomes uniform,
@@ -203,13 +203,13 @@ def test_the_two_paths_agree_in_the_limit_where_they_have_to():
     factorization would leave that ratio at 1, which is why the assertion is on the ratio and
     not on either number alone.
     """
-    fto = 8
+    max_order = 8
     relative = []
     for n_in in (1.05, 1.6):
         eps = pillar(n_in ** 2)
         nx, ny = normal_vector_field(eps)
-        a = rt(solve(pn(tensor(eps), eps, fto), eps, fto, theta=8.0))
-        b = rt(solve(nvf_conv_matrices(np, eps, nx, ny, fto, fto), eps, fto, theta=8.0))
+        a = rt(solve(pn(tensor(eps), eps, max_order), eps, max_order, theta=8.0))
+        b = rt(solve(nvf_conv_matrices(np, eps, nx, ny, max_order, max_order), eps, max_order, theta=8.0))
         relative.append(abs(a[0] - b[0]) / abs(b[0]))
 
     assert relative[0] < relative[1] / 10, (
@@ -243,12 +243,12 @@ def test_the_z_slot_is_the_direct_rule_inverted_not_the_inverse_rule():
     """
     eps = pillar(1.6 ** 2)
     nx, ny = normal_vector_field(eps)
-    for fto in (4, 8):
-        got = pn_conv_matrices(np, tensor(eps), nx, ny, fto, fto)[2]
+    for max_order in (4, 8):
+        got = pn_conv_matrices(np, tensor(eps), nx, ny, max_order, max_order)[2]
         direct = np.linalg.inv(fourier2d_piecewise_constant(
-            np, eps.astype(complex), fto, fto, inverse_rule=None))
+            np, eps.astype(complex), max_order, max_order, inverse_rule=None))
         inverse = fourier2d_piecewise_constant(
-            np, (1.0 / eps).astype(complex), fto, fto, inverse_rule=None)
+            np, (1.0 / eps).astype(complex), max_order, max_order, inverse_rule=None)
         assert np.abs(got - direct).max() < 1e-12
         assert np.abs(got - inverse).max() > 1e-3, 'the two rules have stopped differing'
 
@@ -279,7 +279,7 @@ def test_the_z_slot_reads_the_raster_as_the_staircase_it_is():
     it is the reason for the switch: pixel-repeating a raster respells the *same* staircase, so
     an exact transform of it cannot move. The closed form does not (8.4e-17); the DFT moves by
     2.7e-4, because a finer grid of point samples is a different set of samples. That gap is the
-    ``sinc`` at this truncation -- ``sinc(12/96)`` is 0.9974 -- so it widens with fto and the
+    ``sinc`` at this truncation -- ``sinc(12/96)`` is 0.9974 -- so it widens with max_order and the
     1e-4 floor below is not a tight one to have picked.
 
     The quarter turn is kept on both arms, still as the ``_half_pixel_phase`` guard: strip that
@@ -288,18 +288,18 @@ def test_the_z_slot_reads_the_raster_as_the_staircase_it_is():
 
     Accuracy at the solve is measured in ``docs/patterned-anisotropic-factorization.md`` §7
     rather than here — it needs a raster sweep against a fine-grid reference, which is far too
-    slow for this file. The verdict: at fixed fto and a frozen geometry the DFT arm carries 3.5x
+    slow for this file. The verdict: at fixed max_order and a frozen geometry the DFT arm carries 3.5x
     to 4.8x the closed form's error from 45 to 55 degrees, crossing over near 38 degrees, below
     which it leads by 5% of a term 30x smaller.
     """
     eps = pillar(1.6 ** 2)
     g = pillar(0.30j, 0.0)
-    fto = 6
+    max_order = 6
     e33 = tensor(eps, g)
 
     # Exactness, stated as the invariance it *is*: the same staircase spelled on a 2x finer grid.
     def z_slot(raster, transform):
-        return transform(np, raster[..., 2, 2], fto, fto)
+        return transform(np, raster[..., 2, 2], max_order, max_order)
 
     fine = np.repeat(np.repeat(e33, 2, axis=0), 2, axis=1)
     closed = [z_slot(r, lambda *a: fourier2d_piecewise_constant(*a, inverse_rule=None))
@@ -315,15 +315,15 @@ def test_the_z_slot_reads_the_raster_as_the_staircase_it_is():
         f'transforms have stopped differing and this test has stopped comparing anything')
 
     # The shipped slot is the closed-form one.
-    shipped = pn(e33, eps, fto).epz_i
+    shipped = pn(e33, eps, max_order).epz_i
     assert np.abs(shipped - np.linalg.inv(closed[0])).max() < 1e-13
 
     def rotated_pair(slot_transform):
         out = []
         for e, gg, psi in ((eps, g, 30.0), (np.rot90(eps), np.rot90(g), 120.0)):
-            slots = list(pn(tensor(e, gg), e, fto))
+            slots = list(pn(tensor(e, gg), e, max_order))
             slots[2] = np.linalg.inv(z_slot(tensor(e, gg), slot_transform))
-            out.append(rt(solve(slots, e, fto, psi=psi)))
+            out.append(rt(solve(slots, e, max_order, psi=psi)))
         return max(abs(out[0][0] - out[1][0]), abs(out[0][1] - out[1][1]))
 
     shipped_turn = rotated_pair(lambda *a: fourier2d_piecewise_constant(*a, inverse_rule=None))
@@ -344,19 +344,19 @@ def test_the_z_slot_reaches_the_answer_at_a_steep_angle():
     """
     eps = pillar(1.6 ** 2)
     g = pillar(0.30j, 0.0)
-    fto = 8
-    slots = list(pn(tensor(eps, g), eps, fto))
-    good = rt(solve(slots, eps, fto, theta=40.0, psi=30.0))
+    max_order = 8
+    slots = list(pn(tensor(eps, g), eps, max_order))
+    good = rt(solve(slots, eps, max_order, theta=40.0, psi=30.0))
 
     slots[2] = np.linalg.inv(np.eye(slots[2].shape[0]) * np.mean(eps))   # a plausible wrong slot
-    bad = rt(solve(slots, eps, fto, theta=40.0, psi=30.0))
+    bad = rt(solve(slots, eps, max_order, theta=40.0, psi=30.0))
     assert abs(good[0] - bad[0]) > 1e-5, 'the z slot is not reaching the answer here'
 
 
 # ------------------------------------------------------------------------ theorems, not oracles
 
-@pytest.mark.parametrize('fto, tol', [(4, 5e-5), (8, 5e-6), (12, 2e-6)])
-def test_a_hermitian_tensor_conserves_energy_however_it_is_patterned(fto, tol):
+@pytest.mark.parametrize('max_order, tol', [(4, 5e-5), (8, 5e-6), (12, 2e-6)])
+def test_a_hermitian_tensor_conserves_energy_however_it_is_patterned(max_order, tol):
     """``eps_xy = +ig`` with ``eps_yx = -ig`` is Hermitian, hence lossless.
 
     Losslessness follows from the tensor being Hermitian at every pixel and has nothing to do
@@ -364,12 +364,12 @@ def test_a_hermitian_tensor_conserves_energy_however_it_is_patterned(fto, tol):
     which is what makes it a check the factorization cannot talk its way out of.
 
     The tolerance is per-order and measured (the residual runs 1.7e-5 / 1.7e-6 / 5.8e-7 at
-    these three), not one loose number reused. A single tolerance wide enough for fto=4 would
-    leave fto=12 free to regress by an order without anything noticing.
+    these three), not one loose number reused. A single tolerance wide enough for max_order=4 would
+    leave max_order=12 free to regress by an order without anything noticing.
     """
     eps = pillar(1.6 ** 2)
     g = pillar(0.30j, 0.0)
-    r, t = rt(solve(pn(tensor(eps, g), eps, fto), eps, fto, theta=8.0, psi=30.0))
+    r, t = rt(solve(pn(tensor(eps, g), eps, max_order), eps, max_order, theta=8.0, psi=30.0))
     assert abs(r + t - 1.0) < tol
 
 
@@ -382,10 +382,10 @@ def test_energy_closes_better_as_the_truncation_is_relaxed():
     eps = pillar(1.6 ** 2)
     g = pillar(0.30j, 0.0)
     drift = []
-    for fto in (2, 4, 8):
-        r, t = rt(solve(pn(tensor(eps, g), eps, fto), eps, fto, theta=8.0, psi=30.0))
+    for max_order in (2, 4, 8):
+        r, t = rt(solve(pn(tensor(eps, g), eps, max_order), eps, max_order, theta=8.0, psi=30.0))
         drift.append(abs(r + t - 1.0))
-    assert drift[-1] < drift[0] / 10, f'not improving with fto: {drift}'
+    assert drift[-1] < drift[0] / 10, f'not improving with max_order: {drift}'
 
 
 def test_it_is_covariant_under_a_quarter_turn_about_z():
@@ -404,11 +404,11 @@ def test_it_is_covariant_under_a_quarter_turn_about_z():
     """
     eps = pillar(1.6 ** 2)
     g = pillar(0.30j, 0.0)
-    fto = 6
+    max_order = 6
 
-    a = rt(solve(pn(tensor(eps, g), eps, fto), eps, fto, psi=30.0))
+    a = rt(solve(pn(tensor(eps, g), eps, max_order), eps, max_order, psi=30.0))
     eps_r = np.rot90(eps)
-    b = rt(solve(pn(tensor(eps_r, np.rot90(g)), eps_r, fto), eps_r, fto, psi=30.0 + 90.0))
+    b = rt(solve(pn(tensor(eps_r, np.rot90(g)), eps_r, max_order), eps_r, max_order, psi=30.0 + 90.0))
 
     assert max(abs(a[0] - b[0]), abs(a[1] - b[1])) < 1e-12
 

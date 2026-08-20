@@ -19,7 +19,7 @@ new contract, on **every** backend:
 * the solve at the exact point equals the one-ULP-detuned solve — the physics is continuous
   across the condition, the singularity was in the coordinates, not the structure;
 * the lossless stack conserves energy there, with no warning;
-* the one case still refused — an eigenvalue that is *exactly* zero, fto=3 below, where the
+* the one case still refused — an eigenvalue that is *exactly* zero, max_order=3 below, where the
   0/0 has no consistent nearby problem to stand on — refuses loudly, never quietly.
 
 The stack puts the condition in an *interior* layer rather than at a half-space, which is why
@@ -64,11 +64,11 @@ _STACK = np.concatenate([_PILLAR, np.full((1, 1, 20), EPS_SPACER)], axis=0)
 _KW = dict(period=[PERIOD], top=1.0, bot=EPS_SPACER, theta=0.0, phi=0.0,
            psi=np.pi / 2, thickness=[200.0, 300.0])
 
-# fto values that retain the grazing order. fto=3 is the first truncation that retains it at
+# max_order values that retain the grazing order. max_order=3 is the first truncation that retains it at
 # all, and the one whose eigenvalue comes out exactly zero (the refused 0/0); at 4, 6 and 9
 # the FFT round-off keeps the eigenvalue at ~1e-16 and the solve must simply be right. These
 # were the values that used to come back quietly wrong (R off by 1 to 600 against 0.215).
-BAND_FTO = [4, 6, 9]
+BAND_MAX_ORDER = [4, 6, 9]
 
 # The exact answer and the one-ULP-detuned answer may differ by at most this. The instability
 # this file guards against produced *random* answers — errors of 1e0 to 1e2 — so the margin
@@ -76,11 +76,11 @@ BAND_FTO = [4, 6, 9]
 TOL = 1e-6
 
 
-def _solve(backend, fto, structure=None, wavelength=WL, auto_detune=False, **kw):
+def _solve(backend, max_order, structure=None, wavelength=WL, auto_detune=False, **kw):
     # auto_detune off by default *here*: these tests pin the exact-point contracts, and the
     # library default would detune past the very regime under test. The default's own
     # contract has its own tests below.
-    return wavebit.rcwa(backend=backend, wavelength=wavelength, fto=[fto, 0],
+    return wavebit.rcwa(backend=backend, wavelength=wavelength, max_order=[max_order, 0],
                         structure=_STACK if structure is None else structure,
                         **{**_KW, **kw}).solve(auto_detune=auto_detune)
 
@@ -92,7 +92,7 @@ def _totals(result):
 
 
 @functools.lru_cache(maxsize=None)
-def _truth(fto):
+def _truth(max_order):
     """The same stack one ULP of wavelength off the exact Rayleigh point.
 
     The physics is continuous across the condition — nothing resonates there, the singularity
@@ -102,7 +102,7 @@ def _truth(fto):
 
     Cached because every case below wants it and it is a clean solve.
     """
-    return _totals(_solve(0, fto, wavelength=np.nextafter(WL, WL + 1)))[0]
+    return _totals(_solve(0, max_order, wavelength=np.nextafter(WL, WL + 1)))[0]
 
 
 # ---------------------------------------------------------------- the regime is real
@@ -122,16 +122,16 @@ def test_the_stack_actually_sits_on_a_rayleigh_condition():
 # ---------------------------------------------------------------- the regression itself
 
 @pytest.mark.parametrize('backend, name', [(0, 'numpy'), (1, 'jax'), (2, 'torch')])
-@pytest.mark.parametrize('fto', BAND_FTO)
+@pytest.mark.parametrize('max_order', BAND_MAX_ORDER)
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
-def test_exact_rayleigh_point_solves_correctly(backend, fto, name, algo):
+def test_exact_rayleigh_point_solves_correctly(backend, max_order, name, algo):
     """The exact-point solve equals the detuned one, conserves energy, and says nothing.
 
     This is the regression for the D#81 formulation fix. Before it, these exact solves
     returned finite efficiencies wrong by orders of magnitude — with a warning on a good day
-    (``R = 44.3`` at fto=5 ETM) and without one on a bad day (``R = 0.179`` against a true
-    ``0.222`` at fto=5 SMM, every value in range, R+T = 0.98 reading as ordinary absorption).
-    The error was *random* across fto and connecting algorithm, which is why this asserts
+    (``R = 44.3`` at max_order=5 ETM) and without one on a bad day (``R = 0.179`` against a true
+    ``0.222`` at max_order=5 SMM, every value in range, R+T = 0.98 reading as ordinary absorption).
+    The error was *random* across max_order and connecting algorithm, which is why this asserts
     tight agreement rather than a looser "not absurd" bound: a re-introduced instability
     would miss by orders of magnitude, not by a factor near TOL.
     """
@@ -143,15 +143,15 @@ def test_exact_rayleigh_point_solves_correctly(backend, fto, name, algo):
 
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        R, T = _totals(_solve(backend, fto, connecting_algo=algo))
+        R, T = _totals(_solve(backend, max_order, connecting_algo=algo))
 
     flagged = [r for r in rec if issubclass(r.category, UnphysicalResultWarning)]
     assert not flagged, f'{name}/{algo} warned on a solve that is now ordinary: {flagged}'
-    assert abs(R - _truth(fto)) < TOL, (
-        f'{name}/{algo} fto={fto}: exact-point R={R!r} vs detuned {_truth(fto)!r} — the '
+    assert abs(R - _truth(max_order)) < TOL, (
+        f'{name}/{algo} max_order={max_order}: exact-point R={R!r} vs detuned {_truth(max_order)!r} — the '
         'exact Rayleigh solve has come apart from its one-ULP neighbour again')
     assert abs(R + T - 1.0) < TOL, (
-        f'{name}/{algo} fto={fto}: R+T={R + T!r} on a lossless stack')
+        f'{name}/{algo} max_order={max_order}: R+T={R + T!r} on a lossless stack')
 
 
 # ---------------------------------------------------------------- the 2D path
@@ -171,7 +171,7 @@ def _solve_2d(n_spacer, algo, wavelength=WL, auto_detune=False):
     # `n_spacer` names the index, because that is the quantity the graze condition is about;
     # squaring it here is the only conversion, and it is exact for both 2.0 and 1.5.
     cell = np.concatenate([pillar, np.full((1, 2, 20), n_spacer ** 2)], axis=0)
-    return wavebit.rcwa(backend=0, wavelength=wavelength, fto=[5, 1], structure=cell,
+    return wavebit.rcwa(backend=0, wavelength=wavelength, max_order=[5, 1], structure=cell,
                         period=[PERIOD, PERIOD], top=1.0, bot=2.25, theta=0.0, phi=0.0,
                         psi=np.pi / 2, thickness=[200.0, 300.0],
                         connecting_algo=algo).solve(auto_detune=auto_detune)
@@ -261,16 +261,16 @@ def test_2d_detection_clears_off_the_condition():
 def test_exact_point_solves_for_tm_and_mixed_polarization(psi, algo):
     """The p family (``V_22`` / ``B``) takes the same reformulated path — pin it too.
 
-    The backend/fto matrix above runs at ``psi = pi/2``, which exercises only the s family's
+    The backend/max_order matrix above runs at ``psi = pi/2``, which exercises only the s family's
     blocks. ``B`` is exactly as singular as ``A`` at the graze (same eigenvalues for a
     uniform layer), so a regression that broke only the ``B``-side identity would slip past
     a TE-only file. NumPy only: the backend axis is already covered above.
     """
     kw = dict(_KW)
     kw['psi'] = psi
-    exact = wavebit.rcwa(backend=0, wavelength=WL, fto=[5, 0], structure=_STACK,
+    exact = wavebit.rcwa(backend=0, wavelength=WL, max_order=[5, 0], structure=_STACK,
                          connecting_algo=algo, **kw).solve(auto_detune=False)
-    near = wavebit.rcwa(backend=0, wavelength=np.nextafter(WL, WL + 1), fto=[5, 0],
+    near = wavebit.rcwa(backend=0, wavelength=np.nextafter(WL, WL + 1), max_order=[5, 0],
                         structure=_STACK, connecting_algo=algo,
                         **kw).solve(auto_detune=False)
     R, T = _totals(exact)
@@ -288,7 +288,7 @@ def test_exact_point_field_reconstruction_matches_its_neighbour():
     LAPACK builds.
     """
     def field(wl):
-        mee = wavebit.rcwa(backend=0, wavelength=wl, fto=[5, 0], structure=_STACK,
+        mee = wavebit.rcwa(backend=0, wavelength=wl, max_order=[5, 0], structure=_STACK,
                            answers='field', **_KW)
         mee.solve(auto_detune=False)
         return np.asarray(mee.reconstruct_field(sample_x=16, sample_y=1, sample_z=16))
@@ -332,7 +332,7 @@ def test_auto_detune_default_lands_every_2d_graze_correct():
 
 
 def test_auto_detune_rescues_the_refused_point():
-    """The exact-zero eigenvalue point (fto=3) returns the nearby answer under the default.
+    """The exact-zero eigenvalue point (max_order=3) returns the nearby answer under the default.
 
     ``auto_detune=False`` keeps the loud refusal (pinned above); the default catches that
     refusal, retries off the point, and must agree with the one-ULP oracle.
@@ -359,7 +359,7 @@ def test_auto_detune_is_silent_on_an_ordinary_solve():
 def test_auto_detune_accepts_an_explicit_step():
     """A float ``auto_detune`` is the relative step — the complex64 escape hatch."""
     from wavebit._core.backend import AutoDetuneWarning
-    mee = wavebit.rcwa(backend=0, wavelength=WL, fto=[3, 0], structure=_STACK, **_KW)
+    mee = wavebit.rcwa(backend=0, wavelength=WL, max_order=[3, 0], structure=_STACK, **_KW)
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         R, T = _totals(mee.solve(auto_detune=1e-9))
@@ -405,7 +405,7 @@ def test_auto_detune_theta_rung_clears_a_wavelength_invariant_graze():
         pytest.skip("this platform's libm never lands n_top*sin(theta) on 1.25 exactly")
 
     def solver():
-        return wavebit.rcwa(backend=0, wavelength=WL, fto=[2, 0],
+        return wavebit.rcwa(backend=0, wavelength=WL, max_order=[2, 0],
                             structure=np.full((1, 1, 16), 1.5625), period=[PERIOD],
                             top=6.25, bot=2.25, theta=theta, phi=0.0, psi=np.pi / 2,
                             thickness=[300.0])
@@ -433,7 +433,7 @@ def test_auto_detune_theta_rung_clears_a_wavelength_invariant_graze():
 def test_auto_detune_keeps_gradients_flowing_through_the_retry():
     """The retry multiplies the knob, so an autodiff graph survives it.
 
-    ``jax.grad`` through the refused exact-zero point (fto=3): the first pass raises, the
+    ``jax.grad`` through the refused exact-zero point (max_order=3): the first pass raises, the
     ladder re-solves at the detuned wavelength, and the gradient that comes back is the
     nearby problem's — finite, and nonzero for a parameter the reflectance depends on.
     """
@@ -442,7 +442,7 @@ def test_auto_detune_keeps_gradients_flowing_through_the_retry():
     import jax.numpy as jnp
 
     def loss(thickness):
-        r = wavebit.rcwa(backend=1, wavelength=WL, fto=[3, 0], structure=_STACK,
+        r = wavebit.rcwa(backend=1, wavelength=WL, max_order=[3, 0], structure=_STACK,
                          **_KW).solve(thickness=[200.0, thickness])
         return jnp.real(jnp.asarray(r.R)).sum()
 
@@ -453,7 +453,7 @@ def test_auto_detune_keeps_gradients_flowing_through_the_retry():
 
 
 def test_exact_zero_eigenvalue_is_loud_on_every_backend():
-    """``fto=3`` retains the grazing order with an eigenvalue that is *exactly* zero.
+    """``max_order=3`` retains the grazing order with an eigenvalue that is *exactly* zero.
 
     There the mode partner is 0/0 — no nearby problem to stand on — and the NaN must reach
     :func:`~wavebit._core.backend.check_finite`. Raising and warning are both fine outcomes —
@@ -559,7 +559,7 @@ def test_grad_is_guarded_and_still_differentiates():
             jnp.stack([jnp.ones((), dtype=jnp.complex128)] * 2
                       + [jnp.astype(n, jnp.complex128)] * 3
                       + [jnp.ones((), dtype=jnp.complex128)] * 3), (1, 1, 8))
-        r = wavebit.rcwa(backend=1, wavelength=550.0, period=[700.0], fto=[10, 0],
+        r = wavebit.rcwa(backend=1, wavelength=550.0, period=[700.0], max_order=[10, 0],
                          top=1.0, bot=2.25, theta=0.1, phi=0.0, psi=np.pi / 2,
                          structure=structure, thickness=[220.0]).solve()
         return jnp.real(r.R).sum()

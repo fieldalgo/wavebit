@@ -3,11 +3,11 @@
 A unit cell is periodic in both directions -- topologically a torus, not a rectangle -- so
 rolling its raster by an integer number of pixels is an exact lattice translation of one
 structure, not a different structure. Every efficiency must come back bit-for-bit. Li's rules
-do (1e-15 throughout); the NVF path did not, by ~1e-2, at every ``fto``.
+do (1e-15 throughout); the NVF path did not, by ~1e-2, at every ``max_order``.
 
 **Why it does not converge away, which is what makes it a defect rather than a residual.** The
-lift to the ``4*fto+1`` floor is a block repeat -- the same staircase spelled with more pixels
-(``docs/nvf-upsampling.md``) -- so raising ``fto`` does not refine the normal field. It only
+lift to the ``4*max_order+1`` floor is a block repeat -- the same staircase spelled with more pixels
+(``docs/nvf-upsampling.md``) -- so raising ``max_order`` does not refine the normal field. It only
 lets the convolution matrices read more orders of a field that is wrong by the same amount, and
 the measured error wanders between 3e-3 and 1.7e-2 without a trend.
 
@@ -165,19 +165,19 @@ def test_the_solve_is_covariant_on_a_multi_phase_raster(shift, axis):
     structure[0, 11:14, 2:6] = 1.60
 
     def efficiencies(uc):
-        solver = wavebit.rcwa(structure=uc, fto=[5, 3], factorization='nvf', **SOLVE_KW)
+        solver = wavebit.rcwa(structure=uc, max_order=[5, 3], factorization='nvf', **SOLVE_KW)
         return np.asarray(solver.solve().res.R, dtype=complex)
 
     moved = np.abs(efficiencies(structure) - efficiencies(np.roll(structure, shift, axis=axis))).max()
     assert moved < 1e-12, f'R moved by {moved:.2e} under an exact lattice translation'
 
 
-def test_the_defect_did_not_converge_with_fto_which_is_why_it_was_a_defect():
+def test_the_defect_did_not_converge_with_max_order_which_is_why_it_was_a_defect():
     """Covariance holds at every truncation, not merely at a large one.
 
-    Stated as a *sweep* deliberately. The pre-fix error did not decay with ``fto`` -- it sat
-    between 3e-3 and 1.7e-2 without a trend -- so a single-``fto`` guard could be passed by an
-    implementation that merely made the error small somewhere. Raising ``fto`` changes the lift
+    Stated as a *sweep* deliberately. The pre-fix error did not decay with ``max_order`` -- it sat
+    between 3e-3 and 1.7e-2 without a trend -- so a single-``max_order`` guard could be passed by an
+    implementation that merely made the error small somewhere. Raising ``max_order`` changes the lift
     factor, and the lift is a block repeat, so a genuinely non-periodic field stays non-periodic
     however fine the grid is.
     """
@@ -186,10 +186,10 @@ def test_the_defect_did_not_converge_with_fto_which_is_why_it_was_a_defect():
     structure[0, 6:13, 9:13] = 2.10
 
     rolled = np.roll(structure, 7, axis=2)
-    for fto in ([3, 2], [5, 3], [8, 5]):
+    for max_order in ([3, 2], [5, 3], [8, 5]):
         def efficiencies(uc):
-            solver = wavebit.rcwa(structure=uc, fto=fto, factorization='nvf', **SOLVE_KW)
+            solver = wavebit.rcwa(structure=uc, max_order=max_order, factorization='nvf', **SOLVE_KW)
             return np.asarray(solver.solve().res.R, dtype=complex)
 
         moved = np.abs(efficiencies(structure) - efficiencies(rolled)).max()
-        assert moved < 1e-12, f'fto={fto}: R moved by {moved:.2e}'
+        assert moved < 1e-12, f'max_order={max_order}: R moved by {moved:.2e}'

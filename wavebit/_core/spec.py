@@ -58,7 +58,7 @@ from .domain import Layer, Material, Stack, Incidence, retired_material_name
 from .enums import (Answers, Backend, Factorization, FourierCoefficients, NormalMethod,
                     Pol, answers_of)
 
-SPEC_VERSION = '3'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12)
+SPEC_VERSION = '4'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12)
 #                     '3': the material convention. `stack.layers[i].eps` -> `.structure`,
 #                     `stack.n_top` / `.n_bot` -> `.top` / `.bot`, and the *quantity* every
 #                     one of them holds went from refractive index to relative permittivity
@@ -66,6 +66,11 @@ SPEC_VERSION = '3'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12
 #                     re-keyed to v3 spellings and left at its old numbers is a legal,
 #                     energy-conserving, different structure, so it must be refused rather
 #                     than migrated by guess.
+#                     '4': the pre-release rename set (2026-08-20). `numerics.fto` ->
+#                     `numerics.max_order`. Unlike '3' this one cannot be got wrong quietly
+#                     -- an unknown key is refused by `_reject_unknown` and a missing one
+#                     takes the default -- but the document's shape changed, so the version
+#                     says so rather than leaving two spellings both looking current.
 
 #: Refusal for a document that states no version. Its own justification, because the rule
 #: reads as gratuitous ceremony until you see which case it is for.
@@ -305,7 +310,7 @@ class Numerics:
     stays backend-neutral; :func:`run` maps it onto the solver's code.
     """
     backend: Backend = Backend.NUMPY
-    fto: Any = (0, 0)
+    max_order: Any = (0, 0)
     #: ``None`` = unset, for the same reason as ``factorization`` below: the solver resolves an
     #: unset series against the modeling path (sampled on a raster, integrated on both shape
     #: paths, which is the only series either can form) and refuses one the path cannot form.
@@ -334,7 +339,7 @@ class Numerics:
     #: ``incidence`` because it describes the job, not the light.
     answers: Answers = Answers.AMPLITUDE
 
-    _FIELDS = ('backend', 'fto', 'fourier_coefficients', 'factorization', 'normal_method',
+    _FIELDS = ('backend', 'max_order', 'fourier_coefficients', 'factorization', 'normal_method',
                'type_complex', 'connecting_algo', 'normal_grid', 'answers')
 
     @classmethod
@@ -354,13 +359,13 @@ class Numerics:
                                        'numerics.normal_method')
         if 'answers' in d:
             d['answers'] = _enum(d['answers'], Answers, 'numerics.answers')
-        if 'fto' in d:
-            fto = d['fto']
-            fto = (fto, 0) if isinstance(fto, int) else tuple(fto)
-            if len(fto) != 2 or not all(isinstance(v, int) and v >= 0 for v in fto):
+        if 'max_order' in d:
+            max_order = d['max_order']
+            max_order = (max_order, 0) if isinstance(max_order, int) else tuple(max_order)
+            if len(max_order) != 2 or not all(isinstance(v, int) and v >= 0 for v in max_order):
                 raise SpecError(
-                    f"numerics.fto: expected two non-negative ints (x, y), got {d['fto']!r}")
-            d['fto'] = fto
+                    f"numerics.max_order: expected two non-negative ints (x, y), got {d['max_order']!r}")
+            d['max_order'] = max_order
         if d.get('type_complex', 128) not in (128, 64):
             raise SpecError(
                 f"numerics.type_complex: expected 128 or 64, got {d['type_complex']!r}")
@@ -378,7 +383,7 @@ class Numerics:
         """
         return dict(
             backend=int(self.backend),
-            fto=list(self.fto),
+            max_order=list(self.max_order),
             type_complex=0 if self.type_complex == 128 else 1,
             connecting_algo=self.connecting_algo,
             normal_grid=self.normal_grid,

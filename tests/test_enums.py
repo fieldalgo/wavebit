@@ -25,7 +25,7 @@ def test_str_enums_equal_their_strings():
 def _solve(tetm, backend, **strategy):
     structure = np.array([[[9.0, 9.0, 9.0, 1.0, 1.0, 1.0]]])
     solver = wavebit.rcwa(backend=backend, top=4.0, bot=1.0, theta=0.0, phi=None,
-                          tetm=tetm, fto=[6, 0], period=[0.77], wavelength=0.777,
+                          tetm=tetm, max_order=[6, 0], period=[0.77], wavelength=0.777,
                           thickness=[0.15], structure=structure, **strategy)
     r = solver.solve()
     return float(np.array(r.R).sum()), float(np.array(r.T).sum())

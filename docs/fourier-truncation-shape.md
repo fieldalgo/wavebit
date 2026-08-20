@@ -3,7 +3,7 @@
 Written: 2026-08-09. Measured on CPU, NumPy backend, float64.
 
 Targets:
-- `wavebit/_core/solve_2d.py::solve_2d` — the tensor-product `(ff_y, ff_x)` order layout
+- `wavebit/_core/solve_2d.py::solve_2d` — the tensor-product `(n_orders_y, n_orders_x)` order layout
 - `wavebit/_core/factorization.py` — the truncation the convolution builds assume
 - `studies/benchmark_truncation_shape.py` — the harness this document reports
 
@@ -41,7 +41,7 @@ One layer, pillar array on a square lattice, air above and below.
 
 Fill factor is held across the three shapes so that only the *spectrum* changes, not the
 material volume. Error metric is the max deviation of a propagating order's diffraction
-efficiency from a rectangular `fto=20` (N=1681) reference.
+efficiency from a rectangular `max_order=20` (N=1681) reference.
 
 ## Why NVF is the only factorization this is measurable on
 
@@ -68,7 +68,7 @@ pinned against the production code before anything is read off them:
 | G-difference build vs `fourier2d_piecewise_constant` | 4.5e-16 |
 | `solve_flat` on a rectangular set vs `_core.solve_2d` (NVF) | 4.0e-15 |
 
-Reference drift (`fto=18` against `fto=20`) is 4e-4 to 9e-4 under NVF, five to eight times
+Reference drift (`max_order=18` against `max_order=20`) is 4e-4 to 9e-4 under NVF, five to eight times
 below the smallest error compared.
 
 ## Result
@@ -98,7 +98,7 @@ and ~20% lost on a common one.
 
 The circular curves are also visibly **non-monotone** — the circle pillar's circular fit reaches
 only r²=0.66. Adding a shell can make a given order's efficiency worse. A box never does that,
-and that is worth something to a user sweeping `fto` for convergence.
+and that is worth something to a user sweeping `max_order` for convergence.
 
 ### Memory
 
@@ -113,7 +113,7 @@ memory axis, not stronger:
 
 At a *fixed maximum order* the disc does save 44% (N=1257 against 1681, 0.81 GB against 1.45 GB
 for the `final_A` pair). But maximum order is not what is bought — accuracy is. Matched on
-memory instead, on the circle pillar: `rect fto=16` is 0.61 GB at 2.14e-3, `circ radius=18` is
+memory instead, on the circle pillar: `rect max_order=16` is 0.61 GB at 2.14e-3, `circ radius=18` is
 0.52 GB at 1.97e-3. Accuracy per byte is the same, because both axes are functions of the same
 error-vs-N curve.
 
@@ -180,7 +180,7 @@ again.
 conda run -n wavebit python studies/benchmark_truncation_shape.py
 ```
 
-Run it from the repo root. `main()` takes `fto_ref`, the structure list, the factorization
+Run it from the repo root. `main()` takes `max_order_ref`, the structure list, the factorization
 modes and `plot=<path>`; the low-contrast control is the same call with `n_ridge=1.5` and
 `modes=('laurent',)`. The full sweep above is about 25 minutes and peaks near 2.5 GB at
-`fto_ref=20`.
+`max_order_ref=20`.

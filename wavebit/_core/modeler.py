@@ -514,16 +514,16 @@ class Modeling:
         **This does not make the path fit a sidewall angle near normal.** A staircase and a
         smoothly tilted boundary do not have the same Fourier coefficients at a finite harmonic
         count, and the difference goes like ``|angle|``: on an 80x60 rectangle in TE at
-        ``fto = [3, 3]``, ``sum(T)`` falls off its aligned value at 0.59 per radian on
+        ``max_order = [3, 3]``, ``sum(T)`` falls off its aligned value at 0.59 per radian on
         *both* sides. That coefficient is flat in ``n_split`` (0.546 at 4, 0.595 at 256) and
-        only comes down with harmonics (0.59 at ``fto`` 3, 0.16 at 12), so adding blocks cannot
-        remove it — it is the staircase's cost, not its resolution. Only harmonics do, and
-        slowly: 0.594 / 0.217 / 0.147 / 0.111 at ``fto`` 3 / 5 / 11 / 17.
+        only comes down with harmonics (0.59 at ``max_order`` 3, 0.16 at 12), so adding blocks
+        cannot remove it — it is the staircase's cost, not its resolution. Only harmonics do,
+        and slowly: 0.594 / 0.217 / 0.147 / 0.111 at ``max_order`` 3 / 5 / 11 / 17.
 
         The smooth path builds the rotated shape's coefficients in closed form, and its kink
         is not small but *absent* — measured at 4e-4 or below at every one of those counts. It
         is also where the block path is heading: at 0.4 rad the analytic answer settles by
-        ``fto`` 8 and moves by 4e-4 after, while the block one is still coming down at 17
+        ``max_order`` 8 and moves by 4e-4 after, while the block one is still coming down at 17
         (0.3746 / 0.3606 / 0.3484 against 0.3081 / 0.3363 / 0.3367). Use it for angle fits, as
         :mod:`wavebit._core.analytic` says.
 

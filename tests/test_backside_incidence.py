@@ -65,7 +65,7 @@ _GRATING = eps_from_index(np.array([[[3.0] * 6 + [1.0] * 6],
 #: The substrate's index, kept beside its permittivity: the reciprocity angle below is a
 #: Snell relation and needs the index, while the constructor takes the square.
 N_SUB = 2.0
-GRATING_KW = dict(backend=0, top=1.0, bot=eps_from_index(N_SUB), fto=10, period=[0.7],
+GRATING_KW = dict(backend=0, top=1.0, bot=eps_from_index(N_SUB), max_order=10, period=[0.7],
                   wavelength=0.85, structure=_GRATING, thickness=[0.15, 0.22])
 
 _GRATING_LOSSLESS = eps_from_index(np.array([[[3.0] * 6 + [1.0] * 6],
@@ -79,13 +79,13 @@ def _solver(ns, ds, theta, tetm, path, algo, side):
                   bot=eps_from_index(ns[-1]), theta=theta,
                   wavelength=WL, thickness=ds, incidence_side=side)
     if path == '1d':
-        return wavebit.rcwa(tetm=tetm, fto=0, period=[WL * 2],
+        return wavebit.rcwa(tetm=tetm, max_order=0, period=[WL * 2],
                               structure=eps_from_index(
                                   np.array([[[n, n]] for n in layers])), **common)
     cell = ([[[n, n]] for n in layers] if path == 'conical'
             else [[[n, n], [n, n]] for n in layers])
     return wavebit.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0),
-                          fto=[0, 0] if path == '2d' else 0,
+                          max_order=[0, 0] if path == '2d' else 0,
                           period=[WL * 2, WL * 2],
                           structure=eps_from_index(np.array(cell)), **common)
 
@@ -174,11 +174,11 @@ def test_grating_transmittance_is_reciprocal_per_order(tetm):
     degenerates to the plain equal-``T00`` statement, which is asserted too.
     """
     kw = dict(GRATING_KW, structure=_GRATING_LOSSLESS)
-    fto = kw['fto']
+    max_order = kw['max_order']
 
     def T00(side, theta):
         res = wavebit.rcwa(tetm=tetm, theta=theta, incidence_side=side, **kw).solve()
-        return float(np.asarray(res.T).ravel()[fto])
+        return float(np.asarray(res.T).ravel()[max_order])
 
     assert T00('top', 0.0) == pytest.approx(T00('bottom', 0.0), abs=1e-12)
 
@@ -188,8 +188,8 @@ def test_grating_transmittance_is_reciprocal_per_order(tetm):
 
     res_t = wavebit.rcwa(tetm=tetm, theta=0.0, incidence_side='top', **kw).solve()
     res_b = wavebit.rcwa(tetm=tetm, theta=0.0, incidence_side='bottom', **kw).solve()
-    dR00 = abs(float(np.asarray(res_t.R).ravel()[fto])
-               - float(np.asarray(res_b.R).ravel()[fto]))
+    dR00 = abs(float(np.asarray(res_t.R).ravel()[max_order])
+               - float(np.asarray(res_b.R).ravel()[max_order]))
     assert dR00 > 1e-2, 'an asymmetric grating must reflect differently per side'
 
 

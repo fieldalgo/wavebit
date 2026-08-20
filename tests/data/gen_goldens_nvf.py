@@ -20,7 +20,7 @@ half-pixel cell-centre phase, so the normal field sat half a pixel off the permi
 multiplies -- see :func:`wavebit._core.factorization._half_pixel_phase`. Per-order efficiency
 moves up to 0.30 transmitted and 0.09 reflected, and energy is conserved to 1.000000000000
 either way. Large because this case is the half-pixel term's worst case and not in spite of it:
-5x5 puts half a pixel at a tenth of the cell, and ``fto=2`` is nowhere near converged.
+5x5 puts half a pixel at a tenth of the cell, and ``max_order=2`` is nowhere near converged.
 
 **A random 5x5 raster cannot arbitrate that**, and it is not being asked to. NVF's premise is
 that a staircase stands for a smooth boundary and a random raster has no boundary behind it --
@@ -86,7 +86,7 @@ NAME = '2d_nvf'
 # `uniform(1, 16)` would have produced a different structure from the same seed.
 CASE = dict(psi=0.9, phi=0.4,
             structure=np.random.default_rng(3).uniform(1.0, 4.0, size=(1, 5, 5)) ** 2,
-            thickness=[0.2], top=1., bot=1., theta=0.2, fto=[2, 2], period=[1., 1.],
+            thickness=[0.2], top=1., bot=1., theta=0.2, max_order=[2, 2], period=[1., 1.],
             wavelength=0.9, factorization='nvf')
 
 #: Efficiency keys, stored under the legacy spelling the comparison already speaks.

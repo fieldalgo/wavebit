@@ -171,8 +171,8 @@ slab per eigen-polarisation and a Jones waveplate, and matches to ~1e-16.
 ```python
 import numpy as np
 
-ff_xy = (2 * fto_x + 1) * (2 * fto_y + 1)
-I = np.eye(ff_xy, dtype=np.complex128)
+n_orders = (2 * max_order_x + 1) * (2 * max_order_y + 1)
+I = np.eye(n_orders, dtype=np.complex128)
 
 # eps = [[exx, exy, 0], [eyx, eyy, 0], [0, 0, ezz]] for a single uniform layer
 epx   = np.stack([exx * I])

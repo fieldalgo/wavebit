@@ -40,7 +40,7 @@ import wavebit
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from _reticolo_conical_field_cases import (CASES, FTO, NAMES, PERIOD, RES_X,  # noqa: E402
+from _reticolo_conical_field_cases import (CASES, MAX_ORDER, NAMES, PERIOD, RES_X,  # noqa: E402
                                            RES_Z, SLOW_SLOT, STACKS, WL, Z_PARITY,
                                            key, layer_rows, n_layers, x_samples)
 
@@ -50,9 +50,9 @@ GOLDEN_PATH = HERE / 'golden_reticolo_conical_field.npz'
 # departure of the amplitude from 1 is 4.2e-14. Round-off room above that, not slack.
 TOL = 1e-12
 
-# `E_x` on a patterned stack, measured over the same cases: 8.6e-2 to 1.2e-1 at fto=8. Loose at
+# `E_x` on a patterned stack, measured over the same cases: 8.6e-2 to 1.2e-1 at max_order=8. Loose at
 # both ends on purpose -- the band keeps the exception visible and bounded, it does not pin a
-# number. See the generator for the fto behaviour behind it.
+# number. See the generator for the max_order behaviour behind it.
 SLOW_BAND = (1e-3, 3e-1)
 
 IDS = [f'{s}-{t:g}-{p:g}-{q}' for s, t, p, q in CASES]
@@ -78,7 +78,7 @@ def _in_our_frame(e):
 
 def _reconstruct(stack, theta, phi, pol):
     thickness, structure = STACKS[stack]
-    solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, period=[PERIOD], fto=FTO,
+    solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, period=[PERIOD], max_order=MAX_ORDER,
                           wavelength=WL, thickness=thickness, structure=structure,
                           theta=np.deg2rad(theta), phi=np.deg2rad(phi),
                           psi=np.pi / 2 if pol == 's' else 0.0,
@@ -216,8 +216,8 @@ def test_at_zero_azimuth_the_two_reticolo_goldens_agree(stack, pol):
     flat_g = np.load(flat_path)
 
     # the two case lists must describe the same scene, or this compares unrelated numbers
-    assert (flat.WL, flat.PERIOD, flat.FTO, flat.RES_X, flat.RES_Z) == \
-           (WL, PERIOD, FTO, RES_X, RES_Z)
+    assert (flat.WL, flat.PERIOD, flat.MAX_ORDER, flat.RES_X, flat.RES_Z) == \
+           (WL, PERIOD, MAX_ORDER, RES_X, RES_Z)
     assert np.array_equal(flat.STACKS[stack][1], STACKS[stack][1])
     assert flat.STACKS[stack][0] == STACKS[stack][0]
 

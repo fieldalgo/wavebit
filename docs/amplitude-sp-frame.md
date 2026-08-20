@@ -62,12 +62,12 @@ have reached the half-plane.
 ## 3. The three measurements
 
 Case throughout: a chiral 16x16 cell (a bar with two arms of different index, no mirror line
-in either axis), `period = [500, 800]`, `fto = [5, 3]`, `theta = 25 deg`, `wl = 250`,
+in either axis), `period = [500, 800]`, `max_order = [5, 3]`, `theta = 25 deg`, `wl = 250`,
 `factorization='nvf'`, so 18 orders propagate and the retained grid straddles `kx = 0` with 35
 orders on one side and 42 on the other. NumPy, complex128.
 
 **(a) The transposed twin.** Reflecting the whole scene about `x = y` -- transpose the cell,
-swap the period pair, swap the `fto` pair, `phi -> pi/2 - phi`, `a_s -> -a_s` -- is the same
+swap the period pair, swap the `max_order` pair, `phi -> pi/2 - phi`, `a_s -> -a_s` -- is the same
 physical problem, so the two solves must agree entry for entry.
 
 | quantity | before | after |
@@ -104,7 +104,7 @@ mask is neither: it takes exactly two values, and it is a function of the order'
 
 (`li` rather than `nvf` for this control on purpose, *at the time*. The NVF path was not
 translation-covariant -- the same roll moved `R` by 1.2e-02 and it did not converge away with
-`fto` -- so it could not isolate a translation. That was a separate, pre-existing property of
+`max_order` -- so it could not isolate a translation. That was a separate, pre-existing property of
 the normal-field construction, unrelated to the frame, and it predated every change described
 here. **It was in fact a defect, and was fixed on 2026-08-17** (`339df21`, `5b4c891`): the cell
 is periodic and three places in the construction read it as a flat array. The same roll now
@@ -165,7 +165,7 @@ at `theta = 0` the order grid is `kx_m = m*wl/Px`, `ky_n = n*wl/Py` -- which doe
 **The measurement that settles it.** The incident field at `theta = 0` is
 `a_s*s_hat(phi) + a_p*p_hat(phi)`, so `(phi + pi, psi)` and `(phi, polarization=(-a_s, -a_p))`
 are the *same physical incident field* written two ways -- and every order but `(0, 0)` is
-reported against an identical basis in both. 8x8 cell, `fto = [4, 4]`, `psi = 0.7`, `phi = 0.3`:
+reported against an identical basis in both. 8x8 cell, `max_order = [4, 4]`, `psi = 0.7`, `phi = 0.3`:
 
 | | before | after |
 | --- | --- | --- |

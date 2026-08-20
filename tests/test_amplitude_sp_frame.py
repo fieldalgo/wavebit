@@ -42,15 +42,15 @@ _PX, _PY, _FX, _FY = 500.0, 800.0, 5, 3
 _THICK = [120.0]
 
 
-def _solve(structure, period, fto, phi, psi, theta=_THETA, backend=0, **kw):
+def _solve(structure, period, max_order, phi, psi, theta=_THETA, backend=0, **kw):
     return wavebit.rcwa(backend=backend, top=1.0, bot=1.0, thickness=_THICK,
                         wavelength=_WL, theta=theta, phi=phi, psi=psi, factorization='nvf',
-                        structure=structure, period=list(period), fto=list(fto),
+                        structure=structure, period=list(period), max_order=list(max_order),
                         **kw).solve().res
 
 
 def _order_kxy(phi, theta=_THETA, px=_PX, py=_PY, fx=_FX, fy=_FY):
-    """The in-plane wavevector of every retained order, on the ``(ff_y, ff_x)`` grid."""
+    """The in-plane wavevector of every retained order, on the ``(n_orders_y, n_orders_x)`` grid."""
     kx = np.sin(theta) * np.cos(phi) + np.arange(-fx, fx + 1) * _WL / px
     ky = np.sin(theta) * np.sin(phi) + np.arange(-fy, fy + 1) * _WL / py
     return np.meshgrid(kx, ky)
@@ -72,7 +72,7 @@ def test_a_grating_and_its_transpose_report_the_same_amplitudes():
     """Transposing the cell and the incidence is the same physical problem, amplitudes too.
 
     The recipe is a reflection of the whole scene about the plane ``x = y``: transpose the
-    cell, swap the period pair, swap the ``fto`` pair, send ``phi -> pi/2 - phi``, and
+    cell, swap the period pair, swap the ``max_order`` pair, send ``phi -> pi/2 - phi``, and
     conjugate the polarization (``a_s -> -a_s``), because a reflection reverses handedness.
     Everything physical must survive it, and the amplitudes are physical once a frame is
     fixed -- the reflection maps order ``(m, n)``'s frame onto order ``(n, m)``'s, so the
@@ -129,7 +129,7 @@ def test_the_amplitudes_are_the_field_projected_on_zhat_cross_k():
     """
     solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, thickness=_THICK, wavelength=_WL,
                           theta=_THETA, phi=np.pi / 2, psi=_PSI, factorization='nvf',
-                          structure=_UC, period=[_PX, _PY], fto=[_FX, _FY], answers='field')
+                          structure=_UC, period=[_PX, _PY], max_order=[_FX, _FY], answers='field')
     res = solver.solve().res
 
     # More sample points than retained orders, so the decomposition is overdetermined and a

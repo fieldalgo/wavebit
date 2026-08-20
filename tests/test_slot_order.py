@@ -56,7 +56,7 @@ def _no_unphysical_warning():
         yield
 
 
-GRID, FTO = 48, 4
+GRID, MAX_ORDER = 48, 4
 KW = dict(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
           period=(1.0, 1.0), wavelength=1.1, thickness=[0.3])
 
@@ -105,14 +105,14 @@ def _mean_eps():
 #: ``(name, callable)`` -- every builder a caller can splat into ``solve_conv``, at the
 #: arity it returns. Adding a builder without adding it here is what the pairing test catches.
 BUILDERS = {
-    'raster_sampled': lambda: _fac.to_conv_mat_raster_sampled(_raster(), FTO, FTO),
-    'raster_integrated': lambda: _fac.to_conv_mat_raster_integrated(_raster(), FTO, FTO),
-    'raster_nvf': lambda: _fac.to_conv_mat_raster_nvf(_raster(), FTO, FTO),
+    'raster_sampled': lambda: _fac.to_conv_mat_raster_sampled(_raster(), MAX_ORDER, MAX_ORDER),
+    'raster_integrated': lambda: _fac.to_conv_mat_raster_integrated(_raster(), MAX_ORDER, MAX_ORDER),
+    'raster_nvf': lambda: _fac.to_conv_mat_raster_nvf(_raster(), MAX_ORDER, MAX_ORDER),
     'raster_integrated_nvf': lambda: _fac.to_conv_mat_raster_integrated_nvf(
-        _raster(), FTO, FTO),
-    'raster_pn': lambda: _fac.to_conv_mat_raster_pn(_tensor_raster(), FTO, FTO),
+        _raster(), MAX_ORDER, MAX_ORDER),
+    'raster_pn': lambda: _fac.to_conv_mat_raster_pn(_tensor_raster(), MAX_ORDER, MAX_ORDER),
     'smooth_layers': lambda: _analytic.to_conv_mat_smooth_layers(
-        _shapes(), FTO, FTO, KW['period'], normal_grid=256,
+        _shapes(), MAX_ORDER, MAX_ORDER, KW['period'], normal_grid=256,
         type_complex=np.complex128, xp=np),
 }
 
@@ -129,7 +129,7 @@ def test_a_splatted_builder_conserves_energy(name):
     assert len(slots) in (3, 5), f'{name} returned {len(slots)} slots'
 
     with _no_unphysical_warning():
-        res = wavebit.rcwa(fto=[FTO, FTO], **KW).solve_conv(*slots)
+        res = wavebit.rcwa(max_order=[MAX_ORDER, MAX_ORDER], **KW).solve_conv(*slots)
 
     total = float(np.asarray(res.res.R).sum() + np.asarray(res.res.T).sum())
     assert abs(total - 1.0) < 1e-6, (

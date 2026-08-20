@@ -276,7 +276,7 @@ def test_j1_derivative_is_right_including_at_zero(lib):
 # structure being described, so which backend is running must not be able to see them.
 
 STRIDED_CFG = dict(period=(500., 800.), thickness=(180.,), wavelength=620.,
-                   fto=(2, 2), theta=0.2, psi=0.3)
+                   max_order=(2, 2), theta=0.2, psi=0.3)
 
 #: Asymmetric on purpose: a cell that equals its own rotation would pass the comparison below
 #: while measuring nothing.
@@ -318,7 +318,7 @@ def test_torch_takes_a_reversed_period_and_thickness():
     pytest.importorskip('torch')
     cell = np.ascontiguousarray(STRIDED_CELL)
     stack = np.concatenate([cell, 1.0 + 0.5 * cell])
-    cfg = dict(wavelength=620., fto=(2, 2), theta=0.2, psi=0.3)
+    cfg = dict(wavelength=620., max_order=(2, 2), theta=0.2, psi=0.3)
 
     reversed_ = wavebit.rcwa(backend=2, structure=stack, period=np.flip(np.array([800., 500.])),
                              thickness=np.flip(np.array([90., 180.])), **cfg).solve()

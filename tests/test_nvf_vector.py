@@ -10,8 +10,8 @@ def get_normal_vector_field_analytical(grid_shape, shapes, period=(1000.0, 1000.
     return _nvf_analytic(xnp, grid_shape, shapes, period, xnp.float64)
 
 
-def to_conv_mat_nvf_2d(eps_matrix, fto_x, fto_y, nx=None, ny=None):
-    return _nvf_conv(xnp, eps_matrix, nx, ny, fto_x, fto_y)
+def to_conv_mat_nvf_2d(eps_matrix, max_order_x, max_order_y, nx=None, ny=None):
+    return _nvf_conv(xnp, eps_matrix, nx, ny, max_order_x, max_order_y)
 
 def test_analytical_normal_vector_generation():
     modeler = Modeling(period=[1000.0, 1000.0])
@@ -40,11 +40,11 @@ def test_vector_nvf_energy_conservation():
     shapes = [dict(type='circle', cx=500.0, cy=500.0, lx=600.0)]
     nx_vec, ny_vec = get_normal_vector_field_analytical((N, N), shapes, period=(1000.0, 1000.0))
 
-    fto_val = 2
-    Exx, Eyy, Epz_i, Exy, Eyx = to_conv_mat_nvf_2d(eps_matrix, fto_val, fto_val, nx=nx_vec, ny=ny_vec)
+    max_order_val = 2
+    Exx, Eyy, Epz_i, Exy, Eyx = to_conv_mat_nvf_2d(eps_matrix, max_order_val, max_order_val, nx=nx_vec, ny=ny_vec)
 
     m = wavebit.rcwa(
-        backend=0, fto=[fto_val, fto_val],
+        backend=0, max_order=[max_order_val, max_order_val],
         psi=0.0, top=1.0, bot=2.1025,
         theta=10.0 * np.pi / 180, phi=20.0 * np.pi / 180,
         wavelength=1000.0, period=[1000.0, 1000.0], thickness=[300.0],

@@ -206,7 +206,7 @@ The gradient is the half the swap was reached for, and it is the half that fails
 the previous section says it has to be — across a window six normal-grid pixels wide, with the
 autodiff gradient sampled on the *same* abscissae as the loss, so nothing can alias — the
 integral of the gradient has to equal the change in the loss across the window. Two tilted
-rectangles, fto 8:
+rectangles, max_order 8:
 
 | | ∫ `d/dcx` across the window | loss change across it | ratio |
 |---|---|---|---|
@@ -214,9 +214,9 @@ rectangles, fto 8:
 | grad-of-distance field | -3.4743e-04 | +1.3942e-04 | **-2.49** |
 
 The replacement points the wrong way, and not at one unlucky position: at **all 25** positions
-across the window, and again at fto 12, where the gradient scatters by 18% between positions and
-every one of them still has the wrong sign. The sampled field is high by 8% at fto 8 and 14% at
-fto 12.
+across the window, and again at max_order 12, where the gradient scatters by 18% between positions and
+every one of them still has the wrong sign. The sampled field is high by 8% at max_order 8 and 14% at
+max_order 12.
 
 A circle pair reverses the comparison rather than widening it. There the sampled field accounts
 for the loss to 5% and the replacement is 21% out — so on curved shapes the swap makes the
@@ -230,9 +230,9 @@ stands. What moved:
 
 | | before `c128fd8` | now |
 |---|---|---|
-| sampled, rectangles fto 8 | +1.22 | **+1.08** |
-| sampled, rectangles fto 12 | +1.24 | **+1.14** |
-| sampled, circles fto 8 | +0.99 | **+0.95** |
+| sampled, rectangles max_order 8 | +1.22 | **+1.08** |
+| sampled, rectangles max_order 12 | +1.24 | **+1.14** |
+| sampled, circles max_order 8 | +0.99 | **+0.95** |
 
 The rectangle pair improved because that commit is what gave a rectangle a position gradient at
 all — 22% high is the defect it removed, and 8% is what is left. The circle pair went the other
@@ -250,7 +250,7 @@ it into whatever the spacing happens to select.
 
 The measurement above sits at one corner of its own parameter space: high index contrast (3.0 and
 2.2) **and** oblique incidence. Varying those one at a time over a fixed base — same shapes, same
-period, same thickness, same normal grid, fto 8, three window positions each —
+period, same thickness, same normal grid, max_order 8, three window positions each —
 `benchmark_boundary_normal_field_axes.py` gives the swapped field's `err`, where
 `err = |∫ d/dcx − ΔL| / (max L − min L)` and 0 means the gradient accounts for the loss change:
 
@@ -302,14 +302,14 @@ between two things that both moved. Read those as ratios: absolute milliseconds 
 256-gon.
 
 Forward accuracy is **open**, not settled, and the truncations reachable here cannot settle it. At
-fto 24 the two constructions still sit 2e-4 apart on a total — as large as the differences any
+max_order 24 the two constructions still sit 2e-4 apart on a total — as large as the differences any
 ratio between them would be reading — so neither has reached the limit such a ratio would have to
 be measured against. Over seven disjoint cases the median per-order ratio comes out anywhere from
 0.32× to 16× depending only on which of the two is called the limit. A number quoted for this has
 to name its reference; without one it is reporting the choice of reference.
 
-One thing the window does settle. At `fto = 4` neither field reproduces the slope — the fto-4
-slope is about twice the fto-12 one — and that is the truncation every gradient test in
+One thing the window does settle. At `max_order = 4` neither field reproduces the slope — the max_order-4
+slope is about twice the max_order-12 one — and that is the truncation every gradient test in
 `tests/test_shape_position_gradients.py` runs at. Those tests hold autodiff to finite differences,
 which is the comparison the previous section says cannot fail on either path.
 
@@ -361,8 +361,8 @@ at the boundary path the caller was already inside and naming neither the record
 same call with no `geometry=` solves the layer fine.
 
 Checking costs one re-plan. That is **0.2%** of a frozen `solve` for the two-rectangle
-layer above and **1.2%** for ten overlapping shapes at `fto = 4`, falling as `fto` rises (0.4% for
-those ten at `fto = 8`) since the solve grows faster than the painting does. The freeze on this
+layer above and **1.2%** for ten overlapping shapes at `max_order = 4`, falling as `max_order` rises (0.4% for
+those ten at `max_order = 8`) since the solve grows faster than the painting does. The freeze on this
 path buys traceability rather than a speed plateau, so that is not traded against anything. Under a trace there is nothing to
 re-ask and the replay goes through on trust, the same documented limit every record here has,
 and the reason the instruction above is *every step* rather than *once*.
@@ -377,7 +377,7 @@ Finite differences there diverge like `1/h` (a constant jump of 0.42 straddled a
 1e-3 to 1e-6) while the analytic gradient is the correct one-sided value. An optimizer started
 from a perfectly symmetric shape can see that step on its first move.
 
-**The sampled normal field needs `4*fto+1` points per axis.** Below it, `k % n` folds distinct
+**The sampled normal field needs `4*max_order+1` points per axis.** Below it, `k % n` folds distinct
 orders onto one bin, and the damage is structural rather than gradual — a constant normal field
 stops transforming to the identity, so NVF no longer collapses onto Li's rules and picks up
 off-diagonals at `±n` instead. `boundary.check_normal_grid` raises instead of quietly
@@ -388,15 +388,15 @@ raster path; the constraint belongs to the transform, not to the path that feeds
 
 Against **S4**, an independent RCWA implementation (Stanford Stratified Structure Solver), with
 the truncation set matched exactly (`LatticeTruncation='Parallelogramic'`,
-`NumBasis=(2*fto+1)**2`) so both codes carry the same orders:
+`NumBasis=(2*max_order+1)**2`) so both codes carry the same orders:
 
-- **The permittivity Fourier coefficients agree to 2.2e-16** inside `|k| <= fto`, on overlapping,
+- **The permittivity Fourier coefficients agree to 2.2e-16** inside `|k| <= max_order`, on overlapping,
   low-contrast and tilted-overlapping layers alike. Geometry and transform are therefore settled,
   and any residual difference is factorisation, normal field or truncation — nothing else.
 - **Painting is the right reading of an overlap.** Where both codes have converged, shape
   addition sits 8.5–68x further from S4 than this path does.
 - **The advantage appears exactly where a staircase would.** Comparing per diffraction order and
-  pushing both codes' truncation together to `fto` 18, the distance to S4 keeps falling for this
+  pushing both codes' truncation together to `max_order` 18, the distance to S4 keeps falling for this
   path while the block path's settles on a floor — its staircase error. Distances over the
   propagating orders, `sum |path - S4|`:
 
@@ -412,8 +412,8 @@ the truncation set matched exactly (`LatticeTruncation='Parallelogramic'`,
 
 - **Axis-aligned overlap ties** (1.00x), as it must — there is no staircase there to beat.
 - **The ratio is not a fixed number; it grows with truncation.** On the rotated overlapping case
-  it runs 1.08 → 1.31 → 2.30 → 3.19 → 4.11 → 5.13 → 6.11 → **7.05** over `fto` 4 → 18. Reading a
-  single truncation would have got the sign wrong on a rotated bar: at `fto` 8 the staircase still
+  it runs 1.08 → 1.31 → 2.30 → 3.19 → 4.11 → 5.13 → 6.11 → **7.05** over `max_order` 4 → 18. Reading a
+  single truncation would have got the sign wrong on a rotated bar: at `max_order` 8 the staircase still
   looked *closer*, because S4's own truncation error dominated.
 - **Polygonising a curve costs almost nothing, and the staircase costs everything.** On a single
   ellipse — the one case where S4 holds the true closed-form shape and this path holds a 256-gon —
@@ -424,8 +424,8 @@ the truncation set matched exactly (`LatticeTruncation='Parallelogramic'`,
   on a curve its staircase does not shrink with truncation at all.
 
 Not settled: **high index contrast**. Over a ladder of `max n` = 1.5 / 1.9 / 2.4 / 2.9 this path
-and the block path drift from S4 together, but S4's own `fto`-to-`fto` change at `n <= 2.9` is
-still 1e-2 at `fto` 12 — larger than the difference being measured, so nothing can be concluded
+and the block path drift from S4 together, but S4's own `max_order`-to-`max_order` change at `n <= 2.9` is
+still 1e-2 at `max_order` 12 — larger than the difference being measured, so nothing can be concluded
 there. Trust the 1.5–1.9 band. This is a known limit of the factorisation at high contrast rather
 than a property of this path; the existing paths meet the same wall.
 
@@ -461,7 +461,7 @@ And one convention borrowed from a neighbouring implementation rather than a pap
   the DC coefficient and pollutes every low order. Cite as Hugonin & Lalanne,
   [arXiv:2101.00901](https://arxiv.org/abs/2101.00901).
   **`polygon.ellipse_verts` currently inscribes** and therefore carries that deficit. Against
-  the closed-form transform of a circle (`D = 0.6`, unit cell, `fto = 11`), the error is 2.84e-5
+  the closed-form transform of a circle (`D = 0.6`, unit cell, `max_order = 11`), the error is 2.84e-5
   at the default 256 vertices where the area-matched construction gives 8.4e-10. For scale, the
   NVF normal-field grid floor is ~1.3e-6 at grid 1024, so polygonisation is currently the
   dominant error on a curved painted shape and would stop mattering afterwards.

@@ -10,7 +10,7 @@ incidence, or a complex incidence angle. For every real ``k_par`` a passive medi
 principal root is in the first quadrant: ``Re(kz) > 0`` and ``Im(kz) > 0`` hold *at the same
 time* and no rule can distinguish itself. Nothing in the suite reached past that until this
 file, which is why the defect below survived: every absorbing-superstrate test in
-``test_lossy_media.py`` runs at ``fto=0`` with a lossless substrate, where the two candidate
+``test_lossy_media.py`` runs at ``max_order=0`` with a lossless substrate, where the two candidate
 answers coincide.
 
 What it pins:
@@ -98,7 +98,7 @@ def _amp(n_top, n_bot, n_layer, d, theta, tetm):
     # spelling. The conversion happens here, where the public API takes over.
     solver = wavebit.rcwa(backend=0, tetm=tetm, top=eps_from_index(n_top),
                             bot=eps_from_index(n_bot), theta=theta,
-                            fto=0, wavelength=WL, period=[WL * 2],
+                            max_order=0, wavelength=WL, period=[WL * 2],
                             structure=eps_from_index(np.array([[[n_layer, n_layer]]])),
                             thickness=[d])
     with warnings.catch_warnings():
@@ -195,7 +195,7 @@ LAYER_CASES = [
 
 def _grating(tetm, thickness, **kw):
     cell = eps_from_index(np.array([[[1.0] * 8 + [3.4] * 8]]))
-    return dict(backend=0, tetm=tetm, fto=6, wavelength=WL, period=[300.0], structure=cell,
+    return dict(backend=0, tetm=tetm, max_order=6, wavelength=WL, period=[300.0], structure=cell,
                 thickness=[thickness], **kw)
 
 

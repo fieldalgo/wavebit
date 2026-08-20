@@ -31,14 +31,14 @@ WL = 620.0
 PERIOD = (400.0, 380.0)
 
 
-def uniform_slots(eps_list, ff_xy, z_row=True):
+def uniform_slots(eps_list, n_orders, z_row=True):
     """The nine (or five) convolution stacks for a list of uniform tensors.
 
     Slot convention: every off-diagonal slot holds the **negative** of its tensor component,
     the z row included; ``epz_i`` is the inverse of the ``zz`` block. See
     ``docs/off-diagonal-slot-convention.md``.
     """
-    I = np.eye(ff_xy, dtype=complex)
+    I = np.eye(n_orders, dtype=complex)
     e = [np.asarray(x, dtype=complex) for x in eps_list]
     stacks = [np.stack([x[0, 0] * I for x in e]),
               np.stack([x[1, 1] * I for x in e]),
@@ -52,11 +52,11 @@ def uniform_slots(eps_list, ff_xy, z_row=True):
     return stacks if z_row else stacks[:5]
 
 
-def solver(fto=(0, 0), backend=0, **kw):
+def solver(max_order=(0, 0), backend=0, **kw):
     kw.setdefault('theta', np.deg2rad(28.0))
     kw.setdefault('phi', np.deg2rad(37.0))
     kw.setdefault('psi', 0.6)
-    return wavebit.rcwa(backend=backend, top=1.0, bot=2.3104, fto=fto, period=PERIOD,
+    return wavebit.rcwa(backend=backend, top=1.0, bot=2.3104, max_order=max_order, period=PERIOD,
                           wavelength=WL, **kw)
 
 
@@ -126,7 +126,7 @@ def test_the_default_never_reaches_the_first_order_path_on_a_grating():
     """A raster solve — the ordinary case — must be untouched by any of this."""
     structure = np.ones((2, 20, 20))
     structure[0, 5:15, 5:15] = 11.559999999999999           # permittivity: 3.4**2
-    mee = solver(fto=(3, 3), thickness=[120.0, 90.0], structure=structure)
+    mee = solver(max_order=(3, 3), thickness=[120.0, 90.0], structure=structure)
     mee.solve()
     assert mee.formulation_assigned == '2ff'
 
@@ -136,7 +136,7 @@ def test_the_result_surface_is_the_same_object_the_other_paths_return():
 
     Three claims at once, because they fail together and are cheap to check together:
 
-    * the **layout** — ``(ff_y, ff_x)``, y first, incident order at the centre, and
+    * the **layout** — ``(n_orders_y, n_orders_x)``, y first, incident order at the centre, and
       ``result.order(m, n)`` indexing it by the order indices;
     * the **naming contract** (``docs/conventions.md``) — uppercase real (power), lowercase
       complex (amplitude), both incidence variants present;
@@ -148,21 +148,21 @@ def test_the_result_surface_is_the_same_object_the_other_paths_return():
     solve as the specular one and land at ~1e-16 in amplitude, hence ~1e-32 in power. The
     bound is set on the amplitude, where the error actually lives.
     """
-    fto = (2, 1)
-    ff = (2 * fto[0] + 1) * (2 * fto[1] + 1)
-    mee = solver(fto=fto, thickness=[180.0])
-    res = mee.solve_conv(*uniform_slots([VOIGT], ff))
+    max_order = (2, 1)
+    n_orders = (2 * max_order[0] + 1) * (2 * max_order[1] + 1)
+    mee = solver(max_order=max_order, thickness=[180.0])
+    res = mee.solve_conv(*uniform_slots([VOIGT], n_orders))
 
     assert mee.formulation_assigned == '4ff'
     assert res.res_te_inc is not None and res.res_tm_inc is not None
     R, T = np.asarray(res.res.R), np.asarray(res.res.T)
-    assert R.shape == (2 * fto[1] + 1, 2 * fto[0] + 1)
+    assert R.shape == (2 * max_order[1] + 1, 2 * max_order[0] + 1)
     assert R.dtype == np.float64 and np.asarray(res.res.r_s).dtype == np.complex128
 
     assert float(R.sum() + T.sum()) == pytest.approx(1.0, abs=1e-12)
     assert res.order(0, 0).R + res.order(0, 0).T == pytest.approx(1.0, abs=1e-12)
-    for m in range(-fto[0], fto[0] + 1):
-        for n in range(-fto[1], fto[1] + 1):
+    for m in range(-max_order[0], max_order[0] + 1):
+        for n in range(-max_order[1], max_order[1] + 1):
             if (m, n) == (0, 0):
                 continue
             o = res.order(m, n)
@@ -188,8 +188,8 @@ def test_forcing_the_first_order_path_reproduces_a_uniform_anisotropic_answer():
     assert gap < 1e-11, f'the two formulations disagree by {gap:.2e} on {where}'
 
 
-@pytest.mark.parametrize('fto', [(1, 1), (2, 2)], ids=['9 orders', '25 orders'])
-def test_forcing_the_first_order_path_reproduces_a_patterned_grating(fto):
+@pytest.mark.parametrize('max_order', [(1, 1), (2, 2)], ids=['9 orders', '25 orders'])
+def test_forcing_the_first_order_path_reproduces_a_patterned_grating(max_order):
     """The cross-check that matters: full convolution matrices, so the orders genuinely couple.
 
     A uniform layer's convolution matrices are scaled identities, and the two formulations
@@ -204,9 +204,9 @@ def test_forcing_the_first_order_path_reproduces_a_patterned_grating(fto):
     structure[0, 6:18, 4:20] = 12.1104                      # 3.48**2
     structure[1, 10:14, :] = 4.41                           # 2.1**2
 
-    a = solver(fto=fto, thickness=[130.0, 85.0], structure=structure)
+    a = solver(max_order=max_order, thickness=[130.0, 85.0], structure=structure)
     res_a = a.solve()
-    b = solver(fto=fto, thickness=[130.0, 85.0], structure=structure)
+    b = solver(max_order=max_order, thickness=[130.0, 85.0], structure=structure)
     b.formulation = '4ff'
     res_b = b.solve()
 
@@ -263,9 +263,9 @@ def test_the_two_formulations_agree_across_absorbing_half_spaces(eps_top, eps_bo
     layers = [IN_PLANE, np.diag([2.4 + 0.05j, 3.1 + 0.05j, 2.7 + 0.05j]).astype(complex)]
     kw = dict(top=eps_top, bot=eps_bot, thickness=[140.0, 260.0])
 
-    a = wavebit.rcwa(backend=0, fto=(0, 0), period=PERIOD, wavelength=WL,
+    a = wavebit.rcwa(backend=0, max_order=(0, 0), period=PERIOD, wavelength=WL,
                        theta=np.deg2rad(28.0), phi=np.deg2rad(37.0), psi=0.6, **kw)
-    b = wavebit.rcwa(backend=0, fto=(0, 0), period=PERIOD, wavelength=WL,
+    b = wavebit.rcwa(backend=0, max_order=(0, 0), period=PERIOD, wavelength=WL,
                        theta=np.deg2rad(28.0), phi=np.deg2rad(37.0), psi=0.6, **kw)
     b.formulation = '4ff'
 
@@ -368,7 +368,7 @@ def test_field_reconstruction_still_works_on_the_second_order_path():
     """The control for the guard above — it must not have cost the ordinary path anything."""
     structure = np.ones((1, 16, 16))
     structure[0, 4:12, 4:12] = 9.0
-    mee = solver(fto=(1, 1), thickness=[150.0], structure=structure, answers='field')
+    mee = solver(max_order=(1, 1), thickness=[150.0], structure=structure, answers='field')
     mee.solve()
     cell = mee.reconstruct_field(sample_x=4, sample_y=4, sample_z=4)
     assert np.isfinite(np.asarray(cell)).all()
@@ -486,12 +486,12 @@ def test_a_z_row_pulls_a_one_dimensional_structure_onto_the_2d_layout():
     """
     structure = np.ones((1, 1, 20))
     structure[0, 0, 5:15] = 11.559999999999999
-    mee = solver(fto=(3, 0), thickness=[150.0], structure=structure)
+    mee = solver(max_order=(3, 0), thickness=[150.0], structure=structure)
     mee._assign_grating_type()
     assert mee.grating_type_assigned in (0, 1)      # what it would have taken on its own
 
-    ff_xy = 2 * 3 + 1
-    mee.solve_conv(*uniform_slots([VOIGT], ff_xy))
+    n_orders = 2 * 3 + 1
+    mee.solve_conv(*uniform_slots([VOIGT], n_orders))
     assert (mee.grating_type_assigned, mee.formulation_assigned) == (2, '4ff')
 
 
@@ -511,11 +511,11 @@ def test_y_orders_on_a_y_invariant_cell_are_refused_in_plain_words(incidence):
 
     It used to reach ``layer_modes_1d_conical`` and surface as ``operands could not be
     broadcast together with shapes (5,5) (15,15)`` — the ``Ky2`` block is built over
-    ``ff_x * ff_y`` and the convolution matrices over ``ff_x``. Nothing in that names the
+    ``n_orders_x * n_orders_y`` and the convolution matrices over ``n_orders_x``. Nothing in that names the
     mistake, and it fired inside the solve rather than at the request.
     """
     with pytest.raises(ValueError, match='asks for y diffraction orders'):
-        wavebit.rcwa(structure=_Y_INVARIANT, fto=[2, 1], **incidence, **_1D_KW).solve()
+        wavebit.rcwa(structure=_Y_INVARIANT, max_order=[2, 1], **incidence, **_1D_KW).solve()
 
 
 def test_the_refused_orders_are_the_ones_that_are_zero():
@@ -523,19 +523,19 @@ def test_the_refused_orders_are_the_ones_that_are_zero():
 
     Written with two identical rows the same structure takes the 2D path, which *does* keep
     the y orders — and returns them empty. So the 1D formulations are not withholding an
-    answer, and clamping ``fto[1]`` silently would hand back a different shape than asked for.
+    answer, and clamping ``max_order[1]`` silently would hand back a different shape than asked for.
     """
-    res = wavebit.rcwa(structure=_Y_ROWS, fto=[2, 1], psi=0.4, **_1D_KW).solve()
+    res = wavebit.rcwa(structure=_Y_ROWS, max_order=[2, 1], psi=0.4, **_1D_KW).solve()
     T = np.asarray(res.res.T)
     assert T.shape == (3, 5)
     assert T[[0, 2], :].sum() < 1e-25, T                     # every n != 0 order is empty
 
-    flat = np.asarray(wavebit.rcwa(structure=_Y_ROWS, fto=[2, 0], psi=0.4,
+    flat = np.asarray(wavebit.rcwa(structure=_Y_ROWS, max_order=[2, 0], psi=0.4,
                                    **_1D_KW).solve().res.T).ravel()
     assert np.abs(T[1] - flat).max() < 1e-13                 # and n = 0 is the 1D answer
 
 
-def test_fto_y_zero_is_untouched():
+def test_max_order_y_zero_is_untouched():
     """The guard must not cost the ordinary 1D call anything."""
-    res = wavebit.rcwa(structure=_Y_INVARIANT, fto=[2, 0], psi=0.4, **_1D_KW).solve()
+    res = wavebit.rcwa(structure=_Y_INVARIANT, max_order=[2, 0], psi=0.4, **_1D_KW).solve()
     assert np.asarray(res.res.T).shape == (1, 5)

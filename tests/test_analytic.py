@@ -31,8 +31,8 @@ def shape_ft(shape, ky, kx, period):
     return _shape_ft(xnp, shape, ky, kx, period)
 
 
-def conv_matrix_2d(coeff2d, fto_x, fto_y):
-    return _conv_matrix_2d(xnp, coeff2d, fto_x, fto_y)
+def conv_matrix_2d(coeff2d, max_order_x, max_order_y):
+    return _conv_matrix_2d(xnp, coeff2d, max_order_x, max_order_y)
 
 
 def sampled_coeffs(field, fx, fy):
@@ -40,14 +40,14 @@ def sampled_coeffs(field, fx, fy):
     return _sampled_coeffs(xnp, field, fx, fy)
 
 
-def assemble_eps_coeffs(shapes, background, fto_x, fto_y, period):
-    return _assemble_eps_coeffs(xnp, shapes, background, fto_x, fto_y, period, xnp.complex128)
+def assemble_eps_coeffs(shapes, background, max_order_x, max_order_y, period):
+    return _assemble_eps_coeffs(xnp, shapes, background, max_order_x, max_order_y, period, xnp.complex128)
 
 
-def to_conv_mat_smooth(shapes, background, fto_x, fto_y, period):
+def to_conv_mat_smooth(shapes, background, max_order_x, max_order_y, period):
     """Direct-rule (eps, 1/eps) Laurent pair — the NVF builder's inputs."""
-    eps_c, inv_c = assemble_eps_coeffs(shapes, background, fto_x, fto_y, period)
-    return conv_matrix_2d(eps_c, fto_x, fto_y), conv_matrix_2d(inv_c, fto_x, fto_y)
+    eps_c, inv_c = assemble_eps_coeffs(shapes, background, max_order_x, max_order_y, period)
+    return conv_matrix_2d(eps_c, max_order_x, max_order_y), conv_matrix_2d(inv_c, max_order_x, max_order_y)
 
 
 # ----------------------------------------------------------------------
@@ -72,10 +72,10 @@ def test_conv_matrix_matches_grid_convention():
     """
     rng = np.random.default_rng(0)
     cell = (rng.random((12, 10)) + 1.0).astype(complex)
-    fto_x, fto_y = 2, 3
+    max_order_x, max_order_y = 2, 3
 
-    M_raster = raw_dft(cell, fto_x, fto_y)
-    M_analytic = conv_matrix_2d(sampled_coeffs(cell, fto_x, fto_y), fto_x, fto_y)
+    M_raster = raw_dft(cell, max_order_x, max_order_y)
+    M_analytic = conv_matrix_2d(sampled_coeffs(cell, max_order_x, max_order_y), max_order_x, max_order_y)
 
     gap = np.abs(M_raster - M_analytic).max()
     assert gap < 1e-12, (
@@ -106,12 +106,12 @@ def test_complex_permittivity_is_loss_not_gain(where):
     # A metal, stated as the permittivity the API now takes: this is (0.05 + 3.5j)**2, and
     # conj() would flip it to gain.
     eps_metal = -12.2475 + 0.35000000000000003j
-    fto_x = fto_y = 2
+    max_order_x = max_order_y = 2
     period = (1.0, 1.0)
-    dc = (2 * fto_y, 2 * fto_x)                 # [ky+2*fto_y, kx+2*fto_x] at ky = kx = 0
+    dc = (2 * max_order_y, 2 * max_order_x)                 # [ky+2*max_order_y, kx+2*max_order_x] at ky = kx = 0
 
     if where == 'background':
-        eps_c, inv_c = assemble_eps_coeffs([], eps_metal, fto_x, fto_y, period)
+        eps_c, inv_c = assemble_eps_coeffs([], eps_metal, max_order_x, max_order_y, period)
         assert complex(eps_c[dc]) == pytest.approx(eps_metal, rel=1e-14)
         assert complex(inv_c[dc]) == pytest.approx(1.0 / eps_metal, rel=1e-14)
     else:
@@ -119,7 +119,7 @@ def test_complex_permittivity_is_loss_not_gain(where):
         # area-weighted mean and the shape's contribution is separable from the background's.
         shape = dict(type='rectangle', cx=0.5, cy=0.5, lx=0.5, ly=0.5, angle=0.0,
                      material=eps_metal)
-        eps_c, inv_c = assemble_eps_coeffs([shape], 1.0, fto_x, fto_y, period)
+        eps_c, inv_c = assemble_eps_coeffs([shape], 1.0, max_order_x, max_order_y, period)
         assert complex(eps_c[dc]) == pytest.approx(1.0 + 0.25 * (eps_metal - 1.0), rel=1e-12)
         assert complex(inv_c[dc]) == pytest.approx(1.0 + 0.25 * (1.0 / eps_metal - 1.0),
                                                    rel=1e-12)
@@ -179,7 +179,7 @@ def test_axis_aligned_matches_raster_nvf():
     """
     P, EPS_R, L, N = 0.77, 12.25, 0.5, 128       # eps 12.25 is the old n = 3.5
     cfg = dict(top=1.0, bot=2.25, theta=0.35, phi=0.4, period=(P, P),
-               wavelength=0.777, thickness=(0.25,), fto=(8, 8))
+               wavelength=0.777, thickness=(0.25,), max_order=(8, 8))
 
     xx, yy = ((np.mgrid[0:N, 0:N] + 0.5) / N)[::-1]
     ras = np.where((np.abs(xx - 0.5) < L / 2) & (np.abs(yy - 0.5) < L / 2), EPS_R, 1.0)[None]
@@ -277,9 +277,9 @@ def test_metal_rod_absorbs_end_to_end(psi):
     absent is as much the assertion as the number is.
 
     Why this rather than a comparison against the same rod rastered: the two NVF schemes do not
-    agree closely for a metal. Their gap here is ~3e-3 on ``sum(T)`` at ``fto=8`` and does
+    agree closely for a metal. Their gap here is ~3e-3 on ``sum(T)`` at ``max_order=8`` and does
     not shrink when the raster is refined (128 -> 256 moves it by 1%), because they are
-    different factorizations that meet only as ``fto -> inf``, and ``|eps|`` this large converges
+    different factorizations that meet only as ``max_order -> inf``, and ``|eps|`` this large converges
     slowly. A tolerance loose enough to pass would be looser than the effect being guarded.
     The tight cross-path statement lives in ``test_lossy_media`` instead, on uniform layers
     where an absolute oracle exists.
@@ -295,7 +295,7 @@ def test_metal_rod_absorbs_end_to_end(psi):
         warnings.simplefilter('error', UnphysicalResultWarning)
         res = wavebit.rcwa(backend=0, structure=structure, psi=psi, top=1.0, bot=2.25,
                              theta=0.35, phi=0.4, period=(P, P), wavelength=0.777,
-                             thickness=(0.25,), fto=(8, 8)).solve()
+                             thickness=(0.25,), max_order=(8, 8)).solve()
 
     total = float(np.sum(np.asarray(res.R)).real + np.sum(np.asarray(res.T)).real)
     assert 0.5 < total < 0.95, total       # absorbing, and absorbing by a visible margin
@@ -311,7 +311,7 @@ def test_analytic_shape_parameters_are_absolute_lengths():
     """
     P, EPS_R, L, N = 0.77, 12.25, 0.5, 128       # eps 12.25 is the old n = 3.5
     cfg = dict(top=1.0, bot=2.25, theta=0.35, phi=0.0, period=(P, P),
-               wavelength=0.777, thickness=(0.25,), fto=(6, 6), psi=0.0)
+               wavelength=0.777, thickness=(0.25,), max_order=(6, 6), psi=0.0)
 
     xx, yy = ((np.mgrid[0:N, 0:N] + 0.5) / N)[::-1]
     ras = np.where((np.abs(xx - 0.5) < L / 2) & (np.abs(yy - 0.5) < L / 2), EPS_R, 1.0)[None]
@@ -348,8 +348,8 @@ def test_energy_conservation_lossless():
                                   dict(type='circle', cx=0.8, cy=0.9, lx=0.25,
                                        material=9.0)]),
     ]
-    for fto in (5, 8):
-        res = wavebit.rcwa(backend=0, structure=structure, fto=(fto, fto), **cfg).solve()
+    for max_order in (5, 8):
+        res = wavebit.rcwa(backend=0, structure=structure, max_order=(max_order, max_order), **cfg).solve()
         tot = np.array(res.R).real.sum() + np.array(res.T).real.sum()
         assert abs(tot - 1.0) < 1e-9
 
@@ -366,7 +366,7 @@ def test_cross_backend_agreement():
                                            material=9.0)])]
 
     def T(bk):
-        return float(np.array(wavebit.rcwa(backend=bk, structure=structure, fto=(6, 6), **cfg)
+        return float(np.array(wavebit.rcwa(backend=bk, structure=structure, max_order=(6, 6), **cfg)
                               .solve().T).real.sum())
 
     tn, tj, tt = T(0), T(1), T(2)
@@ -385,7 +385,7 @@ def _fd_grad_lx(shape_type, lx0=0.5):
         s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, material=6.25,
                  **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
         uc = [dict(background=1.0, shapes=[s])]
-        return float(np.array(wavebit.rcwa(backend=0, structure=uc, fto=(6, 6), **cfg)
+        return float(np.array(wavebit.rcwa(backend=0, structure=uc, max_order=(6, 6), **cfg)
                               .solve().T).real.sum())
 
     h = 1e-5
@@ -399,7 +399,7 @@ def test_torch_gradient(shape_type):
     lx = torch.tensor(0.5, dtype=torch.float64, requires_grad=True)
     s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, material=6.25,
              **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
-    res = wavebit.rcwa(backend=2, structure=[dict(background=1.0, shapes=[s])], fto=(6, 6), **cfg).solve()
+    res = wavebit.rcwa(backend=2, structure=[dict(background=1.0, shapes=[s])], max_order=(6, 6), **cfg).solve()
     T = res.T.real.sum()
     T.backward()
     assert np.isfinite(float(lx.grad))
@@ -415,7 +415,7 @@ def test_jax_gradient(shape_type):
     def loss(lx):
         s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, material=6.25,
                  **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
-        r = wavebit.rcwa(backend=1, structure=[dict(background=1.0, shapes=[s])], fto=(6, 6), **cfg).solve()
+        r = wavebit.rcwa(backend=1, structure=[dict(background=1.0, shapes=[s])], max_order=(6, 6), **cfg).solve()
         return jnp.real(r.T).sum()
 
     g = float(jax.grad(loss)(jnp.array(0.5)))
@@ -439,9 +439,9 @@ def test_analytic_beats_staircase_tilted():
         d = np.array(res.T).real
         return d[d.shape[0] // 2, d.shape[0] // 2]
 
-    ref = t0(wavebit.rcwa(backend=0, structure=analytic, fto=(15, 15), **cfg).solve())
-    a11 = t0(wavebit.rcwa(backend=0, structure=analytic, fto=(11, 11), **cfg).solve())
-    s11 = t0(wavebit.rcwa(backend=0, structure=stair, fto=(11, 11), **cfg).solve())
+    ref = t0(wavebit.rcwa(backend=0, structure=analytic, max_order=(15, 15), **cfg).solve())
+    a11 = t0(wavebit.rcwa(backend=0, structure=analytic, max_order=(11, 11), **cfg).solve())
+    s11 = t0(wavebit.rcwa(backend=0, structure=stair, max_order=(11, 11), **cfg).solve())
 
     err_analytic = abs(a11 - ref)
     err_stair = abs(s11 - ref)
@@ -451,7 +451,7 @@ def test_analytic_beats_staircase_tilted():
 
 CIRCLE_P, CIRCLE_EPS = 0.77, 12.25               # eps 12.25 is the old n = 3.5
 CIRCLE_CFG = dict(period=[CIRCLE_P, CIRCLE_P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
-                  wavelength=0.777, top=1.0, bot=2.25, fto=[6, 6])
+                  wavelength=0.777, top=1.0, bot=2.25, max_order=[6, 6])
 
 
 def test_a_circle_is_written_with_one_length():
@@ -541,7 +541,7 @@ def test_overlapping_shapes_move_the_answer_while_the_vector_path_does_not():
     block path — which is what the two assertions measure.
     """
     period, eps_base = [300.0, 300.0], 1.0
-    cfg = dict(period=period, thickness=[205.0], fto=[6, 6], top=1.0, bot=1.0,
+    cfg = dict(period=period, thickness=[205.0], max_order=[6, 6], top=1.0, bot=1.0,
                wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0)
     boxes = [(130.0, 4.0), (190.0, 9.0)]
 
@@ -570,7 +570,7 @@ def test_overlapping_shapes_move_the_answer_while_the_vector_path_does_not():
 
 # ------------------------------------------------------- the layer has to say how shapes combine
 
-CHECK_CFG = dict(period=[300.0, 300.0], thickness=[205.0], fto=[2, 2], top=1.0, bot=1.0,
+CHECK_CFG = dict(period=[300.0, 300.0], thickness=[205.0], max_order=[2, 2], top=1.0, bot=1.0,
                  wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0)
 
 
@@ -881,7 +881,7 @@ def test_the_check_steps_aside_for_a_traced_solve():
 
 # ------------------------------------------------------------------ the block path's half
 
-VECTOR_CFG = dict(period=[300.0, 300.0], thickness=[205.0], fto=[6, 6], top=1.0, bot=1.0,
+VECTOR_CFG = dict(period=[300.0, 300.0], thickness=[205.0], max_order=[6, 6], top=1.0, bot=1.0,
                   wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0)
 
 
@@ -1001,7 +1001,7 @@ def test_only_numpy_takes_the_tiled_path():
 
 
 PROJ_KW = dict(period=(1.0, 1.0), thickness=(0.32,), wavelength=0.94, top=1.0, bot=2.1025,
-               theta=0.2, phi=0.3, psi=0.0, fto=(4, 4), normal_grid=512)
+               theta=0.2, phi=0.3, psi=0.0, max_order=(4, 4), normal_grid=512)
 
 #: 3.4**2 and 2.7**2, spelled to the bit rather than tidied. These reach a cache key, and a
 #: rounded literal is a different key from the one the arithmetic produces.
@@ -1025,7 +1025,7 @@ def test_the_projector_cache_never_changes_an_answer(build):
     """A hit and a miss have to return the same bits, or the cache is a second implementation.
 
     ``normal_projector_coeffs`` is the expensive half of the analytic NVF build -- 83% of a
-    five-point sweep at ``normal_grid = 1024, fto = 4`` for one shape, 93% for six -- and none of
+    five-point sweep at ``normal_grid = 1024, max_order = 4`` for one shape, 93% for six -- and none of
     it reads a material value, so a material sweep rebuilds a field it already had. What makes
     the reuse safe rather than merely fast is that the *build* is position-free for a single
     shape: it is done at the centre of the cell and carried to ``(cx, cy)`` by a phase computed
@@ -1133,17 +1133,17 @@ def test_the_cache_key_carries_everything_the_build_depends_on():
     import wavebit
     from wavebit._core import analytic as _an
 
-    def total(fto, normal_grid):
-        kw = dict(PROJ_KW, fto=(fto, fto), normal_grid=normal_grid)
+    def total(max_order, normal_grid):
+        kw = dict(PROJ_KW, max_order=(max_order, max_order), normal_grid=normal_grid)
         return np.asarray(wavebit.rcwa(backend=0, structure=_one(0.40), **kw).solve().T)
 
     _an._PROJECTOR_CACHE.clear()
-    alone = {(fto, ng): total(fto, ng)                       # each built with nothing cached
-             for fto in (3, 4, 6) for ng in (256, 512)
+    alone = {(max_order, ng): total(max_order, ng)                       # each built with nothing cached
+             for max_order in (3, 4, 6) for ng in (256, 512)
              if not _an._PROJECTOR_CACHE.clear()}
 
-    for (fto, ng), expected in alone.items():                # now with all six entries resident
-        assert np.array_equal(total(fto, ng), expected), (fto, ng)
+    for (max_order, ng), expected in alone.items():                # now with all six entries resident
+        assert np.array_equal(total(max_order, ng), expected), (max_order, ng)
     assert len(_an._PROJECTOR_CACHE) == 6, 'the six builds shared an entry'
 
 

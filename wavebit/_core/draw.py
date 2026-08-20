@@ -288,25 +288,26 @@ def _render_paint(layer, xs, ys, basis, period):
 
 # ============================================================ band-limited reconstruction
 
-def _grid_from_conv_matrix(M, fto_x, fto_y):
-    """The ``(4*fto_y+1, 4*fto_x+1)`` coefficient grid a convolution matrix was built from.
+def _grid_from_conv_matrix(M, max_order_x, max_order_y):
+    """The ``(4*max_order_y+1, 4*max_order_x+1)`` coefficient grid a convolution matrix came
+    from.
 
     ``M[(r,s),(c,d)] = coeff(ky = r-c, kx = s-d)`` (see
     :func:`~wavebit._core.analytic.conv_matrix_2d`), and ``r``, ``c`` each run over
-    ``2*fto_y+1`` values, so every difference in ``[-2*fto_y, 2*fto_y]`` is reachable. Reading
-    the grid back out of the builder's own output beats re-deriving it here: there is then no
-    second opinion about the order-index sign, which is the convention this codebase has had to
-    re-pin more than once.
+    ``2*max_order_y+1`` values, so every difference in ``[-2*max_order_y, 2*max_order_y]`` is
+    reachable. Reading the grid back out of the builder's own output beats re-deriving it here:
+    there is then no second opinion about the order-index sign, which is the convention this
+    codebase has had to re-pin more than once.
     """
-    ff_x, ff_y = 2 * fto_x + 1, 2 * fto_y + 1
-    ky = np.arange(-2 * fto_y, 2 * fto_y + 1)[:, None]
-    kx = np.arange(-2 * fto_x, 2 * fto_x + 1)[None, :]
+    n_orders_x, n_orders_y = 2 * max_order_x + 1, 2 * max_order_y + 1
+    ky = np.arange(-2 * max_order_y, 2 * max_order_y + 1)[:, None]
+    kx = np.arange(-2 * max_order_x, 2 * max_order_x + 1)[None, :]
     r, c = np.maximum(ky, 0), np.maximum(ky, 0) - ky
     s, d = np.maximum(kx, 0), np.maximum(kx, 0) - kx
-    return np.asarray(M)[(r * ff_x + s), (c * ff_x + d)]
+    return np.asarray(M)[(r * n_orders_x + s), (c * n_orders_x + d)]
 
 
-def _inverse_series(coeffs, fto_x, fto_y, nx, ny):
+def _inverse_series(coeffs, max_order_x, max_order_y, nx, ny):
     """Evaluate a coefficient grid on ``ny x nx`` fractional samples.
 
     ``eps(u, v) = sum c[ky, kx] * exp(+2i*pi*(kx*u + ky*v))``, sampled at cell centres. The
@@ -316,8 +317,8 @@ def _inverse_series(coeffs, fto_x, fto_y, nx, ny):
     """
     u = (np.arange(nx) + 0.5) / nx
     v = (np.arange(ny) + 0.5) / ny
-    my = np.arange(-2 * fto_y, 2 * fto_y + 1)
-    mx = np.arange(-2 * fto_x, 2 * fto_x + 1)
+    my = np.arange(-2 * max_order_y, 2 * max_order_y + 1)
+    mx = np.arange(-2 * max_order_x, 2 * max_order_x + 1)
     Ey = np.exp(2j * np.pi * np.outer(v, my))
     Ex = np.exp(2j * np.pi * np.outer(u, mx))
     return Ey @ np.asarray(coeffs) @ Ex.T
@@ -325,21 +326,21 @@ def _inverse_series(coeffs, fto_x, fto_y, nx, ny):
 
 def _band_limited(solver, layer, n):
     """The layer's own eps coefficients, evaluated on an ``n x n`` fractional grid."""
-    fto_x, fto_y = int(solver.fto[0]), int(solver.fto[1])
+    max_order_x, max_order_y = int(solver.max_order[0]), int(solver.max_order[1])
     mt = solver.modeling_type_assigned
     period = _periods(solver)
 
     if mt == 0:
         eps = _np_complex(solver.structure[layer])
         grid = _grid_from_conv_matrix(
-            _fac.fourier2d_piecewise_constant(xnp, eps, fto_x, fto_y, inverse_rule=None),
-            fto_x, fto_y)
+            _fac.fourier2d_piecewise_constant(xnp, eps, max_order_x, max_order_y, inverse_rule=None),
+            max_order_x, max_order_y)
     elif mt == 1:
         cell, x_list, y_list = solver.modeling_block_instruction(solver.structure)[layer]
         grid = _grid_from_conv_matrix(
             _fac.fourier2d_integrated(xnp, _np_complex(cell), _np_complex(x_list),
-                                      _np_complex(y_list), fto_x, fto_y, inverse_rule=None),
-            fto_x, fto_y)
+                                      _np_complex(y_list), max_order_x, max_order_y, inverse_rule=None),
+            max_order_x, max_order_y)
     else:
         lay = solver.structure[layer]
         # The solver's own choice of basis, not `solver.lattice`: an axis-aligned cell gets
@@ -347,10 +348,10 @@ def _band_limited(solver, layer, n):
         # keeps this reconstruction the transform the solve holds instead of a lookalike.
         basis = solver._geometry_lattice_for(None)
         if _analytic.layer_needs_resolving(lay, period, basis):
-            KY, KX = _boundary._k_grids(xnp, fto_x, fto_y, np.float64)
+            KY, KX = _boundary._k_grids(xnp, max_order_x, max_order_y, np.float64)
             eps_b = _eps_of(lay.get('background', 1.0))
             grid = np.zeros(KY.shape, dtype=complex)
-            grid[2 * fto_y, 2 * fto_x] = eps_b
+            grid[2 * max_order_y, 2 * max_order_x] = eps_b
             for eps_s, loops in _resolved_regions(lay.get('shapes', []), period):
                 # Plain sum: `polygon_ft` is a signed contour integral and a hole arrives
                 # wound clockwise, so it subtracts itself.
@@ -361,9 +362,9 @@ def _band_limited(solver, layer, n):
             # and refuses an overlapping painted layer rather than answering for it. The branch
             # above means the refusal never fires from here -- which is the point of stating it.
             grid = np.asarray(_analytic.assemble_eps_coeffs(
-                xnp, lay.get('shapes', []), lay.get('background', 1.0), fto_x, fto_y, period,
+                xnp, lay.get('shapes', []), lay.get('background', 1.0), max_order_x, max_order_y, period,
                 np.complex128, lattice=basis, combine=lay.get('combine'))[0])
-    return _inverse_series(grid, fto_x, fto_y, n, n)
+    return _inverse_series(grid, max_order_x, max_order_y, n, n)
 
 
 # ==================================================================== the two public entries
@@ -410,13 +411,12 @@ def structure_slice(solver, layer=0, n=512, show='eps', band_limited=False):
 
     1. **It is the geometry; the solver holds a truncated transform of it.** Pass
        ``band_limited=True`` to see that instead -- the layer's own coefficients, evaluated
-       rather than sampled. A ``circle(lx=260, material=12.25)`` plus a rectangle rotated
-       0.45 rad in a 1000x1000 cell comes back at ``fto=9`` with ``eps`` in
-       ``[-0.186, 13.850]`` where the
-       geometry is ``[1.0, 12.25]``: negative permittivity and 13% overshoot, pure Gibbs.
-       Relative L2 against the sampled geometry is 28.4% / 16.8% / 10.2% at ``fto`` 3 / 9 / 25,
-       while ``<eps>`` agrees to 1e-4 throughout -- so an integrated quantity can be converged
-       while the picture still rings.
+       rather than sampled. A ``circle(lx=260, material=12.25)`` plus a rectangle rotated 0.45
+       rad in a 1000x1000 cell comes back at ``max_order=9`` with ``eps`` in ``[-0.186,
+       13.850]`` where the geometry is ``[1.0, 12.25]``: negative permittivity and 13%
+       overshoot, pure Gibbs. Relative L2 against the sampled geometry is 28.4% / 16.8% / 10.2%
+       at ``max_order`` 3 / 9 / 25, while ``<eps>`` agrees to 1e-4 throughout -- so an
+       integrated quantity can be converged while the picture still rings.
     2. **On the block path this draws the blocks, not the shape.** That is what the solver has,
        and it is not what the user typed: a 240x180 rectangle at ``angle=0.4`` with
        ``n_split=16`` differs from the true rotated rectangle over 1.9% of the rod's area (7.7%
@@ -515,7 +515,7 @@ def structure_plot(solver, layer=0, n=512, show='eps', ax=None, band_limited=Fal
     what = {0: 'raster', 1: 'blocks', 2: 'shapes'}.get(solver.modeling_type_assigned, '?')
     title = f'layer {layer} ({what}), {show}'
     if band_limited:
-        title += f' band-limited to fto={tuple(int(f) for f in solver.fto)}'
+        title += f' band-limited to max_order={tuple(int(f) for f in solver.max_order)}'
     if complex_valued:
         title += ' (real part)'
     ax.set_title(title, fontsize=9)

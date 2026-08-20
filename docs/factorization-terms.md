@@ -66,8 +66,8 @@ is building. In `to_conv_mat_smooth_nvf` it is called five times in a row — on
 `1/eps`, and on the three normal-field products `nx^2`, `nx ny`, `ny^2`:
 
 ```python
-ep_dir = conv_matrix_2d(xp, eps_c,     fto_x, fto_y)
-ep_inv = conv_matrix_2d(xp, inv_eps_c, fto_x, fto_y)
+ep_dir = conv_matrix_2d(xp, eps_c,     max_order_x, max_order_y)
+ep_inv = conv_matrix_2d(xp, inv_eps_c, max_order_x, max_order_y)
 ...
 delta_ep = ep_dir - xp.linalg.inv(ep_inv)
 ```
@@ -77,24 +77,24 @@ The inverse rule's *inversion* is the caller's, on the line after. The builder i
 This is what the old name got wrong: it carried a rule word into a place where no rule has been
 chosen yet, so `ep_inv = laurent_conv_2d(...)` read as a contradiction without being one.
 
-The index differences `r - c` and `s - d` each span `-2*fto .. +2*fto`, which is why the
+The index differences `r - c` and `s - d` each span `-2*max_order .. +2*max_order`, which is why the
 coefficient grid arrives on a **doubled** reciprocal range — see `_grid`. A grid of only
-`2*fto+1` per axis cannot fill the corners of the matrix.
+`2*max_order+1` per axis cannot fill the corners of the matrix.
 
 ## 3. The matrix is BTTB, not Toeplitz
 
 A Toeplitz matrix is constant along its diagonals: `T[i,j]` depends on `i - j` alone. The
-matrix here does not satisfy that. Flattening `i = r*ff_x + s` and `j = c*ff_x + d`,
+matrix here does not satisfy that. Flattening `i = r*n_orders_x + s` and `j = c*n_orders_x + d`,
 
 ```
-i - j = (r - c) * ff_x + (s - d)
+i - j = (r - c) * n_orders_x + (s - d)
 ```
 
-and `s - d` ranges over `-(ff_x-1) .. (ff_x-1)`, which is wider than `ff_x`. So `(r-c, s-d)` is
-not recoverable from `i - j`: the pairs `(k, m)` and `(k+1, m - ff_x)` land on the same
+and `s - d` ranges over `-(n_orders_x-1) .. (n_orders_x-1)`, which is wider than `n_orders_x`. So `(r-c, s-d)` is
+not recoverable from `i - j`: the pairs `(k, m)` and `(k+1, m - n_orders_x)` land on the same
 diagonal carrying different values.
 
-Checked directly on `fto_x, fto_y = 2, 3` (a 35x35 matrix, random complex coefficients):
+Checked directly on `max_order_x, max_order_y = 2, 3` (a 35x35 matrix, random complex coefficients):
 
 | Property | Holds |
 | --- | --- |
@@ -151,7 +151,7 @@ the incident polarisation by 90 degrees maps the problem onto itself, so the dif
 must come back transposed, exactly. Measured on an L-shape (transpose-symmetric, deliberately
 not 4-fold), 96x96 raster, `max|T(psi=0) - T(psi=90)ᵀ|`:
 
-| fto | `factorization='li'` | `factorization='nvf'` |
+| max_order | `factorization='li'` | `factorization='nvf'` |
 | --- | --- | --- |
 | 4 | 5.3e-3 | 2.2e-14 |
 | 8 | 1.4e-3 | 3.5e-13 |
@@ -217,9 +217,9 @@ than merely unused.
 
 Why this was worth doing rather than documenting: the two mistakes are not symmetric, and the
 dangerous one is silent. Feeding a permittivity raster to the sampled build costs 5.7e-4 per
-order on a comfortable grid (N=64, fto=4), 4.9e-3 on a tight one (N=24, fto=10), and below
-roughly `N < 2*fto` the inverse-rule matrix goes singular and the solve raises `LinAlgError`
-(measured: N=16, fto=8). Energy conserves to 1e-14 through all of it, so nothing downstream
+order on a comfortable grid (N=64, max_order=4), 4.9e-3 on a tight one (N=24, max_order=10), and below
+roughly `N < 2*max_order` the inverse-rule matrix goes singular and the solve raises `LinAlgError`
+(measured: N=16, max_order=8). Energy conserves to 1e-14 through all of it, so nothing downstream
 reports anything. The reverse mistake — the sampled field built as a staircase — is 1e-5 at
 normal incidence into an index-matched substrate and 2e-4 to 2e-3 with contrast or at conical
 incidence, and never structural.

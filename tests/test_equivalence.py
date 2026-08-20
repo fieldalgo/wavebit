@@ -28,7 +28,7 @@ _ROW = [1, 1, 1, 12.1104, 12.1104, 12.1104, 1, 1, 1, 1]   # eps: the index 3.48 
 UCELL_1D = np.array([[_ROW], [_ROW]], dtype=float)
 UCELL_2D = np.repeat(UCELL_1D, 2, axis=1)          # same structure, two identical y rows
 
-CFG = dict(backend=0, top=1.0, bot=1.0, theta=1e-10, fto=[20, 0],
+CFG = dict(backend=0, top=1.0, bot=1.0, theta=1e-10, max_order=[20, 0],
            wavelength=300.0, period=[700.0, 700.0], thickness=[460.0, 22.0])
 
 TOL = 1e-11
@@ -113,7 +113,7 @@ _RASTER = np.array([[[1.0] * 4 + [_EPS] * 4 + [1.0] * 4]])
 _BLOCK = [[1.0, [['rectangle', 600.0, 600.0, 400.0, 1200.0, _EPS, 0, 0, 0]]]]
 
 _CFG = dict(top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2,
-            fto=[5, 0], wavelength=900.0, period=[1200.0, 1200.0], thickness=[300.0])
+            max_order=[5, 0], wavelength=900.0, period=[1200.0, 1200.0], thickness=[300.0])
 
 
 @pytest.mark.parametrize('backend,name', [(0, 'numpy'), (1, 'jax'), (2, 'torch')])

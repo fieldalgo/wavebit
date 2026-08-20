@@ -53,7 +53,7 @@ def branch_tolerance(value):
     Exists because at single precision there is no right answer to bake in. ``Re(v)`` for a
     root that should be pure-imaginary is round-off ~1e-7 at complex64, and a weakly absorbing
     superstrate carries a *genuine* real part at the same scale — the two overlap, so any fixed
-    cutoff has to sacrifice one of them. Measured against double precision (``fto=30``,
+    cutoff has to sacrifice one of them. Measured against double precision (``max_order=30``,
     ``docs/branch-cuts.md``):
 
     ============================  ==========  ==========  ==========

@@ -43,7 +43,7 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
                  backend=2,
                  tetm=None,
                  pol=None,   # retired; kept only to say so
-                 fto=(0, 0),
+                 max_order=(0, 0),
                  connecting_algo='ETM',
                  device='cpu',
                  type_complex=torch.complex128,
@@ -77,11 +77,11 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
                  # explicitly set anywhere else it is refused rather than ignored.
                  # See docs/nvf-normal-methods.md for the measurements that rank them.
                  answers='amplitude',        # what this solve keeps the state to answer:
-                 # 'efficiency' | 'amplitude' (default) | 'field'. A declaration, like
-                 # tetm -- reconstruct_field is refused below 'field' rather than served,
-                 # because the per-layer state it walks is 4.25 matrices of side
-                 # 2*ff_x*ff_y per layer (240 MB at fto=(15, 15)) and is kept as the
-                 # solve runs or not at all. See CoreSolveMixin.answers.
+                 # 'efficiency' | 'amplitude' (default) | 'field'. A declaration, like tetm --
+                 # reconstruct_field is refused below 'field' rather than served, because the
+                 # per-layer state it walks is 4.25 matrices of side 2*n_orders_x*n_orders_y per
+                 # layer (240 MB at max_order=(15, 15)) and is kept as the solve runs or not at
+                 # all. See CoreSolveMixin.answers.
                  mu=None,                    # raster path only: the permeability field,
                  # (n_layers, Ny, Nx) beside `structure`. On the two shape paths a
                  # permeability belongs to the Material filling each region, so naming it
@@ -95,7 +95,7 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
         _refuse_retired(retired)
 
         super().__init__(top=top, bot=bot, theta=theta, phi=phi, psi=psi, chi=chi, tetm=tetm, pol=pol,
-                         fto=fto, period=period, wavelength=wavelength,
+                         max_order=max_order, period=period, wavelength=wavelength,
                          thickness=thickness, connecting_algo=connecting_algo,
                          device=device, type_complex=type_complex,
                          polarization=polarization)
@@ -280,7 +280,7 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
         res_te_inc = ResultSubTorch(**result_dict['res_te_inc']) if 'res_te_inc' in result_dict else None
         res_tm_inc = ResultSubTorch(**result_dict['res_tm_inc']) if 'res_tm_inc' in result_dict else None
 
-        result = ResultTorch(res_psi, res_te_inc, res_tm_inc, fto=self.fto)
+        result = ResultTorch(res_psi, res_te_inc, res_tm_inc, max_order=self.max_order)
 
         return result
 

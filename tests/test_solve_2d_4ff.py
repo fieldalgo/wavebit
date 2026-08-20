@@ -22,7 +22,7 @@ that were already committed.
 
 Most cases here are **uniform** layers at one Fourier order. Three groups at the end widen
 that, each for a reason: the multi-order tests because "the algebra is written in blocks and
-should extend" is the sort of claim this suite exists to disbelieve, and because at ``ff = 1``
+should extend" is the sort of claim this suite exists to disbelieve, and because at ``n_orders = 1``
 the entire block layout is the identity and can be wrong invisibly; and the grating test because
 a uniform layer's convolution matrices are scaled identities, so nothing else here makes orders
 actually couple. What none of them reach is a patterned *anisotropic* layer, which has no
@@ -40,10 +40,10 @@ THICK = 220.0
 EO, EE, G = 2.25, 4.0, 0.45
 
 
-def blocks(eps, ff=1):
+def blocks(eps, n_orders=1):
     """The mapping ``layer_matrix_4ff`` takes, from a 3x3 tensor."""
     e = np.asarray(eps, dtype=complex)
-    I = np.eye(ff, dtype=complex)
+    I = np.eye(n_orders, dtype=complex)
     return dict(exx=e[0, 0] * I, exy=e[0, 1] * I, exz=e[0, 2] * I,
                 eyx=e[1, 0] * I, eyy=e[1, 1] * I, eyz=e[1, 2] * I,
                 ezx=e[2, 0] * I, ezy=e[2, 1] * I, ezz_i=np.linalg.inv(e[2, 2] * I))
@@ -104,13 +104,13 @@ def rt(eps, theta_deg, thick=THICK, alpha_deg=0.0):
 PERIOD = 300.0
 
 
-def order_grid(fto, theta_deg, phi_deg=0.0):
-    """``(kx, ky, ff, centre)`` on a flattened ``(ff_y, ff_x)`` grid, as the 2ff path lays it out.
+def order_grid(max_order, theta_deg, phi_deg=0.0):
+    """``(kx, ky, n_orders, centre)`` on a flattened ``(n_orders_y, n_orders_x)`` grid, as the 2ff path lays it out.
 
     ``order_grid_kxy`` broadcasts the two 1-D vectors to that grid and everything downstream
     reads it flattened, so a test that builds the same layout is testing the same indexing.
     """
-    fx, fy = fto
+    fx, fy = max_order
     kx = (np.sin(np.deg2rad(theta_deg)) * np.cos(np.deg2rad(phi_deg))
           + np.arange(-fx, fx + 1) * WL / PERIOD)
     ky = (np.sin(np.deg2rad(theta_deg)) * np.sin(np.deg2rad(phi_deg))
@@ -470,19 +470,19 @@ def test_a_multilayer_stack_matches_berreman(theta_deg, algo):
 
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
-@pytest.mark.parametrize('fto', [(1, 1), (2, 2)], ids=['9 orders', '25 orders'])
+@pytest.mark.parametrize('max_order', [(1, 1), (2, 2)], ids=['9 orders', '25 orders'])
 @pytest.mark.parametrize('theta_deg,phi_deg', [(0.0, 0.0), (35.0, 0.0), (35.0, 40.0)],
                          ids=['normal', 'oblique', 'conical'])
 @pytest.mark.parametrize('label,eps', Z_DECOUPLED + Z_COUPLED,
                          ids=[c[0] for c in Z_DECOUPLED + Z_COUPLED])
-def test_adding_orders_to_a_uniform_stack_changes_nothing(label, eps, theta_deg, phi_deg, fto,
+def test_adding_orders_to_a_uniform_stack_changes_nothing(label, eps, theta_deg, phi_deg, max_order,
                                                           algo):
     """The multi-order gate, and it needs no oracle: a uniform layer cannot diffract.
 
     Every test above this one runs at a single Fourier order, which leaves the module's whole
-    block layout unexercised — the ``psi[:ff] / psi[ff:2*ff] / ...`` slicing, where an order sits
-    inside a ``4*ff`` state, the ``2*ff`` block sizes in the connecting algorithms, and the count
-    the direction split insists on. All of that is the identity at ``ff = 1`` and can be wrong
+    block layout unexercised — the ``psi[:n_orders] / psi[n_orders:2*n_orders] / ...`` slicing, where an order sits
+    inside a ``4*n_orders`` state, the ``2*n_orders`` block sizes in the connecting algorithms, and the count
+    the direction split insists on. All of that is the identity at ``n_orders = 1`` and can be wrong
     without a single existing test noticing. "The algebra is written in blocks and should extend"
     is exactly the claim this suite exists to disbelieve.
 
@@ -493,24 +493,24 @@ def test_adding_orders_to_a_uniform_stack_changes_nothing(label, eps, theta_deg,
     sits at ``kx = 2``, well past the light line, so the evanescent path is exercised throughout.
 
     Both stable connecting algorithms, because each sizes its own blocks: running only the
-    default left ``eye(2*ff)`` in the Redheffer cascade and the propagation block size reachable
+    default left ``eye(2*n_orders)`` in the Redheffer cascade and the propagation block size reachable
     only at one order, and mutating both to a hardcoded ``2`` was invisible until this was
     parametrised. ``'TMM'`` is absent for a reason the test below states.
     """
-    kx, ky, ff, centre = order_grid(fto, theta_deg, phi_deg)
+    kx, ky, n_orders, centre = order_grid(max_order, theta_deg, phi_deg)
     kx1, ky1, ff1, c1 = order_grid((0, 0), theta_deg, phi_deg)
-    layers, layers1 = [(blocks(eps, ff), THICK)], [(blocks(eps, ff1), THICK)]
+    layers, layers1 = [(blocks(eps, n_orders), THICK)], [(blocks(eps, ff1), THICK)]
 
     for j, pol in enumerate(('s', 'p')):
         want = solve_uniform_stack(WL, kx1, ky1, layers1, ff1,
                                    vacuum_sp_states(np, kx1, ky1, ff1, order=c1)[j],
                                    connecting_algo=algo)
-        got = solve_uniform_stack(WL, kx, ky, layers, ff,
-                                  vacuum_sp_states(np, kx, ky, ff, order=centre)[j],
+        got = solve_uniform_stack(WL, kx, ky, layers, n_orders,
+                                  vacuum_sp_states(np, kx, ky, n_orders, order=centre)[j],
                                   connecting_algo=algo)
         gap = max(abs(a - b) for a, b in zip(got, want))
         assert gap < 1e-12, (f'{algo}, {label}, {theta_deg}/{phi_deg} deg, {pol}-pol, '
-                             f'ff={ff}: {gap:.2e}')
+                             f'n_orders={n_orders}: {gap:.2e}')
 
 
 @pytest.mark.parametrize('label,eps', Z_DECOUPLED + Z_COUPLED,
@@ -518,7 +518,7 @@ def test_adding_orders_to_a_uniform_stack_changes_nothing(label, eps, theta_deg,
 def test_the_operator_decouples_into_one_problem_per_order(label, eps):
     """Sharper than the end-to-end check, and it localises a layout error to the operator.
 
-    With no structure to mix orders, the ``4*ff`` operator is a permutation away from ``ff``
+    With no structure to mix orders, the ``4*n_orders`` operator is a permutation away from ``n_orders``
     independent ``4x4`` blocks — so its spectrum must be exactly the union of the single-order
     spectra taken at each order's own ``(kx, ky)``. If the blocks are assembled in the wrong
     interleaving the answer above can still come out right by symmetry; this cannot.
@@ -531,14 +531,14 @@ def test_the_operator_decouples_into_one_problem_per_order(label, eps):
     """
     from scipy.optimize import linear_sum_assignment
 
-    kx, ky, ff, _ = order_grid((1, 1), 35.0, 40.0)
+    kx, ky, n_orders, _ = order_grid((1, 1), 35.0, 40.0)
     got = np.linalg.eigvals(layer_matrix_4ff(np, np.diag(kx).astype(complex),
-                                             np.diag(ky).astype(complex), **blocks(eps, ff)))
+                                             np.diag(ky).astype(complex), **blocks(eps, n_orders)))
 
     want = np.concatenate([
         np.linalg.eigvals(layer_matrix_4ff(np, np.diag([kx[i]]).astype(complex),
                                            np.diag([ky[i]]).astype(complex), **blocks(eps)))
-        for i in range(ff)])
+        for i in range(n_orders)])
 
     cost = np.abs(got[:, None] - want[None, :])
     gap = cost[linear_sum_assignment(cost)].max()
@@ -553,7 +553,7 @@ def test_the_plain_transfer_cannot_do_a_realistic_order_count():
     index whatever the thickness — so on a 220 nm layer of ``n = 1.5``:
 
     ======  =====  ==============  =========
-    fto     ff     max exponent    plain TMM
+    max_order     n_orders     max exponent    plain TMM
     ======  =====  ==============  =========
     (0,0)      1             0.0   ok
     (1,1)      9             7.0   ok
@@ -562,34 +562,34 @@ def test_the_plain_transfer_cannot_do_a_realistic_order_count():
     (5,5)    121            33.7   refuses
     ======  =====  ==============  =========
 
-    ``fto = (2, 2)`` is a *small* grating calculation. So the unstabilised transfer is not merely
+    ``max_order = (2, 2)`` is a *small* grating calculation. So the unstabilised transfer is not merely
     weak on thick stacks, it cannot run a real problem at all — which is the historical reason
     RCWA needed the enhanced form (Moharam et al. 1995) rather than a preference between two
     equivalent recursions.
     """
     eps = Z_DECOUPLED[0][1]
-    kx, ky, ff, centre = order_grid((1, 1), 35.0, 40.0)
-    psi = vacuum_sp_states(np, kx, ky, ff, order=centre)[0]
-    layers = [(blocks(eps, ff), THICK)]
+    kx, ky, n_orders, centre = order_grid((1, 1), 35.0, 40.0)
+    psi = vacuum_sp_states(np, kx, ky, n_orders, order=centre)[0]
+    layers = [(blocks(eps, n_orders), THICK)]
 
     # 9 orders: inside the bound, and must still agree with the stable paths
-    plain = solve_uniform_stack(WL, kx, ky, layers, ff, psi, connecting_algo='TMM')
-    good = solve_uniform_stack(WL, kx, ky, layers, ff, psi)
+    plain = solve_uniform_stack(WL, kx, ky, layers, n_orders, psi, connecting_algo='TMM')
+    good = solve_uniform_stack(WL, kx, ky, layers, n_orders, psi)
     for a, b in zip(plain, good):
         assert a == pytest.approx(b, abs=1e-10), '9 orders should still be within reach'
 
     # 25 orders: refused, on a layer thin enough that thickness is plainly not the cause
-    kx, ky, ff, centre = order_grid((2, 2), 35.0, 40.0)
+    kx, ky, n_orders, centre = order_grid((2, 2), 35.0, 40.0)
     with pytest.raises(ValueError, match="connecting_algo='ETM'"):
-        solve_uniform_stack(WL, kx, ky, [(blocks(eps, ff), THICK)], ff,
-                            vacuum_sp_states(np, kx, ky, ff, order=centre)[0],
+        solve_uniform_stack(WL, kx, ky, [(blocks(eps, n_orders), THICK)], n_orders,
+                            vacuum_sp_states(np, kx, ky, n_orders, order=centre)[0],
                             connecting_algo='TMM')
 
 
 @pytest.mark.parametrize('theta_deg,phi_deg', [(0.0, 0.0), (35.0, 40.0)],
                          ids=['normal', 'conical'])
-@pytest.mark.parametrize('fto', [1, 2, 3], ids=['9 orders', '25 orders', '49 orders'])
-def test_a_real_grating_matches_the_2ff_solve(fto, theta_deg, phi_deg):
+@pytest.mark.parametrize('max_order', [1, 2, 3], ids=['9 orders', '25 orders', '49 orders'])
+def test_a_real_grating_matches_the_2ff_solve(max_order, theta_deg, phi_deg):
     """Order *coupling*, which the uniform multi-order tests cannot reach.
 
     An **isotropic** grating needs no new factorization: the 2ff path already builds the three
@@ -601,7 +601,7 @@ def test_a_real_grating_matches_the_2ff_solve(fto, theta_deg, phi_deg):
 
     What makes this different from every other test in this file is that the convolution matrices
     are **full**, not scaled identities. Orders genuinely mix, so this exercises the block algebra
-    with real coupling rather than ff independent problems side by side.
+    with real coupling rather than n_orders independent problems side by side.
 
     It stops at isotropic. A *patterned anisotropic* layer has no factorization at all yet — Li's
     rule does not apply per component when the continuous quantity is a sum of three products
@@ -616,7 +616,7 @@ def test_a_real_grating_matches_the_2ff_solve(fto, theta_deg, phi_deg):
     structure[0, 12:28, 12:28] = 6.760000000000001     # permittivity: 2.6**2
 
     solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
-                            phi=np.deg2rad(phi_deg), psi=0.0, fto=(fto, fto),
+                            phi=np.deg2rad(phi_deg), psi=0.0, max_order=(max_order, max_order),
                             period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
                             structure=structure)
     ref = solver.solve()
@@ -624,15 +624,15 @@ def test_a_real_grating_matches_the_2ff_solve(fto, theta_deg, phi_deg):
     KX, KY = order_grid_kxy(np, np.asarray(solver.get_kx_ky_vector(WL)[0], complex),
                             np.asarray(solver.get_kx_ky_vector(WL)[1], complex))
     kx, ky = KX.ravel(), KY.ravel()
-    ff = kx.size
-    epx, epy, epz_i = to_conv_mat_raster_sampled(np.asarray(structure, dtype=complex), fto, fto)
-    O = np.zeros((ff, ff), dtype=complex)
+    n_orders = kx.size
+    epx, epy, epz_i = to_conv_mat_raster_sampled(np.asarray(structure, dtype=complex), max_order, max_order)
+    O = np.zeros((n_orders, n_orders), dtype=complex)
     layers = [(dict(exx=epx[0], exy=O, exz=O, eyx=O, eyy=epy[0], eyz=O, ezx=O, ezy=O,
                     ezz_i=epz_i[0]), THICK)]
 
-    states = vacuum_sp_states(np, kx, ky, ff, order=fto * (2 * fto + 1) + fto)
+    states = vacuum_sp_states(np, kx, ky, n_orders, order=max_order * (2 * max_order + 1) + max_order)
     for psi, res, pol in zip(states, (ref.res_te_inc, ref.res_tm_inc), ('TE/s', 'TM/p')):
-        got = solve_uniform_stack(WL, kx, ky, layers, ff, psi)
+        got = solve_uniform_stack(WL, kx, ky, layers, n_orders, psi)
         want = (float(np.asarray(res.R).sum()), float(np.asarray(res.T).sum()))
         gap = max(abs(a - b) for a, b in zip(got, want))
-        assert gap < 1e-12, f'{pol}, fto={fto}, {theta_deg}/{phi_deg} deg: {gap:.2e}'
+        assert gap < 1e-12, f'{pol}, max_order={max_order}, {theta_deg}/{phi_deg} deg: {gap:.2e}'

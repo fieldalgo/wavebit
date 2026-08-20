@@ -55,7 +55,7 @@ Note that the defect *is* visible in power efficiencies here, unlike the sign-co
 ``test_uniform_anisotropic.py``, which only moves a complex amplitude. Those are different claims
 about different mistakes; only the latter is invisible to R and T.
 
-**Scope.** Every case in this file is a *uniform film*: no in-plane structure, ``fto=(0, 0)``, one
+**Scope.** Every case in this file is a *uniform film*: no in-plane structure, ``max_order=(0, 0)``, one
 Fourier order, convolution matrices hand-filled as scaled identities. Nothing that turns a pattern
 into those matrices is exercised — not the ``fourier2d_*`` builders, not Li's rules, not NVF, not
 the analytic or
@@ -212,7 +212,7 @@ def solve_tensor_stack(layers, theta, wl=WL, connecting_algo='ETM', formulation=
         thick.append(d)
     conv = [np.stack(s) for s in slots]
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=theta, phi=0.0, psi=0.0,
-                         fto=(0, 0), period=(300.0, 300.0), wavelength=wl, thickness=thick,
+                         max_order=(0, 0), period=(300.0, 300.0), wavelength=wl, thickness=thick,
                          connecting_algo=connecting_algo, incidence_side=incidence_side)
     if formulation is not None:
         mee.formulation = formulation

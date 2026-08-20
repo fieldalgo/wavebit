@@ -23,7 +23,7 @@ def test_nvf_circular_grating():
 
     option_nvf = dict(
         psi=0.0, top=1.0, bot=2.25, theta=10 * np.pi / 180, phi=20 * np.pi / 180,
-        fto=[3, 3], wavelength=wavelength, period=period,
+        max_order=[3, 3], wavelength=wavelength, period=period,
         structure=structure_2d, thickness=[200], factorization='nvf'
     )
 
@@ -61,17 +61,17 @@ def test_nvf_energy_convergence():
                wavelength=0.5, period=[1.0, 1.0], thickness=[0.3])
 
     errs = {}
-    for fto in (3, 5, 7):
-        res = wavebit.rcwa(backend=0, structure=structure, fto=[fto, fto],
+    for max_order in (3, 5, 7):
+        res = wavebit.rcwa(backend=0, structure=structure, max_order=[max_order, max_order],
                               factorization='nvf', **cfg).solve()
         R = float(np.array(res.R).real.sum())
         T = float(np.array(res.T).real.sum())
-        errs[fto] = abs(R + T - 1.0)
-        print(f"[NVF] fto={fto:2d}  |R+T-1| = {errs[fto]:.2e}")
+        errs[max_order] = abs(R + T - 1.0)
+        print(f"[NVF] max_order={max_order:2d}  |R+T-1| = {errs[max_order]:.2e}")
 
     # Tight, order-independent bound the buggy implementation could never meet.
-    assert errs[3] < 1e-6, f"NVF energy error too large at fto=3: {errs[3]}"
-    assert errs[7] < 1e-5, f"NVF energy error too large at fto=7: {errs[7]}"
+    assert errs[3] < 1e-6, f"NVF energy error too large at max_order=3: {errs[3]}"
+    assert errs[7] < 1e-5, f"NVF energy error too large at max_order=7: {errs[7]}"
 
     print("SUCCESS: NVF energy conservation test passed!\n")
 
@@ -94,7 +94,7 @@ def test_nvf_on_a_one_cell_axis_reduces_to_li(kind):
     """
     structure = np.array([[[9., 9., 1., 1., 9., 1., 1., 1.]]])
     cfg = dict(backend=0, structure=structure, period=[0.77], thickness=[0.2], theta=0.25,
-               wavelength=0.777, top=1.0, bot=2.25, fto=[10, 0])
+               wavelength=0.777, top=1.0, bot=2.25, max_order=[10, 0])
     cfg |= dict(phi=0.3, psi=0.4) if kind == 'conical' else dict(psi=np.pi / 2 if kind == 'te' else 1)
 
     def total(**kw):

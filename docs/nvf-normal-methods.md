@@ -94,7 +94,7 @@ defect rather than a trade-off. It was also only a third of the story. See
 The cutoff is fixed in physical orders deliberately: every N-tied cutoff plateaus exactly
 like `'distance'` (tying the band to the raster re-admits the staircase harmonics), and
 hard cutoffs floor out on their own Gibbs ringing. The *value* 8 is pinned at the low end
-of the band the factorization itself reads (orders to `2*fto`, `fto >= 4` in practice) —
+of the band the factorization itself reads (orders to `2*max_order`, `max_order >= 4` in practice) —
 a circle harness cannot choose it, because a low-passed circle stays radially symmetric
 and smaller is always better there.
 
@@ -123,14 +123,14 @@ Degrees, modulo 180. Only `distance` is flat in N; the 30-40 deg substitution ou
 Note `smooth` winning this table and losing the next one — the tables must be read
 together.
 
-### Solver-level A/B, circle (vs the analytic reference at fto=14)
+### Solver-level A/B, circle (vs the analytic reference at max_order=14)
 
 Same setup as the `li` comparison in [`nvf-upsampling.md`](nvf-upsampling.md): circle
 r=0.30, index 2.4, thickness 0.30, wavelength 0.55, theta 12 / phi 30 / psi 40 deg.
 Error = max per-order |R - R_ref|, |T - T_ref| over shared orders. All cells resolved
 (gaps above the reference's ~1.7e-3 own error).
 
-| N | fto | `distance` | `contour` | `spectral` | `smooth` |
+| N | max_order | `distance` | `contour` | `spectral` | `smooth` |
 |---|---|---|---|---|---|
 | 64 | 6 | 2.15e-02 | 1.06e-02 | 1.13e-02 | 9.72e-03 |
 | 64 | 10 | 8.75e-03 | 1.13e-03 | 1.03e-03 | 1.04e-03 |
@@ -142,14 +142,14 @@ Error = max per-order |R - R_ref|, |T - T_ref| over shared orders. All cells res
 Every replacement beats `distance` in every circle cell, up to 14x at 256/10 — and
 `contour` at N=64 already beats `distance` at N=256.
 
-### Solver-level A/B, rotated rectangle (vs the analytic reference at fto=18)
+### Solver-level A/B, rotated rectangle (vs the analytic reference at max_order=18)
 
 The corner-bearing scene: rectangle 0.5 x 0.3 rotated 30 deg, same stack and incidence.
-The fto=14 reference could not resolve this scene (its own error floor ~1.7e-3 swamped
-the differences), so the reference was rebuilt at fto=18; the floor |fto16 - fto18| is
+The max_order=14 reference could not resolve this scene (its own error floor ~1.7e-3 swamped
+the differences), so the reference was rebuilt at max_order=18; the floor |max_order 16 - max_order 18| is
 2.09e-4, and cells are called only above it.
 
-| N | fto | `distance` | `contour` | `spectral` | `smooth` |
+| N | max_order | `distance` | `contour` | `spectral` | `smooth` |
 |---|---|---|---|---|---|
 | 64 | 6 | 1.37e-02 | **1.30e-02** | 1.49e-02 | 1.43e-02 |
 | 64 | 10 | 3.89e-03 | **3.02e-03** | 4.12e-03 | 3.81e-03 |
@@ -173,22 +173,22 @@ way general shapes are not — a corner-bearing scene belongs in any future sele
 
 ### Where improvement is possible at all — the truncation floor
 
-The analytic path itself (exact geometry, exact normal field) at the working `fto`,
+The analytic path itself (exact geometry, exact normal field) at the working `max_order`,
 against the finest references:
 
-| scene | fto=6 | fto=10 |
+| scene | max_order=6 | max_order=10 |
 |---|---|---|
 | circle | 1.06e-02 | 1.13e-03 |
 | rect30 | 1.16e-02 | 1.57e-03 |
 
 Error is (truncation) + (normal-field error), and no normal field can go below the first
-term. Read the tables above against these floors: every fto=6 cell sits at ~1e-2 for
+term. Read the tables above against these floors: every max_order=6 cell sits at ~1e-2 for
 every method because the floor is ~1.1e-2 there — `contour`'s 1.06e-02 at circle 64/6
 *is* the floor, i.e. 100% of the removable error removed. The dramatic cells are the ones
-where the normal field dominated the budget (circle fto=10), and the flat-looking rect30
+where the normal field dominated the budget (circle max_order=10), and the flat-looking rect30
 cells are flat because `distance` was already near the floor on straight edges. Raising
-accuracy past these numbers is a matter of `fto` and raster resolution, not of the normal
-field — with the asymmetry that `distance` eats into higher-`fto` gains (its staircase
+accuracy past these numbers is a matter of `max_order` and raster resolution, not of the normal
+field — with the asymmetry that `distance` eats into higher-`max_order` gains (its staircase
 error becomes the new floor) while the replacements keep converging.
 
 ### fmmax's construction, measured and left out
@@ -205,12 +205,12 @@ exactly what `'spectral'` adopts.
 
 Fixed 2026-08-17, pre-existing since the port. **`'distance'` was not periodic**, so
 rolling a raster by whole pixels — an exact lattice translation, the same structure named
-differently — moved `max|dR|` by ~1e-2, at every `fto`, non-monotonically. Li's rules are
+differently — moved `max|dR|` by ~1e-2, at every `max_order`, non-monotonically. Li's rules are
 exact to 1e-15 on the same rolls.
 
 It does not converge away, and that is what makes it a defect rather than a residual: the
-lift to the `4*fto+1` floor is a block repeat, the same staircase spelled with more pixels
-([`nvf-upsampling.md`](nvf-upsampling.md)), so raising `fto` never refines the field. It
+lift to the `4*max_order+1` floor is a block repeat, the same staircase spelled with more pixels
+([`nvf-upsampling.md`](nvf-upsampling.md)), so raising `max_order` never refines the field. It
 only lets the convolution matrices read more orders of a field that is wrong by the same
 amount.
 
@@ -233,7 +233,7 @@ full 90 degrees at 74 of 256 pixels — the distance map is nonzero right up to 
 border whatever the shape does.
 
 **What it cost, and what it did not.** The reported case goes 1.7e-2 to ~2e-15 at every
-`fto`. Cost is ~3 ms on an 11.6 s solve at `fto=[16,12]` (the EDT is 11x dearer in
+`max_order`. Cost is ~3 ms on an 11.6 s solve at `max_order=[16,12]` (the EDT is 11x dearer in
 isolation and irrelevant in context). Accuracy against a converged reference is a wash —
 neither arm is better, because this was never an accuracy fix. Two test thresholds moved,
 both calibrated against the *old* non-periodic reading rather than against the field:
@@ -312,7 +312,7 @@ states the property where a test of the opposite name used to pin the defect.
   them inline; the error says to `freeze_geometry()` first. `'distance'` keeps its
   mask-only traced path. Torch grad tensors are fine either way (detached eagerly, like
   the shipped field always did).
-- **The floor lift keeps the base scale.** A layer block-repeated to the `4*fto+1` floor
+- **The floor lift keeps the base scale.** A layer block-repeated to the `4*max_order+1` floor
   hands the constructions its *base* shape, and the pixel-unit policies scale by the lift
   factor — smoothing over the base grid's features, not the lifted grid's respelling of
   them. Pinned by a test that runs the same construction base-aware and base-blind and
@@ -335,7 +335,7 @@ states the property where a test of the opposite name used to pin the defect.
   cannot see — that record fix is the one part a future attempt should keep). Its
   angular fidelity is dramatic — 1.2 deg mean on a graded band against 52 deg for
   `'distance'`, whose mask degenerates over a thick band — **and the advantage does not
-  reach the solve.** On SSP-projected scenes at `beta = inf` against same-`fto` exact
+  reach the solve.** On SSP-projected scenes at `beta = inf` against same-`max_order` exact
   references, no construction dominates: smoothing-based variants win a round scene by
   up to 3.3x and lose a cornered one ~2-3x on resolved cells, the raw level set roughly
   ties `'distance'` on corners and trails on circles, and at moderate `beta` the

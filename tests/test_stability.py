@@ -28,10 +28,10 @@ def _grating(eps_hi=16.0, cells=8):
 
 
 # eps 16 is the index 4; eps 2.25 the index 1.5.
-def _solve(*, fto, thickness, eps_hi=16.0, algo='ETM', type_complex=np.complex128,
+def _solve(*, max_order, thickness, eps_hi=16.0, algo='ETM', type_complex=np.complex128,
            period=3000.0, wavelength=400.0, eps_bot=2.25):
     return wavebit.rcwa(
-        backend=0, wavelength=wavelength, period=[period], fto=[fto, 0],
+        backend=0, wavelength=wavelength, period=[period], max_order=[max_order, 0],
         top=1.0, bot=eps_bot, theta=0.0, phi=0.0, psi=np.pi / 2,
         structure=_grating(eps_hi), thickness=[thickness],
         connecting_algo=algo, type_complex=type_complex,
@@ -42,14 +42,14 @@ def _energy(result):
     return float(result.R.sum() + result.T.sum())
 
 
-def evanescent_orders(fto, period, wavelength, n=1.0):
+def evanescent_orders(max_order, period, wavelength, n=1.0):
     """How many retained orders are evanescent in a medium of index ``n``.
 
     ``kx_m = n·sinθ + m·λ/Λ`` in this solver's normalisation, so at normal incidence an
     order is evanescent once ``|m|·λ/Λ > n``. Reported so a test that claims to stress
     evanescent growth can show that it does.
     """
-    orders = np.arange(-fto, fto + 1)
+    orders = np.arange(-max_order, max_order + 1)
     return int(np.sum(np.abs(orders * wavelength / period) > n))
 
 
@@ -57,28 +57,28 @@ def evanescent_orders(fto, period, wavelength, n=1.0):
 
 def test_the_test_conditions_actually_stress_evanescent_orders():
     """Guard the premise: without this the suite below could pass by never being hard."""
-    assert evanescent_orders(fto=40, period=3000.0, wavelength=400.0) > 60, (
+    assert evanescent_orders(max_order=40, period=3000.0, wavelength=400.0) > 60, (
         'most retained orders should be evanescent, or these tests prove nothing')
 
 
 # ---------------------------------------------------------------- energy
 
 @pytest.mark.parametrize('thickness', [500.0, 5_000.0, 50_000.0])
-@pytest.mark.parametrize('fto', [10, 40])
-def test_energy_is_conserved_through_thick_layers(fto, thickness):
+@pytest.mark.parametrize('max_order', [10, 40])
+def test_energy_is_conserved_through_thick_layers(max_order, thickness):
     """A lossless stack conserves energy no matter how far the evanescent tail is pushed.
 
-    50 um at fto=40 puts ``exp(|kz|·d)`` far past what a float can hold, so a formulation
+    50 um at max_order=40 puts ``exp(|kz|·d)`` far past what a float can hold, so a formulation
     that carried the growing exponential explicitly would have overflowed long before here.
     """
-    assert _energy(_solve(fto=fto, thickness=thickness)) == pytest.approx(1.0, abs=1e-9)
+    assert _energy(_solve(max_order=max_order, thickness=thickness)) == pytest.approx(1.0, abs=1e-9)
 
 
 def test_absorbing_metal_stays_physical_when_thick():
     """With loss, R + T < 1 — but it must stay in [0, 1] and not drift with thickness."""
     previous = 1.0
     for thickness in (200.0, 2_000.0, 20_000.0):
-        total = _energy(_solve(fto=30, thickness=thickness, eps_hi=-12.2275 + 1.05j,
+        total = _energy(_solve(max_order=30, thickness=thickness, eps_hi=-12.2275 + 1.05j,
                                period=2000.0, wavelength=500.0))
         assert 0.0 <= total <= 1.0 + 1e-9
         assert total <= previous + 1e-9, 'absorption cannot decrease with thickness'
@@ -88,16 +88,16 @@ def test_absorbing_metal_stays_physical_when_thick():
 # ---------------------------------------------------------------- algorithms agree
 
 @pytest.mark.parametrize('thickness', [500.0, 10_000.0])
-@pytest.mark.parametrize('fto', [10, 40])
-def test_tmm_and_smm_agree(fto, thickness):
+@pytest.mark.parametrize('max_order', [10, 40])
+def test_tmm_and_smm_agree(max_order, thickness):
     """The two connecting algorithms are independent routes to the same answer.
 
     Scattering-matrix formulations are the usual answer to evanescent blow-up, so ETM
     tracking SMM to machine precision through a thick stack is the statement that ETM is
     not the fragile one here.
     """
-    tmm = _solve(fto=fto, thickness=thickness, algo='ETM')
-    smm = _solve(fto=fto, thickness=thickness, algo='SMM')
+    tmm = _solve(max_order=max_order, thickness=thickness, algo='ETM')
+    smm = _solve(max_order=max_order, thickness=thickness, algo='SMM')
 
     assert np.allclose(tmm.R, smm.R, rtol=1e-9, atol=1e-12)
     assert np.allclose(tmm.T, smm.T, rtol=1e-9, atol=1e-12)
@@ -115,7 +115,7 @@ def test_tmm_and_smm_fields_agree_through_a_thick_layer(thickness):
     cells = []
     for algo in ('ETM', 'SMM'):
         solver = wavebit.rcwa(
-            backend=0, wavelength=400.0, period=[3000.0], fto=[40, 0],
+            backend=0, wavelength=400.0, period=[3000.0], max_order=[40, 0],
             top=1.0, bot=2.25, theta=0.0, phi=0.0, psi=np.pi / 2,
             structure=_grating(), thickness=[thickness], connecting_algo=algo,
             answers='field')
@@ -128,9 +128,9 @@ def test_tmm_and_smm_fields_agree_through_a_thick_layer(thickness):
 
 
 def test_tmm_and_smm_agree_on_a_lossy_stack():
-    tmm = _solve(fto=30, thickness=5_000.0, eps_hi=-12.2275 + 1.05j, period=2000.0,
+    tmm = _solve(max_order=30, thickness=5_000.0, eps_hi=-12.2275 + 1.05j, period=2000.0,
                  wavelength=500.0, algo='ETM')
-    smm = _solve(fto=30, thickness=5_000.0, eps_hi=-12.2275 + 1.05j, period=2000.0,
+    smm = _solve(max_order=30, thickness=5_000.0, eps_hi=-12.2275 + 1.05j, period=2000.0,
                  wavelength=500.0, algo='SMM')
     assert np.allclose(tmm.R, smm.R, rtol=1e-8, atol=1e-11)
     assert np.allclose(tmm.T, smm.T, rtol=1e-8, atol=1e-11)
@@ -141,14 +141,14 @@ def test_tmm_and_smm_agree_on_a_lossy_stack():
 @pytest.mark.parametrize('thickness', [500.0, 5_000.0])
 def test_single_precision_still_conserves_energy(thickness):
     """complex64 overflows at exp(88), so this is where a carried exponential would show."""
-    total = _energy(_solve(fto=40, thickness=thickness, type_complex=np.complex64))
+    total = _energy(_solve(max_order=40, thickness=thickness, type_complex=np.complex64))
     assert total == pytest.approx(1.0, abs=1e-4)
 
 
 def test_single_precision_tracks_double():
     """32-bit should cost accuracy, not correctness."""
-    wide = _solve(fto=40, thickness=5_000.0, type_complex=np.complex128)
-    narrow = _solve(fto=40, thickness=5_000.0, type_complex=np.complex64)
+    wide = _solve(max_order=40, thickness=5_000.0, type_complex=np.complex128)
+    narrow = _solve(max_order=40, thickness=5_000.0, type_complex=np.complex64)
     assert np.allclose(np.real(wide.R), np.real(narrow.R), atol=1e-4)
     assert np.allclose(np.real(wide.T), np.real(narrow.T), atol=1e-4)
 
@@ -157,7 +157,7 @@ def test_single_precision_tracks_double():
 
 def test_results_are_finite_and_non_negative_at_the_extreme():
     """The two things ``check_physical`` looks for, asserted rather than warned about."""
-    result = _solve(fto=40, thickness=50_000.0)
+    result = _solve(max_order=40, thickness=50_000.0)
     for name, array in (('R', result.R), ('T', result.T)):
         values = np.real(np.asarray(array))
         assert np.all(np.isfinite(values)), f'{name} went non-finite'

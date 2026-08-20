@@ -6,10 +6,11 @@ Array-API namespace, sharing the boundary/branch conventions and the final s/p m
 :func:`wavebit._core.backend.eig`.
 
 The 2D layer couples both polarizations *and* both in-plane directions, so per-layer modes and
-the boundary system are ``2*ff_xy`` block matrices (``ff_xy = ff_x*ff_y``). Optional off-axis
-convolution blocks (``epxy`` / ``epyx``, produced by the NVF factorization; ``None`` = zeros)
-enter the mode operator. ``transfer_2d_1`` and ``transfer_2d_4`` are identical to the conical
-versions, so this module reuses ``solve_1d``'s boundary init and ``final_matching`` verbatim.
+the boundary system are ``2*n_orders`` block matrices (``n_orders = n_orders_x*n_orders_y``).
+Optional off-axis convolution blocks (``epxy`` / ``epyx``, produced by the NVF factorization;
+``None`` = zeros) enter the mode operator. ``transfer_2d_1`` and ``transfer_2d_4`` are identical
+to the conical versions, so this module reuses ``solve_1d``'s boundary init and
+``final_matching`` verbatim.
 """
 from .backend import _concrete, _readable, array_namespace, as_array, check_mode_cutoff, eig
 from .conventions import boundary_kz, mode_q, order_azimuth
@@ -44,14 +45,16 @@ _DEFECTIVE_REL = 1e-10
 
 
 def order_grid_kxy(xp, kx, ky):
-    """``kx`` / ``ky`` on the ``(ff_y, ff_x)`` order grid, from either spelling.
+    """``kx`` / ``ky`` on the ``(n_orders_y, n_orders_x)`` order grid, from either spelling.
 
     Two ways in, because a lattice basis decides which one is even expressible:
 
-    * **1-D**, lengths ``(ff_x,)`` and ``(ff_y,)`` — the separable form an axis-aligned cell
+    * **1-D**, lengths ``(n_orders_x,)`` and ``(n_orders_y,)`` — the separable form an
+      axis-aligned cell
       admits, where ``kx`` depends only on ``m`` and ``ky`` only on ``n``. Broadcast to the
       grid here, which is what both solves used to do inline.
-    * **2-D**, ``(ff_y, ff_x)`` each — the per-order Cartesian components, which is the only
+    * **2-D**, ``(n_orders_y, n_orders_x)`` each — the per-order Cartesian components, which is
+      the only
       form a skewed cell has: with ``G = m*b1 + n*b2`` non-orthogonal, *both* components
       depend on *both* indices and no pair of 1-D vectors can hold them. See
       :func:`wavebit._core.lattice.order_kxy`.
@@ -61,9 +64,9 @@ def order_grid_kxy(xp, kx, ky):
     """
     if kx.ndim == 2:
         return kx, ky
-    ff_x, ff_y = kx.shape[0], ky.shape[0]
-    return (xp.broadcast_to(kx[None, :], (ff_y, ff_x)),
-            xp.broadcast_to(xp.reshape(ky, (-1, 1)), (ff_y, ff_x)))
+    n_orders_x, n_orders_y = kx.shape[0], ky.shape[0]
+    return (xp.broadcast_to(kx[None, :], (n_orders_y, n_orders_x)),
+            xp.broadcast_to(xp.reshape(ky, (-1, 1)), (n_orders_y, n_orders_x)))
 
 
 def _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R):
@@ -289,20 +292,20 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     return W, V, q
 
 
-def sp_modes_2d(xp, W, V, F_c, F_s, ff_xy):
+def sp_modes_2d(xp, W, V, F_c, F_s, n_orders):
     """Rotate 2D layer modes into the s/p boundary basis: ``(big_W, big_V)``.
 
     ``big_W`` maps mode amplitudes to the boundary variables ``(E_s, F_p)`` and ``big_V`` to
     ``(H_s, H_p)`` — the pair the substrate seed ``big_F`` / ``big_G`` is written in.
     """
-    W_11 = W[:ff_xy, :ff_xy]
-    W_12 = W[:ff_xy, ff_xy:]
-    W_21 = W[ff_xy:, :ff_xy]
-    W_22 = W[ff_xy:, ff_xy:]
-    V_11 = V[:ff_xy, :ff_xy]
-    V_12 = V[:ff_xy, ff_xy:]
-    V_21 = V[ff_xy:, :ff_xy]
-    V_22 = V[ff_xy:, ff_xy:]
+    W_11 = W[:n_orders, :n_orders]
+    W_12 = W[:n_orders, n_orders:]
+    W_21 = W[n_orders:, :n_orders]
+    W_22 = W[n_orders:, n_orders:]
+    V_11 = V[:n_orders, :n_orders]
+    V_12 = V[:n_orders, n_orders:]
+    V_21 = V[n_orders:, :n_orders]
+    V_22 = V[n_orders:, n_orders:]
 
     W_ss = F_c @ W_21 - F_s @ W_11
     W_sp = F_c @ W_22 - F_s @ W_12
@@ -360,11 +363,11 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     connecting algorithms answering one question -- ``eps_top`` reached this signature before
     it reached the ETM matching, and for a while the two algorithms honoured different inputs.
 
-    ``kx`` / ``ky`` are the retained in-plane orders, in either spelling
-    :func:`order_grid_kxy` accepts: 1-D of lengths ``ff_x`` / ``ff_y`` for an axis-aligned
-    cell, or ``(ff_y, ff_x)`` per-order Cartesian components for any lattice.
+    ``kx`` / ``ky`` are the retained in-plane orders, in either spelling :func:`order_grid_kxy`
+    accepts: 1-D of lengths ``n_orders_x`` / ``n_orders_y`` for an axis-aligned cell, or
+    ``(n_orders_y, n_orders_x)`` per-order Cartesian components for any lattice.
 
-    Returns ``(de_ri, de_ti)`` for that incidence, shape ``(ff_y, ff_x)``.
+    Returns ``(de_ri, de_ti)`` for that incidence, shape ``(n_orders_y, n_orders_x)``.
     """
     xp = array_namespace(epx_conv_all)
     mu_all = (None,) * 5 if mu is None else tuple(mu)
@@ -387,13 +390,13 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     C = kx.dtype
 
     kx_g, ky_g = order_grid_kxy(xp, kx, ky)
-    ff_y, ff_x = kx_g.shape
-    ff_xy = ff_x * ff_y
+    n_orders_y, n_orders_x = kx_g.shape
+    n_orders = n_orders_x * n_orders_y
     k0 = 2 * 3.141592653589793 / wavelength
     theta = 0.0 if theta is None else theta
 
-    I = xp.astype(xp.eye(ff_xy), C)
-    O = xp.astype(xp.zeros((ff_xy, ff_xy)), C)
+    I = xp.astype(xp.eye(n_orders), C)
+    O = xp.astype(xp.zeros((n_orders, n_orders)), C)
 
     # --- stage 1: boundary init (transfer_2d_1 == transfer_1d_conical_1) ----------------
     k_par_sq = kx_g ** 2 + ky_g ** 2
@@ -409,7 +412,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     # electric (s) one. Both are the previous expression at mu_bot = 1.
     big_F = _block(xp, [[I, O], [O, -1j * Kz_bot / eps_bot]])
     big_G = _block(xp, [[-1j * Kz_bot / mu_bot, O], [O, I]])
-    big_T = xp.astype(xp.eye(2 * ff_xy), C)
+    big_T = xp.astype(xp.eye(2 * n_orders), C)
 
 
     # The order grid flattened row-major: m fastest, matching how the ``fourier2d_*`` builders
@@ -421,7 +424,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     F_s = _diag(xp, xp.sin(varphi))
 
     # --- stage 2/3: per-layer eig + coupled block transfer (transfer_2d_2 / transfer_2d_3)
-    big_I = xp.astype(xp.eye(2 * ff_xy), C)
+    big_I = xp.astype(xp.eye(2 * n_orders), C)
     keep_field = answers_of(answers).covers(Answers.FIELD)
     layer_info_list = []
     n_layers = len(thickness) if not hasattr(thickness, 'shape') else thickness.shape[0]
@@ -444,13 +447,13 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         W, V, q = layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i,
                                  epxy_conv, epyx_conv, C, mu=layer_mu)
 
-        q_1 = q[:ff_xy]
-        q_2 = q[ff_xy:]
+        q_1 = q[:n_orders]
+        q_2 = q[n_orders:]
         X_1 = _diag(xp, xp.exp(-k0 * q_1 * d))
         X_2 = _diag(xp, xp.exp(-k0 * q_2 * d))
         big_X = _block(xp, [[X_1, O], [O, X_2]])
 
-        big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, ff_xy)
+        big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, n_orders)
 
         big_W_i = xp.linalg.inv(big_W)
         big_V_i = xp.linalg.inv(big_V)
@@ -464,7 +467,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
 
         # Bottom-to-top, matching the legacy append order; consumed by field reconstruction.
         # Conditional for the reason `solve_1d`'s append is -- and this is the path where it
-        # costs the most: `W`, `V`, `big_A_i` and `big_B` are each a full `2*ff_xy` square,
+        # costs the most: `W`, `V`, `big_A_i` and `big_B` are each a full `2*n_orders` square,
         # 4.25 of them per layer once `epz_conv_i` is counted at its quarter (4.5 on a
         # magnetic layer, where `muz_conv_i` is the second quarter).
         #
@@ -480,7 +483,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
 
     # --- stage 3: final matching -> efficiency (transfer_2d_4 == transfer_1d_conical_4) --
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
-                         n_top, n_bot, ff_x, ff_y, answers=answers,
+                         n_top, n_bot, n_orders_x, n_orders_y, answers=answers,
                          mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top)
     if keep_field:
         out['layer_info_list'] = layer_info_list

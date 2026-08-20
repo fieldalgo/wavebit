@@ -26,7 +26,7 @@ numbers below would separate by far more than any tolerance: the same literal ``
 an index gives ``R = 0.3086`` and read as a permittivity gives ``R = 0.0920``, and both
 conserve energy exactly, so nothing else in the suite can tell them apart.
 
-Uniform layers at ``fto=0`` throughout: only the zeroth order exists, so the solver is being
+Uniform layers at ``max_order=0`` throughout: only the zeroth order exists, so the solver is being
 asked the multilayer question the Fresnel/Airy recursion answers, and any disagreement is
 about the material convention rather than about truncation. ``tests/test_lossy_media.py``
 carries the same oracle for a different purpose (the conjugation seam); this file is narrower
@@ -73,11 +73,11 @@ EPS_LOSSY = 4.0 + 0.8j
 
 
 def _solve(eps_stack, thickness, eps_top, eps_bot, *, theta=0.0, tetm='te', wavelength=500.0):
-    """One uniform stack at ``fto=0``, driven through the public API."""
+    """One uniform stack at ``max_order=0``, driven through the public API."""
     structure = np.array([[[complex(_api_material(e))]] for e in eps_stack]) if eps_stack \
         else np.zeros((0, 1, 1), dtype=complex)
     solver = wavebit.rcwa(
-        backend=0, wavelength=wavelength, period=[300.], fto=[0, 0],
+        backend=0, wavelength=wavelength, period=[300.], max_order=[0, 0],
         top=complex(_api_material(eps_top)), bot=complex(_api_material(eps_bot)),
         theta=theta, phi=0., tetm=tetm,
         structure=structure if len(eps_stack) else np.array([[[_api_material(EPS_AIR)]]]),
@@ -142,7 +142,7 @@ def test_the_api_material_is_the_one_this_file_declares(
 
     Reading the same literals in the other convention moves these by 10-70%, so the tolerance
     is not what makes this test discriminating -- the two answers are nowhere near each other.
-    It is tight anyway because a uniform stack at ``fto=0`` is exactly the problem the
+    It is tight anyway because a uniform stack at ``max_order=0`` is exactly the problem the
     recursion solves.
     """
     theta = np.deg2rad(theta_deg)

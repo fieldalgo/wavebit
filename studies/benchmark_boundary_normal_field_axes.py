@@ -58,14 +58,14 @@ def geos(na, nb):
 
 
 def scalar(geometry, cx, na, nb, theta, phi, key, backend):
-    s = wavebit.rcwa(backend=backend, structure=build(cx, na, nb), fto=[8, 8],
+    s = wavebit.rcwa(backend=backend, structure=build(cx, na, nb), max_order=[8, 8],
                      normal_grid=NGRID, theta=theta, phi=phi, **BASE)
     r = getattr(s.solve(geometry=geometry), key)
     return jnp.real(jnp.sum(r)) if backend == 1 else float(np.real(np.sum(np.asarray(r))))
 
 
 print(f'base: period {P:.4f}  wl {WL}  thickness 0.25  grid {NGRID}  '
-      f'window +-{HALF_PX:.0f} px  {NPTS} pts  fto 8')
+      f'window +-{HALF_PX:.0f} px  {NPTS} pts  max_order 8')
 print(f'{"contrast":>9} {"incidence":>10} {"read":>5} {"cx0/P":>7} | '
       f'{"sampled err":>11} {"swapped err":>11} | {"s ratio":>8} {"w ratio":>8} | {"spread":>9}')
 
@@ -102,7 +102,7 @@ for cname, inc, rname in itertools.product(AXES['contrast'], AXES['incidence'],
 
 WL = 0.777
 P = 2.0 * WL
-NGRID, HALF_PX, NPTS, FTO = 512, 6.0, 25, 8
+NGRID, HALF_PX, NPTS, MAX_ORDER = 512, 6.0, 25, 8
 PIX, CX0 = P / NGRID, 0.28 * P
 NAMES = ('epx', 'epy', 'epz_i', 'epxy', 'epyx')
 
@@ -113,7 +113,7 @@ PLAN = _boundary.plan_layer(build(CX0, 3.0, 2.2)[0]['shapes'], (P, P))
 def probe(na, nb, plans, block):
     def loss(cx):
         m = _analytic.to_conv_mat_smooth_layers(
-            build(cx, na, nb), FTO, FTO, (P, P), normal_grid=NGRID,
+            build(cx, na, nb), MAX_ORDER, MAX_ORDER, (P, P), normal_grid=NGRID,
             type_complex=jnp.complex128, xp=jnp, boundary_plans=plans)[block]
         return jnp.real(jnp.sum(m * jnp.conj(m)))
     f = jax.jit(jax.value_and_grad(loss))

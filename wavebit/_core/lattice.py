@@ -33,7 +33,7 @@ has the distinction and the check.)
 
 The raster follows that substitution: ``structure[layer][j, i]`` is the permittivity at
 ``r = (i + 0.5)/Nx * a1 + (j + 0.5)/Ny * a2``. Axis 1 runs along ``a1`` (and pairs with
-``fto[0]`` / ``m``), axis 0 along ``a2`` (with ``fto[1]`` / ``n``) — the same pairing the
+``max_order[0]`` / ``m``), axis 0 along ``a2`` (with ``max_order[1]`` / ``n``) — the same pairing
 axis-aligned case has always used, read in lattice coordinates rather than Cartesian ones.
 
 What the skew *does* reach is any quantity that is Cartesian-geometric rather than
@@ -168,13 +168,14 @@ def sample_grid(xp, grid_shape, period, dtype, lattice=None):
     return u[None, :] * a1x + v[:, None] * a2x, u[None, :] * a1y + v[:, None] * a2y
 
 
-def order_kxy(xp, A, fto_x, fto_y, wavelength, k_inc_x, k_inc_y, dtype, device=None):
-    """Per-order in-plane wavevectors on the ``(n, m)`` index grid: two ``(ff_y, ff_x)`` arrays.
+def order_kxy(xp, A, max_order_x, max_order_y, wavelength, k_inc_x, k_inc_y, dtype, device=None):
+    """Per-order in-plane wavevectors on the ``(n, m)`` index grid: two
+    ``(n_orders_y, n_orders_x)`` arrays.
 
     Both are normalized by ``k0`` — i.e. these are ``kx/k0``, matching what
     ``get_kx_ky_vector`` has always returned — and laid out so that ``reshape(-1)`` gives the
     flat order list the convolution matrices are indexed by (``m`` fastest, matching
-    ``_fourier2d_grid``'s final ``(ff_y, ff_x)`` reshape).
+    ``_fourier2d_grid``'s final ``(n_orders_y, n_orders_x)`` reshape).
 
     The closed form, written out rather than taken from a matrix inverse so it stays one
     expression per component and differentiates cleanly::
@@ -190,14 +191,14 @@ def order_kxy(xp, A, fto_x, fto_y, wavelength, k_inc_x, k_inc_y, dtype, device=N
     a1y, a2y = float(A[1, 0]), float(A[1, 1])
     det = a1x * a2y - a2x * a1y
 
-    m = xp.asarray(np.arange(-fto_x, fto_x + 1, dtype=float)[None, :], dtype=dtype,
+    m = xp.asarray(np.arange(-max_order_x, max_order_x + 1, dtype=float)[None, :], dtype=dtype,
                    device=device)
-    n = xp.asarray(np.arange(-fto_y, fto_y + 1, dtype=float)[:, None], dtype=dtype,
+    n = xp.asarray(np.arange(-max_order_y, max_order_y + 1, dtype=float)[:, None], dtype=dtype,
                    device=device)
 
     lam = as_array(xp, wavelength, dtype=dtype, device=device) / det
     kx = as_array(xp, k_inc_x, dtype=dtype, device=device) + lam * (a2y * m - a1y * n)
     ky = as_array(xp, k_inc_y, dtype=dtype, device=device) + lam * (-a2x * m + a1x * n)
 
-    ff_x, ff_y = 2 * fto_x + 1, 2 * fto_y + 1
-    return xp.broadcast_to(kx, (ff_y, ff_x)), xp.broadcast_to(ky, (ff_y, ff_x))
+    n_orders_x, n_orders_y = 2 * max_order_x + 1, 2 * max_order_y + 1
+    return xp.broadcast_to(kx, (n_orders_y, n_orders_x)), xp.broadcast_to(ky, (n_orders_y, n_orders_x))

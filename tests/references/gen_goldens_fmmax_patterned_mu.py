@@ -46,10 +46,10 @@ def main():
     import jax.numpy as jnp
     import fmmax
 
-    from _fmmax_patterned_mu_cases import CASES, FTO, PERIOD, THETA, THICK, WL, tensors
+    from _fmmax_patterned_mu_cases import CASES, MAX_ORDER, PERIOD, THETA, THICK, WL, tensors
 
     lat = fmmax.LatticeVectors(u=jnp.array([PERIOD, 0.0]), v=jnp.array([0.0, PERIOD]))
-    expansion = fmmax.generate_expansion(lat, approximate_num_terms=(2 * FTO + 1) ** 2,
+    expansion = fmmax.generate_expansion(lat, approximate_num_terms=(2 * MAX_ORDER + 1) ** 2,
                                          truncation=fmmax.Truncation.PARALLELOGRAMIC)
     kx = jnp.asarray([2 * np.pi / WL * np.sin(np.deg2rad(THETA)), 0.0])
     wl = jnp.asarray(WL)
@@ -92,7 +92,7 @@ def main():
         # Every tensor is Hermitian at every pixel, so both are lossless whatever the pattern
         # is. Enforced sharply on FFT, where a Hermitian input gives an exactly Hermitian
         # convolution matrix; JONES_DIRECT is a vector formulation whose truncation leaves a
-        # residual that shrinks with fto rather than vanishing (same as the patterned eps case).
+        # residual that shrinks with max_order rather than vanishing (same as the patterned eps case).
         for pol, (r, t) in (('s', fft[:2]), ('p', fft[2:])):
             if abs(r + t - 1.0) > 1e-9:
                 raise SystemExit(f'{name} FFT {pol}: R+T = {r + t:.12f} for Hermitian eps and '

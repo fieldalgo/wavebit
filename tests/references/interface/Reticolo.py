@@ -55,7 +55,7 @@ class Reticolo:
         m_path = os.path.dirname(__file__)
         self.eng.addpath(self.eng.genpath(m_path))
 
-    def run_res2(self, grating_type, period, fto, structure, thickness, theta, phi, pol, wavelength, top, bot,
+    def run_res2(self, grating_type, period, max_order, structure, thickness, theta, phi, pol, wavelength, top, bot,
                  *args, **kwargs):
         """``structure`` / ``top`` / ``bot`` are **permittivity**, as everywhere in wavebit.
 
@@ -73,7 +73,7 @@ class Reticolo:
         if grating_type in (0, 1):
             period = period[0]
 
-            fto = fto
+            max_order = max_order
             Nx = n_cell.shape[2]
             period_x = period
             # grid_x = np.linspace(0, period, Nx + 1)[1:]
@@ -111,12 +111,12 @@ class Reticolo:
         profile = np.array([[0, *thickness, 0], range(1, len(thickness) + 3)])
 
         top_refl_info, top_tran_info, bottom_refl_info, bottom_tran_info = \
-            self._run(pol, theta, phi, period, n_top, fto, textures, profile, wavelength, grating_type,
+            self._run(pol, theta, phi, period, n_top, max_order, textures, profile, wavelength, grating_type,
                       cal_field=False)
 
         return top_refl_info.efficiency, top_tran_info.efficiency, bottom_refl_info.efficiency, bottom_tran_info.efficiency
 
-    def run_res3(self, grating_type, period, fto, structure, thickness, theta, phi, pol, wavelength, top, bot,
+    def run_res3(self, grating_type, period, max_order, structure, thickness, theta, phi, pol, wavelength, top, bot,
                  matlab_plot_field=0, res3_npts=0, *args, **kwargs):
 
         # theta *= (180 / np.pi)
@@ -126,7 +126,7 @@ class Reticolo:
         if grating_type in (0, 1):
             period = period[0]
 
-            fto = fto
+            max_order = max_order
             Nx = n_cell.shape[2]
             # A texture's x origin used to be in doubt here -- RETICOLO's documentation
             # describes a texture as running -period/2 .. +period/2, and a `grid_x -= period/2`
@@ -174,14 +174,14 @@ class Reticolo:
 
         (top_refl_info_te, top_tran_info_te, top_refl_info_tm, top_tran_info_tm, bottom_refl_info_te,
          bottom_tran_info_te, bottom_refl_info_tm, bottom_tran_info_tm, field_cell, z, index_map) = \
-            self._run(pol, theta, phi, period, n_top, fto, textures, profile, wavelength, grating_type,
+            self._run(pol, theta, phi, period, n_top, max_order, textures, profile, wavelength, grating_type,
                       cal_field=True, matlab_plot_field=matlab_plot_field, res3_npts=res3_npts)
 
         return (top_refl_info_te, top_tran_info_te, top_refl_info_tm, top_tran_info_tm,
                 bottom_refl_info_te, bottom_tran_info_te, bottom_refl_info_tm, bottom_tran_info_tm,
                 field_cell, z, index_map)
 
-    def _run(self, pol, theta, phi, period, n_top, fto,
+    def _run(self, pol, theta, phi, period, n_top, max_order,
              textures, profile, wavelength, grating_type, cal_field=False, matlab_plot_field=0, res3_npts=0):
 
         if phi is None:
@@ -193,7 +193,7 @@ class Reticolo:
             # top_refl_info, top_tran_info, bottom_refl_info, bottom_tran_info, field_cell = \
             (top_refl_info_te, top_tran_info_te, top_refl_info_tm, top_tran_info_tm, bottom_refl_info_te,
              bottom_tran_info_te, bottom_refl_info_tm, bottom_tran_info_tm, field_cell, z, index_map) = \
-                self.eng.reticolo_res3(pol, theta, phi, period, n_top, fto,
+                self.eng.reticolo_res3(pol, theta, phi, period, n_top, max_order,
                                        textures, profile, wavelength, grating_type, matlab_plot_field, res3_npts,
                                        nout=11)
 
@@ -201,7 +201,7 @@ class Reticolo:
                    bottom_tran_info_te, bottom_refl_info_tm, bottom_tran_info_tm, field_cell, z, index_map)
         else:
             top_refl_info, top_tran_info, bottom_refl_info, bottom_tran_info = \
-                self.eng.reticolo_res2(pol, theta, phi, period, n_top, fto,
+                self.eng.reticolo_res2(pol, theta, phi, period, n_top, max_order,
                                        textures, profile, wavelength, grating_type, nout=4)
             res = (top_refl_info, top_tran_info, bottom_refl_info, bottom_tran_info)
         return res
@@ -211,7 +211,7 @@ class Reticolo:
     #         n_si = find_nk_index(n_si, self.mat_table, self.wavelength)
     #
     #     abseff, effi_r, effi_t = self.eng.reticolo_res2(pattern, self.wavelength, self.deflected_angle,
-    #                                                     self.fto,
+    #                                                     self.max_order,
     #                                                     self.n_top, self.n_bot, self.thickness, self.theta, n_si, nout=3)
     #     effi_r, effi_t = np.array(effi_r).flatten(), np.array(effi_t).flatten()
     #
@@ -228,7 +228,7 @@ if __name__ == '__main__':
         'theta': 1,
         'phi': 1,
         'wavelength': 1,
-        'fto': 1,
+        'max_order': 1,
         'thickness': [1000],
         'period': [1000],
         'factorization': 'nvf',
@@ -251,7 +251,7 @@ if __name__ == '__main__':
     #     'theta': 1,
     #     'phi': 1,
     #     'wavelength': 550,
-    #     'fto': 1,
+    #     'max_order': 1,
     #     'thickness': [220],
     #     'period': [480],
     #     'factorization': 'nvf',

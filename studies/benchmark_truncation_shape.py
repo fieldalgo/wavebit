@@ -2,8 +2,8 @@
 benchmark_truncation_shape.py -- rectangular vs circular Fourier-order truncation.
 
 
-Wavebit keeps a full rectangle of Fourier orders, |m| <= fto_x and |n| <= fto_y, so the
-harmonic count is always (2*fto_x+1)*(2*fto_y+1).  S4 instead keeps a disc in reciprocal
+Wavebit keeps a full rectangle of Fourier orders, |m| <= max_order_x and |n| <= max_order_y, so the
+harmonic count is always (2*max_order_x+1)*(2*max_order_y+1).  S4 instead keeps a disc in reciprocal
 space: the orders with the smallest |G|, with the last shell closed so lattice symmetry is
 preserved.  At the same maximum order the disc holds about pi/4 of the harmonics of the box,
 and RCWA cost scales as N^3, so the disc is ~2x cheaper -- if the discarded corner orders were
@@ -56,11 +56,11 @@ C128 = np.complex128
 
 # ---------------------------------------------------------------- order sets
 
-def order_grid(fto_x, fto_y):
-    """Flat (m, n) order lists in the solver's layout: flat index is iy * ff_x + ix."""
-    m = np.arange(-fto_x, fto_x + 1)
-    n = np.arange(-fto_y, fto_y + 1)
-    mm, nn = np.meshgrid(m, n)  # (ff_y, ff_x)
+def order_grid(max_order_x, max_order_y):
+    """Flat (m, n) order lists in the solver's layout: flat index is iy * n_orders_x + ix."""
+    m = np.arange(-max_order_x, max_order_x + 1)
+    n = np.arange(-max_order_y, max_order_y + 1)
+    mm, nn = np.meshgrid(m, n)  # (n_orders_y, n_orders_x)
 
     return mm.flatten(), nn.flatten()
 
@@ -123,7 +123,7 @@ def toeplitz_conv(f, mm, nn, piecewise_constant):
     return E
 
 
-def conv_mats(eps, normal_field, mm, nn, keep, fto_box, mode):
+def conv_mats(eps, normal_field, mm, nn, keep, max_order_box, mode):
     """``(epx, epy, epz_i, epxy, epyx)`` for the selected order set."""
     m, n = mm[keep], nn[keep]
 
@@ -148,10 +148,10 @@ def conv_mats(eps, normal_field, mm, nn, keep, fto_box, mode):
     if mode == 'li':
         if not keep.all():
             raise ValueError('the nested Li rule has no circular form; see the module docstring')
-        fto_x, fto_y = fto_box
-        epz = fourier2d_piecewise_constant(np, eps, fto_x, fto_y, inverse_rule=None)
-        epy = fourier2d_piecewise_constant(np, eps, fto_x, fto_y, inverse_rule='y')
-        epx = fourier2d_piecewise_constant(np, eps, fto_x, fto_y, inverse_rule='x')
+        max_order_x, max_order_y = max_order_box
+        epz = fourier2d_piecewise_constant(np, eps, max_order_x, max_order_y, inverse_rule=None)
+        epy = fourier2d_piecewise_constant(np, eps, max_order_x, max_order_y, inverse_rule='y')
+        epx = fourier2d_piecewise_constant(np, eps, max_order_x, max_order_y, inverse_rule='x')
         O = np.zeros_like(epz)
 
         return epx, epy, np.linalg.inv(epz), O, O
@@ -176,7 +176,7 @@ def solve_flat(mm, nn, epx, epy, epz_i, epxy, epyx, wavelength, period, thicknes
     """2D RCWA (TMM) for an arbitrary flat set of Fourier orders.
 
     Same chain as ``_core.solve_2d.solve_2d`` -- and reusing its ``layer_modes_2d`` /
-    ``sp_modes_2d`` / ``final_matching`` verbatim -- with the (ff_y, ff_x) tensor-product
+    ``sp_modes_2d`` / ``final_matching`` verbatim -- with the (n_orders_y, n_orders_x) tensor-product
     layout replaced by an explicit order list so non-rectangular sets work.  Single layer.
 
     ``n_top`` / ``n_bot`` are refractive indices, and stay so: this reimplements the solver
@@ -187,7 +187,7 @@ def solve_flat(mm, nn, epx, epy, epz_i, epxy, epyx, wavelength, period, thicknes
     make is the raster's, in :func:`make_cell`.
     """
     xp = np
-    ff_xy = len(mm)
+    n_orders = len(mm)
     k0 = 2 * np.pi / wavelength
 
     kx = np.asarray(n_top * np.sin(theta) * np.cos(phi)
@@ -204,14 +204,14 @@ def solve_flat(mm, nn, epx, epy, epz_i, epxy, epyx, wavelength, period, thicknes
     # exists to compare order sets that differ in exactly which orders they contain.
     varphi = order_azimuth(xp, ky, kx, phi)
 
-    I = np.astype(np.eye(ff_xy), C128)
-    O = np.astype(np.zeros((ff_xy, ff_xy)), C128)
+    I = np.astype(np.eye(n_orders), C128)
+    O = np.astype(np.zeros((n_orders, n_orders)), C128)
 
     Kz_bot = _diag(xp, kz_bot)
     big_F = _block(xp, [[I, O], [O, -1j * Kz_bot / n_bot ** 2]])
     big_G = _block(xp, [[-1j * Kz_bot, O], [O, I]])
-    big_T = np.astype(np.eye(2 * ff_xy), C128)
-    big_I = np.astype(np.eye(2 * ff_xy), C128)
+    big_T = np.astype(np.eye(2 * n_orders), C128)
+    big_I = np.astype(np.eye(2 * n_orders), C128)
 
     Kx = _diag(xp, kx)
     Ky = _diag(xp, ky)
@@ -220,11 +220,11 @@ def solve_flat(mm, nn, epx, epy, epz_i, epxy, epyx, wavelength, period, thicknes
 
     W, V, q = layer_modes_2d(xp, Kx, Ky, I, epx, epy, epz_i, epxy, epyx, C128)
 
-    X_1 = _diag(xp, np.exp(-k0 * q[:ff_xy] * thickness))
-    X_2 = _diag(xp, np.exp(-k0 * q[ff_xy:] * thickness))
+    X_1 = _diag(xp, np.exp(-k0 * q[:n_orders] * thickness))
+    X_2 = _diag(xp, np.exp(-k0 * q[n_orders:] * thickness))
     big_X = _block(xp, [[X_1, O], [O, X_2]])
 
-    big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, ff_xy)
+    big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, n_orders)
     big_W_i = np.linalg.inv(big_W)
     big_V_i = np.linalg.inv(big_V)
     big_B = 0.5 * (big_W_i @ big_F - big_V_i @ big_G)
@@ -235,11 +235,11 @@ def solve_flat(mm, nn, epx, epy, epz_i, epxy, epyx, wavelength, period, thicknes
     big_G = big_V @ (big_I - Y)
     big_T = big_T @ big_A_i @ big_X
 
-    # ff_x = ff_xy, ff_y = 1: the flat set *is* the layout. The incident delta lands at
-    # ff_xy // 2, which is the zero order for both shapes (see circular_select).
+    # n_orders_x = n_orders, n_orders_y = 1: the flat set *is* the layout. The incident delta lands at
+    # n_orders // 2, which is the zero order for both shapes (see circular_select).
     R, T = final_matching(xp, C128, big_F, big_G, big_T, kz_top, kz_bot,
                           amplitude_pair(psi), theta,
-                          n_top, n_bot, ff_xy, 1, answers='efficiency')
+                          n_top, n_bot, n_orders, 1, answers='efficiency')
 
     return R.flatten(), T.flatten(), kz_top, kz_bot
 
@@ -294,8 +294,8 @@ CASE = dict(
 )
 
 
-def run_one(eps, normal_field, mm, nn, keep, fto_box, mode):
-    mats = conv_mats(eps, normal_field, mm, nn, keep, fto_box, mode)
+def run_one(eps, normal_field, mm, nn, keep, max_order_box, mode):
+    mats = conv_mats(eps, normal_field, mm, nn, keep, max_order_box, mode)
 
     t0 = time.perf_counter()
     R, T, kz_top, kz_bot = solve_flat(
@@ -348,35 +348,35 @@ def equivalent_rect_N(rect_rows, err):
 def selftest():
     """Pin the G-difference build and the flat solver against the production code."""
     eps = make_cell('circle', ngrid=64).astype(C128)
-    fto = 3
-    mm, nn = order_grid(fto, fto)
+    max_order = 3
+    mm, nn = order_grid(max_order, max_order)
 
     for flag in (False, True):
         direct = toeplitz_conv(eps, mm, nn, flag)
-        nested = (fourier2d_piecewise_constant(np, eps, fto, fto, inverse_rule=None) if flag
-                  else fourier2d_pointwise(np, eps, fto, fto))
+        nested = (fourier2d_piecewise_constant(np, eps, max_order, max_order, inverse_rule=None) if flag
+                  else fourier2d_pointwise(np, eps, max_order, max_order))
         err = np.abs(direct - nested).max()
         print(f'selftest conv (piecewise_constant={flag}): {err:.3e}')
         assert err < 1e-12, err
 
     # flat solver vs the production NVF path, on a rectangular set
     structure = eps[None, :, :]
-    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_nvf(structure, fto, fto)
-    de_ri_ref, de_ti_ref = _core_solve_2d(fto, epx, epy, epz_i, epxy, epyx)
+    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_nvf(structure, max_order, max_order)
+    de_ri_ref, de_ti_ref = _core_solve_2d(max_order, epx, epy, epz_i, epxy, epyx)
 
     nf = normal_vector_field(eps)
-    r = run_one(eps, nf, mm, nn, np.ones(mm.shape, bool), (fto, fto), 'nvf')
+    r = run_one(eps, nf, mm, nn, np.ones(mm.shape, bool), (max_order, max_order), 'nvf')
     err = max(np.abs(r['R'] - de_ri_ref.flatten()).max(),
               np.abs(r['T'] - de_ti_ref.flatten()).max())
     print(f'selftest solver (flat vs _core.solve_2d): {err:.3e}')
     assert err < 1e-12, err
 
 
-def _core_solve_2d(fto, epx, epy, epz_i, epxy, epyx):
+def _core_solve_2d(max_order, epx, epy, epz_i, epxy, epyx):
     from wavebit._core.solve_2d import solve_2d
 
     C = CASE
-    rng = np.arange(-fto, fto + 1)
+    rng = np.arange(-max_order, max_order + 1)
     kx = C['n_top'] * np.sin(C['theta']) * np.cos(C['phi']) + rng * (C['wavelength'] / C['period'][0])
     ky = C['n_top'] * np.sin(C['theta']) * np.sin(C['phi']) + rng * (C['wavelength'] / C['period'][1])
 
@@ -387,28 +387,28 @@ def _core_solve_2d(fto, epx, epy, epz_i, epxy, epyx):
 
 # -------------------------------------------------------------------- sweep
 
-def sweep(eps, normal_field, mode, fto_ref, ftos, radii, label):
+def sweep(eps, normal_field, mode, max_order_ref, max_orders, radii, label):
     print(f'\n===== {label}  factorization={mode} '
-          f'  (reference: rectangular fto={fto_ref}) =====')
+          f'  (reference: rectangular max_order={max_order_ref}) =====')
 
-    mm_r, nn_r = order_grid(fto_ref, fto_ref)
+    mm_r, nn_r = order_grid(max_order_ref, max_order_ref)
     ref = run_one(eps, normal_field, mm_r, nn_r, np.ones(mm_r.shape, dtype=bool),
-                  (fto_ref, fto_ref), mode)
+                  (max_order_ref, max_order_ref), mode)
     print(f'reference: N={ref["n_harmonics"]}  '
           f'R={ref["R"].sum():.6f}  T={ref["T"].sum():.6f}  {ref["time"]:.1f}s')
 
     for back in (2, 4):
-        mm_c, nn_c = order_grid(fto_ref - back, fto_ref - back)
+        mm_c, nn_c = order_grid(max_order_ref - back, max_order_ref - back)
         chk = run_one(eps, normal_field, mm_c, nn_c, np.ones(mm_c.shape, dtype=bool),
-                      (fto_ref - back, fto_ref - back), mode)
-        print(f'reference drift (fto={fto_ref - back} vs {fto_ref}): '
+                      (max_order_ref - back, max_order_ref - back), mode)
+        print(f'reference drift (max_order={max_order_ref - back} vs {max_order_ref}): '
               f'{compare(chk, ref)["err_order_max"]:.2e}')
 
     rect_rows, circ_rows = [], []
-    for fto in ftos:
-        mm, nn = order_grid(fto, fto)
-        r = run_one(eps, normal_field, mm, nn, np.ones(mm.shape, bool), (fto, fto), mode)
-        rect_rows.append(('rect', fto, r, compare(r, ref)))
+    for max_order in max_orders:
+        mm, nn = order_grid(max_order, max_order)
+        r = run_one(eps, normal_field, mm, nn, np.ones(mm.shape, bool), (max_order, max_order), mode)
+        rect_rows.append(('rect', max_order, r, compare(r, ref)))
 
     if mode != 'li':
         for radius in radii:
@@ -438,7 +438,7 @@ def sweep(eps, normal_field, mode, fto_ref, ftos, radii, label):
     return dict(mode=mode, label=label, rect=rect_rows, circ=circ_rows)
 
 
-def main(fto_ref=20, ftos=(3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
+def main(max_order_ref=20, max_orders=(3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
          radii=(3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
          structures=(('circle pillar, n=3.48', dict(kind='circle')),
                      ('square pillar, n=3.48', dict(kind='square')),
@@ -454,7 +454,7 @@ def main(fto_ref=20, ftos=(3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
         eps = make_cell(**kwargs).astype(C128)
         normal_field = normal_vector_field(eps)
         for mode in modes:
-            blocks.append(sweep(eps, normal_field, mode, fto_ref, ftos, radii, label))
+            blocks.append(sweep(eps, normal_field, mode, max_order_ref, max_orders, radii, label))
 
     if plot:
         make_plot(blocks, plot)

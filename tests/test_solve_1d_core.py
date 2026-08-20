@@ -36,16 +36,16 @@ except ImportError:
     pass
 
 
-def _run_and_inputs(tetm, structure, thickness, n_top, n_bot, wl, period, fto, theta):
+def _run_and_inputs(tetm, structure, thickness, n_top, n_bot, wl, period, max_order, theta):
     """Solve via the public API and return (its R/T, the same inputs)."""
     # Two quantities, one pair of half-spaces. The constructor takes permittivity; `solve_1d`
     # below takes the index, which is what the amplitude ratios in it actually are.
     solver = wavebit.rcwa(backend=0, top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=None,
-                          tetm=tetm, fto=fto, period=period, wavelength=wl,
+                          tetm=tetm, max_order=max_order, period=period, wavelength=wl,
                           thickness=thickness, structure=structure)
     via_api = solver.solve()
     epx, epy, epz = to_conv_mat_raster_sampled(
-        solver.structure, solver.fto[0], solver.fto[1])
+        solver.structure, solver.max_order[0], solver.max_order[1])
     kx, _ = solver.get_kx_ky_vector(wl)
     inputs = dict(tetm_index=0 if tetm == 'te' else 1, wavelength=wl, kx=kx, n_top=n_top, n_bot=n_bot,
                   theta=solver.theta, thickness=solver.thickness,
@@ -69,7 +69,7 @@ def _assert_same_answer(via_api, direct):
 
 
 CASES = [
-    # name, tetm, structure, thickness, n_top, n_bot, wl, period, fto, theta.
+    # name, tetm, structure, thickness, n_top, n_bot, wl, period, max_order, theta.
     # The rasters are PERMITTIVITY (9 and 4 where the indices 3 and 2 used to be); the
     # half-spaces stay indices and are squared at the constructor -- see _run_and_inputs.
     ('te_1layer', 'te', [[[9., 9., 9., 1., 1., 1.]]], [0.15], 2.0, 1.0, 0.777, [0.77], [6, 0], 0.0),
@@ -90,9 +90,9 @@ CASES = [
 
 @pytest.mark.parametrize('case', CASES, ids=[c[0] for c in CASES])
 def test_wiring_matches_direct_core_call(case):
-    _, tetm, structure, thickness, n_top, n_bot, wl, period, fto, theta = case
+    _, tetm, structure, thickness, n_top, n_bot, wl, period, max_order, theta = case
     (lri, lti), inputs = _run_and_inputs(
-        tetm, np.array(structure), thickness, n_top, n_bot, wl, period, fto, theta)
+        tetm, np.array(structure), thickness, n_top, n_bot, wl, period, max_order, theta)
     cri, cti = solve_1d(**inputs)
     _assert_same_answer((lri, lti), (cri, cti))
 
@@ -109,9 +109,9 @@ def _to(backend, x):
 @pytest.mark.parametrize('case', CASES, ids=[c[0] for c in CASES])
 def test_core_cross_backend(case, backend):
     pytest.importorskip(backend)
-    _, tetm, structure, thickness, n_top, n_bot, wl, period, fto, theta = case
+    _, tetm, structure, thickness, n_top, n_bot, wl, period, max_order, theta = case
     (_, _), inp = _run_and_inputs(
-        tetm, np.array(structure), thickness, n_top, n_bot, wl, period, fto, theta)
+        tetm, np.array(structure), thickness, n_top, n_bot, wl, period, max_order, theta)
     ri0, ti0 = solve_1d(**inp)                              # numpy reference
 
     bk = dict(inp)
@@ -178,15 +178,15 @@ def test_core_gradient_jax_torch_fd(tetm):
 
 # =========================================================================== conical
 
-def _run_and_inputs_conical(structure, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi):
+def _run_and_inputs_conical(structure, thickness, n_top, n_bot, wl, period, max_order, theta, phi, psi):
     """Same, forced onto the conical path."""
     solver = wavebit.rcwa(backend=0, top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=phi,
-                          psi=psi, fto=fto, period=period, wavelength=wl,
+                          psi=psi, max_order=max_order, period=period, wavelength=wl,
                           thickness=thickness, structure=structure)
     via_api = solver.solve()
     assert solver.grating_type_assigned == 1, solver.grating_type_assigned   # ensure conical path
     epx, epy, epz = to_conv_mat_raster_sampled(
-        solver.structure, solver.fto[0], solver.fto[1])
+        solver.structure, solver.max_order[0], solver.max_order[1])
     kx, ky = solver.get_kx_ky_vector(wl)
     inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_top, n_bot=n_bot,
                   theta=solver.theta, phi=solver.phi,
@@ -196,7 +196,7 @@ def _run_and_inputs_conical(structure, thickness, n_top, n_bot, wl, period, fto,
 
 
 CONICAL_CASES = [
-    # name, structure, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi
+    # name, structure, thickness, n_top, n_bot, wl, period, max_order, theta, phi, psi
     ('con_1layer', [[[9., 9., 9., 1., 1., 1.]]], [0.15], 2.0, 1.0, 0.777, [0.77], [6, 0], 0.2, 0.3, 0.4),
     ('con_2layer_lossy', [[[9., 9., 1., 1., 9., 1.]], [[4., 4., 4., 1., 1., 1.]]], [0.15, 0.22],
      1.0, 1.5, 0.9, [0.7], [5, 0], 0.3, 0.5, 1.1),
@@ -206,9 +206,9 @@ CONICAL_CASES = [
 
 @pytest.mark.parametrize('case', CONICAL_CASES, ids=[c[0] for c in CONICAL_CASES])
 def test_conical_wiring_matches_direct_core_call(case):
-    _, structure, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi = case
+    _, structure, thickness, n_top, n_bot, wl, period, max_order, theta, phi, psi = case
     (lri, lti), inp = _run_and_inputs_conical(
-        np.array(structure), thickness, n_top, n_bot, wl, period, fto, theta, phi, psi)
+        np.array(structure), thickness, n_top, n_bot, wl, period, max_order, theta, phi, psi)
     cri, cti = solve_1d_conical(**inp)
     _assert_same_answer((lri, lti), (cri, cti))
 
@@ -217,9 +217,9 @@ def test_conical_wiring_matches_direct_core_call(case):
 @pytest.mark.parametrize('case', CONICAL_CASES, ids=[c[0] for c in CONICAL_CASES])
 def test_conical_cross_backend(case, backend):
     pytest.importorskip(backend)
-    _, structure, thickness, n_top, n_bot, wl, period, fto, theta, phi, psi = case
+    _, structure, thickness, n_top, n_bot, wl, period, max_order, theta, phi, psi = case
     (_, _), inp = _run_and_inputs_conical(
-        np.array(structure), thickness, n_top, n_bot, wl, period, fto, theta, phi, psi)
+        np.array(structure), thickness, n_top, n_bot, wl, period, max_order, theta, phi, psi)
     ri0, ti0 = solve_1d_conical(**inp)                       # numpy reference
 
     bk = dict(inp)

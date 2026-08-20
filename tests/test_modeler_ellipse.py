@@ -183,7 +183,7 @@ def test_split_counts_below_two_are_rejected():
 
 # ------------------------------------------------------------------------------- through solve
 
-SOLVE_KW = dict(period=[700.0, 700.0], thickness=[400.0], fto=[4, 4],
+SOLVE_KW = dict(period=[700.0, 700.0], thickness=[400.0], max_order=[4, 4],
                 top=1.0, bot=1.0, wavelength=500.0, psi=np.pi / 4)
 #: One ellipse, described once and reached through four paths. ``material`` / ``background``
 #: are permittivities: 9.0 is the index 3.0 this rod used to be written with.
@@ -237,12 +237,12 @@ def test_converged_efficiency_matches_the_analytic_shape_path():
 
     A looser check than the raster one, and deliberately so: the smooth path factorizes with
     NVF while the block path uses Li's rules on the block edges, so the two agree only once
-    the harmonic count is high enough for both — 0.3% at ``fto`` 8, 0.1% at 10. What it does
+    the harmonic count is high enough for both — 0.3% at ``max_order`` 8, 0.1% at 10. What it does
     pin tightly is the *rotation convention*: feeding the smooth path the opposite sign of
     ``angle`` misses by an order of magnitude more, so a flipped rotation cannot hide inside
     the factorization tolerance.
     """
-    kw = dict(SOLVE_KW, fto=[8, 8])
+    kw = dict(SOLVE_KW, max_order=[8, 8])
     e = ELLIPSE
 
     def analytic(angle):
@@ -278,7 +278,7 @@ def _grad_and_difference(param, value, step, angle, n_split):
         structure = [[ELLIPSE['background'],
                   [['ellipse', args['cx'], args['cy'], args['lx'], args['ly'],
                     ELLIPSE['material'], args['angle'], n_split, n_split]]]]
-        kw = dict(SOLVE_KW, fto=[3, 3])
+        kw = dict(SOLVE_KW, max_order=[3, 3])
         return torch.sum(wavebit.rcwa(backend=2, structure=structure, **kw).solve().T)
 
     p = torch.tensor(value, dtype=torch.float64, requires_grad=True)

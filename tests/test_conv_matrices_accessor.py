@@ -18,7 +18,7 @@ import wavebit
 
 P = 1.0
 BASE = dict(period=[P, P], thickness=[0.4], wavelength=0.8, theta=0.0, phi=0.0,
-            top=1.0, bot=2.25, fto=[4, 4])
+            top=1.0, bot=2.25, max_order=[4, 4])
 CIRCLE = dict(type='circle', cx=0.5, cy=0.5, lx=0.6, material=9.0)   # eps 9 is the old n = 3
 
 
@@ -38,7 +38,7 @@ def test_it_is_exactly_what_solve_conv_takes():
 
 def test_every_modeling_path_answers_with_the_same_shaped_object():
     """The point of the accessor: one quantity, comparable across paths that share nothing."""
-    ff = (2 * 4 + 1) ** 2
+    n_orders = (2 * 4 + 1) ** 2
     paths = {
         'raster+nvf': wavebit.rcwa(structure=disc_raster(96), factorization='nvf', **BASE),
         'smooth': wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **BASE),
@@ -50,7 +50,7 @@ def test_every_modeling_path_answers_with_the_same_shaped_object():
     for name, solver in paths.items():
         epx, epy, epz_i, epxy, epyx = solver.conv_matrices()
         for tag, m in (('epx', epx), ('epy', epy), ('epz_i', epz_i)):
-            assert np.asarray(m).shape == (1, ff, ff), (name, tag, np.asarray(m).shape)
+            assert np.asarray(m).shape == (1, n_orders, n_orders), (name, tag, np.asarray(m).shape)
             assert np.isfinite(np.asarray(m)).all(), (name, tag)
         assert epxy is not None and epyx is not None, name       # all three are NVF paths
 
@@ -70,7 +70,7 @@ def test_it_does_not_solve():
     """Cheaper than solve by the whole eigenproblem — otherwise there is no reason to have
     it separately, and a sweep over geometries would pay for a solve it discards."""
     import time
-    solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **dict(BASE, fto=[8, 8]))
+    solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **dict(BASE, max_order=[8, 8]))
     solver.conv_matrices(), solver.solve()             # warm
 
     t = time.perf_counter()

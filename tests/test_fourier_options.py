@@ -29,13 +29,13 @@ ROD = np.ones((1, N, N))
 ROD[0, _X ** 2 + _Y ** 2 <= 0.3 ** 2] = 6.25       # permittivity: 2.5**2
 
 CFG_2D = dict(backend=0, structure=ROD, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
-              fto=[3, 3], period=[1.0, 1.0], wavelength=1.1, thickness=[0.3])
+              max_order=[3, 3], period=[1.0, 1.0], wavelength=1.1, thickness=[0.3])
 
 # A 1D grating: no interface along y, so every normal points along x. A *constant* normal
 # collapses the NVF projector onto Li's rules exactly (C_xx = I, C_xy = C_yy = 0).
 CFG_1D = dict(backend=0, structure=np.array([[[9., 9., 1., 1., 9., 1., 1., 1.]]]), tetm='tm',
               period=[0.77], thickness=[0.2], theta=0.25, wavelength=0.777,
-              top=1.0, bot=2.25, fto=[10, 0])
+              top=1.0, bot=2.25, max_order=[10, 0])
 
 
 def _totals(cfg, **strategy):

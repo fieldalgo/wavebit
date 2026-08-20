@@ -4,12 +4,12 @@ Naming follows the optics convention the rest of the ecosystem reads by sight:
 **uppercase is power, lowercase is amplitude.**
 
 ``R``, ``T``
-    Per-order diffraction efficiency, shape ``(ff_y, ff_x)`` with the incident order at
-    the centre (``[fto_y, fto_x]``); index ``+1`` along the last axis is order ``m = +1``.
-    ``R`` is the fraction of incident power returned into the incidence medium, ``T`` the
-    fraction leaving through the far side. For an absorbing superstrate the incident-power
-    normalization is convention-dependent and these are not comparable to ``1`` — use the
-    amplitudes there.
+    Per-order diffraction efficiency, shape ``(n_orders_y, n_orders_x)`` with the incident order
+    at the centre (``[max_order_y, max_order_x]``); index ``+1`` along the last axis is order
+    ``m = +1``. ``R`` is the fraction of incident power returned into the incidence medium,
+    ``T`` the fraction leaving through the far side. For an absorbing superstrate the
+    incident-power normalization is convention-dependent and these are not comparable to ``1`` —
+    use the amplitudes there.
 
 ``R_s``, ``R_p``, ``T_s``, ``T_p``
     The same efficiencies resolved by outgoing polarization (``R = R_s + R_p``).
@@ -88,20 +88,20 @@ class Result:
     incidences — unpolarized illumination.
     """
 
-    def __init__(self, res=None, res_te_inc=None, res_tm_inc=None, fto=None):
+    def __init__(self, res=None, res_te_inc=None, res_tm_inc=None, max_order=None):
         self.res = res
         self.res_te_inc = res_te_inc
         self.res_tm_inc = res_tm_inc
-        #: (fto_x, fto_y) — static metadata for order(); not a pytree child.
-        self.fto = tuple(int(v) for v in fto) if fto is not None else None
+        #: (max_order_x, max_order_y) — static metadata for order(); not a pytree child.
+        self.max_order = tuple(int(v) for v in max_order) if max_order is not None else None
 
     # pytree protocol (see ResultSub)
     def tree_flatten(self):
-        return (self.res, self.res_te_inc, self.res_tm_inc), self.fto
+        return (self.res, self.res_te_inc, self.res_tm_inc), self.max_order
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        return cls(*children, fto=aux_data)
+        return cls(*children, max_order=aux_data)
 
     def _delegate(self, name):
         if self.res is not None:
@@ -126,7 +126,8 @@ class Result:
         """Scalars for diffraction order ``(m, n)`` of the solved (``res``) incidence.
 
         Spares the caller the array layout: efficiencies and amplitudes are stored as
-        ``(ff_y, ff_x)`` grids — note ``y`` first, the transpose of the ``fto=[x, y]``
+        ``(n_orders_y, n_orders_x)`` grids — note ``y`` first, the transpose of the
+        ``max_order=[x, y]``
         input order — with the incident order at the centre. This indexes them by the
         order indices themselves.
         """
@@ -134,9 +135,10 @@ class Result:
             self.res_te_inc if self.res_te_inc is not None else self.res_tm_inc)
         if sub is None:
             raise ValueError('no solved incidence to index into')
-        if self.fto is None:
-            raise ValueError('this result carries no fto metadata; index the arrays directly')
-        fx, fy = self.fto
+        if self.max_order is None:
+            raise ValueError(
+                'this result carries no max_order metadata; index the arrays directly')
+        fx, fy = self.max_order
 
         def pick(a):
             if a is None:

@@ -36,13 +36,13 @@ recommend anything.
 | In | Out |
 | --- | --- |
 | What each path implements | Which path to use |
-| What is refused, and why | "PyTorch below `fto≈5`" |
+| What is refused, and why | "PyTorch below `max_order≈5`" |
 | How a `structure` selects a path | A vocabulary for describing an experiment |
 | Which material cases are unsolvable | An extraction schema, a system prompt |
 
 The test is whether the fact can be checked against the code. `_FACTORIZATION_IMPLEMENTED_BY`
 can be — build a block-path solver, ask for NVF, watch it refuse. *"PyTorch wins below
-`fto≈5`"* cannot: it is a measurement on one CPU host about a workload, and the solver has no
+`max_order≈5`"* cannot: it is a measurement on one CPU host about a workload, and the solver has no
 opinion about it. A fact that cannot be checked that way does not belong in the module, because
 publishing it would extend the manifest's guarantee to something the guarantee does not cover.
 

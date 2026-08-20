@@ -54,8 +54,8 @@ def make_circle_raster(N, R, n_rod, n_bg=1.0):
     return layer[None]
 
 
-def solve(backend, structure, fto, **cfg):
-    solver = wavebit.rcwa(backend=backend, structure=structure, fto=(fto, fto), **cfg)
+def solve(backend, structure, max_order, **cfg):
+    solver = wavebit.rcwa(backend=backend, structure=structure, max_order=(max_order, max_order), **cfg)
     return t0_and_energy(solver.solve())
 
 
@@ -79,13 +79,13 @@ def bench_tilted_dielectric():
     ref, _ = solve(0, analytic, 16, **cfg)
     print("\n" + "=" * 74)
     print(f"[1] Dielectric tilted square (30 deg, n={NR}, TM subwavelength)")
-    print(f"    reference t0 (analytic fto=16) = {ref:.6f}")
-    print(f"    {'fto':>3} | {'analytic |err|':>14} | {'staircase n=8':>13} | {'staircase n=24':>14}")
-    for fto in (3, 5, 7, 9, 11):
-        a, _ = solve(0, analytic, fto, **cfg)
-        s8, _ = solve(0, stair(8), fto, **cfg)
-        s24, _ = solve(0, stair(24), fto, **cfg)
-        print(f"    {fto:>3} | {abs(a - ref):14.2e} | {abs(s8 - ref):13.2e} | {abs(s24 - ref):14.2e}")
+    print(f"    reference t0 (analytic max_order=16) = {ref:.6f}")
+    print(f"    {'max_order':>3} | {'analytic |err|':>14} | {'staircase n=8':>13} | {'staircase n=24':>14}")
+    for max_order in (3, 5, 7, 9, 11):
+        a, _ = solve(0, analytic, max_order, **cfg)
+        s8, _ = solve(0, stair(8), max_order, **cfg)
+        s24, _ = solve(0, stair(24), max_order, **cfg)
+        print(f"    {max_order:>3} | {abs(a - ref):14.2e} | {abs(s8 - ref):13.2e} | {abs(s24 - ref):14.2e}")
 
 
 # ----------------------------------------------------------------------
@@ -103,14 +103,14 @@ def bench_metallic_circle():
     ref, _ = solve(0, analytic, 16, **cfg)
     print("\n" + "=" * 74)
     print(f"[2] Metallic circle (n={NM}, R={R}, TM subwavelength)")
-    print(f"    reference t0 (analytic fto=16) = {ref:.6f}")
-    print(f"    {'fto':>3} | {'analytic-NVF':>13} | {'raster-NVF':>12} | {'raster-sampled':>14}")
-    for fto in (3, 5, 7, 9, 11):
-        a, _ = solve(0, analytic, fto, **cfg)
+    print(f"    reference t0 (analytic max_order=16) = {ref:.6f}")
+    print(f"    {'max_order':>3} | {'analytic-NVF':>13} | {'raster-NVF':>12} | {'raster-sampled':>14}")
+    for max_order in (3, 5, 7, 9, 11):
+        a, _ = solve(0, analytic, max_order, **cfg)
         ras = make_circle_raster(240, R, NM)
-        nvf, _ = solve(0, ras, fto, factorization='nvf', **cfg)
-        dfs, _ = solve(0, ras, fto, **cfg)
-        print(f"    {fto:>3} | {abs(a - ref):13.2e} | {abs(nvf - ref):12.2e} | {abs(dfs - ref):12.2e}")
+        nvf, _ = solve(0, ras, max_order, factorization='nvf', **cfg)
+        dfs, _ = solve(0, ras, max_order, **cfg)
+        print(f"    {max_order:>3} | {abs(a - ref):13.2e} | {abs(nvf - ref):12.2e} | {abs(dfs - ref):12.2e}")
 
 
 # ----------------------------------------------------------------------
@@ -133,12 +133,12 @@ def bench_energy_and_backends():
     ]
     print("\n" + "=" * 74)
     print("[3] Lossless multi-shape / multi-layer: energy conservation + cross-backend")
-    print(f"    {'fto':>3} | {'|R+T-1|':>10} | {'numpy t0':>10} {'jax t0':>10} {'torch t0':>10}")
-    for fto in (5, 8):
-        tn, en = solve(0, structure, fto, **cfg)
-        tj, _ = solve(1, structure, fto, **cfg)
-        tt, _ = solve(2, structure, fto, **cfg)
-        print(f"    {fto:>3} | {abs(en - 1):10.2e} | {tn:10.6f} {tj:10.6f} {tt:10.6f}"
+    print(f"    {'max_order':>3} | {'|R+T-1|':>10} | {'numpy t0':>10} {'jax t0':>10} {'torch t0':>10}")
+    for max_order in (5, 8):
+        tn, en = solve(0, structure, max_order, **cfg)
+        tj, _ = solve(1, structure, max_order, **cfg)
+        tt, _ = solve(2, structure, max_order, **cfg)
+        print(f"    {max_order:>3} | {abs(en - 1):10.2e} | {tn:10.6f} {tj:10.6f} {tt:10.6f}"
               f"   (|np-jax|={abs(tn - tj):.1e}, |np-torch|={abs(tn - tt):.1e})")
 
 

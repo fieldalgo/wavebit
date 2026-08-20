@@ -138,9 +138,9 @@ def distance_gradient_normal_field(xp, polys, grid_shape, period, dtype, chunk=N
 
 
 # ============================================ convolution matrices for one layer
-def _k_grids(xp, fto_x, fto_y, dtype):
-    ky = xp.asarray([float(k) for k in range(-2 * fto_y, 2 * fto_y + 1)], dtype=dtype)
-    kx = xp.asarray([float(k) for k in range(-2 * fto_x, 2 * fto_x + 1)], dtype=dtype)
+def _k_grids(xp, max_order_x, max_order_y, dtype):
+    ky = xp.asarray([float(k) for k in range(-2 * max_order_y, 2 * max_order_y + 1)], dtype=dtype)
+    kx = xp.asarray([float(k) for k in range(-2 * max_order_x, 2 * max_order_x + 1)], dtype=dtype)
     KY = ky[:, None] + 0.0 * kx[None, :]
     KX = 0.0 * ky[:, None] + kx[None, :]
     return KY, KX
@@ -156,21 +156,21 @@ def _centroid(xp, V):
                      xp.sum((y + yn) * cr) / (6.0 * a)])
 
 
-def check_normal_grid(grid_shape, fto_x, fto_y):
-    """`4*fto+1` points per axis, or `_sampled_coeffs` aliases distinct orders onto one bin.
+def check_normal_grid(grid_shape, max_order_x, max_order_y):
+    """`4*max_order+1` points per axis, or `_sampled_coeffs` aliases distinct orders onto one bin.
 
     Structural, not gradual: a *constant* normal field has to transform to the identity for NVF
     to collapse onto Li's rules, and on a short grid it picks up off-diagonals at +/-n instead.
     Same floor `factorization._normal_field_floor` enforces on the raster path.
     """
     Ny, Nx = grid_shape
-    need_y, need_x = 4 * fto_y + 1, 4 * fto_x + 1
+    need_y, need_x = 4 * max_order_y + 1, 4 * max_order_x + 1
     if Ny < need_y or Nx < need_x:
-        raise ValueError(f'normal-field grid {Ny}x{Nx} aliases at fto=({fto_x}, {fto_y}): '
+        raise ValueError(f'normal-field grid {Ny}x{Nx} aliases at max_order=({max_order_x}, {max_order_y}): '
                          f'needs at least {need_y}x{need_x}')
 
 
-def normal_projector_coeffs(xp, loops, grid_shape, period, fto_x, fto_y, dtype, cdtype,
+def normal_projector_coeffs(xp, loops, grid_shape, period, max_order_x, max_order_y, dtype, cdtype,
                             lattice=None):
     """Coefficient grids of ``nx**2``, ``nx*ny``, ``ny**2``, built with the layer CENTRED.
 
@@ -182,7 +182,7 @@ def normal_projector_coeffs(xp, loops, grid_shape, period, fto_x, fto_y, dtype, 
     It only works when the whole field translates as one, i.e. **a single loop**. With several
     loops, moving one reshapes the field between them and no phase describes that.
     """
-    check_normal_grid(grid_shape, fto_x, fto_y)
+    check_normal_grid(grid_shape, max_order_x, max_order_y)
     Px, Py = period
 
     if len(loops) == 1:
@@ -196,7 +196,7 @@ def normal_projector_coeffs(xp, loops, grid_shape, period, fto_x, fto_y, dtype, 
             mid_x, mid_y = 0.5 * (a1x + a2x), 0.5 * (a1y + a2y)
         shift = xp.stack([c[0] - mid_x, c[1] - mid_y])
         built = [loops[0] - shift[None, :]]
-        KY, KX = _k_grids(xp, fto_x, fto_y, dtype)
+        KY, KX = _k_grids(xp, max_order_x, max_order_y, dtype)
         if lattice is None:
             su, sv = shift[0] * frac_x, shift[1] * frac_y
         else:
@@ -215,11 +215,11 @@ def normal_projector_coeffs(xp, loops, grid_shape, period, fto_x, fto_y, dtype, 
                                             lattice=lattice)
     out = []
     for f in (nx * nx, nx * ny, ny * ny):
-        out.append(_sampled_coeffs(xp, xp.astype(f, cdtype), fto_x, fto_y) * phase)
+        out.append(_sampled_coeffs(xp, xp.astype(f, cdtype), max_order_x, max_order_y) * phase)
     return out
 
 
-def conv_mats(xp, regions, background, fto_x, fto_y, period, normal_grid, dtype, cdtype,
+def conv_mats(xp, regions, background, max_order_x, max_order_y, period, normal_grid, dtype, cdtype,
               lattice=None):
     """``(epx, epy, epz_i, epxy, epyx)`` for one boundary-resolved layer.
 
@@ -242,7 +242,7 @@ def conv_mats(xp, regions, background, fto_x, fto_y, period, normal_grid, dtype,
     dropped. The matrices stay Hermitian and the solve conserves energy exactly, so a shape
     painted entirely inside another was solved as a different structure in silence -- measured
     ``<eps> = 2.4256`` against an exact 2.2371 for a disc of permittivity 9 inside a square of 4,
-    at every ``fto`` alike, and ``sum(R) = 0.1798`` against a converged raster's 0.4164.
+    at every ``max_order`` alike, and ``sum(R) = 0.1798`` against a converged raster's 0.4164.
 
     The normal field is handed the loops as they are, orientation included, and that is safe by
     construction rather than by luck: it is the direction to the nearest boundary *point*, so it
@@ -264,7 +264,7 @@ def conv_mats(xp, regions, background, fto_x, fto_y, period, normal_grid, dtype,
     1.5e4 times below this path's own 1.8e-3 agreement with a converged raster.
     """
     Px, Py = period
-    KY, KX = _k_grids(xp, fto_x, fto_y, dtype)
+    KY, KX = _k_grids(xp, max_order_x, max_order_y, dtype)
     is_dc = (KY == 0) & (KX == 0)
     zero = xp.zeros(KY.shape, dtype=cdtype)
 
@@ -295,9 +295,9 @@ def conv_mats(xp, regions, background, fto_x, fto_y, period, normal_grid, dtype,
 
     all_loops = [V for _, polys in regions for V in polys]
     c_xx, c_xy, c_yy = normal_projector_coeffs(
-        xp, all_loops, (normal_grid, normal_grid), (Px, Py), fto_x, fto_y, dtype, cdtype,
+        xp, all_loops, (normal_grid, normal_grid), (Px, Py), max_order_x, max_order_y, dtype, cdtype,
         lattice=lattice)
-    return nvf_from_coeffs(xp, eps_c, inv_c, c_xx, c_xy, c_yy, fto_x, fto_y)
+    return nvf_from_coeffs(xp, eps_c, inv_c, c_xx, c_xy, c_yy, max_order_x, max_order_y)
 
 
 # ================================================== one painted layer, end to end
@@ -400,12 +400,13 @@ def check_plan_still_fits(shapes, period, plan, n_poly=POLYGON_VERTICES):
     transmission once it does not, with no step in between to notice.
 
     Re-planning is the whole cost of the comparison, and it scales with the shape count rather
-    than with the solve: 0.2% of a frozen ``solve`` for the two-rectangle layer above, 1.2%
-    for ten overlapping shapes at ``fto = 4``, and falling as ``fto`` rises (0.4% for those ten at
-    ``fto = 8``) because the solve grows faster than the painting does. The freeze on this path
-    buys traceability, not speed, so there is no plateau being given up for it.
-    Under a trace it is skipped -- a tracer has no coordinates to re-plan from, which is the same
-    reading of "not concrete" that :func:`analytic._primitives` takes, and for the same reason.
+    than with the solve: 0.2% of a frozen ``solve`` for the two-rectangle layer above, 1.2% for
+    ten overlapping shapes at ``max_order = 4``, and falling as ``max_order`` rises (0.4% for
+    those ten at ``max_order = 8``) because the solve grows faster than the painting does. The
+    freeze on this path buys traceability, not speed, so there is no plateau being given up for
+    it. Under a trace it is skipped -- a tracer has no coordinates to re-plan from, which is the
+    same reading of "not concrete" that :func:`analytic._primitives` takes, and for the same
+    reason.
     """
     try:
         verts = _plan_vertices(shapes, period, n_poly)
@@ -453,7 +454,7 @@ def _what_moved(fresh_key, plan_key):
     return '; '.join(parts)
 
 
-def to_conv_mat_boundary_layer(xp, shapes, background, fto_x, fto_y, period, dtype,
+def to_conv_mat_boundary_layer(xp, shapes, background, max_order_x, max_order_y, period, dtype,
                                normal_grid=256, n_poly=POLYGON_VERTICES, plan=None,
                                lattice=None):
     """The five convolution matrices for one layer whose shapes are *painted*.
@@ -473,5 +474,5 @@ def to_conv_mat_boundary_layer(xp, shapes, background, fto_x, fto_y, period, dty
     regs = [(s['material'], [_clipper.loop_verts(xp, lp, vals) for lp in region])
             for s, region in zip(shapes, regions)]
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
-    return conv_mats(xp, regs, background, fto_x, fto_y, period, normal_grid, real_dtype, dtype,
+    return conv_mats(xp, regs, background, max_order_x, max_order_y, period, normal_grid, real_dtype, dtype,
                      lattice=lattice)

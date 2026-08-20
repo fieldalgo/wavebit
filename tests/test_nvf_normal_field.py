@@ -88,10 +88,10 @@ def _unit_fraction(nx, ny):
     return float(np.isclose(np.hypot(nx, ny), 1.0, atol=1e-8).mean())
 
 
-def _projector_defect(nx, ny, fto=3):
+def _projector_defect(nx, ny, max_order=3):
     """``||C_xx + C_yy - I|| / ||I||`` in Fourier space — 0 iff ``nx^2 + ny^2 == 1``."""
-    C_xx = fourier2d_pointwise(xnp, (nx ** 2).astype(complex), fto, fto)
-    C_yy = fourier2d_pointwise(xnp, (ny ** 2).astype(complex), fto, fto)
+    C_xx = fourier2d_pointwise(xnp, (nx ** 2).astype(complex), max_order, max_order)
+    C_yy = fourier2d_pointwise(xnp, (ny ** 2).astype(complex), max_order, max_order)
     I = np.eye(C_xx.shape[0])
     return float(np.linalg.norm(C_xx + C_yy - I) / np.linalg.norm(I))
 
@@ -175,22 +175,22 @@ def test_the_projector_is_built_from_the_sampled_transform():
     """
     eps = _circle(40)
     nx, ny = normal_vector_field(eps)
-    fto = 3
+    max_order = 3
 
-    got = np.asarray(nvf_conv_matrices(xnp, eps, nx, ny, fto, fto)[0])
+    got = np.asarray(nvf_conv_matrices(xnp, eps, nx, ny, max_order, max_order)[0])
 
     def assembled(build):
         c_xx, c_xy, c_yy = (np.asarray(build(f.astype(complex)))
                             for f in (nx ** 2, nx * ny, ny ** 2))
         return c_xx, c_xy, c_yy
 
-    sampled = assembled(lambda f: fourier2d_pointwise(xnp, f, fto, fto))
-    staircase = assembled(lambda f: fourier2d_piecewise_constant(xnp, f, fto, fto, inverse_rule=None))
+    sampled = assembled(lambda f: fourier2d_pointwise(xnp, f, max_order, max_order))
+    staircase = assembled(lambda f: fourier2d_piecewise_constant(xnp, f, max_order, max_order, inverse_rule=None))
 
     # The projector that shipped is the sampled one, to the last bit of the assembly.
     from wavebit._core.factorization import _nvf_assemble
     want = np.asarray(_nvf_assemble(xnp, *(np.asarray(fourier2d_piecewise_constant(
-        xnp, e.astype(complex), fto, fto, inverse_rule=None)) for e in (eps, 1.0 / eps)), *sampled)[0])
+        xnp, e.astype(complex), max_order, max_order, inverse_rule=None)) for e in (eps, 1.0 / eps)), *sampled)[0])
     assert np.allclose(got, want, atol=1e-12, rtol=0), np.abs(got - want).max()
 
     # ... and the other build is far enough away that the check above has teeth.

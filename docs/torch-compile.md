@@ -19,7 +19,7 @@ runs unmodified and returns bit-identical values.
 
 So there is nothing to make work. And no reason to: with everything working on 2.13.0,
 compiling buys **0.92–0.99x on the forward pass and 0.85–1.02x on forward+backward** — nothing,
-either way. The reason is structural, not a bug: at `fto=10`, **98% of the runtime is inside
+either way. The reason is structural, not a bug: at `max_order=10`, **98% of the runtime is inside
 LAPACK/BLAS calls that Inductor forwards verbatim**, and Inductor declines to generate code for
 complex operators at all, which is essentially the entire remainder.
 
@@ -145,7 +145,7 @@ verified on 2.5.1 and 1.18.0. They were aligned to the stated rule at the same t
 Raster path, 64×64 permittivity `structure`, one CPU, best-of-3..7 per cell, **torch 2.13.0** where everything
 works:
 
-| `fto` | forward eager | forward compiled | | fwd+bwd eager | fwd+bwd compiled | |
+| `max_order` | forward eager | forward compiled | | fwd+bwd eager | fwd+bwd compiled | |
 |---|---|---|---|---|---|---|
 | 3 | 0.0126 s | 0.0137 s | **0.92x** | 0.0186 s | 0.0219 s | **0.85x** |
 | 6 | 0.1810 s | 0.1905 s | **0.95x** | 0.2992 s | 0.2940 s | **1.02x** |
@@ -153,8 +153,8 @@ works:
 
 Values were bit-identical (`diff = 0.0`) and gradients agreed to `8.5e-20`.
 
-For scale, `jax.jit` — the analogue that does work — bought roughly 1.9x at `fto=3` falling to
-1.3x at `fto=10` when last measured -- the same collapsing trend, measured the same way.
+For scale, `jax.jit` — the analogue that does work — bought roughly 1.9x at `max_order=3` falling to
+1.3x at `max_order=10` when last measured -- the same collapsing trend, measured the same way.
 Compiled torch does not reach that, and does not reach plain NumPy either.
 
 ## 5. Why the prize is zero, and what would change that
@@ -162,12 +162,12 @@ Compiled torch does not reach that, and does not reach plain NumPy either.
 Not a bug, and not fixable by clearing blockers. Where the time goes (torch profiler, aten self
 time, raster path):
 
-| | `fto=3` | `fto=10` |
+| | `max_order=3` | `max_order=10` |
 |---|---|---|
 | BLAS / LAPACK | 83.7% | **97.9%** |
 | everything else | 16.3% | 2.1% |
 
-At `fto=10` the top four ops are `linalg_eig` (41.5%), `linalg_lu_solve` (25.1%), `mm` (17.5%)
+At `max_order=10` the top four ops are `linalg_eig` (41.5%), `linalg_lu_solve` (25.1%), `mm` (17.5%)
 and `linalg_lu_factor_ex` (13.8%). Inductor does not implement any of these; it emits a fallback
 to the same ATen kernel eager calls. The remaining ~2% is complex-valued elementwise work, which
 Inductor announces it will not compile:
@@ -178,14 +178,14 @@ Performance may be worse than eager.
 ```
 
 The share grew during this investigation, for a reason worth recording. An earlier profile on
-`c992b72` put BLAS/LAPACK at 89% at `fto=10`, with `_fft_c2c` taking 5% there and 30% at
-`fto=3`. `072710d perf(factorization): compute the raster's Fourier coefficients exactly` then
+`c992b72` put BLAS/LAPACK at 89% at `max_order=10`, with `_fft_c2c` taking 5% there and 30% at
+`max_order=3`. `072710d perf(factorization): compute the raster's Fourier coefficients exactly` then
 landed. It did not remove the FFT — the same six transforms still run — but it removed the
 **upsampling** in front of them: the sampled path used to repeat pixels until the grid resolved
-`4*fto+1` harmonics and transform *that*, where the exact coefficients are the N-point DFT of
+`4*max_order+1` harmonics and transform *that*, where the exact coefficients are the N-point DFT of
 the original grid times `sinc(k/N) * exp(-i*pi*k/N)`. Transforming the small grid instead took
-the FFT from 8.4 ms to 0.05 ms at `fto=3` (0.34% of the work) and from 157.9 ms to 0.27 ms at
-`fto=10` (0.01%).
+the FFT from 8.4 ms to 0.05 ms at `max_order=3` (0.34% of the work) and from 157.9 ms to 0.27 ms at
+`max_order=10` (0.01%).
 
 Either way it was a library call Inductor forwards untouched, so this did not change the
 conclusion — it only concentrated what remains into LAPACK.
@@ -199,7 +199,7 @@ This would be worth revisiting if any of the following changed:
 - **A GPU.** All of the above is CPU-only, because this machine has no GPU. Kernel-launch
   overhead and memory traffic are a much larger share on GPU, and the ranking could differ.
 - **Inductor learns to codegen complex operators.** That is what would put the non-LAPACK
-  fraction in play — and it is worth most at low `fto`, where that fraction is largest.
+  fraction in play — and it is worth most at low `max_order`, where that fraction is largest.
 - **The cost stops being dense eigendecomposition** — a different mode solver, or batching many
   small solves so per-call overhead dominates again.
 

@@ -39,7 +39,7 @@ import wavebit.on_jax                                        # noqa: E402,F401  
 
 P = 0.77
 BASE = dict(period=[P, P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
-            wavelength=0.777, top=1.0, bot=2.25, fto=[4, 4])
+            wavelength=0.777, top=1.0, bot=2.25, max_order=[4, 4])
 
 # Nine positions, spaced so no two land on the same normal-field grid line — when this file was
 # written that mattered, because the answer moved between grid lines. It no longer does, and
@@ -134,14 +134,14 @@ def test_the_projectors_move_by_a_phase_and_by_nothing_else():
     """
     from wavebit._core.analytic import normal_projector_coeffs
 
-    fto, grid = 4, 256
+    max_order, grid = 4, 256
     cy0, cy = 0.385, 0.31 * P
 
     def coeffs(v):
         return normal_projector_coeffs(jnp, [_shape('rectangle', 'cy', v)], (grid, grid),
-                                       (P, P), fto, fto, jnp.complex128)
+                                       (P, P), max_order, max_order, jnp.complex128)
 
-    ky = np.arange(-2 * fto, 2 * fto + 1)[:, None]
+    ky = np.arange(-2 * max_order, 2 * max_order + 1)[:, None]
     phase = np.exp(-2j * np.pi * ky * (cy - cy0) / P)
 
     for at_ref, at_cy in zip(coeffs(cy0), coeffs(cy)):
@@ -158,12 +158,12 @@ def test_the_position_reaches_the_projectors_through_that_phase():
     """
     from wavebit._core.analytic import normal_projector_coeffs
 
-    fto, grid = 4, 256
+    max_order, grid = 4, 256
 
     def c_ky1(v):
         c_xx = normal_projector_coeffs(jnp, [_shape('rectangle', 'cy', v)], (grid, grid),
-                                       (P, P), fto, fto, jnp.complex128)[0]
-        return jnp.real(c_xx[2 * fto + 1, 2 * fto])
+                                       (P, P), max_order, max_order, jnp.complex128)[0]
+        return jnp.real(c_xx[2 * max_order + 1, 2 * max_order])
 
     cy, h = 0.31 * P, 1e-6
     auto = float(jax.grad(c_ky1)(jnp.asarray(cy)))
@@ -219,7 +219,7 @@ def test_the_sampled_field_no_longer_depends_on_where_in_the_cell_a_shape_SITS()
 # nothing to do with each layer being right.
 
 STACK = dict(period=[P, P], thickness=[0.25, 0.30], theta=0.35, phi=0.4, psi=0.0,
-             wavelength=0.777, top=1.0, bot=2.25, fto=[4, 4])
+             wavelength=0.777, top=1.0, bot=2.25, max_order=[4, 4])
 CX0, CX1 = 0.35 * P, 0.55 * P
 
 
@@ -315,7 +315,7 @@ def test_moving_one_layer_of_two_moves_the_answer_and_the_gradient_says_by_how_m
 # both. Both halves are pinned below so that neither can be assumed from the other.
 
 TWO_CFG = dict(period=[P, P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
-               wavelength=0.777, top=1.0, bot=2.25, fto=[4, 4])
+               wavelength=0.777, top=1.0, bot=2.25, max_order=[4, 4])
 CA, CB = 0.28 * P, 0.68 * P
 
 TWO_CIRCLES = (dict(type='circle', cy=0.30 * P, lx=0.20 * P, material=9.0),
@@ -398,7 +398,7 @@ def test_a_layer_of_two_shapes_is_translation_invariant_too():
     converges with the grid (7.3e-6, 5.2e-6, 1.8e-6, 7.6e-7 at normal_grid 256 to 2048), which
     is what separates it from the clipped window this used to measure at 1e-2.
     """
-    cfg = dict(backend=0, period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), fto=(4, 4),
+    cfg = dict(backend=0, period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), max_order=(4, 4),
                top=1.0, bot=2.1025, theta=0.0, phi=None, psi=np.pi / 2)
 
     def total(d, grid=256):
@@ -435,7 +435,7 @@ def test_a_multishape_layer_is_periodic_across_the_cell_edge():
     test replaced ``test_a_multishape_layer_is_not_periodic_across_the_cell_edge`` on
     2026-08-17, which existed to fail loudly on the day the path was repaired.
     """
-    cfg = dict(backend=0, period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), fto=(4, 4),
+    cfg = dict(backend=0, period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), max_order=(4, 4),
                top=1.0, bot=2.1025, theta=0.0, phi=None, psi=np.pi / 2)
     fixed = dict(type='rectangle', cx=0.72, cy=0.62, lx=0.26, ly=0.30, angle=0.0, material=4.41)
 
@@ -474,7 +474,7 @@ def test_a_common_translation_of_every_shape_leaves_the_answer_alone():
     resamples a periodic field at different points and leaves ~6e-5, which is discretization
     and not the clipped window this used to be confused with.
     """
-    cfg = dict(backend=0, period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), fto=(4, 4),
+    cfg = dict(backend=0, period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), max_order=(4, 4),
                top=1.0, bot=2.1025, theta=0.0, phi=None, psi=np.pi / 2)
 
     def total(shift):

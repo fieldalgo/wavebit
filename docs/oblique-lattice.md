@@ -23,7 +23,7 @@ a = 400.0
 a1, a2 = np.array([a, 0.0]), np.array([a / 2, a * np.sqrt(3) / 2])   # hex
 
 solver = wavebit.rcwa(
-    backend=0, structure=cell, fto=[10, 10], thickness=[300.0], wavelength=900.0,
+    backend=0, structure=cell, max_order=[10, 10], thickness=[300.0], wavelength=900.0,
     factorization='nvf',                       # required — see "What is refused"
     lattice=np.column_stack((a1, a2)),         # columns are a1, a2
 )
@@ -38,7 +38,7 @@ report the basis-vector lengths `(|a1|, |a2|)`.
 
     r = (i + 0.5)/Nx * a1  +  (j + 0.5)/Ny * a2
 
-Axis 1 runs along `a1` (and pairs with `fto[0]`), axis 0 along `a2` (with `fto[1]`). Build the
+Axis 1 runs along `a1` (and pairs with `max_order[0]`), axis 0 along `a2` (with `max_order[1]`). Build the
 raster on a **Cartesian** grid and hand it a skewed basis and you have described a *different
 structure* — and nothing will tell you. There is no error, the transform is still a transform,
 and energy still conserves to 1e-15 because the NVF assembly is Hermitian whatever the geometry
@@ -64,16 +64,16 @@ The supercell and the native cell describe the same infinite array.
 
 | | orders | wall clock |
 |---|---|---|
-| `a x a*sqrt(3)` supercell, `fto=(14, 24)` | 1421 | 38.9 s |
-| native hex cell, `fto=(12, 12)` | 625 | 3.3 s |
+| `a x a*sqrt(3)` supercell, `max_order=(14, 24)` | 1421 | 38.9 s |
+| native hex cell, `max_order=(12, 12)` | 625 | 3.3 s |
 
 The order-count ratio is exactly 2 (it is the cell-area ratio; verified numerically across
-`fto`), and the measured cost exponent is `N^2.7` — not `N^3`, because the convolution build is
+`max_order`), and the measured cost exponent is `N^2.7` — not `N^3`, because the convolution build is
 sub-cubic. At matched k-space coverage that is **~8x**, and better in practice because the
 supercell converges more slowly than the native cell does.
 
 Do not confuse this with a convergence fix. On the same structure, `factorization='li'` had not
-converged at `fto=(16, 28)` after 72 s while `'nvf'` settled by `fto=(10, 17)` in 5 s. That gap
+converged at `max_order=(16, 28)` after 72 s while `'nvf'` settled by `max_order=(10, 17)` in 5 s. That gap
 is the *factorization*, not the lattice, and an oblique cell does nothing about it. The two wins
 are independent and multiply.
 
@@ -115,15 +115,15 @@ reproduces `li` face by face there.
 Measured, on the structure most favourable to `li` — a rectangle aligned to the axes, 512x512
 raster, square lattice:
 
-| fto | `li` | `nvf` |
+| max_order | `li` | `nvf` |
 |---|---|---|
 | 12 | 0.86259051 | 0.86239874 |
 | 15 | 0.86204124 | 0.86242349 |
 | 18 | 0.86197717 | 0.86186546 |
 
-Same limit to ~1e-4, same cost (30.0 s against 31.1 s at fto 18). On a *curved* boundary the two
-part company completely: on a circular pillar `li` had not converged at `fto=(16, 28)` after 72 s
-while `nvf` settled by `fto=(10, 17)` in 5 s. No measured case has `li` ahead. One structure, one
+Same limit to ~1e-4, same cost (30.0 s against 31.1 s at max_order 18). On a *curved* boundary the two
+part company completely: on a circular pillar `li` had not converged at `max_order=(16, 28)` after 72 s
+while `nvf` settled by `max_order=(10, 17)` in 5 s. No measured case has `li` ahead. One structure, one
 wavelength, normal incidence — but the containment above is structural and holds regardless.
 
 ## Fields on a skewed cell
@@ -150,7 +150,7 @@ keeps the lattice but retains a different set of orders — a sheared parallelog
 where the other has a square. Converged quantities cannot tell (efficiencies agree to 2e-6), but
 a field is a finite sum over exactly that set, and the evanescent tails the two sets disagree
 about decay far too slowly to cancel at a discontinuity. Measured: 1.1e-1 at the interface, flat
-from `fto=4` to `fto=12`; **2.0e-4** in a homogeneous region of the same run, where every
+from `max_order=4` to `max_order=12`; **2.0e-4** in a homogeneous region of the same run, where every
 surviving order is propagating and both sets hold all of them. Compare fields away from
 boundaries, or at matched order sets.
 
@@ -208,10 +208,10 @@ which `is_axis_aligned` correctly reports as *not* axis-aligned — it needs one
 | T(+1,0) | 0.12860 | 0.12843 | 0.12850 | +7e-5 |
 | T(+1,+1) | 0.04308 | 0.04332 | 0.04317 | -1.5e-4 |
 
-Worst 2.06e-4 over all nine, at `fto=(16,16)`; sum of reflected orders 0.10057 against the
+Worst 2.06e-4 over all nine, at `max_order=(16,16)`; sum of reflected orders 0.10057 against the
 paper's 0.10040. For scale, the paper's own FMM and FEM differ by 9.1e-4 on T(0,0) — this sits
 closer to FEM than those two sit to each other. `tests/test_oblique_lattice.py` has it as
-`test_li_1997_checkerboard_matches_the_published_table`, at `fto=(12,12)` so it stays a test
+`test_li_1997_checkerboard_matches_the_published_table`, at `max_order=(12,12)` so it stays a test
 rather than a study.
 
 **Watch the polarisation frame when reproducing it.** `psi0 = 45 deg` in the paper is measured
@@ -239,7 +239,7 @@ diverged on *both* lattices in our hands, 0.986 -> 0.933, and is not usable as a
 
 **The supercell it replaces.** A native hex cell reproduces its rectangular supercell; the
 residual is the two rasters staircasing the feature differently, so it tightens with resolution
-rather than with `fto`.
+rather than with `max_order`.
 
 ## A worked case: a visible metalens phase library
 
@@ -260,9 +260,9 @@ already at its final value with 289 orders, where S4 has not settled at 595. Tha
 staircase-free shape transform and NVF together, not the lattice.
 
 The same structure as a rectangular supercell agrees to 6.0e-4 and takes 2.9x as long
-(`fto=(8,14)`, 493 orders, 2.57 s against 289 orders, 0.89 s). Note that is **~3x, not the ~8x**
+(`max_order=(8,14)`, 493 orders, 2.57 s against 289 orders, 0.89 s). Note that is **~3x, not the ~8x**
 quoted above: 8x is the asymptotic ratio on a converged high-contrast structure, and a metalens
-library at `fto=8` is not in that regime — the order ratio there is 1.71, not 2. Expect ~3x on
+library at `max_order=8` is not in that regime — the order ratio there is 1.71, not 2. Expect ~3x on
 this kind of sweep and ~8x when you genuinely need the harmonics.
 
 ## Where the skew actually reaches the code

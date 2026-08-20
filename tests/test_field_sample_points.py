@@ -51,12 +51,12 @@ def _solver(path, backend=0):
     kw = dict(backend=backend, top=1.0, bot=1.0, wavelength=WL, thickness=THICK,
               theta=np.deg2rad(24.0), fourier_coefficients='integrated', answers='field')
     if path in ('te', 'tm'):
-        kw.update(tetm=path, phi=None, fto=6, period=[PERIOD[0]], structure=TWO_LAYER)
+        kw.update(tetm=path, phi=None, max_order=6, period=[PERIOD[0]], structure=TWO_LAYER)
     elif path == 'conical':
-        kw.update(psi=np.pi / 2, phi=np.deg2rad(15.0), fto=6, period=[PERIOD[0]],
+        kw.update(psi=np.pi / 2, phi=np.deg2rad(15.0), max_order=6, period=[PERIOD[0]],
                   structure=TWO_LAYER)
     else:
-        kw.update(psi=np.pi / 2, phi=np.deg2rad(15.0), fto=(3, 3), period=PERIOD,
+        kw.update(psi=np.pi / 2, phi=np.deg2rad(15.0), max_order=(3, 3), period=PERIOD,
                   structure=np.repeat(TWO_LAYER, 4, axis=1))
     s = wavebit.rcwa(**kw)
     if path == '4ff':
@@ -267,7 +267,7 @@ def test_traced_thickness_with_explicit_z_says_why_it_cannot():
     def run(thick, sample_z):
         s = wavebit.rcwa(backend=1, top=1.0, bot=1.0, wavelength=WL,
                          thickness=thick, theta=np.deg2rad(24.0), tetm='tm', phi=None,
-                         fto=4, period=[PERIOD[0]], structure=jnp.asarray(TWO_LAYER),
+                         max_order=4, period=[PERIOD[0]], structure=jnp.asarray(TWO_LAYER),
                          fourier_coefficients='integrated', answers='field')
         s.solve()
         return jnp.sum(jnp.abs(s.reconstruct_field(sample_x=5, sample_y=1, sample_z=sample_z)) ** 2)

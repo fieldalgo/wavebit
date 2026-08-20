@@ -76,7 +76,7 @@ Slot order
 
 .. code-block:: python
 
-    res = mee.solve_conv(*to_conv_mat_raster_nvf(structure, fto_x, fto_y))
+    res = mee.solve_conv(*to_conv_mat_raster_nvf(structure, max_order_x, max_order_y))
 
 is correct for any of them. Concretely, three slots are ``(epx, epy, epz_i)`` and five are
 ``(epx, epy, epz_i, epxy, epyx)`` — the inverted zz matrix is **third**, not last, because
@@ -172,7 +172,7 @@ def _wrap(orders, n):
     return [k % n for k in orders]
 
 
-def _circulant_index(fto):
+def _circulant_index(max_order):
     """Circular index matrix selecting Fourier orders ``m - n`` (pure integer, data-free).
 
     The sign here *is* the order-index convention, and it has to agree with the sign ``kx``
@@ -181,17 +181,18 @@ def _circulant_index(fto):
     a grating comparison. Uniform layers cannot expose it at all -- their convolution matrix
     is ``eps * I``, which is its own transpose.
     """
-    ff = 2 * fto + 1
-    return [[(r - c) for c in range(ff)] for r in range(ff)]
+    n_orders = 2 * max_order + 1
+    return [[(r - c) for c in range(n_orders)] for r in range(n_orders)]
 
 
-def _circulant_gather(xp, fto, dev):
-    """Index expanding a ``4*fto+1`` order vector into the ``(ff, ff)`` circulant of ``r - c``.
+def _circulant_gather(xp, max_order, dev):
+    """Index expanding a ``4*max_order+1`` order vector into the ``(n_orders, n_orders)``
+    circulant of ``r - c``.
 
-    The same shape :func:`fourier2d_integrated` builds; ``+ 2*fto`` turns the signed order into a position in
-    that vector.
+    The same shape :func:`fourier2d_integrated` builds; ``+ 2*max_order`` turns the signed order
+    into a position in that vector.
     """
-    return xp.asarray([[v + 2 * fto for v in row] for row in _circulant_index(fto)], device=dev)
+    return xp.asarray([[v + 2 * max_order for v in row] for row in _circulant_index(max_order)], device=dev)
 
 
 def _pixel_correction(xp, orders, n, dtype, device=None):
@@ -204,9 +205,9 @@ def _pixel_correction(xp, orders, n, dtype, device=None):
     ``|k| > n`` where the DFT itself has wrapped.
 
     That last part is what makes the upsampling unnecessary rather than merely cheaper. The
-    previous approach repeated each pixel until the grid resolved ``4*fto+1`` harmonics and
+    previous approach repeated each pixel until the grid resolved ``4*max_order+1`` harmonics and
     took the DFT of *that*, which converges to this expression as ``1/R`` — so it was an
-    approximation of a closed form, at a grid cost of ``(4*fto+1)**2`` per layer.
+    approximation of a closed form, at a grid cost of ``(4*max_order+1)**2`` per layer.
     """
     k = xp.astype(xp.asarray(orders, device=device), dtype)
     t = k / n
@@ -241,7 +242,7 @@ def _half_pixel_phase(xp, orders, n, dtype, device=None):
     return xp.exp(-1j * 3.141592653589793 * k / n)
 
 
-def fourier2d_piecewise_constant(xp, cell, fto_x, fto_y, *, inverse_rule):
+def fourier2d_piecewise_constant(xp, cell, max_order_x, max_order_y, *, inverse_rule):
     """2D discrete Fourier series of a grid whose values *hold across* their pixels.
 
     A permittivity raster is this case: ``structure`` names the material occupying each cell, so
@@ -253,10 +254,10 @@ def fourier2d_piecewise_constant(xp, cell, fto_x, fto_y, *, inverse_rule):
     ``None`` for the direct rule both ways. Those three are Li's three components of one
     layer: ``None`` builds ``epz``, ``'y'`` builds ``epy``, ``'x'`` builds ``epx``.
     """
-    return _fourier2d_grid(xp, cell, fto_x, fto_y, inverse_rule=inverse_rule, piecewise_constant=True)
+    return _fourier2d_grid(xp, cell, max_order_x, max_order_y, inverse_rule=inverse_rule, piecewise_constant=True)
 
 
-def fourier2d_pointwise(xp, field, fto_x, fto_y):
+def fourier2d_pointwise(xp, field, max_order_x, max_order_y):
     """2D discrete Fourier series of a grid holding *point samples* of a continuous field.
 
     The NVF normal field is this case, and the only one in the package: a continuous
@@ -274,18 +275,18 @@ def fourier2d_pointwise(xp, field, fto_x, fto_y):
     call in the package asked for the direct rule. Offering the choice would only be offering
     a way to be wrong.
 
-    Because there is no closed form, this path *does* need ``4*fto+1`` points — the caller
+    Because there is no closed form, this path *does* need ``4*max_order+1`` points — the caller
     lifts the grid to that floor, see :func:`_normal_field_floor`.
     """
-    return _fourier2d_grid(xp, field, fto_x, fto_y, inverse_rule=None, piecewise_constant=False)
+    return _fourier2d_grid(xp, field, max_order_x, max_order_y, inverse_rule=None, piecewise_constant=False)
 
 
-def _fourier2d_grid(xp, cell, fto_x, fto_y, *, inverse_rule, piecewise_constant):
+def _fourier2d_grid(xp, cell, max_order_x, max_order_y, *, inverse_rule, piecewise_constant):
     """2D discrete Fourier series of ``cell`` with Li's factorization rules.
 
     Private, and ``piecewise_constant`` has no default, because the two answers are not a
-    preference: they say what kind of data the grid holds, and getting it wrong is silent.
-    Call :func:`fourier2d_piecewise_constant` or :func:`fourier2d_pointwise` instead, which say it in
+    preference: they say what kind of data the grid holds, and getting it wrong is silent. Call
+    :func:`fourier2d_piecewise_constant` or :func:`fourier2d_pointwise` instead, which say it in
     the name.
 
     ``inverse_rule`` is the direction whose discontinuity the inverse rule closes (``'x'``,
@@ -301,7 +302,7 @@ def _fourier2d_grid(xp, cell, fto_x, fto_y, *, inverse_rule, piecewise_constant)
     That is Li's construction, so ``epy`` takes the inner inverse and ``epx`` the outer one —
     the mid-loop ``inv`` below is not movable to the end. It also means the result is not
     invariant under relabelling x and y: on a transpose-symmetric structure the two
-    polarisations disagree by ~6e-4 at ``fto=12`` where NVF holds the symmetry to 1e-13.
+    polarisations disagree by ~6e-4 at ``max_order=12`` where NVF holds the symmetry to 1e-13.
     Intrinsic to the scheme rather than a defect here, and untested; the measurement is in
     ``docs/factorization-terms.md`` §6.
 
@@ -322,8 +323,8 @@ def _fourier2d_grid(xp, cell, fto_x, fto_y, *, inverse_rule, piecewise_constant)
     efficiencies by 1e-5 at normal incidence into an index-matched substrate, and by 2e-4 to
     2e-3 once there is index contrast or conical incidence — between one decade under the
     change from doubling the raster and comparable to it. Omitting it on a permittivity raster
-    is the serious one: 1e-4 to 2e-2 per order, growing with ``fto``, and below roughly
-    ``N < 2*fto`` the inverse-rule matrix is singular and the solve raises ``LinAlgError``
+    is the serious one: 1e-4 to 2e-2 per order, growing with ``max_order``, and below roughly
+    ``N < 2*max_order`` the inverse-rule matrix is singular and the solve raises ``LinAlgError``
     outright. Energy conservation is undisturbed either way, so nothing downstream notices.
 
     (An earlier version of this docstring gave the first figure as ``~7e-7``, "four decades
@@ -331,8 +332,8 @@ def _fourier2d_grid(xp, cell, fto_x, fto_y, *, inverse_rule, piecewise_constant)
     with no index contrast, and is not a bound.)
     """
     inv_x, inv_y = _inverse_axes(inverse_rule)
-    ff_x = 2 * fto_x + 1
-    ff_y = 2 * fto_y + 1
+    n_orders_x = 2 * max_order_x + 1
+    n_orders_y = 2 * max_order_y + 1
 
     cell = xp.matrix_transpose(cell)
 
@@ -342,35 +343,35 @@ def _fourier2d_grid(xp, cell, fto_x, fto_y, *, inverse_rule, piecewise_constant)
     dfs1d = xp.fft.fft(cell / cell.shape[1])
 
     dev = _device(xp, cell)
-    orders_y = list(range(-2 * fto_y, 2 * fto_y + 1))
-    orders_x = list(range(-2 * fto_x, 2 * fto_x + 1))
+    orders_y = list(range(-2 * max_order_y, 2 * max_order_y + 1))
+    orders_x = list(range(-2 * max_order_x, 2 * max_order_x + 1))
     n_y = cell.shape[1]
 
     # Read the coefficients on the *order* vector, correct them there, and only then expand
     # into the circulant -- the shape `fourier2d_integrated` has always had.
     #
     # Two reasons it is this way round. It is cheaper: the circulant repeats each of the
-    # 4*fto+1 distinct orders across (2*fto+1)**2 entries, so correcting afterwards evaluates
-    # the same sin/exp and repeats the same multiply ~21x over at fto=20. And it is the only
+    # 4*max_order+1 distinct orders across (2*max_order+1)**2 entries, so correcting
+    # the same sin/exp and repeats the same multiply ~21x over at max_order=20. And it is the only
     # order that is *correct* to fold: the correction depends on the order, not on the DFT bin
     # it wraps to, so it cannot be pushed any earlier into `dfs1d` -- on a short grid distinct
     # orders share a bin and need different factors.
     #
     # `_wrap` states that bin rather than leaning on Python's negative indexing. Identical
     # wherever the old form worked, and defined where it did not: raw order indices need a grid
-    # of at least 4*fto+1 to stay in range, which is the whole reason the raster used to be
+    # of at least 4*max_order+1 to stay in range, which is the whole reason the raster used to be
     # upsampled before anything else was considered.
     coeff_y = dfs1d[:, xp.asarray(_wrap(orders_y, n_y), device=dev)]
     # Both kinds of grid carry the half-pixel offset; only a staircase also carries
     # the box transform. See :func:`_half_pixel_phase`.
     _correct = _pixel_correction if piecewise_constant else _half_pixel_phase
     coeff_y = coeff_y * _correct(xp, orders_y, n_y, coeff_y.dtype, dev)
-    conv1d = coeff_y[:, _circulant_gather(xp, fto_y, dev)]
+    conv1d = coeff_y[:, _circulant_gather(xp, max_order_y, dev)]
 
     if inv_x or inv_y:    # Li's inner step, whichever direction asked for it
         conv1d = xp.linalg.inv(conv1d)
 
-    conv1d = xp.reshape(conv1d, (-1, ff_y ** 2))
+    conv1d = xp.reshape(conv1d, (-1, n_orders_y ** 2))
 
     conv1d_t = xp.matrix_transpose(conv1d)
     n_x = conv1d_t.shape[1]
@@ -381,10 +382,10 @@ def _fourier2d_grid(xp, cell, fto_x, fto_y, *, inverse_rule, piecewise_constant)
     # the box transform. See :func:`_half_pixel_phase`.
     _correct = _pixel_correction if piecewise_constant else _half_pixel_phase
     coeff_x = coeff_x * _correct(xp, orders_x, n_x, coeff_x.dtype, dev)
-    conv2d = coeff_x[:, _circulant_gather(xp, fto_x, dev)]
-    conv2d = xp.reshape(conv2d, (ff_y, ff_y, ff_x, ff_x))
+    conv2d = coeff_x[:, _circulant_gather(xp, max_order_x, dev)]
+    conv2d = xp.reshape(conv2d, (n_orders_y, n_orders_y, n_orders_x, n_orders_x))
     conv2d = xp.moveaxis(conv2d, 1, 2)
-    conv2d = xp.reshape(conv2d, (ff_y * ff_x, ff_y * ff_x))
+    conv2d = xp.reshape(conv2d, (n_orders_y * n_orders_x, n_orders_y * n_orders_x))
 
     if inv_x:             # x discontinuous: Li's outer step closes it
         conv2d = xp.linalg.inv(conv2d)
@@ -420,26 +421,26 @@ def _layer_eps(xp, structure):
         yield xp.astype(layer, _complex_dtype(xp, layer))
 
 
-def _normal_field_floor(shape, fto_x, fto_y):
+def _normal_field_floor(shape, max_order_x, max_order_y):
     """Repeat factors that lift a layer to the grid the normal field's transform needs.
 
     The normal field is a continuous vector field this code evaluates on a grid, so unlike the
-    permittivity it has no closed-form transform and :func:`fourier2d_pointwise` reads it off the grid
-    directly. That requires ``4*fto+1`` points: the circulant asks for orders up to
-    ``+/-2*fto``, and on a shorter grid ``k % n`` folds distinct orders onto one bin. The
-    damage is structural rather than gradual — a *constant* normal field must transform to the
-    identity for NVF to collapse onto Li's rules on a one-cell axis, and on a short grid it
+    permittivity it has no closed-form transform and :func:`fourier2d_pointwise` reads it off
+    the grid directly. That requires ``4*max_order+1`` points: the circulant asks for orders up
+    to ``+/-2*max_order``, and on a shorter grid ``k % n`` folds distinct orders onto one bin.
+    The damage is structural rather than gradual — a *constant* normal field must transform to
+    the identity for NVF to collapse onto Li's rules on a one-cell axis, and on a short grid it
     picks up off-diagonals at ``+/-n`` instead.
 
     Only up to that floor. Going past it was the old ``enhanced_dfs=True``, which multiplied it
     by the raster size; measured across 32 shape/material/polarization/order combinations it
     lost accuracy in 27 and gained in none that stood up (see ``docs/nvf-upsampling.md``).
     """
-    return (max(1, (4 * fto_y + 1) // shape[0] + 1) if shape[0] < 4 * fto_y + 1 else 1,
-            max(1, (4 * fto_x + 1) // shape[1] + 1) if shape[1] < 4 * fto_x + 1 else 1)
+    return (max(1, (4 * max_order_y + 1) // shape[0] + 1) if shape[0] < 4 * max_order_y + 1 else 1,
+            max(1, (4 * max_order_x + 1) // shape[1] + 1) if shape[1] < 4 * max_order_x + 1 else 1)
 
 
-def _layer_eps_for_normal_field(xp, structure, fto_x, fto_y):
+def _layer_eps_for_normal_field(xp, structure, max_order_x, max_order_y):
     """Each layer's permittivity grid for the NVF path, with the base it was repeated from.
 
     Yields ``(eps, base_eps, repeat_y, repeat_x)``. The base is what
@@ -451,7 +452,7 @@ def _layer_eps_for_normal_field(xp, structure, fto_x, fto_y):
     for i in range(structure.shape[0]):
         layer = structure[i]
         base = xp.astype(layer, _complex_dtype(xp, layer))
-        repeat_y, repeat_x = _normal_field_floor(layer.shape, fto_x, fto_y)
+        repeat_y, repeat_x = _normal_field_floor(layer.shape, max_order_x, max_order_y)
         if repeat_y > 1:
             layer = xp.repeat(layer, repeat_y, axis=0)
         if repeat_x > 1:
@@ -459,26 +460,26 @@ def _layer_eps_for_normal_field(xp, structure, fto_x, fto_y):
         yield xp.astype(layer, _complex_dtype(xp, layer)), base, repeat_y, repeat_x
 
 
-def to_conv_mat_raster_sampled(structure, fto_x, fto_y):
+def to_conv_mat_raster_sampled(structure, max_order_x, max_order_y):
     """Per-layer convolution matrices for a raster ``structure`` via the sampled path.
 
     Args:
         structure: relative-permittivity raster, shape ``(n_layers, Ny, Nx)``. This is the
             design variable — gradients flow back to it. Permittivity, not an index: nothing
             here squares it (``docs/conventions.md``).
-        fto_x, fto_y: Fourier truncation orders.
+        max_order_x, max_order_y: Fourier truncation orders.
 
     Returns:
-        ``(epx_conv_all, epy_conv_all, epz_conv_i_all)``, each ``(n_layers, ff_xy, ff_xy)``.
+        ``(epx_conv_all, epy_conv_all, epz_conv_i_all)``, each ``(n_layers, n_orders, n_orders)``.
     """
     xp = array_namespace(structure)
 
     epx_list, epy_list, epz_i_list = [], [], []
 
     for eps_matrix in _layer_eps(xp, structure):
-        epz_conv = fourier2d_piecewise_constant(xp, eps_matrix, fto_x, fto_y, inverse_rule=None)
-        epy_conv = fourier2d_piecewise_constant(xp, eps_matrix, fto_x, fto_y, inverse_rule='y')
-        epx_conv = fourier2d_piecewise_constant(xp, eps_matrix, fto_x, fto_y, inverse_rule='x')
+        epz_conv = fourier2d_piecewise_constant(xp, eps_matrix, max_order_x, max_order_y, inverse_rule=None)
+        epy_conv = fourier2d_piecewise_constant(xp, eps_matrix, max_order_x, max_order_y, inverse_rule='y')
+        epx_conv = fourier2d_piecewise_constant(xp, eps_matrix, max_order_x, max_order_y, inverse_rule='x')
 
         epx_list.append(epx_conv)
         epy_list.append(epy_conv)
@@ -521,7 +522,7 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
     live in :mod:`wavebit._core.normal_methods`, and ``docs/nvf-normal-methods.md`` carries
     the measurements that rank them (``'contour'`` is the one that lost nowhere).
 
-    ``base_shape`` is the layer's shape before the ``4*fto+1`` floor lift, when the caller
+    ``base_shape`` is the layer's shape before the ``4*max_order+1`` floor lift, when the caller
     lifted it. The smoothing constructions state their pixel-unit policies on the base grid
     — a lifted raster is the same staircase spelled with more pixels, so smoothing scales
     stated on the lifted grid would shrink under the lift instead of holding still.
@@ -553,10 +554,10 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
     named differently — and every efficiency must come back unchanged. It did not: the mask
     compared only inside the array, the distance transform measured to the in-cell interface
     rather than the periodically nearest one, and ``np.gradient`` is one-sided on the first and
-    last row and column. Together they moved ``max|dR|`` by ~1e-2 at every ``fto``, and no
+    last row and column. Together they moved ``max|dR|`` by ~1e-2 at every ``max_order``, and no
     subset of the three fixes it (fixed 2026-08-17; ``docs/nvf-normal-methods.md`` has the
     table, ``tests/test_nvf_lattice_translation.py`` the guard). The defect did not shrink with
-    ``fto`` because the floor lift is a block repeat, so a finer grid is the same staircase.
+    ``max_order`` because the floor lift is a block repeat, so a finer grid is the same staircase.
 
     ``lattice`` is the cell basis the raster indexes into. It matters because this is the one
     piece of the NVF construction that is *Cartesian-geometric* rather than index-based: the
@@ -685,16 +686,16 @@ def _interface_mask(eps):
 def _upsampled_interface_mask(xp, base_eps, repeat_y, repeat_x):
     """The interface mask of a block-repeated grid, from the base grid's neighbour comparisons.
 
-    :func:`_layer_eps_for_normal_field` lifts a layer to the floor by repeating each cell, so the repeated grid is
-    constant inside every block. Two neighbouring cells of it can therefore only differ where
-    they straddle a block boundary *and* the base differs across it — which means the whole
-    mask follows from ``(base_ny-1)*base_nx + base_ny*(base_nx-1)`` comparisons on the base,
-    rather than one read of the repeated grid.
+    :func:`_layer_eps_for_normal_field` lifts a layer to the floor by repeating each cell, so
+    the repeated grid is constant inside every block. Two neighbouring cells of it can therefore
+    only differ where they straddle a block boundary *and* the base differs across it — which
+    means the whole mask follows from ``(base_ny-1)*base_nx + base_ny*(base_nx-1)`` comparisons
+    on the base, rather than one read of the repeated grid.
 
     That is the whole point. Reading the repeated grid means converting it to NumPy in one
     step, which a tracer refuses; narrowing the base's comparisons one value at a time is
     something a grad tracer allows, and there are ``repeat_y * repeat_x`` times fewer of them —
-    128x128 rather than 2688x2688 at ``fto=5``. It is what lets NVF differentiate with no
+    128x128 rather than 2688x2688 at ``max_order=5``. It is what lets NVF differentiate with no
     frozen geometry. (Under ``jax.jit`` neither works: there is no primal to narrow.)
 
     Note this is *not* the base's own mask repeated. Repeating ``[1, 2]`` twice gives
@@ -789,7 +790,7 @@ def _normal_field_source(eps, lattice=None, method=None):
     phases (which decides the delegation to ``'distance'``, and which a merge of two
     non-adjacent phases can change without moving a single interface — hence the fifth
     element). The pre-lift ``base_shape`` is not captured because it follows from the
-    shape the record already pins plus the solver's own ``fto``.
+    shape the record already pins plus the solver's own ``max_order``.
     """
     import numpy as np
     from .enums import NormalMethod, normal_method_of
@@ -800,7 +801,7 @@ def _normal_field_source(eps, lattice=None, method=None):
             int(np.unique(eps).size))
 
 
-def normal_field_for_raster(structure, fto_x, fto_y, lattice=None, method=None):
+def normal_field_for_raster(structure, max_order_x, max_order_y, lattice=None, method=None):
     """Per-layer ``(nx, ny)`` normal fields for ``structure``, on the grid the NVF build uses.
 
     Precompute this once from the concrete geometry and hand it to
@@ -813,10 +814,10 @@ def normal_field_for_raster(structure, fto_x, fto_y, lattice=None, method=None):
     xp = array_namespace(structure)
     return [normal_vector_field(eps, lattice=lattice, method=method,
                                 base_shape=tuple(base.shape))
-            for eps, base, _, _ in _layer_eps_for_normal_field(xp, structure, fto_x, fto_y)]
+            for eps, base, _, _ in _layer_eps_for_normal_field(xp, structure, max_order_x, max_order_y)]
 
 
-def normal_field_source_for_raster(structure, fto_x, fto_y, lattice=None, method=None):
+def normal_field_source_for_raster(structure, max_order_x, max_order_y, lattice=None, method=None):
     """What :func:`normal_field_for_raster` derived its answer from, per layer.
 
     Freeze this alongside the normal field and hand both back to
@@ -826,7 +827,7 @@ def normal_field_source_for_raster(structure, fto_x, fto_y, lattice=None, method
     """
     xp = array_namespace(structure)
     return [_normal_field_source(_to_numpy(eps), lattice, method)
-            for eps, _, _, _ in _layer_eps_for_normal_field(xp, structure, fto_x, fto_y)]
+            for eps, _, _, _ in _layer_eps_for_normal_field(xp, structure, max_order_x, max_order_y)]
 
 
 def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None, method=None):
@@ -898,7 +899,7 @@ def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None, meth
         f'does.)')
 
 
-def _nvf_projector(xp, nx, ny, fto_x, fto_y, dtype, device=None):
+def _nvf_projector(xp, nx, ny, max_order_x, max_order_y, dtype, device=None):
     """Convolution matrices of the normal projector: ``C_xx = <nx^2>`` etc.
 
     Always sampled off the raster the normal field lives on, whatever
@@ -908,9 +909,9 @@ def _nvf_projector(xp, nx, ny, fto_x, fto_y, dtype, device=None):
     extension of the interface direction into the bulk, so it has no piecewise-constant block
     structure for the closed-form series to integrate over in the first place.
     """
-    C_xx = fourier2d_pointwise(xp, xp.asarray(nx ** 2, dtype=dtype, device=device), fto_x, fto_y)
-    C_xy = fourier2d_pointwise(xp, xp.asarray(nx * ny, dtype=dtype, device=device), fto_x, fto_y)
-    C_yy = fourier2d_pointwise(xp, xp.asarray(ny ** 2, dtype=dtype, device=device), fto_x, fto_y)
+    C_xx = fourier2d_pointwise(xp, xp.asarray(nx ** 2, dtype=dtype, device=device), max_order_x, max_order_y)
+    C_xy = fourier2d_pointwise(xp, xp.asarray(nx * ny, dtype=dtype, device=device), max_order_x, max_order_y)
+    C_yy = fourier2d_pointwise(xp, xp.asarray(ny ** 2, dtype=dtype, device=device), max_order_x, max_order_y)
     return C_xx, C_xy, C_yy
 
 
@@ -1008,7 +1009,7 @@ def _pn_fields(xp, eps33, nx, ny):
     return A, B
 
 
-def pn_conv_matrices(xp, eps33, nx, ny, fto_x, fto_y):
+def pn_conv_matrices(xp, eps33, nx, ny, max_order_x, max_order_y):
     """Popov-Neviere convolution matrices for one *patterned anisotropic* layer.
 
     ``eps33`` is the pointwise permittivity tensor on the layer raster, shape ``(Ny, Nx, 3, 3)``.
@@ -1027,13 +1028,13 @@ def pn_conv_matrices(xp, eps33, nx, ny, fto_x, fto_y):
     A, B = _pn_fields(xp, eps33, nx, ny)
 
     def block(field):
-        return xp.concat([xp.concat([fourier2d_pointwise(xp, field[..., i, j], fto_x, fto_y)
+        return xp.concat([xp.concat([fourier2d_pointwise(xp, field[..., i, j], max_order_x, max_order_y)
                                      for j in range(2)], axis=-1) for i in range(2)], axis=-2)
 
     eps_t = block(A) @ xp.linalg.inv(block(B))
-    ff = eps_t.shape[-1] // 2
-    eps_xx, eps_xy = eps_t[..., :ff, :ff], eps_t[..., :ff, ff:]
-    eps_yx, eps_yy = eps_t[..., ff:, :ff], eps_t[..., ff:, ff:]
+    n_orders = eps_t.shape[-1] // 2
+    eps_xx, eps_xy = eps_t[..., :n_orders, :n_orders], eps_t[..., :n_orders, n_orders:]
+    eps_yx, eps_yy = eps_t[..., n_orders:, :n_orders], eps_t[..., n_orders:, n_orders:]
 
     # z decouples: with nz = 0 the projectors are block diagonal, so A_zz = eps_zz and B_zz = 1
     # exactly and the slot is the plain direct rule inverted -- the same expression
@@ -1062,21 +1063,21 @@ def pn_conv_matrices(xp, eps33, nx, ny, fto_x, fto_y):
     # quarter turn, so covariance cannot choose between them and neither can energy conservation.
     #
     # Measured against the transform's own exact limit instead; the sweeps are in §7 of
-    # `docs/patterned-anisotropic-factorization.md`. What separates the two is the `sinc` alone --
-    # the box transform of a value held across its pixel, which the point sample never had -- and
-    # on a rectangle whose edges are grid lines, where the raster *is* the layer, the closed form
-    # is exact at every N while the DFT converges to it as 1/N**2 (3.0e-2 at N=16, 1.2e-5 at
-    # N=512, fto=6). That reaches the answer through `Kx epz_i Kx`, so it grows with angle: at
-    # fixed fto and a frozen geometry the DFT arm's error runs 3.5x to 4.8x the closed form's
-    # across 45 to 55 degrees, and the crossover is near 38 degrees, below which the DFT leads by
-    # 5% of a term 30x smaller.
+    # `docs/patterned-anisotropic-factorization.md`. What separates the two is the `sinc` alone
+    # -- the box transform of a value held across its pixel, which the point sample never had --
+    # and on a rectangle whose edges are grid lines, where the raster *is* the layer, the closed
+    # form is exact at every N while the DFT converges to it as 1/N**2 (3.0e-2 at N=16, 1.2e-5
+    # at N=512, max_order=6). That reaches the answer through `Kx epz_i Kx`, so it grows with
+    # angle: at fixed max_order and a frozen geometry the DFT arm's error runs 3.5x to 4.8x the
+    # closed form's across 45 to 55 degrees, and the crossover is near 38 degrees, below which
+    # the DFT leads by 5% of a term 30x smaller.
     epz_i = xp.linalg.inv(
-        fourier2d_piecewise_constant(xp, eps33[..., 2, 2], fto_x, fto_y, inverse_rule=None))
+        fourier2d_piecewise_constant(xp, eps33[..., 2, 2], max_order_x, max_order_y, inverse_rule=None))
 
     return ConvMatrices(eps_xx, eps_yy, epz_i, -eps_xy, -eps_yx)
 
 
-def pn_mu_conv_matrices(xp, mu33, nx, ny, fto_x, fto_y):
+def pn_mu_conv_matrices(xp, mu33, nx, ny, max_order_x, max_order_y):
     """The five **permeability** slots from a patterned ``mu`` tensor.
 
     ``pn_conv_matrices`` verbatim. That the same routine serves both is not a shortcut — it is
@@ -1102,17 +1103,17 @@ def pn_mu_conv_matrices(xp, mu33, nx, ny, fto_x, fto_y):
     ``nx`` / ``ny`` are the normal field of the **permeability's** boundary, which need not be
     the permittivity's — see :func:`to_conv_mat_raster_pn_mu`.
     """
-    return pn_conv_matrices(xp, mu33, nx, ny, fto_x, fto_y)
+    return pn_conv_matrices(xp, mu33, nx, ny, max_order_x, max_order_y)
 
 
-def to_conv_mat_raster_pn_mu(tensor_raster, fto_x, fto_y, normal_field=None, lattice=None,
+def to_conv_mat_raster_pn_mu(tensor_raster, max_order_x, max_order_y, normal_field=None, lattice=None,
                              normal_method=None):
     """Per-layer permeability slots for a **tensor** ``mu`` raster — the ``mu`` twin of
     :func:`to_conv_mat_raster_pn`.
 
     Args:
         tensor_raster: ``(n_layers, Ny, Nx, 3, 3)`` permeability tensors per pixel.
-        fto_x, fto_y: Fourier truncation orders.
+        max_order_x, max_order_y: Fourier truncation orders.
         normal_field: optional per-layer ``(nx, ny)``. Left ``None`` it is computed from the
             in-plane trace of **``mu``**, not of ``eps``. Reading ``mu_zz`` instead would give
             the same field for any tensor whose components share a boundary — which is every
@@ -1127,7 +1128,7 @@ def to_conv_mat_raster_pn_mu(tensor_raster, fto_x, fto_y, normal_field=None, lat
 
     Returns:
         ``(mux_conv, muy_conv, muz_conv_i, muxy_conv, muyx_conv)``, each
-        ``(n_layers, ff_xy, ff_xy)`` — ready to hand to ``solve_conv(..., mu=...)``.
+        ``(n_layers, n_orders, n_orders)`` — ready to hand to ``solve_conv(..., mu=...)``.
 
     **A layer's two tensors may have different boundaries**, and this is why the normal field is
     read off ``mu`` here rather than shared with the permittivity build. A magnetic inclusion
@@ -1158,13 +1159,13 @@ def to_conv_mat_raster_pn_mu(tensor_raster, fto_x, fto_y, normal_field=None, lat
                 method=normal_method)
         else:
             nx, ny = normal_field[i]
-        for slot, mat in zip(out, pn_mu_conv_matrices(xp, mu33, nx, ny, fto_x, fto_y)):
+        for slot, mat in zip(out, pn_mu_conv_matrices(xp, mu33, nx, ny, max_order_x, max_order_y)):
             slot.append(mat)
 
     return ConvMatrices(*(xp.stack(slot) for slot in out))
 
 
-def to_conv_mat_raster_pn(tensor_raster, fto_x, fto_y, normal_field=None, lattice=None,
+def to_conv_mat_raster_pn(tensor_raster, max_order_x, max_order_y, normal_field=None, lattice=None,
                           normal_method=None):
     """Per-layer Popov-Neviere convolution matrices for a **tensor** raster.
 
@@ -1177,7 +1178,7 @@ def to_conv_mat_raster_pn(tensor_raster, fto_x, fto_y, normal_field=None, lattic
             builder was already stated in permittivity before the scalar paths were, because
             ``n ** 2`` is a scalar operation and there is no square root of a tensor field
             worth guessing at.
-        fto_x, fto_y: Fourier truncation orders.
+        max_order_x, max_order_y: Fourier truncation orders.
         normal_field: optional per-layer ``(nx, ny)``. Left ``None`` it is computed from the
             trace of the in-plane block, which is the isotropic part of the layer and so sees
             the same geometry a scalar raster would. Supply it to keep the build traceable
@@ -1189,7 +1190,7 @@ def to_conv_mat_raster_pn(tensor_raster, fto_x, fto_y, normal_field=None, lattic
             read only when ``normal_field`` is not supplied.
 
     Returns:
-        ``(epx, epy, epz_i, epxy, epyx)``, each ``(n_layers, ff_xy, ff_xy)`` — the same five
+        ``(epx, epy, epz_i, epxy, epyx)``, each ``(n_layers, n_orders, n_orders)`` — the same
         slots :func:`to_conv_mat_raster_nvf` returns, in the same convention.
     """
     xp = array_namespace(tensor_raster)
@@ -1216,13 +1217,13 @@ def to_conv_mat_raster_pn(tensor_raster, fto_x, fto_y, normal_field=None, lattic
                 method=normal_method)
         else:
             nx, ny = normal_field[i]
-        for slot, mat in zip(out, pn_conv_matrices(xp, eps33, nx, ny, fto_x, fto_y)):
+        for slot, mat in zip(out, pn_conv_matrices(xp, eps33, nx, ny, max_order_x, max_order_y)):
             slot.append(mat)
 
     return ConvMatrices(*(xp.stack(slot) for slot in out))
 
 
-def nvf_conv_matrices(xp, eps_matrix, nx, ny, fto_x, fto_y):
+def nvf_conv_matrices(xp, eps_matrix, nx, ny, max_order_x, max_order_y):
     """NVF convolution matrices for one layer, with sampled coefficients."""
     C = _complex_dtype(xp, eps_matrix)
     eps_matrix = xp.astype(eps_matrix, C)
@@ -1231,38 +1232,38 @@ def nvf_conv_matrices(xp, eps_matrix, nx, ny, fto_x, fto_y):
     # eps is a staircase however finely it was sampled, so its coefficients are exact from
     # the grid it arrives on. The projector grids are not -- they sample a continuous
     # vector field -- which is why only these two carry the flag.
-    ep_dir = fourier2d_piecewise_constant(xp, eps_matrix, fto_x, fto_y, inverse_rule=None)
-    ep_inv = fourier2d_piecewise_constant(xp, 1.0 / eps_matrix, fto_x, fto_y, inverse_rule=None)
+    ep_dir = fourier2d_piecewise_constant(xp, eps_matrix, max_order_x, max_order_y, inverse_rule=None)
+    ep_inv = fourier2d_piecewise_constant(xp, 1.0 / eps_matrix, max_order_x, max_order_y, inverse_rule=None)
 
     return _nvf_assemble(xp, ep_dir, ep_inv,
-                         *_nvf_projector(xp, nx, ny, fto_x, fto_y, C, dev))
+                         *_nvf_projector(xp, nx, ny, max_order_x, max_order_y, C, dev))
 
 
-def nvf_conv_matrices_integrated(xp, eps_comp, x, y, nx, ny, fto_x, fto_y):
+def nvf_conv_matrices_integrated(xp, eps_comp, x, y, nx, ny, max_order_x, max_order_y):
     """NVF convolution matrices for one layer, with integrated (closed-form) coefficients.
 
     ``eps_comp`` is the *compressed* piecewise-constant layer and ``x`` / ``y`` its segment
-    edges, exactly as :func:`fourier2d_integrated` takes them; ``nx`` / ``ny`` are the normal field on the
-    uncompressed raster (see :func:`_nvf_projector` for why the two grids differ).
+    edges, exactly as :func:`fourier2d_integrated` takes them; ``nx`` / ``ny`` are the normal
+    field on the uncompressed raster (see :func:`_nvf_projector` for why the two grids differ).
     """
     C = _complex_dtype(xp, eps_comp)
     eps_comp = xp.astype(eps_comp, C)
     dev = _device(xp, eps_comp)
 
-    ep_dir = fourier2d_integrated(xp, eps_comp, x, y, fto_x, fto_y, inverse_rule=None)
-    ep_inv = fourier2d_integrated(xp, 1.0 / eps_comp, x, y, fto_x, fto_y, inverse_rule=None)
+    ep_dir = fourier2d_integrated(xp, eps_comp, x, y, max_order_x, max_order_y, inverse_rule=None)
+    ep_inv = fourier2d_integrated(xp, 1.0 / eps_comp, x, y, max_order_x, max_order_y, inverse_rule=None)
 
     return _nvf_assemble(xp, ep_dir, ep_inv,
-                         *_nvf_projector(xp, nx, ny, fto_x, fto_y, C, dev))
+                         *_nvf_projector(xp, nx, ny, max_order_x, max_order_y, C, dev))
 
 
-def to_conv_mat_raster_nvf(structure, fto_x, fto_y, normal_field=None,
+def to_conv_mat_raster_nvf(structure, max_order_x, max_order_y, normal_field=None,
                            normal_field_source=None, lattice=None, normal_method=None):
     """Per-layer NVF convolution matrices for a raster ``structure``.
 
     Args:
         structure: relative-permittivity raster ``(n_layers, Ny, Nx)`` — the design variable.
-        fto_x, fto_y: Fourier truncation orders.
+        max_order_x, max_order_y: Fourier truncation orders.
         normal_field: optional per-layer ``(nx, ny)`` pairs for the *upsampled* layer grid.
             Supply this to keep the build traceable under JAX (the default computes the field
             with SciPy, which needs concrete values). It is static geometry either way.
@@ -1282,7 +1283,7 @@ def to_conv_mat_raster_nvf(structure, fto_x, fto_y, normal_field=None,
     27 of 32 combinations (``docs/nvf-upsampling.md``).
 
     Returns:
-        ``(epx, epy, epz_i, epxy, epyx)``, each ``(n_layers, ff_xy, ff_xy)``.
+        ``(epx, epy, epz_i, epxy, epyx)``, each ``(n_layers, n_orders, n_orders)``.
     """
     xp = array_namespace(structure)
 
@@ -1296,7 +1297,7 @@ def to_conv_mat_raster_nvf(structure, fto_x, fto_y, normal_field=None,
 
     out = [[], [], [], [], []]
 
-    layers = _layer_eps_for_normal_field(xp, structure, fto_x, fto_y)
+    layers = _layer_eps_for_normal_field(xp, structure, max_order_x, max_order_y)
     for i, (eps_matrix, base_eps, repeat_y, repeat_x) in enumerate(layers):
         if normal_field is None:
             nx, ny = normal_vector_field(
@@ -1308,7 +1309,7 @@ def to_conv_mat_raster_nvf(structure, fto_x, fto_y, normal_field=None,
             nx, ny = normal_field[i]
 
         for slot, mat in zip(out, nvf_conv_matrices(
-                xp, eps_matrix, nx, ny, fto_x, fto_y)):
+                xp, eps_matrix, nx, ny, max_order_x, max_order_y)):
             slot.append(mat)
 
     return ConvMatrices(*(xp.stack(slot) for slot in out))
@@ -1333,13 +1334,13 @@ def _lift(xp, v, dtype, device=None):
     return xp.asarray(v, dtype=dtype, device=device)
 
 
-def _fourier1d_integrated(xp, x, cell, fto, period):
+def _fourier1d_integrated(xp, x, cell, max_order, period):
     """1D continuous Fourier series of a piecewise-constant profile.
 
-    ``x`` holds the right-hand edge of each constant segment (shape ``(n, 1)``) and ``cell``
-    the segment values (``(m, n)``). Port of the legacy ``_fourier1d_integrated``, with its two in-place
-    assignments rewritten: the non-DC modes divide by ``1j*2*pi*m`` and the DC mode is the
-    length-weighted mean, so both are expressed as one ``where`` over a mode mask.
+    ``x`` holds the right-hand edge of each constant segment (shape ``(n, 1)``) and ``cell`` the
+    segment values (``(m, n)``). Port of the legacy ``_fourier1d_integrated``, with its two
+    in-place assignments rewritten: the non-DC modes divide by ``1j*2*pi*m`` and the DC mode is
+    the length-weighted mean, so both are expressed as one ``where`` over a mode mask.
     """
     C = cell.dtype
     dev = _device(xp, cell)
@@ -1347,8 +1348,8 @@ def _fourier1d_integrated(xp, x, cell, fto, period):
     cell_next = xp.roll(cell, -1, axis=1)
     cell_diff = cell_next - cell
 
-    n_modes = 4 * fto + 1
-    modes = xp.asarray([float(m) for m in range(-2 * fto, 2 * fto + 1)], dtype=C, device=dev)
+    n_modes = 4 * max_order + 1
+    modes = xp.asarray([float(m) for m in range(-2 * max_order, 2 * max_order + 1)], dtype=C, device=dev)
 
     # ``x`` holds the segment edges, which for a vector-modelled layer *are* the design
     # variables an OCD fit differentiates -- CD, sidewall angle, pitch all live here. Lift
@@ -1366,7 +1367,7 @@ def _fourier1d_integrated(xp, x, cell, fto, period):
 
     # Divisor for the non-DC modes; 1 at DC so the unused branch of `where` stays finite
     # (a NaN there would still poison the gradient).
-    is_dc = xp.asarray([m == 2 * fto for m in range(n_modes)], device=dev)
+    is_dc = xp.asarray([m == 2 * max_order for m in range(n_modes)], device=dev)
     divisor = xp.where(is_dc, xp.asarray(1.0, dtype=C, device=dev),
                        1j * 2 * 3.141592653589793 * modes)
 
@@ -1375,16 +1376,16 @@ def _fourier1d_integrated(xp, x, cell, fto, period):
     return xp.where(xp.reshape(is_dc, (1, n_modes)), dc, f / xp.reshape(divisor, (1, n_modes)))
 
 
-def fourier2d_integrated(xp, cell, x, y, fto_x, fto_y, *, inverse_rule):
+def fourier2d_integrated(xp, cell, x, y, max_order_x, max_order_y, *, inverse_rule):
     """2D continuous Fourier series with Li's rules — the staircase-free factorization.
 
     ``x`` / ``y`` are the segment edges of the compressed (piecewise-constant) layer, so the
     permittivity is Fourier-transformed analytically rather than off a raster.
 
     **``continuous`` describes the method, not the data.** What arrives here is piecewise
-    constant, exactly as in :func:`fourier2d_piecewise_constant`; the coefficients are obtained by
-    integrating over the segments rather than by a discrete sum, which is the ``integrated`` / ``sampled``
-    distinction and nothing more. The public spelling of the same choice is
+    constant, exactly as in :func:`fourier2d_piecewise_constant`; the coefficients are obtained
+    by integrating over the segments rather than by a discrete sum, which is the ``integrated``
+    / ``sampled`` distinction and nothing more. The public spelling of the same choice is
     ``fourier_coefficients='integrated'``.
 
     What that buys is *where the steps may sit*. :func:`fourier2d_piecewise_constant` places them
@@ -1397,8 +1398,8 @@ def fourier2d_integrated(xp, cell, x, y, fto_x, fto_y, *, inverse_rule):
     ``inverse_rule`` is as in :func:`fourier2d_piecewise_constant`.
     """
     inv_x, inv_y = _inverse_axes(inverse_rule)
-    ff_x = 2 * fto_x + 1
-    ff_y = 2 * fto_y + 1
+    n_orders_x = 2 * max_order_x + 1
+    n_orders_y = 2 * max_order_y + 1
 
     period_x, period_y = x[-1], y[-1]
 
@@ -1407,25 +1408,25 @@ def fourier2d_integrated(xp, cell, x, y, fto_x, fto_y, *, inverse_rule):
     if inv_y:             # y discontinuous: the inverse rule starts from 1/eps
         cell = 1 / cell
 
-    cfs1d = _fourier1d_integrated(xp, y, cell, fto_y, period_y)
+    cfs1d = _fourier1d_integrated(xp, y, cell, max_order_y, period_y)
 
     dev = _device(xp, cell)
-    idx_y = _circulant_gather(xp, fto_y, dev)
-    idx_x = _circulant_gather(xp, fto_x, dev)
+    idx_y = _circulant_gather(xp, max_order_y, dev)
+    idx_x = _circulant_gather(xp, max_order_x, dev)
 
     conv1d = cfs1d[:, idx_y]
 
     if inv_x or inv_y:    # Li's inner step, whichever direction asked for it
         conv1d = xp.linalg.inv(conv1d)
 
-    conv1d = xp.reshape(conv1d, (-1, ff_y ** 2))
+    conv1d = xp.reshape(conv1d, (-1, n_orders_y ** 2))
 
-    cfs_2d = _fourier1d_integrated(xp, x, xp.matrix_transpose(conv1d), fto_x, period_x)
+    cfs_2d = _fourier1d_integrated(xp, x, xp.matrix_transpose(conv1d), max_order_x, period_x)
 
     conv2d = cfs_2d[:, idx_x]
-    conv2d = xp.reshape(conv2d, (ff_y, ff_y, ff_x, ff_x))
+    conv2d = xp.reshape(conv2d, (n_orders_y, n_orders_y, n_orders_x, n_orders_x))
     conv2d = xp.moveaxis(conv2d, 1, 2)
-    conv2d = xp.reshape(conv2d, (ff_y * ff_x, ff_y * ff_x))
+    conv2d = xp.reshape(conv2d, (n_orders_y * n_orders_x, n_orders_y * n_orders_x))
 
     if inv_x:             # x discontinuous: Li's outer step closes it
         conv2d = xp.linalg.inv(conv2d)
@@ -1565,19 +1566,19 @@ def compress_cell(xp, cell, row_idx, col_idx):
     return xp.take(cell, xp.asarray(row_idx, device=dev), axis=0)
 
 
-def to_conv_mat_raster_integrated(structure, fto_x, fto_y, compression=None):
+def to_conv_mat_raster_integrated(structure, max_order_x, max_order_y, compression=None):
     """Per-layer convolution matrices via the analytic (staircase-free) integrated path.
 
     Args:
         structure: relative-permittivity raster ``(n_layers, Ny, Nx)`` — the design variable.
-        fto_x, fto_y: Fourier truncation orders.
+        max_order_x, max_order_y: Fourier truncation orders.
         compression: optional per-layer ``(row_idx, col_idx, x, y)`` from
             :func:`compression_indices`. Supply it to stay traceable under JAX; it is static
             geometry either way. Replayed eagerly it is checked against the layer in front of
             it (see :func:`_check_compression_still_fits`).
 
     Returns:
-        ``(epx_conv_all, epy_conv_all, epz_conv_i_all)``, each ``(n_layers, ff_xy, ff_xy)``.
+        ``(epx_conv_all, epy_conv_all, epz_conv_i_all)``, each ``(n_layers, n_orders, n_orders)``.
     """
     xp = array_namespace(structure)
 
@@ -1599,15 +1600,15 @@ def to_conv_mat_raster_integrated(structure, fto_x, fto_y, compression=None):
         comp = compress_cell(xp, layer, row_idx, col_idx)
         eps = xp.astype(comp, _complex_dtype(xp, comp))
 
-        epz_list = fourier2d_integrated(xp, eps, x, y, fto_x, fto_y, inverse_rule=None)
-        epx_list.append(fourier2d_integrated(xp, eps, x, y, fto_x, fto_y, inverse_rule='x'))
-        epy_list.append(fourier2d_integrated(xp, eps, x, y, fto_x, fto_y, inverse_rule='y'))
+        epz_list = fourier2d_integrated(xp, eps, x, y, max_order_x, max_order_y, inverse_rule=None)
+        epx_list.append(fourier2d_integrated(xp, eps, x, y, max_order_x, max_order_y, inverse_rule='x'))
+        epy_list.append(fourier2d_integrated(xp, eps, x, y, max_order_x, max_order_y, inverse_rule='y'))
         epz_i_list.append(xp.linalg.inv(epz_list))
 
     return ConvSlots3(xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list))
 
 
-def to_conv_mat_raster_integrated_nvf(structure, fto_x, fto_y, normal_field=None,
+def to_conv_mat_raster_integrated_nvf(structure, max_order_x, max_order_y, normal_field=None,
                                       normal_field_source=None, compression=None,
                                       lattice=None, normal_method=None):
     """Per-layer convolution matrices for a raster ``structure`` via closed-form Fourier + NVF.
@@ -1619,7 +1620,7 @@ def to_conv_mat_raster_integrated_nvf(structure, fto_x, fto_y, normal_field=None
 
     Args:
         structure: relative-permittivity raster ``(n_layers, Ny, Nx)`` — the design variable.
-        fto_x, fto_y: Fourier truncation orders.
+        max_order_x, max_order_y: Fourier truncation orders.
         normal_field: optional per-layer ``(nx, ny)`` from :func:`normal_field_for_raster`.
         normal_field_source: what that field was sampled from, as in
             :func:`to_conv_mat_raster_nvf` — this path replays the same record and is checked
@@ -1639,12 +1640,12 @@ def to_conv_mat_raster_integrated_nvf(structure, fto_x, fto_y, normal_field=None
     path consistent with the record it consumes, not a second implementation of the skew.
 
     Returns:
-        ``(epx, epy, epz_i, epxy, epyx)``, each ``(n_layers, ff_xy, ff_xy)``.
+        ``(epx, epy, epz_i, epxy, epyx)``, each ``(n_layers, n_orders, n_orders)``.
     """
     xp = array_namespace(structure)
 
     out = [[], [], [], [], []]
-    eps_grids = _layer_eps_for_normal_field(xp, structure, fto_x, fto_y)
+    eps_grids = _layer_eps_for_normal_field(xp, structure, max_order_x, max_order_y)
 
     for i, (eps_grid, base_eps, repeat_y, repeat_x) in enumerate(eps_grids):
         if normal_field is None:
@@ -1666,13 +1667,13 @@ def to_conv_mat_raster_integrated_nvf(structure, fto_x, fto_y, normal_field=None
         eps_comp = xp.astype(comp, _complex_dtype(xp, comp))
 
         for slot, mat in zip(out, nvf_conv_matrices_integrated(
-                xp, eps_comp, x, y, nx, ny, fto_x, fto_y)):
+                xp, eps_comp, x, y, nx, ny, max_order_x, max_order_y)):
             slot.append(mat)
 
     return ConvMatrices(*(xp.stack(slot) for slot in out))
 
 
-def to_conv_mat_block(block_info_list, fto_x, fto_y):
+def to_conv_mat_block(block_info_list, max_order_x, max_order_y):
     """Per-layer convolution matrices for vector-modelled layers (integrated over explicit segments).
 
     Each entry of ``block_info_list`` is ``(layer, x_list, y_list)`` — the segment values and
@@ -1684,8 +1685,8 @@ def to_conv_mat_block(block_info_list, fto_x, fto_y):
 
     for layer, x, y in block_info_list:
         eps = xp.astype(layer, _complex_dtype(xp, layer))
-        epx_list.append(fourier2d_integrated(xp, eps, x, y, fto_x, fto_y, inverse_rule='x'))
-        epy_list.append(fourier2d_integrated(xp, eps, x, y, fto_x, fto_y, inverse_rule='y'))
-        epz_i_list.append(xp.linalg.inv(fourier2d_integrated(xp, eps, x, y, fto_x, fto_y, inverse_rule=None)))
+        epx_list.append(fourier2d_integrated(xp, eps, x, y, max_order_x, max_order_y, inverse_rule='x'))
+        epy_list.append(fourier2d_integrated(xp, eps, x, y, max_order_x, max_order_y, inverse_rule='y'))
+        epz_i_list.append(xp.linalg.inv(fourier2d_integrated(xp, eps, x, y, max_order_x, max_order_y, inverse_rule=None)))
 
     return ConvSlots3(xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list))

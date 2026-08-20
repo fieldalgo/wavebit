@@ -12,18 +12,18 @@ Targets:
 
 ## TL;DR
 
-`enhanced_dfs=True` repeated every cell `4*fto+1` times before taking the normal field. Across
+`enhanced_dfs=True` repeated every cell `4*max_order+1` times before taking the normal field. Across
 32 combinations of shape, material, polarization and truncation order it **lost accuracy in 27
 and gained in none that stood up**. It is gone — the parameter with it, from the solver
 constructors and from `Numerics`, so passing it now raises rather than being quietly ignored.
-The normal field is taken on the raster as given, lifted only to the `4*fto+1`-point floor its
+The normal field is taken on the raster as given, lifted only to the `4*max_order+1`-point floor its
 transform structurally requires.
 
 ## What the knob did
 
 ```python
-if enhanced_dfs:  min = (4*fto + 1) * N     # per cell
-else:             min = 4*fto + 1           # total
+if enhanced_dfs:  min = (4*max_order + 1) * N     # per cell
+else:             min = 4*max_order + 1           # total
 ```
 
 Verbatim from `meent`. What changed underneath it is where it lands:
@@ -36,7 +36,7 @@ Verbatim from `meent`. What changed underneath it is where it lands:
 So a flag whose reason for existing was the permittivity survived into a codebase where the
 permittivity no longer reads it.
 
-At `fto=6`, `N=240` the two settings differ by a factor of 26 per axis — a 6240x6240 grid
+At `max_order=6`, `N=240` the two settings differ by a factor of 26 per axis — a 6240x6240 grid
 against 240x240, 676x the cells, with a Euclidean distance transform run over it.
 
 ## Why refining it does not help
@@ -54,7 +54,7 @@ staircase more sharply, so the guess tracks the steps rather than the shape behi
 The measurement separates the two cleanly. Building the **same final grid** two ways, from a
 real 480x480 raster of a circle, and from a 60x60 raster repeated 8x:
 
-| | `fto=6` | `fto=10` |
+| | `max_order=6` | `max_order=10` |
 |---|---|---|
 | N=480, no repeat (real resolution) | **3.65e-04** | **1.89e-03** |
 | N=60 repeated 8x (same grid) | 1.28e-02 | 1.18e-02 |
@@ -67,7 +67,7 @@ Raising the real raster resolution behaves as it should:
 
 | N | 30 | 60 | 120 | 240 | 480 |
 |---|---|---|---|---|---|
-| NVF error (dielectric circle, `fto=6`) | 7.63e-03 | 5.03e-03 | 1.43e-03 | 1.33e-03 | 3.65e-04 |
+| NVF error (dielectric circle, `max_order=6`) | 7.63e-03 | 5.03e-03 | 1.43e-03 | 1.33e-03 | 3.65e-04 |
 
 ### How far off the guess is, as an angle
 
@@ -217,11 +217,11 @@ about either factorization in general.**
 
 Setup: a circle of radius 0.30 in a unit cell, index 2.4 in vacuum, thickness 0.30, wavelength
 0.55, `theta` 12 deg, `phi` 30 deg, `psi` 40 deg. Reference is the analytic (staircase-free)
-path on the exact circle at `fto=14`. The two raster runs take the identical raster and differ
+path on the exact circle at `max_order=14`. The two raster runs take the identical raster and differ
 only in `factorization`. Error is the largest per-order difference in R or T against the
 reference, over the orders both retain.
 
-| N | `fto` | raster `nvf` | raster `li` |
+| N | `max_order` | raster `nvf` | raster `li` |
 |---|---|---|---|
 | 32 | 6 | 6.95e-02 | 8.89e-02 |
 | 32 | 10 | 5.63e-02 | 7.45e-02 |
@@ -232,7 +232,7 @@ reference, over the orders both retain.
 | 256 | 6 | 1.43e-02 | 3.75e-02 |
 | 256 | 10 | 3.51e-03 | 2.08e-02 |
 
-**The reference carries 1.7e-3 of its own**: `|fto=12 - fto=14|` on the same measure. Read the
+**The reference carries 1.7e-3 of its own**: `|max_order=12 - max_order=14|` on the same measure. Read the
 last row with that in mind -- 3.51e-03 is close enough to that floor that what separates the two
 columns there is not resolved by this experiment, while the `N=128` rows sit clearly above it.
 Nothing here says what happens on a shape with corners, at another incidence, or at truncations
@@ -241,9 +241,9 @@ where either column has stopped converging.
 ## The sweep
 
 Base raster 240x240 (fine enough that the staircase error is small), truth from the analytic
-shape path at `fto=16`, error on the specular transmitted order.
+shape path at `max_order=16`, error on the specular transmitted order.
 
-| case | `fto` | sampled | R=1 | R=2 | R=4 |
+| case | `max_order` | sampled | R=1 | R=2 | R=4 |
 |---|---|---|---|---|---|
 | dielectric circle, TM | 4 | 1.60e-02 | **3.73e-03** | 5.34e-03 | 6.43e-03 |
 | | 6 | 1.25e-02 | **1.33e-03** | 2.86e-03 | 3.90e-03 |
@@ -260,7 +260,7 @@ shape path at `fto=16`, error on the specular transmitted order.
 
 Over all 32 rows (adding metallic circle and rect, and both polarizations): **27 worse with
 upsampling, 4 unchanged, 1 better** — and that one is a case whose analytic reference had not
-converged (`fto=12` residual 8.7e-03), so it does not count for anything.
+converged (`max_order=12` residual 8.7e-03), so it does not count for anything.
 
 Two controls make the separation exact:
 
@@ -274,13 +274,13 @@ Two controls make the separation exact:
 
 The floor is not an accuracy preference, it is structural. The normal field has no closed-form
 transform (unlike the permittivity, which `_pixel_correction` handles for any order), so
-`fourier2d_pointwise` reads it off the grid, and the circulant asks for orders up to `±2*fto`. On a grid
-shorter than `4*fto+1`, `k % n` folds distinct orders onto one bin.
+`fourier2d_pointwise` reads it off the grid, and the circulant asks for orders up to `±2*max_order`. On a grid
+shorter than `4*max_order+1`, `k % n` folds distinct orders onto one bin.
 
 The consequence is not gradual. A **constant** normal field must transform to the identity for
 NVF to collapse onto Li's rules on a one-cell axis. On a short grid it instead picks up
 off-diagonals wherever `(r - c) % n == 0`, and the collapse fails outright — a 1D grating of 8
-cells at `fto=10` returned 0.1236 against Li's 0.0324. That is what
+cells at `max_order=10` returned 0.1236 against Li's 0.0324. That is what
 `test_nvf_on_a_one_cell_axis_reduces_to_li` pins.
 
 So: lift to the floor, never past it.
@@ -308,7 +308,7 @@ the quantization this file measured (the `normal_method` keyword).
 - L. Li, *Use of Fourier series in the analysis of discontinuous periodic structures*, JOSA A
   **13**(9), 1870 (1996). [doi:10.1364/JOSAA.13.001870](https://doi.org/10.1364/JOSAA.13.001870)
   — the rules NVF must collapse onto when the normal field is constant, which is what the
-  `4*fto+1` floor protects.
+  `4*max_order+1` floor protects.
 - T. Schuster, J. Ruoff, N. Kerwien, S. Rafler, W. Osten, *Normal vector method for convergence
   improvement using the RCWA for crossed gratings*, JOSA A **24**(9), 2880 (2007).
   [doi:10.1364/JOSAA.24.002880](https://doi.org/10.1364/JOSAA.24.002880) — the method itself.

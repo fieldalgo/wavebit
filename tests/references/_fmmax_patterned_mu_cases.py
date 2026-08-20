@@ -34,7 +34,7 @@ THETA = 8.0
 
 # High, because the oracle arbitrates by convergence: fmmax's own two formulations are still
 # some way apart at this order and no claim can be sharper than that gap.
-FTO = 12
+MAX_ORDER = 12
 
 
 def rect(value, background, y0, y1, x0, x1, grid=GRID):

@@ -74,30 +74,30 @@ def _rand_eps(shape, seed):
 # decimal is what breaks the bit-exact assertions elsewhere in the suite.
 CASES = {
     'te_1d':     dict(tetm='te', phi=None, structure=[[[9., 9., 9., 1., 1., 1.]]],
-                      thickness=[0.15], top=4., bot=1., theta=0.2, fto=[4, 0], period=[0.77],
+                      thickness=[0.15], top=4., bot=1., theta=0.2, max_order=[4, 0], period=[0.77],
                       wavelength=0.777),
     'tm_1d':     dict(tetm='tm', phi=None, structure=[[[9., 9., 9., 1., 1., 1.]]],
-                      thickness=[0.15], top=4., bot=1., theta=0.2, fto=[4, 0], period=[0.77],
+                      thickness=[0.15], top=4., bot=1., theta=0.2, max_order=[4, 0], period=[0.77],
                       wavelength=0.777),
     '1d_2layer': dict(tetm='te', phi=None,
                       structure=[[[9., 9., 1., 1., 9., 1.]], [[4., 4., 4., 1., 1., 1.]]],
-                      thickness=[0.15, 0.22], top=1., bot=1., theta=0.1, fto=[3, 0],
+                      thickness=[0.15, 0.22], top=1., bot=1., theta=0.1, max_order=[3, 0],
                       period=[0.7], wavelength=0.9),
     'conical':   dict(psi=0.4, phi=0.3, structure=[[[9., 9., 9., 1., 1., 1.]]],
-                      thickness=[0.15], top=4., bot=1., theta=0.2, fto=[4, 0], period=[0.77],
+                      thickness=[0.15], top=4., bot=1., theta=0.2, max_order=[4, 0], period=[0.77],
                       wavelength=0.777),
     '2d':        dict(psi=0.9, phi=0.4, structure=_rand_eps((1, 5, 5), 0),
-                      thickness=[0.2], top=1., bot=2.25, theta=0.3, fto=[2, 2],
+                      thickness=[0.2], top=1., bot=2.25, theta=0.3, max_order=[2, 2],
                       period=[1., 1.], wavelength=0.9),
     '2d_2layer': dict(psi=1.1, phi=0.5, structure=_rand_eps((2, 4, 4), 1),
-                      thickness=[0.15, 0.22], top=1.44, bot=1., theta=0.2, fto=[2, 2],
+                      thickness=[0.15, 0.22], top=1.44, bot=1., theta=0.2, max_order=[2, 2],
                       period=[0.9, 0.9], wavelength=0.7),
     # The first-order route, forced onto a problem the second-order one can also express. Its
     # own physics is covered by tests/test_field_4ff.py; what this adds is the public path and
     # the same drift net the others get.
     '2d_4ff':    dict(psi=0.7, phi=0.35, structure=_rand_eps((2, 4, 4), 2),
                       thickness=[0.18, 0.13], top=1., bot=1.9599999999999997, theta=0.25,
-                      fto=[2, 1], period=[0.85, 0.8], wavelength=0.66, formulation='4ff'),
+                      max_order=[2, 1], period=[0.85, 0.8], wavelength=0.66, formulation='4ff'),
 }
 VARIANTS = (('default', ('given',)), ('all', ('given', 's', 'p')))
 RES = dict(sample_x=5, sample_y=4, sample_z=6)

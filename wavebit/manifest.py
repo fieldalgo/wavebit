@@ -10,7 +10,7 @@ read the same facts the solver enforces instead of restating them.
 **Capabilities and constraints only.** What each path implements, what is refused and why,
 and which spelling of ``structure`` selects which path. Deliberately not here:
 
-* *Recommendations.* "PyTorch below ``fto≈5``" is a measurement about a workload, not a
+* *Recommendations.* "PyTorch below ``max_order≈5``" is a measurement about a workload, not a
   property of the solver, and it belongs to whoever is giving advice. The manifest says
   which backends exist; picking one is someone else's job.
 * *A vocabulary for describing experiments.* Fields like "is the boundary curved" describe
@@ -317,8 +317,8 @@ RESULTS = {
     'efficiencies': {
         'total': ('R', 'T'),
         'by_outgoing_polarization': ('R_s', 'R_p', 'T_s', 'T_p'),
-        'layout': 'arrays of shape (ff_y, ff_x) — y first, the transpose of the '
-                  'fto=[x, y] input order — with the incident order at the centre',
+        'layout': 'arrays of shape (n_orders_y, n_orders_x) — y first, the transpose of the '
+                  'max_order=[x, y] input order — with the incident order at the centre',
         'accessor': 'result.order(m, n) indexes every per-order quantity by the order '
                     'indices themselves',
         'caveat': 'with an absorbing superstrate the incident-power normalization is '
@@ -368,7 +368,8 @@ RESULTS = {
                    "variants; 'field' adds the per-layer modes and amplitudes "
                    'reconstruct_field walks. Below that rung reconstruct_field is refused '
                    'rather than served, because the state is kept while the solve runs or not at '
-                   'all -- it is 4.25 matrices of side 2*ff_x*ff_y per layer on the 2D path '
+                   'all -- it is 4.25 matrices of side 2*n_orders_x*n_orders_y per layer on the '
+                   '2D path '
                    '(3.75 conical, 5 pure 1D), against boundary vectors for the amplitudes',
     },
     'jobspec': {

@@ -41,10 +41,11 @@ _Z_ROW_SLOTS = ('epxz_conv_all', 'epyz_conv_all', 'epzx_conv_all', 'epzy_conv_al
 _AUTO_DETUNE_REL = 1e-12
 
 # Connecting algorithm -> the core solve for each grating type. ETM propagates an enhanced
-# transmittance matrix (Moharam et al. 1995); SMM cascades per-layer scattering matrices. Same modes, same boundary
-# conventions, same answers (~1e-14), both able to reconstruct fields; SMM costs ~1.1-1.4x on
-# efficiencies and a little more once it also recovers the per-layer amplitudes. The two
-# solves in each row take identical arguments, which is what makes the dispatch a lookup.
+# transmittance matrix (Moharam et al. 1995); SMM cascades per-layer scattering matrices. Same
+# modes, same boundary conventions, same answers (~1e-14), both able to reconstruct fields; SMM
+# costs ~1.1-1.4x on efficiencies and a little more once it also recovers the per-layer
+# amplitudes. The two solves in each row take identical arguments, which is what makes the
+# dispatch a lookup.
 _SOLVES = {
     'ETM': {'1d': _etm_1d, 'conical': _etm_1d_conical, '2d': _etm_2d},
     'SMM': {'1d': _smm_1d, 'conical': _smm_1d_conical, '2d': _smm_2d},
@@ -152,8 +153,8 @@ _FIELD_NOT_DECLARED = (
     "state has to be retained *during* the solve, so there is nothing left to reconstruct "
     "from once it has returned. Set answers='field' and solve again.\n"
     "The default is 'amplitude' because the field state is 4.25 matrices of side "
-    "2*ff_x*ff_y per layer on the 2D path (3.75 conical, 5 pure 1D) -- 21.7 MB at "
-    "fto=(8, 8), 240 MB at (15, 15), 733 MB at (20, 20), per layer -- while the amplitudes "
+    "2*n_orders_x*n_orders_y per layer on the 2D path (3.75 conical, 5 pure 1D) -- 21.7 MB at "
+    "max_order=(8, 8), 240 MB at (15, 15), 733 MB at (20, 20), per layer -- while the amplitudes "
     "it does keep are boundary vectors. An optimization against a fixed objective needs the "
     "amplitudes and never reconstructs a field.")
 
@@ -319,8 +320,8 @@ class CoreSolveMixin:
 
         The default is ``'amplitude'`` because that is where the cost cliff is. The
         amplitudes are boundary vectors already solved for; the field state is 4.25 matrices
-        of side ``2*ff_x*ff_y`` per layer on the 2D path — 240 MB per layer at
-        ``fto=(15, 15)``, 733 MB at ``(20, 20)``. The two differ by three orders of
+        of side ``2*n_orders_x*n_orders_y`` per layer on the 2D path — 240 MB per layer at
+        ``max_order=(15, 15)``, 733 MB at ``(20, 20)``. The two differ by three orders of
         magnitude, and the runs that are large enough to care are optimization sweeps
         against a fixed objective, which never call :meth:`reconstruct_field` at all.
 
@@ -504,7 +505,7 @@ class CoreSolveMixin:
         It says the incidence has **no polarization and no azimuth degree of freedom**: not
         that they happen to be TE and zero right now, but that neither is a parameter of this
         problem. That is what makes the pure 1D TE/TM formulation legal, and that formulation
-        is 2 to 4 times faster than the conical one it replaces (measured across ``fto``;
+        is 2 to 4 times faster than the conical one it replaces (measured across ``max_order``;
         they agree to 1e-13).
 
         The distinction is the reason this is not a second spelling of ``polarization=(1, 0)``.
@@ -515,7 +516,7 @@ class CoreSolveMixin:
         freedom is *absent*, so ``psi`` reads back as ``None`` rather than as a number whose
         gradient is quietly zero.
 
-        Legal only where the formulation exists: a 1D structure, ``fto[1] == 0``, no azimuth,
+        Legal only where the formulation exists: a 1D structure, ``max_order[1] == 0``, no azimuth,
         and no ``psi`` or ``polarization`` beside it. Everywhere else it is refused rather
         than ignored — ``_assign_grating_type`` does that check, and says which condition
         failed.
@@ -627,21 +628,22 @@ class CoreSolveMixin:
         the physics: with nothing varying in ``y`` there is no grating vector to couple
         different ``n``, and the orders being asked for are identically zero. Measured on the
         2D path, which does retain them, for the same structure written with two identical
-        rows: the ``n = ±1`` rows sum to 5e-29, and the ``n = 0`` row reproduces ``fto=[m, 0]``
-        to 3e-15.
+        rows: the ``n = ±1`` rows sum to 5e-29, and the ``n = 0`` row reproduces
+        ``max_order=[m, 0]`` to 3e-15.
 
         Until this check the request reached ``layer_modes_1d_conical``, where ``Ky2`` is built
-        over the full ``ff_x * ff_y`` order set and the convolution matrices over ``ff_x``
-        alone, and surfaced as ``operands could not be broadcast together with shapes (5,5)
-        (15,15)`` — an error with nothing in it that names the mistake.
+        over the full ``n_orders_x * n_orders_y`` order set and the convolution matrices over
+        ``n_orders_x`` alone, and surfaced as ``operands could not be broadcast together with
+        shapes (5,5) (15,15)`` — an error with nothing in it that names the mistake.
         """
-        if not one_dimensional or self.fto[1] == 0:
+        if not one_dimensional or self.max_order[1] == 0:
             return
         raise ValueError(
-            f'fto={list(self.fto)} asks for y diffraction orders, but this structure has one row '
-            f'in y, so the structure is invariant along it and every n != 0 order is '
-            f'identically zero. Both 1D formulations keep the single n = 0 order for that '
-            f'reason. Use fto=[{self.fto[0]}, 0]; if you meant a structure that varies in y, '
+            f'max_order={list(self.max_order)} asks for y diffraction orders, but this '
+            f'structure has one row in y, so the structure is invariant along it and every '
+            f'n != 0 order is identically zero. Both 1D formulations keep the single n = 0 '
+            f'order for that reason. Use max_order=[{self.max_order[0]}, 0]; if you meant a '
+            f'structure that varies in y, '
             f'give a structure with more than one row (two identical rows is the 2D path solving '
             f'the same physics, and it returns those zeros explicitly).')
 
@@ -652,8 +654,9 @@ class CoreSolveMixin:
         The old ``pol`` had no such check: on a 2D structure it was accepted and then ignored,
         and the fast path it was reaching for silently did not happen.
 
-        The ``fto[1]`` half lives in :meth:`_refuse_y_orders_on_a_y_invariant_cell` instead —
-        it is not a fact about the declaration but about the structure, and it applies to
+        The ``max_order[1]`` half lives in :meth:`_refuse_y_orders_on_a_y_invariant_cell`
+        instead — it is not a fact about the declaration but about the structure, and it
+        applies to
         every spelling of the incidence.
         """
         if self._tetm is None:
@@ -797,8 +800,8 @@ class CoreSolveMixin:
 
         Axis-aligned cells keep the two 1-D vectors untouched — same objects, same values, so
         nothing downstream can tell this method was added. A skewed cell cannot be written that
-        way and gets the ``(ff_y, ff_x)`` Cartesian components instead; both spellings are what
-        :func:`wavebit._core.solve_2d.order_grid_kxy` accepts.
+        way and gets the ``(n_orders_y, n_orders_x)`` Cartesian components instead; both
+        spellings are what :func:`wavebit._core.solve_2d.order_grid_kxy` accepts.
 
         The incident components are read back out of the 1-D vectors at ``m = n = 0`` rather
         than recomputed. That entry *is* ``k_inc`` by construction, so the backend's own
@@ -810,10 +813,10 @@ class CoreSolveMixin:
         A = self._lattice_basis
         if A is None or _lattice.is_axis_aligned(A):
             return kx, ky
-        fto_x, fto_y = int(self.fto[0]), int(self.fto[1])
+        max_order_x, max_order_y = int(self.max_order[0]), int(self.max_order[1])
         xp = array_namespace(kx)
-        return _lattice.order_kxy(xp, A, fto_x, fto_y, wavelength,
-                                  kx[fto_x], ky[fto_y],
+        return _lattice.order_kxy(xp, A, max_order_x, max_order_y, wavelength,
+                                  kx[max_order_x], ky[max_order_y],
                                   dtype=kx.dtype, device=_device_of(kx))
 
     def _finish(self, out):
@@ -1289,7 +1292,7 @@ class CoreFactorizationMixin:
         factorization = self.factorization
         coefficients = self.fourier_coefficients
         self._reject_unread_normal_method(factorization)
-        fto_x, fto_y = self.fto[0], self.fto[1]
+        max_order_x, max_order_y = self.max_order[0], self.max_order[1]
 
         # The two axes decide independently what has to be frozen: NVF needs the normal
         # field, the integrated series needs the block compression, and ('integrated', 'nvf')
@@ -1300,9 +1303,9 @@ class CoreFactorizationMixin:
             if factorization == Factorization.NVF:
                 basis = self._geometry_lattice_for(None)
                 normal_field = _fac.normal_field_for_raster(
-                    self.structure, fto_x, fto_y, lattice=basis, method=self.normal_method)
+                    self.structure, max_order_x, max_order_y, lattice=basis, method=self.normal_method)
                 normal_field_source = _fac.normal_field_source_for_raster(
-                    self.structure, fto_x, fto_y, lattice=basis, method=self.normal_method)
+                    self.structure, max_order_x, max_order_y, lattice=basis, method=self.normal_method)
                 if self._mu is not None:
                     # A separate record, off `mu`'s own raster. A magnetic inclusion need not
                     # sit where the dielectric one does, and the NVF rearrangement is written
@@ -1311,9 +1314,9 @@ class CoreFactorizationMixin:
                     # permittivity's field would be right on every case where the two patterns
                     # coincide, which is most of them, and silently wrong on the rest.
                     mu_normal_field = _fac.normal_field_for_raster(
-                        self._mu, fto_x, fto_y, lattice=basis, method=self.normal_method)
+                        self._mu, max_order_x, max_order_y, lattice=basis, method=self.normal_method)
                     mu_normal_field_source = _fac.normal_field_source_for_raster(
-                        self._mu, fto_x, fto_y, lattice=basis, method=self.normal_method)
+                        self._mu, max_order_x, max_order_y, lattice=basis, method=self.normal_method)
             if coefficients == FourierCoefficients.INTEGRATED:
                 compression = [_fac.compression_indices(self.structure[i])
                                for i in range(self.structure.shape[0])]
@@ -1482,14 +1485,14 @@ class CoreFactorizationMixin:
     def conv_matrices(self, geometry=None, **kwargs):
         """The convolution matrices for this structure, without solving.
 
-        Returns a :class:`~wavebit._core.factorization.ConvMatrices` — the five slots
-        ``(epx, epy, epz_i, epxy, epyx)``, which are exactly :meth:`solve_conv`'s leading
-        parameters, so ``solver.solve_conv(*solver.conv_matrices())`` is ``solve()``. It is
-        a ``NamedTuple``: splatting, unpacking, indexing and ``len`` all behave as they did
-        when this returned a bare tuple, and ``conv.epz_i`` now reaches one slot by name
-        rather than by an index that is correct only until somebody reorders. Each slot is
-        ``(n_layers, ff_xy, ff_xy)`` with ``ff_xy = (2*fto_x+1) * (2*fto_y+1)``; ``epxy`` and
-        ``epyx`` are ``None`` on the paths that produce three rather than five (see
+        Returns a :class:`~wavebit._core.factorization.ConvMatrices` — the five slots ``(epx,
+        epy, epz_i, epxy, epyx)``, which are exactly :meth:`solve_conv`'s leading parameters, so
+        ``solver.solve_conv(*solver.conv_matrices())`` is ``solve()``. It is a ``NamedTuple``:
+        splatting, unpacking, indexing and ``len`` all behave as they did when this returned a
+        bare tuple, and ``conv.epz_i`` now reaches one slot by name rather than by an index that
+        is correct only until somebody reorders. Each slot is ``(n_layers, n_orders, n_orders)``
+        with ``n_orders = (2*max_order_x+1) * (2*max_order_y+1)``; ``epxy`` and ``epyx`` are
+        ``None`` on the paths that produce three rather than five (see
         :func:`~._core.factorization.nvf_conv_matrices`).
 
         **This exists because the boundary was one-way.** ``solve_conv`` has always accepted
@@ -1687,7 +1690,7 @@ class CoreFactorizationMixin:
         """
         factorization = self.factorization
         coefficients = self.fourier_coefficients
-        fto_x, fto_y = self.fto[0], self.fto[1]
+        max_order_x, max_order_y = self.max_order[0], self.max_order[1]
         mu_pass = quantity == 'permeability'
         epxy_conv_all = epyx_conv_all = None
 
@@ -1711,16 +1714,16 @@ class CoreFactorizationMixin:
                 if sampled:
                     epx_conv_all, epy_conv_all, epz_conv_i_all = \
                         _fac.to_conv_mat_raster_sampled(
-                            structure, fto_x, fto_y)
+                            structure, max_order_x, max_order_y)
                 else:
                     epx_conv_all, epy_conv_all, epz_conv_i_all = \
                         _fac.to_conv_mat_raster_integrated(
-                            structure, fto_x, fto_y, compression=compression)
+                            structure, max_order_x, max_order_y, compression=compression)
             else:
                 if sampled:
                     (epx_conv_all, epy_conv_all, epz_conv_i_all,
                      epxy_conv_all, epyx_conv_all) = _fac.to_conv_mat_raster_nvf(
-                        structure, fto_x, fto_y,
+                        structure, max_order_x, max_order_y,
                         normal_field=normal_field,
                         normal_field_source=normal_field_source,
                         lattice=self._geometry_lattice_for(geometry),
@@ -1728,7 +1731,7 @@ class CoreFactorizationMixin:
                 else:
                     (epx_conv_all, epy_conv_all, epz_conv_i_all,
                      epxy_conv_all, epyx_conv_all) = _fac.to_conv_mat_raster_integrated_nvf(
-                        structure, fto_x, fto_y,
+                        structure, max_order_x, max_order_y,
                         normal_field=normal_field,
                         normal_field_source=normal_field_source,
                         compression=compression,
@@ -1752,7 +1755,7 @@ class CoreFactorizationMixin:
             structure_block = self.modeling_block_instruction(
                 structure, plans=plans, shape_choices=choices)
             epx_conv_all, epy_conv_all, epz_conv_i_all = _fac.to_conv_mat_block(
-                structure_block, fto_x, fto_y)
+                structure_block, max_order_x, max_order_y)
 
         elif self._modeling_type_assigned == 2:      # smooth shapes -- NVF on exact transforms
             # Likewise fixed on both axes: the epsilon tensor comes from the shapes' analytic
@@ -1762,7 +1765,7 @@ class CoreFactorizationMixin:
             xp = _namespace_for_backend(self.backend)
             (epx_conv_all, epy_conv_all, epz_conv_i_all,
              epxy_conv_all, epyx_conv_all) = _analytic.to_conv_mat_smooth_layers(
-                structure, fto_x, fto_y, self.period,
+                structure, max_order_x, max_order_y, self.period,
                 normal_grid=self.normal_grid,
                 type_complex=xp.complex128, xp=xp,
                 boundary_plans=None if geometry is None else geometry.boundary_plans,

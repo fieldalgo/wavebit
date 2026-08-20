@@ -48,7 +48,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                  backend=0,
                  tetm=None,
                  pol=None,   # retired; kept only to say so
-                 fto=(0, 0),
+                 max_order=(0, 0),
                  connecting_algo='ETM',
                  type_complex=np.complex128,
                  fourier_coefficients=None,  # 'sampled' | 'integrated'
@@ -81,11 +81,11 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                  # explicitly set anywhere else it is refused rather than ignored.
                  # See docs/nvf-normal-methods.md for the measurements that rank them.
                  answers='amplitude',        # what this solve keeps the state to answer:
-                 # 'efficiency' | 'amplitude' (default) | 'field'. A declaration, like
-                 # tetm -- reconstruct_field is refused below 'field' rather than served,
-                 # because the per-layer state it walks is 4.25 matrices of side
-                 # 2*ff_x*ff_y per layer (240 MB at fto=(15, 15)) and is kept as the
-                 # solve runs or not at all. See CoreSolveMixin.answers.
+                 # 'efficiency' | 'amplitude' (default) | 'field'. A declaration, like tetm --
+                 # reconstruct_field is refused below 'field' rather than served, because the
+                 # per-layer state it walks is 4.25 matrices of side 2*n_orders_x*n_orders_y per
+                 # layer (240 MB at max_order=(15, 15)) and is kept as the solve runs or not at
+                 # all. See CoreSolveMixin.answers.
                  mu=None,                    # raster path only: the permeability field,
                  # (n_layers, Ny, Nx) beside `structure`. On the two shape paths a
                  # permeability belongs to the Material filling each region, so naming it
@@ -99,7 +99,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         _refuse_retired(retired)
 
         super().__init__(top=top, bot=bot, theta=theta, phi=phi, psi=psi, chi=chi, tetm=tetm, pol=pol,
-                         fto=fto, period=period, wavelength=wavelength,
+                         max_order=max_order, period=period, wavelength=wavelength,
                          thickness=thickness, connecting_algo=connecting_algo,
                          type_complex=type_complex,
                          polarization=polarization)
@@ -197,13 +197,16 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
 
     def _assign_grating_type(self):
         """
-        Select the grating type for RCWA simulation. This decides the efficient formulation for given case.
+        Select the grating type for RCWA simulation. This decides the efficient formulation for
+        given case.
 
-        `_grating_type_assigned` == 0(1D TETM)    is for 1D grating, no rotation (phi or azimuth), and either TE or TM.
-        `_grating_type_assigned` == 1(1D conical) is for 1D grating with generality.
-        `_grating_type_assigned` == 2(2D)         is for 2D grating with generality.
+        `_grating_type_assigned` == 0(1D TETM)    is for 1D grating, no rotation (phi or
+        azimuth), and either TE or TM. `_grating_type_assigned` == 1(1D conical) is for 1D
+        grating with generality. `_grating_type_assigned` == 2(2D)         is for 2D grating
+        with generality.
 
-        Note that no rotation means 'phi' is `None`. If phi is given as '0', then it takes 1D conical form
+        Note that no rotation means 'phi' is `None`. If phi is given as '0', then it takes 1D
+        conical form
          even though when the case itself is 1D TETM.
 
         1D conical is under implementation.
@@ -265,7 +268,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
         if self._formulation_for(z_row) == Formulation.FIRST:
             # The 1D paths have no z-row slots to fill, so a z row is also a choice of path:
-            # the first-order solve is written on the 2D layout (a 1D structure is ff_y == 1
+            # the first-order solve is written on the 2D layout (a 1D structure is n_orders_y == 1
             # there, the same physics the conical path solves at conical cost).
             self._grating_type_assigned = 2
 
@@ -296,7 +299,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         res_te_inc = ResultSubNumpy(**result_dict['res_te_inc']) if 'res_te_inc' in result_dict else None
         res_tm_inc = ResultSubNumpy(**result_dict['res_tm_inc']) if 'res_tm_inc' in result_dict else None
 
-        result = ResultNumpy(res_psi, res_te_inc, res_tm_inc, fto=self.fto)
+        result = ResultNumpy(res_psi, res_te_inc, res_tm_inc, max_order=self.max_order)
 
         return result
 

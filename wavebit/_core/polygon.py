@@ -146,7 +146,7 @@ def ellipse_verts(xp, cx, cy, lx, ly, angle, n):
     Scaling the semi-axes by ``sqrt(2*pi/(n*sin(2*pi/n)))`` makes the areas equal, and the same
     factor serves an ellipse of any aspect: the ``a*b`` cancels out of the ratio.
 
-    Measured against the closed-form transform at ``fto`` 11, a circle at ``n = 256``:
+    Measured against the closed-form transform at ``max_order`` 11, a circle at ``n = 256``:
     inscribed **2.84e-05**, area-matched **8.43e-10**. Checked at aspect 1:1, 3:1 and 9:1.
 
     This is what RETICOLO's ellipse texture has always done -- ``retu.m``, "la surface totale de

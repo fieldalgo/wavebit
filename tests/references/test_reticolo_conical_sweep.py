@@ -31,7 +31,7 @@ import wavebit
 
 GOLDEN_PATH = pathlib.Path(__file__).parent / 'golden_reticolo_conical_sweep.npz'
 
-FTO = 80
+MAX_ORDER = 80
 # Solving all 441 points takes about a minute. These strides keep the physics — a spread of
 # polar and azimuthal angles, on and off the axes — at a couple of seconds.
 PROPAGATING_STRIDE = 7
@@ -82,7 +82,7 @@ def _solve(g, i, j):
     theta = np.arcsin(np.sqrt(kx[i] ** 2 + ky[j] ** 2 + 0.0001, dtype=np.complex128))
     phi = np.arctan(ky[j] / (kx[i] + 0.0001), dtype=np.complex128)
     res = wavebit.rcwa(backend=0, psi=np.pi / 2, **_scene(g),
-                         theta=theta, phi=phi, fto=[FTO], wavelength=float(g['wavelength']),
+                         theta=theta, phi=phi, max_order=[MAX_ORDER], wavelength=float(g['wavelength']),
                          period=list(g['period']),
                          thickness=list(g['thickness']),
                          fourier_coefficients='integrated',
@@ -94,17 +94,17 @@ def test_propagating_incidence_matches_reticolo():
     """Real incidence angles, swept over the light cone.
 
     ``2e-13`` is round-off room: the measured spread over the full 441-point grid is 2e-14 at
-    fto=80. This is the assertion that says the conical path is right; everything else in
+    max_order=80. This is the assertion that says the conical path is right; everything else in
     this file is about the regime where it is not.
     """
     g = _golden()
-    want = g[f'amp_fto{FTO}'].real
+    want = g[f'amp_fto{MAX_ORDER}'].real
     prop, _ = _grid(g)
     assert len(prop) >= 8, len(prop)
 
     worst = 0.0
     for i, j in prop:
-        got = np.asarray(_solve(g, i, j).r_s).ravel()[FTO].real
+        got = np.asarray(_solve(g, i, j).r_s).ravel()[MAX_ORDER].real
         worst = max(worst, abs(got - want[i, j]))
     assert worst < 2e-13, worst
 
@@ -141,13 +141,13 @@ def test_evanescent_incidence_matches_reticolo():
     half is not a softer regime once the branch is right.
     """
     g = _golden()
-    want = g[f'amp_fto{FTO}'].real
+    want = g[f'amp_fto{MAX_ORDER}'].real
     _, evan = _grid(g)
     assert len(evan) >= 4, len(evan)
 
     worst = 0.0
     for i, j in evan:
-        got = np.asarray(_solve(g, i, j).r_s).ravel()[FTO].real
+        got = np.asarray(_solve(g, i, j).r_s).ravel()[MAX_ORDER].real
         worst = max(worst, abs(got - want[i, j]))
     assert worst < 2e-13, worst
 
@@ -169,7 +169,7 @@ def test_double_precision_agrees_across_backends_at_a_complex_angle(backend):
 
     def solve(bk):
         res = wavebit.rcwa(backend=bk, psi=np.pi / 2, **_scene(g),
-                             theta=theta, phi=phi, fto=[40],
+                             theta=theta, phi=phi, max_order=[40],
                              wavelength=float(g['wavelength']), period=list(g['period']),
                              thickness=list(g['thickness']),
                              type_complex=0, fourier_coefficients='integrated',
@@ -201,11 +201,11 @@ def test_uniform_stack_does_not_diffract_at_a_complex_angle():
     scene['structure'] = np.full_like(np.asarray(scene['structure'], dtype=float), 6.25)
     res = wavebit.rcwa(backend=0, psi=np.pi / 2, **scene,
                          theta=np.complex128(0.5 + 0.3j), phi=np.complex128(0.3),
-                         fto=[FTO], wavelength=float(g['wavelength']),
+                         max_order=[MAX_ORDER], wavelength=float(g['wavelength']),
                          period=list(g['period']),
                          thickness=list(g['thickness']),
                          fourier_coefficients='integrated',
                          factorization='li').solve()
     R = np.asarray(res.res_te_inc.r_s).ravel()
-    off_centre = np.abs(np.delete(R, FTO)).max()
+    off_centre = np.abs(np.delete(R, MAX_ORDER)).max()
     assert off_centre < 1e-12, off_centre

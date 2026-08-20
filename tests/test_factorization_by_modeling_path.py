@@ -31,7 +31,7 @@ import wavebit
 from wavebit._core.enums import Factorization
 
 KW = dict(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
-          fto=[4, 4], period=[1.0, 1.0], wavelength=1.1, thickness=[0.3])
+          max_order=[4, 4], period=[1.0, 1.0], wavelength=1.1, thickness=[0.3])
 
 # One structure per modeling path, as close to the same circle as each path can state it.
 # `modeling_type` is inferred from the type of `structure`, never passed. A `circle` takes `lx`
@@ -306,8 +306,8 @@ def test_freezing_gives_the_same_diagnosis_the_solve_would():
 # --------------------------------------------------------------------------- through the spec
 
 SPEC = {
-    'version': '3',                 # a parsed document states its schema; see tests/test_spec.py
-    'numerics': {'backend': 'numpy', 'fto': [4, 4]},
+    'version': '4',                 # a parsed document states its schema; see tests/test_spec.py
+    'numerics': {'backend': 'numpy', 'max_order': [4, 4]},
     'stack': {'top': 1.0, 'bot': 1.0, 'period': [1.0, 1.0],
               'layers': [{'thickness': 0.3, 'structure': SMOOTH[0]}]},
     'incidence': {'wavelength': 1.1, 'theta': 0.0, 'phi': 0.0, 'psi': 0.0},

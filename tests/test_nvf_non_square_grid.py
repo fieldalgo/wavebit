@@ -151,7 +151,7 @@ def test_the_error_is_a_bias_refinement_cannot_remove():
 def test_energy_is_conserved_anyway():
     """Why nothing caught this. The wrong normal costs nothing the usual tell can see."""
     _, _, structure = _disc(96, 96)
-    cfg = dict(backend=0, period=[PX, PY], fto=[4, 4], wavelength=300.0, thickness=[220.0],
+    cfg = dict(backend=0, period=[PX, PY], max_order=[4, 4], wavelength=300.0, thickness=[220.0],
                top=1.0, bot=1.0, theta=0.2, phi=0.3, psi=0.4, factorization='nvf',
                structure=structure[None, :, :])
     res = wavebit.rcwa(**cfg).solve()
@@ -168,7 +168,7 @@ def test_a_frozen_normal_field_replays_onto_a_non_square_grid(coefficients):
     as a cell change and refuses the replay outright.
     """
     _, _, structure = _disc(64, 64)
-    cfg = dict(backend=0, period=[PX, PY], fto=[3, 3], wavelength=300.0, thickness=[220.0],
+    cfg = dict(backend=0, period=[PX, PY], max_order=[3, 3], wavelength=300.0, thickness=[220.0],
                top=1.0, bot=2.25, theta=0.2, factorization='nvf',
                fourier_coefficients=coefficients, structure=structure[None, :, :])
     solver = wavebit.rcwa(**cfg)
@@ -193,7 +193,7 @@ def test_the_solver_hands_the_cell_basis_to_the_factorization(coefficients):
 
     _, _, structure = _disc(64, 64)
     layers = structure[None, :, :]
-    cfg = dict(backend=0, period=[PX, PY], fto=[3, 3], wavelength=300.0, thickness=[220.0],
+    cfg = dict(backend=0, period=[PX, PY], max_order=[3, 3], wavelength=300.0, thickness=[220.0],
                top=1.0, bot=2.25, theta=0.2, factorization='nvf',
                fourier_coefficients=coefficients, structure=layers)
     build = (fac.to_conv_mat_raster_nvf if coefficients == 'sampled'
@@ -222,14 +222,14 @@ def test_the_frozen_record_carries_the_pixel_shape():
     :func:`~wavebit._core.factorization._lattice_key`).
     """
     _, _, structure = _disc(64, 64)
-    solver = wavebit.rcwa(backend=0, period=[PX, PY], fto=[3, 3], wavelength=300.0,
+    solver = wavebit.rcwa(backend=0, period=[PX, PY], max_order=[3, 3], wavelength=300.0,
                             thickness=[220.0], top=1.0, bot=2.25, theta=0.2,
                             factorization='nvf', structure=structure[None, :, :])
     recorded = solver.freeze_geometry().normal_field_source[0][2]
     assert recorded == pytest.approx((1.0, 0.0, 0.0, PY / PX))   # (400/64) / (200/64) == 2
 
     # A cell twice the size with the same shape is the same normal field, so the same key.
-    doubled = wavebit.rcwa(backend=0, period=[2 * PX, 2 * PY], fto=[3, 3], wavelength=300.0,
+    doubled = wavebit.rcwa(backend=0, period=[2 * PX, 2 * PY], max_order=[3, 3], wavelength=300.0,
                              thickness=[220.0], top=1.0, bot=2.25, theta=0.2,
                              factorization='nvf', structure=structure[None, :, :])
     assert doubled.freeze_geometry().normal_field_source[0][2] == pytest.approx(recorded)
@@ -247,7 +247,7 @@ def test_differentiating_period_does_not_read_as_a_cell_change():
     import jax.numpy as jnp
 
     _, _, structure = _disc(48, 48)
-    base = dict(backend=1, fto=[3, 3], wavelength=300.0, thickness=[220.0], top=1.0,
+    base = dict(backend=1, max_order=[3, 3], wavelength=300.0, thickness=[220.0], top=1.0,
                 bot=2.25, theta=0.2, factorization='nvf', structure=jnp.asarray(structure[None, :, :]))
     frozen = wavebit.rcwa(period=[PX, PY], **base).freeze_geometry()
 

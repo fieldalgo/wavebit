@@ -71,12 +71,12 @@ def test_raster_1d_parity():
     thickness, period = [0.15], [0.77]
 
     legacy = wavebit.rcwa(backend=0, top=4.0, bot=1.0, theta=0.0, phi=None,
-                             tetm=Pol.TE, fto=[6, 0], period=period, wavelength=0.777,
+                             tetm=Pol.TE, max_order=[6, 0], period=period, wavelength=0.777,
                              thickness=thickness, structure=structure).solve()
 
     stack = Stack.from_structure(structure, thickness, top=4.0, bot=1.0, period=period)
     incidence = Incidence(wavelength=0.777, theta=0.0, phi=None, tetm=Pol.TE)
-    typed = wavebit.rcwa(backend=0, fto=[6, 0], stack=stack, incidence=incidence).solve()
+    typed = wavebit.rcwa(backend=0, max_order=[6, 0], stack=stack, incidence=incidence).solve()
 
     assert _de(typed) == _de(legacy)
 
@@ -87,12 +87,12 @@ def test_raster_2d_parity():
     thickness, period = [0.2, 0.3], [1.0, 1.0]
 
     legacy = wavebit.rcwa(backend=0, top=1.0, bot=2.25, theta=0.1, phi=0.2,
-                             psi=np.pi / 4, fto=[3, 3], period=period, wavelength=0.9,
+                             psi=np.pi / 4, max_order=[3, 3], period=period, wavelength=0.9,
                              thickness=thickness, structure=structure).solve()
 
     stack = Stack.from_structure(structure, thickness, top=1.0, bot=2.25, period=period)
     incidence = Incidence(wavelength=0.9, theta=0.1, phi=0.2, psi=np.pi / 4)
-    typed = wavebit.rcwa(backend=0, fto=[3, 3], stack=stack, incidence=incidence).solve()
+    typed = wavebit.rcwa(backend=0, max_order=[3, 3], stack=stack, incidence=incidence).solve()
 
     assert _de(typed) == _de(legacy)
 
@@ -102,12 +102,12 @@ def test_conical_psi_parity():
     thickness, period = [0.15], [0.77]
 
     legacy = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.3, phi=0.0,
-                             psi=0.4, fto=[6, 0], period=period, wavelength=0.777,
+                             psi=0.4, max_order=[6, 0], period=period, wavelength=0.777,
                              thickness=thickness, structure=structure).solve()
 
     stack = Stack.from_structure(structure, thickness, period=period)
     incidence = Incidence(wavelength=0.777, theta=0.3, phi=0.0, psi=0.4)
-    typed = wavebit.rcwa(backend=0, fto=[6, 0], stack=stack, incidence=incidence).solve()
+    typed = wavebit.rcwa(backend=0, max_order=[6, 0], stack=stack, incidence=incidence).solve()
 
     assert _de(typed) == _de(legacy)
 
@@ -123,7 +123,7 @@ def test_material_half_spaces_are_the_same_physics_as_the_shorthand():
     never a second way to compute one.
     """
     structure = np.array([[[9.0, 9.0, 9.0, 1.0, 1.0, 1.0]]])
-    kw = dict(backend=0, fto=[6, 0], period=[0.77], wavelength=0.777,
+    kw = dict(backend=0, max_order=[6, 0], period=[0.77], wavelength=0.777,
               thickness=[0.15], structure=structure, theta=0.0, phi=None, tetm=Pol.TE)
 
     plain = wavebit.rcwa(top=4.0, bot=1.0, **kw).solve()
@@ -134,7 +134,7 @@ def test_material_half_spaces_are_the_same_physics_as_the_shorthand():
     stack = Stack.from_structure(structure, [0.15], top=Material(4.0), bot=Material(1.0),
                                  period=[0.77])
     assert stack.as_kwargs()['top'] == Material(4.0)
-    through = wavebit.rcwa(backend=0, fto=[6, 0], stack=stack,
+    through = wavebit.rcwa(backend=0, max_order=[6, 0], stack=stack,
                            incidence=Incidence(wavelength=0.777, theta=0.0, phi=None,
                                                tetm=Pol.TE)).solve()
     assert _de(through) == _de(plain)
@@ -171,7 +171,7 @@ def test_the_retired_layer_key_is_in_the_one_table():
 def test_the_solver_refuses_the_retired_layer_keyword_by_name():
     """Adding it to the table is what makes every reader of the table refuse it."""
     with pytest.raises(TypeError, match='PERMITTIVITY'):
-        wavebit.rcwa(backend=0, fto=[2, 0], eps=np.array([[[9.0, 1.0]]]), thickness=[0.1])
+        wavebit.rcwa(backend=0, max_order=[2, 0], eps=np.array([[[9.0, 1.0]]]), thickness=[0.1])
 
 
 def test_the_two_figures_the_refusal_quotes_are_the_readme_scene_measured():
@@ -194,7 +194,7 @@ def test_the_two_figures_the_refusal_quotes_are_the_readme_scene_measured():
     """
     def quickstart(eps_layer, eps_substrate):
         res = wavebit.rcwa(
-            backend=0, wavelength=900., period=[700.], fto=[10, 0],
+            backend=0, wavelength=900., period=[700.], max_order=[10, 0],
             top=1., bot=eps_substrate, theta=0., phi=0., tetm='te',
             structure=np.array([[[1.0, 1.0, eps_layer, eps_layer]]]),
             thickness=[300.]).solve()
@@ -221,6 +221,6 @@ def test_double_specify_raises():
     structure = np.array([[[9.0, 1.0]]])
     stack = Stack.from_structure(structure, [0.1])
     with pytest.raises(ValueError, match='stack'):
-        wavebit.rcwa(backend=0, stack=stack, structure=structure, fto=[2, 0])
+        wavebit.rcwa(backend=0, stack=stack, structure=structure, max_order=[2, 0])
     with pytest.raises(ValueError, match='incidence'):
-        wavebit.rcwa(backend=0, incidence=Incidence(theta=0.1), theta=0.2, fto=[2, 0])
+        wavebit.rcwa(backend=0, incidence=Incidence(theta=0.1), theta=0.2, max_order=[2, 0])
