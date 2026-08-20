@@ -35,13 +35,13 @@ import pytest
 import wavebit
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent / 'data'))
-from gen_goldens_field import CASES, RES, VARIANTS, solved  # noqa: E402
+from gen_goldens_field import CASE_VARIANTS, CASES, COUPLED, RES, solved  # noqa: E402
 
 GOLDEN = np.load(pathlib.Path(__file__).parent / 'data' / 'golden_field.npz')
 
 
-@pytest.mark.parametrize('tag,which', VARIANTS, ids=[v[0] for v in VARIANTS])
-@pytest.mark.parametrize('name', list(CASES))
+@pytest.mark.parametrize('name,tag,which', CASE_VARIANTS,
+                         ids=[f'{n}-{t}' for n, t, _ in CASE_VARIANTS])
 def test_the_reconstruction_has_not_drifted(name, tag, which):
     """The frozen cells, unchanged — a change detector, and only that.
 
@@ -64,6 +64,73 @@ def test_the_reconstruction_has_not_drifted(name, tag, which):
     assert got.shape == want.shape, (got.shape, want.shape)
     assert np.allclose(want, got, atol=1e-12, rtol=0), np.max(np.abs(want - got))
 
+
+@pytest.mark.parametrize('name', [n for n in CASES if n not in COUPLED])
+def test_the_1d_all_keys_are_the_ignored_argument_frozen(name):
+    """The three golden keys the incidence refusal made unreachable, read as evidence.
+
+    Until 2026-08-20 the pure 1D TE/TM path took ``incidences`` and dropped it: ``field_1d``
+    has no incidence axis to put a second slab on, so asking for all three returned the
+    declared one, once, with nothing saying so. The generator froze that, twice per case, and
+    the two arrays are **bit-identical** -- which is what makes the refusal that now stands in
+    their place correct rather than merely tidy.
+
+    So the keys stay and this reads them, instead of the file being re-frozen three keys
+    lighter. Re-running the generator would recapture the other 25 as well and absorb whatever
+    drift they hold, which is the one thing this file exists to prevent; ``gen_goldens.py``'s
+    own note prescribes the same answer for the same reason -- transform at the comparison.
+    """
+    assert np.array_equal(GOLDEN[f'{name}__all'], GOLDEN[f'{name}__default'])
+
+# ------------------------------------------------------- what `incidences` refuses, and why
+
+@pytest.mark.parametrize('bad,match', [
+    ((True, False, False), r'tuple of booleans'),      # the retired `set_field_input` triple
+    ('given', r'bare string'),                         # one name is still a tuple
+    ((), r'nothing requested'),
+    (('te',), r'not an incidence this solve carries'),  # the `tetm` vocabulary, not this one
+    (('s', 's'), r'repeats an incidence'),
+])
+def test_a_request_that_names_no_incidence_is_refused(bad, match):
+    """Each refusal names what was written, because none of these is a shape error.
+
+    The boolean triple is the one that has to be refused rather than read: it is a legal
+    Python tuple, and read positionally it would select ``T1[1]`` for ``True`` and ``T1[0]``
+    for ``False`` -- a complete, plausible field cell for the wrong incidence.
+    """
+    solver = solved('2d')
+    with pytest.raises(ValueError, match=match):
+        solver.reconstruct_field(incidences=bad, **RES)
+
+
+@pytest.mark.parametrize('which', [('given', 's', 'p'), ('s',), ('p', 'given')])
+@pytest.mark.parametrize('name', [n for n in CASES if n not in COUPLED])
+def test_the_pure_1d_path_refuses_an_incidence_it_never_solved(name, which):
+    """``tetm`` declared the other polarization away; asking for it back is refused.
+
+    Ignored until 2026-08-20, which is the failure this pins: the argument was read on the
+    coupled paths and dropped here, so the same call that returns three slabs on a conical
+    solve returned one on this one, silently, with the request nowhere in the output.
+    """
+    solver = solved(name)
+    assert solver.grating_type_assigned == 0
+    with pytest.raises(ValueError, match=r'pure 1D TE/TM path'):
+        solver.reconstruct_field(incidences=which, **RES)
+
+
+@pytest.mark.parametrize('name', [n for n in CASES if n not in COUPLED])
+def test_the_one_incidence_it_does_carry_is_still_reconstructed(name):
+    """The refusal above is about the two it never solved, not about the path.
+
+    Stated separately because a refusal is cheap to over-apply: a guard that also rejected
+    the default would take field reconstruction off the 1D path entirely, and every other
+    assertion here would still pass.
+    """
+    want = GOLDEN[f'{name}__default']
+    got = np.asarray(solved(name).reconstruct_field(incidences=('given',), **RES))
+    assert got.shape == want.shape
+    # the drift test's tolerance, not equality: these two 1D cases sit ~1e-14 off the freeze
+    assert np.allclose(want, got, atol=1e-12, rtol=0), np.max(np.abs(want - got))
 
 # ------------------------------------------------------- the frame the components live in
 

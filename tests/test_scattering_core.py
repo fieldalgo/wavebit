@@ -223,10 +223,21 @@ def test_unknown_connecting_algo_is_rejected():
         _solve('RCWA-ish', kwargs)
 
 
+def _incidences_of(solver):
+    """The incidences this solve actually carries.
+
+    Read off the solved solver rather than off the case list, so the routing rule stays
+    stated once -- in ``_assign_grating_type`` -- instead of being restated here. The pure 1D
+    TE/TM path carries one: ``tetm`` declared the other degree of freedom away, and asking it
+    for ``'s'`` / ``'p'`` is refused rather than answered.
+    """
+    return ('given',) if solver.grating_type_assigned == 0 else ('given', 's', 'p')
+
+
 def _field(algo, kwargs, **res):
     solver = wavebit.rcwa(backend=0, layer_algorithm=algo, answers='field', **kwargs)
     solver.solve()
-    cell = solver.reconstruct_field(incidences=('given', 's', 'p'), **res)
+    cell = solver.reconstruct_field(incidences=_incidences_of(solver), **res)
     return solver, np.array(cell)
 
 
@@ -236,8 +247,9 @@ def test_smm_field_matches_tmm(name, kwargs, kind):
 
     The SMM cascade throws away what field reconstruction walks, so it recovers the per-layer
     amplitudes from its own split-plane amplitudes afterwards. This is the check that the
-    recovery is the same physical state and not merely a plausible one — including for the
-    TE / TM incidence variants, which have their own amplitude columns.
+    recovery is the same physical state and not merely a plausible one — including, on the
+    paths that carry them, for the pure-s / pure-p incidence variants, which have their own
+    amplitude columns.
     """
     _, tmm = _field('ETM', kwargs, sample_x=6, sample_y=6, sample_z=5)
     _, smm = _field('SMM', kwargs, sample_x=6, sample_y=6, sample_z=5)
@@ -467,7 +479,7 @@ def test_smm_field_cross_backend(case, backend, name):
     solver = wavebit.rcwa(backend=backend, layer_algorithm='SMM', answers='field', **kwargs)
     solver.solve(geometry=solver.freeze_geometry())
     cell = np.asarray(solver.reconstruct_field(sample_x=5, sample_y=5, sample_z=4,
-                                             incidences=('given', 's', 'p')))
+                                               incidences=_incidences_of(solver)))
     assert cell.shape == reference.shape
     assert np.max(np.abs(cell - reference)) < 1e-10 * np.max(np.abs(reference))
 

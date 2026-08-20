@@ -373,13 +373,44 @@ def _unshuffle(xp, cell, unshuffle, axis):
     return xp.take(cell, xp.asarray(unshuffle, device=_dev(cell)), axis=axis)
 
 
+def refuse_extra_incidences(incidences):
+    """Refuse anything but ``('given',)`` on the path that carries exactly one incidence.
+
+    The pure 1D TE/TM solve is single-polarization by construction: ``tetm`` declares the
+    other degree of freedom away, so ``T1`` there is one column rather than the stack of three
+    the coupled paths leave (:func:`wavebit._core.solve_1d.solve_1d`). ``'s'`` and ``'p'`` name
+    variants that solve never computed.
+
+    Refused rather than ignored, which is what it was until 2026-08-20 -- the argument was read
+    on the coupled paths and silently dropped here, so ``incidences=('s', 'p')`` returned the
+    declared incidence, once, with no axis to say so. That is the unread-option defect
+    :meth:`~wavebit._core.engine.CoreFactorizationMixin._reject_unread_normal_method` exists to
+    refuse one layer up, and the rename from ``set_field_input`` made it worse rather than
+    better: three anonymous booleans read as plumbing, while a name reads as a request.
+    """
+    if incidence_indices(incidences) == [0]:
+        return
+    raise ValueError(
+        f'incidences={tuple(incidences)!r}: this solve took the pure 1D TE/TM path, which '
+        f'carries exactly one incidence -- the one `tetm` declared -- so '
+        f"{INCIDENCE_NAMES[1]!r} and {INCIDENCE_NAMES[2]!r} name variants it never computed, "
+        f'and the cell it returns has no incidence axis to put them on. Reconstruct with '
+        f"incidences=('given',), or drop `tetm` and name the incidence with `psi` or "
+        f'`polarization`: the same 1D structure then takes the conical path, which carries '
+        f'all three for one extra solve.')
+
 def field_1d(wavelength, kx, T1, layer_info_list, period, tetm_index,
-             sample_x=20, sample_y=1, sample_z=20):
+             sample_x=20, sample_y=1, sample_z=20, incidences=('given',)):
     """Field of a pure TE/TM 1D stack.
 
     Returns ``(nz, sample_y, sample_x, 3)``, where ``nz`` is ``sample_z * n_layers`` for a count
     and ``len(sample_z)`` for explicit coordinates. See the module docstring on sampling.
+
+    No leading incidence axis, unlike every other entry point here: ``tetm`` declared the
+    polarization away, so this path solved one incidence and ``T1`` holds one column. Asking
+    for another is refused rather than ignored -- see :func:`refuse_extra_incidences`.
     """
+    refuse_extra_incidences(incidences)
     _require_solved(T1, layer_info_list)
     xp = array_namespace(T1)
     C = T1.dtype

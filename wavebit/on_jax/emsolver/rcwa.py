@@ -336,6 +336,11 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         (``set_field_input``) until 2026-08-20; booleans are now refused by name, since a
         reconstruction of the wrong incidence is a complete and plausible field cell.
 
+        On the pure 1D TE/TM path only ``('given',)`` is answerable -- ``tetm`` declared the
+        other degree of freedom away, so that solve carries one incidence and the cell it
+        returns has no axis to put a second on. Naming ``'s'`` or ``'p'`` there is refused
+        rather than ignored, which is what it was until 2026-08-20.
+
         Takes no ``geometry``: it never calls ``solve``, and every discrete decision it
         makes -- the grating type, and which incidences ``incidences`` selects -- is
         already concrete by the time it runs. It reads ``self.T1`` / ``self.layer_info_list``,
@@ -351,7 +356,8 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
             sample_y = 1
             field_cell = field_1d(self.wavelength, kx, self.T1, self.layer_info_list,
                                   self.period, self.tetm_index,
-                                  sample_x=sample_x, sample_y=sample_y, sample_z=sample_z)
+                                  sample_x=sample_x, sample_y=sample_y, sample_z=sample_z,
+                                  incidences=incidences)
         elif self._grating_type_assigned == 1:
             field_cell = field_1d_conical(self.wavelength, kx, ky, self.T1,
                                           self.layer_info_list, self.period,

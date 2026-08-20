@@ -100,6 +100,22 @@ CASES = {
                       max_order=[2, 1], period=[0.85, 0.8], wavelength=0.66, formulation='4ff'),
 }
 VARIANTS = (('default', ('given',)), ('all', ('given', 's', 'p')))
+
+#: The cases whose solve carries three incidences. A ``tetm`` declaration on a one-row raster
+#: routes to the pure 1D TE/TM path, which carries exactly one -- the declaration is what takes
+#: the other degree of freedom away -- so ``('given', 's', 'p')`` is refused there rather than
+#: answered (:func:`wavebit._core.fields.refuse_extra_incidences`, 2026-08-20).
+COUPLED = tuple(name for name, kw in CASES.items() if 'tetm' not in kw)
+
+#: The (case, tag, incidences) triples this file freezes, and the ones the parity test reads.
+#: ``golden_field.npz`` still holds ``te_1d__all`` / ``tm_1d__all`` / ``1d_2layer__all`` from
+#: before the refusal existed, and they are **bit-identical to their ``__default`` twins** --
+#: which is the argument being ignored, frozen. `test_field_core.py` asserts exactly that
+#: rather than dropping them, so the file stays byte-identical: re-running this generator to
+#: delete three redundant keys would re-freeze the other 25 as well, and absorbing whatever
+#: drift they have accumulated is the one thing a drift detector must not do.
+CASE_VARIANTS = tuple((name, tag, which) for name in CASES for tag, which in VARIANTS
+                      if tag == 'default' or name in COUPLED)
 RES = dict(sample_x=5, sample_y=4, sample_z=6)
 
 
@@ -118,7 +134,9 @@ def build():
     out = {}
     for name in CASES:
         solver = solved(name)
-        for tag, which in VARIANTS:
+        for case, tag, which in CASE_VARIANTS:
+            if case != name:
+                continue
             out[f'{name}__{tag}'] = np.asarray(
                 solver.reconstruct_field(incidences=which, **RES))
         out[f'{name}__grating_type'] = np.array(solver.grating_type_assigned)
