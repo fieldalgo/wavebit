@@ -311,11 +311,6 @@ def incident_sp_amplitudes(xp, C, psi, chi=None, polarization=None):
             xp.cos(psi) * xp.cos(chi) - 1j * xp.sin(psi) * xp.sin(chi))
 
 
-def safe_sqrt(xp, z, eps=1e-30):
-    """``sqrt`` with a finite derivative at 0 (guards autodiff NaN at the DC/branch point)."""
-    return (z + eps) ** 0.5
-
-
 def order_azimuth(xp, ky, kx, phi):
     """Azimuth of each retained order's in-plane wavevector, flattened.
 
