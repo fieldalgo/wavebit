@@ -53,10 +53,10 @@ def _frame_defect(a, b):
                                     np.abs(ax * ay - bx * by)]).max())
 
 
-def _field_defect(eps, shift, axis, method):
+def _field_defect(eps, shift, axis, method, lattice=None):
     """Roll the raster, take the field, roll it back, compare against the unrolled field."""
-    ref = normal_vector_field(eps, method=method)
-    got = normal_vector_field(np.roll(eps, shift, axis=axis), method=method)
+    ref = normal_vector_field(eps, method=method, lattice=lattice)
+    got = normal_vector_field(np.roll(eps, shift, axis=axis), method=method, lattice=lattice)
     return _frame_defect(ref, tuple(np.roll(c, -shift, axis=axis) for c in got))
 
 
@@ -147,6 +147,29 @@ def test_contour_survives_the_shapes_that_stress_its_fragment_handling(name, eps
     """
     defect = _field_defect(eps, shift, axis, 'contour')
     assert defect < 1e-12, f'{name}: n n^T moved by {defect:.2e}'
+
+
+#: A skewed cell, where the roll is still an exact lattice translation -- of a lattice whose
+#: two directions are not perpendicular. The metric enters every construction here, so this is
+#: where a metric applied to the *field* but not to the periodic tiling it is built on would
+#: show: the roll would move the answer even though the structure did not move.
+HEX = np.column_stack(([500.0, 0.0], [250.0, 250.0 * np.sqrt(3)]))
+
+
+@pytest.mark.parametrize('method', COVARIANT_METHODS)
+@pytest.mark.parametrize('shift,axis', PLACEMENTS)
+def test_the_field_is_covariant_under_a_translation_of_a_skewed_lattice(method, shift, axis):
+    """The same property on an oblique cell, where all four constructions now run.
+
+    Periodicity and the metric are independent corrections and both are per-construction, so
+    holding one on a square cell says nothing about holding it on a skewed one: 'contour'
+    folds its level-set loops back by whole periods, 'spectral' copies bulk normals across a
+    3x3 tiling, and 'smooth' measures its distance on one -- each of those is a place where a
+    tiling that was built in index space and a field that is measured in Cartesian space can
+    part company without either looking wrong on its own.
+    """
+    defect = _field_defect(_block(), shift, axis, method, lattice=HEX)
+    assert defect < 1e-12, f'{method}: n n^T moved by {defect:.2e} under a roll of {shift}'
 
 
 @pytest.mark.parametrize('shift,axis', [(7, 2), (5, 1)])

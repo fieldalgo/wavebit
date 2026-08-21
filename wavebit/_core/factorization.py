@@ -559,6 +559,13 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
     NVF rather than Li's nested rule is the factorization that ports there: the tensor this
     feeds (:func:`_nvf_assemble`) is written in Cartesian components, so once the normal is
     Cartesian nothing else in the factorization learns the cell was skewed.
+
+    The other three constructions carry the basis too, since 2026-08-21 — the paragraph above
+    describes this body, not the option. Two of them need no pullback at all (they never take
+    an index-space difference), which is why they were portable in the first place and why
+    they are the better field on a skewed cell than this one:
+    :mod:`wavebit._core.normal_methods` says which is which, and ``docs/oblique-lattice.md``
+    what it is worth (18.5 degrees against 0.42 on a disc at a 60-degree skew).
     """
     import numpy as np
     from scipy.ndimage import distance_transform_edt

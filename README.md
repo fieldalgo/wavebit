@@ -356,6 +356,11 @@ axes, which are `a1` / `a2` once skewed — repairing it is Li's covariant formu
 block modeler. Everything else works, including analytic shapes with painted overlaps and field
 reconstruction — whose output grid is then indexed by `(v, u)` rather than `(y, x)`.
 
+On a raster, pass `normal_method='contour'`. Every `normal_method` carries the cell metric
+(since 2026-08-21), and the default `'distance'` is the least accurate of the four — a skew
+makes its quantization worse, not better: 18.5 degrees of mean normal error at a 60-degree cell
+against `'contour'`'s 0.42, and 2-4x at the solve.
+
 The measurements, the validation against Li's published checkerboard table, and a worked metalens
 phase library are in [docs/oblique-lattice.md](docs/oblique-lattice.md);
 [`tutorials/05-oblique-lattice.ipynb`](tutorials/05-oblique-lattice.ipynb) is the walkthrough.

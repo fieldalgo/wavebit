@@ -84,6 +84,7 @@ are independent and multiply.
 | `factorization='nvf'`, sampled or integrated | supported | — |
 | analytic shapes, summed | supported | lengths are absolute Cartesian; nothing deforms |
 | analytic shapes, painted **overlap** | supported | the clipper is Cartesian; only the periodic images and the transform needed the basis |
+| every `normal_method` on a raster | supported | since 2026-08-21; **use `'contour'`** — see below |
 | field reconstruction | supported | output grid is indexed by `(v, u)`, not `(y, x)` — see below |
 | block modeler (`modeling_type=1`) | **refused** | rasterises onto a rectangular grid of its own |
 | `factorization='li'` on a raster | **refused** | see below |
@@ -191,6 +192,10 @@ wrongly. Four checks that are, the first of them against numbers from the litera
 Table 5.4. Parameters: `phi0 = theta0 = 0`, `psi0 = 45 deg`, `dx = dy = 5*lambda*sqrt(2)/4`,
 `h = lambda`, `eps+ = 2.25`, `eps- = 1`.
 
+(Run through the *analytic shape* path, where the geometry is exact. Rasterized instead, the
+same benchmark lands at 3.1e-3 at N=256 whatever the `normal_method` — that is the staircase,
+and it is why this table cannot arbitrate a normal field.)
+
 This is the ideal case for the feature, because a checkerboard **is** an oblique-cell problem: on
 a square cell it needs two blocks, and on its own primitive cell — a square rotated 45 degrees,
 which `is_axis_aligned` correctly reports as *not* axis-aligned — it needs one. The paper's
@@ -286,3 +291,35 @@ is written in Cartesian tensor components, so once the normal is Cartesian nothi
 factorization learns the cell was skewed. The same correction fixes an orthogonal case that was
 also wrong — a raster whose pixels are not square in real space; see
 `tests/test_nvf_non_square_grid.py`.
+
+## Which `normal_method` to use, and what the default costs here
+
+**Use `normal_method='contour'`.** The paragraph above describes the *default* construction,
+`'distance'`, and it is the least accurate of the four the raster path offers. A skew makes it
+worse rather than better: the handful of directions a pair of integer central differences can
+spell stays put while the cell they are read in shears away from them.
+
+| gamma | `distance` | `contour` | `spectral` | `smooth` |
+|---|---|---|---|---|
+| 90 | 15.6 | 0.96 | 0.75 | 0.28 |
+| 60 | 18.2 | 0.98 | 0.89 | 0.16 |
+| 30 | 23.7 | 1.31 | 0.96 | 0.48 |
+
+Mean angular error in degrees against a disc's exact normal (r=60 in a 400-unit cell, N=128;
+`gamma` is the angle between `a1` and `a2`). At the solve, on a hex rod against a
+staircase-free analytic reference, the three replacements beat `'distance'` by 2.0x to 4.3x at
+every grid and truncation measured.
+
+All three were **refused** on a skewed cell until 2026-08-21, on the grounds that only
+`'distance'` carried the `J^-T` pullback. That was a fact about the code rather than about the
+constructions: `'contour'` measures distances between Cartesian points and `'spectral'`
+multiplies by a Cartesian wavevector, so neither takes an index-space difference at all and
+neither needs a pullback — what they needed was the coordinates. `'smooth'` did need work and
+got it, since scipy's distance transform and its Gaussian are both per-axis and a skewed metric
+is not diagonal. [`nvf-normal-methods.md`](nvf-normal-methods.md) has all of it: the
+per-construction table, the solver A/B, and the two axis-aligned cells that changed with it.
+
+Two things not to expect. `'contour'` needs the optional `contourpy`
+(`pip install wavebit[contour]`), and Li's checkerboard above will not show you the difference:
+it is straight-edged, so a raster of it carries a permittivity staircase that all four
+constructions share to within 5%. Pick a curved feature to see the gain.

@@ -90,6 +90,12 @@ same two are also listed by name in `paths_refused_on_oblique` and
 `factorizations_refused_on_oblique`, because a consumer deciding what to recommend needs a
 membership test and prose is not one.
 
+A third list, `normal_methods_refused_on_oblique`, is **empty** and kept rather than dropped —
+it held three entries until 2026-08-21, when all four normal-field constructions gained the
+cell metric. The key is the membership test a consumer already asks, and an empty answer is an
+answer; removing it would turn "nothing is refused on this axis" into "this consumer is talking
+to a document that predates the axis".
+
 Two spellings of one fact drift, and the machine-readable spelling is the one a consumer
 acts on — so a mismatch would leave the document reading correctly and behaving wrongly.
 `test_the_named_and_described_skewed_refusals_agree` is what stops that.

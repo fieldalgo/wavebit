@@ -25,6 +25,11 @@ What this file pins, and why each pin is the one that matters:
 - **The floor lift keeps the base grid's smoothing scale** — a lifted raster is the same
   staircase spelled with more pixels, so a construction that read its pixel policies off
   the lifted shape would smooth 3x too narrowly exactly when the floor kicks in.
+- **The cell metric, oblique cells included** — accuracy against a skewed disc's exact
+  normal, and, because an accuracy bound cannot say a metric is *right*, the covariance
+  that can: a rotated basis is one structure seen from a turned frame, so the field must
+  turn with it and nothing else may move. Until 2026-08-21 this file pinned the opposite,
+  that a skewed basis raises.
 """
 from importlib.util import find_spec
 
@@ -298,11 +303,149 @@ def test_a_non_square_cell_measures_in_physical_space(method):
     assert err < 6.0
 
 
+# --------------------------------------------------- the cell metric, oblique included
+
+SKEWS = [90.0, 60.0, 30.0]
+
+
+def skewed_disc(N, gamma_deg, P=400.0, r=60.0, eps_in=5.76):
+    """``(A, eps, tx, ty)``: a disc on the parametric grid of a skewed cell, and its exact normal.
+
+    ``eps[j, i]`` is the permittivity at ``(i+.5)/N * a1 + (j+.5)/N * a2`` — the convention an
+    oblique raster is read in (``docs/oblique-lattice.md``), and what makes this a disc rather
+    than the ellipse a Cartesian-drawn array would describe. Membership uses the minimum image
+    over the lattice, so the shape is genuinely periodic; drawn without it, it is a different
+    structure at the wrap and every construction here is periodic.
+
+    ``r = 60`` of a 400-unit cell, rather than the 90 the oblique tests use elsewhere, for a
+    reason worth stating: at ``gamma = 30`` the cell is only 200 units thick across ``a1``, so
+    an ``r = 90`` disc passes within 20 units of its own periodic copy — comparable to
+    ``'smooth'``'s period/16 kernel, which then reads two shapes as one and scores 1.8 degrees
+    for a reason that has nothing to do with the metric. That is a property of the scene, and
+    this file is measuring the metric.
+    """
+    a1 = np.array([P, 0.0])
+    a2 = P * np.array([np.cos(np.deg2rad(gamma_deg)), np.sin(np.deg2rad(gamma_deg))])
+    A = np.column_stack((a1, a2))
+    t = (np.arange(N) + 0.5) / N
+    U, V = np.meshgrid(t, t)
+    d = U[..., None] * a1 + V[..., None] * a2 - 0.5 * (a1 + a2)
+    rho, disp = None, None
+    for i in (-1, 0, 1):
+        for j in (-1, 0, 1):
+            s = d - i * a1 - j * a2
+            rr = np.hypot(s[..., 0], s[..., 1])
+            if rho is None:
+                rho, disp = rr, s
+            else:
+                nearer = rr < rho
+                rho, disp = np.where(nearer, rr, rho), np.where(nearer[..., None], s, disp)
+    safe = np.where(rho == 0.0, 1.0, rho)
+    return (A, np.where(rho <= r, eps_in, 1.0), disp[..., 0] / safe, disp[..., 1] / safe)
+
+
+def skew_error(method, gamma, N=128):
+    """Mean angular error against the disc's exact normal, over the interface mask."""
+    A, eps, tx, ty = skewed_disc(N, gamma)
+    nx, ny = normal_vector_field(eps, lattice=A, method=method)
+    return float(angular_error_deg(nx, ny, tx, ty)[_interface_mask(eps)].mean())
+
+
 @pytest.mark.parametrize('method', NEW_METHODS)
-def test_a_skewed_basis_is_refused(method):
-    lattice = np.array([[1.0, 0.3], [0.0, 1.0]])
-    with pytest.raises(NotImplementedError, match='axis-aligned'):
-        normal_vector_field(circle_raster(16), method=method, lattice=lattice)
+def test_a_skewed_cell_costs_these_constructions_nothing(method):
+    """Every construction here carries the cell metric, and a skew does not degrade it.
+
+    Until 2026-08-21 all three refused a skewed basis, on the grounds that only
+    ``'distance'`` carried the ``J^-T`` pullback that makes an index-space gradient a
+    Cartesian normal. That was a fact about the code and not about the constructions: two of
+    these never take an index-space difference at all — ``'contour'`` measures between
+    Cartesian points, ``'spectral'`` multiplies by a Cartesian wavevector — so what they
+    needed was the *coordinates*, and ``'smooth'`` needed the two per-axis scipy routines it
+    leans on swapped for ones that can express a metric which is not diagonal.
+
+    Two assertions, and the second is the one that catches a half-correction: an absolute
+    bound at every shear, and no growth relative to the unskewed cell. Handing scipy the
+    per-axis step lengths and calling that the metric — the most a diagonal consumer can be
+    told — passes neither, leaving ``'smooth'`` between 2 and 12 degrees.
+    """
+    errs = {gamma: skew_error(method, gamma) for gamma in SKEWS}
+    for gamma, err in errs.items():
+        assert err < 2.0, f'{method} at gamma={gamma}: {err:.3f} deg'
+    assert max(errs.values()) < 2.5 * errs[90.0], errs
+
+
+def test_distance_is_the_field_a_skewed_cell_used_to_be_stuck_with():
+    """The control that makes the bounds above a result rather than a loose tolerance.
+
+    ``'distance'`` is not *wrong* on a skewed cell — it has carried the pullback since the
+    lattice feature landed — it is quantized, and the skew makes the quantization worse: the
+    handful of directions a pair of integer central differences can spell stays put while the
+    cell they are read in shears away from them.
+    """
+    errs = {gamma: skew_error('distance', gamma) for gamma in SKEWS}
+    assert errs[90.0] > 10.0, errs
+    assert errs[30.0] > 1.3 * errs[90.0], errs
+
+
+@pytest.mark.parametrize('method', METHODS)
+def test_turning_the_cell_turns_the_field(method):
+    """A rotated basis is one structure seen from a turned frame, so the field turns with it.
+
+    The property no accuracy bound can state, and the one that separates a metric from a
+    number that merely happens to fit: a rotation is an isometry, so nothing in any of these
+    constructions may notice it beyond the direction of the answer. It also crosses the one
+    branch in :mod:`wavebit._core.normal_methods` — rotating an axis-aligned cell makes the
+    metric non-diagonal — so the separable implementations of the Gaussian and of the distance
+    transform are compared against the frequency-domain and kd-tree ones here, rather than
+    each only ever being measured within its own regime.
+
+    Compared as a **mean** over the interface mask, not a maximum. ``'contour'`` and
+    ``'spectral'`` carry tie-breaks (the nearest polyline sample, the nearest valid band
+    donor) that a rotation can settle the other way on the medial ridge, where the direction
+    is genuinely ambiguous — the same asymmetry the mirror note in ``normal_methods`` measures,
+    and it puts single pixels tens of degrees out. The means sit between 1e-7 and 5e-3
+    degrees; a construction that ignored the rotation would be out by tens of degrees on
+    average, so the bound below separates the two by three orders.
+    """
+    turn = np.deg2rad(30.0)
+    c, s = np.cos(turn), np.sin(turn)
+    R = np.array([[c, -s], [s, c]])
+    for gamma in (90.0, 60.0):
+        A, eps, _, _ = skewed_disc(96, gamma)
+        nx, ny = normal_vector_field(eps, lattice=A, method=method)
+        gx, gy = normal_vector_field(eps, lattice=R @ A, method=method)
+        err = angular_error_deg(gx, gy, R[0, 0] * nx + R[0, 1] * ny,
+                                R[1, 0] * nx + R[1, 1] * ny)
+        moved = float(err[_interface_mask(eps)].mean())
+        assert moved < 0.05, f'{method} at gamma={gamma}: field moved {moved:.3e} deg'
+
+
+def test_the_two_signed_distance_branches_measure_the_same_distance():
+    """``'smooth'`` measures its signed distance two ways, and they have to be one quantity.
+
+    A diagonal metric is a per-axis rescaling, which is exactly what
+    ``distance_transform_edt``'s ``sampling`` expresses; a skewed one is not expressible that
+    way at all, so it goes to a kd-tree over the tiled phase sets instead. Rotating the cell
+    is what lets the two be compared: it moves no distance at all (an isometry) while moving
+    the metric off the diagonal, so the two implementations must return the *same array*.
+
+    Without this the kd-tree branch is only ever exercised where nothing independent knows
+    the answer, and a construction that quietly measured to the wrong tiling — or dropped the
+    sign — would still produce a plausible smooth field.
+    """
+    from wavebit._core.normal_methods import (_metric, _periodic_signed_distance, _separable,
+                                              _two_phase_indicator)
+    turn = 0.4
+    c, s = np.cos(turn), np.sin(turn)
+    R = np.array([[c, -s], [s, c]])
+    for gamma in (90.0, 60.0):
+        A, eps, _, _ = skewed_disc(64, gamma)
+        inside = _two_phase_indicator(eps).astype(bool)
+        M, M_turned = _metric(A, eps.shape), _metric(R @ A, eps.shape)
+        assert _separable(M) == (gamma == 90.0) and not _separable(M_turned)
+        moved = float(np.abs(_periodic_signed_distance(inside, M)
+                             - _periodic_signed_distance(inside, M_turned)).max())
+        assert moved < 1e-12, f'gamma={gamma}: the two branches differ by {moved:.2e}'
 
 
 def test_smooths_kernel_is_a_length_rather_than_a_pixel_count_per_axis():

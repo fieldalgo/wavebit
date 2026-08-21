@@ -150,7 +150,12 @@ def test_the_manifest_lists_every_skewed_refusal():
     listed = ' '.join(r['what'] for r in LATTICE['refused_on_oblique'])
     assert 'block path' in listed
     assert "factorization='li'" in listed
-    assert 'normal_method' in listed
+    # `normal_method` was the third entry here until 2026-08-21, when all four constructions
+    # gained the cell metric. What is asserted now is that it is gone from *both* spellings --
+    # a stale entry in either would tell a consumer to avoid the option that is in fact the
+    # one to recommend on a skewed cell.
+    assert 'normal_method' not in listed
+    assert LATTICE['normal_methods_refused_on_oblique'] == ()
 
 
 def test_the_named_and_described_skewed_refusals_agree():
@@ -181,11 +186,25 @@ def test_every_named_skewed_refusal_is_a_thing_that_exists():
         m.value for m in NormalMethod}
 
 
-def test_a_smoothing_normal_method_is_refused_on_a_skewed_cell():
-    """Only 'distance' carries the Jacobian pullback; the others must refuse, by name."""
-    with pytest.raises(NotImplementedError, match='normal_method'):
-        wavebit.rcwa(structure=STRUCTURES['raster'], lattice=HEX, factorization='nvf',
-                       normal_method='contour', **KW).solve()
+@pytest.mark.parametrize('method', ['contour', 'spectral', 'smooth'])
+def test_a_smoothing_normal_method_builds_on_a_skewed_cell(method):
+    """The refusal this used to assert is gone, and the manifest has to agree with the solver.
+
+    Both directions are worth holding: the document says nothing is refused on this axis, and
+    the solver must actually build. A manifest that opened an option the engine still refuses
+    would send a consumer straight into a NotImplementedError it was told could not happen.
+
+    ``'contour'`` needs the optional contourpy, and the manifest already probes for it -- the
+    per-path ``normal_method`` list omits it in a minimal install -- so this case follows the
+    same probe rather than asserting an option that environment does not have.
+    """
+    if method == 'contour':
+        pytest.importorskip('contourpy',
+                            reason="normal_method='contour' needs the optional dependency")
+    assert method not in LATTICE['normal_methods_refused_on_oblique']
+    result = wavebit.rcwa(structure=STRUCTURES['raster'], lattice=HEX, factorization='nvf',
+                          normal_method=method, **KW).solve()
+    assert np.isfinite(np.asarray(result.T)).all()
 
 
 def test_a_skewed_cell_still_builds_on_the_paths_the_manifest_leaves_open():

@@ -1733,8 +1733,9 @@ class CoreFactorizationMixin:
         The block modeler (``modeling_type=1``) rasterises shapes onto a rectangular grid of
         its own and is not ported.
 
-        Two things that were refused here are not any more, both because the assumption behind
-        the refusal turned out to be wrong rather than because they were implemented:
+        Three things that were refused here are not any more. Two of them because the
+        assumption behind the refusal turned out to be wrong rather than because they were
+        implemented:
 
         * The **integrated** coefficients are computed by ``fourier2d_integrated`` as an integral over the
           *parametric* cell, where the Jacobian cancels against the ``1/area`` normalisation.
@@ -1750,6 +1751,19 @@ class CoreFactorizationMixin:
           periodic-image enumeration in
           :func:`~wavebit._core.overlap.overlapping_pairs`, which decides whether a layer has
           an overlap at all. See ``test_a_painted_overlap_survives_a_unimodular_shear``.
+
+        The third was implemented, on 2026-08-21. Every ``normal_method`` other than
+        ``'distance'`` used to be refused here, on the grounds that only ``'distance'``
+        carried the ``J^-T`` pullback that turns an index-space gradient into a Cartesian
+        normal. True of the code, and not of the constructions: two of the three never take
+        an index-space difference at all — ``'contour'`` measures between Cartesian points,
+        ``'spectral'`` multiplies by a Cartesian wavevector — so what they needed was the
+        *coordinates*, not a pullback, and the third needed its two scipy calls swapped for
+        tools that can express a metric which is not diagonal. The refusal was costing
+        accuracy rather than protecting it, because ``'distance'`` is the least accurate of
+        the four and the skew makes it worse: on a disc at a 60-degree skew it sits at 18.5
+        degrees of mean angular error against ``'contour'``'s 0.42
+        (``docs/nvf-normal-methods.md``).
 
         The Li check below reads the *resolved* :attr:`factorization`, which is why a skewed
         run on the smooth shape path no longer has to spell ``factorization='nvf'`` out: that
@@ -1770,18 +1784,6 @@ class CoreFactorizationMixin:
                 common + f"factorization={factorization.value!r} applies the inverse "
                 f'rule along the raster axes, which are not x and y once the cell is skewed, '
                 f"so it would answer plausibly and wrongly. Use factorization='nvf'.")
-        if (self._modeling_type == 0
-                and self.normal_method != DEFAULT_NORMAL_METHOD):
-            # Only the original construction carries the Jacobian pullback that makes an
-            # index-space gradient a Cartesian normal on a skewed cell; the smoothing
-            # constructions are not ported there. Refused here, with the others, rather
-            # than from inside the build — same reason as everything in this method.
-            # Scoped to the raster path: on the shape paths the option has no reader at
-            # all, skewed or not, and _reject_unread_normal_method owns that message.
-            raise NotImplementedError(
-                common + f'normal_method={self.normal_method.value!r} is not implemented '
-                f"for a skewed cell; only 'distance' carries the Jacobian pullback there. "
-                f'Drop normal_method or use an axis-aligned cell.')
 
     def _eps_conv_matrices(self, geometry=None):
         """Convolution matrices for the current structure: ``(epx, epy, epz_i, epxy, epyx)``."""

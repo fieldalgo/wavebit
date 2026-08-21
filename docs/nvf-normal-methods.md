@@ -20,7 +20,8 @@ The shipped raster normal field quantizes its directions to essentially {0, 45} 
 Three replacement constructions were prototyped and measured at the solver level against
 staircase-free analytic references. **`'contour'` is the one to use**: of the 12 measured
 cells, 11 are resolved by the reference floor and it won all 11, losing none, by factors up
-to 14x. `'smooth'` had the *best* angular numbers and still lost every resolved cell on the
+to 14x — and that holds on an oblique cell too, where all four constructions have run since
+2026-08-21 ([the metric section](#the-cell-metric-and-oblique-cells)). `'smooth'` had the *best* angular numbers and still lost every resolved cell on the
 corner-bearing scene (5 of 5, the sixth unresolved) — the measured demonstration that the
 best angular field is not the best solver field. The default stays `'distance'`: every
 existing result is bit-identical unless the keyword is set. (True of the *keyword*, and no
@@ -367,12 +368,132 @@ states the property where a test of the opposite name used to pin the defect.
   crossing and vanishes from the *field* (the permittivity is untouched); such pixels get
   the nearest surviving contour's direction. The threshold is `0.35/sqrt(N)` of the
   period — it vanishes with real resolution.
-- **Axis-aligned bases only.** Square-pixel cells reduce bit-identically to no metric;
-  non-square cells work in physical coordinates (pinned by a 2:1-cell test against exact
-  normals). An *oblique* lattice keeps working, but only under `'distance'`, the one
-  construction ported to it (it carries the Jacobian pullback — see
-  [`oblique-lattice.md`](oblique-lattice.md)); a skewed cell with any other method is
-  refused up front, next to the other lattice refusals.
+- **Any basis, oblique included** (since 2026-08-21 — before that all three refused a
+  skewed cell and `'distance'` was the only field an oblique lattice could have). Square-pixel
+  cells reduce bit-identically to no metric; everything else works in physical coordinates,
+  non-square and skewed alike. See [the metric section](#the-cell-metric-and-oblique-cells).
+
+## The cell metric, and oblique cells
+
+Added 2026-08-21. Until then these three refused a skewed basis, and
+[`oblique-lattice.md`](oblique-lattice.md) recorded the reason: only `'distance'` carried the
+`J^-T` pullback that turns an index-space gradient into a Cartesian normal. That was a true
+statement about the code and a misleading one about the constructions, and it was expensive —
+`'distance'` is the least accurate of the four and a skew makes it worse, so the refusal left
+an oblique cell with a **18.5 deg** mean angular error where `'contour'` gives **0.42**.
+
+### What each construction actually needed
+
+| | takes an index-space difference? | what a skewed cell needed |
+|---|---|---|
+| `'contour'` | **no** — it measures between Cartesian points | the level set's coordinates and the pixel centres mapped through the metric; the direction to the nearest point of a curve is then Cartesian by construction |
+| `'spectral'` | **no** — it multiplies by a wavevector | both frequency-domain quantities (the low-pass and the gradient) stated on the mode's *Cartesian* `G = 2*pi * M^-T @ (fi, fj)` |
+| `'smooth'` | **yes** | both of the below |
+
+Two of the three needed *coordinates*, not a pullback, and neither has one. That is also why
+they are the better field on a skewed cell than `'distance'`, which does take a difference on
+the grid and pays the quantization for it.
+
+`'smooth'` is the one that leans on scipy's per-axis routines, and a skewed metric is not
+diagonal, so both had to be replaced: `distance_transform_edt`'s `sampling` by a kd-tree over
+the tiled phase sets, and the separable `gaussian_filter` by a frequency-domain kernel. An
+axis-aligned cell keeps both scipy calls, bit-identically; `normal_methods._separable` is the
+switch, and it is a tolerance rather than an exact zero so that a square cell spelled
+`a2 = P*(cos(pi/2), sin(pi/2))` does not fall off the fast path on a 1e-14 entry.
+
+### Angular error against the exact normal, by shear
+
+Disc r=60 in a 400-unit cell, mean over the interface mask, degrees. `gamma` is the angle
+between `a1` and `a2`; 90 is the square cell the tables further up measure.
+
+| gamma | `distance` | `contour` | `spectral` | `smooth` |
+|---|---|---|---|---|
+| 90 (N=128) | 15.61 | 0.96 | 0.75 | 0.28 |
+| 60 (N=128) | 18.18 | 0.98 | 0.89 | 0.16 |
+| 30 (N=128) | 23.69 | 1.31 | 0.96 | 0.48 |
+| 90 (N=256) | 15.01 | 0.90 | 0.58 | 0.17 |
+| 60 (N=256) | 17.50 | 0.68 | 0.37 | 0.12 |
+| 30 (N=256) | 24.78 | 0.55 | 0.21 | 0.13 |
+
+The shape of it: `distance` *grows* with shear (15.6 -> 23.7) while the three replacements
+stay flat or improve, and they converge in N where `distance` does not — the same two
+statements as the axis-aligned table, now under a skew as well.
+
+**Both `'smooth'` repairs are load-bearing and neither alone is enough.** The 2x2, on an r=90
+disc at N=256, as `gamma=60 / gamma=30` mean degrees:
+
+| | separable Gaussian | isotropic Gaussian |
+|---|---|---|
+| scipy's diagonal distance | 2.11 / 2.65 | 1.17 / 2.49 |
+| exact kd-tree distance | 1.38 / 2.25 | **0.07 / 1.82** |
+
+And the half-fix is worse than that suggests, because its error grows as the feature shrinks
+relative to the period/16 kernel: at r=40 the two-scipy-calls pair scores **7.8 and 11.8 deg**
+where the repaired pair scores 0.085 and 0.077 — that is a field no better than `'distance'`,
+reached through four times the work.
+
+The r=90 / gamma=30 cell above (1.82) is the one number here that is not about the metric: at
+gamma=30 the cell is only 200 units thick across `a1`, so an r=90 disc passes 20 units from its
+own periodic copy — comparable to the 17.7-unit kernel, which then reads two shapes as one. A
+property of that scene; r=60 and r=40 both sit near 0.1 there.
+
+### Solver-level A/B on a hex cell
+
+Rod r=90 in a hex cell of pitch 400, eps 5.76, thickness 300, wavelength 900, theta 12 / phi
+30 / psi 40 deg. The reference is the same rod through the *analytic shape* path (exact
+geometry, exact normal field) at `max_order=14`, whose own `|14 - 12|` floor is 1.8e-6 — well
+under every gap below, so all eight cells are resolved. Error is the worst per-order
+`|R - R_ref|`, `|T - T_ref|` over shared orders.
+
+| N | max_order | `distance` | `contour` | `spectral` | `smooth` | analytic at that max_order |
+|---|---|---|---|---|---|---|
+| 128 | 6 | 8.33e-05 | 3.27e-05 | 3.21e-05 | 3.38e-05 | 2.82e-05 |
+| 128 | 10 | 5.07e-05 | 1.21e-05 | 1.05e-05 | 1.86e-05 | 7.37e-06 |
+| 256 | 6 | 6.61e-05 | 3.23e-05 | 3.33e-05 | 3.41e-05 | 2.82e-05 |
+| 256 | 10 | 3.83e-05 | 1.11e-05 | 9.92e-06 | 1.76e-05 | 7.37e-06 |
+
+All three beat `distance` in all four cells, by 2.0x to 4.3x, and land near the truncation
+floor: at 256/10 `contour` removes 89% of the error that floor leaves room to remove. Read it
+against the axis-aligned tables and nothing is new except that the cell is skewed — which is
+the result.
+
+### Where it does *not* show: Li's checkerboard
+
+The published oblique benchmark ([`oblique-lattice.md`](oblique-lattice.md) has the table) is
+the obvious candidate for an outside oracle here, and it cannot see this. Rasterized on its own
+primitive cell and run through the raster NVF path at `max_order=12`, the worst deviation from
+the paper's FEM column is:
+
+| N | `distance` | `contour` | `spectral` | `smooth` | analytic shapes |
+|---|---|---|---|---|---|
+| 128 | 6.52e-03 | 6.75e-03 | 6.67e-03 | 6.54e-03 | 2.78e-04 |
+| 256 | 3.11e-03 | 3.26e-03 | 3.20e-03 | 3.11e-03 | 2.78e-04 |
+
+All four within 5% of each other, halving with N, and an order above the analytic path at the
+same `max_order`. That is the *permittivity* staircase, not the normal field: a checkerboard is
+straight-edged, and the axis-aligned tables already say `distance` is near the floor on
+straight edges — the rotated-rectangle scene looked flat for the same reason. A benchmark has
+to be curved to have a normal-field budget to spend, which is why the hex rod above is the
+measurement and this is the control.
+
+### What changed for axis-aligned cells too
+
+**The skeleton needs an exact zero, and a transform does not produce one.** The separable
+Gaussian returns exact zeros where the two nearest interfaces are equidistant, because a
+symmetric kernel over a locally symmetric field cancels term by term in the same
+floating-point order. The frequency-domain branch has no such pairwise structure and leaves
+~1e-16 there instead, which the unit normalisation inflates into a full vector pointing
+wherever the round-off fell — and a lattice translation settles it differently, so the field
+stops being covariant at a handful of pixels (4 of 256 on a rod in a hex cell, 90 deg apart).
+Found by `test_nvf_lattice_translation`'s skewed parametrization, and by nothing else: no
+accuracy number moves by 4 pixels. Snapped at 1e-12 of the largest gradient in the cell, since
+the factorization reads an exact zero as "no normal here, collapse to the direct rule", which
+is the right answer on a skeleton.
+
+That, and `'smooth'`'s smoothing scale — [its own section](#smooths-sigma-is-a-length-not-a-pixel-count-per-axis),
+because it is an axis-aligned defect the port merely happened to find. Everything else is
+bit-identical on an axis-aligned cell, square *and* non-square, for all three constructions,
+checked scene by scene across the change.
 
 ## `'smooth'`'s sigma is a length, not a pixel count per axis
 

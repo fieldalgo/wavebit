@@ -211,19 +211,29 @@ def _raster_normal_methods():
 #: raster, the transforms are still transforms, and NVF's assembly stays Hermitian so energy
 #: conserves to 1e-15 either way. Nothing downstream can notice, which is why the refusal is
 #: a fact worth publishing rather than an implementation detail.
+#:
+#: A third refusal used to live here, ``normal_method`` — see the note on the empty tuple
+#: below. It was the one entry that named an *accuracy* limit rather than a wrong answer, and
+#: that is what made it removable.
 LATTICE = {
     'default': 'period, meaning diag(Lx, Ly)',
     'oblique': 'pass the two lattice vectors as the columns of `lattice`; `period` then '
                'reports their lengths',
     'raster_coordinates': 'lattice',
-    #: The same two refusals as ``refused_on_oblique`` below, named rather than described.
+    #: The same refusals as ``refused_on_oblique`` below, named rather than described.
     #: A consumer deciding *what to recommend* needs to test membership, and prose is not a
     #: membership test — these are what makes the constraint machine-checkable outside this
     #: process. Kept beside the prose so the two cannot be updated apart; a test asserts they
     #: agree.
+    #:
+    #: ``normal_methods_refused_on_oblique`` is empty as of 2026-08-21 and kept rather than
+    #: dropped: the key is the membership test a consumer already asks, and an empty answer
+    #: is the answer. All four constructions carry the cell metric now — see
+    #: ``docs/nvf-normal-methods.md``; ``'contour'`` is the one to recommend on a skewed cell
+    #: as on any other.
     'paths_refused_on_oblique': ('block',),
     'factorizations_refused_on_oblique': ('li',),
-    'normal_methods_refused_on_oblique': ('contour', 'spectral', 'smooth'),
+    'normal_methods_refused_on_oblique': (),
     'refused_on_oblique': (
         {
             'what': 'the block path (modeling_type=1)',
@@ -234,12 +244,6 @@ LATTICE = {
             'what': "factorization='li'",
             'why': 'the inverse rule is applied along the raster axes, which are a1 and a2 '
                    'rather than x and y once the cell is skewed. Use NVF.',
-        },
-        {
-            'what': "normal_method='contour' / 'spectral' / 'smooth'",
-            'why': "only 'distance' carries the Jacobian pullback that makes an index-space "
-                   'gradient a Cartesian normal on a skewed cell; the smoothing '
-                   'constructions are not ported there',
         },
     ),
 }
