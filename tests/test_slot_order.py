@@ -126,7 +126,7 @@ def test_a_splatted_builder_conserves_energy(name):
     holes, and 1e-6 is far tighter than the 0.61 the defect this pins was worth.
     """
     slots = BUILDERS[name]()
-    assert len(slots) in (3, 5), f'{name} returned {len(slots)} slots'
+    assert len(slots) == 5, f'{name} returned {len(slots)} slots'
 
     with _no_unphysical_warning():
         res = wavebit.rcwa(max_order=[MAX_ORDER, MAX_ORDER], **KW).solve_conv(*slots)
@@ -160,26 +160,36 @@ def test_the_slot_a_builder_calls_z_is_the_inverted_one(name):
 def test_a_builder_returns_the_named_slot_type(name):
     """The order is a named contract, not a convention held in docstrings.
 
-    Every builder returns :class:`~wavebit._core.factorization.ConvSlots3` or
-    :class:`~wavebit._core.factorization.ConvMatrices`, so a reorder cannot be made without
-    editing ``_fields`` here -- which is the point of naming them at all. The two tests above
-    would catch a reorder by its physics; this one catches it at the declaration, and names
-    what changed instead of reporting a wrong number.
+    Every builder returns :class:`~wavebit._core.factorization.ConvMatrices`, so a reorder
+    cannot be made without editing ``_fields`` here -- which is the point of naming them at
+    all. The two tests above would catch a reorder by its physics; this one catches it at the
+    declaration, and names what changed instead of reporting a wrong number.
+
+    One type for every builder since 2026-08-21. The Li-rule ones used to answer with a
+    three-slot type instead, which said "this rule does not couple x and y" by *arity* -- two
+    arities for one quantity, and so two slot orders to keep straight. They now say it in the
+    slot that carries it, which is what every consumer already read.
 
     ``issubclass(..., tuple)`` is asserted because everything downstream splats and unpacks
     these: a builder that returned a dataclass or a plain list would break every call site
     while satisfying the field check.
     """
     slots = BUILDERS[name]()
-    assert isinstance(slots, (_fac.ConvSlots3, _fac.ConvMatrices)), (
-        f'{name} returned a bare {type(slots).__name__}; use ConvSlots3/ConvMatrices so the slot '
+    assert isinstance(slots, _fac.ConvMatrices), (
+        f'{name} returned a bare {type(slots).__name__}; use ConvMatrices so the slot '
         f'order is declared rather than positional')
     assert isinstance(slots, tuple), f'{name}: slots must stay tuple-compatible'
 
-    expected = (('epx', 'epy', 'epz_i') if len(slots) == 3
-                else ('epx', 'epy', 'epz_i', 'epxy', 'epyx'))
+    expected = ('epx', 'epy', 'epz_i', 'epxy', 'epyx')
     assert slots._fields == expected, (
         f'{name} returns {slots._fields}, not {expected} -- solve_conv takes epz_i third')
+
+    # A Li-rule builder says so with the pair, not with a shorter tuple. Asserted rather than
+    # left implicit: `None` there is what routes the solve onto the uncoupled arithmetic.
+    couples = name not in ('raster_sampled', 'raster_integrated')
+    assert (slots.epxy is not None) == couples, (
+        f'{name}: epxy is {"unset" if slots.epxy is None else "set"}, which claims the rule '
+        f'{"does not couple" if slots.epxy is None else "couples"} x and y')
 
 
 def test_every_five_slot_builder_is_exercised():

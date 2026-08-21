@@ -4,14 +4,8 @@ from ._base import _BaseRCWA
 from ..._core.engine import CoreFactorizationMixin, _refuse_retired
 from ..._core.enums import Formulation
 from ..._core.fields import field_1d, field_1d_conical, field_2d, field_2d_4ff
-from ..._core.result import Result, ResultSub
-
-# One shared container (wavebit._core.result); the old per-backend copies are gone.
-ResultNumpy = Result
-ResultSubNumpy = ResultSub
-
-
 from ..._core.modeler import Modeling
+from ..._core.result import Result, ResultSub
 
 
 class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
@@ -214,11 +208,11 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                                          mu_top=mu_top, mu_bot=mu_bot,
                                          eps_top=eps_top, eps_bot=eps_bot)
 
-        given = ResultSubNumpy(**result_dict['given']) if 'given' in result_dict else None
-        s_inc = ResultSubNumpy(**result_dict['s_inc']) if 's_inc' in result_dict else None
-        p_inc = ResultSubNumpy(**result_dict['p_inc']) if 'p_inc' in result_dict else None
+        given = ResultSub(**result_dict['given']) if 'given' in result_dict else None
+        s_inc = ResultSub(**result_dict['s_inc']) if 's_inc' in result_dict else None
+        p_inc = ResultSub(**result_dict['p_inc']) if 'p_inc' in result_dict else None
 
-        result = ResultNumpy(given, s_inc, p_inc, max_order=self.max_order)
+        result = Result(given, s_inc, p_inc, max_order=self.max_order)
 
         return result
 

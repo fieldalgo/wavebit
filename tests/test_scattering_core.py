@@ -171,7 +171,7 @@ def _core_inputs(kwargs):
     """Solver-built arguments for a direct core call (same route the mixin takes)."""
     solver = wavebit.rcwa(backend=0, layer_algorithm='SMM', **kwargs)
     solver.solve()                    # assigns the grating type
-    epx, epy, epz = to_conv_mat_raster_sampled(
+    epx, epy, epz, *_ = to_conv_mat_raster_sampled(
         solver.structure, solver.max_order[0], solver.max_order[1])
     kx, ky = solver.order_kxy()
     # The core solves take an INDEX: `n_top` / `n_bot` are amplitude ratios there, and the

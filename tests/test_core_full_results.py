@@ -21,7 +21,7 @@ FIELDS = ('r_s', 'r_p', 't_s', 't_p',
 def _setup(**kw):
     solver = wavebit.rcwa(backend=0, **kw)
     legacy = solver.solve()
-    epx, epy, epz = to_conv_mat_raster_sampled(
+    epx, epy, epz, *_ = to_conv_mat_raster_sampled(
         solver.structure, solver.max_order[0], solver.max_order[1])
     kx, ky = solver.order_kxy()
     return solver, legacy, (epx, epy, epz), kx, ky

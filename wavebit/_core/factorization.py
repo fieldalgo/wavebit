@@ -106,32 +106,18 @@ from .backend import array_namespace
 from .geometry import StaleGeometryError
 
 
-class ConvSlots3(NamedTuple):
-    """The three permittivity slots of a scalar (Li-rule) layer, in ``solve_conv`` order.
-
-    Keeps its ``Slots`` name while the five-slot one became :class:`ConvMatrices`, because
-    only the five-slot one is public: ``eps_conv_matrices()`` pads a three-slot build out to five
-    before returning it, so nothing outside ``_core`` ever holds one of these.
-
-    A ``NamedTuple``, so every way these have ever been consumed still works — splatting into
-    ``solve_conv``, unpacking into five names, ``len``, indexing, ``zip``. What it adds is
-    ``slots.epz_i``, which is the point: an index written as ``[2]`` is correct only for as
-    long as nobody reorders, and the reorder that prompted all this was invisible precisely
-    because positional access cannot notice one. Prefer the attribute at any site that reaches
-    for a single slot.
-    """
-    epx: object
-    epy: object
-    epz_i: object
-
-
 class ConvMatrices(NamedTuple):
     """The five convolution matrices of a layer stack, in ``solve_conv`` order.
 
     What :meth:`~wavebit._core.engine.CoreFactorizationMixin.eps_conv_matrices` returns, and what
     ``solve_conv`` takes first — ``solver.solve_conv(*solver.eps_conv_matrices())`` is
-    ``solver.solve()``. :class:`ConvSlots3` with the off-diagonal pair appended; see that
-    docstring, and "Slot order" above, for why ``epz_i`` sits third rather than last.
+    ``solver.solve()``. See "Slot order" above for why ``epz_i`` sits third rather than last.
+
+    **Every builder in this module returns this**, the Li-rule ones included: they do not
+    couple ``x`` and ``y``, so they set ``epxy`` and ``epyx`` to ``None``, which is what every
+    consumer already reads that as. There was a separate three-slot type until 2026-08-21,
+    and two arities for one quantity meant two slot orders to keep straight -- to state a fact
+    the five-slot form states more directly, at the one slot that carries it.
 
     Splatting, unpacking, ``len``, indexing and ``zip`` all work as they did when the builders
     returned bare tuples; what it adds is ``conv.epz_i``, reaching one slot by a name instead
@@ -485,7 +471,8 @@ def to_conv_mat_raster_sampled(structure, max_order_x, max_order_y):
         epy_list.append(epy_conv)
         epz_i_list.append(xp.linalg.inv(epz_conv))
 
-    return ConvSlots3(xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list))
+    return ConvMatrices(xp.stack(epx_list), xp.stack(epy_list),
+                        xp.stack(epz_i_list), None, None)
 
 
 def _complex_dtype(xp, x):
@@ -1621,7 +1608,8 @@ def to_conv_mat_raster_integrated(structure, max_order_x, max_order_y, compressi
         epy_list.append(fourier2d_integrated(xp, eps, x, y, max_order_x, max_order_y, inverse_rule='y'))
         epz_i_list.append(xp.linalg.inv(epz_list))
 
-    return ConvSlots3(xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list))
+    return ConvMatrices(xp.stack(epx_list), xp.stack(epy_list),
+                        xp.stack(epz_i_list), None, None)
 
 
 def to_conv_mat_raster_integrated_nvf(structure, max_order_x, max_order_y, normal_field=None,
@@ -1705,4 +1693,5 @@ def to_conv_mat_block(block_info_list, max_order_x, max_order_y):
         epy_list.append(fourier2d_integrated(xp, eps, x, y, max_order_x, max_order_y, inverse_rule='y'))
         epz_i_list.append(xp.linalg.inv(fourier2d_integrated(xp, eps, x, y, max_order_x, max_order_y, inverse_rule=None)))
 
-    return ConvSlots3(xp.stack(epx_list), xp.stack(epy_list), xp.stack(epz_i_list))
+    return ConvMatrices(xp.stack(epx_list), xp.stack(epy_list),
+                        xp.stack(epz_i_list), None, None)

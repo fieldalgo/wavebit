@@ -625,7 +625,8 @@ def test_a_real_grating_matches_the_2ff_solve(max_order, theta_deg, phi_deg):
                             np.asarray(solver.order_kxy()[1], complex))
     kx, ky = KX.ravel(), KY.ravel()
     n_orders = kx.size
-    epx, epy, epz_i = to_conv_mat_raster_sampled(np.asarray(structure, dtype=complex), max_order, max_order)
+    epx, epy, epz_i, *_ = to_conv_mat_raster_sampled(
+        np.asarray(structure, dtype=complex), max_order, max_order)
     O = np.zeros((n_orders, n_orders), dtype=complex)
     layers = [(dict(exx=epx[0], exy=O, exz=O, eyx=O, eyy=epy[0], eyz=O, ezx=O, ezy=O,
                     ezz_i=epz_i[0]), THICK)]

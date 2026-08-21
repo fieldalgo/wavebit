@@ -175,7 +175,7 @@ def test_factorization_feeds_solve_bit_exactly():
     legacy = solver.solve()
     kx, _ = solver.order_kxy()
 
-    epx, epy, epz = core_dfs(structure, max_order[0], max_order[1])
+    epx, epy, epz, *_ = core_dfs(structure, max_order[0], max_order[1])
     ri, ti = solve_1d(0, wl, kx, n_top, n_bot, solver.theta, solver.thickness, epx, epy, epz)
 
     assert np.array_equal(np.array(legacy.R), np.array(ri))
@@ -185,7 +185,7 @@ def test_factorization_feeds_solve_bit_exactly():
 # ------------------------------------------------- end-to-end differentiability (the point)
 
 def _chain_1d(fac_kwargs, structure, kx, theta):
-    epx, epy, epz = core_dfs(structure, **fac_kwargs)
+    epx, epy, epz, *_ = core_dfs(structure, **fac_kwargs)
     _, ti = solve_1d(0, 0.777, kx, 2.0, 1.0, theta, [0.15], epx, epy, epz)
     return ti
 
@@ -240,7 +240,7 @@ def test_end_to_end_gradient_wrt_structure_2d():
     theta, inc = complex(solver.theta), solver._incidence_pair()
 
     def chain(u, kx_, ky_, th_, inc_):
-        epx, epy, epz = core_dfs(u, max_order[0], max_order[1])
+        epx, epy, epz, *_ = core_dfs(u, max_order[0], max_order[1])
         _, ti = solve_2d(wl, kx_, ky_, n_top, n_bot, th_, inc_, [0.15], epx, epy, epz,
                          phi=solver.phi)
         return ti
@@ -501,7 +501,7 @@ def test_cfs_end_to_end_gradient_wrt_structure():
     theta = complex(solver.theta)
 
     def chain(u, kx_):
-        epx, epy, epz = core_cfs(u, max_order[0], max_order[1], compression=compression)
+        epx, epy, epz, *_ = core_cfs(u, max_order[0], max_order[1], compression=compression)
         _, ti = solve_1d(0, wl, kx_, n_top, n_bot, theta, [d], epx, epy, epz)
         return ti
 

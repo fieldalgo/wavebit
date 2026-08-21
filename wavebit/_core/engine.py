@@ -1849,7 +1849,6 @@ class CoreFactorizationMixin:
         coefficients = self.fourier_coefficients
         max_order_x, max_order_y = self.max_order[0], self.max_order[1]
         mu_pass = quantity == 'permeability'
-        epxy_conv_all = epyx_conv_all = None
 
         if self._modeling_type == 0:                      # raster
             # The two axes are dispatched independently. Splitting on the factorization
@@ -1869,25 +1868,21 @@ class CoreFactorizationMixin:
 
             if factorization == Factorization.LI:
                 if sampled:
-                    epx_conv_all, epy_conv_all, epz_conv_i_all = \
-                        _fac.to_conv_mat_raster_sampled(
-                            structure, max_order_x, max_order_y)
+                    conv = _fac.to_conv_mat_raster_sampled(
+                        structure, max_order_x, max_order_y)
                 else:
-                    epx_conv_all, epy_conv_all, epz_conv_i_all = \
-                        _fac.to_conv_mat_raster_integrated(
-                            structure, max_order_x, max_order_y, compression=compression)
+                    conv = _fac.to_conv_mat_raster_integrated(
+                        structure, max_order_x, max_order_y, compression=compression)
             else:
                 if sampled:
-                    (epx_conv_all, epy_conv_all, epz_conv_i_all,
-                     epxy_conv_all, epyx_conv_all) = _fac.to_conv_mat_raster_nvf(
+                    conv = _fac.to_conv_mat_raster_nvf(
                         structure, max_order_x, max_order_y,
                         normal_field=normal_field,
                         normal_field_source=normal_field_source,
                         lattice=self._geometry_lattice_for(geometry),
                         normal_method=self.normal_method)
                 else:
-                    (epx_conv_all, epy_conv_all, epz_conv_i_all,
-                     epxy_conv_all, epyx_conv_all) = _fac.to_conv_mat_raster_integrated_nvf(
+                    conv = _fac.to_conv_mat_raster_integrated_nvf(
                         structure, max_order_x, max_order_y,
                         normal_field=normal_field,
                         normal_field_source=normal_field_source,
@@ -1911,8 +1906,7 @@ class CoreFactorizationMixin:
                 plans, choices = self.modeler.grid_plans, self.modeler.shape_choices
             structure_block = self.modeling_block_instruction(
                 structure, plans=plans, shape_choices=choices)
-            epx_conv_all, epy_conv_all, epz_conv_i_all = _fac.to_conv_mat_block(
-                structure_block, max_order_x, max_order_y)
+            conv = _fac.to_conv_mat_block(structure_block, max_order_x, max_order_y)
 
         elif self._modeling_type == 2:      # smooth shapes -- NVF on exact transforms
             # Likewise fixed on both axes: the epsilon tensor comes from the shapes' analytic
@@ -1920,8 +1914,7 @@ class CoreFactorizationMixin:
             # integral over the cell, so the coefficients are integrated ones. Naming
             # `factorization='li'` or `fourier_coefficients='sampled'` was refused above.
             xp = _namespace_for_backend(self.backend)
-            (epx_conv_all, epy_conv_all, epz_conv_i_all,
-             epxy_conv_all, epyx_conv_all) = _analytic.to_conv_mat_smooth_layers(
+            conv = _analytic.to_conv_mat_smooth_layers(
                 structure, max_order_x, max_order_y, self.period,
                 normal_grid=self.normal_grid,
                 complex_dtype=xp.complex128, xp=xp,
@@ -1929,10 +1922,15 @@ class CoreFactorizationMixin:
                 lattice=self._geometry_lattice_for(geometry))
 
         else:
-            raise ValueError("Check 'modeling_type' in 'solve'.")
+            raise ValueError(
+                f'no modeling path is assigned (modeling_type={self._modeling_type!r}), so '
+                f'there is nothing to build convolution matrices from. Assign `structure`: '
+                f'its type is what selects the path.')
 
-        return _fac.ConvMatrices(epx_conv_all, epy_conv_all, epz_conv_i_all,
-                                 epxy_conv_all, epyx_conv_all)
+        # Returned as the builder made it. Every builder in `_core.factorization` and
+        # `_core.analytic` answers with a `ConvMatrices`, the Li-rule ones carrying `None` in
+        # the off-diagonal pair, so there is no padding step here to get the arity wrong.
+        return conv
 
     # ------------------------------------------------------------------------- permeability
 

@@ -38,7 +38,7 @@ def _run_and_inputs(structure, thickness, n_top, n_bot, wl, period, max_order, t
                           thickness=thickness, structure=structure)
     via_api = solver.solve()
     assert solver.grating_type == 2, solver.grating_type    # ensure 2D path
-    epx, epy, epz = to_conv_mat_raster_sampled(
+    epx, epy, epz, *_ = to_conv_mat_raster_sampled(
         solver.structure, solver.max_order[0], solver.max_order[1])
     kx, ky = solver.order_kxy()
     inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_top, n_bot=n_bot,

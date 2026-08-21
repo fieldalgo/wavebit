@@ -125,7 +125,8 @@ def test_5_continuous_raster_convolution_matrix():
     
     structure = eps_from_index(np.array([[[0.18 + 3.0j]]]))
 
-    epx, epy, epz_i = to_conv_mat_raster_integrated(structure, max_order_x=1, max_order_y=1)
+    epx, epy, epz_i, *_ = to_conv_mat_raster_integrated(
+        structure, max_order_x=1, max_order_y=1)
     # No conjugation anywhere on the way in: Im(n) > 0 is loss, and the permittivity the
     # raster now carries has Im(eps) > 0 to match. This asserted the opposite until 2026-08,
     # when the solver stopped conjugating; the squaring the builder used to do is gone too,

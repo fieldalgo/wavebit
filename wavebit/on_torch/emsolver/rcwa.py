@@ -10,9 +10,6 @@ from ..._core.modeler import Modeling
 from ..._core.result import Result, ResultSub
 
 
-# One shared container (wavebit._core.result); the old per-backend copies are gone.
-ResultTorch = Result
-ResultSubTorch = ResultSub
 
 
 class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
@@ -219,11 +216,11 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
                                          mu_top=mu_top, mu_bot=mu_bot,
                                          eps_top=eps_top, eps_bot=eps_bot)
 
-        given = ResultSubTorch(**result_dict['given']) if 'given' in result_dict else None
-        s_inc = ResultSubTorch(**result_dict['s_inc']) if 's_inc' in result_dict else None
-        p_inc = ResultSubTorch(**result_dict['p_inc']) if 'p_inc' in result_dict else None
+        given = ResultSub(**result_dict['given']) if 'given' in result_dict else None
+        s_inc = ResultSub(**result_dict['s_inc']) if 's_inc' in result_dict else None
+        p_inc = ResultSub(**result_dict['p_inc']) if 'p_inc' in result_dict else None
 
-        result = ResultTorch(given, s_inc, p_inc, max_order=self.max_order)
+        result = Result(given, s_inc, p_inc, max_order=self.max_order)
 
         return result
 

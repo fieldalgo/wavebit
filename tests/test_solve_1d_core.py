@@ -44,7 +44,7 @@ def _run_and_inputs(tetm, structure, thickness, n_top, n_bot, wl, period, max_or
                           tetm=tetm, max_order=max_order, period=period, wavelength=wl,
                           thickness=thickness, structure=structure)
     via_api = solver.solve()
-    epx, epy, epz = to_conv_mat_raster_sampled(
+    epx, epy, epz, *_ = to_conv_mat_raster_sampled(
         solver.structure, solver.max_order[0], solver.max_order[1])
     kx, _ = solver.order_kxy()
     inputs = dict(tetm_index=0 if tetm == 'te' else 1, wavelength=wl, kx=kx, n_top=n_top, n_bot=n_bot,
@@ -185,7 +185,7 @@ def _run_and_inputs_conical(structure, thickness, n_top, n_bot, wl, period, max_
                           thickness=thickness, structure=structure)
     via_api = solver.solve()
     assert solver.grating_type == 1, solver.grating_type   # ensure conical path
-    epx, epy, epz = to_conv_mat_raster_sampled(
+    epx, epy, epz, *_ = to_conv_mat_raster_sampled(
         solver.structure, solver.max_order[0], solver.max_order[1])
     kx, ky = solver.order_kxy()
     inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_top, n_bot=n_bot,

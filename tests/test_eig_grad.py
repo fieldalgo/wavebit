@@ -198,7 +198,7 @@ def test_the_degeneracy_is_real():
     from wavebit._core.factorization import to_conv_mat_raster_sampled
     from wavebit._core.solve_1d import layer_modes_1d
 
-    epx, epy, epz = to_conv_mat_raster_sampled(UNIFORM ** 2, 4, 0)
+    epx, epy, epz, *_ = to_conv_mat_raster_sampled(UNIFORM ** 2, 4, 0)
     max_order = 4
     kx = np.asarray([0.0 + m * 0.9 / 0.7 for m in range(-max_order, max_order + 1)], dtype=complex)
     I = np.eye(2 * max_order + 1, dtype=complex)
