@@ -5,7 +5,8 @@ import numpy as np
 from ._base import _BaseRCWA, _as_tensor
 from ..._core.engine import CoreFactorizationMixin, _refuse_retired
 from ..._core.enums import Formulation
-from ..._core.fields import field_1d, field_1d_conical, field_2d, field_2d_4ff
+from ..._core.fields import (field_1d, field_1d_conical, field_2d, field_2d_4ff,
+                             is_count, to_mirrored_z, to_scene_frame)
 from ..._core.modeler import Modeling
 from ..._core.result import Result, ResultSub
 
@@ -253,6 +254,12 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
         rather than ignored, which is what it was until 2026-08-20.
         """
         self._require_field_declaration()
+        # An explicit z is stated in scene coordinates on both sides, so a backside request is
+        # restated in the mirror the solve walks before anything buckets it.
+        backside = self.incidence_side == 'bottom'
+        counted_z = is_count(sample_z)
+        if backside:
+            sample_z = to_mirrored_z(sample_z, self.thickness)
         kx, ky = self.order_kxy()
 
         if self._grating_type == 0:
@@ -283,11 +290,14 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
                                   sample_z=sample_z, incidences=incidences,
                                   lattice=self.lattice)
 
-        if self.incidence_side == 'bottom':
-            # The backside solve leaves its state in the mirrored frame (z reversed); un-flip
-            # once here so the returned cell is in SCENE coordinates for either side.
-            field_cell = torch.flip(field_cell,
-                                    dims=[0 if self._grating_type == 0 else 1])
+        if backside:
+            # The backside solve is the top-side solve of the z-mirrored scene, so its cell is
+            # in that mirror -- axis and components both. `to_scene_frame` undoes both; see it
+            # for why the component half is not optional, and `to_scene_frame`'s `flip_z` for
+            # why an explicit z has no axis left to reverse. Static under jit either way:
+            # `incidence_side` is aux data, never a tracer.
+            field_cell = to_scene_frame(field_cell, pure_1d=self._grating_type == 0,
+                                        tetm_index=self.tetm_index, flip_z=counted_z)
 
         return field_cell
 

@@ -226,26 +226,97 @@ def test_backside_etm_and_smm_agree_on_the_conical_path():
 
 # ----------------------------------------------------------------------------------- fields
 
+#: The mirror a backside solve leaves behind is ``diag(1, 1, -1)``, and the field components do
+#: not all follow the coordinates through it: ``E`` is polar and loses ``E_z``, ``H`` is axial
+#: and loses ``H_x``/``H_y`` instead. The two 1D layouts fill their three slots with different
+#: components, so the same rule reads as two different vectors.
+MIRROR_1D = {'te': np.array([1.0, -1.0, 1.0]),      # (Ey, Hx, Hz)
+             'tm': np.array([-1.0, 1.0, -1.0])}     # (Hy, Ex, Ez)
+
+
+def _reversed_scene_kw(kw):
+    """The same stack written upside down, to be lit from the top."""
+    return dict(kw, structure=GRATING_KW['structure'][::-1], thickness=[0.22, 0.15],
+                top=GRATING_KW['bot'], bot=GRATING_KW['top'])
+
+
+@pytest.mark.parametrize('tetm', ['te', 'tm'])
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
-def test_field_cell_comes_back_in_scene_coordinates(algo):
-    """The reconstructed cell has scene z whichever side is lit.
+def test_field_cell_comes_back_in_scene_coordinates(algo, tetm):
+    """The reconstructed cell is in the scene's frame — both axis *and* components.
 
-    Pinned against the mirror identity itself: the backside cell of a scene must equal the
-    top-side cell of the hand-reversed scene read upside down. The scene is z-asymmetric, so
-    a missing (or double) un-flip puts the absorbing layer's field profile in the wrong half
-    and the comparison fails at O(1) — and for the SMM this is also the only test of its
-    backside field-state recovery, which shares no code with its efficiency read.
+    The backside cell must equal the top-side cell of the hand-reversed scene read upside down
+    **and with the mirror's vector parity applied**. Both halves are needed and this test
+    carried only the first until 2026-08-22, which is how a wrong frame survived: the two sides
+    were then bit-identical either way, because the ETM backside path *is* the reversed-scene
+    solve and the SMM recovers the same state. It pinned the bookkeeping — which slices, which
+    order — and nothing about the frame. What it cannot see, the Poynting sign below can.
+
+    Both polarizations, because the two 1D layouts need different sign vectors and a TM-only
+    error is invisible to the ETM/SMM comparison beneath, which is sign-blind.
     """
-    kw = dict(GRATING_KW, layer_algorithm=algo, tetm='te', theta=0.3, answers='field')
-    s_b = wavebit.rcwa(incidence_side='bottom', **kw)
-    _, cell_b = s_b.solve_field(sample_x=16, sample_z=8)
+    kw = dict(GRATING_KW, layer_algorithm=algo, tetm=tetm, theta=0.3, answers='field')
+    _, cell_b = wavebit.rcwa(incidence_side='bottom', **kw).solve_field(sample_x=16, sample_z=8)
+    _, cell_t = wavebit.rcwa(**_reversed_scene_kw(kw)).solve_field(sample_x=16, sample_z=8)
 
-    kw_rev = dict(kw, structure=GRATING_KW['structure'][::-1], thickness=[0.22, 0.15],
-                  top=GRATING_KW['bot'], bot=GRATING_KW['top'])
-    s_t = wavebit.rcwa(**kw_rev)
-    _, cell_t = s_t.solve_field(sample_x=16, sample_z=8)
+    mirrored = MIRROR_1D[tetm] * np.asarray(cell_t)[::-1]
+    assert np.abs(np.asarray(cell_b) - mirrored).max() < 1e-12
 
-    assert np.abs(np.asarray(cell_b) - np.asarray(cell_t)[::-1]).max() < 1e-12
+
+@pytest.mark.parametrize('tetm', ['te', 'tm'])
+@pytest.mark.parametrize('side,sign', [('top', +1.0), ('bottom', -1.0)])
+def test_net_power_flows_away_from_the_lit_face(side, sign, tetm):
+    """``S_z`` points into the stack from whichever face is lit — the sign the mirror decides.
+
+    This is the assertion the mirror identity above cannot make. That one compares two cells
+    that share their arithmetic, so it is satisfied by *either* frame as long as both sides use
+    the same one — and the returned cell was in the mirrored frame for as long as it existed.
+    Net Poynting is answerable from the cell alone, against a fact no reconstruction supplies:
+    light entering from below carries power upward, so ``S_z`` in scene coordinates is negative.
+
+    Measured before the fix: ``+0.343`` on both sides, bit-identical, where the two must differ
+    in sign.
+    """
+    kw = dict(GRATING_KW, tetm=tetm, theta=0.3, answers='field')
+    _, cell = wavebit.rcwa(incidence_side=side, **kw).solve_field(sample_x=64, sample_z=16)
+    c = np.asarray(cell)
+    # TE fills the three slots as (Ey, Hx, Hz) and TM as (Hy, Ex, Ez)
+    Sz = (0.5 * np.real(-c[..., 0] * np.conj(c[..., 1])) if tetm == 'te'
+          else 0.5 * np.real(c[..., 1] * np.conj(c[..., 0])))
+    mean = float(np.mean(Sz))
+    assert np.sign(mean) == sign, mean
+    assert abs(mean) > 1e-2, mean                    # not a sign read off round-off
+
+
+@pytest.mark.parametrize('tetm', ['te', 'tm'])
+def test_explicit_z_on_a_backside_solve_is_read_in_scene_coordinates(tetm):
+    """An explicit ``sample_z`` is absolute in the scene, on both sides, in the caller's order.
+
+    Two things went wrong together and this pins both. The coordinate was bucketed against the
+    *mirror's* thicknesses, so it selected the wrong layer; and the axis was then reversed even
+    though ``_z_plan`` already returns explicit samples in the caller's own order, so the
+    request came back backwards. Against the hand-reversed scene the pair was worth O(1) at
+    every requested z — 2.86 on this stack.
+
+    The requested z straddle the 0.15 interface deliberately: an interface belongs to the layer
+    below it, and that rule has to be applied once, in scene coordinates, rather than
+    re-derived in the mirror where it inverts.
+    """
+    kw = dict(GRATING_KW, tetm=tetm, theta=0.3, answers='field')
+    total = sum(kw['thickness'])
+    z = np.array([0.02, 0.149, 0.151, 0.30, 0.36])
+
+    def cell(solver_kw, zs):
+        s = wavebit.rcwa(**solver_kw)
+        s.solve()
+        return np.asarray(s.reconstruct_field(sample_x=8, sample_y=1, sample_z=zs))
+
+    got = cell(dict(kw, incidence_side='bottom'), z)
+    want = MIRROR_1D[tetm] * cell(_reversed_scene_kw(kw), total - z)
+    assert np.abs(got - want).max() < 1e-12, np.abs(got - want).max()
+
+    # ...and the caller's order is the returned order, which the blind reversal also broke
+    assert np.array_equal(cell(dict(kw, incidence_side='bottom'), z[::-1]), got[::-1])
 
 
 def test_backside_field_cells_agree_between_algorithms():

@@ -136,6 +136,21 @@ wave has `Sz > 0` — the same direction the cell's `z` index runs. This is wort
 because it was not true before 2026-08-14: every path returned `Ez`, `Hx` and `Hy` with the
 opposite sign.
 
+**And it holds on both sides**, which took until 2026-08-22. A backside solve *is* the
+top-side solve of the z-mirrored scene, so everything it leaves behind is expressed in that
+mirror; the reconstruction reversed the z axis and stopped there. `z → -z` is improper, so the
+components do not all follow the coordinates — `E` is polar and loses `E_z`, `H` is axial and
+loses `H_x`/`H_y` — and without that parity a cell lit from below came back with `Sz > 0` for
+light travelling *upward*, bit-identical to the top-side answer instead of its mirror. Every
+efficiency was unaffected, which is why nothing saw it: the check that catches it is net
+Poynting, which is answerable from the cell alone against a fact no reconstruction supplies
+(`tests/test_backside_incidence.py::test_net_power_flows_away_from_the_lit_face`).
+
+An explicit `sample_z` is absolute in **scene** coordinates on both sides, for the same reason
+the labels are. A backside request is restated in the mirror before it is bucketed, and comes
+back in the caller's own order; it used to be bucketed against the mirror's thicknesses *and*
+then reversed.
+
 That was a contradiction inside the repo, not a convention nobody had chosen.
 [`formulation.md`](formulation.md) §1 anchors (M1)/(M2) on a vacuum wave travelling `+z` and
 records the pair `(Ey, H̃x) = (1, -kz)`; `tests/test_anisotropic_berreman.py::_vacuum_modes`

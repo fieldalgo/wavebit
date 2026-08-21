@@ -146,6 +146,81 @@ def _require_solved(T1, layer_info_list):
             "answers='field' declared so the solve keeps them.")
 
 
+#: Vector parity of the mirror ``diag(1, 1, -1)``, per layout, in each one's component order.
+#: Not a convention: ``E`` is a polar vector and transforms as the coordinates do, so only
+#: ``E_z`` changes sign; ``H`` is axial and picks up the determinant as well, so it is
+#: ``H_x`` / ``H_y`` that change and ``H_z`` that does not. The two 1D layouts fill three slots
+#: with different components, so the same rule reads as two different vectors.
+_MIRROR_PARITY = {
+    'coupled': (1.0, 1.0, -1.0, -1.0, -1.0, 1.0),   # (Ex, Ey, Ez, Hx, Hy, Hz)
+    'te': (1.0, -1.0, 1.0),                          # (Ey, Hx, Hz)
+    'tm': (-1.0, 1.0, -1.0),                         # (Hy, Ex, Ez)
+}
+
+
+def to_mirrored_z(sample_z, thickness):
+    """A caller's ``sample_z`` restated in the frame a backside solve actually walks.
+
+    Explicit coordinates are absolute in **scene** coordinates -- that is the contract on both
+    sides, and it is what makes ``incidence_side`` a statement about the light rather than
+    about the axis. A backside solve walks the z-mirror of that scene, so each coordinate
+    becomes ``total - z`` before it is bucketed.
+
+    Reversing the *output* instead would not do, and that is what was happening until
+    2026-08-22: :func:`_z_plan` hands explicit samples back in the caller's own order, so the
+    blind flip that follows returned the request backwards, on top of having bucketed a scene
+    coordinate against the mirror's thicknesses. Measured against the hand-reversed scene, both
+    together were worth O(1) at every requested z -- 2.86 on a two-layer TE grating.
+
+    A **count** passes straight through. It is a shape, not a position: "six samples per layer"
+    means the same thing in either frame, and the returned axis is reversed at the end instead.
+
+    A traced thickness passes through untouched as well, so that the refusal a caller sees is
+    :func:`_z_plan`'s -- which says why a data-dependent layer choice cannot be traced -- rather
+    than a numpy conversion error raised here first.
+    """
+    if is_count(sample_z):
+        return sample_z
+    try:
+        total = float(_np.sum(_np.asarray(thickness, dtype=float)))
+    except Exception:
+        return sample_z
+    return total - _np.asarray(sample_z, dtype=float)
+
+def to_scene_frame(cell, pure_1d, tetm_index=None, flip_z=True):
+    """A backside cell, put back into scene coordinates -- both axis and components.
+
+    A backside solve *is* the top-side solve of the z-mirrored scene
+    (:func:`~wavebit._core.solve_1d._mirrored_scene`), so everything it leaves behind is
+    expressed in that mirror. Returning it as-is would make ``incidence_side`` change the frame
+    the answer is written in, which is the one thing the scene labels promise it does not:
+    index 0 of the z axis is the top of ``structure[0]`` whichever side the light came from.
+
+    Two halves, and the second was missing until 2026-08-22. Reversing the z axis is the
+    obvious one. The other is that ``z -> -z`` is *improper*, so the field components do not
+    all follow the coordinates: see :data:`_MIRROR_PARITY`. Without it a backside cell comes
+    back with ``E_z``, ``H_x`` and ``H_y`` negated -- which conserves energy, leaves every
+    efficiency untouched, and reverses the net Poynting vector. Measured on a TE grating lit
+    from below: ``S_z`` came back ``+0.343`` where the light travels upward and it must be
+    negative, bit-identical to the top-side solve rather than its mirror.
+
+    The parity is the same vector the reconstructions already apply once to reach the library's
+    declared frame (``+z`` down, see the module docstring). That is not a coincidence and not a
+    double-application: both are mirrors in ``z``, and this one composes on top of a cell that
+    is already in the declared frame.
+
+    ``flip_z`` is false when the caller asked for explicit coordinates. Those were restated in
+    the mirror's frame on the way in (:func:`to_mirrored_z`) and come back in the caller's own
+    order, so there is no axis left to reverse -- only the components. A count did not move on
+    the way in, and its axis is what carries the reversal.
+    """
+    xp = array_namespace(cell)
+    which = 'coupled' if not pure_1d else ('te' if tetm_index == 0 else 'tm')
+    parity = xp.asarray(_MIRROR_PARITY[which], dtype=cell.dtype, device=_dev(cell))
+    if flip_z:
+        cell = xp.flip(cell, axis=0 if pure_1d else 1)
+    return cell * parity
+
 def _diag_exp(xp, diag_vals, n):
     """``exp`` of a diagonal matrix stack, given its diagonals — the legacy ``d_exp``.
 
@@ -156,7 +231,7 @@ def _diag_exp(xp, diag_vals, n):
     return eye * xp.exp(diag_vals)[..., None, :]
 
 
-def _is_count(spec):
+def is_count(spec):
     """Is this sampling argument a *number of points* rather than the points themselves?
 
     Only a Python/NumPy integer counts. Anything with a length -- list, tuple, ndarray, backend
@@ -173,7 +248,7 @@ def _check_spec(spec, name):
     ``sample_z=5.0`` reads like the first and would silently behave like the second. It is a
     typo often enough that guessing either way is worse than saying so.
     """
-    if _is_count(spec):
+    if is_count(spec):
         return
     if _np.ndim(spec) != 1:
         raise TypeError(
@@ -183,7 +258,7 @@ def _check_spec(spec, name):
 
 def _n_samples(spec, name='res_*'):
     _check_spec(spec, name)
-    return int(spec) if _is_count(spec) else len(spec)
+    return int(spec) if is_count(spec) else len(spec)
 
 
 def _axis_samples(xp, spec, extent, C, dev):
@@ -196,7 +271,7 @@ def _axis_samples(xp, spec, extent, C, dev):
     respect. That is also why this is cheap: cost is points x orders either way.
     """
     _check_spec(spec, 'sample_x/sample_y')
-    if _is_count(spec):
+    if is_count(spec):
         return xp.linspace(0, extent, spec, dtype=C, device=dev)
     return xp.astype(xp.asarray(spec, device=dev), C)
 
@@ -241,7 +316,7 @@ def _inv_fourier(xp, kx, ky, period, sample_x, sample_y, k0, C, lattice=None):
         # and it divides by the *lattice* vector rather than by `period`, which need not be
         # the same number.
         def _frac(spec, a_par, a_perp, axis):
-            if _is_count(spec):
+            if is_count(spec):
                 return xp.linspace(0, 1, _n_samples(spec), dtype=C, device=dev)
             if abs(a_perp) > 1e-12 * max(abs(a_par), 1.0):
                 raise NotImplementedError(
@@ -281,7 +356,7 @@ def _z_1d(xp, sample_z, d, C, dev=None):
     rather than ``linspace(0, d, sample_z)`` — because the two are not identical in floating
     point and every committed field golden was captured with this one.
     """
-    if _is_count(sample_z):
+    if is_count(sample_z):
         return xp.reshape(xp.linspace(0, sample_z, sample_z, dtype=C, device=dev), (-1,)) / sample_z * d
     return xp.astype(xp.asarray(sample_z, device=dev), C)
 
@@ -329,7 +404,7 @@ def _z_plan(sample_z, layer_info_list, d_index):
     geometry.
     """
     _check_spec(sample_z, 'sample_z')
-    if _is_count(sample_z):
+    if is_count(sample_z):
         return [sample_z] * len(layer_info_list), None
 
     z_req = _np.asarray(sample_z, dtype=float).reshape(-1)
