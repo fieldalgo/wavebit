@@ -266,7 +266,10 @@ def test_the_mode_q_tie_break_is_worth_nothing():
     tie-break, which is the opposite sign and *does* decide something.
     """
     def inverted(xp, eigenvalue):
-        v = eigenvalue ** 0.5
+        # `xp.sqrt`, matching `mode_q`. Spelling it `** 0.5` here would make this mirror
+        # differ from the real function in two ways at once, and the test could no longer
+        # say which of them moved the answer.
+        v = xp.sqrt(eigenvalue)
         flip = xp.where(xp.abs(xp.real(v)) > 1e-12, xp.real(v) < 0, xp.imag(v) < 0)
         return xp.where(flip, -v, v)
 

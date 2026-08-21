@@ -42,7 +42,10 @@ def _grad_scalar_from_eig(xp, backend_scalar):
     P = xp.asarray(np.array([[0, 1.0, 0], [0.0, 0, 0.4], [1.0, 0, 0]], dtype=complex))
     A = A0 + backend_scalar * P
     w, V = eig(A)
-    M = V @ (xp.diag(w ** 0.5) @ xp.linalg.inv(V))
+    # `xp.sqrt`, not `w ** 0.5`. Bitwise identical for this matrix (its eigenvalues are
+    # positive reals, measured), but this is a cross-backend gradient comparison and
+    # `** 0.5` is the one spelling whose complex result depends on the backend.
+    M = V @ (xp.diag(xp.sqrt(w)) @ xp.linalg.inv(V))
     return xp.real(xp.sum(M * xp.conj(M)))
 
 
