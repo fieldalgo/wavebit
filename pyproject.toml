@@ -117,12 +117,14 @@ wavebit = ["nk_data/filmetrics/*.txt", "nk_data/matlab/*.mat"]
 [tool.ruff.lint]
 select = ["F401", "F811", "F821", "F632", "E711", "E712", "E714"]
 
-# The package's public surface. `import wavebit; wavebit.Layer` works precisely because
-# __init__ binds these names and nothing here uses them, so all 19 read as unused. The other
-# spelling is an `__all__` repeating the same 19 names, which states it at more length.
+# Nothing is exempted, and there is no `per-file-ignores` table on purpose. tests/references/
+# and tutorials/ stay linted: they look like throwaway comparison harnesses, which is exactly
+# the argument for skipping them -- and the Reticolo bug above was sitting in one of them.
 #
-# Note what is *not* exempted: tests/references/ and tutorials/ stay linted. They look like
-# throwaway comparison harnesses, which is exactly the argument for skipping them -- and the
-# Reticolo bug above was sitting in one of them.
-[tool.ruff.lint.per-file-ignores]
-"wavebit/__init__.py" = ["F401"]
+# `wavebit/__init__.py` is the one file that would ask for an exemption, since it binds the
+# public surface and uses none of it, so every export reads as unused. It declares `__all__`
+# instead, which ruff reads as the use. That puts the surface in the file it describes, and it
+# keeps F401 pointed at that file rather than silenced for it: an export added without a line
+# in `__all__` now fails the lint. This comment used to carry the count instead, and the count
+# drifted 19 -> 34 unnoticed -- the argument against restating in prose what the code can state
+# itself, and hold itself to.

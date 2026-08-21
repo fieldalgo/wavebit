@@ -52,4 +52,29 @@ from ._core.geometry import StaticGeometry, StaleGeometryError
 from ._core.modeler import find_nk_index, read_material_table
 from ._core.spec import JobSpec, Numerics, Sweep, SpecError, run
 
+# The public surface -- and the reason this file needs no F401 exemption. Every name above is
+# bound here and used nowhere here, which is indistinguishable from an unused import until
+# `__all__` says otherwise; ruff reads a listing here as the use. Keeping the surface in the
+# file it belongs to, rather than as a blanket ignore in `pyproject.toml`, also keeps F401
+# pointed at it: an export added without a line here fails the lint instead of being waved
+# through. Grouped to match the import blocks above.
+#
+# `main` is deliberately absent. It is bound as a side effect of `from .main import rcwa`, not
+# offered, and without `__all__` a star import collected it along with the rest.
+__all__ = [
+    'rcwa',
+    'AutoDetuneWarning', 'PrecisionLossWarning', 'RayleighPointWarning',
+    'UnphysicalResultWarning', 'UnresolvedBranchWarning',
+    'get_j1_implementation', 'set_j1_implementation',
+    'branch_tolerance',
+    'plot_structure', 'slice_structure',
+    'Answers', 'Backend', 'Tetm', 'FourierCoefficients', 'Factorization', 'Formulation',
+    'NormalMethod',
+    'Layer', 'Stack', 'Incidence', 'Material', 'eps_from_index', 'index_from_eps',
+    'ConvMatrices',
+    'StaticGeometry', 'StaleGeometryError',
+    'find_nk_index', 'read_material_table',
+    'JobSpec', 'Numerics', 'Sweep', 'SpecError', 'run',
+]
+
 __version__ = "0.1.0"
