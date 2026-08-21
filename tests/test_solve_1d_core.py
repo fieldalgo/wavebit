@@ -184,7 +184,7 @@ def _run_and_inputs_conical(structure, thickness, n_top, n_bot, wl, period, max_
                           psi=psi, max_order=max_order, period=period, wavelength=wl,
                           thickness=thickness, structure=structure)
     via_api = solver.solve()
-    assert solver.grating_type_assigned == 1, solver.grating_type_assigned   # ensure conical path
+    assert solver.grating_type == 1, solver.grating_type   # ensure conical path
     epx, epy, epz = to_conv_mat_raster_sampled(
         solver.structure, solver.max_order[0], solver.max_order[1])
     kx, ky = solver.order_kxy()

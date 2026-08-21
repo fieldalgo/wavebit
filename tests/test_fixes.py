@@ -151,8 +151,8 @@ def test_6_none_structure_grating_type():
         try:
             solver = wavebit.rcwa(backend=backend_id, **option)
             solver._assign_grating_type()
-            print(f"[{backend_name}] structure=None assigned grating_type: {solver.grating_type_assigned}")
-            assert solver.grating_type_assigned == 2, f"Expected grating_type_assigned == 2 for structure=None, got {solver.grating_type_assigned}"
+            print(f"[{backend_name}] structure=None assigned grating_type: {solver.grating_type}")
+            assert solver.grating_type == 2, f"Expected grating_type == 2 for structure=None, got {solver.grating_type}"
         except Exception as e:
             print(f"[{backend_name}] Error: {e}")
             raise e

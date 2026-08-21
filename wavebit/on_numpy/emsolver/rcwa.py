@@ -15,12 +15,6 @@ from ..._core.modeler import Modeling
 
 
 class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
-    def run_structure_vmap(self, structure_list):
-        """
-        under development
-        """
-        pass
-
     def __init__(self,
                  top=1.,                     # superstrate: a Material, or a bare relative
                  # permittivity (the scalar shorthand for Material(epsilon=x)). Was `n_top`
@@ -37,7 +31,6 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                  thickness=(0.,),
                  backend=0,
                  tetm=None,
-                 pol=None,   # retired; kept only to say so
                  max_order=(0, 0),
                  layer_algorithm='ETM',
                  complex_dtype=np.complex128,
@@ -88,7 +81,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                  ):
         _refuse_retired(retired)
 
-        super().__init__(top=top, bot=bot, theta=theta, phi=phi, psi=psi, chi=chi, tetm=tetm, pol=pol,
+        super().__init__(top=top, bot=bot, theta=theta, phi=phi, psi=psi, chi=chi, tetm=tetm,
                          max_order=max_order, period=period, wavelength=wavelength,
                          thickness=thickness, layer_algorithm=layer_algorithm,
                          complex_dtype=complex_dtype,
@@ -98,8 +91,8 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
 
         self.modeler = Modeling(period=self.period, complex_dtype=complex_dtype)
 
-        self._modeling_type_assigned = None
-        self._grating_type_assigned = None
+        self._modeling_type = None
+        self._grating_type = None
         self._structure = None
 
         self.structure = structure
@@ -120,7 +113,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         A raster is an ``(n_layers, Ny, Nx)`` array of **relative permittivity**; the block
         and analytic spellings are per-layer lists that name a
         :class:`~wavebit._core.domain.Material` per region. Assigning it settles
-        :attr:`modeling_type_assigned`, which is the only thing that selects the modeling
+        :attr:`modeling_type`, which is the only thing that selects the modeling
         path -- there is no separate mode switch.
         """
         return self._structure
@@ -129,7 +122,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
     def structure(self, structure):
 
         if isinstance(structure, np.ndarray):  # Raster
-            self._modeling_type_assigned = 0
+            self._modeling_type = 0
             self._structure = self._coerce_raster('structure', structure)
 
         elif type(structure) is list:
@@ -139,14 +132,14 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
             # this path adds them where the block path paints. See
             # wavebit._core.analytic; overlaps are refused until it is set.
             if len(structure) > 0 and isinstance(structure[0], dict):
-                self._modeling_type_assigned = 2
+                self._modeling_type = 2
                 self._structure = structure
             else:  # Block
-                self._modeling_type_assigned = 1
+                self._modeling_type = 1
                 self._structure = structure
         elif structure is None:
             self._structure = structure
-            self._modeling_type_assigned = None
+            self._modeling_type = None
         else:
             raise ValueError
         # `mu` and `structure` are one raster pair and either can be assigned second, so the
@@ -196,7 +189,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
             # The 1D paths have no z-row slots to fill, so a z row is also a choice of path:
             # the first-order solve is written on the 2D layout (a 1D structure is n_orders_y == 1
             # there, the same physics the conical path solves at conical cost).
-            self._grating_type_assigned = 2
+            self._grating_type = 2
 
         # "Was a permeability named?", the structural question `Material.is_magnetic` answers,
         # rather than "does it differ from one?". `None` means no half-space permeability was
@@ -206,14 +199,14 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         # there. See the note in on_jax/emsolver/rcwa.py.
         magnetic = ((mu is not None and any(m is not None for m in mu))
                     or mu_top is not None or mu_bot is not None)
-        if magnetic and self._grating_type_assigned != 2:
+        if magnetic and self._grating_type != 2:
             raise NotImplementedError(
                 'mu is implemented on the 2D path only; this structure routed to a 1D solve. '
                 'The 1D and conical operators carry no permeability slot at all.')
 
-        if self._grating_type_assigned == 0:
+        if self._grating_type == 0:
             result_dict = self._solve_1d(epx_conv_all, epy_conv_all, epz_conv_i_all)
-        elif self._grating_type_assigned == 1:
+        elif self._grating_type == 1:
             result_dict = self._solve_1d_conical(epx_conv_all, epy_conv_all, epz_conv_i_all)
         else:
             result_dict = self._solve_2d(epx_conv_all, epy_conv_all, epz_conv_i_all,
@@ -260,13 +253,13 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         self._require_field_declaration()
         kx, ky = self.order_kxy()
 
-        if self._grating_type_assigned == 0:
+        if self._grating_type == 0:
             sample_y = 1
             field_cell = field_1d(self.wavelength, kx, self.T1, self.layer_info_list,
                                   self.period, self.tetm_index,
                                   sample_x=sample_x, sample_y=sample_y, sample_z=sample_z,
                                   incidences=incidences)
-        elif self._grating_type_assigned == 1:
+        elif self._grating_type == 1:
             # TODO other bds
             field_cell = field_1d_conical(self.wavelength, kx, ky, self.T1,
                                           self.layer_info_list, self.period,
@@ -293,7 +286,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
             # The backside solve leaves its state in the mirrored frame (z reversed); un-flip
             # once here so the returned cell is in SCENE coordinates for either side: index 0
             # of the z axis is the top of `structure[0]` regardless of where light came from.
-            field_cell = np.flip(field_cell, axis=0 if self._grating_type_assigned == 0 else 1)
+            field_cell = np.flip(field_cell, axis=0 if self._grating_type == 0 else 1)
 
         return field_cell
 

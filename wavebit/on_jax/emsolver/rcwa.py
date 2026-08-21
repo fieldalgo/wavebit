@@ -40,7 +40,6 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                  thickness=(0., ),
                  backend=1,
                  tetm=None,
-                 pol=None,   # retired; kept only to say so
                  max_order=(0, 0),
                  layer_algorithm='ETM',
                  device='cpu',
@@ -92,7 +91,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                  ):
         _refuse_retired(retired)
 
-        super().__init__(top=top, bot=bot, theta=theta, phi=phi, psi=psi, chi=chi, tetm=tetm, pol=pol,
+        super().__init__(top=top, bot=bot, theta=theta, phi=phi, psi=psi, chi=chi, tetm=tetm,
                          max_order=max_order, period=period, wavelength=wavelength,
                          thickness=thickness, layer_algorithm=layer_algorithm,
                          device=device, complex_dtype=complex_dtype,
@@ -102,8 +101,8 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
 
         self.modeler = Modeling(period=self.period, complex_dtype=complex_dtype)
 
-        self._modeling_type_assigned = None
-        self._grating_type_assigned = None
+        self._modeling_type = None
+        self._grating_type = None
         self._structure = None
 
         self.structure = structure
@@ -124,7 +123,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         A raster is an ``(n_layers, Ny, Nx)`` array of **relative permittivity**; the block
         and analytic spellings are per-layer lists that name a
         :class:`~wavebit._core.domain.Material` per region. Assigning it settles
-        :attr:`modeling_type_assigned`, which is the only thing that selects the modeling
+        :attr:`modeling_type`, which is the only thing that selects the modeling
         path -- there is no separate mode switch.
         """
         return self._structure
@@ -133,7 +132,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
     def structure(self, structure):
 
         if isinstance(structure, (jnp.ndarray, np.ndarray)):  # Raster
-            self._modeling_type_assigned = 0
+            self._modeling_type = 0
             self._structure = self._coerce_raster('structure', structure)
 
         elif type(structure) is list:
@@ -143,14 +142,14 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
             # this path adds them where the block path paints. See
             # wavebit._core.analytic; overlaps are refused until it is set.
             if len(structure) > 0 and isinstance(structure[0], dict):
-                self._modeling_type_assigned = 2
+                self._modeling_type = 2
                 self._structure = structure
             else:  # Block
-                self._modeling_type_assigned = 1
+                self._modeling_type = 1
                 self._structure = structure
         elif structure is None:
             self._structure = structure
-            self._modeling_type_assigned = None
+            self._modeling_type = None
         else:
             raise ValueError
         # `mu` and `structure` are one raster pair and either can be assigned second, so the
@@ -203,7 +202,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         if self._formulation_for(z_row) == Formulation.FOUR_FIELD:
             # See the NumPy solver: a z row is also a choice of path, since the 1D paths have
             # no slots to put one in.
-            self._grating_type_assigned = 2
+            self._grating_type = 2
 
         # Structural, like `Material.is_magnetic`: a permeability is present when one was
         # *named*, not when its value differs from one. This used to read `mu_top != 1.0`, and
@@ -214,14 +213,14 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         # which is the whole reason it is how absence is spelled.
         magnetic = ((mu is not None and any(m is not None for m in mu))
                     or mu_top is not None or mu_bot is not None)
-        if magnetic and self._grating_type_assigned != 2:
+        if magnetic and self._grating_type != 2:
             raise NotImplementedError(
                 'mu is implemented on the 2D path only; this structure routed to a 1D solve. '
                 'The 1D and conical operators carry no permeability slot at all.')
 
-        if self._grating_type_assigned == 0:
+        if self._grating_type == 0:
             result_dict = self._solve_1d(epx_conv_all, epy_conv_all, epz_conv_i_all)
-        elif self._grating_type_assigned == 1:
+        elif self._grating_type == 1:
             result_dict = self._solve_1d_conical(epx_conv_all, epy_conv_all, epz_conv_i_all)
         else:
             result_dict = self._solve_2d(epx_conv_all, epy_conv_all, epz_conv_i_all,
@@ -278,13 +277,13 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         self._require_field_declaration()
         kx, ky = self.order_kxy()
 
-        if self._grating_type_assigned == 0:
+        if self._grating_type == 0:
             sample_y = 1
             field_cell = field_1d(self.wavelength, kx, self.T1, self.layer_info_list,
                                   self.period, self.tetm_index,
                                   sample_x=sample_x, sample_y=sample_y, sample_z=sample_z,
                                   incidences=incidences)
-        elif self._grating_type_assigned == 1:
+        elif self._grating_type == 1:
             field_cell = field_1d_conical(self.wavelength, kx, ky, self.T1,
                                           self.layer_info_list, self.period,
                                           sample_x=sample_x, sample_y=sample_y,
@@ -312,7 +311,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
             # once here so the returned cell is in SCENE coordinates for either side. The
             # branch is static under jit: incidence_side is aux data, never a tracer.
             field_cell = jnp.flip(field_cell,
-                                  axis=0 if self._grating_type_assigned == 0 else 1)
+                                  axis=0 if self._grating_type == 0 else 1)
 
         return field_cell
 
@@ -367,21 +366,3 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         res = self.solve(geometry=geometry)
         field_cell = self.reconstruct_field(sample_x, sample_y, sample_z, incidences)
         return res, field_cell
-
-    def run_structure_vmap(self, structure_list):
-        """
-        under development
-        """
-
-        R, T = jax.vmap(self.solve)(structure_list)
-
-        return R, T
-
-    def run_structure_pmap(self, structure_list):
-        """
-        under development
-        """
-
-        R, T = jax.pmap(self.solve)(structure_list)
-
-        return jnp.array(R), jnp.array(T)

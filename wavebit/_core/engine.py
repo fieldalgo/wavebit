@@ -228,6 +228,8 @@ def _refuse_retired(kwargs):
     if not kwargs:
         return
     for name in kwargs:
+        if name == 'pol':
+            raise TypeError(_POL_RETIRED)
         if name == 'ucell_materials':
             raise TypeError(_UCELL_MATERIALS_DELETED)
         if name in RETIRED_MATERIAL_NAMES:
@@ -907,7 +909,7 @@ class CoreSolveMixin:
     def formulation_assigned(self):
         """The formulation the last solve actually ran on — ``None`` before the first.
 
-        The companion to :attr:`grating_type_assigned`, and exposed for the same reason: a
+        The companion to :attr:`grating_type`, and exposed for the same reason: a
         silent 8x is indistinguishable from a slow machine, and a benchmark that cannot say
         which formulation it measured is not a benchmark.
 
@@ -960,11 +962,11 @@ class CoreSolveMixin:
         * ``2`` -- 2D: everything else, and every scene whose k layout is not separable.
         """
         if self.structure is None:
-            if self._grating_type_assigned is None:
-                self._grating_type_assigned = 2
+            if self._grating_type is None:
+                self._grating_type = 2
             return
 
-        if self.modeling_type_assigned == 0:                      # raster
+        if self.modeling_type == 0:                      # raster
             one_row = self.structure.shape[1] == 1
             self._refuse_y_orders_on_a_y_invariant_cell(one_row)
             # One raster row means invariant along `a2`, which is a 1D grating -- but only on
@@ -982,18 +984,18 @@ class CoreSolveMixin:
                 # -- psi, or a pair, which mixes s and p the pure path cannot carry -- leaves
                 # the polarization a live parameter, and the conical formulation is the 1D
                 # one that carries it.
-                self._grating_type_assigned = 0 if self._tetm is not None else 1
+                self._grating_type = 0 if self._tetm is not None else 1
             else:
-                self._grating_type_assigned = 2
+                self._grating_type = 2
 
-        elif self.modeling_type_assigned == 1:                    # block
-            self._grating_type_assigned = 2                       # TODO: 1d conical case
+        elif self.modeling_type == 1:                    # block
+            self._grating_type = 2                       # TODO: 1d conical case
 
-        elif self.modeling_type_assigned == 2:                    # analytic, staircase-free
-            self._grating_type_assigned = 2
+        elif self.modeling_type == 2:                    # analytic, staircase-free
+            self._grating_type = 2
 
     @property
-    def grating_type_assigned(self):
+    def grating_type(self):
         """Which formulation the routing picked: ``0`` pure 1D TE/TM, ``1`` conical, ``2`` 2D.
 
         ``None`` before a structure has been assigned. The companion to
@@ -1003,23 +1005,26 @@ class CoreSolveMixin:
         through the wrong code. ``tests/data/golden_field.npz`` stores it beside every case
         for exactly that.
 
-        Read-only. It was writable until 2026-08-21, for one internal assignment that its
-        three sibling branches already spelled ``self._grating_type_assigned``; no caller
-        anywhere set it. Writing it could not mean anything anyway -- ``_assign_grating_type``
-        runs at the top of every ``solve_conv`` and settles it again from the structure.
+        Read-only, and named without the ``_assigned`` suffix
+        :attr:`formulation_assigned` carries: that suffix earns its place by separating what
+        the solver chose from what the caller asked for, and ``formulation`` is settable while
+        this is not. There is no ``grating_type`` to set -- the structure and the declaration
+        decide it -- so a suffix here would be guarding against nothing.
         """
-        return self._grating_type_assigned
+        return self._grating_type
 
     @property
-    def modeling_type_assigned(self):
+    def modeling_type(self):
         """Which modeling path the structure selected: ``0`` raster, ``1`` block, ``2`` shapes.
 
         ``None`` before a structure has been assigned. The *type of the object* passed as
         ``structure`` is the choice -- there is no separate mode switch -- so this is the only
         place that says which one was read, and it is what ``_core.draw`` reads to label a
-        picture with the path that drew it.
+        picture with the path that drew it. Read-only, and spelled the way every refusal in
+        this package already spells the concept (``modeling_type=0`` is how the messages in
+        ``_FACTORIZATION_REASON`` name a raster).
         """
-        return self._modeling_type_assigned
+        return self._modeling_type
 
     # -------------------------------------------------------------- modeller pass-throughs
 
@@ -1211,7 +1216,7 @@ class CoreFactorizationMixin:
     #: Which of the three modeling paths the current ``structure`` selected; the concrete
     #: solver classes assign it. Defaulted here because both option properties resolve against
     #: it, so the mixin would otherwise only work inside a class that happens to set it first.
-    _modeling_type_assigned = None
+    _modeling_type = None
     #: The raster permeability field; ``None`` is non-magnetic. Read through :attr:`mu`.
     _mu = None
     #: What was *asked for*, with ``None`` meaning "nobody said". Read through the
@@ -1260,7 +1265,7 @@ class CoreFactorizationMixin:
         if value is None:
             self._mu = None
             return
-        if self._modeling_type_assigned in (1, 2):
+        if self._modeling_type in (1, 2):
             raise ValueError(_MU_ON_A_SHAPE_PATH)
         field = self._coerce_raster('mu', value)
         # Same grid or nothing. The two fields are sampled on one raster and are transformed
@@ -1294,7 +1299,7 @@ class CoreFactorizationMixin:
         that named a ``mu`` in the first place.
 
         Called by each backend's ``structure`` setter, at the end -- after
-        ``_modeling_type_assigned`` is settled, since that is the thing being checked against.
+        ``_modeling_type`` is settled, since that is the thing being checked against.
         """
         if self._mu is not None:
             self.mu = self._mu
@@ -1316,7 +1321,7 @@ class CoreFactorizationMixin:
                 never touched the keyword is not asking for anything and keeps the closed-form
                 series both paths always ran.
         """
-        implemented = _COEFFICIENTS_IMPLEMENTED_BY.get(self._modeling_type_assigned)
+        implemented = _COEFFICIENTS_IMPLEMENTED_BY.get(self._modeling_type)
         if implemented is None:                       # raster, or no structure yet: free choice
             return (DEFAULT_FOURIER_COEFFICIENTS if self._fourier_coefficients is None
                     else self._fourier_coefficients)
@@ -1327,7 +1332,7 @@ class CoreFactorizationMixin:
             raise NotImplementedError(
                 f"fourier_coefficients="
                 f"{coefficients_of(self._fourier_coefficients).value!r} is not available "
-                f"here: {_COEFFICIENTS_REASON[self._modeling_type_assigned]}.")
+                f"here: {_COEFFICIENTS_REASON[self._modeling_type]}.")
         return implemented
 
     @fourier_coefficients.setter
@@ -1352,7 +1357,7 @@ class CoreFactorizationMixin:
                 resolved per path, so a user who never touched the keyword gets Li on a raster
                 and NVF on smooth shapes, which is what each path always did.
         """
-        implemented = _FACTORIZATION_IMPLEMENTED_BY.get(self._modeling_type_assigned)
+        implemented = _FACTORIZATION_IMPLEMENTED_BY.get(self._modeling_type)
         if implemented is None:                       # raster, or no structure yet: free choice
             return DEFAULT_FACTORIZATION if self._factorization is None else self._factorization
         if self._factorization is not None and self._factorization != implemented:
@@ -1361,7 +1366,7 @@ class CoreFactorizationMixin:
             # formatting below tolerates one rather than dying inside the error path.
             raise NotImplementedError(
                 f"factorization={factorization_of(self._factorization).value!r} is not "
-                f"available here: {_FACTORIZATION_REASON[self._modeling_type_assigned]}.")
+                f"available here: {_FACTORIZATION_REASON[self._modeling_type]}.")
         return implemented
 
     @factorization.setter
@@ -1400,11 +1405,11 @@ class CoreFactorizationMixin:
         """
         if self._normal_method is None:
             return
-        if self._modeling_type_assigned == 0 and factorization == Factorization.NVF:
+        if self._modeling_type == 0 and factorization == Factorization.NVF:
             return
-        if self._modeling_type_assigned == 1:
+        if self._modeling_type == 1:
             where = "the block path applies Li's rules only and builds no normal field"
-        elif self._modeling_type_assigned == 2:
+        elif self._modeling_type == 2:
             where = 'the smooth shape path builds its normal field from the geometry itself'
         else:
             where = "factorization='li' builds no normal field at all"
@@ -1441,7 +1446,7 @@ class CoreFactorizationMixin:
         # -- the combination the old integer could not spell -- needs both.
         normal_field = normal_field_source = compression = None
         mu_normal_field = mu_normal_field_source = mu_compression = None
-        if self._modeling_type_assigned == 0:
+        if self._modeling_type == 0:
             if factorization == Factorization.NVF:
                 basis = self._geometry_lattice_for(None)
                 normal_field = _fac.normal_field_for_raster(
@@ -1471,7 +1476,7 @@ class CoreFactorizationMixin:
                                   mu_normal_field=mu_normal_field,
                                   mu_normal_field_source=mu_normal_field_source,
                                   mu_compression=mu_compression)
-        if self._modeling_type_assigned == 1:
+        if self._modeling_type == 1:
             # The block modeler records its plans while it builds, so run the build once to
             # get them -- the *modeler*, not the whole factorization. Freezing used to go
             # through `_eps_conv_matrices` and throw the convolution matrices away, which it paid
@@ -1486,7 +1491,7 @@ class CoreFactorizationMixin:
             self.modeling_block_instruction(self.structure)
             geometry.block_grid = self.modeler.grid_plans
             geometry.shape_choices = self.modeler.shape_choices
-        if self._modeling_type_assigned == 2:
+        if self._modeling_type == 2:
             # Only a painted layer that actually overlaps has a plan to freeze. A summed one
             # has no discrete decision in it, and a painted one with nothing overlapping means
             # the same structure either way -- both stay on the closed-form path, so their
@@ -1754,7 +1759,7 @@ class CoreFactorizationMixin:
         if self.lattice_is_axis_aligned:
             return
         common = ('The cell basis is non-orthogonal (set via .lattice). ')
-        if self._modeling_type_assigned == 1:
+        if self._modeling_type == 1:
             raise NotImplementedError(
                 common + 'the block modeler (modeling_type=1) rasterises onto a rectangular '
                 'grid, which is not implemented yet for a skewed cell. Use a raster structure '
@@ -1765,7 +1770,7 @@ class CoreFactorizationMixin:
                 common + f"factorization={factorization.value!r} applies the inverse "
                 f'rule along the raster axes, which are not x and y once the cell is skewed, '
                 f"so it would answer plausibly and wrongly. Use factorization='nvf'.")
-        if (self._modeling_type_assigned == 0
+        if (self._modeling_type == 0
                 and self.normal_method != DEFAULT_NORMAL_METHOD):
             # Only the original construction carries the Jacobian pullback that makes an
             # index-space gradient a Cartesian normal on a skewed cell; the smoothing
@@ -1846,7 +1851,7 @@ class CoreFactorizationMixin:
         mu_pass = quantity == 'permeability'
         epxy_conv_all = epyx_conv_all = None
 
-        if self._modeling_type_assigned == 0:                      # raster
+        if self._modeling_type == 0:                      # raster
             # The two axes are dispatched independently. Splitting on the factorization
             # first is not arbitrary: Li's rules return three matrices and NVF returns five
             # (it couples x and y, so epxy / epyx stop being zero).
@@ -1890,7 +1895,7 @@ class CoreFactorizationMixin:
                         lattice=self._geometry_lattice_for(geometry),
                         normal_method=self.normal_method)
 
-        elif self._modeling_type_assigned == 1:      # block -- Li on integrated coefficients
+        elif self._modeling_type == 1:      # block -- Li on integrated coefficients
             # No branch on either option here, and that is not an oversight: this path has one
             # rule and one series (see _FACTORIZATION_IMPLEMENTED_BY and
             # _COEFFICIENTS_IMPLEMENTED_BY) -- `to_conv_mat_block` integrates eps over the
@@ -1909,7 +1914,7 @@ class CoreFactorizationMixin:
             epx_conv_all, epy_conv_all, epz_conv_i_all = _fac.to_conv_mat_block(
                 structure_block, max_order_x, max_order_y)
 
-        elif self._modeling_type_assigned == 2:      # smooth shapes -- NVF on exact transforms
+        elif self._modeling_type == 2:      # smooth shapes -- NVF on exact transforms
             # Likewise fixed on both axes: the epsilon tensor comes from the shapes' analytic
             # normal field, so five matrices always, and each shape's transform is the exact
             # integral over the cell, so the coefficients are integrated ones. Naming
@@ -1957,7 +1962,7 @@ class CoreFactorizationMixin:
         building five identities for it instead would be an eigenproblem's worth of work to
         express "nothing here is magnetic".
         """
-        if self._modeling_type_assigned == 0:
+        if self._modeling_type == 0:
             return self._mu is not None
         return any(m.is_magnetic for m in self._structure_materials())
 
@@ -1977,7 +1982,7 @@ class CoreFactorizationMixin:
         """Every :class:`~wavebit._core.domain.Material` named inside a shape structure."""
         out = []
         for layer in (self.structure or []):
-            if self._modeling_type_assigned == 1:
+            if self._modeling_type == 1:
                 background, materials = self._block_material_slots(layer)
                 out.append(as_material(background, 'block layer background'))
                 out.extend(as_material(m, 'block shape material') for m in materials)
@@ -2004,11 +2009,11 @@ class CoreFactorizationMixin:
         means; handing the builder a ``None`` would raise, and defaulting it here to anything
         else would be a second, quieter statement of a convention the type already owns.
         """
-        if self._modeling_type_assigned == 0:
+        if self._modeling_type == 0:
             return self._mu
         out = []
         for layer in self.structure:
-            if self._modeling_type_assigned == 1:
+            if self._modeling_type == 1:
                 objects = [list(obj[:5]) + [as_material(obj[5]).mu_value] + list(obj[6:])
                            for obj in (layer[1] if len(layer) > 1 else [])]
                 out.append([as_material(layer[0]).mu_value, objects] + list(layer[2:]))

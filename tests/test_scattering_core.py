@@ -179,7 +179,7 @@ def _core_inputs(kwargs):
     common = dict(wavelength=kwargs['wavelength'], kx=kx, n_top=solver.n_top,
                   n_bot=solver.n_bot, theta=solver.theta, thickness=solver.thickness,
                   epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
-    if solver.grating_type_assigned == 0:
+    if solver.grating_type == 0:
         return solver, dict(common, tetm_index=solver.tetm_index)
     return solver, dict(common, ky=ky, incidence=solver._incidence_pair(), phi=solver.phi)
 
@@ -231,7 +231,7 @@ def _incidences_of(solver):
     TE/TM path carries one: ``tetm`` declared the other degree of freedom away, and asking it
     for ``'s'`` / ``'p'`` is refused rather than answered.
     """
-    return ('given',) if solver.grating_type_assigned == 0 else ('given', 's', 'p')
+    return ('given',) if solver.grating_type == 0 else ('given', 's', 'p')
 
 
 def _field(algo, kwargs, **res):

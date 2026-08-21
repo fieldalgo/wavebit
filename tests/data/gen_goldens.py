@@ -78,7 +78,7 @@ for name, kw in CASES.items():
     # result surface; without it `solver.T1` is None and the goldens regenerate empty.
     solver = wavebit.rcwa(backend=0, answers='field', **kw)
     r = solver.solve()
-    out[f'{name}__grating_type'] = np.array(solver.grating_type_assigned)
+    out[f'{name}__grating_type'] = np.array(solver.grating_type)
     # The golden's key component is the legacy attribute name; today's is beside it.
     # See SUBS in tests/test_golden_legacy_parity.py for why the file keeps the old
     # vocabulary rather than being rewritten.

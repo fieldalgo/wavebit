@@ -327,7 +327,7 @@ def _inverse_series(coeffs, max_order_x, max_order_y, nx, ny):
 def _band_limited(solver, layer, n):
     """The layer's own eps coefficients, evaluated on an ``n x n`` fractional grid."""
     max_order_x, max_order_y = int(solver.max_order[0]), int(solver.max_order[1])
-    mt = solver.modeling_type_assigned
+    mt = solver.modeling_type
     period = _periods(solver)
 
     if mt == 0:
@@ -370,7 +370,7 @@ def _band_limited(solver, layer, n):
 # ==================================================================== the two public entries
 
 def _refuse_layer(solver, layer):
-    if solver.modeling_type_assigned is None or solver.structure is None:
+    if solver.modeling_type is None or solver.structure is None:
         raise ValueError('this solver has no structure to draw.')
     n_layers = len(solver.structure)
     if not (-n_layers <= layer < n_layers):
@@ -440,7 +440,7 @@ def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
     if band_limited:
         values = _band_limited(solver, layer, n)
     else:
-        mt = solver.modeling_type_assigned
+        mt = solver.modeling_type
         period = _periods(solver)
         basis = _basis(solver)
         if mt == 0:
@@ -512,7 +512,7 @@ def plot_structure(solver, layer=0, n=512, show='eps', ax=None, band_limited=Fal
         Y = U * basis[1][0] + V * basis[1][1]
         art = ax.pcolormesh(X, Y, image, shading='nearest', cmap='viridis')
 
-    what = {0: 'raster', 1: 'blocks', 2: 'shapes'}.get(solver.modeling_type_assigned, '?')
+    what = {0: 'raster', 1: 'blocks', 2: 'shapes'}.get(solver.modeling_type, '?')
     title = f'layer {layer} ({what}), {show}'
     if band_limited:
         title += f' band-limited to max_order={tuple(int(f) for f in solver.max_order)}'

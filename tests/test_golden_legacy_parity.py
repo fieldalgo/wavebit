@@ -224,11 +224,11 @@ def _run(name):
 @pytest.mark.parametrize('name', list(CASES))
 def test_results_match_legacy_golden(name):
     solver, result = _run(name)
-    assert solver.grating_type_assigned == GOLDEN[f'{name}__grating_type']
+    assert solver.grating_type == GOLDEN[f'{name}__grating_type']
 
     # `n_top` / `n_bot` are the derived indices, which is what the legacy amplitude
     # normalisation was written in -- the case dicts above now hold the permittivity.
-    amp_map = _amp_map(solver.grating_type_assigned, solver.n_top, solver.n_bot)
+    amp_map = _amp_map(solver.grating_type, solver.n_top, solver.n_bot)
 
     checked = 0
     for sub, attr_name in SUBS:
@@ -242,7 +242,7 @@ def test_results_match_legacy_golden(name):
             assert np.allclose(want, got, atol=TOL, rtol=0), (
                 sub, key, np.max(np.abs(want - got)))
             checked += 1
-        frame = _frame_sign(solver, solver.grating_type_assigned)
+        frame = _frame_sign(solver, solver.grating_type)
         for key, attr, factor in amp_map:
             want = GOLDEN[f'{name}__{sub}__{key}'] * factor * frame
             got = np.asarray(getattr(got_sub, attr))

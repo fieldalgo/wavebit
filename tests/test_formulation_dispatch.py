@@ -330,7 +330,7 @@ def test_the_scattering_algorithm_still_works_without_a_z_row():
 def test_field_reconstruction_is_dispatched_on_the_formulation_not_the_grating_type(monkeypatch):
     """The branch ``reconstruct_field`` has to make, and the reason it cannot be the usual one.
 
-    The first-order path sets ``_grating_type_assigned = 2`` as well — a z row is a choice of
+    The first-order path sets ``_grating_type = 2`` as well — a z row is a choice of
     *layout* as much as of formulation — so a ``reconstruct_field`` that read only the grating
     type would hand a 4ff solve to the 2ff ``field_2d``. That is not a crash but a wrong
     answer: the two reconstructions read the same two state slots and one of them would
@@ -344,7 +344,7 @@ def test_field_reconstruction_is_dispatched_on_the_formulation_not_the_grating_t
     mee = solver(thickness=[180.0], answers='field')
     mee.solve_conv(*uniform_slots([VOIGT], 1))
     assert mee.formulation_assigned == '4ff'
-    assert mee.grating_type_assigned == 2, 'the premise: the grating type cannot tell them apart'
+    assert mee.grating_type == 2, 'the premise: the grating type cannot tell them apart'
 
     seen = []
 
@@ -488,11 +488,11 @@ def test_a_z_row_pulls_a_one_dimensional_structure_onto_the_2d_layout():
     structure[0, 0, 5:15] = 11.559999999999999
     mee = solver(max_order=(3, 0), thickness=[150.0], structure=structure)
     mee._assign_grating_type()
-    assert mee.grating_type_assigned in (0, 1)      # what it would have taken on its own
+    assert mee.grating_type in (0, 1)      # what it would have taken on its own
 
     n_orders = 2 * 3 + 1
     mee.solve_conv(*uniform_slots([VOIGT], n_orders))
-    assert (mee.grating_type_assigned, mee.formulation_assigned) == (2, '4ff')
+    assert (mee.grating_type, mee.formulation_assigned) == (2, '4ff')
 
 
 # ------------------------------------------------- asking a 1D cell for y diffraction orders

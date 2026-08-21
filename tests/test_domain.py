@@ -173,6 +173,44 @@ def test_the_solver_refuses_the_retired_layer_keyword_by_name():
     with pytest.raises(TypeError, match='PERMITTIVITY'):
         wavebit.rcwa(backend=0, max_order=[2, 0], eps=np.array([[[9.0, 1.0]]]), thickness=[0.1])
 
+@pytest.mark.parametrize('name,keyword,expect', [
+    ('pol', dict(pol='te'), r"use tetm='te'"),
+    ('ucell_materials', dict(ucell_materials=[]), r'read by nothing at all'),
+    ('ucell', dict(ucell=np.array([[[9.0, 1.0]]])), r'PERMITTIVITY'),
+    ('n_top', dict(n_top=1.5), r'PERMITTIVITY'),
+])
+def test_every_retired_constructor_keyword_is_refused_by_name(name, keyword, expect):
+    """One mechanism, one refusal each, and none of them a bare ``TypeError``.
+
+    The point of ``**retired`` is that Python's own "unexpected keyword argument" is the wrong
+    message: it sends a reader to rename the keyword and keep the number, and for the material
+    names that is a legal, energy-conserving, different medium. ``pol`` is here because it was
+    the one retired spelling that was *not* on this mechanism -- it sat in all three
+    constructor signatures purely to raise, threaded through three ``super().__init__``
+    calls, and nothing tested it at all until 2026-08-21.
+    """
+    with pytest.raises(TypeError, match=expect):
+        wavebit.rcwa(backend=0, max_order=[2, 0], thickness=[0.1],
+                     structure=np.array([[[9.0, 1.0]]]), **keyword)
+
+
+def test_a_typo_in_a_live_keyword_is_not_swallowed_by_the_catch_all():
+    """``**retired`` collects everything, so the refusal has to re-raise the ordinary case."""
+    with pytest.raises(TypeError, match=r"unexpected keyword argument\(s\) \['wavelenght'\]"):
+        wavebit.rcwa(backend=0, max_order=[2, 0], thickness=[0.1],
+                     structure=np.array([[[9.0, 1.0]]]), wavelenght=0.5)
+
+
+def test_the_retired_names_are_refused_on_attribute_access_too():
+    """A constructor refusal does not help someone who assigns after building."""
+    solver = wavebit.rcwa(backend=0, max_order=[2, 0], thickness=[0.1],
+                          structure=np.array([[[9.0, 1.0]]]))
+    for attr, expect in (('pol', r"use tetm='te'"), ('ucell', r'PERMITTIVITY')):
+        with pytest.raises(AttributeError, match=expect):
+            getattr(solver, attr)
+        with pytest.raises(AttributeError, match=expect):
+            setattr(solver, attr, 1)
+
 
 def test_the_two_figures_the_refusal_quotes_are_the_readme_scene_measured():
     """Every retired spelling ends in a measurement; solve it and check the message.

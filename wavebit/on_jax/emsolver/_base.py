@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from ..._core.engine import CoreSolveMixin, _POL_RETIRED
+from ..._core.engine import CoreSolveMixin
 from wavebit._core.backend import check_input_precision
 
 
@@ -22,7 +22,7 @@ def jax_device_set(func):
 class _BaseRCWA(CoreSolveMixin):
 
     def __init__(self, top=1., bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None,
-                 max_order=(0, 0), pol=None,
+                 max_order=(0, 0),
                  period=(1., 1.), wavelength=1.,
                  thickness=(0.,), layer_algorithm='ETM',
                  device=0, complex_dtype=jnp.complex128, polarization=None):
@@ -46,8 +46,6 @@ class _BaseRCWA(CoreSolveMixin):
         self.top = top
         self.bot = bot
 
-        if pol is not None:
-            raise ValueError(_POL_RETIRED)
         # degree to radian due to JAX JIT
         self.theta = theta
         self.phi = phi

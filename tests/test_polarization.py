@@ -271,7 +271,7 @@ def test_a_1d_structure_with_a_pair_takes_the_conical_path():
     for pair, tetm in (((1, 0), 'te'), ((0, 1), 'tm')):
         solver = wavebit.rcwa(polarization=pair, **kw)
         via_pair = solver.solve()
-        assert solver.grating_type_assigned == 1, 'expected the conical formulation'
+        assert solver.grating_type == 1, 'expected the conical formulation'
         via_pure = wavebit.rcwa(tetm=tetm, **kw).solve()
         np.testing.assert_allclose(np.asarray(via_pair.given.R), np.asarray(via_pure.given.R),
                                    atol=1e-11)
@@ -422,7 +422,7 @@ def test_the_1d_routed_pair_field_matches_the_conical_psi_field():
     kw = dict(CFG_1D, structure=STRUCTURE_1D)
     solver = wavebit.rcwa(polarization=pair_of(psi_v), answers='field', **kw)
     _, via_pair = solver.solve_field(**FIELD_RES)
-    assert solver.grating_type_assigned == 1, 'expected the conical formulation'
+    assert solver.grating_type == 1, 'expected the conical formulation'
     np.testing.assert_allclose(np.asarray(via_pair), _field(psi=psi_v, phi=0.0, **kw),
                                atol=1e-12, rtol=0)
 

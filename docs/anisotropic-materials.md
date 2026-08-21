@@ -539,7 +539,7 @@ this paragraph said it belonged once the solver could be handed a tensor directl
 
 ### One requirement on the dispatch itself
 
-**Which path ran has to be visible in the result.** `grating_type_assigned` is already exposed for
+**Which path ran has to be visible in the result.** `grating_type` is already exposed for
 exactly this reason. A silent 8x is indistinguishable from a slow machine, and a benchmark that
 cannot say which formulation it measured is not a benchmark. The attribute is
 `solver.formulation_assigned`, `'2ff'` or `'4ff'`, set by every 2D solve and `None` before the

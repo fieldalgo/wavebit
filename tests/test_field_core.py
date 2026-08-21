@@ -55,7 +55,7 @@ def test_the_reconstruction_has_not_drifted(name, tag, which):
     through the wrong code.
     """
     solver = solved(name)
-    assert solver.grating_type_assigned == GOLDEN[f'{name}__grating_type']
+    assert solver.grating_type == GOLDEN[f'{name}__grating_type']
     # Both sides forced to plain str: a str-Enum compared against a numpy string array
     # is True whatever the array holds, which made this assertion vacuous once.
     assert solver.formulation_assigned.value == str(GOLDEN[f'{name}__formulation'])
@@ -113,7 +113,7 @@ def test_the_pure_1d_path_refuses_an_incidence_it_never_solved(name, which):
     solve returned one on this one, silently, with the request nowhere in the output.
     """
     solver = solved(name)
-    assert solver.grating_type_assigned == 0
+    assert solver.grating_type == 0
     with pytest.raises(ValueError, match=r'pure 1D TE/TM path'):
         solver.reconstruct_field(incidences=which, **RES)
 

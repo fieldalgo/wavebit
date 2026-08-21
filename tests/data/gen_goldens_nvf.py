@@ -132,7 +132,7 @@ def frame_sign(solver):
     Must stay identical to ``_frame_sign``; the two are checked against each other by
     ``test_results_match_legacy_golden[2d_nvf]`` every run.
     """
-    if solver.grating_type_assigned == 0:
+    if solver.grating_type == 0:
         return 1.0
     kx = np.asarray(solver.order_kxy()[0], dtype=np.complex128)
     return np.where(np.real(np.reshape(kx, (1, -1))) < 0, -1.0, 1.0)
@@ -146,7 +146,7 @@ def main():
     solver = wavebit.rcwa(backend=0, answers='field', **kw)
     result = solver.solve()
 
-    out = {f'{NAME}__grating_type': np.array(solver.grating_type_assigned)}
+    out = {f'{NAME}__grating_type': np.array(solver.grating_type)}
     sign = frame_sign(solver)
     # The golden's key component is the legacy attribute name; today's is beside it.
     # See SUBS in tests/test_golden_legacy_parity.py for why the file keeps the old

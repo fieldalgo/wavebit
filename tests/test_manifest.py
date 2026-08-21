@@ -73,12 +73,12 @@ def test_each_spelling_selects_the_modeling_type_it_claims(spelling):
     than the one whose trade-offs it just explained.
     """
     solver = wavebit.rcwa(structure=STRUCTURES[spelling['path']], **KW)
-    assert solver.modeling_type_assigned == spelling['modeling_type']
+    assert solver.modeling_type == spelling['modeling_type']
 
 
 def test_the_manifest_covers_every_spelling_the_setter_accepts():
     """A path the solver can assign but the manifest omits is a path nobody is told about."""
-    assigned = {wavebit.rcwa(structure=u, **KW).modeling_type_assigned for u in STRUCTURES.values()}
+    assigned = {wavebit.rcwa(structure=u, **KW).modeling_type for u in STRUCTURES.values()}
     assert assigned == {s['modeling_type'] for s in SPELLINGS}
 
 
