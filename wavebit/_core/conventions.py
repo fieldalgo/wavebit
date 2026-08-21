@@ -176,7 +176,12 @@ def mode_q(xp, eigenvalue):
     disagree there on purpose, and the disagreement is pinned in
     ``tests/test_branch_selection.py``. See ``docs/time-convention-audit.md`` §5.
     """
-    v = eigenvalue ** 0.5
+    # `xp.sqrt` for the same reason as :func:`boundary_kz` -- `**0.5` leaves a 6.1e-17 real
+    # part on a lossless propagating mode, where `Re(q)` is meant to be a hard 0. Nothing
+    # downstream reads it at that size (the tie-break's `_FLAT` is 1e-12, and the residue moves
+    # `|exp(-k0*q*d)|` by ~1e-17), so this is consistency of spelling rather than a fix; the
+    # tie-break itself is untouched and still disagrees with `boundary_kz` on purpose.
+    v = xp.sqrt(eigenvalue)
     _check_resolvable(xp, v)
     flip = xp.where(xp.abs(xp.real(v)) > _FLAT, xp.real(v) < 0, xp.imag(v) > 0)
     return xp.where(flip, -v, v)
@@ -195,7 +200,13 @@ def boundary_kz(xp, eps, k_par_sq):
     :func:`_off_principal_branch` and ``docs/time-convention-audit.md``.
     """
     kz2 = eps - k_par_sq
-    v = kz2 ** 0.5
+    # `xp.sqrt`, not `kz2 ** 0.5`. On a negative real `kz2` -- every purely evanescent order --
+    # the two disagree exactly where it counts: `csqrt` returns `Re(kz)` as a hard 0, while
+    # `**0.5` goes through `exp(0.5*log)` and leaves `cos(pi/2)` behind, 6.1e-17. NumPy and
+    # Torch route `**0.5` back to `csqrt` and so hide it; JAX and Python's own `complex` do not.
+    # The residue is not decorative: an evanescent order's efficiency carries a factor
+    # `Re(kz)`, so the spelling alone decides whether a cut-off channel reports 0.0 or 1e-19.
+    v = xp.sqrt(kz2)
     _check_resolvable(xp, v)
     flip = xp.where(xp.abs(xp.real(v)) > _FLAT, xp.real(v) < 0, xp.imag(v) < 0)
     v = xp.where(flip, -v, v)

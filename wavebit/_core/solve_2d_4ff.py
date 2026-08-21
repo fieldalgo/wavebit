@@ -164,6 +164,8 @@ path's ``(t_s, t_p)``, so ``big_T`` is ``T_acc`` with nothing applied to it. Eig
 the half-space instead — the obvious alternative — leaves ``eig``'s arbitrary column scale
 between ``big_F`` and ``big_T``, and that error is invisible in ``R``.
 """
+from cmath import sqrt as _csqrt
+
 from .backend import array_namespace, as_array, eig
 from .conventions import boundary_kz, order_azimuth
 from .enums import Answers, answers_of
@@ -326,8 +328,15 @@ def vacuum_sp_states(xp, kx, ky, n_orders, order=0):
     # angle. What a complex `kt` has no answer for is the guard, immediately below.
     kx0, ky0 = complex(xp.reshape(xp.asarray(kx), (-1,))[order]), \
         complex(xp.reshape(xp.asarray(ky), (-1,))[order])
-    kt = (kx0 ** 2 + ky0 ** 2) ** 0.5
-    kz = (1.0 - kt ** 2) ** 0.5
+    # `cmath.sqrt`, not `** 0.5`. These are Python `complex` scalars, and `complex.__pow__`
+    # goes through `exp(0.5*log)`: past the light line `1 - kt**2` is a negative real, and the
+    # spelling leaves `Re(kz)` at 6.1e-17 instead of a hard 0. Unlike the array paths there is
+    # no backend to hide it -- this one leaked on every backend. It is what made the incident
+    # z-flux of a cut-off order read as ~1e-17 rather than as the exact 0 it is: measured
+    # Re(kz) = 2.7e-20 / 4.1e-17 / 1.1e-16 at kt = 1.0000001 / 1.2 / 2.0, which is twice the
+    # flux figures those cases used to report.
+    kt = _csqrt(kx0 ** 2 + ky0 ** 2)
+    kz = _csqrt(1.0 - kt ** 2)
 
     # The guard asks about `order`, not about the angle. Order m carries `k_par + G_m`, and past
     # the light line that order is evanescent in vacuum, so there is no incident plane wave for

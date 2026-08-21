@@ -31,7 +31,19 @@ import pytest
 import wavebit
 from wavebit import eps_from_index
 from wavebit._core import solve_1d as _s1
+from wavebit._core.backend import array_namespace
 from wavebit._core.conventions import boundary_kz, mode_q
+
+
+def _backend_namespace(backend):
+    """The array namespace a given ``backend`` code solves in."""
+    if backend == 0:
+        return array_namespace(np.asarray(0j))
+    if backend == 1:
+        jnp = pytest.importorskip('jax.numpy')
+        return array_namespace(jnp.asarray(np.asarray(0j)))
+    torch = pytest.importorskip('torch')
+    return array_namespace(torch.zeros(1, dtype=torch.complex128))
 
 WL = 500.0
 AU = 0.18 + 3.0j
@@ -287,3 +299,65 @@ def test_the_two_selectors_disagree_at_complex_k_par_by_design():
     assert abs(q - (-1j * kz)) > 1.0                      # and not one here
     assert abs(q - (+1j * kz)) < 1e-12                    # it took the other root
     assert np.real(q) >= 0                                # which is the one that cannot grow
+
+
+# --------------------------------------------------------------------------------------------
+# An evanescent order's `Re(kz)` is a *hard* zero, on every backend.
+#
+# `kz2 ** 0.5` and `sqrt(kz2)` are one number in exact arithmetic and two numbers in a float.
+# `**0.5` has no complex-sqrt path: it goes through `exp(0.5*log z)`, and for a negative real
+# `z` that returns `cos(pi/2)` as the real part. `pi/2` is not representable, so `cos` of the
+# nearest double is 6.123233995736766e-17 rather than 0, scaled by `|Im(kz)|`.
+#
+# NumPy and Torch special-case the exponent 0.5 back to `csqrt` and so hide it; JAX and Python's
+# own `complex` do not. One source therefore produced different numbers per backend, and not
+# cosmetically: an evanescent order's efficiency carries a factor `Re(kz)`, so the spelling alone
+# decided whether a cut-off channel reported 0.0 or 1e-19. The same residue is what made the
+# incident z-flux of an evanescent order read as ~1e-17 -- recorded once as "numerically zero"
+# when it is structurally zero.
+#
+# These pin the exactness rather than the fix, so they fail if any complex root on this path is
+# spelled `** 0.5` again.
+
+BACKENDS = [(0, 'numpy'), (1, 'jax'), (2, 'torch')]
+
+# A grating whose orders straddle the vacuum light line, so one solve carries both kinds and the
+# propagating ones witness that the solve is not simply empty.
+CUT_OFF_SCENE = dict(wavelength=500., period=[900.], max_order=[5, 0],
+                     top=1., bot=eps_from_index(1.5), theta=0.3, phi=0.,
+                     structure=np.array([[[1.0, eps_from_index(3.5),
+                                           1.0, eps_from_index(3.5)]]]),
+                     thickness=[300.])
+CUT_OFF_U = np.array([np.sin(0.3) + m * 500. / 900. for m in range(-5, 6)])
+
+
+@pytest.mark.parametrize('backend,name', BACKENDS, ids=[n for _, n in BACKENDS])
+def test_evanescent_kz_has_no_real_part_at_all(backend, name):
+    """``Re(kz)`` of a cut-off order is bitwise 0, not merely small."""
+    xp = _backend_namespace(backend)
+    # k_par**2 of 1.44, 4.0, 9.0 -- all past the light line of a vacuum superstrate.
+    kz = np.asarray(boundary_kz(xp, xp.asarray(np.asarray(1.0 + 0j)),
+                                xp.asarray(np.array([1.44, 4.0, 9.0], dtype=complex))))
+    real = [float(v) for v in np.real(kz)]
+    assert real == [0.0, 0.0, 0.0], f'{name}: Re(kz) leaked {real}'
+    # and the decaying root is still the one taken, so this is not a sign flip in disguise
+    assert all(float(v) > 0 for v in np.imag(kz)), f'{name}: took the growing root'
+
+
+@pytest.mark.parametrize('backend,name', BACKENDS, ids=[n for _, n in BACKENDS])
+@pytest.mark.parametrize('tetm', ['te', 'tm'], ids=['te', 'tm'])
+def test_cut_off_orders_report_exactly_zero_efficiency(backend, tetm, name):
+    """A grating's cut-off orders carry real amplitude and exactly zero efficiency.
+
+    The amplitude half is the point: the zero has to come from the ``Re(kz)`` factor, not from
+    the channel being empty. Without it this passes on a solver that zeroes them by hand.
+    """
+    res = wavebit.rcwa(backend=backend, tetm=tetm, **CUT_OFF_SCENE).solve()
+    R = np.asarray(res.R, dtype=float).ravel()
+
+    cut = np.abs(CUT_OFF_U) > 1.0
+    assert cut.any() and (~cut).any(), 'scene must carry both kinds of order'
+
+    leaked = R[cut][np.nonzero(R[cut])]
+    assert leaked.size == 0, f'{name}/{tetm}: cut-off orders reported {leaked}'
+    assert R[~cut].sum() > 0.0, f'{name}/{tetm}: no propagating order carried anything'
