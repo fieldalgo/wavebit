@@ -484,9 +484,13 @@ def spectral_normal_field(eps, interface_mask, lattice=None, base_shape=None):
 
 # FROZEN 2026-08-16 from the angular sweep: the SIGNED distance, because the unsigned
 # distance-to-band has a crease AT the interface (it rises on both sides), and smoothing
-# across the crease cancels gradients in exactly the band that matters; sigma = N/16 px
-# per axis, because the N-scaled sigma is what converges (fixed-in-px stays flat) and
-# N/16 is the largest scaling that still does (N/8 reaches the skeleton and degrades).
+# across the crease cancels gradients in exactly the band that matters; sigma = N/16 px,
+# because the N-scaled sigma is what converges (fixed-in-px stays flat) and N/16 is the
+# largest scaling that still does (N/8 reaches the skeleton and degrades).
+#
+# The sweep ran on square cells, where "N/16 pixels" and "sqrt(cell area)/16 of length"
+# are the same number, so it froze the coefficient and not which of the two it meant. The
+# length is what the code says now (2026-08-21) -- see the docstring.
 _SMOOTH_SIGMA_DIVISOR = 16.0
 _SMOOTH_SIGMA_FLOOR = 1.0
 
@@ -507,6 +511,16 @@ def smoothed_distance_normal_field(eps, interface_mask, lattice=None, base_shape
     smoothing at period/16 rounds corners. It is the measured demonstration that the best
     angular field is not the best solver field; prefer ``'contour'`` unless the layer is
     genuinely smooth everywhere (docs/nvf-normal-methods.md has both tables).
+
+    **The sigma is a length, and one number rather than one per axis** (changed 2026-08-21).
+    It used to be ``base_N/16`` *pixels* along each axis, which on a square cell is the same
+    quantity and on any other cell is an ellipse elongated toward whichever axis spans more of
+    the cell -- a shape nobody chose, since the sweep that froze the 1/16 saw square cells
+    only. It also was not a property of the *lattice*: ``a2' = a2 + a1`` generates the
+    identical point lattice and would have moved the kernel. ``sqrt(cell area)/16`` is the
+    reading that is isotropic and basis-invariant at once, and it reduces to ``N/16`` px
+    bit-identically on a square cell. On the 2:1 cell the non-square test draws its disc in,
+    it takes the mean angular error from 2.22 to 0.39 degrees.
     """
     shape = eps.shape
     values = np.unique(eps)
@@ -530,10 +544,14 @@ def smoothed_distance_normal_field(eps, interface_mask, lattice=None, base_shape
           - distance_transform_edt(t, sampling=sampling))
     sd = sd[ny:2 * ny, nx:2 * nx]
 
-    # Sigma per axis on the BASE grid, carried to the lifted one: 1/16 of the period
-    # along each axis, floored at one base pixel.
-    sig_y = max(_SMOOTH_SIGMA_FLOOR, base_shape[0] / _SMOOTH_SIGMA_DIVISOR) * repeat_y
-    sig_x = max(_SMOOTH_SIGMA_FLOOR, base_shape[1] / _SMOOTH_SIGMA_DIVISOR) * repeat_x
+    # Sigma on the BASE grid, carried to the lifted one: 1/16 of the cell's linear size,
+    # floored at one base pixel. A *length*, and one isotropic number rather than one per
+    # axis -- see the docstring for why that is the reading, and what the per-axis one cost.
+    sigma_base = max(_SMOOTH_SIGMA_FLOOR,
+                     float(np.sqrt(base_shape[0] * base_shape[1])) / _SMOOTH_SIGMA_DIVISOR)
+    sigma = (sigma_base * float(np.sqrt(repeat_y * repeat_x))
+             * float(np.sqrt(step_y * step_x)))
+    sig_y, sig_x = sigma / step_y, sigma / step_x
     gx = gaussian_filter(sd, (sig_y, sig_x), order=(0, 1), mode='wrap') / step_x
     gy = gaussian_filter(sd, (sig_y, sig_x), order=(1, 0), mode='wrap') / step_y
 

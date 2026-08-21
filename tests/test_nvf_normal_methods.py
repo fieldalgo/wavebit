@@ -305,6 +305,37 @@ def test_a_skewed_basis_is_refused(method):
         normal_vector_field(circle_raster(16), method=method, lattice=lattice)
 
 
+def test_smooths_kernel_is_a_length_rather_than_a_pixel_count_per_axis():
+    """``'smooth'`` smooths by ``sqrt(cell area)/16``, one isotropic length (changed 2026-08-21).
+
+    It used to be ``base_N/16`` *pixels along each axis*, which on a square cell is the same
+    number and on any other cell is an ellipse stretched toward whichever axis spans more of
+    the cell — a shape the sweep that froze the 1/16 never chose, since it only ever saw
+    square cells. It is also not a property of the *lattice*, which is the decisive objection:
+    ``a2' = a2 + a1`` generates the identical point lattice and would have moved the kernel.
+
+    Measured on the 2:1 cell of :func:`test_a_non_square_cell_measures_in_physical_space`, the
+    per-axis reading scores 2.22 degrees and the length 0.39 — so the bound below is what
+    separates them, and it is why this is a test of its own rather than a tighter number on
+    that one (``'contour'`` and ``'spectral'`` sit near 2 degrees on the same scene for
+    reasons of their own, and would fail a shared bound that had teeth here).
+    """
+    from wavebit._core.lattice import as_lattice
+    N = 64
+    ax = (np.arange(N) + 0.5) / N
+    X, Y = np.meshgrid(ax * 2.0, ax)               # physical x in [0, 2), y in [0, 1)
+    eps = np.ones((N, N))
+    cx, cy, r = 1.0, 0.5, 0.3
+    eps[(X - cx) ** 2 + (Y - cy) ** 2 <= r ** 2] = 5.76
+    nx, ny = normal_vector_field(eps, method='smooth', lattice=as_lattice(period=[2.0, 1.0]))
+    dx, dy = X - cx, Y - cy
+    rr = np.hypot(dx, dy)
+    band = (np.abs(rr - r) / (2.0 / N)) <= 2
+    tx, ty = dx / np.where(rr == 0, 1, rr), dy / np.where(rr == 0, 1, rr)
+    err = float(angular_error_deg(nx, ny, tx, ty)[band].mean())
+    assert err < 1.0, f'{err:.3f} deg — the per-axis kernel scored 2.22 here'
+
+
 # ------------------------------------------------------------------- the floor lift
 
 @pytest.mark.parametrize('method,base_n', [('contour', 16), ('smooth', 8)])

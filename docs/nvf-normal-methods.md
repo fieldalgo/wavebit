@@ -374,6 +374,18 @@ states the property where a test of the opposite name used to pin the defect.
   [`oblique-lattice.md`](oblique-lattice.md)); a skewed cell with any other method is
   refused up front, next to the other lattice refusals.
 
+## `'smooth'`'s sigma is a length, not a pixel count per axis
+
+Changed 2026-08-21. It was `base_N/16` *pixels along each axis*, which on a
+square cell is the same number and on any other cell is an ellipse stretched toward whichever
+axis spans more of the cell. Nothing chose that: the sweep that froze the 1/16 saw square cells
+only, so it fixed the coefficient and not which of the two readings it meant. It is also not a
+property of the lattice — `a2' = a2 + a1` generates the identical point lattice and would have
+moved the kernel — which is the objection that settles it. `sqrt(cell area)/16` is isotropic
+and basis-invariant at once, and reduces to `N/16` px bit-identically on a square cell. On the
+2:1 cell of `test_a_non_square_cell_measures_in_physical_space` it takes the mean angular error
+from **2.22 to 0.39 deg**. `'contour'`'s sigma was already stated this way.
+
 ## Verification
 
 The prototypes were measured by monkeypatching `normal_vector_field`; after integration
