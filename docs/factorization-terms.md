@@ -48,8 +48,10 @@ Both names for the first rule are in use in this repository and both are correct
 in code (`ep_dir`, `ep_inv`). The gloss form — naming one and parenthesising the other — is the
 one to copy in new prose, because a reader who knows only one name still lands.
 
-`fourier2d_piecewise_constant`'s `inverse_rule` is the switch: `'x'` or `'y'` names the
+`fourier2d_piecewise_constant`'s `inverse_rule` is the switch: `'u'` or `'v'` names the
 direction whose discontinuity the rule closes, `None` asks for the direct rule both ways.
+Those are the *cell's* two directions, not the lab's — they coincide only on a rectangular
+cell, so `'x'` and `'y'` are refused by name rather than reinterpreted.
 Nothing else selects it, and `fourier2d_pointwise` does not offer it at all — a field that is
 continuous by construction has no discontinuity for the inverse rule to close.
 
@@ -211,7 +213,7 @@ The same reasoning reached the rule argument itself on 2026-08-12. It was `conti
 four states for three meanings, since `(0, 0)` is not part of Li's scheme as used here and
 appeared nowhere, yet nothing refused it. The names also ran backwards: `conti_y=0` meant
 "y takes the inverse rule", so the flag that was *set* said what was not true of the axis
-it named. One `inverse_rule` of `None` / `'x'` / `'y'` says the same thing in the
+it named. One `inverse_rule` of `None` / `'u'` / `'v'` says the same thing in the
 direction the reader is thinking in, and makes the fourth state unrepresentable rather
 than merely unused.
 

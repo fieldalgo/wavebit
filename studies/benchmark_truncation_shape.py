@@ -150,8 +150,8 @@ def conv_mats(eps, normal_field, mm, nn, keep, max_order_box, mode):
             raise ValueError('the nested Li rule has no circular form; see the module docstring')
         half_width_u, half_width_v = max_order_box
         epz = fourier2d_piecewise_constant(np, eps, half_width_u, half_width_v, inverse_rule=None)
-        epy = fourier2d_piecewise_constant(np, eps, half_width_u, half_width_v, inverse_rule='y')
-        epx = fourier2d_piecewise_constant(np, eps, half_width_u, half_width_v, inverse_rule='x')
+        epy = fourier2d_piecewise_constant(np, eps, half_width_u, half_width_v, inverse_rule='v')
+        epx = fourier2d_piecewise_constant(np, eps, half_width_u, half_width_v, inverse_rule='u')
         O = np.zeros_like(epz)
 
         return epx, epy, np.linalg.inv(epz), O, O

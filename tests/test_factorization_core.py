@@ -941,3 +941,27 @@ def test_the_normal_field_of_a_straight_interface_is_the_axis_normal(axis):
         f'the {"y" if vanishing else "x"} component must vanish for a {axis}-varying grating, '
         f'got {np.max(np.abs(nf[vanishing])):.3e}')
     assert np.max(np.abs(nf[present])) == pytest.approx(1.0, abs=1e-12)
+
+
+def test_inverse_rule_refuses_the_lab_axes_by_name():
+    """``'x'`` / ``'y'`` are refused, not reinterpreted.
+
+    The rule runs along a *cell* direction. On a rectangular cell that is x and y, which is why
+    the argument was spelled that way until 2026-08-23; on an oblique lattice ``a1`` is not x,
+    so the old spelling names nothing. Silently mapping it to ``'u'`` would be right in exactly
+    the case where the user did not need to be told and wrong in the case where they did.
+    """
+    eps = np.ones((16, 16), complex)
+    eps[4:9, 3:11] = 12.0
+
+    for lab, cell in (('x', 'u'), ('y', 'v')):
+        with pytest.raises(ValueError, match=f"lattice axis.*pass '{cell}'"):
+            fourier2d_piecewise_constant(xnp, eps, 3, 3, inverse_rule=lab)
+
+    # and the replacement is the same quantity, not merely an accepted spelling: on a
+    # rectangular cell it must reproduce what the old name produced.
+    direct = np.asarray(fourier2d_piecewise_constant(xnp, eps, 3, 3, inverse_rule=None))
+    along_u = np.asarray(fourier2d_piecewise_constant(xnp, eps, 3, 3, inverse_rule='u'))
+    along_v = np.asarray(fourier2d_piecewise_constant(xnp, eps, 3, 3, inverse_rule='v'))
+    assert not np.allclose(along_u, direct) and not np.allclose(along_v, direct)
+    assert not np.allclose(along_u, along_v)

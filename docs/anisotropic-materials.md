@@ -107,7 +107,7 @@ They are **one scalar permittivity** put through three different factorization r
        epx_conv               epy_conv               epz_conv ──inv──> epz_conv_i
 ```
 
-(`inverse_rule` names the direction whose discontinuity the inverse rule closes, or `None`
+(`inverse_rule` names the cell direction whose discontinuity the inverse rule closes, or `None`
 for the direct rule both ways.) NVF is the same story: `ep_dir = ⟦eps⟧` and
 `ep_inv = ⟦1/eps⟧⁻¹` both come from that one scalar, and the tensor `_nvf_assemble` returns is the
 *effective* tensor of the interface projector — not a material tensor.

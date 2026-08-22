@@ -136,7 +136,7 @@ class ConvMatrices(NamedTuple):
 
 
 def _inverse_axes(inverse_rule):
-    """``inverse_rule`` as ``(along_x, along_y)`` booleans, refusing anything else.
+    """``inverse_rule`` as ``(along_u, along_v)`` booleans, refusing anything else.
 
     One three-valued argument rather than the pair of ``conti_x`` / ``conti_y`` integers this
     took until 2026-08-12. Those had four states and only three meanings: ``(0, 0)`` — both
@@ -145,12 +145,22 @@ def _inverse_axes(inverse_rule):
 
     The names also ran backwards. ``conti_y=0`` meant "y is discontinuous, so y takes the
     inverse rule", so the flag that was set said what was *not* true of the axis it named.
+
+    The values were ``'x'`` / ``'y'`` until 2026-08-23. The rule runs along a *lattice* axis --
+    the direction the cell's own edge follows -- which is x and y only while ``a1`` and ``a2``
+    are the Cartesian axes. On an oblique cell they are not, so the old spellings are refused
+    by name rather than quietly reinterpreted.
     """
-    if inverse_rule not in (None, 'x', 'y'):
+    if inverse_rule in ('x', 'y'):
         raise ValueError(
-            f"inverse_rule: expected None (direct rule both ways), 'x' or 'y' — the direction "
+            f"inverse_rule={inverse_rule!r}: the rule runs along a lattice axis, not a lab one — "
+            f"pass {'u' if inverse_rule == 'x' else 'v'!r} instead. They coincide only on a "
+            f"rectangular cell; on an oblique lattice 'x' does not name a cell direction.")
+    if inverse_rule not in (None, 'u', 'v'):
+        raise ValueError(
+            f"inverse_rule: expected None (direct rule both ways), 'u' or 'v' — the direction "
             f"whose discontinuity the inverse rule closes; got {inverse_rule!r}")
-    return inverse_rule == 'x', inverse_rule == 'y'
+    return inverse_rule == 'u', inverse_rule == 'v'
 
 
 def _wrap(orders, n):
@@ -238,7 +248,7 @@ def fourier2d_piecewise_constant(xp, cell, half_width_u, half_width_v, *, invers
 
     ``inverse_rule`` names the direction whose discontinuity the inverse rule closes, or
     ``None`` for the direct rule both ways. Those three are Li's three components of one
-    layer: ``None`` builds ``epz``, ``'y'`` builds ``epy``, ``'x'`` builds ``epx``.
+    layer: ``None`` builds ``epz``, ``'v'`` builds ``epy``, ``'u'`` builds ``epx``.
     """
     return _fourier2d_grid(xp, cell, half_width_u, half_width_v, inverse_rule=inverse_rule, piecewise_constant=True)
 
@@ -275,8 +285,8 @@ def _fourier2d_grid(xp, cell, half_width_u, half_width_v, *, inverse_rule, piece
     :func:`fourier2d_piecewise_constant` or :func:`fourier2d_pointwise` instead, which say it in
     the name.
 
-    ``inverse_rule`` is the direction whose discontinuity the inverse rule closes (``'x'``,
-    ``'y'``, or ``None`` for neither) — see :func:`_inverse_axes`. Port of the legacy
+    ``inverse_rule`` is the direction whose discontinuity the inverse rule closes (``'u'``,
+    ``'v'``, or ``None`` for neither) — see :func:`_inverse_axes`. Port of the legacy
     ``dfs2d``; the two entry points above are what callers use.
 
     This is the *only* thing that selects a rule. The other name for the continuous
@@ -323,7 +333,7 @@ def _fourier2d_grid(xp, cell, half_width_u, half_width_v, *, inverse_rule, piece
 
     cell = xp.matrix_transpose(cell)
 
-    if inv_v:             # y discontinuous: the inverse rule starts from 1/eps
+    if inv_v:             # v discontinuous: the inverse rule starts from 1/eps
         cell = 1 / cell
 
     dfs1d = xp.fft.fft(cell / cell.shape[1])
@@ -373,7 +383,7 @@ def _fourier2d_grid(xp, cell, half_width_u, half_width_v, *, inverse_rule, piece
     conv2d = xp.moveaxis(conv2d, 1, 2)
     conv2d = xp.reshape(conv2d, (n_orders_v * n_orders_u, n_orders_v * n_orders_u))
 
-    if inv_u:             # x discontinuous: Li's outer step closes it
+    if inv_u:             # u discontinuous: Li's outer step closes it
         conv2d = xp.linalg.inv(conv2d)
 
     return conv2d
@@ -464,8 +474,8 @@ def to_conv_mat_raster_sampled(structure, half_width_u, half_width_v):
 
     for eps_matrix in _layer_eps(xp, structure):
         epz_conv = fourier2d_piecewise_constant(xp, eps_matrix, half_width_u, half_width_v, inverse_rule=None)
-        epy_conv = fourier2d_piecewise_constant(xp, eps_matrix, half_width_u, half_width_v, inverse_rule='y')
-        epx_conv = fourier2d_piecewise_constant(xp, eps_matrix, half_width_u, half_width_v, inverse_rule='x')
+        epy_conv = fourier2d_piecewise_constant(xp, eps_matrix, half_width_u, half_width_v, inverse_rule='v')
+        epx_conv = fourier2d_piecewise_constant(xp, eps_matrix, half_width_u, half_width_v, inverse_rule='u')
 
         epx_list.append(epx_conv)
         epy_list.append(epy_conv)
@@ -1415,7 +1425,7 @@ def fourier2d_integrated(xp, cell, x, y, half_width_u, half_width_v, *, inverse_
 
     cell = xp.matrix_transpose(cell)
 
-    if inv_v:             # y discontinuous: the inverse rule starts from 1/eps
+    if inv_v:             # v discontinuous: the inverse rule starts from 1/eps
         cell = 1 / cell
 
     cfs1d = _fourier1d_integrated(xp, y, cell, half_width_v, extent_v)
@@ -1438,7 +1448,7 @@ def fourier2d_integrated(xp, cell, x, y, half_width_u, half_width_v, *, inverse_
     conv2d = xp.moveaxis(conv2d, 1, 2)
     conv2d = xp.reshape(conv2d, (n_orders_v * n_orders_u, n_orders_v * n_orders_u))
 
-    if inv_u:             # x discontinuous: Li's outer step closes it
+    if inv_u:             # u discontinuous: Li's outer step closes it
         conv2d = xp.linalg.inv(conv2d)
 
     return conv2d
@@ -1611,8 +1621,8 @@ def to_conv_mat_raster_integrated(structure, half_width_u, half_width_v, compres
         eps = xp.astype(comp, _complex_dtype(xp, comp))
 
         epz_list = fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule=None)
-        epx_list.append(fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule='x'))
-        epy_list.append(fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule='y'))
+        epx_list.append(fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule='u'))
+        epy_list.append(fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule='v'))
         epz_i_list.append(xp.linalg.inv(epz_list))
 
     return ConvMatrices(xp.stack(epx_list), xp.stack(epy_list),
@@ -1696,8 +1706,8 @@ def to_conv_mat_block(block_info_list, half_width_u, half_width_v):
 
     for layer, x, y in block_info_list:
         eps = xp.astype(layer, _complex_dtype(xp, layer))
-        epx_list.append(fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule='x'))
-        epy_list.append(fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule='y'))
+        epx_list.append(fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule='u'))
+        epy_list.append(fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule='v'))
         epz_i_list.append(xp.linalg.inv(fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule=None)))
 
     return ConvMatrices(xp.stack(epx_list), xp.stack(epy_list),
