@@ -623,7 +623,7 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                  epxy_conv_all=None, epyx_conv_all=None,
                  epxz_conv_all=None, epyz_conv_all=None,
                  epzx_conv_all=None, epzy_conv_all=None,
-                 *, phi, incidence_side='top', answers=Answers.EFFICIENCY,
+                 *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
                  layer_algorithm='ETM'):
     """Solve a 2D stack on the first-order formulation — the public 4ff route.
 
@@ -721,7 +721,8 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     big_F, big_G = sp_modes_2d(xp, G[:2 * n_orders], 1j * G[2 * n_orders:], F_c, F_s, n_orders)
 
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
-                         n_top, n_bot, n_orders_x, n_orders_y, answers=answers)
+                         n_top, n_bot, n_orders_x, n_orders_y, answers=answers,
+                         lit=lit)
     if keep_field:
         # `sp_modes_2d` recombines the *rows* of `G` into the s/p boundary variables and leaves
         # its columns alone, so `final_matching`'s `T1` is the unknown of the `G` above the top

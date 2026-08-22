@@ -325,7 +325,7 @@ def sp_modes_2d(xp, W, V, F_c, F_s, n_orders):
 def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
              epxy_conv_all=None, epyx_conv_all=None,
-             *, phi, incidence_side='top', answers=Answers.EFFICIENCY,
+             *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
              mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None):
     """Solve a 2D grating stack for the given incidence.
 
@@ -484,7 +484,8 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     # --- stage 3: final matching -> efficiency (transfer_2d_4 == transfer_1d_conical_4) --
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
                          n_top, n_bot, n_orders_x, n_orders_y, answers=answers,
-                         mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top)
+                         mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top,
+                         lit=lit)
     if keep_field:
         out['layer_info_list'] = layer_info_list
     return out

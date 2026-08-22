@@ -57,7 +57,8 @@ import numpy as np
 from .backend import _device_of, array_namespace, as_array, check_finite, check_physical
 from .conventions import boundary_kz, order_azimuth
 from .enums import Answers, answers_of
-from .solve_1d import (_block, _diag, _is_backside, _pack, _unit, layer_modes_1d,
+from .conventions import incident_column
+from .solve_1d import (_block, _diag, _incident_flux, _is_backside, _pack, layer_modes_1d,
                        layer_modes_1d_conical, sp_efficiencies, sp_modes_1d_conical)
 from .solve_2d import layer_modes_2d, order_grid_kxy, sp_modes_2d
 
@@ -400,7 +401,7 @@ def _port_disagreement(a, b):
 
 def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
-           incidence_side='top', answers=Answers.EFFICIENCY):
+           incidence_side='top', answers=Answers.EFFICIENCY, lit=None):
     """Solve a 1D grating stack by scattering matrices — SMM twin of :func:`solve_1d`.
 
     Same arguments and same returns as :func:`wavebit._core.solve_1d.solve_1d`, so the two are
@@ -477,7 +478,7 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     # leaves through the far side. For the backside these are the substrate-port outputs, so
     # the reads swap to S22 / S12; everything after is the top-side arithmetic with the two
     # half-spaces in incidence-relative roles.
-    delta = xp.reshape(xp.astype(_unit(xp, n_orders_x, n_orders_x // 2), C), (n_orders_x, 1))
+    delta = xp.reshape(incident_column(xp, C, lit, n_orders_x, n_orders_x // 2), (n_orders_x, 1))
     R = xp.reshape((S[3] if backside else S[0]) @ delta, (1, n_orders_x))
     Tt = xp.reshape((S[1] if backside else S[2]) @ delta, (1, n_orders_x))
 
@@ -485,9 +486,18 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     n_ref, n_trn = (n_bot, n_top) if backside else (n_top, n_bot)
 
     cos_t = xp.cos(xp.asarray(theta, dtype=C))
-    de_ri = xp.real(R * xp.conj(R) * xp.real(kz_ref / (n_ref * cos_t)))
+    # `n_ref*cos_t` is `Re(kz_inc)` in this function's own spelling; a superposition needs the
+    # sum over its lit orders instead. Branched rather than unified because the two differ by
+    # an ulp, and the ETM twin makes the same split for the same reason.
+    if lit is None:
+        denom_r, denom_t_tm = n_ref * cos_t, cos_t / n_ref
+    else:
+        flux = _incident_flux(xp, C, lit, kz_ref)
+        denom_r, denom_t_tm = flux, flux / (n_ref ** 2)
+
+    de_ri = xp.real(R * xp.conj(R) * xp.real(kz_ref / denom_r))
     if tetm_index == 0:
-        de_ti = xp.real(Tt * xp.conj(Tt) * xp.real(kz_trn / (n_ref * cos_t)))
+        de_ti = xp.real(Tt * xp.conj(Tt) * xp.real(kz_trn / denom_r))
     else:
         # Re(kz/eps), not Re(conj(kz)/eps): for TM the downward flux is Re(E_x H_y*) with E_x
         # proportional to (kz/eps) H_y. The two agree for a real exit index, which is why a
@@ -496,7 +506,7 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         # conjugated problem until 2026-08, and this was the last boundary still on the far
         # side of that seam.
         de_ti = xp.real(Tt * xp.conj(Tt)
-                        * xp.real(kz_trn / n_trn ** 2 / (cos_t / n_ref)))
+                        * xp.real(kz_trn / n_trn ** 2 / denom_t_tm))
 
     check_finite(xp, de_ri=de_ri, de_ti=de_ti)
     check_physical(xp, de_ri, de_ti, n_ref)
@@ -546,7 +556,7 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
 
 def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
             layer_modes, epz_conv_i_all, backside, answers, mu_top=1.0, mu_bot=1.0,
-            eps_top=None, eps_bot=None, muz_conv_i_all=None):
+            eps_top=None, eps_bot=None, muz_conv_i_all=None, lit=None):
     """Shared SMM cascade + matching for the coupled s/p paths (conical and 2D).
 
     ``layer_modes(layer_index)`` returns that layer's ``(big_W, big_V, q, W, V)``: the mode
@@ -645,7 +655,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     # incident field itself: E_s = a_s, H_p = -i*n_ref*a_p in the incidence medium — with
     # (a_s, a_p) as resolved at the boundary — one form arrives here, and it is the same
     # amplitudes the ETM final matching solves against (see conventions.incident_sp_amplitudes).
-    delta = xp.reshape(xp.astype(_unit(xp, n_orders, n_orders // 2), C), (n_orders, 1))
+    delta = xp.reshape(incident_column(xp, C, lit, n_orders, n_orders // 2), (n_orders, 1))
 
     def incident(a_s, a_p):
         # `n_ref/mu_ref`, not `n_ref`: `a_s` and `a_p` are defined at equal incident flux,
@@ -682,7 +692,8 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
 
     kz_ref_2d = xp.reshape(kz_ref, (n_orders_y, n_orders_x))
     kz_trn_2d = xp.reshape(kz_trn, (n_orders_y, n_orders_x))
-    denom = n_ref * xp.cos(xp.asarray(theta, dtype=C)) / mu_ref
+    denom = (n_ref * xp.cos(xp.asarray(theta, dtype=C)) / mu_ref if lit is None
+             else _incident_flux(xp, C, lit, kz_ref) / mu_ref)
     eff = sp_efficiencies(xp, kz_ref_2d, kz_trn_2d, denom, n_ref, n_trn, R_s, R_p, T_s, T_p,
                           mu_top=mu_ref, mu_bot=mu_trn)
 
@@ -726,7 +737,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
 
 def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                    epx_conv_all, epy_conv_all, epz_conv_i_all,
-                   *, phi, incidence_side='top', answers=Answers.EFFICIENCY):
+                   *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None):
     """Solve a conical 1D grating by scattering matrices — SMM twin of :func:`solve_1d_conical`.
 
     Same arguments and returns as :func:`smm_1d`; ``polarization`` is the complex amplitude
@@ -758,13 +769,13 @@ def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
         return big_W, big_V, xp.concat([q1, q2]), W, V
 
     return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
-                   layer_modes, epz_conv_i_all, backside, answers)
+                   layer_modes, epz_conv_i_all, backside, answers, lit=lit)
 
 
 def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
            epxy_conv_all=None, epyx_conv_all=None,
-           *, phi, incidence_side='top', answers=Answers.EFFICIENCY,
+           *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
            mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None):
     """Solve a 2D grating stack by scattering matrices — SMM twin of :func:`solve_2d`.
 
@@ -813,4 +824,4 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                    layer_modes, epz_conv_i_all, backside, answers,
                    mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot,
-                   muz_conv_i_all=mu_all[2])
+                   muz_conv_i_all=mu_all[2], lit=lit)

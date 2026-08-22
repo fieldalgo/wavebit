@@ -168,7 +168,8 @@ def sample_grid(xp, grid_shape, period, dtype, lattice=None):
     return u[None, :] * a1x + v[:, None] * a2x, u[None, :] * a1y + v[:, None] * a2y
 
 
-def order_kxy(xp, A, max_order_x, max_order_y, wavelength, k_inc_x, k_inc_y, dtype, device=None):
+def order_kxy(xp, A, max_order_x, max_order_y, wavelength, k_inc_x, k_inc_y,
+              dtype, device=None, centre=(0, 0)):
     """Per-order in-plane wavevectors on the ``(n, m)`` index grid: two
     ``(n_orders_y, n_orders_x)`` arrays.
 
@@ -191,10 +192,11 @@ def order_kxy(xp, A, max_order_x, max_order_y, wavelength, k_inc_x, k_inc_y, dty
     a1y, a2y = float(A[1, 0]), float(A[1, 1])
     det = a1x * a2y - a2x * a1y
 
-    m = xp.asarray(np.arange(-max_order_x, max_order_x + 1, dtype=float)[None, :], dtype=dtype,
-                   device=device)
-    n = xp.asarray(np.arange(-max_order_y, max_order_y + 1, dtype=float)[:, None], dtype=dtype,
-                   device=device)
+    cx, cy = int(centre[0]), int(centre[1])
+    m = xp.asarray(np.arange(cx - max_order_x, cx + max_order_x + 1, dtype=float)[None, :],
+                   dtype=dtype, device=device)
+    n = xp.asarray(np.arange(cy - max_order_y, cy + max_order_y + 1, dtype=float)[:, None],
+                   dtype=dtype, device=device)
 
     lam = as_array(xp, wavelength, dtype=dtype, device=device) / det
     kx = as_array(xp, k_inc_x, dtype=dtype, device=device) + lam * (a2y * m - a1y * n)

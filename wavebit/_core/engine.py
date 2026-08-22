@@ -14,7 +14,7 @@ from . import boundary as _boundary
 from . import factorization as _fac
 from . import lattice as _lattice
 from .backend import _device_of, array_namespace
-from .conventions import incident_sp_amplitudes
+from .conventions import incident_sp_amplitudes, lit_orders, order_window
 from .domain import (Material, RETIRED_MATERIAL_NAMES, as_material, index_from_eps,
                      retired_material_name)
 from .enums import (Answers, DEFAULT_ANSWERS, DEFAULT_FACTORIZATION, DEFAULT_FORMULATION,
@@ -332,6 +332,78 @@ class CoreSolveMixin:
     that does the most. Handing in matrices you built yourself is still a supported thing to
     do -- that is ``solve_conv``, which routes to these.
     """
+
+    _excitation = None
+
+    def _lit(self):
+        """The excitation resolved onto the retained window, or ``None`` if none was named.
+
+        Resolved here, at the boundary, and handed to the solves already done -- the same
+        arrangement :meth:`_incidence_pair` has for the polarization. The solves never see
+        ``excitation`` itself, so they never have to know which window it widened.
+        """
+        return lit_orders(self._excitation, *self.order_window)
+
+    @property
+    def order_window(self):
+        """Which orders this solve retains: ``(centre, half_width)`` per axis.
+
+        ``(0, max_order)`` unless an :attr:`excitation` widens it -- see
+        :func:`~wavebit._core.conventions.order_window` for why lighting an off-centre order
+        moves the window rather than leaving that beam short of neighbours.
+        """
+        return order_window(self.max_order[0], self.max_order[1], self._excitation)
+
+    @property
+    def excitation(self):
+        """Which diffraction orders the illumination arrives on, and with what amplitude.
+
+        ``None`` — the default — is one plane wave on the specular order, which is what this
+        library has always solved and what every other incidence keyword describes. Naming a
+        dict lights several orders at once::
+
+            rcwa(..., excitation={0: 1.0, 1: 0.6 - 0.8j})        # 1D: keyed by the x order
+            rcwa(..., excitation={(0, 0): 1.0, (1, 0): 0.5j})    # 2D: by the pair
+
+        The weights are *spatial*: :attr:`psi` / :attr:`polarization` / :attr:`tetm` still say
+        which polarization arrives, and every lit order carries that same one. They may be
+        traced -- an incident field is a legitimate design variable -- while the **keys** may
+        not, because which entries of the incident column are non-zero decides array structure
+        rather than a value.
+
+        What it is for is a coherent superposition that a single solve cannot otherwise
+        express. A *single* non-specular order is not that: exciting order ``m`` at ``theta``
+        is the same plane wave as exciting the specular order at the angle whose ``kx``
+        matches, so it buys nothing but a relabelling. Several at once is different, and the
+        alternative -- one solve per beam, indices realigned, amplitudes added -- costs a solve
+        per beam for the same answer.
+
+        **Every lit order must propagate in the incidence medium.** One past the light line
+        carries no time-averaged power, so it would drive the structure while contributing
+        nothing to the flux every efficiency is divided by; it is refused rather than silently
+        redefining what "efficiency" means. An evanescent excitation is a near-field source,
+        which is a different problem than an incident plane wave.
+        """
+        return self._excitation
+
+    @excitation.setter
+    def excitation(self, value):
+        if value is None:
+            self._excitation = None
+            return
+        if not isinstance(value, dict):
+            raise TypeError(
+                f'excitation must be a dict of order -> complex amplitude, got '
+                f'{type(value).__name__}. A 1D scene keys it by the x order alone '
+                '({0: 1.0, 1: 0.5j}); a 2D one by the pair ({(0, 0): 1.0, (1, 0): 0.5j}). '
+                'Leave it unset for the ordinary single wave on the specular order.')
+        if not value:
+            raise ValueError(
+                'excitation is empty, so nothing would be lit and every answer would be zero. '
+                'Leave it unset for the ordinary single wave on the specular order.')
+        # Which orders are legal depends on `max_order`, which may still change; that check
+        # belongs where the solve reads them (`conventions.lit_orders`). This one is the shape.
+        self._excitation = dict(value)
 
     _incidence_side = 'top'
 
@@ -903,10 +975,10 @@ class CoreSolveMixin:
         A = self._lattice_basis
         if A is None or _lattice.is_axis_aligned(A):
             return kx, ky
-        max_order_x, max_order_y = int(self.max_order[0]), int(self.max_order[1])
+        (cx, max_order_x), (cy, max_order_y) = self.order_window
         xp = array_namespace(kx)
         return _lattice.order_kxy(xp, A, max_order_x, max_order_y, wavelength,
-                                  kx[max_order_x], ky[max_order_y],
+                                  kx[max_order_x], ky[max_order_y], centre=(cx, cy),
                                   dtype=kx.dtype, device=_device_of(kx))
 
     @property
@@ -1153,7 +1225,8 @@ class CoreSolveMixin:
             self.tetm_index, wavelength, kx, self.n_top, self.n_bot, self.theta,
             self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
-            incidence_side=self.incidence_side, answers=self._answers))
+            incidence_side=self.incidence_side, answers=self._answers,
+            lit=self._lit()))
 
     def _solve_1d_conical(self, epx_conv_all, epy_conv_all, epz_conv_i_all):
         solve = self._solve_fn('conical')
@@ -1164,7 +1237,7 @@ class CoreSolveMixin:
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self._incidence_pair(), self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             phi=self.phi, incidence_side=self.incidence_side,
-            answers=self._answers))
+            answers=self._answers, lit=self._lit()))
 
     def _solve_2d(self, epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None,
@@ -1204,14 +1277,15 @@ class CoreSolveMixin:
                 epxz_conv_all=epxz_conv_all, epyz_conv_all=epyz_conv_all,
                 epzx_conv_all=epzx_conv_all, epzy_conv_all=epzy_conv_all,
                 phi=self.phi, incidence_side=self.incidence_side,
-                answers=self._answers, layer_algorithm=self.layer_algorithm))
+                answers=self._answers, layer_algorithm=self.layer_algorithm,
+                lit=self._lit()))
         solve = self._solve_fn('2d')
         return self._finish(solve(
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self._incidence_pair(), self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
             phi=self.phi, incidence_side=self.incidence_side,
-            answers=self._answers, mu=mu,
+            answers=self._answers, lit=self._lit(), mu=mu,
             mu_top=1.0 if mu_top is None else mu_top,
             mu_bot=1.0 if mu_bot is None else mu_bot,
             eps_top=eps_top, eps_bot=eps_bot))
@@ -1522,7 +1596,11 @@ class CoreFactorizationMixin:
         factorization = self.factorization
         coefficients = self.fourier_coefficients
         self._reject_unread_normal_method(factorization)
-        max_order_x, max_order_y = self.max_order[0], self.max_order[1]
+        # The *window's* half-width, not the declared `max_order`: an excitation can
+        # widen the retained set, and a convolution matrix has to be as wide as the
+        # `kx` it will meet. Its entries do not otherwise care where the window sits
+        # -- `(i, j)` is the harmonic `i - j` -- so only the size travels here.
+        (_, max_order_x), (_, max_order_y) = self.order_window
 
         # The two axes decide independently what has to be frozen: NVF needs the normal
         # field, the integrated series needs the block compression, and ('integrated', 'nvf')
@@ -1932,7 +2010,11 @@ class CoreFactorizationMixin:
         """
         factorization = self.factorization
         coefficients = self.fourier_coefficients
-        max_order_x, max_order_y = self.max_order[0], self.max_order[1]
+        # The *window's* half-width, not the declared `max_order`: an excitation can
+        # widen the retained set, and a convolution matrix has to be as wide as the
+        # `kx` it will meet. Its entries do not otherwise care where the window sits
+        # -- `(i, j)` is the harmonic `i - j` -- so only the size travels here.
+        (_, max_order_x), (_, max_order_y) = self.order_window
         mu_pass = quantity == 'permeability'
 
         if self._modeling_type == 0:                      # raster

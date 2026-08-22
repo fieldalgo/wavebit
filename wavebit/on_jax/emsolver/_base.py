@@ -24,7 +24,7 @@ class _BaseRCWA(CoreSolveMixin):
     def __init__(self, top=1., bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None,
                  max_order=(0, 0),
                  period=(1., 1.), wavelength=1.,
-                 thickness=(0.,), layer_algorithm='ETM',
+                 thickness=(0.,), layer_algorithm='ETM', excitation=None,
                  device=0, complex_dtype=jnp.complex128, polarization=None):
 
         self.device = device
@@ -63,6 +63,7 @@ class _BaseRCWA(CoreSolveMixin):
         self.wavelength = wavelength
         self.thickness = thickness
         self.layer_algorithm = layer_algorithm
+        self.excitation = excitation
 
         self.layer_info_list = []
         self.T1 = None
@@ -249,9 +250,10 @@ class _BaseRCWA(CoreSolveMixin):
 
     @jax_device_set
     def _separable_kxy(self, wavelength):
+        (cx, hx), (cy, hy) = self.order_window
 
-        max_order_x_range = jnp.arange(-self.max_order[0], self.max_order[0] + 1)
-        max_order_y_range = jnp.arange(-self.max_order[1], self.max_order[1] + 1)
+        max_order_x_range = jnp.arange(cx - hx, cx + hx + 1)
+        max_order_y_range = jnp.arange(cy - hy, cy + hy + 1)
 
         def adjust_theta():
             theta = 0 if self.theta is None else self.theta

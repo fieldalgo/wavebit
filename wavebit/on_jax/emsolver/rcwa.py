@@ -43,6 +43,8 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                  tetm=None,
                  max_order=(0, 0),
                  layer_algorithm='ETM',
+                 excitation=None,   # which orders the illumination arrives on; see
+                 # `CoreSolveMixin.excitation`. None is one wave on the specular order.
                  device='cpu',
                  complex_dtype=jnp.complex128,
                  fourier_coefficients=None,  # 'sampled' | 'integrated'
@@ -95,6 +97,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         super().__init__(top=top, bot=bot, theta=theta, phi=phi, psi=psi, chi=chi, tetm=tetm,
                          max_order=max_order, period=period, wavelength=wavelength,
                          thickness=thickness, layer_algorithm=layer_algorithm,
+                         excitation=excitation,
                          device=device, complex_dtype=complex_dtype,
                          polarization=polarization)
         self.incidence_side = incidence_side
@@ -233,7 +236,8 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         s_inc = ResultSubJax(**result_dict['s_inc']) if 's_inc' in result_dict else None
         p_inc = ResultSubJax(**result_dict['p_inc']) if 'p_inc' in result_dict else None
 
-        result = ResultJax(given, s_inc, p_inc, max_order=self.max_order)
+        (cx, hx), (cy, hy) = self.order_window
+        result = ResultJax(given, s_inc, p_inc, max_order=(hx, hy), centre=(cx, cy))
 
         return result
 

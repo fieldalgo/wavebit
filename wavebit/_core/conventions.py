@@ -37,6 +37,9 @@ Backend-agnostic: pass the array namespace as ``xp`` (``numpy`` / ``jax.numpy`` 
 """
 
 import contextlib
+from typing import NamedTuple
+
+import numpy as np
 
 from .backend import UnresolvedBranchWarning, as_array
 
@@ -309,6 +312,154 @@ def incident_sp_amplitudes(xp, C, psi, chi=None, polarization=None):
     chi = as_array(xp, chi, dtype=C)
     return (xp.sin(psi) * xp.cos(chi) + 1j * xp.cos(psi) * xp.sin(chi),
             xp.cos(psi) * xp.cos(chi) - 1j * xp.sin(psi) * xp.sin(chi))
+
+
+def parse_excitation(excitation, max_order_x, max_order_y):
+    """Read a declared excitation into ``((m, n), amplitude, key)`` triples, refusing what it is not.
+
+    The original ``key`` rides along because a message that has to name an order should name it
+    the way the caller wrote it -- ``5``, not the normalised ``(5, 0)``.
+
+    One validator, called by both :func:`order_window` and :func:`lit_orders`, because the
+    window is computed *before* the orders are mapped and an excitation that is going to be
+    refused must not reshape the problem on its way to being refused.
+
+    **A lit order has to sit inside the declared ``max_order``.** The window widens around the
+    lit set (see :func:`order_window`), so without this rule that widening would be unbounded
+    -- lighting order 9 at ``max_order=6`` would quietly solve a 22-order problem instead of
+    saying that 9 is outside what was asked for. With it the widening is bounded at twice the
+    declared half-width, and `max_order` keeps meaning what it says: the orders being modelled.
+    """
+    if not isinstance(excitation, dict):
+        raise TypeError(
+            f'excitation must be a dict of order -> complex amplitude, got '
+            f'{type(excitation).__name__}. A 1D scene keys it by the x order alone '
+            '({0: 1.0, 1: 0.5j}); a 2D one by the pair ({(0, 0): 1.0, (1, 0): 0.5j}).')
+    if not excitation:
+        raise ValueError(
+            'excitation is empty, so nothing is lit and every answer would be zero. Leave it '
+            'unset for the ordinary single wave on the specular order.')
+    two_d = max_order_y > 0
+    out = []
+    for key, amplitude in excitation.items():
+        pair = key if isinstance(key, tuple) else (key, 0)
+        if len(pair) != 2 or not all(isinstance(v, (int, np.integer)) for v in pair):
+            raise TypeError(
+                f'excitation key {key!r} is not a diffraction order. Use an integer m'
+                + (' pair (m, n)' if two_d else '')
+                + ', which is what indexes the orders this solve retains.')
+        m, n = int(pair[0]), int(pair[1])
+        if not two_d and n != 0:
+            raise ValueError(
+                f'excitation names order {key!r}, but this solve retains only n = 0 -- '
+                'max_order[1] is 0, so there is no out-of-plane order to light. Both 1D '
+                'formulations keep the single n = 0 order.')
+        if abs(m) > max_order_x or abs(n) > max_order_y:
+            raise ValueError(
+                f'excitation names order {key!r}, which is outside the declared '
+                f'max_order=({max_order_x}, {max_order_y}). The retained window widens around '
+                'the orders you light, so this is bounded on purpose: raise max_order if that '
+                'order is really part of the illumination.')
+        out.append(((m, n), amplitude, key))
+    return out
+
+
+def order_window(max_order_x, max_order_y, excitation):
+    """Which orders the solve retains, as ``(centre, half_width)`` per axis.
+
+    Without an excitation this is ``(0, max_order)`` -- the symmetric window centred on the
+    specular order that this library has always used, and the reason the pair is spelled this
+    way rather than as a range: ``n_orders = 2*half_width + 1`` stays true, so every size
+    computation downstream is untouched and only the *offset* is new.
+
+    With one, every lit order needs ``max_order`` neighbours on each side, or a beam sitting
+    off-centre is worse resolved than it would be solved alone. That union spans
+    ``[m_min - max_order, m_max + max_order]``, and the smallest symmetric window containing it
+    is returned -- one order wider than the union when that span is odd, since a symmetric
+    window cannot straddle a half-integer centre. Measured 3.6 to 9.1 percent, falling with the
+    order count because the addition is fixed while ``n_orders`` grows.
+
+    Without the widening the retained set would stay centred on the specular order and a beam
+    at ``+1`` would see one fewer neighbour above it than below. That measures as a *tie*
+    against solving beam by beam; with it, better. The extra orders are what buys the
+    difference.
+    """
+    if excitation is None:
+        return (0, int(max_order_x)), (0, int(max_order_y))
+    orders = [order for order, _, _ in parse_excitation(excitation, max_order_x, max_order_y)]
+
+    def span(lit, half):
+        lo, hi = min(lit) - int(half), max(lit) + int(half)
+        centre = (lo + hi) // 2
+        return centre, max(centre - lo, hi - centre)
+
+    return span([m for m, _ in orders], max_order_x), span([n for _, n in orders], max_order_y)
+
+
+class LitOrder(NamedTuple):
+    """One order an excitation lights: where it sits, what weight, and what to call it."""
+    #: Flat position into the ``(n_orders_y, n_orders_x)`` grid, row-major.
+    index: int
+    #: The complex weight written for it. May be traced.
+    amplitude: object
+    #: The diffraction order as the caller wrote it, for messages that have to name it.
+    order: object
+
+
+def lit_orders(excitation, window_x, window_y):
+    """Which retained orders an ``excitation`` lights, as a tuple of :class:`LitOrder`.
+
+    The spatial twin of :func:`incident_sp_amplitudes`: that one resolves *which polarization*
+    arrives, this one *which plane waves*, and both are called once at the boundary so the
+    numerics never learn there was a choice. ``None`` in, ``None`` out -- a solver that named no
+    excitation is the ordinary single wave on the specular order, and every site keeps the
+    expression it had, which is what stops a golden moving by a rounding step for a feature the
+    scene does not use.
+
+    Keys are the diffraction order: a bare ``m`` where there is no ``y`` extent, and ``(m, n)``
+    otherwise. Values are complex amplitudes and may be traced -- they are ordinary design
+    variables. The **keys** may not be: they decide which entries of the incident column are
+    non-zero, which is a structural question, so they are read as Python integers and never
+    compared against a traced value.
+
+    ``window_x`` / ``window_y`` are :func:`order_window`'s ``(centre, half_width)`` pairs, and
+    the indices returned are flat into the ``(n_orders_y, n_orders_x)`` grid the solves carry,
+    row-major -- so a caller writes them straight into a column of that length. Reading the
+    window rather than ``max_order`` is what lets the retained set sit off the specular order,
+    which is the whole point of widening it.
+    """
+    if excitation is None:
+        return None
+    (centre_x, half_x), (centre_y, half_y) = window_x, window_y
+    n_orders_x = 2 * half_x + 1
+    # Validated against the *declared* max_order, which the window was widened from: a lit
+    # order is inside `centre +- half` by construction, so re-deriving the declaration is what
+    # keeps the refusal meaningful rather than vacuous.
+    declared_x = max(abs(centre_x - half_x), abs(centre_x + half_x))
+    declared_y = max(abs(centre_y - half_y), abs(centre_y + half_y))
+    resolved = []
+    for (m, n), amplitude, key in parse_excitation(excitation, declared_x, declared_y):
+        resolved.append(LitOrder((n - centre_y + half_y) * n_orders_x
+                                 + (m - centre_x + half_x), amplitude, key))
+    return tuple(resolved)
+
+
+def incident_column(xp, C, lit, n_orders, specular):
+    """The incident amplitude of every retained order, as a flat column.
+
+    ``lit`` is :func:`lit_orders`' answer, and ``None`` — nothing declared — gives back exactly
+    the unit vector on ``specular`` that this library has always used, to the bit. That is not
+    a fast path but the definition: one wave on the specular order *is* the default excitation,
+    so there is no second expression to drift from.
+    """
+    if lit is None:
+        column = [0.0] * n_orders
+        column[specular] = 1.0
+        return xp.astype(xp.asarray(column), C)
+    column = [xp.astype(xp.asarray(0.0), C)] * n_orders
+    for one in lit:
+        column[one.index] = xp.astype(as_array(xp, one.amplitude, dtype=C), C)
+    return xp.stack(column)
 
 
 def order_azimuth(xp, ky, kx, phi):

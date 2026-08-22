@@ -1,0 +1,263 @@
+"""Multimode incidence — several orders lit at once, in one solve.
+
+``excitation={0: 1.0, 1: 0.6-0.8j}`` says the illumination arrives on more than one
+diffraction order, coherently. What it is *for* is the superposition: a single non-specular
+order is the same plane wave as the specular one at the angle whose ``kx`` matches, so lighting
+one order buys nothing but a relabelling. Several at once cannot be had from one ordinary
+solve, and the alternative — one solve per beam, indices realigned, amplitudes added — costs a
+solve per beam for the same answer.
+
+The oracle is the SMM's scattering matrix. ``S11 @ c_inc`` is by definition the reflected
+amplitude for the incident column ``c_inc``, built by machinery that shares nothing with the
+ETM's boundary match, so the two agreeing is a real check rather than a restatement. Beside it:
+energy on a lossless stack, and the two connecting algorithms against each other.
+
+What is *not* tested here is that a superposition is more accurate than solving beam by beam —
+it is not. Measured at two and three beams across seven basis sizes, neither is systematically
+better; the truncation error of each dominates their difference from `max_order` 8 up. The gain
+is the solve count.
+"""
+import numpy as np
+import pytest
+
+import wavebit
+
+WL, PERIOD, THICK = 600.0, 2000.0, [220.0, 130.0]
+#: `lambda/period = 0.3`, so orders -3..+3 are all inside the light line at this angle --
+#: which is what makes a three-beam excitation legal here at all (see the refusal below).
+COMMON = dict(backend=0, max_order=(6, 0), period=(PERIOD, PERIOD), wavelength=WL,
+              theta=0.25, thickness=THICK, top=1.0, bot=2.25, answers='amplitude')
+BEAMS = {-1: 0.4 + 0.2j, 0: 1.0, 1: 0.6 - 0.8j}
+#: Deliberately *not* symmetric about the specular order, so the widened window's centre is
+#: non-zero. A symmetric excitation leaves it at 0, where a `Result` that ignored the centre
+#: entirely would still index correctly -- and two mutants proved exactly that.
+OFF_CENTRE = {0: 1.0, 2: 0.5 - 0.3j}
+
+
+def _structure():
+    eps = np.ones((2, 1, 64), dtype=complex)
+    eps[0, 0, :26] = 6.25
+    eps[1, 0, 20:] = 4.0
+    return eps
+
+
+def _solve(excitation=None, algo='ETM', phi=None, tetm='te', **over):
+    kw = dict(COMMON, phi=phi, tetm=tetm, layer_algorithm=algo, excitation=excitation)
+    kw.update(over)
+    solver = wavebit.rcwa(**kw)
+    solver.structure = _structure()
+    return solver, solver.solve()
+
+
+def _column(solver, excitation):
+    """The incident column, on whatever window the solver actually retained.
+
+    Not `order + max_order`: an excitation widens the window and can move its centre, so the
+    position of order `m` is `m - centre + half_width`. Reading it off the solver rather than
+    recomputing it is what keeps this an oracle instead of a second implementation.
+    """
+    (centre, half), _ = solver.order_window
+    column = np.zeros((2 * half + 1, 1), dtype=complex)
+    for order, amplitude in excitation.items():
+        column[order - centre + half, 0] = amplitude
+    return column
+
+
+# ------------------------------------------------------------------------------ the oracle
+
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+def test_a_superposition_is_the_scattering_matrix_applied_to_it(algo):
+    """``S11 @ c_inc`` and ``S21 @ c_inc``, which is what an incident column *means*.
+
+    The strongest oracle available, and an independent one: the SMM builds ``S`` by cascading
+    layer matrices and never performs the ETM's boundary match, so an agreement here is two
+    constructions meeting rather than one restated. Parametrised over the algorithm because
+    the excitation has to reach both incident-column builders, which are separate code.
+    """
+    # The reference carries the same excitation, so its window -- and therefore its S -- is
+    # the one the ETM solve is built on. `S` itself does not depend on the excitation, only on
+    # the window it widened to.
+    reference, _ = _solve(BEAMS, algo='SMM')
+    S = reference.scattering
+    _, got = _solve(BEAMS, algo=algo)
+    column = _column(reference, BEAMS)
+    for block, reported in (('S11', 'r_s'), ('S21', 't_s')):
+        want = (np.asarray(getattr(S, block)) @ column).ravel()
+        assert np.abs(np.asarray(getattr(got.given, reported)).ravel() - want).max() < 1e-12
+
+
+@pytest.mark.parametrize('phi, tetm, name', [(None, 'te', '1d_te'), (None, 'tm', '1d_tm'),
+                                             (0.3, None, 'conical')])
+def test_the_two_connecting_algorithms_agree_on_a_superposition(phi, tetm, name):
+    """The ETM matches a boundary and the SMM cascades; a superposition must not part them."""
+    _, a = _solve(BEAMS, algo='ETM', phi=phi, tetm=tetm)
+    _, b = _solve(BEAMS, algo='SMM', phi=phi, tetm=tetm)
+    for field in ('R', 'T', 'r_s', 't_s', 'r_p', 't_p'):
+        assert np.abs(np.asarray(getattr(a.given, field))
+                      - np.asarray(getattr(b.given, field))).max() < 1e-12, (name, field)
+
+
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+@pytest.mark.parametrize('phi, tetm', [(None, 'te'), (None, 'tm'), (0.3, None)])
+def test_a_lossless_stack_still_closes_under_a_superposition(algo, phi, tetm):
+    """``R + T == 1``, which is the whole point of getting the denominator right.
+
+    Every efficiency is divided by the *incident* flux, and for a superposition that is the sum
+    over the lit orders rather than one wave's. Getting it wrong leaves a number that looks
+    like an efficiency and is not; energy is what notices.
+    """
+    _, r = _solve(BEAMS, algo=algo, phi=phi, tetm=tetm)
+    total = float(np.asarray(r.given.R).sum() + np.asarray(r.given.T).sum())
+    assert total == pytest.approx(1.0, abs=1e-12)
+
+
+def test_lighting_only_the_specular_order_is_the_ordinary_solve():
+    """The general path has to reduce, or the declaration would change the physics.
+
+    Not bit-identical, and deliberately so: the undeclared case keeps ``n_top*cos(theta)`` and
+    this one sums ``Re(kz)`` over one order, which are the same quantity spelled two ways and
+    differ by an ulp on half of all angles. Agreement to 1e-14 is the claim; bit-identity is
+    the *other* test, and it is about the undeclared path staying untouched.
+    """
+    _, plain = _solve()
+    _, spelled = _solve({0: 1.0})
+    for field in ('R', 'T', 'r_s', 't_s'):
+        a, b = np.asarray(getattr(plain.given, field)), np.asarray(getattr(spelled.given, field))
+        assert np.abs(a - b).max() < 1e-14, field
+
+
+def test_declaring_nothing_leaves_the_solve_byte_for_byte_what_it_was():
+    """No excitation named, no expression changed — the reason for the structural branch.
+
+    The incident column is built by one function now, but the *normalisation* is not: the
+    undeclared case keeps the spelling it had, because a golden should not move by a rounding
+    step for a feature the scene does not use (the argument
+    :func:`~wavebit._core.engine._half_space_index` makes for an unnamed ``mu``). This pins
+    that, on the paths and angles where the two spellings differ.
+    """
+    for tetm, phi in (('te', None), ('tm', None), (None, 0.3)):
+        for theta in (0.0, 0.3, 1.2):
+            solver = wavebit.rcwa(**dict(COMMON, theta=theta, phi=phi, tetm=tetm))
+            solver.structure = _structure()
+            named = wavebit.rcwa(**dict(COMMON, theta=theta, phi=phi, tetm=tetm,
+                                        excitation=None))
+            named.structure = _structure()
+            a, b = solver.solve(), named.solve()
+            for field in ('R', 'T', 'r_s', 't_s'):
+                assert np.array_equal(np.asarray(getattr(a.given, field)),
+                                      np.asarray(getattr(b.given, field))), (tetm, theta, field)
+
+
+def test_the_result_indexes_by_order_on_a_widened_window():
+    """``order(m)`` reads the array, so it has to describe the array and not the declaration.
+
+    The window widens past the declared ``max_order``, which means the array grows and order 0
+    stops sitting at its middle. A ``Result`` carrying the *declared* half-width then indexed
+    one order out -- and returned a plausible number rather than raising, which is the shape of
+    defect this repo hunts. Checked against the raw array, which is the only thing that cannot
+    be wrong the same way.
+    """
+    solver, result = _solve(OFF_CENTRE)
+    (centre, half), _ = solver.order_window
+    assert result.max_order[0] == half and result.centre[0] == centre
+    assert half > COMMON['max_order'][0]                 # the window really did widen
+    assert centre != 0                                   # ...and it is not centred on 0
+
+    raw = np.asarray(result.given.R).ravel()
+    for order in range(centre - half, centre + half + 1):
+        assert float(result.order(order).R) == pytest.approx(
+            float(raw[order - centre + half]), abs=0, rel=0), order
+
+
+def test_an_order_outside_the_widened_window_is_still_refused():
+    """And the bound moves with the window, rather than staying at the declaration."""
+    solver, result = _solve(OFF_CENTRE)
+    (centre, half), _ = solver.order_window
+    result.order(centre + half)                          # the edge is in
+    with pytest.raises(IndexError, match='outside the retained set'):
+        result.order(centre + half + 1)
+
+
+# -------------------------------------------------------------------------------- refusals
+
+def test_lighting_an_evanescent_order_is_refused():
+    """It carries no power, so it would drive the stack while paying nothing into the flux.
+
+    Left in, ``R + T`` exceeds one on a passive stack -- measured 8.87 on a thirteen-order
+    excitation before this refusal existed -- because the denominator counts only the
+    propagating part of an input the numerator counts all of. That is not a wrong number so
+    much as a different quantity wearing the name "efficiency". An evanescent excitation is a
+    near-field source, which this library does not model.
+    """
+    with pytest.raises(ValueError, match='evanescent'):
+        _solve({0: 1.0, 5: 0.5}, period=(600.0, 600.0))
+
+
+def test_lighting_an_order_outside_the_declared_max_order_is_refused():
+    """The window widens around the lit orders, so this rule is what bounds the widening.
+
+    Without it, `{0: 1.0, 9: 0.5}` at `max_order=6` would not be an error at all -- it would
+    quietly retain `[-6, 15]`, twenty-two orders where six were asked for. Refusing keeps
+    `max_order` meaning the orders being modelled, and caps the widening at twice its
+    half-width.
+    """
+    with pytest.raises(ValueError, match='outside the declared'):
+        _solve({0: 1.0, 9: 0.5})
+
+
+def test_an_out_of_plane_order_on_a_one_dimensional_solve_is_refused():
+    """``max_order[1] == 0`` keeps the single ``n = 0`` order, so ``(0, 1)`` names nothing."""
+    with pytest.raises(ValueError, match='n = 0'):
+        _solve({(0, 0): 1.0, (0, 1): 0.5})
+
+
+@pytest.mark.parametrize('bad, match', [
+    ({}, 'empty'),
+    ([1.0, 0.5], 'dict'),
+    ({'first': 1.0}, 'diffraction order'),
+])
+def test_an_excitation_that_is_not_orders_and_amplitudes_is_refused(bad, match):
+    with pytest.raises((TypeError, ValueError), match=match):
+        _solve(bad)
+
+
+# ------------------------------------------------------------------------ design variables
+
+def test_an_incident_amplitude_carries_a_gradient():
+    """The weights are values, not structure, so they differentiate like any other input.
+
+    Which is the reason the keys and the values are read differently: a key decides which
+    entries of the incident column exist, and structure cannot be traced, while an amplitude
+    is an ordinary design variable. Checked against a difference quotient because an autodiff
+    number agreeing with itself proves nothing.
+    """
+    jax = pytest.importorskip('jax')
+    jnp = jax.numpy
+
+    def reflectance(scale):
+        solver = wavebit.rcwa(**dict(COMMON, backend=1, phi=None, tetm='te',
+                                     excitation={0: 1.0, 1: scale * (0.6 - 0.8j)}))
+        solver.structure = jnp.asarray(_structure())
+        return jnp.sum(solver.solve().given.R)
+
+    x = jnp.asarray(1.0)
+    step = 1e-6
+    analytic = float(jax.grad(reflectance)(x))
+    quotient = float((reflectance(x + step) - reflectance(x - step)) / (2 * step))
+    assert analytic == pytest.approx(quotient, rel=1e-5)
+    assert abs(analytic) > 1e-6                      # and it is not trivially zero
+
+
+def test_a_superposition_survives_a_jit_boundary():
+    """The keys are static and the values are traced, which is what makes this compile."""
+    jax = pytest.importorskip('jax')
+    jnp = jax.numpy
+
+    def reflectance(a1):
+        solver = wavebit.rcwa(**dict(COMMON, backend=1, phi=None, tetm='te',
+                                     excitation={0: 1.0, 1: a1}))
+        solver.structure = jnp.asarray(_structure())
+        return jnp.sum(solver.solve().given.R)
+
+    a1 = jnp.asarray(0.6 - 0.8j)
+    assert float(jax.jit(reflectance)(a1)) == pytest.approx(float(reflectance(a1)), rel=1e-10)

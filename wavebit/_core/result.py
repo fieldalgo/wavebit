@@ -95,20 +95,27 @@ class Result:
     polarization; the suffix says this one names the incidence.
     """
 
-    def __init__(self, given=None, s_inc=None, p_inc=None, max_order=None):
+    def __init__(self, given=None, s_inc=None, p_inc=None, max_order=None, centre=(0, 0)):
         self.given = given
         self.s_inc = s_inc
         self.p_inc = p_inc
         #: (max_order_x, max_order_y) — static metadata for order(); not a pytree child.
+        #: The **retained** half-width, which an ``excitation`` can widen past the declared
+        #: one: `order()` reads the array, so it has to describe the array. A result that
+        #: carried the declaration instead indexed one order out and said nothing.
         self.max_order = tuple(int(v) for v in max_order) if max_order is not None else None
+        #: Which order the retained window is centred on, ``(x, y)``. ``(0, 0)`` unless an
+        #: excitation moved it -- see :attr:`wavebit._core.engine.CoreSolveMixin.order_window`.
+        self.centre = tuple(int(v) for v in centre)
 
     # pytree protocol (see ResultSub)
     def tree_flatten(self):
-        return (self.given, self.s_inc, self.p_inc), self.max_order
+        return (self.given, self.s_inc, self.p_inc), (self.max_order, self.centre)
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        return cls(*children, max_order=aux_data)
+        max_order, centre = aux_data
+        return cls(*children, max_order=max_order, centre=centre)
 
     def _delegate(self, name):
         if self.given is not None:
@@ -134,8 +141,11 @@ class Result:
 
         Spares the caller the array layout: efficiencies and amplitudes are stored as
         ``(n_orders_y, n_orders_x)`` grids — note ``y`` first, the transpose of the
-        ``max_order=[x, y]`` input order — with the incident order at the centre. This
-        indexes them by the order indices themselves.
+        ``max_order=[x, y]`` input order — centred on the specular order, or on
+        :attr:`centre` when an ``excitation`` moved the retained window. This indexes them by
+        the order indices themselves, which is the whole point: the array layout is not the
+        caller's problem, and it stopped being derivable from the declared ``max_order`` the
+        moment a window could widen.
         """
         sub = self.given if self.given is not None else (
             self.s_inc if self.s_inc is not None else self.p_inc)
@@ -145,22 +155,24 @@ class Result:
             raise ValueError(
                 'this result carries no max_order metadata; index the arrays directly')
         fx, fy = self.max_order
+        cx, cy = self.centre
 
         def pick(a):
             if a is None:
                 return None
-            row = a.reshape(-1, a.shape[-1])[n + fy if a.reshape(-1, a.shape[-1]).shape[0] > 1 else 0]
-            return row[m + fx]
+            flat = a.reshape(-1, a.shape[-1])
+            row = flat[n - cy + fy if flat.shape[0] > 1 else 0]
+            return row[m - cx + fx]
 
-        if not (-fx <= m <= fx):
-            raise IndexError(f'order m={m} outside the retained set [-{fx}, {fx}]')
+        if not (cx - fx <= m <= cx + fx):
+            raise IndexError(f'order m={m} outside the retained set [{cx - fx}, {cx + fx}]')
         ny = None
         for a in (sub.R, sub.T):
             if a is not None:
                 ny = a.reshape(-1, a.shape[-1]).shape[0]
                 break
-        if ny is not None and ny > 1 and not (-fy <= n <= fy):
-            raise IndexError(f'order n={n} outside the retained set [-{fy}, {fy}]')
+        if ny is not None and ny > 1 and not (cy - fy <= n <= cy + fy):
+            raise IndexError(f'order n={n} outside the retained set [{cy - fy}, {cy + fy}]')
         if ny is not None and ny == 1 and n != 0:
             raise IndexError('this solve retained a single row of orders; only n=0 exists')
 

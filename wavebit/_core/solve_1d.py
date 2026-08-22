@@ -20,8 +20,10 @@ Stages (matching the legacy chain, kept as one function each to make bit-parity 
   2. per-layer eig+couple— Redheffer/transfer propagation from the bottom layer up
   3. final matching      — incident field -> R, T -> diffraction efficiency
 """
-from .backend import array_namespace, as_array, check_finite, check_physical, eig
-from .conventions import boundary_kz, incident_kz, mode_q, order_azimuth
+from .backend import (_concrete, array_namespace, as_array, check_finite,
+                      check_physical, eig)
+from .conventions import (boundary_kz, incident_column, incident_kz, mode_q,
+                          order_azimuth)
 from .enums import Answers, answers_of
 
 
@@ -172,7 +174,7 @@ def sp_modes_1d_conical(xp, F_c, F_s, W1, W2, V_11, V_12, V_21, V_22):
 
 def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
-             incidence_side='top', answers=Answers.EFFICIENCY):
+             incidence_side='top', answers=Answers.EFFICIENCY, lit=None):
     """Solve a 1D grating stack for reflection/transmission diffraction efficiency.
 
     Args:
@@ -280,7 +282,7 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
 
     # --- stage 3: final matching -> efficiency (transfer_1d_4) -------------------------
     Kz_top = _diag(xp, kz_top)
-    delta = xp.astype(_unit(xp, n_orders_x, n_orders_x // 2), C)
+    delta = incident_column(xp, C, lit, n_orders_x, n_orders_x // 2)
     cos_t = xp.cos(as_array(xp, theta, dtype=C))
     # The incident wave's own kz, read off the same vector the reflected orders use. It equals
     # `n_top * cos(theta)` for a real incidence angle, and must be *taken from* `kz_top` rather
@@ -289,22 +291,35 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     kz_inc = incident_kz(kz_top, n_orders_x // 2)
 
     if tetm_index == 0:  # TE
-        inc = -1j * kz_inc * delta
+        inc = -1j * kz_inc * delta if lit is None else -1j * (Kz_top @ delta)
         T1 = xp.linalg.inv(G - 1j * Kz_top @ F) @ (-1j * Kz_top @ delta + inc)
     else:         # TM
         Kz_scaled = Kz_top / (n_top ** 2)
-        inc = -1j * delta * kz_inc / (n_top ** 2)
+        inc = (-1j * delta * kz_inc / (n_top ** 2) if lit is None
+               else -1j * (Kz_scaled @ delta))
         T1 = xp.linalg.inv(G - 1j * Kz_scaled @ F) @ (-1j * Kz_scaled @ delta + inc)
 
     R = (F @ T1 - delta)[None, :]
     Tt = (T @ T1)[None, :]
 
-    de_ri = xp.real(R * xp.conj(R) * xp.real(kz_top / (n_top * cos_t)))
+    # The incident flux every efficiency is measured against. Written as the two shapes the
+    # expressions below need rather than as one number, so that the undeclared case keeps the
+    # spelling it has always had: `n_top*cos(theta)` and `Re(kz_top[specular])` are the same
+    # quantity and differ by an ulp on half of all angles, and a golden should not move by a
+    # rounding step for a feature the scene does not use (same argument as
+    # :func:`~wavebit._core.engine._half_space_index`'s unnamed `mu`).
+    if lit is None:
+        denom_r, denom_t_tm = n_top * cos_t, cos_t / n_top
+    else:
+        flux = _incident_flux(xp, C, lit, kz_top)
+        denom_r, denom_t_tm = flux, flux / (n_top ** 2)
+
+    de_ri = xp.real(R * xp.conj(R) * xp.real(kz_top / denom_r))
     if tetm_index == 0:  # TE
-        de_ti = xp.real(Tt * xp.conj(Tt) * xp.real(kz_bot / (n_top * cos_t)))
+        de_ti = xp.real(Tt * xp.conj(Tt) * xp.real(kz_bot / denom_r))
     else:         # TM
         de_ti = xp.real(Tt * xp.conj(Tt)
-                        * xp.real(kz_bot / n_bot ** 2 / (cos_t / n_top)))
+                        * xp.real(kz_bot / n_bot ** 2 / denom_t_tm))
 
     check_finite(xp, de_ri=de_ri, de_ti=de_ti)
     check_physical(xp, de_ri, de_ti, n_top)
@@ -331,7 +346,7 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
 
 def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                      epx_conv_all, epy_conv_all, epz_conv_i_all,
-                     *, phi, incidence_side='top', answers=Answers.EFFICIENCY):
+                     *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None):
     """Solve a general 1D grating (arbitrary azimuth/polarization) for the given ``psi``.
 
     The conical case couples the s and p polarizations, so the per-layer modes and the boundary
@@ -436,10 +451,45 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
 
     # --- stage 3: final matching -> efficiency (transfer_1d_conical_4) ------------------
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
-                         n_top, n_bot, n_orders_x, n_orders_y, answers=answers)
+                         n_top, n_bot, n_orders_x, n_orders_y, answers=answers,
+                         lit=lit)
     if keep_field:
         out['layer_info_list'] = layer_info_list
     return out
+
+
+def _incident_flux(xp, C, lit, kz_inc_medium):
+    """Total time-averaged z-flux arriving, summed over the lit orders.
+
+    The denominator every efficiency is divided by. For one wave it is that wave's ``Re(kz)``,
+    which is what ``n_top*cos(theta)`` spells today; for a superposition the orders each carry
+    their own, and nothing but the sum is the incident power.
+
+    **A lit order past the light line is refused**, one at a time rather than only when the
+    whole excitation is evanescent. It carries no time-averaged z-flux, so it would drive the
+    structure while contributing nothing to this sum -- and "efficiency" would quietly stop
+    meaning *fraction of incident power* and start meaning *fraction of the propagating part
+    of it*, with ``R + T`` free to exceed one on a passive stack. The answer is not missing;
+    the question is. An evanescent excitation is a near-field source, and this library's
+    incident field is a plane wave (see ``docs/conventions.md`` on ``kz``, and the dipole case
+    that wants an interior source instead).
+    """
+    total = None
+    for one in lit:
+        carries = _concrete(xp.real(kz_inc_medium[one.index]) > 0)
+        if carries is False:
+            raise ValueError(
+                f'the excitation lights order {one.order!r}, which is evanescent in '
+                'the incidence medium -- it carries no time-averaged power, so it cannot be '
+                'part of an incident flux and every efficiency would be measured against the '
+                'rest. An order propagates only while |kx| < n_inc; light one that does, or '
+                'lengthen the period so more orders fall inside the light line. An evanescent '
+                'excitation is a near-field source rather than an incident plane wave, which '
+                'is a different problem than this one.')
+        a = as_array(xp, one.amplitude, dtype=C)
+        term = xp.abs(a) ** 2 * xp.real(kz_inc_medium[one.index])
+        total = term if total is None else total + term
+    return total
 
 
 def _unit(xp, n, i):
@@ -451,7 +501,7 @@ def _unit(xp, n, i):
 
 def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
                    n_top, n_bot, n_orders_x, n_orders_y, answers=Answers.EFFICIENCY,
-                   mu_top=1.0, mu_bot=1.0, eps_top=None):
+                   mu_top=1.0, mu_bot=1.0, eps_top=None, lit=None):
     """Boundary match the assembled s/p system to the incident field.
 
     Shared, byte-identical port of ``transfer_1d_conical_4`` / ``transfer_2d_4`` (their final
@@ -501,7 +551,7 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     kz_bot_2d = xp.reshape(kz_bot, (n_orders_y, n_orders_x))
     a_s, a_p = as_array(xp, incidence[0], dtype=C), as_array(xp, incidence[1], dtype=C)
 
-    delta = xp.reshape(xp.astype(_unit(xp, n_orders, n_orders // 2), C), (n_orders, 1))
+    delta = xp.reshape(incident_column(xp, C, lit, n_orders, n_orders // 2), (n_orders, 1))
 
     bF = [[big_F[:n_orders, :n_orders], big_F[:n_orders, n_orders:]],
           [big_F[n_orders:, :n_orders], big_F[n_orders:, n_orders:]]]
@@ -544,12 +594,27 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     # which is the shape of the bug this argument was added to close.
     h_p_inc = n_top / mu_top
     e_p_inc = h_p_inc * kz_inc / eps_top
-    final_B = _block(xp, [
-        [-a_s * delta],
-        [a_p * e_p_inc * delta],
-        [1j * a_s * kz_inc / mu_top * delta],
-        [1j * h_p_inc * a_p * delta],
-    ])
+    if lit is None:
+        final_B = _block(xp, [
+            [-a_s * delta],
+            [a_p * e_p_inc * delta],
+            [1j * a_s * kz_inc / mu_top * delta],
+            [1j * h_p_inc * a_p * delta],
+        ])
+    else:
+        # A superposition has no single incident `kz`: each lit order carries its own, so the
+        # two rows built from it become `Kz_top @ delta` rather than a scalar times `delta`.
+        # The rows are written out twice rather than folded into one expression because the
+        # undeclared case has to stay bit-identical -- `(h*kz/eps)*delta` and `h*(kz*delta)/eps`
+        # associate differently and differ by an ulp, and no golden should move for a feature
+        # the scene does not use.
+        kz_col = Kz_top @ delta
+        final_B = _block(xp, [
+            [-a_s * delta],
+            [a_p * h_p_inc * kz_col / eps_top],
+            [1j * a_s * kz_col / mu_top],
+            [1j * h_p_inc * a_p * delta],
+        ])
 
     final_A_inv = xp.linalg.inv(final_A)
     final_RT = final_A_inv @ final_B
@@ -562,7 +627,11 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     T_s = xp.reshape(big_T[:n_orders, :], (n_orders_y, n_orders_x))
     T_p = xp.reshape(big_T[n_orders:, :], (n_orders_y, n_orders_x))
 
-    denom = n_top * cos_t / mu_top          # incident flux carries kz/mu, see sp_efficiencies
+    # incident flux carries kz/mu, see sp_efficiencies. `n_top*cos_t` is `Re(kz_inc)` written
+    # the way this function has always written it; a superposition needs the sum over the lit
+    # orders instead, and the two spellings differ by an ulp on half of all angles.
+    denom = (n_top * cos_t / mu_top if lit is None
+             else _incident_flux(xp, C, lit, kz_top) / mu_top)
 
     def efficiencies(R_s_, R_p_, T_s_, T_p_):
         return sp_efficiencies(xp, kz_top_2d, kz_bot_2d, denom, n_top, n_bot,

@@ -193,6 +193,62 @@ directions that cannot change any power (its scale and its overall phase, both m
 ~1e-16). [`docs/conventions.md`](docs/conventions.md) is the normative statement, and
 [tutorial 6](tutorials/06-polarization-pair.ipynb) works through all three.
 
+### Arriving on more than one order
+
+Everything above says which *polarization* arrives. `excitation` says which *directions*:
+
+```python
+wavebit.rcwa(excitation={0: 1.0, 1: 0.6 - 0.8j}, ...)        # 1D: keyed by the x order
+wavebit.rcwa(excitation={(0, 0): 1.0, (1, 0): 0.5j}, ...)    # 2D: by the (m, n) pair
+```
+
+Left unset — the default — one plane wave arrives, on the specular order, at `theta` / `phi`.
+That is what every other keyword on this page describes and what the solver has always done.
+
+Naming a dict lights several diffraction orders at once, coherently, in one solve. The values
+are complex amplitudes and share whatever polarization you asked for above; they can be
+optimized like any other input. Two things are worth knowing before reaching for it:
+
+- **One order alone buys nothing.** Lighting order `m` at `theta` is the same plane wave as
+  lighting the specular order at the angle whose `kx` matches — a relabelling, not a different
+  problem. The point is the *superposition*, which one ordinary solve cannot express. Coherent
+  beam combining is the clear case: N beams at the angles the grating equation fixes.
+- **You could do it by hand, at N times the cost.** The solve is linear in the incident field,
+  so solving once per beam and adding the results works. This saves the solve count (measured
+  2.95x for three beams) and two places to be quietly wrong — computing each beam's angle, and
+  realigning the order indices before adding — and it is *more* accurate besides, because the
+  retained window widens so that every lit order keeps `max_order` neighbours on each side.
+  `solver.order_window` reports what was retained.
+
+Every lit order has to propagate in the incidence medium — one past the light line carries no
+power, so it would drive the structure while contributing nothing to the incident flux every
+efficiency is divided by, and `R + T` would exceed one on a passive stack. Asking for one is
+refused by name. That also caps how many beams can be combined: roughly `2 * period /
+wavelength` orders are available.
+
+**One polarization for all of them.** The dict carries an amplitude per order; which
+polarization arrives is still `psi` / `polarization` / `tetm`, and every lit order carries that
+same one. A *different* polarization per order is reachable, but through `solver.scattering`
+rather than here — on the coupled paths the incident column is `[s-block; p-block]`, so filling
+both halves independently is exactly that:
+
+```python
+solver = wavebit.rcwa(layer_algorithm='SMM', answers='amplitude', ...)
+solver.solve()
+column = np.zeros((2 * n_orders, 1), dtype=complex)
+column[n_orders // 2] = 1.0                    # order 0, s-polarized
+column[n_orders + n_orders // 2 + 1] = 0.5j    # order +1, p-polarized
+reflected = solver.scattering.S11 @ column
+```
+
+That route hands back amplitudes rather than efficiencies — you normalize — and it is SMM-only.
+With a common polarization the two agree to 1.6e-17, so they are one contract from two sides.
+
+[Tutorial 7](tutorials/07-multimode-incidence.ipynb) works through all of it with runnable
+scenes; [`docs/multimode-incidence.md`](docs/multimode-incidence.md) has the measurements and
+the reasoning, including why the retained-order window stays symmetric and how this compares
+with S4, fmmax and RETICOLO.
+
 ## Saying what a thing is made of
 
 `wavebit.Material(epsilon, mu=1.0)` — **relative** permittivity and the permeability that goes
