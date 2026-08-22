@@ -412,12 +412,12 @@ def layer_needs_resolving(layer, period, lattice=None):
 def shape_ft(xp, shape, ky, kx, period, lattice=None):
     """Continuous Fourier transform of one shape's indicator, divided by the cell area.
 
-    Returns ``c(ky, kx) = 1/area * FT{1_shape}(u, v)`` on the integer reciprocal grid — the
+    Returns ``c(ky, kx) = 1/area * FT{1_shape}(Gx, Gy)`` on the integer reciprocal grid — the
     analytic analogue of one Fourier coefficient the ``fourier2d_*`` builders read off a raster.
 
     ``lattice`` is the cell basis (``None`` = the axis-aligned ``diag(period)``). It reaches
     only the two lines below, and that is the whole of what a skewed cell costs this function:
-    ``(u, v)`` is the reciprocal vector ``G = m*b1 + n*b2`` in **Cartesian** components, and
+    ``(Gx, Gy)`` is the reciprocal vector ``G = m*b1 + n*b2`` in **Cartesian** components, and
     everything after it — the rotation, the phase, the sinc product, the Bessel forms — is
     already written in Cartesian frequency and so does not care how ``G`` was reached.
 
@@ -432,26 +432,26 @@ def shape_ft(xp, shape, ky, kx, period, lattice=None):
 
     pi = 3.141592653589793
     if lattice is None:
-        u = 2.0 * pi * kx / Px
-        v = 2.0 * pi * ky / Py
+        Gx = 2.0 * pi * kx / Px
+        Gy = 2.0 * pi * ky / Py
         area = Px * Py
     else:
-        # (u, v) = 2*pi * A^-T @ (m, n), written out for the same reason as in
+        # (Gx, Gy) = 2*pi * A^-T @ (m, n), written out for the same reason as in
         # wavebit._core.lattice.order_kxy: one expression per component, no matrix inverse.
         a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
         a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
         det = a1x * a2y - a2x * a1y
-        u = 2.0 * pi * (a2y * kx - a1y * ky) / det
-        v = 2.0 * pi * (-a2x * kx + a1x * ky) / det
+        Gx = 2.0 * pi * (a2y * kx - a1y * ky) / det
+        Gy = 2.0 * pi * (-a2x * kx + a1x * ky) / det
         area = abs(det)
 
     # Rotated frequency coordinates: kappa = Rot(angle)^T @ k
-    ct = xp.cos(as_array(xp, angle, dtype=u.dtype))
-    st = xp.sin(as_array(xp, angle, dtype=u.dtype))
-    kxr = u * ct + v * st
-    kyr = -u * st + v * ct
+    ct = xp.cos(as_array(xp, angle, dtype=Gx.dtype))
+    st = xp.sin(as_array(xp, angle, dtype=Gx.dtype))
+    kxr = Gx * ct + Gy * st
+    kyr = -Gx * st + Gy * ct
 
-    phase = xp.exp(-1j * (u * cx + v * cy))
+    phase = xp.exp(-1j * (Gx * cx + Gy * cy))
 
     if stype in ('rectangle', 'square'):
         s = lx * sinc(kxr * lx / 2.0) * ly * sinc(kyr * ly / 2.0)
@@ -461,7 +461,7 @@ def shape_ft(xp, shape, ky, kx, period, lattice=None):
         # ``d(sqrt)/d`` is infinite, and ``jinc``'s own ``where`` turns that into NaN. Here the
         # radicand depends on ``period``, so it is ``d(R)/d(period)`` that used to come back
         # NaN on a circle while the guarded ellipse was fine.
-        r2 = u * u + v * v
+        r2 = Gx * Gx + Gy * Gy
         nz = r2 != 0
         rho = xp.where(nz, xp.sqrt(xp.where(nz, r2, xp.ones_like(r2))), xp.zeros_like(r2))
         s = (pi * R * R) * jinc(R * rho)          # 2 pi R J1(R rho)/rho

@@ -49,7 +49,7 @@ def polygon_ft(xp, verts, ky, kx, period, lattice=None):
 
     ``lattice`` is the cell basis (``None`` = axis-aligned ``diag(period)``), and as in
     :func:`wavebit._core.analytic.shape_ft` it reaches only the two lines that turn the order
-    indices into ``(u, v)``. Everything after them is the contour integral in **Cartesian**
+    indices into ``(Gx, Gy)``. Everything after them is the contour integral in **Cartesian**
     frequency, so a skewed cell changes where the transform is sampled and nothing about the
     polygon. Vertices are absolute Cartesian positions, and the shape needs no wrapping at the
     cell edge either: ``exp(-i G.r)`` carries the lattice periodicity, so integrating over the
@@ -58,15 +58,15 @@ def polygon_ft(xp, verts, ky, kx, period, lattice=None):
     Px, Py = period[0], period[1]
     pi = 3.141592653589793
     if lattice is None:
-        u = 2.0 * pi * kx / Px
-        v = 2.0 * pi * ky / Py
+        Gx = 2.0 * pi * kx / Px
+        Gy = 2.0 * pi * ky / Py
         cell_area = Px * Py
     else:
         a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
         a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
         det = a1x * a2y - a2x * a1y
-        u = 2.0 * pi * (a2y * kx - a1y * ky) / det
-        v = 2.0 * pi * (-a2x * kx + a1x * ky) / det
+        Gx = 2.0 * pi * (a2y * kx - a1y * ky) / det
+        Gy = 2.0 * pi * (-a2x * kx + a1x * ky) / det
         cell_area = abs(det)
 
     x, y = verts[:, 0], verts[:, 1]
@@ -75,13 +75,13 @@ def polygon_ft(xp, verts, ky, kx, period, lattice=None):
     mx, my = 0.5 * (x + xn), 0.5 * (y + yn)       # edge midpoints
 
     # Broadcast: (..., 1) frequency against (N,) edges.
-    U, V = u[..., None], v[..., None]
-    k_dot_e = U * ex + V * ey
-    k_cross_n = U * ey - V * ex                   # (k . n_hat) * |e|
-    terms = k_cross_n * xp.exp(-1j * (U * mx + V * my)) * _sinc(xp, 0.5 * k_dot_e)
+    GX, GY = Gx[..., None], Gy[..., None]
+    k_dot_e = GX * ex + GY * ey
+    k_cross_n = GX * ey - GY * ex                   # (k . n_hat) * |e|
+    terms = k_cross_n * xp.exp(-1j * (GX * mx + GY * my)) * _sinc(xp, 0.5 * k_dot_e)
     contour = xp.sum(terms, axis=-1)
 
-    k2 = u * u + v * v
+    k2 = Gx * Gx + Gy * Gy
     nz = k2 != 0
     k2_safe = xp.where(nz, k2, xp.ones_like(k2))
     area = polygon_area(xp, verts)
