@@ -186,16 +186,23 @@ def test_the_raster_path_is_the_raster():
     assert solver.slice_structure(layer=1).real.mean() == pytest.approx(4.0)
 
 
-def test_layer_is_indexed_the_way_the_structure_is():
-    """0 is the layer light meets first, on every path -- and out of range says so."""
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+def test_layer_is_indexed_the_way_the_structure_is(side):
+    """0 is the layer nearest ``top``, on every path -- and out of range says so.
+
+    Parametrised over ``incidence_side`` because that is the whole claim: the scene labels do
+    not move when the illumination does (``docs/conventions.md``). Lit from below the light
+    meets ``structure[-1]`` first, and ``layer=0`` still has to mean the top one -- "the layer
+    light meets first" was the wording here until 2026-08-22, and it is only true from above.
+    """
     shapes = [dict(type='circle', cx=500.0, cy=500.0, lx=200.0, material=9.0)]
     layers = [dict(background=1.0, shapes=[]), dict(background=1.0, shapes=shapes)]
-    solver = wavebit.rcwa(structure=layers, **COMMON)
+    solver = wavebit.rcwa(structure=layers, incidence_side=side, **COMMON)
 
     assert solver.slice_structure(layer=0, n=128).real.mean() == pytest.approx(1.0)
     assert solver.slice_structure(layer=1, n=128).real.mean() > 1.2
     assert solver.slice_structure(layer=-1, n=128).real.mean() > 1.2
-    with pytest.raises(IndexError, match='light meets first'):
+    with pytest.raises(IndexError, match='nearest'):
         solver.slice_structure(layer=2)
 
 

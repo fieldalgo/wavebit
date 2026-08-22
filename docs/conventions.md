@@ -112,8 +112,9 @@ disagree is exactly the state the type exists to remove.
 ## Geometry and propagation
 
 Layers are listed **top to bottom**, and `+z` points down, into the stack: `structure[0]` is
-the layer light meets first, `top` the medium it arrives from, `bot` the medium it
-exits into. A wave travelling `+z` carries `exp(+i*k0*kz*z)` with `Re(kz) > 0`; decay
+the layer nearest `top`, `structure[-1]` the one nearest `bot`, and `top` / `bot` are the
+half-spaces above and below — which of them the light arrives from is `incidence_side`, not
+the ordering. A wave travelling `+z` carries `exp(+i*k0*kz*z)` with `Re(kz) > 0`; decay
 toward `+z` is `Im(kz) > 0`.
 
 "Top/bottom" name the *scene*, not the illumination. `incidence_side` (`'top'` by

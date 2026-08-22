@@ -376,16 +376,17 @@ def _refuse_layer(solver, layer):
     if not (-n_layers <= layer < n_layers):
         raise IndexError(
             f'layer {layer} is out of range for a {n_layers}-layer stack. `layer` indexes the '
-            f'way `structure` does -- 0 is the layer light meets first '
-            f'(docs/conventions.md).')
+            f'way `structure` does -- 0 is the layer nearest `top`, whichever side the light '
+            f'arrives from (docs/conventions.md).')
 
 
 def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
     """The structure of one layer, as a NumPy array. **Geometry, not the truncated series.**
 
-    ``layer`` indexes the way ``structure`` does: ``0`` is the layer light meets first
-    (``docs/conventions.md``). Row 0 of the result is ``y = 0``, so it draws with
-    ``origin='lower'`` -- the same way up ``plot_field``'s top view ends at.
+    ``layer`` indexes the way ``structure`` does: ``0`` is the layer nearest ``top``,
+    whichever side the light arrives from (``docs/conventions.md``). Row 0 of the result is
+    ``y = 0``, so it draws with ``origin='lower'`` -- the same way up ``plot_field``'s top
+    view ends at.
 
     Returns complex values -- ``show='eps'`` for the relative permittivity the solve works in,
     ``show='n'`` for the refractive index derived from it. An absorbing layer has a non-zero
