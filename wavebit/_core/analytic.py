@@ -1058,7 +1058,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, half_width_u, half_w
         if lattice is None:
             mid_x, mid_y = Px / 2.0, Py / 2.0
             # Fractions of a period -- which is what the phase below is written in.
-            shift_y, shift_x = (cy - mid_y) / Py, (cx - mid_x) / Px
+            shift_v, shift_u = (cy - mid_y) / Py, (cx - mid_x) / Px
         else:
             a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
             a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
@@ -1069,11 +1069,11 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, half_width_u, half_w
             # its argument as a fraction of Px / Py.
             det = a1x * a2y - a2x * a1y
             dx, dy = cx - mid_x, cy - mid_y
-            shift_x = (a2y * dx - a2x * dy) / det
-            shift_y = (-a1y * dx + a1x * dy) / det
+            shift_u = (a2y * dx - a2x * dy) / det
+            shift_v = (-a1y * dx + a1x * dy) / det
         built = [dict(shapes[0], cx=mid_x, cy=mid_y)]
     else:
-        built, shift_y, shift_x = shapes, None, None
+        built, shift_v, shift_u = shapes, None, None
 
     # The build above is the expensive half and the phase below is the cheap one, so what is
     # cached is the split: for a single shape ``built`` sits at the centre of the cell whatever
@@ -1100,11 +1100,11 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, half_width_u, half_w
             _PROJECTOR_CACHE.pop(next(iter(_PROJECTOR_CACHE)))
         _PROJECTOR_CACHE[key] = coeffs
 
-    if shift_y is None:
+    if shift_v is None:
         phase = 1.0
     else:
         KKY, KKX = _grid(xp, half_width_u, half_width_v, _device(coeffs[0]), real_dtype)
-        arg = KKY * shift_y + KKX * shift_x
+        arg = KKY * shift_v + KKX * shift_u
         phase = xp.exp(xp.astype(arg, dtype) * (-2j * 3.141592653589793))
 
     return tuple(c * phase for c in coeffs)

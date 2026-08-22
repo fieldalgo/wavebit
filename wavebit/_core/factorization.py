@@ -339,9 +339,9 @@ def _fourier2d_grid(xp, cell, half_width_u, half_width_v, *, inverse_rule, piece
     dfs1d = xp.fft.fft(cell / cell.shape[1])
 
     dev = _device(xp, cell)
-    orders_y = list(range(-2 * half_width_v, 2 * half_width_v + 1))
+    orders_v = list(range(-2 * half_width_v, 2 * half_width_v + 1))
     orders_u = list(range(-2 * half_width_u, 2 * half_width_u + 1))
-    n_y = cell.shape[1]
+    n_v = cell.shape[1]
 
     # Read the coefficients on the *order* vector, correct them there, and only then expand
     # into the circulant -- the shape `fourier2d_integrated` has always had.
@@ -357,11 +357,11 @@ def _fourier2d_grid(xp, cell, half_width_u, half_width_v, *, inverse_rule, piece
     # wherever the old form worked, and defined where it did not: raw order indices need a grid
     # of at least 4*truncation_order+1 to stay in range, which is the whole reason the raster used to be
     # upsampled before anything else was considered.
-    coeff_v = dfs1d[:, xp.asarray(_wrap(orders_y, n_y), device=dev)]
+    coeff_v = dfs1d[:, xp.asarray(_wrap(orders_v, n_v), device=dev)]
     # Both kinds of grid carry the half-pixel offset; only a staircase also carries
     # the box transform. See :func:`_half_pixel_phase`.
     _correct = _pixel_correction if piecewise_constant else _half_pixel_phase
-    coeff_v = coeff_v * _correct(xp, orders_y, n_y, coeff_v.dtype, dev)
+    coeff_v = coeff_v * _correct(xp, orders_v, n_v, coeff_v.dtype, dev)
     conv1d = coeff_v[:, _circulant_gather(xp, half_width_v, dev)]
 
     if inv_u or inv_v:    # Li's inner step, whichever direction asked for it
@@ -1431,10 +1431,10 @@ def fourier2d_integrated(xp, cell, x, y, half_width_u, half_width_v, *, inverse_
     cfs1d = _fourier1d_integrated(xp, y, cell, half_width_v, extent_v)
 
     dev = _device(xp, cell)
-    idx_y = _circulant_gather(xp, half_width_v, dev)
-    idx_x = _circulant_gather(xp, half_width_u, dev)
+    idx_v = _circulant_gather(xp, half_width_v, dev)
+    idx_u = _circulant_gather(xp, half_width_u, dev)
 
-    conv1d = cfs1d[:, idx_y]
+    conv1d = cfs1d[:, idx_v]
 
     if inv_u or inv_v:    # Li's inner step, whichever direction asked for it
         conv1d = xp.linalg.inv(conv1d)
@@ -1443,7 +1443,7 @@ def fourier2d_integrated(xp, cell, x, y, half_width_u, half_width_v, *, inverse_
 
     cfs_2d = _fourier1d_integrated(xp, x, xp.matrix_transpose(conv1d), half_width_u, extent_u)
 
-    conv2d = cfs_2d[:, idx_x]
+    conv2d = cfs_2d[:, idx_u]
     conv2d = xp.reshape(conv2d, (n_orders_v, n_orders_v, n_orders_u, n_orders_u))
     conv2d = xp.moveaxis(conv2d, 1, 2)
     conv2d = xp.reshape(conv2d, (n_orders_v * n_orders_u, n_orders_v * n_orders_u))

@@ -164,10 +164,10 @@ def check_normal_grid(grid_shape, half_width_u, half_width_v):
     Same floor `factorization._normal_field_floor` enforces on the raster path.
     """
     Ny, Nx = grid_shape
-    need_y, need_x = 4 * half_width_v + 1, 4 * half_width_u + 1
-    if Ny < need_y or Nx < need_x:
+    need_v, need_u = 4 * half_width_v + 1, 4 * half_width_u + 1
+    if Ny < need_v or Nx < need_u:
         raise ValueError(f'normal-field grid {Ny}x{Nx} aliases at truncation_order=({half_width_u}, {half_width_v}): '
-                         f'needs at least {need_y}x{need_x}')
+                         f'needs at least {need_v}x{need_u}')
 
 
 def normal_projector_coeffs(xp, loops, grid_shape, period, half_width_u, half_width_v, dtype, cdtype,
@@ -189,7 +189,7 @@ def normal_projector_coeffs(xp, loops, grid_shape, period, half_width_u, half_wi
         c = _centroid(xp, loops[0])
         if lattice is None:
             mid_x, mid_y = Px / 2.0, Py / 2.0
-            frac_x, frac_y = 1.0 / Px, 1.0 / Py           # fractions of a period
+            frac_u, frac_v = 1.0 / Px, 1.0 / Py           # fractions of a period
         else:
             a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
             a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
@@ -198,7 +198,7 @@ def normal_projector_coeffs(xp, loops, grid_shape, period, half_width_u, half_wi
         built = [loops[0] - shift[None, :]]
         KY, KX = _k_grids(xp, half_width_u, half_width_v, dtype)
         if lattice is None:
-            su, sv = shift[0] * frac_x, shift[1] * frac_y
+            su, sv = shift[0] * frac_u, shift[1] * frac_v
         else:
             # The displacement in *fractional lattice* coordinates, A^-1 @ shift. The phase is
             # already exp(-i G.d) written that way; it was only ever handed Px / Py fractions.

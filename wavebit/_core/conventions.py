@@ -435,10 +435,10 @@ def lit_orders(excitation, window_x, window_y):
     # Validated against the *declared* truncation_order, which the window was widened from: a lit
     # order is inside `centre +- half` by construction, so re-deriving the declaration is what
     # keeps the refusal meaningful rather than vacuous.
-    declared_x = max(abs(centre_u - half_u), abs(centre_u + half_u))
-    declared_y = max(abs(centre_v - half_v), abs(centre_v + half_v))
+    declared_u = max(abs(centre_u - half_u), abs(centre_u + half_u))
+    declared_v = max(abs(centre_v - half_v), abs(centre_v + half_v))
     resolved = []
-    for (m, n), amplitude, key in parse_excitation(excitation, declared_x, declared_y):
+    for (m, n), amplitude, key in parse_excitation(excitation, declared_u, declared_v):
         resolved.append(LitOrder((n - centre_v + half_v) * n_orders_u
                                  + (m - centre_u + half_u), amplitude, key))
     return tuple(resolved)

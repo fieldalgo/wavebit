@@ -333,7 +333,7 @@ class Table:
         self.shapes = [np.asarray(s, float) for s in shapes]
         self.recs = []
         self.vals = []
-        self._x = {}
+        self._crossings = {}
 
     def src(self, si, vi):
         self.recs.append(('src', si, vi))
@@ -342,13 +342,13 @@ class Table:
 
     def cross(self, ia1, ia2, ib1, ib2):
         key = (ia1, ia2, ib1, ib2)
-        if key in self._x:
-            return self._x[key]
+        if key in self._crossings:
+            return self._crossings[key]
         a1, a2 = self.vals[ia1], self.vals[ia2]
         b1, b2 = self.vals[ib1], self.vals[ib2]
         self.recs.append(('x', ia1, ia2, ib1, ib2))
         self.vals.append(_seg_point(np, a1, a2, b1, b2))
-        self._x[key] = len(self.recs) - 1
+        self._crossings[key] = len(self.recs) - 1
         return len(self.recs) - 1
 
     def poly(self, ids):
