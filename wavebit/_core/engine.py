@@ -85,7 +85,36 @@ def _concrete_period(value):
     return float(p[0]), float(p[1])
 
 
-def _half_space_index(material):
+def _refuse_shaped_half_space(material, where):
+    """A half-space is one uniform material, so its numbers must be scalars.
+
+    Checked here rather than in :func:`~wavebit._core.domain.as_material`, which is
+    deliberately permissive: it cannot tell a vmapped tracer from a raster grid, and refusing
+    both to catch one would break the design-variable case (``tests/test_material.py::
+    test_arrays_and_tracers_are_not_refused``). This slot can be precise where that one cannot,
+    because *half-space* is a stronger claim than *material* -- and because the test is a
+    **shape**, never a value. A shape is static under ``jit``, ``grad`` and ``vmap`` alike, and
+    a vmapped scalar reads ``()`` inside the trace, so nothing traced is caught by this.
+
+    Without it a shaped half-space travelled as far as ``_separable_kxy``, where it met the
+    order range and raised ``operands could not be broadcast together with shapes (1, 8) and
+    (5,)`` -- loud, but naming neither the argument at fault nor what a half-space is.
+    """
+    for name, value in (('epsilon', material.epsilon), ('mu', material.mu)):
+        shape = tuple(getattr(value, 'shape', ()))
+        size = 1
+        for dim in shape:
+            size *= int(dim)
+        if size > 1:
+            raise ValueError(
+                f'`{where}` is a half-space, so its {name} must be a single value, but it has '
+                f'shape {shape}. A half-space is semi-infinite and homogeneous: a patterned or '
+                'graded medium is a *layer*, which goes in `structure` with a thickness of its '
+                'own. An anisotropic half-space is not supported either -- its modes are the '
+                'plane waves that `sqrt(eps*mu)` alone defines.')
+
+
+def _half_space_index(material, where='top'):
     """``sqrt(eps*mu)`` -- the one place a half-space material becomes an index.
 
     **The branch is verified, not chosen.** A passive medium has ``Im(eps) >= 0`` in this
@@ -110,6 +139,7 @@ def _half_space_index(material):
     ``jax.jit`` where the value would be a tracer. A material that names ``mu = 1`` takes the
     second line and multiplies by an exact one, so the two answers agree anyway.
     """
+    _refuse_shaped_half_space(material, where)
     if not material.is_magnetic:
         return index_from_eps(material.epsilon)
     return index_from_eps(material.epsilon * material.mu)
@@ -384,7 +414,7 @@ class CoreSolveMixin:
     @top.setter
     def top(self, value):
         self._top = as_material(value, 'top')
-        self._n_top = _half_space_index(self._top)
+        self._n_top = _half_space_index(self._top, 'top')
 
     @property
     def bot(self):
@@ -394,7 +424,7 @@ class CoreSolveMixin:
     @bot.setter
     def bot(self, value):
         self._bot = as_material(value, 'bot')
-        self._n_bot = _half_space_index(self._bot)
+        self._n_bot = _half_space_index(self._bot, 'bot')
 
     @property
     def n_top(self):

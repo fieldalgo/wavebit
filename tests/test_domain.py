@@ -140,6 +140,49 @@ def test_material_half_spaces_are_the_same_physics_as_the_shorthand():
     assert _de(through) == _de(plain)
 
 
+@pytest.mark.parametrize('slot', ['top', 'bot'])
+@pytest.mark.parametrize('name, value', [
+    ('a raster', np.full((1, 8), 2.25)),
+    ('a tensor', np.diag([2.25, 2.25, 3.0])),
+    ('a mu raster', Material(2.25, mu=np.full((2, 2), 1.5))),
+])
+def test_a_half_space_that_is_not_one_material_is_refused(slot, name, value):
+    """A half-space is semi-infinite and homogeneous, so its numbers are single values.
+
+    Refused at the half-space slot rather than in :func:`as_material`, which is deliberately
+    permissive -- it cannot tell a vmapped tracer from a raster grid
+    (``test_material.py::test_arrays_and_tracers_are_not_refused``). *Half-space* is a
+    stronger claim than *material*, so this slot can be precise where that one cannot.
+
+    Until 2026-08-22 a shaped half-space travelled as far as ``_separable_kxy`` and raised
+    ``operands could not be broadcast together with shapes (1, 8) and (5,)`` -- loud, but
+    naming neither the argument at fault nor what a half-space is. The `(5,)` was the order
+    count, which no caller has any reason to recognise.
+    """
+    kw = dict(backend=0, max_order=[2, 0], period=[0.77], wavelength=0.777, thickness=[0.15],
+              theta=0.0, phi=None, tetm=Tetm.TE, **{slot: value})
+    kw.setdefault('top' if slot == 'bot' else 'bot', 1.0)
+    with pytest.raises(ValueError) as excinfo:
+        wavebit.rcwa(**kw)
+    message = str(excinfo.value)
+    assert f'`{slot}`' in message and 'half-space' in message
+    assert 'layer' in message and '`structure`' in message      # says where it does belong
+
+
+@pytest.mark.parametrize('value', [2.25, 2.25 + 0.3j, np.asarray(2.25), np.asarray([2.25]),
+                                   Material(2.25, mu=1.5)])
+def test_one_value_in_any_spelling_is_still_one_value(value):
+    """The refusal is a *size*, not a type: a 0-d or one-element array is a scalar.
+
+    Which is also what keeps it safe under trace. The test never reads the value, only the
+    shape -- and a shape is static under ``jit``, ``grad`` and ``vmap`` alike, with a vmapped
+    scalar reading ``()`` inside the trace. ``test_backend_jax.py`` runs the traced solves
+    that would fail if this had been a value comparison.
+    """
+    wavebit.rcwa(backend=0, max_order=[2, 0], period=[0.77], wavelength=0.777,
+                 thickness=[0.15], theta=0.0, phi=None, tetm=Tetm.TE, top=value, bot=1.0)
+
+
 # --------------------------------------------------------------- retired spellings
 
 def test_the_retired_layer_key_is_in_the_one_table():
