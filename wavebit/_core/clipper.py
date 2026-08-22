@@ -188,9 +188,9 @@ def plan_difference(A, B):
     """
     A, B = np.asarray(A, float), np.asarray(B, float)
     ra, rb = _rings(A, B)
-    n_u = sum(1 for n in ra if n['kind'] == 'x')
+    n_crossings = sum(1 for n in ra if n['kind'] == 'x')
 
-    if n_u == 0:                                       # no crossings: containment or disjoint
+    if n_crossings == 0:                                       # no crossings: containment or disjoint
         if point_in_polygon(A[0], B):
             return [], []                              # A entirely covered
         if point_in_polygon(B[0], A):                  # B punches a hole in A
@@ -200,8 +200,8 @@ def plan_difference(A, B):
         plan = [[('src', 'A', k) for k in range(len(A))]]
         return plan, _eval_plan_np(plan, A, B)
 
-    if n_u % 2:
-        raise DegenerateClipError(f'odd number of crossings ({n_u}) — tangency?')
+    if n_crossings % 2:
+        raise DegenerateClipError(f'odd number of crossings ({n_crossings}) — tangency?')
 
     # Flag convention for A\B, pinned against a raster in `_selftest_flags` below:
     # walk A forward where it is OUTSIDE B, and B backward where it is INSIDE A.

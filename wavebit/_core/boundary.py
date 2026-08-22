@@ -211,10 +211,10 @@ def normal_projector_coeffs(xp, loops, grid_shape, period, half_width_u, half_wi
         built = loops
         phase = xp.asarray(1.0 + 0j, dtype=cdtype)
 
-    n_u, n_v = distance_gradient_normal_field(xp, built, grid_shape, period, dtype,
-                                            lattice=lattice)
+    normal_x, normal_y = distance_gradient_normal_field(xp, built, grid_shape, period, dtype,
+                                                        lattice=lattice)
     out = []
-    for f in (n_u * n_u, n_u * n_v, n_v * n_v):
+    for f in (normal_x * normal_x, normal_x * normal_y, normal_y * normal_y):
         out.append(_sampled_coeffs(xp, xp.astype(f, cdtype), half_width_u, half_width_v) * phase)
     return out
 
