@@ -32,7 +32,7 @@ free to absorb anything absorbs errors too.
 
 **One component is excluded, and it is not swept under the rug.** TM's ``E_x`` is discontinuous
 across the grating's vertical interfaces and the two codes resolve it differently at any finite
-truncation -- 7.0e-2 to 1.0e-1 here, shrinking with ``max_order`` but non-monotonically, in the shape
+truncation -- 7.0e-2 to 1.0e-1 here, shrinking with ``truncation_order`` but non-monotonically, in the shape
 of Gibbs ringing near the jump rather than of a defect. Which code is closer to the true field
 is not established, and cannot be from inside this directory.
 :func:`test_the_discontinuous_tm_component_is_the_known_exception` pins that gap from both
@@ -59,9 +59,9 @@ GOLDEN_PATH = HERE / 'golden_reticolo_field.npz'
 # departure of the amplitude from 1 is 2.7e-14. This is round-off room above that, not slack.
 TOL = 1e-12
 
-# TM `E_x` on a patterned stack, measured over the same 24 cases: 7.0e-2 to 1.0e-1 at max_order=8.
+# TM `E_x` on a patterned stack, measured over the same 24 cases: 7.0e-2 to 1.0e-1 at truncation_order=8.
 # The band is deliberately loose at both ends -- it exists to keep the exception visible and
-# bounded, not to pin a number. See the generator for the max_order convergence behind it.
+# bounded, not to pin a number. See the generator for the truncation_order convergence behind it.
 SLOW_BAND = (1e-3, 3e-1)
 
 IDS = [f'{s}-{t:g}-{p}' for s, t, p in CASES]
@@ -89,7 +89,7 @@ def _in_our_frame(e, pol):
 
 def _reconstruct(stack, theta, pol):
     thickness, structure = STACKS[stack]
-    solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, period=[PERIOD], max_order=MAX_ORDER,
+    solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, period=[PERIOD], truncation_order=MAX_ORDER,
                           wavelength=WL, thickness=thickness, structure=structure,
                           theta=np.deg2rad(theta), phi=None, tetm=pol,
                           # RETICOLO's texture is analytic piecewise-constant, so the exact

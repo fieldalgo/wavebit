@@ -79,13 +79,13 @@ def _reconstruct(path, stack_name, theta, phi, pol):
     kw = dict(backend=0, top=1.0, bot=1.0, wavelength=WL, thickness=d,
               theta=np.deg2rad(theta), answers='field')
     if path in ('te', 'tm'):
-        kw.update(tetm=path, phi=None, max_order=(0, 0), period=[PERIOD[0]], structure=eps)
+        kw.update(tetm=path, phi=None, truncation_order=(0, 0), period=[PERIOD[0]], structure=eps)
     elif path == 'conical':
         kw.update(psi=np.pi / 2 if pol == 's' else 0.0, phi=np.deg2rad(phi),
-                  max_order=(0, 0), period=[PERIOD[0]], structure=eps)
+                  truncation_order=(0, 0), period=[PERIOD[0]], structure=eps)
     else:
         kw.update(psi=np.pi / 2 if pol == 's' else 0.0, phi=np.deg2rad(phi),
-                  max_order=(0, 0), period=PERIOD,
+                  truncation_order=(0, 0), period=PERIOD,
                   structure=np.repeat(np.repeat(eps, 2, axis=1), 2, axis=2))
     solver = wavebit.rcwa(**kw)
     if path == '4ff':

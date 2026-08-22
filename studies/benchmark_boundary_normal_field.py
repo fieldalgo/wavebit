@@ -25,13 +25,13 @@ over identical abscissae.
 
 **The result, and it is one-sided.** On two tilted rectangles the sampled field integrates
 high by about 22%, which is the known defect. The grad-of-distance field integrates to the
-*wrong sign* -- at every position sampled, at max_order 8 and again at max_order 12, with a spread about
+*wrong sign* -- at every position sampled, at truncation_order 8 and again at truncation_order 12, with a spread about
 the mean far too small for sampling noise. On a circle pair the sampled field is already within
 about 1% and the replacement is an order of magnitude worse, which is the same verdict the cost
 table at the end reaches independently. The swap is not a fix; the field stays as it is.
 
 This script does **not** settle forward accuracy, and deliberately does not try. The two
-constructions are still ~2e-4 apart on a total at max_order 24, so neither has reached the limit any
+constructions are still ~2e-4 apart on a total at truncation_order 24, so neither has reached the limit any
 ratio between them would have to be measured against, and the ratio one computes is set by
 which of them is called the limit. Write-up: ``docs/boundary-modeling.md``.
 
@@ -117,8 +117,8 @@ def geometries(structure):
     return sampled, swapped
 
 
-def total_reflectance(build, geometry, cx, max_order, backend=0):
-    solver = wavebit.rcwa(backend=backend, structure=build(cx), max_order=[max_order, max_order],
+def total_reflectance(build, geometry, cx, truncation_order, backend=0):
+    solver = wavebit.rcwa(backend=backend, structure=build(cx), truncation_order=[truncation_order, truncation_order],
                           normal_grid=NORMAL_GRID, **CFG)
     result = solver.solve(geometry=geometry)
     if backend == 1:
@@ -127,7 +127,7 @@ def total_reflectance(build, geometry, cx, max_order, backend=0):
     return float(np.real(np.sum(np.asarray(result.R))))
 
 
-def integral_test(build, cx0, max_order, use_boundary):
+def integral_test(build, cx0, truncation_order, use_boundary):
     """Trapezoid of d(sum R)/dcx across the window, against the change in sum R across it."""
     import jax
     import jax.numpy as jnp                                       # noqa: F401
@@ -135,9 +135,9 @@ def integral_test(build, cx0, max_order, use_boundary):
     geometry = geometries(build(cx0))[1 if use_boundary else 0]
     xs = cx0 + np.linspace(-HALF_PIXELS * PIX, HALF_PIXELS * PIX, N_POINTS)
     grads = np.array([float(jax.grad(
-        lambda c: total_reflectance(build, geometry, c, max_order, backend=1))(
+        lambda c: total_reflectance(build, geometry, c, truncation_order, backend=1))(
             jnp.asarray(x))) for x in xs])
-    loss = np.array([total_reflectance(build, geometry, x, max_order) for x in xs])
+    loss = np.array([total_reflectance(build, geometry, x, truncation_order) for x in xs])
     return dict(integral=float(np.trapezoid(grads, xs)),
                 change=float(loss[-1] - loss[0]),
                 mean=float(grads.mean()), spread=float(grads.std() / abs(grads.mean())),
@@ -179,17 +179,17 @@ def main():
     say('a ratio of +1 would mean the gradient accounts for the loss exactly')
     say()
     header = ('%-24s %9s %-18s %12s %12s %8s %8s %6s'
-              % ('case', 'max_order', 'normal field', 'int d/dcx', 'loss change', 'ratio',
+              % ('case', 'truncation_order', 'normal field', 'int d/dcx', 'loss change', 'ratio',
                  'spread', 'wrong'))
     say(header)
     say('-' * len(header))
     for name, (build, cx0, max_orders) in CASES.items():
-        for max_order in max_orders:
+        for truncation_order in max_orders:
             for use_boundary in (False, True):
                 start = time.perf_counter()
-                out = integral_test(build, cx0, max_order, use_boundary)
+                out = integral_test(build, cx0, truncation_order, use_boundary)
                 say('%-24s %9d %-18s %+12.4e %+12.4e %8.2f %7.1f%% %3d/%d   (%.0fs)'
-                    % (name, max_order,
+                    % (name, truncation_order,
                        'grad-of-distance' if use_boundary else 'sampled',
                        out['integral'], out['change'], out['integral'] / out['change'],
                        out['spread'] * 100, out['wrong_sign'], N_POINTS,

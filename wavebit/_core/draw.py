@@ -326,7 +326,7 @@ def _inverse_series(coeffs, max_order_x, max_order_y, nx, ny):
 
 def _band_limited(solver, layer, n):
     """The layer's own eps coefficients, evaluated on an ``n x n`` fractional grid."""
-    max_order_x, max_order_y = int(solver.max_order[0]), int(solver.max_order[1])
+    max_order_x, max_order_y = int(solver.truncation_order[0]), int(solver.truncation_order[1])
     mt = solver.modeling_type
     period = _periods(solver)
 
@@ -413,10 +413,10 @@ def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
     1. **It is the geometry; the solver holds a truncated transform of it.** Pass
        ``band_limited=True`` to see that instead -- the layer's own coefficients, evaluated
        rather than sampled. A ``circle(lx=260, material=12.25)`` plus a rectangle rotated 0.45
-       rad in a 1000x1000 cell comes back at ``max_order=9`` with ``eps`` in ``[-0.186,
+       rad in a 1000x1000 cell comes back at ``truncation_order=9`` with ``eps`` in ``[-0.186,
        13.850]`` where the geometry is ``[1.0, 12.25]``: negative permittivity and 13%
        overshoot, pure Gibbs. Relative L2 against the sampled geometry is 28.4% / 16.8% / 10.2%
-       at ``max_order`` 3 / 9 / 25, while ``<eps>`` agrees to 1e-4 throughout -- so an
+       at ``truncation_order`` 3 / 9 / 25, while ``<eps>`` agrees to 1e-4 throughout -- so an
        integrated quantity can be converged while the picture still rings.
     2. **On the block path this draws the blocks, not the shape.** That is what the solver has,
        and it is not what the user typed: a 240x180 rectangle at ``angle=0.4`` with
@@ -516,7 +516,7 @@ def plot_structure(solver, layer=0, n=512, show='eps', ax=None, band_limited=Fal
     what = {0: 'raster', 1: 'blocks', 2: 'shapes'}.get(solver.modeling_type, '?')
     title = f'layer {layer} ({what}), {show}'
     if band_limited:
-        title += f' band-limited to max_order={tuple(int(f) for f in solver.max_order)}'
+        title += f' band-limited to truncation_order={tuple(int(f) for f in solver.truncation_order)}'
     if complex_valued:
         title += ' (real part)'
     ax.set_title(title, fontsize=9)

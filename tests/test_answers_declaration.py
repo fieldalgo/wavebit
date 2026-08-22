@@ -34,7 +34,7 @@ def _solver(backend=0, n_layers=1, **kw):
     if backend == 1:
         import jax.numpy as jnp
         grid = jnp.asarray(grid)
-    return wavebit.rcwa(backend=backend, max_order=(3, 3), period=(300., 300.), wavelength=500.,
+    return wavebit.rcwa(backend=backend, truncation_order=(3, 3), period=(300., 300.), wavelength=500.,
                         thickness=(120.,) * n_layers, top=1., bot=2.1025, structure=grid,
                         psi=0.3, theta=0.2, phi=0.1, **kw)
 

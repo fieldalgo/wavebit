@@ -10,8 +10,8 @@ disagreement:
 
 * **The order sets must match.** fmmax's ``generate_expansion`` on a square lattice with
   ``approximate_num_terms=25`` and parallelogramic truncation returns a 5x5 set. Comparing that
-  against this project's ``max_order=(8, 0)`` — 17 orders along x, one along y — left a 1.2e-1
-  residual that is entirely truncation. ``max_order=(2, 2)`` is the same 5x5 set and drops it to
+  against this project's ``truncation_order=(8, 0)`` — 17 orders along x, one along y — left a 1.2e-1
+  residual that is entirely truncation. ``truncation_order=(2, 2)`` is the same 5x5 set and drops it to
   1.9e-5.
 * **The factorization rules must match.** fmmax's ``Formulation.FFT`` is the plain Laurent
   rule, which is the one Li's work exists because of: it converges badly in TM. It left the

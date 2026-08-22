@@ -35,53 +35,53 @@ UC_2D = np.array([[[9., 9., 1., 1.], [1., 9., 9., 1.], [1., 1., 9., 9.], [9., 1.
 CASES_1D = [
     ('te_1layer', dict(tetm='te', structure=np.array([[[9., 9., 9., 1., 1., 1.]]]), thickness=[0.15],
                        top=4.0, bot=1.0, theta=0.0, wavelength=0.777, period=[0.77],
-                       max_order=[6, 0])),
+                       truncation_order=[6, 0])),
     ('tm_1layer', dict(tetm='tm', structure=np.array([[[9., 9., 9., 1., 1., 1.]]]), thickness=[0.15],
                        top=4.0, bot=1.0, theta=0.0, wavelength=0.777, period=[0.77],
-                       max_order=[6, 0])),
+                       truncation_order=[6, 0])),
     ('te_2layer_oblique', dict(tetm='te', structure=UC_1D, thickness=[0.15, 0.22], top=4.0,
                                bot=2.25, theta=0.3, wavelength=0.777, period=[0.77],
-                               max_order=[5, 0])),
+                               truncation_order=[5, 0])),
     ('tm_2layer_oblique', dict(tetm='tm', structure=UC_1D, thickness=[0.15, 0.22], top=4.0,
                                bot=2.25, theta=0.3, wavelength=0.777, period=[0.77],
-                               max_order=[5, 0])),
+                               truncation_order=[5, 0])),
     # bottom layer uniform and equal to the substrate: ETM short-circuits the interface,
     # SMM has no short-circuit to take — they must still land on the same answer.
     ('te_same_material', dict(tetm='te', structure=UC_1D_SUB, thickness=[0.2, 0.1], top=1.0,
                               bot=1.0, theta=0.0, wavelength=0.9, period=[0.7],
-                              max_order=[5, 0])),
+                              truncation_order=[5, 0])),
     ('tm_same_material', dict(tetm='tm', structure=UC_1D_SUB, thickness=[0.2, 0.1], top=1.0,
                               bot=1.0, theta=0.0, wavelength=0.9, period=[0.7],
-                              max_order=[5, 0])),
+                              truncation_order=[5, 0])),
     # thick, strongly evanescent: the regime where a connecting algorithm goes wrong if it
     # ever inverts a growing exponential
     ('tm_thick', dict(tetm='tm', structure=np.array([[[16., 16., 16., 16., 1., 1., 1., 1.]]]),
                       thickness=[20.0], top=1.0, bot=1.0, theta=0.0, wavelength=0.5,
-                      period=[0.6], max_order=[12, 0])),
+                      period=[0.6], truncation_order=[12, 0])),
 ]
 
 CASES_CONICAL = [
     ('con_1layer', dict(structure=np.array([[[9., 9., 9., 1., 1., 1.]]]), thickness=[0.15],
                         top=4.0, bot=1.0, theta=0.2, phi=0.3, psi=0.4, wavelength=0.777,
-                        period=[0.77], max_order=[6, 0])),
+                        period=[0.77], truncation_order=[6, 0])),
     ('con_2layer_lossy_sub', dict(structure=UC_1D, thickness=[0.15, 0.22], top=1.0, bot=2.25,
                                   theta=0.3, phi=0.5, psi=1.1, wavelength=0.9, period=[0.7],
-                                  max_order=[5, 0])),
+                                  truncation_order=[5, 0])),
     ('con_phi0', dict(structure=np.array([[[16., 16., 1., 1., 1., 1.]]]), thickness=[0.3],
                       top=2.25, bot=1.0, theta=0.25, phi=0.0, psi=0.7, wavelength=0.6,
-                      period=[0.5], max_order=[4, 0])),
+                      period=[0.5], truncation_order=[4, 0])),
 ]
 
 CASES_2D = [
     ('2d_1layer', dict(structure=UC_2D, thickness=[0.3], top=1.0, bot=2.25, theta=0.2,
-                       phi=0.4, psi=0.7, wavelength=0.9, period=[0.7, 0.7], max_order=[3, 3])),
+                       phi=0.4, psi=0.7, wavelength=0.9, period=[0.7, 0.7], truncation_order=[3, 3])),
     # The two layers differ in *mean* permittivity, not just in pattern. Equal means used to
     # trip a ETM misdetection (see the DEGENERATE_MEAN note below); that path is gone, and
     # this stays the way it is because the case is a cross-algorithm check, not a probe of it.
     ('2d_2layer_normal', dict(structure=np.concat([UC_2D, 1 + UC_2D[:, ::-1]]),
                               thickness=[0.2, 0.3], top=1.0, bot=1.0, theta=0.0,
                               phi=0.0, psi=0.4, wavelength=0.5, period=[0.6, 0.6],
-                              max_order=[2, 2])),
+                              truncation_order=[2, 2])),
 ]
 
 ALL_CASES = ([(n, k, '1d') for n, k in CASES_1D]
@@ -172,7 +172,7 @@ def _core_inputs(kwargs):
     solver = wavebit.rcwa(backend=0, layer_algorithm='SMM', **kwargs)
     solver.solve()                    # assigns the grating type
     epx, epy, epz, *_ = to_conv_mat_raster_sampled(
-        solver.structure, solver.max_order[0], solver.max_order[1])
+        solver.structure, solver.truncation_order[0], solver.truncation_order[1])
     kx, ky = solver.order_kxy()
     # The core solves take an INDEX: `n_top` / `n_bot` are amplitude ratios there, and the
     # solver's read-only properties are exactly the derived roots to hand them.
@@ -304,7 +304,7 @@ def test_smm_field_state_matches_tmm(name, kwargs, kind):
 # the recovery actually uses cannot, by construction of eps_gap.
 CUTOFF = dict(structure=np.array([[[9., 9., 1., 1., 9., 1.]], [[4., 4., 4., 1., 1., 1.]]]),
               thickness=[300.0, 500.0], top=1.0, bot=2.25, theta=0.0,
-              wavelength=500.0, period=[2000.0], max_order=[8, 0])
+              wavelength=500.0, period=[2000.0], truncation_order=[8, 0])
 
 
 @pytest.mark.parametrize('extra', [dict(tetm='te'), dict(tetm='tm'), dict(psi=0.3 * np.pi, phi=0.3)],
@@ -355,7 +355,7 @@ def test_smm_field_on_a_skewed_cell_matches_tmm():
     recovery reads the lattice -- it works in the mode and gap bases, which the basis change
     never touches -- and this is the test that says so rather than assuming it.
     """
-    kwargs = dict(structure=_hex_rod(), period=[HEX_P, HEX_P], max_order=[4, 4], thickness=[150.0],
+    kwargs = dict(structure=_hex_rod(), period=[HEX_P, HEX_P], truncation_order=[4, 4], thickness=[150.0],
                   wavelength=900.0, top=1.0, bot=1.0, theta=0.1, phi=0.3, psi=0.4,
                   lattice=HEX, factorization='nvf')
     _, tmm = _field('ETM', kwargs, sample_x=6, sample_y=6, sample_z=4)
@@ -397,7 +397,7 @@ def test_frozen_geometry_does_not_change_the_smm_answer():
 # growing one back.
 DEGENERATE_MEAN = dict(
     structure=np.concat([UC_2D, UC_2D[:, ::-1]]), thickness=[0.2, 0.3], top=1.0, bot=1.0,
-    psi=0.4, wavelength=0.5, period=[0.6, 0.6], max_order=[2, 2])
+    psi=0.4, wavelength=0.5, period=[0.6, 0.6], truncation_order=[2, 2])
 
 
 @pytest.mark.parametrize('theta,phi', [(0.0, 0.0), (0.1, 0.0), (0.1, 0.4)])
@@ -423,7 +423,7 @@ def test_smm_2d_matches_conical_on_y_invariant_stack():
     pattern = np.array([[[9., 9., 1., 1., 9., 1., 1., 1.]],
                         [[4., 4., 4., 1., 1., 1., 4., 4.]]])
     common = dict(thickness=[0.2, 0.3], top=1.0, bot=1.0, psi=0.4, wavelength=0.5,
-                  period=[0.6, 0.6], theta=0.1, phi=0.0, max_order=[2, 0])
+                  period=[0.6, 0.6], theta=0.1, phi=0.0, truncation_order=[2, 0])
     conical = _solve('SMM', dict(common, structure=pattern))
     two_d = _solve('SMM', dict(common, structure=np.repeat(pattern, 8, axis=1)))
     for field in ('R', 'T'):
@@ -558,7 +558,7 @@ def test_jit_traceable_jax():
 #: A z-asymmetric two-layer stack between unequal half-spaces: the two sides genuinely differ,
 #: so a mirrored or block-swapped mapping cannot pass by symmetry.
 S_KW = dict(structure=UC_1D, thickness=[0.15, 0.22], top=4.0, bot=2.25, tetm='te',
-            wavelength=0.777, period=[0.77], max_order=[5, 0], answers='amplitude')
+            wavelength=0.777, period=[0.77], truncation_order=[5, 0], answers='amplitude')
 
 
 def _lit(side='top', algo='SMM', **over):
@@ -692,7 +692,7 @@ def test_the_backside_matrix_is_the_scene_a_caller_would_build_by_hand():
 #: between layers 1 and 2. Every piece is solved as an independent problem.
 WHOLE = np.concatenate([UC_1D, UC_1D[::-1]])
 WHOLE_TH = [0.15, 0.22, 0.31, 0.09]
-JOINT_KW = dict(tetm='te', wavelength=0.777, period=[0.77], max_order=[5, 0],
+JOINT_KW = dict(tetm='te', wavelength=0.777, period=[0.77], truncation_order=[5, 0],
                 answers='amplitude', layer_algorithm='SMM')
 
 

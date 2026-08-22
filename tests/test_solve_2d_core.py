@@ -30,16 +30,16 @@ except ImportError:
     pass
 
 
-def _run_and_inputs(structure, thickness, n_top, n_bot, wl, period, max_order, theta, phi, psi):
+def _run_and_inputs(structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi):
     # The constructor takes permittivity, `solve_2d` the index -- one pair of half-spaces
     # spelled in the quantity each side actually works in.
     solver = wavebit.rcwa(backend=0, top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=phi,
-                          psi=psi, max_order=max_order, period=period, wavelength=wl,
+                          psi=psi, truncation_order=truncation_order, period=period, wavelength=wl,
                           thickness=thickness, structure=structure)
     via_api = solver.solve()
     assert solver.grating_type == 2, solver.grating_type    # ensure 2D path
     epx, epy, epz, *_ = to_conv_mat_raster_sampled(
-        solver.structure, solver.max_order[0], solver.max_order[1])
+        solver.structure, solver.truncation_order[0], solver.truncation_order[1])
     kx, ky = solver.order_kxy()
     inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_top, n_bot=n_bot,
                   theta=solver.theta, phi=solver.phi,
@@ -70,7 +70,7 @@ def _rand(shape, seed):
 
 
 CASES = [
-    # name, structure, thickness, n_top, n_bot, wl, period, max_order, theta, phi, psi
+    # name, structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi
     # (half-spaces as indices; squared where they enter the constructor)
     ('normal', _rand((1, 5, 5), 0), [0.2], 1.0, 1.0, 0.9, [1.0, 1.0], [2, 2], 0.0, 0.0, 0.0),
     ('oblique_psi', _rand((1, 6, 6), 1), [0.3], 1.0, 1.5, 0.8, [1.0, 1.2], [2, 2], 0.3, 0.4, 0.9),
@@ -80,9 +80,9 @@ CASES = [
 
 @pytest.mark.parametrize('case', CASES, ids=[c[0] for c in CASES])
 def test_2d_wiring_matches_direct_core_call(case):
-    _, structure, thickness, n_top, n_bot, wl, period, max_order, theta, phi, psi = case
+    _, structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi = case
     (lri, lti), inp = _run_and_inputs(
-        structure, thickness, n_top, n_bot, wl, period, max_order, theta, phi, psi)
+        structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi)
     cri, cti = solve_2d(**inp)
     _assert_same_answer((lri, lti), (cri, cti))
 
@@ -99,9 +99,9 @@ def _to(backend, x):
 @pytest.mark.parametrize('case', CASES, ids=[c[0] for c in CASES])
 def test_2d_cross_backend(case, backend):
     pytest.importorskip(backend)
-    _, structure, thickness, n_top, n_bot, wl, period, max_order, theta, phi, psi = case
+    _, structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi = case
     (_, _), inp = _run_and_inputs(
-        structure, thickness, n_top, n_bot, wl, period, max_order, theta, phi, psi)
+        structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi)
     ri0, ti0 = solve_2d(**inp)                               # numpy reference
 
     bk = dict(inp)
@@ -174,9 +174,9 @@ def test_python_scalar_incidence_keeps_double_precision_on_torch():
     dtype instead, so passing them through raw is precision-safe either way.
     """
     torch = pytest.importorskip('torch')
-    _, structure, thickness, n_top, n_bot, wl, period, max_order, theta, phi, psi = CASES[1]
+    _, structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi = CASES[1]
     (_, _), inp = _run_and_inputs(
-        structure, thickness, n_top, n_bot, wl, period, max_order, theta, phi, psi)
+        structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi)
     ri0, ti0 = solve_2d(**inp)                                   # numpy, double
 
     default_before = torch.get_default_dtype()

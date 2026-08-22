@@ -50,9 +50,9 @@ GOLDEN_PATH = HERE / 'golden_reticolo_conical_field.npz'
 # departure of the amplitude from 1 is 4.2e-14. Round-off room above that, not slack.
 TOL = 1e-12
 
-# `E_x` on a patterned stack, measured over the same cases: 8.6e-2 to 1.2e-1 at max_order=8. Loose at
+# `E_x` on a patterned stack, measured over the same cases: 8.6e-2 to 1.2e-1 at truncation_order=8. Loose at
 # both ends on purpose -- the band keeps the exception visible and bounded, it does not pin a
-# number. See the generator for the max_order behaviour behind it.
+# number. See the generator for the truncation_order behaviour behind it.
 SLOW_BAND = (1e-3, 3e-1)
 
 IDS = [f'{s}-{t:g}-{p:g}-{q}' for s, t, p, q in CASES]
@@ -78,7 +78,7 @@ def _in_our_frame(e):
 
 def _reconstruct(stack, theta, phi, pol):
     thickness, structure = STACKS[stack]
-    solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, period=[PERIOD], max_order=MAX_ORDER,
+    solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, period=[PERIOD], truncation_order=MAX_ORDER,
                           wavelength=WL, thickness=thickness, structure=structure,
                           theta=np.deg2rad(theta), phi=np.deg2rad(phi),
                           psi=np.pi / 2 if pol == 's' else 0.0,

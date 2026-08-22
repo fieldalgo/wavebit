@@ -146,7 +146,7 @@ def test_degenerate_eigenvalues_give_a_finite_gradient(name, diag):
 # 3. the RCWA case that motivates all of it
 # ----------------------------------------------------------------------
 UNIFORM = np.full((1, 1, 8), 6.25)      # permittivity: 2.5**2
-STACK = dict(top=1.0, bot=1.0, phi=None, tetm='te', max_order=[4, 0],
+STACK = dict(top=1.0, bot=1.0, phi=None, tetm='te', truncation_order=[4, 0],
              period=[0.7], wavelength=0.9, thickness=[0.2])
 
 
@@ -199,13 +199,13 @@ def test_the_degeneracy_is_real():
     from wavebit._core.solve_1d import layer_modes_1d
 
     epx, epy, epz, *_ = to_conv_mat_raster_sampled(UNIFORM ** 2, 4, 0)
-    max_order = 4
-    kx = np.asarray([0.0 + m * 0.9 / 0.7 for m in range(-max_order, max_order + 1)], dtype=complex)
-    I = np.eye(2 * max_order + 1, dtype=complex)
+    truncation_order = 4
+    kx = np.asarray([0.0 + m * 0.9 / 0.7 for m in range(-truncation_order, truncation_order + 1)], dtype=complex)
+    I = np.eye(2 * truncation_order + 1, dtype=complex)
     _, _, q = layer_modes_1d(xnp, 0, kx, I, epx[0], epy[0], epz[0], complex)
 
     q = np.asarray(q)
     nearest = (np.abs(q[:, None] - q[None, :]) + np.eye(len(q)) * 1e9).min(axis=1)
     # m = 0 stands alone; +m and -m coincide for every other order.
-    assert int((nearest < 1e-12).sum()) == 2 * max_order, nearest
-    assert len({round(v.real, 12) + 1j * round(v.imag, 12) for v in q}) == max_order + 1
+    assert int((nearest < 1e-12).sum()) == 2 * truncation_order, nearest
+    assert len({round(v.real, 12) + 1j * round(v.imag, 12) for v in q}) == truncation_order + 1

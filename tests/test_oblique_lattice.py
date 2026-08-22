@@ -45,15 +45,15 @@ def raster(basis, n=128, radius=R):
     return cell
 
 
-def solver(cell, max_order=8, lattice=None, **kw):
+def solver(cell, truncation_order=8, lattice=None, **kw):
     kw.setdefault('factorization', 'nvf')
-    return wavebit.rcwa(backend=0, structure=cell, period=[P, P], max_order=[max_order, max_order],
+    return wavebit.rcwa(backend=0, structure=cell, period=[P, P], truncation_order=[truncation_order, truncation_order],
                           thickness=[H], wavelength=WL, top=1.0, bot=1.0,
                           theta=0.0, phi=0.0, psi=0.0, lattice=lattice, **kw)
 
 
-def totals(cell, max_order=8, lattice=None, **kw):
-    res = solver(cell, max_order, lattice, **kw).solve()
+def totals(cell, truncation_order=8, lattice=None, **kw):
+    res = solver(cell, truncation_order, lattice, **kw).solve()
     return float(np.sum(np.asarray(res.R))), float(np.sum(np.asarray(res.T)))
 
 
@@ -176,7 +176,7 @@ def test_the_public_wavevectors_are_the_ones_the_skewed_solve_uses():
     separable 1-D pair ``(kx[m], ky[n])``. That form cannot express a skewed cell at all --
     there each order's components mix both indices -- so it returned the rectangular problem's
     answer, silently, while the solve used the private lattice-aware build. Measured on this
-    60-degree cell at ``max_order=(2, 2)``: ``ky`` out by **0.805 k0** across a retained band
+    60-degree cell at ``truncation_order=(2, 2)``: ``ky`` out by **0.805 k0** across a retained band
     of about ``+-2``. Nothing raised, and no document said so.
 
     The two swapped places. This pins the swap from both sides: the skewed answer must *not*
@@ -185,14 +185,14 @@ def test_the_public_wavevectors_are_the_ones_the_skewed_solve_uses():
     """
     from wavebit._core.solve_2d import order_grid_kxy
 
-    skewed = solver(raster(HEX), max_order=2, lattice=HEX)
+    skewed = solver(raster(HEX), truncation_order=2, lattice=HEX)
     grid = order_grid_kxy(np, *(np.asarray(v) for v in skewed.order_kxy()))
     flat = order_grid_kxy(np, *(np.asarray(v) for v in skewed._separable_kxy(skewed.wavelength)))
     assert grid[0].shape == grid[1].shape == (5, 5)
     apart = max(float(np.max(np.abs(a - b))) for a, b in zip(grid, flat))
     assert apart > 0.5, apart          # the separable pair is a different problem, not a rounding
 
-    aligned = solver(raster(ORTHO), max_order=2, lattice=ORTHO)
+    aligned = solver(raster(ORTHO), truncation_order=2, lattice=ORTHO)
     for public, separable in zip(aligned.order_kxy(),
                                  aligned._separable_kxy(aligned.wavelength)):
         assert np.array_equal(np.asarray(public), np.asarray(separable))
@@ -213,7 +213,7 @@ def _skewed(deg, rows=1, **kw):
     basis = np.column_stack((np.array([P, 0.0]), a2))
     return wavebit.rcwa(backend=0, structure=np.tile(_GROOVE, (1, rows, 1)), thickness=[H],
                         wavelength=WL, lattice=basis, factorization='nvf', theta=0.0,
-                        max_order=(6, 0), **kw)
+                        truncation_order=(6, 0), **kw)
 
 
 def _rotated_frame_reference(deg):
@@ -232,7 +232,7 @@ def _rotated_frame_reference(deg):
     for tetm in ('te', 'tm'):
         solved = wavebit.rcwa(backend=0, structure=_GROOVE, thickness=[H], wavelength=WL,
                               period=[P * np.sin(g)], theta=0.0, phi=None, tetm=tetm,
-                              max_order=(6, 0)).solve()
+                              truncation_order=(6, 0)).solve()
         out[tetm] = (np.asarray(solved.R).ravel(), np.asarray(solved.T).ravel())
     w_te, w_tm = np.sin(g) ** 2, np.cos(g) ** 2
     return tuple(w_te * out['te'][i] + w_tm * out['tm'][i] for i in (0, 1))
@@ -304,7 +304,7 @@ def test_unimodular_shear_is_the_same_physics():
     tolerance is 1e-3 rather than machine epsilon and why it tightens with resolution.
 
     Guarding this specifically because it fails *quietly*. With the metric correction removed
-    from the normal field the same comparison drifts to ~8.5e-4 at n=512/max_order=14 and ~7x that
+    from the normal field the same comparison drifts to ~8.5e-4 at n=512/truncation_order=14 and ~7x that
     here, while both runs still conserve energy to 1e-15.
     """
     r_o, t_o = totals(raster(ORTHO))
@@ -372,8 +372,8 @@ def test_hex_lattice_matches_its_rectangular_supercell():
     sup = np.full((1, ny, nx), EPS_AIR)
     sup[0][inside] = EPS_ROD
 
-    _, t_hex = totals(hex_cell, max_order=8, lattice=HEX)
-    sup_solver = wavebit.rcwa(backend=0, structure=sup, period=[a, a * sq3], max_order=[8, 14],
+    _, t_hex = totals(hex_cell, truncation_order=8, lattice=HEX)
+    sup_solver = wavebit.rcwa(backend=0, structure=sup, period=[a, a * sq3], truncation_order=[8, 14],
                                 thickness=[H], wavelength=WL, top=1.0, bot=1.0,
                                 theta=0.0, phi=0.0, psi=0.0, factorization='nvf')
     t_sup = float(np.sum(np.asarray(sup_solver.solve().T)))
@@ -392,7 +392,7 @@ def test_oblique_runs_on_every_backend(backend):
     elif backend == 2:
         cell = pytest.importorskip('torch').tensor(cell, dtype=pytest.importorskip(
             'torch').float64)
-    s = wavebit.rcwa(backend=backend, structure=cell, period=[P, P], max_order=[4, 4],
+    s = wavebit.rcwa(backend=backend, structure=cell, period=[P, P], truncation_order=[4, 4],
                        thickness=[H], wavelength=WL, top=1.0, bot=1.0,
                        theta=0.0, phi=0.0, psi=0.0, factorization='nvf', lattice=HEX)
     res = s.solve()
@@ -412,7 +412,7 @@ def test_the_vector_modeler_is_refused_on_a_skewed_cell():
     with pytest.raises(NotImplementedError, match='block modeler'):
         s = wavebit.rcwa(backend=0, structure=[[1.0, [['rectangle', 100.0, 200.0, 50.0, 50.0,
                                                        5.76, 0, 0, 0]]]],
-                           period=[P, P], max_order=[4, 4], thickness=[H], wavelength=WL,
+                           period=[P, P], truncation_order=[4, 4], thickness=[H], wavelength=WL,
                            top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                            factorization='nvf', lattice=HEX)
         s.solve()
@@ -432,7 +432,7 @@ def test_a_painted_overlap_survives_a_unimodular_shear():
         structure = [{'background': 1.0, 'combine': 'paint', 'shapes': [
             {'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 160.0, 'material': 5.76},
             {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'material': 9.0}]}]
-        s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], max_order=[6, 6], thickness=[H],
+        s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], truncation_order=[6, 6], thickness=[H],
                            wavelength=WL, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                            factorization='nvf', lattice=lattice)
         res = s.solve()
@@ -453,7 +453,7 @@ def test_a_painted_overlap_is_not_the_same_as_summing_it():
     def run(combine):
         s = wavebit.rcwa(backend=0, structure=[{'background': 1.0, 'combine': combine,
                                               'shapes': shapes}],
-                           period=[P, P], max_order=[6, 6], thickness=[H], wavelength=WL,
+                           period=[P, P], truncation_order=[6, 6], thickness=[H], wavelength=WL,
                            top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                            factorization='nvf', lattice=SHEAR)
         return float(np.sum(np.asarray(s.solve().T)))
@@ -467,7 +467,7 @@ def _analytic_totals(g, lattice=None):
     """One circle, stated in absolute Cartesian lengths — the same disc on the same lattice."""
     structure = [{'background': 1.0, 'shapes': [
         {'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 2 * R, 'material': EPS_ROD}]}]
-    s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], max_order=[g, g], thickness=[H],
+    s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], truncation_order=[g, g], thickness=[H],
                        wavelength=WL, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                        factorization='nvf', lattice=lattice)
     return float(np.sum(np.asarray(s.solve().T)))
@@ -516,7 +516,7 @@ def test_the_reconstructed_field_agrees_across_a_unimodular_shear():
     ``(m, n)`` where the other has a square. Converged quantities cannot tell (the efficiencies
     agree to 2e-6), but a field is a finite sum over exactly that set, and near a material
     discontinuity the tails the two sets disagree about decay far too slowly to cancel. Measured
-    on this structure the interface slice sits at 1.1e-1 and does **not** improve from max_order 4 to
+    on this structure the interface slice sits at 1.1e-1 and does **not** improve from truncation_order 4 to
     12 — which is the truncation shape, not an error. In the homogeneous cap, where every
     surviving order is propagating and both sets hold all of them, the same comparison is
     2.0e-4: a 500x drop across the same field.
@@ -526,7 +526,7 @@ def test_the_reconstructed_field_agrees_across_a_unimodular_shear():
     structure = [{'background': 1.0, 'shapes': []}, {'background': 1.0, 'shapes': shapes}]
 
     def field(lattice):
-        s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], max_order=[8, 8],
+        s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], truncation_order=[8, 8],
                            thickness=[600.0, H], wavelength=WL, top=1.0, bot=1.0,
                            theta=0.0, phi=0.0, psi=0.0, factorization='nvf', lattice=lattice,
                            answers='field')
@@ -612,7 +612,7 @@ def test_li_1997_checkerboard_matches_the_published_table():
     structure = [{'background': 1.0, 'shapes': [
         {'type': 'rectangle', 'cx': float(centre[0]), 'cy': float(centre[1]),
          'lx': LI_SIDE, 'ly': LI_SIDE, 'material': 2.25}]}]
-    s = wavebit.rcwa(backend=0, structure=structure, max_order=[12, 12], thickness=[1.0], wavelength=1.0,
+    s = wavebit.rcwa(backend=0, structure=structure, truncation_order=[12, 12], thickness=[1.0], wavelength=1.0,
                        top=2.25, bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2,
                        factorization='nvf', lattice=basis)
     res = s.solve().given

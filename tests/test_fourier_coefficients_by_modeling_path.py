@@ -28,7 +28,7 @@ import wavebit
 from wavebit._core.enums import FourierCoefficients
 
 KW = dict(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
-          max_order=[4, 4], period=[1.0, 1.0], wavelength=1.1, thickness=[0.3])
+          truncation_order=[4, 4], period=[1.0, 1.0], wavelength=1.1, thickness=[0.3])
 
 # One structure per modeling path, as close to the same circle as each path can state it --
 # the same three the factorization file uses, for the same reason.
@@ -213,7 +213,7 @@ PAINTED = [dict(background=1.0, combine='paint',
                              angle=0.0, material=4.0),
                         dict(type='rectangle', cx=0.56, cy=0.56, lx=0.34, ly=0.34,
                              angle=0.0, material=9.0)])]
-PAINTED_KW = dict(KW, period=PAINTED_PERIOD, max_order=[6, 6], thickness=[0.6], wavelength=1.6)
+PAINTED_KW = dict(KW, period=PAINTED_PERIOD, truncation_order=[6, 6], thickness=[0.6], wavelength=1.6)
 
 
 def _painted(**strategy):
@@ -319,8 +319,8 @@ def test_a_smooth_call_naming_both_unavailable_values_is_told_about_the_rule():
 # --------------------------------------------------------------------------- through the spec
 
 SPEC = {
-    'version': '4',                 # a parsed document states its schema; see tests/test_spec.py
-    'numerics': {'backend': 'numpy', 'max_order': [4, 4]},
+    'version': '5',                 # a parsed document states its schema; see tests/test_spec.py
+    'numerics': {'backend': 'numpy', 'truncation_order': [4, 4]},
     'stack': {'top': 1.0, 'bot': 1.0, 'period': [1.0, 1.0],
               'layers': [{'thickness': 0.3, 'structure': SMOOTH[0]}]},
     'incidence': {'wavelength': 1.1, 'theta': 0.0, 'phi': 0.0, 'psi': 0.0},

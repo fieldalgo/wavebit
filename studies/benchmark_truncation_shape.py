@@ -348,35 +348,35 @@ def equivalent_rect_N(rect_rows, err):
 def selftest():
     """Pin the G-difference build and the flat solver against the production code."""
     eps = make_cell('circle', ngrid=64).astype(C128)
-    max_order = 3
-    mm, nn = order_grid(max_order, max_order)
+    truncation_order = 3
+    mm, nn = order_grid(truncation_order, truncation_order)
 
     for flag in (False, True):
         direct = toeplitz_conv(eps, mm, nn, flag)
-        nested = (fourier2d_piecewise_constant(np, eps, max_order, max_order, inverse_rule=None) if flag
-                  else fourier2d_pointwise(np, eps, max_order, max_order))
+        nested = (fourier2d_piecewise_constant(np, eps, truncation_order, truncation_order, inverse_rule=None) if flag
+                  else fourier2d_pointwise(np, eps, truncation_order, truncation_order))
         err = np.abs(direct - nested).max()
         print(f'selftest conv (piecewise_constant={flag}): {err:.3e}')
         assert err < 1e-12, err
 
     # flat solver vs the production NVF path, on a rectangular set
     structure = eps[None, :, :]
-    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_nvf(structure, max_order, max_order)
-    de_ri_ref, de_ti_ref = _core_solve_2d(max_order, epx, epy, epz_i, epxy, epyx)
+    epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_nvf(structure, truncation_order, truncation_order)
+    de_ri_ref, de_ti_ref = _core_solve_2d(truncation_order, epx, epy, epz_i, epxy, epyx)
 
     nf = normal_vector_field(eps)
-    r = run_one(eps, nf, mm, nn, np.ones(mm.shape, bool), (max_order, max_order), 'nvf')
+    r = run_one(eps, nf, mm, nn, np.ones(mm.shape, bool), (truncation_order, truncation_order), 'nvf')
     err = max(np.abs(r['R'] - de_ri_ref.flatten()).max(),
               np.abs(r['T'] - de_ti_ref.flatten()).max())
     print(f'selftest solver (flat vs _core.solve_2d): {err:.3e}')
     assert err < 1e-12, err
 
 
-def _core_solve_2d(max_order, epx, epy, epz_i, epxy, epyx):
+def _core_solve_2d(truncation_order, epx, epy, epz_i, epxy, epyx):
     from wavebit._core.solve_2d import solve_2d
 
     C = CASE
-    rng = np.arange(-max_order, max_order + 1)
+    rng = np.arange(-truncation_order, truncation_order + 1)
     kx = C['n_top'] * np.sin(C['theta']) * np.cos(C['phi']) + rng * (C['wavelength'] / C['period'][0])
     ky = C['n_top'] * np.sin(C['theta']) * np.sin(C['phi']) + rng * (C['wavelength'] / C['period'][1])
 
@@ -389,7 +389,7 @@ def _core_solve_2d(max_order, epx, epy, epz_i, epxy, epyx):
 
 def sweep(eps, normal_field, mode, max_order_ref, max_orders, radii, label):
     print(f'\n===== {label}  factorization={mode} '
-          f'  (reference: rectangular max_order={max_order_ref}) =====')
+          f'  (reference: rectangular truncation_order={max_order_ref}) =====')
 
     mm_r, nn_r = order_grid(max_order_ref, max_order_ref)
     ref = run_one(eps, normal_field, mm_r, nn_r, np.ones(mm_r.shape, dtype=bool),
@@ -401,14 +401,14 @@ def sweep(eps, normal_field, mode, max_order_ref, max_orders, radii, label):
         mm_c, nn_c = order_grid(max_order_ref - back, max_order_ref - back)
         chk = run_one(eps, normal_field, mm_c, nn_c, np.ones(mm_c.shape, dtype=bool),
                       (max_order_ref - back, max_order_ref - back), mode)
-        print(f'reference drift (max_order={max_order_ref - back} vs {max_order_ref}): '
+        print(f'reference drift (truncation_order={max_order_ref - back} vs {max_order_ref}): '
               f'{compare(chk, ref)["err_order_max"]:.2e}')
 
     rect_rows, circ_rows = [], []
-    for max_order in max_orders:
-        mm, nn = order_grid(max_order, max_order)
-        r = run_one(eps, normal_field, mm, nn, np.ones(mm.shape, bool), (max_order, max_order), mode)
-        rect_rows.append(('rect', max_order, r, compare(r, ref)))
+    for truncation_order in max_orders:
+        mm, nn = order_grid(truncation_order, truncation_order)
+        r = run_one(eps, normal_field, mm, nn, np.ones(mm.shape, bool), (truncation_order, truncation_order), mode)
+        rect_rows.append(('rect', truncation_order, r, compare(r, ref)))
 
     if mode != 'li':
         for radius in radii:

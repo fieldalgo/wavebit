@@ -45,18 +45,18 @@ def _airy_R(ns, ds, theta, tetm):
     return abs(analytic_r(ns, ds, WL, theta, tetm)) ** 2
 
 
-def _solver(ns, ds, *, tetm='te', theta=0.2, path='1d', max_order=0, answers='amplitude'):
+def _solver(ns, ds, *, tetm='te', theta=0.2, path='1d', truncation_order=0, answers='amplitude'):
     """A uniform stack on the requested solve path (see test_lossy_media.solver_r)."""
     layers = ns[1:-1]
     common = dict(backend=0, top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
                   theta=theta, wavelength=WL, thickness=ds, answers=answers)
     if path == '1d':
-        return wavebit.rcwa(tetm=tetm, max_order=max_order, period=[WL * 2],
+        return wavebit.rcwa(tetm=tetm, truncation_order=truncation_order, period=[WL * 2],
                               structure=eps_from_index(
                                   np.array([[[n, n]] for n in layers])), **common)
     cell = ([[[n, n]] for n in layers] if path == 'conical'
             else [[[n, n], [n, n]] for n in layers])
-    return wavebit.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0), max_order=[max_order, max_order],
+    return wavebit.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0), truncation_order=[truncation_order, truncation_order],
                           period=[WL * 2, WL * 2],
                           structure=eps_from_index(np.array(cell)), **common)
 
@@ -119,9 +119,9 @@ def test_a_matched_interface_is_well_conditioned():
     from wavebit._core.conventions import boundary_kz
     from wavebit._core.solve_1d import _diag, layer_modes_1d
 
-    max_order, theta = 2, 0.3
-    n_orders = 2 * max_order + 1
-    kx = np.asarray([np.sin(theta) + m * 0.5 for m in range(-max_order, max_order + 1)], dtype=complex)
+    truncation_order, theta = 2, 0.3
+    n_orders = 2 * truncation_order + 1
+    kx = np.asarray([np.sin(theta) + m * 0.5 for m in range(-truncation_order, truncation_order + 1)], dtype=complex)
     I = np.eye(n_orders, dtype=complex)
 
     eps = complex(AU) ** 2                      # layer and substrate are both gold
@@ -141,8 +141,8 @@ RES = 10
 FIELD_STACK = ([1.0, 1.5, 1.5, 2.0, 1.0], [30.0, 30.0, 40.0])
 
 
-def _field(ns, ds, *, tetm='te', theta=0.2, max_order=2):
-    solver = _solver(ns, ds, tetm=tetm, theta=theta, max_order=max_order, answers='field')
+def _field(ns, ds, *, tetm='te', theta=0.2, truncation_order=2):
+    solver = _solver(ns, ds, tetm=tetm, theta=theta, truncation_order=truncation_order, answers='field')
     solver.solve()
     return np.asarray(solver.reconstruct_field(sample_x=RES, sample_y=1, sample_z=RES))
 

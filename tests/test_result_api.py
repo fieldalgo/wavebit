@@ -17,14 +17,14 @@ CELL_2D = np.array([[[1.0, 12.25], [12.25, 1.0]]])
 
 
 def _solve_1d(**kw):
-    args = dict(backend=0, tetm='te', top=1.0, bot=2.25, theta=0.3, max_order=2, wavelength=WL,
+    args = dict(backend=0, tetm='te', top=1.0, bot=2.25, theta=0.3, truncation_order=2, wavelength=WL,
                 period=[900.0], structure=CELL_1D, thickness=[300.0])
     args.update(kw)
     return wavebit.rcwa(**args).solve()
 
 
 def _solve_2d(**kw):
-    args = dict(backend=0, top=1.0, bot=2.25, theta=0.3, phi=0.0, psi=0.0, max_order=[2, 1],
+    args = dict(backend=0, top=1.0, bot=2.25, theta=0.3, phi=0.0, psi=0.0, truncation_order=[2, 1],
                 wavelength=WL, period=[900.0, 900.0], structure=CELL_2D, thickness=[300.0])
     args.update(kw)
     return wavebit.rcwa(**args).solve()
@@ -33,7 +33,7 @@ def _solve_2d(**kw):
 def test_efficiency_arrays_are_the_power_surface():
     res = _solve_1d()
     R, T = np.asarray(res.R), np.asarray(res.T)
-    assert R.shape == (1, 5) and T.shape == (1, 5)        # max_order=2 -> 2*2+1 orders
+    assert R.shape == (1, 5) and T.shape == (1, 5)        # truncation_order=2 -> 2*2+1 orders
     assert float(R.sum() + T.sum()) == pytest.approx(1.0, abs=1e-12)
 
 
@@ -46,13 +46,13 @@ def test_polarization_split_sums_to_the_total():
 def test_order_accessor_agrees_with_the_arrays():
     """``order(m, n)`` is the same data as the arrays, addressed by order index.
 
-    The arrays are ``(n_orders_y, n_orders_x)`` — note the transpose of the ``max_order=[x, y]`` input
+    The arrays are ``(n_orders_y, n_orders_x)`` — note the transpose of the ``truncation_order=[x, y]`` input
     order — with the incident order at the centre. That layout is exactly what the
     accessor exists to spare users from, so this test IS the layout's documentation.
     """
     res = _solve_2d()
     R = np.asarray(res.R)
-    fx, fy = res.max_order
+    (cx, fx), (cy, fy) = res.order_window
     for m, n in ((0, 0), (1, 0), (-2, 1), (2, -1)):
         assert float(res.order(m, n).R) == R[n + fy, m + fx]
 
@@ -60,7 +60,7 @@ def test_order_accessor_agrees_with_the_arrays():
 def test_order_accessor_rejects_out_of_range_orders():
     res = _solve_1d()
     with pytest.raises(IndexError):
-        res.order(3)              # max_order=2 retains |m| <= 2
+        res.order(3)              # truncation_order=2 retains |m| <= 2
     with pytest.raises(IndexError):
         res.order(0, 1)           # the 1D solve has a single row of orders
 
@@ -72,7 +72,7 @@ def test_unpolarized_delegation_averages_the_two_incidences():
         want = np.asarray(res.given.R)
         assert np.allclose(np.asarray(res.R), want)
     te, tm = np.asarray(res.s_inc.R), np.asarray(res.p_inc.R)
-    avg = wavebit._core.result.Result(None, res.s_inc, res.p_inc, max_order=res.max_order)
+    avg = wavebit._core.result.Result(None, res.s_inc, res.p_inc, order_window=res.order_window)
     assert np.allclose(np.asarray(avg.R), 0.5 * (te + tm))
 
 

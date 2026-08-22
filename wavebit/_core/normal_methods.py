@@ -3,7 +3,7 @@
 :func:`wavebit._core.factorization.normal_vector_field` dispatches here for every method
 except ``'distance'``, which stays where it always was. Each construction takes the same
 inputs — a concrete permittivity raster, its interface mask, the cell basis, and the shape
-the raster had before the ``4*max_order+1`` floor lift — and returns ``(nx, ny)`` float arrays
+the raster had before the ``4*truncation_order+1`` floor lift — and returns ``(nx, ny)`` float arrays
 with ``|n| = 1`` everywhere it emits a direction at all.
 
 Why these exist: the distance-transform gradient quantizes. Central differences of a
@@ -26,7 +26,7 @@ Shared conventions, stated once:
   take them — the dispatcher turns that into an error naming ``freeze_geometry()``.
 - **Sign is free.** The factorization consumes ``n n^T`` only, so ``n`` and ``-n`` are the
   same field; no construction here spends effort orienting.
-- **The base grid sets the smoothing scale.** A layer lifted to the ``4*max_order+1`` floor is
+- **The base grid sets the smoothing scale.** A layer lifted to the ``4*truncation_order+1`` floor is
   the same staircase spelled with more pixels (that is the whole finding of
   ``docs/nvf-upsampling.md``), so every pixel-unit policy below reads ``base_shape`` and
   scales by the lift factor — a 10x10 layer lifted 4x smooths over 4x as many lifted
@@ -587,7 +587,7 @@ def contour_normal_field(eps, interface_mask, lattice=None, base_shape=None):
 # exactly like 'distance' (tying the band to the raster re-admits the staircase
 # harmonics). The cutoff VALUE is the one thing a circle harness cannot pick (smaller is
 # always better on a shape that stays radially symmetric under blur), so it is pinned at
-# the low end of the band the factorization itself reads — orders to 2*max_order, max_order >= 4
+# the low end of the band the factorization itself reads — orders to 2*truncation_order, truncation_order >= 4
 # in practice.
 _SPECTRAL_CUTOFF = 8.0   # Fourier orders per period, fixed — never tied to N
 _SPECTRAL_REL_MAG_TOL = 1e-3   # band pixels below this fraction of the band max carry
@@ -601,7 +601,7 @@ def spectral_normal_field(eps, interface_mask, lattice=None, base_shape=None):
     there are exactly two values — exact and contrast-independent — else ``Re(eps)``),
     multiply by an isotropic Gaussian low-pass at a *fixed* number of orders per period,
     and read the spectral gradient ``i*k`` per axis. The rationale is the factorization's
-    own: it only ever reads orders up to ``2*max_order`` of tensors built from ``n n^T``, so a
+    own: it only ever reads orders up to ``2*truncation_order`` of tensors built from ``n n^T``, so a
     band-limited boundary is the boundary the solve can see anyway. Interface-band pixels
     take ``n = g/|g|``; every other pixel copies its nearest band pixel's normal
     (``distance_transform_edt(return_indices=True)``), which keeps ``|n| = 1`` everywhere

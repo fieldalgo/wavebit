@@ -129,7 +129,7 @@ def test_a_splatted_builder_conserves_energy(name):
     assert len(slots) == 5, f'{name} returned {len(slots)} slots'
 
     with _no_unphysical_warning():
-        res = wavebit.rcwa(max_order=[MAX_ORDER, MAX_ORDER], **KW).solve_conv(*slots)
+        res = wavebit.rcwa(truncation_order=[MAX_ORDER, MAX_ORDER], **KW).solve_conv(*slots)
 
     total = float(np.asarray(res.given.R).sum() + np.asarray(res.given.T).sum())
     assert abs(total - 1.0) < 1e-6, (

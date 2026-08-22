@@ -232,7 +232,7 @@ size set entirely by the working precision:
                                          and `Re(v) < 0` reads the sign of noise
 ```
 
-Measured at one evanescent point, `max_order=40` (162 orders):
+Measured at one evanescent point, `truncation_order=40` (162 orders):
 
 | | `boundary_kz` decided on round-off | `mode_q` |
 | --- | --- | --- |
@@ -250,7 +250,7 @@ each other:
 ### There is no threshold that fixes it
 
 The obvious repair is to scale the cutoff to the dtype. It does not work, and the measurement
-is worth keeping so nobody re-derives it. Nine physically meaningful cases at `max_order=30`, float32
+is worth keeping so nobody re-derives it. Nine physically meaningful cases at `truncation_order=30`, float32
 against float64 as ground truth, sweeping the cutoff:
 
 | cutoff | lossless, complex angle | weakly absorbing superstrate | worst of nine |
@@ -289,7 +289,7 @@ in the caller's own namespace and only the scalar is read; when that read raises
 a tracer and there was nothing to inspect. `jax.jit(jax.grad(...))` is pinned in
 `test_the_check_does_not_break_tracing`.
 
-Cost, measured in isolation against the `eig` of the layer it belongs to (max_order=60):
+Cost, measured in isolation against the `eig` of the layer it belongs to (truncation_order=60):
 
 | | one check | `eig(2N)` | share |
 | --- | --- | --- | --- |
@@ -389,7 +389,7 @@ four orders clear of round-off, and moving it can only hurt.
 
 ## 5. What it bought
 
-Max `|solver - RETICOLO|` on `Re(R_s)` of the (0,0) order, over all 441 points, `max_order=80`:
+Max `|solver - RETICOLO|` on `Re(R_s)` of the (0,0) order, over all 441 points, `truncation_order=80`:
 
 | | propagating (69) | evanescent (372) | points off by > 0.05 |
 | --- | --- | --- | --- |

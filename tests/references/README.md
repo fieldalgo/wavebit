@@ -72,7 +72,7 @@ grating cases sit at 1e-1 and read as a solver disagreement:
 
 | what had to match | wrong | right |
 | --- | --- | --- |
-| the **order set** — fmmax's parallelogramic 5x5 against our `max_order` | `max_order=(8,0)`, 17 orders: **1.2e-1** | `max_order=(2,2)`, the same 25: **1.9e-5** |
+| the **order set** — fmmax's parallelogramic 5x5 against our `truncation_order` | `truncation_order=(8,0)`, 17 orders: **1.2e-1** | `truncation_order=(2,2)`, the same 25: **1.9e-5** |
 | the **factorization** — fmmax's `Formulation` | `FFT`, the plain Laurent rule: **2.7e-1** on p | `JONES_DIRECT`: **7.2e-5** |
 
 That leaves ~1e-4 rather than 1e-13, because the two vector factorizations still differ in
@@ -116,15 +116,15 @@ sharing a formulation can. Read it beside the fmmax row rather than instead of i
 
 **The sixth component is a real exception.** TM's `Ex` is discontinuous across a grating's
 vertical interfaces, and the two codes resolve it differently at any finite truncation:
-7.0e-2 to 1.0e-1 across the committed cases at `max_order=8`. Measured on the `grating` case at 24
+7.0e-2 to 1.0e-1 across the committed cases at `truncation_order=8`. Measured on the `grating` case at 24
 degrees, it *decreases* with truncation but **not monotonically** — 3.1e-1, 2.3e-1, 9.7e-2,
-1.1e-1, 3.8e-2, 4.4e-2 at `max_order = 2, 4, 8, 16, 32, 64` — about 8x over a 32x increase in orders,
+1.1e-1, 3.8e-2, 4.4e-2 at `truncation_order = 2, 4, 8, 16, 32, 64` — about 8x over a 32x increase in orders,
 and nowhere near machine precision. That shape is Gibbs ringing rather than convergence
 failure: the gap is set by the samples nearest a discontinuity (10 nm from one here), and the
 local error there oscillates with the number of retained terms. Two things it is *not*: a
 rescaling (a per-component complex fit does not remove it), and a disagreement about which side
 of the interface to divide by — forming `Dx = eps*Ex` leaves a gap of the same order
-(1.7e-1, 1.6e-1, 8.1e-2, 4.8e-2 at `max_order = 4, 8, 16, 32`), neither better nor worse.
+(1.7e-1, 1.6e-1, 8.1e-2, 4.8e-2 at `truncation_order = 4, 8, 16, 32`), neither better nor worse.
 
 The test excludes that one slot on patterned stacks and bounds it **from both sides**, so the
 exception can neither grow nor quietly disappear. Whether either code's `Ex` is closer to the
@@ -356,8 +356,8 @@ through its direct rule only, and a comparison built on the vector formulation w
 its own truncation. Same shape of caveat as the anisotropy one above, reached independently.
 
 For the record, since it is the only place this repository has compared all three outside
-solvers on one patterned 2D case: on that L at 16x16, `R_s` came out 0.1426 (RETICOLO, max_order 14),
-0.1462 (S4 direct, NumBasis 761) and 0.1396 (fmmax FFT, max_order 22), against this solver's 0.1419 --
+solvers on one patterned 2D case: on that L at 16x16, `R_s` came out 0.1426 (RETICOLO, truncation_order 14),
+0.1462 (S4 direct, NumBasis 761) and 0.1396 (fmmax FFT, truncation_order 22), against this solver's 0.1419 --
 a 7e-3 spread with ours inside it and RETICOLO nearest. All four are still converging on a
 staircase with this many corners, which is the honest reading of that spread rather than a
 tolerance anybody should inherit.

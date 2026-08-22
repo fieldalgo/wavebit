@@ -127,7 +127,7 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
     degeneracy the two spellings agree to 8e-15 in efficiency over 40 random conical solves.
 
     The one case still refused: an eigenvalue that comes out *exactly* zero (e.g. a uniform
-    layer whose FFT is noiseless, max_order=3 on the D#81 stack). Then ``q/w`` is 0/0 and the NaN
+    layer whose FFT is noiseless, truncation_order=3 on the D#81 stack). Then ``q/w`` is 0/0 and the NaN
     reaches :func:`~wavebit._core.backend.check_finite`, whose message prescribes the one-ULP
     detune — where the old spelling died in LAPACK with no advice.
     """
@@ -180,7 +180,7 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     Args:
         tetm_index: ``0`` (TE) or ``1`` (TM) — the two the ``tetm`` declaration selects.
         wavelength: incident wavelength (sets ``k0 = 2*pi/wavelength``).
-        kx: in-plane wavevectors of the retained orders (length ``n_orders = 2*max_order+1``),
+        kx: in-plane wavevectors of the retained orders (length ``n_orders = 2*truncation_order+1``),
             built
             with the *incidence* medium's index (``n_bot`` for backside illumination).
         n_top, n_bot: superstrate / substrate refractive indices — scene labels, whichever

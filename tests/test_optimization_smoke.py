@@ -19,7 +19,7 @@ import pytest
 
 import wavebit
 
-CFG = dict(max_order=[2, 2], wavelength=900.0, period=[1000.0, 1000.0], thickness=[300.0],
+CFG = dict(truncation_order=[2, 2], wavelength=900.0, period=[1000.0, 1000.0], thickness=[300.0],
            top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2)
 
 # Small enough that this stays a smoke test. The grid is a smooth ramp rather than random so

@@ -82,7 +82,7 @@ def _solve(g, i, j):
     theta = np.arcsin(np.sqrt(kx[i] ** 2 + ky[j] ** 2 + 0.0001, dtype=np.complex128))
     phi = np.arctan(ky[j] / (kx[i] + 0.0001), dtype=np.complex128)
     res = wavebit.rcwa(backend=0, psi=np.pi / 2, **_scene(g),
-                         theta=theta, phi=phi, max_order=[MAX_ORDER], wavelength=float(g['wavelength']),
+                         theta=theta, phi=phi, truncation_order=[MAX_ORDER], wavelength=float(g['wavelength']),
                          period=list(g['period']),
                          thickness=list(g['thickness']),
                          fourier_coefficients='integrated',
@@ -94,7 +94,7 @@ def test_propagating_incidence_matches_reticolo():
     """Real incidence angles, swept over the light cone.
 
     ``2e-13`` is round-off room: the measured spread over the full 441-point grid is 2e-14 at
-    max_order=80. This is the assertion that says the conical path is right; everything else in
+    truncation_order=80. This is the assertion that says the conical path is right; everything else in
     this file is about the regime where it is not.
     """
     g = _golden()
@@ -169,7 +169,7 @@ def test_double_precision_agrees_across_backends_at_a_complex_angle(backend):
 
     def solve(bk):
         res = wavebit.rcwa(backend=bk, psi=np.pi / 2, **_scene(g),
-                             theta=theta, phi=phi, max_order=[40],
+                             theta=theta, phi=phi, truncation_order=[40],
                              wavelength=float(g['wavelength']), period=list(g['period']),
                              thickness=list(g['thickness']),
                              complex_dtype=0, fourier_coefficients='integrated',
@@ -201,7 +201,7 @@ def test_uniform_stack_does_not_diffract_at_a_complex_angle():
     scene['structure'] = np.full_like(np.asarray(scene['structure'], dtype=float), 6.25)
     res = wavebit.rcwa(backend=0, psi=np.pi / 2, **scene,
                          theta=np.complex128(0.5 + 0.3j), phi=np.complex128(0.3),
-                         max_order=[MAX_ORDER], wavelength=float(g['wavelength']),
+                         truncation_order=[MAX_ORDER], wavelength=float(g['wavelength']),
                          period=list(g['period']),
                          thickness=list(g['thickness']),
                          fourier_coefficients='integrated',

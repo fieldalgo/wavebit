@@ -63,7 +63,7 @@ def _energy(res):
 
 
 # --- the structures: thick, high-truncation, deeply evanescent -----------------------------
-# A 600nm rod at 500nm wavelength with max_order=8 retains orders whose decay over one layer is
+# A 600nm rod at 500nm wavelength with truncation_order=8 retains orders whose decay over one layer is
 # ~exp(-100): the regime that made the broken NumPy shout loudest.
 
 #: 3.48**2 and 2.0**2 -- the same two media, as the permittivity `structure` now holds.
@@ -94,7 +94,7 @@ def test_numpy_is_new_enough_to_report_fp_flags_correctly():
 
 @pytest.mark.parametrize('layer_algorithm', ['ETM', 'SMM'])
 def test_thick_2d_stack_is_silent_and_conserves_energy(layer_algorithm):
-    res, fp = _run(structure=_structure_2d(), thickness=[600], period=[700, 700], max_order=[8, 8],
+    res, fp = _run(structure=_structure_2d(), thickness=[600], period=[700, 700], truncation_order=[8, 8],
                    psi=0.0, bot=EPS_SI, layer_algorithm=layer_algorithm)
     assert fp == []
     assert abs(_energy(res) - 1.0) < 1e-10
@@ -103,7 +103,7 @@ def test_thick_2d_stack_is_silent_and_conserves_energy(layer_algorithm):
 @pytest.mark.parametrize('layer_algorithm', ['ETM', 'SMM'])
 @pytest.mark.parametrize('psi', [np.pi / 2, 0.0], ids=['te', 'tm'])
 def test_thick_1d_stack_is_silent_and_conserves_energy(layer_algorithm, psi):
-    res, fp = _run(structure=_structure_1d(), thickness=[800, 400], period=[700], max_order=[8, 0],
+    res, fp = _run(structure=_structure_1d(), thickness=[800, 400], period=[700], truncation_order=[8, 0],
                    psi=psi, bot=EPS_SI, layer_algorithm=layer_algorithm)
     assert fp == []
     assert abs(_energy(res) - 1.0) < 1e-10
@@ -111,7 +111,7 @@ def test_thick_1d_stack_is_silent_and_conserves_energy(layer_algorithm, psi):
 
 @pytest.mark.parametrize('layer_algorithm', ['ETM', 'SMM'])
 def test_conical_stack_is_silent_and_conserves_energy(layer_algorithm):
-    res, fp = _run(structure=_structure_1d(), thickness=[800, 400], period=[700], max_order=[8, 0],
+    res, fp = _run(structure=_structure_1d(), thickness=[800, 400], period=[700], truncation_order=[8, 0],
                    psi=np.pi / 2, phi=0.3, bot=EPS_SI, layer_algorithm=layer_algorithm)
     assert fp == []
     assert abs(_energy(res) - 1.0) < 1e-10
@@ -123,7 +123,7 @@ def test_conical_stack_is_silent_and_conserves_energy(layer_algorithm):
                          ids=['sampled-li', 'sampled-nvf', 'integrated-li', 'integrated-nvf'])
 def test_every_factorization_is_silent(strategy):
     """The convolution builders were the loudest sites of all under the broken NumPy."""
-    res, fp = _run(structure=_structure_2d(), thickness=[600], period=[700, 700], max_order=[6, 6],
+    res, fp = _run(structure=_structure_2d(), thickness=[600], period=[700, 700], truncation_order=[6, 6],
                    psi=0.0, bot=EPS_SI, **strategy)
     assert fp == []
     assert abs(_energy(res) - 1.0) < 1e-10
@@ -137,7 +137,7 @@ def test_analytic_shape_path_is_silent():
                                               material=9.0)])]
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        res = wavebit.rcwa(backend=0, structure=structure, max_order=(6, 6), top=1.0, bot=1.0,
+        res = wavebit.rcwa(backend=0, structure=structure, truncation_order=(6, 6), top=1.0, bot=1.0,
                              theta=np.deg2rad(5), phi=np.deg2rad(20), period=(1.0, 1.2),
                              wavelength=1.5, thickness=(0.3,), psi=0.35 * np.pi).solve()
     assert _fp_warnings(rec) == []
@@ -147,7 +147,7 @@ def test_analytic_shape_path_is_silent():
 def test_field_reconstruction_is_silent_and_finite():
     """Reconstruction re-walks the same modal exponentials the solve cascaded."""
     sim = wavebit.rcwa(backend=0, structure=_structure_2d(), thickness=[600], period=[700, 700],
-                         wavelength=WL, max_order=[6, 6], psi=0.0, bot=EPS_SI, answers='field')
+                         wavelength=WL, truncation_order=[6, 6], psi=0.0, bot=EPS_SI, answers='field')
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         res, field = sim.solve_field(sample_x=8, sample_y=8, sample_z=8)
@@ -162,7 +162,7 @@ def test_solving_does_not_touch_global_seterr():
     try:
         np.seterr(over='raise', divide='raise', invalid='raise')
         during = np.geterr()
-        _run(structure=_structure_2d(), thickness=[600], period=[700, 700], max_order=[6, 6],
+        _run(structure=_structure_2d(), thickness=[600], period=[700, 700], truncation_order=[6, 6],
              psi=0.0, bot=EPS_SI)
         assert np.geterr() == during
     finally:
@@ -179,7 +179,7 @@ def test_caller_raise_policy_survives_a_solve():
     before = np.geterr()
     try:
         np.seterr(over='raise', divide='raise', invalid='raise', under='raise')
-        res, _ = _run(structure=_structure_2d(), thickness=[600], period=[700, 700], max_order=[8, 8],
+        res, _ = _run(structure=_structure_2d(), thickness=[600], period=[700, 700], truncation_order=[8, 8],
                       psi=0.0, bot=EPS_SI)
         assert abs(_energy(res) - 1.0) < 1e-10
     finally:
@@ -202,7 +202,7 @@ def test_check_finite_raises_with_a_structural_hint(bad):
         check_finite(xp, de_ri=np.array([0.4, bad]), de_ti=np.array([0.5]))
     msg = str(e.value)
     assert 'de_ri' in msg and 'de_ti' not in msg      # names only the contaminated array
-    assert 'max_order' in msg and 'degenerate' in msg       # says what to do about it
+    assert 'truncation_order' in msg and 'degenerate' in msg       # says what to do about it
 
 
 def test_finiteness_guard_fires_from_the_solve_path():
@@ -300,7 +300,7 @@ def test_healthy_solves_emit_no_unphysical_warning():
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         wavebit.rcwa(backend=0, structure=_structure_2d(), thickness=[600], period=[700, 700],
-                       wavelength=WL, max_order=[8, 8], psi=0.0, bot=EPS_SI).solve()
+                       wavelength=WL, truncation_order=[8, 8], psi=0.0, bot=EPS_SI).solve()
     assert [r for r in rec if issubclass(r.category, UnphysicalResultWarning)] == []
 
 
@@ -372,7 +372,7 @@ _BRANCH_STRUCTURE = np.array([[[0, 1, 0, 1, 1, 1]]]) * 24 + 1
 
 def _branch_solve(complex_dtype, top=1.0, theta=0.4, phi=0.3, backend=0):
     return wavebit.rcwa(
-        backend=backend, psi=np.pi / 2, top=top, bot=25.0, theta=theta, phi=phi, max_order=[30],
+        backend=backend, psi=np.pi / 2, top=top, bot=25.0, theta=theta, phi=phi, truncation_order=[30],
         wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
         complex_dtype=complex_dtype, fourier_coefficients='integrated',
         factorization='li').solve()
@@ -436,7 +436,7 @@ def test_a_traced_single_precision_solve_says_it_could_not_be_checked():
 
     def amplitude(complex_dtype, t):
         res = wavebit.rcwa(
-            backend=1, psi=np.pi / 2, top=1.0, bot=25.0, theta=t, phi=phi, max_order=[10],
+            backend=1, psi=np.pi / 2, top=1.0, bot=25.0, theta=t, phi=phi, truncation_order=[10],
             wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
             complex_dtype=complex_dtype, fourier_coefficients='sampled',
             factorization='li').solve()
@@ -466,7 +466,7 @@ def test_the_check_does_not_break_tracing():
 
     def R(theta):
         res = wavebit.rcwa(
-            backend=1, psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, max_order=[6],
+            backend=1, psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, truncation_order=[6],
             wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
             complex_dtype=0, fourier_coefficients='sampled',
             factorization='li').solve()
@@ -520,7 +520,7 @@ def _precision_warnings(theta, backend=0, complex_dtype=0):
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         wavebit.rcwa(
-            backend=backend, psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, max_order=[5],
+            backend=backend, psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, truncation_order=[5],
             wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
             complex_dtype=complex_dtype, fourier_coefficients='sampled', factorization='li')
     return [r for r in rec if issubclass(r.category, PrecisionLossWarning)]
@@ -607,7 +607,7 @@ def test_the_remaining_x64_ordering_gap_is_reported():
         with warnings.catch_warnings(record=True) as rec:
             warnings.simplefilter('always')
             wavebit.rcwa(
-                backend=1, psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, max_order=[5],
+                backend=1, psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, truncation_order=[5],
                 wavelength=900e-9, period=[2000e-9],
                 structure=np.array([[[0, 1, 0, 1, 1, 1]]]) * 24 + 1, thickness=[100e-9],
                 complex_dtype=0, fourier_coefficients='sampled', factorization='li')

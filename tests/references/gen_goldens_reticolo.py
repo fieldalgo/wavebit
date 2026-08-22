@@ -27,7 +27,7 @@ Setup notes, all of them things that cost an afternoon once:
   nonconformant operands. Both generators in this directory now read the same tree. The
   switch was checked rather than assumed: regenerating this golden against V10 reproduces
   all 48 arrays **bit for bit**, so nothing in the checked-in data moved.
-* ``max_order`` reaches RETICOLO as a scalar for the 1D branches; handing it the solver's
+* ``truncation_order`` reaches RETICOLO as a scalar for the 1D branches; handing it the solver's
   ``[max_order_x, max_order_y]`` pair returns an empty efficiency list rather than an error.
 * **The polarisation is read from whichever spelling the case uses.** The pure cases declare
   ``tetm='te'`` / ``'tm'`` and carry no ``psi``; the conical ones carry ``psi`` and no
@@ -92,15 +92,15 @@ def _propagating_indices(kw, n_side):
     """Indices into the solver's flat order axis whose order propagates in ``n_side``.
 
     1D grating equation: order ``m`` propagates when ``|n_top*sin(theta) + m*wl/period| < n``.
-    The solver's axis runs ``m = -max_order .. +max_order``, so the index is ``m + max_order``.
+    The solver's axis runs ``m = -truncation_order .. +truncation_order``, so the index is ``m + truncation_order``.
     """
-    max_order = kw['max_order']
-    max_order = max_order if np.isscalar(max_order) else max_order[0]
+    truncation_order = kw['truncation_order']
+    truncation_order = truncation_order if np.isscalar(truncation_order) else truncation_order[0]
     kpar = _index(kw['top']) * np.sin(kw['theta'])
     if kw.get('phi'):                       # conical: the azimuth tilts k_parallel off x
         kpar = kpar * np.cos(kw['phi'])
     step = kw['wavelength'] / kw['period'][0]
-    return np.array([m + max_order for m in range(-max_order, max_order + 1)
+    return np.array([m + truncation_order for m in range(-truncation_order, truncation_order + 1)
                      if abs(kpar + m * step) < n_side - 1e-12], dtype=np.int64)
 
 
@@ -134,7 +134,7 @@ def main():
         # Permittivity straight through: the bridge is what converts to RETICOLO's index, so
         # the same numbers reach Octave and the solver and neither can be migrated without the
         # other. See `interface/Reticolo.py::_index`.
-        reti_kw = dict(period=kw['period'], max_order=kw['max_order'], structure=kw['structure'],
+        reti_kw = dict(period=kw['period'], truncation_order=kw['truncation_order'], structure=kw['structure'],
                        thickness=kw['thickness'], theta=kw['theta'],
                        phi=kw.get('phi'), wavelength=kw['wavelength'],
                        top=kw['top'], bot=kw['bot'])

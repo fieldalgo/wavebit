@@ -20,7 +20,7 @@ it. Uniform stacks land at **1e-15** on every component that is not identically 
 what proves the conventions rather than the physics. Patterned stacks land at **1e-13 on five
 of the six components**; ``E_x``, the one normal to the grating's vertical interfaces and
 therefore discontinuous, sits at 7.0e-2 to 7.5e-2 and does not converge cleanly -- 1.3e-1,
-1.4e-1, 4.8e-2, 5.9e-2 at ``max_order = 4, 8, 16, 32``. That is the same Gibbs-limited disagreement
+1.4e-1, 4.8e-2, 5.9e-2 at ``truncation_order = 4, 8, 16, 32``. That is the same Gibbs-limited disagreement
 the pure TM path shows in the same slot, and it is excluded from the tight comparison and
 bounded on its own rather than hidden.
 
@@ -80,7 +80,7 @@ def main():
         # `structure` is permittivity and the bridge converts it to RETICOLO's index; see
         # `interface/Reticolo.py::_index`.
         *_, e, z, o = reti.run_res3(
-            grating_type=1, period=[PERIOD], max_order=MAX_ORDER, structure=structure, thickness=thickness,
+            grating_type=1, period=[PERIOD], truncation_order=MAX_ORDER, structure=structure, thickness=thickness,
             theta=np.deg2rad(theta), phi=np.deg2rad(phi), pol=0 if pol == 's' else 1,
             wavelength=WL, top=1.0, bot=1.0, res3_npts=RES_Z)
         e, z, o = np.asarray(e), np.asarray(z).ravel(), np.asarray(o)
@@ -105,7 +105,7 @@ def main():
     out['x'] = np.linspace(0, PERIOD, RES_X)     # what the .m hardcodes
     assert np.allclose(out['x'], x_samples())
     np.savez_compressed(str(OUT), **out)
-    print(f'wrote {len(out)} arrays to {OUT.name}; {len(CASES)} cases, max_order={MAX_ORDER}, '
+    print(f'wrote {len(out)} arrays to {OUT.name}; {len(CASES)} cases, truncation_order={MAX_ORDER}, '
           f'{2 * MAX_ORDER + 1} orders')
 
 

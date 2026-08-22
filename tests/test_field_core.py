@@ -187,10 +187,10 @@ def _as_six(v, path):
 
 
 FRAME_PATHS = {
-    'te_slab': dict(tetm='te', phi=None, max_order=(0, 0), period=[400.0]),
-    'tm_slab': dict(tetm='tm', phi=None, max_order=(0, 0), period=[400.0]),
-    'conical': dict(psi=0.7, phi=0.0, max_order=(0, 0), period=[400.0]),
-    '2d': dict(psi=0.7, phi=np.deg2rad(41.0), max_order=(0, 0), period=(400.0, 380.0)),
+    'te_slab': dict(tetm='te', phi=None, truncation_order=(0, 0), period=[400.0]),
+    'tm_slab': dict(tetm='tm', phi=None, truncation_order=(0, 0), period=[400.0]),
+    'conical': dict(psi=0.7, phi=0.0, truncation_order=(0, 0), period=[400.0]),
+    '2d': dict(psi=0.7, phi=np.deg2rad(41.0), truncation_order=(0, 0), period=(400.0, 380.0)),
 }
 
 

@@ -47,7 +47,7 @@ from wavebit._core.analytic import (                         # noqa: E402
 
 P = 0.77
 BASE = dict(period=[P, P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
-            wavelength=0.777, top=1.0, bot=2.25, max_order=[4, 4])
+            wavelength=0.777, top=1.0, bot=2.25, truncation_order=[4, 4])
 
 NORMAL_GRID = 1024                                             # the solver's default
 

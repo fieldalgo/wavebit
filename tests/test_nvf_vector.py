@@ -44,7 +44,7 @@ def test_vector_nvf_energy_conservation():
     Exx, Eyy, Epz_i, Exy, Eyx = to_conv_mat_nvf_2d(eps_matrix, max_order_val, max_order_val, nx=nx_vec, ny=ny_vec)
 
     m = wavebit.rcwa(
-        backend=0, max_order=[max_order_val, max_order_val],
+        backend=0, truncation_order=[max_order_val, max_order_val],
         psi=0.0, top=1.0, bot=2.1025,
         theta=10.0 * np.pi / 180, phi=20.0 * np.pi / 180,
         wavelength=1000.0, period=[1000.0, 1000.0], thickness=[300.0],

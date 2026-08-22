@@ -77,9 +77,9 @@ The inverse rule's *inversion* is the caller's, on the line after. The builder i
 This is what the old name got wrong: it carried a rule word into a place where no rule has been
 chosen yet, so `ep_inv = laurent_conv_2d(...)` read as a contradiction without being one.
 
-The index differences `r - c` and `s - d` each span `-2*max_order .. +2*max_order`, which is why the
+The index differences `r - c` and `s - d` each span `-2*truncation_order .. +2*truncation_order`, which is why the
 coefficient grid arrives on a **doubled** reciprocal range — see `_grid`. A grid of only
-`2*max_order+1` per axis cannot fill the corners of the matrix.
+`2*truncation_order+1` per axis cannot fill the corners of the matrix.
 
 ## 3. The matrix is BTTB, not Toeplitz
 
@@ -151,7 +151,7 @@ the incident polarisation by 90 degrees maps the problem onto itself, so the dif
 must come back transposed, exactly. Measured on an L-shape (transpose-symmetric, deliberately
 not 4-fold), 96x96 raster, `max|T(psi=0) - T(psi=90)ᵀ|`:
 
-| max_order | `factorization='li'` | `factorization='nvf'` |
+| truncation_order | `factorization='li'` | `factorization='nvf'` |
 | --- | --- | --- |
 | 4 | 5.3e-3 | 2.2e-14 |
 | 8 | 1.4e-3 | 3.5e-13 |
@@ -217,9 +217,9 @@ than merely unused.
 
 Why this was worth doing rather than documenting: the two mistakes are not symmetric, and the
 dangerous one is silent. Feeding a permittivity raster to the sampled build costs 5.7e-4 per
-order on a comfortable grid (N=64, max_order=4), 4.9e-3 on a tight one (N=24, max_order=10), and below
-roughly `N < 2*max_order` the inverse-rule matrix goes singular and the solve raises `LinAlgError`
-(measured: N=16, max_order=8). Energy conserves to 1e-14 through all of it, so nothing downstream
+order on a comfortable grid (N=64, truncation_order=4), 4.9e-3 on a tight one (N=24, truncation_order=10), and below
+roughly `N < 2*truncation_order` the inverse-rule matrix goes singular and the solve raises `LinAlgError`
+(measured: N=16, truncation_order=8). Energy conserves to 1e-14 through all of it, so nothing downstream
 reports anything. The reverse mistake — the sampled field built as a staircase — is 1e-5 at
 normal incidence into an index-matched substrate and 2e-4 to 2e-3 with contrast or at conical
 incidence, and never structural.

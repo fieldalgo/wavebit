@@ -60,7 +60,7 @@ INSTRUCTIONS = {
     'ellipse_rot': [[EPS_SI3N4, [['ellipse', 140, 160, 100, 50, EPS_SI, 0.5, 4, 4]]],
                     [EPS_SIO2, []]],
 }
-SOLVE_KW = dict(period=PERIOD, thickness=[205.0, 100.0], max_order=[3, 3],
+SOLVE_KW = dict(period=PERIOD, thickness=[205.0, 100.0], truncation_order=[3, 3],
                 top=1.0, bot=1.0, wavelength=900.0, psi=np.pi / 4)
 
 # The ellipse is deliberately not held to its legacy golden. The decomposition those numbers
@@ -208,7 +208,7 @@ def test_rectangle_has_no_step_where_the_angle_margin_used_to_end():
     step at the edge — a step that did not shrink from ``n_split`` 4 to 1024. Here the slope
     across that crossing has to match the slope just outside it.
     """
-    cfg = dict(period=PERIOD, thickness=[205.0], max_order=[3, 3], top=1.0, bot=1.0,
+    cfg = dict(period=PERIOD, thickness=[205.0], truncation_order=[3, 3], top=1.0, bot=1.0,
                wavelength=900.0, psi=np.pi / 4)
 
     def T(angle):
@@ -235,7 +235,7 @@ def test_rectangle_angle_carries_gradient_near_an_aligned_angle():
     """
     torch = pytest.importorskip('torch')
     tensor = lambda v: torch.tensor(v, dtype=torch.float64)
-    cfg = dict(period=PERIOD, thickness=[205.0], max_order=[3, 3], top=1.0, bot=1.0,
+    cfg = dict(period=PERIOD, thickness=[205.0], truncation_order=[3, 3], top=1.0, bot=1.0,
                wavelength=900.0, psi=np.pi / 4)
 
     def T(angle):
@@ -302,7 +302,7 @@ def test_two_objects_sharing_an_edge_keep_their_gradient():
                          tensor(0.)],
                         ['rectangle', tensor(100.) + p, tensor(150.), p, tensor(60.), 9.0,
                          tensor(0.)]]]]
-        cfg = dict(period=PERIOD, thickness=[205.0], max_order=[3, 3], top=1.0, bot=1.0,
+        cfg = dict(period=PERIOD, thickness=[205.0], truncation_order=[3, 3], top=1.0, bot=1.0,
                    wavelength=900.0, psi=np.pi / 4)
         return torch.sum(wavebit.rcwa(backend=2, structure=structure, **cfg).solve().T)
 
@@ -373,7 +373,7 @@ def test_jax_device_setter_round_trips():
     jax = pytest.importorskip('jax')
 
     solver = wavebit.rcwa(
-        backend=1, psi=np.pi / 2, top=1.0, bot=1.0, theta=0.0, phi=0.0, max_order=[5],
+        backend=1, psi=np.pi / 2, top=1.0, bot=1.0, theta=0.0, phi=0.0, truncation_order=[5],
         wavelength=900.0, period=[1000.0], thickness=[500.0],
         structure=np.array([[[1.0, 3.0, 3.0, 1.0]]]), device=0, answers='field')
 
@@ -407,7 +407,7 @@ def test_vector_path_differentiates_wrt_edge_positions(backend, name):
     if backend == 1:
         importlib.import_module('wavebit.on_jax')
 
-    cfg = dict(period=[300.0, 300.0], thickness=[205.0], max_order=[3, 3],
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[3, 3],
                top=1.0, bot=1.0, wavelength=900.0, psi=np.pi / 4)
 
     def total(cd, xp_scalar):
@@ -451,7 +451,7 @@ def test_the_staircase_costs_a_kink_at_an_aligned_angle(tetm, name):
     cross term is genuinely odd in the angle, which hides this under a real first-order term;
     measuring there is what made it look absent.
     """
-    cfg = dict(period=PERIOD, thickness=[205.0], max_order=[3, 3], top=1.0, bot=1.0,
+    cfg = dict(period=PERIOD, thickness=[205.0], truncation_order=[3, 3], top=1.0, bot=1.0,
                wavelength=900.0, psi=_PSI_OF[tetm], theta=0.0, phi=0.0)
 
     def T(angle, n_split):

@@ -102,8 +102,8 @@ at the ``normal_grid`` of 1024 the solver defaults to. That is 12x and 3.4x, and
 of the boundary exactness and the position gradient above rather than an accident -- but it was
 paid before it was counted, and it moves what is worth optimising: the field now costs 4-5x the
 three FFTs that transform it (0.36 s against 0.08 s at N = 1024), so the transform is not the
-place to look. Whole-solve share falls away with ``max_order`` as the eigendecomposition takes
-over, from 8.5% at max_order 4 to 0.13% at max_order 16, which is the range where it might
+place to look. Whole-solve share falls away with ``truncation_order`` as the eigendecomposition takes
+over, from 8.5% at truncation_order 4 to 0.13% at truncation_order 16, which is the range where it might
 matter to an optimizer looping at low truncation. Side effect worth knowing when reading
 ``docs/boundary-modeling.md``: the cost ratio it quotes for swapping in the boundary path's
 field fell from 12x/486x to 2x/182x because this side got slower, not because that one got
@@ -122,7 +122,7 @@ def _grid(xp, max_order_x, max_order_y, dev, dtype):
     """Integer reciprocal grid ``(KY, KX)`` spanning the doubled range a convolution matrix needs.
 
     Doubled because the matrix is indexed by *differences*: ``r - c`` and ``s - d`` each reach
-    ``+-2*max_order``, so a grid of ``2*max_order+1`` per axis cannot fill its corners. See
+    ``+-2*truncation_order``, so a grid of ``2*truncation_order+1`` per axis cannot fill its corners. See
     ``docs/factorization-terms.md`` for the layout and why the result is BTTB, not Toeplitz.
     """
     ky = xp.asarray([float(m) for m in range(-2 * max_order_y, 2 * max_order_y + 1)], dtype=dtype, device=dev)
@@ -515,7 +515,7 @@ def assemble_eps_coeffs(xp, shapes, background, max_order_x, max_order_y, period
     """Analytic Fourier coefficients of ``eps`` and ``1/eps`` for one layer.
 
     Each grid has shape ``(4*max_order_y+1, 4*max_order_x+1)``, indexed ``[ky+2*max_order_y,
-    kx+2*max_order_x]`` — the doubled range a ``(2*max_order+1)**2`` convolution matrix needs
+    kx+2*max_order_x]`` — the doubled range a ``(2*truncation_order+1)**2`` convolution matrix needs
     (``docs/factorization-terms.md`` §2 for why it doubles).
 
     ``background`` and each shape's ``material`` are read through
@@ -972,7 +972,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, max_order_x, max_ord
     the shape sits. That is not a discretization: ``<nx**2>`` for a circle moves 2.4e-2 between
     0.30 and 0.50 of the period and does not budge when the grid goes from 256 to 4096. It
     reached ``sum(R)`` as 1.6e-3, so the same structure translated gave a different answer.
-    Built here it reproduces the centred one to 1e-14, at every ``max_order``.
+    Built here it reproduces the centred one to 1e-14, at every ``truncation_order``.
 
     Several shapes cannot use it, and the reason is worth stating precisely because it is two
     reasons. The field is a *normalized sum* (``sum(g/|g|)``, divided by its own norm), so a
@@ -1022,21 +1022,21 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, max_order_x, max_ord
     Tried, and rejected on the half it was reached for. Integrate its autodiff position
     gradient across a six-pixel window on two tilted rectangles and it comes to -3.5e-4 over a
     window the loss *rises* through by +1.4e-4 -- the wrong sign, at all 25 sampled positions,
-    at max_order 8 and again at max_order 12; the sampled field integrates to +1.4e-4 against
+    at truncation_order 8 and again at truncation_order 12; the sampled field integrates to +1.4e-4 against
     +1.1e-4, high by 22%. A circle pair reverses it rather than widening it: there the sampled
     field accounts for the loss to 1% and the replacement is 19% out. The cost is a pixel scan
     over every segment of every loop, and ``POLYGON_VERTICES`` is 256, so a circle carries 64x
     the segments a rectangle does: at the ``normal_grid`` of 1024 this solver defaults to, the
     swap costs 12x on a rectangle pair and 486x on a circle pair, 0.4 s and 23 s per layer per
     build. Its *forward* accuracy is open rather than settled, and the two are not separable at
-    reachable truncations: they still sit 2e-4 apart on a total at max_order 24, so neither has
+    reachable truncations: they still sit 2e-4 apart on a total at truncation_order 24, so neither has
     reached the limit any ratio between them would have to be measured against. Reproduced by
     ``studies/benchmark_boundary_normal_field.py``; see ``docs/boundary-modeling.md``.
 
     Multi-shape layers therefore keep the sampled field. Both halves of what that costs are
     pinned in ``test_shape_position_gradients.py``, the working one as a test and the broken one
     as a strict xfail, so neither can be inferred from the other. Both of those run at
-    ``max_order = 4``, where the model's own slope is about twice its max_order 12 one, so they
+    ``truncation_order = 4``, where the model's own slope is about twice its truncation_order 12 one, so they
     hold autodiff to finite differences rather than to the slope the structure has.
 
     **The forward answer is affected too, not only the gradient — keep every shape inside the
@@ -1080,7 +1080,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, max_order_x, max_ord
     # ``(cx, cy)`` are, which makes a position sweep -- and a position *gradient*, which runs
     # through the phase -- reuse one field instead of rebuilding it every step. A material sweep
     # reuses it for the other reason: the key holds no material at all because the build reads
-    # none. Measured on a five-point sweep at ``normal_grid = 1024``, ``max_order = 4``: the call
+    # none. Measured on a five-point sweep at ``normal_grid = 1024``, ``truncation_order = 4``: the call
     # 83% of the wall clock for one shape and 93% for six.
     key = _projector_cache_key(xp, built, grid_shape, period, max_order_x, max_order_y, dtype, lattice)
     coeffs = _PROJECTOR_CACHE.pop(key, None) if key is not None else None

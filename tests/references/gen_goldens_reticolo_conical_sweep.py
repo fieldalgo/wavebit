@@ -10,8 +10,8 @@ is committed. It holds::
 
     run_reti.m               the sweep driver
     Reticolo_RCWA_1D.m       the per-point wrapper
-    reti_res_80.mat          max_order=80   (reti_res2.mat is the same run, to 3e-14)
-    reti_res_200.mat         max_order=200
+    reti_res_80.mat          truncation_order=80   (reti_res2.mat is the same run, to 3e-14)
+    reti_res_200.mat         truncation_order=200
 
 Pass that directory as the first argument and run this file with Octave-free Python; the golden
 it writes is what CI reads. There is no default: the path is machine-specific, and a stale
@@ -51,12 +51,12 @@ N_TOP, N_BOT = 1.0, 5.0
 payload = dict(kx=KX, ky=KY, ucell=UCELL, period=PERIOD, wavelength=WAVELENGTH,
                thickness=THICKNESS, n_top=N_TOP, n_bot=N_BOT)
 
-for max_order, name in ((80, 'reti_res_80.mat'), (200, 'reti_res_200.mat')):
+for truncation_order, name in ((80, 'reti_res_80.mat'), (200, 'reti_res_200.mat')):
     mat = scipy.io.loadmat(SOURCE / name)
     arr = mat['dc_ri_TETE_Reticolo_arr']
-    assert arr.shape == (len(KX), len(KY), 2 * max_order + 1), (name, arr.shape)
-    # [:, :, max_order] is the (0,0) order: the array runs -max_order .. +max_order.
-    payload[f'amp_fto{max_order}'] = arr[:, :, max_order].astype(np.complex128)
+    assert arr.shape == (len(KX), len(KY), 2 * truncation_order + 1), (name, arr.shape)
+    # [:, :, truncation_order] is the (0,0) order: the array runs -truncation_order .. +truncation_order.
+    payload[f'amp_fto{truncation_order}'] = arr[:, :, truncation_order].astype(np.complex128)
 
 np.savez(OUT, **payload)
 print('wrote', OUT, sorted(payload))

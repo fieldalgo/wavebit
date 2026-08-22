@@ -56,7 +56,7 @@ if __name__ == '__main__':
 
     # The silicon underneath is the substrate, so it goes in `bot`.
     rcwa_options = dict(backend=0, thickness=[205], period=[300, 300],
-                        max_order=[3, 3],
+                        truncation_order=[3, 3],
                         top=1, bot=si,
                         wavelength=900,
                         )

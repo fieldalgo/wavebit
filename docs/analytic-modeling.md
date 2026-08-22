@@ -39,7 +39,7 @@ Two qualifications, both measured, both easy to trip over:
 - **On an axis-aligned boundary the smooth path is the slower one.** Li's rules along x and y
   are already optimal when the interfaces are axis-aligned, so NVF only costs there. Measured
   against RETICOLO: the block path matches at 1e-14 every order while the smooth path needs
-  max_order≈16 to reach 1e-4.
+  truncation_order≈16 to reach 1e-4.
 
 Choose the path by the boundary, not on a general expectation that the smooth path wins.
 
@@ -80,7 +80,7 @@ stand in those two expressions is gone**, which is one of the sites the flip to 
 made of, and there is no conjugation on the way in either: wavebit is `e^{-iωt}` throughout,
 so `Im(eps) > 0` is loss as written. Same reading as `to_conv_mat_raster_nvf`.
 `conv_matrix_2d` builds the block-Toeplitz matrices `⟦ε⟧`,
-`⟦1/ε⟧` from this `(4*max_order+1)²` coefficient grid in the same ordering as the `dfs2d_*` builders.
+`⟦1/ε⟧` from this `(4*truncation_order+1)²` coefficient grid in the same ordering as the `dfs2d_*` builders.
 
 ## 2. Coupling with the NVF factorization
 
@@ -110,13 +110,13 @@ phase `⟦ε⟧` already carries. Every one of the five matrices is then `D X D�
 
 **The centring also makes the field reusable, which is where the wall clock goes.** Sampling and
 transforming it is the expensive half of this build — 83% of a five-point sweep at
-`normal_grid = 1024, max_order = 4` for one shape and 93% for six — and none of it reads a material.
+`normal_grid = 1024, truncation_order = 4` for one shape and 93% for six — and none of it reads a material.
 The normal field is a property of where the boundaries are, not of what sits either side of
 them. So `normal_projector_coeffs` keys the sampled coefficients on the geometry it was actually
 built from and reuses them: a **material** sweep hits because the key holds no permittivity, and a
 single-shape **position** sweep hits because the build sits at the centre of the cell whatever
 `(cx, cy)` are. Measured 1.6× to 3.8× on five-point sweeps, largest where `normal_grid` is fine
-and `max_order` modest; where there is nothing to win (`normal_grid = 256`, `max_order = 8`) it is 1.0×.
+and `truncation_order` modest; where there is nothing to win (`normal_grid = 256`, `truncation_order = 8`) it is 1.0×.
 
 The key is `None` — no reuse, rebuild — whenever a value it would have to hold is traced or under
 autograd, which is what keeps this from touching a gradient. A JAX tracer cannot be converted, so
@@ -162,7 +162,7 @@ structure = [dict(background=1.0, shapes=[
                       angle=np.deg2rad(25), material=1.0),
                  dict(type='ellipse', cx=0.8, cy=0.9, lx=0.3, ly=0.2,
                       angle=0.6, material=9.0)])]
-solver = wavebit.rcwa(backend=0, structure=structure, max_order=(11, 11), ...)  # normal_grid=256 (default)
+solver = wavebit.rcwa(backend=0, structure=structure, truncation_order=(11, 11), ...)  # normal_grid=256 (default)
 res = solver.solve()
 ```
 
@@ -181,10 +181,10 @@ builds a different structure that solves and conserves energy — see
 ## 4. Results (`studies/benchmark_analytic.py`)
 
 **[1] Dielectric tilted rectangle** (30°, n=3.5, TM, subwavelength). Reference = analytic
-max_order=16. Same rectangle represented analytically vs. as a block staircase (n_split); `t0`
+truncation_order=16. Same rectangle represented analytically vs. as a block staircase (n_split); `t0`
 error:
 
-| max_order | analytic | staircase n=8 | staircase n=24 |
+| truncation_order | analytic | staircase n=8 | staircase n=24 |
 |---:|---:|---:|---:|
 | 3 | 3.6e-2 | 7.4e-2 | 7.5e-2 |
 | 5 | 1.0e-2 | 5.0e-2 | 4.9e-2 |
@@ -192,14 +192,14 @@ error:
 | 9 | 2.4e-3 | 3.4e-2 | 3.1e-2 |
 | 11 | **6.2e-4** | 3.0e-2 | 2.6e-2 |
 
-Analytic at max_order=5 (1e-2) already beats the staircase at max_order=11 (n=24, 2.6e-2), and is ~40×
-more accurate at max_order=11. The staircase saturates at its geometric-error floor (~3e-2) no
+Analytic at truncation_order=5 (1e-2) already beats the staircase at truncation_order=11 (n=24, 2.6e-2), and is ~40×
+more accurate at truncation_order=11. The staircase saturates at its geometric-error floor (~3e-2) no
 matter the order.
 
-**[2] Metallic circle** (n=0.05+3.5j, R=0.3, TM). Reference = analytic max_order=16. `t0` error,
+**[2] Metallic circle** (n=0.05+3.5j, R=0.3, TM). Reference = analytic truncation_order=16. `t0` error,
 re-measured at `f537010` (2026-08-09):
 
-| max_order | analytic-NVF | raster-NVF (SDF normals) | raster-sampled |
+| truncation_order | analytic-NVF | raster-NVF (SDF normals) | raster-sampled |
 |---:|---:|---:|---:|
 | 3 | 1.56e-2 | 1.39e-2 | 4.18e-2 |
 | 5 | 2.78e-2 | 3.42e-2 | 2.89e-2 |
@@ -209,34 +209,34 @@ re-measured at `f537010` (2026-08-09):
 
 **This case no longer separates analytic-NVF from raster-NVF, and the earlier version of this
 section claimed it did.** It read "the accuracy ranks analytic-NVF < raster-NVF < raster-sampled (as
-expected)" against a raster-NVF column of 1.1e-2 at max_order=9 and 5.5e-3 at max_order=11. Those numbers
+expected)" against a raster-NVF column of 1.1e-2 at truncation_order=9 and 5.5e-3 at truncation_order=11. Those numbers
 were correct when measured; the baseline has since moved.
 
 Retiring `enhanced_dfs` (see [nvf-upsampling.md](nvf-upsampling.md)) improved raster-NVF here by
 about 8x. A/B on this exact case, extracting the old tree with `git archive` so no git state is
 touched:
 
-| raster-NVF error | max_order=9 | max_order=11 |
+| raster-NVF error | truncation_order=9 | truncation_order=11 |
 |---|---|---|
 | `21ad539` (before) | 1.073e-2 | 5.487e-3 |
 | `f537010` (after) | 1.385e-3 | 3.484e-3 |
 
 Nothing regressed — this is one of the 27-of-32 combinations that write-up reports gaining
-accuracy. What went away is the *margin*: at max_order=9 raster-NVF is now marginally ahead of
-analytic-NVF, and only at max_order=11 does analytic lead again.
+accuracy. What went away is the *margin*: at truncation_order=9 raster-NVF is now marginally ahead of
+analytic-NVF, and only at truncation_order=11 does analytic lead again.
 
 So this case no longer supports the claim it was written for. Metal also oscillates badly at
-low order — the analytic error *rises* from 1.56e-2 at max_order=3 to 2.78e-2 at max_order=5 — and with the
+low order — the analytic error *rises* from 1.56e-2 at truncation_order=3 to 2.78e-2 at truncation_order=5 — and with the
 two NVF columns now level, there is no clean trend left to read off it. Case [1], the tilted
 dielectric, is the one that still separates the paths, because there the staircase carries a
 geometric error floor that no Fourier order removes and no raster refinement reaches.
 
 For a curved boundary the honest evidence is now the RETICOLO comparison, which has an external
-reference rather than the smooth path's own max_order=16: the analytic result is flat from max_order=5
-while two independent staircases are still climbing toward it at max_order=20.
+reference rather than the smooth path's own truncation_order=16: the analytic result is flat from truncation_order=5
+while two independent staircases are still climbing toward it at truncation_order=20.
 
 **[3] Lossless multi-shape / multi-layer** (ellipse + rectangle + circle, conical
-incidence, non-square period): `|R+T−1|` = 6.7e-16 (max_order 5), 1.1e-14 (max_order 8) — machine-
+incidence, non-square period): `|R+T−1|` = 6.7e-16 (truncation_order 5), 1.1e-14 (truncation_order 8) — machine-
 precision energy conservation. Backend agreement: `|np−jax|`~1e-14, `|np−torch|`~5e-10.
 
 ## 5. Backend consistency and differentiability
@@ -356,7 +356,7 @@ term of **-0.074** — a negative mean reciprocal permittivity on a layer whose 
 between 5.76 and 20.04, against +0.150 for the profile itself. So the number the solver returned
 was neither reading's, and the tell is that it does not settle on one. `sum(T)` for that rod:
 
-| `max_order` | block | smooth, `combine='add'` | raster of the superposition | raster of the union |
+| `truncation_order` | block | smooth, `combine='add'` | raster of the superposition | raster of the union |
 |---|---|---|---|---|
 | 6  | 0.4403 | 0.7635 | 0.8346 | 0.9722 |
 | 10 | 0.4147 | 0.4239 | 0.7136 | 0.9722 |

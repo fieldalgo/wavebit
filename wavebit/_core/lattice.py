@@ -33,7 +33,7 @@ has the distinction and the check.)
 
 The raster follows that substitution: ``structure[layer][j, i]`` is the permittivity at
 ``r = (i + 0.5)/Nx * a1 + (j + 0.5)/Ny * a2``. Axis 1 runs along ``a1`` (and pairs with
-``max_order[0]`` / ``m``), axis 0 along ``a2`` (with ``max_order[1]`` / ``n``) — the same pairing
+``truncation_order[0]`` / ``m``), axis 0 along ``a2`` (with ``truncation_order[1]`` / ``n``) — the same pairing
 axis-aligned case has always used, read in lattice coordinates rather than Cartesian ones.
 
 What the skew *does* reach is any quantity that is Cartesian-geometric rather than

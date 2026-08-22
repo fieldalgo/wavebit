@@ -22,7 +22,7 @@ def _setup(**kw):
     solver = wavebit.rcwa(backend=0, **kw)
     legacy = solver.solve()
     epx, epy, epz, *_ = to_conv_mat_raster_sampled(
-        solver.structure, solver.max_order[0], solver.max_order[1])
+        solver.structure, solver.truncation_order[0], solver.truncation_order[1])
     kx, ky = solver.order_kxy()
     return solver, legacy, (epx, epy, epz), kx, ky
 
@@ -38,7 +38,7 @@ def _assert_all_fields(legacy_sub, got):
 def test_solve_1d_full_result_matches_legacy(tetm):
     # Permittivities at the public boundary: top eps 4 is the index 2, and the raster's 9 is
     # the index 3. The core solves below still take the index, which `solver.n_top` derives.
-    kw = dict(top=4.0, bot=1.0, theta=0.3, phi=None, tetm=tetm, max_order=[6, 0],
+    kw = dict(top=4.0, bot=1.0, theta=0.3, phi=None, tetm=tetm, truncation_order=[6, 0],
               period=[0.77], wavelength=0.777, thickness=[0.15],
               structure=np.array([[[9., 9., 9., 1., 1., 1.]]]))
     solver, legacy, conv, kx, _ = _setup(**kw)
@@ -57,8 +57,8 @@ CONICAL_2D = [
 
 @pytest.mark.parametrize('case', CONICAL_2D, ids=[c[0] for c in CONICAL_2D])
 def test_conical_and_2d_full_result_matches_legacy(case):
-    name, structure, thickness, max_order, period = case
-    kw = dict(top=2.25, bot=1.0, theta=0.2, phi=0.3, psi=0.7, max_order=max_order, period=period,
+    name, structure, thickness, truncation_order, period = case
+    kw = dict(top=2.25, bot=1.0, theta=0.2, phi=0.3, psi=0.7, truncation_order=truncation_order, period=period,
               wavelength=0.9, thickness=thickness, structure=structure)
     solver, legacy, conv, kx, ky = _setup(**kw)
 
@@ -75,7 +75,7 @@ def test_conical_and_2d_full_result_matches_legacy(case):
 
 def test_amplitude_rung_is_consistent_with_efficiency_rung():
     """Climbing the ladder must not perturb the numbers the rung below returns."""
-    kw = dict(top=2.25, bot=1.0, theta=0.2, phi=0.3, psi=0.7, max_order=[2, 2],
+    kw = dict(top=2.25, bot=1.0, theta=0.2, phi=0.3, psi=0.7, truncation_order=[2, 2],
               period=[1.0, 1.0], wavelength=0.9, thickness=[0.2],
               structure=np.random.default_rng(2).uniform(1, 4, (1, 5, 5)) ** 2)
     solver, _, conv, kx, ky = _setup(**kw)

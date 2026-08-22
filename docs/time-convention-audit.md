@@ -69,7 +69,7 @@ only when `Im(k_par**2) > Im(eps)`, which needs the superstrate to be lossier th
 being asked about.
 
 **What the suite covered before this work.** Every absorbing-superstrate test in
-`test_lossy_media.py` runs at `max_order=0` onto a *lossless* substrate. That is quadrant IV, where
+`test_lossy_media.py` runs at `truncation_order=0` onto a *lossless* substrate. That is quadrant IV, where
 the shipped rule is right (§3). The regime where it is not — quadrant III with an absorbing
 substrate — had no test at all.
 
@@ -190,7 +190,7 @@ It stays backend-agnostic and traceable: no Python `bool`, no boolean indexing, 
 broadcast against `k_par_sq` rather than assumed to be an array. Measured in the corrected
 regime — NumPy, JAX and PyTorch return the same `kz` (max difference 5.2e-16, 0.0), `jax.jit`
 gives the same, `jax.grad` through a `k_par` scale returns a finite `-0.2056`, and a full
-`max_order=2` grating solve agrees to all ten printed digits on the three backends.
+`truncation_order=2` grating solve agrees to all ten printed digits on the three backends.
 
 ### The one construction that cannot arbitrate, and why it is worth recording
 
@@ -222,7 +222,7 @@ argument reaches the wrong conclusion there with no warning that it has.
 `kz_bot**2(θ) = eps_bot − eps_top·sin²(θ)` traces a straight segment as `θ` is swept. It
 generically misses `kz**2 = 0`, so `r(θ)` is analytic and any step in it is the branch rule.
 
-Run through the shipped solver, `max_order=0`, one 120 nm layer of `n = 2` between the half-spaces:
+Run through the shipped solver, `truncation_order=0`, one 120 nm layer of `n = 2` between the half-spaces:
 
 | case | pol | `θ` of the step | `r` below | `r` above | **step** | `Δθ` | `\|kz_bot²\|` there |
 | --- | --- | --- | --- | --- | --- | --- | --- |

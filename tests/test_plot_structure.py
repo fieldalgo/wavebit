@@ -15,7 +15,7 @@ The other three claims pinned here:
   shift, since a shape sitting comfortably inside the cell cannot tell;
 * a painted, overlapping layer goes through the resolved loops and not through the summed
   rule, which agrees to the eye and differs by 5.4% in ``<eps>``;
-* the band-limited reconstruction *converges* on the geometry as ``max_order`` rises. That is the
+* the band-limited reconstruction *converges* on the geometry as ``truncation_order`` rises. That is the
   check that catches a flipped order-index sign, which would mirror the picture: a mirrored
   reconstruction of an asymmetric layer does not converge on anything.
 """
@@ -35,7 +35,7 @@ from wavebit._core.draw import _render_block, slice_structure
 
 P = 1000.0
 COMMON = dict(backend=0, period=(P, P), thickness=(300.,), wavelength=900.,
-              top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, max_order=(9, 9))
+              top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, truncation_order=(9, 9))
 
 #: A 200x160 rod of permittivity 12.25 in a 1000x1000 cell of permittivity 1: `<eps>` is
 #: `1 + 0.032*(12.25 - 1) = 1.36` wherever it is placed, since a translation is not a
@@ -219,7 +219,7 @@ def test_the_analytic_sampler_agrees_with_its_own_dc_coefficient(lattice):
               dict(type='rectangle', cx=740.0, cy=650.0, lx=300.0, ly=180.0,
                    angle=0.45, material=4.840000000000001)]
     solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], lattice=lattice, **COMMON)
-    fx, fy = int(solver.max_order[0]), int(solver.max_order[1])
+    fx, fy = int(solver.truncation_order[0]), int(solver.truncation_order[1])
     dc = assemble_eps_coeffs(xnp, shapes, 1.0, fx, fy, solver.period, xnp.complex128,
                              lattice=solver.lattice)[0][2 * fy, 2 * fx].real
 
@@ -325,23 +325,23 @@ def test_a_hole_is_drawn_as_a_hole():
 # ----------------------------------------------------------------- geometry against the series
 
 def test_band_limited_converges_on_the_geometry():
-    """Rising ``max_order`` closes on the sampled geometry -- which is also the mirror test.
+    """Rising ``truncation_order`` closes on the sampled geometry -- which is also the mirror test.
 
-    Relative L2 measured at 28.4% / 16.8% / 10.2% for ``max_order`` 3 / 9 / 25 on an asymmetric
+    Relative L2 measured at 28.4% / 16.8% / 10.2% for ``truncation_order`` 3 / 9 / 25 on an asymmetric
     layer. A flipped order-index sign reconstructs the mirrored structure, whose distance to
-    the geometry does not fall with ``max_order`` at all, so monotone convergence is what pins the
+    the geometry does not fall with ``truncation_order`` at all, so monotone convergence is what pins the
     convention here without restating it.
     """
     shapes = [dict(type='circle', cx=300.0, cy=300.0, lx=260.0, material=12.25),
               dict(type='rectangle', cx=740.0, cy=650.0, lx=300.0, ly=180.0,
                    angle=0.45, material=4.840000000000001)]
-    cfg = {k: v for k, v in COMMON.items() if k != 'max_order'}
-    geometry = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], max_order=(3, 3),
+    cfg = {k: v for k, v in COMMON.items() if k != 'truncation_order'}
+    geometry = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], truncation_order=(3, 3),
                             **cfg).slice_structure(n=512).real
 
     errors = []
-    for max_order in (3, 9, 25):
-        solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], max_order=(max_order, max_order), **cfg)
+    for truncation_order in (3, 9, 25):
+        solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], truncation_order=(truncation_order, truncation_order), **cfg)
         band = solver.slice_structure(n=512, band_limited=True).real
         errors.append(np.linalg.norm(band - geometry) / np.linalg.norm(geometry))
         # `<eps>` is converged from the start; the picture is not. That gap is the warning.
@@ -352,7 +352,7 @@ def test_band_limited_converges_on_the_geometry():
 
 
 def test_the_truncated_series_leaves_the_material_range():
-    """Gibbs, stated as a number: negative permittivity and 13% overshoot at ``max_order = 9``.
+    """Gibbs, stated as a number: negative permittivity and 13% overshoot at ``truncation_order = 9``.
 
     Nothing is wrong with the solve; this is what a truncated transform of a discontinuous
     function looks like, and it is the reason ``band_limited`` is not the default.

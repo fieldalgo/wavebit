@@ -37,7 +37,7 @@ class SolverJax(RCWAJax, OptimizerJax):
         aux_data = {
             'backend': self.backend,
             'tetm': self.tetm,
-            'max_order': self.max_order,
+            'truncation_order': self.truncation_order,
             'layer_algorithm': self.layer_algorithm,
             'device': self.device,
             'complex_dtype': self.complex_dtype,

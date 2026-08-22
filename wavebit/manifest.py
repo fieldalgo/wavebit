@@ -10,7 +10,7 @@ read the same facts the solver enforces instead of restating them.
 **Capabilities and constraints only.** What each path implements, what is refused and why,
 and which spelling of ``structure`` selects which path. Deliberately not here:
 
-* *Recommendations.* "PyTorch below ``max_order≈5``" is a measurement about a workload, not a
+* *Recommendations.* "PyTorch below ``truncation_order≈5``" is a measurement about a workload, not a
   property of the solver, and it belongs to whoever is giving advice. The manifest says
   which backends exist; picking one is someone else's job.
 * *A vocabulary for describing experiments.* Fields like "is the boundary curved" describe
@@ -51,13 +51,13 @@ from ._core.spec import SPEC_VERSION
 #: '6': the pre-release rename set (2026-08-20). What a consumer sees move:
 #: ``results.incidences.fields`` goes ``('res', 'res_te_inc', 'res_tm_inc')`` ->
 #: ``('given', 's_inc', 'p_inc')``, and the constructor keywords named in ``why`` and
-#: ``meaning`` prose move with them (``fto`` -> ``max_order``, ``type_complex`` ->
+#: ``meaning`` prose move with them (``fto`` -> ``max_order`` -> ``truncation_order``, ``type_complex`` ->
 #: ``complex_dtype``, ``connecting_algo`` -> ``layer_algorithm``). ``docs/capability-manifest.md``
 #: says a rename alone does not earn a bump, because a consumer reading unknown keys degrades
 #: gracefully -- but ``fields`` is a *recognisable* key whose contents are attribute names a
 #: consumer indexes a result object with, so the old contents keep their shape while ceasing
 #: to resolve. That is the same failure the '5' bump exists for, one level down.
-MANIFEST_VERSION = '6'
+MANIFEST_VERSION = '7'
 
 
 # --------------------------------------------------------------- how a structure is spelled
@@ -331,7 +331,9 @@ RESULTS = {
         'total': ('R', 'T'),
         'by_outgoing_polarization': ('R_s', 'R_p', 'T_s', 'T_p'),
         'layout': 'arrays of shape (n_orders_y, n_orders_x) — y first, the transpose of the '
-                  'max_order=[x, y] input order — with the incident order at the centre',
+                  'truncation_order=[x, y] input order. Centred on the incident order unless '
+                  'an excitation widened the retained window; result.order_window says which '
+                  'orders these are, and result.order(m, n) spares you the arithmetic',
         'accessor': 'result.order(m, n) indexes every per-order quantity by the order '
                     'indices themselves',
         'caveat': 'with an absorbing superstrate the incident-power normalization is '

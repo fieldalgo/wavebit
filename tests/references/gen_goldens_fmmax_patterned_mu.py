@@ -92,7 +92,7 @@ def main():
         # Every tensor is Hermitian at every pixel, so both are lossless whatever the pattern
         # is. Enforced sharply on FFT, where a Hermitian input gives an exactly Hermitian
         # convolution matrix; JONES_DIRECT is a vector formulation whose truncation leaves a
-        # residual that shrinks with max_order rather than vanishing (same as the patterned eps case).
+        # residual that shrinks with truncation_order rather than vanishing (same as the patterned eps case).
         for pol, (r, t) in (('s', fft[:2]), ('p', fft[2:])):
             if abs(r + t - 1.0) > 1e-9:
                 raise SystemExit(f'{name} FFT {pol}: R+T = {r + t:.12f} for Hermitian eps and '

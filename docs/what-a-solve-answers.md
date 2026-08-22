@@ -18,7 +18,7 @@ Targets:
 last two, and it is worth a keyword because they differ by three orders of magnitude: the
 amplitudes are boundary vectors already solved for, while the field-reconstruction state is
 **4.25 matrices of side `2*n_orders_x*n_orders_y` per layer** on the 2D path — 240 MB per layer at
-`max_order=(15, 15)`, 733 MB at `(20, 20)`. Every public route used to keep it unconditionally, and
+`truncation_order=(15, 15)`, 733 MB at `(20, 20)`. Every public route used to keep it unconditionally, and
 most large runs are optimization sweeps against a fixed objective that never reconstruct a
 field at all.
 
@@ -51,27 +51,27 @@ of one (it is indexed by orders, not by the doubled s/p state), so:
 | conical (`solve_1d_conical`) | 3.75 | `W = [[W1, W2]]` is `dim/2 x dim`, half the 2D one |
 | pure 1D TE/TM | 5.0 | `dim = n_orders_x`, and all five matrices are square in it |
 
-Read off the retained shapes rather than assumed, at `max_order=6`: the pure path holds five
+Read off the retained shapes rather than assumed, at `truncation_order=6`: the pure path holds five
 `13 x 13` matrices, the conical one `(13,13) (13,26) (26,26) (26,26) (26,26)`, and the 2D one
 `(169,169) (338,338) (338,338) (338,338) (338,338)`. Measured totals at that size are 5.15,
 3.90 and 4.26 blocks — above the asymptote by the `q` vector and `T1`, which stop mattering as
-`dim` grows (4.25 to three figures by `max_order=(8, 8)`).
+`dim` grows (4.25 to three figures by `truncation_order=(8, 8)`).
 
 Measured, one patterned layer, ETM, 2D coupled:
 
-| `max_order` | `dim` | one block | retained | buffers |
+| `truncation_order` | `dim` | one block | retained | buffers |
 | --- | --- | --- | --- | --- |
 | `(8, 8)` | 578 | 5.1 MB | 21.70 MB | 8 |
 | `(15, 15)` | 1922 | 56.4 MB | 239.68 MB | 8 |
 | `(20, 20)` | 3362 | 172.7 MB | 733.21 MB | 8 |
 
-and linear in depth — 4.25 blocks *per layer*, so at `max_order=(8, 8)`: 21.70 MB at one layer,
+and linear in depth — 4.25 blocks *per layer*, so at `truncation_order=(8, 8)`: 21.70 MB at one layer,
 43.37 at two, 86.72 at four, 173.42 at eight. On the 16 GB machine these were measured on, a
-four-layer stack at `max_order=(20, 20)` retains 2.9 GB after a solve that is already finished.
+four-layer stack at `truncation_order=(20, 20)` retains 2.9 GB after a solve that is already finished.
 
 The 4.25 figure is worth stating because 3.75 is the number you get by assuming the 2D path
 shares the conical path's `W`. It does not, and the difference is 13% on exactly the case —
-a 2D metasurface at `max_order=(15, 15)` or `(20, 20)` — where the absolute number is largest.
+a 2D metasurface at `truncation_order=(15, 15)` or `(20, 20)` — where the absolute number is largest.
 
 ## 3. Why the amplitudes are on the near side of the seam
 
@@ -98,7 +98,7 @@ blocks across `k` layers; without it each layer's matrices become garbage as soo
 iteration rebinds the names, and only `F`, `G` and `T` — the ETM recursion state — carry
 across. So the appends are conditional, not just the returns.
 
-Measured with `tracemalloc`, `max_order=(8, 8)`, one process, ETM:
+Measured with `tracemalloc`, `truncation_order=(8, 8)`, one process, ETM:
 
 | layers | peak, `'amplitude'` | peak, `'field'` | peak delta |
 | --- | --- | --- | --- |
@@ -119,13 +119,13 @@ cannot see it.
 **Do not measure any of this with a post-solve RSS delta, and not with `ru_maxrss` either.**
 The RSS delta is at the allocator's discretion. `ru_maxrss` is a true high-water mark but
 carries several hundred MB of process noise here — run across fresh processes it reported
-`'amplitude'` peaking *above* `'field'` at `max_order=(8, 8)`, in the direction opposite to the
+`'amplitude'` peaking *above* `'field'` at `truncation_order=(8, 8)`, in the direction opposite to the
 effect, at both 1 and 6 layers. `tracemalloc` tracks NumPy's own allocator exactly (a
 2000x2000 complex array reports 61.04 MiB) and is the instrument these rows come from.
 
 ## 5. What it costs in time
 
-Only on the SMM, and only at the top rung. Measured at `max_order=(10, 10)`, 4 layers, best of 3
+Only on the SMM, and only at the top rung. Measured at `truncation_order=(10, 10)`, 4 layers, best of 3
 after a warm-up:
 
 | | `'amplitude'` | `'field'` | |
@@ -139,8 +139,8 @@ measured one. It measures at 14.8%, inside the claimed band. So on the SMM, decl
 below `'field'` buys time and not only memory; on the ETM it buys memory alone.
 
 The `'efficiency'` rung buys **no time at all**: 1.283 s against 1.284 s on the ETM and 1.935 s
-against 1.923 s on the SMM, at `max_order=(10, 10)`, one layer, best of 5 — differences of one part
-in a thousand, which is noise. Re-measured 2026-08-20 at `max_order=(8, 8)` (0.536 s against 0.524 s)
+against 1.923 s on the SMM, at `truncation_order=(10, 10)`, one layer, best of 5 — differences of one part
+in a thousand, which is noise. Re-measured 2026-08-20 at `truncation_order=(8, 8)` (0.536 s against 0.524 s)
 and `(15, 15)` (17.0 s against 17.4 s), same answer. It is not a speed knob and never was: what
 it skips is one extra linear solve on an already-factorized `final_A`, plus the Fresnel packing,
 against a cost the eigendecomposition owns.
@@ -150,7 +150,7 @@ an earlier draft of this section wrongly reported as nothing. Measured on the sa
 
 | | result payload | JAX pytree |
 | --- | --- | --- |
-| `'efficiency'` | 4.5 KB at `max_order=(8, 8)`, 15.0 KB at `(15, 15)` | **2 leaves** |
+| `'efficiency'` | 4.5 KB at `truncation_order=(8, 8)`, 15.0 KB at `(15, 15)` | **2 leaves** |
 | `'amplitude'` | 94.8 KB, 315.3 KB | **30 leaves** |
 
 A factor of 21, because the amplitude rung carries ten per-order arrays across three incidence
@@ -179,7 +179,7 @@ whether the per-layer appends happen — and a traced value cannot be branched o
 And it must survive the JAX pytree round trip, which is where the interesting failure is. As a
 plain instance attribute nothing puts it in `aux_data`, so `_tree_unflatten` never passes it to
 the constructor and the rebuilt solver takes the default. Exercised on the real flatten /
-unflatten pair, `max_order=(3, 3)`, 2 layers:
+unflatten pair, `truncation_order=(3, 3)`, 2 layers:
 
 | `aux_data` carries it | declared | rebuilt reports | retained after re-solve |
 | --- | --- | --- | --- |
@@ -199,7 +199,7 @@ declarations produce *different* treedefs, and that the numbers agree across the
 ## 7. Under autograd it is worth several times the arrays
 
 A retained tensor anchors its `grad_fn`, and through it everything the graph reaches. PyTorch
-eager, `max_order=(6, 6)`, 2 layers, `requires_grad` on the permittivity `structure`:
+eager, `truncation_order=(6, 6)`, 2 layers, `requires_grad` on the permittivity `structure`:
 
 | | retained tensors | arrays | graph nodes | pinned by the graph | total |
 | --- | --- | --- | --- | --- | --- |

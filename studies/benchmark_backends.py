@@ -114,7 +114,7 @@ def _probe_step():
     import torch
     rng = np.random.default_rng(0)
     pattern = np.where(rng.random((1, 64, 64)) < 0.35, EPS_HIGH, EPS_LOW)
-    cfg = dict(period=[300.0, 300.0], thickness=[205.0], max_order=[5, 5], top=1.0, bot=1.0,
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[5, 5], top=1.0, bot=1.0,
                theta=0.15, phi=0.35, psi=0.3, wavelength=900.0)
 
     def step():
@@ -217,9 +217,9 @@ def jax_jit_grad(build, seed):
 
 # ------------------------------------------------------------------ the two paths
 
-def vector_builder(max_order, split, layers):
+def vector_builder(truncation_order, split, layers):
     """A stack of ellipse layers whose ``lx`` is the design variable."""
-    cfg = dict(period=[300.0, 300.0], thickness=[205.0] * layers, max_order=[max_order, max_order],
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0] * layers, truncation_order=[truncation_order, truncation_order],
                top=1.0, bot=1.0, theta=0.15, phi=0.35, psi=TE_PSI, wavelength=900.0)
 
     def build(backend, lx):
@@ -230,11 +230,11 @@ def vector_builder(max_order, split, layers):
     return build
 
 
-def raster_builder(n, max_order, strategy, layers=1):
+def raster_builder(n, truncation_order, strategy, layers=1):
     """A binary raster stack whose permittivity grid *is* the design variable."""
     rng = np.random.default_rng(0)
     pattern = np.where(rng.random((layers, n, n)) < 0.35, EPS_HIGH, EPS_LOW)
-    cfg = dict(period=[300.0, 300.0], thickness=[205.0] * layers, max_order=[max_order, max_order],
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0] * layers, truncation_order=[truncation_order, truncation_order],
                top=1.0, bot=1.0, theta=0.15, phi=0.35, psi=0.3, wavelength=900.0)
 
     def build(backend, structure):
@@ -284,12 +284,12 @@ def sweep_vector(budget, reps, quick):
              (5, 12, 3), (7, 4, 1), (7, 12, 1), (7, 20, 1), (7, 12, 3), (7, 20, 3),
              (9, 12, 1), (9, 20, 1), (9, 20, 3), (11, 20, 3)])
     out = {}
-    for max_order, split, layers in grid:
-        key = f'max_order={max_order},split={split},L={layers}'
-        estimate = 0.05 * (2 * max_order + 1) ** 3 / 100 * layers * 6    # rough, for budgeting only
+    for truncation_order, split, layers in grid:
+        key = f'truncation_order={truncation_order},split={split},L={layers}'
+        estimate = 0.05 * (2 * truncation_order + 1) ** 3 / 100 * layers * 6    # rough, for budgeting only
         print(f'[vector] {key} ...', flush=True)
-        out[key] = measure(vector_builder(max_order, split, layers), 85.0, reps, budget, estimate)
-        out[key]['max_order'], out[key]['split'], out[key]['layers'] = max_order, split, layers
+        out[key] = measure(vector_builder(truncation_order, split, layers), 85.0, reps, budget, estimate)
+        out[key]['truncation_order'], out[key]['split'], out[key]['layers'] = truncation_order, split, layers
         checkpoint({'vector': out})
     return out
 
@@ -298,14 +298,14 @@ def sweep_raster(budget, reps, quick):
     grid = ([(16, 3)] if quick else
             [(16, 3), (32, 3), (32, 5), (64, 3), (64, 5), (64, 7), (128, 3), (128, 5)])
     out = {}
-    for n, max_order in grid:
+    for n, truncation_order in grid:
         for strategy in STRATEGIES:
-            key = f'N={n},max_order={max_order},{strategy}'
-            estimate = 0.05 * (2 * max_order + 1) ** 3 / 100 * 6
+            key = f'N={n},truncation_order={truncation_order},{strategy}'
+            estimate = 0.05 * (2 * truncation_order + 1) ** 3 / 100 * 6
             print(f'[raster] {key} ...', flush=True)
-            build, pattern = raster_builder(n, max_order, strategy)
+            build, pattern = raster_builder(n, truncation_order, strategy)
             out[key] = measure(build, pattern, reps, budget, estimate)
-            out[key].update(n=n, max_order=max_order, strategy=strategy)
+            out[key].update(n=n, truncation_order=truncation_order, strategy=strategy)
             checkpoint({'raster': out})
     return out
 
@@ -314,7 +314,7 @@ def sweep_recompile(budget, reps):
     """How much a *content* change costs, against the steady step it interrupts."""
     import jax
     import jax.numpy as jnp
-    cfg = dict(period=[300.0, 300.0], thickness=[205.0], max_order=[3, 3], top=1.0, bot=1.0,
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[3, 3], top=1.0, bot=1.0,
                theta=0.15, phi=0.35, psi=TE_PSI, wavelength=900.0)
     make = lambda lx: [[EPS_HIGH, [['ellipse', 150.0, 150.0, lx, 55.0, EPS_MID, 0.27, 4, 4]]]]
 
@@ -344,7 +344,7 @@ def sweep_stale_window(budget):
     """
     import jax.numpy as jnp
     from wavebit import StaleGeometryError
-    cfg = dict(period=[300.0, 300.0], thickness=[205.0], max_order=[3, 3], top=1.0, bot=1.0,
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[3, 3], top=1.0, bot=1.0,
                theta=0.15, phi=0.35, psi=TE_PSI, wavelength=900.0)
 
     def accepts(make, value, frozen):

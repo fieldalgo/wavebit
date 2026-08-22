@@ -13,7 +13,7 @@ Two facts these tests exist to pin down, both learned the hard way:
   of a square grid, those pixels are exact ``argmin`` ties, and finite differences there diverge
   like 1/h while the analytic gradient is the correct one-sided value. Every gradient test here
   therefore uses asymmetric shapes on purpose.
-* The sampled normal field needs **4*max_order+1 points per axis** or distinct orders alias onto one
+* The sampled normal field needs **4*truncation_order+1 points per axis** or distinct orders alias onto one
   bin, and the damage is structural rather than gradual (a constant normal field stops
   transforming to the identity, so NVF no longer collapses onto Li's rules).
 """
@@ -139,13 +139,13 @@ def test_plan_replays_against_moved_vertices():
 
 
 # --------------------------------------------------------------------------- normal field
-@pytest.mark.parametrize('max_order', [3, 6, 12])
-def test_normal_grid_floor_is_enforced(max_order):
-    """Below 4*max_order+1 the sampled field aliases; that must raise, not silently mis-transform."""
-    need = 4 * max_order + 1
+@pytest.mark.parametrize('truncation_order', [3, 6, 12])
+def test_normal_grid_floor_is_enforced(truncation_order):
+    """Below 4*truncation_order+1 the sampled field aliases; that must raise, not silently mis-transform."""
+    need = 4 * truncation_order + 1
     with pytest.raises(ValueError, match='aliases'):
-        _b.check_normal_grid((need - 1, need - 1), max_order, max_order)
-    _b.check_normal_grid((need, need), max_order, max_order)
+        _b.check_normal_grid((need - 1, need - 1), truncation_order, truncation_order)
+    _b.check_normal_grid((need, need), truncation_order, truncation_order)
 
 
 def test_normal_field_is_the_edge_normal_beside_an_edge():
@@ -217,9 +217,9 @@ def test_normal_field_chunking_changes_nothing():
 
 
 # --------------------------------------------------------------------------- conv matrices
-def _mats(xp, params, plan=None, max_order=4, ng=64, dtype=None, cdtype=None):
+def _mats(xp, params, plan=None, truncation_order=4, ng=64, dtype=None, cdtype=None):
     regs, plan = resolve(xp, params, plan)
-    return _b.conv_mats(xp, regs, 1.0, max_order, max_order, PERIOD, ng,
+    return _b.conv_mats(xp, regs, 1.0, truncation_order, truncation_order, PERIOD, ng,
                         dtype or xp.float64, cdtype or xp.complex128), plan
 
 
@@ -230,22 +230,22 @@ def test_conv_mats_are_hermitian_for_a_lossless_layer():
         assert np.abs(A - A.conj().T).max() < 1e-11
 
 
-@pytest.mark.parametrize('max_order', [4, 8])
-def test_permittivity_matches_the_analytic_path_for_one_shape(max_order):
+@pytest.mark.parametrize('truncation_order', [4, 8])
+def test_permittivity_matches_the_analytic_path_for_one_shape(truncation_order):
     """One rectangle overlaps nothing, so both paths hold the *same* permittivity -- exactly.
 
     Only ``epz_i`` is compared, because it is ``inv(ep_dir)`` and never touches the normal field.
     The other four do, and the two paths extend the normal differently -- closed form off the
     shape here, gradient-of-distance off the polygon there. Both are valid NVF choices, and the
     matrices they build differ by a *fixed* amount that does not shrink with truncation
-    (measured 4.8e-3 flat over max_order 4..12), so requiring them to agree would be requiring one
+    (measured 4.8e-3 flat over truncation_order 4..12), so requiring them to agree would be requiring one
     extension to be the other.
     """
     from wavebit._core.analytic import to_conv_mat_smooth_nvf
     shape = dict(type='rectangle', cx=0.5, cy=0.5, lx=0.42, ly=0.31, angle=0.4, material=4.0)
     ng = 1024
-    (mine, _) = _mats(xnp, [(0.5, 0.5, 0.42, 0.31, 0.4, 4.0)], max_order=max_order, ng=ng)
-    theirs = to_conv_mat_smooth_nvf(xnp, [shape], 1.0, max_order, max_order, PERIOD, xnp.complex128,
+    (mine, _) = _mats(xnp, [(0.5, 0.5, 0.42, 0.31, 0.4, 4.0)], truncation_order=truncation_order, ng=ng)
+    theirs = to_conv_mat_smooth_nvf(xnp, [shape], 1.0, truncation_order, truncation_order, PERIOD, xnp.complex128,
                                       normal_grid=ng)
     rel = (np.abs(np.asarray(mine.epz_i) - np.asarray(theirs.epz_i)).max()
            / np.abs(np.asarray(theirs.epz_i)).max())
@@ -339,8 +339,8 @@ def test_shape_vertices_reads_the_dict_like_the_transform(shape, spelt_out):
     assert np.array_equal(a, b)
 
 
-@pytest.mark.parametrize('max_order', [4, 8])
-def test_a_circle_without_ly_is_the_same_circle_on_both_paths(max_order):
+@pytest.mark.parametrize('truncation_order', [4, 8])
+def test_a_circle_without_ly_is_the_same_circle_on_both_paths(truncation_order):
     """Painted and summed hold the same permittivity for a lone circle -- so it must be round.
 
     ``epz_i`` again, for the reason given in the one-rectangle test above: it is ``inv(ep_dir)``
@@ -363,22 +363,22 @@ def test_a_circle_without_ly_is_the_same_circle_on_both_paths(max_order):
     for name, lat in (('square', None), ('skew', as_lattice(lattice=[[1.0, 0.3], [0.0, 1.0]]))):
         shape = CIRCLE_NO_LY if lat is None else dict(type='circle', lx=0.34, material=5.76)
         period = PERIOD if lat is None else periods_of(lat)
-        mine = _b.to_conv_mat_boundary_layer(xnp, [shape], 1.0, max_order, max_order, period,
+        mine = _b.to_conv_mat_boundary_layer(xnp, [shape], 1.0, truncation_order, truncation_order, period,
                                              xnp.complex128, normal_grid=ng, lattice=lat)
-        theirs = to_conv_mat_smooth_nvf(xnp, [shape], 1.0, max_order, max_order, period,
+        theirs = to_conv_mat_smooth_nvf(xnp, [shape], 1.0, truncation_order, truncation_order, period,
                                           xnp.complex128, normal_grid=ng, lattice=lat)
         rel = (np.abs(np.asarray(mine.epz_i) - np.asarray(theirs.epz_i)).max()
                / np.abs(np.asarray(theirs.epz_i)).max())
-        # Measured 3.2e-10 (max_order 4) and 6.2e-10 (max_order 8), square and skew alike. Set just
+        # Measured 3.2e-10 (truncation_order 4) and 6.2e-10 (truncation_order 8), square and skew alike. Set just
         # above that, not at a round number: dropping the area matching puts it back at
         # 1.6e-5 and a 1e-4 tolerance would have absorbed that silently.
         assert rel < 5e-9, (name, rel)
 
 
 # --------------------------------------------------------------------------- wiring
-def _solve(structure, max_order=6, **over):
+def _solve(structure, truncation_order=6, **over):
     import wavebit
-    cfg = dict(backend=0, max_order=(max_order, max_order), period=PERIOD, thickness=(0.6,), wavelength=1.6,
+    cfg = dict(backend=0, truncation_order=(truncation_order, truncation_order), period=PERIOD, thickness=(0.6,), wavelength=1.6,
                top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2)
     cfg.update(over)
     return wavebit.rcwa(structure=structure, **cfg)
@@ -520,13 +520,13 @@ def _raster_of(shapes, n):
     return cell
 
 
-@pytest.mark.parametrize('max_order', [6, 12])
-def test_an_enclosed_shape_is_cut_out_of_its_host_not_added_to_it(max_order):
+@pytest.mark.parametrize('truncation_order', [6, 12])
+def test_an_enclosed_shape_is_cut_out_of_its_host_not_added_to_it(truncation_order):
     """The cell-average permittivity, against the closed form -- the truncation-free instrument.
 
     ``epz_i`` is ``inv(ep_dir)``, so inverting it back recovers the matrix the solve holds, and
     that matrix's centre element is the ``k = 0`` coefficient: the cell average of ``eps``. It
-    is an *exact* quantity, identical at every ``max_order``, which is what makes it the right probe
+    is an *exact* quantity, identical at every ``truncation_order``, which is what makes it the right probe
     here -- a wrong answer that does not move with truncation cannot be argued away as a series
     that has not converged, and this one does not move at all.
 
@@ -546,11 +546,11 @@ def test_an_enclosed_shape_is_cut_out_of_its_host_not_added_to_it(max_order):
     exact = 1.0 + (4.0 - 1.0) * (0.36 - area) + (9.0 - 1.0) * area
     wrong = 1.0 + (4.0 - 1.0) * (0.36 + area) + (9.0 - 1.0) * area              # sign dropped
 
-    solver = _solve([dict(background=1.0, combine='paint', shapes=ENCLOSED_SHAPES)], max_order=max_order,
+    solver = _solve([dict(background=1.0, combine='paint', shapes=ENCLOSED_SHAPES)], truncation_order=truncation_order,
                     normal_grid=256)
     assert solver.freeze_geometry().boundary_plans[0] is not None      # it really painted
     direct = np.linalg.inv(np.asarray(solver.eps_conv_matrices()[2])[0])
-    n_orders = (2 * max_order + 1) ** 2
+    n_orders = (2 * truncation_order + 1) ** 2
     got = complex(direct[n_orders // 2, n_orders // 2])
 
     assert abs(got.imag) < 1e-12, got
@@ -649,7 +649,7 @@ def test_a_hole_inside_a_hole_is_material_again():
     total is what a consumer sees: the outer region comes back as four loops whose areas are
     ``+0.64, -0.04, -0.25, +0.04`` -- note the small square appearing with *both* signs, which
     is the composition working -- and they sum to 0.39, the visible area. The cell average is
-    then checked against the closed form at two ``max_order``, since it is exact and truncation-free.
+    then checked against the closed form at two ``truncation_order``, since it is exact and truncation-free.
     """
     nested = [dict(type='rectangle', cx=0.5, cy=0.5, lx=0.80, ly=0.80, angle=0.0, material=4.0),
               dict(type='rectangle', cx=0.5, cy=0.5, lx=0.50, ly=0.50, angle=0.0, material=9.0),
@@ -670,12 +670,12 @@ def test_a_hole_inside_a_hole_is_material_again():
 
     exact = 1.0 + (4.0 - 1) * visible[0] + (9.0 - 1) * visible[1] \
         + (16.0 - 1) * visible[2]
-    for max_order in (6, 12):
-        solver = _solve([dict(background=1.0, combine='paint', shapes=nested)], max_order=max_order,
+    for truncation_order in (6, 12):
+        solver = _solve([dict(background=1.0, combine='paint', shapes=nested)], truncation_order=truncation_order,
                         normal_grid=256)
         direct = np.linalg.inv(np.asarray(solver.eps_conv_matrices()[2])[0])
-        n_orders = (2 * max_order + 1) ** 2
-        assert complex(direct[n_orders // 2, n_orders // 2]).real == pytest.approx(exact, abs=1e-12), max_order
+        n_orders = (2 * truncation_order + 1) ** 2
+        assert complex(direct[n_orders // 2, n_orders // 2]).real == pytest.approx(exact, abs=1e-12), truncation_order
 
 
 def test_the_normal_field_does_not_care_which_way_a_hole_is_wound():
@@ -752,7 +752,7 @@ def _two_painted(w, curved=False):
         dict(type='rectangle', cx=0.68, cy=0.58, lx=0.26, ly=0.30, angle=0.0, material=4.41)])]
 
 
-_PAINT_CFG = dict(period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), max_order=(4, 4),
+_PAINT_CFG = dict(period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), truncation_order=(4, 4),
                   top=1.0, bot=2.1025, theta=0.0, phi=None, psi=np.pi / 2, normal_grid=256)
 
 
@@ -854,7 +854,7 @@ def test_a_traced_painted_layer_is_refused_without_a_frozen_geometry():
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    cfg = dict(period=(1.0, 1.0), wavelength=0.94, max_order=(5, 5), top=1.0, bot=2.1025,
+    cfg = dict(period=(1.0, 1.0), wavelength=0.94, truncation_order=(5, 5), top=1.0, bot=2.1025,
                theta=0.0, phi=None, psi=np.pi / 2, thickness=(0.3,), normal_grid=256)
     fixed = dict(type='rectangle', cx=0.70, cy=0.62, lx=0.26, ly=0.30, angle=0.0, material=4.41)
 
@@ -901,7 +901,7 @@ def test_a_traced_summed_layer_is_not_refused():
     """The refusal is for `paint` only -- a summed layer has no overlap question to ask."""
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    cfg = dict(period=(1.0, 1.0), wavelength=0.94, max_order=(5, 5), top=1.0, bot=2.1025,
+    cfg = dict(period=(1.0, 1.0), wavelength=0.94, truncation_order=(5, 5), top=1.0, bot=2.1025,
                theta=0.0, phi=None, psi=np.pi / 2, thickness=(0.3,), normal_grid=256)
 
     def total(v):
@@ -929,7 +929,7 @@ def test_a_frozen_geometry_answers_the_overlap_question_for_every_layer():
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    cfg = dict(period=(1.0, 1.0), wavelength=0.94, max_order=(5, 5), top=1.0, bot=2.1025,
+    cfg = dict(period=(1.0, 1.0), wavelength=0.94, truncation_order=(5, 5), top=1.0, bot=2.1025,
                theta=0.0, phi=None, psi=np.pi / 2, thickness=(0.3,), normal_grid=256)
     fixed = dict(type='rectangle', cx=0.70, cy=0.5, lx=0.26, ly=0.30, angle=0.0, material=4.41)
 

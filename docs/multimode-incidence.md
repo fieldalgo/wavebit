@@ -23,7 +23,7 @@ and reading order `+1` against solving at `arcsin(sin(theta) + lambda/period)` a
 specular order agrees to **~1e-9** at every basis size tried, the residue being nothing but the
 two solves keeping slightly different finite windows. So a one-order excitation buys a
 relabelling. (It was 9e-1 → 2.5e-4 before §4's widening, which is itself a demonstration of
-what the widening does: lighting order +1 now retains `[-max_order, max_order + 1]`, all but
+what the widening does: lighting order +1 now retains `[-truncation_order, truncation_order + 1]`, all but
 one order of what the shifted-angle solve keeps.)
 
 **For** the coherent superposition, which no single ordinary solve can express. Concretely,
@@ -50,7 +50,7 @@ number of order indices before adding.
 It is also *more* accurate, but only because of the window widening in §4. On a window that
 stayed centred on the specular order the two are a measured tie — the winner alternates
 arbitrarily across basis sizes, and their difference is smaller than each one's own truncation
-error from `max_order` 8 up. The widening is what turns the tie into a win.
+error from `truncation_order` 8 up. The widening is what turns the tie into a win.
 
 ## 3. Every lit order must propagate
 
@@ -77,9 +77,9 @@ limit of this code.
 
 ## 4. The retained window widens around the lit orders
 
-Every lit order needs `max_order` neighbours on each side, or a beam sitting off-centre is
+Every lit order needs `truncation_order` neighbours on each side, or a beam sitting off-centre is
 worse resolved than it would be solved alone. So the retained set spans
-`[m_min - max_order, m_max + max_order]` rather than staying centred on the specular order.
+`[m_min - truncation_order, m_max + truncation_order]` rather than staying centred on the specular order.
 
 That set is carried as `(centre, half_width)` — `solver.order_window` — rather than as a range,
 because `n_orders = 2*half_width + 1` then stays true and every size computation downstream is
@@ -89,7 +89,7 @@ odd span buys one order more than the union strictly needs.
 **This is what makes the feature better than the workaround rather than equal to it.** Three
 beams at orders 0, +1, +2, error on orders -2..+2 against a converged reference:
 
-| max_order | union window | orders | three solves apart | orders |
+| truncation_order | union window | orders | three solves apart | orders |
 | --- | --- | --- | --- | --- |
 | 6 | 4.01e-1 | 15 | 3.48e-1 | 39 |
 | 8 | **2.51e-1** | 19 | 4.85e-1 | 51 |
@@ -98,22 +98,22 @@ beams at orders 0, +1, +2, error on orders -2..+2 against a converged reference:
 | 20 | **4.34e-3** | 43 | 5.05e-3 | 123 |
 | 24 | **2.09e-3** | 51 | 2.47e-3 | 147 |
 
-From `max_order` 8 up it wins every time, on a third of the orders. (Row 6 is the unconverged
+From `truncation_order` 8 up it wins every time, on a third of the orders. (Row 6 is the unconverged
 regime — both errors are ~0.4 — and means nothing.) Without the widening the two are a measured
 tie, which is what an earlier draft of this feature had.
 
 The extra orders are cheap and get cheaper: `m_max - m_min` of them, a **fixed** number, against
 an `n_orders` that grows. Measured **3.6–9.1%**, falling with N.
 
-**The lit orders themselves must stay inside the declared `max_order`.** Without that rule the
-widening would be unbounded — `{0: 1.0, 9: 0.5}` at `max_order=6` would quietly retain 22
-orders — and `max_order` would stop meaning the orders being modelled. With it the widening is
+**The lit orders themselves must stay inside the declared `truncation_order`.** Without that rule the
+widening would be unbounded — `{0: 1.0, 9: 0.5}` at `truncation_order=6` would quietly retain 22
+orders — and `truncation_order` would stop meaning the orders being modelled. With it the widening is
 capped at twice the declared half-width, and lighting an order outside is refused by name.
 
 Everything the widening touches is a *size* or an *offset*: the four `kx` builders, the two
 factorization entry points, and `lit_orders`'s mapping. **The factorization does not care where
 the window sits** — a convolution matrix's `(i, j)` entry is the harmonic `i - j`, so two solves
-at one `max_order` and very different angles build bit-identical slots (measured 0.0). Only the
+at one `truncation_order` and very different angles build bit-identical slots (measured 0.0). Only the
 width travels into it.
 
 ## 5. Where it enters

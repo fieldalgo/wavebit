@@ -104,13 +104,13 @@ def rt(eps, theta_deg, thick=THICK, alpha_deg=0.0):
 PERIOD = 300.0
 
 
-def order_grid(max_order, theta_deg, phi_deg=0.0):
+def order_grid(truncation_order, theta_deg, phi_deg=0.0):
     """``(kx, ky, n_orders, centre)`` on a flattened ``(n_orders_y, n_orders_x)`` grid, as the 2ff path lays it out.
 
     ``order_grid_kxy`` broadcasts the two 1-D vectors to that grid and everything downstream
     reads it flattened, so a test that builds the same layout is testing the same indexing.
     """
-    fx, fy = max_order
+    fx, fy = truncation_order
     kx = (np.sin(np.deg2rad(theta_deg)) * np.cos(np.deg2rad(phi_deg))
           + np.arange(-fx, fx + 1) * WL / PERIOD)
     ky = (np.sin(np.deg2rad(theta_deg)) * np.sin(np.deg2rad(phi_deg))
@@ -470,12 +470,12 @@ def test_a_multilayer_stack_matches_berreman(theta_deg, algo):
 
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
-@pytest.mark.parametrize('max_order', [(1, 1), (2, 2)], ids=['9 orders', '25 orders'])
+@pytest.mark.parametrize('truncation_order', [(1, 1), (2, 2)], ids=['9 orders', '25 orders'])
 @pytest.mark.parametrize('theta_deg,phi_deg', [(0.0, 0.0), (35.0, 0.0), (35.0, 40.0)],
                          ids=['normal', 'oblique', 'conical'])
 @pytest.mark.parametrize('label,eps', Z_DECOUPLED + Z_COUPLED,
                          ids=[c[0] for c in Z_DECOUPLED + Z_COUPLED])
-def test_adding_orders_to_a_uniform_stack_changes_nothing(label, eps, theta_deg, phi_deg, max_order,
+def test_adding_orders_to_a_uniform_stack_changes_nothing(label, eps, theta_deg, phi_deg, truncation_order,
                                                           algo):
     """The multi-order gate, and it needs no oracle: a uniform layer cannot diffract.
 
@@ -497,7 +497,7 @@ def test_adding_orders_to_a_uniform_stack_changes_nothing(label, eps, theta_deg,
     only at one order, and mutating both to a hardcoded ``2`` was invisible until this was
     parametrised. ``'TMM'`` is absent for a reason the test below states.
     """
-    kx, ky, n_orders, centre = order_grid(max_order, theta_deg, phi_deg)
+    kx, ky, n_orders, centre = order_grid(truncation_order, theta_deg, phi_deg)
     kx1, ky1, ff1, c1 = order_grid((0, 0), theta_deg, phi_deg)
     layers, layers1 = [(blocks(eps, n_orders), THICK)], [(blocks(eps, ff1), THICK)]
 
@@ -553,7 +553,7 @@ def test_the_plain_transfer_cannot_do_a_realistic_order_count():
     index whatever the thickness — so on a 220 nm layer of ``n = 1.5``:
 
     ======  =====  ==============  =========
-    max_order     n_orders     max exponent    plain TMM
+    truncation_order     n_orders     max exponent    plain TMM
     ======  =====  ==============  =========
     (0,0)      1             0.0   ok
     (1,1)      9             7.0   ok
@@ -562,7 +562,7 @@ def test_the_plain_transfer_cannot_do_a_realistic_order_count():
     (5,5)    121            33.7   refuses
     ======  =====  ==============  =========
 
-    ``max_order = (2, 2)`` is a *small* grating calculation. So the unstabilised transfer is not merely
+    ``truncation_order = (2, 2)`` is a *small* grating calculation. So the unstabilised transfer is not merely
     weak on thick stacks, it cannot run a real problem at all — which is the historical reason
     RCWA needed the enhanced form (Moharam et al. 1995) rather than a preference between two
     equivalent recursions.
@@ -588,8 +588,8 @@ def test_the_plain_transfer_cannot_do_a_realistic_order_count():
 
 @pytest.mark.parametrize('theta_deg,phi_deg', [(0.0, 0.0), (35.0, 40.0)],
                          ids=['normal', 'conical'])
-@pytest.mark.parametrize('max_order', [1, 2, 3], ids=['9 orders', '25 orders', '49 orders'])
-def test_a_real_grating_matches_the_2ff_solve(max_order, theta_deg, phi_deg):
+@pytest.mark.parametrize('truncation_order', [1, 2, 3], ids=['9 orders', '25 orders', '49 orders'])
+def test_a_real_grating_matches_the_2ff_solve(truncation_order, theta_deg, phi_deg):
     """Order *coupling*, which the uniform multi-order tests cannot reach.
 
     An **isotropic** grating needs no new factorization: the 2ff path already builds the three
@@ -616,7 +616,7 @@ def test_a_real_grating_matches_the_2ff_solve(max_order, theta_deg, phi_deg):
     structure[0, 12:28, 12:28] = 6.760000000000001     # permittivity: 2.6**2
 
     solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
-                            phi=np.deg2rad(phi_deg), psi=0.0, max_order=(max_order, max_order),
+                            phi=np.deg2rad(phi_deg), psi=0.0, truncation_order=(truncation_order, truncation_order),
                             period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
                             structure=structure)
     ref = solver.solve()
@@ -626,14 +626,14 @@ def test_a_real_grating_matches_the_2ff_solve(max_order, theta_deg, phi_deg):
     kx, ky = KX.ravel(), KY.ravel()
     n_orders = kx.size
     epx, epy, epz_i, *_ = to_conv_mat_raster_sampled(
-        np.asarray(structure, dtype=complex), max_order, max_order)
+        np.asarray(structure, dtype=complex), truncation_order, truncation_order)
     O = np.zeros((n_orders, n_orders), dtype=complex)
     layers = [(dict(exx=epx[0], exy=O, exz=O, eyx=O, eyy=epy[0], eyz=O, ezx=O, ezy=O,
                     ezz_i=epz_i[0]), THICK)]
 
-    states = vacuum_sp_states(np, kx, ky, n_orders, order=max_order * (2 * max_order + 1) + max_order)
+    states = vacuum_sp_states(np, kx, ky, n_orders, order=truncation_order * (2 * truncation_order + 1) + truncation_order)
     for psi, res, pol in zip(states, (ref.s_inc, ref.p_inc), ('TE/s', 'TM/p')):
         got = solve_uniform_stack(WL, kx, ky, layers, n_orders, psi)
         want = (float(np.asarray(res.R).sum()), float(np.asarray(res.T).sum()))
         gap = max(abs(a - b) for a, b in zip(got, want))
-        assert gap < 1e-12, f'{pol}, max_order={max_order}, {theta_deg}/{phi_deg} deg: {gap:.2e}'
+        assert gap < 1e-12, f'{pol}, truncation_order={truncation_order}, {theta_deg}/{phi_deg} deg: {gap:.2e}'

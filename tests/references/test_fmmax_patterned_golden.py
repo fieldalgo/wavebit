@@ -41,7 +41,7 @@ from _fmmax_patterned_cases import (                                           #
 GOLDEN_PATH = HERE / 'golden_fmmax_patterned.npz'
 
 
-def solve(n_in, g, max_order=MAX_ORDER):
+def solve(n_in, g, truncation_order=MAX_ORDER):
     """``[R_s, T_s, R_p, T_p]`` for one patterned gyrotropic layer between vacuum."""
     eps, gyro = tensor_rasters(n_in, g)
 
@@ -50,14 +50,14 @@ def solve(n_in, g, max_order=MAX_ORDER):
     eps33[..., 0, 1], eps33[..., 1, 0] = gyro, -gyro         # the physical tensor
 
     nx, ny = normal_vector_field(eps)
-    epx, epy, epz_i, epxy, epyx = pn_eps_conv_matrices(np, eps33, nx, ny, max_order, max_order)
+    epx, epy, epz_i, epxy, epyx = pn_eps_conv_matrices(np, eps33, nx, ny, truncation_order, truncation_order)
 
     # `structure` is the scalar permittivity raster, handed over as it stands: the `np.sqrt`
     # that used to sit here existed only because the constructor took an index and squared it
     # back. It selects the modeling path and the grating type; the convolution matrices the
     # solve actually uses are the ones passed to `solve_conv` below.
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
-                       psi=0.0, max_order=(max_order, max_order), period=(PERIOD, PERIOD), wavelength=WL,
+                       psi=0.0, truncation_order=(truncation_order, truncation_order), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK], structure=np.expand_dims(eps, axis=0))
     res = mee.solve_conv(np.stack([epx]), np.stack([epy]), np.stack([epz_i]),
                              np.stack([epxy]), np.stack([epyx]))

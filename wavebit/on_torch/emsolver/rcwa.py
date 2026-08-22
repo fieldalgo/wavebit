@@ -30,7 +30,7 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
                  thickness=(0.,),
                  backend=2,
                  tetm=None,
-                 max_order=(0, 0),
+                 truncation_order=(0, 0),
                  layer_algorithm='ETM',
                  excitation=None,   # which orders the illumination arrives on; see
                  # `CoreSolveMixin.excitation`. None is one wave on the specular order.
@@ -69,7 +69,7 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
                  # 'efficiency' | 'amplitude' (default) | 'field'. A declaration, like tetm --
                  # reconstruct_field is refused below 'field' rather than served, because the
                  # per-layer state it walks is 4.25 matrices of side 2*n_orders_x*n_orders_y per
-                 # layer (240 MB at max_order=(15, 15)) and is kept as the solve runs or not at
+                 # layer (240 MB at truncation_order=(15, 15)) and is kept as the solve runs or not at
                  # all. See CoreSolveMixin.answers.
                  mu=None,                    # raster path only: the permeability field,
                  # (n_layers, Ny, Nx) beside `structure`. On the two shape paths a
@@ -84,7 +84,7 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
         _refuse_retired(retired)
 
         super().__init__(top=top, bot=bot, theta=theta, phi=phi, psi=psi, chi=chi, tetm=tetm,
-                         max_order=max_order, period=period, wavelength=wavelength,
+                         truncation_order=truncation_order, period=period, wavelength=wavelength,
                          thickness=thickness, layer_algorithm=layer_algorithm,
                          excitation=excitation,
                          device=device, complex_dtype=complex_dtype,
@@ -224,8 +224,7 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
         s_inc = ResultSub(**result_dict['s_inc']) if 's_inc' in result_dict else None
         p_inc = ResultSub(**result_dict['p_inc']) if 'p_inc' in result_dict else None
 
-        (cx, hx), (cy, hy) = self.order_window
-        result = Result(given, s_inc, p_inc, max_order=(hx, hy), centre=(cx, cy))
+        result = Result(given, s_inc, p_inc, order_window=self.order_window)
 
         return result
 

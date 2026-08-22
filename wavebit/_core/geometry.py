@@ -49,7 +49,7 @@ boundary path differentiable -- so only the combinatorics changing makes it stal
 begin to overlap, or stop, or a shape that was covered coming out from under the one covering
 it. Its ``None`` entry is a recorded answer too ("painted, and nothing overlapped"), and goes
 stale the same way. Both are checked by re-asking, which costs a re-plan -- 0.2% of a frozen
-solve for two overlapping shapes and 1.2% for ten, falling as ``max_order`` rises. The freeze
+solve for two overlapping shapes and 1.2% for ten, falling as ``truncation_order`` rises. The freeze
 here buys traceability, not speed, so no plateau is given up for it.
 
 On the raster paths the sweep a frozen record serves is over the *material values* — those

@@ -56,7 +56,7 @@ def branch_tolerance(value):
     Exists because at single precision there is no right answer to bake in. ``Re(v)`` for a
     root that should be pure-imaginary is round-off ~1e-7 at complex64, and a weakly absorbing
     superstrate carries a *genuine* real part at the same scale — the two overlap, so any fixed
-    cutoff has to sacrifice one of them. Measured against double precision (``max_order=30``,
+    cutoff has to sacrifice one of them. Measured against double precision (``truncation_order=30``,
     ``docs/branch-cuts.md``):
 
     ============================  ==========  ==========  ==========
@@ -324,11 +324,11 @@ def parse_excitation(excitation, max_order_x, max_order_y):
     window is computed *before* the orders are mapped and an excitation that is going to be
     refused must not reshape the problem on its way to being refused.
 
-    **A lit order has to sit inside the declared ``max_order``.** The window widens around the
+    **A lit order has to sit inside the declared ``truncation_order``.** The window widens around the
     lit set (see :func:`order_window`), so without this rule that widening would be unbounded
-    -- lighting order 9 at ``max_order=6`` would quietly solve a 22-order problem instead of
+    -- lighting order 9 at ``truncation_order=6`` would quietly solve a 22-order problem instead of
     saying that 9 is outside what was asked for. With it the widening is bounded at twice the
-    declared half-width, and `max_order` keeps meaning what it says: the orders being modelled.
+    declared half-width, and `truncation_order` keeps meaning what it says: the orders being modelled.
     """
     if not isinstance(excitation, dict):
         raise TypeError(
@@ -352,13 +352,13 @@ def parse_excitation(excitation, max_order_x, max_order_y):
         if not two_d and n != 0:
             raise ValueError(
                 f'excitation names order {key!r}, but this solve retains only n = 0 -- '
-                'max_order[1] is 0, so there is no out-of-plane order to light. Both 1D '
+                'truncation_order[1] is 0, so there is no out-of-plane order to light. Both 1D '
                 'formulations keep the single n = 0 order.')
         if abs(m) > max_order_x or abs(n) > max_order_y:
             raise ValueError(
                 f'excitation names order {key!r}, which is outside the declared '
-                f'max_order=({max_order_x}, {max_order_y}). The retained window widens around '
-                'the orders you light, so this is bounded on purpose: raise max_order if that '
+                f'truncation_order=({max_order_x}, {max_order_y}). The retained window widens around '
+                'the orders you light, so this is bounded on purpose: raise truncation_order if that '
                 'order is really part of the illumination.')
         out.append(((m, n), amplitude, key))
     return out
@@ -367,14 +367,14 @@ def parse_excitation(excitation, max_order_x, max_order_y):
 def order_window(max_order_x, max_order_y, excitation):
     """Which orders the solve retains, as ``(centre, half_width)`` per axis.
 
-    Without an excitation this is ``(0, max_order)`` -- the symmetric window centred on the
+    Without an excitation this is ``(0, truncation_order)`` -- the symmetric window centred on the
     specular order that this library has always used, and the reason the pair is spelled this
     way rather than as a range: ``n_orders = 2*half_width + 1`` stays true, so every size
     computation downstream is untouched and only the *offset* is new.
 
-    With one, every lit order needs ``max_order`` neighbours on each side, or a beam sitting
+    With one, every lit order needs ``truncation_order`` neighbours on each side, or a beam sitting
     off-centre is worse resolved than it would be solved alone. That union spans
-    ``[m_min - max_order, m_max + max_order]``, and the smallest symmetric window containing it
+    ``[m_min - truncation_order, m_max + truncation_order]``, and the smallest symmetric window containing it
     is returned -- one order wider than the union when that span is odd, since a symmetric
     window cannot straddle a half-integer centre. Measured 3.6 to 9.1 percent, falling with the
     order count because the addition is fixed while ``n_orders`` grows.
@@ -425,14 +425,14 @@ def lit_orders(excitation, window_x, window_y):
     ``window_x`` / ``window_y`` are :func:`order_window`'s ``(centre, half_width)`` pairs, and
     the indices returned are flat into the ``(n_orders_y, n_orders_x)`` grid the solves carry,
     row-major -- so a caller writes them straight into a column of that length. Reading the
-    window rather than ``max_order`` is what lets the retained set sit off the specular order,
+    window rather than ``truncation_order`` is what lets the retained set sit off the specular order,
     which is the whole point of widening it.
     """
     if excitation is None:
         return None
     (centre_x, half_x), (centre_y, half_y) = window_x, window_y
     n_orders_x = 2 * half_x + 1
-    # Validated against the *declared* max_order, which the window was widened from: a lit
+    # Validated against the *declared* truncation_order, which the window was widened from: a lit
     # order is inside `centre +- half` by construction, so re-deriving the declaration is what
     # keeps the refusal meaningful rather than vacuous.
     declared_x = max(abs(centre_x - half_x), abs(centre_x + half_x))

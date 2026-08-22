@@ -158,7 +158,7 @@ def _wrap(orders, n):
     return [k % n for k in orders]
 
 
-def _circulant_index(max_order):
+def _circulant_index(truncation_order):
     """Circular index matrix selecting Fourier orders ``m - n`` (pure integer, data-free).
 
     The sign here *is* the order-index convention, and it has to agree with the sign ``kx``
@@ -167,18 +167,18 @@ def _circulant_index(max_order):
     a grating comparison. Uniform layers cannot expose it at all -- their convolution matrix
     is ``eps * I``, which is its own transpose.
     """
-    n_orders = 2 * max_order + 1
+    n_orders = 2 * truncation_order + 1
     return [[(r - c) for c in range(n_orders)] for r in range(n_orders)]
 
 
-def _circulant_gather(xp, max_order, dev):
-    """Index expanding a ``4*max_order+1`` order vector into the ``(n_orders, n_orders)``
+def _circulant_gather(xp, truncation_order, dev):
+    """Index expanding a ``4*truncation_order+1`` order vector into the ``(n_orders, n_orders)``
     circulant of ``r - c``.
 
-    The same shape :func:`fourier2d_integrated` builds; ``+ 2*max_order`` turns the signed order
+    The same shape :func:`fourier2d_integrated` builds; ``+ 2*truncation_order`` turns the signed order
     into a position in that vector.
     """
-    return xp.asarray([[v + 2 * max_order for v in row] for row in _circulant_index(max_order)], device=dev)
+    return xp.asarray([[v + 2 * truncation_order for v in row] for row in _circulant_index(truncation_order)], device=dev)
 
 
 def _pixel_correction(xp, orders, n, dtype, device=None):
@@ -191,9 +191,9 @@ def _pixel_correction(xp, orders, n, dtype, device=None):
     ``|k| > n`` where the DFT itself has wrapped.
 
     That last part is what makes the upsampling unnecessary rather than merely cheaper. The
-    previous approach repeated each pixel until the grid resolved ``4*max_order+1`` harmonics and
+    previous approach repeated each pixel until the grid resolved ``4*truncation_order+1`` harmonics and
     took the DFT of *that*, which converges to this expression as ``1/R`` — so it was an
-    approximation of a closed form, at a grid cost of ``(4*max_order+1)**2`` per layer.
+    approximation of a closed form, at a grid cost of ``(4*truncation_order+1)**2`` per layer.
     """
     k = xp.astype(xp.asarray(orders, device=device), dtype)
     t = k / n
@@ -261,7 +261,7 @@ def fourier2d_pointwise(xp, field, max_order_x, max_order_y):
     call in the package asked for the direct rule. Offering the choice would only be offering
     a way to be wrong.
 
-    Because there is no closed form, this path *does* need ``4*max_order+1`` points — the caller
+    Because there is no closed form, this path *does* need ``4*truncation_order+1`` points — the caller
     lifts the grid to that floor, see :func:`_normal_field_floor`.
     """
     return _fourier2d_grid(xp, field, max_order_x, max_order_y, inverse_rule=None, piecewise_constant=False)
@@ -288,7 +288,7 @@ def _fourier2d_grid(xp, cell, max_order_x, max_order_y, *, inverse_rule, piecewi
     That is Li's construction, so ``epy`` takes the inner inverse and ``epx`` the outer one —
     the mid-loop ``inv`` below is not movable to the end. It also means the result is not
     invariant under relabelling x and y: on a transpose-symmetric structure the two
-    polarisations disagree by ~6e-4 at ``max_order=12`` where NVF holds the symmetry to 1e-13.
+    polarisations disagree by ~6e-4 at ``truncation_order=12`` where NVF holds the symmetry to 1e-13.
     Intrinsic to the scheme rather than a defect here, and untested; the measurement is in
     ``docs/factorization-terms.md`` §6.
 
@@ -309,8 +309,8 @@ def _fourier2d_grid(xp, cell, max_order_x, max_order_y, *, inverse_rule, piecewi
     efficiencies by 1e-5 at normal incidence into an index-matched substrate, and by 2e-4 to
     2e-3 once there is index contrast or conical incidence — between one decade under the
     change from doubling the raster and comparable to it. Omitting it on a permittivity raster
-    is the serious one: 1e-4 to 2e-2 per order, growing with ``max_order``, and below roughly
-    ``N < 2*max_order`` the inverse-rule matrix is singular and the solve raises ``LinAlgError``
+    is the serious one: 1e-4 to 2e-2 per order, growing with ``truncation_order``, and below roughly
+    ``N < 2*truncation_order`` the inverse-rule matrix is singular and the solve raises ``LinAlgError``
     outright. Energy conservation is undisturbed either way, so nothing downstream notices.
 
     (An earlier version of this docstring gave the first figure as ``~7e-7``, "four decades
@@ -337,15 +337,15 @@ def _fourier2d_grid(xp, cell, max_order_x, max_order_y, *, inverse_rule, piecewi
     # into the circulant -- the shape `fourier2d_integrated` has always had.
     #
     # Two reasons it is this way round. It is cheaper: the circulant repeats each of the
-    # 4*max_order+1 distinct orders across (2*max_order+1)**2 entries, so correcting
-    # the same sin/exp and repeats the same multiply ~21x over at max_order=20. And it is the only
+    # 4*truncation_order+1 distinct orders across (2*truncation_order+1)**2 entries, so correcting
+    # the same sin/exp and repeats the same multiply ~21x over at truncation_order=20. And it is the only
     # order that is *correct* to fold: the correction depends on the order, not on the DFT bin
     # it wraps to, so it cannot be pushed any earlier into `dfs1d` -- on a short grid distinct
     # orders share a bin and need different factors.
     #
     # `_wrap` states that bin rather than leaning on Python's negative indexing. Identical
     # wherever the old form worked, and defined where it did not: raw order indices need a grid
-    # of at least 4*max_order+1 to stay in range, which is the whole reason the raster used to be
+    # of at least 4*truncation_order+1 to stay in range, which is the whole reason the raster used to be
     # upsampled before anything else was considered.
     coeff_y = dfs1d[:, xp.asarray(_wrap(orders_y, n_y), device=dev)]
     # Both kinds of grid carry the half-pixel offset; only a staircase also carries
@@ -412,8 +412,8 @@ def _normal_field_floor(shape, max_order_x, max_order_y):
 
     The normal field is a continuous vector field this code evaluates on a grid, so unlike the
     permittivity it has no closed-form transform and :func:`fourier2d_pointwise` reads it off
-    the grid directly. That requires ``4*max_order+1`` points: the circulant asks for orders up
-    to ``+/-2*max_order``, and on a shorter grid ``k % n`` folds distinct orders onto one bin.
+    the grid directly. That requires ``4*truncation_order+1`` points: the circulant asks for orders up
+    to ``+/-2*truncation_order``, and on a shorter grid ``k % n`` folds distinct orders onto one bin.
     The damage is structural rather than gradual — a *constant* normal field must transform to
     the identity for NVF to collapse onto Li's rules on a one-cell axis, and on a short grid it
     picks up off-diagonals at ``+/-n`` instead.
@@ -509,7 +509,7 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
     live in :mod:`wavebit._core.normal_methods`, and ``docs/nvf-normal-methods.md`` carries
     the measurements that rank them (``'contour'`` is the one that lost nowhere).
 
-    ``base_shape`` is the layer's shape before the ``4*max_order+1`` floor lift, when the caller
+    ``base_shape`` is the layer's shape before the ``4*truncation_order+1`` floor lift, when the caller
     lifted it. The smoothing constructions state their pixel-unit policies on the base grid
     — a lifted raster is the same staircase spelled with more pixels, so smoothing scales
     stated on the lifted grid would shrink under the lift instead of holding still.
@@ -541,10 +541,10 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
     named differently — and every efficiency must come back unchanged. It did not: the mask
     compared only inside the array, the distance transform measured to the in-cell interface
     rather than the periodically nearest one, and ``np.gradient`` is one-sided on the first and
-    last row and column. Together they moved ``max|dR|`` by ~1e-2 at every ``max_order``, and no
+    last row and column. Together they moved ``max|dR|`` by ~1e-2 at every ``truncation_order``, and no
     subset of the three fixes it (fixed 2026-08-17; ``docs/nvf-normal-methods.md`` has the
     table, ``tests/test_nvf_lattice_translation.py`` the guard). The defect did not shrink with
-    ``max_order`` because the floor lift is a block repeat, so a finer grid is the same staircase.
+    ``truncation_order`` because the floor lift is a block repeat, so a finer grid is the same staircase.
 
     ``lattice`` is the cell basis the raster indexes into. It matters because this is the one
     piece of the NVF construction that is *Cartesian-geometric* rather than index-based: the
@@ -704,7 +704,7 @@ def _upsampled_interface_mask(xp, base_eps, repeat_y, repeat_x):
     That is the whole point. Reading the repeated grid means converting it to NumPy in one
     step, which a tracer refuses; narrowing the base's comparisons one value at a time is
     something a grad tracer allows, and there are ``repeat_y * repeat_x`` times fewer of them —
-    128x128 rather than 2688x2688 at ``max_order=5``. It is what lets NVF differentiate with no
+    128x128 rather than 2688x2688 at ``truncation_order=5``. It is what lets NVF differentiate with no
     frozen geometry. (Under ``jax.jit`` neither works: there is no primal to narrow.)
 
     Note this is *not* the base's own mask repeated. Repeating ``[1, 2]`` twice gives
@@ -799,7 +799,7 @@ def _normal_field_source(eps, lattice=None, method=None):
     phases (which decides the delegation to ``'distance'``, and which a merge of two
     non-adjacent phases can change without moving a single interface — hence the fifth
     element). The pre-lift ``base_shape`` is not captured because it follows from the
-    shape the record already pins plus the solver's own ``max_order``.
+    shape the record already pins plus the solver's own ``truncation_order``.
     """
     import numpy as np
     from .enums import NormalMethod, normal_method_of
@@ -1076,8 +1076,8 @@ def pn_eps_conv_matrices(xp, eps33, nx, ny, max_order_x, max_order_y):
     # -- the box transform of a value held across its pixel, which the point sample never had --
     # and on a rectangle whose edges are grid lines, where the raster *is* the layer, the closed
     # form is exact at every N while the DFT converges to it as 1/N**2 (3.0e-2 at N=16, 1.2e-5
-    # at N=512, max_order=6). That reaches the answer through `Kx epz_i Kx`, so it grows with
-    # angle: at fixed max_order and a frozen geometry the DFT arm's error runs 3.5x to 4.8x the
+    # at N=512, truncation_order=6). That reaches the answer through `Kx epz_i Kx`, so it grows with
+    # angle: at fixed truncation_order and a frozen geometry the DFT arm's error runs 3.5x to 4.8x the
     # closed form's across 45 to 55 degrees, and the crossover is near 38 degrees, below which
     # the DFT leads by 5% of a term 30x smaller.
     epz_i = xp.linalg.inv(
@@ -1344,7 +1344,7 @@ def _lift(xp, v, dtype, device=None):
     return xp.asarray(v, dtype=dtype, device=device)
 
 
-def _fourier1d_integrated(xp, x, cell, max_order, period):
+def _fourier1d_integrated(xp, x, cell, truncation_order, period):
     """1D continuous Fourier series of a piecewise-constant profile.
 
     ``x`` holds the right-hand edge of each constant segment (shape ``(n, 1)``) and ``cell`` the
@@ -1358,8 +1358,8 @@ def _fourier1d_integrated(xp, x, cell, max_order, period):
     cell_next = xp.roll(cell, -1, axis=1)
     cell_diff = cell_next - cell
 
-    n_modes = 4 * max_order + 1
-    modes = xp.asarray([float(m) for m in range(-2 * max_order, 2 * max_order + 1)], dtype=C, device=dev)
+    n_modes = 4 * truncation_order + 1
+    modes = xp.asarray([float(m) for m in range(-2 * truncation_order, 2 * truncation_order + 1)], dtype=C, device=dev)
 
     # ``x`` holds the segment edges, which for a vector-modelled layer *are* the design
     # variables an OCD fit differentiates -- CD, sidewall angle, pitch all live here. Lift
@@ -1377,7 +1377,7 @@ def _fourier1d_integrated(xp, x, cell, max_order, period):
 
     # Divisor for the non-DC modes; 1 at DC so the unused branch of `where` stays finite
     # (a NaN there would still poison the gradient).
-    is_dc = xp.asarray([m == 2 * max_order for m in range(n_modes)], device=dev)
+    is_dc = xp.asarray([m == 2 * truncation_order for m in range(n_modes)], device=dev)
     divisor = xp.where(is_dc, xp.asarray(1.0, dtype=C, device=dev),
                        1j * 2 * 3.141592653589793 * modes)
 

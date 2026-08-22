@@ -42,7 +42,7 @@ CASES = {
 
 # Fourier orders the golden is frozen at. High, because the oracle is a *converged* comparison:
 # fmmax's own two formulations (FFT, the plain direct rule, and JONES_DIRECT, a vector one) are
-# still 1.7e-4 apart at max_order=14 on the strongest case, and no claim tighter than that spread
+# still 1.7e-4 apart at truncation_order=14 on the strongest case, and no claim tighter than that spread
 # means anything.
 MAX_ORDER = 14
 

@@ -65,7 +65,7 @@ INSTRUCTIONS = {
 
 out = {}
 for name, instr in INSTRUCTIONS.items():
-    solver = wavebit.rcwa(backend=0, period=PERIOD, thickness=[205.0, 100.0], max_order=[3, 3],
+    solver = wavebit.rcwa(backend=0, period=PERIOD, thickness=[205.0, 100.0], truncation_order=[3, 3],
                           top=1.0, bot=1.0, wavelength=900.0, psi=np.pi / 4, structure=instr)
     info = solver.modeling_block_instruction(solver.structure)
     out[f'{name}__n_layers'] = np.array(len(info))
@@ -81,7 +81,7 @@ for name, instr in INSTRUCTIONS.items():
 # `material=4.0` is the index-2 rectangle this has always drawn; the keyword was `base=` and
 # took an index. The `draw__L0__cell` array in the golden therefore holds 1 and 2, not 1 and 4
 # — the eleventh of the eleven index-valued cells named in the docstring above.
-solver = wavebit.rcwa(backend=0, period=[1000.0, 1000.0], thickness=[100.0], max_order=[2, 2],
+solver = wavebit.rcwa(backend=0, period=[1000.0, 1000.0], thickness=[100.0], truncation_order=[2, 2],
                       wavelength=900.0, structure=[[1.0, []]])
 elem = solver.modeler.rectangle_no_approximation(cx=500, cy=500, lx=200, ly=200, material=4.0)
 drawn = solver.modeler.draw([[1.0, elem]])

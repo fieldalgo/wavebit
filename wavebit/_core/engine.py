@@ -210,7 +210,7 @@ _FIELD_NOT_DECLARED = (
     "from once it has returned. Set answers='field' and solve again.\n"
     "The default is 'amplitude' because the field state is 4.25 matrices of side "
     "2*n_orders_x*n_orders_y per layer on the 2D path (3.75 conical, 5 pure 1D) -- 21.7 MB at "
-    "max_order=(8, 8), 240 MB at (15, 15), 733 MB at (20, 20), per layer -- while the amplitudes "
+    "truncation_order=(8, 8), 240 MB at (15, 15), 733 MB at (20, 20), per layer -- while the amplitudes "
     "it does keep are boundary vectors. An optimization against a fixed objective needs the "
     "amplitudes and never reconstructs a field.")
 
@@ -348,11 +348,11 @@ class CoreSolveMixin:
     def order_window(self):
         """Which orders this solve retains: ``(centre, half_width)`` per axis.
 
-        ``(0, max_order)`` unless an :attr:`excitation` widens it -- see
+        ``(0, truncation_order)`` unless an :attr:`excitation` widens it -- see
         :func:`~wavebit._core.conventions.order_window` for why lighting an off-centre order
         moves the window rather than leaving that beam short of neighbours.
         """
-        return order_window(self.max_order[0], self.max_order[1], self._excitation)
+        return order_window(self.truncation_order[0], self.truncation_order[1], self._excitation)
 
     @property
     def excitation(self):
@@ -401,7 +401,7 @@ class CoreSolveMixin:
             raise ValueError(
                 'excitation is empty, so nothing would be lit and every answer would be zero. '
                 'Leave it unset for the ordinary single wave on the specular order.')
-        # Which orders are legal depends on `max_order`, which may still change; that check
+        # Which orders are legal depends on `truncation_order`, which may still change; that check
         # belongs where the solve reads them (`conventions.lit_orders`). This one is the shape.
         self._excitation = dict(value)
 
@@ -451,7 +451,7 @@ class CoreSolveMixin:
         The default is ``'amplitude'`` because that is where the cost cliff is. The
         amplitudes are boundary vectors already solved for; the field state is 4.25 matrices
         of side ``2*n_orders_x*n_orders_y`` per layer on the 2D path — 240 MB per layer at
-        ``max_order=(15, 15)``, 733 MB at ``(20, 20)``. The two differ by three orders of
+        ``truncation_order=(15, 15)``, 733 MB at ``(20, 20)``. The two differ by three orders of
         magnitude, and the runs that are large enough to care are optimization sweeps
         against a fixed objective, which never call :meth:`reconstruct_field` at all.
 
@@ -635,7 +635,7 @@ class CoreSolveMixin:
         It says the incidence has **no polarization and no azimuth degree of freedom**: not
         that they happen to be TE and zero right now, but that neither is a parameter of this
         problem. That is what makes the pure 1D TE/TM formulation legal, and that formulation
-        is 2 to 4 times faster than the conical one it replaces (measured across ``max_order``;
+        is 2 to 4 times faster than the conical one it replaces (measured across ``truncation_order``;
         they agree to 1e-13).
 
         The distinction is the reason this is not a second spelling of ``polarization=(1, 0)``.
@@ -646,7 +646,7 @@ class CoreSolveMixin:
         freedom is *absent*, so ``psi`` reads back as ``None`` rather than as a number whose
         gradient is quietly zero.
 
-        Legal only where the formulation exists: a 1D structure, ``max_order[1] == 0``, no azimuth,
+        Legal only where the formulation exists: a 1D structure, ``truncation_order[1] == 0``, no azimuth,
         and no ``psi`` or ``polarization`` beside it. Everywhere else it is refused rather
         than ignored — ``_assign_grating_type`` does that check, and says which condition
         failed.
@@ -759,20 +759,20 @@ class CoreSolveMixin:
         different ``n``, and the orders being asked for are identically zero. Measured on the
         2D path, which does retain them, for the same structure written with two identical
         rows: the ``n = ±1`` rows sum to 5e-29, and the ``n = 0`` row reproduces
-        ``max_order=[m, 0]`` to 3e-15.
+        ``truncation_order=[m, 0]`` to 3e-15.
 
         Until this check the request reached ``layer_modes_1d_conical``, where ``Ky2`` is built
         over the full ``n_orders_x * n_orders_y`` order set and the convolution matrices over
         ``n_orders_x`` alone, and surfaced as ``operands could not be broadcast together with
         shapes (5,5) (15,15)`` — an error with nothing in it that names the mistake.
         """
-        if not one_dimensional or self.max_order[1] == 0:
+        if not one_dimensional or self.truncation_order[1] == 0:
             return
         raise ValueError(
-            f'max_order={list(self.max_order)} asks for y diffraction orders, but this '
+            f'truncation_order={list(self.truncation_order)} asks for y diffraction orders, but this '
             f'structure has one row in y, so the structure is invariant along it and every '
             f'n != 0 order is identically zero. Both 1D formulations keep the single n = 0 '
-            f'order for that reason. Use max_order=[{self.max_order[0]}, 0]; if you meant a '
+            f'order for that reason. Use truncation_order=[{self.truncation_order[0]}, 0]; if you meant a '
             f'structure that varies in y, '
             f'give a structure with more than one row (two identical rows is the 2D path solving '
             f'the same physics, and it returns those zeros explicitly).')
@@ -791,7 +791,7 @@ class CoreSolveMixin:
         polarizations rather than one of them. Telling that caller "this is not a 1D
         structure" would be answering a question they did not ask.
 
-        The ``max_order[1]`` half lives in :meth:`_refuse_y_orders_on_a_y_invariant_cell`
+        The ``truncation_order[1]`` half lives in :meth:`_refuse_y_orders_on_a_y_invariant_cell`
         instead — it is not a fact about the declaration but about the structure, and it
         applies to every spelling of the incidence.
         """
@@ -957,7 +957,7 @@ class CoreSolveMixin:
         **This is public because the separable half is a trap on its own.** Until 2026-08-20
         the public accessor was ``get_kx_ky_vector``, which builds only the 1-D pair, and on a
         skewed cell that pair describes the rectangular problem rather than the one being
-        solved -- measured on a 60-degree hexagonal cell at ``max_order=(2, 2)``, ``ky`` is out
+        solved -- measured on a 60-degree hexagonal cell at ``truncation_order=(2, 2)``, ``ky`` is out
         by up to ``0.805 k0`` across a retained band of about ``+-2``, silently, with nothing
         in the docs saying so. The correct answer was the private one. They swapped places.
 
@@ -1596,7 +1596,7 @@ class CoreFactorizationMixin:
         factorization = self.factorization
         coefficients = self.fourier_coefficients
         self._reject_unread_normal_method(factorization)
-        # The *window's* half-width, not the declared `max_order`: an excitation can
+        # The *window's* half-width, not the declared `truncation_order`: an excitation can
         # widen the retained set, and a convolution matrix has to be as wide as the
         # `kx` it will meet. Its entries do not otherwise care where the window sits
         # -- `(i, j)` is the harmonic `i - j` -- so only the size travels here.
@@ -2010,7 +2010,7 @@ class CoreFactorizationMixin:
         """
         factorization = self.factorization
         coefficients = self.fourier_coefficients
-        # The *window's* half-width, not the declared `max_order`: an excitation can
+        # The *window's* half-width, not the declared `truncation_order`: an excitation can
         # widen the retained set, and a convolution matrix has to be as wide as the
         # `kx` it will meet. Its entries do not otherwise care where the window sits
         # -- `(i, j)` is the harmonic `i - j` -- so only the size travels here.

@@ -26,10 +26,10 @@ BASE = dict(top=1.0, bot=1.0, theta=0.1, wavelength=900.0, thickness=[500.0])
 
 # (kwargs, (sample_x, sample_y, sample_z)) per grating type the dispatcher can pick.
 CASES = {
-    '1d_tetm': (dict(tetm='te', phi=None, max_order=[3], period=[1000.0], structure=UCELL_1D), (8, 1, 4)),
-    '1d_tm': (dict(tetm='tm', phi=None, max_order=[3], period=[1000.0], structure=UCELL_1D), (8, 1, 4)),
-    '1d_conical': (dict(psi=0.35 * np.pi, phi=0.2, max_order=[3], period=[1000.0], structure=UCELL_1D), (8, 1, 4)),
-    '2d': (dict(psi=0.35 * np.pi, phi=0.2, max_order=[2, 2], period=[1000.0, 1000.0], structure=UCELL_2D), (4, 4, 4)),
+    '1d_tetm': (dict(tetm='te', phi=None, truncation_order=[3], period=[1000.0], structure=UCELL_1D), (8, 1, 4)),
+    '1d_tm': (dict(tetm='tm', phi=None, truncation_order=[3], period=[1000.0], structure=UCELL_1D), (8, 1, 4)),
+    '1d_conical': (dict(psi=0.35 * np.pi, phi=0.2, truncation_order=[3], period=[1000.0], structure=UCELL_1D), (8, 1, 4)),
+    '2d': (dict(psi=0.35 * np.pi, phi=0.2, truncation_order=[2, 2], period=[1000.0, 1000.0], structure=UCELL_2D), (4, 4, 4)),
 }
 
 

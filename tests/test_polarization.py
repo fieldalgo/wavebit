@@ -41,9 +41,9 @@ STRUCTURE_1D = np.array([[_ROW], [_ROW]], dtype=float)
 STRUCTURE_2D = np.array([[[4.0, 1.0, 2.25, 1.0],
                           [1.0, 9.0, 1.0, 4.0]]] * 2)
 
-CFG_1D = dict(backend=0, top=1.0, bot=1.0, theta=1e-10, max_order=[8, 0],
+CFG_1D = dict(backend=0, top=1.0, bot=1.0, theta=1e-10, truncation_order=[8, 0],
               wavelength=300.0, period=[700.0, 700.0], thickness=[460.0, 22.0])
-CFG_2D = dict(backend=0, top=1.0, bot=2.25, theta=0.3, phi=0.4, max_order=[2, 1],
+CFG_2D = dict(backend=0, top=1.0, bot=2.25, theta=0.3, phi=0.4, truncation_order=[2, 1],
               wavelength=900.0, period=[700.0, 700.0], thickness=[100.0, 200.0])
 
 _AMPLITUDE_FIELDS = ('r_s', 'r_p', 't_s', 't_p')
@@ -324,7 +324,7 @@ def _solve_gyrotropic(pair=None, **incidence):
     if pair is not None:
         incidence = dict(incidence, polarization=pair)
     solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0,
-                            **incidence, max_order=(0, 0), period=(300.0, 300.0),
+                            **incidence, truncation_order=(0, 0), period=(300.0, 300.0),
                             wavelength=WL, thickness=[D])
     return solver.solve_conv(
         np.stack([EO * I]),
@@ -533,8 +533,8 @@ def test_incidence_carries_the_pair():
 
 
 _SPEC = {
-    'version': '4',                 # a parsed document states its schema; see tests/test_spec.py
-    'numerics': {'backend': 'numpy', 'max_order': [10, 0]},
+    'version': '5',                 # a parsed document states its schema; see tests/test_spec.py
+    'numerics': {'backend': 'numpy', 'truncation_order': [10, 0]},
     'stack': {
         'top': 1.0, 'bot': 2.25, 'period': [700.0],
         'layers': [{'thickness': 300.0, 'structure': [[1.0, 1.0, 12.25, 12.25]]}],
@@ -564,7 +564,7 @@ def test_spec_round_trips_the_pair():
 def test_run_executes_the_pair_spec():
     result = wavebit.run(_SPEC)
     reference = wavebit.rcwa(
-        backend=0, wavelength=900.0, period=[700.0], max_order=[10, 0],
+        backend=0, wavelength=900.0, period=[700.0], truncation_order=[10, 0],
         top=1.0, bot=2.25, theta=0.0, phi=0.0, polarization=(1, -1j),
         structure=np.array([[[1.0, 1.0, 12.25, 12.25]]]), thickness=[300.0],
     ).solve()

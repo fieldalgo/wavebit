@@ -45,9 +45,9 @@ def slots(t):
             np.stack([-t[0, 1] * I1]), np.stack([-t[1, 0] * I1])]
 
 
-def solve(eps, mu=None, theta=0.0, algo='ETM', backend=0, max_order=(0, 0), period=None):
+def solve(eps, mu=None, theta=0.0, algo='ETM', backend=0, truncation_order=(0, 0), period=None):
     mee = wavebit.rcwa(backend=backend, top=1.0, bot=1.0, theta=np.deg2rad(theta),
-                       phi=0.0, psi=0.0, max_order=max_order, period=period or (PERIOD, PERIOD),
+                       phi=0.0, psi=0.0, truncation_order=truncation_order, period=period or (PERIOD, PERIOD),
                        wavelength=WL, thickness=[THICK], layer_algorithm=algo)
     res = mee.solve_conv(*slots(eps), mu=None if mu is None else tuple(slots(mu)))
     te, tm = res.s_inc, res.p_inc
@@ -133,7 +133,7 @@ def test_the_other_backends_carry_mu_too(backend, name):
     want = solve(eps, mu, theta=39.0)
 
     mee = wavebit.rcwa(backend=backend, top=1.0, bot=1.0, theta=np.deg2rad(39.0), phi=0.0,
-                       psi=0.0, max_order=(0, 0), period=(PERIOD, PERIOD), wavelength=WL,
+                       psi=0.0, truncation_order=(0, 0), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK])
     res = mee.solve_conv(*[lift(s) for s in slots(eps)],
                              mu=tuple(lift(s) for s in slots(mu)))
@@ -171,7 +171,7 @@ def test_mu_on_a_one_dimensional_structure_is_refused():
     entirely plausible non-magnetic answer.
     """
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
-                       max_order=(3, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
+                       truncation_order=(3, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
                        structure=np.ones((1, 1, 8)) * 2.25)
     e = [np.stack([np.eye(7, dtype=complex) * v]) for v in (2.6, 2.6, 1 / 2.6)]
     m = tuple(np.stack([np.eye(7, dtype=complex) * v]) for v in (1.7, 1.7, 1 / 1.7, 0.0, 0.0))
@@ -186,7 +186,7 @@ def test_mu_with_a_z_coupled_permittivity_is_refused():
     *combination* has to say so rather than silently taking whichever path it lands on.
     """
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
-                       max_order=(0, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK])
+                       truncation_order=(0, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK])
     e = slots(tensor(2.6, 2.6, 2.6))
     z_row = [np.stack([0.2j * I1])] + [np.stack([0.0 * I1])] * 3
     m = tuple(slots(tensor(1.7, 1.7, 1.7)))
@@ -220,7 +220,7 @@ BLOCK_LAYER = [[1.0, [['rectangle', PERIOD / 4, PERIOD / 4, PERIOD / 4, PERIOD /
 
 def _raster_solver_with_mu(backend=0):
     return wavebit.rcwa(backend=backend, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
-                        max_order=(2, 2), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
+                        truncation_order=(2, 2), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
                         structure=RASTER, mu=MU_RASTER)
 
 
@@ -380,7 +380,7 @@ def _uniform_cell(eps, mu, thick, eps_bot, mu_bot, theta, z_abs, algo='ETM'):
     so the *scene* is a uniform slab while the *path* is the 2D one that takes a permeability
     -- which is what makes a closed form applicable to the path under test.
 
-    ``max_order=(0, 0)``: only the zeroth order exists, so the solver is being asked the multilayer
+    ``truncation_order=(0, 0)``: only the zeroth order exists, so the solver is being asked the multilayer
     question the recursion above answers, and any disagreement is about ``mu`` rather than
     about truncation.
     """
@@ -390,7 +390,7 @@ def _uniform_cell(eps, mu, thick, eps_bot, mu_bot, theta, z_abs, algo='ETM'):
     # `kz/mu` at the bottom interface -- so the standing wave above it moves.
     bot = eps_bot if mu_bot == 1.0 else wavebit.Material(eps_bot, mu=mu_bot)
     solver = wavebit.rcwa(backend=0, top=1.0, bot=bot, theta=theta, phi=0.0,
-                          max_order=(0, 0), period=(PERIOD, PERIOD), wavelength=FIELD_WL,
+                          truncation_order=(0, 0), period=(PERIOD, PERIOD), wavelength=FIELD_WL,
                           thickness=list(thick), layer_algorithm=algo, answers='field')
     solver.structure = tile(eps)
     solver.mu = None if all(m == 1.0 for m in mu) else tile(mu)
@@ -503,7 +503,7 @@ TWO_LAYER_MU = np.array([[[1.8, 1.0, 1.0, 1.4], [1.0, 1.0, 1.4, 1.4]],
 
 def _two_layer_cell(algo, side):
     solver = wavebit.rcwa(backend=0, top=1.0, bot=2.25, theta=np.deg2rad(31.0),
-                          phi=np.deg2rad(17.0), max_order=(2, 2), period=(PERIOD, PERIOD),
+                          phi=np.deg2rad(17.0), truncation_order=(2, 2), period=(PERIOD, PERIOD),
                           wavelength=FIELD_WL, thickness=[180.0, 120.0], answers='field',
                           layer_algorithm=algo, incidence_side=side)
     solver.structure = TWO_LAYER_EPS
@@ -546,7 +546,7 @@ MU_PATTERN = np.array([[[1.8, 1.0, 1.0, 1.4], [1.0, 1.0, 1.4, 1.4]]])
 def _patterned_cell(eps, mu, variant, backend=0):
     """One patterned magnetic cell. Vacuum half-spaces, which are self-dual."""
     solver = wavebit.rcwa(backend=backend, top=1.0, bot=1.0, theta=np.deg2rad(37.0),
-                          phi=np.deg2rad(23.0), max_order=(2, 2), period=(PERIOD, PERIOD),
+                          phi=np.deg2rad(23.0), truncation_order=(2, 2), period=(PERIOD, PERIOD),
                           wavelength=FIELD_WL, thickness=[THICK], answers='field')
     solver.structure = eps if backend == 0 else _lift(backend, eps)
     solver.mu = mu if backend == 0 else _lift(backend, mu)
@@ -630,7 +630,7 @@ def test_the_permeability_a_reconstructed_hz_depends_on_is_differentiable():
 
     def loss(mu):
         solver = wavebit.rcwa(backend=1, top=1.0, bot=1.0, theta=np.deg2rad(37.0),
-                              phi=np.deg2rad(23.0), max_order=(1, 1), period=(PERIOD, PERIOD),
+                              phi=np.deg2rad(23.0), truncation_order=(1, 1), period=(PERIOD, PERIOD),
                               wavelength=FIELD_WL, thickness=[THICK], answers='field')
         solver.structure = jnp.asarray(EPS_PATTERN)
         solver.mu = mu
@@ -663,7 +663,7 @@ def test_mu_on_the_first_order_path_is_refused_whichever_way_it_got_there():
     nothing else.
     """
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
-                       max_order=(0, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK])
+                       truncation_order=(0, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK])
     mee.formulation = '4ff'
     e = slots(tensor(2.6, 2.6, 2.6))
     m = tuple(slots(tensor(1.7, 1.7, 1.7)))

@@ -179,7 +179,7 @@ def test_axis_aligned_matches_raster_nvf():
     """
     P, EPS_R, L, N = 0.77, 12.25, 0.5, 128       # eps 12.25 is the old n = 3.5
     cfg = dict(top=1.0, bot=2.25, theta=0.35, phi=0.4, period=(P, P),
-               wavelength=0.777, thickness=(0.25,), max_order=(8, 8))
+               wavelength=0.777, thickness=(0.25,), truncation_order=(8, 8))
 
     xx, yy = ((np.mgrid[0:N, 0:N] + 0.5) / N)[::-1]
     ras = np.where((np.abs(xx - 0.5) < L / 2) & (np.abs(yy - 0.5) < L / 2), EPS_R, 1.0)[None]
@@ -277,9 +277,9 @@ def test_metal_rod_absorbs_end_to_end(psi):
     absent is as much the assertion as the number is.
 
     Why this rather than a comparison against the same rod rastered: the two NVF schemes do not
-    agree closely for a metal. Their gap here is ~3e-3 on ``sum(T)`` at ``max_order=8`` and does
+    agree closely for a metal. Their gap here is ~3e-3 on ``sum(T)`` at ``truncation_order=8`` and does
     not shrink when the raster is refined (128 -> 256 moves it by 1%), because they are
-    different factorizations that meet only as ``max_order -> inf``, and ``|eps|`` this large converges
+    different factorizations that meet only as ``truncation_order -> inf``, and ``|eps|`` this large converges
     slowly. A tolerance loose enough to pass would be looser than the effect being guarded.
     The tight cross-path statement lives in ``test_lossy_media`` instead, on uniform layers
     where an absolute oracle exists.
@@ -295,7 +295,7 @@ def test_metal_rod_absorbs_end_to_end(psi):
         warnings.simplefilter('error', UnphysicalResultWarning)
         res = wavebit.rcwa(backend=0, structure=structure, psi=psi, top=1.0, bot=2.25,
                              theta=0.35, phi=0.4, period=(P, P), wavelength=0.777,
-                             thickness=(0.25,), max_order=(8, 8)).solve()
+                             thickness=(0.25,), truncation_order=(8, 8)).solve()
 
     total = float(np.sum(np.asarray(res.R)).real + np.sum(np.asarray(res.T)).real)
     assert 0.5 < total < 0.95, total       # absorbing, and absorbing by a visible margin
@@ -311,7 +311,7 @@ def test_analytic_shape_parameters_are_absolute_lengths():
     """
     P, EPS_R, L, N = 0.77, 12.25, 0.5, 128       # eps 12.25 is the old n = 3.5
     cfg = dict(top=1.0, bot=2.25, theta=0.35, phi=0.0, period=(P, P),
-               wavelength=0.777, thickness=(0.25,), max_order=(6, 6), psi=0.0)
+               wavelength=0.777, thickness=(0.25,), truncation_order=(6, 6), psi=0.0)
 
     xx, yy = ((np.mgrid[0:N, 0:N] + 0.5) / N)[::-1]
     ras = np.where((np.abs(xx - 0.5) < L / 2) & (np.abs(yy - 0.5) < L / 2), EPS_R, 1.0)[None]
@@ -348,8 +348,8 @@ def test_energy_conservation_lossless():
                                   dict(type='circle', cx=0.8, cy=0.9, lx=0.25,
                                        material=9.0)]),
     ]
-    for max_order in (5, 8):
-        res = wavebit.rcwa(backend=0, structure=structure, max_order=(max_order, max_order), **cfg).solve()
+    for truncation_order in (5, 8):
+        res = wavebit.rcwa(backend=0, structure=structure, truncation_order=(truncation_order, truncation_order), **cfg).solve()
         tot = np.array(res.R).real.sum() + np.array(res.T).real.sum()
         assert abs(tot - 1.0) < 1e-9
 
@@ -366,7 +366,7 @@ def test_cross_backend_agreement():
                                            material=9.0)])]
 
     def T(bk):
-        return float(np.array(wavebit.rcwa(backend=bk, structure=structure, max_order=(6, 6), **cfg)
+        return float(np.array(wavebit.rcwa(backend=bk, structure=structure, truncation_order=(6, 6), **cfg)
                               .solve().T).real.sum())
 
     tn, tj, tt = T(0), T(1), T(2)
@@ -385,7 +385,7 @@ def _fd_grad_lx(shape_type, lx0=0.5):
         s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, material=6.25,
                  **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
         uc = [dict(background=1.0, shapes=[s])]
-        return float(np.array(wavebit.rcwa(backend=0, structure=uc, max_order=(6, 6), **cfg)
+        return float(np.array(wavebit.rcwa(backend=0, structure=uc, truncation_order=(6, 6), **cfg)
                               .solve().T).real.sum())
 
     h = 1e-5
@@ -399,7 +399,7 @@ def test_torch_gradient(shape_type):
     lx = torch.tensor(0.5, dtype=torch.float64, requires_grad=True)
     s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, material=6.25,
              **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
-    res = wavebit.rcwa(backend=2, structure=[dict(background=1.0, shapes=[s])], max_order=(6, 6), **cfg).solve()
+    res = wavebit.rcwa(backend=2, structure=[dict(background=1.0, shapes=[s])], truncation_order=(6, 6), **cfg).solve()
     T = res.T.real.sum()
     T.backward()
     assert np.isfinite(float(lx.grad))
@@ -415,7 +415,7 @@ def test_jax_gradient(shape_type):
     def loss(lx):
         s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, material=6.25,
                  **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
-        r = wavebit.rcwa(backend=1, structure=[dict(background=1.0, shapes=[s])], max_order=(6, 6), **cfg).solve()
+        r = wavebit.rcwa(backend=1, structure=[dict(background=1.0, shapes=[s])], truncation_order=(6, 6), **cfg).solve()
         return jnp.real(r.T).sum()
 
     g = float(jax.grad(loss)(jnp.array(0.5)))
@@ -439,9 +439,9 @@ def test_analytic_beats_staircase_tilted():
         d = np.array(res.T).real
         return d[d.shape[0] // 2, d.shape[0] // 2]
 
-    ref = t0(wavebit.rcwa(backend=0, structure=analytic, max_order=(15, 15), **cfg).solve())
-    a11 = t0(wavebit.rcwa(backend=0, structure=analytic, max_order=(11, 11), **cfg).solve())
-    s11 = t0(wavebit.rcwa(backend=0, structure=stair, max_order=(11, 11), **cfg).solve())
+    ref = t0(wavebit.rcwa(backend=0, structure=analytic, truncation_order=(15, 15), **cfg).solve())
+    a11 = t0(wavebit.rcwa(backend=0, structure=analytic, truncation_order=(11, 11), **cfg).solve())
+    s11 = t0(wavebit.rcwa(backend=0, structure=stair, truncation_order=(11, 11), **cfg).solve())
 
     err_analytic = abs(a11 - ref)
     err_stair = abs(s11 - ref)
@@ -451,7 +451,7 @@ def test_analytic_beats_staircase_tilted():
 
 CIRCLE_P, CIRCLE_EPS = 0.77, 12.25               # eps 12.25 is the old n = 3.5
 CIRCLE_CFG = dict(period=[CIRCLE_P, CIRCLE_P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
-                  wavelength=0.777, top=1.0, bot=2.25, max_order=[6, 6])
+                  wavelength=0.777, top=1.0, bot=2.25, truncation_order=[6, 6])
 
 
 def test_a_circle_is_written_with_one_length():
@@ -541,7 +541,7 @@ def test_overlapping_shapes_move_the_answer_while_the_vector_path_does_not():
     block path — which is what the two assertions measure.
     """
     period, eps_base = [300.0, 300.0], 1.0
-    cfg = dict(period=period, thickness=[205.0], max_order=[6, 6], top=1.0, bot=1.0,
+    cfg = dict(period=period, thickness=[205.0], truncation_order=[6, 6], top=1.0, bot=1.0,
                wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0)
     boxes = [(130.0, 4.0), (190.0, 9.0)]
 
@@ -570,7 +570,7 @@ def test_overlapping_shapes_move_the_answer_while_the_vector_path_does_not():
 
 # ------------------------------------------------------- the layer has to say how shapes combine
 
-CHECK_CFG = dict(period=[300.0, 300.0], thickness=[205.0], max_order=[2, 2], top=1.0, bot=1.0,
+CHECK_CFG = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[2, 2], top=1.0, bot=1.0,
                  wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0)
 
 
@@ -881,7 +881,7 @@ def test_the_check_steps_aside_for_a_traced_solve():
 
 # ------------------------------------------------------------------ the block path's half
 
-VECTOR_CFG = dict(period=[300.0, 300.0], thickness=[205.0], max_order=[6, 6], top=1.0, bot=1.0,
+VECTOR_CFG = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[6, 6], top=1.0, bot=1.0,
                   wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0)
 
 
@@ -1027,21 +1027,21 @@ def test_what_the_block_grid_built_instead_was_not_a_structure_at_all():
     row = np.asarray(cell)[1:2]                                # one row straight through the rod
     assert sorted(np.real(row).reshape(-1).tolist()) == [1.0, 1.0, 5.76]
 
-    max_order, period = 6, np.asarray(1.0, dtype=complex)
-    got_eps = np.asarray(_fourier1d_integrated(xnp, x_list, row, max_order, period))[0]
-    got_inv = np.asarray(_fourier1d_integrated(xnp, x_list, 1 / row, max_order, period))[0]
+    truncation_order, period = 6, np.asarray(1.0, dtype=complex)
+    got_eps = np.asarray(_fourier1d_integrated(xnp, x_list, row, truncation_order, period))[0]
+    got_inv = np.asarray(_fourier1d_integrated(xnp, x_list, 1 / row, truncation_order, period))[0]
 
     # The profile that edge list describes, by dense quadrature: 1 + 4.76 * (cover count).
     s = (np.arange(400_000) + 0.5) / 400_000
     covers = sum((np.abs(s - 0.5 - m) <= 0.65).astype(float) for m in (-1, 0, 1))
     profile = 1.0 + 4.76 * covers
-    modes = np.arange(-2 * max_order, 2 * max_order + 1)
+    modes = np.arange(-2 * truncation_order, 2 * truncation_order + 1)
     truth = lambda f: np.array([np.mean(f * np.exp(-1j * 2 * np.pi * m * s)) for m in modes])
 
     assert np.abs(got_eps - truth(profile)).max() < 1e-8      # quadrature, not the transform
     assert np.abs(got_inv - truth(1.0 / profile)).max() > 0.2
 
-    dc = 2 * max_order
+    dc = 2 * truncation_order
     assert np.real(truth(1.0 / profile)[dc]) > 0.0            # it must be: eps >= 5.76 > 0
     assert np.real(got_inv[dc]) < 0.0                         # what the grid handed the solve
 
@@ -1111,7 +1111,7 @@ def test_only_numpy_takes_the_tiled_path():
 
 
 PROJ_KW = dict(period=(1.0, 1.0), thickness=(0.32,), wavelength=0.94, top=1.0, bot=2.1025,
-               theta=0.2, phi=0.3, psi=0.0, max_order=(4, 4), normal_grid=512)
+               theta=0.2, phi=0.3, psi=0.0, truncation_order=(4, 4), normal_grid=512)
 
 #: 3.4**2 and 2.7**2, spelled to the bit rather than tidied. These reach a cache key, and a
 #: rounded literal is a different key from the one the arithmetic produces.
@@ -1135,7 +1135,7 @@ def test_the_projector_cache_never_changes_an_answer(build):
     """A hit and a miss have to return the same bits, or the cache is a second implementation.
 
     ``normal_projector_coeffs`` is the expensive half of the analytic NVF build -- 83% of a
-    five-point sweep at ``normal_grid = 1024, max_order = 4`` for one shape, 93% for six -- and none of
+    five-point sweep at ``normal_grid = 1024, truncation_order = 4`` for one shape, 93% for six -- and none of
     it reads a material value, so a material sweep rebuilds a field it already had. What makes
     the reuse safe rather than merely fast is that the *build* is position-free for a single
     shape: it is done at the centre of the cell and carried to ``(cx, cy)`` by a phase computed
@@ -1243,17 +1243,17 @@ def test_the_cache_key_carries_everything_the_build_depends_on():
     import wavebit
     from wavebit._core import analytic as _an
 
-    def total(max_order, normal_grid):
-        kw = dict(PROJ_KW, max_order=(max_order, max_order), normal_grid=normal_grid)
+    def total(truncation_order, normal_grid):
+        kw = dict(PROJ_KW, truncation_order=(truncation_order, truncation_order), normal_grid=normal_grid)
         return np.asarray(wavebit.rcwa(backend=0, structure=_one(0.40), **kw).solve().T)
 
     _an._PROJECTOR_CACHE.clear()
-    alone = {(max_order, ng): total(max_order, ng)                       # each built with nothing cached
-             for max_order in (3, 4, 6) for ng in (256, 512)
+    alone = {(truncation_order, ng): total(truncation_order, ng)                       # each built with nothing cached
+             for truncation_order in (3, 4, 6) for ng in (256, 512)
              if not _an._PROJECTOR_CACHE.clear()}
 
-    for (max_order, ng), expected in alone.items():                # now with all six entries resident
-        assert np.array_equal(total(max_order, ng), expected), (max_order, ng)
+    for (truncation_order, ng), expected in alone.items():                # now with all six entries resident
+        assert np.array_equal(total(truncation_order, ng), expected), (truncation_order, ng)
     assert len(_an._PROJECTOR_CACHE) == 6, 'the six builds shared an entry'
 
 

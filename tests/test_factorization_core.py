@@ -113,7 +113,7 @@ def test_dfs_coefficients_are_the_exact_ones(case):
     """``<eps>`` must be the raster's own Fourier coefficients, to round-off.
 
     This replaced a bit-parity check against the legacy builder, which is gone: that builder
-    resampled the raster onto a grid resolving ``4*max_order+1`` harmonics and transformed *that*,
+    resampled the raster onto a grid resolving ``4*truncation_order+1`` harmonics and transformed *that*,
     approaching these values as ``1/R`` and stopping ~1e-2 short on the coefficients (~1e-5
     on efficiency, measured against RETICOLO). The exact route made the frozen values wrong to
     hold, and the generator could not be re-run — it imported modules deleted in ``306c9ea``.
@@ -161,7 +161,7 @@ def test_factorization_cross_backend(case, backend):
 def test_factorization_feeds_solve_bit_exactly():
     """core factorization -> core solve reproduces the legacy end-to-end result exactly."""
     structure = np.array([[[9., 9., 9., 1., 1., 1.]]])
-    wl, n_top, n_bot, theta, period, max_order = 0.777, 2.0, 1.0, 0.3, [0.77], [6, 0]
+    wl, n_top, n_bot, theta, period, truncation_order = 0.777, 2.0, 1.0, 0.3, [0.77], [6, 0]
     thickness = [0.15]
 
     # Two spellings of one pair of half-spaces, on purpose. `solve_1d` is the core, and there
@@ -171,11 +171,11 @@ def test_factorization_feeds_solve_bit_exactly():
 
     solver = wavebit.rcwa(backend=0, top=eps_top, bot=eps_bot, theta=theta, phi=None,
                           tetm='te',
-                          max_order=max_order, period=period, wavelength=wl, thickness=thickness, structure=structure)
+                          truncation_order=truncation_order, period=period, wavelength=wl, thickness=thickness, structure=structure)
     legacy = solver.solve()
     kx, _ = solver.order_kxy()
 
-    epx, epy, epz, *_ = core_dfs(structure, max_order[0], max_order[1])
+    epx, epy, epz, *_ = core_dfs(structure, truncation_order[0], truncation_order[1])
     ri, ti = solve_1d(0, wl, kx, n_top, n_bot, solver.theta, solver.thickness, epx, epy, epz)
 
     assert np.array_equal(np.array(legacy.R), np.array(ri))
@@ -198,13 +198,13 @@ def test_end_to_end_gradient_wrt_structure_1d():
 
     structure = np.array([[[9., 9., 9., 1., 1., 1.]]])
     direction = np.ones_like(structure)
-    max_order = [6, 0]
+    truncation_order = [6, 0]
     # top: eps 4.0 is the index 2.0 the `_chain_1d` core call below still takes.
     solver = wavebit.rcwa(backend=0, top=4.0, bot=1.0, theta=0.3, phi=None, tetm='te',
-                          max_order=max_order, period=[0.77], wavelength=0.777, thickness=[0.15], structure=structure)
+                          truncation_order=truncation_order, period=[0.77], wavelength=0.777, thickness=[0.15], structure=structure)
     kx, _ = solver.order_kxy()
     theta = complex(solver.theta)
-    fk = dict(max_order_x=max_order[0], max_order_y=max_order[1])
+    fk = dict(max_order_x=truncation_order[0], max_order_y=truncation_order[1])
 
     def f_np(s):
         return float(np.sum(np.array(_chain_1d(fk, structure + s * direction, kx, theta))))
@@ -232,15 +232,15 @@ def test_end_to_end_gradient_wrt_structure_2d():
 
     structure = _rand((1, 4, 4), 7)
     direction = np.ones_like(structure)
-    max_order = [1, 1]
+    truncation_order = [1, 1]
     wl, n_top, n_bot = 0.9, 1.0, 1.0
     solver = wavebit.rcwa(backend=0, top=n_top, bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
-                          max_order=max_order, period=[1.0, 1.0], wavelength=wl, thickness=[0.15], structure=structure)
+                          truncation_order=truncation_order, period=[1.0, 1.0], wavelength=wl, thickness=[0.15], structure=structure)
     kx, ky = solver.order_kxy()
     theta, inc = complex(solver.theta), solver._incidence_pair()
 
     def chain(u, kx_, ky_, th_, inc_):
-        epx, epy, epz, *_ = core_dfs(u, max_order[0], max_order[1])
+        epx, epy, epz, *_ = core_dfs(u, truncation_order[0], truncation_order[1])
         _, ti = solve_2d(wl, kx_, ky_, n_top, n_bot, th_, inc_, [0.15], epx, epy, epz,
                          phi=solver.phi)
         return ti
@@ -317,7 +317,7 @@ def test_nvf_now_works_on_every_backend():
     wired — the per-backend builders simply had no NVF branch.
     """
     structure = _rand((1, 5, 5), 13)
-    opts = dict(top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, max_order=[2, 2],
+    opts = dict(top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, truncation_order=[2, 2],
                 period=[1.0, 1.0], wavelength=0.9, thickness=[0.2], structure=structure,
                 factorization='nvf')
     ref = wavebit.rcwa(backend=0, **opts).solve()
@@ -340,17 +340,17 @@ def test_nvf_end_to_end_gradient_wrt_structure():
 
     structure = np.where(_rand((1, 6, 6), 14) > 6.25, 12.25, 1.0)
     direction = np.ones_like(structure)
-    max_order = [1, 1]
+    truncation_order = [1, 1]
     wl, n_top, n_bot, d = 0.9, 1.0, 1.0, 0.2
-    normal_field = normal_field_for_raster(structure, max_order[0], max_order[1])
+    normal_field = normal_field_for_raster(structure, truncation_order[0], truncation_order[1])
 
     solver = wavebit.rcwa(backend=0, top=n_top, bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
-                          max_order=max_order, period=[1.0, 1.0], wavelength=wl, thickness=[d], structure=structure)
+                          truncation_order=truncation_order, period=[1.0, 1.0], wavelength=wl, thickness=[d], structure=structure)
     kx, ky = solver.order_kxy()
     theta, inc = complex(solver.theta), solver._incidence_pair()
 
     def chain(u, kx_, ky_, th_, inc_):
-        epx, epy, epxy, epyx, epz = core_nvf(u, max_order[0], max_order[1], normal_field=normal_field)
+        epx, epy, epxy, epyx, epz = core_nvf(u, truncation_order[0], truncation_order[1], normal_field=normal_field)
         _, ti = solve_2d(wl, kx_, ky_, n_top, n_bot, th_, inc_, [d], epx, epy, epz,
                          epxy_conv_all=epxy, epyx_conv_all=epyx, phi=solver.phi)
         return ti
@@ -490,18 +490,18 @@ def test_cfs_end_to_end_gradient_wrt_structure():
 
     structure = np.array([[[9., 9., 9., 1., 1., 1.]]])
     direction = np.ones_like(structure)
-    max_order = [6, 0]
+    truncation_order = [6, 0]
     wl, n_top, n_bot, d = 0.777, 2.0, 1.0, 0.15      # indices: `solve_1d` takes them below
     compression = [compression_indices(structure[i]) for i in range(structure.shape[0])]
 
     solver = wavebit.rcwa(backend=0, top=n_top ** 2, bot=n_bot ** 2, theta=0.3, phi=None,
                           psi=np.pi / 2,
-                          max_order=max_order, period=[0.77], wavelength=wl, thickness=[d], structure=structure)
+                          truncation_order=truncation_order, period=[0.77], wavelength=wl, thickness=[d], structure=structure)
     kx, _ = solver.order_kxy()
     theta = complex(solver.theta)
 
     def chain(u, kx_):
-        epx, epy, epz, *_ = core_cfs(u, max_order[0], max_order[1], compression=compression)
+        epx, epy, epz, *_ = core_cfs(u, truncation_order[0], truncation_order[1], compression=compression)
         _, ti = solve_1d(0, wl, kx_, n_top, n_bot, theta, [d], epx, epy, epz)
         return ti
 
@@ -531,9 +531,9 @@ def _transpose_symmetric_L(N=48):
     return u[None, :, :]
 
 
-def _transmission_map(structure, factorization, max_order, psi):
+def _transmission_map(structure, factorization, truncation_order, psi):
     res = wavebit.rcwa(
-        backend=0, factorization=factorization, max_order=[max_order, max_order],
+        backend=0, factorization=factorization, truncation_order=[truncation_order, truncation_order],
         top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=psi,
         wavelength=1.3, period=[1.0, 1.0], thickness=[0.4], structure=structure).solve()
     t = np.asarray(res.T)
@@ -541,7 +541,7 @@ def _transmission_map(structure, factorization, max_order, psi):
     return t.reshape(n_orders, n_orders)
 
 
-def _relabelling_residue(factorization, max_order):
+def _relabelling_residue(factorization, truncation_order):
     """``max|T(psi=0) - T(psi=90)^T|`` on a transpose-symmetric structure at normal incidence.
 
     Swapping x and y maps that problem onto itself with the polarisation exchanged, so the
@@ -549,24 +549,24 @@ def _relabelling_residue(factorization, max_order):
     apart.
     """
     structure = _transpose_symmetric_L()
-    a = _transmission_map(structure, factorization, max_order, 0.0)
-    b = _transmission_map(structure, factorization, max_order, np.pi / 2)
+    a = _transmission_map(structure, factorization, truncation_order, 0.0)
+    b = _transmission_map(structure, factorization, truncation_order, np.pi / 2)
     return float(np.abs(a - b.T).max())
 
 
-@pytest.mark.parametrize('max_order', [4, 6])
-def test_nvf_does_not_tell_x_and_y_apart(max_order):
+@pytest.mark.parametrize('truncation_order', [4, 6])
+def test_nvf_does_not_tell_x_and_y_apart(truncation_order):
     """NVF chooses no nesting order, so the relabelling symmetry is exact.
 
     This is the invariant; the ``li`` test below is the record of what it costs not to have
     it. Both were unpinned until 2026-08-12 -- see ``docs/factorization-terms.md`` §6.
     """
-    resid = _relabelling_residue('nvf', max_order)
+    resid = _relabelling_residue('nvf', truncation_order)
     assert resid < 1e-11, f'nvf broke the x<->y relabelling symmetry by {resid:.2e}'
 
 
-@pytest.mark.parametrize('max_order', [4, 6])
-def test_li_tells_x_and_y_apart_and_this_is_expected(max_order):
+@pytest.mark.parametrize('truncation_order', [4, 6])
+def test_li_tells_x_and_y_apart_and_this_is_expected(truncation_order):
     """Li's nested rule fixes one axis inside the other, so it does *not* hold the symmetry.
 
     Intrinsic to the crossed-grating scheme rather than a defect here -- Liu & Fan name it in
@@ -578,7 +578,7 @@ def test_li_tells_x_and_y_apart_and_this_is_expected(max_order):
     it. Energy conservation sees none of this: the whole residue appears as a difference in
     total transmitted power between two polarisations that ought to agree.
     """
-    resid = _relabelling_residue('li', max_order)
+    resid = _relabelling_residue('li', truncation_order)
     assert 1e-4 < resid < 5e-2, (
         f'li relabelling residue {resid:.2e} left the band this test records; if the nesting '
         f'genuinely changed, docs/factorization-terms.md §6 needs the new numbers')
@@ -596,7 +596,7 @@ def test_li_tells_x_and_y_apart_and_this_is_expected(max_order):
 # tensors with no raster and no period pair at all.
 #
 # What follows turns the scene where all four moving parts are live: oblique incidence, unequal
-# periods, unequal max_order, and a chiral cell.
+# periods, unequal truncation_order, and a chiral cell.
 
 def _chiral_L(N=80, eps_hi=5.76):                   # 2.4**2
     """An L with unequal arms -- no mirror axis, and not equal to its own transpose.
@@ -627,27 +627,27 @@ _TURN_THETA = np.deg2rad(25.0)
 _TURN_PSI = np.deg2rad(37.0)
 
 
-def _turn_scene(structure, period, max_order, phi, psi, factorization='nvf'):
-    """One solve of the turnable scene. Returns ``(R, T, max_order)`` -- see :func:`_by_order`."""
+def _turn_scene(structure, period, truncation_order, phi, psi, factorization='nvf'):
+    """One solve of the turnable scene. Returns ``(R, T, truncation_order)`` -- see :func:`_by_order`."""
     res = wavebit.rcwa(
-        backend=0, factorization=factorization, max_order=[int(max_order[0]), int(max_order[1])],
+        backend=0, factorization=factorization, truncation_order=[int(truncation_order[0]), int(truncation_order[1])],
         top=1.0, bot=1.0, theta=_TURN_THETA, phi=phi, psi=psi,
         wavelength=_TURN_WAVELENGTH, period=[period[0], period[1]], thickness=[120.0],
         structure=structure).solve()
-    return np.asarray(res.R), np.asarray(res.T), (int(max_order[0]), int(max_order[1]))
+    return np.asarray(res.R), np.asarray(res.T), (int(truncation_order[0]), int(truncation_order[1]))
 
 
 def _by_order(scene):
     """``{(m, n): (R, T)}`` -- keyed by the diffraction order, not by array position.
 
     Two of the four moving parts below change the *shape* of the returned grids (swapping the
-    ``max_order`` pair transposes it; relabelling the orders is the map onto it), so a comparison
+    ``truncation_order`` pair transposes it; relabelling the orders is the map onto it), so a comparison
     written as array arithmetic either cannot be expressed or silently compares the wrong
     entries. Keying by ``(m, n)`` states which physical order is being matched to which and
     leaves the shape out of it.
 
     ``R`` and ``T`` are ``(n_orders_y, n_orders_x)`` with the incident order at the centre -- the transpose
-    of the ``max_order=[x, y]`` input order, which is itself one of the swaps under test.
+    of the ``truncation_order=[x, y]`` input order, which is itself one of the swaps under test.
     """
     R, T, (max_order_x, max_order_y) = scene
     return {(m, n): (R[max_order_y + n, max_order_x + m], T[max_order_y + n, max_order_x + m])
@@ -683,8 +683,8 @@ def test_the_turned_scene_is_a_scene_that_can_actually_see_the_turn():
         f'close to the degenerate one to distinguish the order maps')
 
 
-@pytest.mark.parametrize('max_order', [[5, 3], [8, 6], [11, 9]])
-def test_nvf_is_covariant_when_the_whole_scene_is_turned(max_order):
+@pytest.mark.parametrize('truncation_order', [[5, 3], [8, 6], [11, 9]])
+def test_nvf_is_covariant_when_the_whole_scene_is_turned(truncation_order):
     """A layer at ``phi=90`` equals its turned counterpart at ``phi=0`` -- exactly, on nvf.
 
     A theorem-oracle: it needs no reference implementation, only the same physics set up twice.
@@ -707,7 +707,7 @@ def test_nvf_is_covariant_when_the_whole_scene_is_turned(max_order):
     a regression that moved only one of them would mean the decomposition itself needs re-deriving,
     and that is the case no single test can report.
 
-    Measured on the shipped path over N in {40, 80, 160} x max_order in {4..12} x three
+    Measured on the shipped path over N in {40, 80, 160} x truncation_order in {4..12} x three
     (theta, psi) pairs: 8.6e-16 to 2.7e-13, so 1e-12 keeps roughly two decades of headroom at
     the configurations parametrized here and about 4x at the worst corner of that wider sweep.
     Exact on all three backends (numpy 1.4e-15, jax 1.8e-15, torch 3.3e-15) -- torch used to
@@ -727,8 +727,8 @@ def test_nvf_is_covariant_when_the_whole_scene_is_turned(max_order):
     parametrizations below.
     """
     structure = _chiral_L()
-    upright = _turn_scene(structure, _TURN_PERIOD, max_order, np.deg2rad(90.0), _TURN_PSI)
-    turned = _turn_scene(structure.transpose(0, 2, 1), _TURN_PERIOD[::-1], max_order[::-1],
+    upright = _turn_scene(structure, _TURN_PERIOD, truncation_order, np.deg2rad(90.0), _TURN_PSI)
+    turned = _turn_scene(structure.transpose(0, 2, 1), _TURN_PERIOD[::-1], truncation_order[::-1],
                          0.0, -_TURN_PSI)
     resid = _residue(upright, turned, _SWAP)
     assert resid < 1e-12, f'nvf is not covariant under a turn of the whole scene: {resid:.2e}'
@@ -740,11 +740,11 @@ def test_every_part_of_the_turn_is_load_bearing():
     This is what keeps the test above from passing for the wrong reason. A covariance check is
     only as strong as the transformation it applies, and three of these four are the kind of
     thing that is easy to leave out and easy not to notice: on a square period the period swap
-    is a no-op, on an equal ``max_order`` pair so is that swap, and on a mirror-symmetric cell the
+    is a no-op, on an equal ``truncation_order`` pair so is that swap, and on a mirror-symmetric cell the
     ``psi`` sign is free. Every one of them is a no-op in the three tests this file's header
     block names, which is why none of them could see a turn go wrong.
 
-    The measured cost of each omission, at ``max_order=[5, 3]``, N=80 -- all of them four to fourteen
+    The measured cost of each omission, at ``truncation_order=[5, 3]``, N=80 -- all of them four to fourteen
     orders of magnitude above the 1e-12 the full recipe meets.
     """
     structure = _chiral_L()
@@ -755,8 +755,8 @@ def test_every_part_of_the_turn_is_load_bearing():
         # period pair left unswapped -- the turned cell solved in the upright cell's box
         'period': (_residue(upright, _turn_scene(
             turned_cell, _TURN_PERIOD, _TURN_MAX_ORDER[::-1], 0.0, -_TURN_PSI), _SWAP), 1.2e-1),
-        # max_order pair left unswapped -- the orders retained along the wrong axis
-        'max_order': (_residue(upright, _turn_scene(
+        # truncation_order pair left unswapped -- the orders retained along the wrong axis
+        'truncation_order': (_residue(upright, _turn_scene(
             turned_cell, _TURN_PERIOD[::-1], _TURN_MAX_ORDER, 0.0, -_TURN_PSI), _SWAP), 2.8e-2),
         # psi left unnegated -- the reflection's s-flip dropped
         'psi': (_residue(upright, _turn_scene(
@@ -777,8 +777,8 @@ def test_every_part_of_the_turn_is_load_bearing():
 
 
 @pytest.mark.parametrize('factorization', ['li', 'nvf'])
-@pytest.mark.parametrize('max_order', [[4, 2], [6, 4], [8, 6]])
-def test_a_y_mirror_is_exact_on_both_factorizations(max_order, factorization):
+@pytest.mark.parametrize('truncation_order', [[4, 2], [6, 4], [8, 6]])
+def test_a_y_mirror_is_exact_on_both_factorizations(truncation_order, factorization):
     """Flip the cell in y and the polarisation with it; at ``phi=0`` the orders must flip too.
 
     ``phi=0`` because the x-z plane of incidence is what a y-mirror leaves invariant. Note this
@@ -797,23 +797,23 @@ def test_a_y_mirror_is_exact_on_both_factorizations(max_order, factorization):
     an O(1/N) asymmetry. Fixed 2026-08-16 by giving the sampled path the same phase and not the
     ``sinc`` (:func:`~wavebit._core.factorization._half_pixel_phase`); ``nvf`` now runs
     1.8e-15 to 1.6e-14 here, and ``|nvf - li|`` at matched truncation improved in all six
-    resolutions measured -- roughly 1.5x to 2x at ``max_order=10``.
+    resolutions measured -- roughly 1.5x to 2x at ``truncation_order=10``.
 
     **Nothing the suite already had could see it**, which is why it survived the whole rewrite:
     energy conservation, the projector identity ``C_xx + C_yy = I``, the x<->y relabelling, and
     every golden are all even in the half-pixel offset. It took a mirror on a chiral cell.
     """
     structure = _chiral_L()
-    upright = _turn_scene(structure, _TURN_PERIOD, max_order, 0.0, +_TURN_PSI,
+    upright = _turn_scene(structure, _TURN_PERIOD, truncation_order, 0.0, +_TURN_PSI,
                           factorization=factorization)
-    mirrored = _turn_scene(np.flip(structure, axis=1), _TURN_PERIOD, max_order, 0.0, -_TURN_PSI,
+    mirrored = _turn_scene(np.flip(structure, axis=1), _TURN_PERIOD, truncation_order, 0.0, -_TURN_PSI,
                            factorization=factorization)
     resid = _residue(upright, mirrored, _MIRROR_Y)
     assert resid < 1e-12, f'{factorization} broke a y-mirror by {resid:.2e}'
 
 
-@pytest.mark.parametrize('max_order', [[5, 3], [8, 6], [11, 9]])
-def test_a_plain_quarter_turn_of_the_whole_scene_is_exact(max_order):
+@pytest.mark.parametrize('truncation_order', [[5, 3], [8, 6], [11, 9]])
+def test_a_plain_quarter_turn_of_the_whole_scene_is_exact(truncation_order):
     """The theorem as it would be stated: turn the scene a quarter turn, the answer follows.
 
     This is the natural form -- an actual ``np.rot90``, with ``psi`` untouched because a rotation
@@ -821,7 +821,7 @@ def test_a_plain_quarter_turn_of_the_whole_scene_is_exact(max_order):
     a *decomposition* of the same turn, kept because of what it isolates, not because it is the
     statement anybody means.
 
-    The period and max_order pairs swap here exactly as they do there. That is not a property of either
+    The period and truncation_order pairs swap here exactly as they do there. That is not a property of either
     spelling: a quarter turn exchanges the axes, so a 500x800 box becomes 800x500 however the
     raster is written, and omitting the swap costs 1.2e-01 on both.
 
@@ -848,8 +848,8 @@ def test_a_plain_quarter_turn_of_the_whole_scene_is_exact(max_order):
     Measured 1.6e-15 to 3.7e-14 across the truncations parametrized here.
     """
     structure = _chiral_L()
-    upright = _turn_scene(structure, _TURN_PERIOD, max_order, np.deg2rad(90.0), _TURN_PSI)
-    turned = _turn_scene(np.rot90(structure, 1, axes=(1, 2)), _TURN_PERIOD[::-1], max_order[::-1],
+    upright = _turn_scene(structure, _TURN_PERIOD, truncation_order, np.deg2rad(90.0), _TURN_PSI)
+    turned = _turn_scene(np.rot90(structure, 1, axes=(1, 2)), _TURN_PERIOD[::-1], truncation_order[::-1],
                          0.0, _TURN_PSI)                      # psi kept: a rotation, not a mirror
     resid = _residue(upright, turned, lambda m, n: (n, -m))
     assert resid < 1e-12, (

@@ -18,7 +18,7 @@ import wavebit
 
 P = 1.0
 BASE = dict(period=[P, P], thickness=[0.4], wavelength=0.8, theta=0.0, phi=0.0,
-            top=1.0, bot=2.25, max_order=[4, 4])
+            top=1.0, bot=2.25, truncation_order=[4, 4])
 CIRCLE = dict(type='circle', cx=0.5, cy=0.5, lx=0.6, material=9.0)   # eps 9 is the old n = 3
 
 
@@ -70,7 +70,7 @@ def test_it_does_not_solve():
     """Cheaper than solve by the whole eigenproblem — otherwise there is no reason to have
     it separately, and a sweep over geometries would pay for a solve it discards."""
     import time
-    solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **dict(BASE, max_order=[8, 8]))
+    solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **dict(BASE, truncation_order=[8, 8]))
     solver.eps_conv_matrices(), solver.solve()             # warm
 
     t = time.perf_counter()

@@ -74,7 +74,7 @@ def _reconstruct(name, theta, pol):
     """
     structure = raster(name)[None, :, :]
     solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, period=(PERIOD, PERIOD),
-                          max_order=(MAX_ORDER, MAX_ORDER), wavelength=WL, thickness=[THICK],
+                          truncation_order=(MAX_ORDER, MAX_ORDER), wavelength=WL, thickness=[THICK],
                           structure=structure, theta=np.deg2rad(theta), phi=0.0,
                           psi=np.pi / 2 if pol == 's' else 0.0, answers='field')
     solver.solve()

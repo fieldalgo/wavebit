@@ -14,7 +14,7 @@ energy on a lossless stack, and the two connecting algorithms against each other
 
 What is *not* tested here is that a superposition is more accurate than solving beam by beam —
 it is not. Measured at two and three beams across seven basis sizes, neither is systematically
-better; the truncation error of each dominates their difference from `max_order` 8 up. The gain
+better; the truncation error of each dominates their difference from `truncation_order` 8 up. The gain
 is the solve count.
 """
 import numpy as np
@@ -25,7 +25,7 @@ import wavebit
 WL, PERIOD, THICK = 600.0, 2000.0, [220.0, 130.0]
 #: `lambda/period = 0.3`, so orders -3..+3 are all inside the light line at this angle --
 #: which is what makes a three-beam excitation legal here at all (see the refusal below).
-COMMON = dict(backend=0, max_order=(6, 0), period=(PERIOD, PERIOD), wavelength=WL,
+COMMON = dict(backend=0, truncation_order=(6, 0), period=(PERIOD, PERIOD), wavelength=WL,
               theta=0.25, thickness=THICK, top=1.0, bot=2.25, answers='amplitude')
 BEAMS = {-1: 0.4 + 0.2j, 0: 1.0, 1: 0.6 - 0.8j}
 #: Deliberately *not* symmetric about the specular order, so the widened window's centre is
@@ -52,7 +52,7 @@ def _solve(excitation=None, algo='ETM', phi=None, tetm='te', **over):
 def _column(solver, excitation):
     """The incident column, on whatever window the solver actually retained.
 
-    Not `order + max_order`: an excitation widens the window and can move its centre, so the
+    Not `order + truncation_order`: an excitation widens the window and can move its centre, so the
     position of order `m` is `m - centre + half_width`. Reading it off the solver rather than
     recomputing it is what keeps this an oracle instead of a second implementation.
     """
@@ -151,7 +151,7 @@ def test_declaring_nothing_leaves_the_solve_byte_for_byte_what_it_was():
 def test_the_result_indexes_by_order_on_a_widened_window():
     """``order(m)`` reads the array, so it has to describe the array and not the declaration.
 
-    The window widens past the declared ``max_order``, which means the array grows and order 0
+    The window widens past the declared ``truncation_order``, which means the array grows and order 0
     stops sitting at its middle. A ``Result`` carrying the *declared* half-width then indexed
     one order out -- and returned a plausible number rather than raising, which is the shape of
     defect this repo hunts. Checked against the raw array, which is the only thing that cannot
@@ -159,8 +159,8 @@ def test_the_result_indexes_by_order_on_a_widened_window():
     """
     solver, result = _solve(OFF_CENTRE)
     (centre, half), _ = solver.order_window
-    assert result.max_order[0] == half and result.centre[0] == centre
-    assert half > COMMON['max_order'][0]                 # the window really did widen
+    assert result.order_window[0] == (centre, half)
+    assert half > COMMON['truncation_order'][0]                 # the window really did widen
     assert centre != 0                                   # ...and it is not centred on 0
 
     raw = np.asarray(result.given.R).ravel()
@@ -196,9 +196,9 @@ def test_lighting_an_evanescent_order_is_refused():
 def test_lighting_an_order_outside_the_declared_max_order_is_refused():
     """The window widens around the lit orders, so this rule is what bounds the widening.
 
-    Without it, `{0: 1.0, 9: 0.5}` at `max_order=6` would not be an error at all -- it would
+    Without it, `{0: 1.0, 9: 0.5}` at `truncation_order=6` would not be an error at all -- it would
     quietly retain `[-6, 15]`, twenty-two orders where six were asked for. Refusing keeps
-    `max_order` meaning the orders being modelled, and caps the widening at twice its
+    `truncation_order` meaning the orders being modelled, and caps the widening at twice its
     half-width.
     """
     with pytest.raises(ValueError, match='outside the declared'):
@@ -206,7 +206,7 @@ def test_lighting_an_order_outside_the_declared_max_order_is_refused():
 
 
 def test_an_out_of_plane_order_on_a_one_dimensional_solve_is_refused():
-    """``max_order[1] == 0`` keeps the single ``n = 0`` order, so ``(0, 1)`` names nothing."""
+    """``truncation_order[1] == 0`` keeps the single ``n = 0`` order, so ``(0, 1)`` names nothing."""
     with pytest.raises(ValueError, match='n = 0'):
         _solve({(0, 0): 1.0, (0, 1): 0.5})
 

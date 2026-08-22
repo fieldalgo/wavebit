@@ -29,10 +29,10 @@ the difference matters more than any of them:
 
 | § | solve path | structure | patterned? | varies | held |
 |---|---|---|---|---|---|
-| 3 | 2ff | square pillar array, `n = 2.6` in air | **yes** | max_order 3–7, 1–12 layers | 17°/31°, 200 nm |
+| 3 | 2ff | square pillar array, `n = 2.6` in air | **yes** | truncation_order 3–7, 1–12 layers | 17°/31°, 200 nm |
 | 4 | 4ff | uniform slab, `n = 1.5 + 0.1j` | no | thickness 1 µm – 10 mm | 35°, one order |
-| 5 | 4ff | uniform slab, `n = 1.5` | no | max_order 0–4 | 35°/40°, 220 nm |
-| 5 | 2ff | pillar array **and** uniform slabs | **both** | max_order 1–5 | 35°/40°, 220 nm |
+| 5 | 4ff | uniform slab, `n = 1.5` | no | truncation_order 0–4 | 35°/40°, 220 nm |
+| 5 | 2ff | pillar array **and** uniform slabs | **both** | truncation_order 1–5 | 35°/40°, 220 nm |
 | 6 | 4ff | Voigt + rotated-uniaxial stack | no | 2–160 layers | 35°, one order |
 
 The 4ff rows are unpatterned throughout, and not by choice: **a patterned anisotropic layer has no
@@ -118,7 +118,7 @@ growth is the physics rather than an artefact, and nothing guards it.
 A square pillar array, `top = 1.0`, `bot = 2.1025` (vacuum over an `n = 1.45` substrate), 17°
 at azimuth 31°, four 200 nm layers unless noted:
 
-| max_order | orders | layers | \|ETM − SMM\| | R + T | ETM | SMM | SMM/ETM |
+| truncation_order | orders | layers | \|ETM − SMM\| | R + T | ETM | SMM | SMM/ETM |
 |---|---|---|---|---|---|---|---|
 | 3 | 49 | 4 | 7.8e-15 | 1.000000000 | 50 ms | 69 ms | 1.37 |
 | 5 | 121 | 4 | 3.8e-15 | 1.000000000 | 232 ms | 364 ms | 1.57 |
@@ -163,7 +163,7 @@ value, reproduced to 4e-16.
 Diffraction orders above the light line are evanescent, and their modal exponent grows with the
 order index **whatever the layer thickness**. On a 220 nm slab of `n = 1.5`:
 
-| max_order | orders | max exponent | ETM | SMM | plain | ETM | SMM |
+| truncation_order | orders | max exponent | ETM | SMM | plain | ETM | SMM |
 |---|---|---|---|---|---|---|---|
 | (0,0) | 1 | 0.0 | — | 2e-16 | 4e-16 | 0.2 ms | 0.2 ms |
 | (1,1) | 9 | 7.0 | 4e-15 | 4e-15 | 4e-15 | 0.8 ms | 1.0 ms |
@@ -180,7 +180,7 @@ path does have gratings, and its modes go as `exp(-k0 q d)`, so the same exponen
 readable there. Measured on a square pillar array (`n = 2.6` in air, 220 nm) beside uniform slabs
 of each index:
 
-| max_order | orders | uniform n=1.5 | uniform n=2.6 | pillar array |
+| truncation_order | orders | uniform n=1.5 | uniform n=2.6 | pillar array |
 |---|---|---|---|---|
 | 1 | 9 | 7.0 | 5.0 | 7.3 |
 | 2 | 25 | 13.9 | 13.0 | **14.1** |
@@ -191,7 +191,7 @@ Patterning barely moves it, and neither does nearly doubling the index. The orde
 a high order's decay rate is set by its `kx`, which the period and wavelength fix and the material
 does not. So the uniform measurement does carry over — that is now measured rather than assumed.
 
-`max_order = (2, 2)` is a *small* calculation. So the plain transfer is not "weak on thick stacks" — it
+`truncation_order = (2, 2)` is a *small* calculation. So the plain transfer is not "weak on thick stacks" — it
 cannot run a real problem, and that is the historical reason RCWA needed the enhanced form
 (Moharam et al. 1995) rather than a preference between two equivalent recursions.
 

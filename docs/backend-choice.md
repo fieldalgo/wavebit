@@ -35,9 +35,9 @@ the speed of a wrong answer.
 
 ## TL;DR
 
-- **Below `max_order≈5`, PyTorch wins outright.** JAX's compilation never pays itself back, and
+- **Below `truncation_order≈5`, PyTorch wins outright.** JAX's compilation never pays itself back, and
   `jax jit` with a re-freeze each step is *slower* than eager PyTorch.
-- **From `max_order≈7` up, `jax jit` is roughly 2x PyTorch** and repays its compilation in under a
+- **From `truncation_order≈7` up, `jax jit` is roughly 2x PyTorch** and repays its compilation in under a
   dozen steps.
 - **`jax eager` is rarely the right answer on speed.** It is 2-11x slower than PyTorch at
   small scale and level with it at large scale. Its value is elsewhere: it is the mode with no
@@ -46,8 +46,8 @@ the speed of a wrong answer.
   block record compares by content, so an unchanged structure reuses its compilation; the
   raster records hold arrays, fall back to identity, and recompile every step.
 - **All three strategies now cost the same.** NVF used to grow with the raster — 359 ms of
-  freeze against a 277 ms step at `N=128, max_order=5` — because its normal field was taken on a
-  grid `4*max_order+1` times finer per axis. That is gone ([`nvf-upsampling.md`](nvf-upsampling.md));
+  freeze against a 277 ms step at `N=128, truncation_order=5` — because its normal field was taken on a
+  grid `4*truncation_order+1` times finer per axis. That is gone ([`nvf-upsampling.md`](nvf-upsampling.md));
   its freeze is
   now under 2 ms and its step is level with the sampled path.
 
@@ -61,22 +61,22 @@ angle and pitch. Times are ms per step.
 
 | config | torch | jax eager | jit (one freeze) | jit (re-freeze) | compile | freeze |
 |---|---|---|---|---|---|---|
-| max_order=3, split=4, L=1 | 26 | 110 | 17 | 21 | 1653 | 4 |
-| max_order=3, split=12, L=1 | 22 | 169 | 17 | 29 | 1839 | 12 |
-| max_order=3, split=20, L=1 | 25 | 251 | 17 | 40 | 2007 | 23 |
-| max_order=5, split=4, L=1 | 132 | 180 | 82 | 86 | 1703 | 4 |
-| max_order=5, split=12, L=1 | 130 | 242 | 87 | 92 | 1840 | 12 |
-| max_order=5, split=20, L=1 | 133 | 322 | 81 | 103 | 2015 | 22 |
-| max_order=5, split=12, L=3 | 341 | 648 | 124 | 160 | 2717 | 35 |
-| max_order=7, split=4, L=1 | 554 | 521 | 376 | 381 | 2008 | 4 |
-| max_order=7, split=12, L=1 | 589 | 575 | 379 | 387 | 2227 | 13 |
-| max_order=7, split=20, L=1 | 583 | 647 | 372 | 397 | 2374 | 23 |
-| max_order=7, split=12, L=3 | 1342 | 1545 | 608 | 637 | 3150 | 34 |
-| max_order=7, split=20, L=3 | 1423 | 1803 | 600 | 676 | 3483 | 70 |
-| max_order=9, split=12, L=1 | 1886 | 1727 | 1350 | 1369 | 3314 | 12 |
-| max_order=9, split=20, L=1 | 1917 | 1785 | 1336 | 1364 | 3378 | 23 |
-| max_order=9, split=20, L=3 | 4408 | 4757 | 2375 | 2466 | 5408 | 68 |
-| max_order=11, split=20, L=3 | 13594 | 12652 | 7112 | 6985 | 10086 | 77 |
+| truncation_order=3, split=4, L=1 | 26 | 110 | 17 | 21 | 1653 | 4 |
+| truncation_order=3, split=12, L=1 | 22 | 169 | 17 | 29 | 1839 | 12 |
+| truncation_order=3, split=20, L=1 | 25 | 251 | 17 | 40 | 2007 | 23 |
+| truncation_order=5, split=4, L=1 | 132 | 180 | 82 | 86 | 1703 | 4 |
+| truncation_order=5, split=12, L=1 | 130 | 242 | 87 | 92 | 1840 | 12 |
+| truncation_order=5, split=20, L=1 | 133 | 322 | 81 | 103 | 2015 | 22 |
+| truncation_order=5, split=12, L=3 | 341 | 648 | 124 | 160 | 2717 | 35 |
+| truncation_order=7, split=4, L=1 | 554 | 521 | 376 | 381 | 2008 | 4 |
+| truncation_order=7, split=12, L=1 | 589 | 575 | 379 | 387 | 2227 | 13 |
+| truncation_order=7, split=20, L=1 | 583 | 647 | 372 | 397 | 2374 | 23 |
+| truncation_order=7, split=12, L=3 | 1342 | 1545 | 608 | 637 | 3150 | 34 |
+| truncation_order=7, split=20, L=3 | 1423 | 1803 | 600 | 676 | 3483 | 70 |
+| truncation_order=9, split=12, L=1 | 1886 | 1727 | 1350 | 1369 | 3314 | 12 |
+| truncation_order=9, split=20, L=1 | 1917 | 1785 | 1336 | 1364 | 3378 | 23 |
+| truncation_order=9, split=20, L=3 | 4408 | 4757 | 2375 | 2466 | 5408 | 68 |
+| truncation_order=11, split=20, L=3 | 13594 | 12652 | 7112 | 6985 | 10086 | 77 |
 
 **Read one table at a time.** Nothing is timed until a 45 s warm-up has run, and the sweep
 times one fixed configuration three times to state its own repeatability:
@@ -108,23 +108,23 @@ Break-even against PyTorch, counting the compile a fit must amortise:
 
 | config | torch − jit(re-freeze) | compile | steps to break even |
 |---|---|---|---|
-| max_order=3, split=4 | +5 ms | 1653 | 331 |
-| max_order=3, split=12 | −7 ms | 1839 | **never** |
-| max_order=3, split=20 | −15 ms | 2007 | **never** |
-| max_order=5, split=4 | +46 ms | 1703 | 37 |
-| max_order=5, split=12 | +38 ms | 1840 | 48 |
-| max_order=5, split=20 | +30 ms | 2015 | 67 |
-| max_order=5, split=12, L=3 | +181 ms | 2717 | 15 |
-| max_order=7, split=4 | +173 ms | 2008 | 12 |
-| max_order=7, split=12, L=3 | +705 ms | 3150 | 4 |
-| max_order=9, split=20, L=3 | +1942 ms | 5408 | 3 |
-| max_order=11, split=20, L=3 | +6609 ms | 10086 | 2 |
+| truncation_order=3, split=4 | +5 ms | 1653 | 331 |
+| truncation_order=3, split=12 | −7 ms | 1839 | **never** |
+| truncation_order=3, split=20 | −15 ms | 2007 | **never** |
+| truncation_order=5, split=4 | +46 ms | 1703 | 37 |
+| truncation_order=5, split=12 | +38 ms | 1840 | 48 |
+| truncation_order=5, split=20 | +30 ms | 2015 | 67 |
+| truncation_order=5, split=12, L=3 | +181 ms | 2717 | 15 |
+| truncation_order=7, split=4 | +173 ms | 2008 | 12 |
+| truncation_order=7, split=12, L=3 | +705 ms | 3150 | 4 |
+| truncation_order=9, split=20, L=3 | +1942 ms | 5408 | 3 |
+| truncation_order=11, split=20, L=3 | +6609 ms | 10086 | 2 |
 
-The `max_order=3` rows sit inside the 1.18x drift the probe measured, so read them as "no
+The `truncation_order=3` rows sit inside the 1.18x drift the probe measured, so read them as "no
 difference worth compiling for" rather than as a sign.
 
-At `max_order=3` the modeling dominates; at `max_order≥7` the eigen-solve does. `n_split` matters much
-less than `max_order`: it moves the freeze cost, not the solve.
+At `truncation_order=3` the modeling dominates; at `truncation_order≥7` the eigen-solve does. `n_split` matters much
+less than `truncation_order`: it moves the freeze cost, not the solve.
 
 ### Why `jax eager` loses, and where it stops losing
 
@@ -133,12 +133,12 @@ large linear algebra call) locates all of it:
 
 | | modeling | solve | blocks |
 |---|---|---|---|
-| max_order=3, split=4 — torch | 0.4 ms | 12.3 ms | 54 |
-| max_order=3, split=4 — jax | **4.0 ms** | 23.0 ms | 54 |
-| max_order=3, split=20 — torch | 2.8 ms | 13.4 ms | 902 |
-| max_order=3, split=20 — jax | **24.3 ms** | 22.0 ms | 902 |
-| max_order=11, split=20 — torch | 2.8 ms | 3512 ms | 902 |
-| max_order=11, split=20 — jax | 27.3 ms | **2543 ms** | 902 |
+| truncation_order=3, split=4 — torch | 0.4 ms | 12.3 ms | 54 |
+| truncation_order=3, split=4 — jax | **4.0 ms** | 23.0 ms | 54 |
+| truncation_order=3, split=20 — torch | 2.8 ms | 13.4 ms | 902 |
+| truncation_order=3, split=20 — jax | **24.3 ms** | 22.0 ms | 902 |
+| truncation_order=11, split=20 — torch | 2.8 ms | 3512 ms | 902 |
+| truncation_order=11, split=20 — jax | 27.3 ms | **2543 ms** | 902 |
 
 JAX is ~9x slower on the modeling step at every size, because JAX has no true eager mode:
 every operation goes through its own dispatch, and the block modeler emits one small array
@@ -147,8 +147,8 @@ JAX's does not. Taking a gradient widens it further (forward alone is 46 ms agai
 `jax.grad` it is 250 against 22), since each primitive is then traced through JVP and partial
 evaluation.
 
-The solve is the other way around: from `max_order=7` up, JAX is *faster* there (2543 ms against
-3512 at `max_order=11`). So `jax eager` catching up at high `max_order` is not the eager path improving —
+The solve is the other way around: from `truncation_order=7` up, JAX is *faster* there (2543 ms against
+3512 at `truncation_order=11`). So `jax eager` catching up at high `truncation_order` is not the eager path improving —
 it is the part where it loses shrinking to nothing as one 1250x1250 eigendecomposition comes
 to dominate.
 
@@ -174,30 +174,30 @@ strategies.
 
 | config | torch | jax eager | jit (one freeze) | jit (re-freeze) | compile | freeze |
 |---|---|---|---|---|---|---|
-| N=16, max_order=3, sampled | 18 | 67 | 16 | 16 | 700 | 0 |
-| N=16, max_order=3, integrated | 18 | 70 | 16 | 626 | 917 | 0 |
-| N=16, max_order=3, NVF | 18 | 70 | 16 | 527 | 709 | 0 |
-| N=32, max_order=3, sampled | 19 | 66 | 15 | 15 | 695 | 0 |
-| N=32, max_order=3, integrated | 19 | 77 | 15 | 639 | 929 | 0 |
-| N=32, max_order=3, NVF | 20 | 73 | 17 | 561 | 683 | 0 |
-| N=32, max_order=5, sampled | 140 | 146 | 85 | 86 | 792 | 0 |
-| N=32, max_order=5, integrated | 138 | 150 | 84 | 733 | 975 | 0 |
-| N=32, max_order=5, NVF | 136 | 147 | 83 | 585 | 727 | 0 |
-| N=64, max_order=3, sampled | 18 | 67 | 15 | 15 | 688 | 0 |
-| N=64, max_order=3, integrated | 20 | 72 | 15 | 613 | 933 | 0 |
-| N=64, max_order=3, NVF | 21 | 73 | 16 | 547 | 727 | 1 |
-| N=64, max_order=5, sampled | 131 | 140 | 80 | 80 | 771 | 0 |
-| N=64, max_order=5, integrated | 138 | 153 | 132 | 1032 | 1050 | 0 |
-| N=64, max_order=5, NVF | 142 | 157 | 93 | 659 | 895 | 1 |
-| N=64, max_order=7, sampled | 641 | 559 | 416 | 425 | 1340 | 0 |
-| N=64, max_order=7, integrated | 613 | 550 | 399 | 1026 | 1322 | 0 |
-| N=64, max_order=7, NVF | 595 | 514 | 399 | 1006 | 1208 | 1 |
-| N=128, max_order=3, sampled | 19 | 70 | 16 | 16 | 718 | 0 |
-| N=128, max_order=3, integrated | 24 | 74 | 17 | 649 | 946 | 1 |
-| N=128, max_order=3, NVF | 21 | 79 | 18 | 608 | 838 | 1 |
-| N=128, max_order=5, sampled | 140 | 150 | 84 | 85 | 843 | 0 |
-| N=128, max_order=5, integrated | 143 | 157 | 87 | 799 | 996 | 0 |
-| N=128, max_order=5, NVF | 148 | 152 | 84 | 619 | 795 | 1 |
+| N=16, truncation_order=3, sampled | 18 | 67 | 16 | 16 | 700 | 0 |
+| N=16, truncation_order=3, integrated | 18 | 70 | 16 | 626 | 917 | 0 |
+| N=16, truncation_order=3, NVF | 18 | 70 | 16 | 527 | 709 | 0 |
+| N=32, truncation_order=3, sampled | 19 | 66 | 15 | 15 | 695 | 0 |
+| N=32, truncation_order=3, integrated | 19 | 77 | 15 | 639 | 929 | 0 |
+| N=32, truncation_order=3, NVF | 20 | 73 | 17 | 561 | 683 | 0 |
+| N=32, truncation_order=5, sampled | 140 | 146 | 85 | 86 | 792 | 0 |
+| N=32, truncation_order=5, integrated | 138 | 150 | 84 | 733 | 975 | 0 |
+| N=32, truncation_order=5, NVF | 136 | 147 | 83 | 585 | 727 | 0 |
+| N=64, truncation_order=3, sampled | 18 | 67 | 15 | 15 | 688 | 0 |
+| N=64, truncation_order=3, integrated | 20 | 72 | 15 | 613 | 933 | 0 |
+| N=64, truncation_order=3, NVF | 21 | 73 | 16 | 547 | 727 | 1 |
+| N=64, truncation_order=5, sampled | 131 | 140 | 80 | 80 | 771 | 0 |
+| N=64, truncation_order=5, integrated | 138 | 153 | 132 | 1032 | 1050 | 0 |
+| N=64, truncation_order=5, NVF | 142 | 157 | 93 | 659 | 895 | 1 |
+| N=64, truncation_order=7, sampled | 641 | 559 | 416 | 425 | 1340 | 0 |
+| N=64, truncation_order=7, integrated | 613 | 550 | 399 | 1026 | 1322 | 0 |
+| N=64, truncation_order=7, NVF | 595 | 514 | 399 | 1006 | 1208 | 1 |
+| N=128, truncation_order=3, sampled | 19 | 70 | 16 | 16 | 718 | 0 |
+| N=128, truncation_order=3, integrated | 24 | 74 | 17 | 649 | 946 | 1 |
+| N=128, truncation_order=3, NVF | 21 | 79 | 18 | 608 | 838 | 1 |
+| N=128, truncation_order=5, sampled | 140 | 150 | 84 | 85 | 843 | 0 |
+| N=128, truncation_order=5, integrated | 143 | 157 | 87 | 799 | 996 | 0 |
+| N=128, truncation_order=5, NVF | 148 | 152 | 84 | 619 | 795 | 1 |
 
 Four things this says.
 
@@ -230,8 +230,8 @@ raster path, which is what makes a fit whose pattern moves every step safe.
 **4. Nothing here separates the strategies on cost any more.** The sampled, integrated and
 NVF builds land within a
 few percent of each other at every size. NVF used to be the outlier, growing with `N` where the
-others were flat, because its distance transform ran on the `(4*max_order+1)*N` upsampled grid; it no
-longer upsamples, and its freeze fell from 359 ms to 1 ms at `N=128, max_order=5`. So the choice among
+others were flat, because its distance transform ran on the `(4*truncation_order+1)*N` upsampled grid; it no
+longer upsamples, and its freeze fell from 359 ms to 1 ms at `N=128, truncation_order=5`. So the choice among
 them is now about accuracy, which is what it should have been.
 
 ---
@@ -278,14 +278,14 @@ above the expected convergence point than at the centre of the search range.
 
 | situation | use |
 |---|---|
-| OCD fit, `max_order ≤ 5` | **torch** |
-| OCD fit, `max_order ≥ 7`, long run | **jax jit, re-freezing every step** |
+| OCD fit, `truncation_order ≤ 5` | **torch** |
+| OCD fit, `truncation_order ≥ 7`, long run | **jax jit, re-freezing every step** |
 | Raster inverse design, pattern moves every step | **`('sampled','li')`**, any backend |
 | Raster, integrated or NVF, pattern moves | **torch** (jit's re-freeze recompiles every step) |
 | Raster, integrated or NVF, pattern fixed | jax jit, one freeze |
 | Anything where a stale record would be silent | **torch**, or re-freeze on the block path |
 
-The general shape: **PyTorch is the default, and JAX earns its place at large `max_order` on the
+The general shape: **PyTorch is the default, and JAX earns its place at large `truncation_order` on the
 block path.** Where JAX is chosen there, re-freezing every step is now both the safe option
 and, within the freeze's own cost, the fast one.
 
@@ -298,7 +298,7 @@ and, within the freeze's own cost, the fast one.
   same direction, so neither the ratios nor the break-even table carries over on its own.
 - **PyTorch was measured eager, which is the only way it runs today.** `torch.compile` fails
   on every Wavebit path before torch 2.13, and once it works it measures 0.85–1.02x — see
-  `docs/torch-compile.md`, which also profiles why (97.9% of the runtime at `max_order=10` is inside
+  `docs/torch-compile.md`, which also profiles why (97.9% of the runtime at `truncation_order=10` is inside
   LAPACK/BLAS calls Inductor forwards verbatim). So `torch` here means eager torch, and that is
   not a limitation of the measurement.
 - **Single process, no batching.** Nothing here says how the modes behave under `vmap`, across
@@ -308,7 +308,7 @@ and, within the freeze's own cost, the fast one.
 - **Compile times are single observations** and vary by tens of percent between runs. The
   step times are medians of 3 after a warm-up.
 - The break-even tables assume a fit that holds its discrete description. A fit that reorders
-  block edges every step pays the compile every step, and no amount of `max_order` rescues that.
+  block edges every step pays the compile every step, and no amount of `truncation_order` rescues that.
 
 Reproduce with `python studies/benchmark_backends.py`. The run this document reports is
 checked in as `studies/results/backends.log`. A run also writes the same numbers as JSON

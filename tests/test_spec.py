@@ -25,8 +25,8 @@ from wavebit import JobSpec, Sweep, SpecError, Backend, Factorization, Material
 # version 3 moved the material numbers from refractive index to permittivity and an absent
 # version is the absence of a statement about which of the two these are. 12.25 is 3.5**2.
 BINARY_GRATING = {
-    'version': '4',
-    'numerics': {'backend': 'numpy', 'max_order': [10, 0]},
+    'version': '5',
+    'numerics': {'backend': 'numpy', 'truncation_order': [10, 0]},
     'stack': {
         'top': 1.0, 'bot': 2.25, 'period': [700.0],
         'layers': [{'thickness': 300.0, 'structure': [[1.0, 1.0, 12.25, 12.25]]}],
@@ -42,7 +42,7 @@ def test_run_matches_the_equivalent_rcwa_call():
     result = wavebit.run(BINARY_GRATING)
 
     reference = wavebit.rcwa(
-        backend=0, wavelength=900., period=[700.], max_order=[10, 0],
+        backend=0, wavelength=900., period=[700.], truncation_order=[10, 0],
         top=1., bot=2.25, theta=0., phi=0., tetm='te',
         structure=np.array([[[1.0, 1.0, 12.25, 12.25]]]), thickness=[300.],
     ).solve()
@@ -80,7 +80,7 @@ def test_key_tracks_content_not_spelling():
 
     # same run, written differently: enum by name vs by int, defaults stated vs omitted
     reworded = dict(BINARY_GRATING)
-    reworded['numerics'] = {'backend': 0, 'max_order': [10, 0], 'complex_dtype': 128}
+    reworded['numerics'] = {'backend': 0, 'truncation_order': [10, 0], 'complex_dtype': 128}
     reworded['incidence'] = {'wavelength': 900.0, 'theta': 0.0, 'phi': 0.0, 'tetm': 'te'}
     assert JobSpec.from_dict(reworded).key() == spec.key()
 
@@ -114,11 +114,11 @@ def test_tetm_normalises_to_the_word_and_has_no_interior():
 def test_enums_accept_name_or_value():
     spec = JobSpec.from_dict({
         **BINARY_GRATING,
-        'numerics': {'backend': 'JAX', 'factorization': 'nvf', 'max_order': 3},
+        'numerics': {'backend': 'JAX', 'factorization': 'nvf', 'truncation_order': 3},
     })
     assert spec.numerics.backend is Backend.JAX
     assert spec.numerics.factorization is Factorization.NVF
-    assert spec.numerics.max_order == (3, 0)              # a bare int is the x order
+    assert spec.numerics.truncation_order == (3, 0)              # a bare int is the x order
 
 
 # ---------------------------------------------------------------- sweeps
@@ -178,10 +178,10 @@ def test_expanded_sweep_points_match_direct_calls():
 
 @pytest.mark.parametrize('spec, message', [
     ({**BINARY_GRATING, 'wavelength': 900.0}, r'unknown field'),          # misplaced key
-    ({**BINARY_GRATING, 'numerics': {'max_order': [10, 0], 'backand': 0}}, r'unknown field'),
+    ({**BINARY_GRATING, 'numerics': {'truncation_order': [10, 0], 'backand': 0}}, r'unknown field'),
     ({**BINARY_GRATING, 'numerics': {'backend': 'cupy'}}, r'not a Backend'),
-    ({**BINARY_GRATING, 'numerics': {'max_order': [1, 2, 3]}}, r'two non-negative ints'),
-    ({**BINARY_GRATING, 'numerics': {'max_order': [-1, 0]}}, r'two non-negative ints'),
+    ({**BINARY_GRATING, 'numerics': {'truncation_order': [1, 2, 3]}}, r'two non-negative ints'),
+    ({**BINARY_GRATING, 'numerics': {'truncation_order': [-1, 0]}}, r'two non-negative ints'),
     ({**BINARY_GRATING, 'numerics': {'complex_dtype': 32}}, r'128 or 64'),
     ({**BINARY_GRATING, 'version': '99'}, r'version'),
     ({**BINARY_GRATING, 'solver': 'fdtd'}, r'only .rcwa.'),
@@ -241,7 +241,7 @@ def test_run_rejects_a_type_it_cannot_interpret():
 #: `BINARY_GRATING` is their squares. Nothing distinguishes the two documents except the
 #: quantity their numbers are in, which is what `version` states.
 INDEX_NUMBERS = {
-    'numerics': {'backend': 'numpy', 'max_order': [10, 0]},
+    'numerics': {'backend': 'numpy', 'truncation_order': [10, 0]},
     'stack': {
         'top': 1.0, 'bot': 1.5, 'period': [700.0],
         'layers': [{'thickness': 300.0, 'structure': [[1.0, 1.0, 3.5, 3.5]]}],
@@ -267,7 +267,7 @@ def test_a_document_that_states_no_version_is_refused():
         JobSpec.from_json(json.dumps(versionless))
 
     # stating it is the whole fix; nothing else about the document has to change
-    assert JobSpec.from_dict({**versionless, 'version': '4'}).key() == \
+    assert JobSpec.from_dict({**versionless, 'version': '5'}).key() == \
         JobSpec.from_dict(BINARY_GRATING).key()
 
 
@@ -285,7 +285,7 @@ def test_the_stale_document_only_the_version_can_catch():
 
     # and it is a *different scene*, not a near miss: state the version and it runs, happily,
     # conserving energy and answering a different question
-    stale = wavebit.run({**INDEX_NUMBERS, 'version': '4'})
+    stale = wavebit.run({**INDEX_NUMBERS, 'version': '5'})
     current = wavebit.run(BINARY_GRATING)
     assert stale.R.sum() + stale.T.sum() == pytest.approx(1.0, abs=1e-13)
     assert current.R.sum() + current.T.sum() == pytest.approx(1.0, abs=1e-13)
@@ -324,7 +324,7 @@ def test_the_retired_layer_key_is_refused_by_name_not_as_an_unknown():
     ``n_top`` / ``n_bot`` already got the full text; the layer key was simply missed, in the
     call two lines below the one that has it.
     """
-    document = {'version': '4',
+    document = {'version': '5',
                 'numerics': BINARY_GRATING['numerics'],
                 'incidence': BINARY_GRATING['incidence'],
                 'stack': {'top': 1.0, 'bot': 1.5, 'period': [700.0],

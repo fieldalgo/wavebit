@@ -181,7 +181,7 @@ All angles are **radians**.
 | `phi` | azimuth of the plane of incidence, from the `+x` axis |
 | `psi` | polarization: the angle of **E** from the p direction in the plane transverse to **k**. `psi = pi/2` is pure s (TE-like), `psi = 0` pure p (TM-like). **Real** — a complex `psi` is refused, see below |
 | `chi` | ellipticity angle: `tan(chi)` is the polarization ellipse's minor/major axis ratio and its sign is the rotation direction. `chi = 0` is linear (the `psi` spelling), `|chi| = pi/4` circular. Real, like `psi`. Naming it selects the `(psi, chi)` chart — see below |
-| `tetm` (1D only) | `'te'` / `'tm'` — a **declaration**, not an angle: it says this problem has no polarization and no azimuth degree of freedom, which is what makes the pure 1D TE/TM formulation legal (2-4x faster than conical, measured). Refused on a 2D cell, with `max_order[1] != 0`, or beside a nonzero `phi` / a `psi` / a `polarization`. `psi` reads back `None` under it — a declared-away degree of freedom is absent, not defaulted |
+| `tetm` (1D only) | `'te'` / `'tm'` — a **declaration**, not an angle: it says this problem has no polarization and no azimuth degree of freedom, which is what makes the pure 1D TE/TM formulation legal (2-4x faster than conical, measured). Refused on a 2D cell, with `truncation_order[1] != 0`, or beside a nonzero `phi` / a `psi` / a `polarization`. `psi` reads back `None` under it — a declared-away degree of freedom is absent, not defaulted |
 
 ### General (elliptical) polarization
 
@@ -288,7 +288,7 @@ wavevectors `kx_m = n_top·sinθ·cosφ + m·λ/Λx` (and correspondingly `ky_n`
 the places the **index** is genuinely the quantity: it is `n_top`, the derived
 `sqrt(eps*mu)` of the `top` material, and it is `n_bot`'s under
 `incidence_side='bottom'` — `theta` lives in the incidence medium. Per-order
-arrays have shape `(n_orders_y, n_orders_x)` — **`y` first, the transpose of the `max_order=[x, y]` input
+arrays have shape `(n_orders_y, n_orders_x)` — **`y` first, the transpose of the `truncation_order=[x, y]` input
 order** — with the incident order at the centre `[max_order_y, max_order_x]` and `m` increasing along
 the last axis.
 

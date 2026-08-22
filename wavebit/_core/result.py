@@ -95,27 +95,28 @@ class Result:
     polarization; the suffix says this one names the incidence.
     """
 
-    def __init__(self, given=None, s_inc=None, p_inc=None, max_order=None, centre=(0, 0)):
+    def __init__(self, given=None, s_inc=None, p_inc=None, order_window=None):
         self.given = given
         self.s_inc = s_inc
         self.p_inc = p_inc
-        #: (max_order_x, max_order_y) — static metadata for order(); not a pytree child.
-        #: The **retained** half-width, which an ``excitation`` can widen past the declared
-        #: one: `order()` reads the array, so it has to describe the array. A result that
-        #: carried the declaration instead indexed one order out and said nothing.
-        self.max_order = tuple(int(v) for v in max_order) if max_order is not None else None
-        #: Which order the retained window is centred on, ``(x, y)``. ``(0, 0)`` unless an
-        #: excitation moved it -- see :attr:`wavebit._core.engine.CoreSolveMixin.order_window`.
-        self.centre = tuple(int(v) for v in centre)
+        #: The orders this result is on: ``((centre_x, half_x), (centre_y, half_y))``, the same
+        #: shape :attr:`wavebit._core.engine.CoreSolveMixin.order_window` has. Static metadata
+        #: for :meth:`order`; not a pytree child.
+        #:
+        #: The **retained** window rather than the declared ``truncation_order``, and the two
+        #: part company as soon as an ``excitation`` widens one: :meth:`order` reads the array,
+        #: so it has to describe the array. A result carrying the declaration instead indexed
+        #: one order out and returned a plausible number.
+        self.order_window = (None if order_window is None else
+                             tuple((int(c), int(h)) for c, h in order_window))
 
     # pytree protocol (see ResultSub)
     def tree_flatten(self):
-        return (self.given, self.s_inc, self.p_inc), (self.max_order, self.centre)
+        return (self.given, self.s_inc, self.p_inc), self.order_window
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        max_order, centre = aux_data
-        return cls(*children, max_order=max_order, centre=centre)
+        return cls(*children, order_window=aux_data)
 
     def _delegate(self, name):
         if self.given is not None:
@@ -141,21 +142,20 @@ class Result:
 
         Spares the caller the array layout: efficiencies and amplitudes are stored as
         ``(n_orders_y, n_orders_x)`` grids — note ``y`` first, the transpose of the
-        ``max_order=[x, y]`` input order — centred on the specular order, or on
+        ``truncation_order=[x, y]`` input order — centred on the specular order, or on
         :attr:`centre` when an ``excitation`` moved the retained window. This indexes them by
         the order indices themselves, which is the whole point: the array layout is not the
-        caller's problem, and it stopped being derivable from the declared ``max_order`` the
+        caller's problem, and it stopped being derivable from the declared ``truncation_order`` the
         moment a window could widen.
         """
         sub = self.given if self.given is not None else (
             self.s_inc if self.s_inc is not None else self.p_inc)
         if sub is None:
             raise ValueError('no solved incidence to index into')
-        if self.max_order is None:
+        if self.order_window is None:
             raise ValueError(
-                'this result carries no max_order metadata; index the arrays directly')
-        fx, fy = self.max_order
-        cx, cy = self.centre
+                'this result carries no order_window metadata; index the arrays directly')
+        (cx, fx), (cy, fy) = self.order_window
 
         def pick(a):
             if a is None:

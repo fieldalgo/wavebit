@@ -23,7 +23,7 @@ which is exactly why topology optimisation reaches for it -- so it keeps a separ
 quantity rather than a grid of objects (``structure`` for permittivity, ``mu`` beside it).
 
 ``Stack`` therefore holds the ordered layers plus the surrounding media (``top``, ``bot``,
-``period``); ``Incidence`` holds the illumination. Numerics and backend choice (``max_order``,
+``period``); ``Incidence`` holds the illumination. Numerics and backend choice (``truncation_order``,
 ``fourier_coefficients``, ``factorization``, ``backend``, ``complex_dtype``) stay as
 :func:`wavebit.rcwa` arguments -- they are not part of the physical scene.
 

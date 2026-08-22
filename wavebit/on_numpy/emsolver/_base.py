@@ -6,7 +6,7 @@ from wavebit._core.backend import check_input_precision
 
 class _BaseRCWA(CoreSolveMixin):
     def __init__(self, top=1., bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None,
-                 max_order=(0, 0),
+                 truncation_order=(0, 0),
                  period=(1., 1.), wavelength=1.,
                  thickness=(0.,), layer_algorithm='ETM', excitation=None,
                  device=0, complex_dtype=np.complex128, polarization=None):
@@ -42,7 +42,7 @@ class _BaseRCWA(CoreSolveMixin):
         if self._tetm is None and self._psi is None and polarization is None:
             self._default_psi()
 
-        self.max_order = max_order
+        self.truncation_order = truncation_order
         self.period = period
         self.wavelength = wavelength
         self.thickness = thickness
@@ -83,7 +83,7 @@ class _BaseRCWA(CoreSolveMixin):
         self.phi = self.phi
         self._psi = self.psi
 
-        self.max_order = self.max_order
+        self.truncation_order = self.truncation_order
         self.thickness = self.thickness
 
         if hasattr(self, 'modeler') and self.modeler is not None:
@@ -154,21 +154,21 @@ class _BaseRCWA(CoreSolveMixin):
         self._psi = np.array(np.pi / 2, dtype=self.float_dtype)
 
     @property
-    def max_order(self):
+    def truncation_order(self):
         return self._max_order
 
-    @max_order.setter
-    def max_order(self, max_order):
+    @truncation_order.setter
+    def truncation_order(self, truncation_order):
 
-        if isinstance(max_order, (list, tuple)):
-            if len(max_order) == 1:
-                self._max_order = [int(max_order[0]), 0]
-            elif len(max_order) == 2:
-                self._max_order = [int(v) for v in max_order]
+        if isinstance(truncation_order, (list, tuple)):
+            if len(truncation_order) == 1:
+                self._max_order = [int(truncation_order[0]), 0]
+            elif len(truncation_order) == 2:
+                self._max_order = [int(v) for v in truncation_order]
             else:
                 raise ValueError
-        elif isinstance(max_order, np.ndarray):
-            max_order_list = max_order.tolist()
+        elif isinstance(truncation_order, np.ndarray):
+            max_order_list = truncation_order.tolist()
             if isinstance(max_order_list, list):
                 if len(max_order_list) == 1:
                     self._max_order = [int(max_order_list[0]), 0]
@@ -180,8 +180,8 @@ class _BaseRCWA(CoreSolveMixin):
                 self._max_order = [int(max_order_list), 0]
             else:
                 raise ValueError
-        elif isinstance(max_order, (int, float)):
-            self._max_order = [int(max_order), 0]
+        elif isinstance(truncation_order, (int, float)):
+            self._max_order = [int(truncation_order), 0]
         else:
             raise ValueError
 

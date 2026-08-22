@@ -157,7 +157,7 @@ def _centroid(xp, V):
 
 
 def check_normal_grid(grid_shape, max_order_x, max_order_y):
-    """`4*max_order+1` points per axis, or `_sampled_coeffs` aliases distinct orders onto one bin.
+    """`4*truncation_order+1` points per axis, or `_sampled_coeffs` aliases distinct orders onto one bin.
 
     Structural, not gradual: a *constant* normal field has to transform to the identity for NVF
     to collapse onto Li's rules, and on a short grid it picks up off-diagonals at +/-n instead.
@@ -166,7 +166,7 @@ def check_normal_grid(grid_shape, max_order_x, max_order_y):
     Ny, Nx = grid_shape
     need_y, need_x = 4 * max_order_y + 1, 4 * max_order_x + 1
     if Ny < need_y or Nx < need_x:
-        raise ValueError(f'normal-field grid {Ny}x{Nx} aliases at max_order=({max_order_x}, {max_order_y}): '
+        raise ValueError(f'normal-field grid {Ny}x{Nx} aliases at truncation_order=({max_order_x}, {max_order_y}): '
                          f'needs at least {need_y}x{need_x}')
 
 
@@ -242,7 +242,7 @@ def conv_mats(xp, regions, background, max_order_x, max_order_y, period, normal_
     dropped. The matrices stay Hermitian and the solve conserves energy exactly, so a shape
     painted entirely inside another was solved as a different structure in silence -- measured
     ``<eps> = 2.4256`` against an exact 2.2371 for a disc of permittivity 9 inside a square of 4,
-    at every ``max_order`` alike, and ``sum(R) = 0.1798`` against a converged raster's 0.4164.
+    at every ``truncation_order`` alike, and ``sum(R) = 0.1798`` against a converged raster's 0.4164.
 
     The normal field is handed the loops as they are, orientation included, and that is safe by
     construction rather than by luck: it is the direction to the nearest boundary *point*, so it
@@ -401,8 +401,8 @@ def check_plan_still_fits(shapes, period, plan, n_poly=POLYGON_VERTICES):
 
     Re-planning is the whole cost of the comparison, and it scales with the shape count rather
     than with the solve: 0.2% of a frozen ``solve`` for the two-rectangle layer above, 1.2% for
-    ten overlapping shapes at ``max_order = 4``, and falling as ``max_order`` rises (0.4% for
-    those ten at ``max_order = 8``) because the solve grows faster than the painting does. The
+    ten overlapping shapes at ``truncation_order = 4``, and falling as ``truncation_order`` rises (0.4% for
+    those ten at ``truncation_order = 8``) because the solve grows faster than the painting does. The
     freeze on this path buys traceability, not speed, so there is no plateau being given up for
     it. Under a trace it is skipped -- a tracer has no coordinates to re-plan from, which is the
     same reading of "not concrete" that :func:`analytic._primitives` takes, and for the same

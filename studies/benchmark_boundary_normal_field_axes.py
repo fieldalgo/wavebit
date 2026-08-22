@@ -58,14 +58,14 @@ def geos(na, nb):
 
 
 def scalar(geometry, cx, na, nb, theta, phi, key, backend):
-    s = wavebit.rcwa(backend=backend, structure=build(cx, na, nb), max_order=[8, 8],
+    s = wavebit.rcwa(backend=backend, structure=build(cx, na, nb), truncation_order=[8, 8],
                      normal_grid=NGRID, theta=theta, phi=phi, **BASE)
     r = getattr(s.solve(geometry=geometry), key)
     return jnp.real(jnp.sum(r)) if backend == 1 else float(np.real(np.sum(np.asarray(r))))
 
 
 print(f'base: period {P:.4f}  wl {WL}  thickness 0.25  grid {NGRID}  '
-      f'window +-{HALF_PX:.0f} px  {NPTS} pts  max_order 8')
+      f'window +-{HALF_PX:.0f} px  {NPTS} pts  truncation_order 8')
 print(f'{"contrast":>9} {"incidence":>10} {"read":>5} {"cx0/P":>7} | '
       f'{"sampled err":>11} {"swapped err":>11} | {"s ratio":>8} {"w ratio":>8} | {"spread":>9}')
 

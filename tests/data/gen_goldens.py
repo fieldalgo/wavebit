@@ -56,19 +56,19 @@ def rand(shape, seed):
     return np.random.default_rng(seed).uniform(1.0, 4.0, size=shape) ** 2
 
 CASES = {
- 'te_1layer':   dict(tetm='te', phi=None, structure=[[[9.,9.,9.,1.,1.,1.]]], thickness=[0.15], top=4., bot=1., theta=0., max_order=[6,0], period=[0.77], wavelength=0.777),
- 'tm_1layer':   dict(tetm='tm', phi=None, structure=[[[9.,9.,9.,1.,1.,1.]]], thickness=[0.15], top=4., bot=1., theta=0., max_order=[6,0], period=[0.77], wavelength=0.777),
- 'te_oblique':  dict(tetm='te', phi=None, structure=[[[9.,9.,9.,1.,1.,1.]]], thickness=[0.2], top=1., bot=2.25, theta=0.3, max_order=[6,0], period=[0.77], wavelength=0.777),
- 'tm_oblique':  dict(tetm='tm', phi=None, structure=[[[9.,9.,9.,1.,1.,1.]]], thickness=[0.2], top=1., bot=2.25, theta=0.3, max_order=[6,0], period=[0.77], wavelength=0.777),
- 'te_2layer':   dict(tetm='te', phi=None, structure=[[[9.,9.,1.,1.,9.,1.]],[[4.,4.,4.,1.,1.,1.]]], thickness=[0.15,0.22], top=1., bot=1., theta=0., max_order=[5,0], period=[0.7], wavelength=0.9),
- 'te_same_mat': dict(tetm='te', phi=None, structure=[[[9.,9.,1.,1.,9.,1.]],[[1.,1.,1.,1.,1.,1.]]], thickness=[0.2,0.1], top=1., bot=1., theta=0., max_order=[5,0], period=[0.7], wavelength=0.9),
- 'conical':     dict(psi=0.4, phi=0.3, structure=[[[9.,9.,9.,1.,1.,1.]]], thickness=[0.15], top=4., bot=1., theta=0.2, max_order=[6,0], period=[0.77], wavelength=0.777),
- 'conical_2l':  dict(psi=1.1, phi=0.5, structure=[[[9.,9.,1.,1.,9.,1.]],[[4.,4.,4.,1.,1.,1.]]], thickness=[0.15,0.22], top=1., bot=2.25, theta=0.3, max_order=[5,0], period=[0.7], wavelength=0.9),
- '2d_normal':   dict(psi=0., phi=0., structure=rand((1,5,5),0), thickness=[0.2], top=1., bot=1., theta=0., max_order=[2,2], period=[1.,1.], wavelength=0.9),
- '2d_oblique':  dict(psi=0.9, phi=0.4, structure=rand((1,6,6),1), thickness=[0.3], top=1., bot=2.25, theta=0.3, max_order=[2,2], period=[1.,1.2], wavelength=0.8),
- '2d_2layer':   dict(psi=1.1, phi=0.5, structure=rand((2,4,4),2), thickness=[0.15,0.22], top=1.44, bot=1., theta=0.2, max_order=[2,2], period=[0.9,0.9], wavelength=0.7),
- '2d_nvf':      dict(psi=0.9, phi=0.4, structure=rand((1,5,5),3), thickness=[0.2], top=1., bot=1., theta=0.2, max_order=[2,2], period=[1.,1.], wavelength=0.9, factorization='nvf'),
- '2d_cfs':      dict(psi=0.7, phi=0.3, structure=rand((1,5,5),4), thickness=[0.2], top=2.25, bot=1., theta=0.2, max_order=[2,2], period=[1.,1.], wavelength=0.9, fourier_coefficients='integrated'),
+ 'te_1layer':   dict(tetm='te', phi=None, structure=[[[9.,9.,9.,1.,1.,1.]]], thickness=[0.15], top=4., bot=1., theta=0., truncation_order=[6,0], period=[0.77], wavelength=0.777),
+ 'tm_1layer':   dict(tetm='tm', phi=None, structure=[[[9.,9.,9.,1.,1.,1.]]], thickness=[0.15], top=4., bot=1., theta=0., truncation_order=[6,0], period=[0.77], wavelength=0.777),
+ 'te_oblique':  dict(tetm='te', phi=None, structure=[[[9.,9.,9.,1.,1.,1.]]], thickness=[0.2], top=1., bot=2.25, theta=0.3, truncation_order=[6,0], period=[0.77], wavelength=0.777),
+ 'tm_oblique':  dict(tetm='tm', phi=None, structure=[[[9.,9.,9.,1.,1.,1.]]], thickness=[0.2], top=1., bot=2.25, theta=0.3, truncation_order=[6,0], period=[0.77], wavelength=0.777),
+ 'te_2layer':   dict(tetm='te', phi=None, structure=[[[9.,9.,1.,1.,9.,1.]],[[4.,4.,4.,1.,1.,1.]]], thickness=[0.15,0.22], top=1., bot=1., theta=0., truncation_order=[5,0], period=[0.7], wavelength=0.9),
+ 'te_same_mat': dict(tetm='te', phi=None, structure=[[[9.,9.,1.,1.,9.,1.]],[[1.,1.,1.,1.,1.,1.]]], thickness=[0.2,0.1], top=1., bot=1., theta=0., truncation_order=[5,0], period=[0.7], wavelength=0.9),
+ 'conical':     dict(psi=0.4, phi=0.3, structure=[[[9.,9.,9.,1.,1.,1.]]], thickness=[0.15], top=4., bot=1., theta=0.2, truncation_order=[6,0], period=[0.77], wavelength=0.777),
+ 'conical_2l':  dict(psi=1.1, phi=0.5, structure=[[[9.,9.,1.,1.,9.,1.]],[[4.,4.,4.,1.,1.,1.]]], thickness=[0.15,0.22], top=1., bot=2.25, theta=0.3, truncation_order=[5,0], period=[0.7], wavelength=0.9),
+ '2d_normal':   dict(psi=0., phi=0., structure=rand((1,5,5),0), thickness=[0.2], top=1., bot=1., theta=0., truncation_order=[2,2], period=[1.,1.], wavelength=0.9),
+ '2d_oblique':  dict(psi=0.9, phi=0.4, structure=rand((1,6,6),1), thickness=[0.3], top=1., bot=2.25, theta=0.3, truncation_order=[2,2], period=[1.,1.2], wavelength=0.8),
+ '2d_2layer':   dict(psi=1.1, phi=0.5, structure=rand((2,4,4),2), thickness=[0.15,0.22], top=1.44, bot=1., theta=0.2, truncation_order=[2,2], period=[0.9,0.9], wavelength=0.7),
+ '2d_nvf':      dict(psi=0.9, phi=0.4, structure=rand((1,5,5),3), thickness=[0.2], top=1., bot=1., theta=0.2, truncation_order=[2,2], period=[1.,1.], wavelength=0.9, factorization='nvf'),
+ '2d_cfs':      dict(psi=0.7, phi=0.3, structure=rand((1,5,5),4), thickness=[0.2], top=2.25, bot=1., theta=0.2, truncation_order=[2,2], period=[1.,1.], wavelength=0.9, fourier_coefficients='integrated'),
 }
 
 out = {}
