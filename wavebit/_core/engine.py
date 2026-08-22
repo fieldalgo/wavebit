@@ -176,6 +176,32 @@ def _recorded_lattice(normal_field_source):
 #: declaration exists to be able to give. It names the keyword to change, because the thing
 #: that went wrong is a declaration and not a missing call: by the time ``reconstruct_field``
 #: runs, the state it wants was never built, and no argument here can bring it back.
+#: Why ``solver.scattering`` has nothing, one message per reason. Modelled on
+#: :data:`_FIELD_NOT_DECLARED` and split for the same stated reason: "run a solve first" is
+#: false advice for a solver whose solves cannot produce one, and running another would change
+#: nothing. A bare ``None`` said all three of these at once, and then surfaced as
+#: ``'NoneType' object has no attribute 'S11'``.
+_SCATTERING_WRONG_ALGORITHM = (
+    "there is no scattering matrix because layer_algorithm={got!r} forms none. The ETM fixes "
+    "one illumination's boundary condition and solves it directly -- it never builds a "
+    "both-sides operator, which is exactly why it is the cheaper default -- so solving again "
+    "with this solver changes nothing. Pass layer_algorithm='SMM', whose cascade builds one to "
+    "answer at all and now keeps it. Everything else the two algorithms produce is identical, "
+    "so this is the one thing that choice buys."
+)
+_SCATTERING_NOT_DECLARED = (
+    "there is no scattering matrix because this solver declared answers={got!r}, which keeps "
+    "power only. An S *is* amplitude information -- its blocks applied to the incident vector "
+    "are the reported amplitudes -- so it appears from answers='amplitude' up. Declare that "
+    "(the default) or higher and solve again; it costs no arithmetic and four matrices, "
+    "whatever the stack's depth."
+)
+_SCATTERING_NOT_SOLVED = (
+    "there is no scattering matrix yet: run solve() -- or solve_conv(), if you built the "
+    "convolution matrices yourself -- first. The declaration is right for one "
+    "(layer_algorithm='SMM', answers='amplitude' or higher), so a solve will fill it."
+)
+
 _FIELD_NOT_DECLARED = (
     "reconstruct_field needs the per-layer modes and amplitudes the solve keeps as it goes, "
     "and this solver declared answers={got!r}, which does not keep them. That is a "
@@ -883,6 +909,26 @@ class CoreSolveMixin:
                                   kx[max_order_x], ky[max_order_y],
                                   dtype=kx.dtype, device=_device_of(kx))
 
+    @property
+    def scattering(self):
+        """The SMM cascade's own :class:`~wavebit._core.scattering.ScatteringMatrix`.
+
+        Present from ``answers='amplitude'`` up on an ``'SMM'`` solve, and *absent* otherwise
+        -- which raises, naming which of the three reasons applies, rather than handing back a
+        ``None`` that says all three at once and then fails as an attribute error on it. The
+        split is the one :meth:`_require_field_declaration` already makes for
+        :meth:`reconstruct_field`, for the same reason: the advice differs, and two of the
+        three are declarations rather than states, so "solve again" would be false there.
+        """
+        if self._scattering is not None:
+            return self._scattering
+        if self.layer_algorithm != 'SMM':
+            raise RuntimeError(
+                _SCATTERING_WRONG_ALGORITHM.format(got=self.layer_algorithm))
+        if not self._answers.covers(Answers.AMPLITUDE):
+            raise RuntimeError(_SCATTERING_NOT_DECLARED.format(got=self._answers.value))
+        raise RuntimeError(_SCATTERING_NOT_SOLVED)
+
     def _finish(self, out):
         """Store the field-reconstruction state and return just the result mapping.
 
@@ -903,7 +949,7 @@ class CoreSolveMixin:
         #: across every ``jit`` / ``grad`` boundary. ``None`` after an ETM solve -- not empty
         #: but *absent*, because the ETM fixes one illumination's boundary condition and
         #: never forms a both-sides operator at all.
-        self.scattering = out.pop('scattering', None)
+        self._scattering = out.pop('scattering', None)
         return out
 
     _formulation = DEFAULT_FORMULATION

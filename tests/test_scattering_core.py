@@ -582,13 +582,55 @@ def test_the_matrix_is_there_exactly_where_amplitudes_are(algo, answers):
 
     An ``S`` *is* amplitude information -- its blocks applied to the incident vector are the
     reported amplitudes -- so it belongs on the rung that keeps them, and the rung below said
-    only power was wanted. ``None`` after an ETM solve is not an ignored request: the ETM
-    fixes one illumination's boundary condition and forms no both-sides operator at all, so an
-    empty mapping would read as "this solve had none", which is a different claim.
+    only power was wanted. Absent after an ETM solve is not an ignored request: the ETM fixes
+    one illumination's boundary condition and forms no both-sides operator at all.
     """
     solver, _ = _lit(algo=algo, answers=answers)
-    expected = algo == 'SMM' and answers in ('amplitude', 'field')
-    assert (solver.scattering is not None) == expected
+    if algo == 'SMM' and answers in ('amplitude', 'field'):
+        assert solver.scattering.S11 is not None
+    else:
+        with pytest.raises(RuntimeError):
+            solver.scattering
+
+
+@pytest.mark.parametrize('kind, kw, says', [
+    ('the algorithm forms none', dict(algo='ETM'), 'ETM'),
+    ('the rung keeps power only', dict(algo='SMM', answers='efficiency'), 'amplitude'),
+])
+def test_an_absent_matrix_says_which_of_the_three_reasons_it_is(kind, kw, says):
+    """Three reasons produced one ``None`` until 2026-08-22, and then an attribute error on it.
+
+    ``'NoneType' object has no attribute 'S11'`` names neither the cause nor the fix, and the
+    three causes want different fixes -- two are declarations, where "solve again" is false
+    advice, and one is a state, where it is the whole advice. Same split
+    :meth:`_require_field_declaration` already makes for ``reconstruct_field``.
+    """
+    solver, _ = _lit(**kw)
+    with pytest.raises(RuntimeError, match=says) as excinfo:
+        solver.scattering
+    assert 'scattering matrix' in str(excinfo.value)
+
+
+def test_two_reasons_at_once_name_the_one_that_would_still_bite():
+    """``'ETM'`` *and* ``'efficiency'``: the algorithm is the answer, and the rung is not.
+
+    Raising the rung on an ETM solver changes nothing -- the ETM forms no matrix at any rung
+    -- so naming the rung here would send the caller to a fix that does not work, which is the
+    exact failure the split exists to avoid. Ordering is what decides it, and nothing else
+    reaches that branch: a case with one reason wrong passes whichever order the checks are
+    in. Found by mutating the order and watching every test still pass.
+    """
+    solver, _ = _lit(algo='ETM', answers='efficiency')
+    with pytest.raises(RuntimeError, match='ETM') as excinfo:
+        solver.scattering
+    assert 'answers=' not in str(excinfo.value)
+
+
+def test_the_unsolved_solver_is_told_to_solve_and_not_to_reconfigure():
+    """Declared right, just not run -- the one reason where "solve" is the whole answer."""
+    solver = wavebit.rcwa(backend=0, **dict(S_KW, theta=0.3, layer_algorithm='SMM'))
+    with pytest.raises(RuntimeError, match='run solve'):
+        solver.scattering
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])

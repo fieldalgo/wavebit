@@ -245,12 +245,15 @@ Three things bound it, and each is a decision rather than an implementation deta
 - **It rides `answers='amplitude'`, not a rung of its own.** An `S` *is* amplitude information,
   and the rung below said only power was wanted. It costs no arithmetic and four matrices of
   memory whatever the stack's depth — the cascade already built it.
-- **`None` after an ETM solve**, not empty. The ETM fixes one illumination's boundary condition
-  and never forms a both-sides operator; an empty mapping would read as "this solve had none",
-  which is a different claim. This is not a knob going unread — it is the shape of the
-  algorithm the caller chose, and it is the *only* thing `'SMM'` buys. Everything else the two
-  algorithms produce — amplitudes, per-layer state, the reconstructed field — is identical, and
-  the ETM is cheaper at all of it.
+- **Absent after an ETM solve, and it says so.** Reading `solver.scattering` when there is none
+  raises, naming which of three reasons applies: the algorithm forms none, the rung keeps power
+  only, or no solve has run. Two of those are declarations, where "solve again" is false advice,
+  and one is a state, where it is the whole advice — the same split
+  `_require_field_declaration` already makes for `reconstruct_field`. A bare `None` said all
+  three at once and then surfaced as `'NoneType' object has no attribute 'S11'`. The ETM case is
+  not a knob going unread: it is the shape of the algorithm the caller chose, and it is the
+  *only* thing `'SMM'` buys. Everything else the two algorithms produce — amplitudes, per-layer
+  state, the reconstructed field — is identical, and the ETM is cheaper at all of it.
 - **It goes on the solver, not into `Result`.** `Result` is a registered pytree with fixed
   children, so carrying matrices there would change its structure and drag them across every
   `jit` and `grad` boundary.
