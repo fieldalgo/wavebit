@@ -69,7 +69,7 @@ class StaticGeometry:
     """The discrete geometry decisions of one structure, taken once.
 
     Attributes:
-        normal_field: per-layer ``(nx, ny)`` for the NVF factorization.
+        normal_field: per-layer ``(normal_x, normal_y)`` for the NVF factorization.
         normal_field_source: per-layer ``(shape, interface mask, lattice key,
             normal_method, phase count)`` that ``normal_field`` was derived from — carried
             so a replay can tell whether it still fits, not consumed by the build. Left

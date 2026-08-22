@@ -65,13 +65,13 @@ def circle_raster(N, cx=0.5, cy=0.5, r=0.3, eps_in=5.76):
     return eps
 
 
-def angular_error_deg(nx, ny, tx, ty):
+def angular_error_deg(normal_x, normal_y, tx, ty):
     """Pointwise angle between two unit fields, modulo 180 (n and -n are one field)."""
-    dot = np.abs(nx * tx + ny * ty)
+    dot = np.abs(normal_x * tx + normal_y * ty)
     return np.degrees(np.arccos(np.clip(dot, 0.0, 1.0)))
 
 
-def band_error(eps, nx, ny, cx=0.5, cy=0.5, r=0.3, width_px=2):
+def band_error(eps, normal_x, normal_y, cx=0.5, cy=0.5, r=0.3, width_px=2):
     """Mean angular error vs the exact radial normal, within ``width_px`` of the circle."""
     N = eps.shape[0]
     ax = (np.arange(N) + 0.5) / N
@@ -80,7 +80,7 @@ def band_error(eps, nx, ny, cx=0.5, cy=0.5, r=0.3, width_px=2):
     rr = np.hypot(dx, dy)
     band = np.abs(rr - r) * N <= width_px
     tx, ty = dx / np.where(rr == 0, 1, rr), dy / np.where(rr == 0, 1, rr)
-    return float(angular_error_deg(nx, ny, tx, ty)[band].mean())
+    return float(angular_error_deg(normal_x, normal_y, tx, ty)[band].mean())
 
 
 SOLVE_KW = dict(backend=0, period=[1., 1.], wavelength=.55, thickness=[.3],
@@ -157,8 +157,8 @@ def test_energy_is_conserved_by_every_construction(method):
 def test_unit_magnitude_everywhere_with_zeros_only_where_deliberate(method):
     """The factorization needs C_xx + C_yy = I, which is |n| = 1 across the cell."""
     eps = circle_raster(64)
-    nx, ny = normal_vector_field(eps, method=method)
-    mag = np.hypot(nx, ny)
+    normal_x, normal_y = normal_vector_field(eps, method=method)
+    mag = np.hypot(normal_x, normal_y)
     nonzero = mag > 0
     assert np.abs(mag[nonzero] - 1.0).max() < 1e-12
     # contour and spectral emit no zeros at all; smooth may only on the skeleton,
@@ -171,8 +171,8 @@ def test_a_flat_interface_gets_the_axis_normal_exactly(method):
     """Nothing here is a bias in where the boundary sits: a strip's normal is the axis."""
     eps = np.ones((32, 32))
     eps[:, 10:20] = 2.4            # vertical strip: interfaces normal to x
-    nx, ny = normal_vector_field(eps, method=method)
-    assert float(np.abs(ny).max()) == 0.0
+    normal_x, normal_y = normal_vector_field(eps, method=method)
+    assert float(np.abs(normal_y).max()) == 0.0
 
 
 @pytest.mark.parametrize('method', METHODS)
@@ -180,17 +180,17 @@ def test_a_flat_interface_gets_the_axis_normal_exactly(method):
 def test_a_one_cell_axis_keeps_the_constant_normal_rule(method, shape):
     """The 1D collapse onto Li must not depend on the construction."""
     eps = np.linspace(1.0, 2.0, 8).reshape(shape)
-    nx, ny = normal_vector_field(eps, method=method)
+    normal_x, normal_y = normal_vector_field(eps, method=method)
     expect_x = 1.0 if shape[0] == 1 else 0.0
-    assert np.array_equal(nx, np.full(shape, expect_x))
-    assert np.array_equal(ny, np.full(shape, 1.0 - expect_x))
+    assert np.array_equal(normal_x, np.full(shape, expect_x))
+    assert np.array_equal(normal_y, np.full(shape, 1.0 - expect_x))
 
 
 @pytest.mark.parametrize('method', NEW_METHODS)
 def test_a_uniform_layer_gets_a_constant_field(method):
-    nx, ny = normal_vector_field(np.full((16, 16), 1.7), method=method)
-    assert np.array_equal(nx, np.ones((16, 16)))
-    assert np.array_equal(ny, np.zeros((16, 16)))
+    normal_x, normal_y = normal_vector_field(np.full((16, 16), 1.7), method=method)
+    assert np.array_equal(normal_x, np.ones((16, 16)))
+    assert np.array_equal(normal_y, np.zeros((16, 16)))
 
 
 @pytest.mark.parametrize('flip', ['y', 'x'])
@@ -198,15 +198,15 @@ def test_smooth_is_bit_exactly_covariant_under_both_flips(flip):
     """'smooth' mirrors exactly, like 'distance' — in BOTH directions. The x direction is
     the one every y-symmetric golden was historically blind to, so it is pinned by name."""
     eps = circle_raster(48, cx=0.4, cy=0.55)           # asymmetric on purpose
-    nx, ny = normal_vector_field(eps, method='smooth')
+    normal_x, normal_y = normal_vector_field(eps, method='smooth')
     if flip == 'y':
         fx, fy = normal_vector_field(eps[::-1].copy(), method='smooth')
-        assert np.array_equal((nx ** 2)[::-1], fx ** 2)
-        assert np.array_equal((nx * ny)[::-1], -(fx * fy))
+        assert np.array_equal((normal_x ** 2)[::-1], fx ** 2)
+        assert np.array_equal((normal_x * normal_y)[::-1], -(fx * fy))
     else:
         fx, fy = normal_vector_field(eps[:, ::-1].copy(), method='smooth')
-        assert np.array_equal((nx ** 2)[:, ::-1], fx ** 2)
-        assert np.array_equal((nx * ny)[:, ::-1], -(fx * fy))
+        assert np.array_equal((normal_x ** 2)[:, ::-1], fx ** 2)
+        assert np.array_equal((normal_x * normal_y)[:, ::-1], -(fx * fy))
 
 
 @pytest.mark.parametrize('method,limit', [
@@ -252,8 +252,8 @@ def test_angular_accuracy_beats_distance_on_an_off_center_circle(method, limit_d
     """
     cx, cy = 0.42, 0.61
     eps = circle_raster(64, cx=cx, cy=cy, r=0.22)
-    nx, ny = normal_vector_field(eps, method=method)
-    err = band_error(eps, nx, ny, cx=cx, cy=cy, r=0.22)
+    normal_x, normal_y = normal_vector_field(eps, method=method)
+    err = band_error(eps, normal_x, normal_y, cx=cx, cy=cy, r=0.22)
     assert err < limit_deg
     dx_, dy_ = normal_vector_field(eps, method='distance')
     assert err < band_error(eps, dx_, dy_, cx=cx, cy=cy, r=0.22) / 3.0
@@ -274,10 +274,10 @@ def test_a_wrap_crossing_shape_is_periodic(method):
     rr = np.hypot(dx, dy)
     eps = np.ones((N, N))
     eps[rr <= 0.3] = 2.4
-    nx, ny = normal_vector_field(eps, method=method)
+    normal_x, normal_y = normal_vector_field(eps, method=method)
     band = np.abs(rr - 0.3) * N <= 2
     tx, ty = dx / np.where(rr == 0, 1, rr), dy / np.where(rr == 0, 1, rr)
-    err = float(angular_error_deg(nx, ny, tx, ty)[band].mean())
+    err = float(angular_error_deg(normal_x, normal_y, tx, ty)[band].mean())
     assert err < 6.0
 
 
@@ -294,12 +294,12 @@ def test_a_non_square_cell_measures_in_physical_space(method):
     cx, cy, r = 1.0, 0.5, 0.3
     eps[(X - cx) ** 2 + (Y - cy) ** 2 <= r ** 2] = 2.4
     lattice = as_lattice(period=[2.0, 1.0])
-    nx, ny = normal_vector_field(eps, method=method, lattice=lattice)
+    normal_x, normal_y = normal_vector_field(eps, method=method, lattice=lattice)
     dx, dy = X - cx, Y - cy
     rr = np.hypot(dx, dy)
     band = (np.abs(rr - r) / (2.0 / N)) <= 2      # within ~2 of the coarser pixel
     tx, ty = dx / np.where(rr == 0, 1, rr), dy / np.where(rr == 0, 1, rr)
-    err = float(angular_error_deg(nx, ny, tx, ty)[band].mean())
+    err = float(angular_error_deg(normal_x, normal_y, tx, ty)[band].mean())
     assert err < 6.0
 
 
@@ -347,8 +347,8 @@ def skewed_disc(N, gamma_deg, P=400.0, r=60.0, eps_in=5.76):
 def skew_error(method, gamma, N=128):
     """Mean angular error against the disc's exact normal, over the interface mask."""
     A, eps, tx, ty = skewed_disc(N, gamma)
-    nx, ny = normal_vector_field(eps, lattice=A, method=method)
-    return float(angular_error_deg(nx, ny, tx, ty)[_interface_mask(eps)].mean())
+    normal_x, normal_y = normal_vector_field(eps, lattice=A, method=method)
+    return float(angular_error_deg(normal_x, normal_y, tx, ty)[_interface_mask(eps)].mean())
 
 
 @pytest.mark.parametrize('method', NEW_METHODS)
@@ -412,10 +412,10 @@ def test_turning_the_cell_turns_the_field(method):
     R = np.array([[c, -s], [s, c]])
     for gamma in (90.0, 60.0):
         A, eps, _, _ = skewed_disc(96, gamma)
-        nx, ny = normal_vector_field(eps, lattice=A, method=method)
+        normal_x, normal_y = normal_vector_field(eps, lattice=A, method=method)
         gx, gy = normal_vector_field(eps, lattice=R @ A, method=method)
-        err = angular_error_deg(gx, gy, R[0, 0] * nx + R[0, 1] * ny,
-                                R[1, 0] * nx + R[1, 1] * ny)
+        err = angular_error_deg(gx, gy, R[0, 0] * normal_x + R[0, 1] * normal_y,
+                                R[1, 0] * normal_x + R[1, 1] * normal_y)
         moved = float(err[_interface_mask(eps)].mean())
         assert moved < 0.05, f'{method} at gamma={gamma}: field moved {moved:.3e} deg'
 
@@ -470,12 +470,12 @@ def test_smooths_kernel_is_a_length_rather_than_a_pixel_count_per_axis():
     eps = np.ones((N, N))
     cx, cy, r = 1.0, 0.5, 0.3
     eps[(X - cx) ** 2 + (Y - cy) ** 2 <= r ** 2] = 5.76
-    nx, ny = normal_vector_field(eps, method='smooth', lattice=as_lattice(period=[2.0, 1.0]))
+    normal_x, normal_y = normal_vector_field(eps, method='smooth', lattice=as_lattice(period=[2.0, 1.0]))
     dx, dy = X - cx, Y - cy
     rr = np.hypot(dx, dy)
     band = (np.abs(rr - r) / (2.0 / N)) <= 2
     tx, ty = dx / np.where(rr == 0, 1, rr), dy / np.where(rr == 0, 1, rr)
-    err = float(angular_error_deg(nx, ny, tx, ty)[band].mean())
+    err = float(angular_error_deg(normal_x, normal_y, tx, ty)[band].mean())
     assert err < 1.0, f'{err:.3f} deg — the per-axis kernel scored 2.22 here'
 
 
@@ -499,12 +499,12 @@ def test_the_floor_lift_keeps_the_base_grids_smoothing_scale(method, base_n):
     repeat = _normal_field_floor(base.shape, 10, 10)[0]
     lifted = np.repeat(np.repeat(base, repeat, axis=0), repeat, axis=1)
 
-    [(nx, ny)] = normal_field_for_raster(base[None], 10, 10, method=method)
+    [(normal_x, normal_y)] = normal_field_for_raster(base[None], 10, 10, method=method)
     ex, ey = normal_vector_field(lifted, method=method, base_shape=(base_n, base_n))
-    assert np.array_equal(nx, ex) and np.array_equal(ny, ey)
+    assert np.array_equal(normal_x, ex) and np.array_equal(normal_y, ey)
 
     bx, by = normal_vector_field(lifted, method=method)     # base-blind on purpose
-    assert not np.allclose(nx, bx)
+    assert not np.allclose(normal_x, bx)
 
 
 @pytest.mark.parametrize('method', NEW_METHODS)
@@ -596,8 +596,8 @@ def test_spectral_bulk_copy_is_periodic_at_the_wrap():
     rr = np.hypot(dx, dy)
     eps = np.ones((N, N))
     eps[rr <= 0.3] = 2.4
-    nx, ny = normal_vector_field(eps, method='spectral')
+    normal_x, normal_y = normal_vector_field(eps, method='spectral')
     tx, ty = dx / np.where(rr == 0, 1, rr), dy / np.where(rr == 0, 1, rr)
-    err = angular_error_deg(nx, ny, tx, ty)
+    err = angular_error_deg(normal_x, normal_y, tx, ty)
     shell = (np.abs(rr - 0.3) * N > 3) & (np.abs(rr - 0.3) * N <= 8)
     assert float(err[shell].max()) < 25.0

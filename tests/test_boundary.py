@@ -151,18 +151,18 @@ def test_normal_grid_floor_is_enforced(truncation_order):
 def test_normal_field_is_the_edge_normal_beside_an_edge():
     """Far from any corner the field must be exactly that edge's own normal."""
     V = rect_verts(xnp, 0.5, 0.5, 0.6, 0.4, 0.0)
-    nx, ny = _b.distance_gradient_normal_field(xnp, [V], (256, 256), PERIOD, xnp.float64)
+    normal_x, normal_y = _b.distance_gradient_normal_field(xnp, [V], (256, 256), PERIOD, xnp.float64)
     # a pixel just outside the right edge (x=0.8), at mid-height
     j = int(0.85 * 256)
     i = int(0.50 * 256)
-    assert abs(abs(float(nx[i, j])) - 1.0) < 1e-12
-    assert abs(float(ny[i, j])) < 1e-12
+    assert abs(abs(float(normal_x[i, j])) - 1.0) < 1e-12
+    assert abs(float(normal_y[i, j])) < 1e-12
 
 
 def test_normal_field_is_a_unit_vector_everywhere():
     V = ellipse_verts(xnp, 0.5, 0.5, 0.34, 0.19, 0.7, 64)
-    nx, ny = _b.distance_gradient_normal_field(xnp, [V], (128, 128), PERIOD, xnp.float64)
-    mag = np.sqrt(np.asarray(nx) ** 2 + np.asarray(ny) ** 2)
+    normal_x, normal_y = _b.distance_gradient_normal_field(xnp, [V], (128, 128), PERIOD, xnp.float64)
+    mag = np.sqrt(np.asarray(normal_x) ** 2 + np.asarray(normal_y) ** 2)
     assert np.abs(mag - 1.0).max() < 1e-12
 
 
@@ -186,12 +186,12 @@ def test_the_normal_field_gets_the_two_axes_the_right_way_round():
     Px, Py, r = 2.0, 1.0, 0.3
     V = ellipse_verts(xnp, Px / 2.0, Py / 2.0, 2 * r, 2 * r, 0.0, 256)
     Ny, Nx = 129, 257
-    nx, ny = _b.distance_gradient_normal_field(xnp, [V], (Ny, Nx), (Px, Py), xnp.float64)
+    normal_x, normal_y = _b.distance_gradient_normal_field(xnp, [V], (Ny, Nx), (Px, Py), xnp.float64)
 
     X, Y = np.meshgrid((np.arange(Nx) + 0.5) / Nx * Px, (np.arange(Ny) + 0.5) / Ny * Py)
     dx, dy = X - Px / 2.0, Y - Py / 2.0
     rad = np.hypot(dx, dy)
-    align = (np.asarray(nx) * dx + np.asarray(ny) * dy) / np.where(rad > 0, rad, 1.0)
+    align = (np.asarray(normal_x) * dx + np.asarray(normal_y) * dy) / np.where(rad > 0, rad, 1.0)
     near = (rad > 0.5 * r) & (rad < 1.5 * r)
     assert np.abs(np.abs(align[near]) - 1.0).max() < 1e-3
 
@@ -201,8 +201,8 @@ def test_the_normal_field_gets_the_two_axes_the_right_way_round():
     # is x_hat with no polygon tilt left in it. On the transposed cell this pixel is not even
     # outside the disc.
     i, j = Ny // 2, int((Px / 2.0 + 1.3 * r) / Px * Nx)
-    assert abs(abs(float(nx[i, j])) - 1.0) < 1e-14
-    assert abs(float(ny[i, j])) < 1e-14
+    assert abs(abs(float(normal_x[i, j])) - 1.0) < 1e-14
+    assert abs(float(normal_y[i, j])) < 1e-14
 
 
 def test_normal_field_chunking_changes_nothing():
@@ -684,13 +684,13 @@ def test_the_normal_field_does_not_care_which_way_a_hole_is_wound():
     ``conv_mats`` hands the loops to the normal field exactly as the clipper produced them,
     holes wound clockwise included. That is safe by construction: the field is the direction to
     the nearest boundary *point*, so it depends on which segments exist and not on how they are
-    wound, and only ``nx**2``, ``nx*ny``, ``ny**2`` are consumed, so the vector's own sign
+    wound, and only ``normal_x**2``, ``normal_x*normal_y``, ``normal_y**2`` are consumed, so the vector's own sign
     cancels as well.
 
     Safe, but not bit-invariant, and the difference is pinned here precisely rather than hidden
     under a loose tolerance. Reversing a loop renumbers its edges, so ``argmin`` breaks its
     *exact* ties the other way. Measured: 20 pixels of 65536 move, each by 0.024541 in
-    ``nx**2`` -- ``sin(2*pi/256)``, one facet of the polygonised disc, so the tie is between two
+    ``normal_x**2`` -- ``sin(2*pi/256)``, one facet of the polygonised disc, so the tie is between two
     adjacent facets. That is 6.0e-6 in ``c_xx`` and ``c_yy``, 7.0e-18 in ``c_xy``.
 
     The last block is the part that decides it: against the **ideal** circle's radial normal,

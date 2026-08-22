@@ -2,7 +2,7 @@
 
 ``nvf_conv_matrices`` derives the Li/Schuster factorization from a normal field that is
 **unit magnitude throughout the unit cell**, not just at the interface. That assumption is
-load-bearing: it is what makes ``C_xx + C_yy = <nx^2> + <ny^2> = I``, so the projector splits E
+load-bearing: it is what makes ``C_xx + C_yy = <normal_x^2> + <normal_y^2> = I``, so the projector splits E
 into normal and tangential parts and nothing else. Nothing else in the suite pins it down, so a
 normal-field change that quietly stopped producing unit vectors would still pass every parity
 and energy test while silently degrading the factorization.
@@ -78,20 +78,20 @@ def _sobel_normal_field(eps):
         + (p[2:, 2:] - p[:-2, 2:]) / 8.0
     norm = np.hypot(gx, gy)
     mask = norm > 1e-8
-    nx, ny = np.zeros_like(gx), np.zeros_like(gy)
-    nx[mask] = gx[mask] / norm[mask]
-    ny[mask] = gy[mask] / norm[mask]
-    return nx, ny
+    normal_x, normal_y = np.zeros_like(gx), np.zeros_like(gy)
+    normal_x[mask] = gx[mask] / norm[mask]
+    normal_y[mask] = gy[mask] / norm[mask]
+    return normal_x, normal_y
 
 
-def _unit_fraction(nx, ny):
-    return float(np.isclose(np.hypot(nx, ny), 1.0, atol=1e-8).mean())
+def _unit_fraction(normal_x, normal_y):
+    return float(np.isclose(np.hypot(normal_x, normal_y), 1.0, atol=1e-8).mean())
 
 
-def _projector_defect(nx, ny, truncation_order=3):
-    """``||C_xx + C_yy - I|| / ||I||`` in Fourier space — 0 iff ``nx^2 + ny^2 == 1``."""
-    C_xx = fourier2d_pointwise(xnp, (nx ** 2).astype(complex), truncation_order, truncation_order)
-    C_yy = fourier2d_pointwise(xnp, (ny ** 2).astype(complex), truncation_order, truncation_order)
+def _projector_defect(normal_x, normal_y, truncation_order=3):
+    """``||C_xx + C_yy - I|| / ||I||`` in Fourier space — 0 iff ``normal_x^2 + normal_y^2 == 1``."""
+    C_xx = fourier2d_pointwise(xnp, (normal_x ** 2).astype(complex), truncation_order, truncation_order)
+    C_yy = fourier2d_pointwise(xnp, (normal_y ** 2).astype(complex), truncation_order, truncation_order)
     I = np.eye(C_xx.shape[0])
     return float(np.linalg.norm(C_xx + C_yy - I) / np.linalg.norm(I))
 
@@ -174,14 +174,14 @@ def test_the_projector_is_built_from_the_sampled_transform():
     assertion would be pinning nothing.
     """
     eps = _circle(40)
-    nx, ny = normal_vector_field(eps)
+    normal_x, normal_y = normal_vector_field(eps)
     truncation_order = 3
 
-    got = np.asarray(nvf_conv_matrices(xnp, eps, nx, ny, truncation_order, truncation_order)[0])
+    got = np.asarray(nvf_conv_matrices(xnp, eps, normal_x, normal_y, truncation_order, truncation_order)[0])
 
     def assembled(build):
         c_xx, c_xy, c_yy = (np.asarray(build(f.astype(complex)))
-                            for f in (nx ** 2, nx * ny, ny ** 2))
+                            for f in (normal_x ** 2, normal_x * normal_y, normal_y ** 2))
         return c_xx, c_xy, c_yy
 
     sampled = assembled(lambda f: fourier2d_pointwise(xnp, f, truncation_order, truncation_order))

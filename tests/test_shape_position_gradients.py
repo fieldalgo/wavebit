@@ -179,8 +179,8 @@ def test_the_sampled_field_no_longer_depends_on_where_in_the_cell_a_shape_SITS()
     This replaced ``test_the_rectangle_normal_field_still_cannot_carry_a_position`` on
     2026-08-17. That test asserted ``autograd == 0.0`` for a rectangle -- the signature of
     ``sign()``, whose derivative vanishes -- against a finite central difference, and called
-    the difference real. It was not. Its own docstring said so: "That ``<nx**2>`` moves at all
-    is the clipped window, not physics: a circle's mean ``nx**2`` is 1/2 by symmetry and reads
+    the difference real. It was not. Its own docstring said so: "That ``<normal_x**2>`` moves at all
+    is the clipped window, not physics: a circle's mean ``normal_x**2`` is 1/2 by symmetry and reads
     1/2 only when it sits at the centre of the cell."
 
     Folding the displacement to the nearest image removed the window, so the quantity that
@@ -198,15 +198,15 @@ def test_the_sampled_field_no_longer_depends_on_where_in_the_cell_a_shape_SITS()
     from wavebit._core.analytic import normal_vector_field_analytical
 
     def mean_nx2(kind, cy):
-        nx, _ = normal_vector_field_analytical(
+        normal_x, _ = normal_vector_field_analytical(
             jnp, (256, 256), [_shape(kind, 'cy', cy)], (P, P), jnp.float64)
-        return float(jnp.mean(nx ** 2))
+        return float(jnp.mean(normal_x ** 2))
 
     for kind, tol in (('circle', 1e-5), ('ellipse', 1e-4), ('rectangle', 1e-3)):
         seen = [mean_nx2(kind, c * P) for c in (0.10, 0.31, 0.50, 0.77, 1.31)]
         assert np.ptp(seen) < tol, (kind, seen)
 
-    # A circle's mean nx**2 is 1/2 by symmetry, and now reads it from anywhere in the cell.
+    # A circle's mean normal_x**2 is 1/2 by symmetry, and now reads it from anywhere in the cell.
     assert abs(mean_nx2('circle', 0.13 * P) - 0.5) < 1e-4
 
 

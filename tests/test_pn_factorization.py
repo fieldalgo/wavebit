@@ -58,8 +58,8 @@ def solve(slots, eps, truncation_order, theta=0.0, phi=0.0, psi=0.0):
 
 
 def pn(eps33, eps_scalar, truncation_order):
-    nx, ny = normal_vector_field(eps_scalar)
-    return pn_eps_conv_matrices(np, eps33, nx, ny, truncation_order, truncation_order)
+    normal_x, normal_y = normal_vector_field(eps_scalar)
+    return pn_eps_conv_matrices(np, eps33, normal_x, normal_y, truncation_order, truncation_order)
 
 
 def rt(res):
@@ -87,21 +87,21 @@ def test_it_builds_and_differentiates_on_every_backend(name):
     eps = pillar(1.6 ** 2, grid=48)
     g = pillar(0.30j, 0.0, grid=48)
     e33 = tensor(eps, g)
-    nx, ny = normal_vector_field(eps)
-    ref = [np.asarray(m) for m in pn_eps_conv_matrices(np, e33, nx, ny, 4, 4)]
+    normal_x, normal_y = normal_vector_field(eps)
+    ref = [np.asarray(m) for m in pn_eps_conv_matrices(np, e33, normal_x, normal_y, 4, 4)]
 
     if name == 'jax':
         import jax
         import jax.numpy as jnp
         jax.config.update('jax_enable_x64', True)
-        args = (jnp.asarray(e33), jnp.asarray(nx), jnp.asarray(ny))
+        args = (jnp.asarray(e33), jnp.asarray(normal_x), jnp.asarray(normal_y))
         xp = array_namespace(args[0])
         grad = jax.grad(lambda e: jnp.abs(
             pn_eps_conv_matrices(xp, e, args[1], args[2], 2, 2)[0]).sum())(args[0])
     else:
         import torch
         args = (torch.as_tensor(e33).clone().requires_grad_(True),
-                torch.as_tensor(np.asarray(nx)), torch.as_tensor(np.asarray(ny)))
+                torch.as_tensor(np.asarray(normal_x)), torch.as_tensor(np.asarray(normal_y)))
         xp = array_namespace(args[0])
         pn_eps_conv_matrices(xp, args[0], args[1], args[2], 2, 2)[0].abs().sum().backward()
         grad = args[0].grad
@@ -178,8 +178,8 @@ def test_an_isotropic_tensor_reproduces_the_shipped_scalar_nvf(n_in):
     eps = pillar(n_in ** 2)
     truncation_order = 8
     a = rt(solve(pn(tensor(eps), eps, truncation_order), eps, truncation_order, theta=8.0))
-    nx, ny = normal_vector_field(eps)
-    b = rt(solve(nvf_conv_matrices(np, eps, nx, ny, truncation_order, truncation_order), eps, truncation_order, theta=8.0))
+    normal_x, normal_y = normal_vector_field(eps)
+    b = rt(solve(nvf_conv_matrices(np, eps, normal_x, normal_y, truncation_order, truncation_order), eps, truncation_order, theta=8.0))
     tol = 3e-5 * (n_in ** 2 - 1.0) ** 2
     assert max(abs(a[0] - b[0]), abs(a[1] - b[1])) < tol
 
@@ -207,9 +207,9 @@ def test_the_two_paths_agree_in_the_limit_where_they_have_to():
     relative = []
     for n_in in (1.05, 1.6):
         eps = pillar(n_in ** 2)
-        nx, ny = normal_vector_field(eps)
+        normal_x, normal_y = normal_vector_field(eps)
         a = rt(solve(pn(tensor(eps), eps, truncation_order), eps, truncation_order, theta=8.0))
-        b = rt(solve(nvf_conv_matrices(np, eps, nx, ny, truncation_order, truncation_order), eps, truncation_order, theta=8.0))
+        b = rt(solve(nvf_conv_matrices(np, eps, normal_x, normal_y, truncation_order, truncation_order), eps, truncation_order, theta=8.0))
         relative.append(abs(a[0] - b[0]) / abs(b[0]))
 
     assert relative[0] < relative[1] / 10, (
@@ -242,9 +242,9 @@ def test_the_z_slot_is_the_direct_rule_inverted_not_the_inverse_rule():
     form here so that this test sees only the rule.
     """
     eps = pillar(1.6 ** 2)
-    nx, ny = normal_vector_field(eps)
+    normal_x, normal_y = normal_vector_field(eps)
     for truncation_order in (4, 8):
-        got = pn_eps_conv_matrices(np, tensor(eps), nx, ny, truncation_order, truncation_order)[2]
+        got = pn_eps_conv_matrices(np, tensor(eps), normal_x, normal_y, truncation_order, truncation_order)[2]
         direct = np.linalg.inv(fourier2d_piecewise_constant(
             np, eps.astype(complex), truncation_order, truncation_order, inverse_rule=None))
         inverse = fourier2d_piecewise_constant(
@@ -431,8 +431,8 @@ def test_the_normal_field_vanishing_is_handled_rather_than_divided_by():
     eps[N // 6:5 * N // 6, N // 6:5 * N // 6] = 2.56
     eps[N // 3:2 * N // 3, N // 3:2 * N // 3] = 1.0
 
-    nx, ny = normal_vector_field(eps)
-    assert (nx ** 2 + ny ** 2 == 0).any(), 'this shape was supposed to have a skeleton'
+    normal_x, normal_y = normal_vector_field(eps)
+    assert (normal_x ** 2 + normal_y ** 2 == 0).any(), 'this shape was supposed to have a skeleton'
 
     for mat in pn(tensor(eps, pillar(0.20j, 0.0)), eps, 6):
         assert np.isfinite(mat).all()
@@ -448,16 +448,16 @@ def test_a_null_direction_of_the_tensor_is_not_quietly_patched():
     """
     eps = pillar(1.6 ** 2)
     e33 = tensor(eps)
-    nx, ny = normal_vector_field(eps)
+    normal_x, normal_y = normal_vector_field(eps)
 
     # Make n.eps.n vanish where the normal points along +x, without zeroing the normal.
-    col = np.argmax(np.abs(nx).max(axis=0))
+    col = np.argmax(np.abs(normal_x).max(axis=0))
     e33[:, col, 0, 0] = 0.0
     e33[:, col, 1, 1] = 0.0
 
-    hit = (nx[:, col] ** 2 > 0.99)
+    hit = (normal_x[:, col] ** 2 > 0.99)
     assert hit.any(), 'this column was supposed to carry an x-pointing normal'
 
     with np.errstate(divide='ignore', invalid='ignore'):    # the division is the point here
-        out = pn_eps_conv_matrices(np, e33, nx, ny, 4, 4)
+        out = pn_eps_conv_matrices(np, e33, normal_x, normal_y, 4, 4)
     assert not all(np.isfinite(m).all() for m in out)

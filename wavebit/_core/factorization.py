@@ -494,7 +494,7 @@ def _to_numpy(x):
 
 def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=None,
                         base_shape=None):
-    """Unit normal vector field ``(nx, ny)`` of a raster layer.
+    """Unit normal vector field ``(normal_x, normal_y)`` of a raster layer.
 
     This is a **geometry** quantity — it depends on where the material interfaces sit, not on
     the permittivity values carried between them — so it is computed eagerly in NumPy/SciPy
@@ -643,16 +643,16 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
         g_j, g_i = _periodic_gradient(dist_map)
     else:
         from .lattice import jacobian
-        ny, nx = shape
-        J = jacobian(lattice, ny, nx)
-        # Work in units of one x-step: divide J through by |a1|/nx before anything reads it.
+        n_v, n_u = shape
+        J = jacobian(lattice, n_v, n_u)
+        # Work in units of one u-step: divide J through by |a1|/n_u before anything reads it.
         # A uniform scale cannot survive the normalisation at the end, so this changes no
         # direction — but it makes a square-pixel raster land on exactly `sampling=(1, 1)` and
         # a `J^-T` of the identity, which is bit-identical to taking no metric at all. Without
         # it those cells moved by ~7e-15 purely from multiplying a factor in and dividing it
         # back out.
         J = J / (float(np.hypot(J[0, 0], J[1, 0])) or 1.0)
-        # Physical length of one index step along each axis: axis 0 walks a2/ny, axis 1 a1/nx.
+        # Physical length of one index step along each axis: axis 0 walks a2/n_v, axis 1 a1/n_u.
         # Exact for an axis-aligned cell; for a sheared one it is the best `sampling` can say,
         # since scipy's transform has no way to express a non-diagonal metric. The direction
         # that survives normalisation is set by the gradient below, which is exact regardless.
@@ -811,7 +811,7 @@ def _normal_field_source(eps, lattice=None, method=None):
 
 
 def normal_field_for_raster(structure, half_width_u, half_width_v, lattice=None, method=None):
-    """Per-layer ``(nx, ny)`` normal fields for ``structure``, on the grid the NVF build uses.
+    """Per-layer ``(normal_x, normal_y)`` normal fields for ``structure``, on the grid the NVF build uses.
 
     Precompute this once from the concrete geometry and hand it to
     :func:`to_conv_mat_raster_nvf` as ``normal_field=`` to keep the build traceable under a
@@ -908,8 +908,8 @@ def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None, meth
         f'does.)')
 
 
-def _nvf_projector(xp, nx, ny, half_width_u, half_width_v, dtype, device=None):
-    """Convolution matrices of the normal projector: ``C_xx = <nx^2>`` etc.
+def _nvf_projector(xp, normal_x, normal_y, half_width_u, half_width_v, dtype, device=None):
+    """Convolution matrices of the normal projector: ``C_xx = <normal_x^2>`` etc.
 
     Always sampled off the raster the normal field lives on, whatever
     ``fourier_coefficients`` says. That keyword describes how the *permittivity* series is
@@ -918,9 +918,9 @@ def _nvf_projector(xp, nx, ny, half_width_u, half_width_v, dtype, device=None):
     extension of the interface direction into the bulk, so it has no piecewise-constant block
     structure for the closed-form series to integrate over in the first place.
     """
-    C_xx = fourier2d_pointwise(xp, xp.asarray(nx ** 2, dtype=dtype, device=device), half_width_u, half_width_v)
-    C_xy = fourier2d_pointwise(xp, xp.asarray(nx * ny, dtype=dtype, device=device), half_width_u, half_width_v)
-    C_yy = fourier2d_pointwise(xp, xp.asarray(ny ** 2, dtype=dtype, device=device), half_width_u, half_width_v)
+    C_xx = fourier2d_pointwise(xp, xp.asarray(normal_x ** 2, dtype=dtype, device=device), half_width_u, half_width_v)
+    C_xy = fourier2d_pointwise(xp, xp.asarray(normal_x * normal_y, dtype=dtype, device=device), half_width_u, half_width_v)
+    C_yy = fourier2d_pointwise(xp, xp.asarray(normal_y ** 2, dtype=dtype, device=device), half_width_u, half_width_v)
     return C_xx, C_xy, C_yy
 
 
@@ -952,7 +952,7 @@ def _nvf_assemble(xp, ep_dir, ep_inv, C_xx, C_xy, C_yy):
     return ConvMatrices(eps_xx, eps_yy, xp.linalg.inv(ep_dir), -eps_xy, -eps_xy)
 
 
-def _pn_fields(xp, eps33, nx, ny):
+def _pn_fields(xp, eps33, normal_x, normal_y):
     """Pointwise ``(A, B)`` of the Popov-Neviere rearrangement, for a tensor layer.
 
     :func:`_nvf_assemble` cannot serve a tensor. Its whole input is ``<eps>`` and ``<1/eps>``,
@@ -992,7 +992,7 @@ def _pn_fields(xp, eps33, nx, ny):
     # torch raises ("expected scalar type Double but found ComplexDouble") the moment the two
     # meet in `einsum`, so cast once here rather than at each of the five places they mix.
     dtype = _complex_dtype(xp, eps33)
-    n = xp.astype(xp.stack([nx, ny, xp.zeros_like(nx)], axis=-1), dtype)
+    n = xp.astype(xp.stack([normal_x, normal_y, xp.zeros_like(normal_x)], axis=-1), dtype)
     eps33 = xp.astype(eps33, dtype)
     eye = xp.astype(xp.eye(3, device=_device(xp, eps33)), dtype)
     N_proj = n[..., :, None] * n[..., None, :]
@@ -1009,7 +1009,7 @@ def _pn_fields(xp, eps33, nx, ny):
     # projector does in `_nvf_assemble`. Guard on the FIELD vanishing, not on `a`: an `a` that
     # vanishes under a nonzero normal is a null direction of the tensor itself, and patching
     # that silently would bury a real singularity instead of reporting it.
-    a = xp.where(nx ** 2 + ny ** 2 == 0, xp.ones_like(a), a)[..., None, None]
+    a = xp.where(normal_x ** 2 + normal_y ** 2 == 0, xp.ones_like(a), a)[..., None, None]
 
     A = (eps33 - p[..., :, None] * q[..., None, :] / a) @ T_proj \
         + p[..., :, None] * n[..., None, :] / a
@@ -1018,7 +1018,7 @@ def _pn_fields(xp, eps33, nx, ny):
     return A, B
 
 
-def pn_eps_conv_matrices(xp, eps33, nx, ny, half_width_u, half_width_v):
+def pn_eps_conv_matrices(xp, eps33, normal_x, normal_y, half_width_u, half_width_v):
     """Popov-Neviere convolution matrices for one *patterned anisotropic* layer.
 
     ``eps33`` is the pointwise permittivity tensor on the layer raster, shape ``(Ny, Nx, 3, 3)``.
@@ -1034,7 +1034,7 @@ def pn_eps_conv_matrices(xp, eps33, nx, ny, half_width_u, half_width_v):
     off-diagonal, has no z-row arguments at all. That case is left unimplemented rather than
     written blind.
     """
-    A, B = _pn_fields(xp, eps33, nx, ny)
+    A, B = _pn_fields(xp, eps33, normal_x, normal_y)
 
     def block(field):
         return xp.concat([xp.concat([fourier2d_pointwise(xp, field[..., i, j], half_width_u, half_width_v)
@@ -1086,7 +1086,7 @@ def pn_eps_conv_matrices(xp, eps33, nx, ny, half_width_u, half_width_v):
     return ConvMatrices(eps_xx, eps_yy, epz_i, -eps_xy, -eps_yx)
 
 
-def pn_mu_conv_matrices(xp, mu33, nx, ny, half_width_u, half_width_v):
+def pn_mu_conv_matrices(xp, mu33, normal_x, normal_y, half_width_u, half_width_v):
     """The five **permeability** slots from a patterned ``mu`` tensor.
 
     ``pn_eps_conv_matrices`` verbatim. That one routine serves both is not a shortcut — it is
@@ -1109,10 +1109,10 @@ def pn_mu_conv_matrices(xp, mu33, nx, ny, half_width_u, half_width_v):
     order" in this module's docstring) and the swap below went away. What remains is a name for
     the ``mu`` half of the duality and for the normal-field note below — nothing is rearranged.
 
-    ``nx`` / ``ny`` are the normal field of the **permeability's** boundary, which need not be
+    ``normal_x`` / ``normal_y`` are the normal field of the **permeability's** boundary, which need not be
     the permittivity's — see :func:`to_conv_mat_raster_pn_mu`.
     """
-    return pn_eps_conv_matrices(xp, mu33, nx, ny, half_width_u, half_width_v)
+    return pn_eps_conv_matrices(xp, mu33, normal_x, normal_y, half_width_u, half_width_v)
 
 
 def to_conv_mat_raster_pn_mu(tensor_raster, half_width_u, half_width_v, normal_field=None, lattice=None,
@@ -1123,7 +1123,7 @@ def to_conv_mat_raster_pn_mu(tensor_raster, half_width_u, half_width_v, normal_f
     Args:
         tensor_raster: ``(n_layers, Ny, Nx, 3, 3)`` permeability tensors per pixel.
         half_width_u, half_width_v: Fourier truncation orders.
-        normal_field: optional per-layer ``(nx, ny)``. Left ``None`` it is computed from the
+        normal_field: optional per-layer ``(normal_x, normal_y)``. Left ``None`` it is computed from the
             in-plane trace of **``mu``**, not of ``eps``. Reading ``mu_zz`` instead would give
             the same field for any tensor whose components share a boundary — which is every
             physical one — because :func:`normal_vector_field` reads where the interface *is*,
@@ -1163,12 +1163,12 @@ def to_conv_mat_raster_pn_mu(tensor_raster, half_width_u, half_width_v, normal_f
     for i in range(tensor_raster.shape[0]):
         mu33 = tensor_raster[i]
         if normal_field is None:
-            nx, ny = normal_vector_field(
+            normal_x, normal_y = normal_vector_field(
                 0.5 * (mu33[..., 0, 0] + mu33[..., 1, 1]), lattice=lattice,
                 method=normal_method)
         else:
-            nx, ny = normal_field[i]
-        for slot, mat in zip(out, pn_mu_conv_matrices(xp, mu33, nx, ny, half_width_u, half_width_v)):
+            normal_x, normal_y = normal_field[i]
+        for slot, mat in zip(out, pn_mu_conv_matrices(xp, mu33, normal_x, normal_y, half_width_u, half_width_v)):
             slot.append(mat)
 
     return ConvMatrices(*(xp.stack(slot) for slot in out))
@@ -1188,7 +1188,7 @@ def to_conv_mat_raster_pn_eps(tensor_raster, half_width_u, half_width_v, normal_
             ``n ** 2`` is a scalar operation and there is no square root of a tensor field
             worth guessing at.
         half_width_u, half_width_v: Fourier truncation orders.
-        normal_field: optional per-layer ``(nx, ny)``. Left ``None`` it is computed from the
+        normal_field: optional per-layer ``(normal_x, normal_y)``. Left ``None`` it is computed from the
             trace of the in-plane block, which is the isotropic part of the layer and so sees
             the same geometry a scalar raster would. Supply it to keep the build traceable
             under JAX, or when the tensor's structure and its *shape* differ — an optic axis
@@ -1221,19 +1221,19 @@ def to_conv_mat_raster_pn_eps(tensor_raster, half_width_u, half_width_v, normal_
         eps33 = tensor_raster[i]
         if normal_field is None:
             # The in-plane trace: the layer's isotropic part, which is what carries the shape.
-            nx, ny = normal_vector_field(
+            normal_x, normal_y = normal_vector_field(
                 0.5 * (eps33[..., 0, 0] + eps33[..., 1, 1]), lattice=lattice,
                 method=normal_method)
         else:
-            nx, ny = normal_field[i]
+            normal_x, normal_y = normal_field[i]
         for slot, mat in zip(
-                out, pn_eps_conv_matrices(xp, eps33, nx, ny, half_width_u, half_width_v)):
+                out, pn_eps_conv_matrices(xp, eps33, normal_x, normal_y, half_width_u, half_width_v)):
             slot.append(mat)
 
     return ConvMatrices(*(xp.stack(slot) for slot in out))
 
 
-def nvf_conv_matrices(xp, eps_matrix, nx, ny, half_width_u, half_width_v):
+def nvf_conv_matrices(xp, eps_matrix, normal_x, normal_y, half_width_u, half_width_v):
     """NVF convolution matrices for one layer, with sampled coefficients."""
     C = _complex_dtype(xp, eps_matrix)
     eps_matrix = xp.astype(eps_matrix, C)
@@ -1246,14 +1246,14 @@ def nvf_conv_matrices(xp, eps_matrix, nx, ny, half_width_u, half_width_v):
     ep_inv = fourier2d_piecewise_constant(xp, 1.0 / eps_matrix, half_width_u, half_width_v, inverse_rule=None)
 
     return _nvf_assemble(xp, ep_dir, ep_inv,
-                         *_nvf_projector(xp, nx, ny, half_width_u, half_width_v, C, dev))
+                         *_nvf_projector(xp, normal_x, normal_y, half_width_u, half_width_v, C, dev))
 
 
-def nvf_conv_matrices_integrated(xp, eps_comp, x, y, nx, ny, half_width_u, half_width_v):
+def nvf_conv_matrices_integrated(xp, eps_comp, x, y, normal_x, normal_y, half_width_u, half_width_v):
     """NVF convolution matrices for one layer, with integrated (closed-form) coefficients.
 
     ``eps_comp`` is the *compressed* piecewise-constant layer and ``x`` / ``y`` its segment
-    edges, exactly as :func:`fourier2d_integrated` takes them; ``nx`` / ``ny`` are the normal
+    edges, exactly as :func:`fourier2d_integrated` takes them; ``normal_x`` / ``normal_y`` are the normal
     field on the uncompressed raster (see :func:`_nvf_projector` for why the two grids differ).
     """
     C = _complex_dtype(xp, eps_comp)
@@ -1264,7 +1264,7 @@ def nvf_conv_matrices_integrated(xp, eps_comp, x, y, nx, ny, half_width_u, half_
     ep_inv = fourier2d_integrated(xp, 1.0 / eps_comp, x, y, half_width_u, half_width_v, inverse_rule=None)
 
     return _nvf_assemble(xp, ep_dir, ep_inv,
-                         *_nvf_projector(xp, nx, ny, half_width_u, half_width_v, C, dev))
+                         *_nvf_projector(xp, normal_x, normal_y, half_width_u, half_width_v, C, dev))
 
 
 def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=None,
@@ -1274,7 +1274,7 @@ def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=N
     Args:
         structure: relative-permittivity raster ``(n_layers, Ny, Nx)`` — the design variable.
         half_width_u, half_width_v: Fourier truncation orders.
-        normal_field: optional per-layer ``(nx, ny)`` pairs for the *upsampled* layer grid.
+        normal_field: optional per-layer ``(normal_x, normal_y)`` pairs for the *upsampled* layer grid.
             Supply this to keep the build traceable under JAX (the default computes the field
             with SciPy, which needs concrete values). It is static geometry either way.
         normal_field_source: what that field was sampled from, from
@@ -1310,16 +1310,16 @@ def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=N
     layers = _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v)
     for i, (eps_matrix, base_eps, repeat_v, repeat_u) in enumerate(layers):
         if normal_field is None:
-            nx, ny = normal_vector_field(
+            normal_x, normal_y = normal_vector_field(
                 eps_matrix, _interface_mask_of(xp, eps_matrix, base_eps, repeat_v, repeat_u),
                 lattice=lattice, method=normal_method, base_shape=tuple(base_eps.shape))
         else:
             _check_normal_field_still_fits(eps_matrix, normal_field_source, i, lattice,
                                            normal_method)
-            nx, ny = normal_field[i]
+            normal_x, normal_y = normal_field[i]
 
         for slot, mat in zip(out, nvf_conv_matrices(
-                xp, eps_matrix, nx, ny, half_width_u, half_width_v)):
+                xp, eps_matrix, normal_x, normal_y, half_width_u, half_width_v)):
             slot.append(mat)
 
     return ConvMatrices(*(xp.stack(slot) for slot in out))
@@ -1632,7 +1632,7 @@ def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, nor
     Args:
         structure: relative-permittivity raster ``(n_layers, Ny, Nx)`` — the design variable.
         half_width_u, half_width_v: Fourier truncation orders.
-        normal_field: optional per-layer ``(nx, ny)`` from :func:`normal_field_for_raster`.
+        normal_field: optional per-layer ``(normal_x, normal_y)`` from :func:`normal_field_for_raster`.
         normal_field_source: what that field was sampled from, as in
             :func:`to_conv_mat_raster_nvf` — this path replays the same record and is checked
             the same way.
@@ -1660,13 +1660,13 @@ def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, nor
 
     for i, (eps_grid, base_eps, repeat_v, repeat_u) in enumerate(eps_grids):
         if normal_field is None:
-            nx, ny = normal_vector_field(
+            normal_x, normal_y = normal_vector_field(
                 eps_grid, _interface_mask_of(xp, eps_grid, base_eps, repeat_v, repeat_u),
                 lattice=lattice, method=normal_method, base_shape=tuple(base_eps.shape))
         else:
             _check_normal_field_still_fits(eps_grid, normal_field_source, i, lattice,
                                            normal_method)
-            nx, ny = normal_field[i]
+            normal_x, normal_y = normal_field[i]
 
         layer = structure[i]
         if compression is None:
@@ -1678,7 +1678,7 @@ def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, nor
         eps_comp = xp.astype(comp, _complex_dtype(xp, comp))
 
         for slot, mat in zip(out, nvf_conv_matrices_integrated(
-                xp, eps_comp, x, y, nx, ny, half_width_u, half_width_v)):
+                xp, eps_comp, x, y, normal_x, normal_y, half_width_u, half_width_v)):
             slot.append(mat)
 
     return ConvMatrices(*(xp.stack(slot) for slot in out))

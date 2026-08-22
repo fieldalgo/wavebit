@@ -166,14 +166,14 @@ class Result:
 
         if not (cx - fx <= m <= cx + fx):
             raise IndexError(f'order m={m} outside the retained set [{cx - fx}, {cx + fx}]')
-        ny = None
+        n_v = None
         for a in (sub.R, sub.T):
             if a is not None:
-                ny = a.reshape(-1, a.shape[-1]).shape[0]
+                n_v = a.reshape(-1, a.shape[-1]).shape[0]
                 break
-        if ny is not None and ny > 1 and not (cy - fy <= n <= cy + fy):
+        if n_v is not None and n_v > 1 and not (cy - fy <= n <= cy + fy):
             raise IndexError(f'order n={n} outside the retained set [{cy - fy}, {cy + fy}]')
-        if ny is not None and ny == 1 and n != 0:
+        if n_v is not None and n_v == 1 and n != 0:
             raise IndexError('this solve retained a single row of orders; only n=0 exists')
 
         return OrderView(m, n, pick(sub.R), pick(sub.T),

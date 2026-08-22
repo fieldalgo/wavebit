@@ -693,7 +693,7 @@ _TILE = 64
 _TILE_MIN_PIXELS = 512 * 512
 
 
-def _tiles_pay(sample, ny, nx, n_shapes):
+def _tiles_pay(sample, n_v, n_u, n_shapes):
     """Whether to evaluate the blend block by block instead of over the whole grid.
 
     **NumPy only, and that is the point rather than a limitation.** The win here is cache
@@ -710,7 +710,7 @@ def _tiles_pay(sample, ny, nx, n_shapes):
     above says to keep it off. ``test_only_numpy_takes_the_tiled_path`` is what caught that.
     """
     import numpy as np
-    return (n_shapes > 1 and ny * nx >= _TILE_MIN_PIXELS
+    return (n_shapes > 1 and n_v * n_u >= _TILE_MIN_PIXELS
             and type(sample) is np.ndarray)
 
 
@@ -722,12 +722,12 @@ def _blend_tiled(xp, X, Y, shapes, Px, Py, dtype, grid_shape):
     ``test_the_tiled_blend_is_bit_identical_to_the_whole_grid_one``.
     """
     import numpy as np
-    ny, nx = grid_shape
+    n_v, n_u = grid_shape
     out_x = np.empty(grid_shape, dtype=dtype)
     out_y = np.empty(grid_shape, dtype=dtype)
-    for i0 in range(0, ny, _TILE):
-        for j0 in range(0, nx, _TILE):
-            block = (slice(i0, min(i0 + _TILE, ny)), slice(j0, min(j0 + _TILE, nx)))
+    for i0 in range(0, n_v, _TILE):
+        for j0 in range(0, n_u, _TILE):
+            block = (slice(i0, min(i0 + _TILE, n_v)), slice(j0, min(j0 + _TILE, n_u)))
             bx = np.ascontiguousarray(X[block])
             by = np.ascontiguousarray(Y[block])
             got = [g for g in (_shape_surface_normal(xp, bx, by, s, Px, Py, dtype)
@@ -763,7 +763,7 @@ def _blend(xp, got, shape, dtype):
 
 
 def _shape_surface_normal(xp, X, Y, shape, Px, Py, dtype):
-    """``(distance to this shape's surface, nx, ny)`` — the outward unit normal, periodic.
+    """``(distance to this shape's surface, normal_x, normal_y)`` — the outward unit normal, periodic.
 
     Two things here differ from what this file did before 2026-08-17, and both are what make
     :func:`normal_vector_field_analytical` a nearest-surface field rather than a sum.
@@ -952,7 +952,7 @@ def _projector_cache_key(xp, built, grid_shape, period, half_width_u, half_width
 
 
 def normal_projector_coeffs(xp, shapes, grid_shape, period, half_width_u, half_width_v, dtype, lattice=None):
-    """Coefficient grids of ``nx**2``, ``nx*ny`` and ``ny**2`` — the NVF projectors' input.
+    """Coefficient grids of ``normal_x**2``, ``normal_x*normal_y`` and ``normal_y**2`` — the NVF projectors' input.
 
     **One shape is built at the centre of the cell and carried to ``(cx, cy)`` by a phase**,
     the same way :func:`assemble_eps_coeffs` carries the permittivity. Two things follow, and
@@ -969,7 +969,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, half_width_u, half_w
     *And the model becomes translation-covariant, which it was not.* The normal field is
     defined over the whole plane — a rectangle's wedges and a circle's rays do not stop at the
     shape — so sampling it over a fixed cell clips a different part of it depending on where
-    the shape sits. That is not a discretization: ``<nx**2>`` for a circle moves 2.4e-2 between
+    the shape sits. That is not a discretization: ``<normal_x**2>`` for a circle moves 2.4e-2 between
     0.30 and 0.50 of the period and does not budge when the grid goes from 256 to 4096. It
     reached ``sum(R)`` as 1.6e-3, so the same structure translated gave a different answer.
     Built here it reproduces the centred one to 1e-14, at every ``truncation_order``.
@@ -1045,7 +1045,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, half_width_u, half_w
     it. Several shapes do not: for a rod at ``cx`` = 0.10 / 1.10 / 2.10 beside a fixed second
     rod, total transmission comes out 0.8532 / 0.8678 / 0.8665. Splitting the layer's inputs
     puts it here rather than in the transform — across one period the permittivity coefficients
-    agree to 1.1e-15 while ``<nx**2>`` differs by 3.1e-1. The boundary path inherits it
+    agree to 1.1e-15 while ``<normal_x**2>`` differs by 3.1e-1. The boundary path inherits it
     identically, bit for bit, since it takes its field from the same place. An optimizer left
     free to move a shape will walk it over the edge and climb the artefact, so clamp the
     centres. Pinned by ``test_a_multishape_layer_is_not_periodic_across_the_cell_edge``.
@@ -1085,10 +1085,10 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, half_width_u, half_w
     key = _projector_cache_key(xp, built, grid_shape, period, half_width_u, half_width_v, dtype, lattice)
     coeffs = _PROJECTOR_CACHE.pop(key, None) if key is not None else None
     if coeffs is None:
-        nx, ny = normal_vector_field_analytical(xp, grid_shape, built, (Px, Py), real_dtype,
+        normal_x, normal_y = normal_vector_field_analytical(xp, grid_shape, built, (Px, Py), real_dtype,
                                                 lattice)
         coeffs = tuple(_sampled_coeffs(xp, xp.astype(f, dtype), half_width_u, half_width_v)
-                       for f in (nx * nx, nx * ny, ny * ny))
+                       for f in (normal_x * normal_x, normal_x * normal_y, normal_y * normal_y))
     if key is not None:
         # Least-recently-used: the read above is a `pop`, so a hit takes the entry out and this
         # puts it back at the end, and a full cache evicts only on a genuine miss. The case that
@@ -1142,7 +1142,7 @@ def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, half_width_u, half_w
     :func:`wavebit._core.factorization.nvf_conv_matrices`.
 
     ``eps_c`` / ``inv_eps_c`` are the ``eps`` and ``1/eps`` coefficients on the doubled
-    reciprocal grid; ``c_xx`` / ``c_xy`` / ``c_yy`` those of ``nx**2``, ``nx*ny``, ``ny**2``.
+    reciprocal grid; ``c_xx`` / ``c_xy`` / ``c_yy`` those of ``normal_x**2``, ``normal_x*normal_y``, ``normal_y**2``.
     Returns ``(eps_xx, eps_yy, epz_i, eps_xy, eps_yx)`` — ``solve_conv``'s parameter order,
     as every builder does; see "Slot order" in :mod:`wavebit._core.factorization`.
     """

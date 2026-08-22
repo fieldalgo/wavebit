@@ -86,8 +86,8 @@ def distance_gradient_normal_field(xp, polys, grid_shape, period, dtype, chunk=N
     corner as their closest point, at exactly equal distance, so `argmin`'s tie-break decides on
     29-45% of the cell. The closest point is unique except on the medial axis (measure zero).
 
-    Sign flips inside/outside, which does not matter: NVF only uses ``nx**2``, ``nx*ny``,
-    ``ny**2``.
+    Sign flips inside/outside, which does not matter: NVF only uses ``normal_x**2``, ``normal_x*normal_y``,
+    ``normal_y**2``.
 
     The sample points come from :func:`wavebit._core.lattice.sample_grid`, shared with the
     analytic builder — this body was written by copying that one, and copying it is how it
@@ -132,9 +132,9 @@ def distance_gradient_normal_field(xp, polys, grid_shape, period, dtype, chunk=N
         nxs.append(n[:, 0])
         nys.append(n[:, 1])
 
-    nx = xp.reshape(xp.concat(nxs, axis=0), (Ny, Nx))
-    ny = xp.reshape(xp.concat(nys, axis=0), (Ny, Nx))
-    return nx, ny
+    normal_x = xp.reshape(xp.concat(nxs, axis=0), (Ny, Nx))
+    normal_y = xp.reshape(xp.concat(nys, axis=0), (Ny, Nx))
+    return normal_x, normal_y
 
 
 # ============================================ convolution matrices for one layer
@@ -172,7 +172,7 @@ def check_normal_grid(grid_shape, half_width_u, half_width_v):
 
 def normal_projector_coeffs(xp, loops, grid_shape, period, half_width_u, half_width_v, dtype, cdtype,
                             lattice=None):
-    """Coefficient grids of ``nx**2``, ``nx*ny``, ``ny**2``, built with the layer CENTRED.
+    """Coefficient grids of ``n_u**2``, ``n_u*n_v``, ``n_v**2``, built with the layer CENTRED.
 
     The normal field lives on the whole plane, so sampling it in a fixed cell clips a different
     part of it depending on where the shape sits -- a bias, not a discretisation: it does not
@@ -211,10 +211,10 @@ def normal_projector_coeffs(xp, loops, grid_shape, period, half_width_u, half_wi
         built = loops
         phase = xp.asarray(1.0 + 0j, dtype=cdtype)
 
-    nx, ny = distance_gradient_normal_field(xp, built, grid_shape, period, dtype,
+    n_u, n_v = distance_gradient_normal_field(xp, built, grid_shape, period, dtype,
                                             lattice=lattice)
     out = []
-    for f in (nx * nx, nx * ny, ny * ny):
+    for f in (n_u * n_u, n_u * n_v, n_v * n_v):
         out.append(_sampled_coeffs(xp, xp.astype(f, cdtype), half_width_u, half_width_v) * phase)
     return out
 
@@ -246,13 +246,13 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, period, norma
 
     The normal field is handed the loops as they are, orientation included, and that is safe by
     construction rather than by luck: it is the direction to the nearest boundary *point*, so it
-    depends on which segments exist and not on how they are wound, and only ``nx**2``,
-    ``nx*ny``, ``ny**2`` are consumed, so the vector's overall sign cancels too.
+    depends on which segments exist and not on how they are wound, and only ``normal_x**2``,
+    ``normal_x*normal_y``, ``normal_y**2`` are consumed, so the vector's overall sign cancels too.
 
     It is not, however, bit-invariant, and the choice made here is a measured one rather than an
     omission. Winding a hole clockwise renumbers its edges, so ``argmin`` breaks its exact ties
     the other way: on a disc inside a square, 20 pixels of 65536 move, each by 0.024541 in
-    ``nx**2`` -- that is ``sin(2*pi/256)``, one facet of the 256-gon, so the tie is between two
+    ``normal_x**2`` -- that is ``sin(2*pi/256)``, one facet of the 256-gon, so the tie is between two
     adjacent facets. It reaches ``c_xx`` and ``c_yy`` as 6.0e-6 and ``c_xy`` as 7.0e-18, and the
     solve as 1.3e-7 in ``sum(T)``.
 

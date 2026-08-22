@@ -3,7 +3,7 @@
 :func:`wavebit._core.factorization.normal_vector_field` dispatches here for every method
 except ``'distance'``, which stays where it always was. Each construction takes the same
 inputs — a concrete permittivity raster, its interface mask, the cell basis, and the shape
-the raster had before the ``4*truncation_order+1`` floor lift — and returns ``(nx, ny)`` float arrays
+the raster had before the ``4*truncation_order+1`` floor lift — and returns ``(normal_x, normal_y)`` float arrays
 with ``|n| = 1`` everywhere it emits a direction at all.
 
 Why these exist: the distance-transform gradient quantizes. Central differences of a
@@ -73,7 +73,7 @@ from .lattice import is_axis_aligned, jacobian
 def _metric(lattice, shape):
     """The cell's metric as one ``(2, 2)`` matrix: ``(x, y) = M @ (i, j)``.
 
-    ``M`` is :func:`~wavebit._core.lattice.jacobian` — columns ``a1/nx`` and ``a2/ny``, the
+    ``M`` is :func:`~wavebit._core.lattice.jacobian` — columns ``a1/n_u`` and ``a2/n_v``, the
     Cartesian displacement of one index step along each axis — divided through by the length
     of its first column. That normalisation is the one
     :func:`~wavebit._core.factorization.normal_vector_field` applies and is there for the same
@@ -92,8 +92,8 @@ def _metric(lattice, shape):
     """
     if lattice is None:
         return np.eye(2)
-    ny, nx = shape
-    M = np.asarray(jacobian(lattice, ny, nx), dtype=float)
+    n_v, n_u = shape
+    M = np.asarray(jacobian(lattice, n_v, n_u), dtype=float)
     return M / (float(np.hypot(M[0, 0], M[1, 0])) or 1.0)
 
 
@@ -101,7 +101,7 @@ def _steps(M):
     """``(step_v, step_u)``: the physical length of one index step along each axis.
 
     The column norms of :func:`_metric`. Two quite different things are read off them and it is
-    worth keeping them apart. ``nx * step_u`` and ``ny * step_v`` are the cell's two edge
+    worth keeping them apart. ``n_u * step_u`` and ``n_v * step_v`` are the cell's two edge
     lengths, which is exact on any basis. The pair *as a metric* is exact only on a diagonal
     ``M``, where it is the whole of it; a caller that hands it to a per-axis consumer on a
     skewed cell is approximating, and says so at the line.
@@ -158,10 +158,10 @@ def _cartesian_frequencies(M, shape):
     ``G/(2*pi) = M^-T @ (fi, fj)`` (:func:`_reciprocal`), evaluated on the transform's own
     index-space frequency grid. On an axis-aligned cell it is ``(fi, fj/step_v)``.
     """
-    ny, nx = shape
+    n_v, n_u = shape
     B = _reciprocal(M)
-    fi = np.fft.fftfreq(nx)[None, :]
-    fj = np.fft.fftfreq(ny)[:, None]
+    fi = np.fft.fftfreq(n_u)[None, :]
+    fj = np.fft.fftfreq(n_v)[:, None]
     return B[0, 0] * fi + B[0, 1] * fj, B[1, 0] * fi + B[1, 1] * fj
 
 
@@ -258,7 +258,7 @@ def _periodic_signed_distance(inside, M):
     *small* features, where the kernel is widest relative to the shape
     (``docs/nvf-normal-methods.md``).
     """
-    ny, nx = inside.shape
+    n_v, n_u = inside.shape
     if _separable(M):
         from scipy.ndimage import distance_transform_edt
         step_v, step_u = _steps(M)
@@ -266,17 +266,17 @@ def _periodic_signed_distance(inside, M):
         t = np.tile(inside, (3, 3))
         sd = (distance_transform_edt(~t, sampling=sampling)
               - distance_transform_edt(t, sampling=sampling))
-        return sd[ny:2 * ny, nx:2 * nx]
+        return sd[n_v:2 * n_v, n_u:2 * n_u]
 
     from scipy.spatial import cKDTree
-    Ii, Jj = np.meshgrid(np.arange(nx, dtype=float), np.arange(ny, dtype=float))
+    Ii, Jj = np.meshgrid(np.arange(n_u, dtype=float), np.arange(n_v, dtype=float))
     P = np.column_stack([Ii.ravel(), Jj.ravel()]) @ M.T
 
     def nearest(phase):
         jj, ii = np.nonzero(phase)
-        tiled = np.vstack([np.column_stack([ii + dx * nx, jj + dy * ny]).astype(float)
+        tiled = np.vstack([np.column_stack([ii + dx * n_u, jj + dy * n_v]).astype(float)
                            for dy in (-1, 0, 1) for dx in (-1, 0, 1)])
-        return cKDTree(tiled @ M.T).query(P, workers=-1)[0].reshape(ny, nx)
+        return cKDTree(tiled @ M.T).query(P, workers=-1)[0].reshape(n_v, n_u)
 
     # Each phase measures to the other one; a pixel's distance to its OWN phase is zero and is
     # what the sign selects away, exactly as the pair of transforms above does.
@@ -360,8 +360,8 @@ def _contour_polylines(smoothed):
             "normal_method='contour' extracts subpixel level sets with contourpy, which "
             "is not installed. `pip install contourpy` (it ships with matplotlib), or use "
             "normal_method='spectral', which needs nothing beyond NumPy/SciPy.") from None
-    ny, nx = smoothed.shape
-    pad = max(ny, nx)
+    n_v, n_u = smoothed.shape
+    pad = max(n_v, n_u)
     padded = np.pad(smoothed, pad, mode='wrap')
     gen = contourpy.contour_generator(z=padded, line_type=contourpy.LineType.Separate)
     closed_loops, open_curves = [], []
@@ -381,8 +381,8 @@ def _contour_polylines(smoothed):
     out, seen = [], set()
     for pts in closed_loops:
         centre = pts.mean(0)
-        folded = pts - np.array([np.round(centre[0] / nx) * nx,
-                                 np.round(centre[1] / ny) * ny])
+        folded = pts - np.array([np.round(centre[0] / n_u) * n_u,
+                                 np.round(centre[1] / n_v) * n_v])
         centre = folded.mean(0)
         key = (round(float(centre[0]), 3), round(float(centre[1]), 3), folded.shape[0])
         if key in seen:
@@ -519,7 +519,7 @@ def contour_normal_field(eps, interface_mask, lattice=None, base_shape=None):
         return _constant_along_x(shape)
     points, prev, nxt = asm
 
-    ny, nx = shape
+    n_v, n_u = shape
     # Everything metric happens in physical coordinates from here on, and that is the whole
     # of the skew correction: `M` maps a point's index coordinates to Cartesian ones, and
     # the direction to the nearest point of the curve is then a Cartesian normal by
@@ -532,7 +532,7 @@ def contour_normal_field(eps, interface_mask, lattice=None, base_shape=None):
         for dx in (-1, 0, 1):
             # The tile offset is a lattice vector, `dx*a1 + dy*a2`, which is what an index
             # offset of a whole cell maps to.
-            tiles_pts.append(points + M @ np.array([dx * nx, dy * ny], dtype=float))
+            tiles_pts.append(points + M @ np.array([dx * n_u, dy * n_v], dtype=float))
             tiles_prev.append(prev + k * n_samples)
             tiles_next.append(nxt + k * n_samples)
             k += 1
@@ -550,7 +550,7 @@ def contour_normal_field(eps, interface_mask, lattice=None, base_shape=None):
     samp_n[:, 1] = np.where(ok, tvec[:, 0] / np.where(ok, tnorm, 1.0), 0.0)
 
     tree = cKDTree(tpts)
-    Ii, Jj = np.meshgrid(np.arange(nx, dtype=float), np.arange(ny, dtype=float))
+    Ii, Jj = np.meshgrid(np.arange(n_u, dtype=float), np.arange(n_v, dtype=float))
     P = np.column_stack([Ii.ravel(), Jj.ravel()]) @ M.T
 
     _, idx = tree.query(P, workers=-1)
@@ -575,8 +575,8 @@ def contour_normal_field(eps, interface_mask, lattice=None, base_shape=None):
                      v / np.where(vnorm > 0.0, vnorm, 1.0)[:, None])
     nn = np.hypot(n_vec[:, 0], n_vec[:, 1])
     nn[nn == 0.0] = 1.0
-    return ((n_vec[:, 0] / nn).reshape(ny, nx),
-            (n_vec[:, 1] / nn).reshape(ny, nx))
+    return ((n_vec[:, 0] / nn).reshape(n_v, n_u),
+            (n_vec[:, 1] / nn).reshape(n_v, n_u))
 
 
 # ==================================================================== 'spectral'
@@ -642,7 +642,7 @@ def spectral_normal_field(eps, interface_mask, lattice=None, base_shape=None):
     M = _metric(lattice, shape)
     step_v, step_u = _steps(M)
     B = _reciprocal(M)
-    ny, nx = shape
+    n_v, n_u = shape
 
     chi = _two_phase_indicator(eps)
 
@@ -652,11 +652,11 @@ def spectral_normal_field(eps, interface_mask, lattice=None, base_shape=None):
     # are stated on `G`, so both are exact on a skewed cell rather than approximated -- this
     # construction never takes a difference in index space, which is what it has instead of
     # a pullback.
-    fi = np.fft.fftfreq(nx)[None, :]            # cycles per index step, axis 1
-    fj = np.fft.fftfreq(ny)[:, None]            # cycles per index step, axis 0
+    fi = np.fft.fftfreq(n_u)[None, :]            # cycles per index step, axis 1
+    fj = np.fft.fftfreq(n_v)[:, None]            # cycles per index step, axis 0
     gxf = B[0, 0] * fi + B[0, 1] * fj           # cycles per unit length, Cartesian
     gyf = B[1, 0] * fi + B[1, 1] * fj
-    L_ref = max(nx * step_u, ny * step_v)       # longer cell edge, in x-steps
+    L_ref = max(n_u * step_u, n_v * step_v)       # longer cell edge, in x-steps
     rr = np.hypot(gxf, gyf) * L_ref             # orders across that edge
     H = np.exp(-0.5 * (rr / _SPECTRAL_CUTOFF) ** 2)
 
@@ -666,10 +666,10 @@ def spectral_normal_field(eps, interface_mask, lattice=None, base_shape=None):
     # Cartesian components.
     di = 2j * np.pi * np.broadcast_to(fi, shape).astype(complex).copy()
     dj = 2j * np.pi * np.broadcast_to(fj, shape).astype(complex).copy()
-    if nx % 2 == 0:
-        di[:, nx // 2] = 0.0                    # Nyquist: no odd derivative
-    if ny % 2 == 0:
-        dj[ny // 2, :] = 0.0
+    if n_u % 2 == 0:
+        di[:, n_u // 2] = 0.0                    # Nyquist: no odd derivative
+    if n_v % 2 == 0:
+        dj[n_v // 2, :] = 0.0
     kx = B[0, 0] * di + B[0, 1] * dj
     ky = B[1, 0] * di + B[1, 1] * dj
 
@@ -706,8 +706,8 @@ def spectral_normal_field(eps, interface_mask, lattice=None, base_shape=None):
     sampling = None if step_v == step_u == 1.0 else (step_v, step_u)
     idx = distance_transform_edt(np.tile(~valid, (3, 3)), return_indices=True,
                                  sampling=sampling)[1]
-    iy = idx[0][ny:2 * ny, nx:2 * nx] % ny
-    ix = idx[1][ny:2 * ny, nx:2 * nx] % nx
+    iy = idx[0][n_v:2 * n_v, n_u:2 * n_u] % n_v
+    ix = idx[1][n_v:2 * n_v, n_u:2 * n_u] % n_u
     return nx_band[iy, ix], ny_band[iy, ix]
 
 

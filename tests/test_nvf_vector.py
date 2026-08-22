@@ -10,20 +10,20 @@ def get_normal_vector_field_analytical(grid_shape, shapes, period=(1000.0, 1000.
     return _nvf_analytic(xnp, grid_shape, shapes, period, xnp.float64)
 
 
-def to_conv_mat_nvf_2d(eps_matrix, half_width_u, half_width_v, nx=None, ny=None):
-    return _nvf_conv(xnp, eps_matrix, nx, ny, half_width_u, half_width_v)
+def to_conv_mat_nvf_2d(eps_matrix, half_width_u, half_width_v, normal_x=None, normal_y=None):
+    return _nvf_conv(xnp, eps_matrix, normal_x, normal_y, half_width_u, half_width_v)
 
 def test_analytical_normal_vector_generation():
     modeler = Modeling(period=[1000.0, 1000.0])
     modeler.shapes_list.append(dict(type='circle', cx=500.0, cy=500.0, lx=600.0))
     
-    nx, ny = get_normal_vector_field_analytical((100, 100), modeler.shapes_list, period=modeler.period)
+    normal_x, normal_y = get_normal_vector_field_analytical((100, 100), modeler.shapes_list, period=modeler.period)
     
-    assert nx.shape == (100, 100)
-    assert ny.shape == (100, 100)
+    assert normal_x.shape == (100, 100)
+    assert normal_y.shape == (100, 100)
     
     # Check unit vector normalization
-    norm = np.hypot(nx, ny)
+    norm = np.hypot(normal_x, normal_y)
     np.testing.assert_allclose(norm, 1.0, atol=1e-5)
 
 def test_vector_nvf_energy_conservation():
@@ -41,7 +41,7 @@ def test_vector_nvf_energy_conservation():
     nx_vec, ny_vec = get_normal_vector_field_analytical((N, N), shapes, period=(1000.0, 1000.0))
 
     max_order_val = 2
-    Exx, Eyy, Epz_i, Exy, Eyx = to_conv_mat_nvf_2d(eps_matrix, max_order_val, max_order_val, nx=nx_vec, ny=ny_vec)
+    Exx, Eyy, Epz_i, Exy, Eyx = to_conv_mat_nvf_2d(eps_matrix, max_order_val, max_order_val, normal_x=nx_vec, normal_y=ny_vec)
 
     m = wavebit.rcwa(
         backend=0, truncation_order=[max_order_val, max_order_val],

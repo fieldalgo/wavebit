@@ -49,8 +49,8 @@ def solve(n_in, g, truncation_order=MAX_ORDER):
     eps33[..., 0, 0] = eps33[..., 1, 1] = eps33[..., 2, 2] = eps
     eps33[..., 0, 1], eps33[..., 1, 0] = gyro, -gyro         # the physical tensor
 
-    nx, ny = normal_vector_field(eps)
-    epx, epy, epz_i, epxy, epyx = pn_eps_conv_matrices(np, eps33, nx, ny, truncation_order, truncation_order)
+    normal_x, normal_y = normal_vector_field(eps)
+    epx, epy, epz_i, epxy, epyx = pn_eps_conv_matrices(np, eps33, normal_x, normal_y, truncation_order, truncation_order)
 
     # `structure` is the scalar permittivity raster, handed over as it stands: the `np.sqrt`
     # that used to sit here existed only because the constructor took an index and squared it

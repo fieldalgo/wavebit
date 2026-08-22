@@ -296,7 +296,7 @@ def _inv_fourier(xp, kx, ky, period, sample_x, sample_y, k0, C, lattice=None):
     branch below, and that branch is left alone so its samples stay bit-identical.
     """
     dev = _dev(kx)
-    nx, ny = _n_samples(sample_x, 'sample_x'), _n_samples(sample_y, 'sample_y')
+    n_u, n_v = _n_samples(sample_x, 'sample_x'), _n_samples(sample_y, 'sample_y')
     # Branch on the *layout*, not on whether a basis was supplied: an axis-aligned cell may
     # carry an explicit `diag(period)` and still hand over separable 1-D vectors, in which case
     # the old path is both correct and bit-identical.
@@ -329,24 +329,24 @@ def _inv_fourier(xp, kx, ky, period, sample_x, sample_y, k0, C, lattice=None):
         _check_spec(sample_y, 'sample_y')
         u_1d = _frac(sample_x, a1x, a1y, 'sample_x')
         v_1d = _frac(sample_y, a2y, a2x, 'sample_y')
-        u_ph = xp.exp(1j * xp.reshape(u_1d, (1, nx, 1)) * proj_a1)
-        v_ph = xp.exp(1j * xp.reshape(v_1d, (ny, 1, 1)) * proj_a2)
-        return xp.broadcast_to(u_ph * v_ph, (ny, nx, kx_f.shape[0]))
+        u_ph = xp.exp(1j * xp.reshape(u_1d, (1, n_u, 1)) * proj_a1)
+        v_ph = xp.exp(1j * xp.reshape(v_1d, (n_v, 1, 1)) * proj_a2)
+        return xp.broadcast_to(u_ph * v_ph, (n_v, n_u, kx_f.shape[0]))
     # `period` stays an array rather than a Python float: all three backends take an array
     # endpoint and give bit-identical samples, and narrowing it would break tracing whenever
     # the solver itself is jitted (period is a traced child of the JAX solver pytree).
     x_1d = _axis_samples(xp, sample_x, period[0], C, dev)
-    x_2d = xp.reshape(x_1d, (1, nx, 1)) * kx * k0
-    x_2d = xp.reshape(xp.broadcast_to(x_2d, (ny, nx, kx.shape[0])),
-                      (ny, nx, 1, kx.shape[0]))
+    x_2d = xp.reshape(x_1d, (1, n_u, 1)) * kx * k0
+    x_2d = xp.reshape(xp.broadcast_to(x_2d, (n_v, n_u, kx.shape[0])),
+                      (n_v, n_u, 1, kx.shape[0]))
     if ky is None:
-        return xp.reshape(xp.exp(1j * x_2d), (ny, nx, -1))
+        return xp.reshape(xp.exp(1j * x_2d), (n_v, n_u, -1))
 
     y_1d = _axis_samples(xp, sample_y, period[1], C, dev)
-    y_2d = xp.reshape(y_1d, (ny, 1, 1)) * ky * k0
-    y_2d = xp.reshape(xp.broadcast_to(y_2d, (ny, nx, ky.shape[0])),
-                      (ny, nx, ky.shape[0], 1))
-    return xp.reshape(xp.exp(1j * x_2d) * xp.exp(1j * y_2d), (ny, nx, -1))
+    y_2d = xp.reshape(y_1d, (n_v, 1, 1)) * ky * k0
+    y_2d = xp.reshape(xp.broadcast_to(y_2d, (n_v, n_u, ky.shape[0])),
+                      (n_v, n_u, ky.shape[0], 1))
+    return xp.reshape(xp.exp(1j * x_2d) * xp.exp(1j * y_2d), (n_v, n_u, -1))
 
 
 def _z_1d(xp, sample_z, d, C, dev=None):

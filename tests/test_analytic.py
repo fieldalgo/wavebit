@@ -239,7 +239,7 @@ def test_the_analytic_normal_field_gets_the_two_axes_the_right_way_round():
     Px, Py, r = 2.0, 1.0, 0.3
     Ny, Nx = 129, 257
     shape = dict(type='circle', cx=Px / 2.0, cy=Py / 2.0, lx=2 * r, material=4.0)
-    nx, ny = _nvf_analytic(xnp, (Ny, Nx), [shape], (Px, Py), xnp.float64)
+    normal_x, normal_y = _nvf_analytic(xnp, (Ny, Nx), [shape], (Px, Py), xnp.float64)
 
     X, Y = np.meshgrid((np.arange(Nx) + 0.5) / Nx * Px, (np.arange(Ny) + 0.5) / Ny * Py)
     dx, dy = X - Px / 2.0, Y - Py / 2.0
@@ -248,15 +248,15 @@ def test_the_analytic_normal_field_gets_the_two_axes_the_right_way_round():
     def radial_alignment(fx, fy):
         return (np.asarray(fx) * dx + np.asarray(fy) * dy) / np.where(rad > 0, rad, 1.0)
 
-    assert np.abs(np.abs(radial_alignment(nx, ny)[rad > 0]) - 1.0).max() < 1e-12
+    assert np.abs(np.abs(radial_alignment(normal_x, normal_y)[rad > 0]) - 1.0).max() < 1e-12
 
     # And the same statement read off one pixel, exactly, where a swap is plainest. Both counts
     # are odd, so the disc's centre is a sample and row 64 sits *on* the centre line: due east
     # of it the normal is x_hat with nothing else in it. On the transposed cell that row is not
     # the centre line and this pixel is not even due east of the disc.
     i, j = Ny // 2, int((Px / 2.0 + 1.3 * r) / Px * Nx)
-    assert abs(abs(float(nx[i, j])) - 1.0) < 1e-14
-    assert abs(float(ny[i, j])) < 1e-14
+    assert abs(abs(float(normal_x[i, j])) - 1.0) < 1e-14
+    assert abs(float(normal_y[i, j])) < 1e-14
 
     # The branch the solver actually takes: a basis in hand, and the centre left to default out
     # of Px / Py. Same disc, so the same radial statement holds and the same tolerance applies.

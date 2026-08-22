@@ -85,8 +85,8 @@ def test_a_zero_norm_configuration_is_actually_reached():
     shape's centre, so the zero closes.
     """
     def zeros_for(shapes, n=NORMAL_GRID):
-        nx, ny = normal_vector_field_analytical(jnp, (n, n), shapes, (P, P), jnp.float64)
-        return int(np.count_nonzero(np.asarray(nx) ** 2 + np.asarray(ny) ** 2 == 0))
+        normal_x, normal_y = normal_vector_field_analytical(jnp, (n, n), shapes, (P, P), jnp.float64)
+        return int(np.count_nonzero(np.asarray(normal_x) ** 2 + np.asarray(normal_y) ** 2 == 0))
 
     n = 256
     c = _grid_point(100, n)
@@ -131,8 +131,8 @@ def test_shape_centred_on_a_grid_point_has_a_finite_gradient(kind):
 
     def mean_nx2(dy):
         shape = dict(type=kind, cx=c, cy=c + dy, lx=0.20 * P, ly=0.10 * P, material=9.0)
-        nx, _ = normal_vector_field_analytical(jnp, (n, n), [shape], (P, P), jnp.float64)
-        return jnp.mean(nx ** 2)
+        normal_x, _ = normal_vector_field_analytical(jnp, (n, n), [shape], (P, P), jnp.float64)
+        return jnp.mean(normal_x ** 2)
 
     g = float(jax.grad(mean_nx2)(jnp.asarray(0.0)))
     assert np.isfinite(g), (kind, g)

@@ -240,7 +240,7 @@ def _winding(V, xs, ys):
     loops with no sign of its own, the same way the polygon transform does.
 
     Crossing count along each row, accumulated as a difference array and summed once -- so the
-    cost is ``O(edges * ny + ny * nx)`` rather than a point-in-polygon per sample, which
+    cost is ``O(edges * n_v + n_v * n_u)`` rather than a point-in-polygon per sample, which
     matters when the ellipse arriving here is a 256-gon.
     """
     x0, y0 = V[:, 0], V[:, 1]
@@ -307,16 +307,16 @@ def _grid_from_conv_matrix(M, half_width_u, half_width_v):
     return np.asarray(M)[(r * n_orders_u + s), (c * n_orders_u + d)]
 
 
-def _inverse_series(coeffs, half_width_u, half_width_v, nx, ny):
-    """Evaluate a coefficient grid on ``ny x nx`` fractional samples.
+def _inverse_series(coeffs, half_width_u, half_width_v, n_u, n_v):
+    """Evaluate a coefficient grid on ``n_v x n_u`` fractional samples.
 
     ``eps(u, v) = sum c[ky, kx] * exp(+2i*pi*(kx*u + ky*v))``, sampled at cell centres. The
     ``+`` is the order-index convention the grids are built in; a sign slip here mirrors the
     picture, which ``test_band_limited_converges_on_the_geometry`` would catch (a mirrored
     reconstruction does not converge on an asymmetric layer).
     """
-    u = (np.arange(nx) + 0.5) / nx
-    v = (np.arange(ny) + 0.5) / ny
+    u = (np.arange(n_u) + 0.5) / n_u
+    v = (np.arange(n_v) + 0.5) / n_v
     my = np.arange(-2 * half_width_v, 2 * half_width_v + 1)
     mx = np.arange(-2 * half_width_u, 2 * half_width_u + 1)
     Ey = np.exp(2j * np.pi * np.outer(v, my))
@@ -505,9 +505,9 @@ def plot_structure(solver, layer=0, n=512, show='eps', ax=None, band_limited=Fal
         Px, Py = _periods(solver)
         art = ax.imshow(image, origin='lower', extent=(0.0, Px, 0.0, Py), cmap='viridis')
     else:
-        ny, nx = image.shape
-        u = (np.arange(nx) + 0.5) / nx
-        v = (np.arange(ny) + 0.5) / ny
+        n_v, n_u = image.shape
+        u = (np.arange(n_u) + 0.5) / n_u
+        v = (np.arange(n_v) + 0.5) / n_v
         U, V = np.meshgrid(u, v)
         X = U * basis[0][0] + V * basis[0][1]
         Y = U * basis[1][0] + V * basis[1][1]

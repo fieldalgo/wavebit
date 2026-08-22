@@ -106,14 +106,14 @@ def periods_of(A):
     return float(np.hypot(A[0, 0], A[1, 0])), float(np.hypot(A[0, 1], A[1, 1]))
 
 
-def jacobian(A, ny, nx):
+def jacobian(A, n_v, n_u):
     """Map from raster index steps to Cartesian displacement: ``(2, 2)``, columns ``(di, dj)``.
 
-    One step along axis 1 (``i``, the ``a1`` direction) moves ``a1 / nx``; one step along axis
-    0 (``j``, ``a2``) moves ``a2 / ny``. So::
+    One step along axis 1 (``i``, the ``a1`` direction) moves ``a1 / n_u``; one step along axis
+    0 (``j``, ``a2``) moves ``a2 / n_v``. So::
 
-        J = [[a1x/nx, a2x/ny],
-             [a1y/nx, a2y/ny]]
+        J = [[a1x/n_u, a2x/n_v],
+             [a1y/n_u, a2y/n_v]]
 
     A gradient carries the *inverse transpose* of this, not the Jacobian itself: for a scalar
     ``f`` sampled on the grid, ``grad_xy f = J^-T @ (df/di, df/dj)``. That distinction is the
@@ -121,7 +121,7 @@ def jacobian(A, ny, nx):
     :func:`wavebit._core.factorization.normal_vector_field`.
     """
     A = np.asarray(A, dtype=float)
-    return np.column_stack((A[:, 0] / nx, A[:, 1] / ny))
+    return np.column_stack((A[:, 0] / n_u, A[:, 1] / n_v))
 
 
 def sample_grid(xp, grid_shape, period, dtype, lattice=None):
