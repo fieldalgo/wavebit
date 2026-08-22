@@ -52,7 +52,7 @@ def _rand(shape, seed):
 
 
 CASES = [
-    # name, structure, max_order_x, max_order_y
+    # name, structure, half_width_1, half_width_2
     ('1d_1layer', _rand((1, 1, 8), 0), 4, 0),
     ('2d_1layer', _rand((1, 5, 5), 1), 2, 2),
     ('2layer_rect', _rand((2, 4, 6), 2), 2, 1),
@@ -96,15 +96,15 @@ def _exact_coeff(eps, ky, kx):
                                  ky, kx)
 
 
-def _exact_matrix(eps, x, y, max_order_x, max_order_y):
+def _exact_matrix(eps, x, y, half_width_1, half_width_2):
     """The whole direct-rule convolution matrix from the definition, index by index."""
-    n_orders_x, n_orders_y = 2 * max_order_x + 1, 2 * max_order_y + 1
-    n = n_orders_y * n_orders_x
+    n_orders_1, n_orders_2 = 2 * half_width_1 + 1, 2 * half_width_2 + 1
+    n = n_orders_2 * n_orders_1
     want = np.empty((n, n), dtype=complex)
     for r in range(n):
         for c in range(n):
             want[r, c] = _exact_coeff_segments(
-                eps, x, y, r // n_orders_x - c // n_orders_x, r % n_orders_x - c % n_orders_x)
+                eps, x, y, r // n_orders_1 - c // n_orders_1, r % n_orders_1 - c % n_orders_1)
     return want
 
 
@@ -123,16 +123,16 @@ def test_dfs_coefficients_are_the_exact_ones(case):
     same move was made for the integrated, vector and compression checks on 2026-08-18, which
     is what retired the golden entirely — see the note further down this file.
     """
-    name, structure, max_order_x, max_order_y = case
+    name, structure, half_width_1, half_width_2 = case
     eps = np.asarray(structure, dtype=float)[0]      # the raster *is* the permittivity now
 
-    got = np.asarray(fourier2d_piecewise_constant(xnp, eps.astype(complex), max_order_x, max_order_y, inverse_rule=None))
-    n_orders_x, n_orders_y = 2 * max_order_x + 1, 2 * max_order_y + 1
+    got = np.asarray(fourier2d_piecewise_constant(xnp, eps.astype(complex), half_width_1, half_width_2, inverse_rule=None))
+    n_orders_1, n_orders_2 = 2 * half_width_1 + 1, 2 * half_width_2 + 1
     want = np.empty_like(got)
-    for r in range(n_orders_y * n_orders_x):
-        for c in range(n_orders_y * n_orders_x):
-            ky = r // n_orders_x - c // n_orders_x
-            kx = r % n_orders_x - c % n_orders_x
+    for r in range(n_orders_2 * n_orders_1):
+        for c in range(n_orders_2 * n_orders_1):
+            ky = r // n_orders_1 - c // n_orders_1
+            kx = r % n_orders_1 - c % n_orders_1
             want[r, c] = _exact_coeff(eps, ky, kx)
 
     assert np.abs(got - want).max() < 1e-12 * max(1.0, np.abs(want).max()), (
@@ -151,9 +151,9 @@ def _to(backend, x):
 @pytest.mark.parametrize('case', CASES, ids=[c[0] for c in CASES])
 def test_factorization_cross_backend(case, backend):
     pytest.importorskip(backend)
-    _, structure, max_order_x, max_order_y = case
-    ref = core_dfs(structure, max_order_x, max_order_y)
-    got = core_dfs(_to(backend, structure), max_order_x, max_order_y)
+    _, structure, half_width_1, half_width_2 = case
+    ref = core_dfs(structure, half_width_1, half_width_2)
+    got = core_dfs(_to(backend, structure), half_width_1, half_width_2)
     for name, a, b in zip(('epx', 'epy', 'epz_i'), ref, got):
         assert np.allclose(np.array(a), np.asarray(b), atol=1e-10, rtol=0), name
 
@@ -204,7 +204,7 @@ def test_end_to_end_gradient_wrt_structure_1d():
                           truncation_order=truncation_order, period=[0.77], wavelength=0.777, thickness=[0.15], structure=structure)
     kx, _ = solver.order_kxy()
     theta = complex(solver.theta)
-    fk = dict(max_order_x=truncation_order[0], max_order_y=truncation_order[1])
+    fk = dict(half_width_1=truncation_order[0], half_width_2=truncation_order[1])
 
     def f_np(s):
         return float(np.sum(np.array(_chain_1d(fk, structure + s * direction, kx, theta))))
@@ -281,16 +281,16 @@ def test_nvf_permittivity_inputs_are_the_exact_ones(case):
     is a continuous vector field sampled on a grid: no closed form replaces it, refining the
     grid is the only thing that helps, and nothing about it moved.
     """
-    name, structure, max_order_x, max_order_y = case
+    name, structure, half_width_1, half_width_2 = case
     eps = np.asarray(structure, dtype=float)[0]
 
     for label, cell in (('eps', eps), ('1/eps', 1.0 / eps)):
-        got = np.asarray(fourier2d_piecewise_constant(xnp, cell.astype(complex), max_order_x, max_order_y, inverse_rule=None))
-        n_orders_x, n_orders_y = 2 * max_order_x + 1, 2 * max_order_y + 1
+        got = np.asarray(fourier2d_piecewise_constant(xnp, cell.astype(complex), half_width_1, half_width_2, inverse_rule=None))
+        n_orders_1, n_orders_2 = 2 * half_width_1 + 1, 2 * half_width_2 + 1
         want = np.empty_like(got)
-        for r in range(n_orders_y * n_orders_x):
-            for c in range(n_orders_y * n_orders_x):
-                want[r, c] = _exact_coeff(cell, r // n_orders_x - c // n_orders_x, r % n_orders_x - c % n_orders_x)
+        for r in range(n_orders_2 * n_orders_1):
+            for c in range(n_orders_2 * n_orders_1):
+                want[r, c] = _exact_coeff(cell, r // n_orders_1 - c // n_orders_1, r % n_orders_1 - c % n_orders_1)
         assert np.abs(got - want).max() < 1e-12 * max(1.0, np.abs(want).max()), (name, label)
 
 
@@ -303,9 +303,9 @@ def test_nvf_runs_on_every_backend(case, backend):
     single-source builder makes the same factorization available on all three.
     """
     pytest.importorskip(backend)
-    _, structure, max_order_x, max_order_y = case
-    ref = core_nvf(structure, max_order_x, max_order_y)
-    got = core_nvf(_to(backend, structure), max_order_x, max_order_y)
+    _, structure, half_width_1, half_width_2 = case
+    ref = core_nvf(structure, half_width_1, half_width_2)
+    got = core_nvf(_to(backend, structure), half_width_1, half_width_2)
     for a, b in zip(ref, got):
         assert np.allclose(np.array(a), np.asarray(b), atol=1e-12, rtol=0)
 
@@ -392,18 +392,18 @@ def test_integrated_coefficients_are_the_exact_ones(case):
     directly, and the builder's ``epz_i``, which is that matrix inverted and so pins the slot
     the solve actually eliminates ``E_z`` with.
     """
-    _, structure, max_order_x, max_order_y = case
+    _, structure, half_width_1, half_width_2 = case
     layer = np.asarray(structure)[0]
     row_idx, col_idx, x, y = compression_indices(layer)
     eps = np.asarray(compress_cell(xnp, layer, row_idx, col_idx)).astype(complex)
 
-    want = _exact_matrix(eps, x, y, max_order_x, max_order_y)
+    want = _exact_matrix(eps, x, y, half_width_1, half_width_2)
     scale = max(1.0, np.abs(want).max())
 
-    got = np.asarray(fourier2d_integrated(xnp, eps, x, y, max_order_x, max_order_y, inverse_rule=None))
+    got = np.asarray(fourier2d_integrated(xnp, eps, x, y, half_width_1, half_width_2, inverse_rule=None))
     assert np.abs(got - want).max() < 1e-12 * scale, np.abs(got - want).max()
 
-    inv_z = np.linalg.inv(np.asarray(core_cfs(structure, max_order_x, max_order_y).epz_i[0]))
+    inv_z = np.linalg.inv(np.asarray(core_cfs(structure, half_width_1, half_width_2).epz_i[0]))
     assert np.abs(inv_z - want).max() < 1e-11 * scale, np.abs(inv_z - want).max()
 
 
@@ -411,11 +411,11 @@ def test_integrated_coefficients_are_the_exact_ones(case):
 @pytest.mark.parametrize('case', INTEGRATED_CASES, ids=[c[0] for c in INTEGRATED_CASES])
 def test_cfs_cross_backend(case, backend):
     pytest.importorskip(backend)
-    _, structure, max_order_x, max_order_y = case
-    ref = core_cfs(structure, max_order_x, max_order_y)
+    _, structure, half_width_1, half_width_2 = case
+    ref = core_cfs(structure, half_width_1, half_width_2)
     # Compression is static geometry, so it is shared rather than recomputed per backend.
     compression = [compression_indices(structure[i]) for i in range(structure.shape[0])]
-    got = core_cfs(_to(backend, structure), max_order_x, max_order_y, compression=compression)
+    got = core_cfs(_to(backend, structure), half_width_1, half_width_2, compression=compression)
     for name, a, b in zip(('epx', 'epy', 'epz_i'), ref, got):
         assert np.allclose(np.array(a), np.asarray(b), atol=1e-12, rtol=0), name
 
@@ -433,10 +433,10 @@ def test_the_vector_path_integrates_its_segments_exactly():
     # column vectors, the shape `compression_indices` hands the builder
     x = np.array([[0.17], [0.61], [1.0]])          # uneven on purpose
     y = np.array([[0.43], [1.0]])
-    max_order_x = max_order_y = 2
+    half_width_1 = half_width_2 = 2
 
-    got = core_vector([(cell, x, y)], max_order_x, max_order_y)
-    want = _exact_matrix(cell.astype(complex), x, y, max_order_x, max_order_y)
+    got = core_vector([(cell, x, y)], half_width_1, half_width_2)
+    want = _exact_matrix(cell.astype(complex), x, y, half_width_1, half_width_2)
     scale = max(1.0, np.abs(want).max())
 
     inv_z = np.linalg.inv(np.asarray(got.epz_i[0]))
@@ -646,12 +646,12 @@ def _by_order(scene):
     entries. Keying by ``(m, n)`` states which physical order is being matched to which and
     leaves the shape out of it.
 
-    ``R`` and ``T`` are ``(n_orders_y, n_orders_x)`` with the incident order at the centre -- the transpose
+    ``R`` and ``T`` are ``(n_orders_2, n_orders_1)`` with the incident order at the centre -- the transpose
     of the ``truncation_order=[x, y]`` input order, which is itself one of the swaps under test.
     """
-    R, T, (max_order_x, max_order_y) = scene
-    return {(m, n): (R[max_order_y + n, max_order_x + m], T[max_order_y + n, max_order_x + m])
-            for n in range(-max_order_y, max_order_y + 1) for m in range(-max_order_x, max_order_x + 1)}
+    R, T, (half_width_1, half_width_2) = scene
+    return {(m, n): (R[half_width_2 + n, half_width_1 + m], T[half_width_2 + n, half_width_1 + m])
+            for n in range(-half_width_2, half_width_2 + 1) for m in range(-half_width_1, half_width_1 + 1)}
 
 
 def _residue(scene_a, scene_b, relabel):

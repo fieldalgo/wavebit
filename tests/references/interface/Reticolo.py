@@ -75,9 +75,9 @@ class Reticolo:
 
             truncation_order = truncation_order
             Nx = n_cell.shape[2]
-            period_x = period
+            extent_1 = period
             # grid_x = np.linspace(0, period, Nx + 1)[1:]
-            # grid_x -= period_x / 2
+            # grid_x -= extent_1 / 2
             grid_x = np.linspace(0, period, Nx + 1)[1:]
             grid_x = np.arange(1, Nx+1) * (period/Nx)
 
@@ -148,17 +148,17 @@ class Reticolo:
 
             # Nx = ucell.shape[2]
             # Ny = ucell.shape[1]
-            # period_x = period[0]
-            # period_y = period[1]
+            # extent_1 = period[0]
+            # extent_2 = period[1]
             #
-            # unit_x = period_x / Nx
-            # unit_y = period_y / Ny
+            # unit_x = extent_1 / Nx
+            # unit_y = extent_2 / Ny
             #
             # grid_x = np.linspace(0, period[0], Nx + 1)[1:]
             # grid_y = np.linspace(0, period[1], Ny + 1)[1:]
             #
-            # grid_x -= period_x / 2
-            # grid_y -= period_y / 2
+            # grid_x -= extent_1 / 2
+            # grid_y -= extent_2 / 2
             #
             # ucell_new = []
             # for z in range(ucell.shape[0]):

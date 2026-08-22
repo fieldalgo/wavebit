@@ -50,7 +50,7 @@ def _solve(structure, period, truncation_order, phi, psi, theta=_THETA, backend=
 
 
 def _order_kxy(phi, theta=_THETA, px=_PX, py=_PY, fx=_FX, fy=_FY):
-    """The in-plane wavevector of every retained order, on the ``(n_orders_y, n_orders_x)`` grid."""
+    """The in-plane wavevector of every retained order, on the ``(n_orders_2, n_orders_1)`` grid."""
     kx = np.sin(theta) * np.cos(phi) + np.arange(-fx, fx + 1) * _WL / px
     ky = np.sin(theta) * np.sin(phi) + np.arange(-fy, fy + 1) * _WL / py
     return np.meshgrid(kx, ky)

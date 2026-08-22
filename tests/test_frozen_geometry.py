@@ -437,7 +437,7 @@ def test_the_normal_field_decides_itself_inside_a_gradient_too():
     *upsampled* layer to SciPy in one NumPy conversion, which no tracer answers. But the field
     reads nothing except the interface mask, and the upsample is a block repeat -- so the mask
     follows from the base raster, which narrows value by value like the compression's
-    comparisons do, with ``repeat_y * repeat_x`` fewer of them.
+    comparisons do, with ``repeat_2 * repeat_1`` fewer of them.
 
     What this buys is the same thing the compression got: a fit whose raster pattern moves
     every step carries no record, so it cannot be served a stale one.

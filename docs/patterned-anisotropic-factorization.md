@@ -303,7 +303,7 @@ different boundaries and therefore need two normal fields.
 
 ## 9. Reaching it
 
-`to_conv_mat_raster_pn_eps(tensor_raster, max_order_x, max_order_y)` takes `(n_layers, Ny, Nx, 3, 3)` and
+`to_conv_mat_raster_pn_eps(tensor_raster, half_width_1, half_width_2)` takes `(n_layers, Ny, Nx, 3, 3)` and
 returns the five slots for the stack. It takes **permittivity**, and always did — `n ** 2` is a
 scalar operation and there is no square root of a tensor field worth guessing at. Since
 2026-08-20 that is no longer a special rule for this builder: the scalar front door takes

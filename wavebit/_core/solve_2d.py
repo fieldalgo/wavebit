@@ -6,7 +6,7 @@ Array-API namespace, sharing the boundary/branch conventions and the final s/p m
 :func:`wavebit._core.backend.eig`.
 
 The 2D layer couples both polarizations *and* both in-plane directions, so per-layer modes and
-the boundary system are ``2*n_orders`` block matrices (``n_orders = n_orders_x*n_orders_y``).
+the boundary system are ``2*n_orders`` block matrices (``n_orders = n_orders_1*n_orders_2``).
 Optional off-axis convolution blocks (``epxy`` / ``epyx``, produced by the NVF factorization;
 ``None`` = zeros) enter the mode operator. ``transfer_2d_1`` and ``transfer_2d_4`` are identical
 to the conical versions, so this module reuses ``solve_1d``'s boundary init and
@@ -45,15 +45,15 @@ _DEFECTIVE_REL = 1e-10
 
 
 def order_grid_kxy(xp, kx, ky):
-    """``kx`` / ``ky`` on the ``(n_orders_y, n_orders_x)`` order grid, from either spelling.
+    """``kx`` / ``ky`` on the ``(n_orders_2, n_orders_1)`` order grid, from either spelling.
 
     Two ways in, because a lattice basis decides which one is even expressible:
 
-    * **1-D**, lengths ``(n_orders_x,)`` and ``(n_orders_y,)`` — the separable form an
+    * **1-D**, lengths ``(n_orders_1,)`` and ``(n_orders_2,)`` — the separable form an
       axis-aligned cell
       admits, where ``kx`` depends only on ``m`` and ``ky`` only on ``n``. Broadcast to the
       grid here, which is what both solves used to do inline.
-    * **2-D**, ``(n_orders_y, n_orders_x)`` each — the per-order Cartesian components, which is
+    * **2-D**, ``(n_orders_2, n_orders_1)`` each — the per-order Cartesian components, which is
       the only
       form a skewed cell has: with ``G = m*b1 + n*b2`` non-orthogonal, *both* components
       depend on *both* indices and no pair of 1-D vectors can hold them. See
@@ -64,9 +64,9 @@ def order_grid_kxy(xp, kx, ky):
     """
     if kx.ndim == 2:
         return kx, ky
-    n_orders_x, n_orders_y = kx.shape[0], ky.shape[0]
-    return (xp.broadcast_to(kx[None, :], (n_orders_y, n_orders_x)),
-            xp.broadcast_to(xp.reshape(ky, (-1, 1)), (n_orders_y, n_orders_x)))
+    n_orders_1, n_orders_2 = kx.shape[0], ky.shape[0]
+    return (xp.broadcast_to(kx[None, :], (n_orders_2, n_orders_1)),
+            xp.broadcast_to(xp.reshape(ky, (-1, 1)), (n_orders_2, n_orders_1)))
 
 
 def _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R):
@@ -364,10 +364,10 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     it reached the ETM matching, and for a while the two algorithms honoured different inputs.
 
     ``kx`` / ``ky`` are the retained in-plane orders, in either spelling :func:`order_grid_kxy`
-    accepts: 1-D of lengths ``n_orders_x`` / ``n_orders_y`` for an axis-aligned cell, or
-    ``(n_orders_y, n_orders_x)`` per-order Cartesian components for any lattice.
+    accepts: 1-D of lengths ``n_orders_1`` / ``n_orders_2`` for an axis-aligned cell, or
+    ``(n_orders_2, n_orders_1)`` per-order Cartesian components for any lattice.
 
-    Returns ``(de_ri, de_ti)`` for that incidence, shape ``(n_orders_y, n_orders_x)``.
+    Returns ``(de_ri, de_ti)`` for that incidence, shape ``(n_orders_2, n_orders_1)``.
     """
     xp = array_namespace(epx_conv_all)
     mu_all = (None,) * 5 if mu is None else tuple(mu)
@@ -390,8 +390,8 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     C = kx.dtype
 
     kx_g, ky_g = order_grid_kxy(xp, kx, ky)
-    n_orders_y, n_orders_x = kx_g.shape
-    n_orders = n_orders_x * n_orders_y
+    n_orders_2, n_orders_1 = kx_g.shape
+    n_orders = n_orders_1 * n_orders_2
     k0 = 2 * 3.141592653589793 / wavelength
     theta = 0.0 if theta is None else theta
 
@@ -483,7 +483,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
 
     # --- stage 3: final matching -> efficiency (transfer_2d_4 == transfer_1d_conical_4) --
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
-                         n_top, n_bot, n_orders_x, n_orders_y, answers=answers,
+                         n_top, n_bot, n_orders_1, n_orders_2, answers=answers,
                          mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top,
                          lit=lit)
     if keep_field:

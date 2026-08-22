@@ -136,7 +136,7 @@ def test_the_result_surface_is_the_same_object_the_other_paths_return():
 
     Three claims at once, because they fail together and are cheap to check together:
 
-    * the **layout** — ``(n_orders_y, n_orders_x)``, y first, incident order at the centre, and
+    * the **layout** — ``(n_orders_2, n_orders_1)``, y first, incident order at the centre, and
       ``result.order(m, n)`` indexing it by the order indices;
     * the **naming contract** (``docs/conventions.md``) — uppercase real (power), lowercase
       complex (amplitude), both incidence variants present;
@@ -511,7 +511,7 @@ def test_y_orders_on_a_y_invariant_cell_are_refused_in_plain_words(incidence):
 
     It used to reach ``layer_modes_1d_conical`` and surface as ``operands could not be
     broadcast together with shapes (5,5) (15,15)`` — the ``Ky2`` block is built over
-    ``n_orders_x * n_orders_y`` and the convolution matrices over ``n_orders_x``. Nothing in that names the
+    ``n_orders_1 * n_orders_2`` and the convolution matrices over ``n_orders_1``. Nothing in that names the
     mistake, and it fired inside the solve rather than at the request.
     """
     with pytest.raises(ValueError, match='asks for y diffraction orders'):

@@ -265,7 +265,7 @@ def test_rectangle_angle_carries_gradient_near_an_aligned_angle():
     ('rectangle', (150., 150., 80., 60., 4.0, 0.4, 64, 64)),
 ])
 def test_grid_lines_come_back_strictly_increasing(shape, args):
-    """``x_list`` / ``y_list`` are segment edges; out of order they are a negative width.
+    """``edges_1`` / ``edges_2`` are segment edges; out of order they are a negative width.
 
     Blocks that meet at a coordinate share one line, so a stack of ``n`` slabs spends ``n + 1``
     rows and not ``2n + 1``. The unrotated ellipse is the sharp case in both respects: ``sin``

@@ -330,7 +330,7 @@ RESULTS = {
     'efficiencies': {
         'total': ('R', 'T'),
         'by_outgoing_polarization': ('R_s', 'R_p', 'T_s', 'T_p'),
-        'layout': 'arrays of shape (n_orders_y, n_orders_x) — y first, the transpose of the '
+        'layout': 'arrays of shape (n_orders_2, n_orders_1) — y first, the transpose of the '
                   'truncation_order=[x, y] input order. Centred on the incident order unless '
                   'an excitation widened the retained window; result.order_window says which '
                   'orders these are, and result.order(m, n) spares you the arithmetic',
@@ -383,7 +383,7 @@ RESULTS = {
                    "variants; 'field' adds the per-layer modes and amplitudes "
                    'reconstruct_field walks. Below that rung reconstruct_field is refused '
                    'rather than served, because the state is kept while the solve runs or not at '
-                   'all -- it is 4.25 matrices of side 2*n_orders_x*n_orders_y per layer on the '
+                   'all -- it is 4.25 matrices of side 2*n_orders_1*n_orders_2 per layer on the '
                    '2D path '
                    '(3.75 conical, 5 pure 1D), against boundary vectors for the amplitudes',
     },

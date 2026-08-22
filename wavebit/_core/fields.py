@@ -279,8 +279,8 @@ def _axis_samples(xp, spec, extent, C, dev):
 def _inv_fourier(xp, kx, ky, period, sample_x, sample_y, k0, C, lattice=None):
     """Inverse-transform kernel ``exp(-i k.r)`` sampled on the cell, flattened over orders.
 
-    With ``lattice`` given (and ``kx`` / ``ky`` therefore per-order, ``(n_orders_y,
-    n_orders_x)``) the samples are taken on the cell's own parallelogram, ``r = u*a1 + v*a2``
+    With ``lattice`` given (and ``kx`` / ``ky`` therefore per-order, ``(n_orders_2,
+    n_orders_1)``) the samples are taken on the cell's own parallelogram, ``r = u*a1 + v*a2``
     for ``u, v`` in ``[0, 1]``, and the returned grid is indexed by ``(v, u)`` rather than ``(y,
     x)``.
 
@@ -568,10 +568,10 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, sample_x, sa
     C = T1.dtype
     k0 = 2 * 3.141592653589793 / wavelength
     if kx.ndim == 2:
-        n_orders_y, n_orders_x = kx.shape
+        n_orders_2, n_orders_1 = kx.shape
     else:
-        n_orders_x, n_orders_y = kx.shape[0], ky.shape[0]
-    n_orders = n_orders_x * n_orders_y
+        n_orders_1, n_orders_2 = kx.shape[0], ky.shape[0]
+    n_orders = n_orders_1 * n_orders_2
 
     # Same two spellings the solve accepts, resolved by the same helper — 1-D separable for an
     # axis-aligned cell (broadcast exactly as before), per-order for any lattice.
@@ -699,10 +699,10 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, period,
     C = T1.dtype
     k0 = 2 * 3.141592653589793 / wavelength
     if kx.ndim == 2:
-        n_orders_y, n_orders_x = kx.shape
+        n_orders_2, n_orders_1 = kx.shape
     else:
-        n_orders_x, n_orders_y = kx.shape[0], ky.shape[0]
-    n_orders = n_orders_x * n_orders_y
+        n_orders_1, n_orders_2 = kx.shape[0], ky.shape[0]
+    n_orders = n_orders_1 * n_orders_2
 
     from .solve_2d import order_grid_kxy
     kx_g, ky_g = order_grid_kxy(xp, kx, ky)

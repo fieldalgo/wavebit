@@ -60,7 +60,7 @@ needs concrete numbers, so a layer whose parameters are tracers is passed throug
 
 **Shape parameters are absolute lengths, in whatever unit ``period`` is given in** -- not
 fractions of the period. A rod filling half a 0.77-long period is ``lx=0.385``, centred at
-``cx=0.385``; the defaults say the same thing (``cx`` defaults to ``period_x / 2``). Passing
+``cx=0.385``; the defaults say the same thing (``cx`` defaults to ``extent_1 / 2``). Passing
 fractions builds a rod ``1/period`` times too large and says nothing about it, so
 ``test_analytic_shape_parameters_are_absolute_lengths`` pins the distinction.
 
@@ -118,15 +118,15 @@ from .overlap import COMBINE_MODES, OVERLAP_TOL_REL      # re-exported; both pat
 from .geometry import StaleGeometryError
 
 
-def _grid(xp, max_order_x, max_order_y, dev, dtype):
+def _grid(xp, half_width_1, half_width_2, dev, dtype):
     """Integer reciprocal grid ``(KY, KX)`` spanning the doubled range a convolution matrix needs.
 
     Doubled because the matrix is indexed by *differences*: ``r - c`` and ``s - d`` each reach
     ``+-2*truncation_order``, so a grid of ``2*truncation_order+1`` per axis cannot fill its corners. See
     ``docs/factorization-terms.md`` for the layout and why the result is BTTB, not Toeplitz.
     """
-    ky = xp.asarray([float(m) for m in range(-2 * max_order_y, 2 * max_order_y + 1)], dtype=dtype, device=dev)
-    kx = xp.asarray([float(m) for m in range(-2 * max_order_x, 2 * max_order_x + 1)], dtype=dtype, device=dev)
+    ky = xp.asarray([float(m) for m in range(-2 * half_width_2, 2 * half_width_2 + 1)], dtype=dtype, device=dev)
+    kx = xp.asarray([float(m) for m in range(-2 * half_width_1, 2 * half_width_1 + 1)], dtype=dtype, device=dev)
     return ky[:, None] + 0.0 * kx[None, :], 0.0 * ky[:, None] + kx[None, :]
 
 
@@ -510,12 +510,12 @@ def _refuse_paint_overlap(shapes, period, lattice=None):
         f'resolved into disjoint polygons before anything is transformed.')
 
 
-def assemble_eps_coeffs(xp, shapes, background, max_order_x, max_order_y, period, dtype, lattice=None,
+def assemble_eps_coeffs(xp, shapes, background, half_width_1, half_width_2, period, dtype, lattice=None,
                         combine=None):
     """Analytic Fourier coefficients of ``eps`` and ``1/eps`` for one layer.
 
-    Each grid has shape ``(4*max_order_y+1, 4*max_order_x+1)``, indexed ``[ky+2*max_order_y,
-    kx+2*max_order_x]`` — the doubled range a ``(2*truncation_order+1)**2`` convolution matrix needs
+    Each grid has shape ``(4*half_width_2+1, 4*half_width_1+1)``, indexed ``[ky+2*half_width_2,
+    kx+2*half_width_1]`` — the doubled range a ``(2*truncation_order+1)**2`` convolution matrix needs
     (``docs/factorization-terms.md`` §2 for why it doubles).
 
     ``background`` and each shape's ``material`` are read through
@@ -550,7 +550,7 @@ def assemble_eps_coeffs(xp, shapes, background, max_order_x, max_order_y, period
     eps_base = as_material(background, 'layer background').epsilon
     dev = getattr(eps_base, 'device', None) if hasattr(eps_base, 'device') else None
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
-    KKY, KKX = _grid(xp, max_order_x, max_order_y, dev, real_dtype)
+    KKY, KKX = _grid(xp, half_width_1, half_width_2, dev, real_dtype)
 
     eps_bg = as_array(xp, eps_base, dtype=dtype)
     inv_bg = 1.0 / eps_bg
@@ -571,7 +571,7 @@ def assemble_eps_coeffs(xp, shapes, background, max_order_x, max_order_y, period
     return eps_c, inv_eps_c
 
 
-def conv_matrix_2d(xp, coeff2d, max_order_x, max_order_y):
+def conv_matrix_2d(xp, coeff2d, half_width_1, half_width_2):
     """Convolution matrix from a 2D coefficient grid.
 
     ``M[(r,s),(c,d)] = coeff(ky=r-c, kx=s-d)`` — the ordering the ``fourier2d_*`` builders
@@ -590,17 +590,17 @@ def conv_matrix_2d(xp, coeff2d, max_order_x, max_order_y):
     and column pairs flattened, ``i - j`` does not determine ``(r-c, s-d)``, so the diagonals
     are not constant. ``docs/factorization-terms.md`` has the check and the vocabulary.
     """
-    n_orders_x = 2 * max_order_x + 1
-    n_orders_y = 2 * max_order_y + 1
+    n_orders_1 = 2 * half_width_1 + 1
+    n_orders_2 = 2 * half_width_2 + 1
     dev = _device(coeff2d)
 
-    iy = xp.asarray([[[[r - c + 2 * max_order_y]]] for r in range(n_orders_y) for c in range(n_orders_y)],
+    iy = xp.asarray([[[[r - c + 2 * half_width_2]]] for r in range(n_orders_2) for c in range(n_orders_2)],
                     device=dev)
-    iy = xp.reshape(iy, (n_orders_y, n_orders_y))
-    ix = xp.asarray([[s - d + 2 * max_order_x for d in range(n_orders_x)] for s in range(n_orders_x)], device=dev)
+    iy = xp.reshape(iy, (n_orders_2, n_orders_2))
+    ix = xp.asarray([[s - d + 2 * half_width_1 for d in range(n_orders_1)] for s in range(n_orders_1)], device=dev)
 
     m4 = coeff2d[iy[:, None, :, None], ix[None, :, None, :]]      # [r, s, c, d]
-    return xp.reshape(m4, (n_orders_y * n_orders_x, n_orders_y * n_orders_x))
+    return xp.reshape(m4, (n_orders_2 * n_orders_1, n_orders_2 * n_orders_1))
 
 
 def _device(x):
@@ -875,7 +875,7 @@ def _hypot_safe(xp, a, b):
     return xp.where(n2 == 0, xp.ones_like(n2), n2) ** 0.5
 
 
-def _sampled_coeffs(xp, field, max_order_x, max_order_y):
+def _sampled_coeffs(xp, field, half_width_1, half_width_2):
     """Fourier coefficients of a sampled field on the doubled reciprocal grid.
 
     ``c(ky, kx) = 1/(Ny*Nx) * sum f[iy, ix] exp(-2i*pi*(ky*iy/Ny + kx*ix/Nx))``, laid out the
@@ -887,8 +887,8 @@ def _sampled_coeffs(xp, field, max_order_x, max_order_y):
     Ny, Nx = field.shape
     dev = _device(field)
     F = xp.fft.fft2(field) / (Ny * Nx)
-    iy = xp.asarray([k % Ny for k in range(-2 * max_order_y, 2 * max_order_y + 1)], device=dev)
-    ix = xp.asarray([k % Nx for k in range(-2 * max_order_x, 2 * max_order_x + 1)], device=dev)
+    iy = xp.asarray([k % Ny for k in range(-2 * half_width_2, 2 * half_width_2 + 1)], device=dev)
+    ix = xp.asarray([k % Nx for k in range(-2 * half_width_1, 2 * half_width_1 + 1)], device=dev)
     coeff = F[iy[:, None], ix[None, :]]
     # The cell-centre half-pixel shift, the same one
     # :func:`~wavebit._core.factorization._half_pixel_phase` applies on the raster side. The
@@ -897,8 +897,8 @@ def _sampled_coeffs(xp, field, max_order_x, max_order_y):
     # these coefficients are multiplied by. Applied here as well as there because these two are
     # the *same transform written twice*, and `test_conv_matrix_matches_grid_convention` is what
     # says so; correcting one alone silently splits the analytic path from the raster one.
-    ky = xp.asarray([float(k) for k in range(-2 * max_order_y, 2 * max_order_y + 1)], device=dev)
-    kx = xp.asarray([float(k) for k in range(-2 * max_order_x, 2 * max_order_x + 1)], device=dev)
+    ky = xp.asarray([float(k) for k in range(-2 * half_width_2, 2 * half_width_2 + 1)], device=dev)
+    kx = xp.asarray([float(k) for k in range(-2 * half_width_1, 2 * half_width_1 + 1)], device=dev)
     pi = 3.141592653589793
     phase = (xp.exp(-1j * pi * xp.astype(ky, coeff.dtype) / Ny)[:, None]
              * xp.exp(-1j * pi * xp.astype(kx, coeff.dtype) / Nx)[None, :])
@@ -925,7 +925,7 @@ def _static_float(v):
     return float(v)
 
 
-def _projector_cache_key(xp, built, grid_shape, period, max_order_x, max_order_y, dtype, lattice):
+def _projector_cache_key(xp, built, grid_shape, period, half_width_1, half_width_2, dtype, lattice):
     """A content key for the coefficients built below, or ``None`` when caching would be wrong.
 
     Everything :func:`normal_vector_field_analytical` reads goes in and nothing else does. It
@@ -948,10 +948,10 @@ def _projector_cache_key(xp, built, grid_shape, period, max_order_x, max_order_y
     # dtypes are named, not a guarantee, and a cross-backend collision hands one namespace's
     # array to another.
     return (getattr(xp, '__name__', ''), shapes_key, tuple(grid_shape), (Px, Py),
-            int(max_order_x), int(max_order_y), str(dtype), lat)
+            int(half_width_1), int(half_width_2), str(dtype), lat)
 
 
-def normal_projector_coeffs(xp, shapes, grid_shape, period, max_order_x, max_order_y, dtype, lattice=None):
+def normal_projector_coeffs(xp, shapes, grid_shape, period, half_width_1, half_width_2, dtype, lattice=None):
     """Coefficient grids of ``nx**2``, ``nx*ny`` and ``ny**2`` — the NVF projectors' input.
 
     **One shape is built at the centre of the cell and carried to ``(cx, cy)`` by a phase**,
@@ -1082,12 +1082,12 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, max_order_x, max_ord
     # reuses it for the other reason: the key holds no material at all because the build reads
     # none. Measured on a five-point sweep at ``normal_grid = 1024``, ``truncation_order = 4``: the call
     # 83% of the wall clock for one shape and 93% for six.
-    key = _projector_cache_key(xp, built, grid_shape, period, max_order_x, max_order_y, dtype, lattice)
+    key = _projector_cache_key(xp, built, grid_shape, period, half_width_1, half_width_2, dtype, lattice)
     coeffs = _PROJECTOR_CACHE.pop(key, None) if key is not None else None
     if coeffs is None:
         nx, ny = normal_vector_field_analytical(xp, grid_shape, built, (Px, Py), real_dtype,
                                                 lattice)
-        coeffs = tuple(_sampled_coeffs(xp, xp.astype(f, dtype), max_order_x, max_order_y)
+        coeffs = tuple(_sampled_coeffs(xp, xp.astype(f, dtype), half_width_1, half_width_2)
                        for f in (nx * nx, nx * ny, ny * ny))
     if key is not None:
         # Least-recently-used: the read above is a `pop`, so a hit takes the entry out and this
@@ -1103,14 +1103,14 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, max_order_x, max_ord
     if shift_y is None:
         phase = 1.0
     else:
-        KKY, KKX = _grid(xp, max_order_x, max_order_y, _device(coeffs[0]), real_dtype)
+        KKY, KKX = _grid(xp, half_width_1, half_width_2, _device(coeffs[0]), real_dtype)
         arg = KKY * shift_y + KKX * shift_x
         phase = xp.exp(xp.astype(arg, dtype) * (-2j * 3.141592653589793))
 
     return tuple(c * phase for c in coeffs)
 
 
-def to_conv_mat_smooth_nvf(xp, shapes, background, max_order_x, max_order_y, period, dtype,
+def to_conv_mat_smooth_nvf(xp, shapes, background, half_width_1, half_width_2, period, dtype,
                              normal_grid=256, lattice=None, combine=None):
     """The five 2D-solve convolution matrices for one analytic layer, via NVF.
 
@@ -1125,14 +1125,14 @@ def to_conv_mat_smooth_nvf(xp, shapes, background, max_order_x, max_order_y, per
     ``combine`` is passed straight to :func:`assemble_eps_coeffs`, which sums; see there for
     why an overlapping painted layer must not arrive at this function.
     """
-    eps_c, inv_eps_c = assemble_eps_coeffs(xp, shapes, background, max_order_x, max_order_y, period, dtype,
+    eps_c, inv_eps_c = assemble_eps_coeffs(xp, shapes, background, half_width_1, half_width_2, period, dtype,
                                            lattice, combine=combine)
     c_xx, c_xy, c_yy = normal_projector_coeffs(
-        xp, shapes, (normal_grid, normal_grid), period, max_order_x, max_order_y, dtype, lattice)
-    return nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, max_order_x, max_order_y)
+        xp, shapes, (normal_grid, normal_grid), period, half_width_1, half_width_2, dtype, lattice)
+    return nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, half_width_1, half_width_2)
 
 
-def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, max_order_x, max_order_y):
+def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, half_width_1, half_width_2):
     """Assemble the five convolution matrices from coefficient grids — the NVF tensor itself.
 
     The last step of every non-raster NVF path, and the same step for all of them: what differs
@@ -1146,14 +1146,14 @@ def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, max_order_x, max_ord
     Returns ``(eps_xx, eps_yy, epz_i, eps_xy, eps_yx)`` — ``solve_conv``'s parameter order,
     as every builder does; see "Slot order" in :mod:`wavebit._core.factorization`.
     """
-    ep_dir = conv_matrix_2d(xp, eps_c, max_order_x, max_order_y)
-    ep_inv = conv_matrix_2d(xp, inv_eps_c, max_order_x, max_order_y)
+    ep_dir = conv_matrix_2d(xp, eps_c, half_width_1, half_width_2)
+    ep_inv = conv_matrix_2d(xp, inv_eps_c, half_width_1, half_width_2)
 
     delta_ep = ep_dir - xp.linalg.inv(ep_inv)
 
-    C_xx = conv_matrix_2d(xp, c_xx, max_order_x, max_order_y)
-    C_xy = conv_matrix_2d(xp, c_xy, max_order_x, max_order_y)
-    C_yy = conv_matrix_2d(xp, c_yy, max_order_x, max_order_y)
+    C_xx = conv_matrix_2d(xp, c_xx, half_width_1, half_width_2)
+    C_xy = conv_matrix_2d(xp, c_xy, half_width_1, half_width_2)
+    C_yy = conv_matrix_2d(xp, c_yy, half_width_1, half_width_2)
 
     eps_xx = ep_dir - 0.5 * (delta_ep @ C_xx + C_xx @ delta_ep)
     eps_yy = ep_dir - 0.5 * (delta_ep @ C_yy + C_yy @ delta_ep)
@@ -1197,7 +1197,7 @@ def check_no_plan_still_fits(layer, period, index, lattice=None):
         f'(Moving a shape never trips this on its own; moving it into another shape does.)')
 
 
-def to_conv_mat_smooth_layers(layer_shapes, max_order_x, max_order_y, period,
+def to_conv_mat_smooth_layers(layer_shapes, half_width_1, half_width_2, period,
                                 normal_grid=256, complex_dtype=None, xp=None,
                                 boundary_plans=None, lattice=None):
     """Stack the analytic-NVF convolution matrices over layers.
@@ -1240,7 +1240,7 @@ def to_conv_mat_smooth_layers(layer_shapes, max_order_x, max_order_y, period,
             # structure either way, so it stays here -- exact, and cheaper.
             from .boundary import to_conv_mat_boundary_layer
             mats = to_conv_mat_boundary_layer(
-                xp, layer.get('shapes', []), background, max_order_x, max_order_y, period, dtype,
+                xp, layer.get('shapes', []), background, half_width_1, half_width_2, period, dtype,
                 normal_grid=normal_grid, plan=plan, lattice=lattice)
         else:
             # `combine` goes down with the shapes rather than being dropped here. Reaching
@@ -1253,7 +1253,7 @@ def to_conv_mat_smooth_layers(layer_shapes, max_order_x, max_order_y, period,
             # rules, and once the shapes moved together the check below is what fired -- with
             # a message about this builder rather than about the stale record.
             mats = to_conv_mat_smooth_nvf(
-                xp, layer.get('shapes', []), background, max_order_x, max_order_y, period, dtype,
+                xp, layer.get('shapes', []), background, half_width_1, half_width_2, period, dtype,
                 normal_grid=normal_grid, lattice=lattice, combine=layer.get('combine'))
         for slot, m in zip(out, mats):
             slot.append(m)

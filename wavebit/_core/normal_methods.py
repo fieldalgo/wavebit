@@ -98,10 +98,10 @@ def _metric(lattice, shape):
 
 
 def _steps(M):
-    """``(step_y, step_x)``: the physical length of one index step along each axis.
+    """``(step_2, step_1)``: the physical length of one index step along each axis.
 
     The column norms of :func:`_metric`. Two quite different things are read off them and it is
-    worth keeping them apart. ``nx * step_x`` and ``ny * step_y`` are the cell's two edge
+    worth keeping them apart. ``nx * step_1`` and ``ny * step_2`` are the cell's two edge
     lengths, which is exact on any basis. The pair *as a metric* is exact only on a diagonal
     ``M``, where it is the whole of it; a caller that hands it to a per-axis consumer on a
     skewed cell is approximating, and says so at the line.
@@ -112,7 +112,7 @@ def _steps(M):
 def _pixel_size(M):
     """Geometric-mean physical pixel size — the square root of the pixel *area*, ``|det M|``.
 
-    ``sqrt(step_y * step_x)`` exactly when the cell is axis-aligned. On a skewed one the
+    ``sqrt(step_2 * step_1)`` exactly when the cell is axis-aligned. On a skewed one the
     column-norm product overstates the area by ``1/sin(gamma)`` — a factor of 2 at a
     30-degree cell — and it is the area that a smoothing scale is stated against.
     """
@@ -156,7 +156,7 @@ def _cartesian_frequencies(M, shape):
     """``(gx, gy)``: the Cartesian spatial frequency of every FFT bin, cycles per unit length.
 
     ``G/(2*pi) = M^-T @ (fi, fj)`` (:func:`_reciprocal`), evaluated on the transform's own
-    index-space frequency grid. On an axis-aligned cell it is ``(fi, fj/step_y)``.
+    index-space frequency grid. On an axis-aligned cell it is ``(fi, fj/step_2)``.
     """
     ny, nx = shape
     B = _reciprocal(M)
@@ -188,8 +188,8 @@ def _isotropic_blur(field, sigma, M):
     """
     if _separable(M):
         from scipy.ndimage import gaussian_filter
-        step_y, step_x = _steps(M)
-        return gaussian_filter(field, sigma=(sigma / step_y, sigma / step_x), mode='wrap')
+        step_2, step_1 = _steps(M)
+        return gaussian_filter(field, sigma=(sigma / step_2, sigma / step_1), mode='wrap')
     gx, gy = _cartesian_frequencies(M, field.shape)
     H = np.exp(-0.5 * (2.0 * np.pi * sigma) ** 2 * (gx ** 2 + gy ** 2))
     return np.real(np.fft.ifft2(np.fft.fft2(field) * H))
@@ -213,8 +213,8 @@ def _isotropic_blur_gradient(field, sigma, M):
     """
     if _separable(M):
         from scipy.ndimage import gaussian_filter
-        step_y, step_x = _steps(M)
-        sig = (sigma / step_y, sigma / step_x)
+        step_2, step_1 = _steps(M)
+        sig = (sigma / step_2, sigma / step_1)
         g_i = gaussian_filter(field, sig, order=(0, 1), mode='wrap')
         g_j = gaussian_filter(field, sig, order=(1, 0), mode='wrap')
         B = _reciprocal(M)
@@ -261,8 +261,8 @@ def _periodic_signed_distance(inside, M):
     ny, nx = inside.shape
     if _separable(M):
         from scipy.ndimage import distance_transform_edt
-        step_y, step_x = _steps(M)
-        sampling = None if step_y == step_x == 1.0 else (step_y, step_x)
+        step_2, step_1 = _steps(M)
+        sampling = None if step_2 == step_1 == 1.0 else (step_2, step_1)
         t = np.tile(inside, (3, 3))
         sd = (distance_transform_edt(~t, sampling=sampling)
               - distance_transform_edt(t, sampling=sampling))
@@ -284,7 +284,7 @@ def _periodic_signed_distance(inside, M):
 
 
 def _repeats(shape, base_shape):
-    """Lift factors ``(repeat_y, repeat_x)`` of the floor-lifted grid over its base."""
+    """Lift factors ``(repeat_2, repeat_1)`` of the floor-lifted grid over its base."""
     if base_shape is None:
         return 1.0, 1.0
     return shape[0] / base_shape[0], shape[1] / base_shape[1]
@@ -494,7 +494,7 @@ def contour_normal_field(eps, interface_mask, lattice=None, base_shape=None):
         return _constant_along_x(shape)
 
     M = _metric(lattice, shape)
-    repeat_y, repeat_x = _repeats(shape, base_shape)
+    repeat_2, repeat_1 = _repeats(shape, base_shape)
     base_shape = base_shape or shape
 
     # The frozen sigma, stated on the base grid and carried to the lifted one: physically
@@ -504,7 +504,7 @@ def contour_normal_field(eps, interface_mask, lattice=None, base_shape=None):
     sigma_base = _CONTOUR_SIGMA_COEF * float(np.sqrt(np.sqrt(
         base_shape[0] * base_shape[1])))
     px = _pixel_size(M)
-    sigma_phys = sigma_base * float(np.sqrt(repeat_y * repeat_x)) * px
+    sigma_phys = sigma_base * float(np.sqrt(repeat_2 * repeat_1)) * px
     # The inert switch length stays in geometric-mean physical pixels; the resample step
     # is an index-space quantity and needs no conversion.
     d_switch = _CONTOUR_D_SWITCH * px
@@ -640,7 +640,7 @@ def spectral_normal_field(eps, interface_mask, lattice=None, base_shape=None):
         return _constant_along_x(shape)
 
     M = _metric(lattice, shape)
-    step_y, step_x = _steps(M)
+    step_2, step_1 = _steps(M)
     B = _reciprocal(M)
     ny, nx = shape
 
@@ -656,7 +656,7 @@ def spectral_normal_field(eps, interface_mask, lattice=None, base_shape=None):
     fj = np.fft.fftfreq(ny)[:, None]            # cycles per index step, axis 0
     gxf = B[0, 0] * fi + B[0, 1] * fj           # cycles per unit length, Cartesian
     gyf = B[1, 0] * fi + B[1, 1] * fj
-    L_ref = max(nx * step_x, ny * step_y)       # longer cell edge, in x-steps
+    L_ref = max(nx * step_1, ny * step_2)       # longer cell edge, in x-steps
     rr = np.hypot(gxf, gyf) * L_ref             # orders across that edge
     H = np.exp(-0.5 * (rr / _SPECTRAL_CUTOFF) ** 2)
 
@@ -703,7 +703,7 @@ def spectral_normal_field(eps, interface_mask, lattice=None, base_shape=None):
     # is not quite the physically nearest one. The *band* is untouched, and the bulk is where
     # the layer is homogeneous -- every factorization rule agrees there whatever the normal
     # says, which is why the field is extended into it at all rather than left at zero.
-    sampling = None if step_y == step_x == 1.0 else (step_y, step_x)
+    sampling = None if step_2 == step_1 == 1.0 else (step_2, step_1)
     idx = distance_transform_edt(np.tile(~valid, (3, 3)), return_indices=True,
                                  sampling=sampling)[1]
     iy = idx[0][ny:2 * ny, nx:2 * nx] % ny
@@ -771,7 +771,7 @@ def smoothed_distance_normal_field(eps, interface_mask, lattice=None, base_shape
         return _constant_along_x(shape)
 
     M = _metric(lattice, shape)
-    repeat_y, repeat_x = _repeats(shape, base_shape)
+    repeat_2, repeat_1 = _repeats(shape, base_shape)
     base_shape = base_shape or shape
 
     sd = _periodic_signed_distance(_two_phase_indicator(eps).astype(bool), M)
@@ -781,7 +781,7 @@ def smoothed_distance_normal_field(eps, interface_mask, lattice=None, base_shape
     # axis -- see the docstring for why that is the reading, and what the per-axis one cost.
     sigma_base = max(_SMOOTH_SIGMA_FLOOR,
                      float(np.sqrt(base_shape[0] * base_shape[1])) / _SMOOTH_SIGMA_DIVISOR)
-    sigma = sigma_base * float(np.sqrt(repeat_y * repeat_x)) * _pixel_size(M)
+    sigma = sigma_base * float(np.sqrt(repeat_2 * repeat_1)) * _pixel_size(M)
     gx, gy = _isotropic_blur_gradient(sd, sigma, M)
 
     norm = np.hypot(gx, gy)

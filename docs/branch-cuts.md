@@ -167,7 +167,7 @@ region** rather than as noise:
 — read from the vector the other side of the match already uses:
 
 ```python
-kz_inc = incident_kz(kz_top, n_orders_x // 2)
+kz_inc = incident_kz(kz_top, n_orders_1 // 2)
 inc = -1j * kz_inc * delta
 ```
 

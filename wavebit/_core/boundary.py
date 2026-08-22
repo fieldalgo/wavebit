@@ -138,9 +138,9 @@ def distance_gradient_normal_field(xp, polys, grid_shape, period, dtype, chunk=N
 
 
 # ============================================ convolution matrices for one layer
-def _k_grids(xp, max_order_x, max_order_y, dtype):
-    ky = xp.asarray([float(k) for k in range(-2 * max_order_y, 2 * max_order_y + 1)], dtype=dtype)
-    kx = xp.asarray([float(k) for k in range(-2 * max_order_x, 2 * max_order_x + 1)], dtype=dtype)
+def _k_grids(xp, half_width_1, half_width_2, dtype):
+    ky = xp.asarray([float(k) for k in range(-2 * half_width_2, 2 * half_width_2 + 1)], dtype=dtype)
+    kx = xp.asarray([float(k) for k in range(-2 * half_width_1, 2 * half_width_1 + 1)], dtype=dtype)
     KY = ky[:, None] + 0.0 * kx[None, :]
     KX = 0.0 * ky[:, None] + kx[None, :]
     return KY, KX
@@ -156,7 +156,7 @@ def _centroid(xp, V):
                      xp.sum((y + yn) * cr) / (6.0 * a)])
 
 
-def check_normal_grid(grid_shape, max_order_x, max_order_y):
+def check_normal_grid(grid_shape, half_width_1, half_width_2):
     """`4*truncation_order+1` points per axis, or `_sampled_coeffs` aliases distinct orders onto one bin.
 
     Structural, not gradual: a *constant* normal field has to transform to the identity for NVF
@@ -164,13 +164,13 @@ def check_normal_grid(grid_shape, max_order_x, max_order_y):
     Same floor `factorization._normal_field_floor` enforces on the raster path.
     """
     Ny, Nx = grid_shape
-    need_y, need_x = 4 * max_order_y + 1, 4 * max_order_x + 1
+    need_y, need_x = 4 * half_width_2 + 1, 4 * half_width_1 + 1
     if Ny < need_y or Nx < need_x:
-        raise ValueError(f'normal-field grid {Ny}x{Nx} aliases at truncation_order=({max_order_x}, {max_order_y}): '
+        raise ValueError(f'normal-field grid {Ny}x{Nx} aliases at truncation_order=({half_width_1}, {half_width_2}): '
                          f'needs at least {need_y}x{need_x}')
 
 
-def normal_projector_coeffs(xp, loops, grid_shape, period, max_order_x, max_order_y, dtype, cdtype,
+def normal_projector_coeffs(xp, loops, grid_shape, period, half_width_1, half_width_2, dtype, cdtype,
                             lattice=None):
     """Coefficient grids of ``nx**2``, ``nx*ny``, ``ny**2``, built with the layer CENTRED.
 
@@ -182,7 +182,7 @@ def normal_projector_coeffs(xp, loops, grid_shape, period, max_order_x, max_orde
     It only works when the whole field translates as one, i.e. **a single loop**. With several
     loops, moving one reshapes the field between them and no phase describes that.
     """
-    check_normal_grid(grid_shape, max_order_x, max_order_y)
+    check_normal_grid(grid_shape, half_width_1, half_width_2)
     Px, Py = period
 
     if len(loops) == 1:
@@ -196,7 +196,7 @@ def normal_projector_coeffs(xp, loops, grid_shape, period, max_order_x, max_orde
             mid_x, mid_y = 0.5 * (a1x + a2x), 0.5 * (a1y + a2y)
         shift = xp.stack([c[0] - mid_x, c[1] - mid_y])
         built = [loops[0] - shift[None, :]]
-        KY, KX = _k_grids(xp, max_order_x, max_order_y, dtype)
+        KY, KX = _k_grids(xp, half_width_1, half_width_2, dtype)
         if lattice is None:
             su, sv = shift[0] * frac_x, shift[1] * frac_y
         else:
@@ -215,11 +215,11 @@ def normal_projector_coeffs(xp, loops, grid_shape, period, max_order_x, max_orde
                                             lattice=lattice)
     out = []
     for f in (nx * nx, nx * ny, ny * ny):
-        out.append(_sampled_coeffs(xp, xp.astype(f, cdtype), max_order_x, max_order_y) * phase)
+        out.append(_sampled_coeffs(xp, xp.astype(f, cdtype), half_width_1, half_width_2) * phase)
     return out
 
 
-def conv_mats(xp, regions, background, max_order_x, max_order_y, period, normal_grid, dtype, cdtype,
+def conv_mats(xp, regions, background, half_width_1, half_width_2, period, normal_grid, dtype, cdtype,
               lattice=None):
     """``(epx, epy, epz_i, epxy, epyx)`` for one boundary-resolved layer.
 
@@ -264,7 +264,7 @@ def conv_mats(xp, regions, background, max_order_x, max_order_y, period, normal_
     1.5e4 times below this path's own 1.8e-3 agreement with a converged raster.
     """
     Px, Py = period
-    KY, KX = _k_grids(xp, max_order_x, max_order_y, dtype)
+    KY, KX = _k_grids(xp, half_width_1, half_width_2, dtype)
     is_dc = (KY == 0) & (KX == 0)
     zero = xp.zeros(KY.shape, dtype=cdtype)
 
@@ -295,9 +295,9 @@ def conv_mats(xp, regions, background, max_order_x, max_order_y, period, normal_
 
     all_loops = [V for _, polys in regions for V in polys]
     c_xx, c_xy, c_yy = normal_projector_coeffs(
-        xp, all_loops, (normal_grid, normal_grid), (Px, Py), max_order_x, max_order_y, dtype, cdtype,
+        xp, all_loops, (normal_grid, normal_grid), (Px, Py), half_width_1, half_width_2, dtype, cdtype,
         lattice=lattice)
-    return nvf_from_coeffs(xp, eps_c, inv_c, c_xx, c_xy, c_yy, max_order_x, max_order_y)
+    return nvf_from_coeffs(xp, eps_c, inv_c, c_xx, c_xy, c_yy, half_width_1, half_width_2)
 
 
 # ================================================== one painted layer, end to end
@@ -454,7 +454,7 @@ def _what_moved(fresh_key, plan_key):
     return '; '.join(parts)
 
 
-def to_conv_mat_boundary_layer(xp, shapes, background, max_order_x, max_order_y, period, dtype,
+def to_conv_mat_boundary_layer(xp, shapes, background, half_width_1, half_width_2, period, dtype,
                                normal_grid=256, n_poly=POLYGON_VERTICES, plan=None,
                                lattice=None):
     """The five convolution matrices for one layer whose shapes are *painted*.
@@ -474,5 +474,5 @@ def to_conv_mat_boundary_layer(xp, shapes, background, max_order_x, max_order_y,
     regs = [(s['material'], [_clipper.loop_verts(xp, lp, vals) for lp in region])
             for s, region in zip(shapes, regions)]
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
-    return conv_mats(xp, regs, background, max_order_x, max_order_y, period, normal_grid, real_dtype, dtype,
+    return conv_mats(xp, regs, background, half_width_1, half_width_2, period, normal_grid, real_dtype, dtype,
                      lattice=lattice)

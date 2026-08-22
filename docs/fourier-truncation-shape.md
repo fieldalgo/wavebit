@@ -3,7 +3,7 @@
 Written: 2026-08-09. Measured on CPU, NumPy backend, float64.
 
 Targets:
-- `wavebit/_core/solve_2d.py::solve_2d` — the tensor-product `(n_orders_y, n_orders_x)` order layout
+- `wavebit/_core/solve_2d.py::solve_2d` — the tensor-product `(n_orders_2, n_orders_1)` order layout
 - `wavebit/_core/factorization.py` — the truncation the convolution builds assume
 - `studies/benchmark_truncation_shape.py` — the harness this document reports
 

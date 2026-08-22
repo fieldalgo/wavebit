@@ -31,8 +31,8 @@ def shape_ft(shape, ky, kx, period):
     return _shape_ft(xnp, shape, ky, kx, period)
 
 
-def conv_matrix_2d(coeff2d, max_order_x, max_order_y):
-    return _conv_matrix_2d(xnp, coeff2d, max_order_x, max_order_y)
+def conv_matrix_2d(coeff2d, half_width_1, half_width_2):
+    return _conv_matrix_2d(xnp, coeff2d, half_width_1, half_width_2)
 
 
 def sampled_coeffs(field, fx, fy):
@@ -40,14 +40,14 @@ def sampled_coeffs(field, fx, fy):
     return _sampled_coeffs(xnp, field, fx, fy)
 
 
-def assemble_eps_coeffs(shapes, background, max_order_x, max_order_y, period):
-    return _assemble_eps_coeffs(xnp, shapes, background, max_order_x, max_order_y, period, xnp.complex128)
+def assemble_eps_coeffs(shapes, background, half_width_1, half_width_2, period):
+    return _assemble_eps_coeffs(xnp, shapes, background, half_width_1, half_width_2, period, xnp.complex128)
 
 
-def to_conv_mat_smooth(shapes, background, max_order_x, max_order_y, period):
+def to_conv_mat_smooth(shapes, background, half_width_1, half_width_2, period):
     """Direct-rule (eps, 1/eps) Laurent pair — the NVF builder's inputs."""
-    eps_c, inv_c = assemble_eps_coeffs(shapes, background, max_order_x, max_order_y, period)
-    return conv_matrix_2d(eps_c, max_order_x, max_order_y), conv_matrix_2d(inv_c, max_order_x, max_order_y)
+    eps_c, inv_c = assemble_eps_coeffs(shapes, background, half_width_1, half_width_2, period)
+    return conv_matrix_2d(eps_c, half_width_1, half_width_2), conv_matrix_2d(inv_c, half_width_1, half_width_2)
 
 
 # ----------------------------------------------------------------------
@@ -72,10 +72,10 @@ def test_conv_matrix_matches_grid_convention():
     """
     rng = np.random.default_rng(0)
     cell = (rng.random((12, 10)) + 1.0).astype(complex)
-    max_order_x, max_order_y = 2, 3
+    half_width_1, half_width_2 = 2, 3
 
-    M_raster = raw_dft(cell, max_order_x, max_order_y)
-    M_analytic = conv_matrix_2d(sampled_coeffs(cell, max_order_x, max_order_y), max_order_x, max_order_y)
+    M_raster = raw_dft(cell, half_width_1, half_width_2)
+    M_analytic = conv_matrix_2d(sampled_coeffs(cell, half_width_1, half_width_2), half_width_1, half_width_2)
 
     gap = np.abs(M_raster - M_analytic).max()
     assert gap < 1e-12, (
@@ -106,12 +106,12 @@ def test_complex_permittivity_is_loss_not_gain(where):
     # A metal, stated as the permittivity the API now takes: this is (0.05 + 3.5j)**2, and
     # conj() would flip it to gain.
     eps_metal = -12.2475 + 0.35000000000000003j
-    max_order_x = max_order_y = 2
+    half_width_1 = half_width_2 = 2
     period = (1.0, 1.0)
-    dc = (2 * max_order_y, 2 * max_order_x)                 # [ky+2*max_order_y, kx+2*max_order_x] at ky = kx = 0
+    dc = (2 * half_width_2, 2 * half_width_1)                 # [ky+2*half_width_2, kx+2*half_width_1] at ky = kx = 0
 
     if where == 'background':
-        eps_c, inv_c = assemble_eps_coeffs([], eps_metal, max_order_x, max_order_y, period)
+        eps_c, inv_c = assemble_eps_coeffs([], eps_metal, half_width_1, half_width_2, period)
         assert complex(eps_c[dc]) == pytest.approx(eps_metal, rel=1e-14)
         assert complex(inv_c[dc]) == pytest.approx(1.0 / eps_metal, rel=1e-14)
     else:
@@ -119,7 +119,7 @@ def test_complex_permittivity_is_loss_not_gain(where):
         # area-weighted mean and the shape's contribution is separable from the background's.
         shape = dict(type='rectangle', cx=0.5, cy=0.5, lx=0.5, ly=0.5, angle=0.0,
                      material=eps_metal)
-        eps_c, inv_c = assemble_eps_coeffs([shape], 1.0, max_order_x, max_order_y, period)
+        eps_c, inv_c = assemble_eps_coeffs([shape], 1.0, half_width_1, half_width_2, period)
         assert complex(eps_c[dc]) == pytest.approx(1.0 + 0.25 * (eps_metal - 1.0), rel=1e-12)
         assert complex(inv_c[dc]) == pytest.approx(1.0 + 0.25 * (1.0 / eps_metal - 1.0),
                                                    rel=1e-12)
@@ -1018,18 +1018,18 @@ def test_what_the_block_grid_built_instead_was_not_a_structure_at_all():
     from wavebit._core.modeler import Modeling
 
     modeler = Modeling(period=[1.0, 1.0])
-    cell, x_list, _ = modeler.block_per_layer_numeric(
+    cell, edges_1, _ = modeler.block_per_layer_numeric(
         [1.0, modeler.rectangle(0.5, 0.5, 1.3, 1.3, 5.76)])
 
-    edges = np.real(np.asarray(x_list)).reshape(-1)
+    edges = np.real(np.asarray(edges_1)).reshape(-1)
     assert edges.min() < 0.0 and edges.max() > 1.0, edges      # the grid leaves the cell
 
     row = np.asarray(cell)[1:2]                                # one row straight through the rod
     assert sorted(np.real(row).reshape(-1).tolist()) == [1.0, 1.0, 5.76]
 
     truncation_order, period = 6, np.asarray(1.0, dtype=complex)
-    got_eps = np.asarray(_fourier1d_integrated(xnp, x_list, row, truncation_order, period))[0]
-    got_inv = np.asarray(_fourier1d_integrated(xnp, x_list, 1 / row, truncation_order, period))[0]
+    got_eps = np.asarray(_fourier1d_integrated(xnp, edges_1, row, truncation_order, period))[0]
+    got_inv = np.asarray(_fourier1d_integrated(xnp, edges_1, 1 / row, truncation_order, period))[0]
 
     # The profile that edge list describes, by dense quadrature: 1 + 4.76 * (cover count).
     s = (np.arange(400_000) + 0.5) / 400_000

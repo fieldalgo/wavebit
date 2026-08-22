@@ -63,7 +63,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                  answers='amplitude',        # what this solve keeps the state to answer:
                  # 'efficiency' | 'amplitude' (default) | 'field'. A declaration, like tetm --
                  # reconstruct_field is refused below 'field' rather than served, because the
-                 # per-layer state it walks is 4.25 matrices of side 2*n_orders_x*n_orders_y per
+                 # per-layer state it walks is 4.25 matrices of side 2*n_orders_1*n_orders_2 per
                  # layer (240 MB at truncation_order=(15, 15)) and is kept as the solve runs or not at
                  # all. See CoreSolveMixin.answers.
                  mu=None,                    # raster path only: the permeability field,
@@ -185,7 +185,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
         if self._formulation_for(z_row) == Formulation.FOUR_FIELD:
             # The 1D paths have no z-row slots to fill, so a z row is also a choice of path:
-            # the first-order solve is written on the 2D layout (a 1D structure is n_orders_y == 1
+            # the first-order solve is written on the 2D layout (a 1D structure is n_orders_2 == 1
             # there, the same physics the conical path solves at conical cost).
             self._grating_type = 2
 

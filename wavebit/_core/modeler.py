@@ -5,8 +5,8 @@ with one Array-API implementation, in the same style as :mod:`wavebit._core.fact
 :mod:`wavebit._core.fields`.
 
 What this module produces is the *block* (staircase-free in x and y) description of a layer:
-a list of ``(cell, x_list, y_list)`` triples, where ``cell`` holds the relative permittivity of
-each piecewise-constant block and ``x_list`` / ``y_list`` the block edges. That is exactly the
+a list of ``(cell, edges_1, edges_2)`` triples, where ``cell`` holds the relative permittivity of
+each piecewise-constant block and ``edges_1`` / ``edges_2`` the block edges. That is exactly the
 input :func:`wavebit._core.factorization.to_conv_mat_block` consumes, so a shape drawn here is
 Fourier-transformed analytically rather than off a raster.
 
@@ -426,8 +426,8 @@ class Modeling:
         self._last_plan = None
         self.shape_choices = None
         self._shape_replay = self._shape_record = None
-        self.x_list = None
-        self.y_list = None
+        self.edges_1 = None
+        self.edges_2 = None
         # No `mat_table` slot. It was assigned `None` here and read by nothing once
         # `put_refractive_index_in_ucell` went: a modeler does not hold materials, it draws
         # regions, and the nk table belongs to whoever looked one up (see the module
@@ -805,10 +805,10 @@ class Modeling:
         return block_cell, _edge_list(xp, col_list, F, C, dev), _edge_list(xp, row_list, F, C, dev)
 
     def block_per_layer_numeric(self, layer_info, x64=True, plan=None):
-        """Reduce one layer's block list to ``(cell, x_list, y_list)``.
+        """Reduce one layer's block list to ``(cell, edges_1, edges_2)``.
 
         Every distinct block edge becomes a grid line, and blocks that meet at a coordinate
-        share the one line rather than getting one each, so ``x_list`` / ``y_list`` come back
+        share the one line rather than getting one each, so ``edges_1`` / ``edges_2`` come back
         strictly increasing. See :func:`insert_edge` for why sharing is the right answer.
 
         Which edge becomes which line, and which two share one, are *discrete* decisions: they
@@ -930,7 +930,7 @@ class Modeling:
                 _edge_list(xp, row_list, F, C, dev))
 
     def draw(self, layer_info_list, plans=None):
-        """Grid every layer. Returns a list of ``[cell, x_list, y_list]``, top layer first.
+        """Grid every layer. Returns a list of ``[cell, edges_1, edges_2]``, top layer first.
 
         Input order is preserved, and ``structure`` is indexed top-down
         (``docs/conventions.md``: ``structure[0]`` is the layer nearest ``top``, whichever side
@@ -950,11 +950,11 @@ class Modeling:
 
         for i, layer_info in enumerate(layer_info_list):
             plan = None if plans is None else plans[i]
-            block_cell, x_list, y_list = self.block_per_layer_numeric(layer_info, plan=plan)
+            block_cell, edges_1, edges_2 = self.block_per_layer_numeric(layer_info, plan=plan)
             used_plans.append(plan if plan is not None else self._last_plan)
-            block_info_list.append([block_cell, x_list, y_list])
+            block_info_list.append([block_cell, edges_1, edges_2])
             # TODO: eig for homo layer
-            film_flags.append(1.0 if x_list.shape[0] == y_list.shape[0] == 1 else 0.0)
+            film_flags.append(1.0 if edges_1.shape[0] == edges_2.shape[0] == 1 else 0.0)
 
         xp = self._ns(*[info[0] for info in block_info_list])
         dev = self._dev(*[info[0] for info in block_info_list])

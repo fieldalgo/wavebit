@@ -79,7 +79,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                  answers='amplitude',        # what this solve keeps the state to answer:
                  # 'efficiency' | 'amplitude' (default) | 'field'. A declaration, like tetm --
                  # reconstruct_field is refused below 'field' rather than served, because the
-                 # per-layer state it walks is 4.25 matrices of side 2*n_orders_x*n_orders_y per
+                 # per-layer state it walks is 4.25 matrices of side 2*n_orders_1*n_orders_2 per
                  # layer (240 MB at truncation_order=(15, 15)) and is kept as the solve runs or not at
                  # all. See CoreSolveMixin.answers.
                  mu=None,                    # raster path only: the permeability field,
