@@ -17,7 +17,7 @@ Targets:
 `'efficiency'`, `'amplitude'` (the default), or `'field'`. The seam that matters is between the
 last two, and it is worth a keyword because they differ by three orders of magnitude: the
 amplitudes are boundary vectors already solved for, while the field-reconstruction state is
-**4.25 matrices of side `2*n_orders_1*n_orders_2` per layer** on the 2D path — 240 MB per layer at
+**4.25 matrices of side `2*n_orders_u*n_orders_v` per layer** on the 2D path — 240 MB per layer at
 `truncation_order=(15, 15)`, 733 MB at `(20, 20)`. Every public route used to keep it unconditionally, and
 most large runs are optimization sweeps against a fixed objective that never reconstruct a
 field at all.
@@ -41,7 +41,7 @@ keyword exists.
 
 ## 2. What the field state costs
 
-A layer's entry is `[epz_conv_i, W, V, q, d, a_i, b]`. With `dim = 2*n_orders_1*n_orders_2` on the coupled
+A layer's entry is `[epz_conv_i, W, V, q, d, a_i, b]`. With `dim = 2*n_orders_u*n_orders_v` on the coupled
 paths, `W`, `V`, `a_i` and `b` are each a full `dim x dim` block and `epz_conv_i` is a quarter
 of one (it is indexed by orders, not by the doubled s/p state), so:
 
@@ -49,7 +49,7 @@ of one (it is indexed by orders, not by the doubled s/p state), so:
 | --- | --- | --- |
 | 2D (`solve_2d`) | **4.25** | `layer_modes_2d` returns a full `dim x dim` `W` |
 | conical (`solve_1d_conical`) | 3.75 | `W = [[W1, W2]]` is `dim/2 x dim`, half the 2D one |
-| pure 1D TE/TM | 5.0 | `dim = n_orders_1`, and all five matrices are square in it |
+| pure 1D TE/TM | 5.0 | `dim = n_orders_u`, and all five matrices are square in it |
 
 Read off the retained shapes rather than assumed, at `truncation_order=6`: the pure path holds five
 `13 x 13` matrices, the conical one `(13,13) (13,26) (26,26) (26,26) (26,26)`, and the 2D one

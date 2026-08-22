@@ -457,7 +457,7 @@ solver = wavebit.rcwa(backend=0, answers='field', ...)   # 'amplitude' is the de
 ```
 
 The default sits where the cost cliff is. The amplitudes are boundary vectors already solved
-for; the field state is 4.25 matrices of side `2*n_orders_1*n_orders_2` **per layer** on the 2D path —
+for; the field state is 4.25 matrices of side `2*n_orders_u*n_orders_v` **per layer** on the 2D path —
 21.7 MB at `truncation_order=(8, 8)`, 240 MB at `(15, 15)`, 733 MB at `(20, 20)`, and again for every
 layer. The two differ by three orders of magnitude, and the runs big enough to care are
 optimization sweeps against a fixed objective, which never reconstruct a field at all.
@@ -549,7 +549,7 @@ the azimuth of the plane of incidence, `psi` the polarization angle (`pi/2` = s/
 `0` = p/TM) and `chi` its ellipticity.
 
 **Uppercase is power, lowercase is amplitude.** `R`/`T` are per-order efficiencies, shape
-`(n_orders_2, n_orders_1)` — `y` first, the transpose of the `truncation_order=[x, y]` input order — with the incident
+`(n_orders_v, n_orders_u)` — `y` first, the transpose of the `truncation_order=[x, y]` input order — with the incident
 order at the centre; `result.order(m, n)` indexes by order so you never touch that layout.
 `r_s`/`r_p`/`t_s`/`t_p` are the complex Fresnel amplitudes, directly comparable to the
 textbook coefficients.

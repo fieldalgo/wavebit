@@ -46,7 +46,7 @@ def test_polarization_split_sums_to_the_total():
 def test_order_accessor_agrees_with_the_arrays():
     """``order(m, n)`` is the same data as the arrays, addressed by order index.
 
-    The arrays are ``(n_orders_2, n_orders_1)`` — note the transpose of the ``truncation_order=[x, y]`` input
+    The arrays are ``(n_orders_v, n_orders_u)`` — note the transpose of the ``truncation_order=[x, y]`` input
     order — with the incident order at the centre. That layout is exactly what the
     accessor exists to spare users from, so this test IS the layout's documentation.
     """

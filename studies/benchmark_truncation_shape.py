@@ -2,8 +2,8 @@
 benchmark_truncation_shape.py -- rectangular vs circular Fourier-order truncation.
 
 
-Wavebit keeps a full rectangle of Fourier orders, |m| <= half_width_1 and |n| <= half_width_2, so the
-harmonic count is always (2*half_width_1+1)*(2*half_width_2+1).  S4 instead keeps a disc in reciprocal
+Wavebit keeps a full rectangle of Fourier orders, |m| <= half_width_u and |n| <= half_width_v, so the
+harmonic count is always (2*half_width_u+1)*(2*half_width_v+1).  S4 instead keeps a disc in reciprocal
 space: the orders with the smallest |G|, with the last shell closed so lattice symmetry is
 preserved.  At the same maximum order the disc holds about pi/4 of the harmonics of the box,
 and RCWA cost scales as N^3, so the disc is ~2x cheaper -- if the discarded corner orders were
@@ -56,11 +56,11 @@ C128 = np.complex128
 
 # ---------------------------------------------------------------- order sets
 
-def order_grid(half_width_1, half_width_2):
-    """Flat (m, n) order lists in the solver's layout: flat index is iy * n_orders_1 + ix."""
-    m = np.arange(-half_width_1, half_width_1 + 1)
-    n = np.arange(-half_width_2, half_width_2 + 1)
-    mm, nn = np.meshgrid(m, n)  # (n_orders_2, n_orders_1)
+def order_grid(half_width_u, half_width_v):
+    """Flat (m, n) order lists in the solver's layout: flat index is iy * n_orders_u + ix."""
+    m = np.arange(-half_width_u, half_width_u + 1)
+    n = np.arange(-half_width_v, half_width_v + 1)
+    mm, nn = np.meshgrid(m, n)  # (n_orders_v, n_orders_u)
 
     return mm.flatten(), nn.flatten()
 
@@ -148,10 +148,10 @@ def conv_mats(eps, normal_field, mm, nn, keep, max_order_box, mode):
     if mode == 'li':
         if not keep.all():
             raise ValueError('the nested Li rule has no circular form; see the module docstring')
-        half_width_1, half_width_2 = max_order_box
-        epz = fourier2d_piecewise_constant(np, eps, half_width_1, half_width_2, inverse_rule=None)
-        epy = fourier2d_piecewise_constant(np, eps, half_width_1, half_width_2, inverse_rule='y')
-        epx = fourier2d_piecewise_constant(np, eps, half_width_1, half_width_2, inverse_rule='x')
+        half_width_u, half_width_v = max_order_box
+        epz = fourier2d_piecewise_constant(np, eps, half_width_u, half_width_v, inverse_rule=None)
+        epy = fourier2d_piecewise_constant(np, eps, half_width_u, half_width_v, inverse_rule='y')
+        epx = fourier2d_piecewise_constant(np, eps, half_width_u, half_width_v, inverse_rule='x')
         O = np.zeros_like(epz)
 
         return epx, epy, np.linalg.inv(epz), O, O
@@ -176,7 +176,7 @@ def solve_flat(mm, nn, epx, epy, epz_i, epxy, epyx, wavelength, period, thicknes
     """2D RCWA (TMM) for an arbitrary flat set of Fourier orders.
 
     Same chain as ``_core.solve_2d.solve_2d`` -- and reusing its ``layer_modes_2d`` /
-    ``sp_modes_2d`` / ``final_matching`` verbatim -- with the (n_orders_2, n_orders_1) tensor-product
+    ``sp_modes_2d`` / ``final_matching`` verbatim -- with the (n_orders_v, n_orders_u) tensor-product
     layout replaced by an explicit order list so non-rectangular sets work.  Single layer.
 
     ``n_top`` / ``n_bot`` are refractive indices, and stay so: this reimplements the solver
@@ -235,7 +235,7 @@ def solve_flat(mm, nn, epx, epy, epz_i, epxy, epyx, wavelength, period, thicknes
     big_G = big_V @ (big_I - Y)
     big_T = big_T @ big_A_i @ big_X
 
-    # n_orders_1 = n_orders, n_orders_2 = 1: the flat set *is* the layout. The incident delta lands at
+    # n_orders_u = n_orders, n_orders_v = 1: the flat set *is* the layout. The incident delta lands at
     # n_orders // 2, which is the zero order for both shapes (see circular_select).
     R, T = final_matching(xp, C128, big_F, big_G, big_T, kz_top, kz_bot,
                           amplitude_pair(psi), theta,

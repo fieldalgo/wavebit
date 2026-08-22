@@ -220,7 +220,7 @@ def test_finiteness_guard_fires_from_the_solve_path():
     with pytest.raises(FloatingPointError, match='non-finite'):
         final_matching(xp, C, big_F, eye.copy(), eye.copy(), kz, kz,
                        incidence=(0.0, 1.0), theta=0.0, n_top=1.0, n_bot=1.0,
-                       n_orders_1=1, n_orders_2=1)
+                       n_orders_u=1, n_orders_v=1)
 
 
 # --- tier 2: finite, but not a physical result ----------------------------------------------

@@ -698,8 +698,8 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     C = kx.dtype
 
     kx_g, ky_g = order_grid_kxy(xp, kx, ky)
-    n_orders_2, n_orders_1 = kx_g.shape
-    n_orders = n_orders_1 * n_orders_2
+    n_orders_v, n_orders_u = kx_g.shape
+    n_orders = n_orders_u * n_orders_v
     k0 = 2 * 3.141592653589793 / wavelength
     theta = 0.0 if theta is None else theta
 
@@ -721,7 +721,7 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     big_F, big_G = sp_modes_2d(xp, G[:2 * n_orders], 1j * G[2 * n_orders:], F_c, F_s, n_orders)
 
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
-                         n_top, n_bot, n_orders_1, n_orders_2, answers=answers,
+                         n_top, n_bot, n_orders_u, n_orders_v, answers=answers,
                          lit=lit)
     if keep_field:
         # `sp_modes_2d` recombines the *rows* of `G` into the s/p boundary variables and leaves

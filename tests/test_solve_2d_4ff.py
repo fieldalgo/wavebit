@@ -105,7 +105,7 @@ PERIOD = 300.0
 
 
 def order_grid(truncation_order, theta_deg, phi_deg=0.0):
-    """``(kx, ky, n_orders, centre)`` on a flattened ``(n_orders_2, n_orders_1)`` grid, as the 2ff path lays it out.
+    """``(kx, ky, n_orders, centre)`` on a flattened ``(n_orders_v, n_orders_u)`` grid, as the 2ff path lays it out.
 
     ``order_grid_kxy`` broadcasts the two 1-D vectors to that grid and everything downstream
     reads it flattened, so a test that builds the same layout is testing the same indexing.

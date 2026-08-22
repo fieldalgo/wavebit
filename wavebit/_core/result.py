@@ -4,8 +4,8 @@ Naming follows the optics convention the rest of the ecosystem reads by sight:
 **uppercase is power, lowercase is amplitude.**
 
 ``R``, ``T``
-    Per-order diffraction efficiency, shape ``(n_orders_2, n_orders_1)`` with the incident order
-    at the centre (``[half_width_2, half_width_1]``); index ``+1`` along the last axis is order
+    Per-order diffraction efficiency, shape ``(n_orders_v, n_orders_u)`` with the incident order
+    at the centre (``[half_width_v, half_width_u]``); index ``+1`` along the last axis is order
     ``m = +1``. ``R`` is the fraction of incident power returned into the incidence medium,
     ``T`` the fraction leaving through the far side. For an absorbing superstrate the
     incident-power normalization is convention-dependent and these are not comparable to ``1`` —
@@ -99,7 +99,7 @@ class Result:
         self.given = given
         self.s_inc = s_inc
         self.p_inc = p_inc
-        #: The orders this result is on: ``((centre_1, half_1), (centre_2, half_2))``, the same
+        #: The orders this result is on: ``((centre_u, half_u), (centre_v, half_v))``, the same
         #: shape :attr:`wavebit._core.engine.CoreSolveMixin.order_window` has. Static metadata
         #: for :meth:`order`; not a pytree child.
         #:
@@ -141,7 +141,7 @@ class Result:
         """Scalars for diffraction order ``(m, n)`` of the solved (``given``) incidence.
 
         Spares the caller the array layout: efficiencies and amplitudes are stored as
-        ``(n_orders_2, n_orders_1)`` grids — note ``y`` first, the transpose of the
+        ``(n_orders_v, n_orders_u)`` grids — note ``y`` first, the transpose of the
         ``truncation_order=[x, y]`` input order — centred on the specular order, or on
         :attr:`centre` when an ``excitation`` moved the retained window. This indexes them by
         the order indices themselves, which is the whole point: the array layout is not the

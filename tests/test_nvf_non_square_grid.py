@@ -75,8 +75,8 @@ def _alignment(nx, ny, lattice, band=None):
     dx, dy, structure = _disc(nx, ny)
     rho = np.hypot(dx, dy)
     rho[rho == 0] = 1.0
-    n_1, n_y = normal_vector_field(structure, lattice=lattice)
-    cos = np.abs(n_1 * dx / rho + n_y * dy / rho)
+    n_u, n_y = normal_vector_field(structure, lattice=lattice)
+    cos = np.abs(n_u * dx / rho + n_y * dy / rho)
     if band is None:
         return float(cos.mean())
     return float(cos[np.abs(rho - R) <= band * (PX / nx)].mean())

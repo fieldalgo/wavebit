@@ -314,7 +314,7 @@ def incident_sp_amplitudes(xp, C, psi, chi=None, polarization=None):
             xp.cos(psi) * xp.cos(chi) - 1j * xp.sin(psi) * xp.sin(chi))
 
 
-def parse_excitation(excitation, half_width_1, half_width_2):
+def parse_excitation(excitation, half_width_u, half_width_v):
     """Read a declared excitation into ``((m, n), amplitude, key)`` triples, refusing what it is not.
 
     The original ``key`` rides along because a message that has to name an order should name it
@@ -339,7 +339,7 @@ def parse_excitation(excitation, half_width_1, half_width_2):
         raise ValueError(
             'excitation is empty, so nothing is lit and every answer would be zero. Leave it '
             'unset for the ordinary single wave on the specular order.')
-    two_d = half_width_2 > 0
+    two_d = half_width_v > 0
     out = []
     for key, amplitude in excitation.items():
         pair = key if isinstance(key, tuple) else (key, 0)
@@ -354,17 +354,17 @@ def parse_excitation(excitation, half_width_1, half_width_2):
                 f'excitation names order {key!r}, but this solve retains only n = 0 -- '
                 'truncation_order[1] is 0, so there is no out-of-plane order to light. Both 1D '
                 'formulations keep the single n = 0 order.')
-        if abs(m) > half_width_1 or abs(n) > half_width_2:
+        if abs(m) > half_width_u or abs(n) > half_width_v:
             raise ValueError(
                 f'excitation names order {key!r}, which is outside the declared '
-                f'truncation_order=({half_width_1}, {half_width_2}). The retained window widens around '
+                f'truncation_order=({half_width_u}, {half_width_v}). The retained window widens around '
                 'the orders you light, so this is bounded on purpose: raise truncation_order if that '
                 'order is really part of the illumination.')
         out.append(((m, n), amplitude, key))
     return out
 
 
-def order_window(half_width_1, half_width_2, excitation):
+def order_window(half_width_u, half_width_v, excitation):
     """Which orders the solve retains, as ``(centre, half_width)`` per axis.
 
     Without an excitation this is ``(0, truncation_order)`` -- the symmetric window centred on the
@@ -385,20 +385,20 @@ def order_window(half_width_1, half_width_2, excitation):
     difference.
     """
     if excitation is None:
-        return (0, int(half_width_1)), (0, int(half_width_2))
-    orders = [order for order, _, _ in parse_excitation(excitation, half_width_1, half_width_2)]
+        return (0, int(half_width_u)), (0, int(half_width_v))
+    orders = [order for order, _, _ in parse_excitation(excitation, half_width_u, half_width_v)]
 
     def span(lit, half):
         lo, hi = min(lit) - int(half), max(lit) + int(half)
         centre = (lo + hi) // 2
         return centre, max(centre - lo, hi - centre)
 
-    return span([m for m, _ in orders], half_width_1), span([n for _, n in orders], half_width_2)
+    return span([m for m, _ in orders], half_width_u), span([n for _, n in orders], half_width_v)
 
 
 class LitOrder(NamedTuple):
     """One order an excitation lights: where it sits, what weight, and what to call it."""
-    #: Flat position into the ``(n_orders_2, n_orders_1)`` grid, row-major.
+    #: Flat position into the ``(n_orders_v, n_orders_u)`` grid, row-major.
     index: int
     #: The complex weight written for it. May be traced.
     amplitude: object
@@ -423,24 +423,24 @@ def lit_orders(excitation, window_x, window_y):
     compared against a traced value.
 
     ``window_x`` / ``window_y`` are :func:`order_window`'s ``(centre, half_width)`` pairs, and
-    the indices returned are flat into the ``(n_orders_2, n_orders_1)`` grid the solves carry,
+    the indices returned are flat into the ``(n_orders_v, n_orders_u)`` grid the solves carry,
     row-major -- so a caller writes them straight into a column of that length. Reading the
     window rather than ``truncation_order`` is what lets the retained set sit off the specular order,
     which is the whole point of widening it.
     """
     if excitation is None:
         return None
-    (centre_1, half_1), (centre_2, half_2) = window_x, window_y
-    n_orders_1 = 2 * half_1 + 1
+    (centre_u, half_u), (centre_v, half_v) = window_x, window_y
+    n_orders_u = 2 * half_u + 1
     # Validated against the *declared* truncation_order, which the window was widened from: a lit
     # order is inside `centre +- half` by construction, so re-deriving the declaration is what
     # keeps the refusal meaningful rather than vacuous.
-    declared_x = max(abs(centre_1 - half_1), abs(centre_1 + half_1))
-    declared_y = max(abs(centre_2 - half_2), abs(centre_2 + half_2))
+    declared_x = max(abs(centre_u - half_u), abs(centre_u + half_u))
+    declared_y = max(abs(centre_v - half_v), abs(centre_v + half_v))
     resolved = []
     for (m, n), amplitude, key in parse_excitation(excitation, declared_x, declared_y):
-        resolved.append(LitOrder((n - centre_2 + half_2) * n_orders_1
-                                 + (m - centre_1 + half_1), amplitude, key))
+        resolved.append(LitOrder((n - centre_v + half_v) * n_orders_u
+                                 + (m - centre_u + half_u), amplitude, key))
     return tuple(resolved)
 
 

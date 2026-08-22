@@ -209,7 +209,7 @@ _FIELD_NOT_DECLARED = (
     "state has to be retained *during* the solve, so there is nothing left to reconstruct "
     "from once it has returned. Set answers='field' and solve again.\n"
     "The default is 'amplitude' because the field state is 4.25 matrices of side "
-    "2*n_orders_1*n_orders_2 per layer on the 2D path (3.75 conical, 5 pure 1D) -- 21.7 MB at "
+    "2*n_orders_u*n_orders_v per layer on the 2D path (3.75 conical, 5 pure 1D) -- 21.7 MB at "
     "truncation_order=(8, 8), 240 MB at (15, 15), 733 MB at (20, 20), per layer -- while the amplitudes "
     "it does keep are boundary vectors. An optimization against a fixed objective needs the "
     "amplitudes and never reconstructs a field.")
@@ -450,7 +450,7 @@ class CoreSolveMixin:
 
         The default is ``'amplitude'`` because that is where the cost cliff is. The
         amplitudes are boundary vectors already solved for; the field state is 4.25 matrices
-        of side ``2*n_orders_1*n_orders_2`` per layer on the 2D path — 240 MB per layer at
+        of side ``2*n_orders_u*n_orders_v`` per layer on the 2D path — 240 MB per layer at
         ``truncation_order=(15, 15)``, 733 MB at ``(20, 20)``. The two differ by three orders of
         magnitude, and the runs that are large enough to care are optimization sweeps
         against a fixed objective, which never call :meth:`reconstruct_field` at all.
@@ -762,8 +762,8 @@ class CoreSolveMixin:
         ``truncation_order=[m, 0]`` to 3e-15.
 
         Until this check the request reached ``layer_modes_1d_conical``, where ``Ky2`` is built
-        over the full ``n_orders_1 * n_orders_2`` order set and the convolution matrices over
-        ``n_orders_1`` alone, and surfaced as ``operands could not be broadcast together with
+        over the full ``n_orders_u * n_orders_v`` order set and the convolution matrices over
+        ``n_orders_u`` alone, and surfaced as ``operands could not be broadcast together with
         shapes (5,5) (15,15)`` — an error with nothing in it that names the mistake.
         """
         if not one_dimensional or self.truncation_order[1] == 0:
@@ -943,10 +943,10 @@ class CoreSolveMixin:
         """Per-order in-plane wavevectors ``(kx, ky)``, normalized by ``k0``.
 
         What the 2D solve uses, in whichever layout the lattice admits. Axis-aligned cells get
-        the two 1-D vectors, lengths ``(n_orders_1,)`` and ``(n_orders_2,)`` — handed straight
+        the two 1-D vectors, lengths ``(n_orders_u,)`` and ``(n_orders_v,)`` — handed straight
         back from the separable build behind it, untouched, so on a rectangular cell this *is*
         that build and nothing downstream can tell the lattice step is there.
-        A skewed cell cannot be written that way and gets the ``(n_orders_2, n_orders_1)``
+        A skewed cell cannot be written that way and gets the ``(n_orders_v, n_orders_u)``
         Cartesian components instead; both spellings are what
         :func:`wavebit._core.solve_2d.order_grid_kxy` accepts.
 
@@ -975,10 +975,10 @@ class CoreSolveMixin:
         A = self._lattice_basis
         if A is None or _lattice.is_axis_aligned(A):
             return kx, ky
-        (cx, half_width_1), (cy, half_width_2) = self.order_window
+        (cx, half_width_u), (cy, half_width_v) = self.order_window
         xp = array_namespace(kx)
-        return _lattice.order_kxy(xp, A, half_width_1, half_width_2, wavelength,
-                                  kx[half_width_1], ky[half_width_2], centre=(cx, cy),
+        return _lattice.order_kxy(xp, A, half_width_u, half_width_v, wavelength,
+                                  kx[half_width_u], ky[half_width_v], centre=(cx, cy),
                                   dtype=kx.dtype, device=_device_of(kx))
 
     @property
@@ -1600,7 +1600,7 @@ class CoreFactorizationMixin:
         # widen the retained set, and a convolution matrix has to be as wide as the
         # `kx` it will meet. Its entries do not otherwise care where the window sits
         # -- `(i, j)` is the harmonic `i - j` -- so only the size travels here.
-        (_, half_width_1), (_, half_width_2) = self.order_window
+        (_, half_width_u), (_, half_width_v) = self.order_window
 
         # The two axes decide independently what has to be frozen: NVF needs the normal
         # field, the integrated series needs the block compression, and ('integrated', 'nvf')
@@ -1611,9 +1611,9 @@ class CoreFactorizationMixin:
             if factorization == Factorization.NVF:
                 basis = self._geometry_lattice_for(None)
                 normal_field = _fac.normal_field_for_raster(
-                    self.structure, half_width_1, half_width_2, lattice=basis, method=self.normal_method)
+                    self.structure, half_width_u, half_width_v, lattice=basis, method=self.normal_method)
                 normal_field_source = _fac.normal_field_source_for_raster(
-                    self.structure, half_width_1, half_width_2, lattice=basis, method=self.normal_method)
+                    self.structure, half_width_u, half_width_v, lattice=basis, method=self.normal_method)
                 if self._mu is not None:
                     # A separate record, off `mu`'s own raster. A magnetic inclusion need not
                     # sit where the dielectric one does, and the NVF rearrangement is written
@@ -1622,9 +1622,9 @@ class CoreFactorizationMixin:
                     # permittivity's field would be right on every case where the two patterns
                     # coincide, which is most of them, and silently wrong on the rest.
                     mu_normal_field = _fac.normal_field_for_raster(
-                        self._mu, half_width_1, half_width_2, lattice=basis, method=self.normal_method)
+                        self._mu, half_width_u, half_width_v, lattice=basis, method=self.normal_method)
                     mu_normal_field_source = _fac.normal_field_source_for_raster(
-                        self._mu, half_width_1, half_width_2, lattice=basis, method=self.normal_method)
+                        self._mu, half_width_u, half_width_v, lattice=basis, method=self.normal_method)
             if coefficients == FourierCoefficients.INTEGRATED:
                 compression = [_fac.compression_indices(self.structure[i])
                                for i in range(self.structure.shape[0])]
@@ -1799,7 +1799,7 @@ class CoreFactorizationMixin:
         splatting, unpacking, indexing and ``len`` all behave as they did when this returned a
         bare tuple, and ``conv.epz_i`` now reaches one slot by name rather than by an index that
         is correct only until somebody reorders. Each slot is ``(n_layers, n_orders, n_orders)``
-        with ``n_orders = (2*half_width_1+1) * (2*half_width_2+1)``; ``epxy`` and ``epyx`` are
+        with ``n_orders = (2*half_width_u+1) * (2*half_width_v+1)``; ``epxy`` and ``epyx`` are
         ``None`` on the paths that produce three rather than five (see
         :func:`~._core.factorization.nvf_conv_matrices`).
 
@@ -2014,7 +2014,7 @@ class CoreFactorizationMixin:
         # widen the retained set, and a convolution matrix has to be as wide as the
         # `kx` it will meet. Its entries do not otherwise care where the window sits
         # -- `(i, j)` is the harmonic `i - j` -- so only the size travels here.
-        (_, half_width_1), (_, half_width_2) = self.order_window
+        (_, half_width_u), (_, half_width_v) = self.order_window
         mu_pass = quantity == 'permeability'
 
         if self._modeling_type == 0:                      # raster
@@ -2036,21 +2036,21 @@ class CoreFactorizationMixin:
             if factorization == Factorization.LI:
                 if sampled:
                     conv = _fac.to_conv_mat_raster_sampled(
-                        structure, half_width_1, half_width_2)
+                        structure, half_width_u, half_width_v)
                 else:
                     conv = _fac.to_conv_mat_raster_integrated(
-                        structure, half_width_1, half_width_2, compression=compression)
+                        structure, half_width_u, half_width_v, compression=compression)
             else:
                 if sampled:
                     conv = _fac.to_conv_mat_raster_nvf(
-                        structure, half_width_1, half_width_2,
+                        structure, half_width_u, half_width_v,
                         normal_field=normal_field,
                         normal_field_source=normal_field_source,
                         lattice=self._geometry_lattice_for(geometry),
                         normal_method=self.normal_method)
                 else:
                     conv = _fac.to_conv_mat_raster_integrated_nvf(
-                        structure, half_width_1, half_width_2,
+                        structure, half_width_u, half_width_v,
                         normal_field=normal_field,
                         normal_field_source=normal_field_source,
                         compression=compression,
@@ -2073,7 +2073,7 @@ class CoreFactorizationMixin:
                 plans, choices = self.modeler.grid_plans, self.modeler.shape_choices
             structure_block = self.modeling_block_instruction(
                 structure, plans=plans, shape_choices=choices)
-            conv = _fac.to_conv_mat_block(structure_block, half_width_1, half_width_2)
+            conv = _fac.to_conv_mat_block(structure_block, half_width_u, half_width_v)
 
         elif self._modeling_type == 2:      # smooth shapes -- NVF on exact transforms
             # Likewise fixed on both axes: the epsilon tensor comes from the shapes' analytic
@@ -2082,7 +2082,7 @@ class CoreFactorizationMixin:
             # `factorization='li'` or `fourier_coefficients='sampled'` was refused above.
             xp = _namespace_for_backend(self.backend)
             conv = _analytic.to_conv_mat_smooth_layers(
-                structure, half_width_1, half_width_2, self.period,
+                structure, half_width_u, half_width_v, self.period,
                 normal_grid=self.normal_grid,
                 complex_dtype=xp.complex128, xp=xp,
                 boundary_plans=None if geometry is None else geometry.boundary_plans,

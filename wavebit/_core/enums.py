@@ -107,7 +107,7 @@ class Answers(str, Enum):
     The seam that matters is between the last two, and it is not a matter of taste. The
     amplitudes are boundary data — a few vectors, already solved for — while the field state is
     ``4.25`` matrices of side ``dim`` *per layer* on the 2D path (``3.75`` conical, ``5`` pure
-    1D), with ``dim = 2*n_orders_1*n_orders_2`` on the coupled paths. At ``truncation_order=(15, 15)``
+    1D), with ``dim = 2*n_orders_u*n_orders_v`` on the coupled paths. At ``truncation_order=(15, 15)``
     that is one 56 MB block per matrix. The 2D figure is the one to quote: ``3.75`` is what you
     get by assuming that path's ``W`` is the conical one's half-height block, and it is not. A
     phase-target optimization needs the amplitudes and never calls ``reconstruct_field``;

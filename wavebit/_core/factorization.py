@@ -54,7 +54,7 @@ whole-array NumPy conversion (:func:`_as_bools`). The compression compares neigh
 rows and columns that way directly. The normal field cannot — SciPy wants the mask as an array
 — so it derives that mask from the *base* raster rather than reading it off the upsampled one
 (:func:`_upsampled_interface_mask`); the upsample is a block repeat, so the two are the same
-mask, and the base has ``repeat_2 * repeat_1`` fewer values to narrow. **Neither raster
+mask, and the base has ``repeat_v * repeat_u`` fewer values to narrow. **Neither raster
 strategy needs a frozen geometry to differentiate**, which is what makes a fit whose pattern
 moves every step safe: with no record there is nothing to go stale.
 
@@ -76,7 +76,7 @@ Slot order
 
 .. code-block:: python
 
-    res = mee.solve_conv(*to_conv_mat_raster_nvf(structure, half_width_1, half_width_2))
+    res = mee.solve_conv(*to_conv_mat_raster_nvf(structure, half_width_u, half_width_v))
 
 is correct for any of them. Concretely, three slots are ``(epx, epy, epz_i)`` and five are
 ``(epx, epy, epz_i, epxy, epyx)`` — the inverted zz matrix is **third**, not last, because
@@ -228,7 +228,7 @@ def _half_pixel_phase(xp, orders, n, dtype, device=None):
     return xp.exp(-1j * 3.141592653589793 * k / n)
 
 
-def fourier2d_piecewise_constant(xp, cell, half_width_1, half_width_2, *, inverse_rule):
+def fourier2d_piecewise_constant(xp, cell, half_width_u, half_width_v, *, inverse_rule):
     """2D discrete Fourier series of a grid whose values *hold across* their pixels.
 
     A permittivity raster is this case: ``structure`` names the material occupying each cell, so
@@ -240,10 +240,10 @@ def fourier2d_piecewise_constant(xp, cell, half_width_1, half_width_2, *, invers
     ``None`` for the direct rule both ways. Those three are Li's three components of one
     layer: ``None`` builds ``epz``, ``'y'`` builds ``epy``, ``'x'`` builds ``epx``.
     """
-    return _fourier2d_grid(xp, cell, half_width_1, half_width_2, inverse_rule=inverse_rule, piecewise_constant=True)
+    return _fourier2d_grid(xp, cell, half_width_u, half_width_v, inverse_rule=inverse_rule, piecewise_constant=True)
 
 
-def fourier2d_pointwise(xp, field, half_width_1, half_width_2):
+def fourier2d_pointwise(xp, field, half_width_u, half_width_v):
     """2D discrete Fourier series of a grid holding *point samples* of a continuous field.
 
     The NVF normal field is this case, and the only one in the package: a continuous
@@ -264,10 +264,10 @@ def fourier2d_pointwise(xp, field, half_width_1, half_width_2):
     Because there is no closed form, this path *does* need ``4*truncation_order+1`` points — the caller
     lifts the grid to that floor, see :func:`_normal_field_floor`.
     """
-    return _fourier2d_grid(xp, field, half_width_1, half_width_2, inverse_rule=None, piecewise_constant=False)
+    return _fourier2d_grid(xp, field, half_width_u, half_width_v, inverse_rule=None, piecewise_constant=False)
 
 
-def _fourier2d_grid(xp, cell, half_width_1, half_width_2, *, inverse_rule, piecewise_constant):
+def _fourier2d_grid(xp, cell, half_width_u, half_width_v, *, inverse_rule, piecewise_constant):
     """2D discrete Fourier series of ``cell`` with Li's factorization rules.
 
     Private, and ``piecewise_constant`` has no default, because the two answers are not a
@@ -317,20 +317,20 @@ def _fourier2d_grid(xp, cell, half_width_1, half_width_2, *, inverse_rule, piece
     under the field's own discretization error". That is reproducible only at normal incidence
     with no index contrast, and is not a bound.)
     """
-    inv_1, inv_2 = _inverse_axes(inverse_rule)
-    n_orders_1 = 2 * half_width_1 + 1
-    n_orders_2 = 2 * half_width_2 + 1
+    inv_u, inv_v = _inverse_axes(inverse_rule)
+    n_orders_u = 2 * half_width_u + 1
+    n_orders_v = 2 * half_width_v + 1
 
     cell = xp.matrix_transpose(cell)
 
-    if inv_2:             # y discontinuous: the inverse rule starts from 1/eps
+    if inv_v:             # y discontinuous: the inverse rule starts from 1/eps
         cell = 1 / cell
 
     dfs1d = xp.fft.fft(cell / cell.shape[1])
 
     dev = _device(xp, cell)
-    orders_y = list(range(-2 * half_width_2, 2 * half_width_2 + 1))
-    orders_1 = list(range(-2 * half_width_1, 2 * half_width_1 + 1))
+    orders_y = list(range(-2 * half_width_v, 2 * half_width_v + 1))
+    orders_u = list(range(-2 * half_width_u, 2 * half_width_u + 1))
     n_y = cell.shape[1]
 
     # Read the coefficients on the *order* vector, correct them there, and only then expand
@@ -347,33 +347,33 @@ def _fourier2d_grid(xp, cell, half_width_1, half_width_2, *, inverse_rule, piece
     # wherever the old form worked, and defined where it did not: raw order indices need a grid
     # of at least 4*truncation_order+1 to stay in range, which is the whole reason the raster used to be
     # upsampled before anything else was considered.
-    coeff_2 = dfs1d[:, xp.asarray(_wrap(orders_y, n_y), device=dev)]
+    coeff_v = dfs1d[:, xp.asarray(_wrap(orders_y, n_y), device=dev)]
     # Both kinds of grid carry the half-pixel offset; only a staircase also carries
     # the box transform. See :func:`_half_pixel_phase`.
     _correct = _pixel_correction if piecewise_constant else _half_pixel_phase
-    coeff_2 = coeff_2 * _correct(xp, orders_y, n_y, coeff_2.dtype, dev)
-    conv1d = coeff_2[:, _circulant_gather(xp, half_width_2, dev)]
+    coeff_v = coeff_v * _correct(xp, orders_y, n_y, coeff_v.dtype, dev)
+    conv1d = coeff_v[:, _circulant_gather(xp, half_width_v, dev)]
 
-    if inv_1 or inv_2:    # Li's inner step, whichever direction asked for it
+    if inv_u or inv_v:    # Li's inner step, whichever direction asked for it
         conv1d = xp.linalg.inv(conv1d)
 
-    conv1d = xp.reshape(conv1d, (-1, n_orders_2 ** 2))
+    conv1d = xp.reshape(conv1d, (-1, n_orders_v ** 2))
 
     conv1d_t = xp.matrix_transpose(conv1d)
-    n_1 = conv1d_t.shape[1]
-    dfs_2d = xp.fft.fft(conv1d_t / n_1)
+    n_u = conv1d_t.shape[1]
+    dfs_2d = xp.fft.fft(conv1d_t / n_u)
 
-    coeff_1 = dfs_2d[:, xp.asarray(_wrap(orders_1, n_1), device=dev)]
+    coeff_u = dfs_2d[:, xp.asarray(_wrap(orders_u, n_u), device=dev)]
     # Both kinds of grid carry the half-pixel offset; only a staircase also carries
     # the box transform. See :func:`_half_pixel_phase`.
     _correct = _pixel_correction if piecewise_constant else _half_pixel_phase
-    coeff_1 = coeff_1 * _correct(xp, orders_1, n_1, coeff_1.dtype, dev)
-    conv2d = coeff_1[:, _circulant_gather(xp, half_width_1, dev)]
-    conv2d = xp.reshape(conv2d, (n_orders_2, n_orders_2, n_orders_1, n_orders_1))
+    coeff_u = coeff_u * _correct(xp, orders_u, n_u, coeff_u.dtype, dev)
+    conv2d = coeff_u[:, _circulant_gather(xp, half_width_u, dev)]
+    conv2d = xp.reshape(conv2d, (n_orders_v, n_orders_v, n_orders_u, n_orders_u))
     conv2d = xp.moveaxis(conv2d, 1, 2)
-    conv2d = xp.reshape(conv2d, (n_orders_2 * n_orders_1, n_orders_2 * n_orders_1))
+    conv2d = xp.reshape(conv2d, (n_orders_v * n_orders_u, n_orders_v * n_orders_u))
 
-    if inv_1:             # x discontinuous: Li's outer step closes it
+    if inv_u:             # x discontinuous: Li's outer step closes it
         conv2d = xp.linalg.inv(conv2d)
 
     return conv2d
@@ -407,7 +407,7 @@ def _layer_eps(xp, structure):
         yield xp.astype(layer, _complex_dtype(xp, layer))
 
 
-def _normal_field_floor(shape, half_width_1, half_width_2):
+def _normal_field_floor(shape, half_width_u, half_width_v):
     """Repeat factors that lift a layer to the grid the normal field's transform needs.
 
     The normal field is a continuous vector field this code evaluates on a grid, so unlike the
@@ -422,14 +422,14 @@ def _normal_field_floor(shape, half_width_1, half_width_2):
     by the raster size; measured across 32 shape/material/polarization/order combinations it
     lost accuracy in 27 and gained in none that stood up (see ``docs/nvf-upsampling.md``).
     """
-    return (max(1, (4 * half_width_2 + 1) // shape[0] + 1) if shape[0] < 4 * half_width_2 + 1 else 1,
-            max(1, (4 * half_width_1 + 1) // shape[1] + 1) if shape[1] < 4 * half_width_1 + 1 else 1)
+    return (max(1, (4 * half_width_v + 1) // shape[0] + 1) if shape[0] < 4 * half_width_v + 1 else 1,
+            max(1, (4 * half_width_u + 1) // shape[1] + 1) if shape[1] < 4 * half_width_u + 1 else 1)
 
 
-def _layer_eps_for_normal_field(xp, structure, half_width_1, half_width_2):
+def _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v):
     """Each layer's permittivity grid for the NVF path, with the base it was repeated from.
 
-    Yields ``(eps, base_eps, repeat_2, repeat_1)``. The base is what
+    Yields ``(eps, base_eps, repeat_v, repeat_u)``. The base is what
     :func:`_upsampled_interface_mask` derives the interface mask from when the values cannot be
     read whole, which is what lets NVF differentiate without a frozen geometry.
 
@@ -438,22 +438,22 @@ def _layer_eps_for_normal_field(xp, structure, half_width_1, half_width_2):
     for i in range(structure.shape[0]):
         layer = structure[i]
         base = xp.astype(layer, _complex_dtype(xp, layer))
-        repeat_2, repeat_1 = _normal_field_floor(layer.shape, half_width_1, half_width_2)
-        if repeat_2 > 1:
-            layer = xp.repeat(layer, repeat_2, axis=0)
-        if repeat_1 > 1:
-            layer = xp.repeat(layer, repeat_1, axis=1)
-        yield xp.astype(layer, _complex_dtype(xp, layer)), base, repeat_2, repeat_1
+        repeat_v, repeat_u = _normal_field_floor(layer.shape, half_width_u, half_width_v)
+        if repeat_v > 1:
+            layer = xp.repeat(layer, repeat_v, axis=0)
+        if repeat_u > 1:
+            layer = xp.repeat(layer, repeat_u, axis=1)
+        yield xp.astype(layer, _complex_dtype(xp, layer)), base, repeat_v, repeat_u
 
 
-def to_conv_mat_raster_sampled(structure, half_width_1, half_width_2):
+def to_conv_mat_raster_sampled(structure, half_width_u, half_width_v):
     """Per-layer convolution matrices for a raster ``structure`` via the sampled path.
 
     Args:
         structure: relative-permittivity raster, shape ``(n_layers, Ny, Nx)``. This is the
             design variable — gradients flow back to it. Permittivity, not an index: nothing
             here squares it (``docs/conventions.md``).
-        half_width_1, half_width_2: Fourier truncation orders.
+        half_width_u, half_width_v: Fourier truncation orders.
 
     Returns:
         ``(epx_conv_all, epy_conv_all, epz_conv_i_all)``, each ``(n_layers, n_orders, n_orders)``.
@@ -463,9 +463,9 @@ def to_conv_mat_raster_sampled(structure, half_width_1, half_width_2):
     epx_list, epy_list, epz_i_list = [], [], []
 
     for eps_matrix in _layer_eps(xp, structure):
-        epz_conv = fourier2d_piecewise_constant(xp, eps_matrix, half_width_1, half_width_2, inverse_rule=None)
-        epy_conv = fourier2d_piecewise_constant(xp, eps_matrix, half_width_1, half_width_2, inverse_rule='y')
-        epx_conv = fourier2d_piecewise_constant(xp, eps_matrix, half_width_1, half_width_2, inverse_rule='x')
+        epz_conv = fourier2d_piecewise_constant(xp, eps_matrix, half_width_u, half_width_v, inverse_rule=None)
+        epy_conv = fourier2d_piecewise_constant(xp, eps_matrix, half_width_u, half_width_v, inverse_rule='y')
+        epx_conv = fourier2d_piecewise_constant(xp, eps_matrix, half_width_u, half_width_v, inverse_rule='x')
 
         epx_list.append(epx_conv)
         epy_list.append(epy_conv)
@@ -692,7 +692,7 @@ def _interface_mask(eps):
     return border
 
 
-def _upsampled_interface_mask(xp, base_eps, repeat_2, repeat_1):
+def _upsampled_interface_mask(xp, base_eps, repeat_v, repeat_u):
     """The interface mask of a block-repeated grid, from the base grid's neighbour comparisons.
 
     :func:`_layer_eps_for_normal_field` lifts a layer to the floor by repeating each cell, so
@@ -703,7 +703,7 @@ def _upsampled_interface_mask(xp, base_eps, repeat_2, repeat_1):
 
     That is the whole point. Reading the repeated grid means converting it to NumPy in one
     step, which a tracer refuses; narrowing the base's comparisons one value at a time is
-    something a grad tracer allows, and there are ``repeat_2 * repeat_1`` times fewer of them —
+    something a grad tracer allows, and there are ``repeat_v * repeat_u`` times fewer of them —
     128x128 rather than 2688x2688 at ``truncation_order=5``. It is what lets NVF differentiate with no
     frozen geometry. (Under ``jax.jit`` neither works: there is no primal to narrow.)
 
@@ -713,7 +713,7 @@ def _upsampled_interface_mask(xp, base_eps, repeat_2, repeat_1):
     import numpy as np
 
     base_ny, base_nx = tuple(base_eps.shape)
-    border = np.zeros((base_ny * repeat_2, base_nx * repeat_1), dtype=bool)
+    border = np.zeros((base_ny * repeat_v, base_nx * repeat_u), dtype=bool)
 
     # The wrap pair is the last base row/column against the first: on a periodic cell that is
     # a neighbour relation like any other, and leaving it out is what made the field
@@ -721,30 +721,30 @@ def _upsampled_interface_mask(xp, base_eps, repeat_2, repeat_1):
     # last row of the last block and the first row of the first block.
     if base_ny > 1:
         differs = _as_bools(xp, base_eps[:-1, :] != base_eps[1:, :])
-        differs = np.repeat(differs, repeat_1, axis=1)
-        last_of_block = np.arange(base_ny - 1) * repeat_2 + repeat_2 - 1
+        differs = np.repeat(differs, repeat_u, axis=1)
+        last_of_block = np.arange(base_ny - 1) * repeat_v + repeat_v - 1
         border[last_of_block, :] |= differs
         border[last_of_block + 1, :] |= differs
 
-        wrap = np.repeat(_as_bools(xp, base_eps[-1, :] != base_eps[0, :]), repeat_1)
+        wrap = np.repeat(_as_bools(xp, base_eps[-1, :] != base_eps[0, :]), repeat_u)
         border[-1, :] |= wrap
         border[0, :] |= wrap
 
     if base_nx > 1:
         differs = _as_bools(xp, base_eps[:, :-1] != base_eps[:, 1:])
-        differs = np.repeat(differs, repeat_2, axis=0)
-        last_of_block = np.arange(base_nx - 1) * repeat_1 + repeat_1 - 1
+        differs = np.repeat(differs, repeat_v, axis=0)
+        last_of_block = np.arange(base_nx - 1) * repeat_u + repeat_u - 1
         border[:, last_of_block] |= differs
         border[:, last_of_block + 1] |= differs
 
-        wrap = np.repeat(_as_bools(xp, base_eps[:, -1] != base_eps[:, 0]), repeat_2)
+        wrap = np.repeat(_as_bools(xp, base_eps[:, -1] != base_eps[:, 0]), repeat_v)
         border[:, -1] |= wrap
         border[:, 0] |= wrap
 
     return border
 
 
-def _interface_mask_of(xp, eps, base_eps, repeat_2, repeat_1):
+def _interface_mask_of(xp, eps, base_eps, repeat_v, repeat_u):
     """The interface mask of ``eps``, by whichever route the backend allows.
 
     Straight off the repeated grid when its values are concrete — the same read as before, and
@@ -754,7 +754,7 @@ def _interface_mask_of(xp, eps, base_eps, repeat_2, repeat_1):
     try:
         return _interface_mask(_to_numpy(eps))
     except Exception:                     # a tracer: derive it from the base instead
-        return _upsampled_interface_mask(xp, base_eps, repeat_2, repeat_1)
+        return _upsampled_interface_mask(xp, base_eps, repeat_v, repeat_u)
 
 
 def _lattice_key(lattice):
@@ -810,7 +810,7 @@ def _normal_field_source(eps, lattice=None, method=None):
             int(np.unique(eps).size))
 
 
-def normal_field_for_raster(structure, half_width_1, half_width_2, lattice=None, method=None):
+def normal_field_for_raster(structure, half_width_u, half_width_v, lattice=None, method=None):
     """Per-layer ``(nx, ny)`` normal fields for ``structure``, on the grid the NVF build uses.
 
     Precompute this once from the concrete geometry and hand it to
@@ -823,10 +823,10 @@ def normal_field_for_raster(structure, half_width_1, half_width_2, lattice=None,
     xp = array_namespace(structure)
     return [normal_vector_field(eps, lattice=lattice, method=method,
                                 base_shape=tuple(base.shape))
-            for eps, base, _, _ in _layer_eps_for_normal_field(xp, structure, half_width_1, half_width_2)]
+            for eps, base, _, _ in _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v)]
 
 
-def normal_field_source_for_raster(structure, half_width_1, half_width_2, lattice=None, method=None):
+def normal_field_source_for_raster(structure, half_width_u, half_width_v, lattice=None, method=None):
     """What :func:`normal_field_for_raster` derived its answer from, per layer.
 
     Freeze this alongside the normal field and hand both back to
@@ -836,7 +836,7 @@ def normal_field_source_for_raster(structure, half_width_1, half_width_2, lattic
     """
     xp = array_namespace(structure)
     return [_normal_field_source(_to_numpy(eps), lattice, method)
-            for eps, _, _, _ in _layer_eps_for_normal_field(xp, structure, half_width_1, half_width_2)]
+            for eps, _, _, _ in _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v)]
 
 
 def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None, method=None):
@@ -908,7 +908,7 @@ def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None, meth
         f'does.)')
 
 
-def _nvf_projector(xp, nx, ny, half_width_1, half_width_2, dtype, device=None):
+def _nvf_projector(xp, nx, ny, half_width_u, half_width_v, dtype, device=None):
     """Convolution matrices of the normal projector: ``C_xx = <nx^2>`` etc.
 
     Always sampled off the raster the normal field lives on, whatever
@@ -918,9 +918,9 @@ def _nvf_projector(xp, nx, ny, half_width_1, half_width_2, dtype, device=None):
     extension of the interface direction into the bulk, so it has no piecewise-constant block
     structure for the closed-form series to integrate over in the first place.
     """
-    C_xx = fourier2d_pointwise(xp, xp.asarray(nx ** 2, dtype=dtype, device=device), half_width_1, half_width_2)
-    C_xy = fourier2d_pointwise(xp, xp.asarray(nx * ny, dtype=dtype, device=device), half_width_1, half_width_2)
-    C_yy = fourier2d_pointwise(xp, xp.asarray(ny ** 2, dtype=dtype, device=device), half_width_1, half_width_2)
+    C_xx = fourier2d_pointwise(xp, xp.asarray(nx ** 2, dtype=dtype, device=device), half_width_u, half_width_v)
+    C_xy = fourier2d_pointwise(xp, xp.asarray(nx * ny, dtype=dtype, device=device), half_width_u, half_width_v)
+    C_yy = fourier2d_pointwise(xp, xp.asarray(ny ** 2, dtype=dtype, device=device), half_width_u, half_width_v)
     return C_xx, C_xy, C_yy
 
 
@@ -1018,7 +1018,7 @@ def _pn_fields(xp, eps33, nx, ny):
     return A, B
 
 
-def pn_eps_conv_matrices(xp, eps33, nx, ny, half_width_1, half_width_2):
+def pn_eps_conv_matrices(xp, eps33, nx, ny, half_width_u, half_width_v):
     """Popov-Neviere convolution matrices for one *patterned anisotropic* layer.
 
     ``eps33`` is the pointwise permittivity tensor on the layer raster, shape ``(Ny, Nx, 3, 3)``.
@@ -1037,7 +1037,7 @@ def pn_eps_conv_matrices(xp, eps33, nx, ny, half_width_1, half_width_2):
     A, B = _pn_fields(xp, eps33, nx, ny)
 
     def block(field):
-        return xp.concat([xp.concat([fourier2d_pointwise(xp, field[..., i, j], half_width_1, half_width_2)
+        return xp.concat([xp.concat([fourier2d_pointwise(xp, field[..., i, j], half_width_u, half_width_v)
                                      for j in range(2)], axis=-1) for i in range(2)], axis=-2)
 
     eps_t = block(A) @ xp.linalg.inv(block(B))
@@ -1081,12 +1081,12 @@ def pn_eps_conv_matrices(xp, eps33, nx, ny, half_width_1, half_width_2):
     # closed form's across 45 to 55 degrees, and the crossover is near 38 degrees, below which
     # the DFT leads by 5% of a term 30x smaller.
     epz_i = xp.linalg.inv(
-        fourier2d_piecewise_constant(xp, eps33[..., 2, 2], half_width_1, half_width_2, inverse_rule=None))
+        fourier2d_piecewise_constant(xp, eps33[..., 2, 2], half_width_u, half_width_v, inverse_rule=None))
 
     return ConvMatrices(eps_xx, eps_yy, epz_i, -eps_xy, -eps_yx)
 
 
-def pn_mu_conv_matrices(xp, mu33, nx, ny, half_width_1, half_width_2):
+def pn_mu_conv_matrices(xp, mu33, nx, ny, half_width_u, half_width_v):
     """The five **permeability** slots from a patterned ``mu`` tensor.
 
     ``pn_eps_conv_matrices`` verbatim. That one routine serves both is not a shortcut — it is
@@ -1112,17 +1112,17 @@ def pn_mu_conv_matrices(xp, mu33, nx, ny, half_width_1, half_width_2):
     ``nx`` / ``ny`` are the normal field of the **permeability's** boundary, which need not be
     the permittivity's — see :func:`to_conv_mat_raster_pn_mu`.
     """
-    return pn_eps_conv_matrices(xp, mu33, nx, ny, half_width_1, half_width_2)
+    return pn_eps_conv_matrices(xp, mu33, nx, ny, half_width_u, half_width_v)
 
 
-def to_conv_mat_raster_pn_mu(tensor_raster, half_width_1, half_width_2, normal_field=None, lattice=None,
+def to_conv_mat_raster_pn_mu(tensor_raster, half_width_u, half_width_v, normal_field=None, lattice=None,
                              normal_method=None):
     """Per-layer permeability slots for a **tensor** ``mu`` raster — the ``mu`` twin of
     :func:`to_conv_mat_raster_pn_eps`.
 
     Args:
         tensor_raster: ``(n_layers, Ny, Nx, 3, 3)`` permeability tensors per pixel.
-        half_width_1, half_width_2: Fourier truncation orders.
+        half_width_u, half_width_v: Fourier truncation orders.
         normal_field: optional per-layer ``(nx, ny)``. Left ``None`` it is computed from the
             in-plane trace of **``mu``**, not of ``eps``. Reading ``mu_zz`` instead would give
             the same field for any tensor whose components share a boundary — which is every
@@ -1168,13 +1168,13 @@ def to_conv_mat_raster_pn_mu(tensor_raster, half_width_1, half_width_2, normal_f
                 method=normal_method)
         else:
             nx, ny = normal_field[i]
-        for slot, mat in zip(out, pn_mu_conv_matrices(xp, mu33, nx, ny, half_width_1, half_width_2)):
+        for slot, mat in zip(out, pn_mu_conv_matrices(xp, mu33, nx, ny, half_width_u, half_width_v)):
             slot.append(mat)
 
     return ConvMatrices(*(xp.stack(slot) for slot in out))
 
 
-def to_conv_mat_raster_pn_eps(tensor_raster, half_width_1, half_width_2, normal_field=None,
+def to_conv_mat_raster_pn_eps(tensor_raster, half_width_u, half_width_v, normal_field=None,
                               lattice=None, normal_method=None):
     """Per-layer Popov-Neviere convolution matrices for a **tensor** raster.
 
@@ -1187,7 +1187,7 @@ def to_conv_mat_raster_pn_eps(tensor_raster, half_width_1, half_width_2, normal_
             builder was already stated in permittivity before the scalar paths were, because
             ``n ** 2`` is a scalar operation and there is no square root of a tensor field
             worth guessing at.
-        half_width_1, half_width_2: Fourier truncation orders.
+        half_width_u, half_width_v: Fourier truncation orders.
         normal_field: optional per-layer ``(nx, ny)``. Left ``None`` it is computed from the
             trace of the in-plane block, which is the isotropic part of the layer and so sees
             the same geometry a scalar raster would. Supply it to keep the build traceable
@@ -1227,13 +1227,13 @@ def to_conv_mat_raster_pn_eps(tensor_raster, half_width_1, half_width_2, normal_
         else:
             nx, ny = normal_field[i]
         for slot, mat in zip(
-                out, pn_eps_conv_matrices(xp, eps33, nx, ny, half_width_1, half_width_2)):
+                out, pn_eps_conv_matrices(xp, eps33, nx, ny, half_width_u, half_width_v)):
             slot.append(mat)
 
     return ConvMatrices(*(xp.stack(slot) for slot in out))
 
 
-def nvf_conv_matrices(xp, eps_matrix, nx, ny, half_width_1, half_width_2):
+def nvf_conv_matrices(xp, eps_matrix, nx, ny, half_width_u, half_width_v):
     """NVF convolution matrices for one layer, with sampled coefficients."""
     C = _complex_dtype(xp, eps_matrix)
     eps_matrix = xp.astype(eps_matrix, C)
@@ -1242,14 +1242,14 @@ def nvf_conv_matrices(xp, eps_matrix, nx, ny, half_width_1, half_width_2):
     # eps is a staircase however finely it was sampled, so its coefficients are exact from
     # the grid it arrives on. The projector grids are not -- they sample a continuous
     # vector field -- which is why only these two carry the flag.
-    ep_dir = fourier2d_piecewise_constant(xp, eps_matrix, half_width_1, half_width_2, inverse_rule=None)
-    ep_inv = fourier2d_piecewise_constant(xp, 1.0 / eps_matrix, half_width_1, half_width_2, inverse_rule=None)
+    ep_dir = fourier2d_piecewise_constant(xp, eps_matrix, half_width_u, half_width_v, inverse_rule=None)
+    ep_inv = fourier2d_piecewise_constant(xp, 1.0 / eps_matrix, half_width_u, half_width_v, inverse_rule=None)
 
     return _nvf_assemble(xp, ep_dir, ep_inv,
-                         *_nvf_projector(xp, nx, ny, half_width_1, half_width_2, C, dev))
+                         *_nvf_projector(xp, nx, ny, half_width_u, half_width_v, C, dev))
 
 
-def nvf_conv_matrices_integrated(xp, eps_comp, x, y, nx, ny, half_width_1, half_width_2):
+def nvf_conv_matrices_integrated(xp, eps_comp, x, y, nx, ny, half_width_u, half_width_v):
     """NVF convolution matrices for one layer, with integrated (closed-form) coefficients.
 
     ``eps_comp`` is the *compressed* piecewise-constant layer and ``x`` / ``y`` its segment
@@ -1260,20 +1260,20 @@ def nvf_conv_matrices_integrated(xp, eps_comp, x, y, nx, ny, half_width_1, half_
     eps_comp = xp.astype(eps_comp, C)
     dev = _device(xp, eps_comp)
 
-    ep_dir = fourier2d_integrated(xp, eps_comp, x, y, half_width_1, half_width_2, inverse_rule=None)
-    ep_inv = fourier2d_integrated(xp, 1.0 / eps_comp, x, y, half_width_1, half_width_2, inverse_rule=None)
+    ep_dir = fourier2d_integrated(xp, eps_comp, x, y, half_width_u, half_width_v, inverse_rule=None)
+    ep_inv = fourier2d_integrated(xp, 1.0 / eps_comp, x, y, half_width_u, half_width_v, inverse_rule=None)
 
     return _nvf_assemble(xp, ep_dir, ep_inv,
-                         *_nvf_projector(xp, nx, ny, half_width_1, half_width_2, C, dev))
+                         *_nvf_projector(xp, nx, ny, half_width_u, half_width_v, C, dev))
 
 
-def to_conv_mat_raster_nvf(structure, half_width_1, half_width_2, normal_field=None,
+def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=None,
                            normal_field_source=None, lattice=None, normal_method=None):
     """Per-layer NVF convolution matrices for a raster ``structure``.
 
     Args:
         structure: relative-permittivity raster ``(n_layers, Ny, Nx)`` — the design variable.
-        half_width_1, half_width_2: Fourier truncation orders.
+        half_width_u, half_width_v: Fourier truncation orders.
         normal_field: optional per-layer ``(nx, ny)`` pairs for the *upsampled* layer grid.
             Supply this to keep the build traceable under JAX (the default computes the field
             with SciPy, which needs concrete values). It is static geometry either way.
@@ -1307,11 +1307,11 @@ def to_conv_mat_raster_nvf(structure, half_width_1, half_width_2, normal_field=N
 
     out = [[], [], [], [], []]
 
-    layers = _layer_eps_for_normal_field(xp, structure, half_width_1, half_width_2)
-    for i, (eps_matrix, base_eps, repeat_2, repeat_1) in enumerate(layers):
+    layers = _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v)
+    for i, (eps_matrix, base_eps, repeat_v, repeat_u) in enumerate(layers):
         if normal_field is None:
             nx, ny = normal_vector_field(
-                eps_matrix, _interface_mask_of(xp, eps_matrix, base_eps, repeat_2, repeat_1),
+                eps_matrix, _interface_mask_of(xp, eps_matrix, base_eps, repeat_v, repeat_u),
                 lattice=lattice, method=normal_method, base_shape=tuple(base_eps.shape))
         else:
             _check_normal_field_still_fits(eps_matrix, normal_field_source, i, lattice,
@@ -1319,7 +1319,7 @@ def to_conv_mat_raster_nvf(structure, half_width_1, half_width_2, normal_field=N
             nx, ny = normal_field[i]
 
         for slot, mat in zip(out, nvf_conv_matrices(
-                xp, eps_matrix, nx, ny, half_width_1, half_width_2)):
+                xp, eps_matrix, nx, ny, half_width_u, half_width_v)):
             slot.append(mat)
 
     return ConvMatrices(*(xp.stack(slot) for slot in out))
@@ -1386,7 +1386,7 @@ def _fourier1d_integrated(xp, x, cell, truncation_order, period):
     return xp.where(xp.reshape(is_dc, (1, n_modes)), dc, f / xp.reshape(divisor, (1, n_modes)))
 
 
-def fourier2d_integrated(xp, cell, x, y, half_width_1, half_width_2, *, inverse_rule):
+def fourier2d_integrated(xp, cell, x, y, half_width_u, half_width_v, *, inverse_rule):
     """2D continuous Fourier series with Li's rules — the staircase-free factorization.
 
     ``x`` / ``y`` are the segment edges of the compressed (piecewise-constant) layer, so the
@@ -1407,38 +1407,38 @@ def fourier2d_integrated(xp, cell, x, y, half_width_1, half_width_2, *, inverse_
 
     ``inverse_rule`` is as in :func:`fourier2d_piecewise_constant`.
     """
-    inv_1, inv_2 = _inverse_axes(inverse_rule)
-    n_orders_1 = 2 * half_width_1 + 1
-    n_orders_2 = 2 * half_width_2 + 1
+    inv_u, inv_v = _inverse_axes(inverse_rule)
+    n_orders_u = 2 * half_width_u + 1
+    n_orders_v = 2 * half_width_v + 1
 
-    extent_1, extent_2 = x[-1], y[-1]
+    extent_u, extent_v = x[-1], y[-1]
 
     cell = xp.matrix_transpose(cell)
 
-    if inv_2:             # y discontinuous: the inverse rule starts from 1/eps
+    if inv_v:             # y discontinuous: the inverse rule starts from 1/eps
         cell = 1 / cell
 
-    cfs1d = _fourier1d_integrated(xp, y, cell, half_width_2, extent_2)
+    cfs1d = _fourier1d_integrated(xp, y, cell, half_width_v, extent_v)
 
     dev = _device(xp, cell)
-    idx_y = _circulant_gather(xp, half_width_2, dev)
-    idx_x = _circulant_gather(xp, half_width_1, dev)
+    idx_y = _circulant_gather(xp, half_width_v, dev)
+    idx_x = _circulant_gather(xp, half_width_u, dev)
 
     conv1d = cfs1d[:, idx_y]
 
-    if inv_1 or inv_2:    # Li's inner step, whichever direction asked for it
+    if inv_u or inv_v:    # Li's inner step, whichever direction asked for it
         conv1d = xp.linalg.inv(conv1d)
 
-    conv1d = xp.reshape(conv1d, (-1, n_orders_2 ** 2))
+    conv1d = xp.reshape(conv1d, (-1, n_orders_v ** 2))
 
-    cfs_2d = _fourier1d_integrated(xp, x, xp.matrix_transpose(conv1d), half_width_1, extent_1)
+    cfs_2d = _fourier1d_integrated(xp, x, xp.matrix_transpose(conv1d), half_width_u, extent_u)
 
     conv2d = cfs_2d[:, idx_x]
-    conv2d = xp.reshape(conv2d, (n_orders_2, n_orders_2, n_orders_1, n_orders_1))
+    conv2d = xp.reshape(conv2d, (n_orders_v, n_orders_v, n_orders_u, n_orders_u))
     conv2d = xp.moveaxis(conv2d, 1, 2)
-    conv2d = xp.reshape(conv2d, (n_orders_2 * n_orders_1, n_orders_2 * n_orders_1))
+    conv2d = xp.reshape(conv2d, (n_orders_v * n_orders_u, n_orders_v * n_orders_u))
 
-    if inv_1:             # x discontinuous: Li's outer step closes it
+    if inv_u:             # x discontinuous: Li's outer step closes it
         conv2d = xp.linalg.inv(conv2d)
 
     return conv2d
@@ -1485,13 +1485,13 @@ def compression_indices(cell):
     same_col = _as_bools(xp, xp.all(cell == xp.roll(cell, -1, axis=1), axis=0))
     col_idx = [c for c in range(n_col) if not same_col[c] or c == n_col - 1]
 
-    cell_1 = xp.take(cell, xp.asarray(col_idx, device=_device(xp, cell)), axis=1)
-    same_row = _as_bools(xp, xp.all(cell_1 == xp.roll(cell_1, -1, axis=0), axis=1))
+    cell_u = xp.take(cell, xp.asarray(col_idx, device=_device(xp, cell)), axis=1)
+    same_row = _as_bools(xp, xp.all(cell_u == xp.roll(cell_u, -1, axis=0), axis=1))
     row_idx = [r for r in range(n_row) if not same_row[r] or r == n_row - 1]
 
-    step_2, step_1 = 1.0 / np.array((n_row, n_col), dtype=np.float64)
-    x = np.array([step_1 * (c + 1) for c in col_idx]).reshape((-1, 1))
-    y = np.array([step_2 * (r + 1) for r in row_idx]).reshape((-1, 1))
+    step_v, step_u = 1.0 / np.array((n_row, n_col), dtype=np.float64)
+    x = np.array([step_u * (c + 1) for c in col_idx]).reshape((-1, 1))
+    y = np.array([step_v * (r + 1) for r in row_idx]).reshape((-1, 1))
     return row_idx, col_idx, x, y
 
 
@@ -1556,15 +1556,15 @@ def _check_compression_still_fits(cell, record, index):
     if missing:
         refuse(f'now steps at column {missing[0]}, where the recorded cut does not divide it')
 
-    cell_1 = cell[:, list(col_idx)]
-    missing = sorted(_steps_along(cell_1, 0) - set(int(r) for r in row_idx))
+    cell_u = cell[:, list(col_idx)]
+    missing = sorted(_steps_along(cell_u, 0) - set(int(r) for r in row_idx))
     if missing:
         refuse(f'now steps at row {missing[0]}, where the recorded cut does not divide it')
 
-    step_2, step_1 = 1.0 / np.array(cell.shape, dtype=np.float64)
+    step_v, step_u = 1.0 / np.array(cell.shape, dtype=np.float64)
     edges = (np.asarray(x), np.asarray(y))
-    want = (np.array([step_1 * (c + 1) for c in col_idx]).reshape((-1, 1)),
-            np.array([step_2 * (r + 1) for r in row_idx]).reshape((-1, 1)))
+    want = (np.array([step_u * (c + 1) for c in col_idx]).reshape((-1, 1)),
+            np.array([step_v * (r + 1) for r in row_idx]).reshape((-1, 1)))
     if not all(np.array_equal(a, b) for a, b in zip(edges, want)):
         refuse('carries block edges that are not the ones its shape implies')
 
@@ -1576,12 +1576,12 @@ def compress_cell(xp, cell, row_idx, col_idx):
     return xp.take(cell, xp.asarray(row_idx, device=dev), axis=0)
 
 
-def to_conv_mat_raster_integrated(structure, half_width_1, half_width_2, compression=None):
+def to_conv_mat_raster_integrated(structure, half_width_u, half_width_v, compression=None):
     """Per-layer convolution matrices via the analytic (staircase-free) integrated path.
 
     Args:
         structure: relative-permittivity raster ``(n_layers, Ny, Nx)`` — the design variable.
-        half_width_1, half_width_2: Fourier truncation orders.
+        half_width_u, half_width_v: Fourier truncation orders.
         compression: optional per-layer ``(row_idx, col_idx, x, y)`` from
             :func:`compression_indices`. Supply it to stay traceable under JAX; it is static
             geometry either way. Replayed eagerly it is checked against the layer in front of
@@ -1610,16 +1610,16 @@ def to_conv_mat_raster_integrated(structure, half_width_1, half_width_2, compres
         comp = compress_cell(xp, layer, row_idx, col_idx)
         eps = xp.astype(comp, _complex_dtype(xp, comp))
 
-        epz_list = fourier2d_integrated(xp, eps, x, y, half_width_1, half_width_2, inverse_rule=None)
-        epx_list.append(fourier2d_integrated(xp, eps, x, y, half_width_1, half_width_2, inverse_rule='x'))
-        epy_list.append(fourier2d_integrated(xp, eps, x, y, half_width_1, half_width_2, inverse_rule='y'))
+        epz_list = fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule=None)
+        epx_list.append(fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule='x'))
+        epy_list.append(fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule='y'))
         epz_i_list.append(xp.linalg.inv(epz_list))
 
     return ConvMatrices(xp.stack(epx_list), xp.stack(epy_list),
                         xp.stack(epz_i_list), None, None)
 
 
-def to_conv_mat_raster_integrated_nvf(structure, half_width_1, half_width_2, normal_field=None,
+def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, normal_field=None,
                                       normal_field_source=None, compression=None,
                                       lattice=None, normal_method=None):
     """Per-layer convolution matrices for a raster ``structure`` via closed-form Fourier + NVF.
@@ -1631,7 +1631,7 @@ def to_conv_mat_raster_integrated_nvf(structure, half_width_1, half_width_2, nor
 
     Args:
         structure: relative-permittivity raster ``(n_layers, Ny, Nx)`` — the design variable.
-        half_width_1, half_width_2: Fourier truncation orders.
+        half_width_u, half_width_v: Fourier truncation orders.
         normal_field: optional per-layer ``(nx, ny)`` from :func:`normal_field_for_raster`.
         normal_field_source: what that field was sampled from, as in
             :func:`to_conv_mat_raster_nvf` — this path replays the same record and is checked
@@ -1656,12 +1656,12 @@ def to_conv_mat_raster_integrated_nvf(structure, half_width_1, half_width_2, nor
     xp = array_namespace(structure)
 
     out = [[], [], [], [], []]
-    eps_grids = _layer_eps_for_normal_field(xp, structure, half_width_1, half_width_2)
+    eps_grids = _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v)
 
-    for i, (eps_grid, base_eps, repeat_2, repeat_1) in enumerate(eps_grids):
+    for i, (eps_grid, base_eps, repeat_v, repeat_u) in enumerate(eps_grids):
         if normal_field is None:
             nx, ny = normal_vector_field(
-                eps_grid, _interface_mask_of(xp, eps_grid, base_eps, repeat_2, repeat_1),
+                eps_grid, _interface_mask_of(xp, eps_grid, base_eps, repeat_v, repeat_u),
                 lattice=lattice, method=normal_method, base_shape=tuple(base_eps.shape))
         else:
             _check_normal_field_still_fits(eps_grid, normal_field_source, i, lattice,
@@ -1678,16 +1678,16 @@ def to_conv_mat_raster_integrated_nvf(structure, half_width_1, half_width_2, nor
         eps_comp = xp.astype(comp, _complex_dtype(xp, comp))
 
         for slot, mat in zip(out, nvf_conv_matrices_integrated(
-                xp, eps_comp, x, y, nx, ny, half_width_1, half_width_2)):
+                xp, eps_comp, x, y, nx, ny, half_width_u, half_width_v)):
             slot.append(mat)
 
     return ConvMatrices(*(xp.stack(slot) for slot in out))
 
 
-def to_conv_mat_block(block_info_list, half_width_1, half_width_2):
+def to_conv_mat_block(block_info_list, half_width_u, half_width_v):
     """Per-layer convolution matrices for vector-modelled layers (integrated over explicit segments).
 
-    Each entry of ``block_info_list`` is ``(layer, edges_1, edges_2)`` — the segment values and
+    Each entry of ``block_info_list`` is ``(layer, edges_u, edges_v)`` — the segment values and
     their edges — so no compression step is needed.
     """
     xp = array_namespace(block_info_list[0][0])
@@ -1696,9 +1696,9 @@ def to_conv_mat_block(block_info_list, half_width_1, half_width_2):
 
     for layer, x, y in block_info_list:
         eps = xp.astype(layer, _complex_dtype(xp, layer))
-        epx_list.append(fourier2d_integrated(xp, eps, x, y, half_width_1, half_width_2, inverse_rule='x'))
-        epy_list.append(fourier2d_integrated(xp, eps, x, y, half_width_1, half_width_2, inverse_rule='y'))
-        epz_i_list.append(xp.linalg.inv(fourier2d_integrated(xp, eps, x, y, half_width_1, half_width_2, inverse_rule=None)))
+        epx_list.append(fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule='x'))
+        epy_list.append(fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule='y'))
+        epz_i_list.append(xp.linalg.inv(fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule=None)))
 
     return ConvMatrices(xp.stack(epx_list), xp.stack(epy_list),
                         xp.stack(epz_i_list), None, None)

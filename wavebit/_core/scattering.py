@@ -428,10 +428,10 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     backside = _is_backside(incidence_side)
     xp, C, kx, _ = _prepare(epx_conv_all, kx)
 
-    n_orders_1 = kx.shape[0]
+    n_orders_u = kx.shape[0]
     k0 = 2 * _PI / wavelength
     theta = 0.0 if theta is None else theta
-    I = xp.astype(xp.eye(n_orders_1), C)
+    I = xp.astype(xp.eye(n_orders_u), C)
 
     # Boundary branches come from the same place the ETM path takes them, so the two
     # algorithms answer identically.
@@ -478,9 +478,9 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     # leaves through the far side. For the backside these are the substrate-port outputs, so
     # the reads swap to S22 / S12; everything after is the top-side arithmetic with the two
     # half-spaces in incidence-relative roles.
-    delta = xp.reshape(incident_column(xp, C, lit, n_orders_1, n_orders_1 // 2), (n_orders_1, 1))
-    R = xp.reshape((S[3] if backside else S[0]) @ delta, (1, n_orders_1))
-    Tt = xp.reshape((S[1] if backside else S[2]) @ delta, (1, n_orders_1))
+    delta = xp.reshape(incident_column(xp, C, lit, n_orders_u, n_orders_u // 2), (n_orders_u, 1))
+    R = xp.reshape((S[3] if backside else S[0]) @ delta, (1, n_orders_u))
+    Tt = xp.reshape((S[1] if backside else S[2]) @ delta, (1, n_orders_u))
 
     kz_ref, kz_trn = (kz_bot, kz_top) if backside else (kz_top, kz_bot)
     n_ref, n_trn = (n_bot, n_top) if backside else (n_top, n_bot)
@@ -547,7 +547,7 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     # Bottom-to-top, the order field reconstruction walks in reverse (as the ETM appends it).
     layer_info_list = [m + list(b) for m, b in zip(modes, blocks)][::-1]
     if T1 is not None:
-        T1 = xp.reshape(T1, (n_orders_1,))    # the 1D path carries T1 as a plain vector
+        T1 = xp.reshape(T1, (n_orders_u,))    # the 1D path carries T1 as a plain vector
     return {'given': res, 'layer_info_list': layer_info_list, 'T1': T1,
             'scattering': scattering}
 
@@ -588,8 +588,8 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     keep_amplitude = answers.covers(Answers.AMPLITUDE)
     keep_field = answers.covers(Answers.FIELD)
     kx_g, ky_g = order_grid_kxy(xp, kx, ky)
-    n_orders_2, n_orders_1 = kx_g.shape
-    n_orders = n_orders_1 * n_orders_2
+    n_orders_v, n_orders_u = kx_g.shape
+    n_orders = n_orders_u * n_orders_v
     k0 = 2 * _PI / wavelength
     theta = 0.0 if theta is None else theta
 
@@ -680,8 +680,8 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     n_inc = len(cols)
 
     def as_orders(M):
-        """(n_orders, n_inc) amplitude columns -> (n_inc, n_orders_2, n_orders_1)."""
-        return xp.reshape(xp.matrix_transpose(M), (n_inc, n_orders_2, n_orders_1))
+        """(n_orders, n_inc) amplitude columns -> (n_inc, n_orders_v, n_orders_u)."""
+        return xp.reshape(xp.matrix_transpose(M), (n_inc, n_orders_v, n_orders_u))
 
     # The reflected p amplitude is reported as its magnetic field, which points the other way
     # for the upward wave; s and the transmitted pair need no such flip.
@@ -690,8 +690,8 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     T_s = as_orders(c_trn[:n_orders, :])
     T_p = as_orders(c_trn[n_orders:, :])
 
-    kz_ref_2d = xp.reshape(kz_ref, (n_orders_2, n_orders_1))
-    kz_trn_2d = xp.reshape(kz_trn, (n_orders_2, n_orders_1))
+    kz_ref_2d = xp.reshape(kz_ref, (n_orders_v, n_orders_u))
+    kz_trn_2d = xp.reshape(kz_trn, (n_orders_v, n_orders_u))
     denom = (n_ref * xp.cos(xp.asarray(theta, dtype=C)) / mu_ref if lit is None
              else _incident_flux(xp, C, lit, kz_ref) / mu_ref)
     eff = sp_efficiencies(xp, kz_ref_2d, kz_trn_2d, denom, n_ref, n_trn, R_s, R_p, T_s, T_p,
@@ -746,13 +746,13 @@ def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     backside = _is_backside(incidence_side)
     xp, C, kx, ky = _prepare(epx_conv_all, kx, ky)
 
-    n_orders_1 = kx.shape[0]
-    I = xp.astype(xp.eye(n_orders_1), C)
+    n_orders_u = kx.shape[0]
+    I = xp.astype(xp.eye(n_orders_u), C)
     ky_col = xp.reshape(ky, (-1, 1))
     varphi = order_azimuth(xp, ky_col, kx, phi)
 
     Kx = _diag(xp, kx)
-    ky_vec = ky[0] * xp.astype(xp.ones((n_orders_1,)), C)      # n_orders_2 == 1: Ky = diag(ky0 * 1)
+    ky_vec = ky[0] * xp.astype(xp.ones((n_orders_u,)), C)      # n_orders_v == 1: Ky = diag(ky0 * 1)
     Ky = _diag(xp, ky_vec)
     Kx2 = _diag(xp, kx * kx)
     Ky2 = _diag(xp, ky_vec * ky_vec)
@@ -796,8 +796,8 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     xp, C, kx, ky = _prepare(epx_conv_all, kx, ky)
 
     kx_g, ky_g = order_grid_kxy(xp, kx, ky)
-    n_orders_2, n_orders_1 = kx_g.shape
-    n_orders = n_orders_1 * n_orders_2
+    n_orders_v, n_orders_u = kx_g.shape
+    n_orders = n_orders_u * n_orders_v
     I = xp.astype(xp.eye(n_orders), C)
     O = xp.astype(xp.zeros((n_orders, n_orders)), C)
     varphi = order_azimuth(xp, ky_g, kx_g, phi)

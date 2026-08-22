@@ -283,13 +283,13 @@ the complex conjugate of ours, and its handedness labels flip with it.
 
 ## Diffraction orders
 
-The retained orders are `m = -half_width_1..half_width_1`, `n = -half_width_2..half_width_2`, with in-plane
+The retained orders are `m = -half_width_u..half_width_u`, `n = -half_width_v..half_width_v`, with in-plane
 wavevectors `kx_m = n_top·sinθ·cosφ + m·λ/Λx` (and correspondingly `ky_n`). This is one of
 the places the **index** is genuinely the quantity: it is `n_top`, the derived
 `sqrt(eps*mu)` of the `top` material, and it is `n_bot`'s under
 `incidence_side='bottom'` — `theta` lives in the incidence medium. Per-order
-arrays have shape `(n_orders_2, n_orders_1)` — **`y` first, the transpose of the `truncation_order=[x, y]` input
-order** — with the incident order at the centre `[half_width_2, half_width_1]` and `m` increasing along
+arrays have shape `(n_orders_v, n_orders_u)` — **`y` first, the transpose of the `truncation_order=[x, y]` input
+order** — with the incident order at the centre `[half_width_v, half_width_u]` and `m` increasing along
 the last axis.
 
 `result.order(m, n)` indexes all per-order quantities by the order indices themselves, so

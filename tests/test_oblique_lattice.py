@@ -131,11 +131,11 @@ def test_the_sample_grid_gets_the_two_axes_the_right_way_round():
 
 def test_order_kxy_reduces_to_the_separable_formula():
     """The generalisation must be exactly the old expression on a diagonal basis."""
-    half_width_1, half_width_2, lx, ly = 3, 2, 300.0, 700.0
-    kx, ky = lat.order_kxy(np, np.diag([lx, ly]), half_width_1, half_width_2, WL,
+    half_width_u, half_width_v, lx, ly = 3, 2, 300.0, 700.0
+    kx, ky = lat.order_kxy(np, np.diag([lx, ly]), half_width_u, half_width_v, WL,
                            0.25, -0.5, dtype=np.complex128)
-    m = np.arange(-half_width_1, half_width_1 + 1)[None, :]
-    n = np.arange(-half_width_2, half_width_2 + 1)[:, None]
+    m = np.arange(-half_width_u, half_width_u + 1)[None, :]
+    n = np.arange(-half_width_v, half_width_v + 1)[:, None]
     # Not bit-identical: the general form divides by det once and multiplies back, so the
     # rounding differs in the last place. Equal to well under any physical significance.
     assert np.allclose(np.asarray(kx), 0.25 + m * (WL / lx), rtol=1e-14, atol=0)

@@ -489,7 +489,7 @@ def test_a_painted_ellipse_is_polygonised():
 # the clipper's difference walk finds crossings and returns disjoint simple pieces -- all
 # ``sign = +1``, so a caller that drops the sign is indistinguishable from one that applies it.
 # Full enclosure is the branch that produces a ``sign = -1`` loop (`clipper.plan_difference`,
-# the ``n_1 == 0`` containment case), and it was answered wrongly for as long as it existed.
+# the ``n_u == 0`` containment case), and it was answered wrongly for as long as it existed.
 
 #: A disc of permittivity 9 wholly inside a square of permittivity 4. Concentric on purpose:
 #: it is

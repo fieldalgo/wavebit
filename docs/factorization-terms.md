@@ -66,8 +66,8 @@ is building. In `to_conv_mat_smooth_nvf` it is called five times in a row — on
 `1/eps`, and on the three normal-field products `nx^2`, `nx ny`, `ny^2`:
 
 ```python
-ep_dir = conv_matrix_2d(xp, eps_c,     half_width_1, half_width_2)
-ep_inv = conv_matrix_2d(xp, inv_eps_c, half_width_1, half_width_2)
+ep_dir = conv_matrix_2d(xp, eps_c,     half_width_u, half_width_v)
+ep_inv = conv_matrix_2d(xp, inv_eps_c, half_width_u, half_width_v)
 ...
 delta_ep = ep_dir - xp.linalg.inv(ep_inv)
 ```
@@ -84,17 +84,17 @@ coefficient grid arrives on a **doubled** reciprocal range — see `_grid`. A gr
 ## 3. The matrix is BTTB, not Toeplitz
 
 A Toeplitz matrix is constant along its diagonals: `T[i,j]` depends on `i - j` alone. The
-matrix here does not satisfy that. Flattening `i = r*n_orders_1 + s` and `j = c*n_orders_1 + d`,
+matrix here does not satisfy that. Flattening `i = r*n_orders_u + s` and `j = c*n_orders_u + d`,
 
 ```
-i - j = (r - c) * n_orders_1 + (s - d)
+i - j = (r - c) * n_orders_u + (s - d)
 ```
 
-and `s - d` ranges over `-(n_orders_1-1) .. (n_orders_1-1)`, which is wider than `n_orders_1`. So `(r-c, s-d)` is
-not recoverable from `i - j`: the pairs `(k, m)` and `(k+1, m - n_orders_1)` land on the same
+and `s - d` ranges over `-(n_orders_u-1) .. (n_orders_u-1)`, which is wider than `n_orders_u`. So `(r-c, s-d)` is
+not recoverable from `i - j`: the pairs `(k, m)` and `(k+1, m - n_orders_u)` land on the same
 diagonal carrying different values.
 
-Checked directly on `half_width_1, half_width_2 = 2, 3` (a 35x35 matrix, random complex coefficients):
+Checked directly on `half_width_u, half_width_v = 2, 3` (a 35x35 matrix, random complex coefficients):
 
 | Property | Holds |
 | --- | --- |

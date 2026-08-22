@@ -215,7 +215,7 @@ together.
 ## 4. One 2D layer: the first-order system
 
 Geometry: `eps = eps(x, y)`, both transverse field components coupled. Collect
-`S = [Ex; Ey]` and `U = +i [H̃x; H̃y]` (each block a vector over the `n_orders_2·n_orders_1` order
+`S = [Ex; Ey]` and `U = +i [H̃x; H̃y]` (each block a vector over the `n_orders_v·n_orders_u` order
 grid). Eliminate the longitudinal components using (M1)/(M2)'s `z`-rows:
 
 ```

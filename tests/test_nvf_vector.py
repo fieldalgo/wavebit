@@ -10,8 +10,8 @@ def get_normal_vector_field_analytical(grid_shape, shapes, period=(1000.0, 1000.
     return _nvf_analytic(xnp, grid_shape, shapes, period, xnp.float64)
 
 
-def to_conv_mat_nvf_2d(eps_matrix, half_width_1, half_width_2, nx=None, ny=None):
-    return _nvf_conv(xnp, eps_matrix, nx, ny, half_width_1, half_width_2)
+def to_conv_mat_nvf_2d(eps_matrix, half_width_u, half_width_v, nx=None, ny=None):
+    return _nvf_conv(xnp, eps_matrix, nx, ny, half_width_u, half_width_v)
 
 def test_analytical_normal_vector_generation():
     modeler = Modeling(period=[1000.0, 1000.0])

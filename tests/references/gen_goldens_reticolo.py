@@ -28,7 +28,7 @@ Setup notes, all of them things that cost an afternoon once:
   switch was checked rather than assumed: regenerating this golden against V10 reproduces
   all 48 arrays **bit for bit**, so nothing in the checked-in data moved.
 * ``truncation_order`` reaches RETICOLO as a scalar for the 1D branches; handing it the solver's
-  ``[half_width_1, half_width_2]`` pair returns an empty efficiency list rather than an error.
+  ``[half_width_u, half_width_v]`` pair returns an empty efficiency list rather than an error.
 * **The polarisation is read from whichever spelling the case uses.** The pure cases declare
   ``tetm='te'`` / ``'tm'`` and carry no ``psi``; the conical ones carry ``psi`` and no
   ``tetm``. Selecting on ``psi`` alone -- which is what this did until 2026-08-15 -- returns

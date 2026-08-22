@@ -168,15 +168,15 @@ def sample_grid(xp, grid_shape, period, dtype, lattice=None):
     return u[None, :] * a1x + v[:, None] * a2x, u[None, :] * a1y + v[:, None] * a2y
 
 
-def order_kxy(xp, A, half_width_1, half_width_2, wavelength, k_inc_x, k_inc_y,
+def order_kxy(xp, A, half_width_u, half_width_v, wavelength, k_inc_x, k_inc_y,
               dtype, device=None, centre=(0, 0)):
     """Per-order in-plane wavevectors on the ``(n, m)`` index grid: two
-    ``(n_orders_2, n_orders_1)`` arrays.
+    ``(n_orders_v, n_orders_u)`` arrays.
 
     Both are normalized by ``k0`` — i.e. these are ``kx/k0``, matching what
     ``order_kxy`` returns — and laid out so that ``reshape(-1)`` gives the
     flat order list the convolution matrices are indexed by (``m`` fastest, matching
-    ``_fourier2d_grid``'s final ``(n_orders_2, n_orders_1)`` reshape).
+    ``_fourier2d_grid``'s final ``(n_orders_v, n_orders_u)`` reshape).
 
     The closed form, written out rather than taken from a matrix inverse so it stays one
     expression per component and differentiates cleanly::
@@ -193,14 +193,14 @@ def order_kxy(xp, A, half_width_1, half_width_2, wavelength, k_inc_x, k_inc_y,
     det = a1x * a2y - a2x * a1y
 
     cx, cy = int(centre[0]), int(centre[1])
-    m = xp.asarray(np.arange(cx - half_width_1, cx + half_width_1 + 1, dtype=float)[None, :],
+    m = xp.asarray(np.arange(cx - half_width_u, cx + half_width_u + 1, dtype=float)[None, :],
                    dtype=dtype, device=device)
-    n = xp.asarray(np.arange(cy - half_width_2, cy + half_width_2 + 1, dtype=float)[:, None],
+    n = xp.asarray(np.arange(cy - half_width_v, cy + half_width_v + 1, dtype=float)[:, None],
                    dtype=dtype, device=device)
 
     lam = as_array(xp, wavelength, dtype=dtype, device=device) / det
     kx = as_array(xp, k_inc_x, dtype=dtype, device=device) + lam * (a2y * m - a1y * n)
     ky = as_array(xp, k_inc_y, dtype=dtype, device=device) + lam * (-a2x * m + a1x * n)
 
-    n_orders_1, n_orders_2 = 2 * half_width_1 + 1, 2 * half_width_2 + 1
-    return xp.broadcast_to(kx, (n_orders_2, n_orders_1)), xp.broadcast_to(ky, (n_orders_2, n_orders_1))
+    n_orders_u, n_orders_v = 2 * half_width_u + 1, 2 * half_width_v + 1
+    return xp.broadcast_to(kx, (n_orders_v, n_orders_u)), xp.broadcast_to(ky, (n_orders_v, n_orders_u))

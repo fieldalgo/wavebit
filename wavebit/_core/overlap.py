@@ -188,7 +188,7 @@ def _shifted(p, dx, dy):
     return (p[0], p[1] + dx, p[2] + dy, p[3], p[4], p[5], p[6])
 
 
-def overlapping_pairs(prims, extent_1, extent_2, tol, lattice=None, *, self_only=False):
+def overlapping_pairs(prims, extent_u, extent_v, tol, lattice=None, *, self_only=False):
     """Every pair of primitives that interpenetrates by more than ``tol``.
 
     Yields ``(i, j, image_x, image_y, gap)`` with ``i <= j``; ``image_*`` is which periodic
@@ -225,7 +225,7 @@ def overlapping_pairs(prims, extent_1, extent_2, tol, lattice=None, *, self_only
                 if i == j and (ox, oy) == (0, 0):
                     continue                      # a shape always overlaps itself
                 if lattice is None:
-                    dx, dy = ox * extent_1, oy * extent_2
+                    dx, dy = ox * extent_u, oy * extent_v
                 else:
                     # Images sit on the lattice, not on a rectangle: a skewed cell's neighbour
                     # is ox*a1 + oy*a2. Getting this wrong does not raise -- it reports the

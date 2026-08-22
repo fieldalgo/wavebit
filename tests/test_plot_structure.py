@@ -58,15 +58,15 @@ def rod_truth(cx, cy, n):
                     ROD['eps'], 1.0)
 
 
-def naive_render(cell, edges_1, edges_2, n):
+def naive_render(cell, edges_u, edges_v, n):
     """The wrong render, kept on purpose: edges as right-hand edges, bands painted in order.
 
     This is what a reader writes from ``draw()``'s return value without knowing that an edge
     list may leave ``[0, period]``. It is right whenever every shape sits inside the cell,
     which is why nothing catches it.
     """
-    xe = np.real(np.asarray(edges_1)).reshape(-1)
-    ye = np.real(np.asarray(edges_2)).reshape(-1)
+    xe = np.real(np.asarray(edges_u)).reshape(-1)
+    ye = np.real(np.asarray(edges_v)).reshape(-1)
     s = (np.arange(n) + 0.5) * P / n
     ci = np.clip(np.searchsorted(xe, s, 'left'), 0, len(xe) - 1)
     ri = np.clip(np.searchsorted(ye, s, 'left'), 0, len(ye) - 1)
@@ -101,9 +101,9 @@ def test_the_block_render_is_exact_at_every_straddle(cx, cy, kept, naive_eps):
     arrays are equal bit-for-bit, and any tolerance would be hiding something.
     """
     n = 400
-    _, (cell, edges_1, edges_2) = block_layer(rod_instruction(cx, cy))
+    _, (cell, edges_u, edges_v) = block_layer(rod_instruction(cx, cy))
     s = (np.arange(n) + 0.5) * P / n
-    got = _render_block(cell, edges_1, edges_2, (P, P), s, s).real
+    got = _render_block(cell, edges_u, edges_v, (P, P), s, s).real
 
     assert np.abs(got - rod_truth(cx, cy, n)).max() == 0.0
     assert got.mean() == pytest.approx(ROD_EPS, abs=1e-12)
@@ -119,9 +119,9 @@ def test_the_naive_render_loses_the_wrapped_part(cx, cy, kept, naive_eps):
     naive render is exactly right.
     """
     n = 400
-    _, (cell, edges_1, edges_2) = block_layer(rod_instruction(cx, cy))
+    _, (cell, edges_u, edges_v) = block_layer(rod_instruction(cx, cy))
     truth = rod_truth(cx, cy, n)
-    naive = naive_render(cell, edges_1, edges_2, n)
+    naive = naive_render(cell, edges_u, edges_v, n)
 
     area_kept = (naive > 1.5).sum() / (truth > 1.5).sum()
     assert area_kept == pytest.approx(kept, abs=5e-3)
@@ -140,8 +140,8 @@ def test_the_edge_list_really_does_leave_the_cell():
     ``[0, Px]``, the tests above go from load-bearing to redundant, and this failure is what
     says so.
     """
-    _, (_, edges_1, _) = block_layer(rod_instruction(960.0, 500.0))
-    x = np.real(np.asarray(edges_1)).reshape(-1)
+    _, (_, edges_u, _) = block_layer(rod_instruction(960.0, 500.0))
+    x = np.real(np.asarray(edges_u)).reshape(-1)
     np.testing.assert_allclose(x, [860.0, 1060.0, 1000.0])
     assert x[-1] < x[-2]
 
