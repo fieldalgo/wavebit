@@ -211,17 +211,43 @@ declaring it away drops the graph with it rather than merely the matrices. This 
 optimization case — the one where the run is long, the solve is repeated, and nobody is going
 to call `reconstruct_field`.
 
-## 8. What is not on the ladder yet
+## 8. What the ladder deliberately does not carry
 
-A fourth rung, `'scattering'`, belongs above `'field'`: the SMM cascade builds `S`, the
-per-layer `S_layer`, the below-plane reflections `gamma` and the gap↔layer interface
-coefficients `AB`, uses them, and drops them — the same "computed and thrown away" shape the
-field state had before this. Adding it is appending one member to `Answers` and one to
-`_ANSWERS_LADDER`; nothing else reads the order, which is the point of keeping the order in
-one tuple.
+A fourth rung, `'scattering'`, was drafted above `'field'` and then not built. The SMM cascade
+builds `S`, the per-layer `S_layer`, the below-plane reflections `gamma` and the gap<->layer
+interface coefficients `AB`, uses them, and drops them — the same "computed and thrown away"
+shape the field state had before this. What shipped instead is `solver.scattering`, a
+`ScatteringMatrix` of the whole stack's four blocks, riding `'amplitude'` rather than a rung of
+its own. Three measurements decided that.
 
-Two constraints belong with that rung rather than with this document, so they are written
-where the next person will be standing when they add it — beside `_ANSWERS_LADDER` in
-`wavebit/_core/enums.py`. In short: `AB` has to ship *with* the blocks, because the blocks are
-in the gap basis and `_ab_matrices` is the only thing that decodes them; and `S_ref` / `S_trn`
-should not ship at all.
+**The gap basis is a gauge, and the whole-stack blocks are outside it.** `eps_gap` is chosen per
+order so `kz_gap == 1`. Re-run a solve with `2.7 + k_par^2` instead of `1 + k_par^2`:
+
+| | moves by |
+| --- | --- |
+| observables (`T`, `r_s`) | 2.1e-15, 0.0–1.7e-15 |
+| whole-stack blocks | 6.0e-15 – 1.8e-14 |
+| `S_layers[0].S11` | **0.64** |
+| `gamma[0]` | **0.49** |
+| `S_ref.S11` | **0.44** |
+
+each against its own magnitude. The entry and exit interface factors cancel the gap between
+them, leaving the two half-spaces as the whole-stack matrix's ports — so those blocks are
+directly readable and `S11 @ delta` is exactly the reflected amplitude the solve reported. The
+per-layer ones are not readable without `_ab_matrices`, the gap → half-space conversion, and
+`S_ref` / `S_trn` *are* that conversion: converted to a physical (E, H) transfer, `S_ref` is the
+identity. Exposing gauge numbers while withholding the decoder would document a footgun and
+withhold the safety, so the per-layer blocks stayed unshipped.
+
+**It is not a rung because it is not on the chain.** The whole-stack `S` exists at every rung —
+`R` and `T` are two of its blocks applied to the incident vector — so keeping it costs no
+arithmetic and four matrices whatever the depth. It sits at `'amplitude'` because an `S` *is*
+amplitude information and the rung below said only power was wanted. The `gamma` sweep that a
+per-layer rung would have needed measures 37.8 ms against `_field_state`'s 99.6 ms, so even as
+its own rung it would have saved 7.6% of solve time and no memory at all.
+
+**And it is SMM-only, which is a fact about the algorithm rather than an unread keyword.** The
+ETM fixes one illumination's boundary condition and never forms a both-sides operator; asking it
+for one is not a request being silently dropped. Everything else on the ladder is
+algorithm-independent, and measurably so — `layer_info_list`, `T1` and the reconstructed field
+come out identical from both paths (see `connecting-algorithms.md` §8).

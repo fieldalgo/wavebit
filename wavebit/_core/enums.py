@@ -137,24 +137,28 @@ class Answers(str, Enum):
 #: The ladder, cheapest first. A new rung is added here and to :class:`Answers` together;
 #: ``covers`` reads the order from this tuple and nothing else does.
 #:
-#: The rung this is waiting for is ``'scattering'``, above ``'field'``: the SMM cascade builds
+#: A ``'scattering'`` rung was drafted here and then not built, which is worth recording
+#: because the reasoning is what keeps the ladder three rungs long. The SMM cascade builds
 #: ``S``, the per-layer ``S_layer``, the below-plane reflections ``gamma`` and the gap<->layer
-#: interface coefficients ``AB`` (:func:`~wavebit._core.scattering._ab_matrices`), uses them,
-#: and drops them -- the same "computed and thrown away" shape the field state had before
-#: ``answers`` existed. Two constraints go with it, written here because here is where someone
-#: adding the rung will be standing:
+#: coefficients ``AB`` (:func:`~wavebit._core.scattering._ab_matrices`) -- the same "computed
+#: and thrown away" shape the field state had before ``answers`` existed. What shipped instead
+#: is :class:`~wavebit._core.scattering.ScatteringMatrix` on ``solver.scattering``, riding
+#: ``AMPLITUDE`` rather than a rung of its own, because the whole-stack ``S`` is four matrices
+#: whatever the depth and an ``S`` *is* amplitude information. The rest stayed unshipped:
 #:
-#: * **``AB`` ships with the blocks or the blocks do not ship.** ``S_layers`` and ``gamma`` are
-#:   expressed in the gap basis (``eps_gap`` chosen per order so ``kz_gap == 1``), and that
-#:   basis is a gauge: change ``eps_gap`` and the physical observables hold at 1e-16 while the
-#:   raw blocks move by O(1) against their own magnitude. What they encode is gauge-invariant;
-#:   their numbers are not readable without the gap -> half-space conversion, and
-#:   ``_ab_matrices`` is that conversion. Exposing the blocks while withholding it would
-#:   document a footgun and withhold the safety. (Measured in a separate session; the raw
-#:   record is not in this repository.)
-#: * **``S_ref`` / ``S_trn`` should not ship.** They are gauge like the rest, and converted to a
-#:   physical (E, H) transfer ``S_ref`` is exactly the identity -- it encodes nothing -- while
-#:   the two of them are most of the fixed matrices such a mapping would retain.
+#: * **The gap basis is a gauge.** ``eps_gap`` is chosen per order so ``kz_gap == 1``; re-run a
+#:   solve with ``eps_gap = 2.7 + k_par^2`` instead of ``1 + k_par^2`` and the observables hold
+#:   (``T`` moves 2.1e-15, ``r_s`` 0.0 to 1.7e-15) while ``S_layers[0].S11`` moves 0.64 and
+#:   ``gamma[0]`` 0.49, each against its own magnitude. The whole-stack blocks move 6e-15 to
+#:   1.8e-14 -- they are gauge-*free*, because the entry and exit interface factors cancel the
+#:   gap between them and leave the two half-spaces as the ports. That is the whole reason
+#:   ``ScatteringMatrix`` is directly readable and the per-layer blocks would not be.
+#: * **So ``AB`` would have to ship with the per-layer blocks, or they do not ship.**
+#:   ``_ab_matrices`` is the gap -> half-space conversion, and exposing gauge numbers while
+#:   withholding it would document a footgun and withhold the safety.
+#: * **``S_ref`` / ``S_trn`` should not ship at all.** They *are* that conversion -- converted
+#:   to a physical (E, H) transfer ``S_ref`` is exactly the identity -- and they moved 0.44 and
+#:   0.28 under the same gauge change while encoding nothing.
 _ANSWERS_LADDER = (Answers.EFFICIENCY, Answers.AMPLITUDE, Answers.FIELD)
 
 

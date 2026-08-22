@@ -78,6 +78,8 @@ class _BaseRCWA(CoreSolveMixin):
 
         self.layer_info_list = []
         self.T1 = None
+        # SMM only, from `answers='amplitude'` up; see `CoreSolveMixin._finish`.
+        self.scattering = None
 
     @property
     def device(self):

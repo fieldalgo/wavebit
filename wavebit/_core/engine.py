@@ -856,7 +856,7 @@ class CoreSolveMixin:
     def _finish(self, out):
         """Store the field-reconstruction state and return just the result mapping.
 
-        Both slots are *reset*, not merely filled: below ``answers='field'`` the core hands
+        All three slots are *reset*, not merely filled: below ``answers='field'`` the core hands
         back a mapping without them, and clearing them here is what stops a later
         reconstruction from walking the state of some earlier, unrelated solve. The
         ``'efficiency'`` rung returns a bare ``(de_ri, de_ti)`` pair — the core's oldest
@@ -867,6 +867,13 @@ class CoreSolveMixin:
             out = {'given': _efficiency_only(*out)}
         self.layer_info_list = out.pop('layer_info_list', [])
         self.T1 = out.pop('T1', None)
+        #: The stack's scattering matrix -- both sides, every order -- on this shelf rather than in
+        #: result: :class:`~wavebit._core.result.Result` is a registered pytree with fixed
+        #: children, so carrying matrices there would change its structure and drag them
+        #: across every ``jit`` / ``grad`` boundary. ``None`` after an ETM solve -- not empty
+        #: but *absent*, because the ETM fixes one illumination's boundary condition and
+        #: never forms a both-sides operator at all.
+        self.scattering = out.pop('scattering', None)
         return out
 
     _formulation = DEFAULT_FORMULATION

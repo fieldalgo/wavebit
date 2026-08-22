@@ -45,6 +45,14 @@ from ._core.domain import (Layer, Stack, Incidence, Material,
 # slots still splat and unpack, but `conv.epz_i` reaches one by name.
 from ._core.factorization import ConvMatrices
 from ._core.geometry import StaticGeometry, StaleGeometryError
+# What `solver.scattering` hands back after an SMM solve: the stack's own scattering matrix,
+# both sides and every order, incidence-relative, with the two half-spaces as its ports.
+# `None` on the ETM, which forms no such operator. `Port` rides along because
+# `ScatteringMatrix.cascade` joins two of them and a join across mismatched ports is silently
+# wrong -- so the basis travels with the numbers and the join refuses rather than trusting
+# the caller. `cascade` is a method rather than a function here: the receiver already names
+# the type, the order is directional, and it chains.
+from ._core.scattering import Port, ScatteringMatrix
 # The nk front door. Exported here rather than left importable from `_core.modeler` because
 # the bundled `nk_data` ships in the wheel and these two are its only readers -- data with no
 # public reader is the same dead end as a keyword with no reader. They hand back an *index*,
@@ -71,7 +79,7 @@ __all__ = [
     'Answers', 'Backend', 'Tetm', 'FourierCoefficients', 'Factorization', 'Formulation',
     'NormalMethod',
     'Layer', 'Stack', 'Incidence', 'Material', 'eps_from_index', 'index_from_eps',
-    'ConvMatrices',
+    'ConvMatrices', 'ScatteringMatrix', 'Port',
     'StaticGeometry', 'StaleGeometryError',
     'find_nk_index', 'read_material_table',
     'JobSpec', 'Numerics', 'Sweep', 'SpecError', 'run',

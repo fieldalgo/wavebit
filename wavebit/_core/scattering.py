@@ -50,7 +50,11 @@ builders. That recovery is a second pass over the stack, done only from ``answer
 up, so declaring anything lower skips it outright — it is where the extra ~10-20% in the cost
 quoted above goes, and it is the one rung of the ladder that buys time rather than memory.
 """
-from .backend import array_namespace, as_array, check_finite, check_physical
+from typing import NamedTuple
+
+import numpy as np
+
+from .backend import _device_of, array_namespace, as_array, check_finite, check_physical
 from .conventions import boundary_kz, order_azimuth
 from .enums import Answers, answers_of
 from .solve_1d import (_block, _diag, _is_backside, _pack, _unit, layer_modes_1d,
@@ -218,6 +222,180 @@ def _field_state(xp, I, S_ref, S_trn, S_layers, AB, c_inc):
     return blocks, T1
 
 
+class Port(NamedTuple):
+    """The basis one end of a :class:`ScatteringMatrix` expresses its amplitudes in.
+
+    A scattering block is a bare matrix of numbers; what makes those numbers mean anything is
+    the set of plane waves its rows and columns count. Two blocks may only be cascaded when the
+    end they meet at counts the *same* waves, and that is what this records so :func:`compose`
+    can check it instead of trusting the caller.
+
+    ``index`` and ``mu`` are the half-space the port opens into. ``kx`` / ``ky`` are the
+    retained orders' in-plane wavevectors, normalised by ``k0`` as everywhere else in the core;
+    ``ky`` is ``None`` on the pure 1D TE/TM path, which has no out-of-plane order.
+    """
+    kx: object
+    ky: object
+    index: object
+    mu: object
+
+
+class ScatteringMatrix(NamedTuple):
+    """The stack's scattering matrix -- both sides, every order -- kept instead of dropped.
+
+    The SMM cascade builds this to answer the solve at all -- ``R`` and ``T`` are two of its
+    blocks applied to the incident vector -- so keeping it adds no arithmetic and four matrices
+    of memory, whatever the stack's depth. It rides no declaration of its own: it appears from
+    ``answers='amplitude'`` up, because an ``S`` *is* amplitude information and the rung below
+    is the one that said only power was wanted. ``solver.scattering`` is ``None`` after an ETM
+    solve, which is not an ignored request but the algorithm's own shape -- the ETM fixes the
+    boundary condition of a single illumination and never forms a both-sides operator at all.
+
+    Each block is square of side ``n_orders`` on the pure 1D TE/TM path and ``2*n_orders`` on
+    the coupled ones, where the s and p amplitudes are stacked in that order -- the same
+    layout the incident column has, so ``S11 @ c_inc`` needs no repacking. Four blocks in
+    total, whatever the stack's depth.
+
+    **Its ports are the two half-spaces, not the SMM's gap.** The cascade's internal gap basis
+    (``eps_gap`` chosen so ``kz_gap == 1``) is a gauge, and it cancels between the entry and
+    exit interface factors: re-running a solve with a different ``eps_gap`` moves these blocks
+    by ~1e-14 while it moves the per-layer gap-embedded ones by ~0.5. So these numbers are
+    directly readable, and ``S11 @ delta`` is exactly the reflected amplitude the solve
+    reported. The per-layer blocks are deliberately not here; they would need the gap ->
+    half-space conversion shipped beside them to mean anything.
+
+    **Orientation is the hazard, not the numbers.** These are orientation-blind matrices, so
+    handing them over without a stated frame is the same shape of defect as a backside field
+    cell in a mirrored frame: every number plausible, every number mirrored. They are therefore
+    *incidence-relative*, matching what the field cell and the ``R``/``T`` reads already do --
+    :attr:`S11` reflects back into the incidence medium whichever side is lit, and
+    :attr:`entry_port` is the side that was lit.
+
+    Use :func:`compose` rather than multiplying two of these by hand: the ports are carried so
+    that a mismatch can be refused, and a mismatch is otherwise invisible (see :func:`compose`).
+    """
+    #: Reflection back into the incidence medium.
+    S11: object
+    #: Transmission from the far half-space into the incidence medium.
+    S12: object
+    #: Transmission through the stack, incidence medium to the far half-space.
+    S21: object
+    #: Reflection back into the far half-space.
+    S22: object
+    #: The basis of the lit side -- the half-space the light arrives through.
+    entry_port: Port
+    #: The basis of the far side.
+    exit_port: Port
+
+    @property
+    def blocks(self):
+        """The four blocks alone, in ``(S11, S12, S21, S22)`` order.
+
+        Kept because the whole tuple no longer splats into four matrices -- the ports ride in
+        it -- and because :func:`redheffer_star` and every hand-rolled cascade want exactly
+        these four.
+        """
+        return (self.S11, self.S12, self.S21, self.S22)
+
+    def cascade(self, beyond):
+        """This stack followed by ``beyond``, as one scattering matrix.
+
+        **Incidence-relative, like every other orientation in this class.** ``beyond`` is the
+        piece the light reaches *next* -- not the piece geometrically below. Lit from the top
+        those are the same thing; lit from the bottom they are opposite, and the piece the
+        light reaches next sits geometrically *above* this one. Getting it backwards is
+        refused rather than answered, because the ports no longer meet.
+
+        The two pieces are solved as independent problems that know nothing of each other, and
+        this reproduces the joined stack's own matrix to 1e-15 -- from either side. The
+        Redheffer star product's ``inv(I - beyond.S11 @ self.S22)`` is the infinite bounce at
+        the cut, which is why it needs :attr:`S22`: the response to light arriving at *this*
+        piece's far face from outside, a thing no single one-sided solve contains.
+
+        The plane where they meet is a **basis, not a layer**. A half-space has no thickness
+        and nothing propagates in it, so nominating one at the cut changes nothing: air,
+        ``eps = 2.25`` and ``eps = 12`` all give the same composite, and inserting a real
+        zero-thickness air layer into the joined stack moves it by 3.7e-16.
+
+        What the two pieces *must* share is the port where they meet -- the same retained
+        orders and the same joint medium -- and this refuses when they do not. That refusal is
+        the reason to call this rather than :func:`redheffer_star` by hand: a join across a
+        shifted order grid does not fail loudly, it returns every number plausible and about
+        ten percent wrong. ``theta`` is measured in the incidence medium, so a joint medium of
+        a different index shifts the whole grid under the same angle.
+
+        Chains, so a stack cut into more than two pieces joins in the order the light meets
+        them::
+
+            whole = first.cascade(second).cascade(third)
+
+        Read eagerly: "are these the same basis" is a value comparison, which a traced array
+        cannot answer. That is a property of the question -- it is asked once, where two
+        solves are joined, not inside a differentiated loop.
+        """
+        if not isinstance(beyond, ScatteringMatrix):
+            raise TypeError(
+                f'cascade() takes a ScatteringMatrix, got {type(beyond).__name__}. It comes '
+                "off `solver.scattering` after an SMM solve that declared "
+                "`answers='amplitude'` or higher.")
+        why = _port_disagreement(self.exit_port, beyond.entry_port)
+        if why is not None:
+            raise ValueError(
+                f'cascade() cannot join these two: {why}. This piece\'s exit port and the '
+                "next piece's entry port have to be the same basis -- and `beyond` is the "
+                'piece the light reaches next, which lit from below is the one geometrically '
+                'above this one.')
+        xp = array_namespace(self.S11)
+        I = xp.eye(self.S11.shape[0], dtype=self.S11.dtype, device=_device_of(self.S11))
+        return ScatteringMatrix(*redheffer_star(xp, I, self.blocks, beyond.blocks),
+                                entry_port=self.entry_port, exit_port=beyond.exit_port)
+
+
+def _scattering_matrix(S, backside, kx, ky, n_ref, n_trn, mu_ref, mu_trn):
+    """Put the cascade's four blocks into incidence-relative order, with their ports.
+
+    Reversing the 4-tuple is the whole job for the blocks: a cascade of symmetric layer factors
+    read from the other end has its blocks in the opposite order, which is why the backside
+    efficiency reads above take ``S[3]`` / ``S[1]`` where the top-side ones take ``S[0]`` /
+    ``S[2]``. The callers hand in ``n_ref`` / ``n_trn`` and ``mu_ref`` / ``mu_trn``, which are
+    already incidence-relative for the same reason, so the ports need no second swap.
+    """
+    return ScatteringMatrix(
+        *(S[::-1] if backside else S),
+        entry_port=Port(kx=kx, ky=ky, index=n_ref, mu=mu_ref),
+        exit_port=Port(kx=kx, ky=ky, index=n_trn, mu=mu_trn))
+
+
+def _port_disagreement(a, b):
+    """Why ports ``a`` and ``b`` are not the same basis, or ``None`` if they are.
+
+    Read eagerly: every comparison here is a value comparison, which a traced array cannot
+    answer. That is a property of the question, not a limitation -- "are these the same basis"
+    is asked once, when two solves are joined, and never inside a differentiated loop.
+    """
+    def differ(x, y, tol=1e-12):
+        if (x is None) != (y is None):
+            return True
+        if x is None:
+            return False
+        xa, ya = np.asarray(x), np.asarray(y)
+        if xa.shape != ya.shape:
+            return True
+        return bool(np.max(np.abs(xa - ya)) > tol)
+
+    if differ(a.kx, b.kx) or differ(a.ky, b.ky):
+        return ('their retained orders are different in-plane wavevectors. `theta` is measured '
+                'in the incidence medium, so the same angle means a different `k_par` on either '
+                'side of an index step: pass the second solve '
+                '`theta_b = arcsin(sin(theta_a) * n_a / n_b)`, and check `order_kxy()` matches '
+                'before composing')
+    if differ(a.index, b.index) or differ(a.mu, b.mu):
+        return ('they open into different half-spaces. The joint medium is a basis rather than '
+                'a layer -- any index will do, and a zero-thickness one changes nothing -- but '
+                'both pieces have to name the same one')
+    return None
+
+
 # --------------------------------------------------------------------------------- 1D TE / TM
 
 def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
@@ -326,6 +504,11 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     if not answers.covers(Answers.AMPLITUDE):
         return de_ri, de_ti
 
+    # `ky` is None and `mu` is 1: this path carries one polarization and no out-of-plane
+    # order, so those two slots have nothing to say and saying nothing is what makes a
+    # coupled-path port refuse to join a 1D one.
+    scattering = _scattering_matrix(S, backside, kx, None, n_ref, n_trn, 1.0, 1.0)
+
     # Same Fresnel conversion as the ETM pure path: reflection primaries are already the
     # amplitude; the TM transmission converts H back to E across the index step.
     zeros_amp = xp.zeros_like(R)
@@ -337,7 +520,7 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
                     zeros_eff, de_ri, zeros_eff, de_ti)
 
     if not keep_field:
-        return {'given': res}
+        return {'given': res, 'scattering': scattering}
 
     if backside:
         # The mirrored scene's own cascade pieces, assembled from what this pass already
@@ -355,7 +538,8 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     layer_info_list = [m + list(b) for m, b in zip(modes, blocks)][::-1]
     if T1 is not None:
         T1 = xp.reshape(T1, (n_orders_x,))    # the 1D path carries T1 as a plain vector
-    return {'given': res, 'layer_info_list': layer_info_list, 'T1': T1}
+    return {'given': res, 'layer_info_list': layer_info_list, 'T1': T1,
+            'scattering': scattering}
 
 
 # ------------------------------------------------------------------- coupled s/p (conical, 2D)
@@ -508,12 +692,15 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     if not keep_amplitude:
         return eff[0][0] + eff[1][0], eff[2][0] + eff[3][0]
 
+    scattering = _scattering_matrix(S, backside, kx, ky, n_ref, n_trn, mu_ref, mu_trn)
+
     # Coupled-path Fresnel conversion, identical to the ETM final matching's.
     amps = (R_s, R_p / (-1j * n_ref / mu_ref), T_s, T_p / (-1j * n_trn / mu_trn))
     packed = [_pack(*(a[i] for a in amps), *(e[i] for e in eff)) for i in range(3)]
 
     if not keep_field:
-        return {'given': packed[0], 's_inc': packed[1], 'p_inc': packed[2]}
+        return {'given': packed[0], 's_inc': packed[1], 'p_inc': packed[2],
+                'scattering': scattering}
 
     if backside:
         # Mirrored-scene field state, same construction as `smm_1d`'s backside branch.
@@ -534,7 +721,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
         # One column per incidence variant (psi, TE, TM), as the ETM stacks them.
         T1 = xp.stack([T1[:, i:i + 1] for i in range(n_inc)])
     return {'given': packed[0], 's_inc': packed[1], 'p_inc': packed[2],
-            'layer_info_list': layer_info_list, 'T1': T1}
+            'layer_info_list': layer_info_list, 'T1': T1, 'scattering': scattering}
 
 
 def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,

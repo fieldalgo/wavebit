@@ -225,6 +225,127 @@ stability test in `tests/test_solve_2d_4ff.py` runs against ETM *and* SMM for th
 parametrising it is what caught SMM's block sizing being unexercised at more than one order once
 ETM became the default.
 
+## 8. The scattering matrix the cascade keeps
+
+An SMM solve builds the stack's whole `S` — both sides, every order — in order to answer at all
+(`R` and `T` are two of its blocks applied to the incident vector) and used to throw it away.
+`solver.scattering` is what survives now:
+
+```python
+solver = wavebit.rcwa(layer_algorithm='SMM', answers='amplitude', ...)
+solver.solve()
+S = solver.scattering               # a ScatteringMatrix, or None
+S.S11, S.S12, S.S21, S.S22          # half-space to half-space, incidence-relative
+S.blocks                            # the four together
+S.entry_port, S.exit_port           # the basis each end is expressed in
+```
+
+Three things bound it, and each is a decision rather than an implementation detail:
+
+- **It rides `answers='amplitude'`, not a rung of its own.** An `S` *is* amplitude information,
+  and the rung below said only power was wanted. It costs no arithmetic and four matrices of
+  memory whatever the stack's depth — the cascade already built it.
+- **`None` after an ETM solve**, not empty. The ETM fixes one illumination's boundary condition
+  and never forms a both-sides operator; an empty mapping would read as "this solve had none",
+  which is a different claim. This is not a knob going unread — it is the shape of the
+  algorithm the caller chose, and it is the *only* thing `'SMM'` buys. Everything else the two
+  algorithms produce — amplitudes, per-layer state, the reconstructed field — is identical, and
+  the ETM is cheaper at all of it.
+- **It goes on the solver, not into `Result`.** `Result` is a registered pytree with fixed
+  children, so carrying matrices there would change its structure and drag them across every
+  `jit` and `grad` boundary.
+
+**Its ports are the two half-spaces, not the cascade's gap.** The internal gap basis (`eps_gap`
+chosen per order so `kz_gap == 1`) is a gauge, and it cancels between the entry and exit
+interface factors. Re-run a solve with `eps_gap = 2.7 + k_par^2` and these blocks move 6e-15 to
+1.8e-14 while a gap-embedded per-layer block moves 0.64 against its own magnitude. That is why
+these numbers are directly readable and the per-layer ones are deliberately not exposed: they
+would need `_ab_matrices`, the gap → half-space conversion, shipped beside them to mean
+anything. The note beside `_ANSWERS_LADDER` in `_core/enums.py` carries that measurement.
+
+**Orientation is the hazard, not the numbers.** These are orientation-blind matrices, so
+handing them over without a stated frame is the same shape of defect as a backside field cell
+in a mirrored frame (`conventions.md`): every number plausible, every number mirrored. They are
+therefore *incidence-relative* — `S11` reflects back into the incidence medium whichever side
+is lit — matching what the field cell and the `R`/`T` reads already do.
+
+The tests pin the contract rather than the values: `S11` and `S21` times the incident column
+*are* the reported `r_s` and `t_s` on either side; `S22` and `S12` answer the *other* side's
+solve, which is the point of keeping the whole matrix and the half of it the lit side never
+reads; and the backside matrix matches the scene a caller would build by hand — flipped stack,
+swapped half-spaces, lit from the top. The last two run at normal incidence on purpose:
+`theta` is incidence-relative, so at an angle the two sides do not share `kx` and their
+cascades are built on different order grids. `theta = 0` is where one matrix really does hold
+both answers.
+
+## 9. Cascading stacks
+
+An `S` is what lets a stack be used as a *component*. `ScatteringMatrix.cascade` joins two of
+them into the matrix their joined stack would have:
+
+```python
+first  = solve(layers[:2], top=1.0,  bot=joint, theta=theta).scattering
+second = solve(layers[2:], top=joint, bot=1.5,  theta=theta_in_joint).scattering
+whole  = first.cascade(second)
+
+whole.S11 @ delta                          # the ordinary answer, back again
+first.cascade(second).cascade(third)       # chains, for a stack cut into more pieces
+```
+
+The two halves are solved as **independent problems** that know nothing of each other, and the
+composite reproduces the stack solved whole to 1e-15 in all four blocks. The Redheffer star
+product's `inv(I - second.S11 @ first.S22)` is the infinite bounce at the cut — which is why it
+needs `first.S22`, the response to light arriving at the first piece's far face *from outside*,
+a thing no single one-sided solve contains.
+
+**The plane where they meet is a basis, not a layer.** A half-space has no thickness and nothing
+propagates in it, so nominating one at the cut changes nothing: air, `eps = 2.25`, `eps = 12` all
+give the same composite to 1e-15, and inserting a real zero-thickness air layer into the whole
+stack moves it by 3.7e-16.
+
+**It is incidence-relative, like every other orientation here.** The argument is the piece the
+light reaches *next*, not the piece geometrically below. Lit from the top those are the same
+thing; lit from the bottom they are opposite, and the next piece sits geometrically above.
+Getting it backwards is refused rather than answered.
+
+### Why it is worth the trouble
+
+Two cases, and neither is exotic:
+
+- **A thick substrate.** A grating on a 0.5–1 mm wafer cannot go in the stack — the phase across
+  the wafer is meaningless at that length and coherence is lost anyway. The standard treatment
+  is the grating's `S`, the back surface's Fresnel, and an *incoherent* sum of intensities over
+  the bounces. That needs the grating's response from below, i.e. `S22` and `S12`. Simulating a
+  sample somebody actually measured usually lands here.
+- **Reuse across a sweep.** Twenty-five points moving only the last of six layers, 41 orders:
+  0.243 s re-solving the whole stack each point against 0.063 s solving the fixed part once and
+  cascading — **3.85x**, agreeing to 3e-15. This is the "built once and then cascaded, cached or
+  reordered" of section 7, finally reachable.
+
+### The trap, and why `cascade` refuses
+
+Both pieces must sit on the **same order grid**. This API derives `kx` from
+`n_inc * sin(theta)`, so a joint medium of a different index shifts the whole grid — the same
+`theta` then means a different `k_par`. Joining across that mismatch is silently wrong:
+
+| | reflected power | transmitted power |
+| --- | --- | --- |
+| `theta` converted | 0.696952 | 0.508050 |
+| same `theta` (the mistake) | 0.764553 | 0.460943 |
+| the stack solved whole | 0.696952 | 0.508050 |
+
+Ten percent out, with no NaN, no negative power, and nothing to notice. It is the same
+"`theta` is measured in the incidence medium" trap as backside illumination, in a new place.
+So `ScatteringMatrix` carries its `Port` at each end — the retained `kx`/`ky` and the
+half-space — and `cascade` refuses a mismatch by name, with the conversion in the message:
+
+```
+sin(theta_next) = sin(theta_this) * n_this / n_joint
+```
+
+Multiplying two matrices by hand with `redheffer_star` skips that check. It is internal for
+that reason: it operates on gap-basis per-layer blocks, which carry no ports at all.
+
 ## References
 
 - M. G. Moharam, D. A. Pommet, E. B. Grann and T. K. Gaylord, "Stable implementation of the

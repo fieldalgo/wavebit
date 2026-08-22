@@ -551,3 +551,207 @@ def test_jit_traceable_jax():
     ri0, ti0 = smm_1d(**inputs)
     assert np.allclose(np.array(ri0), np.asarray(ri), atol=1e-10, rtol=0)
     assert np.allclose(np.array(ti0), np.asarray(ti), atol=1e-10, rtol=0)
+
+
+# --------------------------------------------------------- the scattering matrix the SMM keeps
+
+#: A z-asymmetric two-layer stack between unequal half-spaces: the two sides genuinely differ,
+#: so a mirrored or block-swapped mapping cannot pass by symmetry.
+S_KW = dict(structure=UC_1D, thickness=[0.15, 0.22], top=4.0, bot=2.25, tetm='te',
+            wavelength=0.777, period=[0.77], max_order=[5, 0], answers='amplitude')
+
+
+def _lit(side='top', algo='SMM', **over):
+    kw = dict(S_KW, theta=0.3, incidence_side=side, layer_algorithm=algo)
+    kw.update(over)
+    solver = wavebit.rcwa(backend=0, **kw)
+    return solver, solver.solve()
+
+
+def _delta(block):
+    n = np.asarray(block).shape[0]
+    column = np.zeros((n, 1), dtype=complex)
+    column[n // 2, 0] = 1.0                     # the incident order, as the solve builds it
+    return column
+
+
+@pytest.mark.parametrize('algo', ['SMM', 'ETM'])
+@pytest.mark.parametrize('answers', ['efficiency', 'amplitude', 'field'])
+def test_the_matrix_is_there_exactly_where_amplitudes_are(algo, answers):
+    """SMM from ``'amplitude'`` up, and nowhere else.
+
+    An ``S`` *is* amplitude information -- its blocks applied to the incident vector are the
+    reported amplitudes -- so it belongs on the rung that keeps them, and the rung below said
+    only power was wanted. ``None`` after an ETM solve is not an ignored request: the ETM
+    fixes one illumination's boundary condition and forms no both-sides operator at all, so an
+    empty mapping would read as "this solve had none", which is a different claim.
+    """
+    solver, _ = _lit(algo=algo, answers=answers)
+    expected = algo == 'SMM' and answers in ('amplitude', 'field')
+    assert (solver.scattering is not None) == expected
+
+
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+@pytest.mark.parametrize('block, reported', [('S11', 'r_s'), ('S21', 't_s')])
+def test_the_kept_blocks_are_the_amplitudes_the_solve_reported(side, block, reported):
+    """The two lit-side blocks, applied to the incident order, reproduce the reported answer.
+
+    This is where the orientation claim becomes checkable rather than stated: the solve reads
+    its own amplitudes off ``S11`` / ``S21`` from the top and off ``S22`` / ``S12`` from
+    below, so a matrix handed over unswapped would disagree here on exactly one side -- and
+    agree everywhere a symmetric test looks. It is also what says the ports are the two
+    half-spaces and not the cascade's internal gap basis, which no numeric tolerance states.
+    """
+    solver, result = _lit(side)
+    S = solver.scattering
+    got = (np.asarray(getattr(S, block)) @ _delta(S.S11)).ravel()
+    assert np.abs(got - np.asarray(getattr(result.given, reported)).ravel()).max() < 1e-12
+
+
+def test_one_solve_carries_both_illumination_directions():
+    """The far-side blocks answer the *other* side's solve — the point of keeping the whole S.
+
+    ``S22`` / ``S12`` are the half of the matrix the lit side never reads, so nothing else in
+    this file touches them; without this they could be transposed, swapped, or stale and every
+    other assertion would still pass. Normal incidence on purpose: ``theta`` is
+    incidence-relative, so at an angle the two sides do not share ``kx`` and their cascades
+    are built on different order grids -- ``theta = 0`` is where one matrix really does hold
+    both answers.
+    """
+    top_lit, _ = _lit('top', theta=0.0)
+    bottom_lit, from_below = _lit('bottom', theta=0.0)
+    S = top_lit.scattering
+    delta = _delta(S.S11)
+    for block, reported in (('S22', 'r_s'), ('S12', 't_s')):
+        got = (np.asarray(getattr(S, block)) @ delta).ravel()
+        want = np.asarray(getattr(from_below.given, reported)).ravel()
+        assert np.abs(got - want).max() < 1e-12, block
+
+
+def test_the_backside_matrix_is_the_scene_a_caller_would_build_by_hand():
+    """Lit from below, the blocks are the flipped stack's, in the flipped stack's order.
+
+    The frame assertion. Each block is an orientation-blind matrix, so the mapping can be
+    internally consistent and still be assembled from the wrong end of the scene. Normal
+    incidence for the same reason as above.
+    """
+    lit_from_below, _ = _lit('bottom', theta=0.0)
+    by_hand, _ = _lit('top', theta=0.0, structure=UC_1D[::-1], thickness=[0.22, 0.15],
+                      top=S_KW['bot'], bot=S_KW['top'])
+    a, b = lit_from_below.scattering, by_hand.scattering
+    assert a._fields[:4] == ('S11', 'S12', 'S21', 'S22')
+    for name, x, y in zip(a._fields, a.blocks, b.blocks):
+        assert np.abs(np.asarray(x) - np.asarray(y)).max() < 1e-12, name
+
+
+# -------------------------------------------------------------------------------- cascading
+
+#: The stack the cascade tests take apart: four layers between unequal half-spaces, cut
+#: between layers 1 and 2. Every piece is solved as an independent problem.
+WHOLE = np.concatenate([UC_1D, UC_1D[::-1]])
+WHOLE_TH = [0.15, 0.22, 0.31, 0.09]
+JOINT_KW = dict(tetm='te', wavelength=0.777, period=[0.77], max_order=[5, 0],
+                answers='amplitude', layer_algorithm='SMM')
+
+
+def _piece(structure, thickness, top, bot, theta, side='top'):
+    solver = wavebit.rcwa(backend=0, structure=structure, thickness=thickness, top=top,
+                          bot=bot, theta=theta, incidence_side=side, **JOINT_KW)
+    solver.solve()
+    return solver.scattering
+
+
+def _whole():
+    return _piece(WHOLE, WHOLE_TH, 4.0, 2.25, 0.3)
+
+
+@pytest.mark.parametrize('joint', [1.0, 2.25, 9.0])
+def test_two_pieces_cascade_into_the_stack_they_were_cut_from(joint):
+    """Solve the halves apart, join them, and land on the whole stack's own matrix.
+
+    The joint medium is a *basis*, not a layer: it has no thickness, nothing propagates in it,
+    and the star product's ``inv(I - lower.S11 @ upper.S22)`` is the infinite bounce across the
+    cut. Parametrised over three joint media because which one is chosen must not matter --
+    only that both halves name the same one, and that both sit on the same order grid, which
+    is what the converted ``theta`` below arranges.
+    """
+    upper = _piece(WHOLE[:2], WHOLE_TH[:2], 4.0, joint, 0.3)
+    theta_lower = float(np.arcsin(np.sin(0.3) * 2.0 / np.sqrt(joint)))   # same k_par, in `joint`
+    lower = _piece(WHOLE[2:], WHOLE_TH[2:], joint, 2.25, theta_lower)
+    joined, whole = upper.cascade(lower), _whole()
+    for name, got, want in zip(joined._fields, joined.blocks, whole.blocks):
+        rel = np.abs(np.asarray(got) - np.asarray(want)).max() / np.abs(np.asarray(want)).max()
+        assert rel < 1e-12, (name, joint, rel)
+
+
+def test_the_joined_matrix_keeps_the_outer_ports():
+    """The composite opens into the two half-spaces the *ends* opened into, not the joint."""
+    upper = _piece(WHOLE[:2], WHOLE_TH[:2], 4.0, 9.0, 0.3)
+    theta_lower = float(np.arcsin(np.sin(0.3) * 2.0 / 3.0))
+    lower = _piece(WHOLE[2:], WHOLE_TH[2:], 9.0, 2.25, theta_lower)
+    joined = upper.cascade(lower)
+    assert np.abs(complex(joined.entry_port.index) - 2.0) < 1e-12      # sqrt(4.0)
+    assert np.abs(complex(joined.exit_port.index) - 1.5) < 1e-12       # sqrt(2.25)
+
+
+def test_cascading_across_a_shifted_order_grid_is_refused():
+    """The mistake this whole mechanism exists for, and it cannot be caught by looking.
+
+    ``theta`` is measured in the incidence medium, so handing the lower piece the *same* angle
+    across an index step silently shifts its whole ``kx`` grid. Composing anyway returns a
+    plausible answer about ten percent wrong -- no NaN, no negative power, nothing to notice.
+    Refusing needs the ports, which is why they ride in the matrix.
+    """
+    upper = _piece(WHOLE[:2], WHOLE_TH[:2], 4.0, 9.0, 0.3)
+    lower = _piece(WHOLE[2:], WHOLE_TH[2:], 9.0, 2.25, 0.3)            # not converted
+    with pytest.raises(ValueError, match='in-plane wavevectors'):
+        upper.cascade(lower)
+
+
+def test_cascading_onto_a_different_joint_medium_is_refused():
+    """Same order grid, different half-space at the cut -- still not the same basis.
+
+    Normal incidence is what isolates this: ``sin(theta) = 0`` drops ``n_inc`` out of ``kx``,
+    so the two grids agree to the bit and only the medium is left to disagree about. It is a
+    real disagreement -- a port amplitude is a *mode* amplitude, and the mode normalisation
+    carries the medium -- and at any other angle it would hide behind the grid check.
+    """
+    upper = _piece(WHOLE[:2], WHOLE_TH[:2], 4.0, 4.0, 0.0)
+    lower = _piece(WHOLE[2:], WHOLE_TH[2:], 1.0, 2.25, 0.0)
+    assert np.allclose(np.asarray(upper.exit_port.kx), np.asarray(lower.entry_port.kx))
+    with pytest.raises(ValueError, match='different half-spaces'):
+        upper.cascade(lower)
+
+
+def test_cascade_says_where_a_scattering_matrix_comes_from():
+    """A bare 4-tuple is the obvious thing to try, and the message has to redirect it."""
+    upper = _piece(WHOLE[:2], WHOLE_TH[:2], 4.0, 1.0, 0.3)
+    with pytest.raises(TypeError, match='answers'):
+        upper.cascade(upper.blocks)
+
+
+def test_cascade_joins_in_the_order_the_light_meets_the_pieces():
+    """Lit from below, the piece the light reaches next is the one geometrically *above*.
+
+    `cascade` is incidence-relative like every other orientation on this class, so `beyond`
+    means "next along the path", not "underneath". Lit from the top the two readings agree and
+    a geometric mistake would hide; lit from below they are opposite, which is what makes this
+    case the one that can tell them apart. Normal incidence so both pieces share `kx` without
+    a converted `theta`.
+    """
+    whole = _piece(WHOLE, WHOLE_TH, 4.0, 2.25, 0.0, side='bottom')
+    # from below the light meets layers 2..3 first, then 0..1
+    first = _piece(WHOLE[2:], WHOLE_TH[2:], 1.0, 2.25, 0.0, side='bottom')
+    second = _piece(WHOLE[:2], WHOLE_TH[:2], 4.0, 1.0, 0.0, side='bottom')
+    joined = first.cascade(second)
+    for name, got, want in zip(joined._fields, joined.blocks, whole.blocks):
+        rel = np.abs(np.asarray(got) - np.asarray(want)).max() / np.abs(np.asarray(want)).max()
+        assert rel < 1e-12, (name, rel)
+
+
+def test_cascading_the_pieces_the_other_way_round_is_refused():
+    """The geometric reading of `beyond`, on the side where it differs, does not quietly work."""
+    first = _piece(WHOLE[2:], WHOLE_TH[2:], 1.0, 2.25, 0.0, side='bottom')
+    second = _piece(WHOLE[:2], WHOLE_TH[:2], 4.0, 1.0, 0.0, side='bottom')
+    with pytest.raises(ValueError, match='different half-spaces'):
+        second.cascade(first)
