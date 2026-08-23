@@ -148,8 +148,28 @@ def _inverse_axes(inverse_rule):
 
     The values were ``'x'`` / ``'y'`` until 2026-08-23. The rule runs along a *lattice* axis --
     the direction the cell's own edge follows -- which is x and y only while ``a1`` and ``a2``
-    are the Cartesian axes. On an oblique cell they are not, so the old spellings are refused
-    by name rather than quietly reinterpreted.
+    are the Cartesian axes.
+
+    **Retired, not conditionally allowed**, and the two are worth telling apart because
+    ``truncation_order`` went the other way on the same day: there ``dict(x=, y=)`` is kept, and
+    on a skewed cell it is *read* as ``u``/``v`` with a warning
+    (:class:`~wavebit._core.backend.AxisNameWarning`) rather than refused, because the reading
+    is right and only the caller's vocabulary is off. Two things make this one a rename instead.
+
+    A **value** is not a keyword. Two spellings of a keyword cost one parse; two spellings of a
+    value cost a branch at every comparison, and leave the next reader unsure which is canonical.
+
+    And this function **cannot see the cell**. It takes a raster and two half-widths; there is no
+    lattice in its signature, so "allow ``'x'`` where it is true" is not a check it can make. The
+    conditional treatment ``truncation_order`` gets is available only because the solver knows
+    the basis by then. Here the choice is unconditional either way, and an unconditional
+    *allow* would keep a spelling that is wrong on every skewed cell.
+
+    (An earlier version of this note argued the difference was that ``sample_x`` refuses inside
+    the function that takes the name, while this is a documented out-of-tree seam that refuses
+    nothing. It is not a seam: ``fourier2d_piecewise_constant`` is not exported from ``wavebit``,
+    and every caller in the docs and tutorials reaches it through ``_core``. The rename needed no
+    such argument.)
     """
     if inverse_rule in ('x', 'y'):
         raise ValueError(

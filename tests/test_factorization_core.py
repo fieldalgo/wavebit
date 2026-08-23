@@ -944,12 +944,18 @@ def test_the_normal_field_of_a_straight_interface_is_the_axis_normal(axis):
 
 
 def test_inverse_rule_refuses_the_lab_axes_by_name():
-    """``'x'`` / ``'y'`` are refused, not reinterpreted.
+    """``'x'`` / ``'y'`` are retired, not conditionally allowed.
 
     The rule runs along a *cell* direction. On a rectangular cell that is x and y, which is why
-    the argument was spelled that way until 2026-08-23; on an oblique lattice ``a1`` is not x,
-    so the old spelling names nothing. Silently mapping it to ``'u'`` would be right in exactly
-    the case where the user did not need to be told and wrong in the case where they did.
+    the argument was spelled that way until 2026-08-23; on an oblique lattice ``a1`` is not x.
+
+    Worth contrasting with ``truncation_order``, which kept ``dict(x=, y=)`` on the same day and
+    *reads* it as ``u``/``v`` on a skewed cell with a warning. The reading is right there and
+    it is right here too -- what separates them is not ambiguity. It is that a **value** costs a
+    branch at every comparison where a keyword costs one parse, and that this function **cannot
+    see the cell**: it takes a raster and two half-widths, so "allow ``'x'`` where it is true" is
+    not a check available to it. Unconditional either way, and an unconditional allow would keep
+    a spelling that is wrong on every skewed cell.
     """
     eps = np.ones((16, 16), complex)
     eps[4:9, 3:11] = 12.0
