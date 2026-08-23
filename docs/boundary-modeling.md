@@ -56,7 +56,8 @@ so a region's value is the plain sum over its loops and no consumer has anything
 That is worth stating as a design rule rather than a convenience, because the alternative was
 tried and failed. For a while every loop was stored counter-clockwise with the orientation in a
 separate `sign` field. The information is the same, but it then has to be re-applied by hand at
-every use: `clipper.region_area` and `clipper.region_ft` did, `boundary.conv_mats` did not, and
+every use: `clipper.region_area` and the since-removed `clipper.region_ft` did,
+`boundary.conv_mats` did not, and
 a shape painted entirely inside another one was silently solved as a *thicker* one -- with the
 matrices still Hermitian and `R + T` still exactly 1. The conversion was also self-defeating:
 `plan_difference` already emits a hole clockwise, and `subtract_loop` was flipping it back.

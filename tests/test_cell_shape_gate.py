@@ -186,3 +186,94 @@ def test_the_allow_list_has_not_quietly_grown():
             f'  the exemption reads: {why}\n'
             '  if the new one is covered by that same guard, raise the count; if it is not, '
             'it needs the basis.')
+
+
+# ------------------------------------------- the omission no arithmetic predicate can see
+
+#: ``(module, function, callee)`` that may hold a ``lattice`` and call a lattice-taking sibling
+#: without it. Empty, and an entry here would need the same kind of argument as ``_ALLOWED``.
+_MAY_DROP_THE_LATTICE = set()
+
+
+def _lattice_takers(trees):
+    """``name -> smallest positional index of ``lattice``, or ``None`` if keyword-only.
+
+    Keyed by name because a call site is resolved by name here, and two modules may define the
+    same one with the parameter in different places -- ``normal_projector_coeffs`` does
+    (``boundary.py`` at 6, ``analytic.py`` at 7). The *smallest* index is the conservative
+    reading: a call passing enough positional arguments for any of them is forwarding.
+    """
+    takers = {}
+    for tree in trees.values():
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            names = [a.arg for a in node.args.args]
+            if 'lattice' in names:
+                i = names.index('lattice')
+                prev = takers.get(node.name)
+                takers[node.name] = i if prev is None else min(prev, i)
+            elif any(a.arg == 'lattice' for a in node.args.kwonlyargs):
+                takers.setdefault(node.name, None)
+    return takers
+
+
+def _binds_lattice(fn):
+    if any(a.arg == 'lattice' for a in list(fn.args.args) + list(fn.args.kwonlyargs)):
+        return True
+    return any(isinstance(t, ast.Name) and t.id == 'lattice'
+               for n in ast.walk(fn) if isinstance(n, ast.Assign) for t in n.targets)
+
+
+def test_a_function_holding_a_lattice_forwards_it_to_every_sibling_that_takes_one():
+    """The other half of the hole, and the half no arithmetic predicate reaches.
+
+    ``_ALLOWED`` above is about a period *pair* being used as a rectangle. This is about a
+    ``lattice`` that was never passed at all -- there is no arithmetic to flag, only a call with
+    one argument missing, and the callee then defaults it to ``None`` and computes the rectangle.
+
+    That is exactly ``boundary.py:471`` (fixed 2026-08-24): ``to_conv_mat_boundary_layer``
+    forwarded ``lattice`` to ``shape_vertices``, ``plan_layer`` and ``conv_mats``, and not to
+    ``check_plan_still_fits`` -- whose signature had the parameter all along. A frozen painted
+    layer on a hex cell whose shape omitted its centre then raised ``StaleGeometryError`` where
+    the eager pass answered. Worse, ``_guards_the_rectangle`` credits ``lattice is None`` as
+    *proof* the cell is a rectangle, so a manufactured ``None`` launders itself downstream into
+    a guard this file already trusts.
+
+    The rule is narrow on purpose: only a function that *has* a lattice in scope, only a callee
+    whose own signature takes one. Neither half is a judgement call, so a hit is a fact.
+    """
+    files = [f for f in subprocess.check_output(['git', 'ls-files', 'wavebit'],
+                                                text=True).split() if f.endswith('.py')]
+    trees = {f: ast.parse(pathlib.Path(f).read_text()) for f in files}
+    takers = _lattice_takers(trees)
+    assert len(takers) > 20, takers            # a predicate matching nothing would pass silently
+
+    dropped = []
+    for f, tree in trees.items():
+        for fn in ast.walk(tree):
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if not _binds_lattice(fn):
+                continue
+            for call in ast.walk(fn):
+                if not isinstance(call, ast.Call):
+                    continue
+                name = (call.func.attr if isinstance(call.func, ast.Attribute)
+                        else getattr(call.func, 'id', None))
+                if name not in takers or name == fn.name:
+                    continue
+                if any(k.arg in ('lattice', None) for k in call.keywords):
+                    continue                   # named, or forwarded inside a **kwargs
+                idx = takers[name]
+                if idx is not None and len(call.args) > idx:
+                    continue                   # passed positionally
+                if (f, fn.name, name) in _MAY_DROP_THE_LATTICE:
+                    continue
+                dropped.append(f'  {f}:{call.lineno} in {fn.name}() -> {name}()')
+
+    assert not dropped, (
+        'these hold a `lattice` and call a sibling that takes one without passing it, so the '
+        'callee defaults to `None` and answers for a rectangle:\n' + '\n'.join(dropped)
+        + '\n\nForward it. If the callee genuinely must see the rectangle, pass `lattice=None` '
+          'explicitly -- a stated `None` is a decision and an omitted one is a silence.')

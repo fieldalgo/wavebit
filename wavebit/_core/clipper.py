@@ -482,11 +482,3 @@ def region_area(xp, region, vals):
         tot = tot + 0.5 * xp.sum(x * xp.roll(y, -1) - xp.roll(x, -1) * y)
     return tot
 
-
-def region_ft(xp, region, vals, ky, kx, period, polygon_ft):
-    """FT of a region. The contour integral is signed, so a clockwise hole subtracts itself."""
-    tot = None
-    for lp in region:
-        f = polygon_ft(xp, loop_verts(xp, lp, vals), ky, kx, period)
-        tot = f if tot is None else tot + f
-    return tot
