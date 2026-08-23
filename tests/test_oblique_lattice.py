@@ -721,3 +721,42 @@ def test_the_skewed_branch_never_calls_the_separable_build():
             assert len(calls) == expected, (basis.tolist(), len(calls))
         finally:
             type(s)._separable_kxy = original
+
+
+def test_the_reconstructed_field_obeys_bloch_along_both_lattice_vectors():
+    """The same fix seen in the field rather than in the efficiencies, and one half of it is blind.
+
+    Bloch's theorem: ``E(r + a) = E(r) * exp(i k_inc . a)`` for either lattice vector, because
+    every retained order differs from the incidence by a reciprocal vector ``G`` with
+    ``G . a_j = 2*pi*n``. The skewed reconstruction samples the cell's own parallelogram at
+    ``linspace(0, 1, n)`` in each of ``u`` and ``v``, so both endpoints are already in the grid
+    and the check costs one solve.
+
+    **The ``a1`` half cannot fail here, and that is the point of asserting it anyway.** The bug
+    this pins put an extra ``cx * lambda / |a1|`` on every order's ``kx``. In phase across ``a1``
+    that is ``k0 * cx * lambda / |a1| * a1x = 2*pi*cx`` exactly -- a whole number of turns, so
+    the ``a1`` endpoint agrees to 1.2e-15 with the bug live. It is ``a2`` that separates them,
+    because ``a2x / |a1| = 0.3`` is not an integer: 1.418 before, 2.2e-16 after, against a field
+    of order 1.
+
+    An efficiency test cannot see this either way -- ``R + T == 1`` to 1e-15 on both sides of the
+    fix. The field is where a wrong per-order wavevector is a wrong *shape* rather than a wrong
+    total, which is the reason to reconstruct one here at all.
+    """
+    basis = SHIFTED
+    a1, a2 = np.asarray(basis)[:, 0], np.asarray(basis)[:, 1]
+    s = _shifted_solver({(1, 1): 1.0}, basis=basis)
+    s.answers = 'field'
+    s.solve()
+    field = np.asarray(s.reconstruct_field(sample_x=9, sample_y=7, sample_z=4))
+    assert field.ndim == 5                                  # (incidence, z, v, u, component)
+    scale = float(np.max(np.abs(field)))
+    assert scale > 1e-6, scale                              # a zero field would pass anything
+
+    k_inc = (2 * np.pi / 500.0) * np.array([np.sin(0.2) * np.cos(0.4),
+                                            np.sin(0.2) * np.sin(0.4)])
+    for name, a, lo, hi in (('a1', a1, field[:, :, :, 0, :], field[:, :, :, -1, :]),
+                            ('a2', a2, field[:, :, 0, :, :], field[:, :, -1, :, :])):
+        want = lo * np.exp(1j * float(np.dot(k_inc, a)))
+        off = float(np.max(np.abs(hi - want))) / scale
+        assert off < 1e-12, (name, off)

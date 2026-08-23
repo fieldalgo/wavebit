@@ -523,6 +523,22 @@ def test_an_oblique_cell_survives_the_round_trip():
     b = wavebit.run(back)
     assert np.asarray(a.R).tobytes() == np.asarray(b.R).tobytes()
 
+    # And the field, not only the efficiencies. `R` is a sum over orders, so it survives a
+    # per-order wavevector that is wrong by a whole reciprocal step -- the field is where such a
+    # thing is a different *shape* rather than a different total (see
+    # `test_oblique_lattice.py::test_the_reconstructed_field_obeys_bloch_along_both_lattice_
+    # vectors`). It is also simply the larger array: 5 axes against 1.
+    fields = []
+    for one in (spec, back):
+        solver = wavebit.rcwa(**one.stack.as_kwargs(), **one.incidence.as_kwargs(),
+                              **one.numerics.as_kwargs())
+        solver.answers = 'field'          # `numerics.as_kwargs()` already carries one
+        solver.solve()
+        fields.append(np.asarray(solver.reconstruct_field(sample_x=7, sample_y=5, sample_z=3)))
+    assert fields[0].shape == fields[1].shape
+    assert float(np.max(np.abs(fields[0]))) > 1e-6          # a zero field would pass anything
+    assert fields[0].tobytes() == fields[1].tobytes()
+
 
 def test_the_round_trip_is_not_merely_carrying_the_edge_lengths():
     """The check with teeth: the same edge lengths as a *rectangle* give a different answer.
