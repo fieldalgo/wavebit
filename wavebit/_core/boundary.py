@@ -191,8 +191,8 @@ def normal_projector_coeffs(xp, loops, grid_shape, period, half_width_u, half_wi
             mid_x, mid_y = Px / 2.0, Py / 2.0
             frac_u, frac_v = 1.0 / Px, 1.0 / Py           # fractions of a period
         else:
-            a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
-            a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
+            a1x, a2x = lattice[0][0], lattice[0][1]
+            a1y, a2y = lattice[1][0], lattice[1][1]
             mid_x, mid_y = 0.5 * (a1x + a2x), 0.5 * (a1y + a2y)
         shift = xp.stack([c[0] - mid_x, c[1] - mid_y])
         built = [loops[0] - shift[None, :]]

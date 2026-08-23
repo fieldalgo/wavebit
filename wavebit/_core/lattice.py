@@ -39,12 +39,92 @@ axis-aligned case has always used, read in lattice coordinates rather than Carte
 What the skew *does* reach is any quantity that is Cartesian-geometric rather than
 index-based: see :func:`jacobian`, which is what the NVF normal field needs.
 """
+import dataclasses
+import sys
+from typing import Any
+
 import numpy as np
 
-from .backend import as_array
+from .backend import array_namespace, as_array
 
-__all__ = ['as_lattice', 'grid', 'is_axis_aligned', 'jacobian', 'order_kxy', 'periods_of',
-           'sample_grid']
+__all__ = ['Lattice', 'as_lattice', 'grid', 'is_axis_aligned', 'jacobian', 'order_kxy',
+           'periods_of', 'sample_grid']
+
+_PYTREE_REGISTERED = False
+
+
+@dataclasses.dataclass(frozen=True)
+class Lattice:
+    """The cell basis, with the one fact about it that must not be traced.
+
+    ``columns`` is the ``(2, 2)`` whose columns are ``a1`` and ``a2``. ``axis_aligned`` says
+    whether it is ``diag(Lx, Ly)``.
+
+    **Why those two are not the same kind of thing.** The numbers are a legitimate design
+    variable -- optimising a hex angle or a shear is a real thing to want, and until this class
+    existed ``lattice`` was eager NumPy so ``jax.grad`` could not reach it at all. But
+    ``axis_aligned`` decides *which branch runs* (:func:`~wavebit._core.analytic.
+    _shape_surface_normal` picks the rectangular fold from it, and it is what keeps the
+    orthogonal path bit-identical), and a traced value cannot be branched on. Carried as a
+    child it would kill every jitted solve while staying invisible eagerly -- the same trap
+    ``Material`` documents from the other direction, where a value that belonged in a child was
+    frozen into aux_data.
+
+    So: numbers are the pytree **child**, ``axis_aligned`` is **aux_data**, and it is settled
+    once at ingest where the answer is still readable. When it is not readable -- a basis handed
+    in already traced -- it is ``False``, which is the *general* path and therefore always
+    correct, merely not bit-identical to the rectangular shortcut. A ``period`` is diagonal by
+    construction, so that spelling stays ``True`` even under a tracer.
+
+    Indexing delegates to ``columns``, so ``A[0][1]`` reads the same as it did when this was a
+    bare array.
+    """
+
+    columns: Any
+    axis_aligned: bool
+
+    def __post_init__(self):
+        _register_pytree_if_jax_loaded()
+
+    def __getitem__(self, key):
+        return self.columns[key]
+
+    def __array__(self, dtype=None, copy=None):
+        a = np.asarray(self.columns, dtype=float)
+        return a if dtype is None else a.astype(dtype)
+
+    # pytree protocol -- registered lazily; see _register_pytree_if_jax_loaded
+    def tree_flatten(self):
+        return (self.columns,), (self.axis_aligned,)
+
+    @classmethod
+    def tree_unflatten(cls, aux, children):
+        return cls(children[0], aux[0])
+
+
+def _register_pytree_if_jax_loaded():
+    """Register :class:`Lattice` as a JAX pytree, if JAX is in the process already.
+
+    Lazy for the reason ``on_jax/__init__.py`` exists: ``import wavebit`` must not import JAX
+    for a caller who will never use it, and importing it here flips ``jax_enable_x64``
+    process-wide. Reads ``sys.modules`` and never imports -- the same pattern as
+    :func:`wavebit._core.domain._register_pytree_if_jax_loaded`, which the docstring there
+    explains at length.
+    """
+    global _PYTREE_REGISTERED
+    if _PYTREE_REGISTERED:
+        return
+    jax = sys.modules.get('jax')
+    if jax is None:
+        return
+    tree_util = getattr(jax, 'tree_util', None)
+    if tree_util is None:
+        return                      # jax is mid-import; the next Lattice will try again
+    try:
+        tree_util.register_pytree_node(Lattice, Lattice.tree_flatten, Lattice.tree_unflatten)
+    except ValueError:
+        pass                        # already registered; idempotent by design
+    _PYTREE_REGISTERED = True
 
 
 def as_lattice(period=None, lattice=None):
@@ -56,7 +136,15 @@ def as_lattice(period=None, lattice=None):
     it in :func:`order_kxy` are what carry any gradient.
     """
     if lattice is not None:
-        A = np.asarray(lattice, dtype=float)
+        if isinstance(lattice, Lattice):
+            return lattice
+        try:
+            A = np.asarray(lattice, dtype=float)
+        except Exception:                       # noqa: BLE001 - a tracer, not a mistake
+            # A basis handed in already traced. Its numbers are the point -- that is the whole
+            # reason this is a pytree -- but `axis_aligned` cannot be read off a tracer, so it
+            # takes the general path. Always correct, merely not the rectangular shortcut.
+            return Lattice(lattice, False)
         if A.shape != (2, 2):
             raise ValueError(
                 f'lattice: expected a 2x2 matrix whose columns are the basis vectors a1, a2; '
@@ -67,7 +155,7 @@ def as_lattice(period=None, lattice=None):
             raise ValueError(
                 'lattice: a1 and a2 are parallel (zero cell area), so the cell has no '
                 'reciprocal basis')
-        return A
+        return Lattice(A, is_axis_aligned(A))
 
     if period is None:
         raise ValueError('as_lattice: needs one of period or lattice')
@@ -76,7 +164,7 @@ def as_lattice(period=None, lattice=None):
         p = np.array([p[0], p[0]])
     if p.size != 2:
         raise ValueError(f'period: expected 1 or 2 lengths, got {p.size}')
-    return np.diag(p)
+    return Lattice(np.diag(p), True)      # a period spells a diagonal; nothing to test
 
 
 def is_axis_aligned(A, tol=1e-12):
@@ -87,6 +175,8 @@ def is_axis_aligned(A, tol=1e-12):
     layout that cannot be written as two 1-D vectors. Only a diagonal basis keeps them
     separable, so that is what this tests.
     """
+    if isinstance(A, Lattice):
+        return A.axis_aligned
     A = np.asarray(A, dtype=float)
     scale = float(np.max(np.abs(A)))
     if scale == 0:
@@ -102,8 +192,13 @@ def periods_of(A):
     want a physical extent per raster axis and the wrong thing for anyone wanting a bounding
     box — those need the basis itself.
     """
-    A = np.asarray(A, dtype=float)
-    return float(np.hypot(A[0, 0], A[1, 0])), float(np.hypot(A[0, 1], A[1, 1]))
+    cols = A.columns if isinstance(A, Lattice) else A
+    try:
+        M = np.asarray(cols, dtype=float)
+    except Exception:                       # noqa: BLE001 - a tracer, not a mistake
+        xp = array_namespace(cols)
+        return (xp.hypot(cols[0, 0], cols[1, 0]), xp.hypot(cols[0, 1], cols[1, 1]))
+    return float(np.hypot(M[0, 0], M[1, 0])), float(np.hypot(M[0, 1], M[1, 1]))
 
 
 def jacobian(A, n_v, n_u):
@@ -120,8 +215,13 @@ def jacobian(A, n_v, n_u):
     whole correction the NVF normal field needs on a skewed cell — see
     :func:`wavebit._core.factorization.normal_vector_field`.
     """
-    A = np.asarray(A, dtype=float)
-    return np.column_stack((A[:, 0] / n_u, A[:, 1] / n_v))
+    cols = A.columns if isinstance(A, Lattice) else A
+    try:
+        M = np.asarray(cols, dtype=float)
+    except Exception:                       # noqa: BLE001 - a tracer, not a mistake
+        xp = array_namespace(cols)
+        return xp.stack([cols[:, 0] / n_u, cols[:, 1] / n_v], axis=-1)
+    return np.column_stack((M[:, 0] / n_u, M[:, 1] / n_v))
 
 
 def sample_grid(xp, grid_shape, period, dtype, lattice=None):
@@ -163,8 +263,8 @@ def sample_grid(xp, grid_shape, period, dtype, lattice=None):
     if lattice is None:
         Px, Py = period[0], period[1]
         return (u * Px)[None, :] + 0.0 * v[:, None], (v * Py)[:, None] + 0.0 * u[None, :]
-    a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
-    a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
+    a1x, a2x = lattice[0][0], lattice[0][1]
+    a1y, a2y = lattice[1][0], lattice[1][1]
     return u[None, :] * a1x + v[:, None] * a2x, u[None, :] * a1y + v[:, None] * a2y
 
 
@@ -188,8 +288,10 @@ def order_kxy(xp, A, half_width_u, half_width_v, wavelength, k_inc_x, k_inc_y,
     For ``A = diag(Lx, Ly)`` that is ``k_inc_x + m*lambda/Lx`` and ``k_inc_y + n*lambda/Ly``,
     the existing expressions unchanged.
     """
-    a1x, a2x = float(A[0, 0]), float(A[0, 1])
-    a1y, a2y = float(A[1, 0]), float(A[1, 1])
+    # Read, not converted: `float()` here is what kept a basis from ever being a design
+    # variable. A NumPy scalar arithmetics identically, so the orthogonal path is unmoved.
+    a1x, a2x = A[0, 0], A[0, 1]
+    a1y, a2y = A[1, 0], A[1, 1]
     det = a1x * a2y - a2x * a1y
 
     cx, cy = int(centre[0]), int(centre[1])

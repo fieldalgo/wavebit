@@ -173,8 +173,10 @@ def shape_geometry(shape, Px, Py, lattice=None):
         cx = shape.get('cx', Px / 2.0)
         cy = shape.get('cy', Py / 2.0)
     else:
-        cx = shape.get('cx', 0.5 * (float(lattice[0][0]) + float(lattice[0][1])))
-        cy = shape.get('cy', 0.5 * (float(lattice[1][0]) + float(lattice[1][1])))
+        # `get(key, default)` evaluates the default whether or not it is used, so this is
+        # spelled as a branch: on a traced basis the unused expression would still be built.
+        cx = shape['cx'] if 'cx' in shape else 0.5 * (lattice[0][0] + lattice[0][1])
+        cy = shape['cy'] if 'cy' in shape else 0.5 * (lattice[1][0] + lattice[1][1])
     lx = shape.get('lx', shape.get('l', 0.0))
     round_ = stype in ('circle', 'disk', 'square')
     ly = lx if round_ else shape.get('ly', shape.get('l', 0.0))
@@ -457,8 +459,8 @@ def shape_ft(xp, shape, ky, kx, period, lattice=None):
     else:
         # (Gx, Gy) = 2*pi * A^-T @ (m, n), written out for the same reason as in
         # wavebit._core.lattice.order_kxy: one expression per component, no matrix inverse.
-        a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
-        a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
+        a1x, a2x = lattice[0][0], lattice[0][1]
+        a1y, a2y = lattice[1][0], lattice[1][1]
         det = a1x * a2y - a2x * a1y
         Gx = 2.0 * pi * (a2y * kx - a1y * ky) / det
         Gy = 2.0 * pi * (-a2x * kx + a1x * ky) / det
@@ -794,8 +796,8 @@ def _fold_to_nearest_image(xp, dx, dy, lattice):
     image in the lattice metric, not the Euclidean one. The 3x3 sweep after it is what makes
     the pick Euclidean. One cell a side is enough for any basis this solver accepts.
     """
-    a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
-    a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
+    a1x, a2x = lattice[0][0], lattice[0][1]
+    a1y, a2y = lattice[1][0], lattice[1][1]
     det = a1x * a2y - a2x * a1y
     su = xp.round((a2y * dx - a2x * dy) / det)
     sv = xp.round((-a1y * dx + a1x * dy) / det)
@@ -1120,8 +1122,8 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, half_width_u, half_w
             # Fractions of a period -- which is what the phase below is written in.
             shift_v, shift_u = (cy - mid_y) / Py, (cx - mid_x) / Px
         else:
-            a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
-            a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
+            a1x, a2x = lattice[0][0], lattice[0][1]
+            a1y, a2y = lattice[1][0], lattice[1][1]
             mid_x, mid_y = 0.5 * (a1x + a2x), 0.5 * (a1y + a2y)
             # Same quantity, stated properly: the displacement in *fractional lattice*
             # coordinates, A^-1 @ (c - mid). The phase is exp(-2i*pi*(m*u_d + n*v_d)), which is

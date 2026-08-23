@@ -661,7 +661,20 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
         # a `J^-T` of the identity, which is bit-identical to taking no metric at all. Without
         # it those cells moved by ~7e-15 purely from multiplying a factor in and dividing it
         # back out.
-        J = J / (float(np.hypot(J[0, 0], J[1, 0])) or 1.0)
+        try:
+            scale = float(np.hypot(J[0, 0], J[1, 0]))
+        except Exception:                   # noqa: BLE001 - a traced basis, not a mistake
+            raise NotImplementedError(
+                'the raster normal field cannot be differentiated with respect to the lattice: '
+                'it reaches its neighbours through a distance transform, which is a host '
+                'routine and needs concrete numbers for its `sampling`. That part is discrete '
+                '-- which pixel is nearest -- so its derivative is zero almost everywhere and '
+                'nothing is lost by holding it fixed; the smooth half, the `J^-T` pullback that '
+                'sets the direction, is differentiable already. Wiring the two apart wants '
+                '`jax.pure_callback`. Until then: the analytic path (shapes rather than a '
+                'raster) differentiates with respect to the basis, and a raster still '
+                'differentiates with respect to its permittivity on any cell.') from None
+        J = J / (scale or 1.0)
         # Physical length of one index step along each axis: axis 0 walks a2/n_v, axis 1 a1/n_u.
         # Exact for an axis-aligned cell; for a sheared one it is the best `sampling` can say,
         # since scipy's transform has no way to express a non-diagonal metric. The direction

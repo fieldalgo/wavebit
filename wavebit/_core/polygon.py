@@ -62,8 +62,8 @@ def polygon_ft(xp, verts, ky, kx, period, lattice=None):
         Gy = 2.0 * pi * ky / Py
         cell_area = Px * Py
     else:
-        a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
-        a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
+        a1x, a2x = lattice[0][0], lattice[0][1]
+        a1y, a2y = lattice[1][0], lattice[1][1]
         det = a1x * a2y - a2x * a1y
         Gx = 2.0 * pi * (a2y * kx - a1y * ky) / det
         Gy = 2.0 * pi * (-a2x * kx + a1x * ky) / det

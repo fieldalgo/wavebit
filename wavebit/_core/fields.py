@@ -301,8 +301,8 @@ def _inv_fourier(xp, kx, ky, period, sample_x, sample_y, k0, C, lattice=None):
     # carry an explicit `diag(period)` and still hand over separable 1-D vectors, in which case
     # the old path is both correct and bit-identical.
     if kx.ndim == 2:
-        a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
-        a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
+        a1x, a2x = lattice[0][0], lattice[0][1]
+        a1y, a2y = lattice[1][0], lattice[1][1]
         kx_f = xp.reshape(kx, (-1,))
         ky_f = xp.reshape(ky, (-1,))
         proj_a1 = (kx_f * a1x + ky_f * a1y) * k0          # k . a1, per order
