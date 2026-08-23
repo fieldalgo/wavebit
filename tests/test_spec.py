@@ -491,9 +491,8 @@ def _oblique_spec():
     ``period`` is stated *as well*, and equal to the two edge lengths ``hexagonal(400)``
     gives, so that the basis contributes the angle and nothing else. That is what makes
     the pair of tests below sharp: drop ``lattice`` anywhere along the path and the run
-    degrades to exactly the square in :func:`test_the_round_trip_is_not_merely_carrying_
-    the_edge_lengths` rather than to some other scale, which would part the two numbers
-    for a reason that has nothing to do with the skew.
+    degrades to exactly the square the second of them compares against, rather than to some
+    other scale -- which would part the two numbers for a reason unrelated to the skew.
     """
     basis = np.asarray(wavebit.hexagonal(400.0))
     eps = np.ones((1, 16, 16))
@@ -525,9 +524,9 @@ def test_an_oblique_cell_survives_the_round_trip():
 
     # And the field, not only the efficiencies. `R` is a sum over orders, so it survives a
     # per-order wavevector that is wrong by a whole reciprocal step -- the field is where such a
-    # thing is a different *shape* rather than a different total (see
-    # `test_oblique_lattice.py::test_the_reconstructed_field_obeys_bloch_along_both_lattice_
-    # vectors`). It is also simply the larger array: 5 axes against 1.
+    # thing is a different *shape* rather than a different total. The Bloch-condition test in
+    # `tests/test_oblique_lattice.py` is what pins that; this is the same array being compared
+    # for a different reason, and it is simply the larger one: 5 axes against 1.
     fields = []
     for one in (spec, back):
         solver = wavebit.rcwa(**one.stack.as_kwargs(), **one.incidence.as_kwargs(),
