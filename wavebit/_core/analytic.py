@@ -113,7 +113,7 @@ from . import overlap as _overlap
 from .backend import array_namespace, as_array, j1, jinc, sinc
 from .domain import as_material, retired_material_name
 from .factorization import ConvMatrices      # one slot layout for every builder
-from .lattice import sample_grid
+from .lattice import is_axis_aligned, sample_grid
 from .overlap import COMBINE_MODES, OVERLAP_TOL_REL      # re-exported; both paths read them
 from .geometry import StaleGeometryError
 
@@ -655,9 +655,9 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype, lattic
     X, Y = sample_grid(xp, grid_shape, period, dtype, lattice)
 
     if _tiles_pay(X, Ny, Nx, len(shapes)):
-        return _blend_tiled(xp, X, Y, shapes, Px, Py, dtype, (Ny, Nx))
+        return _blend_tiled(xp, X, Y, shapes, Px, Py, dtype, (Ny, Nx), lattice)
 
-    got = [g for g in (_shape_surface_normal(xp, X, Y, s, Px, Py, dtype) for s in shapes)
+    got = [g for g in (_shape_surface_normal(xp, X, Y, s, Px, Py, dtype, lattice) for s in shapes)
            if g is not None]
     if not got:
         return xp.ones((Ny, Nx), dtype=dtype), xp.zeros((Ny, Nx), dtype=dtype)
@@ -714,7 +714,7 @@ def _tiles_pay(sample, n_v, n_u, n_shapes):
             and type(sample) is np.ndarray)
 
 
-def _blend_tiled(xp, X, Y, shapes, Px, Py, dtype, grid_shape):
+def _blend_tiled(xp, X, Y, shapes, Px, Py, dtype, grid_shape, lattice=None):
     """:func:`normal_vector_field_analytical`'s blend, evaluated one cache-sized block at a time.
 
     Bit-identical to the whole-grid path by construction: same operations on the same values in
@@ -730,7 +730,7 @@ def _blend_tiled(xp, X, Y, shapes, Px, Py, dtype, grid_shape):
             block = (slice(i0, min(i0 + _TILE, n_v)), slice(j0, min(j0 + _TILE, n_u)))
             bx = np.ascontiguousarray(X[block])
             by = np.ascontiguousarray(Y[block])
-            got = [g for g in (_shape_surface_normal(xp, bx, by, s, Px, Py, dtype)
+            got = [g for g in (_shape_surface_normal(xp, bx, by, s, Px, Py, dtype, lattice)
                                for s in shapes) if g is not None]
             if not got:
                 out_x[block], out_y[block] = 1.0, 0.0
@@ -762,7 +762,43 @@ def _blend(xp, got, shape, dtype):
     return sx / norm, sy / norm
 
 
-def _shape_surface_normal(xp, X, Y, shape, Px, Py, dtype):
+def _fold_to_nearest_image(xp, dx, dy, lattice):
+    """``(dx, dy)`` reduced to the nearest periodic image, on the cell's own lattice.
+
+    ``d % P - P/2`` answers "nearest image" only when the images sit at ``(m*Px, n*Py)``. They
+    sit at ``m*a1 + n*a2``, so on a skewed cell the rectangular fold reduces towards a point
+    where no image is: on a 60-degree cell it looks straight up while the neighbour is up and
+    to the right. The field is then wrong wherever a neighbour's surface is the nearest one,
+    which is why it only shows once a shape fills enough of the cell.
+
+    Rounding the *fractional* coordinates lands in the fundamental parallelogram — the nearest
+    image in the lattice metric, not the Euclidean one. The 3x3 sweep after it is what makes
+    the pick Euclidean. One cell a side is enough for any basis this solver accepts.
+    """
+    a1x, a2x = float(lattice[0][0]), float(lattice[0][1])
+    a1y, a2y = float(lattice[1][0]), float(lattice[1][1])
+    det = a1x * a2y - a2x * a1y
+    su = xp.round((a2y * dx - a2x * dy) / det)
+    sv = xp.round((-a1y * dx + a1x * dy) / det)
+
+    best_x = best_y = best_d2 = None
+    for du in (-1.0, 0.0, 1.0):
+        for dv in (-1.0, 0.0, 1.0):
+            mu, mv = su + du, sv + dv
+            ex = dx - mu * a1x - mv * a2x
+            ey = dy - mu * a1y - mv * a2y
+            d2 = ex * ex + ey * ey
+            if best_d2 is None:
+                best_x, best_y, best_d2 = ex, ey, d2
+            else:
+                take = d2 < best_d2
+                best_x = xp.where(take, ex, best_x)
+                best_y = xp.where(take, ey, best_y)
+                best_d2 = xp.where(take, d2, best_d2)
+    return best_x, best_y
+
+
+def _shape_surface_normal(xp, X, Y, shape, Px, Py, dtype, lattice=None):
     """``(distance to this shape's surface, normal_x, normal_y)`` — the outward unit normal, periodic.
 
     Two things here differ from what this file did before 2026-08-17, and both are what make
@@ -785,8 +821,13 @@ def _shape_surface_normal(xp, X, Y, shape, Px, Py, dtype):
     cos_a = xp.cos(as_array(xp, angle, dtype=dtype))
     sin_a = xp.sin(as_array(xp, angle, dtype=dtype))
 
-    dx = (X - cx + Px / 2.0) % Px - Px / 2.0
-    dy = (Y - cy + Py / 2.0) % Py - Py / 2.0
+    # `diag(Lx, Ly)` is the one case where the two folds ARE the same fold, so it keeps the
+    # cheaper spelling -- and stays bit-identical to every result predating this branch.
+    if lattice is None or is_axis_aligned(lattice):
+        dx = (X - cx + Px / 2.0) % Px - Px / 2.0
+        dy = (Y - cy + Py / 2.0) % Py - Py / 2.0
+    else:
+        dx, dy = _fold_to_nearest_image(xp, X - cx, Y - cy, lattice)
     xr = dx * cos_a + dy * sin_a
     yr = -dx * sin_a + dy * cos_a
     a, b = lx / 2.0, ly / 2.0

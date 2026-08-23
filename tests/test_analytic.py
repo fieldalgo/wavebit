@@ -1282,3 +1282,103 @@ def test_one_geometry_solved_on_three_backends_gets_three_entries():
     assert len(_an._PROJECTOR_CACHE) == 3, 'the backends shared one entry'
     assert answers['jax'] == pytest.approx(answers['numpy'], rel=1e-10, abs=1e-12)
     assert answers['torch'] == pytest.approx(answers['numpy'], rel=1e-10, abs=1e-12)
+
+
+# ---------------------------------------------------------- the periodic fold on a skewed cell
+
+def _skewed_ellipse_scene():
+    """A hex cell and one ellipse that is asymmetric under every reflection this could get wrong.
+
+    Deliberately **not** symmetric top-to-bottom or left-to-right, and not centred: a scene with
+    a mirror in it cannot see a flip, and a centred one cannot see a translation. That blindness
+    is not hypothetical here -- every 2D raster in this repository's external goldens was
+    y-symmetric, which is exactly why an axis bug once survived all of them.
+
+    It also has to be *large*. The fold only misreports where a neighbouring image's surface
+    reaches into the sampled cell, so a small feature on a skewed cell agrees either way.
+    """
+    A = np.column_stack([[400.0, 0.0],
+                         [400.0 * np.cos(np.pi / 3), 400.0 * np.sin(np.pi / 3)]])
+    cx0, cy0 = 0.5 * (A[0, 0] + A[0, 1]), 0.5 * (A[1, 0] + A[1, 1])
+    shape = dict(type='ellipse', cx=cx0 - 45.0, cy=cy0 + 40.0,
+                 lx=385.0, ly=300.0, angle=0.5, material=5.76)
+    return A, shape
+
+
+def _band_misalignment(A, shape, n=512):
+    """``1 - |n_analytic . n_raster|`` over the surface band, against the raster contour field.
+
+    The arbiter is the *raster* normal field, which reaches its neighbours by tiling in index
+    space and is therefore lattice-correct by construction. It is independent of the analytic
+    path in every part except the shape it is handed -- which is what a golden could not be.
+    """
+    from scipy import ndimage
+    from wavebit._core.factorization import normal_vector_field
+    from wavebit._core.lattice import periods_of
+
+    nx_a, ny_a = _nvf_analytic(np, (n, n), [shape], periods_of(A), np.float64, A)
+
+    u = (np.arange(n) + 0.5) / n
+    U, V = np.meshgrid(u, u)
+    X, Y = U * A[0, 0] + V * A[0, 1], U * A[1, 0] + V * A[1, 1]
+    ca, sa = np.cos(shape['angle']), np.sin(shape['angle'])
+    inside = np.zeros((n, n), bool)
+    for m in (-1, 0, 1):                       # the true images, at m*a1 + k*a2
+        for k in (-1, 0, 1):
+            dx = X - shape['cx'] - (m * A[0, 0] + k * A[0, 1])
+            dy = Y - shape['cy'] - (m * A[1, 0] + k * A[1, 1])
+            xr, yr = dx * ca + dy * sa, -dx * sa + dy * ca
+            inside |= (xr / (shape['lx'] / 2)) ** 2 + (yr / (shape['ly'] / 2)) ** 2 <= 1.0
+
+    nx_r, ny_r = normal_vector_field(np.where(inside, 5.76, 1.0), lattice=A, method='contour')
+    band = (ndimage.binary_dilation(inside, iterations=3)
+            & ~ndimage.binary_erosion(inside, iterations=3))
+    return (1.0 - np.abs(nx_a * nx_r + ny_a * ny_r))[band]
+
+
+def test_analytic_normal_field_folds_on_the_cells_own_lattice():
+    """The nearest periodic image sits at ``m*a1 + n*a2``, not at ``(m*Px, n*Py)``.
+
+    ``periods_of`` reports ``(|a1|, |a2|)``, so a fold written as ``d % Px`` reduces towards a
+    point where no image is -- on a 60-degree cell it looks straight up while the neighbour is
+    up and to the right. Until 2026-08-23 the analytic path did exactly that, and
+    ``docs/oblique-lattice.md`` asserted the opposite ("Analytic shapes do not have this
+    problem"), which is true of their *lengths* and was never true of their *fold*.
+
+    Measured on this scene before the fix: 21% of the surface band more than 0.05 out, worst
+    0.62 (about 39 degrees). It conserved energy to 1e-12 throughout.
+    """
+    band = _band_misalignment(*_skewed_ellipse_scene())
+    assert band.max() < 0.05, f'worst surface-band misalignment {band.max():.4f}'
+    assert band.mean() < 5e-3
+
+
+def test_the_skew_is_what_that_test_is_sensitive_to():
+    """The control: the same scene on a rectangular cell agreed before the fix and still does.
+
+    Without this, a failure of the test above could be read as the scene being too demanding
+    for the raster arbiter rather than as the fold being wrong.
+    """
+    A = np.diag([400.0, 400.0 * np.sin(np.pi / 3)])
+    _, shape = _skewed_ellipse_scene()
+    shape = dict(shape, cx=0.5 * A[0, 0] - 45.0, cy=0.5 * A[1, 1] + 40.0)
+    band = _band_misalignment(A, shape)
+    assert band.max() < 0.05
+
+
+def test_an_axis_aligned_cell_keeps_the_rectangular_fold_bit_for_bit():
+    """``diag(Lx, Ly)`` is the one case where the two folds are the same fold.
+
+    So it keeps the cheaper spelling, and every result predating the lattice branch is
+    unchanged to the bit -- not to a tolerance. Passing the lattice explicitly must agree with
+    passing only the period, which is what says the branch is on the *shape* of the cell and
+    not on which keyword the caller happened to use.
+    """
+    from wavebit._core.lattice import as_lattice, periods_of
+    shapes = [dict(type='circle', cx=0.37, cy=0.29, lx=0.34, material=5.76),
+              dict(type='rectangle', cx=0.72, cy=0.66, lx=0.3, ly=0.18, angle=0.4, material=3.0)]
+    lat = as_lattice(period=[0.9, 1.4])
+    a = _nvf_analytic(np, (96, 96), shapes, (0.9, 1.4), np.float64, None)
+    b = _nvf_analytic(np, (96, 96), shapes, periods_of(lat), np.float64, lat)
+    for got, want in zip(b, a):
+        assert np.asarray(got).tobytes() == np.asarray(want).tobytes()

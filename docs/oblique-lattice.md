@@ -54,8 +54,16 @@ pts = U[..., None] * a1 + V[..., None] * a2      # Cartesian position of every c
 then test membership in Cartesian space, with **minimum image over the lattice** (`i*a1 + j*a2`
 for `i, j` in `-1, 0, 1`) so a feature straddling an edge wraps correctly.
 
-Analytic shapes do **not** have this problem: their lengths are absolute Cartesian quantities, so
-a rectangle stays a rectangle under a skew and `cx` / `cy` mean what they always did.
+Analytic shapes do not have this problem *in their lengths*: those are absolute Cartesian
+quantities, so a rectangle stays a rectangle under a skew and `cx` / `cy` mean what they always
+did. Their **periodic fold** is a separate thing and it was wrong until 2026-08-23. The nearest
+image of a shape sits at `m*a1 + n*a2`; the fold was written `d % Px`, and `period` on a skewed
+cell reports `(|a1|, |a2|)`, so it reduced towards a point where no image is. On a 60-degree
+cell it looked straight up while the neighbour was up and to the right. It only shows once a
+feature is large enough that a neighbour's surface reaches into the sampled cell -- measured on
+a disc at `r/a = 0.45`, 21% of the surface band was more than 0.05 out and the solve was
+1.1e-3 from the raster path, which the fix brings to 5e-6. Energy conserved to 1e-12 either
+way, and an axis-aligned cell is bit-identical, which is why nothing caught it.
 
 ## What it buys
 
