@@ -970,25 +970,37 @@ class CoreSolveMixin:
         by up to ``0.805 k0`` across a retained band of about ``+-2``, silently, with nothing
         in the docs saying so. The correct answer was the private one. They swapped places.
 
-        The incident components are read back out of the 1-D vectors at ``m = n = 0`` rather
-        than recomputed. That entry *is* ``k_inc`` by construction, so the backend's own
+        The incident components come from the backend's :meth:`_incident_kxy`, so its own
         ``sin(theta)`` handling — which differs between NumPy, JAX and Torch for tracing
         reasons — stays the single source for incidence, and the lattice basis is the only new
-        arithmetic here.
+        arithmetic here. They used to be read back out of the 1-D vectors instead, at the index
+        this docstring called ``m = n = 0`` and which was in fact the *window centre*. Those
+        agree only while the window is centred on zero; under ``excitation`` it follows the lit
+        orders, and the entry carried a ``cx * lambda / |a1|`` that the lattice term below then
+        added a second time. Measured at ``excitation={(2, 0): 1}`` on a sheared 2000 x 2200
+        cell, ``kx`` for the lit order came out ``1.183`` against a true ``0.683`` -- enough to
+        put a propagating order outside the light line, so the run refused as evanescent rather
+        than answering. See ``tests/test_oblique_lattice.py``.
+
+        The skewed branch does not call :meth:`_separable_kxy` at all, which is the point rather
+        than a saving: that build divides by ``period``, and ``period`` on a skewed cell is
+        ``(|a1|, |a2|)`` with the angle gone. Keeping it off this path is what lets
+        ``tests/test_cell_shape_gate.py`` exempt it on reachability instead of on a promise that
+        its result goes unused.
 
         Takes no wavelength, for the reason ``solve_conv`` takes none: the solver has one, and
         every caller passed exactly that.
         """
         wavelength = self.wavelength
-        kx, ky = self._separable_kxy(wavelength)
         A = self._lattice_basis
         if A is None or _lattice.is_axis_aligned(A):
-            return kx, ky
+            return self._separable_kxy(wavelength)
+        k_inc_x, k_inc_y = self._incident_kxy(wavelength)
         (cx, half_width_u), (cy, half_width_v) = self.order_window
-        xp = array_namespace(kx)
+        xp = array_namespace(k_inc_x)
         return _lattice.order_kxy(xp, A, half_width_u, half_width_v, wavelength,
-                                  kx[half_width_u], ky[half_width_v], centre=(cx, cy),
-                                  dtype=kx.dtype, device=_device_of(kx))
+                                  k_inc_x, k_inc_y, centre=(cx, cy),
+                                  dtype=k_inc_x.dtype, device=_device_of(k_inc_x))
 
     @property
     def scattering(self):
@@ -1229,8 +1241,11 @@ class CoreSolveMixin:
         self._formulation_assigned = Formulation.TWO_FIELD
         wavelength = self.wavelength
         # The separable pair, not :meth:`order_kxy`: the 1D operator takes a 1-D ``kx`` and
-        # ``diag``s it. They are the same object on an axis-aligned cell; on a skewed one this
-        # keeps the solve exactly what it was before `order_kxy` became the public accessor.
+        # ``diag``s it, and the two are the same object here -- `_assign_grating_type` reaches
+        # this path only under `one_row and lattice_is_axis_aligned`, so the cell is a rectangle
+        # by the time the call is made. A skewed one-row cell is routed to `_solve_2d` instead,
+        # because its `b1` is perpendicular to `a2` rather than parallel to `a1` and order `m`
+        # carries a `ky` the separable layout has no slot for.
         kx, _ = self._separable_kxy(wavelength)
         return self._finish(solve(
             self.tetm_index, wavelength, kx, self.n_top, self.n_bot, self.theta,

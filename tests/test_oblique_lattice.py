@@ -632,3 +632,92 @@ def test_li_1997_checkerboard_matches_the_published_table():
     worst = max(abs(float(ti[c[0] + n, c[1] + m]) - v) for (n, m), v in LI_FEM.items())
     assert worst < 1e-3, f'worst deviation from the published table: {worst:.2e}'
     assert float(np.asarray(res.R).sum()) == pytest.approx(0.10040, abs=1e-3)
+
+
+# --------------------------------------------- a lit order that is not the centre of the window
+
+#: `excitation` moves the retained window onto the lit orders, so its centre `(cx, cy)` stops
+#: being `(0, 0)`. Nothing on the rectangular path notices -- `_separable_kxy` builds the whole
+#: window in one expression -- but the skewed path assembles `k_inc + m*b1 + n*b2` from an
+#: incidence term it asked the backend for, and it asked with the wrong index.
+SHIFTED = np.column_stack(([2000.0, 0.0], [600.0, 2200.0]))
+
+
+def _shifted_solver(excitation, basis=SHIFTED, theta=0.2, phi=0.4):
+    cell = np.full((1, 8, 8), EPS_AIR)
+    cell[0, 2:5, 1:4] = 12.25
+    return wavebit.rcwa(backend=0, structure=cell, thickness=[300.0], top=1.0, bot=1.0,
+                        lattice=basis.tolist(), wavelength=500.0, theta=theta, phi=phi,
+                        truncation_order=[3, 2], factorization='nvf', excitation=excitation)
+
+
+def _closed_form_kxy(basis, order_window, wavelength, theta, phi, n_inc=1.0):
+    """``k_inc + m*b1 + n*b2`` written out here, from the basis, in the test's own arithmetic."""
+    (cx, hx), (cy, hy) = order_window
+    B = wavelength * np.linalg.inv(np.asarray(basis)).T      # columns b1, b2, in k/k0 units
+    m = np.arange(cx - hx, cx + hx + 1)[None, :]
+    n = np.arange(cy - hy, cy + hy + 1)[:, None]
+    return (n_inc * np.sin(theta) * np.cos(phi) + B[0, 0] * m + B[0, 1] * n,
+            n_inc * np.sin(theta) * np.sin(phi) + B[1, 0] * m + B[1, 1] * n)
+
+
+@pytest.mark.parametrize('lit', [(0, 0), (2, 0), (0, 1), (1, 1), (2, 1)])
+def test_a_shifted_order_window_does_not_count_its_centre_twice(lit):
+    """``order_kxy`` against the closed form, for a window that is not centred on zero.
+
+    Until 2026-08-23 the incidence term was read back as ``kx[half_width_u]``, described in the
+    docstring as the ``m = 0`` entry. It is the *window centre* entry, so it already carried
+    ``cx * lambda / |a1|`` -- the rectangular step, edge lengths with the angle gone -- which
+    :func:`wavebit._core.lattice.order_kxy` then added again as ``m*b1``. At ``lit=(2, 0)`` on
+    this cell ``kx`` came out ``1.183`` where the basis says ``0.683``.
+
+    Compared against arithmetic written here rather than against the solver's own separable
+    build: the two agree by construction on a rectangular cell, which is the case that was
+    never wrong.
+    """
+    s = _shifted_solver({lit: 1.0})
+    want_x, want_y = _closed_form_kxy(SHIFTED, s.order_window, 500.0, 0.2, 0.4)
+    kx, ky = (np.real(np.asarray(v)) for v in s.order_kxy())
+    assert np.allclose(kx, want_x, rtol=0, atol=1e-13), np.max(np.abs(kx - want_x))
+    assert np.allclose(ky, want_y, rtol=0, atol=1e-13), np.max(np.abs(ky - want_y))
+
+
+def test_the_wrong_centre_pushed_a_propagating_order_outside_the_light_line():
+    """The loud half of the same bug: the run refused instead of answering.
+
+    ``(2, 0)`` sits at ``kx = 0.683`` against ``n_inc = 1``, comfortably propagating. The extra
+    ``cx * lambda / |a1| = 0.5`` put it at ``1.183``, and `_incident_flux` refuses to measure
+    efficiencies against an evanescent excitation -- correctly, on the wavevector it was given.
+
+    The quiet half is ``(1, 1)``, which stayed inside the light line and answered:
+    ``sum(R) = 0.173069`` before, ``0.059662`` after, energy conserving to 1e-15 either way.
+    """
+    r = _shifted_solver({(2, 0): 1.0}).solve()
+    assert float(np.sum(r.R) + np.sum(r.T)) == pytest.approx(1.0, abs=1e-12)
+
+    quiet = _shifted_solver({(1, 1): 1.0}).solve()
+    assert float(np.sum(quiet.R)) == pytest.approx(0.059662278, abs=1e-8)
+    assert float(np.sum(quiet.R)) != pytest.approx(0.173069452, abs=1e-6)
+
+
+def test_the_skewed_branch_never_calls_the_separable_build():
+    """Reachability, counted rather than argued.
+
+    ``_separable_kxy`` divides by ``period``, which on a skewed cell is ``(|a1|, |a2|)`` with the
+    angle gone -- exactly what ``tests/test_cell_shape_gate.py`` refuses everywhere it can be
+    reached. Its exemption there rests on this: the skewed branch of ``order_kxy`` does not call
+    it, and the 1D operators that do are routed to only when the cell is axis-aligned. A count,
+    because the previous version of that argument was "it is called but its result is unused",
+    which is a claim about a line that had already stopped being true.
+    """
+    calls = []
+    for basis, expected in ((SHIFTED, 0), (np.diag([2000.0, 2200.0]), 1)):
+        s = _shifted_solver({(1, 1): 1.0}, basis=basis)
+        original = type(s)._separable_kxy
+        try:
+            type(s)._separable_kxy = lambda self, wl, _o=original: (calls.append(1), _o(self, wl))[1]
+            calls.clear()
+            s.order_kxy()
+            assert len(calls) == expected, (basis.tolist(), len(calls))
+        finally:
+            type(s)._separable_kxy = original

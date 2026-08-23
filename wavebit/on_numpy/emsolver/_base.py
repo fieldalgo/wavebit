@@ -222,12 +222,21 @@ class _BaseRCWA(CoreSolveMixin):
         else:
             raise ValueError
 
-    def _separable_kxy(self, wavelength):
-        (cx, hx), (cy, hy) = self.order_window
+    def _incident_kxy(self, wavelength):
+        """The incident in-plane wavevector, ``(k_inc_x, k_inc_y)``, normalized by ``k0``.
 
-        max_order_x_range = np.arange(cx - hx, cx + hx + 1)
-        max_order_y_range = np.arange(cy - hy, cy + hy + 1)
+        Split out of :meth:`_separable_kxy` so :meth:`order_kxy` can *ask* for it. It used to
+        read it back as the ``m = n = 0`` entry of the separable pair, which is what that
+        docstring still described -- but the index it used was the window *centre*, and those
+        are the same entry only while the window is centred on zero. Under ``excitation`` the
+        window follows the lit orders, so the centre carried an extra ``cx * lambda / |a1|``
+        that the lattice term then added again. Reading back at ``m = 0`` is not the repair
+        either: a window lit at order 5 with two orders of half-width does not contain ``m = 0``
+        at all.
 
+        Backend-local for the one reason ``_separable_kxy`` is: the ``sin(theta)`` clamp differs
+        between NumPy, JAX and Torch for tracing reasons, and this keeps it the single source.
+        """
         theta = 0 if self.theta is None else self.theta
 
         if theta.real >= np.float32(np.pi / 2):
@@ -239,10 +248,21 @@ class _BaseRCWA(CoreSolveMixin):
         phi = 0 if self.phi is None else self.phi  # phi is None -> 1D TE TM case
 
         # n_inc, not n_top: theta lives in the incidence medium, which incidence_side picks.
-        kx = (self.n_inc * sin_theta * np.cos(phi) + max_order_x_range * (
+        return (np.asarray(self.n_inc * sin_theta * np.cos(phi)).astype(self.complex_dtype),
+                np.asarray(self.n_inc * sin_theta * np.sin(phi)).astype(self.complex_dtype))
+
+    def _separable_kxy(self, wavelength):
+        (cx, hx), (cy, hy) = self.order_window
+
+        max_order_x_range = np.arange(cx - hx, cx + hx + 1)
+        max_order_y_range = np.arange(cy - hy, cy + hy + 1)
+
+        k_inc_x, k_inc_y = self._incident_kxy(wavelength)
+
+        kx = (k_inc_x + max_order_x_range * (
                 wavelength / self.period[0])).astype(self.complex_dtype)
 
-        ky = (self.n_inc * sin_theta * np.sin(phi) + max_order_y_range * (
+        ky = (k_inc_y + max_order_y_range * (
                 wavelength / self.period[1])).astype(self.complex_dtype)
 
         return kx, ky

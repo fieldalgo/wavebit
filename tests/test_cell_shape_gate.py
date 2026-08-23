@@ -32,7 +32,22 @@ _PERIOD_NAMES = {'Px', 'Py'}
 #: ``(module, function) -> (expected number of flagged lines, why it is allowed)``. Each entry
 #: is a promise that the function cannot see a skewed cell. Adding one means arguing that case,
 #: which is the point: the list is the argument, not the exemption.
+#: The wavevector build named for the case it serves: `_separable_kxy` is the *rectangular*
+#: one, and the two routes that reach it both prove the cell is a rectangle in the caller,
+#: which is why an in-function read cannot see the guard.
+_SEPARABLE_KXY = (
+    "the separable wavevector build, rectangular by name and by design. `engine.order_kxy` "
+    "returns it only inside `if A is None or is_axis_aligned(A)` and takes the lattice branch "
+    "without calling it at all -- counted rather than assumed, by `test_oblique_lattice.py::"
+    "test_the_skewed_branch_never_calls_the_separable_build`. `_solve_1d` and "
+    "`_solve_1d_conical` call it directly, and `_assign_grating_type` routes to either only "
+    "under `one_dimensional = one_row and self.lattice_is_axis_aligned`, the block and shape "
+    "paths setting grating_type 2 unconditionally.")
+
 _ALLOWED = {
+    ('wavebit/on_numpy/emsolver/_base.py', '_separable_kxy'): (2, _SEPARABLE_KXY),
+    ('wavebit/on_jax/emsolver/_base.py', '_separable_kxy'): (2, _SEPARABLE_KXY),
+    ('wavebit/on_torch/emsolver/_base.py', '_separable_kxy'): (2, _SEPARABLE_KXY),
     ('wavebit/_core/draw.py', 'slice_structure'): (
         4,
         "two sample grids, one per branch. The `mt == 1` pair is the block modeller, refused "
@@ -43,11 +58,22 @@ _ALLOWED = {
 
 
 def _is_period_pair(node):
-    """``Px`` / ``Py`` by name, or ``period[0]`` / ``period[1]`` by subscript."""
+    """``Px`` / ``Py`` by name, or a ``period`` / ``periods`` subscript however it is reached.
+
+    The subscript half deliberately does not care what the sequence hangs off. ``period[0]``,
+    ``self.period[0]`` and ``solver.period[0]`` are the same read, and the attribute spelling is
+    the one the three backends actually use -- an earlier version of this matched only
+    ``ast.Name``, so ``wavelength / self.period[0]`` in every ``_separable_kxy`` was invisible to
+    a gate whose whole claim is that it looks everywhere.
+    """
     if isinstance(node, ast.Name) and node.id in _PERIOD_NAMES:
         return True
-    return (isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name)
-            and node.value.id in ('period', 'periods'))
+    if not isinstance(node, ast.Subscript):
+        return False
+    base = node.value
+    if isinstance(base, ast.Attribute):
+        return base.attr in ('period', 'periods')
+    return isinstance(base, ast.Name) and base.id in ('period', 'periods')
 
 
 def _guards_the_rectangle(test):
