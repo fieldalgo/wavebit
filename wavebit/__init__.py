@@ -32,7 +32,7 @@ def _enable_jax_x64_if_already_imported():
 _enable_jax_x64_if_already_imported()
 
 from .main import rcwa
-from ._core.backend import (AutoDetuneWarning, PrecisionLossWarning, RayleighPointWarning,
+from ._core.backend import (AutoDetuneWarning, AxisNameWarning, PrecisionLossWarning, RayleighPointWarning,
                             UnphysicalResultWarning, UnresolvedBranchWarning,
                             get_j1_implementation, set_j1_implementation)
 from ._core.conventions import branch_tolerance
@@ -76,7 +76,8 @@ __all__ = [
     'oblique',
     'rectangular',
     'rcwa',
-    'AutoDetuneWarning', 'PrecisionLossWarning', 'RayleighPointWarning',
+    'AutoDetuneWarning',
+    'AxisNameWarning', 'PrecisionLossWarning', 'RayleighPointWarning',
     'UnphysicalResultWarning', 'UnresolvedBranchWarning',
     'get_j1_implementation', 'set_j1_implementation',
     'branch_tolerance',

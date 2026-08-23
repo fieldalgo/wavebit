@@ -167,6 +167,27 @@ class RayleighPointWarning(UserWarning):
     """
 
 
+class AxisNameWarning(UserWarning):
+    """An ``x``/``y`` pair was read as ``u``/``v`` on a cell where they are not the same.
+
+    The order axes run along the cell's reciprocal vectors: ``u`` along ``a1``, ``v`` along
+    ``a2``. On a rectangular cell those *are* x and y, and on a skewed one they are neither --
+    measured, a 60-degree hex sends ``m += 1`` to ``(dkx, dky) = (+0.600, -0.346)``.
+
+    Read rather than refused, which is the opposite of what ``inverse_rule`` and explicit
+    ``sample_x`` coordinates do on the same cells, and the difference is worth stating.
+    Those two have **no** correct reading: Li's rule on a skewed cell answers the rectangular
+    problem, and an ``(x, y)`` does not determine the ``(u, v)`` a sampler needs. Here there is
+    one -- ``truncation_order`` has only ever meant "this many orders along each cell
+    direction", so a caller who wrote ``x`` out of rectangular habit meant ``u``, and the solve
+    that follows is correct. Refusing would block a run that was going to be right; the warning
+    corrects the caller's *vocabulary*, not their answer.
+
+    Its own category so a sweep over skewed cells can silence it without touching
+    :class:`RayleighPointWarning` or the rest.
+    """
+
+
 class AutoDetuneWarning(UserWarning):
     """An ``auto_detune`` retry moved the solve off the requested point — this is the record.
 

@@ -36,12 +36,14 @@ between them where they part. ``docs/time-convention-audit.md`` derives all of i
 Backend-agnostic: pass the array namespace as ``xp`` (``numpy`` / ``jax.numpy`` / ``torch``).
 """
 
+import warnings
+
 import contextlib
 from typing import NamedTuple
 
 import numpy as np
 
-from .backend import UnresolvedBranchWarning, as_array
+from .backend import AxisNameWarning, UnresolvedBranchWarning, as_array
 
 _FLAT = 1e-12      # below this, a real part counts as zero and the tie-break decides
 
@@ -613,15 +615,21 @@ def parse_order_pair(value, name='truncation_order'):
         f"{name}: expected an int, a pair, or a mapping like dict(u=5, v=2); got {value!r}")
 
 
-def refuse_xy_on_a_skewed_cell(spelling, axis_aligned, name='truncation_order'):
-    """Raise if the pair was written ``x``/``y`` on a cell where those name nothing.
+def warn_if_xy_on_a_skewed_cell(spelling, axis_aligned, name='truncation_order'):
+    """Note that an ``x``/``y`` pair was read as ``u``/``v``, on a cell where they differ.
 
-    Deferred rather than checked where the pair is set, because the cell may not be known yet --
-    ``rcwa(...)`` assigns its keywords in whatever order they arrive.
+    Deferred rather than checked where the pair is set, and holding no memory of having warned:
+    ``rcwa(...)`` assigns its keywords in whatever order they arrive, a cell that was rectangular
+    when the pair was written can be made skewed afterwards, and one that was skewed can be made
+    rectangular again -- at which point ``x``/``y`` is true and there is nothing to say. Reading
+    both facts at the solve is what makes all of those come out right.
+
+    A warning and not a refusal; :class:`~wavebit._core.backend.AxisNameWarning` carries why.
     """
     if spelling == 'xy' and not axis_aligned:
-        raise ValueError(
-            f"{name} was given as x/y, but this cell is not axis-aligned, so 'x' and 'y' do not "
-            f"name its order axes: they run along the reciprocal vectors of a1 and a2. Write "
-            f"{name}=dict(u=..., v=...) instead -- u along a1, v along a2, which is what x and y "
-            f"already meant on a rectangular cell.")
+        warnings.warn(
+            f"{name} was given as x/y on a cell that is not axis-aligned, and has been read as "
+            f"u/v -- u along a1, v along a2, which is what x and y meant on a rectangular cell. "
+            f"The solve is the one you asked for; only the names were off. Write "
+            f"{name}=dict(u=..., v=...) to say it exactly.",
+            AxisNameWarning, stacklevel=3)

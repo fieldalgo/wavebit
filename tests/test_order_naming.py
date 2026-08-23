@@ -16,6 +16,8 @@ Two changes, at the two ends:
 * ``orders_u`` / ``orders_v`` label the axes on the way out, so a reader who zips them the
   wrong way gets a length mismatch instead of a number.
 """
+import warnings
+
 import numpy as np
 import pytest
 
@@ -63,18 +65,32 @@ def test_a_mapping_says_which_is_which_and_a_pair_does_not():
             parse_order_pair(bad)
 
 
-def test_xy_is_refused_on_a_skewed_cell_and_uv_is_not():
-    """``x`` and ``y`` do not name the order axes off a rectangular cell, so they are refused.
+def test_xy_on_a_skewed_cell_is_read_as_uv_and_said_so():
+    """Warned and read, not refused -- and the difference from the neighbours is the point.
 
-    Not reinterpreted as ``u``/``v``: that would be right in exactly the case where the caller
-    did not need telling and wrong in the case where they did. The same choice
-    ``inverse_rule`` and the explicit ``sample_x`` coordinates already make.
+    ``inverse_rule='x'`` and explicit ``sample_x`` coordinates are *refused* on a skewed cell
+    because neither has a correct reading: Li's rule there answers the rectangular problem, and
+    an ``(x, y)`` does not determine the ``(u, v)`` a sampler needs. This one does have a
+    reading. ``truncation_order`` has only ever meant "this many orders along each cell
+    direction", so a caller who wrote ``x`` out of rectangular habit meant ``u``, and the solve
+    that follows is right. Refusing would block a run that was going to be correct.
+
+    So the answer must be byte-identical to the ``u``/``v`` spelling, which is asserted here --
+    a warning that came with a different number would be describing a different bug.
     """
-    _solver(dict(u=4, v=1), lattice=HEX).solve()          # always true, always fine
-    _solver([4, 1], lattice=HEX).solve()                  # a bare pair names nothing to check
-    with pytest.raises(ValueError, match='not axis-aligned'):
-        _solver(dict(x=4, y=1), lattice=HEX).solve()
-    _solver(dict(x=4, y=1)).solve()                       # rectangular: true, so allowed
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        uv = np.asarray(_solver(dict(u=4, v=1), lattice=HEX).solve().R)
+        bare = np.asarray(_solver([4, 1], lattice=HEX).solve().R)
+        rect = np.asarray(_solver(dict(x=4, y=1)).solve().R)       # true here, nothing to say
+        assert not [w for w in caught if w.category is wavebit.AxisNameWarning]
+
+        xy = np.asarray(_solver(dict(x=4, y=1), lattice=HEX).solve().R)
+        said = [w for w in caught if w.category is wavebit.AxisNameWarning]
+
+    assert len(said) == 1 and 'read as u/v' in str(said[0].message)
+    assert xy.tobytes() == uv.tobytes() == bare.tobytes()
+    assert rect.shape == uv.shape
 
 
 def test_period_takes_the_axis_aligned_names_only():
@@ -131,3 +147,39 @@ def test_the_labels_follow_a_moved_window_not_the_declaration():
     for j, u in enumerate(r.orders_u):
         assert R[len(r.orders_v) // 2, j] == pytest.approx(
             float(np.real(r.order(int(u), int(r.orders_v[len(r.orders_v) // 2])).R)))
+
+
+@pytest.mark.parametrize('build, allowed', [
+    (lambda kw: wavebit.rcwa(truncation_order=dict(x=4, y=1), lattice=HEX, **kw), False),
+    (lambda kw: wavebit.rcwa(lattice=HEX, truncation_order=dict(x=4, y=1), **kw), False),
+    (lambda kw: _set_after(wavebit.rcwa(period=RECT, truncation_order=dict(x=4, y=1), **kw),
+                           lattice=HEX), False),
+    (lambda kw: _set_after(wavebit.rcwa(lattice=HEX, truncation_order=dict(u=4, v=1), **kw),
+                           truncation_order=dict(x=4, y=1)), False),
+    (lambda kw: _set_after(wavebit.rcwa(lattice=HEX, truncation_order=dict(u=4, v=1), **kw),
+                           truncation_order=dict(x=4, y=1), lattice=None, period=RECT), True),
+], ids=['ctor-order-first', 'ctor-lattice-first', 'lattice-set-later',
+        'spelling-set-later', 'skewed-then-back-to-rectangular'])
+def test_the_check_reads_the_present_state_whatever_order_it_arrived_in(build, allowed):
+    """Deferred to the solve, and holding no memory of having spoken.
+
+    ``rcwa(...)`` assigns its keywords in whatever order they arrive, so a setter cannot know
+    the cell yet -- but that is only half of it. A cell that was rectangular when the pair was
+    written can be made skewed afterwards, at which point the spelling *becomes* false; and one
+    that was skewed can be made rectangular again, at which point ``x``/``y`` becomes true and
+    must be allowed. Both directions are here. A check that latched on first refusal would pass
+    the fourth case and fail the fifth.
+    """
+    kw = dict(backend=0, wavelength=900.0, top=1.0, bot=1.0, theta=0.1, phi=0.3, psi=0.2,
+              structure=_eps(), thickness=[300.0], factorization='nvf')
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        build(kw).solve()
+        said = [w for w in caught if w.category is wavebit.AxisNameWarning]
+    assert bool(said) is (not allowed), [str(w.message) for w in said]
+
+
+def _set_after(solver, **attrs):
+    for k, v in attrs.items():
+        setattr(solver, k, v)
+    return solver
