@@ -90,6 +90,20 @@ print(result.R.sum(), result.T.sum())   # 0.20533162825847726 0.7946683717415197
 `R` and `T` are the reflected and transmitted diffraction efficiencies, one entry per
 order. Here they sum to 1 to within a few times 1e-15, as a lossless structure must.
 
+Every array axis in this package runs `v` first and every hand-written pair runs `x` first,
+so `truncation_order=[4, 1]` gives `R.shape == (3, 9)` — the leading 4 sizes the *trailing*
+axis. Two spellings keep that from mattering:
+
+```python
+truncation_order = dict(u=4, v=1)     # named, so there is no position to misread
+r.orders_u, r.orders_v                # the order each column and each row is
+```
+
+`R.shape == (len(r.orders_v), len(r.orders_u))`, so zipping them the wrong way round is a
+length mismatch rather than a plausible number. `u` runs along the cell's first basis vector
+and `v` along the second — x and y on a rectangular cell. `result.order(m, n)` indexes by order
+directly and needs none of this. See [`docs/conventions.md`](docs/conventions.md).
+
 `top` and `bot` may be complex: an absorbing substrate or superstrate is given as a
 permittivity like any other, with loss as `Im(eps) > 0` — the same convention the bundled nk
 tables state as `n + 1j*k`, since `eps_from_index` maps the upper half plane into itself.
@@ -388,12 +402,37 @@ to say so. The smooth path's derivation, convergence data and limitations are wr
 rectangular — hexagonal, or any oblique basis — is given as the two primitive vectors instead:
 
 ```python
-a = 400.
-a1, a2 = np.array([a, 0.]), np.array([a / 2, a * np.sqrt(3) / 2])     # hex
-
-solver = wavebit.rcwa(backend=0, lattice=np.column_stack((a1, a2)),   # columns are a1, a2
+solver = wavebit.rcwa(backend=0, lattice=wavebit.hexagonal(400.),     # columns are a1, a2
                         factorization='nvf', structure=structure, ...)
 ```
+
+Three constructors spell the usual cells, or pass the `(2, 2)` yourself:
+
+```python
+wavebit.rectangular(700., 1100.)              # diag(700, 1100); `ly` defaults to `lx`
+wavebit.hexagonal(400.)                       # 120-degree rhombus, the crystallographic setting
+wavebit.hexagonal(400., np.radians(60))       # the 60-degree alternative basis
+wavebit.oblique(400., 520., np.radians(105))  # angle between a1 and a2, in radians
+```
+
+They return the same object `lattice=` takes and store no angle, so building one *inside* a
+differentiated function makes the cell's shape a design variable — the off-diagonals are the
+shear and the angle, which no spelling of `period` can express.
+
+**Building the layer.** `wavebit.grid` gives the Cartesian coordinates of the raster's pixel
+centres, so a structure can be written in coordinates rather than indices:
+
+```python
+A = wavebit.hexagonal(400.)
+X, Y = wavebit.grid((256, 256), lattice=A)
+cx, cy = 0.5 * (A[0][0] + A[0][1]), 0.5 * (A[1][0] + A[1][1])         # the cell centre
+layer = np.where((X - cx) ** 2 + (Y - cy) ** 2 < 90. ** 2, 12.25, 1.)
+```
+
+On a skewed cell the samples sit at `u*a1 + v*a2`, not on a rectangle, and `np.meshgrid` alone
+will not put them there. An expression in `X` and `Y` also cannot get the axis order wrong,
+since `where` is elementwise and the layout follows; one written in indices can, silently, on a
+non-square raster.
 
 Setting `lattice` makes `period` report the basis-vector lengths `(|a1|, |a2|)`. A hexagonal
 array spelled as an `a x a*sqrt(3)` rectangular supercell needs twice the cell area, hence twice
@@ -549,8 +588,9 @@ the azimuth of the plane of incidence, `psi` the polarization angle (`pi/2` = s/
 `0` = p/TM) and `chi` its ellipticity.
 
 **Uppercase is power, lowercase is amplitude.** `R`/`T` are per-order efficiencies, shape
-`(n_orders_v, n_orders_u)` — `y` first, the transpose of the `truncation_order=[x, y]` input order — with the incident
-order at the centre; `result.order(m, n)` indexes by order so you never touch that layout.
+`(n_orders_v, n_orders_u)` — `v` first, the transpose of the `truncation_order=[x, y]` input order — with the incident
+order at the centre; `result.order(m, n)` indexes by order so you never touch that layout, and
+`result.orders_u` / `.orders_v` label the two axes when you do.
 `r_s`/`r_p`/`t_s`/`t_p` are the complex Fresnel amplitudes, directly comparable to the
 textbook coefficients.
 

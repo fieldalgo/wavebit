@@ -295,6 +295,47 @@ the last axis.
 `result.order(m, n)` indexes all per-order quantities by the order indices themselves, so
 user code never needs the previous paragraph.
 
+### The two rules, and where they meet
+
+Measured across the whole public surface, there are exactly two and neither has an exception.
+
+| | order |
+|---|---|
+| **array axes** | `v` first — `structure`, `grid`, `R`, `T`, `r_s`, `reconstruct_field`, `slice_structure`, and `S11`'s flat index |
+| **hand-written pairs** | `x` first — `period`, `truncation_order`, `order(m, n)` (its `m` is `u`) |
+
+Neither is this package's choice. Array axes are numpy's — rows first, which is also what
+`np.meshgrid` gives by default and what typing a matrix gives, so a raster written out reads
+like the picture it is. Hand-written pairs are what people type, and every solver that takes
+one takes it x-first.
+
+They meet at `truncation_order`, and that meeting is where readers go wrong.
+`truncation_order=[4, 1]` gives `R.shape == (3, 9)`: the leading 4 sizes the **trailing** axis.
+It reads worse with figures like `[5, 2] -> (5, 11)`, where the repeated 5 looks like
+confirmation of the wrong reading.
+
+Two things answer it, at the two ends. Neither moves an array.
+
+```python
+truncation_order = dict(u=4, v=1)      # no position to misread
+period           = dict(x=700., y=1100.)
+
+r.orders_u                             # [-4 .. 4], the order each *column* of R is
+r.orders_v                             # [-1, 0, 1], the order each *row* is
+R.shape == (len(r.orders_v), len(r.orders_u))
+```
+
+Zipping the labels the wrong way round is a length mismatch rather than a plausible number.
+They are read from the **retained** window, so an `excitation` that moved or widened it is
+already accounted for.
+
+`u` and `v` rather than `x` and `y` because the order axes follow the cell: `u` runs along
+`a1`, `v` along `a2`, and they *are* x and y on a rectangular cell — on a 60-degree hex,
+`m += 1` moves `(dkx, dky)` by `(+0.600, -0.346)`, neither axis. `truncation_order=dict(x=, y=)`
+is therefore read as `u`/`v` on a skewed cell, with an `AxisNameWarning`: the solve is the one
+you asked for and only the names were off. `period` needs no such note — it is the axis-aligned
+spelling of a cell, and a skewed one arrives as `lattice=` instead.
+
 ## The result surface
 
 **Uppercase is power, lowercase is amplitude.**
