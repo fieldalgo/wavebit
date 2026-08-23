@@ -132,7 +132,7 @@ def test_a_cell_can_be_given_as_two_lengths_and_an_angle():
     assert np.degrees(np.arccos(cos)) == pytest.approx(105.0)
 
     assert np.allclose(np.asarray(wavebit.hexagonal(400.0)),
-                       np.asarray(wavebit.oblique(400.0, 400.0, np.pi / 3)))
+                       np.asarray(wavebit.oblique(400.0, 400.0, 2 * np.pi / 3)))
     assert np.asarray(wavebit.rectangular(700.0, 1100.0)).tobytes() == \
         np.diag([700.0, 1100.0]).tobytes()
     assert np.asarray(wavebit.rectangular(640.0)).tobytes() == np.diag([640.0, 640.0]).tobytes()
@@ -197,3 +197,47 @@ def test_the_raster_path_differentiates_the_basis_through_its_index_offsets():
     g = np.asarray(jax.grad(loss)(jnp.asarray(A)))
     assert np.all(np.isfinite(g)), g
     assert np.count_nonzero(np.abs(g) > 1e-12) == 4, g
+
+
+def test_the_two_hexagonal_spellings_are_one_lattice_and_two_calculations():
+    """60 and 120 degrees generate the same lattice; they do not truncate the same way.
+
+    The default is 120, the crystallographic setting, and the reason is not taste: the
+    three-fold rotation is *visible in the primitive vectors* there and is not at 60. Measured
+    below -- at 120 a 120-degree rotation sends ``a1`` straight to ``a2``; at 60 it sends it to
+    ``a2 - a1``. Both are lattice vectors, as they must be for one lattice, but only one of
+    them lets you read the symmetry off the basis.
+
+    60 remains the alternative basis whose cell is two equilateral triangles, and is what
+    ``docs/oblique-lattice.md`` and the S4 cross-check in it are written on.
+    """
+    a = 400.0
+    A120 = np.asarray(wavebit.hexagonal(a))
+    A60 = np.asarray(wavebit.hexagonal(a, np.radians(60.0)))
+    assert np.allclose(A60[:, 1] - A60[:, 0], A120[:, 1])          # a2_120 = a2_60 - a1
+
+    # the reason for the default, measured rather than asserted
+    t = 2 * np.pi / 3
+    rot = np.array([[np.cos(t), -np.sin(t)], [np.sin(t), np.cos(t)]])
+    assert np.allclose(rot @ A120[:, 0], A120[:, 1])               # a1 -> a2, exactly
+    assert not np.allclose(rot @ A60[:, 0], A60[:, 1])             # a1 -> a2 - a1
+
+    def points(A):
+        return {tuple(np.round(m * A[:, 0] + n * A[:, 1], 6))
+                for m in range(-3, 4) for n in range(-3, 4)}
+
+    assert len(points(A60) & points(A120)) >= 37                   # one lattice
+
+    def g_set(A, N):
+        det = np.linalg.det(A)
+        b1 = 2 * np.pi / det * np.array([A[1, 1], -A[0, 1]])
+        b2 = 2 * np.pi / det * np.array([-A[1, 0], A[0, 0]])
+        return {tuple(np.round(m * b1 + n * b2, 9))
+                for m in range(-N, N + 1) for n in range(-N, N + 1)}
+
+    shared = len(g_set(A60, 4) & g_set(A120, 4))
+    assert 55 < shared < 81, shared                                # two truncations, not one
+
+    # and the omitted centre lands elsewhere, because the fundamental cell does
+    assert 0.5 * (A120[0, 0] + A120[0, 1]) == pytest.approx(100.0)
+    assert 0.5 * (A60[0, 0] + A60[0, 1]) == pytest.approx(300.0)

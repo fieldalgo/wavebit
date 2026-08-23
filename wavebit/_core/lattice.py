@@ -403,6 +403,29 @@ def oblique(lx, ly, angle):
     return Lattice(cols, False)                     # traced: the general path, always correct
 
 
-def hexagonal(a):
-    """The 60-degree rhombus of side ``a`` — one primitive cell of a hexagonal array."""
-    return oblique(a, a, np.pi / 3.0)
+def hexagonal(a, angle=2.0 * np.pi / 3.0):
+    """A primitive cell of a hexagonal array: the rhombus of side ``a``, **120 degrees**.
+
+    120 is the crystallographic standard -- the hexagonal system is defined with
+    ``a = b, alpha = beta = 90, gamma = 120`` -- and the reason is not taste. 60 spans the same
+    lattice, but *the three-fold rotation axis is not visible in the primitive vectors there*:
+    the 120 pair maps into itself under a 120 rotation, and the 60 pair does not. That is why
+    the standard settings pick it, and it is why this is the default.
+
+    60 is a legitimate alternative basis, the one that makes the primitive cell two equilateral
+    triangles, and it is what ``docs/oblique-lattice.md`` and the S4 cross-check in it are
+    written on. ``hexagonal(a, np.radians(60))``.
+
+    They generate the **same lattice** -- ``a2' = a2 + a1`` carries one to the other -- but they
+    are not the same calculation:
+
+    * the *fundamental cell* differs, so an omitted shape centre lands elsewhere: ``(100, 173)``
+      against ``(300, 173)`` at ``a = 400``. See :func:`~wavebit._core.analytic.shape_geometry`.
+    * ``truncation_order`` cuts a parallelogram in ``(m, n)``, and a different basis maps that
+      onto a different set of ``G``. Measured at ``truncation_order=4``: 81 orders either way,
+      **61 of them shared**. The two agree in the converged limit and not before it.
+
+    So this is a choice with consequences at finite truncation, which is why it is an argument
+    rather than a constant folded into the name.
+    """
+    return oblique(a, a, angle)

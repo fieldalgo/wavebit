@@ -20,7 +20,7 @@ motifs. That doubles the cell area, the retained order count scales with area, a
 import numpy as np, wavebit
 
 a = 400.0
-a1, a2 = np.array([a, 0.0]), np.array([a / 2, a * np.sqrt(3) / 2])   # hex
+a1, a2 = np.array([a, 0.0]), np.array([a / 2, a * np.sqrt(3) / 2])   # hex, 60-deg spelling
 
 solver = wavebit.rcwa(
     backend=0, structure=cell, truncation_order=[10, 10], thickness=[300.0], wavelength=900.0,
