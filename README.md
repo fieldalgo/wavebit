@@ -76,7 +76,7 @@ solver = wavebit.rcwa(
     backend=0,                  # 0 = NumPy, 1 = JAX, 2 = PyTorch
     wavelength=900.,            # every length shares one unit; nm here
     period=[700.],
-    truncation_order=[10, 0],                # Fourier truncation order (x, y)
+    truncation_order=dict(x=10, y=0),        # named, so there is no order to recall
     top=1., bot=wavebit.eps_from_index(1.5),   # the two half-spaces, as materials
     theta=0., phi=0.,
     tetm='te',                  # 'te' | 'tm' — see "Saying what the light is"
@@ -329,7 +329,7 @@ structure = [dict(background=1.0, shapes=[
     dict(type='circle', cx=350., cy=350., lx=200., material=wavebit.eps_from_index(3.5)),
 ])]
 
-solver = wavebit.rcwa(backend=0, period=[700., 700.], structure=structure, ...)
+solver = wavebit.rcwa(backend=0, period=dict(x=700., y=700.), structure=structure, ...)
 ```
 
 ### Shapes that overlap

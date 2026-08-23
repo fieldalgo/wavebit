@@ -20,8 +20,8 @@ def run():
 
     # The silicon underneath is the substrate, so it goes in `bot`. Both half-spaces take a
     # Material too -- `top=1` is the scalar shorthand for Material(epsilon=1), i.e. vacuum.
-    rcwa_options = dict(backend=2, thickness=[205], period=[300, 300],
-                        truncation_order=[3, 0],
+    rcwa_options = dict(backend=2, thickness=[205], period=dict(x=300, y=300),
+                        truncation_order=dict(x=3, y=0),
                         top=1, bot=si,
                         wavelength=900,
                         psi=np.pi / 4,

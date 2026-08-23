@@ -162,7 +162,7 @@ structure = [dict(background=1.0, shapes=[
                       angle=np.deg2rad(25), material=1.0),
                  dict(type='ellipse', cx=0.8, cy=0.9, lx=0.3, ly=0.2,
                       angle=0.6, material=9.0)])]
-solver = wavebit.rcwa(backend=0, structure=structure, truncation_order=(11, 11), ...)  # normal_grid=256 (default)
+solver = wavebit.rcwa(backend=0, structure=structure, truncation_order=dict(x=11, y=11), ...)  # normal_grid=256 (default)
 res = solver.solve()
 ```
 

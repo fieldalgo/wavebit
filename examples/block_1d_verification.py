@@ -55,8 +55,8 @@ if __name__ == '__main__':
     si3n4 = wavebit.eps_from_index(2.0056)
 
     # The silicon underneath is the substrate, so it goes in `bot`.
-    rcwa_options = dict(backend=0, thickness=[205], period=[300, 300],
-                        truncation_order=[3, 0],
+    rcwa_options = dict(backend=0, thickness=[205], period=dict(x=300, y=300),
+                        truncation_order=dict(x=3, y=0),
                         top=1, bot=si,
                         wavelength=900,
                         )

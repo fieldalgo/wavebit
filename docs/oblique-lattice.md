@@ -20,7 +20,7 @@ motifs. That doubles the cell area, the retained order count scales with area, a
 import numpy as np, wavebit
 
 solver = wavebit.rcwa(
-    backend=0, structure=cell, truncation_order=[10, 10], thickness=[300.0], wavelength=900.0,
+    backend=0, structure=cell, truncation_order=dict(x=10, y=10), thickness=[300.0], wavelength=900.0,
     factorization='nvf',                       # required — see "What is refused"
     lattice=wavebit.hexagonal(400.0),          # or lattice=np.column_stack((a1, a2))
 )
