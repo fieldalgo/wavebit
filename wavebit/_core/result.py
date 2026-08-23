@@ -35,6 +35,8 @@ footnote before they matched any textbook. Renamed outright before the first rel
 nothing aliases the old names.
 """
 
+import numpy as np
+
 
 class ResultSub:
     """One incidence's per-order efficiencies and Fresnel amplitudes."""
@@ -109,6 +111,41 @@ class Result:
         #: one order out and returned a plausible number.
         self.order_window = (None if order_window is None else
                              tuple((int(c), int(h)) for c, h in order_window))
+
+    @property
+    def orders_u(self):
+        """The order index each **column** of ``R`` is, as a 1-D int array along ``a1``.
+
+        ``R.shape == (len(orders_v), len(orders_u))``, and that is the point rather than a
+        remark. Every array axis in this package runs ``v`` first, while every hand-written
+        pair runs ``x`` first -- two rules that are each consistent and meet here, and the
+        meeting is where readers go wrong. ``truncation_order=[4, 1]`` gives ``R.shape ==
+        (3, 9)``; a reader who takes the leading ``4`` to mean the leading axis indexes the
+        wrong entry and gets a plausible number back.
+
+        Zipping against these labels turns that into a length mismatch on the spot. It is the
+        same service the surveyed solvers provide -- ``basis_coefficients`` in fmmax,
+        ``GetBasisSet()`` in S4, ``.order`` in RETICOLO, ``obj.G`` in grcwa -- adapted to a
+        separable grid, where the labels factor into two vectors instead of an ``(N, 2)`` table.
+
+        ``u`` and ``v`` rather than ``x`` and ``y`` because the order axes follow the cell:
+        ``u`` runs along ``a1``, ``v`` along ``a2``, and they *are* x and y on a rectangular
+        cell. Read from the retained window, so an ``excitation`` that widened or moved it is
+        already accounted for -- see :attr:`order_window`.
+        """
+        return self._labels(0)
+
+    @property
+    def orders_v(self):
+        """The order index each **row** of ``R`` is, as a 1-D int array along ``a2``."""
+        return self._labels(1)
+
+    def _labels(self, axis):
+        if self.order_window is None:
+            raise ValueError(
+                'this result carries no order_window metadata, so its orders cannot be named')
+        centre, half = self.order_window[axis]
+        return np.arange(centre - half, centre + half + 1, dtype=int)
 
     # pytree protocol (see ResultSub)
     def tree_flatten(self):

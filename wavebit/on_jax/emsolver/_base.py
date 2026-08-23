@@ -5,6 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from ..._core.engine import CoreSolveMixin
+from wavebit._core import conventions as _conventions
 from wavebit._core.backend import check_input_precision
 
 
@@ -180,31 +181,8 @@ class _BaseRCWA(CoreSolveMixin):
 
     @truncation_order.setter
     def truncation_order(self, truncation_order):
-
-        if isinstance(truncation_order, (list, tuple)):
-            if len(truncation_order) == 1:
-                self._max_order = [int(truncation_order[0]), 0]
-            elif len(truncation_order) == 2:
-                self._max_order = [int(v) for v in truncation_order]
-            else:
-                raise ValueError
-        elif isinstance(truncation_order, (np.ndarray, jnp.ndarray)):
-            max_order_list = truncation_order.tolist()
-            if isinstance(max_order_list, list):
-                if len(max_order_list) == 1:
-                    self._max_order = [int(max_order_list[0]), 0]
-                elif len(max_order_list) == 2:
-                    self._max_order = [int(v) for v in max_order_list]
-                else:
-                    raise ValueError
-            elif isinstance(max_order_list, (int, float)):
-                self._max_order = [int(max_order_list), 0]
-            else:
-                raise ValueError
-        elif isinstance(truncation_order, (int, float)):
-            self._max_order = [int(truncation_order), 0]
-        else:
-            raise ValueError
+        self._max_order, self._truncation_spelling = _conventions.parse_order_pair(
+            truncation_order)
 
     @property
     def period(self):
@@ -212,6 +190,15 @@ class _BaseRCWA(CoreSolveMixin):
 
     @period.setter
     def period(self, period):
+        if isinstance(period, dict):
+            keys = set(period)
+            if keys != {'x', 'y'}:
+                raise ValueError(
+                    f"period: a mapping needs exactly {{'x', 'y'}}; got {sorted(keys)}. "
+                    f"`period` is the axis-aligned spelling of the cell, so x and y are what "
+                    f"it has -- a skewed cell is given as `lattice=` instead, and its two "
+                    f"directions are u and v.")
+            period = [period['x'], period['y']]
         if type(period) in (int, float):
             self._period = jnp.array([period, period], dtype=self.float_dtype)
         elif type(period) in (list, tuple, np.ndarray) or isinstance(period, jnp.ndarray):

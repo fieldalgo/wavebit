@@ -566,3 +566,62 @@ def order_azimuth(xp, ky, kx, phi):
     incident = (xp.atan(xp.sin(p) / xp.cos(p))
                 + _PI * xp.astype(xp.real(xp.cos(p)) < 0, varphi.dtype)) + xp.zeros_like(varphi)
     return xp.reshape(xp.where(zero_kx & (ky == 0), incident, varphi), (-1,))
+
+
+def parse_order_pair(value, name='truncation_order'):
+    """``([u, v], spelling)`` from any accepted spelling of an order-count pair.
+
+    ``spelling`` is ``'uv'``, ``'xy'`` or ``None`` (a bare sequence, which has no names to
+    check). It travels because **only one of the two is always true**: the order axes run along
+    the cell's reciprocal vectors, so ``u``/``v`` names them on any cell while ``x``/``y`` does
+    so only on an axis-aligned one -- measured, a 60-degree hex sends ``m += 1`` to
+    ``(dkx, dky) = (+0.600, -0.346)``, neither axis. The caller refuses ``'xy'`` on a skewed
+    cell rather than reinterpreting it; this only reports what was written.
+
+    A mapping is the spelling with no order to remember, which is the point of accepting one.
+    Every other pair in this API is positional and every one of them is x-first, while every
+    array axis is v-first -- two rules that are each consistent and meet here. A caller who
+    writes ``dict(u=5, v=2)`` never has to know which.
+    """
+    if isinstance(value, dict):
+        keys = set(value)
+        if keys == {'u', 'v'}:
+            pair, spelling = (value['u'], value['v']), 'uv'
+        elif keys == {'x', 'y'}:
+            pair, spelling = (value['x'], value['y']), 'xy'
+        else:
+            raise ValueError(
+                f"{name}: a mapping needs exactly {{'u', 'v'}} or {{'x', 'y'}}; got {sorted(keys)}. "
+                f"'u' and 'v' are the cell's two directions and are always right; 'x' and 'y' "
+                f"name them only on an axis-aligned cell.")
+        try:
+            return [int(pair[0]), int(pair[1])], spelling
+        except (TypeError, ValueError):
+            raise ValueError(f'{name}: expected two integers, got {value!r}') from None
+
+    if hasattr(value, 'tolist'):
+        value = value.tolist()
+    if isinstance(value, (int, float)):
+        return [int(value), 0], None
+    if isinstance(value, (list, tuple)):
+        if len(value) == 1:
+            return [int(value[0]), 0], None
+        if len(value) == 2:
+            return [int(value[0]), int(value[1])], None
+        raise ValueError(f'{name}: expected 1 or 2 values, got {len(value)}')
+    raise ValueError(
+        f"{name}: expected an int, a pair, or a mapping like dict(u=5, v=2); got {value!r}")
+
+
+def refuse_xy_on_a_skewed_cell(spelling, axis_aligned, name='truncation_order'):
+    """Raise if the pair was written ``x``/``y`` on a cell where those name nothing.
+
+    Deferred rather than checked where the pair is set, because the cell may not be known yet --
+    ``rcwa(...)`` assigns its keywords in whatever order they arrive.
+    """
+    if spelling == 'xy' and not axis_aligned:
+        raise ValueError(
+            f"{name} was given as x/y, but this cell is not axis-aligned, so 'x' and 'y' do not "
+            f"name its order axes: they run along the reciprocal vectors of a1 and a2. Write "
+            f"{name}=dict(u=..., v=...) instead -- u along a1, v along a2, which is what x and y "
+            f"already meant on a rectangular cell.")

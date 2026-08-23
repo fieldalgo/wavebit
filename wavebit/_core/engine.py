@@ -14,7 +14,7 @@ from . import boundary as _boundary
 from . import factorization as _fac
 from . import lattice as _lattice
 from .backend import _device_of, array_namespace
-from .conventions import incident_sp_amplitudes, lit_orders, order_window
+from .conventions import incident_sp_amplitudes, lit_orders, order_window, refuse_xy_on_a_skewed_cell
 from .domain import (Material, RETIRED_MATERIAL_NAMES, as_material, index_from_eps,
                      retired_material_name)
 from .enums import (Answers, DEFAULT_ANSWERS, DEFAULT_FACTORIZATION, DEFAULT_FORMULATION,
@@ -1133,6 +1133,8 @@ class CoreSolveMixin:
             # 60-degree skew, energy conserving to 1e-15 throughout. See
             # `tests/test_oblique_lattice.py::test_a_one_row_skewed_cell_is_the_grating_it_draws`.
             one_dimensional = one_row and self.lattice_is_axis_aligned
+            refuse_xy_on_a_skewed_cell(
+                getattr(self, '_truncation_spelling', None), self.lattice_is_axis_aligned)
             self._refuse_illegal_tetm(one_dimensional, one_row=one_row)
             if one_dimensional:
                 # The declaration selects the path, and nothing else does. A named incidence
