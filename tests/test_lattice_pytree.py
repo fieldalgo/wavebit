@@ -39,6 +39,21 @@ def test_both_spellings_of_a_cell_arrive_as_one_type():
     assert as_lattice(lattice=A) is A                 # idempotent
 
 
+def test_the_basis_is_two_named_vectors():
+    """``u`` and ``v``, the shape and the names fmmax's ``LatticeVectors`` uses.
+
+    ``columns`` is derived, so the ``A[0][1]`` this package is written in still reads ``a2x``.
+    Named because these are the two directions everything else is named after -- ``half_width_u``
+    counts orders along ``u``, ``n_u`` counts raster samples along it. ``A[:, 0]`` needs the
+    reader to know that the columns are the vectors and the rows are x and y; ``A.u`` does not.
+    """
+    A = as_lattice(lattice=HEX)
+    assert np.allclose(A.u, HEX[:, 0]) and np.allclose(A.v, HEX[:, 1])
+    assert np.allclose(np.asarray(A.columns), HEX)
+    assert A[0][1] == pytest.approx(HEX[0, 1])          # a2x, as it always read
+    assert np.array_equal(np.asarray(A), HEX)
+
+
 def test_the_flag_is_aux_data_and_the_numbers_are_children():
     """A child is traced; aux_data is baked into the treedef and can be branched on.
 
@@ -48,11 +63,11 @@ def test_the_flag_is_aux_data_and_the_numbers_are_children():
     jax = pytest.importorskip('jax')
     A = as_lattice(lattice=HEX)
     leaves, treedef = jax.tree_util.tree_flatten(A)
-    assert len(leaves) == 1 and np.shape(leaves[0]) == (2, 2)
+    assert len(leaves) == 2 and all(np.shape(x) == (2,) for x in leaves)
     back = jax.tree_util.tree_unflatten(treedef, leaves)
     assert back.axis_aligned is False and np.array_equal(np.asarray(back), HEX)
     assert jax.tree_util.tree_structure(A) != jax.tree_util.tree_structure(
-        Lattice(A.columns, True))
+        Lattice(A.u, A.v, True))
 
 
 def test_a_basis_handed_in_traced_takes_the_general_path():

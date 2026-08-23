@@ -57,8 +57,17 @@ _PYTREE_REGISTERED = False
 class Lattice:
     """The cell basis, with the one fact about it that must not be traced.
 
-    ``columns`` is the ``(2, 2)`` whose columns are ``a1`` and ``a2``. ``axis_aligned`` says
-    whether it is ``diag(Lx, Ly)``.
+    ``u`` and ``v`` are the two primitive vectors, each ``(2,)`` — the same names and the same
+    shape fmmax's ``LatticeVectors`` uses, so a reader crossing between them is reading one
+    thing. ``columns`` derives the ``(2, 2)`` whose columns they are, which is what most of this
+    package still wants; indexing delegates to it, so ``A[0][1]`` reads ``a2x`` as it always did.
+
+    Named rather than positional because these are the two directions everything else in the
+    package is named after: ``half_width_u`` counts orders along ``u``, ``n_u`` counts raster
+    samples along it, and ``a1`` was only ever a synonym. ``A.u`` says which one it is;
+    ``A[:, 0]`` needs the reader to know that columns are the vectors and rows are x and y.
+
+    ``axis_aligned`` says whether the pair is ``diag(Lx, Ly)``.
 
     **Why those two are not the same kind of thing.** The numbers are a legitimate design
     variable -- optimising a hex angle or a shear is a real thing to want, and until this class
@@ -80,11 +89,18 @@ class Lattice:
     bare array.
     """
 
-    columns: Any
+    u: Any
+    v: Any
     axis_aligned: bool
 
     def __post_init__(self):
         _register_pytree_if_jax_loaded()
+
+    @property
+    def columns(self):
+        """``(2, 2)`` with ``u`` and ``v`` as its columns — the spelling the solve reads."""
+        xp = np if isinstance(self.u, np.ndarray) else array_namespace(self.u)
+        return xp.stack([self.u, self.v], axis=-1)
 
     def __getitem__(self, key):
         return self.columns[key]
@@ -95,11 +111,11 @@ class Lattice:
 
     # pytree protocol -- registered lazily; see _register_pytree_if_jax_loaded
     def tree_flatten(self):
-        return (self.columns,), (self.axis_aligned,)
+        return (self.u, self.v), (self.axis_aligned,)
 
     @classmethod
     def tree_unflatten(cls, aux, children):
-        return cls(children[0], aux[0])
+        return cls(children[0], children[1], aux[0])
 
 
 def _register_pytree_if_jax_loaded():
@@ -144,7 +160,8 @@ def as_lattice(period=None, lattice=None):
             # A basis handed in already traced. Its numbers are the point -- that is the whole
             # reason this is a pytree -- but `axis_aligned` cannot be read off a tracer, so it
             # takes the general path. Always correct, merely not the rectangular shortcut.
-            return Lattice(lattice, False)
+            cols = lattice
+            return Lattice(cols[:, 0], cols[:, 1], False)
         if A.shape != (2, 2):
             raise ValueError(
                 f'lattice: expected a 2x2 matrix whose columns are the basis vectors a1, a2; '
@@ -155,7 +172,7 @@ def as_lattice(period=None, lattice=None):
             raise ValueError(
                 'lattice: a1 and a2 are parallel (zero cell area), so the cell has no '
                 'reciprocal basis')
-        return Lattice(A, is_axis_aligned(A))
+        return Lattice(A[:, 0], A[:, 1], is_axis_aligned(A))
 
     if period is None:
         raise ValueError('as_lattice: needs one of period or lattice')
@@ -164,7 +181,8 @@ def as_lattice(period=None, lattice=None):
         p = np.array([p[0], p[0]])
     if p.size != 2:
         raise ValueError(f'period: expected 1 or 2 lengths, got {p.size}')
-    return Lattice(np.diag(p), True)      # a period spells a diagonal; nothing to test
+    D = np.diag(p)
+    return Lattice(D[:, 0], D[:, 1], True)   # a period spells a diagonal; nothing to test
 
 
 def is_axis_aligned(A, tol=1e-12):
@@ -399,8 +417,8 @@ def oblique(lx, ly, angle):
                      xp.stack([zero, ly * sin_a])])
     if xp is np:
         M = np.asarray(cols, dtype=float)
-        return Lattice(M, is_axis_aligned(M))       # a right angle is a rectangle, and says so
-    return Lattice(cols, False)                     # traced: the general path, always correct
+        return Lattice(M[:, 0], M[:, 1], is_axis_aligned(M))    # a right angle says so
+    return Lattice(cols[:, 0], cols[:, 1], False)   # traced: the general path, always correct
 
 
 def hexagonal(a, angle=2.0 * np.pi / 3.0):
