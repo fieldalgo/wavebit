@@ -378,6 +378,18 @@ def _refuse_layer(solver, layer):
             f'layer {layer} is out of range for a {n_layers}-layer stack. `layer` indexes the '
             f'way `structure` does -- 0 is the layer nearest `top`, whichever side the light '
             f'arrives from (docs/conventions.md).')
+    if solver.modeling_type == 1 and not solver.lattice_is_axis_aligned:
+        # The same refusal `engine._reject_unsupported_lattice` makes, made here because the
+        # drawing entries do not go through it. Without it the block path *draws* a skewed cell:
+        # `slice_structure` returns a picture `np.array_equal` to the same instruction on a
+        # square, because the modeller grids on a rectangle and nothing in it reads a basis --
+        # and `plot_structure` then shears that rectangular staircase through the lattice,
+        # producing a picture of a structure the solve refuses to build.
+        raise NotImplementedError(
+            'the block modeler rasterises onto a rectangular grid of its own and is not ported '
+            'to a skewed cell, so there is no picture of this layer to draw -- the one it would '
+            'return is the square cell\'s. `solve()` refuses it for the same reason. State the '
+            'layer as a raster or as shapes, both of which carry the basis.')
 
 
 def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):

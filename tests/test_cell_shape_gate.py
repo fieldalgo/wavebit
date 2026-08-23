@@ -50,10 +50,16 @@ _ALLOWED = {
     ('wavebit/on_torch/emsolver/_base.py', '_separable_kxy'): (2, _SEPARABLE_KXY),
     ('wavebit/_core/draw.py', 'slice_structure'): (
         4,
-        "two sample grids, one per branch. The `mt == 1` pair is the block modeller, refused "
-        "on a skewed cell by manifest.py's `paths_refused_on_oblique`; the `mt == 2` pair sits "
-        "after an explicit `if not solver.lattice_is_axis_aligned: raise NotImplementedError`. "
-        "The add-path branch beside them already goes through `sample_grid` with the lattice."),
+        "two sample grids, one per branch, each behind a raise rather than behind a "
+        "declaration. The `mt == 1` pair is the block modeller, refused for this cell by "
+        "`draw._refuse_layer`, which every drawing entry calls; the `mt == 2` pair sits after "
+        "an explicit `if not solver.lattice_is_axis_aligned: raise NotImplementedError`. The "
+        "add-path branch beside them already goes through `sample_grid` with the lattice. "
+        "Until 2026-08-24 this entry cited manifest.py's `paths_refused_on_oblique` for the "
+        "first of those, which is a *declaration* and not a guard: `solve()` refused the block "
+        "path on a skewed cell while `slice_structure` drew one, and the picture was "
+        "`np.array_equal` to the square cell's. See "
+        "`test_oblique_lattice.py::test_the_block_modeller_is_refused_at_the_drawing_door_too`."),
 }
 
 
