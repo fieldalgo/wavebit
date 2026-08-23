@@ -130,7 +130,7 @@ def _grid(xp, half_width_u, half_width_v, dev, dtype):
     return ky[:, None] + 0.0 * kx[None, :], 0.0 * ky[:, None] + kx[None, :]
 
 
-def shape_geometry(shape, Px, Py):
+def shape_geometry(shape, Px, Py, lattice=None):
     """``(type, cx, cy, lx, ly, angle)`` for one shape dict, resolved once for everybody.
 
     It exists because the transform and the normal field used to resolve them separately and
@@ -152,17 +152,36 @@ def shape_geometry(shape, Px, Py):
     cleanly and raised ``KeyError: 'ly'`` the moment it was painted.
 
     Lengths are absolute, in the units of ``period`` (see the module docstring).
+
+    **An omitted centre defaults to the centre of the cell**, which needs the basis. It read
+    ``(Px/2, Py/2)`` until 2026-08-23, and that is the centre of ``diag(|a1|, |a2|)`` rather
+    than of the cell whose columns are a1, a2 -- ``periods_of`` has already thrown the angle
+    away by then, so a 60-degree hex and a square both report ``(400, 400)`` and both got the
+    square's answer. Measured 26% of ``|a1|`` out on that hex, and on a shear the default
+    landed *outside* the cell entirely.
+
+    A lone shape survives it, which is why it lasted: a translation is a diagonal phase on
+    every conv matrix, so one defaulted shape is misplaced and not missolved (2.3e-15). It
+    bites the moment a second shape fixes the *relative* geometry -- 45.8% on ``sum(R)``,
+    flat across truncation order, between two spellings of the same point lattice.
+    ``tests/test_boundary.py:355`` recorded the defect in prose and pinned only that the
+    readers agree with each other, which they still do: there is one default and it moves them
+    together.
     """
     stype = shape.get('type', 'rectangle')
-    cx = shape.get('cx', Px / 2.0)
-    cy = shape.get('cy', Py / 2.0)
+    if lattice is None:
+        cx = shape.get('cx', Px / 2.0)
+        cy = shape.get('cy', Py / 2.0)
+    else:
+        cx = shape.get('cx', 0.5 * (float(lattice[0][0]) + float(lattice[0][1])))
+        cy = shape.get('cy', 0.5 * (float(lattice[1][0]) + float(lattice[1][1])))
     lx = shape.get('lx', shape.get('l', 0.0))
     round_ = stype in ('circle', 'disk', 'square')
     ly = lx if round_ else shape.get('ly', shape.get('l', 0.0))
     return stype, cx, cy, lx, ly, shape.get('angle', 0.0)
 
 
-def _primitives(shapes, Px, Py):
+def _primitives(shapes, Px, Py, lattice=None):
     """The layer's shapes as convex primitives, or ``None`` if the parameters are not concrete.
 
     The overlap test compares numbers, which a JAX tracer is not — and PyTorch tensors, which
@@ -173,7 +192,7 @@ def _primitives(shapes, Px, Py):
     exists to fix.
     """
     try:
-        return [_overlap.primitive(*shape_geometry(shape, Px, Py)) for shape in shapes]
+        return [_overlap.primitive(*shape_geometry(shape, Px, Py, lattice)) for shape in shapes]
     except Exception:                                  # noqa: BLE001 - "not a concrete value"
         return None
 
@@ -334,7 +353,7 @@ def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_RE
     except Exception:                                  # noqa: BLE001 - traced period
         return
 
-    prims = _primitives(shapes, Px, Py)
+    prims = _primitives(shapes, Px, Py, lattice)
     if prims is None:
         return
 
@@ -391,7 +410,7 @@ def layer_needs_resolving(layer, period, lattice=None):
         return False
     try:
         Px, Py = float(period[0]), float(period[1])
-        prims = _primitives(shapes, Px, Py)
+        prims = _primitives(shapes, Px, Py, lattice)
     except Exception:                                  # noqa: BLE001 - traced period
         prims = None
     if prims is None:
@@ -428,7 +447,7 @@ def shape_ft(xp, shape, ky, kx, period, lattice=None):
     normal field genuinely is index-based and needs the metric.
     """
     Px, Py = period[0], period[1]
-    stype, cx, cy, lx, ly, angle = shape_geometry(shape, Px, Py)
+    stype, cx, cy, lx, ly, angle = shape_geometry(shape, Px, Py, lattice)
 
     pi = 3.141592653589793
     if lattice is None:
@@ -487,7 +506,7 @@ def _refuse_paint_overlap(shapes, period, lattice=None):
         return
     try:
         Px, Py = float(period[0]), float(period[1])
-        prims = _primitives(shapes, Px, Py)
+        prims = _primitives(shapes, Px, Py, lattice)
     except Exception:                                  # noqa: BLE001 - traced parameters
         return          # the concrete pass already answered this; see `layer_needs_resolving`
     if prims is None:
@@ -817,7 +836,7 @@ def _shape_surface_normal(xp, X, Y, shape, Px, Py, dtype, lattice=None):
     quadrants and this is 0.000; against the independent raster field (``'contour'``, which is
     distance-based and periodic) 27.3 deg becomes 2.4.
     """
-    stype, cx, cy, lx, ly, angle = shape_geometry(shape, Px, Py)
+    stype, cx, cy, lx, ly, angle = shape_geometry(shape, Px, Py, lattice)
     cos_a = xp.cos(as_array(xp, angle, dtype=dtype))
     sin_a = xp.sin(as_array(xp, angle, dtype=dtype))
 
@@ -978,7 +997,7 @@ def _projector_cache_key(xp, built, grid_shape, period, half_width_u, half_width
     try:
         Px, Py = _static_float(period[0]), _static_float(period[1])
         shapes_key = tuple(tuple(v if isinstance(v, str) else _static_float(v)
-                                 for v in shape_geometry(shape, Px, Py))
+                                 for v in shape_geometry(shape, Px, Py, lattice))
                            for shape in built)
         lat = None if lattice is None else tuple(_static_float(v)
                                                  for row in lattice for v in row)
@@ -1095,7 +1114,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, half_width_u, half_w
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
 
     if len(shapes) == 1:
-        _, cx, cy, _, _, _ = shape_geometry(shapes[0], Px, Py)
+        _, cx, cy, _, _, _ = shape_geometry(shapes[0], Px, Py, lattice)
         if lattice is None:
             mid_x, mid_y = Px / 2.0, Py / 2.0
             # Fractions of a period -- which is what the phase below is written in.

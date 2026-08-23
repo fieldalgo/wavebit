@@ -166,7 +166,7 @@ def _render_block(cell, edges_u, edges_v, period, xs, ys):
 
 def _shape_inside(shape, X, Y, basis, Px, Py):
     """Signed cover count of one shape and its periodic images at every sample point."""
-    kind, cx, cy, lx, ly, angle = _analytic.shape_geometry(shape, Px, Py)
+    kind, cx, cy, lx, ly, angle = _analytic.shape_geometry(shape, Px, Py, basis)
     cx, cy, lx, ly, angle = (float(np.real(np.asarray(v, dtype=complex)))
                              for v in (cx, cy, lx, ly, angle))
     cos_a, sin_a = np.cos(angle), np.sin(angle)
@@ -208,7 +208,7 @@ def _render_analytic_add(layer, X, Y, basis, Px, Py):
 
 # ================================================ path 2: analytic shapes, combine='paint'
 
-def _resolved_regions(shapes, period):
+def _resolved_regions(shapes, period, basis=None):
     """``[(eps, [vertices, ...]), ...]`` -- the disjoint loops the boundary path holds.
 
     Painting order resolved once by :func:`~wavebit._core.boundary.plan_layer`, exactly as the
@@ -218,8 +218,8 @@ def _resolved_regions(shapes, period):
     reads that directly -- a plain sum over the loops, no sign to carry alongside and none to
     forget. Ignoring the orientation would put ``<eps>`` at 2.4256 where the geometry is 2.2371.
     """
-    recs, regions = _boundary.plan_layer(shapes, period)
-    verts = [_boundary.shape_vertices(xnp, _boundary._concrete_shape(s), period)
+    recs, regions = _boundary.plan_layer(shapes, period, lattice=basis)
+    verts = [_boundary.shape_vertices(xnp, _boundary._concrete_shape(s), period, lattice=basis)
              for s in shapes]
     vals = _clipper.eval_table(xnp, recs, verts)
     out = []
@@ -274,7 +274,7 @@ def _render_paint(layer, xs, ys, basis, period):
     """The painted structure, from the same disjoint loops the boundary path integrates."""
     eps_b = _eps_of(layer.get('background', 1.0))
     out = np.full((ys.size, xs.size), eps_b, dtype=complex)
-    for eps_s, loops in _resolved_regions(layer.get('shapes', []), period):
+    for eps_s, loops in _resolved_regions(layer.get('shapes', []), period, basis):
         cover = np.zeros((ys.size, xs.size), dtype=int)
         for V in loops:
             for m in _IMAGES:
@@ -352,7 +352,7 @@ def _band_limited(solver, layer, n):
             eps_b = _eps_of(lay.get('background', 1.0))
             grid = np.zeros(KY.shape, dtype=complex)
             grid[2 * half_width_v, 2 * half_width_u] = eps_b
-            for eps_s, loops in _resolved_regions(lay.get('shapes', []), period):
+            for eps_s, loops in _resolved_regions(lay.get('shapes', []), period, basis):
                 # Plain sum: `polygon_ft` is a signed contour integral and a hole arrives
                 # wound clockwise, so it subtracts itself.
                 ft = sum(_boundary.polygon_ft(xnp, V, KY, KX, period, basis) for V in loops)

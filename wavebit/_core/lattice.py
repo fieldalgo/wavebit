@@ -43,7 +43,7 @@ import numpy as np
 
 from .backend import as_array
 
-__all__ = ['as_lattice', 'is_axis_aligned', 'jacobian', 'order_kxy', 'periods_of',
+__all__ = ['as_lattice', 'grid', 'is_axis_aligned', 'jacobian', 'order_kxy', 'periods_of',
            'sample_grid']
 
 
@@ -204,3 +204,51 @@ def order_kxy(xp, A, half_width_u, half_width_v, wavelength, k_inc_x, k_inc_y,
 
     n_orders_u, n_orders_v = 2 * half_width_u + 1, 2 * half_width_v + 1
     return xp.broadcast_to(kx, (n_orders_v, n_orders_u)), xp.broadcast_to(ky, (n_orders_v, n_orders_u))
+
+
+def grid(shape, period=None, lattice=None, backend=0, dtype=None):
+    """Cartesian coordinates of a raster's pixel centres: ``(X, Y)``, both shaped ``shape``.
+
+    The public way to build a structure without deciding an axis order. Write the layer in terms
+    of the coordinates and the layout follows on its own::
+
+        X, Y = wavebit.grid((64, 96), period=[700., 1100.])
+        layer = np.where((X - 350.) ** 2 + (Y - 550.) ** 2 < 200. ** 2, 12.25, 1.0)
+
+    ``np.where`` is elementwise, so ``layer`` simply inherits whatever layout ``X`` and ``Y``
+    already had. **That is the whole point**: an expression written in *coordinates* cannot get
+    the axis order wrong, while one written in *indices* (``layer[:2] = ...``) can, and does so
+    silently on a non-square raster. Hand-rolling the grid is what pushes callers towards
+    indices; this exists so they need not.
+
+    A skewed cell comes free. ``lattice=`` places the samples on the parallelogram, so the same
+    coordinate expression describes the same physical shape whatever the cell -- where writing
+    ``meshgrid`` by hand means writing ``u*a1 + v*a2`` by hand too, once per caller. The
+    equivalent elsewhere in this field is ``numpy.meshgrid(..., indexing='ij')``: fmmax's
+    examples spell that out eleven times because nothing hands it to them, and forgetting it
+    transposes the structure with nothing to say so.
+
+    ``shape`` is ``(rows, columns)``, read as numpy reads it. Rows run along ``a2`` and columns
+    along ``a1`` -- y and x on a rectangular cell, and neither of those on a skewed one, which
+    is why the return is coordinates rather than axis names.
+
+    Exactly one of ``period`` / ``lattice``; ``backend`` matches :func:`wavebit.rcwa`
+    (0 NumPy, 1 JAX, 2 PyTorch). ``dtype`` defaults to the backend's float64.
+    """
+    A = as_lattice(period=period, lattice=lattice)
+    shape = tuple(int(v) for v in shape)
+    if len(shape) != 2:
+        raise ValueError(f'grid: shape must be (rows, columns); got {shape!r}')
+    if min(shape) < 1:
+        raise ValueError(f'grid: shape must be positive; got {shape!r}')
+
+    if backend == 0:
+        import array_api_compat.numpy as xp
+    elif backend == 1:
+        import jax.numpy as xp
+    elif backend == 2:
+        import array_api_compat.torch as xp
+    else:
+        raise ValueError(f'grid: backend must be 0 (NumPy), 1 (JAX) or 2 (PyTorch); got {backend!r}')
+
+    return sample_grid(xp, shape, periods_of(A), dtype if dtype is not None else xp.float64, A)

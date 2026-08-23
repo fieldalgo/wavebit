@@ -308,7 +308,7 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, period, norma
 POLYGON_VERTICES = 256
 
 
-def shape_vertices(xp, shape, period, n_poly=POLYGON_VERTICES):
+def shape_vertices(xp, shape, period, n_poly=POLYGON_VERTICES, lattice=None):
     """Counter-clockwise vertices of one analytic primitive.
 
     Same shape dictionaries the smooth path takes, and the same convention: ``lx`` / ``ly``
@@ -323,7 +323,7 @@ def shape_vertices(xp, shape, period, n_poly=POLYGON_VERTICES):
     square. ``period`` is taken for the same reason the transform takes it: it is what an
     omitted centre falls back to.
     """
-    kind, cx, cy, lx, ly, angle = shape_geometry(shape, period[0], period[1])
+    kind, cx, cy, lx, ly, angle = shape_geometry(shape, period[0], period[1], lattice)
     if kind in ('rectangle', 'square'):
         return rect_verts(xp, cx, cy, lx, ly, angle)
     if kind in ('circle', 'disk', 'ellipse'):
@@ -358,7 +358,7 @@ def _concrete_shape(shape):
     return out
 
 
-def plan_layer(shapes, period, n_poly=POLYGON_VERTICES):
+def plan_layer(shapes, period, n_poly=POLYGON_VERTICES, lattice=None):
     """Resolve one layer's painting order into disjoint loops. **Concrete values only.**
 
     This is the discrete half — which loop holds which vertex, which edges cross — so it runs
@@ -366,10 +366,10 @@ def plan_layer(shapes, period, n_poly=POLYGON_VERTICES):
     (:meth:`~wavebit._core.engine.RCWAEngine.freeze_geometry`) and every later step replays
     it against traced vertices.
     """
-    return _clipper.resolve_painting(_plan_vertices(shapes, period, n_poly))
+    return _clipper.resolve_painting(_plan_vertices(shapes, period, n_poly, lattice))
 
 
-def _plan_vertices(shapes, period, n_poly):
+def _plan_vertices(shapes, period, n_poly, lattice=None):
     """Every shape's vertices as plain float arrays -- the concrete half of building a plan.
 
     Split out so :func:`check_plan_still_fits` can tell the two ways a re-plan fails apart. This
@@ -377,7 +377,7 @@ def _plan_vertices(shapes, period, n_poly):
     ``resolve_painting`` then raises is about the layer and has to be heard.
     """
     import numpy as _np
-    return [_np.asarray(shape_vertices(_np, _concrete_shape(s), period, n_poly), float)
+    return [_np.asarray(shape_vertices(_np, _concrete_shape(s), period, n_poly, lattice), float)
             for s in shapes]
 
 
@@ -388,7 +388,7 @@ def _plan_key(plan):
             [[list(loop) for loop in region] for region in regions])
 
 
-def check_plan_still_fits(shapes, period, plan, n_poly=POLYGON_VERTICES):
+def check_plan_still_fits(shapes, period, plan, n_poly=POLYGON_VERTICES, lattice=None):
     """Refuse a frozen painting plan that the layer in front of it has outgrown.
 
     A plan records *combinatorics* -- which loop holds which vertex, which edges cross -- and
@@ -409,7 +409,7 @@ def check_plan_still_fits(shapes, period, plan, n_poly=POLYGON_VERTICES):
     reason.
     """
     try:
-        verts = _plan_vertices(shapes, period, n_poly)
+        verts = _plan_vertices(shapes, period, n_poly, lattice)
     except (TypeError, ValueError):
         return                      # traced: nothing concrete to re-plan from
     fresh = _clipper.resolve_painting(verts)
@@ -464,9 +464,9 @@ def to_conv_mat_boundary_layer(xp, shapes, background, half_width_u, half_width_
     ``plan`` from a frozen geometry to keep the call traceable; leave it ``None`` and the
     painting is resolved eagerly, which needs concrete shape parameters.
     """
-    verts = [shape_vertices(xp, s, period, n_poly) for s in shapes]
+    verts = [shape_vertices(xp, s, period, n_poly, lattice) for s in shapes]
     if plan is None:
-        recs, regions = plan_layer(shapes, period, n_poly)
+        recs, regions = plan_layer(shapes, period, n_poly, lattice)
     else:
         check_plan_still_fits(shapes, period, plan, n_poly)
         recs, regions = plan

@@ -1382,3 +1382,203 @@ def test_an_axis_aligned_cell_keeps_the_rectangular_fold_bit_for_bit():
     b = _nvf_analytic(np, (96, 96), shapes, periods_of(lat), np.float64, lat)
     for got, want in zip(b, a):
         assert np.asarray(got).tobytes() == np.asarray(want).tobytes()
+
+
+# ------------------------------------------------ the omitted centre is the cell's, on any cell
+
+_CELLS = [
+    ('square', np.diag([400.0, 400.0])),
+    ('rect', np.diag([700.0, 1100.0])),
+    ('tall', np.diag([180.0, 1300.0])),
+    ('hex60', np.column_stack([[400.0, 0.0], [200.0, 400.0 * np.sqrt(3) / 2]])),
+    ('shear-unimodular', np.column_stack([[400.0, 0.0], [400.0, 400.0]])),
+    ('shear-shallow', np.column_stack([[400.0, 0.0], [350.0, 150.0]])),
+    ('obtuse-105', np.column_stack([[400.0, 0.0], [520.0 * np.cos(np.radians(105)),
+                                                   520.0 * np.sin(np.radians(105))]])),
+    ('acute-32', np.column_stack([[900.0, 0.0], [260.0 * np.cos(np.radians(32)),
+                                                 260.0 * np.sin(np.radians(32))]])),
+    ('a1-off-axis', np.column_stack([[380.0, 120.0], [-90.0, 430.0]])),
+    ('negative-det', np.column_stack([[400.0, 0.0], [200.0, -346.41]])),
+]
+
+_SHAPES = [
+    dict(type='circle', lx=140.0),
+    dict(type='ellipse', lx=190.0, ly=95.0, angle=0.63),
+    dict(type='rectangle', lx=150.0, ly=80.0, angle=-1.1),
+    dict(type='square', lx=120.0),
+]
+
+
+@pytest.mark.parametrize('cell_name, A', _CELLS, ids=[c[0] for c in _CELLS])
+@pytest.mark.parametrize('shape', _SHAPES, ids=['circle', 'ellipse', 'rectangle', 'square'])
+def test_an_omitted_centre_is_the_cell_centre_on_every_cell(cell_name, A, shape):
+    """``shape_geometry``'s default must equal ``0.5*(a1 + a2)``, to the bit.
+
+    It read ``(Px/2, Py/2)`` until 2026-08-23 -- the centre of ``diag(|a1|, |a2|)``, which is a
+    different point the moment the cell is not axis-aligned, and on ``shear-shallow`` is not
+    even inside the cell. The cases here are deliberately ugly: obtuse and acute cells, one
+    whose ``a1`` is itself off-axis (so *neither* basis vector is x), and one with a negative
+    determinant (a left-handed basis, which nothing forbids).
+
+    The comparison is against an explicit centre rather than against a stored number, because a
+    frozen expectation would have to be recomputed by the same formula it is checking.
+    """
+    from wavebit._core.analytic import shape_geometry
+    from wavebit._core.lattice import periods_of
+
+    Px, Py = periods_of(A)
+    want = (0.5 * (A[0, 0] + A[0, 1]), 0.5 * (A[1, 0] + A[1, 1]))
+    _, cx, cy, _, _, _ = shape_geometry(shape, Px, Py, A)
+    assert (cx, cy) == want
+
+    # a stated centre still wins, and each coordinate defaults on its own
+    stated = dict(shape, cx=37.5)
+    _, cx2, cy2, _, _, _ = shape_geometry(stated, Px, Py, A)
+    assert cx2 == 37.5 and cy2 == want[1]
+    stated = dict(shape, cy=-12.25)
+    _, cx3, cy3, _, _, _ = shape_geometry(stated, Px, Py, A)
+    assert cx3 == want[0] and cy3 == -12.25
+
+
+@pytest.mark.parametrize('cell_name, A', _CELLS, ids=[c[0] for c in _CELLS])
+def test_every_reader_of_the_default_moves_together(cell_name, A):
+    """The three readers must agree about where an omitted centre is.
+
+    ``shape_ft`` (the transform), ``boundary.shape_vertices`` (the polygon path) and
+    ``draw._shape_inside`` (the picture) each resolve the shape through ``shape_geometry``.
+    There is one default, so correcting it moves them together -- and the picture agreeing with
+    the solve is the load-bearing half, since ``draw()`` is what a user checks a structure with.
+
+    **Against the closed form, not against `shape_geometry`.** Asking the readers to match what
+    that function returned would pass while every one of them is in the wrong place -- there is
+    one default, so a wrong one moves them together just as neatly as a right one. That exact
+    weakness is what ``tests/test_boundary.py:355`` was already recording about the old default,
+    and a mutation run caught this test committing it on four oblique cells.
+    """
+    from wavebit._core import boundary as _b
+    from wavebit._core import draw as _d
+    from wavebit._core.lattice import periods_of
+
+    Px, Py = periods_of(A)
+    shape = dict(type='rectangle', lx=150.0, ly=80.0, angle=0.4)
+    cx, cy = 0.5 * (A[0, 0] + A[0, 1]), 0.5 * (A[1, 0] + A[1, 1])
+
+    verts = np.asarray(_b.shape_vertices(xnp, _b._concrete_shape(shape), (Px, Py), lattice=A),
+                       dtype=float)
+    assert np.allclose(verts.mean(axis=0), (cx, cy), atol=1e-9)
+
+    # the picture: the sample nearest the resolved centre must be inside the shape
+    X, Y = wavebit.grid((129, 129), lattice=A)
+    X, Y = np.asarray(X), np.asarray(Y)
+    cover = np.asarray(_d._shape_inside(shape, X, Y, A, Px, Py))
+    k = np.argmin((X - cx) ** 2 + (Y - cy) ** 2)
+    assert cover.ravel()[k] >= 1
+
+
+@pytest.mark.parametrize('cell_name, A', [c for c in _CELLS if c[0] in
+                                          ('square', 'hex60', 'shear-shallow', 'obtuse-105')],
+                         ids=['square', 'hex60', 'shear-shallow', 'obtuse-105'])
+@pytest.mark.parametrize('factorization', ['nvf', 'boundary'])
+def test_omitting_the_centre_solves_what_stating_it_solves(cell_name, A, factorization):
+    """End to end: the two spellings must be one structure, not two.
+
+    The unit test above pins the resolved number; this pins that nothing downstream
+    reinterprets it. Both shape paths, because they resolve the shape separately and
+    ``shape_geometry`` exists precisely because they once disagreed.
+
+    Note what this can*not* be: an invariance under ``a2' = a2 + a1``. That re-bases the same
+    point lattice onto a *different fundamental cell*, so "the centre of the cell" legitimately
+    moves with it -- ``square`` and ``shear-unimodular`` here have centres ``(200, 200)`` and
+    ``(400, 200)``. A default defined against the basis cannot be basis-independent, and a test
+    demanding that would be demanding the wrong thing.
+    """
+    centre = dict(cx=float(0.5 * (A[0, 0] + A[0, 1])), cy=float(0.5 * (A[1, 0] + A[1, 1])))
+    fixed = dict(type='circle', cx=70.0, cy=95.0, lx=90.0, material=5.76)
+
+    def solve(second):
+        kw = dict(backend=0, wavelength=900.0, lattice=A, truncation_order=[6, 6],
+                  top=1.0, bot=1.0, theta=0.11, phi=0.37, psi=0.29, thickness=[300.0],
+                  structure=[dict(background=1.0, combine='add', shapes=[fixed, second])])
+        if factorization == 'boundary':
+            kw['structure'][0]['combine'] = 'paint'
+        else:
+            kw['factorization'] = 'nvf'
+        res = wavebit.rcwa(**kw).solve()
+        return np.asarray(res.R), np.asarray(res.T)
+
+    bare = dict(type='ellipse', lx=130.0, ly=70.0, angle=0.5, material=5.76)
+    a_r, a_t = solve(bare)
+    b_r, b_t = solve(dict(bare, **centre))
+    assert a_r.tobytes() == b_r.tobytes() and a_t.tobytes() == b_t.tobytes()
+
+
+# --------------------------------------------------------------------- wavebit.grid
+
+@pytest.mark.parametrize('cell_name, A', _CELLS, ids=[c[0] for c in _CELLS])
+def test_grid_places_samples_on_the_cell_not_a_rectangle(cell_name, A):
+    """``grid`` returns ``r = (i+0.5)/n_u * a1 + (j+0.5)/n_v * a2``, in Cartesian coordinates.
+
+    Checked against the closed form rather than against ``sample_grid``, which is the function
+    it wraps -- comparing a wrapper to its callee proves only that the call happened.
+    """
+    n_v, n_u = 7, 11
+    X, Y = wavebit.grid((n_v, n_u), lattice=A)
+    u = (np.arange(n_u) + 0.5) / n_u
+    v = (np.arange(n_v) + 0.5) / n_v
+    U, V = np.meshgrid(u, v)
+    assert np.allclose(np.asarray(X), U * A[0, 0] + V * A[0, 1], atol=1e-12)
+    assert np.allclose(np.asarray(Y), U * A[1, 0] + V * A[1, 1], atol=1e-12)
+
+
+def test_grid_period_and_lattice_are_two_spellings_of_one_cell():
+    """``period=[Lx, Ly]`` must land exactly where ``diag(Lx, Ly)`` does, and a lone period is square."""
+    a = [np.asarray(v).tobytes() for v in wavebit.grid((9, 13), period=[700.0, 1100.0])]
+    b = [np.asarray(v).tobytes() for v in wavebit.grid((9, 13), lattice=np.diag([700.0, 1100.0]))]
+    assert a == b
+    c = [np.asarray(v).tobytes() for v in wavebit.grid((9, 9), period=[640.0])]
+    d = [np.asarray(v).tobytes() for v in wavebit.grid((9, 9), lattice=np.diag([640.0, 640.0]))]
+    assert c == d
+
+
+def test_grid_refuses_what_it_cannot_answer():
+    with pytest.raises(ValueError, match='rows, columns'):
+        wavebit.grid((8,), period=[1.0])
+    with pytest.raises(ValueError, match='rows, columns'):
+        wavebit.grid((8, 8, 8), period=[1.0])
+    with pytest.raises(ValueError, match='positive'):
+        wavebit.grid((0, 8), period=[1.0])
+    with pytest.raises(ValueError, match='one of period or lattice'):
+        wavebit.grid((8, 8))
+    with pytest.raises(ValueError, match='backend'):
+        wavebit.grid((8, 8), period=[1.0], backend=9)
+    with pytest.raises(ValueError, match='parallel'):
+        wavebit.grid((8, 8), lattice=np.column_stack([[1.0, 0.0], [2.0, 0.0]]))
+
+
+def test_a_structure_built_through_grid_is_the_one_that_gets_solved():
+    """The point of the helper: coordinates in, and the layout follows on its own.
+
+    Built through ``grid`` and built by hand from the same closed form must be the same raster
+    and therefore the same answer -- on a skewed cell, where hand-rolling is where the
+    ``u*a1 + v*a2`` step is easy to omit.
+    """
+    A = np.column_stack([[400.0, 0.0], [200.0, 400.0 * np.sqrt(3) / 2]])
+    n = 96
+    cx, cy = 0.5 * (A[0, 0] + A[0, 1]), 0.5 * (A[1, 0] + A[1, 1])
+
+    X, Y = wavebit.grid((n, n), lattice=A)
+    eps_helper = np.where((np.asarray(X) - cx) ** 2 + (np.asarray(Y) - cy) ** 2 < 150.0 ** 2, 5.76, 1.0)
+
+    t = (np.arange(n) + 0.5) / n
+    U, V = np.meshgrid(t, t)
+    Xh, Yh = U * A[0, 0] + V * A[0, 1], U * A[1, 0] + V * A[1, 1]
+    eps_hand = np.where((Xh - cx) ** 2 + (Yh - cy) ** 2 < 150.0 ** 2, 5.76, 1.0)
+
+    assert eps_helper.tobytes() == eps_hand.tobytes()
+
+    def solve(eps):
+        s = wavebit.rcwa(backend=0, wavelength=900.0, lattice=A, truncation_order=[6, 6],
+                         top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, thickness=[300.0],
+                         structure=eps[None], factorization='nvf')
+        return float(np.sum(s.solve().R) + np.sum(s.solve().T))
+    assert abs(solve(eps_helper) - 1.0) < 1e-9
