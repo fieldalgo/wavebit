@@ -655,46 +655,95 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
         from .lattice import jacobian
         n_v, n_u = shape
         J = jacobian(lattice, n_v, n_u)
-        # Work in units of one u-step: divide J through by |a1|/n_u before anything reads it.
-        # A uniform scale cannot survive the normalisation at the end, so this changes no
-        # direction — but it makes a square-pixel raster land on exactly `sampling=(1, 1)` and
-        # a `J^-T` of the identity, which is bit-identical to taking no metric at all. Without
-        # it those cells moved by ~7e-15 purely from multiplying a factor in and dividing it
-        # back out.
         try:
             scale = float(np.hypot(J[0, 0], J[1, 0]))
         except Exception:                   # noqa: BLE001 - a traced basis, not a mistake
-            raise NotImplementedError(
-                'the raster normal field cannot be differentiated with respect to the lattice: '
-                'it reaches its neighbours through a distance transform, which is a host '
-                'routine and needs concrete numbers for its `sampling`. That part is discrete '
-                '-- which pixel is nearest -- so its derivative is zero almost everywhere and '
-                'nothing is lost by holding it fixed; the smooth half, the `J^-T` pullback that '
-                'sets the direction, is differentiable already. Wiring the two apart wants '
-                '`jax.pure_callback`. Until then: the analytic path (shapes rather than a '
-                'raster) differentiates with respect to the basis, and a raster still '
-                'differentiates with respect to its permittivity on any cell.') from None
-        J = J / (scale or 1.0)
-        # Physical length of one index step along each axis: axis 0 walks a2/n_v, axis 1 a1/n_u.
-        # Exact for an axis-aligned cell; for a sheared one it is the best `sampling` can say,
-        # since scipy's transform has no way to express a non-diagonal metric. The direction
-        # that survives normalisation is set by the gradient below, which is exact regardless.
-        step_j = float(np.hypot(J[0, 1], J[1, 1]))
-        step_i = float(np.hypot(J[0, 0], J[1, 0]))
-        if step_j == step_i == 1.0:
-            dist_map = _periodic_edt()
-        else:
-            dist_map = _periodic_edt(sampling=(step_j, step_i))
-        g_j, g_i = _periodic_gradient(dist_map)
-        # grad_xy f = J^-T @ (df/di, df/dj) -- the inverse transpose, not the Jacobian: index
-        # steps push forward, gradients pull back.
-        Jinv_T = np.linalg.inv(J).T
-        g_i, g_j = (Jinv_T[0, 0] * g_i + Jinv_T[0, 1] * g_j,
-                    Jinv_T[1, 0] * g_i + Jinv_T[1, 1] * g_j)
+            scale = None
 
+        if scale is not None:
+            # Work in units of one u-step: divide J through by |a1|/n_u before anything reads
+            # it. A uniform scale cannot survive the normalisation at the end, so this changes
+            # no direction -- but it makes a square-pixel raster land on exactly
+            # `sampling=(1, 1)` and a `J^-T` of the identity, which is bit-identical to taking
+            # no metric at all. Without it those cells moved by ~7e-15 purely from multiplying
+            # a factor in and dividing it back out.
+            J = J / (scale or 1.0)
+            # Physical length of one index step along each axis: axis 0 walks a2/n_v, axis 1
+            # a1/n_u. Exact for an axis-aligned cell; for a sheared one it is the best
+            # `sampling` can say, since scipy's transform has no way to express a non-diagonal
+            # metric. The direction that survives normalisation is set by the gradient below,
+            # which is exact regardless.
+            step_j = float(np.hypot(J[0, 1], J[1, 1]))
+            step_i = float(np.hypot(J[0, 0], J[1, 0]))
+            if step_j == step_i == 1.0:
+                dist_map = _periodic_edt()
+            else:
+                dist_map = _periodic_edt(sampling=(step_j, step_i))
+            g_j, g_i = _periodic_gradient(dist_map)
+            # grad_xy f = J^-T @ (df/di, df/dj) -- the inverse transpose, not the Jacobian:
+            # index steps push forward, gradients pull back.
+            Jinv_T = np.linalg.inv(J).T
+            g_i, g_j = (Jinv_T[0, 0] * g_i + Jinv_T[0, 1] * g_j,
+                        Jinv_T[1, 0] * g_i + Jinv_T[1, 1] * g_j)
+        else:
+            # A **traced** basis. Only one thing here is genuinely discrete: *which* interface
+            # pixel is nearest. The distance to it is not -- it is
+            # ``hypot(step_j*dj, step_i*di)``, smooth in the metric, and its gradient is what
+            # sets the normal direction. So the callback returns the index displacement and
+            # the distance is rebuilt here, where the steps are traced.
+            #
+            # Returning the distance itself and stopping the gradient there looks equivalent
+            # and is not: it drops the metric's smooth half. Measured, that cost ~10% of
+            # ``d/d a2x`` on a hex cell, and the error did not shrink with raster resolution,
+            # which is what said it was systematic rather than quantisation.
+            import jax
+
+            def _index_offsets(Jc):
+                """``(dj, di)`` to the nearest interface pixel, on the 3x3 periodic tiling."""
+                Jc = np.asarray(Jc, dtype=float)
+                Jc = Jc / (float(np.hypot(Jc[0, 0], Jc[1, 0])) or 1.0)
+                sj = float(np.hypot(Jc[0, 1], Jc[1, 1]))
+                si = float(np.hypot(Jc[0, 0], Jc[1, 0]))
+                tiled = np.tile(~interface_mask, (3, 3))
+                _, idx = distance_transform_edt(tiled, sampling=(sj, si),
+                                                return_indices=True)
+                jj, ii = np.meshgrid(np.arange(3 * ny_), np.arange(3 * nx_), indexing='ij')
+                core = (slice(ny_, 2 * ny_), slice(nx_, 2 * nx_))
+                return ((idx[0] - jj)[core].astype(float),
+                        (idx[1] - ii)[core].astype(float))
+
+            spec = jax.ShapeDtypeStruct((ny_, nx_), np.float64)
+            # `stop_gradient` states what is true: no tangent belongs on a choice of pixel.
+            dj, di = jax.pure_callback(_index_offsets, (spec, spec),
+                                       jax.lax.stop_gradient(J))
+            xp_ = array_namespace(J)
+            scale_ = xp_.sqrt(J[0, 0] ** 2 + J[1, 0] ** 2)
+            a_, b_ = J[0, 0] / scale_, J[0, 1] / scale_
+            c_, d_ = J[1, 0] / scale_, J[1, 1] / scale_
+            step_j_ = xp_.sqrt(b_ ** 2 + d_ ** 2)
+            step_i_ = xp_.sqrt(a_ ** 2 + c_ ** 2)
+            # Guard inside the sqrt: an on-interface pixel has zero displacement, and
+            # `d(sqrt)/dx` at zero is infinite whatever a `where` outside it says.
+            sq_ = (step_j_ * dj) ** 2 + (step_i_ * di) ** 2
+            dmap_ = xp_.sqrt(xp_.where(sq_ != 0, sq_, xp_.ones_like(sq_)))
+            dmap_ = xp_.where(sq_ != 0, dmap_, xp_.zeros_like(dmap_))
+            g_j = (xp_.roll(dmap_, -1, axis=0) - xp_.roll(dmap_, 1, axis=0)) / 2.0
+            g_i = (xp_.roll(dmap_, -1, axis=1) - xp_.roll(dmap_, 1, axis=1)) / 2.0
+            det_ = a_ * d_ - b_ * c_
+            g_i, g_j = ((d_ * g_i - c_ * g_j) / det_, (-b_ * g_i + a_ * g_j) / det_)
     gx, gy = g_i, g_j
-    norm = np.hypot(gx, gy)
-    norm[norm == 0] = 1.0
+    if isinstance(gx, np.ndarray):
+        norm = np.hypot(gx, gy)
+        norm[norm == 0] = 1.0
+    else:
+        # The guard goes *inside* the sqrt. `d(sqrt)/dx` is infinite at zero, and a `where`
+        # outside still differentiates the branch it did not take, so the NaN comes back --
+        # the same trap `shape_ft`'s DC term documents for `jinc`. Every pixel with no
+        # gradient (a uniform region) sits at exactly zero, so this is not a rare corner.
+        _xp = array_namespace(gx)
+        sq = gx ** 2 + gy ** 2
+        nz = sq != 0
+        norm = _xp.sqrt(_xp.where(nz, sq, _xp.ones_like(sq)))
     return gx / norm, gy / norm
 
 

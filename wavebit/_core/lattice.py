@@ -47,8 +47,8 @@ import numpy as np
 
 from .backend import array_namespace, as_array
 
-__all__ = ['Lattice', 'as_lattice', 'grid', 'is_axis_aligned', 'jacobian', 'order_kxy',
-           'periods_of', 'sample_grid']
+__all__ = ['Lattice', 'as_lattice', 'grid', 'hexagonal', 'is_axis_aligned', 'jacobian',
+           'oblique', 'order_kxy', 'periods_of', 'rectangular', 'sample_grid']
 
 _PYTREE_REGISTERED = False
 
@@ -354,3 +354,55 @@ def grid(shape, period=None, lattice=None, backend=0, dtype=None):
         raise ValueError(f'grid: backend must be 0 (NumPy), 1 (JAX) or 2 (PyTorch); got {backend!r}')
 
     return sample_grid(xp, shape, periods_of(A), dtype if dtype is not None else xp.float64, A)
+
+
+def rectangular(lx, ly=None):
+    """``diag(lx, ly)`` — the axis-aligned cell, spelled as a basis. ``ly`` defaults to ``lx``."""
+    return as_lattice(period=[lx] if ly is None else [lx, ly])
+
+
+def oblique(lx, ly, angle):
+    """A cell given by two edge lengths and the **angle between them**, in radians.
+
+    ``a1`` lies along x with length ``lx``; ``a2`` has length ``ly`` and makes ``angle`` with
+    it, so::
+
+        A = [[lx, ly*cos(angle)],
+             [ 0, ly*sin(angle)]]
+
+    Radians, because every other angle in this API is (``theta``, ``phi``, a shape's ``angle``).
+    ``np.radians(60)`` for the usual ones, or :func:`hexagonal` for the usual-est.
+
+    This is a *spelling*, not a new kind of cell -- it returns the same :class:`Lattice` that
+    ``lattice=`` does, and there is no ``angle`` stored anywhere afterwards. Which matters for
+    differentiation: build it inside the function you differentiate and the angle is a design
+    variable, because the basis it produces is one. Build it outside and you have handed the
+    solver a constant, exactly as with any other expression.
+
+    ``angle`` near 0 or pi is refused rather than returning a basis with no cell area -- the
+    same refusal :func:`as_lattice` makes for parallel columns, reached earlier and by name.
+
+    A right angle comes back *as* a right angle -- ``axis_aligned`` is read off the basis, not
+    assumed -- but to 1e-16 and not to the bit, since ``cos(pi/2)`` is 6.1e-17. Use
+    :func:`rectangular` where an exact diagonal is wanted, which is every case that does not
+    have an angle to vary.
+    """
+    xp = array_namespace(angle) if not isinstance(angle, (int, float)) else np
+    a = as_array(xp, angle) if xp is not np else float(angle)
+    if xp is np and not (1e-9 < abs(float(np.sin(a))) ):
+        raise ValueError(
+            f'oblique: angle={angle!r} rad puts a1 and a2 on the same line, so the cell has no '
+            f'area. Use a value strictly between 0 and pi (np.radians(60) for a hex rhombus).')
+    cos_a, sin_a = xp.cos(a), xp.sin(a)
+    zero = 0.0 * cos_a
+    cols = xp.stack([xp.stack([lx + zero, ly * cos_a]),
+                     xp.stack([zero, ly * sin_a])])
+    if xp is np:
+        M = np.asarray(cols, dtype=float)
+        return Lattice(M, is_axis_aligned(M))       # a right angle is a rectangle, and says so
+    return Lattice(cols, False)                     # traced: the general path, always correct
+
+
+def hexagonal(a):
+    """The 60-degree rhombus of side ``a`` — one primitive cell of a hexagonal array."""
+    return oblique(a, a, np.pi / 3.0)

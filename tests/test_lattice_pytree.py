@@ -118,24 +118,82 @@ def test_on_a_diagonal_cell_it_is_the_period_gradient():
     assert by_lattice[1, 1] == pytest.approx(by_period[1], rel=1e-9)
 
 
-def test_the_raster_normal_field_says_why_it_cannot():
-    """Correct-or-loud: a distance transform needs concrete numbers, so it refuses.
+# ----------------------------------------------------------- spelling a cell by its angle
 
-    The discrete half -- which pixel is nearest -- has a zero derivative almost everywhere, so
-    nothing is lost by holding it fixed; it is the plumbing that is missing, not the maths.
+def test_a_cell_can_be_given_as_two_lengths_and_an_angle():
+    from wavebit._core.lattice import periods_of
+
+    A = wavebit.oblique(400.0, 520.0, np.radians(105.0))
+    assert periods_of(A) == pytest.approx((400.0, 520.0))
+    assert A.axis_aligned is False
+    # a1 along x, a2 at the stated angle to it
+    a1, a2 = np.asarray(A)[:, 0], np.asarray(A)[:, 1]
+    cos = float(a1 @ a2 / (np.linalg.norm(a1) * np.linalg.norm(a2)))
+    assert np.degrees(np.arccos(cos)) == pytest.approx(105.0)
+
+    assert np.allclose(np.asarray(wavebit.hexagonal(400.0)),
+                       np.asarray(wavebit.oblique(400.0, 400.0, np.pi / 3)))
+    assert np.asarray(wavebit.rectangular(700.0, 1100.0)).tobytes() == \
+        np.diag([700.0, 1100.0]).tobytes()
+    assert np.asarray(wavebit.rectangular(640.0)).tobytes() == np.diag([640.0, 640.0]).tobytes()
+
+
+def test_a_right_angle_reports_itself_as_one():
+    """``axis_aligned`` is read off the basis rather than assumed from which function built it.
+
+    To 1e-16 and not to the bit: ``cos(pi/2)`` is 6.1e-17, so the off-diagonal is ~7e-14 rather
+    than 0. That is why :func:`rectangular` exists beside this.
+    """
+    A = wavebit.oblique(700.0, 1100.0, np.pi / 2)
+    assert A.axis_aligned is True
+    assert np.allclose(np.asarray(A), np.diag([700.0, 1100.0]), atol=1e-12)
+    with pytest.raises(ValueError, match='same line'):
+        wavebit.oblique(400.0, 400.0, 0.0)
+    with pytest.raises(ValueError, match='same line'):
+        wavebit.oblique(400.0, 400.0, np.pi)
+
+
+def test_the_angle_itself_is_a_design_variable():
+    """Build the basis inside the differentiated function and the angle is a parameter.
+
+    Nothing stores an angle -- ``oblique`` is a spelling that returns the same
+    :class:`Lattice` -- so this works for the ordinary reason any expression does.
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    eps = np.ones((1, 32, 32))
-    u = (np.arange(32) + 0.5) / 32
-    U, V = np.meshgrid(u, u)
-    eps[0][(U - 0.5) ** 2 + (V - 0.5) ** 2 < 0.1] = 12.25
+
+    def loss(angle):
+        return _analytic_loss(jnp, jnp.asarray(wavebit.oblique(400.0, 400.0, angle).columns))
+
+    g = float(jax.grad(loss)(jnp.asarray(np.pi / 3)))
+    assert np.isfinite(g) and abs(g) > 1e-12
+
+
+def test_the_raster_path_differentiates_the_basis_through_its_index_offsets():
+    """The distance transform runs on the host; only the pixel *choice* is held fixed.
+
+    Returning the distance and stopping the gradient there drops the metric's smooth half --
+    ``d = hypot(step_j*dj, step_i*di)`` varies smoothly with the steps even when the nearest
+    pixel does not change. Measured, that cost ~10% of ``d/d a2x`` on this cell and did not
+    shrink with raster resolution, which is what said it was systematic. Rebuilding the
+    distance from the returned offsets brings every component under 0.5%.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    A = np.asarray(wavebit.hexagonal(400.0))
+    n = 48
+    t = (np.arange(n) + 0.5) / n
+    U, V = np.meshgrid(t, t)
+    X, Y = U * A[0, 0] + V * A[0, 1], U * A[1, 0] + V * A[1, 1]
+    cx, cy = 0.5 * (A[0, 0] + A[0, 1]), 0.5 * (A[1, 0] + A[1, 1])
+    eps = np.where((X - cx) ** 2 + (Y - cy) ** 2 < 150.0 ** 2, 12.25, 1.0)
 
     def loss(M):
-        s = wavebit.rcwa(backend=1, wavelength=900.0, lattice=M, truncation_order=[3, 3],
-                         top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, thickness=[300.0],
-                         structure=eps, factorization='nvf')
+        s = wavebit.rcwa(backend=1, wavelength=900.0, lattice=M, truncation_order=[4, 4],
+                         top=1.0, bot=1.0, theta=0.1, phi=0.3, psi=0.2, thickness=[300.0],
+                         structure=eps[None], factorization='nvf')
         return jnp.sum(s.solve().R)
 
-    with pytest.raises(NotImplementedError, match='distance transform'):
-        jax.grad(loss)(jnp.array([[400.0, 200.0], [0.0, 346.41]]))
+    g = np.asarray(jax.grad(loss)(jnp.asarray(A)))
+    assert np.all(np.isfinite(g)), g
+    assert np.count_nonzero(np.abs(g) > 1e-12) == 4, g

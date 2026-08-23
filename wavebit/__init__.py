@@ -44,7 +44,7 @@ from ._core.domain import (Layer, Stack, Incidence, Material,
 # The type `eps_conv_matrices()` hands back and `solve_conv()` takes: a NamedTuple, so the five
 # slots still splat and unpack, but `conv.epz_i` reaches one by name.
 from ._core.factorization import ConvMatrices
-from ._core.lattice import grid
+from ._core.lattice import grid, hexagonal, oblique, rectangular
 from ._core.geometry import StaticGeometry, StaleGeometryError
 # What `solver.scattering` hands back after an SMM solve: the stack's own scattering matrix,
 # both sides and every order, incidence-relative, with the two half-spaces as its ports.
@@ -72,6 +72,9 @@ from ._core.spec import JobSpec, Numerics, Sweep, SpecError, run
 # offered, and without `__all__` a star import collected it along with the rest.
 __all__ = [
     'grid',
+    'hexagonal',
+    'oblique',
+    'rectangular',
     'rcwa',
     'AutoDetuneWarning', 'PrecisionLossWarning', 'RayleighPointWarning',
     'UnphysicalResultWarning', 'UnresolvedBranchWarning',
