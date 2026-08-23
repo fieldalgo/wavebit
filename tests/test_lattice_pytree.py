@@ -256,3 +256,56 @@ def test_the_two_hexagonal_spellings_are_one_lattice_and_two_calculations():
     # and the omitted centre lands elsewhere, because the fundamental cell does
     assert 0.5 * (A120[0, 0] + A120[0, 1]) == pytest.approx(100.0)
     assert 0.5 * (A60[0, 0] + A60[0, 1]) == pytest.approx(300.0)
+
+
+def test_the_solver_always_has_a_basis_to_give():
+    """``solver.lattice`` materialises ``diag(period)`` rather than answering ``None``.
+
+    One place to ask what the cell is, one type back. It answered ``None`` for the
+    axis-aligned default until 2026-08-23, on the grounds that "a basis has to be concrete"
+    and ``period`` may be a tracer -- which stopped being true when :class:`Lattice` split its
+    numbers (pytree children, traceable) from ``axis_aligned`` (aux_data, and known from which
+    keyword was used rather than from a number).
+
+    That the ``None`` cost something is visible in the tree: ``draw.slice_structure`` reaches
+    past this property to ``_geometry_lattice_for`` to get the materialised basis "instead of
+    a lookalike".
+    """
+    eps = np.ones((1, 12, 20))
+    eps[0, 3:8, 2:7] = 12.25
+    kw = dict(backend=0, wavelength=900.0, truncation_order=dict(u=4, v=1), top=1.0, bot=1.0,
+              theta=0.1, phi=0.3, psi=0.2, structure=eps, thickness=[300.0])
+
+    by_period = wavebit.rcwa(period=[700.0, 1100.0], **kw).lattice
+    assert isinstance(by_period, Lattice) and by_period.axis_aligned is True
+    assert np.allclose(np.asarray(by_period), np.diag([700.0, 1100.0]))
+
+    by_lattice = wavebit.rcwa(lattice=HEX, factorization='nvf', **kw).lattice
+    assert isinstance(by_lattice, Lattice) and by_lattice.axis_aligned is False
+    assert np.allclose(np.asarray(by_lattice), HEX)
+
+    # a lone period is the square it has always been
+    assert np.allclose(np.asarray(wavebit.rcwa(period=[640.0], **kw).lattice),
+                       np.diag([640.0, 640.0]))
+
+
+def test_a_traced_period_still_gives_a_basis():
+    """The case the ``None`` existed for. Its shape is a diagonal whether or not it is readable.
+
+    So ``axis_aligned`` is ``True`` without reading a number -- which is exactly what aux_data
+    is for, and why materialising is now available where it once was not.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    from wavebit._core.lattice import as_lattice as _as
+
+    seen = []
+
+    def f(p):
+        A = _as(period=p)
+        seen.append((type(A).__name__, A.axis_aligned))
+        return jnp.sum(A.u) + jnp.sum(A.v)
+
+    g = jax.grad(f)(jnp.array([700.0, 1100.0]))
+    assert seen == [('Lattice', True)]
+    assert np.allclose(np.asarray(g), [1.0, 1.0])        # d(Lx + Ly)/d(period)

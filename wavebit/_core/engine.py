@@ -883,20 +883,29 @@ class CoreSolveMixin:
 
     @property
     def lattice(self):
-        """The unit cell's ``(2, 2)`` basis, columns ``a1`` / ``a2`` — or ``None``.
+        """The unit cell's basis, always — :class:`~wavebit._core.lattice.Lattice`, never ``None``.
 
-        ``None`` is the default and means the axis-aligned cell ``diag(period)``. It is a
-        distinct value rather than a materialised ``diag(period)`` on purpose: ``period`` may
-        be a JAX tracer inside a jitted solve, and a basis has to be concrete (it decides
-        control flow and reaches SciPy). Leaving the default un-materialised keeps every
-        existing call off that conversion entirely, so the orthogonal path is untouched.
+        A cell given as ``period`` materialises here as ``diag(period)``, so there is one place
+        to ask what the cell is and one type to get back. It returned ``None`` for the
+        axis-aligned default until 2026-08-23, on the stated grounds that "a basis has to be
+        concrete (it decides control flow and reaches SciPy)" and ``period`` may be a tracer.
+        That stopped being true when ``Lattice`` split its numbers from its shape: the numbers
+        are pytree children and trace, while ``axis_aligned`` -- the part that decides control
+        flow -- is aux_data and is known from *which keyword was used* without reading one.
+
+        The `None` was load-bearing in the meantime, which is how you can tell it cost
+        something: :func:`~wavebit._core.draw.slice_structure` reaches past this property to
+        ``_geometry_lattice_for`` precisely to get the materialised basis, "instead of a
+        lookalike".
 
         Assigning a basis selects the non-orthogonal path; ``period`` then reports the
         basis-vector lengths (see :func:`wavebit._core.lattice.periods_of`), and the raster
         is read in lattice coordinates — ``structure[layer][j, i]`` sampling
         ``r = (i+0.5)/Nx * a1 + (j+0.5)/Ny * a2``.
         """
-        return self._lattice_basis
+        if self._lattice_basis is not None:
+            return self._lattice_basis
+        return _lattice.as_lattice(period=self.period)
 
     @lattice.setter
     def lattice(self, value):

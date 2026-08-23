@@ -165,6 +165,25 @@ class _BaseRCWA(CoreSolveMixin):
 
     @property
     def period(self):
+        """The cell's two edge lengths — **syntactic sugar for the axis-aligned basis**.
+
+        ``period=(Lx, Ly)`` is a shorthand spelling of ``lattice=diag(Lx, Ly)`` and nothing
+        more: it is the same cell, written the short way for the case that has no angle to
+        state. :attr:`lattice` materialises it, so a solver given only a period still answers
+        with a basis.
+
+        **Reading it back on a skewed cell gives something else.** There it is
+        ``periods_of(A) = (|a1|, |a2|)`` -- the two *edge lengths*, with the angle already
+        gone, so a 60-degree hex of side 400 and a 400x400 square both report ``(400, 400)``.
+        Correct for a caller wanting the physical extent along each raster axis, wrong for one
+        wanting a bounding box, and wrong for anything doing geometry: a function handed this
+        pair and no basis can only compute a rectangle's answer. Two live defects came through
+        exactly that gap on 2026-08-23, which is why
+        ``tests/test_cell_shape_gate.py`` now refuses the shape of code that did.
+
+        So: **sugar on the way in, a derived readout on the way out.** :attr:`lattice` is the
+        cell; this is a convenience over it.
+        """
         return self._period
 
     @period.setter

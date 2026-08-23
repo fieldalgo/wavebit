@@ -59,11 +59,21 @@ def totals(cell, truncation_order=8, lattice=None, **kw):
 
 # ------------------------------------------------------------------- the basis itself
 
-def test_default_lattice_is_none_and_reads_as_axis_aligned():
-    """``None`` rather than a materialised ``diag(period)``: ``period`` may be a JAX tracer."""
+def test_the_default_cell_materialises_as_diag_period():
+    """A cell given as ``period`` still *is* a basis, and this reports it as one.
+
+    It answered ``None`` here until 2026-08-23, on the grounds that "``period`` may be a JAX
+    tracer" and a basis had to be concrete. That stopped being true when ``Lattice`` split its
+    numbers from its shape: the numbers are pytree children and trace, while ``axis_aligned``
+    -- the part that decides control flow -- is aux_data and follows from *which keyword was
+    used*, with no number read. So there is one place to ask what the cell is and one type
+    back, and `draw.slice_structure` no longer has to reach past this property for the
+    materialised basis it wanted.
+    """
     s = solver(raster(ORTHO))
-    assert s.lattice is None
-    assert s.lattice_is_axis_aligned
+    assert isinstance(s.lattice, lat.Lattice)
+    assert s.lattice.axis_aligned and s.lattice_is_axis_aligned
+    assert np.allclose(np.asarray(s.lattice), np.diag(np.asarray(s.period)))
 
 
 def test_assigning_a_basis_reports_the_edge_lengths_as_period():

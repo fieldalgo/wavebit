@@ -67,7 +67,12 @@ class Lattice:
     samples along it, and ``a1`` was only ever a synonym. ``A.u`` says which one it is;
     ``A[:, 0]`` needs the reader to know that columns are the vectors and rows are x and y.
 
-    ``axis_aligned`` says whether the pair is ``diag(Lx, Ly)``.
+    ``axis_aligned`` says whether the pair is ``diag(Lx, Ly)`` -- which is the case
+    ``period=(Lx, Ly)`` spells. **``period`` is syntactic sugar for this class**, not a second
+    way of describing a cell: it is the short form for the cell that has no angle to state, and
+    :attr:`~wavebit._core.engine.CoreSolveMixin.lattice` materialises it. Reading ``period``
+    back off a skewed cell gives ``periods_of`` -- the edge lengths, with the angle gone -- so
+    the sugar only round-trips where it was the spelling to begin with.
 
     **Why those two are not the same kind of thing.** The numbers are a legitimate design
     variable -- optimising a hex angle or a shear is a real thing to want, and until this class
@@ -104,6 +109,14 @@ class Lattice:
 
     def __getitem__(self, key):
         return self.columns[key]
+
+    def __repr__(self):
+        u, v = (np.asarray(x, dtype=float) for x in (self.u, self.v))
+        if self.axis_aligned:                       # what `period=(Lx, Ly)` spells
+            return f'Lattice(diag({u[0]:g}, {v[1]:g}))'
+        return (f'Lattice(u=({u[0]:g}, {u[1]:g}), v=({v[0]:g}, {v[1]:g}), '
+                f'|u|={float(np.hypot(*u)):g}, |v|={float(np.hypot(*v)):g}, '
+                f'angle={float(np.degrees(np.arccos(np.clip(u @ v / (np.hypot(*u) * np.hypot(*v)), -1, 1)))):.4g} deg)')
 
     def __array__(self, dtype=None, copy=None):
         a = np.asarray(self.columns, dtype=float)
@@ -176,7 +189,16 @@ def as_lattice(period=None, lattice=None):
 
     if period is None:
         raise ValueError('as_lattice: needs one of period or lattice')
-    p = np.atleast_1d(np.asarray(period, dtype=float))
+    try:
+        p = np.atleast_1d(np.asarray(period, dtype=float))
+    except Exception:                       # noqa: BLE001 - a traced period, not a mistake
+        # `period` is the variable under differentiation. Its *shape* is still a diagonal, so
+        # `axis_aligned` is known without reading a number -- which is the whole reason that
+        # flag is aux_data and not a child.
+        xp = array_namespace(period)
+        q = period if getattr(period, 'shape', (1,))[-1] == 2 else xp.stack([period[0], period[0]])
+        zero = 0.0 * q[0]
+        return Lattice(xp.stack([q[0], zero]), xp.stack([zero, q[1]]), True)
     if p.size == 1:
         p = np.array([p[0], p[0]])
     if p.size != 2:
