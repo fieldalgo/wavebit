@@ -760,3 +760,43 @@ def test_the_reconstructed_field_obeys_bloch_along_both_lattice_vectors():
         want = lo * np.exp(1j * float(np.dot(k_inc, a)))
         off = float(np.max(np.abs(hi - want))) / scale
         assert off < 1e-12, (name, off)
+
+
+# ------------------------------------------------- the plan check that did not get the basis
+
+@pytest.mark.parametrize('lattice,omit_centre', [(None, False), (None, True),
+                                                 (HEX, False), (HEX, True)])
+def test_a_frozen_painting_plan_replays_on_a_skewed_cell(lattice, omit_centre):
+    """``check_plan_still_fits`` was the one sibling in its family not handed the basis.
+
+    ``to_conv_mat_boundary_layer`` forwards ``lattice`` to ``shape_vertices``, ``plan_layer`` and
+    ``conv_mats``, and the analytic twin forwards it to ``check_no_plan_still_fits``,
+    ``check_layer_combination`` and ``layer_needs_resolving``. The frozen branch's own check did
+    not get it, though its signature has had the parameter all along -- so it defaulted an
+    omitted centre to ``(Px/2, Py/2)``, the centre of ``diag(|a1|, |a2|)``, while the eager pass
+    beside it used the cell's. The two then disagreed about where the shape was, and the check
+    reported the plan stale.
+
+    This is ``2d7ca08``'s bug at the one call site that missed the fix, and the parametrisation
+    is what separates the two halves: the cell must be skewed *and* a centre omitted. Either
+    alone leaves the two spellings the same arithmetic, which is why nothing caught it.
+
+    Only the frozen replay was affected -- the eager solve was right throughout, so an
+    energy or convergence check could not have found this. The oracle has to be the eager pass.
+    """
+    def build():
+        a = {'type': 'circle', 'lx': 160.0, 'material': EPS_ROD}
+        if not omit_centre:
+            a = dict(a, cx=P / 2, cy=P / 2)
+        b = {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'material': 9.0}
+        return wavebit.rcwa(backend=0, period=[P, P], truncation_order=[3, 3], thickness=[H],
+                            structure=[{'background': EPS_AIR, 'combine': 'paint',
+                                        'shapes': [a, b]}],
+                            wavelength=WL, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+                            factorization='nvf', lattice=lattice, normal_grid=64)
+
+    eager = np.asarray(build().solve().T)
+    replayer = build()
+    replayed = np.asarray(replayer.solve(geometry=replayer.freeze_geometry()).T)
+    assert float(np.sum(eager)) > 1e-6                    # an all-zero T would pass anything
+    assert replayed.tobytes() == eager.tobytes()          # a replay is the same solve, 0 ulp

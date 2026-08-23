@@ -468,7 +468,7 @@ def to_conv_mat_boundary_layer(xp, shapes, background, half_width_u, half_width_
     if plan is None:
         recs, regions = plan_layer(shapes, period, n_poly, lattice)
     else:
-        check_plan_still_fits(shapes, period, plan, n_poly)
+        check_plan_still_fits(shapes, period, plan, n_poly, lattice)
         recs, regions = plan
     vals = _clipper.eval_table(xp, recs, verts)
     regs = [(s['material'], [_clipper.loop_verts(xp, lp, vals) for lp in region])
