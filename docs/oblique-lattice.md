@@ -19,18 +19,55 @@ motifs. That doubles the cell area, the retained order count scales with area, a
 ```python
 import numpy as np, wavebit
 
-a = 400.0
-a1, a2 = np.array([a, 0.0]), np.array([a / 2, a * np.sqrt(3) / 2])   # hex, 60-deg spelling
-
 solver = wavebit.rcwa(
     backend=0, structure=cell, truncation_order=[10, 10], thickness=[300.0], wavelength=900.0,
     factorization='nvf',                       # required — see "What is refused"
-    lattice=np.column_stack((a1, a2)),         # columns are a1, a2
+    lattice=wavebit.hexagonal(400.0),          # or lattice=np.column_stack((a1, a2))
 )
 ```
 
 `period=(Lx, Ly)` remains the default and means `diag(Lx, Ly)`. Setting `lattice` makes `period`
 report the basis-vector lengths `(|a1|, |a2|)`.
+
+## Spelling the cell
+
+`lattice` is always a 2x2 whose **columns** are `a1` and `a2`, and you can write it by hand.
+Three constructors spell the usual ones:
+
+```python
+wavebit.rectangular(700.0, 1100.0)          # diag(700, 1100); `ly` defaults to `lx`
+wavebit.hexagonal(400.0)                    # 120-degree rhombus, the crystallographic setting
+wavebit.hexagonal(400.0, np.radians(60))    # the 60-degree alternative basis
+wavebit.oblique(400.0, 520.0, np.radians(105))
+```
+
+`angle` is the angle between `a1` and `a2`, in radians, like every other angle in this API.
+These are spellings and not a new kind of cell — each returns the same object `lattice=` takes,
+and nothing stores an angle afterwards. Which is what makes the angle differentiable: build the
+basis *inside* the function you differentiate and it is a design variable, for the ordinary
+reason any expression is. See "Where the skew actually reaches the code".
+
+**Building the structure.** `wavebit.grid` gives the Cartesian coordinates of the raster's pixel
+centres, so a layer can be written in coordinates rather than indices:
+
+```python
+A = wavebit.hexagonal(400.0)
+X, Y = wavebit.grid((256, 256), lattice=A)
+cx, cy = 0.5 * (A[0][0] + A[0][1]), 0.5 * (A[1][0] + A[1][1])       # the cell centre
+layer = np.where((X - cx) ** 2 + (Y - cy) ** 2 < 90.0 ** 2, 12.25, 1.0)
+```
+
+The centre is written out because a pillar sits at the *lattice point* in most descriptions,
+and the lattice point is a **corner** of the cell — put it at the origin and the raster holds
+one wedge of it, with the other wedges belonging to the neighbouring copies. Correct as a
+periodic structure only if you draw all of them; putting the pillar in the middle of the cell
+is the same array, described once.
+
+On a skewed cell this is the step that is easy to get wrong by hand — the samples are at
+`u*a1 + v*a2`, not on a rectangle, and `np.meshgrid` alone will not put them there. An
+expression written in `X` and `Y` also cannot get the axis order wrong, since `where` is
+elementwise and the layout simply follows; one written in indices (`layer[:2] = ...`) can, and
+does so silently on a non-square raster.
 
 ## The one thing that will bite you
 
@@ -253,6 +290,19 @@ diverged on *both* lattices in our hands, 0.986 -> 0.933, and is not usable as a
 **The supercell it replaces.** A native hex cell reproduces its rectangular supercell; the
 residual is the two rasters staircasing the feature differently, so it tightens with resolution
 rather than with `truncation_order`.
+
+**Which hex spelling.** `wavebit.hexagonal(a)` is the 120-degree cell, the crystallographic
+setting: `a1 = (a, 0)`, `a2 = (-a/2, a*sqrt(3)/2)`. 60 degrees spans the same lattice and is one
+argument away (`hexagonal(a, np.radians(60))`), and it is what the numbers on this page were
+originally measured on. They carry over: on the pillar array above the two spellings agree to
+**1e-13** at `truncation_order` 6, 9 and 12 — machine precision, because a pillar at the lattice
+point has the lattice's own six-fold symmetry, so the orders each truncation keeps and the other
+drops are related by it and contribute alike. **That is a property of this structure, not of the
+spelling.** Break the symmetry and the two differ by their truncation error, since
+`truncation_order` cuts a parallelogram in `(m, n)` and a different basis maps that onto a
+different set of `G` — 81 orders either way at `truncation_order=4`, 61 of them shared. And an
+*omitted* shape centre moves outright, since the fundamental cell is a different parallelogram:
+`(100, 173)` against `(300, 173)` at `a = 400`.
 
 ## A worked case: a visible metalens phase library
 
