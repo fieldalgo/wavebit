@@ -25,7 +25,7 @@ from wavebit import JobSpec, Sweep, SpecError, Backend, Factorization, Material
 # version 3 moved the material numbers from refractive index to permittivity and an absent
 # version is the absence of a statement about which of the two these are. 12.25 is 3.5**2.
 BINARY_GRATING = {
-    'version': '5',
+    'version': '6',
     'numerics': {'backend': 'numpy', 'truncation_order': [10, 0]},
     'stack': {
         'top': 1.0, 'bot': 2.25, 'period': [700.0],
@@ -267,7 +267,7 @@ def test_a_document_that_states_no_version_is_refused():
         JobSpec.from_json(json.dumps(versionless))
 
     # stating it is the whole fix; nothing else about the document has to change
-    assert JobSpec.from_dict({**versionless, 'version': '5'}).key() == \
+    assert JobSpec.from_dict({**versionless, 'version': '6'}).key() == \
         JobSpec.from_dict(BINARY_GRATING).key()
 
 
@@ -285,7 +285,7 @@ def test_the_stale_document_only_the_version_can_catch():
 
     # and it is a *different scene*, not a near miss: state the version and it runs, happily,
     # conserving energy and answering a different question
-    stale = wavebit.run({**INDEX_NUMBERS, 'version': '5'})
+    stale = wavebit.run({**INDEX_NUMBERS, 'version': '6'})
     current = wavebit.run(BINARY_GRATING)
     assert stale.R.sum() + stale.T.sum() == pytest.approx(1.0, abs=1e-13)
     assert current.R.sum() + current.T.sum() == pytest.approx(1.0, abs=1e-13)
@@ -324,7 +324,7 @@ def test_the_retired_layer_key_is_refused_by_name_not_as_an_unknown():
     ``n_top`` / ``n_bot`` already got the full text; the layer key was simply missed, in the
     call two lines below the one that has it.
     """
-    document = {'version': '5',
+    document = {'version': '6',
                 'numerics': BINARY_GRATING['numerics'],
                 'incidence': BINARY_GRATING['incidence'],
                 'stack': {'top': 1.0, 'bot': 1.5, 'period': [700.0],
@@ -483,3 +483,66 @@ def test_real_polar_angles_pass():
     for point in spec.expand():
         r = wavebit.run(point)
         assert r.R.sum() + r.T.sum() == pytest.approx(1.0, abs=1e-9)
+
+
+def _oblique_spec():
+    """A hex cell with an off-centre feature — asymmetric, so a lost basis shows.
+
+    ``period`` is stated *as well*, and equal to the two edge lengths ``hexagonal(400)``
+    gives, so that the basis contributes the angle and nothing else. That is what makes
+    the pair of tests below sharp: drop ``lattice`` anywhere along the path and the run
+    degrades to exactly the square in :func:`test_the_round_trip_is_not_merely_carrying_
+    the_edge_lengths` rather than to some other scale, which would part the two numbers
+    for a reason that has nothing to do with the skew.
+    """
+    basis = np.asarray(wavebit.hexagonal(400.0))
+    eps = np.ones((1, 16, 16))
+    eps[0, 3:8, 2:7] = 12.25
+    return basis, JobSpec(
+        stack=wavebit.Stack.from_structure(eps, [300.0], top=1.0, bot=1.0,
+                                          period=(400.0, 400.0),
+                                          lattice=basis.tolist()),
+        incidence=wavebit.Incidence(wavelength=900.0, theta=0.1, phi=0.3, psi=0.2),
+        numerics=wavebit.Numerics(backend=0, truncation_order=[4, 4],
+                                  factorization=Factorization.NVF))
+
+
+def test_an_oblique_cell_survives_the_round_trip():
+    """``JobSpec`` calls itself a *complete* description, and could not describe one.
+
+    ``Stack`` carried ``period`` alone until 2026-08-23 (``SPEC_VERSION`` 5 -> 6), and on a
+    skewed cell ``period`` is ``(|a1|, |a2|)`` -- the two edge lengths, with the angle already
+    gone, so it cannot reconstruct the basis. Every oblique run was therefore unserialisable,
+    quietly: the document came back describing a *rectangle* of the same edge lengths.
+    """
+    basis, spec = _oblique_spec()
+    back = JobSpec.from_json(spec.to_json())
+    assert np.allclose(np.asarray(back.stack.lattice), basis)
+
+    a = wavebit.run(spec)
+    b = wavebit.run(back)
+    assert np.asarray(a.R).tobytes() == np.asarray(b.R).tobytes()
+
+
+def test_the_round_trip_is_not_merely_carrying_the_edge_lengths():
+    """The check with teeth: the same edge lengths as a *rectangle* give a different answer.
+
+    Without it, a spec that dropped `lattice` and kept `period=(400, 400)` would still
+    round-trip, still solve, and still conserve energy — just a different structure.
+    """
+    basis, spec = _oblique_spec()
+    oblique = float(np.sum(wavebit.run(spec).R))
+
+    square = JobSpec(stack=wavebit.Stack.from_structure(
+        spec.stack.structure, spec.stack.thickness, top=1.0, bot=1.0, period=(400.0, 400.0)),
+        incidence=spec.incidence, numerics=spec.numerics)
+    assert square.stack.lattice is None
+    assert not np.isclose(oblique, float(np.sum(wavebit.run(square).R)))
+
+
+def test_a_spec_without_a_lattice_is_unchanged():
+    """The axis-aligned document does not gain a key it has no use for."""
+    spec = JobSpec.from_json(json.dumps(BINARY_GRATING))
+    assert spec.stack.lattice is None
+    assert 'lattice' not in json.loads(spec.to_json())['stack']
+    assert 'lattice' not in spec.stack.as_kwargs()

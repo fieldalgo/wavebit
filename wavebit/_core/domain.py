@@ -438,7 +438,9 @@ class Stack:
 
     Layer order is top-to-bottom, matching ``structure``'s first axis (the same order the
     solver stacks them). ``top`` / ``bot`` are the bounding superstrate / substrate and
-    ``period`` is the in-plane period.
+    ``period`` is the in-plane period, and ``lattice`` the basis when the cell is not
+    axis-aligned -- ``period`` alone cannot describe one, since it reports the two edge lengths
+    and the angle is already gone.
 
     The two half-space slots take a :class:`Material` or a number, and -- like
     :attr:`Layer.structure` -- **pass it through untouched** to :func:`wavebit.rcwa` via
@@ -453,24 +455,32 @@ class Stack:
     top: Any = 1.0
     bot: Any = 1.0
     period: Any = (1.0, 1.0)
+    #: The cell basis, columns ``a1`` / ``a2``, or ``None`` for the axis-aligned cell
+    #: ``period`` spells. Carried because :class:`~wavebit._core.spec.JobSpec` calls itself a
+    #: *complete* description of a run and could not describe an oblique cell without it --
+    #: ``period`` reports ``(|a1|, |a2|)`` there, which does not determine the basis. Kept as
+    #: the plain ``(2, 2)`` rather than a :class:`~wavebit._core.lattice.Lattice` for the same
+    #: reason the half-spaces stay uncoerced: this layer passes through, and ingest converts.
+    lattice: Any = None
 
     @classmethod
     def from_structure(cls, structure, thickness, top=1.0, bot=1.0, period=(1.0, 1.0),
-                       mu=None) -> "Stack":
+                       mu=None, lattice=None) -> "Stack":
         """Adapt a ``(structure, thickness)`` pair into a typed ``Stack``.
 
         ``structure`` may be any encoding (raster ndarray / block list / analytic list); it is
         layer-major on its first axis, so layer *i* is ``(thickness[i], structure[i])``. The
         inverse of :attr:`structure` — ``Stack.from_structure(s, t).structure`` reproduces
         ``s``. ``mu`` is the raster path's optional permeability field, layer-major the same
-        way.
+        way, and ``lattice`` the cell basis for a skewed cell -- give that rather than
+        ``period``, which on one reports only the two edge lengths.
         """
         if structure is None:
             layers = []
         else:
             layers = [Layer(t, structure[i], None if mu is None else mu[i])
                       for i, t in enumerate(thickness)]
-        return cls(layers=layers, top=top, bot=bot, period=period)
+        return cls(layers=layers, top=top, bot=bot, period=period, lattice=lattice)
 
     @property
     def thickness(self) -> list:
@@ -526,6 +536,7 @@ class Stack:
         mu = self.mu
         return dict(structure=self.structure, thickness=self.thickness,
                     top=self.top, bot=self.bot, period=self.period,
+                    **({} if self.lattice is None else {'lattice': self.lattice}),
                     **({} if mu is None else {'mu': mu}))
 
     def __len__(self) -> int:

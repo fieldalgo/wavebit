@@ -58,7 +58,7 @@ from .domain import Layer, Material, Stack, Incidence, retired_material_name
 from .enums import (Answers, Backend, Factorization, FourierCoefficients, NormalMethod,
                     Tetm, answers_of)
 
-SPEC_VERSION = '5'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12)
+SPEC_VERSION = '6'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12)
 #                     '3': the material convention. `stack.layers[i].eps` -> `.structure`,
 #                     `stack.n_top` / `.n_bot` -> `.top` / `.bot`, and the *quantity* every
 #                     one of them holds went from refractive index to relative permittivity
@@ -81,6 +81,12 @@ SPEC_VERSION = '5'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12
 #                     one -- so unlike '3' this is a spelling change, and the version says so
 #                     because `_reject_unknown` would otherwise report the old key as simply
 #                     unknown rather than as renamed.
+#                     '6': `stack.lattice`, the cell basis (2026-08-23). Additive and
+#                     optional -- a v5 document is a correct v6 one -- but the bump is not
+#                     ceremony: it runs the other way. A v6 document carrying a lattice,
+#                     read by a build that predates the key, loses the skew and solves the
+#                     rectangle `period` spells, quietly and conserving energy. The version
+#                     is what makes that old build refuse instead.
 
 #: Refusal for a document that states no version. Its own justification, because the rule
 #: reads as gratuitous ceremony until you see which case it is for.
@@ -599,7 +605,7 @@ class JobSpec:
 
 def _stack_from_dict(d) -> Stack:
     d = dict(d or {})
-    _reject_unknown(d, ('layers', 'top', 'bot', 'period'), 'stack',
+    _reject_unknown(d, ('layers', 'top', 'bot', 'period', 'lattice'), 'stack',
                     retired=('n_top', 'n_bot'))
     layers = []
     for i, raw in enumerate(d.get('layers', [])):
@@ -624,10 +630,14 @@ def _stack_from_dict(d) -> Stack:
             mu=(None if raw.get('mu') is None
                 else _structure_from_json(raw['mu'], i, 'mu'))))
     period = d.get('period', (1.0, 1.0))
+    lattice = d.get('lattice')
+    if lattice is not None:
+        lattice = [list(row) for row in lattice]
     return Stack(layers=layers,
                  top=_material_from_json(d.get('top', 1.0), 'stack.top'),
                  bot=_material_from_json(d.get('bot', 1.0), 'stack.bot'),
-                 period=list(period) if isinstance(period, (list, tuple)) else period)
+                 period=list(period) if isinstance(period, (list, tuple)) else period,
+                 lattice=lattice)
 
 
 def _stack_to_dict(stack: Stack) -> dict:
@@ -643,6 +653,7 @@ def _stack_to_dict(stack: Stack) -> dict:
         'top': _material_to_json(stack.top),
         'bot': _material_to_json(stack.bot),
         'period': _jsonable(stack.period),
+        **({} if stack.lattice is None else {'lattice': _jsonable(stack.lattice)}),
         'layers': [{'thickness': _jsonable(l.thickness),
                     'structure': _jsonable(l.structure),
                     **({} if l.mu is None else {'mu': _jsonable(l.mu)})}
