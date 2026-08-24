@@ -844,3 +844,112 @@ def test_the_block_modeller_is_refused_at_the_drawing_door_too():
     b = np.asarray(draw.slice_structure(stated, 0, n=64))
     assert np.array_equal(a, b)
     assert len(np.unique(a)) > 1                     # a constant picture would pass anything
+
+
+# ---------------------------------------------------- the incidence, which was always normal
+
+def _rotation(angle):
+    c, s = np.cos(angle), np.sin(angle)
+    return np.array([[c, -s], [s, c]])
+
+
+def _rod_on(basis, n=64, radius=R):
+    """The same physical rod, stated in the cell's own coordinates.
+
+    Built at ``u*a1 + v*a2`` rather than on an ``(x, y)`` mesh, so rotating the basis rotates
+    the object rigidly instead of resampling a different one. That is what makes the comparison
+    below exact rather than approximate.
+    """
+    return raster(basis, n=n, radius=radius)
+
+
+@pytest.mark.parametrize('degrees', [13.0, 47.0, 90.0])
+@pytest.mark.parametrize('theta,phi,psi,chi', [
+    (0.0, 0.0, 0.0, 0.0),                       # normal: what every oblique test used to be
+    (0.35, 0.0, 0.4, 0.0),                      # oblique incidence, linear
+    (0.35, 0.9, 0.4, 0.0),                      # with an azimuth of its own
+    (0.35, 0.9, 0.0, np.pi / 4),                # circular
+    (0.35, 0.9, 0.4, np.pi / 8),                # elliptical, at an orientation
+])
+def test_the_answer_rotates_with_the_cell(degrees, theta, phi, psi, chi):
+    """Turn the cell and the azimuth together and nothing may move.
+
+    Rotating the whole problem about ``z`` is a change of observer. The structure is stated in
+    the cell's own coordinates, so ``R @ A`` carries the same object; ``phi`` is measured from
+    ``x``, so it takes the same turn; ``psi`` and ``chi`` are measured against the plane of
+    incidence, which rotates with everything else, and so are unchanged. Every efficiency must
+    come back identical -- the per-order *amplitudes* rotate, the powers do not.
+
+    This is the axis the oblique tests never had. Before 2026-08-24 every one of them ran at
+    ``theta=0, phi=0``: ``phi`` and the cell orientation were never varied against each other,
+    though ``phi=0`` means "along x" while a skewed ``a1`` is the one thing that need not be.
+    ``chi`` appeared nowhere in this file at all.
+
+    Note which rotations are worth asking for. 90 degrees maps ``x`` onto ``y`` and so survives
+    an axis-aligned assumption unharmed; it agreed to 1e-14 while the bug in `b7c4645` was live.
+    13 and 47 do not, which is why they are here.
+    """
+    basis = HEX
+    turned = _rotation(np.radians(degrees)) @ basis
+    common = dict(backend=0, period=[P, P], truncation_order=[5, 5], thickness=[H],
+                  wavelength=WL, top=1.0, bot=1.0, theta=theta, psi=psi, chi=chi,
+                  factorization='nvf')
+    a = wavebit.rcwa(structure=_rod_on(basis), lattice=basis, phi=phi, **common).solve()
+    b = wavebit.rcwa(structure=_rod_on(turned), lattice=turned,
+                     phi=phi + np.radians(degrees), **common).solve()
+    scale = float(np.sum(np.asarray(a.R)) + np.sum(np.asarray(a.T)))
+    assert scale == pytest.approx(1.0, abs=1e-12)          # a dead solve would pass the rest
+    for name in ('R', 'T'):
+        off = float(np.max(np.abs(np.asarray(getattr(a, name)) - np.asarray(getattr(b, name)))))
+        assert off < 1e-12, (name, degrees, off)
+
+
+def _circular_dichroism(basis, truncation, normal_grid=512):
+    """``sum(R)`` for one handedness minus the other, on a rod of isotropic dielectric.
+
+    The *shape* path, not a raster. A pixel grid is itself only mirror-symmetric when the cell
+    is, so a rastered rod on a shear carries a second asymmetry that answers to resolution
+    rather than to truncation -- measured, it falls 1.2e-05 to 5.3e-06 between
+    ``truncation_order`` 5 and 11 and then stops, which would hide the effect this is about.
+    Stating the disc exactly leaves the retained order set as the only asymmetry left.
+    """
+    centre = 0.5 * (np.asarray(basis)[:, 0] + np.asarray(basis)[:, 1])
+    shapes = [{'background': EPS_AIR,
+               'shapes': [{'type': 'circle', 'cx': float(centre[0]), 'cy': float(centre[1]),
+                           'lx': 2 * R, 'material': EPS_ROD}]}]
+    common = dict(backend=0, structure=shapes, period=[P, P], thickness=[H],
+                  truncation_order=[truncation, truncation], wavelength=WL, top=1.0, bot=1.0,
+                  theta=0.35, phi=0.0, psi=0.0, factorization='nvf', lattice=basis,
+                  normal_grid=normal_grid)
+    lcp = wavebit.rcwa(chi=np.pi / 4, **common).solve()
+    rcp = wavebit.rcwa(chi=-np.pi / 4, **common).solve()
+    return float(np.sum(np.asarray(lcp.R)) - np.sum(np.asarray(rcp.R)))
+
+
+def test_a_symmetry_oracle_on_a_skewed_cell_is_only_exact_in_the_limit():
+    """Circular dichroism is machine-zero on a rectangle and merely *converging* on a shear.
+
+    An array of round rods in an isotropic, non-magnetic dielectric has no circular dichroism:
+    mirroring the scene about the plane of incidence maps one handedness onto the other and the
+    structure onto a translate of itself, and a rigid in-plane translation cannot change a
+    total. So ``sum(R)`` must be handedness-blind, and on an orthogonal cell it is -- 1e-15, at
+    any truncation.
+
+    On a skewed cell it is not, and the cause is the *retained order set* rather than the
+    physics. The window is a rectangle in ``(m, n)``; the mirror that proves the symmetry sends
+    ``a2`` to ``a1 - a2``, so it sends ``(m, n)`` to ``(m + n, -n)`` and carries that rectangle
+    off itself. The symmetry is exact in the structure and broken in the truncation, so it comes
+    back only as the window grows: measured on ``hexagonal(400)``, 5.4e-06 at
+    ``truncation_order=5`` and 1.8e-08 at 17, with the sign changing on the way -- which is
+    what truncation error looks like and what a defect does not.
+
+    Pinned so the next reader does not go fix it. A symmetry argument is a valid oracle on this
+    path (``docs``: energy conservation is not), but on a skewed cell it holds to the
+    *truncation*, not to the machine.
+    """
+    assert abs(_circular_dichroism(ORTHO, 5)) < 1e-12       # exact, and at low order already
+    assert abs(_circular_dichroism(ORTHO, 8)) < 1e-12
+
+    coarse, finer = abs(_circular_dichroism(HEX, 5)), abs(_circular_dichroism(HEX, 11))
+    assert coarse > 1e-7, coarse                            # the artifact is real, not noise
+    assert finer < coarse / 5.0, (coarse, finer)            # and it is going away with the order
