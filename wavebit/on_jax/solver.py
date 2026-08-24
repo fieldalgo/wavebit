@@ -87,8 +87,15 @@ class SolverJax(RCWAJax, OptimizerJax):
             # `period` because the setter derives `period` from the basis. That still holds on
             # the way back in, and it is correct: with a basis in play `period` is a reported
             # quantity rather than an independent one.
+            # `.columns`, not `.tolist()` on the basis itself: `_lattice_basis` holds a
+            # `Lattice` since the cell became a design variable, and a `Lattice` has no
+            # `tolist`. Flattening an oblique solver raised `AttributeError` -- and because
+            # `solve_field` is jitted at class level, `self` is flattened on every call, so
+            # the *entire jitted field path* was unreachable on a skewed cell. Nothing caught
+            # it: jax, an oblique cell and a field reconstruction are three features the suite
+            # covered one at a time and never together.
             'lattice': (None if self._lattice_basis is None
-                        else tuple(map(tuple, self._lattice_basis.tolist()))),
+                        else tuple(map(tuple, self._lattice_basis.columns.tolist()))),
             'normal_grid': self.normal_grid,
         }
 
