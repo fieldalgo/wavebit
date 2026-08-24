@@ -42,7 +42,7 @@ def polygon_area(xp, verts):
     return 0.5 * xp.sum(x * yn - xn * y)
 
 
-def polygon_ft(xp, verts, ky, kx, period, lattice=None):
+def polygon_ft(xp, verts, ky, kx, lattice):
     """1/area * FT of the polygon indicator, on the integer reciprocal grid (ky, kx).
 
     ``verts`` is (N, 2) in (x, y), counter-clockwise. Returns an array shaped like ``kx``.
@@ -55,19 +55,19 @@ def polygon_ft(xp, verts, ky, kx, period, lattice=None):
     cell edge either: ``exp(-i G.r)`` carries the lattice periodicity, so integrating over the
     polygon wherever it sits gives the right coefficient.
     """
-    Px, Py = period[0], period[1]
     pi = 3.141592653589793
-    if lattice is None:
-        Gx = 2.0 * pi * kx / Px
-        Gy = 2.0 * pi * ky / Py
-        cell_area = Px * Py
-    else:
-        a1x, a2x = lattice[0][0], lattice[0][1]
-        a1y, a2y = lattice[1][0], lattice[1][1]
-        det = a1x * a2y - a2x * a1y
-        Gx = 2.0 * pi * (a2y * kx - a1y * ky) / det
-        Gy = 2.0 * pi * (-a2x * kx + a1x * ky) / det
-        cell_area = abs(det)
+    # The `lattice is None` arm that used to sit here computed the rectangle's answer from
+    # `Px`, `Py`. The solver stopped reaching it once `_geometry_lattice_for` became total
+    # (`cc016fc`) -- driving only the public API, the one function that ever sees a `None`
+    # cell is `as_lattice` itself, where the conversion happens. Deleted rather than
+    # re-keyed on `is_axis_aligned`: production takes *this* branch on a rectangle today,
+    # and the two differ in the last place (1.3e-16, measured).
+    a1x, a2x = lattice[0][0], lattice[0][1]
+    a1y, a2y = lattice[1][0], lattice[1][1]
+    det = a1x * a2y - a2x * a1y
+    Gx = 2.0 * pi * (a2y * kx - a1y * ky) / det
+    Gy = 2.0 * pi * (-a2x * kx + a1x * ky) / det
+    cell_area = abs(det)
 
     x, y = verts[:, 0], verts[:, 1]
     xn, yn = xp.roll(x, -1), xp.roll(y, -1)

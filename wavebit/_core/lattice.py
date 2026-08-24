@@ -195,7 +195,10 @@ def as_lattice(period=None, lattice=None):
         # `period` is the variable under differentiation. Its *shape* is still a diagonal, so
         # `axis_aligned` is known without reading a number -- which is the whole reason that
         # flag is aux_data and not a child.
-        xp = array_namespace(period)
+        # A tuple or list of tracers is a natural spelling -- `period=(P, P)` under
+        # `jax.grad` -- and `array_namespace` cannot read one, so ask its elements.
+        xp = (array_namespace(*period) if isinstance(period, (tuple, list))
+              else array_namespace(period))
         q = period if getattr(period, 'shape', (1,))[-1] == 2 else xp.stack([period[0], period[0]])
         zero = 0.0 * q[0]
         return Lattice(xp.stack([q[0], zero]), xp.stack([zero, q[1]]), True)
@@ -264,7 +267,7 @@ def jacobian(A, n_v, n_u):
     return np.column_stack((M[:, 0] / n_u, M[:, 1] / n_v))
 
 
-def sample_grid(xp, grid_shape, period, dtype, lattice=None):
+def sample_grid(xp, grid_shape, lattice, dtype):
     """Cartesian coordinates of the cell's pixel centres: two ``(Ny, Nx)`` arrays ``(X, Y)``.
 
     ``r = (i + 0.5)/Nx * a1 + (j + 0.5)/Ny * a2`` — the raster placement stated at the top of
@@ -300,9 +303,6 @@ def sample_grid(xp, grid_shape, period, dtype, lattice=None):
     Ny, Nx = grid_shape
     u = (xp.asarray([float(i) for i in range(Nx)], dtype=dtype) + 0.5) / Nx
     v = (xp.asarray([float(i) for i in range(Ny)], dtype=dtype) + 0.5) / Ny
-    if lattice is None:
-        Px, Py = period[0], period[1]
-        return (u * Px)[None, :] + 0.0 * v[:, None], (v * Py)[:, None] + 0.0 * u[None, :]
     a1x, a2x = lattice[0][0], lattice[0][1]
     a1y, a2y = lattice[1][0], lattice[1][1]
     return u[None, :] * a1x + v[:, None] * a2x, u[None, :] * a1y + v[:, None] * a2y
@@ -400,7 +400,7 @@ def grid(shape, period=None, lattice=None, backend=0, dtype=None):
     else:
         raise ValueError(f'grid: backend must be 0 (NumPy), 1 (JAX) or 2 (PyTorch); got {backend!r}')
 
-    return sample_grid(xp, shape, periods_of(A), dtype if dtype is not None else xp.float64, A)
+    return sample_grid(xp, shape, A, dtype if dtype is not None else xp.float64)
 
 
 def rectangular(lx, ly=None):

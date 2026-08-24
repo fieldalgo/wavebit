@@ -113,7 +113,7 @@ from . import overlap as _overlap
 from .backend import array_namespace, as_array, j1, jinc, sinc
 from .domain import as_material, retired_material_name
 from .factorization import ConvMatrices      # one slot layout for every builder
-from .lattice import is_axis_aligned, sample_grid
+from .lattice import periods_of, is_axis_aligned, sample_grid
 from .overlap import COMBINE_MODES, OVERLAP_TOL_REL      # re-exported; both paths read them
 from .geometry import StaleGeometryError
 
@@ -130,7 +130,7 @@ def _grid(xp, half_width_u, half_width_v, dev, dtype):
     return ky[:, None] + 0.0 * kx[None, :], 0.0 * ky[:, None] + kx[None, :]
 
 
-def shape_geometry(shape, Px, Py, lattice=None):
+def shape_geometry(shape, lattice):
     """``(type, cx, cy, lx, ly, angle)`` for one shape dict, resolved once for everybody.
 
     It exists because the transform and the normal field used to resolve them separately and
@@ -169,21 +169,23 @@ def shape_geometry(shape, Px, Py, lattice=None):
     together.
     """
     stype = shape.get('type', 'rectangle')
-    if lattice is None:
-        cx = shape.get('cx', Px / 2.0)
-        cy = shape.get('cy', Py / 2.0)
-    else:
-        # `get(key, default)` evaluates the default whether or not it is used, so this is
-        # spelled as a branch: on a traced basis the unused expression would still be built.
-        cx = shape['cx'] if 'cx' in shape else 0.5 * (lattice[0][0] + lattice[0][1])
-        cy = shape['cy'] if 'cy' in shape else 0.5 * (lattice[1][0] + lattice[1][1])
+    # `get(key, default)` evaluates the default whether or not it is used, so this is spelled
+    # as a branch: on a traced basis the unused expression would still be built.
+    #
+    # There used to be a `Px / 2` arm here for `lattice is None`. It was the centre of
+    # `diag(|a1|, |a2|)`, which on a shear is not inside the cell (`2d7ca08`), and the solver
+    # stopped reaching it once `_geometry_lattice_for` became total (`cc016fc`) -- measured:
+    # driving only the public API, the one function that ever sees a `None` here is
+    # `as_lattice` itself, which is where the conversion happens.
+    cx = shape['cx'] if 'cx' in shape else 0.5 * (lattice[0][0] + lattice[0][1])
+    cy = shape['cy'] if 'cy' in shape else 0.5 * (lattice[1][0] + lattice[1][1])
     lx = shape.get('lx', shape.get('l', 0.0))
     round_ = stype in ('circle', 'disk', 'square')
     ly = lx if round_ else shape.get('ly', shape.get('l', 0.0))
     return stype, cx, cy, lx, ly, shape.get('angle', 0.0)
 
 
-def _primitives(shapes, Px, Py, lattice=None):
+def _primitives(shapes, lattice):
     """The layer's shapes as convex primitives, or ``None`` if the parameters are not concrete.
 
     The overlap test compares numbers, which a JAX tracer is not — and PyTorch tensors, which
@@ -194,7 +196,7 @@ def _primitives(shapes, Px, Py, lattice=None):
     exists to fix.
     """
     try:
-        return [_overlap.primitive(*shape_geometry(shape, Px, Py, lattice)) for shape in shapes]
+        return [_overlap.primitive(*shape_geometry(shape, lattice)) for shape in shapes]
     except Exception:                                  # noqa: BLE001 - "not a concrete value"
         return None
 
@@ -317,8 +319,7 @@ def check_layer_spec(layer, layer_index=0):
             f'structure that was asked for.')
 
 
-def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_REL,
-                            lattice=None):
+def check_layer_combination(layer, lattice, layer_index=0, tol_rel=OVERLAP_TOL_REL):
     """Refuse a layer whose shapes overlap without saying how they should combine.
 
     This is where the smooth path's superposition stops being implicit. Shapes that do not
@@ -351,15 +352,17 @@ def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_RE
         return
 
     try:
-        Px, Py = float(period[0]), float(period[1])
-    except Exception:                                  # noqa: BLE001 - traced period
+        Px, Py = (float(v) for v in periods_of(lattice))
+    except Exception:                                  # noqa: BLE001 - a traced basis
         return
 
-    prims = _primitives(shapes, Px, Py, lattice)
+    prims = _primitives(shapes, lattice)
     if prims is None:
         return
 
-    hits = _overlap.overlapping_pairs(prims, Px, Py, tol_rel * max(Px, Py), lattice)
+    # `tol_rel * max(Px, Py)` is a tolerance *scale*, not geometry: it says how much
+    # interpenetration counts as an overlap, in units of the cell's own size.
+    hits = _overlap.overlapping_pairs(prims, tol_rel * max(Px, Py), lattice)
     if not hits or combine == 'add':
         return
 
@@ -385,7 +388,7 @@ def check_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_TOL_RE
         f'over earlier ones.')
 
 
-def layer_needs_resolving(layer, period, lattice=None):
+def layer_needs_resolving(layer, lattice):
     """Does this layer actually need the boundary path — i.e. is it painted *and* overlapping?
 
     While nothing intersects, painting and adding describe the same structure, and the closed
@@ -411,9 +414,9 @@ def layer_needs_resolving(layer, period, lattice=None):
     if len(shapes) < 2:
         return False
     try:
-        Px, Py = float(period[0]), float(period[1])
-        prims = _primitives(shapes, Px, Py, lattice)
-    except Exception:                                  # noqa: BLE001 - traced period
+        Px, Py = (float(v) for v in periods_of(lattice))
+        prims = _primitives(shapes, lattice)
+    except Exception:                                  # noqa: BLE001 - a traced basis
         prims = None
     if prims is None:
         raise ValueError(
@@ -426,11 +429,11 @@ def layer_needs_resolving(layer, period, lattice=None):
             "    result = solver.solve(geometry=geometry)\n"
             "  Re-take the freeze whenever the shapes may have started or stopped "
             "overlapping; the plan compares by content, so an unchanged one is free.")
-    return bool(_overlap.overlapping_pairs(prims, Px, Py, OVERLAP_TOL_REL * max(Px, Py),
+    return bool(_overlap.overlapping_pairs(prims, OVERLAP_TOL_REL * max(Px, Py),
                                            lattice))
 
 
-def shape_ft(xp, shape, ky, kx, period, lattice=None):
+def shape_ft(xp, shape, ky, kx, lattice):
     """Continuous Fourier transform of one shape's indicator, divided by the cell area.
 
     Returns ``c(ky, kx) = 1/area * FT{1_shape}(Gx, Gy)`` on the integer reciprocal grid — the
@@ -448,23 +451,23 @@ def shape_ft(xp, shape, ky, kx, period, lattice=None):
     being rectangular. That is why this path needed far less than the raster one, where the
     normal field genuinely is index-based and needs the metric.
     """
-    Px, Py = period[0], period[1]
-    stype, cx, cy, lx, ly, angle = shape_geometry(shape, Px, Py, lattice)
+    stype, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
 
     pi = 3.141592653589793
-    if lattice is None:
-        Gx = 2.0 * pi * kx / Px
-        Gy = 2.0 * pi * ky / Py
-        area = Px * Py
-    else:
-        # (Gx, Gy) = 2*pi * A^-T @ (m, n), written out for the same reason as in
-        # wavebit._core.lattice.order_kxy: one expression per component, no matrix inverse.
-        a1x, a2x = lattice[0][0], lattice[0][1]
-        a1y, a2y = lattice[1][0], lattice[1][1]
-        det = a1x * a2y - a2x * a1y
-        Gx = 2.0 * pi * (a2y * kx - a1y * ky) / det
-        Gy = 2.0 * pi * (-a2x * kx + a1x * ky) / det
-        area = abs(det)
+    # The `lattice is None` arm that stood here computed the rectangle's answer from
+    # `Px`, `Py`. The solver stopped reaching it once `_geometry_lattice_for` became
+    # total (`cc016fc`): driving only the public API, the one function that ever sees a
+    # `None` cell is `as_lattice`, where the conversion happens. Deleted rather than
+    # re-keyed on `is_axis_aligned` -- production takes *this* branch on a rectangle
+    # today, and the two differ in the last place.
+    # (Gx, Gy) = 2*pi * A^-T @ (m, n), written out for the same reason as in
+    # wavebit._core.lattice.order_kxy: one expression per component, no matrix inverse.
+    a1x, a2x = lattice[0][0], lattice[0][1]
+    a1y, a2y = lattice[1][0], lattice[1][1]
+    det = a1x * a2y - a2x * a1y
+    Gx = 2.0 * pi * (a2y * kx - a1y * ky) / det
+    Gy = 2.0 * pi * (-a2x * kx + a1x * ky) / det
+    area = abs(det)
 
     # Rotated frequency coordinates: kappa = Rot(angle)^T @ k
     ct = xp.cos(as_array(xp, angle, dtype=Gx.dtype))
@@ -502,18 +505,18 @@ def shape_ft(xp, shape, ky, kx, period, lattice=None):
     return phase * s / area
 
 
-def _refuse_paint_overlap(shapes, period, lattice=None):
+def _refuse_paint_overlap(shapes, lattice):
     """Raise if these shapes overlap — the case the superposition below cannot represent."""
     if len(shapes) < 2:
         return
     try:
-        Px, Py = float(period[0]), float(period[1])
-        prims = _primitives(shapes, Px, Py, lattice)
+        Px, Py = (float(v) for v in periods_of(lattice))
+        prims = _primitives(shapes, lattice)
     except Exception:                                  # noqa: BLE001 - traced parameters
         return          # the concrete pass already answered this; see `layer_needs_resolving`
     if prims is None:
         return
-    hits = _overlap.overlapping_pairs(prims, Px, Py, OVERLAP_TOL_REL * max(Px, Py), lattice)
+    hits = _overlap.overlapping_pairs(prims, OVERLAP_TOL_REL * max(Px, Py), lattice)
     if not hits:
         return          # nothing to resolve: painting and adding are the same structure here
 
@@ -531,7 +534,7 @@ def _refuse_paint_overlap(shapes, period, lattice=None):
         f'resolved into disjoint polygons before anything is transformed.')
 
 
-def assemble_eps_coeffs(xp, shapes, background, half_width_u, half_width_v, period, dtype, lattice=None,
+def assemble_eps_coeffs(xp, shapes, background, half_width_u, half_width_v, lattice, dtype,
                         combine=None):
     """Analytic Fourier coefficients of ``eps`` and ``1/eps`` for one layer.
 
@@ -566,7 +569,7 @@ def assemble_eps_coeffs(xp, shapes, background, half_width_u, half_width_v, peri
     behaviour, which is the ``'add'`` rule unconditionally.
     """
     if combine == 'paint':
-        _refuse_paint_overlap(shapes, period, lattice)
+        _refuse_paint_overlap(shapes, lattice)
 
     eps_base = as_material(background, 'layer background').epsilon
     dev = getattr(eps_base, 'device', None) if hasattr(eps_base, 'device') else None
@@ -585,7 +588,7 @@ def assemble_eps_coeffs(xp, shapes, background, half_width_u, half_width_v, peri
     for shape in shapes:
         eps_s = as_array(xp, as_material(shape['material'], 'shape material').epsilon,
                          dtype=dtype)
-        ft = xp.astype(shape_ft(xp, shape, KKY, KKX, period, lattice), dtype)
+        ft = xp.astype(shape_ft(xp, shape, KKY, KKX, lattice), dtype)
         eps_c = eps_c + (eps_s - eps_bg) * ft
         inv_eps_c = inv_eps_c + (1.0 / eps_s - inv_bg) * ft
 
@@ -647,7 +650,7 @@ def _device(x):
 _BLEND_EXPONENT = 4
 
 
-def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype, lattice=None):
+def normal_vector_field_analytical(xp, grid_shape, shapes, dtype, lattice):
     """Unit normal field of the shapes, sampled on ``grid_shape`` — analytic, not from a raster.
 
     The sample points come from :func:`wavebit._core.lattice.sample_grid`, which is where the
@@ -672,13 +675,12 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, period, dtype, lattic
     with the shape at the centre of the cell and translates the *coefficients*.
     """
     Ny, Nx = grid_shape
-    Px, Py = period[0], period[1]
-    X, Y = sample_grid(xp, grid_shape, period, dtype, lattice)
+    X, Y = sample_grid(xp, grid_shape, lattice, dtype)
 
     if _tiles_pay(X, Ny, Nx, len(shapes)):
-        return _blend_tiled(xp, X, Y, shapes, Px, Py, dtype, (Ny, Nx), lattice)
+        return _blend_tiled(xp, X, Y, shapes, dtype, (Ny, Nx), lattice)
 
-    got = [g for g in (_shape_surface_normal(xp, X, Y, s, Px, Py, dtype, lattice) for s in shapes)
+    got = [g for g in (_shape_surface_normal(xp, X, Y, s, dtype, lattice) for s in shapes)
            if g is not None]
     if not got:
         return xp.ones((Ny, Nx), dtype=dtype), xp.zeros((Ny, Nx), dtype=dtype)
@@ -735,7 +737,7 @@ def _tiles_pay(sample, n_v, n_u, n_shapes):
             and type(sample) is np.ndarray)
 
 
-def _blend_tiled(xp, X, Y, shapes, Px, Py, dtype, grid_shape, lattice=None):
+def _blend_tiled(xp, X, Y, shapes, dtype, grid_shape, lattice):
     """:func:`normal_vector_field_analytical`'s blend, evaluated one cache-sized block at a time.
 
     Bit-identical to the whole-grid path by construction: same operations on the same values in
@@ -751,7 +753,7 @@ def _blend_tiled(xp, X, Y, shapes, Px, Py, dtype, grid_shape, lattice=None):
             block = (slice(i0, min(i0 + _TILE, n_v)), slice(j0, min(j0 + _TILE, n_u)))
             bx = np.ascontiguousarray(X[block])
             by = np.ascontiguousarray(Y[block])
-            got = [g for g in (_shape_surface_normal(xp, bx, by, s, Px, Py, dtype, lattice)
+            got = [g for g in (_shape_surface_normal(xp, bx, by, s, dtype, lattice)
                                for s in shapes) if g is not None]
             if not got:
                 out_x[block], out_y[block] = 1.0, 0.0
@@ -819,7 +821,7 @@ def _fold_to_nearest_image(xp, dx, dy, lattice):
     return best_x, best_y
 
 
-def _shape_surface_normal(xp, X, Y, shape, Px, Py, dtype, lattice=None):
+def _shape_surface_normal(xp, X, Y, shape, dtype, lattice):
     """``(distance to this shape's surface, normal_x, normal_y)`` — the outward unit normal, periodic.
 
     Two things here differ from what this file did before 2026-08-17, and both are what make
@@ -838,13 +840,14 @@ def _shape_surface_normal(xp, X, Y, shape, Px, Py, dtype, lattice=None):
     quadrants and this is 0.000; against the independent raster field (``'contour'``, which is
     distance-based and periodic) 27.3 deg becomes 2.4.
     """
-    stype, cx, cy, lx, ly, angle = shape_geometry(shape, Px, Py, lattice)
+    stype, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
     cos_a = xp.cos(as_array(xp, angle, dtype=dtype))
     sin_a = xp.sin(as_array(xp, angle, dtype=dtype))
 
     # `diag(Lx, Ly)` is the one case where the two folds ARE the same fold, so it keeps the
     # cheaper spelling -- and stays bit-identical to every result predating this branch.
-    if lattice is None or is_axis_aligned(lattice):
+    if is_axis_aligned(lattice):
+        Px, Py = periods_of(lattice)
         dx = (X - cx + Px / 2.0) % Px - Px / 2.0
         dy = (Y - cy + Py / 2.0) % Py - Py / 2.0
     else:
@@ -987,7 +990,7 @@ def _static_float(v):
     return float(v)
 
 
-def _projector_cache_key(xp, built, grid_shape, period, half_width_u, half_width_v, dtype, lattice):
+def _projector_cache_key(xp, built, grid_shape, lattice, half_width_u, half_width_v, dtype):
     """A content key for the coefficients built below, or ``None`` when caching would be wrong.
 
     Everything :func:`normal_vector_field_analytical` reads goes in and nothing else does. It
@@ -997,23 +1000,22 @@ def _projector_cache_key(xp, built, grid_shape, period, half_width_u, half_width
     build has to happen again -- the gradient runs through it.
     """
     try:
-        Px, Py = _static_float(period[0]), _static_float(period[1])
         shapes_key = tuple(tuple(v if isinstance(v, str) else _static_float(v)
-                                 for v in shape_geometry(shape, Px, Py, lattice))
+                                 for v in shape_geometry(shape, lattice))
                            for shape in built)
-        lat = None if lattice is None else tuple(_static_float(v)
-                                                 for row in lattice for v in row)
+        lat = tuple(_static_float(v) for row in lattice for v in row)
     except (TypeError, ValueError):
         return None
     # The namespace is redundant with ``str(dtype)``, which already spells it out
     # (``numpy.complex128`` against ``torch.complex128``) -- but that is an accident of how the
     # dtypes are named, not a guarantee, and a cross-backend collision hands one namespace's
     # array to another.
-    return (getattr(xp, '__name__', ''), shapes_key, tuple(grid_shape), (Px, Py),
+    return (getattr(xp, '__name__', ''), shapes_key, tuple(grid_shape),
             int(half_width_u), int(half_width_v), str(dtype), lat)
 
 
-def normal_projector_coeffs(xp, shapes, grid_shape, period, half_width_u, half_width_v, dtype, lattice=None):
+def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_width_v,
+                            dtype):
     """Coefficient grids of ``normal_x**2``, ``normal_x*normal_y`` and ``normal_y**2`` — the NVF projectors' input.
 
     **One shape is built at the centre of the cell and carried to ``(cx, cy)`` by a phase**,
@@ -1112,27 +1114,25 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, half_width_u, half_w
     free to move a shape will walk it over the edge and climb the artefact, so clamp the
     centres. Pinned by ``test_a_multishape_layer_is_not_periodic_across_the_cell_edge``.
     """
-    Px, Py = period[0], period[1]
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
 
     if len(shapes) == 1:
-        _, cx, cy, _, _, _ = shape_geometry(shapes[0], Px, Py, lattice)
-        if lattice is None:
-            mid_x, mid_y = Px / 2.0, Py / 2.0
-            # Fractions of a period -- which is what the phase below is written in.
-            shift_v, shift_u = (cy - mid_y) / Py, (cx - mid_x) / Px
-        else:
-            a1x, a2x = lattice[0][0], lattice[0][1]
-            a1y, a2y = lattice[1][0], lattice[1][1]
-            mid_x, mid_y = 0.5 * (a1x + a2x), 0.5 * (a1y + a2y)
-            # Same quantity, stated properly: the displacement in *fractional lattice*
-            # coordinates, A^-1 @ (c - mid). The phase is exp(-2i*pi*(m*u_d + n*v_d)), which is
-            # exp(-i G.d) already -- it was lattice-general all along, it was only ever handed
-            # its argument as a fraction of Px / Py.
-            det = a1x * a2y - a2x * a1y
-            dx, dy = cx - mid_x, cy - mid_y
-            shift_u = (a2y * dx - a2x * dy) / det
-            shift_v = (-a1y * dx + a1x * dy) / det
+        _, cx, cy, _, _, _ = shape_geometry(shapes[0], lattice)
+        # The `lattice is None` arm that stood here read `Px / 2` as the centre and
+        # `1 / Px` as the fraction. The solver stopped reaching it once
+        # `_geometry_lattice_for` became total (`cc016fc`), and it differs from this one in
+        # the last place, so it is deleted rather than re-keyed on `is_axis_aligned`.
+        a1x, a2x = lattice[0][0], lattice[0][1]
+        a1y, a2y = lattice[1][0], lattice[1][1]
+        mid_x, mid_y = 0.5 * (a1x + a2x), 0.5 * (a1y + a2y)
+        # Same quantity, stated properly: the displacement in *fractional lattice*
+        # coordinates, A^-1 @ (c - mid). The phase is exp(-2i*pi*(m*u_d + n*v_d)), which is
+        # exp(-i G.d) already -- it was lattice-general all along, it was only ever handed
+        # its argument as a fraction of Px / Py.
+        det = a1x * a2y - a2x * a1y
+        dx, dy = cx - mid_x, cy - mid_y
+        shift_u = (a2y * dx - a2x * dy) / det
+        shift_v = (-a1y * dx + a1x * dy) / det
         built = [dict(shapes[0], cx=mid_x, cy=mid_y)]
     else:
         built, shift_v, shift_u = shapes, None, None
@@ -1144,11 +1144,11 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, half_width_u, half_w
     # reuses it for the other reason: the key holds no material at all because the build reads
     # none. Measured on a five-point sweep at ``normal_grid = 1024``, ``truncation_order = 4``: the call
     # 83% of the wall clock for one shape and 93% for six.
-    key = _projector_cache_key(xp, built, grid_shape, period, half_width_u, half_width_v, dtype, lattice)
+    key = _projector_cache_key(xp, built, grid_shape, lattice, half_width_u, half_width_v, dtype)
     coeffs = _PROJECTOR_CACHE.pop(key, None) if key is not None else None
     if coeffs is None:
-        normal_x, normal_y = normal_vector_field_analytical(xp, grid_shape, built, (Px, Py), real_dtype,
-                                                lattice)
+        normal_x, normal_y = normal_vector_field_analytical(xp, grid_shape, built,
+                                                            real_dtype, lattice)
         coeffs = tuple(_sampled_coeffs(xp, xp.astype(f, dtype), half_width_u, half_width_v)
                        for f in (normal_x * normal_x, normal_x * normal_y, normal_y * normal_y))
     if key is not None:
@@ -1172,8 +1172,8 @@ def normal_projector_coeffs(xp, shapes, grid_shape, period, half_width_u, half_w
     return tuple(c * phase for c in coeffs)
 
 
-def to_conv_mat_smooth_nvf(xp, shapes, background, half_width_u, half_width_v, period, dtype,
-                             normal_grid=256, lattice=None, combine=None):
+def to_conv_mat_smooth_nvf(xp, shapes, background, half_width_u, half_width_v, lattice, dtype,
+                           normal_grid=256, combine=None):
     """The five 2D-solve convolution matrices for one analytic layer, via NVF.
 
     ``eps`` / ``1/eps`` come from the exact shape transform (no staircase); the normal
@@ -1187,10 +1187,10 @@ def to_conv_mat_smooth_nvf(xp, shapes, background, half_width_u, half_width_v, p
     ``combine`` is passed straight to :func:`assemble_eps_coeffs`, which sums; see there for
     why an overlapping painted layer must not arrive at this function.
     """
-    eps_c, inv_eps_c = assemble_eps_coeffs(xp, shapes, background, half_width_u, half_width_v, period, dtype,
-                                           lattice, combine=combine)
+    eps_c, inv_eps_c = assemble_eps_coeffs(xp, shapes, background, half_width_u,
+                                           half_width_v, lattice, dtype, combine=combine)
     c_xx, c_xy, c_yy = normal_projector_coeffs(
-        xp, shapes, (normal_grid, normal_grid), period, half_width_u, half_width_v, dtype, lattice)
+        xp, shapes, (normal_grid, normal_grid), lattice, half_width_u, half_width_v, dtype)
     return nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, half_width_u, half_width_v)
 
 
@@ -1224,7 +1224,7 @@ def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, half_width_u, half_w
     return ConvMatrices(eps_xx, eps_yy, xp.linalg.inv(ep_dir), -eps_xy, -eps_xy)
 
 
-def check_no_plan_still_fits(layer, period, index, lattice=None):
+def check_no_plan_still_fits(layer, lattice, index):
     """Refuse a frozen *"this layer does not overlap"* that the layer has since outgrown.
 
     A frozen record answers the overlap question for every layer, and a ``None`` plan is one of
@@ -1246,7 +1246,7 @@ def check_no_plan_still_fits(layer, period, index, lattice=None):
     every other check on this record has.
     """
     try:
-        needs = layer_needs_resolving(layer, period, lattice)
+        needs = layer_needs_resolving(layer, lattice)
     except ValueError:
         return                      # traced: no concrete values to re-ask with
     if not needs:
@@ -1259,9 +1259,9 @@ def check_no_plan_still_fits(layer, period, index, lattice=None):
         f'(Moving a shape never trips this on its own; moving it into another shape does.)')
 
 
-def to_conv_mat_smooth_layers(layer_shapes, half_width_u, half_width_v, period,
-                                normal_grid=256, complex_dtype=None, xp=None,
-                                boundary_plans=None, lattice=None):
+def to_conv_mat_smooth_layers(layer_shapes, half_width_u, half_width_v, lattice,
+                              normal_grid=256, complex_dtype=None, xp=None,
+                              boundary_plans=None):
     """Stack the analytic-NVF convolution matrices over layers.
 
     ``layer_shapes`` is one ``dict(background=..., shapes=[...])`` per layer, with the shapes'
@@ -1291,19 +1291,19 @@ def to_conv_mat_smooth_layers(layer_shapes, half_width_u, half_width_v, period,
         frozen = boundary_plans is not None
         plan = boundary_plans[index] if frozen else None
         if frozen and plan is None:
-            check_no_plan_still_fits(layer, period, index, lattice)
-        check_layer_combination(layer, period, index, lattice=lattice)
+            check_no_plan_still_fits(layer, lattice, index)
+        check_layer_combination(layer, lattice, index)
         background = layer.get('background', 1.0)
         if plan is not None or (not frozen
-                                and layer_needs_resolving(layer, period, lattice)):
+                                and layer_needs_resolving(layer, lattice)):
             # A painted layer that actually overlaps is a different structure from a summed
             # one, and this module can only sum. Resolve the painting into disjoint polygons
             # and transform those. A painted layer with nothing overlapping means the same
             # structure either way, so it stays here -- exact, and cheaper.
             from .boundary import to_conv_mat_boundary_layer
             mats = to_conv_mat_boundary_layer(
-                xp, layer.get('shapes', []), background, half_width_u, half_width_v, period, dtype,
-                normal_grid=normal_grid, plan=plan, lattice=lattice)
+                xp, layer.get('shapes', []), background, half_width_u, half_width_v, lattice,
+                dtype, normal_grid=normal_grid, plan=plan)
         else:
             # `combine` goes down with the shapes rather than being dropped here. Reaching
             # this branch means the two rules agree on this layer, so the check below never
@@ -1315,8 +1315,8 @@ def to_conv_mat_smooth_layers(layer_shapes, half_width_u, half_width_v, period,
             # rules, and once the shapes moved together the check below is what fired -- with
             # a message about this builder rather than about the stale record.
             mats = to_conv_mat_smooth_nvf(
-                xp, layer.get('shapes', []), background, half_width_u, half_width_v, period, dtype,
-                normal_grid=normal_grid, lattice=lattice, combine=layer.get('combine'))
+                xp, layer.get('shapes', []), background, half_width_u, half_width_v, lattice,
+                dtype, normal_grid=normal_grid, combine=layer.get('combine'))
         for slot, m in zip(out, mats):
             slot.append(m)
 

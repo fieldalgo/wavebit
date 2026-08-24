@@ -27,6 +27,7 @@ numbers below are what that is worth, and they are absolute now rather than rela
 spread, because there is no longer a spread to measure against.
 """
 import numpy as np
+from wavebit._core.lattice import as_lattice
 import pytest
 
 import wavebit
@@ -139,7 +140,8 @@ def test_the_projectors_move_by_a_phase_and_by_nothing_else():
 
     def coeffs(v):
         return normal_projector_coeffs(jnp, [_shape('rectangle', 'cy', v)], (grid, grid),
-                                       (P, P), truncation_order, truncation_order, jnp.complex128)
+                                       as_lattice(period=(P, P)), truncation_order,
+                                       truncation_order, jnp.complex128)
 
     ky = np.arange(-2 * truncation_order, 2 * truncation_order + 1)[:, None]
     phase = np.exp(-2j * np.pi * ky * (cy - cy0) / P)
@@ -162,7 +164,8 @@ def test_the_position_reaches_the_projectors_through_that_phase():
 
     def c_ky1(v):
         c_xx = normal_projector_coeffs(jnp, [_shape('rectangle', 'cy', v)], (grid, grid),
-                                       (P, P), truncation_order, truncation_order, jnp.complex128)[0]
+                                       as_lattice(period=(P, P)), truncation_order,
+                                       truncation_order, jnp.complex128)[0]
         return jnp.real(c_xx[2 * truncation_order + 1, 2 * truncation_order])
 
     cy, h = 0.31 * P, 1e-6
@@ -199,7 +202,8 @@ def test_the_sampled_field_no_longer_depends_on_where_in_the_cell_a_shape_SITS()
 
     def mean_nx2(kind, cy):
         normal_x, _ = normal_vector_field_analytical(
-            jnp, (256, 256), [_shape(kind, 'cy', cy)], (P, P), jnp.float64)
+            jnp, (256, 256), [_shape(kind, 'cy', cy)], jnp.float64,
+            as_lattice(period=(P, P)))
         return float(jnp.mean(normal_x ** 2))
 
     for kind, tol in (('circle', 1e-5), ('ellipse', 1e-4), ('rectangle', 1e-3)):
@@ -456,11 +460,12 @@ def test_a_multishape_layer_is_periodic_across_the_cell_edge():
     # both keeps this a statement about the normal field rather than about the solve.
     shapes = lambda cx: [dict(type='rectangle', cx=cx, cy=0.5, lx=0.30, ly=0.24, angle=0.0,
                               material=12.1104), fixed]
-    eps = [np.asarray(_an.assemble_eps_coeffs(np, shapes(cx), 1.0, 4, 4, (1.0, 1.0),
-                                              np.complex128)) for cx in (0.10, 1.10)]
+    eps = [np.asarray(_an.assemble_eps_coeffs(np, shapes(cx), 1.0, 4, 4,
+                                              as_lattice(period=(1.0, 1.0)), np.complex128)) for cx in (0.10, 1.10)]
     assert np.max(np.abs(eps[0] - eps[1])) < 1e-13
-    nxx = [np.asarray(_an.normal_projector_coeffs(np, shapes(cx), (256, 256), (1.0, 1.0),
-                                                  4, 4, np.complex128)[0])
+    nxx = [np.asarray(_an.normal_projector_coeffs(np, shapes(cx), (256, 256),
+                                                  as_lattice(period=(1.0, 1.0)), 4, 4,
+                                                  np.complex128)[0])
            for cx in (0.10, 1.10)]
     assert np.max(np.abs(nxx[0] - nxx[1])) < 1e-12
 

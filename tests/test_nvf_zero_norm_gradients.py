@@ -36,6 +36,7 @@ import numpy as np
 import pytest
 
 import wavebit
+from wavebit._core.lattice import as_lattice
 
 pytest.importorskip('jax')
 import jax                                                     # noqa: E402
@@ -85,7 +86,8 @@ def test_a_zero_norm_configuration_is_actually_reached():
     shape's centre, so the zero closes.
     """
     def zeros_for(shapes, n=NORMAL_GRID):
-        normal_x, normal_y = normal_vector_field_analytical(jnp, (n, n), shapes, (P, P), jnp.float64)
+        normal_x, normal_y = normal_vector_field_analytical(jnp, (n, n), shapes, jnp.float64,
+                                                            as_lattice(period=(P, P)))
         return int(np.count_nonzero(np.asarray(normal_x) ** 2 + np.asarray(normal_y) ** 2 == 0))
 
     n = 256
@@ -131,7 +133,8 @@ def test_shape_centred_on_a_grid_point_has_a_finite_gradient(kind):
 
     def mean_nx2(dy):
         shape = dict(type=kind, cx=c, cy=c + dy, lx=0.20 * P, ly=0.10 * P, material=9.0)
-        normal_x, _ = normal_vector_field_analytical(jnp, (n, n), [shape], (P, P), jnp.float64)
+        normal_x, _ = normal_vector_field_analytical(jnp, (n, n), [shape], jnp.float64,
+                                                      as_lattice(period=(P, P)))
         return jnp.mean(normal_x ** 2)
 
     g = float(jax.grad(mean_nx2)(jnp.asarray(0.0)))
@@ -149,7 +152,7 @@ def test_dc_coefficient_gradient_in_period_is_finite(kind, extra):
     """
     def total(px):
         shape = dict(type=kind, cx=P / 2, cy=P / 2, lx=0.20 * P, material=9.0, **extra)
-        eps_c, _ = assemble_eps_coeffs(jnp, [shape], 1.0, 2, 2, (px, px), jnp.complex128)
+        eps_c, _ = assemble_eps_coeffs(jnp, [shape], 1.0, 2, 2, as_lattice(period=(px, px)), jnp.complex128)
         return jnp.real(jnp.sum(eps_c))
 
     g = float(jax.grad(total)(jnp.asarray(P)))

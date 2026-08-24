@@ -37,7 +37,7 @@ from . import clipper as _clipper
 from .analytic import nvf_from_coeffs, shape_geometry, _sampled_coeffs
 from .domain import as_material
 from .geometry import StaleGeometryError
-from .lattice import sample_grid
+from .lattice import periods_of, sample_grid
 from .polygon import ellipse_verts, polygon_ft, rect_verts
 
 
@@ -78,8 +78,7 @@ def _nearest(xp, pts, A, E, L2):
     return j, foot[rows, j]
 
 
-def distance_gradient_normal_field(xp, polys, grid_shape, period, dtype, chunk=None,
-                                   lattice=None):
+def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=None):
     """Unit normal from the direction to the closest boundary *point*.
 
     The closest *edge* is not well defined -- beyond a corner both edges meeting there have the
@@ -103,7 +102,7 @@ def distance_gradient_normal_field(xp, polys, grid_shape, period, dtype, chunk=N
     A, E, L2 = segments_of(xp, polys)
     M = A.shape[0]
 
-    X, Y = sample_grid(xp, grid_shape, period, dtype, lattice)
+    X, Y = sample_grid(xp, grid_shape, lattice, dtype)
     pts = xp.stack([xp.reshape(X, (-1,)), xp.reshape(Y, (-1,))], axis=-1)
 
     npix = Ny * Nx
@@ -170,8 +169,8 @@ def check_normal_grid(grid_shape, half_width_u, half_width_v):
                          f'needs at least {need_v}x{need_u}')
 
 
-def normal_projector_coeffs(xp, loops, grid_shape, period, half_width_u, half_width_v, dtype, cdtype,
-                            lattice=None):
+def normal_projector_coeffs(xp, loops, grid_shape, lattice, half_width_u, half_width_v,
+                            dtype, cdtype):
     """Coefficient grids of ``n_u**2``, ``n_u*n_v``, ``n_v**2``, built with the layer CENTRED.
 
     The normal field lives on the whole plane, so sampling it in a fixed cell clips a different
@@ -183,44 +182,40 @@ def normal_projector_coeffs(xp, loops, grid_shape, period, half_width_u, half_wi
     loops, moving one reshapes the field between them and no phase describes that.
     """
     check_normal_grid(grid_shape, half_width_u, half_width_v)
-    Px, Py = period
-
     if len(loops) == 1:
         c = _centroid(xp, loops[0])
-        if lattice is None:
-            mid_x, mid_y = Px / 2.0, Py / 2.0
-            frac_u, frac_v = 1.0 / Px, 1.0 / Py           # fractions of a period
-        else:
-            a1x, a2x = lattice[0][0], lattice[0][1]
-            a1y, a2y = lattice[1][0], lattice[1][1]
-            mid_x, mid_y = 0.5 * (a1x + a2x), 0.5 * (a1y + a2y)
+        # The `lattice is None` arm that used to sit here computed the rectangle's answer
+        # from `Px`, `Py`. The solver stopped reaching it once `_geometry_lattice_for`
+        # became total (`cc016fc`): driving only the public API, the one function that
+        # ever sees a `None` cell is `as_lattice` itself, where the conversion happens.
+        # Deleted rather than re-keyed on `is_axis_aligned` -- production takes *this*
+        # branch on a rectangle today, and the two differ in the last place (1.3e-16).
+        a1x, a2x = lattice[0][0], lattice[0][1]
+        a1y, a2y = lattice[1][0], lattice[1][1]
+        mid_x, mid_y = 0.5 * (a1x + a2x), 0.5 * (a1y + a2y)
         shift = xp.stack([c[0] - mid_x, c[1] - mid_y])
         built = [loops[0] - shift[None, :]]
         KY, KX = _k_grids(xp, half_width_u, half_width_v, dtype)
-        if lattice is None:
-            su, sv = shift[0] * frac_u, shift[1] * frac_v
-        else:
-            # The displacement in *fractional lattice* coordinates, A^-1 @ shift. The phase is
-            # already exp(-i G.d) written that way; it was only ever handed Px / Py fractions.
-            det = a1x * a2y - a2x * a1y
-            su = (a2y * shift[0] - a2x * shift[1]) / det
-            sv = (-a1y * shift[0] + a1x * shift[1]) / det
+        # The displacement in *fractional lattice* coordinates, A^-1 @ shift. The phase is
+        # already exp(-i G.d) written that way; it was only ever handed Px / Py fractions.
+        det = a1x * a2y - a2x * a1y
+        su = (a2y * shift[0] - a2x * shift[1]) / det
+        sv = (-a1y * shift[0] + a1x * shift[1]) / det
         arg = -2.0 * 3.141592653589793 * (KY * sv + KX * su)
         phase = xp.astype(xp.cos(arg), cdtype) + 1j * xp.astype(xp.sin(arg), cdtype)
     else:
         built = loops
         phase = xp.asarray(1.0 + 0j, dtype=cdtype)
 
-    normal_x, normal_y = distance_gradient_normal_field(xp, built, grid_shape, period, dtype,
-                                                        lattice=lattice)
+    normal_x, normal_y = distance_gradient_normal_field(xp, built, grid_shape, lattice, dtype)
     out = []
     for f in (normal_x * normal_x, normal_x * normal_y, normal_y * normal_y):
         out.append(_sampled_coeffs(xp, xp.astype(f, cdtype), half_width_u, half_width_v) * phase)
     return out
 
 
-def conv_mats(xp, regions, background, half_width_u, half_width_v, period, normal_grid, dtype, cdtype,
-              lattice=None):
+def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, normal_grid,
+              dtype, cdtype):
     """``(epx, epy, epz_i, epxy, epyx)`` for one boundary-resolved layer.
 
     ``regions`` is ``[(material, [loop, ...]), ...]`` -- disjoint, painting already resolved by
@@ -263,7 +258,6 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, period, norma
     to delete, in order to pin a bit-pattern the measurement says is arbitrary and that sits
     1.5e4 times below this path's own 1.8e-3 agreement with a converged raster.
     """
-    Px, Py = period
     KY, KX = _k_grids(xp, half_width_u, half_width_v, dtype)
     is_dc = (KY == 0) & (KX == 0)
     zero = xp.zeros(KY.shape, dtype=cdtype)
@@ -289,14 +283,14 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, period, norma
                                      dtype=cdtype), cdtype)
         ft = zero
         for V in polys:
-            ft = ft + polygon_ft(xp, V, KY, KX, (Px, Py), lattice)
+            ft = ft + polygon_ft(xp, V, KY, KX, lattice)
         eps_c = eps_c + (eps_s - eps_bg) * ft
         inv_c = inv_c + (1.0 / eps_s - 1.0 / eps_bg) * ft
 
     all_loops = [V for _, polys in regions for V in polys]
     c_xx, c_xy, c_yy = normal_projector_coeffs(
-        xp, all_loops, (normal_grid, normal_grid), (Px, Py), half_width_u, half_width_v, dtype, cdtype,
-        lattice=lattice)
+        xp, all_loops, (normal_grid, normal_grid), lattice, half_width_u, half_width_v,
+        dtype, cdtype)
     return nvf_from_coeffs(xp, eps_c, inv_c, c_xx, c_xy, c_yy, half_width_u, half_width_v)
 
 
@@ -308,7 +302,7 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, period, norma
 POLYGON_VERTICES = 256
 
 
-def shape_vertices(xp, shape, period, n_poly=POLYGON_VERTICES, lattice=None):
+def shape_vertices(xp, shape, lattice, n_poly=POLYGON_VERTICES):
     """Counter-clockwise vertices of one analytic primitive.
 
     Same shape dictionaries the smooth path takes, and the same convention: ``lx`` / ``ly``
@@ -323,7 +317,7 @@ def shape_vertices(xp, shape, period, n_poly=POLYGON_VERTICES, lattice=None):
     square. ``period`` is taken for the same reason the transform takes it: it is what an
     omitted centre falls back to.
     """
-    kind, cx, cy, lx, ly, angle = shape_geometry(shape, period[0], period[1], lattice)
+    kind, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
     if kind in ('rectangle', 'square'):
         return rect_verts(xp, cx, cy, lx, ly, angle)
     if kind in ('circle', 'disk', 'ellipse'):
@@ -358,7 +352,7 @@ def _concrete_shape(shape):
     return out
 
 
-def plan_layer(shapes, period, n_poly=POLYGON_VERTICES, lattice=None):
+def plan_layer(shapes, lattice, n_poly=POLYGON_VERTICES):
     """Resolve one layer's painting order into disjoint loops. **Concrete values only.**
 
     This is the discrete half — which loop holds which vertex, which edges cross — so it runs
@@ -366,10 +360,10 @@ def plan_layer(shapes, period, n_poly=POLYGON_VERTICES, lattice=None):
     (:meth:`~wavebit._core.engine.RCWAEngine.freeze_geometry`) and every later step replays
     it against traced vertices.
     """
-    return _clipper.resolve_painting(_plan_vertices(shapes, period, n_poly, lattice))
+    return _clipper.resolve_painting(_plan_vertices(shapes, lattice, n_poly))
 
 
-def _plan_vertices(shapes, period, n_poly, lattice=None):
+def _plan_vertices(shapes, lattice, n_poly):
     """Every shape's vertices as plain float arrays -- the concrete half of building a plan.
 
     Split out so :func:`check_plan_still_fits` can tell the two ways a re-plan fails apart. This
@@ -377,7 +371,7 @@ def _plan_vertices(shapes, period, n_poly, lattice=None):
     ``resolve_painting`` then raises is about the layer and has to be heard.
     """
     import numpy as _np
-    return [_np.asarray(shape_vertices(_np, _concrete_shape(s), period, n_poly, lattice), float)
+    return [_np.asarray(shape_vertices(_np, _concrete_shape(s), lattice, n_poly), float)
             for s in shapes]
 
 
@@ -388,7 +382,7 @@ def _plan_key(plan):
             [[list(loop) for loop in region] for region in regions])
 
 
-def check_plan_still_fits(shapes, period, plan, n_poly=POLYGON_VERTICES, lattice=None):
+def check_plan_still_fits(shapes, lattice, plan, n_poly=POLYGON_VERTICES):
     """Refuse a frozen painting plan that the layer in front of it has outgrown.
 
     A plan records *combinatorics* -- which loop holds which vertex, which edges cross -- and
@@ -409,7 +403,7 @@ def check_plan_still_fits(shapes, period, plan, n_poly=POLYGON_VERTICES, lattice
     reason.
     """
     try:
-        verts = _plan_vertices(shapes, period, n_poly, lattice)
+        verts = _plan_vertices(shapes, lattice, n_poly)
     except (TypeError, ValueError):
         return                      # traced: nothing concrete to re-plan from
     fresh = _clipper.resolve_painting(verts)
@@ -454,9 +448,8 @@ def _what_moved(fresh_key, plan_key):
     return '; '.join(parts)
 
 
-def to_conv_mat_boundary_layer(xp, shapes, background, half_width_u, half_width_v, period, dtype,
-                               normal_grid=256, n_poly=POLYGON_VERTICES, plan=None,
-                               lattice=None):
+def to_conv_mat_boundary_layer(xp, shapes, background, half_width_u, half_width_v, lattice,
+                               dtype, normal_grid=256, n_poly=POLYGON_VERTICES, plan=None):
     """The five convolution matrices for one layer whose shapes are *painted*.
 
     ``shapes`` is in painting order — a later shape covers an earlier one — which is what the
@@ -464,15 +457,15 @@ def to_conv_mat_boundary_layer(xp, shapes, background, half_width_u, half_width_
     ``plan`` from a frozen geometry to keep the call traceable; leave it ``None`` and the
     painting is resolved eagerly, which needs concrete shape parameters.
     """
-    verts = [shape_vertices(xp, s, period, n_poly, lattice) for s in shapes]
+    verts = [shape_vertices(xp, s, lattice, n_poly) for s in shapes]
     if plan is None:
-        recs, regions = plan_layer(shapes, period, n_poly, lattice)
+        recs, regions = plan_layer(shapes, lattice, n_poly)
     else:
-        check_plan_still_fits(shapes, period, plan, n_poly, lattice)
+        check_plan_still_fits(shapes, lattice, plan, n_poly)
         recs, regions = plan
     vals = _clipper.eval_table(xp, recs, verts)
     regs = [(s['material'], [_clipper.loop_verts(xp, lp, vals) for lp in region])
             for s, region in zip(shapes, regions)]
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
-    return conv_mats(xp, regs, background, half_width_u, half_width_v, period, normal_grid, real_dtype, dtype,
-                     lattice=lattice)
+    return conv_mats(xp, regs, background, half_width_u, half_width_v, lattice, normal_grid,
+                     real_dtype, dtype)

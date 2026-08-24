@@ -166,7 +166,7 @@ def _render_block(cell, edges_u, edges_v, period, xs, ys):
 
 def _shape_inside(shape, X, Y, basis, Px, Py):
     """Signed cover count of one shape and its periodic images at every sample point."""
-    kind, cx, cy, lx, ly, angle = _analytic.shape_geometry(shape, Px, Py, basis)
+    kind, cx, cy, lx, ly, angle = _analytic.shape_geometry(shape, basis)
     cx, cy, lx, ly, angle = (float(np.real(np.asarray(v, dtype=complex)))
                              for v in (cx, cy, lx, ly, angle))
     cos_a, sin_a = np.cos(angle), np.sin(angle)
@@ -218,8 +218,8 @@ def _resolved_regions(shapes, period, basis=None):
     reads that directly -- a plain sum over the loops, no sign to carry alongside and none to
     forget. Ignoring the orientation would put ``<eps>`` at 2.4256 where the geometry is 2.2371.
     """
-    recs, regions = _boundary.plan_layer(shapes, period, lattice=basis)
-    verts = [_boundary.shape_vertices(xnp, _boundary._concrete_shape(s), period, lattice=basis)
+    recs, regions = _boundary.plan_layer(shapes, basis)
+    verts = [_boundary.shape_vertices(xnp, _boundary._concrete_shape(s), basis)
              for s in shapes]
     vals = _clipper.eval_table(xnp, recs, verts)
     out = []
@@ -347,7 +347,7 @@ def _band_limited(solver, layer, n):
         # `diag(period)` here rather than `None`, and taking it from the same accessor is what
         # keeps this reconstruction the transform the solve holds instead of a lookalike.
         basis = solver._geometry_lattice_for(None)
-        if _analytic.layer_needs_resolving(lay, period, basis):
+        if _analytic.layer_needs_resolving(lay, basis):
             KY, KX = _boundary._k_grids(xnp, half_width_u, half_width_v, np.float64)
             eps_b = _eps_of(lay.get('background', 1.0))
             grid = np.zeros(KY.shape, dtype=complex)
@@ -355,15 +355,16 @@ def _band_limited(solver, layer, n):
             for eps_s, loops in _resolved_regions(lay.get('shapes', []), period, basis):
                 # Plain sum: `polygon_ft` is a signed contour integral and a hole arrives
                 # wound clockwise, so it subtracts itself.
-                ft = sum(_boundary.polygon_ft(xnp, V, KY, KX, period, basis) for V in loops)
+                ft = sum(_boundary.polygon_ft(xnp, V, KY, KX, basis) for V in loops)
                 grid = grid + (eps_s - eps_b) * ft
         else:
             # `combine=` is passed, not assumed: `assemble_eps_coeffs` builds the summed rule
             # and refuses an overlapping painted layer rather than answering for it. The branch
             # above means the refusal never fires from here -- which is the point of stating it.
             grid = np.asarray(_analytic.assemble_eps_coeffs(
-                xnp, lay.get('shapes', []), lay.get('background', 1.0), half_width_u, half_width_v, period,
-                np.complex128, lattice=basis, combine=lay.get('combine'))[0])
+                xnp, lay.get('shapes', []), lay.get('background', 1.0), half_width_u,
+                half_width_v, basis, np.complex128,
+                combine=lay.get('combine'))[0])
     return _inverse_series(grid, half_width_u, half_width_v, n, n)
 
 
@@ -469,8 +470,7 @@ def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
             values = _render_block(cell, edges_u, edges_v, period, xs, ys)
         elif mt == 2:
             lay = solver.structure[layer]
-            if _analytic.layer_needs_resolving(lay, period,
-                                               solver._geometry_lattice_for(None)):
+            if _analytic.layer_needs_resolving(lay, solver._geometry_lattice_for(None)):
                 # Fractional samples mapped through the basis, so the loops -- which are
                 # absolute Cartesian positions -- are tested where they actually are.
                 if not solver.lattice_is_axis_aligned:
@@ -484,7 +484,7 @@ def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
                 ys = (np.arange(n) + 0.5) * period[1] / n
                 values = _render_paint(lay, xs, ys, basis, period)
             else:
-                X, Y = sample_grid(xnp, (n, n), period, np.float64, solver.lattice)
+                X, Y = sample_grid(xnp, (n, n), solver.lattice, np.float64)
                 values = _render_analytic_add(lay, X, Y, basis, *period)
 
     return values if show == 'eps' else index_from_eps(_passive(values))

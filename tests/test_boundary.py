@@ -26,11 +26,13 @@ os.environ.setdefault('JAX_ENABLE_X64', '1')
 
 import array_api_compat.numpy as xnp
 import wavebit
+from wavebit._core.lattice import as_lattice
 from wavebit._core import boundary as _b
 from wavebit._core import clipper as _c
 from wavebit._core.polygon import polygon_ft, polygon_area, rect_verts, ellipse_verts
 
 PERIOD = (1.0, 1.0)
+CELL = as_lattice(period=PERIOD)      # the same cell, as the basis every builder now takes
 
 
 # --------------------------------------------------------------------------- helpers
@@ -58,7 +60,7 @@ def test_polygon_ft_dc_is_the_area():
     """The k=0 coefficient is the area over the cell -- the branch the 1/|k|^2 form cannot take."""
     V = rect_verts(xnp, 0.47, 0.53, 0.42, 0.31, 0.4)
     k0 = xnp.zeros((1, 1))
-    got = complex(polygon_ft(xnp, V, k0, k0, PERIOD)[0, 0])
+    got = complex(polygon_ft(xnp, V, k0, k0, CELL)[0, 0])
     assert abs(got.real - 0.42 * 0.31) < 1e-15
     assert abs(got.imag) < 1e-15
 
@@ -70,7 +72,7 @@ def test_polygon_ft_exact_for_a_rotated_rectangle():
     lx, ly = 0.42, 0.31
     for angle in (0.0, 0.1, 0.4, 0.9, 1.3):
         V = rect_verts(xnp, 0.5, 0.5, lx, ly, angle)
-        got = polygon_ft(xnp, V, ky, kx, PERIOD)
+        got = polygon_ft(xnp, V, ky, kx, CELL)
         # closed form for a centred rotated rectangle: sinc x sinc in the shape's own frame
         c, s = np.cos(angle), np.sin(angle)
         u = np.asarray(kx) * c + np.asarray(ky) * s
@@ -85,8 +87,8 @@ def test_polygon_ft_hole_subtracts_itself():
     outer = rect_verts(xnp, 0.5, 0.5, 0.6, 0.6, 0.0)
     inner = rect_verts(xnp, 0.5, 0.5, 0.2, 0.2, 0.0)
     k0 = xnp.zeros((1, 1))
-    ring = (polygon_ft(xnp, outer, k0, k0, PERIOD)
-            + polygon_ft(xnp, inner[::-1], k0, k0, PERIOD))
+    ring = (polygon_ft(xnp, outer, k0, k0, CELL)
+            + polygon_ft(xnp, inner[::-1], k0, k0, CELL))
     assert abs(complex(ring[0, 0]).real - (0.36 - 0.04)) < 1e-15
 
 
@@ -151,7 +153,7 @@ def test_normal_grid_floor_is_enforced(truncation_order):
 def test_normal_field_is_the_edge_normal_beside_an_edge():
     """Far from any corner the field must be exactly that edge's own normal."""
     V = rect_verts(xnp, 0.5, 0.5, 0.6, 0.4, 0.0)
-    normal_x, normal_y = _b.distance_gradient_normal_field(xnp, [V], (256, 256), PERIOD, xnp.float64)
+    normal_x, normal_y = _b.distance_gradient_normal_field(xnp, [V], (256, 256), CELL, xnp.float64)
     # a pixel just outside the right edge (x=0.8), at mid-height
     j = int(0.85 * 256)
     i = int(0.50 * 256)
@@ -161,7 +163,7 @@ def test_normal_field_is_the_edge_normal_beside_an_edge():
 
 def test_normal_field_is_a_unit_vector_everywhere():
     V = ellipse_verts(xnp, 0.5, 0.5, 0.34, 0.19, 0.7, 64)
-    normal_x, normal_y = _b.distance_gradient_normal_field(xnp, [V], (128, 128), PERIOD, xnp.float64)
+    normal_x, normal_y = _b.distance_gradient_normal_field(xnp, [V], (128, 128), CELL, xnp.float64)
     mag = np.sqrt(np.asarray(normal_x) ** 2 + np.asarray(normal_y) ** 2)
     assert np.abs(mag - 1.0).max() < 1e-12
 
@@ -186,7 +188,7 @@ def test_the_normal_field_gets_the_two_axes_the_right_way_round():
     Px, Py, r = 2.0, 1.0, 0.3
     V = ellipse_verts(xnp, Px / 2.0, Py / 2.0, 2 * r, 2 * r, 0.0, 256)
     Ny, Nx = 129, 257
-    normal_x, normal_y = _b.distance_gradient_normal_field(xnp, [V], (Ny, Nx), (Px, Py), xnp.float64)
+    normal_x, normal_y = _b.distance_gradient_normal_field(xnp, [V], (Ny, Nx), as_lattice(period=(Px, Py)), xnp.float64)
 
     X, Y = np.meshgrid((np.arange(Nx) + 0.5) / Nx * Px, (np.arange(Ny) + 0.5) / Ny * Py)
     dx, dy = X - Px / 2.0, Y - Py / 2.0
@@ -208,9 +210,9 @@ def test_the_normal_field_gets_the_two_axes_the_right_way_round():
 def test_normal_field_chunking_changes_nothing():
     """Chunking is a static split for memory; it must not be visible in the answer."""
     V = ellipse_verts(xnp, 0.5, 0.5, 0.34, 0.19, 0.7, 64)
-    a = _b.distance_gradient_normal_field(xnp, [V], (128, 128), PERIOD, xnp.float64, chunk=10 ** 9)
+    a = _b.distance_gradient_normal_field(xnp, [V], (128, 128), CELL, xnp.float64, chunk=10 ** 9)
     for chunk in (1000, 4001, None):
-        b = _b.distance_gradient_normal_field(xnp, [V], (128, 128), PERIOD, xnp.float64,
+        b = _b.distance_gradient_normal_field(xnp, [V], (128, 128), CELL, xnp.float64,
                                               chunk=chunk)
         assert np.array_equal(np.asarray(a[0]), np.asarray(b[0]))
         assert np.array_equal(np.asarray(a[1]), np.asarray(b[1]))
@@ -219,7 +221,7 @@ def test_normal_field_chunking_changes_nothing():
 # --------------------------------------------------------------------------- conv matrices
 def _mats(xp, params, plan=None, truncation_order=4, ng=64, dtype=None, cdtype=None):
     regs, plan = resolve(xp, params, plan)
-    return _b.conv_mats(xp, regs, 1.0, truncation_order, truncation_order, PERIOD, ng,
+    return _b.conv_mats(xp, regs, 1.0, truncation_order, truncation_order, CELL, ng,
                         dtype or xp.float64, cdtype or xp.complex128), plan
 
 
@@ -245,8 +247,8 @@ def test_permittivity_matches_the_analytic_path_for_one_shape(truncation_order):
     shape = dict(type='rectangle', cx=0.5, cy=0.5, lx=0.42, ly=0.31, angle=0.4, material=4.0)
     ng = 1024
     (mine, _) = _mats(xnp, [(0.5, 0.5, 0.42, 0.31, 0.4, 4.0)], truncation_order=truncation_order, ng=ng)
-    theirs = to_conv_mat_smooth_nvf(xnp, [shape], 1.0, truncation_order, truncation_order, PERIOD, xnp.complex128,
-                                      normal_grid=ng)
+    theirs = to_conv_mat_smooth_nvf(xnp, [shape], 1.0, truncation_order, truncation_order,
+                                    CELL, xnp.complex128, normal_grid=ng)
     rel = (np.abs(np.asarray(mine.epz_i) - np.asarray(theirs.epz_i)).max()
            / np.abs(np.asarray(theirs.epz_i)).max())
     assert rel < 1e-13, rel
@@ -333,9 +335,11 @@ def test_shape_vertices_reads_the_dict_like_the_transform(shape, spelt_out):
     type. Only the geometry is compared, not the name.
     """
     from wavebit._core.analytic import shape_geometry
-    assert shape_geometry(shape, *PERIOD)[1:] == shape_geometry(spelt_out, *PERIOD)[1:]
-    a = np.asarray(_b.shape_vertices(xnp, shape, PERIOD), float)
-    b = np.asarray(_b.shape_vertices(xnp, spelt_out, PERIOD), float)
+    from wavebit._core.lattice import as_lattice
+    cell = as_lattice(period=PERIOD)
+    assert shape_geometry(shape, cell)[1:] == shape_geometry(spelt_out, cell)[1:]
+    a = np.asarray(_b.shape_vertices(xnp, shape, CELL), float)
+    b = np.asarray(_b.shape_vertices(xnp, spelt_out, CELL), float)
     assert np.array_equal(a, b)
 
 
@@ -360,13 +364,15 @@ def test_a_circle_without_ly_is_the_same_circle_on_both_paths(truncation_order):
     from wavebit._core.analytic import to_conv_mat_smooth_nvf
     from wavebit._core.lattice import as_lattice, periods_of
     ng = 1024
-    for name, lat in (('square', None), ('skew', as_lattice(lattice=[[1.0, 0.3], [0.0, 1.0]]))):
-        shape = CIRCLE_NO_LY if lat is None else dict(type='circle', lx=0.34, material=5.76)
-        period = PERIOD if lat is None else periods_of(lat)
-        mine = _b.to_conv_mat_boundary_layer(xnp, [shape], 1.0, truncation_order, truncation_order, period,
-                                             xnp.complex128, normal_grid=ng, lattice=lat)
-        theirs = to_conv_mat_smooth_nvf(xnp, [shape], 1.0, truncation_order, truncation_order, period,
-                                          xnp.complex128, normal_grid=ng, lattice=lat)
+    for name, lat in (('square', as_lattice(period=PERIOD)),
+                      ('skew', as_lattice(lattice=[[1.0, 0.3], [0.0, 1.0]]))):
+        shape = CIRCLE_NO_LY if name == 'square' else dict(type='circle', lx=0.34, material=5.76)
+        period = periods_of(lat)
+        mine = _b.to_conv_mat_boundary_layer(xnp, [shape], 1.0, truncation_order,
+                                             truncation_order, lat, xnp.complex128,
+                                             normal_grid=ng)
+        theirs = to_conv_mat_smooth_nvf(xnp, [shape], 1.0, truncation_order,
+                                        truncation_order, lat, xnp.complex128, normal_grid=ng)
         rel = (np.abs(np.asarray(mine.epz_i) - np.asarray(theirs.epz_i)).max()
                / np.abs(np.asarray(theirs.epz_i)).max())
         # Measured 3.2e-10 (truncation_order 4) and 6.2e-10 (truncation_order 8), square and skew alike. Set just
@@ -541,7 +547,7 @@ def test_an_enclosed_shape_is_cut_out_of_its_host_not_added_to_it(truncation_ord
     Note what that failure is not: the matrices stayed Hermitian and ``R + T`` stayed exactly
     1.000000000000 (see the raster test below), so no conservation check could have seen it.
     """
-    area = float(polygon_area(xnp, _b.shape_vertices(xnp, ENCLOSED_SHAPES[1], PERIOD)))
+    area = float(polygon_area(xnp, _b.shape_vertices(xnp, ENCLOSED_SHAPES[1], CELL)))
     assert abs(area - np.pi * 0.1 ** 2) < 1e-12, area
     exact = 1.0 + (4.0 - 1.0) * (0.36 - area) + (9.0 - 1.0) * area
     wrong = 1.0 + (4.0 - 1.0) * (0.36 + area) + (9.0 - 1.0) * area              # sign dropped
@@ -597,8 +603,8 @@ def test_a_partial_overlap_was_never_affected():
     no reversed loop in it is exactly a region no orientation convention can get wrong, which
     is why this number is bit-identical across both the sign fix and the move to windings.
     """
-    recs, regions = _b.plan_layer(CLIPPED_SHAPES, PERIOD)
-    verts = [_b.shape_vertices(xnp, s, PERIOD) for s in CLIPPED_SHAPES]
+    recs, regions = _b.plan_layer(CLIPPED_SHAPES, CELL)
+    verts = [_b.shape_vertices(xnp, s, CELL) for s in CLIPPED_SHAPES]
     vals = _c.eval_table(xnp, recs, verts)
     areas = [float(polygon_area(xnp, _c.loop_verts(xnp, lp, vals)))
              for region in regions for lp in region]
@@ -620,8 +626,8 @@ def test_an_enclosed_shape_comes_back_wound_clockwise():
     when the orientation was normalised away into a separate ``sign`` field, and the enclosure
     tests above are what that cost.
     """
-    recs, regions = _b.plan_layer(ENCLOSED_SHAPES, PERIOD)
-    verts = [_b.shape_vertices(xnp, s, PERIOD) for s in ENCLOSED_SHAPES]
+    recs, regions = _b.plan_layer(ENCLOSED_SHAPES, CELL)
+    verts = [_b.shape_vertices(xnp, s, CELL) for s in ENCLOSED_SHAPES]
     vals = _c.eval_table(xnp, recs, verts)
     areas = [[float(polygon_area(xnp, _c.loop_verts(xnp, lp, vals))) for lp in region]
              for region in regions]
@@ -654,8 +660,8 @@ def test_a_hole_inside_a_hole_is_material_again():
     nested = [dict(type='rectangle', cx=0.5, cy=0.5, lx=0.80, ly=0.80, angle=0.0, material=4.0),
               dict(type='rectangle', cx=0.5, cy=0.5, lx=0.50, ly=0.50, angle=0.0, material=9.0),
               dict(type='rectangle', cx=0.5, cy=0.5, lx=0.20, ly=0.20, angle=0.0, material=16.0)]
-    recs, regions = _b.plan_layer(nested, PERIOD)
-    verts = [_b.shape_vertices(xnp, s, PERIOD) for s in nested]
+    recs, regions = _b.plan_layer(nested, CELL)
+    verts = [_b.shape_vertices(xnp, s, CELL) for s in nested]
     vals = _c.eval_table(xnp, recs, verts)
 
     got = [sorted(float(polygon_area(xnp, _c.loop_verts(xnp, lp, vals))) for lp in region)
@@ -699,22 +705,22 @@ def test_the_normal_field_does_not_care_which_way_a_hole_is_wound():
     argument for normalising the loops before the field, and normalising would put back the
     orientation conversion the clipper was rewritten to remove.
     """
-    recs, regions = _b.plan_layer(ENCLOSED_SHAPES, PERIOD)
-    verts = [_b.shape_vertices(xnp, s, PERIOD) for s in ENCLOSED_SHAPES]
+    recs, regions = _b.plan_layer(ENCLOSED_SHAPES, CELL)
+    verts = [_b.shape_vertices(xnp, s, CELL) for s in ENCLOSED_SHAPES]
     vals = _c.eval_table(xnp, recs, verts)
     asis = [_c.loop_verts(xnp, lp, vals) for region in regions for lp in region]
     ccw = [xnp.flip(V, axis=0) if float(polygon_area(xnp, V)) < 0 else V for V in asis]
     assert any(float(polygon_area(xnp, V)) < 0 for V in asis)      # there IS a hole to reverse
 
-    a = _b.normal_projector_coeffs(xnp, asis, (256, 256), PERIOD, 6, 6,
+    a = _b.normal_projector_coeffs(xnp, asis, (256, 256), CELL, 6, 6,
                                    xnp.float64, xnp.complex128)
-    b = _b.normal_projector_coeffs(xnp, ccw, (256, 256), PERIOD, 6, 6,
+    b = _b.normal_projector_coeffs(xnp, ccw, (256, 256), CELL, 6, 6,
                                    xnp.float64, xnp.complex128)
     for got, want in zip(a, b):
         assert np.abs(np.asarray(got) - np.asarray(want)).max() < 1e-5
 
-    fa = _b.distance_gradient_normal_field(xnp, asis, (256, 256), PERIOD, xnp.float64)
-    fb = _b.distance_gradient_normal_field(xnp, ccw, (256, 256), PERIOD, xnp.float64)
+    fa = _b.distance_gradient_normal_field(xnp, asis, (256, 256), CELL, xnp.float64)
+    fb = _b.distance_gradient_normal_field(xnp, ccw, (256, 256), CELL, xnp.float64)
     moved = None
     for u, v in zip(fa, fb):
         # squared, because the field's own sign is meaningless -- see the docstring

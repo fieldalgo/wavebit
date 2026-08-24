@@ -1699,10 +1699,10 @@ class CoreFactorizationMixin:
             # has no discrete decision in it, and a painted one with nothing overlapping means
             # the same structure either way -- both stay on the closed-form path, so their
             # slots stay None and the replay never looks.
-            plans = [_boundary.plan_layer(layer.get('shapes', []), self.period,
-                                          lattice=self._geometry_lattice_for(None))
+            plans = [_boundary.plan_layer(layer.get('shapes', []),
+                                          self._geometry_lattice_for(None))
                      if _analytic.layer_needs_resolving(
-                         layer, self.period, self._geometry_lattice_for(None)) else None
+                         layer, self._geometry_lattice_for(None)) else None
                      for layer in self.structure]
             # Recorded whether or not anything needed a plan. The entry *is* the decision:
             # `None` here means "looked at while the numbers were concrete, and it does not
@@ -2125,11 +2125,11 @@ class CoreFactorizationMixin:
             # `factorization='li'` or `fourier_coefficients='sampled'` was refused above.
             xp = _namespace_for_backend(self.backend)
             conv = _analytic.to_conv_mat_smooth_layers(
-                structure, half_width_u, half_width_v, self.period,
+                structure, half_width_u, half_width_v,
+                self._geometry_lattice_for(geometry),
                 normal_grid=self.normal_grid,
                 complex_dtype=xp.complex128, xp=xp,
-                boundary_plans=None if geometry is None else geometry.boundary_plans,
-                lattice=self._geometry_lattice_for(geometry))
+                boundary_plans=None if geometry is None else geometry.boundary_plans)
 
         else:
             raise ValueError(

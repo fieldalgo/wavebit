@@ -28,6 +28,7 @@ os.environ.setdefault('JAX_ENABLE_X64', '1')
 
 import array_api_compat.numpy as xnp
 import wavebit
+from wavebit._core.lattice import as_lattice
 from wavebit._core import boundary as _b
 from wavebit._core import clipper as _c
 from wavebit._core.analytic import assemble_eps_coeffs
@@ -220,8 +221,8 @@ def test_the_analytic_sampler_agrees_with_its_own_dc_coefficient(lattice):
                    angle=0.45, material=4.840000000000001)]
     solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], lattice=lattice, **COMMON)
     fx, fy = int(solver.truncation_order[0]), int(solver.truncation_order[1])
-    dc = assemble_eps_coeffs(xnp, shapes, 1.0, fx, fy, solver.period, xnp.complex128,
-                             lattice=solver.lattice)[0][2 * fy, 2 * fx].real
+    dc = assemble_eps_coeffs(xnp, shapes, 1.0, fx, fy, solver.lattice,
+                             xnp.complex128)[0][2 * fy, 2 * fx].real
 
     assert solver.slice_structure(n=1024).real.mean() == pytest.approx(dc, rel=1e-4)
 

@@ -60,6 +60,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .lattice import as_lattice
 from . import overlap as _overlap
 from .backend import array_namespace
 from .domain import as_material
@@ -277,7 +278,12 @@ def check_block_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_
     # running into its own image defeats it, so that is all the paint branch asks about — and
     # asking for less is what keeps the check off the quadratic sweep on every rebuild.
     paints = combine != 'add'
-    hits = _overlap.overlapping_pairs(prims, Px, Py, tol_rel * max(Px, Py), self_only=paints)
+    # The block modeller has no basis slot at all -- it grids on a rectangle, and a skewed
+    # cell is refused for it by `engine._reject_unsupported_lattice` and, since `c5b061f`,
+    # by `draw._refuse_layer`. So the cell here *is* `diag(Px, Py)`, and saying so is the
+    # point: `overlapping_pairs` no longer has a `None` arm to fall into silently.
+    hits = _overlap.overlapping_pairs(prims, tol_rel * max(Px, Py),
+                                      as_lattice(period=(Px, Py)), self_only=paints)
     if not hits:
         return
 

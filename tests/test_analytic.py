@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 import wavebit
+from wavebit._core.lattice import as_lattice
 import array_api_compat.numpy as xnp
 from wavebit._core.analytic import (
     shape_ft as _shape_ft, conv_matrix_2d as _conv_matrix_2d,
@@ -28,7 +29,7 @@ def raw_dft(cell, fx, fy):
 
 
 def shape_ft(shape, ky, kx, period):
-    return _shape_ft(xnp, shape, ky, kx, period)
+    return _shape_ft(xnp, shape, ky, kx, as_lattice(period=period))
 
 
 def conv_matrix_2d(coeff2d, half_width_u, half_width_v):
@@ -41,7 +42,8 @@ def sampled_coeffs(field, fx, fy):
 
 
 def assemble_eps_coeffs(shapes, background, half_width_u, half_width_v, period):
-    return _assemble_eps_coeffs(xnp, shapes, background, half_width_u, half_width_v, period, xnp.complex128)
+    return _assemble_eps_coeffs(xnp, shapes, background, half_width_u, half_width_v,
+                                as_lattice(period=period), xnp.complex128)
 
 
 def to_conv_mat_smooth(shapes, background, half_width_u, half_width_v, period):
@@ -239,7 +241,8 @@ def test_the_analytic_normal_field_gets_the_two_axes_the_right_way_round():
     Px, Py, r = 2.0, 1.0, 0.3
     Ny, Nx = 129, 257
     shape = dict(type='circle', cx=Px / 2.0, cy=Py / 2.0, lx=2 * r, material=4.0)
-    normal_x, normal_y = _nvf_analytic(xnp, (Ny, Nx), [shape], (Px, Py), xnp.float64)
+    normal_x, normal_y = _nvf_analytic(xnp, (Ny, Nx), [shape], xnp.float64,
+                                       as_lattice(period=(Px, Py)))
 
     X, Y = np.meshgrid((np.arange(Nx) + 0.5) / Nx * Px, (np.arange(Ny) + 0.5) / Ny * Py)
     dx, dy = X - Px / 2.0, Y - Py / 2.0
@@ -261,7 +264,7 @@ def test_the_analytic_normal_field_gets_the_two_axes_the_right_way_round():
     # The branch the solver actually takes: a basis in hand, and the centre left to default out
     # of Px / Py. Same disc, so the same radial statement holds and the same tolerance applies.
     centred = dict(type='circle', lx=2 * r, material=4.0)
-    nx_l, ny_l = _nvf_analytic(xnp, (Ny, Nx), [centred], (Px, Py), xnp.float64,
+    nx_l, ny_l = _nvf_analytic(xnp, (Ny, Nx), [centred], xnp.float64,
                                ((Px, 0.0), (0.0, Py)))
     assert np.abs(np.abs(radial_alignment(nx_l, ny_l)[rad > 0]) - 1.0).max() < 1e-12
 
@@ -518,7 +521,8 @@ def test_shapes_superpose_where_they_overlap():
             dict(type='rectangle', cx=190.0, cy=150.0, lx=120.0, ly=120.0, angle=0.0,
                  material=9.0)]
 
-    eps_c, _ = _assemble_eps_coeffs(xnp, rods, eps_base, 3, 3, period, np.complex128)
+    eps_c, _ = _assemble_eps_coeffs(xnp, rods, eps_base, 3, 3,
+                                    as_lattice(period=period), np.complex128)
     dc = complex(eps_c[2 * 3, 2 * 3]).real
 
     cell = period[0] * period[1]
@@ -683,7 +687,8 @@ def _solver_mean_eps(combine, shapes=PAINT_RODS):
     """``<eps>`` as the solve reads it: the DC entry of ``ep_dir``, recovered from ``epz_i``."""
     from wavebit._core.analytic import to_conv_mat_smooth_layers
     layer = dict(background=1.0, shapes=shapes, combine=combine)
-    mats = to_conv_mat_smooth_layers([layer], 6, 6, PAINT_PERIOD, normal_grid=256,
+    mats = to_conv_mat_smooth_layers([layer], 6, 6, as_lattice(period=PAINT_PERIOD),
+                                     normal_grid=256,
                                      complex_dtype=np.complex128, xp=xnp)
     return float(np.real(np.linalg.inv(np.asarray(mats.epz_i[0]))[0, 0]))
 
@@ -717,7 +722,8 @@ def test_assemble_eps_coeffs_refuses_a_painted_overlap_when_told_the_rule():
     the layer-level refusal does: an error a caller cannot act on leaves them where they were.
     """
     with pytest.raises(ValueError) as raised:
-        _assemble_eps_coeffs(xnp, PAINT_RODS, 1.0, 6, 6, PAINT_PERIOD, xnp.complex128,
+        _assemble_eps_coeffs(xnp, PAINT_RODS, 1.0, 6, 6, as_lattice(period=PAINT_PERIOD),
+                             xnp.complex128,
                              combine='paint')
     message = str(raised.value)
     assert '0 (rectangle)' in message and '1 (rectangle)' in message
@@ -732,7 +738,8 @@ def test_a_disjoint_painted_layer_still_reaches_the_closed_form_builder():
     also why the shipped dispatch sends such a layer here with ``combine='paint'`` still on it.
     """
     disjoint = [dict(PAINT_RODS[0], cx=200.0), dict(PAINT_RODS[1], cx=700.0)]
-    eps_c, _ = _assemble_eps_coeffs(xnp, disjoint, 1.0, 6, 6, PAINT_PERIOD, xnp.complex128,
+    eps_c, _ = _assemble_eps_coeffs(xnp, disjoint, 1.0, 6, 6,
+                                    as_lattice(period=PAINT_PERIOD), xnp.complex128,
                                     combine='paint')
     assert float(np.real(eps_c[12, 12])) == pytest.approx(EPS_SUMMED, abs=1e-12)
     assert _solver_mean_eps('paint', disjoint) == pytest.approx(EPS_SUMMED, abs=1e-9)
@@ -1078,11 +1085,11 @@ def test_the_tiled_blend_is_bit_identical_to_the_whole_grid_one():
     try:
         for n in (256, 512, 640):                      # 640 is not a multiple of the tile
             _an._TILE_MIN_PIXELS = 10 ** 12            # force the whole-grid path
-            whole = _an.normal_vector_field_analytical(xnp, (n, n), shapes, (1.0, 1.0),
-                                                       np.float64)
+            whole = _an.normal_vector_field_analytical(xnp, (n, n), shapes, np.float64,
+                                                       as_lattice(period=(1.0, 1.0)))
             _an._TILE_MIN_PIXELS = 0                   # force the tiled path
-            tiled = _an.normal_vector_field_analytical(xnp, (n, n), shapes, (1.0, 1.0),
-                                                       np.float64)
+            tiled = _an.normal_vector_field_analytical(xnp, (n, n), shapes, np.float64,
+                                                       as_lattice(period=(1.0, 1.0)))
             for a, b in zip(whole, tiled):
                 assert np.array_equal(np.asarray(a), np.asarray(b)), n
     finally:
@@ -1227,7 +1234,7 @@ def test_a_traced_or_autograd_value_is_never_served_from_the_cache():
     lx = torch.tensor(0.30, requires_grad=True)      # a length *does* reach the build
     assert _an._projector_cache_key(
         None, [dict(type='rectangle', cx=0.4, cy=0.35, lx=lx, ly=0.2, angle=0.3)],
-        (512, 512), (1.0, 1.0), 4, 4, 'complex128', None) is None
+        (512, 512), as_lattice(period=(1.0, 1.0)), 4, 4, 'complex128') is None
 
 
 def test_the_cache_key_carries_everything_the_build_depends_on():
@@ -1316,7 +1323,7 @@ def _band_misalignment(A, shape, n=512):
     from wavebit._core.factorization import normal_vector_field
     from wavebit._core.lattice import periods_of
 
-    nx_a, ny_a = _nvf_analytic(np, (n, n), [shape], periods_of(A), np.float64, A)
+    nx_a, ny_a = _nvf_analytic(np, (n, n), [shape], np.float64, A)
 
     u = (np.arange(n) + 0.5) / n
     U, V = np.meshgrid(u, u)
@@ -1378,8 +1385,8 @@ def test_an_axis_aligned_cell_keeps_the_rectangular_fold_bit_for_bit():
     shapes = [dict(type='circle', cx=0.37, cy=0.29, lx=0.34, material=5.76),
               dict(type='rectangle', cx=0.72, cy=0.66, lx=0.3, ly=0.18, angle=0.4, material=3.0)]
     lat = as_lattice(period=[0.9, 1.4])
-    a = _nvf_analytic(np, (96, 96), shapes, (0.9, 1.4), np.float64, None)
-    b = _nvf_analytic(np, (96, 96), shapes, periods_of(lat), np.float64, lat)
+    a = _nvf_analytic(np, (96, 96), shapes, np.float64, as_lattice(period=(0.9, 1.4)))
+    b = _nvf_analytic(np, (96, 96), shapes, np.float64, lat)
     for got, want in zip(b, a):
         assert np.asarray(got).tobytes() == np.asarray(want).tobytes()
 
@@ -1428,15 +1435,15 @@ def test_an_omitted_centre_is_the_cell_centre_on_every_cell(cell_name, A, shape)
 
     Px, Py = periods_of(A)
     want = (0.5 * (A[0, 0] + A[0, 1]), 0.5 * (A[1, 0] + A[1, 1]))
-    _, cx, cy, _, _, _ = shape_geometry(shape, Px, Py, A)
+    _, cx, cy, _, _, _ = shape_geometry(shape, A)
     assert (cx, cy) == want
 
     # a stated centre still wins, and each coordinate defaults on its own
     stated = dict(shape, cx=37.5)
-    _, cx2, cy2, _, _, _ = shape_geometry(stated, Px, Py, A)
+    _, cx2, cy2, _, _, _ = shape_geometry(stated, A)
     assert cx2 == 37.5 and cy2 == want[1]
     stated = dict(shape, cy=-12.25)
-    _, cx3, cy3, _, _, _ = shape_geometry(stated, Px, Py, A)
+    _, cx3, cy3, _, _, _ = shape_geometry(stated, A)
     assert cx3 == want[0] and cy3 == -12.25
 
 
@@ -1463,7 +1470,7 @@ def test_every_reader_of_the_default_moves_together(cell_name, A):
     shape = dict(type='rectangle', lx=150.0, ly=80.0, angle=0.4)
     cx, cy = 0.5 * (A[0, 0] + A[0, 1]), 0.5 * (A[1, 0] + A[1, 1])
 
-    verts = np.asarray(_b.shape_vertices(xnp, _b._concrete_shape(shape), (Px, Py), lattice=A),
+    verts = np.asarray(_b.shape_vertices(xnp, _b._concrete_shape(shape), A),
                        dtype=float)
     assert np.allclose(verts.mean(axis=0), (cx, cy), atol=1e-9)
 

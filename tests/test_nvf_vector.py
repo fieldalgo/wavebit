@@ -1,5 +1,6 @@
 import numpy as np
 import wavebit
+from wavebit._core.lattice import as_lattice
 from wavebit._core.modeler import Modeling
 import array_api_compat.numpy as xnp
 from wavebit._core.analytic import normal_vector_field_analytical as _nvf_analytic
@@ -7,7 +8,7 @@ from wavebit._core.factorization import nvf_conv_matrices as _nvf_conv
 
 
 def get_normal_vector_field_analytical(grid_shape, shapes, period=(1000.0, 1000.0)):
-    return _nvf_analytic(xnp, grid_shape, shapes, period, xnp.float64)
+    return _nvf_analytic(xnp, grid_shape, shapes, xnp.float64, as_lattice(period=period))
 
 
 def to_conv_mat_nvf_2d(eps_matrix, half_width_u, half_width_v, normal_x=None, normal_y=None):

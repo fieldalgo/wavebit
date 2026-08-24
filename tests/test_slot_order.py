@@ -37,6 +37,7 @@ import contextlib
 import warnings
 
 import numpy as np
+from wavebit._core.lattice import as_lattice
 import pytest
 
 import wavebit
@@ -112,7 +113,7 @@ BUILDERS = {
         _raster(), MAX_ORDER, MAX_ORDER),
     'raster_pn_eps': lambda: _fac.to_conv_mat_raster_pn_eps(_tensor_raster(), MAX_ORDER, MAX_ORDER),
     'smooth_layers': lambda: _analytic.to_conv_mat_smooth_layers(
-        _shapes(), MAX_ORDER, MAX_ORDER, KW['period'], normal_grid=256,
+        _shapes(), MAX_ORDER, MAX_ORDER, as_lattice(period=KW['period']), normal_grid=256,
         complex_dtype=np.complex128, xp=np),
 }
 

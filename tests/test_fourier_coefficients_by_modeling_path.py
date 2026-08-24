@@ -25,6 +25,7 @@ import numpy as np
 import pytest
 
 import wavebit
+from wavebit._core.lattice import as_lattice
 from wavebit._core.enums import FourierCoefficients
 
 KW = dict(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
@@ -223,7 +224,7 @@ def _painted(**strategy):
 def test_the_boundary_sub_path_is_covered_by_the_smooth_row():
     """It really does take the resolving branch, and really does resolve to the smooth pair."""
     from wavebit._core import analytic
-    assert analytic.layer_needs_resolving(PAINTED[0], PAINTED_PERIOD, None)
+    assert analytic.layer_needs_resolving(PAINTED[0], as_lattice(period=PAINTED_PERIOD))
     s = _painted()
     assert s._modeling_type == 2
     assert s.fourier_coefficients == 'integrated' and s.factorization == 'nvf'

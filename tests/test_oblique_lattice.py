@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 import wavebit
+from wavebit._core.lattice import as_lattice
 from wavebit._core import lattice as lat
 from wavebit._core import draw
 from wavebit._core.factorization import (normal_vector_field,
@@ -128,15 +129,16 @@ def test_the_sample_grid_gets_the_two_axes_the_right_way_round():
     want_x = u[None, :] * Px + 0.0 * v[:, None]
     want_y = v[:, None] * Py + 0.0 * u[None, :]
 
-    X0, Y0 = lat.sample_grid(np, (Ny, Nx), (Px, Py), np.float64)
-    Xb, Yb = lat.sample_grid(np, (Ny, Nx), (Px, Py), np.float64, np.diag([Px, Py]))
+    X0, Y0 = lat.sample_grid(np, (Ny, Nx), as_lattice(period=(Px, Py)), np.float64)
+    Xb, Yb = lat.sample_grid(np, (Ny, Nx), np.diag([Px, Py]), np.float64)
     for X, Y in ((X0, Y0), (Xb, Yb)):
         assert X.shape == (Ny, Nx) and Y.shape == (Ny, Nx)
         assert np.array_equal(X, want_x)
         assert np.array_equal(Y, want_y)
 
-    Xr, Yr = lat.sample_grid(np, (Ny, Nx), (Py, Px), np.float64)             # pair reversed
-    Xt, Yt = lat.sample_grid(np, (Ny, Nx), (Px, Py), np.float64, np.diag([Py, Px]))  # transposed
+    # pair reversed
+    Xr, Yr = lat.sample_grid(np, (Ny, Nx), as_lattice(period=(Py, Px)), np.float64)
+    Xt, Yt = lat.sample_grid(np, (Ny, Nx), np.diag([Py, Px]), np.float64)  # transposed
     for X, Y in ((Xr, Yr), (Xt, Yt)):
         assert abs(np.abs(X - X0).max() - 0.9) < 1e-15
         assert abs(np.abs(Y - Y0).max() - 5.0 / 6.0) < 1e-15
