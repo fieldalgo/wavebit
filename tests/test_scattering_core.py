@@ -797,3 +797,83 @@ def test_cascading_the_pieces_the_other_way_round_is_refused():
     second = _piece(WHOLE[:2], WHOLE_TH[:2], 4.0, 1.0, 0.0, side='bottom')
     with pytest.raises(ValueError, match='different half-spaces'):
         second.cascade(first)
+# ------------------------------------------------- cascading a cell whose ky is its own axis
+
+#: ``HEX`` respelt: ``a2 - a1`` in place of ``a2``. ``U = [[1, -1], [0, 1]]`` has ``det U = 1``,
+#: so the two bases generate the *same* point lattice and a disc at every lattice point is one
+#: and the same infinite array -- but ``truncation_order`` cuts a rectangle in ``(m, n)``, and
+#: the two bases carry that rectangle onto different ``G``.
+HEX_RESPELT = np.column_stack((HEX[:, 0], HEX[:, 1] - HEX[:, 0]))
+
+#: The stack the oblique cascade cuts, stated as *shapes* rather than as a raster on purpose: a
+#: raster is not the same object under a change of basis -- re-basing re-discretizes it and the
+#: staircase term converges only as O(1/n) -- while a disc at an absolute Cartesian centre is
+#: carried unchanged. ``cx`` / ``cy`` are written out because an omitted centre defaults to the
+#: *cell* centre, which is a different point in the two spellings.
+CUT_HEX = [dict(background=1.0,
+                shapes=[dict(type='circle', cx=0.0, cy=0.0, lx=180.0, material=12.25)]),
+           dict(background=6.25,
+                shapes=[dict(type='circle', cx=0.0, cy=0.0, lx=240.0, material=1.0)])]
+CUT_HEX_TH = [150.0, 220.0]
+CUT_HEX_KW = dict(backend=0, wavelength=900.0, truncation_order=[3, 3], theta=0.0, phi=0.0,
+                  psi=0.7, answers='amplitude', layer_algorithm='SMM')
+
+
+def _hex_piece(layers, thickness, top, bot, lattice=HEX):
+    solver = wavebit.rcwa(structure=layers, thickness=thickness, top=top, bot=bot,
+                          lattice=lattice, **CUT_HEX_KW)
+    solver.solve()
+    return solver.scattering
+
+
+def test_cascading_across_a_respelt_oblique_cell_is_refused():
+    """The port check's ``ky`` half, on the only cell where ``ky`` can move without ``kx``.
+
+    Every other cascade test in this file is 1D (``period=[0.77]``), so both ports carry
+    ``ky=None`` and ``_port_disagreement`` returns from the ``kx`` clause before the ``ky`` one
+    is ever evaluated. Delete ``or differ(a.ky, b.ky)`` from
+    ``wavebit/_core/scattering.py::_port_disagreement`` and the other 131 tests in this file
+    still pass; this one is what fails.
+
+    The scene is the mistake, not a contrivance. ``HEX`` and ``HEX_RESPELT`` are two bases of
+    one hexagonal lattice (``a2`` against ``a2 - a1``, unimodular), so the two solves describe
+    the same physical array of discs and a user who spells the halves differently has written
+    nothing wrong anywhere. What differs is which ``G`` the retained ``(m, n)`` rectangle lands
+    on, and on a skewed cell ``kx`` and ``ky`` are not separate axes: ``kx`` depends on ``m``
+    alone here and is untouched by the shear, while ``ky`` picks up ``2*lambda*m/(a*sqrt(3))``.
+
+    Measured, at ``truncation_order=[3, 3]``, ``a = 400``, ``lambda = 900``:
+
+    * matched ports (both halves on ``HEX``): ``max|dkx| = max|dky| = 0`` exactly, and the join
+      reproduces the uncut stack's own blocks to ``2.5e-14`` relative -- half (a) below;
+    * respelt lower half: ``max|dkx| = 0`` **exactly**, ``max|dky| = 7.794`` -- 7.8e12 times
+      the check's own ``1e-12`` tolerance, so the two numbers are nowhere near each other and
+      the assertion has room;
+    * what the deleted clause lets through: the star product runs, returns no NaN and no
+      negative power, and the composite is wrong by 8.7% / 13.5% / 6.2% / **58.2%** in
+      ``S11`` / ``S12`` / ``S21`` / ``S22``.
+
+    ``np.array_equal(exit.kx, entry.kx)`` is the load-bearing line and comes first: without it
+    the refusal would only say the ports differ *somehow*, and a check that had kept only the
+    ``kx`` clause would pass this test on the ``kx`` disagreement it never had. Normal
+    incidence for the same reason -- ``sin(theta) = 0`` drops ``n_inc`` out of ``k_inc``, so the
+    two grids agree to the bit rather than to a tolerance. The joint medium is identical on
+    both sides so the half-space clause cannot fire first.
+    """
+    # (a) the machinery works on this cell: cut the stack, solve the halves apart, join.
+    whole = _hex_piece(CUT_HEX, CUT_HEX_TH, 1.0, 2.25)
+    upper = _hex_piece(CUT_HEX[:1], CUT_HEX_TH[:1], 1.0, 4.0)
+    lower = _hex_piece(CUT_HEX[1:], CUT_HEX_TH[1:], 4.0, 2.25)
+    joined = upper.cascade(lower)
+    for name, got, want in zip(joined._fields, joined.blocks, whole.blocks):
+        rel = np.abs(np.asarray(got) - np.asarray(want)).max() / np.abs(np.asarray(want)).max()
+        assert rel < 1e-11, (name, rel)                    # clean residual 2.5e-14
+
+    # (b) the same lower half on the other spelling of the same lattice: kx to the bit, ky not.
+    respelt = _hex_piece(CUT_HEX[1:], CUT_HEX_TH[1:], 4.0, 2.25, lattice=HEX_RESPELT)
+    exit_port, entry_port = upper.exit_port, respelt.entry_port
+    assert np.array_equal(np.asarray(exit_port.kx), np.asarray(entry_port.kx))
+    assert np.max(np.abs(np.asarray(exit_port.ky) - np.asarray(entry_port.ky))) > 1.0
+    assert exit_port.index == entry_port.index and exit_port.mu == entry_port.mu
+    with pytest.raises(ValueError, match='in-plane wavevectors'):
+        upper.cascade(respelt)

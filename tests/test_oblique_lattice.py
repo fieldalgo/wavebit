@@ -15,6 +15,8 @@ import pytest
 import wavebit
 from wavebit._core import lattice as lat
 from wavebit._core import draw
+from wavebit._core.factorization import (normal_vector_field,
+                                         to_conv_mat_raster_pn_eps)
 from wavebit._core.geometry import StaleGeometryError
 
 P = 400.0
@@ -1030,3 +1032,233 @@ def test_a_skewed_cell_can_name_the_coordinate_its_basis_answers(basis):
     assert float(np.max(np.abs(grid))) > 1e-6           # a zero field would pass anything
     assert row.shape[-3] == 1
     assert np.array_equal(row, grid[..., 1:2, :, :])    # v = 0.5 is the middle of `linspace`
+
+# ------------------------------------ backside illumination crossed with a skewed cell
+
+_BS_P = 400.0
+_BS_WL = 900.0
+#: ``a2' = a2 + a1``: det U = +1, so this is the *same* point lattice written another way.
+#: A shear rather than a rotation on purpose -- a 90-degree rotation maps x onto y and an
+#: axis-aligned assumption survives it unharmed.
+_BS_SHEAR = np.column_stack(([_BS_P, 0.0], [_BS_P, _BS_P]))
+_BS_ROD = (3.0 + 0.3j) ** 2                # a lossy rod, as permittivity
+_BS_SUB = 4.0                              # substrate n = 2, against air on top
+
+
+def _backside_totals(lattice, side, truncation_order=10):
+    """``(sum R, sum T)`` for one rod on the lattice ``lattice`` names, lit from ``side``.
+
+    The rod is a *shape* in absolute Cartesian lengths, so the two bases carry the same disc
+    rather than re-discretizing it. A raster would not: re-basing re-staircases it, and that
+    term converges only as O(1/n) -- 7.4% relative at n=32, still 2.0% at n=512 -- which is
+    far larger than anything this test is trying to see.
+    """
+    structure = [{'background': 1.0, 'shapes': [
+        {'type': 'circle', 'cx': _BS_P / 2, 'cy': _BS_P / 2, 'lx': 180.0,
+         'material': _BS_ROD}]}]
+    s = wavebit.rcwa(backend=0, structure=structure, period=[_BS_P, _BS_P],
+                     truncation_order=[truncation_order, truncation_order],
+                     thickness=[300.0], wavelength=_BS_WL, top=1.0, bot=_BS_SUB,
+                     theta=0.5, phi=0.6, psi=np.pi / 4, factorization='nvf',
+                     lattice=lattice, incidence_side=side)
+    res = s.solve()
+    return float(np.sum(np.asarray(res.R))), float(np.sum(np.asarray(res.T)))
+
+
+def test_backside_illumination_survives_a_unimodular_shear():
+    """Lit from below, a skewed cell answers what the same lattice answers unskewed.
+
+    The crossing this file and ``tests/test_oblique_lattice.py`` each cover only one half of:
+    every backside test runs on a rectangular cell, every skewed-cell test is lit from above,
+    so the skewed branch of ``RCWA.order_kxy`` -- the per-order ``(kx, ky)`` a non-orthogonal
+    basis needs, since ``period`` on such a cell is ``(|a1|, |a2|)`` with the angle gone -- has
+    no test reaching it from ``incidence_side='bottom'``. Make that branch fall back to the
+    separable pair when the light comes from below and **nothing in either file notices**:
+    ``tests/test_backside_incidence.py`` 101 passed, ``tests/test_oblique_lattice.py`` 47
+    passed. On this scene it moves ``sum(T)`` 0.492174 -> 0.177587 and ``sum(R)`` 0.229320 ->
+    0.290383, i.e. it silently reads the rectangular problem instead of the skewed one.
+
+    **The oracle is a second representation, not a self-consistency check.** ``a2' = a2 + a1``
+    is unimodular, so ``_BS_SHEAR`` generates the identical point lattice with the identical
+    cell area, and the rod is stated in the cell's own Cartesian coordinates -- the same disc
+    at the same place, carried rather than resampled. Energy would prove nothing: the NVF
+    assembly is Hermitian-symmetrised whatever the k-map says, and the rod absorbs, so the
+    mutation above just moves the absorbed fraction 0.2785 -> 0.5320 with no identity broken.
+
+    **Why this scene.** Lossy rod, ``top != bot``, oblique incidence -- all three deliberate.
+    On the symmetric lossless variant (``top = bot = 1``, real rod, everything else equal) the
+    two sides return *bit-identical* arrays: top-vs-bottom ``dR`` and ``dT`` are 0.0 exactly,
+    per order, on both bases. A solver that ignored ``incidence_side`` altogether would pass
+    such a scene, so the last assertion pins the asymmetry that makes 'bottom' mean something
+    here: measured top-vs-bottom 0.232 in ``sum(T)`` and 0.153 in ``sum(R)``.
+
+    **Numbers.** Clean residual at ``truncation_order=10``: 3.8e-4 in ``T``, 6.2e-5 in ``R``
+    (worst across truncation 8/10/12/14: 5.5e-4 and 2.3e-4). It does not fall monotonically
+    with truncation and it is not meant to: the two bases retain *different order sets* -- a
+    square in ``(m, n)`` against a sheared parallelogram -- so this agrees to the truncation,
+    not to the machine. The mutation's effect is 3.1e-1 in ``T`` and 6.1e-2 in ``R``. The 5e-3
+    tolerance sits 13x above the residual and 12x below the smaller of the two effects.
+
+    ``layer_algorithm`` is the default ``'ETM'`` (the backside path that solves the z-mirrored
+    scene); ``'SMM'`` returns the same numbers to 9 digits on this scene.
+    """
+    r_o, t_o = _backside_totals(None, 'bottom')
+    r_s, t_s = _backside_totals(_BS_SHEAR, 'bottom')
+    assert t_s == pytest.approx(t_o, abs=5e-3), f'sum(T) from below: {t_o!r} vs {t_s!r}'
+    assert r_s == pytest.approx(r_o, abs=5e-3), f'sum(R) from below: {r_o!r} vs {r_s!r}'
+
+    # ...and the scene really is two-sided, so the pair above is a backside statement.
+    _, t_top = _backside_totals(None, 'top')
+    assert abs(t_top - t_o) > 0.1, f'scene is not two-sided: {t_top!r} vs {t_o!r}'
+
+
+# ------------------------- the Popov-Neviere (patterned anisotropic) build on a skewed cell
+
+#: ``a2' = a2 + 2*a1``. Unimodular (det U = +1), so the *same point lattice* as ``ORTHO`` --
+#: and the shear is **even**, which is what puts the two parametric grids on the same physical
+#: points: sample ``(i, j)`` of one is sample ``(i + 2j + 1 mod n, j)`` of the other. The odd
+#: ``SHEAR`` above re-discretizes the rod instead, and the staircase term that opens up costs
+#: an order of magnitude here -- 5.3e-4 to 6.7e-4 on ``sum(R)`` against the 1.6e-5 to 1.0e-4
+#: below.
+SHEAR_2A1 = np.column_stack(([P, 0.0], [2 * P, P]))
+
+PN_N = 192
+PN_ORDERS = (4, 12)                                # tall on purpose; see the docstring
+PN_CENTRE = (0.31 * P, 0.44 * P)
+PN_RADIUS = 0.40 * P
+PN_EO, PN_EE = 4.0, 7.0                            # ordinary / extraordinary permittivity
+PN_AXIS_DEG = 23.0
+
+
+def _pn_disc(basis, n=PN_N):
+    """Indicator of one disc, stated in the cell's own Cartesian coordinates.
+
+    Written out here rather than taken from a helper because the **shape** is what has to
+    cross between the two cells, not an array: the disc has a Cartesian centre and a Cartesian
+    radius, and each cell samples that same disc on its own parametric grid.
+    :func:`wavebit._core.draw._shape_inside` cannot serve -- its periodic image loop is fixed
+    at ``(-1, 0, 1)``, which does not reach across a cell sheared by two lattice vectors: it
+    draws 0.262 of ``SHEAR_2A1`` filled where the disc covers 0.503.
+    """
+    a1 = np.asarray(basis, dtype=float)[:, 0]
+    a2 = np.asarray(basis, dtype=float)[:, 1]
+    t = (np.arange(n) + 0.5) / n
+    x = t[None, :] * a1[0] + t[:, None] * a2[0]
+    y = t[None, :] * a1[1] + t[:, None] * a2[1]
+    inside = np.zeros((n, n), dtype=bool)
+    for i in range(-4, 5):                         # minimum image over the lattice
+        for j in range(-4, 5):
+            ox = PN_CENTRE[0] + i * a1[0] + j * a2[0]
+            oy = PN_CENTRE[1] + i * a1[1] + j * a2[1]
+            inside |= ((x - ox) ** 2 + (y - oy) ** 2) <= PN_RADIUS ** 2
+    return inside
+
+
+def _pn_tensor(inside):
+    """A uniaxial rod in vacuum, optic axis in plane and 23 degrees off x.
+
+    ``eps = eo I + (ee - eo) c c^T`` with ``c = (cos a, sin a, 0)``: real, symmetric, and with
+    a **patterned** ``eps_xy``, which is the slot the Popov-Neviere rearrangement exists to
+    fill. 23 degrees rather than 0, 45 or 90 -- an axis on x, on y or on the diagonal is
+    carried by an axis swap, and a quarter turn maps x onto y unharmed.
+    """
+    c = np.array([np.cos(np.deg2rad(PN_AXIS_DEG)), np.sin(np.deg2rad(PN_AXIS_DEG)), 0.0])
+    rod = PN_EO * np.eye(3) + (PN_EE - PN_EO) * np.outer(c, c)
+    eps33 = np.zeros(inside.shape + (3, 3), dtype=complex)
+    eps33[..., 0, 0] = eps33[..., 1, 1] = eps33[..., 2, 2] = 1.0
+    eps33[inside] = rod
+    return eps33
+
+
+def _pn_totals(basis, method, lattice_blind=False):
+    """``(sum(R), sum(T))`` for the rod on ``basis``, through the Popov-Neviere builder.
+
+    The tensor path has no front door -- ``structure`` is a scalar raster -- so this is the
+    documented route in: build the five slots and hand them to ``solve_conv``
+    (``docs/patterned-anisotropic-factorization.md`` section 9).
+    """
+    inside = _pn_disc(basis)
+    eps33 = _pn_tensor(inside)
+    normal_field = None
+    if lattice_blind:
+        # exactly what the builder computes if it does not pass the basis on
+        normal_field = [normal_vector_field(0.5 * (eps33[..., 0, 0] + eps33[..., 1, 1]),
+                                            lattice=None, method=method)]
+    slots = to_conv_mat_raster_pn_eps(eps33[None], PN_ORDERS[0], PN_ORDERS[1],
+                                      normal_field=normal_field, lattice=basis,
+                                      normal_method=method)
+    solver = wavebit.rcwa(backend=0, structure=np.where(inside, PN_EO, 1.0)[None],
+                          lattice=basis, truncation_order=PN_ORDERS, thickness=[H],
+                          wavelength=WL, top=1.0, bot=1.0, theta=np.deg2rad(25.0),
+                          phi=np.deg2rad(37.0), psi=np.deg2rad(20.0))
+    result = solver.solve_conv(*(np.stack([slot[0]]) for slot in slots))
+    return float(np.sum(np.asarray(result.R))), float(np.sum(np.asarray(result.T)))
+
+
+@pytest.mark.parametrize('method', ['contour', 'spectral', 'smooth'])
+def test_a_patterned_tensor_is_the_same_physics_under_a_unimodular_shear(method):
+    """The Popov-Neviere build has to carry the cell basis into its own normal field.
+
+    The crossing nothing covered: a **patterned anisotropic** layer on a **non-orthogonal**
+    cell. :func:`~wavebit._core.factorization.to_conv_mat_raster_pn_eps` reads its normal field
+    off the trace of the in-plane block, and that read is the one Cartesian-geometric step in
+    the whole build -- an index-space gradient is a Cartesian one only where the pixels are
+    square in real space. Drop the ``lattice=`` from that single call and 218 tests stay green,
+    the 36 of the two fmmax patterned goldens included, because every scene they are stated on
+    is square. Measured on this cell, that drop moves ``epxy`` and ``epyx`` -- the slots the
+    rearrangement exists for -- by 0.67 to 1.00 relative, and moves ``epz_i`` by exactly zero,
+    which is the tell: ``epz_i`` is the one slot that never reads the normal field.
+
+    **Oracle: the same rod, twice.** ``a2 + 2*a1`` is unimodular, so it generates the identical
+    point lattice, and the rod crosses between the two runs as a *shape* rather than as an
+    array. Two things about that are asserted before any physics runs: the disc's area comes
+    out right (a periodic image loop too short for the shear clips it silently), and the
+    sheared raster is the square one re-indexed pixel for pixel -- an even shear puts both
+    parametric grids on the same physical points, so the staircase is not merely similar, it is
+    the same staircase. Energy conservation would say nothing here: the tensor is Hermitian at
+    every pixel, so ``R + T`` comes back 1 to 1e-15 however the cell is read.
+
+    **The retained window is deliberately tall.** The orders kept are a rectangle in
+    ``(m, n)`` and the shear carries that rectangle off itself, so the two runs hold different
+    physical order sets -- a residual no resolution removes. At ``(4, 4)`` it is 3.5e-3 to
+    6.8e-3 and swamps everything; ``(4, 8)`` gives 4.6e-4 to 1.4e-3; ``(4, 12)`` shrinks the
+    mismatched band to orders whose amplitude is already negligible, and ``(4, 16)`` does not
+    improve on it.
+
+    **Measured**, ``|d sum(R)|`` at ``n = 192``, ``truncation_order = (4, 12)``:
+
+    ==========  ===============  ==========================
+    method      clean            normal field on ``None``
+    ==========  ===============  ==========================
+    contour     8.6e-5           1.46e-2
+    spectral    1.0e-4           1.46e-2
+    smooth      1.6e-5           1.51e-2
+    ==========  ===============  ==========================
+
+    ``1e-3`` therefore sits 10x above the worst clean residual and 15x below the smallest
+    effect it has to catch. ``'distance'`` is **not** in the list and cannot be: it separates
+    1.37e-2 from 1.47e-2, a factor of 1.07, because its own index-step gradient differs between
+    the two cells by more than the basis correction is worth. That is a finding about the
+    method rather than about this wiring, and it is the same three constructions
+    :func:`test_the_shear_is_the_same_physics_under_every_normal_method` names for the scalar
+    path, for the same reason.
+
+    The last assertion is the guard the first cannot make: that the comparison *moved*. Every
+    number above would also pass on a scene with no skew in it to see.
+    """
+    if method == 'contour':
+        pytest.importorskip('contourpy',
+                            reason="normal_method='contour' needs the optional dependency")
+
+    square, sheared = _pn_disc(ORTHO), _pn_disc(SHEAR_2A1)
+    assert abs(square.mean() - np.pi * (PN_RADIUS / P) ** 2) < 2e-3, square.mean()
+    for j in range(PN_N):
+        assert np.array_equal(sheared[j], np.roll(square[j], -(2 * j + 1))), j
+
+    r_o, t_o = _pn_totals(ORTHO, method)
+    r_s, t_s = _pn_totals(SHEAR_2A1, method)
+    assert r_s == pytest.approx(r_o, abs=1e-3)
+    assert t_s == pytest.approx(t_o, abs=1e-3)
+
+    r_blind, _ = _pn_totals(SHEAR_2A1, method, lattice_blind=True)
+    assert abs(r_blind - r_o) > 5e-3, r_blind - r_o

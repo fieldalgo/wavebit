@@ -669,3 +669,142 @@ def test_mu_on_the_first_order_path_is_refused_whichever_way_it_got_there():
     m = tuple(slots(tensor(1.7, 1.7, 1.7)))
     with pytest.raises(NotImplementedError, match="formulation='4ff' was asked for"):
         mee.solve_conv(*e, mu=m)
+
+# ------------------------------------------------- a magnetic layer on a non-orthogonal cell
+#
+# `mu` and `lattice` had never been crossed: this file did not contain the word "lattice", and
+# `tests/test_oblique_lattice.py` did not contain "mu". The permittivity and the permeability
+# slots are one method called twice (`CoreFactorizationMixin._slots_for`, once per `quantity`)
+# and the cell basis is handed in separately on each call -- at the live build, and again where
+# the NVF normal field is frozen -- so the permeability pass can lose the basis while the
+# permittivity pass keeps it. Nothing already here looks: every scene above is a rectangle,
+# where the basis the mu pass would drop is `diag(period)` and dropping it moves the answer by
+# nothing at all (4.49e-14 either way, measured).
+
+# 60 degrees, not 90. A quarter turn maps x onto y and an axis-aligned assumption survives it
+# unharmed; nothing relabels this cell into a rectangle.
+HEX_CELL = np.column_stack(([PERIOD, 0.0], [PERIOD / 2, PERIOD * np.sqrt(3) / 2]))
+
+
+def _disc_raster(basis, cu, cv, radius, inside, outside, n=64):
+    """One disc of Cartesian ``radius`` on the parametric grid of ``basis``.
+
+    ``cell[j, i]`` samples ``(i+.5)/n * a1 + (j+.5)/n * a2``; the centre is given in those same
+    lattice coordinates, and the minimum image is taken over the nine nearest cells so the
+    array is periodic on the torus the solver reads it as.
+    """
+    a1, a2 = np.asarray(basis)[:, 0], np.asarray(basis)[:, 1]
+    t = (np.arange(n) + 0.5) / n
+    U, V = np.meshgrid(t, t)
+    pts = U[..., None] * a1 + V[..., None] * a2
+    centre = cu * a1 + cv * a2
+    hit = np.zeros(pts.shape[:2], dtype=bool)
+    for i in (-1, 0, 1):
+        for j in (-1, 0, 1):
+            s = i * a1 + j * a2
+            hit |= ((pts[..., 0] - centre[0] - s[0]) ** 2
+                    + (pts[..., 1] - centre[1] - s[1]) ** 2) <= radius ** 2
+    cell = np.full(pts.shape[:2], float(outside))
+    cell[hit] = inside
+    return cell[None]
+
+
+def _dual_pair(basis, order=4):
+    """Solvers for one magnetic scene and for its E/H dual, both on the cell ``basis``.
+
+    The straight scene is a rod of ``eps = 6.25`` in vacuum with a *differently placed, smaller*
+    rod of ``mu = 2.25`` beside it. The dual scene is those same two arrays with their roles
+    exchanged -- handed over unchanged, so nothing is re-sampled between the runs.
+    """
+    eps_field = _disc_raster(basis, 0.5, 0.5, 110.0, 6.25, 1.0)
+    mu_field = _disc_raster(basis, 0.25, 0.7, 80.0, 2.25, 1.0)
+
+    def build(eps, mu, above, below):
+        s = wavebit.rcwa(backend=0, top=above, bot=below, theta=np.deg2rad(37.0),
+                         phi=np.deg2rad(23.0), truncation_order=(order, order),
+                         period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
+                         factorization='nvf', lattice=basis)
+        s.structure = eps
+        s.mu = mu
+        return s
+
+    straight = build(eps_field, mu_field,
+                     wavebit.Material(2.25, 1.0), wavebit.Material(1.0, 2.89))
+    dual = build(mu_field, eps_field,
+                 wavebit.Material(1.0, 2.25), wavebit.Material(2.89, 1.0))
+    return straight, dual
+
+
+def _duality_residual(straight, dual):
+    """Largest per-order gap between a scene's s (p) channel and its dual's p (s) channel."""
+    worst = 0.0
+    for a, b in ((straight.s_inc, dual.p_inc), (straight.p_inc, dual.s_inc)):
+        for name in ('R', 'T'):
+            worst = max(worst, float(np.abs(np.asarray(getattr(a, name))
+                                            - np.asarray(getattr(b, name))).max()))
+    return worst
+
+
+def test_a_magnetic_cell_on_a_skewed_lattice_obeys_the_eps_mu_duality():
+    """``R_s(eps=A, mu=B) == R_p(eps=B, mu=A)`` per order, on a 60-degree cell.
+
+    **How it is posed.** Maxwell maps onto itself under ``(E, H, eps, mu) -> (H, -E, mu, eps)``,
+    so exchanging the two tensors of *every* region gives the same problem back with the
+    polarizations traded. Three parts carry the weight:
+
+    * **The layer.** Two different rasters -- a rod of ``eps = 6.25``, and elsewhere in the cell
+      a smaller rod of ``mu = 2.25`` -- exchanged between the two runs. The arrays are passed
+      through as they are, so this is not a change of representation: no re-basis, no
+      resampling, and the staircase error is the *same* number in both runs rather than merely
+      a small one. That is deliberate. A unimodular re-basis, the other oracle a skewed cell
+      admits, is not usable on the raster ``mu`` path: re-basing re-discretizes the array, and
+      the residual that leaves is larger than the shift a dropped basis in the permeability
+      pass produces, so there is no tolerance to put between them.
+    * **The half-spaces.** They are exchanged too, and that is load-bearing rather than tidy.
+      ``n = sqrt(eps*mu)`` is invariant under the swap, so ``theta`` still names the same angle
+      in the same medium and the retained order grid is the one the straight run used; what
+      trades is the pair of boundary admittances ``kz/eps`` and ``kz/mu``, and that is *why* the
+      s and p channels trade. Leaving the half-spaces alone -- ``top = Material(2.25, 1.0)`` in
+      both runs -- breaks the identity by **4.50e-01**, so the swap is not cosmetic and the
+      check would not survive omitting it.
+    * **The polarization.** ``E -> H`` sends s to p, so the comparison is ``s_inc`` against the
+      dual's ``p_inc`` and ``p_inc`` against the dual's ``s_inc``, per diffraction order, in
+      both ``R`` and ``T``. Off-normal in both angles (37 and 23 degrees), so no accidental
+      symmetry of the scene stands in for the theorem.
+
+    **Why it closes to the machine and not to the truncation.** A mirror or a rotation permutes
+    the retained ``(m, n)`` window, which on a skewed cell is a rectangle that does not carry
+    onto itself -- such an oracle is only good to the truncation. The duality permutes nothing:
+    order ``(m, n)`` maps to order ``(m, n)``, so the *truncated* problem is exactly self-dual
+    and the residual is rounding. Measured 1.32e-13 at ``truncation_order=4``, 3.03e-13 at 6.
+
+    **What breaks without it.** Handing ``lattice=None`` to the permeability pass alone, leaving
+    the permittivity pass untouched, is a change nothing else in this repository sees: energy
+    still conserves (the NVF assembly is Hermitian-symmetrised whatever the normal field says),
+    every external golden is on a rectangle, and on a square cell the dropped basis is
+    ``diag(period)`` so the mutation is bit-identical there. On this hex cell it takes the
+    residual below from **1.32e-13 to 2.16e-02**. Planted, it leaves all 71 tests in this file
+    and all 47 in ``tests/test_oblique_lattice.py`` green.
+
+    Both the live build and the frozen replay are checked, because the basis reaches the
+    permeability pass at two separate call sites. Losing it at the freeze site alone is already
+    caught -- ``_recorded_lattice`` compares what was recorded against what the build is using
+    and raises ``StaleGeometryError`` -- so the live build is the site where it can go quiet,
+    and the live assertion is the one that has to carry a number.
+    """
+    straight, dual = _dual_pair(HEX_CELL)
+    assert not straight.lattice_is_axis_aligned and not dual.lattice_is_axis_aligned
+
+    live_a, live_b = straight.solve(), dual.solve()
+    live = _duality_residual(live_a, live_b)
+    # 1e-10 sits 760x above the clean residual (1.32e-13) and 2e8 below the mutant (2.16e-02).
+    assert live < 1e-10, f'live build: duality residual {live:.3e}'
+
+    frozen = _duality_residual(straight.solve(straight.freeze_geometry()),
+                               dual.solve(dual.freeze_geometry()))
+    assert frozen < 1e-10, f'frozen replay: duality residual {frozen:.3e}'
+
+    # Not vacuous: the exchange has to make a different scene before its dual means anything.
+    # Measured 3.07e-01, on the same per-order R the assertions above close at 1e-10.
+    moved = float(np.abs(np.asarray(live_a.s_inc.R) - np.asarray(live_b.s_inc.R)).max())
+    assert moved > 1e-2, f'the eps/mu exchange barely moved the scene ({moved:.3e})'
