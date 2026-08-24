@@ -953,3 +953,35 @@ def test_a_symmetry_oracle_on_a_skewed_cell_is_only_exact_in_the_limit():
     coarse, finer = abs(_circular_dichroism(HEX, 5)), abs(_circular_dichroism(HEX, 11))
     assert coarse > 1e-7, coarse                            # the artifact is real, not noise
     assert finer < coarse / 5.0, (coarse, finer)            # and it is going away with the order
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+def test_a_skewed_cell_answers_in_the_width_it_was_asked_for(backend):
+    """``complex_dtype=1`` was silently a no-op once a basis was named.
+
+    The basis is *read* rather than converted -- that is what lets it be a design variable -- so
+    ``det`` arrives at whatever width the caller built the cell in, which is float64. Under
+    NEP 50 a ``complex64 / float64`` is a ``complex128``, so ``lam`` widened inside
+    :func:`~wavebit._core.lattice.order_kxy` and carried the whole return with it. The
+    separable build ends in ``.astype(self.complex_dtype)`` and never had the problem, so the
+    two paths disagreed exactly when the cell stopped being a rectangle.
+
+    The tell was not the width. It was the **missing warning**: ``UnresolvedBranchWarning``
+    fires on the float32 path and the skewed cell was not raising it, because the solve had
+    quietly become a float64 one. A user asking for single precision got double -- slower and
+    larger, not wrong, but nothing said so.
+
+    Asserted as a *pair* against the rectangle rather than as a literal dtype: the claim is that
+    naming the cell does not change the arithmetic width, which is what the bug broke.
+    """
+    common = dict(backend=backend, structure=_rod_on(ORTHO, n=32), truncation_order=[4, 4],
+                  thickness=[H], wavelength=WL, top=1.0, bot=1.0, theta=0.3, phi=0.2, psi=0.1,
+                  factorization='nvf', period=[P, P])
+    for complex_dtype in (0, 1):
+        rect = wavebit.rcwa(complex_dtype=complex_dtype, **common).solve()
+        skew = wavebit.rcwa(complex_dtype=complex_dtype, lattice=HEX,
+                            **dict(common, structure=_rod_on(HEX, n=32))).solve()
+        assert np.asarray(rect.R).dtype == np.asarray(skew.R).dtype, complex_dtype
+    assert np.asarray(wavebit.rcwa(complex_dtype=1, lattice=HEX,
+                                   **dict(common, structure=_rod_on(HEX, n=32))
+                                   ).solve().R).dtype == np.float32

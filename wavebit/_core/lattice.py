@@ -344,8 +344,15 @@ def order_kxy(xp, A, half_width_u, half_width_v, wavelength, k_inc_x, k_inc_y,
     kx = as_array(xp, k_inc_x, dtype=dtype, device=device) + lam * (a2y * m - a1y * n)
     ky = as_array(xp, k_inc_y, dtype=dtype, device=device) + lam * (-a2x * m + a1x * n)
 
+    # Closed with a cast, as `_separable_kxy` is. The basis is read rather than converted --
+    # that is what lets it be a design variable -- so `det` arrives at whatever width the caller
+    # built the cell in, in practice float64. Under NEP 50 a `complex64 / float64` is a
+    # `complex128`, so `lam` widened and carried the whole return with it: a skewed cell
+    # answered in double while `complex_dtype=1` was asked for, silently, and the float32
+    # branch-resolution guard that fires on the rectangular path did not fire here.
     n_orders_u, n_orders_v = 2 * half_width_u + 1, 2 * half_width_v + 1
-    return xp.broadcast_to(kx, (n_orders_v, n_orders_u)), xp.broadcast_to(ky, (n_orders_v, n_orders_u))
+    return (xp.astype(xp.broadcast_to(kx, (n_orders_v, n_orders_u)), dtype),
+            xp.astype(xp.broadcast_to(ky, (n_orders_v, n_orders_u)), dtype))
 
 
 def grid(shape, period=None, lattice=None, backend=0, dtype=None):
