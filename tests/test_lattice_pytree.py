@@ -434,3 +434,61 @@ def test_the_basis_gradient_obeys_the_unimodular_chain_rule(cell, tol):
     assert swapped == pytest.approx(primal, rel=1e-5)  # the two spellings are one crystal
     want = g @ np.linalg.inv(swap).T
     assert float(np.max(np.abs(g_swapped - want))) / scale < tol, (cell, g, g_swapped)
+
+
+def test_a_traced_scene_attribute_takes_the_live_arm_and_says_nothing():
+    """The tracer arms in the JAX ``period`` and ``thickness`` setters were unreachable.
+
+    Each setter tested ``type(x) is DynamicJaxprTracer`` *after* an arm that already accepts
+    ``isinstance(x, jnp.ndarray)`` -- which is ``True`` for a tracer inside ``jax.jit``. So the
+    live arm caught every one, and the arm written for tracers ran never.
+
+    It was not inert-looking code. Both copies carried ``print('init period')`` and
+    ``jax.debug.print('init period')``, and the copy in the *thickness* setter printed that same
+    wrong word: a debug line left in a shipped library, naming the wrong attribute, in a branch
+    that could not execute. Nobody saw it because nobody reached it.
+
+    Two things are asserted, because deleting the arm is only safe if both hold: the live arm
+    keeps the autograd graph (``jnp.array(tracer, dtype=...)`` does), and it stores at
+    ``float_dtype`` rather than passing the tracer through raw as the dead arm did. Neither is
+    visible in a gradient's *value* -- a wrong dtype still differentiates -- so the dtype is
+    read directly.
+    """
+    jax = pytest.importorskip('jax')
+    jnp = pytest.importorskip('jax.numpy')
+    import contextlib
+    import io as _io
+
+    structure = np.ones((1, 8, 8))
+    structure[0, 2:5, 1:4] = 5.76
+
+    def build(period, thickness):
+        return wavebit.rcwa(backend=1, structure=jnp.asarray(structure),
+                            truncation_order=[3, 3], thickness=thickness, wavelength=900.0,
+                            top=1.0, bot=1.0, theta=0.2, phi=0.3, psi=0.4,
+                            factorization='nvf', period=period)
+
+    seen = {}
+
+    def loss(x):
+        solver = build([x[0], x[1]], [150.0])
+        seen['period_dtype'] = solver.period.dtype
+        seen['float_dtype'] = solver.float_dtype
+        return jnp.sum(solver.solve().T)
+
+    def loss_thickness(t):
+        solver = build([400.0, 400.0], t)
+        seen['thickness_dtype'] = solver.thickness.dtype
+        return jnp.sum(solver.solve().T)
+
+    chatter = _io.StringIO()
+    with contextlib.redirect_stdout(chatter):
+        g_period = jax.grad(loss)(jnp.asarray([400.0, 400.0]))
+        g_thickness = jax.grad(loss_thickness)(jnp.asarray([150.0]))
+
+    assert chatter.getvalue() == ''                       # the deleted arm was the only printer
+    assert np.all(np.isfinite(np.asarray(g_period)))
+    assert np.all(np.isfinite(np.asarray(g_thickness)))
+    assert np.count_nonzero(np.asarray(g_period)) == 2     # a severed graph gives zeros
+    assert seen['period_dtype'] == seen['float_dtype']
+    assert seen['thickness_dtype'] == seen['float_dtype']

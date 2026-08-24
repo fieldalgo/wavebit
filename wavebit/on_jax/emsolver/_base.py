@@ -230,14 +230,16 @@ class _BaseRCWA(CoreSolveMixin):
             period = [period['x'], period['y']]
         if type(period) in (int, float):
             self._period = jnp.array([period, period], dtype=self.float_dtype)
+        # `isinstance(..., jnp.ndarray)` is what catches a tracer -- it is `True` inside
+        # `jax.jit` -- so the `DynamicJaxprTracer` arm that used to follow was unreachable.
+        # It carried `print('init period')` and `jax.debug.print('init period')`, and the
+        # copy in the *thickness* setter printed that same wrong word.
+        # `jnp.array(tracer, dtype=...)` keeps the graph: both attributes differentiate,
+        # see `tests/test_lattice_pytree.py::test_a_traced_period_is_still_a_cell`.
         elif type(period) in (list, tuple, np.ndarray) or isinstance(period, jnp.ndarray):
             if len(period) == 1:
                 period = [period[0], period[0]]
             self._period = jnp.array(period, dtype=self.float_dtype)
-        elif type(period) is jax.interpreters.partial_eval.DynamicJaxprTracer:
-            print('init period')
-            jax.debug.print('init period')
-            self._period = period
         else:
             raise ValueError
 
@@ -256,10 +258,6 @@ class _BaseRCWA(CoreSolveMixin):
             self._thickness = jnp.array(thickness, dtype=self.float_dtype)
         elif isinstance(thickness, jnp.ndarray):
             self._thickness = jnp.array(thickness, dtype=self.float_dtype)
-        elif type(thickness) is jax.interpreters.partial_eval.DynamicJaxprTracer:
-            print('init period')
-            jax.debug.print('init period')
-            self._thickness = thickness
         else:
             raise ValueError
 
