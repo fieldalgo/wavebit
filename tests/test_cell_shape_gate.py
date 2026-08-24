@@ -63,14 +63,29 @@ _ALLOWED = {
 }
 
 
-def _is_period_pair(node):
-    """``Px`` / ``Py`` by name, or a ``period`` / ``periods`` subscript however it is reached.
+def _is_period_pair(node, alias=frozenset({'period', 'periods'})):
+    """``Px`` / ``Py`` by name, or a ``period``-derived subscript however the name was reached.
 
     The subscript half deliberately does not care what the sequence hangs off. ``period[0]``,
     ``self.period[0]`` and ``solver.period[0]`` are the same read, and the attribute spelling is
     the one the three backends actually use -- an earlier version of this matched only
     ``ast.Name``, so ``wavelength / self.period[0]`` in every ``_separable_kxy`` was invisible to
     a gate whose whole claim is that it looks everywhere.
+
+    ``alias`` is the set of local names the enclosing function bound to a period sequence, which
+    ``_Scan.visit_Assign`` grows: ``p = self.period`` then ``p[0] * x`` is the same read as
+    ``self.period[0] * x``. No such spelling exists in the package today, so that half is
+    prevention and costs nothing -- it flags nothing new.
+
+    Descending into **call arguments** was measured and rejected. It flags 30-odd lines and
+    nearly all of them are this package's correct idiom: ``shape_geometry(shape, Px, Py,
+    lattice)`` hands the pair *and* the basis to a callee that takes both. Narrowing it to calls
+    carrying no basis still leaves the ``float(period[0])`` conversions and the rectangular
+    branch of ``fields._inv_fourier``, which the skewed branch returns before reaching. The
+    audit's motivating example, ``tol_rel * max(Px, Py)`` in ``modeler.py``, is a tolerance
+    scale and not geometry at all. An allow-list long enough to hold that is a gate that no
+    longer means anything -- and the omission it was meant to catch is caught directly by
+    ``test_a_function_holding_a_lattice_forwards_it_to_every_sibling_that_takes_one`` below.
     """
     if isinstance(node, ast.Name) and node.id in _PERIOD_NAMES:
         return True
@@ -79,7 +94,7 @@ def _is_period_pair(node):
     base = node.value
     if isinstance(base, ast.Attribute):
         return base.attr in ('period', 'periods')
-    return isinstance(base, ast.Name) and base.id in ('period', 'periods')
+    return isinstance(base, ast.Name) and base.id in alias
 
 
 def _guards_the_rectangle(test):
@@ -110,6 +125,7 @@ class _Scan(ast.NodeVisitor):
         self.guarded = 0
         self.lines = []
         self._top = True
+        self.alias = {'period', 'periods'}
 
     def visit_FunctionDef(self, node):
         if self._top:                      # scan one function at a time; ast.walk finds the rest
@@ -130,8 +146,18 @@ class _Scan(ast.NodeVisitor):
         else:
             self.generic_visit(node)
 
+    def visit_Assign(self, node):
+        v = node.value
+        if ((isinstance(v, ast.Name) and v.id in self.alias)
+                or (isinstance(v, ast.Attribute) and v.attr in ('period', 'periods'))):
+            for t in node.targets:
+                if isinstance(t, ast.Name):
+                    self.alias.add(t.id)
+        self.generic_visit(node)
+
     def visit_BinOp(self, node):
-        if self.guarded == 0 and (_is_period_pair(node.left) or _is_period_pair(node.right)):
+        if self.guarded == 0 and (_is_period_pair(node.left, self.alias)
+                                  or _is_period_pair(node.right, self.alias)):
             self.lines.append(node.lineno)
         self.generic_visit(node)
 
