@@ -290,31 +290,28 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         if self._grating_type == 0:
             sample_y = 1
             field_cell = field_1d(self.wavelength, kx, self.T1, self.layer_info_list,
-                                  self.period, self.tetm_index,
+                                  self.lattice, self.tetm_index,
                                   sample_x=sample_x, sample_y=sample_y, sample_z=sample_z,
                                   incidences=incidences)
         elif self._grating_type == 1:
             field_cell = field_1d_conical(self.wavelength, kx, ky, self.T1,
-                                          self.layer_info_list, self.period,
+                                          self.layer_info_list, self.lattice,
                                           sample_x=sample_x, sample_y=sample_y,
-                                          sample_z=sample_z, incidences=incidences,
-                                          lattice=self.lattice)
+                                          sample_z=sample_z, incidences=incidences)
         elif self._formulation_assigned == Formulation.FOUR_FIELD:
             # The grating type cannot answer this: the first-order path sets it to 2 as well,
             # so branching on it alone would hand a 4ff solve to the 2ff reconstruction, which
             # reads the same state slots and returns a plausible, wrong cell. Static under jit
             # for the same reason the side flip below is -- the formulation is settled eagerly.
             field_cell = field_2d_4ff(self.wavelength, kx, ky, self.T1,
-                                      self.layer_info_list, self.period,
+                                      self.layer_info_list, self.lattice,
                                       sample_x=sample_x, sample_y=sample_y,
-                                      sample_z=sample_z, incidences=incidences,
-                                      lattice=self.lattice)
+                                      sample_z=sample_z, incidences=incidences)
         else:
             field_cell = field_2d(self.wavelength, kx, ky, self.T1,
-                                  self.layer_info_list, self.period,
+                                  self.layer_info_list, self.lattice,
                                   sample_x=sample_x, sample_y=sample_y,
-                                  sample_z=sample_z, incidences=incidences,
-                                  lattice=self.lattice)
+                                  sample_z=sample_z, incidences=incidences)
 
         if backside:
             # The backside solve is the top-side solve of the z-mirrored scene, so its cell is

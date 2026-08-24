@@ -72,6 +72,7 @@ the grating type — the first-order path sets that to 2 as well.
 import numpy as _np
 
 from .backend import array_namespace
+from .lattice import periods_of
 
 
 #: The three incidences a coupled solve leaves stacked in ``T1``, in the order it stacks
@@ -276,7 +277,7 @@ def _axis_samples(xp, spec, extent, C, dev):
     return xp.astype(xp.asarray(spec, device=dev), C)
 
 
-def _inv_fourier(xp, kx, ky, period, sample_x, sample_y, k0, C, lattice=None):
+def _inv_fourier(xp, kx, ky, lattice, sample_x, sample_y, k0, C):
     """Inverse-transform kernel ``exp(-i k.r)`` sampled on the cell, flattened over orders.
 
     With ``lattice`` given (and ``kx`` / ``ky`` therefore per-order, ``(n_orders_v,
@@ -341,9 +342,13 @@ def _inv_fourier(xp, kx, ky, period, sample_x, sample_y, k0, C, lattice=None):
         u_ph = xp.exp(1j * xp.reshape(u_1d, (1, n_u, 1)) * proj_a1)
         v_ph = xp.exp(1j * xp.reshape(v_1d, (n_v, 1, 1)) * proj_a2)
         return xp.broadcast_to(u_ph * v_ph, (n_v, n_u, kx_f.shape[0]))
-    # `period` stays an array rather than a Python float: all three backends take an array
-    # endpoint and give bit-identical samples, and narrowing it would break tracing whenever
-    # the solver itself is jitted (period is a traced child of the JAX solver pytree).
+    # The separable branch, and the only place in this module that wants a *length* rather
+    # than a basis. `periods_of` gives back exactly the numbers `period` carried -- byte for
+    # byte on an axis-aligned cell, which is the only kind that reaches here -- and stays an
+    # array rather than a Python float: all three backends take an array endpoint and give
+    # bit-identical samples, and narrowing it would break tracing whenever the solver itself
+    # is jitted (the basis is a traced child of the JAX solver pytree).
+    period = periods_of(lattice)
     x_1d = _axis_samples(xp, sample_x, period[0], C, dev)
     x_2d = xp.reshape(x_1d, (1, n_u, 1)) * kx * k0
     x_2d = xp.reshape(xp.broadcast_to(x_2d, (n_v, n_u, kx.shape[0])),
@@ -483,7 +488,7 @@ def refuse_extra_incidences(incidences):
         f'`polarization`: the same 1D structure then takes the conical path, which carries '
         f'all three for one extra solve.')
 
-def field_1d(wavelength, kx, T1, layer_info_list, period, tetm_index,
+def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
              sample_x=20, sample_y=1, sample_z=20, incidences=('given',)):
     """Field of a pure TE/TM 1D stack.
 
@@ -526,7 +531,7 @@ def field_1d(wavelength, kx, T1, layer_info_list, period, tetm_index,
         # path by name ("2D path only") rather than dropping it here.
         Mz = 1j * (epz_conv_i @ Kx @ My if tetm_index else Kx @ My)
 
-        inv_f = _inv_fourier(xp, kx, None, period, sample_x, sample_y, k0, C)
+        inv_f = _inv_fourier(xp, kx, None, lattice, sample_x, sample_y, k0, C)
         sgn = -1j if tetm_index == 0 else 1j
         Fy = inv_f[:, :, None, :] @ My[:, None, None, :, :]
         Fx = sgn * (inv_f[:, :, None, :] @ Mx[:, None, None, :, :])
@@ -544,8 +549,8 @@ def field_1d(wavelength, kx, T1, layer_info_list, period, tetm_index,
     return _unshuffle(xp, xp.concat(cells, axis=0), unshuffle, axis=0)
 
 
-def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, sample_x, sample_y, sample_z,
-                   incidences, conical, lattice=None):
+def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, sample_y,
+                   sample_z, incidences, conical):
     """Shared body of the conical and 2D reconstructions.
 
     They differ only in how the layer's mode matrices assemble into ``(Sx, Sy, Ux, Uy)``; the
@@ -643,8 +648,7 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, sample_x, sa
         if muz_conv_i is not None:
             Uz = muz_conv_i @ Uz
 
-        inv_f = _inv_fourier(xp, kx, ky, period, sample_x, sample_y, k0, C,
-                             lattice)[:, :, None, :]
+        inv_f = _inv_fourier(xp, kx, ky, lattice, sample_x, sample_y, k0, C)[:, :, None, :]
         # `-1j` converts out of `U = i H`; the three minus signs on top of it are the parity
         # into the declared frame (module docstring), so `H_z` keeps the bare conversion.
         comps = [inv_f @ M[:, :, None, None, :, :] for M in (Sx, Sy, -Sz)]
@@ -657,9 +661,8 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, period, sample_x, sa
     return _unshuffle(xp, xp.concat(cells, axis=1), unshuffle, axis=1)
 
 
-def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, period,
-                 sample_x=20, sample_y=20, sample_z=20, incidences=('given',),
-                 lattice=None):
+def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, lattice,
+                 sample_x=20, sample_y=20, sample_z=20, incidences=('given',)):
     """Field of a stack solved on the first-order (4ff) path. Same shape as :func:`field_2d`.
 
     The transverse half is *simpler* than the second-order reconstruction, not harder. There
@@ -746,8 +749,7 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, period,
         Ez = eps['ezz_i'] @ (Ky @ Hx - Kx @ Hy - eps['ezx'] @ Ex - eps['ezy'] @ Ey)
         Hz = Kx @ Ey - Ky @ Ex
 
-        inv_f = _inv_fourier(xp, kx, ky, period, sample_x, sample_y, k0, C,
-                             lattice)[:, :, None, :]
+        inv_f = _inv_fourier(xp, kx, ky, lattice, sample_x, sample_y, k0, C)[:, :, None, :]
         # No parity here, deliberately: the 4ff state vector is already in the declared frame.
         comps = [inv_f @ M[:, :, None, None, :, :]
                  for M in (Ex, Ey, Ez, Hx, Hy, Hz)]
@@ -759,26 +761,24 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, period,
     return _unshuffle(xp, xp.concat(cells, axis=1), unshuffle, axis=1)
 
 
-def field_1d_conical(wavelength, kx, ky, T1, layer_info_list, period,
-                     sample_x=20, sample_y=20, sample_z=20, incidences=('given',),
-                     lattice=None):
+def field_1d_conical(wavelength, kx, ky, T1, layer_info_list, lattice,
+                     sample_x=20, sample_y=20, sample_z=20, incidences=('given',)):
     """Field of a general 1D (conical) stack. ``(n_selected, nz, sample_y, sample_x, 6)``.
 
     ``nz`` is ``sample_z * n_layers`` for a count, ``len(sample_z)`` for explicit coordinates.
     """
-    return _field_coupled(wavelength, kx, ky, T1, layer_info_list, period,
-                          sample_x, sample_y, sample_z, incidences, conical=True, lattice=lattice)
+    return _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice,
+                          sample_x, sample_y, sample_z, incidences, conical=True)
 
 
-def field_2d(wavelength, kx, ky, T1, layer_info_list, period,
-             sample_x=20, sample_y=20, sample_z=20, incidences=('given',),
-             lattice=None):
+def field_2d(wavelength, kx, ky, T1, layer_info_list, lattice,
+             sample_x=20, sample_y=20, sample_z=20, incidences=('given',)):
     """Field of a 2D stack. ``(n_selected, nz, sample_y, sample_x, 6)``.
 
     ``nz`` is ``sample_z * n_layers`` for a count, ``len(sample_z)`` for explicit coordinates.
     """
-    return _field_coupled(wavelength, kx, ky, T1, layer_info_list, period,
-                          sample_x, sample_y, sample_z, incidences, conical=False, lattice=lattice)
+    return _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice,
+                          sample_x, sample_y, sample_z, incidences, conical=False)
 
 
 def plot_field(field_cell, tetm_index=0, plot_indices=(1, 1, 1, 1, 1, 1), y_slice=0, z_slice=-1,
