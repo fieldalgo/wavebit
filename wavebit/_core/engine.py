@@ -947,7 +947,9 @@ class CoreSolveMixin:
         if period is not None:
             return _lattice.as_lattice(period=period)
         if geometry is not None:
-            return _recorded_lattice(geometry.normal_field_source)
+            recorded = _recorded_lattice(geometry.normal_field_source)
+            if recorded is not None:
+                return recorded
         # A traced `period` and no record. This used to return `None`, and `None` downstream is
         # not "unknown" -- it is the identity metric, i.e. *square pixels*. So a `jax.grad` over
         # `period` on a raster whose pixels are not square silently solved a different structure:
