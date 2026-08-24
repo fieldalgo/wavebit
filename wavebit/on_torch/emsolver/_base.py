@@ -1,4 +1,5 @@
 import torch
+import array_api_compat.torch as _xp
 
 import numpy as np
 
@@ -27,6 +28,15 @@ def _as_tensor(v, device=None, dtype=None):
 
 
 class _BaseRCWA(CoreSolveMixin):
+    #: The array namespace this solver's arrays live in. A class attribute rather than a
+    #: lookup, because the one caller that needs it -- the analytic builder, which starts from
+    #: parametric shapes and so cannot infer a namespace from its input -- used to reach a
+    #: `_namespace_for_backend(self.backend)` living in `_core` that imported jax and torch by
+    #: name and fell through to numpy on an unrecognised code, with no `else`. The solver
+    #: already knows which namespace it is; asking it is cheaper than deciding again, and it
+    #: keeps `_core` from naming an optional dependency.
+    xp = _xp
+
     def __init__(self, top=1., bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None,
                  truncation_order=(0, 0),
                  period=(1., 1.), wavelength=1.,

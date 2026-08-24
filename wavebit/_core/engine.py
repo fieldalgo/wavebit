@@ -2123,7 +2123,7 @@ class CoreFactorizationMixin:
             # normal field, so five matrices always, and each shape's transform is the exact
             # integral over the cell, so the coefficients are integrated ones. Naming
             # `factorization='li'` or `fourier_coefficients='sampled'` was refused above.
-            xp = _namespace_for_backend(self.backend)
+            xp = self.xp
             conv = _analytic.to_conv_mat_smooth_layers(
                 structure, half_width_u, half_width_v,
                 self._geometry_lattice_for(geometry),
@@ -2270,20 +2270,3 @@ class CoreFactorizationMixin:
         return self.solve_conv(*eps, mu=self._mu_conv_matrices(geometry),
                                mu_top=self._top.mu, mu_bot=self._bot.mu,
                                eps_top=self._top.epsilon, eps_bot=self._bot.epsilon)
-
-
-def _namespace_for_backend(backend):
-    """Array namespace for a ``Backend`` code.
-
-    The analytic builder starts from parametric shapes, not arrays, so unlike every other
-    entry point it cannot infer the namespace from its input.
-    """
-    from .backend import array_namespace
-    if backend == 1:
-        import jax.numpy as jnp
-        return array_namespace(jnp.zeros(1))
-    if backend == 2:
-        import torch
-        return array_namespace(torch.zeros(1))
-    import numpy as np
-    return array_namespace(np.zeros(1))
