@@ -12,6 +12,7 @@ makes them assertions, not studies.
 
 | Script | Question it answers |
 | --- | --- |
+| `scene_hash.py` | Not a question -- an instrument. One byte digest over 96 scenes (4 cell shapes x 4 modeling paths x 2 incidence sides x 3 backends), efficiencies and reconstructed fields, refusals hashed by name. Run it before and after a change that must move no number. |
 | `benchmark_backends.py` | Which backend, and whether to freeze the geometry, for a *differentiated* run. Sweeps the vector and raster paths across four modes and a range of `truncation_order`, and reports the compile cost that decides between them. Write-up: [../docs/backend-choice.md](../docs/backend-choice.md). |
 | `benchmark_analytic.py` | How the analytic (staircase-free) shape path converges against the raster and vector staircases, for tilted and curved boundaries. Write-up: [../docs/analytic-modeling.md](../docs/analytic-modeling.md). |
 | `benchmark_truncation_shape.py` | Whether S4's circular cut of the Fourier order set beats the full rectangle Wavebit keeps. Sweeps both shapes through the same permittivity raster and solver, on NVF and on Laurent as a control. Write-up: [../docs/fourier-truncation-shape.md](../docs/fourier-truncation-shape.md). |
