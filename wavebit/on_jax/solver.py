@@ -2,6 +2,18 @@ from .emsolver.rcwa import RCWAJax
 from .optimizer.optimizer import OptimizerJax
 
 
+#: The flattened children, in order, by the name each takes on `__init__`. `polarization` is
+#: the one that cannot ride through the constructor -- see `_tree_unflatten` -- and is popped
+#: there; everything else goes in as a keyword, so this order is a *listing* rather than a
+#: contract with `__init__`'s signature.
+CHILD_NAMES = ('top', 'bot', 'theta', 'phi', 'psi', 'period', 'wavelength', 'structure',
+               'thickness', 'chi', 'polarization', 'mu')
+
+#: Read through the private slot rather than the property: these three report a *resolved*
+#: value, and a round trip has to carry what was asked for.
+_PRIVATE = frozenset({'chi', 'polarization', 'mu'})
+
+
 class SolverJax(RCWAJax, OptimizerJax):
 
     def __init__(self, *args, **kwargs):
@@ -31,9 +43,13 @@ class SolverJax(RCWAJax, OptimizerJax):
         # last, after `polarization`, so the leading tuple still lines up with `__init__`'s
         # positional parameters; `None` is an empty subtree, so a non-magnetic solver
         # flattens exactly as it did before.
-        children = (self.top, self.bot, self.theta, self.phi, self.psi,
-                    self.period, self.wavelength, self.structure, self.thickness,
-                    self._chi, self._polarization, self._mu)
+        # The names, beside the values, because `_tree_unflatten` rebuilds by keyword. They
+        # used to be matched by *position* against `__init__`'s leading parameters, which made
+        # the two orders one undeclared contract: adding a positional parameter anywhere but
+        # the end would have shifted every child by one and rebuilt a different solver, in
+        # silence. Two comments below warned about it; now nothing has to.
+        children = tuple(getattr(self, '_' + n, None) if n in _PRIVATE else getattr(self, n)
+                         for n in CHILD_NAMES)
         aux_data = {
             'backend': self.backend,
             'tetm': self.tetm,
@@ -109,8 +125,9 @@ class SolverJax(RCWAJax, OptimizerJax):
         # legal when it was flattened. Rebuild without it, then restore the slot directly.
         aux_data = dict(aux_data)
         psi_given = aux_data.pop('psi_given')
-        *core, chi, polarization, mu = children
-        solver = cls(*core, chi=chi, mu=mu, **aux_data)
+        named = dict(zip(CHILD_NAMES, children))
+        polarization = named.pop('polarization')
+        solver = cls(**named, **aux_data)
         # Straight into the slot, bypassing the setter's validation: the pair may now be a
         # tuple of tracers, and the setter's `(0, 0)` check reads concrete values. It already
         # guards that with a try/except, but there is nothing left to validate here anyway --

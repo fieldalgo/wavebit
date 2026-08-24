@@ -151,3 +151,40 @@ def test_psi_given_survives_because_the_psi_child_would_overwrite_it():
         solver = _scene(**kw) if given else _one_row(**kw)
         assert solver._psi_given is given, kw
         assert _round_trip(solver)._psi_given is given, kw
+
+
+def test_the_rebuild_names_its_arguments():
+    """`_tree_unflatten` may not hand the children to `__init__` by position.
+
+    It used to: `*core, chi, polarization, mu = children` and then `cls(*core, ...)`, which made
+    the order of `children` and the order of `__init__`'s leading parameters one undeclared
+    contract between two files. Adding a positional parameter anywhere but the end would have
+    shifted every child by one and rebuilt a *different solver*, in silence -- and since
+    `solve_field` flattens `self` on every call, the wrong solver is the one that answers.
+
+    `_tree_flatten`'s own comments warned about it twice ("It rides last so the leading tuple
+    still lines up with `__init__`'s positional parameters"). A warning in a comment is a note
+    that the next person has to read; this is the version that fails.
+
+    Read from the source rather than from behaviour, because behaviour cannot see it: a
+    positional rebuild is correct right up until the signature moves, and then it is silently
+    wrong. Only the shape of the call says which one is in the file.
+    """
+    import ast
+    import inspect
+
+    from wavebit.on_jax import solver as jax_solver
+
+    tree = ast.parse(inspect.getsource(jax_solver))
+    body = next(n for n in ast.walk(tree)
+                if isinstance(n, ast.FunctionDef) and n.name == '_tree_unflatten')
+    starred = [n for n in ast.walk(body) if isinstance(n, ast.Starred)]
+    assert not starred, (
+        'a `*` unpack in `_tree_unflatten` means the children are matched to `__init__` by '
+        'position again. Pass them by name -- `CHILD_NAMES` is the listing.')
+
+    names = set(jax_solver.CHILD_NAMES)
+    flattened, _ = _scene()._tree_flatten()
+    assert len(flattened) == len(names), (
+        f'`CHILD_NAMES` lists {len(names)} children and `_tree_flatten` produced '
+        f'{len(flattened)}; they are the same tuple and have to stay the same length.')
