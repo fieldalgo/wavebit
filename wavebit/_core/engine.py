@@ -946,7 +946,21 @@ class CoreSolveMixin:
         period = _concrete_period(self.period)
         if period is not None:
             return _lattice.as_lattice(period=period)
-        return None if geometry is None else _recorded_lattice(geometry.normal_field_source)
+        if geometry is not None:
+            return _recorded_lattice(geometry.normal_field_source)
+        # A traced `period` and no record. This used to return `None`, and `None` downstream is
+        # not "unknown" -- it is the identity metric, i.e. *square pixels*. So a `jax.grad` over
+        # `period` on a raster whose pixels are not square silently solved a different structure:
+        # measured on a 200 x 400 cell at 32 x 32, the value inside `value_and_grad` was
+        # 0.962499142191 against an eager 0.964225033797, and bit-identical to what this method
+        # returning `None` gives. Not a missing derivative -- a wrong forward answer, and the
+        # derivative of the wrong function.
+        #
+        # `as_lattice` has taken a traced `period` since the basis became a design variable: the
+        # shape is still diagonal, so `axis_aligned` is known without reading a number, which is
+        # exactly why that flag is aux_data. Nothing here needed building; this line needed
+        # calling.
+        return _lattice.as_lattice(period=self.period)
 
     def order_kxy(self):
         """Per-order in-plane wavevectors ``(kx, ky)``, normalized by ``k0``.

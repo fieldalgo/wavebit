@@ -309,3 +309,53 @@ def test_a_traced_period_still_gives_a_basis():
     g = jax.grad(f)(jnp.array([700.0, 1100.0]))
     assert seen == [('Lattice', True)]
     assert np.allclose(np.asarray(g), [1.0, 1.0])        # d(Lx + Ly)/d(period)
+
+
+def test_a_traced_period_is_still_a_cell():
+    """``jax.grad`` over ``period`` solved a *different structure* until 2026-08-24.
+
+    ``_geometry_lattice_for`` returned ``None`` when ``period`` could not be read as concrete --
+    which is exactly when it is the variable under differentiation. ``None`` downstream is not
+    "unknown": it is the identity metric, i.e. **square pixels**. So on a raster whose pixels
+    are not square in real space, the forward solve inside ``value_and_grad`` answered for a cell
+    nobody asked for, and the gradient was the exact derivative of that other function.
+
+    Measured on a 200 x 400 cell at 32 x 32: eager ``sum(T)`` 0.964225033797 against
+    0.962499142191 returned by ``value_and_grad`` -- and that second number was *bit-identical*
+    to forcing ``_geometry_lattice_for`` to ``None``, which is what named the cause.
+
+    The oracle is the definition of ``value_and_grad`` and not a physical claim: the value it
+    returns is the value of the function. A square cell cannot show it -- with square pixels the
+    identity metric *is* the right one -- which is why this scene is 200 x 400 on a square
+    raster.
+
+    ``rel=1e-7`` sits between two measured numbers. The suite runs JAX at its default precision
+    (nothing here enables x64), so the two calls differ by 1.1e-09 relative on correct code; the
+    defect moved the value by 1.8e-03. Four orders of margin below the one, two above the other.
+
+    Nothing had to be built for the fix. :func:`~wavebit._core.lattice.as_lattice` has taken a
+    traced ``period`` since the basis became a design variable -- a diagonal shape is known to be
+    axis-aligned without reading a number, which is why that flag is aux_data -- so the call was
+    there and simply was not made.
+    """
+    jax = pytest.importorskip('jax')
+    jnp = pytest.importorskip('jax.numpy')
+
+    n = 32
+    t = (np.arange(n) + 0.5) / n
+    U, V = np.meshgrid(t, t)
+    structure = np.where(((U - 0.5) ** 2 + (V - 0.5) ** 2) < 0.09, 5.76, 1.0)[None, ...]
+
+    def loss(period):
+        solver = wavebit.rcwa(backend=1, structure=jnp.asarray(structure),
+                              truncation_order=[4, 4], thickness=[150.0], wavelength=900.0,
+                              top=1.0, bot=1.0, theta=0.2, phi=0.3, psi=0.4,
+                              factorization='nvf', period=period)
+        return jnp.sum(jnp.asarray(solver.solve().T))
+
+    period = jnp.asarray([200.0, 400.0])                 # non-square cell, square raster
+    eager = float(loss(period))
+    value, grad = jax.value_and_grad(loss)(period)
+    assert eager == pytest.approx(0.5, abs=0.5)          # a degenerate loss would pass the rest
+    assert float(value) == pytest.approx(eager, rel=1e-7)
+    assert np.all(np.isfinite(np.asarray(grad)))
