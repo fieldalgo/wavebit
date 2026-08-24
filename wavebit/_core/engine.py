@@ -9,6 +9,8 @@ without touching the public API.
 Because the core is backend-agnostic, one mixin serves NumPy, JAX and PyTorch alike; the
 per-backend ``transfer_method`` chains it replaces existed in triplicate.
 """
+import numpy as _np
+
 from . import analytic as _analytic
 from . import boundary as _boundary
 from . import factorization as _fac
@@ -321,6 +323,13 @@ _COMPLEX_PSI = (
     'that factor. It cannot reach the circular states either: they are the two values '
     'tan(psi) never takes. Use polarization=(a_s, a_p) — (1, -1j) and (1, +1j) are the '
     'circular states, and its magnitude is normalized for you.')
+
+
+#: `nextafter(float32(pi/2), 0)` and `float32(pi/2)`, as plain Python floats. They are the
+#: clamp and the threshold `_incident_kxy` uses, and they are constants: computing them in each
+#: backend's own namespace was the reason the method looked as though it had to live there.
+_HALF_PI_F32 = float(_np.float32(_np.pi / 2))
+_HALF_PI_F32_BELOW = float(_np.nextafter(_np.float32(_np.pi / 2), _np.float32(0)))
 
 
 class CoreSolveMixin:
@@ -963,6 +972,44 @@ class CoreSolveMixin:
         # exactly why that flag is aux_data. Nothing here needed building; this line needed
         # calling.
         return _lattice.as_lattice(period=self.period)
+
+    def _incident_kxy(self, wavelength):
+        """The incident in-plane wavevector, ``(k_inc_x, k_inc_y)``, normalized by ``k0``.
+
+        One body for all three backends. It was three, under a docstring saying "the
+        ``sin(theta)`` clamp differs between NumPy, JAX and Torch for tracing reasons, and this
+        keeps it the single source" -- a sentence that was in four places and was false. NumPy
+        and Torch branched with `if`, JAX with `jnp.where` on the *result*; putting the `where`
+        on the *argument* instead reproduces each backend's own output byte for byte, checked
+        across nine `theta` values including `pi/2`, `pi/2 + 0.5j` and `float32(pi/2) + 0.5j`.
+
+        Two things that are not decoration:
+
+        * the dtype is given at creation, not applied after. `xp.asarray(0.4)` is `float32` on
+          Torch, and an `astype` afterwards widens a number that has already lost its digits --
+          measured at 1.5e-07 on 13 of 18 probes, which is exactly the kind of quiet narrowing
+          this repo hunts.
+        * the clamp and the threshold are Python floats computed once in NumPy. Building them
+          per backend is what made the method look backend-shaped in the first place.
+
+        ``theta >= pi/2`` is clamped one float32 ulp below it because ``sin`` at exactly
+        ``pi/2`` in single precision walks off the branch NumPy documents at
+        numpy/numpy#27306; the imaginary part rides through untouched, so an evanescent
+        incidence keeps its decay.
+
+        Takes ``wavelength`` for the signature it has always had, and does not read it: the
+        incidence direction is a direction. Kept so that the three call sites did not have to
+        change in the same commit that moved the body.
+        """
+        xp, C = self.xp, self.complex_dtype
+        theta = xp.asarray(0.0 if self.theta is None else self.theta, dtype=C)
+        # `phi is None` is the 1D TE/TM case, where the azimuth is not a degree of freedom.
+        phi = xp.asarray(0.0 if self.phi is None else self.phi, dtype=C)
+        clamped = xp.asarray(_HALF_PI_F32_BELOW, dtype=C) + xp.imag(theta) * 1j
+        sin_theta = xp.sin(xp.where(xp.real(theta) >= _HALF_PI_F32, clamped, theta))
+        # n_inc, not n_top: theta lives in the incidence medium, which incidence_side picks.
+        return (xp.astype(self.n_inc * sin_theta * xp.cos(phi), C),
+                xp.astype(self.n_inc * sin_theta * xp.sin(phi), C))
 
     def order_kxy(self):
         """Per-order in-plane wavevectors ``(kx, ky)``, normalized by ``k0``.

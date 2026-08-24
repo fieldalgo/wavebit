@@ -241,3 +241,106 @@ def test_the_declared_width_is_the_width_answered_in(case):
         R, T = totals(scene(case, complex_dtype=complex_dtype).solve())
         assert np.asarray(R).dtype == want, (complex_dtype, case)
         assert np.asarray(T).dtype == want, (complex_dtype, case)
+
+
+# ------------------------------------------------ the clamp that was three bodies and one lie
+
+#: `theta` values the incident wavevector has to survive, including the two the clamp exists
+#: for. `pi/2` is where `sin` in single precision walks off the branch numpy documents at
+#: numpy/numpy#27306; `float32(pi/2)` is the threshold itself, one ulp the other side.
+CLAMP_THETAS = [0.0, 0.3, 0.4 + 0.3j, np.pi / 2, np.pi / 2 + 0.5j, 1.4 + 2j, 1.9, -0.7,
+                float(np.float32(np.pi / 2)) + 0.5j]
+
+
+@pytest.mark.parametrize('theta', CLAMP_THETAS, ids=lambda t: f'{t!r}')
+def test_the_three_backends_clamp_a_grazing_theta_the_same_way(theta):
+    """One body serves all three, and the sweep above cannot see it.
+
+    ``_incident_kxy`` lived three times, under a docstring saying the ``sin(theta)`` clamp
+    "differs between NumPy, JAX and Torch for tracing reasons". It does not. NumPy and Torch
+    branched with ``if`` and JAX with ``jnp.where`` on the *result*; putting the ``where`` on
+    the *argument* reproduces all three byte for byte. The sentence was in four places and was
+    never checked -- it was copied, including by the commit that split the method out.
+
+    Nothing else here reaches this. Every scene in the condition sweep is at a propagating
+    angle, so the clamped branch is never taken and the 96-scene digest is blind to it: a
+    change that broke only ``theta >= pi/2`` would pass the whole file. These points are the
+    part of the input space the sweep does not cover, and they are cheap because no solve runs.
+
+    Cross-backend and not merely self-consistent, because that is the claim that was false.
+    ``1e-13`` rather than byte equality: the three ``sin`` implementations differ by an ulp on
+    some of these already, and pinning to the byte would fail for a reason that has nothing to
+    do with the clamp.
+
+    Agreement alone is not enough, and finding that out is why the second assertion is here: a
+    cross-backend check is blind to any change that moves all three the same way. Deleting the
+    clamp outright passed it. So the clamp's *own* property is stated too --
+    :func:`test_a_theta_past_grazing_saturates` below.
+    """
+    reference = None
+    for backend in (0, 1, 2):
+        solver = wavebit.rcwa(backend=backend, structure=np.ones((1, 4, 4)), period=[P, P],
+                              truncation_order=[1, 1], thickness=[H], wavelength=WL,
+                              top=1.7, bot=1.0, theta=theta, phi=0.4, psi=0.1)
+        got = tuple(complex(np.asarray(v)) for v in solver._incident_kxy(WL))
+        assert np.all(np.isfinite([[v.real, v.imag] for v in got])), (backend, got)
+        if reference is None:
+            reference = got
+            # A zero result would satisfy the comparison below trivially -- but at normal
+            # incidence it is the right answer, so the guard applies only where sin(theta) is
+            # not itself zero.
+            if theta != 0.0:
+                assert abs(got[0]) + abs(got[1]) > 1e-12, got
+        else:
+            for a, b in zip(reference, got):
+                assert abs(a - b) < 1e-13, (backend, a, b)
+
+
+@pytest.mark.parametrize('imag', [0.0, 0.5, 2.0])
+def test_a_theta_past_grazing_saturates(imag):
+    """Above ``pi/2`` the real part stops mattering, and that is what the clamp is *for*.
+
+    It is not a rounding fix. It replaces the real part with ``pi/2`` (one float32 ulp below),
+    so ``sin(2.0)`` returns 1.0 rather than 0.909: any incidence at or past grazing is treated
+    as grazing, and the imaginary part -- the decay of an evanescent incidence -- rides through
+    untouched.
+
+    Stated as an identity rather than a table: above the threshold the answer does not depend
+    on the real part at all. That catches the clamp being deleted, which cross-backend
+    agreement cannot -- removing it moves all three backends together, so they still agree, on
+    the wrong number.
+
+    The threshold is ``float32(pi/2)``, computed here rather than imported, and it sits
+    *above* ``pi/2`` because float32 rounds up: 1.5707963705062866 against 1.5707963267948966.
+    So ``theta = pi/2`` does not trigger the clamp, and using it as the reference is what the
+    first version of this test did -- it failed, correctly, for a reason that was the test's
+    and not the code's.
+    """
+    threshold = float(np.float32(np.pi / 2))
+    reference = None
+    for backend in (0, 1, 2):
+        for real in (threshold, 1.9, 2.6, 3.0):
+            solver = wavebit.rcwa(backend=backend, structure=np.ones((1, 4, 4)), period=[P, P],
+                                  truncation_order=[1, 1], thickness=[H], wavelength=WL,
+                                  top=1.7, bot=1.0, theta=real + 1j * imag, phi=0.4, psi=0.1)
+            got = tuple(complex(np.asarray(v)) for v in solver._incident_kxy(WL))
+            if reference is None:
+                reference = got
+                assert abs(got[0]) > 1e-12, got            # a zero would pass anything
+            for a, b in zip(reference, got):
+                assert abs(a - b) < 1e-13, (backend, real, a, b)
+
+    # The real part stops mattering; the imaginary part must not. Saturating is what the clamp
+    # is for, but it saturates *only* the real part -- an evanescent incidence carries its decay
+    # in `Im(theta)`, and a clamp that dropped it would leave every one of them looking like a
+    # grazing propagating wave. The identity above cannot see that on its own: with the
+    # imaginary part gone, all four real parts still agree, so the check still passes.
+    grazing = float(np.float32(np.pi / 2))
+    def _at(imag_part):
+        solver = wavebit.rcwa(backend=0, structure=np.ones((1, 4, 4)), period=[P, P],
+                              truncation_order=[1, 1], thickness=[H], wavelength=WL,
+                              top=1.7, bot=1.0, theta=grazing + 1j * imag_part,
+                              phi=0.4, psi=0.1)
+        return complex(np.asarray(solver._incident_kxy(WL)[0]))
+    if imag != 0.0:
+        assert abs(_at(imag) - _at(0.0)) > 1e-6, (imag, _at(imag), _at(0.0))
