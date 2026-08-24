@@ -985,3 +985,48 @@ def test_a_skewed_cell_answers_in_the_width_it_was_asked_for(backend):
     assert np.asarray(wavebit.rcwa(complex_dtype=1, lattice=HEX,
                                    **dict(common, structure=_rod_on(HEX, n=32))
                                    ).solve().R).dtype == np.float32
+
+
+# --------------------------------------------- which Cartesian coordinate names which fraction
+
+def _field_solver(basis, n=24):
+    s = wavebit.rcwa(backend=0, structure=raster(basis, n=n, radius=110.0),
+                     period=[P, P], lattice=np.asarray(basis).tolist(), truncation_order=[5, 5],
+                     thickness=[220.0], wavelength=WL, top=1.0, bot=1.0,
+                     theta=0.21, phi=0.58, psi=np.pi / 4, factorization='nvf', answers='field')
+    s.solve()
+    return s
+
+
+@pytest.mark.parametrize('basis', [HEX, np.column_stack(([P, 0.0], [-P / 2, P * np.sqrt(3) / 2]))],
+                         ids=['hex60', 'hex120'])
+def test_a_skewed_cell_can_name_the_coordinate_its_basis_answers(basis):
+    """``r = u*a1 + v*a2``, so it is the *other* axis's component that decides.
+
+    ``x = u*a1x + v*a2x``: an ``x`` names a ``u`` only where ``a2x == 0``. ``y = u*a1y +
+    v*a2y``: a ``y`` names a ``v`` only where ``a1y == 0``. Until 2026-08-24 the guard in
+    :func:`~wavebit._core.fields._inv_fourier` was handed the two the other way round, on a
+    premise written above it -- that this path could not meet a skewed cell -- which stopped
+    being true when oblique cells landed.
+
+    Both hex spellings put ``a1`` along ``x``, so both were wrong in *both* directions at once:
+    an explicit ``sample_x`` was accepted and answered with the nearest ``u`` column, a line
+    running across ``|a2x| = 200`` nm of the cell rather than the constant ``x`` asked for --
+    about 90% of the field magnitude out where it was read -- while an explicit ``sample_y``,
+    which these cells answer exactly, was refused.
+
+    Pinned from both sides and on both spellings, because a guard that is merely *strict* is not
+    the same as one that is right: swapping the two arguments back flips both assertions.
+    """
+    s = _field_solver(basis)
+    a2y = float(np.asarray(basis)[1, 1])
+
+    with pytest.raises(NotImplementedError, match='axis-aligned cell'):
+        s.reconstruct_field(sample_x=np.array([250.0]), sample_y=3, sample_z=3)
+
+    grid = np.asarray(s.reconstruct_field(sample_x=9, sample_y=3, sample_z=3))
+    row = np.asarray(s.reconstruct_field(sample_x=9, sample_y=np.array([0.5 * a2y]),
+                                         sample_z=3))
+    assert float(np.max(np.abs(grid))) > 1e-6           # a zero field would pass anything
+    assert row.shape[-3] == 1
+    assert np.array_equal(row, grid[..., 1:2, :, :])    # v = 0.5 is the middle of `linspace`

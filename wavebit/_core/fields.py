@@ -310,11 +310,20 @@ def _inv_fourier(xp, kx, ky, period, sample_x, sample_y, k0, C, lattice=None):
         # This branch samples the cell's own parallelogram in fractional `(u, v)`, so a count
         # is `linspace(0, 1, n)` -- unchanged, and stated per axis so that mixing a count with
         # explicit coordinates on the other axis leaves this one bit-identical. Explicit
-        # coordinates are lengths and have to be converted, and `x` alone does not determine
-        # `u` on a sheared cell: refuse rather than guess. The solver does not support an
-        # oblique lattice anyway, so `u = x / a1x` is exact everywhere this is reachable --
-        # and it divides by the *lattice* vector rather than by `period`, which need not be
-        # the same number.
+        # coordinates are lengths and have to be converted, and a Cartesian coordinate does not
+        # in general name a fraction: refuse rather than guess. It divides by the *lattice*
+        # vector rather than by `period`, which need not be the same number.
+        #
+        # **Which component decides is the other axis's.** `r = u*a1 + v*a2`, so
+        # `x = u*a1x + v*a2x`: an `x` names a `u` only where `a2x == 0`, and `y = u*a1y +
+        # v*a2y`, so a `y` names a `v` only where `a1y == 0`. Until 2026-08-24 the two were
+        # passed the other way round, on the premise -- stated here, and false since oblique
+        # cells landed -- that this path could not meet a skewed cell at all. Both directions
+        # were wrong at once on `wavebit.hexagonal(400)`, where `a1y == 0` and `a2x == -200`:
+        # an explicit `sample_x` was *accepted* and answered with the `u` column nearest it,
+        # a line running from x=250 to x=50 across the cell rather than the constant x asked
+        # for -- up to `|a2x|` away in position and ~90% of the field magnitude in value --
+        # while an explicit `sample_y`, which that cell answers exactly, was refused.
         def _frac(spec, a_par, a_perp, axis):
             if is_count(spec):
                 return xp.linspace(0, 1, _n_samples(spec), dtype=C, device=dev)
@@ -327,8 +336,8 @@ def _inv_fourier(xp, kx, ky, period, sample_x, sample_y, k0, C, lattice=None):
 
         _check_spec(sample_x, 'sample_x')
         _check_spec(sample_y, 'sample_y')
-        u_1d = _frac(sample_x, a1x, a1y, 'sample_x')
-        v_1d = _frac(sample_y, a2y, a2x, 'sample_y')
+        u_1d = _frac(sample_x, a1x, a2x, 'sample_x')
+        v_1d = _frac(sample_y, a2y, a1y, 'sample_y')
         u_ph = xp.exp(1j * xp.reshape(u_1d, (1, n_u, 1)) * proj_a1)
         v_ph = xp.exp(1j * xp.reshape(v_1d, (n_v, 1, 1)) * proj_a2)
         return xp.broadcast_to(u_ph * v_ph, (n_v, n_u, kx_f.shape[0]))
