@@ -359,3 +359,78 @@ def test_a_traced_period_is_still_a_cell():
     assert eager == pytest.approx(0.5, abs=0.5)          # a degenerate loss would pass the rest
     assert float(value) == pytest.approx(eager, rel=1e-7)
     assert np.all(np.isfinite(np.asarray(grad)))
+
+
+def _rod_on_cell(basis, n=48, radius=150.0):
+    """A disc on the parametric grid of ``basis`` -- the same object whatever the spelling."""
+    A = np.asarray(basis)
+    t = (np.arange(n) + 0.5) / n
+    U, V = np.meshgrid(t, t)
+    X, Y = U * A[0, 0] + V * A[0, 1], U * A[1, 0] + V * A[1, 1]
+    cx, cy = 0.5 * (A[0, 0] + A[0, 1]), 0.5 * (A[1, 0] + A[1, 1])
+    return np.where((X - cx) ** 2 + (Y - cy) ** 2 < radius ** 2, 12.25, 1.0)
+
+
+@pytest.mark.parametrize('cell,tol', [
+    ('oblique', 1e-9),                      # unequal edge lengths: machine precision
+    ('hex', 1e-2),                          # equal lengths: genuine EDT ties, see the docstring
+], ids=['oblique-400x537', 'hex-400'])
+def test_the_basis_gradient_obeys_the_unimodular_chain_rule(cell, tol):
+    """``grad L(A @ U) == grad L(A) @ inv(U).T`` -- a chain rule, not a golden and not an FD.
+
+    ``U = [[0, 1], [1, 0]]`` swaps ``a1`` and ``a2``, ``det U = -1``, so ``A @ U`` is the same
+    point lattice written the other way round. Writing the raster transposed states the same
+    physical object, so the loss is invariant and its gradient must transform by ``inv(U).T``.
+    Nothing here compares the code to itself, and nothing here needs a step size.
+
+    **This is the check the shipped basis-gradient test could not make.** That one asserts
+    ``isfinite`` and that four components exceed 1e-12, which a gradient of the right *shape*
+    and the wrong *size* passes. On its own scene -- ``hexagonal(400)``, 48x48, a 150 nm rod --
+    ``d(sum R)/d a1x`` read **-2.70e+08** against the loss's own slope of -8.12e-04 over a 4 nm
+    window: eleven orders out, finite, four components nonzero, green. The cause was an
+    exact-zero guard in ``normal_vector_field``'s normalisation (fixed 2026-08-24); this law
+    reads 1.44e-01 with it live and 5.4e-04 without.
+
+    The two arms have different tolerances and both numbers are measured. Unequal edge lengths
+    give 1.2e-13 -- the identity is exact and the arithmetic is all that is left. Equal lengths
+    do not: 37 of 2304 pixels sit at a genuine distance-transform tie, where which interface
+    pixel is nearest is a choice rather than a fact, and that choice does not transpose with the
+    raster. 1e-2 is above that residual and two orders below what the defect produced.
+
+    The primal equality is the loose one deliberately. It checks that the two spellings
+    really are one crystal; it is not what this test is for. Its residual moves with whether
+    JAX is running in x64 -- 1.2e-13 with, 2.4e-08 without -- and which of those holds
+    depends on import order within the process, so a tight bound here passes in a whole-file
+    run and fails when the test is selected alone. The chain rule's own residual does not
+    move with x64 at all, which is why it is the one carrying the argument.
+    """
+    jax = pytest.importorskip('jax')
+    jnp = pytest.importorskip('jax.numpy')
+
+    if cell == 'hex':
+        basis = np.asarray(wavebit.hexagonal(400.0))
+    else:
+        angle = np.radians(105.0)
+        basis = np.column_stack(([400.0, 0.0],
+                                 [537.3 * np.cos(angle), 537.3 * np.sin(angle)]))
+    structure = _rod_on_cell(basis)
+    swap = np.array([[0.0, 1.0], [1.0, 0.0]])
+
+    def grad_of(cell_basis, raster):
+        def loss(M):
+            solver = wavebit.rcwa(backend=1, wavelength=900.0, lattice=M,
+                                  truncation_order=[4, 4], top=1.0, bot=1.0, theta=0.1,
+                                  phi=0.3, psi=0.2, thickness=[300.0],
+                                  structure=raster[None], factorization='nvf')
+            return jnp.sum(solver.solve().R)
+        return (float(loss(jnp.asarray(cell_basis))),
+                np.asarray(jax.grad(loss)(jnp.asarray(cell_basis))))
+
+    primal, g = grad_of(basis, structure)
+    swapped, g_swapped = grad_of(basis @ swap, structure.T)
+
+    scale = float(np.max(np.abs(g)))
+    assert scale > 1e-12, scale                       # a dead gradient would pass the rest
+    assert swapped == pytest.approx(primal, rel=1e-5)  # the two spellings are one crystal
+    want = g @ np.linalg.inv(swap).T
+    assert float(np.max(np.abs(g_swapped - want))) / scale < tol, (cell, g, g_swapped)

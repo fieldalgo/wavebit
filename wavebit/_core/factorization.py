@@ -754,17 +754,37 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
     gx, gy = g_i, g_j
     if isinstance(gx, np.ndarray):
         norm = np.hypot(gx, gy)
-        norm[norm == 0] = 1.0
+        norm[norm < _FLAT_PIXEL] = 1.0
     else:
         # The guard goes *inside* the sqrt. `d(sqrt)/dx` is infinite at zero, and a `where`
         # outside still differentiates the branch it did not take, so the NaN comes back --
-        # the same trap `shape_ft`'s DC term documents for `jinc`. Every pixel with no
-        # gradient (a uniform region) sits at exactly zero, so this is not a rare corner.
+        # the same trap `shape_ft`'s DC term documents for `jinc`.
+        #
+        # And it is a *floor*, not `!= 0`. This used to read "every pixel with no gradient sits
+        # at exactly zero, so this is not a rare corner", which is true only while the two
+        # sampling steps are the literal 1 of index space. Give it the cell's real steps -- what
+        # a skewed cell does -- and a pixel equidistant from two interfaces cancels to 8.9e-16
+        # instead of 0, passes `!= 0`, and contributes `1/1e-15` to the gradient. Measured on
+        # `hexagonal(400)` at 48x48 with a 150 nm rod, which is the shipped test's own scene:
+        # `d(sum R)/d a1x` came out -2.70e+08 where the loss's own slope over a 4 nm window is
+        # -8.12e-04. Eleven orders, finite, and past a test that asserted only `isfinite`.
+        #
+        # It needs `|a1| == |a2|` and a square raster for the cancellation to be exact enough,
+        # so it never appeared through `period` and only ever on a hexagon. `|grad d|` is O(1)
+        # at every real interface -- 1st percentile 4.2, median 8.3, in units of the step -- so
+        # a floor nine orders below that separates the two populations with nothing in between.
         _xp = array_namespace(gx)
         sq = gx ** 2 + gy ** 2
-        nz = sq != 0
+        nz = sq > _FLAT_PIXEL ** 2
         norm = _xp.sqrt(_xp.where(nz, sq, _xp.ones_like(sq)))
+        gx = _xp.where(nz, gx, _xp.zeros_like(gx))
+        gy = _xp.where(nz, gy, _xp.zeros_like(gy))
     return gx / norm, gy / norm
+
+
+#: Below this, a distance-map gradient is a flat pixel rather than an interface. See the
+#: floor's own note in `normal_vector_field`: real interfaces sit at O(1) in step units.
+_FLAT_PIXEL = 1e-9
 
 
 def _interface_mask(eps):
