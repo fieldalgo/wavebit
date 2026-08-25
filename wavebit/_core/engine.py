@@ -2033,6 +2033,45 @@ class CoreFactorizationMixin:
 
         return field_cell
 
+    def _solve_and_field(self, sample_x, sample_y, sample_z, incidences, geometry, **kwargs):
+        """Solve, then reconstruct, sharing nothing with the caller but the arguments.
+
+        The body all three backends had. Undecorated on purpose: both entry points below open
+        the device scope themselves, and JAX's jitted `solve_field` would otherwise nest
+        `jax.default_device` inside itself for no gain.
+        """
+        self._require_field_declaration()
+        # An optimizer's loop sets a design variable and re-solves in one call. It was a list
+        # comprehension evaluated for its side effects in two of the three copies, which is a
+        # `for` loop written to look like a value.
+        for name, value in kwargs.items():
+            setattr(self, name, value)
+        result = self.solve(geometry=geometry)
+        return result, self.reconstruct_field(sample_x, sample_y, sample_z, incidences)
+
+    @device_scoped
+    def solve_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('given',),
+                    geometry=None, **kwargs):
+        """Solve and reconstruct the field in one call, eagerly.
+
+        ``geometry`` is optional: omit it and each discrete decision is auto-detected from the
+        concrete structure. It is accepted so that backend-agnostic code can hand over the same
+        frozen geometry JAX's jitted override *requires* -- see
+        :meth:`wavebit.on_jax.emsolver.rcwa.RCWAJax.solve_field`, which overrides this, and
+        ``solve_field_eager`` there, which is this method under its other name.
+
+        Naming the field here does not declare one: ``answers='field'`` still has to be on the
+        solver, because it is the *solve* that either keeps the per-layer state or does not.
+        Checked before that solve rather than after, so the refusal does not arrive on the far
+        side of the expensive part.
+
+        ``kwargs`` are assigned to the solver first, which is how an optimizer moves a design
+        variable and re-solves in one call. NumPy did not accept them and the other two did,
+        so the same sweep loop ran on two backends and raised ``TypeError`` on the third.
+        """
+        return self._solve_and_field(sample_x, sample_y, sample_z, incidences, geometry,
+                                     **kwargs)
+
     @property
     def mu(self):
         """The raster path's relative permeability field — ``(n_layers, Ny, Nx)``, or ``None``.

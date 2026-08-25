@@ -101,16 +101,3 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
         self.normal_method = normal_method
         self.normal_grid = normal_grid
         self.lattice = lattice      # after period: assigning a basis overwrites period
-
-    def solve_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('given',),
-                    geometry=None, **kwargs):
-        """``geometry`` is optional here — PyTorch traces eagerly, so auto-detection works. It is
-        accepted so backend-agnostic code can pass the same frozen geometry JAX requires.
-
-        Naming the field here does not declare one — see the NumPy twin."""
-        self._require_field_declaration()
-        [setattr(self, k, v) for k, v in kwargs.items()]  # needed for optimization
-
-        res = self.solve(geometry=geometry)
-        field_cell = self.reconstruct_field(sample_x, sample_y, sample_z, incidences)
-        return res, field_cell

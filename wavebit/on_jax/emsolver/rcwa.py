@@ -153,23 +153,13 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                 '    result, field_cell = solver.solve_field(..., geometry=geometry)\n'
                 'Reuse that one geometry across calls to compile only once. '
                 'For the eager, auto-detecting path use solver.solve_field_eager(...).')
-        # Naming the field here does not declare one: `answers` is aux data, so it is static
-        # by the time this traces, and the solve below keeps the state or does not according
-        # to what was declared. Checked before the trace rather than inside it.
-        self._require_field_declaration()
+        return self._solve_and_field(sample_x, sample_y, sample_z, incidences, geometry,
+                                     **kwargs)
 
-        [setattr(self, k, v) for k, v in kwargs.items()]  # needed for optimization
 
-        res = self.solve(geometry=geometry)
-        field_cell = self.reconstruct_field(sample_x, sample_y, sample_z, incidences)
-        return res, field_cell
-
-    @device_scoped
-    def solve_field_eager(self, sample_x=20, sample_y=20, sample_z=20,
-                          incidences=('given',), geometry=None):
-        """Eager solve-and-field. ``geometry`` is optional: omit it and each discrete decision
-        is auto-detected from the concrete structure."""
-        self._require_field_declaration()
-        res = self.solve(geometry=geometry)
-        field_cell = self.reconstruct_field(sample_x, sample_y, sample_z, incidences)
-        return res, field_cell
+# The eager path, which is `CoreFactorizationMixin.solve_field` under its other name -- one
+# function, two names, rather than a body written twice. JAX is the only backend that needs
+# both, because it is the only one whose `solve_field` is jitted and so demands a frozen
+# geometry; the other two have nothing to be eager *relative to*. Bound here rather than inside
+# the class because the name it aliases is the one this class overrides.
+RCWAJax.solve_field_eager = CoreFactorizationMixin.solve_field

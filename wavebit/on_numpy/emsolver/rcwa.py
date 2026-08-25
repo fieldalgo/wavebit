@@ -99,17 +99,3 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         self.normal_method = normal_method
         self.normal_grid = normal_grid
         self.lattice = lattice      # after period: assigning a basis overwrites period
-
-    def solve_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('given',),
-                    geometry=None):
-        """``geometry`` is optional here — NumPy is always eager, so auto-detection works. It is
-        accepted so backend-agnostic code can pass the same frozen geometry JAX requires.
-
-        Naming the field here does not declare one: ``answers='field'`` still has to be on the
-        solver, because it is the *solve* below that either keeps the per-layer state or does
-        not. Checked before that solve rather than after, so the refusal does not arrive on the
-        far side of the expensive part."""
-        self._require_field_declaration()
-        res = self.solve(geometry=geometry)
-        field_cell = self.reconstruct_field(sample_x, sample_y, sample_z, incidences)
-        return res, field_cell
