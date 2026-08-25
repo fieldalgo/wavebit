@@ -626,3 +626,62 @@ def test_the_raster_dtype_whitelist_is_a_whitelist(backend):
     with pytest.raises(ValueError):
         wavebit.rcwa(structure=np.ones((1, 4, 4)),
                      mu=np.ones((1, 4, 4), dtype=np.uint8), **cfg)
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+def test_a_refused_structure_leaves_the_solver_exactly_as_it_was(backend):
+    """The setter settles two attributes, and it used to settle them before it could refuse.
+
+    Three ways to raise sit after the first write -- the raster coercion, and both of
+    `_revalidate_mu`'s refusals -- so a caller who caught any of them was left holding the
+    state the refusal exists to prevent. All three measured before the fix:
+
+    * a shape recipe assigned over a raster that carries a `mu`: `ValueError` raised, and
+      afterwards `modeling_type == 2` with `mu` still attached. That is verbatim the
+      silently-dropped knob `_MU_ON_A_SHAPE_PATH` is worded to stop, reached through the
+      refusal written to stop it.
+    * a mismatched grid: left a `(1, 2, 8)` permittivity beside a `(1, 2, 4)` permeability,
+      and the next `solve()` *answered* rather than raising.
+    * a bad-dtype raster over a shape structure: left `modeling_type == 0` with a list in
+      `structure` -- a pair that contradicts itself.
+
+    Asserted on the state *and* on the answer, because the state is what a reader inspects and
+    the answer is what actually goes wrong. A solver that reports the right `modeling_type`
+    while solving a different scene would pass the first half alone.
+    """
+    if backend == 1:
+        pytest.importorskip('jax')
+    elif backend == 2:
+        pytest.importorskip('torch')
+    cfg = dict(backend=backend, truncation_order=(2, 2), wavelength=620., top=1.0, bot=1.0,
+               period=[400.0, 400.0], thickness=[150.0])
+    shapes = [{'background': 1.0, 'shapes': [{'type': 'circle', 'cx': 200.0, 'cy': 200.0,
+                                              'lx': 120.0, 'material': 4.0}]}]
+
+    def state(s):
+        return (s.modeling_type, s.mu is not None, type(s.structure).__name__,
+                None if s.mu is None else tuple(np.asarray(s.mu).shape))
+
+    def totals(s):
+        return float(np.sum(np.asarray(s.solve().T)))
+
+    # a shape recipe over a raster carrying a mu
+    solver = wavebit.rcwa(structure=np.ones((1, 4, 4)), mu=np.ones((1, 4, 4)) * 1.5, **cfg)
+    was, answered = state(solver), totals(solver)
+    with pytest.raises(ValueError):
+        solver.structure = shapes
+    assert state(solver) == was and totals(solver) == answered
+
+    # a raster on a different grid from the mu beside it
+    solver = wavebit.rcwa(structure=np.ones((1, 2, 4)), mu=np.ones((1, 2, 4)) * 1.5, **cfg)
+    was, answered = state(solver), totals(solver)
+    with pytest.raises(ValueError):
+        solver.structure = np.ones((1, 2, 8))
+    assert state(solver) == was and totals(solver) == answered
+
+    # a raster the dtype whitelist refuses, over a shape structure
+    solver = wavebit.rcwa(structure=shapes, **cfg)
+    was = state(solver)
+    with pytest.raises(ValueError):
+        solver.structure = np.ones((1, 4, 4), dtype=np.uint8)
+    assert state(solver) == was

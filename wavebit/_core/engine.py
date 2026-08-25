@@ -1824,30 +1824,51 @@ class CoreFactorizationMixin:
 
     @structure.setter
     def structure(self, structure):
-        if isinstance(structure, self._raster_types()):     # Raster
-            self._modeling_type = 0
-            self._structure = self._coerce_raster('structure', structure)
+        """Settle the encoding and the modeling type together, or leave both alone.
 
+        Every branch decides into locals and the pair is written once, at the end. It used to
+        write as it went, and there are three ways to raise after the first write: the raster
+        coercion, and both of ``_revalidate_mu``'s refusals. A caller who caught any of them
+        was left holding the state the refusal exists to prevent -- measured, assigning a shape
+        recipe over a raster that had a ``mu``: ``ValueError`` raised, and afterwards
+        ``modeling_type == 2`` with ``mu`` still attached, which is verbatim the
+        silently-dropped knob :data:`_MU_ON_A_SHAPE_PATH` is worded to stop. The mismatched-grid
+        refusal was worse: it left a ``(1, 2, 8)`` permittivity beside a ``(1, 2, 4)``
+        permeability and the next ``solve()`` *answered*.
+
+        ``_revalidate_mu`` still runs after the write, because it checks the new pair and has
+        to see it. So the write is undone if it refuses. Rolling back is not the same as
+        checking first: the rules for what a ``mu`` may sit beside belong to the ``mu`` setter,
+        and a copy of them here would be a second thing to keep in step -- which is the reason
+        ``_revalidate_mu`` re-assigns rather than re-checking inline, given in its own docstring.
+        """
+        if isinstance(structure, self._raster_types()):     # Raster
+            kind, value = 0, self._coerce_raster('structure', structure)
         elif type(structure) is list:
             # Analytic: one dict(background=..., shapes=[...], combine=...) per layer.
             # Shape coordinates are absolute lengths in the units of `period`, not
             # fractions of it, and `combine` picks what overlapping shapes mean --
             # this path adds them where the block path paints. See
             # wavebit._core.analytic; overlaps are refused until it is set.
-            if len(structure) > 0 and isinstance(structure[0], dict):
-                self._modeling_type = 2
-                self._structure = structure
-            else:  # Block
-                self._modeling_type = 1
-                self._structure = structure
+            # An empty list is a Block, not a missing structure -- `None` is that.
+            kind = 2 if (len(structure) > 0 and isinstance(structure[0], dict)) else 1
+            value = structure
         elif structure is None:
-            self._structure = structure
-            self._modeling_type = None
+            kind, value = None, None
         else:
-            raise ValueError
-        # `mu` and `structure` are one raster pair and either can be assigned second, so the
-        # pair is checked from whichever side completes it -- see `_revalidate_mu`.
-        self._revalidate_mu()
+            raise ValueError(
+                f'structure: expected a raster array, a list of layers, or None -- got '
+                f'{type(structure).__name__}')
+
+        previous = (self._structure, self._modeling_type)
+        self._structure, self._modeling_type = value, kind
+        try:
+            # `mu` and `structure` are one raster pair and either can be assigned second, so
+            # the pair is checked from whichever side completes it -- see `_revalidate_mu`.
+            self._revalidate_mu()
+        except Exception:
+            self._structure, self._modeling_type = previous
+            raise
 
     def _coerce_raster(self, where, grid):
         """A raster field on this backend at the solve's precision.
