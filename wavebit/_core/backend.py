@@ -411,10 +411,11 @@ def as_array(xp, v, dtype=None, device=None, copy=False):
     the two spellings agree. ``array_api_compat`` never entered into it: its torch ``asarray``
     is a passthrough that only fixes device propagation (changelog 1.12.0, pytorch#150199).
 
-    So the ``astype`` branch is no longer the graph guard it was. Two reasons to keep it
-    survive it: the strides normalisation above, and ``device`` -- which that branch honours
-    and a rebuild through ``asarray`` would have to be told about separately. Both are
-    described below.
+    So the ``astype`` branch is no longer the graph guard it was. What justifies it now is
+    ``device``, described below: the branch *moves* a value already in ``xp``, where a rebuild
+    through ``asarray`` would have to be told to. The strides normalisation is not a reason to
+    keep this branch and never was -- ``forward_strided`` runs past the early return, only for
+    a foreign array -- it is why ``as_array`` beats ``xp.asarray`` on that path instead.
 
     ``device`` is honoured on **both** paths. It used to be honoured only on the second one:
     a value already in ``xp`` was cast and returned wherever it happened to live, so a
