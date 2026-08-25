@@ -492,3 +492,51 @@ def test_a_traced_scene_attribute_takes_the_live_arm_and_says_nothing():
     assert np.count_nonzero(np.asarray(g_period)) == 2     # a severed graph gives zeros
     assert seen['period_dtype'] == seen['float_dtype']
     assert seen['thickness_dtype'] == seen['float_dtype']
+
+
+@pytest.mark.parametrize('backend', [1, 2])
+def test_a_period_written_as_two_separate_leaves_still_carries_gradient(backend):
+    """`period=[a, b]` where a and b are arrays, not a single array of two.
+
+    Rebuilding the pair from such a list is the obvious spelling and it is the one that loses
+    the graph -- `torch.tensor([leaf, leaf])` raises outright, and the working version stacks
+    instead, casting each element first so nothing is created at single precision.
+
+    Torch had that branch and the other two did not, because Torch is where it was hit. Folding
+    the three setters into one gave it to JAX as well, which is correct -- `jnp.stack` and
+    `jnp.array` agree on values and on gradients for a list of scalars, measured -- but it was
+    a branch no JAX test reached, since every JAX caller in this suite passes `period` as one
+    whole `jnp.asarray([...])`. This is that case.
+    """
+    structure = np.ones((1, 8, 8))
+    structure[0, 2:6, 2:6] = 4.0
+    cfg = dict(truncation_order=[3, 3], thickness=[150.0], wavelength=900.0, top=1.0, bot=1.0,
+               theta=0.2, phi=0.3, psi=0.4)
+
+    if backend == 1:
+        jax = pytest.importorskip('jax')
+        jnp = pytest.importorskip('jax.numpy')
+
+        def loss(p):
+            solver = wavebit.rcwa(backend=1, structure=jnp.asarray(structure),
+                                  period=[p, 2.0 * p], **cfg)
+            return jnp.sum(jnp.asarray(solver.solve().T))
+
+        p = jnp.asarray(400.0)
+        grad = jax.grad(loss)(p)
+        assert np.isfinite(float(grad)) and float(grad) != 0.0
+        # and the pair really was built from both entries, not from the first twice
+        solver = wavebit.rcwa(backend=1, structure=jnp.asarray(structure),
+                              period=[p, 2.0 * p], **cfg)
+    else:
+        torch = pytest.importorskip('torch')
+        leaf = torch.tensor(400.0, dtype=torch.float64, requires_grad=True)
+        solver = wavebit.rcwa(backend=2, structure=torch.asarray(structure),
+                              period=[leaf, 2.0 * leaf], **cfg)
+        torch.real(solver.solve().T).sum().backward()
+        assert leaf.grad is not None and float(leaf.grad) != 0.0
+
+    got = np.asarray(solver.period, dtype=float) if backend == 1 else \
+        solver.period.detach().numpy()
+    assert got.tolist() == [400.0, 800.0], 'the second entry was dropped'
+    assert str(np.asarray(got).dtype) == str(np.dtype(np.float64))

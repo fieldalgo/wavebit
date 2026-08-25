@@ -454,3 +454,48 @@ def test_a_torch_leaf_is_kept_rather_than_copied():
         leaf[0] = 450.0
     assert float(solver.period[0].detach()) == 450.0, 'the solver stopped tracking its leaf'
     assert solver.period.requires_grad or solver.period.grad_fn is not None
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+def test_every_spelling_of_a_cell_and_a_stack_arrives_as_the_same_array(backend):
+    """The shapes the geometry setters promise, read back rather than solved through.
+
+    A solve cannot arbitrate these. `thickness=150.0` becoming `[150.0, 150.0]` instead of
+    `[150.0]` changes nothing a one-layer solve can see -- the extra entry is simply never
+    reached -- so a mutation that duplicated it passed 131 tests across the stability, spec,
+    gradient and pytree suites without a murmur. Same shape of blindness as the C5 clamp: the
+    suite watched the answer, and the answer did not depend on the thing that moved.
+
+    So this reads the attribute. `period` promises a pair from four spellings -- a number, a
+    length-1 sequence, a pair, and the `{'x', 'y'}` mapping -- and `thickness` promises to
+    duplicate nothing, which is the whole difference between the two and the reason
+    `_as_lengths` takes a flag rather than being written twice.
+    """
+    if backend == 1:
+        pytest.importorskip('jax')
+    elif backend == 2:
+        pytest.importorskip('torch')
+    base = dict(backend=backend, truncation_order=(1, 1), wavelength=620., top=1.0, bot=1.0)
+    one, two = np.ones((1, 4, 4)), np.ones((2, 4, 4))
+
+    def built(**over):
+        kw = dict(base, structure=one, period=[400.0, 400.0], thickness=[150.0])
+        kw.update(over)
+        return wavebit.rcwa(**kw)
+
+    for spelling in (400.0, [400.0], (400.0,), [400.0, 400.0], {'x': 400.0, 'y': 400.0},
+                     np.array([400.0, 400.0])):
+        got = np.asarray(built(period=spelling).period, dtype=float)
+        assert got.shape == (2,) and got.tolist() == [400.0, 400.0], f'period={spelling!r}'
+
+    assert np.asarray(built(period=[400.0, 500.0]).period, dtype=float).tolist() == [400.0, 500.0]
+
+    # thickness duplicates nothing: a lone number is one layer, not two.
+    assert np.asarray(built(thickness=150.0).thickness, dtype=float).tolist() == [150.0]
+    assert np.asarray(built(structure=two, thickness=[150.0, 200.0]).thickness,
+                      dtype=float).tolist() == [150.0, 200.0]
+
+    with pytest.raises(ValueError):
+        built(period='four hundred')
+    with pytest.raises(ValueError):
+        built(period={'u': 400.0, 'v': 400.0})       # x and y, because it is the aligned cell

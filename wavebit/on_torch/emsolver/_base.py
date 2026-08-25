@@ -38,6 +38,9 @@ class _BaseRCWA(CoreSolveMixin):
         """Torch places a tensor at creation, so this is the only place to say where."""
         return self.device
 
+    #: A tensor, so a caller's optimizer leaf reaches the solver as itself.
+    _ARRAY_TYPES = (torch.Tensor,)
+
     def __init__(self, top=1., bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None,
                  truncation_order=(0, 0),
                  period=(1., 1.), wavelength=1.,
@@ -146,86 +149,6 @@ class _BaseRCWA(CoreSolveMixin):
     @property
     def int_dtype(self):
         return self._int_dtype
-
-    @property
-    def truncation_order(self):
-        return self._max_order
-
-    @truncation_order.setter
-    def truncation_order(self, truncation_order):
-        self._max_order, self._truncation_spelling = _conventions.parse_order_pair(
-            truncation_order)
-
-    @property
-    def period(self):
-        """The cell's two edge lengths — **syntactic sugar for the axis-aligned basis**.
-
-        ``period=(Lx, Ly)`` is a shorthand spelling of ``lattice=diag(Lx, Ly)`` and nothing
-        more: it is the same cell, written the short way for the case that has no angle to
-        state. :attr:`lattice` materialises it, so a solver given only a period still answers
-        with a basis.
-
-        **Reading it back on a skewed cell gives something else.** There it is
-        ``periods_of(A) = (|a1|, |a2|)`` -- the two *edge lengths*, with the angle already
-        gone, so a 60-degree hex of side 400 and a 400x400 square both report ``(400, 400)``.
-        Correct for a caller wanting the physical extent along each raster axis, wrong for one
-        wanting a bounding box, and wrong for anything doing geometry: a function handed this
-        pair and no basis can only compute a rectangle's answer. Two live defects came through
-        exactly that gap on 2026-08-23, which is why
-        ``tests/test_cell_shape_gate.py`` now refuses the shape of code that did.
-
-        So: **sugar on the way in, a derived readout on the way out.** :attr:`lattice` is the
-        cell; this is a convenience over it.
-        """
-        return self._period
-
-    @period.setter
-    def period(self, period):
-        if isinstance(period, dict):
-            keys = set(period)
-            if keys != {'x', 'y'}:
-                raise ValueError(
-                    f"period: a mapping needs exactly {{'x', 'y'}}; got {sorted(keys)}. "
-                    f"`period` is the axis-aligned spelling of the cell, so x and y are what "
-                    f"it has -- a skewed cell is given as `lattice=` instead, and its two "
-                    f"directions are u and v.")
-            period = [period['x'], period['y']]
-        if type(period) in (int, float):
-            self._period = _as_tensor([period, period], device=self.device, dtype=self.float_dtype)
-        elif type(period) in (list, tuple, np.ndarray) or isinstance(period, torch.Tensor):
-            if len(period) == 1:
-                period = [period[0], period[0]]
-            if isinstance(period, (list, tuple)) and any(isinstance(p, torch.Tensor) for p in period):
-                # a sequence holding tensors: stack rather than re-wrap, or the caller's
-                # graph is lost. Each element is cast first so nothing is created at float32.
-                self._period = torch.stack([_as_tensor(p, device=self.device, dtype=self.float_dtype)
-                                            for p in period])
-            else:
-                self._period = _as_tensor(period, device=self.device, dtype=self.float_dtype)
-        else:
-            raise ValueError
-
-        if hasattr(self, 'modeler') and self.modeler is not None:
-            self.modeler.period = self._period
-
-    @property
-    def thickness(self):
-        return self._thickness
-
-    @thickness.setter
-    def thickness(self, thickness):
-        if type(thickness) in (int, float):
-            self._thickness = _as_tensor([thickness], device=self.device, dtype=self.float_dtype)
-        elif type(thickness) in (list, tuple, np.ndarray):
-            if isinstance(thickness, (list, tuple)) and any(isinstance(t, torch.Tensor) for t in thickness):
-                self._thickness = torch.stack([_as_tensor(t, device=self.device, dtype=self.float_dtype)
-                                               for t in thickness])
-            else:
-                self._thickness = _as_tensor(thickness, device=self.device, dtype=self.float_dtype)
-        elif type(thickness) is torch.Tensor:
-            self._thickness = thickness.to(device=self.device, dtype=self.float_dtype)
-        else:
-            raise ValueError
 
     def _separable_kxy(self, wavelength):
         (cx, hx), (cy, hy) = self.order_window

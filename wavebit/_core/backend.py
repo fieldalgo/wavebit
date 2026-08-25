@@ -11,6 +11,7 @@ eigenvalues and return NaN when that fails, which an ordinary structure can caus
 note above :func:`eig`. NumPy needs no gradient.
 """
 import array_api_compat as ac
+import numpy as _np
 
 
 def array_namespace(*xs):
@@ -374,13 +375,12 @@ def forward_strided(v):
     (``np.ascontiguousarray`` raises ``RuntimeError: Can't call numpy() on Tensor that requires
     grad``). Anything else is returned untouched.
     """
-    import numpy as np
-    if isinstance(v, np.ndarray) and any(s < 0 for s in v.strides):
-        return np.ascontiguousarray(v)
+    if isinstance(v, _np.ndarray) and any(s < 0 for s in v.strides):
+        return _np.ascontiguousarray(v)
     return v
 
 
-def as_array(xp, v, dtype=None, device=None):
+def as_array(xp, v, dtype=None, device=None, copy=False):
     """``v`` as an ``xp`` array, keeping any autograd graph intact.
 
     Values that are already arrays of this namespace are cast with ``astype``, which is
@@ -418,10 +418,24 @@ def as_array(xp, v, dtype=None, device=None):
     a value already in ``xp`` was cast and returned wherever it happened to live, so a
     ``device='cuda'`` solver handed a CPU tensor kept the CPU tensor. Nothing on a CPU-only
     machine can see that -- there is one device and every placement is correct -- which is why
-    it survived five call sites. ``to_device`` is the array-API spelling and is identity when
-    the device already matches, so the common case still copies nothing, and it preserves an
-    autograd graph where ``asarray`` would not.
+    it survived five call sites. ``to_device`` is the array-API spelling for a move and is
+    identity when the device already matches, so the ordinary call still copies nothing; under
+    Torch it is ``.to()``, which is differentiable, so a caller's optimizer leaf survives the
+    move.
+
+    ``copy=True`` says the result may not share memory with a NumPy buffer the caller still
+    holds. That is what a *stored* attribute needs -- a solver's ``period`` must not change
+    because the caller reused the array it was built from -- and NumPy input is the whole of
+    it: a list or a scalar is never shared, and a native array is shared **on purpose**,
+    because that is what lets a Torch optimizer's in-place step reach the solver it was handed
+    to. One sentence, the same on all three backends: a NumPy array you pass in is copied, a
+    native array you pass in is kept.
+
+    Not the default, because the callers that pass a wavelength or a wavevector *into* the
+    algebra share it harmlessly -- the next operation allocates anyway.
     """
+    if copy and isinstance(v, _np.ndarray):
+        v = v.copy()                          # a NumPy array carries no graph to lose
     if hasattr(v, 'dtype') and hasattr(v, 'shape'):
         try:
             same_ns = ac.array_namespace(v) is xp

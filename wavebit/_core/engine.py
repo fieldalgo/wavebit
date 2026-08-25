@@ -19,7 +19,8 @@ from . import boundary as _boundary
 from . import factorization as _fac
 from . import lattice as _lattice
 from .backend import _device_of, array_namespace, as_array, check_input_precision
-from .conventions import incident_sp_amplitudes, lit_orders, order_window, warn_if_xy_on_a_skewed_cell
+from .conventions import (incident_sp_amplitudes, lit_orders, order_window,
+                          parse_order_pair, warn_if_xy_on_a_skewed_cell)
 from .domain import (Material, RETIRED_MATERIAL_NAMES, as_material, index_from_eps,
                      retired_material_name)
 from .enums import (Answers, DEFAULT_ANSWERS, DEFAULT_FACTORIZATION, DEFAULT_FORMULATION,
@@ -999,10 +1000,13 @@ class CoreSolveMixin:
     #
     # One copy. These were three, differing only in how a value became an array: `np.array`,
     # `jnp.array`, and a local `_as_tensor` that was a second copy of `_core.backend.as_array`.
-    # `as_array` is the one that has to be used -- `xp.asarray` detaches under PyTorch, and
-    # when the dtype already matches it hands back *the same tensor* with `requires_grad`
-    # flipped off in place, so a caller's optimizer leaf stops carrying gradient after one
-    # forward pass. Its docstring has the full account.
+    # `as_array` is what all three became, for the two reasons that hold on this repo's floor:
+    # it normalises strides, which Torch needs and the other two do not, and it honours
+    # `device=` for a value already in the namespace. Not for autograd -- `torch.asarray` did
+    # flip a leaf's `requires_grad` off in place, but pytorch#170897 changed that in 2.12.0 and
+    # the floor here is 2.13. For a scalar angle the two spellings are measurably equivalent
+    # today, which is why a mutation swapping them survives the suite: a fact about the floor,
+    # not a gap in the tests.
     #
     # Torch's `psi` setter also checked `torch.is_tensor` before taking a real part where the
     # other two called `np.real` unconditionally. That divergence dies here: `xp.real` is the
@@ -1068,6 +1072,109 @@ class CoreSolveMixin:
         is what records whether the caller named it.
         """
         self._psi = self._as_real_angle(_np.pi / 2)
+
+    # ------------------------------------------------------------- the cell and the stack
+    #
+    # One copy each. These were three, differing in which constructor built the array --
+    # `np.array`, `jnp.array`, `_as_tensor` -- and in which array types each was willing to
+    # accept alongside `list` and `tuple`. The second difference is a real per-backend fact,
+    # so it survives as data rather than as three copies of a branch.
+
+    #: Array types these setters accept beyond `list`, `tuple` and `np.ndarray`. Empty here:
+    #: NumPy's own array is already in that trio. JAX and Torch each name theirs, which is what
+    #: lets a caller hand a solver a traced or a grad-carrying period. Declared rather than
+    #: sniffed, because a generic "has dtype and shape" test would widen all three at once --
+    #: NumPy refuses a torch tensor today, and changing that is not this commit's business.
+    _ARRAY_TYPES = ()
+
+    def _as_lengths(self, value, pair):
+        """A length, or a list of lengths, as a real 1-D array of this solver's width.
+
+        `pair=True` is :attr:`period`, where a lone number means a square cell and a length-1
+        sequence means the same; `pair=False` is :attr:`thickness`, where a lone number means a
+        single layer and nothing is duplicated.
+
+        Three things here are not incidental:
+
+        * `copy=True`. All three backends copied a NumPy input before this was one function,
+          and `as_array` is built around *not* copying -- sharing is how it keeps a graph
+          alive. Folding onto it without saying so would have made every solver alias the
+          array it was configured from, on all three backends at once.
+        * a sequence holding this namespace's own arrays is **stacked**, not rebuilt from, or
+          the caller's graph is lost. Each element is cast first, so nothing is created at
+          single precision and widened after: `xp.asarray(0.4)` is `float32` under Torch, and
+          folding `_incident_kxy` measured exactly that at 1.5e-07 on 13 of 18 probes.
+        * the type tests are `type(...) in`, not `isinstance`, everywhere except
+          :attr:`_ARRAY_TYPES`. That is what the three copies did, and loosening it would
+          start accepting subclasses that are refused today.
+        """
+        xp = self.xp
+        if type(value) in (int, float):
+            value = [value] * (2 if pair else 1)
+        elif type(value) in (list, tuple, _np.ndarray) or isinstance(value, self._ARRAY_TYPES):
+            if pair and len(value) == 1:
+                value = [value[0], value[0]]
+        else:
+            raise ValueError
+        if isinstance(value, (list, tuple)) and any(
+                isinstance(v, self._ARRAY_TYPES) for v in value):
+            return xp.stack([as_array(xp, v, dtype=self.float_dtype,
+                                      device=self._array_device) for v in value])
+        return as_array(xp, value, dtype=self.float_dtype, device=self._array_device, copy=True)
+
+    @property
+    def truncation_order(self):
+        return self._max_order
+
+    @truncation_order.setter
+    def truncation_order(self, truncation_order):
+        self._max_order, self._truncation_spelling = parse_order_pair(truncation_order)
+
+    @property
+    def period(self):
+        """The cell's two edge lengths — **syntactic sugar for the axis-aligned basis**.
+
+        ``period=(Lx, Ly)`` is a shorthand spelling of ``lattice=diag(Lx, Ly)`` and nothing
+        more: it is the same cell, written the short way for the case that has no angle to
+        state. :attr:`lattice` materialises it, so a solver given only a period still answers
+        with a basis.
+
+        **Reading it back on a skewed cell gives something else.** There it is
+        ``periods_of(A) = (|a1|, |a2|)`` -- the two *edge lengths*, with the angle already
+        gone, so a 60-degree hex of side 400 and a 400x400 square both report ``(400, 400)``.
+        Correct for a caller wanting the physical extent along each raster axis, wrong for one
+        wanting a bounding box, and wrong for anything doing geometry: a function handed this
+        pair and no basis can only compute a rectangle's answer. Two live defects came through
+        exactly that gap on 2026-08-23, which is why
+        ``tests/test_cell_shape_gate.py`` now refuses the shape of code that did.
+
+        So: **sugar on the way in, a derived readout on the way out.** :attr:`lattice` is the
+        cell; this is a convenience over it.
+        """
+        return self._period
+
+    @period.setter
+    def period(self, period):
+        if isinstance(period, dict):
+            keys = set(period)
+            if keys != {'x', 'y'}:
+                raise ValueError(
+                    f"period: a mapping needs exactly {{'x', 'y'}}; got {sorted(keys)}. "
+                    f"`period` is the axis-aligned spelling of the cell, so x and y are what "
+                    f"it has -- a skewed cell is given as `lattice=` instead, and its two "
+                    f"directions are u and v.")
+            period = [period['x'], period['y']]
+        self._period = self._as_lengths(period, pair=True)
+        if getattr(self, 'modeler', None) is not None:
+            self.modeler.period = self._period
+
+    @property
+    def thickness(self):
+        return self._thickness
+
+    @thickness.setter
+    def thickness(self, thickness):
+        self._thickness = self._as_lengths(thickness, pair=False)
 
     def _device_scope(self):
         """Where this solver's arrays are placed, as a context manager.
