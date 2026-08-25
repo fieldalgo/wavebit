@@ -1073,6 +1073,98 @@ class CoreSolveMixin:
         """
         self._psi = self._as_real_angle(_np.pi / 2)
 
+    # ------------------------------------------------------------------- the precision
+    #
+    # One copy. The width resolution was written *seven* times: a `complex_dtype` setter and an
+    # inline block in each backend's `_BaseRCWA.__init__`, plus a third inside
+    # `SolverTorch.__init__`. No per-backend table is needed for any of it -- every Array-API
+    # namespace exposes `complex128`, `complex64`, `float64`, `float32`, `int64` and `int32`,
+    # and on all three they are *the same objects* as the native spellings (measured), so
+    # `xp.complex128` under Torch is `torch.complex128` itself.
+
+    def _resolve_precision(self, value):
+        """``(complex, float, int)`` dtypes for a requested width, in this solver's namespace.
+
+        ``0`` or a complex128 spelling asks for double, ``1`` or a complex64 spelling for
+        single. Both the namespace's own spelling and NumPy's are accepted on every backend,
+        which is what the copies did between them.
+
+        The three are returned **together** rather than derived from the first afterwards.
+        The copies derived them with ``is not``, and that is a live bug: for a ``np.dtype``
+        instance ``np.dtype('complex64') == np.complex64`` is True while
+        ``np.dtype('complex64') is np.complex64`` is False, so NumPy's setter accepted the
+        spelling, selected complex64 arithmetic, and paired it with ``float64`` and ``int64``.
+        A mixed width that nothing downstream could see.
+        """
+        xp = self.xp
+        if value in (0, xp.complex128, _np.complex128):
+            return xp.complex128, xp.float64, xp.int64
+        if value in (1, xp.complex64, _np.complex64):
+            return xp.complex64, xp.float32, xp.int32
+        raise ValueError(
+            f'complex_dtype: 0 or 1, or a complex128 / complex64 dtype -- got {value!r}. '
+            f'0 and complex128 are double precision, 1 and complex64 single.')
+
+    @property
+    def complex_dtype(self):
+        return self._complex_dtype
+
+    @complex_dtype.setter
+    def complex_dtype(self, complex_dtype):
+        self._complex_dtype, self._float_dtype, self._int_dtype = (
+            self._resolve_precision(complex_dtype))
+        self._recast_to_precision()
+
+    @property
+    def float_dtype(self):
+        return self._float_dtype
+
+    @property
+    def int_dtype(self):
+        return self._int_dtype
+
+    def _recast_to_precision(self):
+        """Rebuild every stored array at the current width.
+
+        Only reached by *assigning* :attr:`complex_dtype`; the constructors resolve the width
+        before any of these exist and never call the setter. So this is the whole of what makes
+        ``solver.complex_dtype = 1`` mean the same thing as building the solver at ``1``, and
+        before this commit it did not: ``period``, ``psi`` and ``structure`` were left at the
+        old width on all three backends. NumPy and JAX then solved at a *mixed* width and
+        answered, and the tell is that they answered *identically*: both returned
+        ``R + T = 1.000000080317048``, where solvers born at single precision return
+        ``1.0000002160668373`` and ``1.0000000447034836``. Two backends agreeing to the last
+        bit is not what single precision looks like; it is what double precision looks like.
+        Torch did not answer at all -- it raised ``expected m1 and m2 to have the same dtype``
+        from inside ``layer_modes_2d``. One call, three outcomes, none of them the request.
+
+        ``structure`` is the one that carries it: re-casting it alone restores the born
+        solver's answer bit for bit on both NumPy and Torch, while ``period`` or ``psi`` alone
+        restores neither. They are still rebuilt here, because "the attribute reads back at
+        the width you asked for" is the contract, and an attribute whose staleness happens to
+        be absorbed downstream today is a defect waiting for the path that does not absorb it.
+
+        ``psi`` is assigned privately and cast by hand, which looks like an oversight and is
+        not. The public setter calls ``_psi_set_explicitly``, which would (a) flip
+        ``_psi_given`` from False to True on a solver whose ``psi`` came from the 45-degree
+        default, silently converting a derived value into a declared one, and (b) *raise*
+        outright once ``polarization`` or ``tetm`` is set. The copies knew this and wrote
+        ``self._psi = self.psi`` -- which reads the property and writes it straight back, so it
+        re-cast nothing at all. Same object before and after, on every backend.
+        """
+        self.theta = self.theta
+        self.phi = self.phi
+        if self._psi is not None:
+            self._psi = self._as_real_angle(self._psi)
+        self.truncation_order = self.truncation_order
+        self.period = self.period
+        self.thickness = self.thickness
+        # Guarded because `_structure` is set by the `RCWA*` subclass, after `_BaseRCWA`.
+        if getattr(self, '_structure', None) is not None:
+            self.structure = self.structure
+        if getattr(self, 'modeler', None) is not None:
+            self.modeler.complex_dtype = self._complex_dtype
+
     # ------------------------------------------------------------- the cell and the stack
     #
     # One copy each. These were three, differing in which constructor built the array --

@@ -2,8 +2,6 @@ import numpy as np
 import array_api_compat.numpy as _xp
 
 from ..._core.engine import CoreSolveMixin
-from wavebit._core import conventions as _conventions
-from wavebit._core.backend import check_input_precision
 
 
 class _BaseRCWA(CoreSolveMixin):
@@ -24,18 +22,10 @@ class _BaseRCWA(CoreSolveMixin):
 
         self._device = 0
 
-        # complex_dtype
-        self._complex_dtype: type
-        if complex_dtype in (0, np.complex128):
-            self._complex_dtype = np.complex128
-        elif complex_dtype in (1, np.complex64):
-            self._complex_dtype = np.complex64
-        else:
-            raise ValueError('Numpy complex_dtype')
-
-        # currently these two are not used. Only the torch backend uses them.
-        self._float_dtype = np.float64 if self.complex_dtype is not np.complex64 else np.float32
-        self._int_dtype = np.int64 if self.complex_dtype is not np.complex64 else np.int32
+        # The width, once. `_resolve_precision` is in `_core`; it is not the setter, because
+        # the setter re-casts every stored array and none of them exist yet.
+        self._complex_dtype, self._float_dtype, self._int_dtype = (
+            self._resolve_precision(complex_dtype))
 
         # Materials in, an index out: the two setters store the Material and derive the
         # `sqrt(eps*mu)` every solve reads. See `CoreSolveMixin.top`.
@@ -72,41 +62,6 @@ class _BaseRCWA(CoreSolveMixin):
     @device.setter
     def device(self, device):
         print('The NumPy backend runs on CPU only.')
-
-    @property
-    def complex_dtype(self):
-        return self._complex_dtype
-
-    @complex_dtype.setter
-    def complex_dtype(self, complex_dtype):
-        if complex_dtype == 0:
-            self._complex_dtype = np.complex128
-        elif complex_dtype == 1:
-            self._complex_dtype = np.complex64
-        elif complex_dtype in (np.complex128, np.complex64):
-            self._complex_dtype = complex_dtype
-        else:
-            raise ValueError
-
-        self._float_dtype = np.float64 if self.complex_dtype is not np.complex64 else np.float32
-        self._int_dtype = np.int64 if self.complex_dtype is not np.complex64 else np.int32
-        self.theta = self.theta
-        self.phi = self.phi
-        self._psi = self.psi
-
-        self.truncation_order = self.truncation_order
-        self.thickness = self.thickness
-
-        if hasattr(self, 'modeler') and self.modeler is not None:
-            self.modeler.complex_dtype = self._complex_dtype
-
-    @property
-    def float_dtype(self):
-        return self._float_dtype
-
-    @property
-    def int_dtype(self):
-        return self._int_dtype
 
     def _separable_kxy(self, wavelength):
         (cx, hx), (cy, hy) = self.order_window

@@ -243,6 +243,102 @@ def test_the_declared_width_is_the_width_answered_in(case):
         assert np.asarray(T).dtype == want, (complex_dtype, case)
 
 
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+def test_reassigning_the_width_gives_the_solver_it_would_have_been_born_as(backend):
+    """`complex_dtype` is settable, and setting it used to build a third kind of solver.
+
+    The setter re-casts the stored arrays so the whole scene moves together, and three of them
+    were missing from that list: `period` and `structure` were never rebuilt, and `psi`'s line
+    was `self._psi = self.psi`, which reads the property and writes it back unchanged. The
+    result was one call with three outcomes -- NumPy and JAX solved at a mixed width and
+    answered (R + T = 0.999999944824 against a born solver's 1.0000000), while Torch raised
+    `expected m1 and m2 to have the same dtype` from inside `layer_modes_2d`.
+
+    Nothing covered it: no test in the suite assigns `complex_dtype` after construction, so the
+    cascade -- which exists for nothing else -- was never once executed.
+
+    Both halves are asserted. The dtype of each attribute, because that is the contract; and
+    the solve, bit for bit, because the attributes are what the solve is built from. The two
+    are not redundant: `structure` alone carries the numerical difference here, and a test that
+    checked only the answer would have passed while `period` and `psi` stayed stale.
+
+    A raster, and only a raster, because single precision does not reach the other modeling
+    paths at all -- and that is older and larger than this test. `engine.py`'s smooth-shape
+    branch passes `complex_dtype=xp.complex128` literally while `self.complex_dtype` is in
+    scope, and the block modeller's `block_per_layer_numeric` defaults `x64=True` with a TODO
+    above it saying so. Measured on both: at `complex_dtype=1` the shape and block paths return
+    float64 on NumPy and JAX, and Torch raises `expected m1 and m2 to have the same dtype` --
+    when *born* at single precision, not merely when switched. Extending this test to those
+    paths is the check that the fix has landed, not a check that can pass first.
+    """
+    if backend == 1:
+        pytest.importorskip('jax')
+    elif backend == 2:
+        pytest.importorskip('torch')
+    cfg = dict(backend=backend, structure=np.ones((1, 4, 4)) * 2.0, truncation_order=(2, 2),
+               wavelength=620., top=1.0, bot=1.0, period=[400.0, 500.0], thickness=[150.0],
+               theta=0.3, phi=0.4, psi=0.2)
+    born = wavebit.rcwa(complex_dtype=1, **cfg)
+    moved = wavebit.rcwa(complex_dtype=0, **cfg)
+    moved.complex_dtype = 1
+
+    def dtype_of(v):
+        return str(np.asarray(v.detach() if hasattr(v, 'detach') else v).dtype)
+
+    for name in ('period', 'thickness', 'theta', 'phi', 'psi'):
+        assert dtype_of(getattr(moved, name)) == dtype_of(getattr(born, name)), name
+    assert dtype_of(moved.structure) == dtype_of(born.structure)
+    assert moved.float_dtype is born.float_dtype and moved.int_dtype is born.int_dtype
+
+    a, b = born.solve(), moved.solve()
+    for x, y, name in ((a.R, b.R, 'R'), (a.T, b.T, 'T')):
+        assert np.array_equal(np.asarray(x), np.asarray(y)), name
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+def test_a_dtype_instance_and_a_dtype_class_choose_the_same_three_widths(backend):
+    """The three widths are chosen together, because deriving them apart went wrong.
+
+    Each backend used to accept a spelling with `==` (inside an `in` test) and then derive the
+    float and int companions with `is not`. Those two disagree for exactly one input:
+    `np.dtype('complex64') == np.complex64` is True and `is` is False. So a `np.dtype` instance
+    was accepted, selected complex64 arithmetic, and paired it with `float64` and `int64` --
+    a mixed width, chosen silently, that nothing downstream could report.
+    """
+    if backend == 1:
+        pytest.importorskip('jax')
+    elif backend == 2:
+        pytest.importorskip('torch')
+    cfg = dict(backend=backend, structure=np.ones((1, 4, 4)), truncation_order=(1, 1),
+               wavelength=620., top=1.0, bot=1.0, period=[400.0, 400.0], thickness=[150.0])
+    for narrow, spellings in ((True, (1, np.complex64, np.dtype('complex64'))),
+                              (False, (0, np.complex128, np.dtype('complex128')))):
+        ref = wavebit.rcwa(complex_dtype=(1 if narrow else 0), **cfg)
+        # The namespace's own spelling too -- what the solver reports has to be accepted back.
+        # It is the only term that is load-bearing on Torch alone: `jnp.complex64` compares
+        # equal to `np.complex64` and `torch.complex64` does not, so dropping `xp.complex64`
+        # from the accepted set is invisible on two backends and refuses every native spelling
+        # on the third. Measured; it is why this loop reads `ref.complex_dtype` rather than
+        # listing three literals.
+        for spelling in (*spellings, ref.complex_dtype):
+            got = wavebit.rcwa(complex_dtype=spelling, **cfg)
+            assert got.complex_dtype is ref.complex_dtype, spelling
+            assert got.float_dtype is ref.float_dtype, spelling
+            assert got.int_dtype is ref.int_dtype, spelling
+        # and that the narrow width really is narrow, read off an array the solver built
+        want = 4 if narrow else 8
+        assert np.asarray(ref.period).dtype.itemsize == want
+        assert np.asarray(ref.theta).dtype.itemsize == 2 * want
+
+
+def test_an_unrecognised_width_is_refused_by_name():
+    """One message for all three, where there were three (and one of them was empty)."""
+    with pytest.raises(ValueError, match=r'complex_dtype'):
+        wavebit.rcwa(backend=0, structure=np.ones((1, 4, 4)), truncation_order=(1, 1),
+                     wavelength=620., top=1.0, bot=1.0, period=[400.0, 400.0],
+                     thickness=[150.0], complex_dtype=np.float64)
+
 # ------------------------------------------------ the clamp that was three bodies and one lie
 
 #: `theta` values the incident wavevector has to survive, including the two the clamp exists

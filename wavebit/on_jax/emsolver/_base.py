@@ -1,13 +1,9 @@
-import functools
 import jax
 
 import jax.numpy as jnp
 import jax.numpy as _xp
-import numpy as np
 
 from ..._core.engine import CoreSolveMixin, device_scoped
-from wavebit._core import conventions as _conventions
-from wavebit._core.backend import check_input_precision
 
 
 class _BaseRCWA(CoreSolveMixin):
@@ -42,17 +38,10 @@ class _BaseRCWA(CoreSolveMixin):
 
         self.device = device
 
-        # complex_dtype
-        if complex_dtype in (0, jnp.complex128, np.complex128):
-            self._complex_dtype = jnp.complex128
-        elif complex_dtype in (1, jnp.complex64, np.complex64):
-            self._complex_dtype = jnp.complex64
-        else:
-            raise ValueError('JAX complex_dtype')
-
-        # currently these two are not used. Only the torch backend uses them.
-        self._float_dtype = jnp.float64 if self._complex_dtype is not jnp.complex64 else jnp.float32
-        self._int_dtype = jnp.int64 if self._complex_dtype is not jnp.complex64 else jnp.int32
+        # The width, once. `_resolve_precision` is in `_core`; it is not the setter, because
+        # the setter re-casts every stored array and none of them exist yet.
+        self._complex_dtype, self._float_dtype, self._int_dtype = (
+            self._resolve_precision(complex_dtype))
 
         # Materials in, an index out: the two setters store the Material and derive the
         # `sqrt(eps*mu)` every solve reads. See `CoreSolveMixin.top`.
@@ -104,40 +93,6 @@ class _BaseRCWA(CoreSolveMixin):
             self._device = list(device)
         else:
             raise ValueError(f'unsupported jax device: {device!r}')
-
-    @property
-    def complex_dtype(self):
-        return self._complex_dtype
-
-    @complex_dtype.setter
-    def complex_dtype(self, complex_dtype):
-        # complex_dtype
-        if complex_dtype in (0, jnp.complex128, np.complex128):
-            self._complex_dtype = jnp.complex128
-        elif complex_dtype in (1, jnp.complex64, np.complex64):
-            self._complex_dtype = jnp.complex64
-        else:
-            raise ValueError('JAX complex_dtype')
-
-        self._float_dtype = jnp.float64 if self.complex_dtype is not jnp.complex64 else jnp.float32
-        self._int_dtype = jnp.int64 if self.complex_dtype is not jnp.complex64 else jnp.int32
-        self.theta = self.theta
-        self.phi = self.phi
-        self._psi = self.psi
-
-        self.truncation_order = self.truncation_order
-        self.thickness = self.thickness
-
-        if hasattr(self, 'modeler') and self.modeler is not None:
-            self.modeler.complex_dtype = self._complex_dtype
-
-    @property
-    def float_dtype(self):
-        return self._float_dtype
-
-    @property
-    def int_dtype(self):
-        return self._int_dtype
 
     @device_scoped
     def _separable_kxy(self, wavelength):

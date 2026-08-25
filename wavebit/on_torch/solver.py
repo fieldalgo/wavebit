@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 
 from .emsolver.rcwa import RCWATorch
 from .optimizer.optimizer import OptimizerTorch
@@ -18,17 +17,9 @@ class SolverTorch(RCWATorch, OptimizerTorch):
             self._device = device
         else:
             raise ValueError('device')
-        #
-        # complex_dtype
-        if complex_dtype in (0, torch.complex128, np.complex128):
-            self._complex_dtype = torch.complex128
-        elif complex_dtype in (1, torch.complex64, np.complex64):
-            self._complex_dtype = torch.complex64
-        else:
-            raise ValueError('Torch complex_dtype')
-        self._float_dtype = (torch.float64 if self._complex_dtype is not torch.complex64
-                             else torch.float32)
-        self._int_dtype = torch.int64 if self._complex_dtype is not torch.complex64 else torch.int32
+        # The `complex_dtype` block that used to sit here was the seventh copy of the width
+        # resolution and it was dead: `RCWATorch.__init__` below reaches `_BaseRCWA.__init__`,
+        # which resolves the width again, and nothing between the two reads a dtype.
         self.device = device
 
         RCWATorch.__init__(self, device=device, complex_dtype=complex_dtype, *args, **kwargs)
