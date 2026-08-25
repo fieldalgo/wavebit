@@ -5,7 +5,8 @@ import jax.numpy as jnp
 
 from functools import partial
 
-from ._base import _BaseRCWA, jax_device_set
+from ..._core.engine import device_scoped
+from ._base import _BaseRCWA
 from ..._core.engine import CoreFactorizationMixin, _refuse_retired
 from ..._core.enums import Formulation
 from ..._core.fields import (field_1d, field_1d_conical, field_2d, field_2d_4ff,
@@ -181,7 +182,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
             raise ValueError(f'{where}: unsupported dtype {grid.dtype}')
         return jnp.asarray(grid, dtype=dtype)
 
-    @jax_device_set
+    @device_scoped
     def solve_conv(self, epx_conv_all, epy_conv_all, epz_conv_i_all,
                    epxy_conv_all=None, epyx_conv_all=None,
                    epxz_conv_all=None, epyz_conv_all=None,
@@ -241,7 +242,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         return result
 
 
-    @jax_device_set
+    @device_scoped
     def reconstruct_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('given',)):
         """Reconstruct the field from the state left behind by the last solve.
 
@@ -326,7 +327,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
 
     @partial(jax.jit, static_argnums=(1, 2, 3, 4, 5),
              static_argnames=('sample_x', 'sample_y', 'sample_z', 'incidences', 'geometry'))
-    @jax_device_set
+    @device_scoped
     def solve_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('given',),
                     geometry=None, **kwargs):
         """Solve and reconstruct the field in one jit-compiled call.
@@ -366,7 +367,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         field_cell = self.reconstruct_field(sample_x, sample_y, sample_z, incidences)
         return res, field_cell
 
-    @jax_device_set
+    @device_scoped
     def solve_field_eager(self, sample_x=20, sample_y=20, sample_z=20,
                           incidences=('given',), geometry=None):
         """Eager solve-and-field. ``geometry`` is optional: omit it and each discrete decision

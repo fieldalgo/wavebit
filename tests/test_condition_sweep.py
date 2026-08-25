@@ -344,3 +344,51 @@ def test_a_theta_past_grazing_saturates(imag):
         return complex(np.asarray(solver._incident_kxy(WL)[0]))
     if imag != 0.0:
         assert abs(_at(imag) - _at(0.0)) > 1e-6, (imag, _at(imag), _at(0.0))
+
+
+# --------------------------------------------------- the scope no digest on this machine sees
+
+def test_every_backend_declares_where_its_arrays_are_placed():
+    """`_device_scope` is a declared member, and that is the whole point of it.
+
+    JAX is told where to build things by `jax.default_device`, which is a *scope* rather than
+    an argument -- so five methods carried a `@jax_device_set` decorator that named
+    `jax.default_device` directly. All five have counterparts on the other two backends, so the
+    decorator had to stop belonging to one backend before those bodies could become one body.
+
+    A missing device scope is invisible in every other check here. Everything still computes,
+    on the wrong device, and the 96-scene digest is CPU-only on this machine -- it cannot tell
+    a scoped call from an unscoped one. So the contract is asserted directly: every backend
+    answers `_device_scope()` with a context manager, and the five methods that need one carry
+    the decorator that opens it.
+
+    `self.device` is a list on JAX (`jax.devices('cpu')`) and a scalar elsewhere, which is why
+    this is an override rather than a value the base could hold.
+    """
+    import contextlib
+    import inspect
+
+    scoped = ('solve_conv', 'reconstruct_field', 'solve_field', 'solve_field_eager',
+              '_separable_kxy')
+
+    for backend in (0, 1, 2):
+        solver = wavebit.rcwa(backend=backend, structure=np.ones((1, 4, 4)), period=[P, P],
+                              truncation_order=[1, 1], thickness=[H], wavelength=WL,
+                              top=1.0, bot=1.0)
+        scope = solver._device_scope()
+        assert hasattr(scope, '__enter__') and hasattr(scope, '__exit__'), (backend, scope)
+        with scope:                                    # it has to be usable, not merely typed
+            pass
+
+    jax_solver = wavebit.rcwa(backend=1, structure=np.ones((1, 4, 4)), period=[P, P],
+                              truncation_order=[1, 1], thickness=[H], wavelength=WL,
+                              top=1.0, bot=1.0)
+    assert not isinstance(jax_solver._device_scope(), contextlib.nullcontext), (
+        'the JAX override is gone: its scope is the only one that does anything, and a '
+        '`nullcontext` here means every array is placed wherever JAX defaults to.')
+
+    for name in scoped:
+        method = inspect.unwrap(getattr(type(jax_solver), name))
+        assert method is not getattr(type(jax_solver), name), (
+            f'{name} is not wrapped: it needs `@device_scoped`, and without it JAX builds its '
+            f'arrays outside the solver\'s device scope.')

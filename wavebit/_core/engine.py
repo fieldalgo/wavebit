@@ -9,6 +9,9 @@ without touching the public API.
 Because the core is backend-agnostic, one mixin serves NumPy, JAX and PyTorch alike; the
 per-backend ``transfer_method`` chains it replaces existed in triplicate.
 """
+import contextlib as _contextlib
+import functools as _functools
+
 import numpy as _np
 
 from . import analytic as _analytic
@@ -330,6 +333,25 @@ _COMPLEX_PSI = (
 #: backend's own namespace was the reason the method looked as though it had to live there.
 _HALF_PI_F32 = float(_np.float32(_np.pi / 2))
 _HALF_PI_F32_BELOW = float(_np.nextafter(_np.float32(_np.pi / 2), _np.float32(0)))
+
+
+def device_scoped(func):
+    """Run ``func`` inside the solver's own device scope.
+
+    Replaces a `jax_device_set` that lived in `on_jax` and named `jax.default_device`
+    directly. The five methods it decorates all have counterparts on the other two backends,
+    so the decorator has to stop being one backend's before those bodies can become one body.
+
+    The scope itself is :meth:`CoreSolveMixin._device_scope`, which is a declared member: the
+    base answers `nullcontext` and JAX overrides it. Declared rather than duck-typed because a
+    missing device scope is invisible -- everything still computes, on the wrong device, and a
+    CPU-only test machine cannot tell the difference.
+    """
+    @_functools.wraps(func)
+    def wrapped(self, *args, **kwargs):
+        with self._device_scope():
+            return func(self, *args, **kwargs)
+    return wrapped
 
 
 class CoreSolveMixin:
@@ -972,6 +994,15 @@ class CoreSolveMixin:
         # exactly why that flag is aux_data. Nothing here needed building; this line needed
         # calling.
         return _lattice.as_lattice(period=self.period)
+
+    def _device_scope(self):
+        """Where this solver's arrays are placed, as a context manager.
+
+        `nullcontext` on every backend that does not need one -- NumPy has no device and
+        Torch places tensors at creation. JAX overrides it, because `jax.default_device` is
+        the only way to say it there and the answer is scoped rather than an argument.
+        """
+        return _contextlib.nullcontext()
 
     def _incident_kxy(self, wavelength):
         """The incident in-plane wavevector, ``(k_inc_x, k_inc_y)``, normalized by ``k0``.

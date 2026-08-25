@@ -5,20 +5,9 @@ import jax.numpy as jnp
 import jax.numpy as _xp
 import numpy as np
 
-from ..._core.engine import CoreSolveMixin
+from ..._core.engine import CoreSolveMixin, device_scoped
 from wavebit._core import conventions as _conventions
 from wavebit._core.backend import check_input_precision
-
-
-def jax_device_set(func):
-    @functools.wraps(func)
-    def wrap(*args, **kwargs):
-        self, *_ = args
-        with jax.default_device(self.device[0]):
-            res = func(*args, **kwargs)
-            return res
-
-    return wrap
 
 
 class _BaseRCWA(CoreSolveMixin):
@@ -30,6 +19,15 @@ class _BaseRCWA(CoreSolveMixin):
     #: already knows which namespace it is; asking it is cheaper than deciding again, and it
     #: keeps `_core` from naming an optional dependency.
     xp = _xp
+
+    def _device_scope(self):
+        """`jax.default_device`, which is how JAX is told where to place what it builds.
+
+        `self.device` is a *list* here -- `jax.devices('cpu')` -- so it is indexed. That is
+        the one thing about it that is not obvious, and it is why this is an override rather
+        than a value the base could hold.
+        """
+        return jax.default_device(self.device[0])
 
 
     def __init__(self, top=1., bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None,
@@ -262,7 +260,7 @@ class _BaseRCWA(CoreSolveMixin):
             raise ValueError
 
 
-    @jax_device_set
+    @device_scoped
     def _separable_kxy(self, wavelength):
         (cx, hx), (cy, hy) = self.order_window
 
