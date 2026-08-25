@@ -109,62 +109,6 @@ class _BaseRCWA(CoreSolveMixin):
         return self._int_dtype
 
     @property
-    def theta(self):
-        return self._theta
-
-    @theta.setter
-    def theta(self, theta):
-        if theta is None:
-            self._theta = None
-        else:
-            check_input_precision('theta', theta, self.complex_dtype)
-            self._theta = np.array(theta, dtype=self.complex_dtype)
-
-    @property
-    def phi(self):
-        return self._phi
-
-    @phi.setter
-    def phi(self, phi):
-        if phi is None:
-            self._phi = None
-        else:
-            check_input_precision('phi', phi, self.complex_dtype)
-            self._phi = np.array(phi, dtype=self.complex_dtype)
-
-    @property
-    def psi(self):
-        return self._psi
-
-    @psi.setter
-    def psi(self, psi):
-        if psi is not None:
-            self._psi_set_explicitly()
-            self._reject_complex_angle(psi)
-            # Real dtype, unlike `theta`: a complex theta means evanescent incidence and is
-            # a feature, while a complex psi is only ever the mistake `_reject_complex_angle`
-            # describes. Storing it real is what lets the refusal read a dtype, and it keeps
-            # the autodiff leaf real — the imaginary direction it used to carry was the
-            # unnormalized cosh path, not physics.
-            self._psi = np.array(np.real(psi), dtype=self.float_dtype)
-
-    def _as_complex(self, value):
-        """An incident amplitude in the solve's complex dtype."""
-        return np.array(value, dtype=self.complex_dtype)
-
-    def _as_real_angle(self, value):
-        """An angle in the real dtype — the storage `chi` shares with `psi`."""
-        return np.array(np.real(value), dtype=self.float_dtype)
-
-    def _default_psi(self):
-        """Pure s, applied when no incidence was named and none was declared away.
-
-        Not marked as *given*, so ``polarization`` may still be assigned afterwards — the
-        same courtesy the retired ``pol``-derived ``psi`` had.
-        """
-        self._psi = np.array(np.pi / 2, dtype=self.float_dtype)
-
-    @property
     def truncation_order(self):
         return self._max_order
 

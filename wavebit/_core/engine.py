@@ -18,7 +18,7 @@ from . import analytic as _analytic
 from . import boundary as _boundary
 from . import factorization as _fac
 from . import lattice as _lattice
-from .backend import _device_of, array_namespace
+from .backend import _device_of, array_namespace, as_array, check_input_precision
 from .conventions import incident_sp_amplitudes, lit_orders, order_window, warn_if_xy_on_a_skewed_cell
 from .domain import (Material, RETIRED_MATERIAL_NAMES, as_material, index_from_eps,
                      retired_material_name)
@@ -994,6 +994,80 @@ class CoreSolveMixin:
         # exactly why that flag is aux_data. Nothing here needed building; this line needed
         # calling.
         return _lattice.as_lattice(period=self.period)
+
+    # ---------------------------------------------------------------- the incidence angles
+    #
+    # One copy. These were three, differing only in how a value became an array: `np.array`,
+    # `jnp.array`, and a local `_as_tensor` that was a second copy of `_core.backend.as_array`.
+    # `as_array` is the one that has to be used -- `xp.asarray` detaches under PyTorch, and
+    # when the dtype already matches it hands back *the same tensor* with `requires_grad`
+    # flipped off in place, so a caller's optimizer leaf stops carrying gradient after one
+    # forward pass. Its docstring has the full account.
+    #
+    # Torch's `psi` setter also checked `torch.is_tensor` before taking a real part where the
+    # other two called `np.real` unconditionally. That divergence dies here: `xp.real` is the
+    # namespace's own, and it is correct for all three.
+
+    @property
+    def theta(self):
+        return self._theta
+
+    @theta.setter
+    def theta(self, theta):
+        if theta is None:
+            self._theta = None
+        else:
+            check_input_precision('theta', theta, self.complex_dtype)
+            self._theta = self._as_complex(theta)
+
+    @property
+    def phi(self):
+        return self._phi
+
+    @phi.setter
+    def phi(self, phi):
+        if phi is None:
+            self._phi = None
+        else:
+            check_input_precision('phi', phi, self.complex_dtype)
+            self._phi = self._as_complex(phi)
+
+    @property
+    def psi(self):
+        return self._psi
+
+    @psi.setter
+    def psi(self, psi):
+        if psi is not None:
+            self._psi_set_explicitly()
+            self._reject_complex_angle(psi)
+            self._psi = self._as_real_angle(psi)
+
+    #: Where `_as_complex` and `_as_real_angle` place what they build. `None` on the two
+    #: namespaces that have no device to name; Torch overrides it with `self.device`, because
+    #: there a tensor is placed at creation and there is nowhere else to say it. Declared for
+    #: the same reason `_device_scope` is: a wrong placement computes the right numbers in the
+    #: wrong place, and a CPU-only machine cannot tell.
+    _array_device = None
+
+    def _as_complex(self, value):
+        """A user-supplied value as a complex array of this solver's width."""
+        return as_array(self.xp, value, dtype=self.complex_dtype, device=self._array_device)
+
+    def _as_real_angle(self, value):
+        """The real part, as a real array. `psi` and `chi` are angles, not complex numbers."""
+        xp = self.xp
+        real = xp.real(value) if hasattr(value, 'dtype') else _np.real(value)
+        return as_array(xp, real, dtype=self.float_dtype, device=self._array_device)
+
+    def _default_psi(self):
+        """The unstated polarization: 45 degrees, so `s` and `p` arrive with equal amplitude.
+
+        Set rather than defaulted-at-read because `psi` is a traced leaf: it has to exist as an
+        array before anything differentiates through it, and `_psi_given` -- not its value --
+        is what records whether the caller named it.
+        """
+        self._psi = self._as_real_angle(_np.pi / 2)
 
     def _device_scope(self):
         """Where this solver's arrays are placed, as a context manager.

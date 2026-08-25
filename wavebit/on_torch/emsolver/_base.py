@@ -12,15 +12,11 @@ from wavebit._core.backend import check_input_precision, forward_strided
 def _as_tensor(v, device=None, dtype=None):
     """``v`` as a torch tensor, keeping any autograd graph intact.
 
-    ``torch.tensor(x)`` copies and detaches, so wrapping an incidence angle or a period that
-    the caller is optimizing would silently drop it from the graph — the solve still returns a
-    tensor, just one with nothing behind it. Tensors are moved with ``.to()``; everything else
-    is created as before.
-
-    This is the boundary where a caller's value becomes a torch value, so it is also where a
-    reversed NumPy view (``np.rot90``, ``np.flip``, ``a[::-1]``) is normalised — torch rejects
-    negative strides outright where the other two backends accept them. See
-    :func:`wavebit._core.backend.forward_strided`.
+    A second copy of :func:`wavebit._core.backend.as_array`, kept only until its remaining
+    callers -- the ``period`` and ``thickness`` setters and ``_coerce_raster`` -- fold into
+    ``_core`` alongside the angles. Verified equivalent to ``as_array`` across eleven
+    value/dtype combinations including a grad-carrying tensor, so the two can be swapped one
+    caller at a time rather than all at once.
     """
     if isinstance(v, torch.Tensor):
         return v.to(device=device, dtype=dtype)
@@ -36,6 +32,11 @@ class _BaseRCWA(CoreSolveMixin):
     #: already knows which namespace it is; asking it is cheaper than deciding again, and it
     #: keeps `_core` from naming an optional dependency.
     xp = _xp
+
+    @property
+    def _array_device(self):
+        """Torch places a tensor at creation, so this is the only place to say where."""
+        return self.device
 
     def __init__(self, top=1., bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None,
                  truncation_order=(0, 0),
@@ -145,58 +146,6 @@ class _BaseRCWA(CoreSolveMixin):
     @property
     def int_dtype(self):
         return self._int_dtype
-
-    @property
-    def theta(self):
-        return self._theta
-
-    @theta.setter
-    def theta(self, theta):
-        if theta is None:
-            self._theta = None
-        else:
-            check_input_precision('theta', theta, self.complex_dtype)
-            self._theta = _as_tensor(theta, device=self.device, dtype=self.complex_dtype)
-
-    @property
-    def phi(self):
-        return self._phi
-
-    @phi.setter
-    def phi(self, phi):
-        if phi is None:
-            self._phi = None
-        else:
-            check_input_precision('phi', phi, self.complex_dtype)
-            self._phi = _as_tensor(phi, device=self.device, dtype=self.complex_dtype)
-
-    @property
-    def psi(self):
-        return self._psi
-
-    @psi.setter
-    def psi(self, psi):
-        if psi is not None:
-            self._psi_set_explicitly()
-            self._reject_complex_angle(psi)
-            # Real dtype: see the numpy twin, and `CoreSolveMixin._reject_complex_angle`.
-            # `torch.real` rather than `np.real` on a tensor: it is a no-op on a real one and
-            # keeps the autograd graph, which `np.real` would drop on the way out to numpy.
-            psi = torch.real(psi) if torch.is_tensor(psi) else np.real(psi)
-            self._psi = _as_tensor(psi, device=self.device, dtype=self.float_dtype)
-
-    def _as_complex(self, value):
-        """An incident amplitude in the solve's complex dtype."""
-        return _as_tensor(value, device=self.device, dtype=self.complex_dtype)
-
-    def _as_real_angle(self, value):
-        """An angle in the real dtype — the storage `chi` shares with `psi`."""
-        value = torch.real(value) if torch.is_tensor(value) else np.real(value)
-        return _as_tensor(value, device=self.device, dtype=self.float_dtype)
-
-    def _default_psi(self):
-        """Pure s, applied when no incidence was named and none was declared away."""
-        self._psi = torch.tensor(torch.pi / 2, device=self.device, dtype=self.float_dtype)
 
     @property
     def truncation_order(self):

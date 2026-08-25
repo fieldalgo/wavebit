@@ -136,54 +136,6 @@ class _BaseRCWA(CoreSolveMixin):
         return self._int_dtype
 
     @property
-    def theta(self):
-        return self._theta
-
-    @theta.setter
-    def theta(self, theta):
-        if theta is None:
-            self._theta = None
-        else:
-            check_input_precision('theta', theta, self.complex_dtype)
-            self._theta = jnp.array(theta, dtype=self.complex_dtype)
-
-    @property
-    def phi(self):
-        return self._phi
-
-    @phi.setter
-    def phi(self, phi):
-        if phi is None:
-            self._phi = None
-        else:
-            check_input_precision('phi', phi, self.complex_dtype)
-            self._phi = jnp.array(phi, dtype=self.complex_dtype)
-
-    @property
-    def psi(self):
-        return self._psi
-
-    @psi.setter
-    def psi(self, psi):
-        if psi is not None:
-            self._psi_set_explicitly()
-            self._reject_complex_angle(psi)
-            # Real dtype: see the numpy twin, and `CoreSolveMixin._reject_complex_angle`.
-            self._psi = jnp.array(jnp.real(psi), dtype=self.float_dtype)
-
-    def _as_complex(self, value):
-        """An incident amplitude in the solve's complex dtype."""
-        return jnp.array(value, dtype=self.complex_dtype)
-
-    def _as_real_angle(self, value):
-        """An angle in the real dtype — the storage `chi` shares with `psi`."""
-        return jnp.array(jnp.real(value), dtype=self.float_dtype)
-
-    def _default_psi(self):
-        """Pure s, applied when no incidence was named and none was declared away."""
-        self._psi = jnp.array(jnp.pi / 2, dtype=self.float_dtype)
-
-    @property
     def truncation_order(self):
         return self._max_order
 
