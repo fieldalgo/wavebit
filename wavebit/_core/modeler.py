@@ -775,7 +775,7 @@ class Modeling:
         if record is not None:
             record.append(choice)
 
-    def _replay_grid(self, xp, dev, datatype, F, C, pmtvy_base, obj_list, plan):
+    def _replay_grid(self, xp, dev, F, C, pmtvy_base, obj_list, plan):
         """Build the layer from a recorded :class:`VectorGridPlan`, comparing nothing.
 
         The edge *values* are still the traced ones — they are gathered from the blocks the
@@ -789,7 +789,7 @@ class Modeling:
 
         def edge_of(source, is_row):
             if source is None:                       # the closing period line
-                return _cast(xp, xp.reshape(period[1 if is_row else 0], (1,)), datatype, dev)
+                return _cast(xp, xp.reshape(period[1 if is_row else 0], (1,)), C, dev)
             obj_index, corner, axis = source
             return obj_list[obj_index][corner][axis]
 
@@ -799,18 +799,18 @@ class Modeling:
         _check_plan_still_fits(xp, row_list, col_list)
 
         n_row, n_col = len(row_list), len(col_list)
-        block_cell = xp.ones((n_row, n_col), dtype=datatype, device=dev) * pmtvy_base
+        block_cell = xp.ones((n_row, n_col), dtype=C, device=dev) * pmtvy_base
         rows = xp.arange(n_row, device=dev)
         cols = xp.arange(n_col, device=dev)
 
         for obj, (row_begin, row_end, col_begin, col_end) in zip(obj_list, plan.ranges):
             mask = (xp.reshape((rows >= row_begin) & (rows < row_end), (-1, 1))
                     & xp.reshape((cols >= col_begin) & (cols < col_end), (1, -1)))
-            block_cell = xp.where(mask, _cast(xp, obj[2], datatype, dev), block_cell)
+            block_cell = xp.where(mask, _cast(xp, obj[2], C, dev), block_cell)
 
         return block_cell, _edge_list(xp, col_list, F, C, dev), _edge_list(xp, row_list, F, C, dev)
 
-    def block_per_layer_numeric(self, layer_info, x64=True, plan=None):
+    def block_per_layer_numeric(self, layer_info, plan=None):
         """Reduce one layer's block list to ``(cell, edges_u, edges_v)``.
 
         Every distinct block edge becomes a grid line, and blocks that meet at a coordinate
@@ -837,13 +837,18 @@ class Modeling:
                       self._period)
         dev = self._dev(*[c for obj in obj_list for corner in obj[:2] for c in corner])
 
-        # TODO: activate and apply 'x64' option thru this function and connect to the solver class.
-        datatype = xp.complex128 if x64 else xp.complex64
-
+        # `C` is the declared width, and it is what the cell is built at. This read
+        # `xp.complex128 if x64 else xp.complex64`, with `x64=True` defaulted and no
+        # caller ever passing it, under a TODO reading "activate and apply 'x64' option
+        # thru this function and connect to the solver class". The connection was already
+        # there -- `_double` is set from `complex_dtype` by this class's own setter, and
+        # the solver pushes its width to the modeler -- so the option was not unconnected.
+        # It was unread, and a `complex_dtype=1` block layer was built at double all the
+        # same, which then met a single-precision k-grid downstream.
         F, C = self._float(xp), self._complex(xp)
 
         if plan is not None:
-            return self._replay_grid(xp, dev, datatype, F, C, pmtvy_base, obj_list, plan)
+            return self._replay_grid(xp, dev, F, C, pmtvy_base, obj_list, plan)
 
         # Griding
         row_list = []
@@ -895,10 +900,10 @@ class Modeling:
         period = _cast(xp, self.period, self._float(xp), dev)
 
         if not row_list or bool(row_list[-1] != period[1]):
-            row_list.append(_cast(xp, xp.reshape(period[1], (1,)), datatype, dev))
+            row_list.append(_cast(xp, xp.reshape(period[1], (1,)), C, dev))
             row_src.append(None)
         if not col_list or bool(col_list[-1] != period[0]):
-            col_list.append(_cast(xp, xp.reshape(period[0], (1,)), datatype, dev))
+            col_list.append(_cast(xp, xp.reshape(period[0], (1,)), C, dev))
             col_src.append(None)
 
         if row_list and bool(row_list[0] == 0):
@@ -907,7 +912,7 @@ class Modeling:
             col_list, col_src = col_list[1:], col_src[1:]
 
         n_row, n_col = len(row_list), len(col_list)
-        block_cell = xp.ones((n_row, n_col), dtype=datatype, device=dev) * pmtvy_base
+        block_cell = xp.ones((n_row, n_col), dtype=C, device=dev) * pmtvy_base
 
         rows = xp.arange(n_row, device=dev)
         cols = xp.arange(n_col, device=dev)
@@ -927,7 +932,7 @@ class Modeling:
             # through it is not, and stays differentiable.
             mask = (xp.reshape((rows >= row_begin) & (rows < row_end), (-1, 1))
                     & xp.reshape((cols >= col_begin) & (cols < col_end), (1, -1)))
-            block_cell = xp.where(mask, _cast(xp, pmty, datatype, dev), block_cell)
+            block_cell = xp.where(mask, _cast(xp, pmty, C, dev), block_cell)
 
         self._last_plan = VectorGridPlan(row_sources=tuple(row_src), col_sources=tuple(col_src),
                                         ranges=tuple(ranges))

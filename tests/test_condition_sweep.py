@@ -228,19 +228,56 @@ def test_the_backends_agree(case):
                 (backend, name, case)
 
 
+@pytest.mark.parametrize('build', [scene, shape_scene], ids=['raster', 'shapes'])
 @pytest.mark.parametrize('case', CASES, ids=IDS)
-def test_the_declared_width_is_the_width_answered_in(case):
+def test_the_declared_width_is_the_width_answered_in(case, build):
     """``complex_dtype`` is a declaration, and until `4316825` a named cell ignored it.
 
     The basis is read rather than converted, so it arrives at float64 and NEP 50 widened the
     whole return with it -- but only once the cell was skewed, because the rectangular path came
     back through a build that closes with its own cast. Asserted as *the same width whatever the
     cell*, which is the claim that broke.
+
+    Over both modeling paths, because when this test was written it ran only on the raster one
+    and the shape path was violating it the whole time: ``engine.py`` passed
+    ``complex_dtype=xp.complex128`` as a literal, with ``self.complex_dtype`` in scope. NumPy
+    and JAX returned float64 from a solver reporting complex64, and Torch raised
+    ``expected m1 and m2 to have the same dtype`` from ``layer_modes_2d`` -- when *born* at
+    single precision, not merely when switched to it. A theorem that holds for any scene has to
+    be run over the scenes, and one builder is not the scenes.
     """
     for complex_dtype, want in ((0, np.float64), (1, np.float32)):
-        R, T = totals(scene(case, complex_dtype=complex_dtype).solve())
+        R, T = totals(build(case, complex_dtype=complex_dtype).solve())
         assert np.asarray(R).dtype == want, (complex_dtype, case)
         assert np.asarray(T).dtype == want, (complex_dtype, case)
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+def test_the_block_path_answers_in_the_declared_width_too(backend):
+    """The fourth modeling path, which the cases above cannot reach.
+
+    The block modeller refuses a skewed cell, so it cannot ride the all-pairs cover -- every
+    case there varies the lattice. It gets a square cell and the three backends instead.
+
+    It was violating the same claim for its own reason: ``block_per_layer_numeric`` built the
+    cell at ``xp.complex128 if x64 else xp.complex64`` with ``x64=True`` defaulted and no caller
+    ever passing it, under a TODO asking for the option to be connected to the solver. It was
+    connected -- ``_double`` comes from ``complex_dtype`` through the modeler's own setter --
+    and simply not read.
+    """
+    if backend == 1:
+        pytest.importorskip('jax')
+    elif backend == 2:
+        pytest.importorskip('torch')
+    layer = [[1.0, [['ellipse', P / 2, P / 2, 0.6 * P, 0.6 * P, 6.25, 0.0, 24, 24]]]]
+    for complex_dtype, want in ((0, np.float64), (1, np.float32)):
+        solver = wavebit.rcwa(backend=backend, structure=layer, period=[P, P],
+                              truncation_order=[3, 3], thickness=[H], wavelength=WL,
+                              top=1.0, bot=2.25, theta=0.3, phi=0.4, psi=0.2,
+                              complex_dtype=complex_dtype)
+        R, T = totals(solver.solve())
+        assert np.asarray(R).dtype == want, (complex_dtype, backend)
+        assert np.asarray(T).dtype == want, (complex_dtype, backend)
 
 
 

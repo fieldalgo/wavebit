@@ -2484,7 +2484,12 @@ class CoreFactorizationMixin:
                 structure, half_width_u, half_width_v,
                 self._geometry_lattice_for(geometry),
                 normal_grid=self.normal_grid,
-                complex_dtype=xp.complex128, xp=xp,
+                # The declared width, not a literal. This read `xp.complex128` with
+                # `self.complex_dtype` in scope, so a caller asking for single precision on
+                # this path got double: NumPy and JAX returned float64 from a solver that
+                # reported complex64, and Torch raised `expected m1 and m2 to have the same
+                # dtype` as soon as anything upstream honoured the request.
+                complex_dtype=self.complex_dtype, xp=xp,
                 boundary_plans=None if geometry is None else geometry.boundary_plans)
 
         else:
