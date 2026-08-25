@@ -86,7 +86,15 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
         self.incidence_side = incidence_side
         self.answers = answers
 
-        self.modeler = Modeling(period=self.period, complex_dtype=complex_dtype)
+        # `xp=` and the *resolved* device, because `Modeling.__init__` resolves its own
+        # `device` one line before it learns its namespace: `_xp` starts at the NumPy
+        # fallback and only becomes this backend's when the `period` setter infers it from
+        # the array. `_resolve_device` returns `None` for any non-Torch namespace, so a
+        # Torch device handed in was discarded on arrival -- the modeler then built its own
+        # arrays on the host while the solver was elsewhere. The solver knows its namespace;
+        # it should not be guessed from an argument.
+        self.modeler = Modeling(period=self.period, xp=self.xp,
+                                device=self._array_device, complex_dtype=complex_dtype)
 
         self._modeling_type = None
         self._grating_type = None

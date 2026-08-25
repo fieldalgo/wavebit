@@ -686,3 +686,47 @@ def test_the_scene_is_built_by_one_constructor_for_all_three_backends():
             f'something the other two do not, that difference belongs in a declared member the '
             f'shared body calls -- the way `_resolve_device` and `_resolve_precision` hold the '
             f'per-backend halves of `device` and `complex_dtype`.')
+
+
+def test_the_modeler_is_born_on_the_device_it_would_be_moved_to():
+    """`Modeling` resolved its device one line before it learned its namespace.
+
+    `Modeling.__init__` sets `_xp` to a NumPy fallback, resolves `device` against it, and only
+    then assigns `period` -- whose setter re-derives `_xp` from the array it was handed. So
+    `_resolve_device` always ran with `'torch' not in xp.__name__` true and always returned
+    `None`, and the `device=` that Torch alone bothered to pass was discarded on arrival.
+
+    The result was a solver whose modeler was in a state its own setter could never produce:
+    `None` as constructed, and the real device after any assignment, including the no-op
+    `solver.device = solver.device`. Arrays the modeler builds from Python values take
+    `modeler.device`, so on a placed solver they landed on the host.
+
+    Measured on torch's `meta` device, which exists on every install and is a real placement --
+    there is one device on this machine, so every placement is correct for free otherwise. It
+    is the same instrument `test_as_array_places_what_it_returns_on_the_device_it_was_given`
+    uses, for the same reason.
+    """
+    torch = pytest.importorskip('torch')
+    from wavebit._core.modeler import _cast
+
+    kw = dict(structure=np.ones((1, 4, 4)), period=[P, P], truncation_order=[1, 1],
+              thickness=[H], wavelength=WL, top=1.0, bot=1.0)
+    solver = wavebit.rcwa(backend=2, device=torch.device('meta'), **kw)
+    modeler = solver.modeler
+
+    assert modeler.device == torch.device('meta'), (
+        f'the modeler was born at {modeler.device!r} while the solver is at {solver.device!r}')
+
+    built = _cast(modeler._xp, [1.0, 2.0], modeler.float_dtype, modeler._dev())
+    assert built.device.type == 'meta', (
+        f'an array the modeler built from a Python list landed on {built.device}, not with the '
+        f'solver on {solver.device}')
+
+    # And construction agrees with assignment -- the bimodality is what made it invisible.
+    before = modeler.device
+    solver.device = solver.device
+    assert modeler.device == before, (before, modeler.device)
+
+    # The other two place nothing, and say so with `None` rather than a device object.
+    for backend in (0, 1):
+        assert wavebit.rcwa(backend=backend, **kw).modeler.device is None, backend
