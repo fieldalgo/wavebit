@@ -14,6 +14,13 @@ class _BaseRCWA(CoreSolveMixin):
     #: keeps `_core` from naming an optional dependency.
     xp = _xp
 
+    #: Which backend this class is, as the integer `rcwa(backend=...)` takes. A declared
+    #: member because the shared constructor cannot spell three literals -- and it has to
+    #: stay an accepted *keyword* as well: `SolverJax._tree_flatten` puts `backend` in
+    #: aux_data, so it is part of the treedef and of every jit cache key, and
+    #: `_tree_unflatten` hands it straight back to `__init__` on every jitted call.
+    _BACKEND_ID = 2
+
     @property
     def _array_device(self):
         """Torch places a tensor at creation, so this is the only place to say where."""

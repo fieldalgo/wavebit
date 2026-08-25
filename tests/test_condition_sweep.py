@@ -730,3 +730,38 @@ def test_the_modeler_is_born_on_the_device_it_would_be_moved_to():
     # The other two place nothing, and say so with `None` rather than a device object.
     for backend in (0, 1):
         assert wavebit.rcwa(backend=backend, **kw).modeler.device is None, backend
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+def test_the_public_class_declares_which_backend_it_is_and_nothing_else(backend):
+    """The layer above `_BaseRCWA` folded too, and `backend` is what made it awkward.
+
+    `RCWANumpy` / `RCWAJax` / `RCWATorch` each carried a ~104-line constructor that differed in
+    `backend=0/1/2` and two default spellings. The defaults resolve identically through
+    `_resolve_device` and `_resolve_precision`, so they became wavebit's own `0`. `backend`
+    could not: `SolverJax._tree_flatten` puts it in aux_data, which is part of the treedef and
+    therefore of every jit cache key, and `_tree_unflatten` hands it back to `__init__` on every
+    jitted call. So it stays an accepted keyword, and its *default* comes from a declared
+    `_BACKEND_ID` -- the same shape as `xp` and `_ARRAY_TYPES`.
+
+    Both halves are asserted, because either alone passes while the other is broken: the class
+    must answer its own id when nothing is named, and must still take an explicit one.
+    """
+    module = {0: 'wavebit.on_numpy.emsolver.rcwa', 1: 'wavebit.on_jax.emsolver.rcwa',
+              2: 'wavebit.on_torch.emsolver.rcwa'}[backend]
+    name = {0: 'RCWANumpy', 1: 'RCWAJax', 2: 'RCWATorch'}[backend]
+    cls = getattr(__import__(module, fromlist=[name]), name)
+
+    from wavebit._core.engine import CoreFactorizationMixin
+    assert cls.__init__ is CoreFactorizationMixin.__init__, (
+        f'{name} declares its own constructor again; a per-backend difference belongs in a '
+        f'declared member the shared body reads, the way `_BACKEND_ID` holds this one.')
+
+    assert cls._BACKEND_ID == backend
+
+    kw = dict(structure=np.ones((1, 4, 4)), period=[P, P], truncation_order=[1, 1],
+              thickness=[H], wavelength=WL, top=1.0, bot=1.0)
+    assert cls(**kw).backend == backend, 'the default did not come from `_BACKEND_ID`'
+    assert cls(backend=7, **kw).backend == 7, (
+        'an explicit `backend=` was ignored -- the JAX pytree passes one back on every jitted '
+        'call, so a constructor that overrides it rebuilds a solver under a different cache key')
