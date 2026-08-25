@@ -497,3 +497,37 @@ def test_material_is_exported_from_the_package_root():
     assert wavebit.eps_from_index is eps_from_index
     assert wavebit.index_from_eps is index_from_eps
 
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('where', ['top', 'bot'])
+def test_a_refused_half_space_leaves_neither_the_material_nor_the_index(backend, where):
+    """The Material and the index it yields are one write, and they used to be two.
+
+    The setter stored the Material and *then* derived the index, and the derivation is where
+    `_refuse_shaped_half_space` lives. So a caller who handed over a shaped epsilon -- a raster
+    where a half-space belongs, which is the mistake the guard exists for -- caught the
+    `ValueError` and was left with `top` holding the Material the guard had just refused while
+    `n_top` still held the previous medium's index.
+
+    The two then disagreed, and the solve reads the *index*, so it went on answering the old
+    question under the new label. Naming a `mu` in the refused Material made it worse:
+    `is_magnetic` flipped with it, and that selects a different arithmetic path rather than a
+    different number.
+    """
+    if backend == 1:
+        pytest.importorskip('jax')
+    elif backend == 2:
+        pytest.importorskip('torch')
+    solver = wavebit.rcwa(backend=backend, structure=np.ones((1, 4, 4)) * 2.0,
+                          period=[400.0, 500.0], truncation_order=(2, 2), wavelength=620.,
+                          thickness=[150.0], top=2.25, bot=1.5)
+    index = f'n_{where}'
+    was = (getattr(solver, where).epsilon, getattr(solver, index))
+
+    for refused in (Material(np.ones((4, 4)) * 2.0),          # shaped epsilon
+                    Material(2.0, mu=np.ones((4, 4)) * 1.4)):  # scalar epsilon, shaped mu
+        with pytest.raises(ValueError):
+            setattr(solver, where, refused)
+        assert getattr(solver, where).epsilon == was[0], f'{where} kept the refused material'
+        assert getattr(solver, index) == was[1], f'{index} and {where} disagree'

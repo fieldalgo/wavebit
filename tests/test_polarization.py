@@ -731,3 +731,39 @@ def test_an_integer_pair_still_carries_a_gradient():
                             **{k: v for k, v in CFG_2D.items() if k != 'backend'})
     grad = jax.grad(lambda s: s.solve().T.sum())(solver)
     assert all(abs(complex(np.asarray(g))) > 1e-6 for g in grad.polarization), grad.polarization
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+def test_a_refused_psi_does_not_claim_the_spelling_it_refused(backend):
+    """The refusal used to latch `_psi_given`, and that flag outlives the refusal.
+
+    `psi`, `polarization` and `tetm` are three mutually exclusive spellings of one input, and
+    `_psi_given` is how the `polarization` setter knows `psi` was *given* rather than derived
+    from the 45-degree default. The setter called `_psi_set_explicitly()` -- which latches the
+    flag -- before `_reject_complex_angle`, which is the line that raises.
+
+    So the sequence a caller actually walks was broken. A complex `psi` is refused with a
+    message that points at `polarization=(a_s, a_p)` as the spelling that *does* express the
+    circular states -- and reaching for it next was then refused too, with "psi and
+    polarization both given", naming a `psi` the caller never successfully set. The angle
+    itself was untouched the whole time; only the claim on the spelling survived.
+
+    `chi`'s setter had the right order all along, in the same file: both clash checks and the
+    complex check run before its single write.
+    """
+    if backend == 1:
+        pytest.importorskip('jax')
+    elif backend == 2:
+        pytest.importorskip('torch')
+    cfg = dict(CFG_2D, backend=backend)
+    solver = wavebit.rcwa(structure=np.ones((2, 4, 4)) * 2.0, **cfg)   # CFG_2D names 2 layers
+    assert solver._psi_given is False, 'premise: psi came from the default, not from a caller'
+    was = float(np.asarray(solver.psi))
+
+    with pytest.raises(ValueError):
+        solver.psi = 0.3 + 0.2j
+
+    assert solver._psi_given is False, 'the refusal claimed the spelling'
+    assert float(np.asarray(solver.psi)) == was
+    solver.polarization = (1.0, -1j)          # the spelling the refusal points at
+    assert solver.polarization is not None

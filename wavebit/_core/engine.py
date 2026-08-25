@@ -543,8 +543,20 @@ class CoreSolveMixin:
 
     @top.setter
     def top(self, value):
-        self._top = as_material(value, 'top')
-        self._n_top = _half_space_index(self._top, 'top')
+        """Both, or neither. ``_half_space_index`` refuses, and it used to refuse too late.
+
+        This wrote ``_top`` and *then* derived ``_n_top``, and the derivation is where
+        ``_refuse_shaped_half_space`` lives. So a caller who handed over a shaped epsilon --
+        a raster where a half-space belongs -- caught the ``ValueError`` and was left with
+        ``top`` holding the Material the guard had just refused while ``n_top`` still held the
+        previous medium's index. The two disagreed, and the solve reads the index, so it went
+        on answering the old question under the new label. With a ``mu`` named in the refused
+        Material it was worse: ``is_magnetic`` flipped, which selects a different arithmetic
+        path entirely.
+        """
+        material = as_material(value, 'top')
+        self._n_top = _half_space_index(material, 'top')
+        self._top = material
 
     @property
     def bot(self):
@@ -553,8 +565,10 @@ class CoreSolveMixin:
 
     @bot.setter
     def bot(self, value):
-        self._bot = as_material(value, 'bot')
-        self._n_bot = _half_space_index(self._bot, 'bot')
+        """Both, or neither -- see :attr:`top`, which had the same order and the same defect."""
+        material = as_material(value, 'bot')
+        self._n_bot = _half_space_index(material, 'bot')
+        self._bot = material
 
     @property
     def n_top(self):
@@ -1042,10 +1056,26 @@ class CoreSolveMixin:
 
     @psi.setter
     def psi(self, psi):
+        """Refuse before recording, because the record outlives the refusal.
+
+        This read ``_psi_set_explicitly()`` first, and that call *latches* ``_psi_given``. So a
+        ``psi`` refused for being complex left the angle at whatever it was and the flag at
+        True -- and ``_psi_given`` is what the ``polarization`` setter reads to decide the two
+        spellings clash. A caller who tried a complex ``psi``, caught the refusal, and then
+        reached for ``polarization=(1, -1j)`` -- which is the pair that *does* express the
+        state they were after, and what the refusal message points them to -- was told
+        "psi and polarization both given". The refusal had claimed a spelling nobody used.
+
+        Order now: reject, build, record, write. Every raising step precedes every write, and
+        the only statement after the latch is an assignment that cannot fail.
+        ``_psi_set_explicitly`` still does the clash checks itself, so those keep raising
+        before it latches. :attr:`chi` had this order all along, in the same file.
+        """
         if psi is not None:
-            self._psi_set_explicitly()
             self._reject_complex_angle(psi)
-            self._psi = self._as_real_angle(psi)
+            value = self._as_real_angle(psi)
+            self._psi_set_explicitly()
+            self._psi = value
 
     #: Where `_as_complex` and `_as_real_angle` place what they build. `None` on the two
     #: namespaces that have no device to name; Torch overrides it with `self.device`, because
