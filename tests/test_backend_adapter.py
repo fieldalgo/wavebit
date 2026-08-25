@@ -374,3 +374,83 @@ def test_forward_strided_copies_only_what_it_must():
     fixed = forward_strided(STRIDED_CELL)
     assert all(s > 0 for s in fixed.strides)
     assert np.array_equal(fixed, STRIDED_CELL)
+
+
+def test_as_array_places_what_it_returns_on_the_device_it_was_given():
+    """A value already in the namespace was cast and left wherever it was.
+
+    `as_array` takes `device=` and honoured it only for values crossing *into* `xp`. Anything
+    already there -- a torch tensor handed to a torch solver, which is the ordinary case for a
+    user optimising a period or an angle -- took the early return and kept its own placement.
+    A `device='cuda'` solver given a CPU tensor therefore built its algebra half on the host.
+
+    Untestable by observation on this machine: there is one device, so every placement is
+    correct and the five call sites passing `device=` agreed with each other for free. The
+    `meta` device is the way out -- it exists on every torch install, it is a real placement,
+    and it holds no data, which is exactly enough to ask *where* without asking *what*.
+
+    Both branches, because they are separate returns: `dtype=None` and a matching dtype take
+    the identity path, a differing dtype takes `astype`, and only one of the two was ever
+    exercised by a caller that also passed a device.
+    """
+    torch = pytest.importorskip('torch')
+    import array_api_compat.torch as txp
+    from wavebit._core.backend import as_array
+
+    cpu = torch.tensor([1.0, 2.0], dtype=torch.float64)
+    assert as_array(txp, cpu, device='meta').device.type == 'meta', 'dtype=None path'
+    assert as_array(txp, cpu, dtype=txp.float64, device='meta').device.type == 'meta', 'identity'
+    assert as_array(txp, cpu, dtype=txp.float32, device='meta').device.type == 'meta', 'astype'
+
+    leaf = torch.tensor([1.0, 2.0], dtype=torch.float64, requires_grad=True)
+    moved = as_array(txp, leaf, dtype=txp.float64, device='meta')
+    assert moved.requires_grad, 'moving a device must not detach; `.to` keeps the graph'
+
+    # And the fix costs the common case nothing: same device in, same object out.
+    assert as_array(txp, cpu, dtype=txp.float64, device=cpu.device) is cpu
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+def test_a_solver_does_not_share_the_array_it_was_configured_from(backend):
+    """`period` and `thickness` are stored, so they may not alias a buffer the caller keeps.
+
+    All three backends copied a NumPy input before the setters were folded into one -- NumPy
+    through `np.array`, JAX through `jnp.array`, Torch through `torch.tensor` -- and all three
+    would have started sharing it, because `as_array` is built around *not* copying: sharing is
+    how it keeps an autograd graph alive. Measured before the fold, so this is the pin, not a
+    prediction: on every backend a mutation of the caller's array reached straight into the
+    solver.
+
+    The other half of the contract has its own test below. A native array is shared on purpose.
+    """
+    if backend == 1:
+        pytest.importorskip('jax')
+    elif backend == 2:
+        pytest.importorskip('torch')
+    period = np.array([400.0, 500.0])
+    thickness = np.array([100.0])
+    solver = wavebit.rcwa(backend=backend, structure=np.ones((1, 4, 4)), period=period,
+                          thickness=thickness, truncation_order=(1, 1), wavelength=620.,
+                          top=1.0, bot=1.0)
+    period[0], thickness[0] = 999.0, 777.0
+    assert float(np.asarray(solver.period)[0]) == 400.0, 'period followed the caller\'s array'
+    assert float(np.asarray(solver.thickness)[0]) == 100.0, 'thickness followed it'
+
+
+def test_a_torch_leaf_is_kept_rather_than_copied():
+    """The exception the copy rule is written around, and the reason it is not unconditional.
+
+    A Torch caller who hands the solver an optimizer leaf expects `opt.step()` -- which mutates
+    that tensor in place, under `no_grad` -- to be visible to the solver it configured. Copying
+    every input would leave such a solver quietly holding the starting value forever, with
+    gradients still flowing and nothing ever moving.
+    """
+    torch = pytest.importorskip('torch')
+    leaf = torch.tensor([400.0, 500.0], dtype=torch.float64, requires_grad=True)
+    solver = wavebit.rcwa(backend=2, structure=np.ones((1, 4, 4)), period=leaf,
+                          thickness=[100.0], truncation_order=(1, 1), wavelength=620.,
+                          top=1.0, bot=1.0)
+    with torch.no_grad():
+        leaf[0] = 450.0
+    assert float(solver.period[0].detach()) == 450.0, 'the solver stopped tracking its leaf'
+    assert solver.period.requires_grad or solver.period.grad_fn is not None

@@ -413,6 +413,14 @@ def as_array(xp, v, dtype=None, device=None):
 
     So the ``astype`` branch is a same-namespace no-op today rather than the graph guard it
     was; the strides normalisation above is the part that has not changed.
+
+    ``device`` is honoured on **both** paths. It used to be honoured only on the second one:
+    a value already in ``xp`` was cast and returned wherever it happened to live, so a
+    ``device='cuda'`` solver handed a CPU tensor kept the CPU tensor. Nothing on a CPU-only
+    machine can see that -- there is one device and every placement is correct -- which is why
+    it survived five call sites. ``to_device`` is the array-API spelling and is identity when
+    the device already matches, so the common case still copies nothing, and it preserves an
+    autograd graph where ``asarray`` would not.
     """
     if hasattr(v, 'dtype') and hasattr(v, 'shape'):
         try:
@@ -420,7 +428,8 @@ def as_array(xp, v, dtype=None, device=None):
         except Exception:
             same_ns = False
         if same_ns:
-            return v if dtype is None or v.dtype == dtype else xp.astype(v, dtype)
+            out = v if dtype is None or v.dtype == dtype else xp.astype(v, dtype)
+            return out if device is None else ac.to_device(out, device)
     v = forward_strided(v)
     if dtype is None:
         return xp.asarray(v, device=device)
