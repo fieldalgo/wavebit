@@ -610,3 +610,49 @@ def test_the_modeler_is_handed_a_device_its_array_constructor_can_take(backend):
     xp = solver.modeler._xp
     placed = xp.asarray([1.0, 2.0], device=solver.modeler.device)
     assert placed.shape == (2,)
+
+
+def test_the_same_positional_argument_means_the_same_thing_on_all_three_backends():
+    """`rcwa()` forwards `*args` positionally, so a wrapper that names parameters claims slots.
+
+    `SolverTorch.__init__` was `(self, device=0, complex_dtype=0, *args, **kwargs)` while
+    `SolverNumpy` and `SolverJax` were `(self, *args, **kwargs)`. Those two names are not
+    defaults -- one layer down they already had defaults that resolve identically -- they are a
+    claim on the first two POSITIONS. So `rcwa(0, 1.5, 2.25)` and `rcwa(1, 1.5, 2.25)` built a
+    solver with `top=1.5, bot=2.25`, and `rcwa(2, 1.5, 2.25)` read 1.5 as a device request and
+    refused it.
+
+    Read through the public entry point rather than off the signature: a wrapper could grow the
+    same defect again by any route, and what matters is what a caller's argument becomes.
+    """
+    kw = dict(structure=np.ones((1, 4, 4)), period=[P, P], truncation_order=[1, 1],
+              thickness=[H], wavelength=WL)
+
+    built = [wavebit.rcwa(backend, 1.5, 2.25, **kw) for backend in (0, 1, 2)]
+    for backend, solver in enumerate(built):
+        assert float(np.asarray(solver.top.epsilon)) == pytest.approx(1.5), backend
+        assert float(np.asarray(solver.bot.epsilon)) == pytest.approx(2.25), backend
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+def test_the_solver_wrapper_adds_no_parameters_of_its_own(backend):
+    """The wrapper exists to mix in the optimizer, not to re-declare the scene.
+
+    Checked from the signature as well, because the positional test above passes for a wrapper
+    that names the parameters it forwards *after* the ones the caller uses -- the slots would
+    line up and the extra names would still be there to drift.
+    """
+    import inspect
+
+    module = {0: 'wavebit.on_numpy.solver', 1: 'wavebit.on_jax.solver',
+              2: 'wavebit.on_torch.solver'}[backend]
+    name = {0: 'SolverNumpy', 1: 'SolverJax', 2: 'SolverTorch'}[backend]
+    cls = getattr(__import__(module, fromlist=[name]), name)
+
+    kinds = [p.kind for n, p in inspect.signature(cls.__init__).parameters.items()
+             if n != 'self']
+    assert kinds == [inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD], (
+        f'{name}.__init__ declares named parameters: '
+        f'{[n for n in inspect.signature(cls.__init__).parameters if n != "self"]}. Every name '
+        f'here claims a positional slot that the other backends pass through, so the same '
+        f'`rcwa(backend, a, b)` call means different things depending on the backend.')

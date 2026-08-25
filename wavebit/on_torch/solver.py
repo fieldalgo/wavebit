@@ -4,12 +4,17 @@ from .optimizer.optimizer import OptimizerTorch
 
 class SolverTorch(RCWATorch, OptimizerTorch):
 
-    def __init__(self, device=0, complex_dtype=0, *args, **kwargs):
-
-        # The `complex_dtype` block that used to sit here was the seventh copy of the width
-        # resolution and it was dead: `RCWATorch.__init__` below reaches `_BaseRCWA.__init__`,
-        # which resolves the width again, and nothing between the two reads a dtype.
-        self.device = device
-
-        RCWATorch.__init__(self, device=device, complex_dtype=complex_dtype, *args, **kwargs)
-        OptimizerTorch.__init__(self, device=device, complex_dtype=complex_dtype, *args, **kwargs)
+    # `(*args, **kwargs)` and nothing else, which is what `SolverNumpy` and `SolverJax` are.
+    # This one used to name `device` and `complex_dtype` before them, and naming them here is
+    # not a default -- it is a claim on the first two POSITIONS. `rcwa()` forwards `*args`
+    # positionally, so `rcwa(0, 1.5, 2.25)` and `rcwa(1, 1.5, 2.25)` build a solver with
+    # `top=1.5, bot=2.25` while `rcwa(2, 1.5, 2.25)` read 1.5 as a device and refused. Same
+    # call, one backend answering a different question -- and the two names it intercepted are
+    # the two that already had defaults one layer down, so it was not adding anything either.
+    #
+    # The forwarding was equally redundant: `device=0` and `complex_dtype=0` resolve to exactly
+    # what `RCWATorch.__init__`'s own `'cpu'` and `torch.complex128` resolve to, through
+    # `_resolve_device` and `_resolve_precision`. Removing them leaves construction identical.
+    def __init__(self, *args, **kwargs):
+        RCWATorch.__init__(self, *args, **kwargs)
+        OptimizerTorch.__init__(self, *args, **kwargs)
