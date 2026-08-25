@@ -37,7 +37,7 @@ CARRIED = (
     'backend', 'tetm', 'truncation_order', 'layer_algorithm', 'complex_dtype',
     'fourier_coefficients', 'factorization', 'normal_method', 'incidence_side', 'answers',
     'normal_grid', 'theta', 'phi', 'psi', 'chi', 'polarization', 'period', 'wavelength',
-    'thickness', 'structure', 'mu', 'top', 'bot', 'lattice',
+    'thickness', 'structure', 'mu', 'top', 'bot', 'lattice', 'excitation',
 )
 
 #: Aux keys that are not attributes under the same name. `psi_given` is the *fact* that `psi`
@@ -58,7 +58,8 @@ def _scene(**over):
               theta=0.31, phi=0.47, psi=0.29, chi=np.pi / 9,
               factorization='nvf', normal_method='contour', normal_grid=512,
               incidence_side='bottom', layer_algorithm='SMM', answers='field',
-              complex_dtype=1, fourier_coefficients='integrated')
+              complex_dtype=1, fourier_coefficients='integrated',
+              excitation={(0, 0): 1.0, (1, 0): 0.5j})
     kw.update(over)
     return wavebit.rcwa(**kw)
 
@@ -188,3 +189,102 @@ def test_the_rebuild_names_its_arguments():
     assert len(flattened) == len(names), (
         f'`CHILD_NAMES` lists {len(names)} children and `_tree_flatten` produced '
         f'{len(flattened)}; they are the same tuple and have to stay the same length.')
+
+
+def test_every_constructor_parameter_is_carried_by_the_pytree():
+    """The direction the guard above cannot see, and the one `excitation` was lost in.
+
+    `test_the_carried_list_covers_every_aux_key` runs aux -> CARRIED. It catches a key added to
+    `_tree_flatten` and not compared here. It cannot catch the thing that actually keeps
+    happening, which is a parameter added to the *constructor* and put in neither slot -- there
+    is no aux key to notice, so the check has nothing to fire on.
+
+    That is how `excitation` got here. It is this branch's feature, it went into the signature
+    and into the solve, and the pytree never learned about it. `solve_field` is jit-decorated
+    at class level, so `self` is flattened and rebuilt every call, and the rebuild handed the
+    solve `excitation = None`: a multimode scene silently answered the single-wave problem.
+    Eager against jitted on a 1D grating, R read 0.148814934 where eager gave 0.164651118 --
+    and 0.148814934 is exactly what the same scene answers with no excitation at all.
+
+    Read from the signature rather than from a list, so nothing has to be remembered. A
+    parameter that genuinely must not ride (there are none today) fails here and has to say so
+    in writing.
+    """
+    import inspect
+
+    from wavebit.on_jax.emsolver.rcwa import RCWAJax
+    from wavebit.on_jax.solver import CHILD_NAMES
+
+    _, aux = _scene()._tree_flatten()
+    carried = set(CHILD_NAMES) | set(aux)
+
+    # `**retired` is `_refuse_retired`'s catch-all, not a condition -- it holds names that are
+    # refused rather than stored, so there is nothing for a round trip to preserve.
+    declared = [name for name, p in inspect.signature(RCWAJax.__init__).parameters.items()
+                if name != 'self'
+                and p.kind not in (p.VAR_KEYWORD, p.VAR_POSITIONAL)]
+
+    dropped = [name for name in declared if name not in carried]
+    assert not dropped, (
+        f'these are constructor parameters and the JAX pytree carries neither a child nor an '
+        f'aux key for them: {dropped}. A jitted call rebuilds the solver through `__init__` '
+        f'(`SolverJax._tree_unflatten`), so each of these comes back at its default and the '
+        f'solve answers a scene the caller did not configure. Add it to `CHILD_NAMES` if it '
+        f'is a value (it may then be traced and differentiated), or to `aux_data` if the '
+        f'solves branch on it.')
+
+#: A grating whose orders actually carry power, and a period long enough that order 1 is inside
+#: the light line -- `_one_row`'s 400 nm at 900 nm makes it evanescent, which `excitation`
+#: refuses by name. On a uniform slab the derivative below is 1e-16 and proves nothing.
+_LIT = np.array([[[1., 1., 1., 4., 4., 4., 4., 1., 1., 1., 1., 1.]]])
+
+
+def _lit(excitation):
+    return wavebit.rcwa(backend=1, structure=_LIT, period=[3 * WL, 3 * WL],
+                        truncation_order=[3, 0], thickness=[220.0], wavelength=WL,
+                        top=1.0, bot=1.0, excitation=excitation)
+
+
+def test_excitation_rides_as_a_child_so_an_amplitude_is_a_leaf_and_not_a_cache_key():
+    """Which slot it rides in, measured three ways -- because the obvious way does not work.
+
+    `test_a_round_trip_preserves[excitation]` passes with the dict in *either* slot: aux data
+    round-trips too. The difference only shows up in the treedef.
+
+    As a child, JAX flattens the dict with its keys in the treedef and its amplitudes as
+    leaves, which is exactly the split the property documents: "they may be traced ... while
+    the keys may not, because which entries of the incident column are non-zero decides array
+    structure rather than a value."
+
+    In aux the amplitudes become part of the treedef, and both halves of that are bad. Every
+    amplitude is a new jit cache key, so a sweep over beam weights recompiles per step. And
+    `jax.grad` of a function of the solver hands the aux back untouched -- measured on this
+    scene, it returns ``{0: 1.0, 1: 0.5j}``, the *inputs*, where the child slot gives
+    ``{0: -0.00129, 1: 0.00513 - 0.00258j}``. That is worse than the ``0j`` `polarization`
+    used to return: a caller stepping downhill would step by the amplitude itself, and an
+    assertion that the gradient is merely non-zero passes.
+    """
+    import jax
+    import jax.numpy as jnp
+    from jax import tree_util
+
+    lit, other, unlit = _lit({0: 1.0, 1: 0.5j}), _lit({0: 1.0, 1: 0.9j}), _lit(None)
+
+    # 1. The amplitudes are leaves. In aux the lit solver flattens to exactly as many leaves
+    #    as the unlit one, which is the same thing as not carrying them.
+    assert len(tree_util.tree_leaves(lit)) == len(tree_util.tree_leaves(unlit)) + 2, (
+        'the two beam amplitudes are not leaves of the flattened solver')
+
+    # 2. Changing an amplitude does not change the structure -- one compilation serves both.
+    assert tree_util.tree_structure(lit) == tree_util.tree_structure(other), (
+        'two solvers differing only in a beam amplitude have different treedefs, so every '
+        'amplitude in a sweep is a fresh jit compilation')
+
+    # 3. The gradient is a gradient, not the input handed back.
+    grad = jax.grad(lambda s: jnp.sum(s.solve().T).real)(lit).excitation
+    for order, amplitude in lit.excitation.items():
+        assert complex(np.asarray(grad[order])) != complex(amplitude), (
+            f'order {order}: grad came back as the amplitude itself ({amplitude!r}), which is '
+            f'what aux_data does -- it is passed through, not differentiated')
+    assert max(abs(complex(np.asarray(v))) for v in grad.values()) > 1e-6, (
+        f'every beam amplitude derivative is at the noise floor: {grad}')

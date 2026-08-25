@@ -261,3 +261,61 @@ def test_a_superposition_survives_a_jit_boundary():
 
     a1 = jnp.asarray(0.6 - 0.8j)
     assert float(jax.jit(reflectance)(a1)) == pytest.approx(float(reflectance(a1)), rel=1e-10)
+
+
+def test_a_superposition_survives_the_solver_itself_crossing_the_boundary():
+    """The boundary the two tests above do not cross, and the one production uses.
+
+    Both of them build the solver *inside* the traced function, so the only thing that crosses
+    the jit boundary is the amplitude. The solver is constructed within the trace and holds the
+    tracer directly -- it is never flattened, so the pytree is never consulted, and both tests
+    compile and pass while `_tree_flatten` carries no `excitation` at all.
+
+    That is how it was: `excitation` was in neither `CHILD_NAMES` nor `aux_data`. The path that
+    matters is the other direction -- `RCWAJax.solve_field` is `jax.jit`-decorated at class
+    level with `self` at argnum 0 and not static, so every call flattens the solver and rebuilds
+    it through `__init__`. A multimode scene came back with `excitation = None` and answered the
+    single-wave problem: on a 1D grating, R read 0.148814934 against eager's 0.164651118, and
+    0.148814934 is exactly what that scene answers with no excitation at all.
+
+    So: pass the solver, do not build it inside.
+    """
+    jax = pytest.importorskip('jax')
+    jnp = jax.numpy
+
+    solver, eager = _solve(BEAMS, backend=1, phi=None, tetm='te')
+
+    @jax.jit
+    def reflectance(s):                                # `s` is flattened on the way in
+        return jnp.sum(s.solve().given.R)
+
+    assert float(reflectance(solver)) == pytest.approx(float(jnp.sum(eager.given.R)), rel=1e-10)
+
+    # And the same scene with the excitation dropped must NOT agree -- otherwise the assertion
+    # above is satisfied by a solver that ignored the superposition on both sides.
+    plain, _ = _solve(None, backend=1, phi=None, tetm='te')
+    assert float(reflectance(plain)) != pytest.approx(float(jnp.sum(eager.given.R)), rel=1e-6), (
+        'the lit and unlit scenes answer the same number, so this test cannot see the drop')
+
+
+def test_the_jitted_field_path_keeps_the_superposition():
+    """The production path, end to end: `solve_field` is where the drop actually bit.
+
+    `solve_field_eager` and `solve_field` differ only in whether the solver crosses a jit
+    boundary, so they are each other's oracle. With the excitation dropped they parted by 1.22
+    in the field cell.
+    """
+    jax = pytest.importorskip('jax')
+
+    kw = dict(COMMON, backend=1, phi=None, tetm='te', answers='field', excitation=BEAMS)
+    solver = wavebit.rcwa(**kw)
+    solver.structure = _structure()
+
+    sample = dict(sample_x=8, sample_y=1, sample_z=4)
+    _, eager = solver.solve_field_eager(**sample)
+    _, jitted = solver.solve_field(geometry=solver.freeze_geometry(), **sample)
+
+    a = [np.asarray(x) for x in jax.tree_util.tree_leaves(eager)]
+    b = [np.asarray(x) for x in jax.tree_util.tree_leaves(jitted)]
+    assert [x.shape for x in a] == [x.shape for x in b]
+    assert max(np.max(np.abs(x - y)) for x, y in zip(a, b)) < 1e-10

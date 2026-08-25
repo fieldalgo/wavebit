@@ -7,7 +7,7 @@ from .optimizer.optimizer import OptimizerJax
 #: there; everything else goes in as a keyword, so this order is a *listing* rather than a
 #: contract with `__init__`'s signature.
 CHILD_NAMES = ('top', 'bot', 'theta', 'phi', 'psi', 'period', 'wavelength', 'structure',
-               'thickness', 'chi', 'polarization', 'mu')
+               'thickness', 'chi', 'polarization', 'mu', 'excitation')
 
 #: Read through the private slot rather than the property: these three report a *resolved*
 #: value, and a round trip has to carry what was asked for.
@@ -37,6 +37,22 @@ class SolverJax(RCWAJax, OptimizerJax):
         # would also be lossy: `sqrt(eps*mu)` cannot be taken apart again, so a magnetic
         # half-space would come back through `_tree_unflatten` as a non-magnetic one of a
         # different permittivity, silently.
+        #
+        # `excitation` is a child, and JAX's own dict handling is what makes that the right
+        # slot: a dict flattens with its **keys in the treedef** and its **values as leaves**,
+        # which is exactly the split the property documents -- "they may be traced ... while
+        # the keys may not, because which entries of the incident column are non-zero decides
+        # array structure rather than a value". Amplitudes are a legitimate design variable,
+        # so putting the whole dict in aux would have made a differentiated beam weight
+        # return a compile-time constant, the way `polarization` did above.
+        #
+        # It was in *neither* slot until now, which is worse than the wrong slot: the jitted
+        # `solve_field` rebuilds `self` on every call, so a multimode scene came back with
+        # `excitation = None` and the solve answered the single-specular-wave problem.
+        # Measured on a 1D grating, eager against jitted: the field parted by 1.22 and R read
+        # 0.148814934 where eager gave 0.164651118 -- and 0.148814934 is exactly the R of the
+        # same scene built with no excitation at all, which is the tell. `order_window`
+        # narrowed with it, ((0, 3), (0, 0)) -> ((0, 2), (0, 0)).
         #
         # `mu` is the raster permeability field, a child for the same reason `structure` is:
         # it is material values, and material values are what gradients are for. It rides
