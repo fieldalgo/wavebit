@@ -30,6 +30,25 @@ class _BaseRCWA(CoreSolveMixin):
     #: differentiated or closed over inside `jax.jit`.
     _ARRAY_TYPES = (jnp.ndarray,)
 
+    def _resolve_device(self, value):
+        """A list of :class:`jax.Device`, which is what `jax.default_device` takes.
+
+        A single already-resolved device is wrapped rather than refused, so
+        `solver.device = solver.device` round-trips against the getter. The membership test is
+        against the public `jax.Device`: matching the implementation class's repr instead broke
+        silently when jaxlib moved it from `xla_extension` to `_jax`.
+        """
+        if value is None or value in (0, 'cpu'):
+            return jax.devices('cpu')
+        if value in (1, 'gpu', 'cuda'):
+            return jax.devices('gpu')
+        if isinstance(value, jax.Device):
+            return [value]
+        if (isinstance(value, (list, tuple)) and value
+                and all(isinstance(d, jax.Device) for d in value)):
+            return list(value)
+        raise ValueError(f'unsupported jax device: {value!r}')
+
     def __init__(self, top=1., bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None,
                  truncation_order=(0, 0),
                  period=(1., 1.), wavelength=1.,
@@ -71,28 +90,6 @@ class _BaseRCWA(CoreSolveMixin):
         self.T1 = None
         # SMM only, from `answers='amplitude'` up; see `CoreSolveMixin._finish`.
         self._scattering = None
-
-    @property
-    def device(self):
-        return self._device
-
-    @device.setter
-    def device(self, device):
-        if device in (0, 'cpu'):
-            self._device = jax.devices('cpu')
-        elif device in (1, 'gpu', 'cuda'):
-            self._device = jax.devices('gpu')
-        # Already-resolved devices, which is what the getter hands back — so assigning
-        # `self.device = self.device` has to round-trip. Test against the public
-        # ``jax.Device``: matching the repr of the implementation class instead broke
-        # silently when jaxlib moved it from ``xla_extension`` to ``_jax``.
-        elif isinstance(device, jax.Device):
-            self._device = [device]
-        elif (isinstance(device, (list, tuple)) and device
-                and all(isinstance(d, jax.Device) for d in device)):
-            self._device = list(device)
-        else:
-            raise ValueError(f'unsupported jax device: {device!r}')
 
     @device_scoped
     def _separable_kxy(self, wavelength):

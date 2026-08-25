@@ -23,21 +23,32 @@ class _BaseRCWA(CoreSolveMixin):
     #: A tensor, so a caller's optimizer leaf reaches the solver as itself.
     _ARRAY_TYPES = (torch.Tensor,)
 
+    def _resolve_device(self, value):
+        """A :class:`torch.device`.
+
+        Strings are accepted, which they were not: `rcwa(backend=2, device='cpu')` raised a
+        bare `ValueError` while `RCWATorch.__init__` declared `device='cpu'` as its own
+        default, so the documented default could not be written out. JAX took the strings all
+        along, and `_core.modeler._resolve_device` -- the same mapping, for the modeler --
+        has taken them since it was written.
+        """
+        if value is None or value in (0, 'cpu'):
+            return torch.device('cpu')
+        if value in (1, 'gpu', 'cuda'):
+            return torch.device('cuda')
+        if isinstance(value, torch.device):
+            return value
+        raise ValueError(
+            f"device: expected 0 / 'cpu', 1 / 'gpu' / 'cuda', or a torch.device; "
+            f'got {value!r}.')
+
     def __init__(self, top=1., bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None,
                  truncation_order=(0, 0),
                  period=(1., 1.), wavelength=1.,
                  thickness=(0.,), layer_algorithm='ETM', excitation=None,
                  device='cpu', complex_dtype=torch.complex128, polarization=None):
 
-        # device
-        if device in (0, 'cpu'):
-            self._device = torch.device('cpu')
-        elif device in (1, 'gpu', 'cuda'):
-            self._device = torch.device('cuda')
-        elif type(device) is torch.device:
-            self._device = device
-        else:
-            raise ValueError('device')
+        self.device = device
 
         # The width, once. `_resolve_precision` is in `_core`; it is not the setter, because
         # the setter re-casts every stored array and none of them exist yet.
@@ -71,24 +82,6 @@ class _BaseRCWA(CoreSolveMixin):
         self.T1 = None
         # SMM only, from `answers='amplitude'` up; see `CoreSolveMixin._finish`.
         self._scattering = None
-
-    @property
-    def device(self):
-        return self._device
-
-    @device.setter
-    def device(self, device):
-        if device == 0:
-            self._device = torch.device('cpu')
-        elif device == 1:
-            self._device = torch.device('cuda')
-        elif type(device) is torch.device:
-            self._device = device
-        else:
-            raise ValueError
-
-        if hasattr(self, 'modeler') and self.modeler is not None:
-            self.modeler.device = self._device
 
     def _separable_kxy(self, wavelength):
         (cx, hx), (cy, hy) = self.order_window

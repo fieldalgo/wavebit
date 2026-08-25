@@ -26,6 +26,9 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                  layer_algorithm='ETM',
                  excitation=None,   # which orders the illumination arrives on; see
                  # `CoreSolveMixin.excitation`. None is one wave on the specular order.
+                 device=0,                    # accepted so that backend-agnostic code
+                 # can pass the same argument to all three. NumPy has one device; a GPU
+                 # request is refused rather than printed about. See `_resolve_device`.
                  complex_dtype=np.complex128,
                  fourier_coefficients=None,  # 'sampled' | 'integrated'
                  # (closed-form series); the default resolves per modeling path --
@@ -78,7 +81,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
                          truncation_order=truncation_order, period=period, wavelength=wavelength,
                          thickness=thickness, layer_algorithm=layer_algorithm,
                          excitation=excitation,
-                         complex_dtype=complex_dtype,
+                         device=device, complex_dtype=complex_dtype,
                          polarization=polarization)
         self.incidence_side = incidence_side
         self.answers = answers

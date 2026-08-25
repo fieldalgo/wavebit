@@ -525,3 +525,88 @@ def test_every_backend_declares_where_its_arrays_are_placed():
         assert method is not getattr(type(jax_solver), name), (
             f'{name} is not wrapped: it needs `@device_scoped`, and without it JAX builds its '
             f'arrays outside the solver\'s device scope.')
+
+
+SCENE = dict(structure=np.ones((1, 4, 4)), period=[P, P], truncation_order=[1, 1],
+             thickness=[H], wavelength=WL, top=1.0, bot=1.0)
+
+
+def test_a_device_this_backend_does_not_have_is_refused_rather_than_printed_about():
+    """NumPy's setter used to `print` and store nothing. A print is not a refusal.
+
+    It fired for *every* assignment, `device = 0` included -- which is what the solver already
+    was -- so the one line that meant something ("you asked for a GPU and will not get one")
+    was indistinguishable from the ones that did not. And it does not stop the caller: the
+    solver went on to answer `0`, the caller went on believing it had asked for a GPU, and in
+    a notebook the line lands in a cell nobody reads.
+
+    Both halves are asserted, because fixing only the loud one would leave the quiet one:
+    a GPU request raises, and an assignment that *is* satisfiable says nothing at all.
+    """
+    import io
+    import contextlib
+
+    solver = wavebit.rcwa(backend=0, **SCENE)
+
+    for asked in (1, 'gpu', 'cuda'):
+        with pytest.raises(ValueError, match='one device'):
+            solver.device = asked
+        assert solver.device == 0, (
+            f'device={asked!r} was refused and then stored anyway; a refusal that mutates is '
+            f'worse than the print it replaced')
+
+    noise = io.StringIO()
+    with contextlib.redirect_stdout(noise):
+        for asked in (0, 'cpu', None):
+            solver.device = asked
+    assert noise.getvalue() == '', (
+        f'a satisfiable assignment wrote to stdout: {noise.getvalue()!r}')
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+def test_the_three_backends_take_one_device_vocabulary_and_answer_in_their_own(backend):
+    """The words going in are wavebit's; the object coming back is the backend's.
+
+    Torch refused `device='cpu'` with a bare `ValueError` while `RCWATorch.__init__` declared
+    `device='cpu'` as its own default -- so the documented default could not be written out,
+    and backend-agnostic code could not pass one spelling to all three. NumPy's constructor
+    did not take `device=` at all.
+
+    The answers stay different on purpose: `0`, a *list* of `jax.Device` (which is what
+    `jax.default_device` takes), and a `torch.device`. Normalising them would mean handing
+    every caller something none of the three frameworks accepts.
+    """
+    for spelling in (0, 'cpu'):
+        solver = wavebit.rcwa(backend=backend, device=spelling, **SCENE)
+        assert solver.device is not None
+
+        # The getter's answer is a legal argument to the setter -- otherwise `solver.device =
+        # solver.device` is a mutation, and copying a solver's placement onto another needs a
+        # conversion nobody wrote.
+        before = solver.device
+        solver.device = solver.device
+        assert solver.device == before, (backend, before, solver.device)
+
+    assert wavebit.rcwa(backend=backend, device=0, **SCENE).device \
+        == wavebit.rcwa(backend=backend, device='cpu', **SCENE).device
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+def test_the_modeler_is_handed_a_device_its_array_constructor_can_take(backend):
+    """`_array_device`, not `self._device` -- and the difference is not cosmetic.
+
+    The solver stores a device in its backend's spelling; the modeler wants the argument an
+    array constructor takes, which is `None` on the two namespaces that place nothing. Handing
+    the modeler `self._device` raw reaches `xp.asarray(device=0)`, which NumPy refuses with
+    "Device not understood" and JAX with "sharding=0 must be an instance of ...".
+
+    Torch is why this survived unnoticed: there the two are the same object, so the Torch-only
+    line this replaced could conflate them and still be right. Then the fold gave the other
+    two backends a setter that had never run on them.
+    """
+    solver = wavebit.rcwa(backend=backend, **SCENE)
+    solver.device = solver.device                      # through the setter, modeler attached
+
+    xp = solver.modeler._xp
+    placed = xp.asarray([1.0, 2.0], device=solver.modeler.device)
+    assert placed.shape == (2,)

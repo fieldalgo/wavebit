@@ -20,7 +20,7 @@ class _BaseRCWA(CoreSolveMixin):
                  thickness=(0.,), layer_algorithm='ETM', excitation=None,
                  device=0, complex_dtype=np.complex128, polarization=None):
 
-        self._device = 0
+        self.device = device
 
         # The width, once. `_resolve_precision` is in `_core`; it is not the setter, because
         # the setter re-casts every stored array and none of them exist yet.
@@ -54,14 +54,6 @@ class _BaseRCWA(CoreSolveMixin):
         self.T1 = None
         # SMM only, from `answers='amplitude'` up; see `CoreSolveMixin._finish`.
         self._scattering = None
-
-    @property
-    def device(self):
-        return self._device
-
-    @device.setter
-    def device(self, device):
-        print('The NumPy backend runs on CPU only.')
 
     def _separable_kxy(self, wavelength):
         (cx, hx), (cy, hy) = self.order_window

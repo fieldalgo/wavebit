@@ -1006,6 +1006,49 @@ class CoreSolveMixin:
             self._psi_set_explicitly()
             self._psi = value
 
+    @property
+    def device(self):
+        """Where this solver's arrays live, in whatever this backend calls a device.
+
+        The three spell it differently and the difference is real, so it is reported rather
+        than normalised: NumPy answers ``0`` because it has one device and does not name it,
+        JAX answers a *list* of :class:`jax.Device` (which is what ``jax.default_device``
+        takes), and Torch answers a :class:`torch.device`. Assigning
+        ``solver.device = solver.device`` round-trips on all three.
+
+        Accepts wavebit's own codes -- ``0`` / ``'cpu'`` and ``1`` / ``'gpu'`` / ``'cuda'`` --
+        as well as the backend's own device object. The codes are wavebit's, not device
+        indices: handing ``0`` straight to Torch selects device *index* 0, which on a Mac is
+        MPS and refuses float64.
+        """
+        return self._device
+
+    @device.setter
+    def device(self, value):
+        self._device = self._resolve_device(value)
+        if getattr(self, 'modeler', None) is not None:
+            # `_array_device`, not `self._device`: the modeler wants the argument an array
+            # constructor takes, which is `None` on the two namespaces that place their own
+            # arrays. Torch's two spellings are the same object, which is why the line it
+            # replaced could conflate them and still be right there.
+            self.modeler.device = self._array_device
+
+    def _resolve_device(self, value):
+        """A device request as this backend's own device object. One device here.
+
+        NumPy names no device and places nothing, so a CPU request is the identity and a GPU
+        request is refused. It used to `print` -- for *every* assignment, including
+        ``device = 0``, which is what it already was -- and store nothing. A print is not a
+        refusal: it does not stop the caller, it does not reach a log, and in a notebook it
+        lands somewhere nobody reads. A solver that reports `0` after being asked for a GPU
+        has answered the question wrongly and said so where it cannot be heard.
+        """
+        if value is None or value in (0, 'cpu'):
+            return 0
+        raise ValueError(
+            f'device: the NumPy backend has one device and it is the CPU; got {value!r}. '
+            f'Use backend=1 (JAX) or backend=2 (Torch) for anything else.')
+
     #: Where `_as_complex` and `_as_real_angle` place what they build. `None` on the two
     #: namespaces that have no device to name; Torch overrides it with `self.device`, because
     #: there a tensor is placed at creation and there is nowhere else to say it. Declared for
