@@ -180,8 +180,8 @@ def test_expanded_sweep_points_match_direct_calls():
     ({**BINARY_GRATING, 'wavelength': 900.0}, r'unknown field'),          # misplaced key
     ({**BINARY_GRATING, 'numerics': {'truncation_order': [10, 0], 'backand': 0}}, r'unknown field'),
     ({**BINARY_GRATING, 'numerics': {'backend': 'cupy'}}, r'not a Backend'),
-    ({**BINARY_GRATING, 'numerics': {'truncation_order': [1, 2, 3]}}, r'two non-negative ints'),
-    ({**BINARY_GRATING, 'numerics': {'truncation_order': [-1, 0]}}, r'two non-negative ints'),
+    ({**BINARY_GRATING, 'numerics': {'truncation_order': [1, 2, 3]}}, r'1 or 2 values'),
+    ({**BINARY_GRATING, 'numerics': {'truncation_order': [-1, 0]}}, r'cannot be negative'),
     ({**BINARY_GRATING, 'numerics': {'complex_dtype': 32}}, r'128 or 64'),
     ({**BINARY_GRATING, 'version': '99'}, r'version'),
     ({**BINARY_GRATING, 'solver': 'fdtd'}, r'only .rcwa.'),

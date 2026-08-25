@@ -54,6 +54,7 @@ import hashlib
 import json
 import math
 
+from .conventions import parse_order_pair
 from .domain import Layer, Material, Stack, Incidence, retired_material_name
 from .enums import (Answers, Backend, Factorization, FourierCoefficients, NormalMethod,
                     Tetm, answers_of)
@@ -376,12 +377,19 @@ class Numerics:
         if 'answers' in d:
             d['answers'] = _enum(d['answers'], Answers, 'numerics.answers')
         if 'truncation_order' in d:
-            truncation_order = d['truncation_order']
-            truncation_order = (truncation_order, 0) if isinstance(truncation_order, int) else tuple(truncation_order)
-            if len(truncation_order) != 2 or not all(isinstance(v, int) and v >= 0 for v in truncation_order):
-                raise SpecError(
-                    f"numerics.truncation_order: expected two non-negative ints (x, y), got {d['truncation_order']!r}")
-            d['truncation_order'] = truncation_order
+            # The solver's own parser, not a second one. This was an inline check that refused
+            # five spellings `rcwa()` accepts -- `2.0`, `[3]`, both mappings, and a NumPy
+            # integer -- while catching two the parser missed. Both halves now live in
+            # `parse_order_pair`, so the two doors agree by construction rather than by anyone
+            # remembering to update both. A mapping is canonicalised to a pair here, which
+            # costs a spec written that way the deferred `x`/`y`-on-a-skewed-cell *warning*;
+            # it is a warning rather than a refusal, and it still fires for a caller who hands
+            # the mapping straight to `rcwa()`.
+            try:
+                d['truncation_order'] = tuple(
+                    parse_order_pair(d['truncation_order'], 'numerics.truncation_order')[0])
+            except ValueError as exc:
+                raise SpecError(str(exc)) from None
         if d.get('complex_dtype', 128) not in (128, 64):
             raise SpecError(
                 f"numerics.complex_dtype: expected 128 or 64, got {d['complex_dtype']!r}")

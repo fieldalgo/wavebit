@@ -570,6 +570,36 @@ def order_azimuth(xp, ky, kx, phi):
     return xp.reshape(xp.where(zero_kx & (ky == 0), incident, varphi), (-1,))
 
 
+def _order_count(value, name, which):
+    """One order count: a whole number, not negative.
+
+    Neither of the two doors into this repository got both halves. The solver's side took
+    ``int(value)`` and so read ``2.7`` as ``2`` -- a silent truncation of the one number that
+    decides how much of the spectrum is kept -- and took ``-3`` as ``-3``, which reaches
+    ``solve`` and dies there with ``IndexError: arrays used as indices must be of integer
+    type``, naming neither the argument nor the caller. The JSON side (``Numerics.from_dict``)
+    caught both, and refused five spellings the solver accepts on top: ``2.0``, ``[3]``,
+    ``dict(u=..., v=...)``, ``dict(x=..., y=...)`` and a NumPy integer.
+
+    So this is the missing half of the accepting side rather than a copy of the strict one.
+    ``2.0`` is a whole number written as a float and is accepted; ``2.7`` is not a count.
+    """
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f'{name}: expected two integers, got {value!r}') from None
+    if count != value:
+        raise ValueError(
+            f'{name}: {which} is {value!r}, which is not a whole number. The count is how '
+            f'many diffraction orders are retained on each side of zero.')
+    if count < 0:
+        raise ValueError(
+            f'{name}: {which} is {value!r}. The count is how many orders are retained on '
+            f'each side of zero, so it cannot be negative -- 0 keeps the specular order '
+            f'alone, which is the smallest a solve can be.')
+    return count
+
+
 def parse_order_pair(value, name='truncation_order'):
     """``([u, v], spelling)`` from any accepted spelling of an order-count pair.
 
@@ -596,20 +626,19 @@ def parse_order_pair(value, name='truncation_order'):
                 f"{name}: a mapping needs exactly {{'u', 'v'}} or {{'x', 'y'}}; got {sorted(keys)}. "
                 f"'u' and 'v' are the cell's two directions and are always right; 'x' and 'y' "
                 f"name them only on an axis-aligned cell.")
-        try:
-            return [int(pair[0]), int(pair[1])], spelling
-        except (TypeError, ValueError):
-            raise ValueError(f'{name}: expected two integers, got {value!r}') from None
+        return [_order_count(pair[0], name, "the first entry"),
+                _order_count(pair[1], name, "the second entry")], spelling
 
     if hasattr(value, 'tolist'):
         value = value.tolist()
     if isinstance(value, (int, float)):
-        return [int(value), 0], None
+        return [_order_count(value, name, 'the count'), 0], None
     if isinstance(value, (list, tuple)):
         if len(value) == 1:
-            return [int(value[0]), 0], None
+            return [_order_count(value[0], name, 'the count'), 0], None
         if len(value) == 2:
-            return [int(value[0]), int(value[1])], None
+            return [_order_count(value[0], name, 'the first entry'),
+                    _order_count(value[1], name, 'the second entry')], None
         raise ValueError(f'{name}: expected 1 or 2 values, got {len(value)}')
     raise ValueError(
         f"{name}: expected an int, a pair, or a mapping like dict(u=5, v=2); got {value!r}")
