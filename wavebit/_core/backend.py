@@ -21,13 +21,15 @@ def array_namespace(*xs):
 def _readable(v, xp):
     """``v`` as something ``xp`` can reduce, without disturbing an autograd graph.
 
-    Deliberately not :func:`as_array`, and deliberately not a bare ``xp.asarray``: under
-    PyTorch the latter hands back *the same tensor* with ``requires_grad`` flipped off in
-    place (see :func:`as_array`), which would make a read-only guard silently sever a
-    caller's gradient. An array already belonging to ``xp`` is therefore passed through
-    untouched; a Python scalar or a foreign array — ``n_top`` can arrive as either — has no
-    graph to lose and is converted, which is also what gives ``xp.isdtype`` below a dtype it
-    recognizes.
+    Deliberately not :func:`as_array`, and deliberately not a bare ``xp.asarray``: through
+    torch 2.11.x the latter handed back *the same tensor* with ``requires_grad`` flipped off
+    in place (see :func:`as_array` for the version history), which made a read-only guard a
+    way to silently sever a caller's gradient. torch 2.12.0 fixed that, so on the supported
+    floor the pass-through is no longer what keeps the graph alive; it is kept because a
+    guard that only reads has no business rebuilding its input. An array already belonging to
+    ``xp`` is therefore passed through untouched; a Python scalar or a foreign array —
+    ``n_top`` can arrive as either — has no graph to lose and is converted, which is also what
+    gives ``xp.isdtype`` below a dtype it recognizes.
     """
     if hasattr(v, 'dtype') and hasattr(v, 'shape'):
         try:
@@ -368,8 +370,9 @@ def forward_strided(v):
 
     Normalising is safe precisely where it applies. Only NumPy arrays are copied, and a NumPy
     array never carries an autograd graph; a torch tensor cannot have a negative stride in the
-    first place, and copying one would be the silent detach :func:`as_array` is written to
-    avoid. Anything else is returned untouched.
+    first place, and NumPy-copying one that tracks gradient is not even possible
+    (``np.ascontiguousarray`` raises ``RuntimeError: Can't call numpy() on Tensor that requires
+    grad``). Anything else is returned untouched.
     """
     import numpy as np
     if isinstance(v, np.ndarray) and any(s < 0 for s in v.strides):
@@ -380,12 +383,9 @@ def forward_strided(v):
 def as_array(xp, v, dtype=None, device=None):
     """``v`` as an ``xp`` array, keeping any autograd graph intact.
 
-    ``xp.asarray`` detaches under PyTorch, and does something worse when the dtype already
-    matches: it hands back *the same tensor* with ``requires_grad`` flipped off in place, so a
-    caller's optimizer leaf stops carrying gradient after one forward pass, silently. Values
-    that are already arrays of this namespace are therefore cast with ``astype``, which is
+    Values that are already arrays of this namespace are cast with ``astype``, which is
     differentiable; everything else (Python scalars, NumPy arrays, lists) goes through
-    ``asarray`` as before, where there is no graph to lose.
+    ``asarray``, where there is no graph to lose.
 
     Use this anywhere a *user-supplied* quantity enters the algebra — an index, an angle, a
     period, a wavelength, an edge position. `xp.asarray` is still right for values the core
@@ -393,7 +393,26 @@ def as_array(xp, v, dtype=None, device=None):
 
     A foreign array crossing into ``xp`` also gets its strides normalised
     (:func:`forward_strided`), because PyTorch is the one namespace that refuses a reversed
-    NumPy view.
+    NumPy view. That half is current: on torch 2.13.0 ``asarray(np.flip(a))`` still raises
+    ``ValueError: At least one stride in the given numpy array is negative``.
+
+    The *gradient* hazard this function was written for is fixed upstream and is no longer
+    reachable from the supported floor. Through **torch 2.11.x**, ``torch.asarray`` defaulted
+    ``requires_grad`` to ``False`` and then applied it to the tensor it was about to return
+    (``torch/csrc/utils/tensor_new.cpp``: ``detach()`` for a non-leaf, ``set_requires_grad()``
+    for a leaf). So a leaf whose dtype already matched came back as *the same tensor* with
+    ``requires_grad`` flipped off in place — a caller's optimizer parameter stopped carrying
+    gradient and the very next ``backward()`` raised — while every other path returned a
+    detached copy. Reproduced here on torch 2.0.0, and that branch is still verbatim in the
+    v2.11.0 source. pytorch#170897 (landed 2026-03-31), first released in **torch 2.12.0**
+    (2026-05-11), changed the default to ``obj.requires_grad`` and warns once about the old
+    one; measured on torch 2.13.0 — this project's floor, see ``docs/torch-compile.md`` —
+    every ``asarray`` path now preserves both ``requires_grad`` and the graph, so on gradients
+    the two spellings agree. ``array_api_compat`` never entered into it: its torch ``asarray``
+    is a passthrough that only fixes device propagation (changelog 1.12.0, pytorch#150199).
+
+    So the ``astype`` branch is a same-namespace no-op today rather than the graph guard it
+    was; the strides normalisation above is the part that has not changed.
     """
     if hasattr(v, 'dtype') and hasattr(v, 'shape'):
         try:

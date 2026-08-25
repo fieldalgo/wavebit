@@ -1442,9 +1442,11 @@ def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=N
 def _lift(xp, v, dtype, device=None):
     """``v`` on the working backend at ``dtype``, keeping any autograd graph intact.
 
-    ``asarray(tensor, dtype=...)`` detaches under PyTorch, so a value that *is* a design
-    variable would silently stop carrying gradient. Only values that are not already arrays of
-    this namespace get created from scratch.
+    Only values that are not already arrays of this namespace get created from scratch. That
+    guarded a real defect through torch 2.11.x, where ``asarray(tensor, dtype=...)`` detached
+    and a value that *is* a design variable silently stopped carrying gradient; torch 2.12.0
+    fixed it — see :func:`wavebit._core.backend.as_array` for the version history and for why
+    the branch is kept anyway.
     """
     if hasattr(v, 'dtype') and hasattr(v, 'shape'):
         try:
@@ -1475,7 +1477,8 @@ def _fourier1d_integrated(xp, x, cell, truncation_order, period):
 
     # ``x`` holds the segment edges, which for a vector-modelled layer *are* the design
     # variables an OCD fit differentiates -- CD, sidewall angle, pitch all live here. Lift
-    # them without detaching; ``asarray(..., dtype=)`` would cut the graph under PyTorch.
+    # them through ``_lift``, which keeps a same-namespace value as it is; through torch
+    # 2.11.x a bare ``asarray(..., dtype=)`` would have cut the graph here.
     period = _lift(xp, period, C, dev)
     x = _lift(xp, x, C, dev)
 

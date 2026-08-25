@@ -396,9 +396,12 @@ def test_vector_path_differentiates_wrt_edge_positions(backend, name):
     """An OCD fit differentiates the *edges* — CD, sidewall angle, pitch — not the pixels.
 
     Those live in the segment edge list the block modeler produces, and ``_fourier1d_integrated`` used to lift
-    it with ``asarray(..., dtype=)``, which detaches under PyTorch. The solve still returned a
+    it with ``asarray(..., dtype=)``, which through torch 2.11.x detached -- see
+    :func:`wavebit._core.backend.as_array` for the version boundary. The solve still returned a
     tensor, just one with no graph behind it, so this failed only when someone called
-    ``backward()``.
+    ``backward()``. torch 2.12.0 fixed that spelling, so on the current floor this no longer
+    discriminates the original defect; it stands as a gradient check on the vector path, which
+    the edge-position derivative is worth having on its own.
 
     Compared against a central difference rather than a stored number: the point is that the
     derivative is the real one, not that it is any particular value.
