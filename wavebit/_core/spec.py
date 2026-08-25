@@ -395,6 +395,38 @@ class Numerics:
                 f"numerics.complex_dtype: expected 128 or 64, got {d['complex_dtype']!r}")
         return cls(**d)
 
+    def check(self):
+        """Every reason these numerics cannot be used, as messages, or an empty tuple.
+
+        Same contract as :meth:`~wavebit._core.domain.Stack.check`. ``truncation_order`` goes
+        through ``parse_order_pair`` -- the solver's own parser, which this class stopped
+        second-guessing in `0dde6c5` -- and ``complex_dtype`` is checked in the bit-width
+        spelling this class uses (128 / 64), not the solver's 0 / 1 code. That difference is
+        real and is why the width is not simply handed to `_resolve_precision`: they are two
+        vocabularies for one choice, and `as_kwargs` is where one becomes the other.
+        """
+        problems = []
+        if self.truncation_order is not None:
+            try:
+                parse_order_pair(self.truncation_order, 'truncation_order')
+            except ValueError as exc:
+                problems.append(str(exc))
+        if self.complex_dtype not in (128, 64):
+            problems.append(
+                f'complex_dtype: expected 128 or 64, got {self.complex_dtype!r}. It is the '
+                f'width in bits; the solver spells the same choice 0 and 1.')
+        if self.normal_grid is not None:
+            try:
+                grid = int(self.normal_grid)
+                bad = grid != self.normal_grid or grid <= 0
+            except (TypeError, ValueError):
+                bad = True
+            if bad:
+                problems.append(
+                    f'normal_grid: expected a positive whole number of samples, got '
+                    f'{self.normal_grid!r}.')
+        return tuple(problems)
+
     def to_dict(self) -> dict:
         return {f: _jsonable(getattr(self, f)) for f in self._FIELDS}
 
@@ -567,6 +599,31 @@ class JobSpec:
         return cls.from_dict(json.loads(text))
 
     # -------------------------------------------------------------- serialisation
+
+    def check(self):
+        """Every reason this job cannot be submitted, as messages, or an empty tuple.
+
+        The three carriers' checks, each prefixed with where it came from, in the order a
+        reader would look: the scene, then the illumination, then the numerics. Nothing is
+        raised -- `run` and the solver still refuse, one problem at a time, which is right
+        for them; this is for the caller who would rather fix all four at once than learn
+        about them across four submissions.
+
+        Deliberately not called by `from_dict`. That door parses JSON and refuses what cannot
+        become a spec at all; this one asks whether a spec that parsed can be solved, and the
+        two are different questions with different right answers for a caller who is, say,
+        generating a sweep and wants to report every bad point rather than stop at the first.
+        """
+        problems = []
+        for where, carrier in (('stack', self.stack), ('incidence', self.incidence),
+                               ('numerics', self.numerics)):
+            if carrier is None:
+                continue
+            # One prefix shape, always. Guessing whether a message already names its field
+            # produced `incidence.psi and polarization both given`, which reads as a field
+            # called `psi and polarization`.
+            problems.extend(f'[{where}] {message}' for message in carrier.check())
+        return tuple(problems)
 
     def to_dict(self) -> dict:
         return {

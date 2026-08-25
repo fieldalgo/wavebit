@@ -19,8 +19,11 @@ from . import boundary as _boundary
 from . import factorization as _fac
 from . import lattice as _lattice
 from .backend import _device_of, array_namespace, as_array, check_input_precision
-from .conventions import (incident_sp_amplitudes, lit_orders, order_window,
-                          parse_order_pair, warn_if_xy_on_a_skewed_cell)
+from .conventions import (_CHI_POLARIZATION_CLASH, _COMPLEX_CHI,
+                          _PSI_POLARIZATION_CLASH, _TETM_INCIDENCE_CLASH,
+                          incident_sp_amplitudes, lit_orders, order_window,
+                          parse_order_pair, reject_complex_angle,
+                          warn_if_xy_on_a_skewed_cell)
 from .domain import (Material, RETIRED_MATERIAL_NAMES, as_material, index_from_eps,
                      retired_material_name)
 from .enums import (Answers, DEFAULT_ANSWERS, DEFAULT_FACTORIZATION, DEFAULT_FORMULATION,
@@ -233,29 +236,6 @@ def _efficiency_only(de_ri, de_ti):
             'R': de_ri, 'R_s': None, 'R_p': None, 'T': de_ti, 'T_s': None, 'T_p': None}
 
 
-#: One message for both directions of the same mistake — the ``psi`` setters raise it when a
-#: pair is already set, the ``polarization`` setter when ``psi`` was given explicitly.
-_PSI_POLARIZATION_CLASH = (
-    'psi and polarization both given: they specify the same thing (the incident '
-    'polarization), so one must be dropped rather than silently overridden. '
-    'psi = v is exactly polarization = (sin(v), cos(v)).')
-
-#: ``tetm`` declares the polarization away; naming one beside it is the same clash as
-#: ``psi`` with ``polarization``, one level up.
-_TETM_INCIDENCE_CLASH = (
-    'tetm and an incidence polarization (psi or polarization) both given: tetm declares '
-    'that the polarization is not a degree of freedom of this problem, so naming one is a '
-    'contradiction rather than a refinement. Drop tetm to keep the polarization free (the '
-    'conical path, 2-4x slower), or drop psi/polarization to keep the declaration.')
-
-#: ``chi`` and the pair are two charts on one slot -- the same clash as ``psi`` with the pair.
-_CHI_POLARIZATION_CLASH = (
-    'chi and polarization both given: they are two ways of writing the same incident state, '
-    'not two states. (psi, chi) are its canonical coordinates -- two real angles, no '
-    'normalization, nothing redundant -- while polarization=(a_s, a_p) is the raw pair, which '
-    'additionally carries an overall phase the chart does not. Drop whichever you did not '
-    'mean; psi = v with chi = 0 is exactly polarization = (sin v, cos v).')
-
 #: ``pol`` was three things at once, and this is the rename. See :attr:`CoreSolveMixin.tetm`.
 _POL_RETIRED = (
     "pol is gone; use tetm='te' or tetm='tm'. The old name said three things at once: "
@@ -310,24 +290,6 @@ _MU_ON_A_SHAPE_PATH = (
     'to attach itself to, so it is refused rather than dropped. The two fields are one pair '
     'and either may be assigned second, so this is also what assigning a shape structure over '
     'a solver that already holds a mu raises -- clear the mu first if the swap is intended.')
-
-#: ``chi`` is an angle too, and the same argument applies one coordinate over.
-_COMPLEX_CHI = (
-    'chi must be a real angle: it is the ellipticity angle, and tan(chi) is the '
-    "ellipse's minor/major axis ratio. Every state already has real coordinates -- "
-    'that is what makes (psi, chi) a chart -- so an imaginary part is not a wider '
-    'spelling but an unnormalized pair in disguise. Use polarization=(a_s, a_p) to '
-    'write amplitudes directly.')
-
-#: Raised by :meth:`CoreSolveMixin._reject_complex_angle`, which says why at length.
-_COMPLEX_PSI = (
-    'psi must be a real angle; a complex psi is not the elliptical spelling it looks '
-    'like. (sin(psi), cos(psi)) stops being a unit pair once psi has an imaginary part, '
-    'so the incident flux silently becomes cosh(2*Im(psi)) and every efficiency is off by '
-    'that factor. It cannot reach the circular states either: they are the two values '
-    'tan(psi) never takes. Use polarization=(a_s, a_p) — (1, -1j) and (1, +1j) are the '
-    'circular states, and its magnitude is normalized for you.')
-
 
 #: `nextafter(float32(pi/2), 0)` and `float32(pi/2)`, as plain Python floats. They are the
 #: clamp and the threshold `_incident_kxy` uses, and they are constants: computing them in each
@@ -606,42 +568,6 @@ class CoreSolveMixin:
         """
         return self.n_bot if self._incidence_side == 'bottom' else self.n_top
 
-    @staticmethod
-    def _reject_complex_angle(psi, message=None):
-        """``psi`` is an angle, and an angle is real. Called by the backend ``psi`` setters.
-
-        A complex ``psi`` is not a wider spelling of the same input — it is a silently wrong
-        one, and it was wrong in a way nothing downstream could catch. ``(sin(psi), cos(psi))``
-        is a unit pair only for real ``psi``; for ``Im(psi) = b`` the incident flux comes out
-        ``cosh(2b)``, so every efficiency is scaled by a factor the solver never applied.
-        On a lossless stack ``R + T > 1`` raises ``UnphysicalResultWarning``, but an absorbing
-        one absorbs the discrepancy: a measured case returned ``R + T = 0.998`` where the
-        right answer was ``0.647``, with no warning anywhere.
-
-        Nor does it buy the states it looks like it should. ``a_s/a_p = tan(psi)``, and
-        ``tan(z) = ±i`` reduces to ``exp(±iz) = 0``, which has no solution — the circular
-        states are the two values ``tan`` omits. A complex ``psi`` approaches them only as
-        ``Im(psi) -> ±inf``, and the incident amplitude diverges at exactly the rate the
-        approach converges. ``polarization=(a_s, a_p)`` is where those states live.
-
-        Anything carrying a ``dtype`` — array, tensor, tracer — is judged on that and its
-        value is never read: a trace has no value to read, and reading a torch tensor that
-        requires grad warns. A plain Python scalar is judged on its imaginary part instead,
-        so ``0.5+0j`` is accepted as a real angle written oddly rather than refused.
-        """
-        message = _COMPLEX_PSI if message is None else message
-        dtype = getattr(psi, 'dtype', None)
-        if dtype is not None:
-            if getattr(dtype, 'kind', '') == 'c' or 'complex' in str(dtype):
-                raise ValueError(message)
-            return
-        try:
-            value = complex(psi)
-        except (TypeError, ValueError):
-            return
-        if value.imag != 0:
-            raise ValueError(message)
-
     def _psi_set_explicitly(self):
         """Called by the backend ``psi`` setters on a non-``None`` assignment.
 
@@ -762,7 +688,7 @@ class CoreSolveMixin:
             raise ValueError(_CHI_POLARIZATION_CLASH)
         if self._tetm is not None:
             raise ValueError(_TETM_INCIDENCE_CLASH)
-        self._reject_complex_angle(value, _COMPLEX_CHI)
+        reject_complex_angle(value, _COMPLEX_CHI)
         self._chi = self._as_real_angle(value)
 
     def _incidence_pair(self):
@@ -1072,7 +998,7 @@ class CoreSolveMixin:
         before it latches. :attr:`chi` had this order all along, in the same file.
         """
         if psi is not None:
-            self._reject_complex_angle(psi)
+            reject_complex_angle(psi)
             value = self._as_real_angle(psi)
             self._psi_set_explicitly()
             self._psi = value

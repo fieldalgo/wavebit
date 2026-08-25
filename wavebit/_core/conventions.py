@@ -662,3 +662,155 @@ def warn_if_xy_on_a_skewed_cell(spelling, axis_aligned, name='truncation_order')
             f"The solve is the one you asked for; only the names were off. Write "
             f"{name}=dict(u=..., v=...) to say it exactly.",
             AxisNameWarning, stacklevel=3)
+
+
+# --- the incidence spellings, and what makes them exclusive -----------------------------
+#
+# `psi`, `chi`, `polarization` and `tetm` are four names for one input, and the rules about
+# which may sit beside which live here rather than in the setters that used to hold them.
+# The reason is the reason this module exists at all: the solver's setters are one door and
+# `Stack` / `Incidence` are another, and a rule written twice is a rule that will disagree
+# with itself -- as `truncation_order`'s two copies did, for years, in `0dde6c5`.
+
+
+#: One message for both directions of the same mistake — the ``psi`` setters raise it when a
+#: pair is already set, the ``polarization`` setter when ``psi`` was given explicitly.
+_PSI_POLARIZATION_CLASH = (
+    'psi and polarization both given: they specify the same thing (the incident '
+    'polarization), so one must be dropped rather than silently overridden. '
+    'psi = v is exactly polarization = (sin(v), cos(v)).')
+
+#: ``tetm`` declares the polarization away; naming one beside it is the same clash as
+#: ``psi`` with ``polarization``, one level up.
+_TETM_INCIDENCE_CLASH = (
+    'tetm and an incidence polarization (psi or polarization) both given: tetm declares '
+    'that the polarization is not a degree of freedom of this problem, so naming one is a '
+    'contradiction rather than a refinement. Drop tetm to keep the polarization free (the '
+    'conical path, 2-4x slower), or drop psi/polarization to keep the declaration.')
+
+#: ``chi`` and the pair are two charts on one slot -- the same clash as ``psi`` with the pair.
+_CHI_POLARIZATION_CLASH = (
+    'chi and polarization both given: they are two ways of writing the same incident state, '
+    'not two states. (psi, chi) are its canonical coordinates -- two real angles, no '
+    'normalization, nothing redundant -- while polarization=(a_s, a_p) is the raw pair, which '
+    'additionally carries an overall phase the chart does not. Drop whichever you did not '
+    'mean; psi = v with chi = 0 is exactly polarization = (sin v, cos v).')
+
+#: ``chi`` is an angle too, and the same argument applies one coordinate over.
+_COMPLEX_CHI = (
+    'chi must be a real angle: it is the ellipticity angle, and tan(chi) is the '
+    "ellipse's minor/major axis ratio. Every state already has real coordinates -- "
+    'that is what makes (psi, chi) a chart -- so an imaginary part is not a wider '
+    'spelling but an unnormalized pair in disguise. Use polarization=(a_s, a_p) to '
+    'write amplitudes directly.')
+
+#: Raised by :meth:`CoreSolveMixin._reject_complex_angle`, which says why at length.
+_COMPLEX_PSI = (
+    'psi must be a real angle; a complex psi is not the elliptical spelling it looks '
+    'like. (sin(psi), cos(psi)) stops being a unit pair once psi has an imaginary part, '
+    'so the incident flux silently becomes cosh(2*Im(psi)) and every efficiency is off by '
+    'that factor. It cannot reach the circular states either: they are the two values '
+    'tan(psi) never takes. Use polarization=(a_s, a_p) — (1, -1j) and (1, +1j) are the '
+    'circular states, and its magnitude is normalized for you.')
+
+
+def reject_complex_angle(psi, message=None):
+    """``psi`` is an angle, and an angle is real. Called by the backend ``psi`` setters.
+
+    A complex ``psi`` is not a wider spelling of the same input — it is a silently wrong
+    one, and it was wrong in a way nothing downstream could catch. ``(sin(psi), cos(psi))``
+    is a unit pair only for real ``psi``; for ``Im(psi) = b`` the incident flux comes out
+    ``cosh(2b)``, so every efficiency is scaled by a factor the solver never applied.
+    On a lossless stack ``R + T > 1`` raises ``UnphysicalResultWarning``, but an absorbing
+    one absorbs the discrepancy: a measured case returned ``R + T = 0.998`` where the
+    right answer was ``0.647``, with no warning anywhere.
+
+    Nor does it buy the states it looks like it should. ``a_s/a_p = tan(psi)``, and
+    ``tan(z) = ±i`` reduces to ``exp(±iz) = 0``, which has no solution — the circular
+    states are the two values ``tan`` omits. A complex ``psi`` approaches them only as
+    ``Im(psi) -> ±inf``, and the incident amplitude diverges at exactly the rate the
+    approach converges. ``polarization=(a_s, a_p)`` is where those states live.
+
+    Anything carrying a ``dtype`` — array, tensor, tracer — is judged on that and its
+    value is never read: a trace has no value to read, and reading a torch tensor that
+    requires grad warns. A plain Python scalar is judged on its imaginary part instead,
+    so ``0.5+0j`` is accepted as a real angle written oddly rather than refused.
+    """
+    message = _COMPLEX_PSI if message is None else message
+    dtype = getattr(psi, 'dtype', None)
+    if dtype is not None:
+        if getattr(dtype, 'kind', '') == 'c' or 'complex' in str(dtype):
+            raise ValueError(message)
+        return
+    try:
+        value = complex(psi)
+    except (TypeError, ValueError):
+        return
+    if value.imag != 0:
+        raise ValueError(message)
+
+
+def incidence_clashes(tetm=None, psi=None, chi=None, polarization=None):
+    """Every conflict among the four incidence spellings, as messages, or an empty tuple.
+
+    Four names for one input, and the rules are pairwise: ``tetm`` refuses to sit beside any
+    of the other three, and ``psi`` (with ``chi`` beside it) and ``polarization`` refuse each
+    other. Whole-state rather than incremental -- it is handed the four values and reports
+    every conflict among them at once.
+
+    The setters enforce the same rules one assignment at a time, because that is the shape
+    they are in: they see one new value against a solver that already holds the others, and
+    they distinguish a ``psi`` the caller *gave* from the 45-degree default using
+    ``_psi_given``. A carrier has no such history; ``psi is not None`` is the whole of it.
+    So this is the same rule stated for the caller that has all four in hand, not a second
+    rule -- and stating it once, here, is why the messages are the constants above rather
+    than sentences written twice.
+
+    Returns messages instead of raising because a caller checking a whole scene wants every
+    problem, not the first. A setter wants the opposite and keeps raising.
+    """
+    problems = []
+    if tetm is not None:
+        for name, value in (('psi', psi), ('chi', chi), ('polarization', polarization)):
+            if value is not None:
+                problems.append(f'{name} beside tetm: {_TETM_INCIDENCE_CLASH}')
+    if polarization is not None:
+        if psi is not None:
+            problems.append(_PSI_POLARIZATION_CLASH)
+        if chi is not None:
+            problems.append(_CHI_POLARIZATION_CLASH)
+    return tuple(problems)
+
+
+def wavelength_problem(wavelength, name='wavelength'):
+    """Why ``wavelength`` cannot be one, or ``None``.
+
+    The one slot in the whole incidence with no rule anywhere: there is no ``wavelength``
+    property on any solver -- no getter, no setter, just ``self.wavelength = wavelength`` in
+    three constructors -- so ``'abc'``, ``None``, ``0.0`` and ``-620.0`` were all accepted,
+    and the negative one solved and returned energy-conserving numbers.
+
+    Written here rather than as a setter because it is the first rule for this slot and both
+    doors should get it at once. A free-space wavelength is a positive length; zero has no
+    frequency and a negative one is the same wave with the sign moved into the phase, which
+    every downstream expression then disagrees about.
+
+    Anything carrying a ``dtype`` is left alone, the same way :func:`reject_complex_angle`
+    leaves it alone: a traced or arrayed wavelength is a design variable being swept, and its
+    value is not available to look at.
+    """
+    if hasattr(wavelength, 'dtype') or hasattr(wavelength, 'shape'):
+        return None
+    try:
+        value = complex(wavelength)
+    except (TypeError, ValueError):
+        return (f'{name}: expected a positive length, got {wavelength!r}. It is the free-space '
+                f'wavelength, in whatever unit the rest of the scene is written in.')
+    if value.imag != 0:
+        return (f'{name}: {wavelength!r} is complex. Loss belongs in a material '
+                f'(Im(eps) > 0), not in the wavelength.')
+    if value.real <= 0:
+        return (f'{name}: {wavelength!r} is not a length. Zero has no frequency, and a '
+                f'negative wavelength is the same wave with the sign moved into the phase, '
+                f'which the solve and the order grid then disagree about.')
+    return None

@@ -36,6 +36,8 @@ from cmath import sqrt as _complex_sqrt
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from .conventions import (_COMPLEX_CHI, incidence_clashes, reject_complex_angle,
+                          wavelength_problem)
 from .backend import array_namespace
 from .enums import Tetm  # noqa: F401  (re-exported for spec's tetm parsing)
 
@@ -525,6 +527,56 @@ class Stack:
             return xp.stack(per_layer, axis=0)
         return per_layer
 
+    def check(self):
+        """Every reason this stack cannot be solved, as messages, or an empty tuple.
+
+        Same contract as :meth:`Incidence.check`: all of them, none raised, and the rules are
+        called rather than restated. ``as_material`` and ``_refuse_shaped_half_space`` are the
+        solver's own, and ``as_lattice`` is what the cell has always been parsed by.
+
+        A ``Layer`` is checked for the pair a raster has to be -- a permeability field is a
+        second array on one grid, so it shares a shape with the permittivity exactly -- which
+        is the check ``_revalidate_mu`` performs on the solver, from whichever side lands
+        second. Here both sides are in hand at once and there is no order to worry about.
+
+        What it cannot see: the modeling path. Whether a shape recipe is well formed, whether
+        its overlaps resolve, whether the block modeller accepts this cell -- those are read
+        by the builders and need the whole scene. A clean check here is not a promise that the
+        solve will succeed; it is a promise that these particular mistakes are not present.
+        """
+        from .engine import _refuse_shaped_half_space
+        problems = []
+        for where, value in (('top', self.top), ('bot', self.bot)):
+            try:
+                _refuse_shaped_half_space(as_material(value, where), where)
+            except (ValueError, TypeError) as exc:
+                problems.append(str(exc))
+        for index, layer in enumerate(self.layers):
+            eps, mu = layer.structure, layer.mu
+            if mu is None or not hasattr(eps, 'shape') or not hasattr(mu, 'shape'):
+                continue
+            if tuple(eps.shape) != tuple(mu.shape):
+                problems.append(
+                    f'layer {index}: mu is {tuple(mu.shape)} and structure is '
+                    f'{tuple(eps.shape)}. They are two fields sampled on one raster, so they '
+                    f'share a shape exactly.')
+        if self.lattice is not None:
+            try:
+                from .lattice import as_lattice
+                as_lattice(lattice=self.lattice)
+            except (ValueError, TypeError) as exc:
+                problems.append(f'lattice: {exc}')
+        elif self.period is not None:
+            try:
+                pair = tuple(self.period) if hasattr(self.period, '__len__') else (self.period,)
+            except TypeError:
+                pair = None
+            if pair is not None and len(pair) not in (1, 2):
+                problems.append(
+                    f'period: expected 1 or 2 lengths, got {len(pair)}. It is the '
+                    f'axis-aligned spelling of the cell; a skewed one is `lattice=`.')
+        return tuple(problems)
+
     def as_kwargs(self) -> dict:
         """The geometry keyword arguments for :func:`wavebit.rcwa`.
 
@@ -578,6 +630,43 @@ class Incidence:
     chi: Optional[Any] = None
     incidence_side: str = 'top'
     polarization: Optional[Any] = None
+
+    def check(self):
+        """Every reason this illumination cannot be solved, as messages, or an empty tuple.
+
+        All of them at once. The solver refuses the first problem it reaches and stops, which
+        is right for a setter and wrong for a caller holding a whole scene: a spec with three
+        mistakes takes three round trips to find out. Nothing is raised here, so a caller
+        decides whether to raise, print, or collect across a sweep.
+
+        The rules are called, not restated. ``reject_complex_angle`` and
+        ``incidence_clashes`` live in :mod:`wavebit._core.conventions` precisely so that this
+        and the solver's setters are two callers of one rule rather than two rules -- which
+        is what ``truncation_order`` was until `0dde6c5`, and the two had disagreed for years.
+
+        What it cannot see: anything that needs the scene. ``phi`` on a 1D grating, a ``psi``
+        against a structure that has no polarization freedom, an order count against a cell --
+        those are :class:`Stack` and :class:`Numerics` crossed with this, and a check that
+        knows only the illumination cannot reach them.
+        """
+        problems = []
+        message = wavelength_problem(self.wavelength)
+        if message is not None:
+            problems.append(message)
+        for name, value, note in (('psi', self.psi, None), ('chi', self.chi, _COMPLEX_CHI)):
+            if value is None:
+                continue
+            try:
+                reject_complex_angle(value, note)
+            except ValueError as exc:
+                problems.append(str(exc))
+        problems.extend(incidence_clashes(self.tetm, self.psi, self.chi, self.polarization))
+        if self.incidence_side not in ('top', 'bottom'):
+            problems.append(
+                f"incidence_side: expected 'top' or 'bottom', got {self.incidence_side!r}. "
+                f"It names which half-space the light arrives from, and theta and phi are "
+                f"measured in that medium.")
+        return tuple(problems)
 
     def as_kwargs(self) -> dict:
         """The illumination keyword arguments for :func:`wavebit.rcwa`."""
