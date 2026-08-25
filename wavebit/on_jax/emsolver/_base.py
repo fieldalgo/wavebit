@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 import jax.numpy as _xp
 
-from ..._core.engine import CoreSolveMixin, device_scoped
+from ..._core.engine import CoreSolveMixin
 
 
 class _BaseRCWA(CoreSolveMixin):
@@ -24,7 +24,6 @@ class _BaseRCWA(CoreSolveMixin):
         than a value the base could hold.
         """
         return jax.default_device(self.device[0])
-
 
     #: A JAX array -- and a `DynamicJaxprTracer` too, which is what lets a period be
     #: differentiated or closed over inside `jax.jit`.
@@ -48,21 +47,4 @@ class _BaseRCWA(CoreSolveMixin):
                 and all(isinstance(d, jax.Device) for d in value)):
             return list(value)
         raise ValueError(f'unsupported jax device: {value!r}')
-
-    @device_scoped
-    def _separable_kxy(self, wavelength):
-        (cx, hx), (cy, hy) = self.order_window
-
-        max_order_x_range = jnp.arange(cx - hx, cx + hx + 1)
-        max_order_y_range = jnp.arange(cy - hy, cy + hy + 1)
-
-        k_inc_x, k_inc_y = self._incident_kxy(wavelength)
-
-        kx = (k_inc_x + max_order_x_range * (
-                wavelength / self.period[0])).astype(self.complex_dtype)
-
-        ky = (k_inc_y + max_order_y_range * (
-                wavelength / self.period[1])).astype(self.complex_dtype)
-
-        return kx, ky
 

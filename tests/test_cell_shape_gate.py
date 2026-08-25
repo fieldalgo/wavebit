@@ -45,9 +45,12 @@ _SEPARABLE_KXY = (
     "paths setting grating_type 2 unconditionally.")
 
 _ALLOWED = {
-    ('wavebit/on_numpy/emsolver/_base.py', '_separable_kxy'): (2, _SEPARABLE_KXY),
-    ('wavebit/on_jax/emsolver/_base.py', '_separable_kxy'): (2, _SEPARABLE_KXY),
-    ('wavebit/on_torch/emsolver/_base.py', '_separable_kxy'): (2, _SEPARABLE_KXY),
+    # One entry, and three until the body was folded into `_core`. The argument below is
+    # entirely about the *callers*, so it did not weaken by moving -- but the gate is keyed by
+    # (module, function) and could not know that, which is what makes it a gate. It failed on
+    # the move in both directions at once: the new location was unlisted, and the three old
+    # keys had stopped existing, which `test_the_allow_list_has_not_quietly_grown` caught.
+    ('wavebit/_core/engine.py', '_separable_kxy'): (2, _SEPARABLE_KXY),
     ('wavebit/_core/draw.py', 'slice_structure'): (
         4,
         "two sample grids, one per branch, each behind a raise rather than behind a "

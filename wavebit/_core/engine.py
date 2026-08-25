@@ -394,6 +394,40 @@ class CoreSolveMixin:
         # SMM only, from `answers='amplitude'` up; see `CoreSolveMixin._finish`.
         self._scattering = None
 
+    @device_scoped
+    def _separable_kxy(self, wavelength):
+        """The in-plane wavevector on each retained order, one axis at a time.
+
+        The last body that was written three times. They differed in the namespace's `arange`,
+        in `.astype` against Torch's `.type`, and in Torch alone naming `device=` and
+        `dtype=` -- every one of which the array API already absorbs.
+
+        `dtype=` is *not* carried over, and that is measured rather than assumed. It looked
+        load-bearing at single precision, where an untyped integer `arange` multiplied by a
+        float32 gives a float64 intermediate on NumPy. Torch promotes that product to float32
+        regardless, so its `dtype=` never changed a width -- dropping it leaves all three
+        returning byte-identical arrays at both widths. `device=` is the half that was doing
+        the work, and it stays, spelled `_array_device` (`None` where nothing is placed).
+
+        NOTE, separate from this move: at ``complex_dtype=1`` NumPy still computes these offsets
+        through a float64 intermediate while JAX and Torch stay in float32, so NumPy's kx/ky
+        differ from theirs in the last bits. Pre-existing, and not something a fold should
+        decide -- the declared width governs the answer, which
+        ``test_the_declared_width_is_the_width_answered_in`` checks, and it is met either way.
+        """
+        xp = self.xp
+        (cx, hx), (cy, hy) = self.order_window
+
+        orders_u = xp.arange(cx - hx, cx + hx + 1, device=self._array_device)
+        orders_v = xp.arange(cy - hy, cy + hy + 1, device=self._array_device)
+
+        k_inc_x, k_inc_y = self._incident_kxy(wavelength)
+
+        kx = xp.astype(k_inc_x + orders_u * (wavelength / self.period[0]), self.complex_dtype)
+        ky = xp.astype(k_inc_y + orders_v * (wavelength / self.period[1]), self.complex_dtype)
+
+        return kx, ky
+
     def _lit(self):
         """The excitation resolved onto the retained window, or ``None`` if none was named.
 

@@ -1,7 +1,6 @@
 import torch
 import array_api_compat.torch as _xp
 
-
 from ..._core.engine import CoreSolveMixin
 
 
@@ -41,22 +40,4 @@ class _BaseRCWA(CoreSolveMixin):
         raise ValueError(
             f"device: expected 0 / 'cpu', 1 / 'gpu' / 'cuda', or a torch.device; "
             f'got {value!r}.')
-
-    def _separable_kxy(self, wavelength):
-        (cx, hx), (cy, hy) = self.order_window
-
-        max_order_x_range = torch.arange(cx - hx, cx + hx + 1, device=self.device,
-                                   dtype=self.float_dtype)
-        max_order_y_range = torch.arange(cy - hy, cy + hy + 1, device=self.device,
-                                   dtype=self.float_dtype)
-
-        k_inc_x, k_inc_y = self._incident_kxy(wavelength)
-
-        kx = (k_inc_x + max_order_x_range * (
-                wavelength / self.period[0])).type(self.complex_dtype)
-
-        ky = (k_inc_y + max_order_y_range * (
-                wavelength / self.period[1])).type(self.complex_dtype)
-
-        return kx, ky
 
