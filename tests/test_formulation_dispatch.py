@@ -339,7 +339,11 @@ def test_field_reconstruction_is_dispatched_on_the_formulation_not_the_grating_t
     Asserted by watching which reconstruction actually runs, rather than by trusting the
     numbers — ``tests/test_field_4ff.py`` is where the numbers are checked.
     """
-    import wavebit.on_numpy.emsolver.rcwa as rcwa_numpy
+    # `reconstruct_field` folded into `_core.engine` in C8, so the names it dispatches on
+    # are looked up there now. Patching the backend module would patch a name nothing
+    # reads any more -- the spy would see nothing and the assertion would read as a
+    # dispatch failure rather than as a stale patch target.
+    import wavebit._core.engine as dispatch_site
 
     mee = solver(thickness=[180.0], answers='field')
     mee.solve_conv(*uniform_slots([VOIGT], 1))
@@ -349,12 +353,12 @@ def test_field_reconstruction_is_dispatched_on_the_formulation_not_the_grating_t
     seen = []
 
     def spy(name):
-        real = getattr(rcwa_numpy, name)
+        real = getattr(dispatch_site, name)
 
         def wrapper(*args, **kwargs):
             seen.append(name)
             return real(*args, **kwargs)
-        monkeypatch.setattr(rcwa_numpy, name, wrapper)
+        monkeypatch.setattr(dispatch_site, name, wrapper)
 
     spy('field_2d')
     spy('field_2d_4ff')

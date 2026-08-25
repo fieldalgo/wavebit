@@ -6,7 +6,7 @@ repaired the same day; the measurements are kept as taken, with it in place.
 Targets:
 - `wavebit/_core/solve_2d.py::layer_modes_2d` — the two blocks, and why they must order the pair oppositely
 - `wavebit/_core/factorization.py::_nvf_assemble` — where the sign convention is set
-- `wavebit/on_numpy/emsolver/rcwa.py::solve_conv` — the only way to reach the slots by hand
+- `wavebit/_core/engine.py::solve_conv` — the only way to reach the slots by hand
 - `wavebit/_core/solve_2d_4ff.py::_conv_layers` — where the negation is undone for the z row
 - `tests/test_uniform_anisotropic.py`, `tests/test_anisotropic_berreman.py`,
   `tests/references/test_reticolo_anisotropic_golden.py` — every number below

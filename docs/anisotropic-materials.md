@@ -10,7 +10,7 @@ Targets:
 - `wavebit/_core/solve_2d.py::layer_modes_2d` — the five permittivity slots the mode operator reads
 - `wavebit/_core/factorization.py` — what `epx` / `epy` / `epz_i` actually are (not what they look like)
 - `wavebit/_core/conventions.py::boundary_kz` — where `mu` would have to land besides the layer
-- `wavebit/on_numpy/emsolver/rcwa.py::solve_conv` — the injection point that bypasses `structure`, and where the formulation is chosen
+- `wavebit/_core/engine.py::solve_conv` — the injection point that bypasses `structure`, and where the formulation is chosen
 - `wavebit/_core/solve_2d_4ff.py::solve_2d_4ff` — the nine-slot twin of the 2D solve
 
 ---
