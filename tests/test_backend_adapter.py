@@ -314,9 +314,12 @@ def test_a_reversed_raster_solves_the_same_as_its_copy(backend):
 def test_torch_takes_a_reversed_period_and_thickness():
     """Not only the raster: every scalar-ish input crosses the same adapter.
 
-    `period` and `thickness` reach `_as_tensor` as whole arrays, so `np.flip(...)` on either
+    `period` and `thickness` reach the adapter as whole arrays, so `np.flip(...)` on either
     raised exactly like the rotated cell did. Each is written backwards and flipped, so the two
     solves are handed the same numbers and differ only in how those numbers are laid out.
+
+    They reached it through a torch-local `_as_tensor` when this was written. That helper was a
+    second copy of `as_array` and is gone; the path is the same one.
     """
     pytest.importorskip('torch')
     cell = np.ascontiguousarray(STRIDED_CELL)
@@ -499,3 +502,127 @@ def test_every_spelling_of_a_cell_and_a_stack_arrives_as_the_same_array(backend)
         built(period='four hundred')
     with pytest.raises(ValueError):
         built(period={'u': 400.0, 'v': 400.0})       # x and y, because it is the aligned cell
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+def test_a_solver_does_not_share_the_raster_it_was_configured_from(backend):
+    """The same contract as `period`, on the two fields that carry the whole structure.
+
+    `structure` and `mu` are the largest thing a caller hands over and the likeliest to be a
+    buffer they keep writing into -- a topology optimiser's density map is exactly that. NumPy
+    copied it (`grid.astype`) and Torch copied it (`torch.tensor`), but JAX's `jnp.asarray`
+    zero-copies from a NumPy buffer *sometimes*: measured over twenty identical trials before
+    the fold, JAX followed the caller on 5 of 20 and NumPy and Torch on 0 of 20. Neither
+    aliasing nor copying, which means no contract at all.
+
+    Twenty trials rather than one, because a single trial passed on JAX more often than not and
+    would have pinned nothing.
+    """
+    if backend == 1:
+        pytest.importorskip('jax')
+    elif backend == 2:
+        pytest.importorskip('torch')
+    cfg = dict(backend=backend, truncation_order=(1, 1), wavelength=620., top=1.0, bot=1.0,
+               period=[400.0, 400.0], thickness=[150.0])
+    for _ in range(20):
+        eps, mu = np.ones((1, 4, 4)) * 2.0, np.ones((1, 4, 4)) * 1.5
+        solver = wavebit.rcwa(structure=eps, mu=mu, **cfg)
+        eps[0, 0, 0], mu[0, 0, 0] = 99.0, 9.0
+        assert float(np.asarray(solver.structure)[0, 0, 0]) == 2.0, 'structure followed'
+        assert float(np.asarray(solver.mu)[0, 0, 0]) == 1.5, 'mu followed'
+
+
+def test_a_torch_raster_leaf_is_kept_rather_than_copied():
+    """The other half of the same contract, and the half that costs something to keep.
+
+    Copying every input would be the simple rule; it would also detach the design variable a
+    topology optimiser is differentiating, which is the one thing the raster path exists for.
+    """
+    torch = pytest.importorskip('torch')
+    leaf = torch.tensor(np.ones((1, 4, 4)) * 2.0, dtype=torch.float64, requires_grad=True)
+    solver = wavebit.rcwa(backend=2, structure=leaf, truncation_order=(1, 1), wavelength=620.,
+                          top=1.0, bot=1.0, period=[400.0, 400.0], thickness=[150.0])
+    assert solver.structure is leaf
+    assert solver.structure.requires_grad
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+def test_a_reversed_view_on_a_length_one_axis_crosses_too(backend):
+    """The case `forward_strided` does *not* fix, which is why the raster is also copied.
+
+    `np.ascontiguousarray` trusts the `C_CONTIGUOUS` flag, and NumPy sets that flag on an array
+    whose only negative stride sits on a **size-1** axis -- so `forward_strided` returns it
+    untouched, still with `strides=(-192, 48, 8)`. Torch refuses it all the same. Two ordinary
+    shapes land there: a one-layer raster flipped on the layer axis, and a 1-D grating flipped
+    on y.
+
+    The five stride tests above are all blind to it by construction -- every one of them uses a
+    cell with more than one row on the reversed axis. `.copy()` normalises where
+    `ascontiguousarray` does not, so the copy the stored-raster contract needs closes this as
+    a side effect rather than by a second mechanism.
+    """
+    if backend == 1:
+        pytest.importorskip('jax')
+    elif backend == 2:
+        pytest.importorskip('torch')
+    one_layer = np.ones((1, 4, 6)) * 2.0
+    one_layer[0, 1:3, 2:5] = 5.76
+    reversed_ = np.flip(one_layer, 0)
+    assert any(s < 0 for s in reversed_.strides), 'premise: the view has a negative stride'
+    assert any(s < 0 for s in forward_strided(reversed_).strides), (
+        'premise: forward_strided leaves this one alone -- if it has learned to fix a size-1 '
+        'axis, this test is now about a case that no longer exists and should be re-aimed')
+
+    cfg = dict(backend=backend, truncation_order=(2, 2), wavelength=620., top=1.0, bot=1.0,
+               period=[400.0, 400.0], thickness=[150.0])
+    got = wavebit.rcwa(structure=reversed_, **cfg).solve()
+    want = wavebit.rcwa(structure=np.ascontiguousarray(reversed_), **cfg).solve()
+    assert np.array_equal(np.asarray(got.T), np.asarray(want.T))
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+def test_the_raster_dtype_whitelist_is_a_whitelist(backend):
+    """What `_coerce_raster` takes and what it refuses, which nothing pinned before.
+
+    Not one test in the suite reached either refusal branch, and none passed a float32, bool,
+    float16 or uint8 raster -- every single-precision exercise arrived the other way round, as
+    a float64 raster plus ``complex_dtype=1``, which covers the output side of the dtype choice
+    and not the input side. So the branch that decides *whether to accept at all* was free to
+    move without a red test.
+
+    That matters more after the fold than before it. The obvious way to write the coercion is
+    to hand the value to `as_array` and let it cast, and `as_array` casts anything -- a bool or
+    a float16 raster would start being accepted and silently widened, on all three backends at
+    once, with the suite green. The whitelist is what makes "this is not a permittivity field"
+    a refusal rather than a cast.
+
+    `mu` is checked alongside because it is the same function's other caller, and it is the
+    caller with no type dispatch of its own in front of it: `structure` pre-filters with the
+    same predicate, so `_coerce_raster`'s own type refusal is reachable only through `mu`.
+    """
+    if backend == 1:
+        pytest.importorskip('jax')
+    elif backend == 2:
+        pytest.importorskip('torch')
+    cfg = dict(backend=backend, truncation_order=(1, 1), wavelength=620., top=1.0, bot=1.0,
+               period=[400.0, 400.0], thickness=[150.0])
+
+    def built(dtype):
+        return wavebit.rcwa(structure=np.ones((1, 4, 4), dtype=dtype), **cfg)
+
+    for dtype in (np.float64, np.float32, np.int64, np.int32):
+        assert np.asarray(built(dtype).structure).dtype == np.float64, dtype
+    for dtype in (np.complex128, np.complex64):
+        assert np.asarray(built(dtype).structure).dtype == np.complex128, dtype
+
+    for dtype in (np.float16, np.int16, np.int8, np.uint8, np.bool_):
+        with pytest.raises(ValueError):
+            built(dtype)
+
+    # `mu` reaches the same function with nothing in front of it, so its type gate is the only
+    # thing standing between a nested list and a cast.
+    with pytest.raises(ValueError):
+        wavebit.rcwa(structure=np.ones((1, 4, 4)), mu=[[[1.0] * 4] * 4], **cfg)
+    with pytest.raises(ValueError):
+        wavebit.rcwa(structure=np.ones((1, 4, 4)),
+                     mu=np.ones((1, 4, 4), dtype=np.uint8), **cfg)

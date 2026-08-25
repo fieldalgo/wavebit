@@ -1,6 +1,5 @@
 import jax
 
-import numpy as np
 import jax.numpy as jnp
 
 from functools import partial
@@ -120,67 +119,6 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         self.normal_method = normal_method
         self.normal_grid = normal_grid
         self.lattice = lattice      # after period: assigning a basis overwrites period
-
-    @property
-    def structure(self):
-        """The layer stack, in whichever of the three encodings it was given in.
-
-        A raster is an ``(n_layers, Ny, Nx)`` array of **relative permittivity**; the block
-        and analytic spellings are per-layer lists that name a
-        :class:`~wavebit._core.domain.Material` per region. Assigning it settles
-        :attr:`modeling_type`, which is the only thing that selects the modeling
-        path -- there is no separate mode switch.
-        """
-        return self._structure
-
-    @structure.setter
-    def structure(self, structure):
-
-        if isinstance(structure, (jnp.ndarray, np.ndarray)):  # Raster
-            self._modeling_type = 0
-            self._structure = self._coerce_raster('structure', structure)
-
-        elif type(structure) is list:
-            # Analytic: one dict(background=..., shapes=[...], combine=...) per layer.
-            # Shape coordinates are absolute lengths in the units of `period`, not
-            # fractions of it, and `combine` picks what overlapping shapes mean --
-            # this path adds them where the block path paints. See
-            # wavebit._core.analytic; overlaps are refused until it is set.
-            if len(structure) > 0 and isinstance(structure[0], dict):
-                self._modeling_type = 2
-                self._structure = structure
-            else:  # Block
-                self._modeling_type = 1
-                self._structure = structure
-        elif structure is None:
-            self._structure = structure
-            self._modeling_type = None
-        else:
-            raise ValueError
-        # `mu` and `structure` are one raster pair and either can be assigned second, so the
-        # pair is checked from whichever side completes it -- see `_revalidate_mu`.
-        self._revalidate_mu()
-
-    def _coerce_raster(self, where, grid):
-        """A raster field on this backend at the solve's precision.
-
-        Shared by ``structure`` and ``mu`` -- they are two fields of the same shape sampled on
-        the same grid, so a second copy of this would be a second chance for them to disagree
-        about dtype.
-        """
-        if not isinstance(grid, (jnp.ndarray, np.ndarray)):
-            raise ValueError(
-                f'{where}: expected a JAX or NumPy array on this backend, got '
-                f'{type(grid).__name__}')
-        if grid.dtype in (jnp.float64, jnp.float32, jnp.int64, jnp.int32,
-                          np.int64, np.float64, np.int32, np.float32):
-            dtype = self.float_dtype
-        elif grid.dtype in (jnp.complex128, jnp.complex64,
-                            np.complex128, np.complex64):
-            dtype = self.complex_dtype
-        else:
-            raise ValueError(f'{where}: unsupported dtype {grid.dtype}')
-        return jnp.asarray(grid, dtype=dtype)
 
     @device_scoped
     def solve_conv(self, epx_conv_all, epy_conv_all, epz_conv_i_all,

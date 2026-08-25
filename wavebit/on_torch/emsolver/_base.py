@@ -3,21 +3,6 @@ import array_api_compat.torch as _xp
 
 
 from ..._core.engine import CoreSolveMixin
-from wavebit._core.backend import forward_strided
-
-
-def _as_tensor(v, device=None, dtype=None):
-    """``v`` as a torch tensor, keeping any autograd graph intact.
-
-    A second copy of :func:`wavebit._core.backend.as_array`, kept only until its remaining
-    callers -- the ``period`` and ``thickness`` setters and ``_coerce_raster`` -- fold into
-    ``_core`` alongside the angles. Verified equivalent to ``as_array`` across eleven
-    value/dtype combinations including a grad-carrying tensor, so the two can be swapped one
-    caller at a time rather than all at once.
-    """
-    if isinstance(v, torch.Tensor):
-        return v.to(device=device, dtype=dtype)
-    return torch.tensor(forward_strided(v), device=device, dtype=dtype)
 
 
 class _BaseRCWA(CoreSolveMixin):
