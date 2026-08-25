@@ -283,7 +283,6 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     # --- stage 3: final matching -> efficiency (transfer_1d_4) -------------------------
     Kz_top = _diag(xp, kz_top)
     delta = incident_column(xp, C, lit, n_orders_u, n_orders_u // 2)
-    cos_t = xp.cos(as_array(xp, theta, dtype=C))
     # The incident wave's own kz, read off the same vector the reflected orders use. It equals
     # `n_top * cos(theta)` for a real incidence angle, and must be *taken from* `kz_top` rather
     # than recomputed so that a complex angle cannot put the two sides of the match on opposite
@@ -309,7 +308,7 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     # rounding step for a feature the scene does not use (same argument as
     # :func:`~wavebit._core.engine._half_space_index`'s unnamed `mu`).
     if lit is None:
-        denom_r, denom_t_tm = n_top * cos_t, cos_t / n_top
+        denom_r, denom_t_tm = kz_inc, kz_inc / (n_top ** 2)
     else:
         flux = _incident_flux(xp, C, lit, kz_top)
         denom_r, denom_t_tm = flux, flux / (n_top ** 2)
@@ -541,7 +540,6 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     I = xp.astype(xp.eye(n_orders), C)
     O = xp.astype(xp.zeros((n_orders, n_orders)), C)
 
-    cos_t = xp.cos(as_array(xp, theta, dtype=C))
     # See :func:`~wavebit._core.conventions.incident_kz`: an identity for a real angle, and
     # the difference between a solve and a degenerate R = -delta for a complex one.
     kz_inc = incident_kz(kz_top, n_orders // 2)
@@ -630,7 +628,7 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     # incident flux carries kz/mu, see sp_efficiencies. `n_top*cos_t` is `Re(kz_inc)` written
     # the way this function has always written it; a superposition needs the sum over the lit
     # orders instead, and the two spellings differ by an ulp on half of all angles.
-    denom = (n_top * cos_t / mu_top if lit is None
+    denom = (kz_inc / mu_top if lit is None
              else _incident_flux(xp, C, lit, kz_top) / mu_top)
 
     def efficiencies(R_s_, R_p_, T_s_, T_p_):

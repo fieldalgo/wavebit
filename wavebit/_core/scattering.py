@@ -57,7 +57,7 @@ import numpy as np
 from .backend import _device_of, array_namespace, as_array, check_finite, check_physical
 from .conventions import boundary_kz, order_azimuth
 from .enums import Answers, answers_of
-from .conventions import incident_column
+from .conventions import incident_column, incident_kz
 from .solve_1d import (_block, _diag, _incident_flux, _is_backside, _pack, layer_modes_1d,
                        layer_modes_1d_conical, sp_efficiencies, sp_modes_1d_conical)
 from .solve_2d import layer_modes_2d, order_grid_kxy, sp_modes_2d
@@ -485,12 +485,15 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     kz_ref, kz_trn = (kz_bot, kz_top) if backside else (kz_top, kz_bot)
     n_ref, n_trn = (n_bot, n_top) if backside else (n_top, n_bot)
 
-    cos_t = xp.cos(xp.asarray(theta, dtype=C))
+    # The incident order's own kz, read off the vector the reflected orders use rather than
+    # respelled as `n_ref * cos(theta)` -- see `conventions.incident_kz`, whose docstring gives
+    # the rule and whose helper was already applied to the incidence column and not here.
+    kz_inc = incident_kz(kz_ref, n_orders_u // 2)
     # `n_ref*cos_t` is `Re(kz_inc)` in this function's own spelling; a superposition needs the
     # sum over its lit orders instead. Branched rather than unified because the two differ by
     # an ulp, and the ETM twin makes the same split for the same reason.
     if lit is None:
-        denom_r, denom_t_tm = n_ref * cos_t, cos_t / n_ref
+        denom_r, denom_t_tm = kz_inc, kz_inc / (n_ref ** 2)
     else:
         flux = _incident_flux(xp, C, lit, kz_ref)
         denom_r, denom_t_tm = flux, flux / (n_ref ** 2)
@@ -692,7 +695,9 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
 
     kz_ref_2d = xp.reshape(kz_ref, (n_orders_v, n_orders_u))
     kz_trn_2d = xp.reshape(kz_trn, (n_orders_v, n_orders_u))
-    denom = (n_ref * xp.cos(xp.asarray(theta, dtype=C)) / mu_ref if lit is None
+    # `incident_kz(kz_ref, ...)`, not `n_ref * cos(theta)` -- the same quantity, read off the
+    # vector the reflected orders use instead of respelled. See `conventions.incident_kz`.
+    denom = (incident_kz(kz_ref, n_orders // 2) / mu_ref if lit is None
              else _incident_flux(xp, C, lit, kz_ref) / mu_ref)
     eff = sp_efficiencies(xp, kz_ref_2d, kz_trn_2d, denom, n_ref, n_trn, R_s, R_p, T_s, T_p,
                           mu_top=mu_ref, mu_bot=mu_trn)
