@@ -49,48 +49,6 @@ class _BaseRCWA(CoreSolveMixin):
             return list(value)
         raise ValueError(f'unsupported jax device: {value!r}')
 
-    def __init__(self, top=1., bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None,
-                 truncation_order=(0, 0),
-                 period=(1., 1.), wavelength=1.,
-                 thickness=(0.,), layer_algorithm='ETM', excitation=None,
-                 device=0, complex_dtype=jnp.complex128, polarization=None):
-
-        self.device = device
-
-        # The width, once. `_resolve_precision` is in `_core`; it is not the setter, because
-        # the setter re-casts every stored array and none of them exist yet.
-        self._complex_dtype, self._float_dtype, self._int_dtype = (
-            self._resolve_precision(complex_dtype))
-
-        # Materials in, an index out: the two setters store the Material and derive the
-        # `sqrt(eps*mu)` every solve reads. See `CoreSolveMixin.top`.
-        self.top = top
-        self.bot = bot
-
-        # degree to radian due to JAX JIT
-        self.theta = theta
-        self.phi = phi
-        # Order matters: `tetm` refuses to coexist with a named incidence, so it goes first
-        # and the two spellings below raise against it rather than silently winning.
-        self.tetm = tetm
-        self.psi = psi
-        self.chi = chi
-        self.polarization = polarization
-        if self._tetm is None and self._psi is None and polarization is None:
-            self._default_psi()
-
-        self.truncation_order = truncation_order
-        self.period = period
-        self.wavelength = wavelength
-        self.thickness = thickness
-        self.layer_algorithm = layer_algorithm
-        self.excitation = excitation
-
-        self.layer_info_list = []
-        self.T1 = None
-        # SMM only, from `answers='amplitude'` up; see `CoreSolveMixin._finish`.
-        self._scattering = None
-
     @device_scoped
     def _separable_kxy(self, wavelength):
         (cx, hx), (cy, hy) = self.order_window

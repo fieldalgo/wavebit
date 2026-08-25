@@ -332,6 +332,68 @@ class CoreSolveMixin:
 
     _excitation = None
 
+    def __init__(self, top=1., bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None,
+                 truncation_order=(0, 0),
+                 period=(1., 1.), wavelength=1.,
+                 thickness=(0.,), layer_algorithm='ETM', excitation=None,
+                 device=0, complex_dtype=0, polarization=None):
+        """The scene, set once through the setters that maintain it.
+
+        One body for three backends. The three it replaced were textually identical apart from
+        two defaults and a stale comment, and identical in effect too: measured before the fold,
+        all three ended construction with the same 37 attribute names and the same `__dict__`
+        insertion order (digest `e46a77c5060e` on each), which is to say the same setters called
+        in the same order. Everything a backend does differently is already behind a declared
+        member -- `xp`, `_ARRAY_TYPES`, `_array_device`, `_device_scope`, `_resolve_device`,
+        `_resolve_precision` -- so there is nothing here to specialise.
+
+        The two defaults are written in wavebit's own vocabulary rather than a namespace's.
+        `0` is what `_resolve_precision` and `_resolve_device` already accept on every backend,
+        and it resolves to exactly what `np.complex128` / `jnp.complex128` /
+        `torch.complex128` and `'cpu'` did -- the three spellings were three ways to say the
+        thing this one says once.
+
+        On JAX this runs **under tracing** as well as eagerly: `SolverJax._tree_unflatten`
+        rebuilds by `cls(**named, **aux_data)`, so `solve_field` re-enters it on every call
+        with tracers in the child slots. The one value-shaped test below is safe because it is
+        structural -- `None` against present, never a comparison against a traced number. See
+        `docs/` on the pytree, and do not add a branch here that reads one.
+        """
+        self.device = device
+
+        # The width, once. `_resolve_precision` is not the setter, because the setter re-casts
+        # every stored array and none of them exist yet.
+        self._complex_dtype, self._float_dtype, self._int_dtype = (
+            self._resolve_precision(complex_dtype))
+
+        # Materials in, an index out: the two setters store the Material and derive the
+        # `sqrt(eps*mu)` every solve reads. See `CoreSolveMixin.top`.
+        self.top = top
+        self.bot = bot
+
+        self.theta = theta
+        self.phi = phi
+        # Order matters: `tetm` refuses to coexist with a named incidence, so it goes first
+        # and the two spellings below raise against it rather than silently winning.
+        self.tetm = tetm
+        self.psi = psi
+        self.chi = chi
+        self.polarization = polarization
+        if self._tetm is None and self._psi is None and polarization is None:
+            self._default_psi()
+
+        self.truncation_order = truncation_order
+        self.period = period
+        self.wavelength = wavelength
+        self.thickness = thickness
+        self.layer_algorithm = layer_algorithm
+        self.excitation = excitation
+
+        self.layer_info_list = []
+        self.T1 = None
+        # SMM only, from `answers='amplitude'` up; see `CoreSolveMixin._finish`.
+        self._scattering = None
+
     def _lit(self):
         """The excitation resolved onto the retained window, or ``None`` if none was named.
 

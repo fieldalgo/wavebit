@@ -656,3 +656,33 @@ def test_the_solver_wrapper_adds_no_parameters_of_its_own(backend):
         f'{[n for n in inspect.signature(cls.__init__).parameters if n != "self"]}. Every name '
         f'here claims a positional slot that the other backends pass through, so the same '
         f'`rcwa(backend, a, b)` call means different things depending on the backend.')
+
+
+def test_the_scene_is_built_by_one_constructor_for_all_three_backends():
+    """`_BaseRCWA.__init__` was written three times; it resolves to one function now.
+
+    The three were textually identical apart from two default spellings and a stale comment,
+    and identical in effect: measured before the fold, all three ended construction with the
+    same 37 attribute names in the same `__dict__` insertion order, which is to say the same
+    setters called in the same order. Everything a backend does differently was already behind
+    a declared member -- `xp`, `_ARRAY_TYPES`, `_array_device`, `_device_scope`,
+    `_resolve_device`, `_resolve_precision`.
+
+    Asserted structurally rather than behaviourally because behaviour cannot see it: three
+    copies that agree today pass every other test in this file, right up until one of them is
+    edited alone. That has happened here before -- `_assign_grating_type` was copied into all
+    three and one routing bug existed three times (`3c7d166`), and `_separable_kxy` was edited
+    in three files in one week.
+    """
+    from wavebit._core.engine import CoreSolveMixin
+
+    shared = CoreSolveMixin.__init__
+    for backend, module in ((0, 'wavebit.on_numpy.emsolver._base'),
+                            (1, 'wavebit.on_jax.emsolver._base'),
+                            (2, 'wavebit.on_torch.emsolver._base')):
+        base = __import__(module, fromlist=['_BaseRCWA'])._BaseRCWA
+        assert base.__init__ is shared, (
+            f'backend {backend} declares its own `_BaseRCWA.__init__` again. If it needs to do '
+            f'something the other two do not, that difference belongs in a declared member the '
+            f'shared body calls -- the way `_resolve_device` and `_resolve_precision` hold the '
+            f'per-backend halves of `device` and `complex_dtype`.')
