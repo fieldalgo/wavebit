@@ -1195,12 +1195,15 @@ class CoreSolveMixin:
         on the *argument* instead reproduces each backend's own output byte for byte, checked
         across nine `theta` values including `pi/2`, `pi/2 + 0.5j` and `float32(pi/2) + 0.5j`.
 
-        Two things that are not decoration:
+        Three things that are not decoration:
 
         * the dtype is given at creation, not applied after. `xp.asarray(0.4)` is `float32` on
           Torch, and an `astype` afterwards widens a number that has already lost its digits --
           measured at 1.5e-07 on 13 of 18 probes, which is exactly the kind of quiet narrowing
           this repo hunts.
+        * `theta` and `phi` go through `_as_complex`, not `xp.asarray`. They are *user* values
+          and may be optimizer leaves; the constants below are the core's own, and
+          `xp.asarray` is right for those. `as_array`'s docstring has the split.
         * the clamp and the threshold are Python floats computed once in NumPy. Building them
           per backend is what made the method look backend-shaped in the first place.
 
@@ -1214,9 +1217,11 @@ class CoreSolveMixin:
         change in the same commit that moved the body.
         """
         xp, C = self.xp, self.complex_dtype
-        theta = xp.asarray(0.0 if self.theta is None else self.theta, dtype=C)
+        theta = self._as_complex(0.0 if self.theta is None else self.theta)
         # `phi is None` is the 1D TE/TM case, where the azimuth is not a degree of freedom.
-        phi = xp.asarray(0.0 if self.phi is None else self.phi, dtype=C)
+        phi = self._as_complex(0.0 if self.phi is None else self.phi)
+        # A constant the core builds, so `xp.asarray` is the right spelling here and
+        # `_as_complex` is the right one above -- see `as_array`'s docstring on the split.
         clamped = xp.asarray(_HALF_PI_F32_BELOW, dtype=C) + xp.imag(theta) * 1j
         sin_theta = xp.sin(xp.where(xp.real(theta) >= _HALF_PI_F32, clamped, theta))
         # n_inc, not n_top: theta lives in the incidence medium, which incidence_side picks.
