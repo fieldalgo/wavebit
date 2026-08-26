@@ -986,7 +986,7 @@ class CoreSolveMixin:
             return
         A = _lattice.as_lattice(lattice=value)
         self._lattice_basis = A
-        self.period = _lattice.periods_of(A)
+        self._set_period_slot(_lattice.periods_of(A))   # derived, not chosen
 
     @property
     def lattice_is_axis_aligned(self):
@@ -1256,7 +1256,7 @@ class CoreSolveMixin:
         if self._psi is not None:
             self._psi = self._as_real_angle(self._psi)
         self.truncation_order = self.truncation_order
-        self.period = self.period
+        self._set_period_slot(self._period)            # a re-cast, not a new cell
         self.thickness = self.thickness
         # Guarded because `_structure` is set by the `RCWA*` subclass, after `_BaseRCWA`.
         if getattr(self, '_structure', None) is not None:
@@ -1355,6 +1355,39 @@ class CoreSolveMixin:
                     f"it has -- a skewed cell is given as `lattice=` instead, and its two "
                     f"directions are u and v.")
             period = [period['x'], period['y']]
+
+        # A cell basis outranks this. `period` is `(|a1|, |a2|)`, which drops the angle, so on
+        # a skewed cell it cannot say what the new cell is -- and the sync only ever ran one
+        # way: `lattice` derives `period`, `period` never touched `_lattice_basis`. So an
+        # assignment here moved `_period` and the read-back while every geometry consumer kept
+        # reading the old basis. Measured on a hex cell: `solver.period = [600., 600.]` left T
+        # bit-identical at 0.868418046552 while `solver.period` reported [600., 600.].
+        #
+        # An axis-aligned basis has no angle to lose, so it is updated to match rather than
+        # refused. A skewed one is refused, which is this setter's own stance one message up:
+        # `period` is the axis-aligned spelling of the cell.
+        if self._lattice_basis is not None and not self.lattice_is_axis_aligned:
+            raise ValueError(
+                'period: this solver was given a skewed cell basis, and `period` is the '
+                'axis-aligned spelling -- it is (|a1|, |a2|), so it cannot say what the new '
+                'cell is without the angle. Assigning it used to move the read-back and '
+                'nothing else. Set the basis instead:\n'
+                '    solver.lattice = wavebit.oblique(lx, ly, angle)\n'
+                'or `wavebit.hexagonal(a)` / a 2x2 column_stack((a1, a2)); `period` follows '
+                'from it.')
+
+        self._set_period_slot(period)
+        if self._lattice_basis is not None:
+            # Axis-aligned, by the guard above: keep the two spellings from drifting apart.
+            self._lattice_basis = _lattice.as_lattice(period=self._period)
+
+    def _set_period_slot(self, period):
+        """The store, without the cell-basis question -- for the two callers that own it.
+
+        `lattice` derives `period` from a basis it just set, and the precision cascade re-casts
+        the value already there. Neither is a caller *choosing* a period, so neither should meet
+        a refusal about which spelling to use.
+        """
         self._period = self._as_lengths(period, pair=True)
         if getattr(self, 'modeler', None) is not None:
             self.modeler.period = self._period
@@ -3022,7 +3055,6 @@ class CoreFactorizationMixin:
         factorization = self.factorization
         self.fourier_coefficients   # read for the refusal it may raise, not for its value
         self._reject_unread_normal_method(factorization)
-
     def _slots_for(self, structure, geometry, quantity):
         """Five convolution slots for one *quantity* of the current structure.
 

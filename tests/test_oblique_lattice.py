@@ -1264,3 +1264,118 @@ def test_a_patterned_tensor_is_the_same_physics_under_a_unimodular_shear(method)
 
     r_blind, _ = _pn_totals(SHEAR_2A1, method, lattice_blind=True)
     assert abs(r_blind - r_o) > 5e-3, r_blind - r_o
+
+
+# ------------------------------------------------------------ period against a cell basis
+#
+# `lattice` derived `period` and `period` never touched `_lattice_basis`, so the sync ran one
+# way. On a solver built with a basis, `solver.period = [...]` moved `_period` and the
+# read-back while every geometry consumer kept reading the old cell: a period sweep returned
+# the identical number at every point while the solver reported the period it had been given.
+
+_PERIOD_CELLS = {
+    'none': None,
+    'axis_aligned': np.diag([1500.0, 1500.0]).tolist(),
+    'rect_basis': np.diag([1500.0, 2400.0]).tolist(),
+    'hex': np.column_stack(([1500.0, 0.0], [750.0, 1500.0 * np.sqrt(3) / 2])).tolist(),
+    'oblique_70': np.column_stack(
+        ([1500.0, 0.0],
+         [1500.0 * np.cos(np.deg2rad(70)), 1500.0 * np.sin(np.deg2rad(70))])).tolist(),
+}
+
+_PERIOD_GRATING = np.array([[[1.0, 1.0, 4.0, 4.0, 4.0, 1.0, 1.0, 1.0]]])
+
+
+def _period_scene(backend, cell, **over):
+    kw = dict(backend=backend, structure=_PERIOD_GRATING, period=[1500.0, 1500.0],
+              truncation_order=[2, 0], thickness=[150.0], wavelength=900.0,
+              top=1.0, bot=1.0, factorization='nvf')
+    if _PERIOD_CELLS[cell] is not None:
+        kw['lattice'] = _PERIOD_CELLS[cell]
+    kw.update(over)
+    return wavebit.rcwa(**kw)
+
+
+def _period_cell_is_skewed(cell):
+    return cell in ('hex', 'oblique_70')
+
+
+@pytest.mark.parametrize('cell', sorted(_PERIOD_CELLS))
+@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+def test_assigning_a_period_either_moves_the_answer_or_is_refused(backend, cell):
+    """Never the third thing, which is what it used to do: accepted, and inert.
+
+    Crossed over the cells because the two halves of the rule live on opposite sides of one
+    predicate -- an axis-aligned basis has no angle to lose and is updated to match, a skewed
+    one cannot say what the new cell is and is refused. A test on one cell checks one half.
+    """
+    if backend:
+        pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    solver = _period_scene(backend, cell)
+    before = float(np.asarray(solver.solve().T).sum())
+
+    if _period_cell_is_skewed(cell):
+        with pytest.raises(ValueError, match=r'axis-aligned spelling'):
+            solver.period = [900.0, 900.0]
+        assert float(np.asarray(solver.period)[0]) == pytest.approx(1500.0), (
+            'the refusal moved the read-back on its way out')
+        assert float(np.asarray(solver.solve().T).sum()) == pytest.approx(before, abs=1e-12)
+        return
+
+    solver.period = [900.0, 900.0]
+    after = float(np.asarray(solver.solve().T).sum())
+    assert after != pytest.approx(before, abs=1e-9), (
+        f'{cell}: the period was accepted and the answer did not move ({before:.12f})')
+
+
+@pytest.mark.parametrize('cell', ['axis_aligned', 'rect_basis'])
+def test_an_axis_aligned_basis_follows_the_period_it_reports(cell):
+    """The read-back and the basis must not be able to disagree.
+
+    They could, and did: `period` reported the new pair while `lattice` held the old cell, so
+    two accessors of one quantity answered differently and only one of them was consulted by
+    the solve.
+    """
+    solver = _period_scene(0, cell)
+    solver.period = [900.0, 1200.0]
+    assert np.allclose(np.asarray(solver.period), [900.0, 1200.0])
+    assert np.allclose(np.diag(np.asarray(solver.lattice)), [900.0, 1200.0]), (
+        f'period reports {np.asarray(solver.period)} while the basis is\n'
+        f'{np.asarray(solver.lattice)}')
+
+
+@pytest.mark.parametrize('cell', sorted(_PERIOD_CELLS))
+def test_a_period_sweep_visits_distinct_answers(cell):
+    """The shape a caller actually writes, and the one the defect was invisible in.
+
+    Three points that must give three numbers -- on a skewed cell the sweep is written through
+    `lattice` instead, which is what the refusal tells the caller to do. Asserted as *distinct*
+    rather than against golden values, so it stays a statement about the sweep moving at all.
+    """
+    solver = _period_scene(0, cell)
+    seen = []
+    for length in (1200.0, 1500.0, 1800.0):
+        if _period_cell_is_skewed(cell):
+            basis = np.asarray(_PERIOD_CELLS[cell]) * (length / 1500.0)
+            solver.lattice = basis.tolist()
+        else:
+            solver.period = [length, length]
+        seen.append(float(np.asarray(solver.solve().T).sum()))
+    assert len(set(seen)) == 3, f'{cell}: {seen}'
+
+
+@pytest.mark.parametrize('cell', sorted(_PERIOD_CELLS))
+def test_the_precision_cascade_does_not_meet_the_refusal(cell):
+    """`complex_dtype` re-casts every stored array, and `period` is one of them.
+
+    It used to do that by writing the property back onto itself, which now asks the caller's
+    question -- and would refuse on exactly the cells this feature exists for. The re-cast goes
+    through the slot instead, and this is the test that says the two paths stayed separate.
+    """
+    solver = _period_scene(0, cell)
+    before = np.asarray(solver.period).copy()
+    solver.complex_dtype = 1
+    assert np.asarray(solver.period).dtype.itemsize == 4
+    assert np.allclose(np.asarray(solver.period), before)
+    if _PERIOD_CELLS[cell] is not None:
+        assert np.allclose(np.asarray(solver.lattice), np.asarray(_PERIOD_CELLS[cell]))
