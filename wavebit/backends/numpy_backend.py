@@ -6,7 +6,8 @@ is left here is which namespace to call and which integer this backend is.
 """
 import array_api_compat.numpy as _xp
 
-from .._core.engine import CoreFactorizationMixin, CoreSolveMixin
+from .._core.engine import _NO_AUTODIFF, CoreFactorizationMixin, CoreSolveMixin
+from .._core.enums import DIFFERENTIABLE_BACKENDS as _DIFFERENTIABLE_BACKENDS
 
 
 class _BaseRCWA(CoreSolveMixin):
@@ -26,6 +27,11 @@ class _BaseRCWA(CoreSolveMixin):
     #: `_tree_unflatten` hands it straight back to `__init__` on every jitted call.
     _BACKEND_ID = 0
 
+    #: Derived, not declared: `_core.enums.DIFFERENTIABLE_BACKENDS` is the one table,
+    #: so `manifest.py` can publish this without importing this module to ask.
+    _DIFFERENTIABLE = _BACKEND_ID in _DIFFERENTIABLE_BACKENDS
+
+
 
 class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
     """The NumPy solver, which is the two mixins and the declared members on `_BaseRCWA`.
@@ -38,6 +44,19 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
 
 
 class SolverNumpy(RCWANumpy):
+    """The NumPy solver. It solves and it differentiates nothing.
+
+    `grad` and `fit` are *here*, refusing, rather than absent. The MRO is why they cannot live
+    in `_core` as a shared refusal that the other two override: `CoreSolveMixin` sits **before**
+    `OptimizerJax` and `OptimizerTorch` in the MRO of their solvers, so a `grad` defined there
+    would shadow the working ones rather than be shadowed by them.
+    """
 
     def __init__(self, *args, **kwargs):
         RCWANumpy.__init__(self, *args, **kwargs)
+
+    def grad(self, *args, **kwargs):
+        raise NotImplementedError(_NO_AUTODIFF.format(name='grad'))
+
+    def fit(self, *args, **kwargs):
+        raise NotImplementedError(_NO_AUTODIFF.format(name='fit'))

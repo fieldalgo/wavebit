@@ -258,6 +258,20 @@ _UCELL_MATERIALS_DELETED = (
     'all. A material is named where it is used now: wavebit.Material(epsilon, mu) in a shape '
     'or block slot, and permittivity samples in the raster itself.')
 
+#: What NumPy answers to `grad` and `fit`. A named refusal rather than the `AttributeError` a
+#: missing method raises: "'SolverNumpy' object has no attribute 'grad'" is true and says
+#: nothing -- not that the absence is deliberate, not that two other backends have it, not that
+#: the scene needs no change to move. NumPy has no autodiff, and that is a fact about NumPy.
+_NO_AUTODIFF = (
+    "{name} needs automatic differentiation and the NumPy backend has none. This is a "
+    "property of the backend rather than of the scene: the same solver on JAX or PyTorch "
+    "differentiates it, and `backend=` is the only thing that changes.\n"
+    "    solver = wavebit.rcwa(backend=1, ...)   # JAX, then `optax` for `fit`\n"
+    "    solver = wavebit.rcwa(backend=2, ...)   # PyTorch, then `torch.optim`\n"
+    "Ask before building, with `type(solver)._DIFFERENTIABLE` or the manifest's "
+    "`backends` section, which publishes the same fact.")
+
+
 def _refuse_retired(kwargs):
     """Refuse the retired constructor keywords by name, before anything else runs.
 
@@ -330,6 +344,13 @@ class CoreSolveMixin:
     that does the most. Handing in matrices you built yourself is still a supported thing to
     do -- that is ``solve_conv``, which routes to these.
     """
+
+    #: Whether this backend can differentiate through a solve -- i.e. whether `grad` and `fit`
+    #: are here at all. `False` is the base answer and NumPy keeps it; JAX and PyTorch override
+    #: it beside `_BACKEND_ID`. Declared rather than discovered so a caller can *ask* before
+    #: building a solver it cannot optimize, and so the manifest can publish it and be checked
+    #: against it. See `_NO_AUTODIFF`.
+    _DIFFERENTIABLE = False
 
     _excitation = None
 

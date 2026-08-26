@@ -8,6 +8,7 @@ import array_api_compat.torch as _xp
 from tqdm import tqdm
 
 from .._core.engine import CoreFactorizationMixin, CoreSolveMixin
+from .._core.enums import DIFFERENTIABLE_BACKENDS as _DIFFERENTIABLE_BACKENDS
 
 
 class _BaseRCWA(CoreSolveMixin):
@@ -26,6 +27,11 @@ class _BaseRCWA(CoreSolveMixin):
     #: aux_data, so it is part of the treedef and of every jit cache key, and
     #: `_tree_unflatten` hands it straight back to `__init__` on every jitted call.
     _BACKEND_ID = 2
+
+    #: Derived, not declared: `_core.enums.DIFFERENTIABLE_BACKENDS` is the one table,
+    #: so `manifest.py` can publish this without importing this module to ask.
+    _DIFFERENTIABLE = _BACKEND_ID in _DIFFERENTIABLE_BACKENDS
+
 
     @property
     def _array_device(self):
@@ -59,13 +65,7 @@ class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
     """The Torch solver. Empty for the same reason as :class:`RCWANumpy`."""
 
 
-class Grad:
-    def __init__(self):
-        pass
-
-
-
-class OptimizerTorch(Grad):
+class OptimizerTorch:
 
     def __init__(self, *args, **kwargs):
 

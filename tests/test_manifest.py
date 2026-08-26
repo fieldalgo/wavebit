@@ -531,3 +531,106 @@ def test_a_patterned_z_row_has_no_builder_to_come_from():
         assert len(out) == 5, (
             f'{name} returned {len(out)} slots — if it now emits the z row, patterned and '
             'z-coupled may be reachable and MATERIALS should say so')
+
+
+# ------------------------------------------------------------------- what each backend can do
+
+def test_differentiability_claims_match_the_solver():
+    """The published answer, held against a real solver of each backend.
+
+    `backends[*].differentiable` is read off `_DIFFERENTIABLE`, so this checks the thing the
+    declaration is *about*: whether `grad` and `fit` are there and answer. A backend that gains
+    or loses autodiff fails here rather than going stale in a consumer -- which is the rule
+    every other claim in this file is held to.
+    """
+    published = manifest()['backends']
+    assert set(published) == {'numpy', 'jax', 'torch'}, sorted(published)
+
+    for name, backend in (('numpy', 0), ('jax', 1), ('torch', 2)):
+        claim = published[name]
+        if not claim['available']:
+            with pytest.raises(ImportError):
+                __import__({1: 'jax', 2: 'torch'}[backend])
+            continue
+        if backend:
+            pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+
+        solver = wavebit.rcwa(backend=backend, structure=np.ones((1, 4, 4)) * 2.0,
+                              period=[400.0, 400.0], truncation_order=[1, 1],
+                              thickness=[150.0], wavelength=900.0, top=1.0, bot=1.0)
+        assert type(solver)._DIFFERENTIABLE is claim['differentiable'], name
+
+        # Both are present on every backend; on a non-differentiating one they exist to refuse.
+        assert hasattr(solver, 'grad') and hasattr(solver, 'fit'), name
+
+        # And then ASK, because the line above is circular on its own: `_DIFFERENTIABLE` and
+        # the published claim are both read off `DIFFERENTIABLE_BACKENDS`, so they agree
+        # whatever the table says. A table declaring that NumPy differentiates passed every
+        # test in this file until this call went in.
+        if claim['differentiable']:
+            gradient = _gradient_of_a_transmittance(solver, backend)
+            assert np.any(np.asarray(gradient) != 0), (
+                f'{name} is published as differentiable and returned an all-zero gradient')
+        else:
+            with pytest.raises(NotImplementedError, match=r'automatic differentiation'):
+                solver.grad(['structure'], solver.solve, lambda result: result.T.sum())
+
+
+def _gradient_of_a_transmittance(solver, backend):
+    """d(sum T)/d(structure) through the backend's own `grad`, detached for comparison."""
+    import functools
+
+    if backend == 1:
+        import jax.numpy as jnp
+        wavebit.enable_x64()
+        solver.structure = jnp.asarray(np.asarray(solver.structure))
+        loss = (lambda result: jnp.sum(result.T).real)
+    else:
+        import torch
+        solver.structure = torch.tensor(np.asarray(solver.structure), dtype=torch.complex128)
+        loss = (lambda result: torch.sum(result.T).real)
+
+    got = solver.grad(['structure'], functools.partial(solver.solve), loss)['structure']
+    return got.detach() if hasattr(got, 'detach') else got
+
+
+def test_a_backend_that_does_not_differentiate_says_so_rather_than_missing_the_method():
+    """`AttributeError: 'SolverNumpy' object has no attribute 'grad'` is true and says nothing.
+
+    Not that the absence is deliberate, not that two other backends have it, not that the scene
+    needs no change to move. The refusal names all three, and names the declaration a caller can
+    read *before* building a solver it cannot optimize.
+    """
+    solver = wavebit.rcwa(backend=0, structure=np.ones((1, 4, 4)), period=[400.0, 400.0],
+                          truncation_order=[1, 1], thickness=[150.0], wavelength=900.0,
+                          top=1.0, bot=1.0)
+    for name in ('grad', 'fit'):
+        with pytest.raises(NotImplementedError) as caught:
+            getattr(solver, name)(['structure'], None, None)
+        message = str(caught.value)
+        assert name in message, message
+        assert 'backend=1' in message and 'backend=2' in message, message
+        assert '_DIFFERENTIABLE' in message, message
+
+
+def test_the_manifest_does_not_import_an_optional_backend_to_answer():
+    """Building the document must not pull JAX or PyTorch in.
+
+    `_backend_capabilities` reads a class attribute, which needs the class -- so the imports are
+    lazy and one at a time. A module-scope import of all three would make `import
+    wavebit.manifest` import both optional libraries, and the manifest is exactly the thing a
+    caller reads to decide whether to install one.
+    """
+    import subprocess
+    import sys
+
+    code = ('import sys, json; import wavebit.manifest as m; '
+            'd = m.manifest(); '
+            'print(json.dumps({"jax": "jax" in sys.modules, "torch": "torch" in sys.modules, '
+            '"backends": sorted(d["backends"])}))')
+    out = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    seen = json.loads(out.stdout.strip().splitlines()[-1])
+    assert seen['backends'] == ['jax', 'numpy', 'torch'], seen
+    assert not seen['jax'] and not seen['torch'], (
+        f'building the manifest imported an optional backend: {seen}')

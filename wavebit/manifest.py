@@ -28,13 +28,18 @@ Regenerate the JSON with::
 import json
 
 from ._core.domain import RETIRED_MATERIAL_NAMES
-from ._core.enums import (Answers, Backend, DEFAULT_ANSWERS, Factorization,
+from ._core.enums import (Answers, Backend, DEFAULT_ANSWERS, DIFFERENTIABLE_BACKENDS,
+                          Factorization,
                           FourierCoefficients, NormalMethod, Tetm)
 from ._core.engine import (_COEFFICIENTS_IMPLEMENTED_BY, _COEFFICIENTS_REASON,
                            _FACTORIZATION_IMPLEMENTED_BY, _FACTORIZATION_REASON)
 from ._core.spec import SPEC_VERSION
 
 #: Bumped when the document's *shape* changes, so a consumer can refuse one it cannot read.
+#: An **added** key is not that: a consumer reading unknown keys degrades gracefully, and
+#: nothing it already reads changes meaning. ``backends`` (2026-08-26) went in without a
+#: bump for exactly the reason ``docs/capability-manifest.md`` gives for why a rename alone
+#: would not earn one.
 #: Independent of the Wavebit version, which moves whenever the content does.
 #: '2': the ``results`` section — the solve's output contract joined the document when the
 #: result surface was renamed for the first release (2026-08-12).
@@ -398,6 +403,31 @@ RESULTS = {
 
 # ------------------------------------------------------------------ the document
 
+#: What each backend can do that is not the same everywhere. One entry so far, and it is the
+#: one a caller has to know *before* building: only two of the three differentiate, and asking
+#: after the fact means an exception from a method that exists only to say no.
+#:
+#: Read off `_DIFFERENTIABLE` rather than restated here, and
+#: `test_manifest.py::test_differentiability_claims_match_the_solver` holds the published answer
+#: against `hasattr(solver, 'grad')` on a real solver of each backend -- so a backend that gains
+#: or loses autodiff fails the suite instead of going stale in a consumer.
+def _backend_capabilities() -> dict:
+    import importlib.util
+
+    out = {}
+    for member in Backend:
+        # `find_spec` rather than an import: reading this document must not pull an optional
+        # library into the caller's process, and importing the JAX backend lifts
+        # `jax_enable_x64` process-wide. The manifest is what a caller reads to decide whether
+        # to install JAX; it cannot be the thing that changes their JAX.
+        module = {Backend.NUMPY: 'numpy', Backend.JAX: 'jax', Backend.TORCH: 'torch'}[member]
+        out[member.name.lower()] = {
+            'available': importlib.util.find_spec(module) is not None,
+            'differentiable': member in DIFFERENTIABLE_BACKENDS,
+        }
+    return out
+
+
 def manifest() -> dict:
     """Everything above, as one JSON-round-trippable document."""
     from . import __version__
@@ -413,6 +443,7 @@ def manifest() -> dict:
             'normal_method': [m.value for m in NormalMethod],
             'answers': [m.value for m in Answers],
         },
+        'backends': _backend_capabilities(),
         'shape_coordinates': SHAPE_COORDINATES,
         'material_quantity': _jsonable_material_quantity(),
         'paths': [

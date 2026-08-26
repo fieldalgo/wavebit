@@ -24,6 +24,18 @@ class Backend(IntEnum):
     TORCH = 2
 
 
+#: Which backends differentiate through a solve. The one table: the backend classes set their
+#: own ``_DIFFERENTIABLE`` from it, and ``manifest.py`` publishes it -- so the document can be
+#: built **without importing an optional backend to ask one**. That matters more than it
+#: sounds: importing the JAX backend lifts ``jax_enable_x64`` process-wide, and the manifest is
+#: exactly what a caller reads to decide whether to install JAX at all. Reading it must not
+#: change their process.
+#:
+#: ``tests/test_manifest.py::test_differentiability_claims_match_the_solver`` holds this against
+#: a real solver of each backend, so the table cannot drift from the classes it describes.
+DIFFERENTIABLE_BACKENDS = frozenset({Backend.JAX, Backend.TORCH})
+
+
 class Tetm(IntEnum):
     """The two states of the ``tetm`` declaration; the value is ``tetm_index``."""
     TE = 0
