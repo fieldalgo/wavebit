@@ -15,7 +15,6 @@ import pytest
 import wavebit
 from wavebit._core.lattice import as_lattice
 from wavebit._core import lattice as lat
-from wavebit._core import draw
 from wavebit._core.factorization import (normal_vector_field,
                                          to_conv_mat_raster_pn_eps)
 from wavebit._core.geometry import StaleGeometryError
@@ -423,16 +422,6 @@ def test_li_is_refused_on_a_skewed_cell():
         totals(raster(HEX), lattice=HEX, factorization='li')
 
 
-def test_the_vector_modeler_is_refused_on_a_skewed_cell():
-    with pytest.raises(NotImplementedError, match='block modeler'):
-        s = wavebit.rcwa(backend=0, structure=[[1.0, [['rectangle', 100.0, 200.0, 50.0, 50.0,
-                                                       5.76, 0, 0, 0]]]],
-                           period=[P, P], truncation_order=[4, 4], thickness=[H], wavelength=WL,
-                           top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
-                           factorization='nvf', lattice=HEX)
-        s.solve()
-
-
 def test_a_painted_overlap_survives_a_unimodular_shear():
     """Resolving an overlap into polygons works skewed: the clipper never sees the cell.
 
@@ -808,47 +797,6 @@ def test_a_frozen_painting_plan_replays_on_a_skewed_cell(lattice, omit_centre):
 
 
 # ------------------------------------------------------- the drawing door around the refusal
-
-#: A block instruction: the one modeling path `_reject_unsupported_lattice` refuses outright.
-BLOCK = [[EPS_AIR, [['ellipse', P / 2, P / 2, 0.6 * P, 0.6 * P, EPS_ROD, 0.0, 24, 24]]]]
-
-
-def _block_solver(lattice):
-    return wavebit.rcwa(backend=0, structure=BLOCK, period=[P, P], truncation_order=[4, 4],
-                        thickness=[H], wavelength=WL, top=1.0, bot=1.0,
-                        theta=0.0, phi=0.0, psi=0.0, lattice=lattice)
-
-
-def test_the_block_modeller_is_refused_at_the_drawing_door_too():
-    """``solve()`` refused a skewed block layer; ``slice_structure`` drew one anyway.
-
-    ``_reject_unsupported_lattice`` is reached from ``_check_before_building`` and
-    ``freeze_geometry``, and neither is on the path to :func:`~wavebit._core.draw.slice_structure`.
-    So the block modeller *drew* a skewed cell -- and the picture was
-    ``np.array_equal`` to the same instruction on a square, because the modeller grids on a
-    rectangle and nothing inside it reads a basis. ``plot_structure`` then sheared that
-    rectangular staircase through the lattice and showed a structure the solve refuses to build.
-
-    Pinned as a pair. The refusal has to reach every door, and it has to leave the axis-aligned
-    picture untouched -- a refusal that also changed what a square cell draws would be a worse
-    trade than the bug.
-    """
-    skewed = _block_solver(HEX)
-    with pytest.raises(NotImplementedError, match='block modeler'):
-        skewed.solve()
-    for call in (lambda s: draw.slice_structure(s, 0, n=32),
-                 lambda s: draw.slice_structure(s, 0, n=32, band_limited=True),
-                 lambda s: draw.plot_structure(s, 0, n=32)):
-        with pytest.raises(NotImplementedError, match='block modeler'):
-            call(_block_solver(HEX))
-
-    square = _block_solver(None)
-    stated = _block_solver(np.diag([P, P]))          # the same cell, named explicitly
-    a = np.asarray(draw.slice_structure(square, 0, n=64))
-    b = np.asarray(draw.slice_structure(stated, 0, n=64))
-    assert np.array_equal(a, b)
-    assert len(np.unique(a)) > 1                     # a constant picture would pass anything
-
 
 # ---------------------------------------------------- the incidence, which was always normal
 

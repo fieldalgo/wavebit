@@ -9,7 +9,7 @@ Presentation rather than physics, and like ``plot_field`` there is no reason for
 per backend: it only needs the geometry as NumPy. Everything here converts on the way in.
 
 **Why a hand-rolled version is worth replacing.** The obvious reading of
-:meth:`~wavebit._core.modeler.Modeling.draw` -- edges are right-hand edges, paint the bands in
+the block modeller's own ``draw`` -- edges were right-hand edges, painted in
 order -- is silently wrong for any shape that crosses the cell boundary. A ``draw()`` edge list
 is not guaranteed increasing: a 200x160 rod at ``cx = 960`` in a 1000x1000 cell comes back as
 ``x = [860., 1060., 1000.]``, and the segment closed by the last edge has a *negative* width.
@@ -21,7 +21,7 @@ four times: painting the bands in order drops 25.0% / 30.0% / 43.8% of the rod (
 x from the low side, from the high side, and in both axes at once) and puts
 ``<eps>`` at 1.2700 / 1.2520 / 1.2025 where the solver integrates 1.3600 in all three. At
 ``cx = 960`` the edge array actually *decreases*, so ``pcolormesh`` draws overlapping quads
-without complaining. :func:`_render_block` below does the signed accumulation instead, and
+without complaining. That renderer did the signed accumulation instead, and
 ``tests/test_plot_structure.py`` pins it at max\\|render - truth\\| = 0 on those positions --
 with the naive render checked in alongside, failing, so the hazard stays demonstrated.
 """
@@ -143,23 +143,6 @@ def _signed_coverage(lo, hi, s, L):
     """
     return (np.floor((hi[:, None] - s[None, :]) / L)
             - np.floor((lo[:, None] - s[None, :]) / L))
-
-
-def _render_block(cell, edges_u, edges_v, period, xs, ys):
-    """``eps`` on the grid ``(ys, xs)`` for one entry of :meth:`.Modeling.draw`.
-
-    ``cell`` is permittivity already -- the modeler takes Materials and writes out their
-    ``epsilon`` -- indexed ``[row, col]`` = ``[y, x]``, with row 0 at ``y = 0``
-    (``docs/conventions.md``). There is no squaring here for the same reason there is none in
-    the builder this mirrors: a picture that squared what the solve does not would show a
-    different structure from the one being solved, which is the one thing a structure picture
-    must not do. Exact for the staircase the modeler built -- which is not the same thing as
-    exact for the shape the user typed; see :func:`slice_structure`.
-    """
-    Px, Py = float(period[0]), float(period[1])
-    Cx = _signed_coverage(*_segments(edges_u), xs, Px)
-    Cy = _signed_coverage(*_segments(edges_v), ys, Py)
-    return Cy.T @ _np_complex(cell) @ Cx
 
 
 # =========================================================== path 2: analytic shape sampling
@@ -335,12 +318,6 @@ def _band_limited(solver, layer, n):
         grid = _grid_from_conv_matrix(
             _fac.fourier2d_piecewise_constant(xnp, eps, half_width_u, half_width_v, inverse_rule=None),
             half_width_u, half_width_v)
-    elif mt == 1:
-        cell, edges_u, edges_v = solver.modeling_block_instruction(solver.structure)[layer]
-        grid = _grid_from_conv_matrix(
-            _fac.fourier2d_integrated(xnp, _np_complex(cell), _np_complex(edges_u),
-                                      _np_complex(edges_v), half_width_u, half_width_v, inverse_rule=None),
-            half_width_u, half_width_v)
     else:
         lay = solver.structure[layer]
         # The solver's own choice of basis, not `solver.lattice`: an axis-aligned cell gets
@@ -379,18 +356,6 @@ def _refuse_layer(solver, layer):
             f'layer {layer} is out of range for a {n_layers}-layer stack. `layer` indexes the '
             f'way `structure` does -- 0 is the layer nearest `top`, whichever side the light '
             f'arrives from (docs/conventions.md).')
-    if solver.modeling_type == 1 and not solver.lattice_is_axis_aligned:
-        # The same refusal `engine._reject_unsupported_lattice` makes, made here because the
-        # drawing entries do not go through it. Without it the block path *draws* a skewed cell:
-        # `slice_structure` returns a picture `np.array_equal` to the same instruction on a
-        # square, because the modeller grids on a rectangle and nothing in it reads a basis --
-        # and `plot_structure` then shears that rectangular staircase through the lattice,
-        # producing a picture of a structure the solve refuses to build.
-        raise NotImplementedError(
-            'the block modeler rasterises onto a rectangular grid of its own and is not ported '
-            'to a skewed cell, so there is no picture of this layer to draw -- the one it would '
-            'return is the square cell\'s. `solve()` refuses it for the same reason. State the '
-            'layer as a raster or as shapes, both of which carry the basis.')
 
 
 def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
@@ -436,7 +401,7 @@ def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
        ``n_split=16`` differs from the true rotated rectangle over 1.9% of the rod's area (7.7%
        at ``n_split=4``, 0.5% at 64). Adding blocks narrows that, but it is *harmonics* that
        remove the kink the staircase costs in the answer, not ``n_split`` --
-       :meth:`~wavebit._core.modeler.Modeling.rectangle` measures both.
+       the block modeller's ``rectangle`` measured both.
     3. **A curved shape on the painted path is a 256-gon** before anything is drawn or
        transformed (:data:`~wavebit._core.boundary.POLYGON_VERTICES`), while the summed path
        keeps the exact ellipse -- so one ellipse has two pictures. Comparing them by ``<eps>``
@@ -459,15 +424,6 @@ def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
         basis = _basis(solver)
         if mt == 0:
             values = _np_complex(solver.structure[layer])
-        elif mt == 1:
-            xs = (np.arange(n) + 0.5) * period[0] / n
-            ys = (np.arange(n) + 0.5) * period[1] / n
-            # Re-run rather than read `modeler.block_info_list`, which may be left over from
-            # an earlier `structure`. This is the same call every solve makes, and it leaves
-            # the same marks on the modeler (`grid_plans`, `shape_choices`) that a solve would -- a
-            # frozen `StaticGeometry` is a copy and is not disturbed.
-            cell, edges_u, edges_v = solver.modeling_block_instruction(solver.structure)[layer]
-            values = _render_block(cell, edges_u, edges_v, period, xs, ys)
         elif mt == 2:
             lay = solver.structure[layer]
             if _analytic.layer_needs_resolving(lay, solver._geometry_lattice_for(None)):

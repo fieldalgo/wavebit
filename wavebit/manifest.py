@@ -72,9 +72,9 @@ MANIFEST_VERSION = '7'
 #: it from a keyword.
 #:
 #: ``material_form`` is the second half of the same fact and is what :data:`MATERIAL_QUANTITY`
-#: is stated against: three of the four paths name a material per region ('assignment') and
+#: is stated against: two of the three spellings name a material per region ('assignment') and
 #: one samples a field ('field'), which is why only the raster takes a ``mu=`` array while the
-#: other three carry permeability inside each ``Material``.
+#: other two carry permeability inside each ``Material``.
 SPELLINGS = (
     {
         'path': 'raster',
@@ -85,17 +85,6 @@ SPELLINGS = (
         'summary': 'Permittivity as samples. The only path that implements both Fourier '
                    'series and both factorization rules, and the one topology optimisation '
                    'uses.',
-    },
-    {
-        'path': 'block',
-        'modeling_type': 1,
-        'structure': 'a list of [background, [shape, ...]] layers, each shape a list '
-                     "starting with 'rectangle' or 'ellipse' and carrying its Material in "
-                     'position 5',
-        'material_form': 'assignment',
-        'mu': 'inside each Material',
-        'summary': 'Shapes decomposed into axis-aligned blocks, painted in order. Edges that '
-                   'are not axis-aligned become a staircase.',
     },
     {
         'path': 'smooth',
@@ -190,10 +179,8 @@ def _options_for(modeling_type):
         'normal_method': _raster_normal_methods() if modeling_type == 0 else [],
         'normal_method_reason': (
             "read only under factorization='nvf'" if modeling_type == 0
-            else ("the block path applies Li's rules only and builds no normal field"
-                  if modeling_type == 1
-                  else 'the smooth shape path builds its normal field from the geometry '
-                       'itself') + '; there is no raster construction to select'),
+            else 'the smooth shape path builds its normal field from the geometry itself; '
+                 'there is no raster construction to select'),
     }
 
 
@@ -234,15 +221,13 @@ LATTICE = {
     #: is the answer. All four constructions carry the cell metric now — see
     #: ``docs/nvf-normal-methods.md``; ``'contour'`` is the one to recommend on a skewed cell
     #: as on any other.
-    'paths_refused_on_oblique': ('block',),
+    #: Empty since the block path was removed: it was the only one refused here, because its
+    #: modeller rasterised shapes onto a rectangular grid of its own. Both surviving paths
+    #: take a skewed cell.
+    'paths_refused_on_oblique': (),
     'factorizations_refused_on_oblique': ('li',),
     'normal_methods_refused_on_oblique': (),
     'refused_on_oblique': (
-        {
-            'what': 'the block path (modeling_type=1)',
-            'why': 'its modeler rasterises shapes onto a rectangular grid of its own, which '
-                   'is not ported to a skewed cell',
-        },
         {
             'what': "factorization='li'",
             'why': 'the inverse rule is applied along the raster axes, which are a1 and a2 '

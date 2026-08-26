@@ -33,7 +33,6 @@ from .enums import (Answers, DEFAULT_ANSWERS, DEFAULT_FACTORIZATION, DEFAULT_FOR
 from .fields import (field_1d, field_1d_conical, field_2d, field_2d_4ff,
                      is_count, to_mirrored_z, to_scene_frame)
 from .geometry import StaticGeometry
-from .modeler import Modeling
 from .result import Result, ResultSub
 from .scattering import smm_1d as _smm_1d, smm_1d_conical as _smm_1d_conical, smm_2d as _smm_2d
 from .solve_1d import solve_1d as _etm_1d, solve_1d_conical as _etm_1d_conical
@@ -1102,12 +1101,6 @@ class CoreSolveMixin:
     @device.setter
     def device(self, value):
         self._device = self._resolve_device(value)
-        if getattr(self, 'modeler', None) is not None:
-            # `_array_device`, not `self._device`: the modeler wants the argument an array
-            # constructor takes, which is `None` on the two namespaces that place their own
-            # arrays. Torch's two spellings are the same object, which is why the line it
-            # replaced could conflate them and still be right there.
-            self.modeler.device = self._array_device
 
     def _resolve_device(self, value):
         """A device request as this backend's own device object. One device here.
@@ -1240,8 +1233,6 @@ class CoreSolveMixin:
         # Guarded because `_structure` is set by the `RCWA*` subclass, after `_BaseRCWA`.
         if getattr(self, '_structure', None) is not None:
             self.structure = self.structure
-        if getattr(self, 'modeler', None) is not None:
-            self.modeler.complex_dtype = self._complex_dtype
 
     # ------------------------------------------------------------- the cell and the stack
     #
@@ -1368,8 +1359,6 @@ class CoreSolveMixin:
         a refusal about which spelling to use.
         """
         self._period = self._as_lengths(period, pair=True)
-        if getattr(self, 'modeler', None) is not None:
-            self.modeler.period = self._period
 
     @property
     def thickness(self):
@@ -1652,9 +1641,6 @@ class CoreSolveMixin:
             else:
                 self._grating_type = 2
 
-        elif self.modeling_type == 1:                    # block
-            self._grating_type = 2                       # TODO: 1d conical case
-
         elif self.modeling_type == 2:                    # analytic, staircase-free
             self._grating_type = 2
 
@@ -1679,7 +1665,7 @@ class CoreSolveMixin:
 
     @property
     def modeling_type(self):
-        """Which modeling path the structure selected: ``0`` raster, ``1`` block, ``2`` shapes.
+        """Which modeling path the structure selected: ``0`` raster, ``2`` shapes.
 
         ``None`` before a structure has been assigned. The *type of the object* passed as
         ``structure`` is the choice -- there is no separate mode switch -- so this is the only
@@ -1689,17 +1675,6 @@ class CoreSolveMixin:
         ``_FACTORIZATION_REASON`` name a raster).
         """
         return self._modeling_type
-
-    # -------------------------------------------------------------- modeller pass-throughs
-
-    def modeling_block_instruction(self, *args, **kwargs):
-        return self.modeler.modeling_block_instruction(*args, **kwargs)
-
-    def rectangle(self, *args, **kwargs):
-        return self.modeler.rectangle(*args, **kwargs)
-
-    def ellipse(self, *args, **kwargs):
-        return self.modeler.ellipse(*args, **kwargs)
 
     def plot_field(self, field_cell):
         """Draw a reconstructed cell. See :func:`wavebit._core.fields.plot_field`."""
@@ -1797,19 +1772,14 @@ class CoreSolveMixin:
 
 # The rule each modeling path actually implements, for the two paths that implement exactly
 # one. The raster path (0) is absent because it implements both and so takes the option as
-# given; on these two the option is a claim to check rather than a choice to make.
+# given; on the shape path the option is a claim to check rather than a choice to make.
 _FACTORIZATION_IMPLEMENTED_BY = {
-    1: Factorization.LI,
     2: Factorization.NVF,
 }
 
 # Why each of those two is the only rule its path has, phrased for the person who asked for
 # the other one. The distinction matters: one is unbuilt, the other is unbuildable.
 _FACTORIZATION_REASON = {
-    1: ("the block path (modeling_type=1) applies Li's rules to the rectangles its modeler "
-        "paints (wavebit._core.factorization.to_conv_mat_block); no normal field is computed "
-        "there, so NVF is not implemented on it. Use a raster structure (modeling_type=0) or "
-        "smooth shapes (modeling_type=2), which both have it"),
     2: ("the smooth shape path (modeling_type=2) builds eps from an analytic normal field -- "
         "the shapes' own (wavebit._core.analytic.to_conv_mat_smooth_nvf), or, for a painted "
         "layer whose shapes overlap, that of the disjoint polygons the painting resolves into "
@@ -1820,24 +1790,17 @@ _FACTORIZATION_REASON = {
         "lost: drop the keyword, or pass factorization='nvf' to say so"),
 }
 
-# The other Fourier axis, exactly the same shape of fact. Both shape paths describe a layer as
-# geometry rather than as samples, and integrate the permittivity over that geometry in closed
-# form; neither has a raster underneath to run a discrete series along. The raster path (0) is
-# again absent because it is the one that implements both.
+# The other Fourier axis, exactly the same shape of fact. The shape path describes a layer as
+# geometry rather than as samples, and integrates the permittivity over that geometry in
+# closed form; it has no raster underneath to run a discrete series along. The raster path (0)
+# is again absent because it is the one that implements both.
 _COEFFICIENTS_IMPLEMENTED_BY = {
-    1: FourierCoefficients.INTEGRATED,
     2: FourierCoefficients.INTEGRATED,
 }
 
 # Why, phrased for the person who asked for 'sampled'. Same distinction as above: the block
 # path's missing series is unbuilt, the smooth path's is unbuildable.
 _COEFFICIENTS_REASON = {
-    1: ("the block path (modeling_type=1) hands the factorizer explicit rectangles and their "
-        "edges, and integrates eps over them in closed form "
-        "(wavebit._core.factorization.fourier2d_integrated, via to_conv_mat_block). The edges are the "
-        "geometry, at whatever real coordinates the modeler put them, so there is no raster "
-        "underneath to sample -- rasterising one first is what modeling_type=0 is. Use a "
-        "raster structure, which implements both"),
     2: ("the smooth shape path (modeling_type=2) transforms geometry analytically -- each "
         "shape in turn (wavebit._core.analytic.shape_ft), or, for a painted layer whose "
         "shapes overlap, the disjoint polygons the painting resolves into "
@@ -1958,16 +1921,6 @@ class CoreFactorizationMixin:
                          polarization=polarization)
         self.incidence_side = incidence_side
         self.answers = answers
-
-        # `xp=` and the *resolved* device, because `Modeling.__init__` resolves its own
-        # `device` one line before it learns its namespace: `_xp` starts at the NumPy
-        # fallback and only becomes this backend's when the `period` setter infers it from
-        # the array. `_resolve_device` returns `None` for any non-Torch namespace, so a
-        # Torch device handed in was discarded on arrival -- the modeler then built its own
-        # arrays on the host while the solver was elsewhere. The solver knows its namespace;
-        # it should not be guessed from an argument.
-        self.modeler = Modeling(period=self.period, xp=self.xp,
-                                device=self._array_device, complex_dtype=complex_dtype)
 
         self._modeling_type = None
         self._grating_type = None
@@ -2163,9 +2116,22 @@ class CoreFactorizationMixin:
             # fractions of it, and `combine` picks what overlapping shapes mean --
             # this path adds them where the block path paints. See
             # wavebit._core.analytic; overlaps are refused until it is set.
-            # An empty list is a Block, not a missing structure -- `None` is that.
-            kind = 2 if (len(structure) > 0 and isinstance(structure[0], dict)) else 1
-            value = structure
+            # The block spelling -- a per-layer `[background, [[shape, ...], ...]]` -- used
+            # to be the `else` of this line, so every list that was not the analytic one became
+            # a block. That path is gone; the shape it accepted has to be refused by name here,
+            # or it falls through to the analytic builder and dies as
+            # `TypeError: unhashable type: 'list'` from somewhere with no bearing on the input.
+            if not structure or not isinstance(structure[0], dict):
+                raise ValueError(
+                    'structure: a list of layers has to be the analytic spelling -- one '
+                    'dict(background=..., shapes=[...]) per layer. The other list spelling, a '
+                    'per-layer [background, [[shape, ...], ...]], was the block modeller, and '
+                    'that path is gone: it decomposed shapes into axis-aligned rectangles and '
+                    "applied Li's rule to them, which measured bit-identical to a raster under "
+                    'the same rule on a commensurate 1D grating and behind NVF everywhere '
+                    'else. Write the shapes as dicts for the analytic path, or sample them '
+                    'onto a raster.')
+            kind, value = 2, structure
         elif structure is None:
             kind, value = None, None
         else:
@@ -2660,9 +2626,7 @@ class CoreFactorizationMixin:
             return
         if self._modeling_type == 0 and factorization == Factorization.NVF:
             return
-        if self._modeling_type == 1:
-            where = "the block path applies Li's rules only and builds no normal field"
-        elif self._modeling_type == 2:
+        if self._modeling_type == 2:
             where = 'the smooth shape path builds its normal field from the geometry itself'
         else:
             where = "factorization='li' builds no normal field at all"
@@ -2739,21 +2703,6 @@ class CoreFactorizationMixin:
                                   mu_normal_field=mu_normal_field,
                                   mu_normal_field_source=mu_normal_field_source,
                                   mu_compression=mu_compression)
-        if self._modeling_type == 1:
-            # The block modeler records its plans while it builds, so run the build once to
-            # get them -- the *modeler*, not the whole factorization. Freezing used to go
-            # through `_eps_conv_matrices` and throw the convolution matrices away, which it paid
-            # for only because the same-material detector read them; that detector is gone.
-            # Dropping them takes a freeze from 25.6 ms to 10.4 ms, which is what makes
-            # re-freezing every step of a fit cheaper than nursing one along.
-            #
-            # One record serves the permeability build too, and has to: the mu pass paints the
-            # *same* shapes at the *same* coordinates, so replaying these plans is what
-            # guarantees the two quantities land on one grid rather than on two that happen to
-            # agree.
-            self.modeling_block_instruction(self.structure)
-            geometry.block_grid = self.modeler.grid_plans
-            geometry.shape_choices = self.modeler.shape_choices
         if self._modeling_type == 2:
             # Only a painted layer that actually overlaps has a plan to freeze. A summed one
             # has no discrete decision in it, and a painted one with nothing overlapping means
@@ -3037,11 +2986,6 @@ class CoreFactorizationMixin:
         if self.lattice_is_axis_aligned:
             return
         common = ('The cell basis is non-orthogonal (set via .lattice). ')
-        if self._modeling_type == 1:
-            raise NotImplementedError(
-                common + 'the block modeler (modeling_type=1) rasterises onto a rectangular '
-                'grid, which is not implemented yet for a skewed cell. Use a raster structure '
-                '(modeling_type=0) or smooth shapes (modeling_type=2).')
         factorization = self.factorization
         if factorization != Factorization.NVF:
             raise NotImplementedError(
@@ -3198,28 +3142,10 @@ class CoreFactorizationMixin:
                         lattice=self._geometry_lattice_for(geometry),
                         normal_method=self.normal_method)
 
-        elif self._modeling_type == 1:      # block -- Li on integrated coefficients
-            # No branch on either option here, and that is not an oversight: this path has one
-            # rule and one series (see _FACTORIZATION_IMPLEMENTED_BY and
-            # _COEFFICIENTS_IMPLEMENTED_BY) -- `to_conv_mat_block` integrates eps over the
-            # painted rectangles with `fourier2d_integrated`, unconditionally. Asking it for the other of
-            # either was refused above rather than answered with this.
-            #
-            # The permeability pass replays the plans the permittivity pass recorded (or the
-            # frozen ones), never re-decides them: the two passes paint the same shapes at the
-            # same coordinates, so a second independent gridding could only agree by luck.
-            plans = None if geometry is None else geometry.block_grid
-            choices = None if geometry is None else geometry.shape_choices
-            if mu_pass and plans is None:
-                plans, choices = self.modeler.grid_plans, self.modeler.shape_choices
-            structure_block = self.modeling_block_instruction(
-                structure, plans=plans, shape_choices=choices)
-            conv = _fac.to_conv_mat_block(structure_block, half_width_u, half_width_v)
-
         elif self._modeling_type == 2:      # smooth shapes -- NVF on exact transforms
-            # Likewise fixed on both axes: the epsilon tensor comes from the shapes' analytic
-            # normal field, so five matrices always, and each shape's transform is the exact
-            # integral over the cell, so the coefficients are integrated ones. Naming
+            # Fixed on both axes: the epsilon tensor comes from the shapes' analytic normal
+            # field, so five matrices always, and each shape's transform is the exact integral
+            # over the cell, so the coefficients are integrated ones. Naming
             # `factorization='li'` or `fourier_coefficients='sampled'` was refused above.
             xp = self.xp
             conv = _analytic.to_conv_mat_smooth_layers(
@@ -3277,30 +3203,13 @@ class CoreFactorizationMixin:
             return self._mu is not None
         return any(m.is_magnetic for m in self._structure_materials())
 
-    def _block_material_slots(self, layer):
-        """``(background, [object materials...])`` of one block layer, as raw slot values.
-
-        One reader for the two places that take a block layer apart, so the positional layout
-        -- ``[background, [[name, cx, cy, lx, ly, material, angle], ...], combine]`` -- is
-        written down once. A shape written without its material slot is left to the modeler to
-        complain about; answering "vacuum" here would turn a missing material into a silent
-        one, and this method only ever asks whether something is magnetic.
-        """
-        objects = layer[1] if len(layer) > 1 else []
-        return layer[0], [(obj[5] if len(obj) > 5 else 1.0) for obj in objects]
-
     def _structure_materials(self):
         """Every :class:`~wavebit._core.domain.Material` named inside a shape structure."""
         out = []
         for layer in (self.structure or []):
-            if self._modeling_type == 1:
-                background, materials = self._block_material_slots(layer)
-                out.append(as_material(background, 'block layer background'))
-                out.extend(as_material(m, 'block shape material') for m in materials)
-            else:
-                out.append(as_material(layer.get('background', 1.0), 'layer background'))
-                for shape in layer.get('shapes', []):
-                    out.append(as_material(shape.get('material', 1.0), 'shape material'))
+            out.append(as_material(layer.get('background', 1.0), 'layer background'))
+            for shape in layer.get('shapes', []):
+                out.append(as_material(shape.get('material', 1.0), 'shape material'))
         return out
 
     def _mu_structure(self):
@@ -3324,17 +3233,11 @@ class CoreFactorizationMixin:
             return self._mu
         out = []
         for layer in self.structure:
-            if self._modeling_type == 1:
-                objects = [list(obj[:5]) + [as_material(obj[5]).mu_value] + list(obj[6:])
-                           for obj in (layer[1] if len(layer) > 1 else [])]
-                out.append([as_material(layer[0]).mu_value, objects] + list(layer[2:]))
-            else:
-                shapes = [dict(shape, material=as_material(shape.get('material', 1.0)).mu_value)
-                          for shape in layer.get('shapes', [])]
-                out.append(dict(layer,
-                                background=as_material(
-                                    layer.get('background', 1.0)).mu_value,
-                                shapes=shapes))
+            shapes = [dict(shape, material=as_material(shape.get('material', 1.0)).mu_value)
+                      for shape in layer.get('shapes', [])]
+            out.append(dict(layer,
+                            background=as_material(layer.get('background', 1.0)).mu_value,
+                            shapes=shapes))
         return out
 
     def _solve_built(self, geometry=None):

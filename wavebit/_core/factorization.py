@@ -34,7 +34,7 @@ discontinuous functions:
 - ``('integrated', 'nvf')``   -> :func:`to_conv_mat_raster_integrated_nvf`, closed-form
   Fourier with NVF.
 
-Block-modelled layers (:func:`to_conv_mat_block`) are the closed-form series on explicitly
+The removed block path's layers were the closed-form series on explicitly
 given segment edges, with Li's rules; the analytic *shape* path lives in
 :mod:`wavebit._core.analytic` and is always NVF.
 
@@ -1799,21 +1799,3 @@ def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, nor
     return ConvMatrices(*(xp.stack(slot) for slot in out))
 
 
-def to_conv_mat_block(block_info_list, half_width_u, half_width_v):
-    """Per-layer convolution matrices for vector-modelled layers (integrated over explicit segments).
-
-    Each entry of ``block_info_list`` is ``(layer, edges_u, edges_v)`` — the segment values and
-    their edges — so no compression step is needed.
-    """
-    xp = array_namespace(block_info_list[0][0])
-
-    epx_list, epy_list, epz_i_list = [], [], []
-
-    for layer, x, y in block_info_list:
-        eps = xp.astype(layer, _complex_dtype(xp, layer))
-        epx_list.append(fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule='u'))
-        epy_list.append(fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule='v'))
-        epz_i_list.append(xp.linalg.inv(fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule=None)))
-
-    return ConvMatrices(xp.stack(epx_list), xp.stack(epy_list),
-                        xp.stack(epz_i_list), None, None)

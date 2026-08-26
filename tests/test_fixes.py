@@ -204,25 +204,6 @@ def test_8_torch_structure_numpy_ndarray():
     print("SUCCESS: Test 8 Passed!\n")
 
 
-def test_9_vector_modeling_period():
-    print("==================================================")
-    print("Test 9: Vector Modeling period attribute test")
-    print("==================================================")
-
-    for backend_id, backend_name in [(0, 'NumPy'), (1, 'JAX'), (2, 'PyTorch')]:
-        solver = wavebit.rcwa(backend=backend_id, period=[1000, 1000])
-        assert solver.modeler.period is not None
-        # vector object for layer
-        sub_element = solver.modeler.rectangle_no_approximation(
-            cx=500, cy=500, lx=200, ly=200, material=4.0)
-        layer_info_list = [[1.0, sub_element]]
-        blocks = solver.modeler.draw(layer_info_list)
-        assert blocks is not None
-        assert len(blocks) == 1
-        print(f"[{backend_name}] Vector modeling period test passed")
-    print("SUCCESS: Test 9 Passed!\n")
-
-
 def test_10_shared_mean_permittivity_keeps_the_interface():
     print("==================================================")
     print("Test 10: Layers Sharing a Mean Permittivity Keep Their Interface")
@@ -256,7 +237,6 @@ if __name__ == "__main__":
     test_6_none_structure_grating_type()
     test_7_none_theta_handling()
     test_8_torch_structure_numpy_ndarray()
-    test_9_vector_modeling_period()
     test_10_shared_mean_permittivity_keeps_the_interface()
     print("==================================================")
     print("ALL FIXES VERIFICATION TESTS PASSED SUCCESSFULLY! ")

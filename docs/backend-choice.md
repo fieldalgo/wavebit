@@ -9,7 +9,7 @@ Targets:
   costs
 - `wavebit/_core/factorization.py::compression_indices`, `normal_field_for_raster` — the two
   raster decisions that must be taken eagerly
-- `wavebit/_core/modeler.py::_check_plan_still_fits` — the block record's staleness check
+- `wavebit/_core/geometry.py::StaticGeometry` — the frozen records and their staleness checks (the block record's own check went with that path on 2026-08-26)
 - [`nvf-upsampling.md`](nvf-upsampling.md) — why NVF's cost fell between the first run of this
   sweep and the one reported here; [`torch-compile.md`](torch-compile.md) — why PyTorch is
   measured eager
@@ -238,11 +238,12 @@ them is now about accuracy, which is what it should have been.
 
 ## If a fit must hold one freeze — how far it stays valid
 
-Re-freezing every step removes the question on the block path, but the raster records give no
+Re-freezing every step removes the question on the shape paths, but the raster records give no
 choice: their identity comparison makes a re-freeze a recompilation, so a jitted raster fit
-holds one. The width of that record's validity was bisected against
-`_check_plan_still_fits` — the boundary is sharp, exact up to it (a replay at 106.31 matches a
-rebuild at 0.0e+00) and refused past it (106.33).
+holds one. The width of that record's validity was bisected on the block path, before it was
+removed — the boundary is sharp, exact up to it (a replay at 106.31 matched a rebuild at
+0.0e+00) and refused past it (106.33). The table below is that measurement, kept because the
+shape of the answer is what it is about; the block path itself is gone.
 
 | shape | parameter (nominal) | n_split | valid window | width |
 |---|---|---|---|---|

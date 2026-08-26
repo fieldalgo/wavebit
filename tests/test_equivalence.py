@@ -110,32 +110,7 @@ def test_all_three_conserve_energy(tetm):
 # does not make it exact.
 _EPS = 12.1104
 _RASTER = np.array([[[1.0] * 4 + [_EPS] * 4 + [1.0] * 4]])
-_BLOCK = [[1.0, [['rectangle', 600.0, 600.0, 400.0, 1200.0, _EPS, 0, 0, 0]]]]
-
 _CFG = dict(top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2,
             truncation_order=[5, 0], wavelength=900.0, period=[1200.0, 1200.0], thickness=[300.0])
 
 
-@pytest.mark.parametrize('backend,name', [(0, 'numpy'), (1, 'jax'), (2, 'torch')])
-def test_block_and_raster_describe_the_same_structure(backend, name):
-    """The two modeling paths must agree, on every backend, to round-off.
-
-    This is a regression test for a defect in the *example* that used to demonstrate it:
-    ``examples/vector_*_verification.py`` built the raster with ``torch.as_tensor`` on a Python
-    list, which takes torch's **default** dtype -- float32 -- and no later cast recovers digits
-    the constructor already dropped. It printed a block-vs-raster disagreement of 5.6e-5 on
-    torch while numpy and jax agreed to 1e-13, which reads as a solver defect and was not one.
-
-    The tolerance is what the paths actually achieve once the dtype is right: ~1e-13. Anything
-    near 1e-5 again means someone has reintroduced a single-precision array on one backend.
-    """
-    if name != 'numpy':
-        pytest.importorskip(name)
-
-    block = wavebit.rcwa(backend=backend, structure=_BLOCK, **_CFG).solve().given
-    raster = wavebit.rcwa(backend=backend, structure=_RASTER, **_CFG).solve().given
-
-    for a, b, which in ((block.R, raster.R, 'R'),
-                        (block.T, raster.T, 'T')):
-        diff = np.linalg.norm(np.asarray(a, dtype=float) - np.asarray(b, dtype=float))
-        assert diff < 1e-11, f'{name} {which}: {diff:.3e}'

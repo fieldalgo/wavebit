@@ -29,16 +29,13 @@ _GROOVE = np.array([[1.0, 1.0, 4.0, 4.0, 4.0, 1.0, 1.0, 1.0]])
 def _layers(path, count):
     if path == 'raster':
         return np.stack([_GROOVE * (1.0 + 0.5 * i) for i in range(count)])
-    if path == 'smooth':
-        return [{'background': 1.0,
-                 'shapes': [{'type': 'rectangle', 'cx': 0.4 * P, 'cy': 0.5 * P,
-                             'lx': 0.3 * P, 'ly': P, 'material': 4.0 + i}]}
-                for i in range(count)]
-    return [[1.0, [['rectangle', 0.4 * P, 0.5 * P, 0.3 * P, P, 4.0 + i, 0.0, 16, 16]]]
+    return [{'background': 1.0,
+             'shapes': [{'type': 'rectangle', 'cx': 0.4 * P, 'cy': 0.5 * P,
+                         'lx': 0.3 * P, 'ly': P, 'material': 4.0 + i}]}
             for i in range(count)]
 
 
-PATHS = ('raster', 'smooth', 'block')
+PATHS = ('raster', 'smooth')
 COUNTS = (1, 2, 3)
 
 
@@ -46,14 +43,8 @@ def _solver(path, layers, thicknesses, backend=0, **over):
     kw = dict(backend=backend, structure=_layers(path, layers),
               thickness=[H] * thicknesses, period=[P, P], truncation_order=[2, 0],
               wavelength=WL, top=1.0, bot=1.0)
-    # The two shape spellings take different rules, and each refuses the other's: the dict
-    # spelling is the analytic path and implements NVF only, the list-of-lists is the block
-    # path and implements Li's rule only. Naming the wrong one raises before the layer count
-    # is ever read, which is how a first version of this file "failed" on all nine block cases.
     if path == 'smooth':
         kw['factorization'] = 'nvf'
-    elif path == 'block':
-        kw['factorization'] = 'li'
     kw.update(over)
     return wavebit.rcwa(**kw)
 

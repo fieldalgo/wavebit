@@ -5,10 +5,10 @@ A refactor that must not move a number needs an instrument that would notice if 
 the instrument has to be wider than the change. This one sweeps
 
     4 cell shapes    square, rectangle, hexagon, shear
-  x 4 modeling paths raster, shapes (summed), shapes (painted), block
+  x 3 modeling paths raster, shapes (summed), shapes (painted)
   x 2 incidence      top, bottom
   x 3 backends       numpy, jax, torch
-  = 96 scenes
+  = 72 scenes
 
 and hashes, per scene, the per-order efficiencies **and** the reconstructed field. Both,
 because `R` and `T` are sums over orders: a per-order wavevector wrong by a whole reciprocal
@@ -21,11 +21,12 @@ costs the most to add later: the jax and torch arms need their optional dependen
 so a run that silently skipped them would report a smaller sweep as a clean one. It says so
 instead -- an absent backend is recorded by name in the digest rather than omitted from it.
 
-**Refusals are hashed too, by exception name.** Twelve of the 96 are refused on purpose: the
-block modeller on the two skewed cells, both incidence sides, all three backends. A refactor
-that changes *which* refusal fires, or removes one, moves the digest exactly as a changed
-number does. Hashing only the successes would make "it stopped refusing" a silent pass, which
-is the failure mode `c5b061f` was.
+**Refusals are hashed too, by exception name**, and there are none left. Twelve of the old 96
+were refused on purpose -- the block modeller on the two skewed cells, both incidence sides,
+all three backends -- and they went with that path: both surviving ones take a skewed cell. The
+mechanism stays because a refactor that *starts* refusing has to move the digest exactly as a
+changed number would; hashing only the successes would make "it began refusing" a silent pass,
+which is the failure mode `c5b061f` was.
 
 A refusal that is *not* on purpose is the trap on the other side, and this sweep walked into it
 before it was fixed: forcing `factorization='nvf'` onto the block path and handing the summed
@@ -119,12 +120,9 @@ def _shapes(basis, painted=False):
     return [layer]
 
 
-BLOCK = [[1.0, [['ellipse', P / 2, P / 2, 0.6 * P, 0.6 * P, 6.25, 0.0, 24, 24]]]]
-
-
 def _structure(kind, basis):
     return {'raster': _rod(basis), 'add': _shapes(basis),
-            'paint': _shapes(basis, True), 'block': BLOCK}[kind]
+            'paint': _shapes(basis, True)}[kind]
 
 
 def _available(name):
@@ -134,7 +132,7 @@ def _available(name):
 def scenes():
     """Every (cell, path, side, backend) combination, in a fixed order."""
     for cell in CELLS:
-        for kind in ('raster', 'add', 'paint', 'block'):
+        for kind in ('raster', 'add', 'paint'):
             for side in SIDES:
                 for backend in BACKENDS:
                     yield cell, kind, side, backend
@@ -154,11 +152,11 @@ def digest_one(cell, kind, side, backend):
                 lattice=np.asarray(basis).tolist(), truncation_order=[4, 4], thickness=[H],
                 wavelength=WL, top=1.0, bot=2.25, theta=0.3, phi=0.4, psi=0.2,
                 incidence_side=side, answers='field',
-                # NVF everywhere it is available. The block path builds its coefficients its
-                # own way and refuses the name, so it takes the default -- forcing one
-                # factorization across all four paths would refuse a quarter of the sweep and
-                # call the refusal a result.
-                **({} if kind == 'block' else {'factorization': 'nvf'}))
+                # NVF on every path here, which all three implement. It used to be conditional:
+                # the block path built its coefficients its own way and refused the name, so
+                # forcing one factorization across all four refused a quarter of the sweep and
+                # called the refusal a result.
+                factorization='nvf')
             result = solver.solve()
             field = solver.reconstruct_field(sample_x=7, sample_y=5, sample_z=3)
         for value in (result.R, result.T, field):

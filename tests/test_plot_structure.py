@@ -28,11 +28,9 @@ os.environ.setdefault('JAX_ENABLE_X64', '1')
 
 import array_api_compat.numpy as xnp
 import wavebit
-from wavebit._core.lattice import as_lattice
 from wavebit._core import boundary as _b
 from wavebit._core import clipper as _c
 from wavebit._core.analytic import assemble_eps_coeffs
-from wavebit._core.draw import _render_block, slice_structure
 
 P = 1000.0
 COMMON = dict(backend=0, period=(P, P), thickness=(300.,), wavelength=900.,
@@ -42,128 +40,7 @@ COMMON = dict(backend=0, period=(P, P), thickness=(300.,), wavelength=900.,
 #: `1 + 0.032*(12.25 - 1) = 1.36` wherever it is placed, since a translation is not a
 #: different structure. Every straddle case below is that same rod.
 ROD = dict(lx=200.0, ly=160.0, eps=12.25)
-ROD_EPS = 1.36
-
-
-def rod_instruction(cx, cy):
-    return [[1.0, [['rectangle', cx, cy, ROD['lx'], ROD['ly'], ROD['eps'], 0.0, 0, 0]]]]
-
-
-def rod_truth(cx, cy, n):
-    """`eps` of the rod sampled at cell centres, wrapped -- the geometry, independently built."""
-    s = (np.arange(n) + 0.5) * P / n
-    X, Y = np.meshgrid(s, s)
-    dx = (X - cx + P / 2) % P - P / 2
-    dy = (Y - cy + P / 2) % P - P / 2
-    return np.where((np.abs(dx) <= ROD['lx'] / 2) & (np.abs(dy) <= ROD['ly'] / 2),
-                    ROD['eps'], 1.0)
-
-
-def naive_render(cell, edges_u, edges_v, n):
-    """The wrong render, kept on purpose: edges as right-hand edges, bands painted in order.
-
-    This is what a reader writes from ``draw()``'s return value without knowing that an edge
-    list may leave ``[0, period]``. It is right whenever every shape sits inside the cell,
-    which is why nothing catches it.
-    """
-    xe = np.real(np.asarray(edges_u)).reshape(-1)
-    ye = np.real(np.asarray(edges_v)).reshape(-1)
-    s = (np.arange(n) + 0.5) * P / n
-    ci = np.clip(np.searchsorted(xe, s, 'left'), 0, len(xe) - 1)
-    ri = np.clip(np.searchsorted(ye, s, 'left'), 0, len(ye) - 1)
-    # `cell` is permittivity, as `_render_block` reads it -- no squaring on either side.
-    return np.real(np.asarray(cell))[np.ix_(ri, ci)]
-
-
-def block_layer(instruction):
-    solver = wavebit.rcwa(structure=instruction, **COMMON)
-    return solver, solver.modeling_block_instruction(instruction)[0]
-
-
 # ------------------------------------------------------- the straddle, which is the whole point
-
-#: `(cx, cy, how much of the rod a naive render keeps, its <eps>)`. The four positions are the
-#: ones `test_a_solver_answer_does_not_move_with_the_rod` shows the solver cannot distinguish.
-STRADDLES = [
-    (400.0, 500.0, 1.00, 1.3600),      # inside the cell: both renders are right
-    (550.0, 500.0, 1.00, 1.3600),      # inside the cell
-    (50.0, 500.0, 0.75, 1.2700),       # crosses x = 0     -> edges [-50, 150, 1000]
-    (960.0, 500.0, 0.70, 1.2520),      # crosses x = Px    -> edges [860, 1060, 1000], decreasing
-    (50.0, 40.0, 0.5625, 1.2025),      # crosses both axes
-]
-
-
-@pytest.mark.parametrize('cx,cy,kept,naive_eps', STRADDLES)
-def test_the_block_render_is_exact_at_every_straddle(cx, cy, kept, naive_eps):
-    """max|render - truth| == 0, not "close": the render is a sum of exact segment values.
-
-    Nothing here is interpolated. Each sample takes the modeler's own segment value through a
-    signed periodic-image count, so on a rod whose edges avoid the sample centres the two
-    arrays are equal bit-for-bit, and any tolerance would be hiding something.
-    """
-    n = 400
-    _, (cell, edges_u, edges_v) = block_layer(rod_instruction(cx, cy))
-    s = (np.arange(n) + 0.5) * P / n
-    got = _render_block(cell, edges_u, edges_v, (P, P), s, s).real
-
-    assert np.abs(got - rod_truth(cx, cy, n)).max() == 0.0
-    assert got.mean() == pytest.approx(ROD_EPS, abs=1e-12)
-
-
-@pytest.mark.parametrize('cx,cy,kept,naive_eps', STRADDLES)
-def test_the_naive_render_loses_the_wrapped_part(cx, cy, kept, naive_eps):
-    """The hazard, asserted rather than described.
-
-    A straddling rod loses 25% / 30% / 43.8% of its area to the in-order render and lands
-    ``<eps>`` at 1.2700 / 1.2520 / 1.2025 against the 1.3600 the solver integrates. The two
-    interior positions are in the list to show what makes this so easy to ship: there the
-    naive render is exactly right.
-    """
-    n = 400
-    _, (cell, edges_u, edges_v) = block_layer(rod_instruction(cx, cy))
-    truth = rod_truth(cx, cy, n)
-    naive = naive_render(cell, edges_u, edges_v, n)
-
-    area_kept = (naive > 1.5).sum() / (truth > 1.5).sum()
-    assert area_kept == pytest.approx(kept, abs=5e-3)
-    assert naive.mean() == pytest.approx(naive_eps, abs=1e-3)
-    if kept == 1.0:
-        assert np.abs(naive - truth).max() == 0.0
-    else:
-        assert np.abs(naive - truth).max() > 11.0
-
-
-def test_the_edge_list_really_does_leave_the_cell():
-    """Pins the premise, so a change to the modeler that removes the hazard is visible here.
-
-    ``draw()`` places the edges where the shape is, not where the cell is: at ``cx = 960`` the
-    array *decreases* over its last step. If this ever starts coming back sorted and inside
-    ``[0, Px]``, the tests above go from load-bearing to redundant, and this failure is what
-    says so.
-    """
-    _, (_, edges_u, _) = block_layer(rod_instruction(960.0, 500.0))
-    x = np.real(np.asarray(edges_u)).reshape(-1)
-    np.testing.assert_allclose(x, [860.0, 1060.0, 1000.0])
-    assert x[-1] < x[-2]
-
-    _, (_, x_low, _) = block_layer(rod_instruction(50.0, 500.0))
-    assert np.real(np.asarray(x_low)).reshape(-1)[0] < 0.0
-
-
-def test_a_solver_answer_does_not_move_with_the_rod():
-    """The reason the render has to wrap: the *solver* already does, so the picture owes it.
-
-    Same rod named in four periods is one structure, and the integrated series carries the
-    wrapped part on the Fourier phase. The spread measured across the four is 1.4e-13 on
-    ``sum(R)`` and 5.4e-14 on ``sum(T)``; the bound below is loose by ~70x on purpose, since
-    the failure this guards against is the *picture*'s failure -- dropping the wrapped part
-    moves ``<eps>`` by 0.09, twelve orders above any BLAS-dependent noise here.
-    """
-    totals = [float(np.sum(wavebit.rcwa(structure=rod_instruction(cx, 500.0),
-                                        **COMMON).solve().R).real)
-              for cx, _, _, _ in STRADDLES[:4]]
-    assert np.ptp(totals) < 1e-11, totals
-
 
 # --------------------------------------------------------------------------- the other paths
 
@@ -368,31 +245,6 @@ def test_the_truncated_series_leaves_the_material_range():
     assert band.max() == pytest.approx(13.85, abs=5e-2)
     assert 1.0 <= solver.slice_structure(n=512).real.min()
     assert solver.slice_structure(n=512).real.max() <= 12.25
-
-
-def test_the_block_path_draws_the_blocks_not_the_rectangle():
-    """The picture is honest about the staircase, which is 1.9% of the rod away from the shape.
-
-    Not a defect in the render -- the blocks *are* what the solver has. It is worth a test
-    because the difference shrinks with ``n_split`` and a reader may conclude that is the knob
-    for the answer too; it is not (``Modeling.rectangle`` measures the kink against harmonics).
-    """
-    n = 1024
-    cx, cy, lx, ly, angle = 500.0, 500.0, 240.0, 180.0, 0.4
-    s = (np.arange(n) + 0.5) * P / n
-    X, Y = np.meshgrid(s, s)
-    u = np.cos(angle) * (X - cx) + np.sin(angle) * (Y - cy)
-    v = -np.sin(angle) * (X - cx) + np.cos(angle) * (Y - cy)
-    exact = (np.abs(u) <= lx / 2) & (np.abs(v) <= ly / 2)
-
-    diffs = []
-    for n_split in (4, 16, 64):
-        instruction = [[1.0, [['rectangle', cx, cy, lx, ly, 12.25, angle, n_split, n_split]]]]
-        drawn = slice_structure(wavebit.rcwa(structure=instruction, **COMMON), n=n).real > 1.5
-        diffs.append(np.logical_xor(drawn, exact).sum() / exact.sum())
-
-    np.testing.assert_allclose(diffs, [0.077, 0.019, 0.005], atol=3e-3)
-    assert diffs[0] > diffs[1] > diffs[2]
 
 
 def test_an_absorbing_layer_keeps_its_imaginary_part():

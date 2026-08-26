@@ -254,35 +254,6 @@ def test_the_declared_width_is_the_width_answered_in(case, build):
 
 
 @pytest.mark.parametrize('backend', [0, 1, 2])
-def test_the_block_path_answers_in_the_declared_width_too(backend):
-    """The fourth modeling path, which the cases above cannot reach.
-
-    The block modeller refuses a skewed cell, so it cannot ride the all-pairs cover -- every
-    case there varies the lattice. It gets a square cell and the three backends instead.
-
-    It was violating the same claim for its own reason: ``block_per_layer_numeric`` built the
-    cell at ``xp.complex128 if x64 else xp.complex64`` with ``x64=True`` defaulted and no caller
-    ever passing it, under a TODO asking for the option to be connected to the solver. It was
-    connected -- ``_double`` comes from ``complex_dtype`` through the modeler's own setter --
-    and simply not read.
-    """
-    if backend == 1:
-        pytest.importorskip('jax')
-    elif backend == 2:
-        pytest.importorskip('torch')
-    layer = [[1.0, [['ellipse', P / 2, P / 2, 0.6 * P, 0.6 * P, 6.25, 0.0, 24, 24]]]]
-    for complex_dtype, want in ((0, np.float64), (1, np.float32)):
-        solver = wavebit.rcwa(backend=backend, structure=layer, period=[P, P],
-                              truncation_order=[3, 3], thickness=[H], wavelength=WL,
-                              top=1.0, bot=2.25, theta=0.3, phi=0.4, psi=0.2,
-                              complex_dtype=complex_dtype)
-        R, T = totals(solver.solve())
-        assert np.asarray(R).dtype == want, (complex_dtype, backend)
-        assert np.asarray(T).dtype == want, (complex_dtype, backend)
-
-
-
-@pytest.mark.parametrize('backend', [0, 1, 2])
 def test_reassigning_the_width_gives_the_solver_it_would_have_been_born_as(backend):
     """`complex_dtype` is settable, and setting it used to build a third kind of solver.
 
@@ -301,14 +272,13 @@ def test_reassigning_the_width_gives_the_solver_it_would_have_been_born_as(backe
     are not redundant: `structure` alone carries the numerical difference here, and a test that
     checked only the answer would have passed while `period` and `psi` stayed stale.
 
-    A raster, and only a raster, because single precision does not reach the other modeling
-    paths at all -- and that is older and larger than this test. `engine.py`'s smooth-shape
-    branch passes `complex_dtype=xp.complex128` literally while `self.complex_dtype` is in
-    scope, and the block modeller's `block_per_layer_numeric` defaults `x64=True` with a TODO
-    above it saying so. Measured on both: at `complex_dtype=1` the shape and block paths return
-    float64 on NumPy and JAX, and Torch raises `expected m1 and m2 to have the same dtype` --
-    when *born* at single precision, not merely when switched. Extending this test to those
-    paths is the check that the fix has landed, not a check that can pass first.
+    A raster, and only a raster, because single precision does not reach the shape path at all
+    -- and that is older and larger than this test. `engine.py`'s smooth-shape branch passes
+    `complex_dtype=xp.complex128` literally while `self.complex_dtype` is in scope. Measured:
+    at `complex_dtype=1` the shape path returns float64 on NumPy and JAX, and Torch raises
+    `expected m1 and m2 to have the same dtype` -- when *born* at single precision, not merely
+    when switched. Extending this test to that path is the check that the fix has landed, not
+    a check that can pass first.
     """
     if backend == 1:
         pytest.importorskip('jax')
@@ -592,27 +562,6 @@ def test_the_three_backends_take_one_device_vocabulary_and_answer_in_their_own(b
         == wavebit.rcwa(backend=backend, device='cpu', **SCENE).device
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
-def test_the_modeler_is_handed_a_device_its_array_constructor_can_take(backend):
-    """`_array_device`, not `self._device` -- and the difference is not cosmetic.
-
-    The solver stores a device in its backend's spelling; the modeler wants the argument an
-    array constructor takes, which is `None` on the two namespaces that place nothing. Handing
-    the modeler `self._device` raw reaches `xp.asarray(device=0)`, which NumPy refuses with
-    "Device not understood" and JAX with "sharding=0 must be an instance of ...".
-
-    Torch is why this survived unnoticed: there the two are the same object, so the Torch-only
-    line this replaced could conflate them and still be right. Then the fold gave the other
-    two backends a setter that had never run on them.
-    """
-    solver = wavebit.rcwa(backend=backend, **SCENE)
-    solver.device = solver.device                      # through the setter, modeler attached
-
-    xp = solver.modeler._xp
-    placed = xp.asarray([1.0, 2.0], device=solver.modeler.device)
-    assert placed.shape == (2,)
-
-
 def test_the_same_positional_argument_means_the_same_thing_on_all_three_backends():
     """`rcwa()` forwards `*args` positionally, so a wrapper that names parameters claims slots.
 
@@ -686,50 +635,6 @@ def test_the_scene_is_built_by_one_constructor_for_all_three_backends():
             f'something the other two do not, that difference belongs in a declared member the '
             f'shared body calls -- the way `_resolve_device` and `_resolve_precision` hold the '
             f'per-backend halves of `device` and `complex_dtype`.')
-
-
-def test_the_modeler_is_born_on_the_device_it_would_be_moved_to():
-    """`Modeling` resolved its device one line before it learned its namespace.
-
-    `Modeling.__init__` sets `_xp` to a NumPy fallback, resolves `device` against it, and only
-    then assigns `period` -- whose setter re-derives `_xp` from the array it was handed. So
-    `_resolve_device` always ran with `'torch' not in xp.__name__` true and always returned
-    `None`, and the `device=` that Torch alone bothered to pass was discarded on arrival.
-
-    The result was a solver whose modeler was in a state its own setter could never produce:
-    `None` as constructed, and the real device after any assignment, including the no-op
-    `solver.device = solver.device`. Arrays the modeler builds from Python values take
-    `modeler.device`, so on a placed solver they landed on the host.
-
-    Measured on torch's `meta` device, which exists on every install and is a real placement --
-    there is one device on this machine, so every placement is correct for free otherwise. It
-    is the same instrument `test_as_array_places_what_it_returns_on_the_device_it_was_given`
-    uses, for the same reason.
-    """
-    torch = pytest.importorskip('torch')
-    from wavebit._core.modeler import _cast
-
-    kw = dict(structure=np.ones((1, 4, 4)), period=[P, P], truncation_order=[1, 1],
-              thickness=[H], wavelength=WL, top=1.0, bot=1.0)
-    solver = wavebit.rcwa(backend=2, device=torch.device('meta'), **kw)
-    modeler = solver.modeler
-
-    assert modeler.device == torch.device('meta'), (
-        f'the modeler was born at {modeler.device!r} while the solver is at {solver.device!r}')
-
-    built = _cast(modeler._xp, [1.0, 2.0], modeler.float_dtype, modeler._dev())
-    assert built.device.type == 'meta', (
-        f'an array the modeler built from a Python list landed on {built.device}, not with the '
-        f'solver on {solver.device}')
-
-    # And construction agrees with assignment -- the bimodality is what made it invisible.
-    before = modeler.device
-    solver.device = solver.device
-    assert modeler.device == before, (before, modeler.device)
-
-    # The other two place nothing, and say so with `None` rather than a device object.
-    for backend in (0, 1):
-        assert wavebit.rcwa(backend=backend, **kw).modeler.device is None, backend
 
 
 @pytest.mark.parametrize('backend', [0, 1, 2])

@@ -407,12 +407,23 @@ def test_paint_is_accepted_and_is_not_add():
     assert abs(painted - added) > 0.1, (painted, added)
 
 
-def test_paint_agrees_with_the_vector_path():
-    """The block path paints too, so on axis-aligned shapes both describe the same structure."""
+def test_paint_agrees_with_a_raster_of_the_same_painting():
+    """A raster paints too -- later sample wins -- so both describe the same structure.
+
+    The arm was the block path until it was removed; a raster is what is left that paints, and
+    it is the more honest comparison anyway: it shares no code with the boundary path at all.
+    """
     painted = _total(_solve([dict(background=1.0, combine='paint', shapes=PAINT_SHAPES)]).solve())
-    vec = [[1.0, [['rectangle', s['cx'], s['cy'], s['lx'], s['ly'], s['material'], s['angle'],
-                   2, 2] for s in PAINT_SHAPES]]]
-    assert abs(painted - _total(_solve(vec).solve())) < 5e-3
+
+    n = 512
+    axis = (np.arange(n) + 0.5) / n
+    gx, gy = np.meshgrid(axis, axis, indexing='xy')
+    cell = np.full((1, n, n), 1.0)
+    for s in PAINT_SHAPES:                       # in order: the later shape covers the earlier
+        u = (gx - s['cx']) * np.cos(s['angle']) + (gy - s['cy']) * np.sin(s['angle'])
+        v = -(gx - s['cx']) * np.sin(s['angle']) + (gy - s['cy']) * np.cos(s['angle'])
+        cell[0][(np.abs(u) <= s['lx'] / 2) & (np.abs(v) <= s['ly'] / 2)] = s['material']
+    assert abs(painted - _total(_solve(cell).solve())) < 5e-3
 
 
 def test_paint_without_overlap_equals_add():

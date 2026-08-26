@@ -215,9 +215,6 @@ MU_RASTER = np.array([[[1.7, 1.7, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]]])
 SHAPE_LAYER = [dict(background=1.0,
                     shapes=[dict(type='rectangle', cx=PERIOD / 4, cy=PERIOD / 4,
                                  lx=PERIOD / 4, ly=PERIOD / 4, angle=0.0, material=2.6)])]
-BLOCK_LAYER = [[1.0, [['rectangle', PERIOD / 4, PERIOD / 4, PERIOD / 4, PERIOD / 4, 2.6, 0.0]]]]
-
-
 def _raster_solver_with_mu(backend=0):
     return wavebit.rcwa(backend=backend, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                         truncation_order=(2, 2), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
@@ -227,9 +224,8 @@ def _raster_solver_with_mu(backend=0):
 @pytest.mark.parametrize('backend,name', BACKENDS)
 @pytest.mark.parametrize('replacement,match', [
     (SHAPE_LAYER, 'no region'),
-    (BLOCK_LAYER, 'no region'),
     (np.array([[[2.6, 2.6, 2.6, 1.0, 1.0, 1.0]]]), 'sampled on one raster'),
-], ids=['analytic', 'block', 'wrong_grid'])
+], ids=['analytic', 'wrong_grid'])
 def test_replacing_the_structure_rechecks_the_mu_beside_it(replacement, match, backend, name):
     """Assigning over the permittivity re-asks what the permeability may sit beside.
 

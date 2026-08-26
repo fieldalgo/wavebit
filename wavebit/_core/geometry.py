@@ -33,7 +33,6 @@ One rule covers all of them: *the record must still be a description of the laye
 it.* Each path has its own reading of that, because each record depends on something different:
 
 ======================  ==================================================================
-``block_grid``         the replayed grid lines must still be in order
 ``normal_field``        the interfaces it was sampled from must still be where they were
 ``compression``         the cut it recorded must still separate every block the layer has
 ``boundary_plans``      the shapes must still overlap the way the painting was resolved for
@@ -82,13 +81,9 @@ class StaticGeometry:
             quantity is built on the normal of its own boundary. All three are ``None``
             unless the structure carries a raster ``mu``; the two shape paths need no twin
             here at all, since their records hold the geometry both quantities share.
-        block_grid: per-layer ``VectorGridPlan`` for the block modeler's grid build. One
-            record for both quantities: the permeability pass paints the same shapes at the
-            same coordinates, so replaying this is what puts eps and mu on one grid.
-        shape_choices: per-shape discrete branch outcomes taken inside ``Modeling.rectangle``.
         boundary_plans: per-layer ``(table_records, regions)`` for the boundary path — which
-            loop holds which vertex and which edges cross, once the painting is resolved. Like
-            the block records these are pure Python indices, never coordinates, so a replay
+            loop holds which vertex and which edges cross, once the painting is resolved. These
+            are pure Python indices, never coordinates, so a replay
             carries a gradient to the vertices and they compare by content. ``None`` for a layer
             is an answer rather than a gap: painted, looked at while concrete, and nothing
             overlapped, so it is summed. Both answers are re-asked eagerly
@@ -119,8 +114,6 @@ class StaticGeometry:
     normal_field: Optional[Any] = None
     normal_field_source: Optional[Any] = None
     compression: Optional[Any] = None
-    block_grid: Optional[Any] = None
-    shape_choices: Optional[Any] = None
     boundary_plans: Optional[Any] = None
     mu_normal_field: Optional[Any] = None
     mu_normal_field_source: Optional[Any] = None
@@ -140,15 +133,15 @@ class StaticGeometry:
         did" is a property of ``freeze_geometry``, one module over, and a cache key that
         inferred its answer from another module's fill order would go wrong silently the first
         time that order changed. The failure it would produce is the expensive kind -- a
-        content key hashed over ``block_grid`` alone while an array sits in ``mu_normal_field``,
+        content key hashed over ``boundary_plans`` alone while an array sits in
+        ``mu_normal_field``,
         which serves a cached program compiled for a different structure.
         """
         if self.normal_field is None and self.normal_field_source is None \
                 and self.compression is None and self.mu_normal_field is None \
                 and self.mu_normal_field_source is None and self.mu_compression is None:
             try:
-                key = ('content', _hashable(self.block_grid), _hashable(self.shape_choices),
-                       _hashable(self.boundary_plans))
+                key = ('content', _hashable(self.boundary_plans))
                 hash(key)
                 return key
             except TypeError:

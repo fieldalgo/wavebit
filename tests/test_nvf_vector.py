@@ -1,7 +1,6 @@
 import numpy as np
 import wavebit
 from wavebit._core.lattice import as_lattice
-from wavebit._core.modeler import Modeling
 import array_api_compat.numpy as xnp
 from wavebit._core.analytic import normal_vector_field_analytical as _nvf_analytic
 from wavebit._core.factorization import nvf_conv_matrices as _nvf_conv
@@ -15,10 +14,12 @@ def to_conv_mat_nvf_2d(eps_matrix, half_width_u, half_width_v, normal_x=None, no
     return _nvf_conv(xnp, eps_matrix, normal_x, normal_y, half_width_u, half_width_v)
 
 def test_analytical_normal_vector_generation():
-    modeler = Modeling(period=[1000.0, 1000.0])
-    modeler.shapes_list.append(dict(type='circle', cx=500.0, cy=500.0, lx=600.0))
-    
-    normal_x, normal_y = get_normal_vector_field_analytical((100, 100), modeler.shapes_list, period=modeler.period)
+    # The shapes were reached through a `Modeling` instance, which only ever held the list --
+    # the block modeller it belonged to is gone and the normal field never needed it.
+    period = (1000.0, 1000.0)
+    shapes = [dict(type='circle', cx=500.0, cy=500.0, lx=600.0)]
+
+    normal_x, normal_y = get_normal_vector_field_analytical((100, 100), shapes, period=period)
     
     assert normal_x.shape == (100, 100)
     assert normal_y.shape == (100, 100)

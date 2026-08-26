@@ -4,7 +4,7 @@ Written: 2026-08. Measured on macOS arm64 (CPU only) against `develop` at `8257e
 NumPy 2.5.1 / SciPy 1.18.0 / jax 0.11.0.
 
 Targets:
-- `wavebit/_core/modeler.py::Modeling.period` — where the first failure is raised
+- `wavebit/_core/engine.py::CoreSolveMixin.period` — where the first failure was raised (it was the block modeller's own `period` setter until that path was removed)
 - `wavebit/_core/backend.py::eig` — the primitive the remaining failures are about
 - `pyproject.toml` — the torch floor, raised from 2.7 to 2.13 as a result; see §3
 

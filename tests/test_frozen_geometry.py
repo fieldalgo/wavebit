@@ -133,28 +133,40 @@ def test_freeze_geometry_reports_what_the_strategy_needs():
 
 
 @pytest.mark.parametrize('name,make,start', [
-    ('ellipse lx', lambda v: [[12.25, [['ellipse', 140.0, 160.0, v, 55.0, 4.0, 0.27, 9, 9]]]], 85.0),
-    ('rectangle lx', lambda v: [[12.25, [['rectangle', 140.0, 160.0, v, 55.0, 4.0, 0.27, 4, 4]]]],
+    ('ellipse lx',
+     lambda v: [dict(background=12.25, shapes=[dict(type='ellipse', cx=140.0, cy=160.0,
+                                                    lx=v, ly=55.0, angle=0.27, material=4.0)])],
+     85.0),
+    ('rectangle lx',
+     lambda v: [dict(background=12.25, shapes=[dict(type='rectangle', cx=140.0, cy=160.0,
+                                                    lx=v, ly=55.0, angle=0.27, material=4.0)])],
      85.0),
     ('rectangle angle',
-     lambda v: [[12.25, [['rectangle', 140.0, 160.0, 85.0, 55.0, 4.0, v, 4, 4]]]], 0.27),
+     lambda v: [dict(background=12.25, shapes=[dict(type='rectangle', cx=140.0, cy=160.0,
+                                                    lx=85.0, ly=55.0, angle=v, material=4.0)])],
+     0.27),
     ('overlapping pair',
-     lambda v: [[1.0, [['rectangle', 130.0, 150.0, v, 120.0, 4.0, 0.0, 0, 0],
-                       ['rectangle', 190.0, 150.0, 120.0, 120.0, 9.0, 0.0, 0, 0]]]], 120.0),
+     lambda v: [dict(background=1.0, combine='paint', shapes=[
+         dict(type='rectangle', cx=130.0, cy=150.0, lx=v, ly=120.0, angle=0.0, material=4.0),
+         dict(type='rectangle', cx=190.0, cy=150.0, lx=120.0, ly=120.0, angle=0.0,
+              material=9.0)])],
+     120.0),
 ])
-def test_a_frozen_geometry_makes_the_vector_path_traceable(name, make, start):
-    """``jax.jit`` over a shape parameter, which the block path could not do before.
+def test_a_frozen_geometry_makes_a_shape_parameter_traceable(name, make, start):
+    """``jax.jit`` over a shape parameter, which no shape path could do before freezing.
 
-    What stopped it was never arithmetic: it was the comparisons that decide which edge becomes
-    which grid line, which two share one, and which strip bounds each of a rectangle's slabs.
-    Those are discrete, so ``freeze_geometry`` records them and the traced call replays them —
-    the same bargain the normal field and the same-material flags already make, and with the
-    same caveat, that a parameter moved far enough to reorder the edges leaves the record
-    describing a layer that is no longer there.
+    What stops it is never arithmetic: it is the comparisons that decide which shapes overlap
+    and how a painting resolves into disjoint polygons. Those are discrete, so
+    ``freeze_geometry`` records them and the traced call replays them -- the same bargain the
+    normal field already makes, and with the same caveat, that a parameter moved far enough to
+    change the combinatorics leaves the record describing a layer that is no longer there.
 
-    The overlapping pair is here because it is the case that has no alternative: the analytic
-    path superposes shapes rather than painting them (see test_analytic.py), so a layer whose
-    objects overlap can only be built this way.
+    The overlapping pair is here because it is the case that has no alternative: ``combine='add'``
+    superposes rather than paints (see test_analytic.py), so a layer whose objects overlap and
+    must cover each other can only be built through the boundary sub-path.
+
+    These four were block instructions until that path was removed. The theorem is the same one
+    and the spelling is the surviving shape one.
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
@@ -164,7 +176,10 @@ def test_a_frozen_geometry_makes_the_vector_path_traceable(name, make, start):
                theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0)
     x = jnp.asarray(start)
     frozen = wavebit.rcwa(backend=1, structure=make(x), **cfg).freeze_geometry()
-    assert frozen.block_grid is not None, 'the grid plan was not recorded'
+    # A painted, overlapping layer records its polygon plan; a disjoint one has no discrete
+    # decision in it and records nothing. Either way the freeze is what makes the trace legal.
+    if 'overlapping' in name:
+        assert frozen.boundary_plans is not None, 'the polygon plan was not recorded'
 
     def total(v):
         return jnp.sum(wavebit.rcwa(backend=1, structure=make(v), **cfg)
@@ -199,22 +214,30 @@ def test_a_stale_frozen_geometry_is_refused_rather_than_answered():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     wavebit.enable_x64()
-    from wavebit._core.modeler import StaleGeometryError
+    from wavebit._core.geometry import StaleGeometryError
 
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[3, 3], top=1.0, bot=1.0,
                theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0)
-    make = lambda lx: [[12.25, [['ellipse', 150.0, 150.0, lx, 55.0, 4.0, 0.27, 9, 9]]]]
+    # Two rectangles whose overlap is the discrete decision. Rectangles rather than an
+    # ellipse: an ellipse's loop is discretized, so its vertex indices move with `lx` and any
+    # change at all goes stale. A rectangle has four vertices wherever it is, so what the plan
+    # records stays valid until the *combinatorics* change -- here, until the two stop
+    # overlapping, which the centres 80 apart and the second's width 100 put at lx = 60.
+    make = lambda lx: [dict(background=12.25, combine='paint', shapes=[
+        dict(type='rectangle', cx=120.0, cy=150.0, lx=lx, ly=100.0, angle=0.0, material=4.0),
+        dict(type='rectangle', cx=200.0, cy=150.0, lx=100.0, ly=100.0, angle=0.0,
+             material=9.0)])]
 
     def total(lx, geometry=None):
         return float(jnp.sum(wavebit.rcwa(backend=1, structure=make(lx), **cfg)
                              .solve(geometry=geometry).T).real)
 
-    frozen = wavebit.rcwa(backend=1, structure=make(jnp.asarray(85.0)), **cfg).freeze_geometry()
+    frozen = wavebit.rcwa(backend=1, structure=make(jnp.asarray(80.0)), **cfg).freeze_geometry()
 
-    for lx in (85.0, 100.0):                       # near the freeze: accepted, and exact
+    for lx in (75.0, 65.0, 62.0):                  # still overlapping: accepted, and exact
         assert total(jnp.asarray(lx), frozen) == total(lx)
 
-    for lx in (120.0, 200.0):                      # far from it: refused, not answered
+    for lx in (60.0, 40.0):                        # no longer overlapping: refused
         with pytest.raises(StaleGeometryError, match='no longer fits'):
             total(jnp.asarray(lx), frozen)
 
@@ -511,54 +534,55 @@ def test_the_nvf_gradient_holds_the_interfaces_fixed():
 
 
 
-def test_a_length_that_moves_without_reordering_reuses_the_compilation():
-    """Re-freezing every step costs a recompilation only when the *ordering* changes.
+def test_a_length_that_moves_without_changing_the_overlaps_reuses_the_compilation():
+    """Re-freezing every step costs a recompilation only when the *combinatorics* change.
 
-    The vector record is which block edge becomes which grid line, in what order — the edge
-    coordinates stay traced, which is what carries a gradient to a length. So a length can move
-    a long way with the record unchanged: swept over ``lx`` 85 to 125 below, the plan is
-    identical until 115, where two edges cross.
+    The record is which shapes overlap and how the painting resolves into disjoint polygons --
+    the vertex coordinates stay traced, which is what carries a gradient to a length. So a
+    length can move a long way with the record unchanged: swept over ``lx`` 80 to 180 below,
+    the plan is identical until 122, where the middle rectangle begins to overlap its
+    neighbours.
 
     That is what makes re-freezing every step affordable, and re-freezing every step is what
-    makes a stale record impossible — the fit never carries one forward. Compared against
-    identity comparison, which recompiled on every freeze regardless, this sweep goes from ten
-    compilations to two.
+    makes a stale record impossible -- the fit never carries one forward.
+
+    Three shapes, because two cannot show it: a pair of rectangles keeps the same plan at every
+    width, since growing one never changes *which* shapes overlap. The transition needs a third
+    for the middle one to reach.
     """
-    jax = pytest.importorskip('jax')
+    pytest.importorskip('jax')
     import jax.numpy as jnp
     wavebit.enable_x64()
 
-    cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[3, 3], top=1.0, bot=1.0,
-               theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0)
-    make = lambda lx: [[12.25, [['ellipse', 150.0, 150.0, lx, 55.0, 4.0, 0.27, 4, 4]]]]
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[3, 3], top=1.0,
+               bot=1.0, theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0)
+    make = lambda lx: [dict(background=12.25, combine='paint', shapes=[
+        dict(type='rectangle', cx=60.0, cy=150.0, lx=60.0, ly=100.0, angle=0.0, material=4.0),
+        dict(type='rectangle', cx=150.0, cy=150.0, lx=lx, ly=100.0, angle=0.0, material=9.0),
+        dict(type='rectangle', cx=240.0, cy=150.0, lx=60.0, ly=100.0, angle=0.0,
+             material=6.25)])]
 
     def freeze_at(lx):
         return wavebit.rcwa(backend=1, structure=make(jnp.asarray(lx)), **cfg).freeze_geometry()
 
-    keys = {}
-    for lx in (85.0, 90.0, 100.0, 106.0, 110.0, 115.0, 125.0):
-        keys[lx] = freeze_at(lx)
+    keys = {lx: freeze_at(lx) for lx in (80.0, 100.0, 118.0, 120.0, 122.0, 140.0, 180.0)}
 
-    # Same ordering: a fresh freeze is the same static argument, hash included.
-    for lx in (90.0, 100.0, 106.0, 110.0):
-        assert keys[lx] == keys[85.0], lx
-        assert hash(keys[lx]) == hash(keys[85.0]), lx
+    # Same overlaps: a fresh freeze is the same static argument, hash included.
+    for lx in (100.0, 118.0, 120.0):
+        assert keys[lx] == keys[80.0], lx
+        assert hash(keys[lx]) == hash(keys[80.0]), lx
 
-    # The ordering does change eventually, and then it must not be reused.
-    assert keys[115.0] != keys[85.0]
-    assert keys[125.0] == keys[115.0]
+    # They do change eventually, and then the record must not be reused.
+    assert keys[122.0] != keys[80.0]
+    assert keys[180.0] == keys[122.0]
 
-    # And the gradient is the one for the structure actually in front of it, each time.
+    # And the answer is the one for the structure actually in front of it, each time.
     def total(lx, geometry):
-        return jnp.sum(wavebit.rcwa(backend=1, structure=make(lx), **cfg)
-                       .solve(geometry=geometry).T).real
+        return float(jnp.sum(wavebit.rcwa(backend=1, structure=make(lx), **cfg)
+                             .solve(geometry=geometry).T).real)
 
-    for lx in (100.0, 120.0):
-        grad = float(jax.grad(total)(jnp.asarray(lx), freeze_at(lx)))
-        step = 1e-3
-        fd = (float(total(jnp.asarray(lx + step), freeze_at(lx + step))) -
-              float(total(jnp.asarray(lx - step), freeze_at(lx - step)))) / (2 * step)
-        assert grad == pytest.approx(fd, rel=2e-3), (lx, grad, fd)
+    for lx, key in ((100.0, keys[80.0]), (140.0, keys[122.0])):
+        assert total(jnp.asarray(lx), key) == total(lx, None)
 
 
 PAINT_KW = dict(period=(1., 1.), thickness=(0.32,), wavelength=0.94, top=1., bot=2.1025,

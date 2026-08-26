@@ -53,8 +53,8 @@ def _scene(g):
     **index**. That is not an oversight left lying around — this golden is a slice of a
     2024-09-09 RETICOLO run, and its generator cannot re-emit it under the new names: the 7-19 MB
     ``.mat`` inputs are not in this repository and the sweep is not reproducible without them.
-    A golden that cannot be regenerated is converted at the *read*, which is the same trade
-    ``tests/test_modeler_core.py`` makes for the legacy modeler cells.
+    A golden that cannot be regenerated is converted at the *read* rather than rewritten in
+    place, so the file on disk stays the one the oracle produced.
 
     Squaring rather than renaming is the entire content of this function, and it is not
     cosmetic. ``n_bot = 5`` is ``eps = 25``; handing 5 to ``bot=`` describes a substrate of

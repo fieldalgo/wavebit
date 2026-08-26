@@ -44,10 +44,6 @@ def _frozen_raster():
 
 FROZEN = None
 
-VECTOR_BASE = dict(period=[300.0, 300.0], thickness=[205.0], theta=0.1, truncation_order=[3, 3],
-                   wavelength=900.0, top=1.0, bot=1.0, psi=np.pi / 4)
-
-
 def _backend(name):
     pytest.importorskip(name)
     if name == 'jax':
@@ -194,75 +190,19 @@ def test_analytic_shape_gradients(param, name):
 
 # ------------------------------------------------------------------------------ vector (OCD)
 
-@pytest.mark.parametrize('name', ['torch', 'jax'])
-@pytest.mark.parametrize('param,index,start', [('lx', 3, 80.0), ('ly', 4, 60.0),
-                                               ('angle', 6, 0.4)])
-def test_vector_edge_gradients(param, index, start, name):
-    """OCD differentiates the edges: CD, position, sidewall angle."""
-    backend, cast = _backend(name)
-
-    def objective(p):
-        rect = ['rectangle', cast(150.0), cast(150.0), cast(80.0), cast(60.0), 4.0, cast(0.4)]
-        rect[index] = p
-        res = wavebit.rcwa(backend=backend, structure=[[12.25, [rect]]],
-                             **VECTOR_BASE).solve()
-        return res.T.sum()
-
-    auto, fd = _derivative(backend, objective, start)
-    assert abs(fd) > 1e-8, f'the objective does not depend on {param}; test is vacuous'
-    assert abs(auto - fd) / abs(fd) < 1e-3, (param, auto, fd)
-
-
 # ------------------------------------------------------------------- shape gradients near zero
 
-def test_rectangle_is_built_the_same_way_on_both_sides_of_zero_angle():
-    """A rectangle at -1e-6 rad must be built exactly like one at +1e-6.
-
-    ``angle`` used to be wrapped into [0, 2*pi) and then tested against a list of aligned
-    targets that stopped at ``3*pi/2``, so a small *negative* angle arrived as ``2*pi - eps``,
-    missed every target, and fell through to the rotated decomposition while the positive side
-    got an exact single block. The two disagreed by 2e-7 in efficiency — a step sitting exactly
-    on the unrotated case, which is where any sidewall-angle fit starts.
-
-    There is no aligned-target test left to get wrong: the angle folds onto ``[0, pi/2)`` and
-    both sides run the same code. So the check is on the geometry the two sides produce, which
-    is now identical rather than merely close, and on the unrotated case still sitting between
-    them.
-    """
-    m = wavebit.rcwa(backend=0, period=[300.0, 300.0]).modeler
-    blocks = [m.rectangle(150.0, 150.0, 80.0, 60.0, 4.0, a) for a in (-1e-6, 0.0, 1e-6)]
-    f = lambda v: float(np.real(np.asarray(v).reshape(-1)[0]))
-
-    def bbox(bs):
-        ys = [f(b[0][0]) for b in bs] + [f(b[1][0]) for b in bs]
-        xs = [f(b[0][1]) for b in bs] + [f(b[1][1]) for b in bs]
-        return min(xs), max(xs), min(ys), max(ys)
-
-    def area(bs):
-        return sum((f(b[1][0]) - f(b[0][0])) * (f(b[1][1]) - f(b[0][1])) for b in bs)
-
-    assert len(blocks[0]) == len(blocks[2]), [len(b) for b in blocks]
-    assert bbox(blocks[0]) == bbox(blocks[2])
-    for bs in blocks:
-        assert area(bs) == pytest.approx(80.0 * 60.0, rel=1e-12)
-
-    # The rotated pair sits within the rotation's own reach of the unrotated one.
-    for a, b in zip(bbox(blocks[0]), bbox(blocks[1])):
-        assert abs(a - b) < 1e-4, (bbox(blocks[0]), bbox(blocks[1]))
-
-
 def test_analytic_angle_is_smooth_through_normal():
-    """The smooth path is the one that can fit a sidewall angle near normal; the vector one cannot.
+    """The shape path fits a sidewall angle through normal, and the slopes agree at zero.
 
     Rotating a rectangle moves its Fourier coefficients analytically, so the efficiency is
-    smooth in ``angle`` and the two one-sided slopes at zero must agree. They do, on the
-    smooth path, and that is all this pins.
+    smooth in ``angle`` and the two one-sided slopes at zero must agree.
 
-    The block path is not held to it. It is a staircase at any angle but zero, and at zero it
-    stops being one — the two triangles appear the moment the angle leaves it — so the two
-    sides of zero are not built from the same number of blocks and its one-sided slopes are
-    free to differ. A central difference hides that, so it only bites an optimizer, which sees
-    one side at a time.
+    The block path could not be held to this, which is part of why it is gone: it was a
+    staircase at every angle but zero, and at zero it stopped being one -- the two triangles
+    appeared the moment the angle left it -- so the two sides of zero were built from different
+    numbers of blocks and its one-sided slopes were free to differ. A central difference hides
+    that, so it only bit an optimizer, which sees one side at a time.
     """
     base = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[5, 5], top=1.0, bot=1.0,
                 wavelength=900.0, psi=np.pi / 4, theta=0.1, phi=0.3)

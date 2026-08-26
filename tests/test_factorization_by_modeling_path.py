@@ -40,22 +40,20 @@ KW = dict(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
 SMOOTH = [{'background': 1.0,
            'shapes': [{'type': 'circle', 'cx': 0.5, 'cy': 0.5,
                        'lx': 0.6, 'material': 6.25}]}]
-BLOCK = [[1.0, [['ellipse', 0.5, 0.5, 0.6, 0.6, 6.25, 0.0, 24, 24]]]]
-
 _N = 32
 _axis = (np.arange(_N) + 0.5) / _N - 0.5
 _X, _Y = np.meshgrid(_axis, _axis)
 RASTER = np.ones((1, _N, _N))
 RASTER[0, _X ** 2 + _Y ** 2 <= 0.3 ** 2] = 6.25
 
-STRUCTURES = {'smooth': SMOOTH, 'block': BLOCK, 'raster': RASTER}
+STRUCTURES = {'smooth': SMOOTH, 'raster': RASTER}
 
 #: The rule each path implements, and therefore the one an untouched default resolves to.
-IMPLEMENTED = {'smooth': 'nvf', 'block': 'li', 'raster': 'li'}
+IMPLEMENTED = {'smooth': 'nvf', 'raster': 'li'}
 
 #: The rule each single-rule path does *not* implement. The raster path is absent: it has
 #: both, so there is nothing there to refuse.
-UNAVAILABLE = {'smooth': 'li', 'block': 'nvf'}
+UNAVAILABLE = {'smooth': 'li'}
 
 
 def solver(path, **strategy):
@@ -99,11 +97,6 @@ def test_the_smooth_default_is_still_nvf_to_the_bit():
     """
     assert totals('smooth') == totals('smooth', factorization='nvf')
     assert n_conv_matrices('smooth') == 5
-
-
-def test_the_block_default_is_still_li_to_the_bit():
-    assert totals('block') == totals('block', factorization='li')
-    assert n_conv_matrices('block') == 3
 
 
 def test_the_raster_default_is_unchanged_and_still_says_li():
@@ -156,7 +149,7 @@ def test_a_request_is_refused_however_it_is_spelled(spelling):
 #: How each refusal is expected to name the rule the path *does* use. Matched as a phrase
 #: rather than as the bare enum value, because a bare ``li`` matches "applies" and would let a
 #: message that never names Li at all pass.
-NAMES_ITS_RULE = {'smooth': r'\bNVF\b', 'block': r"Li's rules"}
+NAMES_ITS_RULE = {'smooth': r'\bNVF\b'}
 
 
 @pytest.mark.parametrize('path,rule', sorted(UNAVAILABLE.items()))
@@ -269,38 +262,6 @@ def test_a_skewed_raster_cell_still_refuses_li():
     hexagonal = np.array([[1.0, 0.5], [0.0, np.sqrt(3) / 2]])
     with pytest.raises(NotImplementedError, match="factorization='nvf'"):
         wavebit.rcwa(structure=RASTER, lattice=hexagonal, **KW).solve()
-
-
-def test_a_skewed_block_cell_reports_the_lattice_first_not_the_keyword():
-    """Two true refusals apply at once here, and the order between them is load-bearing.
-
-    A block structure on a skewed cell is unbuildable *whatever* rule is named — the modeler
-    rasterises onto a rectangular grid of its own. So naming the keyword instead would send
-    the user to change the one thing that cannot help. `_eps_conv_matrices` therefore checks the
-    lattice before it reads the rule, and this pins that: with the refusals swapped, the
-    message below is the ``factorization='nvf'`` one and
-    ``test_oblique_lattice.py::test_the_vector_modeler_is_refused_on_a_skewed_cell`` fails too.
-    """
-    hexagonal = np.array([[1.0, 0.5], [0.0, np.sqrt(3) / 2]])
-    with pytest.raises(NotImplementedError, match='block modeler'):
-        wavebit.rcwa(structure=BLOCK, lattice=hexagonal, factorization='nvf', **KW).solve()
-
-
-def test_freezing_gives_the_same_diagnosis_the_solve_would():
-    """One structure must not get two different explanations depending on the entry point.
-
-    ``freeze_geometry`` refuses the same two things in the same order as ``_eps_conv_matrices``.
-    Before that, the keyword check landed first here and the lattice check first there, so a
-    skewed block cell was told to fix its ``factorization`` if it froze and to fix its
-    ``structure`` if it solved — for one scene that has to change its ``structure`` either way.
-    """
-    hexagonal = np.array([[1.0, 0.5], [0.0, np.sqrt(3) / 2]])
-    s = wavebit.rcwa(structure=BLOCK, lattice=hexagonal, factorization='nvf', **KW)
-    with pytest.raises(NotImplementedError, match='block modeler') as frozen:
-        s.freeze_geometry()
-    with pytest.raises(NotImplementedError, match='block modeler') as solved:
-        s.solve()
-    assert str(frozen.value) == str(solved.value)
 
 
 # --------------------------------------------------------------------------- through the spec

@@ -16,7 +16,6 @@ from wavebit._core.factorization import (
     to_conv_mat_raster_sampled as core_dfs,
     to_conv_mat_raster_nvf as core_nvf,
     to_conv_mat_raster_integrated as core_cfs,
-    to_conv_mat_block as core_vector,
     normal_field_for_raster,
     compression_indices,
     compress_cell,
@@ -418,29 +417,6 @@ def test_cfs_cross_backend(case, backend):
     got = core_cfs(_to(backend, structure), half_width_u, half_width_v, compression=compression)
     for name, a, b in zip(('epx', 'epy', 'epz_i'), ref, got):
         assert np.allclose(np.array(a), np.asarray(b), atol=1e-12, rtol=0), name
-
-
-def test_the_vector_path_integrates_its_segments_exactly():
-    """Segment edges given directly, on a grid no raster could express.
-
-    The vector path's whole reason to exist is that its steps need not sit at ``j/N``, so the
-    case is built with deliberately uneven edges — a raster would have to snap them. Nothing is
-    frozen: the cell and its edges are written here, and the answer comes from the definition.
-    """
-    # Permittivities, not indices: the block path's cell holds what the transform integrates.
-    cell = np.array([[1.0, 12.25, 4.0],
-                     [6.25, 1.0, 9.0]])
-    # column vectors, the shape `compression_indices` hands the builder
-    x = np.array([[0.17], [0.61], [1.0]])          # uneven on purpose
-    y = np.array([[0.43], [1.0]])
-    half_width_u = half_width_v = 2
-
-    got = core_vector([(cell, x, y)], half_width_u, half_width_v)
-    want = _exact_matrix(cell.astype(complex), x, y, half_width_u, half_width_v)
-    scale = max(1.0, np.abs(want).max())
-
-    inv_z = np.linalg.inv(np.asarray(got.epz_i[0]))
-    assert np.abs(inv_z - want).max() < 1e-11 * scale, np.abs(inv_z - want).max()
 
 
 @pytest.mark.parametrize('seed', [26, 27, 28])

@@ -47,7 +47,6 @@ _RASTER[0, _X ** 2 + _Y ** 2 <= 0.3 ** 2] = 6.25          # permittivity: 2.5**2
 #: what `material_quantity` publishes.
 STRUCTURES = {
     'raster': _RASTER,
-    'block': [[1.0, [['ellipse', 0.5, 0.5, 0.6, 0.6, 6.25, 0.0, 24, 24]]]],
     'smooth': [{'background': 1.0, 'combine': 'add',
                 'shapes': [{'type': 'circle', 'cx': 0.5, 'cy': 0.5,
                             'lx': 0.6, 'material': 6.25}]}],
@@ -133,12 +132,6 @@ def test_an_option_the_manifest_offers_actually_builds(path):
 
 # ------------------------------------------------------- the lattice refusals
 
-def test_the_block_path_is_refused_on_a_skewed_cell():
-    with pytest.raises(NotImplementedError, match='block modeler'):
-        wavebit.rcwa(structure=STRUCTURES['block'], lattice=HEX, factorization='nvf',
-                       **KW).solve()
-
-
 def test_li_is_refused_on_a_skewed_cell():
     with pytest.raises(NotImplementedError, match="factorization='nvf'"):
         wavebit.rcwa(structure=STRUCTURES['raster'], lattice=HEX, factorization='li',
@@ -148,7 +141,11 @@ def test_li_is_refused_on_a_skewed_cell():
 def test_the_manifest_lists_every_skewed_refusal():
     """Guards against one being dropped from the document while the solver still enforces it."""
     listed = ' '.join(r['what'] for r in LATTICE['refused_on_oblique'])
-    assert 'block path' in listed
+    # The block path was the other entry until it was removed; both spellings must
+    # have lost it together, or the document tells a consumer to avoid a path that
+    # no longer exists.
+    assert 'block' not in listed
+    assert LATTICE['paths_refused_on_oblique'] == ()
     assert "factorization='li'" in listed
     # `normal_method` was the third entry here until 2026-08-21, when all four constructions
     # gained the cell metric. What is asserted now is that it is gone from *both* spellings --

@@ -37,22 +37,20 @@ KW = dict(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
 SMOOTH = [{'background': 1.0,
            'shapes': [{'type': 'circle', 'cx': 0.5, 'cy': 0.5,
                        'lx': 0.6, 'material': 6.25}]}]
-BLOCK = [[1.0, [['ellipse', 0.5, 0.5, 0.6, 0.6, 6.25, 0.0, 24, 24]]]]
-
 _N = 32
 _axis = (np.arange(_N) + 0.5) / _N - 0.5
 _X, _Y = np.meshgrid(_axis, _axis)
 RASTER = np.ones((1, _N, _N))
 RASTER[0, _X ** 2 + _Y ** 2 <= 0.3 ** 2] = 6.25
 
-STRUCTURES = {'smooth': SMOOTH, 'block': BLOCK, 'raster': RASTER}
+STRUCTURES = {'smooth': SMOOTH, 'raster': RASTER}
 
 #: The series each path forms, and therefore the one an untouched default resolves to.
-IMPLEMENTED = {'smooth': 'integrated', 'block': 'integrated', 'raster': 'sampled'}
+IMPLEMENTED = {'smooth': 'integrated', 'raster': 'sampled'}
 
 #: The series each shape path cannot form. The raster path is absent: it has both, so there is
 #: nothing there to refuse.
-UNAVAILABLE = {'smooth': 'sampled', 'block': 'sampled'}
+UNAVAILABLE = {'smooth': 'sampled'}
 
 
 def solver(path, **strategy):
@@ -77,7 +75,7 @@ def test_the_default_resolves_to_whatever_the_path_forms(path, series):
     assert solver(path).fourier_coefficients == series
 
 
-@pytest.mark.parametrize('path', ['smooth', 'block'])
+@pytest.mark.parametrize('path', ['smooth'])
 def test_the_shape_path_defaults_are_still_integrated_to_the_bit(path):
     """Resolving the default must not have moved any shape-path user's numbers.
 
@@ -116,7 +114,7 @@ def test_asking_for_the_series_a_path_cannot_form_is_refused(path, series):
 #: How each refusal is expected to name what the path does instead. Matched as a phrase rather
 #: than as the bare enum value, because a bare ``integrated`` would also match a message that
 #: only ever says the word in passing.
-NAMES_ITS_SERIES = {'smooth': r'closed form', 'block': r'closed form'}
+NAMES_ITS_SERIES = {'smooth': r'closed form'}
 
 
 @pytest.mark.parametrize('path,series', sorted(UNAVAILABLE.items()))
@@ -124,17 +122,6 @@ def test_the_refusal_says_what_the_path_does_instead(path, series):
     """A refusal that does not say what to do instead is a worse bug report than the silence."""
     with pytest.raises(NotImplementedError, match=NAMES_ITS_SERIES[path]):
         totals(path, fourier_coefficients=series)
-
-
-def test_the_block_refusal_points_at_the_raster_path():
-    """The block path's missing series is unbuilt rather than unbuildable, and says so.
-
-    Rasterising the painted rectangles and taking a discrete series of that is a real thing to
-    want -- it is what ``modeling_type=0`` is. So this refusal is a redirection, and naming the
-    destination is the whole of its value.
-    """
-    with pytest.raises(NotImplementedError, match='modeling_type=0'):
-        totals('block', fourier_coefficients='sampled')
 
 
 def test_the_smooth_refusal_says_sampling_is_not_missing_but_meaningless_there():
