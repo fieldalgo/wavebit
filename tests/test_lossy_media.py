@@ -253,21 +253,29 @@ def solver_R_painted(n, thickness, wavelength, theta, tetm):
     """Total reflectance of a *uniform* layer of index ``n`` built through the PAINTED path.
 
     Two overlapping rectangles of the same index, together covering the cell. The overlap is
-    what routes the layer to ``_core.boundary.to_conv_mat_boundary_layer`` (a non-overlapping
-    ``paint`` stays on the summed closed form), and same-index-everywhere is what leaves a
+    what routes the layer to ``_core.boundary.to_conv_mat_boundary_layer`` (a layer with nothing
+    overlapping stays on the summed closed form), and same-index-everywhere is what leaves a
     uniform slab at the end of it, so the Airy oracle applies exactly and none of the shape
     machinery is under test. The material convention is the entire point, again.
+
+    ``ly`` is exactly one period: the rods span the cell in y without running into their own
+    images, which is the line ``check_layer_shapes`` draws (a gap of zero is touching, not
+    overlapping). It was ``1.4 * P`` until 2026-08-27, and that is now refused -- rightly, since
+    the boundary builder does not add a shape's periodic images either. It happened to give the
+    right answer here only because the *other* rod covered the region the missing image would
+    have: on the same pair shrunk so they no longer tile the cell, ``<1/eps>`` comes back 0.618
+    against the 0.695 the geometry has.
     """
     P = 400.0
     eps = eps_from_index(n)
-    shapes = [dict(type='rectangle', cx=0.30 * P, cy=0.5 * P, lx=0.75 * P, ly=1.4 * P,
+    shapes = [dict(type='rectangle', cx=0.30 * P, cy=0.5 * P, lx=0.75 * P, ly=1.0 * P,
                    material=eps),
-              dict(type='rectangle', cx=0.72 * P, cy=0.5 * P, lx=0.75 * P, ly=1.4 * P,
+              dict(type='rectangle', cx=0.72 * P, cy=0.5 * P, lx=0.75 * P, ly=1.0 * P,
                    material=eps)]
     solver = wavebit.rcwa(backend=0, top=1.0, bot=2.25, theta=theta, phi=0.0,
                             psi=(np.pi / 2 if tetm == 'te' else 0.0), truncation_order=(3, 3),
                             wavelength=wavelength, period=[P, P],
-                            structure=[dict(background=eps, combine='paint', shapes=shapes)],
+                            structure=[dict(background=eps, shapes=shapes)],
                             thickness=[thickness])
     res = solver.solve()
     return float(np.sum(np.asarray(res.R)).real), float(np.sum(np.asarray(res.T)).real)

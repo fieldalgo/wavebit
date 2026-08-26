@@ -2111,11 +2111,10 @@ class CoreFactorizationMixin:
         if isinstance(structure, self._raster_types()):     # Raster
             kind, value = 0, self._coerce_raster('structure', structure)
         elif type(structure) is list:
-            # Analytic: one dict(background=..., shapes=[...], combine=...) per layer.
-            # Shape coordinates are absolute lengths in the units of `period`, not
-            # fractions of it, and `combine` picks what overlapping shapes mean --
-            # this path adds them where the block path paints. See
-            # wavebit._core.analytic; overlaps are refused until it is set.
+            # Analytic: one dict(background=..., shapes=[...]) per layer. Shape
+            # coordinates are absolute lengths in the units of `period`, not fractions
+            # of it. Shapes that overlap paint, later over earlier, and are routed to
+            # the boundary builder by the overlap itself. See wavebit._core.analytic.
             # The block spelling -- a per-layer `[background, [[shape, ...], ...]]` -- used
             # to be the `else` of this line, so every list that was not the analytic one became
             # a block. That path is gone; the shape it accepted has to be refused by name here,

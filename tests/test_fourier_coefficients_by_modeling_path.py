@@ -196,7 +196,7 @@ def test_the_refusal_holds_on_every_backend(name, code, path, series):
 # reason the layer takes the resolving branch -- keeping them distinct after the flip is what
 # the numbers had to preserve, not their literal text.
 PAINTED_PERIOD = [1.2, 1.2]
-PAINTED = [dict(background=1.0, combine='paint',
+PAINTED = [dict(background=1.0,
                 shapes=[dict(type='rectangle', cx=0.40, cy=0.40, lx=0.34, ly=0.34,
                              angle=0.0, material=4.0),
                         dict(type='rectangle', cx=0.56, cy=0.56, lx=0.34, ly=0.34,

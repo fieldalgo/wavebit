@@ -35,8 +35,6 @@ import math
 #: path superposes (``'add'``), the block path paints later shapes over earlier ones
 #: (``'paint'``), and neither can build the other's rule. A recipe that means one of them has
 #: to be able to say so, or moving it between paths silently changes the structure.
-COMBINE_MODES = ('add', 'paint')
-
 #: Penetration below this fraction of the period is touching, not overlapping.
 OVERLAP_TOL_REL = 1e-6
 

@@ -89,21 +89,23 @@ SPELLINGS = (
     {
         'path': 'smooth',
         'modeling_type': 2,
-        'structure': "a list of dict(background=..., shapes=[...], combine='add') layers, "
-                     "each shape dict carrying material=",
+        'structure': 'a list of dict(background=..., shapes=[...]) layers, each shape '
+                     'dict carrying material=',
         'material_form': 'assignment',
         'mu': 'inside each Material',
         'summary': 'Shape edges enter the Fourier transform in closed form, so a tilted or '
-                   'curved boundary carries no staircase error. Overlapping shapes are summed.',
+                   'curved boundary carries no staircase error. Shapes that do not overlap '
+                   'are transformed one by one.',
     },
     {
         'path': 'boundary',
         'modeling_type': 2,
-        'structure': "the smooth spelling with combine='paint'",
+        'structure': 'the smooth spelling, for a layer whose shapes overlap',
         'material_form': 'assignment',
         'mu': 'inside each Material',
         'summary': 'The smooth path with overlaps resolved into disjoint polygons first, so '
-                   'later shapes cover earlier ones without losing edge exactness.',
+                   'later shapes cover earlier ones without losing edge exactness. Selected '
+                   'by the overlap itself, not by a keyword.',
     },
 )
 

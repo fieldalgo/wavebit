@@ -297,7 +297,7 @@ def _revive_materials(value, where='material'):
     one, so the reader has to meet it at the same depths or ``to_dict`` would emit a document
     its own ``from_dict`` reads as something else. Recognition is by shape rather than by
     position -- a dict carrying ``epsilon`` and at most ``mu`` -- which is safe because the two
-    recipe schemas funnel their keys strictly (``background`` / ``shapes`` / ``combine`` on a
+    recipe schemas funnel their keys strictly (``background`` / ``shapes`` on a
     layer, and a fixed set on a shape), so no legitimate dict in here has an ``epsilon`` key.
 
     Rasters never reach this: they are arrays of numbers, not containers of assignments, and

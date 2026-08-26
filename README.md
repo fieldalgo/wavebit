@@ -302,11 +302,10 @@ The type of `structure` selects the modeling path; there is no separate mode swi
 | `structure` | Path | What it is |
 | --- | --- | --- |
 | `ndarray`, shape `(n_layers, Ny, Nx)` | **raster** | relative permittivity sampled on a grid |
-| `list` of `[background, [shape, ...]]` per layer | **block** | drawn shapes reduced to piecewise-constant blocks, then Fourier-transformed analytically instead of off a grid — see [`examples/block_1d.py`](examples/block_1d.py) |
 | `list` of `dict(background=..., shapes=[...])` per layer | **smooth** | smooth primitives (rotated rectangle, circle, ellipse) with exact Fourier coefficients — no staircase at all |
 
-Three of those four material slots — the block background, the block object's own slot, the
-smooth shape's `material` — are **assignments**: a name for the stuff filling a region, which
+Two of those three material slots — the layer's `background` and each shape's `material` —
+are **assignments**: a name for the stuff filling a region, which
 is exactly what `Material` is. The raster is the odd one out and stays arrays, because it is
 not an assignment but a *sampled field*, one number per pixel, which is why topology
 optimisation reaches for it. A field carries one quantity, so a magnetic raster needs a second
@@ -314,12 +313,11 @@ array: `mu=`, the same shape as `structure`. Naming `mu=` on either shape path i
 there the permeability lives inside each `Material`, and a layer-shaped array would have no
 region to attach itself to.
 
-There is a fourth path, **boundary**, which the `structure` type alone cannot select: it is
-what a smooth layer becomes when its shapes actually overlap and it asks for `combine='paint'`,
-and it is the only path that keeps a tilted edge exact *and* paints. It is decided per layer,
-not per solver, so one smooth `structure` can hold layers of both kinds. See
-[Shapes that overlap](#shapes-that-overlap) below and
-[`docs/boundary-modeling.md`](docs/boundary-modeling.md).
+There is a third path, **boundary**, which the `structure` type alone cannot select: it is
+what a smooth layer becomes when its shapes actually overlap, and it is the only path that
+keeps a tilted edge exact *and* paints. It is decided per layer, not per solver, so one smooth
+`structure` can hold layers of both kinds. See [Shapes that overlap](#shapes-that-overlap)
+below and [`docs/boundary-modeling.md`](docs/boundary-modeling.md).
 
 The smooth path takes one dict per layer. Note that `cx`, `cy`, `lx` and `ly` are absolute
 lengths in the units of `period`, not fractions of it:
@@ -334,30 +332,27 @@ solver = wavebit.rcwa(backend=0, period=dict(x=700., y=700.), structure=structur
 
 ### Shapes that overlap
 
-The two shape paths do different things with an overlap. The block path **paints**, later
-shape over earlier; the smooth path **superposes**, adding every shape's contribution, so
-the overlap ends up as neither shape's material. Same recipe, two different structures.
-
-`combine` is how a layer says which it means — `'paint'` or `'add'`:
+Shapes in a layer **paint**: a later shape covers an earlier one, which is what a raster of the
+same recipe does and what you get with no keyword to say so.
 
 ```python
-structure = [dict(background=1.0, combine='add', shapes=[...])]     # superpose, in closed form
-structure = [dict(background=1.0, combine='paint', shapes=[...])]   # paint, edges still exact
-structure = [[1.0, [['rectangle', ...], ...], 'paint']]             # block path: paint, staircased
+structure = [dict(background=1.0, shapes=[...])]
 ```
 
-Both are built on the shape paths now. `'paint'` with an actual overlap resolves the painting
-into polygons first and transforms those — so a layer can be painted *and* keep a tilted edge
-exact, which no single path used to offer. See
-[`docs/boundary-modeling.md`](docs/boundary-modeling.md). The block path still refuses
-`'add'`: a staircase of blocks holds one permittivity per block, so an overlap can only take
-one of them.
+The geometry picks how it is built, per layer. While no two shapes intersect, each shape's
+Fourier transform is added to the layer's — exact, closed form, and cheap, because with nothing
+overlapping the sum *is* the painting. Where shapes do intersect, the layer's overlap is
+resolved into disjoint polygons first and those are transformed, so a layer can be painted
+*and* keep a tilted edge exact. See [`docs/boundary-modeling.md`](docs/boundary-modeling.md).
 
-While no two shapes intersect, both rules describe the same structure, so `combine` is
-optional, nothing is refused, and both spellings give the same numbers. It only has to be
-given where it changes the answer — and there, an unlabelled *smooth* layer is refused,
-because superposition is the rule nobody expects. The block path paints unlabelled, which is
-what it always did and what a raster of the same recipe agrees with.
+Nothing has to be said either way, and no layer pays for the question unless its own shapes
+raise it. A `combine=` key named the rule until 2026-08-27 — `'paint'` or `'add'`, the second
+adding every shape's contribution so an overlap came out at `eps_a + eps_b - eps_background`,
+which is not a material. That spelling is gone and is refused rather than ignored.
+
+One thing is refused: a shape wider than the period. Its transform is a single sinc, which is
+not the transform of any periodic indicator, so the layer is not the structure its parameters
+name — and it would otherwise solve and conserve energy. Sample it onto a raster instead.
 
 ### Fourier factorization
 
@@ -387,10 +382,9 @@ staircase-free permittivity series *and* a factorization that handles boundaries
 with x or y, which is what a fit of a tilted sidewall wants. Keeping the two as separate
 keywords is what makes that pairing reachable.
 
-The other two paths have one pairing each, because each states a layer as geometry and
-integrates over it in closed form: the block path is `('integrated', 'li')` and the smooth path
-`('integrated', 'nvf')`. Both keywords resolve to that on their own, so leaving them unset is
-not a request and gets the build those paths always ran. Naming a value the path does not
+The shape paths have one pairing, because they state a layer as geometry and integrate over it
+in closed form: `('integrated', 'nvf')`. Both keywords resolve to that on their own, so leaving
+them unset is not a request and gets the build those paths always ran. Naming a value the path does not
 implement raises `NotImplementedError` rather than quietly running the one it does — which is
 what both keywords used to do, returning the other value's numbers with nothing in the result
 to say so. The smooth path's derivation, convergence data and limitations are written up in
@@ -445,11 +439,10 @@ tilted basis therefore describes a *different structure*, silently — energy st
 1e-15. Analytic shapes are immune: their lengths are absolute Cartesian quantities, so a
 rectangle stays a rectangle under a skew.
 
-Two build paths are refused on a skewed cell rather than answering, because both run and return
-a plausible wrong number: `factorization='li'` on a raster (the inverse rule follows the raster
-axes, which are `a1` / `a2` once skewed — repairing it is Li's covariant formulation) and the
-block modeler. Everything else works, including analytic shapes with painted overlaps and field
-reconstruction — whose output grid is then indexed by `(v, u)` rather than `(y, x)`.
+One build path is refused on a skewed cell rather than answering, because it runs and returns a
+plausible wrong number: `factorization='li'` on a raster, whose inverse rule follows the raster
+axes, which are `a1` / `a2` once skewed — repairing it is Li's covariant formulation. Everything
+else works, including analytic shapes with painted overlaps and field reconstruction — whose output grid is then indexed by `(v, u)` rather than `(y, x)`.
 
 On a raster, pass `normal_method='contour'`. Every `normal_method` carries the cell metric
 (since 2026-08-21), and the default `'distance'` is the least accurate of the four — a skew
@@ -610,9 +603,8 @@ quickstart uses nanometres; nothing in the solver assumes it.
 
 ## Differentiating a simulation
 
-Two steps in the raster pipeline decide something structural rather than compute a value —
-which way the interfaces point, and where the piecewise-constant blocks start and stop. Both
-branch on values, so neither survives `jax.jit`.
+One step in the raster pipeline decides something structural rather than computing a value —
+which way the interfaces point. It branches on values, so it does not survive `jax.jit`.
 
 Neither of them needs help to survive `jax.grad`, though. A grad tracer carries a concrete
 value, so the decisions read it one at a time and a gradient works straight off the public API:
@@ -642,10 +634,10 @@ combinatorics rather than coordinates: a shape sliding is what it replays, bit f
 a change in which shape covers which makes it stale. `docs/boundary-modeling.md` says which
 motions those are.
 
-So take the freeze again every step. On the block path it costs a few milliseconds and
-recompiles only when the recorded *ordering* changes, which is the same moment a held record
-would have gone stale — a length can move 47% for two compilations. That makes re-freezing both
-the fastest way to run a moving fit and the only one that cannot carry a stale record forward.
+So take the freeze again every step. The record compares by content, so an unchanged one is
+free and a jitted step recompiles only when the recorded *combinatorics* change — which is the
+same moment a held record would have gone stale. That makes re-freezing both the fastest way to
+run a moving fit and the only one that cannot carry a stale record forward.
 
 Which backend to use, and whether to jit at all, is not obvious and is not a matter of taste:
 below `truncation_order ~ 5` eager PyTorch beats a jitted JAX step outright, and the crossover moves with

@@ -46,7 +46,7 @@ def build(cx, na, nb):
                     angle=ang, material=EPS(n))
     first = rect(0.28, 0.30, 0.20, 0.15, 0.4, na)
     first['cx'] = cx
-    return [dict(background=1.0, combine='paint',
+    return [dict(background=1.0,
                  shapes=[first, rect(0.68, 0.70, 0.20, 0.15, 0.9, nb)])]
 
 

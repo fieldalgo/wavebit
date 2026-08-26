@@ -12,7 +12,7 @@ matrices either way — with nothing in the result to say so.
 The fix is not to implement the missing rule; on the smooth path there is nothing to implement,
 since NVF is a superset of Li and the path has no other axis to factorize along. It is to stop
 substituting silently, in the style the rest of the module already uses
-(``_reject_unsupported_lattice``, ``analytic.check_layer_combination``): refuse, and say why.
+(``_reject_unsupported_lattice``, ``analytic.check_layer_shapes``): refuse, and say why.
 That also settles a temperament the two shape paths did not share — the smooth path already
 refuses an unlabelled overlapping layer rather than guessing, while both used to swallow a
 factorization request whole.
@@ -162,7 +162,7 @@ def test_the_refusal_names_the_rule_the_path_does_use(path, rule):
 # A painted layer whose shapes actually overlap is still `modeling_type=2`, but it does not
 # reach `to_conv_mat_smooth_nvf` at all: `to_conv_mat_smooth_layers` resolves the painting into
 # disjoint polygons and transforms those instead (`boundary.to_conv_mat_boundary_layer`).
-PAINTED_OVERLAP = [{'background': 1.0, 'combine': 'paint', 'shapes': [
+PAINTED_OVERLAP = [{'background': 1.0, 'shapes': [
     {'type': 'rectangle', 'cx': 0.45, 'cy': 0.5, 'lx': 0.4, 'ly': 0.4, 'material': 4.0},
     {'type': 'rectangle', 'cx': 0.60, 'cy': 0.5, 'lx': 0.4, 'ly': 0.4, 'material': 9.0}]}]
 

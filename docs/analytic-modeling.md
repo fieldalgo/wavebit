@@ -293,12 +293,11 @@ keep passing.
   For a non-NVF pure-Laurent comparison, call the two builders directly:
   `_core.analytic.assemble_eps_coeffs` returns the coefficient grids for `eps` and `1/eps`, and
   `_core.analytic.conv_matrix_2d` turns either into a block-Toeplitz matrix. That first builder
-  takes a *shape list*, not a layer, and implements `combine='add'` only — hand it the shapes of
-  an overlapping `combine='paint'` layer and it silently returns the summed structure instead
-  (`<eps>` 1.99 against the 1.90 the solver integrates, for two 300x300 rods of permittivity
-  4 and 9).
-  Pass the layer's `combine=` to have that refused rather than answered; the painted layer's
-  own coefficients come from `_core.boundary` (see [boundary-modeling.md](boundary-modeling.md)).
+  takes a *shape list*, not a layer, and sums — so it refuses shapes that overlap rather than
+  returning the summed structure under the name of the painted one (`<eps>` 1.99 against the
+  1.90 the solver integrates, for two 300x300 rods of permittivity 4 and 9). An overlapping
+  layer's own coefficients come from `_core.boundary`
+  (see [boundary-modeling.md](boundary-modeling.md)).
 
 ### References
 - L. Li, *Use of Fourier series in the analysis of discontinuous periodic structures*, JOSA A
@@ -324,39 +323,40 @@ keep passing.
 
 ## Overlapping shapes
 
-This module **sums** its shapes, so an overlap gets both contributions and is neither shape's
-material. `combine='paint'` on a layer whose shapes actually intersect is built by the boundary
-path instead — it resolves the painting into disjoint polygons and transforms those, keeping the
-tilted edges exact. See [`boundary-modeling.md`](boundary-modeling.md).
+This module **sums** its shapes, so an overlap would get both contributions and be neither
+shape's material. It refuses one instead. A layer whose shapes actually intersect is built by
+the boundary path — it resolves the painting into disjoint polygons, later shape over earlier,
+and transforms those, keeping the tilted edges exact. See
+[`boundary-modeling.md`](boundary-modeling.md).
 
 While nothing intersects the two rules mean the same structure, and the layer stays here.
+Nothing is asked of the recipe either way; `layer_needs_resolving` reads the geometry. A
+`combine=` key named the rule until 2026-08-27 and is now refused as an unread layer key.
 
 ### A shape larger than the period
 
-Neither path paints one, and for the same reason: nothing in either builder clips a shape
+This one is refused outright, by `check_layer_shapes`. Nothing in either builder clips a shape
 against a *translated copy of itself*, so the only reading of "later over earlier" that means
-anything when the two are the same shape — their union — is out of reach. An unlabelled layer
-is refused by name on both (`check_layer_combination` here, `check_block_layer_combination` on
-the block path), and so is `combine='paint'` on the block path, which is the one it defaults
-to.
+anything when the two are the same shape — their union — is out of reach, and the sum is not a
+second meaning one could have documented either.
 
-What the block path did instead, until it was refused, is worth recording because the picture
-looked reasonable. A 1.3-wide rod of `eps` 5.76 at the centre of a unit cell over a background
-of 1.0 came out as three materials — 5.76 / 10.52 / 20.04, i.e. `1 + n*4.76` for cover counts
-`n` = 1, 2, 4 — none of them in the recipe. Blocks are gridded in *unwrapped* coordinates and
-`_fourier1d_integrated` weights each segment by its **signed** width, which is exactly what
-draws the wrapped part of a sub-period shape correctly; past one period the same arithmetic
-counts the covered strip twice, so the image adds to the shape instead of covering it.
+Why not, is worth recording, because the picture the removed block path drew looked reasonable.
+A 1.3-wide rod of `eps` 5.76 at the centre of a unit cell over a background of 1.0 came out as
+three materials — 5.76 / 10.52 / 20.04, i.e. `1 + n*4.76` for cover counts `n` = 1, 2, 4 — none
+of them in the recipe. Blocks were gridded in *unwrapped* coordinates and `_fourier1d_integrated`
+weights each segment by its **signed** width, which is exactly what draws the wrapped part of a
+sub-period shape correctly; past one period the same arithmetic counts the covered strip twice,
+so the image adds to the shape instead of covering it.
 
-That superposition is not a second meaning one could have documented, because only half of the
-layer is built that way. Li's rule transforms `1/eps` through the same signed segments, so the
-two halves describe different functions: on that rod the `eps` coefficients match the
-superposition profile to quadrature accuracy while the `1/eps` coefficients come back with a DC
-term of **-0.074** — a negative mean reciprocal permittivity on a layer whose permittivity is
-between 5.76 and 20.04, against +0.150 for the profile itself. So the number the solver returned
-was neither reading's, and the tell is that it does not settle on one. `sum(T)` for that rod:
+And only half of the layer was built that way. Li's rule transforms `1/eps` through the same
+signed segments, so the two halves describe different functions: on that rod the `eps`
+coefficients matched the superposition profile to quadrature accuracy while the `1/eps`
+coefficients came back with a DC term of **-0.074** — a negative mean reciprocal permittivity on
+a layer whose permittivity is between 5.76 and 20.04, against +0.150 for the profile itself. So
+the number the solver returned was neither reading's, and the tell is that it does not settle on
+one. `sum(T)` for that rod:
 
-| `truncation_order` | block | smooth, `combine='add'` | raster of the superposition | raster of the union |
+| `truncation_order` | block | smooth, summed | raster of the superposition | raster of the union |
 |---|---|---|---|---|
 | 6  | 0.4403 | 0.7635 | 0.8346 | 0.9722 |
 | 10 | 0.4147 | 0.4239 | 0.7136 | 0.9722 |
@@ -365,12 +365,9 @@ was neither reading's, and the tell is that it does not settle on one. `sum(T)` 
 | 25 | 0.4011 | 0.6508 | 0.7189 | 0.9722 |
 
 Both readings are structures and both converge — the union is a uniform slab, so it is exact at
-every order, and the superposition settles on 0.7189 by 25. The two shape paths converge on
+every order, and the superposition settles on 0.7189 by 25. The two shape paths converged on
 neither and, over that range, on nothing. The same rod at 0.6 wide, where nothing self-overlaps,
 matches its raster to every digit printed at every count.
-
-`combine='add'` on the smooth path is the one place the superposition of the images is built on
-purpose, and is where to ask for it.
 
 **Where the line falls.** A shape *exactly* the period is touching, not overlapping, and is
 built — it is the filled cell, and agrees with a uniform slab of the same material to 1e-12. A sub-period shape straddling the cell boundary is the case the signed-width reading

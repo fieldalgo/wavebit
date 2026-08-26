@@ -47,10 +47,10 @@ _RASTER[0, _X ** 2 + _Y ** 2 <= 0.3 ** 2] = 6.25          # permittivity: 2.5**2
 #: what `material_quantity` publishes.
 STRUCTURES = {
     'raster': _RASTER,
-    'smooth': [{'background': 1.0, 'combine': 'add',
+    'smooth': [{'background': 1.0,
                 'shapes': [{'type': 'circle', 'cx': 0.5, 'cy': 0.5,
                             'lx': 0.6, 'material': 6.25}]}],
-    'boundary': [{'background': 1.0, 'combine': 'paint', 'shapes': [
+    'boundary': [{'background': 1.0, 'shapes': [
         {'type': 'rectangle', 'cx': 0.40, 'cy': 0.40, 'lx': 0.34, 'ly': 0.34,
          'angle': 0.0, 'material': 4.0},
         {'type': 'rectangle', 'cx': 0.56, 'cy': 0.56, 'lx': 0.34, 'ly': 0.34,

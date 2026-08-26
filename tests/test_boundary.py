@@ -400,11 +400,21 @@ def _total(res):
     return float(np.asarray(res.T).real.sum())
 
 
-def test_paint_is_accepted_and_is_not_add():
-    """The two rules are two structures; asking for one must not quietly give the other."""
-    painted = _total(_solve([dict(background=1.0, combine='paint', shapes=PAINT_SHAPES)]).solve())
-    added = _total(_solve([dict(background=1.0, combine='add', shapes=PAINT_SHAPES)]).solve())
-    assert abs(painted - added) > 0.1, (painted, added)
+def test_an_overlap_cannot_be_answered_by_the_summing_builder():
+    """The two rules are two structures, and the one that cannot paint refuses rather than answers.
+
+    This used to be a comparison -- ``combine='paint'`` against ``combine='add'``, 0.1 apart in
+    ``T``. The summed spelling was removed on 2026-08-27 and the sum is now unreachable for an
+    overlap: :func:`assemble_eps_coeffs` refuses these shapes outright, which is what makes the
+    routing below safe to state as a plan rather than as a number.
+    """
+    from wavebit._core.analytic import assemble_eps_coeffs
+
+    painted = _total(_solve([dict(background=1.0, shapes=PAINT_SHAPES)]).solve())
+    assert 0.0 < painted < 1.0
+
+    with pytest.raises(ValueError, match='overlapping layer cannot be built here'):
+        assemble_eps_coeffs(xnp, PAINT_SHAPES, 1.0, 5, 5, CELL, xnp.complex128)
 
 
 def test_paint_agrees_with_a_raster_of_the_same_painting():
@@ -413,7 +423,7 @@ def test_paint_agrees_with_a_raster_of_the_same_painting():
     The arm was the block path until it was removed; a raster is what is left that paints, and
     it is the more honest comparison anyway: it shares no code with the boundary path at all.
     """
-    painted = _total(_solve([dict(background=1.0, combine='paint', shapes=PAINT_SHAPES)]).solve())
+    painted = _total(_solve([dict(background=1.0, shapes=PAINT_SHAPES)]).solve())
 
     n = 512
     axis = (np.arange(n) + 0.5) / n
@@ -426,47 +436,77 @@ def test_paint_agrees_with_a_raster_of_the_same_painting():
     assert abs(painted - _total(_solve(cell).solve())) < 5e-3
 
 
-def test_paint_without_overlap_equals_add():
-    """While nothing intersects, the two rules mean the same thing and must agree exactly."""
+def test_a_disjoint_layer_never_reaches_the_polygon_path():
+    """While nothing intersects, the closed form is the same structure and stays in charge.
+
+    Both halves matter. Routing here anyway would cost the case the smooth path exists for --
+    and it would *move the answer*, by 0.8% on disjoint rods, because the polygon transform and
+    the closed form discretize differently. So the plan is ``None`` and the solve still lands.
+    """
     apart = [dict(type='rectangle', cx=0.22, cy=0.22, lx=0.26, ly=0.26, angle=0.3, material=4.0),
              dict(type='rectangle', cx=0.74, cy=0.74, lx=0.26, ly=0.26, angle=-0.4, material=9.0)]
-    a = _total(_solve([dict(background=1.0, combine='paint', shapes=apart)]).solve())
-    b = _total(_solve([dict(background=1.0, combine='add', shapes=apart)]).solve())
-    assert abs(a - b) < 2e-3, (a, b)
+    solver = _solve([dict(background=1.0, shapes=apart)])
+    assert solver.freeze_geometry().boundary_plans[0] is None
+    assert 0.0 < _total(solver.solve()) < 1.0
 
 
-def test_freeze_geometry_records_a_plan_only_for_painted_layers():
-    solver = _solve([dict(background=1.0, combine='paint', shapes=PAINT_SHAPES),
-                     dict(background=1.0, combine='add', shapes=PAINT_SHAPES)],
+def test_freeze_geometry_records_a_plan_only_for_overlapping_layers():
+    apart = [dict(PAINT_SHAPES[0], cx=0.24, cy=0.24), dict(PAINT_SHAPES[1], cx=0.76, cy=0.76)]
+    solver = _solve([dict(background=1.0, shapes=PAINT_SHAPES),
+                     dict(background=1.0, shapes=apart)],
                     thickness=(0.3, 0.3))
     g = solver.freeze_geometry()
     assert g.boundary_plans is not None
-    assert g.boundary_plans[0] is not None      # painted
-    assert g.boundary_plans[1] is None          # summed -- nothing discrete to freeze
+    assert g.boundary_plans[0] is not None      # overlapping: loops to cut
+    assert g.boundary_plans[1] is None          # disjoint -- nothing discrete to freeze
+
+
+def test_a_shape_wider_than_the_period_is_refused_here_too():
+    """This builder does not add a shape's periodic images either, so it must not be handed one.
+
+    ``polygon_ft`` transforms the loops it is given. A shape larger than the period has images
+    reaching into the cell and no loop describes them, so the coefficients come back for a
+    different structure -- silently, and with the matrices still Hermitian. Measured on a
+    1.2x1.4-period rod alone: ``<1/eps>`` = 0.186 where the geometry is 0.250; and on a pair
+    where one rod is 1.4 periods tall and the two do not tile the cell, 0.618 against 0.695.
+
+    The pair matters more than the single, because the single was already refused (one shape
+    cannot overlap another, so the closed form would have taken it and refused). A *pair* routes
+    here, which is the branch where being wrong looks like an answer. ``check_layer_shapes`` is
+    where it is stopped, ahead of the routing, so both branches are covered by one refusal.
+    """
+    tall = [dict(type='rectangle', cx=0.30, cy=0.5, lx=0.30, ly=1.4, angle=0.0, material=4.0),
+            dict(type='rectangle', cx=0.60, cy=0.5, lx=0.30, ly=0.30, angle=0.0, material=9.0)]
+    with pytest.raises(ValueError, match='larger than the period'):
+        _solve([dict(background=1.0, shapes=tall)]).solve()
+
+    # Exactly one period is touching, not overlapping, and is a legal structure: the rod spans
+    # the cell in y and its image meets it at a gap of zero.
+    fits = [dict(t, ly=1.0) if t['ly'] > 1.0 else dict(t) for t in tall]
+    assert 0.0 < _total(_solve([dict(background=1.0, shapes=fits)]).solve()) < 1.0
 
 
 def test_frozen_plan_reproduces_the_eager_answer():
-    solver = _solve([dict(background=1.0, combine='paint', shapes=PAINT_SHAPES)])
+    solver = _solve([dict(background=1.0, shapes=PAINT_SHAPES)])
     eager = _total(solver.solve())
     replayed = _total(solver.solve(geometry=solver.freeze_geometry()))
     assert abs(eager - replayed) < 1e-12
 
 
-def test_a_circle_without_ly_paints_and_sums_to_the_same_answer():
-    """The dict that used to sum and not paint, through both rules, on one structure.
+def test_a_circle_without_ly_solves_on_the_closed_form_side():
+    """The dict that used to sum and not paint, on the side of the crossing that does not paint.
 
-    Nothing here overlaps, so the two rules describe the same thing and the two answers are
-    the *same number* rather than merely two numbers. Note what this does and does not reach:
-    while nothing intersects, ``paint`` stays on the summed closed form (see
-    ``layer_needs_resolving``), so this pins the contract but never calls ``shape_vertices``.
-    The test below is the one that paints.
+    Nothing here overlaps, so the layer stays on the summed closed form (see
+    ``layer_needs_resolving``) -- which means this pins the contract but never calls
+    ``shape_vertices``. The test below is the one that paints, and the pair is the point: the
+    same dict has to survive both builders.
     """
     apart = [CIRCLE_NO_LY,
              dict(type='rectangle', cx=0.80, cy=0.82, lx=0.22, ly=0.18, angle=-0.4,
                   material=9.0)]
-    a = _total(_solve([dict(background=1.0, combine='paint', shapes=apart)]).solve())
-    b = _total(_solve([dict(background=1.0, combine='add', shapes=apart)]).solve())
-    assert abs(a - b) < 2e-3, (a, b)
+    solver = _solve([dict(background=1.0, shapes=apart)])
+    assert solver.freeze_geometry().boundary_plans[0] is None
+    assert 0.0 < _total(solver.solve()) < 1.0
 
 
 def test_a_circle_without_ly_survives_the_polygon_path():
@@ -484,7 +524,7 @@ def test_a_circle_without_ly_survives_the_polygon_path():
 
     got = []
     for shapes in ([circle, over], [spelt, over]):
-        solver = _solve([dict(background=1.0, combine='paint', shapes=shapes)])
+        solver = _solve([dict(background=1.0, shapes=shapes)])
         assert solver.freeze_geometry().boundary_plans[0] is not None    # it really painted
         got.append(_total(solver.solve()))
     assert got[0] == got[1], got
@@ -494,7 +534,7 @@ def test_a_painted_ellipse_is_polygonised():
     """Curved primitives are polygonised for this path; the answer must still be sane."""
     shapes = [dict(type='ellipse', cx=0.42, cy=0.46, lx=0.44, ly=0.28, angle=0.5, material=4.0),
               dict(type='circle', cx=0.60, cy=0.58, lx=0.30, angle=0.0, material=9.0)]
-    r = _solve([dict(background=1.0, combine='paint', shapes=shapes)]).solve()
+    r = _solve([dict(background=1.0, shapes=shapes)]).solve()
     t = _total(r)
     assert 0.0 < t < 1.0
     assert abs(t + float(np.asarray(r.R).real.sum()) - 1.0) < 1e-9    # lossless
@@ -563,7 +603,7 @@ def test_an_enclosed_shape_is_cut_out_of_its_host_not_added_to_it(truncation_ord
     exact = 1.0 + (4.0 - 1.0) * (0.36 - area) + (9.0 - 1.0) * area
     wrong = 1.0 + (4.0 - 1.0) * (0.36 + area) + (9.0 - 1.0) * area              # sign dropped
 
-    solver = _solve([dict(background=1.0, combine='paint', shapes=ENCLOSED_SHAPES)], truncation_order=truncation_order,
+    solver = _solve([dict(background=1.0, shapes=ENCLOSED_SHAPES)], truncation_order=truncation_order,
                     normal_grid=256)
     assert solver.freeze_geometry().boundary_plans[0] is not None      # it really painted
     direct = np.linalg.inv(np.asarray(solver.eps_conv_matrices()[2])[0])
@@ -596,7 +636,7 @@ def test_paint_with_an_enclosed_shape_agrees_with_a_fine_raster():
     Hermitian permittivity -- just of a different structure. That is why the assertion here is
     against an outside reading of the geometry rather than an internal consistency check.
     """
-    painted = _total(_solve([dict(background=1.0, combine='paint', shapes=ENCLOSED_SHAPES)],
+    painted = _total(_solve([dict(background=1.0, shapes=ENCLOSED_SHAPES)],
                             normal_grid=256).solve())
     coarse = _total(_solve(_raster_of(ENCLOSED_SHAPES, 800), normal_grid=256).solve())
     fine = _total(_solve(_raster_of(ENCLOSED_SHAPES, 1600), normal_grid=256).solve())
@@ -621,7 +661,7 @@ def test_a_partial_overlap_was_never_affected():
              for region in regions for lp in region]
     assert len(areas) == 2 and all(a > 0 for a in areas), areas
 
-    painted = _total(_solve([dict(background=1.0, combine='paint', shapes=CLIPPED_SHAPES)],
+    painted = _total(_solve([dict(background=1.0, shapes=CLIPPED_SHAPES)],
                             normal_grid=256).solve())
     fine = _total(_solve(_raster_of(CLIPPED_SHAPES, 1600), normal_grid=256).solve())
     assert abs(painted - fine) < 2e-3, (painted, fine)
@@ -688,7 +728,7 @@ def test_a_hole_inside_a_hole_is_material_again():
     exact = 1.0 + (4.0 - 1) * visible[0] + (9.0 - 1) * visible[1] \
         + (16.0 - 1) * visible[2]
     for truncation_order in (6, 12):
-        solver = _solve([dict(background=1.0, combine='paint', shapes=nested)], truncation_order=truncation_order,
+        solver = _solve([dict(background=1.0, shapes=nested)], truncation_order=truncation_order,
                         normal_grid=256)
         direct = np.linalg.inv(np.asarray(solver.eps_conv_matrices()[2])[0])
         n_orders = (2 * truncation_order + 1) ** 2
@@ -764,7 +804,7 @@ def _two_painted(w, curved=False):
     first = (dict(type='circle', cx=w(0.55), cy=w(0.5), lx=w(0.30), material=12.1104) if curved
              else dict(type='rectangle', cx=w(0.55), cy=w(0.5), lx=w(0.26), ly=w(0.24),
                        angle=w(0.0), material=12.1104))
-    return [dict(background=1.0, combine='paint', shapes=[
+    return [dict(background=1.0, shapes=[
         first,
         dict(type='rectangle', cx=0.68, cy=0.58, lx=0.26, ly=0.30, angle=0.0, material=4.41)])]
 
@@ -851,8 +891,8 @@ def test_freezing_a_painted_layer_works_on_torch():
     assert total == pytest.approx(_painted_total(0, float), abs=1e-12)
 
 
-def test_a_traced_painted_layer_is_refused_without_a_frozen_geometry():
-    """The silent one: `combine='paint'` under `jax.grad` used to solve a *summed* layer.
+def test_a_traced_shape_layer_is_refused_without_a_frozen_geometry():
+    """The silent one: an overlapping layer under `jax.grad` used to solve a *summed* layer.
 
     Whether two shapes overlap decides which structure a painted layer is, and that question
     needs concrete numbers. A JAX tracer refuses to give them, and the check used to read that
@@ -864,7 +904,14 @@ def test_a_traced_painted_layer_is_refused_without_a_frozen_geometry():
     How it was identified is worth keeping. The gradient looked merely wrong -- -3.48 where
     finite differences give -0.6461 -- until it was compared against the same layer spelled
     ``combine='add'``, which returns **the same number to the last digit**. Not a broken
-    derivative; the derivative of something else.
+    derivative; the derivative of something else. (That spelling no longer exists; summing is
+    what the closed-form builder does, and it now refuses an overlap outright.)
+
+    Since the summing rule was removed the refusal reaches further: *any* traced layer of more
+    than one shape needs the freeze, not only one that named the painting. Which builder a
+    layer takes is a question about its geometry, and a tracer cannot answer it -- where the old
+    contract could route a summed layer without asking, because summing was a spelling rather
+    than a fact about the shapes.
 
     PyTorch never reached this, because its tensors convert to floats and the check ran. So a
     torch-only test would have passed throughout.
@@ -876,7 +923,7 @@ def test_a_traced_painted_layer_is_refused_without_a_frozen_geometry():
     fixed = dict(type='rectangle', cx=0.70, cy=0.62, lx=0.26, ly=0.30, angle=0.0, material=4.41)
 
     def structure(v):
-        return [dict(background=1.0, combine='paint', shapes=[
+        return [dict(background=1.0, shapes=[
             dict(type='rectangle', cx=0.46, cy=0.5, lx=v, ly=0.26, angle=0.3, material=12.1104),
             dict(fixed)])]
 
@@ -914,18 +961,25 @@ def test_a_traced_painted_layer_is_refused_without_a_frozen_geometry():
     assert analytic == pytest.approx((plus - minus) / (2 * h), rel=2e-2)
 
 
-def test_a_traced_summed_layer_is_not_refused():
-    """The refusal is for `paint` only -- a summed layer has no overlap question to ask."""
+def test_a_traced_single_shape_layer_is_not_refused():
+    """One shape has no overlap question to ask, so the freeze is not demanded of it.
+
+    This is the other side of the refusal above, and the reason it is phrased on the shape count
+    rather than on tracing: a lone shape routes the same way whatever its parameters are, so
+    demanding a freeze here would tax the commonest differentiable layer for nothing.
+
+    A *pair* of traced shapes was allowed here too until 2026-08-27, on the grounds that a layer
+    with no ``combine`` meant the sum and so needed no geometry. That went with the spelling.
+    """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     cfg = dict(period=(1.0, 1.0), wavelength=0.94, truncation_order=(5, 5), top=1.0, bot=2.1025,
                theta=0.0, phi=None, psi=np.pi / 2, thickness=(0.3,), normal_grid=256)
 
     def total(v):
-        u = [dict(background=1.0, combine='add', shapes=[
-            dict(type='rectangle', cx=0.46, cy=0.5, lx=v, ly=0.26, angle=0.3, material=12.1104),
-            dict(type='rectangle', cx=0.70, cy=0.62, lx=0.26, ly=0.30, angle=0.0,
-                 material=4.41)])]
+        u = [dict(background=1.0, shapes=[
+            dict(type='rectangle', cx=0.46, cy=0.5, lx=v, ly=0.26, angle=0.3,
+                 material=12.1104)])]
         return jnp.sum(wavebit.rcwa(backend=1, structure=u, **cfg).solve().T).real
 
     assert np.isfinite(float(jax.grad(total)(jnp.asarray(0.34))))
@@ -951,7 +1005,7 @@ def test_a_frozen_geometry_answers_the_overlap_question_for_every_layer():
     fixed = dict(type='rectangle', cx=0.70, cy=0.5, lx=0.26, ly=0.30, angle=0.0, material=4.41)
 
     def structure(cx):
-        return [dict(background=1.0, combine='paint', shapes=[
+        return [dict(background=1.0, shapes=[
             dict(type='rectangle', cx=cx, cy=0.5, lx=0.26, ly=0.30, angle=0.0, material=12.1104),
             dict(fixed)])]
 

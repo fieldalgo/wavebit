@@ -98,12 +98,11 @@ def _rod(basis, n=40, radius=ROD):
 
 
 def _shapes(basis, painted=False):
-    """Two discs on the closed-form path -- disjoint when summed, overlapping when painted.
+    """Two discs on the shape path -- disjoint on one arm, overlapping on the other.
 
-    The two rules take different scenes on purpose. `combine='add'` refuses an overlap by
-    design, so the summed arm is given discs that do not touch; the painted arm is given ones
-    that do, because a painting with nothing overlapping is the summed structure again and
-    would exercise the resolver not at all.
+    The arms take different scenes on purpose, because the geometry is what routes them: discs
+    that do not touch stay on the closed-form builder, and discs that do go to the boundary
+    resolver. Handing both arms the same discs would exercise one builder twice.
     """
     a1, a2 = np.asarray(basis)[:, 0], np.asarray(basis)[:, 1]
     centre = 0.5 * (a1 + a2)
@@ -115,14 +114,12 @@ def _shapes(basis, painted=False):
         {'type': 'circle', 'cx': float(centre[0]) + dx, 'cy': float(centre[1]) + dy,
          'lx': 2 * r, 'material': eps}
         for (dx, dy), r, eps in zip(offsets, radii, (5.76, 9.0))]}
-    if painted:
-        layer['combine'] = 'paint'
     return [layer]
 
 
 def _structure(kind, basis):
-    return {'raster': _rod(basis), 'add': _shapes(basis),
-            'paint': _shapes(basis, True)}[kind]
+    return {'raster': _rod(basis), 'disjoint': _shapes(basis),
+            'overlap': _shapes(basis, True)}[kind]
 
 
 def _available(name):
@@ -132,7 +129,7 @@ def _available(name):
 def scenes():
     """Every (cell, path, side, backend) combination, in a fixed order."""
     for cell in CELLS:
-        for kind in ('raster', 'add', 'paint'):
+        for kind in ('raster', 'disjoint', 'overlap'):
             for side in SIDES:
                 for backend in BACKENDS:
                     yield cell, kind, side, backend

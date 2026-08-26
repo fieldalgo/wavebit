@@ -82,13 +82,13 @@ def _circle(cx, cy, d, n):
 
 def two_rectangles(cx):
     """Two disjoint tilted rectangles; the first one's centre is the swept parameter."""
-    return [dict(background=1.0, combine='paint', shapes=[
+    return [dict(background=1.0, shapes=[
         dict(_rect(0.28, 0.30, 0.20, 0.15, 0.4, 3.0), cx=cx),
         _rect(0.68, 0.70, 0.20, 0.15, 0.9, 2.2)])]
 
 
 def two_circles(cx):
-    return [dict(background=1.0, combine='paint', shapes=[
+    return [dict(background=1.0, shapes=[
         dict(_circle(0.28, 0.30, 0.22, 3.0), cx=cx),
         _circle(0.70, 0.72, 0.20, 2.2)])]
 
@@ -100,10 +100,10 @@ CASES = {'two tilted rectangles': (two_rectangles, 0.28 * P, (8, 12)),
 def geometries(structure):
     """The two frozen geometries the comparison needs, differing only in the normal field.
 
-    A ``combine='paint'`` layer has to be frozen before it is traced -- whether the shapes
-    overlap decides which structure it is, and a tracer cannot be asked. Both slots below are
-    that freeze, taken once at the centre of the window since the topology does not change
-    across it.
+    A shape layer of more than one shape has to be frozen before it is traced -- whether the
+    shapes overlap decides which builder it takes, and a tracer cannot be asked. Both slots
+    below are that freeze, taken once at the centre of the window since the topology does not
+    change across it.
 
     ``boundary_plans[i] = None`` is not "unknown": it is what ``freeze_geometry`` records for a
     layer it has looked at and found disjoint, and it keeps the layer on the closed-form path.

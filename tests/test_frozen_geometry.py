@@ -146,7 +146,7 @@ def test_freeze_geometry_reports_what_the_strategy_needs():
                                                     lx=85.0, ly=55.0, angle=v, material=4.0)])],
      0.27),
     ('overlapping pair',
-     lambda v: [dict(background=1.0, combine='paint', shapes=[
+     lambda v: [dict(background=1.0, shapes=[
          dict(type='rectangle', cx=130.0, cy=150.0, lx=v, ly=120.0, angle=0.0, material=4.0),
          dict(type='rectangle', cx=190.0, cy=150.0, lx=120.0, ly=120.0, angle=0.0,
               material=9.0)])],
@@ -161,9 +161,9 @@ def test_a_frozen_geometry_makes_a_shape_parameter_traceable(name, make, start):
     normal field already makes, and with the same caveat, that a parameter moved far enough to
     change the combinatorics leaves the record describing a layer that is no longer there.
 
-    The overlapping pair is here because it is the case that has no alternative: ``combine='add'``
-    superposes rather than paints (see test_analytic.py), so a layer whose objects overlap and
-    must cover each other can only be built through the boundary sub-path.
+    The overlapping pair is here because it is the case that has no alternative: the closed-form
+    builder superposes rather than paints and refuses an overlap outright (see test_analytic.py),
+    so a layer whose objects cover each other can only be built through the boundary sub-path.
 
     These four were block instructions until that path was removed. The theorem is the same one
     and the spelling is the surviving shape one.
@@ -223,7 +223,7 @@ def test_a_stale_frozen_geometry_is_refused_rather_than_answered():
     # change at all goes stale. A rectangle has four vertices wherever it is, so what the plan
     # records stays valid until the *combinatorics* change -- here, until the two stop
     # overlapping, which the centres 80 apart and the second's width 100 put at lx = 60.
-    make = lambda lx: [dict(background=12.25, combine='paint', shapes=[
+    make = lambda lx: [dict(background=12.25, shapes=[
         dict(type='rectangle', cx=120.0, cy=150.0, lx=lx, ly=100.0, angle=0.0, material=4.0),
         dict(type='rectangle', cx=200.0, cy=150.0, lx=100.0, ly=100.0, angle=0.0,
              material=9.0)])]
@@ -556,7 +556,7 @@ def test_a_length_that_moves_without_changing_the_overlaps_reuses_the_compilatio
 
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[3, 3], top=1.0,
                bot=1.0, theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0)
-    make = lambda lx: [dict(background=12.25, combine='paint', shapes=[
+    make = lambda lx: [dict(background=12.25, shapes=[
         dict(type='rectangle', cx=60.0, cy=150.0, lx=60.0, ly=100.0, angle=0.0, material=4.0),
         dict(type='rectangle', cx=150.0, cy=150.0, lx=lx, ly=100.0, angle=0.0, material=9.0),
         dict(type='rectangle', cx=240.0, cy=150.0, lx=60.0, ly=100.0, angle=0.0,
@@ -595,7 +595,7 @@ EPS_A, EPS_B = 11.559999999999999, 4.41
 
 def _painted(cx, material=EPS_A):
     """Two painted rectangles; the first crosses the second as ``cx`` runs past ~0.52."""
-    return [dict(background=1.0, combine='paint', shapes=[
+    return [dict(background=1.0, shapes=[
         dict(type='rectangle', cx=cx, cy=0.5, lx=0.34, ly=0.26, angle=0.3, material=material),
         dict(type='rectangle', cx=0.55, cy=0.55, lx=0.30, ly=0.24, angle=0.0,
              material=EPS_B)])]
@@ -665,7 +665,7 @@ def test_the_painting_plan_check_is_skipped_under_a_trace_too():
 
 def _hidden(cx, material=4.0):
     """A small circle painted *under* a larger one — completely covered, so it has no loops."""
-    return [dict(background=1.0, combine='paint', shapes=[
+    return [dict(background=1.0, shapes=[
         dict(type='circle', cx=cx, cy=0.43, lx=0.12, material=material),
         dict(type='circle', cx=0.35, cy=0.45, lx=0.25, material=9.0)])]
 
@@ -703,7 +703,7 @@ def test_a_shape_the_plan_recorded_as_covered_cannot_be_slid_out_from_under_it()
 
 def _disjoint(cx):
     """A rectangle and a circle that do not touch until ``cx`` is dragged down onto the circle."""
-    return [dict(background=1.0, combine='paint', shapes=[
+    return [dict(background=1.0, shapes=[
         dict(type='rectangle', cx=cx, cy=0.407, lx=0.30, ly=0.24, angle=0.3, material=EPS_A),
         dict(type='circle', cx=0.225, cy=0.354, lx=0.18, material=EPS_B)])]
 

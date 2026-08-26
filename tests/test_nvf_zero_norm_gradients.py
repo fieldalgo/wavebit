@@ -105,10 +105,19 @@ def test_a_zero_norm_configuration_is_actually_reached():
 
 
 def test_symmetric_two_shape_layer_has_a_finite_position_gradient():
-    """The reported case, through the public API: two shapes, one solve, one ``jax.grad``."""
+    """The reported case, through the public API: two shapes, one solve, one ``jax.grad``.
+
+    The freeze is not incidental to the reproduction. A traced layer of more than one shape
+    cannot be routed -- whether the shapes overlap decides which builder it takes, and a tracer
+    cannot answer that -- so ``freeze_geometry`` is how any two-shape gradient is taken. These
+    circles stay disjoint across the window, so one freeze covers it.
+    """
+    frozen = wavebit.rcwa(backend=0, structure=[dict(background=1.0, shapes=_twin_circles(0.0))],
+                          **BASE).freeze_geometry()
+
     def objective(d):
         res = wavebit.rcwa(backend=1, structure=[dict(background=1.0, shapes=_twin_circles(d))],
-                             **BASE).solve()
+                             **BASE).solve(geometry=frozen)
         return jnp.real(jnp.sum(res.R))
 
     at_zero = float(jax.grad(objective)(jnp.asarray(0.0)))

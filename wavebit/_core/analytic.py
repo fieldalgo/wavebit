@@ -5,7 +5,7 @@ circles, ellipses — and its permittivity is Fourier-transformed *analytically*
 sampled onto a raster. That removes staircase error entirely, so the same accuracy needs far
 fewer harmonics on curved or tilted boundaries.
 
-A layer is ``dict(background=..., shapes=[...], combine=...)`` and a shape is
+A layer is ``dict(background=..., shapes=[...])`` and a shape is
 ``dict(type='rectangle'|'circle'|'ellipse', cx=, cy=, lx=, ly=, angle=, material=...)``.
 
 Both material slots take a :class:`~wavebit._core.domain.Material` -- relative permittivity
@@ -15,47 +15,31 @@ spellings are refused by name now, because the *quantity* changed with them and 
 kept the number would build a different, legal, energy-conserving structure
 (``docs/conventions.md``).
 
-**Shapes superpose; they do not paint over each other.** Each one contributes
-``(eps_shape - eps_base) * FT(indicator)``, so where two overlap the layer gets *both*
+**Shapes superpose in this module; they do not paint over each other.** Each one contributes
+``(eps_shape - eps_base) * FT(indicator)``, so where two overlap the layer would get *both*
 contributions and the permittivity there is neither shape's. Two 120x120 rods of permittivity
 4 and 9 in a background of 1, overlapping by 7200 of a 90000 cell, come out at a mean
-permittivity of 2.76 where painting the second over the first gives 2.52 -- and the efficiency
-follows, 0.9856 against the 0.9792 a raster and the block path agree on. The block path
-(``structure=[[background, [[shape, ...], ...]]]``) is the one that paints, later object over
-earlier,
-so the same recipe means two different structures depending on which path it is handed to.
+permittivity of 2.76 that way, where painting the second over the first gives 2.52 -- and the
+efficiency follows, 0.9856 against the 0.9792 a raster of the same recipe agrees on.
 
-``combine`` is what makes that choice explicit. It is a property of the *layer*, not of this
-module: both shape paths read it, and each refuses the rule it cannot build, so a recipe
-carrying one cannot be quietly given the other. :func:`check_layer_combination` enforces it
-here and :func:`wavebit._core.modeler.check_block_layer_combination` there.
+So the sum is not what an overlapping layer means, and :func:`assemble_eps_coeffs` refuses one
+outright. Such a layer is dispatched to :mod:`.boundary`, which resolves the overlap into
+disjoint polygons -- later shape over earlier -- and transforms those, edges still exact. Where
+nothing overlaps the two rules describe the same structure, so the layer stays here: exact, and
+cheaper. Nothing is asked of the recipe either way; the overlap makes the choice.
 
-While no two shapes intersect the question does not arise and any spelling is accepted on
-either path — that keeps ``combine`` from taxing the case this path exists for. An overlap is
-where they part:
-
-=========  ==========================  ====================================================
-path       unlabelled                  refuses
-=========  ==========================  ====================================================
-analytic   refused                     nothing — ``'add'`` is built here, ``'paint'`` by
-                                       :mod:`.boundary`, which resolves the overlap into
-                                       disjoint polygons first and transforms those
-vector     painted (its own rule)      ``'add'`` — a staircase of blocks holds one index
-                                       per block, so an overlap can only take one of them
-=========  ==========================  ====================================================
-
-The asymmetry in the middle column is deliberate. Painting is what the block path does and
-what a raster of the same recipe agrees with, so there is nothing surprising to refuse;
-superposition here is the rule nobody expects, so this path asks rather than assumes. The
-layer that used to come back silently different now names the two shapes and both ways
-forward.
+A ``combine=`` key used to make it explicit, ``'add'`` for the sum and ``'paint'`` for the
+painting, and each shape path refused the rule it could not build. It was removed on 2026-08-27
+together with the sum: what ``'add'`` builds in an overlap is ``eps_a + eps_b - eps_bg``, which
+is not a material, and being the rule nobody expects it had to be asked for -- which taxed every
+layer, including the non-overlapping ones this path exists for.
 
 ``'paint'`` used to be refused here too, on the grounds that it needs the transform of a shape
 *difference*. It still does — :mod:`.boundary` computes that difference as a polygon rather
 than in closed form, which is what made it buildable.
 
-The check costs a pairwise geometry test per layer (see :mod:`wavebit._core.overlap`) and
-needs concrete numbers, so a layer whose parameters are tracers is passed through unchecked;
+The overlap test costs a pairwise geometry test per layer (see :mod:`wavebit._core.overlap`)
+and needs concrete numbers, so a layer whose parameters are tracers is passed through unchecked;
 :meth:`freeze_geometry` is the eager call that still sees them.
 
 **Shape parameters are absolute lengths, in whatever unit ``period`` is given in** -- not
@@ -114,7 +98,7 @@ from .backend import array_namespace, as_array, j1, jinc, sinc
 from .domain import as_material
 from .factorization import ConvMatrices      # one slot layout for every builder
 from .lattice import periods_of, is_axis_aligned, sample_grid
-from .overlap import COMBINE_MODES, OVERLAP_TOL_REL      # re-exported; both paths read them
+from .overlap import OVERLAP_TOL_REL
 from .geometry import StaleGeometryError
 
 
@@ -281,7 +265,7 @@ def check_shape_spec(shape, shape_index=0, layer_index=0):
 
 
 #: Everything a layer dict may say. Keep this in step with what the builders below read.
-_LAYER_KEYS = frozenset({'background', 'shapes', 'combine'})
+_LAYER_KEYS = frozenset({'background', 'shapes'})
 
 
 def check_layer_spec(layer, layer_index=0):
@@ -305,83 +289,70 @@ def check_layer_spec(layer, layer_index=0):
             f'structure that was asked for.')
 
 
-def check_layer_combination(layer, lattice, layer_index=0, tol_rel=OVERLAP_TOL_REL):
-    """Refuse a layer whose shapes overlap without saying how they should combine.
+def check_layer_shapes(layer, lattice, layer_index=0):
+    """Check every shape's keys, and refuse a shape no builder here can represent.
 
-    This is where the smooth path's superposition stops being implicit. Shapes that do not
-    intersect mean the same structure under either rule, so nothing is refused and ``combine``
-    need not be given; shapes that *do* intersect mean two different structures, and the layer
-    has to pick one. Raises :class:`ValueError` when it has not. Both answers can now be built —
-    ``'add'`` here and ``'paint'`` by :mod:`.boundary`, which resolves the overlap into
-    polygons first — so neither is refused, only silence is.
+    This function is the funnel the smooth path reaches the solver through, which is why the
+    per-shape check is repeated here and — unlike :func:`shape_geometry`, where it would sit
+    closer to the mistake — not inside :func:`_primitives`, whose ``except Exception`` would
+    catch the refusal and answer it by silently building without that shape.
 
-    Touching is not overlapping — abutting rectangles and a shape exactly filling the period
-    both come out at a gap of zero — and ``tol_rel`` is measured against the period, so a
-    fraction of a cell of interpenetration is still allowed as arithmetic noise.
+    **A shape wider than the period is the one geometry neither builder can read.** Its
+    transform is a single sinc, which is not the transform of any periodic indicator, so the
+    layer is not the structure its parameters name — and it still solves and conserves energy.
+    Overlaps *between* shapes are a different matter and are not refused: they paint, later
+    shape over earlier, and :func:`layer_needs_resolving` routes them to :mod:`.boundary`. A
+    shape over its own image has no such reading — painting it over itself changes nothing and
+    the sinc is still wrong.
 
-    Also runs :func:`check_shape_spec` over every shape, ahead of everything else here. This
-    function is the funnel the smooth path reaches the solver through, and — unlike
-    :func:`shape_geometry`, where the check would sit closer to the mistake — it is not inside
-    :func:`_primitives`, whose ``except Exception`` would catch the refusal and answer it by
-    silently skipping the overlap check.
+    The sweep is ``self_only``, which asks exactly that question and is linear rather than
+    quadratic: 0.3 ms against 17 ms on a 144-shape layer, paid on every rebuild of a fit. It
+    needs concrete numbers, so a layer whose parameters are tracers passes through unchecked;
+    :meth:`freeze_geometry` is the eager call that still sees them.
+
+    This was ``check_layer_combination`` until 2026-08-27, when it also refused an overlapping
+    layer that had not said whether its shapes add or paint. Nothing is asked of the layer any
+    more: ``combine`` was removed with the summing rule, and the geometry picks the builder.
     """
-    combine = layer.get('combine')
-    if combine is not None and combine not in COMBINE_MODES:
-        raise ValueError(
-            f'Analytic layer {layer_index}: combine={combine!r} is not one of '
-            f'{COMBINE_MODES}.')
-
     shapes = layer.get('shapes', [])
     for i, shape in enumerate(shapes):
         check_shape_spec(shape, i, layer_index)
-    if len(shapes) < 1:
+    if not shapes:
         return
 
     try:
         Px, Py = (float(v) for v in periods_of(lattice))
-    except Exception:                                  # noqa: BLE001 - a traced basis
+        prims = _primitives(shapes, lattice)
+    except Exception:                                  # noqa: BLE001 - traced parameters
         return
-
-    prims = _primitives(shapes, lattice)
     if prims is None:
         return
 
-    # `tol_rel * max(Px, Py)` is a tolerance *scale*, not geometry: it says how much
-    # interpenetration counts as an overlap, in units of the cell's own size.
-    hits = _overlap.overlapping_pairs(prims, tol_rel * max(Px, Py), lattice)
-    if not hits or combine == 'add':
+    # `OVERLAP_TOL_REL * max(Px, Py)` is a tolerance *scale*, not geometry: it says how much
+    # interpenetration counts, in units of the cell's own size. It keeps *touching* out --
+    # a rod exactly filling the period comes out at a gap of zero and is a legal structure.
+    hits = _overlap.overlapping_pairs(prims, OVERLAP_TOL_REL * max(Px, Py), lattice,
+                                      self_only=True)
+    if not hits:
         return
 
-    i, j, ox, oy, _ = hits[0]
-    more = f' (and {len(hits) - 1} more such pair(s))' if len(hits) > 1 else ''
-    if i == j:
-        what = (f'shape {_shape_name(shapes, i)} is larger than the period and runs into its '
-                f'own image{_across(ox, oy)}')
-    else:
-        what = (f'shapes {_shape_name(shapes, i)} and {_shape_name(shapes, j)} '
-                f'overlap{_across(ox, oy)}')
-
-    if combine == 'paint':
-        return          # handled by the boundary path, not here — see :mod:`.boundary`
-
+    i, _, ox, oy, _ = hits[0]
+    more = f' (and {len(hits) - 1} more such shape(s))' if len(hits) > 1 else ''
     raise ValueError(
-        f'Analytic layer {layer_index}: {what}{more}. This path adds every shape\'s '
-        f'(eps_shape - eps_base) * FT(indicator), so the overlap gets both contributions and '
-        f"ends up as neither shape's material, while the block path paints one over the "
-        f'other — the same recipe, two different structures. Say which you mean:\n'
-        f"  - combine='add' in the layer dict to keep the superposition computed here;\n"
-        f'  - the block path, structure=[[background, [[shape, ...], ...]]], to paint later shapes '
-        f'over earlier ones.')
+        f'Analytic layer {layer_index}: shape {_shape_name(shapes, i)} is larger than the '
+        f'period and runs into its own image{_across(ox, oy)}{more}. Its transform is a single '
+        f'sinc, which is not the transform of any periodic indicator, so the layer is not the '
+        f'structure these parameters name -- and it would still solve and conserve energy. '
+        f'Shrink it below the period, or state the layer as a raster structure.')
 
 
 def layer_needs_resolving(layer, lattice):
     """Does this layer actually need the boundary path — i.e. is it painted *and* overlapping?
 
-    While nothing intersects, painting and adding describe the same structure, and the closed
+    While nothing intersects, painting and summing describe the same structure, and the closed
     form here is both exact and cheaper than resolving a polygon that has nothing to resolve.
-    Routing on the spelling alone would also make two names for one structure return different
-    numbers (measured 0.8% apart on disjoint rods), which is the surprise ``combine`` exists to
-    remove.
+    Routing every shape layer through the boundary path would also move the answer on a layer
+    that has no overlap at all -- measured 0.8% apart on disjoint rods.
 
     Raises when the parameters are not concrete and no plan was frozen. That case used to
     return ``False`` on the reasoning that a traced call has already had its eager pass through
@@ -389,13 +360,11 @@ def layer_needs_resolving(layer, lattice):
     wrong is not a slower path or a warning. It is a **different structure**: the layer is
     summed instead of painted, silently. Measured under ``jax.grad`` on two overlapping rods,
     ``T`` came out 0.8743 where painting gives 0.8539, and the gradient was bit-identical to
-    the one ``combine='add'`` returns — which is what identified it.
+    the one the summing builder returns on its own — which is what identified it.
 
     PyTorch never hit this: its tensors convert to floats, so the check ran. JAX tracers do
     not, so it silently did not.
     """
-    if layer.get('combine') != 'paint':
-        return False
     shapes = layer.get('shapes', [])
     if len(shapes) < 2:
         return False
@@ -406,10 +375,10 @@ def layer_needs_resolving(layer, lattice):
         prims = None
     if prims is None:
         raise ValueError(
-            "combine='paint' on a traced layer needs a frozen geometry. Whether the shapes "
-            "overlap decides which structure this is -- painted, or summed -- and that "
-            "question cannot be asked of a traced value. Taking the summed branch anyway "
-            "would solve a different structure than the one asked for, without saying so.\n"
+            "a traced layer of more than one shape needs a frozen geometry. Whether the "
+            "shapes overlap decides how the painting resolves into disjoint polygons, and "
+            "that question cannot be asked of a traced value. Guessing it would solve a "
+            "different structure than the one asked for, without saying so.\n"
             "  Freeze once, outside the trace, and replay:\n"
             "    geometry = solver.freeze_geometry()\n"
             "    result = solver.solve(geometry=geometry)\n"
@@ -491,8 +460,8 @@ def shape_ft(xp, shape, ky, kx, lattice):
     return phase * s / area
 
 
-def _refuse_paint_overlap(shapes, lattice):
-    """Raise if these shapes overlap — the case the superposition below cannot represent."""
+def _refuse_overlap(shapes, lattice):
+    """Raise if these shapes overlap -- the case the superposition below cannot represent."""
     if len(shapes) < 2:
         return
     try:
@@ -506,11 +475,17 @@ def _refuse_paint_overlap(shapes, lattice):
     if not hits:
         return          # nothing to resolve: painting and adding are the same structure here
 
-    i, j = hits[0][0], hits[0][1]
-    what = (f'shape {_shape_name(shapes, i)} runs into its own periodic image' if i == j else
-            f'shapes {_shape_name(shapes, i)} and {_shape_name(shapes, j)} overlap')
+    # `_across` is not decoration: the sweep tests the eight periodic images too, so the pair
+    # a user is told about can be two shapes that plainly miss each other inside the cell.
+    # Without the phrase the message reads as a false positive and the layer looks unbuildable.
+    i, j, ox, oy = hits[0][0], hits[0][1], hits[0][2], hits[0][3]
+    where = _across(ox, oy)
+    what = (f'shape {_shape_name(shapes, i)} runs into its own periodic image{where}'
+            if i == j else
+            f'shapes {_shape_name(shapes, i)} and {_shape_name(shapes, j)} overlap{where}')
     raise ValueError(
-        f"combine='paint' cannot be built here: {what}, and this builder sums every shape's "
+        f'an overlapping layer cannot be built here: {what}, and this builder sums every '
+        f"shape's "
         f'(eps_shape - eps_base) * FT(indicator). Summing an overlap is a different structure '
         f'from painting it -- measured 1.99 against 1.90 in <eps> for two 300x300 rods of '
         f'permittivity 4 and 9 -- so returning the sum under the name of the paint would '
@@ -520,8 +495,7 @@ def _refuse_paint_overlap(shapes, lattice):
         f'resolved into disjoint polygons before anything is transformed.')
 
 
-def assemble_eps_coeffs(xp, shapes, background, half_width_u, half_width_v, lattice, dtype,
-                        combine=None):
+def assemble_eps_coeffs(xp, shapes, background, half_width_u, half_width_v, lattice, dtype):
     """Analytic Fourier coefficients of ``eps`` and ``1/eps`` for one layer.
 
     Each grid has shape ``(4*half_width_v+1, 4*half_width_u+1)``, indexed ``[ky+2*half_width_v,
@@ -539,23 +513,20 @@ def assemble_eps_coeffs(xp, shapes, background, half_width_u, half_width_v, latt
     put where their ``epsilon`` was, and that second pass is what builds the permeability
     slots. Reading both here would build one of them twice and the other never.
 
-    **This builds ``combine='add'`` and nothing else.** It takes a shape *list*, not a layer,
-    so the layer's ``combine`` is not in front of it — and where two shapes overlap the two
-    rules describe two different structures. Reconstructing a painted layer from this function
-    is therefore wrong, silently: two 300x300 rods of permittivity 4 and 9 in a 1000x1000
-    cell come back at ``<eps> = 1.99`` where the solver integrates ``1.90``, a 4.7% error that
-    looks
-    entirely plausible. The solver itself does not make that mistake —
-    :func:`to_conv_mat_smooth_layers` routes a painted *and overlapping* layer to
-    :mod:`.boundary` and only reaches this builder where the two rules coincide — so this is a
-    precondition on the caller, which is what ``combine`` is here to let you state.
+    **This sums, and an overlapping layer is not a sum.** Where two shapes overlap, summing and
+    painting describe two different structures, so reconstructing a painted layer from this
+    function is wrong -- silently: two 300x300 rods of permittivity 4 and 9 in a 1000x1000 cell
+    come back at ``<eps> = 1.99`` where the solver integrates ``1.90``, a 4.7% error that looks
+    entirely plausible. The solver does not make that mistake -- :func:`to_conv_mat_smooth_layers`
+    routes an overlapping layer to :mod:`.boundary` and only reaches this builder where the
+    shapes are disjoint, and where they are disjoint the two rules coincide exactly.
 
-    Pass ``combine`` (the layer's own value) to have that checked rather than assumed: an
-    overlapping ``'paint'`` layer is refused instead of summed. Omitting it keeps the old
-    behaviour, which is the ``'add'`` rule unconditionally.
+    So an overlap is refused here unconditionally. It was conditional on a ``combine=`` argument
+    until 2026-08-27, when ``combine='add'`` was removed: a layer could then ask for the sum,
+    and the caller had to say so for the check to run. There is no such ask now, so there is
+    nothing for the caller to state and no way to turn the check off.
     """
-    if combine == 'paint':
-        _refuse_paint_overlap(shapes, lattice)
+    _refuse_overlap(shapes, lattice)
 
     eps_base = as_material(background, 'layer background').epsilon
     dev = getattr(eps_base, 'device', None) if hasattr(eps_base, 'device') else None
@@ -1159,7 +1130,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
 
 
 def to_conv_mat_smooth_nvf(xp, shapes, background, half_width_u, half_width_v, lattice, dtype,
-                           normal_grid=256, combine=None):
+                           normal_grid=256):
     """The five 2D-solve convolution matrices for one analytic layer, via NVF.
 
     ``eps`` / ``1/eps`` come from the exact shape transform (no staircase); the normal
@@ -1170,11 +1141,11 @@ def to_conv_mat_smooth_nvf(xp, shapes, background, half_width_u, half_width_v, l
     position-free ``X`` (see :func:`normal_projector_coeffs`), so sliding a single-shape layer
     conjugates the whole solve by a diagonal and leaves each order's efficiency alone.
 
-    ``combine`` is passed straight to :func:`assemble_eps_coeffs`, which sums; see there for
-    why an overlapping painted layer must not arrive at this function.
+    The coefficients come from :func:`assemble_eps_coeffs`, which sums -- see there for why
+    a layer whose shapes overlap must not arrive at this function.
     """
     eps_c, inv_eps_c = assemble_eps_coeffs(xp, shapes, background, half_width_u,
-                                           half_width_v, lattice, dtype, combine=combine)
+                                           half_width_v, lattice, dtype)
     c_xx, c_xy, c_yy = normal_projector_coeffs(
         xp, shapes, (normal_grid, normal_grid), lattice, half_width_u, half_width_v, dtype)
     return nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, half_width_u, half_width_v)
@@ -1221,7 +1192,7 @@ def check_no_plan_still_fits(layer, lattice, index):
     it does overlap and the answer is exactly as stale as a plan whose loops have been re-cut.
 
     It used to go stale in a worse place. The dispatch below summed on the record's word, and
-    :func:`_refuse_paint_overlap` stopped it there with a ``ValueError`` about *this* builder --
+    :func:`_refuse_overlap` stopped it there with a ``ValueError`` about *this* builder --
     naming neither the frozen record nor the fix, and pointing at the boundary path the caller
     was already trying to reach. Reproduced by freezing a disjoint rectangle-and-circle layer and
     sliding the rectangle onto the circle; the same call without ``geometry=`` returns
@@ -1239,7 +1210,7 @@ def check_no_plan_still_fits(layer, lattice, index):
         return
     raise StaleGeometryError(
         f'the frozen geometry no longer fits this structure: it recorded layer {index} as '
-        f'painted but not overlapping, and its shapes overlap now. That record is what routes '
+        f'not overlapping, and its shapes overlap now. That record is what routes '
         f'the layer, so replaying it would sum a layer that has to be painted -- a different '
         f'structure. Call freeze_geometry() again, or drop geometry= to route by comparison. '
         f'(Moving a shape never trips this on its own; moving it into another shape does.)')
@@ -1255,9 +1226,9 @@ def to_conv_mat_smooth_layers(layer_shapes, half_width_u, half_width_v, lattice,
     module docstring). Returns ``(epx, epy, epz_i, epxy, epyx)``, each
     ``(n_layers, n_orders, n_orders)``.
 
-    Every layer goes through :func:`check_layer_combination` first — this is the funnel the
-    smooth path reaches the solver through, so it is the one place that can guarantee an
-    overlap is never answered silently.
+    Every layer goes through :func:`check_layer_spec` and :func:`check_layer_shapes` first —
+    this is the funnel the smooth path reaches the solver through, so it is the one place that
+    can guarantee a misspelled recipe is never answered with a plausible structure.
 
     The array namespace is taken from the first differentiable shape parameter found, so
     passing JAX or PyTorch scalars for e.g. ``lx`` makes the whole build run — and
@@ -1278,23 +1249,23 @@ def to_conv_mat_smooth_layers(layer_shapes, half_width_u, half_width_v, lattice,
         plan = boundary_plans[index] if frozen else None
         if frozen and plan is None:
             check_no_plan_still_fits(layer, lattice, index)
-        check_layer_combination(layer, lattice, index)
+        check_layer_shapes(layer, lattice, index)
         background = layer.get('background', 1.0)
         if plan is not None or (not frozen
                                 and layer_needs_resolving(layer, lattice)):
-            # A painted layer that actually overlaps is a different structure from a summed
-            # one, and this module can only sum. Resolve the painting into disjoint polygons
-            # and transform those. A painted layer with nothing overlapping means the same
-            # structure either way, so it stays here -- exact, and cheaper.
+            # Shapes that overlap paint -- later over earlier -- and this module can only
+            # sum, which is a different structure. Resolve the painting into disjoint polygons
+            # and transform those. Where nothing overlaps the two are the same structure, so
+            # the layer stays here -- exact, and cheaper.
             from .boundary import to_conv_mat_boundary_layer
             mats = to_conv_mat_boundary_layer(
                 xp, layer.get('shapes', []), background, half_width_u, half_width_v, lattice,
                 dtype, normal_grid=normal_grid, plan=plan)
         else:
-            # `combine` goes down with the shapes rather than being dropped here. Reaching
-            # this branch means the two rules agree on this layer, so the check below never
-            # fires from here -- it is a second reading of the dispatch just above, on the one
-            # branch where getting it wrong returns a plausible number instead of an error.
+            # Reaching this branch means the shapes are disjoint, so the summing this
+            # builder does is the painted structure. `assemble_eps_coeffs` re-checks that --
+            # a second reading of the dispatch just above, on the one branch where getting it
+            # wrong returns a plausible number instead of an error.
             # That failure has happened once already (see `layer_needs_resolving`). It held
             # only for the unfrozen route until `check_no_plan_still_fits` was added: a record
             # frozen while the shapes were disjoint routes by its own answer, not by the two
@@ -1302,7 +1273,7 @@ def to_conv_mat_smooth_layers(layer_shapes, half_width_u, half_width_v, lattice,
             # a message about this builder rather than about the stale record.
             mats = to_conv_mat_smooth_nvf(
                 xp, layer.get('shapes', []), background, half_width_u, half_width_v, lattice,
-                dtype, normal_grid=normal_grid, combine=layer.get('combine'))
+                dtype, normal_grid=normal_grid)
         for slot, m in zip(out, mats):
             slot.append(m)
 

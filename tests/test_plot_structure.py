@@ -148,7 +148,7 @@ def test_the_paint_renderer_matches_the_boundary_path_loops():
     n = 128 / 1024 / 2048 -- and that is what says the scanline fill lands on the loops rather
     than merely averaging to them.
     """
-    solver = wavebit.rcwa(structure=[dict(background=1.0, combine='paint', shapes=OVERLAP)], **COMMON)
+    solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=OVERLAP)], **COMMON)
     want = loop_mean_eps(OVERLAP)
 
     assert solver.slice_structure(n=64, band_limited=True).real.mean() == pytest.approx(
@@ -156,21 +156,24 @@ def test_the_paint_renderer_matches_the_boundary_path_loops():
     assert solver.slice_structure(n=2048).real.mean() == pytest.approx(want, abs=2e-4)
 
 
-def test_painting_and_adding_are_drawn_as_the_different_structures_they_are():
-    """Same shape list, two ``combine`` values, two pictures -- 5.4% apart in ``<eps>``.
+def test_an_overlap_is_drawn_painted_and_not_summed():
+    """The plausible wrong picture, 5.4% away in ``<eps>``, pinned by both numbers.
 
-    Falling back to the summed sampler for a painted layer is the plausible wrong answer here:
-    the overlap is drawn at ``eps_a + eps_b - eps_base`` instead of ``eps_b``, which looks like
-    a structure someone might have meant.
+    Falling back to the summed sampler is the mistake this catches: the overlap would be drawn
+    at ``eps_a + eps_b - eps_base`` instead of ``eps_b``, which looks like a structure someone
+    might have meant. It was reachable by name until 2026-08-27 (``combine='add'``); the sum is
+    now what the closed-form builder computes for shapes that do not overlap, and this picture
+    is the one the solver builds.
+
+    The summed number stays as a literal because it is the failure's signature, not a second
+    structure: a renderer that lost the painting lands on 1.9134 exactly.
     """
-    paint = wavebit.rcwa(structure=[dict(background=1.0, combine='paint', shapes=OVERLAP)], **COMMON)
-    add = wavebit.rcwa(structure=[dict(background=1.0, combine='add', shapes=OVERLAP)], **COMMON)
+    paint = wavebit.rcwa(structure=[dict(background=1.0, shapes=OVERLAP)], **COMMON)
 
     e_paint = paint.slice_structure(n=2048).real.mean()
-    e_add = add.slice_structure(n=2048).real.mean()
+    e_summed = 1.9134                                  # eps_a + eps_b - eps_base in the overlap
     assert e_paint == pytest.approx(1.8158, abs=1e-3)
-    assert e_add == pytest.approx(1.9134, abs=1e-3)
-    assert (e_add - e_paint) / e_paint == pytest.approx(0.054, abs=2e-3)
+    assert (e_summed - e_paint) / e_paint == pytest.approx(0.054, abs=2e-3)
 
 
 def test_a_hole_is_drawn_as_a_hole():
@@ -184,7 +187,7 @@ def test_a_hole_is_drawn_as_a_hole():
     """
     shapes = [dict(type='rectangle', cx=500.0, cy=500.0, lx=600.0, ly=600.0, material=4.0),
               dict(type='circle', cx=500.0, cy=500.0, lx=200.0, material=9.0)]
-    solver = wavebit.rcwa(structure=[dict(background=1.0, combine='paint', shapes=shapes)], **COMMON)
+    solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], **COMMON)
 
     hole_area = np.pi * 100.0 ** 2
     geometry = 1.0 + 3.0 * (360000.0 - hole_area) / (P * P) + 8.0 * hole_area / (P * P)

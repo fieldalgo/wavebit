@@ -339,8 +339,20 @@ def _two_total(pair, ca, cb):
     return float(np.real(np.sum(np.asarray(res.R))))
 
 
-def _two_jtotal(pair, ca, cb):
-    res = wavebit.rcwa(backend=1, structure=_two(pair, ca, cb), **TWO_CFG).solve()
+def _two_frozen(pair, ca, cb):
+    """The eager routing pass a traced two-shape layer needs.
+
+    Which builder a layer of more than one shape takes is a question about the geometry --
+    whether they overlap -- and a tracer cannot answer it, so the answer is recorded once here
+    and replayed. Every pair below stays disjoint across its window, so one freeze covers the
+    whole sweep and the record never goes stale.
+    """
+    return wavebit.rcwa(backend=0, structure=_two(pair, ca, cb), **TWO_CFG).freeze_geometry()
+
+
+def _two_jtotal(pair, ca, cb, geometry=None):
+    solver = wavebit.rcwa(backend=1, structure=_two(pair, ca, cb), **TWO_CFG)
+    res = solver.solve(geometry=geometry)
     return jnp.real(jnp.sum(res.R))
 
 
@@ -354,7 +366,8 @@ def test_two_smooth_shapes_already_carry_a_correct_relative_gradient():
     """
     h = 1e-5
     for d in (0.02, 0.05, 0.08):
-        auto = float(jax.grad(lambda c: _two_jtotal(TWO_CIRCLES, c, CB))(jnp.asarray(CA + d)))
+        frozen = _two_frozen(TWO_CIRCLES, CA + d, CB)
+        auto = float(jax.grad(lambda c: _two_jtotal(TWO_CIRCLES, c, CB, frozen))(jnp.asarray(CA + d)))
         fd = (_two_total(TWO_CIRCLES, CA + d + h, CB)
               - _two_total(TWO_CIRCLES, CA + d - h, CB)) / (2 * h)
         assert abs(fd) > 1e-4, (d, fd)
@@ -381,7 +394,8 @@ def test_two_rectangles_carry_a_correct_relative_gradient_too():
     """
     h = 1e-6
     for d in (0.02, 0.05, 0.08):
-        auto = float(jax.grad(lambda c: _two_jtotal(TWO_RECTANGLES, c, CB))(jnp.asarray(CA + d)))
+        frozen = _two_frozen(TWO_RECTANGLES, CA + d, CB)
+        auto = float(jax.grad(lambda c: _two_jtotal(TWO_RECTANGLES, c, CB, frozen))(jnp.asarray(CA + d)))
         fd = (_two_total(TWO_RECTANGLES, CA + d + h, CB)
               - _two_total(TWO_RECTANGLES, CA + d - h, CB)) / (2 * h)
         assert abs(fd) > 1e-4, (d, fd)

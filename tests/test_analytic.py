@@ -511,17 +511,17 @@ def test_a_circle_that_names_a_second_length_is_refused(ly, why):
                        **CIRCLE_CFG).solve()
 
 
-def test_shapes_superpose_where_they_overlap():
-    """Overlapping shapes are added, not painted over — what ``combine='add'`` now selects.
+def test_the_closed_form_builder_refuses_an_overlap_rather_than_summing_it():
+    """It sums, and a sum is not what an overlap means -- so it refuses instead of answering.
 
-    Each shape contributes ``(eps_shape - eps_base) * FT(indicator)``, so an overlap receives
-    both. This is the coefficient builder underneath the modeling layer, so it superposes
-    unconditionally; the layer above refuses to reach it without being told that is the
-    intent (:func:`check_layer_combination`).
+    Each shape contributes ``(eps_shape - eps_base) * FT(indicator)``, so an overlap would
+    receive both and the permittivity there would be ``eps_a + eps_b - eps_bg``, which is
+    neither shape's material. The oracle below is what the sum *would* have been, and it is a
+    plausible number -- 2.76 against the 2.52 painting gives -- which is why this is refused
+    rather than left to be noticed downstream.
 
-    The block path paints instead — later object over earlier — and agrees with a raster of
-    the same instruction to eight digits, which is what makes the analytic value identifiable
-    as the superposition rather than either of them being noise.
+    The layer above never reaches here with an overlap: :func:`to_conv_mat_smooth_layers`
+    routes it to the boundary path. This is the second reading of that dispatch.
     """
     period, eps_base = [300.0, 300.0], 1.0
     rods = [dict(type='rectangle', cx=130.0, cy=150.0, lx=120.0, ly=120.0, angle=0.0,
@@ -529,7 +529,15 @@ def test_shapes_superpose_where_they_overlap():
             dict(type='rectangle', cx=190.0, cy=150.0, lx=120.0, ly=120.0, angle=0.0,
                  material=9.0)]
 
-    eps_c, _ = _assemble_eps_coeffs(xnp, rods, eps_base, 3, 3,
+    with pytest.raises(ValueError) as raised:
+        _assemble_eps_coeffs(xnp, rods, eps_base, 3, 3, as_lattice(period=period),
+                             np.complex128)
+    assert '0 (rectangle)' in str(raised.value) and '1 (rectangle)' in str(raised.value)
+
+    # Slide them apart and the same call answers -- with the sum, which is now also the
+    # painted structure, so the oracle is unambiguous.
+    apart = [dict(rods[0], cx=70.0), dict(rods[1], cx=230.0)]
+    eps_c, _ = _assemble_eps_coeffs(xnp, apart, eps_base, 3, 3,
                                     as_lattice(period=period), np.complex128)
     dc = complex(eps_c[2 * 3, 2 * 3]).real
 
@@ -537,20 +545,18 @@ def test_shapes_superpose_where_they_overlap():
     fraction = 120.0 * 120.0 / cell
     # Nothing is squared in the oracle any more: 4.0 and 9.0 are the materials as written,
     # and they name the same structure the pre-flip literals 2.0 and 3.0 did.
-    superposed = eps_base + (4.0 - eps_base) * fraction + (9.0 - eps_base) * fraction
-    overlap = 60.0 * 120.0 / cell
-    painted = superposed - (9.0 - eps_base) * overlap
-
-    assert dc == pytest.approx(superposed, rel=1e-12)
-    assert dc != pytest.approx(painted, rel=1e-6)      # 2.76 against 2.52
+    assert dc == pytest.approx(eps_base + (4.0 - eps_base) * fraction
+                               + (9.0 - eps_base) * fraction, rel=1e-12)
 
 
-def test_adding_shapes_parts_from_painting_them_where_they_overlap():
-    """The user-visible half of it: `combine='add'` parts from the raster, `paint` does not.
+def test_an_overlapping_smooth_layer_paints_like_the_raster_of_the_same_recipe():
+    """What the user sees of the rule: the smooth path lands on the raster's structure.
 
-    This is why the layer has to be asked. Painting is what a raster does -- the later box
-    covers the earlier -- and adding keeps the superposition, which is a different structure.
-    The two assertions measure exactly that gap.
+    Painting is what a raster does -- the later box covers the earlier -- and it is what an
+    overlapping smooth layer now means, resolved into disjoint polygons by the boundary
+    sub-path. Summing them instead is a different structure, ~1e-3 away in ``T`` here and
+    4.7% away in ``<eps>`` on the wider rods below; that arm was ``combine='add'`` and is
+    gone.
 
     The painted arm was the block path until it was removed; the boundary sub-path paints the
     same way and agrees with the raster to the truncation, which is what the looser tolerance
@@ -574,18 +580,14 @@ def test_adding_shapes_parts_from_painting_them_where_they_overlap():
             wavebit.rcwa(backend=0, structure=structure, **extra, **cfg).solve().T)))
 
     want = total(raster[None], fourier_coefficients='sampled')
-    painted = total([dict(background=eps_base, combine='paint',
+    painted = total([dict(background=eps_base,
                           shapes=[dict(type='rectangle', cx=cx, cy=150.0, lx=120.0, ly=120.0,
                                        angle=0.0, material=eps) for cx, eps in boxes])])
-    analytic = total([dict(background=eps_base, combine='add',
-                           shapes=[dict(type='rectangle', cx=cx, cy=150.0, lx=120.0, ly=120.0,
-                                        angle=0.0, material=eps) for cx, eps in boxes])])
 
     assert painted == pytest.approx(want, abs=2e-3)
-    assert abs(analytic - want) > 1e-3, (analytic, want)
 
 
-# ------------------------------------------------------- the layer has to say how shapes combine
+# ------------------------------------------------ overlapping shapes paint, and route themselves
 
 CHECK_CFG = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[2, 2], top=1.0, bot=1.0,
                  wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0)
@@ -606,38 +608,44 @@ def solve(shapes, **layer):
                           **CHECK_CFG).solve()
 
 
-def test_overlapping_shapes_are_refused_until_the_layer_says_how_to_combine():
-    """The hazard this whole check exists for: the same recipe means two structures.
+def test_an_overlapping_layer_is_built_by_painting_and_routes_itself():
+    """The same recipe used to mean two structures, and the layer had to name which.
 
-    A vector recipe moved onto the smooth path used to come back superposed, with nothing
-    said. Now the layer is refused until it names the rule, and the message has to carry both
-    shapes and both ways forward — a user who cannot act on the error is no better off than
-    one who never saw it.
+    A vector recipe moved onto the smooth path came back superposed, with nothing said. The
+    ``combine`` keyword was the first answer -- refuse the layer until it names the rule --
+    and it taxed every layer for a question only an overlap raises. The rule is now fixed
+    (later shape over earlier, as a raster reads the same recipe) and the *geometry* picks the
+    builder: :func:`layer_needs_resolving` says yes, and the boundary path resolves the
+    overlap into disjoint polygons.
     """
+    from wavebit._core.analytic import layer_needs_resolving
+
     shapes = [rod(130.0, material=4.0), rod(190.0, material=9.0)]
+    lattice = as_lattice(period=CHECK_CFG['period'])
+    assert layer_needs_resolving(dict(background=1.0, shapes=shapes), lattice) is True
 
-    with pytest.raises(ValueError) as raised:
-        solve(shapes)
-    message = str(raised.value)
-    assert '0 (rectangle)' in message and '1 (rectangle)' in message
-    assert "combine='add'" in message and 'block path' in message
+    painted = float(np.sum(np.asarray(solve(shapes).T)))
+    assert 0.0 < painted < 1.0
 
-    # And the escape hatch actually escapes, to the superposition that was always computed.
-    assert float(np.sum(np.asarray(solve(shapes, combine='add').T))) > 0.0
+    # And it is the painted structure, not the sum: <eps> is one Fourier coefficient, so the
+    # two rules fix it in closed form and nothing about truncation is in the way. The wider
+    # rods below carry that measurement (1.90 against 1.99).
+    assert _solver_mean_eps() == pytest.approx(EPS_PAINTED, abs=1e-9)
 
 
-def test_disjoint_shapes_never_have_to_answer_the_question():
-    """No overlap, no difference between the rules — so no ``combine``, and any spelling works.
+def test_a_disjoint_layer_stays_on_the_closed_form_builder():
+    """No overlap, no polygon to resolve -- the case the smooth path exists for stays free.
 
-    This is the case the smooth path is built for and the one that must stay free: the check
-    is only worth having if it fires on actual overlap, since pushing people off this path
-    costs them the staircase-free rotation it exists to provide.
+    Routing every shape layer through the boundary path would cost this case for nothing, and
+    it would move the answer: measured 0.8% apart on disjoint rods. So the routing question is
+    asked of the geometry, and answered ``False`` here.
     """
-    shapes = [rod(70.0, lx=100.0), rod(220.0, lx=100.0, material=9.0)]
-    want = float(np.sum(np.asarray(solve(shapes).T)))
+    from wavebit._core.analytic import layer_needs_resolving
 
-    for combine in ('add', 'paint'):
-        assert float(np.sum(np.asarray(solve(shapes, combine=combine).T))) == want
+    shapes = [rod(70.0, lx=100.0), rod(220.0, lx=100.0, material=9.0)]
+    lattice = as_lattice(period=CHECK_CFG['period'])
+    assert layer_needs_resolving(dict(background=1.0, shapes=shapes), lattice) is False
+    assert 0.0 < float(np.sum(np.asarray(solve(shapes).T))) < 1.0
 
 
 def test_touching_is_not_overlapping():
@@ -652,39 +660,26 @@ def test_touching_is_not_overlapping():
     solve([rod(150.0, lx=300.0)])                                     # exactly one period wide
 
 
-def test_paint_now_builds_and_is_not_the_sum():
-    """``combine='paint'`` used to raise here; the boundary path builds it, and it differs.
+def test_the_removed_combine_key_is_refused_not_ignored():
+    """``combine=`` was how a layer named the rule until 2026-08-27. It is now an unread key.
 
-    It has to differ: the overlap holds the later shape's material under painting and the sum
-    of both contributions under superposition, so agreeing would mean one of them is wrong.
-    What this pins is that asking for painting no longer silently returns the sum -- the
-    failure the ``combine`` keyword exists to prevent, now in the direction that used to be
-    unbuildable rather than refused.
+    Every layer key is read with ``.get`` and a default, so leaving a retired one to be ignored
+    is not a no-op: a recipe written against the old contract would keep solving and quietly
+    stop meaning what it says. Both spellings go the same way -- the one whose behaviour was
+    deleted and the one that is now unconditional -- because the key itself is gone.
     """
-    shapes = [rod(130.0), rod(190.0, material=9.0)]
-    painted = float(np.sum(np.asarray(solve(shapes, combine='paint').T)))
-    added = float(np.sum(np.asarray(solve(shapes, combine='add').T)))
-    assert 0.0 < painted < 1.0
-    # These rods overlap over a small part of the cell, so the two structures are close and
-    # the gap is ~1e-3 -- four orders above the 1e-12 the two spellings agree to when nothing
-    # intersects (`test_disjoint_shapes_never_have_to_answer_the_question`). That contrast is
-    # the point; the size of the gap is the geometry's business, not this test's.
-    assert abs(painted - added) > 1e-4, (painted, added)
+    for mode in ('add', 'paint'):
+        with pytest.raises(ValueError, match="'combine'"):
+            solve([rod(150.0)], combine=mode)
 
 
-def test_unknown_combine_modes_are_refused_even_without_an_overlap():
-    """A typo in the one word that picks the semantics must not read as the default."""
-    with pytest.raises(ValueError, match='combine='):
-        solve([rod(150.0)], combine='superpose')
-
-
-# ------------------------------------------- which side of `combine` each builder sits on
+# --------------------------------------------- which side of the overlap each builder sits on
 #
-# `assemble_eps_coeffs` sums. `to_conv_mat_smooth_layers` reads the layer and routes a painted
-# overlap to the boundary path instead. Reading only the first of those looks exactly like a
-# solver that ignores `combine`, which is a diagnosis worth being able to settle with a number:
-# `<eps>` is the DC coefficient, so the two rules give it in closed form and nothing about
-# truncation, factorization or the normal field is in the way.
+# `assemble_eps_coeffs` sums, and refuses an overlap. `to_conv_mat_smooth_layers` looks at the
+# geometry and routes an overlapping layer to the boundary path instead. Reading only the first
+# of those looks exactly like a solver that cannot paint, which is a diagnosis worth being able
+# to settle with a number: `<eps>` is the DC coefficient, so both rules give it in closed form
+# and nothing about truncation, factorization or the normal field is in the way.
 
 PAINT_PERIOD = (1000.0, 1000.0)
 
@@ -696,10 +691,10 @@ PAINT_RODS = [dict(type='rectangle', cx=400.0, cy=500.0, lx=300.0, ly=300.0, mat
 EPS_SUMMED, EPS_PAINTED = 1.99, 1.90
 
 
-def _solver_mean_eps(combine, shapes=PAINT_RODS):
+def _solver_mean_eps(shapes=PAINT_RODS):
     """``<eps>`` as the solve reads it: the DC entry of ``ep_dir``, recovered from ``epz_i``."""
     from wavebit._core.analytic import to_conv_mat_smooth_layers
-    layer = dict(background=1.0, shapes=shapes, combine=combine)
+    layer = dict(background=1.0, shapes=shapes)
     mats = to_conv_mat_smooth_layers([layer], 6, 6, as_lattice(period=PAINT_PERIOD),
                                      normal_grid=256,
                                      complex_dtype=np.complex128, xp=xnp)
@@ -707,55 +702,48 @@ def _solver_mean_eps(combine, shapes=PAINT_RODS):
 
 
 def test_the_solve_path_integrates_the_painted_structure_not_the_summed_one():
-    """The solver honours ``combine``; only the bare coefficient builder does not.
+    """The solver paints; only the bare coefficient builder sums, and it refuses an overlap.
 
     Both numbers are exact, not converged-to: ``<eps>`` is one Fourier coefficient and each
-    rule fixes it in closed form. So this is not "close enough" — a solver that ignored
-    ``combine`` would land on 1.99 for both rows and this would fail by 4.7%.
+    rule fixes it in closed form. So this is not "close enough" -- a solver that summed would
+    land on 1.99 and this would fail by 4.7%.
     """
-    assert _solver_mean_eps('paint') == pytest.approx(EPS_PAINTED, abs=1e-9)
-    assert _solver_mean_eps('add') == pytest.approx(EPS_SUMMED, abs=1e-9)
+    assert _solver_mean_eps() == pytest.approx(EPS_PAINTED, abs=1e-9)
 
 
-def test_assemble_eps_coeffs_sums_whatever_it_is_handed():
-    """The precondition, pinned as behaviour so the docstring cannot drift off it.
-
-    This is the misuse that reads as a solver bug: pull ``shapes`` out of a painted layer, hand
-    them here, and get the summed structure back with nothing said. Both spellings give 1.99
-    because the layer's rule was never in the argument list.
-    """
-    eps_c, _ = assemble_eps_coeffs(PAINT_RODS, 1.0, 6, 6, PAINT_PERIOD)
-    assert float(np.real(eps_c[12, 12])) == pytest.approx(EPS_SUMMED, abs=1e-12)
-
-
-def test_assemble_eps_coeffs_refuses_a_painted_overlap_when_told_the_rule():
+def test_assemble_eps_coeffs_refuses_an_overlap_it_was_handed_directly():
     """Told what it cannot build, it refuses instead of answering plausibly.
 
+    This is the misuse that reads as a solver bug: pull ``shapes`` out of an overlapping layer,
+    hand them here, and the summed structure would come back with nothing said -- 1.99 where
+    the solver integrates 1.90. The refusal used to be conditional on the caller passing
+    ``combine='paint'``; there is no such argument now, so it cannot be left off.
+
     The message has to name the shapes and the path that *can* build it, for the same reason
-    the layer-level refusal does: an error a caller cannot act on leaves them where they were.
+    the routing does: an error a caller cannot act on leaves them where they were.
     """
     with pytest.raises(ValueError) as raised:
         _assemble_eps_coeffs(xnp, PAINT_RODS, 1.0, 6, 6, as_lattice(period=PAINT_PERIOD),
-                             xnp.complex128,
-                             combine='paint')
+                             xnp.complex128)
     message = str(raised.value)
     assert '0 (rectangle)' in message and '1 (rectangle)' in message
     assert 'boundary' in message
 
 
-def test_a_disjoint_painted_layer_still_reaches_the_closed_form_builder():
+def test_a_disjoint_layer_still_reaches_the_closed_form_builder():
     """The guard must not push the cheap exact path away from layers it handles correctly.
 
-    Nothing intersects, so painting and summing are the same structure and this builder is
-    both right and cheaper than resolving polygons that have nothing to resolve — which is
-    also why the shipped dispatch sends such a layer here with ``combine='paint'`` still on it.
+    Nothing intersects, so painting and summing are the same structure and this builder is both
+    right and cheaper than resolving polygons that have nothing to resolve -- which is why the
+    shipped dispatch still sends such a layer here. Both rows land on the summed value because
+    with the rods apart that *is* the painted value; ``EPS_SUMMED`` names the arithmetic, not
+    the rule.
     """
     disjoint = [dict(PAINT_RODS[0], cx=200.0), dict(PAINT_RODS[1], cx=700.0)]
     eps_c, _ = _assemble_eps_coeffs(xnp, disjoint, 1.0, 6, 6,
-                                    as_lattice(period=PAINT_PERIOD), xnp.complex128,
-                                    combine='paint')
+                                    as_lattice(period=PAINT_PERIOD), xnp.complex128)
     assert float(np.real(eps_c[12, 12])) == pytest.approx(EPS_SUMMED, abs=1e-12)
-    assert _solver_mean_eps('paint', disjoint) == pytest.approx(EPS_SUMMED, abs=1e-9)
+    assert _solver_mean_eps(disjoint) == pytest.approx(EPS_SUMMED, abs=1e-9)
 
 
 # ------------------------------------------------------- what a shape dict may say
@@ -814,12 +802,21 @@ def test_a_traced_ly_on_a_circle_is_refused_where_a_comparison_cannot_reach():
 
 
 def test_overlap_is_found_across_the_period_boundary():
-    """The layer is a unit cell: shapes that miss inside it can still meet through the edge."""
+    """The layer is a unit cell: shapes that miss inside it can still meet through the edge.
+
+    Missing this does not raise -- it routes the layer to the summing builder, which is a
+    different structure. So the sweep is pinned twice: the solver takes the boundary path, and
+    the bare builder names the edge it met through when handed the same shapes directly.
+    """
+    from wavebit._core.analytic import layer_needs_resolving
+
     shapes = [rod(20.0, lx=100.0), rod(280.0, lx=100.0, material=9.0)]   # meet through x = 0
+    lattice = as_lattice(period=CHECK_CFG['period'])
+    assert layer_needs_resolving(dict(background=1.0, shapes=shapes), lattice) is True
+    solve(shapes)
 
     with pytest.raises(ValueError, match='period boundary'):
-        solve(shapes)
-    solve(shapes, combine='add')
+        _assemble_eps_coeffs(xnp, shapes, 1.0, 2, 2, lattice, xnp.complex128)
 
 
 def test_a_shape_wider_than_the_period_runs_into_its_own_image():
@@ -837,19 +834,23 @@ def test_detection_follows_the_shapes_and_not_their_bounding_boxes():
 
     Both pairs have overlapping axis-aligned bounding boxes and are disjoint: two rectangles
     at +/- 45 degrees passing corner to corner, and two ellipses crossing broadside to
-    end-on. Nudged into contact, both are reported — so the pass is not the check being
-    asleep.
+    end-on. A bounding-box test would send both down the polygon path -- a different structure
+    from the closed form by 0.8% on disjoint rods, and dearer. Nudged into contact, both are
+    reported, so the pass is not the check being asleep.
     """
     diagonal = [rod(110.0, 110.0, lx=120.0, ly=40.0, angle=np.pi / 4),
                 rod(190.0, 190.0, lx=120.0, ly=40.0, angle=-np.pi / 4, material=9.0)]
     crossing = [rod(120.0, 150.0, lx=160.0, ly=30.0, type='ellipse'),
                 rod(225.0, 150.0, lx=30.0, ly=160.0, type='ellipse', material=9.0)]
 
+    from wavebit._core.analytic import layer_needs_resolving
+    lattice = as_lattice(period=CHECK_CFG['period'])
+
     for shapes in (diagonal, crossing):
-        solve(shapes)                                          # disjoint: no question to ask
+        assert layer_needs_resolving(dict(background=1.0, shapes=shapes), lattice) is False
+        solve(shapes)                                          # disjoint: the closed form
         closed = [dict(shapes[0]), dict(shapes[1], cx=shapes[0]['cx'] + 10.0)]
-        with pytest.raises(ValueError, match='overlap'):
-            solve(closed)
+        assert layer_needs_resolving(dict(background=1.0, shapes=closed), lattice) is True
 
 
 def test_the_check_reports_the_exact_geometry_it_should():
@@ -880,7 +881,8 @@ def test_the_check_steps_aside_for_a_traced_solve():
     A jitted analytic solve is the reason this cannot simply be an unconditional assertion:
     turning a differentiable sweep into an exception would cost more than the silence it
     replaces. ``freeze_geometry`` is the eager pass such a sweep already makes, and the same
-    layer with a concrete ``cx`` right beside it is what still gets checked.
+    layer with a concrete ``cx`` right beside it is what still gets checked -- here against the
+    record, which was taken while the rods were apart and does not fit them together.
     """
     jax = pytest.importorskip('jax')
     jnp = pytest.importorskip('jax.numpy')
@@ -895,7 +897,7 @@ def test_the_check_steps_aside_for_a_traced_solve():
                                       **CHECK_CFG).solve(geometry=frozen).T)
 
     assert float(jax.jit(total)(jnp.asarray(130.0))) > 0.0     # overlapping, and traced: allowed
-    with pytest.raises(ValueError, match='overlap'):
+    with pytest.raises(wavebit.StaleGeometryError, match='no longer fits'):
         total(130.0)                                           # same layer, concrete: refused
 
 
@@ -1058,8 +1060,13 @@ def test_a_traced_or_autograd_value_is_never_served_from_the_cache():
     assert abs(float(jax.grad(total)(jnp.asarray(0.40)))) < ZERO_FORCE
     assert abs(float(jax.grad(total)(jnp.asarray(0.40)))) < ZERO_FORCE   # again, now warm
 
+    # Two shapes and a tracer: which builder the layer takes is a question about the geometry,
+    # so it needs the eager pass. See `layer_needs_resolving`.
+    frozen = wavebit.rcwa(backend=0, structure=_two(0.40), **PROJ_KW).freeze_geometry()
+
     def pair(cx):
-        return jnp.sum(wavebit.rcwa(backend=1, structure=_two(cx), **PROJ_KW).solve().T).real
+        return jnp.sum(wavebit.rcwa(backend=1, structure=_two(cx), **PROJ_KW)
+                       .solve(geometry=frozen).T).real
 
     h = 1e-5
     fd = (float(pair(jnp.asarray(0.40 + h))) - float(pair(jnp.asarray(0.40 - h)))) / (2 * h)
@@ -1348,10 +1355,8 @@ def test_omitting_the_centre_solves_what_stating_it_solves(cell_name, A, factori
     def solve(second):
         kw = dict(backend=0, wavelength=900.0, lattice=A, truncation_order=[6, 6],
                   top=1.0, bot=1.0, theta=0.11, phi=0.37, psi=0.29, thickness=[300.0],
-                  structure=[dict(background=1.0, combine='add', shapes=[fixed, second])])
-        if factorization == 'boundary':
-            kw['structure'][0]['combine'] = 'paint'
-        else:
+                  structure=[dict(background=1.0, shapes=[fixed, second])])
+        if factorization != 'boundary':
             kw['factorization'] = 'nvf'
         res = wavebit.rcwa(**kw).solve()
         return np.asarray(res.R), np.asarray(res.T)

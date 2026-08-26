@@ -1,7 +1,7 @@
 # Boundary modeling — painting an overlap without staircasing the edges
 
 Written: 2026-08. Targets `wavebit/_core/boundary.py`, `_core/clipper.py`, `_core/polygon.py`,
-and the `combine='paint'` route through `_core/analytic.py::to_conv_mat_smooth_layers`.
+and the overlap route through `_core/analytic.py::to_conv_mat_smooth_layers`.
 
 ---
 
@@ -11,16 +11,16 @@ Two things a layer can need at once, and until now no path gave both:
 
 | path | tilted edge | overlapping shapes |
 |---|---|---|
-| raster | staircase | as drawn |
-| block | staircase | **painted** |
+| raster | staircase | as drawn (painted) |
+| block (removed) | staircase | **painted** |
 | smooth | **exact** | added (superposed) |
 | **boundary** | **exact** | **painted** |
 
-The block path paints later shapes over earlier ones, which is what a raster of the same recipe
-agrees with — but it decomposes shapes into axis-aligned blocks, so a tilted edge becomes a
-staircase. The smooth path transforms a tilted shape in closed form, but *sums* the shapes, so
-where two overlap the layer gets both contributions and the permittivity there is neither
-shape's. Asking for `combine='paint'` on the smooth path used to raise `NotImplementedError`.
+A raster paints — the later sample wins — but it staircases a tilted edge. So did the block
+path, which decomposed shapes into axis-aligned blocks. The smooth path transforms a tilted
+shape in closed form but *sums* the shapes, so where two overlap the layer would get both
+contributions and the permittivity there is neither shape's; asking it to paint used to raise
+`NotImplementedError`, and it now refuses an overlap outright and hands the layer here.
 
 The two cannot simply be mixed. `normal_vector_field_analytical` builds its field from each shape
 in turn and never asks which boundary survived the painting, so a hybrid would put a normal on an
@@ -65,7 +65,7 @@ matrices still Hermitian and `R + T` still exactly 1. The conversion was also se
 ## Using it
 
 ```python
-structure = [dict(background=1.0, combine='paint', shapes=[
+structure = [dict(background=1.0, shapes=[
     dict(type='rectangle', cx=0.40, cy=0.40, lx=0.34, ly=0.34, angle=0.0, material=4.0),
     dict(type='rectangle', cx=0.56, cy=0.56, lx=0.34, ly=0.34, angle=0.3, material=9.0),
 ])]
@@ -82,11 +82,13 @@ Shapes are in painting order — a later shape covers an earlier one. `rectangle
 `boundary.POLYGON_VERTICES` (256), which converges on the true shape at `O(1/n^2)` and puts that
 error far below the normal field's.
 
-**Routing is on the overlap, not on the spelling.** While no two shapes intersect, painting and
-adding describe the same structure, so the layer stays on the closed-form smooth path: exact,
-cheaper, and identical to `combine='add'` as it was before. Sending `'paint'` down a different
-path regardless would make two names for one structure return different numbers — measured 0.8%
-apart on disjoint rods, because the two paths extend the normal differently.
+**Routing is on the overlap, and nothing else says it.** While no two shapes intersect,
+painting and adding describe the same structure, so the layer stays on the closed-form smooth
+path: exact and cheaper. Routing every shape layer here regardless would move the answer on a
+layer that has no overlap at all — measured 0.8% apart on disjoint rods, because the two paths
+extend the normal differently. A `combine=` key chose the rule by name until 2026-08-27, when
+`'add'` was removed (its overlap is `eps_a + eps_b - eps_background`, which is not a material)
+and `'paint'` stopped being a choice.
 
 ### Which path a layer took
 
@@ -326,13 +328,18 @@ central differences is exactly what that layer would show on its own.
 
 The routing test of the previous section compares coordinates, and a tracer is not a coordinate:
 `analytic._primitives` reads a backend's refusal to hand over a value as "this is traced" and
-returns `None`, after which both `layer_needs_resolving` and `check_layer_combination` return
-without deciding anything. That is the right behaviour *given* the assumption it is written on — a
-traced call has already had its eager pass through `freeze_geometry`, and turning a differentiable
-sweep into an exception would be a worse bargain than the check is worth. But it is an assumption,
-not a check. `jax.jit` over a painted, overlapping layer with **no** frozen geometry does not
-raise and does not resolve: it sums the shapes and returns a different structure's answer. So the
-freeze is not only what makes the call fast, it is what makes it correct — take it, every step.
+returns `None`. That used to mean `layer_needs_resolving` returned without deciding anything,
+on the assumption that a traced call had already had its eager pass through `freeze_geometry`.
+It was an assumption, not a check: `jax.jit` over an overlapping layer with **no** frozen
+geometry did not raise and did not resolve — it summed the shapes and returned a different
+structure's answer.
+
+It now raises instead, for any traced layer of more than one shape. A single shape routes the
+same way whatever its parameters are, so it is not asked; two or more cannot be routed without
+knowing whether they meet. `check_layer_shapes` still steps aside under a trace, because the
+only thing it refuses — a shape wider than the period — is a question about *values*, and the
+eager freeze is where it gets asked. So the freeze is not only what makes the call fast, it is
+what makes it possible — take it, every step.
 
 ### What a frozen plan does and does not survive
 

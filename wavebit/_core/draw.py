@@ -173,8 +173,8 @@ def _shape_inside(shape, X, Y, basis, Px, Py):
     return count
 
 
-def _render_analytic_add(layer, X, Y, basis, Px, Py):
-    """The ``combine='add'`` structure: ``eps_base + sum_s (eps_s - eps_base) * indicator_s``.
+def _render_summed(layer, X, Y, basis, Px, Py):
+    """The summed structure: ``eps_base + sum_s (eps_s - eps_base) * indicator_s``.
 
     Read through :func:`~wavebit._core.analytic.shape_geometry` rather than off the shape dict,
     which is the whole reason that function exists -- a circle takes its diameter once, ``ly``
@@ -189,7 +189,7 @@ def _render_analytic_add(layer, X, Y, basis, Px, Py):
     return out
 
 
-# ================================================ path 2: analytic shapes, combine='paint'
+# ============================================ path 2: analytic shapes, painted where they overlap
 
 def _resolved_regions(shapes, period, basis=None):
     """``[(eps, [vertices, ...]), ...]`` -- the disjoint loops the boundary path holds.
@@ -335,13 +335,13 @@ def _band_limited(solver, layer, n):
                 ft = sum(_boundary.polygon_ft(xnp, V, KY, KX, basis) for V in loops)
                 grid = grid + (eps_s - eps_b) * ft
         else:
-            # `combine=` is passed, not assumed: `assemble_eps_coeffs` builds the summed rule
-            # and refuses an overlapping painted layer rather than answering for it. The branch
-            # above means the refusal never fires from here -- which is the point of stating it.
+            # Disjoint shapes, by the branch above: `assemble_eps_coeffs` sums, and where
+            # nothing overlaps the sum and the painting are the same structure. It refuses an
+            # overlap unconditionally, so a branch that stopped being right would raise here
+            # rather than draw a picture the solver does not build.
             grid = np.asarray(_analytic.assemble_eps_coeffs(
                 xnp, lay.get('shapes', []), lay.get('background', 1.0), half_width_u,
-                half_width_v, basis, np.complex128,
-                combine=lay.get('combine'))[0])
+                half_width_v, basis, np.complex128)[0])
     return _inverse_series(grid, half_width_u, half_width_v, n, n)
 
 
@@ -433,15 +433,14 @@ def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
                     raise NotImplementedError(
                         'a painted, overlapping layer on a skewed cell is not drawn yet: the '
                         'loops are Cartesian polygons and the scanline fill runs on cell rows, '
-                        'which stop being rows once the cell is sheared. Draw it with '
-                        "combine='add' if the shapes do not overlap, or raise the structure "
-                        'as a raster structure.')
+                        'which stop being rows once the cell is sheared. State the layer '
+                        'as a raster structure instead.')
                 xs = (np.arange(n) + 0.5) * period[0] / n
                 ys = (np.arange(n) + 0.5) * period[1] / n
                 values = _render_paint(lay, xs, ys, basis, period)
             else:
                 X, Y = sample_grid(xnp, (n, n), solver.lattice, np.float64)
-                values = _render_analytic_add(lay, X, Y, basis, *period)
+                values = _render_summed(lay, X, Y, basis, *period)
 
     return values if show == 'eps' else index_from_eps(_passive(values))
 

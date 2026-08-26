@@ -433,7 +433,7 @@ def test_a_painted_overlap_survives_a_unimodular_shear():
     overlap at all and shifted by ``(ox*Px, oy*Py)`` rather than along the lattice.
     """
     def painted(lattice):
-        structure = [{'background': 1.0, 'combine': 'paint', 'shapes': [
+        structure = [{'background': 1.0, 'shapes': [
             {'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 160.0, 'material': 5.76},
             {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'material': 9.0}]}]
         s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], truncation_order=[6, 6], thickness=[H],
@@ -449,20 +449,38 @@ def test_a_painted_overlap_is_not_the_same_as_summing_it():
     """Guards the test above from being vacuous: the two rules must give different answers.
 
     If painting and summing agreed here, agreeing across the shear would say nothing about the
-    resolver having run.
+    resolver having run. The summed arm is no longer reachable through a solve -- the builder
+    that computes it refuses an overlap since 2026-08-27 -- so it is taken at the coefficient
+    level, on the same shapes and the same sheared cell, and compared with what the solve's own
+    convolution matrix holds.
     """
+    from wavebit._core.analytic import assemble_eps_coeffs
+    import array_api_compat.numpy as xnp
+
     shapes = [{'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 160.0, 'material': 5.76},
               {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'material': 9.0}]
+    apart = [shapes[0], dict(shapes[1], cx=P / 2 + 200.0)]
 
-    def run(combine):
-        s = wavebit.rcwa(backend=0, structure=[{'background': 1.0, 'combine': combine,
-                                              'shapes': shapes}],
-                           period=[P, P], truncation_order=[6, 6], thickness=[H], wavelength=WL,
-                           top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
-                           factorization='nvf', lattice=SHEAR)
-        return float(np.sum(np.asarray(s.solve().T)))
+    def mean_eps(cell):
+        s = wavebit.rcwa(backend=0, structure=[{'background': 1.0, 'shapes': cell}],
+                         period=[P, P], truncation_order=[6, 6], thickness=[H], wavelength=WL,
+                         top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+                         factorization='nvf', lattice=SHEAR)
+        epz_i = np.asarray(s.eps_conv_matrices().epz_i[0])
+        return float(np.real(np.linalg.inv(epz_i)[0, 0]))
 
-    assert abs(run('paint') - run('add')) > 1e-3
+    # The summing builder answers the disjoint pair and refuses the overlapping one, which is
+    # the whole reason the painted arm has to exist.
+    lattice = as_lattice(period=[P, P], lattice=SHEAR)
+    eps_c, _ = assemble_eps_coeffs(xnp, apart, 1.0, 6, 6, lattice, xnp.complex128)
+    assert float(np.real(eps_c[12, 12])) == pytest.approx(mean_eps(apart), abs=1e-9)
+    with pytest.raises(ValueError, match='overlapping layer cannot be built here'):
+        assemble_eps_coeffs(xnp, shapes, 1.0, 6, 6, lattice, xnp.complex128)
+
+    # And the painted overlap is a different structure from the sum of the same two discs.
+    summed = 1.0 + sum((s['material'] - 1.0) * np.pi * (s['lx'] / 2) ** 2 / (P * P)
+                       for s in shapes)
+    assert abs(mean_eps(shapes) - summed) > 1e-3
 
 
 # --------------------------------------------------- paths a skew turned out not to break
@@ -765,7 +783,7 @@ def test_a_frozen_painting_plan_replays_on_a_skewed_cell(lattice, omit_centre):
 
     ``to_conv_mat_boundary_layer`` forwards ``lattice`` to ``shape_vertices``, ``plan_layer`` and
     ``conv_mats``, and the analytic twin forwards it to ``check_no_plan_still_fits``,
-    ``check_layer_combination`` and ``layer_needs_resolving``. The frozen branch's own check did
+    ``check_layer_shapes`` and ``layer_needs_resolving``. The frozen branch's own check did
     not get it, though its signature has had the parameter all along -- so it defaulted an
     omitted centre to ``(Px/2, Py/2)``, the centre of ``diag(|a1|, |a2|)``, while the eager pass
     beside it used the cell's. The two then disagreed about where the shape was, and the check
@@ -784,8 +802,7 @@ def test_a_frozen_painting_plan_replays_on_a_skewed_cell(lattice, omit_centre):
             a = dict(a, cx=P / 2, cy=P / 2)
         b = {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'material': 9.0}
         return wavebit.rcwa(backend=0, period=[P, P], truncation_order=[3, 3], thickness=[H],
-                            structure=[{'background': EPS_AIR, 'combine': 'paint',
-                                        'shapes': [a, b]}],
+                            structure=[{'background': EPS_AIR, 'shapes': [a, b]}],
                             wavelength=WL, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                             factorization='nvf', lattice=lattice, normal_grid=64)
 

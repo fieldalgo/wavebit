@@ -42,7 +42,7 @@ def test_every_modeling_path_answers_with_the_same_shaped_object():
     paths = {
         'raster+nvf': wavebit.rcwa(structure=disc_raster(96), factorization='nvf', **BASE),
         'smooth': wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **BASE),
-        'boundary': wavebit.rcwa(structure=[dict(background=1.0, combine='paint', shapes=[
+        'boundary': wavebit.rcwa(structure=[dict(background=1.0, shapes=[
             dict(type='rectangle', cx=0.40, cy=0.40, lx=0.34, ly=0.34, material=4.0),
             dict(type='rectangle', cx=0.56, cy=0.56, lx=0.34, ly=0.34, angle=0.3,
                  material=9.0)])], **BASE),
