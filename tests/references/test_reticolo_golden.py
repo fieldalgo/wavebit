@@ -138,8 +138,7 @@ def test_reticolo_agreement_holds_on_every_backend(backend):
     """The oracle is about the physics, so it cannot be a NumPy-only result."""
     pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
     if backend == 1:
-        import importlib
-        importlib.import_module('wavebit.on_jax')          # enables x64
+        wavebit.enable_x64()
 
     g = _golden()
     name = 'te_oblique'

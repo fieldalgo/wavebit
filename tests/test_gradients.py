@@ -18,7 +18,6 @@ So each case compares against a central difference rather than a stored value: t
 that the derivative is the real one. Any parameter whose finite difference is itself zero is
 reported as such rather than counted as a pass.
 """
-import importlib
 
 import numpy as np
 import pytest
@@ -52,7 +51,7 @@ VECTOR_BASE = dict(period=[300.0, 300.0], thickness=[205.0], theta=0.1, truncati
 def _backend(name):
     pytest.importorskip(name)
     if name == 'jax':
-        importlib.import_module('wavebit.on_jax')       # enables x64
+        wavebit.enable_x64()
         import jax.numpy as jnp
         return 1, (lambda v: jnp.asarray(v, dtype=jnp.float64))
     import torch

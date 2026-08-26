@@ -32,7 +32,6 @@ lossless test.
 For an absorbing superstrate the *amplitude* is the meaningful check: incident power in an
 absorbing medium is convention-dependent, so ``R`` there is not compared to anything.
 """
-import importlib
 
 import numpy as np
 import pytest
@@ -308,9 +307,7 @@ def test_complex_n_bot_keeps_full_precision_on_every_backend(backend):
     """
     pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
     if backend == 1:
-        # via importlib: a plain `import wavebit.on_jax` here would rebind `wavebit`
-        # as a local for the whole function, breaking the torch branch that skips it.
-        importlib.import_module('wavebit.on_jax')       # enables x64
+        wavebit.enable_x64()
 
     ns, ds = [1.0, 1.5, AU], [20.0]
     want = solver_R(ns, ds, WL, 0.3, 'te')                  # numpy reference

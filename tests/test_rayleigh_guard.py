@@ -137,7 +137,7 @@ def test_exact_rayleigh_point_solves_correctly(backend, truncation_order, name, 
     """
     if backend == 1:
         pytest.importorskip('jax')
-        import wavebit.on_jax  # noqa: F401  -- lifts x64 before the structure is built
+        wavebit.enable_x64()
     elif backend == 2:
         pytest.importorskip('torch')
 
@@ -438,7 +438,7 @@ def test_auto_detune_keeps_gradients_flowing_through_the_retry():
     nearby problem's — finite, and nonzero for a parameter the reflectance depends on.
     """
     jax = pytest.importorskip('jax')
-    import wavebit.on_jax  # noqa: F401
+    wavebit.enable_x64()
     import jax.numpy as jnp
 
     def loss(thickness):
@@ -466,7 +466,7 @@ def test_exact_zero_eigenvalue_is_loud_on_every_backend():
     for backend, name in ((0, 'numpy'), (1, 'jax'), (2, 'torch')):
         if backend == 1:
             pytest.importorskip('jax')
-            import wavebit.on_jax  # noqa: F401
+            wavebit.enable_x64()
         elif backend == 2:
             pytest.importorskip('torch')
 
@@ -507,7 +507,7 @@ def test_guards_read_concrete_jax_and_torch_values():
 
 
 def _jax_arrays():
-    import wavebit.on_jax  # noqa: F401
+    wavebit.enable_x64()
     import jax.numpy as jnp
     return jnp.asarray([np.nan]), jnp.asarray([9.0])
 
@@ -526,7 +526,7 @@ def test_guards_are_skipped_under_jit_and_do_not_break_the_trace():
     traced non-finite result still returns quietly. That gap is real and is the accepted cost.
     """
     jax = pytest.importorskip('jax')
-    import wavebit.on_jax  # noqa: F401
+    wavebit.enable_x64()
     import jax.numpy as jnp
 
     def f(x):
@@ -551,7 +551,7 @@ def test_grad_is_guarded_and_still_differentiates():
     checked side of the line. The gradient itself must still be finite and still flow.
     """
     jax = pytest.importorskip('jax')
-    import wavebit.on_jax  # noqa: F401
+    wavebit.enable_x64()
     import jax.numpy as jnp
 
     def loss(n):

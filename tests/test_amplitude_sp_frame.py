@@ -216,7 +216,7 @@ def test_the_traced_backends_quote_the_same_frame(backend, name):
     """
     pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
     if backend == 1:
-        import wavebit.on_jax  # noqa: F401  -- lifts x64 before any array is built
+        wavebit.enable_x64()
 
     a = _solve(_UC, (_PX, _PY), (_FX, _FY), np.pi / 2, _PSI, backend=backend)
     b = _solve(np.transpose(_UC, (0, 2, 1)), (_PY, _PX), (_FY, _FX), 0.0, -_PSI,

@@ -41,7 +41,7 @@ from wavebit._core.lattice import as_lattice
 pytest.importorskip('jax')
 import jax                                                     # noqa: E402
 import jax.numpy as jnp                                        # noqa: E402
-import wavebit.on_jax                                        # noqa: E402,F401  (enables x64)
+wavebit.enable_x64()
 
 from wavebit._core.analytic import (                         # noqa: E402
     assemble_eps_coeffs, normal_vector_field_analytical)

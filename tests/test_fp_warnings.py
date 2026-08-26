@@ -428,7 +428,7 @@ def test_a_traced_single_precision_solve_says_it_could_not_be_checked():
     traced double-precision one stays silent, which is what keeps the message meaningful.
     """
     jax = pytest.importorskip('jax')
-    import wavebit.on_jax          # noqa: F401  -- enables x64 before any array is made
+    wavebit.enable_x64()
     import jax.numpy as jnp
 
     theta = np.arcsin(np.sqrt(1.6 ** 2 + 1.2 ** 2 + 1e-4, dtype=np.complex128))
@@ -589,7 +589,7 @@ def test_the_remaining_x64_ordering_gap_is_reported():
     """JAX arriving *after* wavebit is the ordering the early lift cannot reach.
 
     Nothing has imported JAX yet when ``import wavebit`` runs, so there is no config to
-    change; ``wavebit.on_jax`` enables x64 later, at the first solve, and an array built
+    change; the backend lifts it later, at the first solve, and an array built
     before that is complex64. The setter widens it without recovering anything — measured
     ``|R| = 3.94`` against a true 0.67, with every dtype in sight reading complex128, which was
     read as a solver bug before it was read as this.
@@ -613,6 +613,59 @@ def test_the_remaining_x64_ordering_gap_is_reported():
                 complex_dtype=0, fourier_coefficients='sampled', factorization='li')
         assert any(issubclass(r.category, PrecisionLossWarning) for r in rec), \\
             'the remaining ordering gap went unreported'
+        print('OK')
+    """)
+
+
+def test_the_remedy_the_warning_names_actually_removes_it():
+    """The message tells the caller to run `wavebit.enable_x64()`. This is that, run.
+
+    The test above asserts the *category* of the warning and nothing about what it says to do,
+    which is the half that can rot: the message used to say "Import wavebit.on_jax first" -- a
+    statement that reads as a no-op, names a private path, and needed a comment every one of the
+    33 places this suite used it. Nothing checked that following it worked, and nothing would
+    have noticed when the module it named moved.
+
+    Same scene as the gap test, one line earlier. The array must come back complex128 and the
+    solve must warn about nothing.
+    """
+    pytest.importorskip('jax')
+    assert 'OK' in _in_subprocess("""
+        import warnings
+        import wavebit
+        wavebit.enable_x64()                                    # the remedy, before the array
+        import jax.numpy as jnp
+        import numpy as np
+        from wavebit._core.backend import PrecisionLossWarning
+
+        theta = jnp.asarray(0.4 + 0.3j)
+        assert theta.dtype == jnp.complex128, theta.dtype       # the trap is disarmed
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter('always')
+            wavebit.rcwa(
+                backend=1, psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, truncation_order=[5],
+                wavelength=900e-9, period=[2000e-9],
+                structure=np.array([[[0, 1, 0, 1, 1, 1]]]) * 24 + 1, thickness=[100e-9],
+                complex_dtype=0, fourier_coefficients='sampled', factorization='li')
+        assert not [r for r in rec if issubclass(r.category, PrecisionLossWarning)], \\
+            'the documented remedy did not remove the warning it is documented against'
+        print('OK')
+    """)
+
+
+def test_enable_x64_does_not_import_jax_to_find_out_whether_it_can():
+    """It uses `importlib.util.find_spec`, and that matters for `import wavebit`.
+
+    `wavebit/__init__.py` defines it, so anything the *body* imports at module scope would be
+    pulled in by `import wavebit`, which
+    `test_material.py::test_import_wavebit_does_not_import_jax` exists to forbid. The imports
+    are inside the function, and `find_spec` answers "is JAX installed" without loading it.
+    """
+    assert 'OK' in _in_subprocess("""
+        import sys
+        import wavebit
+        assert 'jax' not in sys.modules, 'importing wavebit imported jax'
+        assert callable(wavebit.enable_x64)
         print('OK')
     """)
 

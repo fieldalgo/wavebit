@@ -27,7 +27,7 @@ from wavebit._core.backend import eig
 pytest.importorskip('jax')
 import jax                                                    # noqa: E402
 import jax.numpy as jnp                                       # noqa: E402
-import wavebit.on_jax                                       # noqa: E402,F401  (enables x64)
+wavebit.enable_x64()
 
 
 def _rand(rng, n):

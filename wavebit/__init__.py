@@ -31,6 +31,50 @@ def _enable_jax_x64_if_already_imported():
 
 _enable_jax_x64_if_already_imported()
 
+
+def enable_x64():
+    """Lift JAX's 32-bit cap now, so arrays built from here on can hold double precision.
+
+    Call this before building any JAX array wavebit will be handed, when ``import jax`` came
+    after ``import wavebit``::
+
+        import wavebit
+        wavebit.enable_x64()
+        import jax.numpy as jnp
+        theta = jnp.asarray(0.4 + 0.3j)                 # complex128, not complex64
+
+    Without it that array is complex64, and the setter's widening cannot recover the digits
+    already gone: a solve reporting ``complex_dtype=0`` everywhere ran with ~8 significant
+    digits missing from its incidence angle and returned ``|R| = 3.94`` against a true 0.67.
+    See :class:`~wavebit._core.backend.PrecisionLossWarning`, which is what says so at runtime,
+    and ``docs/branch-cuts.md`` for the case.
+
+    Two other things already lift it, and this exists because neither covers every ordering.
+    ``import wavebit`` lifts it if JAX is *already* loaded, and the JAX backend lifts it when it
+    is first used. The gap is JAX arriving after wavebit and being used before the first solve,
+    which is exactly the ordering above.
+
+    It lifts a **cap**, not a choice. With x64 off, ``jnp.asarray(x, jnp.float64)`` still gives
+    float32, so double precision cannot be opted into at all; with it on, ``jnp.asarray(x,
+    jnp.float32)`` still gives float32, and ``complex_dtype`` continues to select the solve's
+    own precision either way. The cost is that JAX's default dtype becomes 64-bit for the
+    caller's own code too, which is why nothing does this on plain ``import wavebit``.
+
+    Idempotent, and it does not import JAX unless JAX is installed -- but it does raise if it
+    is not, rather than quietly doing nothing. Asking for double precision and silently not
+    getting it is the failure this whole path exists to stop.
+    """
+    import importlib.util
+
+    if importlib.util.find_spec('jax') is None:
+        raise ImportError(
+            'enable_x64() lifts JAX\'s 32-bit cap, and JAX is not installed. '
+            'Install it (`pip install jax`) or drop the call -- NumPy and PyTorch have no '
+            'such cap, and `complex_dtype` selects the solve precision on every backend.')
+
+    import jax
+    jax.config.update('jax_enable_x64', True)
+
 from .main import rcwa
 from ._core.backend import (AutoDetuneWarning, AxisNameWarning, PrecisionLossWarning, RayleighPointWarning,
                             UnphysicalResultWarning, UnresolvedBranchWarning,
@@ -76,6 +120,8 @@ __all__ = [
     'oblique',
     'rectangular',
     'rcwa',
+    # Defined in this file rather than imported -- see `enable_x64` above.
+    'enable_x64',
     'AutoDetuneWarning',
     'AxisNameWarning', 'PrecisionLossWarning', 'RayleighPointWarning',
     'UnphysicalResultWarning', 'UnresolvedBranchWarning',

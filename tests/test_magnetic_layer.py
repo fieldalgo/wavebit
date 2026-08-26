@@ -624,7 +624,7 @@ def test_the_permeability_a_reconstructed_hz_depends_on_is_differentiable():
     being checked, and one abscissa is enough to separate "wrong gradient" from "no gradient".
     """
     pytest.importorskip('jax')
-    import wavebit.on_jax                                # noqa: F401 -- lifts x64 first
+    wavebit.enable_x64()
     import jax
     import jax.numpy as jnp
 

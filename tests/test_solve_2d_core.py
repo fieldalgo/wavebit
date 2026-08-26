@@ -15,8 +15,8 @@ from wavebit._core.solve_2d import solve_2d
 # miss their 1e-10 tolerance and the gradient checks miss 1e-6. Guarded because jax is optional
 # -- when it is absent the jax cases skip themselves via `pytest.importorskip`.
 #
-# Without it this file passes only when some *other* test module has already imported
-# `wavebit.on_jax`, because x64 is a cap set at import time and cannot be raised afterwards.
+# Without it this file passes only when some *other* test module has already lifted the cap,
+# because x64 is a cap set at import time and cannot be raised afterwards.
 # The whole suite was green while `pytest tests/test_solve_2d_core.py` alone failed 4 of these
 # -- three `[*-jax]` cross-backend cases and the gradient check -- and a failure that looks
 # like a real cross-backend physics bug is exactly what that hides.
@@ -25,7 +25,7 @@ from wavebit._core.solve_2d import solve_2d
 # later cannot silently inherit float32. `test_factorization_core.py` carries the same guard
 # for the same reason, found the same way.
 try:
-    import wavebit.on_jax                                    # noqa: E402,F401
+    wavebit.enable_x64()
 except ImportError:
     pass
 

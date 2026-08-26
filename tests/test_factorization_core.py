@@ -31,10 +31,10 @@ from wavebit._core.solve_2d import solve_2d
 # At the top of the module rather than beside each `import jax.numpy`, which is the idiom
 # elsewhere in this suite, because the jax paths here are scattered across `_to` and three
 # gradient tests: a jax case added later would silently inherit float32. That is how this file
-# came to depend on *another* test module importing `wavebit.on_jax` first -- the whole suite
-# passed while `pytest tests/test_factorization_core.py` alone failed nine of them.
+# came to depend on *another* test module lifting the cap first -- the whole suite passed
+# while `pytest tests/test_factorization_core.py` alone failed nine of them.
 try:
-    import wavebit.on_jax                                    # noqa: E402,F401
+    wavebit.enable_x64()
 except ImportError:
     pass
 

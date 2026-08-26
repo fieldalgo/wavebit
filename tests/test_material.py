@@ -34,7 +34,7 @@ from wavebit._core.domain import as_material
 try:
     import jax
     import jax.numpy as jnp
-    import wavebit.on_jax                       # noqa: F401  (importing it lifts x64)
+    wavebit.enable_x64()
 except ImportError:                             # pragma: no cover - jax is an extra
     jax = jnp = None
 

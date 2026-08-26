@@ -335,8 +335,7 @@ def test_backside_holds_on_every_backend(backend):
     """Same physics through the same single-source core, so the backends may not diverge."""
     pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
     if backend == 1:
-        import importlib
-        importlib.import_module('wavebit.on_jax')          # enables x64
+        wavebit.enable_x64()
 
     ref = wavebit.rcwa(tetm='te', theta=0.3, incidence_side='bottom',
                          **GRATING_KW).solve()

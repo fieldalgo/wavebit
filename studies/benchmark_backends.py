@@ -483,7 +483,7 @@ def main():
     ap.add_argument('--budget', type=float, default=7200, help='wall-clock allowance, seconds')
     args = ap.parse_args()
 
-    importlib.import_module('wavebit.on_jax')
+    wavebit.enable_x64()
     importlib.import_module('wavebit.on_torch')
 
     budget = Budget(args.budget)

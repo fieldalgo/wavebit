@@ -36,7 +36,7 @@ from wavebit._core import analytic as _an
 pytest.importorskip('jax')
 import jax                                                     # noqa: E402
 import jax.numpy as jnp                                        # noqa: E402
-import wavebit.on_jax                                        # noqa: E402,F401  (enables x64)
+wavebit.enable_x64()
 
 P = 0.77
 BASE = dict(period=[P, P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,

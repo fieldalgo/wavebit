@@ -12,7 +12,6 @@ compression decides itself inside a gradient, the normal field cannot. That boun
 pinning, because on the near side a frozen record is optional — and an optional record is one
 that cannot go stale.
 """
-import importlib
 
 import numpy as np
 import pytest
@@ -159,7 +158,7 @@ def test_a_frozen_geometry_makes_the_vector_path_traceable(name, make, start):
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    importlib.import_module('wavebit.on_jax')
+    wavebit.enable_x64()
 
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[3, 3], top=1.0, bot=1.0,
                theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0)
@@ -199,7 +198,7 @@ def test_a_stale_frozen_geometry_is_refused_rather_than_answered():
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    importlib.import_module('wavebit.on_jax')
+    wavebit.enable_x64()
     from wavebit._core.modeler import StaleGeometryError
 
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[3, 3], top=1.0, bot=1.0,
@@ -527,7 +526,7 @@ def test_a_length_that_moves_without_reordering_reuses_the_compilation():
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    importlib.import_module('wavebit.on_jax')
+    wavebit.enable_x64()
 
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[3, 3], top=1.0, bot=1.0,
                theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0)

@@ -228,7 +228,7 @@ def test_normal_incidence_solves_without_a_nudge(backend, case, phi, name):
     """
     if backend == 1:
         pytest.importorskip('jax')
-        import wavebit.on_jax  # noqa: F401  -- lifts x64 before any array is built
+        wavebit.enable_x64()
     elif backend == 2:
         pytest.importorskip('torch')
 
@@ -424,7 +424,7 @@ def test_gradient_flows_through_the_azimuth():
     which is why it cannot stand in for this test.
     """
     jax = pytest.importorskip('jax')
-    import wavebit.on_jax  # noqa: F401
+    wavebit.enable_x64()
     import jax.numpy as jnp
 
     def loss(period, structure, truncation_order, phi):
@@ -455,7 +455,7 @@ def test_torch_agrees_with_jax_on_the_gradient_through_the_azimuth():
     """
     torch = pytest.importorskip('torch')
     pytest.importorskip('jax')
-    import wavebit.on_jax  # noqa: F401
+    wavebit.enable_x64()
     import jax
     import jax.numpy as jnp
 
@@ -491,7 +491,7 @@ def test_the_denominator_clamp_is_what_saves_the_gradient():
     reading only the forward result.
     """
     jax = pytest.importorskip('jax')
-    import wavebit.on_jax  # noqa: F401
+    wavebit.enable_x64()
     import jax.numpy as jnp
 
     ky = jnp.asarray([0.0, 0.2, 0.3], dtype=jnp.complex128)

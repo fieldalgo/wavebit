@@ -9,7 +9,6 @@ The ellipse is the exception — see ``LEGACY_PARITY`` below and test_modeler_el
 """
 import pathlib
 
-import importlib
 
 import numpy as np
 import pytest
@@ -408,7 +407,7 @@ def test_vector_path_differentiates_wrt_edge_positions(backend, name):
     """
     pytest.importorskip(name)
     if backend == 1:
-        importlib.import_module('wavebit.on_jax')
+        wavebit.enable_x64()
 
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[3, 3],
                top=1.0, bot=1.0, wavelength=900.0, psi=np.pi / 4)

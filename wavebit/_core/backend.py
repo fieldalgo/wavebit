@@ -276,14 +276,16 @@ def _real_itemsize(dtype):
 def check_input_precision(name, value, target_dtype):
     """Warn when ``value`` is already narrower than ``target_dtype`` asks for.
 
-    The case this exists for: ``wavebit/on_jax/__init__.py`` enables ``jax_enable_x64``, and
-    it does so on purpose only when the JAX backend is *first used*, since the setting is
-    process-wide and belongs to the caller. But `import wavebit` alone does not pull that
-    module in, so an array built between the two is silently single precision::
+    The case this exists for: JAX's 32-bit cap is lifted by :func:`wavebit.enable_x64`, and
+    otherwise only when the JAX backend is *first used* -- the setting is process-wide and
+    belongs to the caller, so nothing flips it on plain ``import wavebit`` unless JAX was
+    already loaded. An array built before that moment is silently single precision::
 
         import jax.numpy as jnp, wavebit
         theta = jnp.asarray(0.4 + 0.3j)          # complex64 -- x64 is not on yet
         wavebit.rcwa(backend=1, theta=theta, complex_dtype=0, ...)   # asks for double
+
+    ``wavebit.enable_x64()`` before the second line is the fix.
 
     ``jnp.array(theta, dtype=complex128)`` in the setter then promotes it without recovering
     anything, and the solve runs with ~8 significant digits missing from its incidence angle.
@@ -301,10 +303,10 @@ def check_input_precision(name, value, target_dtype):
     warnings.warn(
         f'{name} was given at {8 * have}-bit precision but this solve runs at '
         f'{8 * target}-bit, and widening it cannot recover the digits already lost. If this '
-        'is JAX, the usual cause is building the array before the first solve — '
-        '`jax_enable_x64` is enabled when wavebit.on_jax is first imported, not by '
-        '`import wavebit`. Import wavebit.on_jax first, or build the array after the '
-        'first solve.',
+        'is JAX, the usual cause is building the array before JAX\'s 32-bit cap was lifted: '
+        'call `wavebit.enable_x64()` once, before building it. `import wavebit` lifts the cap '
+        'only if JAX was already loaded, and the backend lifts it at the first solve, which '
+        'is too late for an array made before that.',
         PrecisionLossWarning, stacklevel=3)
 
 

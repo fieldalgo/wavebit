@@ -436,7 +436,7 @@ def test_smm_2d_matches_conical_on_y_invariant_stack():
 
 def _to(backend, x):
     if backend == 'jax':
-        import wavebit.on_jax     # noqa: F401  (enables x64; RCWA needs double precision)
+        wavebit.enable_x64()
         import jax.numpy as jnp
         return jnp.asarray(x)
     import torch
@@ -471,8 +471,7 @@ def test_smm_field_cross_backend(case, backend, name):
     """The amplitude recovery is Array-API code like the rest — same field on every backend."""
     pytest.importorskip(name)
     if name == 'jax':
-        # `as _`: a plain `import wavebit.on_jax` would rebind `wavebit` as a local.
-        import wavebit.on_jax as _   # noqa: F401  (enables x64; RCWA needs double precision)
+        wavebit.enable_x64()
     kwargs = case[1]
     _, reference = _field('SMM', kwargs, sample_x=5, sample_y=5, sample_z=4)
 
@@ -489,7 +488,7 @@ def test_gradient_jax_torch_fd(index):
     """d(sum T)/ds where s scales a real perturbation of a layer's eps-conv matrix."""
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
-    import wavebit.on_jax          # noqa: F401  (enables x64)
+    wavebit.enable_x64()
     import jax.numpy as jnp
 
     kwargs = dict(CASES_1D[index][1], theta=0.3)
@@ -532,7 +531,7 @@ def test_gradient_jax_torch_fd(index):
 def test_jit_traceable_jax():
     """The SMM cascade is jittable: no data-dependent branching on traced values."""
     jax = pytest.importorskip('jax')
-    import wavebit.on_jax          # noqa: F401  (enables x64)
+    wavebit.enable_x64()
     import jax.numpy as jnp
 
     _, inputs = _core_inputs(CASES_1D[0][1])
