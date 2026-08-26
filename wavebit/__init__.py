@@ -1,7 +1,7 @@
 def _enable_jax_x64_if_already_imported():
     """Lift JAX's 32-bit cap now, if the caller has JAX loaded.
 
-    ``wavebit/on_jax/__init__.py`` enables ``jax_enable_x64`` when the JAX backend is first
+    ``wavebit/backends/jax_backend.py`` enables ``jax_enable_x64`` when the JAX backend is first
     *used*. That was chosen so the process-wide setting is not touched on behalf of a caller
     who never asks for JAX, and that half still holds — this does not import JAX, it only acts
     when JAX is already there.

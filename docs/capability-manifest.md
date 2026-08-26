@@ -5,8 +5,9 @@ Written: 2026-08-11.
 Targets:
 - `wavebit/manifest.py` — the document
 - `tests/test_manifest.py` — what keeps it true
-- `wavebit/_core/engine.py` — the refusal tables it reads
-- `wavebit/on_numpy/emsolver/rcwa.py` — the `structure` setter whose type dispatch it describes
+- `wavebit/_core/engine.py` — the refusal tables it reads, and the `structure` setter whose
+  type dispatch it describes. Those were two entries until the per-backend copies folded into
+  `_core`; the second pointed at the NumPy backend, which no longer holds that setter.
 
 ---
 

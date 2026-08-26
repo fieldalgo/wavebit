@@ -320,7 +320,7 @@ work.
 
 ### The x64 ordering trap, and why it now warns
 
-`wavebit/on_jax/__init__.py` enables `jax_enable_x64`, and it does so deliberately late: the
+`wavebit/backends/jax_backend.py` enables `jax_enable_x64`, and it does so deliberately late: the
 setting is process-wide and belongs to the caller, so it happens when the JAX backend is first
 *used*, not on `import wavebit`. An array built in the gap between the two is silently
 complex64:

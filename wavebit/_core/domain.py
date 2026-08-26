@@ -64,7 +64,7 @@ def _register_pytree_if_jax_loaded():
     the same defect class as the aux_data bugs already fixed on this branch, where a value
     that should have been a child was carried as static metadata.
 
-    Registration is lazy for the reason ``on_jax/__init__.py`` exists at all: ``import
+    Registration is lazy for the reason ``backends/jax_backend.py`` lifts x64 on import: ``import
     wavebit`` must not import JAX on behalf of a caller who will never use it, and importing
     JAX has real side effects here (that module flips ``jax_enable_x64`` process-wide). So
     this reads ``sys.modules`` and never imports -- the same "act only if JAX is already

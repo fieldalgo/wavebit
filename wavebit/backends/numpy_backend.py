@@ -1,6 +1,12 @@
+"""The NumPy backend: the namespace it computes in, and the classes `rcwa(backend=0)` builds.
+
+Was `wavebit/on_numpy/`, three files and two `__init__.py` deep -- a layout that was accurate
+when `on_numpy` held a whole solver. It holds no solver now; the physics is in `_core` and what
+is left here is which namespace to call and which integer this backend is.
+"""
 import array_api_compat.numpy as _xp
 
-from ..._core.engine import CoreSolveMixin
+from .._core.engine import CoreFactorizationMixin, CoreSolveMixin
 
 
 class _BaseRCWA(CoreSolveMixin):
@@ -20,3 +26,18 @@ class _BaseRCWA(CoreSolveMixin):
     #: `_tree_unflatten` hands it straight back to `__init__` on every jitted call.
     _BACKEND_ID = 0
 
+
+class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
+    """The NumPy solver, which is the two mixins and the declared members on `_BaseRCWA`.
+
+    Empty on purpose. Everything this class used to hold -- a 104-line constructor -- is in
+    `CoreFactorizationMixin.__init__`, and everything NumPy does differently is a declared
+    member one level down. The class survives because it is the name `rcwa(backend=0)` builds
+    and the MRO position that pairs the two halves.
+    """
+
+
+class SolverNumpy(RCWANumpy):
+
+    def __init__(self, *args, **kwargs):
+        RCWANumpy.__init__(self, *args, **kwargs)

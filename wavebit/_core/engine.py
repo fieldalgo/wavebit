@@ -305,7 +305,7 @@ _HALF_PI_F32_BELOW = float(_np.nextafter(_np.float32(_np.pi / 2), _np.float32(0)
 def device_scoped(func):
     """Run ``func`` inside the solver's own device scope.
 
-    Replaces a `jax_device_set` that lived in `on_jax` and named `jax.default_device`
+    Replaces a `jax_device_set` that lived in the JAX backend and named `jax.default_device`
     directly. The five methods it decorates all have counterparts on the other two backends,
     so the decorator has to stop being one backend's before those bodies can become one body.
 
@@ -2309,7 +2309,7 @@ class CoreFactorizationMixin:
         ``geometry`` is optional: omit it and each discrete decision is auto-detected from the
         concrete structure. It is accepted so that backend-agnostic code can hand over the same
         frozen geometry JAX's jitted override *requires* -- see
-        :meth:`wavebit.on_jax.emsolver.rcwa.RCWAJax.solve_field`, which overrides this, and
+        :meth:`wavebit.backends.jax_backend.RCWAJax.solve_field`, which overrides this, and
         ``solve_field_eager`` there, which is this method under its other name.
 
         Naming the field here does not declare one: ``answers='field'`` still has to be on the

@@ -26,6 +26,7 @@ whatever the normal field says, so ``R + T == 1`` to 1e-15 while the cell is bei
 it is asserted only as a liveness check, to catch a scene that stopped solving at all.
 """
 import itertools
+import pathlib
 
 import numpy as np
 import pytest
@@ -644,8 +645,7 @@ def test_the_solver_wrapper_adds_no_parameters_of_its_own(backend):
     """
     import inspect
 
-    module = {0: 'wavebit.on_numpy.solver', 1: 'wavebit.on_jax.solver',
-              2: 'wavebit.on_torch.solver'}[backend]
+    module = f'wavebit.backends.{["numpy", "jax", "torch"][backend]}_backend'
     name = {0: 'SolverNumpy', 1: 'SolverJax', 2: 'SolverTorch'}[backend]
     cls = getattr(__import__(module, fromlist=[name]), name)
 
@@ -677,9 +677,9 @@ def test_the_scene_is_built_by_one_constructor_for_all_three_backends():
     from wavebit._core.engine import CoreSolveMixin
 
     shared = CoreSolveMixin.__init__
-    for backend, module in ((0, 'wavebit.on_numpy.emsolver._base'),
-                            (1, 'wavebit.on_jax.emsolver._base'),
-                            (2, 'wavebit.on_torch.emsolver._base')):
+    for backend, module in ((0, 'wavebit.backends.numpy_backend'),
+                            (1, 'wavebit.backends.jax_backend'),
+                            (2, 'wavebit.backends.torch_backend')):
         base = __import__(module, fromlist=['_BaseRCWA'])._BaseRCWA
         assert base.__init__ is shared, (
             f'backend {backend} declares its own `_BaseRCWA.__init__` again. If it needs to do '
@@ -747,8 +747,7 @@ def test_the_public_class_declares_which_backend_it_is_and_nothing_else(backend)
     Both halves are asserted, because either alone passes while the other is broken: the class
     must answer its own id when nothing is named, and must still take an explicit one.
     """
-    module = {0: 'wavebit.on_numpy.emsolver.rcwa', 1: 'wavebit.on_jax.emsolver.rcwa',
-              2: 'wavebit.on_torch.emsolver.rcwa'}[backend]
+    module = f'wavebit.backends.{["numpy", "jax", "torch"][backend]}_backend'
     name = {0: 'RCWANumpy', 1: 'RCWAJax', 2: 'RCWATorch'}[backend]
     cls = getattr(__import__(module, fromlist=[name]), name)
 
@@ -765,3 +764,33 @@ def test_the_public_class_declares_which_backend_it_is_and_nothing_else(backend)
     assert cls(backend=7, **kw).backend == 7, (
         'an explicit `backend=` was ignored -- the JAX pytree passes one back on every jitted '
         'call, so a constructor that overrides it rebuilds a solver under a different cache key')
+
+
+def test_importing_a_backend_does_not_import_the_other_two():
+    """One module per backend, and reaching for one must not load the frameworks it does not need.
+
+    `wavebit/backends/` replaced `on_numpy/`, `on_jax/` and `on_torch/`, three packages that
+    were four levels deep and held about 500 lines between them. A package `__init__` that
+    imported all three would make `rcwa(backend=0)` pull in JAX and PyTorch -- which is what
+    the empty `wavebit/backends/__init__.py` is for, and empty is not self-evidently deliberate.
+
+    Checked in a subprocess, because `sys.modules` is process state and this whole suite has
+    every backend loaded by the time it runs.
+    """
+    import subprocess
+    import sys
+
+    for backend, absent in ((0, ('jax', 'torch')), (1, ('torch',)), (2, ('jax',))):
+        if backend:
+            pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+        code = (
+            'import sys, numpy as np, wavebit\n'
+            f'wavebit.rcwa(backend={backend}, structure=np.ones((1, 4, 4)), period=[400., 400.],\n'
+            '             truncation_order=[1, 1], thickness=[150.], wavelength=900.).solve()\n'
+            f'print([m for m in {absent!r} if m in sys.modules])\n')
+        got = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True,
+                             cwd=str(pathlib.Path(__file__).resolve().parent.parent))
+        assert got.returncode == 0, got.stderr[-800:]
+        assert got.stdout.strip() == '[]', (
+            f'solving on backend {backend} imported {got.stdout.strip()}; the backends package '
+            f'must stay empty so each module is reached only when it is asked for')

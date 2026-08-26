@@ -174,7 +174,7 @@ def test_the_rebuild_names_its_arguments():
     import ast
     import inspect
 
-    from wavebit.on_jax import solver as jax_solver
+    from wavebit.backends import jax_backend as jax_solver
 
     tree = ast.parse(inspect.getsource(jax_solver))
     body = next(n for n in ast.walk(tree)
@@ -212,8 +212,7 @@ def test_every_constructor_parameter_is_carried_by_the_pytree():
     """
     import inspect
 
-    from wavebit.on_jax.emsolver.rcwa import RCWAJax
-    from wavebit.on_jax.solver import CHILD_NAMES
+    from wavebit.backends.jax_backend import CHILD_NAMES, RCWAJax
 
     _, aux = _scene()._tree_flatten()
     carried = set(CHILD_NAMES) | set(aux)

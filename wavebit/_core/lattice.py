@@ -134,7 +134,8 @@ class Lattice:
 def _register_pytree_if_jax_loaded():
     """Register :class:`Lattice` as a JAX pytree, if JAX is in the process already.
 
-    Lazy for the reason ``on_jax/__init__.py`` exists: ``import wavebit`` must not import JAX
+    Lazy for the reason ``backends/jax_backend.py`` is imported only on use: ``import wavebit``
+    must not import JAX
     for a caller who will never use it, and importing it here flips ``jax_enable_x64``
     process-wide. Reads ``sys.modules`` and never imports -- the same pattern as
     :func:`wavebit._core.domain._register_pytree_if_jax_loaded`, which the docstring there

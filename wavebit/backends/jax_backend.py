@@ -1,5 +1,192 @@
-from .emsolver.rcwa import RCWAJax
-from .optimizer.optimizer import OptimizerJax
+"""The JAX backend: the namespace, the device scope, the pytree, and the optimizer mixin.
+
+Was `wavebit/on_jax/`, five files deep. See :mod:`wavebit.backends.numpy_backend` for why the
+depth went.
+
+**Importing this module lifts JAX's 32-bit cap**, and that is deliberate rather than a side
+effect nobody chose: RCWA needs double precision, and with x64 off JAX silently truncates
+float64 and complex128 at array creation. It happens here, on first use of this backend, rather
+than on `import wavebit`, because the setting is process-wide and belongs to the caller. The
+line sits above every other import in this file for the reason it sat above the solver import
+in the package this module replaces: whatever runs first must not build an array under the cap.
+
+`wavebit.enable_x64()` is the public way to lift it earlier, which is what a caller who builds
+JAX arrays *before* the first solve needs -- see :class:`~wavebit._core.backend.PrecisionLossWarning`.
+"""
+import jax
+
+# Above the rest, and before anything here can build an array. See the module docstring.
+jax.config.update('jax_enable_x64', True)
+
+from functools import partial                                    # noqa: E402
+
+import jax.numpy as jnp                                          # noqa: E402
+import jax.numpy as _xp                                          # noqa: E402
+from jax import tree_util                                        # noqa: E402
+from tqdm import tqdm                                            # noqa: E402
+
+from .._core.engine import (CoreFactorizationMixin, CoreSolveMixin,  # noqa: E402
+                            device_scoped)
+from .._core.result import Result, ResultSub                     # noqa: E402
+
+
+class _BaseRCWA(CoreSolveMixin):
+    #: The array namespace this solver's arrays live in. A class attribute rather than a
+    #: lookup, because the one caller that needs it -- the analytic builder, which starts from
+    #: parametric shapes and so cannot infer a namespace from its input -- used to reach a
+    #: `_namespace_for_backend(self.backend)` living in `_core` that imported jax and torch by
+    #: name and fell through to numpy on an unrecognised code, with no `else`. The solver
+    #: already knows which namespace it is; asking it is cheaper than deciding again, and it
+    #: keeps `_core` from naming an optional dependency.
+    xp = _xp
+
+    #: Which backend this class is, as the integer `rcwa(backend=...)` takes. A declared
+    #: member because the shared constructor cannot spell three literals -- and it has to
+    #: stay an accepted *keyword* as well: `SolverJax._tree_flatten` puts `backend` in
+    #: aux_data, so it is part of the treedef and of every jit cache key, and
+    #: `_tree_unflatten` hands it straight back to `__init__` on every jitted call.
+    _BACKEND_ID = 1
+
+    def _device_scope(self):
+        """`jax.default_device`, which is how JAX is told where to place what it builds.
+
+        `self.device` is a *list* here -- `jax.devices('cpu')` -- so it is indexed. That is
+        the one thing about it that is not obvious, and it is why this is an override rather
+        than a value the base could hold.
+        """
+        return jax.default_device(self.device[0])
+
+    #: A JAX array -- and a `DynamicJaxprTracer` too, which is what lets a period be
+    #: differentiated or closed over inside `jax.jit`.
+    _ARRAY_TYPES = (jnp.ndarray,)
+
+    def _resolve_device(self, value):
+        """A list of :class:`jax.Device`, which is what `jax.default_device` takes.
+
+        A single already-resolved device is wrapped rather than refused, so
+        `solver.device = solver.device` round-trips against the getter. The membership test is
+        against the public `jax.Device`: matching the implementation class's repr instead broke
+        silently when jaxlib moved it from `xla_extension` to `_jax`.
+        """
+        if value is None or value in (0, 'cpu'):
+            return jax.devices('cpu')
+        if value in (1, 'gpu', 'cuda'):
+            return jax.devices('gpu')
+        if isinstance(value, jax.Device):
+            return [value]
+        if (isinstance(value, (list, tuple)) and value
+                and all(isinstance(d, jax.Device) for d in value)):
+            return list(value)
+        raise ValueError(f'unsupported jax device: {value!r}')
+
+
+@jax.tree_util.register_pytree_node_class
+class ResultJax(Result):
+    """Shared container, registered as a pytree so a jitted method can return one."""
+
+
+@jax.tree_util.register_pytree_node_class
+class ResultSubJax(ResultSub):
+    """Shared container; a pytree for the same reason as :class:`ResultJax`."""
+
+
+class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
+    #: The pytree-registered pair, so a jitted `solve_field` can return one. See the
+    #: declaration in `CoreFactorizationMixin`.
+    _RESULT = ResultJax
+    _RESULT_SUB = ResultSubJax
+
+    @partial(jax.jit, static_argnums=(1, 2, 3, 4, 5),
+             static_argnames=('sample_x', 'sample_y', 'sample_z', 'incidences', 'geometry'))
+    @device_scoped
+    def solve_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('given',),
+                    geometry=None, **kwargs):
+        """Solve and reconstruct the field in one jit-compiled call.
+
+        ``geometry`` is required here, unlike on :meth:`solve`. This method jits over
+        ``self``, so the structure arrives as tracers and the discrete decisions inside the
+        factorization and the solve have nothing concrete to branch on; a
+        :class:`~wavebit._core.geometry.StaticGeometry` from
+        :meth:`~wavebit._core.engine.CoreFactorizationMixin.freeze_geometry` supplies them as
+        static data. It is a static argument -- reuse one freeze across calls and you compile
+        once.
+
+        Because this method always traces, a stale ``geometry`` is replayed on trust here: the
+        comparison that would catch it is the thing the freeze exists to avoid. ``solve``
+        refuses one eagerly, so check a long fit there, or re-freeze on a schedule.
+
+        ``sample_x`` / ``sample_y`` / ``sample_z`` and ``incidences`` are static too: they set the
+        output shape and select which incidences to reconstruct.
+
+        Use :meth:`solve_field_eager` for the eager equivalent that auto-detects.
+        """
+        if geometry is None:
+            raise ValueError(
+                'solve_field is jit-compiled and needs the geometry frozen up front:\n'
+                '    geometry = solver.freeze_geometry()\n'
+                '    result, field_cell = solver.solve_field(..., geometry=geometry)\n'
+                'Reuse that one geometry across calls to compile only once. '
+                'For the eager, auto-detecting path use solver.solve_field_eager(...).')
+        return self._solve_and_field(sample_x, sample_y, sample_z, incidences, geometry,
+                                     **kwargs)
+
+
+# The eager path, which is `CoreFactorizationMixin.solve_field` under its other name -- one
+# function, two names, rather than a body written twice. JAX is the only backend that needs
+# both, because it is the only one whose `solve_field` is jitted and so demands a frozen
+# geometry; the other two have nothing to be eager *relative to*. Bound here rather than inside
+# the class because the name it aliases is the one this class overrides.
+RCWAJax.solve_field_eager = CoreFactorizationMixin.solve_field
+
+
+try:
+    import optax
+except (TypeError, ImportError, ModuleNotFoundError) as e:
+    import warnings
+
+    warnings.warn('Importing optax failed. You can run RCWA but not optimization on the JAX backend. '
+                  'One possible reason is python version: optax support python>=3.9.')
+
+class OptimizerJax:
+
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+
+    @staticmethod
+    def _grad(params, forward, loss_fn):
+        def forward_pass(params, forward, loss):
+            result = forward(**params)
+            loss_value = loss(result)
+            return loss_value
+
+        loss_value, grads = jax.value_and_grad(forward_pass)(params, forward, loss_fn)
+        return loss_value, grads
+
+    def grad(self, parameters, forward, loss_fn):
+        params = {name: (getattr(self, name)) for name in parameters}
+        _, grads = self._grad(params, forward, loss_fn)
+        [setattr(self, name, params[name]) for name in parameters]
+
+        return grads
+
+    def fit(self, parameters, forward, loss_fn, optimizer, iteration=1):
+        params = {name: (getattr(self, name)) for name in parameters}
+        opt_state = optimizer.init(params)
+
+        @jax.jit
+        def step(params, opt_state):
+            loss_value, grads = self._grad(params, forward, loss_fn)
+            grads = {k: v.conj() for k, v in grads.items()}
+            updates, opt_state = optimizer.update(grads, opt_state, params)
+            params = optax.apply_updates(params, updates)
+            return params, opt_state, loss_value
+
+        for _ in tqdm(range(iteration)):
+            params, opt_state, loss_value = step(params, opt_state)
+
+        [setattr(self, name, params[name]) for name in parameters]
+
+        return params
 
 
 #: The flattened children, in order, by the name each takes on `__init__`. `polarization` is
@@ -152,3 +339,13 @@ class SolverJax(RCWAJax, OptimizerJax):
         solver._psi_given = psi_given
 
         return solver
+
+
+# Registered here rather than in a package `__init__`, which is where it lived: the class is
+# defined in this module, so the registration cannot be reached without it and cannot run
+# before it. `SolverJax` is a pytree because `solve_field` is `jax.jit`-decorated at class
+# level with `self` at argnum 0 -- every call flattens the solver and rebuilds it through
+# `__init__`. What that costs when a slot is forgotten is in `_tree_flatten`'s comments.
+tree_util.register_pytree_node(SolverJax,
+                               SolverJax._tree_flatten,
+                               SolverJax._tree_unflatten)

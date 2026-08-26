@@ -45,13 +45,13 @@ def rcwa(backend=0, *args, stack=None, incidence=None, **kwargs):
         kwargs = _merge_domain(kwargs, incidence.as_kwargs(), 'incidence')
 
     if backend == 0:
-        from .on_numpy.solver import SolverNumpy
+        from .backends.numpy_backend import SolverNumpy
         solver = SolverNumpy(backend=backend, *args, **kwargs)
     elif backend == 1:
-        from .on_jax.solver import SolverJax
+        from .backends.jax_backend import SolverJax
         solver = SolverJax(backend=backend, *args, **kwargs)
     elif backend == 2:
-        from .on_torch.solver import SolverTorch
+        from .backends.torch_backend import SolverTorch
         solver = SolverTorch(backend=backend, *args, **kwargs)
     else:
         raise ValueError

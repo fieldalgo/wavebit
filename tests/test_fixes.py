@@ -191,7 +191,7 @@ def test_8_torch_structure_numpy_ndarray():
     print("==================================================")
 
     import torch
-    from wavebit.on_torch.emsolver.rcwa import RCWATorch
+    from wavebit.backends.torch_backend import RCWATorch
 
     solver = RCWATorch()
     # Test float numpy array

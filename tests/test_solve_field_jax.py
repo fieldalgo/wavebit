@@ -139,7 +139,7 @@ def test_a_freeze_recompiles_only_when_its_content_moves():
     well defined nor hashable — so this pins both halves.
     """
     import jax
-    from wavebit.on_jax.emsolver.rcwa import RCWAJax
+    from wavebit.backends.jax_backend import RCWAJax
 
     jax.clear_caches()
     solver = _solver(1, '1d_conical')          # ('sampled', 'li'): records nothing at all

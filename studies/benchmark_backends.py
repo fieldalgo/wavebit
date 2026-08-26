@@ -484,7 +484,7 @@ def main():
     args = ap.parse_args()
 
     wavebit.enable_x64()
-    importlib.import_module('wavebit.on_torch')
+    importlib.import_module('wavebit.backends.torch_backend')
 
     budget = Budget(args.budget)
     print(f'# Wavebit backend benchmark  (budget {args.budget:.0f} s, reps {args.reps})\n',
