@@ -72,13 +72,19 @@ class OptimizerTorch(Grad):
         super().__init__()
 
     def grad(self, parameters, forward, loss_fn):
-        [setattr(getattr(self, name), 'requires_grad', True) for name in parameters]
-        result = forward()  # Forward Prop.
-        loss = loss_fn(result)  # Loss
-        loss.backward()  # Back Prop.
-        grad = {name: getattr(self, name).grad for name in parameters}  # gradient
+        leaves = [getattr(self, name) for name in parameters]
+        for leaf in leaves:
+            leaf.requires_grad = True
+            # Torch *accumulates* into `.grad`, and nothing here used to clear it. So the
+            # same question asked twice answered twice the truth, three times the third time
+            # -- measured exactly 1x, 2x, 3x on a thickness derivative. A gradient that
+            # depends on how many times you have asked for one is not a gradient, and the
+            # scaling is silent: every step of a hand-written loop moves further than the
+            # last, which reads as a learning rate that is merely too high.
+            leaf.grad = None
 
-        return grad
+        loss_fn(forward()).backward()
+        return {name: getattr(self, name).grad for name in parameters}
 
     def _build_optimizer(self, _parameters, _opt, *args, **kwargs):
         _parameters_to_fit = [(getattr(self, name)) for name in _parameters]

@@ -160,7 +160,20 @@ class OptimizerJax:
             return loss_value
 
         loss_value, grads = jax.value_and_grad(forward_pass)(params, forward, loss_fn)
-        return loss_value, grads
+
+        # Conjugated HERE, once, because both callers need it and only one of them did it.
+        # For a real-valued loss of a complex parameter, `jax.value_and_grad` returns
+        # `dL/dx - i dL/dy`, which is the conjugate of the steepest-ascent direction. `fit`
+        # knew that and conjugated in its own `step`; `grad` returned the raw value, so the
+        # two shipped answers for one question were complex conjugates of each other -- and
+        # `grad`'s was the one a caller reads and steps along. Measured against finite
+        # differences on a lossy grating (eps = 4 + 0.6j), dL/dx = -0.000489034 and
+        # dL/dy = -0.029081472: stepping `z - lr * grad` moved the loss by -8.460e-07 with the
+        # conjugated value and +8.455e-07 with the raw one. Downhill and uphill.
+        #
+        # Real parameters are unaffected -- `conj` of a real array is itself -- which is why a
+        # thickness sweep never showed it and why this went out at all.
+        return loss_value, {k: jnp.conj(v) for k, v in grads.items()}
 
     def grad(self, parameters, forward, loss_fn):
         params = {name: (getattr(self, name)) for name in parameters}
@@ -175,8 +188,7 @@ class OptimizerJax:
 
         @jax.jit
         def step(params, opt_state):
-            loss_value, grads = self._grad(params, forward, loss_fn)
-            grads = {k: v.conj() for k, v in grads.items()}
+            loss_value, grads = self._grad(params, forward, loss_fn)   # already conjugated
             updates, opt_state = optimizer.update(grads, opt_state, params)
             params = optax.apply_updates(params, updates)
             return params, opt_state, loss_value
