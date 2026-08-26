@@ -19,6 +19,8 @@ is everything around them: an export that quietly disappears, a column order tha
 and ``k``, a lossy medium that comes back as gain, and above all the missing squaring, since
 an index and a permittivity are both bare floats and the wrong one solves happily.
 """
+import inspect
+
 import numpy as np
 import pytest
 
@@ -190,3 +192,82 @@ def test_the_stored_width_follows_type_complex():
     assert wavebit.read_material_table(complex_dtype=0)['SI'].dtype == np.float64
     assert wavebit.read_material_table(complex_dtype=1)['SI'].dtype == np.float32
     assert wavebit.read_material_table(complex_dtype=np.complex64)['SI'].dtype == np.float32
+
+
+def test_the_readers_depend_on_nothing_above_the_material_table_section():
+    """The nk readers are one tenant of `modeler.py`; the block modeller is the other.
+
+    `_precision_is_double` was written among the modeller's helpers and is called by
+    `read_material_table` -- so a region delete of the block machinery took it out and broke a
+    public export with `NameError: name '_precision_is_double' is not defined`, eight tests in
+    this file with it. It has been moved down beside the readers.
+
+    Asserted from the source rather than by calling, because calling passes right up until the
+    delete: every name the three readers reference must be defined *below* the material-table
+    banner, be a module import, or be a builtin. A helper that drifts back up fails here.
+    """
+    import ast
+    import builtins
+
+    from wavebit._core import modeler
+
+    source = inspect.getsource(modeler)
+    tree = ast.parse(source)
+    lines = source.splitlines()
+    banner = next(i for i, line in enumerate(lines, 1)
+                  if line.startswith('# -') and 'material table' in line)
+
+    imported = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update((a.asname or a.name.split('.')[0]) for a in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            imported.update((a.asname or a.name) for a in node.names)
+
+    below = {n.name: n for n in tree.body
+             if isinstance(n, (ast.FunctionDef, ast.ClassDef)) and n.lineno > banner}
+    below_names = set(below) | {n.targets[0].id for n in tree.body
+                                if isinstance(n, ast.Assign) and n.lineno > banner
+                                and isinstance(n.targets[0], ast.Name)}
+
+    stray = {}
+    for reader in ('find_nk_index', 'find_material', 'read_material_table'):
+        for node in ast.walk(below[reader]):
+            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+                name = node.id
+                if (name not in below_names and name not in imported
+                        and not hasattr(builtins, name)):
+                    stray.setdefault(reader, set()).add(name)
+        # Every way a name is bound *inside* the function: parameters, assignment targets
+        # (including tuple unpacking), `for` targets, comprehension targets, `with ... as`,
+        # `except ... as`, and nested defs. Missing any of these reports a local as a stray,
+        # which is how a first version of this flagged eight of `read_material_table`'s own
+        # loop variables.
+        local = {a.arg for a in below[reader].args.args}
+        local.add('__file__')
+        for node in ast.walk(below[reader]):
+            if isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                for target in targets:
+                    local.update(t.id for t in ast.walk(target)
+                                 if isinstance(t, ast.Name))
+            elif isinstance(node, (ast.For, ast.AsyncFor, ast.comprehension)):
+                local.update(t.id for t in ast.walk(node.target) if isinstance(t, ast.Name))
+            elif isinstance(node, ast.withitem) and node.optional_vars is not None:
+                local.update(t.id for t in ast.walk(node.optional_vars)
+                             if isinstance(t, ast.Name))
+            elif isinstance(node, ast.ExceptHandler) and node.name:
+                local.add(node.name)
+            elif isinstance(node, (ast.FunctionDef, ast.Lambda)):
+                local.update(a.arg for a in node.args.args)
+                if isinstance(node, ast.FunctionDef):
+                    local.add(node.name)
+        if reader in stray:
+            stray[reader] -= local
+            if not stray[reader]:
+                del stray[reader]
+
+    assert not stray, (
+        f'these readers reach a name defined above the material-table banner: {stray}. '
+        f'Everything above it is the block modeller and is being removed; a reader that '
+        f'depends on it breaks a public export when that happens.')

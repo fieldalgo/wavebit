@@ -328,28 +328,6 @@ def check_block_layer_combination(layer, period, layer_index=0, tol_rel=OVERLAP_
         f"combine='paint' to keep what this path draws.")
 
 
-def _precision_is_double(complex_dtype):
-    """Map any spelling of the complex dtype onto the double / single precision flag.
-
-    Accepts the legacy shorthands (``0`` = complex128, ``1`` = complex64) as well as any
-    backend's dtype object — matching on the bit width keeps this free of ``if torch:``.
-    """
-    if complex_dtype is None:
-        return True
-    if isinstance(complex_dtype, int) and not isinstance(complex_dtype, bool):
-        if complex_dtype == 0:
-            return True
-        if complex_dtype == 1:
-            return False
-        raise ValueError(f'unsupported complex_dtype: {complex_dtype}')
-    s = str(complex_dtype).lower()
-    if '128' in s:
-        return True
-    if '64' in s or '32' in s:
-        return False
-    raise ValueError(f'unsupported complex_dtype: {complex_dtype}')
-
-
 def _edge_list(xp, parts, float_dtype, complex_dtype, device):
     """The ``(n, 1)`` grid line column both the eager build and the replay hand back."""
     flat = [_flat(xp, v, float_dtype, complex_dtype, device) for v in parts]
@@ -1016,6 +994,32 @@ class Modeling:
 
 
 # ------------------------------------------------------------------------------ material table
+
+#: Down here with the nk readers, not up with the modeller helpers where it was written.
+#: `read_material_table` is its only surviving caller -- the other one was the block
+#: modeller's `complex_dtype` setter -- and it sat inside a contiguous run of block
+#: machinery, where a region delete would take it out and break a public export.
+def _precision_is_double(complex_dtype):
+    """Map any spelling of the complex dtype onto the double / single precision flag.
+
+    Accepts the legacy shorthands (``0`` = complex128, ``1`` = complex64) as well as any
+    backend's dtype object — matching on the bit width keeps this free of ``if torch:``.
+    """
+    if complex_dtype is None:
+        return True
+    if isinstance(complex_dtype, int) and not isinstance(complex_dtype, bool):
+        if complex_dtype == 0:
+            return True
+        if complex_dtype == 1:
+            return False
+        raise ValueError(f'unsupported complex_dtype: {complex_dtype}')
+    s = str(complex_dtype).lower()
+    if '128' in s:
+        return True
+    if '64' in s or '32' in s:
+        return False
+    raise ValueError(f'unsupported complex_dtype: {complex_dtype}')
+
 #
 # The nk tables are static data read off disk, not design variables, so they are held and
 # interpolated in NumPy: there is no Array-API ``interp``, and nothing downstream
