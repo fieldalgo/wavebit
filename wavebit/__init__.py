@@ -102,7 +102,7 @@ from ._core.scattering import Port, ScatteringMatrix
 # the bundled `nk_data` ships in the wheel and these two are its only readers -- data with no
 # public reader is the same dead end as a keyword with no reader. They hand back an *index*,
 # so `eps_from_index` above is the step between them and a Material.
-from ._core.modeler import find_nk_index, read_material_table
+from ._core.modeler import find_material, find_nk_index, read_material_table
 from ._core.spec import JobSpec, Numerics, Sweep, SpecError, run
 
 # The public surface -- and the reason this file needs no F401 exemption. Every name above is
@@ -133,7 +133,7 @@ __all__ = [
     'Layer', 'Stack', 'Incidence', 'Material', 'eps_from_index', 'index_from_eps',
     'ConvMatrices', 'ScatteringMatrix', 'Port',
     'StaticGeometry', 'StaleGeometryError',
-    'find_nk_index', 'read_material_table',
+    'find_material', 'find_nk_index', 'read_material_table',
     'JobSpec', 'Numerics', 'Sweep', 'SpecError', 'run',
 ]
 

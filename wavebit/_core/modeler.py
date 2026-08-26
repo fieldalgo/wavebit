@@ -32,21 +32,29 @@ Two conventions carry over from the already-ported modules:
   ellipse needs no such decision at all: its blocks are one closed-form expression of the
   shape parameters, valid at every angle.
 
-**The nk table at the bottom of this file draws nothing.** :func:`read_material_table` and
-:func:`find_nk_index` are the readers for the dispersion data shipped in ``wavebit/nk_data``,
-and they are here rather than anywhere else because their only caller used to be this module's
-``put_refractive_index_in_ucell``, which is gone. What replaced that caller is the pair itself:
-both are exported as ``wavebit.read_material_table`` / ``wavebit.find_nk_index``, so the path
-from a wavelength to a material is one a user walks explicitly ::
+**The nk table at the bottom of this file draws nothing.** :func:`read_material_table`,
+:func:`find_material` and :func:`find_nk_index` are the readers for the dispersion data shipped
+in ``wavebit/nk_data``, and they are here rather than anywhere else because their only caller
+used to be this module's ``put_refractive_index_in_ucell``, which is gone.
+
+The path from a wavelength to a material is two calls ::
 
     table = wavebit.read_material_table()
-    n = wavebit.find_nk_index('Si', table, wavelength)     # a refractive index, n + 1j*k
-    material = wavebit.Material(wavebit.eps_from_index(n))
+    material = wavebit.find_material('Si', table, wavelength)   # a Material, permittivity
 
-The :func:`wavebit.eps_from_index` step in the middle is not decoration. A table holds an
-*index* -- that is what nk means -- and every material slot in this package takes a relative
-permittivity, so the one place the two quantities meet is a call the reader can see. It also
-stays a lookup the caller performs, never one a material slot performs for them:
+It was three, and the middle one was ``wavebit.Material(wavebit.eps_from_index(n))``. The
+squaring was written out on purpose, the argument being that a call you can see is a call you
+will not skip -- and that argument is wrong. A table holds an *index*, every material slot in
+this package takes a relative permittivity, and both are bare complex numbers, so skipping it
+is the one migration mistake no refusal can catch: silicon at 900 nm is ``n = 3.6388 +
+0.0075j``, ``top=n`` builds a medium of permittivity 3.64 where 13.24 was meant, and the answer
+comes back at ``T = 0.9026`` against 0.6764, passive and energy-conserving throughout.
+
+:func:`find_material` returns a :class:`~wavebit._core.domain.Material`, which carries its own
+name, so there is nothing left to forget. :func:`find_nk_index` stays for the questions that
+want the index itself -- a dispersion curve, a datasheet check.
+
+It is still a lookup the caller performs, never one a material slot performs for them:
 :func:`wavebit._core.domain.as_material` refuses a string on purpose, because a name silently
 resolving to a medium is a lookup nobody asked for and cannot audit.
 
@@ -1012,7 +1020,8 @@ class Modeling:
 # The nk tables are static data read off disk, not design variables, so they are held and
 # interpolated in NumPy: there is no Array-API ``interp``, and nothing downstream
 # differentiates through the table lookup. Both functions are public
-# (``wavebit.read_material_table`` / ``wavebit.find_nk_index``) -- see the module docstring for
+# (``wavebit.read_material_table`` / ``wavebit.find_material`` / ``wavebit.find_nk_index``)
+# -- see the module docstring for
 # the three-line path from a wavelength to a Material, and for why the permittivity conversion
 # is left to the caller.
 
@@ -1022,10 +1031,13 @@ def find_nk_index(material, mat_table, wl):
     ``mat_table`` is what :func:`read_material_table` returns and ``material`` is one of its
     keys, matched case-insensitively (``'si'``, ``'Si'`` and ``'SI'`` are one material).
 
-    Returns ``n + 1j*k``, an **index** -- so a caller filling a material slot wants
-    ``wavebit.Material(wavebit.eps_from_index(n))``. Passing this number straight into a slot
-    is the exact mistake the retired-name refusals exist to catch, and here no refusal can fire
-    because a number carries no name.
+    Returns ``n + 1j*k``, an **index**, because that is the quantity an nk table publishes and
+    this is the function that reads one. It is the *low-level* door:
+    :func:`find_material` is the one that fills a material slot, and it hands back a
+    :class:`~wavebit._core.domain.Material` so there is no conversion to forget.
+
+    This one is for the questions that want the index itself -- plotting a dispersion curve,
+    checking a datasheet, comparing against a table published as ``n`` and ``k``.
 
     Loss comes back as ``+1j*k``, which is already this project's convention
     (``Im > 0`` is loss under ``e^{-iwt}``, ``docs/conventions.md``) and survives
@@ -1051,6 +1063,36 @@ def find_nk_index(material, mat_table, wl):
     k_index = np.interp(wl, mat_data[:, 0], mat_data[:, 2])
 
     return n_index + 1j * k_index
+
+
+def find_material(material, mat_table, wl):
+    """``material`` at ``wl`` as a :class:`~wavebit._core.domain.Material`, ready for a slot.
+
+    The front door, and the reason it exists is that every material slot in wavebit takes a
+    **relative permittivity** -- ``top``, ``bot``, the raster, a shape's ``material``, a block
+    slot -- while an nk table publishes a refractive index. Two bare complex numbers, one
+    convention apart, and nothing to tell them apart at the point of use.
+
+    :func:`find_nk_index` returns the index and the caller squared it. The conversion was left
+    visible on purpose, the argument being that a call you can see is a call you will not skip.
+    That argument is wrong, and the size of it is measurable: silicon at 900 nm is ``n = 3.6388
+    + 0.0075j``, so ``top=n`` builds a medium of permittivity 3.64 where 13.24 was meant. Both
+    solve. Both conserve energy. `T` comes out 0.9026 against 0.6764 -- a fifth of the light,
+    for a squaring. No refusal can fire, because a number carries no name.
+
+    Handing back a `Material` is what gives it a name. There is nothing left to forget.
+
+    ``mat_table`` is what :func:`read_material_table` returns and ``material`` is one of its
+    keys, matched case-insensitively. A ``__real`` suffix asks for ``n`` only, no absorption --
+    it survives here because "is this feature doing anything, or is the layer just absorbing?"
+    is a question about a *scene*, so it belongs where scenes are built.
+
+    Non-magnetic: the tables carry no permeability, so ``mu`` is left unset rather than
+    asserted as 1. A magnetic medium is `Material(find_material(...).epsilon, mu=...)`.
+    """
+    from .domain import Material, eps_from_index
+
+    return Material(eps_from_index(find_nk_index(material, mat_table, wl)))
 
 
 def read_material_table(nk_path=None, complex_dtype=None):

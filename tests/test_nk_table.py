@@ -2,7 +2,8 @@
 
 Wavebit ships dispersion data in ``wavebit/nk_data`` (five files, in the wheel via
 ``pyproject.toml``'s package-data), and exactly two functions can open it:
-``wavebit.read_material_table`` and ``wavebit.find_nk_index``.
+``wavebit.read_material_table``, ``wavebit.find_material`` and
+``wavebit.find_nk_index``.
 
 They were briefly neither called nor exported. ``put_refractive_index_in_ucell`` had been the
 only caller, and when it went the readers stayed behind in ``_core/modeler.py`` -- private,
@@ -22,7 +23,7 @@ import numpy as np
 import pytest
 
 import wavebit
-from wavebit import Material, index_from_eps
+from wavebit import Material
 
 # Silicon at 900 nm, from the bundled filmetrics table: n ~ 3.64 with a little absorption.
 # Chosen because it is the one material whose numbers a reader can sanity-check from memory,
@@ -107,26 +108,75 @@ def test_the_lookup_understands_case_and_the_real_suffix():
     assert not isinstance(real_only, complex)
 
 
-def test_forgetting_the_conversion_is_legal_and_wrong():
-    """Why ``eps_from_index`` is written out at the call site instead of folded into the lookup.
+def test_the_front_door_hands_back_a_material_so_there_is_nothing_to_forget():
+    """``find_material`` exists because the visible conversion did not survive being visible.
 
-    A table's number is an index, every material slot takes a permittivity, and both are bare
-    floats -- so the one migration mistake with no possible refusal is skipping the squaring.
-    Nothing raises. The scene is simply made of a thinner, still perfectly passive material,
-    and it conserves energy while answering a different question.
+    ``find_nk_index`` returns an index, every material slot takes a permittivity, and both are
+    bare complex numbers. The conversion was written out at the call site on purpose -- the
+    argument being that a call you can see is a call you will not skip -- and this test used to
+    pin how wrong skipping it is, under the name ``test_forgetting_the_conversion_is_legal_and_
+    wrong``. It is the same measurement, read the other way round: nothing raises, the medium is
+    simply thinner, and the answer is a fifth of the light off.
 
-    Pinned so the size of that gap sits next to the function that opens it: this is the reason
-    the conversion is a visible call and not a keyword on ``find_nk_index``.
+    The fix is not a louder call. It is handing back a value that carries its own name.
     """
     table = wavebit.read_material_table()
-    n = wavebit.find_nk_index('Si', table, SI_WL)
+    material = wavebit.find_material('Si', table, SI_WL)
+    index = wavebit.find_nk_index('Si', table, SI_WL)
 
-    converted = Material(wavebit.eps_from_index(n))
-    forgotten = Material(n)                        # legal, and a completely different medium
+    assert isinstance(material, Material)
+    assert complex(material.epsilon) == pytest.approx(complex(index) ** 2)
+    assert material.mu is None, 'an nk table carries no permeability, so none is asserted'
 
-    assert abs(complex(converted.epsilon) - complex(forgotten.epsilon)) > 9.0
-    assert complex(forgotten.epsilon).imag > 0, 'and still passive, so no check downstream fires'
-    assert complex(index_from_eps(forgotten.epsilon)).real == pytest.approx(1.9, abs=0.1)
+    # The size of the mistake the front door removes, kept as a number rather than a claim.
+    forgotten = Material(index)
+    assert abs(complex(material.epsilon) - complex(forgotten.epsilon)) > 9.0
+    assert complex(forgotten.epsilon).imag > 0, 'and still passive, so nothing downstream fires'
+
+
+def test_the_two_doors_answer_the_same_medium_in_their_own_quantities():
+    """One reads the table, the other names what the table means. They cannot disagree.
+
+    `find_material` is `Material(eps_from_index(find_nk_index(...)))` and this is the test that
+    says so -- through the solver, because the quantity that matters is the one the solve reads.
+    """
+    table = wavebit.read_material_table()
+    solver = wavebit.rcwa(backend=0, structure=np.ones((1, 1, 8)), period=[1000.0, 1000.0],
+                          truncation_order=[2, 0], thickness=[150.0], wavelength=900.0,
+                          top=wavebit.find_material('Si', table, SI_WL))
+
+    assert complex(solver.n_top) == pytest.approx(complex(wavebit.find_nk_index('Si', table, SI_WL)))
+    assert np.isfinite(np.asarray(solver.solve().T).sum())
+
+
+def test_the_real_only_suffix_reaches_the_front_door_too():
+    """``__real`` asks for ``n`` with no absorption, and that is a question about a *scene*.
+
+    It exists for "is this feature doing anything, or is the layer just absorbing?", so it has
+    to be answerable where scenes are built, not only at the low-level reader.
+    """
+    table = wavebit.read_material_table()
+    lossless = wavebit.find_material('si__real', table, SI_WL)
+    lossy = wavebit.find_material('Si', table, SI_WL)
+
+    assert complex(lossless.epsilon).imag == pytest.approx(0.0, abs=1e-15)
+    assert complex(lossy.epsilon).imag > 0
+    assert complex(lossless.epsilon).real == pytest.approx(complex(lossy.epsilon).real, rel=1e-4)
+
+
+def test_a_swept_wavelength_is_refused_by_the_slot_rather_than_by_the_lookup():
+    """An array ``wl`` gives a `Material` holding several permittivities, which is not one medium.
+
+    `find_material` does not police that, because the half-space setter already does and says
+    the shape out loud. A sweep is `[find_material(name, table, w) for w in wls]`.
+    """
+    table = wavebit.read_material_table()
+    swept = wavebit.find_material('Si', table, np.array([700.0, 900.0, 1100.0]))
+    assert np.shape(np.asarray(swept.epsilon)) == (3,)
+
+    with pytest.raises(ValueError, match=r'half-space.*single value'):
+        wavebit.rcwa(backend=0, structure=np.ones((1, 1, 8)), period=[1000.0, 1000.0],
+                     truncation_order=[2, 0], thickness=[150.0], wavelength=900.0, top=swept)
 
 
 def test_the_stored_width_follows_type_complex():
