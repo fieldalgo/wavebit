@@ -186,7 +186,7 @@ def _shifted(p, dx, dy):
     return (p[0], p[1] + dx, p[2] + dy, p[3], p[4], p[5], p[6])
 
 
-def overlapping_pairs(prims, tol, lattice, *, self_only=False):
+def overlapping_pairs(prims, tol, lattice, *, self_only=False, image_only=False):
     """Every pair of primitives that interpenetrates by more than ``tol``.
 
     Yields ``(i, j, image_x, image_y, gap)`` with ``i <= j``; ``image_*`` is which periodic
@@ -194,10 +194,22 @@ def overlapping_pairs(prims, tol, lattice, *, self_only=False):
     shape runs into its own image, i.e. it is bigger than the period. One entry per pair —
     the first image that overlaps is enough to say the layer is ambiguous.
 
-    ``self_only`` drops the cross terms and reports just the ``i == j`` entries. That is the
-    whole question the block path's painting check asks — it paints a genuine overlap and only
-    a shape's own image defeats it — and it turns the sweep from quadratic into linear: 17 ms
-    to 0.3 ms on a 144-shape layer, paid on every rebuild of a fit.
+    ``self_only`` drops the cross terms and reports just the ``i == j`` entries, turning the
+    sweep from quadratic into linear: 17 ms to 0.3 ms on a 144-shape layer, paid on every
+    rebuild of a fit. It was the whole question the removed block path's painting check asked.
+
+    ``image_only`` drops the in-cell offset for *every* pair, so a hit means the layer needs a
+    periodic image and not merely an overlap. That is the question the shape paths ask before
+    building: an overlap inside the cell resolves into disjoint polygons, but one that happens
+    through an edge does not — :func:`~wavebit._core.boundary.resolve_painting` clips loops in
+    unwrapped Cartesian coordinates and enumerates no images, so it answers such a layer with a
+    number that does not converge (measured 0.309 / 0.632 / 0.913 in ``sum(T)`` at truncation
+    order 5 / 9 / 13 against a wrapped raster's 0.997). It cannot ride on ``self_only``: two
+    sub-period shapes can meet only through an edge, and neither runs into its *own* image.
+
+    ``(0, 0)`` is the *fifth* entry of ``_IMAGES``, not the first, which matters here. Only one
+    entry per pair is reported, so a pair overlapping both in the cell and through an edge can
+    come back either way — asking for the images alone is what makes the answer definite.
 
     ``tol`` keeps *touching* out of the report: abutting rectangles and a shape exactly
     filling the period both come out at a gap of zero, and they are the same structure
@@ -220,7 +232,7 @@ def overlapping_pairs(prims, tol, lattice, *, self_only=False):
                 continue
             reach = radii[i] + radii[j]
             for ox, oy in _IMAGES:
-                if i == j and (ox, oy) == (0, 0):
+                if (ox, oy) == (0, 0) and (i == j or image_only):
                     continue                      # a shape always overlaps itself
                 # Images sit on the lattice, not on a rectangle: a skewed cell's neighbour
                 # is ox*a1 + oy*a2. Getting this wrong does not raise -- it reports the

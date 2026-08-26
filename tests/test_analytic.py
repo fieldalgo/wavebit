@@ -801,22 +801,58 @@ def test_a_traced_ly_on_a_circle_is_refused_where_a_comparison_cannot_reach():
         jax.grad(f)(jnp.asarray(120.0))
 
 
-def test_overlap_is_found_across_the_period_boundary():
+def test_an_overlap_that_happens_only_through_an_edge_is_refused():
     """The layer is a unit cell: shapes that miss inside it can still meet through the edge.
 
-    Missing this does not raise -- it routes the layer to the summing builder, which is a
-    different structure. So the sweep is pinned twice: the solver takes the boundary path, and
-    the bare builder names the edge it met through when handed the same shapes directly.
+    And when they do, neither builder can read it. The closed form sums each shape's own
+    transform; the boundary path clips its polygons in unwrapped coordinates and enumerates no
+    images, so the wrapped part of the overlap is simply cut away. What comes back is not a
+    second structure but a **non-convergent** one -- the pinned numbers below are ``sum(T)``
+    against a raster painted with every image, and the solver's column is still moving where
+    the raster's has settled to five digits:
+
+    ======================  ==========  ==========  ==========
+    truncation order        5           9           13
+    ======================  ==========  ==========  ==========
+    what it used to return  0.308963    0.632267    0.912687
+    wrapped raster          0.997160    0.997184    0.997189
+    ======================  ==========  ==========  ==========
+
+    That is why this is a refusal and not a tolerance. It was reachable as the default for one
+    commit: the check used to fire only on a layer that had not named its ``combine``, so
+    removing the keyword handed every such layer to the branch ``combine='paint'`` used to
+    reach. The bare builder said so all along, which is the second half of this test -- a
+    refusal that only the internals can raise is one a user never sees.
     """
     from wavebit._core.analytic import layer_needs_resolving
 
     shapes = [rod(20.0, lx=100.0), rod(280.0, lx=100.0, material=9.0)]   # meet through x = 0
     lattice = as_lattice(period=CHECK_CFG['period'])
-    assert layer_needs_resolving(dict(background=1.0, shapes=shapes), lattice) is True
-    solve(shapes)
 
+    # The routing question answers "yes" -- it is the refusal in front of it that stops this,
+    # not the router, and stating both is what says the refusal is load-bearing.
+    assert layer_needs_resolving(dict(background=1.0, shapes=shapes), lattice) is True
+    with pytest.raises(ValueError, match='period boundary'):
+        solve(shapes)
     with pytest.raises(ValueError, match='period boundary'):
         _assemble_eps_coeffs(xnp, shapes, 1.0, 2, 2, lattice, xnp.complex128)
+
+
+def test_an_overlap_inside_the_cell_is_still_built():
+    """The other side of that line, or the refusal above would have eaten the ordinary case.
+
+    Slide the same two rods until their overlap is interior and the layer builds, converging
+    on a raster of the same painting: 2.1e-5 at truncation order 5 down to 1.1e-6 at 17. Two
+    rods *abutting* across the edge are touching, not overlapping, and build too.
+    """
+    interior = [rod(120.0, lx=100.0), rod(180.0, lx=100.0, material=9.0)]
+    assert 0.0 < float(np.sum(np.asarray(solve(interior).T))) < 1.0
+
+    abutting = [rod(50.0, lx=100.0), rod(250.0, lx=100.0, material=9.0)]   # edges meet at x = 0
+    assert 0.0 < float(np.sum(np.asarray(solve(abutting).T))) < 1.0
+
+    straddling = [rod(0.0, lx=100.0)]                     # one rod over the edge: no overlap
+    assert 0.0 < float(np.sum(np.asarray(solve(straddling).T))) < 1.0
 
 
 def test_a_shape_wider_than_the_period_runs_into_its_own_image():
@@ -1350,7 +1386,13 @@ def test_omitting_the_centre_solves_what_stating_it_solves(cell_name, A, factori
     demanding that would be demanding the wrong thing.
     """
     centre = dict(cx=float(0.5 * (A[0, 0] + A[0, 1])), cy=float(0.5 * (A[1, 0] + A[1, 1])))
-    fixed = dict(type='circle', cx=70.0, cy=95.0, lx=90.0, material=5.76)
+    # cx = 110, not the 70 this carried until 2026-08-27: at 70 the circle met the centred
+    # ellipse *through the x edge* on `shear-shallow` only, and that is refused now
+    # (`check_layer_shapes`). It was not a deliberate case -- the same pair misses on the other
+    # three cells -- and while it was allowed this test was solving the one geometry the
+    # boundary builder cannot read, on the cell whose skew makes it easiest to reach by
+    # accident.
+    fixed = dict(type='circle', cx=110.0, cy=95.0, lx=90.0, material=5.76)
 
     def solve(second):
         kw = dict(backend=0, wavelength=900.0, lattice=A, truncation_order=[6, 6],

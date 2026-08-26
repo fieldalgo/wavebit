@@ -356,6 +356,14 @@ def _refuse_layer(solver, layer):
             f'layer {layer} is out of range for a {n_layers}-layer stack. `layer` indexes the '
             f'way `structure` does -- 0 is the layer nearest `top`, whichever side the light '
             f'arrives from (docs/conventions.md).')
+    if solver.modeling_type == 2:
+        # The same refusals the solve makes, so a picture cannot be drawn of a structure the
+        # solver will not build. Only the layer asked for: drawing layer 0 should not be
+        # stopped by layer 3, and a renderer is where someone goes to *find out* what a
+        # refusal is about.
+        index = layer % n_layers
+        _analytic.check_layer_spec(solver.structure[index], index)
+        _analytic.check_layer_shapes(solver.structure[index], _basis(solver), index)
 
 
 def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):

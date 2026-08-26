@@ -2703,10 +2703,21 @@ class CoreFactorizationMixin:
                                   mu_normal_field_source=mu_normal_field_source,
                                   mu_compression=mu_compression)
         if self._modeling_type == 2:
-            # Only a painted layer that actually overlaps has a plan to freeze. A summed one
-            # has no discrete decision in it, and a painted one with nothing overlapping means
-            # the same structure either way -- both stay on the closed-form path, so their
-            # slots stay None and the replay never looks.
+            # The layer refusals run here, not only on the solve. This *is* the eager pass --
+            # it is where the shapes are concrete by construction -- and a record taken over a
+            # layer that would be refused is a record that lets the refusal be replayed past:
+            # freeze a rod of `lx = 340` on a period of 300, hand the record to a traced solve,
+            # and it builds, giving T = 0.9715 where the slab it actually describes gives
+            # 0.9590 and a `dT/dlx` of 9.8e-4 where the true derivative is exactly zero. Both
+            # `check_layer_shapes` docstrings named this call as the one that still sees them;
+            # until 2026-08-27 it did not make it.
+            basis = self._geometry_lattice_for(None)
+            for index, layer in enumerate(self.structure):
+                _analytic.check_layer_spec(layer, index)
+                _analytic.check_layer_shapes(layer, basis, index)
+            # Only a layer that actually overlaps has a plan to freeze. One with nothing
+            # overlapping means the same structure either way and stays on the closed-form
+            # path, so its slot stays None and the replay never looks.
             plans = [_boundary.plan_layer(layer.get('shapes', []),
                                           self._geometry_lattice_for(None))
                      if _analytic.layer_needs_resolving(

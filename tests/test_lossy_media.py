@@ -258,19 +258,26 @@ def solver_R_painted(n, thickness, wavelength, theta, tetm):
     uniform slab at the end of it, so the Airy oracle applies exactly and none of the shape
     machinery is under test. The material convention is the entire point, again.
 
-    ``ly`` is exactly one period: the rods span the cell in y without running into their own
-    images, which is the line ``check_layer_shapes`` draws (a gap of zero is touching, not
-    overlapping). It was ``1.4 * P`` until 2026-08-27, and that is now refused -- rightly, since
-    the boundary builder does not add a shape's periodic images either. It happened to give the
-    right answer here only because the *other* rod covered the region the missing image would
-    have: on the same pair shrunk so they no longer tile the cell, ``<1/eps>`` comes back 0.618
-    against the 0.695 the geometry has.
+    Every edge of the pair lands exactly on a cell edge or inside it, and that is not
+    cosmetic. The boundary builder does not read a shape's *periodic images* -- it clips loops
+    in unwrapped coordinates -- so a rod past the period, or a pair meeting only through an
+    edge, is refused (``check_layer_shapes``). A gap of exactly zero is touching, not
+    overlapping, so ``ly = 1.0 * P`` spans the cell and is legal.
+
+    Both were wrong here until 2026-08-27: the rods were ``ly = 1.4 * P`` and their x extents
+    wrapped as well. It gave the right answer anyway, for a reason that is not a reason -- the
+    two rods tile the cell, so whatever the missing images would have covered, the *other* rod
+    covered. On the same pair shrunk until they no longer tile, ``<1/eps>`` comes back 0.618
+    against the 0.695 the geometry has, and a wrapped overlap's ``sum(T)`` does not converge at
+    all (0.309 / 0.632 / 0.913 at truncation order 5 / 9 / 13, against a wrapped raster's
+    0.997). The pair here overlaps over 0.4-0.5 of the cell, inside it, which is the case the
+    resolver is for.
     """
     P = 400.0
     eps = eps_from_index(n)
-    shapes = [dict(type='rectangle', cx=0.30 * P, cy=0.5 * P, lx=0.75 * P, ly=1.0 * P,
+    shapes = [dict(type='rectangle', cx=0.25 * P, cy=0.5 * P, lx=0.50 * P, ly=1.0 * P,
                    material=eps),
-              dict(type='rectangle', cx=0.72 * P, cy=0.5 * P, lx=0.75 * P, ly=1.0 * P,
+              dict(type='rectangle', cx=0.70 * P, cy=0.5 * P, lx=0.60 * P, ly=1.0 * P,
                    material=eps)]
     solver = wavebit.rcwa(backend=0, top=1.0, bot=2.25, theta=theta, phi=0.0,
                             psi=(np.pi / 2 if tetm == 'te' else 0.0), truncation_order=(3, 3),

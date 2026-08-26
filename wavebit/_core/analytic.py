@@ -290,29 +290,43 @@ def check_layer_spec(layer, layer_index=0):
 
 
 def check_layer_shapes(layer, lattice, layer_index=0):
-    """Check every shape's keys, and refuse a shape no builder here can represent.
+    """Check every shape's keys, and refuse a layer that needs a shape's periodic image.
 
     This function is the funnel the smooth path reaches the solver through, which is why the
     per-shape check is repeated here and — unlike :func:`shape_geometry`, where it would sit
     closer to the mistake — not inside :func:`_primitives`, whose ``except Exception`` would
     catch the refusal and answer it by silently building without that shape.
 
-    **A shape wider than the period is the one geometry neither builder can read.** Its
-    transform is a single sinc, which is not the transform of any periodic indicator, so the
-    layer is not the structure its parameters name — and it still solves and conserves energy.
-    Overlaps *between* shapes are a different matter and are not refused: they paint, later
-    shape over earlier, and :func:`layer_needs_resolving` routes them to :mod:`.boundary`. A
-    shape over its own image has no such reading — painting it over itself changes nothing and
-    the sinc is still wrong.
+    **Neither builder here reads a shape's periodic images.** The closed form sums each shape's
+    own transform; :func:`~wavebit._core.boundary.resolve_painting` clips loops in unwrapped
+    Cartesian coordinates and enumerates no images either. So two things are refused, and they
+    are one fact wearing two faces:
 
-    The sweep is ``self_only``, which asks exactly that question and is linear rather than
-    quadratic: 0.3 ms against 17 ms on a 144-shape layer, paid on every rebuild of a fit. It
-    needs concrete numbers, so a layer whose parameters are tracers passes through unchecked;
-    :meth:`freeze_geometry` is the eager call that still sees them.
+    * a shape **larger than the period**, which runs into its own image. Its transform is a
+      single sinc, which is not the transform of any periodic indicator. Measured on the
+      boundary builder: a 1.2x1.4-period rod gives ``<1/eps>`` = 0.186 where the geometry is
+      0.250, and a pair with one rod 1.4 periods tall that does not tile the cell, 0.618
+      against 0.695.
+    * two shapes that **meet only through a cell edge**. An overlap inside the cell resolves
+      into disjoint polygons and is built; one that happens through an edge is clipped away,
+      and what comes back does not converge — ``sum(T)`` of 0.309 / 0.632 / 0.913 at truncation
+      order 5 / 9 / 13 where a wrapped raster holds at 0.997.
+
+    Both would otherwise solve and conserve energy. The second was refused by name until
+    2026-08-27, when ``combine`` was removed: the refusal was reached only by a layer that had
+    not named its rule, and ``combine='paint'`` walked past it into the answer above. Removing
+    the keyword made that branch the default, so the refusal moved here — where it does not
+    depend on what the layer says.
+
+    The sweep is ``image_only``: quadratic in the shapes, like the routing question next door,
+    and asked of the images alone so that a pair overlapping both inside the cell and through
+    an edge cannot be reported as the harmless one. It needs concrete numbers, so a layer whose
+    parameters are tracers passes through unchecked; :meth:`freeze_geometry` is the eager call
+    that still sees them.
 
     This was ``check_layer_combination`` until 2026-08-27, when it also refused an overlapping
     layer that had not said whether its shapes add or paint. Nothing is asked of the layer any
-    more: ``combine`` was removed with the summing rule, and the geometry picks the builder.
+    more: ``combine`` went with the summing rule, and the geometry picks the builder.
     """
     shapes = layer.get('shapes', [])
     for i, shape in enumerate(shapes):
@@ -330,20 +344,31 @@ def check_layer_shapes(layer, lattice, layer_index=0):
 
     # `OVERLAP_TOL_REL * max(Px, Py)` is a tolerance *scale*, not geometry: it says how much
     # interpenetration counts, in units of the cell's own size. It keeps *touching* out --
-    # a rod exactly filling the period comes out at a gap of zero and is a legal structure.
+    # a rod exactly filling the period comes out at a gap of zero and is a legal structure,
+    # and so are two rods abutting across an edge.
     hits = _overlap.overlapping_pairs(prims, OVERLAP_TOL_REL * max(Px, Py), lattice,
-                                      self_only=True)
+                                      image_only=True)
     if not hits:
         return
 
-    i, _, ox, oy, _ = hits[0]
-    more = f' (and {len(hits) - 1} more such shape(s))' if len(hits) > 1 else ''
+    i, j, ox, oy, _ = hits[0]
+    more = f' (and {len(hits) - 1} more such pair(s))' if len(hits) > 1 else ''
+    if i == j:
+        what = (f'shape {_shape_name(shapes, i)} is larger than the period and runs into its '
+                f'own image{_across(ox, oy)}')
+        fix = 'Shrink it below the period'
+    else:
+        what = (f'shapes {_shape_name(shapes, i)} and {_shape_name(shapes, j)} overlap '
+                f'only{_across(ox, oy)}')
+        fix = ('Move them so the overlap falls inside the cell -- an overlap that does is '
+               'resolved into disjoint polygons and built exactly')
     raise ValueError(
-        f'Analytic layer {layer_index}: shape {_shape_name(shapes, i)} is larger than the '
-        f'period and runs into its own image{_across(ox, oy)}{more}. Its transform is a single '
-        f'sinc, which is not the transform of any periodic indicator, so the layer is not the '
-        f'structure these parameters name -- and it would still solve and conserve energy. '
-        f'Shrink it below the period, or state the layer as a raster structure.')
+        f'Analytic layer {layer_index}: {what}{more}. Neither shape builder here reads a '
+        f"shape's periodic images: the closed form sums each shape's own transform, and the "
+        f'boundary path clips its polygons in unwrapped coordinates. So the layer would be '
+        f'built as a different structure -- one that solves, conserves energy, and does not '
+        f'converge.\n'
+        f'  {fix}, or state the layer as a raster structure, which carries the wrap.')
 
 
 def layer_needs_resolving(layer, lattice):

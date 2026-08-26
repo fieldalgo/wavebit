@@ -749,3 +749,74 @@ def test_a_frozen_no_overlap_is_a_claim_about_the_layer_and_is_checked_too():
     assert frozen_jax.boundary_plans == [None]
     assert np.isfinite(float(jax.jit(traced_total)(jnp.asarray(0.629))))
     assert np.isfinite(float(jax.grad(traced_total)(jnp.asarray(0.629))))
+
+
+# ------------------------------------------- the freeze is a check, not only a recording
+
+_REFUSE_KW = dict(period=(300.0, 300.0), thickness=(205.0,), truncation_order=(6, 6),
+                  top=1.0, bot=1.0, wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0)
+
+
+def _oversized(lx=340.0):
+    return [dict(background=1.0, shapes=[dict(type='rectangle', cx=150.0, cy=150.0, lx=lx,
+                                              ly=300.0, angle=0.0, material=4.0)])]
+
+
+def test_freeze_geometry_runs_the_layer_refusals_it_is_named_for():
+    """A record taken over a refused layer is a record that lets the refusal be replayed past.
+
+    ``check_layer_shapes`` steps aside under a trace -- it compares numbers -- and both its
+    docstring and the analytic module's say ``freeze_geometry`` is the eager call that still
+    sees them. Until 2026-08-27 it did not make that call at all, and the gap was not academic:
+    freeze a rod of ``lx = 340`` on a period of 300, hand the record to a traced solve, and it
+    builds. ``T`` came back 0.9715 where the slab that rod actually describes gives 0.9590, and
+    ``dT/dlx`` came back 9.8e-4 where the true derivative is **exactly zero** -- every ``lx``
+    past the period is the same full slab. A phantom descent direction is worse than a wrong
+    forward number, because an optimiser follows it.
+
+    Pinned on the eager call, since that is the one that can raise. The traced replay is what
+    it protects and cannot be asserted directly: with the freeze refusing, no record exists to
+    hand it.
+    """
+    solver = wavebit.rcwa(backend=0, structure=_oversized(), **_REFUSE_KW)
+    with pytest.raises(ValueError, match='larger than the period'):
+        solver.freeze_geometry()
+
+    ok = wavebit.rcwa(backend=0, structure=_oversized(lx=120.0), **_REFUSE_KW)
+    assert ok.freeze_geometry().boundary_plans == [None]
+
+
+def test_the_freeze_also_refuses_a_layer_key_nobody_reads():
+    """Same hole, milder consequence, and the one a migrating recipe hits first.
+
+    ``combine='paint'`` was a layer key until 2026-08-27. ``solve`` refuses it; the freeze used
+    to accept it, so a recipe carrying it could take a record, then be refused by the solve it
+    was taken for -- or, worse, not be refused at all on the paths that only read the record.
+    """
+    stale = [dict(background=1.0, combine='paint',
+                  shapes=[dict(type='rectangle', cx=150.0, cy=150.0, lx=120.0, ly=120.0,
+                               angle=0.0, material=4.0)])]
+    solver = wavebit.rcwa(backend=0, structure=stale, **_REFUSE_KW)
+    with pytest.raises(ValueError, match="'combine'"):
+        solver.freeze_geometry()
+
+
+def test_the_renderer_refuses_what_the_solver_refuses():
+    """A picture of a structure the solver will not build is the worst kind of documentation.
+
+    ``slice_structure`` reaches the same layer dicts by a different door, and it is exactly
+    where someone goes to find out what a refusal was about -- so it has to agree about which
+    layers exist. Only the layer asked for is checked: drawing layer 0 must not be stopped by
+    something wrong with layer 3.
+    """
+    solver = wavebit.rcwa(backend=0, structure=_oversized(), **_REFUSE_KW)
+    with pytest.raises(ValueError, match='larger than the period'):
+        solver.slice_structure(n=32)
+
+    good = dict(background=1.0, shapes=[dict(type='rectangle', cx=150.0, cy=150.0, lx=120.0,
+                                             ly=120.0, angle=0.0, material=4.0)])
+    mixed = wavebit.rcwa(backend=0, structure=[good, _oversized()[0]],
+                         **dict(_REFUSE_KW, thickness=(205.0, 205.0)))
+    assert mixed.slice_structure(layer=0, n=32).real.mean() > 1.0
+    with pytest.raises(ValueError, match='larger than the period'):
+        mixed.slice_structure(layer=1, n=32)
