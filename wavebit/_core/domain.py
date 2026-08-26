@@ -358,48 +358,6 @@ def index_from_eps(eps):
 #: read as permittivities). They are deliberately *close*: a migration that broke loudly would
 #: not need refusing. 0.2053 against 0.1753 is the size of a truncation-order wobble, which is
 #: what a user would take it for. Re-measure them if the quickstart scene ever changes.
-_VALUE_CHANGED_TOO = (
-    'THE VALUE CHANGED TOO: wavebit now takes relative PERMITTIVITY where it took a '
-    'refractive index, so renaming the keyword and keeping the number solves a different '
-    'structure. n = 3.5 is eps = 12.25 -- write wavebit.eps_from_index(3.5), or '
-    'wavebit.Material(12.25). The same 3.5 read as a permittivity is a perfectly legal, '
-    "energy-conserving medium, which is why this is refused by name: on the README's "
-    'quickstart scene, keeping the old numbers moves sum(R) from 0.2053 to 0.1753 -- a '
-    'plausible number, the size of a truncation wobble, and nothing warns. '
-    'wavebit.index_from_eps is the way back.')
-
-#: ``old spelling -> (new spelling, what it names)``. One table, read by the constructors (to
-#: refuse a retired keyword argument), by the analytic path's strict-key funnel and by
-#: ``_core/spec.py`` (to refuse a retired dict key), so they cannot drift into saying different
-#: things about one rename.
-#:
-#: ``ucell`` and ``eps`` name a *structure* rather than a material, and they are in this table
-#: for the same reason the material spellings are: the raster each of them usually held is a
-#: grid of numbers whose quantity moved with the rename. A layer written ``eps=[[1, 1, 3.5,
-#: 3.5]]`` respelled to ``structure=`` and left at 3.5 is a legal, energy-conserving grating
-#: made of a different glass, so the rename alone is not the whole migration and the message
-#: must not say it is.
-RETIRED_MATERIAL_NAMES = {
-    'ucell': ('structure', 'the layer stack: an (n_layers, Ny, Nx) permittivity raster, or a '
-                           'per-layer list of shape recipes'),
-    'eps': ('structure', "one layer's structure: a (Ny, Nx) permittivity raster, a block "
-                         'recipe, or an analytic layer dict'),
-    'n_top': ('top', 'the superstrate, as a Material or a bare permittivity'),
-    'n_bot': ('bot', 'the substrate, as a Material or a bare permittivity'),
-    'n_base': ('background', "an analytic layer's background material"),
-    'base': ('background', "an analytic layer's background material"),
-    'n_index': ('material', "an analytic shape's material"),
-}
-
-
-def retired_material_name(old, where=''):
-    """The refusal text for one retired spelling -- the rename *and* the value change."""
-    new, what = RETIRED_MATERIAL_NAMES[old]
-    prefix = f'{where}: ' if where else ''
-    return (f'{prefix}{old!r} is retired; it is {new!r} now, naming {what}. '
-            f'{_VALUE_CHANGED_TOO}')
-
-
 @dataclass
 class Layer:
     """One layer of a :class:`Stack`: a thickness paired with the structure filling it.

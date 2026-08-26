@@ -111,7 +111,7 @@ faster.
 """
 from . import overlap as _overlap
 from .backend import array_namespace, as_array, j1, jinc, sinc
-from .domain import as_material, retired_material_name
+from .domain import as_material
 from .factorization import ConvMatrices      # one slot layout for every builder
 from .lattice import periods_of, is_axis_aligned, sample_grid
 from .overlap import COMBINE_MODES, OVERLAP_TOL_REL      # re-exported; both paths read them
@@ -226,14 +226,6 @@ _LENGTH_KEYS = {
 }
 
 
-#: Retired spellings a *layer* dict may still be carrying, and a *shape* dict likewise. Both
-#: are refused by name through :func:`~wavebit._core.domain.retired_material_name`, which says
-#: the quantity changed as well as the key -- the half a plain "unknown key" message would
-#: leave out, and the half that decides whether the number the user kept is still right.
-_RETIRED_LAYER_KEYS = ('n_base', 'base')
-_RETIRED_SHAPE_KEYS = ('n_index',)
-
-
 def check_shape_spec(shape, shape_index=0, layer_index=0):
     """Refuse a shape dict that says something this path will not do.
 
@@ -276,9 +268,6 @@ def check_shape_spec(shape, shape_index=0, layer_index=0):
             f"is the size you meant, or use type={alt!r} to give two lengths.")
 
     unknown = set(shape) - (lengths | _COMMON_KEYS)
-    for key in _RETIRED_SHAPE_KEYS:
-        if key in unknown:
-            raise ValueError(retired_material_name(key, where))
     if unknown:
         import difflib
         known = sorted(lengths | _COMMON_KEYS)
@@ -306,9 +295,6 @@ def check_layer_spec(layer, layer_index=0):
     downstream that could notice.
     """
     unknown = sorted(set(layer) - _LAYER_KEYS)
-    for key in unknown:
-        if key in _RETIRED_LAYER_KEYS:
-            raise ValueError(retired_material_name(key, f'Analytic layer {layer_index}'))
     if unknown:
         raise ValueError(
             f'Analytic layer {layer_index}: {unknown} is not read by any path here. A layer '

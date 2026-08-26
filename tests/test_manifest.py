@@ -280,28 +280,6 @@ def test_the_published_material_quantity_is_the_one_the_solver_takes():
     assert abs(want - other) > 0.15
 
 
-def test_every_retired_material_name_the_manifest_lists_is_actually_refused():
-    """The ``retired`` map is migration advice, and stale advice is worse than none.
-
-    A consumer reading it will rewrite ``n_top`` to ``top`` -- so each entry has to be a name
-    the solver still refuses (or the map is telling people to fix something that is no longer
-    broken) and each replacement has to be a name it accepts. The refusal text must also carry
-    the *value* change, because a consumer that renames the key and keeps the number gets a
-    different scene and no warning; ``'PERMITTIVITY'`` in the message is that sentence's
-    fingerprint.
-    """
-    constructor = {'ucell': 'structure', 'n_top': 'top', 'n_bot': 'bot'}
-    for old, new in MATERIAL_QUANTITY['retired'].items():
-        assert new in ('structure', 'top', 'bot', 'background', 'material'), (old, new)
-        if old not in constructor:
-            continue                       # a dict key, refused by the analytic funnel instead
-        with pytest.raises(TypeError) as excinfo:
-            wavebit.rcwa(**{old: STRUCTURES['raster'] if old == 'ucell' else 1.0},
-                         **{k: v for k, v in KW.items() if k != 'structure'})
-        message = str(excinfo.value)
-        assert new in message and 'PERMITTIVITY' in message, (old, message)
-
-
 def test_the_published_conversions_exist_and_invert_each_other():
     """``conversions`` names the way out of the flip; a name that is not exported is no way out."""
     for name in MATERIAL_QUANTITY['conversions']:

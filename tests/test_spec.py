@@ -197,12 +197,13 @@ def test_expanded_sweep_points_match_direct_calls():
       'stack': {'layers': [{'thickness': -1.0, 'structure': [[1.0]]}]}}, r'non-negative'),
     ({**BINARY_GRATING, 'stack': {'layers': [{'structure': [[1.0]]}]}},
      r"'thickness' and 'structure'"),
-    # The retired spellings, refused by name -- and the refusal has to say the *value* moved
-    # too, since a v2 document re-keyed and left at its old numbers is a legal, different
-    # scene. `SPEC_VERSION` 3 is what a consumer tests instead of guessing.
-    ({**BINARY_GRATING, 'stack': dict(BINARY_GRATING['stack'], n_top=1.0)}, r'PERMITTIVITY'),
+    # The pre-rename spellings. They were refused *by name* until 2026-08-26, with a sentence
+    # about the quantity having moved as well as the key; that machinery is gone, because
+    # wavebit has never been released and the reader it addressed does not exist yet. They are
+    # unknown fields now, and `SPEC_VERSION` is what a consumer tests.
+    ({**BINARY_GRATING, 'stack': dict(BINARY_GRATING['stack'], n_top=1.0)}, r'unknown field'),
     ({**BINARY_GRATING,
-      'stack': {'layers': [{'thickness': 1.0, 'eps': [[1.0]]}]}}, r'PERMITTIVITY'),
+      'stack': {'layers': [{'thickness': 1.0, 'eps': [[1.0]]}]}}, r'unknown field'),
     # a material object with a key nothing reads: `mu` misspelled must not read as absent,
     # which would be a silently non-magnetic medium
     ({**BINARY_GRATING, 'stack': dict(BINARY_GRATING['stack'],
@@ -316,13 +317,18 @@ def test_the_version_free_path_is_the_python_one():
     assert JobSpec.from_json(spec.to_json()).key() == spec.key()
 
 
-def test_the_retired_layer_key_is_refused_by_name_not_as_an_unknown():
-    """``eps`` -> ``structure`` is a rename whose *quantity* moved, so it needs the sentence.
+def test_a_pre_rename_layer_key_is_refused_as_an_unknown_field():
+    """``eps`` was refused by name, with the sentence about the quantity moving, until the
+    retired machinery was deleted on 2026-08-26.
 
-    ``'unknown field(s) [eps]'`` names the half of the migration a reader can guess and omits
-    the half that decides whether the numbers they kept are still right. The stack-level
-    ``n_top`` / ``n_bot`` already got the full text; the layer key was simply missed, in the
-    call two lines below the one that has it.
+    It is an unknown field now. That is a real loss of help -- ``eps`` held a grid of
+    *refractive indices* and ``structure`` holds permittivity, so a document re-keyed and left
+    at its old numbers is a legal grating made of different glass -- and it is the loss the
+    deletion accepted: wavebit has never been released, so the reader that sentence addressed
+    does not exist yet, and the renames belong in the first release's notes instead.
+
+    Pinned here rather than dropped, because the refusal still has to fire. Silently accepting
+    ``eps`` beside ``structure`` is the failure; reporting it plainly is not.
     """
     document = {'version': '6',
                 'numerics': BINARY_GRATING['numerics'],
@@ -334,9 +340,9 @@ def test_the_retired_layer_key_is_refused_by_name_not_as_an_unknown():
     with pytest.raises(SpecError) as excinfo:
         JobSpec.from_dict(document)
     message = str(excinfo.value)
-    assert "'structure'" in message                  # what to write instead
-    assert 'PERMITTIVITY' in message                 # and that the number has to change too
-    assert '12.25' in message                        # with the conversion spelled out
+    assert "'eps'" in message or "['eps']" in message, message
+    assert 'unknown field' in message, message
+    assert 'thickness' in message and 'structure' in message, message   # and what is allowed
 
 
 # ---------------------------------------------------------------- materials

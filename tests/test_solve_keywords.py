@@ -50,10 +50,17 @@ REFUSED = {
     'thicknes': 'a one-letter typo',
     'wavelenght': 'a transposition of the most swept condition there is',
     'truncation_orders': 'a plural',
-    'max_order': 'the pre-rename spelling, which has no property to refuse it by name',
+    'max_order': 'a pre-rename spelling with no property to refuse it by name',
     '_tetm': 'the private slot behind a property, which skips the setter that would refuse it',
     'backend': 'a real attribute that is not a condition',
     'T1': 'internal state',
+    # Retired spellings until 2026-08-26, when the machinery that named their
+    # replacements was deleted -- wavebit has never been released, so the reader those
+    # messages addressed does not exist yet. They are ordinary unknown keywords now, and
+    # this is where that is pinned.
+    'ucell': 'the pre-rename spelling of `structure`',
+    'pol': 'the pre-rename spelling of `tetm`',
+    'ucell_materials': 'a keyword that was deleted rather than renamed',
 }
 
 #: Names that must still work -- and that the suite already passes through these doors.
@@ -153,23 +160,6 @@ def test_every_keyword_the_suite_passes_is_still_accepted(name):
         f'derived condition set no longer contains it')
 
 
-@pytest.mark.parametrize('retired,replacement', [('ucell', 'structure'), ('n_top', 'top'),
-                                                 ('n_bot', 'bot'), ('pol', 'tetm')])
-def test_a_retired_spelling_is_refused_by_what_replaced_it_not_as_unknown(retired, replacement):
-    """The retired names keep their own message, which is the reason they are in the set at all.
-
-    They are properties whose setters raise by name, so the derivation includes them and the
-    unknown-keyword check passes them through to a refusal that says what replaced them. A
-    derivation that excluded them would downgrade four careful messages into one generic
-    'unexpected keyword', and the quantity changed with each of those renames -- a reader told
-    only to rename the keyword would keep the number.
-    """
-    solver = _scene()
-    with pytest.raises(AttributeError) as caught:
-        solver.solve(**{retired: 1.0})
-    assert replacement in str(caught.value), str(caught.value)
-
-
 @pytest.mark.parametrize('backend', BACKENDS, ids=lambda b: BACKEND_IDS[b])
 def test_the_condition_set_is_derived_not_listed(backend):
     """It has to track the code, or it is a second list to keep in sync.
@@ -201,7 +191,12 @@ def test_the_condition_set_is_derived_not_listed(backend):
                 and not name.startswith('_')}
     assert derived == (declared | settable) - {'backend'}, derived ^ ((declared | settable) - {'backend'})
 
-    # Neither source alone is the set, which is the whole reason there are two.
+    # Neither source alone is the set, which is the whole reason there are two -- and after
+    # the retired spellings were deleted the property half came within one name of
+    # contributing nothing. `formulation` is that name: a property with a setter and no
+    # constructor parameter. If it ever gains one, this collapses to the signature and the
+    # union should go with it.
     assert derived - settable, 'the constructor contributes nothing; properties alone would do'
-    assert derived - declared, 'the properties contribute nothing; the constructor alone would do'
-    assert 'wavelength' in derived and 'ucell' in derived and 'backend' not in derived
+    assert derived - declared == {'formulation'}, sorted(derived - declared)
+    assert 'wavelength' in derived and 'backend' not in derived
+    assert 'ucell' not in derived and 'pol' not in derived

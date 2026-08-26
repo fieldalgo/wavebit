@@ -55,7 +55,7 @@ import json
 import math
 
 from .conventions import parse_order_pair
-from .domain import Layer, Material, Stack, Incidence, retired_material_name
+from .domain import Layer, Material, Stack, Incidence
 from .enums import (Answers, Backend, Factorization, FourierCoefficients, NormalMethod,
                     Tetm, answers_of)
 
@@ -117,18 +117,15 @@ class SpecError(ValueError):
 
 # ------------------------------------------------------------------ coercion helpers
 
-def _reject_unknown(got, allowed, where, retired=()):
-    """Refuse fields this schema does not read, retired material spellings by name first.
+def _reject_unknown(got, allowed, where):
+    """Refuse fields this schema does not read.
 
-    ``retired`` is the subset of unknown names that used to mean something here. They get the
-    rename *and* the sentence about the quantity changing, because a spec re-keyed from a v2
-    document and left at its old numbers describes a different structure that solves and
-    conserves energy. Plain unknowns fall through to the list below.
+    Took a ``retired`` set until 2026-08-26, which named the pre-rename material spellings and
+    said that the *quantity* had changed with each. Gone with the rest of that machinery: the
+    reader it addressed cannot exist before a first release, and the renames belong in the
+    release notes. A retired spelling is now reported as what it is here -- an unknown field.
     """
     unknown = sorted(set(got) - set(allowed))
-    for name in retired:
-        if name in unknown:
-            raise SpecError(retired_material_name(name, where))
     if unknown:
         raise SpecError(
             f"{where}: unknown field(s) {unknown}. Allowed: {sorted(allowed)}")
@@ -670,18 +667,10 @@ class JobSpec:
 
 def _stack_from_dict(d) -> Stack:
     d = dict(d or {})
-    _reject_unknown(d, ('layers', 'top', 'bot', 'period', 'lattice'), 'stack',
-                    retired=('n_top', 'n_bot'))
+    _reject_unknown(d, ('layers', 'top', 'bot', 'period', 'lattice'), 'stack')
     layers = []
     for i, raw in enumerate(d.get('layers', [])):
-        # 'eps' is retired the same way 'n_top' is two lines up, and for the same reason: the
-        # raster it used to hold was a grid of refractive indices, so a document that renamed
-        # the key and kept the numbers is a legal grating made of different glass. Without the
-        # `retired=` it fell through to "unknown field(s) ['eps']", which names the one half of
-        # the migration a reader can already guess and omits the half that decides whether
-        # their numbers are still right.
-        _reject_unknown(raw, ('thickness', 'structure', 'mu'), f'stack.layers[{i}]',
-                        retired=('eps',))
+        _reject_unknown(raw, ('thickness', 'structure', 'mu'), f'stack.layers[{i}]')
         if 'thickness' not in raw or 'structure' not in raw:
             raise SpecError(f"stack.layers[{i}]: needs both 'thickness' and 'structure'")
         thickness = raw['thickness']

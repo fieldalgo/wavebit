@@ -27,7 +27,6 @@ Regenerate the JSON with::
 """
 import json
 
-from ._core.domain import RETIRED_MATERIAL_NAMES
 from ._core.enums import (Answers, Backend, DEFAULT_ANSWERS, DIFFERENTIABLE_BACKENDS,
                           Factorization,
                           FourierCoefficients, NormalMethod, Tetm)
@@ -127,11 +126,6 @@ SPELLINGS = (
 #: downstream raises and no energy check fires. Prose cannot be tested for; this can, which is
 #: the whole reason it is a dict of names rather than a sentence in ``summary``.
 #:
-#: ``retired`` maps each old spelling to the new one, and is *read from the table the
-#: refusals themselves use* (:data:`wavebit._core.domain.RETIRED_MATERIAL_NAMES`) rather than
-#: restated here. Every entry is refused **by name** at the boundary rather than accepted, so
-#: a consumer can rely on an old document failing loudly instead of being reinterpreted -- and
-#: deriving the list is what keeps that promise true of the list rather than of a copy of it.
 MATERIAL_QUANTITY = {
     'quantity': 'permittivity',
     'relative': True,
@@ -148,7 +142,11 @@ MATERIAL_QUANTITY = {
     # structural so that it can be read inside a jax.jit trace, where a value cannot be.
     'non_magnetic_spelling': 'mu=None',
     'conversions': ('eps_from_index', 'index_from_eps'),
-    'retired': {old: new for old, (new, _what) in RETIRED_MATERIAL_NAMES.items()},
+    #: No `retired` map since 2026-08-26: the retired-spelling machinery it was derived
+    #: from is gone. wavebit has never been released, so the reader those messages
+    #: addressed does not exist yet; the renames belong in the first release's notes.
+    #: Removed without a MANIFEST_VERSION bump, following `c08e682`, which took
+    #: `outputs_default` out of `results.jobspec` and left the version at '6'.
     'source': 'docs/conventions.md',
 }
 
@@ -470,7 +468,6 @@ def _jsonable_material_quantity() -> dict:
     """:data:`MATERIAL_QUANTITY` with its tuples as lists, so it round-trips through JSON."""
     out = dict(MATERIAL_QUANTITY)
     out['conversions'] = list(out['conversions'])
-    out['retired'] = dict(out['retired'])
     return out
 
 

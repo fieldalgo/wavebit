@@ -24,8 +24,7 @@ from .conventions import (_CHI_POLARIZATION_CLASH, _COMPLEX_CHI,
                           incident_sp_amplitudes, lit_orders, order_window,
                           parse_order_pair, reject_complex_angle,
                           warn_if_xy_on_a_skewed_cell)
-from .domain import (Material, RETIRED_MATERIAL_NAMES, as_material, index_from_eps,
-                     retired_material_name)
+from .domain import Material, as_material, index_from_eps
 from .enums import (Answers, DEFAULT_ANSWERS, DEFAULT_FACTORIZATION, DEFAULT_FORMULATION,
                     DEFAULT_FOURIER_COEFFICIENTS, DEFAULT_NORMAL_METHOD, answers_of,
                     normal_method_of,
@@ -241,23 +240,6 @@ def _efficiency_only(de_ri, de_ti):
 
 
 #: ``pol`` was three things at once, and this is the rename. See :attr:`CoreSolveMixin.tetm`.
-_POL_RETIRED = (
-    "pol is gone; use tetm='te' or tetm='tm'. The old name said three things at once: "
-    'which polarization, which solver path, and (through a derived psi) a value that a '
-    'fractional pol -- pol=0.3 was psi = 0.35*pi -- turned into a third spelling of the '
-    'angle. tetm says only the first two, which are the ones that travel together: it '
-    'declares that the incidence has no polarization and no azimuth degree of freedom, '
-    'and that declaration is what buys the pure 1D TE/TM formulation. For a linear angle '
-    'use psi, and for anything elliptical use polarization=(a_s, a_p).')
-
-#: ``ucell_materials`` had a reader once and lost it. Deleted rather than renamed, so the
-#: message says that rather than pointing at a replacement that does not exist.
-_UCELL_MATERIALS_DELETED = (
-    'ucell_materials is gone. It was assigned in all three backends and carried in the JAX '
-    "pytree's aux_data -- where it took part in the jit cache key -- and read by nothing at "
-    'all. A material is named where it is used now: wavebit.Material(epsilon, mu) in a shape '
-    'or block slot, and permittivity samples in the raster itself.')
-
 #: What NumPy answers to `grad` and `fit`. A named refusal rather than the `AttributeError` a
 #: missing method raises: "'SolverNumpy' object has no attribute 'grad'" is true and says
 #: nothing -- not that the absence is deliberate, not that two other backends have it, not that
@@ -272,30 +254,22 @@ _NO_AUTODIFF = (
     "`backends` section, which publishes the same fact.")
 
 
-def _refuse_retired(kwargs):
-    """Refuse the retired constructor keywords by name, before anything else runs.
+def _refuse_unknown_keywords(kwargs):
+    """Refuse a constructor keyword that is not a condition.
 
-    The three solver constructors collect these through ``**retired`` rather than listing
-    them, because what has to be said is not "no such argument" -- Python says that already --
-    but *which* argument replaced it and that the number it carried has to change too. A
-    ``TypeError: unexpected keyword argument 'n_top'`` sends a reader to rename the keyword and
-    keep the value, and a refractive index reread as a permittivity is a legal,
-    energy-conserving, wrong medium that nothing downstream can flag.
+    The constructors collect the leftovers through ``**unknown`` rather than letting Python
+    raise, because the catch-all is what makes a typo reachable at all: without a refusal here
+    it would be swallowed silently.
 
-    Anything else still raises ``TypeError``, from here rather than from Python, so a typo in a
-    live keyword is not silently swallowed by the catch-all this refusal needs.
+    This used to also name the retired spellings -- ``ucell``, ``n_top``, ``n_bot``, ``pol``,
+    ``ucell_materials`` -- and say what replaced each and that the *quantity* changed with the
+    name. Those messages are gone with the rest of the retired machinery: wavebit has never
+    been released, so the reader they were written for does not exist yet. The renames belong
+    in the first release's notes instead.
     """
-    if not kwargs:
-        return
-    for name in kwargs:
-        if name == 'pol':
-            raise TypeError(_POL_RETIRED)
-        if name == 'ucell_materials':
-            raise TypeError(_UCELL_MATERIALS_DELETED)
-        if name in RETIRED_MATERIAL_NAMES:
-            raise TypeError(retired_material_name(name))
-    raise TypeError(
-        f'unexpected keyword argument(s) {sorted(kwargs)!r}')
+    if kwargs:
+        raise TypeError(
+            f'unexpected keyword argument(s) {sorted(kwargs)!r}')
 
 
 #: ``mu`` is a *field*, and only the raster states a layer as fields. Refused by name on the
@@ -663,10 +637,6 @@ class CoreSolveMixin:
         """
         return self._n_top
 
-    @n_top.setter
-    def n_top(self, value):
-        raise AttributeError(retired_material_name('n_top'))
-
     @property
     def n_bot(self):
         """The substrate's refractive index, ``sqrt(eps*mu)`` -- derived, read-only.
@@ -674,10 +644,6 @@ class CoreSolveMixin:
         See :attr:`n_top`.
         """
         return self._n_bot
-
-    @n_bot.setter
-    def n_bot(self, value):
-        raise AttributeError(retired_material_name('n_bot'))
 
     @property
     def n_inc(self):
@@ -835,14 +801,6 @@ class CoreSolveMixin:
         formulations rather than naming them; the word is the user's spelling.
         """
         return None if self._tetm is None else int(self._tetm == 'tm')
-
-    @property
-    def pol(self):
-        raise AttributeError(_POL_RETIRED)
-
-    @pol.setter
-    def pol(self, value):
-        raise AttributeError(_POL_RETIRED)
 
     def _refuse_y_orders_on_a_y_invariant_cell(self, one_dimensional):
         """A one-row raster cannot diffract out of plane, so it cannot keep ``y`` orders.
@@ -1743,14 +1701,6 @@ class CoreSolveMixin:
     def ellipse(self, *args, **kwargs):
         return self.modeler.ellipse(*args, **kwargs)
 
-    @property
-    def ucell(self):
-        raise AttributeError(retired_material_name('ucell'))
-
-    @ucell.setter
-    def ucell(self, value):
-        raise AttributeError(retired_material_name('ucell'))
-
     def plot_field(self, field_cell):
         """Draw a reconstructed cell. See :func:`wavebit._core.fields.plot_field`."""
         from .fields import plot_field
@@ -1994,12 +1944,11 @@ class CoreFactorizationMixin:
                  # permeability belongs to the Material filling each region, so naming it
                  # here is refused rather than ignored. New parameters go at the end -- see
                  # the note on `lattice` above.
-                 **retired,                  # ucell / n_top / n_bot / ucell_materials, so
-                 # each can say what replaced it *and* that the quantity changed with the
-                 # name. A TypeError alone would send a reader to rename the keyword and keep
-                 # the number, which is a different, legal, energy-conserving structure.
+                 **unknown,                  # collected rather than left to Python, so the
+                 # refusal comes from `_refuse_unknown_keywords` and a typo cannot be
+                 # swallowed by the catch-all itself.
                  ):
-        _refuse_retired(retired)
+        _refuse_unknown_keywords(unknown)
 
         super().__init__(top=top, bot=bot, theta=theta, phi=phi, psi=psi, chi=chi, tetm=tetm,
                          truncation_order=truncation_order, period=period, wavelength=wavelength,

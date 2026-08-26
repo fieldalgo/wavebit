@@ -4,15 +4,12 @@ A ``Stack`` round-trips losslessly to and from the ``(structure, thickness)`` pa
 driving :func:`wavebit.rcwa` through ``stack=`` / ``incidence=`` must give byte-identical
 results to passing the equivalent raw keyword arguments (the Phase 2 "API parity" gate).
 """
-import dataclasses
 
 import numpy as np
 import pytest
 
 import wavebit
 from wavebit import Stack, Incidence, Material, Tetm
-from wavebit._core.domain import (Layer, RETIRED_MATERIAL_NAMES, _VALUE_CHANGED_TOO,
-                                  retired_material_name)
 
 
 # ---------------------------------------------------------------- round-trip
@@ -183,117 +180,64 @@ def test_one_value_in_any_spelling_is_still_one_value(value):
                  thickness=[0.15], theta=0.0, phi=None, tetm=Tetm.TE, top=value, bot=1.0)
 
 
-# --------------------------------------------------------------- retired spellings
+# ------------------------------------------------- the spellings that used to be named
 
-def test_the_retired_layer_key_is_in_the_one_table():
-    """``eps`` -> ``structure`` belongs in ``RETIRED_MATERIAL_NAMES`` like every other rename.
+# `ucell`, `eps`, `n_top`, `n_bot`, `n_base`, `base`, `n_index`, `pol` and `ucell_materials`
+# were refused **by name** until 2026-08-26, each with the sentence that its *quantity* had
+# changed too -- `ucell` held refractive indices and `structure` holds permittivity, so a
+# script re-keyed and left at its old numbers is a legal, energy-conserving, different scene.
+#
+# That machinery is deleted. wavebit has never been released, so the reader those messages
+# addressed does not exist yet, and the renames belong in the first release's notes. What has
+# to survive is the refusal itself: a name nothing reads must not be accepted.
 
-    The table exists so that the constructors, the analytic path's key funnel and
-    ``_core/spec.py`` cannot drift into saying different things about one rename. ``eps`` was
-    missing from it, which is not a decision about ``eps`` -- it made
-    ``retired_material_name('eps')`` a ``KeyError``, so the spec layer's refusal could not use
-    the shared text even if it asked for it.
-
-    It names a *structure* rather than a material, and it is still here for the reason the
-    table's own comment gives: the raster it held was a grid of refractive indices, so the
-    rename is only half of the migration.
-    """
-    assert 'eps' in RETIRED_MATERIAL_NAMES
-    new, _what = RETIRED_MATERIAL_NAMES['eps']
-    assert new == 'structure'
-    # the replacement has to be a name that exists, or the advice sends a reader nowhere
-    assert new in {f.name for f in dataclasses.fields(Layer)}
-
-    message = retired_material_name('eps', 'stack.layers[0]')
-    assert "'eps' is retired" in message and "'structure'" in message
-    assert 'PERMITTIVITY' in message          # the half a plain rename message would omit
-    assert '12.25' in message                 # n = 3.5 spelled out, both directions named
-    assert 'eps_from_index' in message and 'index_from_eps' in message
-
-
-def test_the_solver_refuses_the_retired_layer_keyword_by_name():
-    """Adding it to the table is what makes every reader of the table refuse it."""
-    with pytest.raises(TypeError, match='PERMITTIVITY'):
-        wavebit.rcwa(backend=0, truncation_order=[2, 0], eps=np.array([[[9.0, 1.0]]]), thickness=[0.1])
-
-@pytest.mark.parametrize('name,keyword,expect', [
-    ('pol', dict(pol='te'), r"use tetm='te'"),
-    ('ucell_materials', dict(ucell_materials=[]), r'read by nothing at all'),
-    ('ucell', dict(ucell=np.array([[[9.0, 1.0]]])), r'PERMITTIVITY'),
-    ('n_top', dict(n_top=1.5), r'PERMITTIVITY'),
+@pytest.mark.parametrize('keyword', [
+    dict(pol='te'),
+    dict(ucell_materials=[]),
+    dict(ucell=np.array([[[9.0, 1.0]]])),
+    dict(n_top=1.5),
+    dict(eps=np.array([[[9.0, 1.0]]])),
 ])
-def test_every_retired_constructor_keyword_is_refused_by_name(name, keyword, expect):
-    """One mechanism, one refusal each, and none of them a bare ``TypeError``.
+def test_a_pre_rename_constructor_keyword_is_refused_as_unknown(keyword):
+    """Plainly now, and the plainness is the whole change -- but still refused.
 
-    The point of ``**retired`` is that Python's own "unexpected keyword argument" is the wrong
-    message: it sends a reader to rename the keyword and keep the number, and for the material
-    names that is a legal, energy-conserving, different medium. ``pol`` is here because it was
-    the one retired spelling that was *not* on this mechanism -- it sat in all three
-    constructor signatures purely to raise, threaded through three ``super().__init__``
-    calls, and nothing tested it at all until 2026-08-21.
+    Silently accepting one is the failure this guards; naming its replacement was help that
+    had no audience yet.
     """
-    with pytest.raises(TypeError, match=expect):
+    with pytest.raises(TypeError, match=r'unexpected keyword argument'):
         wavebit.rcwa(backend=0, truncation_order=[2, 0], thickness=[0.1],
                      structure=np.array([[[9.0, 1.0]]]), **keyword)
 
 
 def test_a_typo_in_a_live_keyword_is_not_swallowed_by_the_catch_all():
-    """``**retired`` collects everything, so the refusal has to re-raise the ordinary case."""
+    """``**unknown`` collects everything, so the refusal has to raise the ordinary case.
+
+    This is the half of `_refuse_retired` that survived the deletion, under the name
+    `_refuse_unknown_keywords`: without it the catch-all would swallow a misspelled live
+    keyword, which is worse than the Python error it replaced.
+    """
     with pytest.raises(TypeError, match=r"unexpected keyword argument\(s\) \['wavelenght'\]"):
         wavebit.rcwa(backend=0, truncation_order=[2, 0], thickness=[0.1],
-                     structure=np.array([[[9.0, 1.0]]]), wavelenght=0.5)
+                     structure=np.array([[[9.0, 1.0]]]), wavelenght=700.0)
 
 
-def test_the_retired_names_are_refused_on_attribute_access_too():
-    """A constructor refusal does not help someone who assigns after building."""
-    solver = wavebit.rcwa(backend=0, truncation_order=[2, 0], thickness=[0.1],
-                          structure=np.array([[[9.0, 1.0]]]))
-    for attr, expect in (('pol', r"use tetm='te'"), ('ucell', r'PERMITTIVITY')):
-        with pytest.raises(AttributeError, match=expect):
-            getattr(solver, attr)
-        with pytest.raises(AttributeError, match=expect):
-            setattr(solver, attr, 1)
+def test_the_derived_index_accessors_survived_the_deletion():
+    """`n_top` / `n_bot` are **read-only derived properties**, not retired spellings.
 
+    Only their setters were the retired half. The getters return `sqrt(eps*mu)` and every solve
+    reads them -- `n_inc` and the four solve dispatch sites -- so deleting all four defs, which
+    is what "four retired properties" reads like, takes an ordinary solve down with
+    `AttributeError: no attribute 'n_bot'`.
 
-def test_the_two_figures_the_refusal_quotes_are_the_readme_scene_measured():
-    """Every retired spelling ends in a measurement; solve it and check the message.
-
-    ``_VALUE_CHANGED_TOO`` argues its case with two numbers -- the README quickstart migrated
-    properly, and the same scene with each material literal left at the refractive index it
-    used to be. For a while it quoted a pair (0.0635 / 0.9814) that no variant of that scene
-    produces; they came from a different structure and were copied along. Nothing failed,
-    because a docstring's arithmetic has no reader but a person.
-
-    Which makes it worth a test rather than a re-check: the sentence's whole job is to convince
-    someone that the wrong reading is *plausible*, and it argues that with a figure. A reader
-    who reproduces the scene and gets a third answer learns the opposite of what the sentence
-    is for. Pinning the two to four decimals also keeps them honest against the message text
-    itself, so the prose and the solve cannot drift apart in either direction.
-
-    The numbers belong to the quickstart, not to the convention: if that scene changes,
-    re-measure and update both copies (here, and ``docs/conventions.md``).
+    The input is permittivity and this is derived from it; both are true at once.
     """
-    def quickstart(eps_layer, eps_substrate):
-        res = wavebit.rcwa(
-            backend=0, wavelength=900., period=[700.], truncation_order=[10, 0],
-            top=1., bot=eps_substrate, theta=0., phi=0., tetm='te',
-            structure=np.array([[[1.0, 1.0, eps_layer, eps_layer]]]),
-            thickness=[300.]).solve()
-        return float(np.sum(res.R)), float(np.sum(res.T))
-
-    migrated, migrated_t = quickstart(wavebit.eps_from_index(3.5), wavebit.eps_from_index(1.5))
-    literals_kept, kept_t = quickstart(3.5, 1.5)
-
-    assert migrated == pytest.approx(0.20533, abs=5e-6)
-    assert literals_kept == pytest.approx(0.17530, abs=5e-6)
-    assert f'{migrated:.4f}' in _VALUE_CHANGED_TOO
-    assert f'{literals_kept:.4f}' in _VALUE_CHANGED_TOO
-
-    # And the reason the pair has to be quoted at all: the wrong reading is a legal lossless
-    # grating, so it conserves energy exactly as the right one does. Nothing downstream can
-    # separate them, which is what leaves the refusal as the only place it can be said.
-    assert migrated + migrated_t == pytest.approx(1.0, abs=1e-12)
-    assert literals_kept + kept_t == pytest.approx(1.0, abs=1e-12)
+    solver = wavebit.rcwa(backend=0, truncation_order=[2, 0], thickness=[0.1],
+                          structure=np.array([[[9.0, 1.0]]]), top=Material(4.0), bot=2.25)
+    assert complex(solver.n_top) == pytest.approx(2.0)      # sqrt(4.0)
+    assert complex(solver.n_bot) == pytest.approx(1.5)      # sqrt(2.25)
+    with pytest.raises(AttributeError):
+        solver.n_top = 1.5                                   # derived, so not settable
+    assert np.isfinite(np.asarray(solver.solve().T).sum())
 
 
 # --------------------------------------------------------------- conflicts
