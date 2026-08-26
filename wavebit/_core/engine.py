@@ -2012,6 +2012,102 @@ class CoreFactorizationMixin:
     # messages, and the conversion at the end. All four collapse onto things `_core` already
     # declares -- `_ARRAY_TYPES`, the namespace's own dtype names, and `as_array`.
 
+    @classmethod
+    def _condition_names(cls):
+        """Every keyword the solve entry points accept: a public property with a setter.
+
+        Derived rather than listed, so it cannot drift. A condition is something with a
+        validating setter -- which is exactly what a `property` with an `fset` is here -- and
+        the retired spellings (`ucell`, `n_top`, `n_bot`, `pol`) are in the set on purpose:
+        they are properties whose setters raise by name, so they keep saying what replaced
+        them instead of being reported as unknown.
+
+        Cached per class, because the three backends have different sets and the answer cannot
+        change after import.
+        """
+        cached = cls.__dict__.get('_CONDITION_NAMES')
+        if cached is None:
+            import inspect
+
+            # Two sources, because neither alone is the set. Properties miss `wavelength`,
+            # `layer_algorithm` and `normal_grid`, which are plain attributes and are exactly
+            # what a sweep moves -- deriving from properties alone refused a wavelength sweep,
+            # which is the most ordinary call this library has. The constructor misses the
+            # retired spellings, which have no parameter and must stay in so their own setters
+            # can say what replaced them.
+            # Every `__init__` in the MRO, not `cls.__init__`: the public wrapper is
+            # `(*args, **kwargs)`, so asking the class itself returns nothing at all -- which
+            # is how a first version of this refused a wavelength sweep. The wrappers
+            # contribute nothing here because variadics are skipped.
+            declared = {name
+                        for klass in cls.__mro__
+                        for name, parameter in inspect.signature(
+                            klass.__init__).parameters.items()
+                        if name != 'self'
+                        and parameter.kind not in (parameter.VAR_KEYWORD,
+                                                   parameter.VAR_POSITIONAL)}
+            settable = {name
+                        for klass in cls.__mro__
+                        for name, member in vars(klass).items()
+                        if isinstance(member, property) and member.fset is not None
+                        # Prevention rather than a filter: there are no private properties
+                        # with setters today. It states that writing a private slot from here
+                        # is not a supported way to set a condition, whatever appears later.
+                        and not name.startswith('_')}
+
+            # `backend` is a constructor parameter that cannot take effect afterwards: it
+            # selected the class, and construction is over. Assigning it changes nothing about
+            # the solve and only moves what the JAX pytree hashes into its aux_data, so it
+            # would be one more keyword accepted for an effect it does not have.
+            cls._CONDITION_NAMES = cached = frozenset(declared | settable) - {'backend'}
+        return cached
+
+    def _assign_conditions(self, kwargs):
+        """Set conditions from keywords, refusing a name that is not one.
+
+        These entry points take `**kwargs` so an optimizer can move a design variable and
+        re-solve in one call, and every one of them used to end with a bare
+
+            [setattr(self, k, v) for k, v in kwargs.items()]
+
+        which accepts anything. A misspelled condition was stored as a brand-new attribute,
+        the real one never moved, and the **unchanged** answer came back -- no exception, no
+        warning, nothing in the result to tell it apart from a change that happened to do
+        nothing. Measured: `solve(thicknes=[900.])` returned T = 0.851185066096, bit-identical
+        to the base, while the real `thickness=[900.]` moves T by thirteen points.
+
+        The constructor already refuses an unknown keyword by name (`_refuse_retired`), and
+        `tests/test_domain.py` pins it with this exact typo. The decision was made; it just
+        never reached the entry points a sweep actually calls.
+
+        It also closes a sharper hole than a typo. `solve(_tetm='tm')` reached the private slot
+        behind the property and returned the TM answer for a solver configured TE -- the clash
+        check that refuses `tetm` beside a named incidence lives in the setter, and writing the
+        slot goes around it. A private name is neither a constructor parameter nor a public
+        property, so it is now simply unknown.
+        """
+        if not kwargs:
+            return
+
+        legal = self._condition_names()
+        unknown = sorted(name for name in kwargs if name not in legal)
+        if unknown:
+            import difflib
+
+            hints = []
+            for name in unknown:
+                near = difflib.get_close_matches(name, sorted(legal), n=1, cutoff=0.7)
+                hints.append(f'{name!r}' + (f' (did you mean {near[0]!r}?)' if near else ''))
+            raise TypeError(
+                f'unexpected keyword argument(s): {", ".join(hints)}. These entry points take '
+                f'conditions to set before solving, and a name that is not one used to be '
+                f'stored as an attribute and silently ignored -- the solve then answered the '
+                f'scene you had, not the one you asked for. Settable conditions: '
+                f'{", ".join(sorted(legal))}.')
+
+        for name, value in kwargs.items():
+            setattr(self, name, value)
+
     def _raster_types(self):
         """The array types a raster may arrive as: NumPy's, plus this backend's own.
 
@@ -2296,8 +2392,7 @@ class CoreFactorizationMixin:
         # An optimizer's loop sets a design variable and re-solves in one call. It was a list
         # comprehension evaluated for its side effects in two of the three copies, which is a
         # `for` loop written to look like a value.
-        for name, value in kwargs.items():
-            setattr(self, name, value)
+        self._assign_conditions(kwargs)
         result = self.solve(geometry=geometry)
         return result, self.reconstruct_field(sample_x, sample_y, sample_z, incidences)
 
@@ -2515,7 +2610,7 @@ class CoreFactorizationMixin:
         is refused rather than answered, eagerly — see :mod:`wavebit._core.geometry` for what
         each record checks and why a traced replay cannot.
         """
-        [setattr(self, k, v) for k, v in kwargs.items()]
+        self._assign_conditions(kwargs)
         # Same two refusals as `_eps_conv_matrices`, in the same order, for the same reason: a
         # record of a build that cannot happen is worth nothing, and a structure that gets one
         # diagnosis from `freeze_geometry` and a different one from `solve` sends the
@@ -2633,7 +2728,7 @@ class CoreFactorizationMixin:
                 thing the record exists to avoid — so a long fit should re-freeze on a schedule
                 rather than wait to be told.
         """
-        [setattr(self, k, v) for k, v in kwargs.items()]  # needed for optimization sweeps
+        self._assign_conditions(kwargs)   # an optimizer moves a design variable here
         self._frozen_geometry = geometry
         if not auto_detune:
             return self._solve_built(geometry)
@@ -2757,7 +2852,7 @@ class CoreFactorizationMixin:
 
         ``geometry`` behaves as in :meth:`solve`.
         """
-        [setattr(self, k, v) for k, v in kwargs.items()]
+        self._assign_conditions(kwargs)
         return self._eps_conv_matrices(geometry)
 
     def mu_conv_matrices(self, geometry=None, **kwargs):
@@ -2775,7 +2870,7 @@ class CoreFactorizationMixin:
 
         ``geometry`` behaves as in :meth:`solve`.
         """
-        [setattr(self, k, v) for k, v in kwargs.items()]
+        self._assign_conditions(kwargs)
         return self._mu_conv_matrices(geometry)
 
     def slice_structure(self, layer=0, n=512, show='eps', band_limited=False):
