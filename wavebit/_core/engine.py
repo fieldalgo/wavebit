@@ -2644,6 +2644,12 @@ class CoreFactorizationMixin:
         each record checks and why a traced replay cannot.
         """
         self._assign_conditions(kwargs)
+        # A record of a stack that cannot be solved is a record of nothing, and it would be
+        # replayed rather than rebuilt -- so the mismatch would surface later, from the replay,
+        # further from the assignment that caused it. Only this one refusal, not all of
+        # `_check_before_building`: whether a freeze should also refuse an unavailable rule is
+        # a separate question about what a geometry record is for.
+        self._reject_layer_count_mismatch()
         # Same two refusals as `_eps_conv_matrices`, in the same order, for the same reason: a
         # record of a build that cannot happen is worth nothing, and a structure that gets one
         # diagnosis from `freeze_geometry` and a different one from `solve` sends the
@@ -3055,6 +3061,45 @@ class CoreFactorizationMixin:
         factorization = self.factorization
         self.fourier_coefficients   # read for the refusal it may raise, not for its value
         self._reject_unread_normal_method(factorization)
+        self._reject_layer_count_mismatch()
+
+    def _reject_layer_count_mismatch(self):
+        """The stack has to be one stack: as many thicknesses as the structure has layers.
+
+        Every solve sizes its layer loop off `len(thickness)`, so the two ways of getting this
+        wrong failed in opposite directions and neither said what was wrong:
+
+        * **more layers than thicknesses** -- the extra convolution slots were simply never
+          indexed. A two-layer structure with one thickness answered T = 0.851185066096, which
+          is *bit-identical* to the one-layer structure with one thickness. The second layer
+          was built, paid for, and dropped, in silence.
+        * **more thicknesses than layers** -- a raw `IndexError: index 1 is out of bounds for
+          axis 0 with size 1` out of the middle of the solve, which says where it died and not
+          what the caller did.
+
+        Checked at build time rather than in the setters because the two arrive in either
+        order: assigning a two-layer structure to a solver that still holds one thickness is a
+        legal half-step. This is the same reason `excitation`'s legality is read here and not
+        in its setter -- the condition it depends on may still change.
+
+        `len` covers both spellings: a raster is `(n_layers, Ny, Nx)`, and the two shape
+        spellings are a list with one entry per layer.
+        """
+        structure = getattr(self, '_structure', None)
+        if structure is None:
+            return
+        layers, thicknesses = len(structure), len(self._thickness)
+        if layers == thicknesses:
+            return
+        raise ValueError(
+            f'the structure declares {layers} layer(s) and `thickness` has {thicknesses} '
+            f'entry(ies); a stack needs one thickness per layer. '
+            + ('The extra layers used to be built and then never indexed -- the solve loops '
+               'over `thickness` -- so the answer came back identical to the shorter stack.'
+               if layers > thicknesses else
+               'The extra thicknesses used to reach past the end of the structure and raise '
+               'an IndexError from inside the solve.'))
+
     def _slots_for(self, structure, geometry, quantity):
         """Five convolution slots for one *quantity* of the current structure.
 
