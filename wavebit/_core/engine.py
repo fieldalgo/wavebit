@@ -1540,6 +1540,9 @@ class CoreSolveMixin:
             out = {'given': _efficiency_only(*out)}
         self.layer_info_list = out.pop('layer_info_list', [])
         self.T1 = out.pop('T1', None)
+        #: The scene this solve was posed with, so `reconstruct_field` can tell whether it is
+        #: still being asked about the same one. See `_reconstruction_scene`.
+        self._solved_scene = self._reconstruction_scene()
         #: The stack's scattering matrix -- both sides, every order -- on this shelf rather than in
         #: result: :class:`~wavebit._core.result.Result` is a registered pytree with fixed
         #: children, so carrying matrices there would change its structure and drag them
@@ -2331,6 +2334,72 @@ class CoreFactorizationMixin:
 
         return result
 
+    _solved_scene = None
+
+    def _reconstruction_scene(self):
+        """The live conditions a reconstruction reads, as concrete numbers -- or ``None``.
+
+        `reconstruct_field` walks the modes and amplitudes the last solve left behind, but it
+        re-reads `wavelength`, `thickness`, the cell, the incidence angles and `incidence_side`
+        from the solver as it goes. So a condition changed after the solve and before the
+        reconstruction produces a field that belongs to *neither* scene.
+
+        ``None`` when any of it is traced: concreteness is not a tracer's to prove, and a jitted
+        reconstruction cannot compare anyway -- the same rule `StaticGeometry`'s staleness
+        checks follow, and for the same reason.
+        """
+        try:
+            lattice = self.lattice
+            return (
+                complex(self.wavelength),
+                tuple(complex(v) for v in _np.asarray(self.thickness).reshape(-1)),
+                complex(self.theta),
+                None if self.phi is None else complex(self.phi),
+                tuple(complex(v) for v in _np.asarray(self.period).reshape(-1)),
+                None if lattice is None else tuple(
+                    complex(v) for v in _np.asarray(lattice).reshape(-1)),
+                self.incidence_side,
+                self.tetm_index,
+                # The width, because narrowing it re-casts the *conditions* and leaves the
+                # solve's `T1` and `layer_info_list` at the width they were computed in. That
+                # is a mix too. Held explicitly rather than left to fall out of the numbers:
+                # `complex_dtype=1` moves `theta=0.1` and leaves `theta=0.0` alone, so without
+                # this the refusal would depend on whether a value happens to survive float32.
+                self._complex_dtype,
+            )
+        except (TypeError, ValueError, RuntimeError):
+            # Three ways a condition declines to be a number, and all three mean the same
+            # thing here. `TypeError` is a JAX tracer refusing `complex()`; `ValueError` an
+            # array that is not a scalar; `RuntimeError` is Torch's "Can't call numpy() on
+            # Tensor that requires grad", which is a *differentiated* leaf rather than a
+            # traced one -- the case the whole optimizer path runs in, and the one that
+            # taught this line its third exception.
+            return None
+
+    def _reject_stale_field_scene(self):
+        """Refuse a reconstruction of a scene that was never solved.
+
+        Measured on a 1D grating: solve, then move `wavelength` from 900 to 600 without
+        re-solving, then reconstruct. The field **moved** -- max|d| = 1.105 against the first
+        reconstruction, so the new wavelength was read -- and it did **not** match the field
+        after actually re-solving either, max|d| = 0.582. It belonged to no scene at all, while
+        the docstring below promises "the state left behind by the last solve".
+
+        Eager only, like every other staleness check here. Under a trace both keys are ``None``
+        and the comparison is skipped.
+        """
+        if self._solved_scene is None:
+            return
+        now = self._reconstruction_scene()
+        if now is None or now == self._solved_scene:
+            return
+        raise RuntimeError(
+            'the scene has changed since the solve whose state this would reconstruct from. '
+            'The modes and amplitudes are the old scene\'s while the wavelength, thickness, '
+            'cell and incidence are read live, so the field would belong to neither -- '
+            'measured at max|d| = 1.105 against the field before the change and 0.582 against '
+            'the field after re-solving. Call solve() again first.')
+
     @device_scoped
     def reconstruct_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('given',)):
         """Reconstruct the field from the state left behind by the last solve.
@@ -2369,6 +2438,7 @@ class CoreFactorizationMixin:
         layer needs the thicknesses as numbers. It raises rather than guessing.
         """
         self._require_field_declaration()
+        self._reject_stale_field_scene()
         # An explicit z is stated in scene coordinates on both sides, so a backside request is
         # restated in the mirror the solve walks before anything buckets it.
         backside = self.incidence_side == 'bottom'
