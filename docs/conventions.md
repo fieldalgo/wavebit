@@ -58,16 +58,17 @@ The *type* of `structure` selects the modeling path; there is no separate mode s
 | encoding | `structure` |
 | --- | --- |
 | raster | ndarray `(n_layers, Ny, Nx)` of **relative permittivity** — one sample per pixel |
-| block | `[[background, [['rectangle', cx, cy, lx, ly, material, angle], ...]], ...]` — a `Material` in slot 0 and in positional slot 5 |
-| analytic | `[dict(background=..., shapes=[dict(type=..., cx=..., cy=..., lx=..., ly=..., angle=..., material=...)], combine=...), ...]` |
+| analytic | `[dict(background=..., shapes=[dict(type=..., cx=..., cy=..., lx=..., ly=..., angle=..., material=...)]), ...]` |
 
-Three of those four ways of saying what fills a region — the block background, the block
-object's own slot, the analytic shape's `material` — are **assignments**: a name for the stuff
-in a region, and a medium has both a permittivity and a permeability, which is why one type
-carries the pair. The raster is the fourth and is not an assignment at all but a **sampled
-field**, one number per pixel, which is exactly why topology optimisation reaches for it. A
-field has one quantity in it, so the raster's permeability is a second array (`mu=`) rather
-than a second slot on an object.
+A third encoding, `[[background, [['rectangle', cx, cy, lx, ly, material, angle], ...]], ...]`,
+was the block modeller and is refused by name since 2026-08-26.
+
+Two of those three ways of saying what fills a region — the analytic layer's `background` and
+each shape's `material` — are **assignments**: a name for the stuff in a region, and a medium
+has both a permittivity and a permeability, which is why one type carries the pair. The raster
+is the third and is not an assignment at all but a **sampled field**, one number per pixel,
+which is exactly why topology optimisation reaches for it. A field has one quantity in it, so
+the raster's permeability is a second array (`mu=`) rather than a second slot on an object.
 
 ### The retired spellings, and why they are refused by name
 

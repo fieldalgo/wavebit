@@ -3,11 +3,11 @@ import numpy as np
 import wavebit
 
 
-def run_block(rcwa_options, backend):
+def run_shapes(rcwa_options, backend):
 
     rcwa_options['backend'] = backend
     solver = wavebit.rcwa(**rcwa_options)
-    solver.structure = structure_block
+    solver.structure = structure_shapes
 
     res = solver.solve()
 
@@ -18,12 +18,13 @@ def run_raster(rcwa_options, backend, fourier_coefficients):
 
     rcwa_options['backend'] = backend
     rcwa_options['fourier_coefficients'] = fourier_coefficients
-    # 'sampled': discrete Fourier series; 'integrated' is the closed-form series that
-    # block modeling uses.
+    # 'sampled': discrete Fourier series; 'integrated': the closed-form series over the pixels.
+    # This grating is commensurate with its grid, so the two agree here -- see the note at the
+    # bottom of this file.
 
     # One array for every backend. Handing torch the Python list instead would build it at
     # torch's *default* dtype -- float32 -- and no later cast recovers the digits the
-    # constructor already dropped. That showed up here as torch disagreeing with the block
+    # constructor already dropped. That showed up here as torch disagreeing with the shape
     # path by 5.6e-5 while numpy and jax agreed to 1e-13, which reads as a solver defect and
     # is not one.
     structure_raster_1 = np.asarray(structure_raster)
@@ -42,7 +43,7 @@ if __name__ == '__main__':
     # Permittivity, not refractive index -- that is the quantity the API takes, and
     # `eps_from_index` is the conversion for the nk datasheet these came off. Written as bare
     # numbers rather than as `Material(...)` on purpose: the same value has to serve both
-    # paths compared here, and only one of them takes materials. The block path below reads a
+    # paths compared here, and only one of them takes materials. The shape path below reads a
     # bare number through the scalar shorthand, `Material(epsilon=x)`; the raster is a
     # *sampled field* rather than an assignment, so its pixels are permittivity samples and a
     # Material could not go in an ndarray at all. That asymmetry is the whole reason the
@@ -61,16 +62,18 @@ if __name__ == '__main__':
                         wavelength=900,
                         )
 
-    structure_block = [
+    # The rods are commensurate with the raster below on purpose: 100 wide from x = 0 and 40
+    # wide centred at 200, on a 300 period sampled at 30 pixels, so each rod's edges land
+    # exactly on pixel boundaries. The two structures are then the *same* permittivity function
+    # and any difference in the answer is the two paths' arithmetic, not their geometry.
+    structure_shapes = [
         # layer 1
-        [si3n4,
-            [
-                # obj 1
-                ['rectangle', 50, 150, 100, 300, si, 0, 0, 0],
-                # obj 2
-                ['rectangle', 200, 150, 40, 300, si, 0, 0, 0],
-            ],
-        ],
+        dict(background=si3n4, shapes=[
+            # obj 1
+            dict(type='rectangle', cx=50, cy=150, lx=100, ly=300, angle=0, material=si),
+            # obj 2
+            dict(type='rectangle', cx=200, cy=150, lx=40, ly=300, angle=0, material=si),
+        ]),
     ]
 
     a = si3n4
@@ -112,20 +115,20 @@ if __name__ == '__main__':
         ],
     ]
 
-    de_ri_v_0, de_ti_v_0 = run_block(rcwa_options, 0)  # NumPy
-    de_ri_v_1, de_ti_v_1 = run_block(rcwa_options, 1)  # JAX
-    de_ri_v_2, de_ti_v_2 = run_block(rcwa_options, 2)  # PyTorch
+    de_ri_v_0, de_ti_v_0 = run_shapes(rcwa_options, 0)  # NumPy
+    de_ri_v_1, de_ti_v_1 = run_shapes(rcwa_options, 1)  # JAX
+    de_ri_v_2, de_ti_v_2 = run_shapes(rcwa_options, 2)  # PyTorch
 
     de_ri_v_1, de_ti_v_1 = np.array(de_ri_v_1), np.array(de_ti_v_1)
     de_ri_v_2, de_ti_v_2 = np.array(de_ri_v_2), np.array(de_ti_v_2)
 
     c_x, c_y = de_ri_v_0.shape[0] // 2, de_ri_v_0.shape[1] // 2
 
-    print('\nVector; R and T from NumPy\n')
+    print('\nShapes; R and T from NumPy\n')
     print('Reflectance from NumPy: \n', de_ri_v_0[c_x-1:c_x+2, c_y-1:c_y+2])
     print('Transmittance from NumPy: \n', de_ti_v_0[c_x-1:c_x+2, c_y-1:c_y+2])
 
-    print('\nblock across backends\n')
+    print('\nshapes across backends\n')
     print(f'Norm of difference NumPy and JAX; R: {np.linalg.norm(de_ri_v_0-de_ri_v_1)}, T: {np.linalg.norm(de_ti_v_0-de_ti_v_1)}')
     print(f'Norm of difference JAX and Torch; R: {np.linalg.norm(de_ri_v_1-de_ri_v_2)}, T: {np.linalg.norm(de_ti_v_1-de_ti_v_2)}')
     print(f'Norm of difference Torch and NumPy; R: {np.linalg.norm(de_ri_v_1-de_ri_v_2)}, T: {np.linalg.norm(de_ti_v_1-de_ti_v_2)}')
@@ -150,20 +153,42 @@ if __name__ == '__main__':
     print('Reflectance from NumPy: \n', de_ri_r_1_dfs[c_x-1:c_x+2, c_y-1:c_y+2])
     print('Transmittance from NumPy: \n', de_ti_r_1_dfs[c_x-1:c_x+2, c_y-1:c_y+2])
 
-    print('\nblock vs raster dfs \n')
-    print(f'Norm of difference, block and raster dfs, NumPy;'
+    print('\nshapes vs raster dfs \n')
+    print(f'Norm of difference, shapes and raster dfs, NumPy;'
           f' R: {np.linalg.norm(de_ri_v_0-de_ri_r_0_dfs)}, T: {np.linalg.norm(de_ti_v_0-de_ti_r_0_dfs)}')
-    print(f'Norm of difference, block and raster dfs, JAX;'
+    print(f'Norm of difference, shapes and raster dfs, JAX;'
           f' R: {np.linalg.norm(de_ri_v_1-de_ri_r_1_dfs)}, T: {np.linalg.norm(de_ti_v_1-de_ti_r_1_dfs)}')
-    print(f'Norm of difference, block and raster dfs, Torch;'
+    print(f'Norm of difference, shapes and raster dfs, Torch;'
           f' R: {np.linalg.norm(de_ri_v_2-de_ri_r_2_dfs)}, T: {np.linalg.norm(de_ti_v_2-de_ti_r_2_dfs)}')
 
-    print('\nblock vs raster cfs \n')
-    print(f'Norm of difference, block and raster cfs, NumPy;'
+    print('\nshapes vs raster cfs \n')
+    print(f'Norm of difference, shapes and raster cfs, NumPy;'
           f' R: {np.linalg.norm(de_ri_v_0-de_ri_r_0_cfs)}, T: {np.linalg.norm(de_ti_v_0-de_ti_r_0_cfs)}')
-    print(f'Norm of difference, block and raster cfs, JAX;'
+    print(f'Norm of difference, shapes and raster cfs, JAX;'
           f' R: {np.linalg.norm(de_ri_v_1-de_ri_r_1_cfs)}, T: {np.linalg.norm(de_ti_v_1-de_ti_r_1_cfs)}')
-    print(f'Norm of difference, block and raster cfs, Torch;'
+    print(f'Norm of difference, shapes and raster cfs, Torch;'
           f' R: {np.linalg.norm(de_ri_v_2-de_ri_r_2_cfs)}, T: {np.linalg.norm(de_ti_v_2-de_ti_r_2_cfs)}')
+
+    # What that difference is, and why a single number could not answer it.
+    #
+    # The geometry is identical -- the rods land on pixel boundaries -- and the two paths agree
+    # on it exactly: the `1/eps` coefficient grid matches to 1e-16 between them. What differs is
+    # the *factorization*. The raster runs Li's inverse rule along the grid; the shape path runs
+    # NVF off an analytic normal field, extended off the boundary a different way. Both converge
+    # to the same answer, from different sides, so the gap is a truncation error rather than a
+    # disagreement, and the only honest way to say so is to watch it shrink.
+    #
+    # This is the check that replaced a bit-identity. The block path -- removed on 2026-08-26 --
+    # gridded its shapes and applied Li's rule to them, which on a commensurate grating like this
+    # one *is* the raster's arithmetic, so it agreed to the last bit and said nothing about
+    # whether either was right.
+    print('\nshapes vs raster, against truncation_order (integrated raster, NumPy)\n')
+    for order in (3, 10, 20, 40):
+        opts = dict(rcwa_options, backend=0, truncation_order=dict(x=order, y=0))
+        r_s, t_s = run_shapes(dict(opts), 0)
+        r_r, t_r = run_raster(dict(opts), 0, 'integrated')
+        print(f'  truncation_order = {order:3d}   '
+              f'R: {np.linalg.norm(r_s - r_r):.3e}   T: {np.linalg.norm(t_s - t_r):.3e}   '
+              f'sum(T) = {float(np.sum(t_s)):.9f}')
 
     print(0)

@@ -42,7 +42,7 @@ recommend anything.
 | Which material cases are unsolvable | An extraction schema, a system prompt |
 
 The test is whether the fact can be checked against the code. `_FACTORIZATION_IMPLEMENTED_BY`
-can be — build a block-path solver, ask for NVF, watch it refuse. *"PyTorch wins below
+can be — build a shape-path solver, ask for `li`, watch it refuse. *"PyTorch wins below
 `truncation_order≈5`"* cannot: it is a measurement on one CPU host about a workload, and the solver has no
 opinion about it. A fact that cannot be checked that way does not belong in the module, because
 publishing it would extend the manifest's guarantee to something the guarantee does not cover.

@@ -131,11 +131,12 @@ are independent and multiply.
 | analytic shapes, painted **overlap** | supported | the clipper is Cartesian; only the periodic images and the transform needed the basis |
 | every `normal_method` on a raster | supported | since 2026-08-21; **use `'contour'`** — see below |
 | field reconstruction | supported | output grid is indexed by `(v, u)`, not `(y, x)` — see below |
-| block modeler (`modeling_type=1`) | **refused** | rasterises onto a rectangular grid of its own |
 | `factorization='li'` on a raster | **refused** | see below |
 
-Everything except `li` and the block modeler works on a skewed cell, and both of those have a
-supported route to the same structure — a raster, or analytic shapes.
+Everything except `li` works on a skewed cell, and `li` has a supported route to the same
+structure — analytic shapes, which carry the metric. The block modeller was refused here too,
+on the same grounds (it rasterised onto a rectangular grid of its own); that whole path was
+removed on 2026-08-26.
 
 **Analytic shapes need no keyword at all.** `factorization` resolves per modeling path, and the
 analytic path implements only `nvf` — it builds `eps` from the shapes' own analytic normal field,

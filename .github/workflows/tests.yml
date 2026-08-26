@@ -129,8 +129,8 @@ jobs:
       - name: Install CPU-only PyTorch
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu
 
-      # Both backends, because `block_1d` solves on torch,
-      # `block_2d` on jax, and the two `_verification` ones run all three.
+      # Both backends, because `shapes_1d` solves on torch,
+      # `shapes_2d` on jax, and the two `_verification` ones run all three.
       # No matplotlib: nothing under examples/ plots any more, and it is not a
       # dependency of the library and never should be.
       - name: Install Wavebit with both optional backends

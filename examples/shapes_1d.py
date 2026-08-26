@@ -1,5 +1,4 @@
 import numpy as np
-import torch
 
 import wavebit
 
@@ -21,32 +20,28 @@ def run():
 
     # The silicon underneath is the substrate, so it goes in `bot`. Both half-spaces take a
     # Material too -- `top=1` is the scalar shorthand for Material(epsilon=1), i.e. vacuum.
-    rcwa_options = dict(backend=1, thickness=[205, 305], period=dict(x=300, y=300),
-                        truncation_order=dict(x=3, y=3),
+    rcwa_options = dict(backend=2, thickness=[205], period=dict(x=300, y=300),
+                        truncation_order=dict(x=3, y=0),
                         top=1, bot=si,
                         wavelength=900,
                         psi=np.pi / 4,
                         )
 
+    # One dict per layer: a background material, and the shapes drawn on it. `cx`, `cy`, `lx`
+    # and `ly` are absolute lengths in the units of `period` -- not fractions of it -- so these
+    # rods are 31 and 49.5 wide on a 300 period and run the full height of the cell.
+    #
+    # Each shape's Fourier transform is taken in closed form, so a tilted or curved edge carries
+    # no staircase error. Shapes paint, later over earlier, where they overlap; these two do not,
+    # and a layer with nothing overlapping stays on the closed-form builder.
     structure = [
         # layer 1
-        [sio2,
-            [
-                # obj 1
-                ['ellipse', 75, 225, 101.5, 81.5, si, 20 * torch.pi / 180, 40, 40],
-                # obj 2
-                ['rectangle', 225, 75, 98.5, 81.5, si, 0, 0, 0],
-            ],
-        ],
-        # layer 2
-        [si3n4,
-            [
-                # obj 1
-                ['rectangle', 50, 150, 31, 300, si, 0, 0, 0],
-                # obj 2
-                ['rectangle', 200, 150, 49.5, 300, si, 0, 0, 0],
-            ],
-        ],
+        dict(background=si3n4, shapes=[
+            # obj 1
+            dict(type='rectangle', cx=50, cy=150, lx=31, ly=300, angle=0, material=si),
+            # obj 2
+            dict(type='rectangle', cx=200, cy=150, lx=49.5, ly=300, angle=0, material=si),
+        ]),
     ]
 
     solver = wavebit.rcwa(**rcwa_options)

@@ -23,7 +23,7 @@ A script fails on any of:
 How far the third condition actually reaches. The result guards run wherever the values are
 concrete, which is every backend solving eagerly -- ``check_physical`` steps aside only for an
 abstract value, and under ``jit`` it has to, since a traced array carries no value to compare.
-``block_1d.py`` solves on PyTorch and ``block_2d.py`` on JAX, both eagerly, so this condition
+``shapes_1d.py`` solves on PyTorch and ``shapes_2d.py`` on JAX, both eagerly, so this condition
 reaches all four scripts. It used to reach only the two ``_verification.py`` files, because the
 guards keyed their exemption on the namespace rather than on concreteness; that was the bug
 ``tests/test_rayleigh_guard.py`` was written for. Should a script here ever wrap its solve in
@@ -40,7 +40,7 @@ say so in the script and expect this check to stop seeing it.
 Usage::
 
     python tests/run_examples_smoke.py                    # every example
-    python tests/run_examples_smoke.py examples/block_2d.py   # one script, for iterating
+    python tests/run_examples_smoke.py examples/shapes_2d.py  # one script, for iterating
 """
 
 from __future__ import annotations
