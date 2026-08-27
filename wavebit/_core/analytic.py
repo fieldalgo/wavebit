@@ -838,14 +838,14 @@ def _shape_surface_normal(xp, X, Y, shape, dtype, lattice):
     yr = -dx * sin_a + dy * cos_a
     a, b = lx / 2.0, ly / 2.0
 
-    if stype in ('ellipse', 'circle'):
+    if stype in _overlap._ELLIPSE_TYPES:                 # ellipse / circle / disk
         gxr = 2.0 * xr / (a ** 2)
         gyr = 2.0 * yr / (b ** 2)
         # The algebraic distance |f| / |grad f| -- exact for a circle, and for an ellipse the
         # first-order distance to the level set, which is all the nearest-surface pick needs.
         f = (xr / a) ** 2 + (yr / b) ** 2 - 1.0
         dist = xp.abs(f) / _hypot_safe(xp, gxr, gyr)
-    elif stype == 'rectangle':
+    elif stype in _overlap._BOX_TYPES:                   # rectangle / square
         qx, qy = xp.abs(xr) - a, xp.abs(yr) - b
         # `xp.maximum` against a Python float is a numpy convenience torch does not share, so
         # every clamp here goes through a zero array of the same dtype.
@@ -895,6 +895,15 @@ def _shape_surface_normal(xp, X, Y, shape, dtype, lattice):
         gxr = xp.where(is_out, xp.sign(xr) * out_x, in_x)
         gyr = xp.where(is_out, xp.sign(yr) * out_y, in_y)
     else:
+        # A type this does not know. `normal_vector_field_analytical` drops the None and, if
+        # every shape drops out, falls back to a constant `(1, 0)` -- Li's rules with x as the
+        # normal everywhere. That fallback is right for a type nothing here can transform
+        # either, and was silently wrong for two that it can: until 2026-08-27 the branches
+        # above read the *canonical* spellings only, so `type='disk'` and `type='square'` --
+        # both accepted by `check_shape_spec`, both transformed correctly by `shape_ft` -- came
+        # back with no normal field at all. Same geometry, one word apart, `sum(T)` 1.6e-3
+        # adrift at truncation_order 6 and still 7.0e-4 at 14, with R+T exactly 1. The branches
+        # read `overlap`'s alias tuples now, which is the one place the spellings are listed.
         return None
 
     gx = gxr * cos_a - gyr * sin_a

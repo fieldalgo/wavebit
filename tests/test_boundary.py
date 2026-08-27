@@ -1025,3 +1025,60 @@ def test_a_frozen_geometry_answers_the_overlap_question_for_every_layer():
             wavebit.rcwa(backend=0, structure=structure(cx + s * h), **cfg).solve().T)).real)
             for s in (1, -1)]
         assert analytic == pytest.approx((step[0] - step[1]) / (2 * h), rel=3e-2), cx
+
+
+# ------------------------------------------- the normal field is periodic, like everything else
+
+def test_the_polygon_normal_field_folds_to_the_nearest_image():
+    """A cell is a torus, and the distance the normal field is built from has to be one too.
+
+    ``distance_gradient_normal_field`` measured the distance to each polygon *where it sits*, so
+    a shape whose body crossed the cell edge was invisible from the other side and the points
+    there took their normal from whatever was next nearest. It was found by translating a layer
+    rigidly, which is a theorem rather than a tolerance: the same structure, moved, must give
+    the same answer.
+
+    ``epz_i`` is what located it and is asserted here for the same reason -- it is built from
+    the permittivity alone and never touches a normal field, so it stayed bit-identical through
+    the whole sweep while ``epx`` / ``epy`` moved by -0.0323 / +0.0323 the moment a rod crossed.
+    A test that only watched ``sum(T)`` would have seen one number move and not known which half
+    moved it.
+
+    The residual left in the fractional shifts is the sampling, and it converges: 8.9e-6 / 2.6e-6
+    / 4.2e-7 / 4.7e-8 at ``normal_grid`` 128 / 256 / 512 / 1024. A whole-period shift resamples
+    the same points and is exact.
+    """
+    import wavebit
+
+    P = 300.0
+    cfg = dict(backend=0, period=[P, P], thickness=(205.0,), truncation_order=(6, 6), top=1.0,
+               bot=1.0, wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0, normal_grid=256)
+
+    def layer(shift):
+        return [dict(background=1.0, shapes=[
+            dict(type='rectangle', cx=(120.0 + shift) % P, cy=150.0, lx=100.0, ly=90.0,
+                 angle=0.0, material=4.0),
+            dict(type='rectangle', cx=(170.0 + shift) % P, cy=150.0, lx=100.0, ly=90.0,
+                 angle=0.0, material=9.0)])]
+
+    def dc(shift, slot):
+        m = getattr(wavebit.rcwa(structure=layer(shift), **cfg).eps_conv_matrices(), slot)
+        a = np.asarray(m[0])
+        return complex(a[a.shape[0] // 2, a.shape[0] // 2]).real
+
+    # The geometry slot is the control, and it held before the fix as well. Not asserted
+    # bit-identical: a fractional shift reorders the sum over shapes, so the last ulp moves
+    # (1.7e-15 across this sweep). Three orders below the `epx` bound below, which is the
+    # separation that matters -- the point is that one slot did not move while the other did.
+    geo = [dc(s, 'epz_i') for s in (0.0, 40.0, 80.0, 100.0, 120.0)]
+    assert max(geo) - min(geo) < 1e-13
+
+    # `shift` 100 and 120 put a rod over the cell edge; 0/40/80 do not. Before the fold the
+    # first group sat 3.2e-2 away from the second in `epx`, against 8.2e-4 within it.
+    base = dc(0.0, 'epx')
+    assert max(abs(dc(s, 'epx') - base) for s in (40.0, 80.0, 100.0, 120.0)) < 2e-3
+
+    # a whole period is the same sample points, so it is exact rather than merely close
+    total = lambda shift: float(np.sum(np.asarray(
+        wavebit.rcwa(structure=layer(shift), **cfg).solve().T)).real)
+    assert total(0.0) == total(P)

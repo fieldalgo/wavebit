@@ -56,6 +56,65 @@ def segments_of(xp, polys):
     return A, E, L2
 
 
+def periodic_segments(xp, A, E, L2, lattice):
+    """Every segment, plus the images of it that can be a cell point's nearest boundary.
+
+    **The cell is a torus and the distance has to be too.** Without this the field measures the
+    distance to each polygon *where it sits*, so a shape whose body crosses the cell edge is
+    invisible from the other side and the points there take their normal from whatever is next
+    nearest. `epz_i` -- which never touches a normal field -- stays bit-identical under the
+    same translation, which is what located it: rigidly sliding an overlapping pair moved
+    `epx`/`epy` by -0.0323/+0.0323 in their DC entries the moment a rod crossed the edge, and
+    `sum(T)` stopped converging (1.8e-3 to 3.9e-4 over truncation order 4 to 16, against
+    5.6e-4 to 3.6e-5 for the same structure sitting inside the cell).
+
+    Two steps, and both are the ones :func:`wavebit._core.analytic._fold_to_nearest_image`
+    takes, because this is the same theorem one representation over:
+
+    * **Fold in the lattice, not in a rectangle.** ``A % P`` answers "which cell is this in"
+      only for images at ``(m*Px, n*Py)``. They sit at ``m*a1 + n*a2``, so the fold runs
+      through the fractional coordinates and a skewed cell folds towards an image that exists.
+    * **Then sweep 3x3.** The fractional fold lands in the fundamental parallelogram, which is
+      the nearest image in the *lattice* metric; the sweep is what makes the pick Euclidean.
+
+    Segments are folded one at a time and a loop is free to come apart across the seam. That is
+    sound here and only here: the caller reduces over `argmin` of a distance, which asks nothing
+    about connectivity, and NVF reads only ``nx**2``, ``nx*ny``, ``ny**2``, so the inside/outside
+    sign the winding would have carried is not read either.
+
+    One ring is enough because a shape wider than the period is refused before this
+    (:func:`wavebit._core.analytic.check_layer_shapes`); with every segment shorter than the
+    period, folding its start into the cell puts the whole segment within one period of it.
+
+    ``E`` and ``L2`` are translation invariant, so an image needs neither recomputed -- which
+    is also why this cannot be written as a fold of the *displacement* inside
+    :func:`_seg_dist`: that would pick the image nearest the segment's start rather than the
+    one nearest the segment, and the two differ for a segment approaching the period in length.
+    """
+    a1x, a2x = lattice[0][0], lattice[0][1]
+    a1y, a2y = lattice[1][0], lattice[1][1]
+    det = a1x * a2y - a2x * a1y
+
+    # `floor`, not `round`: this names the cell the start sits in, and the sweep below covers
+    # the neighbours. Its derivative is zero, which is correct -- the choice of image is
+    # locally constant in the vertices, and moving one does not move which image is nearest
+    # except on a measure-zero seam.
+    su = xp.floor((a2y * A[:, 0] - a2x * A[:, 1]) / det)
+    sv = xp.floor((-a1y * A[:, 0] + a1x * A[:, 1]) / det)
+    ax = A[:, 0] - su * a1x - sv * a2x
+    ay = A[:, 1] - su * a1y - sv * a2y
+
+    xs, ys = [], []
+    for du in (-1.0, 0.0, 1.0):
+        for dv in (-1.0, 0.0, 1.0):
+            xs.append(ax + (du * a1x + dv * a2x))
+            ys.append(ay + (du * a1y + dv * a2y))
+    A9 = xp.stack([xp.concat(xs, axis=0), xp.concat(ys, axis=0)], axis=-1)
+    E9 = xp.concat([E] * 9, axis=0)
+    L29 = xp.concat([L2] * 9, axis=0)
+    return A9, E9, L29
+
+
 def _seg_dist(xp, pts, A, E, L2):
     """Squared point-to-segment distance and the foot, for every (point, segment) pair.
 
@@ -90,7 +149,11 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
 
     The sample points come from :func:`wavebit._core.lattice.sample_grid`, shared with the
     analytic builder — this body was written by copying that one, and copying it is how it
-    inherited a reversed ``period`` unpack that sampled over a transposed cell.
+    inherited a reversed ``period`` unpack that sampled over a transposed cell. It is also how
+    it *failed* to inherit the periodic fold the analytic field was given on 2026-08-17: the
+    copy carried a bug across and then missed the fix. :func:`periodic_segments` is that fix in
+    this representation, and it is applied here rather than in :func:`_seg_dist` for the reason
+    given there.
 
     ``chunk`` is how many pixels are handled at once. It bounds the ``pixels x segments``
     temporaries without changing any result -- the arithmetic per pixel is independent, so a
@@ -100,6 +163,7 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
     """
     Ny, Nx = grid_shape
     A, E, L2 = segments_of(xp, polys)
+    A, E, L2 = periodic_segments(xp, A, E, L2, lattice=lattice)
     M = A.shape[0]
 
     X, Y = sample_grid(xp, grid_shape, lattice, dtype)

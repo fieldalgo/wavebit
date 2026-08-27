@@ -1479,3 +1479,51 @@ def test_a_structure_built_through_grid_is_the_one_that_gets_solved():
                          structure=eps[None], factorization='nvf')
         return float(np.sum(s.solve().R) + np.sum(s.solve().T))
     assert abs(solve(eps_helper) - 1.0) < 1e-9
+
+
+#: Pairs that name one geometry twice. `disk` is a true alias of `circle` -- one length, round.
+#: `square` is not an alias of `rectangle`: it is the one-length spelling of it, so the pair has
+#: to be written out rather than parametrized on a keyword.
+_SAME_SHAPE_TWO_SPELLINGS = [
+    (dict(type='circle', lx=140.0), dict(type='disk', lx=140.0)),
+    (dict(type='rectangle', lx=140.0, ly=140.0), dict(type='square', lx=140.0)),
+]
+
+
+@pytest.mark.parametrize('first, second', _SAME_SHAPE_TWO_SPELLINGS,
+                         ids=['circle-disk', 'rectangle-square'])
+def test_an_alias_spelling_gets_the_same_normal_field(first, second):
+    """Two words for one shape have to be one structure, in the *field* as well as the transform.
+
+    ``_shape_surface_normal`` branched on the canonical spellings alone and returned ``None``
+    for the others. ``normal_vector_field_analytical`` drops a ``None`` and, with nothing left,
+    falls back to a constant ``(1, 0)`` -- Li's rules with x as the normal everywhere. So
+    ``type='disk'`` and ``type='square'`` came back with **no normal field at all**: accepted by
+    ``check_shape_spec``, transformed correctly by ``shape_ft``, energy conserved to twelve
+    digits, and ``sum(T)`` 1.6e-3 adrift at truncation_order 6, still 7.0e-4 at 14.
+
+    Asserted as a bit-identity rather than a tolerance, because that is what it is: the two
+    spellings resolve to the same geometry through ``shape_geometry``, so every number
+    downstream must agree to the last bit. A tolerance here would have passed the defect.
+    """
+    from wavebit._core.analytic import normal_vector_field_analytical
+
+    lattice = as_lattice(period=(300.0, 300.0))
+    made = [dict(spelling, cx=150.0, cy=150.0, angle=0.3, material=4.0)
+            for spelling in (first, second)]
+
+    fields = [normal_vector_field_analytical(xnp, (64, 64), [s], xnp.float64, lattice)
+              for s in made]
+    for got, want in zip(fields[1], fields[0]):
+        assert np.asarray(got).tobytes() == np.asarray(want).tobytes()
+
+    # and the constant fallback is what it used to be, so the assertion above has teeth
+    assert not np.all(np.asarray(fields[0][0]) == 1.0)
+
+    cfg = dict(backend=0, period=[300.0, 300.0], thickness=[205.0], truncation_order=(6, 6),
+               top=1.0, bot=1.0, wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0,
+               normal_grid=256)
+    totals = [float(np.sum(np.asarray(wavebit.rcwa(
+        structure=[dict(background=1.0, shapes=[dict(s, angle=0.0)])], **cfg).solve().T)))
+        for s in made]
+    assert totals[0] == totals[1]
