@@ -172,14 +172,19 @@ Not a matter of taste, and not the same answer for a forward solve as for a diff
 
 * **Forward solves, small to medium.** NumPy — lightest to install, and the one that warns when
   a result cannot be physical.
-* **Differentiated, `truncation_order ≲ 5`.** Eager PyTorch beats a jitted JAX step outright; JAX's
-  compilation never repays itself at that size.
-* **Differentiated, `truncation_order ≳ 7`, long run.** A jitted JAX step is roughly 2x PyTorch and repays
-  its compilation in under a dozen steps.
+* **Differentiating a shape recipe.** A jitted JAX step wins at every size measured — 2.3x
+  PyTorch at `truncation_order=3`, 1.3x at 13 — and repays its compilation in 13 steps at
+  worst. Re-freeze every step; the freeze costs 0-1 ms.
+* **Differentiating a raster, `truncation_order ≲ 5`.** Eager PyTorch beats a jitted JAX step
+  outright; JAX's compilation does not repay itself at that size.
+* **Differentiating a raster, `truncation_order ≳ 7`, long run.** A jitted JAX step is roughly
+  1.5x PyTorch and repays its compilation in under a dozen steps.
 
-Where the crossover falls, and whether a freeze is worth it at all, is measured in
-[docs/backend-choice.md](docs/backend-choice.md) — on one CPU host, with the run's own
-repeatability printed next to the numbers.
+The two paths want different backends, and before reaching for either on a shape recipe, look
+at `normal_grid`: at `truncation_order=3` its default of 1024 spends 63 ms per step building a
+normal field against a 15 ms solve, and 256 makes that 5 ms — more than any backend choice is
+worth. All of it is measured in [docs/backend-choice.md](docs/backend-choice.md), on one CPU
+host, with the run's own repeatability printed next to the numbers.
 
 ## Saying what the light is
 
@@ -639,9 +644,10 @@ free and a jitted step recompiles only when the recorded *combinatorics* change 
 same moment a held record would have gone stale. That makes re-freezing both the fastest way to
 run a moving fit and the only one that cannot carry a stale record forward.
 
-Which backend to use, and whether to jit at all, is not obvious and is not a matter of taste:
-below `truncation_order ~ 5` eager PyTorch beats a jitted JAX step outright, and the crossover moves with
-problem size. Measurements are in [docs/backend-choice.md](docs/backend-choice.md).
+Which backend to use, and whether to jit at all, is not obvious and is not a matter of taste,
+and the answer differs by path: on a shape recipe a jitted JAX step wins at every size, while
+on a raster below `truncation_order ~ 5` eager PyTorch beats it outright. Measurements are in
+[docs/backend-choice.md](docs/backend-choice.md).
 
 On PyTorch, eager and `.backward()` are the supported path. `torch.compile` is not: it buys
 nothing here — the solve is almost entirely LAPACK calls the compiler forwards untouched — and

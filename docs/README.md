@@ -59,7 +59,7 @@ somewhere else** — question 6 of the CONTRIBUTING table, not this folder.
 
 | Document | Question it answers | Decision |
 | --- | --- | --- |
-| [`backend-choice.md`](backend-choice.md) | Which backend, and whether to freeze the geometry, for a *differentiated* run? | PyTorch below `truncation_order≈5`; `jax jit` from `truncation_order≈7` up; re-freeze every step |
+| [`backend-choice.md`](backend-choice.md) | Which backend, and whether to freeze the geometry, for a *differentiated* run? | Shapes: `jax jit` at every size, re-freezing every step. Rasters: PyTorch below `truncation_order≈5`. And `normal_grid` outweighs both |
 | [`analytic-modeling.md`](analytic-modeling.md) | How does the staircase-free shape path converge against a raster staircase? | The smooth path for tilted and curved boundaries |
 | [`boundary-modeling.md`](boundary-modeling.md) | Can a layer be painted *and* keep a tilted edge exact? | Yes — resolve the painting into polygons once, then transform those |
 | [`nvf-upsampling.md`](nvf-upsampling.md) | What grid should the NVF normal field be taken on? | Not the fine one: it lost accuracy in 27 of 32 combinations and cost the most |

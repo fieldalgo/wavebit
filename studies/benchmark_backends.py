@@ -350,6 +350,118 @@ def sweep_recompile(budget, reps):
     return out
 
 
+def decompose(backend, truncation_order, normal_grid, reps):
+    """Modeling and solve, timed apart, for one backend and one configuration.
+
+    `eps_conv_matrices()` is the modeling half -- the shapes' analytic transform and the normal
+    field they carry -- and `solve_conv` is what is left of a forward call. Timed separately
+    because the two halves have opposite backend preferences, which a single per-step number
+    hides.
+    """
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0],
+               truncation_order=[truncation_order, truncation_order],
+               top=1.0, bot=1.0, theta=0.15, phi=0.35, psi=TE_PSI, wavelength=900.0,
+               normal_grid=normal_grid)
+
+    def build(lx):
+        return wavebit.rcwa(backend=backend, structure=[
+            dict(background=EPS_HIGH,
+                 shapes=[dict(type='ellipse', cx=150.0, cy=150.0, lx=lx, ly=55.0,
+                              angle=0.27, material=EPS_MID)])], **cfg)
+
+    # **The shape moves between calls, and it has to.** `normal_projector_coeffs` is cached on
+    # the shape parameters, so timing the same call twice measures a cache hit -- flat in
+    # `normal_grid` at 1.1 ms, which is the one number a fit never sees. A fit moves the design
+    # variable every step and misses every time.
+    step = [0]
+
+    def modeling():
+        step[0] += 1
+        build(85.0 + 0.037 * step[0]).eps_conv_matrices()
+
+    mats = build(85.0).eps_conv_matrices()
+    solver = build(85.0)
+    return {'modeling_ms': _time(modeling, reps),
+            'solve_ms': _time(lambda: solver.solve_conv(*mats), reps)}
+
+
+def sweep_decomposition(budget, reps):
+    """Where each backend's time goes, and how that moves with `normal_grid`.
+
+    This replaces a table keyed on the removed block path's `n_split`, which set how many small
+    array operations that modeller emitted. The shape path emits no such stream; what sets its
+    modeling cost is `normal_grid`, the resolution its analytic normal field is sampled at.
+    """
+    out = []
+    for truncation_order, normal_grid in ((3, 256), (3, 1024), (3, 2048),
+                                          (7, 1024), (11, 1024)):
+        if not budget.can_afford(90):
+            break
+        row = {'truncation_order': truncation_order, 'normal_grid': normal_grid}
+        for name, backend in (('torch', 2), ('jax', 1)):
+            try:
+                row[name] = decompose(backend, truncation_order, normal_grid, reps)
+            except Exception as exc:                   # a backend that cannot run says so
+                row[name] = {'error': f'{type(exc).__name__}: {str(exc)[:80]}'}
+        out.append(row)
+        print(f'[decompose] truncation_order={truncation_order}, normal_grid={normal_grid}: '
+              + '  '.join(f'{k} {v.get("modeling_ms", float("nan")):.1f}/'
+                          f'{v.get("solve_ms", float("nan")):.1f} ms'
+                          for k, v in row.items() if isinstance(v, dict)), flush=True)
+        checkpoint({'decomposition': out})
+    return out
+
+
+def sweep_recompile_shapes(budget, reps):
+    """Where a re-freeze recompiles on the shape path, and where it never does.
+
+    The block path recompiled when two of its grid edges crossed. A shape layer's plan holds
+    the combinatorics of the *painting*, so a lone shape has nothing that can change, and a
+    two-shape layer changes exactly once -- when they start or stop overlapping. Both are here,
+    because "never" is the more surprising half and only the pair shows the boundary.
+    """
+    import jax
+    import jax.numpy as jnp
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[3, 3], top=1.0,
+               bot=1.0, theta=0.15, phi=0.35, psi=TE_PSI, wavelength=900.0, normal_grid=256)
+
+    def one(make, values, label):
+        def loss(v, geometry):
+            return jnp.sum(wavebit.rcwa(backend=1, structure=make(v), **cfg)
+                           .solve(geometry=geometry).T).real
+
+        g = jax.jit(jax.grad(loss), static_argnums=1)
+        freeze = lambda v: wavebit.rcwa(backend=1, structure=make(jnp.asarray(v)),
+                                        **cfg).freeze_geometry()
+        jax.clear_caches()
+        rows = []
+        for v in values:
+            t0 = time.perf_counter()
+            grad = float(g(jnp.asarray(v), freeze(v)))
+            rows.append({'case': label, 'value': v,
+                         'ms': (time.perf_counter() - t0) * 1e3, 'grad': grad})
+            print(f'[recompile:{label}] {v}: {rows[-1]["ms"]:.0f} ms', flush=True)
+        return rows
+
+    lone = lambda lx: [dict(background=EPS_HIGH,
+                            shapes=[dict(type='ellipse', cx=150.0, cy=150.0, lx=lx, ly=55.0,
+                                         angle=0.27, material=EPS_MID)])]
+    # Two rods 120 apart, each `lx` wide: they meet as `lx` passes 120.
+    pair = lambda lx: [dict(background=EPS_HIGH, shapes=[
+        dict(type='rectangle', cx=90.0, cy=150.0, lx=lx, ly=55.0, angle=0.0,
+             material=EPS_MID),
+        dict(type='rectangle', cx=210.0, cy=150.0, lx=lx, ly=55.0, angle=0.0,
+             material=EPS_LOW)])]
+
+    out = one(lone, [85.0, 90.0, 95.0, 100.0, 103.0, 106.0, 110.0, 115.0, 120.0, 125.0],
+              'one shape')
+    if budget.can_afford(180):
+        out += one(pair, [100.0, 105.0, 110.0, 115.0, 118.0, 122.0, 126.0, 130.0, 140.0],
+                   'two shapes')
+    checkpoint({'recompile_shapes': out})
+    return out
+
+
 # `sweep_stale_window` lived here until 2026-08-27: it bisected how far a *held* freeze stays
 # valid, per shape and per `n_split`. The block modeller it measured is gone, and `n_split`
 # with it, so the sweep could not be renamed -- its whole abscissa was that parameter. The
@@ -415,6 +527,25 @@ def report(state):
         table(rows, 'Re-freezing every step while lx moves — where the recompilation lands',
               ['lx', 'ms', 'grad'])
 
+    if 'decomposition' in state:
+        rows = []
+        for e in state['decomposition']:
+            cells = []
+            for who in ('torch', 'jax'):
+                m = e.get(who, {})
+                cells += ['—' if 'error' in m else f'{m["modeling_ms"]:.1f}',
+                          '—' if 'error' in m else f'{m["solve_ms"]:.1f}']
+            rows.append([str(e['truncation_order']), str(e['normal_grid'])] + cells)
+        table(rows, 'Where the time goes — one forward call, split in two',
+              ['truncation_order', 'normal_grid', 'torch modeling', 'torch solve',
+               'jax modeling', 'jax solve'])
+
+    if 'recompile_shapes' in state:
+        rows = [[e['case'], f'{e["value"]:.0f}', f'{e["ms"]:.0f}', f'{e["grad"]:+.3e}']
+                for e in state['recompile_shapes']]
+        table(rows, 'Re-freezing every step — where a recompilation lands, and where none does',
+              ['case', 'lx', 'ms', 'grad'])
+
     if 'drift' in state:
         rows = [[e['at'], f'{e["ms"]:.0f}'] for e in state['drift']]
         first = state['drift'][0]['ms']
@@ -445,6 +576,9 @@ def main():
     sweep_raster(budget, args.reps, args.quick)
     drift('after raster', marks)
     sweep_recompile(budget, args.reps)
+    sweep_decomposition(budget, args.reps)
+    if not args.quick:
+        sweep_recompile_shapes(budget, args.reps)
 
     print(f'\nfinished with {budget.left():.0f} s of budget left\n')
     report(_STATE)
