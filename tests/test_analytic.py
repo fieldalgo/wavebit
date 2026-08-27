@@ -1532,3 +1532,51 @@ def test_an_alias_spelling_gets_the_same_normal_field(first, second):
         structure=[dict(background=1.0, shapes=[dict(s, angle=0.0)])], **cfg).solve().T)))
         for s in made]
     assert totals[0] == totals[1]
+
+
+@pytest.mark.parametrize('name, make, entries', [
+    ('circle radius',
+     lambda k: dict(type='circle', cx=150.0, cy=150.0, lx=140.0 + 8 * k, material=4.0), 1),
+    ('ellipse, aspect held',
+     lambda k: dict(type='ellipse', cx=150.0, cy=150.0, lx=140.0 + 8 * k, ly=70.0 + 4 * k,
+                    angle=0.4, material=4.0), 1),
+    ('ellipse, aspect swept',
+     lambda k: dict(type='ellipse', cx=150.0, cy=150.0, lx=140.0, ly=70.0 + 8 * k,
+                    angle=0.4, material=4.0), 5),
+    ('rectangle lx',
+     lambda k: dict(type='rectangle', cx=150.0, cy=150.0, lx=140.0 + 8 * k, ly=70.0,
+                    angle=0.4, material=4.0), 5),
+])
+def test_the_projector_cache_keys_on_what_the_field_depends_on(name, make, entries):
+    """A lone round shape's normal field is scale-free, so its size must not key the cache.
+
+    The level-set gradient of ``x^2/a^2 + y^2/b^2`` is ``(2x/a^2, 2y/b^2)``, whose *direction*
+    is unchanged when ``a`` and ``b`` scale together. So for one ellipse-family shape the
+    projector coefficients depend on the aspect and not on the size -- measured on
+    ``normal_projector_coeffs`` directly: a circle at lx 40 / 90 / 220 / 280 agrees with lx=140
+    to 2.8e-17, and an ellipse rescaled 2x and 0.5x at a fixed aspect agrees to 0.000e+00.
+
+    It is worth keying correctly because the commonest 1D grating sweep is over a *radius*, and
+    with ``lx`` in the key every step missed and rebuilt a bit-identical field. Five steps left
+    five entries where a position or material sweep left one.
+
+    The two arms that must still miss are here for the same reason the hits are: a rectangle's
+    four-face blend weighs absolute distances (8.4e-02 and 5.4e-02 for the same two
+    rescalings), and an aspect change is a genuinely different field.
+
+    Every row also asserts the five answers *differ* -- a cache that returned one field for
+    five structures would satisfy the entry count and be a much worse bug than the one this
+    replaced.
+    """
+    from wavebit._core import analytic as _an
+
+    cfg = dict(backend=0, period=[300.0, 300.0], thickness=[205.0], truncation_order=(4, 4),
+               top=1.0, bot=1.0, wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0,
+               normal_grid=256)
+    _an._PROJECTOR_CACHE.clear()
+    totals = [float(np.sum(np.asarray(wavebit.rcwa(
+        structure=[dict(background=1.0, shapes=[make(k)])], **cfg).solve().T)))
+        for k in range(5)]
+
+    assert len(_an._PROJECTOR_CACHE) == entries, (name, len(_an._PROJECTOR_CACHE))
+    assert len(set(totals)) == 5, totals

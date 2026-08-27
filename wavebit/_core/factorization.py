@@ -484,6 +484,30 @@ def _normal_field_floor(shape, half_width_u, half_width_v):
             max(1, (4 * half_width_u + 1) // shape[1] + 1) if shape[1] < 4 * half_width_u + 1 else 1)
 
 
+def _tensor_at_the_normal_field_floor(xp, t33, half_width_u, half_width_v):
+    """A ``(Ny, Nx, 3, 3)`` pointwise tensor, block-repeated to the floor its field needs.
+
+    The tensor twin of :func:`_layer_eps_for_normal_field`, and it exists because the two
+    Popov-Neviere wrappers called :func:`normal_vector_field` directly and so skipped the lift
+    every scalar NVF builder makes. On a **uniform** slab -- where the answer is exactly
+    ``eps * I`` and no geometry is involved at all -- that put ``max|epx - 4I|`` at **2.9e+02**
+    for a 8x8 raster at ``truncation_order=4``, against 0.000e+00 for the scalar path on the
+    same raster. It is the aliasing :func:`_normal_field_floor` describes: the projector grids
+    are read off this grid by :func:`fourier2d_pointwise`, and below ``4*truncation_order+1``
+    points ``k % n`` folds distinct orders onto one bin.
+
+    A repeat is not a resample. The tensor field it describes is unchanged -- the same
+    staircase spelled with more pixels -- so the permittivity coefficients are identical and
+    only the field's transform stops aliasing.
+    """
+    repeat_v, repeat_u = _normal_field_floor(tuple(t33.shape[:2]), half_width_u, half_width_v)
+    if repeat_v > 1:
+        t33 = xp.repeat(t33, repeat_v, axis=0)
+    if repeat_u > 1:
+        t33 = xp.repeat(t33, repeat_u, axis=1)
+    return t33
+
+
 def _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v):
     """Each layer's permittivity grid for the NVF path, with the base it was repeated from.
 
@@ -1362,6 +1386,9 @@ def to_conv_mat_raster_pn_mu(tensor_raster, half_width_u, half_width_v, normal_f
     for i in range(tensor_raster.shape[0]):
         mu33 = tensor_raster[i]
         if normal_field is None:
+            # Lifted only when the field is built here. A supplied one fixes the resolution,
+            # and repeating the tensor under it would pair a fine tensor with a coarse field.
+            mu33 = _tensor_at_the_normal_field_floor(xp, mu33, half_width_u, half_width_v)
             normal_x, normal_y = normal_vector_field(
                 0.5 * (mu33[..., 0, 0] + mu33[..., 1, 1]), lattice=lattice,
                 method=normal_method)
@@ -1419,6 +1446,9 @@ def to_conv_mat_raster_pn_eps(tensor_raster, half_width_u, half_width_v, normal_
     for i in range(tensor_raster.shape[0]):
         eps33 = tensor_raster[i]
         if normal_field is None:
+            # Lifted only when the field is built here. A supplied one fixes the resolution,
+            # and repeating the tensor under it would pair a fine tensor with a coarse field.
+            eps33 = _tensor_at_the_normal_field_floor(xp, eps33, half_width_u, half_width_v)
             # The in-plane trace: the layer's isotropic part, which is what carries the shape.
             normal_x, normal_y = normal_vector_field(
                 0.5 * (eps33[..., 0, 0] + eps33[..., 1, 1]), lattice=lattice,

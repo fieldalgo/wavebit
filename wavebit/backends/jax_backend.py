@@ -333,7 +333,13 @@ class SolverJax(RCWAJax, OptimizerJax):
             # covered one at a time and never together.
             'lattice': (None if self._lattice_basis is None
                         else tuple(map(tuple, self._lattice_basis.columns.tolist()))),
-            'normal_grid': self.normal_grid,
+            # The **raw** slot, not the property. `normal_grid` reads back resolved --
+            # `None` becomes `max(1024, 4*truncation_order+1)` -- and putting that in aux_data
+            # makes the round trip rewrite what the caller asked for: an unset grid comes back
+            # as an explicit one, and `_reject_unread_normal_grid` then refuses a raster solver
+            # for a value the library itself put there. `solve_field` is jitted at class level,
+            # so this flattens on every call and it took out 23 tests at once.
+            'normal_grid': self._normal_grid,
         }
 
         return children, aux_data

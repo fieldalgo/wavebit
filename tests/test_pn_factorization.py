@@ -461,3 +461,39 @@ def test_a_null_direction_of_the_tensor_is_not_quietly_patched():
     with np.errstate(divide='ignore', invalid='ignore'):    # the division is the point here
         out = pn_eps_conv_matrices(np, e33, normal_x, normal_y, 4, 4)
     assert not all(np.isfinite(m).all() for m in out)
+
+
+@pytest.mark.parametrize('build_name', ['to_conv_mat_raster_pn_eps', 'to_conv_mat_raster_pn_mu'],
+                         ids=['eps', 'mu'])
+@pytest.mark.parametrize('n', [8, 12, 16], ids=['N8', 'N12', 'N16'])
+def test_the_tensor_builders_lift_to_the_normal_field_floor(build_name, n):
+    """A uniform slab has no geometry in it, so the answer is exactly ``eps * I``.
+
+    The projector grids are read off the raster by ``fourier2d_pointwise``, which needs
+    ``4*truncation_order+1`` points -- below that ``k % n`` folds distinct orders onto one bin
+    and a *constant* normal field stops transforming to the identity. Every scalar NVF builder
+    lifts a layer to that floor through ``_layer_eps_for_normal_field``; the two tensor
+    builders called ``normal_vector_field`` directly and skipped it.
+
+    On a uniform slab that is not a small error and it involves no geometry at all: at
+    ``N=8, truncation_order=4`` (floor 17) ``max|epx - 4I|`` was **2.867e+02**, where the
+    scalar builder on the same raster gives 0.000e+00.
+
+    Crossed over both quantities because ``pn_mu_conv_matrices`` delegates to the eps one, so a
+    lift added to one and not the other would be invisible from the other.
+    """
+    from wavebit._core import factorization as fac
+
+    order = 4
+    assert n < 4 * order + 1, 'the point is a raster below the floor'
+
+    eps = 4.0
+    t = np.zeros((1, n, n, 3, 3), dtype=complex)
+    for a in range(3):
+        t[0, ..., a, a] = eps
+
+    from wavebit._core.lattice import as_lattice
+
+    slots = getattr(fac, build_name)(t, order, order, lattice=as_lattice(period=(300.0, 300.0)))
+    epx = np.asarray(slots[0][0])
+    assert np.abs(epx - eps * np.eye(epx.shape[0])).max() < 1e-12

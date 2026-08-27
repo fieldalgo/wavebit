@@ -198,3 +198,39 @@ def test_the_gate_is_stricter_than_the_solver_here_and_that_is_recorded(name, ov
     """
     assert carrier().check(), f'{name}: the gate should refuse -- {why}'
     assert not _solver_refuses(**over), f'{name}: the solver now refuses too; move this to SHARED'
+
+
+@pytest.mark.parametrize('factorization', ['li', 'nvf'])
+def test_normal_grid_is_refused_where_nothing_reads_it(factorization):
+    """The sibling of ``normal_method``'s refusal, and the asymmetry was not a decision.
+
+    ``normal_grid`` sizes the grid the *shape* paths sample their analytic normal field on. A
+    raster builds its field at the raster's own resolution, lifted to the
+    ``4*truncation_order+1`` floor, so the keyword changes nothing there -- measured, 64 and
+    4096 gave ``0.898147036010`` both times, under Li *and* under NVF. ``normal_method`` has
+    been refused where unread since it was added; this one was accepted and ignored.
+
+    More urgently than for its sibling, in fact: this keyword's own comment in the ``rcwa``
+    signature promises something about *shape* gradients, which a raster user cannot have.
+
+    The default is exempt, because an untouched keyword is not a request -- which is what
+    ``None`` means since 2026-08-27.
+    """
+    import numpy as np
+
+    raster = np.full((1, 16, 16), 4.0)
+    raster[0, 4:12, 4:12] = 12.25
+    cfg = dict(backend=0, period=[300.0, 300.0], thickness=[205.0], truncation_order=(4, 4),
+               top=1.0, bot=1.0, wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0,
+               factorization=factorization)
+
+    with pytest.raises(NotImplementedError, match='normal_grid'):
+        wavebit.rcwa(structure=raster, normal_grid=256, **cfg).solve()
+
+    # the default is not a request, and a shape layer reads it
+    assert float(np.sum(np.asarray(wavebit.rcwa(structure=raster, **cfg).solve().T))) > 0.0
+    shapes = [dict(background=1.0, shapes=[dict(type='circle', cx=150.0, cy=150.0, lx=140.0,
+                                                material=4.0)])]
+    assert float(np.sum(np.asarray(wavebit.rcwa(
+        structure=shapes, normal_grid=256,
+        **dict(cfg, factorization='nvf')).solve().T))) > 0.0

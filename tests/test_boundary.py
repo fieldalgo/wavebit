@@ -672,8 +672,8 @@ def test_paint_with_an_enclosed_shape_agrees_with_a_fine_raster():
     """
     painted = _total(_solve([dict(background=1.0, shapes=ENCLOSED_SHAPES)],
                             normal_grid=256).solve())
-    coarse = _total(_solve(_raster_of(ENCLOSED_SHAPES, 800), normal_grid=256).solve())
-    fine = _total(_solve(_raster_of(ENCLOSED_SHAPES, 1600), normal_grid=256).solve())
+    coarse = _total(_solve(_raster_of(ENCLOSED_SHAPES, 800)).solve())
+    fine = _total(_solve(_raster_of(ENCLOSED_SHAPES, 1600)).solve())
 
     assert abs(coarse - fine) < 2e-4, (coarse, fine)          # the raster has converged
     assert abs(painted - fine) < 4e-3, (painted, fine)
@@ -697,7 +697,7 @@ def test_a_partial_overlap_was_never_affected():
 
     painted = _total(_solve([dict(background=1.0, shapes=CLIPPED_SHAPES)],
                             normal_grid=256).solve())
-    fine = _total(_solve(_raster_of(CLIPPED_SHAPES, 1600), normal_grid=256).solve())
+    fine = _total(_solve(_raster_of(CLIPPED_SHAPES, 1600)).solve())
     assert abs(painted - fine) < 2e-3, (painted, fine)
 
 

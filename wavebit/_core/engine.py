@@ -2791,6 +2791,30 @@ class CoreFactorizationMixin:
             f"here: {where}. It selects the raster NVF normal-field construction, so it "
             f"needs a raster structure and factorization='nvf'.")
 
+    def _reject_unread_normal_grid(self):
+        """Refuse an explicit ``normal_grid`` on a build that samples no normal field.
+
+        Exactly the argument :meth:`_reject_unread_normal_method` makes for its sibling, and
+        the asymmetry between them was not a decision. ``normal_grid`` is read by the shape
+        paths and by nothing else: on a raster the field is built at the raster's own
+        resolution (lifted to the aliasing floor), so ``normal_grid=64`` and
+        ``normal_grid=4096`` return the same answer to the last bit, under Li *and* under NVF.
+        Measured before this check: 0.898147036010 for both at 64 and at 4096.
+
+        More urgently than for `normal_method`, in fact: this one's own signature comment
+        promises a raster user something about shape gradients it cannot deliver for them.
+
+        The default is exempt for the same reason as everywhere else -- an untouched keyword is
+        not a request -- which is what `None` now means (see :meth:`_resolve_normal_grid`).
+        """
+        if self._normal_grid is None or self._modeling_type == 2:
+            return
+        raise NotImplementedError(
+            f'normal_grid={self._normal_grid!r} has no reader here: the raster path builds its '
+            f"normal field at the raster's own resolution, lifted to the 4*truncation_order+1 "
+            f'floor, so this changes nothing. It sizes the grid the *shape* paths sample their '
+            f'analytic normal field on, and needs a structure of shape dicts.')
+
     def freeze_geometry(self, **kwargs):
         """Take this structure's discrete geometry decisions once, eagerly.
 
@@ -2818,6 +2842,7 @@ class CoreFactorizationMixin:
         factorization = self.factorization
         coefficients = self.fourier_coefficients
         self._reject_unread_normal_method(factorization)
+        self._reject_unread_normal_grid()
         # The *window's* half-width, not the declared `truncation_order`: an excitation can
         # widen the retained set, and a convolution matrix has to be as wide as the
         # `kx` it will meet. Its entries do not otherwise care where the window sits
@@ -3209,6 +3234,7 @@ class CoreFactorizationMixin:
         factorization = self.factorization
         self.fourier_coefficients   # read for the refusal it may raise, not for its value
         self._reject_unread_normal_method(factorization)
+        self._reject_unread_normal_grid()
         self._reject_layer_count_mismatch()
 
     def _reject_layer_count_mismatch(self):

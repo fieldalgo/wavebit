@@ -997,6 +997,25 @@ def _projector_cache_key(xp, built, grid_shape, lattice, half_width_u, half_widt
         lat = tuple(_static_float(v) for row in lattice for v in row)
     except (TypeError, ValueError):
         return None
+
+    # **A lone round shape's field is scale-free, so its size does not belong in the key.**
+    # The level-set gradient of `x^2/a^2 + y^2/b^2` is `(2x/a^2, 2y/b^2)`, whose *direction*
+    # is unchanged when `a` and `b` scale together -- so the projector coefficients depend on
+    # the aspect and not on the size. Measured on this function: a circle at lx = 40 / 90 /
+    # 220 / 280 agrees with lx = 140 to 2.8e-17, and an ellipse rescaled 2x and 0.5x at a fixed
+    # aspect agrees to 0.000e+00, while changing the aspect moves it 1.2e-01.
+    #
+    # It matters because the commonest 1D grating sweep is over a *radius*, and with `lx` in
+    # the key every step missed and rebuilt a bit-identical field: five steps, five entries,
+    # where a position or material sweep leaves one.
+    #
+    # Only for one shape, and only for the round family. The multi-shape blend weighs absolute
+    # distances between shapes, and a rectangle's four-face blend is absolute too -- measured
+    # 8.4e-02 and 5.4e-02 for the same two rescalings, which is why it keeps its lengths.
+    if len(shapes_key) == 1 and shapes_key[0][0] in _overlap._ELLIPSE_TYPES:
+        stype, cx, cy, lx, ly, angle = shapes_key[0]
+        if lx:
+            shapes_key = ((stype, cx, cy, 1.0, ly / lx, angle),)
     # The namespace is redundant with ``str(dtype)``, which already spells it out
     # (``numpy.complex128`` against ``torch.complex128``) -- but that is an accident of how the
     # dtypes are named, not a guarantee, and a cross-backend collision hands one namespace's
