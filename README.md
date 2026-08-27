@@ -630,9 +630,14 @@ step = jax.jit(lambda u: jnp.sum(solver.solve(structure=u, geometry=geometry).T)
 ```
 
 A freeze describes the structure it was taken on. Sweeping the *material values* reuses it
-exactly; moving the geometry does not, and an eager `solve` raises `StaleGeometryError`
-rather than answering from a record that no longer fits. A traced call cannot check — the
-comparison is what the freeze exists to avoid.
+exactly; moving the geometry does not, and a `solve` that can read its values raises
+`StaleGeometryError` rather than answering from a record that no longer fits. Under `jax.jit`
+there is nothing to compare against and the check cannot run — which is the reason to re-take
+the freeze every step rather than hold one.
+
+You need a freeze only under `jax.jit` and `vmap`. `jax.grad` and PyTorch autograd carry a
+concrete value through the trace, so they take every decision at the point the gradient is
+being taken — and a decision taken there is one that cannot go stale.
 
 The painted-shape path reads "moving the geometry" more narrowly, because its record holds
 combinatorics rather than coordinates: a shape sliding is what it replays, bit for bit, and only

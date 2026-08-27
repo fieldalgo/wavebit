@@ -223,6 +223,15 @@ def overlapping_pairs(prims, tol, lattice, *, self_only=False, image_only=False)
     of Python arithmetic. The bound is one-sided — the true gap is never smaller than the
     circles' — so rejecting on it can only skip a pair that was never going to be reported.
     """
+    # The basis is read once, not per image: it is loop-invariant, and it is read the way the
+    # shapes are, because `lattice` is a design variable too (2026-08-23). Spelled `float` it
+    # refused a `jax.grad` tracer, and the caller reads that refusal as "skip the check" -- so
+    # differentiating the *cell* walked past a refusal that differentiating the *shape* hits.
+    # Measured on one 1.6-wide rod in a period of 1.0: refused eagerly, and `grad` wrt the
+    # period returned 0.0265.
+    a1x, a2x = checked_float(lattice[0][0]), checked_float(lattice[0][1])
+    a1y, a2y = checked_float(lattice[1][0]), checked_float(lattice[1][1])
+
     found = []
     radii = [None if p is None else _bounding_radius(p) for p in prims]
     for i, p in enumerate(prims):
@@ -239,8 +248,8 @@ def overlapping_pairs(prims, tol, lattice, *, self_only=False, image_only=False)
                 # Images sit on the lattice, not on a rectangle: a skewed cell's neighbour
                 # is ox*a1 + oy*a2. Getting this wrong does not raise -- it reports the
                 # wrong pairs as overlapping, and the layer takes the wrong build path.
-                dx = ox * float(lattice[0][0]) + oy * float(lattice[0][1])
-                dy = ox * float(lattice[1][0]) + oy * float(lattice[1][1])
+                dx = ox * a1x + oy * a2x
+                dy = ox * a1y + oy * a2y
                 shifted = _shifted(q, dx, dy)
                 if math.hypot(p[1] - shifted[1], p[2] - shifted[2]) - reach >= -tol:
                     continue

@@ -325,22 +325,35 @@ three-layer stack — one painted-and-overlapping, one painted-and-disjoint, one
 `jax.jit` and `jax.grad`: every parameter's gradient is finite, and each layer's agreement with
 central differences is exactly what that layer would show on its own.
 
-### Freeze before you trace, or the overlap goes unnoticed
+### Which traces need a freeze, and which do not
 
-The routing test of the previous section compares coordinates, and a tracer is not a coordinate:
-`analytic._primitives` reads a backend's refusal to hand over a value as "this is traced" and
-returns `None`. That used to mean `layer_needs_resolving` returned without deciding anything,
-on the assumption that a traced call had already had its eager pass through `freeze_geometry`.
-It was an assumption, not a check: `jax.jit` over an overlapping layer with **no** frozen
-geometry did not raise and did not resolve — it summed the shapes and returned a different
-structure's answer.
+The routing test of the previous section compares coordinates. Whether a tracer *has* one is
+the whole question, and for a long time this code answered it by asking the wrong thing:
+`analytic._primitives` spelled its read as `float(value)` and treated any refusal as "this is
+traced". A `jax.jit` tracer genuinely has no number. A **`jax.grad` tracer carries a concrete
+primal** and was refusing only the spelling — so the checks were skipped in an un-jitted
+gradient loop, which is exactly where an optimizer lives, and a rod grown by plain gradient
+ascent ran to `lx = 911.71` on a period of 300 with `R + T = 1.000000000000` at every step.
 
-It now raises instead, for any traced layer of more than one shape. A single shape routes the
-same way whatever its parameters are, so it is not asked; two or more cannot be routed without
-knowing whether they meet. `check_layer_shapes` still steps aside under a trace, because the
-only thing it refuses — a shape wider than the period — is a question about *values*, and the
-eager freeze is where it gets asked. So the freeze is not only what makes the call fast, it is
-what makes it possible — take it, every step.
+Since 2026-08-28 the read is `backend.checked_float` — `detach`, then `float`, then
+`stop_gradient` — and "concrete" is a property of the *value*:
+
+| trace | reads a value? | needs `freeze_geometry()`? |
+|---|---|---|
+| eager, any backend | yes | no |
+| PyTorch autograd | yes | no |
+| **`jax.grad`** (un-jitted) | **yes** | **no** |
+| `jax.jit`, `jit(grad)`, `vmap` | no | **yes** |
+
+So a gradient takes every decision at the point the gradient is being taken — which is also
+the point they have to be right at, and a decision taken there cannot go stale the way a held
+record can. Verified against the frozen route on an overlapping pair: **bit-identical**
+(−0.646606440 either way), and 4.0e-13 from PyTorch.
+
+Under `jax.jit` there is nothing to read, the freeze is what stands in for it, and the checks
+above cannot run at all — including the staleness checks. That is the argument for re-taking
+the freeze every step rather than holding one; it costs 0–1 ms and its record compares by
+content.
 
 ### What a frozen plan does and does not survive
 

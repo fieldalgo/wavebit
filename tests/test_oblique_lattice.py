@@ -1344,3 +1344,38 @@ def test_the_precision_cascade_does_not_meet_the_refusal(cell):
     assert np.allclose(np.asarray(solver.period), before)
     if _PERIOD_CELLS[cell] is not None:
         assert np.allclose(np.asarray(solver.lattice), np.asarray(_PERIOD_CELLS[cell]))
+
+
+def test_the_geometry_refusals_read_the_lattice_the_way_they_read_the_shapes():
+    """The other half of the same defect: differentiate the *cell* instead of the shape.
+
+    ``check_layer_shapes``, ``layer_needs_resolving`` and ``_refuse_overlap`` all gate on
+    ``float(v) for v in periods_of(lattice)``, and ``overlapping_pairs`` re-read the basis the
+    same way once per periodic image. A ``jax.grad`` tracer refuses ``float`` while carrying a
+    concrete primal, so the caller's ``except`` read that as "traced -- skip the check": the
+    identical geometry that is refused eagerly came back with a gradient when the differentiated
+    variable was the lattice rather than the shape. Measured before the fix, one 1.6-wide rod on
+    a period of 1.0: refused eagerly, and ``d(sum T)/dP`` = 0.0265 through ``jax.grad``.
+
+    The lattice has been a design variable since 2026-08-23, so this is not a hypothetical door.
+    Both readings go through ``backend.checked_float`` now.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+
+    cfg = dict(thickness=[0.3], truncation_order=(4, 4), top=1.0, bot=1.0, wavelength=0.94,
+               psi=np.pi / 2, theta=0.0, phi=0.0, normal_grid=256)
+    rod = lambda lx: [dict(background=1.0, shapes=[
+        dict(type='rectangle', cx=0.5, cy=0.5, lx=lx, ly=0.5, angle=0.0, material=4.0)])]
+
+    def by_lattice(structure, P):
+        basis = jnp.stack([jnp.stack([P, jnp.asarray(0.0)]),
+                           jnp.stack([jnp.asarray(0.0), P])])
+        return jnp.sum(wavebit.rcwa(backend=1, structure=structure, lattice=basis,
+                                    **cfg).solve().T).real
+
+    with pytest.raises(ValueError, match='larger than the period'):
+        jax.grad(lambda P: by_lattice(rod(1.6), P))(jnp.asarray(1.0))
+
+    # and a legal cell still differentiates -- the check must not cost the feature it guards
+    assert np.isfinite(float(jax.grad(lambda P: by_lattice(rod(0.6), P))(jnp.asarray(1.0))))

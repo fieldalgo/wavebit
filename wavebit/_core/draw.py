@@ -324,6 +324,34 @@ def _refuse_layer(solver, layer):
         _analytic.check_layer_spec(solver.structure[index], index)
         _analytic.check_layer_shapes(solver.structure[index], _basis(solver), index)
 
+        # A picture is a picture: every renderer below samples on a NumPy grid, so a traced
+        # shape parameter has nowhere to go. Said here rather than left to surface as a
+        # `TracerArrayConversionError` out of `numpy.stack`, naming nothing the caller wrote.
+        # It became reachable on 2026-08-28: `layer_needs_resolving` used to raise for any
+        # traced multi-shape layer and incidentally covered this, and now that it answers
+        # under a gradient the renderer has to say so itself.
+        for shape in solver.structure[index].get('shapes', []):
+            for key, value in shape.items():
+                if key in ('type', 'material'):
+                    continue
+                try:
+                    # `np.asarray`, not `checked_float`. The renderer needs the value as an
+                    # *array* to sample against a NumPy grid, and that is a strictly stronger
+                    # ask: `checked_float` reaches a `jax.grad` tracer's primal one scalar at a
+                    # time, which is why the geometry checks can run under a gradient, while a
+                    # whole-array conversion is refused under any JAX trace. `detach` first so
+                    # a torch leaf under autograd -- which can be drawn -- still is.
+                    probe = value.detach() if hasattr(value, 'detach') else value
+                    np.asarray(probe, dtype=float)
+                except Exception:                  # noqa: BLE001 - a tracer of some kind
+                    raise ValueError(
+                        f'a traced structure cannot be drawn: layer {index} has a {key!r} that '
+                        f'carries no number this can sample. `slice_structure` and '
+                        f'`plot_structure` render the geometry on a grid, which is not '
+                        f'something a jax.jit or vmap trace can be asked for.\n'
+                        f'  Draw it outside the trace, at the values you want to look at.'
+                    ) from None
+
 
 def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
     """The structure of one layer, as a NumPy array. **Geometry, not the truncated series.**

@@ -2919,8 +2919,15 @@ class CoreFactorizationMixin:
 
         ``geometry`` is an optional :class:`~wavebit._core.geometry.StaticGeometry` — the
         discrete decisions frozen by :meth:`freeze_geometry`. Supply it to keep the whole call
-        traceable under ``jax.jit`` / ``jax.grad``; omit it and each decision is auto-detected
-        eagerly, which needs concrete values.
+        traceable under ``jax.jit``; omit it and each decision is taken from the values in
+        front of it, which needs a number to read.
+
+        **``jax.grad`` needs no freeze, since 2026-08-28.** "Concrete" is a property of the
+        *value*, not of the framework: an un-jitted grad tracer carries a primal, so every
+        decision can be taken at the point the gradient is being taken -- and a decision taken
+        there cannot be stale, which a held one can. Under ``jax.jit`` and ``vmap`` there is no
+        primal to read and the freeze is what stands in for it. PyTorch has always been on the
+        readable side, and the two now agree to 4.0e-13 on a shape gradient.
 
         ``auto_detune`` is what happens when the requested point is numerically singular — an
         order exactly on a light line (``kx_m == n``, a Rayleigh point). On by default: if the

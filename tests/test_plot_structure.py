@@ -279,3 +279,38 @@ def test_it_draws():
     ax = skewed.plot_structure(n=64)
     assert ax.collections and not ax.images          # pcolormesh on the parallelogram
     plt.close('all')
+
+
+def test_a_traced_structure_is_refused_by_name_rather_than_by_numpy():
+    """A picture needs values, and saying so is the renderer's job.
+
+    ``slice_structure`` samples the geometry on a NumPy grid, so a traced shape parameter has
+    nowhere to go. It used to be covered by accident: ``layer_needs_resolving`` raised for any
+    traced multi-shape layer and the renderer never got that far. Since 2026-08-28 that routing
+    question answers under ``jax.grad``, and without this the renderer fell out of
+    ``numpy.stack`` with a ``TracerArrayConversionError`` naming nothing the caller wrote.
+
+    The predicate is an *array* conversion, not ``checked_float``: reading one scalar at a time
+    reaches a grad tracer's primal -- which is what lets the geometry checks run under a
+    gradient -- while a whole-array conversion is refused under any JAX trace. A torch leaf
+    under autograd detaches and still draws, and is asserted here so the two do not drift.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+
+    def layer(lx):
+        return [dict(background=1.0, shapes=[
+            dict(type='rectangle', cx=250.0, cy=500.0, lx=lx, ly=200.0, angle=0.0,
+                 material=4.0),
+            dict(type='rectangle', cx=750.0, cy=500.0, lx=200.0, ly=200.0, angle=0.0,
+                 material=9.0)])]
+
+    def drawn(lx):
+        return jnp.sum(jnp.asarray(wavebit.rcwa(
+            structure=layer(lx), **dict(COMMON, backend=1)).slice_structure(n=32)).real)
+
+    with pytest.raises(ValueError, match='traced structure cannot be drawn'):
+        jax.grad(drawn)(jnp.asarray(200.0))
+
+    # eager still draws, on the same solver type
+    assert float(drawn(jnp.asarray(200.0))) > 0.0
