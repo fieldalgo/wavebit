@@ -1,14 +1,7 @@
 """
 Verification tests for `slice_structure` / `plot_structure` -- the picture of the *input*.
 
-The reason this file exists is one hazard, and most of it is spent on that hazard: a
-``Modeling.draw()`` edge list is not guaranteed increasing, so the obvious render of a
-block-modelled layer is silently wrong for any shape that crosses the cell boundary. The
-naive render is therefore checked in *alongside* the real one and asserted to be wrong, so
-the test says what the hazard is rather than only that the fix holds. Delete
-``naive_render`` and this file stops making its argument.
-
-The other three claims pinned here:
+What this file pins:
 
 * the analytic sampler agrees with the layer's own DC coefficient, on a skewed cell as well
   as an axis-aligned one -- which is the only thing that catches a wrong periodic-image

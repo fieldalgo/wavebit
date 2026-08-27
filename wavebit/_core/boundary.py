@@ -1,22 +1,21 @@
 # -*- coding: utf-8 -*-
 """Convolution matrices for a layer whose overlap has been resolved into polygons.
 
-The fourth modeling path, and the only one that gets both halves of the problem right at once:
+The third modeling path, and the only one that gets both halves of the problem right at once:
 
 ===============  ==================  =====================
 path             tilted edge         overlapping shapes
 ===============  ==================  =====================
-raster           staircase           as drawn
-block            staircase           **painted**
-analytic         **exact**           added (superposed)
+raster           staircase           as drawn (painted)
+analytic         **exact**           summed
 **this one**     **exact**           **painted**
 ===============  ==================  =====================
 
-The block path paints later shapes over earlier ones but decomposes them into axis-aligned
-blocks, so a tilted edge becomes a staircase. The smooth path transforms a tilted shape in
-closed form but *sums* the shapes, so an overlap gets both contributions and ends up as neither
-shape's material. Neither can be fixed by mixing them: the analytic normal field never asks
-which boundary survived.
+A raster paints -- the later sample wins -- but staircases a tilted edge. The smooth path
+transforms a tilted shape in closed form but *sums* the shapes, so an overlap would get both
+contributions and end up as neither shape's material; it refuses one rather than answering.
+Neither gap can be closed by mixing the two: the analytic normal field never asks which
+boundary survived.
 
 This path resolves the painting **once** into disjoint polygons (:mod:`.clipper`), transforms
 those in closed form (:func:`.polygon.polygon_ft`), and builds the normal field from the same
@@ -30,8 +29,9 @@ Split in two halves, which is what makes it differentiable:
   writes, so it traces and differentiates on every backend.
 
 Validated against S4 (an independent RCWA implementation): the permittivity coefficients agree
-to 2.2e-16, and on a case with both tilt and overlap this path sits 4x closer to it than the
-block path, while tying on axis-aligned overlap where the block path has no staircase to lose.
+to 2.2e-16, and on a case with both tilt and overlap this path sat 4x closer to it than the
+removed block path, while tying on axis-aligned overlap, where a staircase has nothing to
+lose.
 """
 from . import clipper as _clipper
 from .analytic import nvf_from_coeffs, shape_geometry, _sampled_coeffs
@@ -356,7 +356,7 @@ def plan_layer(shapes, lattice, n_poly=POLYGON_VERTICES):
     """Resolve one layer's painting order into disjoint loops. **Concrete values only.**
 
     This is the discrete half — which loop holds which vertex, which edges cross — so it runs
-    on NumPy outside any trace, exactly like the block modeler's grid plan. Freeze it once
+    on NumPy outside any trace. Freeze it once
     (:meth:`~wavebit._core.engine.RCWAEngine.freeze_geometry`) and every later step replays
     it against traced vertices.
     """
@@ -452,8 +452,8 @@ def to_conv_mat_boundary_layer(xp, shapes, background, half_width_u, half_width_
                                dtype, normal_grid=256, n_poly=POLYGON_VERTICES, plan=None):
     """The five convolution matrices for one layer whose shapes are *painted*.
 
-    ``shapes`` is in painting order — a later shape covers an earlier one — which is what the
-    block path means by painting and what a raster of the same instruction agrees with. Pass
+    ``shapes`` is in painting order — a later shape covers an earlier one — which is what a
+    raster of the same instruction agrees with. Pass
     ``plan`` from a frozen geometry to keep the call traceable; leave it ``None`` and the
     painting is resolved eagerly, which needs concrete shape parameters.
     """

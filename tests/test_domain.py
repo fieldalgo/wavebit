@@ -34,17 +34,6 @@ def test_stack_roundtrips_a_raster_structure():
         assert layer.is_raster
 
 
-def test_stack_roundtrips_a_block_structure():
-    # block encoding: one [background, [objects...]] entry per layer -> stays a list
-    blocks = [
-        [4.0, [['rectangle', 50, 150, 31, 300, 12.96, 0, 0, 0]]],
-        [12.96, []],
-    ]
-    stack = Stack.from_structure(blocks, [205, 100000])
-    assert stack.structure == blocks                       # list preserved verbatim
-    assert not stack[0].is_raster
-
-
 def test_stack_roundtrips_an_analytic_structure():
     layers = [{'background': 12.96, 'shapes': []}, {'background': 1.0, 'shapes': []}]
     stack = Stack.from_structure(layers, [0.1, 0.2])

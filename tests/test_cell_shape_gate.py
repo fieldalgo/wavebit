@@ -41,8 +41,8 @@ _SEPARABLE_KXY = (
     "without calling it at all -- counted rather than assumed, by `test_oblique_lattice.py::"
     "test_the_skewed_branch_never_calls_the_separable_build`. `_solve_1d` and "
     "`_solve_1d_conical` call it directly, and `_assign_grating_type` routes to either only "
-    "under `one_dimensional = one_row and self.lattice_is_axis_aligned`, the block and shape "
-    "paths setting grating_type 2 unconditionally.")
+    "under `one_dimensional = one_row and self.lattice_is_axis_aligned`, the shape path "
+    "setting grating_type 2 unconditionally.")
 
 _ALLOWED = {
     # One entry, and three until the body was folded into `_core`. The argument below is

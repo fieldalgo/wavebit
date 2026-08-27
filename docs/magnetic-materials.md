@@ -287,7 +287,7 @@ whenever anything in the scene carries `mu != 1`, by running the **same builder 
 time** on a view of the structure with each material's `mu` where its `epsilon` was. That is
 why the permeability slots are the E/H dual of the permittivity ones by construction rather
 than by a second derivation, and why the two quantities cannot land on different geometry —
-the block path replays the same grid plans, the shape paths the same boundary plans. A
+the shape path replays the same boundary plans. A
 non-magnetic scene builds nothing and takes the arithmetic that existed before `mu` did, bit
 for bit.
 

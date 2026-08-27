@@ -60,7 +60,7 @@ somewhere else** — question 6 of the CONTRIBUTING table, not this folder.
 | Document | Question it answers | Decision |
 | --- | --- | --- |
 | [`backend-choice.md`](backend-choice.md) | Which backend, and whether to freeze the geometry, for a *differentiated* run? | PyTorch below `truncation_order≈5`; `jax jit` from `truncation_order≈7` up; re-freeze every step |
-| [`analytic-modeling.md`](analytic-modeling.md) | How does the staircase-free shape path converge against the raster and block staircases? | The smooth path for tilted and curved boundaries |
+| [`analytic-modeling.md`](analytic-modeling.md) | How does the staircase-free shape path converge against a raster staircase? | The smooth path for tilted and curved boundaries |
 | [`boundary-modeling.md`](boundary-modeling.md) | Can a layer be painted *and* keep a tilted edge exact? | Yes — resolve the painting into polygons once, then transform those |
 | [`nvf-upsampling.md`](nvf-upsampling.md) | What grid should the NVF normal field be taken on? | Not the fine one: it lost accuracy in 27 of 32 combinations and cost the most |
 | [`nvf-normal-methods.md`](nvf-normal-methods.md) | Can the raster normal field do better than the {0, 45}-degree staircase gradient? And is it periodic? | Yes — `normal_method='contour'` won 11/12 resolved solver cells and lost none; the best *angular* field (`'smooth'`) loses on corners, which is why the solver A/B decides. Periodic only since 2026-08-17: `'distance'` read the cell as a flat array in three places, so a lattice translation of the raster moved `R` by 1e-2 at every `truncation_order` |

@@ -201,15 +201,16 @@ def test_a_frozen_geometry_makes_a_shape_parameter_traceable(name, make, start):
 def test_a_stale_frozen_geometry_is_refused_rather_than_answered():
     """Reusing a frozen plan too far from where it was taken has to fail loudly.
 
-    The plan records which block edge becomes which grid line. Move the shape parameters far
-    enough and the edges reorder, so the plan describes a different layer — and the answer that
-    comes back is wrong without looking wrong, which is the whole hazard. Measured before the
-    check existed: an ellipse frozen at ``lx`` 85 and replayed at 120 was 1.5e-4 off.
+    The plan records the *combinatorics* of the painting -- which loop holds which vertex,
+    which edges cross. A shape moving is exactly what it is built to survive, since that is
+    what carries the gradient; what makes it stale is the combinatorics changing, which here
+    is the two rectangles ceasing to overlap. Replay it past that point and the plan describes
+    a different layer, and the answer comes back wrong without looking wrong.
 
-    The tell is free, because grid lines are sorted by construction: a replayed list that is
-    not sorted is a plan that no longer fits. This pins both halves — that it is refused where
-    it does not fit, and that where it *is* accepted the answer matches a rebuild exactly, so
-    the check is not merely conservative.
+    This pins both halves — that it is refused where it does not fit, and that where it *is*
+    accepted the answer matches a rebuild exactly, so the check is not merely conservative.
+    The docstring described the removed block path's grid plan, and a sortedness tell that
+    went with it, until 2026-08-27; the body has used the boundary plan throughout.
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
@@ -281,7 +282,8 @@ def test_a_stale_raster_record_is_refused_rather_than_answered(strategy):
     to the same three values at the frozen indices, so they all build one profile that is
     neither the true layer nor the frozen one (whose own answer is 0.490).
 
-    This pins both halves, as the vector-path test does: refused where the record no longer
+    This pins both halves, as `test_a_stale_frozen_geometry_is_refused_rather_than_answered`
+    does: refused where the record no longer
     fits, and exact where it is accepted, so the check is not merely conservative.
     """
     frozen = wavebit.rcwa(backend=0, structure=_rod(6), **strategy,

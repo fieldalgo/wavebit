@@ -38,11 +38,11 @@ it.* Each path has its own reading of that, because each record depends on somet
 ``boundary_plans``      the shapes must still overlap the way the painting was resolved for
 ======================  ==================================================================
 
-All four raise :class:`StaleGeometryError`, and all four run **only eagerly**: under a trace
+All three raise :class:`StaleGeometryError`, and all three run **only eagerly**: under a trace
 the comparison is itself the thing the record exists to avoid, so a jitted call carries no
 check and a long fit should re-freeze on a schedule rather than wait to be told.
 
-``boundary_plans`` reads that rule differently from the other three, because it holds no
+``boundary_plans`` reads that rule differently from the other two, because it holds no
 coordinates at all. A shape *moving* is what it is built to survive -- that is what makes the
 boundary path differentiable -- so only the combinatorics changing makes it stale: shapes that
 begin to overlap, or stop, or a shape that was covered coming out from under the one covering
@@ -96,13 +96,13 @@ class StaticGeometry:
     argument to a jitted call, so its ``__eq__``/``__hash__`` decide when JAX recompiles. Two
     records answer that question differently:
 
-    * The block records are pure Python — which block edge becomes which grid line, in what
-      order. Nothing but *ordering*: the edge coordinates themselves stay traced, which is what
-      carries a gradient to a length. So they compare **by content**, and a freeze taken again
-      on a structure whose ordering has not changed hits the compilation cache. That is the
-      difference between re-freezing every step and re-freezing on a schedule — measured on an
-      ellipse swept over ``lx`` 85 to 125, two compilations instead of ten, and re-freezing
-      every step becomes the *cheapest* way to run, not the most expensive one.
+    * ``boundary_plans`` is pure Python — which loop holds which vertex, which edges cross.
+      Nothing but *combinatorics*: the vertex coordinates themselves stay traced, which is what
+      carries a gradient to a shape parameter. So it compares **by content**, and a freeze
+      taken again on a structure whose combinatorics have not changed hits the compilation
+      cache. That is the difference between re-freezing every step and re-freezing on a
+      schedule, and it is what makes re-freezing every step the *cheapest* way to run a moving
+      fit rather than the most expensive.
     * ``normal_field`` and ``compression`` hold arrays, where value equality is both
       ill-defined and unhashable. A record carrying either falls back to **identity**, exactly
       as before.
@@ -122,8 +122,8 @@ class StaticGeometry:
     def _cache_key(self):
         """What ``__eq__``/``__hash__`` compare: the content when that is well defined.
 
-        Falls back to identity the moment an array-bearing record is present, or if the vector
-        records turn out to hold something unhashable — a conservative answer costs a
+        Falls back to identity the moment an array-bearing record is present, or if the
+        boundary plans turn out to hold something unhashable — a conservative answer costs a
         recompilation, a wrong one would serve a cached program for a different structure.
 
         All six array-bearing slots are tested, the three ``mu_*`` records included, even

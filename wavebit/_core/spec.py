@@ -157,7 +157,7 @@ def _jsonable(value):
     """Plain-Python form of a value, so ``to_dict`` output survives ``json.dumps``.
 
     A :class:`~wavebit._core.domain.Material` is handled here rather than only at the two
-    half-space slots because it can sit at any depth -- a block layer's background, an
+    half-space slots because it can sit at any depth -- an analytic layer's background, an
     analytic shape's ``material`` -- and its JSON form is *self-identifying* (a dict with an
     ``epsilon`` key), so it can be recognised again on the way back in without the reader
     having to know which position in which recipe it came from. That is exactly the property a
@@ -203,8 +203,8 @@ def _material_to_json(value):
       half-space is not exotic.
 
     The last one only works where the reader knows it is looking at a material -- ``stack.top``
-    and ``stack.bot``, and the ``epsilon`` / ``mu`` entries of the object form. Inside a block
-    or analytic recipe a two-list is not distinguishable from a recipe fragment, so a bare
+    and ``stack.bot``, and the ``epsilon`` / ``mu`` entries of the object form. Inside a shape
+    recipe a two-list is not distinguishable from a recipe fragment, so a bare
     complex there is still refused by :func:`_jsonable` rather than written in a spelling
     nothing could read back. Wrapping it in a ``Material`` is the way to put one anywhere.
     """
@@ -291,7 +291,7 @@ def _scalar_from_json(value, where):
 
 
 def _revive_materials(value, where='material'):
-    """Turn every material *object* inside a block / analytic recipe back into a ``Material``.
+    """Turn every material *object* inside a shape recipe back into a ``Material``.
 
     :func:`_jsonable` writes a ``Material`` as ``{'epsilon': ...}`` at whatever depth it finds
     one, so the reader has to meet it at the same depths or ``to_dict`` would emit a document
@@ -701,7 +701,7 @@ def _stack_to_dict(stack: Stack) -> dict:
     because they are *named* material slots, which is what makes the bare-complex ``[re, im]``
     spelling readable there. A ``Material`` needs no such help at either end: its object form
     identifies itself, so :func:`_jsonable` writes one wherever it appears, including inside a
-    block or analytic recipe.
+    shape recipe.
     """
     out = {
         'top': _material_to_json(stack.top),
@@ -720,7 +720,7 @@ def _structure_from_json(value, index, key):
     """A layer's structure (or its ``mu`` field), as written in JSON.
 
     A nested list is a raster grid and becomes an ndarray -- of **relative permittivity**, the
-    quantity the whole spec is stated in since ``SPEC_VERSION`` 3. Block / analytic recipes
+    quantity the whole spec is stated in since ``SPEC_VERSION`` 3. Shape recipes
     keep their shape and their numbers; the one thing done to them is that a material written
     in its object form (``{'epsilon': ...}``) becomes a ``Material`` again, since that is what
     :func:`_jsonable` emitted for one. A bare number in a material slot stays a bare number --

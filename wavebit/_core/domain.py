@@ -11,14 +11,13 @@ A ``structure`` is layer-major on its first axis in every encoding the solver ac
 single layer is exactly ``(thickness[i], structure[i])``:
 
   - raster   : ndarray ``(n_layers, Ny, Nx)`` of PERMITTIVITY -- one sample per pixel
-  - block    : list ``[[background, [objects...]], ...]`` -- one entry per layer
   - analytic : list of layer dicts -- one dict per layer
 
-There are four places in there that say what a region is made of, and three of them -- the
-block background, the block object's own slot, the analytic shape's ``material`` -- are
+There are three places in there that say what a region is made of, and two of them -- the
+analytic layer's ``background`` and the analytic shape's ``material`` -- are
 **assignments**: a name for the stuff that fills a region. :class:`Material` is that name, and
 it carries permittivity and permeability together because a medium has both. The raster is the
-fourth and stays arrays: it is not an assignment but a *sampled field*, one number per pixel,
+third and stays arrays: it is not an assignment but a *sampled field*, one number per pixel,
 which is exactly why topology optimisation reaches for it -- so it keeps a separate array per
 quantity rather than a grid of objects (``structure`` for permittivity, ``mu`` beside it).
 
@@ -43,7 +42,7 @@ from .enums import Tetm  # noqa: F401  (re-exported for spec's tetm parsing)
 
 
 def _is_raster(value: Any) -> bool:
-    """True if ``value`` is an array grid (raster) rather than a block/analytic recipe."""
+    """True if ``value`` is an array grid (raster) rather than a shape recipe."""
     return not isinstance(value, (list, tuple, dict)) and hasattr(value, 'shape')
 
 
@@ -245,8 +244,8 @@ def as_material(value, where='material') -> Material:
     """A :class:`Material` from whatever a caller wrote: a Material, a number, or nothing.
 
     **The single coercion point.** Every path that accepts a material calls this, so the
-    scalar shorthand is defined once and cannot drift between the block background, the
-    vector object slot and the analytic ``material`` key -- the three spellings that
+    scalar shorthand is defined once and cannot drift between the analytic layer's
+    ``background`` and the analytic shape's ``material`` key -- the two spellings that
     :class:`Material` exists to unify. ``where`` names the slot in the error message
     (``'stack.top'``, ``'shapes[2].material'``), matching how ``_core/spec.py`` reports paths.
 
@@ -362,14 +361,13 @@ def index_from_eps(eps):
 class Layer:
     """One layer of a :class:`Stack`: a thickness paired with the structure filling it.
 
-    ``structure`` is the layer's entry of the stack's ``structure`` in any of the three
-    encodings -- a raster grid array ``(Ny, Nx)`` of permittivity, a block
-    ``[background, [objects...]]``, or an analytic layer dict.
+    ``structure`` is the layer's entry of the stack's ``structure`` in either encoding -- a
+    raster grid array ``(Ny, Nx)`` of permittivity, or an analytic layer dict.
 
     It is a *structure*, not a material, which is why the field is no longer called ``eps``:
-    only the raster case is a single quantity end to end, and even there it is one sample per
-    pixel rather than one value. The materials live inside the other two encodings, where they
-    are :class:`Material` (or a number, via the scalar shorthand).
+    the raster case is a single quantity end to end, and even there it is one sample per pixel
+    rather than one value. The materials live inside the other encoding, where they are
+    :class:`Material` (or a number, via the scalar shorthand).
 
     ``mu`` is the raster's field-form companion and is ``None`` everywhere else: on the two
     shape encodings a permeability is part of the :class:`Material` that names the region, so
@@ -428,7 +426,7 @@ class Stack:
                        mu=None, lattice=None) -> "Stack":
         """Adapt a ``(structure, thickness)`` pair into a typed ``Stack``.
 
-        ``structure`` may be any encoding (raster ndarray / block list / analytic list); it is
+        ``structure`` may be either encoding (raster ndarray / analytic list); it is
         layer-major on its first axis, so layer *i* is ``(thickness[i], structure[i])``. The
         inverse of :attr:`structure` — ``Stack.from_structure(s, t).structure`` reproduces
         ``s``. ``mu`` is the raster path's optional permeability field, layer-major the same
@@ -452,7 +450,7 @@ class Stack:
         """Rebuild the stack-wide ``structure`` for the solver.
 
         Raster layers (array grids) stack into an ``(n_layers, Ny, Nx)`` array through the
-        Array-API namespace, preserving backend and dtype; block / analytic layers return a
+        Array-API namespace, preserving backend and dtype; analytic layers return a
         plain per-layer list. An empty stack is ``None`` (matching the ``structure`` default).
         """
         return self._stacked([layer.structure for layer in self.layers])
@@ -498,7 +496,7 @@ class Stack:
         second. Here both sides are in hand at once and there is no order to worry about.
 
         What it cannot see: the modeling path. Whether a shape recipe is well formed, whether
-        its overlaps resolve, whether the block modeller accepts this cell -- those are read
+        its overlaps resolve, whether the shapes fit the cell -- those are read
         by the builders and need the whole scene. A clean check here is not a promise that the
         solve will succeed; it is a promise that these particular mistakes are not present.
         """

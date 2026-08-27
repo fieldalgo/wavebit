@@ -60,7 +60,7 @@ def solve(backend, structure, truncation_order, **cfg):
 
 
 # ----------------------------------------------------------------------
-# 1. Dielectric tilted square — analytic vs vector staircase (same geometry)
+# 1. Dielectric tilted square — analytic vs raster staircase (same geometry)
 # ----------------------------------------------------------------------
 def bench_tilted_dielectric():
     # psi = 0 is TM.  (It was `pol=1.0`, which said three things at once; `psi` says only
@@ -73,18 +73,29 @@ def bench_tilted_dielectric():
     analytic = [dict(background=1.0, shapes=[dict(type='rectangle', cx=c, cy=c, lx=L, ly=L,
                                                   angle=ang, material=eps_r)])]
 
-    def stair(nsplit):
-        return [[1.0, [['rectangle', c, c, L, L, eps_r, ang, nsplit, nsplit]]]]
+    def stair(n_pix):
+        # The staircase arm was the removed block path until 2026-08-27, at `n_split` 8 and
+        # 24. A raster of the same rotated square is what is left that staircases, and it is
+        # the more honest comparison anyway: it shares no code with the analytic transform.
+        # `n_pix` is pixels per period, not splits per shape, so the two axes do not compare
+        # directly -- what carries over is the shape of the curve, not the row labels.
+        ax = (np.arange(n_pix) + 0.5) / n_pix
+        X, Y = np.meshgrid(ax, ax)
+        u = (X - c) * np.cos(ang) + (Y - c) * np.sin(ang)
+        v = -(X - c) * np.sin(ang) + (Y - c) * np.cos(ang)
+        cell = np.where((np.abs(u) <= L / 2) & (np.abs(v) <= L / 2), eps_r, 1.0)
+        return cell[None]
 
     ref, _ = solve(0, analytic, 16, **cfg)
     print("\n" + "=" * 74)
     print(f"[1] Dielectric tilted square (30 deg, n={NR}, TM subwavelength)")
     print(f"    reference t0 (analytic truncation_order=16) = {ref:.6f}")
-    print(f"    {'truncation_order':>3} | {'analytic |err|':>14} | {'staircase n=8':>13} | {'staircase n=24':>14}")
+    print(f"    {'truncation_order':>3} | {'analytic |err|':>14} | {'raster 64px':>13} | {'raster 256px':>14}")
+    lo, hi = stair(64), stair(256)
     for truncation_order in (3, 5, 7, 9, 11):
         a, _ = solve(0, analytic, truncation_order, **cfg)
-        s8, _ = solve(0, stair(8), truncation_order, **cfg)
-        s24, _ = solve(0, stair(24), truncation_order, **cfg)
+        s8, _ = solve(0, lo, truncation_order, **cfg)
+        s24, _ = solve(0, hi, truncation_order, **cfg)
         print(f"    {truncation_order:>3} | {abs(a - ref):14.2e} | {abs(s8 - ref):13.2e} | {abs(s24 - ref):14.2e}")
 
 

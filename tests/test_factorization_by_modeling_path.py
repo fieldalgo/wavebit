@@ -1,21 +1,21 @@
-"""``factorization`` means different things to the three modeling paths — and used to say so
-to none of them.
+"""``factorization`` means different things to the two modeling paths — and used to say so to
+neither of them.
 
-Only the raster path implements both rules. The block path has Li's rules alone
-(``to_conv_mat_block`` factorizes the painted rectangles and computes no normal field) and the
-smooth shape path has NVF alone (``to_conv_mat_smooth_nvf`` builds eps from the shapes' own
-analytic normal field, and there is no raster axis to run Li's nested 1D rule along). Neither
-of those two used to look at the keyword at all: a smooth-path circle asked for
-``factorization='li'`` returned NVF numbers — bit-identical to ``'nvf'``, five convolution
-matrices either way — with nothing in the result to say so.
+Only the raster path implements both rules. The smooth shape path has NVF alone
+(``to_conv_mat_smooth_nvf`` builds eps from the shapes' own analytic normal field, and there
+is no raster axis to run Li's nested 1D rule along), and it used to not look at the keyword at
+all: a smooth-path circle asked for ``factorization='li'`` returned NVF numbers —
+bit-identical to ``'nvf'``, five convolution matrices either way — with nothing in the result
+to say so. The removed block path had Li's rules alone and the same silence, which is why this
+file was written about *paths* rather than about one path.
 
 The fix is not to implement the missing rule; on the smooth path there is nothing to implement,
 since NVF is a superset of Li and the path has no other axis to factorize along. It is to stop
 substituting silently, in the style the rest of the module already uses
 (``_reject_unsupported_lattice``, ``analytic.check_layer_shapes``): refuse, and say why.
-That also settles a temperament the two shape paths did not share — the smooth path already
-refuses an unlabelled overlapping layer rather than guessing, while both used to swallow a
-factorization request whole.
+That also settles a temperament the path did not share with itself — it already refuses a
+layer whose geometry it cannot read rather than guessing, while swallowing a factorization
+request whole.
 
 The whole difficulty is that ``'li'`` is also the *default*, so refusing it outright would
 break every smooth-path user who never touched the keyword. So the solver stores what was

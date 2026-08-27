@@ -48,7 +48,7 @@ The scene is stated with four keywords:
 
 | keyword | what it holds |
 | --- | --- |
-| `structure` | the layer stack, layer-major on its first axis — one of the three encodings below |
+| `structure` | the layer stack, layer-major on its first axis — one of the two encodings below |
 | `top`, `bot` | the two half-space materials: a `Material`, or a bare relative permittivity |
 | `mu` | the **raster path only**: the permeability field, `(n_layers, Ny, Nx)`, beside `structure`. Named on a shape path it is refused, not ignored — there a permeability belongs to the `Material` filling the region |
 | `thickness` | per-layer thicknesses, in the shared length unit |

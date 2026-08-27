@@ -269,5 +269,5 @@ def test_the_readers_depend_on_nothing_above_the_material_table_section():
 
     assert not stray, (
         f'these readers reach a name defined above the material-table banner: {stray}. '
-        f'Everything above it is the block modeller and is being removed; a reader that '
-        f'depends on it breaks a public export when that happens.')
+        f'Everything above the banner was the block modeller and is gone; a reader that '
+        f'reaches back up there is reaching for something that no longer exists.')

@@ -2,28 +2,20 @@
 
 :func:`~wavebit._core.fields.plot_field` draws what came out of a solve. This draws what went
 in, which had no helper at all: every tutorial that shows a layer builds the array itself,
-before Wavebit sees it, so the two paths where rendering is not trivial -- the block modeler
-and the analytic shapes -- were never pictured by anything the library ships.
+before Wavebit sees it, so the path where rendering is not trivial -- the analytic shapes --
+was never pictured by anything the library ships.
 
 Presentation rather than physics, and like ``plot_field`` there is no reason for it to exist
 per backend: it only needs the geometry as NumPy. Everything here converts on the way in.
 
-**Why a hand-rolled version is worth replacing.** The obvious reading of
-the block modeller's own ``draw`` -- edges were right-hand edges, painted in
-order -- is silently wrong for any shape that crosses the cell boundary. A ``draw()`` edge list
-is not guaranteed increasing: a 200x160 rod at ``cx = 960`` in a 1000x1000 cell comes back as
-``x = [860., 1060., 1000.]``, and the segment closed by the last edge has a *negative* width.
-The solver is right about this -- :func:`~wavebit._core.factorization._fourier1d_integrated`
-weights every segment by its **signed** width, so the wrapped part subtracts and rides on the
-Fourier phase: at ``cx`` = 400, 50, 960 and 550 that rod's ``sum(R)`` spreads by 1.4e-13 and
-its ``sum(T)`` by 5.4e-14, which is one answer four times over. The picture was not the same
-four times: painting the bands in order drops 25.0% / 30.0% / 43.8% of the rod (straddling in
-x from the low side, from the high side, and in both axes at once) and puts
-``<eps>`` at 1.2700 / 1.2520 / 1.2025 where the solver integrates 1.3600 in all three. At
-``cx = 960`` the edge array actually *decreases*, so ``pcolormesh`` draws overlapping quads
-without complaining. That renderer did the signed accumulation instead, and
-``tests/test_plot_structure.py`` pins it at max\\|render - truth\\| = 0 on those positions --
-with the naive render checked in alongside, failing, so the hazard stays demonstrated.
+A shape recipe is drawn from the shapes themselves rather than from anything the modeller
+built, which is what the picture being *the geometry* means -- see :func:`slice_structure`.
+An earlier version of this module read the removed block modeller's own ``draw()`` edge list,
+where the hazard was that the list is not guaranteed increasing: a 200x160 rod at ``cx = 960``
+in a 1000x1000 cell came back as ``x = [860., 1060., 1000.]``, whose last segment has a
+*negative* width. Painting those bands in order dropped up to 43.8% of the rod while the solver
+integrated it correctly, because :func:`~wavebit._core.factorization._fourier1d_integrated`
+weights each segment by its **signed** width. That path is gone and so is the reader for it.
 """
 import array_api_compat.numpy as xnp
 import numpy as np
@@ -112,40 +104,7 @@ def _periods(solver):
     return float(np.real(solver.period[0])), float(np.real(solver.period[1]))
 
 
-# ================================================================ path 1: the block modeler
-
-def _segments(edges):
-    """``(lo, hi)`` for the segments a ``draw()`` edge list describes.
-
-    Segment ``j`` runs from ``edges[j-1]`` to ``edges[j]``, with the cell's origin closing the
-    first -- the same reading :func:`~wavebit._core.factorization._fourier1d_integrated` takes
-    when it forms its DC term. **Oriented**, not sorted: ``hi < lo`` is a real case (a shape
-    that crossed the cell boundary) and means the segment subtracts.
-    """
-    hi = _np_real(edges).reshape(-1)
-    lo = np.concatenate([[0.0], hi[:-1]])
-    return lo, hi
-
-
-def _signed_coverage(lo, hi, s, L):
-    """Signed count of periodic images of the oriented interval ``(lo, hi]`` containing ``s``.
-
-    ``floor((hi - s)/L) - floor((lo - s)/L)`` counts the integers ``k`` with
-    ``lo < s + k*L <= hi``, which is negative exactly when the interval is reversed. That is the
-    signed width of :func:`~wavebit._core.factorization._fourier1d_integrated` resolved back
-    into space, and it telescopes: the segments of one axis sum to 1 at every sample, because
-    the edge list ends at the period and starts at 0.
-
-    Samples sit at segment *centres*, so a boundary landing exactly on a sample -- where the
-    two floors would be one ulp from disagreeing -- takes a coincidence rather than an aligned
-    design. A shape whose edge sits at a sample centre may still show a one-pixel seam; raise
-    ``n`` and it moves, which is what identifies it.
-    """
-    return (np.floor((hi[:, None] - s[None, :]) / L)
-            - np.floor((lo[:, None] - s[None, :]) / L))
-
-
-# =========================================================== path 2: analytic shape sampling
+# =========================================================== path 1: analytic shape sampling
 
 def _shape_inside(shape, X, Y, basis, Px, Py):
     """Signed cover count of one shape and its periodic images at every sample point."""
@@ -383,9 +342,6 @@ def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
     * **raster** (``modeling_type=0``) -- ``structure[layer]`` itself, at the raster's own
       resolution. ``n`` is ignored, because resampling a raster invents detail it does not
       carry.
-    * **block** (``modeling_type=1``) -- ``n x n`` samples of the modeler's staircase, by
-      signed segment accumulation (see the module docstring; the naive read is wrong on any
-      shape that crosses the cell boundary).
     * **analytic** (``modeling_type=2``) -- ``n x n`` samples of the shapes themselves, through
       :func:`~wavebit._core.analytic.shape_geometry`, periodic images included. A painted layer
       whose shapes overlap is resolved into disjoint loops by
@@ -394,7 +350,7 @@ def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
       rod of permittivity 4 under a 320-diameter disc of permittivity 9 in a 1000x1000
       cell).
 
-    Three things this picture is *not*, each measured:
+    Two things this picture is *not*, each measured:
 
     1. **It is the geometry; the solver holds a truncated transform of it.** Pass
        ``band_limited=True`` to see that instead -- the layer's own coefficients, evaluated
@@ -404,13 +360,7 @@ def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
        overshoot, pure Gibbs. Relative L2 against the sampled geometry is 28.4% / 16.8% / 10.2%
        at ``truncation_order`` 3 / 9 / 25, while ``<eps>`` agrees to 1e-4 throughout -- so an
        integrated quantity can be converged while the picture still rings.
-    2. **On the block path this draws the blocks, not the shape.** That is what the solver has,
-       and it is not what the user typed: a 240x180 rectangle at ``angle=0.4`` with
-       ``n_split=16`` differs from the true rotated rectangle over 1.9% of the rod's area (7.7%
-       at ``n_split=4``, 0.5% at 64). Adding blocks narrows that, but it is *harmonics* that
-       remove the kink the staircase costs in the answer, not ``n_split`` --
-       the block modeller's ``rectangle`` measured both.
-    3. **A curved shape on the painted path is a 256-gon** before anything is drawn or
+    2. **A curved shape on the painted path is a 256-gon** before anything is drawn or
        transformed (:data:`~wavebit._core.boundary.POLYGON_VERTICES`), while the summed path
        keeps the exact ellipse -- so one ellipse has two pictures. Comparing them by ``<eps>``
        will not show it: :func:`~wavebit._core.polygon.ellipse_verts` matches the polygon's
@@ -488,7 +438,7 @@ def plot_structure(solver, layer=0, n=512, show='eps', ax=None, band_limited=Fal
         Y = U * basis[1][0] + V * basis[1][1]
         art = ax.pcolormesh(X, Y, image, shading='nearest', cmap='viridis')
 
-    what = {0: 'raster', 1: 'blocks', 2: 'shapes'}.get(solver.modeling_type, '?')
+    what = {0: 'raster', 2: 'shapes'}.get(solver.modeling_type, '?')
     title = f'layer {layer} ({what}), {show}'
     if band_limited:
         title += f' band-limited to truncation_order={tuple(int(f) for f in solver.truncation_order)}'

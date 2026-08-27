@@ -15,7 +15,7 @@ Targets:
 
 ## TL;DR
 
-The existing raster/block modelers approximate tilted or curved boundaries with a
+The raster path approximates tilted or curved boundaries with a
 **staircase of axis-aligned rectangles**. That staircase is pure geometric error, so it
 only shrinks with high Fourier order / fine grids, and there is no **true smooth
 boundary/normal** for the NVF (normal vector field) factorization to exploit.
@@ -151,8 +151,9 @@ energy-conservation violation on curved boundaries — is written out in the
 ## 3. Usage (new modeling type)
 
 Passing `structure` as a **list of layer dicts** dispatches to the smooth path (modeling type
-2, grating type 2). The existing raster (ndarray) and block (nested list) paths keep
-working.
+2, grating type 2). The raster (ndarray) path keeps working; the other list spelling, a
+per-layer `[background, [[shape, ...], ...]]`, was the block modeller and is refused by name
+since 2026-08-26.
 
 ```python
 structure = [dict(background=1.0, shapes=[

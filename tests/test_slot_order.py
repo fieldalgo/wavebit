@@ -201,9 +201,6 @@ def test_every_five_slot_builder_is_exercised():
     deliberately out of scope.
     """
     exempt = {
-        # takes an already-modelled block instruction, not a structure -- covered via the solver
-        # path in test_factorization_core.py
-        'to_conv_mat_block',
         # permeability, not permittivity: its slots go to solve_conv's `mu=`, not
         # positionally. Pinned against fmmax in tests/references/.
         'to_conv_mat_raster_pn_mu',

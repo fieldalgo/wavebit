@@ -1,8 +1,8 @@
 """The ``Material`` type itself: the shorthand, the pytree, and the two conversions.
 
-``Material(epsilon, mu=None)`` is what the three *assignment* modeling paths (the vector
-background, the vector object slot, the analytic ``material`` key) now spell their contents
-with, in place of three different spellings of "what is here". This file tests the type in
+``Material(epsilon, mu=None)`` is what the two *assignment* slots (the analytic layer's
+``background`` and the analytic shape's ``material`` key) now spell their contents with, in
+place of two different spellings of "what is here". This file tests the type in
 isolation -- no solver runs here. Which convention the solver reads is a different question
 and is pinned against closed-form Fresnel in ``tests/test_material_convention_anchor.py``;
 that separation is on purpose, because a type test and a physics test fail for different

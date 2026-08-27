@@ -26,9 +26,9 @@ The two cannot simply be mixed. `normal_vector_field_analytical` builds its fiel
 in turn and never asks which boundary survived the painting, so a hybrid would put a normal on an
 interface that the painting has already covered up.
 
-**Note this is not free.** An axis-aligned overlap costs the block path nothing: axis-aligned
-rectangles tile exactly into axis-aligned blocks, overlap or not, so there is no staircase to
-remove. This path earns its keep only where an edge is actually tilted.
+**Note this is not free.** An axis-aligned overlap costs a raster nothing either — its pixels
+tile the cell whether shapes overlap or not, so there is no staircase to remove. This path
+earns its keep only where an edge is actually tilted.
 
 ## What it does
 
@@ -94,15 +94,16 @@ and `'paint'` stopped being a choice.
 
 **There is no `modeling_type` for this path**, and the omission is deliberate rather than
 pending. `modeling_type` is a property of the whole solver, decided from the *type* of `structure`
-alone — 0 raster, 1 block, 2 smooth. The choice between boundary and the closed form is taken
+alone — 0 raster, 2 smooth. The choice between boundary and the closed form is taken
 **per layer**, by the loop in `to_conv_mat_smooth_layers`, from the shapes' actual coordinates.
 One smooth `structure` can have its first layer resolved into polygons and its second transformed in
 closed form; a solver-wide integer cannot say that. Both layers report `modeling_type == 2`.
 
 Two consequences worth keeping straight:
 
-- The four rows of the table above are not four settings to pick between. The first three are
-  `structure` types; the fourth is what the third *becomes*, layer by layer, where it has to.
+- The rows of the table above are not settings to pick between. The first two are `structure`
+  types (and the third, marked removed, was one); the last is what the smooth one *becomes*,
+  layer by layer, where it has to.
 - What records the choice is `geometry.boundary_plans`: a layer's slot holds a plan if that layer
   resolved, and `None` if it stayed on the closed form. That, not `modeling_type`, is what to
   read when you want to know which happened.
@@ -124,10 +125,10 @@ gradient:
 - **replay** (`polygon.py`, `boundary.py`) — arithmetic only. No value-dependent control flow, no
   in-place writes, so it traces and differentiates on every backend.
 
-`freeze_geometry()` records the plan in `StaticGeometry.boundary_plans`, exactly as it records the
-block modeler's grid plan. Because the plan is pure Python indices it compares **by content**, so
-re-freezing a structure whose topology has not changed hits the JAX compilation cache — take the
-freeze again every step, as with the block path (see the README on stale geometry).
+`freeze_geometry()` records the plan in `StaticGeometry.boundary_plans`. Because the plan is
+pure Python indices it compares **by content**, so re-freezing a structure whose topology has
+not changed hits the JAX compilation cache — take the freeze again every step (see the README
+on stale geometry).
 
 ```python
 solver = wavebit.rcwa(backend=1, structure=structure, ...)
@@ -405,8 +406,11 @@ the truncation set matched exactly (`LatticeTruncation='Parallelogramic'`,
   addition sits 8.5–68x further from S4 than this path does.
 - **The advantage appears exactly where a staircase would.** Comparing per diffraction order and
   pushing both codes' truncation together to `truncation_order` 18, the distance to S4 keeps falling for this
-  path while the block path's settles on a floor — its staircase error. Distances over the
-  propagating orders, `sum |path - S4|`:
+  path while the staircase settles on a floor — its staircase error. Distances over the
+  propagating orders, `sum |path - S4|`. The `block` column is the modeling path removed on
+  2026-08-26; it is kept because it is the staircase this argument is *about*, and nothing that
+  survives makes the same comparison (a raster staircases by sampling and has no `n_split` to
+  hold fixed):
 
   | case | boundary | block | shape addition |
   |---|---|---|---|
@@ -428,17 +432,17 @@ the truncation set matched exactly (`LatticeTruncation='Parallelogramic'`,
   the permittivity coefficients differ by 3.70e-05 (2.7e-05 relative), which is the polygonisation
   in isolation; every other case is 1e-15 because both sides then hold the same polygons. In the
   *answer* it does not show: 1.52e-02 here against 1.51e-02 for the closed-form smooth path,
-  the two tracking each other all the way down. The block path sits at 3.29e-01 and **flat** —
-  on a curve its staircase does not shrink with truncation at all.
+  the two tracking each other all the way down. The block staircase sat at 3.29e-01 and
+  **flat** — on a curve a staircase does not shrink with truncation at all.
 
 Not settled: **high index contrast**. Over a ladder of `max n` = 1.5 / 1.9 / 2.4 / 2.9 this path
-and the block path drift from S4 together, but S4's own `truncation_order`-to-`truncation_order` change at `n <= 2.9` is
+and the staircase drifted from S4 together, but S4's own `truncation_order`-to-`truncation_order` change at `n <= 2.9` is
 still 1e-2 at `truncation_order` 12 — larger than the difference being measured, so nothing can be concluded
 there. Trust the 1.5–1.9 band. This is a known limit of the factorisation at high contrast rather
 than a property of this path; the existing paths meet the same wall.
 
-Against the repository's own paths: two overlapping rods give 0.548127 painted here, 0.824944
-summed by the smooth path, and 0.547893 on the block path — which paints, and so should agree.
+Against the repository's own paths: two overlapping rods give 0.548127 painted here and
+0.824944 if summed — and 0.547893 on the block path, which painted, and so agreed.
 On a single shape, where there is nothing to resolve, the permittivity matches the smooth path
 to 5e-16.
 

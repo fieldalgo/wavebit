@@ -937,7 +937,7 @@ def test_the_check_steps_aside_for_a_traced_solve():
         total(130.0)                                           # same layer, concrete: refused
 
 
-# ------------------------------------------------------------------ the block path's half
+# ------------------------------------------------- the analytic normal field's tiled traversal
 
 def test_the_tiled_blend_is_bit_identical_to_the_whole_grid_one():
     """The tiled traversal is an optimization and must be invisible in the answer.

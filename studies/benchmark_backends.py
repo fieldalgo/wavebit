@@ -21,14 +21,15 @@ with how often the structure's discrete description moves. This benchmark measur
 
 Two paths are swept, because they differentiate different things:
 
-    vector     a shape's *length* is the design variable (OCD: CD, sidewall angle, pitch).
-               This is what the closed-form series exists for -- the segment edges enter the
-               Fourier transform analytically, so d(efficiency)/d(length) is available.
+    shapes     a shape's *length* is the design variable (OCD: CD, sidewall angle, pitch).
+               This is what the closed-form series exists for -- the shape's outline enters
+               the Fourier transform analytically, so d(efficiency)/d(length) is available.
     raster     the permittivity grid is the design variable (inverse design). Swept across
                all three Fourier strategies, since they freeze different things.
 
-Every material below is a **relative permittivity**: ``structure`` (raster pixels, or a block
-layer's background and each object's own slot) and the ``top`` / ``bot`` half-spaces alike.
+Every material below is a **relative permittivity**: ``structure`` (raster pixels, or a shape
+layer's background and each shape's own ``material``) and the ``top`` / ``bot`` half-spaces
+alike.
 The structures are written from refractive indices through ``wavebit.eps_from_index`` so the
 scenes stay the ones these timings were taken on -- the quantity changed with the keyword
 names, and a datasheet index left in a material slot is a legal, different medium.
@@ -129,7 +130,7 @@ def warm_up(seconds=45):
     """Run the probe until the machine settles, before anything is timed.
 
     Without this the first sweep is measured on a cold machine and the later ones on a warm
-    one, which showed up as the raster tables being systematically slower than the vector ones
+    one, which showed up as the raster tables being systematically slower than the shape ones
     in the same run — a property of the ordering, not of the code under test.
     """
     step = _probe_step()
@@ -217,14 +218,26 @@ def jax_jit_grad(build, seed):
 
 # ------------------------------------------------------------------ the two paths
 
-def vector_builder(truncation_order, split, layers):
-    """A stack of ellipse layers whose ``lx`` is the design variable."""
+def shape_builder(truncation_order, layers):
+    """A stack of ellipse layers whose ``lx`` is the design variable.
+
+    One shape per layer, deliberately: a traced layer of more than one shape needs a frozen
+    geometry (which builder takes it is a question about whether they overlap), and this sweep
+    is about the *step* cost, not about the freeze. `sweep_recompile` below is where the freeze
+    is timed.
+
+    This took a `split` argument until 2026-08-27 -- the block modeller's `n_split`, which set
+    how many axis-aligned rectangles a shape was cut into. There is no successor knob on the
+    surviving paths, and `normal_grid` is not one: it samples a normal field rather than
+    approximating the outline. So the sweep's grid lost that axis rather than renaming it.
+    """
     cfg = dict(period=[300.0, 300.0], thickness=[205.0] * layers, truncation_order=[truncation_order, truncation_order],
                top=1.0, bot=1.0, theta=0.15, phi=0.35, psi=TE_PSI, wavelength=900.0)
 
     def build(backend, lx):
-        structure = [[EPS_HIGH,
-                      [['ellipse', 150.0, 150.0, lx, 55.0, EPS_MID, 0.27, split, split]]]] * layers
+        structure = [dict(background=EPS_HIGH,
+                          shapes=[dict(type='ellipse', cx=150.0, cy=150.0, lx=lx, ly=55.0,
+                                       angle=0.27, material=EPS_MID)])] * layers
         return wavebit.rcwa(backend=backend, structure=structure, **cfg)
 
     return build
@@ -278,19 +291,18 @@ def measure(build, seed, reps, budget, estimate_s):
 
 # ------------------------------------------------------------------ sweeps
 
-def sweep_vector(budget, reps, quick):
-    grid = ([(3, 4, 1), (5, 12, 1)] if quick else
-            [(3, 4, 1), (3, 12, 1), (3, 20, 1), (5, 4, 1), (5, 12, 1), (5, 20, 1),
-             (5, 12, 3), (7, 4, 1), (7, 12, 1), (7, 20, 1), (7, 12, 3), (7, 20, 3),
-             (9, 12, 1), (9, 20, 1), (9, 20, 3), (11, 20, 3)])
+def sweep_shapes(budget, reps, quick):
+    grid = ([(3, 1), (5, 1)] if quick else
+            [(3, 1), (5, 1), (7, 1), (9, 1), (11, 1), (13, 1),
+             (5, 3), (7, 3), (9, 3), (11, 3)])
     out = {}
-    for truncation_order, split, layers in grid:
-        key = f'truncation_order={truncation_order},split={split},L={layers}'
+    for truncation_order, layers in grid:
+        key = f'truncation_order={truncation_order},L={layers}'
         estimate = 0.05 * (2 * truncation_order + 1) ** 3 / 100 * layers * 6    # rough, for budgeting only
-        print(f'[vector] {key} ...', flush=True)
-        out[key] = measure(vector_builder(truncation_order, split, layers), 85.0, reps, budget, estimate)
-        out[key]['truncation_order'], out[key]['split'], out[key]['layers'] = truncation_order, split, layers
-        checkpoint({'vector': out})
+        print(f'[shapes] {key} ...', flush=True)
+        out[key] = measure(shape_builder(truncation_order, layers), 85.0, reps, budget, estimate)
+        out[key]['truncation_order'], out[key]['layers'] = truncation_order, layers
+        checkpoint({'shapes': out})
     return out
 
 
@@ -316,7 +328,9 @@ def sweep_recompile(budget, reps):
     import jax.numpy as jnp
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[3, 3], top=1.0, bot=1.0,
                theta=0.15, phi=0.35, psi=TE_PSI, wavelength=900.0)
-    make = lambda lx: [[EPS_HIGH, [['ellipse', 150.0, 150.0, lx, 55.0, EPS_MID, 0.27, 4, 4]]]]
+    make = lambda lx: [dict(background=EPS_HIGH,
+                            shapes=[dict(type='ellipse', cx=150.0, cy=150.0, lx=lx, ly=55.0,
+                                         angle=0.27, material=EPS_MID)])]
 
     def loss(v, geometry):
         return jnp.sum(wavebit.rcwa(backend=1, structure=make(v), **cfg)
@@ -336,62 +350,12 @@ def sweep_recompile(budget, reps):
     return out
 
 
-def sweep_stale_window(budget):
-    """How far a *held* freeze stays valid — bisected, per shape and slab count.
-
-    Only matters if a fit holds one record rather than retaking it; on the block path that is
-    no longer the recommended loop, but the raster records give no choice.
-    """
-    import jax.numpy as jnp
-    from wavebit import StaleGeometryError
-    cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[3, 3], top=1.0, bot=1.0,
-               theta=0.15, phi=0.35, psi=TE_PSI, wavelength=900.0)
-
-    def accepts(make, value, frozen):
-        try:
-            wavebit.rcwa(backend=1, structure=make(jnp.asarray(value)),
-                         **cfg).solve(geometry=frozen)
-            return True
-        except StaleGeometryError:
-            return False
-
-    def window(make, nominal, lo_probe, hi_probe, tol=1e-4):
-        frozen = wavebit.rcwa(backend=1, structure=make(jnp.asarray(nominal)),
-                              **cfg).freeze_geometry()
-
-        def edge(probe):
-            if accepts(make, probe, frozen):
-                return None                      # unbounded in this direction
-            good, bad = nominal, probe
-            while abs(bad - good) > tol:
-                mid = 0.5 * (good + bad)
-                good, bad = (mid, bad) if accepts(make, mid, frozen) else (good, mid)
-            return good
-
-        return edge(lo_probe), edge(hi_probe)
-
-    cases = [
-        ('ellipse', 'lx', 85.0, 5.0, 295.0, [3, 4, 6, 9, 12, 20],
-         lambda s: (lambda v: [[EPS_HIGH,
-                                [['ellipse', 150., 150., v, 55., EPS_MID, 0.27, s, s]]]])),
-        ('rectangle', 'angle', 0.27, -1.5, 1.5, [1, 2, 4, 8, 12, 20],
-         lambda s: (lambda v: [[EPS_HIGH,
-                                [['rectangle', 150., 150., 85., 55., EPS_MID, v, s, s]]]])),
-        ('rectangle', 'lx (angle=0)', 85.0, 5.0, 295.0, [1, 4, 12, 20],
-         lambda s: (lambda v: [[EPS_HIGH,
-                                [['rectangle', 150., 150., v, 55., EPS_MID, 0.0, s, s]]]])),
-    ]
-    out = []
-    for shape, param, nominal, lo_probe, hi_probe, splits, make_for in cases:
-        for split in splits:
-            if not budget.can_afford(30):
-                break
-            lo, hi = window(make_for(split), nominal, lo_probe, hi_probe)
-            out.append({'shape': shape, 'parameter': param, 'nominal': nominal,
-                        'n_split': split, 'lo': lo, 'hi': hi})
-            print(f'[window] {shape} {param} split={split}: {lo} .. {hi}', flush=True)
-            checkpoint({'stale_window': out})
-    return out
+# `sweep_stale_window` lived here until 2026-08-27: it bisected how far a *held* freeze stays
+# valid, per shape and per `n_split`. The block modeller it measured is gone, and `n_split`
+# with it, so the sweep could not be renamed -- its whole abscissa was that parameter. The
+# question it asked is still real on the boundary path, where the plan holds combinatorics
+# rather than grid lines and what makes it stale is shapes starting or stopping overlapping;
+# re-earning the answer there is a measurement, not a rename, and it has not been taken.
 
 
 # ------------------------------------------------------------------ reporting
@@ -424,7 +388,7 @@ def table(rows, title, columns):
 
 def report(state):
     for section, title, unit in (
-            ('vector', 'Vector path — d(efficiency)/d(length)', 'length'),
+            ('shapes', 'Shape path — d(efficiency)/d(length)', 'length'),
             ('raster', 'Raster path — d(efficiency)/d(permittivity)', 'permittivity')):
         if section not in state:
             continue
@@ -458,23 +422,6 @@ def report(state):
         table(rows, 'Machine drift over the run — one fixed configuration, timed three times',
               ['at', 'ms'])
 
-    if 'stale_window' in state:
-        rows = []
-        for e in state['stale_window']:
-            lo, hi, nominal = e['lo'], e['hi'], e['nominal']
-            if lo is None and hi is None:
-                span = 'unbounded'
-            elif lo is None or hi is None:
-                span = 'one-sided'
-            else:
-                span = (f'{hi - lo:.3f}  ({(lo - nominal) / nominal * 100:+.1f}% .. '
-                        f'{(hi - nominal) / nominal * 100:+.1f}%)')
-            rows.append([e['shape'], f'{e["parameter"]} @ {nominal}', str(e['n_split']),
-                         'none' if lo is None else f'{lo:.3f}',
-                         'none' if hi is None else f'{hi:.3f}', span])
-        table(rows, 'How far a *held* freeze stays valid',
-              ['shape', 'parameter', 'n_split', 'lo', 'hi', 'width'])
-
 
 def main():
     ap = argparse.ArgumentParser()
@@ -493,13 +440,11 @@ def main():
     warm_up(5 if args.quick else 45)
     marks = []
     drift('start', marks)
-    sweep_vector(budget, args.reps, args.quick)
-    drift('after vector', marks)
+    sweep_shapes(budget, args.reps, args.quick)
+    drift('after shapes', marks)
     sweep_raster(budget, args.reps, args.quick)
     drift('after raster', marks)
     sweep_recompile(budget, args.reps)
-    if not args.quick:
-        sweep_stale_window(budget)
 
     print(f'\nfinished with {budget.left():.0f} s of budget left\n')
     report(_STATE)

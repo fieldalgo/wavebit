@@ -23,9 +23,9 @@ P, WL, H = 1500.0, 900.0, 150.0
 
 _GROOVE = np.array([[1.0, 1.0, 4.0, 4.0, 4.0, 1.0, 1.0, 1.0]])
 
-#: The same one-layer stack in the three spellings `structure` accepts, each of which reports
-#: its layer count as `len()`: a raster is `(n_layers, Ny, Nx)`, and the two shape spellings are
-#: a list with one entry per layer.
+#: The same one-layer stack in the two spellings `structure` accepts, each of which reports
+#: its layer count as `len()`: a raster is `(n_layers, Ny, Nx)`, and the shape spelling is a
+#: list with one entry per layer.
 def _layers(path, count):
     if path == 'raster':
         return np.stack([_GROOVE * (1.0 + 0.5 * i) for i in range(count)])
@@ -55,10 +55,10 @@ def _solver(path, layers, thicknesses, backend=0, **over):
 def test_a_stack_needs_one_thickness_per_layer(path, layers, thicknesses):
     """The full matrix. Only the diagonal solves; every off-diagonal cell is refused by name.
 
-    Run over all three modeling paths because the layer count is read through `len` and the
-    three spell a stack differently -- a raster's first axis, and a list per layer for the two
-    shape spellings. A rule that held for one spelling and not the others would be invisible
-    from any single path.
+    Run over both modeling paths because the layer count is read through `len` and the two
+    spell a stack differently -- a raster's first axis, and a list per layer for the shape
+    spelling. A rule that held for one spelling and not the other would be invisible from
+    either alone.
     """
     solver = _solver(path, layers, thicknesses)
 

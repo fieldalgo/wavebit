@@ -93,24 +93,3 @@ def test_all_three_conserve_energy(tetm):
     for phi, structure in ((None, UCELL_1D), (0.0, UCELL_1D), (0.0, UCELL_2D)):
         ri, ti = _solve(tetm, phi, structure)
         assert abs(ri.sum() + ti.sum() - 1.0) < 1e-9, (phi, structure.shape)
-
-
-# --------------------------------------------------------- block path vs raster, per backend
-
-# A single rectangle, given twice: once as a drawn shape for the block path, once as the raster
-# of that same shape. Edges sit on pixel boundaries, so the raster *is* the rectangle and the two
-# descriptions are the same structure rather than an approximation of one another.
-# The raster is 12 cells over a 1200 nm period, so cells 4..7 are x = 400..800 -- a 400 nm
-# rectangle centred at 600. `ly` spans the full period because the structure is y-invariant.
-# These are absolute lengths in the units of `period`, not fractions of it.
-# eps = 3.48**2 rather than a round number on purpose: a value exactly representable in
-# float32 would round-trip through a single-precision raster unharmed and this test would pass
-# while blind to the very defect it exists for. 12.1104 is not, and it separates the two by
-# ~3e-8 -- the same argument the pre-flip index 3.48 carried, since squaring an inexact value
-# does not make it exact.
-_EPS = 12.1104
-_RASTER = np.array([[[1.0] * 4 + [_EPS] * 4 + [1.0] * 4]])
-_CFG = dict(top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2,
-            truncation_order=[5, 0], wavelength=900.0, period=[1200.0, 1200.0], thickness=[300.0])
-
-

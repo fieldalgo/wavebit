@@ -4,18 +4,19 @@
 the problem; this one is the same fix on the other axis, so the two read in parallel on
 purpose.
 
-Only the raster path obtains coefficients two ways. Both shape paths state a layer as geometry
-rather than as samples and integrate the permittivity over that geometry in closed form -- the
-block path over the rectangles its modeler paints (``to_conv_mat_block``, every matrix built
-with ``fourier2d_integrated``), the smooth path over each shape's analytic transform (``analytic.shape_ft``,
-which *is* that integral). Neither has a raster underneath to run a discrete series along, and
-neither used to look at the keyword at all.
+Only the raster path obtains coefficients two ways. The shape path states a layer as geometry
+rather than as samples and integrates the permittivity over that geometry in closed form, over
+each shape's analytic transform (``analytic.shape_ft``, which *is* that integral). It has no
+raster underneath to run a discrete series along, and used to not look at the keyword at all.
+The removed block path was the same case by a different route -- it integrated over the
+rectangles its modeler painted -- which is why this file is written about paths.
 
 That made this axis the quieter of the two. The factorization mismatch at least changed how
 many convolution matrices came back; here the default ``'sampled'`` and an explicit
-``'integrated'`` produce one identical run on both shape paths, because only one of them was
-ever going to happen. Measured before the fix on an ellipse through the block modeler:
-``T = 0.7609842245`` for both, bit for bit, with nothing in the result to say which series ran.
+``'integrated'`` produce one identical run on the shape path, because only one of them was
+ever going to happen. Measured before the fix on an ellipse through the block modeler, the
+path that has since been removed: ``T = 0.7609842245`` for both, bit for bit, with nothing in
+the result to say which series ran.
 
 The fix is the same one, in the same style: store what was *asked for* -- ``None`` when nobody
 asked -- and resolve it against the modeling path on read. ``'sampled'`` is the module-wide

@@ -1,7 +1,7 @@
 """Which material quantity the public API takes, pinned against closed-form Fresnel.
 
 Wavebit takes a **relative permittivity** at the front door -- ``structure``, ``top``, ``bot``,
-and the block and shape material slots -- and hands it to the factorization unconverted. That
+and the shape material slots -- and hands it to the factorization unconverted. That
 is a convention, not a fact, and until the migration of 2026-08-20 it was the other one: the
 API took a refractive index and squared it on the way in
 (``_core.factorization._layer_eps``), which left the package holding two conventions at once --
