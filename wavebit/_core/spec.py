@@ -345,7 +345,12 @@ class Numerics:
     normal_method: Optional[NormalMethod] = None
     complex_dtype: int = 128
     layer_algorithm: str = 'ETM'
-    normal_grid: int = 1024
+    #: `None` is "resolve it", the same as `rcwa`'s -- max(256, 4*truncation_order+1). Kept
+    #: in step with the solver deliberately: a spec that omitted it and a call that omitted it
+    #: have to mean the same grid, and this defaulted to a literal 1024 while the solver moved
+    #: to 256 on 2026-08-27. `to_json` writes the value either way, so no document already
+    #: written changes meaning -- every one of them carries an explicit number.
+    normal_grid: Optional[int] = None
     #: What the solve keeps the state to answer. Unlike the three above this has a real
     #: default rather than ``None``: it resolves against nothing -- no modeling path, no
     #: geometry -- so ``'amplitude'`` here is the same claim a bare ``rcwa()`` makes, and

@@ -96,7 +96,7 @@ faster.
 from . import overlap as _overlap
 from .backend import array_namespace, as_array, j1, jinc, sinc
 from .domain import as_material
-from .factorization import ConvMatrices      # one slot layout for every builder
+from .factorization import ConvMatrices, check_normal_grid
 from .lattice import periods_of, is_axis_aligned, sample_grid
 from .overlap import OVERLAP_TOL_REL
 from .geometry import StaleGeometryError
@@ -1104,7 +1104,15 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
     identically, bit for bit, since it takes its field from the same place. An optimizer left
     free to move a shape will walk it over the edge and climb the artefact, so clamp the
     centres. Pinned by ``test_a_multishape_layer_is_not_periodic_across_the_cell_edge``.
+
+    ``grid_shape`` is checked against the ``4*truncation_order+1`` floor
+    (:func:`~wavebit._core.factorization.check_normal_grid`). The boundary path has done that
+    since it was written and this one did not, which was not a decision: at
+    ``truncation_order=10`` the two disagreed about ``normal_grid=8``, one refusing and the
+    other building it 4.9e-4 adrift with energy conserved to twelve digits. The floor is a
+    property of reading a field off a grid, not of which builder put it there.
     """
+    check_normal_grid(grid_shape, half_width_u, half_width_v)
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
 
     if len(shapes) == 1:

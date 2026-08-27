@@ -437,6 +437,34 @@ def _layer_eps(xp, structure):
         yield xp.astype(layer, _complex_dtype(xp, layer))
 
 
+def check_normal_grid(grid_shape, half_width_u, half_width_v):
+    """``4*truncation_order+1`` points per axis, or reading the field off the grid aliases.
+
+    The same floor :func:`_normal_field_floor` lifts a raster to, stated as a refusal for the
+    paths that take the grid as a *number* instead of lifting one: a raster can be repeated up
+    to the floor without changing what it describes, and a sampling resolution cannot.
+
+    Structural, not gradual: a *constant* normal field has to transform to the identity for NVF
+    to collapse onto Li's rules, and on a short grid it picks up off-diagonals at ``+/-n``
+    instead.
+
+    It lives here rather than beside either caller because both shape paths need it and
+    :mod:`.boundary` imports :mod:`.analytic`, so the analytic one could not reach it there.
+    Until 2026-08-27 only the boundary path called it, and the asymmetry was not a decision:
+    at ``truncation_order=10`` the boundary path refused ``normal_grid=8`` while the analytic
+    path built it, 4.9e-4 adrift and conserving energy to twelve digits.
+    """
+    Ny, Nx = grid_shape
+    need_v, need_u = 4 * half_width_v + 1, 4 * half_width_u + 1
+    if Ny < need_v or Nx < need_u:
+        raise ValueError(
+            f'normal-field grid {Ny}x{Nx} aliases at truncation_order=({half_width_u}, '
+            f'{half_width_v}): needs at least {need_v}x{need_u}. The normal field has no '
+            f'closed-form transform, so it is read off this grid, and the circulant asks for '
+            f'orders up to +/-2*truncation_order -- below that, k % n folds distinct orders '
+            f'onto one bin and a constant field stops transforming to the identity.')
+
+
 def _normal_field_floor(shape, half_width_u, half_width_v):
     """Repeat factors that lift a layer to the grid the normal field's transform needs.
 

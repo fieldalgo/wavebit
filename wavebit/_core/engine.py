@@ -1875,10 +1875,10 @@ class CoreFactorizationMixin:
                  # default resolves per modeling path -- 'li' on a raster, 'nvf' on
                  # analytic shapes, which is the only rule the shape path implements.
                  # Naming the other one raises.
-                 normal_grid=1024,  # normal-field sampling; sets the floor on shape gradients
-                 # (a translation-invariant structure should give d/dcx == 0 exactly; the
-                 #  sampling leaves a sawtooth instead -- 5e-4 at 256, 4.2e-5 at 1024, for
-                 #  ~1.2-2x the runtime. Raise further to fit positions below that.)
+                 normal_grid=None,  # normal-field sampling, per axis; None resolves to
+                 # max(256, 4*truncation_order+1). Read by the shape paths only -- the
+                 # normal field has no closed-form transform, so it is sampled and read off
+                 # this grid. See `_resolve_normal_grid`.
                  lattice=None,               # 2x2 cell basis (columns a1, a2); None = diag(period).
                  # New parameters go at the end on purpose: SolverJax._tree_unflatten passes
                  # the children positionally, so one added earlier silently shifts them.
@@ -1934,7 +1934,7 @@ class CoreFactorizationMixin:
         self.backend = self._BACKEND_ID if backend is None else backend
         self._set_fourier_options(fourier_coefficients, factorization)
         self.normal_method = normal_method
-        self.normal_grid = normal_grid
+        self._normal_grid = normal_grid
         self.lattice = lattice      # after period: assigning a basis overwrites period
 
 
@@ -2693,6 +2693,80 @@ class CoreFactorizationMixin:
     def normal_method(self, value):
         self._normal_method = None if value is None else normal_method_of(value)
 
+    #: What `normal_grid=None` means, before the `4*truncation_order+1` floor lifts it.
+    #:
+    #: **1024, and it survived an attempt to drop it to 256.** On the forward value 1024 is
+    #: plainly over-specified: 256 moves `sum(T)` by 1.4e-9 to 7.2e-7 on a circle, a tilted
+    #: rectangle and a pair of circles at truncation_order 4 / 8 / 12, where the truncation
+    #: error on those same rows is 4.2e-7 to 1.2e-4 -- one to four orders larger. Judged on
+    #: values alone, this is 16x the pixels for the seventh digit.
+    #:
+    #: It is not judged on values. A *rotated rectangle's angle gradient* is what sets this,
+    #: and it converges far later than the value does -- `d(sum T)/d(angle)` at 128 / 256 /
+    #: 512 / 1024 / 2048 is 0.002050 / 0.002593 / 0.002342 / 0.002372 / 0.002364, so 256 is
+    #: **9.7% off** the converged answer and 512 is 0.9% off. Non-monotone, too: the AD-vs-FD
+    #: gap runs 1.3e-3 / 1.6e-2 / 3.4e-3 / 1.6e-3 / 4.4e-4 across those grids, so a coarser
+    #: grid can look better than a finer one and no single check catches it.
+    _NORMAL_GRID_DEFAULT = 1024
+
+    @property
+    def normal_grid(self):
+        """The normal field's sampling, per axis -- **resolved**, never ``None``.
+
+        Reports the grid the *current* solve will use, the way :attr:`factorization` reports the
+        rule it will use: a stated number is returned as stated, and ``None`` resolves against
+        the truncation order. A caller that reads this to size something -- and there is one in
+        the suite, dividing a period by it -- gets a number rather than the absence of one.
+
+        Assigning ``None`` is how you ask for the default back after setting it.
+        """
+        want = self._normal_grid
+        if want is not None:
+            return want
+        try:
+            (_, hu), (_, hv) = self.order_window
+        except Exception:                              # noqa: BLE001 - no order assigned yet
+            return self._NORMAL_GRID_DEFAULT
+        return self._resolve_normal_grid(hu, hv)
+
+    @normal_grid.setter
+    def normal_grid(self, value):
+        self._normal_grid = value
+
+    def _resolve_normal_grid(self, half_width_u, half_width_v):
+        """`normal_grid`, with `None` meaning "enough, and not more".
+
+        A *stated* number is taken as stated and checked against the aliasing floor by
+        :func:`~wavebit._core.factorization.check_normal_grid`, which refuses below it. The
+        default must never be the thing that trips that check, so it is resolved against the
+        same floor rather than being a literal -- at `truncation_order=64` a flat 256 would
+        refuse a solve nobody configured.
+
+        **The default's stated reason was the right kind of reason and the wrong measurement.**
+        It read "sets the floor on shape gradients (a translation-invariant structure should
+        give d/dcx == 0 exactly; the sampling leaves a sawtooth instead -- 5e-4 at 256, 4.2e-5
+        at 1024)". That *translation* number is a multi-shape one written as a general one: a
+        lone shape is built at the centre of the cell and carried to its position by a phase
+        (`analytic.normal_projector_coeffs`), so it is translation-exact at every grid.
+        Peak-to-peak `sum(T)` over a one-pixel rigid translation, `truncation_order=6`:
+
+            normal_grid        128       256       512      1024
+            one shape      1.1e-13   7.0e-14   1.3e-13   8.1e-14      flat, machine precision
+            two shapes     2.8e-06   6.4e-07   2.6e-07   1.3e-07      converges
+
+        But the conclusion that looks like -- that the default is over-specified and could be
+        256 -- is wrong, and 256 was tried and reverted. It is a rectangle's **angle** that
+        sets the grid, not anyone's position, and there 256 is 9.7% from the converged
+        gradient. See `_NORMAL_GRID_DEFAULT` for the numbers. The general lesson is the one
+        `docs/` already states about this field: a *value* cannot judge a normal field, and a
+        default chosen on values will be chosen too coarse.
+        """
+        want = self._normal_grid
+        floor = max(4 * half_width_u + 1, 4 * half_width_v + 1)
+        if want is None:
+            return max(self._NORMAL_GRID_DEFAULT, floor)
+        return want
+
     def _reject_unread_normal_method(self, factorization):
         """Refuse an explicit ``normal_method`` on a build that constructs no raster normal
         field — before it silently decides nothing.
@@ -3241,7 +3315,7 @@ class CoreFactorizationMixin:
             conv = _analytic.to_conv_mat_smooth_layers(
                 structure, half_width_u, half_width_v,
                 self._geometry_lattice_for(geometry),
-                normal_grid=self.normal_grid,
+                normal_grid=self._resolve_normal_grid(half_width_u, half_width_v),
                 # The declared width, not a literal. This read `xp.complex128` with
                 # `self.complex_dtype` in scope, so a caller asking for single precision on
                 # this path got double: NumPy and JAX returned float64 from a solver that

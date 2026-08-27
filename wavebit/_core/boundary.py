@@ -36,6 +36,7 @@ lose.
 from . import clipper as _clipper
 from .analytic import nvf_from_coeffs, shape_geometry, _sampled_coeffs
 from .domain import as_material
+from .factorization import check_normal_grid
 from .geometry import StaleGeometryError
 from .lattice import periods_of, sample_grid
 from .polygon import ellipse_verts, polygon_ft, rect_verts
@@ -217,20 +218,6 @@ def _centroid(xp, V):
     a = 0.5 * xp.sum(cr)
     return xp.stack([xp.sum((x + xn) * cr) / (6.0 * a),
                      xp.sum((y + yn) * cr) / (6.0 * a)])
-
-
-def check_normal_grid(grid_shape, half_width_u, half_width_v):
-    """`4*truncation_order+1` points per axis, or `_sampled_coeffs` aliases distinct orders onto one bin.
-
-    Structural, not gradual: a *constant* normal field has to transform to the identity for NVF
-    to collapse onto Li's rules, and on a short grid it picks up off-diagonals at +/-n instead.
-    Same floor `factorization._normal_field_floor` enforces on the raster path.
-    """
-    Ny, Nx = grid_shape
-    need_v, need_u = 4 * half_width_v + 1, 4 * half_width_u + 1
-    if Ny < need_v or Nx < need_u:
-        raise ValueError(f'normal-field grid {Ny}x{Nx} aliases at truncation_order=({half_width_u}, {half_width_v}): '
-                         f'needs at least {need_v}x{need_u}')
 
 
 def normal_projector_coeffs(xp, loops, grid_shape, lattice, half_width_u, half_width_v,

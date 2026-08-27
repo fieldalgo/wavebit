@@ -389,7 +389,7 @@ from a perfectly symmetric shape can see that step on its first move.
 **The sampled normal field needs `4*truncation_order+1` points per axis.** Below it, `k % n` folds distinct
 orders onto one bin, and the damage is structural rather than gradual — a constant normal field
 stops transforming to the identity, so NVF no longer collapses onto Li's rules and picks up
-off-diagonals at `±n` instead. `boundary.check_normal_grid` raises instead of quietly
+off-diagonals at `±n` instead. `factorization.check_normal_grid` raises instead of quietly
 mis-transforming. This is the same floor `factorization._normal_field_floor` enforces on the
 raster path; the constraint belongs to the transform, not to the path that feeds it.
 

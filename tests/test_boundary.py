@@ -144,10 +144,44 @@ def test_plan_replays_against_moved_vertices():
 @pytest.mark.parametrize('truncation_order', [3, 6, 12])
 def test_normal_grid_floor_is_enforced(truncation_order):
     """Below 4*truncation_order+1 the sampled field aliases; that must raise, not silently mis-transform."""
+    from wavebit._core.factorization import check_normal_grid
+
     need = 4 * truncation_order + 1
     with pytest.raises(ValueError, match='aliases'):
-        _b.check_normal_grid((need - 1, need - 1), truncation_order, truncation_order)
-    _b.check_normal_grid((need, need), truncation_order, truncation_order)
+        check_normal_grid((need - 1, need - 1), truncation_order, truncation_order)
+    check_normal_grid((need, need), truncation_order, truncation_order)
+
+
+@pytest.mark.parametrize('overlapping', [False, True], ids=['analytic', 'boundary'])
+def test_both_shape_paths_draw_the_floor_in_the_same_place(overlapping):
+    """The floor is a property of reading a field off a grid, not of which builder read it.
+
+    Only the boundary path checked it until 2026-08-27, and the asymmetry was not a decision:
+    at ``truncation_order=10`` the boundary path refused ``normal_grid=8`` while the analytic
+    path built it -- ``sum(T)`` 4.9e-4 adrift, ``R + T`` exactly 1. Both go through
+    ``factorization.check_normal_grid`` now, which is where it had to live because
+    :mod:`~wavebit._core.boundary` imports :mod:`~wavebit._core.analytic` and the analytic
+    builder could not reach it in the other direction.
+
+    Crossed over the two paths for the same reason every other refusal in this file is: a rule
+    that held on one and not the other is exactly the shape the defect had.
+    """
+    import wavebit
+
+    order = 10
+    need = 4 * order + 1
+    shapes = [dict(type='rectangle', cx=0.30, cy=0.5, lx=0.34, ly=0.30, angle=0.0, material=4.0)]
+    if overlapping:
+        shapes.append(dict(type='rectangle', cx=0.44, cy=0.5, lx=0.34, ly=0.30, angle=0.0,
+                           material=9.0))
+    cfg = dict(backend=0, period=PERIOD, thickness=(0.32,), truncation_order=(order, order),
+               top=1.0, bot=1.0, wavelength=1.6, psi=np.pi / 2, theta=0.0, phi=0.0)
+    build = lambda ng: wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)],
+                                    normal_grid=ng, **cfg)
+
+    with pytest.raises(ValueError, match='aliases'):
+        build(need - 1).solve()
+    assert 0.0 < float(np.sum(np.asarray(build(need).solve().T)).real) < 1.0
 
 
 def test_normal_field_is_the_edge_normal_beside_an_edge():

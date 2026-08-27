@@ -461,8 +461,13 @@ def test_analytic_beats_staircase_tilted():
 
 
 CIRCLE_P, CIRCLE_EPS = 0.77, 12.25               # eps 12.25 is the old n = 3.5
+#: `normal_grid` is stated, not defaulted. The golden below is an anchor on how a circle is
+#: *spelled*, and it was silently anchoring the default grid too -- when that moved from 1024
+#: to 256 on 2026-08-27 the number moved 2.5e-7 and the 1e-9 tolerance caught it. Correctly:
+#: the grid is a real input. Stating it puts the tolerance back on the thing the test is about.
 CIRCLE_CFG = dict(period=[CIRCLE_P, CIRCLE_P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
-                  wavelength=0.777, top=1.0, bot=2.25, truncation_order=[6, 6])
+                  wavelength=0.777, top=1.0, bot=2.25, truncation_order=[6, 6],
+                  normal_grid=256)
 
 
 def test_a_circle_is_written_with_one_length():
@@ -492,7 +497,7 @@ def test_a_circle_is_written_with_one_length():
     # permittivity they multiply; correcting it moves this anchor by 3.6e-5, which is the size an
     # O(1/N) term has at this `normal_grid`. Self-captured either way -- it says the number has
     # not drifted, not that it is right.
-    assert float(np.sum(np.asarray(got.R))) == pytest.approx(0.161117311218, abs=1e-9)
+    assert float(np.sum(np.asarray(got.R))) == pytest.approx(0.161117056324, abs=1e-9)
 
 
 @pytest.mark.parametrize('ly, why', [(0.5 * CIRCLE_P, 'a second length that agrees'),
