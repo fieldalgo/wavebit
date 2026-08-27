@@ -216,3 +216,50 @@ def test_the_defect_did_not_converge_with_max_order_which_is_why_it_was_a_defect
 
         moved = np.abs(efficiencies(structure) - efficiencies(rolled)).max()
         assert moved < 1e-12, f'truncation_order={truncation_order}: R moved by {moved:.2e}'
+
+
+def test_contour_is_not_periodic_on_a_loop_that_fills_the_cell():
+    """A known defect, pinned as one. `xfail`, not deleted, so it fails when it is fixed.
+
+    Rolling a raster is the same structure written from a different corner, so every answer
+    must be identical. Three of the four constructions are, to 4e-14. `normal_method='contour'`
+    -- the one `docs/nvf-normal-methods.md` and `README.md` recommend -- moves `sum(T)` by
+    3.9e-4 on a square cell and 9.7e-4 on a 2:1 cell, for a disc of radius 30 in a 64-pixel
+    cell. It does not converge with truncation order.
+
+    **The cause is not the tile ring**, which was the first hypothesis and is worth recording
+    as refused: `_contour_polylines` folds each loop on its area-mean centre, so a loop's
+    bounding box can overshoot the cell by a full period (measured 0.81 to 1.00 cells on the
+    three scenes here), and `contour_normal_field` lays down exactly one ring. Deriving the
+    ring from that overshoot instead moves the field by **5e-14** -- the overshooting parts are
+    images of points the ring-1 tiles already carry, so the bound is loose but not wrong.
+
+    What is left is the resample phase: `_resample` lays its samples from `pts[0]`, wherever
+    contourpy happened to enter the loop, and the query takes the nearest *sample* and its two
+    adjacent segments rather than the nearest segment. Rolling the raster moves contourpy's
+    entry point, which moves every sample by a fraction of the spacing. Fixing it means
+    querying the nearest segment, which deletes `_resample` -- a rewrite of the core of that
+    function, not a patch.
+
+    Until then `'spectral'` is the honest recommendation wherever a feature is large compared
+    to the cell, and on a skewed cell.
+    """
+    import wavebit
+
+    pytest.xfail('contour resample phase follows contourpy loop entry; needs the '
+                 'nearest-segment rewrite')
+
+    n = 64
+    ax = np.arange(n)
+    X, Y = np.meshgrid(ax, ax)
+    disc = np.where(((X - 32) ** 2 + (Y - 32) ** 2) <= 30 ** 2, 12.25, 1.0)
+    cfg = dict(backend=0, thickness=[0.3], truncation_order=(6, 6), top=1.0, bot=1.0,
+               wavelength=0.94, psi=np.pi / 2, theta=0.1, phi=0.2, factorization='nvf',
+               period=[1.0, 1.0], normal_method='contour')
+
+    def total(roll):
+        cell = np.roll(np.roll(disc, roll[0], axis=0), roll[1], axis=1)
+        return float(np.sum(np.asarray(wavebit.rcwa(structure=cell[None], **cfg).solve().T)))
+
+    got = [total(r) for r in ((0, 0), (7, 11), (23, 5))]
+    assert max(got) - min(got) < 1e-9, got

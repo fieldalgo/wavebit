@@ -2,6 +2,19 @@
 
 Written: 2026-08-17. Measured 2026-08-16/17 on CPU, NumPy backend, float64.
 
+
+> **Caveat added 2026-08-27, and it is not small.** `'contour'` is the one raster construction
+> that is **not periodic**: rolling a raster -- the same structure written from a different
+> corner, which every answer must be invariant under -- moves `sum(T)` by 3.9e-4 on a square
+> cell and 9.7e-4 on a 2:1 cell for a disc of radius 30 in a 64-pixel cell, where `'distance'`,
+> `'spectral'` and `'smooth'` hold at 4e-14. The cause is `_resample`'s phase, which starts
+> wherever contourpy entered the loop, and the query taking the nearest *sample* rather than
+> the nearest *segment*. It is pinned as an `xfail` in
+> `tests/test_nvf_lattice_translation.py::test_contour_is_not_periodic_on_a_loop_that_fills_the_cell`.
+> The accuracy tables below stand -- they were taken on interior features, where it does not
+> fire -- but where a feature is large compared to the cell, prefer `'spectral'`.
+
+
 Targets:
 - `wavebit/_core/normal_methods.py` — the three constructions added beside the original
 - `wavebit/_core/factorization.py::normal_vector_field` — the dispatcher

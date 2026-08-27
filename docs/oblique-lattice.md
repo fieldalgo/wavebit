@@ -353,6 +353,17 @@ also wrong — a raster whose pixels are not square in real space; see
 
 ## Which `normal_method` to use, and what the default costs here
 
+> **Caveat added 2026-08-27, and it is not small.** `'contour'` is the one raster construction
+> that is **not periodic**: rolling a raster -- the same structure written from a different
+> corner, which every answer must be invariant under -- moves `sum(T)` by 3.9e-4 on a square
+> cell and 9.7e-4 on a 2:1 cell for a disc of radius 30 in a 64-pixel cell, where `'distance'`,
+> `'spectral'` and `'smooth'` hold at 4e-14. The cause is `_resample`'s phase, which starts
+> wherever contourpy entered the loop, and the query taking the nearest *sample* rather than
+> the nearest *segment*. It is pinned as an `xfail` in
+> `tests/test_nvf_lattice_translation.py::test_contour_is_not_periodic_on_a_loop_that_fills_the_cell`.
+> The accuracy tables below stand -- they were taken on interior features, where it does not
+> fire -- but where a feature is large compared to the cell, prefer `'spectral'`.
+
 **Use `normal_method='contour'`.** The paragraph above describes the *default* construction,
 `'distance'`, and it is the least accurate of the four the raster path offers. A skew makes it
 worse rather than better: the handful of directions a pair of integer central differences can
