@@ -122,6 +122,7 @@ decide every row, and neither needs another solver to agree:
 | solver | behaviour | evidence |
 |---|---|---|
 | **Wavebit 2ff** | refuses | `ValueError` naming the slot, only reachable by asking for `formulation='2ff'` |
+| **Wavebit patterned (PN)** | refuses | `ValueError` naming the z row; it **accepted and silently dropped** until 2026-08-27, which is the row below, in this table, about this solver |
 | **fmmax** 1.7.1 | cannot be asked | no `xz/yz/zx/zy` arguments exist |
 | **inkstone** 0.3.15 | **accepts, silently drops** | takes a `(3,3)` array; output bit-identical to the z row zeroed |
 | **EMpy** 2.2.3 | reads it, diverges | uses the z row, but returns `R + T = 1.6e13` for a plain Faraday tensor at normal incidence |

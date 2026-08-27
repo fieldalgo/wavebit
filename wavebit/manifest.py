@@ -175,9 +175,8 @@ def _options_for(modeling_type):
         # optional contourpy dependency, and offering an option this environment cannot
         # build is exactly the drift the manifest tests exist to prevent -- and the axis is
         # read only under factorization='nvf' (explicitly set anywhere it has no reader, it
-        # is refused rather than ignored). The block path applies Li's rules and builds no
-        # normal field at all; the smooth shape path builds its normal field from the
-        # geometry itself. Neither has a raster construction to select.
+        # is refused rather than ignored). The smooth shape path builds its normal field
+        # from the geometry itself, so it has no raster construction to select.
         'normal_method': _raster_normal_methods() if modeling_type == 0 else [],
         'normal_method_reason': (
             "read only under factorization='nvf'" if modeling_type == 0
@@ -301,7 +300,9 @@ MATERIALS = (
         'why': 'patterned *and* z-coupled: the 3x3 closing step. The two halves that exist '
                'reach this from opposite sides and neither extends to it -- the in-plane '
                'factorization has no z row, and the 4ff solve takes no pattern. No oracle '
-               'exists for it either, which is the harder half.',
+               'exists for it either, which is the harder half. Refused rather than dropped '
+               'since 2026-08-27: the Popov-Neviere builder used to return matrices '
+               'bit-identical to the same layer with its z row zeroed.',
         'source': 'docs/anisotropic-materials.md',
     },
 )

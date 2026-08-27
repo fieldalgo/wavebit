@@ -170,7 +170,7 @@ def test_the_named_and_described_skewed_refusals_agree():
     # Every described refusal must name at least one machine-checkable member — an entry
     # naming none would be prose with no name to test membership on.
     for r in LATTICE['refused_on_oblique']:
-        assert any(name in r['what'] for name in named | {'block'}), r['what']
+        assert any(name in r['what'] for name in named), r['what']
 
 
 def test_every_named_skewed_refusal_is_a_thing_that_exists():
@@ -401,8 +401,8 @@ _MAT_KW = dict(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                period=(1.0, 1.0), wavelength=1.1, thickness=[0.3])
 
 
-def _tensor(xx, yy, zz, xy=0.0, yx=0.0, xz=0.0, zx=0.0):
-    return np.array([[xx, xy, xz], [yx, yy, 0.0], [zx, 0.0, zz]], dtype=complex)
+def _tensor(xx, yy, zz, xy=0.0, yx=0.0, xz=0.0, zx=0.0, yz=0.0, zy=0.0):
+    return np.array([[xx, xy, xz], [yx, yy, yz], [zx, zy, zz]], dtype=complex)
 
 
 def _in_plane(t):
@@ -482,30 +482,68 @@ def test_a_supported_material_solves_and_conserves_energy(case):
     assert abs(total - 1.0) < 1e-6, f'{case}: R + T = {total!r} on a lossless passive layer'
 
 
-def test_a_patterned_z_row_has_no_builder_to_come_from():
-    """``patterned_z_coupled: False`` is structural, so it is checked as structure.
+def _z_coupled_cell(**over):
+    cell = np.zeros((1, 16, 16, 3, 3), dtype=complex)
+    for i in range(3):
+        cell[..., i, i] = 1.0
+    cell[0, 4:12, 4:12] = _tensor(2.9, 2.6, 2.9, xy=0.3, yx=0.3, **over)
+    return cell
 
-    Nothing raises if a z-coupled tensor raster goes to the Popov-Neviere builder: it returns
-    the same five in-plane slots and the z row is simply dropped. The honest statement of the
-    gap is that no builder emits the four z-row slots from a raster at all, and that is what
-    this pins. The day one does, this fails — which is the day the flag should be revisited.
 
-    Worth flagging for whoever gets there: silently dropping the row sits oddly beside the
-    rest of this solver, which refuses rather than ignores.
+def test_a_patterned_z_row_is_refused_by_the_builder_that_cannot_read_it():
+    """``patterned_z_coupled: False`` is a refusal now, not an omission, so it is pinned as one.
+
+    It used to be dropped. The Popov-Neviere rearrangement closes over the in-plane 2x2 block,
+    so a z-coupled tensor came back **bit-identical** to the same tensor with the z row zeroed
+    -- all five slots -- and conserved energy. Against the 4ff path, which holds a z row
+    exactly on a uniform layer, the cost is quadratic in the coupling: ``T`` in error by 3.3e-9
+    at ``eps_xz = 1e-6`` and 1.9e-2 at 0.8.
+
+    Written by name rather than by sweeping ``dir(factorization)``. The sweep this replaced
+    wrapped its call in ``except Exception: continue``, so the moment a builder started
+    *refusing*, the sweep skipped it and went green while asserting nothing about the two
+    builders it was written for.
+    """
+    from wavebit._core.factorization import (to_conv_mat_raster_pn_eps,
+                                             to_conv_mat_raster_pn_mu)
+
+    for build in (to_conv_mat_raster_pn_eps, to_conv_mat_raster_pn_mu):
+        with pytest.raises(ValueError, match='z row or column'):
+            build(_z_coupled_cell(xz=0.4, zx=0.4), 2, 2)
+        with pytest.raises(ValueError, match='z row or column'):
+            build(_z_coupled_cell(yz=0.4, zy=0.4), 2, 2)
+
+        # `zz` is read, and is not what the refusal is about -- changing it moves `epz_i` by
+        # 1.4e-1, so a guard that swept the whole z row would refuse every uniaxial layer.
+        assert len(build(_z_coupled_cell(), 2, 2)) == 5
+
+
+def test_no_builder_emits_the_four_z_row_slots():
+    """The other half, and the one that still has teeth for a builder written later.
+
+    The refusal above is about the builder that exists. This is about the flag: nothing in
+    ``factorization`` returns more than the five in-plane slots from a raster, which is what
+    makes ``patterned_z_coupled: False`` structural rather than a policy. The day something
+    returns nine, this fails -- and that is the day the flag should be revisited.
     """
     from wavebit._core import factorization
     cell = np.zeros((1, 16, 16, 3, 3), dtype=complex)
     for i in range(3):
         cell[..., i, i] = 1.0
-    cell[0, 4:12, 4:12] = _tensor(2.9, 2.6, 2.9, xy=0.3, yx=0.3, xz=0.4, zx=0.4)
+    cell[0, 4:12, 4:12] = _tensor(2.9, 2.6, 2.9, xy=0.3, yx=0.3)     # no z row: reaches them
+    reached = []
     for name in (n for n in dir(factorization) if n.startswith('to_conv_mat')):
         try:
             out = getattr(factorization, name)(cell, 2, 2)
         except Exception:
             continue                      # not a tensor-raster builder; nothing to claim
+        reached.append(name)
         assert len(out) == 5, (
             f'{name} returned {len(out)} slots — if it now emits the z row, patterned and '
             'z-coupled may be reachable and MATERIALS should say so')
+    # The sweep has to actually reach the tensor builders, or it asserts nothing. This is the
+    # line the version before 2026-08-27 was missing, and it is why a refusal made it vacuous.
+    assert set(reached) >= {'to_conv_mat_raster_pn_eps', 'to_conv_mat_raster_pn_mu'}, reached
 
 
 # ------------------------------------------------------------------- what each backend can do

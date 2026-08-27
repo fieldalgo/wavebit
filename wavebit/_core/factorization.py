@@ -1130,6 +1130,51 @@ def _pn_fields(xp, eps33, normal_x, normal_y):
     return A, B
 
 
+def _refuse_z_coupling(xp, tensor33):
+    """Raise if a pointwise tensor's z row or column is populated. See :func:`pn_eps_conv_matrices`.
+
+    **Exact zero, no tolerance.** The obvious objection is that a user who builds a tensor by
+    rotating a diagonal one gets rounding into the z slots -- and they do not. An in-plane
+    rotation's third row and column are the literal ``0.0, 0.0, 1.0``, so every path into a z
+    off-diagonal passes through a multiplication by an exact zero, which IEEE 754 keeps exact.
+    Measured at 0.000e+00 over 20000 random angles for eight constructions (written-out
+    ``R_z``, ``einsum``, four SciPy ``Rotation`` spellings, ``expm``, a director outer
+    product), in float32 and float64, on all three backends. What *does* produce a residue is
+    not rounding: ``n_z = sqrt(1 - nx^2 - ny^2)`` gives 6.6e-9 and a genuine 1e-9 rad tilt
+    gives 1.3e-9 -- both real z coupling, and a relative tolerance would swallow them.
+
+    **Skipped under a trace, and that is the softer pole on purpose.** ``bool(any(z != 0))``
+    survives ``jax.grad`` -- a comparison drops the tangent in one whole-array step, where
+    ``float(max(abs(z)))`` stays a tracer -- but not ``jax.jit``. Unlike
+    :func:`~wavebit._core.analytic.layer_needs_resolving`, whose traced answer *routes* a layer
+    and so must raise, this one routes nothing: both answers build the same matrices, and it
+    decides only whether to report. There is also no frozen record that could carry an eager
+    answer forward, so refusing when traced would refuse *every* jitted call on a path that
+    jits today and is published as supported.
+
+    Two ``any`` calls rather than one over a concatenation, because the concatenation copies:
+    490 us against 1091 us on a 256x256 raster, which is 0.06% of that layer's build.
+    """
+    z_row = tensor33[..., 2, :2]
+    z_col = tensor33[..., :2, 2]
+    try:
+        coupled = bool(xp.any(z_row != 0)) or bool(xp.any(z_col != 0))
+    except Exception:                          # noqa: BLE001 - a traced tensor; see above
+        return
+    if not coupled:
+        return
+    raise ValueError(
+        'a patterned tensor with a populated z row or column cannot be built here: the '
+        'Popov-Neviere rearrangement closes over the in-plane 2x2 block, so eps_xz, eps_zx, '
+        'eps_yz and eps_zy are not read and would be dropped without a word -- the matrices '
+        'come back bit-identical to the same layer with that row zeroed, and the solve '
+        'conserves energy. (eps_zz is read, and is not what this refuses.)\n'
+        '  A *uniform* z-coupled layer has a route: hand solve_conv the nine slots directly, '
+        'which selects the first-order (4ff) path. That path holds the z row exactly and '
+        'takes no permeability. A patterned one has no builder yet -- the 3x3 closing step is '
+        'unwritten, and no oracle exists that could say whether it were right.')
+
+
 def pn_eps_conv_matrices(xp, eps33, normal_x, normal_y, half_width_u, half_width_v):
     """Popov-Neviere convolution matrices for one *patterned anisotropic* layer.
 
@@ -1145,7 +1190,21 @@ def pn_eps_conv_matrices(xp, eps33, normal_x, normal_y, half_width_u, half_width
     whether the answer is right: fmmax, the one oracle that handles a patterned complex
     off-diagonal, has no z-row arguments at all. That case is left unimplemented rather than
     written blind.
+
+    **And refused rather than dropped**, since 2026-08-27. It used to be dropped: ``block``
+    below iterates ``range(2)``, so with ``nz = 0`` the projector is block diagonal and
+    ``q[2]`` cannot reach ``A[i, j]`` for ``i, j < 2`` at all. A tensor carrying
+    ``eps_xz = 0.7j, eps_zx = -0.7j`` came back **bit-identical** to the same tensor with the z
+    row and column zeroed -- all five slots, max|diff| = 0.000e+00 -- and the answer conserved
+    energy. Against the 4ff path, which holds a z row exactly on a uniform layer, the cost is
+    quadratic in the coupling and has no plateau a tolerance could sit on: ``T`` in error by
+    3.3e-9 at ``eps_xz = 1e-6``, 3.4e-5 at 1e-2, and 1.9e-2 at 0.8.
+
+    ``eps_zz`` is **not** part of the refusal, and the distinction is measured rather than
+    assumed: changing it moves ``epz_i`` by 1.4e-1. Only ``[..., 2, :2]`` and ``[..., :2, 2]``
+    are unreachable.
     """
+    _refuse_z_coupling(xp, eps33)
     A, B = _pn_fields(xp, eps33, normal_x, normal_y)
 
     def block(field):
