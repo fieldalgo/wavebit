@@ -1798,8 +1798,8 @@ _COEFFICIENTS_IMPLEMENTED_BY = {
     2: FourierCoefficients.INTEGRATED,
 }
 
-# Why, phrased for the person who asked for 'sampled'. Same distinction as above: the block
-# path's missing series is unbuilt, the smooth path's is unbuildable.
+# Why, phrased for the person who asked for 'sampled'. The smooth path's missing series is
+# not merely unbuilt but unbuildable -- a parametric shape has no samples to take.
 _COEFFICIENTS_REASON = {
     2: ("the smooth shape path (modeling_type=2) transforms geometry analytically -- each "
         "shape in turn (wavebit._core.analytic.shape_ft), or, for a painted layer whose "
@@ -1869,12 +1869,12 @@ class CoreFactorizationMixin:
                  # three namespaces' own complex spellings. Same argument as `device`.
                  fourier_coefficients=None,  # 'sampled' | 'integrated'
                  # (closed-form series); the default resolves per modeling path --
-                 # 'sampled' on a raster, 'integrated' on both shape paths, which is
-                 # the only series either can form. Naming the other one raises.
+                 # 'sampled' on a raster, 'integrated' on the shape path, which is
+                 # the only series it can form. Naming the other one raises.
                  factorization=None,         # 'li' | 'nvf' (normal vector field); the
-                 # default resolves per modeling path -- 'li' on a raster and on the
-                 # block modeler, 'nvf' on analytic shapes, which is the only rule
-                 # each of those last two implements. Naming the other one raises.
+                 # default resolves per modeling path -- 'li' on a raster, 'nvf' on
+                 # analytic shapes, which is the only rule the shape path implements.
+                 # Naming the other one raises.
                  normal_grid=1024,  # normal-field sampling; sets the floor on shape gradients
                  # (a translation-invariant structure should give d/dcx == 0 exactly; the
                  #  sampling leaves a sawtooth instead -- 5e-4 at 256, 4.2e-5 at 1024, for
@@ -1976,10 +1976,14 @@ class CoreFactorizationMixin:
         """Every keyword the solve entry points accept: a public property with a setter.
 
         Derived rather than listed, so it cannot drift. A condition is something with a
-        validating setter -- which is exactly what a `property` with an `fset` is here -- and
-        the retired spellings (`ucell`, `n_top`, `n_bot`, `pol`) are in the set on purpose:
-        they are properties whose setters raise by name, so they keep saying what replaced
-        them instead of being reported as unknown.
+        validating setter -- which is exactly what a `property` with an `fset` is here.
+
+        This is **not** the same set as "every attribute that may be written", and the two must
+        not be merged. `backend`, `T1` and `layer_info_list` are public attributes the library
+        writes on itself and no caller may pass as a keyword; they are in
+        `_ASSIGNABLE_NON_CONDITIONS` and `tests/test_solve_keywords.py` refuses them at the
+        keyword door on purpose. Folding them in here would make `solve(backend=1)` legal for
+        an effect it does not have.
 
         Cached per class, because the three backends have different sets and the answer cannot
         change after import.
@@ -2020,6 +2024,85 @@ class CoreFactorizationMixin:
             # would be one more keyword accepted for an effect it does not have.
             cls._CONDITION_NAMES = cached = frozenset(declared | settable) - {'backend'}
         return cached
+
+    #: Public attributes the library writes on itself that are not conditions. `backend` is
+    #: subtracted from `_condition_names` above because assigning it cannot take effect;
+    #: `layer_info_list` and `T1` are per-solve state written by `__init__` and `_finish`.
+    #: Every one is refused as a *keyword* (`tests/test_solve_keywords.py`) and must still be
+    #: writable as an *attribute* -- the two rules are different rules, and this is the
+    #: difference. Without them `__setattr__` below refuses `rcwa()` itself, at the
+    #: `self.layer_info_list = []` in `CoreSolveMixin.__init__`.
+    _ASSIGNABLE_NON_CONDITIONS = frozenset({'backend', 'T1', 'layer_info_list'})
+
+    def __setattr__(self, name, value):
+        """Refuse a public attribute nothing reads, instead of storing it.
+
+        `solver.thicknes = [900.0]` used to be a new attribute and a solve that answered for
+        the *old* thickness -- bit-identically, so there was nothing to notice. Direct
+        assignment is the idiom the tutorials and examples teach, and it was the one door into
+        the solver with no check on it: the constructor and the five `**kwargs` entry points
+        have been guarded since 2026-08-26 (`_refuse_unknown_keywords`, `_assign_conditions`),
+        which is what made the gap easy to miss -- the same typo is caught in
+        `rcwa(thicknes=...)` and was not in `solver.thicknes = ...`.
+
+        Four constraints, each of which a plausible implementation gets wrong:
+
+        * **A name already on the class goes through untouched**, and this branch is not a
+          convenience. Without it the guard *preempts the descriptor protocol*: a read-only
+          property would be reported as a missing attribute, which is the one thing it is not,
+          and the near-match hint made that worse -- `solver.n_top = 1.5` came back "did you
+          mean 'top'?", pointing a refractive index at a permittivity slot, which is exactly
+          the quantity error `docs/conventions.md` exists to prevent. Delegating instead lets
+          Python say `property 'n_top' of 'SolverNumpy' object has no setter`. The same branch
+          keeps a method stubbable (`solver.solve = fake`, `monkeypatch.setattr(solver, ...)`),
+          which the first version refused with a message claiming `solve` did not exist.
+        * **`AttributeError`, not `TypeError`.** `tests/test_domain.py` asks for
+          `AttributeError` on a read-only property, and a caller cannot tell the two refusals
+          apart if the types differ. `TypeError` is what `_assign_conditions` raises at the
+          keyword door; it is the wrong type here.
+        * **No instance state may be read.** This fires on `self.device = device`, the first
+          statement of `CoreSolveMixin.__init__`, when `__dict__` is still empty.
+          `_condition_names()` is a classmethod cached on the class, and `type(self)` reaches
+          the class without touching the instance, which is why both are safe. It also has to
+          live on the class that *owns* `_condition_names`: on `CoreSolveMixin`, which does not
+          inherit it, `_BaseRCWA()` dies inside the guard on its own first assignment.
+        * **No branch on the value.** `SolverJax._tree_unflatten` rebuilds through `__init__`,
+          so under a jitted `solve_field` every slot arrives as a tracer. This branches on
+          `name`, a `str`, and on nothing else.
+
+        A leading underscore passes. Pinning the private slots by name instead was measured --
+        35 of them -- and rejected: it buys nothing a caller can reach by accident and goes
+        stale on every new slot. `solver._thicknes` is a way to break this, and it is spelled
+        like one.
+
+        **A subclass adding state of its own is refused, deliberately.** Declaring the name as
+        a class attribute (`label = None` on the subclass) opts it in through the first branch,
+        and a private name never needed to. The alternative -- allowing any new name on a
+        subclass -- would make whether a name is checked depend on which class wrote it, which
+        is not a rule anyone could predict.
+        """
+        if (name.startswith('_')
+                or name in self._condition_names()
+                or name in self._ASSIGNABLE_NON_CONDITIONS
+                # Last, and it is the branch that keeps the descriptor protocol in charge:
+                # a settable property is set as before, a read-only one raises Python's own
+                # message, and a method can still be stubbed on an instance.
+                or hasattr(type(self), name)):
+            object.__setattr__(self, name, value)
+            return
+
+        import difflib
+        known = sorted(self._condition_names())
+        near = difflib.get_close_matches(name, known, n=1, cutoff=0.6)
+        hint = f' Did you mean {near[0]!r}?' if near else ''
+        raise AttributeError(
+            f'{type(self).__name__} has no attribute {name!r} to set.{hint} Refused rather '
+            f'than stored, because storing it is silent: the solve reads the attribute it '
+            f'knows about, so the answer comes back for the value you meant to change and '
+            f'nothing says otherwise.\n'
+            f'  Settable conditions: {", ".join(known)}.\n'
+            f'  To attach state of your own, use a name starting with an underscore, or '
+            f'declare it as a class attribute on a subclass.')
 
     def _assign_conditions(self, kwargs):
         """Set conditions from keywords, refusing a name that is not one.
@@ -2078,10 +2161,10 @@ class CoreFactorizationMixin:
 
     @property
     def structure(self):
-        """The layer stack, in whichever of the three encodings it was given in.
+        """The layer stack, in whichever of the two encodings it was given in.
 
-        A raster is an ``(n_layers, Ny, Nx)`` array of **relative permittivity**; the block
-        and analytic spellings are per-layer lists that name a
+        A raster is an ``(n_layers, Ny, Nx)`` array of **relative permittivity**; the analytic
+        spelling is a per-layer list that names a
         :class:`~wavebit._core.domain.Material` per region. Assigning it settles
         :attr:`modeling_type`, which is the only thing that selects the modeling
         path -- there is no separate mode switch.
@@ -2483,7 +2566,7 @@ class CoreFactorizationMixin:
         if value is None:
             self._mu = None
             return
-        if self._modeling_type in (1, 2):
+        if self._modeling_type == 2:
             raise ValueError(_MU_ON_A_SHAPE_PATH)
         field = self._coerce_raster('mu', value)
         # Same grid or nothing. The two fields are sampled on one raster and are transformed
@@ -2535,9 +2618,9 @@ class CoreFactorizationMixin:
         Raises:
             NotImplementedError: when the series was *explicitly* asked for and this modeling
                 path cannot form it. Same exemption for the default, and for the same reason:
-                ``'sampled'`` is the module-wide default, so a block- or smooth-path user who
-                never touched the keyword is not asking for anything and keeps the closed-form
-                series both paths always ran.
+                ``'sampled'`` is the module-wide default, so a smooth-path user who never
+                touched the keyword is not asking for anything and keeps the closed-form
+                series that path always ran.
         """
         implemented = _COEFFICIENTS_IMPLEMENTED_BY.get(self._modeling_type)
         if implemented is None:                       # raster, or no structure yet: free choice
@@ -2562,10 +2645,10 @@ class CoreFactorizationMixin:
         """Which rule closes the discontinuous products: ``'li'`` | ``'nvf'``.
 
         This reports the rule the *current structure* will be built with, which is not always
-        the one that was asked for, because only the raster path implements both. The block
-        path has only Li's rules and the smooth shape path only NVF, so on those two the
-        keyword is a claim about the build rather than a choice within it, and this resolves
-        it against the modeling path instead of repeating it back.
+        the one that was asked for, because only the raster path implements both. The smooth
+        shape path has only NVF, so there the keyword is a claim about the build rather than a
+        choice within it, and this resolves it against the modeling path instead of repeating
+        it back.
 
         Raises:
             NotImplementedError: when the rule was *explicitly* asked for and this modeling
@@ -2953,9 +3036,6 @@ class CoreFactorizationMixin:
         since NVF already converges faster than Li on the curved boundaries this feature exists
         for.
 
-        The block modeler (``modeling_type=1``) rasterises shapes onto a rectangular grid of
-        its own and is not ported.
-
         Three things that were refused here are not any more. Two of them because the
         assumption behind the refusal turned out to be wrong rather than because they were
         implemented:
@@ -3020,8 +3100,8 @@ class CoreFactorizationMixin:
         exactly this reason. Rebuilding the rules for ``mu`` would be rederiving them.
 
         Two things the shared build gives that a separate one would have to re-earn: the two
-        quantities land on one grid (the block path replays the *same* plans, the shape paths
-        the same boundary plans, so the geometry cannot drift between them), and every
+        quantities land on one grid (the shape path replays the same boundary plans, so the
+        geometry cannot drift between them), and every
         refusal that applies to the permittivity build applies here once rather than twice.
 
         Where ``mu`` *cannot* be expressed the refusal is by name and lives elsewhere, close
@@ -3041,9 +3121,9 @@ class CoreFactorizationMixin:
 
     def _check_before_building(self):
         """The refusals every build goes through, in the order they have to be read in."""
-        # Lattice first, then the rule -- the order is load-bearing. A skewed cell on the block
-        # path is unbuildable whatever rule is named, so reporting the *keyword* there would
-        # send the user to change the one thing that cannot help. The other way round is safe:
+        # Lattice first, then the rule -- the order is load-bearing. Where a cell is refused
+        # outright, reporting the *keyword* would send the user to change the one thing that
+        # cannot help. The other way round is safe:
         # `_reject_unsupported_lattice` reads the resolved `factorization` itself, so a skewed
         # cell asking for a rule its path cannot express still gets told about the rule.
         self._reject_unsupported_lattice()
@@ -3276,9 +3356,9 @@ class CoreFactorizationMixin:
         a half-space that never mentioned one, and on a scene routed to a 1D path that is the
         difference between solving it and refusing it.
 
-        Permittivity first, and it matters on the block path: without a frozen geometry the
-        permeability pass replays the grid plans the permittivity pass has just recorded, so
-        the order is what puts the two quantities on one grid.
+        Permittivity first, and it matters on the shape path: without a frozen geometry the
+        permeability pass replays the boundary plans the permittivity pass has just recorded,
+        so the order is what puts the two quantities on one grid.
         """
         eps = self._eps_conv_matrices(geometry)
         if not self._is_magnetic():

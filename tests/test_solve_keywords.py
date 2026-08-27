@@ -200,3 +200,108 @@ def test_the_condition_set_is_derived_not_listed(backend):
     assert derived - declared == {'formulation'}, sorted(derived - declared)
     assert 'wavelength' in derived and 'backend' not in derived
     assert 'ucell' not in derived and 'pol' not in derived
+
+
+# ------------------------------------------- the sixth door: plain attribute assignment
+
+#: Every backend that is importable, as `(id, name)`. The guard is derived per class, so a
+#: version that drifted on one backend would be invisible from another -- the same argument
+#: the keyword tests above are crossed for.
+_GUARD_BACKENDS = [(0, 'numpy')]
+for _bk, _mod in ((1, 'jax'), (2, 'torch')):
+    try:
+        __import__(_mod)
+    except ImportError:                                    # pragma: no cover - env-dependent
+        pass
+    else:
+        _GUARD_BACKENDS.append((_bk, _mod))
+
+
+def _guard_solver(backend, cls=None):
+    kw = dict(structure=GRATING, period=[P, P], truncation_order=(3, 0), thickness=[H],
+              wavelength=WL, theta=0.0)
+    return cls(**kw) if cls is not None else wavebit.rcwa(backend=backend, **kw)
+
+
+@pytest.mark.parametrize('backend, name', _GUARD_BACKENDS, ids=[n for _, n in _GUARD_BACKENDS])
+@pytest.mark.parametrize('typo, meant', [('thicknes', 'thickness'), ('wavelenght', 'wavelength'),
+                                         ('truncation_orders', 'truncation_order'),
+                                         ('perio', 'period'), ('max_order', None),
+                                         ('ucell', None)])
+def test_a_typoed_attribute_is_refused_rather_than_stored(backend, name, typo, meant):
+    """The door the five above did not cover, and the one the tutorials teach.
+
+    ``rcwa(thicknes=...)`` and ``solve(thicknes=...)`` have been refused since 2026-08-26.
+    ``solver.thicknes = [900.]`` was stored as a new attribute until 2026-08-27, and the solve
+    then answered for the thickness that was *not* changed -- bit-identically to the untouched
+    run, so there was nothing to notice. Every one of these spellings moved the answer when
+    written correctly, which is what makes the silence a wrong answer rather than a no-op.
+    """
+    solver = _guard_solver(backend)
+    before = float(np.sum(np.asarray(solver.solve().T)).real)
+
+    with pytest.raises(AttributeError, match=typo):
+        setattr(solver, typo, [900.0])
+    assert not hasattr(solver, typo)
+
+    if meant is not None:
+        # and the name it was a typo *of* moves the answer, so the silence was not harmless
+        message = str(pytest.raises(AttributeError,
+                                    lambda: setattr(solver, typo, [900.0])).value)
+        assert meant in message, message
+        setattr(solver, meant, [900.0] if meant == 'thickness' else getattr(solver, meant))
+        if meant == 'thickness':
+            assert float(np.sum(np.asarray(solver.solve().T)).real) != before
+
+
+@pytest.mark.parametrize('backend, name', _GUARD_BACKENDS, ids=[n for _, n in _GUARD_BACKENDS])
+def test_the_guard_leaves_the_descriptor_protocol_in_charge(backend, name):
+    """A read-only property is not a missing attribute, and must not be reported as one.
+
+    This is the branch that costs the least to leave out and the most to get wrong. Without it
+    the guard preempts the property protocol: ``solver.n_top = 1.5`` came back "has no attribute
+    'n_top' to set. Did you mean 'top'?" -- pointing a refractive *index* at a *permittivity*
+    slot, which is the one quantity error ``docs/conventions.md`` exists to prevent. Twelve
+    properties were affected, and the type is right in both versions, so a test that checked
+    only ``pytest.raises(AttributeError)`` could not see it.
+    """
+    solver = _guard_solver(backend)
+    for prop in ('n_top', 'n_bot', 'modeling_type', 'grating_type', 'scattering',
+                 'formulation_assigned', 'order_window', 'tetm_index'):
+        with pytest.raises(AttributeError, match='has no setter'):
+            setattr(solver, prop, 1.5)
+
+
+@pytest.mark.parametrize('backend, name', _GUARD_BACKENDS, ids=[n for _, n in _GUARD_BACKENDS])
+def test_a_method_can_still_be_stubbed_on_an_instance(backend, name):
+    """The other half of that branch, and a capability a guard silently removes.
+
+    ``monkeypatch.setattr(solver, 'solve', ...)`` is how a test isolates a caller from the
+    solve. The first version of the guard refused it with a message saying ``solve`` did not
+    exist -- of a method that does. Nothing in this suite patches an instance today, which is
+    exactly why it needs pinning here rather than being left to be discovered downstream.
+    """
+    solver = _guard_solver(backend)
+    solver.solve = lambda *a, **k: 'stubbed'
+    assert solver.solve() == 'stubbed'
+
+
+@pytest.mark.parametrize('backend, name', _GUARD_BACKENDS, ids=[n for _, n in _GUARD_BACKENDS])
+def test_a_subclass_opts_its_own_state_in_with_a_class_attribute(backend, name):
+    """Refused by default, and there is a way in that is not a private name.
+
+    A solver subclass cannot simply add ``self.label = ...``: the guard cannot tell that from a
+    typo, and letting it through on subclasses alone would make whether a name is checked
+    depend on which class wrote it. Declaring ``label = None`` on the class opts it in through
+    the class-presence branch -- a decision spelled out once, where a reader can see it.
+    """
+    base = type(_guard_solver(backend))
+    plain = base.__new__(base)                     # no __init__: the guard is what is at issue
+    with pytest.raises(AttributeError, match='label'):
+        plain.label = 'case-3'
+
+    declared = type('Labelled', (base,), {'label': None})
+    solver = _guard_solver(backend, cls=declared)
+    solver.label = 'case-3'
+    assert solver.label == 'case-3'
+    assert float(np.sum(np.asarray(solver.solve().T)).real) > 0.0
