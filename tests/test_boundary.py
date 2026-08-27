@@ -925,7 +925,7 @@ def test_freezing_a_painted_layer_works_on_torch():
     assert total == pytest.approx(_painted_total(0, float), abs=1e-12)
 
 
-def test_a_traced_shape_layer_is_refused_without_a_frozen_geometry():
+def test_a_traced_shape_layer_needs_a_freeze_under_jit_and_not_under_grad():
     """The silent one: an overlapping layer under `jax.grad` used to solve a *summed* layer.
 
     Whether two shapes overlap decides which structure a painted layer is, and that question
@@ -966,8 +966,15 @@ def test_a_traced_shape_layer_is_refused_without_a_frozen_geometry():
         res = solver.solve() if geometry is None else solver.solve(geometry=geometry)
         return jnp.sum(res.T).real
 
+    # **Under `jit` the freeze is still required**, because there is genuinely no value to
+    # read: `checked_float` reaches a grad tracer's primal and a jit tracer has none.
     with pytest.raises(ValueError, match='freeze_geometry'):
-        jax.grad(total)(jnp.asarray(0.34))
+        jax.jit(total)(jnp.asarray(0.34))
+
+    # **Under `grad` it is not, since 2026-08-28** -- and the freeze changes nothing when it is
+    # taken anyway, which is the assertion that says planning from the primal is the same plan.
+    # It is what torch has always done here; the two now agree to 4.0e-13.
+    unfrozen = float(jax.grad(total)(jnp.asarray(0.34)))
 
     # and the documented route works, and agrees with central differences on the *painted*
     # structure rather than on the summed one
@@ -993,6 +1000,10 @@ def test_a_traced_shape_layer_is_refused_without_a_frozen_geometry():
     # Widened to what this comparison can actually support, which is a sanity band on the
     # gradient rather than a convergence claim.
     assert analytic == pytest.approx((plus - minus) / (2 * h), rel=2e-2)
+
+    # Bit-identical, not merely close: the plan a gradient builds from the primal *is* the plan
+    # the freeze recorded, so the only difference between the two routes is when it was taken.
+    assert unfrozen == analytic
 
 
 def test_a_traced_single_shape_layer_is_not_refused():

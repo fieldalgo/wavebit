@@ -94,7 +94,7 @@ field fell from 12x/486x to 2x/182x because this side got slower, not because th
 faster.
 """
 from . import overlap as _overlap
-from .backend import array_namespace, as_array, j1, jinc, sinc
+from .backend import array_namespace, as_array, checked_float, j1, jinc, sinc
 from .domain import as_material
 from .factorization import ConvMatrices, check_normal_grid
 from .lattice import periods_of, is_axis_aligned, sample_grid
@@ -399,18 +399,52 @@ def layer_needs_resolving(layer, lattice):
     except Exception:                                  # noqa: BLE001 - a traced basis
         prims = None
     if prims is None:
-        raise ValueError(
-            "a traced layer of more than one shape needs a frozen geometry. Whether the "
-            "shapes overlap decides how the painting resolves into disjoint polygons, and "
-            "that question cannot be asked of a traced value. Guessing it would solve a "
-            "different structure than the one asked for, without saying so.\n"
-            "  Freeze once, outside the trace, and replay:\n"
-            "    geometry = solver.freeze_geometry()\n"
-            "    result = solver.solve(geometry=geometry)\n"
-            "  Re-take the freeze whenever the shapes may have started or stopped "
-            "overlapping; the plan compares by content, so an unchanged one is free.")
+        raise ValueError(_NEEDS_A_FREEZE.format(
+            what='whether the shapes overlap, which decides how the painting resolves into '
+                 'disjoint polygons'))
     return bool(_overlap.overlapping_pairs(prims, OVERLAP_TOL_REL * max(Px, Py),
                                            lattice))
+
+
+#: One message for the two questions a trace cannot answer, because a caller acts on both the
+#: same way. They are not the same question, and splitting them is what 2026-08-28 was about --
+#: see :func:`can_plan_eagerly`.
+_NEEDS_A_FREEZE = (
+    "a traced shape layer needs a frozen geometry: {what} cannot be asked of a traced "
+    "value. Guessing it would solve a different structure than the one asked for, without "
+    "saying so.\n"
+    "  Freeze once, outside the trace, and replay:\n"
+    "    geometry = solver.freeze_geometry()\n"
+    "    result = solver.solve(geometry=geometry)\n"
+    "  Re-take the freeze whenever the shapes may have started or stopped overlapping; the "
+    "plan compares by content, so an unchanged one is free.")
+
+
+def can_plan_eagerly(shapes, lattice):
+    """Can the painting be resolved into polygons right here, without a frozen record?
+
+    **A different question from :func:`layer_needs_resolving`, and they came apart on
+    2026-08-28.** Both used to be answered by the same failure: `_primitives` spelled its read
+    as `float()`, a `jax.grad` tracer refused that, and every geometry question fell through
+    together. Now that the read reaches a grad tracer's primal
+    (:func:`~wavebit._core.backend.checked_float`), the routing question *can* be answered
+    under a gradient -- and the planning question still cannot, because
+    :func:`~wavebit._core.clipper.plan_layer` walks vertex arrays through NumPy and a tracer
+    refuses a whole-array conversion whatever its primal is. That asymmetry is the one
+    ``docs/backend-choice.md`` tabulates: narrowing one value at a time is permitted under
+    `grad`, converting an array is not.
+
+    So the layer is routed correctly under a gradient and then told, precisely, that the plan
+    is what it is missing -- rather than falling out of `numpy.stack` with a
+    `TracerArrayConversionError` naming nothing the caller wrote.
+    """
+    try:
+        for shape in shapes:
+            for v in shape_geometry(shape, lattice)[1:]:
+                checked_float(v)
+    except Exception:                              # noqa: BLE001 - a jit tracer, and only that
+        return False
+    return True
 
 
 def shape_ft(xp, shape, ky, kx, lattice):
@@ -1318,6 +1352,11 @@ def to_conv_mat_smooth_layers(layer_shapes, half_width_u, half_width_v, lattice,
             # sum, which is a different structure. Resolve the painting into disjoint polygons
             # and transform those. Where nothing overlaps the two are the same structure, so
             # the layer stays here -- exact, and cheaper.
+            if plan is None and not can_plan_eagerly(layer.get('shapes', []), lattice):
+                raise ValueError(_NEEDS_A_FREEZE.format(
+                    what='how the painting resolves into disjoint polygons -- which shapes '
+                         'these are is readable here, but cutting them into loops walks the '
+                         'vertices through NumPy, and that'))
             from .boundary import to_conv_mat_boundary_layer
             mats = to_conv_mat_boundary_layer(
                 xp, layer.get('shapes', []), background, half_width_u, half_width_v, lattice,

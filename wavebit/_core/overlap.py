@@ -31,6 +31,8 @@ being reported.
 """
 import math
 
+from .backend import checked_float
+
 #: Penetration below this fraction of the period is touching, not overlapping.
 OVERLAP_TOL_REL = 1e-6
 
@@ -61,8 +63,12 @@ def primitive(stype, cx, cy, lx, ly, angle):
         kind = ELLIPSE
     else:
         return None
-    return (kind, float(cx), float(cy), float(lx) / 2.0, float(ly) / 2.0,
-            math.cos(float(angle)), math.sin(float(angle)))
+    # `checked_float`, not `float`: a `jax.grad` tracer refuses `float()` while carrying a
+    # perfectly concrete primal, and `analytic._primitives` reads that refusal as "traced --
+    # skip the check". See the helper for what that cost.
+    return (kind, checked_float(cx), checked_float(cy),
+            checked_float(lx) / 2.0, checked_float(ly) / 2.0,
+            math.cos(checked_float(angle)), math.sin(checked_float(angle)))
 
 
 def _is_circle(p):

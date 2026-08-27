@@ -41,6 +41,54 @@ def _readable(v, xp):
     return xp.asarray(v)
 
 
+def checked_float(v):
+    """``v`` as a plain float **for a check**, raising only when there is no value to read.
+
+    The numeric twin of :func:`_concrete`, and it draws the same line in the same place: a
+    ``jax.grad`` tracer carries a concrete primal and is on the **checked** side, a ``jax.jit``
+    tracer has no number and is skipped. `_concrete` gets there by reducing to a boolean, which
+    narrows on its own; a geometry check needs the number itself, and the spelling decides
+    whether it can have it. Measured:
+
+        read                      eager   jax.grad   jax.jit   torch(requires_grad)
+        float(x)                  ok      **fails**  fails     ok, with a UserWarning
+        float(stop_gradient(x))   ok      ok         fails     TypeError
+        float(x.detach())         ok      --         --        ok, silent
+
+    So no single spelling covers both live backends, and this is the sequence that does:
+    ``detach`` where it exists, then ``float``, then ``stop_gradient`` for what is left.
+
+    **Why it matters that this is not `float`.** :func:`wavebit._core.overlap.primitive` spelled
+    it ``float(cx)``, and :func:`wavebit._core.analytic._primitives` reads the failure as "this
+    is traced -- skip the check". A grad tracer refuses ``float()`` while answering
+    ``stop_gradient`` and ``bool(x > 300)`` perfectly, so it was saying "this spelling carries a
+    tangent", not "there is no value here" -- and the geometry refusals were skipped under
+    exactly the gradient loop they exist to protect. A rod grown by plain gradient ascent from
+    ``lx = 280`` on a period of 300 ran to completion at **lx = 911.71**, three times the
+    period, with ``R + T = 1.000000000000`` at every step; the same run on torch died at step 1,
+    because torch tensors satisfy ``float()``.
+
+    ``detach`` first also silences the ``UserWarning`` torch emits for a ``requires_grad``
+    scalar conversion, which the checks were printing on every eager torch shape solve.
+
+    Deliberately **not** :func:`wavebit._core.analytic._static_float`, which refuses an autograd
+    value on purpose: that one keys a cache, where reading a differentiated value would serve a
+    stale build. Reading one to *check* geometry is the opposite -- it is the case that most
+    needs checking.
+    """
+    detach = getattr(v, 'detach', None)
+    if detach is not None:                      # torch, including requires_grad, and silent
+        v = detach()
+    try:
+        return float(v)
+    except Exception:                           # noqa: BLE001 - a tracer of some kind
+        pass
+    if type(v).__module__.split('.')[0] == 'jax':
+        import jax                              # local: jax is optional
+        return float(jax.lax.stop_gradient(v))  # a jit tracer still raises, as it must
+    raise TypeError(f'{type(v).__name__} carries no value a check can read')
+
+
 def _concrete(flag):
     """``bool(flag)`` for a 0-d reduction, or ``None`` when the value cannot be read.
 
