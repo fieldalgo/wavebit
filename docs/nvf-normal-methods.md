@@ -7,10 +7,24 @@ Written: 2026-08-17. Measured 2026-08-16/17 on CPU, NumPy backend, float64.
 > that is **not periodic**: rolling a raster -- the same structure written from a different
 > corner, which every answer must be invariant under -- moves `sum(T)` by 3.9e-4 on a square
 > cell and 9.7e-4 on a 2:1 cell for a disc of radius 30 in a 64-pixel cell, where `'distance'`,
-> `'spectral'` and `'smooth'` hold at 4e-14. The cause is `_resample`'s phase, which starts
-> wherever contourpy entered the loop, and the query taking the nearest *sample* rather than
-> the nearest *segment*. It is pinned as an `xfail` in
-> `tests/test_nvf_lattice_translation.py::test_contour_is_not_periodic_on_a_loop_that_fills_the_cell`.
+> `'spectral'` and `'smooth'` hold at 4e-14.
+>
+> **The cause, measured 2026-08-28, is `_two_phase_indicator` — not the contour block.** It
+> keys the background on the *corner pixel* (`eps != eps.flat[0]`), which is invariant under
+> relabeling the two phases but not under a translation: this disc nearly fills the cell, so a
+> roll can put the corner *inside* it and the indicator inverts wholesale. The rolls partition
+> exactly two ways by whether the corner lands inside — 0.328909134249 for the six that do not,
+> 0.329294462911 for the four that do, each class tight to 5e-13 with nothing in between.
+> Making the indicator translation-invariant collapses all ten to one value at 4.157e-13.
+> The three other constructions read the same indicator and are unaffected, because an
+> inversion flips their field globally and NVF consumes only `n n^T`.
+>
+> Until 2026-08-28 this caveat blamed `_resample`'s phase and the nearest-*sample* query, and
+> scoped the fix as a rewrite deleting `_resample`. That was wrong, and two prototypes of that
+> rewrite left the defect in place. It is pinned as a **strict** `xfail` in
+> `tests/test_nvf_lattice_translation.py::test_contour_is_not_periodic_on_a_loop_that_fills_the_cell`
+> — strict because it was an imperative `pytest.xfail()` call until the same day, which raises
+> before the assertion and so could never have reported the defect fixed.
 > The accuracy tables below stand -- they were taken on interior features, where it does not
 > fire -- but where a feature is large compared to the cell, prefer `'spectral'`.
 
@@ -300,8 +314,11 @@ Use a two-phase raster to tell the constructions apart.
 
 Pinned by [`tests/test_nvf_lattice_translation.py`](../tests/test_nvf_lattice_translation.py),
 which parametrizes three placements deliberately (a partial fix passes some). `'contour'` was
-carried there as a strict xfail until the aperture fix above promoted it; all four constructions
-are covariant now and the file has no xfail left. The sibling defect in the *analytic* path was
+carried there as a strict xfail until the aperture fix above promoted it. It is back to being
+one: the aperture fix was real and is not undone, but it was never the whole defect — see the
+caveat at the top of this file, whose cause lies in `_two_phase_indicator` and not in any of
+the contour work described here. So `'distance'`, `'spectral'` and `'smooth'` are covariant and
+`'contour'` is not, and the file carries exactly one xfail. The sibling defect in the *analytic* path was
 older and is also fixed (`c128fd8`) — its normal field was distance-blind, not merely aperiodic,
 and `test_shape_position_gradients.test_a_multishape_layer_is_periodic_across_the_cell_edge` now
 states the property where a test of the opposite name used to pin the defect.

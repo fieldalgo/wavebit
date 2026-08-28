@@ -218,8 +218,18 @@ def test_the_defect_did_not_converge_with_max_order_which_is_why_it_was_a_defect
         assert moved < 1e-12, f'truncation_order={truncation_order}: R moved by {moved:.2e}'
 
 
+@pytest.mark.xfail(strict=True, reason='the two-phase indicator keys the background on the '
+                                        'corner pixel, which a roll can move inside the shape')
 def test_contour_is_not_periodic_on_a_loop_that_fills_the_cell():
     """A known defect, pinned as one. `xfail`, not deleted, so it fails when it is fixed.
+
+    The pin is a `strict` *marker*, and that is load-bearing. It was an imperative
+    `pytest.xfail(...)` call at the top of the body until 2026-08-28, which raises immediately:
+    the assertion below never ran, so the test reported XFAIL whether or not the defect was
+    still there and could not have told anyone it was fixed -- which is exactly what the line
+    above claims it does. Two one-line tests with identical `assert True` bodies show it:
+    the imperative call gives XFAIL, `@pytest.mark.xfail(strict=True)` gives
+    `FAILED [XPASS(strict)]`.
 
     Rolling a raster is the same structure written from a different corner, so every answer
     must be identical. Three of the four constructions are, to 4e-14. `normal_method='contour'`
@@ -227,27 +237,55 @@ def test_contour_is_not_periodic_on_a_loop_that_fills_the_cell():
     3.9e-4 on a square cell and 9.7e-4 on a 2:1 cell, for a disc of radius 30 in a 64-pixel
     cell. It does not converge with truncation order.
 
-    **The cause is not the tile ring**, which was the first hypothesis and is worth recording
-    as refused: `_contour_polylines` folds each loop on its area-mean centre, so a loop's
-    bounding box can overshoot the cell by a full period (measured 0.81 to 1.00 cells on the
-    three scenes here), and `contour_normal_field` lays down exactly one ring. Deriving the
-    ring from that overshoot instead moves the field by **5e-14** -- the overshooting parts are
-    images of points the ring-1 tiles already carry, so the bound is loose but not wrong.
+    **The cause is `_two_phase_indicator`, and it is not in the contour block at all.** That
+    function keys the background on the *corner pixel* -- `eps != eps.flat[0]` -- which is
+    invariant under relabeling the two phases, the property its docstring defends, and is not
+    invariant under a translation. This disc has radius 30 in a 64 cell, so a roll can put the
+    corner *inside* it, and then the indicator inverts wholesale.
 
-    What is left is the resample phase: `_resample` lays its samples from `pts[0]`, wherever
-    contourpy happened to enter the loop, and the query takes the nearest *sample* and its two
-    adjacent segments rather than the nearest segment. Rolling the raster moves contourpy's
-    entry point, which moves every sample by a fraction of the spacing. Fixing it means
-    querying the nearest segment, which deletes `_resample` -- a rewrite of the core of that
-    function, not a patch.
+    That is measurable directly, and it partitions the rolls exactly:
+
+    ====================================  =============  ================
+    roll                                  corner inside  ``sum(T)``
+    ====================================  =============  ================
+    (0,0) (7,11) (1,63) (2,2) (5,5) (17,3)  no           0.328909134249
+    (23,5) (31,17) (40,40) (13,29)          yes          0.329294462911
+    ====================================  =============  ================
+
+    Two values, nothing between, each class internally tight to 5e-13. A sample-phase offset
+    would give a spread, not two classes. Replacing the corner rule with the majority phase --
+    a probe, not a proposed fix, since it ties at exactly half fill -- collapses all ten rolls
+    to one value, spread 4.157e-13, the floor the other three constructions sit at. So the
+    indicator is the whole of it on this scene.
+
+    **Two earlier hypotheses, both recorded as refused.** The tile ring: `_contour_polylines`
+    folds each loop on its area-mean centre, so a loop's bounding box can overshoot the cell by
+    a full period (0.81 to 1.00 cells on the three scenes here) while `contour_normal_field`
+    lays down exactly one ring -- deriving the ring from that overshoot moves the field by
+    **5e-14**. And the resample phase: `_resample` lays its samples from `pts[0]`, wherever
+    contourpy entered the loop, which a roll moves. That was the standing explanation until
+    2026-08-28 and is why the fix was scoped as a nearest-segment rewrite deleting `_resample`.
+    It is the amplifier, not the cause: an inverted indicator is the *same curve* -- 236 points
+    either way -- reached in a different traversal, and `_resample`'s phase is what turns that
+    into a different field. `'distance'`, `'spectral'` and `'smooth'` read the same indicator
+    and do not notice, because an inversion flips their field globally and NVF consumes only
+    `n n^T`.
+
+    Two further probes, both refused, because each is the obvious thing to try next:
+
+    * forcing every closed loop counter-clockwise by its shoelace sign does **not** fix it
+      (4.543e-4, still exactly two classes). Reversing the point order moves the entry point
+      too, so it canonicalizes the wrong thing.
+    * the fold's `np.round` half-way tie is real and is **not** what this is.
+      `_contour_polylines` folds on `np.round(centre / n)`, and `np.round(0.5)` is 0, so the
+      centred disc keeps *two* representatives at (-32,+32) and (-32,-32) where every offset
+      roll keeps one. Harmless: roll (0,0) with two and roll (7,11) with one agree to 4.7e-13,
+      because the 3x3 tiling regenerates the copies either way.
 
     Until then `'spectral'` is the honest recommendation wherever a feature is large compared
     to the cell, and on a skewed cell.
     """
     import wavebit
-
-    pytest.xfail('contour resample phase follows contourpy loop entry; needs the '
-                 'nearest-segment rewrite')
 
     n = 64
     ax = np.arange(n)
