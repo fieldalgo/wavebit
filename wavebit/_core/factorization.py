@@ -958,8 +958,9 @@ def _normal_field_source(eps, lattice=None, method=None):
 
     The smoothing constructions read the layer's values only through two
     value-relabeling-invariant facts, and both are captured: the interface mask (their
-    indicators mark the not-the-corner-REGION phase, so relabeling the values moves
-    nothing — see ``normal_methods._two_phase_indicator``), and the number of distinct
+    indicators mark the smaller REGION, found from the corner, so neither relabeling the
+    values nor translating the raster moves anything — see
+    ``normal_methods._two_phase_indicator``), and the number of distinct
     phases (which decides the delegation to ``'distance'``, and which a merge of two
     non-adjacent phases can change without moving a single interface — hence the fifth
     element). The pre-lift ``base_shape`` is not captured because it follows from the

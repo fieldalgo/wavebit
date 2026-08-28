@@ -218,86 +218,114 @@ def test_the_defect_did_not_converge_with_max_order_which_is_why_it_was_a_defect
         assert moved < 1e-12, f'truncation_order={truncation_order}: R moved by {moved:.2e}'
 
 
-@pytest.mark.xfail(strict=True, reason='the two-phase indicator keys the background on the '
-                                        'corner pixel, which a roll can move inside the shape')
-def test_contour_is_not_periodic_on_a_loop_that_fills_the_cell():
-    """A known defect, pinned as one. `xfail`, not deleted, so it fails when it is fixed.
+def test_contour_is_periodic_under_a_roll_that_lands_on_the_corner():
+    """Rolling a raster is the same structure written from a different corner.
 
-    The pin is a `strict` *marker*, and that is load-bearing. It was an imperative
-    `pytest.xfail(...)` call at the top of the body until 2026-08-28, which raises immediately:
-    the assertion below never ran, so the test reported XFAIL whether or not the defect was
-    still there and could not have told anyone it was fixed -- which is exactly what the line
-    above claims it does. Two one-line tests with identical `assert True` bodies show it:
-    the imperative call gives XFAIL, `@pytest.mark.xfail(strict=True)` gives
-    `FAILED [XPASS(strict)]`.
+    Every answer must be identical. Three of the four constructions always were, to 4e-14.
+    `normal_method='contour'` -- the one `docs/nvf-normal-methods.md` and `README.md` recommend
+    -- was not, until 2026-08-29: `sum(T)` moved by 3.9e-4 on a square cell and 9.7e-4 on a 2:1
+    cell for the disc below, and did not converge with truncation order.
 
-    Rolling a raster is the same structure written from a different corner, so every answer
-    must be identical. Three of the four constructions are, to 4e-14. `normal_method='contour'`
-    -- the one `docs/nvf-normal-methods.md` and `README.md` recommend -- moves `sum(T)` by
-    3.9e-4 on a square cell and 9.7e-4 on a 2:1 cell, for a disc of radius 30 in a 64-pixel
-    cell. It does not converge with truncation order.
-
-    **The cause is `_two_phase_indicator`, and it is not in the contour block at all.** That
-    function keys the background on the *corner pixel* -- `eps != eps.flat[0]` -- which is
+    **The cause was `_two_phase_indicator`, and it was not in the contour block at all.** That
+    function keyed the background on the *corner pixel* -- `eps != eps.flat[0]` -- which is
     invariant under relabeling the two phases, the property its docstring defends, and is not
-    invariant under a translation. This disc has radius 30 in a 64 cell, so a roll can put the
-    corner *inside* it, and then the indicator inverts wholesale.
+    invariant under a translation. A roll can put the corner *inside* the feature, and then the
+    indicator inverted wholesale. It partitioned these ten rolls exactly:
 
-    That is measurable directly, and it partitions the rolls exactly:
+    ======================================  =============  ================
+    roll                                    corner inside  ``sum(T)``
+    ======================================  =============  ================
+    (0,0) (7,11) (1,63) (2,2) (5,5) (17,3)  no             0.328909134249
+    (23,5) (31,17) (40,40) (13,29)          yes            0.329294462911
+    ======================================  =============  ================
 
-    ====================================  =============  ================
-    roll                                  corner inside  ``sum(T)``
-    ====================================  =============  ================
-    (0,0) (7,11) (1,63) (2,2) (5,5) (17,3)  no           0.328909134249
-    (23,5) (31,17) (40,40) (13,29)          yes          0.329294462911
-    ====================================  =============  ================
+    Two values, nothing between, each class tight to 5e-13 -- which is the tell, because a
+    sample-phase offset gives a spread and not two classes. Orienting the indicator by area
+    instead collapses all ten to 4.157e-13.
 
-    Two values, nothing between, each class internally tight to 5e-13. A sample-phase offset
-    would give a spread, not two classes. Replacing the corner rule with the majority phase --
-    a probe, not a proposed fix, since it ties at exactly half fill -- collapses all ten rolls
-    to one value, spread 4.157e-13, the floor the other three constructions sit at. So the
-    indicator is the whole of it on this scene.
+    **The small disc is here because it refutes how this was first described.** The standing
+    account was that `'contour'` is unsafe "where a feature is large compared to the cell". It
+    is not a size problem: a disc of radius 12 in the same 64 cell breaks on exactly one roll
+    of the ten -- (40,40), which moves its centre to within 12 pixels of the corner -- at
+    1.5e-4. Any feature does, given the placement, and a shape written at the origin is an
+    ordinary thing to write.
 
-    **Two earlier hypotheses, both recorded as refused.** The tile ring: `_contour_polylines`
-    folds each loop on its area-mean centre, so a loop's bounding box can overshoot the cell by
-    a full period (0.81 to 1.00 cells on the three scenes here) while `contour_normal_field`
-    lays down exactly one ring -- deriving the ring from that overshoot moves the field by
-    **5e-14**. And the resample phase: `_resample` lays its samples from `pts[0]`, wherever
-    contourpy entered the loop, which a roll moves. That was the standing explanation until
-    2026-08-28 and is why the fix was scoped as a nearest-segment rewrite deleting `_resample`.
-    It is the amplifier, not the cause: an inverted indicator is the *same curve* -- 236 points
-    either way -- reached in a different traversal, and `_resample`'s phase is what turns that
-    into a different field. `'distance'`, `'spectral'` and `'smooth'` read the same indicator
-    and do not notice, because an inversion flips their field globally and NVF consumes only
-    `n n^T`.
+    **Three refuted explanations**, kept because each is what the next person would try.
 
-    Two further probes, both refused, because each is the obvious thing to try next:
+    * *the tile ring.* `_contour_polylines` folds each loop on its area-mean centre, so a
+      loop's bounding box can overshoot the cell by a full period (0.81 to 1.00 cells on these
+      scenes) while `contour_normal_field` lays down exactly one ring. Deriving the ring from
+      that overshoot moves the field by **5e-14**.
+    * *the resample phase.* `_resample` lays its samples from `pts[0]`, wherever contourpy
+      entered the loop, which a roll moves. This was the shipped explanation until 2026-08-28,
+      and it scoped the fix as a nearest-segment rewrite deleting `_resample`. It is the
+      amplifier, not the cause: an inverted indicator is the *same curve*, 236 points either
+      way, reached in a different traversal. Canonicalizing the traversal directly was tried
+      and is worse -- shoelace direction alone leaves 4.5e-4 and still two classes, and adding
+      a lexicographic entry vertex gives 1.5e-3 across ten distinct values, because the entry
+      is itself unstable.
+    * *the fold's `np.round` half-way tie.* Real -- `np.round(0.5)` is 0, so the centred disc
+      keeps two loop representatives where every offset roll keeps one -- and harmless: those
+      two agree to 4.7e-13, because the 3x3 tiling regenerates the copies anyway.
 
-    * forcing every closed loop counter-clockwise by its shoelace sign does **not** fix it
-      (4.543e-4, still exactly two classes). Reversing the point order moves the entry point
-      too, so it canonicalizes the wrong thing.
-    * the fold's `np.round` half-way tie is real and is **not** what this is.
-      `_contour_polylines` folds on `np.round(centre / n)`, and `np.round(0.5)` is 0, so the
-      centred disc keeps *two* representatives at (-32,+32) and (-32,-32) where every offset
-      roll keeps one. Harmless: roll (0,0) with two and roll (7,11) with one agree to 4.7e-13,
-      because the 3x3 tiling regenerates the copies either way.
-
-    Until then `'spectral'` is the honest recommendation wherever a feature is large compared
-    to the cell, and on a skewed cell.
+    What the fix picks between are two readings that converge, so it is a choice and not a
+    correction: the same disc at 64 / 128 / 256 samples a side has its branches 3.85e-4,
+    2.51e-5 and 6.73e-7 apart. At exactly half fill the area rule ties and the corner rule
+    stands, which a 50/50 stripe shows is harmless (1.144e-14 across these rolls, before and
+    after alike). Making the tie flip instead -- `>=` for `>` -- is a mutant this test does
+    not kill, and deliberately so: at half fill both readings give the same curve and the
+    same traversal, so nothing downstream can see which was taken. The two that matter do
+    die -- restoring the corner rule, and marking the larger phase instead of the smaller.
     """
     import wavebit
 
     n = 64
     ax = np.arange(n)
     X, Y = np.meshgrid(ax, ax)
-    disc = np.where(((X - 32) ** 2 + (Y - 32) ** 2) <= 30 ** 2, 12.25, 1.0)
     cfg = dict(backend=0, thickness=[0.3], truncation_order=(6, 6), top=1.0, bot=1.0,
                wavelength=0.94, psi=np.pi / 2, theta=0.1, phi=0.2, factorization='nvf',
                period=[1.0, 1.0], normal_method='contour')
 
-    def total(roll):
-        cell = np.roll(np.roll(disc, roll[0], axis=0), roll[1], axis=1)
-        return float(np.sum(np.asarray(wavebit.rcwa(structure=cell[None], **cfg).solve().T)))
+    def spread(cell, rolls):
+        got = [float(np.sum(np.asarray(wavebit.rcwa(
+            structure=np.roll(np.roll(cell, r[0], axis=0), r[1], axis=1)[None],
+            **cfg).solve().T))) for r in rolls]
+        return max(got) - min(got), got
 
-    got = [total(r) for r in ((0, 0), (7, 11), (23, 5))]
-    assert max(got) - min(got) < 1e-9, got
+    # Six rolls whose corner falls outside and four whose corner falls inside -- the partition
+    # the defect produced. It is not enough to roll *somewhere*: eight of these ten agree with
+    # each other even with the defect in place.
+    rolls = ((0, 0), (7, 11), (23, 5), (31, 17), (1, 63), (2, 2), (40, 40), (5, 5),
+             (13, 29), (17, 3))
+    inside = {(23, 5), (31, 17), (40, 40), (13, 29)}
+
+    from wavebit._core.normal_methods import _two_phase_indicator
+    big = np.where(((X - 32) ** 2 + (Y - 32) ** 2) <= 30 ** 2, 12.25, 1.0)
+
+    # Which phase gets marked is a convention, and it is the *smaller* one -- asserted because
+    # marking the larger is equally periodic and so passes everything below, while moving every
+    # `'contour'` number on a raster whose feature covers more than half the cell.
+    assert _two_phase_indicator(big).mean() == pytest.approx(1.0 - 0.6887, abs=1e-3)
+
+    # The corner rule really did invert on exactly those four, and the area rule does not.
+    for r in rolls:
+        rolled = np.roll(np.roll(big, r[0], axis=0), r[1], axis=1)
+        assert bool(rolled.flat[0] > 1.5) == (r in inside), r
+        moved = np.abs(_two_phase_indicator(rolled)
+                       - np.roll(np.roll(_two_phase_indicator(big), r[0], axis=0),
+                                 r[1], axis=1)).max()
+        assert moved < 1e-12, f'roll {r}: indicator moved by {moved}'
+
+    moved, got = spread(big, rolls)
+    assert moved < 1e-9, f'disc r=30: sum(T) moved by {moved:.2e} across rolls -- {got}'
+
+    # A feature far too small for the "large compared to the cell" story. Only (40,40) reaches
+    # the corner, so a test rolling anywhere else would pass with the defect in place.
+    small = np.where(((X - 32) ** 2 + (Y - 32) ** 2) <= 12 ** 2, 12.25, 1.0)
+    moved, got = spread(small, ((0, 0), (40, 40)))
+    assert moved < 1e-9, f'disc r=12: sum(T) moved by {moved:.2e} across rolls -- {got}'
+
+    # Exactly half fill: the area rule ties, the corner rule stands, and it does not matter.
+    stripe = np.where(X < 32, 12.25, 1.0)
+    moved, got = spread(stripe, rolls)
+    assert moved < 1e-9, f'50/50 stripe: sum(T) moved by {moved:.2e} across rolls -- {got}'

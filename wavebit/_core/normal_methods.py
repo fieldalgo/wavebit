@@ -43,8 +43,9 @@ Shared conventions, stated once:
   (:func:`_separable` is the switch). Until 2026-08-21 all three refused a skewed basis and
   ``'distance'`` — the least accurate of the four — was the only field an oblique cell
   could have.
-- **Only values-through-geometry are read.** The indicators are corner-canonical
-  (:func:`_two_phase_indicator`), so relabeling the two phases moves nothing, and a
+- **Only values-through-geometry are read.** The indicators mark the smaller phase, found
+  from the corner (:func:`_two_phase_indicator`), so relabeling the two phases moves
+  nothing and neither does translating the raster, and a
   raster with 3+ distinct values — including the continuous/grayscale densities of a
   mid-run topology optimization — delegates to ``'distance'``: a value-built source
   field would break the geometry-only contract the frozen-record staleness tell relies
@@ -295,17 +296,49 @@ def _constant_along_x(shape):
 
 
 def _two_phase_indicator(eps):
-    """Not-the-corner-phase indicator of a two-phase raster — canonical in the REGION.
+    """Minority-phase indicator of a two-phase raster — canonical in the REGION, and periodic.
 
-    The background is whatever phase occupies the corner pixel, not ``np.unique(eps)[0]``:
-    swapping the two material values exchanges which value ``unique`` sorts first and
-    inverts a value-sorted indicator, but it leaves the corner's *region* where it was —
-    so this indicator is invariant under relabeling the phases, which is what keeps the
-    whole construction a function of the geometry alone (the contract
-    :func:`~wavebit._core.factorization.normal_vector_field` states, and the frozen-record
-    staleness tell relies on).
+    Which phase is *marked* is read from the corner pixel and then oriented by area, and both
+    halves are load-bearing.
+
+    **The corner, not** ``np.unique(eps)[0]``: swapping the two material values exchanges which
+    value ``unique`` sorts first and inverts a value-sorted indicator, but it leaves the
+    corner's *region* where it was — so this indicator is invariant under relabeling the
+    phases, which is what keeps the whole construction a function of the geometry alone (the
+    contract :func:`~wavebit._core.factorization.normal_vector_field` states, and the
+    frozen-record staleness tell relies on).
+
+    **Then the smaller area**, since 2026-08-29, because the corner alone is not invariant
+    under a *translation*. A raster rolled is the same structure written from a different
+    corner, and a roll can put that corner inside the feature — at which point the corner rule
+    inverts the indicator wholesale. Three of the four constructions never noticed: an
+    inversion flips their field globally and NVF consumes only ``n n^T``. ``'contour'`` did.
+    The 0.5 level set of a field and of its complement is the same curve, but contourpy
+    traverses it the other way, which moves ``_resample``'s phase and so the whole sampled
+    field. Measured on the pinned disc (radius 30 in a 64 cell), ten rolls came back as
+    *exactly two* values — 0.328909134249 for the six whose corner lands outside and
+    0.329294462911 for the four whose corner lands inside, each class tight to 5e-13, nothing
+    in between. Orienting by area collapses all ten to 4.157e-13.
+
+    It is not a large-feature problem, which is how it was first described: a disc of radius
+    12 in the same cell breaks on exactly the one roll of ten that moves its centre within 12
+    pixels of the corner. Any feature does, given the placement.
+
+    The two readings converge, so this picks between them rather than correcting one: the same
+    disc at 64 / 128 / 256 samples a side has the branches 3.85e-4, 2.51e-5 and 6.73e-7 apart.
+    What moves is ``'contour'`` on a raster whose feature covers more than half the cell, which
+    is where the orientation now differs from the corner's; the other three constructions are
+    bit-identical (0.00e+00 on both discs tried), as is ``'contour'`` below half.
+
+    **The tie is left on the corner rule.** At exactly half fill neither phase is the smaller,
+    and no translation-invariant tiebreak is available — a 50/50 split that no such function
+    can separate is one whose two phases are exchanged by a symmetry. Measured on the case
+    that provokes it, a 50/50 stripe: 1.144e-14 across the same ten rolls, before and after
+    alike. The exchange there is a half-period translation, so both readings give the same
+    curve and the same traversal.
     """
-    return (eps != eps.flat[0]).astype(float)
+    indicator = (eps != eps.flat[0]).astype(float)
+    return 1.0 - indicator if indicator.mean() > 0.5 else indicator
 
 
 # ==================================================================== 'contour'
