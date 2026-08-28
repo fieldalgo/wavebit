@@ -189,6 +189,24 @@ def _shape_name(shapes, i):
     return f"{i} ({shapes[i].get('type', 'rectangle')})"
 
 
+def _length_keys_of(shape):
+    """What to *call* a shape's two half-widths when refusing one of them.
+
+    It mirrors :func:`shape_geometry`'s own fallback, so the message quotes back the key that
+    actually supplied the value: a dict saying ``l=-150`` is told about ``l``, not about an
+    ``ly`` it never wrote, and ``lx=120, l=-150`` is told about ``l`` for the second one.
+
+    A round type needs no case of its own. :func:`shape_geometry` sets its second length from
+    its first, so the two half-widths are equal and the first is always what raises -- an
+    ``ly`` a ``circle`` does not take (and that :func:`check_shape_spec` refuses as a *key*)
+    can never be named. A branch for it was written first and deleted: nothing could reach it,
+    which a mutation showed by surviving its removal.
+    """
+    first = 'lx' if 'lx' in shape else ('l' if 'l' in shape else 'lx')
+    second = 'ly' if 'ly' in shape else ('l' if 'l' in shape else 'ly')
+    return (first, second)
+
+
 def _across(ox, oy):
     """Which period boundary a periodic image sits over, as a phrase or ``''`` for none."""
     axes = [name for name, off in (('x', ox), ('y', oy)) if off]
@@ -297,10 +315,34 @@ def check_layer_shapes(layer, lattice, layer_index=0):
     closer to the mistake — not inside :func:`_primitives`, whose ``except Exception`` would
     catch the refusal and answer it by silently building without that shape.
 
+    A **non-positive length** is refused first, and separately, because it is not a smaller
+    shape -- it is a subtracted one. :func:`shape_ft` carries the sign straight through to the
+    ``G = 0`` coefficient, which is the fraction of the cell the shape claims: ``lx = +120`` on
+    a 300 period gives ``+0.200000`` and ``lx = -120`` gives ``-0.200000``, so the shape takes
+    its contrast *out* of the background instead of putting it in. A 120 x 150 rod of eps 4 on
+    eps 1 comes back as eps 0.4 rather than 4, ``sum(T)`` 0.444002054 against 0.980652726, and
+    at ``lx = -340`` the average permittivity is **negative** -- a metal, out of a spec that
+    named two dielectrics. Every backend agrees on it, and nothing downstream can notice.
+
+    It also silently disabled the two refusals below, which is why it is checked before them:
+    :func:`~wavebit._core.overlap.primitive` stores ``lx / 2`` as a half-width, so a negative
+    length is a negative projection radius and the separating-axis test finds every image
+    clear -- ``overlapping_pairs`` returns ``[]`` for a rod of ``lx = -340`` on a 300 period,
+    exactly as it does for one that fits. ``lx = +340`` is refused; ``lx = -340`` was built,
+    and answered 0.047049717.
+
+    An optimiser reaches this by the most ordinary move it has -- shrinking a feature. There is
+    no cliff at zero to stop it: ``T`` is even to second order there (0.999998510 at +0.5
+    against 0.999998461 at -0.5, the derivative merely changing sign), so a descent slides
+    through and starts growing anti-material on the far side. Zero itself goes with it: a
+    rectangle of ``lx = 0`` is a shape that is not there, and an ``ellipse`` of ``lx = 0``
+    raises ``LinAlgError`` from inside the solve with nothing said about the geometry. An
+    omitted length is the same case, since :func:`shape_geometry` defaults it to ``0.0``.
+
     **Neither builder here reads a shape's periodic images.** The closed form sums each shape's
     own transform; :func:`~wavebit._core.boundary.resolve_painting` clips loops in unwrapped
-    Cartesian coordinates and enumerates no images either. So two things are refused, and they
-    are one fact wearing two faces:
+    Cartesian coordinates and enumerates no images either. So two more things are refused, and
+    they are one fact wearing two faces:
 
     * a shape **larger than the period**, which runs into its own image. Its transform is a
       single sinc, which is not the transform of any periodic indicator. Measured on the
@@ -341,6 +383,30 @@ def check_layer_shapes(layer, lattice, layer_index=0):
         return
     if prims is None:
         return
+
+    # Before the sweep, not after -- not because the message would differ (a negative
+    # half-width makes the sweep find nothing, so the length is reported either way; moving
+    # this loop below changes no test), but because the sweep cannot answer over one. It reads
+    # half-widths as projection radii, so `overlapping_pairs` on a rod of `lx = -340` on a 300
+    # period returns `[]`, the same as for a rod that fits. Asking first means it is never
+    # asked a question it has no way to answer.
+    for i, prim in enumerate(prims):
+        for half_width, key in zip(prim[3:5], _length_keys_of(shapes[i])):
+            if half_width > 0.0:
+                continue
+            raise ValueError(
+                f'Analytic layer {layer_index}: shape {_shape_name(shapes, i)} has '
+                f'{key} = {2.0 * half_width:g}. A length here is a size, and the transform '
+                f'carries its sign: the shape\'s coefficient at G = 0 is the fraction of the '
+                f'cell it claims, so a negative length *subtracts* the shape\'s contrast from '
+                f'the background instead of adding it. A 120 x 150 rod of eps 4 on eps 1 comes '
+                f'back as eps 0.4, and a long enough one as a negative permittivity -- which '
+                f'solves, conserves energy, and is not a structure anything asked for. Zero is '
+                f'refused with it: it is a shape that is not there, and on a round type it '
+                f'reaches the solve as a division by zero.\n'
+                f'  Give it a positive size. If an optimiser walked it through zero, bound the '
+                f'parameter or optimise a quantity that cannot go negative -- there is no '
+                f'cliff at zero to stop a descent on its own.')
 
     # `OVERLAP_TOL_REL * max(Px, Py)` is a tolerance *scale*, not geometry: it says how much
     # interpenetration counts, in units of the cell's own size. It keeps *touching* out --

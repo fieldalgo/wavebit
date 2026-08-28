@@ -1639,3 +1639,93 @@ def test_longer_than_the_period_is_not_the_same_as_running_into_its_own_image():
     for ang in (0.0, 0.3, np.pi / 4):
         with pytest.raises(ValueError, match='larger than the period'):
             wavebit.rcwa(structure=rod(277.0, ang), **cfg).solve()
+
+
+def test_a_length_is_a_size_and_the_transform_carries_its_sign():
+    """A negative length does not make a smaller shape. It makes a subtracted one.
+
+    ``shape_ft`` at ``G = 0`` is the fraction of the cell the shape claims, and the sign rides
+    straight through it, so the shape takes its contrast *out* of the background:
+
+    ======  ==================  ==========================
+    ``lx``  coefficient at G=0  what the layer then is
+    ======  ==================  ==========================
+    +120    +0.200000           eps 4 in 20% of the cell
+    -120    -0.200000           eps 0.4 -- 1 + 3*(-0.2)
+    -340    -0.566667           eps -0.7, a *metal*
+    ======  ==================  ==========================
+
+    None of it was refused. ``sum(T)`` came back 0.444002054 against the 0.980652726 of the rod
+    the dict names, identically on all three backends, with energy conserved and nothing said.
+
+    It also disabled the two refusals next door, which is why this runs before them:
+    ``overlap.primitive`` stores ``lx / 2`` as a half-width, so a negative length is a negative
+    projection radius and the separating-axis test finds every image clear. ``lx = +340`` on a
+    300 period is refused as larger than the period; ``lx = -340`` was built, and answered
+    0.047049717 -- ``overlapping_pairs`` returns ``[]`` over it, exactly as it does for a rod
+    that fits, so the length is reported and the period check is never asked a question it has
+    no way to answer.
+
+    An optimiser reaches this by the most ordinary move it has, shrinking a feature, and there
+    is no cliff at zero to stop it: ``T`` is even to second order there (0.999998510 at +0.5
+    against 0.999998461 at -0.5, only the derivative changing sign). Zero is refused with the
+    negatives -- a rectangle of ``lx = 0`` is a shape that is not there, an ``ellipse`` of
+    ``lx = 0`` reaches ``LinAlgError`` from inside the solve with nothing said about the
+    geometry, and an *omitted* length is the same case, since ``shape_geometry`` defaults it
+    to 0.0.
+    """
+    from wavebit._core.analytic import shape_ft
+    lattice = np.array([[300.0, 0.0], [0.0, 300.0]])
+    zero = np.array([[0.0]])
+    claimed = lambda lx: float(np.asarray(shape_ft(
+        np, dict(type='rectangle', cx=150.0, cy=150.0, lx=lx, ly=150.0, angle=0.0,
+                 material=4.0), zero, zero, lattice)).ravel()[0].real)
+    assert claimed(120.0) == pytest.approx(+0.2, abs=1e-12)
+    assert claimed(-120.0) == pytest.approx(-0.2, abs=1e-12)   # the sign is not dropped
+
+    cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=(6, 6), top=1.0,
+               bot=1.0, wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0)
+    rod = lambda **kw: [dict(background=1.0, shapes=[
+        dict(dict(type='rectangle', cx=150.0, cy=150.0, lx=120.0, ly=150.0, material=4.0),
+             **kw)])]
+
+    for backend in (0, 1, 2):
+        with pytest.raises(ValueError, match=r'has lx = -120'):
+            wavebit.rcwa(backend=backend, structure=rod(lx=-120.0), **cfg).solve()
+
+    for kw, spelled in ((dict(lx=-120.0), 'lx'), (dict(ly=-150.0), 'ly'),
+                        (dict(lx=0.0), 'lx'), (dict(type='ellipse', lx=-120.0), 'lx')):
+        with pytest.raises(ValueError, match=rf'has {spelled} = '):
+            wavebit.rcwa(backend=0, structure=rod(**kw), **cfg).solve()
+
+    # The name in the message is the key that actually supplied the value, following
+    # `shape_geometry`'s own fallback -- a dict saying `l` is never told about an `ly` it did
+    # not write. On a round type that is also what keeps an `ly` a circle does not take out of
+    # the message, without a branch for it: its two lengths are equal, so the first one raises.
+    for kw, spelled in ((dict(lx=-120.0), 'lx'), (dict(l=-120.0), 'l')):
+        layer = [dict(background=1.0, shapes=[dict(type='circle', cx=150.0, cy=150.0,
+                                                   material=4.0, **kw)])]
+        with pytest.raises(ValueError, match=rf'\(circle\) has {spelled} = -120'):
+            wavebit.rcwa(backend=0, structure=layer, **cfg).solve()
+    both = [dict(background=1.0, shapes=[dict(type='rectangle', cx=150.0, cy=150.0,
+                                             lx=120.0, l=-150.0, material=4.0)])]
+    with pytest.raises(ValueError, match='has l = -150'):     # `lx` given, `ly` fell back to `l`
+        wavebit.rcwa(backend=0, structure=both, **cfg).solve()
+
+    # An omitted length defaults to 0.0 -- the same case, and previously a silent empty layer.
+    missing = [dict(background=1.0, shapes=[dict(type='rectangle', cx=150.0, cy=150.0,
+                                                 material=4.0)])]
+    with pytest.raises(ValueError, match='has lx = 0'):
+        wavebit.rcwa(backend=0, structure=missing, **cfg).solve()
+
+    # The ordering: -340 is longer than the period *and* negative, and it is the length that
+    # gets reported, because a negative half-width is what let it past the period check.
+    with pytest.raises(ValueError, match='has lx = -340'):
+        wavebit.rcwa(backend=0, structure=rod(lx=-340.0), **cfg).solve()
+    with pytest.raises(ValueError, match='larger than the period'):
+        wavebit.rcwa(backend=0, structure=rod(lx=340.0), **cfg).solve()
+
+    # And nothing legal moved: a rod exactly filling the period still touches, not overlaps.
+    assert float(np.sum(np.asarray(wavebit.rcwa(
+        backend=0, structure=rod(lx=300.0), **cfg).solve().T)).real) == pytest.approx(
+            0.957157644, abs=1e-7)

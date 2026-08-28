@@ -322,6 +322,53 @@ keep passing.
 
 ---
 
+## A length is a size, and the transform carries its sign
+
+`check_layer_shapes` refuses a length that is not positive, before it looks at anything else.
+
+A negative `lx` does not make a smaller shape. It makes a *subtracted* one. `shape_ft`'s
+coefficient at `G = 0` is the fraction of the cell the shape claims, and the sign rides straight
+through it:
+
+| `lx` on a 300 period | coefficient at `G = 0` | what the layer then is |
+|---|---|---|
+| +120 | +0.200000 | `eps` 4 in 20% of the cell |
+| -120 | **-0.200000** | `eps` 0.4 — the background *minus* the contrast |
+| -340 | -0.566667 | `eps` -0.7, a **metal**, out of a spec naming two dielectrics |
+
+None of it was refused before 2026-08-28. A 120x150 rod of `eps` 4 on `eps` 1 came back with
+`sum(T)` 0.444002054 against the 0.980652726 of the rod the dict names — identically on NumPy,
+JAX and PyTorch, energy conserved, nothing said.
+
+**It also disabled the refusal below.** `overlap.primitive` stores `lx / 2` as a half-width, so
+a negative length is a negative projection radius and every separating-axis test comes back
+clear: `overlapping_pairs` returns `[]` over a rod of `lx = -340` exactly as it does for one
+that fits. `lx = +340` is refused as larger than the period; `lx = -340` was built, and answered
+0.047049717. That is why the sign is checked first — not because the message would otherwise
+differ (it would not; the period check simply finds nothing), but so that check is never asked a
+question it has no way to answer.
+
+**An optimiser reaches it by the most ordinary move it has** — shrinking a feature. There is no
+cliff at zero to stop a descent: `T` is even there to second order (0.999998510 at `lx = +0.5`
+against 0.999998461 at `-0.5`, only the derivative changing sign), so the walk continues and
+starts growing anti-material on the far side.
+
+Zero goes with the negatives. A `rectangle` of `lx = 0` is a shape that is not there — a layer
+that builds, as a uniform slab of the background, which is the same argument `check_layer_spec`
+makes one level up about an unread layer key. An `ellipse` of `lx = 0` reaches `LinAlgError`
+from inside the solve with nothing said about the geometry. And an *omitted* length is the same case, since
+`shape_geometry` defaults it to `0.0`.
+
+The message names the key that actually supplied the value, following `shape_geometry`'s own
+fallback: a dict saying `l` is told about `l`, never about an `ly` it did not write. That is
+also what keeps an `ly` off a `circle`, which does not take one — its two lengths are equal, so
+the first is always what raises.
+
+Under `jax.jit` this is unchecked, like every other value check on this path — a jit tracer
+carries no number to read. Five of the six doors are closed (NumPy, JAX eager, `jax.grad`,
+`freeze_geometry`, and both PyTorch modes); the sixth is the standing trace limitation recorded
+in [`boundary-modeling.md`](boundary-modeling.md) and [`backend-choice.md`](backend-choice.md).
+
 ## Overlapping shapes
 
 This module **sums** its shapes, so an overlap would get both contributions and be neither
