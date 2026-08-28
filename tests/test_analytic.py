@@ -1580,3 +1580,61 @@ def test_the_projector_cache_keys_on_what_the_field_depends_on(name, make, entri
 
     assert len(_an._PROJECTOR_CACHE) == entries, (name, len(_an._PROJECTOR_CACHE))
     assert len(set(totals)) == 5, totals
+
+
+def test_longer_than_the_period_is_not_the_same_as_running_into_its_own_image():
+    """The refusal is on the geometry, not on a length, and a tilted rod is why that matters.
+
+    A 1.2-long rod on a period of 1.0 is longer than the cell, and at 45 degrees its periodic
+    images **do not touch it**: it shears past its own copies, separated along its own short
+    axis. Measured on a raster carrying every image, the covered fraction is 0.359280 against
+    the 0.360000 one rod occupies -- i.e. the union is the disjoint sum, so the closed form's
+    summing *is* the structure and there is nothing to refuse.
+
+    ======  ======================  ==============
+    angle   images intersect?       built?
+    ======  ======================  ==============
+    0.000   yes (gap -0.200000)     refused
+    0.300   yes (gap -0.004480)     refused
+    0.500   no  (gap +0.179426)     built
+    0.785   no  (gap +0.407107)     built
+    ======  ======================  ==============
+
+    The crossing is at ``asin(2*b/P)`` -- 0.3047 rad here -- where the offset to the (1,0)
+    image clears the rod's own width. That is the separating-axis answer, and it is *not* the
+    axis-aligned one: a bounding box says "1.2 > 1.0, refuse" at every angle. Reasoning that
+    way is the mistake ``test_detection_follows_the_shapes_and_not_their_bounding_boxes``
+    exists to prevent, and it was made again in 2026-08-28 review -- reported as a hole that
+    let a tilted rod escape, on no evidence but the length. There is no hole: the same rod at
+    ``lx = 277`` is refused at every angle, because *then* the images really do meet.
+
+    Pinned because the wrong fix is easy and looks tidy: a length check against the period
+    would refuse a legal structure at every angle above 0.3047, and nothing else in the suite
+    would notice.
+    """
+    from wavebit._core.overlap import primitive, signed_gap
+
+    P = 1.0
+    cfg = dict(backend=0, period=[P, P], thickness=[0.3], truncation_order=(6, 6), top=1.0,
+               bot=1.0, wavelength=0.94, psi=np.pi / 2, theta=0.0, phi=0.0, normal_grid=256)
+    rod = lambda lx, ang: [dict(background=1.0, shapes=[
+        dict(type='rectangle', cx=0.5, cy=0.5, lx=lx, ly=0.30, angle=ang, material=4.0)])]
+
+    # the gap to its own (1, 0) image decides, and it changes sign with the angle
+    gap = lambda ang: signed_gap(primitive('rectangle', 0.5, 0.5, 1.2, 0.30, ang),
+                                 primitive('rectangle', 0.5 + P, 0.5, 1.2, 0.30, ang))
+    assert gap(0.0) < 0 and gap(0.3) < 0
+    assert gap(0.5) > 0 and gap(np.pi / 4) > 0
+
+    for ang in (0.0, 0.3):
+        with pytest.raises(ValueError, match='larger than the period'):
+            wavebit.rcwa(structure=rod(1.2, ang), **cfg).solve()
+
+    for ang in (0.5, np.pi / 4):
+        assert 0.0 < float(np.sum(np.asarray(
+            wavebit.rcwa(structure=rod(1.2, ang), **cfg).solve().T)).real) < 1.0
+
+    # long enough and the images meet whatever the angle, which is the other end of the same rule
+    for ang in (0.0, 0.3, np.pi / 4):
+        with pytest.raises(ValueError, match='larger than the period'):
+            wavebit.rcwa(structure=rod(277.0, ang), **cfg).solve()
