@@ -1587,8 +1587,9 @@ def test_longer_than_the_period_is_not_the_same_as_running_into_its_own_image():
 
     A 1.2-long rod on a period of 1.0 is longer than the cell, and at 45 degrees its periodic
     images **do not touch it**: it shears past its own copies, separated along its own short
-    axis. Measured on a raster carrying every image, the covered fraction is 0.359280 against
-    the 0.360000 one rod occupies -- i.e. the union is the disjoint sum, so the closed form's
+    axis. Measured on a raster carrying every image, the covered fraction converges to the
+    0.360000 one rod occupies (0.359994 at 12000 samples a side; the last digits are the
+    raster's, not the geometry's) -- i.e. the union is the disjoint sum, so the closed form's
     summing *is* the structure and there is nothing to refuse.
 
     ======  ======================  ==============
