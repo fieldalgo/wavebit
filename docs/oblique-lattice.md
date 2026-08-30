@@ -353,18 +353,26 @@ also wrong — a raster whose pixels are not square in real space; see
 
 ## Which `normal_method` to use, and what the default costs here
 
-> **Fixed 2026-08-29; it stood from 2026-08-17 and is worth knowing about.** `'contour'` was
-> the one raster construction that was **not periodic**: rolling a raster -- the same structure
+> **Still open on a skewed cell -- and this is the cell it is worst on.** `'contour'` is the
+> one raster construction that is **not fully periodic**: rolling a raster -- the same structure
 > written from a different corner, which every answer must be invariant under -- moved `sum(T)`
 > by 3.9e-4 on a square cell and 9.7e-4 on a 2:1 cell, where `'distance'`, `'spectral'` and
 > `'smooth'` held at 4e-14. The cause was `_two_phase_indicator` reading the background off the
 > *corner pixel*, which a translation can move inside the feature; it marks the smaller phase
-> now. It was **not** `_resample`'s phase, which is what this caveat said until today, and it
-> was not a large-feature problem either -- see
-> [`nvf-normal-methods.md`](nvf-normal-methods.md) for the measurements and the two other
-> refuted explanations. Pinned by
-> `tests/test_nvf_lattice_translation.py::test_contour_is_periodic_under_a_roll_that_lands_on_the_corner`.
-> The accuracy tables below were taken on interior features, where none of it fired, and stand.
+> now. It was **not** `_resample`'s phase, which is what this caveat said until then, and it
+> was not a large-feature problem either.
+>
+> **That fix does not reach a skewed cell.** A disc of radius 30 in a 64-px hex cell still
+> moves by 2.3e-4 over ten rolls (from 3.0e-4), where `'spectral'`, `'distance'` and
+> `'smooth'` hold at 1e-13. The disagreement sits on 1 to 18 pixels at radius 35-42 -- outside
+> the disc, in the deep gaps between its periodic images, which is the **medial axis** of the
+> tiling, where the normal is genuinely undefined. On an annulus it is one pixel, at the centre
+> of the hole. See [`nvf-normal-methods.md`](nvf-normal-methods.md) for the table and the
+> refuted explanations; pinned by
+> `tests/test_nvf_lattice_translation.py::test_contour_is_periodic_under_a_roll_that_lands_on_the_corner`
+> and its strict-xfail sibling. **On a skewed cell prefer `'spectral'` if a translation must
+> not move your answer.** The accuracy tables below were taken on interior features, where none
+> of it fired, and stand.
 
 **Use `normal_method='contour'`.** The paragraph above describes the *default* construction,
 `'distance'`, and it is the least accurate of the four the raster path offers. A skew makes it

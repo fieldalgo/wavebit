@@ -3,8 +3,8 @@
 Written: 2026-08-17. Measured 2026-08-16/17 on CPU, NumPy backend, float64.
 
 
-> **A defect that stood from 2026-08-17 to 2026-08-29, worth reading before trusting a
-> covariance claim in this file.** `'contour'` was the one raster construction that was **not
+> **Partly fixed 2026-08-29, and still open. Read this before trusting a covariance claim in
+> this file.** `'contour'` is the one raster construction that is **not fully
 > periodic**: rolling a raster -- the same structure written from a different corner, which
 > every answer must be invariant under -- moved `sum(T)` by 3.9e-4 on a square cell and 9.7e-4
 > on a 2:1 cell, where `'distance'`, `'spectral'` and `'smooth'` held at 4e-14.
@@ -34,6 +34,32 @@ Written: 2026-08-17. Measured 2026-08-16/17 on CPU, NumPy backend, float64.
 >   so it reported XFAIL forever and could not have said the defect was gone. The strict marker
 >   that replaced it earned itself immediately: it reported `XPASS(strict)` the moment the
 >   indicator was fixed.
+>
+> **What is left, measured the same day.** Fixing the indicator fully fixes a *single* loop on
+> an orthogonal cell (4.2e-13 over ten rolls, from 3.9e-4). It does not fix everything:
+>
+> | scene | after | before |
+> |---|---|---|
+> | disc, square cell | 4.2e-13 | 3.9e-4 |
+> | disc, `[1,2]` and `[2,1]` cells | 1.2e-13 / 8.3e-14 | -- |
+> | **annulus, square cell** | **1.2e-5** | 7.5e-5 |
+> | **disc, hex cell** | **2.3e-4** | 3.0e-4 |
+> | annulus, hex cell | 2.2e-3 | 2.2e-3 |
+>
+> `'spectral'`, `'distance'` and `'smooth'` are at 1e-13 on every one of those.
+>
+> The residual is a different animal, and it is not a tie-break rule that can fix it. Comparing
+> the *fields* pixel by pixel: the annulus disagrees on **one pixel**, at the exact centre of
+> its hole; the hex disc on 1 to 18 pixels, all at radius 35-42 where the curve is at 30 --
+> outside the shape, in the deep gaps between its periodic images. Both sets are the **medial
+> axis**, where the nearest boundary point is equidistant in every direction and the normal is
+> genuinely undefined. Whichever segment wins that tie is an accident of sampling, and a roll
+> changes the accident. This is the same wall a nearest-segment rewrite hits: a prototype of
+> one differs from the shipped construction on exactly 8 pixels, all within 4.2 px of a disc's
+> centre, and is *less* periodic overall (2.8e-3).
+>
+> So this is the raster twin of the exact-tangency singularity in the analytic path: a normal
+> field asked for a direction at a place geometry does not define one.
 >
 > The accuracy tables below were taken on interior features, where none of this fired, and
 > stand unchanged.
@@ -326,8 +352,10 @@ Pinned by [`tests/test_nvf_lattice_translation.py`](../tests/test_nvf_lattice_tr
 which parametrizes three placements deliberately (a partial fix passes some). `'contour'` was
 carried there as a strict xfail twice -- until the aperture fix above promoted it, and
 again from 2026-08-28 to 2026-08-29 for the indicator defect in the caveat at the top of
-this file, which no amount of contour work was going to reach. All four constructions are
-covariant now and the file has no xfail left. Rolling *somewhere* does not test it: eight
+this file, which no amount of contour work was going to reach. Three constructions are
+covariant; `'contour'` is covariant for a single loop on an orthogonal cell and carries a
+strict xfail for the medial-axis residual on a holed shape and on a skewed cell. Rolling
+*somewhere* does not test any of it: eight
 of the ten rolls in `test_contour_is_periodic_under_a_roll_that_lands_on_the_corner` agreed
 with each other even with the defect in place, and the small-disc case turns on exactly one
 of the ten. The sibling defect in the *analytic* path was

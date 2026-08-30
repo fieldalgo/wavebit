@@ -218,6 +218,16 @@ def test_the_defect_did_not_converge_with_max_order_which_is_why_it_was_a_defect
         assert moved < 1e-12, f'truncation_order={truncation_order}: R moved by {moved:.2e}'
 
 
+def _disc(X, Y, r=30.0):
+    return np.where(((X - 32) ** 2 + (Y - 32) ** 2) <= r ** 2, 12.25, 1.0)
+
+
+def _annulus(X, Y, r_out=30.0, r_in=14.0):
+    cell = _disc(X, Y, r_out)
+    cell[((X - 32) ** 2 + (Y - 32) ** 2) <= r_in ** 2] = 1.0
+    return cell
+
+
 def test_contour_is_periodic_under_a_roll_that_lands_on_the_corner():
     """Rolling a raster is the same structure written from a different corner.
 
@@ -329,3 +339,65 @@ def test_contour_is_periodic_under_a_roll_that_lands_on_the_corner():
     stripe = np.where(X < 32, 12.25, 1.0)
     moved, got = spread(stripe, rolls)
     assert moved < 1e-9, f'50/50 stripe: sum(T) moved by {moved:.2e} across rolls -- {got}'
+
+
+@pytest.mark.xfail(strict=True, reason='the medial axis carries no defined normal, and which '
+                                       'segment wins that tie moves with the roll')
+@pytest.mark.parametrize('name,build,lattice', [
+    ('annulus, square cell', _annulus, None),
+    ('disc, hex cell', _disc, np.column_stack(([1.0, 0.0], [0.5, np.sqrt(3) / 2]))),
+])
+def test_contour_is_periodic_where_the_medial_axis_is_reachable(name, build, lattice):
+    """What the 2026-08-29 indicator fix does **not** reach, pinned so it is not claimed away.
+
+    Marking the smaller phase makes `'contour'` exactly periodic for a *single* loop on an
+    orthogonal cell -- 4.2e-13 over the ten rolls below, from 3.9e-4. Two scenes stay broken:
+
+    =========================  ==========  ==========
+    scene                      after       before
+    =========================  ==========  ==========
+    disc, square cell          4.2e-13     3.9e-4
+    disc, [1,2] / [2,1] cells  1.2e-13     --
+    **annulus, square cell**   **1.2e-5**  7.5e-5
+    **disc, hex cell**         **2.3e-4**  3.0e-4
+    annulus, hex cell          2.2e-3      2.2e-3
+    =========================  ==========  ==========
+
+    `'spectral'`, `'distance'` and `'smooth'` sit at 1e-13 on every one of them, which is what
+    makes this `'contour'`'s and not the raster's.
+
+    **It is not another labelling bug, and no tie-break rule fixes it.** Comparing the fields
+    pixel by pixel rather than through `sum(T)` -- which is the only way to see this -- the
+    annulus disagrees on **one pixel**, at the exact centre of its hole; the hex disc on 1 to
+    18 pixels at radius 35 to 42, where the curve is at 30, i.e. *outside* the shape, in the
+    deep gaps between its periodic images. Both sets are the **medial axis**: the nearest
+    boundary is equidistant in every direction, the normal is genuinely undefined, and which
+    segment wins the tie is an accident of where the samples fell. A roll changes the accident.
+
+    A nearest-segment query -- the rewrite this file's docstrings proposed for two weeks --
+    hits the same wall from the other side: a prototype differs from the shipped construction
+    on exactly 8 pixels, all within 4.2 px of a disc's centre, and comes out *less* periodic
+    (2.8e-3, ten distinct values).
+
+    This is the raster twin of the exact-tangency singularity in the analytic path
+    (`analytic._blend`): a normal field asked for a direction where geometry defines none.
+
+    The scene tests above do not catch it, which is worth stating -- their nested ring and
+    their hex cell both pass. What these two add is a feature large enough that its medial axis
+    lands on a *sampled* pixel.
+    """
+    n = 64
+    ax = np.arange(n)
+    X, Y = np.meshgrid(ax, ax)
+    cell = build(X, Y)
+    cfg = dict(backend=0, thickness=[0.3], truncation_order=(6, 6), top=1.0, bot=1.0,
+               wavelength=0.94, psi=np.pi / 2, theta=0.1, phi=0.2, factorization='nvf',
+               normal_method='contour')
+    cfg['lattice' if lattice is not None else 'period'] = (lattice if lattice is not None
+                                                           else [1.0, 1.0])
+    rolls = ((0, 0), (7, 11), (23, 5), (31, 17), (1, 63), (2, 2), (40, 40), (5, 5),
+             (13, 29), (17, 3))
+    got = [float(np.sum(np.asarray(wavebit.rcwa(
+        structure=np.roll(np.roll(cell, r[0], axis=0), r[1], axis=1)[None],
+        **cfg).solve().T))) for r in rolls]
+    assert max(got) - min(got) < 1e-9, f'{name}: sum(T) moved by {max(got) - min(got):.2e}'

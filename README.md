@@ -449,7 +449,7 @@ plausible wrong number: `factorization='li'` on a raster, whose inverse rule fol
 axes, which are `a1` / `a2` once skewed — repairing it is Li's covariant formulation. Everything
 else works, including analytic shapes with painted overlaps and field reconstruction — whose output grid is then indexed by `(v, u)` rather than `(y, x)`.
 
-On a raster, pass `normal_method='contour'`. All four are periodic under a rigid translation of the raster since 2026-08-29; `'contour'` was not until then, by 3.9e-4 in `sum(T)` where the others held at 4e-14, whenever the placement put the cell's corner pixel inside the feature (`docs/nvf-normal-methods.md`). Every `normal_method` carries the cell metric
+On a raster, pass `normal_method='contour'` — with one caveat: it is the only one of the four that is not fully periodic under a rigid translation of the raster, where the other three hold at 1e-13. The largest cause was fixed on 2026-08-29 (a corner-pixel read, 3.9e-4), and what is left is smaller and harder: on a shape with a hole, or on a skewed cell, a handful of pixels *maximally far* from any boundary have no defined normal, and which way they tie moves `sum(T)` by 1e-5 to 2e-3. Prefer `'spectral'` if a translation must not move your answer (`docs/nvf-normal-methods.md`). Every `normal_method` carries the cell metric
 (since 2026-08-21), and the default `'distance'` is the least accurate of the four — a skew
 makes its quantization worse, not better: 18.5 degrees of mean normal error at a 60-degree cell
 against `'contour'`'s 0.42, and 2-4x at the solve.
