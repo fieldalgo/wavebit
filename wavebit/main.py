@@ -56,3 +56,45 @@ def rcwa(backend=0, *args, stack=None, incidence=None, **kwargs):
     else:
         raise ValueError
     return solver
+
+
+def fdtd(stack=None, incidence=None, **kwargs):
+    """Solve the same scene in the time domain; returns a :class:`wavebit._core.result.Result`.
+
+    The point of having this beside :func:`rcwa` is that its errors are different errors --
+    RCWA truncates a Fourier series, FDTD discretises space and time -- so a defect that
+    survives both is unlikely to belong to either method. It reads the same ``Stack`` and
+    ``Incidence``, and it returns the same ``Result``, so the two are compared without a
+    translation layer.
+
+    Unlike :func:`rcwa` this hands back the answer rather than a solver. There is no reusable
+    per-instance state to keep: no eigen-decomposition to cache, no frozen geometry, no
+    gradient to take. A solver object would be a place to put the state this method does not
+    have.
+
+    Its scope is deliberately :func:`~wavebit._core.solve_1d.solve_1d`'s -- pure TE / TM,
+    normal incidence, a raster structure periodic along one axis -- and everything outside
+    that is refused by name. There is no ``backend`` argument; ``wavebit/_core/fdtd.py``'s
+    docstring says why.
+
+    Args:
+        stack: optional typed ``Stack`` supplying ``structure`` / ``thickness`` / ``top`` /
+            ``bot`` / ``period`` (adapts in; do not also pass those keywords).
+        incidence: optional typed ``Incidence`` supplying ``wavelength`` / ``theta`` /
+            ``phi`` / ``tetm`` / ``incidence_side`` (adapts in, same rule).
+        **kwargs: passed to :func:`~wavebit._core.fdtd.solve_fdtd`.
+
+    Returns:
+        Result: the same container an RCWA solve returns.
+    """
+    from ._core.fdtd import solve_fdtd
+    if stack is not None:
+        kwargs = _merge_domain(kwargs, stack.as_kwargs(), 'stack')
+    if incidence is not None:
+        kwargs = _merge_domain(kwargs, incidence.as_kwargs(), 'incidence')
+    # `Incidence.as_kwargs` always names the whole polarization family; the three this
+    # formulation cannot carry are dropped only when they are unset, and refused otherwise.
+    for unset in ('psi', 'chi', 'polarization'):
+        if kwargs.get(unset) is None:
+            kwargs.pop(unset, None)
+    return solve_fdtd(**kwargs)

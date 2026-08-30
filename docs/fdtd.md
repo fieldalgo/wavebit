@@ -1,0 +1,319 @@
+# FDTD — the time-domain solve beside the RCWA one
+
+Landed 2026-08-31. Roadmap item 2: a second method reading the same `Stack` and `Incidence`,
+so that one structure can be solved two ways and the answers compared without a translation
+layer.
+
+Target: `wavebit/_core/fdtd.py` — `solve_fdtd`, `component_property`, `cpml_coefficients`,
+`_refuse_out_of_scope`; `wavebit/main.py` — `fdtd`; `tests/test_fdtd.py`.
+
+**Scope.** Pure TE / TM, normal incidence, a raster structure periodic along one axis —
+deliberately the scope of `wavebit/_core/solve_1d.py`, which this mirrors down to the
+amplitude conventions. Everything outside it is refused by name; §6 lists all eleven refusals
+and why each is a refusal rather than an approximation.
+
+---
+
+## TL;DR
+
+On the benchmark binary grating, at the same 5 nm grid Meep uses, the worst per-order gap
+against the converged RCWA answer is **7.4e-4 (TE) and 6.2e-4 (TM)**, against Meep's 7.4e-4
+and 6.9e-4 — the same number. Refine once more and it reaches 1.8e-4 / 1.9e-4, at a clean
+second order throughout. The two methods agree in the limit, which is the only thing this
+module was built to establish.
+
+What the exercise actually taught, in the order the findings are worth reading:
+
+1. **A dimensional constant in a scale-free solver is a bug with no symptom at the design
+   wavelength.** The PML's frequency shift was written as a bare `0.05`, which is a reciprocal
+   *length*. At 900 nm it happened to sit 7× above the operating frequency and merely cost an
+   order of accuracy; at 7.2 µm, with the identical discretisation, it returned `R + T = 1.22`
+   (§3).
+2. **A wrong absorber looks exactly like a wrong discretisation, and I misdiagnosed it once.**
+   Before the fix the error stopped falling at second order, and I concluded that a PML must be
+   specified as a physical thickness rather than a cell count and wrote that down as a finding.
+   It was not. A correctly graded CPML *is* dz-independent — 2.06e-6 → 1.37e-6 as `dz` goes
+   20 → 2.5 nm — so cells is the right unit after all, and the thickness rule was a workaround
+   for a broken layer that also made every run 4× slower than it needed to be (§3).
+3. **`T[+1] == T[-1]` on a mirror-symmetric grating is a free, oracle-free error bar**, exact
+   here at even cell counts. Meep does not pass it (8.7e-5 apart at its own res 200).
+4. **Efficiencies converge second order while amplitudes did not**, twice, for two unrelated
+   reasons — a half-cell monitor offset and a de-referencing that removed both legs of the
+   phase instead of one. `|r|**2` cannot see either, so every efficiency test passed
+   throughout (§5).
+
+---
+
+## 1. What makes the comparison worth making
+
+RCWA and FDTD fail differently. RCWA truncates a Fourier series and inherits every
+factorization choice that series forces; FDTD discretises space and time and inherits
+numerical dispersion, a staircased boundary and an imperfect absorber. Nothing is shared
+except Maxwell's equations, so a defect that survives both is unlikely to belong to either.
+
+That is only true if the comparison is arranged so the two *can* disagree. The conventions are
+therefore taken from wavebit rather than from the FDTD literature, each one a place the two
+would otherwise silently part company:
+
+| Convention | Taken from | What adopting the other one costs |
+| --- | --- | --- |
+| `+z` points **down**, into the stack | `docs/conventions.md`, `_core/fields.py` | Negates `E_z`, `H_x`, `H_y`; conserves energy, leaves every efficiency untouched. `fields.py` carried exactly this defect undetected for months |
+| `e^{-iωt}` | `docs/formulation.md` | A phasor needs an `exp(+iωt)` kernel. `np.fft.fft` over the *time* axis applies the opposite one and conjugates every amplitude |
+| `kx_m = n_inc sin θ cos φ + m·λ/Λ` | `_core/engine.py` `n_inc` | Reversing the order index mirrors `+1` onto `-1` **while conserving energy exactly** |
+| TE all on `s`, TM all on `p`; `r_p` magnetic, `t_E = t_H·n_top/n_bot` | `_core/solve_1d.py:316-341` | A sign `\|r\|^2` cannot see |
+| `H̃ = Z0 H`, `c = ε0 = μ0 = 1` | `docs/formulation.md` | A scale factor on every amplitude |
+
+The amplitude conventions were not adopted, they were *derived and found to already agree*: a
+single interface gives `Ey_r/Ey_i = (n1-n2)/(n1+n2)` and `Hy_r/Hy_i = (n2-n1)/(n1+n2)`, which
+are `solve_1d`'s `r_s` and `r_p` outright. No sign patch sits between the two solvers.
+
+---
+
+## 2. The benchmark, and the three-way agreement
+
+λ = 900 nm, period = 700 nm, one 300 nm layer, 50 % duty `n = 3.5` tooth in air, substrate
+`n = 1.5`, normal incidence. In glass orders 0 and ±1 propagate; in air only order 0, so
+`R[±1]` is identically zero. The same scene was solved by Meep (FDTD) and gyptis (FEM) in the
+sibling lab repository on 2026-08-25; those numbers are quoted here, not recomputed.
+
+Reference is the RCWA path at `truncation_order=80`, re-derived in this worktree. TM's `R0`
+and `T0` still move by ~9e-6 out to 120, so the reference itself carries that much
+uncertainty; TE is converged.
+
+| | RCWA (ref) | this module, 5 nm | gap | Meep, res 200 | gap |
+| --- | --- | --- | --- | --- | --- |
+| TE `R0` | 0.204898 | 0.205633 | 7.4e-4 | 0.204162 | 7.4e-4 |
+| TE `T0` | 0.352474 | 0.352724 | 2.5e-4 | 0.352583 | 1.1e-4 |
+| TE `T±1` | 0.221314 | 0.220785 | 5.3e-4 | 0.221396 | 8.2e-5 |
+| TM `R0` | 0.282393 | 0.283018 | 6.2e-4 | 0.282607 | 2.1e-4 |
+| TM `T0` | 0.163805 | 0.164256 | 4.5e-4 | 0.164495 | 6.9e-4 |
+| TM `T±1` | 0.276901 | 0.276292 | 6.1e-4 | 0.276318 / 0.276231 | 5.8e-4 / 6.7e-4 |
+| Σ, TE / TM | 1 | 0.999928 / 0.999859 | | 0.999537 / 0.999650 | |
+
+**Which Meep column.** Meep reports two — a mode decomposition and a raw flux — differing by
+2.5e-4 (TE) and 3.4e-4 (TM) at res 200, the same order as the agreement being claimed. The
+column above is the mode decomposition.
+
+**Convergence**, at the shipped defaults (12 PML cells), worst per-order gap against RCWA:
+
+| cell | TE | order | TM | order | Σ (TE / TM) | wall |
+| --- | --- | --- | --- | --- | --- | --- |
+| 20 nm | 1.16e-2 | | 8.89e-3 | | 0.99986 / 0.99834 | 0.3 s |
+| 10 nm | 2.87e-3 | 2.02 | 2.32e-3 | 1.94 | 0.99997 / 0.99941 | 1.3 s |
+| 5 nm | 7.35e-4 | 1.96 | 6.25e-4 | 1.89 | 0.99993 / 0.99986 | 8 s |
+| 2.5 nm | 1.84e-4 | 2.00 | 1.90e-4 | 1.71 | 0.99991 / 1.00000 | 110 s |
+
+Second order throughout, which is the point of the table — the number in any one row is a
+property of the grid, but the *order* is a property of the method, and it is what says the
+remaining error is discretisation and not a floor.
+
+The cost column is the honest one: 5 nm is 8 s a polarisation against the RCWA solve's
+fraction of a second, and 2.5 nm is two minutes. This is a cross-check, not a production path.
+
+---
+
+## 3. Two constants, and a misdiagnosis
+
+Both material-dependent quantities in the CPML were wrong, in the obvious direction, and
+neither announced itself at the design wavelength.
+
+**`σ_max` had `sqrt(eps_r)` upside down.** In a *stretched coordinate* `σ` is normalised by
+the vacuum permittivity, so a wave accumulates `n·∫σ` and a fixed round-trip target needs
+`σ_max ∝ 1/sqrt(eps_r)`. Taflove & Hagness eq. 7.61 carries the factor the other way up
+because there it is a *material* conductivity acting against the local permittivity;
+transplanting that spelling into the stretch overshoots by exactly `eps_r`. An independent
+argmin over the conductivity scale settles it — the optimum tracks `1/n`, not `1/eps_r` and
+not `n`:
+
+| n | 1.0 | 1.5 | 2.0 | 3.0 | 3.5 |
+| --- | --- | --- | --- | --- | --- |
+| measured argmin | 0.80 | 0.60 | 0.44 | 0.35 | 0.25 |
+| `1/n` | 1.000 | 0.667 | 0.500 | 0.333 | 0.286 |
+
+The cost, on a lossless slab with an `n = 3.5` substrate: `T = 1.037` and `R` wrong by 27 %.
+Nothing in the benchmark exceeds `n_bot = 1.5`, where the factor is 2.25 rather than 12.25.
+
+**`α_max` was a bare `0.05`, which is a reciprocal length.** Everything else in the module is
+dimensionless or scales with a length, so this one constant made the answer depend on whether
+the caller wrote nanometres or microns. At 900 nm it works out to 7.16 ω; the measured optimum
+is flat between 1 and 2 ω:
+
+| `α/ω` | 0 | 0.5 | 1.0 | 2.0 | 4.0 | 7.16 (was shipped) |
+| --- | --- | --- | --- | --- | --- | --- |
+| air | 1.84e-6 | 1.76e-6 | 1.48e-6 | **1.15e-6** | 3.89e-6 | 2.13e-4 |
+| glass | 1.88e-6 | 1.86e-6 | 1.63e-6 | **1.15e-6** | 2.42e-6 | 2.67e-4 |
+| n = 3.5 | 2.12e-6 | 2.28e-6 | 2.12e-6 | **1.80e-6** | 4.73e-5 | 1.95e-3 |
+
+Zero is *not* safe — the shifted pole is what absorbs the evanescent field a grating radiates
+into the layer, and that part of the design was right; only its magnitude was ~7× oversized.
+Scaled in the same nanometre convention the module ships with, the old constant returned
+`R + T = 1.0124` at λ = 1800 nm and **1.2234** at λ = 7200 nm, on an identical discretisation.
+
+**The misdiagnosis.** Before either fix, a sweep of PML depth at a fixed grid showed the error
+falling to a plateau at about a quarter wavelength, and a convergence study showed the order
+dropping from 2.04 to 1.31 on the last refinement. I concluded that a PML has to be specified
+as a physical thickness rather than a cell count, since a cell count thins as the grid refines
+— and wrote that into this document as the headline finding. **It was wrong.** The 1D probe
+below is the instrument that settles it, and a correct layer is flat in `dz`:
+
+| `dz` | 20 nm | 10 nm | 5 nm | 2.5 nm | effective order |
+| --- | --- | --- | --- | --- | --- |
+| before | 9.11e-3 | 2.24e-3 | 1.03e-3 | 6.85e-4 | ~`dz^1.25` |
+| after | 2.06e-6 | 1.63e-6 | 1.42e-6 | 1.37e-6 | flat |
+
+So cells is the right unit, the thickness rule was a workaround for a broken absorber, and it
+cost 45 PML cells where 12 do better — a 4× slowdown bought nothing. The lesson generalises
+past this module: **a floor under a convergence study is a hypothesis about the absorber, and
+the way to test it is a direct reflection measurement, not a second convergence study.** The
+1D probe (a short grid minus a long one at a common monitor) takes seconds and has ten orders
+of resolving power; the convergence study that produced the wrong answer took an hour.
+
+Two more constants moved with them: `m = 4` beats the textbook `m = 3` by ~140× once `α` is
+right (9.12e-9 against 1.29e-6), and `κ_max` dropped from 5 to 2. `κ_max` is the one constant
+here **not** settled by measurement — the 1D probe prefers 1, and the classical case for a
+larger value is grazing and evanescent absorption that a 1D probe cannot see.
+
+---
+
+## 4. Subpixel smoothing, and what cannot arbitrate it
+
+The material is averaged onto each Yee component's own cell, **harmonically along the axis the
+component points along and arithmetically along the others**. Subpixel smoothing replaces the
+stepped material with an effective tensor (Farjadpour 2006, Kottke 2008): arithmetic mean
+tangential to the interface, harmonic mean along its normal. For an interface normal to `x`
+that tensor is `diag(harmonic, arithmetic, arithmetic)`, and `E_x` — the only component
+reading `eps_xx` — is exactly the one this rule averages harmonically along `x`. The other
+components see a constant along `x` there, where the two means coincide. So the rule
+**reproduces the full tensor exactly for axis-aligned interfaces**, and the geometry this
+module accepts — a z-stack of piecewise-constant x rasters — has no other kind, so there is no
+off-diagonal term being dropped.
+
+The averages are exact rather than oversampled: the geometry is piecewise constant, so the
+integral is a sum of segment overlaps and an oversampled estimate would only add a second
+discretisation to converge.
+
+Worth, on a slab whose interfaces genuinely cut cells, against point sampling (`subpixel=False`):
+
+| `dz` | subpixel | point-sampled |
+| --- | --- | --- |
+| 38.9 nm | 8.07e-2 | 2.87e-1 |
+| 20 nm | 1.04e-2 | 1.93e-2 |
+| 10 nm | 1.49e-3 | 6.75e-3 |
+| 5 nm | 2.73e-4 | 3.41e-3 |
+| order | ~2.5 | ~1.0 |
+
+**What cannot see it.** A planar stack at normal incidence is blind to both harmonic averages
+— `E_z` is identically zero there, and a harmonic mean along `x` of a constant is that
+constant. Worse, the `harmonic_axis='z'` branch is unreachable by any test whose layer
+thickness is a whole number of cells, which the benchmark's 300 nm is at every round
+resolution. Make one thickness non-commensurate and give it x structure and the branch becomes
+load-bearing: 1.43e-3 with it against 6.55e-3 without, on a 317 nm layer at a 10 nm grid.
+`tests/test_fdtd.py` carries that case for exactly this reason. Same shape of problem as
+`docs/nvf-normal-methods.md`: the cheap test that validates everything else is precisely the
+one that cannot judge the smoothing.
+
+---
+
+## 5. Four defects the efficiencies could not see
+
+**The TM monitor's half cell.** `Hy` lives half a cell below the z node, and the amplitude was
+de-referenced to the node's coordinate. The result is a `k0(kz_out + kz_inc)·dz/2` phase on
+every TM amplitude — which cancels in `|r|**2`. So `R` and `T` converged at second order while
+`r_p` fell as `dz**0.6`: 1.29e-1, 3.39e-2, 8.19e-3 became second order only after the fix, at
+which point `r_p`'s error matched `r_s`'s to 1 % (8.19e-3 against 8.26e-3), as it must — at
+normal incidence a planar stack has no plane of incidence and the two are degenerate.
+
+**The de-referencing removed both legs.** Normalising by the incident spectrum sampled *at the
+monitor* looks like it cancels the incident wave's numerical dispersion. It does — and then
+adds the outgoing leg's, for a net factor of two rather than the cancellation it appears to
+be. Sweeping only the monitor's distance, the phase residual tracks `2(k0 - κ_yee)·z_ref` at a
+ratio of 0.96 and the one-leg form at 1.92. Reading the incident at `z = 0`, where the
+amplitude is *referenced*, leaves exactly one leg. `|r|` is unaffected either way.
+
+**The 1D auxiliary field's sign.** The incident wave is generated on a 1D grid sharing `dz`
+and `dt` (Taflove & Hagness §5.8) so its numerical dispersion matches along z exactly. The
+pair it integrates is `(Ey, Hx)` for TE but `(Ex, -Hy)` for TM, and that minus sign has **two**
+consumers — the TFSF correction and the incident amplitude the result is normalised by.
+Getting it wrong in only one flips the sign of `r_p` and leaves every efficiency intact.
+
+**Evanescent orders were amplified without bound.** An order evanescent in the superstrate has
+decayed by `exp(k0|Im kz||z_ref|)` before it reaches the monitor, and de-referencing undoes
+that — amplifying whatever is left, which past some depth is float64 round-off. Measured
+against the RCWA amplitudes on a duty-0.3 grating: a gain of 1.1e8 still gives 6 % accuracy,
+4.5e12 is wrong by 5×, 1.4e17 by 3e5, and a caller who mirrored an RCWA `truncation_order=80`
+order set got `inf` and `nan`. The efficiency is identically zero for these orders either way,
+so nothing downstream of `R` could notice. They are now `nan` above a measured gain bound.
+
+The common instrument for the first two is **comparing amplitudes, not efficiencies**, against
+a closed form. The common instrument for the last is asking what a quantity means when its
+efficiency is identically zero.
+
+---
+
+## 6. The refusals
+
+Eleven, each refused by name. The common thread: every one returns a *plausible* number if it
+is quietly ignored, and a plausible wrong number from the cross-check solver is worse than no
+cross-check at all.
+
+| Refused | Why not just implement it |
+| --- | --- |
+| `psi` / `chi` / `polarization` incidence | A different problem, not a different spelling — same reason `solve_1d` is separate from `solve_1d_conical` |
+| oblique `theta`, `phi` | A Bloch phase across the periodic cell edge, which a real-valued single-frequency time-domain field cannot carry. Needs a split-field or complex-field formulation |
+| `incidence_side='bottom'` | The mirror the ETM applies has no counterpart here yet |
+| complex permittivity | Time domain carries loss as a conductivity, and a constant one reproduces a given `Im(ε)` at **one** frequency. Right at the centre wavelength, silently wrong beside it |
+| `Re(ε) ≤ 0` | A metal below its plasma frequency — the same dispersion problem, and no real wave speed, so no stable time step exists |
+| `mu` | **Parity, not omission**: the RCWA side refuses it on the same scene. `engine.py:2334` — *"mu is implemented on the 2D path only ... the 1D and conical operators carry no permeability slot at all"*. `solve_1d_conical` does carry `mu_top`/`mu_bot` parameters, but the engine refuses before reaching it, so they are unreachable defaults. There would be nothing to compare against |
+| analytic shape structure | Rasterising it would put a second geometry builder beside `draw.slice_structure`, which is NumPy-only, square-only and refuses a traced shape parameter. The two would disagree about one scene |
+| `(n_layers, Ny>1, Nx)` | A crossed grating needs a 3D FDTD |
+| oblique `lattice` | The Yee grid is Cartesian; a skewed cell needs the metric in every update |
+| a run shorter than the source | The source is not finished emitting until 48 optical cycles. A 20-cycle run returns 0.033 where the answer is 0.543 — an efficiency-shaped number, so it is refused rather than reported with a residual nobody reads |
+| `\|m\| ≥ nx/2` | Past Nyquist the x transform aliases one order onto another and returns a plausible amplitude — with a flipped sign on TM, from the half-cell sample offset |
+| `backend` | §7 |
+
+Beyond the refusals, the solve runs the same `check_physical` the RCWA path runs. Every defect
+this module has had announced itself there first, as `R + T` between 1.1 and 106.
+
+---
+
+## 7. Why NumPy only
+
+The time loop is a Python `for` over ~10⁴ steps. Under `jax.jit` it unrolls to a trace of that
+length; under `jax.grad` or torch autograd it materialises a tape of O(steps × grid). Crossing
+either needs a per-backend `scan` — `jax.lax.scan`, an eager loop elsewhere — and there is no
+such primitive in `wavebit/_core/backend.py`, nor any loop construct in `_core` that is not a
+Python `for` over a small static layer count.
+
+The field updates themselves would port unchanged: they are slice-shifted differences and
+`xp.concat`, needing no index assignment (which is the one array operation with no spelling
+common to all three backends). It is only the loop that has nowhere to live. Adding that
+primitive is a design decision rather than a continuation of this work, so `backend` is
+refused by name instead of half-supported.
+
+---
+
+## 8. What is not yet answered
+
+- **Oblique incidence** is the single biggest gap, and the one a grating study most wants: a
+  cross-check that cannot do oblique cannot check what wavebit is most often used for. The
+  route is a complex-field or split-field periodic FDTD, and it touches five places together —
+  Bloch-phased shifts, the TFSF plane's angled projection, the DFT x-kernel, `kx`, and the s/p
+  frame.
+- **Dispersion**, which also unlocks lossy and metallic gratings — an ADE Drude/Lorentz pole
+  per material. Metals are the largest class where an independent oracle would be worth having
+  and where RCWA convergence is hardest.
+- **`mu`**, to reach parity with `solve_1d_conical` rather than with `solve_1d`.
+- **A broadband run.** The DFT machinery accumulates at a single frequency now; a band needs
+  the source width sized from the requested span and a guard on the incident amplitude, which
+  falls to 2e-7 of its peak at the band edge and turned `R` into 105 in a prototype that had
+  no such guard.
+- **Field output.** The solve returns two monitor planes; cross-checking `calculate_field` —
+  the part of the solver with the most recent bug history — is impossible without it.
+- **The Yee grid's numerical anisotropy** is unmeasured. Convergence order was measured at
+  normal incidence only, and phase-velocity error as a function of propagation angle is
+  exactly what limits the high-`|m|` orders a grating oracle exists to check.
+- **The corner cells** where a vertical and a horizontal interface meet are the one place the
+  axis-aligned averaging rule is not exact; whether they contribute at first or second order
+  has not been measured, and TM's convergence order (1.71–1.94, against TE's 1.96–2.02) is the
+  place to look.
+- **3D**, for crossed gratings.

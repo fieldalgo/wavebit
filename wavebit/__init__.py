@@ -75,7 +75,7 @@ def enable_x64():
     import jax
     jax.config.update('jax_enable_x64', True)
 
-from .main import rcwa
+from .main import fdtd, rcwa
 from ._core.backend import (AutoDetuneWarning, AxisNameWarning, PrecisionLossWarning, RayleighPointWarning,
                             UnphysicalResultWarning, UnresolvedBranchWarning,
                             get_j1_implementation, set_j1_implementation)
@@ -118,12 +118,15 @@ from ._core.spec import JobSpec, Numerics, Sweep, SpecError, run
 # pointed at it: an export added without a line here fails the lint instead of being waved
 # through. Grouped to match the import blocks above.
 #
-# `main` is deliberately absent. It is bound as a side effect of `from .main import rcwa`, not
+# `main` is deliberately absent. It is bound as a side effect of the import above, not
 # offered, and without `__all__` a star import collected it along with the rest.
 __all__ = [
     'Lattice',
     'meshgrid_xy',
     'rcwa',
+    # The time-domain solve beside it -- roadmap item 2. A function, not a solver: see
+    # its docstring in `main.py` for why there is no per-instance state to hold.
+    'fdtd',
     # Defined in this file rather than imported -- see `enable_x64` above.
     'enable_x64',
     'AutoDetuneWarning',
