@@ -291,6 +291,21 @@ class SolverJax(RCWAJax, OptimizerJax):
             # A dispatch key like `pol`: the solves branch on it (which cascade blocks are
             # read, which way the stack is walked), so it must come back static, never traced.
             'incidence_side': self.incidence_side,
+            # The last settable condition to reach this dict, 2026-08-30. It is a *declaration*
+            # -- `'4ff'` asks for the four-field form where `auto` would have picked two -- and
+            # a declaration that does not survive the round trip is worse than one that is
+            # refused: with the key absent, two solvers differing only here produce identical
+            # aux_data, so their treedefs coincide and **one jit compilation serves both**.
+            # Measured on a 16x16 raster with `answers='field'`: declaring `'4ff'` after `auto`
+            # did not recompile (0.05 s against 0.93 s) and returned `auto`'s number to the
+            # last digit. The declared cross-check silently became a no-op, and the declared
+            # *refusal* -- `'2ff'` over a z row -- silently did not fire. It cannot produce a
+            # wrong answer (max |T_2ff - T_4ff| = 1.4e-14 on a patterned raster, and each
+            # override degrades to the correct path), which is why it outranks nothing; it is
+            # here because a declaration must mean the same thing on both sides of a trace.
+            # It rides as the *raw slot*: `rcwa()` does not take `formulation` as a keyword,
+            # so `_tree_unflatten` restores it directly rather than through the constructor.
+            'formulation': self._formulation,
             # Aux data, and it has to be. A plain instance attribute survives __init__ but
             # nothing puts it here, so `_tree_unflatten` never passes it to the constructor
             # and the rebuilt solver takes the default: measured on this pair, a solver that
@@ -352,9 +367,13 @@ class SolverJax(RCWAJax, OptimizerJax):
         # legal when it was flattened. Rebuild without it, then restore the slot directly.
         aux_data = dict(aux_data)
         psi_given = aux_data.pop('psi_given')
+        # `formulation` is settable on the instance and on `solve()`, but not on `rcwa()`,
+        # so it cannot go through the constructor either. Same treatment as `polarization`.
+        formulation = aux_data.pop('formulation')
         named = dict(zip(CHILD_NAMES, children))
         polarization = named.pop('polarization')
         solver = cls(**named, **aux_data)
+        solver._formulation = formulation
         # Straight into the slot, bypassing the setter's validation: the pair may now be a
         # tuple of tracers, and the setter's `(0, 0)` check reads concrete values. It already
         # guards that with a try/except, but there is nothing left to validate here anyway --
