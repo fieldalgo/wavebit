@@ -228,6 +228,12 @@ def _annulus(X, Y, r_out=30.0, r_in=14.0):
     return cell
 
 
+def _two_discs(X, Y, r=11.0, sep=12.0):
+    """Two discs with a saddle between them -- the worst medial axis found so far."""
+    return np.where(((X - (32 - sep)) ** 2 + (Y - 32) ** 2 <= r ** 2)
+                    | ((X - (32 + sep)) ** 2 + (Y - 32) ** 2 <= r ** 2), 12.25, 1.0)
+
+
 def test_contour_is_periodic_under_a_roll_that_lands_on_the_corner():
     """Rolling a raster is the same structure written from a different corner.
 
@@ -343,15 +349,42 @@ def test_contour_is_periodic_under_a_roll_that_lands_on_the_corner():
 
 @pytest.mark.xfail(strict=True, reason='the medial axis carries no defined normal, and which '
                                        'segment wins that tie moves with the roll')
-@pytest.mark.parametrize('name,build,lattice', [
-    ('annulus, square cell', _annulus, None),
+@pytest.mark.parametrize('name,build,rolls', [
+    ('annulus, square cell', _annulus,
+     ((0, 0), (7, 11), (23, 5), (31, 17), (1, 63), (2, 2), (40, 40), (5, 5), (13, 29), (17, 3))),
+    ('two discs, square cell', _two_discs,
+     ((0, 0), (48, 32), (42, 32), (38, 32), (2, 32))),
 ])
-def test_contour_is_periodic_where_the_medial_axis_is_reachable(name, build, lattice):
+def test_contour_is_periodic_where_the_medial_axis_is_reachable(name, build, rolls):
     """What the 2026-08-29 indicator fix does **not** reach, pinned so it is not claimed away.
 
     **The oblique half of this was a second, unrelated defect and is fixed** (the tile ring;
     see `test_the_tile_ring_follows_the_cell`). What is left, and what this pins, is the
     medial axis on an orthogonal cell.
+
+    **How much is left, swept rather than sampled.** With the translation identity there is no
+    reason to guess: 6 scenes x 4 constructions x 2 lattices x 1023 rolls, ~49k measurements
+    in 395 s. `'distance'`, `'spectral'` and `'smooth'` are clean on every one of the 48
+    combinations, and so is `'contour'` on every oblique one. Exactly two scenes survive, both
+    on a square cell:
+
+    ========================  ==============  ==========
+    scene                     broken          worst
+    ========================  ==============  ==========
+    annulus                   435 of 1023     9.87e-05
+    **two discs (saddle)**    26 of 1023      **1.70e-02**
+    ========================  ==============  ==========
+
+    A disc, a small disc, a stripe and a cross are all clean, on both lattices. The saddle
+    between two discs is the worse of the two by two orders of magnitude and was not in this
+    file until 2026-08-31 -- the annulus had been standing in for a class whose worst member
+    it is not.
+
+    **The saddle's trigger is sharper than "a roll".** All 26 of its broken rolls have the
+    same ``roll_u = 32`` -- exactly half the period, along the axis joining the two discs,
+    which is the shift that puts the saddle point on the *cell wrap*. Rolling anywhere else
+    is clean, which is why the eight rolls first written here all passed and the case looked
+    fixed. The rolls below are chosen from the failing set for that reason.
 
     Marking the smaller phase makes `'contour'` exactly periodic for a *single* loop on an
     orthogonal cell -- 4.2e-13 over the ten rolls below, from 3.9e-4. Two scenes stayed
@@ -383,6 +416,24 @@ def test_contour_is_periodic_where_the_medial_axis_is_reachable(name, build, lat
     on exactly 8 pixels, all within 4.2 px of a disc's centre, and comes out *less* periodic
     (2.8e-3, ten distinct values).
 
+    **What does work, measured, and not landed.** Both S4 and fmmax answer the null by *not
+    choosing a direction*: they open the linear state into an ellipse whose ellipticity follows
+    the field magnitude, `eta = (pi/8)(1 + cos(pi|v|))`, so `|v| -> 0` gives an exactly
+    circular state whose projector is `Pxx = Pyy = 1/2`, `Pxy = -i/2`, `Pyx = +i/2` --
+    independent of the arbitrary direction, and a *limit* rather than a branch, with no
+    threshold anywhere (`fmm_PolBasisJones.cpp:65`, `fmmax/vector.py:285`; Liu & Fan, CPC 183,
+    2233 (2012)). Prototyped here with `|v| = |grad d|`, the distance field's gradient
+    magnitude -- 1 almost everywhere, dropping only on the ridge that *is* the medial axis, and
+    independent of which construction produced the field. It takes the annulus to 4.56e-15,
+    i.e. removes this defect outright, and the saddle from 1.70e-2 to 1.58e-3, i.e. helps and
+    does not fix -- the saddle's two nearest boundary points sit on *different* discs, so the
+    tie there is a discrete jump rather than a direction that fades out.
+
+    It is not landed because it is a trade and not a free win: against an exact circle at
+    512x512 the error goes 3.18e-5 to 3.95e-5. And it needs the field API to carry a magnitude
+    (the constructions return unit vectors), complex projector coefficients, and distinct
+    `eps_xy` / `eps_yx` -- today one object fills both slots.
+
     This is the raster twin of the exact-tangency singularity in the analytic path
     (`analytic._blend`): a normal field asked for a direction where geometry defines none.
 
@@ -397,10 +448,7 @@ def test_contour_is_periodic_where_the_medial_axis_is_reachable(name, build, lat
     cfg = dict(backend=0, thickness=[0.3], truncation_order=(6, 6), top=1.0, bot=1.0,
                wavelength=0.94, psi=np.pi / 2, theta=0.1, phi=0.2, factorization='nvf',
                normal_method='contour')
-    cfg['lattice' if lattice is not None else 'period'] = (lattice if lattice is not None
-                                                           else [1.0, 1.0])
-    rolls = ((0, 0), (7, 11), (23, 5), (31, 17), (1, 63), (2, 2), (40, 40), (5, 5),
-             (13, 29), (17, 3))
+    cfg['period'] = [1.0, 1.0]
     got = [float(np.sum(np.asarray(wavebit.rcwa(
         structure=np.roll(np.roll(cell, r[0], axis=0), r[1], axis=1)[None],
         **cfg).solve().T))) for r in rolls]
