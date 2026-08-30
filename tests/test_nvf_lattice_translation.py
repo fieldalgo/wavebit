@@ -345,13 +345,17 @@ def test_contour_is_periodic_under_a_roll_that_lands_on_the_corner():
                                        'segment wins that tie moves with the roll')
 @pytest.mark.parametrize('name,build,lattice', [
     ('annulus, square cell', _annulus, None),
-    ('disc, hex cell', _disc, np.column_stack(([1.0, 0.0], [0.5, np.sqrt(3) / 2]))),
 ])
 def test_contour_is_periodic_where_the_medial_axis_is_reachable(name, build, lattice):
     """What the 2026-08-29 indicator fix does **not** reach, pinned so it is not claimed away.
 
+    **The oblique half of this was a second, unrelated defect and is fixed** (the tile ring;
+    see `test_the_tile_ring_follows_the_cell`). What is left, and what this pins, is the
+    medial axis on an orthogonal cell.
+
     Marking the smaller phase makes `'contour'` exactly periodic for a *single* loop on an
-    orthogonal cell -- 4.2e-13 over the ten rolls below, from 3.9e-4. Two scenes stay broken:
+    orthogonal cell -- 4.2e-13 over the ten rolls below, from 3.9e-4. Two scenes stayed
+    broken after it:
 
     =========================  ==========  ==========
     scene                      after       before
@@ -401,3 +405,148 @@ def test_contour_is_periodic_where_the_medial_axis_is_reachable(name, build, lat
         structure=np.roll(np.roll(cell, r[0], axis=0), r[1], axis=1)[None],
         **cfg).solve().T))) for r in rolls]
     assert max(got) - min(got) < 1e-9, f'{name}: sum(T) moved by {max(got) - min(got):.2e}'
+
+
+def _phase_diagonal(to, shift_v, shift_u, n_v, n_u):
+    """``D = diag(exp(-i G.d))`` for an integer pixel shift, in ``conv_matrix_2d``'s order."""
+    mv = np.arange(-to, to + 1)
+    mu = np.arange(-to, to + 1)
+    V, U = np.meshgrid(mv, mu, indexing='ij')
+    return np.exp(-2j * np.pi * (V.ravel() * shift_v / n_v + U.ravel() * shift_u / n_u))
+
+
+def _translation_defect(cell, shift, method, lattice=None, to=3):
+    """``max |E(rolled) - D E D^-1| / max|E|`` over the three slots that carry the field.
+
+    **The instrument, and it is worth more than the test it serves.** Translating a periodic
+    structure by ``d`` multiplies every Fourier coefficient by ``exp(-i G.d)``, so every
+    convolution matrix transforms as a *similarity*, ``E -> D E D^-1``. A covariant builder
+    satisfies that exactly -- and the identity holds at **any** truncation, converged or not,
+    with **no solve**, no S-matrix and no flux convention in the way. 36 measurements take
+    under a second where the equivalent `sum(T)` sweep took twenty minutes.
+
+    ``epz_i`` is the control: it is ``inv(<eps>)`` and reads no normal field at all, so it
+    pins the convention itself at 5e-15 whatever the field does.
+
+    It is also what made the defect's *size* honest. Ten hand-picked rolls said the oblique
+    residual was 2.2e-3; sweeping all 4095 said 2.7e-2 on 39 of 63, and that the annulus on a
+    square cell breaks on 35% of rolls rather than the one in ten a sample had found.
+    """
+    import wavebit
+    kw = dict(backend=0, thickness=[0.3], truncation_order=(to, to), top=1.0, bot=1.0,
+              wavelength=0.94, psi=np.pi / 2, theta=0.1, phi=0.2,
+              factorization='nvf', normal_method=method)
+    kw['lattice' if lattice is not None else 'period'] = (lattice if lattice is not None
+                                                          else [1.0, 1.0])
+    n_v, n_u = cell.shape
+    rolled = np.roll(np.roll(cell, shift[0], axis=0), shift[1], axis=1)
+    A = wavebit.rcwa(structure=cell[None], **kw).eps_conv_matrices()
+    B = wavebit.rcwa(structure=rolled[None], **kw).eps_conv_matrices()
+    d = _phase_diagonal(to, shift[0], shift[1], n_v, n_u)
+    worst = 0.0
+    for k in (0, 1, 3):                     # epx, epy, epxy -- the slots the field reaches
+        a = np.asarray(A[k])[0]
+        b = np.asarray(B[k])[0]
+        pred = (d[:, None] * a) * np.conj(d)[None, :]
+        worst = max(worst, np.abs(b - pred).max() / max(np.abs(a).max(), 1e-30))
+    return worst
+
+
+@pytest.mark.parametrize('gamma', [90, 75, 60, 45, 30, 20])
+def test_the_tile_ring_follows_the_cell(gamma):
+    """One ring of periodic images is enough on a square cell and not on a skewed one.
+
+    `contour_normal_field` answers each pixel with the nearest point of the level set *over
+    the periodic images*, so it lays the curve down on a ring of tiles and queries that. The
+    ring was fixed at 3x3 until 2026-08-30, which is a statement about a square cell wearing
+    the clothes of a general one. Two things exceed it, and neither is bounded by the cell:
+
+    * the nearest lattice point to an arbitrary point can be a **diagonal** away, and the
+      covering radius over the shortest lattice vector is 0.707 on a square cell but 1.21 at
+      45 degrees and 2.84 at 20 -- past 1 it no longer fits in one ring;
+    * `_contour_polylines` folds each loop onto its own centre, so a representative can
+      overshoot the cell by a full period before the query even starts.
+
+    Measured with the defect in place, disc of radius 30 in a 64 cell at 60 degrees:
+    2.68e-2, on 39 of 63 rolls, where `'distance'`, `'spectral'` and `'smooth'` all held at
+    1e-15. `_tile_rings` reads both terms off the data instead of assuming a cell, and every
+    angle here comes back at the floor.
+
+    The ring it picks is 2 on a square cell -- one more than the code used to take. That is
+    not a no-op: an orthogonal cell moves by 4.3e-14, which is the kd-tree choosing between
+    samples at equal distance. The cost is 3 ms -> 6 ms on the field build at N=64.
+    """
+    n = 64
+    ax = np.arange(n)
+    X, Y = np.meshgrid(ax, ax)
+    disc = np.where(((X - 32) ** 2 + (Y - 32) ** 2) <= 30 ** 2, 12.25, 1.0)
+    t = np.deg2rad(gamma)
+    lattice = None if gamma == 90 else np.column_stack(([1.0, 0.0], [np.cos(t), np.sin(t)]))
+    for shift in ((1, 1), (2, 3), (3, 0), (0, 2), (5, 7)):
+        got = _translation_defect(disc, shift, 'contour', lattice)
+        assert got < 1e-12, f'gamma={gamma}, roll {shift}: E moved by {got:.2e}'
+
+
+def test_the_translation_identity_holds_for_every_construction():
+    """The instrument itself, on all four fields and on the permittivity-only control.
+
+    A defect this pins that `sum(T)` cannot: it names the *slot*. `epz_i` is `inv(<eps>)` and
+    reads no field, so it holds at 5e-15 no matter what any construction does -- which is how
+    a field defect is told apart from a convention error in the identity itself.
+    """
+    n = 64
+    ax = np.arange(n)
+    X, Y = np.meshgrid(ax, ax)
+    disc = np.where(((X - 32) ** 2 + (Y - 32) ** 2) <= 30 ** 2, 12.25, 1.0)
+    hexl = np.column_stack(([1.0, 0.0], [0.5, np.sqrt(3) / 2]))
+    for lattice in (None, hexl):
+        for method in ('distance', 'contour', 'spectral', 'smooth'):
+            got = _translation_defect(disc, (13, 29), method, lattice)
+            assert got < 1e-12, f'{method}: E moved by {got:.2e}'
+
+
+def test_the_ring_count_is_read_from_the_cell_not_assumed():
+    """`_tile_rings`' two terms, pinned separately, because each hides the other's absence.
+
+    The covering term alone is right on a square cell and the stray term alone is right at 45
+    degrees, so a test that only checks the *outcome* at a few angles passes with either one
+    deleted. These are the values the formula owes:
+
+    ==========  ==========  ============  =======  =====
+    gamma       covering/   shortest      stray    rings
+                shortest    is
+    ==========  ==========  ============  =======  =====
+    90          0.707       |a1| = 1      1        2
+    60          0.866       |a1-a2| = 1   1        2
+    45          1.207       |a1-a2|=0.77  1        3
+    20          2.836       |a1-a2|=0.35  1        4
+    135         1.208       |a1+a2|=0.77  1        3
+    160         2.838       |a1+a2|=0.35  1        4
+    ==========  ==========  ============  =======  =====
+
+    The `shortest` column is why the minimum runs over `a1 +- a2` and not just the two basis
+    vectors: away from 90 degrees the *diagonal* is the shortest lattice vector, and using
+    `|a1|` instead gives 2 where the geometry needs 4 at 20 degrees -- a mutant the angle
+    sweep above does not kill, because two rings happen to be enough for the one disc it draws.
+
+    The **obtuse** rows are here for the other half of the same point: `covering` is half the
+    *longer* diagonal, and which diagonal that is swaps at 90 degrees. Taking `|a1+a2|` alone
+    is right for every acute cell and gives 1 where 2 and 3 are needed at 135 and 160.
+    """
+    from wavebit._core.normal_methods import _tile_rings
+
+    n = 64
+    # samples exactly inside the cell: the stray term is then 0 and the covering term is alone
+    for gamma, want in ((90, 1), (60, 1), (45, 2), (20, 3), (135, 2), (160, 3)):
+        t = np.deg2rad(gamma)
+        M = np.column_stack(([1.0, 0.0], [np.cos(t), np.sin(t)])) / n
+        pts = (M @ np.array([[1.0, 1.0], [n - 1.0, n - 1.0]]).T).T
+        assert _tile_rings(M, pts, n, n) == want, f'gamma={gamma}'
+
+    # and the stray term: push one sample a full cell out, expect exactly one more ring
+    t = np.deg2rad(90.0)
+    M = np.column_stack(([1.0, 0.0], [np.cos(t), np.sin(t)])) / n
+    inside = (M @ np.array([[1.0, 1.0], [n - 1.0, n - 1.0]]).T).T
+    outside = np.vstack([inside, (M @ np.array([[1.4 * n], [0.5 * n]])).T])
+    assert _tile_rings(M, inside, n, n) == 1
+    assert _tile_rings(M, outside, n, n) == 2
