@@ -519,13 +519,20 @@ def as_array(xp, v, dtype=None, device=None, copy=False):
 # the naive expression computes as 0/0 really is zero. The regularized gradient at exact
 # degeneracy comes out equal to the limit approaching it, not merely finite.
 #
-# This follows fmmax (MIT, google/fmmax, `utils.py`), whose eps is relative to the
-# eigenvalue range with an absolute floor rather than fixed (torcwa 1e-10, meent 1e-10 on
-# Torch and 1e-20 on JAX). A fixed eps is tied to the matrix scale: measured against finite
-# differences, the fixed one degrades from ~2e-10 to ~1e-7 as the operator shrinks four
-# decades, where the scale-aware one stays flat. That difference is the reason to prefer it.
+# `_eig_grad` below is a PORT of `_eig_bwd` from fmmax (MIT, Copyright (c) 2023 Meta
+# Research, facebookresearch/fmmax, in its `utils.py`; the maintained fork invrs-io/fmmax
+# carries it in `eig.py`). Both epsilons, the broadening, and every term of `rhs`
+# are theirs; what is ours is the generalization to the array API so one body serves all
+# three backends, and the move to PyTorch's conjugate convention. See LICENSE.fmmax — the
+# MIT terms require that notice to travel with this code.
 #
-# The gauge term (the third one in `rhs`) also comes from fmmax; grcwa carries it, meent and
+# Their eps is relative to the eigenvalue range with an absolute floor rather than fixed
+# (torcwa 1e-10, meent 1e-10 on Torch and 1e-20 on JAX). A fixed eps is tied to the matrix
+# scale: measured against finite differences, the fixed one degrades from ~2e-10 to ~1e-7 as
+# the operator shrinks four decades, where the scale-aware one stays flat. That difference is
+# the reason to prefer it.
+#
+# The gauge term (the third one in `rhs`) is theirs too; grcwa carries it, meent and
 # torcwa drop it. It is kept here on their authority rather than on evidence: for a
 # gauge-invariant loss — which every physical loss is — it provably contributes nothing, and
 # no measurement made here separates it from its absence. It costs one matmul.
