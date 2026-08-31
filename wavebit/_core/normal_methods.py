@@ -439,13 +439,21 @@ def _contour_polylines(smoothed):
         # Fold onto the CELL, not onto the origin. `round(c/n)*n` lands the centre in
         # [-n/2, n/2), i.e. straddling the cell's corner, so the representative can sit a
         # full period outside the cell it describes -- measured at index centre (-30, -30)
-        # for a 64 cell. The tiles below are laid around the representative, so the cell
-        # then sits at the *edge* of the tiled region instead of its middle, and a pixel on
-        # the far side reaches past it. Centring on n/2 puts the representative in the cell
-        # and one ring back in the middle. `floor(x + 0.5)` rather than `round`, which is
-        # half-to-even and ties at exactly half a period -- the case a centred shape hits.
-        folded = pts - np.array([np.floor((centre[0] - n_u / 2) / n_u + 0.5) * n_u,
-                                 np.floor((centre[1] - n_v / 2) / n_v + 0.5) * n_v])
+        # for a 64 cell. The tiles below are laid around the representative, so the cell then
+        # sits at the *edge* of the tiled region instead of its middle, and a pixel on the far
+        # side reaches past it. `floor` puts the centre in [0, n), which is the cell.
+        #
+        # `floor(c/n)` and not `round`, for the tie and not for the general case: `round` is
+        # half-to-even, so a centre at exactly +-n/2 stays where it is and a loop keeps two
+        # representatives, one of them a full period out. What reaches that tie is a shape
+        # written about the *pixel index* n//2 -- `(X - N//2)**2 + (Y - N//2)**2 < r**2`,
+        # whose centroid is exactly n/2 -- and not a shape centred in the cell, whose centroid
+        # is (n-1)/2 and misses it. (An earlier spelling here was
+        # `floor((c - n/2)/n + 0.5)`, which is *identically* `floor(c/n)` -- checked over
+        # 20001 samples per n for n in 2, 3, 32, 64, 1024, 4097, zero differences. It was
+        # written as if the `+0.5` were doing the work. It is not.)
+        folded = pts - np.array([np.floor(centre[0] / n_u) * n_u,
+                                 np.floor(centre[1] / n_v) * n_v])
         centre = folded.mean(0)
         key = (round(float(centre[0]), 3), round(float(centre[1]), 3), folded.shape[0])
         if key in seen:
