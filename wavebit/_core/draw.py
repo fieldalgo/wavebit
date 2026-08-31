@@ -435,8 +435,10 @@ def plot_structure(solver, layer=0, n=512, show='eps', ax=None, band_limited=Fal
     """Draw one layer of the structure. Arguments are :func:`slice_structure`'s; read it first.
 
     Returns the axes. An axis-aligned cell is drawn with ``imshow(origin='lower')`` and a
-    skewed one with ``pcolormesh`` on ``u*a1 + v*a2``, as ``docs/oblique-lattice.md`` does for
-    fields -- an index-space ``imshow`` of a skewed cell draws a parallelogram as a square.
+    skewed one with ``pcolormesh`` on ``(u - 0.5)*a1 + (v - 0.5)*a2``, as
+    ``docs/oblique-lattice.md`` does for fields -- an index-space ``imshow`` of a skewed cell
+    draws a parallelogram as a square. The axes run from ``-P/2`` to ``+P/2``: the cell is
+    centred at the origin, the same frame a shape's ``cx`` and :func:`wavebit.grid` use.
 
     Complex values are drawn as their real part, and the title says so.
     """
@@ -453,14 +455,22 @@ def plot_structure(solver, layer=0, n=512, show='eps', ax=None, band_limited=Fal
     if ax is None:
         _, ax = plt.subplots()
 
+    # Both branches label the axes in the frame the caller states geometry in: the cell is
+    # centred at the origin, so a centred feature sits at 0 in the picture as it does in the
+    # recipe. The image itself is untouched -- only the coordinates written on it moved.
     basis = _basis(solver)
     if solver.lattice_is_axis_aligned:
-        Px, Py = _periods(solver)
-        art = ax.imshow(image, origin='lower', extent=(0.0, Px, 0.0, Py), cmap='viridis')
+        # Off the basis, not off `period`: this branch has proved the cell is a rectangle, so
+        # the two agree -- but `periods_of` is `(|a1|, |a2|)` with the angle already gone, and
+        # `test_cell_shape_gate` is right that arithmetic on that pair should not spread. The
+        # basis is in hand and the `else` below already reads it.
+        half_x, half_y = 0.5 * basis[0][0], 0.5 * basis[1][1]
+        art = ax.imshow(image, origin='lower', cmap='viridis',
+                        extent=(-half_x, half_x, -half_y, half_y))
     else:
         n_v, n_u = image.shape
-        u = (np.arange(n_u) + 0.5) / n_u
-        v = (np.arange(n_v) + 0.5) / n_v
+        u = (np.arange(n_u) + 0.5) / n_u - 0.5
+        v = (np.arange(n_v) + 0.5) / n_v - 0.5
         U, V = np.meshgrid(u, v)
         X = U * basis[0][0] + V * basis[0][1]
         Y = U * basis[1][0] + V * basis[1][1]

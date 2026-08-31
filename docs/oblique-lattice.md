@@ -53,15 +53,16 @@ centres, so a layer can be written in coordinates rather than indices:
 ```python
 A = wavebit.hexagonal(400.0)
 X, Y = wavebit.grid((256, 256), lattice=A)
-cx, cy = 0.5 * (A[0][0] + A[0][1]), 0.5 * (A[1][0] + A[1][1])       # the cell centre
-layer = np.where((X - cx) ** 2 + (Y - cy) ** 2 < 90.0 ** 2, 12.25, 1.0)
+layer = np.where(X ** 2 + Y ** 2 < 90.0 ** 2, 12.25, 1.0)
 ```
 
-The centre is written out because a pillar sits at the *lattice point* in most descriptions,
-and the lattice point is a **corner** of the cell — put it at the origin and the raster holds
-one wedge of it, with the other wedges belonging to the neighbouring copies. Correct as a
-periodic structure only if you draw all of them; putting the pillar in the middle of the cell
-is the same array, described once.
+**The cell is centred on the origin**, so the pillar above needs no arithmetic to be centred.
+That matters more than it looks here: a pillar sits at the *lattice point* in most
+descriptions, and the lattice point is a **corner** of the cell — put it there and the raster
+holds one wedge of it, with the other wedges belonging to the neighbouring copies. Correct as
+a periodic structure only if you draw all of them; putting the pillar in the middle of the
+cell is the same array, described once, and now it is also the shortest thing to write. Until
+2026-08-31 this example opened by computing `0.5*(a1 + a2)` by hand.
 
 On a skewed cell this is the step that is easy to get wrong by hand — the samples are at
 `u*a1 + v*a2`, not on a rectangle, and `np.meshgrid` alone will not put them there. An
@@ -71,9 +72,10 @@ does so silently on a non-square raster.
 
 ## The one thing that will bite you
 
-**The raster is read in lattice coordinates.** `structure[layer][j, i]` is the permittivity at
+**The raster is read in lattice coordinates.** `structure[layer][j, i]` sits at the parametric
+point `u = (i + 0.5)/Nx`, `v = (j + 0.5)/Ny`, and the cell is centred on the origin:
 
-    r = (i + 0.5)/Nx * a1  +  (j + 0.5)/Ny * a2
+    r = (u - 0.5) * a1  +  (v - 0.5) * a2
 
 Axis 1 runs along `a1` (and pairs with `truncation_order[0]`), axis 0 along `a2` (with `truncation_order[1]`). Build the
 raster on a **Cartesian** grid and hand it a skewed basis and you have described a *different
@@ -82,20 +84,18 @@ and energy still conserves to 1e-15 because the NVF assembly is Hermitian whatev
 says. The way to write it:
 
 ```python
-u = (np.arange(nx) + 0.5) / nx
-v = (np.arange(ny) + 0.5) / ny
-U, V = np.meshgrid(u, v)
-pts = U[..., None] * a1 + V[..., None] * a2      # Cartesian position of every cell
+X, Y = wavebit.grid((ny, nx), lattice=A)         # Cartesian position of every pixel
 ```
 
 then test membership in Cartesian space, with **minimum image over the lattice** (`i*a1 + j*a2`
-for `i, j` in `-1, 0, 1`) so a feature straddling an edge wraps correctly.
+for `i, j` in `-1, 0, 1`) so a feature straddling an edge wraps correctly. Written out by hand
+it is `((np.arange(n) + 0.5)/n - 0.5)` per axis, then `U*a1 + V*a2` — the `- 0.5` being the
+centred cell. `wavebit.grid` exists so that neither half has to be remembered.
 
 Analytic shapes do not have this problem *in their lengths*: those are absolute Cartesian
 quantities, so a rectangle stays a rectangle under a skew. `cx` / `cy` are Cartesian too, and
-since 2026-08-31 they are measured from the **centre of the cell**, `0.5*(a1 + a2)` -- which
-is the one place a skew reaches a shape's own numbers, and what makes `cx = cy = 0` a centred
-shape on every cell rather than a corner-relative point that has to be computed per basis.
+they are measured from the same origin the raster grid above uses — the centre of the cell —
+so `cx = cy = 0` is a centred shape on every cell, skewed or not.
 Their **periodic fold** is a separate thing and it was wrong until 2026-08-23. The nearest
 image of a shape sits at `m*a1 + n*a2`; the fold was written `d % Px`, and `period` on a skewed
 cell reports `(|a1|, |a2|)`, so it reduced towards a point where no image is. On a 60-degree

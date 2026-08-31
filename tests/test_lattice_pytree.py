@@ -197,11 +197,8 @@ def test_the_raster_path_differentiates_the_basis_through_its_index_offsets():
     import jax.numpy as jnp
     A = np.asarray(wavebit.hexagonal(400.0))
     n = 48
-    t = (np.arange(n) + 0.5) / n
-    U, V = np.meshgrid(t, t)
-    X, Y = U * A[0, 0] + V * A[0, 1], U * A[1, 0] + V * A[1, 1]
-    cx, cy = 0.5 * (A[0, 0] + A[0, 1]), 0.5 * (A[1, 0] + A[1, 1])
-    eps = np.where((X - cx) ** 2 + (Y - cy) ** 2 < 150.0 ** 2, 12.25, 1.0)
+    X, Y = (np.asarray(c) for c in wavebit.grid((n, n), lattice=A))
+    eps = np.where(X ** 2 + Y ** 2 < 150.0 ** 2, 12.25, 1.0)
 
     def loss(M):
         s = wavebit.rcwa(backend=1, wavelength=900.0, lattice=M, truncation_order=[4, 4],
@@ -363,12 +360,8 @@ def test_a_traced_period_is_still_a_cell():
 
 def _rod_on_cell(basis, n=48, radius=150.0):
     """A disc on the parametric grid of ``basis`` -- the same object whatever the spelling."""
-    A = np.asarray(basis)
-    t = (np.arange(n) + 0.5) / n
-    U, V = np.meshgrid(t, t)
-    X, Y = U * A[0, 0] + V * A[0, 1], U * A[1, 0] + V * A[1, 1]
-    cx, cy = 0.5 * (A[0, 0] + A[0, 1]), 0.5 * (A[1, 0] + A[1, 1])
-    return np.where((X - cx) ** 2 + (Y - cy) ** 2 < radius ** 2, 12.25, 1.0)
+    X, Y = (np.asarray(c) for c in wavebit.grid((n, n), lattice=basis))
+    return np.where(X ** 2 + Y ** 2 < radius ** 2, 12.25, 1.0)
 
 
 @pytest.mark.parametrize('cell,tol', [

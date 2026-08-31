@@ -327,9 +327,9 @@ def skewed_disc(N, gamma_deg, P=400.0, r=60.0, eps_in=5.76):
     a1 = np.array([P, 0.0])
     a2 = P * np.array([np.cos(np.deg2rad(gamma_deg)), np.sin(np.deg2rad(gamma_deg))])
     A = np.column_stack((a1, a2))
-    t = (np.arange(N) + 0.5) / N
-    U, V = np.meshgrid(t, t)
-    d = U[..., None] * a1 + V[..., None] * a2 - 0.5 * (a1 + a2)
+    # `wavebit.grid` centres the cell on the origin, so these displacements are its output
+    X, Y = (np.asarray(c) for c in wavebit.grid((N, N), lattice=A))
+    d = np.stack([X, Y], axis=-1)
     rho, disp = None, None
     for i in (-1, 0, 1):
         for j in (-1, 0, 1):

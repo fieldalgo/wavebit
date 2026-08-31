@@ -127,8 +127,11 @@ model): `R` is power back into the incidence medium, `T` power through the far s
 `'bottom'`), and the amplitudes keep the Fresnel contract below — so user
 post-processing is identical for both sides.
 
-Within a layer the array follows the image convention: row `0` of a raster `structure` is
-`y = 0`, for every builder and for the reconstructed field cell alike. The flip that renders a
+Within a layer the array follows the image convention: row `0` of a raster `structure` is the
+**bottom** of the cell — the `-y` end, at `y = -Py/2 + Py/(2*Ny)` — for every builder and for
+the reconstructed field cell alike. (It read "row `0` is `y = 0`" until 2026-08-31, which was
+loose in two ways at once: row 0's centre was never at `y = 0` even then, and the cell is
+centred on the origin now.) The flip that renders a
 field the conventional way up belongs to plotting (`plot_field`), not to the data.
 
 **The reconstructed field's vector components use that same `+z`.** `reconstruct_field` returns
@@ -174,12 +177,27 @@ converge rather than merely scoring worse.
 …) share **one length unit of your choosing** — nothing in the solver assumes nm. Shape
 coordinates are absolute lengths, not fractions of the period.
 
-A shape's **centre is measured from the centre of the cell**, `0.5*(a1 + a2)`, so a centred
-shape is `cx = cy = 0` — which is also what omitting them means, and what S4 does. Only the
-shape paths have such a coordinate: a raster *is* the geometry, and its pixel convention is
-unchanged (`structure[layer][j, i]` is the permittivity at `(i+0.5)/Nx * a1 + (j+0.5)/Ny * a2`).
-`reconstruct_field`'s `sample_x` / `sample_y` use the same origin; a *count* there spans the
-cell, which in that frame is `[-period/2, +period/2]`.
+### One origin: the cell is centred on it
+
+Every coordinate this library takes or hands back is measured from the **centre of the cell**,
+`0.5*(a1 + a2)`. So a centred feature is `0`, and `0.5*(a1 + a2)` is never written by hand.
+
+| where | what `0` means |
+| --- | --- |
+| a shape's `cx` / `cy` | the centre of the cell — also what omitting them means |
+| `reconstruct_field`'s `sample_x` / `sample_y` | the same point; a *count* spans the cell, `[-period/2, +period/2]` |
+| `wavebit.grid`'s `X` / `Y` | the same point; `structure[layer][j, i]` sits at `r = (u - 0.5) * a1 + (v - 0.5) * a2` for `u = (i+0.5)/Nx`, `v = (j+0.5)/Ny` |
+| the axes `plot_structure` draws | the same point; they run `-P/2` to `+P/2` |
+
+`sample_z` is the exception and deliberately so: `z` is not periodic and the stack *has* a
+distinguished point, so it is absolute from the top (see below).
+
+This is S4's convention (*"the unit cell is the Wigner-Seitz cell centered at the origin"*) and
+Meep's. It arrived on 2026-08-31; before it the origin was the cell's corner, and both the
+README and `oblique-lattice.md` opened their raster example by computing the cell centre by
+hand. Internally the Fourier machinery still integrates over `u, v` in `[0, 1]` — the offset is
+a relabeling, so no coefficient moves — and `_core.lattice.sample_grid` is that internal frame.
+Reaching for it from user-facing code misplaces a structure by half a period, silently.
 
 All angles are **radians**.
 

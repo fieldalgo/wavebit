@@ -31,10 +31,22 @@ this module.
 differences survives the skew. The exact structure is BTTB; ``docs/factorization-terms.md`` §3
 has the distinction and the check.)
 
-The raster follows that substitution: ``structure[layer][j, i]`` is the permittivity at
-``r = (i + 0.5)/Nx * a1 + (j + 0.5)/Ny * a2``. Axis 1 runs along ``a1`` (and pairs with
-``truncation_order[0]`` / ``m``), axis 0 along ``a2`` (with ``truncation_order[1]`` / ``n``) — the same pairing
-axis-aligned case has always used, read in lattice coordinates rather than Cartesian ones.
+The raster follows that substitution. ``structure[layer][j, i]`` sits at the parametric point
+``u = (i + 0.5)/Nx``, ``v = (j + 0.5)/Ny``, and **the cell is centred at the origin**, so its
+Cartesian position is
+
+    r = (u - 0.5) * a1 + (v - 0.5) * a2
+
+Axis 1 runs along ``a1`` (and pairs with ``truncation_order[0]`` / ``m``), axis 0 along ``a2``
+(with ``truncation_order[1]`` / ``n``) — the same pairing the axis-aligned case has always
+used, read in lattice coordinates rather than Cartesian ones.
+
+The ``- 0.5`` is a relabeling and nothing else: the integral above runs over ``u, v`` in
+``[0, 1]`` either way and the array is indexed the same, so **no coefficient moves**. What
+changed on 2026-08-31 is where the origin *is*, and it changed for every coordinate this
+library takes or hands back — a shape's ``cx`` / ``cy``, ``reconstruct_field``'s ``sample_x`` /
+``sample_y``, and :func:`grid`. One origin, so that a centred feature is ``0`` everywhere and
+nobody writes ``0.5*(a1 + a2)`` by hand.
 
 What the skew *does* reach is any quantity that is Cartesian-geometric rather than
 index-based: see :func:`jacobian`, which is what the NVF normal field needs.
@@ -269,10 +281,16 @@ def jacobian(A, n_v, n_u):
 
 
 def sample_grid(xp, grid_shape, lattice, dtype):
-    """Cartesian coordinates of the cell's pixel centres: two ``(Ny, Nx)`` arrays ``(X, Y)``.
+    """Pixel-centre coordinates in the **internal** frame: two ``(Ny, Nx)`` arrays ``(X, Y)``.
 
-    ``r = (i + 0.5)/Nx * a1 + (j + 0.5)/Ny * a2`` — the raster placement stated at the top of
-    this module, evaluated as *positions* rather than read as indices. That is what the two
+    ``r = (i + 0.5)/Nx * a1 + (j + 0.5)/Ny * a2`` -- the cell's *corner* at the origin, which
+    is the frame the Fourier machinery works in and the one
+    :func:`~wavebit._core.analytic.shape_geometry` resolves a shape's centre into. **The public
+    door is :func:`grid`**, which re-bases to the cell centre; the two differ by
+    ``0.5*(a1 + a2)``, and reaching for this one from user-facing code misplaces a structure by
+    half a period with nothing to say so.
+
+    Evaluated as *positions* rather than read as indices. That is what the two
     non-raster normal-field builders need
     (:func:`wavebit._core.analytic.normal_vector_field_analytical`,
     :func:`wavebit._core.boundary.distance_gradient_normal_field`): both measure something
@@ -363,13 +381,21 @@ def grid(shape, period=None, lattice=None, backend=0, dtype=None):
     of the coordinates and the layout follows on its own::
 
         X, Y = wavebit.grid((64, 96), period=[700., 1100.])
-        layer = np.where((X - 350.) ** 2 + (Y - 550.) ** 2 < 200. ** 2, 12.25, 1.0)
+        layer = np.where(X ** 2 + Y ** 2 < 200. ** 2, 12.25, 1.0)
 
     ``np.where`` is elementwise, so ``layer`` simply inherits whatever layout ``X`` and ``Y``
     already had. **That is the whole point**: an expression written in *coordinates* cannot get
     the axis order wrong, while one written in *indices* (``layer[:2] = ...``) can, and does so
     silently on a non-square raster. Hand-rolling the grid is what pushes callers towards
     indices; this exists so they need not.
+
+    **The cell is centred at the origin**, the same origin an analytic shape's ``cx`` / ``cy``
+    and ``reconstruct_field``'s ``sample_x`` / ``sample_y`` use, so the rod above is centred by
+    writing nothing. It read ``(X - 350.)**2 + (Y - 550.)**2`` until 2026-08-31 -- the caller
+    computed the centre of the cell, which on a skewed cell is ``0.5*(a1 + a2)``, two
+    components neither of which is a period. That line appeared in the README, in
+    ``docs/oblique-lattice.md``, in a tutorial and in eight helpers; one origin deletes all of
+    them. :func:`sample_grid` is the internal corner-based twin and is not this function.
 
     A skewed cell comes free. ``lattice=`` places the samples on the parallelogram, so the same
     coordinate expression describes the same physical shape whatever the cell -- where writing
@@ -401,7 +427,10 @@ def grid(shape, period=None, lattice=None, backend=0, dtype=None):
     else:
         raise ValueError(f'grid: backend must be 0 (NumPy), 1 (JAX) or 2 (PyTorch); got {backend!r}')
 
-    return sample_grid(xp, shape, A, dtype if dtype is not None else xp.float64)
+    X, Y = sample_grid(xp, shape, A, dtype if dtype is not None else xp.float64)
+    # The one place the public frame is put on. `sample_grid` builds the cell from its corner
+    # because that is what the transform integrates over; a caller sees it from the centre.
+    return X - 0.5 * (A[0][0] + A[0][1]), Y - 0.5 * (A[1][0] + A[1][1])
 
 
 def rectangular(lx, ly=None):

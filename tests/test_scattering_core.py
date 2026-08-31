@@ -332,16 +332,12 @@ HEX = np.column_stack(([HEX_P, 0.0], [HEX_P / 2, HEX_P * np.sqrt(3) / 2]))
 
 def _hex_rod(n=48, radius=90.0):
     a1, a2 = HEX[:, 0], HEX[:, 1]
-    t = (np.arange(n) + 0.5) / n
-    U, V = np.meshgrid(t, t)
-    pts = U[..., None] * a1 + V[..., None] * a2
-    centre = 0.5 * (a1 + a2)
-    inside = np.zeros(pts.shape[:2], dtype=bool)
+    X, Y = (np.asarray(c) for c in wavebit.grid((n, n), lattice=HEX))
+    inside = np.zeros(X.shape, dtype=bool)
     for i in (-1, 0, 1):                       # minimum image over the lattice
         for j in (-1, 0, 1):
             s = i * a1 + j * a2
-            inside |= ((pts[..., 0] - centre[0] - s[0]) ** 2
-                       + (pts[..., 1] - centre[1] - s[1]) ** 2) <= radius ** 2
+            inside |= ((X - s[0]) ** 2 + (Y - s[1]) ** 2) <= radius ** 2
     cell = np.full((1, n, n), 1.0)
     cell[0][inside] = 5.76           # 2.4**2
     return cell

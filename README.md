@@ -425,9 +425,11 @@ centres, so a structure can be written in coordinates rather than indices:
 ```python
 A = wavebit.hexagonal(400.)
 X, Y = wavebit.grid((256, 256), lattice=A)
-cx, cy = 0.5 * (A[0][0] + A[0][1]), 0.5 * (A[1][0] + A[1][1])         # the cell centre
-layer = np.where((X - cx) ** 2 + (Y - cy) ** 2 < 90. ** 2, 12.25, 1.)
+layer = np.where(X ** 2 + Y ** 2 < 90. ** 2, 12.25, 1.)
 ```
+
+The cell is centred at the origin, so a centred pillar takes no arithmetic — the same `0` a
+shape's `cx` / `cy` and `reconstruct_field`'s `sample_x` / `sample_y` use.
 
 On a skewed cell the samples sit at `u*a1 + v*a2`, not on a rectangle, and `np.meshgrid` alone
 will not put them there. An expression in `X` and `Y` also cannot get the axis order wrong,
@@ -440,10 +442,12 @@ the retained orders, and the solve is `O(N^2.7)` — so the native cell is about
 a converged high-contrast structure (~3x on a lightly-truncated sweep).
 
 **The raster is read in lattice coordinates.** `structure[layer][j, i]` is the permittivity at
-`r = (i + 0.5)/Nx * a1 + (j + 0.5)/Ny * a2`. Building a raster on a Cartesian grid and passing a
-tilted basis therefore describes a *different structure*, silently — energy still conserves to
-1e-15. Analytic shapes are immune: their lengths are absolute Cartesian quantities, so a
-rectangle stays a rectangle under a skew.
+the parametric point `u = (i + 0.5)/Nx`, `v = (j + 0.5)/Ny`, which — the cell being centred on
+the origin — is `r = (u - 0.5) * a1 + (v - 0.5) * a2`. Building a raster on a Cartesian grid and
+passing a tilted basis therefore describes a *different structure*, silently — energy still
+conserves to 1e-15. `wavebit.grid` is there so you need not write either form. Analytic shapes
+are immune to the skew in their lengths, which are absolute Cartesian quantities, so a rectangle
+stays a rectangle under one.
 
 One build path is refused on a skewed cell rather than answering, because it runs and returns a
 plausible wrong number: `factorization='li'` on a raster, whose inverse rule follows the raster
@@ -600,11 +604,14 @@ reconstructed field's vector components use that same `+z` — so a wave travell
 stack has `H = k̂ × E` and `Sz > 0`. (Before 2026-08-14 `Ez`, `Hx` and `Hy` came back with the
 opposite sign; see [`docs/conventions.md`](docs/conventions.md).)
 
-**Smooth-path shape coordinates are absolute, and centred.** On the smooth path, `cx`, `cy`,
+**Shape coordinates are absolute, and there is one origin.** On the smooth path, `cx`, `cy`,
 `lx` and `ly` are lengths in the same units as `period` — not fractions of it. Passing
 fractions builds a structure `1/period` times too small and solves it without complaint.
-`cx` / `cy` are measured from the centre of the cell, `0.5*(a1 + a2)`, so `0` is centred; the
-raster path has no such coordinate and is unaffected.
+
+**The cell is centred at the origin**, everywhere a coordinate is taken or handed back: a
+shape's `cx` / `cy`, `reconstruct_field`'s `sample_x` / `sample_y`, `wavebit.grid`'s `X` / `Y`,
+and the axes `plot_structure` draws. A centred feature is `0` in all of them, and nobody writes
+`0.5*(a1 + a2)` by hand.
 
 **Units are yours.** `wavelength`, `period` and `thickness` only have to share one unit. The
 quickstart uses nanometres; nothing in the solver assumes it.

@@ -89,16 +89,12 @@ IDS = ['-'.join(c[k] for k in AXES) for c in CASES]
 def _rod_mask(basis, n=32, radius=ROD):
     """A disc, stated in the cell's own coordinates so a change of basis carries the same object."""
     a1, a2 = np.asarray(basis)[:, 0], np.asarray(basis)[:, 1]
-    t = (np.arange(n) + 0.5) / n
-    U, V = np.meshgrid(t, t)
-    pts = U[..., None] * a1 + V[..., None] * a2
-    centre = 0.5 * (a1 + a2)
-    inside = np.zeros(pts.shape[:2], bool)
+    X, Y = (np.asarray(c) for c in wavebit.grid((n, n), lattice=basis))
+    inside = np.zeros(X.shape, bool)
     for i in (-1, 0, 1):                              # minimum image over the lattice
         for j in (-1, 0, 1):
             s = i * a1 + j * a2
-            inside |= (((pts[..., 0] - centre[0] - s[0]) ** 2
-                        + (pts[..., 1] - centre[1] - s[1]) ** 2) <= radius ** 2)
+            inside |= ((X - s[0]) ** 2 + (Y - s[1]) ** 2) <= radius ** 2
     return inside
 
 

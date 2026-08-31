@@ -31,18 +31,19 @@ HEX = np.column_stack(([P, 0.0], [P / 2, P * np.sqrt(3) / 2]))
 
 
 def raster(basis, n=128, radius=R):
-    """A rod on the parametric grid of ``basis``: ``cell[j, i]`` at ``(i+.5)/n*a1+(j+.5)/n*a2``."""
+    """A rod at the centre of ``basis``'s cell, through ``wavebit.grid``.
+
+    ``grid`` puts the samples on the parallelogram (``cell[j, i]`` at the parametric point
+    ``(i+.5)/n, (j+.5)/n``) *and* centres the cell on the origin, so a centred rod is stated by
+    writing nothing -- the same ``cx = cy = 0`` the shape arms in this file use.
+    """
     a1, a2 = np.asarray(basis)[:, 0], np.asarray(basis)[:, 1]
-    t = (np.arange(n) + 0.5) / n
-    U, V = np.meshgrid(t, t)
-    pts = U[..., None] * a1 + V[..., None] * a2
-    centre = 0.5 * (a1 + a2)
-    inside = np.zeros(pts.shape[:2], dtype=bool)
+    X, Y = (np.asarray(c) for c in wavebit.grid((n, n), lattice=basis))
+    inside = np.zeros(X.shape, dtype=bool)
     for i in (-1, 0, 1):                           # minimum image over the lattice
         for j in (-1, 0, 1):
             s = i * a1 + j * a2
-            inside |= (((pts[..., 0] - centre[0] - s[0]) ** 2
-                        + (pts[..., 1] - centre[1] - s[1]) ** 2) <= radius ** 2)
+            inside |= ((X - s[0]) ** 2 + (Y - s[1]) ** 2) <= radius ** 2
     cell = np.full((1, n, n), EPS_AIR)
     cell[0][inside] = EPS_ROD
     return cell

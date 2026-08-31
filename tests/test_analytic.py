@@ -1379,8 +1379,12 @@ def test_every_reader_of_the_default_moves_together(cell_name, A):
                        dtype=float)
     assert np.allclose(verts.mean(axis=0), (cx, cy), atol=1e-9)
 
-    # the picture: the sample nearest the resolved centre must be inside the shape
-    X, Y = wavebit.grid((129, 129), lattice=A)
+    # the picture: the sample nearest the resolved centre must be inside the shape.
+    # `sample_grid`, not `wavebit.grid` -- `_shape_inside` reads the *internal* frame, the one
+    # `shape_geometry` resolves into, and the public helper is the same points half a period
+    # away. `draw` itself calls `sample_grid` here for the same reason.
+    from wavebit._core.lattice import sample_grid
+    X, Y = sample_grid(xnp, (129, 129), A, np.float64)
     X, Y = np.asarray(X), np.asarray(Y)
     cover = np.asarray(_d._shape_inside(shape, X, Y, A, Px, Py))
     k = np.argmin((X - cx) ** 2 + (Y - cy) ** 2)
@@ -1435,18 +1439,64 @@ def test_omitting_the_centre_solves_what_stating_it_solves(cell_name, A, factori
 
 @pytest.mark.parametrize('cell_name, A', _CELLS, ids=[c[0] for c in _CELLS])
 def test_grid_places_samples_on_the_cell_not_a_rectangle(cell_name, A):
-    """``grid`` returns ``r = (i+0.5)/n_u * a1 + (j+0.5)/n_v * a2``, in Cartesian coordinates.
+    """``grid`` returns ``r = (u - 0.5)*a1 + (v - 0.5)*a2`` -- the cell centred on the origin.
 
     Checked against the closed form rather than against ``sample_grid``, which is the function
-    it wraps -- comparing a wrapper to its callee proves only that the call happened.
+    it wraps -- comparing a wrapper to its callee proves only that the call happened, and the
+    two deliberately differ: `sample_grid` is the internal corner-based frame.
+
+    The ``- 0.5`` is the whole public convention. Drop it and every raster in this repository
+    still solves, still conserves energy, and sits half a period from where its recipe says.
     """
     n_v, n_u = 7, 11
     X, Y = wavebit.grid((n_v, n_u), lattice=A)
-    u = (np.arange(n_u) + 0.5) / n_u
-    v = (np.arange(n_v) + 0.5) / n_v
+    u = (np.arange(n_u) + 0.5) / n_u - 0.5
+    v = (np.arange(n_v) + 0.5) / n_v - 0.5
     U, V = np.meshgrid(u, v)
     assert np.allclose(np.asarray(X), U * A[0, 0] + V * A[0, 1], atol=1e-12)
     assert np.allclose(np.asarray(Y), U * A[1, 0] + V * A[1, 1], atol=1e-12)
+
+    # and the samples straddle the origin rather than starting at it
+    assert np.asarray(X).min() < 0.0 < np.asarray(X).max()
+
+
+def test_the_grid_and_a_shape_centre_are_the_same_origin():
+    """``grid``'s ``0`` and a shape's ``cx = 0`` are the same point. Nothing else says so.
+
+    They are the two halves of one convention and they are re-based in two different functions
+    -- ``grid`` shifts what ``sample_grid`` returns, ``shape_geometry`` shifts what the dict
+    says -- with no shared constant between them. Drift in either is silent: the raster still
+    solves, the shape still solves, and they describe structures half a cell apart.
+
+    **Compared on the convolution matrix, not on a total.** A rigid translation of the whole
+    layer is a diagonal similarity, so ``sum(R)`` and ``sum(T)`` are invariant and could not
+    see this at all; the coefficient at ``G`` carries ``exp(-i G.d)`` and does. A skewed cell,
+    because that is where the offset stops being a period and becomes ``0.5*(a1 + a2)``.
+
+    Measured: 1.5e-4 of the matrix's own scale, which is the staircase between a 512-pixel
+    raster and the closed form. The control is the corner spelling -- what ``grid`` returned
+    until 2026-08-31 -- at 5.2e-1, a factor of 3500.
+    """
+    A = np.column_stack([[400.0, 0.0], [200.0, 400.0 * np.sqrt(3) / 2]])
+    R, EPS, n = 120.0, 5.76, 512
+    X, Y = (np.asarray(c) for c in wavebit.grid((n, n), lattice=A))
+    kw = dict(backend=0, wavelength=900.0, lattice=A, truncation_order=[6, 6], top=1.0,
+              bot=1.0, theta=0.0, phi=0.0, psi=0.0, thickness=[300.0], factorization='nvf')
+
+    def conv(structure):
+        return np.asarray(wavebit.rcwa(structure=structure, **kw).eps_conv_matrices().epz_i[0])
+
+    shape = conv([dict(background=1.0, shapes=[
+        dict(type='circle', cx=0.0, cy=0.0, lx=2 * R, material=EPS)])])
+    scale = np.abs(shape).max()
+
+    same = np.abs(conv(np.where(X ** 2 + Y ** 2 < R ** 2, EPS, 1.0)[None]) - shape).max() / scale
+    ox, oy = 0.5 * (A[0, 0] + A[0, 1]), 0.5 * (A[1, 0] + A[1, 1])
+    corner = np.abs(conv(np.where((X + ox) ** 2 + (Y + oy) ** 2 < R ** 2, EPS, 1.0)[None])
+                    - shape).max() / scale
+
+    assert same < 1e-3, same
+    assert corner > 100 * same, (same, corner)
 
 
 def test_grid_period_and_lattice_are_two_spellings_of_one_cell():
@@ -1483,15 +1533,16 @@ def test_a_structure_built_through_grid_is_the_one_that_gets_solved():
     """
     A = np.column_stack([[400.0, 0.0], [200.0, 400.0 * np.sqrt(3) / 2]])
     n = 96
-    cx, cy = 0.5 * (A[0, 0] + A[0, 1]), 0.5 * (A[1, 0] + A[1, 1])
 
+    # A centred rod is what the helper is for, and stating it takes nothing: the cell is
+    # centred on the origin, so there is no cell centre left to compute.
     X, Y = wavebit.grid((n, n), lattice=A)
-    eps_helper = np.where((np.asarray(X) - cx) ** 2 + (np.asarray(Y) - cy) ** 2 < 150.0 ** 2, 5.76, 1.0)
+    eps_helper = np.where(np.asarray(X) ** 2 + np.asarray(Y) ** 2 < 150.0 ** 2, 5.76, 1.0)
 
-    t = (np.arange(n) + 0.5) / n
+    t = (np.arange(n) + 0.5) / n - 0.5
     U, V = np.meshgrid(t, t)
     Xh, Yh = U * A[0, 0] + V * A[0, 1], U * A[1, 0] + V * A[1, 1]
-    eps_hand = np.where((Xh - cx) ** 2 + (Yh - cy) ** 2 < 150.0 ** 2, 5.76, 1.0)
+    eps_hand = np.where(Xh ** 2 + Yh ** 2 < 150.0 ** 2, 5.76, 1.0)
 
     assert eps_helper.tobytes() == eps_hand.tobytes()
 
