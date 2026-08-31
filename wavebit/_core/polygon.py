@@ -91,11 +91,34 @@ def polygon_ft(xp, verts, ky, kx, lattice):
 
 # ---------------------------------------------------------------- primitives
 
+def _speaks(xp, dt):
+    """Can ``xp`` be *asked* for ``dt``? PyTorch cannot be asked for one of NumPy's.
+
+    A shape's centre carries whatever the **cell basis** is made of, which on an ordinary torch
+    solve is a NumPy float64 -- ``as_lattice`` holds the basis in the namespace it was built
+    from, not the one the solve runs in. ``torch.asarray(..., dtype=numpy.dtype('float64'))``
+    raises; the arithmetic that follows is fine either way, so it is only the *request* that
+    has to be spelled in the namespace's own vocabulary.
+
+    This was reachable before the centre moved (2026-08-31) and had no test: an omitted centre
+    already resolved to a NumPy scalar, so a **painted** layer on torch whose shapes did not
+    state their centres raised ``TypeError: asarray(): argument 'dtype' must be torch.dtype``
+    out of ``rect_verts``. Every torch case in ``test_boundary.py`` spelled its centres out, so
+    nothing reached it. Now that every shape carries the origin the branch is on the main road,
+    which is what turned a latent failure into five red tests.
+    """
+    try:
+        xp.asarray(0.0, dtype=dt)
+    except Exception:                          # noqa: BLE001 - "not this namespace's dtype"
+        return False
+    return True
+
+
 def _vertex_dtype(xp, *args):
     """The real dtype these vertices should be built in.
 
-    Taken from the arguments when any of them is an array, so a traced parameter carries its
-    own precision through; ``float64`` otherwise.
+    Taken from the arguments when any of them is an array **of this namespace**, so a traced
+    parameter carries its own precision through; ``float64`` otherwise.
 
     The fallback is the point. ``xp.asarray([1.0, ...])`` takes the *namespace default*, and
     torch's is ``float32`` no matter what ``complex_dtype`` the solver was given. A layer whose
@@ -104,7 +127,7 @@ def _vertex_dtype(xp, *args):
     """
     for a in args:
         dt = getattr(a, 'dtype', None)
-        if dt is not None:
+        if dt is not None and _speaks(xp, dt):
             return dt
     return xp.float64
 
