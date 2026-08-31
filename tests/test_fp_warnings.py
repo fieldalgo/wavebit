@@ -131,9 +131,9 @@ def test_every_factorization_is_silent(strategy):
 
 def test_analytic_shape_path_is_silent():
     """The analytic (staircase-free) builder carries its own copy of the NVF assembly."""
-    structure = [dict(background=1.0, shapes=[dict(type='ellipse', cx=0.5, cy=0.6, lx=0.5,
+    structure = [dict(background=1.0, shapes=[dict(type='ellipse', cx=0.0, cy=0.0, lx=0.5,
                                               ly=0.3, angle=np.deg2rad(40), material=5.76),
-                                      dict(type='circle', cx=0.3, cy=0.3, lx=0.2,
+                                      dict(type='circle', cx=-0.2, cy=-0.3, lx=0.2,
                                               material=9.0)])]
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')

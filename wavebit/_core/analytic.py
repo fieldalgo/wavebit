@@ -43,10 +43,12 @@ and needs concrete numbers, so a layer whose parameters are tracers is passed th
 :meth:`freeze_geometry` is the eager call that still sees them.
 
 **Shape parameters are absolute lengths, in whatever unit ``period`` is given in** -- not
-fractions of the period. A rod filling half a 0.77-long period is ``lx=0.385``, centred at
-``cx=0.385``; the defaults say the same thing (``cx`` defaults to ``extent_u / 2``). Passing
+fractions of the period. A rod filling half a 0.77-long period is ``lx=0.385``. Passing
 fractions builds a rod ``1/period`` times too large and says nothing about it, so
 ``test_analytic_shape_parameters_are_absolute_lengths`` pins the distinction.
+
+**A centre is measured from the centre of the cell**, not from its corner, so that same rod
+sits at ``cx=0`` -- which is also what an omitted ``cx`` means. See :func:`shape_geometry`.
 
 Everything here is differentiable with respect to the shape parameters (``cx``, ``cy``, ``lx``,
 ``ly``, ``angle``, ``material``) — those are what an inverse-design user actually optimizes. A
@@ -137,32 +139,57 @@ def shape_geometry(shape, lattice):
 
     Lengths are absolute, in the units of ``period`` (see the module docstring).
 
-    **An omitted centre defaults to the centre of the cell**, which needs the basis. It read
+    **``cx`` / ``cy`` are measured from the centre of the cell**, ``0.5*(a1 + a2)``, so a
+    centred shape is ``cx = cy = 0`` -- which is also what omitting them means. What this
+    returns is the absolute position everything downstream has always consumed: the offset is
+    added here, in the one place a shape dict is read, so no builder knows the difference.
+
+    Corner-relative until 2026-08-31. It moved to match S4, the only other solver that takes
+    analytic shapes, whose centres are likewise *"relative to the center of the unit cell"*.
+    A centred structure is the common case and ``0`` is the natural spelling for it; the
+    corner spelling of the same thing was ``0.5*(a1 + a2)`` written out by hand, which on a
+    skewed cell is two components, neither of them a period. Nothing has been released, so
+    there is no shim: the old numbers were re-based at every call site instead.
+
+    **The raster path did not move, and has no origin to move.** An array *is* the geometry,
+    so there is no coordinate a caller can state against the wrong origin:
+    ``structure[layer][j, i]`` is still the permittivity at ``(i+0.5)/Nx * a1 +
+    (j+0.5)/Ny * a2`` (``README.md``). The other surface that did move is
+    ``reconstruct_field``'s ``sample_x`` / ``sample_y``, which name points in the same frame.
+
+    The origin needs the basis, and reading it off the *periods* was a bug: it was
     ``(Px/2, Py/2)`` until 2026-08-23, and that is the centre of ``diag(|a1|, |a2|)`` rather
     than of the cell whose columns are a1, a2 -- ``periods_of`` has already thrown the angle
     away by then, so a 60-degree hex and a square both report ``(400, 400)`` and both got the
     square's answer. Measured 26% of ``|a1|`` out on that hex, and on a shear the default
-    landed *outside* the cell entirely.
+    landed *outside* the cell entirely. Every shape pays that arithmetic now rather than only
+    the defaulted ones, which is the one thing the move buys beyond the spelling.
 
-    A lone shape survives it, which is why it lasted: a translation is a diagonal phase on
-    every conv matrix, so one defaulted shape is misplaced and not missolved (2.3e-15). It
-    bites the moment a second shape fixes the *relative* geometry -- 45.8% on ``sum(R)``,
-    flat across truncation order, between two spellings of the same point lattice.
+    A lone shape survives such a slip, which is why it lasted: a translation is a diagonal
+    phase on every conv matrix, so one misplaced shape is misplaced and not missolved
+    (2.3e-15). It bites the moment a second shape fixes the *relative* geometry -- 45.8% on
+    ``sum(R)``, flat across truncation order, between two spellings of the same point lattice.
     ``tests/test_boundary.py:355`` recorded the defect in prose and pinned only that the
-    readers agree with each other, which they still do: there is one default and it moves them
+    readers agree with each other, which they still do: there is one origin and it moves them
     together.
     """
     stype = shape.get('type', 'rectangle')
-    # `get(key, default)` evaluates the default whether or not it is used, so this is spelled
-    # as a branch: on a traced basis the unused expression would still be built.
+    # The origin. It used to be built only for a shape that omitted its centre, and was spelled
+    # as a branch rather than as `get(key, default)` for that reason -- the default expression
+    # of a `get` is evaluated whether or not it is used, so on a traced basis it would have
+    # been built for nothing. Every shape needs it now, so the branch is gone and the default
+    # is the constant `0.0`, which a `get` may evaluate freely.
     #
     # There used to be a `Px / 2` arm here for `lattice is None`. It was the centre of
     # `diag(|a1|, |a2|)`, which on a shear is not inside the cell (`2d7ca08`), and the solver
     # stopped reaching it once `_geometry_lattice_for` became total (`cc016fc`) -- measured:
     # driving only the public API, the one function that ever sees a `None` here is
     # `as_lattice` itself, which is where the conversion happens.
-    cx = shape['cx'] if 'cx' in shape else 0.5 * (lattice[0][0] + lattice[0][1])
-    cy = shape['cy'] if 'cy' in shape else 0.5 * (lattice[1][0] + lattice[1][1])
+    # Two reads, not four: `Lattice.__getitem__` stacks its two vectors on every access, and
+    # this now runs for every shape rather than only for a defaulted one.
+    row_x, row_y = lattice[0], lattice[1]
+    cx = shape.get('cx', 0.0) + 0.5 * (row_x[0] + row_x[1])
+    cy = shape.get('cy', 0.0) + 0.5 * (row_y[0] + row_y[1])
     lx = shape.get('lx', shape.get('l', 0.0))
     round_ = stype in ('circle', 'disk', 'square')
     ly = lx if round_ else shape.get('ly', shape.get('l', 0.0))
@@ -1229,7 +1256,11 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
         dx, dy = cx - mid_x, cy - mid_y
         shift_u = (a2y * dx - a2x * dy) / det
         shift_v = (-a1y * dx + a1x * dy) / det
-        built = [dict(shapes[0], cx=mid_x, cy=mid_y)]
+        # `0.0`, not `mid`: a centre is measured from `0.5*(a1 + a2)` since 2026-08-31, so the
+        # centre of the cell is what an explicit zero names. Writing `mid` here would add the
+        # origin twice and build the field for a shape one cell-centre away from where the
+        # phase then puts it.
+        built = [dict(shapes[0], cx=0.0, cy=0.0)]
     else:
         built, shift_v, shift_u = shapes, None, None
 

@@ -104,15 +104,14 @@ def _shapes(basis, painted=False):
     that do not touch stay on the closed-form builder, and discs that do go to the boundary
     resolver. Handing both arms the same discs would exercise one builder twice.
     """
-    a1, a2 = np.asarray(basis)[:, 0], np.asarray(basis)[:, 1]
-    centre = 0.5 * (a1 + a2)
     if painted:
         offsets, radii = ((0.0, 0.0), (40.0, 0.0)), (ROD, ROD)
     else:
         offsets, radii = ((-0.22 * P, 0.0), (0.22 * P, 0.0)), (0.16 * P, 0.16 * P)
+    # The offsets *are* the centres: `cx` / `cy` are measured from `0.5*(a1 + a2)`, so every
+    # cell here carries the same pair of discs the same way, as `_rod` does above.
     layer = {'background': 1.0, 'shapes': [
-        {'type': 'circle', 'cx': float(centre[0]) + dx, 'cy': float(centre[1]) + dy,
-         'lx': 2 * r, 'material': eps}
+        {'type': 'circle', 'cx': dx, 'cy': dy, 'lx': 2 * r, 'material': eps}
         for (dx, dy), r, eps in zip(offsets, radii, (5.76, 9.0))]}
     return [layer]
 

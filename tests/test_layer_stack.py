@@ -30,7 +30,7 @@ def _layers(path, count):
     if path == 'raster':
         return np.stack([_GROOVE * (1.0 + 0.5 * i) for i in range(count)])
     return [{'background': 1.0,
-             'shapes': [{'type': 'rectangle', 'cx': 0.4 * P, 'cy': 0.5 * P,
+             'shapes': [{'type': 'rectangle', 'cx': -0.1 * P, 'cy': 0.0,
                          'lx': 0.3 * P, 'ly': P, 'material': 4.0 + i}]}
             for i in range(count)]
 

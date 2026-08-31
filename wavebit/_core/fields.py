@@ -52,9 +52,11 @@ so arbitrary points cost the same per point as grid ones and need no interpolati
 grid leaves the shared points bit-identical, which is what says the sampling is genuinely
 pointwise rather than merely appearing to be.
 
-Explicit ``sample_x`` / ``sample_y`` are lengths in ``period``'s units and are unconstrained —
+Explicit ``sample_x`` / ``sample_y`` are lengths in ``period``'s units, measured from the
+**centre of the cell** (the origin an analytic shape's ``cx`` uses), and are unconstrained —
 unsorted, non-uniform and outside the cell are all fine, the last being a periodic
-continuation. Explicit ``sample_z`` is absolute, measured from the **top of the stack**, and is
+continuation. A count spans the cell, which in that frame is ``[-period/2, +period/2]``.
+Explicit ``sample_z`` is absolute, measured from the **top of the stack**, and is
 the one with rules: it must lie within the stack, an interface belongs to the layer below it,
 and the layer thicknesses have to be concrete. :func:`_z_plan` states each of those and why.
 
@@ -270,11 +272,19 @@ def _axis_samples(xp, spec, extent, C, dev):
     same length units as ``period`` -- they need not be uniform, sorted, or inside the cell,
     because the kernel below is a plain pointwise ``exp(i k.r)`` with no grid structure to
     respect. That is also why this is cheap: cost is points x orders either way.
+
+    **Both spellings name the cell, and both are measured from its centre**: ``sample_x = 0``
+    is the middle of the cell, the same origin an analytic shape's ``cx`` has used since
+    2026-08-31. A count therefore spans ``[-extent/2, +extent/2]``, which is exactly the grid
+    that read ``[0, extent]`` while the origin was the corner -- the same physical points under
+    a new name, so no golden moves. It is still *built* as ``linspace(0, extent, n)`` rather
+    than as the re-based spelling plus a shift, because the two are not identical in floating
+    point and every field golden was captured on this one.
     """
     _check_spec(spec, 'sample_x/sample_y')
     if is_count(spec):
         return xp.linspace(0, extent, spec, dtype=C, device=dev)
-    return xp.astype(xp.asarray(spec, device=dev), C)
+    return xp.astype(xp.asarray(spec, device=dev), C) + 0.5 * extent
 
 
 def _inv_fourier(xp, kx, ky, lattice, sample_x, sample_y, k0, C):
@@ -325,6 +335,11 @@ def _inv_fourier(xp, kx, ky, lattice, sample_x, sample_y, k0, C):
         # a line running from x=250 to x=50 across the cell rather than the constant x asked
         # for -- up to `|a2x|` away in position and ~90% of the field magnitude in value --
         # while an explicit `sample_y`, which that cell answers exactly, was refused.
+        #
+        # The ``+ 0.5`` is the centre-relative origin the length spelling carries too: the
+        # centre of the cell is ``u = v = 0.5``, and this branch only ever converts on an
+        # axis-aligned cell, where that is the ``0.5*(a1 + a2)`` an analytic ``cx`` is measured
+        # from. A count needs no shift -- it spans the whole cell either way.
         def _frac(spec, a_par, a_perp, axis):
             if is_count(spec):
                 return xp.linspace(0, 1, _n_samples(spec), dtype=C, device=dev)
@@ -333,7 +348,7 @@ def _inv_fourier(xp, kx, ky, lattice, sample_x, sample_y, k0, C):
                     f'explicit {axis} coordinates need an axis-aligned cell: on a sheared '
                     'lattice an (x, y) does not determine the (u, v) this path samples in. '
                     'Pass a count instead, or describe the cell as a rectangular supercell.')
-            return xp.astype(xp.asarray(spec, device=dev), C) / a_par
+            return xp.astype(xp.asarray(spec, device=dev), C) / a_par + 0.5
 
         _check_spec(sample_x, 'sample_x')
         _check_spec(sample_y, 'sample_y')

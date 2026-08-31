@@ -119,7 +119,7 @@ def test_a_method_nothing_reads_is_refused_not_ignored(cfg):
 
 def test_a_method_on_the_smooth_shape_path_is_refused():
     """The shape paths build their normal fields from the geometry itself."""
-    smooth = [{'background': 1.0, 'shapes': [{'type': 'circle', 'cx': 0.5, 'cy': 0.5,
+    smooth = [{'background': 1.0, 'shapes': [{'type': 'circle', 'cx': 0.0, 'cy': 0.0,
                                               'lx': 0.6, 'material': 5.76}]}]
     s = wavebit.rcwa(structure=smooth, truncation_order=[2, 2], normal_method='contour', **SOLVE_KW)
     with pytest.raises(NotImplementedError, match='no reader'):

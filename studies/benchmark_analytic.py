@@ -9,8 +9,8 @@ curved (metallic) boundaries.
 
 The analytic modeling path is selected by passing ``structure`` as a list of layer dicts::
 
-    structure = [dict(background=1.0, shapes=[dict(type='circle', cx=.5, cy=.5,
-                                                   lx=0.6, ly=0.6, material=12.25)])]
+    structure = [dict(background=1.0, shapes=[dict(type='circle', cx=0.0, cy=0.0,
+                                                   lx=0.6, material=12.25)])]
 
 Every material here is a **relative permittivity** -- ``background``, each shape's
 ``material``, and ``top`` / ``bot``.  A bare number is the scalar shorthand for
@@ -70,8 +70,10 @@ def bench_tilted_dielectric():
                period=(1.0, 1.0), wavelength=1.6, thickness=(0.6,), psi=0.0)  # TM
     NR, ang, L, c = 3.5, np.deg2rad(30), 0.5, 0.5
     eps_r = wavebit.eps_from_index(NR)
-    analytic = [dict(background=1.0, shapes=[dict(type='rectangle', cx=c, cy=c, lx=L, ly=L,
-                                                  angle=ang, material=eps_r)])]
+    # `c` is the absolute centre the staircase below is built around; a shape's centre is
+    # measured from the middle of the cell, which on this period-1 cell is 0.5.
+    analytic = [dict(background=1.0, shapes=[dict(type='rectangle', cx=c - 0.5, cy=c - 0.5,
+                                                  lx=L, ly=L, angle=ang, material=eps_r)])]
 
     def stair(n_pix):
         # The staircase arm was the removed block path until 2026-08-27, at `n_split` 8 and
@@ -108,7 +110,7 @@ def bench_metallic_circle():
     NM, R = 0.05 + 3.5j, 0.30
     # No `ly`: a circle has one length, and naming a second is refused rather than dropped
     # (a dropped `ly` optimises with an exactly-zero gradient).
-    analytic = [dict(background=1.0, shapes=[dict(type='circle', cx=0.5, cy=0.5,
+    analytic = [dict(background=1.0, shapes=[dict(type='circle', cx=0.0, cy=0.0,
                                                   lx=2 * R,
                                                   material=wavebit.eps_from_index(NM))])]
     ref, _ = solve(0, analytic, 16, **cfg)
@@ -134,12 +136,12 @@ def bench_energy_and_backends():
                period=(1.0, 1.2), wavelength=1.5, thickness=(0.3, 0.2), psi=0.35 * np.pi)
     eps = wavebit.eps_from_index
     structure = [
-        dict(background=1.0, shapes=[dict(type='ellipse', cx=0.5, cy=0.6, lx=0.5, ly=0.3,
+        dict(background=1.0, shapes=[dict(type='ellipse', cx=0.0, cy=0.0, lx=0.5, ly=0.3,
                                           angle=np.deg2rad(40), material=eps(2.4))]),
-        dict(background=eps(1.5), shapes=[dict(type='rectangle', cx=0.4, cy=0.5, lx=0.4,
+        dict(background=eps(1.5), shapes=[dict(type='rectangle', cx=-0.1, cy=-0.1, lx=0.4,
                                                ly=0.5, angle=np.deg2rad(25),
                                                material=eps(1.0)),
-                                          dict(type='circle', cx=0.8, cy=0.9, lx=0.25,
+                                          dict(type='circle', cx=0.3, cy=0.3, lx=0.25,
                                                material=eps(3.0))]),
     ]
     print("\n" + "=" * 74)

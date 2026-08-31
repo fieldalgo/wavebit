@@ -27,8 +27,10 @@ def run():
                         psi=np.pi / 4,
                         )
 
-    # One dict per layer: a background material, and the shapes drawn on it. `cx`, `cy`, `lx`
-    # and `ly` are absolute lengths in the units of `period`, not fractions of it.
+    # One dict per layer: a background material, and the shapes drawn on it. `lx` and `ly` are
+    # absolute lengths in the units of `period`, not fractions of it, and `cx` / `cy` are the
+    # centre measured from the *centre of the cell* -- so 0 is centred and +-150 is an edge on
+    # this 300 period.
     #
     # The tilted ellipse is the reason to be on this path at all. Its Fourier transform is taken
     # in closed form, so the 20-degree edge is exact at every truncation order rather than being
@@ -38,17 +40,17 @@ def run():
         # layer 1
         dict(background=sio2, shapes=[
             # obj 1
-            dict(type='ellipse', cx=75, cy=225, lx=101.5, ly=81.5,
+            dict(type='ellipse', cx=-75, cy=75, lx=101.5, ly=81.5,
                  angle=20 * np.pi / 180, material=si),
             # obj 2
-            dict(type='rectangle', cx=225, cy=75, lx=98.5, ly=81.5, angle=0, material=si),
+            dict(type='rectangle', cx=75, cy=-75, lx=98.5, ly=81.5, angle=0, material=si),
         ]),
         # layer 2
         dict(background=si3n4, shapes=[
             # obj 1
-            dict(type='rectangle', cx=50, cy=150, lx=31, ly=300, angle=0, material=si),
+            dict(type='rectangle', cx=-100, cy=0, lx=31, ly=300, angle=0, material=si),
             # obj 2
-            dict(type='rectangle', cx=200, cy=150, lx=49.5, ly=300, angle=0, material=si),
+            dict(type='rectangle', cx=50, cy=0, lx=49.5, ly=300, angle=0, material=si),
         ]),
     ]
 

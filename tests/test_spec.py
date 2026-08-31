@@ -25,7 +25,7 @@ from wavebit import JobSpec, Sweep, SpecError, Backend, Factorization, Material
 # version 3 moved the material numbers from refractive index to permittivity and an absent
 # version is the absence of a statement about which of the two these are. 12.25 is 3.5**2.
 BINARY_GRATING = {
-    'version': '6',
+    'version': '7',
     'numerics': {'backend': 'numpy', 'truncation_order': [10, 0]},
     'stack': {
         'top': 1.0, 'bot': 2.25, 'period': [700.0],
@@ -268,7 +268,7 @@ def test_a_document_that_states_no_version_is_refused():
         JobSpec.from_json(json.dumps(versionless))
 
     # stating it is the whole fix; nothing else about the document has to change
-    assert JobSpec.from_dict({**versionless, 'version': '6'}).key() == \
+    assert JobSpec.from_dict({**versionless, 'version': '7'}).key() == \
         JobSpec.from_dict(BINARY_GRATING).key()
 
 
@@ -286,7 +286,7 @@ def test_the_stale_document_only_the_version_can_catch():
 
     # and it is a *different scene*, not a near miss: state the version and it runs, happily,
     # conserving energy and answering a different question
-    stale = wavebit.run({**INDEX_NUMBERS, 'version': '6'})
+    stale = wavebit.run({**INDEX_NUMBERS, 'version': '7'})
     current = wavebit.run(BINARY_GRATING)
     assert stale.R.sum() + stale.T.sum() == pytest.approx(1.0, abs=1e-13)
     assert current.R.sum() + current.T.sum() == pytest.approx(1.0, abs=1e-13)
@@ -330,7 +330,7 @@ def test_a_pre_rename_layer_key_is_refused_as_an_unknown_field():
     Pinned here rather than dropped, because the refusal still has to fire. Silently accepting
     ``eps`` beside ``structure`` is the failure; reporting it plainly is not.
     """
-    document = {'version': '6',
+    document = {'version': '7',
                 'numerics': BINARY_GRATING['numerics'],
                 'incidence': BINARY_GRATING['incidence'],
                 'stack': {'top': 1.0, 'bot': 1.5, 'period': [700.0],
@@ -436,7 +436,7 @@ def test_a_material_inside_a_shape_recipe_survives_too():
     from wavebit import Stack, Incidence
 
     layer = {'background': Material(12.96),
-             'shapes': [{'type': 'rectangle', 'cx': 0.5, 'cy': 0.5, 'lx': 0.2, 'ly': 0.2,
+             'shapes': [{'type': 'rectangle', 'cx': 0.0, 'cy': 0.0, 'lx': 0.2, 'ly': 0.2,
                          'material': Material(2.25, mu=1.5)}]}
     spec = JobSpec(stack=Stack(layers=[wavebit.Layer(thickness=0.2, structure=layer)],
                                period=[1.0, 1.0]),

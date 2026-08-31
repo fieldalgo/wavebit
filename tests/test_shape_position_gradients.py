@@ -44,18 +44,19 @@ BASE = dict(period=[P, P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
 
 # Nine positions, spaced so no two land on the same normal-field grid line — when this file was
 # written that mattered, because the answer moved between grid lines. It no longer does, and
-# the spacing now serves as a check that it does not. Confined to 0.30-0.70 of the period so
-# that the widest shape here (a circle of radius 0.25*P) stays clear of the cell edge: a shape
-# wrapping the boundary is a separate question from this one, and it does move the objective
-# (1.5e-2 at 0.17*P, where the circle overhangs).
-POSITIONS = [(0.30 + 0.05 * i) * P for i in range(9)]
+# the spacing now serves as a check that it does not. Confined to +-0.20 of the period about
+# the cell's centre -- which is what a centre is measured from -- so that the widest shape here
+# (a circle of radius 0.25*P) stays clear of the cell edge: a shape wrapping the boundary is a
+# separate question from this one, and it does move the objective (1.5e-2 at -0.33*P, where the
+# circle overhangs).
+POSITIONS = [(-0.20 + 0.05 * i) * P for i in range(9)]
 
 CASES = [(s, p) for s in ('rectangle', 'ellipse', 'circle') for p in ('cx', 'cy')]
 IDS = [f'{s}_{p}' for s, p in CASES]
 
 
 def _shape(kind, param, value):
-    s = dict(type=kind, cx=0.385, cy=0.385, lx=0.385, ly=0.231, angle=0.4, material=12.25)
+    s = dict(type=kind, cx=0.0, cy=0.0, lx=0.385, ly=0.231, angle=0.4, material=12.25)
     if kind == 'circle':
         # Same geometry as the `ly = lx` this used to write -- `lx` is the diameter and
         # `shape_geometry` resolves the second axis to it -- but a circle has no second length
@@ -136,7 +137,7 @@ def test_the_projectors_move_by_a_phase_and_by_nothing_else():
     from wavebit._core.analytic import normal_projector_coeffs
 
     truncation_order, grid = 4, 256
-    cy0, cy = 0.385, 0.31 * P
+    cy0, cy = 0.0, -0.19 * P
 
     def coeffs(v):
         return normal_projector_coeffs(jnp, [_shape('rectangle', 'cy', v)], (grid, grid),
@@ -168,7 +169,7 @@ def test_the_position_reaches_the_projectors_through_that_phase():
                                        truncation_order, jnp.complex128)[0]
         return jnp.real(c_xx[2 * truncation_order + 1, 2 * truncation_order])
 
-    cy, h = 0.31 * P, 1e-6
+    cy, h = -0.19 * P, 1e-6
     auto = float(jax.grad(c_ky1)(jnp.asarray(cy)))
     fd = float((c_ky1(jnp.asarray(cy + h)) - c_ky1(jnp.asarray(cy - h))) / (2 * h))
 
@@ -207,11 +208,11 @@ def test_the_sampled_field_no_longer_depends_on_where_in_the_cell_a_shape_SITS()
         return float(jnp.mean(normal_x ** 2))
 
     for kind, tol in (('circle', 1e-5), ('ellipse', 1e-4), ('rectangle', 1e-3)):
-        seen = [mean_nx2(kind, c * P) for c in (0.10, 0.31, 0.50, 0.77, 1.31)]
+        seen = [mean_nx2(kind, c * P) for c in (-0.40, -0.19, 0.0, 0.27, 0.81)]
         assert np.ptp(seen) < tol, (kind, seen)
 
     # A circle's mean normal_x**2 is 1/2 by symmetry, and now reads it from anywhere in the cell.
-    assert abs(mean_nx2('circle', 0.13 * P) - 0.5) < 1e-4
+    assert abs(mean_nx2('circle', -0.37 * P) - 0.5) < 1e-4
 
 
 # ------------------------------------------------------------------ more than one layer
@@ -224,13 +225,13 @@ def test_the_sampled_field_no_longer_depends_on_where_in_the_cell_a_shape_SITS()
 
 STACK = dict(period=[P, P], thickness=[0.25, 0.30], theta=0.35, phi=0.4, psi=0.0,
              wavelength=0.777, top=1.0, bot=2.25, truncation_order=[4, 4])
-CX0, CX1 = 0.35 * P, 0.55 * P
+CX0, CX1 = -0.15 * P, 0.05 * P
 
 
 def _stack(cx0, cx1):
-    return [dict(background=1.0, shapes=[dict(type='rectangle', cx=cx0, cy=0.385, lx=0.385,
+    return [dict(background=1.0, shapes=[dict(type='rectangle', cx=cx0, cy=0.0, lx=0.385,
                                           ly=0.231, angle=0.4, material=12.25)]),
-            dict(background=1.0, shapes=[dict(type='circle', cx=cx1, cy=0.462, lx=0.385,
+            dict(background=1.0, shapes=[dict(type='circle', cx=cx1, cy=0.077, lx=0.385,
                                           material=6.25)])]
 
 
@@ -320,13 +321,13 @@ def test_moving_one_layer_of_two_moves_the_answer_and_the_gradient_says_by_how_m
 
 TWO_CFG = dict(period=[P, P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
                wavelength=0.777, top=1.0, bot=2.25, truncation_order=[4, 4])
-CA, CB = 0.28 * P, 0.68 * P
+CA, CB = -0.22 * P, 0.18 * P
 
-TWO_CIRCLES = (dict(type='circle', cy=0.30 * P, lx=0.20 * P, material=9.0),
-               dict(type='circle', cy=0.70 * P, lx=0.20 * P, material=4.840000000000001))
-TWO_RECTANGLES = (dict(type='rectangle', cy=0.30 * P, lx=0.20 * P, ly=0.15 * P, angle=0.4,
+TWO_CIRCLES = (dict(type='circle', cy=-0.20 * P, lx=0.20 * P, material=9.0),
+               dict(type='circle', cy=0.20 * P, lx=0.20 * P, material=4.840000000000001))
+TWO_RECTANGLES = (dict(type='rectangle', cy=-0.20 * P, lx=0.20 * P, ly=0.15 * P, angle=0.4,
                        material=9.0),
-                  dict(type='rectangle', cy=0.70 * P, lx=0.20 * P, ly=0.15 * P, angle=0.9,
+                  dict(type='rectangle', cy=0.20 * P, lx=0.20 * P, ly=0.15 * P, angle=0.9,
                        material=4.840000000000001))
 
 
@@ -420,9 +421,9 @@ def test_a_layer_of_two_shapes_is_translation_invariant_too():
                top=1.0, bot=2.1025, theta=0.0, phi=None, psi=np.pi / 2)
 
     def total(d, grid=256):
-        shapes = [dict(type='rectangle', cx=0.30 + d, cy=0.5, lx=0.30, ly=0.24, angle=0.0,
+        shapes = [dict(type='rectangle', cx=-0.20 + d, cy=0.0, lx=0.30, ly=0.24, angle=0.0,
                        material=12.1104),
-                  dict(type='circle', cx=0.70 + d, cy=0.30, lx=0.22, angle=0.0, material=5.76)]
+                  dict(type='circle', cx=0.20 + d, cy=-0.20, lx=0.22, angle=0.0, material=5.76)]
         structure = [dict(background=1.0, shapes=shapes)]
         return float(np.sum(np.asarray(
             wavebit.rcwa(structure=structure, normal_grid=grid, **cfg).solve().T)).real)
@@ -455,32 +456,32 @@ def test_a_multishape_layer_is_periodic_across_the_cell_edge():
     """
     cfg = dict(backend=0, period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), truncation_order=(4, 4),
                top=1.0, bot=2.1025, theta=0.0, phi=None, psi=np.pi / 2)
-    fixed = dict(type='rectangle', cx=0.72, cy=0.62, lx=0.26, ly=0.30, angle=0.0, material=4.41)
+    fixed = dict(type='rectangle', cx=0.22, cy=0.12, lx=0.26, ly=0.30, angle=0.0, material=4.41)
 
     def total(cx, shapes_after):
-        moving = dict(type='rectangle', cx=cx, cy=0.5, lx=0.30, ly=0.24, angle=0.0,
+        moving = dict(type='rectangle', cx=cx, cy=0.0, lx=0.30, ly=0.24, angle=0.0,
                       material=12.1104)
         structure = [dict(background=1.0, shapes=[moving] + shapes_after)]
         return float(np.sum(np.asarray(
             wavebit.rcwa(structure=structure, normal_grid=256, **cfg).solve().T)).real)
 
-    alone = [total(cx, []) for cx in (0.10, 1.10, 2.10)]
+    alone = [total(cx, []) for cx in (-0.40, 0.60, 1.60)]
     assert np.ptp(alone) < 1e-12, alone
 
-    pair = [total(cx, [fixed]) for cx in (0.10, 1.10, 2.10)]
+    pair = [total(cx, [fixed]) for cx in (-0.40, 0.60, 1.60)]
     assert np.ptp(pair) < 1e-9, pair
 
     # The projector coefficients are what used to move; the permittivity never did. Comparing
     # both keeps this a statement about the normal field rather than about the solve.
-    shapes = lambda cx: [dict(type='rectangle', cx=cx, cy=0.5, lx=0.30, ly=0.24, angle=0.0,
+    shapes = lambda cx: [dict(type='rectangle', cx=cx, cy=0.0, lx=0.30, ly=0.24, angle=0.0,
                               material=12.1104), fixed]
     eps = [np.asarray(_an.assemble_eps_coeffs(np, shapes(cx), 1.0, 4, 4,
-                                              as_lattice(period=(1.0, 1.0)), np.complex128)) for cx in (0.10, 1.10)]
+                                              as_lattice(period=(1.0, 1.0)), np.complex128)) for cx in (-0.40, 0.60)]
     assert np.max(np.abs(eps[0] - eps[1])) < 1e-13
     nxx = [np.asarray(_an.normal_projector_coeffs(np, shapes(cx), (256, 256),
                                                   as_lattice(period=(1.0, 1.0)), 4, 4,
                                                   np.complex128)[0])
-           for cx in (0.10, 1.10)]
+           for cx in (-0.40, 0.60)]
     assert np.max(np.abs(nxx[0] - nxx[1])) < 1e-12
 
 
@@ -497,9 +498,9 @@ def test_a_common_translation_of_every_shape_leaves_the_answer_alone():
                top=1.0, bot=2.1025, theta=0.0, phi=None, psi=np.pi / 2)
 
     def total(shift):
-        shapes = [dict(type='rectangle', cx=0.30 + shift, cy=0.5, lx=0.30, ly=0.24,
+        shapes = [dict(type='rectangle', cx=-0.20 + shift, cy=0.0, lx=0.30, ly=0.24,
                        angle=0.0, material=12.1104),
-                  dict(type='rectangle', cx=0.72 + shift, cy=0.62, lx=0.26, ly=0.30,
+                  dict(type='rectangle', cx=0.22 + shift, cy=0.12, lx=0.26, ly=0.30,
                        angle=0.0, material=4.41)]
         return float(np.sum(np.asarray(wavebit.rcwa(
             structure=[dict(background=1.0, shapes=shapes)], normal_grid=256, **cfg)

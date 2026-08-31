@@ -151,16 +151,14 @@ def shape_scene(case, basis=None, **over):
     """
     basis = LATTICE[case['lattice']] if basis is None else np.asarray(basis)
     medium = MEDIA[case['media']]
-    centre = 0.5 * (np.asarray(basis)[:, 0] + np.asarray(basis)[:, 1])
     material = (wavebit.Material(medium['eps'], mu=medium['mu']) if 'mu' in medium
                 else medium['eps'])
     kw = dict(backend=0, period=[P, P], lattice=basis.tolist(), truncation_order=[6, 6],
               thickness=[H], wavelength=WL, top=medium['top'], bot=medium['bot'],
               factorization='nvf', incidence_side=case['side'], normal_grid=256,
               structure=[{'background': 1.0,
-                          'shapes': [{'type': 'circle', 'cx': float(centre[0]),
-                                      'cy': float(centre[1]), 'lx': 2 * ROD,
-                                      'material': material}]}],
+                          'shapes': [{'type': 'circle', 'cx': 0.0, 'cy': 0.0,
+                                      'lx': 2 * ROD, 'material': material}]}],
               **INCIDENCE[case['incidence']])
     kw.update(over)
     return wavebit.rcwa(**kw)

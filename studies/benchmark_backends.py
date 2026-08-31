@@ -236,7 +236,7 @@ def shape_builder(truncation_order, layers):
 
     def build(backend, lx):
         structure = [dict(background=EPS_HIGH,
-                          shapes=[dict(type='ellipse', cx=150.0, cy=150.0, lx=lx, ly=55.0,
+                          shapes=[dict(type='ellipse', cx=0.0, cy=0.0, lx=lx, ly=55.0,
                                        angle=0.27, material=EPS_MID)])] * layers
         return wavebit.rcwa(backend=backend, structure=structure, **cfg)
 
@@ -329,7 +329,7 @@ def sweep_recompile(budget, reps):
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[3, 3], top=1.0, bot=1.0,
                theta=0.15, phi=0.35, psi=TE_PSI, wavelength=900.0)
     make = lambda lx: [dict(background=EPS_HIGH,
-                            shapes=[dict(type='ellipse', cx=150.0, cy=150.0, lx=lx, ly=55.0,
+                            shapes=[dict(type='ellipse', cx=0.0, cy=0.0, lx=lx, ly=55.0,
                                          angle=0.27, material=EPS_MID)])]
 
     def loss(v, geometry):
@@ -366,7 +366,7 @@ def decompose(backend, truncation_order, normal_grid, reps):
     def build(lx):
         return wavebit.rcwa(backend=backend, structure=[
             dict(background=EPS_HIGH,
-                 shapes=[dict(type='ellipse', cx=150.0, cy=150.0, lx=lx, ly=55.0,
+                 shapes=[dict(type='ellipse', cx=0.0, cy=0.0, lx=lx, ly=55.0,
                               angle=0.27, material=EPS_MID)])], **cfg)
 
     # **The shape moves between calls, and it has to.** `normal_projector_coeffs` is cached on
@@ -444,13 +444,13 @@ def sweep_recompile_shapes(budget, reps):
         return rows
 
     lone = lambda lx: [dict(background=EPS_HIGH,
-                            shapes=[dict(type='ellipse', cx=150.0, cy=150.0, lx=lx, ly=55.0,
+                            shapes=[dict(type='ellipse', cx=0.0, cy=0.0, lx=lx, ly=55.0,
                                          angle=0.27, material=EPS_MID)])]
     # Two rods 120 apart, each `lx` wide: they meet as `lx` passes 120.
     pair = lambda lx: [dict(background=EPS_HIGH, shapes=[
-        dict(type='rectangle', cx=90.0, cy=150.0, lx=lx, ly=55.0, angle=0.0,
+        dict(type='rectangle', cx=-60.0, cy=0.0, lx=lx, ly=55.0, angle=0.0,
              material=EPS_MID),
-        dict(type='rectangle', cx=210.0, cy=150.0, lx=lx, ly=55.0, angle=0.0,
+        dict(type='rectangle', cx=60.0, cy=0.0, lx=lx, ly=55.0, angle=0.0,
              material=EPS_LOW)])]
 
     out = one(lone, [85.0, 90.0, 95.0, 100.0, 103.0, 106.0, 110.0, 115.0, 120.0, 125.0],

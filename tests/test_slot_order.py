@@ -92,7 +92,8 @@ def _shapes():
     px, py = KW['period']
     return [dict(background=EPS_BASE, shapes=[dict(
         type='rectangle',
-        cx=px * 0.5 * (COL0 + COL1) / GRID, cy=py * 0.5 * (ROW0 + ROW1) / GRID,
+        cx=px * (0.5 * (COL0 + COL1) / GRID - 0.5),
+        cy=py * (0.5 * (ROW0 + ROW1) / GRID - 0.5),
         lx=px * (COL1 - COL0) / GRID, ly=py * (ROW1 - ROW0) / GRID,
         material=EPS_ROD)])]
 

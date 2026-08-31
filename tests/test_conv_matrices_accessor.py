@@ -19,7 +19,7 @@ import wavebit
 P = 1.0
 BASE = dict(period=[P, P], thickness=[0.4], wavelength=0.8, theta=0.0, phi=0.0,
             top=1.0, bot=2.25, truncation_order=[4, 4])
-CIRCLE = dict(type='circle', cx=0.5, cy=0.5, lx=0.6, material=9.0)   # eps 9 is the old n = 3
+CIRCLE = dict(type='circle', cx=0.0, cy=0.0, lx=0.6, material=9.0)   # eps 9 is the old n = 3
 
 
 def disc_raster(N, r=0.30):
@@ -43,8 +43,8 @@ def test_every_modeling_path_answers_with_the_same_shaped_object():
         'raster+nvf': wavebit.rcwa(structure=disc_raster(96), factorization='nvf', **BASE),
         'smooth': wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **BASE),
         'boundary': wavebit.rcwa(structure=[dict(background=1.0, shapes=[
-            dict(type='rectangle', cx=0.40, cy=0.40, lx=0.34, ly=0.34, material=4.0),
-            dict(type='rectangle', cx=0.56, cy=0.56, lx=0.34, ly=0.34, angle=0.3,
+            dict(type='rectangle', cx=-0.10, cy=-0.10, lx=0.34, ly=0.34, material=4.0),
+            dict(type='rectangle', cx=0.06, cy=0.06, lx=0.34, ly=0.34, angle=0.3,
                  material=9.0)])], **BASE),
     }
     for name, solver in paths.items():

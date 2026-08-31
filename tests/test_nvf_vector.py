@@ -17,7 +17,7 @@ def test_analytical_normal_vector_generation():
     # The shapes were reached through a `Modeling` instance, which only ever held the list --
     # the block modeller it belonged to is gone and the normal field never needed it.
     period = (1000.0, 1000.0)
-    shapes = [dict(type='circle', cx=500.0, cy=500.0, lx=600.0)]
+    shapes = [dict(type='circle', cx=0.0, cy=0.0, lx=600.0)]
 
     normal_x, normal_y = get_normal_vector_field_analytical((100, 100), shapes, period=period)
     
@@ -39,7 +39,7 @@ def test_vector_nvf_energy_conservation():
     # in and no square on the way back out.
     structure_raster = np.expand_dims(eps_matrix, axis=0)
 
-    shapes = [dict(type='circle', cx=500.0, cy=500.0, lx=600.0)]
+    shapes = [dict(type='circle', cx=0.0, cy=0.0, lx=600.0)]
     nx_vec, ny_vec = get_normal_vector_field_analytical((N, N), shapes, period=(1000.0, 1000.0))
 
     max_order_val = 2

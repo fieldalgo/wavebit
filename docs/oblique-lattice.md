@@ -92,8 +92,11 @@ then test membership in Cartesian space, with **minimum image over the lattice**
 for `i, j` in `-1, 0, 1`) so a feature straddling an edge wraps correctly.
 
 Analytic shapes do not have this problem *in their lengths*: those are absolute Cartesian
-quantities, so a rectangle stays a rectangle under a skew and `cx` / `cy` mean what they always
-did. Their **periodic fold** is a separate thing and it was wrong until 2026-08-23. The nearest
+quantities, so a rectangle stays a rectangle under a skew. `cx` / `cy` are Cartesian too, and
+since 2026-08-31 they are measured from the **centre of the cell**, `0.5*(a1 + a2)` -- which
+is the one place a skew reaches a shape's own numbers, and what makes `cx = cy = 0` a centred
+shape on every cell rather than a corner-relative point that has to be computed per basis.
+Their **periodic fold** is a separate thing and it was wrong until 2026-08-23. The nearest
 image of a shape sits at `m*a1 + n*a2`; the fold was written `d % Px`, and `period` on a skewed
 cell reports `(|a1|, |a2|)`, so it reduced towards a point where no image is. On a 60-degree
 cell it looked straight up while the neighbour was up and to the right. It only shows once a

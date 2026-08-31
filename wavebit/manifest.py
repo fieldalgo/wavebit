@@ -61,7 +61,13 @@ from ._core.spec import SPEC_VERSION
 #: gracefully -- but ``fields`` is a *recognisable* key whose contents are attribute names a
 #: consumer indexes a result object with, so the old contents keep their shape while ceasing
 #: to resolve. That is the same failure the '5' bump exists for, one level down.
-MANIFEST_VERSION = '7'
+#: '8': the shape origin (2026-08-31). ``cx`` / ``cy`` are measured from the centre of the cell
+#: rather than from its corner, and ``shape_coordinates`` says so -- it was the bare string
+#: ``'absolute'``, which said only half of what a generator has to know. Same argument as '5':
+#: a consumer that kept writing ``cx = Px/2`` for a centred pillar now places it half a period
+#: off, and the scene it builds solves and conserves energy. The version is what lets it
+#: refuse rather than quietly answer a different question.
+MANIFEST_VERSION = '8'
 
 
 # --------------------------------------------------------------- how a structure is spelled
@@ -141,10 +147,23 @@ MATERIAL_QUANTITY = {
     'source': 'docs/conventions.md',
 }
 
-#: Shape lengths on both parametric paths are absolute, in the units of ``period`` — not
-#: fractions of it. Stated here because passing a fraction is not an error: it solves a
-#: different, much smaller structure and nothing raises.
-SHAPE_COORDINATES = 'absolute'
+#: How a shape dict's numbers are read, on both parametric paths. It says two things, and each
+#: is here because getting it wrong is not an error: a fraction where a length belongs solves a
+#: different, much smaller structure, and a corner-relative centre solves a correctly sized one
+#: in the wrong place. Both raise nothing.
+#:
+#: ``lengths``: absolute, in the units of ``period``, never fractions of it.
+#: ``origin``: what ``cx`` / ``cy`` are measured from -- the centre of the cell,
+#: ``0.5*(a1 + a2)``, which is also what an omitted centre means. Corner-relative until
+#: 2026-08-31; moved to match S4, the only other solver that takes analytic shapes.
+#: The **raster** path has no such coordinate and did not move: an array is the geometry.
+SHAPE_COORDINATES = {
+    'lengths': 'absolute',
+    'origin': 'cell_centre',
+    'origin_expression': '0.5*(a1 + a2)',
+    'omitted_centre': 'cx = cy = 0',
+    'applies_to': ('smooth', 'boundary'),
+}
 
 
 # ------------------------------------------------------------------ per-path option support

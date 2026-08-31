@@ -24,8 +24,12 @@ import wavebit
 from wavebit._core import boundary as _b
 from wavebit._core import clipper as _c
 from wavebit._core.analytic import assemble_eps_coeffs
+from wavebit._core.lattice import as_lattice
 
 P = 1000.0
+#: The axis-aligned cell as a *basis*. The boundary helpers below take one, not a period pair:
+#: a shape's `cx` / `cy` are measured from `0.5*(a1 + a2)`, which a pair of lengths cannot say.
+CELL = as_lattice(period=(P, P))
 COMMON = dict(backend=0, period=(P, P), thickness=(300.,), wavelength=900.,
               top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, truncation_order=(9, 9))
 
@@ -66,7 +70,7 @@ def test_layer_is_indexed_the_way_the_structure_is(side):
     meets ``structure[-1]`` first, and ``layer=0`` still has to mean the top one -- "the layer
     light meets first" was the wording here until 2026-08-22, and it is only true from above.
     """
-    shapes = [dict(type='circle', cx=500.0, cy=500.0, lx=200.0, material=9.0)]
+    shapes = [dict(type='circle', cx=0.0, cy=0.0, lx=200.0, material=9.0)]
     layers = [dict(background=1.0, shapes=[]), dict(background=1.0, shapes=shapes)]
     solver = wavebit.rcwa(structure=layers, incidence_side=side, **COMMON)
 
@@ -83,11 +87,11 @@ def test_the_analytic_sampler_agrees_with_its_own_dc_coefficient(lattice):
 
     The skewed case is the one that carries weight. A periodic image is ``r + m*a1 + n*a2``,
     not ``r + (m*Px, n*Py)``, and a shape sitting inside the cell cannot tell the two apart;
-    this layer has a rectangle at ``cy = 650`` with a 300 length across a sheared cell, so it
-    does.
+    this layer has a rectangle 150 above the cell centre with a 300 length across a sheared
+    cell, so it does.
     """
-    shapes = [dict(type='circle', cx=300.0, cy=300.0, lx=260.0, material=12.25),
-              dict(type='rectangle', cx=740.0, cy=650.0, lx=300.0, ly=180.0,
+    shapes = [dict(type='circle', cx=-200.0, cy=-200.0, lx=260.0, material=12.25),
+              dict(type='rectangle', cx=240.0, cy=150.0, lx=300.0, ly=180.0,
                    angle=0.45, material=4.840000000000001)]
     solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], lattice=lattice, **COMMON)
     fx, fy = int(solver.truncation_order[0]), int(solver.truncation_order[1])
@@ -105,7 +109,7 @@ def test_a_circle_is_read_through_shape_geometry():
     which is the defect that function was written to end.
     """
     solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=[
-        dict(type='circle', cx=500.0, cy=500.0, lx=400.0, material=9.0)])], **COMMON)
+        dict(type='circle', cx=0.0, cy=0.0, lx=400.0, material=9.0)])], **COMMON)
     area = np.pi * 200.0 ** 2 / (P * P)
     assert solver.slice_structure(n=1024).real.mean() == pytest.approx(
         1.0 + area * (9.0 - 1.0), rel=1e-3)
@@ -113,14 +117,14 @@ def test_a_circle_is_read_through_shape_geometry():
 
 # ------------------------------------------------------------------- painted, overlapping
 
-OVERLAP = [dict(type='rectangle', cx=430.0, cy=500.0, lx=300.0, ly=300.0, material=4.0),
-           dict(type='circle', cx=600.0, cy=520.0, lx=320.0, material=9.0)]
+OVERLAP = [dict(type='rectangle', cx=-70.0, cy=0.0, lx=300.0, ly=300.0, material=4.0),
+           dict(type='circle', cx=100.0, cy=20.0, lx=320.0, material=9.0)]
 
 
 def loop_mean_eps(shapes, background=1.0):
     """`<eps>` straight off the boundary path's resolved loops -- areas, no sampling at all."""
-    recs, regions = _b.plan_layer(shapes, (P, P))
-    verts = [_b.shape_vertices(xnp, s, (P, P)) for s in shapes]
+    recs, regions = _b.plan_layer(shapes, CELL)
+    verts = [_b.shape_vertices(xnp, s, CELL) for s in shapes]
     vals = _c.eval_table(xnp, recs, verts)
     total = background * P * P
     for shape, region in zip(shapes, regions):
@@ -178,8 +182,8 @@ def test_a_hole_is_drawn_as_a_hole():
     2.4256 where the geometry is 2.2371, which is what the solver itself did until the
     orientation stopped being carried in a separate field.
     """
-    shapes = [dict(type='rectangle', cx=500.0, cy=500.0, lx=600.0, ly=600.0, material=4.0),
-              dict(type='circle', cx=500.0, cy=500.0, lx=200.0, material=9.0)]
+    shapes = [dict(type='rectangle', cx=0.0, cy=0.0, lx=600.0, ly=600.0, material=4.0),
+              dict(type='circle', cx=0.0, cy=0.0, lx=200.0, material=9.0)]
     solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], **COMMON)
 
     hole_area = np.pi * 100.0 ** 2
@@ -189,8 +193,8 @@ def test_a_hole_is_drawn_as_a_hole():
     assert 2.4256 - geometry > 0.18                    # what ignoring the winding would give
 
     # The premise, pinned: the two loops of the host region are wound opposite ways.
-    recs, regions = _b.plan_layer(shapes, (P, P))
-    vals = _c.eval_table(xnp, recs, [_b.shape_vertices(xnp, s, (P, P)) for s in shapes])
+    recs, regions = _b.plan_layer(shapes, CELL)
+    vals = _c.eval_table(xnp, recs, [_b.shape_vertices(xnp, s, CELL) for s in shapes])
     areas = [_c.signed_area(np.asarray(_c.loop_verts(xnp, lp, vals), float))
              for lp in regions[0]]
     assert len(areas) == 2 and areas[0] > 0 > areas[1]
@@ -206,8 +210,8 @@ def test_band_limited_converges_on_the_geometry():
     the geometry does not fall with ``truncation_order`` at all, so monotone convergence is what pins the
     convention here without restating it.
     """
-    shapes = [dict(type='circle', cx=300.0, cy=300.0, lx=260.0, material=12.25),
-              dict(type='rectangle', cx=740.0, cy=650.0, lx=300.0, ly=180.0,
+    shapes = [dict(type='circle', cx=-200.0, cy=-200.0, lx=260.0, material=12.25),
+              dict(type='rectangle', cx=240.0, cy=150.0, lx=300.0, ly=180.0,
                    angle=0.45, material=4.840000000000001)]
     cfg = {k: v for k, v in COMMON.items() if k != 'truncation_order'}
     geometry = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], truncation_order=(3, 3),
@@ -231,8 +235,8 @@ def test_the_truncated_series_leaves_the_material_range():
     Nothing is wrong with the solve; this is what a truncated transform of a discontinuous
     function looks like, and it is the reason ``band_limited`` is not the default.
     """
-    shapes = [dict(type='circle', cx=300.0, cy=300.0, lx=260.0, material=12.25),
-              dict(type='rectangle', cx=740.0, cy=650.0, lx=300.0, ly=180.0,
+    shapes = [dict(type='circle', cx=-200.0, cy=-200.0, lx=260.0, material=12.25),
+              dict(type='rectangle', cx=240.0, cy=150.0, lx=300.0, ly=180.0,
                    angle=0.45, material=4.840000000000001)]
     solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], **COMMON)
     band = solver.slice_structure(n=512, band_limited=True).real
@@ -247,7 +251,7 @@ def test_an_absorbing_layer_keeps_its_imaginary_part():
     """`slice_structure` returns complex; taking the real part is the *plot*'s decision."""
     solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=[
         # (3.5 + 0.4j)**2 -- the same absorbing medium, as permittivity.
-        dict(type='circle', cx=500.0, cy=500.0, lx=300.0,
+        dict(type='circle', cx=0.0, cy=0.0, lx=300.0,
              material=12.09 + 2.8000000000000003j)])], **COMMON)
     values = solver.slice_structure(n=128)
 
@@ -268,7 +272,7 @@ def test_it_draws():
     """The drawing half, once per coordinate system. Presentation, so it only has to run."""
     plt = pytest.importorskip('matplotlib.pyplot')
     plt.switch_backend('Agg')
-    shapes = [dict(type='circle', cx=300.0, cy=300.0, lx=260.0, material=12.25)]
+    shapes = [dict(type='circle', cx=-200.0, cy=-200.0, lx=260.0, material=12.25)]
 
     axis_aligned = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], **COMMON)
     ax = axis_aligned.plot_structure(n=64)
@@ -300,9 +304,9 @@ def test_a_traced_structure_is_refused_by_name_rather_than_by_numpy():
 
     def layer(lx):
         return [dict(background=1.0, shapes=[
-            dict(type='rectangle', cx=250.0, cy=500.0, lx=lx, ly=200.0, angle=0.0,
+            dict(type='rectangle', cx=-250.0, cy=0.0, lx=lx, ly=200.0, angle=0.0,
                  material=4.0),
-            dict(type='rectangle', cx=750.0, cy=500.0, lx=200.0, ly=200.0, angle=0.0,
+            dict(type='rectangle', cx=250.0, cy=0.0, lx=200.0, ly=200.0, angle=0.0,
                  material=9.0)])]
 
     def drawn(lx):

@@ -806,9 +806,13 @@ HEX_RESPELT = np.column_stack((HEX[:, 0], HEX[:, 1] - HEX[:, 0]))
 
 #: The stack the oblique cascade cuts, stated as *shapes* rather than as a raster on purpose: a
 #: raster is not the same object under a change of basis -- re-basing re-discretizes it and the
-#: staircase term converges only as O(1/n) -- while a disc at an absolute Cartesian centre is
-#: carried unchanged. ``cx`` / ``cy`` are written out because an omitted centre defaults to the
-#: *cell* centre, which is a different point in the two spellings.
+#: staircase term converges only as O(1/n) -- while a disc is carried across exactly.
+#:
+#: ``cx = cy = 0`` is the cell centre, which the two spellings put half of ``a1`` apart:
+#: ``(a1 + a2)/2`` against ``(a1 + (a2 - a1))/2 = a2/2``. That is a rigid translation of the
+#: whole stack -- both layers carry it -- and neither half of what this file asserts can see
+#: one: a port is built from the basis and the media, and the cascade below joins two solves on
+#: the *same* spelling.
 CUT_HEX = [dict(background=1.0,
                 shapes=[dict(type='circle', cx=0.0, cy=0.0, lx=180.0, material=12.25)]),
            dict(background=6.25,

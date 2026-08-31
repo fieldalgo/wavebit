@@ -533,7 +533,7 @@ def test_incidence_carries_the_pair():
 
 
 _SPEC = {
-    'version': '6',                 # a parsed document states its schema; see tests/test_spec.py
+    'version': '7',                 # a parsed document states its schema; see tests/test_spec.py
     'numerics': {'backend': 'numpy', 'truncation_order': [10, 0]},
     'stack': {
         'top': 1.0, 'bot': 2.25, 'period': [700.0],

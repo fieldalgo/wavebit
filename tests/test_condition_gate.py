@@ -229,7 +229,7 @@ def test_normal_grid_is_refused_where_nothing_reads_it(factorization):
 
     # the default is not a request, and a shape layer reads it
     assert float(np.sum(np.asarray(wavebit.rcwa(structure=raster, **cfg).solve().T))) > 0.0
-    shapes = [dict(background=1.0, shapes=[dict(type='circle', cx=150.0, cy=150.0, lx=140.0,
+    shapes = [dict(background=1.0, shapes=[dict(type='circle', cx=0.0, cy=0.0, lx=140.0,
                                                 material=4.0)])]
     assert float(np.sum(np.asarray(wavebit.rcwa(
         structure=shapes, normal_grid=256,

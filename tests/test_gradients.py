@@ -30,7 +30,7 @@ RASTER[0, 2:6, 2:6] = 9.0             # permittivity: 3.0**2
 BASE = dict(period=[0.77, 0.77], thickness=[0.2], theta=0.2, phi=0.3, psi=0.4,
             wavelength=0.777, top=1.0, bot=2.25, truncation_order=[3, 3])
 
-SHAPE = dict(type='rectangle', cx=0.385, cy=0.385, lx=0.385, ly=0.231, angle=0.4,
+SHAPE = dict(type='rectangle', cx=0.0, cy=0.0, lx=0.385, ly=0.231, angle=0.4,
              material=12.25)                            # 3.5**2
 ANALYTIC_BASE = dict(period=[0.77, 0.77], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
                      wavelength=0.777, top=1.0, bot=2.25, truncation_order=[4, 4])
@@ -208,7 +208,7 @@ def test_analytic_angle_is_smooth_through_normal():
                 wavelength=900.0, psi=np.pi / 4, theta=0.1, phi=0.3)
 
     def analytic(angle):
-        shape = dict(type='rectangle', cx=150.0, cy=150.0, lx=80.0, ly=60.0,
+        shape = dict(type='rectangle', cx=0.0, cy=0.0, lx=80.0, ly=60.0,
                      angle=angle, material=4.0)
         res = wavebit.rcwa(backend=0, structure=[dict(background=12.25, shapes=[shape])],
                              **base).solve()
@@ -237,10 +237,10 @@ def test_translation_leaves_nothing_behind_within_one_normal_field_cell():
     cell = 300.0 / solver.normal_grid
 
     def total(cx):
-        shape = dict(type='rectangle', cx=cx, cy=150.0, lx=80.0, ly=60.0,
+        shape = dict(type='rectangle', cx=cx, cy=0.0, lx=80.0, ly=60.0,
                      angle=0.4, material=4.0)
         return float(np.sum(wavebit.rcwa(backend=0, structure=[dict(background=12.25, shapes=[shape])],
                                            **base).solve().T))
 
-    values = [total(150.0 + f * cell) for f in (0.05, 0.35, 0.65, 0.95)]
+    values = [total(f * cell) for f in (0.05, 0.35, 0.65, 0.95)]
     assert np.ptp(values) < 5e-5, np.ptp(values)

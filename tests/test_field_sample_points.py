@@ -11,6 +11,11 @@ that holds until someone adds an FFT for speed. The strongest statement availabl
 *bit-identity*, and it is what most of these tests use: a point asked for explicitly must equal
 the same point asked for as part of a grid, to the bit, not to a tolerance.
 
+``sample_x`` / ``sample_y`` are measured from the **centre of the cell**, the same origin an
+analytic shape's ``cx`` uses since 2026-08-31, so a count spans ``[-period/2, +period/2]``.
+:func:`test_the_shape_origin_and_the_sample_origin_are_one_origin` is the one that says the two
+halves of that sentence are the same origin, against a raster, which has no origin to move.
+
 The one place the two spellings legitimately differ is a layer interface, where ``E_z`` is
 two-valued. A count returns both limits (the interface appears twice, as one layer's bottom and
 the next one's top); explicit coordinates can only return one, and the documented rule picks the
@@ -83,11 +88,52 @@ def test_explicit_points_reproduce_the_grid_they_were_taken_from(path):
     below, where the interface rule has to be accounted for.
     """
     grid = _field(path, sample_x=11, sample_y=5, sample_z=4)
-    named = _field(path, sample_x=np.linspace(0, PERIOD[0], 11),
-                   sample_y=np.linspace(0, PERIOD[1], 5) if path in ('2d', '4ff') else 5,
+    named = _field(path, sample_x=np.linspace(-PERIOD[0] / 2, PERIOD[0] / 2, 11),
+                   sample_y=(np.linspace(-PERIOD[1] / 2, PERIOD[1] / 2, 5)
+                             if path in ('2d', '4ff') else 5),
                    sample_z=4)
     assert named.shape == grid.shape
     assert np.array_equal(named, grid), np.max(np.abs(named - grid))
+
+
+def test_the_shape_origin_and_the_sample_origin_are_one_origin():
+    """``cx`` and ``sample_x`` are measured from the same point, and a raster says which.
+
+    Both moved to the centre of the cell on 2026-08-31, and they had to move together: a shape
+    stated in one frame and sampled in the other returns the field half a period from the
+    structure it belongs to. Nothing inside either path could notice -- a translation of the
+    whole layer is a diagonal phase on every convolution matrix, so ``R`` and ``T`` come back
+    identical either way and the cell that arrives is complete, smooth and wrong.
+
+    **The raster is the referee**, because it did not move: an array *is* the geometry, so the
+    same grating written as pixels fixes both origins from outside the shape path. The rod's
+    edges land on pixel boundaries, so the two structures are one permittivity function and
+    what is left between them is the factorization -- measured 2.8e-3 of the field's own scale.
+    The control is the half-period alternative at 8.6e-1, a factor of 300, which is what says
+    the tolerance is not the thing carrying the argument.
+    """
+    P, N, EPS = 400.0, 40, 12.25
+    x = (np.arange(N) + 0.5) / N * P
+    raster = np.where((x >= 100.0) & (x < 200.0), EPS, 1.0)[None, None, :]
+    # the same rod: absolute x in [100, 200), which is 50 left of the centre of the cell
+    shapes = [dict(background=1.0, shapes=[dict(type='rectangle', cx=-50.0, cy=0.0,
+                                                lx=100.0, ly=P, material=EPS)])]
+    kw = dict(backend=0, top=1.0, bot=1.0, wavelength=900.0, thickness=[220.0],
+              theta=np.deg2rad(18.0), phi=0.0, psi=np.pi / 2, truncation_order=[8, 0],
+              period=[P], answers='field')
+
+    def field(structure, sample_x, **over):
+        s = wavebit.rcwa(structure=structure, **dict(kw, **over))
+        s.solve()
+        return np.asarray(s.reconstruct_field(sample_x=sample_x, sample_y=1, sample_z=6))
+
+    xs = np.linspace(-P / 2, P / 2, 25, endpoint=False)
+    ref = field(raster, xs)
+    scale = np.abs(ref).max()
+    same = np.abs(ref - field(shapes, xs, factorization='nvf')).max() / scale
+    half = np.abs(ref - field(shapes, xs + P / 2, factorization='nvf')).max() / scale
+    assert same < 1e-2, same
+    assert half > 30 * same, (same, half)
 
 
 @pytest.mark.parametrize('path', PATHS)
@@ -97,7 +143,7 @@ def test_a_subset_costs_nothing_in_accuracy(path):
     The point of the feature: sample a line cut or a monitor plane without paying for a grid,
     and without the answer depending on what else was requested alongside it.
     """
-    fine = np.linspace(0, PERIOD[0], 41)
+    fine = np.linspace(-PERIOD[0] / 2, PERIOD[0] / 2, 41)
     pick = [3, 17, 38]
     full = _field(path, sample_x=fine, sample_y=1, sample_z=3)
     few = _field(path, sample_x=fine[pick], sample_y=1, sample_z=3)
@@ -108,11 +154,12 @@ def test_a_subset_costs_nothing_in_accuracy(path):
 def test_the_x_points_need_not_be_sorted_or_uniform_or_inside_the_cell(path):
     """No grid structure is assumed anywhere, so none of these are special cases.
 
-    A coordinate outside ``[0, period)`` is a periodic continuation rather than an error: the
-    kernel is ``exp(i k.r)`` and the Bloch phase carries it. Checked against the in-cell point
-    it repeats, which is a statement about the physics rather than about the indexing.
+    A coordinate outside the cell -- which is ``[-period/2, +period/2)``, x being measured
+    from the cell's centre -- is a periodic continuation rather than an error: the kernel is
+    ``exp(i k.r)`` and the Bloch phase carries it. Checked against the in-cell point it
+    repeats, which is a statement about the physics rather than about the indexing.
     """
-    xs = np.array([310.0, 0.0, 97.3, 41.0])
+    xs = np.array([110.0, 0.0, -102.7, -159.0])
     got = _field(path, sample_x=xs, sample_y=1, sample_z=3)
     shifted = _field(path, sample_x=xs + PERIOD[0], sample_y=1, sample_z=3)
 

@@ -23,12 +23,16 @@ import wavebit
 from wavebit._core import analytic as _analytic
 from wavebit._core import boundary as _boundary
 from wavebit._core.geometry import StaticGeometry
+from wavebit._core.lattice import as_lattice
 
 WL = 0.777
 P = 2.0 * WL
 NGRID, HALF_PX, NPTS = 512, 6.0, 25
 PIX = P / NGRID
-CX0 = 0.28 * P
+#: `cx` is measured from the centre of the cell, so this is 0.22 of the period to its left.
+CX0 = -0.22 * P
+#: The cell as a *basis*, which is what the builders below take.
+LATTICE = as_lattice(period=(P, P))
 
 # Materials are **relative permittivity**. The contrast axis keeps naming its media by
 # refractive index, because that is what the printed row labels say and what the two earlier
@@ -44,17 +48,17 @@ def build(cx, na, nb):
     def rect(cx_, cy, lx, ly, ang, n):
         return dict(type='rectangle', cx=cx_ * P, cy=cy * P, lx=lx * P, ly=ly * P,
                     angle=ang, material=EPS(n))
-    first = rect(0.28, 0.30, 0.20, 0.15, 0.4, na)
+    first = rect(-0.22, -0.20, 0.20, 0.15, 0.4, na)
     first['cx'] = cx
     return [dict(background=1.0,
-                 shapes=[first, rect(0.68, 0.70, 0.20, 0.15, 0.9, nb)])]
+                 shapes=[first, rect(0.18, 0.20, 0.20, 0.15, 0.9, nb)])]
 
 
 def geos(na, nb):
     structure = build(CX0, na, nb)
     return (StaticGeometry(boundary_plans=[None]),
             StaticGeometry(boundary_plans=[
-                _boundary.plan_layer(structure[0]['shapes'], (P, P))]))
+                _boundary.plan_layer(structure[0]['shapes'], LATTICE)]))
 
 
 def scalar(geometry, cx, na, nb, theta, phi, key, backend):
@@ -103,17 +107,17 @@ for cname, inc, rname in itertools.product(AXES['contrast'], AXES['incidence'],
 WL = 0.777
 P = 2.0 * WL
 NGRID, HALF_PX, NPTS, MAX_ORDER = 512, 6.0, 25, 8
-PIX, CX0 = P / NGRID, 0.28 * P
+PIX, CX0 = P / NGRID, -0.22 * P
 NAMES = ('epx', 'epy', 'epz_i', 'epxy', 'epyx')
 
 
-PLAN = _boundary.plan_layer(build(CX0, 3.0, 2.2)[0]['shapes'], (P, P))
+PLAN = _boundary.plan_layer(build(CX0, 3.0, 2.2)[0]['shapes'], LATTICE)
 
 
 def probe(na, nb, plans, block):
     def loss(cx):
         m = _analytic.to_conv_mat_smooth_layers(
-            build(cx, na, nb), MAX_ORDER, MAX_ORDER, (P, P), normal_grid=NGRID,
+            build(cx, na, nb), MAX_ORDER, MAX_ORDER, LATTICE, normal_grid=NGRID,
             complex_dtype=jnp.complex128, xp=jnp, boundary_plans=plans)[block]
         return jnp.real(jnp.sum(m * jnp.conj(m)))
     f = jax.jit(jax.value_and_grad(loss))

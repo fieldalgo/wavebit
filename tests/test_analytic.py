@@ -119,7 +119,7 @@ def test_complex_permittivity_is_loss_not_gain(where):
     else:
         # A square of side 1/2 covers a quarter of the cell, so the DC term is the exact
         # area-weighted mean and the shape's contribution is separable from the background's.
-        shape = dict(type='rectangle', cx=0.5, cy=0.5, lx=0.5, ly=0.5, angle=0.0,
+        shape = dict(type='rectangle', cx=0.0, cy=0.0, lx=0.5, ly=0.5, angle=0.0,
                      material=eps_metal)
         eps_c, inv_c = assemble_eps_coeffs([shape], 1.0, half_width_u, half_width_v, period)
         assert complex(eps_c[dc]) == pytest.approx(1.0 + 0.25 * (eps_metal - 1.0), rel=1e-12)
@@ -133,9 +133,9 @@ def test_complex_permittivity_is_loss_not_gain(where):
 # 2. analytic shape transforms match a fine midpoint DFT
 # ----------------------------------------------------------------------
 @pytest.mark.parametrize("shape", [
-    dict(type='rectangle', cx=0.55, cy=0.45, lx=0.5, ly=0.3, angle=0.6),
-    dict(type='circle', cx=0.5, cy=0.5, lx=0.6, angle=0.0),
-    dict(type='ellipse', cx=0.55, cy=0.45, lx=0.7, ly=0.4, angle=0.9),
+    dict(type='rectangle', cx=0.05, cy=-0.05, lx=0.5, ly=0.3, angle=0.6),
+    dict(type='circle', cx=0.0, cy=0.0, lx=0.6, angle=0.0),
+    dict(type='ellipse', cx=0.05, cy=-0.05, lx=0.7, ly=0.4, angle=0.9),
 ])
 def test_shape_ft_matches_fine_dft(shape):
     period = (1.0, 1.0)
@@ -143,8 +143,9 @@ def test_shape_ft_matches_fine_dft(shape):
     idx = np.arange(N)
     x = (idx + 0.5) / N
     X, Y = np.meshgrid(x, x)
-    dx = X - shape['cx']
-    dy = Y - shape['cy']
+    # `cx` / `cy` are measured from the centre of the cell; this grid runs from its corner
+    dx = X - (shape['cx'] + 0.5)
+    dy = Y - (shape['cy'] + 0.5)
     ct, st = np.cos(shape['angle']), np.sin(shape['angle'])
     xr = dx * ct + dy * st
     yr = -dx * st + dy * ct
@@ -185,7 +186,7 @@ def test_axis_aligned_matches_raster_nvf():
 
     xx, yy = ((np.mgrid[0:N, 0:N] + 0.5) / N)[::-1]
     ras = np.where((np.abs(xx - 0.5) < L / 2) & (np.abs(yy - 0.5) < L / 2), EPS_R, 1.0)[None]
-    analytic = [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.5 * P, cy=0.5 * P,
+    analytic = [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0,
                                               lx=L * P, ly=L * P, angle=0.0, material=EPS_R)])]
 
     def total(structure, psi, **kw):
@@ -230,17 +231,17 @@ def test_the_analytic_normal_field_gets_the_two_axes_the_right_way_round():
     and a ``grad`` with respect to ``period``, where the pair arrives as a tracer with no primal
     to read. Rare, not dead -- and not the path this test is here to protect.
 
-    But the pair is read *outside* the branch as well, at :func:`shape_geometry`, which is where
-    a shape that does not name ``cx`` / ``cy`` gets its centre -- so the natural way to write a
-    centred disc stays sensitive with a basis in hand. Measured on this cell, reversing the pair
-    moves the field by 1.96 with an explicit centre and no lattice, and by 1.7 with the centre
-    defaulted and a lattice; the remaining combination, explicit centre *and* a lattice, moves
-    by exactly 0. That last cell is why the defaulted case is here: on its own the first
-    assertion would be pinning the rare branch only.
+    But the cell is read *outside* the branch as well, at :func:`shape_geometry`, which is
+    where every shape's centre is measured from -- so the natural way to write a centred disc
+    stays sensitive with a basis in hand. Measured on this cell, reversing the pair moves the
+    field by 1.96 with no lattice, and by 1.7 with a lattice and the centre left to default;
+    with a lattice the origin comes off ``0.5*(a1 + a2)`` and the pair is not read at all, so
+    that combination moves by exactly 0. That last cell is why the defaulted case is here: on
+    its own the first assertion would be pinning the rare branch only.
     """
     Px, Py, r = 2.0, 1.0, 0.3
     Ny, Nx = 129, 257
-    shape = dict(type='circle', cx=Px / 2.0, cy=Py / 2.0, lx=2 * r, material=4.0)
+    shape = dict(type='circle', cx=0.0, cy=0.0, lx=2 * r, material=4.0)
     normal_x, normal_y = _nvf_analytic(xnp, (Ny, Nx), [shape], xnp.float64,
                                        as_lattice(period=(Px, Py)))
 
@@ -262,7 +263,7 @@ def test_the_analytic_normal_field_gets_the_two_axes_the_right_way_round():
     assert abs(float(normal_y[i, j])) < 1e-14
 
     # The branch the solver actually takes: a basis in hand, and the centre left to default out
-    # of Px / Py. Same disc, so the same radial statement holds and the same tolerance applies.
+    # of it. Same disc, so the same radial statement holds and the same tolerance applies.
     centred = dict(type='circle', lx=2 * r, material=4.0)
     nx_l, ny_l = _nvf_analytic(xnp, (Ny, Nx), [centred], xnp.float64,
                                ((Px, 0.0), (0.0, Py)))
@@ -290,7 +291,7 @@ def test_metal_rod_absorbs_end_to_end(psi):
     P, L = 0.77, 0.5
     # (0.05 + 3.5j)**2: a metal rod, and conj() would make it gain.
     EPS_METAL = -12.2475 + 0.35000000000000003j
-    structure = [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.5 * P, cy=0.5 * P,
+    structure = [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0,
                                                    lx=L * P, ly=L * P, angle=0.0,
                                                    material=EPS_METAL)])]
 
@@ -307,10 +308,14 @@ def test_metal_rod_absorbs_end_to_end(psi):
 def test_analytic_shape_parameters_are_absolute_lengths():
     """``cx`` / ``lx`` are lengths, not fractions of the period.
 
-    Nothing else says so: the defaults (``Px / 2``) are the only statement in the code, and
-    every other test here uses ``period = 1`` where the two readings coincide. Reading them as
-    fractions builds a rod ``1/period`` times too big, which stays silent -- it just solves a
-    different structure.
+    Nothing else says so, and every other test here uses ``period = 1``, where the two readings
+    coincide. Reading them as fractions builds a rod ``1/period`` times too big, which stays
+    silent -- it just solves a different structure.
+
+    It is the *lengths* that carry this now. A centre is measured from the middle of the cell
+    since 2026-08-31, so a centred rod is ``cx = 0`` whichever way the units are read and the
+    two spellings cannot separate there -- which is why the rod below is centred and only
+    ``lx`` / ``ly`` are varied.
     """
     P, EPS_R, L, N = 0.77, 12.25, 0.5, 128       # eps 12.25 is the old n = 3.5
     cfg = dict(top=1.0, bot=2.25, theta=0.35, phi=0.0, period=(P, P),
@@ -319,9 +324,9 @@ def test_analytic_shape_parameters_are_absolute_lengths():
     xx, yy = ((np.mgrid[0:N, 0:N] + 0.5) / N)[::-1]
     ras = np.where((np.abs(xx - 0.5) < L / 2) & (np.abs(yy - 0.5) < L / 2), EPS_R, 1.0)[None]
 
-    def shaped(lx, cx):
-        return [dict(background=1.0, shapes=[dict(type='rectangle', cx=cx, cy=cx, lx=lx, ly=lx,
-                                              angle=0.0, material=EPS_R)])]
+    def shaped(lx):
+        return [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0, lx=lx,
+                                              ly=lx, angle=0.0, material=EPS_R)])]
 
     def total(structure, **kw):
         res = wavebit.rcwa(backend=0, structure=structure, **cfg, **kw).solve()
@@ -333,8 +338,8 @@ def test_analytic_shape_parameters_are_absolute_lengths():
     # see docs/nvf-upsampling.md) -- a raster reference with sampled coefficients sits at 1.7e-3 on this structure
     # too, so it is the reference that moved, not the shape parameters.
     reference = total(ras, factorization='nvf')
-    assert abs(total(shaped(L * P, 0.5 * P)) - reference) < 5e-3        # absolute: agrees
-    assert abs(total(shaped(L, 0.5)) - reference) > 1e-2               # fractions: does not
+    assert abs(total(shaped(L * P)) - reference) < 5e-3                # absolute: agrees
+    assert abs(total(shaped(L)) - reference) > 1e-2                    # fractions: does not
 
 
 # ----------------------------------------------------------------------
@@ -344,11 +349,11 @@ def test_energy_conservation_lossless():
     cfg = dict(top=1.0, bot=1.0, theta=np.deg2rad(5), phi=np.deg2rad(20),
                period=(1.0, 1.2), wavelength=1.5, thickness=(0.3, 0.2), psi=0.35 * np.pi)
     structure = [
-        dict(background=1.0, shapes=[dict(type='ellipse', cx=0.5, cy=0.6, lx=0.5, ly=0.3,
+        dict(background=1.0, shapes=[dict(type='ellipse', cx=0.0, cy=0.0, lx=0.5, ly=0.3,
                                       angle=np.deg2rad(40), material=5.76)]),
-        dict(background=2.25, shapes=[dict(type='rectangle', cx=0.4, cy=0.5, lx=0.4, ly=0.5,
+        dict(background=2.25, shapes=[dict(type='rectangle', cx=-0.1, cy=-0.1, lx=0.4, ly=0.5,
                                        angle=np.deg2rad(25), material=1.0),
-                                  dict(type='circle', cx=0.8, cy=0.9, lx=0.25,
+                                  dict(type='circle', cx=0.3, cy=0.3, lx=0.25,
                                        material=9.0)]),
     ]
     for truncation_order in (5, 8):
@@ -363,9 +368,9 @@ def test_energy_conservation_lossless():
 def test_cross_backend_agreement():
     cfg = dict(top=1.0, bot=1.0, theta=np.deg2rad(5), phi=np.deg2rad(20),
                period=(1.0, 1.2), wavelength=1.5, thickness=(0.3,), psi=0.35 * np.pi)
-    structure = [dict(background=1.0, shapes=[dict(type='ellipse', cx=0.5, cy=0.6, lx=0.5, ly=0.3,
+    structure = [dict(background=1.0, shapes=[dict(type='ellipse', cx=0.0, cy=0.0, lx=0.5, ly=0.3,
                                            angle=np.deg2rad(40), material=5.76),
-                                      dict(type='circle', cx=0.3, cy=0.3, lx=0.2,
+                                      dict(type='circle', cx=-0.2, cy=-0.3, lx=0.2,
                                            material=9.0)])]
 
     def T(bk):
@@ -385,7 +390,7 @@ def _fd_grad_lx(shape_type, lx0=0.5):
                period=(1.0, 1.0), wavelength=1.5, thickness=(0.4,), psi=np.pi / 4)
 
     def T(lx):
-        s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, material=6.25,
+        s = dict(type=shape_type, cx=0.0, cy=0.0, lx=lx, material=6.25,
                  **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
         uc = [dict(background=1.0, shapes=[s])]
         return float(np.array(wavebit.rcwa(backend=0, structure=uc, truncation_order=(6, 6), **cfg)
@@ -400,7 +405,7 @@ def test_torch_gradient(shape_type):
     torch = pytest.importorskip("torch")
     fd, cfg = _fd_grad_lx(shape_type)
     lx = torch.tensor(0.5, dtype=torch.float64, requires_grad=True)
-    s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, material=6.25,
+    s = dict(type=shape_type, cx=0.0, cy=0.0, lx=lx, material=6.25,
              **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
     res = wavebit.rcwa(backend=2, structure=[dict(background=1.0, shapes=[s])], truncation_order=(6, 6), **cfg).solve()
     T = res.T.real.sum()
@@ -416,7 +421,7 @@ def test_jax_gradient(shape_type):
     fd, cfg = _fd_grad_lx(shape_type)
 
     def loss(lx):
-        s = dict(type=shape_type, cx=0.5, cy=0.5, lx=lx, material=6.25,
+        s = dict(type=shape_type, cx=0.0, cy=0.0, lx=lx, material=6.25,
                  **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
         r = wavebit.rcwa(backend=1, structure=[dict(background=1.0, shapes=[s])], truncation_order=(6, 6), **cfg).solve()
         return jnp.real(r.T).sum()
@@ -433,8 +438,10 @@ def test_analytic_beats_staircase_tilted():
     cfg = dict(top=1.0, bot=1.0, theta=0.0, phi=None,
                period=(1.0, 1.0), wavelength=1.6, thickness=(0.6,), psi=0.0)
     EPS_R, ang, L, c = 12.25, np.deg2rad(30), 0.5, 0.5    # eps 12.25 is the old n = 3.5
-    analytic = [dict(background=1.0, shapes=[dict(type='rectangle', cx=c, cy=c, lx=L, ly=L,
-                                              angle=ang, material=EPS_R)])]
+    # `c` is the absolute centre the staircase below is built around; a shape's centre is
+    # measured from the middle of the cell, which on this period-1 cell is 0.5.
+    analytic = [dict(background=1.0, shapes=[dict(type='rectangle', cx=c - 0.5, cy=c - 0.5,
+                                              lx=L, ly=L, angle=ang, material=EPS_R)])]
     # A staircase, now sampled rather than blocked: the block modeller decomposed the tilted
     # rectangle into axis-aligned pieces, and a raster does the same thing by sampling. Either
     # is a staircase; the theorem is that the exact transform beats one.
@@ -485,7 +492,7 @@ def test_a_circle_is_written_with_one_length():
     accepted and dropped still has a zero gradient, and silence is what the whole class of bug
     was made of. The anchor moves here, onto the one spelling there is.
     """
-    shape = dict(type='circle', cx=0.5 * CIRCLE_P, cy=0.5 * CIRCLE_P, lx=0.5 * CIRCLE_P,
+    shape = dict(type='circle', cx=0.0, cy=0.0, lx=0.5 * CIRCLE_P,
                  material=CIRCLE_EPS)
     got = wavebit.rcwa(backend=0, structure=[dict(background=1.0, shapes=[shape])],
                          **CIRCLE_CFG).solve()
@@ -509,7 +516,7 @@ def test_a_circle_that_names_a_second_length_is_refused(ly, why):
     the one thing not readable under ``jax.grad``. See ``check_shape_spec``: the tolerance and
     identity handling that a value rule needs are exactly what phrasing it on the key removes.
     """
-    shape = dict(type='circle', cx=0.5 * CIRCLE_P, cy=0.5 * CIRCLE_P, lx=0.5 * CIRCLE_P,
+    shape = dict(type='circle', cx=0.0, cy=0.0, lx=0.5 * CIRCLE_P,
                  ly=ly, material=CIRCLE_EPS)
     with pytest.raises(ValueError, match="'ly' would be dropped"):
         wavebit.rcwa(backend=0, structure=[dict(background=1.0, shapes=[shape])],
@@ -529,9 +536,9 @@ def test_the_closed_form_builder_refuses_an_overlap_rather_than_summing_it():
     routes it to the boundary path. This is the second reading of that dispatch.
     """
     period, eps_base = [300.0, 300.0], 1.0
-    rods = [dict(type='rectangle', cx=130.0, cy=150.0, lx=120.0, ly=120.0, angle=0.0,
+    rods = [dict(type='rectangle', cx=-20.0, cy=0.0, lx=120.0, ly=120.0, angle=0.0,
                  material=4.0),
-            dict(type='rectangle', cx=190.0, cy=150.0, lx=120.0, ly=120.0, angle=0.0,
+            dict(type='rectangle', cx=40.0, cy=0.0, lx=120.0, ly=120.0, angle=0.0,
                  material=9.0)]
 
     with pytest.raises(ValueError) as raised:
@@ -541,7 +548,7 @@ def test_the_closed_form_builder_refuses_an_overlap_rather_than_summing_it():
 
     # Slide them apart and the same call answers -- with the sum, which is now also the
     # painted structure, so the oracle is unambiguous.
-    apart = [dict(rods[0], cx=70.0), dict(rods[1], cx=230.0)]
+    apart = [dict(rods[0], cx=-80.0), dict(rods[1], cx=80.0)]
     eps_c, _ = _assemble_eps_coeffs(xnp, apart, eps_base, 3, 3,
                                     as_lattice(period=period), np.complex128)
     dc = complex(eps_c[2 * 3, 2 * 3]).real
@@ -570,14 +577,15 @@ def test_an_overlapping_smooth_layer_paints_like_the_raster_of_the_same_recipe()
     period, eps_base = [300.0, 300.0], 1.0
     cfg = dict(period=period, thickness=[205.0], truncation_order=[6, 6], top=1.0, bot=1.0,
                wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0)
-    boxes = [(130.0, 4.0), (190.0, 9.0)]
+    boxes = [(-20.0, 4.0), (40.0, 9.0)]                  # `cx`, from the centre of the cell
 
     n_pix = 900
     axis = (np.arange(n_pix) + 0.5) / n_pix * period[0]
     X, Y = np.meshgrid(axis, axis)
     raster = np.full((n_pix, n_pix), eps_base)
+    ox, oy = 0.5 * period[0], 0.5 * period[1]            # the grid runs from the corner
     for cx, eps in boxes:                                # later box paints over the earlier
-        raster = np.where((np.abs(X - cx) <= 60.0) & (np.abs(Y - 150.0) <= 60.0),
+        raster = np.where((np.abs(X - (cx + ox)) <= 60.0) & (np.abs(Y - oy) <= 60.0),
                           eps, raster)
 
     def total(structure, **extra):
@@ -586,7 +594,7 @@ def test_an_overlapping_smooth_layer_paints_like_the_raster_of_the_same_recipe()
 
     want = total(raster[None], fourier_coefficients='sampled')
     painted = total([dict(background=eps_base,
-                          shapes=[dict(type='rectangle', cx=cx, cy=150.0, lx=120.0, ly=120.0,
+                          shapes=[dict(type='rectangle', cx=cx, cy=0.0, lx=120.0, ly=120.0,
                                        angle=0.0, material=eps) for cx, eps in boxes])])
 
     assert painted == pytest.approx(want, abs=2e-3)
@@ -598,7 +606,7 @@ CHECK_CFG = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[2, 
                  wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0)
 
 
-def rod(cx, cy=150.0, lx=120.0, ly=120.0, angle=0.0, material=4.0, type='rectangle'):
+def rod(cx, cy=0.0, lx=120.0, ly=120.0, angle=0.0, material=4.0, type='rectangle'):
     s = dict(type=type, cx=cx, cy=cy, lx=lx, ly=ly, angle=angle, material=material)
     if type in ('circle', 'disk', 'square'):
         # A round rod has one length. The helper's `ly` default is not the caller asking for a
@@ -691,8 +699,8 @@ PAINT_PERIOD = (1000.0, 1000.0)
 #: 300x300 rods of permittivity 4 and 9, overlapping over 100x300 of a 1000x1000 cell. Summed
 #: that is 1 + 3*0.09 + 8*0.09 = 1.99; painted, the earlier rod keeps only its unshared 60000,
 #: giving 1 + 3*0.06 + 8*0.09 = 1.90. A 4.7% gap, and both are plausible numbers.
-PAINT_RODS = [dict(type='rectangle', cx=400.0, cy=500.0, lx=300.0, ly=300.0, material=4.0),
-              dict(type='rectangle', cx=600.0, cy=500.0, lx=300.0, ly=300.0, material=9.0)]
+PAINT_RODS = [dict(type='rectangle', cx=-100.0, cy=0.0, lx=300.0, ly=300.0, material=4.0),
+              dict(type='rectangle', cx=100.0, cy=0.0, lx=300.0, ly=300.0, material=9.0)]
 EPS_SUMMED, EPS_PAINTED = 1.99, 1.90
 
 
@@ -744,7 +752,7 @@ def test_a_disjoint_layer_still_reaches_the_closed_form_builder():
     with the rods apart that *is* the painted value; ``EPS_SUMMED`` names the arithmetic, not
     the rule.
     """
-    disjoint = [dict(PAINT_RODS[0], cx=200.0), dict(PAINT_RODS[1], cx=700.0)]
+    disjoint = [dict(PAINT_RODS[0], cx=-300.0), dict(PAINT_RODS[1], cx=200.0)]
     eps_c, _ = _assemble_eps_coeffs(xnp, disjoint, 1.0, 6, 6,
                                     as_lattice(period=PAINT_PERIOD), xnp.complex128)
     assert float(np.real(eps_c[12, 12])) == pytest.approx(EPS_SUMMED, abs=1e-12)
@@ -753,7 +761,7 @@ def test_a_disjoint_layer_still_reaches_the_closed_form_builder():
 
 # ------------------------------------------------------- what a shape dict may say
 def _circle(**over):
-    return dict(dict(type='circle', cx=150.0, cy=150.0, lx=120.0, material=4.0), **over)
+    return dict(dict(type='circle', cx=0.0, cy=0.0, lx=120.0, material=4.0), **over)
 
 
 @pytest.mark.parametrize('shape, match', [
@@ -777,7 +785,7 @@ def test_a_shape_dict_that_says_something_unreadable_is_refused(shape, match):
 
 @pytest.mark.parametrize('shape', [
     _circle(),                                       # the natural spelling: one diameter
-    dict(type='circle', cx=150.0, cy=150.0, l=120.0, material=4.0),   # `l` says the same
+    dict(type='circle', cx=0.0, cy=0.0, l=120.0, material=4.0),       # `l` says the same
     dict(_circle(), type='ellipse', ly=200.0),       # two lengths, on the type that has two
     dict(_circle(), type='rectangle', ly=200.0, angle=0.4),
 ])
@@ -879,10 +887,10 @@ def test_detection_follows_the_shapes_and_not_their_bounding_boxes():
     from the closed form by 0.8% on disjoint rods, and dearer. Nudged into contact, both are
     reported, so the pass is not the check being asleep.
     """
-    diagonal = [rod(110.0, 110.0, lx=120.0, ly=40.0, angle=np.pi / 4),
-                rod(190.0, 190.0, lx=120.0, ly=40.0, angle=-np.pi / 4, material=9.0)]
-    crossing = [rod(120.0, 150.0, lx=160.0, ly=30.0, type='ellipse'),
-                rod(225.0, 150.0, lx=30.0, ly=160.0, type='ellipse', material=9.0)]
+    diagonal = [rod(-40.0, -40.0, lx=120.0, ly=40.0, angle=np.pi / 4),
+                rod(40.0, 40.0, lx=120.0, ly=40.0, angle=-np.pi / 4, material=9.0)]
+    crossing = [rod(-30.0, 0.0, lx=160.0, ly=30.0, type='ellipse'),
+                rod(75.0, 0.0, lx=30.0, ly=160.0, type='ellipse', material=9.0)]
 
     from wavebit._core.analytic import layer_needs_resolving
     lattice = as_lattice(period=CHECK_CFG['period'])
@@ -962,10 +970,10 @@ def test_the_tiled_blend_is_bit_identical_to_the_whole_grid_one():
     """
     from wavebit._core import analytic as _an
 
-    shapes = [dict(type='rectangle', cx=0.31, cy=0.44, lx=0.30, ly=0.22, angle=0.4,
+    shapes = [dict(type='rectangle', cx=-0.19, cy=-0.06, lx=0.30, ly=0.22, angle=0.4,
                    material=12.25),
-              dict(type='circle', cx=0.70, cy=0.62, lx=0.22, material=4.41),
-              dict(type='ellipse', cx=0.20, cy=0.80, lx=0.18, ly=0.11, angle=1.1,
+              dict(type='circle', cx=0.20, cy=0.12, lx=0.22, material=4.41),
+              dict(type='ellipse', cx=-0.30, cy=0.30, lx=0.18, ly=0.11, angle=1.1,
                    material=3.24)]
     guard = _an._TILE_MIN_PIXELS
     try:
@@ -1013,14 +1021,14 @@ EPS_ROD, EPS_ROD_ALT = 11.559999999999999, 7.290000000000001
 
 def _one(cx, material=EPS_ROD):
     return [dict(background=1.0, shapes=[
-        dict(type='rectangle', cx=cx, cy=0.35, lx=0.30, ly=0.20, angle=0.3,
+        dict(type='rectangle', cx=cx, cy=-0.15, lx=0.30, ly=0.20, angle=0.3,
              material=material)])]
 
 
 def _two(cx, material=EPS_ROD):
     return [dict(background=1.0, shapes=[
-        dict(type='rectangle', cx=cx, cy=0.30, lx=0.30, ly=0.18, angle=0.3, material=material),
-        dict(type='circle', cx=0.72, cy=0.80, lx=0.20, material=5.289999999999999)])]
+        dict(type='rectangle', cx=cx, cy=-0.20, lx=0.30, ly=0.18, angle=0.3, material=material),
+        dict(type='circle', cx=0.22, cy=0.30, lx=0.20, material=5.289999999999999)])]
 
 
 @pytest.mark.parametrize('build', [_one, _two], ids=['one-shape', 'two-shapes'])
@@ -1040,7 +1048,7 @@ def test_the_projector_cache_never_changes_an_answer(build):
     def total(cell):
         return np.asarray(wavebit.rcwa(backend=0, structure=cell, **PROJ_KW).solve().T)
 
-    for cx in (0.30, 0.45, 0.60):
+    for cx in (-0.20, -0.05, 0.10):
         for eps in (EPS_ROD, EPS_ROD_ALT):
             cell = build(cx, eps)
             _an._PROJECTOR_CACHE.clear()
@@ -1059,17 +1067,17 @@ def test_the_cache_holds_no_material_value_so_a_material_sweep_reuses_one_field(
     try:
         _an._PROJECTOR_CACHE.clear()
         for eps in (11.559999999999999, 9.0, 6.760000000000001, 4.840000000000001, 3.24):
-            wavebit.rcwa(backend=0, structure=_one(0.40, eps), **PROJ_KW).solve()
+            wavebit.rcwa(backend=0, structure=_one(-0.10, eps), **PROJ_KW).solve()
         assert len(built) == 1, f'the field was rebuilt {len(built)} times for one geometry'
 
-        for cx in (0.41, 0.42, 0.43):                # and a *single* shape sliding is the same
+        for cx in (-0.09, -0.08, -0.07):             # and a *single* shape sliding is the same
             wavebit.rcwa(backend=0, structure=_one(cx), **PROJ_KW).solve()
         assert len(built) == 1, 'position enters through the phase, not through the build'
 
-        wavebit.rcwa(backend=0, structure=_one(0.40, material=EPS_ROD)                 # a real change
+        wavebit.rcwa(backend=0, structure=_one(-0.10, material=EPS_ROD)                # a real change
                      , **PROJ_KW).solve()
         _an._PROJECTOR_CACHE.clear()
-        wavebit.rcwa(backend=0, structure=_one(0.40), **PROJ_KW).solve()
+        wavebit.rcwa(backend=0, structure=_one(-0.10), **PROJ_KW).solve()
         assert len(built) == 2, 'a cleared cache must rebuild'
     finally:
         _an.normal_vector_field_analytical = original
@@ -1098,33 +1106,33 @@ def test_a_traced_or_autograd_value_is_never_served_from_the_cache():
 
     ZERO_FORCE = 1e-6          # 1.7e-9 measured, 0.046 for the failure it has to catch
     _an._PROJECTOR_CACHE.clear()
-    assert abs(float(jax.grad(total)(jnp.asarray(0.40)))) < ZERO_FORCE
-    assert abs(float(jax.grad(total)(jnp.asarray(0.40)))) < ZERO_FORCE   # again, now warm
+    assert abs(float(jax.grad(total)(jnp.asarray(-0.10)))) < ZERO_FORCE
+    assert abs(float(jax.grad(total)(jnp.asarray(-0.10)))) < ZERO_FORCE  # again, now warm
 
     # Two shapes and a tracer: which builder the layer takes is a question about the geometry,
     # so it needs the eager pass. See `layer_needs_resolving`.
-    frozen = wavebit.rcwa(backend=0, structure=_two(0.40), **PROJ_KW).freeze_geometry()
+    frozen = wavebit.rcwa(backend=0, structure=_two(-0.10), **PROJ_KW).freeze_geometry()
 
     def pair(cx):
         return jnp.sum(wavebit.rcwa(backend=1, structure=_two(cx), **PROJ_KW)
                        .solve(geometry=frozen).T).real
 
     h = 1e-5
-    fd = (float(pair(jnp.asarray(0.40 + h))) - float(pair(jnp.asarray(0.40 - h)))) / (2 * h)
-    assert float(jax.grad(pair)(jnp.asarray(0.40))) == pytest.approx(fd, rel=1e-3)
+    fd = (float(pair(jnp.asarray(-0.10 + h))) - float(pair(jnp.asarray(-0.10 - h)))) / (2 * h)
+    assert float(jax.grad(pair)(jnp.asarray(-0.10))) == pytest.approx(fd, rel=1e-3)
 
     torch = pytest.importorskip('torch')
     _an._PROJECTOR_CACHE.clear()
-    cx = torch.tensor(0.40, requires_grad=True)
+    cx = torch.tensor(-0.10, requires_grad=True)
     cell = [dict(background=1.0, shapes=[
-        dict(type='rectangle', cx=cx, cy=0.35, lx=0.30, ly=0.20, angle=0.3,
+        dict(type='rectangle', cx=cx, cy=-0.15, lx=0.30, ly=0.20, angle=0.3,
              material=EPS_ROD)])]
     torch.sum(wavebit.rcwa(backend=2, structure=cell, **PROJ_KW).solve().T).real.backward()
     assert abs(float(cx.grad)) < ZERO_FORCE
 
     lx = torch.tensor(0.30, requires_grad=True)      # a length *does* reach the build
     assert _an._projector_cache_key(
-        None, [dict(type='rectangle', cx=0.4, cy=0.35, lx=lx, ly=0.2, angle=0.3)],
+        None, [dict(type='rectangle', cx=-0.1, cy=-0.15, lx=lx, ly=0.2, angle=0.3)],
         (512, 512), as_lattice(period=(1.0, 1.0)), 4, 4, 'complex128') is None
 
 
@@ -1197,8 +1205,7 @@ def _skewed_ellipse_scene():
     """
     A = np.column_stack([[400.0, 0.0],
                          [400.0 * np.cos(np.pi / 3), 400.0 * np.sin(np.pi / 3)]])
-    cx0, cy0 = 0.5 * (A[0, 0] + A[0, 1]), 0.5 * (A[1, 0] + A[1, 1])
-    shape = dict(type='ellipse', cx=cx0 - 45.0, cy=cy0 + 40.0,
+    shape = dict(type='ellipse', cx=-45.0, cy=40.0,
                  lx=385.0, ly=300.0, angle=0.5, material=5.76)
     return A, shape
 
@@ -1220,11 +1227,13 @@ def _band_misalignment(A, shape, n=512):
     U, V = np.meshgrid(u, u)
     X, Y = U * A[0, 0] + V * A[0, 1], U * A[1, 0] + V * A[1, 1]
     ca, sa = np.cos(shape['angle']), np.sin(shape['angle'])
+    # `cx` / `cy` are stated from the centre of the cell; `X` / `Y` are absolute
+    ox, oy = 0.5 * (A[0, 0] + A[0, 1]), 0.5 * (A[1, 0] + A[1, 1])
     inside = np.zeros((n, n), bool)
     for m in (-1, 0, 1):                       # the true images, at m*a1 + k*a2
         for k in (-1, 0, 1):
-            dx = X - shape['cx'] - (m * A[0, 0] + k * A[0, 1])
-            dy = Y - shape['cy'] - (m * A[1, 0] + k * A[1, 1])
+            dx = X - (shape['cx'] + ox) - (m * A[0, 0] + k * A[0, 1])
+            dy = Y - (shape['cy'] + oy) - (m * A[1, 0] + k * A[1, 1])
             xr, yr = dx * ca + dy * sa, -dx * sa + dy * ca
             inside |= (xr / (shape['lx'] / 2)) ** 2 + (yr / (shape['ly'] / 2)) ** 2 <= 1.0
 
@@ -1258,8 +1267,9 @@ def test_the_skew_is_what_that_test_is_sensitive_to():
     for the raster arbiter rather than as the fold being wrong.
     """
     A = np.diag([400.0, 400.0 * np.sin(np.pi / 3)])
+    # The shape dict carries over untouched: a centre is stated from the cell's own centre, so
+    # the same numbers put the ellipse in the same place inside this cell as inside the shear.
     _, shape = _skewed_ellipse_scene()
-    shape = dict(shape, cx=0.5 * A[0, 0] - 45.0, cy=0.5 * A[1, 1] + 40.0)
     band = _band_misalignment(A, shape)
     assert band.max() < 0.05
 
@@ -1273,8 +1283,9 @@ def test_an_axis_aligned_cell_keeps_the_rectangular_fold_bit_for_bit():
     not on which keyword the caller happened to use.
     """
     from wavebit._core.lattice import as_lattice, periods_of
-    shapes = [dict(type='circle', cx=0.37, cy=0.29, lx=0.34, material=5.76),
-              dict(type='rectangle', cx=0.72, cy=0.66, lx=0.3, ly=0.18, angle=0.4, material=3.0)]
+    shapes = [dict(type='circle', cx=-0.08, cy=-0.41, lx=0.34, material=5.76),
+              dict(type='rectangle', cx=0.27, cy=-0.04, lx=0.3, ly=0.18, angle=0.4,
+                   material=3.0)]
     lat = as_lattice(period=[0.9, 1.4])
     a = _nvf_analytic(np, (96, 96), shapes, np.float64, as_lattice(period=(0.9, 1.4)))
     b = _nvf_analytic(np, (96, 96), shapes, np.float64, lat)
@@ -1310,7 +1321,10 @@ _SHAPES = [
 @pytest.mark.parametrize('cell_name, A', _CELLS, ids=[c[0] for c in _CELLS])
 @pytest.mark.parametrize('shape', _SHAPES, ids=['circle', 'ellipse', 'rectangle', 'square'])
 def test_an_omitted_centre_is_the_cell_centre_on_every_cell(cell_name, A, shape):
-    """``shape_geometry``'s default must equal ``0.5*(a1 + a2)``, to the bit.
+    """``shape_geometry``'s origin must be ``0.5*(a1 + a2)``, to the bit.
+
+    ``cx`` / ``cy`` are measured from it, so an omitted centre and ``cx = cy = 0`` are the same
+    statement and both land there.
 
     It read ``(Px/2, Py/2)`` until 2026-08-23 -- the centre of ``diag(|a1|, |a2|)``, which is a
     different point the moment the cell is not axis-aligned, and on ``shear-shallow`` is not
@@ -1329,13 +1343,13 @@ def test_an_omitted_centre_is_the_cell_centre_on_every_cell(cell_name, A, shape)
     _, cx, cy, _, _, _ = shape_geometry(shape, A)
     assert (cx, cy) == want
 
-    # a stated centre still wins, and each coordinate defaults on its own
+    # a stated centre is an offset from that origin, and each coordinate is read on its own
     stated = dict(shape, cx=37.5)
     _, cx2, cy2, _, _, _ = shape_geometry(stated, A)
-    assert cx2 == 37.5 and cy2 == want[1]
+    assert cx2 == want[0] + 37.5 and cy2 == want[1]
     stated = dict(shape, cy=-12.25)
     _, cx3, cy3, _, _, _ = shape_geometry(stated, A)
-    assert cx3 == want[0] and cy3 == -12.25
+    assert cx3 == want[0] and cy3 == want[1] - 12.25
 
 
 @pytest.mark.parametrize('cell_name, A', _CELLS, ids=[c[0] for c in _CELLS])
@@ -1390,14 +1404,17 @@ def test_omitting_the_centre_solves_what_stating_it_solves(cell_name, A, factori
     ``(400, 200)``. A default defined against the basis cannot be basis-independent, and a test
     demanding that would be demanding the wrong thing.
     """
-    centre = dict(cx=float(0.5 * (A[0, 0] + A[0, 1])), cy=float(0.5 * (A[1, 0] + A[1, 1])))
+    ox, oy = 0.5 * (A[0, 0] + A[0, 1]), 0.5 * (A[1, 0] + A[1, 1])
+    centre = dict(cx=0.0, cy=0.0)                 # the same point, said out loud
     # cx = 110, not the 70 this carried until 2026-08-27: at 70 the circle met the centred
     # ellipse *through the x edge* on `shear-shallow` only, and that is refused now
     # (`check_layer_shapes`). It was not a deliberate case -- the same pair misses on the other
     # three cells -- and while it was allowed this test was solving the one geometry the
     # boundary builder cannot read, on the cell whose skew makes it easiest to reach by
     # accident.
-    fixed = dict(type='circle', cx=110.0, cy=95.0, lx=90.0, material=5.76)
+    # 110 / 95 are absolute, because what they have to miss is the *cell edge* rather than
+    # anything measured from the centre; the offset puts them back in the shape's own frame.
+    fixed = dict(type='circle', cx=110.0 - ox, cy=95.0 - oy, lx=90.0, material=5.76)
 
     def solve(second):
         kw = dict(backend=0, wavelength=900.0, lattice=A, truncation_order=[6, 6],
@@ -1514,7 +1531,7 @@ def test_an_alias_spelling_gets_the_same_normal_field(first, second):
     from wavebit._core.analytic import normal_vector_field_analytical
 
     lattice = as_lattice(period=(300.0, 300.0))
-    made = [dict(spelling, cx=150.0, cy=150.0, angle=0.3, material=4.0)
+    made = [dict(spelling, cx=0.0, cy=0.0, angle=0.3, material=4.0)
             for spelling in (first, second)]
 
     fields = [normal_vector_field_analytical(xnp, (64, 64), [s], xnp.float64, lattice)
@@ -1536,15 +1553,15 @@ def test_an_alias_spelling_gets_the_same_normal_field(first, second):
 
 @pytest.mark.parametrize('name, make, entries', [
     ('circle radius',
-     lambda k: dict(type='circle', cx=150.0, cy=150.0, lx=140.0 + 8 * k, material=4.0), 1),
+     lambda k: dict(type='circle', cx=0.0, cy=0.0, lx=140.0 + 8 * k, material=4.0), 1),
     ('ellipse, aspect held',
-     lambda k: dict(type='ellipse', cx=150.0, cy=150.0, lx=140.0 + 8 * k, ly=70.0 + 4 * k,
+     lambda k: dict(type='ellipse', cx=0.0, cy=0.0, lx=140.0 + 8 * k, ly=70.0 + 4 * k,
                     angle=0.4, material=4.0), 1),
     ('ellipse, aspect swept',
-     lambda k: dict(type='ellipse', cx=150.0, cy=150.0, lx=140.0, ly=70.0 + 8 * k,
+     lambda k: dict(type='ellipse', cx=0.0, cy=0.0, lx=140.0, ly=70.0 + 8 * k,
                     angle=0.4, material=4.0), 5),
     ('rectangle lx',
-     lambda k: dict(type='rectangle', cx=150.0, cy=150.0, lx=140.0 + 8 * k, ly=70.0,
+     lambda k: dict(type='rectangle', cx=0.0, cy=0.0, lx=140.0 + 8 * k, ly=70.0,
                     angle=0.4, material=4.0), 5),
 ])
 def test_the_projector_cache_keys_on_what_the_field_depends_on(name, make, entries):
@@ -1619,7 +1636,7 @@ def test_longer_than_the_period_is_not_the_same_as_running_into_its_own_image():
     cfg = dict(backend=0, period=[P, P], thickness=[0.3], truncation_order=(6, 6), top=1.0,
                bot=1.0, wavelength=0.94, psi=np.pi / 2, theta=0.0, phi=0.0, normal_grid=256)
     rod = lambda lx, ang: [dict(background=1.0, shapes=[
-        dict(type='rectangle', cx=0.5, cy=0.5, lx=lx, ly=0.30, angle=ang, material=4.0)])]
+        dict(type='rectangle', cx=0.0, cy=0.0, lx=lx, ly=0.30, angle=ang, material=4.0)])]
 
     # the gap to its own (1, 0) image decides, and it changes sign with the angle
     gap = lambda ang: signed_gap(primitive('rectangle', 0.5, 0.5, 1.2, 0.30, ang),
@@ -1678,7 +1695,7 @@ def test_a_length_is_a_size_and_the_transform_carries_its_sign():
     lattice = np.array([[300.0, 0.0], [0.0, 300.0]])
     zero = np.array([[0.0]])
     claimed = lambda lx: float(np.asarray(shape_ft(
-        np, dict(type='rectangle', cx=150.0, cy=150.0, lx=lx, ly=150.0, angle=0.0,
+        np, dict(type='rectangle', cx=0.0, cy=0.0, lx=lx, ly=150.0, angle=0.0,
                  material=4.0), zero, zero, lattice)).ravel()[0].real)
     assert claimed(120.0) == pytest.approx(+0.2, abs=1e-12)
     assert claimed(-120.0) == pytest.approx(-0.2, abs=1e-12)   # the sign is not dropped
@@ -1686,7 +1703,7 @@ def test_a_length_is_a_size_and_the_transform_carries_its_sign():
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=(6, 6), top=1.0,
                bot=1.0, wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0)
     rod = lambda **kw: [dict(background=1.0, shapes=[
-        dict(dict(type='rectangle', cx=150.0, cy=150.0, lx=120.0, ly=150.0, material=4.0),
+        dict(dict(type='rectangle', cx=0.0, cy=0.0, lx=120.0, ly=150.0, material=4.0),
              **kw)])]
 
     for backend in (0, 1, 2):
@@ -1703,17 +1720,17 @@ def test_a_length_is_a_size_and_the_transform_carries_its_sign():
     # not write. On a round type that is also what keeps an `ly` a circle does not take out of
     # the message, without a branch for it: its two lengths are equal, so the first one raises.
     for kw, spelled in ((dict(lx=-120.0), 'lx'), (dict(l=-120.0), 'l')):
-        layer = [dict(background=1.0, shapes=[dict(type='circle', cx=150.0, cy=150.0,
+        layer = [dict(background=1.0, shapes=[dict(type='circle', cx=0.0, cy=0.0,
                                                    material=4.0, **kw)])]
         with pytest.raises(ValueError, match=rf'\(circle\) has {spelled} = -120'):
             wavebit.rcwa(backend=0, structure=layer, **cfg).solve()
-    both = [dict(background=1.0, shapes=[dict(type='rectangle', cx=150.0, cy=150.0,
+    both = [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0,
                                              lx=120.0, l=-150.0, material=4.0)])]
     with pytest.raises(ValueError, match='has l = -150'):     # `lx` given, `ly` fell back to `l`
         wavebit.rcwa(backend=0, structure=both, **cfg).solve()
 
     # An omitted length defaults to 0.0 -- the same case, and previously a silent empty layer.
-    missing = [dict(background=1.0, shapes=[dict(type='rectangle', cx=150.0, cy=150.0,
+    missing = [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0,
                                                  material=4.0)])]
     with pytest.raises(ValueError, match='has lx = 0'):
         wavebit.rcwa(backend=0, structure=missing, **cfg).solve()

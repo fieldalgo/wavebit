@@ -27,9 +27,10 @@ def run():
                         psi=np.pi / 4,
                         )
 
-    # One dict per layer: a background material, and the shapes drawn on it. `cx`, `cy`, `lx`
-    # and `ly` are absolute lengths in the units of `period` -- not fractions of it -- so these
-    # rods are 31 and 49.5 wide on a 300 period and run the full height of the cell.
+    # One dict per layer: a background material, and the shapes drawn on it. `lx` and `ly` are
+    # absolute lengths in the units of `period` -- not fractions of it -- so these rods are 31
+    # and 49.5 wide on a 300 period and run the full height of the cell. `cx` / `cy` are the
+    # centre, measured from the centre of the cell: 0 is centred, +-150 is an edge here.
     #
     # Each shape's Fourier transform is taken in closed form, so a tilted or curved edge carries
     # no staircase error. Shapes paint, later over earlier, where they overlap; these two do not,
@@ -38,9 +39,9 @@ def run():
         # layer 1
         dict(background=si3n4, shapes=[
             # obj 1
-            dict(type='rectangle', cx=50, cy=150, lx=31, ly=300, angle=0, material=si),
+            dict(type='rectangle', cx=-100, cy=0, lx=31, ly=300, angle=0, material=si),
             # obj 2
-            dict(type='rectangle', cx=200, cy=150, lx=49.5, ly=300, angle=0, material=si),
+            dict(type='rectangle', cx=50, cy=0, lx=49.5, ly=300, angle=0, material=si),
         ]),
     ]
 

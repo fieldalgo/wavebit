@@ -59,13 +59,17 @@ def _twin_circles(d):
     At ``d == 0`` they sit symmetrically about the centre, so on the diagonal between them the
     two unit normals are exactly opposed and their sum is exactly zero.
     """
-    return [dict(type='circle', cx=P / 2 - 0.1 + d, cy=P / 2 - 0.1, lx=0.20 * P, material=9.0),
-            dict(type='circle', cx=P / 2 + 0.1 + d, cy=P / 2 + 0.1, lx=0.20 * P, material=9.0)]
+    return [dict(type='circle', cx=-0.1 + d, cy=-0.1, lx=0.20 * P, material=9.0),
+            dict(type='circle', cx=0.1 + d, cy=0.1, lx=0.20 * P, material=9.0)]
 
 
 def _grid_point(i, n=NORMAL_GRID):
-    """The ``i``-th normal-field sample, which is where a centre has to land to give ``g == 0``."""
-    return (i + 0.5) * P / n
+    """The ``i``-th normal-field sample, which is where a centre has to land to give ``g == 0``.
+
+    Returned as a shape centre is stated -- from the middle of the cell -- so that it can be
+    handed straight to ``cx`` / ``cy``. The samples themselves are laid out from the corner.
+    """
+    return (i + 0.5) * P / n - 0.5 * P
 
 
 def test_a_zero_norm_configuration_is_actually_reached():
@@ -160,7 +164,7 @@ def test_dc_coefficient_gradient_in_period_is_finite(kind, extra):
     not, so this pins them to the same answer.
     """
     def total(px):
-        shape = dict(type=kind, cx=P / 2, cy=P / 2, lx=0.20 * P, material=9.0, **extra)
+        shape = dict(type=kind, cx=0.0, cy=0.0, lx=0.20 * P, material=9.0, **extra)
         eps_c, _ = assemble_eps_coeffs(jnp, [shape], 1.0, 2, 2, as_lattice(period=(px, px)), jnp.complex128)
         return jnp.real(jnp.sum(eps_c))
 

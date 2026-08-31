@@ -103,8 +103,10 @@ and transforming it (`normal_projector_coeffs`). Unlike the SDF normals of a sta
 boundary, these are the true-boundary normals, so the full NVF benefit is realized.
 
 For a layer holding **one** shape the field is sampled with the shape at the centre of the
-cell and the coefficients are then translated to `(cx, cy)` by `e^{-i k·(c − P/2)}` — the same
-phase `⟦ε⟧` already carries. Every one of the five matrices is then `D X D⁻¹` for one diagonal
+cell and the coefficients are then translated by `e^{-i k·c}`, where `c` is the displacement
+from that centre — which since 2026-08-31 is just `(cx, cy)` as the caller wrote them, those
+being measured from `0.5*(a1 + a2)`. It is the same phase `⟦ε⟧` already carries. Every one of
+the five matrices is then `D X D⁻¹` for one diagonal
 `D`, so a translated layer reproduces the centred one to 1e−14 and `d/dcx`, `d/dcy` come out at
 5e−9. That is exact rather than merely good, which is why it stays.
 
@@ -157,11 +159,11 @@ since 2026-08-26.
 
 ```python
 structure = [dict(background=1.0, shapes=[
-                 dict(type='circle', cx=0.5, cy=0.5, lx=0.6, material=12.25)]),
+                 dict(type='circle', cx=0.0, cy=0.0, lx=0.6, material=12.25)]),
              dict(background=2.25, shapes=[
-                 dict(type='rectangle', cx=0.4, cy=0.5, lx=0.4, ly=0.5,
+                 dict(type='rectangle', cx=-0.1, cy=0.0, lx=0.4, ly=0.5,
                       angle=np.deg2rad(25), material=1.0),
-                 dict(type='ellipse', cx=0.8, cy=0.9, lx=0.3, ly=0.2,
+                 dict(type='ellipse', cx=0.3, cy=0.4, lx=0.3, ly=0.2,
                       angle=0.6, material=9.0)])]
 solver = wavebit.rcwa(backend=0, structure=structure, truncation_order=dict(x=11, y=11), ...)  # normal_grid=256 (default)
 res = solver.solve()

@@ -213,7 +213,7 @@ BACKENDS = [(0, 'numpy'), (1, 'jax'), (2, 'torch')]
 RASTER = np.array([[[2.6, 2.6, 1.0, 1.0], [2.6, 1.0, 1.0, 1.0]]])
 MU_RASTER = np.array([[[1.7, 1.7, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]]])
 SHAPE_LAYER = [dict(background=1.0,
-                    shapes=[dict(type='rectangle', cx=PERIOD / 4, cy=PERIOD / 4,
+                    shapes=[dict(type='rectangle', cx=-PERIOD / 4, cy=-PERIOD / 4,
                                  lx=PERIOD / 4, ly=PERIOD / 4, angle=0.0, material=2.6)])]
 def _raster_solver_with_mu(backend=0):
     return wavebit.rcwa(backend=backend, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,

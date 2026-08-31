@@ -66,8 +66,8 @@ matrices still Hermitian and `R + T` still exactly 1. The conversion was also se
 
 ```python
 structure = [dict(background=1.0, shapes=[
-    dict(type='rectangle', cx=0.40, cy=0.40, lx=0.34, ly=0.34, angle=0.0, material=4.0),
-    dict(type='rectangle', cx=0.56, cy=0.56, lx=0.34, ly=0.34, angle=0.3, material=9.0),
+    dict(type='rectangle', cx=-0.10, cy=-0.10, lx=0.34, ly=0.34, angle=0.0, material=4.0),
+    dict(type='rectangle', cx=0.06, cy=0.06, lx=0.34, ly=0.34, angle=0.3, material=9.0),
 ])]
 ```
 

@@ -48,6 +48,19 @@ def raster(basis, n=128, radius=R):
     return cell
 
 
+def cell_centre(lattice=None, period=(P, P)):
+    """Where a shape's ``cx`` / ``cy`` are measured from, for the cell ``lattice`` names.
+
+    Two spellings of one lattice do not share a centre: ``0.5*(a1 + a2)`` is ``(200, 200)`` on
+    ``ORTHO`` and ``(400, 200)`` on ``SHEAR``, half of ``a1`` apart. Most of this file compares
+    two such spellings, so a disc that has to land on the same *Cartesian* point in both is
+    written as an absolute point and converted here. One that only has to sit the same way
+    inside its own cell is written ``cx = cy = 0`` and needs none of this.
+    """
+    a = np.asarray(as_lattice(period=list(period), lattice=lattice))
+    return 0.5 * (a[0, 0] + a[0, 1]), 0.5 * (a[1, 0] + a[1, 1])
+
+
 def solver(cell, truncation_order=8, lattice=None, **kw):
     kw.setdefault('factorization', 'nvf')
     return wavebit.rcwa(backend=0, structure=cell, period=[P, P], truncation_order=[truncation_order, truncation_order],
@@ -433,9 +446,12 @@ def test_a_painted_overlap_survives_a_unimodular_shear():
     overlap at all and shifted by ``(ox*Px, oy*Py)`` rather than along the lattice.
     """
     def painted(lattice):
+        ox, oy = cell_centre(lattice)
         structure = [{'background': 1.0, 'shapes': [
-            {'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 160.0, 'material': 5.76},
-            {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'material': 9.0}]}]
+            {'type': 'circle', 'cx': P / 2 - ox, 'cy': P / 2 - oy, 'lx': 160.0,
+             'material': 5.76},
+            {'type': 'circle', 'cx': P / 2 + 40.0 - ox, 'cy': P / 2 - oy, 'lx': 160.0,
+             'material': 9.0}]}]
         s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], truncation_order=[6, 6], thickness=[H],
                            wavelength=WL, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                            factorization='nvf', lattice=lattice)
@@ -457,9 +473,12 @@ def test_a_painted_overlap_is_not_the_same_as_summing_it():
     from wavebit._core.analytic import assemble_eps_coeffs
     import array_api_compat.numpy as xnp
 
-    shapes = [{'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 160.0, 'material': 5.76},
-              {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'material': 9.0}]
-    apart = [shapes[0], dict(shapes[1], cx=P / 2 + 200.0)]
+    ox, oy = cell_centre(SHEAR)
+    shapes = [{'type': 'circle', 'cx': P / 2 - ox, 'cy': P / 2 - oy, 'lx': 160.0,
+               'material': 5.76},
+              {'type': 'circle', 'cx': P / 2 + 40.0 - ox, 'cy': P / 2 - oy, 'lx': 160.0,
+               'material': 9.0}]
+    apart = [shapes[0], dict(shapes[1], cx=P / 2 + 200.0 - ox)]
 
     def mean_eps(cell):
         s = wavebit.rcwa(backend=0, structure=[{'background': 1.0, 'shapes': cell}],
@@ -487,8 +506,10 @@ def test_a_painted_overlap_is_not_the_same_as_summing_it():
 
 def _analytic_totals(g, lattice=None):
     """One circle, stated in absolute Cartesian lengths — the same disc on the same lattice."""
+    ox, oy = cell_centre(lattice)
     structure = [{'background': 1.0, 'shapes': [
-        {'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 2 * R, 'material': EPS_ROD}]}]
+        {'type': 'circle', 'cx': P / 2 - ox, 'cy': P / 2 - oy, 'lx': 2 * R,
+         'material': EPS_ROD}]}]
     s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], truncation_order=[g, g], thickness=[H],
                        wavelength=WL, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                        factorization='nvf', lattice=lattice)
@@ -544,10 +565,16 @@ def test_the_reconstructed_field_agrees_across_a_unimodular_shear():
     2.0e-4: a 500x drop across the same field.
     """
     n = 21
-    shapes = [{'type': 'circle', 'cx': P / 2, 'cy': P / 2, 'lx': 2 * R, 'material': EPS_ROD}]
-    structure = [{'background': 1.0, 'shapes': []}, {'background': 1.0, 'shapes': shapes}]
 
     def field(lattice):
+        # The same *Cartesian* disc in both arms, which is what "the field at the same point"
+        # is being asked about: the two cells' centres are half of `a1` apart, so leaving this
+        # at `cx = 0` would compare a structure against a translated copy of itself.
+        ox, oy = cell_centre(lattice)
+        shapes = [{'type': 'circle', 'cx': P / 2 - ox, 'cy': P / 2 - oy, 'lx': 2 * R,
+                   'material': EPS_ROD}]
+        structure = [{'background': 1.0, 'shapes': []},
+                     {'background': 1.0, 'shapes': shapes}]
         s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], truncation_order=[8, 8],
                            thickness=[600.0, H], wavelength=WL, top=1.0, bot=1.0,
                            theta=0.0, phi=0.0, psi=0.0, factorization='nvf', lattice=lattice,
@@ -630,9 +657,8 @@ def test_li_1997_checkerboard_matches_the_published_table():
     assert not lat.is_axis_aligned(basis)                       # the point of the test
     assert np.linalg.norm(a1) == pytest.approx(5 * np.sqrt(2) / 4)
 
-    centre = 0.5 * (a1 + a2)
     structure = [{'background': 1.0, 'shapes': [
-        {'type': 'rectangle', 'cx': float(centre[0]), 'cy': float(centre[1]),
+        {'type': 'rectangle', 'cx': 0.0, 'cy': 0.0,
          'lx': LI_SIDE, 'ly': LI_SIDE, 'material': 2.25}]}]
     s = wavebit.rcwa(backend=0, structure=structure, truncation_order=[12, 12], thickness=[1.0], wavelength=1.0,
                        top=2.25, bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2,
@@ -790,17 +816,22 @@ def test_a_frozen_painting_plan_replays_on_a_skewed_cell(lattice, omit_centre):
     reported the plan stale.
 
     This is ``2d7ca08``'s bug at the one call site that missed the fix, and the parametrisation
-    is what separates the two halves: the cell must be skewed *and* a centre omitted. Either
-    alone leaves the two spellings the same arithmetic, which is why nothing caught it.
+    is what separated the two halves: the cell had to be skewed *and* a centre omitted. Either
+    alone left the two spellings the same arithmetic, which is why nothing caught it. The
+    ``omit_centre`` arm is the weaker half now -- since 2026-08-31 a *stated* centre is measured
+    from ``0.5*(a1 + a2)`` too, so the basis is read for every shape and either arm would catch
+    it -- and it stays because the two are still different geometry on a skewed cell.
 
     Only the frozen replay was affected -- the eager solve was right throughout, so an
     energy or convergence check could not have found this. The oracle has to be the eager pass.
     """
     def build():
+        ox, oy = cell_centre(lattice)
         a = {'type': 'circle', 'lx': 160.0, 'material': EPS_ROD}
         if not omit_centre:
-            a = dict(a, cx=P / 2, cy=P / 2)
-        b = {'type': 'circle', 'cx': P / 2 + 40.0, 'cy': P / 2, 'lx': 160.0, 'material': 9.0}
+            a = dict(a, cx=P / 2 - ox, cy=P / 2 - oy)
+        b = {'type': 'circle', 'cx': P / 2 + 40.0 - ox, 'cy': P / 2 - oy, 'lx': 160.0,
+             'material': 9.0}
         return wavebit.rcwa(backend=0, period=[P, P], truncation_order=[3, 3], thickness=[H],
                             structure=[{'background': EPS_AIR, 'shapes': [a, b]}],
                             wavelength=WL, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
@@ -882,9 +913,8 @@ def _circular_dichroism(basis, truncation, normal_grid=512):
     ``truncation_order`` 5 and 11 and then stops, which would hide the effect this is about.
     Stating the disc exactly leaves the retained order set as the only asymmetry left.
     """
-    centre = 0.5 * (np.asarray(basis)[:, 0] + np.asarray(basis)[:, 1])
     shapes = [{'background': EPS_AIR,
-               'shapes': [{'type': 'circle', 'cx': float(centre[0]), 'cy': float(centre[1]),
+               'shapes': [{'type': 'circle', 'cx': 0.0, 'cy': 0.0,
                            'lx': 2 * R, 'material': EPS_ROD}]}]
     common = dict(backend=0, structure=shapes, period=[P, P], thickness=[H],
                   truncation_order=[truncation, truncation], wavelength=WL, top=1.0, bot=1.0,
@@ -988,14 +1018,15 @@ def test_a_skewed_cell_can_name_the_coordinate_its_basis_answers(basis):
     the same as one that is right: swapping the two arguments back flips both assertions.
     """
     s = _field_solver(basis)
-    a2y = float(np.asarray(basis)[1, 1])
 
     with pytest.raises(NotImplementedError, match='axis-aligned cell'):
         s.reconstruct_field(sample_x=np.array([250.0]), sample_y=3, sample_z=3)
 
     grid = np.asarray(s.reconstruct_field(sample_x=9, sample_y=3, sample_z=3))
-    row = np.asarray(s.reconstruct_field(sample_x=9, sample_y=np.array([0.5 * a2y]),
-                                         sample_z=3))
+    # A length is measured from the centre of the cell, so `0.0` *is* `v = 0.5` whatever `a2`
+    # is -- which is the middle row of a count of three. It read `0.5 * a2y` until 2026-08-31,
+    # when the origin moved; that spelling now names the far edge, `v = 1`.
+    row = np.asarray(s.reconstruct_field(sample_x=9, sample_y=np.array([0.0]), sample_z=3))
     assert float(np.max(np.abs(grid))) > 1e-6           # a zero field would pass anything
     assert row.shape[-3] == 1
     assert np.array_equal(row, grid[..., 1:2, :, :])    # v = 0.5 is the middle of `linspace`
@@ -1020,8 +1051,9 @@ def _backside_totals(lattice, side, truncation_order=10):
     term converges only as O(1/n) -- 7.4% relative at n=32, still 2.0% at n=512 -- which is
     far larger than anything this test is trying to see.
     """
+    ox, oy = cell_centre(lattice, (_BS_P, _BS_P))
     structure = [{'background': 1.0, 'shapes': [
-        {'type': 'circle', 'cx': _BS_P / 2, 'cy': _BS_P / 2, 'lx': 180.0,
+        {'type': 'circle', 'cx': _BS_P / 2 - ox, 'cy': _BS_P / 2 - oy, 'lx': 180.0,
          'material': _BS_ROD}]}]
     s = wavebit.rcwa(backend=0, structure=structure, period=[_BS_P, _BS_P],
                      truncation_order=[truncation_order, truncation_order],
@@ -1366,7 +1398,7 @@ def test_the_geometry_refusals_read_the_lattice_the_way_they_read_the_shapes():
     cfg = dict(thickness=[0.3], truncation_order=(4, 4), top=1.0, bot=1.0, wavelength=0.94,
                psi=np.pi / 2, theta=0.0, phi=0.0, normal_grid=256)
     rod = lambda lx: [dict(background=1.0, shapes=[
-        dict(type='rectangle', cx=0.5, cy=0.5, lx=lx, ly=0.5, angle=0.0, material=4.0)])]
+        dict(type='rectangle', cx=0.0, cy=0.0, lx=lx, ly=0.5, angle=0.0, material=4.0)])]
 
     def by_lattice(structure, P):
         basis = jnp.stack([jnp.stack([P, jnp.asarray(0.0)]),

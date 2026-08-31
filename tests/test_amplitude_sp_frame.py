@@ -134,9 +134,14 @@ def test_the_amplitudes_are_the_field_projected_on_zhat_cross_k():
 
     # More sample points than retained orders, so the decomposition is overdetermined and a
     # missing order would show up as a residual instead of being absorbed.
+    # `xs` / `ys` are absolute Cartesian, because the plane-wave basis below is written in
+    # that frame; `sample_x` / `sample_y` are measured from the centre of the cell, so the
+    # request carries the half-period back off. The two must name the same points or the
+    # decomposition is fitting a shifted field.
     xs = np.linspace(0.0, _PX, 4 * _FX + 3, endpoint=False)
     ys = np.linspace(0.0, _PY, 4 * _FY + 3, endpoint=False)
-    cell = np.asarray(solver.reconstruct_field(sample_x=xs, sample_y=ys, sample_z=np.array([0.0])),
+    cell = np.asarray(solver.reconstruct_field(sample_x=xs - 0.5 * _PX, sample_y=ys - 0.5 * _PY,
+                                               sample_z=np.array([0.0])),
                       dtype=np.complex128)
     cell = cell.reshape((-1,) + cell.shape[-3:])[0]           # (ny, nx, 6) at z = 0
 

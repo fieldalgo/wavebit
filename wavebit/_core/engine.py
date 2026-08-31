@@ -2428,7 +2428,10 @@ class CoreFactorizationMixin:
         explicit points cost the same per point as grid ones and involve no interpolation.
         They are named for taking either; a count is one way to say where to sample.
 
-        ``sample_x`` / ``sample_y`` are lengths in ``period``'s units and are unconstrained.
+        ``sample_x`` / ``sample_y`` are lengths in ``period``'s units, measured from the
+        **centre of the cell** -- the origin an analytic shape's ``cx`` uses since 2026-08-31 --
+        and are otherwise unconstrained; a count spans the cell, which is ``[-period/2,
+        +period/2]`` in that frame and the same physical grid it always was.
         ``sample_z`` is absolute, measured from the top of the stack, must lie inside it, and
         assigns an interface to the layer below it -- which is visible only in ``E_z``, the one
         component genuinely two-valued there. With explicit ``sample_z`` the returned z axis is

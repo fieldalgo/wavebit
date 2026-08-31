@@ -134,21 +134,21 @@ def test_freeze_geometry_reports_what_the_strategy_needs():
 
 @pytest.mark.parametrize('name,make,start', [
     ('ellipse lx',
-     lambda v: [dict(background=12.25, shapes=[dict(type='ellipse', cx=140.0, cy=160.0,
+     lambda v: [dict(background=12.25, shapes=[dict(type='ellipse', cx=-10.0, cy=10.0,
                                                     lx=v, ly=55.0, angle=0.27, material=4.0)])],
      85.0),
     ('rectangle lx',
-     lambda v: [dict(background=12.25, shapes=[dict(type='rectangle', cx=140.0, cy=160.0,
+     lambda v: [dict(background=12.25, shapes=[dict(type='rectangle', cx=-10.0, cy=10.0,
                                                     lx=v, ly=55.0, angle=0.27, material=4.0)])],
      85.0),
     ('rectangle angle',
-     lambda v: [dict(background=12.25, shapes=[dict(type='rectangle', cx=140.0, cy=160.0,
+     lambda v: [dict(background=12.25, shapes=[dict(type='rectangle', cx=-10.0, cy=10.0,
                                                     lx=85.0, ly=55.0, angle=v, material=4.0)])],
      0.27),
     ('overlapping pair',
      lambda v: [dict(background=1.0, shapes=[
-         dict(type='rectangle', cx=130.0, cy=150.0, lx=v, ly=120.0, angle=0.0, material=4.0),
-         dict(type='rectangle', cx=190.0, cy=150.0, lx=120.0, ly=120.0, angle=0.0,
+         dict(type='rectangle', cx=-20.0, cy=0.0, lx=v, ly=120.0, angle=0.0, material=4.0),
+         dict(type='rectangle', cx=40.0, cy=0.0, lx=120.0, ly=120.0, angle=0.0,
               material=9.0)])],
      120.0),
 ])
@@ -225,8 +225,8 @@ def test_a_stale_frozen_geometry_is_refused_rather_than_answered():
     # records stays valid until the *combinatorics* change -- here, until the two stop
     # overlapping, which the centres 80 apart and the second's width 100 put at lx = 60.
     make = lambda lx: [dict(background=12.25, shapes=[
-        dict(type='rectangle', cx=120.0, cy=150.0, lx=lx, ly=100.0, angle=0.0, material=4.0),
-        dict(type='rectangle', cx=200.0, cy=150.0, lx=100.0, ly=100.0, angle=0.0,
+        dict(type='rectangle', cx=-30.0, cy=0.0, lx=lx, ly=100.0, angle=0.0, material=4.0),
+        dict(type='rectangle', cx=50.0, cy=0.0, lx=100.0, ly=100.0, angle=0.0,
              material=9.0)])]
 
     def total(lx, geometry=None):
@@ -559,9 +559,9 @@ def test_a_length_that_moves_without_changing_the_overlaps_reuses_the_compilatio
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[3, 3], top=1.0,
                bot=1.0, theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0)
     make = lambda lx: [dict(background=12.25, shapes=[
-        dict(type='rectangle', cx=60.0, cy=150.0, lx=60.0, ly=100.0, angle=0.0, material=4.0),
-        dict(type='rectangle', cx=150.0, cy=150.0, lx=lx, ly=100.0, angle=0.0, material=9.0),
-        dict(type='rectangle', cx=240.0, cy=150.0, lx=60.0, ly=100.0, angle=0.0,
+        dict(type='rectangle', cx=-90.0, cy=0.0, lx=60.0, ly=100.0, angle=0.0, material=4.0),
+        dict(type='rectangle', cx=0.0, cy=0.0, lx=lx, ly=100.0, angle=0.0, material=9.0),
+        dict(type='rectangle', cx=90.0, cy=0.0, lx=60.0, ly=100.0, angle=0.0,
              material=6.25)])]
 
     def freeze_at(lx):
@@ -596,10 +596,10 @@ EPS_A, EPS_B = 11.559999999999999, 4.41
 
 
 def _painted(cx, material=EPS_A):
-    """Two painted rectangles; the first crosses the second as ``cx`` runs past ~0.52."""
+    """Two painted rectangles; the first crosses the second as ``cx`` runs past ~0.02."""
     return [dict(background=1.0, shapes=[
-        dict(type='rectangle', cx=cx, cy=0.5, lx=0.34, ly=0.26, angle=0.3, material=material),
-        dict(type='rectangle', cx=0.55, cy=0.55, lx=0.30, ly=0.24, angle=0.0,
+        dict(type='rectangle', cx=cx, cy=0.0, lx=0.34, ly=0.26, angle=0.3, material=material),
+        dict(type='rectangle', cx=0.05, cy=0.05, lx=0.30, ly=0.24, angle=0.0,
              material=EPS_B)])]
 
 
@@ -620,24 +620,24 @@ def test_a_stale_painting_plan_is_refused_rather_than_answered():
     What it cannot survive is the combinatorics changing underneath it. Slide the first
     rectangle far enough and it begins to overlap the second; the recorded loops then describe a
     painting nobody asked for. Before the check, the replay took it: bit-identical through
-    ``cx = 0.50`` and then 3.9e-4, 2.3e-2, 3.3e-2 wrong at 0.55, 0.62, 0.75, with no step in
+    ``cx = 0.00`` and then 3.9e-4, 2.3e-2, 3.3e-2 wrong at 0.05, 0.12, 0.25, with no step in
     between to notice. Re-planning to compare costs 0.2% of a frozen ``solve`` on this layer
     (1.2% on one of ten overlapping shapes, less as ``truncation_order`` rises) -- the freeze here buys
     traceability rather than a speed plateau, so that is not what is being traded.
     """
-    frozen = wavebit.rcwa(backend=0, structure=_painted(0.40), **PAINT_KW).freeze_geometry()
+    frozen = wavebit.rcwa(backend=0, structure=_painted(-0.10), **PAINT_KW).freeze_geometry()
     assert frozen.boundary_plans is not None, 'the plan was not recorded'
 
-    for cx in (0.40, 0.405, 0.42, 0.45, 0.50):     # moved, same overlap: accepted, and exact
+    for cx in (-0.10, -0.095, -0.08, -0.05, 0.00):  # moved, same overlap: accepted, and exact
         assert np.array_equal(_painted_t(cx, frozen), _painted_t(cx))
 
-    for cx in (0.55, 0.62, 0.75):                  # the overlap changed: refused, not answered
+    for cx in (0.05, 0.12, 0.25):                  # the overlap changed: refused, not answered
         with pytest.raises(wavebit.StaleGeometryError, match='no longer fits'):
             _painted_t(cx, frozen)
 
     for eps in (9.0, 4.0, 1.9599999999999997):     # material only: never moves a vertex
-        assert np.array_equal(_painted_t(0.40, frozen, eps),
-                              _painted_t(0.40, material=eps))
+        assert np.array_equal(_painted_t(-0.10, frozen, eps),
+                              _painted_t(-0.10, material=eps))
 
 
 def test_the_painting_plan_check_is_skipped_under_a_trace_too():
@@ -655,21 +655,21 @@ def test_the_painting_plan_check_is_skipped_under_a_trace_too():
         solver = wavebit.rcwa(backend=1, structure=_painted(cx), **PAINT_KW)
         return jnp.sum(solver.solve(geometry=frozen).T).real
 
-    frozen = wavebit.rcwa(backend=1, structure=_painted(0.40), **PAINT_KW).freeze_geometry()
+    frozen = wavebit.rcwa(backend=1, structure=_painted(-0.10), **PAINT_KW).freeze_geometry()
 
     with pytest.raises(wavebit.StaleGeometryError):        # eagerly, jax converts: checked
-        total(0.75, frozen)
+        total(0.25, frozen)
 
     jitted = jax.jit(total, static_argnums=1)              # traced: not checked, and finite
-    assert np.isfinite(float(jitted(jnp.asarray(0.75), frozen)))
-    assert np.isfinite(float(jax.grad(total)(jnp.asarray(0.40), frozen)))
+    assert np.isfinite(float(jitted(jnp.asarray(0.25), frozen)))
+    assert np.isfinite(float(jax.grad(total)(jnp.asarray(-0.10), frozen)))
 
 
 def _hidden(cx, material=4.0):
     """A small circle painted *under* a larger one — completely covered, so it has no loops."""
     return [dict(background=1.0, shapes=[
-        dict(type='circle', cx=cx, cy=0.43, lx=0.12, material=material),
-        dict(type='circle', cx=0.35, cy=0.45, lx=0.25, material=9.0)])]
+        dict(type='circle', cx=cx, cy=-0.07, lx=0.12, material=material),
+        dict(type='circle', cx=-0.15, cy=-0.05, lx=0.25, material=9.0)])]
 
 
 def test_a_shape_the_plan_recorded_as_covered_cannot_be_slid_out_from_under_it():
@@ -678,27 +678,28 @@ def test_a_shape_the_plan_recorded_as_covered_cannot_be_slid_out_from_under_it()
     The first circle sits entirely inside the second (centres 0.036 apart, radii 0.12 and 0.25),
     and the second is painted over it, so the plan gives shape 0 **zero** loops. Slide it out and
     the replay keeps every loop it recorded, which is the same structure it always was: before
-    the check it returned 0.929791164 for *every* position tried — 0.42, 0.55, 0.60, 0.70 — while
-    the true answers ran 0.9295, 0.9536, 0.9483, 0.9382. The shape had simply left the structure.
+    the check it returned 0.929791164 for *every* position tried — -0.08, 0.05, 0.10, 0.20 —
+    while the true answers ran 0.9295, 0.9536, 0.9483, 0.9382. The shape had simply left the
+    structure.
 
-    This case also pins *what* is compared. From ``cx = 0.55`` on, the crossing table is
+    This case also pins *what* is compared. From ``cx = 0.05`` on, the crossing table is
     identical and only the loop assignment differs, so a check that compared the table alone
     would pass all three of those and answer with a circle that is not in the layer.
     """
-    frozen = wavebit.rcwa(backend=0, structure=_hidden(0.38), **PAINT_KW).freeze_geometry()
+    frozen = wavebit.rcwa(backend=0, structure=_hidden(-0.12), **PAINT_KW).freeze_geometry()
     assert frozen.boundary_plans[0][1][0] == [], 'the covered shape was expected to have no loops'
 
     def total(cx, geometry=None, material=4.0):
         solver = wavebit.rcwa(backend=0, structure=_hidden(cx, material), **PAINT_KW)
         return np.asarray(solver.solve(geometry=geometry).T)
 
-    for cx in (0.38, 0.40):                        # still covered: accepted, and exact
+    for cx in (-0.12, -0.10):                      # still covered: accepted, and exact
         assert np.array_equal(total(cx, frozen), total(cx))
 
     for eps in (6.760000000000001, 2.25):          # material only: never uncovers anything
-        assert np.array_equal(total(0.38, frozen, eps), total(0.38, material=eps))
+        assert np.array_equal(total(-0.12, frozen, eps), total(-0.12, material=eps))
 
-    for cx in (0.42, 0.55, 0.60, 0.70):            # out from under it: refused, not answered
+    for cx in (-0.08, 0.05, 0.10, 0.20):           # out from under it: refused, not answered
         with pytest.raises(wavebit.StaleGeometryError, match='no longer fits'):
             total(cx, frozen)
 
@@ -706,8 +707,8 @@ def test_a_shape_the_plan_recorded_as_covered_cannot_be_slid_out_from_under_it()
 def _disjoint(cx):
     """A rectangle and a circle that do not touch until ``cx`` is dragged down onto the circle."""
     return [dict(background=1.0, shapes=[
-        dict(type='rectangle', cx=cx, cy=0.407, lx=0.30, ly=0.24, angle=0.3, material=EPS_A),
-        dict(type='circle', cx=0.225, cy=0.354, lx=0.18, material=EPS_B)])]
+        dict(type='rectangle', cx=cx, cy=-0.093, lx=0.30, ly=0.24, angle=0.3, material=EPS_A),
+        dict(type='circle', cx=-0.275, cy=-0.146, lx=0.18, material=EPS_B)])]
 
 
 def test_a_frozen_no_overlap_is_a_claim_about_the_layer_and_is_checked_too():
@@ -721,19 +722,19 @@ def test_a_frozen_no_overlap_is_a_claim_about_the_layer_and_is_checked_too():
     caller was already inside. Nothing in it mentioned the frozen record or said to re-freeze,
     and the same call without ``geometry=`` returns 0.933226529 quite happily.
     """
-    frozen = wavebit.rcwa(backend=0, structure=_disjoint(0.629), **PAINT_KW).freeze_geometry()
+    frozen = wavebit.rcwa(backend=0, structure=_disjoint(0.129), **PAINT_KW).freeze_geometry()
     assert frozen.boundary_plans == [None], 'the layer was expected to be recorded as disjoint'
 
     def total(cx, geometry=None):
         solver = wavebit.rcwa(backend=0, structure=_disjoint(cx), **PAINT_KW)
         return np.asarray(solver.solve(geometry=geometry).T)
 
-    for cx in (0.629, 0.60, 0.70):                 # still disjoint: accepted, and exact
+    for cx in (0.129, 0.10, 0.20):                 # still disjoint: accepted, and exact
         assert np.array_equal(total(cx, frozen), total(cx))
 
     with pytest.raises(wavebit.StaleGeometryError, match='not overlapping'):
-        total(0.374, frozen)                       # dragged onto the circle
-    assert np.isfinite(total(0.374).sum()), 'the unfrozen call solves this layer fine'
+        total(-0.126, frozen)                      # dragged onto the circle
+    assert np.isfinite(total(-0.126).sum()), 'the unfrozen call solves this layer fine'
 
     # And the re-asking has to stay eager. A tracer cannot answer the overlap question at all --
     # `layer_needs_resolving` raises rather than guess, which is the whole reason the record
@@ -747,10 +748,10 @@ def test_a_frozen_no_overlap_is_a_claim_about_the_layer_and_is_checked_too():
         solver = wavebit.rcwa(backend=1, structure=_disjoint(cx), **PAINT_KW)
         return jnp.sum(solver.solve(geometry=frozen_jax).T).real
 
-    frozen_jax = wavebit.rcwa(backend=1, structure=_disjoint(0.629), **PAINT_KW).freeze_geometry()
+    frozen_jax = wavebit.rcwa(backend=1, structure=_disjoint(0.129), **PAINT_KW).freeze_geometry()
     assert frozen_jax.boundary_plans == [None]
-    assert np.isfinite(float(jax.jit(traced_total)(jnp.asarray(0.629))))
-    assert np.isfinite(float(jax.grad(traced_total)(jnp.asarray(0.629))))
+    assert np.isfinite(float(jax.jit(traced_total)(jnp.asarray(0.129))))
+    assert np.isfinite(float(jax.grad(traced_total)(jnp.asarray(0.129))))
 
 
 # ------------------------------------------- the freeze is a check, not only a recording
@@ -760,7 +761,7 @@ _REFUSE_KW = dict(period=(300.0, 300.0), thickness=(205.0,), truncation_order=(6
 
 
 def _oversized(lx=340.0):
-    return [dict(background=1.0, shapes=[dict(type='rectangle', cx=150.0, cy=150.0, lx=lx,
+    return [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0, lx=lx,
                                               ly=300.0, angle=0.0, material=4.0)])]
 
 
@@ -796,7 +797,7 @@ def test_the_freeze_also_refuses_a_layer_key_nobody_reads():
     was taken for -- or, worse, not be refused at all on the paths that only read the record.
     """
     stale = [dict(background=1.0, combine='paint',
-                  shapes=[dict(type='rectangle', cx=150.0, cy=150.0, lx=120.0, ly=120.0,
+                  shapes=[dict(type='rectangle', cx=0.0, cy=0.0, lx=120.0, ly=120.0,
                                angle=0.0, material=4.0)])]
     solver = wavebit.rcwa(backend=0, structure=stale, **_REFUSE_KW)
     with pytest.raises(ValueError, match="'combine'"):
@@ -815,7 +816,7 @@ def test_the_renderer_refuses_what_the_solver_refuses():
     with pytest.raises(ValueError, match='larger than the period'):
         solver.slice_structure(n=32)
 
-    good = dict(background=1.0, shapes=[dict(type='rectangle', cx=150.0, cy=150.0, lx=120.0,
+    good = dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0, lx=120.0,
                                              ly=120.0, angle=0.0, material=4.0)])
     mixed = wavebit.rcwa(backend=0, structure=[good, _oversized()[0]],
                          **dict(_REFUSE_KW, thickness=(205.0, 205.0)))

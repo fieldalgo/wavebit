@@ -655,7 +655,7 @@ def test_a_refused_structure_leaves_the_solver_exactly_as_it_was(backend):
         pytest.importorskip('torch')
     cfg = dict(backend=backend, truncation_order=(2, 2), wavelength=620., top=1.0, bot=1.0,
                period=[400.0, 400.0], thickness=[150.0])
-    shapes = [{'background': 1.0, 'shapes': [{'type': 'circle', 'cx': 200.0, 'cy': 200.0,
+    shapes = [{'background': 1.0, 'shapes': [{'type': 'circle', 'cx': 0.0, 'cy': 0.0,
                                               'lx': 120.0, 'material': 4.0}]}]
 
     def state(s):

@@ -324,12 +324,13 @@ keeps a tilted edge exact *and* paints. It is decided per layer, not per solver,
 `structure` can hold layers of both kinds. See [Shapes that overlap](#shapes-that-overlap)
 below and [`docs/boundary-modeling.md`](docs/boundary-modeling.md).
 
-The smooth path takes one dict per layer. Note that `cx`, `cy`, `lx` and `ly` are absolute
-lengths in the units of `period`, not fractions of it:
+The smooth path takes one dict per layer. Note that `lx` and `ly` are absolute lengths in the
+units of `period`, not fractions of it, and that `cx` / `cy` are measured from the **centre of
+the cell** — so a centred shape is `cx = cy = 0`, which is also what omitting them means:
 
 ```python
 structure = [dict(background=1.0, shapes=[
-    dict(type='circle', cx=350., cy=350., lx=200., material=wavebit.eps_from_index(3.5)),
+    dict(type='circle', cx=0., cy=0., lx=200., material=wavebit.eps_from_index(3.5)),
 ])]
 
 solver = wavebit.rcwa(backend=0, period=dict(x=700., y=700.), structure=structure, ...)
@@ -599,9 +600,11 @@ reconstructed field's vector components use that same `+z` — so a wave travell
 stack has `H = k̂ × E` and `Sz > 0`. (Before 2026-08-14 `Ez`, `Hx` and `Hy` came back with the
 opposite sign; see [`docs/conventions.md`](docs/conventions.md).)
 
-**Smooth-path shape coordinates are absolute.** On the smooth path, `cx`, `cy`, `lx` and `ly`
-are lengths in the same units as `period` — not fractions of it. Passing fractions builds a
-structure `1/period` times too small and solves it without complaint.
+**Smooth-path shape coordinates are absolute, and centred.** On the smooth path, `cx`, `cy`,
+`lx` and `ly` are lengths in the same units as `period` — not fractions of it. Passing
+fractions builds a structure `1/period` times too small and solves it without complaint.
+`cx` / `cy` are measured from the centre of the cell, `0.5*(a1 + a2)`, so `0` is centred; the
+raster path has no such coordinate and is unaffected.
 
 **Units are yours.** `wavelength`, `period` and `thickness` only have to share one unit. The
 quickstart uses nanometres; nothing in the solver assumes it.

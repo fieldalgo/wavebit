@@ -49,6 +49,7 @@ from wavebit._core import analytic as _analytic
 from wavebit._core import boundary as _boundary
 from wavebit._core import clipper as _clipper
 from wavebit._core.geometry import StaticGeometry
+from wavebit._core.lattice import as_lattice
 
 RESULTS = pathlib.Path(__file__).resolve().parent / 'results'
 
@@ -64,6 +65,10 @@ EPS = wavebit.eps_from_index
 CFG = dict(period=[P, P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
            wavelength=WL, top=1.0, bot=EPS(1.5))
 
+#: The cell as a *basis*, which is what every builder below takes -- a `cx` is measured from
+#: `0.5*(a1 + a2)`, and a pair of lengths cannot say where that is on a skewed cell.
+LATTICE = as_lattice(period=(P, P))
+
 #: Half-width of the window, in normal-grid pixels, and how many points span it. The window has
 #: to be several pixels wide or the jumps are stepped over rather than averaged in; the point
 #: count only has to resolve the trapezoid, since the gradient varies by ~1% across it.
@@ -71,6 +76,8 @@ HALF_PIXELS = 3.0
 N_POINTS = 25
 
 
+# `cx` / `cy` arrive as fractions of the period *measured from the cell centre*, so 0.0 is the
+# middle of the cell and +-0.5 its edges.
 def _rect(cx, cy, lx, ly, angle, n):
     return dict(type='rectangle', cx=cx * P, cy=cy * P, lx=lx * P, ly=ly * P, angle=angle,
                 material=EPS(n))
@@ -83,18 +90,18 @@ def _circle(cx, cy, d, n):
 def two_rectangles(cx):
     """Two disjoint tilted rectangles; the first one's centre is the swept parameter."""
     return [dict(background=1.0, shapes=[
-        dict(_rect(0.28, 0.30, 0.20, 0.15, 0.4, 3.0), cx=cx),
-        _rect(0.68, 0.70, 0.20, 0.15, 0.9, 2.2)])]
+        dict(_rect(-0.22, -0.20, 0.20, 0.15, 0.4, 3.0), cx=cx),
+        _rect(0.18, 0.20, 0.20, 0.15, 0.9, 2.2)])]
 
 
 def two_circles(cx):
     return [dict(background=1.0, shapes=[
-        dict(_circle(0.28, 0.30, 0.22, 3.0), cx=cx),
-        _circle(0.70, 0.72, 0.20, 2.2)])]
+        dict(_circle(-0.22, -0.20, 0.22, 3.0), cx=cx),
+        _circle(0.20, 0.22, 0.20, 2.2)])]
 
 
-CASES = {'two tilted rectangles': (two_rectangles, 0.28 * P, (8, 12)),
-         'two circles': (two_circles, 0.28 * P, (8,))}
+CASES = {'two tilted rectangles': (two_rectangles, -0.22 * P, (8, 12)),
+         'two circles': (two_circles, -0.22 * P, (8,))}
 
 
 def geometries(structure):
@@ -113,7 +120,7 @@ def geometries(structure):
     """
     sampled = StaticGeometry(boundary_plans=[None for _ in structure])
     swapped = StaticGeometry(boundary_plans=[
-        _boundary.plan_layer(layer.get('shapes', []), (P, P)) for layer in structure])
+        _boundary.plan_layer(layer.get('shapes', []), LATTICE) for layer in structure])
     return sampled, swapped
 
 
@@ -147,8 +154,8 @@ def integral_test(build, cx0, truncation_order, use_boundary):
 def normal_field_cost(build, cx0, grid, repeats=3):
     """Milliseconds to build each field once, at one grid, for one layer."""
     shapes = build(cx0)[0]['shapes']
-    records, regions = _boundary.plan_layer(shapes, (P, P))
-    verts = [_boundary.shape_vertices(np, s, (P, P)) for s in shapes]
+    records, regions = _boundary.plan_layer(shapes, LATTICE)
+    verts = [_boundary.shape_vertices(np, s, LATTICE) for s in shapes]
     values = _clipper.eval_table(np, records, verts)
     loops = [_clipper.loop_verts(np, loop, values)
              for _shape, region in zip(shapes, regions) for loop in region]
@@ -161,9 +168,9 @@ def normal_field_cost(build, cx0, grid, repeats=3):
         return (time.perf_counter() - start) / repeats * 1e3
 
     sampled = timed(lambda: _analytic.normal_vector_field_analytical(
-        np, (grid, grid), shapes, (P, P), np.float64))
+        np, (grid, grid), shapes, np.float64, LATTICE))
     distance = timed(lambda: _boundary.distance_gradient_normal_field(
-        np, loops, (grid, grid), (P, P), np.float64))
+        np, loops, (grid, grid), LATTICE, np.float64))
     return sampled, distance, sum(len(loop) for loop in loops)
 
 

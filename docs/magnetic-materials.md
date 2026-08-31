@@ -264,7 +264,7 @@ belongs to, so on the three *assignment* paths there is nothing extra to pass:
 
 ```python
 structure = [dict(background=1.0, shapes=[
-    dict(type='circle', cx=150., cy=150., lx=180.,
+    dict(type='circle', cx=0., cy=0., lx=180.,
          material=wavebit.Material(12.25, mu=2.0))])]
 solver = wavebit.rcwa(backend=0, structure=structure,
                       top=1.0, bot=wavebit.Material(2.25, mu=1.5), ...)

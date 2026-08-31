@@ -366,8 +366,9 @@ def shape_vertices(xp, shape, lattice, n_poly=POLYGON_VERTICES):
     circle — give the diameter once — summed fine and raised ``KeyError`` the moment the same
     layer was painted; ``cx`` / ``cy`` had no default either, where the transform centres a
     shape in the cell; and ``square`` kept whatever ``ly`` it was handed instead of being
-    square. ``period`` is taken for the same reason the transform takes it: it is what an
-    omitted centre falls back to.
+    square. ``lattice`` is taken for the same reason the transform takes it: ``cx`` / ``cy``
+    are measured from ``0.5*(a1 + a2)``, so the basis is what puts a shape anywhere at all.
+    A ``period`` pair is not a substitute -- it has the cell's angle already thrown away.
     """
     kind, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
     if kind in ('rectangle', 'square'):
@@ -421,6 +422,20 @@ def plan_layer(shapes, lattice, n_poly=POLYGON_VERTICES):
     return _clipper.resolve_painting(_plan_vertices(shapes, lattice, n_poly))
 
 
+def _concrete_basis(lattice):
+    """The cell basis as plain floats, read the way :func:`_concrete_shape` reads a centre.
+
+    The basis became part of *where a shape is* on 2026-08-31, when ``cx`` / ``cy`` moved to
+    the centre of the cell: :func:`~wavebit._core.analytic.shape_geometry` adds
+    ``0.5*(a1 + a2)`` to every shape now, not only to a defaulted one. Without this read a plan
+    cut from perfectly concrete shapes on a *differentiated cell* would fail the way the shape
+    half used to -- ``TracerArrayConversionError`` under ``jax.grad`` -- and the staleness check
+    would be skipped on exactly the loop it exists for. Same read, same reason: a plan is
+    combinatorics taken from the primal.
+    """
+    return [[checked_float(lattice[i][j]) for j in (0, 1)] for i in (0, 1)]
+
+
 def _plan_vertices(shapes, lattice, n_poly):
     """Every shape's vertices as plain float arrays -- the concrete half of building a plan.
 
@@ -429,7 +444,8 @@ def _plan_vertices(shapes, lattice, n_poly):
     ``resolve_painting`` then raises is about the layer and has to be heard.
     """
     import numpy as _np
-    return [_np.asarray(shape_vertices(_np, _concrete_shape(s), lattice, n_poly), float)
+    basis = _concrete_basis(lattice)
+    return [_np.asarray(shape_vertices(_np, _concrete_shape(s), basis, n_poly), float)
             for s in shapes]
 
 

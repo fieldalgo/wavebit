@@ -36,7 +36,7 @@ KW = dict(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
 # the same three the factorization file uses, for the same reason.
 # Permittivity throughout: 6.25 is the index 2.5 all three used to be written with.
 SMOOTH = [{'background': 1.0,
-           'shapes': [{'type': 'circle', 'cx': 0.5, 'cy': 0.5,
+           'shapes': [{'type': 'circle', 'cx': 0.0, 'cy': 0.0,
                        'lx': 0.6, 'material': 6.25}]}]
 _N = 32
 _axis = (np.arange(_N) + 0.5) / _N - 0.5
@@ -198,9 +198,9 @@ def test_the_refusal_holds_on_every_backend(name, code, path, series):
 # the numbers had to preserve, not their literal text.
 PAINTED_PERIOD = [1.2, 1.2]
 PAINTED = [dict(background=1.0,
-                shapes=[dict(type='rectangle', cx=0.40, cy=0.40, lx=0.34, ly=0.34,
+                shapes=[dict(type='rectangle', cx=-0.20, cy=-0.20, lx=0.34, ly=0.34,
                              angle=0.0, material=4.0),
-                        dict(type='rectangle', cx=0.56, cy=0.56, lx=0.34, ly=0.34,
+                        dict(type='rectangle', cx=-0.04, cy=-0.04, lx=0.34, ly=0.34,
                              angle=0.0, material=9.0)])]
 PAINTED_KW = dict(KW, period=PAINTED_PERIOD, truncation_order=[6, 6], thickness=[0.6], wavelength=1.6)
 
@@ -308,7 +308,7 @@ def test_a_smooth_call_naming_both_unavailable_values_is_told_about_the_rule():
 # --------------------------------------------------------------------------- through the spec
 
 SPEC = {
-    'version': '6',                 # a parsed document states its schema; see tests/test_spec.py
+    'version': '7',                 # a parsed document states its schema; see tests/test_spec.py
     'numerics': {'backend': 'numpy', 'truncation_order': [4, 4]},
     'stack': {'top': 1.0, 'bot': 1.0, 'period': [1.0, 1.0],
               'layers': [{'thickness': 0.3, 'structure': SMOOTH[0]}]},

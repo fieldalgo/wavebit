@@ -170,9 +170,9 @@ def test_both_shape_paths_draw_the_floor_in_the_same_place(overlapping):
 
     order = 10
     need = 4 * order + 1
-    shapes = [dict(type='rectangle', cx=0.30, cy=0.5, lx=0.34, ly=0.30, angle=0.0, material=4.0)]
+    shapes = [dict(type='rectangle', cx=-0.20, cy=0.0, lx=0.34, ly=0.30, angle=0.0, material=4.0)]
     if overlapping:
-        shapes.append(dict(type='rectangle', cx=0.44, cy=0.5, lx=0.34, ly=0.30, angle=0.0,
+        shapes.append(dict(type='rectangle', cx=-0.06, cy=0.0, lx=0.34, ly=0.30, angle=0.0,
                            material=9.0))
     cfg = dict(backend=0, period=PERIOD, thickness=(0.32,), truncation_order=(order, order),
                top=1.0, bot=1.0, wavelength=1.6, psi=np.pi / 2, theta=0.0, phi=0.0)
@@ -278,7 +278,7 @@ def test_permittivity_matches_the_analytic_path_for_one_shape(truncation_order):
     extension to be the other.
     """
     from wavebit._core.analytic import to_conv_mat_smooth_nvf
-    shape = dict(type='rectangle', cx=0.5, cy=0.5, lx=0.42, ly=0.31, angle=0.4, material=4.0)
+    shape = dict(type='rectangle', cx=0.0, cy=0.0, lx=0.42, ly=0.31, angle=0.4, material=4.0)
     ng = 1024
     (mine, _) = _mats(xnp, [(0.5, 0.5, 0.42, 0.31, 0.4, 4.0)], truncation_order=truncation_order, ng=ng)
     theirs = to_conv_mat_smooth_nvf(xnp, [shape], 1.0, truncation_order, truncation_order,
@@ -336,25 +336,25 @@ def test_gradient_reaches_the_shape_parameters():
 # --------------------------------------------------------------- one dict, one reading
 #: A circle written the natural way: the diameter given once. Summing this used to work and
 #: painting it used to raise ``KeyError: 'ly'``, because the two paths read the dict apart.
-CIRCLE_NO_LY = dict(type='circle', cx=0.42, cy=0.38, lx=0.34, material=5.76)
+CIRCLE_NO_LY = dict(type='circle', cx=-0.08, cy=-0.12, lx=0.34, material=5.76)
 
 
 @pytest.mark.parametrize('shape, spelt_out', [
     # a circle's second length has no spelling of its own -- `ellipse` is where two go, which
     # is exactly what the resolved circle has to equal
     (CIRCLE_NO_LY,
-     dict(type='ellipse', cx=0.42, cy=0.38, lx=0.34, ly=0.34, angle=0.0)),
+     dict(type='ellipse', cx=-0.08, cy=-0.12, lx=0.34, ly=0.34, angle=0.0)),
     # no centre either -- the transform centres a shape in the cell, so this path must too
     (dict(type='circle', lx=0.34, material=5.76),
-     dict(type='ellipse', cx=0.5, cy=0.5, lx=0.34, ly=0.34, angle=0.0)),
+     dict(type='ellipse', cx=0.0, cy=0.0, lx=0.34, ly=0.34, angle=0.0)),
     # a square is square, and `rectangle` is where the second side goes
-    (dict(type='square', cx=0.4, cy=0.6, lx=0.3, angle=0.2, material=5.76),
-     dict(type='rectangle', cx=0.4, cy=0.6, lx=0.3, ly=0.3, angle=0.2)),
+    (dict(type='square', cx=-0.1, cy=0.1, lx=0.3, angle=0.2, material=5.76),
+     dict(type='rectangle', cx=-0.1, cy=0.1, lx=0.3, ly=0.3, angle=0.2)),
     # `l` is the both-axes spelling of a length
-    (dict(type='rectangle', cx=0.4, cy=0.6, l=0.3, material=5.76),
-     dict(type='rectangle', cx=0.4, cy=0.6, lx=0.3, ly=0.3, angle=0.0)),
-    (dict(type='ellipse', cx=0.4, cy=0.6, lx=0.3, ly=0.2, angle=-0.7, material=5.76),
-     dict(type='ellipse', cx=0.4, cy=0.6, lx=0.3, ly=0.2, angle=-0.7)),
+    (dict(type='rectangle', cx=-0.1, cy=0.1, l=0.3, material=5.76),
+     dict(type='rectangle', cx=-0.1, cy=0.1, lx=0.3, ly=0.3, angle=0.0)),
+    (dict(type='ellipse', cx=-0.1, cy=0.1, lx=0.3, ly=0.2, angle=-0.7, material=5.76),
+     dict(type='ellipse', cx=-0.1, cy=0.1, lx=0.3, ly=0.2, angle=-0.7)),
 ])
 def test_shape_vertices_reads_the_dict_like_the_transform(shape, spelt_out):
     """One shape dict, one reading -- `analytic.shape_geometry` -- for polygons too.
@@ -389,11 +389,12 @@ def test_a_circle_without_ly_is_the_same_circle_on_both_paths(truncation_order):
     the scaling being dropped. A misread ``ly`` is not a 1e-9 effect either way: falling back to
     zero empties the circle and falling back to the old 500.0 fills the cell.
 
-    ``skew`` drops ``cx`` / ``cy`` as well, on a cell where the default for them is *arguable*:
-    ``shape_geometry`` fills an omitted centre from the period, and on a parallelogram that is
-    not the cell centre (measured 0.5, 0.522 against a centre of 0.65, 0.5 on this shear). This
-    asserts the two paths **agree**, not that the location is right -- there is one default, so
-    correcting it later moves both paths together, which is the property worth pinning.
+    ``skew`` drops ``cx`` / ``cy`` as well, which on a parallelogram is where the default used
+    to be *arguable*: ``shape_geometry`` filled an omitted centre from the period, which on this
+    shear is 0.5, 0.522 against a cell centre of 0.65, 0.5. It reads the basis now, and since
+    2026-08-31 an omitted centre is the same statement as ``cx = cy = 0`` rather than a separate
+    rule. What this asserts is unchanged either way: the two paths **agree**, because there is
+    one reader and it moves them together.
     """
     from wavebit._core.analytic import to_conv_mat_smooth_nvf
     from wavebit._core.lattice import as_lattice, periods_of
@@ -424,9 +425,9 @@ def _solve(structure, truncation_order=6, **over):
     return wavebit.rcwa(structure=structure, **cfg)
 
 
-PAINT_SHAPES = [dict(type='rectangle', cx=0.40, cy=0.40, lx=0.34, ly=0.34, angle=0.0,
+PAINT_SHAPES = [dict(type='rectangle', cx=-0.10, cy=-0.10, lx=0.34, ly=0.34, angle=0.0,
                      material=4.0),
-                dict(type='rectangle', cx=0.56, cy=0.56, lx=0.34, ly=0.34, angle=0.0,
+                dict(type='rectangle', cx=0.06, cy=0.06, lx=0.34, ly=0.34, angle=0.0,
                      material=9.0)]
 
 
@@ -463,9 +464,12 @@ def test_paint_agrees_with_a_raster_of_the_same_painting():
     axis = (np.arange(n) + 0.5) / n
     gx, gy = np.meshgrid(axis, axis, indexing='xy')
     cell = np.full((1, n, n), 1.0)
+    # `cx` / `cy` are measured from the centre of the cell and `gx` / `gy` from its corner,
+    # so the half-period goes back on here rather than being left out of one of the two.
     for s in PAINT_SHAPES:                       # in order: the later shape covers the earlier
-        u = (gx - s['cx']) * np.cos(s['angle']) + (gy - s['cy']) * np.sin(s['angle'])
-        v = -(gx - s['cx']) * np.sin(s['angle']) + (gy - s['cy']) * np.cos(s['angle'])
+        dx, dy = gx - (s['cx'] + 0.5), gy - (s['cy'] + 0.5)
+        u = dx * np.cos(s['angle']) + dy * np.sin(s['angle'])
+        v = -dx * np.sin(s['angle']) + dy * np.cos(s['angle'])
         cell[0][(np.abs(u) <= s['lx'] / 2) & (np.abs(v) <= s['ly'] / 2)] = s['material']
     assert abs(painted - _total(_solve(cell).solve())) < 5e-3
 
@@ -477,15 +481,15 @@ def test_a_disjoint_layer_never_reaches_the_polygon_path():
     and it would *move the answer*, by 0.8% on disjoint rods, because the polygon transform and
     the closed form discretize differently. So the plan is ``None`` and the solve still lands.
     """
-    apart = [dict(type='rectangle', cx=0.22, cy=0.22, lx=0.26, ly=0.26, angle=0.3, material=4.0),
-             dict(type='rectangle', cx=0.74, cy=0.74, lx=0.26, ly=0.26, angle=-0.4, material=9.0)]
+    apart = [dict(type='rectangle', cx=-0.28, cy=-0.28, lx=0.26, ly=0.26, angle=0.3, material=4.0),
+             dict(type='rectangle', cx=0.24, cy=0.24, lx=0.26, ly=0.26, angle=-0.4, material=9.0)]
     solver = _solve([dict(background=1.0, shapes=apart)])
     assert solver.freeze_geometry().boundary_plans[0] is None
     assert 0.0 < _total(solver.solve()) < 1.0
 
 
 def test_freeze_geometry_records_a_plan_only_for_overlapping_layers():
-    apart = [dict(PAINT_SHAPES[0], cx=0.24, cy=0.24), dict(PAINT_SHAPES[1], cx=0.76, cy=0.76)]
+    apart = [dict(PAINT_SHAPES[0], cx=-0.26, cy=-0.26), dict(PAINT_SHAPES[1], cx=0.26, cy=0.26)]
     solver = _solve([dict(background=1.0, shapes=PAINT_SHAPES),
                      dict(background=1.0, shapes=apart)],
                     thickness=(0.3, 0.3))
@@ -509,8 +513,8 @@ def test_a_shape_wider_than_the_period_is_refused_here_too():
     here, which is the branch where being wrong looks like an answer. ``check_layer_shapes`` is
     where it is stopped, ahead of the routing, so both branches are covered by one refusal.
     """
-    tall = [dict(type='rectangle', cx=0.30, cy=0.5, lx=0.30, ly=1.4, angle=0.0, material=4.0),
-            dict(type='rectangle', cx=0.60, cy=0.5, lx=0.30, ly=0.30, angle=0.0, material=9.0)]
+    tall = [dict(type='rectangle', cx=-0.20, cy=0.0, lx=0.30, ly=1.4, angle=0.0, material=4.0),
+            dict(type='rectangle', cx=0.10, cy=0.0, lx=0.30, ly=0.30, angle=0.0, material=9.0)]
     with pytest.raises(ValueError, match='larger than the period'):
         _solve([dict(background=1.0, shapes=tall)]).solve()
 
@@ -536,7 +540,7 @@ def test_a_circle_without_ly_solves_on_the_closed_form_side():
     same dict has to survive both builders.
     """
     apart = [CIRCLE_NO_LY,
-             dict(type='rectangle', cx=0.80, cy=0.82, lx=0.22, ly=0.18, angle=-0.4,
+             dict(type='rectangle', cx=0.30, cy=0.32, lx=0.22, ly=0.18, angle=-0.4,
                   material=9.0)]
     solver = _solve([dict(background=1.0, shapes=apart)])
     assert solver.freeze_geometry().boundary_plans[0] is None
@@ -552,8 +556,8 @@ def test_a_circle_without_ly_survives_the_polygon_path():
     genuinely takes two lengths instead: an equal-axis ``ellipse`` is the same structure, and
     has to give the same number.
     """
-    over = dict(type='rectangle', cx=0.60, cy=0.58, lx=0.34, ly=0.26, angle=0.4, material=9.0)
-    circle = dict(CIRCLE_NO_LY, cx=0.44, cy=0.44, lx=0.36)
+    over = dict(type='rectangle', cx=0.10, cy=0.08, lx=0.34, ly=0.26, angle=0.4, material=9.0)
+    circle = dict(CIRCLE_NO_LY, cx=-0.06, cy=-0.06, lx=0.36)
     spelt = dict(circle, type='ellipse', ly=circle['lx'], angle=0.0)
 
     got = []
@@ -566,8 +570,8 @@ def test_a_circle_without_ly_survives_the_polygon_path():
 
 def test_a_painted_ellipse_is_polygonised():
     """Curved primitives are polygonised for this path; the answer must still be sane."""
-    shapes = [dict(type='ellipse', cx=0.42, cy=0.46, lx=0.44, ly=0.28, angle=0.5, material=4.0),
-              dict(type='circle', cx=0.60, cy=0.58, lx=0.30, angle=0.0, material=9.0)]
+    shapes = [dict(type='ellipse', cx=-0.08, cy=-0.04, lx=0.44, ly=0.28, angle=0.5, material=4.0),
+              dict(type='circle', cx=0.10, cy=0.08, lx=0.30, angle=0.0, material=9.0)]
     r = _solve([dict(background=1.0, shapes=shapes)]).solve()
     t = _total(r)
     assert 0.0 < t < 1.0
@@ -585,15 +589,15 @@ def test_a_painted_ellipse_is_polygonised():
 #: A disc of permittivity 9 wholly inside a square of permittivity 4. Concentric on purpose:
 #: it is
 #: the arrangement whose exact cell-average permittivity is a one-line closed form.
-ENCLOSED_SHAPES = [dict(type='rectangle', cx=0.5, cy=0.5, lx=0.6, ly=0.6, angle=0.0,
+ENCLOSED_SHAPES = [dict(type='rectangle', cx=0.0, cy=0.0, lx=0.6, ly=0.6, angle=0.0,
                         material=4.0),
-                   dict(type='circle', cx=0.5, cy=0.5, lx=0.2, material=9.0)]
+                   dict(type='circle', cx=0.0, cy=0.0, lx=0.2, material=9.0)]
 
 #: The same two shapes moved so they overlap without either containing the other -- the control
 #: that says the boundary path as a whole is sound and only enclosure was broken.
-CLIPPED_SHAPES = [dict(type='rectangle', cx=0.43, cy=0.50, lx=0.30, ly=0.30, angle=0.0,
+CLIPPED_SHAPES = [dict(type='rectangle', cx=-0.07, cy=0.00, lx=0.30, ly=0.30, angle=0.0,
                        material=4.0),
-                  dict(type='circle', cx=0.60, cy=0.52, lx=0.32, material=9.0)]
+                  dict(type='circle', cx=0.10, cy=0.02, lx=0.32, material=9.0)]
 
 
 def _raster_of(shapes, n):
@@ -602,11 +606,12 @@ def _raster_of(shapes, n):
     X, Y = np.meshgrid(axis, axis)             # X indexes x (axis 1), Y indexes y (axis 0)
     cell = np.ones((1, n, n))
     for s in shapes:
+        # a centre is measured from the middle of the cell; this grid runs from its corner
+        cx, cy = s['cx'] + 0.5, s['cy'] + 0.5
         if s['type'] == 'rectangle':
-            hit = ((np.abs(X - s['cx']) <= s['lx'] / 2)
-                   & (np.abs(Y - s['cy']) <= s['ly'] / 2))
+            hit = (np.abs(X - cx) <= s['lx'] / 2) & (np.abs(Y - cy) <= s['ly'] / 2)
         else:
-            hit = (X - s['cx']) ** 2 + (Y - s['cy']) ** 2 <= (s['lx'] / 2) ** 2
+            hit = (X - cx) ** 2 + (Y - cy) ** 2 <= (s['lx'] / 2) ** 2
         cell[0][hit] = s['material']
     return cell
 
@@ -742,9 +747,9 @@ def test_a_hole_inside_a_hole_is_material_again():
     is the composition working -- and they sum to 0.39, the visible area. The cell average is
     then checked against the closed form at two ``truncation_order``, since it is exact and truncation-free.
     """
-    nested = [dict(type='rectangle', cx=0.5, cy=0.5, lx=0.80, ly=0.80, angle=0.0, material=4.0),
-              dict(type='rectangle', cx=0.5, cy=0.5, lx=0.50, ly=0.50, angle=0.0, material=9.0),
-              dict(type='rectangle', cx=0.5, cy=0.5, lx=0.20, ly=0.20, angle=0.0, material=16.0)]
+    nested = [dict(type='rectangle', cx=0.0, cy=0.0, lx=0.80, ly=0.80, angle=0.0, material=4.0),
+              dict(type='rectangle', cx=0.0, cy=0.0, lx=0.50, ly=0.50, angle=0.0, material=9.0),
+              dict(type='rectangle', cx=0.0, cy=0.0, lx=0.20, ly=0.20, angle=0.0, material=16.0)]
     recs, regions = _b.plan_layer(nested, CELL)
     verts = [_b.shape_vertices(xnp, s, CELL) for s in nested]
     vals = _c.eval_table(xnp, recs, verts)
@@ -835,12 +840,12 @@ def test_the_normal_field_does_not_care_which_way_a_hole_is_wound():
 
 def _two_painted(w, curved=False):
     """Two overlapping shapes, painted, with every geometry value wrapped by `w`."""
-    first = (dict(type='circle', cx=w(0.55), cy=w(0.5), lx=w(0.30), material=12.1104) if curved
-             else dict(type='rectangle', cx=w(0.55), cy=w(0.5), lx=w(0.26), ly=w(0.24),
+    first = (dict(type='circle', cx=w(0.05), cy=w(0.0), lx=w(0.30), material=12.1104) if curved
+             else dict(type='rectangle', cx=w(0.05), cy=w(0.0), lx=w(0.26), ly=w(0.24),
                        angle=w(0.0), material=12.1104))
     return [dict(background=1.0, shapes=[
         first,
-        dict(type='rectangle', cx=0.68, cy=0.58, lx=0.26, ly=0.30, angle=0.0, material=4.41)])]
+        dict(type='rectangle', cx=0.18, cy=0.08, lx=0.26, ly=0.30, angle=0.0, material=4.41)])]
 
 
 _PAINT_CFG = dict(period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), truncation_order=(4, 4),
@@ -954,11 +959,11 @@ def test_a_traced_shape_layer_needs_a_freeze_under_jit_and_not_under_grad():
     import jax.numpy as jnp
     cfg = dict(period=(1.0, 1.0), wavelength=0.94, truncation_order=(5, 5), top=1.0, bot=2.1025,
                theta=0.0, phi=None, psi=np.pi / 2, thickness=(0.3,), normal_grid=256)
-    fixed = dict(type='rectangle', cx=0.70, cy=0.62, lx=0.26, ly=0.30, angle=0.0, material=4.41)
+    fixed = dict(type='rectangle', cx=0.20, cy=0.12, lx=0.26, ly=0.30, angle=0.0, material=4.41)
 
     def structure(v):
         return [dict(background=1.0, shapes=[
-            dict(type='rectangle', cx=0.46, cy=0.5, lx=v, ly=0.26, angle=0.3, material=12.1104),
+            dict(type='rectangle', cx=-0.04, cy=0.0, lx=v, ly=0.26, angle=0.3, material=12.1104),
             dict(fixed)])]
 
     def total(v, geometry=None):
@@ -1023,7 +1028,7 @@ def test_a_traced_single_shape_layer_is_not_refused():
 
     def total(v):
         u = [dict(background=1.0, shapes=[
-            dict(type='rectangle', cx=0.46, cy=0.5, lx=v, ly=0.26, angle=0.3,
+            dict(type='rectangle', cx=-0.04, cy=0.0, lx=v, ly=0.26, angle=0.3,
                  material=12.1104)])]
         return jnp.sum(wavebit.rcwa(backend=1, structure=u, **cfg).solve().T).real
 
@@ -1047,15 +1052,15 @@ def test_a_frozen_geometry_answers_the_overlap_question_for_every_layer():
     import jax.numpy as jnp
     cfg = dict(period=(1.0, 1.0), wavelength=0.94, truncation_order=(5, 5), top=1.0, bot=2.1025,
                theta=0.0, phi=None, psi=np.pi / 2, thickness=(0.3,), normal_grid=256)
-    fixed = dict(type='rectangle', cx=0.70, cy=0.5, lx=0.26, ly=0.30, angle=0.0, material=4.41)
+    fixed = dict(type='rectangle', cx=0.20, cy=0.0, lx=0.26, ly=0.30, angle=0.0, material=4.41)
 
     def structure(cx):
         return [dict(background=1.0, shapes=[
-            dict(type='rectangle', cx=cx, cy=0.5, lx=0.26, ly=0.30, angle=0.0, material=12.1104),
+            dict(type='rectangle', cx=cx, cy=0.0, lx=0.26, ly=0.30, angle=0.0, material=12.1104),
             dict(fixed)])]
 
-    # the rods meet at cx = 0.44: 0.44 + 0.13 == 0.70 - 0.13
-    for cx, overlapping in ((0.42, False), (0.46, True)):
+    # the rods meet at cx = -0.06: -0.06 + 0.13 == 0.20 - 0.13
+    for cx, overlapping in ((-0.08, False), (-0.04, True)):
         frozen = wavebit.rcwa(backend=0, structure=structure(cx), **cfg).freeze_geometry()
         assert frozen.boundary_plans is not None, cx
         assert (frozen.boundary_plans[0] is not None) is overlapping, cx
@@ -1101,10 +1106,10 @@ def test_the_polygon_normal_field_folds_to_the_nearest_image():
 
     def layer(shift):
         return [dict(background=1.0, shapes=[
-            dict(type='rectangle', cx=(120.0 + shift) % P, cy=150.0, lx=100.0, ly=90.0,
-                 angle=0.0, material=4.0),
-            dict(type='rectangle', cx=(170.0 + shift) % P, cy=150.0, lx=100.0, ly=90.0,
-                 angle=0.0, material=9.0)])]
+            dict(type='rectangle', cx=(120.0 + shift) % P - 0.5 * P, cy=0.0,
+                 lx=100.0, ly=90.0, angle=0.0, material=4.0),
+            dict(type='rectangle', cx=(170.0 + shift) % P - 0.5 * P, cy=0.0,
+                 lx=100.0, ly=90.0, angle=0.0, material=9.0)])]
 
     def dc(shift, slot):
         m = getattr(wavebit.rcwa(structure=layer(shift), **cfg).eps_conv_matrices(), slot)

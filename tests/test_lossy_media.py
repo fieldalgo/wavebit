@@ -275,9 +275,9 @@ def solver_R_painted(n, thickness, wavelength, theta, tetm):
     """
     P = 400.0
     eps = eps_from_index(n)
-    shapes = [dict(type='rectangle', cx=0.25 * P, cy=0.5 * P, lx=0.50 * P, ly=1.0 * P,
+    shapes = [dict(type='rectangle', cx=-0.25 * P, cy=0.0, lx=0.50 * P, ly=1.0 * P,
                    material=eps),
-              dict(type='rectangle', cx=0.70 * P, cy=0.5 * P, lx=0.60 * P, ly=1.0 * P,
+              dict(type='rectangle', cx=0.20 * P, cy=0.0, lx=0.60 * P, ly=1.0 * P,
                    material=eps)]
     solver = wavebit.rcwa(backend=0, top=1.0, bot=2.25, theta=theta, phi=0.0,
                             psi=(np.pi / 2 if tetm == 'te' else 0.0), truncation_order=(3, 3),

@@ -65,9 +65,9 @@ if __name__ == '__main__':
         # layer 1
         dict(background=si3n4, shapes=[
             # obj 1
-            dict(type='rectangle', cx=50, cy=250, lx=100, ly=100, angle=0, material=si),
+            dict(type='rectangle', cx=-100, cy=100, lx=100, ly=100, angle=0, material=si),
             # obj 2
-            dict(type='rectangle', cx=240, cy=40, lx=40, ly=60, angle=0, material=si),
+            dict(type='rectangle', cx=90, cy=-110, lx=40, ly=60, angle=0, material=si),
         ]),
     ]
 
@@ -77,8 +77,8 @@ if __name__ == '__main__':
 
     # Row 0 is y = 0 and the column index is x, on every path in the package. Typed the other
     # way up, this raster is the vertical mirror of the shape structure above and not the same
-    # structure: obj 1 (cy 250)
-    # lands at y 0-100 and obj 2 (cy 40) at y 230-290. With vacuum on both sides only the
+    # structure: obj 1 (cy +100, so y 200-300) lands at y 0-100 and obj 2 (cy -110, so
+    # y 10-70) at y 230-290. With vacuum on both sides only the
     # specular order propagates, so the mirror image radiates exactly like the original and
     # the two paths still agree to 1e-15. Let a higher order propagate -- a permittivity other
     # than 1 on either half-space is enough -- and the disagreement appears. The `bot` above

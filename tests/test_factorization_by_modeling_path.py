@@ -38,7 +38,7 @@ KW = dict(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
 # alone -- passing `ly` to one is refused by `analytic.check_shape_spec`.
 # Permittivity throughout: 6.25 is the index 2.5 all three used to be written with.
 SMOOTH = [{'background': 1.0,
-           'shapes': [{'type': 'circle', 'cx': 0.5, 'cy': 0.5,
+           'shapes': [{'type': 'circle', 'cx': 0.0, 'cy': 0.0,
                        'lx': 0.6, 'material': 6.25}]}]
 _N = 32
 _axis = (np.arange(_N) + 0.5) / _N - 0.5
@@ -163,8 +163,8 @@ def test_the_refusal_names_the_rule_the_path_does_use(path, rule):
 # reach `to_conv_mat_smooth_nvf` at all: `to_conv_mat_smooth_layers` resolves the painting into
 # disjoint polygons and transforms those instead (`boundary.to_conv_mat_boundary_layer`).
 PAINTED_OVERLAP = [{'background': 1.0, 'shapes': [
-    {'type': 'rectangle', 'cx': 0.45, 'cy': 0.5, 'lx': 0.4, 'ly': 0.4, 'material': 4.0},
-    {'type': 'rectangle', 'cx': 0.60, 'cy': 0.5, 'lx': 0.4, 'ly': 0.4, 'material': 9.0}]}]
+    {'type': 'rectangle', 'cx': -0.05, 'cy': 0.0, 'lx': 0.4, 'ly': 0.4, 'material': 4.0},
+    {'type': 'rectangle', 'cx': 0.10, 'cy': 0.0, 'lx': 0.4, 'ly': 0.4, 'material': 9.0}]}]
 
 
 def test_the_boundary_sub_path_is_classified_and_refused_like_the_rest_of_smooth():
@@ -267,7 +267,7 @@ def test_a_skewed_raster_cell_still_refuses_li():
 # --------------------------------------------------------------------------- through the spec
 
 SPEC = {
-    'version': '6',                 # a parsed document states its schema; see tests/test_spec.py
+    'version': '7',                 # a parsed document states its schema; see tests/test_spec.py
     'numerics': {'backend': 'numpy', 'truncation_order': [4, 4]},
     'stack': {'top': 1.0, 'bot': 1.0, 'period': [1.0, 1.0],
               'layers': [{'thickness': 0.3, 'structure': SMOOTH[0]}]},

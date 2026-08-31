@@ -63,16 +63,17 @@ if __name__ == '__main__':
                         )
 
     # The rods are commensurate with the raster below on purpose: 100 wide from x = 0 and 40
-    # wide centred at 200, on a 300 period sampled at 30 pixels, so each rod's edges land
+    # wide centred at x = 200 -- `cx` is measured from the middle of the cell, so those are
+    # -100 and +50 -- on a 300 period sampled at 30 pixels, so each rod's edges land
     # exactly on pixel boundaries. The two structures are then the *same* permittivity function
     # and any difference in the answer is the two paths' arithmetic, not their geometry.
     structure_shapes = [
         # layer 1
         dict(background=si3n4, shapes=[
             # obj 1
-            dict(type='rectangle', cx=50, cy=150, lx=100, ly=300, angle=0, material=si),
+            dict(type='rectangle', cx=-100, cy=0, lx=100, ly=300, angle=0, material=si),
             # obj 2
-            dict(type='rectangle', cx=200, cy=150, lx=40, ly=300, angle=0, material=si),
+            dict(type='rectangle', cx=50, cy=0, lx=40, ly=300, angle=0, material=si),
         ]),
     ]
 

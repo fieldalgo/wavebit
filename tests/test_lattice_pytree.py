@@ -93,7 +93,7 @@ def _analytic_loss(jnp, M, order=3):
     s = wavebit.rcwa(backend=1, wavelength=900.0, lattice=M, truncation_order=[order, order],
                      top=1.0, bot=1.0, theta=0.07, phi=0.31, psi=0.2, thickness=[300.0],
                      structure=[dict(background=1.0, shapes=[
-                         dict(type='circle', cx=250.0, cy=150.0, lx=140.0, material=5.76)])],
+                         dict(type='circle', cx=-50.0, cy=-20.0, lx=140.0, material=5.76)])],
                      factorization='nvf', normal_grid=64)
     return jnp.sum(s.solve().R)
 

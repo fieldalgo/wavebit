@@ -174,6 +174,13 @@ converge rather than merely scoring worse.
 …) share **one length unit of your choosing** — nothing in the solver assumes nm. Shape
 coordinates are absolute lengths, not fractions of the period.
 
+A shape's **centre is measured from the centre of the cell**, `0.5*(a1 + a2)`, so a centred
+shape is `cx = cy = 0` — which is also what omitting them means, and what S4 does. Only the
+shape paths have such a coordinate: a raster *is* the geometry, and its pixel convention is
+unchanged (`structure[layer][j, i]` is the permittivity at `(i+0.5)/Nx * a1 + (j+0.5)/Ny * a2`).
+`reconstruct_field`'s `sample_x` / `sample_y` use the same origin; a *count* there spans the
+cell, which in that frame is `[-period/2, +period/2]`.
+
 All angles are **radians**.
 
 | angle | meaning |

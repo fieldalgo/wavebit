@@ -59,7 +59,7 @@ from .domain import Layer, Material, Stack, Incidence
 from .enums import (Answers, Backend, Factorization, FourierCoefficients, NormalMethod,
                     Tetm, answers_of)
 
-SPEC_VERSION = '6'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12)
+SPEC_VERSION = '7'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12)
 #                     '3': the material convention. `stack.layers[i].eps` -> `.structure`,
 #                     `stack.n_top` / `.n_bot` -> `.top` / `.bot`, and the *quantity* every
 #                     one of them holds went from refractive index to relative permittivity
@@ -88,6 +88,13 @@ SPEC_VERSION = '6'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12
 #                     read by a build that predates the key, loses the skew and solves the
 #                     rectangle `period` spells, quietly and conserving energy. The version
 #                     is what makes that old build refuse instead.
+#                     '7': the shape origin (2026-08-31). A shape recipe's `cx` / `cy` are
+#                     measured from the centre of the cell rather than from its corner, so
+#                     the *same numbers* name a different point. This is '3' again and not
+#                     '5': the document's shape and its keys are untouched, and a v6 spec
+#                     read by a v7 build builds a shape half a period off, which solves and
+#                     conserves energy. Nothing can migrate it by guess either -- `cx = 0`
+#                     is a legal spelling under both readings -- so the version refuses it.
 
 #: Refusal for a document that states no version. Its own justification, because the rule
 #: reads as gratuitous ceremony until you see which case it is for.
