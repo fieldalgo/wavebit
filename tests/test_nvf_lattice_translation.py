@@ -729,3 +729,112 @@ def test_the_half_fill_tie_falls_back_to_the_corner_rule():
         structure=np.roll(np.roll(cell, a, axis=0), b, axis=1)[None], **cfg).solve().T)))
         for a in range(0, n, 16) for b in range(0, n, 16)]
     assert max(got) - min(got) < 1e-9, f'sum(T) moved by {max(got) - min(got):.2e}'
+
+
+def _percolating_stripe(X, Y, half=22):
+    """A stripe spanning the cell: its level set has no closed 0.5 crossing at all."""
+    return np.where(np.abs(X - 32) < half, 12.25, 1.0)
+
+
+def _post_and_arm(X, Y):
+    """A column percolating in y with an arm on it -- the level set is open and complicated."""
+    return np.where(((X < 40) & (Y < 26)) | ((X < 18) & (Y >= 26)), 12.25, 1.0)
+
+
+@pytest.mark.xfail(strict=True, reason='open curves get neither the fold nor the dedup that '
+                                       'closed loops get, so the padding window cuts them into '
+                                       'a placement-dependent set of fragments')
+@pytest.mark.parametrize('name,build,gamma', [
+    ('stripe, 45 degrees', _percolating_stripe, 45),
+    ('stripe, 20 degrees', _percolating_stripe, 20),
+    ('post and arm, square cell', _post_and_arm, 90),
+])
+def test_a_percolating_level_set_is_periodic(name, build, gamma):
+    """A structure that crosses the cell is closed *on the torus*, and the code cannot see that.
+
+    `_contour_polylines` pads the raster 3x3 with `mode='wrap'` and hands contourpy a **finite
+    rectangle**. A level set that runs off the cell and comes back is a closed curve on the
+    torus, but in that rectangle it is cut at the border and comes back as open curves whose
+    endpoints are cut marks, not curve ends. Measured on the post-and-arm scene: five curves,
+    every one of them starting and ending on the padded array's first or last row.
+
+    Closed loops are given a fold onto the cell and a dedup, so exactly one whole representative
+    survives whatever the placement. Open curves get neither -- `_contour_polylines` returns
+    them exactly as contourpy cut them -- and `_assemble` then points each cut end at itself so
+    the projection degenerates there, which is right at a real curve end and wrong at a window
+    edge. Where the cut falls moves with the structure, so the fragment count does too: 5 / 6 /
+    9 / 12 across rolls of the post-and-arm scene.
+
+    ====================  ==========  =============
+    scene                 worst       rolls broken
+    ====================  ==========  =============
+    simple stripe, 90 deg 1.4e-15     0 of 63
+    simple stripe, 45 deg 5.3e-05     62 of 63
+    simple stripe, 20 deg 1.1e-04     56 of 63
+    post and arm, 90 deg  7.8e-03     56 of 63
+    ====================  ==========  =============
+
+    The 90-degree stripe is the control and it is the reason this went unseen: a stripe fragments
+    the same way at every placement, so the commonest percolating scene is clean. Add an arm, or
+    skew the cell, and it does not.
+
+    Unlike the medial axis, **this one has no principled barrier** -- the information the code is
+    missing is that the curve closes on the torus, which it already uses for closed loops.
+    """
+    n = 64
+    ax = np.arange(n)
+    X, Y = np.meshgrid(ax, ax)
+    cell = build(X, Y)
+    t = np.deg2rad(float(gamma))
+    lattice = None if gamma == 90 else np.column_stack(([1.0, 0.0], [np.cos(t), np.sin(t)]))
+    worst = max(_translation_defect(cell, (a, b), 'contour', lattice)
+                for a in range(8) for b in range(8) if (a, b) != (0, 0))
+    assert worst < 1e-12, f'{name}: E moved by {worst:.2e} under a translation'
+
+
+@pytest.mark.xfail(strict=True, reason='a layer holding both a closed loop and a percolating '
+                                       'interface drops the percolating one entirely')
+def test_a_closed_loop_does_not_delete_the_percolating_interface_beside_it():
+    """The only defect found here that returns a **wrong** answer rather than an unstable one.
+
+    `_contour_polylines` ends with `if out: return out` -- if any closed loop survived the fold,
+    every open curve is thrown away. A layer holding both is ordinary: a percolating stripe and
+    a disc, which is one line of a recipe.
+
+    Measured on exactly that: contourpy finds 9 closed curves and 6 open ones in the padded
+    array, and the code keeps 1 -- the disc's representative. The stripe's boundary is **not in
+    the normal field at all**. Every pixel then answers "where is the nearest interface?" with
+    the disc, including the pixels sitting on the stripe's own edge.
+
+    The stripe here is horizontal, so its normal must be `(0, +-1)` everywhere along it:
+
+    =====  ==================  ==================
+    x      'contour'           'spectral'
+    =====  ==================  ==================
+    8      (-0.660, +0.751)    (0.000, +1.000)
+    20     (-0.388, +0.922)    (0.000, +1.000)
+    50     (+0.554, +0.832)    (0.000, +1.000)
+    =====  ==================  ==================
+
+    Up to **45 degrees** wrong, silently, with energy conserved. It is not a translation defect
+    -- the field is wrong at every placement, consistently -- which is why the periodicity pins
+    in this file cannot see it and why it needs its own.
+
+    The vertical stripe used elsewhere here hides it by coincidence: both interfaces are then
+    vertical, so the disc's normal happens to point the way the stripe's would.
+    """
+    n = 64
+    ax = np.arange(n)
+    X, Y = np.meshgrid(ax, ax)
+    cell = np.where((np.abs(Y - 12) < 6) | ((X - 32) ** 2 + (Y - 42) ** 2 <= 12 ** 2),
+                    12.25, 1.0)
+
+    from wavebit._core.factorization import _interface_mask
+    from wavebit._core.normal_methods import contour_normal_field
+
+    nx, ny = contour_normal_field(cell, _interface_mask(cell))
+    along = np.abs(ny[6, 4:60])                       # the stripe's upper edge, away from the disc
+    worst = float(np.degrees(np.arccos(np.clip(along.min(), 0.0, 1.0))))
+    assert worst < 1.0, (
+        f'on a horizontal interface the normal must be (0, +-1); it is off by {worst:.1f} '
+        f'degrees, because the stripe was dropped and the nearest kept curve is the disc')
