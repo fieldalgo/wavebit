@@ -218,20 +218,35 @@ def test_the_defect_did_not_converge_with_max_order_which_is_why_it_was_a_defect
         assert moved < 1e-12, f'truncation_order={truncation_order}: R moved by {moved:.2e}'
 
 
-def _disc(X, Y, r=30.0):
-    return np.where(((X - 32) ** 2 + (Y - 32) ** 2) <= r ** 2, 12.25, 1.0)
+def _index_disc(U, V, r=30.0):
+    """Round **in index space**, which off a square cell is not round in the cell.
+
+    ``U`` and ``V`` are raster indices, not Cartesian coordinates: the raster is read at
+    ``(i + 0.5)/Nx * a1 + (j + 0.5)/Ny * a2``, so this mask is the image of a disc under the
+    basis. Measured aspect ratio of what it actually builds: 1.00 at 90 degrees, **1.73 at 60,
+    3.73 at 30, 5.67 at 20**. Naming the arguments ``X``/``Y`` hid that, and a caveat in
+    ``docs/oblique-lattice.md`` called the 60-degree case "a disc of radius 30".
+
+    That is fine for what this file measures -- **periodicity is a property of the raster and
+    of the code that reads it, not of the shape being round** -- and an ellipse is a legitimate
+    structure. It is not fine as a description. Where a genuine Cartesian circle on a skewed
+    cell is wanted, ``tests/test_nvf_normal_methods.py::skewed_disc`` builds one through
+    ``wavebit.grid`` with a minimum-image membership test.
+    """
+    return np.where(((U - 32) ** 2 + (V - 32) ** 2) <= r ** 2, 12.25, 1.0)
 
 
-def _annulus(X, Y, r_out=30.0, r_in=14.0):
-    cell = _disc(X, Y, r_out)
-    cell[((X - 32) ** 2 + (Y - 32) ** 2) <= r_in ** 2] = 1.0
+def _index_annulus(U, V, r_out=30.0, r_in=14.0):
+    """:func:`_index_disc` with its middle removed -- an elliptical annulus off a square cell."""
+    cell = _index_disc(U, V, r_out)
+    cell[((U - 32) ** 2 + (V - 32) ** 2) <= r_in ** 2] = 1.0
     return cell
 
 
-def _two_discs(X, Y, r=11.0, sep=12.0):
+def _two_index_discs(U, V, r=11.0, sep=12.0):
     """Two discs with a saddle between them -- the worst medial axis found so far."""
-    return np.where(((X - (32 - sep)) ** 2 + (Y - 32) ** 2 <= r ** 2)
-                    | ((X - (32 + sep)) ** 2 + (Y - 32) ** 2 <= r ** 2), 12.25, 1.0)
+    return np.where(((U - (32 - sep)) ** 2 + (V - 32) ** 2 <= r ** 2)
+                    | ((U - (32 + sep)) ** 2 + (V - 32) ** 2 <= r ** 2), 12.25, 1.0)
 
 
 def test_contour_is_periodic_under_a_roll_that_lands_on_the_corner():
@@ -297,7 +312,7 @@ def test_contour_is_periodic_under_a_roll_that_lands_on_the_corner():
 
     n = 64
     ax = np.arange(n)
-    X, Y = np.meshgrid(ax, ax)
+    U, V = np.meshgrid(ax, ax)
     cfg = dict(backend=0, thickness=[0.3], truncation_order=(6, 6), top=1.0, bot=1.0,
                wavelength=0.94, psi=np.pi / 2, theta=0.1, phi=0.2, factorization='nvf',
                period=[1.0, 1.0], normal_method='contour')
@@ -316,7 +331,7 @@ def test_contour_is_periodic_under_a_roll_that_lands_on_the_corner():
     inside = {(23, 5), (31, 17), (40, 40), (13, 29)}
 
     from wavebit._core.normal_methods import _two_phase_indicator
-    big = np.where(((X - 32) ** 2 + (Y - 32) ** 2) <= 30 ** 2, 12.25, 1.0)
+    big = np.where(((U - 32) ** 2 + (V - 32) ** 2) <= 30 ** 2, 12.25, 1.0)
 
     # Which phase gets marked is a convention, and it is the *smaller* one -- asserted because
     # marking the larger is equally periodic and so passes everything below, while moving every
@@ -337,12 +352,12 @@ def test_contour_is_periodic_under_a_roll_that_lands_on_the_corner():
 
     # A feature far too small for the "large compared to the cell" story. Only (40,40) reaches
     # the corner, so a test rolling anywhere else would pass with the defect in place.
-    small = np.where(((X - 32) ** 2 + (Y - 32) ** 2) <= 12 ** 2, 12.25, 1.0)
+    small = np.where(((U - 32) ** 2 + (V - 32) ** 2) <= 12 ** 2, 12.25, 1.0)
     moved, got = spread(small, ((0, 0), (40, 40)))
     assert moved < 1e-9, f'disc r=12: sum(T) moved by {moved:.2e} across rolls -- {got}'
 
     # Exactly half fill: the area rule ties, the corner rule stands, and it does not matter.
-    stripe = np.where(X < 32, 12.25, 1.0)
+    stripe = np.where(U < 32, 12.25, 1.0)
     moved, got = spread(stripe, rolls)
     assert moved < 1e-9, f'50/50 stripe: sum(T) moved by {moved:.2e} across rolls -- {got}'
 
@@ -350,9 +365,9 @@ def test_contour_is_periodic_under_a_roll_that_lands_on_the_corner():
 @pytest.mark.xfail(strict=True, reason='the medial axis carries no defined normal, and which '
                                        'segment wins that tie moves with the roll')
 @pytest.mark.parametrize('name,build,rolls', [
-    ('annulus, square cell', _annulus,
+    ('annulus, square cell', _index_annulus,
      ((0, 0), (7, 11), (23, 5), (31, 17), (1, 63), (2, 2), (40, 40), (5, 5), (13, 29), (17, 3))),
-    ('two discs, square cell', _two_discs,
+    ('two discs, square cell', _two_index_discs,
      ((0, 0), (48, 32), (42, 32), (38, 32), (2, 32))),
 ])
 def test_contour_is_periodic_where_the_medial_axis_is_reachable(name, build, rolls):
@@ -443,8 +458,8 @@ def test_contour_is_periodic_where_the_medial_axis_is_reachable(name, build, rol
     """
     n = 64
     ax = np.arange(n)
-    X, Y = np.meshgrid(ax, ax)
-    cell = build(X, Y)
+    U, V = np.meshgrid(ax, ax)
+    cell = build(U, V)
     cfg = dict(backend=0, thickness=[0.3], truncation_order=(6, 6), top=1.0, bot=1.0,
                wavelength=0.94, psi=np.pi / 2, theta=0.1, phi=0.2, factorization='nvf',
                normal_method='contour')
@@ -538,8 +553,8 @@ def test_the_tile_ring_follows_the_cell(gamma):
     """
     n = 64
     ax = np.arange(n)
-    X, Y = np.meshgrid(ax, ax)
-    disc = np.where(((X - 32) ** 2 + (Y - 32) ** 2) <= 30 ** 2, 12.25, 1.0)
+    U, V = np.meshgrid(ax, ax)
+    disc = np.where(((U - 32) ** 2 + (V - 32) ** 2) <= 30 ** 2, 12.25, 1.0)
     t = np.deg2rad(gamma)
     lattice = None if gamma == 90 else np.column_stack(([1.0, 0.0], [np.cos(t), np.sin(t)]))
     for shift in ((1, 1), (2, 3), (3, 0), (0, 2), (5, 7)):
@@ -556,8 +571,8 @@ def test_the_translation_identity_holds_for_every_construction():
     """
     n = 64
     ax = np.arange(n)
-    X, Y = np.meshgrid(ax, ax)
-    disc = np.where(((X - 32) ** 2 + (Y - 32) ** 2) <= 30 ** 2, 12.25, 1.0)
+    U, V = np.meshgrid(ax, ax)
+    disc = np.where(((U - 32) ** 2 + (V - 32) ** 2) <= 30 ** 2, 12.25, 1.0)
     hexl = np.column_stack(([1.0, 0.0], [0.5, np.sqrt(3) / 2]))
     for lattice in (None, hexl):
         for method in ('distance', 'contour', 'spectral', 'smooth'):
@@ -648,10 +663,10 @@ def test_one_ring_reaches_the_nearest_point_once_the_fold_is_right(gamma):
 
     n = 64
     ax = np.arange(n)
-    X, Y = np.meshgrid(ax, ax)
+    U, V = np.meshgrid(ax, ax)
     scenes = {
-        'disc (closed loop)': np.where(((X - 32) ** 2 + (Y - 32) ** 2) <= 30 ** 2, 12.25, 1.0),
-        'stripe (open curve)': np.where(np.abs(X - 32) < 22, 12.25, 1.0),
+        'disc (closed loop)': np.where(((U - 32) ** 2 + (V - 32) ** 2) <= 30 ** 2, 12.25, 1.0),
+        'stripe (open curve)': np.where(np.abs(U - 32) < 22, 12.25, 1.0),
     }
     t = np.deg2rad(float(gamma))
     lattice = None if gamma == 90 else np.column_stack(([1.0, 0.0], [np.cos(t), np.sin(t)]))
@@ -714,9 +729,9 @@ def test_the_half_fill_tie_falls_back_to_the_corner_rule():
     """
     n = 64
     ax = np.arange(n)
-    X, Y = np.meshgrid(ax, ax)
-    blob = (Y >= 8) & (Y < 56) & (X >= 8) & (X < 50)
-    blob = blob | ((Y >= 8) & (Y < 40) & (X == 50))
+    U, V = np.meshgrid(ax, ax)
+    blob = (V >= 8) & (V < 56) & (U >= 8) & (U < 50)
+    blob = blob | ((V >= 8) & (V < 40) & (U == 50))
     assert blob.sum() * 2 == blob.size, 'the scene must sit exactly on the tie'
     assert not (blob[0].any() or blob[-1].any() or blob[:, 0].any() or blob[:, -1].any()), (
         'the blob must not touch a cell edge, or open curves confound this')
@@ -731,14 +746,14 @@ def test_the_half_fill_tie_falls_back_to_the_corner_rule():
     assert max(got) - min(got) < 1e-9, f'sum(T) moved by {max(got) - min(got):.2e}'
 
 
-def _percolating_stripe(X, Y, half=22):
+def _percolating_stripe(U, V, half=22):
     """A stripe spanning the cell: its level set has no closed 0.5 crossing at all."""
-    return np.where(np.abs(X - 32) < half, 12.25, 1.0)
+    return np.where(np.abs(U - 32) < half, 12.25, 1.0)
 
 
-def _post_and_arm(X, Y):
+def _post_and_arm(U, V):
     """A column percolating in y with an arm on it -- the level set is open and complicated."""
-    return np.where(((X < 40) & (Y < 26)) | ((X < 18) & (Y >= 26)), 12.25, 1.0)
+    return np.where(((U < 40) & (V < 26)) | ((U < 18) & (V >= 26)), 12.25, 1.0)
 
 
 @pytest.mark.xfail(strict=True, reason='open curves get neither the fold nor the dedup that '
@@ -783,8 +798,8 @@ def test_a_percolating_level_set_is_periodic(name, build, gamma):
     """
     n = 64
     ax = np.arange(n)
-    X, Y = np.meshgrid(ax, ax)
-    cell = build(X, Y)
+    U, V = np.meshgrid(ax, ax)
+    cell = build(U, V)
     t = np.deg2rad(float(gamma))
     lattice = None if gamma == 90 else np.column_stack(([1.0, 0.0], [np.cos(t), np.sin(t)]))
     worst = max(_translation_defect(cell, (a, b), 'contour', lattice)
@@ -825,8 +840,8 @@ def test_a_closed_loop_does_not_delete_the_percolating_interface_beside_it():
     """
     n = 64
     ax = np.arange(n)
-    X, Y = np.meshgrid(ax, ax)
-    cell = np.where((np.abs(Y - 12) < 6) | ((X - 32) ** 2 + (Y - 42) ** 2 <= 12 ** 2),
+    U, V = np.meshgrid(ax, ax)
+    cell = np.where((np.abs(V - 12) < 6) | ((U - 32) ** 2 + (V - 42) ** 2 <= 12 ** 2),
                     12.25, 1.0)
 
     from wavebit._core.factorization import _interface_mask
