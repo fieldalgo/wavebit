@@ -330,12 +330,34 @@ def _two_phase_indicator(eps):
     is where the orientation now differs from the corner's; the other three constructions are
     bit-identical (0.00e+00 on both discs tried), as is ``'contour'`` below half.
 
-    **The tie is left on the corner rule.** At exactly half fill neither phase is the smaller,
-    and no translation-invariant tiebreak is available — a 50/50 split that no such function
-    can separate is one whose two phases are exchanged by a symmetry. Measured on the case
-    that provokes it, a 50/50 stripe: 1.144e-14 across the same ten rolls, before and after
-    alike. The exchange there is a half-period translation, so both readings give the same
-    curve and the same traversal.
+    **The tie at exactly half fill is a LIVE DEFECT, not a harmless corner.** At half fill
+    neither phase is the smaller, so this falls back to the corner rule -- the very thing it
+    was written to replace, and a translation moves what sits in the corner.
+
+    This docstring claimed the opposite until 2026-08-31, on the grounds that *a 50/50 split
+    that no translation-invariant function can separate is one whose two phases are exchanged
+    by a symmetry*, and on a 50/50 **stripe** holding at 1.144e-14. The argument is false, and
+    the stripe is the one scene where its conclusion happens to hold anyway: a stripe *is* its
+    own complement under a half-period shift.
+
+    The counterexample is ordinary. A compact asymmetric blob covering exactly 2048 of 4096
+    pixels, touching no cell edge, with **no** roll of the 4096 mapping it to its complement:
+
+    ==========  ==============  ============================
+    method      total spread    within each indicator class
+    ==========  ==============  ============================
+    'contour'   **1.977e-03**   6.6e-14 / 9.1e-14
+    'spectral'  7.5e-14         --
+    ==========  ==============  ============================
+
+    Every bit of the spread is *between* the two classes and none of it inside them, which is
+    the indicator-flip signature and nothing else. It is six orders past the 1e-9 the
+    periodicity pins assert, and it is reachable deliberately rather than by accident: a binary
+    topology optimisation under a 50% volume constraint sits exactly on it.
+
+    No fix is landed. A tiebreak must be a function of the geometry surviving both a
+    translation and a relabeling, and area -- the one this uses -- is precisely what does not
+    exist at the tie. Pinned by ``test_the_half_fill_tie_falls_back_to_the_corner_rule``.
     """
     indicator = (eps != eps.flat[0]).astype(float)
     return 1.0 - indicator if indicator.mean() > 0.5 else indicator
@@ -414,8 +436,16 @@ def _contour_polylines(smoothed):
     out, seen = [], set()
     for pts in closed_loops:
         centre = pts.mean(0)
-        folded = pts - np.array([np.round(centre[0] / n_u) * n_u,
-                                 np.round(centre[1] / n_v) * n_v])
+        # Fold onto the CELL, not onto the origin. `round(c/n)*n` lands the centre in
+        # [-n/2, n/2), i.e. straddling the cell's corner, so the representative can sit a
+        # full period outside the cell it describes -- measured at index centre (-30, -30)
+        # for a 64 cell. The tiles below are laid around the representative, so the cell
+        # then sits at the *edge* of the tiled region instead of its middle, and a pixel on
+        # the far side reaches past it. Centring on n/2 puts the representative in the cell
+        # and one ring back in the middle. `floor(x + 0.5)` rather than `round`, which is
+        # half-to-even and ties at exactly half a period -- the case a centred shape hits.
+        folded = pts - np.array([np.floor((centre[0] - n_u / 2) / n_u + 0.5) * n_u,
+                                 np.floor((centre[1] - n_v / 2) / n_v + 0.5) * n_v])
         centre = folded.mean(0)
         key = (round(float(centre[0]), 3), round(float(centre[1]), 3), folded.shape[0])
         if key in seen:
@@ -488,40 +518,33 @@ def _project(P, A, B):
 def _tile_rings(M, points, n_v, n_u):
     """How many rings of periodic images the nearest-sample query has to be given.
 
-    **What this buys is measured; WHY it buys it is not settled. Read this before trusting the
-    formula's shape.**
+    **It is not a coverage rule any more, and saying so is the point.** With the fold in
+    :func:`_contour_polylines` corrected to land the representative on the cell rather than on
+    the origin, a single ring misses nothing: 0 of 4096 pixels at 90 / 60 / 45 / 20 degrees, on
+    a disc and on a percolating stripe, at five placements each
+    (``test_one_ring_reaches_the_nearest_point_once_the_fold_is_right``). The covering-radius
+    argument this function computes was standing in for that fold bug.
 
-    What is certain, because it is the pin: one ring leaves ``'contour'`` non-periodic under a
-    rigid translation of the raster by up to 2.7e-2 in ``sum(T)`` at 60 degrees, on 39 of 63
-    rolls, while ``'distance'``, ``'spectral'`` and ``'smooth'`` hold at 1e-15. Widening the
-    ring takes that to 9.7e-15 at every angle from 90 down to 20 degrees.
+    It is kept because it buys something else, by accident. With a single ring the percolating
+    stripe is non-periodic at 45 and 20 degrees -- 61 and 62 of 63 rolls -- and *not* because a
+    nearest point is missed. Open curves get no fold and no dedup, so the padding window cuts
+    them into a placement-dependent set of fragments, and a wider ring masks that. The real fix
+    is to give open curves the treatment closed loops already get; until then this is a
+    deliberate paper-over, and its cost is quadratic: 9 tiles at 1, 25 at 2, 81 at 4, 729 at
+    the 13 it asks for at 5 degrees.
 
-    **The explanation this function shipped with on 2026-08-30 was wrong, and is recorded here
-    so it is not re-derived.** It said the query needs the covering radius and that one ring
-    cannot reach it once the covering radius exceeds the shortest lattice vector (0.707 on a
-    square cell, 0.866 at 60 degrees, 1.21 at 45, 2.84 at 20). That is a true statement about
-    lattices and a false one about this query: measured on the pinned disc, the one-ring answer
-    is **never farther** than the true minimum -- the excess is 0.0 at 90 degrees and at most
-    2.2e-14 at 75 / 60 / 45 / 30 / 20, i.e. floating point, on 0 of 4096 pixels at every angle.
-    One ring always contains a point at the minimum distance.
+    It also costs accuracy where the residual is the medial axis: on an annulus at 90 degrees a
+    single ring breaks 2 of 63 rolls where this rule's wider ring breaks 15, because more tiles
+    mean more candidates at equal distance for a tie to be broken differently.
 
-    What actually differs is *which* point. At 60 degrees, 36 of 4096 pixels have their nearest
-    sample in a copy outside the one-ring window **at the same distance** (8.71 against 8.71),
-    and those pixels sit at radius 34 to 43 where the curve is at 30 -- outside the shape, in
-    the gaps between its periodic images, equidistant to several copies. Two further facts that
-    are measured but not yet joined to that: the folded representative spans -0.97 to +0.97
-    cells, so tiled copies overlap heavily rather than tiling disjointly; and every pixel, not
-    only these 36, has four distinct copies within 0.1% of its minimum distance.
+    The two terms:
 
-    So the ring is derived from the lattice below because that is a *sufficient* rule that has
-    been checked at six angles, not because the derivation is known to be the operative one.
-    A narrower rule may well do. Anyone tightening it should re-run
-    ``test_the_tile_ring_follows_the_cell`` rather than reason from the covering radius.
-
-    The cost is quadratic in the answer -- 9 tiles at 1, 25 at 2, 81 at 4. An orthogonal cell
-    goes from 1 ring to 2 and moves by 4.3e-14, which is the kd-tree choosing between samples
-    at equal distance; the field build goes 3 ms to 6 ms at N=64.
+    * the query needs the covering radius, not the cell -- 0.707 on a square cell,
+      0.866 at 60 degrees, 1.21 at 45, 2.84 at 20.
+    * how far the samples stray from the cell. Closed loops are folded onto it now,
+      so they stray 0.23 to 0.38 cells; open curves are not folded at all.
     """
+
     cell = M @ np.diag([float(n_u), float(n_v)])          # fractional cell coords -> Cartesian
     a1, a2 = cell[:, 0], cell[:, 1]
     shortest = min(np.hypot(*a1), np.hypot(*a2),

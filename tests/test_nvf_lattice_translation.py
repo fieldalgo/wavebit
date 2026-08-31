@@ -513,12 +513,24 @@ def test_the_tile_ring_follows_the_cell(gamma):
     the ring from the lattice takes every angle here to the floor. That much is solid and is
     what this test pins.
 
-    **The reason given for it was wrong, and the correction is worth carrying.** The original
-    claim was that one ring cannot reach the covering radius. It reaches it at every angle:
-    the one-ring answer is never farther than the true minimum -- excess 0.0 at 90 degrees and
-    at most 2.2e-14 elsewhere, on 0 of 4096 pixels. What differs is *which* equidistant point
-    wins, on 36 pixels that sit between the periodic images rather than near the shape. Why a
-    wider ring makes that choice placement-independent is not established; see `_tile_rings`.
+    **The mechanism, and the trap in measuring it.** One ring genuinely fails to reach the
+    nearest point of the level set on a skewed cell -- but *not at every placement*, which is
+    what makes it hard to see. On the unrolled disc the one-ring nearest distance equals the
+    true minimum at every angle (excess at most 2.2e-14 on 0 of 4096 pixels), so a single
+    measurement there says the ring is sufficient and it is wrong. Rolling the same raster:
+
+    ==========  ==========  ================  =================
+    cell        roll (0,0)  roll (2,2)        roll (1,63)
+    ==========  ==========  ================  =================
+    90 degrees  0 px        0 px              0 px
+    60 degrees  0 px        14 px, 2.60 far   18 px, 2.99 far
+    20 degrees  0 px        96 px, 11.9 far   65 px, 3.87 far
+    ==========  ==========  ================  =================
+
+    Those pixel counts are exactly the pixels whose field changes between ring 1 and ring 2
+    (14 / 1 / 18 at 60 degrees), which closes the chain: skewed cell -> one ring misses at
+    *some* placements -> those pixels take a farther point -> the field depends on placement.
+    `test_one_ring_misses_the_nearest_point_only_at_some_placements` pins the middle step.
 
     The ring it picks is 2 on a square cell -- one more than the code used to take. That is
     not a no-op: an orthogonal cell moves by 4.3e-14, which is the kd-tree choosing between
@@ -598,3 +610,122 @@ def test_the_ring_count_is_read_from_the_cell_not_assumed():
     outside = np.vstack([inside, (M @ np.array([[1.4 * n], [0.5 * n]])).T])
     assert _tile_rings(M, inside, n, n) == 1
     assert _tile_rings(M, outside, n, n) == 2
+
+
+@pytest.mark.parametrize('gamma', [90, 60, 45, 20])
+def test_one_ring_reaches_the_nearest_point_once_the_fold_is_right(gamma):
+    """The tile ring is not a coverage question any more, and the history is why this exists.
+
+    `contour_normal_field` answers each pixel with the nearest point of the level set over the
+    periodic images, and lays the curve on a ring of tiles to do it. That ring was a hard-coded
+    3x3, and on a skewed cell `'contour'` came back non-periodic under a rigid translation of
+    the raster -- 2.68e-2 in `sum(T)` at 60 degrees, on 39 of 63 rolls, where the other three
+    constructions held at 1e-15.
+
+    The first fix widened the ring, deriving it from the covering radius over the shortest
+    lattice vector: 2 rings at 90 degrees, 3 at 45, 4 at 20, 13 (729 tiles) at 5. That worked
+    and it treated the symptom. The cause was one line in `_contour_polylines`, which folded
+    each loop onto the **origin** rather than onto the cell -- `round(c / n) * n` lands a centre
+    in `[-n/2, n/2)`, so the representative straddled the cell's corner and could sit a full
+    period outside the cell it describes (index centre (-30, -30) for a 64 cell, every sample
+    at a negative index). Tiles are laid around the *representative*, so the cell sat at the
+    edge of the tiled region instead of its middle.
+
+    With the fold corrected, **one ring misses nothing**: 0 of 4096 pixels at 90 / 60 / 45 / 20
+    degrees, on a disc and on a percolating stripe, at five placements each. That is what this
+    asserts, and it is the statement the covering-radius rule was standing in for.
+
+    `_tile_rings` is kept anyway, and honestly: with a single ring the percolating stripe is
+    still non-periodic at 45 and 20 degrees (61 and 62 of 63 rolls) -- *not* because a nearest
+    point is missed, which this test rules out, but because open curves get no fold and no
+    dedup, so the padding window cuts them into a placement-dependent set of fragments. The
+    wider ring masks that. See
+    `test_contour_is_periodic_where_the_medial_axis_is_reachable` for the other open item.
+    """
+    from scipy.spatial import cKDTree
+
+    from wavebit._core import normal_methods as nm
+
+    n = 64
+    ax = np.arange(n)
+    X, Y = np.meshgrid(ax, ax)
+    scenes = {
+        'disc (closed loop)': np.where(((X - 32) ** 2 + (Y - 32) ** 2) <= 30 ** 2, 12.25, 1.0),
+        'stripe (open curve)': np.where(np.abs(X - 32) < 22, 12.25, 1.0),
+    }
+    t = np.deg2rad(float(gamma))
+    lattice = None if gamma == 90 else np.column_stack(([1.0, 0.0], [np.cos(t), np.sin(t)]))
+    M = nm._metric(lattice, (n, n))
+    sigma = nm._CONTOUR_SIGMA_COEF * float(np.sqrt(np.sqrt(n * n))) * nm._pixel_size(M)
+    Ii, Jj = np.meshgrid(np.arange(n, dtype=float), np.arange(n, dtype=float))
+    P = np.column_stack([Ii.ravel(), Jj.ravel()]) @ M.T
+
+    for name, base in scenes.items():
+        for shift in ((0, 0), (2, 2), (17, 3), (1, 63), (7, 11)):
+            cell = np.roll(np.roll(base, shift[0], axis=0), shift[1], axis=1)
+            smoothed = nm._isotropic_blur(nm._two_phase_indicator(cell), sigma, M)
+            pts = nm._assemble(nm._contour_polylines(smoothed),
+                               nm._CONTOUR_RESAMPLE_H)[0] @ M.T
+
+            def nearest(k):
+                tiles = [pts + M @ np.array([dx * n, dy * n], dtype=float)
+                         for dy in range(-k, k + 1) for dx in range(-k, k + 1)]
+                return cKDTree(np.vstack(tiles)).query(P, workers=-1)[0]
+
+            missed = int((nearest(1) - nearest(5) > 1e-9).sum())
+            assert missed == 0, (
+                f'gamma={gamma}, {name}, roll {shift}: one ring missed the nearest point on '
+                f'{missed} of {P.shape[0]} pixels')
+
+
+@pytest.mark.xfail(strict=True, reason='at exactly half fill neither phase is the smaller, so '
+                                       'the indicator falls back to the corner pixel')
+def test_the_half_fill_tie_falls_back_to_the_corner_rule():
+    """The one place `_two_phase_indicator`'s area rule does not apply, and it is not harmless.
+
+    The rule marks the smaller phase, which is translation-invariant. At **exactly** half fill
+    there is no smaller phase and it falls back to reading the corner pixel -- the thing the
+    area rule replaced on 2026-08-29 precisely because a translation moves what is in the
+    corner.
+
+    That fallback was called harmless in `_two_phase_indicator`'s own docstring, on two
+    grounds, and both were wrong. The argument was that a 50/50 split no translation-invariant
+    function can separate must have its two phases exchanged by a symmetry; the measurement was
+    a 50/50 **stripe** holding at 1.144e-14. A stripe is its own complement under a half-period
+    shift, so it is the one scene where the conclusion holds regardless of the argument.
+
+    The scene below is the counterexample and it is ordinary: a compact asymmetric blob, 2048
+    of 4096 pixels, touching no cell edge -- so no percolating level set and no open-curve
+    handling involved -- and **no** roll of the 4096 maps it to its complement. Measured over
+    64 rolls:
+
+    ==========  ==============  ============================
+    method      total spread    within each indicator class
+    ==========  ==============  ============================
+    'contour'   1.977e-03       6.6e-14 / 9.1e-14
+    'spectral'  7.5e-14         --
+    ==========  ==============  ============================
+
+    All of the spread is *between* the two classes and none inside them. That is the
+    indicator-flip signature exactly, and it is six orders past the 1e-9 the other pins here
+    assert.
+
+    A binary topology optimisation under a 50% volume constraint sits on this tie on purpose.
+    """
+    n = 64
+    ax = np.arange(n)
+    X, Y = np.meshgrid(ax, ax)
+    blob = (Y >= 8) & (Y < 56) & (X >= 8) & (X < 50)
+    blob = blob | ((Y >= 8) & (Y < 40) & (X == 50))
+    assert blob.sum() * 2 == blob.size, 'the scene must sit exactly on the tie'
+    assert not (blob[0].any() or blob[-1].any() or blob[:, 0].any() or blob[:, -1].any()), (
+        'the blob must not touch a cell edge, or open curves confound this')
+
+    cell = np.where(blob, 12.25, 1.0)
+    cfg = dict(backend=0, thickness=[0.3], truncation_order=(6, 6), top=1.0, bot=1.0,
+               wavelength=0.94, psi=np.pi / 2, theta=0.1, phi=0.2, factorization='nvf',
+               normal_method='contour', period=[1.0, 1.0])
+    got = [float(np.sum(np.asarray(wavebit.rcwa(
+        structure=np.roll(np.roll(cell, a, axis=0), b, axis=1)[None], **cfg).solve().T)))
+        for a in range(0, n, 16) for b in range(0, n, 16)]
+    assert max(got) - min(got) < 1e-9, f'sum(T) moved by {max(got) - min(got):.2e}'
