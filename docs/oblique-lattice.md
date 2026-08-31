@@ -13,8 +13,8 @@ Targets:
 ## TL;DR
 
 A hexagonal array used to be spelled as an `a x a*sqrt(3)` rectangular supercell holding two
-motifs. That doubles the cell area, the retained order count scales with area, and the solve is
-`O(N^2.7)` — so it cost about **8x**. Pass the basis instead:
+motifs. That doubles the cell area, the retained order count scales with area, and the measured
+cost exponent is 2.86 -- so it cost **7.3x**. Pass the basis instead:
 
 ```python
 import numpy as np, wavebit
@@ -115,10 +115,32 @@ The supercell and the native cell describe the same infinite array.
 | `a x a*sqrt(3)` supercell, `truncation_order=(14, 24)` | 1421 | 38.9 s |
 | native hex cell, `truncation_order=(12, 12)` | 625 | 3.3 s |
 
-The order-count ratio is exactly 2 (it is the cell-area ratio; verified numerically across
-`truncation_order`), and the measured cost exponent is `N^2.7` — not `N^3`, because the convolution build is
-sub-cubic. At matched k-space coverage that is **~8x**, and better in practice because the
-supercell converges more slowly than the native cell does.
+**Those two rows are not matched in accuracy**, and the 11.8x they invite is not the number:
+1421 against 625 is an order ratio of 2.27, and the supercell's truncation covers *less* of
+k-space than the hex row's (0.281 against 0.329 in the same units). They are here because they
+are the two spellings a user actually writes.
+
+The ratio that is measured, and that holds:
+
+* **Order density is the cell-area ratio, 2.0.** Retained orders against the k-space area each
+  truncation covers: 3719 per unit area on the native cell, 7351 on the supercell -- a ratio of
+  **1.98** against a cell-area ratio of 2.00. Half of the supercell's orders are **fictitious**:
+  they sit on the coset the finer reciprocal lattice adds, where the structure factor of the
+  two-motif basis vanishes identically, so `eps` cannot couple to them and the source never
+  excites them. They are carried at `O(N^p)` anyway.
+* **The cost exponent is 2.86**, fitted over 529 / 841 / 1225 orders on the native cell
+  (4.31 / 15.79 / 47.63 s); per-step exponents 2.80 and 2.94. Sub-cubic because the convolution
+  build is.
+
+Together: **2.0x the orders, 4x the eigenproblem array, and `2^2.86 = 7.3x` the time** at
+matched k-space coverage.
+
+This page used to add "and better in practice because the supercell converges more slowly than
+the native cell does". **That is withdrawn: it was never measured, and it does not resolve.**
+Both arms converge oscillatorily with an amplitude around 2e-4 on this structure, so
+first-run-below-tolerance gives 7.6x / 2.6x / 2.6x / 33.2x as the tolerance moves from 1e-3 to
+2e-4 -- noise, not a measurement. The order ratio is the area ratio and this page claims nothing
+beyond it.
 
 Do not confuse this with a convergence fix. On the same structure, `factorization='li'` had not
 converged at `truncation_order=(16, 28)` after 72 s while `'nvf'` settled by `truncation_order=(10, 17)` in 5 s. That gap
@@ -132,7 +154,7 @@ are independent and multiply.
 | `factorization='nvf'`, sampled or integrated | supported | — |
 | analytic shapes, summed | supported | lengths are absolute Cartesian; nothing deforms |
 | analytic shapes, painted **overlap** | supported | the clipper is Cartesian; only the periodic images and the transform needed the basis |
-| every `normal_method` on a raster | supported | since 2026-08-21; **use `'contour'`** — see below |
+| every `normal_method` on a raster | supported | since 2026-08-21; **use `'contour'`** for accuracy, **not** where a feature overlaps its own images — see below |
 | field reconstruction | supported | output grid is indexed by `(v, u)`, not `(y, x)` — see below |
 | `factorization='li'` on a raster | **refused** | see below |
 
@@ -327,10 +349,10 @@ already at its final value with 289 orders, where S4 has not settled at 595. Tha
 staircase-free shape transform and NVF together, not the lattice.
 
 The same structure as a rectangular supercell agrees to 6.0e-4 and takes 2.9x as long
-(`truncation_order=(8,14)`, 493 orders, 2.57 s against 289 orders, 0.89 s). Note that is **~3x, not the ~8x**
-quoted above: 8x is the asymptotic ratio on a converged high-contrast structure, and a metalens
+(`truncation_order=(8,14)`, 493 orders, 2.57 s against 289 orders, 0.89 s). Note that is **~3x, not the ~7x**
+quoted above: 7.3x is the asymptotic ratio on a converged high-contrast structure, and a metalens
 library at `truncation_order=8` is not in that regime — the order ratio there is 1.71, not 2. Expect ~3x on
-this kind of sweep and ~8x when you genuinely need the harmonics.
+this kind of sweep and ~7x when you genuinely need the harmonics.
 
 ## Where the skew actually reaches the code
 
@@ -356,26 +378,50 @@ also wrong — a raster whose pixels are not square in real space; see
 
 ## Which `normal_method` to use, and what the default costs here
 
-> **Still open on a skewed cell -- and this is the cell it is worst on.** `'contour'` is the
-> one raster construction that is **not fully periodic**: rolling a raster -- the same structure
-> written from a different corner, which every answer must be invariant under -- moved `sum(T)`
-> by 3.9e-4 on a square cell and 9.7e-4 on a 2:1 cell, where `'distance'`, `'spectral'` and
-> `'smooth'` held at 4e-14. The cause was `_two_phase_indicator` reading the background off the
+> **`'contour'` is the one raster construction that is not fully periodic, and a skewed cell is
+> where what remains of that bites.** Rolling a raster -- the same structure written from a
+> different corner, which every answer must be invariant under -- moved `sum(T)` by 3.9e-4 on a
+> square cell and 9.7e-4 on a 2:1 cell, where `'distance'`, `'spectral'` and `'smooth'` held at
+> 4e-14. Two of the three causes are fixed; read the rest of this block for which, because the
+> version of it that shipped before 2026-09-01 was both stale and wrong about its own scene. The cause was `_two_phase_indicator` reading the background off the
 > *corner pixel*, which a translation can move inside the feature; it marks the smaller phase
 > now. It was **not** `_resample`'s phase, which is what this caveat said until then, and it
 > was not a large-feature problem either.
 >
-> **That fix does not reach a skewed cell.** A disc of radius 30 in a 64-px hex cell still
-> moves by 2.3e-4 over ten rolls (from 3.0e-4), where `'spectral'`, `'distance'` and
-> `'smooth'` hold at 1e-13. The disagreement sits on 1 to 18 pixels at radius 35-42 -- outside
-> the disc, in the deep gaps between its periodic images, which is the **medial axis** of the
-> tiling, where the normal is genuinely undefined. On an annulus it is one pixel, at the centre
-> of the hole. See [`nvf-normal-methods.md`](nvf-normal-methods.md) for the table and the
-> refuted explanations; pinned by
-> `tests/test_nvf_lattice_translation.py::test_contour_is_periodic_under_a_roll_that_lands_on_the_corner`
-> and its strict-xfail sibling. **On a skewed cell prefer `'spectral'` if a translation must
-> not move your answer.** The accuracy tables below were taken on interior features, where none
-> of it fired, and stand.
+> **The skewed-cell half of this caveat was stale, and its scene was not what it said.** It
+> read: "a disc of radius 30 in a 64-px hex cell still moves by 2.3e-4 over ten rolls", blamed
+> the **medial axis**, and told you to prefer `'spectral'` on a skewed cell. Two things were
+> wrong with it.
+>
+> *The number does not reproduce.* On that scene, today: `'contour'` **8.1e-15 on 0 of 63
+> rolls**, the annulus 6.1e-15 on 0 of 63, against the 2.3e-4 and 2.2e-3 the text quoted.
+> `9a84f60` (the tile ring is read from the cell) and `876c1c4` (the fold landed the
+> representative on the origin rather than on the cell) fixed it and this block was never
+> re-taken. There is no skewed-cell preference for `'spectral'` left to state.
+>
+> *The scene was an ellipse.* "A disc of radius 30" was `_disc(X, Y)` in
+> `tests/test_nvf_lattice_translation.py`, whose `X` and `Y` were raster **indices**. The raster
+> is read at `(i + 0.5)/Nx * a1 + (j + 0.5)/Ny * a2`, so that mask is the image of a disc under
+> the basis: **1.73:1 at 60 degrees, 3.73:1 at 30, 5.67:1 at 20.** The helper is `_index_disc(U, V)`
+> since `c59d221` and its docstring says so. That does not invalidate what the tests measure --
+> periodicity is a property of the raster and of the code that reads it, not of the shape being
+> round -- but it does invalidate calling the scene a disc.
+>
+> **The accuracy tables below are not affected**, and that was checked rather than assumed: they
+> come from `tests/test_nvf_normal_methods.py::skewed_disc`, which builds through `wavebit.grid`
+> with a minimum-image membership test and is a genuine Cartesian circle. Every printed digit
+> reproduces.
+>
+> **What is still open** is the *open-curve* path, not the medial axis: a level set that crosses
+> the cell is closed on the torus, but `_contour_polylines` hands contourpy a finite 3x3
+> rectangle and the cut fragments get neither the fold nor the dedup that closed loops get.
+> Measured on a Cartesian circle large enough to touch its neighbours at 20 degrees:
+> `'contour'` **1.0e-01 on 63 of 63 rolls**, where `'distance'`, `'spectral'` and `'smooth'`
+> hold at 4e-15. Pinned by `test_a_percolating_level_set_is_periodic` and
+> `test_a_closed_loop_does_not_delete_the_percolating_interface_beside_it`, both
+> `xfail(strict=True)`. **Prefer `'distance'`, `'spectral'` or `'smooth'` where a feature
+> overlaps its own periodic images** -- on a strongly skewed cell that is the ordinary case, not
+> an exotic one: at 20 degrees with `|a1| = |a2| = 640` any circle of radius over 109 is in it.
 
 **Use `normal_method='contour'`.** The paragraph above describes the *default* construction,
 `'distance'`, and it is the least accurate of the four the raster path offers. A skew makes it
