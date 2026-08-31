@@ -506,19 +506,19 @@ def test_the_tile_ring_follows_the_cell(gamma):
 
     `contour_normal_field` answers each pixel with the nearest point of the level set *over
     the periodic images*, so it lays the curve down on a ring of tiles and queries that. The
-    ring was fixed at 3x3 until 2026-08-30, which is a statement about a square cell wearing
-    the clothes of a general one. Two things exceed it, and neither is bounded by the cell:
+    ring was fixed at 3x3 until 2026-08-30.
 
-    * the nearest lattice point to an arbitrary point can be a **diagonal** away, and the
-      covering radius over the shortest lattice vector is 0.707 on a square cell but 1.21 at
-      45 degrees and 2.84 at 20 -- past 1 it no longer fits in one ring;
-    * `_contour_polylines` folds each loop onto its own centre, so a representative can
-      overshoot the cell by a full period before the query even starts.
+    Measured with that in place, disc of radius 30 in a 64 cell at 60 degrees: 2.68e-2, on 39
+    of 63 rolls, where `'distance'`, `'spectral'` and `'smooth'` all held at 1e-15. Deriving
+    the ring from the lattice takes every angle here to the floor. That much is solid and is
+    what this test pins.
 
-    Measured with the defect in place, disc of radius 30 in a 64 cell at 60 degrees:
-    2.68e-2, on 39 of 63 rolls, where `'distance'`, `'spectral'` and `'smooth'` all held at
-    1e-15. `_tile_rings` reads both terms off the data instead of assuming a cell, and every
-    angle here comes back at the floor.
+    **The reason given for it was wrong, and the correction is worth carrying.** The original
+    claim was that one ring cannot reach the covering radius. It reaches it at every angle:
+    the one-ring answer is never farther than the true minimum -- excess 0.0 at 90 degrees and
+    at most 2.2e-14 elsewhere, on 0 of 4096 pixels. What differs is *which* equidistant point
+    wins, on 36 pixels that sit between the periodic images rather than near the shape. Why a
+    wider ring makes that choice placement-independent is not established; see `_tile_rings`.
 
     The ring it picks is 2 on a square cell -- one more than the code used to take. That is
     not a no-op: an orthogonal cell moves by 4.3e-14, which is the kd-tree choosing between

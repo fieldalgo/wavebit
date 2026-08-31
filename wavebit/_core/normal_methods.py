@@ -488,27 +488,39 @@ def _project(P, A, B):
 def _tile_rings(M, points, n_v, n_u):
     """How many rings of periodic images the nearest-sample query has to be given.
 
-    One ring was enough on an orthogonal cell and is **not** enough on a skewed one, which is
-    the whole reason this exists. Two things add up, and neither is bounded by the cell:
+    **What this buys is measured; WHY it buys it is not settled. Read this before trusting the
+    formula's shape.**
 
-    * **the query needs the covering radius, not the cell.** The nearest lattice point to an
-      arbitrary point of the plane can be a *diagonal* away, and on a skewed basis that
-      diagonal grows without bound relative to the shortest lattice vector: the ratio is
-      0.707 on a square cell, 0.866 at 60 degrees, 1.21 at 45 and 2.84 at 20. Past 1 it no
-      longer fits inside one ring.
-    * **the samples are not inside the cell.** :func:`_contour_polylines` folds each loop onto
-      its own area-mean centre, so a representative's bounding box can overshoot by a full
-      period -- 0.81 to 1.00 cells, measured. Whatever the query needs, the samples have
-      already spent some of it.
+    What is certain, because it is the pin: one ring leaves ``'contour'`` non-periodic under a
+    rigid translation of the raster by up to 2.7e-2 in ``sum(T)`` at 60 degrees, on 39 of 63
+    rolls, while ``'distance'``, ``'spectral'`` and ``'smooth'`` hold at 1e-15. Widening the
+    ring takes that to 9.7e-15 at every angle from 90 down to 20 degrees.
 
-    Both are read from the data rather than assumed, so a cell this function has never seen
-    gets the ring it needs instead of the ring a 90-degree cell needed.
+    **The explanation this function shipped with on 2026-08-30 was wrong, and is recorded here
+    so it is not re-derived.** It said the query needs the covering radius and that one ring
+    cannot reach it once the covering radius exceeds the shortest lattice vector (0.707 on a
+    square cell, 0.866 at 60 degrees, 1.21 at 45, 2.84 at 20). That is a true statement about
+    lattices and a false one about this query: measured on the pinned disc, the one-ring answer
+    is **never farther** than the true minimum -- the excess is 0.0 at 90 degrees and at most
+    2.2e-14 at 75 / 60 / 45 / 30 / 20, i.e. floating point, on 0 of 4096 pixels at every angle.
+    One ring always contains a point at the minimum distance.
 
-    The cost is quadratic in the answer -- 9 tiles at 1, 25 at 2 -- and it buys correctness
-    that is not optional: at 60 degrees a single ring leaves ``'contour'`` non-periodic under a
-    rigid translation of the raster by up to 2.7e-2 in ``sum(T)``, on 39 of 63 rolls, while the
-    other three constructions hold at 1e-15. Two rings take that to 9.7e-15 on every roll.
-    An orthogonal cell keeps one ring and is bit-identical to before.
+    What actually differs is *which* point. At 60 degrees, 36 of 4096 pixels have their nearest
+    sample in a copy outside the one-ring window **at the same distance** (8.71 against 8.71),
+    and those pixels sit at radius 34 to 43 where the curve is at 30 -- outside the shape, in
+    the gaps between its periodic images, equidistant to several copies. Two further facts that
+    are measured but not yet joined to that: the folded representative spans -0.97 to +0.97
+    cells, so tiled copies overlap heavily rather than tiling disjointly; and every pixel, not
+    only these 36, has four distinct copies within 0.1% of its minimum distance.
+
+    So the ring is derived from the lattice below because that is a *sufficient* rule that has
+    been checked at six angles, not because the derivation is known to be the operative one.
+    A narrower rule may well do. Anyone tightening it should re-run
+    ``test_the_tile_ring_follows_the_cell`` rather than reason from the covering radius.
+
+    The cost is quadratic in the answer -- 9 tiles at 1, 25 at 2, 81 at 4. An orthogonal cell
+    goes from 1 ring to 2 and moves by 4.3e-14, which is the kd-tree choosing between samples
+    at equal distance; the field build goes 3 ms to 6 ms at N=64.
     """
     cell = M @ np.diag([float(n_u), float(n_v)])          # fractional cell coords -> Cartesian
     a1, a2 = cell[:, 0], cell[:, 1]
