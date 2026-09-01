@@ -494,6 +494,14 @@ def _translation_defect(cell, shift, method, lattice=None, to=3):
     It is also what made the defect's *size* honest. Ten hand-picked rolls said the oblique
     residual was 2.2e-3; sweeping all 4095 said 2.7e-2 on 39 of 63, and that the annulus on a
     square cell breaks on 35% of rolls rather than the one in ten a sample had found.
+
+    **One trap, and it is in the normalisation.** Every slot is divided by the *largest* of
+    the three, not by its own norm. Dividing a slot by itself reports round-off over round-off
+    on a slot that is identically zero -- `epxy` on a stripe is `1.2e-19` against `epx`'s
+    `7.8`, and the per-slot spelling calls a perfectly covariant construction **2.09** there
+    while `sum(T)` over the same rolls moves 1.2e-14. That cost an hour on 2026-09-01, twice.
+    The cost of the shared denominator is that a defect living only in a slot orders below the
+    others is under-reported, which is the right trade: such a slot cannot move an answer.
     """
     import wavebit
     kw = dict(backend=0, thickness=[0.3], truncation_order=(to, to), top=1.0, bot=1.0,
@@ -506,12 +514,12 @@ def _translation_defect(cell, shift, method, lattice=None, to=3):
     A = wavebit.rcwa(structure=cell[None], **kw).eps_conv_matrices()
     B = wavebit.rcwa(structure=rolled[None], **kw).eps_conv_matrices()
     d = _phase_diagonal(to, shift[0], shift[1], n_v, n_u)
+    slots = [(np.asarray(A[k])[0], np.asarray(B[k])[0]) for k in (0, 1, 3)]
+    scale = max(max(float(np.abs(a).max()) for a, _ in slots), 1e-30)
     worst = 0.0
-    for k in (0, 1, 3):                     # epx, epy, epxy -- the slots the field reaches
-        a = np.asarray(A[k])[0]
-        b = np.asarray(B[k])[0]
+    for a, b in slots:                      # epx, epy, epxy -- the slots the field reaches
         pred = (d[:, None] * a) * np.conj(d)[None, :]
-        worst = max(worst, np.abs(b - pred).max() / max(np.abs(a).max(), 1e-30))
+        worst = max(worst, float(np.abs(b - pred).max()) / scale)
     return worst
 
 
