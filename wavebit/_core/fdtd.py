@@ -559,6 +559,9 @@ class _Incident1D:
         self.dz, self.dt, self.eps_r, self.k_src = dz, dt, eps_r, k_src
         self.mu_r = float(np.real(mu_r))
         self.f0, self.width, self.t0 = f0, width, t0
+        #: **Dimensional** (1/length), like `kx_op` beside it -- NOT the normalised `ky_inc`
+        #: every other name in this module carries. Passing the normalised value is a factor
+        #: `k0` too large, which on a 900 nm run is 143x and diverges to 1e267 in 200 steps.
         self.tetm, self.kx_op, self.ky = tetm, kx_op, complex(ky)
         #: The tangential electric amplitudes the source drives, `(ex, ey)`. For a pure TE/TM
         #: run this is the single component that polarisation names; for a conical mount it is
@@ -863,7 +866,7 @@ class _Grid:
 # the time loop
 # ---------------------------------------------------------------------------------------
 
-def _time_loop(grid, tetm, n_steps, wavelengths):
+def _time_loop(grid, tetm, n_steps, wavelengths, leg=None):
     """Step the fields and accumulate the running DFT, at every requested wavelength at once.
 
     This is the one thing a time-domain solve does that a frequency-domain one cannot: the
@@ -896,9 +899,22 @@ def _time_loop(grid, tetm, n_steps, wavelengths):
     kt = grid.k_tfsf
 
     dtype = grid.dtype
+    conical = grid.ky_inc != 0.0
+    # The incident wave's own polarisation, resolved onto the two tangential electric
+    # components. `s_hat = (-sin phi, cos phi, 0)`; `p_hat = k_hat x s_hat` has tangential part
+    # `-cos(theta) * (cos phi, sin phi)`. These are the two eigenpolarisations of a uniform
+    # medium at fixed `(kx, ky)`, so driving one excites only it -- which is what lets a 1D
+    # auxiliary grid carry a conical incident wave at all.
+    inc_drive = None
+    if conical:
+        c_p, s_p = np.cos(grid.phi), np.sin(grid.phi)
+        inc_drive = ((-s_p, c_p) if leg == 's'
+                     else (-np.cos(grid.theta) * c_p, -np.cos(grid.theta) * s_p))
     inc = _Incident1D(nz, dz, dt, grid.eps_top.real, grid.n_pml, grid.k_src,
-                      centre, 1.0 / centre, width, t0, tetm, grid.kx_op, dtype,
-                      mu_r=grid.mu_top.real)
+                      centre, 1.0 / centre, width, t0, None if conical else tetm,
+                      grid.kx_op, dtype, mu_r=grid.mu_top.real,
+                      ky=(2.0 * np.pi / centre) * grid.ky_inc if conical else 0.0,
+                      drive=inc_drive)
 
     # The incident field the TFSF plane injects varies across the cell as `exp(i kx x)`; the
     # auxiliary grid carries only its amplitude, so the plane multiplies it back on. `Ey`/`Hx`
@@ -907,15 +923,20 @@ def _time_loop(grid, tetm, n_steps, wavelengths):
     # field arrays stay real.
     k0 = 2.0 * np.pi / centre
     if grid.kx_inc == 0.0:
-        x_phase = np.ones(nx)
+        x_node = x_half = np.ones(nx)
     else:
-        offset = 0.5 if tetm == 'tm' else 0.0
-        x_phase = np.exp(1j * k0 * grid.kx_inc * (np.arange(nx) + offset) * dx)
+        cell = np.arange(nx)
+        x_node = np.exp(1j * k0 * grid.kx_inc * cell * dx)
+        x_half = np.exp(1j * k0 * grid.kx_inc * (cell + 0.5) * dx)
+    # `Ey`/`Hx` sit on the x nodes and `Ex`/`Hy` on the half-steps. A pure run's two injection
+    # lines share one position -- which is why one array was enough and why the single-offset
+    # form read as correct. A conical run drives all four, so it needs both: using one costs
+    # 1.8e-3 of the incident amplitude, above every convergence tolerance in the test file and
+    # far below anything `R + T` could flag.
 
     # A conical mount couples the two triples, so both run and the four `ky` terms join them.
     # At ky = 0 they decouple exactly and only the named one is allocated -- which is why a
     # pure TE/TM run costs no more than it did.
-    conical = grid.ky_inc != 0.0
     te_on = conical or tetm == 'te'
     tm_on = conical or tetm == 'tm'
     ky = 1j * (2.0 * np.pi / centre) * grid.ky_inc
@@ -976,15 +997,14 @@ def _time_loop(grid, tetm, n_steps, wavelengths):
             hz += dt * curl_hz / mu_z
             # TFSF (Umashankar & Taflove 1982): Hx at kt-1/2 is a scattered-field quantity
             # whose stencil reached across the boundary into the total-field Ey[kt].
-            hx[kt - 1] -= dt * inc.e[kt] * x_phase / dz / mu_x[kt - 1]
+            hx[kt - 1] -= dt * inc.ey[kt] * x_node / dz / mu_x[kt - 1]
         if tm_on:
             # dHy/dt = dEz/dx - dEx/dz -- the one component no `ky` term reaches.
             d_ez = (_shift_up(ez, grid.bloch) - ez) / dx
             d_ex = (ex[1:] - ex[:-1]) / dz
             psi_hy = hb * psi_hy + ha * d_ex
             hy += dt * (d_ez - d_ex / hk - psi_hy) / mu_y
-            # Ex_inc is `inc.e` outright -- see the sign note on _Incident1D.
-            hy[kt - 1] += dt * inc.e[kt] * x_phase / dz / mu_y[kt - 1]
+            hy[kt - 1] += dt * inc.ex[kt] * x_half / dz / mu_y[kt - 1]
 
         # --- E, to level n + 1 ----------------------------------------------------------
         inc.step_e((step + 1) * dt)
@@ -1001,7 +1021,7 @@ def _time_loop(grid, tetm, n_steps, wavelengths):
             if poles_y is not None:
                 drive = drive - poles_y.advance(ey)
             ey[1:-1] += drive[1:-1] / eps[1:-1]
-            ey[kt] -= dt * inc.h[kt - 1] * x_phase / dz / eps[kt]
+            ey[kt] -= dt * inc.hx[kt - 1] * x_node / dz / eps[kt]
         if tm_on:
             # eps dEx/dt = i ky Hz - dHy/dz ; eps dEz/dt = dHy/dx - i ky Hx.
             d = np.zeros((nz, nx), dtype=dtype)
@@ -1014,8 +1034,9 @@ def _time_loop(grid, tetm, n_steps, wavelengths):
             if poles_x is not None:
                 drive = drive - poles_x.advance(ex)
             ex[1:-1] += drive[1:-1] / eps_x[1:-1]
-            # Hy_inc is MINUS inc.h, which is where this sign comes from.
-            ex[kt] -= dt * inc.h[kt - 1] * x_phase / dz / eps_x[kt]
+            # Hy_inc is MINUS `inc.hy`, which is where this sign comes from -- the same
+            # double negation the `inc.h` accessor used to hide.
+            ex[kt] -= dt * (-inc.hy[kt - 1]) * x_half / dz / eps_x[kt]
             curl_ez = (hy - _shift_down(hy, grid.bloch)) / dx
             if conical:
                 curl_ez = curl_ez - ky * hx
@@ -1483,7 +1504,7 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
 
     dispersion, poles = _check_dispersion(dispersion, poles, raster)
     grid = _Grid(wavelength, period_x, raster, thickness, eps_top, eps_bot,
-                 resolution, n_pml, courant, subpixel, theta=theta,
+                 resolution, n_pml, courant, subpixel, theta=theta, phi=phi,
                  dispersion=dispersion, poles=poles, mu_raster=mu_raster,
                  mu_top=mu_top, mu_bot=mu_bot, pad_scale=pad_scale)
     n_steps = int(np.ceil(n_periods * centre / grid.dt))

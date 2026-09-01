@@ -1294,3 +1294,57 @@ def test_tetm_with_an_azimuth_is_still_refused_and_points_at_psi():
         _ = solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
                        period=[PERIOD], wavelength=WL, theta=0.0, tetm='te',
                        phi=np.deg2rad(30.0), resolution=0.05, n_periods=20)
+
+
+def test_the_tfsf_source_injects_a_conical_plane_wave():
+    """On vacuum the scattered-field region must stay empty -- at any azimuth.
+
+    This is the only instrument in the module with resolving power over the conical source, and
+    it needs no oracle: with nothing to scatter from, everything above the TFSF plane is
+    scattered field and must cancel to round-off. Before the source was wired it did not --
+    measured 6.9e-2 / 9.5e-2 / 6.7e-2 of the incident amplitude at phi = 30 / 45 / 90 deg
+    against 3.7e-17 at phi = 0. Thirteen orders, and **every other gate in the module passed
+    throughout**: the stepper was stable and decaying, and the public path with the refusal
+    lifted returned `R + T = 0.9966`.
+
+    Both transverse components are checked, and that is not padding. Watching only `Ey` says
+    1e-32 for pure-s incidence at phi = 90 deg -- not because it is exact but because the wave
+    is x-polarised there and the monitor cannot see it. A one-component check reports its own
+    blindness as a pass.
+    """
+    from wavebit._core.fdtd import _Grid, _time_loop
+    vacuum = np.ones((1, 2), dtype=complex)
+    for phi_deg in (0.0, 30.0, 45.0, 90.0):
+        for leg in ('s', 'p'):
+            grid = _Grid(WL, PERIOD, vacuum, [THICK], EPS_TOP, EPS_TOP, 0.05, 12, 0.99, True,
+                         theta=np.deg2rad(30.0), phi=np.deg2rad(phi_deg),
+                         mu_top=1.0 + 0j, mu_bot=1.0 + 0j)
+            out = _time_loop(grid, 'te', int(np.ceil(60.0 * WL / grid.dt)),
+                             np.array([WL]), leg=leg)
+            for name in ('dft_ref',):
+                leak = float(np.abs(out[name][0]).max())
+                total = float(np.abs(out['inc_z0'][0]))
+                if total > 1e-12:                     # the leg this monitor can see
+                    assert leak / total < 1e-10, (
+                        f'phi={phi_deg} leg={leg}: {leak / total:.2e} of the incident amplitude '
+                        f'is left in the scattered-field region on a vacuum scene')
+
+
+def test_the_auxiliary_grid_takes_a_dimensional_ky():
+    """`_Incident1D.ky` is 1/length, unlike every other `ky` name in the module.
+
+    `kx_op` beside it is the discrete x-derivative operator and already carries `k0`, so its
+    partner must too -- while `grid.ky_inc`, like `kx_inc`, is normalised by `k0`. Passing the
+    normalised value is a factor `k0` too large: 143x on a 900 nm run, and the auxiliary grid
+    reaches 1e267 in 200 steps and takes the 2D grid to NaN with it.
+
+    Pinned because the failure is loud but the CAUSE is not: an unstable FDTD reads as a
+    Courant problem, and the Courant bound here already includes the ky term.
+    """
+    from wavebit._core.fdtd import _Grid, _time_loop
+    grid = _Grid(WL, PERIOD, np.ones((1, 2), dtype=complex), [THICK], EPS_TOP, EPS_TOP,
+                 0.05, 12, 0.99, True, theta=np.deg2rad(30.0), phi=np.deg2rad(45.0),
+                 mu_top=1.0 + 0j, mu_bot=1.0 + 0j)
+    out = _time_loop(grid, 'te', int(np.ceil(60.0 * WL / grid.dt)), np.array([WL]), leg='s')
+    assert np.all(np.isfinite(out['dft_ref'])), 'the conical run went non-finite'
+    assert float(np.abs(out['dft_ref'][0]).max()) < 1e3, 'the conical run diverged'

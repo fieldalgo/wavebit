@@ -615,11 +615,29 @@ as `per-order-sp-frame-half-turn` in the RCWA path.
   done at any `theta` (§5b), and the conical output frame is done at `theta = 0` (§8d), where
   `ky` is exactly zero and the whole `phi` dependence is which channel each order lands in.
   What is left is the middle: at `ky != 0` four terms couple all six field components, so no
-  combination of TE and TM runs reproduces it. **The six-component stepper for it is written
-  and its coupling is measured** — `TM/TE` power ratio 0 at `phi = 0`, 0.464 / 0.740 / 0.648 at
-  30 / 60 / 90 degrees, and 0 at `theta = 0` for any `phi`, which is the same statement as §8d.
-  It is not wired to an extraction, and until it is, `psi` with `theta != 0` is refused by
-  name rather than answered with the normal-incidence projection.
+  combination of TE and TM runs reproduces it. The six-component **operator** is written — four
+  `ky` terms on the `Hx`, `Hz`, `Ex` and `Ez` updates — and the stepper runs and stays bounded.
+  **Nothing else about it is true, and an earlier revision of this section said otherwise.**
+
+  Three things block it, and the first two make the third moot. `solve_fdtd` never passes `phi`
+  to `_Grid`, so `grid.ky_inc` is `0.0` on every reachable path and the `conical` branch is dead
+  code. The TFSF source cannot inject a conical wave: `_Incident1D` takes `ky` and `drive`
+  parameters and carries the mirror four terms, and `_time_loop` constructs it passing neither.
+  And there is no extraction — `_half_space_kz` is `sqrt(eps - kx**2)` with no `ky`.
+
+  The measurement that settles it needs no oracle. On a **vacuum** scene TFSF must cancel
+  exactly in the scattered-field region; the leak, as a fraction of the incident amplitude, is
+  `3.7e-17` at `phi = 0` and `6.9e-2 / 9.5e-2 / 6.7e-2` at `phi = 30 / 45 / 90 deg`. Fifteen
+  orders. **This is the only instrument in the module with resolving power here** — the stepper
+  is stable and decaying, and the public path with the refusal lifted returns `R + T = 0.9966`,
+  so every physicality gate passes on the wrong answer.
+
+  A previous revision of this section reported a measured `TM/TE` coupling ratio
+  (0.464 / 0.740 / 0.648 at 30 / 60 / 90 degrees) as evidence the stepper worked. **Those
+  figures are not reproducible from anything in this repository, and the path they would have
+  had to come through is the broken one above.** No scene, angle or definition was recorded
+  with them, which is the reason they survived as long as they did. Until `psi` with
+  `theta != 0` is answered, it is refused by name.
 - **A broadband run.** The DFT machinery accumulates at a single frequency now; a band needs
   the source width sized from the requested span and a guard on the incident amplitude, which
   falls to 2e-7 of its peak at the band edge and turned `R` into 105 in a prototype that had
