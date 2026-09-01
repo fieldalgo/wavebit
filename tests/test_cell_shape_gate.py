@@ -165,7 +165,7 @@ def _offenders():
              if f.endswith('.py')]
     found = {}
     for f in files:
-        source = pathlib.Path(f).read_text()
+        source = pathlib.Path(f).read_text(encoding='utf-8')
         lines = source.splitlines()
         for node in ast.walk(ast.parse(source)):
             if not isinstance(node, ast.FunctionDef):
@@ -269,7 +269,7 @@ def test_a_function_holding_a_lattice_forwards_it_to_every_sibling_that_takes_on
     """
     files = [f for f in subprocess.check_output(['git', 'ls-files', 'wavebit'],
                                                 text=True).split() if f.endswith('.py')]
-    trees = {f: ast.parse(pathlib.Path(f).read_text()) for f in files}
+    trees = {f: ast.parse(pathlib.Path(f).read_text(encoding='utf-8')) for f in files}
     takers = _lattice_takers(trees)
     assert len(takers) > 20, takers            # a predicate matching nothing would pass silently
 
