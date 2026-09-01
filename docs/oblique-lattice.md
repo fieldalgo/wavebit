@@ -58,7 +58,7 @@ X, Y = A.grid((256, 256))                      # == wavebit.grid((256, 256), lat
 layer = np.where(X ** 2 + Y ** 2 < 90.0 ** 2, 12.25, 1.0)
 ```
 
-`A.grid(pixels)` is the free function with `lattice=A`, and it is the spelling to prefer for one
+`A.grid(grid_shape)` is the free function with `lattice=A`, and it is the spelling to prefer for one
 reason: the cell is needed **twice** — here, to place the pixels, and at `lattice=` on the
 solver — and the only way that goes wrong is the two disagreeing. See "Two uses of one lattice"
 below for what the disagreement costs.
@@ -136,18 +136,21 @@ the array gets — `sum(T)` from 0.157 to 0.997 with no error, no warning, and e
 throughout. It reads as a lattice effect, and the lattice effect and the *shape deformed into
 an ellipse* effect are mixed together with nothing separating them.
 
-`A.grid(pixels)` (`Lattice.grid`) is the same call as `wavebit.grid(pixels, lattice=A)` with the
+`A.grid(grid_shape)` (`Lattice.grid`) is the same call as `wavebit.grid(grid_shape, lattice=A)` with the
 basis named once, which is the whole of what it is for. **It is a nudge and not a guarantee:**
-`wavebit.grid(pixels, lattice=B)` still exists and still answers, and provenance cannot be
+`wavebit.grid(grid_shape, lattice=B)` still exists and still answers, and provenance cannot be
 attached to the array either — the first `np.where` turns the coordinates into a permittivity
 raster, and a raster is numbers on indices with no record of the cell it was drawn in. So the
 rule has to be carried by the reader: **change the cell and redraw the array.** Pinned as
 `tests/test_lattice_pytree.py::test_the_two_uses_of_a_lattice_have_to_be_the_same_one`.
 
-(Its first parameter is `pixels`, not `shape`. This package spells a piece of *geometry* a
-shape — `structure=[{'shapes': [...]}]`, `shape_ft`, `shape_geometry`, 131 uses in `wavebit/` —
-so `A.grid(shape)` read as *"put a shape on this lattice"*, which is the one thing it does not
-do. `pixel` never means geometry here.)
+(Its first parameter is `grid_shape`, not `shape`. Plain `shape` collides with geometry — this
+package spells a piece of geometry a shape, `structure=[{'shapes': [...]}]`, `shape_ft`,
+`shape_geometry` — so `A.grid(shape)` read as *"put a shape on this lattice"*. But the word is
+also what says the pair is **rows-first**, the way an array's shape is, so dropping it loses
+that: `samples` would collide with `reconstruct_field`'s x-first `sample_x` / `sample_y` and
+invite `(nx, ny)`. The prefix disambiguates instead, and `sample_grid` and `boundary.py` were
+already spelling it this way.)
 
 ### The two ways of naming a cell wrongly, both refused since 2026-09-01
 

@@ -323,11 +323,12 @@ def test_the_method_and_the_free_function_are_one_call():
     with pytest.raises(ValueError, match='rows, columns'):
         A.grid((4,))
 
-    # The first parameter is `pixels`, not `shape`: this package spells a piece of *geometry* a
-    # shape (`structure=[{'shapes': [...]}]`, `shape_ft`, `shape_geometry`), so `A.grid(shape)`
-    # read as "put a shape on this lattice". `pixel` never means geometry here.
-    assert [np.asarray(c).tobytes() for c in A.grid(pixels=(9, 13))] == \
-        [np.asarray(c).tobytes() for c in wavebit.grid(pixels=(9, 13), lattice=A)]
+    # The first parameter is `grid_shape`. Plain `shape` collides with geometry -- this package
+    # spells a piece of geometry a shape -- but the word is also what says the pair is
+    # rows-first, the way an array's shape is; `sample_x` / `sample_y` are the x-first spelling
+    # and mean counts per named axis. So the prefix disambiguates rather than the word changing.
+    assert [np.asarray(c).tobytes() for c in A.grid(grid_shape=(9, 13))] == \
+        [np.asarray(c).tobytes() for c in wavebit.grid(grid_shape=(9, 13), lattice=A)]
     with pytest.raises(TypeError):
         A.grid(shape=(9, 13))
 
