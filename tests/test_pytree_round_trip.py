@@ -35,7 +35,8 @@ P, WL, H = 400.0, 900.0, 150.0
 #: slots together -- the split between them is `_tree_flatten`'s business, not this test's.
 CARRIED = (
     'backend', 'tetm', 'truncation_order', 'layer_algorithm', 'complex_dtype',
-    'fourier_coefficients', 'factorization', 'normal_method', 'incidence_side', 'answers',
+    'fourier_coefficients', 'factorization', 'normal_method', 'projector', 'incidence_side',
+    'answers',
     'normal_grid', 'theta', 'phi', 'psi', 'chi', 'polarization', 'period', 'wavelength',
     'thickness', 'structure', 'mu', 'top', 'bot', 'lattice', 'excitation', 'formulation',
 )
@@ -60,7 +61,8 @@ def _scene(**over):
               truncation_order=[3, 2], thickness=[H, 0.5 * H], wavelength=WL,
               top=wavebit.Material(2.25, mu=1.4), bot=wavebit.Material(4.0),
               theta=0.31, phi=0.47, psi=0.29, chi=np.pi / 9,
-              factorization='nvf', normal_method='contour', normal_grid=512,
+              factorization='nvf', normal_method='contour', projector='circular',
+              normal_grid=512,
               incidence_side='bottom', layer_algorithm='SMM', answers='field',
               complex_dtype=1, fourier_coefficients='integrated',
               excitation={(0, 0): 1.0, (1, 0): 0.5j})

@@ -82,7 +82,7 @@ from ._core.backend import (AutoDetuneWarning, AxisNameWarning, PrecisionLossWar
 from ._core.conventions import branch_tolerance
 from ._core.draw import plot_structure, slice_structure
 from ._core.enums import (Answers, Backend, Tetm, FourierCoefficients, Factorization,
-                          Formulation, NormalMethod)
+                          Formulation, NormalMethod, Projector)
 from ._core.domain import (Layer, Stack, Incidence, Material,
                            eps_from_index, index_from_eps)
 # The type `eps_conv_matrices()` hands back and `solve_conv()` takes: a NamedTuple, so the five
@@ -133,7 +133,7 @@ __all__ = [
     'branch_tolerance',
     'plot_structure', 'slice_structure',
     'Answers', 'Backend', 'Tetm', 'FourierCoefficients', 'Factorization', 'Formulation',
-    'NormalMethod',
+    'NormalMethod', 'Projector',
     'Layer', 'Stack', 'Incidence', 'Material', 'eps_from_index', 'index_from_eps',
     'ConvMatrices', 'ScatteringMatrix', 'Port',
     'StaticGeometry', 'StaleGeometryError',

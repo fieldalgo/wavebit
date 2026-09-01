@@ -22,7 +22,7 @@ import wavebit
 from wavebit.manifest import (LATTICE, MATERIAL_QUANTITY, MATERIALS, SPELLINGS,
                               cited_sources, manifest)
 from wavebit._core.enums import (Backend, Factorization, FourierCoefficients, NormalMethod,
-                                   Tetm)
+                                   Projector, Tetm)
 
 import pathlib
 
@@ -122,6 +122,21 @@ def test_a_normal_method_the_manifest_withholds_is_refused(path):
 
 
 @pytest.mark.parametrize('path', sorted(STRUCTURES))
+def test_a_projector_the_manifest_withholds_is_refused(path):
+    """`normal_method`'s twin, over the axis published beside it since 2026-09-01.
+
+    Same contract and the same reason: the shape paths list no projector, because neither
+    forms one from a raster normal field, so naming one there must refuse rather than run to
+    completion with the request ignored.
+    """
+    for value in _unavailable(path, 'projector', Projector):
+        with pytest.raises(Exception) as excinfo:
+            wavebit.rcwa(structure=STRUCTURES[path], projector=value, **KW).solve()
+        assert value in str(excinfo.value), (
+            f'{path}: refused projector={value!r} without naming it')
+
+
+@pytest.mark.parametrize('path', sorted(STRUCTURES))
 def test_an_option_the_manifest_offers_actually_builds(path):
     """The other half — a path must not be described as implementing what it refuses."""
     for value in PATHS[path]['factorization']:
@@ -132,6 +147,10 @@ def test_an_option_the_manifest_offers_actually_builds(path):
         # The manifest's own caveat: the axis is read only under factorization='nvf'.
         wavebit.rcwa(structure=STRUCTURES[path], factorization='nvf',
                        normal_method=value, **KW).solve()
+    for value in PATHS[path]['projector']:
+        # Same caveat, same reader -- the two axes are published side by side.
+        wavebit.rcwa(structure=STRUCTURES[path], factorization='nvf',
+                       projector=value, **KW).solve()
 
 
 # ------------------------------------------------------- the lattice refusals
@@ -227,6 +246,7 @@ def test_enum_lists_match_the_enums():
     assert enums['tetm'] == [m.name.lower() for m in Tetm]
     assert enums['factorization'] == [m.value for m in Factorization]
     assert enums['fourier_coefficients'] == [m.value for m in FourierCoefficients]
+    assert enums['projector'] == [m.value for m in Projector]
 
 
 def test_every_cited_source_exists():

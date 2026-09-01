@@ -581,7 +581,8 @@ def _distance_gradient(interface_mask, shape, lattice=None):
     direction is what the ``'distance'`` construction normalises into a normal field; the
     **magnitude** is ``|grad d|``, which is a property of the interface set rather than of any
     construction — 1 almost everywhere, dropping to 0 exactly on the medial axis, and the same
-    array whichever of the four builders drew the directions.
+    array whichever of the four builders drew the directions. ``projector='circular'`` reads
+    it beside every method (see :func:`normal_vector_field`'s ``with_magnitude``).
 
     Returns ``(g_x, g_y)`` **unnormalised**. Everything periodic about the construction lives
     here: the 3x3 tiling under the transform and the wrapping central difference. See
@@ -698,7 +699,7 @@ def _distance_gradient(interface_mask, shape, lattice=None):
 
 
 def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=None,
-                        base_shape=None):
+                        base_shape=None, with_magnitude=False):
     """Unit normal vector field ``(normal_x, normal_y)`` of a raster layer.
 
     This is a **geometry** quantity — it depends on where the material interfaces sit, not on
@@ -740,6 +741,20 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
     ``tests/test_nvf_normal_field.py``.
     For the shape-based (non-raster) normal field, see
     :func:`wavebit._core.analytic.normal_vector_field_analytical`.
+
+    ``with_magnitude=True`` appends a third array: ``|grad d|`` of the periodic distance map
+    (:func:`_distance_gradient`), scaled so its maximum over the cell is exactly 1. It is the
+    *same* quantity for every ``method`` — the direction is what the four constructions
+    disagree about, while the magnitude is a property of the interface set — so the smoothing
+    constructions get it from a distance transform run beside them rather than from their own
+    output, which is a unit field by construction and carries no magnitude to read.
+
+    Only ``projector='circular'`` asks for it (:class:`~wavebit._core.enums.Projector`), and
+    only that reader makes the scaling meaningful: ``phi = (pi/8)(1 + cos(pi|t|))`` is
+    monotone in ``|t|`` on ``[0, 1]`` and turns back up outside it, so *unit maximum length*
+    is the formula's domain rather than a normalisation anyone chose. A one-cell axis and a
+    layer with no interface at all both answer 1 everywhere, which is what makes the circular
+    projector reduce to ``n n^T`` exactly where the direction was never in doubt.
 
     **Everything here is periodic, and all three pieces of it have to be.** The cell is a torus,
     so rolling the raster by whole pixels is an exact lattice translation — the same structure
@@ -801,7 +816,12 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
             recip = np.linalg.inv(np.asarray(lattice, dtype=float))
             b = recip[0] if shape[0] == 1 else recip[1]
             ux, uy = b / np.hypot(b[0], b[1])
-        return np.full(shape, ux), np.full(shape, uy)
+        # Magnitude 1, i.e. no circular deformation. A one-cell axis carries no interface of
+        # its own, so this constant field is the exact normal everywhere and NVF reduces to
+        # Li's rules; opening it into an ellipse would trade an exact answer for an
+        # approximate one at the stripe centres, which are the only null `|grad d|` has here.
+        field = (np.full(shape, ux), np.full(shape, uy))
+        return field + (np.ones(shape),) if with_magnitude else field
 
     if method != NormalMethod.DISTANCE:
         from .normal_methods import DISPATCH
@@ -816,12 +836,22 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
                 f"whose mask-only path a trace can take.") from None
         mask = (_interface_mask(eps) if interface_mask is None
                 else np.asarray(interface_mask, dtype=bool))
-        return DISPATCH[method.value](eps, mask, lattice, base_shape)
+        field = tuple(DISPATCH[method.value](eps, mask, lattice, base_shape))
+        if not with_magnitude:
+            return field
+        # Beside the construction, not out of it: every builder here returns a *unit* field,
+        # so there is no magnitude in its output to read. The interface set is what carries
+        # one, and all four constructions share it.
+        return field + (_field_magnitude(*_distance_gradient(mask, shape, lattice)),)
 
     if interface_mask is None:
         interface_mask = _interface_mask(_to_numpy(eps_matrix))
 
     gx, gy = _distance_gradient(interface_mask, shape, lattice)
+    # Off the *raw* gradient, before the flat-pixel floor below rewrites it: the floor's whole
+    # job is to keep a direction finite where there is none, and the magnitude is the number
+    # that says so.
+    magnitude = _field_magnitude(gx, gy) if with_magnitude else None
     if isinstance(gx, np.ndarray):
         norm = np.hypot(gx, gy)
         norm[norm < _FLAT_PIXEL] = 1.0
@@ -849,7 +879,31 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
         norm = _xp.sqrt(_xp.where(nz, sq, _xp.ones_like(sq)))
         gx = _xp.where(nz, gx, _xp.zeros_like(gx))
         gy = _xp.where(nz, gy, _xp.zeros_like(gy))
-    return gx / norm, gy / norm
+    unit = (gx / norm, gy / norm)
+    return unit + (magnitude,) if with_magnitude else unit
+
+
+def _field_magnitude(gx, gy):
+    """``|grad d|`` scaled to unit maximum over the cell — the ``|t|`` of Liu & Fan Eq. (52).
+
+    The scale is not a taste call. ``phi = (pi/8)(1 + cos(pi|t|))`` is monotone only while
+    ``|t| <= 1``: past 1 the cosine turns back up and a *stronger* field would be reported as
+    a more circular one. Unit maximum length is what the formula is defined on, and it is
+    what the paper states.
+
+    A layer with no interface at all has a flat distance map and answers 1 everywhere, which
+    keeps ``projector='circular'`` exactly on ``n n^T`` there — the direction is ``(0, 0)``
+    on such a layer, so the linear projector is 0 and the factorization is the plain direct
+    rule, which is the exact answer for a uniform layer and must not be deformed into
+    something else.
+    """
+    xp = array_namespace(gx)
+    m = xp.sqrt(gx ** 2 + gy ** 2)
+    peak = xp.max(m)
+    # A `where` rather than a Python branch: on the traced-basis path `peak` is a tracer, and
+    # the guard has to keep the division defined without asking what its value is.
+    return xp.where(peak > 0, m / xp.where(peak > 0, peak, xp.ones_like(peak)),
+                    xp.ones_like(m))
 
 
 #: Below this, a distance-map gradient is a flat pixel rather than an interface. See the
@@ -993,7 +1047,8 @@ def _normal_field_source(eps, lattice=None, method=None):
             int(np.unique(eps).size))
 
 
-def normal_field_for_raster(structure, half_width_u, half_width_v, lattice=None, method=None):
+def normal_field_for_raster(structure, half_width_u, half_width_v, lattice=None, method=None,
+                            projector=None):
     """Per-layer ``(normal_x, normal_y)`` normal fields for ``structure``, on the grid the NVF build uses.
 
     Precompute this once from the concrete geometry and hand it to
@@ -1001,11 +1056,15 @@ def normal_field_for_raster(structure, half_width_u, half_width_v, lattice=None,
     JAX transform (none of the constructions can run on tracers).
 
     ``lattice`` is the cell basis and ``method`` the construction; see
-    :func:`normal_vector_field` for what each changes.
+    :func:`normal_vector_field` for what each changes. ``projector='circular'`` makes each
+    entry a **triple** — the magnitude the complex-basis projector reads is part of the field
+    the solve is handed, so it has to be part of what is frozen; a record without it is
+    refused rather than served with the other projector (:func:`_unpack_normal_field`).
     """
     xp = array_namespace(structure)
+    want = _wants_magnitude(projector)
     return [normal_vector_field(eps, lattice=lattice, method=method,
-                                base_shape=tuple(base.shape))
+                                base_shape=tuple(base.shape), with_magnitude=want)
             for eps, base, _, _ in _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v)]
 
 
@@ -1091,7 +1150,124 @@ def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None, meth
         f'does.)')
 
 
-def _nvf_projector(xp, normal_x, normal_y, half_width_u, half_width_v, dtype, device=None):
+def jones_projector_fields(normal_x, normal_y, magnitude):
+    """Pointwise ``(P_xx, P_xy, P_yx, P_yy)`` of the **complex-basis** projector.
+
+    The projector NVF has always used is ``P = n n^T``, built from the field's *direction*
+    alone. On the medial axis — the ridge where every boundary point is equidistant — there is
+    no direction: the tie is exact, both answers are arbitrary, and which one is reported is
+    an accident of where the samples fell. No better *direction* fixes that, because none
+    exists.
+
+    What does is a projector that stops reading one. Build a Jones vector from the field
+
+    .. code-block:: text
+
+        J   = n_hat cos(phi) + i n_perp sin(phi),    n_perp = (-n_y, n_x) / |n|
+        phi = (pi/8) (1 + cos(pi |t|))
+
+    with ``|t|`` the field magnitude scaled to unit maximum (:func:`_field_magnitude`), and
+    take ``P = J J^H``. Then
+
+    ==============  ==========================================  =========================
+    ``|t| = 1``     ``phi = 0``, ``J = n_hat``                   ``P = n n^T``, exactly
+    ``|t| -> 0``    ``phi -> pi/4``, ``J`` exactly circular      ``P_xx = P_yy = 1/2``,
+                                                                ``P_xy = -i/2``,
+                                                                ``P_yx = +i/2``
+    ==============  ==========================================  =========================
+
+    The second column is the whole point: at ``phi = pi/4`` the direction cancels out of every
+    entry, so the answer on the medial axis is the same whatever arbitrary direction was
+    reported there. And it is reached as a **limit** — no threshold, no "is this pixel on the
+    medial axis?" test, nothing to tune. In between, ``P`` deforms continuously from one to
+    the other, and ``trace(P) = 1`` throughout, which is what keeps ``C_xx + C_yy = I`` and
+    :func:`_nvf_assemble` unchanged.
+
+    ``P`` is Hermitian and rank one at every pixel, so ``P_yx = conj(P_xy)`` and the two stop
+    being the same object — the first time ``eps_xy`` and ``eps_yx`` genuinely differ on this
+    path.
+
+    Written from the published formula:
+
+    * R. Antos, *Fourier factorization with complex polarization bases in modeling optics of
+      discontinuous bi-periodic structures*, Opt. Express **17**, 7269 (2009) — the complex
+      polarization basis itself, and the origin of this construction.
+    * V. Liu, S. Fan, *S4: A free electromagnetic solver for layered periodic structures*,
+      Comput. Phys. Commun. **183**, 2233 (2012), **Eq. (52), p. 2239** — its generalization,
+      and the form implemented here. S4 states ``J`` in terms of the *tangent* field ``t``;
+      the two differ by a fixed 90-degree rotation, so building ``J`` from the normal
+      directly gives ``R P R^-1`` of theirs, which is exactly the normal projector this
+      module's ``C_xx = <P_xx>`` wants. ``e^{i theta}`` in Eq. (52) is a global phase and
+      cancels out of ``J J^H``; it is not carried here.
+
+    ``docs/nvf-normal-methods.md`` records what it is worth and what it does not fix.
+    """
+    xp = array_namespace(normal_x)
+    # `pi` from the namespace is not portable across the three; a float literal is exact in
+    # binary64 and this is multiplied, never compared.
+    pi = 3.141592653589793
+    phi = (pi / 8.0) * (1.0 + xp.cos(pi * magnitude))
+    cos_p, sin_p = xp.cos(phi), xp.sin(phi)
+
+    # The algebra below needs a *unit* direction, and it takes one: every construction returns
+    # a unit field (that is what makes `C_xx + C_yy = I`), with `(0, 0)` at the flat pixels
+    # where `normal_vector_field`'s floor says there is no direction to report. So the only
+    # thing to do here is fill those in -- and **not** re-normalise the rest. Dividing an
+    # already-unit field by its own length is a no-op in arithmetic and not in floating point,
+    # and it would cost the property that makes this a deformation of the shipped scheme
+    # rather than a rival to it: at `|t| = 1` the result is `n n^T` *to the bit*.
+    #
+    # Any unit vector is exact at a flat pixel. `magnitude` is 0 at precisely those pixels, so
+    # `phi` is `pi/4` and the direction has cancelled out of every entry -- which is the whole
+    # construction, applied to the one place it was built for. `x_hat` is the arbitrary
+    # choice, and its arbitrariness is what is being made harmless.
+    live = xp.sqrt(normal_x ** 2 + normal_y ** 2) > _FLAT_PIXEL
+    n_x = xp.where(live, normal_x, xp.ones_like(normal_x))
+    n_y = xp.where(live, normal_y, xp.zeros_like(normal_y))
+
+    cc, ss = cos_p ** 2, sin_p ** 2
+    p_xx = n_x ** 2 * cc + n_y ** 2 * ss
+    p_yy = n_y ** 2 * cc + n_x ** 2 * ss
+    real = n_x * n_y * (cc - ss)
+    imag = cos_p * sin_p                       # == sin(2 phi) / 2
+    return p_xx, real - 1j * imag, real + 1j * imag, p_yy
+
+
+def _wants_magnitude(projector):
+    """Whether ``projector`` asks the field for a magnitude. ``None`` is the default."""
+    from .enums import DEFAULT_PROJECTOR, Projector, projector_of
+    resolved = DEFAULT_PROJECTOR if projector is None else projector_of(projector)
+    return resolved == Projector.CIRCULAR
+
+
+def _unpack_normal_field(entry, want_magnitude, index):
+    """``(normal_x, normal_y, magnitude)`` from a field the builder made or a record it replays.
+
+    A frozen record carries a magnitude only if it was taken under ``projector='circular'``, so
+    its *arity* is the tell — and a two-entry record replayed under the circular projector is
+    refused rather than quietly served with the linear one. That is the same rule
+    :func:`_check_normal_field_still_fits` applies to the construction: a record built under
+    one configuration and replayed under another describes a field the configuration never
+    asked for, and silently answering with the other projector is exactly the unread knob this
+    library refuses everywhere else.
+
+    The other direction is not an error: a record that carries a magnitude replays fine under
+    ``'linear'``, which simply does not read it.
+    """
+    if not want_magnitude:
+        return entry[0], entry[1], None
+    if len(entry) < 3:
+        raise StaleGeometryError(
+            f"the frozen geometry no longer fits this solver: layer {index}'s normal field "
+            f"was frozen under projector='linear', which records a direction and no "
+            f"magnitude, and this solver is configured projector='circular', which needs "
+            f'one. Call freeze_geometry() again with the projector this solve will use, or '
+            f'drop geometry= to rebuild.')
+    return entry[0], entry[1], entry[2]
+
+
+def _nvf_projector(xp, normal_x, normal_y, half_width_u, half_width_v, dtype, device=None,
+                   magnitude=None):
     """Convolution matrices of the normal projector: ``C_xx = <normal_x^2>`` etc.
 
     Always sampled off the raster the normal field lives on, whatever
@@ -1100,14 +1276,28 @@ def _nvf_projector(xp, normal_x, normal_y, half_width_u, half_width_v, dtype, de
     normal field is static geometry (see :func:`normal_vector_field`): it is a smooth
     extension of the interface direction into the bulk, so it has no piecewise-constant block
     structure for the closed-form series to integrate over in the first place.
+
+    ``magnitude`` selects the projector, and its absence is the default. Left ``None`` this is
+    ``P = n n^T`` and returns **three** matrices, ``C_yx`` being ``C_xy`` — one transform
+    saved, and the arithmetic downstream is the object-for-object identical one it has always
+    been. Given a magnitude it is :func:`jones_projector_fields` and returns **four**, because
+    a complex ``P`` has ``C_yx = C_xy^H`` and the two stop coinciding. Both arities splat
+    straight into :func:`_nvf_assemble`, whose fourth projector argument defaults to "the same
+    as the third".
     """
-    C_xx = fourier2d_pointwise(xp, xp.asarray(normal_x ** 2, dtype=dtype, device=device), half_width_u, half_width_v)
-    C_xy = fourier2d_pointwise(xp, xp.asarray(normal_x * normal_y, dtype=dtype, device=device), half_width_u, half_width_v)
-    C_yy = fourier2d_pointwise(xp, xp.asarray(normal_y ** 2, dtype=dtype, device=device), half_width_u, half_width_v)
-    return C_xx, C_xy, C_yy
+    def series(field):
+        return fourier2d_pointwise(xp, xp.asarray(field, dtype=dtype, device=device),
+                                   half_width_u, half_width_v)
+
+    if magnitude is None:
+        C_xy = series(normal_x * normal_y)
+        return series(normal_x ** 2), C_xy, series(normal_y ** 2)
+
+    p_xx, p_xy, p_yx, p_yy = jones_projector_fields(normal_x, normal_y, magnitude)
+    return series(p_xx), series(p_xy), series(p_yy), series(p_yx)
 
 
-def _nvf_assemble(xp, ep_dir, ep_inv, C_xx, C_xy, C_yy):
+def _nvf_assemble(xp, ep_dir, ep_inv, C_xx, C_xy, C_yy, C_yx=None):
     """Close the NVF factorization from the direct/inverse-rule matrices and the projector.
 
     With ``E = <eps>`` (direct rule), ``A = <1/eps>^-1`` (inverse rule) and ``Delta = E - A``::
@@ -1118,6 +1308,12 @@ def _nvf_assemble(xp, ep_dir, ep_inv, C_xx, C_xy, C_yy):
 
     The 1/2-symmetrization is essential: the plain product ``Delta @ C`` is not Hermitian,
     giving complex ``q^2`` and gross energy-conservation violation on curved boundaries.
+
+    ``C_yx`` left ``None`` says the projector is symmetric, which is what ``P = n n^T`` is and
+    what this path assumed outright until ``projector='circular'`` (see
+    :func:`jones_projector_fields`). It is a real statement about the projector rather than a
+    convenience: with it, ``eps_yx`` is not merely equal to ``eps_xy`` but *the same object*,
+    so the default path does one matmul pair rather than two and cannot drift from itself.
 
     ``ep_dir`` / ``ep_inv`` are the only inputs that depend on how the coefficients are
     obtained, which is what lets the sampled and integrated builders share this step.
@@ -1130,9 +1326,20 @@ def _nvf_assemble(xp, ep_dir, ep_inv, C_xx, C_xy, C_yy):
 
     eps_xx = ep_dir - 0.5 * (delta_ep @ C_xx + C_xx @ delta_ep)
     eps_yy = ep_dir - 0.5 * (delta_ep @ C_yy + C_yy @ delta_ep)
-    eps_xy = -0.5 * (delta_ep @ C_xy + C_xy @ delta_ep)      # == eps_yx (symmetric)
+    eps_xy = -0.5 * (delta_ep @ C_xy + C_xy @ delta_ep)
+    eps_yx = eps_xy if C_yx is None else -0.5 * (delta_ep @ C_yx + C_yx @ delta_ep)
 
-    return ConvMatrices(eps_xx, eps_yy, xp.linalg.inv(ep_dir), -eps_xy, -eps_xy)
+    # Negated once and handed to both slots when the projector is symmetric, so that the two
+    # really are one matrix rather than two copies of one. Spelled this way -- rather than by
+    # folding the sign into the `0.5` above, which is the tidier-looking version -- because
+    # that fold moves the *sign of a zero* on entries that are exactly zero. Numerically
+    # nothing (0 differing elements over 1.57e6), but it breaks a byte-for-byte comparison
+    # against the pre-change tree, and that comparison is the evidence that the default path
+    # is untouched.
+    slot_xy = -eps_xy
+    slot_yx = slot_xy if eps_yx is eps_xy else -eps_yx
+
+    return ConvMatrices(eps_xx, eps_yy, xp.linalg.inv(ep_dir), slot_xy, slot_yx)
 
 
 def _pn_fields(xp, eps33, normal_x, normal_y):
@@ -1481,8 +1688,12 @@ def to_conv_mat_raster_pn_eps(tensor_raster, half_width_u, half_width_v, normal_
     return ConvMatrices(*(xp.stack(slot) for slot in out))
 
 
-def nvf_conv_matrices(xp, eps_matrix, normal_x, normal_y, half_width_u, half_width_v):
-    """NVF convolution matrices for one layer, with sampled coefficients."""
+def nvf_conv_matrices(xp, eps_matrix, normal_x, normal_y, half_width_u, half_width_v,
+                      magnitude=None):
+    """NVF convolution matrices for one layer, with sampled coefficients.
+
+    ``magnitude`` selects the projector — see :func:`_nvf_projector`. ``None`` is ``n n^T``.
+    """
     C = _complex_dtype(xp, eps_matrix)
     eps_matrix = xp.astype(eps_matrix, C)
     dev = _device(xp, eps_matrix)
@@ -1494,15 +1705,18 @@ def nvf_conv_matrices(xp, eps_matrix, normal_x, normal_y, half_width_u, half_wid
     ep_inv = fourier2d_piecewise_constant(xp, 1.0 / eps_matrix, half_width_u, half_width_v, inverse_rule=None)
 
     return _nvf_assemble(xp, ep_dir, ep_inv,
-                         *_nvf_projector(xp, normal_x, normal_y, half_width_u, half_width_v, C, dev))
+                         *_nvf_projector(xp, normal_x, normal_y, half_width_u, half_width_v, C, dev,
+                                         magnitude=magnitude))
 
 
-def nvf_conv_matrices_integrated(xp, eps_comp, x, y, normal_x, normal_y, half_width_u, half_width_v):
+def nvf_conv_matrices_integrated(xp, eps_comp, x, y, normal_x, normal_y, half_width_u, half_width_v,
+                                 magnitude=None):
     """NVF convolution matrices for one layer, with integrated (closed-form) coefficients.
 
     ``eps_comp`` is the *compressed* piecewise-constant layer and ``x`` / ``y`` its segment
     edges, exactly as :func:`fourier2d_integrated` takes them; ``normal_x`` / ``normal_y`` are the normal
     field on the uncompressed raster (see :func:`_nvf_projector` for why the two grids differ).
+    ``magnitude`` selects the projector, as in :func:`nvf_conv_matrices`.
     """
     C = _complex_dtype(xp, eps_comp)
     eps_comp = xp.astype(eps_comp, C)
@@ -1512,11 +1726,13 @@ def nvf_conv_matrices_integrated(xp, eps_comp, x, y, normal_x, normal_y, half_wi
     ep_inv = fourier2d_integrated(xp, 1.0 / eps_comp, x, y, half_width_u, half_width_v, inverse_rule=None)
 
     return _nvf_assemble(xp, ep_dir, ep_inv,
-                         *_nvf_projector(xp, normal_x, normal_y, half_width_u, half_width_v, C, dev))
+                         *_nvf_projector(xp, normal_x, normal_y, half_width_u, half_width_v, C, dev,
+                                         magnitude=magnitude))
 
 
 def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=None,
-                           normal_field_source=None, lattice=None, normal_method=None):
+                           normal_field_source=None, lattice=None, normal_method=None,
+                           projector=None):
     """Per-layer NVF convolution matrices for a raster ``structure``.
 
     Args:
@@ -1533,6 +1749,11 @@ def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=N
             (:class:`~wavebit._core.enums.NormalMethod`; ``None`` means ``'distance'``).
             Ignored when ``normal_field`` is supplied — the record was built under its own
             method, which the source check compares against this one.
+        projector: how ``P`` is formed *from* that field
+            (:class:`~wavebit._core.enums.Projector`; ``None`` means ``'linear'``, ``n n^T``).
+            A separate axis from ``normal_method`` rather than a fifth value of it: this
+            chooses what is done with the field, so it composes with all four constructions
+            instead of doubling the list.
 
     The normal field is taken on the raster as given, lifted only to the floor its transform
     needs (:func:`_normal_field_floor`). Lifting it further used to be offered and is not: the
@@ -1544,6 +1765,7 @@ def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=N
         ``(epx, epy, epz_i, epxy, epyx)``, each ``(n_layers, n_orders, n_orders)``.
     """
     xp = array_namespace(structure)
+    want_magnitude = _wants_magnitude(projector)
 
     for name, record in (('normal field', normal_field),
                          ('normal-field source', normal_field_source)):
@@ -1558,16 +1780,19 @@ def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=N
     layers = _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v)
     for i, (eps_matrix, base_eps, repeat_v, repeat_u) in enumerate(layers):
         if normal_field is None:
-            normal_x, normal_y = normal_vector_field(
+            field = normal_vector_field(
                 eps_matrix, _interface_mask_of(xp, eps_matrix, base_eps, repeat_v, repeat_u),
-                lattice=lattice, method=normal_method, base_shape=tuple(base_eps.shape))
+                lattice=lattice, method=normal_method, base_shape=tuple(base_eps.shape),
+                with_magnitude=want_magnitude)
         else:
             _check_normal_field_still_fits(eps_matrix, normal_field_source, i, lattice,
                                            normal_method)
-            normal_x, normal_y = normal_field[i]
+            field = normal_field[i]
+        normal_x, normal_y, magnitude = _unpack_normal_field(field, want_magnitude, i)
 
         for slot, mat in zip(out, nvf_conv_matrices(
-                xp, eps_matrix, normal_x, normal_y, half_width_u, half_width_v)):
+                xp, eps_matrix, normal_x, normal_y, half_width_u, half_width_v,
+                magnitude=magnitude)):
             slot.append(mat)
 
     return ConvMatrices(*(xp.stack(slot) for slot in out))
@@ -1872,7 +2097,7 @@ def to_conv_mat_raster_integrated(structure, half_width_u, half_width_v, compres
 
 def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, normal_field=None,
                                       normal_field_source=None, compression=None,
-                                      lattice=None, normal_method=None):
+                                      lattice=None, normal_method=None, projector=None):
     """Per-layer convolution matrices for a raster ``structure`` via closed-form Fourier + NVF.
 
     The pairing that needs both axes named independently. It buys the staircase-free
@@ -1891,6 +2116,7 @@ def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, nor
             :func:`compression_indices`. Replayed eagerly it is checked too.
         lattice: the cell basis, as in :func:`to_conv_mat_raster_nvf`.
         normal_method: the construction, as in :func:`to_conv_mat_raster_nvf`.
+        projector: how ``P`` is formed from the field, as in :func:`to_conv_mat_raster_nvf`.
 
     Both ``normal_field`` and ``compression`` are static geometry; supply both to keep the
     build traceable under JAX (this path is the only one that needs both).
@@ -1905,19 +2131,22 @@ def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, nor
         ``(epx, epy, epz_i, epxy, epyx)``, each ``(n_layers, n_orders, n_orders)``.
     """
     xp = array_namespace(structure)
+    want_magnitude = _wants_magnitude(projector)
 
     out = [[], [], [], [], []]
     eps_grids = _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v)
 
     for i, (eps_grid, base_eps, repeat_v, repeat_u) in enumerate(eps_grids):
         if normal_field is None:
-            normal_x, normal_y = normal_vector_field(
+            field = normal_vector_field(
                 eps_grid, _interface_mask_of(xp, eps_grid, base_eps, repeat_v, repeat_u),
-                lattice=lattice, method=normal_method, base_shape=tuple(base_eps.shape))
+                lattice=lattice, method=normal_method, base_shape=tuple(base_eps.shape),
+                with_magnitude=want_magnitude)
         else:
             _check_normal_field_still_fits(eps_grid, normal_field_source, i, lattice,
                                            normal_method)
-            normal_x, normal_y = normal_field[i]
+            field = normal_field[i]
+        normal_x, normal_y, magnitude = _unpack_normal_field(field, want_magnitude, i)
 
         layer = structure[i]
         if compression is None:
@@ -1929,7 +2158,8 @@ def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, nor
         eps_comp = xp.astype(comp, _complex_dtype(xp, comp))
 
         for slot, mat in zip(out, nvf_conv_matrices_integrated(
-                xp, eps_comp, x, y, normal_x, normal_y, half_width_u, half_width_v)):
+                xp, eps_comp, x, y, normal_x, normal_y, half_width_u, half_width_v,
+                magnitude=magnitude)):
             slot.append(mat)
 
     return ConvMatrices(*(xp.stack(slot) for slot in out))

@@ -57,7 +57,7 @@ import math
 from .conventions import parse_order_pair
 from .domain import Layer, Material, Stack, Incidence
 from .enums import (Answers, Backend, Factorization, FourierCoefficients, NormalMethod,
-                    Tetm, answers_of)
+                    Projector, Tetm, answers_of)
 
 SPEC_VERSION = '7'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12)
 #                     '3': the material convention. `stack.layers[i].eps` -> `.structure`,
@@ -350,6 +350,10 @@ class Numerics:
     #: build that constructs no raster normal field, so a spec that never asked must not be
     #: made to ask.
     normal_method: Optional[NormalMethod] = None
+    #: ``None`` = unset, for exactly ``normal_method``'s reason: the default ('linear') is
+    #: path-independent, and an explicit value is *refused* on any build that constructs no
+    #: raster normal field. A spec that never asked must not be made to ask.
+    projector: Optional[Projector] = None
     complex_dtype: int = 128
     layer_algorithm: str = 'ETM'
     #: `None` is "resolve it", the same as `rcwa`'s -- max(256, 4*truncation_order+1). Kept
@@ -366,7 +370,7 @@ class Numerics:
     answers: Answers = Answers.AMPLITUDE
 
     _FIELDS = ('backend', 'truncation_order', 'fourier_coefficients', 'factorization', 'normal_method',
-               'complex_dtype', 'layer_algorithm', 'normal_grid', 'answers')
+               'projector', 'complex_dtype', 'layer_algorithm', 'normal_grid', 'answers')
 
     @classmethod
     def from_dict(cls, d) -> 'Numerics':
@@ -383,6 +387,8 @@ class Numerics:
         if d.get('normal_method') is not None:
             d['normal_method'] = _enum(d['normal_method'], NormalMethod,
                                        'numerics.normal_method')
+        if d.get('projector') is not None:
+            d['projector'] = _enum(d['projector'], Projector, 'numerics.projector')
         if 'answers' in d:
             d['answers'] = _enum(d['answers'], Answers, 'numerics.answers')
         if 'truncation_order' in d:
@@ -459,6 +465,8 @@ class Numerics:
                else {'factorization': self.factorization.value}),
             **({} if self.normal_method is None
                else {'normal_method': self.normal_method.value}),
+            **({} if self.projector is None
+               else {'projector': self.projector.value}),
         )
 
 

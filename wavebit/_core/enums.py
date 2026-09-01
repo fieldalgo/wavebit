@@ -13,6 +13,11 @@ are the same thing.
 
 The two are independent choices, and keeping them as separate keywords is what makes all four
 of their pairings reachable — see :func:`resolve_fourier_options`.
+
+``NormalMethod`` and ``Projector`` are the same shape of pair one level down, over the raster
+NVF normal field: the first says how the field is *built*, the second what is done *with* it.
+Neither is a value of the other, so the eight pairings are reachable and the two lists stay
+four long and two long instead of one list of eight.
 """
 from enum import Enum, IntEnum
 
@@ -73,6 +78,50 @@ class NormalMethod(str, Enum):
     CONTOUR = 'contour'    # subpixel level-set polylines, exact distance-to-curve direction
     SPECTRAL = 'spectral'  # band-limited spectral gradient at the interface, bulk-propagated
     SMOOTH = 'smooth'      # signed distance, derivative-of-Gaussian (rounds corners; see docs)
+
+
+class Projector(str, Enum):
+    """How the NVF projector ``P`` is formed *from* the normal field — a separate axis.
+
+    :class:`NormalMethod` chooses how the field is **built**; this chooses what is done
+    **with** it, so the two compose rather than multiply into one list of eight.
+
+    ``'linear'`` is ``P = n n^T``, built from the field's *direction* alone. It is what NVF
+    has always used and what every number in the repository was measured on.
+
+    ``'circular'`` builds ``P = J J^H`` from a Jones vector that carries the field's
+    *magnitude* as well::
+
+        J = (n cos(phi) + i n_perp sin(phi)),   phi = (pi/8) (1 + cos(pi |n|))
+
+    with ``|n|`` scaled so its maximum over the cell is 1 and ``n_perp = (-n_y, n_x)``. At
+    full magnitude ``phi = 0`` and ``P`` is exactly ``n n^T`` again; as ``|n| -> 0`` the
+    Jones vector becomes exactly circular and ``P`` **loses its direction**:
+    ``P_xx = P_yy = 1/2``, ``P_xy = -i/2``, ``P_yx = +i/2``.
+
+    That limit is the point. On the medial axis — the ridge where every boundary point is
+    equidistant — the direction is not merely hard to compute, it is undefined, and both
+    values ``'linear'`` can report there are arbitrary. ``'circular'`` reaches a
+    direction-independent answer as a *limit*, so there is no threshold anywhere and no
+    "is this the medial axis?" test to get wrong.
+
+    Read only where a raster normal field is built (``factorization='nvf'`` on a raster);
+    explicitly set anywhere else it is refused rather than ignored, exactly as
+    ``normal_method`` is. See ``docs/nvf-normal-methods.md`` for what it costs and what it
+    does not fix, and :func:`wavebit._core.factorization.jones_projector_fields` for the
+    construction and its two citations.
+
+    **The scalar NVF path only.** The Popov-Neviere tensor builders
+    (:func:`~wavebit._core.factorization.pn_eps_conv_matrices` and its ``mu`` twin) never form
+    a ``C_xx``-style projector series to deform: they build ``n n^T`` *pointwise* inside a
+    different rearrangement and transform once at the end, because doing it any other way
+    costs a uniform slab 0.5 (see :func:`~wavebit._core.factorization._pn_fields`). Carrying
+    the limit there is a separate derivation, not this one with an argument threaded through,
+    and no solver path reaches those builders today. So they take no ``projector``, which is
+    also why nothing has to refuse one.
+    """
+    LINEAR = 'linear'      # P = n n^T, direction only (the original)
+    CIRCULAR = 'circular'  # P = J J^H, Antos' complex basis; direction-free as |n| -> 0
 
 
 class Formulation(str, Enum):
@@ -178,6 +227,11 @@ DEFAULT_FOURIER_COEFFICIENTS = FourierCoefficients.SAMPLED
 DEFAULT_FACTORIZATION = Factorization.LI
 DEFAULT_FORMULATION = Formulation.AUTO
 DEFAULT_NORMAL_METHOD = NormalMethod.DISTANCE
+#: ``n n^T``. Not a taste call: every measurement in ``docs/`` and every golden was taken on
+#: it, and the circular limit is a *trade* rather than a free win -- it removes the medial
+#: axis's arbitrariness and costs accuracy against an exact circle (3.18e-5 -> 3.95e-5 at
+#: 512^2). A default that moved would move both.
+DEFAULT_PROJECTOR = Projector.LINEAR
 #: Amplitudes, not fields. The field state is three orders of magnitude larger and most
 #: large runs -- an optimization sweep against a fixed objective -- never reconstruct one.
 DEFAULT_ANSWERS = Answers.AMPLITUDE
@@ -213,6 +267,11 @@ def formulation_of(value):
 def normal_method_of(value):
     """Validate a ``normal_method`` value."""
     return _one_of(NormalMethod, value, 'normal_method')
+
+
+def projector_of(value):
+    """Validate a ``projector`` value."""
+    return _one_of(Projector, value, 'projector')
 
 
 def answers_of(value):

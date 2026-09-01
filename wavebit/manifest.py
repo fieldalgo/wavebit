@@ -29,7 +29,7 @@ import json
 
 from ._core.enums import (Answers, Backend, DEFAULT_ANSWERS, DIFFERENTIABLE_BACKENDS,
                           Factorization,
-                          FourierCoefficients, NormalMethod, Tetm)
+                          FourierCoefficients, NormalMethod, Projector, Tetm)
 from ._core.engine import (_COEFFICIENTS_IMPLEMENTED_BY, _COEFFICIENTS_REASON,
                            _FACTORIZATION_IMPLEMENTED_BY, _FACTORIZATION_REASON)
 from ._core.spec import SPEC_VERSION
@@ -67,6 +67,15 @@ from ._core.spec import SPEC_VERSION
 #: a consumer that kept writing ``cx = Px/2`` for a centred pillar now places it half a period
 #: off, and the scene it builds solves and conserves energy. The version is what lets it
 #: refuse rather than quietly answer a different question.
+#:
+#: The ``projector`` axis (2026-09-01) did **not** earn a bump, and the reason is the rule
+#: above read the other way. It adds a key to ``paths[*]`` and to ``enums`` and changes the
+#: meaning of nothing already published: its default is what the solver has always done, and a
+#: consumer that never learns the key keeps generating exactly the scenes it generated before.
+#: That is the "reading unknown keys degrades gracefully" case the '5' bump was contrasted
+#: with. ``normal_method`` took '3' and ``answers`` took '4' on the same shape of change, but
+#: both predate the rule being written down, and a bump a consumer must react to for an
+#: addition it can ignore is the false alarm the rule exists to prevent.
 MANIFEST_VERSION = '8'
 
 
@@ -201,6 +210,15 @@ def _options_for(modeling_type):
             "read only under factorization='nvf'" if modeling_type == 0
             else 'the smooth shape path builds its normal field from the geometry itself; '
                  'there is no raster construction to select'),
+        # A fourth axis, and deliberately *not* four more `normal_method` values. That one
+        # says how the field is built; this says how the projector is formed from it, so the
+        # two compose -- publishing them as one list of eight would tell a consumer there are
+        # eight independent choices where there are two.
+        'projector': ([m.value for m in Projector] if modeling_type == 0 else []),
+        'projector_reason': (
+            "read only under factorization='nvf', beside normal_method" if modeling_type == 0
+            else 'the smooth shape path builds its normal field from the geometry, which '
+                 'carries no magnitude for the circular limit to read'),
     }
 
 
@@ -449,6 +467,7 @@ def manifest() -> dict:
             'factorization': [m.value for m in Factorization],
             'fourier_coefficients': [m.value for m in FourierCoefficients],
             'normal_method': [m.value for m in NormalMethod],
+            'projector': [m.value for m in Projector],
             'answers': [m.value for m in Answers],
         },
         'backends': _backend_capabilities(),

@@ -288,6 +288,12 @@ class SolverJax(RCWAJax, OptimizerJax):
             'fourier_coefficients': self._fourier_coefficients,
             'factorization': self._factorization,
             'normal_method': self._normal_method,
+            # Beside it, and for the same reason: the *raw* slot, so an unset axis comes back
+            # unset. `solve_field` flattens `self` on every call, so a resolved value written
+            # here would come back as an explicit request and `_reject_unread_projector` would
+            # then refuse a raster solver for a value the library itself put there -- which is
+            # exactly what `normal_grid` did, one entry down.
+            'projector': self._projector,
             # A dispatch key like `pol`: the solves branch on it (which cascade blocks are
             # read, which way the stack is walked), so it must come back static, never traced.
             'incidence_side': self.incidence_side,

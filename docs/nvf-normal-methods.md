@@ -1,4 +1,4 @@
-# The raster normal-field constructions, and the `normal_method` option
+# The raster normal-field constructions, and the `normal_method` / `projector` options
 
 Written: 2026-08-17. Measured 2026-08-16/17 on CPU, NumPy backend, float64.
 
@@ -70,6 +70,9 @@ Targets:
 - `wavebit/_core/factorization.py::normal_vector_field` — the dispatcher
 - the `normal_method` solver keyword — `'distance'` (default) | `'contour'` | `'spectral'`
   | `'smooth'`
+- `wavebit/_core/factorization.py::jones_projector_fields` — the complex-basis projector
+- the `projector` solver keyword — `'linear'` (default) | `'circular'`; a second, independent
+  axis over the same field
 
 Companion: [`nvf-upsampling.md`](nvf-upsampling.md) diagnosed the defect this option
 addresses and records the baseline measurements this file compares against.
@@ -99,6 +102,14 @@ The keyword is read exactly where a raster normal field is built — a raster `s
 `factorization='nvf'` (and the tensor-raster builders, called directly). Explicitly set
 anywhere else it is refused rather than ignored, for the same reason `enhanced_dfs` was
 removed outright: a knob nothing reads is a lie waiting to be believed.
+
+There is a **second, independent** keyword over the same field, `projector`, and it defaults
+to what has always been done. It chooses how the projector is formed *from* the field rather
+than how the field is built, so it composes with all four constructions above; the short
+version is that `'circular'` removes the medial axis's arbitrariness and costs accuracy,
+mirror symmetry and a handedness to do it, and that you should leave it alone unless you have
+measured a medial-axis problem on your own scene. Its own section is
+[below](#projector--the-circular-polarization-limit-2026-09-01).
 
 ## The defect, in one paragraph
 
@@ -439,10 +450,12 @@ The second one settles the **medial-axis** residual this file carried as a stric
 pair of discs 3.16e-4 -> 1.61e-12, and 0 of 1023 rolls on both under the translation identity.
 Be exact about what that means. The direction on the medial axis is still undefined
 and the answer there is still arbitrary — what is no longer arbitrary is *which* arbitrary
-answer, which is all covariance asks for. The accuracy half is still the circular-polarization
-limit S4 and fmmax use, and it is still not landed. That limit is Antos' complex
-polarization basis, published as Liu & Fan Eq. (52) — both are cited below, and both
-are owed if it is ever taken.
+answer, which is all covariance asks for. The accuracy half is the circular-polarization
+limit S4 and fmmax use — Antos' complex polarization basis, published as Liu & Fan Eq. (52).
+It **landed on 2026-09-01** as `projector='circular'`, opt-in and off by default, and
+[its own section](#projector--the-circular-polarization-limit-2026-09-01) records what it is
+worth: it removes this defect completely and costs accuracy, mirror symmetry and a chirality
+to get there. Both papers are cited below and both are owed.
 
 Accuracy stayed put and cost improved. The angular error against an exact circle moves within
 its own third digit (1.33 -> 1.37 at N=64, 0.37 -> 0.37 at N=512) with no trend, and the
@@ -464,6 +477,149 @@ faster**, because the old window handed the kd-tree three periods of every fragm
 | percolating stripe, N=128 | 275 ms | 38 ms |
 | the same, N=512 | 2.47 s | 0.42 s |
 
+
+## `projector` — the circular-polarization limit (2026-09-01)
+
+Everything above is about how the normal field is **built**. This is about what is done
+**with** it, and it is a second, independent keyword for that reason:
+
+```python
+wavebit.rcwa(structure=raster, factorization='nvf',
+             normal_method='contour',      # how the field is built  (4 values)
+             projector='circular', ...)    # how P is formed from it (2 values)
+```
+
+Folding it into `normal_method` would have made one list of eight where there are two lists of
+four and two — every construction can be read either way, and the two choices answer different
+questions. Same precedent as `fourier_coefficients` x `factorization`. It is read exactly where
+`normal_method` is read, and refused rather than ignored everywhere else.
+
+### What it is
+
+The projector has always been `P = n n^T`, built from the field's *direction* alone. On the
+medial axis the direction is undefined — not hard to compute, undefined — so both answers
+there are arbitrary. `projector='circular'` builds `P = J J^H` from a Jones vector that carries
+the field's magnitude too:
+
+    J   = n_hat cos(phi) + i n_perp sin(phi),   n_perp = (-n_y, n_x)
+    phi = (pi/8) (1 + cos(pi |t|)),             |t| scaled to unit maximum
+
+| | |t| = 1 | |t| -> 0 |
+|---|---|---|
+| `phi` | 0 | `pi/4` |
+| `P` | `n n^T`, **to the bit** | `Pxx = Pyy = 1/2`, `Pxy = -i/2`, `Pyx = +i/2` |
+
+The right column does not mention the direction. That is the whole design: the answer on the
+medial axis is reached as a **limit**, so there is no threshold and no "is this pixel on the
+medial axis?" test anywhere. `trace(P) = 1` at every magnitude, which is what keeps
+`C_xx + C_yy = I` and leaves the assembly unchanged.
+
+The unit-maximum scaling is the formula's *domain*, not a normalisation anyone chose: `phi` is
+monotone in `|t|` only on `[0, 1]` and turns back up outside it.
+
+`|t|` is `|grad d|` of the periodic distance map — 1 almost everywhere, dropping to 0 exactly
+on the medial axis. It is the same array for all four constructions, because it is a property
+of the interface set and not of a construction; the constructions return *unit* fields and
+have no magnitude of their own to read.
+
+### What it fixes
+
+The medial-axis covariance defect, completely — measured with `_CONTOUR_TIE_SHEAR` switched
+off, which is the only configuration in which the instrument can still see it (see below).
+`normal_method='contour'`, N=64, `truncation_order=3`, **all 4095 rolls** of the translation
+identity, worst defect and how many rolls exceed 1e-12:
+
+| scene | `linear` | `circular` |
+|---|---|---|
+| annulus | 9.87e-05, 3172 of 4095 | **1.53e-15, 0** |
+| disc | 6.52e-05, 2215 of 4095 | **1.93e-15, 0** |
+| two discs (saddle) | 3.01e-04, 3858 of 4095 | 2.83e-04, 3858 of 4095 |
+
+**The saddle is not fixed and never will be by this.** Its two nearest boundary points sit on
+*different* discs, so the tie is a discrete jump between two separated directions rather than a
+direction fading out — `|t|` stays O(1) through it and the limit is never reached. The medial
+axis and the saddle are two different geometric facts that happen to break the same instrument.
+
+### What it does not buy on today's `develop`
+
+With the shear **on** — the shipped configuration — both projectors sit on the floor:
+0 of 4095 rolls on all three scenes, worst 2.6e-15. The shear (2026-09-01) already settles
+the tie the same way at every placement, which is all covariance asks for.
+
+So the two are answers to different halves of one defect: **the shear makes the arbitrary
+answer stable; this makes it not be read.** Only an instrument sensitive to the arbitrariness
+rather than to the instability can tell them apart — and the one this repository already has
+says the news is bad.
+
+### What it costs
+
+**1. Accuracy, everywhere.** The circle A/B above, re-run on this axis (the `linear` column
+reproduces the printed table exactly, which is what says it is the same harness):
+
+| N | truncation_order | `linear` | `circular` |
+|---|---|---|---|
+| 64 | 6 | 1.06e-02 | 1.76e-02 |
+| 64 | 10 | 1.15e-03 | 8.39e-03 |
+| 128 | 6 | 1.31e-02 | 1.62e-02 |
+| 128 | 10 | 3.31e-03 | 6.54e-03 |
+| 256 | 6 | 9.64e-03 | 1.11e-02 |
+| 256 | 10 | 2.42e-04 | 1.60e-03 |
+
+(`normal_method='contour'`; `distance` loses by the same 1.1x-3x.) **`linear` wins every one
+of the twelve cells measured**, by 1.1x to 7x. Both converge on the analytic reference —
+`Delta = eps^ - A -> 0` as the truncation rises, so the projector's contribution vanishes and
+they must agree in the limit, and they do — `circular` just converges 3-5x further out.
+
+**2. Most of it where the answer is known exactly.** A y-invariant raster with more than one
+row goes through the 2D builder and gets block-repeated to the field's grid floor, so the
+stripe centres become real medial *columns*. Li's rules are **exact** for that structure.
+Total `T` against `factorization='li'`, 8 rows of a 64-wide 50% grating:
+
+| truncation_order | `linear` | `circular` |
+|---|---|---|
+| 4 | 9.2e-05 | 3.5e-01 |
+| 6 | 2.1e-06 | 2.0e-02 |
+| 8 | 3.7e-05 | 1.6e-02 |
+| 12 | 8.4e-05 | 8.9e-03 |
+
+The mechanism is worth stating because it explains the whole cost column. `'distance'` reports
+`(0, 0)` on a medial column, so the **linear projector is zero there and the correction simply
+switches off** — the scheme degrades to the direct rule. The circular projector is a unit-trace
+projector at *every* pixel including that one, so it applies a half-and-half correction with a
+definite handedness instead. "No opinion" and "an arbitrary opinion" are not equally safe.
+
+**3. Mirror symmetry, outright.** `n_perp = (-n_y, n_x)` is a fixed rotation sense and `-i/2`
+is left- rather than right-circular, so the construction is **chiral**. Solve a structure and
+its x-mirror, `max|dR|`, off-centre scenes at N=48, `truncation_order=5`:
+
+| scene | `distance` | `contour` | `spectral` | `smooth` |
+|---|---|---|---|---|
+| circle, `linear` | 2.1e-15 | 7.7e-05 | 1.6e-04 | 2.4e-15 |
+| circle, `circular` | 3.96e-04 | 3.79e-04 | 5.22e-04 | 3.50e-04 |
+| annulus, `linear` | 3.0e-15 | 2.4e-04 | 7.2e-04 | 2.9e-15 |
+| annulus, `circular` | 7.40e-03 | 8.25e-03 | 7.46e-03 | 8.04e-03 |
+
+`'distance'` and `'smooth'` mirror **exactly** under the linear projector, and the circular one
+costs them that by up to twelve orders. It is the method and not the implementation: mirroring
+the structure and *conjugating* the projector — the other circular state, an equally valid
+rank-one projector — agree to **3.4e-15**, so the asymmetry is precisely the basis's
+handedness and nothing else. The two handednesses differ from each other by 7.4e-3, so the
+choice is real rather than a gauge; the sign implemented is the published one.
+
+A workflow that needs exact mirror symmetry of the output must stay on `'linear'`.
+
+### The recommendation
+
+**Leave it alone.** It is landed because it is the published answer to a real question and
+because the question was open in this file for two weeks; it is off by default because on the
+shipped configuration it removes nothing measurable and costs accuracy in every cell measured,
+mirror symmetry outright, and the most on the one scene whose exact answer is known. Reach for
+it if you have a scene whose medial axis you have *measured* to be moving your answer and the
+shear has not settled it — and measure the cost on your own scene before keeping it.
+
+The default is untouched, and provably: 25 MB of convolution matrices over 4 scenes x 2
+lattices x 4 constructions x 2 builders come back **byte-for-byte identical** to the
+pre-change tree.
 
 ## Semantics worth knowing
 
@@ -694,6 +850,19 @@ scratch — the numbers recorded here and the tests in
 `tests/test_nvf_normal_methods.py` are the durable record, consistent with how
 [`nvf-upsampling.md`](nvf-upsampling.md) records its own sweeps.
 
+`projector='circular'` (2026-09-01) was verified on five instruments, listed because each
+answers something the others cannot. **The translation identity** over all 4095 rolls, shear
+on and off — the covariance claim, and the reason the shear had to be switched off to make
+it. **A byte comparison against `git archive HEAD`** over 25 MB of convolution matrices (4
+scenes x 2 lattices x 4 constructions x 2 builders) — the default path is untouched, which a
+tolerance could not have said. **The circle A/B table's own harness**, whose `linear` column
+reproduces the printed numbers exactly, which is what says it is that harness. **Li's rules on
+a y-invariant raster**, the one scene here whose exact answer is known. And **the mirror
+gap**, which is the only instrument sensitive to the arbitrariness rather than to the
+instability — it is the one that found the chirality, and it was not being looked for.
+Backends: numpy, jax and torch agree on a circular cell to ~1e-14, and the record crosses a
+`jax.jit` boundary carrying a finite gradient. Tests in `tests/test_nvf_projector.py`.
+
 ### References
 
 - P. Gotz, T. Schuster, K. Frenner, S. Rafler, W. Osten, *Normal vector method for the
@@ -712,6 +881,7 @@ scratch — the numbers recorded here and the tests in
   polarization basis itself: the projector is built from a Jones vector instead of from
   `n n^T`, so it need not carry a direction at all. This is the origin of the
   circular-polarization limit, and the citation to credit alongside its generalization.
+  **Implemented** as `projector='circular'` — `factorization.jones_projector_fields`.
 - V. Liu, S. Fan, *S4: A free electromagnetic solver for layered periodic structures*,
   Comput. Phys. Commun. **183**, 2233 (2012).
   [doi:10.1016/j.cpc.2012.04.026](https://doi.org/10.1016/j.cpc.2012.04.026) — the
@@ -719,7 +889,11 @@ scratch — the numbers recorded here and the tests in
   not raster-native, and the reason none of it is adopted here directly. Its **Eq. (52)**
   is the published form of the circular-polarization limit — `phi = (pi/8)(1 + cos pi|t|)`,
   a generalization of Antos above — so that limit can be implemented from the paper,
-  without reading S4 itself (which is GPL, where this project is Apache-2.0).
+  without reading S4 itself (which is GPL, where this project is Apache-2.0). It **was**,
+  on 2026-09-01, from the paper and the paper alone; S4's `fmm_PolBasisJones.cpp` was not
+  opened. S4 states `J` in terms of the *tangent* field, which differs from the normal by a
+  fixed 90-degree rotation, so building `J` from the normal directly gives the normal
+  projector this module's `C_xx` wants.
 - A. M. Hammond, S. G. Johnson et al., *Unifying and accelerating level-set and
   density-based topology optimization by subpixel-smoothed projection*,
   [arXiv:2503.20189](https://arxiv.org/abs/2503.20189) — distance and normal jointly from

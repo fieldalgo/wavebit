@@ -26,9 +26,10 @@ from .conventions import (_CHI_POLARIZATION_CLASH, _COMPLEX_CHI,
                           warn_if_xy_on_a_skewed_cell)
 from .domain import Material, as_material, index_from_eps
 from .enums import (Answers, DEFAULT_ANSWERS, DEFAULT_FACTORIZATION, DEFAULT_FORMULATION,
-                    DEFAULT_FOURIER_COEFFICIENTS, DEFAULT_NORMAL_METHOD, answers_of,
-                    normal_method_of,
-                    Factorization, Formulation, FourierCoefficients, Tetm, coefficients_of,
+                    DEFAULT_FOURIER_COEFFICIENTS, DEFAULT_NORMAL_METHOD, DEFAULT_PROJECTOR,
+                    answers_of, normal_method_of, projector_of,
+                    Factorization, Formulation, FourierCoefficients, Projector, Tetm,
+                    coefficients_of,
                     factorization_of, formulation_of, resolve_fourier_options)
 from .fields import (field_1d, field_1d_conical, field_2d, field_2d_4ff,
                      is_count, to_mirrored_z, to_scene_frame)
@@ -1970,6 +1971,11 @@ class CoreFactorizationMixin:
                  # where a raster normal field is built (factorization='nvf' on a raster);
                  # explicitly set anywhere else it is refused rather than ignored.
                  # See docs/nvf-normal-methods.md for the measurements that rank them.
+                 projector=None,             # how P is formed *from* that field:
+                 # 'linear' (default, P = n n^T) | 'circular' (Antos' complex polarization
+                 # basis, direction-free as |n| -> 0 -- the medial axis). A second axis
+                 # rather than a fifth normal_method: it composes with all four
+                 # constructions. Read and refused exactly where normal_method is.
                  answers='amplitude',        # what this solve keeps the state to answer:
                  # 'efficiency' | 'amplitude' (default) | 'field'. A declaration, like tetm --
                  # reconstruct_field is refused below 'field' rather than served, because the
@@ -2030,6 +2036,7 @@ class CoreFactorizationMixin:
         self.backend = self._BACKEND_ID if backend is None else backend
         self._set_fourier_options(fourier_coefficients, factorization)
         self.normal_method = normal_method
+        self.projector = projector
         self._normal_grid = normal_grid
         self.lattice = lattice      # after period: assigning a basis overwrites period
 
@@ -2060,6 +2067,10 @@ class CoreFactorizationMixin:
     #: built. What the None distinguishes is an explicit request on a build that would never
     #: read it, which :meth:`_reject_unread_normal_method` refuses instead of ignoring.
     _normal_method = None
+    #: And likewise, for the same reason and the same reader. ``normal_method`` and this are
+    #: two independent axes over one field -- how it is *built* and what is *done with it* --
+    #: so they are read together and refused together, and neither is a value of the other.
+    _projector = None
 
     def _set_fourier_options(self, fourier_coefficients, factorization):
         """Settle ``fourier_coefficients`` / ``factorization`` from a constructor's arguments."""
@@ -2813,6 +2824,27 @@ class CoreFactorizationMixin:
     def normal_method(self, value):
         self._normal_method = None if value is None else normal_method_of(value)
 
+    @property
+    def projector(self):
+        """How the NVF projector is formed from the normal field: ``'linear'`` | ``'circular'``.
+
+        ``'linear'`` is ``P = n n^T``, the direction alone, and is what every number in this
+        repository was measured on. ``'circular'`` builds ``P = J J^H`` from a Jones vector
+        that carries the field's magnitude too, so that ``P`` loses its direction entirely as
+        the magnitude goes to zero — which is what the *medial axis* is, and where the
+        direction is undefined rather than merely hard to find. See
+        :class:`~wavebit._core.enums.Projector` and
+        :func:`~wavebit._core.factorization.jones_projector_fields`.
+
+        Read exactly where :attr:`normal_method` is read, and refused exactly where that is
+        refused: the two are independent axes over one field, not one axis with eight values.
+        """
+        return DEFAULT_PROJECTOR if self._projector is None else self._projector
+
+    @projector.setter
+    def projector(self, value):
+        self._projector = None if value is None else projector_of(value)
+
     #: What `normal_grid=None` means, before the `4*truncation_order+1` floor lifts it.
     #:
     #: **1024, and it survived an attempt to drop it to 256.** On the forward value 1024 is
@@ -2911,6 +2943,35 @@ class CoreFactorizationMixin:
             f"here: {where}. It selects the raster NVF normal-field construction, so it "
             f"needs a raster structure and factorization='nvf'.")
 
+    def _reject_unread_projector(self, factorization):
+        """Refuse an explicit ``projector`` where no raster normal field is built.
+
+        Word for word :meth:`_reject_unread_normal_method`'s argument, over the same condition,
+        because the two keywords have the same reader: the raster path under
+        ``factorization='nvf'`` and nothing else. Separate methods rather than one loop over
+        both so that a caller naming one gets told about the one they named -- the two are
+        independent axes and a message about the other sends them to change the wrong thing.
+
+        The smooth shape path is the case worth naming. It *does* build a normal field, from
+        the geometry rather than from a raster, and it has no magnitude to open into an
+        ellipse -- an analytic normal is exact everywhere its shape is smooth, and the medial
+        axis this exists for is a raster artefact. So the refusal there is not "there is no
+        field", it is "there is nothing about this field for the circular limit to read".
+        """
+        if self._projector is None:
+            return
+        if self._modeling_type == 0 and factorization == Factorization.NVF:
+            return
+        if self._modeling_type == 2:
+            where = ('the smooth shape path builds its normal field from the geometry, which '
+                     'carries no magnitude for the circular limit to read')
+        else:
+            where = "factorization='li' builds no normal field at all"
+        raise NotImplementedError(
+            f"projector={projector_of(self._projector).value!r} has no reader here: {where}. "
+            f"It selects how the NVF projector is formed from a raster normal field, so it "
+            f"needs a raster structure and factorization='nvf'.")
+
     def _reject_unread_normal_grid(self):
         """Refuse an explicit ``normal_grid`` on a build that samples no normal field.
 
@@ -2962,6 +3023,7 @@ class CoreFactorizationMixin:
         factorization = self.factorization
         coefficients = self.fourier_coefficients
         self._reject_unread_normal_method(factorization)
+        self._reject_unread_projector(factorization)
         self._reject_unread_normal_grid()
         # The *window's* half-width, not the declared `truncation_order`: an excitation can
         # widen the retained set, and a convolution matrix has to be as wide as the
@@ -2978,7 +3040,8 @@ class CoreFactorizationMixin:
             if factorization == Factorization.NVF:
                 basis = self._geometry_lattice_for(None)
                 normal_field = _fac.normal_field_for_raster(
-                    self.structure, half_width_u, half_width_v, lattice=basis, method=self.normal_method)
+                    self.structure, half_width_u, half_width_v, lattice=basis,
+                    method=self.normal_method, projector=self.projector)
                 normal_field_source = _fac.normal_field_source_for_raster(
                     self.structure, half_width_u, half_width_v, lattice=basis, method=self.normal_method)
                 if self._mu is not None:
@@ -2989,7 +3052,8 @@ class CoreFactorizationMixin:
                     # permittivity's field would be right on every case where the two patterns
                     # coincide, which is most of them, and silently wrong on the rest.
                     mu_normal_field = _fac.normal_field_for_raster(
-                        self._mu, half_width_u, half_width_v, lattice=basis, method=self.normal_method)
+                        self._mu, half_width_u, half_width_v, lattice=basis,
+                        method=self.normal_method, projector=self.projector)
                     mu_normal_field_source = _fac.normal_field_source_for_raster(
                         self._mu, half_width_u, half_width_v, lattice=basis, method=self.normal_method)
             if coefficients == FourierCoefficients.INTEGRATED:
@@ -3362,6 +3426,7 @@ class CoreFactorizationMixin:
         factorization = self.factorization
         self.fourier_coefficients   # read for the refusal it may raise, not for its value
         self._reject_unread_normal_method(factorization)
+        self._reject_unread_projector(factorization)
         self._reject_unread_normal_grid()
         self._reject_layer_count_mismatch()
 
@@ -3450,7 +3515,8 @@ class CoreFactorizationMixin:
                         normal_field=normal_field,
                         normal_field_source=normal_field_source,
                         lattice=self._geometry_lattice_for(geometry),
-                        normal_method=self.normal_method)
+                        normal_method=self.normal_method,
+                        projector=self.projector)
                 else:
                     conv = _fac.to_conv_mat_raster_integrated_nvf(
                         structure, half_width_u, half_width_v,
@@ -3458,7 +3524,8 @@ class CoreFactorizationMixin:
                         normal_field_source=normal_field_source,
                         compression=compression,
                         lattice=self._geometry_lattice_for(geometry),
-                        normal_method=self.normal_method)
+                        normal_method=self.normal_method,
+                        projector=self.projector)
 
         elif self._modeling_type == 2:      # smooth shapes -- NVF on exact transforms
             # Fixed on both axes: the epsilon tensor comes from the shapes' analytic normal
