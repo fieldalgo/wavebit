@@ -54,14 +54,16 @@ Shared conventions, stated once:
   filtered-density indicator (arXiv:2503.20189) is the known follow-up.
 - **Covariance under a mirror is exact for one of the three.** ``'smooth'`` mirrors
   bit-exactly in both directions, like ``'distance'``. ``'contour'`` and ``'spectral'``
-  carry tie-breaks (the nearest polyline sample, the nearest valid band donor) and a
-  resampling phase, and a mirror can break those the other way — worst along x, and
-  concentrated on the periodic medial ridge where the direction is genuinely ambiguous.
-  Measured on an off-center circle at N=48: pointwise p99 up to ~3 deg (contour) /
-  ~34 deg (spectral, ridge donors) with a few percent of pixels past 1 deg; at the
-  solve, a structure and its x-mirror differ by ``max|dR| ~ 1.6e-4`` against ~1e-15
-  for ``'distance'``/``'smooth'`` — an order below these methods' accuracy gains at the
-  same settings, and the bound a test pins. A workflow that needs exact mirror symmetry
+  carry tie-breaks — the nearest polyline sample, the nearest valid band donor — and a
+  mirror can break those the other way, worst along x and concentrated on the periodic
+  medial ridge where the direction is genuinely ambiguous. ``'contour'``'s is
+  chirality-sensitive on purpose (:data:`_CONTOUR_TIE_SHEAR` is a shear, and
+  :data:`_CONTOUR_SAMPLE_OFFSET` is measured along the traversal), which is exactly what
+  settles the ties a mirror-symmetric rule leaves exact. Measured on an off-center circle
+  at N=48, a structure and its x-mirror differ at the solve by ``max|dR|`` of 7.7e-5
+  (contour, from 1.4e-4 before 2026-09-01) and 1.6e-4 (spectral), against ~2e-15 for
+  ``'distance'``/``'smooth'`` — an order below these methods' accuracy gains at the same
+  settings, and the bound a test pins. A workflow that needs exact mirror symmetry
   of the *output* should use ``'smooth'`` or ``'distance'``.
 """
 import numpy as np
@@ -314,9 +316,10 @@ def _two_phase_indicator(eps):
     inverts the indicator wholesale. Three of the four constructions never noticed: an
     inversion flips their field globally and NVF consumes only ``n n^T``. ``'contour'`` did.
     The 0.5 level set of a field and of its complement is the same curve, but contourpy
-    traverses it the other way, which moves ``_resample``'s phase and so the whole sampled
-    field. Measured on the pinned disc (radius 30 in a 64 cell), ten rolls came back as
-    *exactly two* values — 0.328909134249 for the six whose corner lands outside and
+    traverses it the other way, and the sampling has a direction in it — samples sit
+    :data:`_CONTOUR_SAMPLE_OFFSET` of the way *along* each sub-interval — so the sampled
+    field is not the same field. Measured on the pinned disc (radius 30 in a 64 cell), ten
+    rolls came back as *exactly two* values — 0.328909134249 for the six whose corner lands outside and
     0.329294462911 for the four whose corner lands inside, each class tight to 5e-13, nothing
     in between. Orienting by area collapses all ten to 4.157e-13.
 
@@ -346,9 +349,12 @@ def _two_phase_indicator(eps):
     ==========  ==============  ============================
     method      total spread    within each indicator class
     ==========  ==============  ============================
-    'contour'   **1.977e-03**   6.6e-14 / 9.1e-14
-    'spectral'  7.5e-14         --
+    'contour'   **2.066e-04**   6.6e-14 / 9.1e-14
+    'spectral'  4.8e-14         --
     ==========  ==============  ============================
+
+    (1.977e-03 before 2026-09-01; the seam-window rewrite took an order off it and left the
+    defect standing, which is the useful thing to know about it.)
 
     Every bit of the spread is *between* the two classes and none of it inside them, which is
     the indicator-flip signature and nothing else. It is six orders past the 1e-9 the
@@ -375,38 +381,117 @@ _CONTOUR_SIGMA_COEF = 0.25    # sigma = 0.25 * sqrt(N) px, N the geometric-mean 
 _CONTOUR_D_SWITCH = 0.5       # below this distance (px) use the local segment normal
 _CONTOUR_RESAMPLE_H = 0.25    # polyline resampling step (px)
 
+#: Where in each sub-interval the sample sits, and **it is the open interval (0, 1/2): 0 is
+#: measurably wrong and 1/2 is measurably worse than the inside.** 14 scenes on square and
+#: skewed cells, 63 lattice translations each, worst over the translation identity, against a
+#: floor of 2.9e-15:
+#:
+#: * ``0.0`` puts a sample on every polyline *vertex*, so the sample set inherits the level
+#:   set's own symmetries wholesale and the ties `_CONTOUR_TIE_SHEAR` settles stop being
+#:   separable. **Seven of the fourteen break**: a small disc 8.8e-05 on 63 of 63 rolls, the
+#:   saddle 5.4e-05 on 56, an annulus 5.2e-05 on 63, a cross 3.1e-06 on 63. It also lands a
+#:   sample exactly ``_CONTOUR_D_SWITCH`` from a pixel centre wherever the interface runs
+#:   along an axis -- the blurred indicator is antisymmetric about a straight interface, so
+#:   its 0.5 crossing sits exactly on the half-integer and the pixel beside it is exactly half
+#:   a pixel away -- and that pixel flips between the two branches of the direction rule on
+#:   the last bit (5.1e-08 on 16 of 63, the smallest defect in this file and still one).
+#: * ``0.5`` is the sub-interval midpoint, and the midpoint set is carried to itself by
+#:   *reversing* the traversal, so a curve and its mirror image get the same samples. Nothing
+#:   breaks -- but the percolating scene on a 45-degree cell sits at **4.1e-13**, 200x the
+#:   floor every other scene holds at and within 2.5x of what the pins assert. That is a
+#:   margin, not a failure, and it is why this is stated as a measurement rather than a proof.
+#:
+#: A quarter of the way in is neither. 0.05, 0.1, 0.2, 0.25, 0.3 and 0.4 all land on the
+#: floor, so the value inside the interval is free.
+_CONTOUR_SAMPLE_OFFSET = 0.25
+
+#: A deterministic infinitesimal perturbation of the metric the nearest-*sample* query is
+#: answered in -- the standard way to make a geometric predicate with exact ties single
+#: valued (Edelsbrunner & Muecke, "Simulation of Simplicity", ACM TOG 9, 66 (1990)).
+#:
+#: **What it is for.** On the medial axis two points of the level set are exactly equidistant
+#: from a pixel and the direction is genuinely undefined there. That is not the problem. The
+#: problem is that *which* of them the kd-tree returns is then settled by the last bit, and a
+#: raster roll settles it the other way, so the field stops being covariant at those pixels.
+#: The ties are exact rather than near, because a level set drawn on a raster inherits the
+#: raster's symmetries. Without this, over 63 translations each: a cross 1.8e-03 on 63 rolls,
+#: a percolating post-and-arm 1.2e-03 on 56, a small disc 4.2e-04 on 57, a saddle between two
+#: discs 2.9e-04 on 8, an annulus 9.9e-05 on 48 -- seven of fourteen scenes, and the annulus
+#: and the saddle are the two that ``tests/test_nvf_lattice_translation.py`` carried as strict
+#: xfails for the medial axis from 2026-08-29 to 2026-09-01.
+#:
+#: It does **not** make the direction on the medial axis defined -- nothing here can, and the
+#: circular-polarization limit that would is still the open item (see
+#: ``tests/test_nvf_lattice_translation.py``). It makes the arbitrary choice the *same*
+#: arbitrary choice at every placement, which is the whole of what covariance asks.
+#:
+#: **It chooses which sample, never where it is**: every distance, foot and direction the
+#: construction returns is computed in the true metric afterwards, so the only thing it can
+#: change is a tie, or an ordering closer together than ``e`` relative, where either answer
+#: is the same answer to that many digits. The working window is enormous, which is what says
+#: this is not a tuned knob: every value from 1e-13 to 1e-3 gives an identical clean sweep,
+#: six orders either side of this one, against the ~1e-15 the tie sits inside.
+#:
+#: The shear carries an off-diagonal term *and* an unequal diagonal, which separate a pair
+#: mirrored in an axis and a pair mirrored in a diagonal respectively. Measured, either half
+#: alone already cleans all fourteen scenes, so the second is insurance against a mirror
+#: class this scene set does not contain rather than a demonstrated need.
+_CONTOUR_TIE_SHEAR = 1e-9
+
+
+#: The two copies of a seam carry bit-identical samples, so a level set cut there comes back
+#: with its two cut ends at the same interpolated coordinate to the last bit. The tolerance is
+#: for a contourpy that walks the two edges in a different order, not for bridging a gap.
+_SEAM_TOL = 1e-9
+
 
 def _contour_polylines(smoothed):
-    """0.5 level set of the wrap-padded smoothed indicator — **one whole copy of each loop**.
+    """0.5 level set of one period, closed **on the torus**.
 
-    Returns ``(points, closed)`` pairs in unpadded index coordinates (x = column, y = row).
-    Two things here are load-bearing, and the construction was not covariant under a lattice
-    translation of the raster until both were (see ``docs/nvf-normal-methods.md``).
+    Returns ``(points, winding)`` pairs in index coordinates (x = column, y = row). Every
+    polyline repeats its first vertex at the end, displaced by ``winding`` whole cells:
+    ``points[-1] == points[0] + (wu * n_u, wv * n_v)``. A ``winding`` of ``(0, 0)`` is an
+    ordinary closed loop; anything else is a level set that **percolates** — it leaves the
+    cell and comes back, so it closes only on the torus, and its tiled copies chain end to
+    end into one curve of infinite extent. ``winding is None`` is the degenerate fallback
+    below, and is the only case that carries genuine curve ends.
 
-    **Pad by a full cell, not by the kernel's support.** The pad used to be ``4*sigma+3``,
-    which on a 16 px cell is about five pixels — far narrower than a period. The level set is
-    then extracted through a window that cuts the periodic copies at a *fixed* place while a
-    roll slides the shape past it, so which copies come back whole depends on where the
-    structure happens to sit. A full cell is the smallest pad that guarantees at least one
-    complete copy of every loop, whatever its extent.
+    **The window is one period with the seam duplicated, not a 3x3 tile.** contourpy has no
+    periodic domain: it is handed a finite rectangle and cuts whatever leaves it. Padding
+    3x3 with ``mode='wrap'`` moves the cut a period away, which is enough for a *contractible*
+    loop — some copy of it lands whole inside the window — and does nothing at all for a
+    percolating one, which is cut wherever the window ends however wide it is. Padding
+    instead by a single duplicated row and column covers each torus cell exactly once, and
+    then the cut has an exact partner: the level set leaving through column ``n_u`` re-enters
+    at column ``0`` at a coordinate interpolated from the same two samples, bit for bit.
 
-    **Keep one whole copy of each loop, not every fragment.** Even at a full cell, a shape
-    straddling the wrap still has copies clipped by the outer boundary: measured on a rod
-    rolled across it, nine whole loops become six whole and six fragments. Fragments are not
-    new geometry — the 3x3 tiling in :func:`contour_normal_field` regenerates every periodic
-    copy downstream — but they are actively harmful twice over: a fragment's endpoint is not a
-    curve end, so ``_assemble`` points it at itself and the segment normal there is one-sided;
-    and :func:`_resample` samples an open curve by ``linspace`` and a closed one by
-    ``arange``, so fragments inject sample positions the whole loops do not have (67 distinct
-    points became 129 on that rod). A pixel's nearest sample then depends on the placement.
+    **So the cut ends are stitched back together.** :func:`_stitch_across_the_seam` matches
+    each fragment's tail to the head sitting at the same point of the torus and walks the
+    cycle, accumulating the whole-cell offsets it crosses; that sum is the winding. A
+    contractible loop straddling the seam comes back as one loop with winding ``(0, 0)`` —
+    the fragments reassemble — and a percolating one as a single arc whose ends are one
+    lattice vector apart. Neither is a fragment any more, so ``_assemble`` never sees an
+    endpoint that is a cut mark rather than a curve end.
 
-    So each closed loop is folded back to the centre cell by whole periods and deduplicated
-    there, leaving exactly one representative per loop. Open curves are kept only when *no*
-    closed loop survived: those are percolating level sets — a stripe spanning the cell has no
-    closed 0.5 crossing at all — and there is no whole copy of them to prefer.
+    Until 2026-09-01 open curves were returned exactly as contourpy cut them, and only when
+    *no* closed loop had survived — one disc beside a percolating stripe deleted the stripe's
+    boundary from the field outright, and the fragment set moved with the placement (5 / 6 /
+    9 / 12 fragments across rolls of one scene), which is what made ``'contour'`` the one
+    construction that is not covariant under a lattice translation on a percolating level
+    set. That regime is ordinary rather than exotic: on a 20-degree cell the lattice rows sit
+    0.34 of a period apart, so any feature wider than that percolates, and the analytic path
+    refuses such a shape entirely.
 
-    Cost is neutral to favourable despite the wider window, because the dedup shrinks what the
-    kd-tree downstream indexes: measured 1.06x at N=64 and 0.79x at N=1024.
+    Each polyline is then folded by whole periods so its centroid lands in the cell. The
+    tiles below are laid around the representative, so a curve left sitting a period out
+    would put the cell at the edge of the tiled region instead of its middle — and a
+    reassembled loop can sit there, because the chain starts wherever the seam cut it. On a
+    loop already inside the window the fold is the identity.
+
+    **The fallback.** A fragment whose partner is missing or ambiguous — a level set touching
+    a corner of the seam, where the wrap is two-dimensional and the match is not unique —
+    is returned as a genuinely open polyline rather than dropped. That is the old behaviour
+    for the one case that still needs it, minus the discard.
     """
     try:
         import contourpy
@@ -416,100 +501,192 @@ def _contour_polylines(smoothed):
             "is not installed. `pip install contourpy` (it ships with matplotlib), or use "
             "normal_method='spectral', which needs nothing beyond NumPy/SciPy.") from None
     n_v, n_u = smoothed.shape
-    pad = max(n_v, n_u)
-    padded = np.pad(smoothed, pad, mode='wrap')
+    padded = np.pad(smoothed, ((0, 1), (0, 1)), mode='wrap')
     gen = contourpy.contour_generator(z=padded, line_type=contourpy.LineType.Separate)
-    closed_loops, open_curves = [], []
+    loops, cuts = [], []
     for pts in gen.lines(0.5):
         pts = np.asarray(pts, dtype=float)
         if pts.shape[0] < 2:
             continue
-        pts = pts - pad
         if np.allclose(pts[0], pts[-1]):
-            pts = pts[:-1]
-            if pts.shape[0] < 3:
+            if pts.shape[0] < 4:            # fewer than three distinct vertices
                 continue
-            closed_loops.append(pts)
+            # Close it on its own first vertex rather than on contourpy's repeat of it, so
+            # that `points[-1] == points[0] + winding` holds exactly for every polyline here
+            # and `_resample` needs no second spelling for the loop case.
+            loops.append((np.vstack([pts[:-1], pts[:1]]), (0, 0)))
         else:
-            open_curves.append(pts)
-
-    out, seen = [], set()
-    for pts in closed_loops:
-        centre = pts.mean(0)
-        # Fold onto the CELL, not onto the origin. `round(c/n)*n` lands the centre in
-        # [-n/2, n/2), i.e. straddling the cell's corner, so the representative can sit a
-        # full period outside the cell it describes -- measured at index centre (-30, -30)
-        # for a 64 cell. The tiles below are laid around the representative, so the cell then
-        # sits at the *edge* of the tiled region instead of its middle, and a pixel on the far
-        # side reaches past it. `floor` puts the centre in [0, n), which is the cell.
-        #
-        # `floor(c/n)` and not `round`, for the tie and not for the general case: `round` is
-        # half-to-even, so a centre at exactly +-n/2 stays where it is and a loop keeps two
-        # representatives, one of them a full period out. What reaches that tie is a shape
-        # written about the *pixel index* n//2 -- `(X - N//2)**2 + (Y - N//2)**2 < r**2`,
-        # whose centroid is exactly n/2 -- and not a shape centred in the cell, whose centroid
-        # is (n-1)/2 and misses it. (An earlier spelling here was
+            cuts.append(pts)
+    out = []
+    for pts, winding in loops + _stitch_across_the_seam(cuts, n_v, n_u):
+        centre = pts[:-1].mean(0) if winding is not None else pts.mean(0)
+        # `floor(c/n)` and not `round(c/n)`, for the tie rather than the general case:
+        # `round` is half-to-even, so a centre at exactly +-n/2 stays where it is and lands
+        # the representative a full period outside the cell it describes. What reaches that
+        # tie is a shape written about the *pixel index* n//2 -- `(U - N//2)**2 +
+        # (V - N//2)**2 < r**2`, whose centroid is exactly n/2 -- and not a shape centred in
+        # the cell, whose centroid is (n-1)/2 and misses it. (An earlier spelling here was
         # `floor((c - n/2)/n + 0.5)`, which is *identically* `floor(c/n)` -- checked over
         # 20001 samples per n for n in 2, 3, 32, 64, 1024, 4097, zero differences. It was
         # written as if the `+0.5` were doing the work. It is not.)
-        folded = pts - np.array([np.floor(centre[0] / n_u) * n_u,
-                                 np.floor(centre[1] / n_v) * n_v])
-        centre = folded.mean(0)
-        key = (round(float(centre[0]), 3), round(float(centre[1]), 3), folded.shape[0])
-        if key in seen:
+        out.append((pts - np.array([np.floor(centre[0] / n_u) * n_u,
+                                    np.floor(centre[1] / n_v) * n_v]), winding))
+    return out
+
+
+def _stitch_across_the_seam(cuts, n_v, n_u):
+    """Close the fragments a seam cut, on the torus, and read off each cycle's winding.
+
+    Every fragment starts and ends on the window border, and the border is the wrap: a tail
+    at column ``n_u`` is the same point of the torus as a head at column ``0``. Matching tails
+    to heads therefore gives each fragment exactly one successor, and following successors
+    walks a cycle that is one whole component of the level set. Summing the whole-cell jumps
+    taken along the way gives the winding — ``(0, 0)`` when the component is a loop that
+    merely straddles the seam, and non-zero when it genuinely percolates.
+
+    Matching is by position and not by "the opposite edge", which is what makes it work on a
+    skewed cell: the raster's periodicity is an index shift of a whole cell whatever the
+    lattice does with those indices, so the partner of a border point is a whole number of
+    columns or rows away in *index* space, and the metric never enters. The jump is snapped
+    to that whole number, so the winding is an exact integer pair and the reassembled
+    polyline sits exactly on the lattice.
+
+    Fragments left unmatched — an ambiguous match at a seam corner, or an odd component
+    contourpy split some other way — come back with ``winding is None``, meaning a polyline
+    with real ends. They are returned rather than discarded.
+    """
+    if not cuts:
+        return []
+    period = np.array([float(n_u), float(n_v)])
+    heads = np.array([c[0] for c in cuts])
+    tails = np.array([c[-1] for c in cuts])
+    def on_torus(p):
+        # Fold the border coordinate n -> 0, so the two copies of a seam share one key.
+        return np.where(np.abs(p - period) <= _SEAM_TOL, 0.0, p)
+
+    head_keys, tail_keys = on_torus(heads), on_torus(tails)
+
+    successor = np.full(len(cuts), -1, dtype=int)
+    for i, t in enumerate(tail_keys):
+        hit = np.nonzero(np.abs(head_keys - t).max(axis=1) <= _SEAM_TOL)[0]
+        if hit.size == 1:
+            successor[i] = int(hit[0])
+
+    out, consumed = [], set()
+    for i0 in range(len(cuts)):
+        if i0 in consumed or successor[i0] < 0:
             continue
-        seen.add(key)
-        out.append((folded, True))
-    if out:
-        return out
-    return [(pts, False) for pts in open_curves]
+        walk, seen, i = [], set(), i0
+        while i >= 0 and i not in seen and i not in consumed:
+            seen.add(i)
+            walk.append(i)
+            i = int(successor[i])
+        if i != i0:                     # ran into another chain, or into a dead end
+            continue
+        consumed.update(walk)
+        pieces, off = [cuts[i0]], np.zeros(2)
+        for a, b in zip(walk, walk[1:] + [i0]):
+            # Where fragment b has to sit for its head to land on fragment a's tail. The two
+            # differ by a whole number of cells; snapping to it keeps the joint on the lattice.
+            off = np.round(((cuts[a][-1] + off) - cuts[b][0]) / period) * period
+            if b != i0:
+                pieces.append(cuts[b][1:] + off)     # its head repeats the previous tail
+        # The last fragment's tail *is* the first fragment's head one winding on, so the
+        # chain already ends where it has to; `off` is what that winding came to.
+        out.append((np.vstack(pieces), tuple(int(w) for w in np.round(off / period))))
+
+    out.extend((cuts[i], None) for i in range(len(cuts)) if i not in consumed)
+    return out
 
 
-def _resample(pts, closed, h):
-    """Uniform arc-length resampling with step <= ``h``; ``None`` for degenerate input."""
-    if closed:
-        seg = np.diff(np.vstack([pts, pts[:1]]), axis=0)
-        knots = np.vstack([pts, pts[:1]])
-    else:
-        seg = np.diff(pts, axis=0)
-        knots = pts
+#: `ceil` sits exactly on its own jump for the commonest segment there is, so the count needs
+#: a round-off guard. A level set running straight along an axis crosses the grid lines a whole
+#: pixel apart, so its segments are *exactly* 1.0 long and `1.0 / 0.25` is *exactly* 4 -- while
+#: contourpy's vertices are covariant under a raster roll only to about 1e-15, because it
+#: interpolates `j + t` from a different integer `j`. Without the guard that last bit decides
+#: between 4 sub-intervals and 5, one segment's samples move wholesale, and the axis-aligned
+#: scenes stop being covariant: the percolating post-and-arm 6.4e-04 on 56 of 63 rolls and
+#: 1.1e-04 on 44 at 45 degrees, a cross 5.3e-04 on 56. The ratio never exceeds ~6 on a
+#: marching-squares segment, so an absolute slack this size can only ever absorb round-off.
+_SUBDIVISION_SLACK = 1e-9
+
+
+def _resample(pts, h, periodic):
+    """Subdivide every segment into equal parts no longer than ``h``; ``None`` if degenerate.
+
+    **Per segment, and never along the whole curve, because the phase is the defect.** The
+    obvious spelling walks arc length from the first vertex and drops a sample every ``h`` —
+    and then *where the curve starts* sets where every sample lands. A closed loop has no
+    intrinsic start; contourpy's is the first crossing its raster scan meets, which is a
+    geometric point of the loop and so moves with a lattice translation exactly as the loop
+    does, and that is the only reason arc-length resampling was ever covariant here. It stops
+    being true the moment a curve has to be reassembled from pieces: the reassembly starts
+    wherever the seam cut it, the cut slides with the placement, and the whole sample set
+    slides a fraction of ``h`` with it. Measured by putting the arc-length spelling back into
+    the finished construction: **8 of 14 scenes**, worst 7.0e-03 on a circle overlapping its
+    own images, 1.2e-03 on a disc merely large enough to straddle the seam — three orders past
+    anything the construction's own accuracy justifies.
+
+    Subdividing each segment into ``ceil(len/h)`` equal parts has no phase to get wrong. Every
+    sample is a fixed fraction of one segment, the segments come from marching squares on the
+    raster, and a whole-pixel roll translates those exactly — so the sample set translates
+    exactly, whatever the curve was cut into or which end of it was walked first. It costs
+    about one extra sample per vertex (753 -> 900 on a radius-30 disc in a 64 cell, whose
+    level set has 236 of them), keeps the same guarantee the step ``h`` is there for — no gap
+    wider than ``h``, so a pixel's nearest sample always sits on a segment adjacent to its
+    nearest point — and it is what lets ``periodic`` mean only "the last vertex is the first
+    one a winding away, so do not emit it", rather than naming a sampling rule.
+
+    Where in the sub-interval the sample sits is :data:`_CONTOUR_SAMPLE_OFFSET`, and that it
+    is neither end of it is measured there.
+    """
+    seg = np.diff(pts, axis=0)
     seglen = np.hypot(seg[:, 0], seg[:, 1])
-    L = float(seglen.sum())
-    if L <= 0.0:
+    live = seglen > 0.0
+    if not live.any():
         return None
-    s = np.concatenate([[0.0], np.cumsum(seglen)])
-    if closed:
-        n = max(int(np.ceil(L / h)), 8)
-        t = np.arange(n) * (L / n)
-    else:
-        n = max(int(np.ceil(L / h)), 2)
-        t = np.linspace(0.0, L, n + 1)
-    return np.column_stack([np.interp(t, s, knots[:, 0]), np.interp(t, s, knots[:, 1])])
+    seg, seglen, starts = seg[live], seglen[live], pts[:-1][live]
+    counts = np.maximum(np.ceil(seglen / h - _SUBDIVISION_SLACK).astype(int), 1)
+    owner = np.repeat(np.arange(counts.size), counts)
+    step = np.arange(counts.sum()) - np.repeat(np.cumsum(counts) - counts, counts)
+    out = (starts[owner]
+           + ((step + _CONTOUR_SAMPLE_OFFSET) / counts[owner])[:, None] * seg[owner])
+    return out if periodic else np.vstack([out, pts[-1:]])
 
 
 def _assemble(polylines, h):
-    """Concatenate resampled polylines into ``(points, prev, nxt)`` adjacency arrays.
-    Open ends point at themselves, so projection degenerates to the endpoint — correctly.
+    """Concatenate resampled polylines into ``(points, prev, nxt, links)`` adjacency arrays.
+
+    Adjacency is cyclic within a closed loop and sequential otherwise. ``links`` carries the
+    joins a single tile cannot express: ``(first, last, wu, wv)`` for each percolating curve,
+    saying that its last sample is followed by its first sample **in the tile ``(wu, wv)``
+    cells away**. :func:`contour_normal_field` patches those in once the tiles exist; without
+    them a percolating curve would have a spurious end at every tile boundary.
+
+    Open ends — the degenerate fallback only — point at themselves, so projection degenerates
+    to the endpoint, which is correct at a real curve end.
     """
-    all_pts, all_prev, all_next = [], [], []
+    all_pts, all_prev, all_next, links = [], [], [], []
     base = 0
-    for pts, closed in polylines:
-        rs = _resample(pts, closed, h)
+    for pts, winding in polylines:
+        rs = _resample(pts, h, winding is not None)
         if rs is None:
             continue
         n = rs.shape[0]
         idx = np.arange(n)
-        if closed:
+        if winding == (0, 0):
             prev, nxt = base + (idx - 1) % n, base + (idx + 1) % n
         else:
             prev, nxt = base + np.maximum(idx - 1, 0), base + np.minimum(idx + 1, n - 1)
+            if winding is not None:
+                links.append((base, base + n - 1, winding[0], winding[1]))
         all_pts.append(rs)
         all_prev.append(prev)
         all_next.append(nxt)
         base += n
     if not all_pts:
         return None
-    return np.vstack(all_pts), np.concatenate(all_prev), np.concatenate(all_next)
+    return np.vstack(all_pts), np.concatenate(all_prev), np.concatenate(all_next), links
 
 
 def _project(P, A, B):
@@ -526,24 +703,25 @@ def _project(P, A, B):
 def _tile_rings(M, points, n_v, n_u):
     """How many rings of periodic images the nearest-sample query has to be given.
 
-    **It is not a coverage rule any more, and saying so is the point.** With the fold in
-    :func:`_contour_polylines` corrected to land the representative on the cell rather than on
+    **It has never once been measured to be needed, and saying so is the point.** With the
+    fold in :func:`_contour_polylines` landing the representative on the cell rather than on
     the origin, a single ring misses nothing: 0 of 4096 pixels at 90 / 60 / 45 / 20 degrees, on
     a disc and on a percolating stripe, at five placements each
     (``test_one_ring_reaches_the_nearest_point_once_the_fold_is_right``). The covering-radius
     argument this function computes was standing in for that fold bug.
 
-    It is kept because it buys something else, by accident. With a single ring the percolating
-    stripe is non-periodic at 45 and 20 degrees -- 61 and 62 of 63 rolls -- and *not* because a
-    nearest point is missed. Open curves get no fold and no dedup, so the padding window cuts
-    them into a placement-dependent set of fragments, and a wider ring masks that. The real fix
-    is to give open curves the treatment closed loops already get; until then this is a
-    deliberate paper-over, and its cost is quadratic: 9 tiles at 1, 25 at 2, 81 at 4, 729 at
-    the 13 it asks for at 5 degrees.
+    **It used to be kept for a second reason and that reason is gone.** With a single ring the
+    percolating stripe was non-periodic at 45 and 20 degrees -- 61 and 62 of 63 rolls -- and
+    *not* because a nearest point was missed: open curves got no fold and no dedup, so the
+    padding window cut them into a placement-dependent set of fragments, and a wider ring
+    masked it. :func:`_contour_polylines` stitches them on the torus since 2026-09-01, and
+    forcing this to 1 now leaves all fourteen scenes of the translation sweep clean.
 
-    It also costs accuracy where the residual is the medial axis: on an annulus at 90 degrees a
-    single ring breaks 2 of 63 rolls where this rule's wider ring breaks 15, because more tiles
-    mean more candidates at equal distance for a tie to be broken differently.
+    So what is left is the covering-radius guarantee alone, and this stays because that
+    guarantee is about a cell this sweep does not contain -- the shortest lattice vector runs
+    away from the covering radius as the cell flattens, whatever the level set does. The cost
+    is quadratic and worth stating: 9 tiles at 1, 25 at 2, 81 at 4, 729 at the 13 it asks for
+    at 5 degrees.
 
     The two terms:
 
@@ -567,12 +745,20 @@ def contour_normal_field(eps, interface_mask, lattice=None, base_shape=None):
     """Subpixel level-set contour, then the exact direction of grad(distance-to-curve).
 
     The construction: smooth the two-phase indicator with a periodic Gaussian, extract its
-    0.5 level set as subpixel polylines (contourpy), resample them finely, and give every
-    pixel the direction to its exact nearest point on the curve — which *is* the gradient
-    of the distance-to-curve field, i.e. the exact version of the extension the
-    ``'distance'`` construction approximates on the integer grid. Below half a pixel the
-    point-difference direction is noisy at polyline vertices, so the local segment normal
-    stands in (the two coincide in segment interiors).
+    0.5 level set as subpixel polylines closed on the torus (contourpy, then
+    :func:`_stitch_across_the_seam`), resample them finely, and give every pixel the
+    direction to its exact nearest point on the curve — which *is* the gradient of the
+    distance-to-curve field, i.e. the exact version of the extension the ``'distance'``
+    construction approximates on the integer grid. Below half a pixel the point-difference
+    direction is noisy at polyline vertices, so the local segment normal stands in (the two
+    coincide in segment interiors).
+
+    Two rules in it exist only to keep the answer the same under a lattice translation of the
+    raster, and both are stated where they are set: samples sit
+    :data:`_CONTOUR_SAMPLE_OFFSET` of the way along each sub-interval rather than at its end,
+    and the nearest-sample query is answered in a metric sheared by
+    :data:`_CONTOUR_TIE_SHEAR` so that the exact ties a raster's symmetries produce on the
+    medial axis are settled the same way at every placement.
 
     This is the measured winner: it won every resolved cell in the solver A/B on both
     scenes and lost none, and it converges with N where ``'distance'`` is flat
@@ -628,7 +814,7 @@ def contour_normal_field(eps, interface_mask, lattice=None, base_shape=None):
     if asm is None:
         # No 0.5 crossing survived the smoothing (a feature thinner than the kernel).
         return _constant_along_x(shape)
-    points, prev, nxt = asm
+    points, prev, nxt, links = asm
 
     n_v, n_u = shape
     # Everything metric happens in physical coordinates from here on, and that is the whole
@@ -638,19 +824,34 @@ def contour_normal_field(eps, interface_mask, lattice=None, base_shape=None):
     points = points @ M.T
     tiles_pts, tiles_prev, tiles_next = [], [], []
     n_samples = points.shape[0]
-    k = 0
     rings = _tile_rings(M, points, n_v, n_u)
+    tile_at = {}
     for dy in range(-rings, rings + 1):
         for dx in range(-rings, rings + 1):
             # The tile offset is a lattice vector, `dx*a1 + dy*a2`, which is what an index
             # offset of a whole cell maps to.
+            k = len(tiles_pts)
+            tile_at[(dx, dy)] = k
             tiles_pts.append(points + M @ np.array([dx * n_u, dy * n_v], dtype=float))
             tiles_prev.append(prev + k * n_samples)
             tiles_next.append(nxt + k * n_samples)
-            k += 1
     tpts = np.vstack(tiles_pts)
     tprev = np.concatenate(tiles_prev)
     tnext = np.concatenate(tiles_next)
+    # A percolating curve does not close inside one tile: its last sample is followed by its
+    # first sample a *winding* away, in another tile. Joining the copies here is what makes
+    # the tiled level set one continuous curve rather than a stack of arcs with an artificial
+    # end apiece, and it is the half of the seam stitch that `_contour_polylines` cannot do
+    # on its own. A join that would leave the ring is left pointing at itself; that is the old
+    # open-end behaviour, on the outermost tiles only, and the translation sweep is clean with
+    # it (14 scenes, 1023 rolls) rather than proved unreachable.
+    for first, last, wu, wv in links:
+        for (dx, dy), k in tile_at.items():
+            k2 = tile_at.get((dx + wu, dy + wv))
+            if k2 is None:
+                continue
+            tnext[k * n_samples + last] = k2 * n_samples + first
+            tprev[k2 * n_samples + first] = k * n_samples + last
 
     # Per-sample tangent normal (central difference along the polyline) — the fallback
     # when the chosen segment is degenerate.
@@ -661,11 +862,18 @@ def contour_normal_field(eps, interface_mask, lattice=None, base_shape=None):
     samp_n[:, 0] = np.where(ok, -tvec[:, 1] / np.where(ok, tnorm, 1.0), 1.0)
     samp_n[:, 1] = np.where(ok, tvec[:, 0] / np.where(ok, tnorm, 1.0), 0.0)
 
-    tree = cKDTree(tpts)
+    # The nearest-sample query is answered in a metric sheared by `_CONTOUR_TIE_SHEAR`, so
+    # that two samples exactly equidistant from a pixel -- the medial axis, which a raster's
+    # own symmetries make an exact tie rather than a near one -- are ordered the same way at
+    # every placement instead of by the last bit. It picks the sample; everything below is
+    # measured in the true metric.
+    e = _CONTOUR_TIE_SHEAR
+    shear = np.array([[1.0, e], [0.0, 1.0 + 2.0 * e]])
+    tree = cKDTree(tpts @ shear.T)
     Ii, Jj = np.meshgrid(np.arange(n_u, dtype=float), np.arange(n_v, dtype=float))
     P = np.column_stack([Ii.ravel(), Jj.ravel()]) @ M.T
 
-    _, idx = tree.query(P, workers=-1)
+    _, idx = tree.query(P @ shear.T, workers=-1)
     Q1, d21, AB1 = _project(P, tpts[tprev[idx]], tpts[idx])
     Q2, d22, AB2 = _project(P, tpts[idx], tpts[tnext[idx]])
     use2 = d22 < d21

@@ -299,6 +299,12 @@ def test_contour_is_periodic_under_a_roll_that_lands_on_the_corner():
       keeps two loop representatives where every offset roll keeps one -- and harmless: those
       two agree to 4.7e-13, because the 3x3 tiling regenerates the copies anyway.
 
+    All three are written in the tense of the code they were measured against. Two of them no
+    longer describe it: the 3x3 window and its dedup were replaced by a seam-duplicated single
+    period on 2026-09-01, and `_resample` has no phase left to be the amplifier -- it
+    subdivides each segment. Neither retraction touches the finding, which is about the
+    indicator and is asserted below.
+
     What the fix picks between are two readings that converge, so it is a choice and not a
     correction: the same disc at 64 / 128 / 256 samples a side has its branches 3.85e-4,
     2.51e-5 and 6.73e-7 apart. At exactly half fill the area rule ties and the corner rule
@@ -362,8 +368,6 @@ def test_contour_is_periodic_under_a_roll_that_lands_on_the_corner():
     assert moved < 1e-9, f'50/50 stripe: sum(T) moved by {moved:.2e} across rolls -- {got}'
 
 
-@pytest.mark.xfail(strict=True, reason='the medial axis carries no defined normal, and which '
-                                       'segment wins that tie moves with the roll')
 @pytest.mark.parametrize('name,build,rolls', [
     ('annulus, square cell', _index_annulus,
      ((0, 0), (7, 11), (23, 5), (31, 17), (1, 63), (2, 2), (40, 40), (5, 5), (13, 29), (17, 3))),
@@ -371,90 +375,98 @@ def test_contour_is_periodic_under_a_roll_that_lands_on_the_corner():
      ((0, 0), (48, 32), (42, 32), (38, 32), (2, 32))),
 ])
 def test_contour_is_periodic_where_the_medial_axis_is_reachable(name, build, rolls):
-    """What the 2026-08-29 indicator fix does **not** reach, pinned so it is not claimed away.
+    """The two scenes that survived the 2026-08-29 indicator fix, and what settled them.
 
-    **The oblique half of this was a second, unrelated defect and is fixed** (the tile ring;
-    see `test_the_tile_ring_follows_the_cell`). What is left, and what this pins, is the
-    medial axis on an orthogonal cell.
+    **The oblique half of this was a second, unrelated defect and was fixed first** (the tile
+    ring; see `test_the_tile_ring_follows_the_cell`). What is left, and what these two scenes
+    reach, is the medial axis on an orthogonal cell.
 
-    **How much is left, swept rather than sampled.** With the translation identity there is no
-    reason to guess: 6 scenes x 4 constructions x 2 lattices x 1023 rolls, ~49k measurements
-    in 395 s. `'distance'`, `'spectral'` and `'smooth'` are clean on every one of the 48
-    combinations, and so is `'contour'` on every oblique one. Exactly two scenes survive, both
-    on a square cell:
+    **How much there was, swept rather than sampled.** With the translation identity there is
+    no reason to guess: 6 scenes x 4 constructions x 2 lattices x 1023 rolls, ~49k
+    measurements in 395 s. `'distance'`, `'spectral'` and `'smooth'` were clean on every one
+    of the 48 combinations, and so was `'contour'` on every oblique one. Exactly two scenes
+    survived, both on a square cell:
 
     ========================  ==============  ==========
     scene                     broken          worst
     ========================  ==============  ==========
-    annulus                   435 of 1023     9.87e-05
-    **two discs (saddle)**    26 of 1023      **1.70e-02**
+    annulus                   621 of 1023     4.06e-05
+    **two discs (saddle)**    26 of 1023      **1.20e-03**
     ========================  ==============  ==========
 
-    A disc, a small disc, a stripe and a cross are all clean, on both lattices. The saddle
+    (Re-taken on 2026-09-01 after `_translation_defect` stopped dividing each slot by its own
+    norm; the figures this file carried before that -- 435 of 1023 at 9.87e-05, and 1.70e-02
+    -- were larger for that reason and not because the code was different.)
+
+    A disc, a small disc, a stripe and a cross were all clean, on both lattices. The saddle
     between two discs is the worse of the two by two orders of magnitude and was not in this
     file until 2026-08-31 -- the annulus had been standing in for a class whose worst member
     it is not.
 
-    **The saddle's trigger is sharper than "a roll".** All 26 of its broken rolls have the
-    same ``roll_u = 32`` -- exactly half the period, along the axis joining the two discs,
-    which is the shift that puts the saddle point on the *cell wrap*. Rolling anywhere else
-    is clean, which is why the eight rolls first written here all passed and the case looked
-    fixed. The rolls below are chosen from the failing set for that reason.
+    **The saddle's trigger is sharper than "a roll".** All 26 of its broken rolls had the same
+    ``roll_u = 32`` -- exactly half the period, along the axis joining the two discs, which is
+    the shift that puts the saddle point on the *cell wrap*. Rolling anywhere else was clean,
+    which is why the eight rolls first written here all passed and the case looked fixed. The
+    rolls below are chosen from the failing set for that reason, and they are kept now that it
+    passes for exactly the same reason: a pin that never reached the defect proves nothing.
+    Measured on precisely those rolls, before and after: the annulus `sum(T)` 1.19e-05 ->
+    4.67e-14, the saddle 3.16e-04 -> 1.61e-12, and the translation identity 9.87e-05 ->
+    9.7e-16 and 1.20e-03 -> 1.1e-15.
 
-    Marking the smaller phase makes `'contour'` exactly periodic for a *single* loop on an
-    orthogonal cell -- 4.2e-13 over the ten rolls below, from 3.9e-4. Two scenes stayed
-    broken after it:
-
-    =========================  ==========  ==========
-    scene                      after       before
-    =========================  ==========  ==========
-    disc, square cell          4.2e-13     3.9e-4
-    disc, [1,2] / [2,1] cells  1.2e-13     --
-    **annulus, square cell**   **1.2e-5**  7.5e-5
-    **disc, hex cell**         **2.3e-4**  3.0e-4
-    annulus, hex cell          2.2e-3      2.2e-3
-    =========================  ==========  ==========
-
-    `'spectral'`, `'distance'` and `'smooth'` sit at 1e-13 on every one of them, which is what
-    makes this `'contour'`'s and not the raster's.
-
-    **It is not another labelling bug, and no tie-break rule fixes it.** Comparing the fields
+    **It was never a labelling bug and no tie-break *rule* fixes it.** Comparing the fields
     pixel by pixel rather than through `sum(T)` -- which is the only way to see this -- the
-    annulus disagrees on **one pixel**, at the exact centre of its hole; the hex disc on 1 to
-    18 pixels at radius 35 to 42, where the curve is at 30, i.e. *outside* the shape, in the
-    deep gaps between its periodic images. Both sets are the **medial axis**: the nearest
-    boundary is equidistant in every direction, the normal is genuinely undefined, and which
-    segment wins the tie is an accident of where the samples fell. A roll changes the accident.
+    annulus disagreed on **one pixel**, at the exact centre of its hole; a disc in a hex cell
+    on 1 to 18 pixels at radius 35 to 42, where the curve is at 30, i.e. *outside* the shape,
+    in the deep gaps between its periodic images. Both sets are the **medial axis**: the
+    nearest boundary is equidistant in every direction, the normal is genuinely undefined, and
+    which point wins the tie is an accident of where the samples fell. A roll changes the
+    accident.
 
-    A nearest-segment query -- the rewrite this file's docstrings proposed for two weeks --
-    hits the same wall from the other side: a prototype differs from the shipped construction
-    on exactly 8 pixels, all within 4.2 px of a disc's centre, and comes out *less* periodic
-    (2.8e-3, ten distinct values).
+    A nearest-*segment* query -- the rewrite this file's docstrings proposed for two weeks --
+    hits the same wall from the other side, and is worth recording as a dead end: a prototype
+    differed from the shipped construction on exactly 8 pixels, all within 4.2 px of a disc's
+    centre, and came out *less* periodic (2.8e-3, ten distinct values). Exactness in the query
+    was never the missing thing.
 
-    **What does work, measured, and not landed.** Both S4 and fmmax answer the null by *not
-    choosing a direction*: they open the linear state into an ellipse whose ellipticity follows
-    the field magnitude, `eta = (pi/8)(1 + cos(pi|v|))`, so `|v| -> 0` gives an exactly
-    circular state whose projector is `Pxx = Pyy = 1/2`, `Pxy = -i/2`, `Pyx = +i/2` --
-    independent of the arbitrary direction, and a *limit* rather than a branch, with no
-    threshold anywhere (`fmm_PolBasisJones.cpp:65`, `fmmax/vector.py:285`; Liu & Fan, CPC 183,
-    2233 (2012)). Prototyped here with `|v| = |grad d|`, the distance field's gradient
-    magnitude -- 1 almost everywhere, dropping only on the ridge that *is* the medial axis, and
-    independent of which construction produced the field. It takes the annulus to 4.56e-15,
-    i.e. removes this defect outright, and the saddle from 1.70e-2 to 1.58e-3, i.e. helps and
-    does not fix -- the saddle's two nearest boundary points sit on *different* discs, so the
-    tie there is a discrete jump rather than a direction that fades out.
+    **What fixed it, 2026-09-01, and precisely what it does not do.** The tie is not resolved;
+    it is *settled the same way every time*, by answering the nearest-sample query in a metric
+    sheared by `_CONTOUR_TIE_SHEAR` -- a fixed, translation-invariant, infinitesimal
+    perturbation, the standard device for a geometric predicate whose exact ties have to be
+    single valued (Edelsbrunner & Muecke 1990). The direction it then reports on the medial
+    axis is still arbitrary, and still undefined by the geometry. What is no longer arbitrary
+    is *which* arbitrary answer, which is the whole of what covariance asks for. Swept the
+    same way as above, 1023 rolls: 0 of 1023 on both, and on the hex cell with them.
 
-    It is not landed because it is a trade and not a free win: against an exact circle at
-    512x512 the error goes 3.18e-5 to 3.95e-5. And it needs the field API to carry a magnitude
-    (the constructions return unit vectors), complex projector coefficients, and distinct
-    `eps_xy` / `eps_yx` -- today one object fills both slots.
+    Two things worth keeping about how this arrived. It was **not sought**: the percolation
+    fix replaced arc-length resampling, whose phase had been breaking these ties by accident
+    all along, and the accident had to be replaced by something deliberate before the
+    percolating scenes would hold. And the exactness is the whole difficulty -- a level set
+    drawn on a raster inherits the raster's mirrors, so the two competing points are equal to
+    the last bit rather than merely close, which is why 1e-15 of round-off decides and why a
+    perturbation is what separates them. Turning the shear off puts these two scenes back at
+    9.9e-05 on 48 of 63 rolls and 2.9e-04 on 8, and breaks five more with them.
+
+    **The accuracy half is still open.** Both S4 and fmmax answer the null by *not choosing a
+    direction*: they open the linear state into an ellipse whose ellipticity follows the field
+    magnitude, `eta = (pi/8)(1 + cos(pi|v|))`, so `|v| -> 0` gives an exactly circular state
+    whose projector is `Pxx = Pyy = 1/2`, `Pxy = -i/2`, `Pyx = +i/2` -- independent of the
+    arbitrary direction, and a *limit* rather than a branch, with no threshold anywhere
+    (`fmm_PolBasisJones.cpp:65`, `fmmax/vector.py:285`; Liu & Fan, CPC 183, 2233 (2012)).
+    Prototyped here with `|v| = |grad d|`, the distance field's gradient magnitude -- 1 almost
+    everywhere, dropping only on the ridge that *is* the medial axis, and independent of which
+    construction produced the field. It took the annulus to 4.56e-15 and the saddle down by
+    about one order and no further -- the saddle's two nearest boundary points sit on
+    *different* discs, so the tie there is a discrete jump rather than a direction that fades
+    out. (Read that as a ratio: both sides of it were measured before `_translation_defect`
+    stopped dividing each slot by its own norm, so the values it was quoted with, 1.70e-2 and
+    1.58e-3, are larger than the same prototype would report today.) It is not landed because it is a trade and not a free win:
+    against an exact circle at 512x512 the error goes 3.18e-5 to 3.95e-5. And it needs the
+    field API to carry a magnitude (the constructions return unit vectors), complex projector
+    coefficients, and distinct `eps_xy` / `eps_yx` -- today one object fills both slots.
 
     This is the raster twin of the exact-tangency singularity in the analytic path
     (`analytic._blend`): a normal field asked for a direction where geometry defines none.
-
-    The scene tests above do not catch it, which is worth stating -- their nested ring and
-    their hex cell both pass. What these two add is a feature large enough that its medial axis
-    lands on a *sampled* pixel.
+    The shear makes that answer stable. It does not make it right, and nothing here does.
     """
     n = 64
     ax = np.arange(n)
@@ -658,12 +670,14 @@ def test_one_ring_reaches_the_nearest_point_once_the_fold_is_right(gamma):
     degrees, on a disc and on a percolating stripe, at five placements each. That is what this
     asserts, and it is the statement the covering-radius rule was standing in for.
 
-    `_tile_rings` is kept anyway, and honestly: with a single ring the percolating stripe is
-    still non-periodic at 45 and 20 degrees (61 and 62 of 63 rolls) -- *not* because a nearest
-    point is missed, which this test rules out, but because open curves get no fold and no
-    dedup, so the padding window cuts them into a placement-dependent set of fragments. The
-    wider ring masks that. See
-    `test_contour_is_periodic_where_the_medial_axis_is_reachable` for the other open item.
+    `_tile_rings` was then kept for a second reason that has since gone away: with a single
+    ring the percolating stripe was still non-periodic at 45 and 20 degrees (61 and 62 of 63
+    rolls) -- *not* because a nearest point was missed, which this test rules out, but because
+    open curves got no fold and no dedup, so the padding window cut them into a
+    placement-dependent set of fragments, and the wider ring masked it. That is fixed at the
+    extraction now (`test_a_percolating_level_set_is_periodic`), and forcing `_tile_rings` to
+    1 leaves all fourteen scenes of the translation sweep clean. It stays for the
+    covering-radius guarantee alone, which is about a cell far flatter than any measured here.
     """
     from scipy.spatial import cKDTree
 
@@ -764,45 +778,66 @@ def _post_and_arm(U, V):
     return np.where(((U < 40) & (V < 26)) | ((U < 18) & (V >= 26)), 12.25, 1.0)
 
 
-@pytest.mark.xfail(strict=True, reason='open curves get neither the fold nor the dedup that '
-                                       'closed loops get, so the padding window cuts them into '
-                                       'a placement-dependent set of fragments')
 @pytest.mark.parametrize('name,build,gamma', [
     ('stripe, 45 degrees', _percolating_stripe, 45),
     ('stripe, 20 degrees', _percolating_stripe, 20),
     ('post and arm, square cell', _post_and_arm, 90),
 ])
 def test_a_percolating_level_set_is_periodic(name, build, gamma):
-    """A structure that crosses the cell is closed *on the torus*, and the code cannot see that.
+    """A structure that crosses the cell is closed *on the torus*, and the code now sees that.
 
-    `_contour_polylines` pads the raster 3x3 with `mode='wrap'` and hands contourpy a **finite
-    rectangle**. A level set that runs off the cell and comes back is a closed curve on the
-    torus, but in that rectangle it is cut at the border and comes back as open curves whose
-    endpoints are cut marks, not curve ends. Measured on the post-and-arm scene: five curves,
-    every one of them starting and ending on the padded array's first or last row.
-
-    Closed loops are given a fold onto the cell and a dedup, so exactly one whole representative
-    survives whatever the placement. Open curves get neither -- `_contour_polylines` returns
-    them exactly as contourpy cut them -- and `_assemble` then points each cut end at itself so
-    the projection degenerates there, which is right at a real curve end and wrong at a window
-    edge. Where the cut falls moves with the structure, so the fragment count does too: 5 / 6 /
-    9 / 12 across rolls of the post-and-arm scene.
+    `_contour_polylines` used to pad the raster 3x3 with `mode='wrap'` and hand contourpy a
+    **finite rectangle**. A level set that runs off the cell and comes back is a closed curve
+    on the torus, but in that rectangle it is cut at the border and came back as open curves
+    whose endpoints were cut marks, not curve ends. Closed loops were given a fold onto the
+    cell and a dedup, so exactly one whole representative survived whatever the placement;
+    open curves got neither, and where the cut fell moved with the structure, so the fragment
+    count did too: 5 / 6 / 9 / 12 across rolls of the post-and-arm scene.
 
     ====================  ==========  =============
     scene                 worst       rolls broken
     ====================  ==========  =============
-    simple stripe, 90 deg 1.4e-15     0 of 63
+    simple stripe, 90 deg 1.3e-15     0 of 63
     simple stripe, 45 deg 5.3e-05     62 of 63
-    simple stripe, 20 deg 1.1e-04     56 of 63
-    post and arm, 90 deg  7.8e-03     56 of 63
+    simple stripe, 20 deg 1.4e-05     56 of 63
+    post and arm, 90 deg  2.8e-03     56 of 63
+    post and arm, 45 deg  1.1e-03     63 of 63
     ====================  ==========  =============
 
-    The 90-degree stripe is the control and it is the reason this went unseen: a stripe fragments
-    the same way at every placement, so the commonest percolating scene is clean. Add an arm, or
-    skew the cell, and it does not.
+    All four sit at 2e-15 now, which is where the other three constructions are.
 
-    Unlike the medial axis, **this one has no principled barrier** -- the information the code is
-    missing is that the curve closes on the torus, which it already uses for closed loops.
+    The 90-degree stripe is the control and it is the reason this went unseen: a stripe
+    fragments the same way at every placement, so the commonest percolating scene is clean.
+    Add an arm, or skew the cell, and it does not.
+
+    **Fixed 2026-09-01, and the fix is the window rather than the fragments.** contourpy has
+    no periodic domain, so the answer is to hand it a window whose cut has an exact partner:
+    one period with the seam duplicated. Every torus cell of the raster then appears exactly
+    once, the level set leaving through column `n_u` re-enters at column `0` at a coordinate
+    interpolated from the same two samples, and `_stitch_across_the_seam` walks the cycle back
+    together. What comes out is closed -- with winding `(0, 0)` if the component merely
+    straddles the seam, non-zero if it percolates -- so there is no fragment left to be
+    placement-dependent, and no fold or dedup to give it, because there is only ever one copy.
+
+    The matching is by position on the torus and not by "the opposite edge", which is what
+    makes it work on a skewed cell: the raster's periodicity is an index shift of a whole cell
+    whatever the lattice does with those indices, so the metric never enters the stitch. An
+    earlier probe that matched *opposite edges* paired 2 of 4 ends on a square-cell stripe and
+    0 of 8 on a 20-degree cell, and it is the window rather than the rule that was wrong.
+
+    Two further changes were needed and neither is about percolation, which is worth stating
+    because either one alone leaves this failing:
+
+    * a reassembled curve has no intrinsic starting vertex, so arc-length resampling from one
+      end is no longer covariant. `_resample` subdivides each *segment* instead, which has no
+      phase. Putting the arc-length spelling back breaks 8 of the 14 scenes swept -- 7.0e-03
+      on a circle overlapping its images, 1.2e-03 on a disc merely straddling the seam.
+    * a sample set with no phase in it inherits the raster's symmetries, and the medial-axis
+      ties then flip on the last bit. `_CONTOUR_TIE_SHEAR` settles them the same way at every
+      placement. Without it, this scene moves 1.2e-03 on 56 of 63 rolls.
+
+    Both are pinned by their own scenes -- see
+    `test_contour_is_periodic_where_the_medial_axis_is_reachable`.
     """
     n = 64
     ax = np.arange(n)
@@ -815,36 +850,139 @@ def test_a_percolating_level_set_is_periodic(name, build, gamma):
     assert worst < 1e-12, f'{name}: E moved by {worst:.2e} under a translation'
 
 
-@pytest.mark.xfail(strict=True, reason='a layer holding both a closed loop and a percolating '
-                                       'interface drops the percolating one entirely')
+@pytest.mark.parametrize('radius,percolates', [(100, False), (140, True)])
+def test_a_round_feature_overlapping_its_own_images_is_periodic(radius, percolates):
+    """The scene that makes percolation ordinary rather than exotic, and it is a real circle.
+
+    At 20 degrees with `|a1| = |a2| = 640` the lattice rows sit 219 apart, so a circle past
+    radius **109** overlaps its own periodic images and its level set percolates. Both radii
+    here are drawn the same way and only one of them crosses that line, which is what makes
+    this a pair rather than a scene:
+
+    ======  ==================  ==========  =============================
+    R       closed / open       `contour`   `distance` / `spectral` / `smooth`
+    ======  ==================  ==========  =============================
+    100     9 / 0               2.1e-15     ~2e-15
+    **140** **0 / 12**          **8.8e-03** ~4e-15
+    ======  ==================  ==========  =============================
+
+    The closed/open counts are what the 3x3 window returned; R=140 percolates, so nothing came
+    back closed and the open fragments moved with the placement. Both radii sit at 2e-15 now.
+
+    That was the state until 2026-09-01. It matters more than a percentage suggests, because
+    the *analytic* path refuses a shape this size outright ("larger than the period and runs
+    into its own image"), so the raster is the only route to it -- and `'contour'` is the
+    construction the oblique documentation tells you to reach for.
+
+    **The circle is built through `wavebit.grid`, and that is not a detail.** A circle written
+    from raster indices -- `(U - 32)**2 + (V - 32)**2 <= r**2` -- is the image of a disc under
+    the basis, which at 20 degrees is a **5.67:1 ellipse**; `_index_disc` in this file is
+    named for that reason. An ellipse that thin percolates at a quite different radius, so
+    drawing it that way would have made both rows of the table say the same thing.
+    """
+    n = 64
+    t = np.deg2rad(20.0)
+    lattice = np.column_stack(([640.0, 0.0], [640.0 * np.cos(t), 640.0 * np.sin(t)]))
+    X, Y = wavebit.grid((n, n), lattice=lattice)
+    cell = np.where(X ** 2 + Y ** 2 <= float(radius) ** 2, 12.25, 1.0)
+
+    from wavebit._core.normal_methods import (_contour_polylines, _isotropic_blur,
+                                              _two_phase_indicator, _metric, _pixel_size,
+                                              _CONTOUR_SIGMA_COEF)
+    M = _metric(lattice, (n, n))
+    sigma = _CONTOUR_SIGMA_COEF * float(np.sqrt(np.sqrt(n * n))) * _pixel_size(M)
+    curves = _contour_polylines(_isotropic_blur(_two_phase_indicator(cell), sigma, M))
+    winding = sorted(w for _, w in curves)
+    assert (winding != [(0, 0)]) == percolates, (
+        f'R={radius} should {"" if percolates else "not "}percolate; windings {winding}')
+
+    worst = max(_translation_defect(cell, (a, b), 'contour', lattice)
+                for a in range(8) for b in range(8) if (a, b) != (0, 0))
+    assert worst < 1e-12, f'R={radius}: E moved by {worst:.2e} under a translation'
+
+
+def test_a_percolating_level_set_comes_back_closed_on_the_torus():
+    """The stitch itself, under the solve -- the statement the periodicity pins rest on.
+
+    Three things, and each fails differently. A percolating stripe is **two** curves, each
+    winding once along the axis it spans and neither of them open. A disc drawn across the
+    seam is cut into fragments by the window and has to come back as **one** loop of winding
+    `(0, 0)` -- the case that says the stitch reassembles rather than merely tolerating a cut.
+    And a layer holding both keeps both, which is what the shipped code got wrong by dropping
+    every open curve whenever a closed loop survived.
+
+    `winding is None` is the degenerate fallback for a fragment whose partner is missing or
+    ambiguous. Nothing here should reach it, and asserting that is the point: a scene that
+    silently fell back would pass a periodicity test and lose the reassembly.
+    """
+    from wavebit._core.normal_methods import (_contour_polylines, _isotropic_blur,
+                                              _two_phase_indicator, _metric, _pixel_size,
+                                              _CONTOUR_SIGMA_COEF)
+
+    n = 64
+    ax = np.arange(n)
+    U, V = np.meshgrid(ax, ax)
+
+    def windings(cell, gamma=90):
+        t = np.deg2rad(float(gamma))
+        lat = None if gamma == 90 else np.column_stack(([1.0, 0.0], [np.cos(t), np.sin(t)]))
+        M = _metric(lat, (n, n))
+        sigma = _CONTOUR_SIGMA_COEF * float(np.sqrt(np.sqrt(n * n))) * _pixel_size(M)
+        out = _contour_polylines(_isotropic_blur(_two_phase_indicator(cell), sigma, M))
+        for pts, w in out:
+            assert w is not None, 'a fragment fell back to an open curve'
+            assert pts[-1] == pytest.approx(pts[0] + np.array([w[0] * n, w[1] * n]), abs=1e-9)
+        return sorted(w for _, w in out)
+
+    assert windings(_percolating_stripe(U, V)) == [(0, -1), (0, 1)]
+    assert windings(_percolating_stripe(U, V), gamma=20) == [(0, -1), (0, 1)]
+    # the same stripe read the other way round: it percolates along u, not v
+    assert windings(np.where(np.abs(V - 32) < 22, 12.25, 1.0)) == [(-1, 0), (1, 0)]
+
+    # a disc sitting on the seam -- cut by the window, and one loop again once stitched
+    seam_disc = np.roll(np.where(((U - 32) ** 2 + (V - 32) ** 2) <= 12 ** 2, 12.25, 1.0),
+                        (32, 32), axis=(0, 1))
+    assert windings(seam_disc) == [(0, 0)]
+
+    # and both at once, which is the layer that used to lose its stripe entirely
+    assert windings(np.where((np.abs(V - 12) < 6)
+                             | ((U - 32) ** 2 + (V - 42) ** 2 <= 12 ** 2), 12.25, 1.0)) == [
+        (-1, 0), (0, 0), (1, 0)]
+
+
 def test_a_closed_loop_does_not_delete_the_percolating_interface_beside_it():
-    """The only defect found here that returns a **wrong** answer rather than an unstable one.
+    """The one defect found here that returned a **wrong** answer rather than an unstable one.
 
-    `_contour_polylines` ends with `if out: return out` -- if any closed loop survived the fold,
-    every open curve is thrown away. A layer holding both is ordinary: a percolating stripe and
-    a disc, which is one line of a recipe.
+    `_contour_polylines` used to end with `if out: return out` -- if any closed loop survived
+    the fold, every open curve was thrown away. A layer holding both is ordinary: a percolating
+    stripe and a disc, which is one line of a recipe.
 
-    Measured on exactly that: contourpy finds 9 closed curves and 6 open ones in the padded
-    array, and the code keeps 1 -- the disc's representative. The stripe's boundary is **not in
-    the normal field at all**. Every pixel then answers "where is the nearest interface?" with
-    the disc, including the pixels sitting on the stripe's own edge.
+    Measured on exactly that: contourpy found 9 closed curves and 6 open ones in the padded
+    array, and the code kept 1 -- the disc's representative. The stripe's boundary was **not
+    in the normal field at all**. Every pixel then answered "where is the nearest interface?"
+    with the disc, including the pixels sitting on the stripe's own edge.
 
     The stripe here is horizontal, so its normal must be `(0, +-1)` everywhere along it:
 
     =====  ==================  ==================
-    x      'contour'           'spectral'
+    x      `'contour'` (was)   `'spectral'`
     =====  ==================  ==================
     8      (-0.660, +0.751)    (0.000, +1.000)
     20     (-0.388, +0.922)    (0.000, +1.000)
     50     (+0.554, +0.832)    (0.000, +1.000)
     =====  ==================  ==================
 
-    Up to **45 degrees** wrong, silently, with energy conserved. It is not a translation defect
-    -- the field is wrong at every placement, consistently -- which is why the periodicity pins
-    in this file cannot see it and why it needs its own.
+    Up to **45 degrees** wrong, silently, with energy conserved. It was not a translation
+    defect -- the field was wrong at every placement, consistently -- which is why the
+    periodicity pins in this file could not see it and why it needs its own.
 
-    The vertical stripe used elsewhere here hides it by coincidence: both interfaces are then
-    vertical, so the disc's normal happens to point the way the stripe's would.
+    The discard is gone with the thing that made it look necessary: once the level set is
+    extracted through a seam-duplicated single period and stitched
+    (`test_a_percolating_level_set_is_periodic`), there are no fragments to prefer a whole
+    loop over. Every component comes back once, closed on the torus, and both are kept.
+
+    The vertical stripe used elsewhere here hides this by coincidence: both interfaces are
+    then vertical, so the disc's normal happens to point the way the stripe's would.
     """
     n = 64
     ax = np.arange(n)

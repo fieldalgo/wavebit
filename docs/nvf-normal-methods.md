@@ -178,11 +178,14 @@ rounds corners at period/16 and measurably loses on corner-bearing shapes.
 | field | N=64 | N=128 | N=256 | N=512 | p90 at N=512 |
 |---|---|---|---|---|---|
 | `distance` | 14.8 | 14.1 | 14.3 | 14.6 | ~30 |
-| `contour` | 1.33 | 1.28 | 0.50 | 0.37 | 0.81 |
+| `contour` | 1.37 | 1.32 | 0.51 | 0.37 | 0.82 |
 | `spectral` | 3.08 | 1.43 | 0.38 | 0.16 | 0.36 |
 | `smooth` | 0.52 | 0.37 | 0.04 | 0.03 | 0.05 |
 
-Degrees, modulo 180. Only `distance` is flat in N; the 30-40 deg substitution outliers
+Degrees, modulo 180. The `contour` column was re-taken on 2026-09-01, when its resampling
+changed; it moved within its own third digit and with no trend (1.33 / 1.28 / 0.50 / 0.37
+before), and so did the skew table further down and both A/B tables. Only `distance` is flat
+in N; the 30-40 deg substitution outliers
 (a pixel emitting 45 where its neighbours emit 0) are gone from all three replacements.
 Note `smooth` winning this table and losing the next one — the tables must be read
 together.
@@ -197,11 +200,11 @@ Error = max per-order |R - R_ref|, |T - T_ref| over shared orders. All cells res
 | N | truncation_order | `distance` | `contour` | `spectral` | `smooth` |
 |---|---|---|---|---|---|
 | 64 | 6 | 2.15e-02 | 1.06e-02 | 1.13e-02 | 9.72e-03 |
-| 64 | 10 | 8.75e-03 | 1.13e-03 | 1.03e-03 | 1.04e-03 |
+| 64 | 10 | 8.75e-03 | 1.15e-03 | 1.03e-03 | 1.04e-03 |
 | 128 | 6 | 1.95e-02 | 1.31e-02 | 1.31e-02 | 1.22e-02 |
-| 128 | 10 | 8.00e-03 | 3.30e-03 | 3.14e-03 | 3.03e-03 |
+| 128 | 10 | 8.00e-03 | 3.31e-03 | 3.14e-03 | 3.03e-03 |
 | 256 | 6 | 1.43e-02 | 9.64e-03 | 9.79e-03 | 9.16e-03 |
-| 256 | 10 | 3.51e-03 | 2.43e-04 | 2.42e-04 | 4.35e-04 |
+| 256 | 10 | 3.51e-03 | 2.42e-04 | 2.42e-04 | 4.35e-04 |
 
 Every replacement beats `distance` in every circle cell, up to 14x at 256/10 — and
 `contour` at N=64 already beats `distance` at N=256.
@@ -350,11 +353,12 @@ Use a two-phase raster to tell the constructions apart.
 
 Pinned by [`tests/test_nvf_lattice_translation.py`](../tests/test_nvf_lattice_translation.py),
 which parametrizes three placements deliberately (a partial fix passes some). `'contour'` was
-carried there as a strict xfail twice -- until the aperture fix above promoted it, and
-again from 2026-08-28 to 2026-08-29 for the indicator defect in the caveat at the top of
-this file, which no amount of contour work was going to reach. Three constructions are
-covariant; `'contour'` is covariant for a single loop on an orthogonal cell and carries a
-strict xfail for the medial-axis residual on a holed shape and on a skewed cell. Rolling
+carried there as a strict xfail four times -- until the aperture fix above promoted it; again
+from 2026-08-28 to 2026-08-29 for the indicator defect in the caveat at the top of this file,
+which no amount of contour work was going to reach; and twice more until 2026-09-01, for the
+medial axis and for percolating level sets (see *Percolation, and the two rules that fell out
+of it* below). **All four constructions are covariant now**, at 1e-14 over 1023 translations
+of every scene in the sweep. Rolling
 *somewhere* does not test any of it: eight
 of the ten rolls in `test_contour_is_periodic_under_a_roll_that_lands_on_the_corner` agreed
 with each other even with the defect in place, and the small-disc case turns on exactly one
@@ -362,6 +366,102 @@ of the ten. The sibling defect in the *analytic* path was
 older and is also fixed (`c128fd8`) — its normal field was distance-blind, not merely aperiodic,
 and `test_shape_position_gradients.test_a_multishape_layer_is_periodic_across_the_cell_edge` now
 states the property where a test of the opposite name used to pin the defect.
+
+### Percolation, and the two rules that fell out of it
+
+The last thing keeping `'contour'` aperiodic, fixed 2026-09-01, was the **window the level set
+is extracted through**. contourpy has no periodic domain: it is handed a finite rectangle and
+cuts whatever leaves it. The old window was the raster padded 3x3 with `mode='wrap'`, which is
+enough for a loop that closes inside the cell — some copy of it lands whole in the window, and
+a fold plus a dedup keep exactly one representative whatever the placement. It does nothing at
+all for a level set that **percolates** — one that leaves the cell and comes back, closing only
+on the torus — because that is cut wherever the window ends however wide the window is. The cut
+fragments got neither the fold nor the dedup, and `_contour_polylines` ended with
+`if out: return out`, so a single surviving closed loop discarded every one of them.
+
+Two consequences, and the second is worse:
+
+* the fragment set moved with the placement (5 / 6 / 9 / 12 fragments across rolls of one
+  scene), so the field did too: 2.8e-3 on a post-and-arm scene, 8.8e-3 on a Cartesian circle
+  big enough to overlap its own images at 20 degrees, 5.3e-5 on a stripe at 45 degrees.
+* a layer holding a stripe **and** a disc lost the stripe's boundary from the field entirely —
+  9 closed curves and 6 open ones found, 1 kept. Pixels on the stripe's own edge answered with
+  the disc's normal, up to **45 degrees** wrong at every placement, with energy conserved. That
+  one is not a stability defect; it is a wrong answer, and the periodicity instrument could not
+  see it because it was wrong consistently.
+
+**The fix is the window, not the fragments.** Pad instead by a single duplicated row and column:
+every torus cell of the raster then appears exactly once, and the cut has an exact partner —
+the level set leaving through column `n_u` re-enters at column `0` at a coordinate interpolated
+from the same two samples, bit for bit. `_stitch_across_the_seam` matches each fragment's tail
+to the head at the same point of the torus and walks the cycle, accumulating the whole-cell
+jumps it crosses; that sum is the curve's **winding**. Everything comes back closed: `(0, 0)`
+for a component that merely straddles the seam (its fragments reassemble), non-zero for one
+that percolates, and `contour_normal_field` then joins each percolating curve's tiled copies
+end to end so the tiling has no artificial ends in it either. There is nothing left to fold or
+dedup, because there is only ever one copy.
+
+Matching is by position on the torus and **not** by "the opposite edge", which is what makes it
+work on a skewed cell: the raster's periodicity is an index shift of a whole cell whatever the
+lattice does with those indices, so the metric never enters the stitch. (An earlier probe that
+matched opposite edges paired 2 of 4 ends on a square-cell stripe and 0 of 8 at 20 degrees. The
+rule was fine; the window was wrong.)
+
+**This regime is ordinary rather than exotic on a skewed cell**, which is what makes it worth
+the machinery: at 20 degrees with `|a1| = |a2| = 640` the lattice rows sit 219 apart, so any
+circle past radius 109 percolates — and the analytic path refuses such a shape outright, so the
+raster is the only route to it.
+
+Two further rules were needed, and neither is about percolation. Both are stated at their
+constants in `wavebit/_core/normal_methods.py`, with the mutation numbers.
+
+* **`_resample` subdivides each segment; it does not walk arc length.** A reassembled curve has
+  no intrinsic starting vertex. Arc-length resampling from one end was only ever covariant
+  because contourpy's entry is the first crossing its raster scan meets — a geometric point of
+  the loop, which moves with the loop — and a curve stitched from fragments starts wherever the
+  seam cut it instead. Subdividing each segment into `ceil(len/h)` equal parts has no phase to
+  get wrong, costs about one extra sample per vertex (753 -> 878 on a radius-30 disc), and has
+  the side benefit that the sampled polyline is exactly the extracted one, with no chord cutting
+  a corner. Putting the arc-length spelling back into the finished construction breaks 8 of the
+  14 scenes swept: 7.0e-3 on the overlapping circle, 1.2e-3 on a disc merely straddling the
+  seam.
+* **The nearest-sample query is answered in a slightly sheared metric.** A sample set with no
+  phase in it inherits the raster's symmetries, so on the medial axis two samples are equidistant
+  *exactly* rather than nearly, and the last bit decides which one wins. A fixed, translation
+  invariant, infinitesimal perturbation makes that choice single valued — Simulation of
+  Simplicity, Edelsbrunner & Mücke, ACM TOG **9**, 66 (1990). Without it, seven of fourteen
+  scenes move: a cross 1.8e-3 on 63 of 63 rolls, a small disc 4.2e-4 on 57, a saddle 2.9e-4 on
+  8, an annulus 9.9e-5 on 48. Every value from 1e-13 to 1e-3 gives an identical clean sweep,
+  which is what says it is a round-off device and not a tuned knob.
+
+The second one settles the **medial-axis** residual this file carried as a strict xfail from
+2026-08-29, on the very rolls that pin it: `sum(T)` on an annulus 1.19e-5 -> 4.67e-14 and on a
+pair of discs 3.16e-4 -> 1.61e-12, and 0 of 1023 rolls on both under the translation identity.
+Be exact about what that means. The direction on the medial axis is still undefined
+and the answer there is still arbitrary — what is no longer arbitrary is *which* arbitrary
+answer, which is all covariance asks for. The accuracy half is still the circular-polarization
+limit S4 and fmmax use, and it is still not landed.
+
+Accuracy stayed put and cost improved. The angular error against an exact circle moves within
+its own third digit (1.33 -> 1.37 at N=64, 0.37 -> 0.37 at N=512) with no trend, and the
+skewed-disc table likewise. Both A/B tables were re-taken rather than assumed, new against old
+through one harness: the circle table's `contour` column is updated above (and its `distance`
+column, which this change cannot touch, reproduces the printed numbers exactly, which is what
+says the harness is the one those numbers came from); the rotated-rectangle table is left as
+printed, because that harness does not reproduce its `distance` column either, and the
+new-against-old deltas there are 3.03e-03 -> 3.11e-03 and 1.40e-03 -> 1.42e-03 at the two
+cells `contour` wins. On a
+non-percolating scene the construction reads ~20% more samples (753 -> 900 on a radius-30 disc
+in a 64 cell) for no measurable wall-time change; on a percolating one it is **several times
+faster**, because the old window handed the kd-tree three periods of every fragment:
+
+| scene (20-degree cell) | before | after |
+|---|---|---|
+| circle overlapping its images, N=128 | 601 ms | 84 ms |
+| the same, N=512 | 7.00 s | 1.96 s |
+| percolating stripe, N=128 | 275 ms | 38 ms |
+| the same, N=512 | 2.47 s | 0.42 s |
+
 
 ## Semantics worth knowing
 
@@ -478,11 +578,11 @@ between `a1` and `a2`; 90 is the square cell the tables further up measure.
 
 | gamma | `distance` | `contour` | `spectral` | `smooth` |
 |---|---|---|---|---|
-| 90 (N=128) | 15.61 | 0.96 | 0.75 | 0.28 |
-| 60 (N=128) | 18.18 | 0.98 | 0.89 | 0.16 |
+| 90 (N=128) | 15.61 | 0.97 | 0.75 | 0.28 |
+| 60 (N=128) | 18.18 | 1.00 | 0.89 | 0.16 |
 | 30 (N=128) | 23.69 | 1.31 | 0.96 | 0.48 |
-| 90 (N=256) | 15.01 | 0.90 | 0.58 | 0.17 |
-| 60 (N=256) | 17.50 | 0.68 | 0.37 | 0.12 |
+| 90 (N=256) | 15.01 | 0.93 | 0.58 | 0.17 |
+| 60 (N=256) | 17.50 | 0.66 | 0.37 | 0.12 |
 | 30 (N=256) | 24.78 | 0.55 | 0.21 | 0.13 |
 
 The shape of it: `distance` *grows* with shear (15.6 -> 23.7) while the three replacements

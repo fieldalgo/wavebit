@@ -154,7 +154,7 @@ are independent and multiply.
 | `factorization='nvf'`, sampled or integrated | supported | — |
 | analytic shapes, summed | supported | lengths are absolute Cartesian; nothing deforms |
 | analytic shapes, painted **overlap** | supported | the clipper is Cartesian; only the periodic images and the transform needed the basis |
-| every `normal_method` on a raster | supported | since 2026-08-21; **use `'contour'`** for accuracy, **not** where a feature overlaps its own images — see below |
+| every `normal_method` on a raster | supported | since 2026-08-21; **use `'contour'`** for accuracy, including where a feature overlaps its own images (2026-09-01) — see below |
 | field reconstruction | supported | output grid is indexed by `(v, u)`, not `(y, x)` — see below |
 | `factorization='li'` on a raster | **refused** | see below |
 
@@ -378,50 +378,53 @@ also wrong — a raster whose pixels are not square in real space; see
 
 ## Which `normal_method` to use, and what the default costs here
 
-> **`'contour'` is the one raster construction that is not fully periodic, and a skewed cell is
-> where what remains of that bites.** Rolling a raster -- the same structure written from a
-> different corner, which every answer must be invariant under -- moved `sum(T)` by 3.9e-4 on a
-> square cell and 9.7e-4 on a 2:1 cell, where `'distance'`, `'spectral'` and `'smooth'` held at
-> 4e-14. Two of the three causes are fixed; read the rest of this block for which, because the
-> version of it that shipped before 2026-09-01 was both stale and wrong about its own scene. The cause was `_two_phase_indicator` reading the background off the
-> *corner pixel*, which a translation can move inside the feature; it marks the smaller phase
-> now. It was **not** `_resample`'s phase, which is what this caveat said until then, and it
-> was not a large-feature problem either.
+> **`'contour'` used to be the one raster construction that was not fully periodic, and a
+> skewed cell was where that bit hardest. It is periodic now (2026-09-01), and this block is
+> kept because it was wrong twice before it was right.** Rolling a raster -- the same structure
+> written from a different corner, which every answer must be invariant under -- moved `sum(T)`
+> by 3.9e-4 on a square cell and 9.7e-4 on a 2:1 cell, where `'distance'`, `'spectral'` and
+> `'smooth'` held at 4e-14. There were four causes and they were found one at a time.
 >
-> **The skewed-cell half of this caveat was stale, and its scene was not what it said.** It
-> read: "a disc of radius 30 in a 64-px hex cell still moves by 2.3e-4 over ten rolls", blamed
-> the **medial axis**, and told you to prefer `'spectral'` on a skewed cell. Two things were
-> wrong with it.
+> *The indicator.* `_two_phase_indicator` read the background off the **corner pixel**, which a
+> translation can move inside the feature; it marks the smaller phase now. It was **not**
+> `_resample`'s phase, which is what this caveat said until 2026-08-29, and it was not a
+> large-feature problem either.
 >
-> *The number does not reproduce.* On that scene, today: `'contour'` **8.1e-15 on 0 of 63
-> rolls**, the annulus 6.1e-15 on 0 of 63, against the 2.3e-4 and 2.2e-3 the text quoted.
-> `9a84f60` (the tile ring is read from the cell) and `876c1c4` (the fold landed the
-> representative on the origin rather than on the cell) fixed it and this block was never
-> re-taken. There is no skewed-cell preference for `'spectral'` left to state.
+> *The tile ring, and the fold.* `9a84f60` reads the ring from the cell and `876c1c4` lands the
+> folded representative on the cell rather than on the origin. Together these fixed the skewed
+> cell outright, and this block went on telling you to prefer `'spectral'` there for two days
+> after they landed: the scene it quoted ("a disc of radius 30 in a 64-px hex cell still moves
+> by 2.3e-4") measures **8.1e-15 on 0 of 63 rolls** today, and the annulus 6.1e-15.
 >
-> *The scene was an ellipse.* "A disc of radius 30" was `_disc(X, Y)` in
+> *The scene was an ellipse.* That "disc of radius 30" was `_disc(X, Y)` in
 > `tests/test_nvf_lattice_translation.py`, whose `X` and `Y` were raster **indices**. The raster
 > is read at `(i + 0.5)/Nx * a1 + (j + 0.5)/Ny * a2`, so that mask is the image of a disc under
-> the basis: **1.73:1 at 60 degrees, 3.73:1 at 30, 5.67:1 at 20.** The helper is `_index_disc(U, V)`
-> since `c59d221` and its docstring says so. That does not invalidate what the tests measure --
-> periodicity is a property of the raster and of the code that reads it, not of the shape being
-> round -- but it does invalidate calling the scene a disc.
+> the basis: **1.73:1 at 60 degrees, 3.73:1 at 30, 5.67:1 at 20.** The helper is
+> `_index_disc(U, V)` since `c59d221` and its docstring says so. That does not invalidate what
+> the tests measure -- periodicity is a property of the raster and of the code that reads it,
+> not of the shape being round -- but it does invalidate calling the scene a disc.
 >
-> **The accuracy tables below are not affected**, and that was checked rather than assumed: they
-> come from `tests/test_nvf_normal_methods.py::skewed_disc`, which builds through `wavebit.grid`
-> with a minimum-image membership test and is a genuine Cartesian circle. Every printed digit
-> reproduces.
+> *Percolation, which is the one this page named as open until 2026-09-01.* A level set that
+> crosses the cell is closed on the torus, but `_contour_polylines` handed contourpy a finite
+> 3x3 rectangle, and the cut fragments got neither the fold nor the dedup that closed loops
+> got -- and a single surviving closed loop discarded every one of them, so a stripe beside a
+> disc lost its boundary from the field entirely. Measured on a Cartesian circle large enough
+> to touch its neighbours at 20 degrees: **8.8e-03 on 63 of 63 rolls**. The level set is now
+> extracted through one period with the seam duplicated and stitched back together across it,
+> which closes every component on the torus and leaves no fragment to prefer: **2.2e-15 on 0 of
+> 63 rolls** on the same scene, and 0 of 1023 on every scene of the wider sweep.
 >
-> **What is still open** is the *open-curve* path, not the medial axis: a level set that crosses
-> the cell is closed on the torus, but `_contour_polylines` hands contourpy a finite 3x3
-> rectangle and the cut fragments get neither the fold nor the dedup that closed loops get.
-> Measured on a Cartesian circle large enough to touch its neighbours at 20 degrees:
-> `'contour'` **1.0e-01 on 63 of 63 rolls**, where `'distance'`, `'spectral'` and `'smooth'`
-> hold at 4e-15. Pinned by `test_a_percolating_level_set_is_periodic` and
-> `test_a_closed_loop_does_not_delete_the_percolating_interface_beside_it`, both
-> `xfail(strict=True)`. **Prefer `'distance'`, `'spectral'` or `'smooth'` where a feature
-> overlaps its own periodic images** -- on a strongly skewed cell that is the ordinary case, not
-> an exotic one: at 20 degrees with `|a1| = |a2| = 640` any circle of radius over 109 is in it.
+> **There is no `normal_method` preference left to state for an oblique cell**, and there is
+> none for a feature that overlaps its own periodic images either -- which matters because on a
+> strongly skewed cell that is the ordinary case rather than an exotic one: at 20 degrees with
+> `|a1| = |a2| = 640` any circle of radius over 109 is in it, and the analytic path refuses such
+> a shape outright, so the raster is the only route to it.
+>
+> **What is still open** is not periodicity but *accuracy on the medial axis*: where two points
+> of the level set are exactly equidistant from a pixel the direction is undefined, and
+> `'contour'` now answers with a stable arbitrary choice rather than an unstable one. The real
+> answer is the circular-polarization limit S4 and fmmax use, and it is not landed; see
+> `tests/test_nvf_lattice_translation.py::test_contour_is_periodic_where_the_medial_axis_is_reachable`.
 
 **Use `normal_method='contour'`.** The paragraph above describes the *default* construction,
 `'distance'`, and it is the least accurate of the four the raster path offers. A skew makes it
