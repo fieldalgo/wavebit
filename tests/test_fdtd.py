@@ -1274,18 +1274,26 @@ def test_psi_and_tetm_together_are_refused():
                        resolution=0.05, n_periods=20)
 
 
-def test_a_conical_mount_off_normal_is_refused_by_name():
-    """`theta != 0` with `psi` is refused, and the message says what is missing rather than that.
+def test_a_conical_mount_off_normal_takes_the_six_component_stepper():
+    """`theta != 0` with `psi` was refused until the stepper was wired; it is answered now.
 
-    At `theta = 0` a conical mount is two decoupled scalar solves wearing a rotated output
-    frame. Away from normal `ky != 0` couples all six components, and no combination of TE and
-    TM runs reproduces that -- so returning the normal-incidence answer there would be a
-    plausible wrong number, which is what every refusal in this module exists to prevent.
+    The refusal this replaces said the coupled operator was written but had no extraction. It
+    also had no source: the auxiliary grid was built without `ky` or a drive, so the TFSF plane
+    injected a non-conical wave into it. Both are wired, and the route taken here is the
+    six-component one rather than the `theta = 0` projection -- asserted on `ky`, since the two
+    paths agree at `ky = 0` by construction and only part company away from it.
     """
-    with pytest.raises(ValueError, match='Only theta = 0 is answered'):
-        _ = solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
-                       period=[PERIOD], wavelength=WL, theta=0.2, psi=0.3,
-                       phi=np.deg2rad(30.0), resolution=0.05, n_periods=20)
+    from wavebit._core.fdtd import _Grid
+    grid = _Grid(WL, PERIOD, np.asarray(_grating(), dtype=complex)[:, 0, :], [THICK],
+                 EPS_TOP, EPS_BOT, 0.05, 12, 0.99, True,
+                 theta=np.deg2rad(30.0), phi=np.deg2rad(40.0))
+    assert grid.ky_inc != 0.0, 'the oblique conical path must reach a nonzero ky'
+
+    result = _oblique_fdtd(resolution=0.06, n_periods=80)
+    assert result.s_inc is not None and result.p_inc is not None, (
+        'both eigenpolarisations come back from a conical run')
+    total = float(np.asarray(result.given.R).sum() + np.asarray(result.given.T).sum())
+    assert abs(total - 1.0) < 2e-2, f'R + T = {total}' 
 
 
 def test_tetm_with_an_azimuth_is_still_refused_and_points_at_psi():
@@ -1348,3 +1356,156 @@ def test_the_auxiliary_grid_takes_a_dimensional_ky():
     out = _time_loop(grid, 'te', int(np.ceil(60.0 * WL / grid.dt)), np.array([WL]), leg='s')
     assert np.all(np.isfinite(out['dft_ref'])), 'the conical run went non-finite'
     assert float(np.abs(out['dft_ref'][0]).max()) < 1e3, 'the conical run diverged'
+
+
+# ---------------------------------------------------------------------------------------
+# 11. a conical mount away from normal -- the six-component stepper, end to end
+# ---------------------------------------------------------------------------------------
+
+OBLIQUE = dict(theta=np.deg2rad(30.0), phi=np.deg2rad(40.0), psi=np.deg2rad(30.0))
+
+
+def _oblique_fdtd(resolution=0.1, n_periods=120, **over):
+    kw = dict(OBLIQUE, **over)
+    return solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+                      period=[PERIOD], wavelength=WL, resolution=resolution,
+                      n_periods=n_periods, **kw)
+
+
+def _oblique_rcwa(fto=40, **over):
+    kw = dict(OBLIQUE, **over)
+    return wavebit.rcwa(backend=0, wavelength=WL, period=[PERIOD],
+                        truncation_order=dict(x=fto, y=0), top=EPS_TOP, bot=EPS_BOT,
+                        structure=_grating(), thickness=[THICK], **kw).solve()
+
+
+def test_the_oblique_conical_mount_matches_the_rcwa_path():
+    """theta = 30 deg, phi = 40 deg: every channel of every order, on all three legs.
+
+    This is the six-component stepper end to end -- conical source, coupled operator, two
+    transverse monitors, per-order s/p projection. Against `solve_1d_conical` at a 10 nm grid
+    the worst efficiency gap is 2.8e-3 and the worst amplitude gap 1.2e-2, and both fall at
+    second order (1.85 / 1.88 on efficiency, 1.98 / 1.79 on amplitude over dz = 20 / 10 / 5 nm)
+    -- so the residual is the Yee grid's rather than the projection's.
+    """
+    got, ref = _oblique_fdtd(), _oblique_rcwa()
+    labels = np.asarray(got.orders_u).ravel()
+    assert set(int(m) for m in labels) >= {-1, 0}, f'window {labels} misses a propagating order'
+    for leg in ('s_inc', 'p_inc', 'given'):
+        for name in ('R_s', 'R_p', 'T_s', 'T_p'):
+            a, b = _channels(got, leg, name), _channels(ref, leg, name)
+            for m in a:
+                assert float(np.real(a[m])) == pytest.approx(float(np.real(b[m])), abs=8e-3), (
+                    f'{leg}.{name}[{m}]')
+    total = float(np.asarray(got.given.R).sum() + np.asarray(got.given.T).sum())
+    assert abs(total - 1.0) < 5e-3, f'R + T = {total}'
+
+
+def test_the_mixed_leg_is_what_sees_the_per_leg_signs():
+    """The pure legs are sign-blind by construction; `given` is the only instrument here.
+
+    Each leg is normalised by its OWN incident amplitude, so a global sign on either one leaves
+    every `|r|**2` in that leg exactly right. It shows up only where the two are added.
+    Measured, with the three leg signs wrong: `s_inc` and `p_inc` agreed with RCWA to 2e-3 in
+    every channel while `given.R_s[-1]` read 0.1795 against a true 0.0197 -- and `R + T` was
+    1.0005 throughout.
+
+    The assertion is on the complex amplitudes, and it has to be: `given.R_s[-1]` is smaller
+    than either pure leg's, which is destructive interference between them, and no combination
+    of the two efficiencies can produce it.
+    """
+    got, ref = _oblique_fdtd(), _oblique_rcwa()
+    for name in ('r_s', 'r_p', 't_s', 't_p'):
+        a, b = _channels(got, 'given', name), _channels(ref, 'given', name)
+        for m in a:
+            assert abs(complex(a[m]) - complex(b[m])) < 3e-2, f'given.{name}[{m}]'
+
+    # The cross term is the whole content: R_s[-1] on the mixed leg is BELOW both pure legs.
+    mixed = float(np.real(_channels(got, 'given', 'R_s')[-1]))
+    pure = [float(np.real(_channels(got, leg, 'R_s')[-1])) for leg in ('s_inc', 'p_inc')]
+    assert mixed < min(pure), (
+        f'R_s[-1] mixed {mixed} against pure {pure}; an incoherent sum cannot go below both, '
+        f'so this order is where a lost relative phase shows')
+
+
+def test_the_p_channel_carries_the_per_order_secant():
+    """`E . p_hat` is the transverse projection times `n / kz_m`, not the projection.
+
+    `p_hat = k_hat x s_hat` has a `z` component, and eliminating `E_z` through `E . k_hat = 0`
+    leaves `E . p_hat = -+ (n / kz_m) (c Ex + s Ey)`. That factor is a per-order
+    `1 / cos(theta_m)`, equal to 1 only for the specular order at normal incidence -- which is
+    exactly the case the `theta = 0` path covered, and why it could not have found this.
+
+    Pinned as a ratio between two orders so the test states the factor rather than a number:
+    at this incidence `kz` differs enough between `m = 0` and `m = -1` that dropping the
+    secant changes their `r_p` ratio by more than 20 %.
+    """
+    got = _oblique_fdtd()
+    ref = _oblique_rcwa()
+    a = _channels(got, 's_inc', 'r_p')
+    b = _channels(ref, 's_inc', 'r_p')
+    got_ratio = abs(complex(a[-1]) / complex(a[0]))
+    ref_ratio = abs(complex(b[-1]) / complex(b[0]))
+    assert got_ratio == pytest.approx(ref_ratio, rel=5e-2), (
+        f'|r_p[-1]/r_p[0]| = {got_ratio} against {ref_ratio}; the per-order n/kz is what sets '
+        f'this ratio, and a projection without it is a pure amplitude error no efficiency or '
+        f'energy check can see')
+
+
+def test_the_order_window_narrows_with_ky():
+    """`ky` is one scalar for every order, so it does not shift the window -- it narrows it.
+
+    An order propagates where `kx_m**2 + ky**2 <= n**2`, and `ky` eats into the budget `kx_m`
+    has left. `_half_space_kz` has to subtract it too, or the window and the extraction end up
+    on different order sets: at theta = 60 / phi = 30 a ky-blind `kz` calls order -4
+    propagating (0.39965 real) where the truth is evanescent (0.16667j), and power appears out
+    of an order that carries none.
+    """
+    from wavebit._core.fdtd import _propagating_window, _half_space_kz
+    wl, period, n_sq = WL, PERIOD, 4.0
+    kx_inc, ky = 2.0 * np.sin(np.deg2rad(60.0)) * np.cos(np.deg2rad(30.0)), \
+                 2.0 * np.sin(np.deg2rad(60.0)) * np.sin(np.deg2rad(30.0))
+    centre, half = _propagating_window(wl, period, 1.0, n_sq, kx_inc=kx_inc, ky_inc=ky)
+    m = np.arange(centre - half, centre + half + 1)
+    kx = kx_inc + m * wl / period
+    truth = kx ** 2 + ky ** 2 <= n_sq + 1e-12
+    kz = _half_space_kz(n_sq, kx, ky)
+    assert np.all((np.abs(np.imag(kz)) < 1e-12) == truth), (
+        f'the window and kz disagree about which orders propagate: kz={kz}, truth={truth}')
+    wider, _ = _propagating_window(wl, period, 1.0, n_sq, kx_inc=kx_inc, ky_inc=0.0)
+    _, half0 = _propagating_window(wl, period, 1.0, n_sq, kx_inc=kx_inc, ky_inc=0.0)
+    assert half <= half0, f'ky must narrow the window, not widen it ({half} vs {half0})'
+
+
+def test_the_conical_amplitudes_converge_at_second_order():
+    """Two resolutions, because a first-order defect is invisible to any single one.
+
+    `Ex` sits on the x half-steps and `Ey` on the nodes, so the two monitors need two
+    demodulation kernels. Using one is a per-order phase `exp(-i k0 kx_m dx/2)` -- **exactly
+    first order in dx**, and mostly cancelled in `|r|**2`. Measured, the single-kernel version
+    moves the amplitudes by 6.7e-2 / 3.3e-2 / 1.6e-2 over dz = 20 / 10 / 5 nm, scaling as
+    dx**1.0 to two digits, and **every fixed-tolerance test in this file passed with it in
+    place** -- including the amplitude ones, because the error at 10 nm sits just under a
+    tolerance that has to accommodate the true 1.2e-2.
+
+    So the assertion is on the RATIO between two grids, which is what separates a second-order
+    scheme from a first-order one no matter where the tolerance is set. The true ratio here is
+    3.9 (order 1.98); with one kernel it falls to about 2.
+    """
+    ref = _oblique_rcwa()
+
+    def gap(resolution):
+        got = _oblique_fdtd(resolution=resolution, n_periods=140)
+        worst = 0.0
+        for leg in ('s_inc', 'p_inc', 'given'):
+            for name in ('r_s', 'r_p', 't_s', 't_p'):
+                a, b = _channels(got, leg, name), _channels(ref, leg, name)
+                worst = max(worst, max(abs(complex(a[m]) - complex(b[m])) for m in a))
+        return worst
+
+    coarse, fine = gap(0.05), gap(0.1)
+    ratio = coarse / fine
+    assert ratio > 3.2, (
+        f'amplitude error {coarse:.3e} -> {fine:.3e} on halving dz is a ratio of {ratio:.2f}, '
+        f'an order of {np.log2(ratio):.2f}. Second order is 4; a ratio near 2 means a '
+        f'first-order term, and the half-cell x offset on the Ex monitor is where to look.')

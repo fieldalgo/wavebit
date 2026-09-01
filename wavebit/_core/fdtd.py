@@ -974,6 +974,12 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None):
     n_f = len(freq)
     dft_ref = np.zeros((n_f, nx), dtype=complex)
     dft_trn = np.zeros((n_f, nx), dtype=complex)
+    # The second transverse component, `Ex`, and its own incident reference. A conical mount
+    # needs both because the s and p channels of an order are two projections of the same
+    # transverse vector -- at ky = 0 one component determines the other and these stay unused.
+    dft_ref_x = np.zeros((n_f, nx), dtype=complex)
+    dft_trn_x = np.zeros((n_f, nx), dtype=complex)
+    inc_z0_x = np.zeros(n_f, dtype=complex)
     inc_ref = np.zeros(n_f, dtype=complex)
     inc_trn = np.zeros(n_f, dtype=complex)
     inc_z0 = np.zeros(n_f, dtype=complex)
@@ -1048,7 +1054,17 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None):
         # --- monitors -------------------------------------------------------------------
         # The e^{-iwt} phasor is recovered with an exp(+i w t) kernel; `np.fft.fft` over the
         # time axis applies the opposite one and would conjugate every amplitude.
-        if tetm == 'te':
+        if conical:
+            # `Ey` and `Ex` are the pair a conical mount needs, and they are also the cheapest
+            # one available: both sit on the z NODES, so they share one z offset and one time
+            # stamp. The obvious pair (Ey, Hy) does not -- `Hy` is a half cell down in z and
+            # stamped half a step back in time, so it would need two of each.
+            f_ref, f_trn = ey[grid.k_ref], ey[grid.k_trn]
+            g_ref, g_trn = ex[grid.k_ref], ex[grid.k_trn]
+            i_z0, j_z0 = inc.ey[grid.k_z0], inc.ex[grid.k_z0]
+            i_ref, i_trn = inc.ey[grid.k_ref], inc.ey[grid.k_trn]
+            t_now = (step + 1) * dt
+        elif tetm == 'te':
             f_ref, f_trn = ey[grid.k_ref], ey[grid.k_trn]
             i_ref, i_trn, i_z0 = (inc.e[grid.k_ref], inc.e[grid.k_trn], inc.e[grid.k_z0])
             t_now = (step + 1) * dt
@@ -1063,8 +1079,14 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None):
         inc_ref += kernel * i_ref
         inc_trn += kernel * i_trn
         inc_z0 += kernel * i_z0
+        if conical:
+            dft_ref_x = dft_ref_x + kernel[:, None] * g_ref[None, :]
+            dft_trn_x = dft_trn_x + kernel[:, None] * g_trn[None, :]
+            inc_z0_x += kernel * j_z0
 
         amplitude = float(np.abs(f_trn).max())
+        if conical:
+            amplitude = max(amplitude, float(np.abs(g_trn).max()))
         peak = max(peak, amplitude)
         tail = amplitude
 
@@ -1073,8 +1095,10 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None):
     # It cancels in |r|**2, so the efficiencies converge at second order while the amplitudes
     # do not -- measured 4.3e-2 on `r_p` at a 10 nm grid against 1.4e-3 on `R`, falling only
     # as dz**0.6.
-    offset = 0.5 if tetm == 'tm' else 0.0
-    return {'dft_ref': dft_ref, 'dft_trn': dft_trn, 'tetm': tetm,
+    # `Ey` and `Ex` both sit on the z nodes, so a conical run's offset is zero for both.
+    offset = 0.0 if conical else (0.5 if tetm == 'tm' else 0.0)
+    return {'dft_ref': dft_ref, 'dft_trn': dft_trn, 'tetm': tetm, 'conical': conical,
+            'dft_ref_x': dft_ref_x, 'dft_trn_x': dft_trn_x, 'inc_z0_x': inc_z0_x,
             'wavelengths': wavelengths,
             'inc_ref': inc_ref, 'inc_trn': inc_trn, 'inc_z0': inc_z0,
             'z_ref': grid.z_of(grid.k_ref + offset),
@@ -1087,9 +1111,20 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None):
 # order extraction
 # ---------------------------------------------------------------------------------------
 
-def _half_space_kz(eps, kx):
-    """``kz`` on wavebit's half-space branch: the principal root of ``eps - kx**2``."""
-    return np.sqrt(np.asarray(eps, dtype=complex) - np.asarray(kx, dtype=complex) ** 2)
+def _half_space_kz(eps, kx, ky=0.0):
+    """``kz`` on wavebit's half-space branch: the principal root of ``eps - kx**2 - ky**2``.
+
+    ``ky`` is one scalar for every order -- the structure is invariant along ``y``, so nothing
+    can change it -- but it is NOT optional in the way a shared constant sometimes is. It sets
+    which orders propagate: at ``theta = 60 deg, phi = 30 deg`` dropping it makes ``kz_inc``
+    0.66144 where the truth is 0.5, and calls order ``-4`` propagating (``kz`` real, 0.39965)
+    where it is evanescent (0.16667j). `_propagating_window` already subtracts it, so a
+    ky-blind ``kz`` here puts the two halves of the extraction on different order sets and the
+    symptom is power appearing out of an evanescent order.
+    """
+    return np.sqrt(np.asarray(eps, dtype=complex)
+                   - np.asarray(kx, dtype=complex) ** 2
+                   - np.asarray(ky, dtype=complex) ** 2)
 
 
 def _propagating_window(wavelength, period, n_top_sq, n_bot_sq, kx_inc=0.0, ky_inc=0.0):
@@ -1201,6 +1236,106 @@ def _combine_at_normal_incidence(grid, sub_te, sub_tm, kx, wavelength, phi, a_s,
 
     R_s, R_p = sq(r_s) * fr, sq(r_p) * fr
     T_s, T_p = sq(t_s) * ft_s, sq(t_p) * ft_p
+    row = lambda a: np.asarray(a)[None, :]
+    return ResultSub(row(r_s), row(r_p), row(t_s), row(t_p),
+                     row(R_s + R_p), row(R_s), row(R_p),
+                     row(T_s + T_p), row(T_s), row(T_p))
+
+
+def _extract_conical(grid, out, half_width, index, centre, sigma=(-1.0, 1.0, -1.0)):
+    """Per-order s/p amplitudes for a conical mount, from the two transverse electric monitors.
+
+    **The p channel is not a projection of the transverse field, it is that projection times
+    ``n / kz_m``,** and getting only the projection conserves energy exactly while every
+    amplitude is wrong by a per-order factor. The algebra, once, because it is the whole
+    function: with ``(c, s) = (cos varphi_m, sin varphi_m)`` and ``k_par`` the in-plane
+    magnitude,
+
+        s_hat  = (-s, c, 0)                              -- the same for every leg
+        p_hat  = k_hat x s_hat = (-+ kz c, -+ kz s, k_par) / n
+
+    so ``p_hat``'s transverse part reverses with the propagation direction and its ``z`` part
+    does not. A plane wave in the medium has ``E . k_hat = 0``, which fixes ``E_z`` from the
+    pair we measure; substituting it and using ``kz**2 + k_par**2 = n**2`` collapses the whole
+    thing to
+
+        E . p_hat = -+ (n / kz_m) * (c Ex + s Ey).
+
+    That ``n / kz_m`` is a per-order ``1 / cos(theta_m)``. It is 1 only for the specular order
+    at normal incidence, which is exactly the case the ``theta = 0`` path already covered.
+
+    ``sigma`` carries the three leg signs -- incident, reflected, transmitted -- which the
+    algebra above fixes only up to wavebit's published convention. They are measured against
+    `solve_1d_conical` amplitudes rather than derived, on the grounds that every one of them is
+    invisible to ``R``, ``T`` and ``R + T``.
+    """
+    nx = grid.nx
+    wavelength = float(out['wavelengths'][index])
+    if half_width >= nx // 2:
+        raise ValueError(
+            f'fdtd: {2 * half_width + 1} orders asked of a {nx}-cell grid. The x transform '
+            f'resolves |m| < {nx // 2}; beyond that an order aliases onto another one.')
+
+    m = np.arange(centre - half_width, centre + half_width + 1)
+    k0 = 2.0 * np.pi / wavelength
+    scale = wavelength / grid.wavelength      # the grid holds the PHYSICAL kx, ky fixed
+    kx_inc, ky = grid.kx_inc * scale, grid.ky_inc * scale
+    kx = kx_inc + m * wavelength / grid.period
+
+    # `Ey` sits on the x nodes, `Ex` on the half-steps -- two kernels, not one.
+    cells = np.arange(nx)
+    ker_y = np.exp(-1j * k0 * kx[:, None] * (cells[None, :] * grid.dx)) / nx
+    ker_x = np.exp(-1j * k0 * kx[:, None] * ((cells[None, :] + 0.5) * grid.dx)) / nx
+
+    n_top, n_bot = np.sqrt(grid.n_top_sq), np.sqrt(grid.n_bot_sq)
+    kz_top = _half_space_kz(grid.n_top_sq, kx, ky)
+    kz_bot = _half_space_kz(grid.n_bot_sq, kx, ky)
+    kz_inc = _half_space_kz(grid.n_top_sq, kx_inc, ky)
+
+    c_m, s_m = _order_frame(kx, np.full_like(kx, ky), grid.phi)
+    c_m, s_m = np.real(c_m), np.real(s_m)
+    c_i, s_i = float(np.cos(grid.phi)), float(np.sin(grid.phi))
+
+    sig_i, sig_r, sig_t = sigma
+    z_ref, z_trn, z_inc = out['z_ref'], out['z_trn'], out['z_inc']
+
+    # The incident wave, read at z = 0 where the amplitudes are referenced -- one leg of the
+    # numerical-dispersion phase rather than two. Its own frame is the azimuth `phi`.
+    e_y0 = out['inc_z0'][index] * np.exp(-1j * k0 * kz_inc * z_inc)
+    e_x0 = out['inc_z0_x'][index] * np.exp(-1j * k0 * kz_inc * z_inc)
+    a_s_inc = -s_i * e_x0 + c_i * e_y0
+    a_p_inc = sig_i * (n_top / kz_inc) * (c_i * e_x0 + s_i * e_y0)
+    # Whichever channel this leg was driven in is the one that normalises it. Dividing by the
+    # other is dividing by round-off.
+    a_inc = a_s_inc if abs(a_s_inc) >= abs(a_p_inc) else a_p_inc
+
+    def face(dft_y, dft_x, kz, n_half, z_face, z_shift, sig):
+        e_y = (ker_y @ dft_y) * np.exp(1j * k0 * kz * z_face * z_shift)
+        e_x = (ker_x @ dft_x) * np.exp(1j * k0 * kz * z_face * z_shift)
+        amp_s = (-s_m * e_x + c_m * e_y) / a_inc
+        amp_p = sig * (n_half / kz) * (c_m * e_x + s_m * e_y) / a_inc
+        return amp_s, amp_p
+
+    r_s, r_p = face(out['dft_ref'][index], out['dft_ref_x'][index],
+                    kz_top, n_top, z_ref, 1.0, sig_r)
+    t_s, t_p = face(out['dft_trn'][index], out['dft_trn_x'][index], kz_bot, n_bot,
+                    z_trn - grid.total_thickness, -1.0, sig_t)
+
+    # An order evanescent in a half-space arrives already decayed; undoing that amplifies
+    # round-off. R is identically zero for these, so nothing downstream would notice.
+    for amp, kz, depth in ((r_s, kz_top, abs(z_ref)), (r_p, kz_top, abs(z_ref)),
+                           (t_s, kz_bot, abs(z_trn - grid.total_thickness)),
+                           (t_p, kz_bot, abs(z_trn - grid.total_thickness))):
+        amp[np.exp(k0 * np.abs(np.imag(kz)) * depth) > MAX_DEREFERENCE_GAIN] = np.nan
+
+    # On the PUBLISHED amplitudes both channels take the same weight on each leg -- the s/p
+    # asymmetry lives on the internal boundary variables and is cancelled by the per-leg
+    # conversion. Measured on the RCWA path to 5e-16.
+    w_r = np.real(kz_top) / np.real(kz_inc)
+    w_t = np.real(kz_bot) / np.real(kz_inc)
+    sq = lambda a: np.nan_to_num(np.real(a * np.conj(a)), nan=0.0)
+    R_s, R_p = sq(r_s) * w_r, sq(r_p) * w_r
+    T_s, T_p = sq(t_s) * w_t, sq(t_p) * w_t
     row = lambda a: np.asarray(a)[None, :]
     return ResultSub(row(r_s), row(r_p), row(t_s), row(t_p),
                      row(R_s + R_p), row(R_s), row(R_p),
@@ -1367,6 +1502,76 @@ def _check_dispersion(dispersion, poles, raster):
     return dispersion, checked
 
 
+def _solve_conical_oblique(psi, phi, theta, return_diagnostics, **kw):
+    """A conical mount away from normal: the six-component stepper, run once per eigenpolarisation.
+
+    At ``ky != 0`` the two triples are coupled, so there is no pair of scalar solves to combine
+    -- each leg is its own full run. The s and p directions are the two eigenpolarisations of a
+    uniform medium at fixed ``(kx, ky)``, so a leg driven in one stays in it on the way in, and
+    the grating is what mixes them. `given` is their combination, and linearity is exact
+    because the operator is linear and the two runs share every coefficient.
+    """
+    legs = {}
+    for leg in ('s', 'p'):
+        legs[leg] = solve_fdtd(tetm='te', theta=theta, phi=phi, _leg=leg,
+                               return_diagnostics=True, **kw)
+    (s_res, s_diag), (p_res, _) = legs['s'], legs['p']
+    single = not isinstance(s_res, list)
+    s_list = [s_res] if single else s_res
+    p_list = [p_res] if single else p_res
+
+    if s_list[0].order_window != p_list[0].order_window:
+        raise AssertionError(
+            f'fdtd: the two legs disagree about the order window, {s_list[0].order_window} '
+            f'against {p_list[0].order_window}.')
+    a_s, a_p = np.sin(psi), np.cos(psi)
+
+    out = []
+    for s_one, p_one in zip(s_list, p_list):
+        mix = ResultSub(*[a_s * np.asarray(getattr(s_one.given, n))
+                          + a_p * np.asarray(getattr(p_one.given, n))
+                          for n in ('r_s', 'r_p', 't_s', 't_p')],
+                        *[None] * 6)
+        mix = _efficiencies_from(mix, s_one, p_one, a_s, a_p)
+        for sub in (mix, s_one.given, p_one.given):
+            check_physical(np, np.asarray(sub.R), np.asarray(sub.T),
+                           np.sqrt(s_diag['grid'].n_top_sq))
+        out.append(Result(given=mix, s_inc=s_one.given, p_inc=p_one.given,
+                          order_window=s_one.order_window))
+
+    result = out[0] if single else out
+    return (result, s_diag) if return_diagnostics else result
+
+
+def _efficiencies_from(mix, s_one, p_one, a_s, a_p):
+    """Rebuild the mixed leg's efficiencies from its own amplitudes, not by averaging.
+
+    ``R`` is quadratic in the amplitude, so ``|a_s r_s + a_p r_p|**2`` is not
+    ``a_s**2 |r_s|**2 + a_p**2 |r_p|**2`` -- the cross term is the whole content of a mixed
+    polarisation. Each channel's flux weight is recovered from a leg where that channel is
+    nonzero, which is exact because the weight is a property of the order and the half-space,
+    not of the incidence.
+    """
+    def weight(name, amp_name):
+        for one in (s_one, p_one):
+            a = np.asarray(getattr(one.given, amp_name))
+            e = np.asarray(getattr(one.given, name))
+            power = np.real(a * np.conj(a))
+            with np.errstate(invalid='ignore', divide='ignore'):
+                w = np.where(power > 1e-30, e / np.where(power > 1e-30, power, 1.0), np.nan)
+            if np.any(np.isfinite(w)):
+                return np.nan_to_num(w, nan=0.0)
+        return np.zeros_like(np.asarray(getattr(s_one.given, name)))
+
+    sq = lambda a: np.nan_to_num(np.real(a * np.conj(a)), nan=0.0)
+    R_s = sq(mix.r_s) * weight('R_s', 'r_s')
+    R_p = sq(mix.r_p) * weight('R_p', 'r_p')
+    T_s = sq(mix.t_s) * weight('T_s', 't_s')
+    T_p = sq(mix.t_p) * weight('T_p', 't_p')
+    return ResultSub(mix.r_s, mix.r_p, mix.t_s, mix.t_p,
+                     R_s + R_p, R_s, R_p, T_s + T_p, T_s, T_p)
+
+
 def _solve_conical(psi, phi, theta, tetm, return_diagnostics, **kw):
     """A ``psi`` incidence at ``theta = 0``, any ``phi``: two scalar solves, then projected.
 
@@ -1382,14 +1587,6 @@ def _solve_conical(psi, phi, theta, tetm, return_diagnostics, **kw):
     `solve_1d_conical` offers, and the reason a caller can reweight the polarisation without
     solving again.
     """
-    if float(np.real(theta)) != 0.0:
-        raise ValueError(
-            f'fdtd: psi with theta={theta!r}. Only theta = 0 is answered so far. At normal '
-            f'incidence ky is exactly zero for any phi, so a conical mount there is two '
-            f'decoupled scalar solves wearing a rotated output frame -- which is what this '
-            f'computes. At theta != 0 the ky terms couple all six field components and the '
-            f'time stepper for it, while written, is not yet wired to an extraction. Use '
-            f'`tetm` with phi = 0, or the RCWA path.')
     if tetm is not None:
         raise ValueError(
             f'fdtd: psi={psi!r} and tetm={tetm!r} together name the polarisation twice. '
@@ -1397,6 +1594,9 @@ def _solve_conical(psi, phi, theta, tetm, return_diagnostics, **kw):
             f'decoupled scalar problem. Pass one.')
 
     phi_v = 0.0 if phi is None else float(np.real(phi))
+    if float(np.real(theta)) != 0.0:
+        return _solve_conical_oblique(psi, phi_v, theta, return_diagnostics, **kw)
+
     legs = {}
     for leg, tt in (('s', 'te'), ('p', 'tm')):
         legs[leg] = solve_fdtd(tetm=tt, theta=0.0, phi=None, return_diagnostics=True, **kw)
@@ -1441,7 +1641,7 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
                theta=0.0, phi=None, psi=None, mu=None, incidence_side='top', lattice=None,
                resolution=None, n_pml=PML_CELLS, n_periods=None, courant=COURANT,
                subpixel=True, truncation_order=None, return_diagnostics=False,
-               dispersion=None, poles=None, pad_scale=1.0):
+               dispersion=None, poles=None, pad_scale=1.0, _leg=None):
     # `mu` is the raster's permeability field, layer-major beside `structure`, and the two
     # half-spaces carry theirs inside their `Material` -- the same two spellings the RCWA path
     # takes, so one `Stack` reaches both solvers unchanged.
@@ -1459,8 +1659,11 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
             truncation_order=truncation_order, return_diagnostics=return_diagnostics,
             dispersion=dispersion, poles=poles, pad_scale=pad_scale, tetm=tetm)
 
-    name = _refuse_out_of_scope(structure, mu, theta, phi, tetm, incidence_side, lattice,
-                                top, bot)
+    # `_leg` is set only by `_solve_conical`, which has already validated the incidence; it
+    # names which eigenpolarisation this run drives. It is the one door `phi != 0` comes
+    # through, so it bypasses that refusal and nothing else.
+    name = _refuse_out_of_scope(structure, mu, theta, None if _leg else phi,
+                                'te' if _leg else tetm, incidence_side, lattice, top, bot)
 
     period_x = float(period[0] if hasattr(period, '__len__') else period)
     raster = np.asarray(structure, dtype=complex)[:, 0, :]
@@ -1508,7 +1711,7 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
                  dispersion=dispersion, poles=poles, mu_raster=mu_raster,
                  mu_top=mu_top, mu_bot=mu_bot, pad_scale=pad_scale)
     n_steps = int(np.ceil(n_periods * centre / grid.dt))
-    out = _time_loop(grid, name, n_steps, band)
+    out = _time_loop(grid, name, n_steps, band, leg=_leg)
 
     centre_order = 0
     if truncation_order is None:
@@ -1535,7 +1738,8 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
 
     results = []
     for index in range(band.size):
-        sub = _extract(grid, out, half_width, index, centre_order)
+        sub = (_extract_conical(grid, out, half_width, index, centre_order) if _leg
+               else _extract(grid, out, half_width, index, centre_order))
         # The same tier of check the RCWA path applies: gain out of nothing, or negative
         # power. Every defect this module has had -- an over-conducting PML, a mis-scaled CFS
         # pole, an out-of-band DFT -- announced itself here first, as `R + T` between 1.1
