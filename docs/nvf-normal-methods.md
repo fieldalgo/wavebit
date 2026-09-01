@@ -440,7 +440,9 @@ pair of discs 3.16e-4 -> 1.61e-12, and 0 of 1023 rolls on both under the transla
 Be exact about what that means. The direction on the medial axis is still undefined
 and the answer there is still arbitrary — what is no longer arbitrary is *which* arbitrary
 answer, which is all covariance asks for. The accuracy half is still the circular-polarization
-limit S4 and fmmax use, and it is still not landed.
+limit S4 and fmmax use, and it is still not landed. That limit is Antos' complex
+polarization basis, published as Liu & Fan Eq. (52) — both are cited below, and both
+are owed if it is ever taken.
 
 Accuracy stayed put and cost improved. The angular error against an exact circle moves within
 its own third digit (1.33 -> 1.37 at N=64, 0.37 -> 0.37 at N=512) with no trend, and the
@@ -704,11 +706,20 @@ scratch — the numbers recorded here and the tests in
   [doi:10.1364/OE.503361](https://doi.org/10.1364/OE.503361) — fmmax's vector-field
   generation (gradient bandlimited to the expansion's orders + quadratic fit), the origin
   of `'spectral'`'s fixed-physical-band cutoff.
+- R. Antos, *Fourier factorization with complex polarization bases in modeling optics of
+  discontinuous bi-periodic structures*, Opt. Express **17**, 7269 (2009).
+  [doi:10.1364/OE.17.007269](https://doi.org/10.1364/OE.17.007269) — the complex
+  polarization basis itself: the projector is built from a Jones vector instead of from
+  `n n^T`, so it need not carry a direction at all. This is the origin of the
+  circular-polarization limit, and the citation to credit alongside its generalization.
 - V. Liu, S. Fan, *S4: A free electromagnetic solver for layered periodic structures*,
   Comput. Phys. Commun. **183**, 2233 (2012).
   [doi:10.1016/j.cpc.2012.04.026](https://doi.org/10.1016/j.cpc.2012.04.026) — the
   least-squares tangent-field design (after Fisher et al. 2007); shape-constraint-based,
-  not raster-native, and the reason none of it is adopted here directly.
+  not raster-native, and the reason none of it is adopted here directly. Its **Eq. (52)**
+  is the published form of the circular-polarization limit — `phi = (pi/8)(1 + cos pi|t|)`,
+  a generalization of Antos above — so that limit can be implemented from the paper,
+  without reading S4 itself (which is GPL, where this project is Apache-2.0).
 - A. M. Hammond, S. G. Johnson et al., *Unifying and accelerating level-set and
   density-based topology optimization by subpixel-smoothed projection*,
   [arXiv:2503.20189](https://arxiv.org/abs/2503.20189) — distance and normal jointly from
