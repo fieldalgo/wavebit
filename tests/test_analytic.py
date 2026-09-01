@@ -1219,7 +1219,6 @@ def _band_misalignment(A, shape, n=512):
     """
     from scipy import ndimage
     from wavebit._core.factorization import normal_vector_field
-    from wavebit._core.lattice import periods_of
 
     nx_a, ny_a = _nvf_analytic(np, (n, n), [shape], np.float64, A)
 
@@ -1282,7 +1281,7 @@ def test_an_axis_aligned_cell_keeps_the_rectangular_fold_bit_for_bit():
     passing only the period, which is what says the branch is on the *shape* of the cell and
     not on which keyword the caller happened to use.
     """
-    from wavebit._core.lattice import as_lattice, periods_of
+    from wavebit._core.lattice import as_lattice
     shapes = [dict(type='circle', cx=-0.08, cy=-0.41, lx=0.34, material=5.76),
               dict(type='rectangle', cx=0.27, cy=-0.04, lx=0.3, ly=0.18, angle=0.4,
                    material=3.0)]

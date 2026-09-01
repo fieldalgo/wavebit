@@ -39,7 +39,7 @@ from .domain import as_material
 from .backend import checked_float
 from .factorization import check_normal_grid
 from .geometry import StaleGeometryError
-from .lattice import periods_of, sample_grid
+from .lattice import sample_grid
 from .polygon import ellipse_verts, polygon_ft, rect_verts
 
 
