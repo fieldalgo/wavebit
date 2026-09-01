@@ -1157,3 +1157,140 @@ def test_the_default_order_window_follows_the_incidence():
 
     labels = np.asarray(result.orders_u).ravel()
     assert labels.min() < 0 <= labels.max(), f'window {labels} must straddle the specular order'
+
+
+# ---------------------------------------------------------------------------------------
+# 10. a conical mount at normal incidence -- the output frame, on its own
+# ---------------------------------------------------------------------------------------
+
+def _conical(phi_deg, psi_deg, resolution=0.1, n_periods=60):
+    return solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+                      period=[PERIOD], wavelength=WL, theta=0.0,
+                      phi=np.deg2rad(phi_deg), psi=np.deg2rad(psi_deg),
+                      resolution=resolution, n_periods=n_periods)
+
+
+def _conical_rcwa(phi_deg, psi_deg, fto=40):
+    return wavebit.rcwa(backend=0, wavelength=WL, period=[PERIOD],
+                        truncation_order=dict(x=fto, y=0), top=EPS_TOP, bot=EPS_BOT,
+                        theta=0.0, phi=np.deg2rad(phi_deg), psi=np.deg2rad(psi_deg),
+                        structure=_grating(), thickness=[THICK]).solve()
+
+
+def _channels(result, leg, name):
+    """``{m: value}`` for one channel of one leg. ``orders_u`` lives on the Result, not the
+    sub-result, so the labels have to come from the parent -- which is the point of them."""
+    a = np.asarray(getattr(getattr(result, leg), name)).ravel()
+    return {int(m): a[i] for i, m in enumerate(np.asarray(result.orders_u).ravel())}
+
+
+def test_at_normal_incidence_the_azimuth_only_relabels_the_channels():
+    """theta = 0, phi = 90 deg: one physical field, and the orders land in DIFFERENT channels.
+
+    At normal incidence `ky` is exactly zero whatever `phi` is, so nothing about the field
+    changes -- the whole azimuth dependence is the output frame. And that frame is not one
+    rotation: the zeroth order's in-plane wavevector is the origin, so it takes `phi`, while
+    every `kx_m != 0` order has azimuth 0 or pi. At `phi = 90 deg` the two are a right angle
+    apart, so the SAME x-polarised field reads as pure s in the specular order and pure p in
+    the first orders.
+
+    That asymmetry is the assertion. A projection that used one frame for all orders would
+    put both in the same channel, conserve energy exactly, and be wrong.
+    """
+    result = _conical(phi_deg=90.0, psi_deg=90.0)          # (a_s, a_p) = (sin psi, cos psi)
+    tm = _by_order(_rcwa(_grating(), [THICK], 'tm'))       # the same physics, named TE/TM
+
+    R_s, R_p = _channels(result, 's_inc', 'R_s'), _channels(result, 's_inc', 'R_p')
+    T_s, T_p = _channels(result, 's_inc', 'T_s'), _channels(result, 's_inc', 'T_p')
+
+    assert R_s[0] == pytest.approx(tm[0][0], abs=5e-3), 'the specular order takes phi'
+    assert R_p[0] < 1e-12, f'R_p[0] = {R_p[0]}; the specular frame is at phi = 90 deg'
+    assert T_s[0] == pytest.approx(tm[0][1], abs=5e-3)
+    assert T_p[0] < 1e-12
+
+    for m in (-1, 1):
+        assert T_p[m] == pytest.approx(tm[m][1], abs=5e-3), (
+            f'order {m} has azimuth 0 or pi, a right angle from the specular frame, so the '
+            f'same field reads as p there')
+        assert T_s[m] < 1e-12, f'T_s[{m}] = {T_s[m]}'
+
+
+@pytest.mark.parametrize('phi_deg', [0.0, 30.0, 45.0, 60.0, 90.0, 135.0])
+def test_the_conical_projection_matches_the_rcwa_path(phi_deg):
+    """Every channel of every order, against `solve_1d_conical`, on both pure legs.
+
+    The residual here is the Yee grid's, not the projection's: at `phi = 45 deg` it falls
+    8.2e-3 / 2.1e-3 / 5.9e-4 / 1.8e-4 over dz = 20 / 10 / 5 / 2.5 nm, an order of 1.94 / 1.86
+    / 1.73. A projection defect leaves a floor instead.
+    """
+    got = _conical(phi_deg, psi_deg=30.0)
+    ref = _conical_rcwa(phi_deg, psi_deg=30.0)
+    for leg in ('given', 's_inc', 'p_inc'):
+        for name in ('R_s', 'R_p', 'T_s', 'T_p'):
+            a = _channels(got, leg, name)
+            b = _channels(ref, leg, name)
+            for m in a:
+                assert a[m] == pytest.approx(b[m], abs=5e-3), f'{leg}.{name}[{m}]'
+
+
+def test_the_transmitted_leg_carries_its_own_p_direction():
+    """`p_hat = k_hat x s_hat` reverses between the up- and down-going legs, and only phi = 45 sees it.
+
+    `s_hat` is common to both legs, so the reflected and transmitted frames differ by the sign
+    of `sin varphi_m` alone. Two things hide that. Every order with `kx_m != 0` has azimuth 0
+    or pi, where `sin varphi_m` is zero -- so **only the specular order can carry the defect**.
+    And at `phi = 0` the term is absent while at `phi = 90 deg` it is the entire answer, so
+    both signs pass there. Measured with the reflected rule used for both, at 45 degrees:
+    `T_p[0] = 0.241` against a true 0.017, while `R` was correct to 3e-3 and `R + T` was 1.000.
+    """
+    got = _conical(phi_deg=45.0, psi_deg=90.0)
+    ref = _conical_rcwa(45.0, psi_deg=90.0)
+    assert _channels(got, 's_inc', 'T_p')[0] == pytest.approx(
+        _channels(ref, 's_inc', 'T_p')[0], abs=5e-3)
+    assert _channels(got, 's_inc', 'T_p')[0] < 0.1, 'the wrong leg sign returned 0.241 here'
+
+
+def test_the_two_pure_legs_compose_the_given_incidence():
+    """`given` is `a_s * s_inc + a_p * p_inc` in AMPLITUDE -- exactly, not to a tolerance.
+
+    The two scalar solves are independent, so both legs come back for free and the caller can
+    reweight the polarisation without solving again. Asserted on the complex amplitudes: the
+    efficiencies are quadratic and would pass on a sign error in either leg.
+    """
+    psi = np.deg2rad(30.0)
+    got = _conical(phi_deg=45.0, psi_deg=30.0)
+    a_s, a_p = np.sin(psi), np.cos(psi)
+    for name in ('r_s', 'r_p', 't_s', 't_p'):
+        mixed = a_s * np.asarray(getattr(got.s_inc, name)) + a_p * np.asarray(
+            getattr(got.p_inc, name))
+        assert np.allclose(np.asarray(getattr(got.given, name)), mixed, atol=1e-13), name
+
+
+def test_psi_and_tetm_together_are_refused():
+    """Two spellings of the polarisation at once name it twice, and neither wins silently."""
+    with pytest.raises(ValueError, match='name the polarisation twice'):
+        _ = solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+                       period=[PERIOD], wavelength=WL, theta=0.0, psi=0.3, tetm='te',
+                       resolution=0.05, n_periods=20)
+
+
+def test_a_conical_mount_off_normal_is_refused_by_name():
+    """`theta != 0` with `psi` is refused, and the message says what is missing rather than that.
+
+    At `theta = 0` a conical mount is two decoupled scalar solves wearing a rotated output
+    frame. Away from normal `ky != 0` couples all six components, and no combination of TE and
+    TM runs reproduces that -- so returning the normal-incidence answer there would be a
+    plausible wrong number, which is what every refusal in this module exists to prevent.
+    """
+    with pytest.raises(ValueError, match='Only theta = 0 is answered'):
+        _ = solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+                       period=[PERIOD], wavelength=WL, theta=0.2, psi=0.3,
+                       phi=np.deg2rad(30.0), resolution=0.05, n_periods=20)
+
+
+def test_tetm_with_an_azimuth_is_still_refused_and_points_at_psi():
+    """The old refusal stays, but now it names the door that opened."""
+    with pytest.raises(ValueError, match='pass `psi`'):
+        _ = solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+                       period=[PERIOD], wavelength=WL, theta=0.0, tetm='te',
+                       phi=np.deg2rad(30.0), resolution=0.05, n_periods=20)

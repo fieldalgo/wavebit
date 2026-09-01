@@ -77,6 +77,7 @@ import warnings
 import numpy as np
 
 from .backend import check_physical
+from .conventions import order_azimuth
 from .domain import as_material
 from .result import Result, ResultSub
 
@@ -262,10 +263,11 @@ def _refuse_out_of_scope(structure, mu, theta, phi, tetm, incidence_side, lattic
             f'construction. The RCWA path answers this; see docs/branch-cuts.md.')
     if phi is not None and float(np.real(phi)) != 0.0:
         raise ValueError(
-            f'fdtd: phi={phi!r}. A conical mount couples the two polarisations, and this is '
-            f'the pure TE/TM formulation -- the same split `solve_1d` and `solve_1d_conical` '
-            f'make. The classical mount (phi = 0) leaves TE and TM decoupled at any theta, '
-            f'which is what makes oblique incidence answerable here at all.')
+            f'fdtd: phi={phi!r} with tetm={tetm!r}. A conical mount couples the two '
+            f'polarisations, so it has no TE/TM answer to give -- the same split `solve_1d` '
+            f'and `solve_1d_conical` make. Ask for it the way the conical path is asked: pass '
+            f'`psi` (or `polarization`) instead of `tetm`, which is answered at theta = 0 for '
+            f'any phi.')
     if incidence_side not in (None, 'top'):
         raise ValueError(
             f"fdtd: incidence_side={incidence_side!r}. Only 'top' is implemented; the mirror "
@@ -1094,6 +1096,96 @@ def _propagating_window(wavelength, period, n_top_sq, n_bot_sq, kx_inc=0.0, ky_i
     return centre, max(hi - centre, centre - lo, 0)
 
 
+def _order_frame(kx, ky, phi):
+    """``(cos varphi_m, sin varphi_m)`` -- each order's own s/p frame.
+
+    :func:`~wavebit._core.conventions.order_azimuth` is **called**, not respelled. Its
+    argument order is ``(ky, kx)`` like ``atan2``'s, and its two special cases are the whole
+    reason not to open-code it: the ``kx == 0`` column is a right angle taking the sign of
+    ``ky``, and the origin -- ``kx == ky == 0``, the zeroth order at exactly normal incidence
+    -- takes ``phi``, because a wave going straight down still needs a reference direction for
+    its polarisation. Filling the origin with zero instead collapses the s/p mixing silently,
+    and only when ``phi != 0``.
+    """
+    varphi = order_azimuth(np, np.asarray(ky, dtype=complex), np.asarray(kx, dtype=complex),
+                           float(phi))
+    return np.cos(varphi), np.sin(varphi)
+
+
+def _combine_at_normal_incidence(grid, sub_te, sub_tm, kx, wavelength, phi, a_s, a_p):
+    """Project the two scalar solves onto each order's s/p frame. ``theta = 0`` only.
+
+    **At normal incidence ``ky`` is exactly zero for every ``phi``**, so the stepper is not
+    conical at all -- the six-component operator is never reached. The whole ``phi`` dependence
+    lives here, in the output frame, which is what makes this the one place the projection can
+    be tested against `solve_1d_conical` with no conical stepper underneath it.
+
+    Two rotations, and nothing else. The incident pair ``(a_s, a_p)`` is stated in a frame at
+    azimuth ``phi``, and the grating's two scalar problems live in the fixed frame -- ``E``
+    along ``y`` is TE, ``E`` along ``x`` is TM -- so rotating in gives each problem its drive.
+    Each order then carries its *own* azimuth, so rotating back out is per-order, and the
+    zeroth order is the only one that rotates at all: every ``kx_m != 0`` order has azimuth 0
+    or pi, where the rotation degenerates to the sign ``cos varphi_m``.
+
+    That asymmetry is the test. Measured against `solve_1d_conical` at ``theta = 0``,
+    ``phi = 90 deg`` on the benchmark grating, pure-s incidence puts the specular order in the
+    **s** channel (0.282281 -- the TM number) and the first order in the **p** channel
+    (0.276917). One physical field, two different channels, decided by geometry alone. A
+    projection that dropped the per-order frame would put both in the same channel and still
+    conserve energy.
+
+    The weights were fixed against RCWA *amplitudes*, not efficiencies, across
+    ``phi = 0, 45, 90 deg`` and both legs -- twelve complex numbers. Efficiencies are blind to
+    exactly the sign this is most likely to get wrong; see `docs/fdtd.md` and
+    ``per-order-sp-frame-half-turn``.
+    """
+    c_i, s_i = float(np.cos(phi)), float(np.sin(phi))
+    # Rotate the incidence out of its own frame and into the grid's. `w_tm` carries the sign
+    # of wavebit's published p amplitude rather than of `E_x`; the two differ by one at
+    # theta = 0, and this form is the measured one.
+    w_te = a_s * c_i - a_p * s_i
+    w_tm = a_s * s_i + a_p * c_i
+
+    ky = np.zeros_like(np.asarray(kx, dtype=float))     # exactly zero: theta = 0
+    c_m, s_m = _order_frame(kx, ky, phi)
+    c_m, s_m = np.real(c_m), np.real(s_m)
+
+    def project(a_te, a_tm, leg):
+        # `s_hat` is the same for the up- and down-going legs, but `p_hat = k_hat x s_hat`
+        # reverses with `k_hat` -- so the transmitted frame is the reflected one with
+        # `sin varphi_m` negated. **Only the specular order can see this**: every other order
+        # at theta = 0 has azimuth 0 or pi, where `sin varphi_m` is zero and the two rules
+        # coincide. It is invisible at phi = 0 and at phi = 90 deg as well, where the term is
+        # either absent or the whole answer; phi = 45 deg is what separates them, and it read
+        # `T_p[0] = 0.241` against a true 0.017 with the reflected rule used for both.
+        v_y, v_x = w_te * np.asarray(a_te).ravel(), w_tm * np.asarray(a_tm).ravel()
+        sm = s_m if leg == 'r' else -s_m
+        return c_m * v_y - sm * v_x, c_m * v_x + sm * v_y
+
+    r_s, r_p = project(sub_te.r_s, sub_tm.r_p, 'r')
+    t_s, t_p = project(sub_te.t_s, sub_tm.t_p, 't')
+
+    # The same flux weights `_extract` applies, restated on the published amplitudes: `T_p`
+    # there is built from the raw magnetic ratio, and the published `t_p` is that times
+    # `g`, so dividing by |g|**2 puts them back on one footing.
+    kz_top = _half_space_kz(grid.n_top_sq, kx)
+    kz_bot = _half_space_kz(grid.n_bot_sq, kx)
+    kz_inc = _half_space_kz(grid.n_top_sq, 0.0)
+    n_top, n_bot = np.sqrt(grid.n_top_sq), np.sqrt(grid.n_bot_sq)
+    g = (n_top / grid.mu_top) / (n_bot / grid.mu_bot)
+    fr = np.real(kz_top / kz_inc)
+    ft_s = np.real(kz_bot / grid.mu_bot / (kz_inc / grid.mu_top))
+    ft_p = np.real(kz_bot / grid.eps_bot / (kz_inc / grid.eps_top)) / abs(g) ** 2
+    sq = lambda a: np.nan_to_num(np.real(a * np.conj(a)), nan=0.0)
+
+    R_s, R_p = sq(r_s) * fr, sq(r_p) * fr
+    T_s, T_p = sq(t_s) * ft_s, sq(t_p) * ft_p
+    row = lambda a: np.asarray(a)[None, :]
+    return ResultSub(row(r_s), row(r_p), row(t_s), row(t_p),
+                     row(R_s + R_p), row(R_s), row(R_p),
+                     row(T_s + T_p), row(T_s), row(T_p))
+
+
 def _extract(grid, out, half_width, index, centre=0):
     """Per-order Fresnel amplitudes and efficiencies, in ``solve_1d``'s contract.
 
@@ -1254,8 +1346,78 @@ def _check_dispersion(dispersion, poles, raster):
     return dispersion, checked
 
 
-def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm,
-               theta=0.0, phi=None, mu=None, incidence_side='top', lattice=None,
+def _solve_conical(psi, phi, theta, tetm, return_diagnostics, **kw):
+    """A ``psi`` incidence at ``theta = 0``, any ``phi``: two scalar solves, then projected.
+
+    **Restricted to normal incidence, and the refusal below says why rather than that.** At
+    ``theta = 0`` the in-plane wavevector is the origin, so ``ky`` is exactly zero whatever
+    ``phi`` is -- the six-component conical stepper is never reached, the two scalar problems
+    stay decoupled, and the entire ``phi`` dependence is the output frame. Away from normal
+    that stops being true: ``ky != 0`` couples all six components through four terms, and no
+    combination of TE and TM runs can produce that.
+
+    Both legs come back for free because the scalar solves are independent, so `s_inc` and
+    `p_inc` are the two runs and `given` is their combination -- the same contract
+    `solve_1d_conical` offers, and the reason a caller can reweight the polarisation without
+    solving again.
+    """
+    if float(np.real(theta)) != 0.0:
+        raise ValueError(
+            f'fdtd: psi with theta={theta!r}. Only theta = 0 is answered so far. At normal '
+            f'incidence ky is exactly zero for any phi, so a conical mount there is two '
+            f'decoupled scalar solves wearing a rotated output frame -- which is what this '
+            f'computes. At theta != 0 the ky terms couple all six field components and the '
+            f'time stepper for it, while written, is not yet wired to an extraction. Use '
+            f'`tetm` with phi = 0, or the RCWA path.')
+    if tetm is not None:
+        raise ValueError(
+            f'fdtd: psi={psi!r} and tetm={tetm!r} together name the polarisation twice. '
+            f'`psi` sets (a_s, a_p) = (sin psi, cos psi) and couples both; `tetm` picks one '
+            f'decoupled scalar problem. Pass one.')
+
+    phi_v = 0.0 if phi is None else float(np.real(phi))
+    legs = {}
+    for leg, tt in (('s', 'te'), ('p', 'tm')):
+        legs[leg] = solve_fdtd(tetm=tt, theta=0.0, phi=None, return_diagnostics=True, **kw)
+    (te_res, te_diag), (tm_res, tm_diag) = legs['s'], legs['p']
+    single = not isinstance(te_res, list)
+    te_list = [te_res] if single else te_res
+    tm_list = [tm_res] if single else tm_res
+
+    # Both legs are the same scene at the same incidence, so they land on the same window --
+    # asserted rather than assumed, because a silent mismatch would pair up orders that are
+    # not the same order and return a plausible number.
+    if te_list[0].order_window != tm_list[0].order_window:
+        raise AssertionError(
+            f'fdtd: the two legs disagree about the order window, {te_list[0].order_window} '
+            f'against {tm_list[0].order_window}.')
+    (centre, half), _ = te_list[0].order_window
+
+    period_x = float(kw['period'][0] if hasattr(kw['period'], '__len__') else kw['period'])
+    band = np.atleast_1d(np.asarray(kw['wavelength'], dtype=float))
+    grid = te_diag['grid']
+
+    out = []
+    for i, (te, tm) in enumerate(zip(te_list, tm_list)):
+        wl = float(band[i])
+        # theta = 0, so kx_inc is zero and the ladder is the grating harmonic alone.
+        kx = np.arange(centre - half, centre + half + 1) * wl / period_x
+        subs = {}
+        for leg, (a_s, a_p) in (('given', (np.sin(psi), np.cos(psi))),
+                                ('s_inc', (1.0, 0.0)), ('p_inc', (0.0, 1.0))):
+            subs[leg] = _combine_at_normal_incidence(grid, te.given, tm.given, kx, wl,
+                                                     phi_v, a_s, a_p)
+        for sub in subs.values():
+            check_physical(np, np.asarray(sub.R), np.asarray(sub.T),
+                           np.sqrt(grid.n_top_sq))
+        out.append(Result(order_window=((centre, half), (0, 0)), **subs))
+
+    result = out[0] if single else out
+    return (result, te_diag) if return_diagnostics else result
+
+
+def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
+               theta=0.0, phi=None, psi=None, mu=None, incidence_side='top', lattice=None,
                resolution=None, n_pml=PML_CELLS, n_periods=None, courant=COURANT,
                subpixel=True, truncation_order=None, return_diagnostics=False,
                dispersion=None, poles=None, pad_scale=1.0):
@@ -1267,6 +1429,15 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm,
     Every keyword this does not implement is refused by name rather than ignored -- see
     :func:`_refuse_out_of_scope`. The module docstring says why NumPy is the only backend.
     """
+    if psi is not None:
+        return _solve_conical(
+            psi=psi, phi=phi, theta=theta, structure=structure, thickness=thickness, top=top,
+            bot=bot, period=period, wavelength=wavelength, mu=mu,
+            incidence_side=incidence_side, lattice=lattice, resolution=resolution,
+            n_pml=n_pml, n_periods=n_periods, courant=courant, subpixel=subpixel,
+            truncation_order=truncation_order, return_diagnostics=return_diagnostics,
+            dispersion=dispersion, poles=poles, pad_scale=pad_scale, tetm=tetm)
+
     name = _refuse_out_of_scope(structure, mu, theta, phi, tetm, incidence_side, lattice,
                                 top, bot)
 
@@ -1362,7 +1533,7 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm,
     # what was asked for and what a single time-domain run can answer.
     angles = np.rad2deg(np.arcsin(np.clip(
         grid.kx_inc * band / centre / max(np.sqrt(eps_top).real, 1e-9), -1.0, 1.0)))
-    return result, {'dz': grid.dz, 'nz': grid.nz, 'nx': grid.nx, 'dt': grid.dt,
+    return result, {'grid': grid, 'dz': grid.dz, 'nz': grid.nz, 'nx': grid.nx, 'dt': grid.dt,
                     'n_steps': n_steps, 'n_pml': grid.n_pml,
                     'pml_thickness': grid.n_pml * grid.dz, 'residual': out['residual'],
                     'incident_balance': abs(out['inc_trn'][0] / out['inc_ref'][0]) - 1.0,
