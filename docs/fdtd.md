@@ -527,6 +527,56 @@ permeability does not split them there.
 
 ---
 
+## 8d. A conical mount at normal incidence
+
+`psi` is accepted at `theta = 0` for any `phi`, and the result carries `given` / `s_inc` /
+`p_inc` — the contract `solve_1d_conical` offers. `theta != 0` with `psi` is refused by name.
+
+**At normal incidence a conical mount is not a different solve. It is a different output
+frame.** The in-plane wavevector is the origin there, so `ky` is exactly zero whatever `phi`
+is; the six-component stepper is never reached and both legs come out of two ordinary TE/TM
+runs. What `phi` decides is which channel each order lands in.
+
+And that is not one rotation, which is the whole content of this section. The zeroth order's
+in-plane wavevector is the origin, so its azimuth is `phi` by convention — a wave going
+straight down has a degenerate plane of incidence, but its *polarization* still needs a
+reference direction. Every order with `kx_m != 0` has azimuth 0 or pi. At `phi = 90 deg` the
+two are a right angle apart, so one x-polarized field reads as pure **s** in the specular
+order and pure **p** in the first orders:
+
+| | `R_s[0]` | `T_s[0]` | `T_s[+1]` | `T_p[+1]` |
+|---|---|---|---|---|
+| pure-s incidence, `phi = 90 deg` | 0.2823 | 0.1639 | 0 | 0.2769 |
+| the same scene as `tetm='tm'` | 0.2823 | 0.1639 | — | 0.2769 |
+
+A projection that used one frame for every order would put both in the same channel, conserve
+energy exactly, and be wrong. `conventions.order_azimuth` is **called** rather than respelled;
+its docstring is explicit that filling the origin with `0` collapses the s/p mixing silently
+and only when `phi != 0`.
+
+Measured against `solve_1d_conical` at `phi = 0/30/45/60/90/135 deg`, all three legs, all four
+channels, every order: worst 2.7e-3 at a 10 nm grid, falling 8.2e-3 / 2.1e-3 / 5.9e-4 / 1.8e-4
+across dz = 20 / 10 / 5 / 2.5 nm — an order of 1.94 / 1.86 / 1.73. The residual is the Yee
+grid's; a projection defect leaves a floor instead.
+
+### The leg reversal, and why only one azimuth sees it
+
+`s_hat` is common to the up- and down-going legs, but `p_hat = k_hat x s_hat` reverses with
+`k_hat`. So the transmitted frame is the reflected one with `sin varphi_m` negated — and
+**only the specular order can carry that**, since every other order at `theta = 0` has
+`sin varphi_m = 0`.
+
+Both obvious azimuths pass either way. At `phi = 0` the term is absent; at `phi = 90 deg` it
+is the entire answer. `phi = 45 deg` is what separates them, and with the reflected rule used
+for both it returned `T_p[0] = 0.241` against a true 0.017 — while `R` was correct to 3e-3 and
+`R + T` was 1.000.
+
+**The weights were fitted to complex amplitudes across three azimuths and both legs, not to
+efficiencies, and that is the only reason this was caught.** Twelve complex numbers fixed the
+reflected rule; the transmitted rule needed its own six. An efficiency is quadratic and blind
+to exactly the sign most likely to be wrong. Same family as the TM monitor offset in §5, and
+as `per-order-sp-frame-half-turn` in the RCWA path.
+
 ## 9. What is not yet answered
 
 - **A non-uniform grid.** Measured in §2 and §8b: on a metal grating, 95 % of the fine cells
@@ -557,9 +607,16 @@ permeability does not split them there.
   ahead of the best FDTD route, so on a scene like this one no formulation wins. The decision
   only becomes real on a scene where the RCWA side is expensive — many layers, a high
   truncation order, or a metal, which is why dispersion is above this on the list.
-- **A conical mount** (`phi != 0`), which is what oblique incidence on a *crossed* grating
-  needs and what `solve_1d_conical` answers on the RCWA side. The classical mount is done
-  (§5b); the conical one couples the polarisations and is a different formulation.
+- **A conical mount away from normal** — `phi != 0` *and* `theta != 0` together. The two
+  halves have landed separately and the remaining gap is a narrow one. The classical mount is
+  done at any `theta` (§5b), and the conical output frame is done at `theta = 0` (§8d), where
+  `ky` is exactly zero and the whole `phi` dependence is which channel each order lands in.
+  What is left is the middle: at `ky != 0` four terms couple all six field components, so no
+  combination of TE and TM runs reproduces it. **The six-component stepper for it is written
+  and its coupling is measured** — `TM/TE` power ratio 0 at `phi = 0`, 0.464 / 0.740 / 0.648 at
+  30 / 60 / 90 degrees, and 0 at `theta = 0` for any `phi`, which is the same statement as §8d.
+  It is not wired to an extraction, and until it is, `psi` with `theta != 0` is refused by
+  name rather than answered with the normal-incidence projection.
 - **A broadband run.** The DFT machinery accumulates at a single frequency now; a band needs
   the source width sized from the requested span and a guard on the incident amplitude, which
   falls to 2e-7 of its peak at the band edge and turned `R` into 105 in a prototype that had
