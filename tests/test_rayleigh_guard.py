@@ -19,8 +19,10 @@ new contract, on **every** backend:
 * the solve at the exact point equals the one-ULP-detuned solve — the physics is continuous
   across the condition, the singularity was in the coordinates, not the structure;
 * the lossless stack conserves energy there, with no warning;
-* the one case still refused — an eigenvalue that is *exactly* zero, truncation_order=3 below, where the
-  0/0 has no consistent nearby problem to stand on — refuses loudly, never quietly.
+* the case still refused — an eigenvalue that is *exactly* zero, where the 0/0 has no
+  consistent nearby problem to stand on — refuses loudly, never quietly. *Which*
+  truncations land there is a property of the LAPACK underneath rather than of this
+  file, so it is read at runtime and not assumed; see :func:`_exact_point_or_refusal`.
 
 The stack puts the condition in an *interior* layer rather than at a half-space, which is why
 it needs two layers: a patterned pillar over a uniform ``n=1.5`` spacer. With ``period=1000``
@@ -48,7 +50,7 @@ from wavebit._core.backend import (UnphysicalResultWarning, array_namespace,
 PERIOD = 1000.0
 WL = 500.0
 # Both spellings of one spacer, and both are needed. The Rayleigh condition is a statement
-# about `kx`, which is an index-scale quantity -- order m=3 lands on `N_SPACER` exactly -- so
+# about `kx`, which is an index-scale quantity — order m=3 lands on `N_SPACER` exactly — so
 # the assertion that pins the premise reads the index. Everything handed to wavebit reads the
 # permittivity. 1.5**2 is exact, so the coincidence stays exact through the conversion.
 N_SPACER = 1.5
@@ -64,10 +66,11 @@ _STACK = np.concatenate([_PILLAR, np.full((1, 1, 20), EPS_SPACER)], axis=0)
 _KW = dict(period=[PERIOD], top=1.0, bot=EPS_SPACER, theta=0.0, phi=0.0,
            psi=np.pi / 2, thickness=[200.0, 300.0])
 
-# truncation_order values that retain the grazing order. truncation_order=3 is the first truncation that retains it at
-# all, and the one whose eigenvalue comes out exactly zero (the refused 0/0); at 4, 6 and 9
-# the FFT round-off keeps the eigenvalue at ~1e-16 and the solve must simply be right. These
-# were the values that used to come back quietly wrong (R off by 1 to 600 against 0.215).
+# truncation_order values that retain the grazing order, and the ones that used to come back
+# quietly wrong (R off by 1 to 600 against 0.215). truncation_order=3 is the first truncation
+# that retains it at all. Whether a given order's eigenvalue comes out *exactly* zero — the
+# refused 0/0 — or merely tiny is a property of the LAPACK underneath, so each case reads its
+# own premise through `_exact_point_or_refusal` instead of this list asserting one.
 BAND_MAX_ORDER = [4, 6, 9]
 
 # The exact answer and the one-ULP-detuned answer may differ by at most this. The instability
@@ -103,6 +106,46 @@ def _truth(truncation_order):
     Cached because every case below wants it and it is a clean solve.
     """
     return _totals(_solve(0, truncation_order, wavelength=np.nextafter(WL, WL + 1)))[0]
+
+
+def _exact_point_or_refusal(call):
+    """Run an exact-point solve, or hand this case to the refusal contract.
+
+    The band's premise is a claim about round-off: at 4, 6 and 9 the FFT round-off was
+    supposed to leave the grazing layer's eigenvalue at ~1e-16, so the mode partner is
+    ``0/eps`` rather than ``0/0`` and the solve is ordinary. **Round-off is not portable.**
+    Recording every eigenvalue :func:`wavebit._core.solve_1d.eig` returns and taking the
+    one nearest zero:
+
+        truncation_order    macOS arm64 / numpy 2.5.1    Windows x86-64 / numpy 2.5.2
+                       3    0.0                          0.0
+                       4    9.427073e-18                 0.0
+                       6    3.938391e-17                 0.0
+                       9    2.253776e-16                 0.0
+
+    so on an exact-zero LAPACK *every* retained order is the ``truncation_order=3`` case
+    and the solves-correctly contract has no cases left to run. It is not a margin story
+    to be repaired by re-picking the orders: ``truncation_order=9``'s macOS residue is
+    about one ULP of an order-1 quantity, nowhere near marginal, and it is zero on the
+    other box anyway. Nor is it a property of the machine — on the *same* Windows box
+    NumPy and JAX return the exact zero while PyTorch returns a residue and solves. The
+    premise has to be read per case.
+
+    Reading it through the outcome keeps this file out of the solver's internals and
+    matches what the 2D graze tests above already do with their own platform-split
+    premise: a refusal is one of the two allowed outcomes, it must be loud and carry the
+    remedy, and the case then belongs to
+    :func:`test_exact_zero_eigenvalue_is_loud_on_every_backend`. Nothing is lost by
+    skipping here — :func:`test_auto_detune_lands_every_band_order` covers these orders
+    end to end whichever class the platform puts them in, and a *quietly wrong* answer
+    still fails, because it does not raise.
+    """
+    try:
+        return call()
+    except FloatingPointError as exc:
+        assert 'auto_detune' in str(exc), f'refusal without the remedy: {exc}'
+        pytest.skip('this LAPACK lands the grazing eigenvalue exactly on zero, so this '
+                    'case is the refusal contract rather than the solves-correctly one')
 
 
 # ---------------------------------------------------------------- the regime is real
@@ -143,7 +186,8 @@ def test_exact_rayleigh_point_solves_correctly(backend, truncation_order, name, 
 
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        R, T = _totals(_solve(backend, truncation_order, layer_algorithm=algo))
+        R, T = _exact_point_or_refusal(
+            lambda: _totals(_solve(backend, truncation_order, layer_algorithm=algo)))
 
     flagged = [r for r in rec if issubclass(r.category, UnphysicalResultWarning)]
     assert not flagged, f'{name}/{algo} warned on a solve that is now ordinary: {flagged}'
@@ -268,8 +312,9 @@ def test_exact_point_solves_for_tm_and_mixed_polarization(psi, algo):
     """
     kw = dict(_KW)
     kw['psi'] = psi
-    exact = wavebit.rcwa(backend=0, wavelength=WL, truncation_order=[5, 0], structure=_STACK,
-                         layer_algorithm=algo, **kw).solve(auto_detune=False)
+    exact = _exact_point_or_refusal(
+        lambda: wavebit.rcwa(backend=0, wavelength=WL, truncation_order=[5, 0], structure=_STACK,
+                             layer_algorithm=algo, **kw).solve(auto_detune=False))
     near = wavebit.rcwa(backend=0, wavelength=np.nextafter(WL, WL + 1), truncation_order=[5, 0],
                         structure=_STACK, layer_algorithm=algo,
                         **kw).solve(auto_detune=False)
@@ -293,7 +338,7 @@ def test_exact_point_field_reconstruction_matches_its_neighbour():
         mee.solve(auto_detune=False)
         return np.asarray(mee.reconstruct_field(sample_x=16, sample_y=1, sample_z=16))
 
-    exact = field(WL)
+    exact = _exact_point_or_refusal(lambda: field(WL))
     near = field(np.nextafter(WL, WL + 1))
     assert np.all(np.isfinite(exact))
     scale = np.max(np.abs(near))
@@ -343,6 +388,37 @@ def test_auto_detune_rescues_the_refused_point():
         R, T = _totals(_solve(0, 3, auto_detune=True))
     assert any(issubclass(r.category, AutoDetuneWarning) for r in rec)
     assert abs(R - _truth(3)) < TOL and abs(R + T - 1.0) < TOL
+
+
+@pytest.mark.parametrize('truncation_order', BAND_MAX_ORDER)
+def test_auto_detune_lands_every_band_order(truncation_order):
+    """Whichever class this LAPACK puts a band order in, the default returns the truth.
+
+    This is the coverage that survives :func:`_exact_point_or_refusal` skipping a case,
+    and it is why that skip costs nothing. On a build that leaves a residue the order is
+    an ordinary solve and the ladder stays silent; on one that returns the exact zero it
+    refuses, the ladder retries one ULP off, and the rescued answer is the same one.
+    Either way no :class:`RayleighPointWarning` reaches the caller and the total matches
+    the detuned oracle — so 4, 6 and 9 stay pinned end to end on both kinds of build,
+    and a regression that made them quietly wrong under the library default would fail
+    here even on a platform where the exact-point matrix has nothing left to run.
+
+    Measured across both outcomes: 1.3e-8 .. 3.6e-8 against ``_truth``, against
+    ``TOL = 1e-6``.
+    """
+    from wavebit._core.backend import AutoDetuneWarning, RayleighPointWarning
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        R, T = _totals(_solve(0, truncation_order, auto_detune=True))
+    assert not any(issubclass(r.category, RayleighPointWarning) for r in rec), (
+        f'truncation_order={truncation_order}: a RayleighPointWarning reached the caller: {rec}')
+    for notice in (r for r in rec if issubclass(r.category, AutoDetuneWarning)):
+        assert 'wavelength' in str(notice.message)
+    assert abs(R - _truth(truncation_order)) < TOL, (
+        f'truncation_order={truncation_order}: the default returned R={R!r} against the '
+        f'detuned oracle {_truth(truncation_order)!r}')
+    assert abs(R + T - 1.0) < TOL, (
+        f'truncation_order={truncation_order}: R+T={R + T!r} on a lossless stack')
 
 
 def test_auto_detune_is_silent_on_an_ordinary_solve():
