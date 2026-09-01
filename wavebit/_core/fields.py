@@ -330,7 +330,7 @@ def _inv_fourier(xp, kx, ky, lattice, sample_x, sample_y, k0, C):
         # v*a2y`, so a `y` names a `v` only where `a1y == 0`. Until 2026-08-24 the two were
         # passed the other way round, on the premise -- stated here, and false since oblique
         # cells landed -- that this path could not meet a skewed cell at all. Both directions
-        # were wrong at once on `wavebit.hexagonal(400)`, where `a1y == 0` and `a2x == -200`:
+        # were wrong at once on `wavebit.Lattice.hexagonal(400)`, where `a1y == 0` and `a2x == -200`:
         # an explicit `sample_x` was *accepted* and answered with the `u` column nearest it,
         # a line running from x=250 to x=50 across the cell rather than the constant x asked
         # for -- up to `|a2x|` away in position and ~90% of the field magnitude in value --

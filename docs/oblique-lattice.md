@@ -22,7 +22,7 @@ import numpy as np, wavebit
 solver = wavebit.rcwa(
     backend=0, structure=cell, truncation_order=dict(x=10, y=10), thickness=[300.0], wavelength=900.0,
     factorization='nvf',                       # required — see "What is refused"
-    lattice=wavebit.hexagonal(400.0),          # or lattice=np.column_stack((a1, a2))
+    lattice=wavebit.Lattice.hexagonal(400.0),          # or lattice=np.column_stack((a1, a2))
 )
 ```
 
@@ -31,15 +31,34 @@ report the basis-vector lengths `(|a1|, |a2|)`.
 
 ## Spelling the cell
 
-`lattice` is always a 2x2 whose **columns** are `a1` and `a2`, and you can write it by hand.
-Three constructors spell the usual ones:
+**An orthogonal cell needs none of this.** `period=(Lx, Ly)` is its spelling and remains the
+default — no `Lattice`, no import, and the coordinates it gives are bit-identical:
 
 ```python
-wavebit.rectangular(700.0, 1100.0)          # diag(700, 1100); `ly` defaults to `lx`
-wavebit.hexagonal(400.0)                    # 120-degree rhombus, the crystallographic setting
-wavebit.hexagonal(400.0, np.radians(60))    # the 60-degree alternative basis
-wavebit.oblique(400.0, 520.0, np.radians(105))
+P = [700.0, 1100.0]
+X, Y = wavebit.grid((256, 256), period=P)
+solver = wavebit.rcwa(period=P, ...)
 ```
+
+`lattice` is always a 2x2 whose **columns** are `a1` and `a2`, and you can write it by hand.
+Four constructors on the type spell the rest:
+
+```python
+wavebit.Lattice.hexagonal(400.0)                    # 120-degree rhombus, the crystallographic setting
+wavebit.Lattice.hexagonal(400.0, np.radians(60))    # the 60-degree alternative basis
+wavebit.Lattice.oblique(400.0, 520.0, np.radians(105))
+wavebit.Lattice.rectangular(700.0, 1100.0)          # diag(700, 1100), as an object; `ly` defaults to `lx`
+wavebit.Lattice.from_columns(np.column_stack((a1, a2)))   # a basis written out by hand
+```
+
+**They sit on the type on purpose.** `hexagonal(400.)` did not say what it returned, and a
+hexagon is a perfectly plausible *shape* in a package whose shape types are already `rectangle`,
+`circle` and `ellipse`. The sharpest case was `oblique(lx, ly, angle)`, which has the **exact
+signature of a rotated rectangle shape** — `{'type': 'rectangle', 'lx':, 'ly':, 'angle':}` —
+with `angle` meaning the angle *between the edges* rather than a rotation. `Lattice.oblique(...)`
+carries the answer in the call. `Lattice.rectangular` is the object form of `period` and the
+exact-diagonal spelling, since `oblique(.., pi/2)` lands 6.1e-17 off it; `from_columns` is what
+gives a hand-written 2x2 the same `.grid` the constructors have.
 
 `angle` is the angle between `a1` and `a2`, in radians, like every other angle in this API.
 These are spellings and not a new kind of cell — each returns the same object `lattice=` takes,
@@ -53,7 +72,7 @@ code".
 centres, so a layer can be written in coordinates rather than indices:
 
 ```python
-A = wavebit.hexagonal(400.0)
+A = wavebit.Lattice.hexagonal(400.0)
 X, Y = A.grid((256, 256))                      # == wavebit.grid((256, 256), lattice=A)
 layer = np.where(X ** 2 + Y ** 2 < 90.0 ** 2, 12.25, 1.0)
 ```
@@ -395,7 +414,7 @@ diverged on *both* lattices in our hands, 0.986 -> 0.933, and is not usable as a
 residual is the two rasters staircasing the feature differently, so it tightens with resolution
 rather than with `truncation_order`.
 
-**Which hex spelling.** `wavebit.hexagonal(a)` is the 120-degree cell, the crystallographic
+**Which hex spelling.** `wavebit.Lattice.hexagonal(a)` is the 120-degree cell, the crystallographic
 setting: `a1 = (a, 0)`, `a2 = (-a/2, a*sqrt(3)/2)`. 60 degrees spans the same lattice and is one
 argument away (`hexagonal(a, np.radians(60))`), and it is what the numbers on this page were
 originally measured on. They carry over: on the pillar array above the two spellings agree to

@@ -1007,7 +1007,7 @@ class CoreSolveMixin:
             'nor `lattice` was named, so the cell would silently be the (1, 1) default -- '
             'which is the normalized-units cell, not a guess at yours. State one:\n'
             '    period=[700., 1100.]                 # a rectangular cell\n'
-            '    lattice=wavebit.hexagonal(400.)      # or oblique(...) / a 2x2\n'
+            '    lattice=wavebit.Lattice.hexagonal(400.)      # or oblique(...) / a 2x2\n'
             'A raster carries no length of its own, so nothing further down can catch this: '
             'measured on a hex scene with `lattice=` forgotten, sum(T) read 0.989790 against '
             'the correct 0.927664, energy conserving throughout. `wavebit.grid` has always '
@@ -1389,8 +1389,8 @@ class CoreSolveMixin:
                 'axis-aligned spelling -- it is (|a1|, |a2|), so it cannot say what the new '
                 'cell is without the angle. Assigning it used to move the read-back and '
                 'nothing else. Set the basis instead:\n'
-                '    solver.lattice = wavebit.oblique(lx, ly, angle)\n'
-                'or `wavebit.hexagonal(a)` / a 2x2 column_stack((a1, a2)); `period` follows '
+                '    solver.lattice = wavebit.Lattice.oblique(lx, ly, angle)\n'
+                'or `wavebit.Lattice.hexagonal(a)` / a 2x2 column_stack((a1, a2)); `period` follows '
                 'from it.')
 
         self._cell_named = True          # an assignment names it, as a keyword does
@@ -2003,7 +2003,7 @@ class CoreFactorizationMixin:
                 '*spelling* of a cell, not a second cell -- on a skewed one it is '
                 '(|a1|, |a2|), with the angle already gone, so the two cannot both be '
                 'honoured. Pass one:\n'
-                '    lattice=wavebit.hexagonal(400.)      # or oblique(...) / a 2x2\n'
+                '    lattice=wavebit.Lattice.hexagonal(400.)      # or oblique(...) / a 2x2\n'
                 '    period=[700., 1100.]                 # the rectangular cell\n'
                 'Until now `lattice` won and `period` was ignored in silence.')
 

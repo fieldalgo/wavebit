@@ -135,10 +135,81 @@ def test_on_a_diagonal_cell_it_is_the_period_gradient():
 
 # ----------------------------------------------------------- spelling a cell by its angle
 
+def test_the_constructors_say_what_they_return():
+    """``hexagonal(400.)`` did not say whether it built a cell or a shape. Now it does.
+
+    A hexagon is a perfectly plausible *shape* in a package whose shape types are already
+    ``rectangle`` / ``circle`` / ``ellipse``, so the bare names were ambiguous by construction.
+    The sharpest case was ``oblique(lx, ly, angle)``: that is the **exact signature of a rotated
+    rectangle shape**, with ``angle`` meaning the angle *between the edges* rather than a
+    rotation. Nothing at the call site separated them. ``Lattice.oblique(...)`` carries the
+    answer in the call, and so will anything added to the type later, without a second naming
+    argument.
+
+    The old spellings are **deleted**, not aliased: no release has happened, so a retired name
+    has no audience to keep it for.
+    """
+    for name in ('hexagonal', 'oblique', 'rectangular'):
+        assert not hasattr(wavebit, name), f'wavebit.{name} should be gone'
+        assert hasattr(wavebit.Lattice, name), f'Lattice.{name} should exist'
+    assert wavebit.Lattice is Lattice
+    assert 'Lattice' in wavebit.__all__
+
+    # the ambiguity that motivated it, side by side: same three numbers, two different objects
+    cell = wavebit.Lattice.oblique(400.0, 520.0, np.radians(105.0))
+    shape = {'type': 'rectangle', 'lx': 400.0, 'ly': 520.0, 'angle': np.radians(105.0)}
+    assert isinstance(cell, Lattice) and isinstance(shape, dict)
+    # `angle` is the angle *between* the edges here, so a2 is not 520 along the rotated axis
+    a1, a2 = np.asarray(cell.u), np.asarray(cell.v)
+    assert np.degrees(np.arccos(a1 @ a2 / (np.hypot(*a1) * np.hypot(*a2)))) == pytest.approx(105.0)
+
+
+def test_a_hand_written_basis_can_join_the_type():
+    """``from_columns`` is what gives a 2x2 written by hand the same ``.grid`` as a constructor.
+
+    The docs bless writing the basis out (``np.column_stack((a1, a2))``) and ``lattice=`` has
+    always taken it, but a bare array has no :meth:`Lattice.grid`, so the "name the basis once"
+    spelling was unavailable to exactly the callers writing the most explicit code.
+
+    It is what ``lattice=<2x2>`` already does at ingest, so ``axis_aligned`` is read off the
+    matrix rather than assumed -- a diagonal handed in this way reports itself as one.
+    """
+    a1, a2 = np.array([400.0, 0.0]), np.array([200.0, 400.0 * np.sqrt(3) / 2])
+    A = wavebit.Lattice.from_columns(np.column_stack((a1, a2)))
+    assert isinstance(A, Lattice)
+    assert np.allclose(np.asarray(A.u), a1) and np.allclose(np.asarray(A.v), a2)
+    assert A.axis_aligned is False
+    assert wavebit.Lattice.from_columns(np.diag([700.0, 1100.0])).axis_aligned is True
+
+    # the gap it closes: the method is now reachable, and agrees with the free function
+    assert [np.asarray(c).tobytes() for c in A.grid((9, 13))] == \
+        [np.asarray(c).tobytes() for c in wavebit.grid((9, 13),
+                                                       lattice=np.column_stack((a1, a2)))]
+
+
+def test_an_orthogonal_cell_still_needs_no_lattice_at_all():
+    """`period=` is the spelling for a rectangle and nothing about it got longer.
+
+    Worth pinning because the constructors moving onto the type reads like the simple case got
+    more ceremony. It did not: the orthogonal route never touches `Lattice`, and the
+    coordinates it produces are bit-identical to the ones the object produces.
+    """
+    P = [700.0, 1100.0]
+    by_period = [np.asarray(c).tobytes() for c in wavebit.grid((17, 23), period=P)]
+    by_object = [np.asarray(c).tobytes()
+                 for c in wavebit.Lattice.rectangular(700.0, 1100.0).grid((17, 23))]
+    assert by_period == by_object
+
+    # and `rectangular` is the *exact* diagonal, which `oblique(.., pi/2)` is not
+    assert np.asarray(wavebit.Lattice.rectangular(700.0, 1100.0)).tobytes() == \
+        np.diag([700.0, 1100.0]).tobytes()
+    assert np.asarray(wavebit.Lattice.oblique(700.0, 1100.0, np.pi / 2))[0, 1] != 0.0
+
+
 def test_a_cell_can_be_given_as_two_lengths_and_an_angle():
     from wavebit._core.lattice import periods_of
 
-    A = wavebit.oblique(400.0, 520.0, np.radians(105.0))
+    A = wavebit.Lattice.oblique(400.0, 520.0, np.radians(105.0))
     assert periods_of(A) == pytest.approx((400.0, 520.0))
     assert A.axis_aligned is False
     # a1 along x, a2 at the stated angle to it
@@ -146,11 +217,11 @@ def test_a_cell_can_be_given_as_two_lengths_and_an_angle():
     cos = float(a1 @ a2 / (np.linalg.norm(a1) * np.linalg.norm(a2)))
     assert np.degrees(np.arccos(cos)) == pytest.approx(105.0)
 
-    assert np.allclose(np.asarray(wavebit.hexagonal(400.0)),
-                       np.asarray(wavebit.oblique(400.0, 400.0, 2 * np.pi / 3)))
-    assert np.asarray(wavebit.rectangular(700.0, 1100.0)).tobytes() == \
+    assert np.allclose(np.asarray(wavebit.Lattice.hexagonal(400.0)),
+                       np.asarray(wavebit.Lattice.oblique(400.0, 400.0, 2 * np.pi / 3)))
+    assert np.asarray(wavebit.Lattice.rectangular(700.0, 1100.0)).tobytes() == \
         np.diag([700.0, 1100.0]).tobytes()
-    assert np.asarray(wavebit.rectangular(640.0)).tobytes() == np.diag([640.0, 640.0]).tobytes()
+    assert np.asarray(wavebit.Lattice.rectangular(640.0)).tobytes() == np.diag([640.0, 640.0]).tobytes()
 
 
 def test_a_right_angle_reports_itself_as_one():
@@ -159,13 +230,13 @@ def test_a_right_angle_reports_itself_as_one():
     To 1e-16 and not to the bit: ``cos(pi/2)`` is 6.1e-17, so the off-diagonal is ~7e-14 rather
     than 0. That is why :func:`rectangular` exists beside this.
     """
-    A = wavebit.oblique(700.0, 1100.0, np.pi / 2)
+    A = wavebit.Lattice.oblique(700.0, 1100.0, np.pi / 2)
     assert A.axis_aligned is True
     assert np.allclose(np.asarray(A), np.diag([700.0, 1100.0]), atol=1e-12)
     with pytest.raises(ValueError, match='same line'):
-        wavebit.oblique(400.0, 400.0, 0.0)
+        wavebit.Lattice.oblique(400.0, 400.0, 0.0)
     with pytest.raises(ValueError, match='same line'):
-        wavebit.oblique(400.0, 400.0, np.pi)
+        wavebit.Lattice.oblique(400.0, 400.0, np.pi)
 
 
 def test_the_angle_itself_is_a_design_variable():
@@ -178,7 +249,7 @@ def test_the_angle_itself_is_a_design_variable():
     import jax.numpy as jnp
 
     def loss(angle):
-        return _analytic_loss(jnp, jnp.asarray(wavebit.oblique(400.0, 400.0, angle).columns))
+        return _analytic_loss(jnp, jnp.asarray(wavebit.Lattice.oblique(400.0, 400.0, angle).columns))
 
     g = float(jax.grad(loss)(jnp.asarray(np.pi / 3)))
     assert np.isfinite(g) and abs(g) > 1e-12
@@ -210,7 +281,7 @@ def test_the_raster_path_differentiates_the_basis_through_its_index_offsets():
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    A = np.asarray(wavebit.hexagonal(400.0))
+    A = np.asarray(wavebit.Lattice.hexagonal(400.0))
     n = 48
     X, Y = (np.asarray(c) for c in wavebit.grid((n, n), lattice=A))
     eps = np.where(X ** 2 + Y ** 2 < 150.0 ** 2, 12.25, 1.0)
@@ -237,7 +308,7 @@ _L, _N, _R, _EPS = 640.0, 64, 100.0, 12.25
 def _cell_at(gamma_deg, length=_L):
     """``|a1| = |a2| = length`` with ``gamma`` between them -- one knob, so a derivative is one."""
     g = np.radians(gamma_deg)
-    return wavebit.oblique(length, length, g)
+    return wavebit.Lattice.oblique(length, length, g)
 
 
 def _sum_t(basis, eps, truncation=6):
@@ -308,14 +379,14 @@ def test_the_two_uses_of_a_lattice_have_to_be_the_same_one():
 
 def test_the_method_and_the_free_function_are_one_call():
     """``A.grid(shape)`` is ``wavebit.grid(shape, lattice=A)``, to the byte, on every spelling."""
-    for A in (wavebit.hexagonal(400.0), wavebit.rectangular(700.0, 1100.0),
-              wavebit.oblique(400.0, 520.0, np.radians(105.0)), as_lattice(lattice=SHEAR)):
+    for A in (wavebit.Lattice.hexagonal(400.0), wavebit.Lattice.rectangular(700.0, 1100.0),
+              wavebit.Lattice.oblique(400.0, 520.0, np.radians(105.0)), as_lattice(lattice=SHEAR)):
         by_method = [np.asarray(c).tobytes() for c in A.grid((9, 13))]
         by_function = [np.asarray(c).tobytes() for c in wavebit.grid((9, 13), lattice=A)]
         assert by_method == by_function, A
 
     # the keywords ride through rather than being quietly dropped
-    A = wavebit.hexagonal(400.0)
+    A = wavebit.Lattice.hexagonal(400.0)
     assert [np.asarray(c).tobytes() for c in A.grid((5, 7), dtype=np.float32)] == \
         [np.asarray(c).tobytes() for c in wavebit.grid((5, 7), lattice=A, dtype=np.float32)]
     with pytest.raises(ValueError, match='backend'):
@@ -345,7 +416,7 @@ def test_naming_both_period_and_lattice_is_refused():
     them on. Each is exercised below, because a refusal that broke any of them would take jit,
     the typed container, or the document format with it.
     """
-    A = wavebit.hexagonal(400.0)
+    A = wavebit.Lattice.hexagonal(400.0)
     eps = np.where(np.asarray(A.grid((16, 16))[0]) ** 2 < 100.0 ** 2, 5.76, 1.0)[None]
     base = dict(backend=0, structure=eps, thickness=[300.0], wavelength=900.0,
                 truncation_order=[2, 2], factorization='nvf')
@@ -393,7 +464,7 @@ def test_a_cell_built_the_documented_way_survives_the_document():
     ``Stack`` stores the plain ``(2, 2)`` on purpose ("this layer passes through, and ingest
     converts"), and ``_jsonable`` recognises what it can write by ``hasattr(value, 'tolist')``.
     A ``Lattice`` has ``__array__`` but had no ``tolist``, so the cell built the way every
-    document recommends -- ``wavebit.hexagonal(400.)`` -- passed ``Stack.check`` and died at
+    document recommends -- ``wavebit.Lattice.hexagonal(400.)`` -- passed ``Stack.check`` and died at
     ``to_json`` with "value of type Lattice is not JSON-representable". Being accepted by one
     door and refused by the next is the failure mode; a plain 2x2 always worked.
 
@@ -404,7 +475,7 @@ def test_a_cell_built_the_documented_way_survives_the_document():
     from wavebit import Incidence, Stack
     from wavebit._core.spec import JobSpec
 
-    A = wavebit.hexagonal(400.0)
+    A = wavebit.Lattice.hexagonal(400.0)
     assert A.tolist() == np.asarray(A).tolist()          # the array form, in plain Python
 
     for cell in (A, np.asarray(A), np.asarray(A).tolist()):
@@ -439,7 +510,7 @@ def test_a_structure_with_no_cell_is_refused_rather_than_solved_on_the_unit_one(
     the omission raises "larger than the period"); the raster was the only silent one, because
     a raster carries no length of its own.
     """
-    A = wavebit.hexagonal(400.0)
+    A = wavebit.Lattice.hexagonal(400.0)
     X, Y = (np.asarray(c) for c in A.grid((64, 64)))
     eps = np.where(X ** 2 + Y ** 2 < 90.0 ** 2, 12.25, 1.0)[None]
     base = dict(backend=0, thickness=[300.0], wavelength=900.0, truncation_order=[6, 6],
@@ -556,8 +627,8 @@ def test_the_two_hexagonal_spellings_are_one_lattice_and_two_calculations():
     ``docs/oblique-lattice.md`` and the S4 cross-check in it are written on.
     """
     a = 400.0
-    A120 = np.asarray(wavebit.hexagonal(a))
-    A60 = np.asarray(wavebit.hexagonal(a, np.radians(60.0)))
+    A120 = np.asarray(wavebit.Lattice.hexagonal(a))
+    A60 = np.asarray(wavebit.Lattice.hexagonal(a, np.radians(60.0)))
     assert np.allclose(A60[:, 1] - A60[:, 0], A120[:, 1])          # a2_120 = a2_60 - a1
 
     # the reason for the default, measured rather than asserted
@@ -733,7 +804,7 @@ def test_the_basis_gradient_obeys_the_unimodular_chain_rule(cell, tol):
     jnp = pytest.importorskip('jax.numpy')
 
     if cell == 'hex':
-        basis = np.asarray(wavebit.hexagonal(400.0))
+        basis = np.asarray(wavebit.Lattice.hexagonal(400.0))
     else:
         angle = np.radians(105.0)
         basis = np.column_stack(([400.0, 0.0],

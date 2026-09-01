@@ -59,8 +59,8 @@ import numpy as np
 
 from .backend import array_namespace, as_array
 
-__all__ = ['Lattice', 'as_lattice', 'grid', 'hexagonal', 'is_axis_aligned', 'jacobian',
-           'oblique', 'order_kxy', 'periods_of', 'rectangular', 'sample_grid']
+__all__ = ['Lattice', 'as_lattice', 'grid', 'is_axis_aligned', 'jacobian',
+           'order_kxy', 'periods_of', 'sample_grid']
 
 _PYTREE_REGISTERED = False
 
@@ -172,7 +172,7 @@ class Lattice:
         Beside :meth:`__array__` because it is the same view of the same numbers, and it earns
         its place at the *document* boundary: :func:`wavebit._core.spec._jsonable` recognises a
         value it can write by ``hasattr(value, 'tolist')``, so without this a cell built the
-        documented way -- ``Stack.from_structure(..., lattice=wavebit.hexagonal(400.))`` --
+        documented way -- ``Stack.from_structure(..., lattice=wavebit.Lattice.hexagonal(400.))`` --
         was accepted by ``Stack.validate`` and then refused by ``to_json`` as "value of type
         Lattice is not JSON-representable". Accepting what cannot be written is the failure
         mode; a plain 2x2 always worked.
@@ -182,6 +182,97 @@ class Lattice:
         nested list rather than a ``Lattice``, exactly as it already does for an ndarray.
         """
         return np.asarray(self.columns, dtype=float).tolist()
+
+    @classmethod
+    def from_columns(cls, matrix):
+        """The cell a ``(2, 2)`` spells, its columns being ``a1`` and ``a2``.
+
+        The way into this type for a basis written out by hand, which the docs bless and the
+        solver has always accepted at ``lattice=``. Without it a hand-written cell was a bare
+        array, so it had no :meth:`grid` and the "name the basis once" spelling was unavailable
+        to exactly the callers writing the most explicit code.
+
+        Identical to what ``lattice=<2x2>`` does at ingest -- ``axis_aligned`` is read off the
+        matrix, so a diagonal reports itself as one.
+        """
+        return as_lattice(lattice=matrix)
+
+    @classmethod
+    def rectangular(cls, lx, ly=None):
+        """``diag(lx, ly)`` — the axis-aligned cell, spelled as a basis. ``ly`` defaults to ``lx``."""
+        return as_lattice(period=[lx] if ly is None else [lx, ly])
+
+
+    @classmethod
+    def oblique(cls, lx, ly, angle):
+        """A cell given by two edge lengths and the **angle between them**, in radians.
+
+        ``a1`` lies along x with length ``lx``; ``a2`` has length ``ly`` and makes ``angle`` with
+        it, so::
+
+            A = [[lx, ly*cos(angle)],
+                 [ 0, ly*sin(angle)]]
+
+        Radians, because every other angle in this API is (``theta``, ``phi``, a shape's ``angle``).
+        ``np.radians(60)`` for the usual ones, or :meth:`hexagonal` for the usual-est.
+
+        This is a *spelling*, not a new kind of cell -- it returns the same :class:`Lattice` that
+        ``lattice=`` does, and there is no ``angle`` stored anywhere afterwards. Which matters for
+        differentiation: build it inside the function you differentiate and the angle is a design
+        variable, because the basis it produces is one. Build it outside and you have handed the
+        solver a constant, exactly as with any other expression.
+
+        ``angle`` near 0 or pi is refused rather than returning a basis with no cell area -- the
+        same refusal :func:`as_lattice` makes for parallel columns, reached earlier and by name.
+
+        A right angle comes back *as* a right angle -- ``axis_aligned`` is read off the basis, not
+        assumed -- but to 1e-16 and not to the bit, since ``cos(pi/2)`` is 6.1e-17. Use
+        :meth:`rectangular` where an exact diagonal is wanted, which is every case that does not
+        have an angle to vary.
+        """
+        xp = array_namespace(angle) if not isinstance(angle, (int, float)) else np
+        a = as_array(xp, angle) if xp is not np else float(angle)
+        if xp is np and not (1e-9 < abs(float(np.sin(a))) ):
+            raise ValueError(
+                f'Lattice.oblique: angle={angle!r} rad puts a1 and a2 on the same line, so the cell has no '
+                f'area. Use a value strictly between 0 and pi (np.radians(60) for a hex rhombus).')
+        cos_a, sin_a = xp.cos(a), xp.sin(a)
+        zero = 0.0 * cos_a
+        cols = xp.stack([xp.stack([lx + zero, ly * cos_a]),
+                         xp.stack([zero, ly * sin_a])])
+        if xp is np:
+            M = np.asarray(cols, dtype=float)
+            return cls(M[:, 0], M[:, 1], is_axis_aligned(M))    # a right angle says so
+        return cls(cols[:, 0], cols[:, 1], False)   # traced: the general path, always correct
+
+
+    @classmethod
+    def hexagonal(cls, a, angle=2.0 * np.pi / 3.0):
+        """A primitive cell of a hexagonal array: the rhombus of side ``a``, **120 degrees**.
+
+        120 is the crystallographic standard -- the hexagonal system is defined with
+        ``a = b, alpha = beta = 90, gamma = 120`` -- and the reason is not taste. 60 spans the same
+        lattice, but *the three-fold rotation axis is not visible in the primitive vectors there*:
+        the 120 pair maps into itself under a 120 rotation, and the 60 pair does not. That is why
+        the standard settings pick it, and it is why this is the default.
+
+        60 is a legitimate alternative basis, the one that makes the primitive cell two equilateral
+        triangles, and it is what ``docs/oblique-lattice.md`` and the S4 cross-check in it are
+        written on. ``Lattice.hexagonal(a, np.radians(60))``.
+
+        They generate the **same lattice** -- ``a2' = a2 + a1`` carries one to the other -- but they
+        are not the same calculation:
+
+        * the *fundamental cell* differs, so an omitted shape centre lands elsewhere: ``(100, 173)``
+          against ``(300, 173)`` at ``a = 400``. See :func:`~wavebit._core.analytic.shape_geometry`.
+        * ``truncation_order`` cuts a parallelogram in ``(m, n)``, and a different basis maps that
+          onto a different set of ``G``. Measured at ``truncation_order=4``: 81 orders either way,
+          **61 of them shared**. The two agree in the converged limit and not before it.
+
+        So this is a choice with consequences at finite truncation, which is why it is an argument
+        rather than a constant folded into the name.
+        """
+        return cls.oblique(a, a, angle)
 
     # pytree protocol -- registered lazily; see _register_pytree_if_jax_loaded
     def tree_flatten(self):
@@ -499,76 +590,3 @@ def grid(grid_shape, period=None, lattice=None, backend=0, dtype=None):
     return X - 0.5 * (A[0][0] + A[0][1]), Y - 0.5 * (A[1][0] + A[1][1])
 
 
-def rectangular(lx, ly=None):
-    """``diag(lx, ly)`` — the axis-aligned cell, spelled as a basis. ``ly`` defaults to ``lx``."""
-    return as_lattice(period=[lx] if ly is None else [lx, ly])
-
-
-def oblique(lx, ly, angle):
-    """A cell given by two edge lengths and the **angle between them**, in radians.
-
-    ``a1`` lies along x with length ``lx``; ``a2`` has length ``ly`` and makes ``angle`` with
-    it, so::
-
-        A = [[lx, ly*cos(angle)],
-             [ 0, ly*sin(angle)]]
-
-    Radians, because every other angle in this API is (``theta``, ``phi``, a shape's ``angle``).
-    ``np.radians(60)`` for the usual ones, or :func:`hexagonal` for the usual-est.
-
-    This is a *spelling*, not a new kind of cell -- it returns the same :class:`Lattice` that
-    ``lattice=`` does, and there is no ``angle`` stored anywhere afterwards. Which matters for
-    differentiation: build it inside the function you differentiate and the angle is a design
-    variable, because the basis it produces is one. Build it outside and you have handed the
-    solver a constant, exactly as with any other expression.
-
-    ``angle`` near 0 or pi is refused rather than returning a basis with no cell area -- the
-    same refusal :func:`as_lattice` makes for parallel columns, reached earlier and by name.
-
-    A right angle comes back *as* a right angle -- ``axis_aligned`` is read off the basis, not
-    assumed -- but to 1e-16 and not to the bit, since ``cos(pi/2)`` is 6.1e-17. Use
-    :func:`rectangular` where an exact diagonal is wanted, which is every case that does not
-    have an angle to vary.
-    """
-    xp = array_namespace(angle) if not isinstance(angle, (int, float)) else np
-    a = as_array(xp, angle) if xp is not np else float(angle)
-    if xp is np and not (1e-9 < abs(float(np.sin(a))) ):
-        raise ValueError(
-            f'oblique: angle={angle!r} rad puts a1 and a2 on the same line, so the cell has no '
-            f'area. Use a value strictly between 0 and pi (np.radians(60) for a hex rhombus).')
-    cos_a, sin_a = xp.cos(a), xp.sin(a)
-    zero = 0.0 * cos_a
-    cols = xp.stack([xp.stack([lx + zero, ly * cos_a]),
-                     xp.stack([zero, ly * sin_a])])
-    if xp is np:
-        M = np.asarray(cols, dtype=float)
-        return Lattice(M[:, 0], M[:, 1], is_axis_aligned(M))    # a right angle says so
-    return Lattice(cols[:, 0], cols[:, 1], False)   # traced: the general path, always correct
-
-
-def hexagonal(a, angle=2.0 * np.pi / 3.0):
-    """A primitive cell of a hexagonal array: the rhombus of side ``a``, **120 degrees**.
-
-    120 is the crystallographic standard -- the hexagonal system is defined with
-    ``a = b, alpha = beta = 90, gamma = 120`` -- and the reason is not taste. 60 spans the same
-    lattice, but *the three-fold rotation axis is not visible in the primitive vectors there*:
-    the 120 pair maps into itself under a 120 rotation, and the 60 pair does not. That is why
-    the standard settings pick it, and it is why this is the default.
-
-    60 is a legitimate alternative basis, the one that makes the primitive cell two equilateral
-    triangles, and it is what ``docs/oblique-lattice.md`` and the S4 cross-check in it are
-    written on. ``hexagonal(a, np.radians(60))``.
-
-    They generate the **same lattice** -- ``a2' = a2 + a1`` carries one to the other -- but they
-    are not the same calculation:
-
-    * the *fundamental cell* differs, so an omitted shape centre lands elsewhere: ``(100, 173)``
-      against ``(300, 173)`` at ``a = 400``. See :func:`~wavebit._core.analytic.shape_geometry`.
-    * ``truncation_order`` cuts a parallelogram in ``(m, n)``, and a different basis maps that
-      onto a different set of ``G``. Measured at ``truncation_order=4``: 81 orders either way,
-      **61 of them shared**. The two agree in the converged limit and not before it.
-
-    So this is a choice with consequences at finite truncation, which is why it is an argument
-    rather than a constant folded into the name.
-    """
-    return oblique(a, a, angle)

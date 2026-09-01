@@ -402,18 +402,25 @@ to say so. The smooth path's derivation, convergence data and limitations are wr
 rectangular — hexagonal, or any oblique basis — is given as the two primitive vectors instead:
 
 ```python
-solver = wavebit.rcwa(backend=0, lattice=wavebit.hexagonal(400.),     # columns are a1, a2
+solver = wavebit.rcwa(backend=0, lattice=wavebit.Lattice.hexagonal(400.),     # columns are a1, a2
                         factorization='nvf', structure=structure, ...)
 ```
 
-Three constructors spell the usual cells, or pass the `(2, 2)` yourself:
+An orthogonal cell needs none of this — `period=(Lx, Ly)` is its spelling and is the default.
+For the rest, four constructors on the type, or pass the `(2, 2)` yourself:
 
 ```python
-wavebit.rectangular(700., 1100.)              # diag(700, 1100); `ly` defaults to `lx`
-wavebit.hexagonal(400.)                       # 120-degree rhombus, the crystallographic setting
-wavebit.hexagonal(400., np.radians(60))       # the 60-degree alternative basis
-wavebit.oblique(400., 520., np.radians(105))  # angle between a1 and a2, in radians
+wavebit.Lattice.hexagonal(400.)                       # 120-degree rhombus, the crystallographic setting
+wavebit.Lattice.hexagonal(400., np.radians(60))       # the 60-degree alternative basis
+wavebit.Lattice.oblique(400., 520., np.radians(105))  # angle BETWEEN a1 and a2, in radians
+wavebit.Lattice.rectangular(700., 1100.)              # diag(700, 1100) as an object
+wavebit.Lattice.from_columns(np.column_stack((a1, a2)))
 ```
+
+They sit on the type because the bare names did not say what they returned, and a hexagon is a
+plausible *shape* in a package whose shape types are `rectangle`, `circle` and `ellipse`. The
+worst was `oblique(lx, ly, angle)`, which had the exact signature of a rotated rectangle shape
+while `angle` meant something else entirely.
 
 They return the same object `lattice=` takes and store no angle, so building one *inside* a
 differentiated function makes the cell's shape a design variable — the off-diagonals are the
@@ -427,7 +434,7 @@ Cartesian lengths tilt the cell only. They differ by 3.6x on a plain scene. See
 centres, so a structure can be written in coordinates rather than indices:
 
 ```python
-A = wavebit.hexagonal(400.)
+A = wavebit.Lattice.hexagonal(400.)
 X, Y = A.grid((256, 256))                       # == wavebit.grid((256, 256), lattice=A)
 layer = np.where(X ** 2 + Y ** 2 < 90. ** 2, 12.25, 1.)
 ```

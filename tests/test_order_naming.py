@@ -25,7 +25,7 @@ import wavebit
 from wavebit._core.conventions import parse_order_pair
 
 RECT = [700.0, 1100.0]
-HEX = wavebit.hexagonal(400.0)
+HEX = wavebit.Lattice.hexagonal(400.0)
 
 
 def _eps():

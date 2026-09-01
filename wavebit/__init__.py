@@ -88,7 +88,13 @@ from ._core.domain import (Layer, Stack, Incidence, Material,
 # The type `eps_conv_matrices()` hands back and `solve_conv()` takes: a NamedTuple, so the five
 # slots still splat and unpack, but `conv.epz_i` reaches one by name.
 from ._core.factorization import ConvMatrices
-from ._core.lattice import grid, hexagonal, oblique, rectangular
+# `Lattice` is public because the constructors live on it -- `Lattice.hexagonal(400.)` says
+# what it returns where `hexagonal(400.)` did not, and a hexagon is a plausible *shape* in a
+# package whose shape types are already `rectangle` / `circle` / `ellipse`. It is also the type
+# `solver.lattice` hands back and the one `repr` prints, so it was reachable and unnameable:
+# no import, no annotation, and since 2026-09-01 a public `.grid` method on a type callers
+# could not spell.
+from ._core.lattice import Lattice, grid
 from ._core.geometry import StaticGeometry, StaleGeometryError
 # What `solver.scattering` hands back after an SMM solve: the stack's own scattering matrix,
 # both sides and every order, incidence-relative, with the two half-spaces as its ports.
@@ -115,10 +121,8 @@ from ._core.spec import JobSpec, Numerics, Sweep, SpecError, run
 # `main` is deliberately absent. It is bound as a side effect of `from .main import rcwa`, not
 # offered, and without `__all__` a star import collected it along with the rest.
 __all__ = [
+    'Lattice',
     'grid',
-    'hexagonal',
-    'oblique',
-    'rectangular',
     'rcwa',
     # Defined in this file rather than imported -- see `enable_x64` above.
     'enable_x64',

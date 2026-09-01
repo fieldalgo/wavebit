@@ -500,7 +500,7 @@ def _oblique_spec():
     degrades to exactly the square the second of them compares against, rather than to some
     other scale -- which would part the two numbers for a reason unrelated to the skew.
     """
-    basis = np.asarray(wavebit.hexagonal(400.0))
+    basis = np.asarray(wavebit.Lattice.hexagonal(400.0))
     eps = np.ones((1, 16, 16))
     eps[0, 3:8, 2:7] = 12.25
     return basis, JobSpec(
