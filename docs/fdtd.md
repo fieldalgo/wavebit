@@ -546,8 +546,11 @@ order and pure **p** in the first orders:
 
 | | `R_s[0]` | `T_s[0]` | `T_s[+1]` | `T_p[+1]` |
 |---|---|---|---|---|
-| pure-s incidence, `phi = 90 deg` | 0.2823 | 0.1639 | 0 | 0.2769 |
-| the same scene as `tetm='tm'` | 0.2823 | 0.1639 | — | 0.2769 |
+| FDTD, pure-s incidence at `phi = 90 deg`, 10 nm grid | 0.2848 | 0.1656 | 0 | 0.2746 |
+| RCWA on the same scene as `tetm='tm'` | 0.2823 | 0.1639 | — | 0.2769 |
+
+The `s`/`p` split is exact — `T_s[+1]` is identically zero, not small — because it is decided
+by the frame geometry alone. The *values* carry the ordinary 10 nm discretisation error.
 
 A projection that used one frame for every order would put both in the same channel, conserve
 energy exactly, and be wrong. `conventions.order_azimuth` is **called** rather than respelled;
