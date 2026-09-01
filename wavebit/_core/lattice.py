@@ -122,10 +122,10 @@ class Lattice:
     def __getitem__(self, key):
         return self.columns[key]
 
-    def grid(self, shape, backend=0, dtype=None):
+    def grid(self, pixels, backend=0, dtype=None):
         """:func:`grid` on this cell -- ``A.grid((256, 256))``, the basis named once.
 
-        Identical to ``wavebit.grid(shape, lattice=A)`` in every respect, and it exists for the
+        Identical to ``wavebit.grid(pixels, lattice=A)`` in every respect, and it exists for the
         naming and nothing else: the lattice appears **twice** in a raster workflow, once here
         and once at ``lattice=`` on the solver, and the only way that goes wrong is the two
         disagreeing. Measured on a 64-px raster of a radius-100 circle in a 640-unit cell,
@@ -144,7 +144,7 @@ class Lattice:
         0.157 -> 0.997 with no error, no warning, and energy conserved throughout. Pinned as
         ``tests/test_lattice_pytree.py::test_the_two_uses_of_a_lattice_have_to_be_the_same_one``.
 
-        **A nudge, not a guarantee, and it cannot be made one.** ``wavebit.grid(shape,
+        **A nudge, not a guarantee, and it cannot be made one.** ``wavebit.grid(pixels,
         lattice=B)`` still exists and still answers; this only makes the agreeing spelling the
         shorter one. Nothing downstream can catch the disagreement either, because what comes
         back is a pair of ordinary coordinate arrays and the first ``np.where`` consumes them --
@@ -152,7 +152,7 @@ class Lattice:
         rule the naming is meant to carry has to be stated too: **change the cell and the array
         has to be drawn again.**
         """
-        return grid(shape, lattice=self, backend=backend, dtype=dtype)
+        return grid(pixels, lattice=self, backend=backend, dtype=dtype)
 
     def __repr__(self):
         u, v = (np.asarray(x, dtype=float) for x in (self.u, self.v))
@@ -406,8 +406,8 @@ def order_kxy(xp, A, half_width_u, half_width_v, wavelength, k_inc_x, k_inc_y,
             xp.astype(xp.broadcast_to(ky, (n_orders_v, n_orders_u)), dtype))
 
 
-def grid(shape, period=None, lattice=None, backend=0, dtype=None):
-    """Cartesian coordinates of a raster's pixel centres: ``(X, Y)``, both shaped ``shape``.
+def grid(pixels, period=None, lattice=None, backend=0, dtype=None):
+    """Cartesian coordinates of a raster's pixel centres: ``(X, Y)``, both that shape.
 
     The public way to build a structure without deciding an axis order. Write the layer in terms
     of the coordinates and the layout follows on its own::
@@ -436,11 +436,17 @@ def grid(shape, period=None, lattice=None, backend=0, dtype=None):
     examples spell that out eleven times because nothing hands it to them, and forgetting it
     transposes the structure with nothing to say so.
 
-    ``shape`` is ``(rows, columns)``, read as numpy reads it. Rows run along ``a2`` and columns
-    along ``a1`` -- y and x on a rectangular cell, and neither of those on a skewed one, which
-    is why the return is coordinates rather than axis names.
+    ``pixels`` is ``(rows, columns)``, read as numpy reads an array's shape. Rows run along
+    ``a2`` and columns along ``a1`` -- y and x on a rectangular cell, and neither of those on a
+    skewed one, which is why the return is coordinates rather than axis names.
 
-    **Prefer :meth:`Lattice.grid` where the cell is already named.** ``A.grid(shape)`` is this
+    It is ``pixels`` and not ``shape`` because **this package spells a piece of geometry a
+    "shape"** -- ``structure=[{'shapes': [...]}]``, :func:`~wavebit._core.analytic.shape_ft`,
+    ``shape_geometry``, 131 uses in ``wavebit/`` -- so ``A.grid(shape)`` read as *"put a shape
+    on this lattice"*, which is the one thing it does not do. ``pixel`` never means geometry
+    here, and the first line of this docstring was already using it.
+
+    **Prefer :meth:`Lattice.grid` where the cell is already named.** ``A.grid(pixels)`` is this
     function with ``lattice=A``, and it spells the basis once instead of twice -- which matters
     because the *other* use of it is ``lattice=A`` on the solver, and a raster drawn on one cell
     and solved on another is a different structure, silently. That method's docstring has the
@@ -450,11 +456,11 @@ def grid(shape, period=None, lattice=None, backend=0, dtype=None):
     (0 NumPy, 1 JAX, 2 PyTorch). ``dtype`` defaults to the backend's float64.
     """
     A = as_lattice(period=period, lattice=lattice)
-    shape = tuple(int(v) for v in shape)
+    shape = tuple(int(v) for v in pixels)
     if len(shape) != 2:
-        raise ValueError(f'grid: shape must be (rows, columns); got {shape!r}')
+        raise ValueError(f'grid: pixels must be (rows, columns); got {pixels!r}')
     if min(shape) < 1:
-        raise ValueError(f'grid: shape must be positive; got {shape!r}')
+        raise ValueError(f'grid: pixels must be positive; got {pixels!r}')
 
     if backend == 0:
         import array_api_compat.numpy as xp

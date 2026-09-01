@@ -323,6 +323,14 @@ def test_the_method_and_the_free_function_are_one_call():
     with pytest.raises(ValueError, match='rows, columns'):
         A.grid((4,))
 
+    # The first parameter is `pixels`, not `shape`: this package spells a piece of *geometry* a
+    # shape (`structure=[{'shapes': [...]}]`, `shape_ft`, `shape_geometry`), so `A.grid(shape)`
+    # read as "put a shape on this lattice". `pixel` never means geometry here.
+    assert [np.asarray(c).tobytes() for c in A.grid(pixels=(9, 13))] == \
+        [np.asarray(c).tobytes() for c in wavebit.grid(pixels=(9, 13), lattice=A)]
+    with pytest.raises(TypeError):
+        A.grid(shape=(9, 13))
+
 
 def test_the_raster_basis_gradient_is_the_shear_along_one():
     """Which of the two lattice-derivatives the raster path computes, named by measurement.
