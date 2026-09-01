@@ -21,6 +21,15 @@ here to regenerate and the reference moves if the RCWA path moves. The tolerance
 *measured* gaps, quoted in each message beside the value that would have to change for the
 assertion to be doing nothing.
 
+**Symmetry is the enemy of an order-resolved test.** Almost every structure here is uniform
+along x or mirror-symmetric about its own centre -- the duty-0.3 rectangle included, which
+looks asymmetric and is not -- and on those RCWA returns `T(+1) == T(-1)` exactly, so nothing
+can tell the two orders apart. That makes the whole file blind to the x origin, to the sign of
+the order index, and to every amplitude phase.
+`test_a_profile_with_no_mirror_symmetry_agrees_on_the_AMPLITUDES` is the one case that is not,
+and it is the only check here that would notice wavebit moving its coordinate origin, which it
+did on 2026-08-31.
+
 **What this file cannot see.** The uniform-slab and multilayer gates are blind to both
 subpixel harmonic averages -- `Ez` is identically zero at normal incidence with no x variation,
 and a harmonic mean along x of a constant is that constant -- so only the grating cases
@@ -580,3 +589,58 @@ def test_an_evanescent_order_reports_nan_rather_than_an_amplified_reading():
         'the efficiencies must stay finite -- they are identically zero for these orders')
     assert np.all(np.isfinite(r_s[np.abs(orders) <= 1])), (
         'the propagating orders must not be caught by the guard')
+
+
+def test_a_profile_with_no_mirror_symmetry_agrees_on_the_AMPLITUDES():
+    """The only test here that can see the x origin, the order-index sign, or a phase.
+
+    Every other structure in this file is either uniform along x or mirror-symmetric about its
+    own centre -- including the duty-0.3 rectangle, which looks asymmetric and is not, so RCWA
+    returns `T(+1) == T(-1)` for it exactly and no comparison can tell the two orders apart.
+    This two-step profile is genuinely asymmetric: `T(-1) = 0.7207` against `T(+1) = 0.0838`,
+    a factor of 8.6.
+
+    What that buys, none of which `R` or `T` can see:
+
+    * **The x origin.** Shifting the structure by half a period multiplies order `m` by
+      `(-1)**m`, which is a phase of pi on every odd order and nothing at all on `|r|**2`.
+      Measured `arg` differences here are 0.007 and 0.010 rad on `m = +-1`, so the frames agree
+      with about 300x of margin against the half-period alternative. This matters more than it
+      looks: wavebit moved every *user-facing* coordinate to the centre of the cell on
+      2026-08-31, and the reason this module was unaffected is that the raster's index
+      convention and the transform's `[0, 1]` integration did not move with it -- a fact worth
+      having pinned rather than reasoned about.
+    * **The order-index sign.** `kx_m = ... + m*wl/period`; reversing it swaps two values that
+      are 8.6x apart here and identical everywhere else in this file.
+    * **The de-referencing phase**, which is what `|r|**2` discarded when it hid a half-cell
+      monitor offset and a two-leg dispersion correction.
+    """
+    column = np.array([wavebit.eps_from_index(N_TOOTH), wavebit.eps_from_index(2.0), 1.0, 1.0])
+    structure = column.reshape(1, 1, 4)
+
+    reference = _rcwa(structure, [THICK], 'te')
+    result = _fdtd(structure, [THICK], 'te', resolution=0.1)
+
+    def amplitudes(res, name):
+        index = {int(m): i for i, m in enumerate(np.asarray(res.orders_u).ravel())}
+        return {m: complex(np.asarray(getattr(res.given, name)).ravel()[index[m]])
+                for m in (-1, 0, 1)}
+
+    ref_T = _by_order(reference)
+    assert ref_T[-1][1] > 5.0 * ref_T[1][1], (
+        'the profile has stopped being asymmetric, and this test measures nothing without it')
+
+    # Measured at this 10 nm grid: max complex gap 1.0e-2 on `r_s` and 1.6e-2 on `t_s`,
+    # falling to 2.1e-3 and 3.1e-3 at 5 nm -- a ratio of 4.7 and 5.2, so second order. Each
+    # bound is about 2x the measured value and about 16x below the 2*|r| a sign flip gives.
+    for name, bound in (('r_s', 2e-2), ('t_s', 3e-2)):
+        got, want = amplitudes(result, name), amplitudes(reference, name)
+        for m in (-1, 0, 1):
+            assert abs(got[m] - want[m]) < bound, (
+                f'{name}[{m}]: fdtd {got[m]} against rcwa {want[m]}')
+        for m in (-1, 1):
+            # The specific failure a half-period origin shift produces, named rather than
+            # left to the tolerance above: it is exactly a sign flip on the odd orders.
+            assert abs(got[m] + want[m]) > 0.5 * abs(want[m]), (
+                f'{name}[{m}] is the NEGATIVE of the reference, which is what a half-period '
+                f'shift of the x origin looks like')

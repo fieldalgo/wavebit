@@ -244,6 +244,19 @@ against the RCWA amplitudes on a duty-0.3 grating: a gain of 1.1e8 still gives 6
 order set got `inf` and `nan`. The efficiency is identically zero for these orders either way,
 so nothing downstream of `R` could notice. They are now `nan` above a measured gain bound.
 
+**The instrument for all of this needs an asymmetric structure, and almost nothing is one.**
+A mirror-symmetric grating at normal incidence gives `T(+1) == T(-1)` exactly, so the two
+orders are indistinguishable and no comparison can see the x origin, the sign of the order
+index, or any amplitude phase — and the benchmark grating, a uniform slab, and even a duty-0.3
+rectangle (symmetric about its own tooth centre) are all in that class. A two-step profile
+`[3.5², 2.0², 1, 1]` is not: it gives `T(-1) = 0.7207` against `T(+1) = 0.0838`. On it the FDTD
+and RCWA amplitudes agree to 2.1e-3 with `arg` differences of 0.007 rad, against the π a
+half-period origin shift would put on every odd order. That is the check that says the two
+solvers share a frame, and wavebit moved every user-facing coordinate to the centre of the
+cell on 2026-08-31 — this module was unaffected because the raster's index convention and the
+transform's `[0, 1]` integration did not move with it, but that is now pinned rather than
+reasoned about.
+
 The common instrument for the first two is **comparing amplitudes, not efficiencies**, against
 a closed form. The common instrument for the last is asking what a quantity means when its
 efficiency is identically zero.
