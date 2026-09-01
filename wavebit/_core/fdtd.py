@@ -96,6 +96,22 @@ CELLS_PER_WAVELENGTH = 20.0
 #: broken absorber. At 12 cells the fixed layer reflects 1.1e-5, and 20 buys 1.5e-6.
 PML_CELLS = 12
 
+#: Clearance between the structure and each of the TFSF plane, the monitors and the PML, as a
+#: fraction of the wavelength IN THAT HALF-SPACE. **Measured, and half of what the first
+#: version used.** On the benchmark grating at a 5 nm grid the worst per-order error runs
+#: 7.37e-4 at 1.0, 6.57e-4 at 0.5, 7.46e-4 at 0.25 and 8.81e-4 at 0.125 -- so 0.5 is *more*
+#: accurate than 1.0 and takes 13.9 s against 22.0. The metal grating agrees: 7.43e-4 / 31.9 s
+#: against 7.01e-4 / 15.9 s.
+#:
+#: A wavelength of clearance was chosen so a grating's evanescent orders would decay before
+#: the monitor. They do not need to: the spatial transform separates the orders exactly, so an
+#: evanescent order sitting on the monitor plane cannot contaminate a propagating one's
+#: amplitude. What the clearance is actually for is keeping the PML out of the structure's near
+#: field, and half a wavelength does that -- while a shorter outgoing leg carries less of the
+#: analytic-versus-discrete ``kz`` mismatch, which is why 0.5 wins on accuracy too. Below 0.25
+#: it stops paying.
+PAD_WAVELENGTHS = 0.5
+
 #: Courant number. The 2D bound is ``dt <= n_min/sqrt(dx^-2 + dz^-2)``; 0.99 of it is the
 #: standard margin. ``n_min`` matters: dropping it (the usual spelling, which assumes no
 #: material is faster than vacuum) makes a perfectly ordinary ``eps = 0.81`` diverge to 1e281
@@ -619,7 +635,8 @@ class _Grid:
 
     def __init__(self, wavelength, period, raster, thickness, eps_top, eps_bot,
                  resolution, n_pml, courant, subpixel, theta=0.0,
-                 dispersion=None, poles=None, mu_raster=None, mu_top=1.0, mu_bot=1.0):
+                 dispersion=None, poles=None, mu_raster=None, mu_top=1.0, mu_bot=1.0,
+                 pad_scale=1.0):
         self.wavelength = float(wavelength)
         self.period = float(period)
         self.raster = np.asarray(raster, dtype=complex)
@@ -671,8 +688,9 @@ class _Grid:
         # A wavelength of clearance in each half-space: far enough that the evanescent orders
         # a grating radiates have decayed before the monitor, near enough that the outgoing
         # leg carrying the analytic-vs-discrete kz mismatch stays short.
-        pad_top = self.wavelength / max(n_top, 1e-9)
-        pad_bot = self.wavelength / max(n_bot, 1e-9)
+        pad = pad_scale * PAD_WAVELENGTHS * self.wavelength
+        pad_top = pad / max(n_top, 1e-9)
+        pad_bot = pad / max(n_bot, 1e-9)
         gap = max(int(round(0.25 * pad_top / self.dz)), 3)
 
         self.k_src = self.n_pml + 2
@@ -1117,7 +1135,7 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm,
                theta=0.0, phi=None, mu=None, incidence_side='top', lattice=None,
                resolution=None, n_pml=PML_CELLS, n_periods=None, courant=COURANT,
                subpixel=True, truncation_order=None, return_diagnostics=False,
-               dispersion=None, poles=None):
+               dispersion=None, poles=None, pad_scale=1.0):
     # `mu` is the raster's permeability field, layer-major beside `structure`, and the two
     # half-spaces carry theirs inside their `Material` -- the same two spellings the RCWA path
     # takes, so one `Stack` reaches both solvers unchanged.
@@ -1173,7 +1191,7 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm,
     grid = _Grid(wavelength, period_x, raster, thickness, eps_top, eps_bot,
                  resolution, n_pml, courant, subpixel, theta=theta,
                  dispersion=dispersion, poles=poles, mu_raster=mu_raster,
-                 mu_top=mu_top, mu_bot=mu_bot)
+                 mu_top=mu_top, mu_bot=mu_bot, pad_scale=pad_scale)
     n_steps = int(np.ceil(n_periods * centre / grid.dt))
     out = _time_loop(grid, name, n_steps, band)
 

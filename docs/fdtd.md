@@ -129,7 +129,16 @@ error, against an RCWA reference at `truncation_order=400`:
 | --- | --- | --- | --- | --- |
 | this grating, TE, 20 nm cell | 0.5 s | 1.2e-2 | fto 5, 0.51 ms | 1009 |
 | this grating, TE, 10 nm cell | 2.0 s | 2.9e-3 | fto 10, 0.71 ms | 2850 |
-| **60 nm metal grating, TM, 10 nm cell** | 3.9 s | 1.7e-3 | fto 60, 26.2 ms | **147** |
+| **60 nm metal grating, TM, 10 nm cell** | 2.4 s | 1.6e-3 | fto 60, 21.4 ms | **112** |
+
+**Half of that came from one constant.** The clearance between the structure and each of the
+TFSF plane, the monitors and the PML was a full wavelength, chosen so a grating's evanescent
+orders would decay before the monitor. They do not need to — the spatial transform separates
+the orders exactly, so an evanescent order sitting on the monitor plane cannot contaminate a
+propagating one. Halving it is *more* accurate as well as twice as fast (7.37e-4 / 22.0 s
+against 6.57e-4 / 13.9 s on the dielectric; 7.43e-4 / 31.9 s against 7.01e-4 / 15.9 s on the
+metal), because a shorter outgoing leg carries less of the analytic-versus-discrete `kz`
+mismatch. Below a quarter wavelength it stops paying. `pad_scale` moves it.
 
 **Matching on accuracy is the whole point of the table**, and an earlier draft of this document
 did not: it compared a 10 nm FDTD run against `truncation_order=80`, which was a *thousand
@@ -456,14 +465,14 @@ absorbing 1.3 %.
 **This is where dispersion and a band multiply each other, and it is measured in §2.** One run
 gives the whole spectrum, and each wavelength in it sees the permittivity the pole model has
 *there*, while RCWA is re-solved per wavelength and handed a different `ε` each time. The
-crossover drops from 2850 wavelengths on the lossless dielectric to **147** on the metal at the
-same cell size — a 19x improvement, and the best figure measured anywhere here.
+crossover drops from 2850 wavelengths on the lossless dielectric to **112** on the metal at the
+same cell size, and that is the best figure measured anywhere here.
 
-**It is still 147, and the reason is worth naming.** A metal makes RCWA converge badly, but it
+**It is still 112, and the reason is worth naming.** A metal makes RCWA converge badly, but it
 makes the FDTD grid requirement worse by more: the wave inside this metal is 138 nm long and
 its skin depth is 11 nm, and the grid is uniform, so the whole domain pays for them. On the
-scene above the metal is 60 nm of a 2145 nm span — **97 % of the fine grid is spent outside the
-material that demanded it.** A graded or subgridded mesh is therefore a far bigger lever on
+scene above the metal is 60 nm of a 1165 nm span — **95 % of the fine grid is spent outside the
+material that demanded it**, even after the clearance was halved (§2). A graded or subgridded mesh is therefore a far bigger lever on
 this module's usefulness than any of the formulation work in §9, and it is the one thing that
 could move `N*` into the range where a caller would reach for FDTD by default.
 
@@ -520,8 +529,8 @@ permeability does not split them there.
 
 ## 9. What is not yet answered
 
-- **A non-uniform grid.** Measured in §2 and §8b: on a metal grating, 97 % of the fine cells
-  are outside the metal that required them, and the crossover against RCWA sits at 147
+- **A non-uniform grid.** Measured in §2 and §8b: on a metal grating, 95 % of the fine cells
+  are outside the metal that required them, and the crossover against RCWA sits at 112
   wavelengths because of it. Nothing else on this list changes that number, and this could
   change it by an order of magnitude. It is the difference between a solver someone chooses
   and one they only cross-check with.
