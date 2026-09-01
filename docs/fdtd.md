@@ -119,13 +119,26 @@ the two solvers: 5 nm is 8 s a polarisation against the RCWA solve's fraction of
 2.5 nm is two minutes.
 
 **A band buys some of that back, but less than it sounds.** A whole spectrum comes out of one
-FDTD run (§8) while RCWA re-solves per wavelength — but RCWA's per-wavelength cost is small
-enough that the crossover is far out. Measured on this scene at a 10 nm grid: **one FDTD run
-over seven wavelengths took 3.1 s; seven separate RCWA solves took 0.2 s**, so RCWA is 15x
-ahead there and the two would not meet until roughly a hundred wavelengths. That number is a
-property of the scene, not of the methods: it moves toward FDTD as the RCWA side gets harder
-(more layers, a higher truncation order, a structure that converges badly) and away as the
-FDTD grid is refined.
+FDTD run (§8) while RCWA re-solves per wavelength, so the two meet at
+`N* = t_fdtd / t_rcwa_per_wavelength`. **Matched on accuracy rather than on settings** — the
+cheapest `truncation_order` and the coarsest cell that each reach the same worst per-order
+error, against an RCWA reference at `truncation_order=400`:
+
+| scene | FDTD | its error | the cheapest RCWA that matches it | `N*` |
+| --- | --- | --- | --- | --- |
+| this grating, TE, 20 nm cell | 0.5 s | 1.2e-2 | fto 5, 0.51 ms | 1009 |
+| this grating, TE, 10 nm cell | 2.0 s | 2.9e-3 | fto 10, 0.71 ms | 2850 |
+| **60 nm metal grating, TM, 10 nm cell** | 3.9 s | 1.7e-3 | fto 60, 26.2 ms | **147** |
+
+**Matching on accuracy is the whole point of the table**, and an earlier draft of this document
+did not: it compared a 10 nm FDTD run against `truncation_order=80`, which was a *thousand
+times* more accurate than it needed to be, and reported a crossover near a hundred. The real
+figure on a lossless dielectric is nearer a thousand.
+
+`N*` is a property of the scene. It moves toward FDTD as the RCWA side gets harder — the metal
+row is 19x better than the dielectric at the same cell size, because RCWA in TM on a metal
+converges slowly and non-monotonically (its error at `fto` 40 is *worse* than at 20) — and away
+as the FDTD grid is refined, which is why the 5 nm rows are worse than the 10 nm ones.
 
 ---
 
@@ -440,10 +453,19 @@ and on a 60 nm metal grating against the RCWA path, which is handed the same mat
 complex `ε`: worst per-order gap 2.7e-3 at 10 nm and 6.1e-4 at 5 nm, with both solvers
 absorbing 1.3 %.
 
-**This is where dispersion and a band multiply each other.** One run gives the whole spectrum,
-and each wavelength in it sees the permittivity the pole model has *there*. RCWA must be
-re-solved per wavelength and handed a different `ε` each time — so the crossover of §2, which
-is far out on a lossless dielectric, moves toward FDTD exactly here.
+**This is where dispersion and a band multiply each other, and it is measured in §2.** One run
+gives the whole spectrum, and each wavelength in it sees the permittivity the pole model has
+*there*, while RCWA is re-solved per wavelength and handed a different `ε` each time. The
+crossover drops from 2850 wavelengths on the lossless dielectric to **147** on the metal at the
+same cell size — a 19x improvement, and the best figure measured anywhere here.
+
+**It is still 147, and the reason is worth naming.** A metal makes RCWA converge badly, but it
+makes the FDTD grid requirement worse by more: the wave inside this metal is 138 nm long and
+its skin depth is 11 nm, and the grid is uniform, so the whole domain pays for them. On the
+scene above the metal is 60 nm of a 2145 nm span — **97 % of the fine grid is spent outside the
+material that demanded it.** A graded or subgridded mesh is therefore a far bigger lever on
+this module's usefulness than any of the formulation work in §9, and it is the one thing that
+could move `N*` into the range where a caller would reach for FDTD by default.
 
 **What is approximated.** The pole strength is weighted by the fraction of each Yee cell the
 dispersive material fills. That is exact in the same limit the arithmetic permittivity average
@@ -455,6 +477,11 @@ material. Half-spaces are not dispersive.
 
 ## 9. What is not yet answered
 
+- **A non-uniform grid.** Measured in §2 and §8b: on a metal grating, 97 % of the fine cells
+  are outside the metal that required them, and the crossover against RCWA sits at 147
+  wavelengths because of it. Nothing else on this list changes that number, and this could
+  change it by an order of magnitude. It is the difference between a solver someone chooses
+  and one they only cross-check with.
 - **A fixed-*angle* spectrum at oblique incidence**, rather than the fixed-`kx` sweep of §8.
   This is the gap that matters most once the module is read as a solver rather than a harness:
   a spectrum at a tilt is an ordinary thing to want, and it is exactly what one run cannot give
