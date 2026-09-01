@@ -531,61 +531,129 @@ class _Incident1D:
     amplitude; a sign or index mutant anywhere in the coupling drives it to 1e-2 or worse, so
     the check has ~15 orders of resolving power and :mod:`tests.test_fdtd` runs it.
 
-    **Why one dimension is still enough at oblique incidence.** The medium here is uniform
-    along x, and ``exp(i kx x)`` is an eigenvector of the *discrete* shift, so a field of that
-    form stays of that form on the grid exactly. Every x derivative therefore collapses to a
-    single multiplier -- ``kx_op = 2i sin(kx dx / 2) / dx``, which is the discrete operator
-    the 2D grid applies and not the continuum ``i kx``. That is what keeps the cancellation at
-    round-off instead of at the dispersion mismatch between the two grids.
+    **Why one dimension is still enough away from normal incidence.** The medium here is
+    uniform in both in-plane directions, and ``exp(i kx x)`` is an eigenvector of the *discrete*
+    x shift while the structure is invariant along y, so a field of that form stays of that
+    form on the grid exactly. Every x derivative collapses to one multiplier ``kx_op``, which
+    is the discrete operator the 2D grid applies and not the continuum ``i kx``; every y
+    derivative is ``i ky`` outright, because there is no y grid to discretise.
 
-    The third component appears only at oblique incidence and it is a **different** component
-    for the two polarisations: ``Hz`` for TE and ``Ez`` for TM. The ``(E, H, eps, mu)``
-    duality that makes one 1D system serve both at normal incidence does not survive the
-    transverse term, because ``eps != mu``. At ``kx = 0`` both branches drop it and the two
-    reduce to the same pair, ``(Ey, Hx)`` and ``(Ex, -Hy)`` -- and that minus sign has **two**
-    consumers, the TFSF correction and the incident amplitude the result is normalised by.
-    Getting it wrong in only one flips the sign of ``r_p`` while leaving every efficiency
-    intact.
+    **Six components, or three.** At ``ky = 0`` the six split exactly into ``(Ey, Hx, Hz)`` and
+    ``(Hy, Ex, Ez)`` -- the TE and TM triples -- and the class carries only the one a pure
+    TE/TM run needs. A conical mount couples them through four terms and needs all six. That
+    split is the whole reason a conical mount is a different formulation rather than a
+    different angle.
     """
 
+    #: Which arrays sit on the z nodes and which on the half steps, by the Yee staggering the
+    #: 2D grid already fixes: `Ey`, `Hz` and `Ex` on the nodes, `Hx`, `Hy` and `Ez` between
+    #: them. The four conical coupling pairs are co-located by construction -- `Hx` with `Ez`,
+    #: `Hz` with `Ex` -- so no interpolation enters anywhere.
+    NODE = ('ey', 'hz', 'ex')
+    HALF = ('hx', 'hy', 'ez')
+
     def __init__(self, nz, dz, dt, eps_r, n_pml, k_src, wavelength, f0, width, t0,
-                 tetm, kx_op, dtype, mu_r=1.0):
+                 tetm, kx_op, dtype, mu_r=1.0, ky=0.0, drive=None):
         self.dz, self.dt, self.eps_r, self.k_src = dz, dt, eps_r, k_src
         self.mu_r = float(np.real(mu_r))
         self.f0, self.width, self.t0 = f0, width, t0
-        self.tetm, self.kx_op = tetm, kx_op
-        self.e = np.zeros(nz, dtype=dtype)
-        self.h = np.zeros(nz - 1, dtype=dtype)
-        #: `Hz` on TE and `Ez` on TM; identically zero at normal incidence.
-        self.third = np.zeros(nz, dtype=dtype)
+        self.tetm, self.kx_op, self.ky = tetm, kx_op, complex(ky)
+        #: The tangential electric amplitudes the source drives, `(ex, ey)`. For a pure TE/TM
+        #: run this is the single component that polarisation names; for a conical mount it is
+        #: the incident wave's s or p direction, which are the two eigenpolarisations of a
+        #: uniform medium at fixed `(kx, ky)` and therefore do not mix.
+        #: `Ey` is TE's primary and `Ex` is TM's, so the default drives whichever one this
+        #: polarisation is named for. A conical run passes the s or p direction instead.
+        self.drive = drive if drive is not None else ((1.0, 0.0) if tetm == 'tm'
+                                                      else (0.0, 1.0))
+
+        for name in self.NODE:
+            setattr(self, name, np.zeros(nz, dtype=dtype))
+        for name in self.HALF:
+            setattr(self, name, np.zeros(nz - 1, dtype=dtype))
         self.node, self.half = cpml_profiles(nz, n_pml, dz, dt, wavelength, eps_r, eps_r)
-        self.psi_e = np.zeros(nz, dtype=dtype)
-        self.psi_h = np.zeros(nz - 1, dtype=dtype)
+        self.psi_hx = np.zeros(nz - 1, dtype=dtype)
+        self.psi_hy = np.zeros(nz - 1, dtype=dtype)
+        self.psi_ey = np.zeros(nz, dtype=dtype)
+        self.psi_ex = np.zeros(nz, dtype=dtype)
+        self.conical = self.ky != 0.0
+
+    # -- the two legacy accessors the TE/TM paths read ---------------------------------
+    @property
+    def e(self):
+        """The primary electric amplitude: ``Ey`` on TE, ``Ex`` on TM."""
+        return self.ey if self.tetm == 'te' else self.ex
+
+    @property
+    def h(self):
+        """Its magnetic partner, ``Hx`` on TE and ``-Hy`` on TM.
+
+        That minus sign has **two** consumers -- the TFSF correction and the incident amplitude
+        the result is normalised by. Getting it wrong in only one flips the sign of ``r_p``
+        while leaving every efficiency intact.
+        """
+        return self.hx if self.tetm == 'te' else -self.hy
+
+    def _dz(self, field):
+        """``d/dz`` of a node array onto the half grid."""
+        return (field[1:] - field[:-1]) / self.dz
 
     def step_h(self):
-        d = (self.e[1:] - self.e[:-1]) / self.dz
-        self.psi_h = self.half['b'] * self.psi_h + self.half['a'] * d
-        self.h += (self.dt / self.mu_r) * (d / self.half['kappa'] + self.psi_h)
-        if self.tetm == 'tm':
-            # dh/dt = de/dz - ez*kx_op, from Faraday's y row with h = -Hy.
-            self.h -= (self.dt / self.mu_r) * self.third[:-1] * self.kx_op
+        ky, kx_op, dt, mu = 1j * self.ky, self.kx_op, self.dt, self.mu_r
+        te = self.tetm in ('te', None)
+        tm = self.tetm in ('tm', None)
+        if te:
+            d = self._dz(self.ey)
+            self.psi_hx = self.half['b'] * self.psi_hx + self.half['a'] * d
+            drive = d / self.half['kappa'] + self.psi_hx
+            if self.conical:
+                drive = drive - ky * self.ez
+            self.hx += (dt / mu) * drive
+            # dHz/dt = i ky Ex - dEy/dx.
+            step = -self.ey * kx_op
+            if self.conical:
+                step = step + ky * self.ex
+            self.hz += (dt / mu) * step
+        if tm:
+            d = self._dz(self.ex)
+            self.psi_hy = self.half['b'] * self.psi_hy + self.half['a'] * d
+            # dHy/dt = dEz/dx - dEx/dz.
+            self.hy += (dt / mu) * (self.ez * kx_op - d / self.half['kappa'] - self.psi_hy)
 
     def step_e(self, t):
-        d = np.zeros_like(self.e)
-        d[1:-1] = (self.h[1:] - self.h[:-1]) / self.dz
-        self.psi_e = self.node['b'] * self.psi_e + self.node['a'] * d
-        curl = d / self.node['kappa'] + self.psi_e
-        if self.tetm == 'te':
-            # dHz/dt = -Ey*kx_op, and Ey then reads Hz back.
-            self.third -= (self.dt / self.mu_r) * self.e * self.kx_op
-            curl = curl - self.third * self.kx_op
-        else:
-            # eps dEz/dt = Hy*kx_op = -h*kx_op.
-            self.third[:-1] -= (self.dt / self.eps_r) * self.h * self.kx_op
-        self.e[1:-1] += (self.dt / self.eps_r) * curl[1:-1]
+        ky, kx_op, dt, eps = 1j * self.ky, self.kx_op, self.dt, self.eps_r
+        te = self.tetm in ('te', None)
+        tm = self.tetm in ('tm', None)
+        if te:
+            d = np.zeros_like(self.ey)
+            d[1:-1] = (self.hx[1:] - self.hx[:-1]) / self.dz
+            self.psi_ey = self.node['b'] * self.psi_ey + self.node['a'] * d
+            curl = d / self.node['kappa'] + self.psi_ey - self.hz * kx_op
+            self.ey[1:-1] += (dt / eps) * curl[1:-1]
+        if tm:
+            d = np.zeros_like(self.ex)
+            d[1:-1] = -(self.hy[1:] - self.hy[:-1]) / self.dz
+            self.psi_ex = self.node['b'] * self.psi_ex + self.node['a'] * d
+            curl = d / self.node['kappa'] + self.psi_ex
+            if self.conical:
+                curl = curl + ky * self.hz
+            self.ex[1:-1] += (dt / eps) * curl[1:-1]
+            # eps dEz/dt = dHy/dx - i ky Hx.
+            step = self.hy * kx_op
+            if self.conical:
+                step = step - ky * self.hx
+            self.ez += (dt / eps) * step
         # Additive rather than imposed: a soft source is transparent to whatever comes back
         # through it, which matters because the source sits between the PML and the monitor.
-        self.e[self.k_src] += gaussian_pulse(t, self.f0, self.width, self.t0)
+        # It drives the two tangential electric components in the ratio the incident
+        # polarisation names, which for a uniform medium at fixed (kx, ky) excites exactly one
+        # of the two eigenpolarisations.
+        pulse = gaussian_pulse(t, self.f0, self.width, self.t0)
+        drive_x, drive_y = self.drive
+        if te and drive_y:
+            self.ey[self.k_src] += drive_y * pulse
+        if tm and drive_x:
+            self.ex[self.k_src] += drive_x * pulse
 
 
 # ---------------------------------------------------------------------------------------
@@ -634,7 +702,7 @@ class _Grid:
     """
 
     def __init__(self, wavelength, period, raster, thickness, eps_top, eps_bot,
-                 resolution, n_pml, courant, subpixel, theta=0.0,
+                 resolution, n_pml, courant, subpixel, theta=0.0, phi=0.0,
                  dispersion=None, poles=None, mu_raster=None, mu_top=1.0, mu_bot=1.0,
                  pad_scale=1.0):
         self.wavelength = float(wavelength)
@@ -674,14 +742,19 @@ class _Grid:
         # than assumed, because a degrees/radians slip returns a legal answer at a legal angle.
         k0 = 2.0 * np.pi / self.wavelength
         self.theta = float(np.real(0.0 if theta is None else theta))
-        self.kx_inc = n_top * float(np.sin(self.theta))
+        self.phi = float(np.real(0.0 if phi is None else phi))
+        self.kx_inc = n_top * float(np.sin(self.theta)) * float(np.cos(self.phi))
+        #: The other in-plane component. The structure is invariant along y, so `ky` is
+        #: conserved and never discretised -- every `d/dy` is `i*ky` outright. It is what
+        #: couples the two polarisations, and `phi = 0` is exactly where it vanishes.
+        self.ky_inc = n_top * float(np.sin(self.theta)) * float(np.sin(self.phi))
         #: The phase the field picks up crossing one cell edge. `1` is normal incidence, and
         #: the arrays stay REAL there -- a complex dtype would double the cost of every run
         #: for a phase that is identically one.
         #: Real `1.0` and `0.0` rather than `(1+0j)` and `0j` at normal incidence: a complex
         #: literal upcasts every array it touches, which would silently double the cost of
         #: every normal-incidence run for a phase that is identically one.
-        self.dtype = complex if self.kx_inc != 0.0 else float
+        self.dtype = complex if (self.kx_inc != 0.0 or self.ky_inc != 0.0) else float
         self.bloch = (np.exp(1j * k0 * self.kx_inc * self.period)
                       if self.dtype is complex else 1.0)
 
@@ -713,7 +786,13 @@ class _Grid:
         n_min = float(np.sqrt(np.min(np.real(np.concatenate([
             (self.raster * self.mu_raster).ravel(),
             [self.n_top_sq, self.n_bot_sq]])))))
-        self.dt = courant * n_min / np.sqrt(1.0 / self.dx ** 2 + 1.0 / self.dz ** 2)
+        # `i*ky` enters the amplification factor exactly as a difference operator does, so it
+        # joins the bound. It is small next to `1/dx` -- `ky/2 <= pi n/wl` against `20 n/wl` at
+        # twenty cells per wavelength -- but it is not zero, and a bound that ignores a term is
+        # a bound that fails at the one angle nobody tested.
+        ky_phys = 2.0 * np.pi / self.wavelength * self.ky_inc
+        self.dt = courant * n_min / np.sqrt(1.0 / self.dx ** 2 + 1.0 / self.dz ** 2
+                                            + (0.5 * ky_phys) ** 2)
 
         #: The DISCRETE x-derivative the auxiliary grid applies, not the continuum `i*kx`:
         #: a field `exp(i kx x)` is an eigenvector of the grid's shift, and the eigenvalue is
@@ -831,7 +910,15 @@ def _time_loop(grid, tetm, n_steps, wavelengths):
         offset = 0.5 if tetm == 'tm' else 0.0
         x_phase = np.exp(1j * k0 * grid.kx_inc * (np.arange(nx) + offset) * dx)
 
-    if tetm == 'te':
+    # A conical mount couples the two triples, so both run and the four `ky` terms join them.
+    # At ky = 0 they decouple exactly and only the named one is allocated -- which is why a
+    # pure TE/TM run costs no more than it did.
+    conical = grid.ky_inc != 0.0
+    te_on = conical or tetm == 'te'
+    tm_on = conical or tetm == 'tm'
+    ky = 1j * (2.0 * np.pi / centre) * grid.ky_inc
+
+    if te_on:
         # (Ey, Hx, Hz). Ey sits on the z nodes and the x nodes, and is tangential to every
         # interface a 1D grating has, so it takes no harmonic average.
         eps = grid.eps_for(False, False, None).real
@@ -843,7 +930,7 @@ def _time_loop(grid, tetm, n_steps, wavelengths):
         hx = np.zeros((nz - 1, nx), dtype=dtype)
         hz = np.zeros((nz, nx), dtype=dtype)
         poles_y = grid.pole_state((nz, nx), False, False, dtype)
-    else:
+    if tm_on:
         # (Hy, Ex, Ez). Ex is normal to the tooth's vertical walls, Ez to the horizontal ones.
         eps_x = grid.eps_for(False, True, 'x').real
         eps_z = grid.eps_for(True, False, 'z').real
@@ -854,8 +941,12 @@ def _time_loop(grid, tetm, n_steps, wavelengths):
         ez = np.zeros((nz - 1, nx), dtype=dtype)
         poles_x = grid.pole_state((nz, nx), False, True, dtype)
         poles_z = grid.pole_state((nz - 1, nx), True, False, dtype)
-    psi_h = np.zeros((nz - 1, nx), dtype=dtype)
-    psi_e = np.zeros((nz, nx), dtype=dtype)
+    # One CPML accumulator per stretched update. The two triples shared a pair while only one
+    # of them ever ran; a conical mount runs both.
+    psi_hx = np.zeros((nz - 1, nx), dtype=dtype)
+    psi_hy = np.zeros((nz - 1, nx), dtype=dtype)
+    psi_ey = np.zeros((nz, nx), dtype=dtype)
+    psi_ex = np.zeros((nz, nx), dtype=dtype)
 
     n_f = len(freq)
     dft_ref = np.zeros((n_f, nx), dtype=complex)
@@ -868,32 +959,39 @@ def _time_loop(grid, tetm, n_steps, wavelengths):
     for step in range(n_steps):
         # --- H, to level n + 1/2 --------------------------------------------------------
         inc.step_h()
-        if tetm == 'te':
-            # Yee 1966: dHx/dt = dEy/dz, dHz/dt = -dEy/dx. Only z carries a PML.
+        if te_on:
+            # Yee 1966: dHx/dt = dEy/dz - i ky Ez, dHz/dt = i ky Ex - dEy/dx. Only z has a PML.
+            # `Ez` sits where `Hx` does and `Ex` where `Hz` does, so the conical coupling is
+            # co-located and no interpolation enters.
             d = (ey[1:] - ey[:-1]) / dz
-            psi_h = hb * psi_h + ha * d
-            hx += dt * (d / hk + psi_h) / mu_x
-            hz -= dt * (_shift_up(ey, grid.bloch) - ey) / dx / mu_z
+            psi_hx = hb * psi_hx + ha * d
+            curl_hx = d / hk + psi_hx
+            curl_hz = -(_shift_up(ey, grid.bloch) - ey) / dx
+            if conical:
+                curl_hx = curl_hx - ky * ez
+                curl_hz = curl_hz + ky * ex
+            hx += dt * curl_hx / mu_x
+            hz += dt * curl_hz / mu_z
             # TFSF (Umashankar & Taflove 1982): Hx at kt-1/2 is a scattered-field quantity
             # whose stencil reached across the boundary into the total-field Ey[kt].
             hx[kt - 1] -= dt * inc.e[kt] * x_phase / dz / mu_x[kt - 1]
-        else:
-            # dHy/dt = dEz/dx - dEx/dz.
+        if tm_on:
+            # dHy/dt = dEz/dx - dEx/dz -- the one component no `ky` term reaches.
             d_ez = (_shift_up(ez, grid.bloch) - ez) / dx
             d_ex = (ex[1:] - ex[:-1]) / dz
-            psi_h = hb * psi_h + ha * d_ex
-            hy += dt * (d_ez - d_ex / hk - psi_h) / mu_y
+            psi_hy = hb * psi_hy + ha * d_ex
+            hy += dt * (d_ez - d_ex / hk - psi_hy) / mu_y
             # Ex_inc is `inc.e` outright -- see the sign note on _Incident1D.
             hy[kt - 1] += dt * inc.e[kt] * x_phase / dz / mu_y[kt - 1]
 
         # --- E, to level n + 1 ----------------------------------------------------------
         inc.step_e((step + 1) * dt)
-        if tetm == 'te':
-            # eps dEy/dt = dHx/dz - dHz/dx.
+        if te_on:
+            # eps dEy/dt = dHx/dz - dHz/dx -- the other component no `ky` term reaches.
             d = np.zeros((nz, nx), dtype=dtype)
             d[1:-1] = (hx[1:] - hx[:-1]) / dz
-            psi_e = nb * psi_e + na * d
-            curl = (d / nk + psi_e
+            psi_ey = nb * psi_ey + na * d
+            curl = (d / nk + psi_ey
                     - (hz - _shift_down(hz, grid.bloch)) / dx)
             # eps_inf dE/dt = curl H - dP/dt. `advance` reads E at level n and hands back the
             # increment every pole contributes, which is what makes the pair explicit.
@@ -902,18 +1000,24 @@ def _time_loop(grid, tetm, n_steps, wavelengths):
                 drive = drive - poles_y.advance(ey)
             ey[1:-1] += drive[1:-1] / eps[1:-1]
             ey[kt] -= dt * inc.h[kt - 1] * x_phase / dz / eps[kt]
-        else:
-            # eps dEx/dt = -dHy/dz ; eps dEz/dt = dHy/dx.
+        if tm_on:
+            # eps dEx/dt = i ky Hz - dHy/dz ; eps dEz/dt = dHy/dx - i ky Hx.
             d = np.zeros((nz, nx), dtype=dtype)
             d[1:-1] = -(hy[1:] - hy[:-1]) / dz
-            psi_e = nb * psi_e + na * d
-            drive = dt * (d / nk + psi_e)
+            psi_ex = nb * psi_ex + na * d
+            curl_ex = d / nk + psi_ex
+            if conical:
+                curl_ex = curl_ex + ky * hz
+            drive = dt * curl_ex
             if poles_x is not None:
                 drive = drive - poles_x.advance(ex)
             ex[1:-1] += drive[1:-1] / eps_x[1:-1]
             # Hy_inc is MINUS inc.h, which is where this sign comes from.
             ex[kt] -= dt * inc.h[kt - 1] * x_phase / dz / eps_x[kt]
-            drive_z = dt * (hy - _shift_down(hy, grid.bloch)) / dx
+            curl_ez = (hy - _shift_down(hy, grid.bloch)) / dx
+            if conical:
+                curl_ez = curl_ez - ky * hx
+            drive_z = dt * curl_ez
             if poles_z is not None:
                 drive_z = drive_z - poles_z.advance(ez)
             ez += drive_z / eps_z
