@@ -574,130 +574,21 @@ def _to_numpy(x):
     return np.asarray(x)
 
 
-def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=None,
-                        base_shape=None):
-    """Unit normal vector field ``(normal_x, normal_y)`` of a raster layer.
+def _distance_gradient(interface_mask, shape, lattice=None):
+    """Raw gradient of the periodic unsigned distance-to-interface map, in Cartesian components.
 
-    This is a **geometry** quantity — it depends on where the material interfaces sit, not on
-    the permittivity values carried between them — so it is computed eagerly in NumPy/SciPy
-    and then held fixed while gradients flow through the permittivity. That holds for every
-    ``method``: the field is a constant to the solve, whatever the backend.
+    Split out of :func:`normal_vector_field` because two different things read it. The
+    direction is what the ``'distance'`` construction normalises into a normal field; the
+    **magnitude** is ``|grad d|``, which is a property of the interface set rather than of any
+    construction — 1 almost everywhere, dropping to 0 exactly on the medial axis, and the same
+    array whichever of the four builders drew the directions.
 
-    ``method`` selects the construction (:class:`~wavebit._core.enums.NormalMethod`;
-    ``None`` means ``'distance'``, the original). The default body below is ``'distance'``:
-    the gradient of the unsigned distance to the interface set. Its directions quantize to
-    the {0, 45} degree list integer central differences can spell — ~14 degrees mean in the
-    boundary band, flat in N — which is what the other three constructions remove; they
-    live in :mod:`wavebit._core.normal_methods`, and ``docs/nvf-normal-methods.md`` carries
-    the measurements that rank them (``'contour'`` is the one that lost nowhere).
-
-    ``base_shape`` is the layer's shape before the ``4*truncation_order+1`` floor lift, when the caller
-    lifted it. The smoothing constructions state their pixel-unit policies on the base grid
-    — a lifted raster is the same staircase spelled with more pixels, so smoothing scales
-    stated on the lifted grid would shrink under the lift instead of holding still.
-    ``'distance'`` has no scale and ignores it.
-
-    ``interface_mask`` is the one input the ``'distance'`` construction reads (see
-    :func:`_interface_mask`). Supplying it lets a caller that can obtain the mask some other
-    way skip the whole-array NumPy conversion this would otherwise need, which is what lets the
-    NVF paths differentiate without a frozen geometry — see
-    :func:`_upsampled_interface_mask`. Left ``None``, the mask is read off ``eps_matrix``,
-    which needs concrete values. The other three constructions read the *values* too (their
-    indicators need to know which phase is which), so a traced layer without concrete values
-    can take them only through ``freeze_geometry()`` — asked to anyway, they raise and say
-    so rather than silently answering with ``'distance'``.
-
-    The factorization needs a normal field that is unit magnitude across the *whole* cell —
-    that is what makes ``C_xx + C_yy = I`` in :func:`nvf_conv_matrices`. Every method
-    delivers that (zeros only on skeleton-type points, which the assembly collapses to the
-    direct rule); the legacy ``method='sobel'`` alternative (a raw ``grad(eps)``) is nonzero
-    only in the one-pixel band at the interface, so it is not a unit field and collapses the
-    projector toward 0, which degenerates the scheme back toward the plain direct rule. It
-    was never reachable from the solver and was dropped in the port. See
-    ``tests/test_nvf_normal_field.py``.
-    For the shape-based (non-raster) normal field, see
-    :func:`wavebit._core.analytic.normal_vector_field_analytical`.
-
-    **Everything here is periodic, and all three pieces of it have to be.** The cell is a torus,
-    so rolling the raster by whole pixels is an exact lattice translation — the same structure
-    named differently — and every efficiency must come back unchanged. It did not: the mask
-    compared only inside the array, the distance transform measured to the in-cell interface
-    rather than the periodically nearest one, and ``np.gradient`` is one-sided on the first and
-    last row and column. Together they moved ``max|dR|`` by ~1e-2 at every ``truncation_order``, and no
-    subset of the three fixes it (fixed 2026-08-17; ``docs/nvf-normal-methods.md`` has the
-    table, ``tests/test_nvf_lattice_translation.py`` the guard). The defect did not shrink with
-    ``truncation_order`` because the floor lift is a block repeat, so a finer grid is the same staircase.
-
-    ``lattice`` is the cell basis the raster indexes into. It matters because this is the one
-    piece of the NVF construction that is *Cartesian-geometric* rather than index-based: the
-    distance transform and ``np.gradient`` both work in index steps, and only a basis whose
-    pixels are square in real space makes an index-space normal a Cartesian one. Left ``None``
-    the index grid is taken to be isotropic Cartesian, which is what this has always assumed;
-    given a basis, distances pick up the per-axis physical step and the gradient is carried
-    through ``J^-T`` (:func:`wavebit._core.lattice.jacobian`) before normalising, so the
-    direction is exact at the interface for a skewed *or* merely non-square cell.
-
-    That correction is what lets NVF serve a non-orthogonal lattice at all, and it is also why
-    NVF rather than Li's nested rule is the factorization that ports there: the tensor this
-    feeds (:func:`_nvf_assemble`) is written in Cartesian components, so once the normal is
-    Cartesian nothing else in the factorization learns the cell was skewed.
-
-    The other three constructions carry the basis too, since 2026-08-21 — the paragraph above
-    describes this body, not the option. Two of them need no pullback at all (they never take
-    an index-space difference), which is why they were portable in the first place and why
-    they are the better field on a skewed cell than this one:
-    :mod:`wavebit._core.normal_methods` says which is which, and ``docs/oblique-lattice.md``
-    what it is worth (18.5 degrees against 0.42 on a disc at a 60-degree skew).
+    Returns ``(g_x, g_y)`` **unnormalised**. Everything periodic about the construction lives
+    here: the 3x3 tiling under the transform and the wrapping central difference. See
+    :func:`normal_vector_field` for why each of those is load-bearing.
     """
     import numpy as np
     from scipy.ndimage import distance_transform_edt
-    from .enums import NormalMethod, normal_method_of
-
-    shape = tuple(eps_matrix.shape)
-    method = NormalMethod.DISTANCE if method is None else normal_method_of(method)
-
-    # A one-cell axis carries no interface of its own: the structure cannot vary along it, so
-    # the normal is constant. Say so directly -- `np.gradient` needs three cells and would
-    # otherwise raise, which is what made NVF unusable on 1D gratings. With a constant normal
-    # the NVF projector reduces to Li's rules exactly (C_xx = I, C_xy = C_yy = 0 gives
-    # eps_xx = <1/eps>^-1 and eps_yy = <eps>), so this is not an approximation.
-    # Shared across methods: nothing about the constant field depends on the construction.
-    #
-    # *Which* constant is the part a skewed cell changes. A raster invariant along `a2` has
-    # interfaces that contain `a2`, so the normal is along `b1` -- perpendicular to `a2`, not
-    # parallel to `a1` -- and only on an axis-aligned cell are those the same direction. This
-    # is the shortcut's version of the `J^-T` pullback the general path below applies: with
-    # `df/dj == 0`, `J^-T @ (df/di, 0)` is the first row of `J^-1`, which is `b1` up to the
-    # scale normalisation removes. Returning `x_hat` there instead cost R 0.132 and T 0.090 on
-    # a 50% binary grating at a 60-degree skew, energy conserving throughout
-    # (`tests/test_oblique_lattice.py::test_a_one_row_skewed_cell_is_the_grating_it_draws`).
-    # An axis-aligned cell gives back exactly (1.0, 0.0) / (0.0, 1.0), to the bit.
-    if 1 in shape:
-        if lattice is None:
-            ux, uy = (1.0, 0.0) if shape[0] == 1 else (0.0, 1.0)
-        else:
-            recip = np.linalg.inv(np.asarray(lattice, dtype=float))
-            b = recip[0] if shape[0] == 1 else recip[1]
-            ux, uy = b / np.hypot(b[0], b[1])
-        return np.full(shape, ux), np.full(shape, uy)
-
-    if method != NormalMethod.DISTANCE:
-        from .normal_methods import DISPATCH
-        try:
-            eps = _to_numpy(eps_matrix)
-        except Exception:
-            raise TypeError(
-                f"normal_method={method.value!r} reads the layer's values (its indicator "
-                f"needs to know which phase is which), and this layer is a tracer without "
-                f"concrete ones. Precompute the field eagerly with freeze_geometry() and "
-                f"hand it to solve(geometry=...), or use normal_method='distance', "
-                f"whose mask-only path a trace can take.") from None
-        mask = (_interface_mask(eps) if interface_mask is None
-                else np.asarray(interface_mask, dtype=bool))
-        return DISPATCH[method.value](eps, mask, lattice, base_shape)
-
-    if interface_mask is None:
-        interface_mask = _interface_mask(_to_numpy(eps_matrix))
 
     ny_, nx_ = shape
 
@@ -803,7 +694,134 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
             g_i = (xp_.roll(dmap_, -1, axis=1) - xp_.roll(dmap_, 1, axis=1)) / 2.0
             det_ = a_ * d_ - b_ * c_
             g_i, g_j = ((d_ * g_i - c_ * g_j) / det_, (-b_ * g_i + a_ * g_j) / det_)
-    gx, gy = g_i, g_j
+    return g_i, g_j
+
+
+def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=None,
+                        base_shape=None):
+    """Unit normal vector field ``(normal_x, normal_y)`` of a raster layer.
+
+    This is a **geometry** quantity — it depends on where the material interfaces sit, not on
+    the permittivity values carried between them — so it is computed eagerly in NumPy/SciPy
+    and then held fixed while gradients flow through the permittivity. That holds for every
+    ``method``: the field is a constant to the solve, whatever the backend.
+
+    ``method`` selects the construction (:class:`~wavebit._core.enums.NormalMethod`;
+    ``None`` means ``'distance'``, the original). The default body below is ``'distance'``:
+    the gradient of the unsigned distance to the interface set. Its directions quantize to
+    the {0, 45} degree list integer central differences can spell — ~14 degrees mean in the
+    boundary band, flat in N — which is what the other three constructions remove; they
+    live in :mod:`wavebit._core.normal_methods`, and ``docs/nvf-normal-methods.md`` carries
+    the measurements that rank them (``'contour'`` is the one that lost nowhere).
+
+    ``base_shape`` is the layer's shape before the ``4*truncation_order+1`` floor lift, when the caller
+    lifted it. The smoothing constructions state their pixel-unit policies on the base grid
+    — a lifted raster is the same staircase spelled with more pixels, so smoothing scales
+    stated on the lifted grid would shrink under the lift instead of holding still.
+    ``'distance'`` has no scale and ignores it.
+
+    ``interface_mask`` is the one input the ``'distance'`` construction reads (see
+    :func:`_interface_mask`). Supplying it lets a caller that can obtain the mask some other
+    way skip the whole-array NumPy conversion this would otherwise need, which is what lets the
+    NVF paths differentiate without a frozen geometry — see
+    :func:`_upsampled_interface_mask`. Left ``None``, the mask is read off ``eps_matrix``,
+    which needs concrete values. The other three constructions read the *values* too (their
+    indicators need to know which phase is which), so a traced layer without concrete values
+    can take them only through ``freeze_geometry()`` — asked to anyway, they raise and say
+    so rather than silently answering with ``'distance'``.
+
+    The factorization needs a normal field that is unit magnitude across the *whole* cell —
+    that is what makes ``C_xx + C_yy = I`` in :func:`nvf_conv_matrices`. Every method
+    delivers that (zeros only on skeleton-type points, which the assembly collapses to the
+    direct rule); the legacy ``method='sobel'`` alternative (a raw ``grad(eps)``) is nonzero
+    only in the one-pixel band at the interface, so it is not a unit field and collapses the
+    projector toward 0, which degenerates the scheme back toward the plain direct rule. It
+    was never reachable from the solver and was dropped in the port. See
+    ``tests/test_nvf_normal_field.py``.
+    For the shape-based (non-raster) normal field, see
+    :func:`wavebit._core.analytic.normal_vector_field_analytical`.
+
+    **Everything here is periodic, and all three pieces of it have to be.** The cell is a torus,
+    so rolling the raster by whole pixels is an exact lattice translation — the same structure
+    named differently — and every efficiency must come back unchanged. It did not: the mask
+    compared only inside the array, the distance transform measured to the in-cell interface
+    rather than the periodically nearest one, and ``np.gradient`` is one-sided on the first and
+    last row and column. Together they moved ``max|dR|`` by ~1e-2 at every ``truncation_order``, and no
+    subset of the three fixes it (fixed 2026-08-17; ``docs/nvf-normal-methods.md`` has the
+    table, ``tests/test_nvf_lattice_translation.py`` the guard). The defect did not shrink with
+    ``truncation_order`` because the floor lift is a block repeat, so a finer grid is the same staircase.
+
+    ``lattice`` is the cell basis the raster indexes into. It matters because this is the one
+    piece of the NVF construction that is *Cartesian-geometric* rather than index-based: the
+    distance transform and ``np.gradient`` both work in index steps, and only a basis whose
+    pixels are square in real space makes an index-space normal a Cartesian one. Left ``None``
+    the index grid is taken to be isotropic Cartesian, which is what this has always assumed;
+    given a basis, distances pick up the per-axis physical step and the gradient is carried
+    through ``J^-T`` (:func:`wavebit._core.lattice.jacobian`) before normalising, so the
+    direction is exact at the interface for a skewed *or* merely non-square cell.
+
+    That correction is what lets NVF serve a non-orthogonal lattice at all, and it is also why
+    NVF rather than Li's nested rule is the factorization that ports there: the tensor this
+    feeds (:func:`_nvf_assemble`) is written in Cartesian components, so once the normal is
+    Cartesian nothing else in the factorization learns the cell was skewed.
+
+    The other three constructions carry the basis too, since 2026-08-21 — the paragraph above
+    describes this body, not the option. Two of them need no pullback at all (they never take
+    an index-space difference), which is why they were portable in the first place and why
+    they are the better field on a skewed cell than this one:
+    :mod:`wavebit._core.normal_methods` says which is which, and ``docs/oblique-lattice.md``
+    what it is worth (18.5 degrees against 0.42 on a disc at a 60-degree skew).
+    """
+    import numpy as np
+    from .enums import NormalMethod, normal_method_of
+
+    shape = tuple(eps_matrix.shape)
+    method = NormalMethod.DISTANCE if method is None else normal_method_of(method)
+
+    # A one-cell axis carries no interface of its own: the structure cannot vary along it, so
+    # the normal is constant. Say so directly -- `np.gradient` needs three cells and would
+    # otherwise raise, which is what made NVF unusable on 1D gratings. With a constant normal
+    # the NVF projector reduces to Li's rules exactly (C_xx = I, C_xy = C_yy = 0 gives
+    # eps_xx = <1/eps>^-1 and eps_yy = <eps>), so this is not an approximation.
+    # Shared across methods: nothing about the constant field depends on the construction.
+    #
+    # *Which* constant is the part a skewed cell changes. A raster invariant along `a2` has
+    # interfaces that contain `a2`, so the normal is along `b1` -- perpendicular to `a2`, not
+    # parallel to `a1` -- and only on an axis-aligned cell are those the same direction. This
+    # is the shortcut's version of the `J^-T` pullback the general path below applies: with
+    # `df/dj == 0`, `J^-T @ (df/di, 0)` is the first row of `J^-1`, which is `b1` up to the
+    # scale normalisation removes. Returning `x_hat` there instead cost R 0.132 and T 0.090 on
+    # a 50% binary grating at a 60-degree skew, energy conserving throughout
+    # (`tests/test_oblique_lattice.py::test_a_one_row_skewed_cell_is_the_grating_it_draws`).
+    # An axis-aligned cell gives back exactly (1.0, 0.0) / (0.0, 1.0), to the bit.
+    if 1 in shape:
+        if lattice is None:
+            ux, uy = (1.0, 0.0) if shape[0] == 1 else (0.0, 1.0)
+        else:
+            recip = np.linalg.inv(np.asarray(lattice, dtype=float))
+            b = recip[0] if shape[0] == 1 else recip[1]
+            ux, uy = b / np.hypot(b[0], b[1])
+        return np.full(shape, ux), np.full(shape, uy)
+
+    if method != NormalMethod.DISTANCE:
+        from .normal_methods import DISPATCH
+        try:
+            eps = _to_numpy(eps_matrix)
+        except Exception:
+            raise TypeError(
+                f"normal_method={method.value!r} reads the layer's values (its indicator "
+                f"needs to know which phase is which), and this layer is a tracer without "
+                f"concrete ones. Precompute the field eagerly with freeze_geometry() and "
+                f"hand it to solve(geometry=...), or use normal_method='distance', "
+                f"whose mask-only path a trace can take.") from None
+        mask = (_interface_mask(eps) if interface_mask is None
+                else np.asarray(interface_mask, dtype=bool))
+        return DISPATCH[method.value](eps, mask, lattice, base_shape)
+
+    if interface_mask is None:
+        interface_mask = _interface_mask(_to_numpy(eps_matrix))
+
+    gx, gy = _distance_gradient(interface_mask, shape, lattice)
     if isinstance(gx, np.ndarray):
         norm = np.hypot(gx, gy)
         norm[norm < _FLAT_PIXEL] = 1.0
