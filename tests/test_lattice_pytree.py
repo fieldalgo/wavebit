@@ -370,9 +370,7 @@ def test_naming_both_period_and_lattice_is_refused():
 
     # 2. the typed container, which holds both by design (`period` is its derived readout)
     from wavebit._core.domain import Stack
-    # a plain 2x2, which is what a `Stack` stores -- a `Lattice` object is not JSON-
-    # representable, which is its own gap and not this one's business.
-    stack = Stack.from_structure(eps, [300.0], lattice=np.asarray(A).tolist())
+    stack = Stack.from_structure(eps, [300.0], lattice=A)
     kw = stack.as_kwargs()
     assert 'lattice' in kw and 'period' not in kw
     wavebit.rcwa(**kw, backend=0, wavelength=900.0, truncation_order=[2, 2],
@@ -387,6 +385,44 @@ def test_naming_both_period_and_lattice_is_refused():
     assert 'period' in spec.to_dict()['stack']            # the writer still emits it
     assert np.allclose(np.asarray(as_lattice(lattice=reloaded.stack.lattice)), np.asarray(A))
     assert reloaded.key() == spec.key()
+
+
+def test_a_cell_built_the_documented_way_survives_the_document():
+    """``Stack`` took a ``Lattice`` and then ``to_json`` refused it -- accepted, unwritable.
+
+    ``Stack`` stores the plain ``(2, 2)`` on purpose ("this layer passes through, and ingest
+    converts"), and ``_jsonable`` recognises what it can write by ``hasattr(value, 'tolist')``.
+    A ``Lattice`` has ``__array__`` but had no ``tolist``, so the cell built the way every
+    document recommends -- ``wavebit.hexagonal(400.)`` -- passed ``Stack.check`` and died at
+    ``to_json`` with "value of type Lattice is not JSON-representable". Being accepted by one
+    door and refused by the next is the failure mode; a plain 2x2 always worked.
+
+    ``axis_aligned`` is not carried and does not need to be -- it is read back off the basis at
+    ingest, which is where it is settled anyway -- so the round trip returns a nested list
+    rather than a ``Lattice``, exactly as it already did for an ndarray.
+    """
+    from wavebit import Incidence, Stack
+    from wavebit._core.spec import JobSpec
+
+    A = wavebit.hexagonal(400.0)
+    assert A.tolist() == np.asarray(A).tolist()          # the array form, in plain Python
+
+    for cell in (A, np.asarray(A), np.asarray(A).tolist()):
+        stack = Stack.from_structure(np.ones((1, 4, 4)) * 2.0, [300.0], lattice=cell)
+        assert not stack.check()                         # accepted...
+        spec = JobSpec(stack=stack, incidence=Incidence(wavelength=900.0, tetm='te'))
+        reloaded = JobSpec.from_json(spec.to_json())      # ...and writable
+        assert np.allclose(np.asarray(as_lattice(lattice=reloaded.stack.lattice)),
+                           np.asarray(A))
+        assert reloaded.key() == spec.key()
+
+    # and the reloaded document still solves the cell it named
+    stack = Stack.from_structure(np.ones((1, 4, 4)) * 2.0, [300.0], lattice=A)
+    kw = JobSpec.from_json(JobSpec(
+        stack=stack, incidence=Incidence(wavelength=900.0, tetm='te')).to_json()).stack.as_kwargs()
+    solver = wavebit.rcwa(**kw, backend=0, truncation_order=[2, 2], wavelength=900.0,
+                          factorization='nvf')
+    assert np.allclose(np.asarray(solver.lattice), np.asarray(A))
 
 
 def test_a_structure_with_no_cell_is_refused_rather_than_solved_on_the_unit_one():

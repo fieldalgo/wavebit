@@ -419,6 +419,9 @@ class Stack:
     #: ``period`` reports ``(|a1|, |a2|)`` there, which does not determine the basis. Kept as
     #: the plain ``(2, 2)`` rather than a :class:`~wavebit._core.lattice.Lattice` for the same
     #: reason the half-spaces stay uncoerced: this layer passes through, and ingest converts.
+    #: A ``Lattice`` is accepted too and writes through its array form -- it grew ``tolist``
+    #: for exactly this boundary, since being accepted here and refused by ``to_json`` was the
+    #: worst of the three options.
     lattice: Any = None
 
     @classmethod

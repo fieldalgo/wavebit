@@ -166,6 +166,23 @@ class Lattice:
         a = np.asarray(self.columns, dtype=float)
         return a if dtype is None else a.astype(dtype)
 
+    def tolist(self):
+        """The ``(2, 2)`` as nested lists -- the array form, in plain Python.
+
+        Beside :meth:`__array__` because it is the same view of the same numbers, and it earns
+        its place at the *document* boundary: :func:`wavebit._core.spec._jsonable` recognises a
+        value it can write by ``hasattr(value, 'tolist')``, so without this a cell built the
+        documented way -- ``Stack.from_structure(..., lattice=wavebit.hexagonal(400.))`` --
+        was accepted by ``Stack.validate`` and then refused by ``to_json`` as "value of type
+        Lattice is not JSON-representable". Accepting what cannot be written is the failure
+        mode; a plain 2x2 always worked.
+
+        ``axis_aligned`` is not carried and does not need to be: it is read back off the basis
+        at ingest, which is where it is settled in the first place. So the round trip returns a
+        nested list rather than a ``Lattice``, exactly as it already does for an ndarray.
+        """
+        return np.asarray(self.columns, dtype=float).tolist()
+
     # pytree protocol -- registered lazily; see _register_pytree_if_jax_loaded
     def tree_flatten(self):
         return (self.u, self.v), (self.axis_aligned,)
