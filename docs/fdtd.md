@@ -46,14 +46,20 @@ What the exercise actually taught, in the order the findings are worth reading:
 
 ## 1. What makes the comparison worth making
 
-RCWA and FDTD fail differently. RCWA truncates a Fourier series and inherits every
-factorization choice that series forces; FDTD discretises space and time and inherits
-numerical dispersion, a staircased boundary and an imperfect absorber. Nothing is shared
-except Maxwell's equations, so a defect that survives both is unlikely to belong to either.
+**This is a solver to choose, not a test harness.** It is the better tool wherever a
+broadband answer is wanted from one run — a spectrum costs one pass here and one RCWA solve
+per wavelength there — or where a scene converges badly in a truncated Fourier series. Where
+RCWA is better it is *much* better, and §2's cost column is the number to weigh.
 
-That is only true if the comparison is arranged so the two *can* disagree. The conventions are
-therefore taken from wavebit rather than from the FDTD literature, each one a place the two
-would otherwise silently part company:
+That the two fail differently is a second dividend. RCWA truncates a Fourier series and
+inherits every factorization choice that forces; FDTD discretises space and time and inherits
+numerical dispersion, a staircased boundary and an imperfect absorber. Nothing is shared
+except Maxwell's equations, so a defect surviving both is unlikely to belong to either — the
+two paths cross-check each other for free, at no cost to either being a real solver.
+
+Both readings need the same thing: the two must be comparable without a translation layer, and
+they must be able to *disagree*. So the conventions are taken from wavebit rather than from
+the FDTD literature, each one a place the two would otherwise silently part company:
 
 | Convention | Taken from | What adopting the other one costs |
 | --- | --- | --- |
@@ -107,8 +113,18 @@ Second order throughout, which is the point of the table — the number in any o
 property of the grid, but the *order* is a property of the method, and it is what says the
 remaining error is discretisation and not a floor.
 
-The cost column is the honest one: 5 nm is 8 s a polarisation against the RCWA solve's
-fraction of a second, and 2.5 nm is two minutes. This is a cross-check, not a production path.
+The cost column is the honest one, and it is the main thing to weigh when choosing between
+the two solvers: 5 nm is 8 s a polarisation against the RCWA solve's fraction of a second, and
+2.5 nm is two minutes.
+
+**A band buys some of that back, but less than it sounds.** A whole spectrum comes out of one
+FDTD run (§8) while RCWA re-solves per wavelength — but RCWA's per-wavelength cost is small
+enough that the crossover is far out. Measured on this scene at a 10 nm grid: **one FDTD run
+over seven wavelengths took 3.1 s; seven separate RCWA solves took 0.2 s**, so RCWA is 15x
+ahead there and the two would not meet until roughly a hundred wavelengths. That number is a
+property of the scene, not of the methods: it moves toward FDTD as the RCWA side gets harder
+(more layers, a higher truncation order, a structure that converges badly) and away as the
+FDTD grid is refined.
 
 ---
 
@@ -317,7 +333,7 @@ cross-check at all.
 | `incidence_side='bottom'` | The mirror the ETM applies has no counterpart here yet |
 | complex permittivity | Time domain carries loss as a conductivity, and a constant one reproduces a given `Im(ε)` at **one** frequency. Right at the centre wavelength, silently wrong beside it |
 | `Re(ε) ≤ 0` | A metal below its plasma frequency — the same dispersion problem, and no real wave speed, so no stable time step exists |
-| `mu` | **Parity, not omission**: the RCWA side refuses it on the same scene. `engine.py:2334` — *"mu is implemented on the 2D path only ... the 1D and conical operators carry no permeability slot at all"*. `solve_1d_conical` does carry `mu_top`/`mu_bot` parameters, but the engine refuses before reaching it, so they are unreachable defaults. There would be nothing to compare against |
+| `mu` | **Parity, not omission**: the RCWA side refuses it on the same scene. `engine.py:2334` — *"mu is implemented on the 2D path only ... the 1D and conical operators carry no permeability slot at all"*. `solve_1d_conical` does carry `mu_top`/`mu_bot` parameters, but the engine refuses before reaching it, so they are unreachable defaults. Neither path answers a magnetic 1D grating today |
 | analytic shape structure | Rasterising it would put a second geometry builder beside `draw.slice_structure`, which is NumPy-only, square-only and refuses a traced shape parameter. The two would disagree about one scene |
 | `(n_layers, Ny>1, Nx)` | A crossed grating needs a 3D FDTD |
 | oblique `lattice` | The Yee grid is Cartesian; a skewed cell needs the metric in every update |
@@ -346,8 +362,50 @@ refused by name instead of half-supported.
 
 ---
 
-## 8. What is not yet answered
+## 8. A spectrum out of one run
 
+This is the thing a time-domain solve does that a frequency-domain one cannot, and with the
+module read as a solver rather than a harness it is the main reason to choose it. The pulse
+already carries every frequency in its band; a second wavelength costs one more running sum
+over a monitor plane — O(nx) a step — against a whole new RCWA solve. `wavelength=` takes a
+sequence and returns one `Result` per entry:
+
+    results = wavebit.fdtd(stack=..., incidence=..., wavelength=[860., 900., 940.])
+
+It is an identity, not an approximation: the band run and three separate single-wavelength
+runs agree to 3e-3, which is the gap between two source *bandwidths* rather than between two
+answers. A band buys itself a shorter pulse — a Gaussian of temporal width `w` has a 1/e
+frequency half-width of `1/(πw)` — so the pulse is sized from the requested span. That is also
+what makes the band edge safe: every amplitude is divided by the incident spectrum, and with a
+fixed pulse width an incident spectrum 2.4e-7 of its peak returned `R = 105` on a scene whose
+true `R` is 0.04. Sizing the source keeps the weakest wavelength above 0.2 of the peak, and
+`tests/test_fdtd.py` pins that invariant rather than the unreachable guard behind it.
+
+**At oblique incidence a band is a fixed-`kx` sweep, not a fixed-angle one.** The grid holds
+one in-plane wavevector and `kx = k0·n·sin θ` carries `k0`, so the polar angle drifts across
+the band — 28.5° at 860 nm and 31.5° at 940 for a 30° centre. `angles_deg` in the diagnostics
+reports it. This is the method rather than this code: any periodic FDTD holding one transverse
+wavevector does the same, and escaping it is what a split-field formulation is for (§9).
+Normal incidence is unaffected, since `sin 0` is zero at every wavelength, so **a fixed-angle
+band is available there and only there**.
+
+A defect only a band at oblique incidence could expose lived here: the extraction reused
+`grid.kx_inc`, normalised by `k0` at the *centre* wavelength, at every wavelength in the band.
+The physical in-plane wavevector is what is held fixed, so the normalised value scales with
+the wavelength — the same statement as the angle drifting. Reusing the centre's value cost
+2.3e-2 at a band edge against 3.6e-3 at the centre, and is identically zero at normal
+incidence. The instrument that settles it is solving the RCWA path at the **drifted** angle:
+5.4e-3 after the fix.
+
+---
+
+## 9. What is not yet answered
+
+- **A split-field formulation**, so that a band at oblique incidence is a fixed-*angle* sweep
+  rather than the fixed-`kx` one of §8. This is the gap that matters most once the module is
+  read as a solver rather than a harness: a spectrum at a tilt is an ordinary thing to want,
+  and it is exactly what one run cannot give today. The cost is a transformed field with extra
+  terms and a stability bound that tightens with the angle.
 - **A conical mount** (`phi != 0`), which is what oblique incidence on a *crossed* grating
   needs and what `solve_1d_conical` answers on the RCWA side. The classical mount is done
   (§5b); the conical one couples the polarisations and is a different formulation.

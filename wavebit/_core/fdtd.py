@@ -1,10 +1,15 @@
 """A 2D FDTD solve for a 1D-periodic grating, answering the same question as ``solve_1d``.
 
-This is roadmap item 2 -- a time-domain solver reading the same :class:`~wavebit._core.domain.
-Stack` and :class:`~wavebit._core.domain.Incidence` the RCWA path reads, so that one structure
-can be solved two ways and the answers compared. Its whole value is that its errors are
-*different* errors: RCWA truncates a Fourier series and FDTD discretises space and time, so a
-defect that survives both is unlikely to be a defect of either.
+This is roadmap item 2 -- **a second solver the caller chooses**, reading the same
+:class:`~wavebit._core.domain.Stack` and :class:`~wavebit._core.domain.Incidence` the RCWA path
+reads and returning the same :class:`~wavebit._core.result.Result`. It is not a test harness:
+it is meant to be picked when it is the better tool, which it is wherever a broadband answer
+is wanted from one run, or where a scene converges badly in a truncated Fourier series.
+
+That its errors are *different* errors -- RCWA truncates a Fourier series, FDTD discretises
+space and time -- is a second dividend rather than the point: a defect surviving both is
+unlikely to belong to either, so the two paths cross-check each other for free. Which is also
+why the conventions below are wavebit's rather than the FDTD literature's.
 
 **What it answers.** The pure TE / TM problem, normal incidence, on a raster structure that is
 periodic along one axis. That is deliberately the scope of :func:`~wavebit._core.solve_1d.
@@ -232,7 +237,7 @@ def _refuse_out_of_scope(structure, mu, theta, phi, tetm, incidence_side, lattic
             'fdtd: mu is not read here. That is parity with the path this mirrors, not an '
             'omission: the RCWA side refuses it on the same scene, at engine.py:2334 -- "mu is '
             'implemented on the 2D path only ... the 1D and conical operators carry no '
-            'permeability slot at all". So there would be nothing to compare against.')
+            'permeability slot at all". Neither path answers a magnetic 1D grating today.')
 
     if theta is not None and np.imag(np.asarray(theta, dtype=complex)) != 0.0:
         raise ValueError(
