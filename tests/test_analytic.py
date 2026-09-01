@@ -1276,20 +1276,39 @@ def test_the_skew_is_what_that_test_is_sensitive_to():
 def test_an_axis_aligned_cell_keeps_the_rectangular_fold_bit_for_bit():
     """``diag(Lx, Ly)`` is the one case where the two folds are the same fold.
 
-    So it keeps the cheaper spelling, and every result predating the lattice branch is
-    unchanged to the bit -- not to a tolerance. Passing the lattice explicitly must agree with
-    passing only the period, which is what says the branch is on the *shape* of the cell and
-    not on which keyword the caller happened to use.
+    The same *fold*, not the same arithmetic: forcing the general arm on this very cell moves
+    the field by 2.6e-14, which is the third assertion here and the whole reason
+    ``axis_aligned`` is carried rather than derived per call. So the rectangular spelling is
+    kept, and every result predating the lattice branch stays unchanged to the bit rather than
+    to a tolerance.
+
+    Which means the branch has to be on the *shape* of the cell and not on which keyword the
+    caller happened to use. The two keywords reach it differently: ``period=`` is diagonal by
+    construction and never tests anything, while ``lattice=diag(Lx, Ly)`` has to be *detected*
+    by ``is_axis_aligned``. Until 2026-08-24 this compared a period-only call against a lattice
+    one; `6e126ce` deleted the period-only path, and what was left behind compared
+    ``period=(0.9, 1.4)`` against ``period=[0.9, 1.4]`` -- a tuple against a list, both of them
+    the arm that is true by construction. That version passes with the branch deleted outright.
     """
-    from wavebit._core.lattice import as_lattice
+    from wavebit._core.lattice import Lattice, as_lattice
     shapes = [dict(type='circle', cx=-0.08, cy=-0.41, lx=0.34, material=5.76),
               dict(type='rectangle', cx=0.27, cy=-0.04, lx=0.3, ly=0.18, angle=0.4,
                    material=3.0)]
-    lat = as_lattice(period=[0.9, 1.4])
-    a = _nvf_analytic(np, (96, 96), shapes, np.float64, as_lattice(period=(0.9, 1.4)))
-    b = _nvf_analytic(np, (96, 96), shapes, np.float64, lat)
+    by_period = as_lattice(period=[0.9, 1.4])
+    by_lattice = as_lattice(lattice=np.diag([0.9, 1.4]))
+    assert by_period.axis_aligned and by_lattice.axis_aligned
+
+    a = _nvf_analytic(np, (96, 96), shapes, np.float64, by_period)
+    b = _nvf_analytic(np, (96, 96), shapes, np.float64, by_lattice)
     for got, want in zip(b, a):
         assert np.asarray(got).tobytes() == np.asarray(want).tobytes()
+
+    # The control: the same numbers with the flag cleared take the general fold, and that is a
+    # different arithmetic. Without this the test above is blind to the branch it is named for
+    # -- with the rectangular arm deleted, both spellings simply agree on the general one.
+    forced = Lattice(np.array([0.9, 0.0]), np.array([0.0, 1.4]), False)
+    c = _nvf_analytic(np, (96, 96), shapes, np.float64, forced)
+    assert any(np.asarray(g).tobytes() != np.asarray(r).tobytes() for g, r in zip(c, a))
 
 
 # ------------------------------------------------ the omitted centre is the cell's, on any cell
