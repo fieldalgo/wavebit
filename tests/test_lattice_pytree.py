@@ -378,7 +378,7 @@ def test_the_two_uses_of_a_lattice_have_to_be_the_same_one():
 
 
 def test_the_method_and_the_free_function_are_one_call():
-    """``A.grid(shape)`` is ``wavebit.grid(shape, lattice=A)``, to the byte, on every spelling."""
+    """``A.grid(g)`` is ``wavebit.grid(g, lattice=A)``, to the byte, on every spelling of a cell."""
     for A in (wavebit.Lattice.hexagonal(400.0), wavebit.Lattice.rectangular(700.0, 1100.0),
               wavebit.Lattice.oblique(400.0, 520.0, np.radians(105.0)), as_lattice(lattice=SHEAR)):
         by_method = [np.asarray(c).tobytes() for c in A.grid((9, 13))]
