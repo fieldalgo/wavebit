@@ -440,6 +440,12 @@ conserved throughout. Naming the basis once is a nudge and not a guarantee — t
 still takes any `lattice=` — because the array that comes back is numbers on indices and carries
 no record of the cell it was drawn in. **Change the cell and redraw the array.**
 
+Two ways of naming the cell wrongly are refused rather than resolved. Passing **both** `period`
+and `lattice` raises: they are two spellings of one cell, and `lattice` used to win silently.
+Passing **neither** while giving a structure raises too — `period=(1., 1.)` is the
+normalized-units cell, not a guess at yours, and a raster carries no length that would let
+anything downstream notice the omission.
+
 The cell is centred at the origin, so a centred pillar takes no arithmetic — the same `0` a
 shape's `cx` / `cy` and `reconstruct_field`'s `sample_x` / `sample_y` use.
 

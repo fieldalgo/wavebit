@@ -33,6 +33,10 @@ CELL = as_lattice(period=(P, P))
 COMMON = dict(backend=0, period=(P, P), thickness=(300.,), wavelength=900.,
               top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, truncation_order=(9, 9))
 
+#: `COMMON` without its cell, for the two calls that give a basis instead: naming `period` and
+#: `lattice` together is refused, they are two spellings of one cell.
+COMMON_NO_CELL = {k: v for k, v in COMMON.items() if k != 'period'}
+
 #: A 200x160 rod of permittivity 12.25 in a 1000x1000 cell of permittivity 1: `<eps>` is
 #: `1 + 0.032*(12.25 - 1) = 1.36` wherever it is placed, since a translation is not a
 #: different structure. Every straddle case below is that same rod.
@@ -93,7 +97,11 @@ def test_the_analytic_sampler_agrees_with_its_own_dc_coefficient(lattice):
     shapes = [dict(type='circle', cx=-200.0, cy=-200.0, lx=260.0, material=12.25),
               dict(type='rectangle', cx=240.0, cy=150.0, lx=300.0, ly=180.0,
                    angle=0.45, material=4.840000000000001)]
-    solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], lattice=lattice, **COMMON)
+    # this case is parametrized over `lattice=None` too, so the cell is named whichever way it
+    # was given -- naming both is refused.
+    cell = {'lattice': lattice} if lattice is not None else {'period': COMMON['period']}
+    solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], **cell,
+                          **COMMON_NO_CELL)
     fx, fy = int(solver.truncation_order[0]), int(solver.truncation_order[1])
     dc = assemble_eps_coeffs(xnp, shapes, 1.0, fx, fy, solver.lattice,
                              xnp.complex128)[0][2 * fy, 2 * fx].real
@@ -279,7 +287,7 @@ def test_it_draws():
     assert ax.images and not ax.collections          # imshow on an axis-aligned cell
 
     skewed = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)],
-                          lattice=[[P, P * 0.5], [0.0, P * 0.866]], **COMMON)
+                          lattice=[[P, P * 0.5], [0.0, P * 0.866]], **COMMON_NO_CELL)
     ax = skewed.plot_structure(n=64)
     assert ax.collections and not ax.images          # pcolormesh on the parallelogram
     plt.close('all')

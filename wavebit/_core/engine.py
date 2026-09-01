@@ -63,6 +63,15 @@ _SOLVES = {
 }
 
 
+#: "the caller did not name a cell" -- distinct from naming ``period=(1., 1.)``, which is a real
+#: cell and the coherent partner of the ``wavelength=1.`` default in normalized units. The two
+#: were one value until 2026-09-01, so a scene that forgot its cell was indistinguishable from
+#: one written in normalized units and simply solved, on a cell 900x smaller than its own
+#: wavelength. Only the raster path could reach that: an analytic shape carries absolute
+#: lengths, so it is already refused by "shape is larger than the period".
+_CELL_UNSET = object()
+
+
 def _concrete_period(value):
     """``period`` as two plain floats, or ``None`` if it has none to give.
 
@@ -963,8 +972,46 @@ class CoreSolveMixin:
             self._lattice_basis = None
             return
         A = _lattice.as_lattice(lattice=value)
+        self._cell_named = True          # an assignment names it, as a keyword does
         self._lattice_basis = A
         self._set_period_slot(_lattice.periods_of(A))   # derived, not chosen
+
+    #: Whether a cell was ever *named* by the caller. ``True`` here so that anything built
+    #: by a route other than the constructor is not accused of omitting one; the constructor
+    #: sets the real answer.
+    _cell_named = True
+
+    def _refuse_a_structure_with_no_cell(self):
+        """A structure to solve, and no cell ever stated — refuse rather than assume ``(1, 1)``.
+
+        ``period=(1., 1.)`` is a real cell and the coherent partner of ``wavelength=1.``, so
+        the default cannot simply be dropped: 35 call sites in this repository rely on it, all
+        of them building a solver with **no structure** to exercise the spec plumbing. What is
+        not defensible is solving a *structure* on a cell nobody chose. A raster carries no
+        length of its own, so nothing downstream can notice: measured on a hex scene whose
+        ``lattice=`` was forgotten, ``sum(T)`` came back **0.989790** against the correct
+        **0.927664**, with no error and energy conserved.
+
+        The analytic path is already safe here and this does not duplicate it — a shape's
+        lengths are absolute, so the same omission raises "shape is larger than the period".
+        The raster was the only silent one.
+
+        :func:`wavebit.grid` has refused exactly this since it was written
+        (``as_lattice: needs one of period or lattice``), so the two doors into a raster now
+        say the same thing.
+        """
+        if self._cell_named or self._structure is None:
+            return
+        raise ValueError(
+            'no cell was given: this solver has a structure to solve but neither `period` '
+            'nor `lattice` was named, so the cell would silently be the (1, 1) default -- '
+            'which is the normalized-units cell, not a guess at yours. State one:\n'
+            '    period=[700., 1100.]                 # a rectangular cell\n'
+            '    lattice=wavebit.hexagonal(400.)      # or oblique(...) / a 2x2\n'
+            'A raster carries no length of its own, so nothing further down can catch this: '
+            'measured on a hex scene with `lattice=` forgotten, sum(T) read 0.989790 against '
+            'the correct 0.927664, energy conserving throughout. `wavebit.grid` has always '
+            'refused the same omission.')
 
     @property
     def lattice_is_axis_aligned(self):
@@ -1346,6 +1393,7 @@ class CoreSolveMixin:
                 'or `wavebit.hexagonal(a)` / a 2x2 column_stack((a1, a2)); `period` follows '
                 'from it.')
 
+        self._cell_named = True          # an assignment names it, as a keyword does
         self._set_period_slot(period)
         if self._lattice_basis is not None:
             # Axis-aligned, by the guard above: keep the two spellings from drifting apart.
@@ -1612,6 +1660,7 @@ class CoreSolveMixin:
           stated zero azimuth is still a stated one.
         * ``2`` -- 2D: everything else, and every scene whose k layout is not separable.
         """
+        self._refuse_a_structure_with_no_cell()
         if self.structure is None:
             if self._grating_type is None:
                 self._grating_type = 2
@@ -1869,7 +1918,8 @@ class CoreFactorizationMixin:
                  theta=0.,
                  phi=None,
                  psi=None,
-                 period=(1., 1.),
+                 period=_CELL_UNSET,   # (Lx, Ly); the sentinel is 'not named', not a value.
+                 # See `_CELL_UNSET` and the two refusals at the end of this constructor.
                  wavelength=1.,
                  structure=None,             # the layer stack. A raster is an
                  # (n_layers, Ny, Nx) array of relative PERMITTIVITY; the two shape spellings
@@ -1937,8 +1987,30 @@ class CoreFactorizationMixin:
                  ):
         _refuse_unknown_keywords(unknown)
 
+        # `period` and `lattice` are two spellings of one cell, not two cells, so naming both
+        # is refused rather than resolved. It resolved silently until 2026-09-01 -- `lattice`
+        # won and `period` was dropped, which reads as a lattice effect and is not one.
+        #
+        # This has to be the *named* keyword and not the value, because three internal paths
+        # legitimately hold both and hand them on: `SolverJax._tree_unflatten` (period is a
+        # pytree child, lattice is aux data), `Stack.as_kwargs`, and the spec round trip, which
+        # writes `period` on every document. All three now drop `period` when a basis is
+        # present -- provably a no-op, since `self.lattice = lattice` below overwrites the
+        # period slot with `periods_of(A)` whenever a basis arrives.
+        if period is not _CELL_UNSET and lattice is not None:
+            raise ValueError(
+                'period and lattice both given. `period=(Lx, Ly)` is the axis-aligned '
+                '*spelling* of a cell, not a second cell -- on a skewed one it is '
+                '(|a1|, |a2|), with the angle already gone, so the two cannot both be '
+                'honoured. Pass one:\n'
+                '    lattice=wavebit.hexagonal(400.)      # or oblique(...) / a 2x2\n'
+                '    period=[700., 1100.]                 # the rectangular cell\n'
+                'Until now `lattice` won and `period` was ignored in silence.')
+
         super().__init__(top=top, bot=bot, theta=theta, phi=phi, psi=psi, chi=chi, tetm=tetm,
-                         truncation_order=truncation_order, period=period, wavelength=wavelength,
+                         truncation_order=truncation_order,
+                         period=(1., 1.) if period is _CELL_UNSET else period,
+                         wavelength=wavelength,
                          thickness=thickness, layer_algorithm=layer_algorithm,
                          excitation=excitation,
                          device=device, complex_dtype=complex_dtype,
@@ -1960,6 +2032,12 @@ class CoreFactorizationMixin:
         self.normal_method = normal_method
         self._normal_grid = normal_grid
         self.lattice = lattice      # after period: assigning a basis overwrites period
+
+        # Whether a cell was ever *named*. Read by `_refuse_a_structure_with_no_cell`, which
+        # runs here and again at the solve -- a structure can arrive by assignment long after
+        # construction, and the door has to be closed on both.
+        self._cell_named = period is not _CELL_UNSET or lattice is not None
+        self._refuse_a_structure_with_no_cell()
 
 
     #: Which of the three modeling paths the current ``structure`` selected; the concrete

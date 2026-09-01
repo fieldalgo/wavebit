@@ -149,6 +149,37 @@ shape — `structure=[{'shapes': [...]}]`, `shape_ft`, `shape_geometry`, 131 use
 so `A.grid(shape)` read as *"put a shape on this lattice"*, which is the one thing it does not
 do. `pixel` never means geometry here.)
 
+### The two ways of naming a cell wrongly, both refused since 2026-09-01
+
+**Naming both `period` and `lattice`.** They are two spellings of one cell, not two cells:
+`period` is `(|a1|, |a2|)` with the angle already gone, so on a skewed cell both cannot be
+honoured. It used to resolve silently — the basis won and the period was dropped — which reads
+as a lattice effect and is not one. It now raises.
+
+That refusal keys on the keyword being **named**, not on the values disagreeing, and that is
+what made it delicate: three internal paths legitimately hold both and hand them on, and a
+refusal that broke any of them would take jit, the typed container or the document format with
+it. `SolverJax._tree_unflatten` (where `period` is a pytree child and `lattice` is aux data),
+`Stack.as_kwargs`, and the spec round trip — which writes `period` into every saved stack —
+all drop `period` when a basis is present. That drop is provably a no-op rather than a loss:
+`__init__` assigns `lattice` *after* `period`, and the basis setter overwrites the period slot
+with `periods_of(A)`, so a period passed beside a basis had never reached anything.
+
+**Naming neither, and solving a structure anyway.** `period=(1., 1.)` is a real cell and the
+coherent partner of the `wavelength=1.` default, so the default itself is not the problem — 35
+call sites in this repository rely on it, every one of them building a solver with *no
+structure* to exercise the spec plumbing, and those still build. What is refused is solving a
+*structure* on a cell nobody chose. A raster carries no length of its own, so nothing
+downstream can notice: measured on a hex scene with `lattice=` forgotten, `sum(T)` came back
+**0.989790** against the correct **0.927664**, no error and energy conserved throughout.
+
+The analytic path was already safe and this does not duplicate it — a shape's lengths are
+absolute, so the same omission raises *"shape is larger than the period"*. The raster was the
+only silent one. `wavebit.grid` has refused the same omission since it was written
+(`as_lattice: needs one of period or lattice`), so the two doors into a raster now agree. The
+check runs at construction *and* at the solve, because a structure can be assigned long after
+the solver was built.
+
 ## What it buys
 
 Hex array of Si pillars, pitch 400 nm, r = 90 nm, h = 300 nm, lambda = 900 nm, normal incidence.

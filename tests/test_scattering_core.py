@@ -351,7 +351,9 @@ def test_smm_field_on_a_skewed_cell_matches_tmm():
     recovery reads the lattice -- it works in the mode and gap bases, which the basis change
     never touches -- and this is the test that says so rather than assuming it.
     """
-    kwargs = dict(structure=_hex_rod(), period=[HEX_P, HEX_P], truncation_order=[4, 4], thickness=[150.0],
+    # `lattice` alone: a period beside a basis was never honoured, and is refused since
+    # 2026-09-01.
+    kwargs = dict(structure=_hex_rod(), truncation_order=[4, 4], thickness=[150.0],
                   wavelength=900.0, top=1.0, bot=1.0, theta=0.1, phi=0.3, psi=0.4,
                   lattice=HEX, factorization='nvf')
     _, tmm = _field('ETM', kwargs, sample_x=6, sample_y=6, sample_z=4)

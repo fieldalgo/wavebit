@@ -31,6 +31,10 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 KW = dict(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
           truncation_order=[4, 4], period=[1.0, 1.0], wavelength=1.1, thickness=[0.3])
 
+#: `KW` without its cell. `period` and `lattice` are two spellings of one cell and naming
+#: both is refused, so the calls below that give a basis take the scene without the period.
+KW_NO_CELL = {k: v for k, v in KW.items() if k != 'period'}
+
 #: A hexagonal basis, for the two refusals a skewed cell carries.
 HEX = np.column_stack((np.array([1.0, 0.0]), np.array([0.5, np.sqrt(3) / 2])))
 
@@ -135,7 +139,7 @@ def test_an_option_the_manifest_offers_actually_builds(path):
 def test_li_is_refused_on_a_skewed_cell():
     with pytest.raises(NotImplementedError, match="factorization='nvf'"):
         wavebit.rcwa(structure=STRUCTURES['raster'], lattice=HEX, factorization='li',
-                       **KW).solve()
+                       **KW_NO_CELL).solve()
 
 
 def test_the_manifest_lists_every_skewed_refusal():
@@ -200,14 +204,14 @@ def test_a_smoothing_normal_method_builds_on_a_skewed_cell(method):
                             reason="normal_method='contour' needs the optional dependency")
     assert method not in LATTICE['normal_methods_refused_on_oblique']
     result = wavebit.rcwa(structure=STRUCTURES['raster'], lattice=HEX, factorization='nvf',
-                          normal_method=method, **KW).solve()
+                          normal_method=method, **KW_NO_CELL).solve()
     assert np.isfinite(np.asarray(result.T)).all()
 
 
 def test_a_skewed_cell_still_builds_on_the_paths_the_manifest_leaves_open():
     for path in ('raster', 'smooth', 'boundary'):
         wavebit.rcwa(structure=STRUCTURES[path], lattice=HEX, factorization='nvf',
-                       **KW).solve()
+                       **KW_NO_CELL).solve()
 
 
 # ------------------------------------------------------- the document itself

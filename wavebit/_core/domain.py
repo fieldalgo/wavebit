@@ -542,9 +542,16 @@ class Stack:
         ``Stack``.
         """
         mu = self.mu
+        # `period` only when there is no basis: the two are one cell in two spellings, and
+        # naming both is refused at the solver's door. A `Stack` legitimately holds both --
+        # `period` is a derived readout on a skewed cell, and `to_dict` writes it into every
+        # document -- so the dropping happens here, on the way out, rather than by making the
+        # container lossy. On a skewed cell it was never honoured anyway: the solver assigns
+        # `lattice` after `period` and the basis overwrites the slot.
         return dict(structure=self.structure, thickness=self.thickness,
-                    top=self.top, bot=self.bot, period=self.period,
-                    **({} if self.lattice is None else {'lattice': self.lattice}),
+                    top=self.top, bot=self.bot,
+                    **({'period': self.period} if self.lattice is None
+                       else {'lattice': self.lattice}),
                     **({} if mu is None else {'mu': mu}))
 
     def __len__(self) -> int:

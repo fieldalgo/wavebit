@@ -220,7 +220,10 @@ def test_the_derived_index_accessors_survived_the_deletion():
 
     The input is permittivity and this is derived from it; both are true at once.
     """
-    solver = wavebit.rcwa(backend=0, truncation_order=[2, 0], thickness=[0.1],
+    # `period` named rather than defaulted: this scene is in normalized units, where the
+    # (1, 1) cell is the right one -- but since 2026-09-01 a structure has to say so, because
+    # a raster carries no length that would let anything downstream notice the omission.
+    solver = wavebit.rcwa(backend=0, truncation_order=[2, 0], thickness=[0.1], period=[1.0, 1.0],
                           structure=np.array([[[9.0, 1.0]]]), top=Material(4.0), bot=2.25)
     assert complex(solver.n_top) == pytest.approx(2.0)      # sqrt(4.0)
     assert complex(solver.n_bot) == pytest.approx(1.5)      # sqrt(2.25)

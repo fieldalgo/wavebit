@@ -62,11 +62,18 @@ def cell_centre(lattice=None, period=(P, P)):
     return 0.5 * (a[0, 0] + a[0, 1]), 0.5 * (a[1, 0] + a[1, 1])
 
 
+#: The cell, named once. `period` and `lattice` are two spellings of one cell and naming both
+#: is refused since 2026-09-01, so a helper that takes an optional basis spells whichever it
+#: was given. On a skewed cell the period was never honoured anyway -- the basis overwrites it.
+def _cell(lattice, period=None):
+    return {'lattice': lattice} if lattice is not None else {'period': period or [P, P]}
+
+
 def solver(cell, truncation_order=8, lattice=None, **kw):
     kw.setdefault('factorization', 'nvf')
-    return wavebit.rcwa(backend=0, structure=cell, period=[P, P], truncation_order=[truncation_order, truncation_order],
+    return wavebit.rcwa(backend=0, structure=cell, truncation_order=[truncation_order, truncation_order],
                           thickness=[H], wavelength=WL, top=1.0, bot=1.0,
-                          theta=0.0, phi=0.0, psi=0.0, lattice=lattice, **kw)
+                          theta=0.0, phi=0.0, psi=0.0, **_cell(lattice), **kw)
 
 
 def totals(cell, truncation_order=8, lattice=None, **kw):
@@ -420,7 +427,7 @@ def test_oblique_runs_on_every_backend(backend):
     elif backend == 2:
         cell = pytest.importorskip('torch').tensor(cell, dtype=pytest.importorskip(
             'torch').float64)
-    s = wavebit.rcwa(backend=backend, structure=cell, period=[P, P], truncation_order=[4, 4],
+    s = wavebit.rcwa(backend=backend, structure=cell, truncation_order=[4, 4],
                        thickness=[H], wavelength=WL, top=1.0, bot=1.0,
                        theta=0.0, phi=0.0, psi=0.0, factorization='nvf', lattice=HEX)
     res = s.solve()
@@ -453,9 +460,9 @@ def test_a_painted_overlap_survives_a_unimodular_shear():
              'material': 5.76},
             {'type': 'circle', 'cx': P / 2 + 40.0 - ox, 'cy': P / 2 - oy, 'lx': 160.0,
              'material': 9.0}]}]
-        s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], truncation_order=[6, 6], thickness=[H],
+        s = wavebit.rcwa(backend=0, structure=structure, truncation_order=[6, 6], thickness=[H],
                            wavelength=WL, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
-                           factorization='nvf', lattice=lattice)
+                           factorization='nvf', **_cell(lattice))
         res = s.solve()
         return float(np.sum(np.asarray(res.T)))
 
@@ -483,7 +490,7 @@ def test_a_painted_overlap_is_not_the_same_as_summing_it():
 
     def mean_eps(cell):
         s = wavebit.rcwa(backend=0, structure=[{'background': 1.0, 'shapes': cell}],
-                         period=[P, P], truncation_order=[6, 6], thickness=[H], wavelength=WL,
+                         truncation_order=[6, 6], thickness=[H], wavelength=WL,
                          top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                          factorization='nvf', lattice=SHEAR)
         epz_i = np.asarray(s.eps_conv_matrices().epz_i[0])
@@ -511,9 +518,9 @@ def _analytic_totals(g, lattice=None):
     structure = [{'background': 1.0, 'shapes': [
         {'type': 'circle', 'cx': P / 2 - ox, 'cy': P / 2 - oy, 'lx': 2 * R,
          'material': EPS_ROD}]}]
-    s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], truncation_order=[g, g], thickness=[H],
+    s = wavebit.rcwa(backend=0, structure=structure, truncation_order=[g, g], thickness=[H],
                        wavelength=WL, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
-                       factorization='nvf', lattice=lattice)
+                       factorization='nvf', **_cell(lattice))
     return float(np.sum(np.asarray(s.solve().T)))
 
 
@@ -576,9 +583,9 @@ def test_the_reconstructed_field_agrees_across_a_unimodular_shear():
                    'material': EPS_ROD}]
         structure = [{'background': 1.0, 'shapes': []},
                      {'background': 1.0, 'shapes': shapes}]
-        s = wavebit.rcwa(backend=0, structure=structure, period=[P, P], truncation_order=[8, 8],
+        s = wavebit.rcwa(backend=0, structure=structure, truncation_order=[8, 8],
                            thickness=[600.0, H], wavelength=WL, top=1.0, bot=1.0,
-                           theta=0.0, phi=0.0, psi=0.0, factorization='nvf', lattice=lattice,
+                           theta=0.0, phi=0.0, psi=0.0, factorization='nvf', **_cell(lattice),
                            answers='field')
         s.solve()
         return np.asarray(s.reconstruct_field(sample_x=n, sample_y=n, sample_z=12))
@@ -833,10 +840,10 @@ def test_a_frozen_painting_plan_replays_on_a_skewed_cell(lattice, omit_centre):
             a = dict(a, cx=P / 2 - ox, cy=P / 2 - oy)
         b = {'type': 'circle', 'cx': P / 2 + 40.0 - ox, 'cy': P / 2 - oy, 'lx': 160.0,
              'material': 9.0}
-        return wavebit.rcwa(backend=0, period=[P, P], truncation_order=[3, 3], thickness=[H],
+        return wavebit.rcwa(backend=0, truncation_order=[3, 3], thickness=[H],
                             structure=[{'background': EPS_AIR, 'shapes': [a, b]}],
                             wavelength=WL, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
-                            factorization='nvf', lattice=lattice, normal_grid=64)
+                            factorization='nvf', **_cell(lattice), normal_grid=64)
 
     eager = np.asarray(build().solve().T)
     replayer = build()
@@ -892,7 +899,7 @@ def test_the_answer_rotates_with_the_cell(degrees, theta, phi, psi, chi):
     """
     basis = HEX
     turned = _rotation(np.radians(degrees)) @ basis
-    common = dict(backend=0, period=[P, P], truncation_order=[5, 5], thickness=[H],
+    common = dict(backend=0, truncation_order=[5, 5], thickness=[H],
                   wavelength=WL, top=1.0, bot=1.0, theta=theta, psi=psi, chi=chi,
                   factorization='nvf')
     a = wavebit.rcwa(structure=_rod_on(basis), lattice=basis, phi=phi, **common).solve()
@@ -917,7 +924,9 @@ def _circular_dichroism(basis, truncation, normal_grid=512):
     shapes = [{'background': EPS_AIR,
                'shapes': [{'type': 'circle', 'cx': 0.0, 'cy': 0.0,
                            'lx': 2 * R, 'material': EPS_ROD}]}]
-    common = dict(backend=0, structure=shapes, period=[P, P], thickness=[H],
+    # the cell named once, as `lattice`: naming `period` beside a basis was a no-op and is
+    # refused since 2026-09-01.
+    common = dict(backend=0, structure=shapes, thickness=[H],
                   truncation_order=[truncation, truncation], wavelength=WL, top=1.0, bot=1.0,
                   theta=0.35, phi=0.0, psi=0.0, factorization='nvf', lattice=basis,
                   normal_grid=normal_grid)
@@ -974,11 +983,13 @@ def test_a_skewed_cell_answers_in_the_width_it_was_asked_for(backend):
     Asserted as a *pair* against the rectangle rather than as a literal dtype: the claim is that
     naming the cell does not change the arithmetic width, which is what the bug broke.
     """
+    # the cell is named per arm -- `period` for the rectangle, `lattice` for the skew. Naming
+    # both is refused, and on the skewed arm the period was never honoured anyway.
     common = dict(backend=backend, structure=_rod_on(ORTHO, n=32), truncation_order=[4, 4],
                   thickness=[H], wavelength=WL, top=1.0, bot=1.0, theta=0.3, phi=0.2, psi=0.1,
-                  factorization='nvf', period=[P, P])
+                  factorization='nvf')
     for complex_dtype in (0, 1):
-        rect = wavebit.rcwa(complex_dtype=complex_dtype, **common).solve()
+        rect = wavebit.rcwa(complex_dtype=complex_dtype, period=[P, P], **common).solve()
         skew = wavebit.rcwa(complex_dtype=complex_dtype, lattice=HEX,
                             **dict(common, structure=_rod_on(HEX, n=32))).solve()
         assert np.asarray(rect.R).dtype == np.asarray(skew.R).dtype, complex_dtype
@@ -991,7 +1002,7 @@ def test_a_skewed_cell_answers_in_the_width_it_was_asked_for(backend):
 
 def _field_solver(basis, n=24):
     s = wavebit.rcwa(backend=0, structure=raster(basis, n=n, radius=110.0),
-                     period=[P, P], lattice=np.asarray(basis).tolist(), truncation_order=[5, 5],
+                     lattice=np.asarray(basis).tolist(), truncation_order=[5, 5],
                      thickness=[220.0], wavelength=WL, top=1.0, bot=1.0,
                      theta=0.21, phi=0.58, psi=np.pi / 4, factorization='nvf', answers='field')
     s.solve()
@@ -1056,11 +1067,11 @@ def _backside_totals(lattice, side, truncation_order=10):
     structure = [{'background': 1.0, 'shapes': [
         {'type': 'circle', 'cx': _BS_P / 2 - ox, 'cy': _BS_P / 2 - oy, 'lx': 180.0,
          'material': _BS_ROD}]}]
-    s = wavebit.rcwa(backend=0, structure=structure, period=[_BS_P, _BS_P],
+    s = wavebit.rcwa(backend=0, structure=structure, **_cell(lattice, [_BS_P, _BS_P]),
                      truncation_order=[truncation_order, truncation_order],
                      thickness=[300.0], wavelength=_BS_WL, top=1.0, bot=_BS_SUB,
                      theta=0.5, phi=0.6, psi=np.pi / 4, factorization='nvf',
-                     lattice=lattice, incidence_side=side)
+                     incidence_side=side)
     res = s.solve()
     return float(np.sum(np.asarray(res.R))), float(np.sum(np.asarray(res.T)))
 
@@ -1285,11 +1296,10 @@ _PERIOD_GRATING = np.array([[[1.0, 1.0, 4.0, 4.0, 4.0, 1.0, 1.0, 1.0]]])
 
 
 def _period_scene(backend, cell, **over):
-    kw = dict(backend=backend, structure=_PERIOD_GRATING, period=[1500.0, 1500.0],
+    kw = dict(backend=backend, structure=_PERIOD_GRATING,
               truncation_order=[2, 0], thickness=[150.0], wavelength=900.0,
               top=1.0, bot=1.0, factorization='nvf')
-    if _PERIOD_CELLS[cell] is not None:
-        kw['lattice'] = _PERIOD_CELLS[cell]
+    kw.update(_cell(_PERIOD_CELLS[cell], [1500.0, 1500.0]))
     kw.update(over)
     return wavebit.rcwa(**kw)
 

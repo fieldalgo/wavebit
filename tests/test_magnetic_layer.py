@@ -725,7 +725,7 @@ def _dual_pair(basis, order=4):
     def build(eps, mu, above, below):
         s = wavebit.rcwa(backend=0, top=above, bot=below, theta=np.deg2rad(37.0),
                          phi=np.deg2rad(23.0), truncation_order=(order, order),
-                         period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
+                         wavelength=WL, thickness=[THICK],
                          factorization='nvf', lattice=basis)
         s.structure = eps
         s.mu = mu

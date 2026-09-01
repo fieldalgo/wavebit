@@ -103,8 +103,11 @@ def scene(case, basis=None, **over):
     basis = LATTICE[case['lattice']] if basis is None else np.asarray(basis)
     medium = MEDIA[case['media']]
     mask = _rod_mask(basis, n=over.pop('n', 32))
+    # `lattice` only: it is given on every case here (the square one included), and naming
+    # `period` beside a basis was always a no-op -- the basis overwrites the period slot. It is
+    # refused outright since 2026-09-01.
     kw = dict(backend=0, structure=np.where(mask, medium['eps'], 1.0)[None, ...],
-              period=[P, P], lattice=basis.tolist(), truncation_order=[4, 4], thickness=[H],
+              lattice=basis.tolist(), truncation_order=[4, 4], thickness=[H],
               wavelength=WL, top=medium['top'], bot=medium['bot'], factorization='nvf',
               incidence_side=case['side'], **INCIDENCE[case['incidence']])
     if 'mu' in medium:
@@ -149,7 +152,7 @@ def shape_scene(case, basis=None, **over):
     medium = MEDIA[case['media']]
     material = (wavebit.Material(medium['eps'], mu=medium['mu']) if 'mu' in medium
                 else medium['eps'])
-    kw = dict(backend=0, period=[P, P], lattice=basis.tolist(), truncation_order=[6, 6],
+    kw = dict(backend=0, lattice=basis.tolist(), truncation_order=[6, 6],
               thickness=[H], wavelength=WL, top=medium['top'], bot=medium['bot'],
               factorization='nvf', incidence_side=case['side'], normal_grid=256,
               structure=[{'background': 1.0,

@@ -33,6 +33,10 @@ from wavebit._core.enums import Factorization
 KW = dict(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
           truncation_order=[4, 4], period=[1.0, 1.0], wavelength=1.1, thickness=[0.3])
 
+#: `KW` without its cell. `period` and `lattice` are two spellings of one cell and naming
+#: both is refused, so the calls below that give a basis take the scene without the period.
+KW_NO_CELL = {k: v for k, v in KW.items() if k != 'period'}
+
 # One structure per modeling path, as close to the same circle as each path can state it.
 # `modeling_type` is inferred from the type of `structure`, never passed. A `circle` takes `lx`
 # alone -- passing `ly` to one is refused by `analytic.check_shape_spec`.
@@ -250,8 +254,9 @@ def test_a_skewed_smooth_cell_no_longer_has_to_spell_out_nvf():
     and every skewed smooth-path run had to pass ``factorization='nvf'`` to talk it down.
     """
     hexagonal = np.array([[1.0, 0.5], [0.0, np.sqrt(3) / 2]])
-    default = wavebit.rcwa(structure=SMOOTH, lattice=hexagonal, **KW)
-    spelled_out = wavebit.rcwa(structure=SMOOTH, lattice=hexagonal, factorization='nvf', **KW)
+    default = wavebit.rcwa(structure=SMOOTH, lattice=hexagonal, **KW_NO_CELL)
+    spelled_out = wavebit.rcwa(structure=SMOOTH, lattice=hexagonal, factorization='nvf',
+                               **KW_NO_CELL)
     assert default.factorization == 'nvf'
     assert (float(np.sum(default.solve().T)) ==
             float(np.sum(spelled_out.solve().T)))
@@ -261,7 +266,7 @@ def test_a_skewed_raster_cell_still_refuses_li():
     """The neighbouring refusal is untouched: on a raster, ``'li'`` really is the rule asked for."""
     hexagonal = np.array([[1.0, 0.5], [0.0, np.sqrt(3) / 2]])
     with pytest.raises(NotImplementedError, match="factorization='nvf'"):
-        wavebit.rcwa(structure=RASTER, lattice=hexagonal, **KW).solve()
+        wavebit.rcwa(structure=RASTER, lattice=hexagonal, **KW_NO_CELL).solve()
 
 
 # --------------------------------------------------------------------------- through the spec

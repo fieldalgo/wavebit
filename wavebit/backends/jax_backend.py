@@ -372,6 +372,14 @@ class SolverJax(RCWAJax, OptimizerJax):
         formulation = aux_data.pop('formulation')
         named = dict(zip(CHILD_NAMES, children))
         polarization = named.pop('polarization')
+        # `period` and `lattice` are two spellings of one cell and naming both is refused at
+        # the constructor, but this path holds both by construction -- `period` is a child
+        # (it has to be, it is a design variable on a rectangular cell) and `lattice` is aux
+        # data. Dropping it here is provably a no-op rather than a loss: `__init__` assigns
+        # `self.lattice` *after* `self.period`, and that setter overwrites the period slot
+        # with `periods_of(A)`, so a period passed beside a basis has never reached anything.
+        if named.get('lattice') is not None or aux_data.get('lattice') is not None:
+            named.pop('period', None)
         solver = cls(**named, **aux_data)
         solver._formulation = formulation
         # Straight into the slot, bypassing the setter's validation: the pair may now be a

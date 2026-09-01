@@ -332,6 +332,104 @@ def test_the_method_and_the_free_function_are_one_call():
         A.grid(shape=(9, 13))
 
 
+def test_naming_both_period_and_lattice_is_refused():
+    """Two spellings of one cell, not two cells -- and `lattice` used to win in silence.
+
+    ``period`` is ``(|a1|, |a2|)``, the angle already gone, so on a skewed cell the two cannot
+    both be honoured. Until 2026-09-01 the basis won and the period was dropped without a word,
+    which reads as a lattice effect and is not one.
+
+    **The refusal has to key on the keyword being *named*, not on the values disagreeing**,
+    and that is what makes it delicate: three internal paths legitimately hold both and hand
+    them on. Each is exercised below, because a refusal that broke any of them would take jit,
+    the typed container, or the document format with it.
+    """
+    A = wavebit.hexagonal(400.0)
+    eps = np.where(np.asarray(A.grid((16, 16))[0]) ** 2 < 100.0 ** 2, 5.76, 1.0)[None]
+    base = dict(backend=0, structure=eps, thickness=[300.0], wavelength=900.0,
+                truncation_order=[2, 2], factorization='nvf')
+
+    with pytest.raises(ValueError, match='period and lattice both given'):
+        wavebit.rcwa(**base, period=[700.0, 700.0], lattice=A)
+    # ...and not only when they disagree: the values here are exactly `periods_of(A)`
+    with pytest.raises(ValueError, match='period and lattice both given'):
+        wavebit.rcwa(**base, period=[400.0, 400.0], lattice=A)
+    wavebit.rcwa(**base, lattice=A)                       # one or the other is fine
+    wavebit.rcwa(**base, period=[400.0, 400.0])
+
+    # 1. the JAX pytree rebuild: `period` is a child, `lattice` is aux data, so `__init__`
+    #    sees both on every jitted call. `_tree_unflatten` drops the period, which is a no-op
+    #    because assigning the basis overwrites the period slot anyway -- asserted here.
+    jax = pytest.importorskip('jax')
+    solver = wavebit.rcwa(**{**base, 'backend': 1}, lattice=A)
+    leaves, treedef = jax.tree_util.tree_flatten(solver)
+    rebuilt = jax.tree_util.tree_unflatten(treedef, leaves)
+    assert np.allclose(np.asarray(rebuilt.lattice), np.asarray(A))
+    assert np.allclose(np.asarray(rebuilt.period), np.asarray(solver.period))
+
+    # 2. the typed container, which holds both by design (`period` is its derived readout)
+    from wavebit._core.domain import Stack
+    # a plain 2x2, which is what a `Stack` stores -- a `Lattice` object is not JSON-
+    # representable, which is its own gap and not this one's business.
+    stack = Stack.from_structure(eps, [300.0], lattice=np.asarray(A).tolist())
+    kw = stack.as_kwargs()
+    assert 'lattice' in kw and 'period' not in kw
+    wavebit.rcwa(**kw, backend=0, wavelength=900.0, truncation_order=[2, 2],
+                 factorization='nvf')
+
+    # 3. the document format, which *writes* `period` into every saved stack (`to_dict` emits
+    #    it unconditionally), so a skewed document carries both and must still load and run.
+    from wavebit import Incidence
+    from wavebit._core.spec import JobSpec
+    spec = JobSpec(stack=stack, incidence=Incidence(wavelength=900.0, tetm='te'))
+    reloaded = JobSpec.from_json(spec.to_json())
+    assert 'period' in spec.to_dict()['stack']            # the writer still emits it
+    assert np.allclose(np.asarray(as_lattice(lattice=reloaded.stack.lattice)), np.asarray(A))
+    assert reloaded.key() == spec.key()
+
+
+def test_a_structure_with_no_cell_is_refused_rather_than_solved_on_the_unit_one():
+    """``period=(1., 1.)`` is a real cell; assuming it for a structure nobody sized is not.
+
+    The default is the coherent partner of ``wavelength=1.`` and 35 call sites in this
+    repository rely on it -- every one of them building a solver with **no structure**, to
+    exercise the spec plumbing. Those still build. What is refused is *solving a structure* on
+    a cell nobody chose.
+
+    Measured, and it is why this is a refusal and not a warning: the same hex scene with
+    ``lattice=`` forgotten answers **0.989790** against the correct **0.927664**, no error and
+    energy conserved. The analytic path was already safe (a shape's lengths are absolute, so
+    the omission raises "larger than the period"); the raster was the only silent one, because
+    a raster carries no length of its own.
+    """
+    A = wavebit.hexagonal(400.0)
+    X, Y = (np.asarray(c) for c in A.grid((64, 64)))
+    eps = np.where(X ** 2 + Y ** 2 < 90.0 ** 2, 12.25, 1.0)[None]
+    base = dict(backend=0, thickness=[300.0], wavelength=900.0, truncation_order=[6, 6],
+                top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, factorization='nvf')
+
+    with pytest.raises(ValueError, match='no cell was given'):
+        wavebit.rcwa(**base, structure=eps)
+
+    # the door the constructor cannot watch: a structure assigned afterwards
+    late = wavebit.rcwa(**base)
+    late.structure = eps
+    with pytest.raises(ValueError, match='no cell was given'):
+        late.solve()
+
+    # a solver with no structure still builds on the default -- the 35 sites
+    wavebit.rcwa(**base)
+    # ...and naming the cell, by either spelling, is all it takes
+    stated = float(np.sum(np.asarray(wavebit.rcwa(**base, structure=eps, lattice=A).solve().T)))
+    assert stated == pytest.approx(0.927664, abs=1e-4)
+
+    # what the refusal is standing in front of: the unit cell answers, plausibly and wrongly
+    silent = wavebit.rcwa(**base, structure=eps, period=[1.0, 1.0])
+    got = float(np.sum(np.asarray(silent.solve().T)))
+    assert got == pytest.approx(0.989790, abs=1e-4)
+    assert abs(got - stated) > 0.05                       # not a rounding difference
+
+
 def test_the_raster_basis_gradient_is_the_shear_along_one():
     """Which of the two lattice-derivatives the raster path computes, named by measurement.
 

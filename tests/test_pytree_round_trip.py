@@ -52,7 +52,11 @@ def _scene(**over):
     rng = np.random.default_rng(0)
     eps = np.where(rng.random((1, 16, 16)) < 0.4, 5.76, 1.0)
     mu = np.where(rng.random((1, 16, 16)) < 0.3, 1.8, 1.0)
-    kw = dict(backend=1, structure=eps, mu=mu, period=[P, P], lattice=basis.tolist(),
+    # The cell is named once, as `lattice` -- this scene is the skewed one, so that is the
+    # spelling it means. It also passed `period=[P, P]`, which was always a no-op here (the
+    # basis overwrites the period slot) and is refused outright since 2026-09-01. `period` is
+    # still carried and still non-default: it reads back as `periods_of(basis)`.
+    kw = dict(backend=1, structure=eps, mu=mu, lattice=basis.tolist(),
               truncation_order=[3, 2], thickness=[H, 0.5 * H], wavelength=WL,
               top=wavebit.Material(2.25, mu=1.4), bot=wavebit.Material(4.0),
               theta=0.31, phi=0.47, psi=0.29, chi=np.pi / 9,
