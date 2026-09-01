@@ -7,10 +7,10 @@ layer.
 Target: `wavebit/_core/fdtd.py` — `solve_fdtd`, `component_property`, `cpml_coefficients`,
 `_refuse_out_of_scope`; `wavebit/main.py` — `fdtd`; `tests/test_fdtd.py`.
 
-**Scope.** Pure TE / TM, normal incidence, a raster structure periodic along one axis —
-deliberately the scope of `wavebit/_core/solve_1d.py`, which this mirrors down to the
-amplitude conventions. Everything outside it is refused by name; §6 lists all eleven refusals
-and why each is a refusal rather than an approximation.
+**Scope.** Pure TE / TM at any polar angle in the classical mount (`phi = 0`), on a raster
+structure periodic along one axis — deliberately the scope of `wavebit/_core/solve_1d.py`,
+which this mirrors down to the amplitude conventions. Everything outside it is refused by
+name; §6 lists all twelve refusals and why each is a refusal rather than an approximation.
 
 ---
 
@@ -263,6 +263,46 @@ efficiency is identically zero.
 
 ---
 
+## 5b. Oblique incidence
+
+A periodic cell at oblique incidence is periodic only up to a phase: `E(x + Λ) = E(x)·exp(i kx Λ)`.
+A real-valued time-domain field cannot carry that factor, which is why most periodic FDTD codes
+reach for a split-field formulation. **This module does not need one**, for a reason specific
+to what it is: it extracts at a single wavelength, so `kx` is a constant, and a complex field
+with the Bloch phase applied at the one column that wraps is exact. The cost is a complex
+dtype, and normal incidence keeps a real one — the phase is identically 1 there, and paying
+for it would double the cost of most runs.
+
+The auxiliary incident grid stays one-dimensional. The medium it lives in is uniform along x,
+and `exp(i kx x)` is an eigenvector of the *discrete* shift, so every x derivative in it
+collapses to one multiplier, `kx_op = 2i·sin(kx·dx/2)/dx`. Using the continuum `i·kx` instead
+would put the two grids on different dispersion relations and degrade the TFSF cancellation
+from round-off to the mismatch between them. The third field component (`Hz` for TE, `Ez` for
+TM) appears only here: the `(E, H, ε, μ)` duality that lets one 1D system serve both
+polarisations at normal incidence does not survive the transverse term, because `ε ≠ μ`.
+
+Measured against RCWA on the benchmark grating, 10 nm grid, 120 optical cycles:
+
+| θ | TE | TM |
+| --- | --- | --- |
+| 0° | 2.9e-3 | 2.3e-3 |
+| 15° | 1.7e-3 | **1.4e-2** |
+| 30° | 3.5e-3 | 3.7e-3 |
+| 45° | 1.8e-3 | 3.6e-3 |
+
+**Run length, not resolution, is what an oblique run costs.** The scattered wave leaves at an
+angle and takes longer to clear. At 15° with 60 cycles the residual is 5.9e-2 and the answer
+is wrong by 3.4e-2; at 120 it is 4.5e-3. `UnsettledFieldWarning` fires above a 1e-2 residual,
+because a truncated running DFT returns a number shaped exactly like an efficiency.
+
+**15° is the one bad row and it is not an accident.** There `kx_{-1} = sin 15° − 900/700 =
+−1.027`, just past the light line in air — a nearly-grazing order 1.6° away from the Rayleigh
+condition at 16.6°, and a nearly-grazing order is precisely what a PML graded along `z` alone
+absorbs worst. Expect the near-Rayleigh band to be the worst case at any angle, and check the
+residual there rather than trusting the number.
+
+---
+
 ## 6. The refusals
 
 Eleven, each refused by name. The common thread: every one returns a *plausible* number if it
@@ -272,7 +312,8 @@ cross-check at all.
 | Refused | Why not just implement it |
 | --- | --- |
 | `psi` / `chi` / `polarization` incidence | A different problem, not a different spelling — same reason `solve_1d` is separate from `solve_1d_conical` |
-| oblique `theta`, `phi` | A Bloch phase across the periodic cell edge, which a real-valued single-frequency time-domain field cannot carry. Needs a split-field or complex-field formulation |
+| complex `theta` | Evanescent incidence has no propagating incident wave to normalise against, and the TFSF plane injects one by construction. The RCWA path answers this — see `docs/branch-cuts.md` |
+| `phi != 0` (conical mount) | It couples the two polarisations, and this is the pure TE/TM formulation — the same split `solve_1d` and `solve_1d_conical` make. The classical mount leaves them decoupled at every `theta`, which is what makes §5b answerable at all |
 | `incidence_side='bottom'` | The mirror the ETM applies has no counterpart here yet |
 | complex permittivity | Time domain carries loss as a conductivity, and a constant one reproduces a given `Im(ε)` at **one** frequency. Right at the centre wavelength, silently wrong beside it |
 | `Re(ε) ≤ 0` | A metal below its plasma frequency — the same dispersion problem, and no real wave speed, so no stable time step exists |
@@ -307,11 +348,9 @@ refused by name instead of half-supported.
 
 ## 8. What is not yet answered
 
-- **Oblique incidence** is the single biggest gap, and the one a grating study most wants: a
-  cross-check that cannot do oblique cannot check what wavebit is most often used for. The
-  route is a complex-field or split-field periodic FDTD, and it touches five places together —
-  Bloch-phased shifts, the TFSF plane's angled projection, the DFT x-kernel, `kx`, and the s/p
-  frame.
+- **A conical mount** (`phi != 0`), which is what oblique incidence on a *crossed* grating
+  needs and what `solve_1d_conical` answers on the RCWA side. The classical mount is done
+  (§5b); the conical one couples the polarisations and is a different formulation.
 - **Dispersion**, which also unlocks lossy and metallic gratings — an ADE Drude/Lorentz pole
   per material. Metals are the largest class where an independent oracle would be worth having
   and where RCWA convergence is hardest.

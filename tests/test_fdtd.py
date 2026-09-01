@@ -344,8 +344,8 @@ def test_the_result_is_the_same_container_an_rcwa_solve_returns():
 REFUSED = [
     (dict(tetm=None), r'tetm must be'),
     (dict(tetm='psi'), r'tetm must be'),
-    (dict(theta=15.0), r'[Nn]ormal incidence'),
-    (dict(phi=90.0), r'normal incidence only'),
+    (dict(theta=0.3 + 0.1j), r'is complex'),
+    (dict(phi=0.5), r'conical mount'),
     (dict(incidence_side='bottom'), r'incidence_side'),
     (dict(mu=[[[1.0, 1.0]]]), r'mu is not read here'),
     (dict(lattice=[[1.0, 0.0], [0.5, 1.0]]), r'lattice'),
@@ -644,3 +644,98 @@ def test_a_profile_with_no_mirror_symmetry_agrees_on_the_AMPLITUDES():
             assert abs(got[m] + want[m]) > 0.5 * abs(want[m]), (
                 f'{name}[{m}] is the NEGATIVE of the reference, which is what a half-period '
                 f'shift of the x origin looks like')
+
+
+# ---------------------------------------------------------------------------------------
+# 6. oblique incidence
+# ---------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize('degrees, tetm', [(30.0, 'te'), (45.0, 'tm')])
+def test_oblique_incidence_agrees_with_the_rcwa_solve(degrees, tetm):
+    """`theta` in RADIANS, which is wavebit's unit -- measured, not assumed.
+
+    A degrees/radians slip returns a legal answer at a legal angle, so it is pinned against
+    the RCWA path rather than against a comment. The classical mount (`phi = 0`) leaves TE and
+    TM decoupled at every `theta`, which is what makes this answerable by the pure TE/TM
+    formulation at all; a conical mount is refused.
+
+    Measured worst per-order gap 3.5e-3 (30 deg TE) and 3.6e-3 (45 deg TM) at this 10 nm grid,
+    against 2.9e-3 and 2.3e-3 at normal incidence -- so an oblique run costs very little
+    accuracy, and what it costs is run length rather than resolution.
+    """
+    theta = np.deg2rad(degrees)
+    solver = wavebit.rcwa(backend=0, wavelength=WL, period=[PERIOD],
+                          truncation_order=dict(x=60, y=0), top=EPS_TOP, bot=EPS_BOT,
+                          theta=theta, phi=0.0, tetm=tetm,
+                          structure=_grating(), thickness=[THICK])
+    reference = _by_order(solver.solve())
+    orders = _by_order(solve_fdtd(
+        structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT, period=[PERIOD],
+        wavelength=WL, tetm=tetm, theta=theta, resolution=0.1, n_periods=120,
+        truncation_order=dict(x=2, y=0)))
+
+    for m in orders:
+        if m not in reference:
+            continue
+        assert abs(orders[m][0] - reference[m][0]) < 8e-3, (
+            f'R[{m}] at {degrees} deg: fdtd {orders[m][0]} against rcwa {reference[m][0]}')
+        assert abs(orders[m][1] - reference[m][1]) < 8e-3, (
+            f'T[{m}] at {degrees} deg: fdtd {orders[m][1]} against rcwa {reference[m][1]}')
+
+
+def test_an_oblique_scene_scatters_asymmetrically_and_on_the_right_side():
+    """The theorem that pins the SIGN of the incident in-plane wavevector.
+
+    Tilting the illumination breaks the mirror symmetry that makes `T[+1] == T[-1]` at normal
+    incidence, and it breaks it hard: at 30 degrees `T[-1] = 0.1324` while `T[+1]` is
+    identically zero, because `kx_{+1} = sin(30 deg) + 900/700 = 1.786` is past the light line
+    in glass and `kx_{-1} = -0.786` is not. Reversing the sign of `kx_inc` swaps the two, which
+    no efficiency sum and no symmetric scene could notice.
+    """
+    theta = np.deg2rad(30.0)
+    orders = _by_order(solve_fdtd(
+        structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT, period=[PERIOD],
+        wavelength=WL, tetm='te', theta=theta, resolution=0.1, n_periods=120,
+        truncation_order=dict(x=1, y=0)))
+    assert orders[1][1] == 0.0, (
+        f'T[+1] = {orders[1][1]}; that order is evanescent in the substrate at this angle')
+    assert orders[-1][1] > 0.1, (
+        f'T[-1] = {orders[-1][1]}; it propagates, and carries the power +1 cannot')
+
+
+def test_normal_incidence_stays_in_real_arithmetic():
+    """The Bloch phase is identically one at `theta = 0`, and paying for it would be a bug.
+
+    Carrying it as `(1+0j)` upcasts every field array and doubles the cost of every
+    normal-incidence run -- which is most of them, and all of this file except the oblique
+    cases. Pinned here because the two spellings are numerically identical and nothing else
+    would ever notice.
+    """
+    from wavebit._core.fdtd import _Grid
+
+    def grid(theta):
+        return _Grid(WL, PERIOD, np.array([[EPS_TOP, EPS_TOP]]), np.array([THICK]),
+                     EPS_TOP, EPS_BOT, resolution=0.02, n_pml=12, courant=0.99,
+                     subpixel=True, theta=theta)
+
+    straight = grid(0.0)
+    assert straight.dtype is float and straight.bloch == 1.0 and straight.kx_op == 0.0
+    tilted = grid(np.deg2rad(30.0))
+    assert tilted.dtype is complex and abs(abs(tilted.bloch) - 1.0) < 1e-12
+    assert tilted.kx_op != 0.0
+
+
+def test_a_field_still_ringing_at_the_end_of_the_run_warns():
+    """A truncated running DFT returns a number shaped exactly like an efficiency.
+
+    The run-length floor refuses what is knowable before the loop -- the source not having
+    finished emitting. This is the other half, and it is only knowable afterwards: a scene
+    that clears slowly. It matters most at oblique incidence, where 60 optical cycles left a
+    residual of 5.9e-2 and an answer wrong by 3.4e-2 at 15 degrees, against 4.5e-3 at 120.
+    """
+    from wavebit._core.fdtd import UnsettledFieldWarning
+
+    with pytest.warns(UnsettledFieldWarning, match='had not settled'):
+        solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+                   period=[PERIOD], wavelength=WL, tetm='tm', theta=np.deg2rad(15.0),
+                   resolution=0.05, n_periods=50, truncation_order=dict(x=1, y=0))

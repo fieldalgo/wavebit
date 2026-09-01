@@ -67,6 +67,8 @@ Literature. Each item is cited again at the line that implements it:
   axis-aligned specialisation described at :func:`component_property`.
 """
 
+import warnings
+
 import numpy as np
 
 from .backend import check_physical
@@ -127,6 +129,28 @@ PML_ALPHA_RELATIVE = 1.5
 
 #: Round-trip amplitude reflection the conductivity grading is aimed at.
 PML_TARGET_REFLECTION = 1e-8
+
+class UnsettledFieldWarning(UserWarning):
+    """The run ended with the field still ringing, so the DFT is of a truncated signal.
+
+    Emitted when the field at the transmission monitor has not decayed to
+    :data:`SETTLED_RESIDUAL` of its peak. A truncated running DFT returns a number shaped
+    exactly like an efficiency, so this is the one diagnostic a caller must not have to go
+    looking for.
+
+    **It matters far more at oblique incidence**, where the scattered wave leaves at an angle
+    and a nearly-grazing order can take several times as long to clear as a normal-incidence
+    run does. Measured on the benchmark grating at 15 degrees: 60 optical cycles leaves a
+    residual of 5.9e-2 and an answer wrong by 3.4e-2, while 120 cycles leaves 4.5e-3. Raise
+    ``n_periods`` until it stops warning.
+    """
+
+
+#: Residual -- the field at the transmission monitor as a fraction of its own peak -- above
+#: which :class:`UnsettledFieldWarning` fires. Measured against the RCWA answer: a residual of
+#: 4.4e-4 costs nothing, 4.5e-3 costs 1.4e-2 on a near-Rayleigh order, and 1.1e-1 costs 1.7e-2
+#: outright. 1e-2 sits inside the band where the error is still second order in the grid.
+SETTLED_RESIDUAL = 1e-2
 
 #: Largest de-referencing gain an evanescent order's amplitude may carry before it is reported
 #: as ``nan``. An order evanescent in the superstrate has decayed by ``exp(k0 |Im kz| |z_ref|)``
@@ -196,14 +220,17 @@ def _refuse_out_of_scope(structure, mu, theta, phi, tetm, incidence_side, lattic
             'implemented on the 2D path only ... the 1D and conical operators carry no '
             'permeability slot at all". So there would be nothing to compare against.')
 
-    if theta is not None and float(np.real(theta)) != 0.0:
+    if theta is not None and np.imag(np.asarray(theta, dtype=complex)) != 0.0:
         raise ValueError(
-            f'fdtd: theta={theta!r}. Only normal incidence is implemented. An oblique plane '
-            f'wave on a periodic cell needs a Bloch phase across the cell edge, which a '
-            f'real-valued time-domain field cannot carry at a single frequency -- it needs a '
-            f'split-field or complex-field formulation, which is a different solver.')
+            f'fdtd: theta={theta!r} is complex. Evanescent incidence has no propagating '
+            f'incident wave to normalise against, and the TFSF plane injects one by '
+            f'construction. The RCWA path answers this; see docs/branch-cuts.md.')
     if phi is not None and float(np.real(phi)) != 0.0:
-        raise ValueError(f'fdtd: phi={phi!r}. See the theta refusal: normal incidence only.')
+        raise ValueError(
+            f'fdtd: phi={phi!r}. A conical mount couples the two polarisations, and this is '
+            f'the pure TE/TM formulation -- the same split `solve_1d` and `solve_1d_conical` '
+            f'make. The classical mount (phi = 0) leaves TE and TM decoupled at any theta, '
+            f'which is what makes oblique incidence answerable here at all.')
     if incidence_side not in (None, 'top'):
         raise ValueError(
             f"fdtd: incidence_side={incidence_side!r}. Only 'top' is implemented; the mirror "
@@ -395,9 +422,9 @@ def gaussian_pulse(t, f0, width, t0):
 
 
 class _Incident1D:
-    """The incident plane wave, on a 1D grid filled with the superstrate medium.
+    """The incident plane wave, reduced to one dimension.
 
-    Taflove & Hagness sec. 5.8. Generating the incident field on a 1D grid sharing ``dz`` and
+    Taflove & Hagness sec. 5.8. Generating the incident field on a grid sharing ``dz`` and
     ``dt`` with the 2D one makes its numerical dispersion identical along z, so the
     total-field/scattered-field cancellation is limited by round-off rather than by the
     dispersion mismatch an analytic plane wave would leave at the boundary. Measured on an
@@ -405,32 +432,57 @@ class _Incident1D:
     amplitude; a sign or index mutant anywhere in the coupling drives it to 1e-2 or worse, so
     the check has ~15 orders of resolving power and :mod:`tests.test_fdtd` runs it.
 
-    The pair ``(e, h)`` integrates ``dh/dt = de/dz`` and ``eps de/dt = dh/dz``. For TE that is
-    ``(Ey, Hx)``; for TM it is ``(Ex, -Hy)``, and **that minus sign has two consumers** -- the
-    TFSF correction and the incident amplitude the result is normalised by. Getting it wrong
-    in only one of them flips the sign of ``r_p`` while leaving every efficiency intact.
+    **Why one dimension is still enough at oblique incidence.** The medium here is uniform
+    along x, and ``exp(i kx x)`` is an eigenvector of the *discrete* shift, so a field of that
+    form stays of that form on the grid exactly. Every x derivative therefore collapses to a
+    single multiplier -- ``kx_op = 2i sin(kx dx / 2) / dx``, which is the discrete operator
+    the 2D grid applies and not the continuum ``i kx``. That is what keeps the cancellation at
+    round-off instead of at the dispersion mismatch between the two grids.
+
+    The third component appears only at oblique incidence and it is a **different** component
+    for the two polarisations: ``Hz`` for TE and ``Ez`` for TM. The ``(E, H, eps, mu)``
+    duality that makes one 1D system serve both at normal incidence does not survive the
+    transverse term, because ``eps != mu``. At ``kx = 0`` both branches drop it and the two
+    reduce to the same pair, ``(Ey, Hx)`` and ``(Ex, -Hy)`` -- and that minus sign has **two**
+    consumers, the TFSF correction and the incident amplitude the result is normalised by.
+    Getting it wrong in only one flips the sign of ``r_p`` while leaving every efficiency
+    intact.
     """
 
-    def __init__(self, nz, dz, dt, eps_r, n_pml, k_src, wavelength, f0, width, t0):
+    def __init__(self, nz, dz, dt, eps_r, n_pml, k_src, wavelength, f0, width, t0,
+                 tetm, kx_op, dtype):
         self.dz, self.dt, self.eps_r, self.k_src = dz, dt, eps_r, k_src
         self.f0, self.width, self.t0 = f0, width, t0
-        self.e = np.zeros(nz)
-        self.h = np.zeros(nz - 1)
+        self.tetm, self.kx_op = tetm, kx_op
+        self.e = np.zeros(nz, dtype=dtype)
+        self.h = np.zeros(nz - 1, dtype=dtype)
+        #: `Hz` on TE and `Ez` on TM; identically zero at normal incidence.
+        self.third = np.zeros(nz, dtype=dtype)
         self.node, self.half = cpml_profiles(nz, n_pml, dz, dt, wavelength, eps_r, eps_r)
-        self.psi_e = np.zeros(nz)
-        self.psi_h = np.zeros(nz - 1)
+        self.psi_e = np.zeros(nz, dtype=dtype)
+        self.psi_h = np.zeros(nz - 1, dtype=dtype)
 
     def step_h(self):
         d = (self.e[1:] - self.e[:-1]) / self.dz
         self.psi_h = self.half['b'] * self.psi_h + self.half['a'] * d
         self.h += self.dt * (d / self.half['kappa'] + self.psi_h)
+        if self.tetm == 'tm':
+            # dh/dt = de/dz - ez*kx_op, from Faraday's y row with h = -Hy.
+            self.h -= self.dt * self.third[:-1] * self.kx_op
 
     def step_e(self, t):
         d = np.zeros_like(self.e)
         d[1:-1] = (self.h[1:] - self.h[:-1]) / self.dz
         self.psi_e = self.node['b'] * self.psi_e + self.node['a'] * d
-        self.e[1:-1] += (self.dt / self.eps_r) * (d[1:-1] / self.node['kappa'][1:-1]
-                                                  + self.psi_e[1:-1])
+        curl = d / self.node['kappa'] + self.psi_e
+        if self.tetm == 'te':
+            # dHz/dt = -Ey*kx_op, and Ey then reads Hz back.
+            self.third -= self.dt * self.e * self.kx_op
+            curl = curl - self.third * self.kx_op
+        else:
+            # eps dEz/dt = Hy*kx_op = -h*kx_op.
+            self.third[:-1] -= (self.dt / self.eps_r) * self.h * self.kx_op
+        self.e[1:-1] += (self.dt / self.eps_r) * curl[1:-1]
         # Additive rather than imposed: a soft source is transparent to whatever comes back
         # through it, which matters because the source sits between the PML and the monitor.
         self.e[self.k_src] += gaussian_pulse(t, self.f0, self.width, self.t0)
@@ -440,14 +492,19 @@ class _Incident1D:
 # the grid
 # ---------------------------------------------------------------------------------------
 
-def _shift_up(a):
-    """``a[:, i+1]`` with the periodic wrap the cell edge carries."""
-    return np.concatenate([a[:, 1:], a[:, :1]], axis=1)
+def _shift_up(a, bloch=1.0):
+    """``a[:, i+1]``, with the Bloch phase the cell edge carries.
+
+    At oblique incidence the field is periodic only up to ``exp(i kx Lambda)``, so the one
+    column that wraps picks that factor up and the rest of the shift is an ordinary roll.
+    ``bloch = 1`` is normal incidence and reduces this to the plain periodic shift.
+    """
+    return np.concatenate([a[:, 1:], a[:, :1] * bloch], axis=1)
 
 
-def _shift_down(a):
-    """``a[:, i-1]`` with the periodic wrap."""
-    return np.concatenate([a[:, -1:], a[:, :-1]], axis=1)
+def _shift_down(a, bloch=1.0):
+    """``a[:, i-1]``, with the Bloch phase (conjugated -- it wraps the other way)."""
+    return np.concatenate([a[:, -1:] * np.conj(bloch), a[:, :-1]], axis=1)
 
 
 class _Grid:
@@ -477,7 +534,7 @@ class _Grid:
     """
 
     def __init__(self, wavelength, period, raster, thickness, eps_top, eps_bot,
-                 resolution, n_pml, courant, subpixel):
+                 resolution, n_pml, courant, subpixel, theta=0.0):
         self.wavelength = float(wavelength)
         self.period = float(period)
         self.raster = np.asarray(raster, dtype=complex)
@@ -493,6 +550,23 @@ class _Grid:
 
         n_top = float(np.sqrt(self.eps_top).real)
         n_bot = float(np.sqrt(self.eps_bot).real)
+
+        # The in-plane wavevector, normalised by k0 exactly as `engine.n_inc` normalises it:
+        # `kx_inc = n_inc*sin(theta)*cos(phi)`, and `phi = 0` here. `theta` is in RADIANS,
+        # which is wavebit's unit -- measured against the closed-form Fresnel value rather
+        # than assumed, because a degrees/radians slip returns a legal answer at a legal angle.
+        k0 = 2.0 * np.pi / self.wavelength
+        self.theta = float(np.real(0.0 if theta is None else theta))
+        self.kx_inc = n_top * float(np.sin(self.theta))
+        #: The phase the field picks up crossing one cell edge. `1` is normal incidence, and
+        #: the arrays stay REAL there -- a complex dtype would double the cost of every run
+        #: for a phase that is identically one.
+        #: Real `1.0` and `0.0` rather than `(1+0j)` and `0j` at normal incidence: a complex
+        #: literal upcasts every array it touches, which would silently double the cost of
+        #: every normal-incidence run for a phase that is identically one.
+        self.dtype = complex if self.kx_inc != 0.0 else float
+        self.bloch = (np.exp(1j * k0 * self.kx_inc * self.period)
+                      if self.dtype is complex else 1.0)
 
         # A wavelength of clearance in each half-space: far enough that the evanescent orders
         # a grating radiates have decayed before the monitor, near enough that the outgoing
@@ -520,6 +594,13 @@ class _Grid:
         n_min = float(np.sqrt(np.min(np.real(
             np.concatenate([self.raster.ravel(), [self.eps_top, self.eps_bot]])))))
         self.dt = courant * n_min / np.sqrt(1.0 / self.dx ** 2 + 1.0 / self.dz ** 2)
+
+        #: The DISCRETE x-derivative the auxiliary grid applies, not the continuum `i*kx`:
+        #: a field `exp(i kx x)` is an eigenvector of the grid's shift, and the eigenvalue is
+        #: this. Using `i*kx` instead leaves the two grids on different dispersion relations
+        #: and the TFSF cancellation degrades from round-off to the mismatch between them.
+        self.kx_op = (2j * np.sin(0.5 * k0 * self.kx_inc * self.dx) / self.dx
+                      if self.dtype is complex else 0.0)
 
         self.node, self.half = cpml_profiles(self.nz, self.n_pml, self.dz, self.dt,
                                              self.wavelength,
@@ -559,25 +640,38 @@ def _time_loop(grid, tetm, n_steps, wavelength):
     nb, na, nk = (grid.node[k][:, None] for k in ('b', 'a', 'kappa'))
     kt = grid.k_tfsf
 
+    dtype = grid.dtype
     inc = _Incident1D(nz, dz, dt, grid.eps_top.real, grid.n_pml, grid.k_src,
-                      wavelength, freq, width, t0)
+                      wavelength, freq, width, t0, tetm, grid.kx_op, dtype)
+
+    # The incident field the TFSF plane injects varies across the cell as `exp(i kx x)`; the
+    # auxiliary grid carries only its amplitude, so the plane multiplies it back on. `Ey`/`Hx`
+    # sit on the x nodes and `Hy`/`Ex` on the half-steps, which is the only difference between
+    # the two polarisations here. `ones` rather than `exp(0j)` at normal incidence, so the
+    # field arrays stay real.
+    k0 = 2.0 * np.pi / wavelength
+    if grid.kx_inc == 0.0:
+        x_phase = np.ones(nx)
+    else:
+        offset = 0.5 if tetm == 'tm' else 0.0
+        x_phase = np.exp(1j * k0 * grid.kx_inc * (np.arange(nx) + offset) * dx)
 
     if tetm == 'te':
         # (Ey, Hx, Hz). Ey sits on the z nodes and the x nodes, and is tangential to every
         # interface a 1D grating has, so it takes no harmonic average.
         eps = grid.eps_for(False, False, None).real
-        ey = np.zeros((nz, nx))
-        hx = np.zeros((nz - 1, nx))
-        hz = np.zeros((nz, nx))
+        ey = np.zeros((nz, nx), dtype=dtype)
+        hx = np.zeros((nz - 1, nx), dtype=dtype)
+        hz = np.zeros((nz, nx), dtype=dtype)
     else:
         # (Hy, Ex, Ez). Ex is normal to the tooth's vertical walls, Ez to the horizontal ones.
         eps_x = grid.eps_for(False, True, 'x').real
         eps_z = grid.eps_for(True, False, 'z').real
-        hy = np.zeros((nz - 1, nx))
-        ex = np.zeros((nz, nx))
-        ez = np.zeros((nz - 1, nx))
-    psi_h = np.zeros((nz - 1, nx))
-    psi_e = np.zeros((nz, nx))
+        hy = np.zeros((nz - 1, nx), dtype=dtype)
+        ex = np.zeros((nz, nx), dtype=dtype)
+        ez = np.zeros((nz - 1, nx), dtype=dtype)
+    psi_h = np.zeros((nz - 1, nx), dtype=dtype)
+    psi_e = np.zeros((nz, nx), dtype=dtype)
 
     dft_ref = np.zeros(nx, dtype=complex)
     dft_trn = np.zeros(nx, dtype=complex)
@@ -592,38 +686,39 @@ def _time_loop(grid, tetm, n_steps, wavelength):
             d = (ey[1:] - ey[:-1]) / dz
             psi_h = hb * psi_h + ha * d
             hx += dt * (d / hk + psi_h)
-            hz -= dt * (_shift_up(ey) - ey) / dx
+            hz -= dt * (_shift_up(ey, grid.bloch) - ey) / dx
             # TFSF (Umashankar & Taflove 1982): Hx at kt-1/2 is a scattered-field quantity
             # whose stencil reached across the boundary into the total-field Ey[kt].
-            hx[kt - 1] -= dt * inc.e[kt] / dz
+            hx[kt - 1] -= dt * inc.e[kt] * x_phase / dz
         else:
             # dHy/dt = dEz/dx - dEx/dz.
-            d_ez = (_shift_up(ez) - ez) / dx
+            d_ez = (_shift_up(ez, grid.bloch) - ez) / dx
             d_ex = (ex[1:] - ex[:-1]) / dz
             psi_h = hb * psi_h + ha * d_ex
             hy += dt * (d_ez - d_ex / hk - psi_h)
             # Ex_inc is `inc.e` outright -- see the sign note on _Incident1D.
-            hy[kt - 1] += dt * inc.e[kt] / dz
+            hy[kt - 1] += dt * inc.e[kt] * x_phase / dz
 
         # --- E, to level n + 1 ----------------------------------------------------------
         inc.step_e((step + 1) * dt)
         if tetm == 'te':
             # eps dEy/dt = dHx/dz - dHz/dx.
-            d = np.zeros((nz, nx))
+            d = np.zeros((nz, nx), dtype=dtype)
             d[1:-1] = (hx[1:] - hx[:-1]) / dz
             psi_e = nb * psi_e + na * d
-            ey[1:-1] += dt * (d[1:-1] / nk[1:-1] + psi_e[1:-1]
-                              - (hz[1:-1] - _shift_down(hz)[1:-1]) / dx) / eps[1:-1]
-            ey[kt] -= dt * inc.h[kt - 1] / dz / eps[kt]
+            ey[1:-1] += (dt * (d[1:-1] / nk[1:-1] + psi_e[1:-1]
+                               - (hz[1:-1] - _shift_down(hz, grid.bloch)[1:-1]) / dx)
+                         / eps[1:-1])
+            ey[kt] -= dt * inc.h[kt - 1] * x_phase / dz / eps[kt]
         else:
             # eps dEx/dt = -dHy/dz ; eps dEz/dt = dHy/dx.
-            d = np.zeros((nz, nx))
+            d = np.zeros((nz, nx), dtype=dtype)
             d[1:-1] = -(hy[1:] - hy[:-1]) / dz
             psi_e = nb * psi_e + na * d
             ex[1:-1] += dt * (d[1:-1] / nk[1:-1] + psi_e[1:-1]) / eps_x[1:-1]
             # Hy_inc is MINUS inc.h, which is where this sign comes from.
-            ex[kt] -= dt * inc.h[kt - 1] / dz / eps_x[kt]
-            ez += dt * (hy - _shift_down(hy)) / dx / eps_z
+            ex[kt] -= dt * inc.h[kt - 1] * x_phase / dz / eps_x[kt]
+            ez += dt * (hy - _shift_down(hy, grid.bloch)) / dx / eps_z
 
         # --- monitors -------------------------------------------------------------------
         # The e^{-iwt} phasor is recovered with an exp(+i w t) kernel; `np.fft.fft` over the
@@ -703,15 +798,18 @@ def _extract(grid, out, half_width, wavelength):
     tetm = out['tetm']
     # Hy is sampled at the x half-step, Ey at the node.
     xs = (np.arange(nx) + (0.5 if tetm == 'tm' else 0.0)) * grid.dx
-    kernel = np.exp(-1j * (2.0 * np.pi * m[:, None] / grid.period) * xs[None, :]) / nx
+    k0 = 2.0 * np.pi / wavelength
+    kx = grid.kx_inc + m * wavelength / grid.period
+    # Each order carries `exp(i kx_m x)`, and `kx_m` includes the incident in-plane
+    # wavevector at oblique incidence -- so the kernel demodulates by the full `kx_m`, not by
+    # the grating harmonic alone.
+    kernel = np.exp(-1j * k0 * kx[:, None] * xs[None, :]) / nx
 
     n_top = np.sqrt(grid.eps_top)
     n_bot = np.sqrt(grid.eps_bot)
-    k0 = 2.0 * np.pi / wavelength
-    kx = m * wavelength / grid.period                    # normal incidence
     kz_top = _half_space_kz(grid.eps_top, kx)
     kz_bot = _half_space_kz(grid.eps_bot, kx)
-    kz_inc = _half_space_kz(grid.eps_top, 0.0)
+    kz_inc = _half_space_kz(grid.eps_top, grid.kx_inc)
 
     z_ref, z_trn, z_inc = out['z_ref'], out['z_trn'], out['z_inc']
     # The incident amplitude at z = 0, from the plane it was actually sampled on.
@@ -782,7 +880,7 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm,
     n_periods = N_PERIODS if n_periods is None else float(n_periods)
 
     grid = _Grid(wavelength, period_x, raster, thickness, eps_top, eps_bot,
-                 resolution, n_pml, courant, subpixel)
+                 resolution, n_pml, courant, subpixel, theta=theta)
     n_steps = int(np.ceil(n_periods * wavelength / grid.dt))
     out = _time_loop(grid, name, n_steps, wavelength)
 
@@ -793,6 +891,15 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm,
     else:
         half_width = int(truncation_order[0] if hasattr(truncation_order, '__len__')
                          else truncation_order)
+
+    if out['residual'] > SETTLED_RESIDUAL:
+        warnings.warn(
+            f"the field had not settled when the run ended: {out['residual']:.1e} of its peak "
+            f"was still at the transmission monitor, against a {SETTLED_RESIDUAL:g} target. "
+            f"The running DFT is of a truncated signal. Raise n_periods (it is "
+            f"{n_periods:g}); an oblique or near-grazing scene often needs twice a "
+            f"normal-incidence one.",
+            UnsettledFieldWarning, stacklevel=2)
 
     sub = _extract(grid, out, half_width, wavelength)
     # The same tier of check the RCWA path applies: gain out of nothing, or negative power.
