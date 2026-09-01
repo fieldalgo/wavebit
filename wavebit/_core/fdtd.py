@@ -77,6 +77,7 @@ import warnings
 import numpy as np
 
 from .backend import check_physical
+from .domain import as_material
 from .result import Result, ResultSub
 
 
@@ -215,31 +216,28 @@ def _refuse_out_of_scope(structure, mu, theta, phi, tetm, incidence_side, lattic
             f'plane, so the grating must be invariant along y: shape (n_layers, 1, Nx). A '
             f'crossed grating needs a 3D FDTD, which this is not.')
 
-    values = np.concatenate([np.asarray(structure, dtype=complex).ravel(),
-                             np.asarray(top, dtype=complex).ravel(),
-                             np.asarray(bot, dtype=complex).ravel()])
+    half_spaces = [as_material(top, 'top'), as_material(bot, 'bot')]
+    values = np.concatenate(
+        [np.asarray(structure, dtype=complex).ravel()]
+        + [np.asarray(m.epsilon, dtype=complex).ravel() for m in half_spaces]
+        + [np.asarray(1.0 if m.mu is None else m.mu, dtype=complex).ravel()
+           for m in half_spaces]
+        + ([] if mu is None else [np.asarray(mu, dtype=complex).ravel()]))
     if np.any(np.abs(np.imag(values)) > 0):
         raise ValueError(
-            'fdtd: the scene has a complex permittivity. A single complex number describes a '
-            'material at ONE frequency, and a time-domain run carries every frequency in its '
-            'band at once -- so there is no constant this solve could use that would be right '
+            'fdtd: the scene has a complex permittivity or permeability. A single complex '
+            'number describes a material at ONE frequency, and a '
+            'time-domain run carries every frequency in its band at once -- so there is no constant this solve could use that would be right '
             'across the band. Give the dispersion as poles instead: `structure` holds the '
             'real eps_infinity, `dispersion` marks which cells are dispersive, and `poles` '
             'carries the Drude/Lorentz model. That IS the frequency dependence, rather than '
             'one sample of it.')
     if np.any(np.real(values) <= 0.0):
         raise ValueError(
-            f'fdtd: the scene has a permittivity of {np.real(values).min()!r}. A '
-            f'non-positive permittivity is a metal below its plasma frequency, which needs the '
-            f'same dispersion the complex case does; it also has no real wave speed, so there '
-            f'is no time step that makes the update stable.')
-
-    if mu is not None:
-        raise ValueError(
-            'fdtd: mu is not read here. That is parity with the path this mirrors, not an '
-            'omission: the RCWA side refuses it on the same scene, at engine.py:2334 -- "mu is '
-            'implemented on the 2D path only ... the 1D and conical operators carry no '
-            'permeability slot at all". Neither path answers a magnetic 1D grating today.')
+            f'fdtd: the scene has a permittivity or permeability of '
+            f'{np.real(values).min()!r}. A non-positive one is a metal below its plasma '
+            f'frequency, which needs the same dispersion the complex case does; it also has no '
+            f'real wave speed, so there is no time step that makes the update stable.')
 
     if theta is not None and np.imag(np.asarray(theta, dtype=complex)) != 0.0:
         raise ValueError(
@@ -535,8 +533,9 @@ class _Incident1D:
     """
 
     def __init__(self, nz, dz, dt, eps_r, n_pml, k_src, wavelength, f0, width, t0,
-                 tetm, kx_op, dtype):
+                 tetm, kx_op, dtype, mu_r=1.0):
         self.dz, self.dt, self.eps_r, self.k_src = dz, dt, eps_r, k_src
+        self.mu_r = float(np.real(mu_r))
         self.f0, self.width, self.t0 = f0, width, t0
         self.tetm, self.kx_op = tetm, kx_op
         self.e = np.zeros(nz, dtype=dtype)
@@ -550,10 +549,10 @@ class _Incident1D:
     def step_h(self):
         d = (self.e[1:] - self.e[:-1]) / self.dz
         self.psi_h = self.half['b'] * self.psi_h + self.half['a'] * d
-        self.h += self.dt * (d / self.half['kappa'] + self.psi_h)
+        self.h += (self.dt / self.mu_r) * (d / self.half['kappa'] + self.psi_h)
         if self.tetm == 'tm':
             # dh/dt = de/dz - ez*kx_op, from Faraday's y row with h = -Hy.
-            self.h -= self.dt * self.third[:-1] * self.kx_op
+            self.h -= (self.dt / self.mu_r) * self.third[:-1] * self.kx_op
 
     def step_e(self, t):
         d = np.zeros_like(self.e)
@@ -562,7 +561,7 @@ class _Incident1D:
         curl = d / self.node['kappa'] + self.psi_e
         if self.tetm == 'te':
             # dHz/dt = -Ey*kx_op, and Ey then reads Hz back.
-            self.third -= self.dt * self.e * self.kx_op
+            self.third -= (self.dt / self.mu_r) * self.e * self.kx_op
             curl = curl - self.third * self.kx_op
         else:
             # eps dEz/dt = Hy*kx_op = -h*kx_op.
@@ -620,13 +619,23 @@ class _Grid:
 
     def __init__(self, wavelength, period, raster, thickness, eps_top, eps_bot,
                  resolution, n_pml, courant, subpixel, theta=0.0,
-                 dispersion=None, poles=None):
+                 dispersion=None, poles=None, mu_raster=None, mu_top=1.0, mu_bot=1.0):
         self.wavelength = float(wavelength)
         self.period = float(period)
         self.raster = np.asarray(raster, dtype=complex)
         self.thickness = np.asarray(thickness, dtype=float)
         self.eps_top = complex(eps_top)
         self.eps_bot = complex(eps_bot)
+        #: Permeability, the E/H dual of `raster` and the two half-space permittivities. An
+        #: index is `sqrt(eps*mu)` (engine.py `_half_space_index`), so `mu` reaches every kz,
+        #: every order and both admittances -- it is not a second material property bolted on
+        #: beside eps, it is the same five slots on the other side of the duality.
+        self.mu_raster = (np.ones_like(self.raster) if mu_raster is None
+                          else np.asarray(mu_raster, dtype=complex))
+        self.mu_top = complex(mu_top)
+        self.mu_bot = complex(mu_bot)
+        self.n_top_sq = self.eps_top * self.mu_top
+        self.n_bot_sq = self.eps_bot * self.mu_bot
         self.subpixel = bool(subpixel)
         self.n_pml = int(n_pml)
         #: Per-raster-cell pole-set id, 0 meaning non-dispersive, and the pole lists it
@@ -639,8 +648,8 @@ class _Grid:
         self.dx = self.period / self.nx
         self.dz = self.dx
 
-        n_top = float(np.sqrt(self.eps_top).real)
-        n_bot = float(np.sqrt(self.eps_bot).real)
+        n_top = float(np.sqrt(self.n_top_sq).real)
+        n_bot = float(np.sqrt(self.n_bot_sq).real)
 
         # The in-plane wavevector, normalised by k0 exactly as `engine.n_inc` normalises it:
         # `kx_inc = n_inc*sin(theta)*cos(phi)`, and `phi = 0` here. `theta` is in RADIANS,
@@ -682,8 +691,10 @@ class _Grid:
         # The stability bound is set by the FASTEST wave in the scene, and speed is `c/n`, so
         # it is the SMALLEST index that binds -- the usual spelling drops this factor because
         # it assumes nothing beats vacuum.
-        n_min = float(np.sqrt(np.min(np.real(
-            np.concatenate([self.raster.ravel(), [self.eps_top, self.eps_bot]])))))
+        # Speed is `1/sqrt(eps*mu)`, so both sides of the duality bind the time step.
+        n_min = float(np.sqrt(np.min(np.real(np.concatenate([
+            (self.raster * self.mu_raster).ravel(),
+            [self.n_top_sq, self.n_bot_sq]])))))
         self.dt = courant * n_min / np.sqrt(1.0 / self.dx ** 2 + 1.0 / self.dz ** 2)
 
         #: The DISCRETE x-derivative the auxiliary grid applies, not the continuum `i*kx`:
@@ -705,6 +716,19 @@ class _Grid:
         nz = self.nz - 1 if z_half else self.nz
         return component_property(
             self.raster, self.thickness, self.eps_top, self.eps_bot, self.period,
+            self.z0, self.dz, nz, self.dx, self.nx, z_half, x_half, harmonic_axis,
+            subpixel=self.subpixel)
+
+    def mu_for(self, z_half, x_half, harmonic_axis):
+        """Permeability on one magnetic component's cells, by the same rule `eps_for` uses.
+
+        Harmonic along the component's own axis: `B_normal` is continuous where `D_normal` is,
+        so the averaging rule is the duality's image of the electric one and not a separate
+        choice.
+        """
+        nz = self.nz - 1 if z_half else self.nz
+        return component_property(
+            self.mu_raster, self.thickness, self.mu_top, self.mu_bot, self.period,
             self.z0, self.dz, nz, self.dx, self.nx, z_half, x_half, harmonic_axis,
             subpixel=self.subpixel)
 
@@ -774,7 +798,8 @@ def _time_loop(grid, tetm, n_steps, wavelengths):
 
     dtype = grid.dtype
     inc = _Incident1D(nz, dz, dt, grid.eps_top.real, grid.n_pml, grid.k_src,
-                      centre, 1.0 / centre, width, t0, tetm, grid.kx_op, dtype)
+                      centre, 1.0 / centre, width, t0, tetm, grid.kx_op, dtype,
+                      mu_r=grid.mu_top.real)
 
     # The incident field the TFSF plane injects varies across the cell as `exp(i kx x)`; the
     # auxiliary grid carries only its amplitude, so the plane multiplies it back on. `Ey`/`Hx`
@@ -792,6 +817,10 @@ def _time_loop(grid, tetm, n_steps, wavelengths):
         # (Ey, Hx, Hz). Ey sits on the z nodes and the x nodes, and is tangential to every
         # interface a 1D grating has, so it takes no harmonic average.
         eps = grid.eps_for(False, False, None).real
+        # `Hx` points along x and `Hz` along z, so each takes the harmonic average along its
+        # own axis -- the duality's image of the rule `eps_for` uses for `Ex` and `Ez`.
+        mu_x = grid.mu_for(True, False, 'x').real
+        mu_z = grid.mu_for(False, True, 'z').real
         ey = np.zeros((nz, nx), dtype=dtype)
         hx = np.zeros((nz - 1, nx), dtype=dtype)
         hz = np.zeros((nz, nx), dtype=dtype)
@@ -800,6 +829,8 @@ def _time_loop(grid, tetm, n_steps, wavelengths):
         # (Hy, Ex, Ez). Ex is normal to the tooth's vertical walls, Ez to the horizontal ones.
         eps_x = grid.eps_for(False, True, 'x').real
         eps_z = grid.eps_for(True, False, 'z').real
+        # `Hy` is out of plane, so it has no in-plane axis to average harmonically along.
+        mu_y = grid.mu_for(True, True, None).real
         hy = np.zeros((nz - 1, nx), dtype=dtype)
         ex = np.zeros((nz, nx), dtype=dtype)
         ez = np.zeros((nz - 1, nx), dtype=dtype)
@@ -823,19 +854,19 @@ def _time_loop(grid, tetm, n_steps, wavelengths):
             # Yee 1966: dHx/dt = dEy/dz, dHz/dt = -dEy/dx. Only z carries a PML.
             d = (ey[1:] - ey[:-1]) / dz
             psi_h = hb * psi_h + ha * d
-            hx += dt * (d / hk + psi_h)
-            hz -= dt * (_shift_up(ey, grid.bloch) - ey) / dx
+            hx += dt * (d / hk + psi_h) / mu_x
+            hz -= dt * (_shift_up(ey, grid.bloch) - ey) / dx / mu_z
             # TFSF (Umashankar & Taflove 1982): Hx at kt-1/2 is a scattered-field quantity
             # whose stencil reached across the boundary into the total-field Ey[kt].
-            hx[kt - 1] -= dt * inc.e[kt] * x_phase / dz
+            hx[kt - 1] -= dt * inc.e[kt] * x_phase / dz / mu_x[kt - 1]
         else:
             # dHy/dt = dEz/dx - dEx/dz.
             d_ez = (_shift_up(ez, grid.bloch) - ez) / dx
             d_ex = (ex[1:] - ex[:-1]) / dz
             psi_h = hb * psi_h + ha * d_ex
-            hy += dt * (d_ez - d_ex / hk - psi_h)
+            hy += dt * (d_ez - d_ex / hk - psi_h) / mu_y
             # Ex_inc is `inc.e` outright -- see the sign note on _Incident1D.
-            hy[kt - 1] += dt * inc.e[kt] * x_phase / dz
+            hy[kt - 1] += dt * inc.e[kt] * x_phase / dz / mu_y[kt - 1]
 
         # --- E, to level n + 1 ----------------------------------------------------------
         inc.step_e((step + 1) * dt)
@@ -916,9 +947,9 @@ def _half_space_kz(eps, kx):
     return np.sqrt(np.asarray(eps, dtype=complex) - np.asarray(kx, dtype=complex) ** 2)
 
 
-def _propagating_half_width(wavelength, period, eps_top, eps_bot):
+def _propagating_half_width(wavelength, period, n_top_sq, n_bot_sq):
     """The largest ``|m|`` that propagates in either half-space, so the default reports them."""
-    n_max = max(abs(np.sqrt(complex(eps_top))), abs(np.sqrt(complex(eps_bot))))
+    n_max = max(abs(np.sqrt(complex(n_top_sq))), abs(np.sqrt(complex(n_bot_sq))))
     return int(np.floor(n_max * period / wavelength))
 
 
@@ -963,11 +994,12 @@ def _extract(grid, out, half_width, index):
     # the grating harmonic alone.
     kernel = np.exp(-1j * k0 * kx[:, None] * xs[None, :]) / nx
 
-    n_top = np.sqrt(grid.eps_top)
-    n_bot = np.sqrt(grid.eps_bot)
-    kz_top = _half_space_kz(grid.eps_top, kx)
-    kz_bot = _half_space_kz(grid.eps_bot, kx)
-    kz_inc = _half_space_kz(grid.eps_top, kx_inc)
+    # An index is `sqrt(eps*mu)`, so every kz and the whole order grid carry mu.
+    n_top = np.sqrt(grid.n_top_sq)
+    n_bot = np.sqrt(grid.n_bot_sq)
+    kz_top = _half_space_kz(grid.n_top_sq, kx)
+    kz_bot = _half_space_kz(grid.n_bot_sq, kx)
+    kz_inc = _half_space_kz(grid.n_top_sq, kx_inc)
 
     z_ref, z_trn, z_inc = out['z_ref'], out['z_trn'], out['z_inc']
     # The incident amplitude at z = 0, from the plane it was actually sampled on.
@@ -998,21 +1030,27 @@ def _extract(grid, out, half_width, index):
                         * abs(z_trn - grid.total_thickness)) > MAX_DEREFERENCE_GAIN,
                  np.nan, t)
 
-    # solve_1d.py:316-322. On the reflection side the two media are the same one, so the p
-    # channel's `n**2` cancels and both polarisations read Re(kz_top/kz_inc).
+    # solve_1d.py:472-481. On the reflection side the two media are the same one, so the
+    # material factor cancels and both polarisations read Re(kz_top/kz_inc). Transmission is
+    # where the duality shows: an s channel's admittance is `kz/mu` and a p channel's is
+    # `kz/eps`, which is the whole content of a magnetic half-space.
+    eps_top, eps_bot = grid.eps_top, grid.eps_bot
+    mu_top, mu_bot = grid.mu_top, grid.mu_bot
     reflected = np.nan_to_num(np.real(r * np.conj(r)), nan=0.0) * np.real(kz_top / kz_inc)
     if tetm == 'te':
         transmitted = (np.nan_to_num(np.real(t * np.conj(t)), nan=0.0)
-                       * np.real(kz_bot / kz_inc))
+                       * np.real(kz_bot / mu_bot / (kz_inc / mu_top)))
         amplitudes = (r, np.zeros_like(r), t, np.zeros_like(t))
         efficiencies = (reflected, np.zeros_like(reflected),
                         transmitted, np.zeros_like(transmitted))
     else:
         transmitted = (np.nan_to_num(np.real(t * np.conj(t)), nan=0.0)
-                       * np.real(kz_bot / n_bot ** 2 / (kz_inc / n_top ** 2)))
-        # The p channel's primary amplitude is magnetic; t_E = t_H * n_top/n_bot
-        # (solve_1d.py:339-341).
-        amplitudes = (np.zeros_like(r), r, np.zeros_like(t), t * (n_top / n_bot))
+                       * np.real(kz_bot / eps_bot / (kz_inc / eps_top)))
+        # The p channel's primary amplitude is magnetic; the published t_p is the E ratio,
+        # `Tt * ((n_top/mu_top) / (n_bot/mu_bot))` (solve_1d.py:505-508), which is
+        # `t_H * n_top/n_bot` exactly at mu = 1.
+        amplitudes = (np.zeros_like(r), r, np.zeros_like(t),
+                      t * ((n_top / mu_top) / (n_bot / mu_bot)))
         efficiencies = (np.zeros_like(reflected), reflected,
                         np.zeros_like(transmitted), transmitted)
 
@@ -1080,6 +1118,9 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm,
                resolution=None, n_pml=PML_CELLS, n_periods=None, courant=COURANT,
                subpixel=True, truncation_order=None, return_diagnostics=False,
                dispersion=None, poles=None):
+    # `mu` is the raster's permeability field, layer-major beside `structure`, and the two
+    # half-spaces carry theirs inside their `Material` -- the same two spellings the RCWA path
+    # takes, so one `Stack` reaches both solvers unchanged.
     """Solve one TE or TM incidence in the time domain; returns a :class:`Result`.
 
     Every keyword this does not implement is refused by name rather than ignored -- see
@@ -1090,8 +1131,20 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm,
 
     period_x = float(period[0] if hasattr(period, '__len__') else period)
     raster = np.asarray(structure, dtype=complex)[:, 0, :]
-    eps_top = complex(np.asarray(top, dtype=complex))
-    eps_bot = complex(np.asarray(bot, dtype=complex))
+    top_material, bot_material = as_material(top, 'top'), as_material(bot, 'bot')
+    eps_top = complex(np.asarray(top_material.epsilon, dtype=complex))
+    eps_bot = complex(np.asarray(bot_material.epsilon, dtype=complex))
+    mu_top = complex(1.0 if top_material.mu is None else top_material.mu)
+    mu_bot = complex(1.0 if bot_material.mu is None else bot_material.mu)
+    mu_raster = None
+    if mu is not None:
+        mu_raster = np.asarray(mu, dtype=complex)
+        if mu_raster.ndim == 3 and mu_raster.shape[1] == 1:
+            mu_raster = mu_raster[:, 0, :]
+        if mu_raster.shape != raster.shape:
+            raise ValueError(
+                f'fdtd: mu is {mu_raster.shape} and structure is {raster.shape}. They are two '
+                f'fields sampled on one raster, so they share a shape exactly.')
 
     # A sequence asks for a spectrum out of ONE run -- the thing a time-domain solve does that
     # a frequency-domain one cannot. The centre sets the source and, at oblique incidence, the
@@ -1108,8 +1161,9 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm,
         # that a long way above `sqrt(eps_infinity)` -- a Drude metal at 900 nm reaches n = 6.5
         # where its eps_infinity is 1. Sizing the grid off eps_infinity alone would leave the
         # metal at three cells per wavelength.
-        indices = [abs(np.sqrt(eps_top)), abs(np.sqrt(eps_bot)),
-                   float(np.sqrt(np.abs(raster)).max())]
+        indices = [abs(np.sqrt(eps_top * mu_top)), abs(np.sqrt(eps_bot * mu_bot)),
+                   float(np.sqrt(np.abs(raster * (1.0 if mu_raster is None
+                                                  else mu_raster))).max())]
         for entries in (poles or {}).values():
             indices.append(abs(np.sqrt(permittivity_at(entries, float(np.min(band)), 1.0))))
         resolution = CELLS_PER_WAVELENGTH * max(indices) / wavelength
@@ -1118,14 +1172,16 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm,
     dispersion, poles = _check_dispersion(dispersion, poles, raster)
     grid = _Grid(wavelength, period_x, raster, thickness, eps_top, eps_bot,
                  resolution, n_pml, courant, subpixel, theta=theta,
-                 dispersion=dispersion, poles=poles)
+                 dispersion=dispersion, poles=poles, mu_raster=mu_raster,
+                 mu_top=mu_top, mu_bot=mu_bot)
     n_steps = int(np.ceil(n_periods * centre / grid.dt))
     out = _time_loop(grid, name, n_steps, band)
 
     if truncation_order is None:
         # The SHORTEST wavelength has the most propagating orders, so the default covers the
         # whole band rather than the centre of it.
-        half_width = _propagating_half_width(float(band.min()), period_x, eps_top, eps_bot)
+        half_width = _propagating_half_width(float(band.min()), period_x,
+                                             eps_top * mu_top, eps_bot * mu_bot)
     elif hasattr(truncation_order, 'get'):
         half_width = int(truncation_order.get('x', truncation_order.get('u', 0)))
     else:
@@ -1148,7 +1204,8 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm,
         # power. Every defect this module has had -- an over-conducting PML, a mis-scaled CFS
         # pole, an out-of-band DFT -- announced itself here first, as `R + T` between 1.1
         # and 106.
-        check_physical(np, np.asarray(sub.R), np.asarray(sub.T), np.sqrt(eps_top))
+        check_physical(np, np.asarray(sub.R), np.asarray(sub.T),
+                       np.sqrt(eps_top * mu_top))
         results.append(Result(given=sub, order_window=((0, half_width), (0, 0))))
 
     result = results[0] if single else results

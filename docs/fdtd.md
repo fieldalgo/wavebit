@@ -8,7 +8,8 @@ Target: `wavebit/_core/fdtd.py` — `solve_fdtd`, `component_property`, `cpml_co
 `_refuse_out_of_scope`; `wavebit/main.py` — `fdtd`; `tests/test_fdtd.py`.
 
 **Scope.** Pure TE / TM at any polar angle in the classical mount (`phi = 0`), on a raster
-structure periodic along one axis, with Drude/Lorentz dispersion — deliberately the scope of
+structure periodic along one axis, with Drude/Lorentz dispersion and permeability —
+deliberately the scope of
 `wavebit/_core/solve_1d.py`, which this mirrors down to the amplitude conventions. Everything
 outside it is refused by name; §6 lists the refusals and why each is a refusal rather than an
 approximation.
@@ -347,7 +348,6 @@ cross-check at all.
 | `incidence_side='bottom'` | The mirror the ETM applies has no counterpart here yet |
 | complex permittivity | One complex number describes a material at **one** frequency, and a run carries every frequency in its band. Give the dispersion as poles instead (§8b) — that *is* the frequency dependence, rather than one sample of it |
 | `Re(ε) ≤ 0` | A metal below its plasma frequency — the same dispersion problem, and no real wave speed, so no stable time step exists |
-| `mu` | **Parity, not omission**: the RCWA side refuses it on the same scene. `engine.py:2334` — *"mu is implemented on the 2D path only ... the 1D and conical operators carry no permeability slot at all"*. `solve_1d_conical` does carry `mu_top`/`mu_bot` parameters, but the engine refuses before reaching it, so they are unreachable defaults. Neither path answers a magnetic 1D grating today |
 | analytic shape structure | Rasterising it would put a second geometry builder beside `draw.slice_structure`, which is NumPy-only, square-only and refuses a traced shape parameter. The two would disagree about one scene |
 | `(n_layers, Ny>1, Nx)` | A crossed grating needs a 3D FDTD |
 | oblique `lattice` | The Yee grid is Cartesian; a skewed cell needs the metric in every update |
@@ -475,6 +475,49 @@ material. Half-spaces are not dispersive.
 
 ---
 
+## 8c. Permeability
+
+Implemented 2026-09-01, the day `644f881` lifted the same refusal on the RCWA path's 1D and
+conical operators. Until then this module refused `mu` *for parity* — there was no reference to
+compare a magnetic 1D grating against. That justification is now withdrawn, and with it the
+refusal.
+
+`mu` arrives the way it arrives on the RCWA side: a raster field beside `structure` for the
+layers, and inside a `Material` for the two half-spaces. So one `Stack` reaches both solvers
+unchanged, which is the whole design.
+
+The placement is the duality's, exactly as `docs/magnetic-materials.md` §11 puts it for the
+RCWA operators: **`Hx` and `Hz` divide by `mu_xx` and `mu_zz` on TE, `Hy` by `mu_yy` on TM**,
+each averaged harmonically along its own axis because `B` normal is continuous where `D`
+normal is. An index becomes `sqrt(εμ)`, so `mu` reaches every `kz`, the order grid, the
+Courant bound (speed is `1/sqrt(εμ)`) and both admittances — `kz/μ` on the s channel and
+`kz/ε` on the p channel, which is the whole content of a magnetic half-space.
+
+**Energy conservation is not a check here, and the instruments that are:**
+
+| instrument | what it catches | measured |
+| --- | --- | --- |
+| An impedance-matched slab (`ε = μ`) reflects **nothing**, at any thickness, however large its index | anything that drops `mu` from an H update | `R` = 4.6e-7 against a control of 0.358 — 774,000x |
+| Same index, different impedance (`ε=2, μ=3` against `ε=6, μ=1`) | a solver that reduced the pair to an index | `R` 0.150 against 0.358 |
+| The transfer matrix, generalised to carry `mu` | the admittances and the normalisation | 1.5e-4 on a magnetic half-space |
+| The RCWA path, on the same magnetic grating | everything at once | 5.9e-4 (TE), 3.4e-3 (TM) |
+
+The first two are exact identities and need no oracle. `R + T = 1` is deliberately absent: it
+passes for magnetic code that is wrong — on the RCWA side all six path/algorithm combinations
+conserved energy on the first smoke test, before any real oracle ran.
+
+**Two test-design traps, both of which caught this file first.** A layer at a *half* wave is
+nearly invisible, so both arms of the same-index comparison collapsed onto the bare
+substrate's 0.04 and measured nothing; and a thickness that straddles a cell spoils the
+discrete impedance match, turning the matched slab's `R` from 4.6e-7 into 1.1e-3. Both
+thicknesses are now a quarter wave *and* a whole number of cells.
+
+Also worth stating because an earlier draft asserted the opposite: **at normal incidence TE and
+TM stay degenerate in `|r|²` whether or not the material is magnetic**, since `r_p = -r_s`. A
+permeability does not split them there.
+
+---
+
 ## 9. What is not yet answered
 
 - **A non-uniform grid.** Measured in §2 and §8b: on a metal grating, 97 % of the fine cells
@@ -508,7 +551,6 @@ material. Half-spaces are not dispersive.
 - **A conical mount** (`phi != 0`), which is what oblique incidence on a *crossed* grating
   needs and what `solve_1d_conical` answers on the RCWA side. The classical mount is done
   (§5b); the conical one couples the polarisations and is a different formulation.
-- **`mu`**, to reach parity with `solve_1d_conical` rather than with `solve_1d`.
 - **A broadband run.** The DFT machinery accumulates at a single frequency now; a band needs
   the source width sized from the requested span and a guard on the incident amplitude, which
   falls to 2e-7 of its peak at the band edge and turned `R` into 105 in a prototype that had

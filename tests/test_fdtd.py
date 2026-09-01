@@ -98,7 +98,8 @@ def _by_order(result):
 # 1. the closed form
 # ---------------------------------------------------------------------------------------
 
-def _stack_rt(wavelength, n_top, n_list, d_list, n_bot, tetm):
+def _stack_rt(wavelength, n_top, n_list, d_list, n_bot, tetm,
+              mu_list=None, mu_top=1.0, mu_bot=1.0):
     """Exact ``(r, t)`` for a planar stack at normal incidence, in wavebit's frame.
 
     ``+z`` down, ``e^{-iwt}``, forward wave ``A exp(+i k z)``. TE propagates ``Ey`` with
@@ -108,18 +109,25 @@ def _stack_rt(wavelength, n_top, n_list, d_list, n_bot, tetm):
     ``r_p = (n2-n1)/(n2+n1) = -r_s``, which is the convention `result.py` states.
     """
     k0 = 2.0 * np.pi / wavelength
+    # `n_list` entries are the indices `sqrt(eps*mu)`; `mu_list` carries the permeabilities, so
+    # `eps = n**2/mu`. An s channel's admittance is `n/mu` and a p channel's is `n/eps`, which
+    # is the whole content of a magnetic half-space -- `n` alone cannot express one, since it
+    # sees no interface at all between vacuum and an impedance-mismatched medium of equal index.
+    mus = ([complex(mu_top)] + [complex(m) for m in (mu_list or [1.0] * len(n_list))]
+           + [complex(mu_bot)])
     ns = [complex(n_top)] + [complex(n) for n in n_list] + [complex(n_bot)]
     ds = [0.0] + [float(d) for d in d_list] + [0.0]
+    epss = [n ** 2 / m for n, m in zip(ns, mus)]
 
     M = np.eye(2, dtype=complex)
     for j in range(len(ns) - 1):
         phase = k0 * ns[j] * ds[j]
         P = np.diag([np.exp(1j * phase), np.exp(-1j * phase)])
-        a, b = ns[j], ns[j + 1]
         if tetm == 'te':
+            a, b = ns[j] / mus[j], ns[j + 1] / mus[j + 1]
             I = np.array([[b + a, b - a], [b - a, b + a]], dtype=complex) / (2.0 * b)
         else:
-            q = b / a
+            q = (ns[j] / epss[j]) / (ns[j + 1] / epss[j + 1])
             I = np.array([[1.0 + q, 1.0 - q], [1.0 - q, 1.0 + q]], dtype=complex) / 2.0
         M = I @ P @ M
 
@@ -127,11 +135,11 @@ def _stack_rt(wavelength, n_top, n_list, d_list, n_bot, tetm):
     t = M[0, 0] + M[0, 1] * r
     R = abs(r) ** 2
     if tetm == 'te':
-        T = abs(t) ** 2 * np.real(complex(n_bot) / complex(n_top))
+        T = abs(t) ** 2 * np.real((ns[-1] / mus[-1]) / (ns[0] / mus[0]))
     else:
-        nt, nb = complex(n_top), complex(n_bot)
-        T = abs(t) ** 2 * np.real((nb / nb ** 2) / (nt / nt ** 2))
-        t = t * (nt / nb)                      # t_E = t_H * n_top/n_bot, solve_1d.py:339-341
+        T = abs(t) ** 2 * np.real((ns[-1] / epss[-1]) / (ns[0] / epss[0]))
+        # t_E from t_H, solve_1d.py:505-508 -- `t_H * n_top/n_bot` exactly at mu = 1.
+        t = t * ((ns[0] / mus[0]) / (ns[-1] / mus[-1]))
     return r, t, R, T
 
 
@@ -347,13 +355,14 @@ REFUSED = [
     (dict(theta=0.3 + 0.1j), r'is complex'),
     (dict(phi=0.5), r'conical mount'),
     (dict(incidence_side='bottom'), r'incidence_side'),
-    (dict(mu=[[[1.0, 1.0]]]), r'mu is not read here'),
+    (dict(mu=np.ones((1, 1, 3))), r'share a shape exactly'),
+    (dict(mu=np.array([[[-1.0, 1.0]]])), r'non-positive'),
     (dict(lattice=[[1.0, 0.0], [0.5, 1.0]]), r'lattice'),
     (dict(structure=[{'shapes': []}]), r'permittivity raster'),
     (dict(structure=np.ones((1, 4, 2))), r'invariant along y'),
     (dict(structure=np.array([[[1.0 + 0.3j, 1.0]]])), r'complex permittivity'),
-    (dict(structure=np.array([[[-2.0, 1.0]]])), r'non-positive permittivity'),
-    (dict(bot=-1.5), r'non-positive permittivity'),
+    (dict(structure=np.array([[[-2.0, 1.0]]])), r'non-positive'),
+    (dict(bot=-1.5), r'non-positive'),
 ]
 
 
@@ -980,3 +989,142 @@ def test_a_band_through_a_metal_carries_the_dispersion_at_every_wavelength():
         assert abs(got[0] - R_a) < 1.5e-2, (
             f'{wavelength} nm: R {got[0]} against the closed form at THAT wavelength {R_a}')
         assert abs(got[1] - T_a) < 1.5e-2, f'{wavelength} nm: T {got[1]} against {T_a}'
+
+
+# ---------------------------------------------------------------------------------------
+# 9. permeability
+# ---------------------------------------------------------------------------------------
+#
+# **Energy conservation is not a check here.** `R + T = 1` passes for magnetic code that is
+# wrong -- on the RCWA side all six path/algorithm combinations conserved energy on the first
+# smoke test, before any real oracle ran (docs/magnetic-materials.md). Every test below is
+# something else: an exact identity, a closed form that carries mu, or a duality.
+
+@pytest.mark.parametrize('tetm', ['te', 'tm'])
+def test_an_impedance_matched_slab_does_not_reflect_at_all(tetm):
+    """`eps = mu` makes a slab invisible however large the index is. The sharpest mu test.
+
+    Wave impedance is `sqrt(mu/eps)`, so a slab with `eps = mu = 4` is matched to vacuum and
+    reflects **nothing**, at any thickness -- while its index is `sqrt(eps*mu) = 4`, so it is
+    optically thick and the transmitted phase is far from vacuum's. A solver that drops `mu`
+    sees `eps = 4, mu = 1`, an index-2 slab, and reflects a great deal.
+
+    Needs no oracle and no tolerance argument: the answer is zero.
+    """
+    # 110 nm is a whole number of cells at this resolution AND close to the quarter wave of
+    # the CONTROL (index 2, lambda/4n = 112.5 nm), where a slab reflects the most it ever
+    # will. Both halves of that matter: a thickness straddling a cell spoils the discrete
+    # match, and a half-wave thickness would make the control transparent too. An earlier
+    # draft picked 220 nm and measured a control of 0.002 instead of 0.36.
+    eps = mu = 4.0
+    result = solve_fdtd(structure=np.full((1, 1, 2), eps), thickness=[110.0],
+                        mu=np.full((1, 1, 2), mu), top=1.0, bot=1.0, period=[PERIOD],
+                        wavelength=WL, tetm=tetm, resolution=0.1, n_periods=80,
+                        truncation_order=dict(x=1, y=0))
+    orders = _by_order(result)
+    # Measured 4.6e-7 at this 10 nm grid and 2.0e-8 at 5 nm. The control -- the same scene
+    # with `mu` dropped -- gives 0.358, a separation of 774,000x, and that is what caught
+    # three H updates silently keeping their non-magnetic form.
+    assert orders[0][0] < 1e-5, (
+        f'R = {orders[0][0]} from an impedance-matched slab, which must not reflect')
+    assert abs(orders[0][1] - 1.0) < 5e-3, f'T = {orders[0][1]}, and nothing was absorbed'
+
+
+@pytest.mark.parametrize('tetm', ['te', 'tm'])
+def test_a_magnetic_slab_matches_the_closed_form(tetm):
+    """A slab that is magnetic *and* mismatched, against the transfer matrix that carries mu.
+
+    `eps = 2, mu = 3`: index `sqrt(6) = 2.449` and impedance `sqrt(1.5) = 1.22`, so neither the
+    index nor the impedance is the vacuum's and a solver cannot get this right by accident.
+    The two polarisations are no longer degenerate at normal incidence either -- an s channel's
+    admittance is `n/mu` and a p channel's is `n/eps` -- so this is two tests, not one twice.
+    """
+    eps, mu, thickness = 2.0, 3.0, 180.0
+    index = np.sqrt(eps * mu)
+    result = solve_fdtd(structure=np.full((1, 1, 2), eps), thickness=[thickness],
+                        mu=np.full((1, 1, 2), mu), top=EPS_TOP, bot=EPS_BOT, period=[PERIOD],
+                        wavelength=WL, tetm=tetm, resolution=0.05, n_periods=80,
+                        truncation_order=dict(x=1, y=0))
+    _, _, R_a, T_a = _stack_rt(WL, N_TOP, [index], [thickness], N_BOT, tetm, mu_list=[mu])
+    orders = _by_order(result)
+    assert abs(orders[0][0] - R_a) < 8e-3, f'R {orders[0][0]} against closed form {R_a}'
+    assert abs(orders[0][1] - T_a) < 8e-3, f'T {orders[0][1]} against closed form {T_a}'
+
+
+def test_the_same_index_with_a_different_impedance_is_a_different_scene():
+    """The one thing a solver carrying only `n` cannot express, stated as the test.
+
+    `eps = 2, mu = 3` and `eps = 6, mu = 1` have the **same index** `sqrt(eps*mu) = 2.449` and
+    different impedances `sqrt(mu/eps)` -- 1.22 against 0.41. Every `kz`, every Snell relation
+    and the whole order grid are identical between them; only the two admittances differ. A
+    solver that had reduced the pair to an index would see no interface at all between vacuum
+    and the first of them, which is the sentence `sp_efficiencies`' docstring puts it in.
+
+    Note what this test is NOT: at normal incidence TE and TM stay degenerate in `\|r\|^2`
+    whether or not the material is magnetic, since `r_p = -r_s`. An earlier draft asserted the
+    opposite and was wrong about the physics rather than about the code.
+    """
+    # 90 nm is the quarter wave of the shared index (91.9 nm) rounded to a whole number of
+    # cells. At 180 nm the layer is a HALF wave and nearly invisible, so both arms collapse
+    # onto the bare substrate's 0.04 and the test measures nothing -- an earlier draft did
+    # exactly that.
+    kwargs = dict(thickness=[90.0], top=EPS_TOP, bot=EPS_BOT, period=[PERIOD],
+                  wavelength=WL, tetm='te', resolution=0.1, n_periods=80,
+                  truncation_order=dict(x=1, y=0))
+    magnetic = _by_order(solve_fdtd(structure=np.full((1, 1, 2), 2.0),
+                                    mu=np.full((1, 1, 2), 3.0), **kwargs))[0]
+    plain = _by_order(solve_fdtd(structure=np.full((1, 1, 2), 6.0), **kwargs))[0]
+    assert abs(np.sqrt(2.0 * 3.0) - np.sqrt(6.0)) < 1e-12, 'the two indices must be equal'
+    # Measured 0.150 against 0.358 -- a gap of 0.21.
+    assert abs(magnetic[0] - plain[0]) > 0.1, (
+        f'R is {magnetic[0]} magnetic against {plain[0]} non-magnetic; the two have the same '
+        f'index, so an equal answer means the impedance never reached the solve')
+
+
+@pytest.mark.parametrize('tetm', ['te', 'tm'])
+def test_a_magnetic_grating_agrees_with_the_rcwa_solve(tetm):
+    """The cross-check that only became possible on 2026-09-01.
+
+    The RCWA path refused `mu` on its 1D operators until then, so a magnetic 1D grating had no
+    reference at all and this module refused it for parity. `644f881` lifted that, and this is
+    the test the lifting bought.
+    """
+    eps_tooth, mu_tooth, thickness = 4.0, 2.5, 200.0
+    structure = np.array([[[eps_tooth, EPS_TOP]]])
+    mu_raster = np.array([[[mu_tooth, 1.0]]])
+
+    solver = wavebit.rcwa(backend=0, wavelength=WL, period=[PERIOD],
+                          truncation_order=dict(x=60, y=0), top=EPS_TOP, bot=EPS_BOT,
+                          theta=0.0, phi=0.0, tetm=tetm,
+                          structure=structure, thickness=[thickness], mu=mu_raster)
+    reference = _by_order(solver.solve())
+    orders = _by_order(solve_fdtd(structure=structure, thickness=[thickness], mu=mu_raster,
+                                  top=EPS_TOP, bot=EPS_BOT, period=[PERIOD], wavelength=WL,
+                                  tetm=tetm, resolution=0.1, n_periods=80,
+                                  truncation_order=dict(x=1, y=0)))
+    for m in (-1, 0, 1):
+        assert abs(orders[m][0] - reference[m][0]) < 8e-3, (
+            f'R[{m}]: fdtd {orders[m][0]} against rcwa {reference[m][0]}')
+        assert abs(orders[m][1] - reference[m][1]) < 8e-3, (
+            f'T[{m}]: fdtd {orders[m][1]} against rcwa {reference[m][1]}')
+
+
+def test_a_magnetic_half_space_is_read():
+    """`mu` on a half-space arrives inside its `Material`, which is where the RCWA path takes it.
+
+    A half-space permeability reaches the index, both admittances and the whole order grid, and
+    nothing about the raster would notice if it were dropped -- so it is checked on its own.
+    """
+    from wavebit import Material
+
+    substrate = Material(2.25, mu=1.6)
+    result = solve_fdtd(structure=np.full((1, 1, 2), EPS_TOP), thickness=[100.0],
+                        top=1.0, bot=substrate, period=[PERIOD], wavelength=WL, tetm='te',
+                        resolution=0.1, n_periods=80, truncation_order=dict(x=1, y=0))
+    index = np.sqrt(2.25 * 1.6)
+    _, _, R_a, T_a = _stack_rt(WL, 1.0, [], [], index, 'te', mu_bot=1.6)
+    orders = _by_order(result)
+    # Measured 1.5e-4 and 2.0e-3 at this grid. Dropping the half-space mu gives R = 0.040
+    # against a true 0.0072 -- the answer of an n = 1.5 substrate.
+    assert abs(orders[0][0] - R_a) < 2e-3, f'R {orders[0][0]} against closed form {R_a}'
+    assert abs(orders[0][1] - T_a) < 8e-3, f'T {orders[0][1]} against closed form {T_a}'
