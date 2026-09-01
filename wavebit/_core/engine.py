@@ -1681,7 +1681,21 @@ class CoreSolveMixin:
         from .fields import plot_field
         plot_field(field_cell, self.tetm_index)
 
-    def _solve_1d(self, epx_conv_all, epy_conv_all, epz_conv_i_all):
+    @staticmethod
+    def _mu_1d(mu):
+        """``solve_conv``'s five permeability slots narrowed to the 1D operators' three.
+
+        The 2D layout is ``(x, y, z_i, xy, yx)`` and the 1D one is its first three: those
+        operators have no off-diagonal position, so the last two slots have nowhere to go.
+        Slicing here rather than at each call site keeps the *caller-facing* order one order
+        -- the property ``tests/test_slot_order.py`` pins for every builder -- while the
+        narrowing happens once. ``solve_conv`` has already refused a non-``None`` entry in
+        either dropped slot, so this only ever discards ``None``.
+        """
+        return None if mu is None else tuple(mu)[:3]
+
+    def _solve_1d(self, epx_conv_all, epy_conv_all, epz_conv_i_all,
+                  mu=None, mu_top=None, mu_bot=None, eps_top=None, eps_bot=None):
         if self._polarization is not None:
             # Unreachable through solve — `_assign_grating_type` sends a structure with a
             # pair to the conical path, which carries both polarizations — so this only
@@ -1700,14 +1714,21 @@ class CoreSolveMixin:
         # because its `b1` is perpendicular to `a2` rather than parallel to `a1` and order `m`
         # carries a `ky` the separable layout has no slot for.
         kx, _ = self._separable_kxy(wavelength)
+        # `mu_top` / `mu_bot` are `None` when no half-space permeability was named -- the
+        # structural spelling `solve_conv` explains -- and the numeric default lives at the one
+        # place that divides by it, so absence resolves to `1.0` exactly once, here.
         return self._finish(solve(
             self.tetm_index, wavelength, kx, self.n_top, self.n_bot, self.theta,
             self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             incidence_side=self.incidence_side, answers=self._answers,
-            lit=self._lit()))
+            lit=self._lit(), mu=self._mu_1d(mu),
+            mu_top=1.0 if mu_top is None else mu_top,
+            mu_bot=1.0 if mu_bot is None else mu_bot,
+            eps_top=eps_top, eps_bot=eps_bot))
 
-    def _solve_1d_conical(self, epx_conv_all, epy_conv_all, epz_conv_i_all):
+    def _solve_1d_conical(self, epx_conv_all, epy_conv_all, epz_conv_i_all,
+                          mu=None, mu_top=None, mu_bot=None, eps_top=None, eps_bot=None):
         solve = self._solve_fn('conical')
         self._formulation_assigned = Formulation.TWO_FIELD
         wavelength = self.wavelength
@@ -1716,7 +1737,10 @@ class CoreSolveMixin:
             wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self._incidence_pair(), self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             phi=self.phi, incidence_side=self.incidence_side,
-            answers=self._answers, lit=self._lit()))
+            answers=self._answers, lit=self._lit(), mu=self._mu_1d(mu),
+            mu_top=1.0 if mu_top is None else mu_top,
+            mu_bot=1.0 if mu_bot is None else mu_bot,
+            eps_top=eps_top, eps_bot=eps_bot))
 
     def _solve_2d(self, epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None,
@@ -2319,25 +2343,40 @@ class CoreFactorizationMixin:
             # there, the same physics the conical path solves at conical cost).
             self._grating_type = 2
 
-        # "Was a permeability named?", the structural question `Material.is_magnetic` answers,
-        # rather than "does it differ from one?". `None` means no half-space permeability was
-        # given; any value, 1.0 included, means one was. It used to read `mu_top != 1.0`, and
-        # under `jax.jit` a named `mu` is a tracer, so that comparison produced a traced boolean
-        # and `or` raised TracerBoolConversionError on every traced solve -- taking the jitted
-        # `solve_field` out of service for magnetic and non-magnetic scenes alike. `None` is an
-        # empty pytree subtree and comes through a trace as itself, which is the whole reason it
-        # is how absence is spelled.
-        magnetic = ((mu is not None and any(m is not None for m in mu))
-                    or mu_top is not None or mu_bot is not None)
-        if magnetic and self._grating_type != 2:
+        # Every permeability question here is **structural** -- "was a slot named?", which is
+        # what `Material.is_magnetic` answers -- and never "does the value differ from one?".
+        # `None` means absent; any value, 1.0 included, means present. The value comparison is
+        # not merely untidy: under `jax.jit` a named `mu` is a tracer, so `mu_top != 1.0`
+        # produces a traced boolean and `or` raises TracerBoolConversionError on every traced
+        # solve, magnetic and non-magnetic alike. `None` is an empty pytree subtree and comes
+        # through a trace as itself, which is the whole reason it is how absence is spelled.
+        #
+        # The 1D and conical operators take three permeability slots, not five: they have no
+        # off-diagonal position to put `mu_xy` / `mu_yx` in, exactly as they have none for
+        # `eps_xy` / `eps_yx`. Refused by name rather than dropped -- an off-diagonal quietly
+        # discarded returns a plausible *uniaxial* answer for a gyromagnetic layer. The
+        # diagonal three route through, as of 2026-09-01; until then the whole feature was
+        # refused here, and `fields.field_1d`'s `H_z` was correct *because* it was.
+        if (self._grating_type != 2 and mu is not None
+                and any(s is not None for s in tuple(mu)[3:])):
             raise NotImplementedError(
-                'mu is implemented on the 2D path only; this structure routed to a 1D solve. '
-                'The 1D and conical operators carry no permeability slot at all.')
+                'an off-diagonal permeability (mu_xy / mu_yx) was given and this structure '
+                'routed to a 1D solve, whose operator has no off-diagonal slot -- the same '
+                'reason it takes no eps_xy / eps_yx. The diagonal slots (mu_xx, mu_yy, '
+                'mu_zz) do work here. Pass None in the last two slots for a layer that has '
+                'no off-diagonal permeability -- absence is None, not a zero matrix, the '
+                'same structural spelling every other slot uses. A tensor that genuinely '
+                'needs the off-diagonals needs the 2D path, which a structure varying in y '
+                'routes to.')
 
         if self._grating_type == 0:
-            result_dict = self._solve_1d(epx_conv_all, epy_conv_all, epz_conv_i_all)
+            result_dict = self._solve_1d(epx_conv_all, epy_conv_all, epz_conv_i_all,
+                                         mu=mu, mu_top=mu_top, mu_bot=mu_bot,
+                                         eps_top=eps_top, eps_bot=eps_bot)
         elif self._grating_type == 1:
-            result_dict = self._solve_1d_conical(epx_conv_all, epy_conv_all, epz_conv_i_all)
+            result_dict = self._solve_1d_conical(epx_conv_all, epy_conv_all, epz_conv_i_all,
+                                                 mu=mu, mu_top=mu_top, mu_bot=mu_bot,
+                                                 eps_top=eps_top, eps_bot=eps_bot)
         else:
             result_dict = self._solve_2d(epx_conv_all, epy_conv_all, epz_conv_i_all,
                                          epxy_conv_all, epyx_conv_all, *z_row, mu=mu,
@@ -3214,9 +3253,10 @@ class CoreFactorizationMixin:
         refusal that applies to the permittivity build applies here once rather than twice.
 
         Where ``mu`` *cannot* be expressed the refusal is by name and lives elsewhere, close
-        to what cannot express it: the 1D and conical operators carry no permeability slot at
-        all and ``solve_conv`` says so, and the first-order (4ff) solve does not implement
-        one -- :meth:`CoreSolveMixin._solve_2d` says so. Nothing here drops a ``mu`` quietly,
+        to what cannot express it: the 1D and conical operators hold the diagonal three of
+        these five and have no off-diagonal position for the other two, and ``solve_conv``
+        says so; the first-order (4ff) solve implements none of them --
+        :meth:`CoreSolveMixin._solve_2d` says so. Nothing here drops a ``mu`` quietly,
         which is the whole reason it is wired at all: a material property the solve ignored
         would be the unread knob :meth:`_reject_unread_normal_method` exists to refuse.
 
@@ -3463,8 +3503,10 @@ class CoreFactorizationMixin:
         material named none. ``solve_conv`` asks the same structural question of them that
         :meth:`_is_magnetic` asked of the scene, so the "was it named" bit has to survive the
         call; resolving it to ``1.0`` here would tell the backend a permeability was named for
-        a half-space that never mentioned one, and on a scene routed to a 1D path that is the
-        difference between solving it and refusing it.
+        a half-space that never mentioned one. That is not merely untidy bookkeeping: the
+        numeric default is applied at the one place that divides by it, so a ``1.0`` invented
+        here would put a non-magnetic scene on the arithmetic written for a magnetic one and
+        cost the bit-identity the whole feature is built to keep.
 
         Permittivity first, and it matters on the shape path: without a frozen geometry the
         permeability pass replays the boundary plans the permittivity pass has just recorded,

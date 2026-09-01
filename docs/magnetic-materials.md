@@ -6,9 +6,10 @@ got the location right and the content wrong; §3 below is the difference.
 Target: `wavebit/_core/solve_2d.py` — `layer_modes_2d`, `solve_2d`;
 `wavebit/_core/scattering.py` — `smm_2d`; `wavebit/_core/fields.py` — `_field_coupled`.
 
-**Scope.** The **2D path** — layers (§1–§4), half-spaces (§5–§6), patterned layers (§7), and
-field reconstruction (§9, added 2026-08-20). Neither the 1D/conical operators nor the
-first-order 4ff solve take a `mu`; both refuse rather than ignore.
+**Scope.** Layers (§1–§4), half-spaces (§5–§6), patterned layers (§7) and field
+reconstruction (§9, added 2026-08-20) on the **2D path**; the **1D and conical paths** since
+2026-09-01 (§11), diagonal slots only. The first-order 4ff solve still takes no `mu` and
+refuses rather than ignores, as do the two off-diagonal slots on the 1D paths.
 
 ---
 
@@ -291,10 +292,10 @@ the shape path replays the same boundary plans. A
 non-magnetic scene builds nothing and takes the arithmetic that existed before `mu` did, bit
 for bit.
 
-A `mu` the chosen path cannot express is refused by name, never dropped: the 1D and conical
-operators carry no permeability slot at all, and the first-order (4ff) solve a z-coupled `eps`
-routes to does not implement one. A knob the solve silently ignored is the failure this
-repository refuses elsewhere too.
+A `mu` the chosen path cannot express is refused by name, never dropped: the first-order
+(4ff) solve a z-coupled `eps` routes to implements none, and the 1D and conical operators take
+the diagonal three slots but have no off-diagonal position for `mu_xy` / `mu_yx` (§11). A knob
+the solve silently ignored is the failure this repository refuses elsewhere too.
 
 **By hand.** `mu` is also one keyword on `solve_conv`, taking the five stacks in the
 permittivity's convention:
@@ -381,10 +382,6 @@ layout from the entry's length, now takes the index from its caller instead.
 
 ## 10. What is not implemented, and why
 
-**1D and conical paths.** No permeability slot in either operator. Refused, not ignored. Their
-reconstructions carry the same `mu = 1` form for `H_z` (`field_1d`'s TE branch is
-`Mz = 1j * Kx @ My`) and are correct because that refusal holds.
-
 **Magnetic `mu` on the first-order 4ff solve.** No `mu` in the operator, and
 `fields.field_2d_4ff`'s `H_z = Kx Ey - Ky Ex` likewise has no `mu_zz` in it. Two ways to land
 there — a z-coupled `eps`, or `formulation='4ff'` asked for directly — and the refusal names
@@ -397,7 +394,139 @@ already keeps `ezx` / `ezy`.
 
 
 
-## 11. References
+## 11. The 1D and conical paths
+
+Landed 2026-09-01. §10 used to carry these as "no permeability slot in either operator,
+refused not ignored"; this is what replaced that.
+
+### What the operators became
+
+The duality of §1 does the placing here too, and on this path it lands somewhere sharper: it
+carries the **TE branch onto the TM branch**. Eliminating each polarization's longitudinal
+component through the `zz` slot of its own tensor,
+
+```
+TE:  d2(E_y)/dz~2 = mu_x  (Kx muz_i Kx - eps_y) E_y        V = mu_x^-1  W q
+TM:  d2(H_y)/dz~2 = eps_x (Kx epz_i Kx - mu_y ) H_y        V = eps_x^-1 W q
+```
+
+and each line is the other with every symbol replaced. At `mu = 1` the TE prefactor is the
+identity and drops out — which is exactly why that branch had no left factor and no inverse in
+`V`, while the TM branch already carried both and its `- I` had been `- mu_y` all along.
+
+**A magnetic TE layer therefore costs what a TM layer always cost**, one matmul and one
+inverse: measured 0.70 ms against 0.78 ms at `truncation_order=(15, 0)`, four layers. That is
+the whole arithmetic price. What this change *removes* is larger: a magnetic 1D scene had to be
+routed through the 2D path, 3.01 ms against 0.78 ms on the same problem.
+
+The conical operator is the same two lines with a `ky**2` shift and a right-multiplication
+rather than a left one, because its mode matrices expand `H_x` and `E_x` rather than `E_y` and
+`H_y`:
+
+```
+family 1 (H_x):  ky**2 + (Kx muz_i Kx - eps_y) mu_x
+family 2 (E_x):  ky**2 + (Kx epz_i Kx - mu_y ) eps_x
+```
+
+and its `V` blocks split by the same duality — the **E-side** pair `V_11` / `V_12` takes the
+`mu`, the **H-side** pair `V_21` / `V_22` is untouched. `V_21` already carried the `epz_conv_i`
+that `V_12` now mirrors with `muz_conv_i`; the two lines had been each other's reflection since
+before there was a permeability to put in one of them.
+
+### The decoupling premise, which had to be checked rather than assumed
+
+The conical path solves two `n`-sized eigenproblems where the 2D path solves one `2n` one. That
+split is not free: written out, the coupled `Omega_L @ Omega_R` has off-diagonal blocks
+proportional to `Kx muz_i mu_y - eps_y epz_i Kx`, so it needs `eps_y = eps_z` **and**
+`mu_y = mu_z` — as matrices, not as materials.
+
+Both hold exactly on a 1D grating, for one reason: `E_y`, `E_z`, `H_y` and `H_z` are all
+*tangential* to a boundary perpendicular to x, so all four slots are built by the direct
+(Laurent) rule from one profile and only the `x` slots take the inverse rule. Measured on a
+random 1D grating at `truncation_order=5`: `|epy - inv(epz_i)| = 9e-16` against a matrix of
+scale 1.9, while `|epx - inv(epz_i)| = 0.16`. The permeability inherits it because the same
+builder runs a second time (§8), so a scene that breaks the premise for one tensor breaks it
+for both.
+
+**The premise is older than this feature and is not new risk.** Fed convolution matrices that
+violate it, the conical path already disagreed with the 2D path by 6.8e-4 *without any* `mu`.
+That control is what identified the 2.6e-4 magnetic disagreement as the same pre-existing
+effect rather than a defect in the new operator: with the premise held, magnetic conical and 2D
+agree to 4.4e-16.
+
+### The reconstruction, which is the reason this was not a small change
+
+Lifting the refusal makes an existing, correct line wrong. `field_1d`'s TE branch was
+`Mz = 1j * Kx @ My` — Faraday's z row at `mu = 1` — and §10 said in as many words that it was
+"correct because that refusal holds". It now divides by `muz_conv_i`, the dual of the
+`epz_conv_i` the TM branch always had:
+
+```
+TE:  mu_zz  H_z = Kx E_y      Faraday's z row
+TM:  eps_zz E_z = Kx H_y      Ampere's z row
+```
+
+The conical path had the same hole in a different shape: its `layer_info_list` appended a
+**hard-coded `None`** in the `muz_conv_i` slot, with a comment saying it "structurally must
+be". Both are the 2D path's 2026-08-20 defect waiting to happen — `H_z` returned scaled by
+`mu_zz` while every other component stays exact, `R + T` still 1, both connecting algorithms
+still agreeing.
+
+### What checks it
+
+`tests/test_magnetic_1d.py`, and its module docstring ranks the four instruments. The duality
+(3.3e-16) is first because it is a theorem across two separately written branches. A closed-form
+uniform slab is second, carrying the two cases an index-only solver cannot express at all:
+`eps = 2, mu = 2` has the vacuum *impedance* with a non-vacuum index and must reflect **0**
+where an index-only solver says 0.111, and `eps = 0.5, mu = 2` has the vacuum *index* with a
+non-vacuum impedance and reflects 0.346 where an index-only solver sees no interface and says
+0. The 2D path is third and is the only instrument that reaches the conical coupling blocks.
+The two connecting algorithms are fourth, compared **on the reconstructed field as well as the
+efficiencies** — `muz_conv_i` is per-layer state each assembles by its own route, so an
+efficiency-only comparison cannot see one of them dropping it.
+
+**Energy conservation is deliberately absent from that list**, for the reason §5 gives.
+
+### Two things the mutation survey found
+
+Sixteen mutants, one per new term. Three survived the first run — the conical `muy_conv`, the
+conical `V_12`'s `muz_conv_i`, and the SMM's field slot — and none of the three was a code
+defect.
+
+The first two had one cause: **the oracles ran at `phi = 0`**, where `ky = 0`, the conical
+problem decouples exactly, and every block carrying a `ky` factor or belonging to the second
+family is unreachable. A conical test at zero azimuth is not exercising the conical path. Moved
+off-axis, both mutants die.
+
+The third was a genuine coverage gap of the kind §9 warns about: the comparison between the two
+connecting algorithms read efficiencies only, and the `muz_conv_i` each carries for `H_z` is
+invisible to those. With a field comparison added, all sixteen die.
+
+### The half-spaces, and one asymmetry worth stating
+
+`kz/mu` on the electric amplitude (TE) and `kz/eps` on the magnetic one (TM), the same pair §5
+places on the 2D boundary — `sp_efficiencies` had been spelling both correctly since 2026-08-14
+against callers that could not yet reach it.
+
+**Reflection needs no permeability and transmission needs two**, which looks like a dropped term
+and is not. A reflected order sits in the *incidence* medium, so it is measured against that
+medium's own incident admittance and the slot cancels algebraically **inside the `Re`** —
+exactly, for a complex `mu_top` as much as a real one. A transmitted order sits in the far
+half-space, so its slot and the superstrate's both survive.
+
+### Non-magnetic solves are untouched, and it was measured rather than asserted
+
+Every branch is skipped rather than multiplied by an identity, so a non-magnetic 1D solve runs
+the arithmetic it ran before. Checked by byte comparison against `git archive` of the parent
+commit: ETM and SMM, top and bottom incidence, TE / TM / conical, two truncation orders,
+`R` / `T` / `r_s` / `t_p` and a reconstructed field cell — 120 arrays, 232 KB, **one sha256**.
+
+The digest was validated before being believed: it is stable across two runs of one tree, it
+moves under one ulp of wavelength, and it moves when the same probe is given a `mu` — the last
+being what says the probe reaches the changed code at all, so the equality is a result rather
+than a probe that misses.
+
+## 12. References
 
 - fmmax's `eigensolve_general_anisotropic_media` — five `eps` and five `mu` components, no z row;
   the same 2ff tensor class this implements, which is why it can arbitrate this and not a

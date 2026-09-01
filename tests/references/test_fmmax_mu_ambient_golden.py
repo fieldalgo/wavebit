@@ -258,16 +258,30 @@ def test_the_reciprocity_check_can_tell_the_two_ambients_apart():
     assert np.abs(a - b).max() > 1e-3
 
 
-# ------------------------------------------------------------------------------ the refusals
+# --------------------------------------------------------------- the boundary, off the 2D path
 
-def test_a_magnetic_ambient_on_a_one_dimensional_structure_is_refused():
-    """The 1D and conical boundaries carry no permeability either. Refused, not ignored."""
-    # 4.41 and 2.25 are the index-2.1 substrate and index-1.5 grating this case always had,
-    # said as permittivities. Neither matters to the refusal; both matter to it being a
-    # recognisable scene rather than an arbitrary one.
-    mee = wavebit.rcwa(backend=0, top=1.0, bot=4.41, theta=0.0, phi=0.0, psi=0.0,
-                       truncation_order=(3, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
-                       structure=np.ones((1, 1, 8)) * 2.25)
-    e = [np.stack([np.eye(7, dtype=complex) * v]) for v in (2.6, 2.6, 1 / 2.6)]
-    with pytest.raises(NotImplementedError, match='2D path only'):
-        mee.solve_conv(*e, mu_bot=1.7)
+def test_a_magnetic_ambient_on_a_one_dimensional_structure_now_solves():
+    """The 1D and conical boundaries carry the permeability too, since 2026-09-01.
+
+    This was the refusal until then. What replaces it is the check the refusal stood in for:
+    that ``mu_bot`` reaches the substrate admittance rather than being accepted and dropped.
+    Asserted against the **closed form** for the bare interface, the same one the 2D rows above
+    are judged by -- ``R = |(Y_inc - Y_sub)/(Y_inc + Y_sub)|**2`` with ``Y = kz/mu`` on s.
+
+    A magnetic substrate under a *vacuum* stack is exactly a bare interface, so no grating is
+    needed to state it; the index stays 2.1 whichever ``mu_bot`` is named, which is what makes
+    this reach the admittance and nothing else.
+    """
+    # 4.41 is the index-2.1 substrate this case always had, said as a permittivity.
+    n_bot, mu_bot = 2.1, 1.7
+    mee = wavebit.rcwa(backend=0, top=1.0, bot=n_bot ** 2, theta=0.0, phi=0.0, tetm='te',
+                       truncation_order=(3, 0), period=(PERIOD, PERIOD), wavelength=WL,
+                       thickness=[THICK], structure=np.ones((1, 1, 8)))
+    e = [np.stack([np.eye(7, dtype=complex) * v]) for v in (1.0, 1.0, 1.0)]
+    got = float(np.sum(mee.solve_conv(*e, mu_bot=mu_bot,
+                                      eps_bot=n_bot ** 2 / mu_bot).given.R))
+    y_inc, y_sub = 1.0, n_bot / mu_bot          # kz/mu at normal incidence, kz = n
+    assert got == pytest.approx(abs((y_inc - y_sub) / (y_inc + y_sub)) ** 2, abs=1e-13)
+    # And it is not the answer an index-only boundary gives, which is the whole point of the
+    # slot: that one reads |(1 - 2.1)/(1 + 2.1)|**2 = 0.126.
+    assert abs(got - abs((1.0 - n_bot) / (1.0 + n_bot)) ** 2) > 1e-2

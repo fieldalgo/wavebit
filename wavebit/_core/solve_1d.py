@@ -78,7 +78,7 @@ def _block(xp, rows):
     return xp.concat([xp.concat(r, axis=1) for r in rows], axis=0)
 
 
-def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C):
+def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C, mu=None):
     """Eigenmodes ``(W, V, q)`` of one 1D TE / TM layer.
 
     ``W`` expands the continuous primary field (``E_y`` for TE, ``H_y`` for TM), ``V`` its
@@ -87,14 +87,55 @@ def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C):
 
     Shared by the ETM (:func:`solve_1d`) and SMM (:mod:`wavebit._core.scattering`) connecting
     algorithms — the mode algebra is a property of the layer, not of how layers are joined.
+
+    ``mu`` is an optional ``(mux_conv, muy_conv, muz_conv_i)`` permeability triple in the
+    permittivity's own convention — ``muz_conv_i`` inverted — or ``None`` for a non-magnetic
+    layer, where every expression below is the one that was here and the solve is
+    bit-identical. Only three slots, not the 2D path's five: this operator has no off-diagonal
+    position to put ``mu_xy`` / ``mu_yx`` in, exactly as it has none for ``eps_xy`` / ``eps_yx``,
+    and :func:`~wavebit._core.engine.CoreSolveMixin.solve_conv` refuses those by name rather
+    than dropping them here.
+
+    **The two branches are each other under the duality**
+    ``(E, H, eps, mu) -> (H, -E, mu, eps)`` (``docs/magnetic-materials.md`` §1), which is what
+    places every slot below rather than a second derivation. Eliminating the longitudinal
+    component of each polarization through the ``zz`` slot of *its own* tensor::
+
+        TE:  d2(E_y)/dz~2 = mu_x  (Kx muz_i Kx - eps_y) E_y      H_z through mu_zz
+        TM:  d2(H_y)/dz~2 = eps_x (Kx epz_i Kx - mu_y ) H_y      E_z through eps_zz
+
+    so each line is the other with every symbol replaced. At ``mu = 1`` the TE prefactor
+    ``mu_x`` is the identity and drops out, which is why that branch had no left factor and
+    no inverse in ``V``; the TM branch already carried both, and its ``- I`` was ``- mu_y``
+    all along. **A magnetic TE layer therefore costs what a TM layer always cost** — one more
+    matmul and one more inverse — and that is the whole arithmetic price of this feature.
+
+    Getting the pair uncrossed is the mistake to watch for, the same one
+    ``docs/anisotropic-materials.md`` §5 made for the 2D operator: it is ``mu_y`` that joins
+    the TM branch and ``mu_x`` the TE one, and reading ``- I`` as "the layer's own mu" puts
+    ``mu_x`` in the TM line. A scalar ``mu`` cannot tell the two apart.
     """
+    mux_conv, muy_conv, muz_conv_i = (I, I, None) if mu is None else mu
     if tetm_index == 0:  # TE
-        A = _diag(xp, kx) @ _diag(xp, kx) - epy_conv
+        Kx = _diag(xp, kx)
+        # `muz_conv_i` sits between the K factors exactly as `epz_conv_i` does in the TM
+        # branch below. Skipped where the layer has no mu_zz rather than multiplying an
+        # identity through, so the non-magnetic arithmetic stays the two products it was.
+        KxKx = Kx @ Kx if muz_conv_i is None else Kx @ muz_conv_i @ Kx
+        A = KxKx - epy_conv
+        if mu is not None:
+            A = mux_conv @ A
         w, W = eig(A)
         q = mode_q(xp, xp.astype(w, C))
-        V = W * q
+        # `V = W * q` is the mu = 1 form; the general one divides out the same `mu_x` the
+        # operator multiplied in, which is what the TM branch does with `eps_x`. Branched
+        # rather than inverting an identity: `inv(I) @ W` is bit-identical but costs an
+        # O(n**3) inverse a non-magnetic solve never paid.
+        V = W * q if mu is None else xp.linalg.inv(mux_conv) @ W * q
     elif tetm_index == 1:  # TM
-        B = kx[:, None] * epz_conv_i * kx[None, :] - I
+        # `- muy_conv` is `- I` to the bit when non-magnetic: the fallback above binds
+        # `muy_conv` to the very `I` this line used to name.
+        B = kx[:, None] * epz_conv_i * kx[None, :] - muy_conv
         w, W = eig(epx_conv @ B)
         q = mode_q(xp, xp.astype(w, C))
         V = xp.linalg.inv(epx_conv) @ W * q
@@ -103,7 +144,8 @@ def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C):
     return W, V, q
 
 
-def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C):
+def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C,
+                           mu=None):
     """Raw (unrotated) eigenmodes of one conical 1D layer.
 
     Returns ``(W1, W2, q1, q2, V_11, V_12, V_21, V_22)`` — the two decoupled mode families and
@@ -130,23 +172,65 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
     layer whose FFT is noiseless, truncation_order=3 on the D#81 stack). Then ``q/w`` is 0/0 and the NaN
     reaches :func:`~wavebit._core.backend.check_finite`, whose message prescribes the one-ULP
     detune — where the old spelling died in LAPACK with no advice.
+
+    ``mu`` is the optional ``(mux_conv, muy_conv, muz_conv_i)`` triple
+    :func:`layer_modes_1d` documents, ``None`` for a non-magnetic layer.
+
+    **Why the two families still decouple with a permeability**, which is the one thing here
+    that had to be checked rather than assumed. Written out, the coupled ``Omega_L @ Omega_R``
+    of ``docs/magnetic-materials.md`` §1 has off-diagonal blocks proportional to
+    ``Kx muz_i muy - epy epz_i Kx``, so the split into two ``n``-sized eigenproblems needs
+    ``eps_y = eps_z`` **and** ``mu_y = mu_z`` — as matrices, not as materials. Both hold
+    exactly on a 1D grating and for one reason: ``E_y``, ``E_z``, ``H_y`` and ``H_z`` are all
+    *tangential* to a boundary that is perpendicular to x, so all four slots are built by the
+    direct (Laurent) rule from one profile, and only the ``x`` slots take the inverse rule.
+    Measured on a random 1D grating at ``truncation_order=5``: ``|epy - inv(epz_i)| = 9e-16``
+    against a matrix of scale 1.9, while ``|epx - inv(epz_i)| = 0.16``. The permeability
+    inherits it because the *same builder* runs a second time (§8), so a scene that breaks
+    the premise for one tensor breaks it for both -- and the premise is the conical path's
+    already, older than this feature.
+
+    Under it the two operators are exact duals::
+
+        family 1 (H_x):  ky**2 + (Kx muz_i Kx - eps_y) mu_x
+        family 2 (E_x):  ky**2 + (Kx epz_i Kx - mu_y ) eps_x
+
+    and so are the ``V`` blocks: the **E-side** pair ``V_11`` / ``V_12`` takes the ``mu``,
+    the **H-side** pair ``V_21`` / ``V_22`` is untouched. That asymmetry is the duality
+    showing, not an omission -- ``V_21`` already carried the ``epz_conv_i`` that ``V_12``
+    now mirrors with ``muz_conv_i``, and the two lines have been each other's reflection
+    since before there was a permeability to put in one of them.
     """
-    A = Kx2 - epy_conv
-    B = Kx @ epz_conv_i @ Kx - I
-    w1, W1 = eig(Ky2 + A)
+    mux_conv, muy_conv, muz_conv_i = (I, I, None) if mu is None else mu
+    # `A` is Faraday's row and takes `muz_i` between the K factors; `B` is Ampere's and keeps
+    # `epz_i` where it always was. `Kx2` is `Kx @ Kx` for a diagonal Kx, kept as the diagonal
+    # build where there is no mu_zz so the non-magnetic product is the one it was.
+    A = (Kx2 if muz_conv_i is None else Kx @ muz_conv_i @ Kx) - epy_conv
+    B = Kx @ epz_conv_i @ Kx - muy_conv
+    w1, W1 = eig(Ky2 + (A if mu is None else A @ mux_conv))
     w2, W2 = eig(Ky2 + B @ epx_conv)
     q1 = mode_q(xp, xp.astype(w1, C))
     q2 = mode_q(xp, xp.astype(w2, C))
 
     ky = Ky[0, 0]                    # Ky == ky * I on this path (single y order)
     ky_sq = Ky2[0, 0]
-    wA = w1 - ky_sq                  # eigenvalues of A, by the shift identity
+    wA = w1 - ky_sq                  # eigenvalues of A @ mu_x, by the shift identity
     wB = w2 - ky_sq                  # eigenvalues of B @ epx_conv
     W1_i = xp.linalg.inv(W1)
     W2_i = xp.linalg.inv(W2)
 
+    # The E-side blocks. `A**-1 = mu_x W1 diag(wA)**-1 W1_i` falls out of the eigenrelation
+    # `A mu_x W1 = W1 diag(wA)`, which is where the leading `mu_x` comes from -- the same
+    # substitution that keeps this function free of `inv(A)` at a Rayleigh point, one slot
+    # richer. `Kx muz_i` inside `V_12` is the dual of the `Kx epz_conv_i` in `V_21`.
     V_11 = W1 * (q1 / wA)
-    V_12 = W1 @ ((ky / wA)[:, None] * (W1_i @ Kx @ W2))
+    V_12 = W1 @ ((ky / wA)[:, None] * (W1_i @ Kx @ W2 if muz_conv_i is None
+                                       else W1_i @ Kx @ muz_conv_i @ W2))
+    if mu is not None:
+        V_11 = mux_conv @ V_11
+        V_12 = mux_conv @ V_12
+    # The H-side blocks are untouched by a permeability, and that is the duality rather than
+    # an omission: they are built from `B**-1`, whose eigenrelation carries `eps_x`.
     V_21 = epx_conv @ (W2 * (ky / wB)) @ (W2_i @ Kx @ epz_conv_i @ W1)
     V_22 = epx_conv @ W2 * (q2 / wB)
     return W1, W2, q1, q2, V_11, V_12, V_21, V_22
@@ -172,9 +256,26 @@ def sp_modes_1d_conical(xp, F_c, F_s, W1, W2, V_11, V_12, V_21, V_22):
     return big_W, big_V
 
 
+def _layer_mu(I, mu_all, layer_index):
+    """One layer's ``(mux_conv, muy_conv, muz_conv_i)``, or ``None`` where it is non-magnetic.
+
+    ``mu_all`` is the three per-layer stacks as ``solve_1d`` takes them, any of which may be
+    ``None``. ``mux_conv`` / ``muy_conv`` fall back to the identity and ``muz_conv_i`` to
+    ``None``, so a stack carrying ``mu`` on some layers and not others is expressible and the
+    layers without it take the arithmetic they always had. The same fallback
+    :func:`~wavebit._core.solve_2d.solve_2d` applies to its five, three slots narrower.
+    """
+    if all(s is None for s in mu_all):
+        return None
+    return (I if mu_all[0] is None else mu_all[0][layer_index],
+            I if mu_all[1] is None else mu_all[1][layer_index],
+            None if mu_all[2] is None else mu_all[2][layer_index])
+
+
 def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
-             incidence_side='top', answers=Answers.EFFICIENCY, lit=None):
+             incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
+             mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None):
     """Solve a 1D grating stack for reflection/transmission diffraction efficiency.
 
     Args:
@@ -200,6 +301,27 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
             so a caller that names nothing pays for nothing; the solver classes declare
             their own (``'amplitude'``).
 
+        mu: optional per-layer permeability, three stacks
+            ``(mux_conv_all, muy_conv_all, muz_conv_i_all)`` in the permittivity's own slots
+            and convention -- see :func:`layer_modes_1d`, which also says why there are three
+            here and five on the 2D path. Any entry may be ``None``; ``None`` throughout is a
+            non-magnetic stack, which takes the arithmetic that existed before ``mu`` did, bit
+            for bit.
+        mu_top, mu_bot: the half-spaces' scalar permeabilities. ``n_top`` / ``n_bot`` keep
+            meaning the refractive index ``sqrt(eps*mu)``, so ``kz``, Snell and the order grid
+            are untouched and every existing call means what it did; ``mu`` enters only
+            through the boundary admittances, ``kz/mu`` on the electric amplitude (TE) and
+            ``kz/eps`` on the magnetic one (TM). That pair is the *whole* content of a
+            magnetic half-space, and it is what a solver carrying only ``n`` cannot express:
+            between vacuum and an impedance-mismatched medium of the same index it sees no
+            interface at all.
+        eps_top, eps_bot: those half-spaces' permittivities. Optional, recovered as
+            ``n**2/mu`` when absent -- which is what this function did unconditionally and is
+            still right for a caller holding only an index. Supply them with ``mu_top`` /
+            ``mu_bot`` or with neither; half a pair describes a medium whose index and
+            permittivity disagree. Same argument as
+            :func:`~wavebit._core.solve_2d.solve_2d`'s, which see.
+
     Returns:
         ``(de_ri, de_ti)`` — reflected / transmitted efficiency per order, shape
         ``(1, n_orders)``.
@@ -211,12 +333,19 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     answers = answers_of(answers)
     keep_field = answers.covers(Answers.FIELD)
     xp = array_namespace(epx_conv_all)
+    mu_all = (None,) * 3 if mu is None else tuple(mu)
     if _is_backside(incidence_side):
         # After the namespace read: the mirror rebinds the per-layer stacks to plain lists
         # (static indexing keeps them traceable), which array_namespace does not accept.
-        n_top, n_bot, thickness, epx_conv_all, epy_conv_all, epz_conv_i_all = \
-            _mirrored_scene(n_top, n_bot, thickness,
-                            epx_conv_all, epy_conv_all, epz_conv_i_all)
+        # `mu` reverses with the layers it belongs to -- `z -> -z` leaves a layer's in-plane
+        # tensor alone whether it is eps or mu -- so it is the same mirror, three stacks wider.
+        (n_top, n_bot, thickness, epx_conv_all, epy_conv_all, epz_conv_i_all,
+         *mu_all) = _mirrored_scene(n_top, n_bot, thickness,
+                                    epx_conv_all, epy_conv_all, epz_conv_i_all, *mu_all)
+        # The half-spaces swap with the indices they belong to -- all three quantities of
+        # each, or the mirrored scene takes its permittivity from the far side.
+        mu_top, mu_bot = mu_bot, mu_top
+        eps_top, eps_bot = eps_bot, eps_top
     kx = as_array(xp, kx)
     if not xp.isdtype(kx.dtype, 'complex floating'):
         # Promote a real kx to the complex working dtype the algebra needs.
@@ -235,9 +364,15 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     kz_top = boundary_kz(xp, n_top ** 2, kx ** 2)
     kz_bot = boundary_kz(xp, n_bot ** 2, kx ** 2)
 
-    eps_bot = n_bot ** 2
+    if eps_bot is None:
+        eps_bot = n_bot ** 2 / mu_bot     # n stays the refractive index; eps carries the mu
+    # The substrate admittance, and it is the one place a magnetic half-space is expressible
+    # at all: `kz` depends only on the index, so `kz/mu` (TE, an electric amplitude) and
+    # `kz/eps` (TM, a magnetic one) are what separate two media of the same `n`. Both are the
+    # expression that was here at mu = 1 -- dividing by `mu_bot = 1.0` is exact, and
+    # `n_bot**2/1.0` is `n_bot**2`.
     if tetm_index == 0:      # TE
-        G = -1j * _diag(xp, kz_bot)
+        G = -1j * _diag(xp, kz_bot / mu_bot)
     elif tetm_index == 1:    # TM
         G = -1j * _diag(xp, kz_bot / eps_bot)
     else:
@@ -254,8 +389,10 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         epy_conv = epy_conv_all[layer_index]
         epz_conv_i = epz_conv_i_all[layer_index]
         d = thickness[layer_index]
+        layer_mu = _layer_mu(I, mu_all, layer_index)
 
-        W, V, q = layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C)
+        W, V, q = layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C,
+                                 mu=layer_mu)
 
         X = _diag(xp, xp.exp(-k0 * q * d))
         W_i = xp.linalg.inv(W)
@@ -277,8 +414,17 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         # `a_i` and `b` are the loop's own working set, and without this append the previous
         # layer's five become garbage as soon as the next iteration rebinds them. Only `F`,
         # `G` and `T` have to survive an iteration.
+        #
+        # `muz_conv_i` rides last, for the reason `epz_conv_i` rides first: the longitudinal
+        # component of each polarization is algebraic rather than propagated, and is recovered
+        # by dividing out the z slot of *its own* tensor. TE reconstructs `H_z` through
+        # `mu_zz` (Faraday's z row) and TM reconstructs `E_z` through `eps_zz` (Ampere's), so
+        # each branch reads one of the two and the slot is `None` on a non-magnetic layer --
+        # the spelling `_layer_mu` and `Material.mu` already use. See
+        # :func:`wavebit._core.fields.field_1d`.
         if keep_field:
-            layer_info_list.append([epz_conv_i, W, V, q, d, a_i, b])
+            layer_info_list.append([epz_conv_i, W, V, q, d, a_i, b,
+                                    None if layer_mu is None else layer_mu[2]])
 
     # --- stage 3: final matching -> efficiency (transfer_1d_4) -------------------------
     Kz_top = _diag(xp, kz_top)
@@ -289,12 +435,20 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     # branches -- see :func:`~wavebit._core.conventions.incident_kz`.
     kz_inc = incident_kz(kz_top, n_orders_u // 2)
 
+    # The superstrate's admittance, the same pair the substrate seed `G` was built from and
+    # necessarily the same spelling: the two sides of this match have to see one medium law.
+    # `Kz_top / mu_top` is `Kz_top` to the bit at mu_top = 1, and `n_top**2/mu_top` is
+    # `n_top**2`, so the undeclared case keeps the arithmetic it had.
+    if eps_top is None:
+        eps_top = n_top ** 2 / mu_top
     if tetm_index == 0:  # TE
-        inc = -1j * kz_inc * delta if lit is None else -1j * (Kz_top @ delta)
-        T1 = xp.linalg.inv(G - 1j * Kz_top @ F) @ (-1j * Kz_top @ delta + inc)
+        Kz_scaled = Kz_top / mu_top
+        inc = (-1j * kz_inc / mu_top * delta if lit is None
+               else -1j * (Kz_scaled @ delta))
+        T1 = xp.linalg.inv(G - 1j * Kz_scaled @ F) @ (-1j * Kz_scaled @ delta + inc)
     else:         # TM
-        Kz_scaled = Kz_top / (n_top ** 2)
-        inc = (-1j * delta * kz_inc / (n_top ** 2) if lit is None
+        Kz_scaled = Kz_top / eps_top
+        inc = (-1j * delta * kz_inc / eps_top if lit is None
                else -1j * (Kz_scaled @ delta))
         T1 = xp.linalg.inv(G - 1j * Kz_scaled @ F) @ (-1j * Kz_scaled @ delta + inc)
 
@@ -307,18 +461,24 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     # quantity and differ by an ulp on half of all angles, and a golden should not move by a
     # rounding step for a feature the scene does not use (same argument as
     # :func:`~wavebit._core.engine._half_space_index`'s unnamed `mu`).
-    if lit is None:
-        denom_r, denom_t_tm = kz_inc, kz_inc / (n_top ** 2)
-    else:
-        flux = _incident_flux(xp, C, lit, kz_top)
-        denom_r, denom_t_tm = flux, flux / (n_top ** 2)
+    #
+    # **Reflection needs no permeability and transmission does**, which is worth stating
+    # because the asymmetry looks like a dropped term. Each efficiency is a ratio of
+    # admittances, `kz/mu` on the electric amplitude (TE) and `kz/eps` on the magnetic one
+    # (TM). A reflected order sits in the *incidence* medium, so it is measured against that
+    # medium's own incident admittance and the slot cancels **algebraically, inside the
+    # `Re`** -- exactly, for a complex `mu_top` as much as a real one. A transmitted order
+    # sits in the far half-space, so its slot and the superstrate's both survive.
+    denom_r = kz_inc if lit is None else _incident_flux(xp, C, lit, kz_top)
+    denom_t_te = denom_r / mu_top
+    denom_t_tm = denom_r / eps_top
 
     de_ri = xp.real(R * xp.conj(R) * xp.real(kz_top / denom_r))
     if tetm_index == 0:  # TE
-        de_ti = xp.real(Tt * xp.conj(Tt) * xp.real(kz_bot / denom_r))
+        de_ti = xp.real(Tt * xp.conj(Tt) * xp.real(kz_bot / mu_bot / denom_t_te))
     else:         # TM
         de_ti = xp.real(Tt * xp.conj(Tt)
-                        * xp.real(kz_bot / n_bot ** 2 / denom_t_tm))
+                        * xp.real(kz_bot / eps_bot / denom_t_tm))
 
     check_finite(xp, de_ri=de_ri, de_ti=de_ti)
     check_physical(xp, de_ri, de_ti, n_top)
@@ -331,12 +491,20 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     # TM the primary is H with unit incident H, and r_H == r_E in the convention where a
     # normal-incidence interface gives r_p = -r_s); transmission converts H back to E across
     # the index step, t_E = t_H * n_top/n_bot. Measured at 5.6e-16 (tests/test_lossy_media).
+    #
+    # With a permeability the step is by **impedance**, `Z = sqrt(mu/eps) = mu/n`, so the
+    # ratio is `(n_top/mu_top)/(n_bot/mu_bot)` -- the same `n/mu` per side that
+    # :func:`final_matching`'s `fresnel` divides the coupled path's p amplitudes by, which is
+    # what keeps one Fresnel convention across the two paths. It is `n_top/n_bot` to the bit
+    # when neither half-space names a `mu`.
     zeros_amp = xp.zeros_like(R)
     zeros_eff = xp.zeros_like(de_ri)
     if tetm_index == 0:
         res = _pack(R, zeros_amp, Tt, zeros_amp, de_ri, zeros_eff, de_ti, zeros_eff)
     else:
-        res = _pack(zeros_amp, R, zeros_amp, Tt * (n_top / n_bot),
+        # Parenthesised as one ratio, not `Tt * a / b`: the two associate differently and
+        # differ by an ulp, and this spelling is `Tt * (n_top / n_bot)` exactly at mu = 1.
+        res = _pack(zeros_amp, R, zeros_amp, Tt * ((n_top / mu_top) / (n_bot / mu_bot)),
                     zeros_eff, de_ri, zeros_eff, de_ti)
     if not keep_field:
         return {'given': res}
@@ -345,7 +513,8 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
 
 def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                      epx_conv_all, epy_conv_all, epz_conv_i_all,
-                     *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None):
+                     *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
+                     mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None):
     """Solve a general 1D grating (arbitrary azimuth/polarization) for the given ``psi``.
 
     The conical case couples the s and p polarizations, so the per-layer modes and the boundary
@@ -356,12 +525,23 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
     ``psi`` the polarization angle. ``polarization`` is the complex amplitude pair ``(a_s,
     a_p)`` that supersedes ``psi`` when given — see
     :func:`~wavebit._core.conventions.incident_sp_amplitudes`.
+
+    ``mu`` / ``mu_top`` / ``mu_bot`` / ``eps_top`` / ``eps_bot`` are the permeability and the
+    half-space terms :func:`solve_1d` documents, in the same three slots
+    (:func:`layer_modes_1d_conical` says why the coupled 1D operator still takes three where
+    the 2D path takes five). Non-magnetic throughout is bit-identical to the arithmetic that
+    predates them.
     """
     xp = array_namespace(epx_conv_all)
+    mu_all = (None,) * 3 if mu is None else tuple(mu)
     if _is_backside(incidence_side):
-        n_top, n_bot, thickness, epx_conv_all, epy_conv_all, epz_conv_i_all = \
-            _mirrored_scene(n_top, n_bot, thickness,
-                            epx_conv_all, epy_conv_all, epz_conv_i_all)
+        # `mu` reverses with its layers and the half-space triples swap, exactly as in
+        # :func:`solve_1d`; the mirror is one function and takes three more stacks.
+        (n_top, n_bot, thickness, epx_conv_all, epy_conv_all, epz_conv_i_all,
+         *mu_all) = _mirrored_scene(n_top, n_bot, thickness,
+                                    epx_conv_all, epy_conv_all, epz_conv_i_all, *mu_all)
+        mu_top, mu_bot = mu_bot, mu_top
+        eps_top, eps_bot = eps_bot, eps_top
     kx = as_array(xp, kx)
     ky = as_array(xp, ky)
     if not xp.isdtype(kx.dtype, 'complex floating'):
@@ -385,11 +565,16 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
     kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq), (-1,))
     varphi = order_azimuth(xp, ky_col, kx, phi)
 
-    eps_bot = n_bot ** 2
+    if eps_bot is None:
+        eps_bot = n_bot ** 2 / mu_bot      # n stays the refractive index; eps carries the mu
     Kz_bot = _diag(xp, kz_bot)
 
+    # The substrate's two admittances: `kz/eps` on the magnetic (p) amplitude, `kz/mu` on the
+    # electric (s) one. Both are the previous expression at mu_bot = 1, and both are the same
+    # pair :func:`~wavebit._core.solve_2d.solve_2d`'s seed carries -- one boundary law, two
+    # formulations that must not spell it differently.
     big_F = _block(xp, [[I, O], [O, -1j * Kz_bot / eps_bot]])
-    big_G = _block(xp, [[-1j * Kz_bot, O], [O, I]])
+    big_G = _block(xp, [[-1j * Kz_bot / mu_bot, O], [O, I]])
     big_T = xp.astype(xp.eye(2 * n_orders), C)
 
     # --- stage 2/3: per-layer eig + coupled s/p transfer (conical_2 / conical_3) --------
@@ -409,9 +594,10 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
         epy_conv = epy_conv_all[layer_index]
         epz_conv_i = epz_conv_i_all[layer_index]
         d = thickness[layer_index]
+        layer_mu = _layer_mu(I, mu_all, layer_index)
 
         W1, W2, q1, q2, V_11, V_12, V_21, V_22 = layer_modes_1d_conical(
-            xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C)
+            xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C, mu=layer_mu)
 
         X_1 = _diag(xp, xp.exp(-k0 * q1 * d))
         X_2 = _diag(xp, xp.exp(-k0 * q2 * d))
@@ -439,18 +625,21 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
         # loop's working set, and only `big_F`, `big_G` and `big_T` have to outlive an
         # iteration.
         #
-        # The trailing `None` is the `muz_conv_i` slot -- one entry layout for the one function
-        # that reads both this list and `solve_2d`'s
-        # (:func:`wavebit._core.fields._field_coupled`), rather than two lengths it would have
-        # to tell apart. It is always `None` here and structurally must be: the conical
-        # operator carries no permeability, and `solve_conv` refuses a `mu` that reaches
-        # it by name ("2D path only").
+        # The eighth slot is `muz_conv_i` -- one entry layout for the one function that reads
+        # both this list and `solve_2d`'s (:func:`wavebit._core.fields._field_coupled`),
+        # rather than two lengths it would have to tell apart. It held a hard `None` while
+        # this operator had no permeability; it now holds the layer's own `mu_zz^-1`, which
+        # `H_z` divides out. A `None` left here on a magnetic layer would return an `H_z`
+        # scaled by `mu_zz` with every other component exact -- the 2D path's 2026-08-20
+        # defect, on this path.
         if keep_field:
-            layer_info_list.append([epz_conv_i, W, V, q, d, big_A_i, big_B, None])
+            layer_info_list.append([epz_conv_i, W, V, q, d, big_A_i, big_B,
+                                    None if layer_mu is None else layer_mu[2]])
 
     # --- stage 3: final matching -> efficiency (transfer_1d_conical_4) ------------------
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
                          n_top, n_bot, n_orders_u, n_orders_v, answers=answers,
+                         mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top,
                          lit=lit)
     if keep_field:
         out['layer_info_list'] = layer_info_list

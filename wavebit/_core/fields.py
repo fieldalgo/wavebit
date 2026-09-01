@@ -526,7 +526,8 @@ def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
 
     T_layer = T1
     cells = []
-    for spec, (epz_conv_i, W, V, q, d, A_i, B) in zip(z_per_layer, layer_info_list[::-1]):
+    for spec, (epz_conv_i, W, V, q, d, A_i, B, muz_conv_i) in zip(
+            z_per_layer, layer_info_list[::-1]):
         nz = _n_samples(spec)
         X = xp.diag(xp.exp(-k0 * q * d))
         c1 = T_layer[:, None]
@@ -540,11 +541,33 @@ def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
         bwd = _diag_exp(xp, k0 * Qd, n_orders)
         My = W @ (fwd @ c1 + bwd @ c2)
         Mx = V @ (-fwd @ c1 + bwd @ c2)
-        # TE's ``H_z = Kx Ey`` is Faraday's z row and would carry ``muz_conv_i`` on a magnetic
-        # layer, as the coupled path's does. It has none to carry: the pure TE/TM operator
-        # has no permeability slot, and `solve_conv` refuses a `mu` that reaches this
-        # path by name ("2D path only") rather than dropping it here.
-        Mz = 1j * (epz_conv_i @ Kx @ My if tetm_index else Kx @ My)
+        # The longitudinal component, and **the whole reason a permeability had to reach this
+        # function in the same change that let one into the operator.** It is algebraic rather
+        # than propagated: the solve hands over the transverse pair, and this line recovers the
+        # third by dividing out the z slot of its own tensor.
+        #
+        # Which tensor is the polarization's, and the two branches are one line under the
+        # duality `(E, H, eps, mu) -> (H, -E, mu, eps)`:
+        #
+        #     TE:  mu_zz  H_z = Kx E_y      Faraday's z row   ->  muz_conv_i
+        #     TM:  eps_zz E_z = Kx H_y      Ampere's z row    ->  epz_conv_i
+        #
+        # TM already divided by `epz_conv_i`; TE carried the bare `Kx @ My`, correct only
+        # while `mu = 1` and correct *because* the solve refused a mu. Lifting that refusal
+        # without this line is the 2D path's 2026-08-20 defect repeated: `H_z` comes back
+        # scaled by `mu_zz` while every other component stays exact, so `R + T` is still 1,
+        # both connecting algorithms still agree, and nothing but a curl residual or a closed
+        # form sees it.
+        #
+        # Skipped rather than multiplied by an identity where the layer is non-magnetic, so a
+        # non-magnetic cell stays bit-identical; and asked structurally (`is not None`), which
+        # is the one form a traced `muz_conv_i` can answer.
+        if tetm_index:
+            Mz = 1j * (epz_conv_i @ Kx @ My)
+        elif muz_conv_i is None:
+            Mz = 1j * (Kx @ My)
+        else:
+            Mz = 1j * (muz_conv_i @ Kx @ My)
 
         inv_f = _inv_fourier(xp, kx, None, lattice, sample_x, sample_y, k0, C)
         sgn = -1j if tetm_index == 0 else 1j

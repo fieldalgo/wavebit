@@ -58,8 +58,9 @@ from .backend import _device_of, array_namespace, as_array, check_finite, check_
 from .conventions import boundary_kz, order_azimuth
 from .enums import Answers, answers_of
 from .conventions import incident_column, incident_kz
-from .solve_1d import (_block, _diag, _incident_flux, _is_backside, _pack, layer_modes_1d,
-                       layer_modes_1d_conical, sp_efficiencies, sp_modes_1d_conical)
+from .solve_1d import (_block, _diag, _incident_flux, _is_backside, _layer_mu, _pack,
+                       layer_modes_1d, layer_modes_1d_conical, sp_efficiencies,
+                       sp_modes_1d_conical)
 from .solve_2d import layer_modes_2d, order_grid_kxy, sp_modes_2d
 
 _PI = 3.141592653589793
@@ -401,11 +402,15 @@ def _port_disagreement(a, b):
 
 def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
-           incidence_side='top', answers=Answers.EFFICIENCY, lit=None):
+           incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
+           mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None):
     """Solve a 1D grating stack by scattering matrices — SMM twin of :func:`solve_1d`.
 
     Same arguments and same returns as :func:`wavebit._core.solve_1d.solve_1d`, so the two are
-    interchangeable behind ``layer_algorithm``.
+    interchangeable behind ``layer_algorithm`` — ``mu`` and the half-space terms included, and
+    that is the point of carrying them here rather than refusing: the connecting algorithm is
+    a choice about how layers are joined, not about what a layer is made of
+    (:func:`smm_2d`).
 
     ``incidence_side='bottom'`` costs nothing here: the cascade composes all four blocks
     whichever side is lit, so backside illumination is *reading* ``S22`` / ``S12`` where the
@@ -427,6 +432,7 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     keep_field = answers.covers(Answers.FIELD)
     backside = _is_backside(incidence_side)
     xp, C, kx, _ = _prepare(epx_conv_all, kx)
+    mu_all = (None,) * 3 if mu is None else tuple(mu)
 
     n_orders_u = kx.shape[0]
     k0 = 2 * _PI / wavelength
@@ -437,17 +443,27 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     # algorithms answer identically.
     kz_top = boundary_kz(xp, n_top ** 2, kx ** 2)
     kz_bot = boundary_kz(xp, n_bot ** 2, kx ** 2)
-    eps_bot = n_bot ** 2
+    if eps_top is None:
+        eps_top = n_top ** 2 / mu_top     # n stays the index; eps carries the mu
+    if eps_bot is None:
+        eps_bot = n_bot ** 2 / mu_bot
 
     # Gap medium: eps chosen per order so kz_gap == 1, which keeps V_gap trivially invertible.
+    # It stays **non-magnetic on purpose**, the same decision `_smm_sp`'s gap records: it is a
+    # bookkeeping device rather than a medium in the scene and it cancels out of the result, so
+    # giving it a material property would be a category error that happens to cancel — harder
+    # to notice than one that does not.
     eps_gap = 1 + kx ** 2
 
+    # The half-space admittances, and the same pair the ETM twin's `G` is built from: `kz/mu`
+    # where the primary is an electric amplitude (TE) and `kz/eps` where it is magnetic (TM).
+    # Every one is the expression that was here at mu = 1.
     if tetm_index == 0:      # TE — primary variable E_y, partner H_x
-        V_top = -1j * _diag(xp, kz_top)
-        V_bot = -1j * _diag(xp, kz_bot)
+        V_top = -1j * _diag(xp, kz_top / mu_top)
+        V_bot = -1j * _diag(xp, kz_bot / mu_bot)
         V_gap = -1j * I
     elif tetm_index == 1:    # TM — primary variable H_y, partner scaled by eps
-        V_top = -1j * _diag(xp, kz_top / n_top ** 2)
+        V_top = -1j * _diag(xp, kz_top / eps_top)
         V_bot = -1j * _diag(xp, kz_bot / eps_bot)
         V_gap = -1j * _diag(xp, 1 / eps_gap)
     else:
@@ -457,11 +473,13 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     # --- cascade: superstrate interface, every layer top-to-bottom, substrate interface ----
     S_ref = _s_reflection(xp, W_top, V_top, W_gap, V_gap)
     S_trn = _s_transmission(xp, W_bot, V_bot, W_gap, V_gap)
-    S_layers, AB, modes = [], [], []
+    S_layers, AB, modes, muzs = [], [], [], []
     S = S_ref
     for layer_index in range(_n_layers(thickness)):
+        layer_mu = _layer_mu(I, mu_all, layer_index)
         W, V, q = layer_modes_1d(xp, tetm_index, kx, I, epx_conv_all[layer_index],
-                                 epy_conv_all[layer_index], epz_conv_i_all[layer_index], C)
+                                 epy_conv_all[layer_index], epz_conv_i_all[layer_index], C,
+                                 mu=layer_mu)
         d = thickness[layer_index]
         X = _diag(xp, xp.exp(-k0 * q * d))
         A, B = _ab_matrices(xp, W, V, W_gap, V_gap)
@@ -471,6 +489,14 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
             S_layers.append(S_layer)
             AB.append((A, B))
             modes.append([epz_conv_i_all[layer_index], W, V, q, d])
+            # `muz_conv_i` travels with its layer for field reconstruction to divide `H_z` by,
+            # exactly as `epz_conv_i` leads the entry for `E_z`. Kept in its own list because
+            # it rides **last** in the entry, after the two cascade-recovered blocks that are
+            # concatenated below — the layout `solve_1d` appends and `field_1d` unpacks.
+            # Collected here as well as in the ETM twin because the two build this list by
+            # their own routes, and a stack whose `H_z` was magnetic under one algorithm and
+            # not the other would have identical `R` and `T` either way.
+            muzs.append(None if layer_mu is None else layer_mu[2])
     S = redheffer_star(xp, I, S, S_trn)
 
     # --- incidence -> amplitudes -> efficiency --------------------------------------------
@@ -484,6 +510,10 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
 
     kz_ref, kz_trn = (kz_bot, kz_top) if backside else (kz_top, kz_bot)
     n_ref, n_trn = (n_bot, n_top) if backside else (n_top, n_bot)
+    # The half-space material slots take the same incidence-relative roles the indices do:
+    # `ref` is whichever side the light arrives from, `trn` the far one.
+    mu_ref, mu_trn = (mu_bot, mu_top) if backside else (mu_top, mu_bot)
+    eps_ref, eps_trn = (eps_bot, eps_top) if backside else (eps_top, eps_bot)
 
     # The incident order's own kz, read off the vector the reflected orders use rather than
     # respelled as `n_ref * cos(theta)` -- see `conventions.incident_kz`, whose docstring gives
@@ -492,15 +522,18 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     # `n_ref*cos_t` is `Re(kz_inc)` in this function's own spelling; a superposition needs the
     # sum over its lit orders instead. Branched rather than unified because the two differ by
     # an ulp, and the ETM twin makes the same split for the same reason.
-    if lit is None:
-        denom_r, denom_t_tm = kz_inc, kz_inc / (n_ref ** 2)
-    else:
-        flux = _incident_flux(xp, C, lit, kz_ref)
-        denom_r, denom_t_tm = flux, flux / (n_ref ** 2)
+    #
+    # Reflection carries no half-space slot and transmission carries two, for the reason the
+    # ETM twin states at the same place: a reflected order is measured against the incident
+    # admittance of its *own* medium, so `mu_ref` (TE) or `eps_ref` (TM) cancels algebraically
+    # inside the `Re`; a transmitted one sits in the far half-space and both survive.
+    denom_r = kz_inc if lit is None else _incident_flux(xp, C, lit, kz_ref)
+    denom_t_te = denom_r / mu_ref
+    denom_t_tm = denom_r / eps_ref
 
     de_ri = xp.real(R * xp.conj(R) * xp.real(kz_ref / denom_r))
     if tetm_index == 0:
-        de_ti = xp.real(Tt * xp.conj(Tt) * xp.real(kz_trn / denom_r))
+        de_ti = xp.real(Tt * xp.conj(Tt) * xp.real(kz_trn / mu_trn / denom_t_te))
     else:
         # Re(kz/eps), not Re(conj(kz)/eps): for TM the downward flux is Re(E_x H_y*) with E_x
         # proportional to (kz/eps) H_y. The two agree for a real exit index, which is why a
@@ -509,7 +542,7 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         # conjugated problem until 2026-08, and this was the last boundary still on the far
         # side of that seam.
         de_ti = xp.real(Tt * xp.conj(Tt)
-                        * xp.real(kz_trn / n_trn ** 2 / denom_t_tm))
+                        * xp.real(kz_trn / eps_trn / denom_t_tm))
 
     check_finite(xp, de_ri=de_ri, de_ti=de_ti)
     check_physical(xp, de_ri, de_ti, n_ref)
@@ -517,19 +550,22 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     if not answers.covers(Answers.AMPLITUDE):
         return de_ri, de_ti
 
-    # `ky` is None and `mu` is 1: this path carries one polarization and no out-of-plane
-    # order, so those two slots have nothing to say and saying nothing is what makes a
-    # coupled-path port refuse to join a 1D one.
-    scattering = _scattering_matrix(S, backside, kx, None, n_ref, n_trn, 1.0, 1.0)
+    # `ky` is None: this path carries no out-of-plane order, and saying nothing there is what
+    # makes a coupled-path port refuse to join a 1D one. The two permeabilities *are* said,
+    # in their incidence-relative roles, because a magnetic half-space changes the port's own
+    # admittance -- they were literal `1.0` while this path refused a `mu`.
+    scattering = _scattering_matrix(S, backside, kx, None, n_ref, n_trn, mu_ref, mu_trn)
 
     # Same Fresnel conversion as the ETM pure path: reflection primaries are already the
-    # amplitude; the TM transmission converts H back to E across the index step.
+    # amplitude; the TM transmission converts H back to E across the index step -- by
+    # impedance `Z = mu/n` once a half-space carries a permeability, which is `n_ref/n_trn`
+    # to the bit when neither does. Parenthesised as one ratio for that reason.
     zeros_amp = xp.zeros_like(R)
     zeros_eff = xp.zeros_like(de_ri)
     if tetm_index == 0:
         res = _pack(R, zeros_amp, Tt, zeros_amp, de_ri, zeros_eff, de_ti, zeros_eff)
     else:
-        res = _pack(zeros_amp, R, zeros_amp, Tt * (n_ref / n_trn),
+        res = _pack(zeros_amp, R, zeros_amp, Tt * ((n_ref / mu_ref) / (n_trn / mu_trn)),
                     zeros_eff, de_ri, zeros_eff, de_ti)
 
     if not keep_field:
@@ -544,11 +580,15 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         S_ref_m = _s_reflection(xp, W_bot, V_bot, W_gap, V_gap)
         S_trn_m = _s_transmission(xp, W_top, V_top, W_gap, V_gap)
         blocks, T1 = _field_state(xp, I, S_ref_m, S_trn_m, S_layers[::-1], AB[::-1], delta)
-        modes = modes[::-1]
+        # `muzs` reverses with `modes`: both are per-layer state indexed the same way, and a
+        # `mu_zz` left in scene order against mirrored modes gives each layer its neighbour's
+        # permeability -- still magnetic, still energy-conserving, `R` and `T` untouched.
+        modes, muzs = modes[::-1], muzs[::-1]
     else:
         blocks, T1 = _field_state(xp, I, S_ref, S_trn, S_layers, AB, delta)
     # Bottom-to-top, the order field reconstruction walks in reverse (as the ETM appends it).
-    layer_info_list = [m + list(b) for m, b in zip(modes, blocks)][::-1]
+    layer_info_list = [m + list(b) + [z]
+                       for m, b, z in zip(modes, blocks, muzs)][::-1]
     if T1 is not None:
         T1 = xp.reshape(T1, (n_orders_u,))    # the 1D path carries T1 as a plain vector
     return {'given': res, 'layer_info_list': layer_info_list, 'T1': T1,
@@ -742,14 +782,24 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
 
 def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                    epx_conv_all, epy_conv_all, epz_conv_i_all,
-                   *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None):
+                   *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
+                   mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None):
     """Solve a conical 1D grating by scattering matrices — SMM twin of :func:`solve_1d_conical`.
 
     Same arguments and returns as :func:`smm_1d`; ``polarization`` is the complex amplitude
     pair ``(a_s, a_p)``, resolved at the boundary as in the ETM twin.
+
+    ``mu`` is the three permeability stacks
+    (:func:`~wavebit._core.solve_1d.layer_modes_1d_conical`), handed to the *same* layer-mode
+    function the ETM twin calls, and the half-space terms go to the shared :func:`_smm_sp`.
+    Carried here rather than refused for the reason :func:`smm_2d`'s docstring gives: which
+    connecting algorithm joins the layers is not a fact about what a layer is made of, and an
+    algorithm that quietly dropped a ``mu`` would answer a magnetic stack plausibly and
+    wrongly while its twin answered it correctly.
     """
     backside = _is_backside(incidence_side)
     xp, C, kx, ky = _prepare(epx_conv_all, kx, ky)
+    mu_all = (None,) * 3 if mu is None else tuple(mu)
 
     n_orders_u = kx.shape[0]
     I = xp.astype(xp.eye(n_orders_u), C)
@@ -767,14 +817,17 @@ def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     def layer_modes(layer_index):
         W1, W2, q1, q2, V_11, V_12, V_21, V_22 = layer_modes_1d_conical(
             xp, Kx, Ky, Kx2, Ky2, I, epx_conv_all[layer_index],
-            epy_conv_all[layer_index], epz_conv_i_all[layer_index], C)
+            epy_conv_all[layer_index], epz_conv_i_all[layer_index], C,
+            mu=_layer_mu(I, mu_all, layer_index))
         big_W, big_V = sp_modes_1d_conical(xp, F_c, F_s, W1, W2, V_11, V_12, V_21, V_22)
         W = _block(xp, [[W1, W2]])
         V = _block(xp, [[V_11, V_12], [V_21, V_22]])
         return big_W, big_V, xp.concat([q1, q2]), W, V
 
     return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
-                   layer_modes, epz_conv_i_all, backside, answers, lit=lit)
+                   layer_modes, epz_conv_i_all, backside, answers,
+                   mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot,
+                   muz_conv_i_all=mu_all[2], lit=lit)
 
 
 def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,

@@ -295,11 +295,14 @@ MATERIALS = (
                'of admittances, patterned layers through the same Popov-Neviere '
                'rearrangement. Written as Material(epsilon, mu) on the three assignment '
                'paths and as a mu= array beside the raster; the same builders run twice, so '
-               'both quantities land on one geometry. The 2D path only -- the 1D/conical '
-               'operators and the first-order 4ff solve take no mu, and refuse rather than '
-               'ignore one. Field reconstruction carries mu since 2026-08-20: H_z is '
-               'Faraday z row, mu_zz^-1 (Kx Ey - Ky Ex), and before that date it came back '
-               'scaled by mu_zz while every other component was exact.',
+               'both quantities land on one geometry. The 1D and conical paths carry it too '
+               'since 2026-09-01, where the same duality maps the TE branch onto the TM one; '
+               'those operators take the diagonal three slots and refuse mu_xy / mu_yx by '
+               'name, having no off-diagonal position for them. The first-order 4ff solve '
+               'takes no mu at all and likewise refuses rather than ignores. Field '
+               'reconstruction carries mu on every path: H_z is Faraday z row, so it divides '
+               'by mu_zz^-1, and on the 2D path it came back scaled by mu_zz until '
+               '2026-08-20 while every other component was exact.',
         'source': 'docs/magnetic-materials.md',
     },
     {

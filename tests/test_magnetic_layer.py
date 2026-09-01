@@ -164,19 +164,26 @@ def test_a_hermitian_pair_is_lossless(name, eps, mu, theta):
 
 # ------------------------------------------------------------------------------- the refusals
 
-def test_mu_on_a_one_dimensional_structure_is_refused():
-    """The 1D and conical operators carry no permeability slot, so ``mu`` there is a lie.
+def test_a_diagonal_mu_on_a_one_dimensional_structure_now_solves():
+    """This scene used to be the refusal; since 2026-09-01 it is an answer.
 
-    Refusing beats ignoring: a dropped ``mu`` returns a finite, energy-conserving,
-    entirely plausible non-magnetic answer.
+    Kept here, where the refusal was, rather than only in the new file: the case is the same
+    one, and what changed is which of the five slots the 1D operators can hold. Three can —
+    the diagonal — and the two off-diagonal ones are still refused by name
+    (``test_magnetic_1d.py``, which carries the whole 1D half of this feature).
+
+    The assertion is *not* ``R + T == 1``, which this scene satisfied throughout the period
+    when the permeability was being dropped on the floor. It is that the answer moves at all:
+    a solver still ignoring ``mu`` returns the non-magnetic number, exactly.
     """
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                        truncation_order=(3, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
                        structure=np.ones((1, 1, 8)) * 2.25)
     e = [np.stack([np.eye(7, dtype=complex) * v]) for v in (2.6, 2.6, 1 / 2.6)]
-    m = tuple(np.stack([np.eye(7, dtype=complex) * v]) for v in (1.7, 1.7, 1 / 1.7, 0.0, 0.0))
-    with pytest.raises(NotImplementedError, match='2D path only'):
-        mee.solve_conv(*e, mu=m)
+    m = tuple(np.stack([np.eye(7, dtype=complex) * v]) for v in (1.7, 1.7, 1 / 1.7))
+    non_magnetic = float(np.sum(mee.solve_conv(*e).given.R))
+    magnetic = float(np.sum(mee.solve_conv(*e, mu=(*m, None, None)).given.R))
+    assert abs(magnetic - non_magnetic) > 1e-3
 
 
 def test_mu_with_a_z_coupled_permittivity_is_refused():
