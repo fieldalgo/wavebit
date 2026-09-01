@@ -220,11 +220,13 @@ def _refuse_out_of_scope(structure, mu, theta, phi, tetm, incidence_side, lattic
                              np.asarray(bot, dtype=complex).ravel()])
     if np.any(np.abs(np.imag(values)) > 0):
         raise ValueError(
-            'fdtd: the scene has a complex permittivity. A time-domain solve carries loss as a '
-            'conductivity, and a constant conductivity reproduces a given Im(eps) at ONE '
-            'frequency only -- so a lossy material here would be right at the centre '
-            'wavelength and silently wrong beside it. Dispersion (an ADE Drude/Lorentz pole) '
-            'is what makes this answerable and it is not implemented.')
+            'fdtd: the scene has a complex permittivity. A single complex number describes a '
+            'material at ONE frequency, and a time-domain run carries every frequency in its '
+            'band at once -- so there is no constant this solve could use that would be right '
+            'across the band. Give the dispersion as poles instead: `structure` holds the '
+            'real eps_infinity, `dispersion` marks which cells are dispersive, and `poles` '
+            'carries the Drude/Lorentz model. That IS the frequency dependence, rather than '
+            'one sample of it.')
     if np.any(np.real(values) <= 0.0):
         raise ValueError(
             f'fdtd: the scene has a permittivity of {np.real(values).min()!r}. A '
@@ -432,6 +434,70 @@ def cpml_profiles(nz, n_pml, dz, dt, wavelength, eps_top, eps_bot):
 
 
 # ---------------------------------------------------------------------------------------
+# dispersion -- the auxiliary differential equation
+# ---------------------------------------------------------------------------------------
+
+class _PoleSet:
+    """The Drude/Lorentz state carried alongside one electric field component.
+
+    **One equation covers both models.** A pole obeys
+
+        d2P/dt2 + gamma dP/dt + omega0**2 P = f E
+
+    which in ``e^{-iwt}`` gives ``P = f E / (omega0**2 - w**2 - i gamma w)``, so
+
+        eps(w) = eps_inf + sum_p  f_p / (omega0_p**2 - w**2 - i gamma_p w)
+
+    At ``omega0 = 0`` that is Drude, ``eps_inf - f/(w**2 + i gamma w)`` with ``f = wp**2``, and
+    the sign works out so ``Im(eps) > 0`` is loss -- which is wavebit's convention and not a
+    free choice (``docs/conventions.md``). At ``omega0 != 0`` it is Lorentz. A metal is a Drude
+    pole plus however many Lorentz poles its interband structure needs.
+
+    Central differences on both derivatives make the recursion explicit: ``P^{n+1}`` reads
+    ``E^n``, never ``E^{n+1}``, so nothing has to be solved simultaneously.
+
+    ``fill`` is the fraction of each Yee cell the dispersive material occupies. Weighting ``f``
+    by it is exact in the same limit the arithmetic permittivity average is exact -- tangential
+    to the interface -- and is an approximation normal to one, where the harmonic rule would
+    apply and does not transfer to a frequency-dependent material. See
+    :func:`component_property`.
+    """
+
+    def __init__(self, shape, dt, poles, fills, dtype):
+        self.step_gain, self.hold, self.drive = [], [], []
+        for (omega0, gamma, strength), fill in zip(poles, fills):
+            scale = 1.0 / dt ** 2 + 0.5 * gamma / dt
+            self.step_gain.append((2.0 / dt ** 2 - omega0 ** 2) / scale)
+            self.hold.append((1.0 / dt ** 2 - 0.5 * gamma / dt) / scale)
+            self.drive.append(strength * np.asarray(fill) / scale)
+        self.p = [np.zeros(shape, dtype=dtype) for _ in poles]
+        self.previous = [np.zeros(shape, dtype=dtype) for _ in poles]
+
+    def advance(self, e):
+        """Take every pole to ``n+1`` using ``E^n``; return ``sum(P^{n+1} - P^n)``."""
+        total = 0.0
+        for k in range(len(self.p)):
+            nxt = (self.step_gain[k] * self.p[k] - self.hold[k] * self.previous[k]
+                   + self.drive[k] * e)
+            total = total + (nxt - self.p[k])
+            self.previous[k], self.p[k] = self.p[k], nxt
+        return total
+
+
+def permittivity_at(poles, wavelength, eps_infinity=1.0):
+    """``eps(w)`` of a pole list, for stating what a scene's material actually is.
+
+    The closed form the time stepping is discretising, in one place, so a test can compare
+    against it rather than against a second implementation of the same sum.
+    """
+    omega = 2.0 * np.pi / wavelength
+    eps = complex(eps_infinity)
+    for omega0, gamma, strength in poles:
+        eps += strength / (omega0 ** 2 - omega ** 2 - 1j * gamma * omega)
+    return eps
+
+
+# ---------------------------------------------------------------------------------------
 # the source, and the 1D auxiliary incident field
 # ---------------------------------------------------------------------------------------
 
@@ -553,7 +619,8 @@ class _Grid:
     """
 
     def __init__(self, wavelength, period, raster, thickness, eps_top, eps_bot,
-                 resolution, n_pml, courant, subpixel, theta=0.0):
+                 resolution, n_pml, courant, subpixel, theta=0.0,
+                 dispersion=None, poles=None):
         self.wavelength = float(wavelength)
         self.period = float(period)
         self.raster = np.asarray(raster, dtype=complex)
@@ -562,6 +629,11 @@ class _Grid:
         self.eps_bot = complex(eps_bot)
         self.subpixel = bool(subpixel)
         self.n_pml = int(n_pml)
+        #: Per-raster-cell pole-set id, 0 meaning non-dispersive, and the pole lists it
+        #: indexes. Kept beside `raster` rather than inside it because a pole model is not a
+        #: number: `structure` holds `eps_infinity` and this says what else the cell carries.
+        self.dispersion = None if dispersion is None else np.asarray(dispersion, dtype=int)
+        self.poles = dict(poles or {})
 
         self.nx = max(int(round(self.period * resolution)), 1)
         self.dx = self.period / self.nx
@@ -636,6 +708,33 @@ class _Grid:
             self.z0, self.dz, nz, self.dx, self.nx, z_half, x_half, harmonic_axis,
             subpixel=self.subpixel)
 
+    def fill_for(self, pole_id, z_half, x_half):
+        """What fraction of each of this component's cells carries ``pole_id``.
+
+        The same exact cell average `eps_infinity` gets, run on the indicator of one pole set,
+        which is what makes it a fraction. Arithmetic, never harmonic: the harmonic rule is a
+        statement about a *static* permittivity normal to an interface and does not carry over
+        to a pole strength.
+        """
+        nz = self.nz - 1 if z_half else self.nz
+        indicator = (self.dispersion == pole_id).astype(float)
+        return np.real(component_property(
+            indicator, self.thickness, 0.0, 0.0, self.period, self.z0, self.dz, nz,
+            self.dx, self.nx, z_half, x_half, None, subpixel=self.subpixel))
+
+    def pole_state(self, shape, z_half, x_half, dtype):
+        """The :class:`_PoleSet` for one electric component, or ``None`` if the scene is
+        non-dispersive."""
+        if self.dispersion is None or not self.poles:
+            return None
+        flat, fills = [], []
+        for pole_id in sorted(self.poles):
+            fill = self.fill_for(pole_id, z_half, x_half)
+            for pole in self.poles[pole_id]:
+                flat.append(pole)
+                fills.append(fill)
+        return _PoleSet(shape, self.dt, flat, fills, dtype) if flat else None
+
 
 # ---------------------------------------------------------------------------------------
 # the time loop
@@ -696,6 +795,7 @@ def _time_loop(grid, tetm, n_steps, wavelengths):
         ey = np.zeros((nz, nx), dtype=dtype)
         hx = np.zeros((nz - 1, nx), dtype=dtype)
         hz = np.zeros((nz, nx), dtype=dtype)
+        poles_y = grid.pole_state((nz, nx), False, False, dtype)
     else:
         # (Hy, Ex, Ez). Ex is normal to the tooth's vertical walls, Ez to the horizontal ones.
         eps_x = grid.eps_for(False, True, 'x').real
@@ -703,6 +803,8 @@ def _time_loop(grid, tetm, n_steps, wavelengths):
         hy = np.zeros((nz - 1, nx), dtype=dtype)
         ex = np.zeros((nz, nx), dtype=dtype)
         ez = np.zeros((nz - 1, nx), dtype=dtype)
+        poles_x = grid.pole_state((nz, nx), False, True, dtype)
+        poles_z = grid.pole_state((nz - 1, nx), True, False, dtype)
     psi_h = np.zeros((nz - 1, nx), dtype=dtype)
     psi_e = np.zeros((nz, nx), dtype=dtype)
 
@@ -742,19 +844,30 @@ def _time_loop(grid, tetm, n_steps, wavelengths):
             d = np.zeros((nz, nx), dtype=dtype)
             d[1:-1] = (hx[1:] - hx[:-1]) / dz
             psi_e = nb * psi_e + na * d
-            ey[1:-1] += (dt * (d[1:-1] / nk[1:-1] + psi_e[1:-1]
-                               - (hz[1:-1] - _shift_down(hz, grid.bloch)[1:-1]) / dx)
-                         / eps[1:-1])
+            curl = (d / nk + psi_e
+                    - (hz - _shift_down(hz, grid.bloch)) / dx)
+            # eps_inf dE/dt = curl H - dP/dt. `advance` reads E at level n and hands back the
+            # increment every pole contributes, which is what makes the pair explicit.
+            drive = dt * curl
+            if poles_y is not None:
+                drive = drive - poles_y.advance(ey)
+            ey[1:-1] += drive[1:-1] / eps[1:-1]
             ey[kt] -= dt * inc.h[kt - 1] * x_phase / dz / eps[kt]
         else:
             # eps dEx/dt = -dHy/dz ; eps dEz/dt = dHy/dx.
             d = np.zeros((nz, nx), dtype=dtype)
             d[1:-1] = -(hy[1:] - hy[:-1]) / dz
             psi_e = nb * psi_e + na * d
-            ex[1:-1] += dt * (d[1:-1] / nk[1:-1] + psi_e[1:-1]) / eps_x[1:-1]
+            drive = dt * (d / nk + psi_e)
+            if poles_x is not None:
+                drive = drive - poles_x.advance(ex)
+            ex[1:-1] += drive[1:-1] / eps_x[1:-1]
             # Hy_inc is MINUS inc.h, which is where this sign comes from.
             ex[kt] -= dt * inc.h[kt - 1] * x_phase / dz / eps_x[kt]
-            ez += dt * (hy - _shift_down(hy, grid.bloch)) / dx / eps_z
+            drive_z = dt * (hy - _shift_down(hy, grid.bloch)) / dx
+            if poles_z is not None:
+                drive_z = drive_z - poles_z.advance(ez)
+            ez += drive_z / eps_z
 
         # --- monitors -------------------------------------------------------------------
         # The e^{-iwt} phasor is recovered with an exp(+i w t) kernel; `np.fft.fft` over the
@@ -912,10 +1025,61 @@ def _extract(grid, out, half_width, index):
 # the entry point
 # ---------------------------------------------------------------------------------------
 
+def _check_dispersion(dispersion, poles, raster):
+    """Validate the pole model, or return ``(None, {})`` for a non-dispersive scene.
+
+    Refused rather than coerced, on the same grounds as everything else here: a pole set that
+    is silently dropped returns a *lossless* answer to a lossy question, which is exactly the
+    shape of number this module exists not to produce.
+    """
+    if dispersion is None and not poles:
+        return None, {}
+    if dispersion is None or not poles:
+        raise ValueError(
+            'fdtd: `dispersion` and `poles` come as a pair -- one marks which cells are '
+            'dispersive and the other says what they are. One without the other describes '
+            'nothing.')
+
+    dispersion = np.asarray(dispersion, dtype=int)
+    if dispersion.ndim == 3 and dispersion.shape[1] == 1:
+        dispersion = dispersion[:, 0, :]
+    if dispersion.shape != raster.shape:
+        raise ValueError(
+            f'fdtd: dispersion is {dispersion.shape} and structure is {raster.shape}. They '
+            f'are two fields sampled on one raster, so they share a shape exactly.')
+
+    named = set(int(v) for v in np.unique(dispersion)) - {0}
+    missing = sorted(named - set(int(k) for k in poles))
+    if missing:
+        raise ValueError(
+            f'fdtd: dispersion marks cells with id {missing} and `poles` has no entry for '
+            f'them. Id 0 means non-dispersive; every other id has to name a model.')
+
+    checked = {}
+    for key, entries in poles.items():
+        for index, entry in enumerate(entries):
+            if len(entry) != 3:
+                raise ValueError(
+                    f'fdtd: poles[{key}][{index}] is {entry!r}. A pole is '
+                    f'(omega0, gamma, strength) -- omega0 = 0 is Drude, and the units are the '
+                    f'reciprocal of whatever `wavelength` is in, since c = 1 here.')
+            omega0, gamma, strength = (float(np.real(v)) for v in entry)
+            if omega0 < 0.0 or gamma < 0.0:
+                raise ValueError(
+                    f'fdtd: poles[{key}][{index}] has omega0={omega0} gamma={gamma}. Both are '
+                    f'frequencies and neither can be negative; a negative gamma is gain, which '
+                    f'this solve has no stable time step for.')
+            if not np.isfinite([omega0, gamma, strength]).all():
+                raise ValueError(f'fdtd: poles[{key}][{index}] is not finite.')
+        checked[int(key)] = [tuple(float(np.real(v)) for v in e) for e in entries]
+    return dispersion, checked
+
+
 def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm,
                theta=0.0, phi=None, mu=None, incidence_side='top', lattice=None,
                resolution=None, n_pml=PML_CELLS, n_periods=None, courant=COURANT,
-               subpixel=True, truncation_order=None, return_diagnostics=False):
+               subpixel=True, truncation_order=None, return_diagnostics=False,
+               dispersion=None, poles=None):
     """Solve one TE or TM incidence in the time domain; returns a :class:`Result`.
 
     Every keyword this does not implement is refused by name rather than ignored -- see
@@ -940,13 +1104,21 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm,
     wavelength = centre
 
     if resolution is None:
-        n_max = max(abs(np.sqrt(eps_top)), abs(np.sqrt(eps_bot)),
-                    float(np.sqrt(np.abs(raster)).max()))
-        resolution = CELLS_PER_WAVELENGTH * n_max / wavelength
+        # The cell size follows the largest index in the scene, and a pole model can raise
+        # that a long way above `sqrt(eps_infinity)` -- a Drude metal at 900 nm reaches n = 6.5
+        # where its eps_infinity is 1. Sizing the grid off eps_infinity alone would leave the
+        # metal at three cells per wavelength.
+        indices = [abs(np.sqrt(eps_top)), abs(np.sqrt(eps_bot)),
+                   float(np.sqrt(np.abs(raster)).max())]
+        for entries in (poles or {}).values():
+            indices.append(abs(np.sqrt(permittivity_at(entries, float(np.min(band)), 1.0))))
+        resolution = CELLS_PER_WAVELENGTH * max(indices) / wavelength
     n_periods = N_PERIODS if n_periods is None else float(n_periods)
 
+    dispersion, poles = _check_dispersion(dispersion, poles, raster)
     grid = _Grid(wavelength, period_x, raster, thickness, eps_top, eps_bot,
-                 resolution, n_pml, courant, subpixel, theta=theta)
+                 resolution, n_pml, courant, subpixel, theta=theta,
+                 dispersion=dispersion, poles=poles)
     n_steps = int(np.ceil(n_periods * centre / grid.dt))
     out = _time_loop(grid, name, n_steps, band)
 

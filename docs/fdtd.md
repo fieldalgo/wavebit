@@ -8,9 +8,10 @@ Target: `wavebit/_core/fdtd.py` — `solve_fdtd`, `component_property`, `cpml_co
 `_refuse_out_of_scope`; `wavebit/main.py` — `fdtd`; `tests/test_fdtd.py`.
 
 **Scope.** Pure TE / TM at any polar angle in the classical mount (`phi = 0`), on a raster
-structure periodic along one axis — deliberately the scope of `wavebit/_core/solve_1d.py`,
-which this mirrors down to the amplitude conventions. Everything outside it is refused by
-name; §6 lists all twelve refusals and why each is a refusal rather than an approximation.
+structure periodic along one axis, with Drude/Lorentz dispersion — deliberately the scope of
+`wavebit/_core/solve_1d.py`, which this mirrors down to the amplitude conventions. Everything
+outside it is refused by name; §6 lists the refusals and why each is a refusal rather than an
+approximation.
 
 ---
 
@@ -331,7 +332,7 @@ cross-check at all.
 | complex `theta` | Evanescent incidence has no propagating incident wave to normalise against, and the TFSF plane injects one by construction. The RCWA path answers this — see `docs/branch-cuts.md` |
 | `phi != 0` (conical mount) | It couples the two polarisations, and this is the pure TE/TM formulation — the same split `solve_1d` and `solve_1d_conical` make. The classical mount leaves them decoupled at every `theta`, which is what makes §5b answerable at all |
 | `incidence_side='bottom'` | The mirror the ETM applies has no counterpart here yet |
-| complex permittivity | Time domain carries loss as a conductivity, and a constant one reproduces a given `Im(ε)` at **one** frequency. Right at the centre wavelength, silently wrong beside it |
+| complex permittivity | One complex number describes a material at **one** frequency, and a run carries every frequency in its band. Give the dispersion as poles instead (§8b) — that *is* the frequency dependence, rather than one sample of it |
 | `Re(ε) ≤ 0` | A metal below its plasma frequency — the same dispersion problem, and no real wave speed, so no stable time step exists |
 | `mu` | **Parity, not omission**: the RCWA side refuses it on the same scene. `engine.py:2334` — *"mu is implemented on the 2D path only ... the 1D and conical operators carry no permeability slot at all"*. `solve_1d_conical` does carry `mu_top`/`mu_bot` parameters, but the engine refuses before reaching it, so they are unreachable defaults. Neither path answers a magnetic 1D grating today |
 | analytic shape structure | Rasterising it would put a second geometry builder beside `draw.slice_structure`, which is NumPy-only, square-only and refuses a traced shape parameter. The two would disagree about one scene |
@@ -399,19 +400,87 @@ incidence. The instrument that settles it is solving the RCWA path at the **drif
 
 ---
 
+## 8b. Dispersion — Drude and Lorentz
+
+A time-domain solve cannot take a complex permittivity: one complex number describes a
+material at one frequency, and the pulse carries every frequency in its band. The frequency
+dependence has to be given as the thing it is, a pole model, which is then integrated
+alongside the fields by an **auxiliary differential equation**:
+
+```
+d²P/dt² + γ dP/dt + ω0² P = f E
+```
+
+In `e^{-iωt}` that gives `P = f E / (ω0² − ω² − iγω)`, so
+
+```
+ε(ω) = ε_inf + Σ_p  f_p / (ω0_p² − ω² − i γ_p ω)
+```
+
+**One equation covers both models.** At `ω0 = 0` it is Drude, `ε_inf − f/(ω² + iγω)` with
+`f = ω_p²`; at `ω0 ≠ 0` it is Lorentz. A metal is a Drude pole plus however many Lorentz poles
+its interband structure needs. The sign works out so `Im(ε) > 0` is loss, which is wavebit's
+convention and not a free choice. Central differences on both derivatives make the recursion
+explicit — `P^{n+1}` reads `E^n`, never `E^{n+1}` — so nothing is solved simultaneously.
+
+The scene is given as three pieces: `structure` holds the real `ε_inf`, `dispersion` is a
+same-shape integer raster marking which cells are dispersive (0 = none), and `poles` maps each
+id to its `(ω0, γ, f)` list.
+
+Measured on a 30 nm Drude slab (gold-ish: plasma wavelength 136 nm, so `ε = −42.7 + 2.3i` and
+an 11 nm skin depth) against the exact transfer matrix at that `ε`:
+
+| cell | `R` gap | `T` gap | absorbed (exact 0.0228) |
+| --- | --- | --- | --- |
+| 20 nm | 3.7e-3 | 3.5e-3 | 0.0230 |
+| 10 nm | 5.9e-4 | 7.6e-4 | 0.0230 |
+| 5 nm | 8.5e-5 | 1.9e-4 | 0.0229 |
+
+and on a 60 nm metal grating against the RCWA path, which is handed the same material as a
+complex `ε`: worst per-order gap 2.7e-3 at 10 nm and 6.1e-4 at 5 nm, with both solvers
+absorbing 1.3 %.
+
+**This is where dispersion and a band multiply each other.** One run gives the whole spectrum,
+and each wavelength in it sees the permittivity the pole model has *there*. RCWA must be
+re-solved per wavelength and handed a different `ε` each time — so the crossover of §2, which
+is far out on a lossless dielectric, moves toward FDTD exactly here.
+
+**What is approximated.** The pole strength is weighted by the fraction of each Yee cell the
+dispersive material fills. That is exact in the same limit the arithmetic permittivity average
+is exact — tangential to the interface — and an approximation normal to one, where the
+harmonic rule applies to a static permittivity and does not transfer to a frequency-dependent
+material. Half-spaces are not dispersive.
+
+---
+
 ## 9. What is not yet answered
 
-- **A split-field formulation**, so that a band at oblique incidence is a fixed-*angle* sweep
-  rather than the fixed-`kx` one of §8. This is the gap that matters most once the module is
-  read as a solver rather than a harness: a spectrum at a tilt is an ordinary thing to want,
-  and it is exactly what one run cannot give today. The cost is a transformed field with extra
-  terms and a stability bound that tightens with the angle.
+- **A fixed-*angle* spectrum at oblique incidence**, rather than the fixed-`kx` sweep of §8.
+  This is the gap that matters most once the module is read as a solver rather than a harness:
+  a spectrum at a tilt is an ordinary thing to want, and it is exactly what one run cannot give
+  today. The textbook answer is a **split-field** formulation — transform the fields so the
+  frequency dependence in the periodic boundary becomes a time derivative, then absorb it by a
+  change of variable (Roden, Gedney, Kesler, Maloney and Harms, *IEEE Trans. Microwave Theory
+  Tech.* **46**, 420 (1998)). Its rival is **spectral FDTD** (Aminian and Rahmat-Samii, *IEEE
+  Trans. Antennas Propag.* **54**, 1818 (2006)), whose building block this module already
+  produces: several fixed-`kx` runs tile the `(kx, f)` plane, a fixed-angle curve is a line
+  through the origin on it, and it is read off by interpolation. **The two lose on different
+  axes and the choice is not obvious.** Measured on this scene, ten wavelengths at 30 degrees
+  cost 75 s as ten separate runs; split-field would be *one* run (the angle is a constant, so
+  the whole band is that angle's answer) at perhaps twice the per-run cost, while spectral
+  needs three to five runs. So split-field is roughly twice as cheap, and spectral is the one
+  that leaves the time stepper alone — a driver loop and an interpolation rather than a second
+  formulation. Split-field implementations are reported to have stability trouble at large
+  angles and spectral's criterion is reported to be angle-independent; neither claim has been
+  checked against a primary source.
+
+  **None of it is worth choosing yet.** RCWA solves those same ten wavelengths in 0.34 s, 44x
+  ahead of the best FDTD route, so on a scene like this one no formulation wins. The decision
+  only becomes real on a scene where the RCWA side is expensive — many layers, a high
+  truncation order, or a metal, which is why dispersion is above this on the list.
 - **A conical mount** (`phi != 0`), which is what oblique incidence on a *crossed* grating
   needs and what `solve_1d_conical` answers on the RCWA side. The classical mount is done
   (§5b); the conical one couples the polarisations and is a different formulation.
-- **Dispersion**, which also unlocks lossy and metallic gratings — an ADE Drude/Lorentz pole
-  per material. Metals are the largest class where an independent oracle would be worth having
-  and where RCWA convergence is hardest.
 - **`mu`**, to reach parity with `solve_1d_conical` rather than with `solve_1d`.
 - **A broadband run.** The DFT machinery accumulates at a single frequency now; a band needs
   the source width sized from the requested span and a guard on the incident amplitude, which

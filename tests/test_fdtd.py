@@ -837,3 +837,146 @@ def test_the_source_widens_to_cover_whatever_band_is_asked_for():
             f'band {band}: the weakest wavelength sits at {worst:.2e} of the peak incident '
             f'spectrum, so the source is not covering what was asked for')
         assert worst > MIN_INCIDENT_FRACTION * 100
+
+
+# ---------------------------------------------------------------------------------------
+# 8. dispersion -- the one thing the RCWA path can express and this could not
+# ---------------------------------------------------------------------------------------
+
+# A Drude metal, gold-ish at 900 nm: plasma wavelength 136 nm, a long collision time.
+# `(omega0, gamma, strength)` with omega0 = 0 is Drude and `strength` is the plasma frequency
+# squared; the units are reciprocal length, since c = 1 here.
+DRUDE = {1: [(0.0, 2.0 * np.pi / 17000.0, (2.0 * np.pi / 136.0) ** 2)]}
+
+
+def test_a_pole_model_and_a_complex_permittivity_are_the_same_material():
+    """The closed form the time stepping discretises, checked before anything is stepped.
+
+    This is what makes the comparisons below meaningful: the RCWA reference is handed a single
+    complex `eps` and the FDTD is handed a pole model, so if the two disagree about what the
+    material IS then nothing downstream means anything. It also pins the sign convention --
+    `Im(eps) > 0` is loss under `e^{-iwt}`, which is wavebit's and not a free choice.
+    """
+    from wavebit._core.fdtd import permittivity_at
+
+    eps = permittivity_at(DRUDE[1], WL, 1.0)
+    assert abs(eps - (-42.6709 + 2.3120j)) < 1e-3, eps
+    assert eps.imag > 0.0, f'Im(eps) = {eps.imag}, which is gain in this convention'
+    # A Drude metal well below its plasma frequency: eps strongly negative, n mostly imaginary.
+    assert eps.real < -10.0 and np.sqrt(eps).imag > 5.0
+
+
+@pytest.mark.parametrize('tetm', ['te', 'tm'])
+def test_a_drude_slab_matches_the_closed_form(tetm):
+    """The decisive gate for the auxiliary differential equation, and it needs no solver.
+
+    A uniform Drude slab has an exact transfer matrix once `eps(w)` is known, so this compares
+    the time stepping against arithmetic rather than against another implementation. 30 nm of
+    metal against an 11 nm skin depth: `T` is 0.036, small but not zero, which is what makes
+    the test sensitive to the absorption rather than only to the reflection.
+
+    Measured error 3.7e-3 (R) at this 20 nm grid, falling to 5.9e-4 at 10 nm and 8.5e-5 at 5 --
+    second order or better.
+    """
+    from wavebit._core.fdtd import permittivity_at
+
+    index = np.sqrt(permittivity_at(DRUDE[1], WL, 1.0))
+    thickness, structure = 30.0, np.ones((1, 1, 2))
+    result = solve_fdtd(structure=structure, thickness=[thickness], top=EPS_TOP, bot=EPS_BOT,
+                        period=[PERIOD], wavelength=WL, tetm=tetm, resolution=0.05,
+                        n_periods=100, truncation_order=dict(x=1, y=0),
+                        dispersion=np.array([[1, 1]]), poles=DRUDE)
+    _, _, R_a, T_a = _stack_rt(WL, N_TOP, [index], [thickness], N_BOT, tetm)
+    orders = _by_order(result)
+
+    assert abs(orders[0][0] - R_a) < 1e-2, f'R {orders[0][0]} against closed form {R_a}'
+    assert abs(orders[0][1] - T_a) < 1e-2, f'T {orders[0][1]} against closed form {T_a}'
+    absorbed = 1.0 - orders[0][0] - orders[0][1]
+    assert 0.01 < absorbed < 0.05, (
+        f'the slab absorbed {absorbed}; the closed form says {1 - R_a - T_a:.4f}, and a scene '
+        f'that absorbs nothing means the pole never reached the field update')
+
+
+def test_a_metal_grating_agrees_with_the_rcwa_solve():
+    """The target: a structure RCWA can express and this module could not, until now.
+
+    The two are handed the material in different forms -- RCWA a complex `eps` at 900 nm, the
+    FDTD a Drude pole -- which is the point rather than an inconvenience: agreement means the
+    pole model and the complex number describe one material AND that the ADE integrates it
+    correctly. Measured worst per-order gap 2.7e-3 at this 10 nm grid, 6.1e-4 at 5 nm.
+    """
+    from wavebit._core.fdtd import permittivity_at
+
+    thickness = 60.0
+    eps_metal = permittivity_at(DRUDE[1], WL, 1.0)
+    solver = wavebit.rcwa(backend=0, wavelength=WL, period=[PERIOD],
+                          truncation_order=dict(x=60, y=0), top=EPS_TOP, bot=EPS_BOT,
+                          theta=0.0, phi=0.0, tetm='te',
+                          structure=np.array([[[eps_metal, EPS_TOP]]]), thickness=[thickness])
+    reference = _by_order(solver.solve())
+
+    orders = _by_order(solve_fdtd(
+        structure=np.ones((1, 1, 2)), thickness=[thickness], top=EPS_TOP, bot=EPS_BOT,
+        period=[PERIOD], wavelength=WL, tetm='te', resolution=0.1, n_periods=100,
+        truncation_order=dict(x=1, y=0), dispersion=np.array([[1, 0]]), poles=DRUDE))
+
+    for m in (-1, 0, 1):
+        assert abs(orders[m][0] - reference[m][0]) < 6e-3, (
+            f'R[{m}]: fdtd {orders[m][0]} against rcwa {reference[m][0]}')
+        assert abs(orders[m][1] - reference[m][1]) < 6e-3, (
+            f'T[{m}]: fdtd {orders[m][1]} against rcwa {reference[m][1]}')
+    total = float(np.asarray(orders[0]).sum())
+    assert total < 0.999, f'R0 + T0 = {total}; a metal grating has to absorb something'
+
+
+DISPERSION_REFUSED = [
+    (dict(dispersion=np.array([[1, 0]])), r'come as a pair'),
+    (dict(poles=DRUDE), r'come as a pair'),
+    (dict(dispersion=np.array([[1, 0, 0]]), poles=DRUDE), r'share a shape exactly'),
+    (dict(dispersion=np.array([[2, 0]]), poles=DRUDE), r'no entry for them'),
+    (dict(dispersion=np.array([[1, 0]]), poles={1: [(0.0, -1.0, 1.0)]}), r'negative'),
+    (dict(dispersion=np.array([[1, 0]]), poles={1: [(0.0, 1.0)]}), r'omega0, gamma, strength'),
+]
+
+
+@pytest.mark.parametrize('override, message', DISPERSION_REFUSED)
+def test_dispersion_refusals(override, message):
+    """A pole set that is silently dropped answers a lossy question losslessly.
+
+    That is the same failure mode as every other refusal here -- a number shaped exactly like
+    an efficiency, with nothing on it to say the material was ignored.
+    """
+    kwargs = dict(structure=np.ones((1, 1, 2)), thickness=[30.0], top=EPS_TOP, bot=EPS_BOT,
+                  period=[PERIOD], wavelength=WL, tetm='te', resolution=0.02, n_periods=60)
+    kwargs.update(override)
+    with pytest.raises(ValueError, match=message):
+        solve_fdtd(**kwargs)
+
+
+def test_a_band_through_a_metal_carries_the_dispersion_at_every_wavelength():
+    """Where dispersion and a band multiply each other, and the clearest case for this solver.
+
+    One run gives the whole spectrum, and each wavelength in it sees the permittivity the pole
+    model has THERE -- not the centre's. RCWA has to be re-solved per wavelength *and* handed a
+    different `eps` each time. This asserts the part that could silently be wrong: that
+    `eps(w)` really varies across the band rather than being frozen at the centre.
+    """
+    from wavebit._core.fdtd import permittivity_at
+
+    band = [820.0, 900.0, 980.0]
+    metal = [permittivity_at(DRUDE[1], wl, 1.0) for wl in band]
+    assert abs(metal[0] - metal[-1]) > 5.0, (
+        'the band has to span a real change in eps or this test proves nothing')
+
+    thickness = 30.0
+    results = solve_fdtd(structure=np.ones((1, 1, 2)), thickness=[thickness], top=EPS_TOP,
+                         bot=EPS_BOT, period=[PERIOD], wavelength=band, tetm='te',
+                         resolution=0.05, n_periods=100, truncation_order=dict(x=1, y=0),
+                         dispersion=np.array([[1, 1]]), poles=DRUDE)
+
+    for wavelength, eps, result in zip(band, metal, results):
+        _, _, R_a, T_a = _stack_rt(wavelength, N_TOP, [np.sqrt(eps)], [thickness], N_BOT, 'te')
+        got = _by_order(result)[0]
+        assert abs(got[0] - R_a) < 1.5e-2, (
+            f'{wavelength} nm: R {got[0]} against the closed form at THAT wavelength {R_a}')
+        assert abs(got[1] - T_a) < 1.5e-2, f'{wavelength} nm: T {got[1]} against {T_a}'
