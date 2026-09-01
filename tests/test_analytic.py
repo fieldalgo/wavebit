@@ -1354,9 +1354,7 @@ def test_an_omitted_centre_is_the_cell_centre_on_every_cell(cell_name, A, shape)
     frozen expectation would have to be recomputed by the same formula it is checking.
     """
     from wavebit._core.analytic import shape_geometry
-    from wavebit._core.lattice import periods_of
 
-    Px, Py = periods_of(A)
     want = (0.5 * (A[0, 0] + A[0, 1]), 0.5 * (A[1, 0] + A[1, 1]))
     _, cx, cy, _, _, _ = shape_geometry(shape, A)
     assert (cx, cy) == want
