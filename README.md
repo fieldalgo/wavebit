@@ -417,7 +417,11 @@ wavebit.oblique(400., 520., np.radians(105))  # angle between a1 and a2, in radi
 
 They return the same object `lattice=` takes and store no angle, so building one *inside* a
 differentiated function makes the cell's shape a design variable — the off-diagonals are the
-shear and the angle, which no spelling of `period` can express.
+shear and the angle, which no spelling of `period` can express. The two modeling paths do not
+differentiate the same question, though: a raster is held in lattice coordinates, so its basis
+gradient tilts the cell **and shears the pattern with it**, where an analytic shape's absolute
+Cartesian lengths tilt the cell only. They differ by 3.6x on a plain scene. See
+[`docs/oblique-lattice.md`](docs/oblique-lattice.md), "Differentiating the cell".
 
 **Building the layer.** `wavebit.grid` gives the Cartesian coordinates of the raster's pixel
 centres, so a structure can be written in coordinates rather than indices:

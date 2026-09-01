@@ -192,6 +192,21 @@ def test_the_raster_path_differentiates_the_basis_through_its_index_offsets():
     pixel does not change. Measured, that cost ~10% of ``d/d a2x`` on this cell and did not
     shrink with raster resolution, which is what said it was systematic. Rebuilding the
     distance from the returned offsets brings every component under 0.5%.
+
+    **Which derivative this is.** ``grid`` is called once, at ``A``, and then ``loss(M)`` is
+    differentiated -- so the array is held in *lattice* coordinates while the cell moves, and
+    the pattern shears along with it. That is not an oversight here and it is not fixable
+    there: a raster is numbers on indices, so a fixed array has no choice but to drag its
+    pixels when the basis moves. It does mean this path answers a **different question** from
+    the analytic one -- *"tilt the cell and shear the pattern with it"* against *"tilt the cell
+    only"* -- and the two differ by 3.6x on a plain scene. Named and pinned by
+    ``test_the_raster_basis_gradient_is_the_shear_along_one``; see also
+    ``docs/oblique-lattice.md``, "Differentiating the cell".
+
+    This test asserts finiteness and four live components, which is a statement about the
+    *plumbing*. The size of the gradient is checked by
+    ``test_the_basis_gradient_obeys_the_unimodular_chain_rule`` and its meaning by the test
+    named above.
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
@@ -307,6 +322,82 @@ def test_the_method_and_the_free_function_are_one_call():
         A.grid((4, 4), backend=9)
     with pytest.raises(ValueError, match='rows, columns'):
         A.grid((4,))
+
+
+def test_the_raster_basis_gradient_is_the_shear_along_one():
+    """Which of the two lattice-derivatives the raster path computes, named by measurement.
+
+    A raster is held in *lattice* coordinates, so a fixed array drags its pixels when the basis
+    moves: differentiating through one asks *"tilt the cell and shear the pattern with it"*.
+    The analytic path asks *"tilt the cell only"*, because its lengths are absolute Cartesian
+    quantities. Both are legitimate questions and the code says which is which nowhere, so this
+    test says it.
+
+    **The identification is made against an independent path, not against the raster itself.**
+    Shearing the circle along the cell turns it into an ellipse whose semi-axes and angle are
+    the singular values and left singular vectors of ``A(gamma) @ A(gamma0)^-1`` -- and *that*
+    is expressible analytically, staircase-free. At gamma=75 on the scene above, per degree::
+
+        raster jax.grad                              -3.3806e-02
+        analytic FD, shape sheared with the cell     -3.0704e-02     <- 10% away
+        analytic FD, shape held fixed                -9.4996e-03     <- 3.6x away
+
+    Verified stable rather than assumed: over ``truncation_order`` 6/8/10/12/14 crossed with
+    raster 64/128/256, the raster gradient sits **2.8% to 23.7%** from the sheared derivative
+    and **211% to 323%** from the fixed one. It is not stable below that -- at 48 px and
+    ``truncation_order=5`` the two candidates cross (-9.72e-03 against -8.95e-03 and
+    -3.35e-02), which is truncation error rather than a change of meaning, and is why this test
+    is sited at 6/64 and not lower.
+
+    The raster arm is ``jax.grad``, and it agrees with a finite difference over the **frozen**
+    array to 0.7% (-3.3806e-02 against -3.3555e-02), so the AD is a faithful derivative of the
+    loss it was handed. Redrawing the array at each gamma -- the other question, asked of the
+    raster -- does not converge at all: -2.12e-01, -3.25e-01, -7.64e-01 at h = 0.5, 0.25, 0.1
+    degrees, because the redraw flips pixels discretely and the quotient differentiates the
+    staircase. **So the fixed-shape derivative is not reachable from a raster by any means**,
+    which is why this is documented rather than warned about or refused: there is nothing to
+    fall back to on this path, and the fallback is the other path.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+
+    gamma, h = 75.0, 0.5
+    A0 = np.asarray(_cell_at(gamma))
+    X, Y = (np.asarray(c) for c in _cell_at(gamma).grid((_N, _N)))
+    eps = np.where(X ** 2 + Y ** 2 < _R ** 2, _EPS, 1.0)
+
+    def loss(M):
+        s = wavebit.rcwa(backend=1, wavelength=900.0, lattice=M, truncation_order=[6, 6],
+                         top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, thickness=[300.0],
+                         structure=jnp.asarray(eps)[None], factorization='nvf')
+        return jnp.sum(s.solve().T)
+
+    # d/d gamma, in degrees: the chain rule onto the one knob `_cell_at` turns
+    rad = np.radians(gamma)
+    dA = np.array([[0.0, -_L * np.sin(rad)], [0.0, _L * np.cos(rad)]]) * np.pi / 180.0
+    raster = float(np.sum(np.asarray(jax.grad(loss)(jnp.asarray(A0))) * dA))
+
+    def analytic(gamma_deg, shear):
+        A = np.asarray(_cell_at(gamma_deg))
+        if shear:
+            U, sv, _ = np.linalg.svd(A @ np.linalg.inv(A0))
+            shape = dict(type='ellipse', cx=0.0, cy=0.0, lx=2 * _R * sv[0], ly=2 * _R * sv[1],
+                         angle=float(np.arctan2(U[1, 0], U[0, 0])), material=_EPS)
+        else:
+            shape = dict(type='circle', cx=0.0, cy=0.0, lx=2 * _R, material=_EPS)
+        s = wavebit.rcwa(backend=0, wavelength=900.0, lattice=A, truncation_order=[6, 6],
+                         top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, thickness=[300.0],
+                         structure=[dict(background=1.0, shapes=[shape])])
+        return float(np.sum(np.asarray(s.solve().T)))
+
+    def slope(shear):
+        return (analytic(gamma + h, shear) - analytic(gamma - h, shear)) / (2 * h)
+
+    sheared, fixed = slope(True), slope(False)
+    # a degenerate scene, where the two questions had the same answer, would pass the rest
+    assert abs(sheared - fixed) / abs(fixed) > 1.0, (sheared, fixed)
+    assert abs(raster - sheared) / abs(sheared) < 0.25, (raster, sheared)
+    assert abs(raster - fixed) / abs(fixed) > 1.5, (raster, fixed)
 
 
 def test_the_two_hexagonal_spellings_are_one_lattice_and_two_calculations():

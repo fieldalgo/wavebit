@@ -45,7 +45,9 @@ wavebit.oblique(400.0, 520.0, np.radians(105))
 These are spellings and not a new kind of cell — each returns the same object `lattice=` takes,
 and nothing stores an angle afterwards. Which is what makes the angle differentiable: build the
 basis *inside* the function you differentiate and it is a design variable, for the ordinary
-reason any expression is. See "Where the skew actually reaches the code".
+reason any expression is — but the two modeling paths differentiate *different questions*, so
+read "Differentiating the cell" before using one. See also "Where the skew actually reaches the
+code".
 
 **Building the structure.** `wavebit.grid` gives the Cartesian coordinates of the raster's pixel
 centres, so a layer can be written in coordinates rather than indices:
@@ -390,6 +392,78 @@ The same structure as a rectangular supercell agrees to 6.0e-4 and takes 2.9x as
 quoted above: 7.3x is the asymptotic ratio on a converged high-contrast structure, and a metalens
 library at `truncation_order=8` is not in that regime — the order ratio there is 1.71, not 2. Expect ~3x on
 this kind of sweep and ~7x when you genuinely need the harmonics.
+
+## Differentiating the cell — which question each path answers
+
+The basis is a design variable (`Lattice` is a pytree; build it *inside* the differentiated
+function and the angle is a variable for the ordinary reason any expression is). But the two
+modeling paths do not differentiate the same thing, and until 2026-09-01 nothing said so.
+
+**A raster is held in lattice coordinates**, so a fixed array drags its pixels when the cell
+moves. Differentiating through one therefore asks *"tilt the cell **and shear the pattern with
+it**"*. An analytic shape's lengths are absolute Cartesian quantities, so the same
+differentiation there asks *"tilt the cell **only**"*. Both are real questions; they are not
+the same number. At `gamma = 75` on the circle above, `d sum(T) / d gamma` per degree:
+
+| | /deg |
+|---|---|
+| raster `jax.grad` (what `test_the_raster_path_differentiates_the_basis_through_its_index_offsets` computes) | -3.3806e-02 |
+| analytic FD, shape **sheared with the cell** | -3.0704e-02 |
+| analytic FD, shape **held fixed** | -9.4996e-03 |
+
+The middle row is the identification, and it is made against an independent, staircase-free
+path rather than against the raster itself: shearing the circle along the cell makes an ellipse
+whose semi-axes and angle are the singular values and left singular vectors of
+`A(gamma) @ A(gamma0)^-1`, which the analytic path can state exactly. The raster sits 10% from
+it and **3.6x** from the fixed-shape derivative.
+
+Checked for stability rather than asserted from one point: over `truncation_order` 6/8/10/12/14
+crossed with rasters of 64/128/256, the raster gradient is **2.8%–23.7%** from the sheared
+derivative and **211%–323%** from the fixed one. Below that it is not safe to read — at 48 px
+and `truncation_order=5` the two candidates cross (-9.72e-03 against a fixed -8.95e-03 and a
+sheared -3.35e-02), which is truncation error and not a change of meaning. Note also that the
+raster's derivative inherits the staircase: it wobbles about ±12% as the raster doubles
+(-3.4e-02 / -2.7e-02 / -3.1e-02 at 64/128/256) where both analytic arms are smooth.
+
+The raster's `jax.grad` is a *faithful* derivative of the loss it was handed — it agrees with a
+finite difference over the frozen array to 0.7% (-3.3806e-02 against -3.3555e-02). Nothing here
+is a bug.
+
+**Why this is documented rather than warned about or refused.** The `factorization='li'`
+refusal on a skewed raster is the obvious precedent, and it does not carry over; three
+measurements say so.
+
+* *The number is right.* `li` on a skewed cell returns a **wrong** answer to the question asked.
+  The raster's basis gradient is the exact derivative of the function the caller wrote. Refusing
+  a correct derivative because a different one might have been meant is a different act.
+* *There is nothing to fall back to on this path.* Asking the raster the fixed-shape question by
+  redrawing the array at each `gamma` does not converge: -2.12e-01, -3.25e-01, -7.64e-01 at
+  `h` = 0.5, 0.25, 0.1 degrees, because the redraw flips pixels discretely and the quotient
+  differentiates the staircase. The fixed-shape derivative is **not reachable from a raster by
+  any means**; the fallback is the other modeling path, which is what this section says to use.
+* *The condition is not detectable.* A warning would have to know the lattice is the thing being
+  differentiated, and that signal does not exist at the solve. `jax.grad` with respect to
+  **anything** traces the whole solver pytree, and the lattice is a child of it. Instrumented
+  over the full suite, a guard on the stable public predicate (`isinstance(u, jax.core.Tracer)`)
+  fires on **29 tests, 16 of which take no derivative at all** — they are plain `jit`. Narrowing
+  to the differentiation-specific tracer leaves 13 tests, of which only **3** are differentiating
+  the basis; the other 10 differentiate the azimuth, the polarisation, an excitation amplitude or
+  the period. And that narrower predicate is a JAX internal that has already renamed:
+  `jax.interpreters.ad.JVPTracer` no longer matches under `jax.grad` in jax 0.11.0 (the class is
+  `LinearizeTracer`), so the obvious spelling of the guard would silently never fire — the
+  quietest possible failure for something whose whole job is to be loud.
+
+**If you want the fixed-shape derivative, use analytic shapes.** That is not a workaround; it is
+the path whose geometry is stated in Cartesian lengths, so the question is expressible there and
+is not on a raster. This is also the derivative the application family that motivates an oblique
+cell actually needs: monoclinic chiral metasurfaces, where achiral meta-atoms on a cell with
+`phi = 75 deg` give circular dichroism from the lattice alone (Toftul et al., *Phys. Rev. Lett.*
+**133**, 216901 (2024), arXiv:2406.11300), are optimised by sweeping the angle while the
+meta-atoms stay achiral — the shape must **not** shear. A survey for the other side found no
+photonic paper wanting the shear-along derivative; strained and graded structures are aperiodic,
+so RCWA is not the tool for them.
+
+Pinned as `tests/test_lattice_pytree.py::test_the_raster_basis_gradient_is_the_shear_along_one`.
 
 ## Where the skew actually reaches the code
 
