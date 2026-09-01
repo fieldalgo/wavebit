@@ -1128,3 +1128,32 @@ def test_a_magnetic_half_space_is_read():
     # against a true 0.0072 -- the answer of an n = 1.5 substrate.
     assert abs(orders[0][0] - R_a) < 2e-3, f'R {orders[0][0]} against closed form {R_a}'
     assert abs(orders[0][1] - T_a) < 8e-3, f'T {orders[0][1]} against closed form {T_a}'
+
+
+def test_the_default_order_window_follows_the_incidence():
+    """At an angle the propagating set is not centred on zero, and missing one is silent.
+
+    `kx_m = kx_inc + m*wl/period`, so the orders that propagate are those with
+    `|kx_m| <= n` -- a range centred on `-kx_inc`, asymmetric in `m`. A window that assumed
+    symmetry dropped orders on the far side and the only symptom was a short energy sum.
+
+    Measured at 60 degrees into an `n = 2` substrate: order `-2` propagates and carries 7.2 %
+    of the power. The symmetric window reported `sum(R) + sum(T) = 0.928`, with nothing on the
+    number to say an order had been left out -- and `check_physical` cannot see it either,
+    since it only refuses a sum ABOVE one.
+    """
+    theta = np.deg2rad(60.0)
+    eps_bot = wavebit.eps_from_index(2.0)
+    result = solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=eps_bot,
+                        period=[PERIOD], wavelength=WL, tetm='te', theta=theta,
+                        resolution=0.1, n_periods=140)
+    orders = _by_order(result)
+    assert -2 in orders, f'order -2 propagates here and the window is {sorted(orders)}'
+    assert orders[-2][1] > 0.05, (
+        f'T[-2] = {orders[-2][1]}; it carries 7.2 % of the power in the RCWA solve')
+    total = sum(R + T for R, T in orders.values())
+    assert abs(total - 1.0) < 5e-3, (
+        f'R + T = {total}; a short sum is what a dropped propagating order looks like')
+
+    labels = np.asarray(result.orders_u).ravel()
+    assert labels.min() < 0 <= labels.max(), f'window {labels} must straddle the specular order'

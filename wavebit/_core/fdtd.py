@@ -1069,13 +1069,32 @@ def _half_space_kz(eps, kx):
     return np.sqrt(np.asarray(eps, dtype=complex) - np.asarray(kx, dtype=complex) ** 2)
 
 
-def _propagating_half_width(wavelength, period, n_top_sq, n_bot_sq):
-    """The largest ``|m|`` that propagates in either half-space, so the default reports them."""
-    n_max = max(abs(np.sqrt(complex(n_top_sq))), abs(np.sqrt(complex(n_bot_sq))))
-    return int(np.floor(n_max * period / wavelength))
+def _propagating_window(wavelength, period, n_top_sq, n_bot_sq, kx_inc=0.0, ky_inc=0.0):
+    """``(centre, half_width)`` covering every order that propagates in either half-space.
+
+    An order propagates where ``kx_m**2 + ky**2 <= n**2`` with ``kx_m = kx_inc + m*wl/period``,
+    so the set is **centred on ``-kx_inc``, not on zero**, and it is asymmetric in ``m`` at any
+    oblique angle. A window that assumed symmetry silently dropped orders on the far side:
+    measured at 60 degrees into an ``n = 2`` substrate, order ``-2`` propagates and carries
+    7.2 % of the power, and ``sum(R) + sum(T)`` came back as 0.928 with nothing to say why.
+
+    ``ky`` narrows it rather than shifting it -- it is the same for every order, so it eats
+    into the budget ``kx_m`` has left. At ``ky > n`` the half-space carries nothing at all.
+    """
+    step = wavelength / period
+    lo, hi = 0, 0
+    for n_sq in (n_top_sq, n_bot_sq):
+        budget = float(np.real(n_sq)) - float(ky_inc) ** 2
+        if budget <= 0.0:
+            continue                                  # nothing propagates on this side
+        reach = np.sqrt(budget)
+        lo = min(lo, int(np.ceil((-reach - kx_inc) / step)))
+        hi = max(hi, int(np.floor((reach - kx_inc) / step)))
+    centre = int(round(0.5 * (lo + hi)))
+    return centre, max(hi - centre, centre - lo, 0)
 
 
-def _extract(grid, out, half_width, index):
+def _extract(grid, out, half_width, index, centre=0):
     """Per-order Fresnel amplitudes and efficiencies, in ``solve_1d``'s contract.
 
     The amplitudes are referenced where wavebit references them -- ``r`` at the top interface,
@@ -1098,7 +1117,7 @@ def _extract(grid, out, half_width, index):
             f'back with a plausible amplitude (and, on TM, a flipped sign from the half-cell '
             f'sample offset). Raise `resolution`, or ask for fewer orders.')
 
-    m = np.arange(-half_width, half_width + 1)
+    m = np.arange(centre - half_width, centre + half_width + 1)
     tetm = out['tetm']
     # Hy is sampled at the x half-step, Ey at the node.
     xs = (np.arange(nx) + (0.5 if tetm == 'tm' else 0.0)) * grid.dx
@@ -1299,11 +1318,14 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm,
     n_steps = int(np.ceil(n_periods * centre / grid.dt))
     out = _time_loop(grid, name, n_steps, band)
 
+    centre_order = 0
     if truncation_order is None:
         # The SHORTEST wavelength has the most propagating orders, so the default covers the
         # whole band rather than the centre of it.
-        half_width = _propagating_half_width(float(band.min()), period_x,
-                                             eps_top * mu_top, eps_bot * mu_bot)
+        shortest = float(band.min())
+        centre_order, half_width = _propagating_window(
+            shortest, period_x, eps_top * mu_top, eps_bot * mu_bot,
+            kx_inc=grid.kx_inc * shortest / centre, ky_inc=grid.ky_inc * shortest / centre)
     elif hasattr(truncation_order, 'get'):
         half_width = int(truncation_order.get('x', truncation_order.get('u', 0)))
     else:
@@ -1321,14 +1343,14 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm,
 
     results = []
     for index in range(band.size):
-        sub = _extract(grid, out, half_width, index)
+        sub = _extract(grid, out, half_width, index, centre_order)
         # The same tier of check the RCWA path applies: gain out of nothing, or negative
         # power. Every defect this module has had -- an over-conducting PML, a mis-scaled CFS
         # pole, an out-of-band DFT -- announced itself here first, as `R + T` between 1.1
         # and 106.
         check_physical(np, np.asarray(sub.R), np.asarray(sub.T),
                        np.sqrt(eps_top * mu_top))
-        results.append(Result(given=sub, order_window=((0, half_width), (0, 0))))
+        results.append(Result(given=sub, order_window=((centre_order, half_width), (0, 0))))
 
     result = results[0] if single else results
     if not return_diagnostics:
