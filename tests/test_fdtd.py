@@ -1477,35 +1477,95 @@ def test_the_order_window_narrows_with_ky():
     assert half <= half0, f'ky must narrow the window, not widen it ({half} vs {half0})'
 
 
-def test_the_conical_amplitudes_converge_at_second_order():
-    """Two resolutions, because a first-order defect is invisible to any single one.
+#: A conical incidence with no order near a Rayleigh point in either half-space, found by
+#: scanning (theta, phi) for the largest minimum |kz| margin. The default OBLIQUE scene is not
+#: one: its m = -1 order sits at kz_top = 0.286, and a grazing order converges slowly for a
+#: reason that is arithmetic rather than a defect -- `kz = sqrt(n**2 - k_par**2)` has
+#: sensitivity `1/kz`, and the p channel then multiplies by `n/kz` again.
+CLEAN = dict(theta=np.deg2rad(30.0), phi=np.deg2rad(60.0), psi=np.deg2rad(30.0))
 
-    `Ex` sits on the x half-steps and `Ey` on the nodes, so the two monitors need two
-    demodulation kernels. Using one is a per-order phase `exp(-i k0 kx_m dx/2)` -- **exactly
-    first order in dx**, and mostly cancelled in `|r|**2`. Measured, the single-kernel version
-    moves the amplitudes by 6.7e-2 / 3.3e-2 / 1.6e-2 over dz = 20 / 10 / 5 nm, scaling as
-    dx**1.0 to two digits, and **every fixed-tolerance test in this file passed with it in
-    place** -- including the amplitude ones, because the error at 10 nm sits just under a
-    tolerance that has to accommodate the true 1.2e-2.
 
-    So the assertion is on the RATIO between two grids, which is what separates a second-order
-    scheme from a first-order one no matter where the tolerance is set. The true ratio here is
-    3.9 (order 1.98); with one kernel it falls to about 2.
+def _propagates(m, n_sq, scene):
+    kx = np.sin(scene['theta']) * np.cos(scene['phi']) + m * WL / PERIOD
+    ky = np.sin(scene['theta']) * np.sin(scene['phi'])
+    return n_sq - (kx ** 2 + ky ** 2) > 0.0
+
+
+def _amplitude_gap(scene, resolution, ref):
+    """Worst amplitude gap against RCWA, over orders that actually propagate.
+
+    R is compared only where an order propagates above and T only where it propagates below.
+    Anything else is round-off the de-referencing multiplied up -- see the evanescent test.
     """
-    ref = _oblique_rcwa()
+    got = _oblique_fdtd(resolution=resolution, n_periods=200, **scene)
+    worst = 0.0
+    for leg in ('s_inc', 'p_inc', 'given'):
+        for name, n_sq in (('r_s', 1.0), ('r_p', 1.0),
+                           ('t_s', N_BOT ** 2), ('t_p', N_BOT ** 2)):
+            a, b = _channels(got, leg, name), _channels(ref, leg, name)
+            for m in a:
+                if _propagates(m, n_sq, scene):
+                    worst = max(worst, abs(complex(a[m]) - complex(b[m])))
+    return worst
 
-    def gap(resolution):
-        got = _oblique_fdtd(resolution=resolution, n_periods=140)
-        worst = 0.0
-        for leg in ('s_inc', 'p_inc', 'given'):
-            for name in ('r_s', 'r_p', 't_s', 't_p'):
-                a, b = _channels(got, leg, name), _channels(ref, leg, name)
-                worst = max(worst, max(abs(complex(a[m]) - complex(b[m])) for m in a))
-        return worst
 
-    coarse, fine = gap(0.05), gap(0.1)
+def test_the_conical_amplitudes_converge_at_second_order():
+    """On a scene with margin: 5.6e-2 -> 1.3e-2 on halving dz, an order of 2.05.
+
+    **Two things have to be kept out of the metric, and both were in it at first.** An order
+    evanescent in a half-space carries no power there and its amplitude is round-off amplified
+    by de-referencing -- included, `t_s[+1]` reads 3.1e-3 / 3.6e-4 / 6.2e-4 and gets *worse*
+    with resolution. And an order near a Rayleigh point converges slowly for arithmetic
+    reasons: the default scene's m = -1 sits at kz_top = 0.286, where the p channel multiplies
+    by `n/kz` = 3.5 and `kz = sqrt(n**2 - k_par**2)` has sensitivity `1/kz` on top of that.
+    With both in, the run reads 1.58 / 1.37 and looks like a first-order term that is not
+    there. The classical controls at the same angle are 2.02 / 1.78 (TE) and 1.89 / 1.85 (TM),
+    which is what made the difference look real.
+    """
+    ref = _oblique_rcwa(fto=200, **CLEAN)
+    coarse, fine = _amplitude_gap(CLEAN, 0.05, ref), _amplitude_gap(CLEAN, 0.1, ref)
     ratio = coarse / fine
-    assert ratio > 3.2, (
-        f'amplitude error {coarse:.3e} -> {fine:.3e} on halving dz is a ratio of {ratio:.2f}, '
-        f'an order of {np.log2(ratio):.2f}. Second order is 4; a ratio near 2 means a '
-        f'first-order term, and the half-cell x offset on the Ex monitor is where to look.')
+    assert ratio > 3.4, (
+        f'amplitude error {coarse:.3e} -> {fine:.3e} is a ratio of {ratio:.2f}, an order of '
+        f'{np.log2(ratio):.2f}; second order is 4')
+
+
+def test_the_two_monitors_need_two_demodulation_kernels():
+    """`Ex` sits on the x half-steps and `Ey` on the nodes, and one kernel for both is FIRST order.
+
+    The error is a per-order phase `exp(-i k0 kx_m dx/2)`: measured 6.7e-2 / 3.3e-2 / 1.6e-2
+    over dz = 20 / 10 / 5 nm, scaling as dx**1.0 to two digits. It is mostly cancelled in
+    `|r|**2`, and **every fixed-tolerance test in this file passed with it in place** -- at
+    10 nm it sits just under a tolerance that has to accommodate the true 1.2e-2. Only a ratio
+    between two grids separates it: 3.62 here against 2.39 with one kernel.
+
+    **This runs on the default scene and not on `CLEAN`, and the reason is worth stating.**
+    The mutation scales with `|kx_m|`, so the scene that makes the convergence claim cleanest
+    is the one that cannot see the defect: on `CLEAN` the only order propagating in air has
+    `kx_0 = 0.25` and the single-kernel version reads 4.24 against a true 4.15 -- no separation
+    at all. The default scene's m = -1 carries `kx = -0.903`, four times the phase. A scene
+    chosen for margin and a scene chosen for sensitivity are not the same scene.
+    """
+    ref = _oblique_rcwa(fto=200)
+    coarse, fine = _amplitude_gap(OBLIQUE, 0.05, ref), _amplitude_gap(OBLIQUE, 0.1, ref)
+    ratio = coarse / fine
+    assert ratio > 3.0, (
+        f'amplitude error {coarse:.3e} -> {fine:.3e} is a ratio of {ratio:.2f}, an order of '
+        f'{np.log2(ratio):.2f}. A ratio near 2.4 is the single-kernel first-order term.')
+
+
+def test_an_evanescent_order_reports_no_power_and_its_amplitude_is_not_a_number():
+    """R and T are exactly zero there, and the amplitude beside them is amplified round-off.
+
+    Measured on the default scene: order +1 has `k_par**2 = 2.89` against `n_bot**2 = 2.25`, so
+    it is evanescent in BOTH half-spaces -- and its `t_s` gap against RCWA grows from 3.6e-4 to
+    6.2e-4 as the grid is refined, because what is being compared is noise the de-referencing
+    multiplied up. Any convergence metric that maximises over all orders picks it up.
+    """
+    got = _oblique_fdtd(resolution=0.06, n_periods=80)
+    for name, n_sq in (('R_s', 1.0), ('R_p', 1.0), ('T_s', N_BOT ** 2), ('T_p', N_BOT ** 2)):
+        channel = _channels(got, 's_inc', name)
+        for m, value in channel.items():
+            if not _propagates(m, n_sq, OBLIQUE):
+                assert float(np.real(value)) == 0.0, (
+                    f'{name}[{m}] = {value}; the order is evanescent in that half-space')
