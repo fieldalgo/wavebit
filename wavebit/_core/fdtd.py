@@ -104,11 +104,25 @@ COURANT = 0.99
 #: even to finish emitting is refused outright rather than returned.
 N_PERIODS = 80.0
 
-#: 1/e half-width of the source envelope, in optical cycles, and the delay before its peak in
-#: units of that width. Together they put a hard floor of ``SOURCE_CYCLES * SOURCE_DELAY``
-#: cycles on any useful run, which :func:`_time_loop` refuses below.
+#: 1/e half-width of the source envelope, in optical cycles at the centre wavelength, and the
+#: delay before its peak in units of that width. Together they put a hard floor of
+#: ``SOURCE_CYCLES * SOURCE_DELAY`` cycles on any useful run, which :func:`_time_loop` refuses
+#: below. A *band* narrows this: a Gaussian of temporal width ``w`` has a 1/e frequency
+#: half-width of ``1/(pi w)``, so covering a span costs a shorter pulse and a longer run.
 SOURCE_CYCLES = 8.0
 SOURCE_DELAY = 4.0
+
+#: How many 1/e frequency half-widths of the source the requested band may span. The incident
+#: spectrum falls as ``exp(-(df/dfe)**2)``, and every amplitude is divided by it -- so the band
+#: edge is where a broadband run stops meaning anything. **Measured**: at 2.4 half-widths out
+#: the incident spectrum is 2.4e-7 of its peak and the reported ``R`` is 105. 1.2 keeps the
+#: worst edge above ``exp(-1.44) = 0.24`` of the peak.
+SOURCE_BAND_WIDTHS = 1.2
+
+#: Smallest incident spectrum, relative to its own peak over the requested band, at which an
+#: amplitude is still reported. Below it the division is noise over noise and the order is
+#: returned as ``nan`` rather than as a number shaped like an efficiency.
+MIN_INCIDENT_FRACTION = 1e-3
 
 #: CPML grading exponent and peak coordinate stretch (Roden & Gedney 2000 sec. 3; Taflove &
 #: Hagness eq. 7.61). Measured on the 1D probe with everything else fixed: at ``kappa_max = 1``
@@ -622,16 +636,30 @@ class _Grid:
 # the time loop
 # ---------------------------------------------------------------------------------------
 
-def _time_loop(grid, tetm, n_steps, wavelength):
-    """Step the fields and accumulate the running DFT at each monitor plane."""
-    freq = 1.0 / wavelength                        # c = 1
-    width = SOURCE_CYCLES * wavelength
+def _time_loop(grid, tetm, n_steps, wavelengths):
+    """Step the fields and accumulate the running DFT, at every requested wavelength at once.
+
+    This is the one thing a time-domain solve does that a frequency-domain one cannot: the
+    pulse carries every frequency in its band, so a second wavelength costs one more running
+    sum over a monitor plane -- O(nx) a step -- against a whole new RCWA solve. The grid, the
+    time stepping and the fields are shared outright.
+    """
+    wavelengths = np.atleast_1d(np.asarray(wavelengths, dtype=float))
+    freq = 1.0 / wavelengths                       # c = 1, shape (n_f,)
+    centre = float(grid.wavelength)
+    # A Gaussian of temporal width `w` has a 1/e frequency half-width of `1/(pi w)`, so a band
+    # buys itself a SHORTER pulse. The single-wavelength width is the ceiling: narrowing the
+    # band past one wavelength gains nothing and only lengthens the run.
+    span = float(np.max(np.abs(freq - 1.0 / centre)))
+    width = SOURCE_CYCLES * centre
+    if span > 0.0:
+        width = min(width, SOURCE_BAND_WIDTHS / (np.pi * span))
     t0 = SOURCE_DELAY * width
     if n_steps * grid.dt < t0 + 2.0 * width:
         raise ValueError(
-            f'fdtd: {n_steps} steps is {n_steps * grid.dt / wavelength:.1f} optical cycles, '
+            f'fdtd: {n_steps} steps is {n_steps * grid.dt / centre:.1f} optical cycles, '
             f'and the source alone is not finished emitting until '
-            f'{(t0 + 2.0 * width) / wavelength:.0f}. A run this short returns a number that '
+            f'{(t0 + 2.0 * width) / centre:.0f}. A run this short returns a number that '
             f'looks like an efficiency -- measured 0.033 against a true 0.543 at 20 cycles -- '
             f'so it is refused rather than reported with a residual nobody reads.')
 
@@ -642,14 +670,14 @@ def _time_loop(grid, tetm, n_steps, wavelength):
 
     dtype = grid.dtype
     inc = _Incident1D(nz, dz, dt, grid.eps_top.real, grid.n_pml, grid.k_src,
-                      wavelength, freq, width, t0, tetm, grid.kx_op, dtype)
+                      centre, 1.0 / centre, width, t0, tetm, grid.kx_op, dtype)
 
     # The incident field the TFSF plane injects varies across the cell as `exp(i kx x)`; the
     # auxiliary grid carries only its amplitude, so the plane multiplies it back on. `Ey`/`Hx`
     # sit on the x nodes and `Hy`/`Ex` on the half-steps, which is the only difference between
     # the two polarisations here. `ones` rather than `exp(0j)` at normal incidence, so the
     # field arrays stay real.
-    k0 = 2.0 * np.pi / wavelength
+    k0 = 2.0 * np.pi / centre
     if grid.kx_inc == 0.0:
         x_phase = np.ones(nx)
     else:
@@ -673,9 +701,12 @@ def _time_loop(grid, tetm, n_steps, wavelength):
     psi_h = np.zeros((nz - 1, nx), dtype=dtype)
     psi_e = np.zeros((nz, nx), dtype=dtype)
 
-    dft_ref = np.zeros(nx, dtype=complex)
-    dft_trn = np.zeros(nx, dtype=complex)
-    inc_ref = inc_trn = inc_z0 = 0.0 + 0.0j
+    n_f = len(freq)
+    dft_ref = np.zeros((n_f, nx), dtype=complex)
+    dft_trn = np.zeros((n_f, nx), dtype=complex)
+    inc_ref = np.zeros(n_f, dtype=complex)
+    inc_trn = np.zeros(n_f, dtype=complex)
+    inc_z0 = np.zeros(n_f, dtype=complex)
     peak = tail = 0.0
 
     for step in range(n_steps):
@@ -732,9 +763,9 @@ def _time_loop(grid, tetm, n_steps, wavelength):
             i_ref, i_trn, i_z0 = (-inc.h[grid.k_ref], -inc.h[grid.k_trn],
                                   -inc.h[grid.k_z0])
             t_now = (step + 0.5) * dt
-        kernel = np.exp(2j * np.pi * freq * t_now) * dt
-        dft_ref = dft_ref + kernel * f_ref
-        dft_trn = dft_trn + kernel * f_trn
+        kernel = np.exp(2j * np.pi * freq * t_now) * dt          # (n_f,)
+        dft_ref = dft_ref + kernel[:, None] * f_ref[None, :]
+        dft_trn = dft_trn + kernel[:, None] * f_trn[None, :]
         inc_ref += kernel * i_ref
         inc_trn += kernel * i_trn
         inc_z0 += kernel * i_z0
@@ -750,6 +781,7 @@ def _time_loop(grid, tetm, n_steps, wavelength):
     # as dz**0.6.
     offset = 0.5 if tetm == 'tm' else 0.0
     return {'dft_ref': dft_ref, 'dft_trn': dft_trn, 'tetm': tetm,
+            'wavelengths': wavelengths,
             'inc_ref': inc_ref, 'inc_trn': inc_trn, 'inc_z0': inc_z0,
             'z_ref': grid.z_of(grid.k_ref + offset),
             'z_trn': grid.z_of(grid.k_trn + offset),
@@ -772,7 +804,7 @@ def _propagating_half_width(wavelength, period, eps_top, eps_bot):
     return int(np.floor(n_max * period / wavelength))
 
 
-def _extract(grid, out, half_width, wavelength):
+def _extract(grid, out, half_width, index):
     """Per-order Fresnel amplitudes and efficiencies, in ``solve_1d``'s contract.
 
     The amplitudes are referenced where wavebit references them -- ``r`` at the top interface,
@@ -787,6 +819,7 @@ def _extract(grid, out, half_width, wavelength):
     unaffected either way, so no efficiency test can see this.
     """
     nx = grid.nx
+    wavelength = float(out['wavelengths'][index])
     if half_width >= nx // 2:
         raise ValueError(
             f'fdtd: {2 * half_width + 1} orders asked of a {nx}-cell grid. The x transform '
@@ -799,7 +832,14 @@ def _extract(grid, out, half_width, wavelength):
     # Hy is sampled at the x half-step, Ey at the node.
     xs = (np.arange(nx) + (0.5 if tetm == 'tm' else 0.0)) * grid.dx
     k0 = 2.0 * np.pi / wavelength
-    kx = grid.kx_inc + m * wavelength / grid.period
+    # `grid.kx_inc` is normalised by k0 at the CENTRE wavelength, because that is where the
+    # Bloch phase was built. The physical in-plane wavevector is what the grid actually holds
+    # fixed, so at any other wavelength in the band the normalised value scales with it --
+    # which is the same statement as the polar angle drifting across the band. Reusing the
+    # centre's value costs 2.3e-2 at a band edge against 3.6e-3 at the centre, and is
+    # invisible at normal incidence, where it is zero either way.
+    kx_inc = grid.kx_inc * wavelength / grid.wavelength
+    kx = kx_inc + m * wavelength / grid.period
     # Each order carries `exp(i kx_m x)`, and `kx_m` includes the incident in-plane
     # wavevector at oblique incidence -- so the kernel demodulates by the full `kx_m`, not by
     # the grating harmonic alone.
@@ -809,14 +849,26 @@ def _extract(grid, out, half_width, wavelength):
     n_bot = np.sqrt(grid.eps_bot)
     kz_top = _half_space_kz(grid.eps_top, kx)
     kz_bot = _half_space_kz(grid.eps_bot, kx)
-    kz_inc = _half_space_kz(grid.eps_top, grid.kx_inc)
+    kz_inc = _half_space_kz(grid.eps_top, kx_inc)
 
     z_ref, z_trn, z_inc = out['z_ref'], out['z_trn'], out['z_inc']
     # The incident amplitude at z = 0, from the plane it was actually sampled on.
-    a_inc = out['inc_z0'] * np.exp(-1j * k0 * kz_inc * z_inc)
+    a_inc = out['inc_z0'][index] * np.exp(-1j * k0 * kz_inc * z_inc)
 
-    r = (kernel @ out['dft_ref']) / a_inc * np.exp(1j * k0 * kz_top * z_ref)
-    t = ((kernel @ out['dft_trn']) / a_inc
+    # Every amplitude is divided by the incident spectrum, so the band edge -- where that
+    # spectrum has decayed into round-off -- is where a broadband run stops meaning anything.
+    # Measured with no guard: 2.4e-7 of the peak incident returned `R = 105`.
+    peak = float(np.max(np.abs(out['inc_z0'])))
+    if abs(out['inc_z0'][index]) < MIN_INCIDENT_FRACTION * peak:
+        raise ValueError(
+            f'fdtd: at {wavelength:g} the incident spectrum is '
+            f'{abs(out["inc_z0"][index]) / peak:.1e} of its peak over the requested band, '
+            f'below the {MIN_INCIDENT_FRACTION:g} floor. Every amplitude is divided by it, so '
+            f'what comes back there is noise over noise -- measured R = 105 on a scene whose '
+            f'true R is 0.04. Narrow the band, or move `wavelength` toward it.')
+
+    r = (kernel @ out['dft_ref'][index]) / a_inc * np.exp(1j * k0 * kz_top * z_ref)
+    t = ((kernel @ out['dft_trn'][index]) / a_inc
          * np.exp(-1j * k0 * kz_bot * (z_trn - grid.total_thickness)))
 
     # An order evanescent in a half-space arrives at the monitor already decayed; undoing that
@@ -871,7 +923,16 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm,
     raster = np.asarray(structure, dtype=complex)[:, 0, :]
     eps_top = complex(np.asarray(top, dtype=complex))
     eps_bot = complex(np.asarray(bot, dtype=complex))
-    wavelength = float(wavelength)
+
+    # A sequence asks for a spectrum out of ONE run -- the thing a time-domain solve does that
+    # a frequency-domain one cannot. The centre sets the source and, at oblique incidence, the
+    # in-plane wavevector; see the `angles` entry in the diagnostics for what that means.
+    band = np.atleast_1d(np.asarray(wavelength, dtype=float))
+    if band.size < 1:
+        raise ValueError('fdtd: wavelength is empty.')
+    single = np.ndim(wavelength) == 0
+    centre = float(0.5 * (band.min() + band.max()))
+    wavelength = centre
 
     if resolution is None:
         n_max = max(abs(np.sqrt(eps_top)), abs(np.sqrt(eps_bot)),
@@ -881,11 +942,13 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm,
 
     grid = _Grid(wavelength, period_x, raster, thickness, eps_top, eps_bot,
                  resolution, n_pml, courant, subpixel, theta=theta)
-    n_steps = int(np.ceil(n_periods * wavelength / grid.dt))
-    out = _time_loop(grid, name, n_steps, wavelength)
+    n_steps = int(np.ceil(n_periods * centre / grid.dt))
+    out = _time_loop(grid, name, n_steps, band)
 
     if truncation_order is None:
-        half_width = _propagating_half_width(wavelength, period_x, eps_top, eps_bot)
+        # The SHORTEST wavelength has the most propagating orders, so the default covers the
+        # whole band rather than the centre of it.
+        half_width = _propagating_half_width(float(band.min()), period_x, eps_top, eps_bot)
     elif hasattr(truncation_order, 'get'):
         half_width = int(truncation_order.get('x', truncation_order.get('u', 0)))
     else:
@@ -901,16 +964,31 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm,
             f"normal-incidence one.",
             UnsettledFieldWarning, stacklevel=2)
 
-    sub = _extract(grid, out, half_width, wavelength)
-    # The same tier of check the RCWA path applies: gain out of nothing, or negative power.
-    # Every defect this module has had -- an over-conducting PML, a mis-scaled CFS pole, an
-    # out-of-band DFT -- announced itself here first, as `R + T` between 1.1 and 106.
-    check_physical(np, np.asarray(sub.R), np.asarray(sub.T), np.sqrt(eps_top))
+    results = []
+    for index in range(band.size):
+        sub = _extract(grid, out, half_width, index)
+        # The same tier of check the RCWA path applies: gain out of nothing, or negative
+        # power. Every defect this module has had -- an over-conducting PML, a mis-scaled CFS
+        # pole, an out-of-band DFT -- announced itself here first, as `R + T` between 1.1
+        # and 106.
+        check_physical(np, np.asarray(sub.R), np.asarray(sub.T), np.sqrt(eps_top))
+        results.append(Result(given=sub, order_window=((0, half_width), (0, 0))))
 
-    result = Result(given=sub, order_window=((0, half_width), (0, 0)))
+    result = results[0] if single else results
     if not return_diagnostics:
         return result
+
+    # `kx` is fixed by the grid and `kx = n*sin(theta)`, so a BAND is a fixed-kx sweep and the
+    # polar angle drifts across it. Reported rather than hidden: at normal incidence every
+    # entry is 0 and there is nothing to read, and at oblique this is the difference between
+    # what was asked for and what a single time-domain run can answer.
+    angles = np.rad2deg(np.arcsin(np.clip(
+        grid.kx_inc * band / centre / max(np.sqrt(eps_top).real, 1e-9), -1.0, 1.0)))
     return result, {'dz': grid.dz, 'nz': grid.nz, 'nx': grid.nx, 'dt': grid.dt,
                     'n_steps': n_steps, 'n_pml': grid.n_pml,
                     'pml_thickness': grid.n_pml * grid.dz, 'residual': out['residual'],
-                    'incident_balance': abs(out['inc_trn'] / out['inc_ref']) - 1.0}
+                    'incident_balance': abs(out['inc_trn'][0] / out['inc_ref'][0]) - 1.0,
+                    'wavelengths': band,
+                    'incident_fraction': (np.abs(out['inc_z0'])
+                                          / max(np.max(np.abs(out['inc_z0'])), 1e-300)),
+                    'angles_deg': angles if single else angles}

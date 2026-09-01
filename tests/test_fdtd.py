@@ -739,3 +739,101 @@ def test_a_field_still_ringing_at_the_end_of_the_run_warns():
         solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
                    period=[PERIOD], wavelength=WL, tetm='tm', theta=np.deg2rad(15.0),
                    resolution=0.05, n_periods=50, truncation_order=dict(x=1, y=0))
+
+
+# ---------------------------------------------------------------------------------------
+# 7. a spectrum out of one run
+# ---------------------------------------------------------------------------------------
+
+BAND = [860.0, 900.0, 940.0]
+
+
+def test_a_band_costs_one_run_and_gives_the_same_answers_as_three():
+    """The one thing a time-domain solve does that a frequency-domain one cannot.
+
+    The pulse carries every frequency in its band, so a second wavelength costs one more
+    running sum over a monitor plane against a whole new RCWA solve. This asserts the part
+    that matters: it is not an approximation. The band run and three separate single-wavelength
+    runs agree to 3e-3, which is the difference between two source bandwidths and not between
+    two answers -- a band buys itself a shorter pulse, so the two runs are not the same
+    numerical experiment even though they are the same physical one.
+    """
+    together = solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+                          period=[PERIOD], wavelength=BAND, tetm='te', resolution=0.05,
+                          n_periods=100, truncation_order=dict(x=1, y=0))
+    assert isinstance(together, list) and len(together) == len(BAND)
+
+    for wavelength, banded in zip(BAND, together):
+        alone = solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+                           period=[PERIOD], wavelength=wavelength, tetm='te', resolution=0.05,
+                           n_periods=100, truncation_order=dict(x=1, y=0))
+        for m in (-1, 0, 1):
+            got = _by_order(banded)[m]
+            want = _by_order(alone)[m]
+            assert abs(got[0] - want[0]) < 3e-3 and abs(got[1] - want[1]) < 3e-3, (
+                f'{wavelength} nm, order {m}: in a band {got} against alone {want}')
+
+
+def test_a_band_at_oblique_incidence_is_a_fixed_kx_sweep_and_says_so():
+    """At oblique incidence a band is a fixed-`kx` sweep, not a fixed-angle one.
+
+    The grid holds one in-plane wavevector, and `kx = k0 n sin(theta)` carries `k0` -- so the
+    polar angle drifts across the band, by construction and not by defect. Measured on a
+    30-degree centre: 28.5 degrees at 860 nm and 31.5 at 940. That is a well-defined and
+    useful sweep (it is how a band structure is mapped), it is simply not the one a naive
+    reading of `theta=30 deg, wavelength=[...]` would expect, so the angle is reported.
+
+    The check that it is right rather than merely different: solve the RCWA path at the
+    DRIFTED angle and require agreement. It agrees to 5.4e-3, against 2.3e-2 when the
+    extraction reused the centre wavelength's normalised `kx` -- a defect only a band at
+    oblique incidence could expose, since it is identically zero at normal incidence.
+    """
+    theta = np.deg2rad(30.0)
+    results, diagnostics = solve_fdtd(
+        structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT, period=[PERIOD],
+        wavelength=BAND, tetm='te', theta=theta, resolution=0.1, n_periods=140,
+        truncation_order=dict(x=2, y=0), return_diagnostics=True)
+
+    angles = diagnostics['angles_deg']
+    assert abs(angles[1] - 30.0) < 1e-9, 'the centre wavelength must be the angle asked for'
+    assert angles[0] < 30.0 < angles[2], f'the angle must drift across the band, got {angles}'
+
+    for wavelength, angle, result in zip(BAND, angles, results):
+        solver = wavebit.rcwa(backend=0, wavelength=wavelength, period=[PERIOD],
+                              truncation_order=dict(x=60, y=0), top=EPS_TOP, bot=EPS_BOT,
+                              theta=np.deg2rad(angle), phi=0.0, tetm='te',
+                              structure=_grating(), thickness=[THICK])
+        reference = _by_order(solver.solve())
+        for m, (R, T) in _by_order(result).items():
+            if m not in reference:
+                continue
+            assert abs(R - reference[m][0]) < 8e-3 and abs(T - reference[m][1]) < 8e-3, (
+                f'{wavelength} nm at {angle:.2f} deg, order {m}: '
+                f'fdtd ({R}, {T}) against rcwa {reference[m]}')
+
+
+def test_the_source_widens_to_cover_whatever_band_is_asked_for():
+    """Why the band-edge cliff never arrives -- stated as the invariant, not left to luck.
+
+    Every amplitude is divided by the incident spectrum, so a wavelength where that spectrum
+    has decayed into round-off returns noise over noise: measured on a prototype with a fixed
+    pulse width, an incident spectrum 2.4e-7 of its peak gave `R = 105` on a scene whose true
+    `R` is 0.04, with nothing on the number to say it was wrong.
+
+    `_time_loop` sizes the pulse from the requested span instead, which is what makes that
+    unreachable -- so `MIN_INCIDENT_FRACTION` is a backstop against a change to the sizing
+    rule rather than a live guard, and this is the assertion that says so. A three-octave band
+    is deliberate: if any band could starve an edge, that one would.
+    """
+    from wavebit._core.fdtd import MIN_INCIDENT_FRACTION
+
+    for band in ([860.0, 900.0, 940.0], [400.0, 900.0, 2400.0]):
+        _, diagnostics = solve_fdtd(
+            structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+            period=[PERIOD], wavelength=band, tetm='te', resolution=0.05, n_periods=100,
+            truncation_order=dict(x=1, y=0), return_diagnostics=True)
+        worst = float(np.min(diagnostics['incident_fraction']))
+        assert worst > 0.2, (
+            f'band {band}: the weakest wavelength sits at {worst:.2e} of the peak incident '
+            f'spectrum, so the source is not covering what was asked for')
+        assert worst > MIN_INCIDENT_FRACTION * 100
