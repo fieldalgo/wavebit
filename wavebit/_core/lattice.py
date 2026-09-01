@@ -122,6 +122,38 @@ class Lattice:
     def __getitem__(self, key):
         return self.columns[key]
 
+    def grid(self, shape, backend=0, dtype=None):
+        """:func:`grid` on this cell -- ``A.grid((256, 256))``, the basis named once.
+
+        Identical to ``wavebit.grid(shape, lattice=A)`` in every respect, and it exists for the
+        naming and nothing else: the lattice appears **twice** in a raster workflow, once here
+        and once at ``lattice=`` on the solver, and the only way that goes wrong is the two
+        disagreeing. Measured on a 64-px raster of a radius-100 circle in a 640-unit cell,
+        drawn at one cell and solved at another::
+
+            grid's cell   solve's cell   what is actually solved
+            -----------   ------------   -----------------------
+            90 deg        90 deg         a circle,   1.00:1
+            90 deg        20 deg         an ellipse, 5.67:1
+            20 deg        90 deg         an ellipse, 5.60:1
+            20 deg        20 deg         a circle,   1.01:1
+
+        Only the diagonal is a circle. The *angle* is irrelevant -- **sameness** is the whole
+        rule -- and the off-diagonal cases are the dangerous ones, because the top-right one is
+        exactly what a caller who swaps ``lattice=`` and reuses the array gets: ``sum(T)`` moves
+        0.157 -> 0.997 with no error, no warning, and energy conserved throughout. Pinned as
+        ``tests/test_lattice_pytree.py::test_the_two_uses_of_a_lattice_have_to_be_the_same_one``.
+
+        **A nudge, not a guarantee, and it cannot be made one.** ``wavebit.grid(shape,
+        lattice=B)`` still exists and still answers; this only makes the agreeing spelling the
+        shorter one. Nothing downstream can catch the disagreement either, because what comes
+        back is a pair of ordinary coordinate arrays and the first ``np.where`` consumes them --
+        a raster is numbers on indices, and which cell it was drawn in is not among them. So the
+        rule the naming is meant to carry has to be stated too: **change the cell and the array
+        has to be drawn again.**
+        """
+        return grid(shape, lattice=self, backend=backend, dtype=dtype)
+
     def __repr__(self):
         u, v = (np.asarray(x, dtype=float) for x in (self.u, self.v))
         if self.axis_aligned:                       # what `period=(Lx, Ly)` spells
@@ -407,6 +439,12 @@ def grid(shape, period=None, lattice=None, backend=0, dtype=None):
     ``shape`` is ``(rows, columns)``, read as numpy reads it. Rows run along ``a2`` and columns
     along ``a1`` -- y and x on a rectangular cell, and neither of those on a skewed one, which
     is why the return is coordinates rather than axis names.
+
+    **Prefer :meth:`Lattice.grid` where the cell is already named.** ``A.grid(shape)`` is this
+    function with ``lattice=A``, and it spells the basis once instead of twice -- which matters
+    because the *other* use of it is ``lattice=A`` on the solver, and a raster drawn on one cell
+    and solved on another is a different structure, silently. That method's docstring has the
+    measurement and the limits of the nudge.
 
     Exactly one of ``period`` / ``lattice``; ``backend`` matches :func:`wavebit.rcwa`
     (0 NumPy, 1 JAX, 2 PyTorch). ``dtype`` defaults to the backend's float64.

@@ -52,9 +52,14 @@ centres, so a layer can be written in coordinates rather than indices:
 
 ```python
 A = wavebit.hexagonal(400.0)
-X, Y = wavebit.grid((256, 256), lattice=A)
+X, Y = A.grid((256, 256))                      # == wavebit.grid((256, 256), lattice=A)
 layer = np.where(X ** 2 + Y ** 2 < 90.0 ** 2, 12.25, 1.0)
 ```
+
+`A.grid(shape)` is the free function with `lattice=A`, and it is the spelling to prefer for one
+reason: the cell is needed **twice** — here, to place the pixels, and at `lattice=` on the
+solver — and the only way that goes wrong is the two disagreeing. See "Two uses of one lattice"
+below for what the disagreement costs.
 
 **The cell is centred on the origin**, so the pillar above needs no arithmetic to be centred.
 That matters more than it looks here: a pillar sits at the *lattice point* in most
@@ -84,7 +89,7 @@ and energy still conserves to 1e-15 because the NVF assembly is Hermitian whatev
 says. The way to write it:
 
 ```python
-X, Y = wavebit.grid((ny, nx), lattice=A)         # Cartesian position of every pixel
+X, Y = A.grid((ny, nx))                          # Cartesian position of every pixel
 ```
 
 then test membership in Cartesian space, with **minimum image over the lattice** (`i*a1 + j*a2`
@@ -104,6 +109,38 @@ feature is large enough that a neighbour's surface reaches into the sampled cell
 a disc at `r/a = 0.45`, 21% of the surface band was more than 0.05 out and the solve was
 1.1e-3 from the raster path, which the fix brings to 5e-6. Energy conserved to 1e-12 either
 way, and an axis-aligned cell is bit-identical, which is why nothing caught it.
+
+## Two uses of one lattice
+
+The cell is needed **twice** in a raster workflow — once by `grid`, to place the pixels, and
+once by `rcwa`, to solve them — and the only way that goes wrong is the two disagreeing.
+`grid` returns genuine Cartesian `X`, `Y`; the lattice is not in its output, it is the
+*conversion*, because the array holds pixel indices and `r = (u-0.5)*a1 + (v-0.5)*a2` is the
+only thing that places them. Same indices, different basis, different points.
+
+Measured on a genuine Cartesian circle of radius 100 in a 640-unit cell at 64 px, drawing at one
+cell and solving at another:
+
+| grid's cell | solve's cell | what is solved | `sum(T)` |
+|---|---|---|---|
+| 90 deg | 90 deg | a circle, 1.00:1 | 0.157 |
+| 90 deg | 20 deg | **an ellipse, 5.67:1** | 0.997 |
+| 20 deg | 90 deg | **an ellipse, 5.60:1** | 0.532 |
+| 20 deg | 20 deg | a circle, 1.01:1 | 0.288 |
+
+Only the diagonal is a circle. **The angle is irrelevant; sameness is the whole rule.** The
+second row is the dangerous one, because it is what a caller who swaps `lattice=` and reuses
+the array gets — `sum(T)` from 0.157 to 0.997 with no error, no warning, and energy conserved
+throughout. It reads as a lattice effect, and the lattice effect and the *shape deformed into
+an ellipse* effect are mixed together with nothing separating them.
+
+`A.grid(shape)` (`Lattice.grid`) is the same call as `wavebit.grid(shape, lattice=A)` with the
+basis named once, which is the whole of what it is for. **It is a nudge and not a guarantee:**
+`wavebit.grid(shape, lattice=B)` still exists and still answers, and provenance cannot be
+attached to the array either — the first `np.where` turns the coordinates into a permittivity
+raster, and a raster is numbers on indices with no record of the cell it was drawn in. So the
+rule has to be carried by the reader: **change the cell and redraw the array.** Pinned as
+`tests/test_lattice_pytree.py::test_the_two_uses_of_a_lattice_have_to_be_the_same_one`.
 
 ## What it buys
 

@@ -211,6 +211,104 @@ def test_the_raster_path_differentiates_the_basis_through_its_index_offsets():
     assert np.count_nonzero(np.abs(g) > 1e-12) == 4, g
 
 
+# ------------------------------------------------- one lattice, two uses: `grid` and `rcwa`
+
+#: The scene both of the next two tests are sited on: a genuine Cartesian circle in a cell that
+#: is square at 90 degrees and strongly skewed at 20, where a raster read on the wrong basis is
+#: an ellipse rather than a slightly-wrong circle.
+_L, _N, _R, _EPS = 640.0, 64, 100.0, 12.25
+
+
+def _cell_at(gamma_deg, length=_L):
+    """``|a1| = |a2| = length`` with ``gamma`` between them -- one knob, so a derivative is one."""
+    g = np.radians(gamma_deg)
+    return wavebit.oblique(length, length, g)
+
+
+def _sum_t(basis, eps, truncation=6):
+    s = wavebit.rcwa(backend=0, wavelength=900.0, lattice=basis, truncation_order=[truncation] * 2,
+                     top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, thickness=[300.0],
+                     structure=np.asarray(eps)[None], factorization='nvf')
+    return float(np.sum(np.asarray(s.solve().T)))
+
+
+def _aspect_of_the_lit_pixels(eps, basis):
+    """How round the *solved* structure is: the lit pixels placed on ``basis``, as a ratio.
+
+    Read off the covariance rather than by fitting a circle, so it needs no centre and no
+    threshold. A round feature gives 1; the number is the axis ratio of the ellipse of inertia.
+    """
+    A = np.asarray(basis)
+    t = (np.arange(_N) + 0.5) / _N - 0.5
+    U, V = np.meshgrid(t, t)
+    X, Y = U * A[0, 0] + V * A[0, 1], U * A[1, 0] + V * A[1, 1]
+    lit = np.asarray(eps) > 1.0
+    w = np.linalg.eigvalsh(np.cov(np.stack([X[lit], Y[lit]])))
+    return float(np.sqrt(w[1] / w[0]))
+
+
+def test_the_two_uses_of_a_lattice_have_to_be_the_same_one():
+    """The cell is needed twice -- to place the pixels and to solve them -- and only sameness saves it.
+
+    ``grid`` returns genuine Cartesian coordinates; the lattice is not in the output, it is the
+    *conversion*, because the array holds pixel indices and ``r = (u-0.5)*a1 + (v-0.5)*a2`` is
+    the only thing that places them. So the same array means a different structure under a
+    different basis, and the failure mode is the two uses diverging. Measured here, on a
+    radius-100 Cartesian circle in a 640-unit cell at 64 px::
+
+        grid's cell   solve's cell   aspect   sum(T)
+        -----------   ------------   ------   -----
+        90 deg        90 deg          1.00    0.157
+        90 deg        20 deg          5.67    0.997
+        20 deg        90 deg          5.60    0.532
+        20 deg        20 deg          1.01    0.288
+
+    Only the diagonal is round -- **the angle is irrelevant and sameness is the whole rule.**
+    The top-right row is the dangerous one because it is what a caller who swaps ``lattice=``
+    and reuses the array gets: ``sum(T)`` 0.157 -> 0.997, no error, no warning, and energy
+    conserved throughout, which is why nothing downstream can be made to catch it.
+
+    :meth:`Lattice.grid` exists for this and only this. It is a nudge, not a guarantee -- the
+    free function still takes any ``lattice=`` -- and provenance cannot be attached to the
+    array either, because the first ``np.where`` turns the coordinates into permittivity and
+    there is nothing left to carry a tag.
+    """
+    drawn = {g: np.where(np.asarray(_cell_at(g).grid((_N, _N))[0]) ** 2
+                         + np.asarray(_cell_at(g).grid((_N, _N))[1]) ** 2 < _R ** 2, _EPS, 1.0)
+             for g in (90, 20)}
+
+    aspect = {(g, s): _aspect_of_the_lit_pixels(drawn[g], _cell_at(s))
+              for g in (90, 20) for s in (90, 20)}
+    assert aspect[(90, 90)] == pytest.approx(1.00, abs=0.02)
+    assert aspect[(20, 20)] == pytest.approx(1.01, abs=0.02)
+    assert aspect[(90, 20)] == pytest.approx(5.67, rel=0.02)      # an ellipse, not a circle
+    assert aspect[(20, 90)] == pytest.approx(5.60, rel=0.02)
+
+    # ... and it is not a small perturbation of the answer either
+    agree = _sum_t(_cell_at(90), drawn[90])
+    diverge = _sum_t(_cell_at(20), drawn[90])
+    assert agree == pytest.approx(0.157, abs=0.01)
+    assert diverge == pytest.approx(0.997, abs=0.01)
+
+
+def test_the_method_and_the_free_function_are_one_call():
+    """``A.grid(shape)`` is ``wavebit.grid(shape, lattice=A)``, to the byte, on every spelling."""
+    for A in (wavebit.hexagonal(400.0), wavebit.rectangular(700.0, 1100.0),
+              wavebit.oblique(400.0, 520.0, np.radians(105.0)), as_lattice(lattice=SHEAR)):
+        by_method = [np.asarray(c).tobytes() for c in A.grid((9, 13))]
+        by_function = [np.asarray(c).tobytes() for c in wavebit.grid((9, 13), lattice=A)]
+        assert by_method == by_function, A
+
+    # the keywords ride through rather than being quietly dropped
+    A = wavebit.hexagonal(400.0)
+    assert [np.asarray(c).tobytes() for c in A.grid((5, 7), dtype=np.float32)] == \
+        [np.asarray(c).tobytes() for c in wavebit.grid((5, 7), lattice=A, dtype=np.float32)]
+    with pytest.raises(ValueError, match='backend'):
+        A.grid((4, 4), backend=9)
+    with pytest.raises(ValueError, match='rows, columns'):
+        A.grid((4,))
+
+
 def test_the_two_hexagonal_spellings_are_one_lattice_and_two_calculations():
     """60 and 120 degrees generate the same lattice; they do not truncate the same way.
 

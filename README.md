@@ -424,9 +424,17 @@ centres, so a structure can be written in coordinates rather than indices:
 
 ```python
 A = wavebit.hexagonal(400.)
-X, Y = wavebit.grid((256, 256), lattice=A)
+X, Y = A.grid((256, 256))                       # == wavebit.grid((256, 256), lattice=A)
 layer = np.where(X ** 2 + Y ** 2 < 90. ** 2, 12.25, 1.)
 ```
+
+Write it as `A.grid(...)` and pass the same `A` to `lattice=`. The cell is needed in **two**
+places — to place the pixels and to solve them — and a raster drawn on one cell and solved on
+another is a different structure with nothing to say so: on a 64-px circle, drawing at 90
+degrees and solving at 20 gives a 5.67:1 ellipse and moves `sum(T)` from 0.157 to 0.997, energy
+conserved throughout. Naming the basis once is a nudge and not a guarantee — the free function
+still takes any `lattice=` — because the array that comes back is numbers on indices and carries
+no record of the cell it was drawn in. **Change the cell and redraw the array.**
 
 The cell is centred at the origin, so a centred pillar takes no arithmetic — the same `0` a
 shape's `cx` / `cy` and `reconstruct_field`'s `sample_x` / `sample_y` use.
