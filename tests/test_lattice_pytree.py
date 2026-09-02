@@ -568,9 +568,16 @@ def test_the_raster_basis_gradient_is_the_shear_along_one():
     loss it was handed. Redrawing the array at each gamma -- the other question, asked of the
     raster -- does not converge at all: -2.12e-01, -3.25e-01, -7.64e-01 at h = 0.5, 0.25, 0.1
     degrees, because the redraw flips pixels discretely and the quotient differentiates the
-    staircase. **So the fixed-shape derivative is not reachable from a raster by any means**,
-    which is why this is documented rather than warned about or refused: there is nothing to
-    fall back to on this path, and the fallback is the other path.
+    staircase. That is a fact about a **binary** raster and not about rasters: smoothing the
+    indicator over about one pixel makes the redraw differentiable, and ``jax.grad`` then agrees
+    with a finite difference to **0.54%** (-8.0137e-03 against -7.9710e-03 per degree, float64).
+    This docstring claimed until 2026-09-02 that the fixed-shape derivative was "not reachable
+    from a raster by any means"; it is reachable, and saying otherwise told readers not to try
+    something that works. What the smoothing costs is a separate and still unmeasured question
+    -- see ``docs/oblique-lattice.md``, "What is binary and what is not".
+
+    None of that changes what *this* test pins, which is that the shipped raster path, handed a
+    held array, answers the shear-along question.
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp

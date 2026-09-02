@@ -497,9 +497,9 @@ than asserts — at `gamma = 60`, holding the truncation and refining the raster
 Analytic shapes need no redrawing at all: `lx` is an absolute Cartesian length, so a circle
 stays a circle whatever the basis does. That is also why they are the control here.
 
-**Differentiating the angle is a different question** and has a different answer — redrawing
-cannot happen inside `jax.grad`, since the redraw flips pixels discretely. See the next
-section.
+**Differentiating the angle is a different question** and has a different answer: redrawing a
+*binary* raster inside `jax.grad` does not work, because the redraw flips pixels discretely, but
+a *smoothed* one does. See the next two sections.
 
 ## Differentiating the cell — which question each path answers
 
@@ -544,11 +544,13 @@ measurements say so.
 * *The number is right.* `li` on a skewed cell returns a **wrong** answer to the question asked.
   The raster's basis gradient is the exact derivative of the function the caller wrote. Refusing
   a correct derivative because a different one might have been meant is a different act.
-* *There is nothing to fall back to on this path.* Asking the raster the fixed-shape question by
-  redrawing the array at each `gamma` does not converge: -2.12e-01, -3.25e-01, -7.64e-01 at
-  `h` = 0.5, 0.25, 0.1 degrees, because the redraw flips pixels discretely and the quotient
-  differentiates the staircase. The fixed-shape derivative is **not reachable from a raster by
-  any means**; the fallback is the other modeling path, which is what this section says to use.
+* *The redraw is not a fallback, though a smoothed one is — see "What is binary and what is
+  not" below.* Asking the raster the fixed-shape question by redrawing a **binary** array at
+  each `gamma` does not converge: -2.12e-01, -3.25e-01, -7.64e-01 at `h` = 0.5, 0.25, 0.1
+  degrees, because the redraw flips pixels discretely and the quotient differentiates the
+  staircase. This page said until 2026-09-02 that the fixed-shape derivative was therefore "not
+  reachable from a raster by any means". **That was wrong, and it was wrong in the worst
+  direction — it told readers not to try something that works.**
 * *The condition is not detectable.* A warning would have to know the lattice is the thing being
   differentiated, and that signal does not exist at the solve. `jax.grad` with respect to
   **anything** traces the whole solver pytree, and the lattice is a child of it. Instrumented
@@ -572,6 +574,45 @@ photonic paper wanting the shear-along derivative; strained and graded structure
 so RCWA is not the tool for them.
 
 Pinned as `tests/test_lattice_pytree.py::test_the_raster_basis_gradient_is_the_shear_along_one`.
+
+## What is binary and what is not — the table that decides the path
+
+Everything above is about *which* derivative you get. This is about *whether* you get one, and
+it turns on one thing: **does the variable move a material boundary across the pixel grid?**
+Permittivity does not, so a binary raster differentiates fine. A cell basis or a shape position
+does, and a binary raster's answer then moves in steps.
+
+| what you are doing | geometry | works | measured |
+|---|---|---|---|
+| solve only | binary raster | yes | converges with the raster (1.8e-3 at N=512) |
+| solve only | analytic shapes | yes | no staircase at all; the control for every row below |
+| **permittivity** gradient (topology optimization) | **binary raster** | **yes** | AD against FD, **0.00%** |
+| **geometry** gradient (cell lengths / angle, shape position / size) | analytic shapes | yes | -9.4996e-03 /deg; the geometry is exact |
+| | binary raster, array **held** | yes, *but a different question* | -3.3806e-02 /deg — see above |
+| | binary raster, **redrawn** | **no** | FD diverges: -2.12e-01, -3.25e-01, -7.64e-01 as `h` falls |
+| | **smoothed** raster, redrawn | **yes** | `jax.grad` against FD, **0.54%** (-8.0137e-03 vs -7.9710e-03 /deg, float64) |
+
+**Smoothing means the raster stops being two-valued.** Instead of every pixel being the rod or
+the background, the pixels within about one pixel of the boundary take intermediate values --
+`eps = 1 + (eps_rod - 1) * sigmoid((R - r) / w)` with `w` one pixel. A small change in the cell
+then slides those pixels (7.97 -> 7.94) instead of flipping one of them (12.25 -> 1.0), and the
+derivative exists. It is the same move density-based topology optimization makes, and this
+package already cites its modern form (Hammond & Johnson, in `nvf-normal-methods.md`).
+
+**What it costs is not measured, and that is a gap rather than a claim of "nothing".** A
+smoothed raster is a *different structure* — it has a graded rim of a permittivity no material
+has. Attempts to price that here failed on the instrument rather than on the answer: the
+**binary** arm did not converge on the scenes tried (`sum(T)` 0.1326, 0.1242, 0.1781, 0.1720 at
+N = 64, 128, 256, 512 on a square cell at `truncation_order=8`), so there was no baseline to
+subtract. Anyone pricing it should start by finding a scene whose binary arm converges.
+
+**The split is not about the angle.** Everything above is written on `gamma` because that is
+where it was found, but it applies to any basis component. Holding the angle at 90 degrees and
+scaling both edge lengths by `s`, `d(sum T)/ds` reads **-1.80e+01** with the array held against
+**+1.62e-01** redrawn — *opposite signs*, because scaling the cell with the array held scales
+the rod with it (fixed fill fraction) while redrawing keeps the rod at radius 100 (fixed feature
+size). `period` is a far more common design variable than a cell angle, so this is the more
+likely place to meet it.
 
 ## Where the skew actually reaches the code
 

@@ -29,10 +29,12 @@ Three arms, so the failure and the fix are separated from the physics:
   need no redrawing at all; the staircase-free control that says what the answer is
 
 Note what this study is *not* about. Differentiating with respect to the angle is a separate
-question with a different answer, because redrawing cannot happen inside ``jax.grad`` -- the
-redraw flips pixels discretely and the difference quotient differentiates the staircase.
-``docs/oblique-lattice.md``, "Differentiating the cell", records that; the short form is that
-a raster's basis gradient shears the pattern with the cell and an analytic shape's does not.
+question with a different answer: redrawing a **binary** raster inside ``jax.grad`` does not
+work -- the redraw flips pixels discretely -- but smoothing the indicator over about one pixel
+makes it work, to 0.54% against a finite difference. ``docs/oblique-lattice.md`` records both,
+in "Differentiating the cell" and "What is binary and what is not"; the short form is that a
+raster's basis gradient shears the pattern with the cell unless the array is redrawn, and that
+redrawing it under a gradient needs the boundary to stop being two-valued.
 
 Run from the repo root:
 
