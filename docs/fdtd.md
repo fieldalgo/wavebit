@@ -750,18 +750,31 @@ offset. In 2D one kernel for both was a first-order error that every fixed-toler
 through; in 3D the y offset is first order in the *efficiencies* too, because the s/p projection
 combines `Ex` and `Ey` coherently and there is no `|r|**2` cancellation left to hide behind.
 
-### The convergence order is not settled
+### The convergence order, and the scene that was measuring itself
 
-Against `solve_2d`, the worst per-order gap runs 9.1e-2 / 3.6e-2 over dz = 33 / 20 nm on a
-crossed scene — order 1.83. On a scene with **no plan-view corner** it runs 1.3e-1 / 4.8e-2 /
-3.5e-2: order 2.02 and then **0.67**. A floor at 3.5e-2 that the corner cannot explain, because
-that scene has none. Candidates not yet separated: the RCWA reference's own truncation,
-`n_periods` at the finest grid, something else. A 3D point costs about eighteen minutes, which
-is why this is recorded rather than chased.
+Against `solve_2d` on a crossed scene the worst per-order gap runs 9.1e-2 / 3.6e-2 / 1.8e-2 over
+dz = 33 / 20 / 12.5 nm — orders 1.83 and 1.50, still improving. On a *y-invariant* control it
+runs 1.3e-1 / 4.8e-2 / 3.5e-2: order 2.02 and then **0.67**, stalled.
 
-What is established instead, and does not depend on the reference: **the 3D path reproduces the
-2D path to 4.8e-3 on a y-invariant raster.** That is the same physical scene solved two ways, so
-it isolates the machinery from the geometry in a way no comparison against RCWA can.
+**The control converging worse than the thing it controls for is the tell, and the cause is the
+control's own incidence.** Its `m = -1` order sits at `kz_top = 0.0916j` — five times closer to
+the Rayleigh cutoff than the margin scene §8e was chosen to give (0.5101j) — and a near-cutoff
+order converges slowly for the arithmetic reason §8e records: `kz = sqrt(n**2 - k_par**2)` has
+sensitivity `1/kz`, and the p channel multiplies by `n/kz` on top.
+
+Two measurements settle it. The RCWA reference is not the floor: at `truncation_order` x = 14 it
+is accurate to 5.6e-4, sixty times below the 3.5e-2 the FDTD stalls at. And **the floor is not a
+property of the third dimension at all** — the long-validated 2D path shows it on the same
+scene, running 1.2e-1 / 4.2e-2 / 2.9e-2 / 1.6e-2 / 2.1e-2 down to dz = 3.3 nm, orders 2.08 then
+0.78, 0.92, -0.35.
+
+So the crossed grating's 1.83 / 1.50 is the honest figure for a scene near a Rayleigh point, and
+what a converged number would take is a scene chosen for margin in 3D the way §8e's was in 2D —
+which costs about eighteen minutes a point, and is why it is recorded rather than run here.
+
+What is established without a reference at all: **the 3D path reproduces the 2D path to 4.8e-3
+on a y-invariant raster.** The same physical scene solved two ways, which isolates the machinery
+from the geometry in a way no comparison against RCWA can.
 
 ### Cost
 
@@ -834,9 +847,11 @@ a 3D FDTD is what RCWA cannot express at all** (§9), not what it expresses more
   for the wrong field**, so the band gap, the growth rate and energy conservation all come out
   right, and only a temporal boundary separates them, by a factor of exactly two that no
   resolution shrinks.
-- **The convergence order of a crossed grating**, which §8g records as unresolved: 1.83 on a
-  cornered scene, and 2.02 then 0.67 on one without a corner. Separating the reference's
-  truncation from `n_periods` from anything else costs about eighteen minutes a point.
+- **A crossed-grating convergence study on a scene chosen for margin**, the way §8e's was in
+  2D. The figures in §8g (1.83 / 1.50) are honest for a scene whose `m = -1` order sits at
+  `kz_top = 0.09i`, and that is near enough to the Rayleigh cutoff to set the constant. Scanning
+  `(theta, phi)` for the largest minimum `|kz|` is the same instrument §8e used; it costs about
+  eighteen minutes a point in 3D.
 - **The corner cells** where a vertical and a horizontal interface meet are the one place the
   axis-aligned averaging rule is not exact; whether they contribute at first or second order
   has not been measured, and TM's convergence order (1.71–1.94, against TE's 1.96–2.02) is the
