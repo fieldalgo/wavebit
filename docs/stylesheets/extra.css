@@ -23,11 +23,20 @@
  * so they get the air above them that separates one group from the next rather than sitting
  * flush against the last link of the previous one. They are 400 by default here, the same
  * weight as the links under them, which is what makes the sidebar read as one long list --
- * PyData sets 600, and that is the number below. */
+ * PyData sets 600, and that is the number below.
+ *
+ * Contrast was the other half, and it was *inverted*: the heading sat at 56% opacity against
+ * the items' 82%, so the label naming a group was fainter than its own contents. PyData runs
+ * it the other way -- heading rgb(34,40,50) against items rgb(72,86,107) on white, the
+ * heading being the darkest thing in the column. */
 .md-nav__item--section > .md-nav__link,
 .md-nav__title {
   margin-top: 0.9rem;
   font-weight: 600;
+  /* `!important` because the theme's own declaration carries it, and an override without it
+   * loses -- an inline `style="color:red"` on the element did not win either, which is what
+   * identified the priority rather than a specificity problem. */
+  color: var(--md-default-fg-color) !important;
 }
 
 .md-nav__item--section:first-child > .md-nav__link {
