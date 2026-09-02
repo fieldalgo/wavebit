@@ -324,7 +324,8 @@ def _cell_average_periodic(values, period, centres, width, harmonic):
 
 
 def component_property(raster, thickness, top, bot, period, z_centres, z_widths, dx, nx,
-                       x_half, harmonic_axis, subpixel=True):
+                       x_half, harmonic_axis, subpixel=True, dy=None, ny=1, y_half=False,
+                       period_y=None):
     """A material property averaged onto one Yee component's cells, shape ``(nz, nx)``.
 
     ``raster`` is ``(n_layers, Nx)`` -- wavebit's ``structure`` with its length-1 ``y`` axis
@@ -349,7 +350,7 @@ def component_property(raster, thickness, top, bot, period, z_centres, z_widths,
     control: on a slab whose interfaces genuinely cut cells it costs an order, 3.4e-3 against
     2.7e-4 at a 5 nm grid and falling as ``dz`` rather than ``dz^2``.
     """
-    if harmonic_axis not in (None, 'x', 'z'):
+    if harmonic_axis not in (None, 'x', 'y', 'z'):
         raise ValueError(
             f"component_property: harmonic_axis={harmonic_axis!r}. It names the axis the "
             f"component points along -- 'x', 'z', or None for one with no in-plane axis. A "
@@ -370,15 +371,30 @@ def component_property(raster, thickness, top, bot, period, z_centres, z_widths,
     n_layers = raster.shape[0]
 
     xc = (np.arange(nx) + (0.5 if x_half else 0.0)) * dx
+    width_y = dy if (subpixel and dy is not None) else 0.0
+    yc = (np.arange(ny) + (0.5 if y_half else 0.0)) * (dy or 0.0)
 
-    # Along x first, inside each layer; the two half-spaces are uniform in x.
-    per_layer = np.empty((n_layers + 2, nx), dtype=complex)
+    # Along x first, inside each layer, then along y; the two half-spaces are uniform in both.
+    per_layer = np.empty((n_layers + 2, ny, nx), dtype=complex)
     per_layer[0] = top
     per_layer[-1] = bot
     for index in range(n_layers):
-        per_layer[index + 1] = _cell_average_periodic(
-            np.asarray(raster[index], dtype=complex), period, xc, width_x,
-            harmonic=(harmonic_axis == 'x'))
+        layer = np.asarray(raster[index], dtype=complex)
+        if layer.ndim == 1:
+            # Invariant along y. **The y pass is SKIPPED rather than run on a constant**: an
+            # exact average of a constant is not bit-equal to the constant, because
+            # `(w*a).sum()/w.sum()` is not `a` in floating point, and skipping it is what keeps
+            # a y-invariant scene byte-identical to the 2D module.
+            per_layer[index + 1] = _cell_average_periodic(
+                layer, period, xc, width_x, harmonic=(harmonic_axis == 'x'))
+            continue
+        rows = np.stack([_cell_average_periodic(row, period, xc, width_x,
+                                                harmonic=(harmonic_axis == 'x'))
+                         for row in layer])
+        per_layer[index + 1] = np.stack(
+            [_cell_average_periodic(rows[:, i], period_y, yc, width_y,
+                                    harmonic=(harmonic_axis == 'y'))
+             for i in range(nx)], axis=1)
 
     # Then along z, across the layer boundaries.
     harmonic_z = (harmonic_axis == 'z')
@@ -386,11 +402,11 @@ def component_property(raster, thickness, top, bot, period, z_centres, z_widths,
         index = np.clip(np.searchsorted(z_edges, zc, side='right') - 1, 0, n_layers + 1)
         return per_layer[index]
     source = 1.0 / per_layer if harmonic_z else per_layer
-    out = np.empty((nz, nx), dtype=complex)
+    out = np.empty((nz, ny, nx), dtype=complex)
     for k, c in enumerate(zc):
         half = 0.5 * width_z[k]
         w = _overlap(z_edges, c - half, c + half)
-        out[k] = (w[:, None] * source).sum(axis=0) / w.sum()
+        out[k] = (w[:, None, None] * source).sum(axis=0) / w.sum()
     return 1.0 / out if harmonic_z else out
 
 
@@ -855,10 +871,17 @@ class _Grid:
         self.poles = dict(poles or {})
 
         self.nx = max(int(round(self.period * resolution)), 1)
-        #: Cells along y. One while the structure is invariant along y, which is every scene
-        #: this module accepts today -- `_refuse_out_of_scope` requires `structure.shape[1] == 1`.
-        #: It exists so the field arrays carry the axis before anything varies along it.
+        #: Cells along y, and the cell size and period that go with them. One while the
+        #: structure is invariant along y, which is every scene this module accepts today --
+        #: `_refuse_out_of_scope` requires `structure.shape[1] == 1`. They exist so the arrays
+        #: and the geometry carry the axis before anything varies along it.
+        #:
+        #: `period_y` is `None` rather than a number in the invariant case, and that is
+        #: load-bearing: `component_property` SKIPS the y pass when the raster has no y axis,
+        #: because an exact average of a constant is not bit-equal to the constant.
         self.ny = 1
+        self.dy = None
+        self.period_y = None
         self.dx = self.period / self.nx
         self.dz = self.dx
 
@@ -1057,16 +1080,17 @@ class _Grid:
             return self.z_mid, self.dz_cell
         return self.z_node, self.dz_dual
 
-    def eps_for(self, z_half, x_half, harmonic_axis):
+    def eps_for(self, z_half, x_half, harmonic_axis, y_half=False):
         centres, widths = self.z_cells(z_half)
         # `[:, None, :]` rather than a reshape: the y axis is inserted, and while `ny == 1` the
         # values are the 2D ones untouched, element for element.
         return component_property(
             self.raster, self.thickness, self.eps_top, self.eps_bot, self.period,
             centres, widths, self.dx, self.nx, x_half, harmonic_axis,
-            subpixel=self.subpixel)[:, None, :]
+            subpixel=self.subpixel, dy=self.dy, ny=self.ny, y_half=y_half,
+            period_y=self.period_y)
 
-    def mu_for(self, z_half, x_half, harmonic_axis):
+    def mu_for(self, z_half, x_half, harmonic_axis, y_half=False):
         """Permeability on one magnetic component's cells, by the same rule `eps_for` uses.
 
         Harmonic along the component's own axis: `B_normal` is continuous where `D_normal` is,
@@ -1077,9 +1101,10 @@ class _Grid:
         return component_property(
             self.mu_raster, self.thickness, self.mu_top, self.mu_bot, self.period,
             centres, widths, self.dx, self.nx, x_half, harmonic_axis,
-            subpixel=self.subpixel)[:, None, :]
+            subpixel=self.subpixel, dy=self.dy, ny=self.ny, y_half=y_half,
+            period_y=self.period_y)
 
-    def fill_for(self, pole_id, z_half, x_half):
+    def fill_for(self, pole_id, z_half, x_half, y_half=False):
         """What fraction of each of this component's cells carries ``pole_id``.
 
         The same exact cell average `eps_infinity` gets, run on the indicator of one pole set,
@@ -1091,7 +1116,8 @@ class _Grid:
         indicator = (self.dispersion == pole_id).astype(float)
         return np.real(component_property(
             indicator, self.thickness, 0.0, 0.0, self.period, centres, widths,
-            self.dx, self.nx, x_half, None, subpixel=self.subpixel))[:, None, :]
+            self.dx, self.nx, x_half, None, subpixel=self.subpixel,
+            dy=self.dy, ny=self.ny, y_half=y_half, period_y=self.period_y))
 
     def pole_state(self, shape, z_half, x_half, dtype):
         """The :class:`_PoleSet` for one electric component, or ``None`` if the scene is
@@ -1200,7 +1226,11 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
     if te_on:
         # (Ey, Hx, Hz). Ey sits on the z nodes and the x nodes, and is tangential to every
         # interface a 1D grating has, so it takes no harmonic average.
-        eps = grid.eps_for(False, False, None).real
+        # `'y'` rather than `None`: `E_y` is tangential to every interface a 1D-periodic
+        # grating has, which is why this was `None`, but it is NORMAL to the y walls of a
+        # crossed one. At `ny == 1` the two spellings are the same computation -- neither makes
+        # the x or z pass harmonic -- so this is byte-identical today and correct later.
+        eps = grid.eps_for(False, False, 'y').real
         # `Hx` points along x and `Hz` along z, so each takes the harmonic average along its
         # own axis -- the duality's image of the rule `eps_for` uses for `Ex` and `Ez`.
         mu_x = grid.mu_for(True, False, 'x').real
@@ -1214,7 +1244,7 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
         eps_x = grid.eps_for(False, True, 'x').real
         eps_z = grid.eps_for(True, False, 'z').real
         # `Hy` is out of plane, so it has no in-plane axis to average harmonically along.
-        mu_y = grid.mu_for(True, True, None).real
+        mu_y = grid.mu_for(True, True, 'y').real
         hy = np.zeros((nz - 1, ny, nx), dtype=dtype)
         ex = np.zeros((nz, ny, nx), dtype=dtype)
         ez = np.zeros((nz - 1, ny, nx), dtype=dtype)

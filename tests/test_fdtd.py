@@ -1830,3 +1830,43 @@ def test_the_record_is_off_by_default_and_costs_nothing():
                       resolution=0.05, n_periods=60, return_diagnostics=True)[1]
     for key in ('field_t', 'field_e', 'field_z', 'field_x'):
         assert key not in diag, f'{key} appeared without record_field being asked for'
+
+
+def test_the_y_average_is_harmonic_along_the_component_it_is_for():
+    """The subpixel rule generalises verbatim: harmonic along the component's own axis.
+
+    Checked against hand values rather than against another run — a cell holding equal parts
+    `eps = 4` and `eps = 1` averages to the harmonic 1.6 for a component pointing along y and
+    to the arithmetic 2.5 for one that does not. It is the same rule `'x'` and `'z'` already
+    take, applied to the axis that only exists once a grating is crossed.
+    """
+    from wavebit._core.fdtd import component_property
+    layer = np.zeros((1, 4, 2), dtype=complex)
+    layer[0, :2, :] = 4.0
+    layer[0, 2:, :] = 1.0
+    kw = dict(thickness=[1.0], top=1.0 + 0j, bot=1.0 + 0j, period=2.0,
+              z_centres=np.array([0.5]), z_widths=np.array([1.0]), dx=1.0, nx=2,
+              x_half=False, dy=4.0, ny=1, period_y=4.0)
+    harmonic = float(np.real(component_property(layer, harmonic_axis='y', **kw)[0, 0, 0]))
+    arithmetic = float(np.real(component_property(layer, harmonic_axis=None, **kw)[0, 0, 0]))
+    assert harmonic == pytest.approx(2.0 * 4.0 * 1.0 / 5.0, rel=1e-12)
+    assert arithmetic == pytest.approx(2.5, rel=1e-12)
+
+
+def test_a_y_invariant_raster_skips_the_y_average_rather_than_running_it():
+    """Averaging a constant is not the constant, in floating point, and that is why it is skipped.
+
+    `(w * a).sum() / w.sum()` is not bit-equal to `a`. Running the y pass on a y-invariant
+    scene would therefore have moved every existing answer in the last digits — which is
+    exactly the kind of change that cannot be told from a real one after the fact. The 2D
+    module's byte-identity is the reason this branch exists.
+    """
+    from wavebit._core.fdtd import component_property
+    flat = np.full((1, 2), 4.0 + 0j)                 # (n_layers, Nx) -- no y axis at all
+    kw = dict(thickness=[1.0], top=1.0 + 0j, bot=1.0 + 0j, period=2.0,
+              z_centres=np.array([0.5]), z_widths=np.array([1.0]), dx=1.0, nx=2,
+              x_half=False, harmonic_axis='y')
+    out = component_property(flat, **kw, dy=1.0, ny=1, period_y=4.0)
+    assert out.shape == (1, 1, 2)
+    # Bit-exact, not approximately: the layer is the only material in the z cell.
+    assert out[0, 0, 0] == 4.0 + 0j and out[0, 0, 1] == 4.0 + 0j
