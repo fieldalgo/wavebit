@@ -30,9 +30,15 @@ theme:
   # beside the README -- pointing at them would need a second copy that can drift from the
   # first. The site carries the wordmark as `site_name` instead.
   features:
+    # Top-level sections as tabs across the header rather than as headings in the sidebar,
+    # which is the arrangement the scientific-Python documentation sites converged on: the
+    # four doorways are visible before the reader has scrolled anything.
+    - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
     - navigation.top
     - navigation.tracking
+    - navigation.footer
     - content.code.copy
     - toc.follow
     - search.suggest
@@ -124,6 +130,11 @@ markdown_extensions:
       anchor_linenums: true
   - pymdownx.inlinehilite
   - pymdownx.snippets
+  # `:material-rocket-launch:` and friends. Material ships the icon sets; without this the
+  # shortcode reaches the page as its own literal text.
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
 
 # Explicit, and with short labels: the H1 of a document here is a full sentence, which is right
 # at the top of the page and unreadable in a sidebar. Listing them also means a document added
