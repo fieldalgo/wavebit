@@ -35,6 +35,10 @@ theme:
     # four doorways are visible before the reader has scrolled anything.
     - navigation.tabs
     - navigation.tabs.sticky
+    # The breadcrumb row above the page title -- "Home / User guide / Describing a scene".
+    # With four top-level sections and three nesting levels under one of them, the page title
+    # alone does not say where you are.
+    - navigation.path
     - navigation.sections
     - navigation.top
     - navigation.tracking

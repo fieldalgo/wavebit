@@ -39,6 +39,19 @@
   color: var(--md-default-fg-color) !important;
 }
 
+/* ...and one step brighter than the links, which is the relationship PyData actually has and
+ * the one Material's scale cannot express: every token it offers is at or below the colour the
+ * links already use, so the strongest available is a tie. Written per scheme rather than as a
+ * literal -- the dark rule reads `--md-hue`, so a palette hue change carries, and the light
+ * rule is an alpha on black, where hue does not arise. */
+.md-nav__item--section > .md-nav__link {
+  color: rgba(0, 0, 0, 0.95) !important;
+}
+
+[data-md-color-scheme="slate"] .md-nav__item--section > .md-nav__link {
+  color: hsla(var(--md-hue), 15%, 96%, 1) !important;
+}
+
 .md-nav__item--section:first-child > .md-nav__link {
   margin-top: 0;
 }
