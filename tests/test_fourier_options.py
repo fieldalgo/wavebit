@@ -23,8 +23,7 @@ import wavebit
 # 2D so the NVF projector is not degenerate: a lossless dielectric rod, which is also the
 # structure whose energy conservation the NVF path exists to improve.
 N = 48
-_x = (np.arange(N) + 0.5) / N - 0.5
-_X, _Y = np.meshgrid(_x, _x)
+_X, _Y = wavebit.Lattice.rectangular(1.0).meshgrid_uv((N, N))
 ROD = np.ones((1, N, N))
 ROD[0, _X ** 2 + _Y ** 2 <= 0.3 ** 2] = 6.25       # permittivity: 2.5**2
 

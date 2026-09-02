@@ -25,7 +25,7 @@ from . import boundary as _boundary
 from . import clipper as _clipper
 from . import factorization as _fac
 from .domain import as_material, index_from_eps
-from .lattice import sample_grid
+from .lattice import meshgrid_xy, sample_grid
 
 #: Periodic images drawn around the cell. A shape's transform is periodic by construction, so
 #: the part that leaves one edge returns at the other and the picture has to show it. One ring
@@ -468,12 +468,9 @@ def plot_structure(solver, layer=0, n=512, show='eps', ax=None, band_limited=Fal
         art = ax.imshow(image, origin='lower', cmap='viridis',
                         extent=(-half_x, half_x, -half_y, half_y))
     else:
-        n_v, n_u = image.shape
-        u = (np.arange(n_u) + 0.5) / n_u - 0.5
-        v = (np.arange(n_v) + 0.5) / n_v - 0.5
-        U, V = np.meshgrid(u, v)
-        X = U * basis[0][0] + V * basis[0][1]
-        Y = U * basis[1][0] + V * basis[1][1]
+        # `meshgrid_xy` is exactly these five lines, and it is the function whose frame
+        # this branch has to agree with -- spelling them out again is how the two drift.
+        X, Y = meshgrid_xy(image.shape, lattice=basis)
         art = ax.pcolormesh(X, Y, image, shading='nearest', cmap='viridis')
 
     what = {0: 'raster', 2: 'shapes'}.get(solver.modeling_type, '?')

@@ -39,8 +39,7 @@ KW_NO_CELL = {k: v for k, v in KW.items() if k != 'period'}
 HEX = np.column_stack((np.array([1.0, 0.0]), np.array([0.5, np.sqrt(3) / 2])))
 
 _N = 32
-_axis = (np.arange(_N) + 0.5) / _N - 0.5
-_X, _Y = np.meshgrid(_axis, _axis)
+_X, _Y = wavebit.Lattice.rectangular(1.0).meshgrid_uv((_N, _N))
 _RASTER = np.ones((1, _N, _N))
 _RASTER[0, _X ** 2 + _Y ** 2 <= 0.3 ** 2] = 6.25          # permittivity: 2.5**2
 

@@ -45,8 +45,7 @@ SMOOTH = [{'background': 1.0,
            'shapes': [{'type': 'circle', 'cx': 0.0, 'cy': 0.0,
                        'lx': 0.6, 'material': 6.25}]}]
 _N = 32
-_axis = (np.arange(_N) + 0.5) / _N - 0.5
-_X, _Y = np.meshgrid(_axis, _axis)
+_X, _Y = wavebit.Lattice.rectangular(1.0).meshgrid_uv((_N, _N))
 RASTER = np.ones((1, _N, _N))
 RASTER[0, _X ** 2 + _Y ** 2 <= 0.3 ** 2] = 6.25
 

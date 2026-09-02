@@ -85,10 +85,10 @@ def _draw_one_mesh_two_arrays(plt):
     """
     n, gamma = 6, 60.0
     g = np.radians(gamma)
-    A = np.array([[1.0, np.cos(g)], [0.0, np.sin(g)]])
-    t = (np.arange(n) + 0.5) / n - 0.5
-    U, V = np.meshgrid(t, t)
-    X, Y = U * A[0, 0] + V * A[0, 1], U * A[1, 0] + V * A[1, 1]
+    cell = wavebit.Lattice.oblique(1.0, 1.0, g)
+    A = np.asarray(cell)
+    # drawn with the API the figure documents, so the picture cannot drift from it
+    X, Y = (np.asarray(c) for c in cell.meshgrid_xy((n, n)))
     edges = np.arange(n + 1) / n - 0.5
 
     fig, ax = plt.subplots(1, 3, figsize=(11.6, 3.1))

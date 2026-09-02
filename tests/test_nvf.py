@@ -52,8 +52,7 @@ def test_nvf_energy_convergence():
     print("==================================================")
 
     N = 120
-    x = (np.arange(N) + 0.5) / N - 0.5
-    X, Y = np.meshgrid(x, x)
+    X, Y = wavebit.Lattice.rectangular(1.0).meshgrid_uv((N, N))
     structure = np.ones((1, N, N), dtype=complex)
     structure[0, X ** 2 + Y ** 2 <= 0.3 ** 2] = 6.25  # lossless dielectric rod, eps 6.25
 
