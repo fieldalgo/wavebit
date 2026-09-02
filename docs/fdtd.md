@@ -707,6 +707,71 @@ efficiencies came back *better* than the uniform run's — 3.5e-3 against RCWA �
 amplitude was wrong by 0.52. `R + T` never noticed. Same family as §5 and §8d: an efficiency is
 quadratic and blind to exactly the phase this kind of mistake produces.
 
+## 8g. A crossed grating
+
+`structure` may carry a y axis and `period` a second entry; `R` and `T` come back on the
+two-dimensional order grid `(orders_v, orders_u)` that `Result` has always described. A
+`(n_layers, 1, Nx)` raster is the y-invariant case and takes the 2D machinery unchanged.
+
+**Most of it was already written.** The conical mount put all twelve curl terms in the stepper,
+so the third dimension turns four algebraic `i*ky` multiplications into staggered y differences
+and adds no term. `conventions.order_azimuth` already takes `(ky, kx)` and already handles its
+degenerate cases, so a 2D order grid needed no new frame code, and the per-order `n / kz_m`
+factor follows from `E . k_hat = 0` — a statement about one order, not about the lattice.
+
+It landed in five stages with one criterion each, and **the first four are byte-identical**: the
+arrays gain a size-1 y axis, the geometry averages along y, the stepper's four terms become
+differences, and the source gains a `ky_op`. A crossed grating is therefore a larger `ny` rather
+than a second stepper — the alternative, a `_time_loop_3d` beside the existing one, would have
+duplicated the six updates, the CPML, the TFSF and the pole coupling.
+
+### What the third dimension broke that the second did not
+
+**The y pass is skipped, not run, on a y-invariant raster.** An exact average of a constant is
+not bit-equal to the constant, so running it would have moved every existing answer in the last
+digits — a change that afterwards cannot be told from a real one.
+
+**`E_y` and `H_y` were passed `harmonic_axis=None`, and that was right.** In a 1D-periodic
+grating `E_y` is tangential to every interface there is; in a crossed one it is normal to the y
+walls. The reverse edit — widening the validator to accept `'y'` and leaving the call sites —
+costs an order of convergence and fails no test in the file.
+
+**The auxiliary grid's `d/dy` must be the discrete difference, not the exact `i*ky`.** The two
+grids otherwise sit on different dispersion relations. The vacuum TFSF cancellation measures it
+with ten orders of resolving power: 1e-16 correct against 5.4e-7 and 2.2e-6 with the continuum
+operator, at 30 and 45 degrees. Same failure `kx_op` prevents, one axis over.
+
+**The propagating set is a disc, not a rectangle.** Calling the 1D window once per axis narrows
+the x range by the *incident* `ky` while order `(m, l)` carries `ky_inc + l*wl/Py`.
+`propagating_window_2d` computes the disc; checked by brute force over 4000 random scenes.
+
+**Four demodulation kernels, not two.** Each transverse component now has an x offset and a y
+offset. In 2D one kernel for both was a first-order error that every fixed-tolerance test passed
+through; in 3D the y offset is first order in the *efficiencies* too, because the s/p projection
+combines `Ex` and `Ey` coherently and there is no `|r|**2` cancellation left to hide behind.
+
+### The convergence order is not settled
+
+Against `solve_2d`, the worst per-order gap runs 9.1e-2 / 3.6e-2 over dz = 33 / 20 nm on a
+crossed scene — order 1.83. On a scene with **no plan-view corner** it runs 1.3e-1 / 4.8e-2 /
+3.5e-2: order 2.02 and then **0.67**. A floor at 3.5e-2 that the corner cannot explain, because
+that scene has none. Candidates not yet separated: the RCWA reference's own truncation,
+`n_periods` at the finest grid, something else. A 3D point costs about eighteen minutes, which
+is why this is recorded rather than chased.
+
+What is established instead, and does not depend on the reference: **the 3D path reproduces the
+2D path to 4.8e-3 on a y-invariant raster.** That is the same physical scene solved two ways, so
+it isolates the machinery from the geometry in a way no comparison against RCWA can.
+
+### Cost
+
+A 3D run is minutes to hours where the 2D one is seconds — 0.75 M cells at a 10 nm grid on a
+700 nm square cell, and the Courant bound tightens by another `sqrt(3/2)`. Against `solve_2d`
+this does not win: the crossed-grating RCWA solve costs 2.8 s at `truncation_order=(10,10)` and
+7.0 s at (12,12), and the broadband break-even is in the hundreds of wavelengths — a band this
+module can only cover to about ±10 % before the blue end is under-resolved. **The reason to have
+a 3D FDTD is what RCWA cannot express at all** (§9), not what it expresses more slowly.
+
 ## 9. What is not yet answered
 
 - **A backend other than NumPy**, which is the item that decides whether this is a first-class
@@ -755,8 +820,24 @@ quadratic and blind to exactly the phase this kind of mistake produces.
 - **The Yee grid's numerical anisotropy** is unmeasured. Convergence order was measured at
   normal incidence only, and phase-velocity error as a function of propagation angle is
   exactly what limits the high-`|m|` orders a grating oracle exists to check.
+- **What only a time-domain solver can do, now that the geometry is general.** With a crossed
+  grating (§8g) and a time record () in place, the features that are not a slower way of
+  answering an RCWA question become reachable: a medium whose permittivity changes *while* the
+  light is inside it (photonic time crystals, time boundaries — a one-frequency formulation
+  cannot express a medium that mixes frequencies), and a nonlinear one whose response depends on
+  the instantaneous field. Neither exists in any permissively-licensed FDTD surveyed. Both have
+  closed forms to check against — a harmonic-balance sideband S-matrix for the first
+  (Zurita-Sanchez, Halevi and Cervantes-Gonzalez, *Phys. Rev. A* **79**, 053821 (2009)), the
+  temporal-boundary amplitudes (Morgenthaler 1958; Xiao, Maywar and Agrawal, *Opt. Lett.* **39**,
+  574 (2014)), self-phase modulation for the second — and both have a trap measured before
+  either was built: the naive `eps dE/dt` where `d(eps E)/dt` is meant is **the right equation
+  for the wrong field**, so the band gap, the growth rate and energy conservation all come out
+  right, and only a temporal boundary separates them, by a factor of exactly two that no
+  resolution shrinks.
+- **The convergence order of a crossed grating**, which §8g records as unresolved: 1.83 on a
+  cornered scene, and 2.02 then 0.67 on one without a corner. Separating the reference's
+  truncation from `n_periods` from anything else costs about eighteen minutes a point.
 - **The corner cells** where a vertical and a horizontal interface meet are the one place the
   axis-aligned averaging rule is not exact; whether they contribute at first or second order
   has not been measured, and TM's convergence order (1.71–1.94, against TE's 1.96–2.02) is the
   place to look.
-- **3D**, for crossed gratings.
