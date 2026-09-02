@@ -816,6 +816,21 @@ def _shift_down(a, bloch=1.0):
     return np.concatenate([a[..., -1:] * np.conj(bloch), a[..., :-1]], axis=-1)
 
 
+def _shift_up_y(a, bloch=1.0):
+    """``a[..., j+1, :]``, with the y Bloch phase the cell edge carries.
+
+    The y twin of :func:`_shift_up`, and it exists separately rather than taking an axis
+    argument because every call site knows which axis it means and a wrong axis is a plausible
+    wrong answer rather than an error.
+    """
+    return np.concatenate([a[..., 1:, :], a[..., :1, :] * bloch], axis=-2)
+
+
+def _shift_down_y(a, bloch=1.0):
+    """``a[..., j-1, :]``, with the y Bloch phase conjugated -- it wraps the other way."""
+    return np.concatenate([a[..., -1:, :] * np.conj(bloch), a[..., :-1, :]], axis=-2)
+
+
 class _Grid:
     """Geometry, timing and CPML shared by the two polarisations.
 
@@ -845,9 +860,13 @@ class _Grid:
     def __init__(self, wavelength, period, raster, thickness, eps_top, eps_bot,
                  resolution, n_pml, courant, subpixel, theta=0.0, phi=0.0,
                  dispersion=None, poles=None, mu_raster=None, mu_top=1.0, mu_bot=1.0,
-                 pad_scale=1.0, grading=None, n_max=None):
+                 pad_scale=1.0, grading=None, n_max=None, period_y=None):
         self.wavelength = float(wavelength)
         self.period = float(period)
+        #: The y period, which only means anything once the raster has a y axis. Defaulting it
+        #: to the x period would be a silently square cell; `None` makes the y-invariant case
+        #: structural rather than a value that happens to be unused.
+        self.period_y_in = None if period_y is None else float(period_y)
         self.raster = np.asarray(raster, dtype=complex)
         self.thickness = np.asarray(thickness, dtype=float)
         self.eps_top = complex(eps_top)
@@ -879,9 +898,15 @@ class _Grid:
         #: `period_y` is `None` rather than a number in the invariant case, and that is
         #: load-bearing: `component_property` SKIPS the y pass when the raster has no y axis,
         #: because an exact average of a constant is not bit-equal to the constant.
-        self.ny = 1
-        self.dy = None
-        self.period_y = None
+        raster_ny = self.raster.shape[1] if self.raster.ndim == 3 else 1
+        crossed = raster_ny > 1
+        if crossed and self.period_y_in is None:
+            raise ValueError(
+                'fdtd: a raster with a y axis needs a y period. `period=[Px, Py]`; a crossed '
+                'grating has two and assuming they are equal is a silently square cell.')
+        self.ny = max(int(round(self.period_y_in * resolution)), 1) if crossed else 1
+        self.dy = (self.period_y_in / self.ny) if crossed else None
+        self.period_y = self.period_y_in if crossed else None
         self.dx = self.period / self.nx
         self.dz = self.dx
 
@@ -909,6 +934,11 @@ class _Grid:
         self.dtype = complex if (self.kx_inc != 0.0 or self.ky_inc != 0.0) else float
         self.bloch = (np.exp(1j * k0 * self.kx_inc * self.period)
                       if self.dtype is complex else 1.0)
+        #: The y twin. A crossed grating is periodic in y as well, so the wrap carries its own
+        #: phase -- and it is `ky_inc`, not `kx_inc`, which is the swap this module's own notes
+        #: record going wrong repeatedly on the RCWA side.
+        self.bloch_y = (np.exp(1j * k0 * self.ky_inc * (self.period_y or self.period))
+                        if self.dtype is complex else 1.0)
 
         # A wavelength of clearance in each half-space: far enough that the evanescent orders
         # a grating radiates have decayed before the monitor, near enough that the outgoing
@@ -1046,8 +1076,12 @@ class _Grid:
         # `i*ky` enters the amplification factor exactly as a difference operator does, so it
         # joins the bound. It is small next to `1/dx` but it is not zero, and a bound that
         # ignores a term is a bound that fails at the one angle nobody tested.
+        # A crossed grating discretises y, so `1/dy**2` joins the bound and the algebraic
+        # `ky` term drops out -- they are the same term, counted once. Adding both would be
+        # conservative and wrong in the direction that hides a real instability.
+        y_term = (1.0 / self.dy ** 2) if self.dy is not None else (0.5 * ky_phys) ** 2
         self.dt = courant * n_min / np.sqrt(
-            1.0 / self.dx ** 2 + 1.0 / float(self.dz_cell.min()) ** 2 + (0.5 * ky_phys) ** 2)
+            1.0 / self.dx ** 2 + 1.0 / float(self.dz_cell.min()) ** 2 + y_term)
 
         #: The DISCRETE x-derivative the auxiliary grid applies, not the continuum `i*kx`:
         #: a field `exp(i kx x)` is an eigenvector of the grid's shift, and the eigenvalue is
@@ -1177,7 +1211,9 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
     kt = grid.k_tfsf
 
     dtype = grid.dtype
-    conical = grid.ky_inc != 0.0
+    # A crossed grating runs all six components for the same reason a conical mount does --
+    # the y terms couple the two triples -- so it takes this branch whether or not ky is zero.
+    conical = grid.ky_inc != 0.0 or grid.ny > 1
     # The incident wave's own polarisation, resolved onto the two tangential electric
     # components. `s_hat = (-sin phi, cos phi, 0)`; `p_hat = k_hat x s_hat` has tangential part
     # `-cos(theta) * (cos phi, sin phi)`. These are the two eigenpolarisations of a uniform
@@ -1222,6 +1258,18 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
     te_on = conical or tetm == 'te'
     tm_on = conical or tetm == 'tm'
     ky = 1j * (2.0 * np.pi / centre) * grid.ky_inc
+    #: `d/dy` is ALGEBRAIC while the structure is invariant along y and a real grid derivative
+    #: once it is not. The two are different operators, not two spellings: `i*ky` is the exact
+    #: continuum value, while a crossed grating's y difference carries the grid's own numerical
+    #: dispersion -- and it has to, because the field it differentiates lives on that grid.
+    #:
+    #: Forward in the H updates and backward in the E ones, mirroring z exactly. The Yee y
+    #: positions that force it: `Ey`, `Hx` and `Hz` sit on the y half-steps, `Ex`, `Ez` and
+    #: `Hy` on the y nodes (Yee 1966; Taflove & Hagness fig. 3.1).
+    crossed = grid.ny > 1
+    dy, by = grid.dy, grid.bloch_y
+    d_dy_fwd = (lambda a: (_shift_up_y(a, by) - a) / dy) if crossed else (lambda a: ky * a)
+    d_dy_bwd = (lambda a: (a - _shift_down_y(a, by)) / dy) if crossed else (lambda a: ky * a)
 
     if te_on:
         # (Ey, Hx, Hz). Ey sits on the z nodes and the x nodes, and is tangential to every
@@ -1230,11 +1278,11 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
         # grating has, which is why this was `None`, but it is NORMAL to the y walls of a
         # crossed one. At `ny == 1` the two spellings are the same computation -- neither makes
         # the x or z pass harmonic -- so this is byte-identical today and correct later.
-        eps = grid.eps_for(False, False, 'y').real
+        eps = grid.eps_for(False, False, 'y', y_half=True).real
         # `Hx` points along x and `Hz` along z, so each takes the harmonic average along its
         # own axis -- the duality's image of the rule `eps_for` uses for `Ex` and `Ez`.
-        mu_x = grid.mu_for(True, False, 'x').real
-        mu_z = grid.mu_for(False, True, 'z').real
+        mu_x = grid.mu_for(True, False, 'x', y_half=True).real
+        mu_z = grid.mu_for(False, True, 'z', y_half=True).real
         ey = np.zeros((nz, ny, nx), dtype=dtype)
         hx = np.zeros((nz - 1, ny, nx), dtype=dtype)
         hz = np.zeros((nz, ny, nx), dtype=dtype)
@@ -1293,8 +1341,8 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
             curl_hx = d / hk + psi_hx
             curl_hz = -(_shift_up(ey, grid.bloch) - ey) / dx
             if conical:
-                curl_hx = curl_hx - ky * ez
-                curl_hz = curl_hz + ky * ex
+                curl_hx = curl_hx - d_dy_fwd(ez)
+                curl_hz = curl_hz + d_dy_fwd(ex)
             hx += dt * curl_hx / mu_x
             hz += dt * curl_hz / mu_z
             # TFSF (Umashankar & Taflove 1982): Hx at kt-1/2 is a scattered-field quantity
@@ -1331,7 +1379,7 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
             psi_ex = nb * psi_ex + na * d
             curl_ex = d / nk + psi_ex
             if conical:
-                curl_ex = curl_ex + ky * hz
+                curl_ex = curl_ex + d_dy_bwd(hz)
             drive = dt * curl_ex
             if poles_x is not None:
                 drive = drive - poles_x.advance(ex)
@@ -1341,7 +1389,7 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
             ex[kt] -= dt * (-inc.hy[kt - 1]) * x_half / dzd[kt, 0] / eps_x[kt]
             curl_ez = (hy - _shift_down(hy, grid.bloch)) / dx
             if conical:
-                curl_ez = curl_ez - ky * hx
+                curl_ez = curl_ez - d_dy_bwd(hx)
             drive_z = dt * curl_ez
             if poles_z is not None:
                 drive_z = drive_z - poles_z.advance(ez)
@@ -1984,6 +2032,7 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
                                 'te' if _leg else tetm, incidence_side, lattice, top, bot)
 
     period_x = float(period[0] if hasattr(period, '__len__') else period)
+    period_y = (float(period[1]) if hasattr(period, '__len__') and len(period) > 1 else None)
     raster = np.asarray(structure, dtype=complex)[:, 0, :]
     top_material, bot_material = as_material(top, 'top'), as_material(bot, 'bot')
     eps_top = complex(np.asarray(top_material.epsilon, dtype=complex))
@@ -2034,7 +2083,7 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
                  resolution, n_pml, courant, subpixel, theta=theta, phi=phi,
                  dispersion=dispersion, poles=poles, mu_raster=mu_raster,
                  mu_top=mu_top, mu_bot=mu_bot, pad_scale=pad_scale, grading=grading,
-                 n_max=n_max)
+                 n_max=n_max, period_y=period_y)
     n_steps = int(np.ceil(n_periods * centre / grid.dt))
     out = _time_loop(grid, name, n_steps, band, leg=_leg, record_field=record_field)
 

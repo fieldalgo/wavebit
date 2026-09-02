@@ -1870,3 +1870,78 @@ def test_a_y_invariant_raster_skips_the_y_average_rather_than_running_it():
     assert out.shape == (1, 1, 2)
     # Bit-exact, not approximately: the layer is the only material in the z cell.
     assert out[0, 0, 0] == 4.0 + 0j and out[0, 0, 1] == 4.0 + 0j
+
+
+# ---------------------------------------------------------------------------------------
+# 14. the y axis -- a crossed grating, stage by stage
+# ---------------------------------------------------------------------------------------
+
+def _crossed_grid(theta_deg=20.0, phi_deg=30.0, n_y=8, n_x=8, resolution=0.05):
+    """A crossed grating that is asymmetric in x, in y, and under transpose.
+
+    Deliberately not an L or a square block: every external oracle this project has used was
+    once blind to a y row-order defect because the 2D rasters tested were y-symmetric, and a
+    scene that cannot see a transposition is worse than no scene.
+    """
+    from wavebit._core.fdtd import _Grid
+    raster = np.full((1, n_y, n_x), EPS_TOP, dtype=complex)
+    raster[0, :n_y // 2, :n_x // 2] = wavebit.eps_from_index(N_TOOTH)
+    raster[0, n_y // 2:, :n_x // 4] = wavebit.eps_from_index(2.0)
+    return _Grid(WL, PERIOD, raster, [THICK], EPS_TOP, EPS_BOT, resolution, 12, 0.99, True,
+                 theta=np.deg2rad(theta_deg), phi=np.deg2rad(phi_deg),
+                 mu_top=1.0 + 0j, mu_bot=1.0 + 0j, period_y=PERIOD)
+
+
+def test_the_y_shift_carries_its_own_bloch_phase_on_its_own_axis():
+    """`_shift_up_y` moves along y, not x, and multiplies by the y phase, not the x one.
+
+    Two separate mistakes, and neither raises: shifting the wrong axis returns an array of the
+    right shape, and using `bloch` where `bloch_y` belongs returns the right shape too. The
+    RCWA path's own notes record the `(Py, Px)` swap happening repeatedly for exactly this
+    reason -- a pair of periods is easy to hand over in the wrong order.
+    """
+    from wavebit._core.fdtd import _shift_up_y, _shift_down_y, _shift_up
+    a = np.arange(2 * 3 * 4, dtype=complex).reshape(2, 3, 4)
+    phase = np.exp(0.7j)
+    up = _shift_up_y(a, phase)
+    assert np.array_equal(up[..., :-1, :], a[..., 1:, :])
+    assert np.allclose(up[..., -1:, :], a[..., :1, :] * phase)
+    assert not np.allclose(up, _shift_up(a, phase)), 'the y shift moved the x axis'
+    assert np.allclose(_shift_down_y(_shift_up_y(a, phase), phase), a), 'not inverses'
+
+
+def test_a_crossed_raster_gives_the_grid_a_real_y_axis():
+    """`ny`, `dy` and `period_y` come from the raster having a y axis, not from a default."""
+    grid = _crossed_grid()
+    assert grid.ny > 1 and grid.dy is not None and grid.period_y == PERIOD
+    material = grid.eps_for(False, False, 'y', y_half=True)
+    assert material.shape == (grid.nz, grid.ny, grid.nx)
+    assert np.ptp(np.real(material)) > 1.0, 'the material does not vary at all'
+    # It must vary along y as well as x -- a scene that varies only in x is the 2D case again.
+    in_layer = np.real(material[grid.k_z0 + 2])
+    assert np.ptp(in_layer.mean(axis=1)) > 0.1, 'the material is constant along y'
+    assert np.ptp(in_layer.mean(axis=0)) > 0.1, 'the material is constant along x'
+
+
+def test_a_crossed_raster_without_a_y_period_is_refused():
+    """Two periods, and assuming they are equal is a silently square cell."""
+    from wavebit._core.fdtd import _Grid
+    raster = np.full((1, 4, 4), EPS_TOP, dtype=complex)
+    raster[0, :2, :2] = wavebit.eps_from_index(N_TOOTH)
+    with pytest.raises(ValueError, match='needs a y period'):
+        _Grid(WL, PERIOD, raster, [THICK], EPS_TOP, EPS_BOT, 0.05, 12, 0.99, True,
+              theta=0.0, mu_top=1.0 + 0j, mu_bot=1.0 + 0j)
+
+
+def test_the_courant_bound_counts_the_y_axis_once():
+    """`1/dy**2` replaces the algebraic `ky` term rather than joining it -- they are one term.
+
+    Keeping both would be conservative, which sounds safe and is not: a bound that is loose for
+    the wrong reason hides the case where the real one is violated.
+    """
+    grid = _crossed_grid()
+    n_min = 1.0
+    expect = 0.99 * n_min / np.sqrt(1.0 / grid.dx ** 2
+                                    + 1.0 / grid.dz_cell.min() ** 2
+                                    + 1.0 / grid.dy ** 2)
+    assert grid.dt == pytest.approx(expect, rel=1e-12)
