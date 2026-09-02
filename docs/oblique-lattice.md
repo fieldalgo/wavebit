@@ -182,15 +182,15 @@ cell and solving at another:
 | 20 deg | 20 deg | a circle, 1.01:1 | 0.288 |
 
 Only the diagonal is a circle. **The angle is irrelevant; sameness is the whole rule in this
-frame.** The
-second row is the dangerous one, because it is what a caller who swaps `lattice=` and reuses
-the array gets — `sum(T)` from 0.157 to 0.997 with no error, no warning, and energy conserved
-throughout. It reads as a lattice effect, and the lattice effect and the *shape deformed into
-an ellipse* effect are mixed together with nothing separating them.
+frame.** The second row is the dangerous one, because it is what a caller who swaps `lattice=`
+and reuses the array gets — `sum(T)` from 0.157 to 0.997 with no error, no warning, and energy
+conserved throughout. It reads as a lattice effect, and the lattice effect and the *shape
+deformed into an ellipse* effect are mixed together with nothing separating them.
 
-`A.grid(grid_shape)` (`Lattice.grid`) is the same call as `wavebit.grid(grid_shape, lattice=A)` with the
-basis named once, which is the whole of what it is for. **It is a nudge and not a guarantee:**
-`wavebit.grid(grid_shape, lattice=B)` still exists and still answers, and provenance cannot be
+`A.grid(grid_shape)` (`Lattice.grid`) is the same call as `wavebit.grid(grid_shape,
+lattice=A)` with the basis named once, which is the whole of what it is for. **It is a nudge
+and not a guarantee:** `wavebit.grid(grid_shape, lattice=B)` still exists and still answers, and
+provenance cannot be
 attached to the array either — the first `np.where` turns the coordinates into a permittivity
 raster, and a raster is numbers on indices with no record of the cell it was drawn in. So the
 rule has to be carried by the reader: **change the cell and redraw the array.** Pinned as
