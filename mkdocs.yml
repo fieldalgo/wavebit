@@ -1,0 +1,157 @@
+# Documentation site. Build it with the `docs` extra:
+#
+#     pip install -e '.[docs]'
+#     mkdocs serve                 # http://127.0.0.1:8000
+#     mkdocs build                 # what the `docs` CI job runs
+#
+# `docs/` is the source tree as it already stands -- every document there is markdown and
+# renders unchanged, so a page reads the same on GitHub and on the site. That is also the
+# constraint on any link written in one: it has to be a relative link to a real file, because
+# both readers follow it.
+site_name: Wavebit
+site_description: Differentiable electromagnetic simulation suite
+site_author: FieldAlgo
+repo_url: https://github.com/fieldalgo/wavebit
+repo_name: fieldalgo/wavebit
+edit_uri: edit/develop/docs/
+
+docs_dir: docs
+site_dir: site
+
+# The folder contract for `docs/` -- what a document there must contain and what it may point
+# at. Its reader is someone adding a file to the repository, not someone reading the site, and
+# leaving it in would also collide with `index.md` for the home page.
+exclude_docs: |
+  /README.md
+
+theme:
+  name: material
+  # No `logo:`. Material resolves it inside `docs_dir`, and the brand SVGs live in `images/`
+  # beside the README -- pointing at them would need a second copy that can drift from the
+  # first. The site carries the wordmark as `site_name` instead.
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - content.code.copy
+    - toc.follow
+    - search.suggest
+  palette:
+    # Follow the reader's system theme, then let them override it -- the same arrangement the
+    # README's <picture> logo swap makes.
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Follow the system theme
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light
+
+# A document here may legitimately point at something outside `docs/` -- a notebook to run, a
+# test to read, the source of a function. Those links are correct in the repository and
+# unresolvable in a site rooted at `docs/`, so they are reported and not failed on.
+# `tests/test_docs_contract.py` is the authority on whether a cited path exists; it reads the
+# whole published tree and has no such blind spot. Anchors and nav are checked strictly here,
+# because nothing else checks them.
+validation:
+  nav:
+    omitted_files: warn
+    not_found: warn
+  links:
+    not_found: info
+    anchors: warn
+    absolute_links: info
+    unrecognized_links: info
+
+hooks:
+  - mkdocs_hooks.py
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: false
+            show_root_heading: true
+            show_root_full_path: false
+            heading_level: 3
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: true
+            signature_crossrefs: true
+            filters: ["!^_"]
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      # GitHub's slugifier, not MkDocs's. Every document here is read in both places, and the
+      # two disagree on headings holding punctuation -- `## `projector` — the
+      # circular-polarization limit (2026-09-01)` anchored one way on GitHub and another by
+      # default, which is how a link written against one arrived broken in the other.
+      slugify: !!python/object/apply:pymdownx.slugs.slugify {kwds: {case: lower}}
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+
+# Explicit, and with short labels: the H1 of a document here is a full sentence, which is right
+# at the top of the page and unreadable in a sidebar. Listing them also means a document added
+# to `docs/` and forgotten shows up as a build warning rather than as a page nobody can reach.
+nav:
+  - Home: index.md
+  - Guide:
+      - Overview: guide/README.md
+      - The scene: guide/scene.md
+      - Backends and precision: guide/backends.md
+      - Near fields: guide/fields.md
+      - Differentiating a solve: guide/autodiff.md
+      - A run as data: guide/specs.md
+  - Reference:
+      - Conventions: conventions.md
+      - API: reference/api.md
+  - Decisions:
+      - Analytic modeling: analytic-modeling.md
+      - Boundary modeling: boundary-modeling.md
+      - Oblique lattices: oblique-lattice.md
+      - NVF normal methods: nvf-normal-methods.md
+      - NVF sampling grid: nvf-upsampling.md
+      - Truncation shape: fourier-truncation-shape.md
+      - Factorization terms: factorization-terms.md
+      - Off-diagonal slots: off-diagonal-slot-convention.md
+      - The five-slot limit: five-slot-limit.md
+      - Anisotropic materials: anisotropic-materials.md
+      - Patterned anisotropic: patterned-anisotropic-factorization.md
+      - Magnetic materials: magnetic-materials.md
+      - The formulation: formulation.md
+      - The 4ff solver: first-order-4ff.md
+      - Connecting algorithms: connecting-algorithms.md
+      - What a solve answers: what-a-solve-answers.md
+      - Multimode incidence: multimode-incidence.md
+      - The s/p frame: amplitude-sp-frame.md
+      - Branch cuts: branch-cuts.md
+      - Rayleigh points: rayleigh-points.md
+      - Rayleigh, walked through: rayleigh-handling-walkthrough.md
+      - Time-convention audit: time-convention-audit.md
+      - Backend choice: backend-choice.md
+      - torch.compile: torch-compile.md
+      - Bessel J1: bessel-j1.md
+      - Capability manifest: capability-manifest.md

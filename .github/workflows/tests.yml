@@ -19,6 +19,13 @@
 #              rule nothing enforces is a comment. The config landed with 19
 #              findings cleared, and without this job the twentieth arrives
 #              unannounced.
+#   docs     — builds the MkDocs site. It does NOT deploy one; see the job for
+#              why that is a decision and not an omission. What it catches is
+#              the class of breakage nothing else sees: `docs/reference/api.md`
+#              names members by hand, and mkdocstrings drops an unknown one in
+#              silence rather than failing — five were dropped that way on the
+#              day the page was written. Importing the package is also what
+#              makes a moved or renamed public symbol a red mark here.
 name: tests
 
 on:
@@ -211,4 +218,50 @@ jobs:
           assert not eager, f'optional backend imported on the numpy path: {eager}'
 
           print(f'numpy-only solve OK: R={R:.6f} T={T:.6f}')
+          PY
+
+  docs:
+    name: docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      # The package itself, because mkdocstrings imports it to read the docstrings —
+      # NumPy only, since nothing on the public surface needs an optional backend to be
+      # introspected, and pulling torch here would cost minutes for nothing.
+      - name: Install Wavebit and the docs extra
+        run: pip install -e '.[docs]'
+
+      # Not `--strict`. A document here may legitimately point at something outside
+      # `docs/` — a notebook to run, a test to read, the source of a function — and those
+      # links are correct in the repository while being unresolvable in a site rooted at
+      # `docs/`. `tests/test_docs_contract.py` is what checks a cited path exists, over
+      # the whole published tree and with no such blind spot; `mkdocs.yml` downgrades the
+      # duplicate check to `info` for that reason.
+      - name: Build the site
+        run: mkdocs build
+
+      # The check the build cannot make on its own. `docs/reference/api.md` lists members
+      # by name, and mkdocstrings renders what it finds and says nothing about what it
+      # does not, so a renamed or moved symbol leaves a quietly shorter page.
+      - name: Every name the API page asks for was rendered
+        run: |
+          python - <<'PY'
+          import pathlib, re, sys
+
+          page = pathlib.Path('docs/reference/api.md').read_text()
+          html = pathlib.Path('site/reference/api/index.html').read_text()
+
+          wanted = re.findall(r'^::: [\w.]*?(\w+)$', page, re.M)
+          wanted += re.findall(r'^        - (\w+)$', page, re.M)
+
+          missing = sorted({n for n in wanted if n not in html})
+          if missing:
+              sys.exit(f'named in docs/reference/api.md, absent from the built page: {missing}')
+          print(f'{len(wanted)} names asked for, all rendered')
           PY

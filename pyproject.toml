@@ -71,6 +71,17 @@ pytorch = [
     "tqdm>=4.67",
 ]
 
+# Building the documentation site (`mkdocs serve` / `mkdocs build`), which nothing at
+# runtime needs. Floored rather than pinned, unlike ruff in the CI workflow: these decide
+# how prose is rendered, not whether a check passes, so a newer one cannot turn a commit
+# that changed nothing red. mkdocs-material is what pulls MkDocs itself, and mkdocstrings
+# reads the docstrings for `docs/reference/api.md` -- 19.9k words that otherwise exist only
+# for someone reading the source.
+docs = [
+    "mkdocs-material>=9.7",
+    "mkdocstrings[python]>=1.0",
+]
+
 # Only normal_method='contour' reads this (subpixel level-set extraction); everything else
 # in the package runs without it, so it stays optional. The floor is the version the
 # construction was measured with. contourpy ships with matplotlib, so most environments

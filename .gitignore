@@ -24,3 +24,6 @@ dev/
 # No trailing slash -- a trailing slash matches directories, not symlinks.
 lab
 
+# The built documentation site. `mkdocs build` regenerates it from `docs/` in about a
+# second, so it is a derived artifact and not a record of anything.
+site/
