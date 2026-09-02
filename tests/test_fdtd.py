@@ -1753,7 +1753,9 @@ def _record(n_index, record_field=1, **over):
 
 def _front_speed(diag):
     """Speed of the first arrival, fitted over the interior."""
-    field = np.abs(diag['field_e']).max(axis=2)
+    # `field_e` is (snapshot, nz, ny, nx) -- the y axis is there even while it is 1, so the
+    # reduction names the transverse axes rather than counting them.
+    field = np.abs(diag['field_e']).max(axis=(2, 3))
     t, z, grid = diag['field_t'], diag['field_z'], diag['grid']
     threshold = 0.02 * field.max()
     arrival = np.array([t[np.flatnonzero(field[:, k] > threshold)[0]]
@@ -1816,6 +1818,9 @@ def test_the_record_carries_the_axes_it_is_measured_on():
     assert np.allclose(z, diag['grid'].z_node), 'field_z must BE the node table, not a rebuild'
     assert diag['field_t'].shape[0] == diag['field_e'].shape[0]
     assert diag['field_x'].shape == (diag['nx'],)
+    assert diag['field_e'].shape[1:] == (diag['nz'], diag['grid'].ny, diag['nx']), (
+        'the record carries the y axis even at ny = 1, so a crossed grating is a larger ny '
+        'rather than a different array shape')
 
 
 def test_the_record_is_off_by_default_and_costs_nothing():

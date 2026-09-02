@@ -783,18 +783,21 @@ class _Incident1D:
 # ---------------------------------------------------------------------------------------
 
 def _shift_up(a, bloch=1.0):
-    """``a[:, i+1]``, with the Bloch phase the cell edge carries.
+    """``a[..., i+1]``, with the Bloch phase the cell edge carries.
+
+    **The LAST axis is x, always.** A 3D run puts y in front of it, so naming the axis by
+    position rather than by number is what lets one expression serve both.
 
     At oblique incidence the field is periodic only up to ``exp(i kx Lambda)``, so the one
     column that wraps picks that factor up and the rest of the shift is an ordinary roll.
     ``bloch = 1`` is normal incidence and reduces this to the plain periodic shift.
     """
-    return np.concatenate([a[:, 1:], a[:, :1] * bloch], axis=1)
+    return np.concatenate([a[..., 1:], a[..., :1] * bloch], axis=-1)
 
 
 def _shift_down(a, bloch=1.0):
     """``a[:, i-1]``, with the Bloch phase (conjugated -- it wraps the other way)."""
-    return np.concatenate([a[:, -1:] * np.conj(bloch), a[:, :-1]], axis=1)
+    return np.concatenate([a[..., -1:] * np.conj(bloch), a[..., :-1]], axis=-1)
 
 
 class _Grid:
@@ -852,6 +855,10 @@ class _Grid:
         self.poles = dict(poles or {})
 
         self.nx = max(int(round(self.period * resolution)), 1)
+        #: Cells along y. One while the structure is invariant along y, which is every scene
+        #: this module accepts today -- `_refuse_out_of_scope` requires `structure.shape[1] == 1`.
+        #: It exists so the field arrays carry the axis before anything varies along it.
+        self.ny = 1
         self.dx = self.period / self.nx
         self.dz = self.dx
 
@@ -1052,10 +1059,12 @@ class _Grid:
 
     def eps_for(self, z_half, x_half, harmonic_axis):
         centres, widths = self.z_cells(z_half)
+        # `[:, None, :]` rather than a reshape: the y axis is inserted, and while `ny == 1` the
+        # values are the 2D ones untouched, element for element.
         return component_property(
             self.raster, self.thickness, self.eps_top, self.eps_bot, self.period,
             centres, widths, self.dx, self.nx, x_half, harmonic_axis,
-            subpixel=self.subpixel)
+            subpixel=self.subpixel)[:, None, :]
 
     def mu_for(self, z_half, x_half, harmonic_axis):
         """Permeability on one magnetic component's cells, by the same rule `eps_for` uses.
@@ -1068,7 +1077,7 @@ class _Grid:
         return component_property(
             self.mu_raster, self.thickness, self.mu_top, self.mu_bot, self.period,
             centres, widths, self.dx, self.nx, x_half, harmonic_axis,
-            subpixel=self.subpixel)
+            subpixel=self.subpixel)[:, None, :]
 
     def fill_for(self, pole_id, z_half, x_half):
         """What fraction of each of this component's cells carries ``pole_id``.
@@ -1082,7 +1091,7 @@ class _Grid:
         indicator = (self.dispersion == pole_id).astype(float)
         return np.real(component_property(
             indicator, self.thickness, 0.0, 0.0, self.period, centres, widths,
-            self.dx, self.nx, x_half, None, subpixel=self.subpixel))
+            self.dx, self.nx, x_half, None, subpixel=self.subpixel))[:, None, :]
 
     def pole_state(self, shape, z_half, x_half, dtype):
         """The :class:`_PoleSet` for one electric component, or ``None`` if the scene is
@@ -1130,10 +1139,15 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
             f'so it is refused rather than reported with a residual nobody reads.')
 
     nz, nx, dz, dx, dt = grid.nz, grid.nx, grid.dz, grid.dx, grid.dt
+    #: The y axis. One today -- the structure is invariant along y and `d/dy` is the
+    #: algebraic `i*ky` -- but the arrays carry it so a crossed grating is a larger `ny`
+    #: rather than a second stepper. At `ny == 1` every expression below is the 2D one
+    #: element for element, which is what makes this provable rather than argued.
+    ny = grid.ny
     # The z divisors. `dz` itself stays scalar here and owns POSITIONS only.
-    dzc, dzd = grid.dz_cell[:, None], grid.dz_dual[:, None]
-    hb, ha, hk = (grid.half[k][:, None] for k in ('b', 'a', 'kappa'))
-    nb, na, nk = (grid.node[k][:, None] for k in ('b', 'a', 'kappa'))
+    dzc, dzd = grid.dz_cell[:, None, None], grid.dz_dual[:, None, None]
+    hb, ha, hk = (grid.half[k][:, None, None] for k in ('b', 'a', 'kappa'))
+    nb, na, nk = (grid.node[k][:, None, None] for k in ('b', 'a', 'kappa'))
     kt = grid.k_tfsf
 
     dtype = grid.dtype
@@ -1191,46 +1205,46 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
         # own axis -- the duality's image of the rule `eps_for` uses for `Ex` and `Ez`.
         mu_x = grid.mu_for(True, False, 'x').real
         mu_z = grid.mu_for(False, True, 'z').real
-        ey = np.zeros((nz, nx), dtype=dtype)
-        hx = np.zeros((nz - 1, nx), dtype=dtype)
-        hz = np.zeros((nz, nx), dtype=dtype)
-        poles_y = grid.pole_state((nz, nx), False, False, dtype)
+        ey = np.zeros((nz, ny, nx), dtype=dtype)
+        hx = np.zeros((nz - 1, ny, nx), dtype=dtype)
+        hz = np.zeros((nz, ny, nx), dtype=dtype)
+        poles_y = grid.pole_state((nz, ny, nx), False, False, dtype)
     if tm_on:
         # (Hy, Ex, Ez). Ex is normal to the tooth's vertical walls, Ez to the horizontal ones.
         eps_x = grid.eps_for(False, True, 'x').real
         eps_z = grid.eps_for(True, False, 'z').real
         # `Hy` is out of plane, so it has no in-plane axis to average harmonically along.
         mu_y = grid.mu_for(True, True, None).real
-        hy = np.zeros((nz - 1, nx), dtype=dtype)
-        ex = np.zeros((nz, nx), dtype=dtype)
-        ez = np.zeros((nz - 1, nx), dtype=dtype)
-        poles_x = grid.pole_state((nz, nx), False, True, dtype)
-        poles_z = grid.pole_state((nz - 1, nx), True, False, dtype)
+        hy = np.zeros((nz - 1, ny, nx), dtype=dtype)
+        ex = np.zeros((nz, ny, nx), dtype=dtype)
+        ez = np.zeros((nz - 1, ny, nx), dtype=dtype)
+        poles_x = grid.pole_state((nz, ny, nx), False, True, dtype)
+        poles_z = grid.pole_state((nz - 1, ny, nx), True, False, dtype)
     # One CPML accumulator per stretched update. The two triples shared a pair while only one
     # of them ever ran; a conical mount runs both.
-    psi_hx = np.zeros((nz - 1, nx), dtype=dtype)
-    psi_hy = np.zeros((nz - 1, nx), dtype=dtype)
-    psi_ey = np.zeros((nz, nx), dtype=dtype)
-    psi_ex = np.zeros((nz, nx), dtype=dtype)
+    psi_hx = np.zeros((nz - 1, ny, nx), dtype=dtype)
+    psi_hy = np.zeros((nz - 1, ny, nx), dtype=dtype)
+    psi_ey = np.zeros((nz, ny, nx), dtype=dtype)
+    psi_ex = np.zeros((nz, ny, nx), dtype=dtype)
 
     n_f = len(freq)
-    dft_ref = np.zeros((n_f, nx), dtype=complex)
-    dft_trn = np.zeros((n_f, nx), dtype=complex)
+    dft_ref = np.zeros((n_f, ny, nx), dtype=complex)
+    dft_trn = np.zeros((n_f, ny, nx), dtype=complex)
     #: The time-domain record, which is the one thing a time-domain solve does that its
     #: frequency-domain answer cannot show. It costs a snapshot every `record_field` steps;
     #: at a 10 nm grid on the benchmark cell that is 86 kB a snapshot, so every 10th step is
     #: 67 MB and every 50th is 13 MB. Off by default because a solve that is not asked for it
     #: should not pay for it -- the same reason `answers` is a declaration on the RCWA path.
     n_snap = 0 if record_field is None else (n_steps + record_field - 1) // record_field
-    snap_e = np.zeros((n_snap, nz, nx), dtype=dtype) if n_snap else None
-    snap_x = np.zeros((n_snap, nz, nx), dtype=dtype) if (n_snap and conical) else None
+    snap_e = np.zeros((n_snap, nz, ny, nx), dtype=dtype) if n_snap else None
+    snap_x = np.zeros((n_snap, nz, ny, nx), dtype=dtype) if (n_snap and conical) else None
     snap_t = np.zeros(n_snap)
 
     # The second transverse component, `Ex`, and its own incident reference. A conical mount
     # needs both because the s and p channels of an order are two projections of the same
     # transverse vector -- at ky = 0 one component determines the other and these stay unused.
-    dft_ref_x = np.zeros((n_f, nx), dtype=complex)
-    dft_trn_x = np.zeros((n_f, nx), dtype=complex)
+    dft_ref_x = np.zeros((n_f, ny, nx), dtype=complex)
+    dft_trn_x = np.zeros((n_f, ny, nx), dtype=complex)
     inc_z0_x = np.zeros(n_f, dtype=complex)
     inc_ref = np.zeros(n_f, dtype=complex)
     inc_trn = np.zeros(n_f, dtype=complex)
@@ -1268,7 +1282,7 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
         inc.step_e((step + 1) * dt)
         if te_on:
             # eps dEy/dt = dHx/dz - dHz/dx -- the other component no `ky` term reaches.
-            d = np.zeros((nz, nx), dtype=dtype)
+            d = np.zeros((nz, ny, nx), dtype=dtype)
             d[1:-1] = (hx[1:] - hx[:-1]) / dzd[1:-1]
             psi_ey = nb * psi_ey + na * d
             curl = (d / nk + psi_ey
@@ -1282,7 +1296,7 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
             ey[kt] -= dt * inc.hx[kt - 1] * x_node / dzd[kt, 0] / eps[kt]
         if tm_on:
             # eps dEx/dt = i ky Hz - dHy/dz ; eps dEz/dt = dHy/dx - i ky Hx.
-            d = np.zeros((nz, nx), dtype=dtype)
+            d = np.zeros((nz, ny, nx), dtype=dtype)
             d[1:-1] = -(hy[1:] - hy[:-1]) / dzd[1:-1]
             psi_ex = nb * psi_ex + na * d
             curl_ex = d / nk + psi_ex
@@ -1326,14 +1340,14 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
                                   -inc.h[grid.k_z0])
             t_now = (step + 0.5) * dt
         kernel = np.exp(2j * np.pi * freq * t_now) * dt          # (n_f,)
-        dft_ref = dft_ref + kernel[:, None] * f_ref[None, :]
-        dft_trn = dft_trn + kernel[:, None] * f_trn[None, :]
+        dft_ref = dft_ref + kernel[:, None, None] * f_ref[None, :, :]
+        dft_trn = dft_trn + kernel[:, None, None] * f_trn[None, :, :]
         inc_ref += kernel * i_ref
         inc_trn += kernel * i_trn
         inc_z0 += kernel * i_z0
         if conical:
-            dft_ref_x = dft_ref_x + kernel[:, None] * g_ref[None, :]
-            dft_trn_x = dft_trn_x + kernel[:, None] * g_trn[None, :]
+            dft_ref_x = dft_ref_x + kernel[:, None, None] * g_ref[None, :, :]
+            dft_trn_x = dft_trn_x + kernel[:, None, None] * g_trn[None, :, :]
             inc_z0_x += kernel * j_z0
 
         if n_snap and step % record_field == 0:
@@ -1532,6 +1546,11 @@ def _extract_conical(grid, out, half_width, index, centre, sigma=(-1.0, 1.0, -1.
     invisible to ``R``, ``T`` and ``R + T``.
     """
     nx = grid.nx
+    if grid.ny != 1:
+        raise NotImplementedError(
+            'fdtd: the extraction is still one-dimensional in the transverse plane. A crossed '
+            'grating needs a 2D order set -- the propagating set becomes a DISC rather than a '
+            'rectangle, and a per-axis copy of `_propagating_window` silently drops orders.')
     wavelength = float(out['wavelengths'][index])
     if half_width >= nx // 2:
         raise ValueError(
@@ -1578,9 +1597,9 @@ def _extract_conical(grid, out, half_width, index, centre, sigma=(-1.0, 1.0, -1.
         amp_p = sig * (n_half / kz) * (c_m * e_x + s_m * e_y) / a_inc
         return amp_s, amp_p
 
-    r_s, r_p = face(out['dft_ref'][index], out['dft_ref_x'][index],
+    r_s, r_p = face(out['dft_ref'][index][0], out['dft_ref_x'][index][0],
                     kz_top, n_top, z_ref, 1.0, sig_r)
-    t_s, t_p = face(out['dft_trn'][index], out['dft_trn_x'][index], kz_bot, n_bot,
+    t_s, t_p = face(out['dft_trn'][index][0], out['dft_trn_x'][index][0], kz_bot, n_bot,
                     z_trn - grid.total_thickness, -1.0, sig_t)
 
     # An order evanescent in a half-space arrives already decayed; undoing that amplifies
@@ -1619,6 +1638,11 @@ def _extract(grid, out, half_width, index, centre=0):
     unaffected either way, so no efficiency test can see this.
     """
     nx = grid.nx
+    if grid.ny != 1:
+        raise NotImplementedError(
+            'fdtd: the extraction is still one-dimensional in the transverse plane. A crossed '
+            'grating needs a 2D order set -- the propagating set becomes a DISC rather than a '
+            'rectangle, and a per-axis copy of `_propagating_window` silently drops orders.')
     wavelength = float(out['wavelengths'][index])
     if half_width >= nx // 2:
         raise ValueError(
@@ -1668,8 +1692,8 @@ def _extract(grid, out, half_width, index, centre=0):
             f'what comes back there is noise over noise -- measured R = 105 on a scene whose '
             f'true R is 0.04. Narrow the band, or move `wavelength` toward it.')
 
-    r = (kernel @ out['dft_ref'][index]) / a_inc * np.exp(1j * k0 * kz_top * z_ref)
-    t = ((kernel @ out['dft_trn'][index]) / a_inc
+    r = (kernel @ out['dft_ref'][index][0]) / a_inc * np.exp(1j * k0 * kz_top * z_ref)
+    t = ((kernel @ out['dft_trn'][index][0]) / a_inc
          * np.exp(-1j * k0 * kz_bot * (z_trn - grid.total_thickness)))
 
     # An order evanescent in a half-space arrives at the monitor already decayed; undoing that
