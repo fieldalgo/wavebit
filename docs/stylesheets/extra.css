@@ -61,3 +61,18 @@
 .md-nav__list .md-nav__item {
   margin-bottom: 0.1rem;
 }
+
+/* The page title.
+ *
+ * Material fades `h1` to `--md-default-fg-color--light` -- 0.54 against the body's 0.87 -- so
+ * the title of a page is the faintest text on it, fainter than its own `h2`s and its own
+ * paragraphs. That is the same inversion the sidebar headings had, and it reads the same way:
+ * the thing naming the content is quieter than the content.
+ *
+ * PyData does not fade it. On numpy.org/doc/stable the h1, the h2 and the body are one colour,
+ * rgb(34,40,50), and the hierarchy is carried by size and weight alone -- which is what those
+ * are for.
+ */
+.md-typeset h1 {
+  color: var(--md-default-fg-color);
+}
