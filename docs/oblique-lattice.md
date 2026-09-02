@@ -29,6 +29,10 @@ solver = wavebit.rcwa(
 `period=(Lx, Ly)` remains the default and means `diag(Lx, Ly)`. Setting `lattice` makes `period`
 report the basis-vector lengths `(|a1|, |a2|)`.
 
+If you only want to know which spellings answer, which refuse, and which answer *the wrong
+question*, skip to [Every combination, measured](#every-combination-measured) — twelve rows, one
+scene, every number taken from a run.
+
 ## Spelling the cell
 
 **An orthogonal cell needs none of this.** `period=(Lx, Ly)` is its spelling and remains the
@@ -295,6 +299,65 @@ only silent one. `wavebit.meshgrid_xy` has refused the same omission since it wa
 (`as_lattice: needs one of period or lattice`), so the two doors into a raster now agree. The
 check runs at construction *and* at the solve, because a structure can be assigned long after
 the solver was built.
+
+### Every combination, measured
+
+One scene answers the whole question: a circle of radius 150 in a 640 cell, 128 px, `nvf`,
+truncation 6, 300 thick, index 3.5 at 900 nm. `A` is the 640 square it was drawn on; `B` is
+`Lattice.oblique(640., 640., 70.)` — a *different* cell, named to stand for every wrong one.
+
+```
+                     structure=
+                         |
+        +----------------+----------------+
+        |                                 |
+   list of dicts                    array of numbers
+   (analytic)                       (raster)
+        |                                 |
+   absolute lengths            fractions of the pixel grid,
+   -- no frame to declare      and the grid needs a cell
+        |                                 |
+   .drawn() REFUSES            +----------+----------+
+   solves on ANY cell          |                     |
+                          bare array          A.drawn(array)
+                               |                     |
+                       answers on any cell    answers on A,
+                       -- lattice frame,      REFUSES on any other
+                          you get an ellipse  -- Cartesian frame, pinned
+```
+
+| `structure=` | cell named | what happens | `sum(T)` |
+|---|---|---|---|
+| raster, bare | `period=[640., 640.]` | answers | 0.420214 |
+| raster, bare | `lattice=A` | answers — same cell, so byte-identical to the row above | 0.420214 |
+| raster, bare | `lattice=B` | **answers, and this is the hazard** | 0.110040 |
+| raster, bare | both | refused: *period and lattice both given* | — |
+| raster, bare | neither | refused: *no cell was given* | — |
+| `A.drawn(raster)` | `lattice=A` | answers, unchanged from bare | 0.420214 |
+| `A.drawn(raster)` | `lattice=B` | **refused**: *drawn on a different cell* | — |
+| `A.drawn(raster)` | `period=[640., 640.]` | answers — the same cell, spelled the other way | 0.420214 |
+| analytic | `lattice=A` | answers | 0.438099 |
+| analytic | `lattice=B` | answers, and **0.121451 is correct** — same circle, skewed cell | 0.121451 |
+| analytic | neither | refused: *no cell was given* | — |
+| `A.drawn(analytic)` | — | **refused at the wrap**: no frame to declare | — |
+
+Read the two bolded rows together, because they are the same input pattern with opposite
+verdicts and that is the entire design. `lattice=B` under a bare raster returns 0.110040 rather
+than raising, because it is a *legal reading*: the array is fractions of the cell, so the circle
+rides along and becomes an ellipse in a skewed cell, which is exactly what a duty cycle or a
+fill fraction is meant to do. Nothing downstream can tell that apart from a mistake — the array
+carries no length of its own — so the only thing that can is the caller, and `.drawn` is how
+they say it. `lattice=B` under an analytic structure returns 0.121451 and that number needs no
+declaration at all: `lx=300.` is 300 units on every cell, so there is no second reading to
+disambiguate, which is why declaring one is refused rather than allowed-and-ignored.
+
+Two rows are worth noticing for what they *don't* do. `A.drawn(...)` with `period=` still
+answers: the check compares the basis matrices, not the keywords, and `period=[640., 640.]` is
+the same cell. And declaring costs nothing when it agrees — 0.420214 either way, since the
+wrapper is taken apart at ingest and no array downstream ever sees the type.
+
+The rule underneath all twelve rows fits in a line: **a raster belongs to a cell and an
+analytic structure does not.** The refusals are the places that sentence is enforced.
 
 ## What it buys
 

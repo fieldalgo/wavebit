@@ -617,6 +617,49 @@ def test_a_declared_structure_is_refused_on_another_cell():
     assert abs(total(hx, hx.drawn(redrawn)) - total(hx, layer)) > 0.09
 
 
+def test_the_documented_combination_table_is_what_the_code_does():
+    """Every row of ``docs/oblique-lattice.md`` "Every combination, measured", re-measured.
+
+    The table is the page's summary of four separate mechanisms -- the two refusals on naming a
+    cell, the declaration check, and the analytic path's freedom -- so it is exactly the kind of
+    text that rots one row at a time while each mechanism's own test stays green.
+    """
+    A = wavebit.Lattice.rectangular(640.0, 640.0)
+    B = wavebit.Lattice.oblique(640.0, 640.0, 70.0)
+    X, Y = (np.asarray(c) for c in A.meshgrid_xy((128, 128)))
+    ras = np.where(X ** 2 + Y ** 2 < 150.0 ** 2, 12.25, 1.0)[None]
+    ana = [{'background': 1.0, 'shapes': [
+        {'type': 'circle', 'cx': 0.0, 'cy': 0.0, 'lx': 300.0, 'material': 12.25}]}]
+
+    def total(**kw):
+        s = wavebit.rcwa(backend=0, thickness=[300.0], wavelength=900.0,
+                         truncation_order=[6, 6], top=1.0, bot=1.0, theta=0.0, phi=0.0,
+                         psi=0.0, factorization='nvf', **kw)
+        return float(np.sum(np.asarray(s.solve().T)))
+
+    ON_A = 0.420214
+    assert total(period=[640.0, 640.0], structure=ras) == pytest.approx(ON_A, abs=1e-5)
+    assert total(lattice=A, structure=ras) == pytest.approx(ON_A, abs=1e-5)
+    assert total(lattice=B, structure=ras) == pytest.approx(0.110040, abs=1e-5)  # the hazard
+    with pytest.raises(ValueError, match='both given'):
+        total(period=[640.0, 640.0], lattice=A, structure=ras)
+    with pytest.raises(ValueError, match='no cell was given'):
+        total(structure=ras)
+
+    assert total(lattice=A, structure=A.drawn(ras)) == pytest.approx(ON_A, abs=1e-5)
+    with pytest.raises(ValueError, match='drawn on a different cell'):
+        total(lattice=B, structure=A.drawn(ras))
+    # the check compares bases, not keywords, so the other spelling of the same cell passes
+    assert total(period=[640.0, 640.0], structure=A.drawn(ras)) == pytest.approx(ON_A, abs=1e-5)
+
+    assert total(lattice=A, structure=ana) == pytest.approx(0.438099, abs=1e-5)
+    assert total(lattice=B, structure=ana) == pytest.approx(0.121451, abs=1e-5)  # also correct
+    with pytest.raises(ValueError, match='no cell was given'):
+        total(structure=ana)
+    with pytest.raises(ValueError, match='no frame to declare'):
+        A.drawn(ana)
+
+
 def test_the_analytic_spelling_has_no_frame_to_declare():
     """``drawn`` refuses an analytic structure, because moving its cell is *legal*.
 
