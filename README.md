@@ -147,14 +147,34 @@ warns `UnphysicalResultWarning`.
 
 ## Documentation
 
-| | |
-| --- | --- |
-| [`docs/guide/`](docs/guide) | The manual: every keyword, what it defaults to and what it refuses — scene, backends, near fields, autodiff, and a run described as data |
-| [`tutorials/`](tutorials) | Lessons in order, for someone who has not used the API yet: a first solve, autograd and optimization, device and precision, NVF factorization, oblique cells, polarization, multimode incidence |
-| [`docs/`](docs) | Why a default is what it is, and what was measured to decide it. [`conventions.md`](docs/conventions.md) is the normative contract; [`docs/README.md`](docs/README.md) maps the rest |
-| [`examples/`](examples) | Wavebit applied to outside problems |
-| [`studies/`](studies) | The scripts behind the measurements in `docs/` |
-| `python -m wavebit.manifest` | Every option, refusal and constraint as one generated JSON document, for a program that needs to know without reading the source ([`docs/capability-manifest.md`](docs/capability-manifest.md)) |
+The prose is split by **who is reading**, not by subject — the same three-way split NumPy's
+manual uses, with the decision records outside the manual the way NEPs are.
+
+| | For a reader who | |
+| --- | --- | --- |
+| [`docs/guide/`](docs/guide) | needs the contract for one keyword | **The manual.** What Wavebit solves and what it is bad at, installation, a quickstart; then describing a scene, saying what the light is, choosing the numerics, near fields, autodiff, backends, and a run described as data |
+| [`docs/reference/`](docs/reference) | needs a signature or a guarantee | [`conventions.md`](docs/conventions.md) is the **normative** contract; `keywords.md` is all 27 `rcwa()` keywords with their defaults and refusals; `api.md` is generated from the docstrings |
+| [`docs/`](docs) | is questioning a default | **Why it is what it is**, and what was measured to decide it — 26 write-ups, cited from the code they explain. [`docs/decisions/`](docs/decisions) groups them |
+| [`tutorials/`](tutorials) | has not used the API yet | Lessons in order, as runnable notebooks: a first solve, autograd and optimization, device and precision, NVF factorization, oblique cells, polarization, multimode incidence |
+| [`examples/`](examples) | wants it applied | Wavebit against outside problems |
+| [`studies/`](studies) | wants the raw measurement | The scripts behind the numbers in `docs/` |
+
+All of it also builds as a site:
+
+```shell
+pip install -e '.[docs]'
+sphinx-build -b html docs docs/_build/html      # then open docs/_build/html/index.html
+```
+
+Every page reads the same in both places, which is a constraint rather than a coincidence: a
+link in `docs/` is a relative link to a real file, the navigation lives in `docs/_toc.yml`
+rather than in directives inside the pages, and `tests/test_docs_contract.py` checks that every
+path a document cites exists. The one thing the site has that the repository cannot show is the
+API reference, which is read off the live objects at build time.
+
+Nothing is deployed yet. `python -m wavebit.manifest` is the other machine-readable surface —
+every option, refusal and constraint as one generated JSON document, for a program that needs to
+know without reading the source ([`docs/capability-manifest.md`](docs/capability-manifest.md)).
 
 ## Roadmap
 
