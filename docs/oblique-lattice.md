@@ -744,8 +744,12 @@ also wrong — a raster whose pixels are not square in real space; see
 >
 > **What is still open** is not periodicity but *accuracy on the medial axis*: where two points
 > of the level set are exactly equidistant from a pixel the direction is undefined, and
-> `'contour'` now answers with a stable arbitrary choice rather than an unstable one. The real
-> answer is the circular-polarization limit S4 and fmmax use, and it is not landed; see
+> `'contour'` now answers with a stable arbitrary choice rather than an unstable one. The
+> circular-polarization limit S4 and fmmax use **has since landed** as `projector='circular'`
+> (2026-09-01) — and it is **off by default and recommended against**: on the shipped
+> configuration it removes nothing measurable and costs accuracy in every cell measured, plus
+> mirror symmetry outright. `docs/nvf-normal-methods.md`, "`projector` — the
+> circular-polarization limit", has the tables. See also
 > `tests/test_nvf_lattice_translation.py::test_contour_is_periodic_where_the_medial_axis_is_reachable`.
 
 **Use `normal_method='contour'`.** The paragraph above describes the *default* construction,
