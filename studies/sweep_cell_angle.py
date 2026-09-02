@@ -1,9 +1,17 @@
 """
 sweep_cell_angle.py — sweeping a unit-cell angle, and the one way it goes wrong.
 
-The question: a cell angle is a design parameter (hex, rhombic, monoclinic chiral
-metasurfaces), so somebody will sweep it. What does that take, and what happens if the
-raster is built once and reused across the sweep?
+The question: what does changing a cell take, and what happens if the raster is built once
+and reused across the change?
+
+**The sweep is the instrument here, not the use case.** One change of ``lattice=`` with a
+reused array is already the whole defect; sweeping an angle only makes it legible, because
+the error then grows with the tilt instead of being a single wrong number that looks like a
+lattice effect. Be exact about the use case too: a *continuous* angle is a design variable in
+one documented family, the monoclinic chiral metasurfaces where achiral meta-atoms on a
+skewed cell give circular dichroism from the lattice alone (Toftul et al., Phys. Rev. Lett.
+**133**, 216901 (2024)). Hexagonal against rectangular is a *discrete* choice, not a sweep --
+you pick 60 or 90 -- and it hits the same trap on the one change it makes.
 
 **The answer is that a raster has to be redrawn at every angle, and that redrawing it is
 enough.** A raster holds pixel *indices*: pixel ``(i, j)`` means the parametric point

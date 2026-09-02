@@ -453,9 +453,13 @@ this kind of sweep and ~7x when you genuinely need the harmonics.
 
 ## Sweeping the cell angle
 
-A cell angle is a design parameter — hex, rhombic, and the monoclinic chiral metasurfaces
-below — so somebody will sweep it. **A raster has to be redrawn at every angle, and redrawing
-it is enough.** `studies/sweep_cell_angle.py` runs the sweep three ways and prints the table
+**A raster has to be redrawn whenever the cell changes, and redrawing it is enough.** One
+change of `lattice=` with a reused array is already the whole defect — the sweep below is the
+instrument that makes it legible, not the use case, because sweeping makes the error grow with
+the tilt instead of being a single wrong number that reads as a lattice effect. A *continuous*
+angle is a design variable in one documented family, the monoclinic chiral metasurfaces at the
+end of this page; hexagonal against rectangular is a discrete choice that hits the same trap on
+the one change it makes. `studies/sweep_cell_angle.py` runs the sweep three ways and prints the table
 below; the figure it writes is `studies/results/sweep_cell_angle.png`.
 
 ```python
