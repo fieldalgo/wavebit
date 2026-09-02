@@ -668,7 +668,7 @@ class _Incident1D:
     HALF = ('hx', 'hy', 'ez')
 
     def __init__(self, nz, dz, dt, eps_r, n_pml, k_src, wavelength, f0, width, t0,
-                 tetm, kx_op, dtype, mu_r=1.0, ky=0.0, drive=None):
+                 tetm, kx_op, dtype, mu_r=1.0, ky=0.0, drive=None, ky_op=None):
         self.dz, self.dt, self.eps_r, self.k_src = dz, dt, eps_r, k_src
         #: The auxiliary grid rides the SAME mesh as the 2D one -- it is handed the same
         #: object, not a copy, so a graded 2D mesh grades this too. That is not a nicety:
@@ -692,6 +692,12 @@ class _Incident1D:
         #: every other name in this module carries. Passing the normalised value is a factor
         #: `k0` too large, which on a 900 nm run is 143x and diverges to 1e267 in 200 steps.
         self.tetm, self.kx_op, self.ky = tetm, kx_op, complex(ky)
+        #: `d/dy` as an OPERATOR, the way `kx_op` already is. While the structure is invariant
+        #: along y this is the exact `i*ky`; on a crossed grating it must be the DISCRETE
+        #: difference the 2D grid applies, or the two grids sit on different dispersion
+        #: relations and the TFSF cancellation degrades from round-off to their mismatch --
+        #: the same failure `kx_op` exists to prevent, in the other axis.
+        self.ky_op = 1j * self.ky if ky_op is None else complex(ky_op)
         #: The tangential electric amplitudes the source drives, `(ex, ey)`. For a pure TE/TM
         #: run this is the single component that polarisation names; for a conical mount it is
         #: the incident wave's s or p direction, which are the two eigenpolarisations of a
@@ -737,7 +743,7 @@ class _Incident1D:
         return (field[1:] - field[:-1]) / self.dz_cell
 
     def step_h(self):
-        ky, kx_op, dt, mu = 1j * self.ky, self.kx_op, self.dt, self.mu_r
+        ky, kx_op, dt, mu = self.ky_op, self.kx_op, self.dt, self.mu_r
         te = self.tetm in ('te', None)
         tm = self.tetm in ('tm', None)
         if te:
@@ -759,7 +765,7 @@ class _Incident1D:
             self.hy += (dt / mu) * (self.ez * kx_op - d / self.half['kappa'] - self.psi_hy)
 
     def step_e(self, t):
-        ky, kx_op, dt, eps = 1j * self.ky, self.kx_op, self.dt, self.eps_r
+        ky, kx_op, dt, eps = self.ky_op, self.kx_op, self.dt, self.eps_r
         te = self.tetm in ('te', None)
         tm = self.tetm in ('tm', None)
         if te:
@@ -1232,6 +1238,8 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
                       centre, 1.0 / centre, width, t0, None if conical else tetm,
                       grid.kx_op, dtype, mu_r=grid.mu_top.real,
                       ky=(2.0 * np.pi / centre) * grid.ky_inc if conical else 0.0,
+                      ky_op=((2j * np.sin(0.5 * (2.0 * np.pi / centre) * grid.ky_inc * grid.dy) / grid.dy)
+                             if grid.ny > 1 else None),
                       drive=inc_drive)
 
     # The incident field the TFSF plane injects varies across the cell as `exp(i kx x)`; the
@@ -1246,6 +1254,18 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
         cell = np.arange(nx)
         x_node = np.exp(1j * k0 * grid.kx_inc * cell * dx)
         x_half = np.exp(1j * k0 * grid.kx_inc * (cell + 0.5) * dx)
+    # The y factor, and the in-plane phase is the OUTER PRODUCT of the two -- a plane wave is
+    # separable, so two vectors serve where a full (ny, nx) array would. The four injected
+    # components sit at only TWO distinct in-plane Yee positions: `Ey` and `Hx` on
+    # (x-node, y-half), `Ex` and `Hy` on (x-half, y-node).
+    if grid.ny == 1 or grid.ky_inc == 0.0:
+        y_node = y_half = np.ones(grid.ny)
+    else:
+        row = np.arange(grid.ny)
+        y_node = np.exp(1j * k0 * grid.ky_inc * row * grid.dy)
+        y_half = np.exp(1j * k0 * grid.ky_inc * (row + 0.5) * grid.dy)
+    p_node = y_half[:, None] * x_node[None, :]      # Ey, Hx
+    p_half = y_node[:, None] * x_half[None, :]      # Ex, Hy
     # `Ey`/`Hx` sit on the x nodes and `Ex`/`Hy` on the half-steps. A pure run's two injection
     # lines share one position -- which is why one array was enough and why the single-offset
     # form read as correct. A conical run drives all four, so it needs both: using one costs
@@ -1347,14 +1367,14 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
             hz += dt * curl_hz / mu_z
             # TFSF (Umashankar & Taflove 1982): Hx at kt-1/2 is a scattered-field quantity
             # whose stencil reached across the boundary into the total-field Ey[kt].
-            hx[kt - 1] -= dt * inc.ey[kt] * x_node / dzc[kt - 1, 0] / mu_x[kt - 1]
+            hx[kt - 1] -= dt * inc.ey[kt] * p_node / dzc[kt - 1, 0] / mu_x[kt - 1]
         if tm_on:
             # dHy/dt = dEz/dx - dEx/dz -- the one component no `ky` term reaches.
             d_ez = (_shift_up(ez, grid.bloch) - ez) / dx
             d_ex = (ex[1:] - ex[:-1]) / dzc
             psi_hy = hb * psi_hy + ha * d_ex
             hy += dt * (d_ez - d_ex / hk - psi_hy) / mu_y
-            hy[kt - 1] += dt * inc.ex[kt] * x_half / dzc[kt - 1, 0] / mu_y[kt - 1]
+            hy[kt - 1] += dt * inc.ex[kt] * p_half / dzc[kt - 1, 0] / mu_y[kt - 1]
 
         # --- E, to level n + 1 ----------------------------------------------------------
         inc.step_e((step + 1) * dt)
@@ -1371,7 +1391,7 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
             if poles_y is not None:
                 drive = drive - poles_y.advance(ey)
             ey[1:-1] += drive[1:-1] / eps[1:-1]
-            ey[kt] -= dt * inc.hx[kt - 1] * x_node / dzd[kt, 0] / eps[kt]
+            ey[kt] -= dt * inc.hx[kt - 1] * p_node / dzd[kt, 0] / eps[kt]
         if tm_on:
             # eps dEx/dt = i ky Hz - dHy/dz ; eps dEz/dt = dHy/dx - i ky Hx.
             d = np.zeros((nz, ny, nx), dtype=dtype)
@@ -1386,7 +1406,7 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
             ex[1:-1] += drive[1:-1] / eps_x[1:-1]
             # Hy_inc is MINUS `inc.hy`, which is where this sign comes from -- the same
             # double negation the `inc.h` accessor used to hide.
-            ex[kt] -= dt * (-inc.hy[kt - 1]) * x_half / dzd[kt, 0] / eps_x[kt]
+            ex[kt] -= dt * (-inc.hy[kt - 1]) * p_half / dzd[kt, 0] / eps_x[kt]
             curl_ez = (hy - _shift_down(hy, grid.bloch)) / dx
             if conical:
                 curl_ez = curl_ez - d_dy_bwd(hx)

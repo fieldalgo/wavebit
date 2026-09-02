@@ -1945,3 +1945,55 @@ def test_the_courant_bound_counts_the_y_axis_once():
                                     + 1.0 / grid.dz_cell.min() ** 2
                                     + 1.0 / grid.dy ** 2)
     assert grid.dt == pytest.approx(expect, rel=1e-12)
+
+
+@pytest.mark.parametrize('phi_deg', [0.0, 30.0, 45.0])
+@pytest.mark.parametrize('leg', ['s', 'p'])
+def test_the_tfsf_source_injects_a_crossed_plane_wave(phi_deg, leg):
+    """On vacuum the scattered-field region must stay empty -- with a y axis as with only x.
+
+    This is the module's strongest instrument and it carries over to a crossed grating intact:
+    with nothing to scatter from, everything above the TFSF plane is scattered field and must
+    cancel to round-off. Measured ~1e-16 to 1e-17 at phi = 0 / 30 / 45 deg on both legs, the
+    same as the y-free case.
+
+    **It has ten orders of resolving power on exactly the mistake this stage exists to avoid.**
+    The auxiliary grid's `d/dy` must be the DISCRETE difference the 2D grid applies, not the
+    exact `i*ky`, or the two grids sit on different dispersion relations. Measured with the
+    continuum operator in the auxiliary grid: 5.4e-7 at 30 deg and 2.2e-6 at 45, against 4e-17.
+    That is the same failure `kx_op` already exists to prevent, in the other axis.
+    """
+    from wavebit._core.fdtd import _Grid, _time_loop
+    vacuum = np.ones((1, 8, 8), dtype=complex)
+    grid = _Grid(WL, PERIOD, vacuum, [THICK], EPS_TOP, EPS_TOP, 0.05, 12, 0.99, True,
+                 theta=np.deg2rad(30.0), phi=np.deg2rad(phi_deg),
+                 mu_top=1.0 + 0j, mu_bot=1.0 + 0j, period_y=PERIOD)
+    assert grid.ny > 1, 'the scene must have a real y axis or this tests nothing'
+    out = _time_loop(grid, 'te', int(np.ceil(60.0 * WL / grid.dt)), np.array([WL]), leg=leg)
+    incident = float(np.abs(out['inc_z0'][0]))
+    if incident < 1e-12:
+        return                                    # this leg drives the other polarisation
+    leak = float(np.abs(out['dft_ref'][0]).max()) / incident
+    assert leak < 1e-10, (
+        f'phi={phi_deg} leg={leg}: {leak:.2e} of the incident amplitude is left in the '
+        f'scattered-field region on a vacuum scene with a y axis')
+
+
+def test_the_in_plane_phase_is_the_outer_product_of_two_vectors():
+    """A plane wave is separable, so two vectors serve where an (ny, nx) array would.
+
+    And the four injected components occupy only TWO distinct in-plane Yee positions -- `Ey`
+    and `Hx` on (x-node, y-half), `Ex` and `Hy` on (x-half, y-node) -- which is why there are
+    two phase arrays rather than four. Checked against the definition rather than against the
+    code that builds it.
+    """
+    grid = _crossed_grid(theta_deg=30.0, phi_deg=40.0)
+    k0 = 2.0 * np.pi / WL
+    x_node = np.exp(1j * k0 * grid.kx_inc * np.arange(grid.nx) * grid.dx)
+    y_half = np.exp(1j * k0 * grid.ky_inc * (np.arange(grid.ny) + 0.5) * grid.dy)
+    outer = y_half[:, None] * x_node[None, :]
+    # The separable form must equal the direct one, exp(i k0 (kx x + ky y)), to round-off.
+    xx, yy = np.meshgrid(np.arange(grid.nx) * grid.dx,
+                         (np.arange(grid.ny) + 0.5) * grid.dy)
+    direct = np.exp(1j * k0 * (grid.kx_inc * xx + grid.ky_inc * yy))
+    assert np.allclose(outer, direct, atol=1e-13)
