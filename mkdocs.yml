@@ -107,7 +107,16 @@ markdown_extensions:
       # default, which is how a link written against one arrived broken in the other.
       slugify: !!python/object/apply:pymdownx.slugs.slugify {kwds: {case: lower}}
   - pymdownx.details
-  - pymdownx.superfences
+  # The custom fence is what turns a ```mermaid block into a diagram. Both readers draw it:
+  # GitHub renders mermaid in markdown natively, and Material ships the renderer -- so a
+  # diagram, like every other page here, reads the same in both places. It is also the only
+  # figure format in this repository that diffs: `docs/figures/` holds output a study
+  # regenerates, and a concept drawing has no script behind it to regenerate from.
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite

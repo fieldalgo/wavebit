@@ -57,6 +57,18 @@ The type of `structure` selects the modeling path; there is no separate mode swi
 path, **boundary**, is what a smooth layer becomes when its shapes actually overlap — decided
 per layer, not per solver, so one `structure` can hold layers of both kinds.
 
+```mermaid
+flowchart TD
+    S["structure"] --> T{"what type?"}
+    T -->|ndarray| R["<b>raster</b><br/>one permittivity per pixel"]
+    T -->|list of dict| A{"shapes intersect<br/>in this layer?"}
+    A -->|no| P["<b>smooth</b><br/>each shape's transform, added"]
+    A -->|yes| B["<b>boundary</b><br/>overlap resolved into polygons,<br/>then transformed"]
+```
+
+Nothing selects between the last two: the geometry does, per layer, and a layer pays for the
+question only when its own shapes raise it.
+
 Shapes in a layer **paint**: a later shape covers an earlier one. While no two intersect, each
 shape's Fourier transform is simply added, which is exact and cheap because with nothing
 overlapping the sum *is* the painting; where they do intersect, the overlap is resolved into
