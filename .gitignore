@@ -23,3 +23,6 @@ dev/
 # scratch: the real directory is a sibling of the checkout; this is a symlink.
 # No trailing slash -- a trailing slash matches directories, not symlinks.
 lab
+
+# study output: the figure is regenerated, not committed
+studies/results/*.png

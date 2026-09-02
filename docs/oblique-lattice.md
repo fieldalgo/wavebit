@@ -451,6 +451,52 @@ quoted above: 7.3x is the asymptotic ratio on a converged high-contrast structur
 library at `truncation_order=8` is not in that regime — the order ratio there is 1.71, not 2. Expect ~3x on
 this kind of sweep and ~7x when you genuinely need the harmonics.
 
+## Sweeping the cell angle
+
+A cell angle is a design parameter — hex, rhombic, and the monoclinic chiral metasurfaces
+below — so somebody will sweep it. **A raster has to be redrawn at every angle, and redrawing
+it is enough.** `studies/sweep_cell_angle.py` runs the sweep three ways and prints the table
+below; the figure it writes is `studies/results/sweep_cell_angle.png`.
+
+```python
+for gamma in angles:
+    A = wavebit.Lattice.oblique(640., 640., np.radians(gamma))   # the cell tilts
+    X, Y = A.grid((256, 256))                                    # its Cartesian coordinates
+    layer = np.where(X ** 2 + Y ** 2 < 100. ** 2, 12.25, 1.0)    # the circle does not
+    solver = wavebit.rcwa(lattice=A, structure=layer[None], factorization='nvf', ...)
+```
+
+The same coordinate expression describes the same physical circle at every angle, because
+`A.grid` returns genuine Cartesian coordinates. Drawing the raster once and passing it on is
+the trap: the array holds pixel *indices*, so its lit pixels tilt with the basis and the circle
+shears into an ellipse. Measured, `truncation_order=10`, N=256, against parametric circles as
+the staircase-free control:
+
+    gamma    redrawn     reused   analytic   axis ratio redrawn   axis ratio reused
+       90   0.164669   0.164669   0.159837              1.0000              1.0000
+       80   0.191967   0.381166   0.195321              1.0004              1.1918
+       70   0.291714   0.373390   0.279065              1.0006              1.4281
+       60   0.342127   0.250499   0.353471              1.0032              1.7321
+       50   0.349900   0.497302   0.355619              1.0005              2.1445
+       40   0.240133   0.870547   0.235241              1.0012              2.7475
+       30   0.052932   0.976169   0.052712              1.0003              3.7321
+
+Worst against the control: **1.26e-02 redrawn, 9.23e-01 reused** — 73x, and the reused arm's
+error grows with the tilt because its error *is* the tilt. The axis-ratio columns are the
+mechanism rather than a symptom: the redrawn raster stays round to 0.3% at every angle (that
+residue is pixelation, not deformation) while the reused one reaches 3.73:1.
+
+The gap on the redrawn arm is the staircase and nothing else, which the study measures rather
+than asserts — at `gamma = 60`, holding the truncation and refining the raster: **5.2e-2,
+8.5e-3, 1.1e-2, 6.4e-4** at N = 64, 128, 256, 512.
+
+Analytic shapes need no redrawing at all: `lx` is an absolute Cartesian length, so a circle
+stays a circle whatever the basis does. That is also why they are the control here.
+
+**Differentiating the angle is a different question** and has a different answer — redrawing
+cannot happen inside `jax.grad`, since the redraw flips pixels discretely. See the next
+section.
+
 ## Differentiating the cell — which question each path answers
 
 The basis is a design variable (`Lattice` is a pytree; build it *inside* the differentiated
