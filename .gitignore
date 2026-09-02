@@ -24,5 +24,3 @@ dev/
 # No trailing slash -- a trailing slash matches directories, not symlinks.
 lab
 
-# study output: the figure is regenerated, not committed
-studies/results/*.png

@@ -67,6 +67,55 @@ ANGLES = np.arange(90.0, 29.0, -10.0)
 CONVERGENCE_ANGLE = 60.0
 
 
+#: Figures belong to the document that shows them, one directory per document, named for what
+#: they show rather than numbered -- a number goes stale the moment a section is reordered.
+#: Both are committed: `docs/` carried no images before 2026-09-02 and that was a habit rather
+#: than a rule (`tutorials/` commits PNGs), and the two frames are a picture before they are a
+#: table.
+FIG_DIR = 'docs/figures/oblique-lattice/'
+
+
+def _draw_two_frames(plt):
+    """The concept figure: one pixel set, read in two frames, and redrawn in the second.
+
+    Deliberately coarse (24 px) and drawn from the *indices* rather than from a solve, because
+    what it has to show is that the lit set never changes -- only where those pixels sit.
+    """
+    n, radius = 24, 0.30
+    t = (np.arange(n) + 0.5) / n - 0.5
+    U, V = np.meshgrid(t, t)
+    lit = (U ** 2 + V ** 2) < radius ** 2                 # drawn once, at 90 degrees
+
+    def basis(deg):
+        g = np.radians(deg)
+        return np.array([[1.0, np.cos(g)], [0.0, np.sin(g)]])
+
+    def panel(ax, A, mask, colour, title):
+        x, y = U * A[0, 0] + V * A[0, 1], U * A[1, 0] + V * A[1, 1]
+        box = np.array([[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5], [-.5, -.5]]) @ A.T
+        ax.plot(box[:, 0], box[:, 1], '-', color='0.55', lw=1.4)
+        ax.scatter(x[~mask], y[~mask], s=4, color='0.87')
+        ax.scatter(x[mask], y[mask], s=11, color=colour)
+        ax.set_aspect('equal'); ax.set_xticks([]); ax.set_yticks([])
+        ax.set_xlim(-1.15, 1.15); ax.set_ylim(-0.9, 0.9)
+        ax.set_title(title, fontsize=9.5)
+        for sp in ax.spines.values():
+            sp.set_visible(False)
+
+    A90, A45 = basis(90), basis(45)
+    x45, y45 = U * A45[0, 0] + V * A45[0, 1], U * A45[1, 0] + V * A45[1, 1]
+    redrawn = (x45 ** 2 + y45 ** 2) < radius ** 2         # same expression, the 45-degree cell
+
+    fig, ax = plt.subplots(1, 3, figsize=(11.4, 2.9))
+    panel(ax[0], A90, lit, '#2a78d6', 'drawn on the 90-degree cell\n(a circle)')
+    panel(ax[1], A45, lit, 'crimson',
+          'the SAME array on a 45-degree cell\n(the lattice frame: an ellipse, 2.41:1)')
+    panel(ax[2], A45, redrawn, '#2a78d6',
+          'redrawn on the 45-degree cell\n(the Cartesian frame: a circle again)')
+    fig.tight_layout()
+    fig.savefig(FIG_DIR + 'two-frames.png', dpi=140)
+
+
 def raster_at(cell):
     """A genuine Cartesian circle on ``cell`` -- the same expression at every angle."""
     X, Y = (np.asarray(c) for c in cell.grid((N, N)))
@@ -165,9 +214,11 @@ def main():
     ax[1].invert_xaxis(); ax[1].legend(fontsize=8); ax[1].grid(alpha=.3)
 
     fig.tight_layout()
-    path = 'studies/results/sweep_cell_angle.png'
-    fig.savefig(path, dpi=130)
-    print(f'\nfigure: {path}')
+    fig.savefig(FIG_DIR + 'cell-angle-sweep.png', dpi=130)
+    print(f'\nfigure: {FIG_DIR}cell-angle-sweep.png')
+
+    _draw_two_frames(plt)
+    print(f'figure: {FIG_DIR}two-frames.png')
 
 
 if __name__ == '__main__':

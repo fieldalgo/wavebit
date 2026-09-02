@@ -138,6 +138,12 @@ A raster records **pixel indices and nothing else**: pixel `(i, j)` is the param
 places it. "Radius 100 nm" is not in the array. So writing one down says one of two things, and
 which one is not recorded anywhere:
 
+![One pixel set, read in two frames](figures/oblique-lattice/two-frames.png)
+
+*The lit set is identical in the first two panels — not a pixel moves. What changes is where
+those pixels sit, because the basis is what places them. The third panel is the same coordinate
+expression evaluated on the 45-degree cell.*
+
 | | the pattern means | when the cell changes | what you do |
 |---|---|---|---|
 | **Cartesian frame** | absolute lengths — "a 100 nm rod" | shape must be preserved | **redraw** the array |
@@ -504,6 +510,11 @@ the other frame: the array holds pixel *indices*, so its lit pixels tilt with th
 circle shears into an ellipse. Measured against parametric circles — which are the Cartesian
 frame by construction, and so are the control for *that* frame only — `truncation_order=10`,
 N=256:
+
+![A cell-angle sweep, three ways](figures/oblique-lattice/cell-angle-sweep.png)
+
+*Left, `sum(T)`; right, the axis ratio of what the solver was actually handed. The redrawn
+raster sits on the staircase-free control at every angle; the held one leaves it.*
 
     gamma    redrawn     reused   analytic   axis ratio redrawn   axis ratio reused
        90   0.164669   0.164669   0.159837              1.0000              1.0000
