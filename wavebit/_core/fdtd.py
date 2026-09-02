@@ -323,8 +323,8 @@ def _cell_average_periodic(values, period, centres, width, harmonic):
     return _cell_average(vals, edges, np.asarray(centres), width, harmonic)
 
 
-def component_property(raster, thickness, top, bot, period, z0, dz, nz, dx, nx,
-                       z_half, x_half, harmonic_axis, subpixel=True):
+def component_property(raster, thickness, top, bot, period, z_centres, z_widths, dx, nx,
+                       x_half, harmonic_axis, subpixel=True):
     """A material property averaged onto one Yee component's cells, shape ``(nz, nx)``.
 
     ``raster`` is ``(n_layers, Nx)`` -- wavebit's ``structure`` with its length-1 ``y`` axis
@@ -355,15 +355,20 @@ def component_property(raster, thickness, top, bot, period, z0, dz, nz, dx, nx,
             f"component points along -- 'x', 'z', or None for one with no in-plane axis. A "
             f"typo here silently selects the arithmetic rule and costs an order of accuracy "
             f"without failing.")
-    width_z = dz if subpixel else 0.0
+    # Each cell brings its OWN width. On a uniform mesh these are all equal and the length
+    # weighting below is what it always was; on a graded one they are not, and `_overlap` plus
+    # the length-weighted mean are already exact for any set of widths -- the integral needed
+    # no rewriting, only the positions did.
+    zc = np.asarray(z_centres, dtype=float)
+    nz = zc.size
+    width_z = np.asarray(z_widths, dtype=float) if subpixel else np.zeros(nz)
     width_x = dx if subpixel else 0.0
 
     cuts = np.concatenate([[0.0], np.cumsum(np.asarray(thickness, dtype=float))])
-    span = 1e6 * max(dz, 1.0)
+    span = 1e6 * max(float(np.max(width_z)) if subpixel else 1.0, 1.0)
     z_edges = np.concatenate([[cuts[0] - span], cuts, [cuts[-1] + span]])
     n_layers = raster.shape[0]
 
-    zc = z0 + (np.arange(nz) + (0.5 if z_half else 0.0)) * dz
     xc = (np.arange(nx) + (0.5 if x_half else 0.0)) * dx
 
     # Along x first, inside each layer; the two half-spaces are uniform in x.
@@ -377,13 +382,14 @@ def component_property(raster, thickness, top, bot, period, z0, dz, nz, dx, nx,
 
     # Then along z, across the layer boundaries.
     harmonic_z = (harmonic_axis == 'z')
-    if width_z <= 0.0:
+    if not subpixel:
         index = np.clip(np.searchsorted(z_edges, zc, side='right') - 1, 0, n_layers + 1)
         return per_layer[index]
     source = 1.0 / per_layer if harmonic_z else per_layer
     out = np.empty((nz, nx), dtype=complex)
     for k, c in enumerate(zc):
-        w = _overlap(z_edges, c - 0.5 * width_z, c + 0.5 * width_z)
+        half = 0.5 * width_z[k]
+        w = _overlap(z_edges, c - half, c + half)
         out[k] = (w[:, None] * source).sum(axis=0) / w.sum()
     return 1.0 / out if harmonic_z else out
 
@@ -426,27 +432,35 @@ def cpml_coefficients(depth, thickness, dt, wavelength, eps_r):
     return b, np.where(denom == 0.0, 0.0, sigma * (b - 1.0) / safe), kappa
 
 
-def cpml_profiles(nz, n_pml, dz, dt, wavelength, eps_top, eps_bot):
+def cpml_profiles(z_node, z_half, top_thickness, bot_thickness, dt, wavelength,
+                  eps_top, eps_bot):
     """CPML coefficients per z index, at node (``nz``) and half (``nz-1``) positions.
 
     Outside the two layers the triple is ``(1, 0, 1)``, which makes every stretched update
     reduce to the plain Yee one -- so the loop runs a single expression everywhere rather than
     branching on whether a row is inside a layer.
     """
-    thickness = n_pml * dz
-    z_max = (nz - 1) * dz
+    # The two layers no longer have the same thickness once the mesh is graded, so the
+    # THICKNESS is selected per side beside the permittivity -- the polynomial grading is
+    # defined against the layer's own depth, and using the other side's would mis-scale
+    # `sigma_max` by that ratio. `cpml_coefficients` itself needs no change: its arguments are
+    # already a physical depth and a physical thickness, and it reads no cell size at all.
+    z_node = np.asarray(z_node, dtype=float)
+    z_start, z_max = z_node[0], z_node[-1]
 
-    def build(offset, n):
-        z = (np.arange(n) + offset) * dz
-        d_top, d_bot = thickness - z, z - (z_max - thickness)
+    def build(z):
+        z = np.asarray(z, dtype=float) - z_start
+        d_top, d_bot = top_thickness - z, z - ((z_max - z_start) - bot_thickness)
         depth = np.maximum(np.maximum(d_top, d_bot), 0.0)
-        eps_side = np.where(d_top >= d_bot, eps_top, eps_bot)
-        b, a, kappa = cpml_coefficients(depth, thickness, dt, wavelength, eps_side)
+        on_top = d_top >= d_bot
+        eps_side = np.where(on_top, eps_top, eps_bot)
+        side_thickness = np.where(on_top, top_thickness, bot_thickness)
+        b, a, kappa = cpml_coefficients(depth, side_thickness, dt, wavelength, eps_side)
         outside = depth <= 0.0
         return {'b': np.where(outside, 1.0, b), 'a': np.where(outside, 0.0, a),
                 'kappa': np.where(outside, 1.0, kappa)}
 
-    return build(0.0, nz), build(0.5, nz - 1)
+    return build(z_node), build(z_half)
 
 
 # ---------------------------------------------------------------------------------------
@@ -585,7 +599,11 @@ class _Incident1D:
             setattr(self, name, np.zeros(nz, dtype=dtype))
         for name in self.HALF:
             setattr(self, name, np.zeros(nz - 1, dtype=dtype))
-        self.node, self.half = cpml_profiles(nz, n_pml, dz, dt, wavelength, eps_r, eps_r)
+        z_node = np.concatenate([[0.0], np.cumsum(self.dz_cell)])
+        self.node, self.half = cpml_profiles(
+            z_node, z_node[:-1] + 0.5 * self.dz_cell,
+            float(self.dz_cell[:n_pml].sum()), float(self.dz_cell[-n_pml:].sum()),
+            dt, wavelength, eps_r, eps_r)
         self.psi_hx = np.zeros(nz - 1, dtype=dtype)
         self.psi_hy = np.zeros(nz - 1, dtype=dtype)
         self.psi_ey = np.zeros(nz, dtype=dtype)
@@ -817,6 +835,17 @@ class _Grid:
         #: that swapping them is a shape error rather than a plausible wrong number.
         self.dz_cell = np.full(self.nz - 1, self.dz)
         self.dz_dual = np.full(self.nz, self.dz)
+        #: Node positions, accumulated rather than derived as ``index * dz``. That is not a
+        #: tidy-up: ``cumsum(full(n, d))`` is NOT bit-equal to ``arange(n) * d`` for a
+        #: non-dyadic ``d`` (measured 367 of 400 rows differing, worst 6.6e-12), so this table
+        #: is the point where the refactor stops being byte-provable and starts being provable
+        #: to 1e-13. Every position in the module reads it; nothing recomputes one.
+        self.z_node = self.z0 + np.concatenate([[0.0], np.cumsum(self.dz_cell)])
+        #: A half-cell component sits at the PRIMAL cell midpoint. That convention is forced
+        #: by the field layout -- ``hy[j]`` is built from ``ex[j+1] - ex[j]`` -- and it has to
+        #: be stated, because the competing non-uniform-Yee convention (primal nodes at dual
+        #: midpoints) puts ``z_of(k + 0.5)`` up to half a coarse cell out.
+        self.z_mid = self.z_node[:-1] + 0.5 * self.dz_cell
 
         self.dt = courant * n_min / np.sqrt(1.0 / self.dx ** 2 + 1.0 / self.dz ** 2
                                             + (0.5 * ky_phys) ** 2)
@@ -828,19 +857,35 @@ class _Grid:
         self.kx_op = (2j * np.sin(0.5 * k0 * self.kx_inc * self.dx) / self.dx
                       if self.dtype is complex else 0.0)
 
-        self.node, self.half = cpml_profiles(self.nz, self.n_pml, self.dz, self.dt,
-                                             self.wavelength,
-                                             self.eps_top.real, self.eps_bot.real)
+        self.node, self.half = cpml_profiles(
+            self.z_node, self.z_mid,
+            float(self.dz_cell[:self.n_pml].sum()), float(self.dz_cell[-self.n_pml:].sum()),
+            self.dt, self.wavelength, self.eps_top.real, self.eps_bot.real)
 
     def z_of(self, k):
-        """The z coordinate of z index ``k``; ``k`` may carry a half."""
-        return self.z0 + k * self.dz
+        """The z coordinate of z index ``k``; ``k`` may carry a half.
+
+        A fractional ``k`` is measured into cell ``floor(k)``, which is exact for the one
+        fraction that occurs (``+0.5``, the half-cell components) under the primal-midpoint
+        convention `z_mid` records.
+        """
+        i = int(np.floor(k))
+        frac = float(k) - i
+        if frac == 0.0:
+            return float(self.z_node[i])
+        return float(self.z_node[i] + frac * self.dz_cell[i])
+
+    def z_cells(self, z_half):
+        """``(centres, widths)`` of one component's z cells -- half-cell or node."""
+        if z_half:
+            return self.z_mid, self.dz_cell
+        return self.z_node, self.dz_dual
 
     def eps_for(self, z_half, x_half, harmonic_axis):
-        nz = self.nz - 1 if z_half else self.nz
+        centres, widths = self.z_cells(z_half)
         return component_property(
             self.raster, self.thickness, self.eps_top, self.eps_bot, self.period,
-            self.z0, self.dz, nz, self.dx, self.nx, z_half, x_half, harmonic_axis,
+            centres, widths, self.dx, self.nx, x_half, harmonic_axis,
             subpixel=self.subpixel)
 
     def mu_for(self, z_half, x_half, harmonic_axis):
@@ -850,10 +895,10 @@ class _Grid:
         so the averaging rule is the duality's image of the electric one and not a separate
         choice.
         """
-        nz = self.nz - 1 if z_half else self.nz
+        centres, widths = self.z_cells(z_half)
         return component_property(
             self.mu_raster, self.thickness, self.mu_top, self.mu_bot, self.period,
-            self.z0, self.dz, nz, self.dx, self.nx, z_half, x_half, harmonic_axis,
+            centres, widths, self.dx, self.nx, x_half, harmonic_axis,
             subpixel=self.subpixel)
 
     def fill_for(self, pole_id, z_half, x_half):
@@ -864,11 +909,11 @@ class _Grid:
         statement about a *static* permittivity normal to an interface and does not carry over
         to a pole strength.
         """
-        nz = self.nz - 1 if z_half else self.nz
+        centres, widths = self.z_cells(z_half)
         indicator = (self.dispersion == pole_id).astype(float)
         return np.real(component_property(
-            indicator, self.thickness, 0.0, 0.0, self.period, self.z0, self.dz, nz,
-            self.dx, self.nx, z_half, x_half, None, subpixel=self.subpixel))
+            indicator, self.thickness, 0.0, 0.0, self.period, centres, widths,
+            self.dx, self.nx, x_half, None, subpixel=self.subpixel))
 
     def pole_state(self, shape, z_half, x_half, dtype):
         """The :class:`_PoleSet` for one electric component, or ``None`` if the scene is
