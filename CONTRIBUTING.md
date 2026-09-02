@@ -13,16 +13,19 @@ Answer these in order and stop at the first **yes**. The point of the order is t
 | 2 | Can you write the `assert` line *before* you run it? | `tests/` |
 | 3 | …and does that criterion come from an **outside solver** (RETICOLO, GRCWA, TORCWA)? | the external-oracle machinery — `tests/references/interface/` plus the golden and its test |
 | 4 | Would writing that `assert` mean asserting the very thing you are trying to find out? | `studies/` — **and** a write-up in `docs/` |
-| 5 | Is it prose **about the code** — what it does, why a default is what it is, what was measured? | `docs/` |
-| 6 | Is it prose **about how the project is run** — a plan, a process, a decision about the repository rather than about the physics? | Not here. It is finished work, but it is not documentation of the library. |
-| 7 | Is it a lesson, read in order, for someone who has not used the API? | `tutorials/` |
-| 8 | Is it Wavebit applied to an outside problem? | `examples/` |
+| 5 | Is it prose telling a user **how to use** something — what a keyword takes, what it defaults to, what it refuses? | `docs/guide/` |
+| 6 | Is it prose **about the code** — why a default is what it is, what was measured to decide it? | `docs/` |
+| 7 | Is it prose **about how the project is run** — a plan, a process, a decision about the repository rather than about the physics? | Not here. It is finished work, but it is not documentation of the library. |
+| 8 | Is it a lesson, read in order, for someone who has not used the API? | `tutorials/` |
+| 9 | Is it Wavebit applied to an outside problem? | `examples/` |
 
 If none of them is a yes, **the file has no home yet.** Say so in the PR rather than inventing a directory.
 
-**Questions 5 and 6 are the other pair worth restating.** `docs/` is published: anyone who clones this repository reads it, so it holds what a user or contributor needs — measurements, and the reasoning behind a default. A record of *how the project is run* is finished work rather than scratch, but it is not part of the library, and putting it here means publishing it. Keep those alongside the checkout instead of inside it.
+**Questions 6 and 7 are the other pair worth restating.** `docs/` is published: anyone who clones this repository reads it, so it holds what a user or contributor needs — measurements, and the reasoning behind a default. A record of *how the project is run* is finished work rather than scratch, but it is not part of the library, and putting it here means publishing it. Keep those alongside the checkout instead of inside it.
 
 Because it is published, **nothing committed here may name a path outside the checkout** — not a document, not a script's default argument, not a notebook's stored output. State what a private record measured; never where it sits. [`docs/README.md`](docs/README.md) states the contract, and `tests/test_docs_contract.py` fails the build on a violation. A draft that keeps wanting to point outward is usually a question-6 file that landed in the wrong place.
+
+**Questions 5 and 6 split what used to be one row.** `docs/guide/` is the manual: it answers *how do I use this*, for a reader who already knows the API exists and needs the contract for one keyword. `docs/` answers *why is it built this way*, for a reader who is questioning a default. The test is whether the sentence would change if a measurement came out differently — if it would, it is a `docs/` sentence. Question 5 also sits above question 8 on purpose: a manual page is looked up, a tutorial is read once and outgrown, and when a draft is both it is a tutorial.
 
 **Questions 2 and 4 are the pair that gets misfiled**, so they are worth restating. If you can state the criterion up front — `assert abs(R + T - 1) < 1e-9`, `assert norm(numpy - jax) < 1e-12` — it is a test. If writing the assertion would require the answer you are running it to discover — `assert jax_is_faster` — it is a study, and it is not finished until `docs/` records what the numbers decided. Equivalently: when the number moves, would you fix the *code* or the *write-up*?
 

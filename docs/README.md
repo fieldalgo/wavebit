@@ -44,12 +44,23 @@ golden that ships, dates the run it was cut from, and stops there.
 One thing worth noticing about how the leaks were distributed: they were all in the documents
 whose subject lives outside the code. A document explaining `_core/` has no occasion to name a
 directory. **If a draft here keeps wanting to point somewhere else, that is a signal it belongs
-somewhere else** — question 6 of the CONTRIBUTING table, not this folder.
+somewhere else** — question 7 of the CONTRIBUTING table, not this folder.
+
+## One exception, and it is a directory
+
+[`guide/`](guide) **is** the user manual, and the rules below do not apply inside it. A page
+there states what a keyword does, what it defaults to and what it refuses; it carries no
+`Written:` date and no `Targets:` list, because it records neither a measurement nor a decision.
+Its own [`README.md`](guide/README.md) states its contract.
+
+Everything else in this folder — every document sitting directly beside this one — follows what
+comes next. The outward-pointing rule above binds `guide/` too; only the house style differs.
 
 ## What a document here is not
 
-- **Not the user manual.** These answer *why it is built this way*; how to use the library is
-  the tutorials and the manual. Overlap in subject is fine — the two have different readers.
+- **Not the user manual.** That is [`guide/`](guide), one directory down. These answer *why it
+  is built this way*, and overlap in subject with the manual is fine — the two have different
+  readers.
 - **Not a changelog or a project record.** A document states what is true now and what the
   measurement decided. Past defects appear only where the current behaviour is otherwise
   inexplicable — a warning that exists because of one, a slot whose sign looks wrong until you
