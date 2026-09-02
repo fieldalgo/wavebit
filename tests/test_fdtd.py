@@ -1569,3 +1569,119 @@ def test_an_evanescent_order_reports_no_power_and_its_amplitude_is_not_a_number(
             if not _propagates(m, n_sq, OBLIQUE):
                 assert float(np.real(value)) == 0.0, (
                     f'{name}[{m}] = {value}; the order is evanescent in that half-space')
+
+
+# ---------------------------------------------------------------------------------------
+# 12. a graded z mesh
+# ---------------------------------------------------------------------------------------
+
+def test_the_graded_mesh_puts_both_structure_faces_on_nodes():
+    """`z = 0` and `z = total_thickness` are nodes exactly, not to a rounding.
+
+    The incident amplitude is referenced at the first and the transmitted at the second, so a
+    half-cell error there is a phase error in every amplitude -- and on a graded mesh a "half
+    cell" is up to half a COARSE one, which is `n_max` times worse than it would be on a
+    uniform grid.
+    """
+    from wavebit._core.fdtd import build_z_mesh
+    for n_top, n_bot, n_max in ((1.0, 1.5, 3.5), (1.0, 1.5, 6.54), (1.0, 1.0, 2.0)):
+        z, k_z0, n_struct = build_z_mesh(6.86, 60.0, 768.0, 391.0, n_top, n_bot, n_max)
+        assert abs(z[k_z0]) < 1e-9, f'structure top at {z[k_z0]}'
+        assert abs(z[k_z0 + n_struct] - 60.0) < 1e-9
+
+
+def test_the_grading_ratio_is_what_bounds_the_transition():
+    """No two adjacent cells differ by more than the ratio, and the smallest stays `h_fine`.
+
+    Both halves matter. The ratio bounds the reflection off the transition -- a mesh step is an
+    optical interface, and a 4.5x jump taken in one cell reflects 5.9e-3 in amplitude against
+    6.0e-4 spread over 40. And the smallest cell has to stay `h_fine` because the Courant bound
+    follows it: rescaling the whole ramp to fit the distance, which is the obvious way to make
+    the ends meet, shrinks it and buys back in time steps what the grading saved in cells --
+    measured 130 -> 80 cells for only 1.50 s -> 1.29 s before the ramp was left alone and the
+    residue pushed into the coarse cells.
+    """
+    from wavebit._core.fdtd import build_z_mesh
+    for ratio in (1.03, 1.06, 1.12):
+        for h_fine, thick in ((6.86, 60.0), (12.96, 300.0), (2.5, 317.0)):
+            z, k_z0, n_struct = build_z_mesh(h_fine, thick, 768.0, 391.0, 1.0, 1.5, 6.54,
+                                             ratio=ratio)
+            cells = np.diff(z)
+            grew = cells[1:] / cells[:-1]
+            # The ramp is built at exactly `ratio` and then scaled by one common factor to
+            # land on the distance -- a common factor preserves every ratio, so the only slack
+            # is that factor itself, `distance / total`, bounded by one coarse cell over the
+            # span. Measured worst case here 1.069 against a 1.06 budget.
+            assert np.all(grew < ratio * 1.02), f'ratio {ratio}: worst step {grew.max()}'
+            assert np.all(grew > 1.0 / (ratio * 1.02))
+            # The structure is split into a WHOLE number of cells so both its faces land on
+            # nodes, which makes its cells up to `n_struct / (n_struct - 1)` smaller than
+            # `h_fine`. Nothing else may be smaller: the Courant bound follows the minimum.
+            h_core = thick / n_struct
+            assert cells.min() >= h_core * (1.0 - 1e-9), (
+                f'smallest cell {cells.min()} is below the structure cell {h_core}')
+            assert h_core <= h_fine * (1.0 + 1e-9)
+
+
+def test_a_graded_run_agrees_with_the_rcwa_path():
+    """The grading is allowed to cost accuracy; it is not allowed to cost correctness.
+
+    Measured against `solve_1d` at fto = 200 on the benchmark grating: 5.0e-3 uniform against
+    6.5e-3 / 8.8e-3 / 7.9e-3 at grading 1.03 / 1.06 / 1.12, with amplitudes 1.6e-2 against
+    1.7e-2 / 1.9e-2 / 1.8e-2. That is the transition reflection, and it is the price.
+    """
+    ref = _rcwa(_grating(), [THICK], 'te', fto=200)
+    labels = np.asarray(ref.orders_u).ravel()
+    want = {int(m): (float(np.asarray(ref.R).ravel()[i]),
+                     float(np.asarray(ref.T).ravel()[i])) for i, m in enumerate(labels)}
+    for grading in (1.03, 1.06, 1.12):
+        got = _by_order(solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP,
+                                   bot=EPS_BOT, period=[PERIOD], wavelength=WL, tetm='te',
+                                   theta=0.0, resolution=0.0777, n_periods=100,
+                                   grading=grading))
+        for m, (R, T) in got.items():
+            assert R == pytest.approx(want[m][0], abs=2e-2), f'grading={grading} R[{m}]'
+            assert T == pytest.approx(want[m][1], abs=2e-2), f'grading={grading} T[{m}]'
+
+
+def test_the_auxiliary_grid_must_ride_the_same_mesh():
+    """A uniform incident wave under a graded scattered one is silent, and it is a phase error.
+
+    `_time_loop` used to hand `_Incident1D` the scalar `grid.dz`, which is right while the mesh
+    is uniform and wrong the moment it is not. Measured on a graded dielectric scene, the
+    EFFICIENCIES stayed plausible -- 3.5e-3 against RCWA, better than the uniform run's 5.0e-3
+    -- while every amplitude was wrong by 0.52. `R + T` never noticed.
+
+    So the constructor checks the length rather than trusting the caller: `nz` nodes need
+    `nz - 1` cells, and a scalar reaching it under a graded grid is a shape mismatch.
+    """
+    from wavebit._core.fdtd import _Incident1D
+    with pytest.raises(ValueError, match='must ride the SAME mesh'):
+        _Incident1D(40, np.full(12, 10.0), 0.02, 1.0, 6, 8, WL, 1.0 / WL, 100.0, 400.0,
+                    'te', 0.0, float)
+
+
+def test_grading_does_not_move_the_time_step():
+    """The Courant bound follows the SMALLEST cell, and grading does not make one smaller.
+
+    This is the fact that caps what grading can buy: it saves cell count and per-step cost, and
+    **no** step count. Measured spectral radii of the non-uniform operator land at 0.9993-0.9999
+    of `4/min(dz)**2` on six meshes including a 1:10 jump, so `min` is tight rather than
+    conservative. Pinned because the natural implementation breaks it silently -- see the ramp
+    note in the ratio test.
+    """
+    kw = dict(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+              period=[PERIOD], wavelength=WL, tetm='te', theta=0.0, resolution=0.0777,
+              n_periods=60, return_diagnostics=True)
+    uniform = solve_fdtd(grading=None, **kw)[1]
+    for grading in (1.03, 1.06, 1.12):
+        got = solve_fdtd(grading=grading, **kw)[1]
+        # Not exactly equal, and the gap is the structure's whole-cell split rather than the
+        # grading: `ceil(thickness / h_fine)` cells across the layer are each a little smaller
+        # than `h_fine`, which is the price of both faces landing on nodes. Bounded and small;
+        # what must NOT happen is the ramp itself producing a smaller cell.
+        assert got['dt'] > uniform['dt'] * 0.85, (
+            f'grading={grading} moved dt from {uniform["dt"]} to {got["dt"]}')
+        assert got['nz'] < uniform['nz'], (
+            f'grading={grading} did not reduce the cell count ({got["nz"]} vs '
+            f'{uniform["nz"]})')

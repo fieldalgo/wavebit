@@ -432,6 +432,75 @@ def cpml_coefficients(depth, thickness, dt, wavelength, eps_r):
     return b, np.where(denom == 0.0, 0.0, sigma * (b - 1.0) / safe), kappa
 
 
+#: How much one cell may grow over its neighbour. A mesh transition is an optical interface
+#: and it reflects: measured on the semi-discrete operator at the module's own 20 cells per
+#: wavelength, a 4.5x jump taken in ONE cell reflects 5.9e-3 in amplitude -- eight times the
+#: module's worst per-order error and 540 times the PML's own reflection. The same 4.5x spread
+#: over 20 cells at 1.078 gives 1.2e-3, and over 40 at 1.038 gives 6.0e-4. This is the knob
+#: that trades cells against that reflection, and it is why grading is not free.
+GRADE_RATIO = 1.06
+
+
+def graded_cells(h_fine, h_coarse, distance, ratio=GRADE_RATIO):
+    """Cell sizes spanning ``distance``, starting at ``h_fine`` and growing to ``h_coarse``.
+
+    The ramp is geometric at ``ratio`` per cell -- the standard grading, and the reason it is
+    gradual rather than a step is the reflection above. Once the ramp reaches ``h_coarse`` the
+    rest of the distance is uniform; if the distance runs out first the ramp is truncated and
+    the whole span is graded, which is the case in a thin padding.
+
+    Returned in increasing-distance order, and the sizes are rescaled so they sum to
+    ``distance`` exactly -- the caller places nodes by accumulation, so a residue here would
+    put the structure interface off a node.
+    """
+    if distance <= 0.0:
+        return np.zeros(0)
+    # Grow at `ratio` until the coarse size, then stay there -- and stop BEFORE overshooting,
+    # so the total is at most the distance and the scale factor below is at least one.
+    cells, h, total = [], float(h_fine), 0.0
+    while total + h <= distance:
+        cells.append(h)
+        total += h
+        h = min(h * ratio, h_coarse)
+    if not cells:
+        return np.array([distance])
+    # **Scaling the whole array preserves every ratio exactly**, which is what makes this
+    # provable rather than patched: the constraint the caller cares about is a bound on
+    # neighbouring cells, and a common factor cannot violate it. Absorbing the residue into a
+    # joint instead -- the obvious spelling, and the one tried first -- put 1.8x and 0.53x
+    # steps at the two ends, which is exactly the reflection this function exists to spread.
+    # And because the loop stops short, the factor is >= 1, so the smallest cell never falls
+    # below `h_fine` and the Courant bound is untouched.
+    return np.array(cells, dtype=float) * (distance / total)
+
+
+def build_z_mesh(h_fine, thickness_total, above, below, n_top, n_bot, n_max,
+                 ratio=GRADE_RATIO):
+    """Node positions for a graded z mesh; ``z = 0`` is the top of the structure, by construction.
+
+    The structure keeps ``h_fine`` because that is what its index demanded. Each half-space
+    coarsens toward ``h_fine * n_max / n_half`` -- the cell size that half-space would have
+    asked for on its own -- which is the whole saving: on a Drude metal grating 112 of 178 z
+    cells sit in air above the structure where the index is 1 while ``h_fine`` was set by the
+    metal's 6.5.
+
+    ``z = 0`` and ``z = thickness_total`` are nodes exactly, not to a rounding: the incident
+    amplitude is referenced at the first and the transmitted at the second, and a half-cell
+    error there is a phase error in every amplitude that no efficiency would show.
+    """
+    n_struct = max(int(np.ceil(thickness_total / h_fine)), 1)
+    h_core = thickness_total / n_struct
+    core = np.full(n_struct, h_core)
+    # The ramps start at the CORE cell, not at `h_fine`. Those differ -- the structure is split
+    # into a whole number of cells so both its faces land on nodes, which makes `h_core` up to
+    # `n_struct/(n_struct-1)` smaller -- and starting from `h_fine` leaves that difference as a
+    # step at the one joint the structure sits on. Measured 1.065 against a 1.03 budget.
+    up = graded_cells(h_core, h_fine * n_max / max(n_top, 1e-9), above, ratio)
+    down = graded_cells(h_core, h_fine * n_max / max(n_bot, 1e-9), below, ratio)
+    cells = np.concatenate([up[::-1], core, down])
+    return -up.sum() + np.concatenate([[0.0], np.cumsum(cells)]), len(up), n_struct
+
+
 def cpml_profiles(z_node, z_half, top_thickness, bot_thickness, dt, wavelength,
                   eps_top, eps_bot):
     """CPML coefficients per z index, at node (``nz``) and half (``nz-1``) positions.
@@ -578,8 +647,15 @@ class _Incident1D:
         #: variant is worse -- grading only BELOW the TFSF plane leaks just 9.6e-4, but the
         #: incident reference every amplitude is divided by comes out 1.3 % wrong, so `R` and
         #: `T` scale together and `check_physical` sees a plausible `R + T = 0.974`.
-        self.dz_cell = np.full(nz - 1, dz) if np.isscalar(dz) else np.asarray(dz)
-        self.dz_dual = np.full(nz, dz) if np.isscalar(dz) else np.asarray(dz)
+        cells = np.full(nz - 1, dz) if np.ndim(dz) == 0 else np.asarray(dz, dtype=float)
+        if cells.size != nz - 1:
+            raise ValueError(
+                f'_Incident1D: {cells.size} cells for {nz} nodes. The auxiliary grid must ride '
+                f'the SAME mesh as the 2D one; a length mismatch means it was handed a scalar '
+                f'while the 2D grid was graded, which leaks 9.0e-2 of the incident amplitude.')
+        self.dz_cell = cells
+        inner = 0.5 * (cells[:-1] + cells[1:])
+        self.dz_dual = np.concatenate([[cells[0]], inner, [cells[-1]]])
         self.mu_r = float(np.real(mu_r))
         self.f0, self.width, self.t0 = f0, width, t0
         #: **Dimensional** (1/length), like `kx_op` beside it -- NOT the normalised `ky_inc`
@@ -736,7 +812,7 @@ class _Grid:
     def __init__(self, wavelength, period, raster, thickness, eps_top, eps_bot,
                  resolution, n_pml, courant, subpixel, theta=0.0, phi=0.0,
                  dispersion=None, poles=None, mu_raster=None, mu_top=1.0, mu_bot=1.0,
-                 pad_scale=1.0):
+                 pad_scale=1.0, grading=None):
         self.wavelength = float(wavelength)
         self.period = float(period)
         self.raster = np.asarray(raster, dtype=complex)
@@ -796,6 +872,12 @@ class _Grid:
         pad = pad_scale * PAD_WAVELENGTHS * self.wavelength
         pad_top = pad / max(n_top, 1e-9)
         pad_bot = pad / max(n_bot, 1e-9)
+        self.total_thickness = float(self.thickness.sum())
+        if grading is not None:
+            cells = self._build_graded(pad_top, pad_bot, n_top, n_bot, grading)
+            self._finish(cells, courant)
+            return
+
         gap = max(int(round(0.25 * pad_top / self.dz)), 3)
 
         self.k_src = self.n_pml + 2
@@ -803,7 +885,6 @@ class _Grid:
         self.k_tfsf = self.k_ref + gap
         self.k_z0 = self.k_tfsf + max(int(round(pad_top / self.dz)), 3)
 
-        self.total_thickness = float(self.thickness.sum())
         k_bottom = self.k_z0 + int(np.ceil(self.total_thickness / self.dz))
         clear = max(int(round(0.5 * pad_bot / self.dz)), 3)
         self.k_trn = k_bottom + clear
@@ -811,18 +892,6 @@ class _Grid:
 
         self.z0 = -self.k_z0 * self.dz
 
-        # The stability bound is set by the FASTEST wave in the scene, and speed is `c/n`, so
-        # it is the SMALLEST index that binds -- the usual spelling drops this factor because
-        # it assumes nothing beats vacuum.
-        # Speed is `1/sqrt(eps*mu)`, so both sides of the duality bind the time step.
-        n_min = float(np.sqrt(np.min(np.real(np.concatenate([
-            (self.raster * self.mu_raster).ravel(),
-            [self.n_top_sq, self.n_bot_sq]])))))
-        # `i*ky` enters the amplification factor exactly as a difference operator does, so it
-        # joins the bound. It is small next to `1/dx` -- `ky/2 <= pi n/wl` against `20 n/wl` at
-        # twenty cells per wavelength -- but it is not zero, and a bound that ignores a term is
-        # a bound that fails at the one angle nobody tested.
-        ky_phys = 2.0 * np.pi / self.wavelength * self.ky_inc
         #: The two z divisors, which are one number today and two arrays under a graded mesh.
         #: A node-to-node difference lands on a half point and divides by the **primary cell
         #: size**; a half-to-half difference lands on a node and divides by the **dual
@@ -833,8 +902,72 @@ class _Grid:
         #:
         #: They are given **different lengths on purpose** -- ``nz - 1`` against ``nz`` -- so
         #: that swapping them is a shape error rather than a plausible wrong number.
-        self.dz_cell = np.full(self.nz - 1, self.dz)
-        self.dz_dual = np.full(self.nz, self.dz)
+        self._finish(np.full(self.nz - 1, self.dz), courant)
+
+    def _build_graded(self, pad_top, pad_bot, n_top, n_bot, ratio):
+        """Lay the scene out in physical distances first, then find the planes on the mesh.
+
+        The uniform path does the opposite -- it counts cells and multiplies by `dz` -- and
+        that inversion is the whole of this method. Every plane here is a DISTANCE from the
+        structure, matching the uniform path's own spacing so the two are comparable: the TFSF
+        plane one `pad_top` above the structure, the reflection monitor a quarter of that
+        further, the source another quarter, and the transmission monitor half a `pad_bot`
+        below.
+
+        `h_fine` is the cell the scene already asked for, and the index that asked for it is
+        recovered from it rather than recomputed -- a pole model raises the effective index far
+        above `sqrt(eps_infinity)` and `resolution` has already accounted for that.
+        """
+        h_fine = self.dz
+        n_max = self.wavelength / (CELLS_PER_WAVELENGTH * h_fine)
+        h_top = h_fine * n_max / max(n_top, 1e-9)
+        h_bot = h_fine * n_max / max(n_bot, 1e-9)
+
+        above = self.n_pml * h_top + 2.0 * h_top + 1.5 * pad_top
+        below = pad_bot + (self.n_pml + 1) * h_bot
+        z_node, n_above, n_struct = build_z_mesh(
+            h_fine, self.total_thickness, above, below, n_top, n_bot, n_max, ratio)
+
+        self.nz = len(z_node)
+        self.z0 = float(z_node[0])
+        self.k_z0 = n_above
+        find = lambda z: int(np.argmin(np.abs(z_node - z)))
+        self.k_tfsf = find(-pad_top)
+        self.k_ref = find(-1.25 * pad_top)
+        self.k_src = find(-1.5 * pad_top)
+        self.k_trn = find(self.total_thickness + 0.5 * pad_bot)
+
+        # Every plane has to be strictly inside the region it belongs to, and strictly ordered.
+        # A graded mesh can collapse two of them onto one cell where a uniform one could not --
+        # the coarse cells are up to `n_max` times longer -- and two monitors on one node
+        # returns a plausible number rather than an error.
+        order = (self.n_pml, self.k_src, self.k_ref, self.k_tfsf, self.k_z0,
+                 self.k_z0 + n_struct, self.k_trn, self.nz - 1 - self.n_pml)
+        if any(b <= a for a, b in zip(order, order[1:])):
+            raise ValueError(
+                f'fdtd: grading={ratio} collapses the layout -- planes at {order} must be '
+                f'strictly increasing, with the PML boundaries at {self.n_pml} and '
+                f'{self.nz - 1 - self.n_pml}. The coarse cells are {n_max:.1f}x the fine ones, '
+                f'so a padding that held several cells uniformly can hold one graded. Raise '
+                f'`pad_scale`, or lower the grading ratio.')
+        return np.diff(z_node)
+
+    def _finish(self, cells, courant):
+        """Everything that follows from the mesh, shared by the uniform and graded paths.
+
+        Both paths arrive with ``nz``, the plane indices, ``z0`` and a per-cell size array;
+        nothing below reads a scalar ``dz`` for a position again.
+        """
+        k0 = 2.0 * np.pi / self.wavelength
+        ky_phys = k0 * self.ky_inc
+        n_min = float(np.sqrt(np.min(np.real(np.concatenate([
+            (self.raster * self.mu_raster).ravel(),
+            [self.n_top_sq, self.n_bot_sq]])))))
+        self.dz_cell = np.asarray(cells, dtype=float)
+        #: The dual spacing at each node: half a cell on each side, and half a cell at the
+        #: two ends where there is only one.
+        inner = 0.5 * (self.dz_cell[:-1] + self.dz_cell[1:])
+        self.dz_dual = np.concatenate([[self.dz_cell[0]], inner, [self.dz_cell[-1]]])
         #: Node positions, accumulated rather than derived as ``index * dz``. That is not a
         #: tidy-up: ``cumsum(full(n, d))`` is NOT bit-equal to ``arange(n) * d`` for a
         #: non-dyadic ``d`` (measured 367 of 400 rows differing, worst 6.6e-12), so this table
@@ -847,8 +980,17 @@ class _Grid:
         #: midpoints) puts ``z_of(k + 0.5)`` up to half a coarse cell out.
         self.z_mid = self.z_node[:-1] + 0.5 * self.dz_cell
 
-        self.dt = courant * n_min / np.sqrt(1.0 / self.dx ** 2 + 1.0 / self.dz ** 2
-                                            + (0.5 * ky_phys) ** 2)
+        # The stability bound is set by the FASTEST wave (speed `1/sqrt(eps*mu)`, so the
+        # SMALLEST index binds) and by the SMALLEST cell. `min` is not conservative padding:
+        # the true spectral radius of the non-uniform operator was measured at 0.9993-0.9999 of
+        # `4/min(dz)**2` on six meshes including a 1:10 jump, never above it. The consequence
+        # is that **grading buys no time-step relief** -- the saving is cell count and per-step
+        # cost, and `n_steps` is unchanged.
+        # `i*ky` enters the amplification factor exactly as a difference operator does, so it
+        # joins the bound. It is small next to `1/dx` but it is not zero, and a bound that
+        # ignores a term is a bound that fails at the one angle nobody tested.
+        self.dt = courant * n_min / np.sqrt(
+            1.0 / self.dx ** 2 + 1.0 / float(self.dz_cell.min()) ** 2 + (0.5 * ky_phys) ** 2)
 
         #: The DISCRETE x-derivative the auxiliary grid applies, not the continuum `i*kx`:
         #: a field `exp(i kx x)` is an eigenvector of the grid's shift, and the eigenvalue is
@@ -979,7 +1121,11 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None):
         c_p, s_p = np.cos(grid.phi), np.sin(grid.phi)
         inc_drive = ((-s_p, c_p) if leg == 's'
                      else (-np.cos(grid.theta) * c_p, -np.cos(grid.theta) * s_p))
-    inc = _Incident1D(nz, dz, dt, grid.eps_top.real, grid.n_pml, grid.k_src,
+    # The SAME cell array the 2D grid runs on, not the scalar. Handing it `grid.dz` leaves the
+    # incident wave on a different mesh from the scattered one: measured on a graded dielectric
+    # scene, the efficiencies stay plausible (3.5e-3 against RCWA) while every AMPLITUDE is
+    # wrong by 0.52 -- a phase error, and `R + T` never notices.
+    inc = _Incident1D(nz, grid.dz_cell, dt, grid.eps_top.real, grid.n_pml, grid.k_src,
                       centre, 1.0 / centre, width, t0, None if conical else tetm,
                       grid.kx_op, dtype, mu_r=grid.mu_top.real,
                       ky=(2.0 * np.pi / centre) * grid.ky_inc if conical else 0.0,
@@ -1710,7 +1856,7 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
                theta=0.0, phi=None, psi=None, mu=None, incidence_side='top', lattice=None,
                resolution=None, n_pml=PML_CELLS, n_periods=None, courant=COURANT,
                subpixel=True, truncation_order=None, return_diagnostics=False,
-               dispersion=None, poles=None, pad_scale=1.0, _leg=None):
+               dispersion=None, poles=None, pad_scale=1.0, grading=None, _leg=None):
     # `mu` is the raster's permeability field, layer-major beside `structure`, and the two
     # half-spaces carry theirs inside their `Material` -- the same two spellings the RCWA path
     # takes, so one `Stack` reaches both solvers unchanged.
@@ -1726,7 +1872,8 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
             incidence_side=incidence_side, lattice=lattice, resolution=resolution,
             n_pml=n_pml, n_periods=n_periods, courant=courant, subpixel=subpixel,
             truncation_order=truncation_order, return_diagnostics=return_diagnostics,
-            dispersion=dispersion, poles=poles, pad_scale=pad_scale, tetm=tetm)
+            dispersion=dispersion, poles=poles, pad_scale=pad_scale, grading=grading,
+            tetm=tetm)
 
     # `_leg` is set only by `_solve_conical`, which has already validated the incidence; it
     # names which eigenpolarisation this run drives. It is the one door `phi != 0` comes
@@ -1778,7 +1925,7 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
     grid = _Grid(wavelength, period_x, raster, thickness, eps_top, eps_bot,
                  resolution, n_pml, courant, subpixel, theta=theta, phi=phi,
                  dispersion=dispersion, poles=poles, mu_raster=mu_raster,
-                 mu_top=mu_top, mu_bot=mu_bot, pad_scale=pad_scale)
+                 mu_top=mu_top, mu_bot=mu_bot, pad_scale=pad_scale, grading=grading)
     n_steps = int(np.ceil(n_periods * centre / grid.dt))
     out = _time_loop(grid, name, n_steps, band, leg=_leg)
 
