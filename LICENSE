@@ -202,5 +202,12 @@
    wavebit/_core/backend.py is a port of `_eig_bwd` from that project's
    src/fmmax/utils.py. The MIT License requires that its copyright notice and
    permission notice be retained; both are reproduced in full in the file
-   LICENSE.fmmax, which also records the notice its maintained fork
-   (https://github.com/invrs-io/fmmax) states for the same function.
+   LICENSE.fmmax.
+
+   fmmax's maintained fork (https://github.com/invrs-io/fmmax) carries the same
+   function in src/fmmax/eig.py and re-states its copyright as 'Copyright: 2025
+   invrs.io LLC', under the same MIT terms. Which of the two the port was taken
+   from is not recorded, so both notices are stated here. LICENSE.fmmax itself is
+   kept as the verbatim upstream text and nothing else, so that licence scanners
+   identify it as MIT -- a note appended there is 29% of MIT's short body and
+   drops the file below the match threshold GitHub's `licensee` uses.

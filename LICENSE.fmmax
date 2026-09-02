@@ -19,13 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-The above is the licence of https://github.com/facebookresearch/fmmax, whose
-src/fmmax/utils.py is where the ported code (_eig_bwd) sits.
-
-fmmax's maintained fork, https://github.com/invrs-io/fmmax, carries the same
-function in src/fmmax/eig.py and re-states its copyright as `Copyright: 2025
-invrs.io LLC`, under the same MIT terms. That notice is reproduced here too, so
-this file covers the port whichever of the two it is measured against.
