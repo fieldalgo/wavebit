@@ -26,7 +26,7 @@ Being honest about this saves more time than any feature list:
 * **Structures that vary continuously in `z`.** A smooth sidewall is approximated by slicing it
   into layers, and the slice count is yours to choose.
 * **Broadband time-domain questions** — a pulse, a ring-down, a resonance hunt across a wide
-  band in one shot. That is FDTD's shape, and it is on the roadmap below rather than here.
+  band in one shot. That is FDTD's shape rather than RCWA's.
 * **Very high index contrast with metals at grazing incidence**, where the retained order count
   needed for convergence can become impractical.
 
@@ -43,12 +43,3 @@ taste: see [Backends, devices and precision](backends.md).
 **Version 0.1.0, unreleased.** No release has been tagged and the API is still free to move; the
 things that are *pinned* are the conventions, which have a normative contract in
 [Conventions](../conventions.md) and a test suite behind them.
-
-## Roadmap
-
-Wavebit is being built as a suite rather than a single solver:
-
-1. **RCWA on a single-source core** — one backend-agnostic implementation of the physics behind
-   a thin adapter, so NumPy, JAX and PyTorch cannot drift apart. *(done)*
-2. **FDTD** — a time-domain solver sharing the same geometry and material layers, enabling
-   cross-validation of the same structure between methods.

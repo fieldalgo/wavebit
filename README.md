@@ -176,15 +176,6 @@ Nothing is deployed yet. `python -m wavebit.manifest` is the other machine-reada
 every option, refusal and constraint as one generated JSON document, for a program that needs to
 know without reading the source ([`docs/capability-manifest.md`](docs/capability-manifest.md)).
 
-## Roadmap
-
-Wavebit is being built as a suite rather than a single solver:
-
-1. **RCWA on a single-source core** — one backend-agnostic implementation of the physics behind
-   a thin adapter, so NumPy, JAX and PyTorch cannot drift apart. *(done)*
-2. **FDTD** — a time-domain solver sharing the same geometry and material layers, enabling
-   cross-validation of the same structure between methods.
-
 ## Contributing
 
 Bug reports, questions and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
