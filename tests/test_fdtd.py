@@ -1735,3 +1735,93 @@ def test_the_coarse_cells_refine_with_the_fine_ones():
     assert fine < coarse / 2.0, (
         f'refining 4x moved the coarsest cell only {coarse} -> {fine}; the padding is not '
         f'converging with the structure')
+
+
+# ---------------------------------------------------------------------------------------
+# 13. the time record -- the one thing a frequency-domain answer cannot show
+# ---------------------------------------------------------------------------------------
+
+def _record(n_index, record_field=1, **over):
+    """A uniform medium, so the recorded front has one speed to measure rather than two."""
+    eps = wavebit.eps_from_index(n_index)
+    kw = dict(structure=np.full((1, 1, 2), eps), thickness=[100.], top=eps, bot=eps,
+              period=[PERIOD], wavelength=WL, tetm='te', theta=0.0, resolution=0.05,
+              n_periods=60, record_field=record_field, return_diagnostics=True)
+    kw.update(over)
+    return solve_fdtd(**kw)[1]
+
+
+def _front_speed(diag):
+    """Speed of the first arrival, fitted over the interior."""
+    field = np.abs(diag['field_e']).max(axis=2)
+    t, z, grid = diag['field_t'], diag['field_z'], diag['grid']
+    threshold = 0.02 * field.max()
+    arrival = np.array([t[np.flatnonzero(field[:, k] > threshold)[0]]
+                        if (field[:, k] > threshold).any() else np.nan
+                        for k in range(len(z))])
+    k = np.arange(len(z))
+    inside = np.isfinite(arrival) & (k > grid.k_tfsf + 2) & (k < grid.nz - grid.n_pml - 4)
+    return 1.0 / np.polyfit(z[inside], arrival[inside], 1)[0]
+
+
+@pytest.mark.parametrize('n_index', [1.0, 2.0, 2.5])
+def test_the_recorded_field_travels_at_the_speed_of_light(n_index):
+    """The record is only worth having if its time axis is right, and this measures exactly that.
+
+    A pulse in a uniform medium of index `n` advances at `1/n` in the module's units. Measured
+    from the recorded snapshots alone -- no closed form, no RCWA -- the fitted front speed is
+    0.9987 / 0.4980 / 0.3993 against 1 / 0.5 / 0.4, so 0.1 % / 0.4 % / 0.2 %.
+
+    A uniform medium and not the benchmark grating, because an interface gives the fit two
+    speeds and the slope comes back as a meaningless average: measured 0.2994 against 0.5 on a
+    scene whose fit window straddled one.
+    """
+    assert _front_speed(_record(n_index)) == pytest.approx(1.0 / n_index, rel=0.03)
+
+
+def test_recording_less_often_costs_only_resolution():
+    """The gap at a coarse `record_field` is the SAMPLING, not the physics -- shown, not asserted.
+
+    A first-arrival time is resolved to one snapshot interval, so a coarse record biases the
+    fit; the point is that refining it converges rather than plateauing. Measured at n = 2.5:
+    21.7 % / 8.0 % / 0.6 % / 0.2 % at every 8th / 4th / 2nd / 1st step. A recorder that was
+    wrong rather than under-sampled would sit on a floor instead.
+    """
+    exact = 1.0 / 2.5
+    errors = [abs(_front_speed(_record(2.5, record_field=d)) - exact) / exact
+              for d in (8, 2, 1)]
+    assert errors[-1] < errors[0] / 5.0, f'refining the record barely helped: {errors}'
+    assert errors[-1] < 0.02
+
+
+def test_the_record_carries_the_axes_it_is_measured_on():
+    """`field_z` is the node TABLE, not `arange(nz) * dz`, and on a graded mesh those differ.
+
+    A reader who rebuilds the abscissa from `dz` plots every graded run against the wrong
+    positions -- and the plot looks entirely reasonable, because the field is still a field.
+    """
+    # The benchmark grating, not a uniform medium: grading coarsens toward the cell each
+    # half-space would have asked for, so a scene whose index is the same everywhere has
+    # nothing to grade and the test would pass on a mesh that never varied.
+    diag = solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+                      period=[PERIOD], wavelength=WL, tetm='te', theta=0.0, resolution=0.05,
+                      n_periods=60, grading=1.06, record_field=20,
+                      return_diagnostics=True)[1]
+    z = diag['field_z']
+    assert z.shape == (diag['nz'],)
+    spacing = np.diff(z)
+    assert spacing.max() / spacing.min() > 1.5, (
+        'the graded run should have unequal cells; if it does not, the scene is not testing '
+        'what this test is for')
+    assert np.allclose(z, diag['grid'].z_node), 'field_z must BE the node table, not a rebuild'
+    assert diag['field_t'].shape[0] == diag['field_e'].shape[0]
+    assert diag['field_x'].shape == (diag['nx'],)
+
+
+def test_the_record_is_off_by_default_and_costs_nothing():
+    """A solve that was not asked for the record does not pay for it, and cannot read one."""
+    diag = solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+                      period=[PERIOD], wavelength=WL, tetm='te', theta=0.0,
+                      resolution=0.05, n_periods=60, return_diagnostics=True)[1]
+    for key in ('field_t', 'field_e', 'field_z', 'field_x'):
+        assert key not in diag, f'{key} appeared without record_field being asked for'

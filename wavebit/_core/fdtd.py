@@ -1102,7 +1102,7 @@ class _Grid:
 # the time loop
 # ---------------------------------------------------------------------------------------
 
-def _time_loop(grid, tetm, n_steps, wavelengths, leg=None):
+def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
     """Step the fields and accumulate the running DFT, at every requested wavelength at once.
 
     This is the one thing a time-domain solve does that a frequency-domain one cannot: the
@@ -1216,6 +1216,16 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None):
     n_f = len(freq)
     dft_ref = np.zeros((n_f, nx), dtype=complex)
     dft_trn = np.zeros((n_f, nx), dtype=complex)
+    #: The time-domain record, which is the one thing a time-domain solve does that its
+    #: frequency-domain answer cannot show. It costs a snapshot every `record_field` steps;
+    #: at a 10 nm grid on the benchmark cell that is 86 kB a snapshot, so every 10th step is
+    #: 67 MB and every 50th is 13 MB. Off by default because a solve that is not asked for it
+    #: should not pay for it -- the same reason `answers` is a declaration on the RCWA path.
+    n_snap = 0 if record_field is None else (n_steps + record_field - 1) // record_field
+    snap_e = np.zeros((n_snap, nz, nx), dtype=dtype) if n_snap else None
+    snap_x = np.zeros((n_snap, nz, nx), dtype=dtype) if (n_snap and conical) else None
+    snap_t = np.zeros(n_snap)
+
     # The second transverse component, `Ex`, and its own incident reference. A conical mount
     # needs both because the s and p channels of an order are two projections of the same
     # transverse vector -- at ky = 0 one component determines the other and these stay unused.
@@ -1326,6 +1336,15 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None):
             dft_trn_x = dft_trn_x + kernel[:, None] * g_trn[None, :]
             inc_z0_x += kernel * j_z0
 
+        if n_snap and step % record_field == 0:
+            # The ELECTRIC field, whichever component this polarisation carries -- a TM run
+            # steps `Hy` as its primary but `Ex` is what a reader means by "the field".
+            j = step // record_field
+            snap_e[j] = ey if te_on else ex
+            if conical:
+                snap_x[j] = ex
+            snap_t[j] = (step + 1) * dt
+
         amplitude = float(np.abs(f_trn).max())
         if conical:
             amplitude = max(amplitude, float(np.abs(g_trn).max()))
@@ -1339,7 +1358,8 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None):
     # as dz**0.6.
     # `Ey` and `Ex` both sit on the z nodes, so a conical run's offset is zero for both.
     offset = 0.0 if conical else (0.5 if tetm == 'tm' else 0.0)
-    return {'dft_ref': dft_ref, 'dft_trn': dft_trn, 'tetm': tetm, 'conical': conical,
+    return {'snap_e': snap_e, 'snap_x': snap_x, 'snap_t': snap_t[:n_snap] if n_snap else None,
+            'dft_ref': dft_ref, 'dft_trn': dft_trn, 'tetm': tetm, 'conical': conical,
             'dft_ref_x': dft_ref_x, 'dft_trn_x': dft_trn_x, 'inc_z0_x': inc_z0_x,
             'wavelengths': wavelengths,
             'inc_ref': inc_ref, 'inc_trn': inc_trn, 'inc_z0': inc_z0,
@@ -1883,7 +1903,8 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
                theta=0.0, phi=None, psi=None, mu=None, incidence_side='top', lattice=None,
                resolution=None, n_pml=PML_CELLS, n_periods=None, courant=COURANT,
                subpixel=True, truncation_order=None, return_diagnostics=False,
-               dispersion=None, poles=None, pad_scale=1.0, grading=None, _leg=None):
+               dispersion=None, poles=None, pad_scale=1.0, grading=None,
+               record_field=None, _leg=None):
     # `mu` is the raster's permeability field, layer-major beside `structure`, and the two
     # half-spaces carry theirs inside their `Material` -- the same two spellings the RCWA path
     # takes, so one `Stack` reaches both solvers unchanged.
@@ -1961,7 +1982,7 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
                  mu_top=mu_top, mu_bot=mu_bot, pad_scale=pad_scale, grading=grading,
                  n_max=n_max)
     n_steps = int(np.ceil(n_periods * centre / grid.dt))
-    out = _time_loop(grid, name, n_steps, band, leg=_leg)
+    out = _time_loop(grid, name, n_steps, band, leg=_leg, record_field=record_field)
 
     centre_order = 0
     if truncation_order is None:
@@ -2008,7 +2029,17 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
     # what was asked for and what a single time-domain run can answer.
     angles = np.rad2deg(np.arcsin(np.clip(
         grid.kx_inc * band / centre / max(np.sqrt(eps_top).real, 1e-9), -1.0, 1.0)))
+    # The time record, with the axes it is measured on. `z` is the node table -- the graded
+    # mesh means it is NOT `arange(nz)*dz`, and a reader who assumes that plots the field
+    # against the wrong abscissa on every graded run.
+    record = {}
+    if record_field is not None:
+        record = {'field_t': out['snap_t'], 'field_e': out['snap_e'],
+                  'field_ex': out['snap_x'],
+                  'field_z': grid.z_node, 'field_x': np.arange(grid.nx) * grid.dx}
+
     return result, {'grid': grid, 'dz': grid.dz, 'nz': grid.nz, 'nx': grid.nx, 'dt': grid.dt,
+                    **record,
                     'n_steps': n_steps, 'n_pml': grid.n_pml,
                     'pml_thickness': grid.n_pml * grid.dz, 'residual': out['residual'],
                     'incident_balance': abs(out['inc_trn'][0] / out['inc_ref'][0]) - 1.0,
