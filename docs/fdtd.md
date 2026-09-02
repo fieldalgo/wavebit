@@ -580,13 +580,135 @@ reflected rule; the transmitted rule needed its own six. An efficiency is quadra
 to exactly the sign most likely to be wrong. Same family as the TM monitor offset in §5, and
 as `per-order-sp-frame-half-turn` in the RCWA path.
 
+## 8f. A conical mount away from normal
+
+`psi` with `theta != 0` and `phi != 0` is answered by the six-component stepper, run once per
+eigenpolarisation — s and p are the two eigenpolarisations of a uniform medium at fixed
+`(kx, ky)`, so a leg driven in one stays in it on the way in and the grating is what mixes them.
+Against `solve_1d_conical` at theta = 30 deg, phi = 40 deg, psi = 30 deg, all three legs, all
+four channels, every order: 2.8e-3 in efficiency and 1.2e-2 in amplitude at a 10 nm grid.
+
+**The p channel is not the transverse projection.** `p_hat = k_hat x s_hat` has a `z` component;
+eliminating `E_z` through `E . k_hat = 0` and using `kz**2 + k_par**2 = n**2` collapses it to
+
+    E . p_hat = -+ (n / kz_m) * (c Ex + s Ey)
+
+and that `n / kz_m` is a per-order `1 / cos(theta_m)`, equal to 1 only for the specular order at
+normal incidence — exactly the case §8d covered, which is why that path could not have found it.
+A pure amplitude factor: no efficiency or energy check sees it.
+
+**Three things blocked it and each was silent.** `solve_fdtd` never passed `phi` to `_Grid`, so
+`grid.ky_inc` was `0.0` on every reachable path and the `conical` branch was dead code. The TFSF
+source could not inject a conical wave — `_time_loop` built `_Incident1D` passing neither `ky`
+nor `drive`, so the four injection lines read the wrong triple through the `inc.e`/`inc.h`
+accessors. And `_half_space_kz` had no `ky`, so it and `_propagating_window` disagreed about
+which orders propagate.
+
+The instrument that settles the source needs no oracle: **on a vacuum scene the scattered-field
+region must stay empty.** As a fraction of the incident amplitude at phi = 30 / 45 / 90 deg it
+was 6.9e-2 / 9.5e-2 / 6.7e-2 against 3.7e-17 at phi = 0; it is ~3e-15 everywhere now. Thirteen
+orders — and nothing else in the module could have found it, because the stepper was stable and
+decaying and the public path with the refusal lifted returned `R + T = 0.9966`.
+
+**The three leg signs were found by the mixed leg, not the pure ones.** Each leg is normalised
+by its own incident amplitude, so a global sign on either leaves every `|r|**2` in that leg
+exactly right. With them wrong, `s_inc` and `p_inc` matched RCWA to 2e-3 in every channel while
+`given.R_s[-1]` read 0.1795 against a true 0.0197 — and `R + T` stayed 1.0005.
+
+### What the convergence metric was measuring instead
+
+The residual first looked sub-second-order, 1.58 / 1.37 in amplitude against classical controls
+of 2.02 / 1.78 (TE) and 1.89 / 1.85 (TM) at the same angle. It was the metric, twice over.
+
+**An evanescent order's amplitude is round-off the de-referencing multiplied up.** Order +1 has
+`k_par**2 = 2.89` against `n_bot**2 = 2.25`, so it is evanescent in both half-spaces; its `t_s`
+gap reads 3.1e-3 / 3.6e-4 / 6.2e-4 and gets *worse* with resolution, while `R` and `T` are
+exactly zero there.
+
+**An order near a Rayleigh point converges slowly for arithmetic reasons.** The default scene's
+m = -1 sits at `kz_top = 0.286`, where the p channel multiplies by `n/kz` = 3.5 and
+`kz = sqrt(n**2 - k_par**2)` has sensitivity `1/kz` on top of that. A large coefficient, not a
+low order.
+
+With R compared only where an order propagates above, T only where it propagates below, and a
+scene chosen by scanning `(theta, phi)` for the largest minimum `|kz|` margin: 2.05 / 1.87.
+
+**And the scene that makes the claim cleanest cannot see the defect.** The two monitors need two
+demodulation kernels — `Ex` sits on the x half-steps and `Ey` on the nodes — and using one is a
+per-order phase `exp(-i k0 kx_m dx/2)`, *first* order in dx, mostly cancelled in `|r|**2`. Its
+size scales with `|kx_m|`. On the margin scene the only order propagating in air has
+`kx_0 = 0.25` and the single-kernel version reads a convergence ratio of 4.24 against a true
+4.15 — no separation at all. The default scene's m = -1 carries `kx = -0.903` and separates 3.62
+from 2.39. **A scene chosen for margin and a scene chosen for sensitivity are not the same
+scene**, and the test file carries both.
+
+## 8e. A graded z mesh, and why it is off by default
+
+`grading=True` builds a z mesh that keeps the fine cell in the structure and coarsens toward the
+cell each half-space would have asked for on its own. `x` stays uniform and that is not
+negotiable: the order extraction is an FFT over x.
+
+The motivation was a real waste. On a Drude metal grating 112 of 178 z cells sit in air above
+the structure and 57 in the substrate below, where the index is 1 and 1.5 while the cell size
+was set by the metal's 6.5 — 94 % of the cells outside the thing that required them.
+
+**An earlier revision of this document said fixing that "could change the crossover by an order
+of magnitude". It does not, and the gap between that sentence and the measurement is the most
+useful thing in this section.**
+
+### What it actually buys
+
+Cell count falls 2.2x on the dielectric benchmark and 4.5x on the metal one — but the
+transition has to be paid for. A mesh step is an optical interface and it reflects: measured at
+the module's own 20 cells per wavelength, a 4.5x jump taken in ONE cell reflects 5.9e-3 in
+amplitude, eight times the module's worst per-order error and 540 times the PML's own. Spread
+over 40 cells it is 6.0e-4. Those cells come out of the saving.
+
+And **grading buys no time-step relief at all.** The Courant bound follows the smallest cell,
+which is the structure's and does not move; the true spectral radius of the non-uniform operator
+lands at 0.9993–0.9999 of `4/min(dz)**2` on six meshes including a 1:10 jump, so `min` is tight
+rather than conservative.
+
+| resolution | dz | cells saved | time saved |
+|---|---|---|---|
+| 0.05 | 20 nm | 1.29x | 1.11x |
+| 0.10 | 10 nm | 1.62x | 1.32x |
+| 0.20 | 5 nm | 2.22x | 1.83x |
+| 0.40 | 2.5 nm | 3.20x | 3.15x |
+
+At coarse grids the module is NumPy-call-bound and the cells do not buy time; at the resolution
+someone would run for a converged answer the two match.
+
+### The comparison that decides it
+
+**Equal cell size is the wrong comparison, and it is the one that looks best.** Holding the
+*answer* fixed instead — time to reach an efficiency error of 1e-3 on the metal grating:
+
+| | uniform | 1.03 | **1.06** | 1.12 |
+|---|---|---|---|---|
+| time | 5.99 s | 6.60 s | **3.78 s** | 9.62 s |
+
+A real optimum, and 1.6x faster than uniform. **On the dielectric benchmark it loses**: the
+error grows 2.7x at the same cell size and buying that back costs more in cell size than the
+grading saves in cell count. So it is off by default and `GRADE_RATIO` is 1.06 — it pays where
+the index contrast is large and the structure occupies little of the domain.
+
+### Two defects only a convergence study could see
+
+`n_max` was first derived back from the cell size, which assumes the caller asked for exactly
+`CELLS_PER_WAVELENGTH`. A caller who *refines* `resolution` was therefore read as having a
+higher-index material and the padding was coarsened to match, pinning the coarse cells at 45 nm
+however fine the structure got. The graded run **floored at 2.3e-3 and stopped converging**
+(order 0.42 at the finest grid) while the uniform path went on to 1.4e-4. A single-resolution
+comparison shows this as a slightly worse number, not as a floor.
+
+And the auxiliary 1D grid was left on the scalar cell size while the 2D grid graded. The
+efficiencies came back *better* than the uniform run's — 3.5e-3 against RCWA — while every
+amplitude was wrong by 0.52. `R + T` never noticed. Same family as §5 and §8d: an efficiency is
+quadratic and blind to exactly the phase this kind of mistake produces.
+
 ## 9. What is not yet answered
 
-- **A non-uniform grid.** Measured in §2 and §8b: on a metal grating, 95 % of the fine cells
-  are outside the metal that required them, and the crossover against RCWA sits at 112
-  wavelengths because of it. Nothing else on this list changes that number, and this could
-  change it by an order of magnitude. It is the difference between a solver someone chooses
-  and one they only cross-check with.
 - **A fixed-*angle* spectrum at oblique incidence**, rather than the fixed-`kx` sweep of §8.
   This is the gap that matters most once the module is read as a solver rather than a harness:
   a spectrum at a tilt is an ordinary thing to want, and it is exactly what one run cannot give
@@ -610,34 +732,10 @@ as `per-order-sp-frame-half-turn` in the RCWA path.
   ahead of the best FDTD route, so on a scene like this one no formulation wins. The decision
   only becomes real on a scene where the RCWA side is expensive — many layers, a high
   truncation order, or a metal, which is why dispersion is above this on the list.
-- **A conical mount away from normal** — `phi != 0` *and* `theta != 0` together. The two
-  halves have landed separately and the remaining gap is a narrow one. The classical mount is
-  done at any `theta` (§5b), and the conical output frame is done at `theta = 0` (§8d), where
-  `ky` is exactly zero and the whole `phi` dependence is which channel each order lands in.
-  What is left is the middle: at `ky != 0` four terms couple all six field components, so no
-  combination of TE and TM runs reproduces it. The six-component **operator** is written — four
-  `ky` terms on the `Hx`, `Hz`, `Ex` and `Ez` updates — and the stepper runs and stays bounded.
-  **Nothing else about it is true, and an earlier revision of this section said otherwise.**
-
-  Three things block it, and the first two make the third moot. `solve_fdtd` never passes `phi`
-  to `_Grid`, so `grid.ky_inc` is `0.0` on every reachable path and the `conical` branch is dead
-  code. The TFSF source cannot inject a conical wave: `_Incident1D` takes `ky` and `drive`
-  parameters and carries the mirror four terms, and `_time_loop` constructs it passing neither.
-  And there is no extraction — `_half_space_kz` is `sqrt(eps - kx**2)` with no `ky`.
-
-  The measurement that settles it needs no oracle. On a **vacuum** scene TFSF must cancel
-  exactly in the scattered-field region; the leak, as a fraction of the incident amplitude, is
-  `3.7e-17` at `phi = 0` and `6.9e-2 / 9.5e-2 / 6.7e-2` at `phi = 30 / 45 / 90 deg`. Fifteen
-  orders. **This is the only instrument in the module with resolving power here** — the stepper
-  is stable and decaying, and the public path with the refusal lifted returns `R + T = 0.9966`,
-  so every physicality gate passes on the wrong answer.
-
-  A previous revision of this section reported a measured `TM/TE` coupling ratio
-  (0.464 / 0.740 / 0.648 at 30 / 60 / 90 degrees) as evidence the stepper worked. **Those
-  figures are not reproducible from anything in this repository, and the path they would have
-  had to come through is the broken one above.** No scene, angle or definition was recorded
-  with them, which is the reason they survived as long as they did. Until `psi` with
-  `theta != 0` is answered, it is refused by name.
+- **A non-uniform grid that pays on every scene**, rather than the one in §8e that pays on a
+  metal grating and loses on a dielectric one. What would change that is a transition cheaper
+  than a geometric ramp — the literature's subgridding schemes (Okoniewski 1997, Berenger 2006)
+  buy a smaller reflection for a more complicated interface, and none of them is measured here.
 - **A broadband run.** The DFT machinery accumulates at a single frequency now; a band needs
   the source width sized from the requested span and a guard on the incident amplitude, which
   falls to 2e-7 of its peak at the band edge and turned `R` into 105 in a prototype that had
