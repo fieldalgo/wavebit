@@ -164,6 +164,47 @@ def _defines(src, symbol):
                 or re.search(rf'^\s*{re.escape(last)}\s*[:=]', src, re.M))
 
 
+# A link into this repository written as a full URL. `docs/` grew these when the documentation
+# site landed: a page there may legitimately point at a notebook to run or a test to read, and a
+# relative `../tests/...` is correct in a clone while being unresolvable in a site whose root is
+# `docs/` -- a reader on the site clicks it and gets a 404. Absolute URLs work in both.
+#
+# What that costs is the thing this file exists to prevent. A relative link is checked by the
+# clone itself the moment someone follows it; a URL is checked by nobody, and a renamed tutorial
+# leaves a link that still looks live and 404s only for a reader who is not here to complain.
+# So the path half is checked the same way every other citation is -- offline, against the tree,
+# with no network involved.
+REPO_URL = re.compile(
+    r'https://github\.com/fieldalgo/wavebit/(?:blob|tree)/[A-Za-z0-9._/-]+?/'
+    r'([A-Za-z0-9_][A-Za-z0-9._/-]*)')
+
+
+def test_repository_urls_name_something_in_the_tree():
+    """A github.com URL into this repository has to point at a path that exists here.
+
+    The branch in the URL is not checked and cannot be: it names a ref that may not be the one
+    checked out. What is checked is the path after it, which is what goes stale in a rename.
+    """
+    bad = []
+    for p in published_files():
+        rel = p.relative_to(ROOT).as_posix()
+        if rel in EXEMPT:
+            continue
+        try:
+            text = p.read_text(encoding='utf-8')
+        except UnicodeDecodeError:
+            continue
+        for n, line in enumerate(text.splitlines(), 1):
+            for m in REPO_URL.finditer(line):
+                cited = m.group(1).rstrip('/).,')
+                if not (ROOT / cited).exists():
+                    bad.append(f'{rel}:{n}: {cited}')
+
+    assert not bad, (
+        'these URLs point into this repository at paths that are not in it, so they 404 for '
+        'every reader and for nobody who can fix them:\n  ' + '\n  '.join(bad))
+
+
 def docs_with_targets():
     for p in sorted((ROOT / 'docs').glob('*.md')):
         text = p.read_text(encoding='utf-8')

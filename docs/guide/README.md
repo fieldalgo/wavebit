@@ -7,16 +7,16 @@ The boundary against the two neighbouring folders is **audience**, not subject:
 
 | | Reader | Answers |
 | --- | --- | --- |
-| [`../../tutorials/`](../../tutorials) | has not used the API yet | "how do I get started" — lessons, in order, read once and outgrown |
+| [`tutorials/`](https://github.com/fieldalgo/wavebit/tree/develop/tutorials) | has not used the API yet | "how do I get started" — lessons, in order, read once and outgrown |
 | **`guide/`** (here) | knows the API, needs the contract | "what does this keyword do, and what does it refuse" — looked up, not read through |
-| [`../`](..) | knows the API, questions the design | "why is the default what it is" — measurements, cited from code comments |
+| [`docs/`](https://github.com/fieldalgo/wavebit/tree/develop/docs) | knows the API, questions the design | "why is the default what it is" — measurements, cited from code comments |
 
 Overlap in subject between the three is expected and fine. A page here may state a default
 that `../` spends four thousand words justifying; it says what the default *is* and links.
 
 ## House style
 
-Different from the documents in [`../`](..), deliberately. A page here carries **no `Written:`
+Different from the documents in [`docs/`](https://github.com/fieldalgo/wavebit/tree/develop/docs), deliberately. A page here carries **no `Written:`
 date and no `Targets:` list** — those exist so a measurement can be cited and so a decision
 can be dated, and a manual page is neither. It states what is true now.
 

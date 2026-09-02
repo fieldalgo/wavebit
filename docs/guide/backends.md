@@ -67,8 +67,8 @@ bits rather than merely risky: evanescent (complex-angle) incidence, where the b
 unresolvable at that precision and no threshold repairs it, so the solver warns
 `UnresolvedBranchWarning` instead of pretending. See [`../branch-cuts.md`](../branch-cuts.md).
 
-Tutorials [`03-jax`](../../tutorials/03-device-and-datatype-jax.ipynb) and
-[`03-torch`](../../tutorials/03-device-and-datatype-torch.ipynb) work through both keywords.
+Tutorials [`03-jax`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/03-device-and-datatype-jax.ipynb) and
+[`03-torch`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/03-device-and-datatype-torch.ipynb) work through both keywords.
 
 ## The JAX 64-bit cap, and import order
 

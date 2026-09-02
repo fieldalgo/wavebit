@@ -58,21 +58,24 @@ theme:
         icon: material/brightness-4
         name: Switch to light
 
-# A document here may legitimately point at something outside `docs/` -- a notebook to run, a
-# test to read, the source of a function. Those links are correct in the repository and
-# unresolvable in a site rooted at `docs/`, so they are reported and not failed on.
-# `tests/test_docs_contract.py` is the authority on whether a cited path exists; it reads the
-# whole published tree and has no such blind spot. Anchors and nav are checked strictly here,
-# because nothing else checks them.
+# A document may point at something outside `docs/` -- a notebook to run, a test to read, the
+# source of a function. Those are written as full github.com URLs rather than as `../tests/...`,
+# because a relative one is right in a clone and 404s for a reader on the site, where the root
+# is `docs/`. There were thirteen of them and there are none now, so `not_found` is back to
+# `warn`: with the legitimate cases gone, every remaining hit is a real broken link.
+#
+# The path inside those URLs is checked offline by
+# `tests/test_docs_contract.py::test_repository_urls_name_something_in_the_tree`, which is what
+# keeps a renamed file from leaving a link that still looks live.
 validation:
   nav:
     omitted_files: warn
     not_found: warn
   links:
-    not_found: info
+    not_found: warn
     anchors: warn
     absolute_links: info
-    unrecognized_links: info
+    unrecognized_links: warn
 
 hooks:
   - mkdocs_hooks.py

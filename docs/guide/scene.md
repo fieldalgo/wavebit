@@ -40,8 +40,8 @@ name. That also caps how many beams can be combined, at roughly `2 * period / wa
 
 See [`../conventions.md`](../conventions.md) for the normative statement,
 [`../multimode-incidence.md`](../multimode-incidence.md) for `excitation`, and tutorials
-[`06`](../../tutorials/06-polarization-pair.ipynb) and
-[`07`](../../tutorials/07-multimode-incidence.ipynb).
+[`06`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/06-polarization-pair.ipynb) and
+[`07`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/07-multimode-incidence.ipynb).
 
 ## The stack
 
@@ -144,7 +144,7 @@ plausible wrong number: `factorization='li'` on a raster, whose inverse rule fol
 axes, which are `a1` / `a2` once skewed.
 
 See [`../oblique-lattice.md`](../oblique-lattice.md) and
-[`tutorial 05`](../../tutorials/05-oblique-lattice.ipynb).
+[`tutorial 05`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/05-oblique-lattice.ipynb).
 
 ## The numerics
 

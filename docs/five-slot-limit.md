@@ -130,7 +130,7 @@ decide every row, and neither needs another solver to agree:
 | **Wavebit 4ff** | handles it, and is the default here | `solve_2d_4ff.py`, agreeing with RETICOLO to 1e-15 inside RETICOLO's bound — through the public API as well as directly |
 
 The per-solver numbers, and how each was established, are in
-[`../tests/references/README.md`](../tests/references/README.md).
+[`tests/references/README.md`](https://github.com/fieldalgo/wavebit/blob/develop/tests/references/README.md).
 
 ## 5. Why the silent drop is the dangerous one
 

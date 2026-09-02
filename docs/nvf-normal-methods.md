@@ -362,7 +362,7 @@ Note that a raster with 3+ distinct values delegates to `'distance'`, so all fou
 return bit-identical numbers on one — which is what hid the defect's location originally.
 Use a two-phase raster to tell the constructions apart.
 
-Pinned by [`tests/test_nvf_lattice_translation.py`](../tests/test_nvf_lattice_translation.py),
+Pinned by [`tests/test_nvf_lattice_translation.py`](https://github.com/fieldalgo/wavebit/blob/develop/tests/test_nvf_lattice_translation.py),
 which parametrizes three placements deliberately (a partial fix passes some). `'contour'` was
 carried there as a strict xfail four times -- until the aperture fix above promoted it; again
 from 2026-08-28 to 2026-08-29 for the indicator defect in the caveat at the top of this file,

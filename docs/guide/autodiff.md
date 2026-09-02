@@ -113,6 +113,6 @@ it outright. Before choosing either on a shape recipe, look at `normal_grid`, wh
 both. The table is in [`backends.md`](backends.md); the measurements are in
 [`../backend-choice.md`](../backend-choice.md).
 
-Tutorials [`02-jax`](../../tutorials/02-autograd-and-optimization-jax.ipynb) and
-[`02-pytorch`](../../tutorials/02-autograd-and-optimization-pytorch.ipynb) run a full
+Tutorials [`02-jax`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/02-autograd-and-optimization-jax.ipynb) and
+[`02-pytorch`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/02-autograd-and-optimization-pytorch.ipynb) run a full
 optimization on each backend.

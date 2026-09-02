@@ -65,7 +65,7 @@ ways, agreeing to 4e-14 — and the Berreman row is run on **stacks**, on a **ti
 mirror has to flip the z row's sign and nothing else.
 
 **No outside solver reaches a tilted magnetisation.** All four surveyed are out, each for a
-measured reason — the table is in [`../tests/references/README.md`](../tests/references/README.md).
+measured reason — the table is in [`tests/references/README.md`](https://github.com/fieldalgo/wavebit/blob/develop/tests/references/README.md).
 So that geometry is judged by a *theorem* instead: turning the tensor and the incidence azimuth
 together about the stack normal must leave the efficiencies unchanged, which holds to 3e-15 over
 eight tensors, three angles and four rotations. That test is also the only thing in the repo

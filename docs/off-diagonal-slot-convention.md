@@ -365,7 +365,7 @@ Pinned by `tests/test_anisotropic_berreman.py`.
 ## 6. It is not a time-convention artefact
 
 A reasonable objection: this repo runs `e^{-iwt}` with `Im(n) > 0` as loss
-([`conventions.py`](../wavebit/_core/conventions.py)), and handedness conventions decide which
+([`conventions.py`](https://github.com/fieldalgo/wavebit/blob/develop/wavebit/_core/conventions.py)), and handedness conventions decide which
 circular state is which. Could the reference above simply have the wrong handedness?
 
 No, for two independent reasons.
