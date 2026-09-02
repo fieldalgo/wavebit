@@ -432,12 +432,20 @@ def cpml_coefficients(depth, thickness, dt, wavelength, eps_r):
     return b, np.where(denom == 0.0, 0.0, sigma * (b - 1.0) / safe), kappa
 
 
-#: How much one cell may grow over its neighbour. A mesh transition is an optical interface
-#: and it reflects: measured on the semi-discrete operator at the module's own 20 cells per
-#: wavelength, a 4.5x jump taken in ONE cell reflects 5.9e-3 in amplitude -- eight times the
-#: module's worst per-order error and 540 times the PML's own reflection. The same 4.5x spread
-#: over 20 cells at 1.078 gives 1.2e-3, and over 40 at 1.038 gives 6.0e-4. This is the knob
-#: that trades cells against that reflection, and it is why grading is not free.
+#: How much one cell may grow over its neighbour, and it is a genuine optimum rather than a
+#: safe-looking number. A mesh transition is an optical interface and it reflects: a 4.5x jump
+#: taken in ONE cell reflects 5.9e-3 in amplitude -- eight times the module's worst per-order
+#: error and 540 times the PML's own -- while the same 4.5x spread over 40 cells gives 6.0e-4.
+#: So too aggressive loses accuracy and too gentle spends the cells it was trying to save.
+#: Measured on the Drude metal grating, time to reach an efficiency error of 1e-3:
+#:
+#:     uniform 5.99 s | 1.03 -> 6.60 s | **1.06 -> 3.78 s** | 1.12 -> 9.62 s
+#:
+#: **Grading is off by default, and that is a measured decision, not caution.** On the metal
+#: scene 1.06 is 1.6x faster at equal accuracy; on the dielectric benchmark it LOSES, because
+#: the error grows 2.7x and buying that back costs more in cell size than the grading saves in
+#: cell count. The saving scales with the index contrast `n_max / n_half` and with how little
+#: of the domain the structure occupies -- a thin metal in air is where it pays.
 GRADE_RATIO = 1.06
 
 
@@ -474,7 +482,7 @@ def graded_cells(h_fine, h_coarse, distance, ratio=GRADE_RATIO):
     return np.array(cells, dtype=float) * (distance / total)
 
 
-def build_z_mesh(h_fine, thickness_total, above, below, n_top, n_bot, n_max,
+def build_z_mesh(h_fine, thickness_total, above, below, n_top, n_bot, n_max, wavelength,
                  ratio=GRADE_RATIO):
     """Node positions for a graded z mesh; ``z = 0`` is the top of the structure, by construction.
 
@@ -495,8 +503,14 @@ def build_z_mesh(h_fine, thickness_total, above, below, n_top, n_bot, n_max,
     # into a whole number of cells so both its faces land on nodes, which makes `h_core` up to
     # `n_struct/(n_struct-1)` smaller -- and starting from `h_fine` leaves that difference as a
     # step at the one joint the structure sits on. Measured 1.065 against a 1.03 budget.
-    up = graded_cells(h_core, h_fine * n_max / max(n_top, 1e-9), above, ratio)
-    down = graded_cells(h_core, h_fine * n_max / max(n_bot, 1e-9), below, ratio)
+    # A half-space may coarsen to the cell it would have asked for on its own -- but never
+    # past the module's own standard for it. Without the cap a caller who passes a coarse
+    # `resolution` gets padding at 12.7 cells per wavelength, which is under-resolved in the
+    # one region the monitors sit in.
+    coarse = lambda n: min(h_fine * n_max / max(n, 1e-9),
+                           wavelength / (CELLS_PER_WAVELENGTH * max(n, 1e-9)))
+    up = graded_cells(h_core, coarse(n_top), above, ratio)
+    down = graded_cells(h_core, coarse(n_bot), below, ratio)
     cells = np.concatenate([up[::-1], core, down])
     return -up.sum() + np.concatenate([[0.0], np.cumsum(cells)]), len(up), n_struct
 
@@ -812,7 +826,7 @@ class _Grid:
     def __init__(self, wavelength, period, raster, thickness, eps_top, eps_bot,
                  resolution, n_pml, courant, subpixel, theta=0.0, phi=0.0,
                  dispersion=None, poles=None, mu_raster=None, mu_top=1.0, mu_bot=1.0,
-                 pad_scale=1.0, grading=None):
+                 pad_scale=1.0, grading=None, n_max=None):
         self.wavelength = float(wavelength)
         self.period = float(period)
         self.raster = np.asarray(raster, dtype=complex)
@@ -873,7 +887,19 @@ class _Grid:
         pad_top = pad / max(n_top, 1e-9)
         pad_bot = pad / max(n_bot, 1e-9)
         self.total_thickness = float(self.thickness.sum())
+        self.n_max = float(n_max) if n_max is not None else float(
+            np.sqrt(np.abs(self.raster * self.mu_raster)).max())
+        if grading is True:
+            grading = GRADE_RATIO
+        elif grading is False:
+            grading = None
         if grading is not None:
+            if not 1.0 < float(grading) < 2.0:
+                raise ValueError(
+                    f'fdtd: grading={grading!r}. It is the most one cell may grow over its '
+                    f'neighbour, so it is above 1 and sensibly below about 1.2 -- a mesh step '
+                    f'is an optical interface and it reflects. `True` takes the measured '
+                    f'optimum ({GRADE_RATIO}); `None` or `False` is the uniform mesh.')
             cells = self._build_graded(pad_top, pad_bot, n_top, n_bot, grading)
             self._finish(cells, courant)
             return
@@ -919,14 +945,15 @@ class _Grid:
         above `sqrt(eps_infinity)` and `resolution` has already accounted for that.
         """
         h_fine = self.dz
-        n_max = self.wavelength / (CELLS_PER_WAVELENGTH * h_fine)
+        n_max = self.n_max
         h_top = h_fine * n_max / max(n_top, 1e-9)
         h_bot = h_fine * n_max / max(n_bot, 1e-9)
 
         above = self.n_pml * h_top + 2.0 * h_top + 1.5 * pad_top
         below = pad_bot + (self.n_pml + 1) * h_bot
         z_node, n_above, n_struct = build_z_mesh(
-            h_fine, self.total_thickness, above, below, n_top, n_bot, n_max, ratio)
+            h_fine, self.total_thickness, above, below, n_top, n_bot, n_max,
+            self.wavelength, ratio)
 
         self.nz = len(z_node)
         self.z0 = float(z_node[0])
@@ -1908,24 +1935,31 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
     centre = float(0.5 * (band.min() + band.max()))
     wavelength = centre
 
-    if resolution is None:
-        # The cell size follows the largest index in the scene, and a pole model can raise
-        # that a long way above `sqrt(eps_infinity)` -- a Drude metal at 900 nm reaches n = 6.5
-        # where its eps_infinity is 1. Sizing the grid off eps_infinity alone would leave the
-        # metal at three cells per wavelength.
-        indices = [abs(np.sqrt(eps_top * mu_top)), abs(np.sqrt(eps_bot * mu_bot)),
-                   float(np.sqrt(np.abs(raster * (1.0 if mu_raster is None
-                                                  else mu_raster))).max())]
-        for entries in (poles or {}).values():
-            indices.append(abs(np.sqrt(permittivity_at(entries, float(np.min(band)), 1.0))))
-        resolution = CELLS_PER_WAVELENGTH * max(indices) / wavelength
     n_periods = N_PERIODS if n_periods is None else float(n_periods)
 
     dispersion, poles = _check_dispersion(dispersion, poles, raster)
+    # The cell size follows the largest index in the scene, and a pole model can raise that a
+    # long way above `sqrt(eps_infinity)` -- a Drude metal at 900 nm reaches n = 6.5 where its
+    # eps_infinity is 1. Sizing the grid off eps_infinity alone would leave the metal at three
+    # cells per wavelength. It is computed whether or not `resolution` was given, because the
+    # graded mesh needs the TRUE maximum: deriving it back from the cell size instead assumes
+    # the caller asked for exactly `CELLS_PER_WAVELENGTH`, so a caller who refines `resolution`
+    # is read as having a higher-index material and the padding is coarsened to match -- which
+    # pins the coarse cells at 45 nm however fine the structure gets, and floors the error at
+    # 2.3e-3 while the uniform path keeps converging to 1.4e-4.
+    indices = [abs(np.sqrt(eps_top * mu_top)), abs(np.sqrt(eps_bot * mu_bot)),
+               float(np.sqrt(np.abs(raster * (1.0 if mu_raster is None
+                                              else mu_raster))).max())]
+    for entries in (poles or {}).values():
+        indices.append(abs(np.sqrt(permittivity_at(entries, float(np.min(band)), 1.0))))
+    n_max = float(max(indices))
+    if resolution is None:
+        resolution = CELLS_PER_WAVELENGTH * n_max / wavelength
     grid = _Grid(wavelength, period_x, raster, thickness, eps_top, eps_bot,
                  resolution, n_pml, courant, subpixel, theta=theta, phi=phi,
                  dispersion=dispersion, poles=poles, mu_raster=mu_raster,
-                 mu_top=mu_top, mu_bot=mu_bot, pad_scale=pad_scale, grading=grading)
+                 mu_top=mu_top, mu_bot=mu_bot, pad_scale=pad_scale, grading=grading,
+                 n_max=n_max)
     n_steps = int(np.ceil(n_periods * centre / grid.dt))
     out = _time_loop(grid, name, n_steps, band, leg=_leg)
 

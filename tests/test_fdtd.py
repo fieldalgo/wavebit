@@ -1585,7 +1585,7 @@ def test_the_graded_mesh_puts_both_structure_faces_on_nodes():
     """
     from wavebit._core.fdtd import build_z_mesh
     for n_top, n_bot, n_max in ((1.0, 1.5, 3.5), (1.0, 1.5, 6.54), (1.0, 1.0, 2.0)):
-        z, k_z0, n_struct = build_z_mesh(6.86, 60.0, 768.0, 391.0, n_top, n_bot, n_max)
+        z, k_z0, n_struct = build_z_mesh(6.86, 60.0, 768.0, 391.0, n_top, n_bot, n_max, WL)
         assert abs(z[k_z0]) < 1e-9, f'structure top at {z[k_z0]}'
         assert abs(z[k_z0 + n_struct] - 60.0) < 1e-9
 
@@ -1605,7 +1605,7 @@ def test_the_grading_ratio_is_what_bounds_the_transition():
     for ratio in (1.03, 1.06, 1.12):
         for h_fine, thick in ((6.86, 60.0), (12.96, 300.0), (2.5, 317.0)):
             z, k_z0, n_struct = build_z_mesh(h_fine, thick, 768.0, 391.0, 1.0, 1.5, 6.54,
-                                             ratio=ratio)
+                                             WL, ratio=ratio)
             cells = np.diff(z)
             grew = cells[1:] / cells[:-1]
             # The ramp is built at exactly `ratio` and then scaled by one common factor to
@@ -1685,3 +1685,53 @@ def test_grading_does_not_move_the_time_step():
         assert got['nz'] < uniform['nz'], (
             f'grading={grading} did not reduce the cell count ({got["nz"]} vs '
             f'{uniform["nz"]})')
+
+
+def test_grading_is_off_by_default_and_true_takes_the_measured_optimum():
+    """`None` and `False` are the uniform mesh; `True` is the ratio the measurement picked.
+
+    Off by default is a measured decision. On the Drude metal grating, time to reach an
+    efficiency error of 1e-3: uniform 5.99 s, grading 1.03 6.60 s, **1.06 3.78 s**, 1.12
+    9.62 s -- a real optimum, 1.6x faster than uniform. On the dielectric benchmark grading
+    loses: the error grows 2.7x and buying that back in cell size costs more than the grading
+    saves in cell count. A scheme that loses on one of two benchmark scenes does not get to be
+    the default.
+    """
+    from wavebit._core.fdtd import GRADE_RATIO
+    kw = dict(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+              period=[PERIOD], wavelength=WL, tetm='te', theta=0.0, resolution=0.0777,
+              n_periods=60, return_diagnostics=True)
+    off = solve_fdtd(**kw)[1]['nz']
+    assert solve_fdtd(grading=False, **kw)[1]['nz'] == off
+    assert solve_fdtd(grading=None, **kw)[1]['nz'] == off
+    assert solve_fdtd(grading=True, **kw)[1]['nz'] == solve_fdtd(grading=GRADE_RATIO, **kw)[1]['nz']
+    assert solve_fdtd(grading=True, **kw)[1]['nz'] < off
+
+
+@pytest.mark.parametrize('bad', [1.0, 0.9, 2.5, -1.0])
+def test_a_grading_ratio_outside_its_range_is_refused(bad):
+    """It is a growth factor, so it is above 1, and a big one is the step it exists to avoid."""
+    with pytest.raises(ValueError, match='most one cell may grow'):
+        _ = solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+                       period=[PERIOD], wavelength=WL, tetm='te', theta=0.0,
+                       resolution=0.05, n_periods=20, grading=bad)
+
+
+def test_the_coarse_cells_refine_with_the_fine_ones():
+    """The padding must not stop converging while the structure does.
+
+    `n_max` is the scene's true maximum index, not one derived back from the cell size. The
+    derived form assumes the caller asked for exactly `CELLS_PER_WAVELENGTH`, so a caller who
+    refines `resolution` is read as having a higher-index material and the padding is coarsened
+    to match -- pinning the coarse cells at 45 nm however fine the structure gets. Measured
+    with that bug, the graded run **floored at 2.3e-3 and stopped converging** (order 0.42)
+    while the uniform path went on to 1.4e-4. Fixed, it converges at 2.19 / 1.91.
+    """
+    kw = dict(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+              period=[PERIOD], wavelength=WL, tetm='te', theta=0.0, n_periods=60,
+              grading=1.06, return_diagnostics=True)
+    coarse = solve_fdtd(resolution=0.05, **kw)[1]['grid'].dz_cell.max()
+    fine = solve_fdtd(resolution=0.2, **kw)[1]['grid'].dz_cell.max()
+    assert fine < coarse / 2.0, (
+        f'refining 4x moved the coarsest cell only {coarse} -> {fine}; the padding is not '
+        f'converging with the structure')
