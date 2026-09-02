@@ -714,10 +714,15 @@ quadratic and blind to exactly the phase this kind of mistake produces.
   traceable; the field updates here are slice-shifted differences and would port unchanged. It
   is only the time LOOP that has nowhere to live — it needs a `scan` primitive `_core/backend.py`
   does not have, and adding one is a design decision about the whole backend layer rather than
-  about this module. fdtdx (MIT, and safe to study) answers the shape of it with a `custom_vjp`
-  carrying two gradient methods, reversible and checkpointed, and marks where reversibility
-  stops: it refuses dispersive materials, because the ADE polarisation recurrence cannot be run
-  backwards. A metal grating is Drude, so the headline problem lands on the checkpointed path.
+  about this module. **fdtdx** (Mahlau et al., https://github.com/ymahlau/fdtdx, MIT;
+  JOSS 10.21105/joss.08912) answers the shape of it with a `custom_vjp` carrying two gradient
+  methods, reversible and checkpointed, and marks where reversibility stops: it refuses
+  dispersive materials, because the ADE polarisation recurrence cannot be run backwards. A metal
+  grating is Drude, so the headline problem lands on the checkpointed path. Cited as prior art
+  only — **nothing here is ported from it**, and it carries no notice in `LICENSE` for that
+  reason. Its own non-uniform-mesh design (one realised grid on which "uniform" is a policy
+  rather than a separate code path) is the same shape as §8f's, arrived at independently and
+  landed before that survey ran; the resemblance is convergence, not lineage.
 - **A fixed-*angle* spectrum at oblique incidence**, rather than the fixed-`kx` sweep of §8.
   This is the gap that matters most once the module is read as a solver rather than a harness:
   a spectrum at a tilt is an ordinary thing to want, and it is exactly what one run cannot give
