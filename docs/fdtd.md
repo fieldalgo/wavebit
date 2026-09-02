@@ -580,7 +580,7 @@ reflected rule; the transmitted rule needed its own six. An efficiency is quadra
 to exactly the sign most likely to be wrong. Same family as the TM monitor offset in §5, and
 as `per-order-sp-frame-half-turn` in the RCWA path.
 
-## 8f. A conical mount away from normal
+## 8e. A conical mount away from normal
 
 `psi` with `theta != 0` and `phi != 0` is answered by the six-component stepper, run once per
 eigenpolarisation — s and p are the two eigenpolarisations of a uniform medium at fixed
@@ -642,7 +642,7 @@ size scales with `|kx_m|`. On the margin scene the only order propagating in air
 from 2.39. **A scene chosen for margin and a scene chosen for sensitivity are not the same
 scene**, and the test file carries both.
 
-## 8e. A graded z mesh, and why it is off by default
+## 8f. A graded z mesh, and why it is off by default
 
 `grading=True` builds a z mesh that keeps the fine cell in the structure and coarsens toward the
 cell each half-space would have asked for on its own. `x` stays uniform and that is not
@@ -732,7 +732,7 @@ quadratic and blind to exactly the phase this kind of mistake produces.
   ahead of the best FDTD route, so on a scene like this one no formulation wins. The decision
   only becomes real on a scene where the RCWA side is expensive — many layers, a high
   truncation order, or a metal, which is why dispersion is above this on the list.
-- **A non-uniform grid that pays on every scene**, rather than the one in §8e that pays on a
+- **A non-uniform grid that pays on every scene**, rather than the one in §8f that pays on a
   metal grating and loses on a dielectric one. What would change that is a transition cheaper
   than a geometric ramp — the literature's subgridding schemes (Okoniewski 1997, Berenger 2006)
   buy a smaller reflection for a more complicated interface, and none of them is measured here.
