@@ -709,6 +709,15 @@ quadratic and blind to exactly the phase this kind of mistake produces.
 
 ## 9. What is not yet answered
 
+- **A backend other than NumPy**, which is the item that decides whether this is a first-class
+  part of a differentiable package or a guest in one. Everything else in wavebit is jax/torch
+  traceable; the field updates here are slice-shifted differences and would port unchanged. It
+  is only the time LOOP that has nowhere to live — it needs a `scan` primitive `_core/backend.py`
+  does not have, and adding one is a design decision about the whole backend layer rather than
+  about this module. fdtdx (MIT, and safe to study) answers the shape of it with a `custom_vjp`
+  carrying two gradient methods, reversible and checkpointed, and marks where reversibility
+  stops: it refuses dispersive materials, because the ADE polarisation recurrence cannot be run
+  backwards. A metal grating is Drude, so the headline problem lands on the checkpointed path.
 - **A fixed-*angle* spectrum at oblique incidence**, rather than the fixed-`kx` sweep of §8.
   This is the gap that matters most once the module is read as a solver rather than a harness:
   a spectrum at a tilt is an ordinary thing to want, and it is exactly what one run cannot give
@@ -736,10 +745,6 @@ quadratic and blind to exactly the phase this kind of mistake produces.
   metal grating and loses on a dielectric one. What would change that is a transition cheaper
   than a geometric ramp — the literature's subgridding schemes (Okoniewski 1997, Berenger 2006)
   buy a smaller reflection for a more complicated interface, and none of them is measured here.
-- **A broadband run.** The DFT machinery accumulates at a single frequency now; a band needs
-  the source width sized from the requested span and a guard on the incident amplitude, which
-  falls to 2e-7 of its peak at the band edge and turned `R` into 105 in a prototype that had
-  no such guard.
 - **Field output.** The solve returns two monitor planes; cross-checking `calculate_field` —
   the part of the solver with the most recent bug history — is impossible without it.
 - **The Yee grid's numerical anisotropy** is unmeasured. Convergence order was measured at
