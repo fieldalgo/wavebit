@@ -28,7 +28,7 @@ from .domain import Material, as_material, index_from_eps
 from .enums import (Answers, DEFAULT_ANSWERS, DEFAULT_FACTORIZATION, DEFAULT_FORMULATION,
                     DEFAULT_FOURIER_COEFFICIENTS, DEFAULT_NORMAL_METHOD, DEFAULT_PROJECTOR,
                     answers_of, normal_method_of, projector_of,
-                    Factorization, Formulation, FourierCoefficients, Projector, Tetm,
+                    Factorization, Formulation, FourierCoefficients, Tetm,
                     coefficients_of,
                     factorization_of, formulation_of, resolve_fourier_options)
 from .fields import (field_1d, field_1d_conical, field_2d, field_2d_4ff,
