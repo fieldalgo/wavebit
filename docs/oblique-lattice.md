@@ -453,14 +453,12 @@ this kind of sweep and ~7x when you genuinely need the harmonics.
 
 ## Sweeping the cell angle
 
-**A raster has to be redrawn whenever the cell changes, and redrawing it is enough.** One
-change of `lattice=` with a reused array is already the whole defect — the sweep below is the
-instrument that makes it legible, not the use case, because sweeping makes the error grow with
-the tilt instead of being a single wrong number that reads as a lattice effect. A *continuous*
-angle is a design variable in one documented family, the monoclinic chiral metasurfaces at the
-end of this page; hexagonal against rectangular is a discrete choice that hits the same trap on
-the one change it makes. `studies/sweep_cell_angle.py` runs the sweep three ways and prints the table
-below; the figure it writes is `studies/results/sweep_cell_angle.png`.
+**Whether a raster has to be redrawn when the cell changes depends on which frame the pattern
+was specified in, and both frames are real.** Keeping the array says the pattern is a set of
+*fractions of the cell*; redrawing it says the pattern is a set of *Cartesian lengths*. Neither
+is a mistake — what is a mistake is not knowing which one you asked for, because nothing tells
+you. `studies/sweep_cell_angle.py` runs it three ways and prints the table below; the figure it
+writes is `studies/results/sweep_cell_angle.png`.
 
 ```python
 for gamma in angles:
@@ -471,10 +469,11 @@ for gamma in angles:
 ```
 
 The same coordinate expression describes the same physical circle at every angle, because
-`A.grid` returns genuine Cartesian coordinates. Drawing the raster once and passing it on is
-the trap: the array holds pixel *indices*, so its lit pixels tilt with the basis and the circle
-shears into an ellipse. Measured, `truncation_order=10`, N=256, against parametric circles as
-the staircase-free control:
+`A.grid` returns genuine Cartesian coordinates. Drawing the raster once and passing it on gives
+the other frame: the array holds pixel *indices*, so its lit pixels tilt with the basis and the
+circle shears into an ellipse. Measured against parametric circles — which are the Cartesian
+frame by construction, and so are the control for *that* frame only — `truncation_order=10`,
+N=256:
 
     gamma    redrawn     reused   analytic   axis ratio redrawn   axis ratio reused
        90   0.164669   0.164669   0.159837              1.0000              1.0000
@@ -485,10 +484,27 @@ the staircase-free control:
        40   0.240133   0.870547   0.235241              1.0012              2.7475
        30   0.052932   0.976169   0.052712              1.0003              3.7321
 
-Worst against the control: **1.26e-02 redrawn, 9.23e-01 reused** — 73x, and the reused arm's
-error grows with the tilt because its error *is* the tilt. The axis-ratio columns are the
-mechanism rather than a symptom: the redrawn raster stays round to 0.3% at every angle (that
-residue is pixelation, not deformation) while the reused one reaches 3.73:1.
+Worst against that control: **1.26e-02 redrawn, 9.23e-01 reused** — 73x, and the reused arm's
+divergence grows with the tilt because the tilt *is* what it is tracking. The axis-ratio columns
+are the mechanism rather than a symptom: the redrawn raster stays round to 0.3% at every angle
+(that residue is pixelation, not deformation) while the reused one reaches 3.73:1.
+
+**Read that as "the two frames separate", not as "one arm is wrong".** The lattice frame is the
+right answer to a real question, and one of them settles it on its own: **scale the whole
+design** — cell, thickness and wavelength all by `s` — and Maxwell says the answer cannot move.
+Holding the array gives 0.124231941 at `s` = 0.5, 1, 2, 4, **identical to nine digits**, because
+the rod scales with the cell as it must. Redrawing pins the rod at radius 100 while the cell
+grows, so it solves a different fill fraction at every `s` and reads 0.330 / 0.124 / 0.99986 /
+0.99999. **Here the Cartesian frame is the wrong one.** The same holds wherever a feature is
+specified as a duty cycle or a fill fraction rather than as a length.
+
+**Tilting and scaling are not the same case, and the dividing line is *similarity*.** Holding
+the array, the pattern is carried by the basis change itself, so it keeps its shape exactly when
+that change is a similarity. Measured as the axis ratio of the lit pixels: an isotropic scale to
+2x leaves it at **1.000** (radius 99.8 -> 199.6, a bigger circle), while stretching `Lx` alone to
+2x gives **2.000** and a 45-degree tilt gives **2.414**. So holding the array is safe under a
+pure scale and deforms the feature under anything else — which is why the angle sweep above is
+where the two frames are easiest to tell apart, and a scale sweep is where they are hardest.
 
 The gap on the redrawn arm is the staircase and nothing else, which the study measures rather
 than asserts — at `gamma = 60`, holding the truncation and refining the raster: **5.2e-2,

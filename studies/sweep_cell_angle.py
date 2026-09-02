@@ -13,20 +13,32 @@ skewed cell give circular dichroism from the lattice alone (Toftul et al., Phys.
 **133**, 216901 (2024)). Hexagonal against rectangular is a *discrete* choice, not a sweep --
 you pick 60 or 90 -- and it hits the same trap on the one change it makes.
 
-**The answer is that a raster has to be redrawn at every angle, and that redrawing it is
-enough.** A raster holds pixel *indices*: pixel ``(i, j)`` means the parametric point
-``u = (i+0.5)/Nx``, ``v = (j+0.5)/Ny``, whose Cartesian position is
-``r = (u-0.5)*a1 + (v-0.5)*a2``. Nothing in the array records "radius 100 nm", so when the
-basis tilts the lit pixels tilt with it and a circle shears into an ellipse. Rebuild the
-array through ``Lattice.grid`` and the same coordinate expression describes the same physical
-circle at every angle -- that is the whole of what the helper is for.
+**The answer is that it depends which frame the pattern was specified in, and that nothing
+tells you which one you asked for.** A raster holds pixel *indices*: pixel ``(i, j)`` means the
+parametric point ``u = (i+0.5)/Nx``, ``v = (j+0.5)/Ny``, whose Cartesian position is
+``r = (u-0.5)*a1 + (v-0.5)*a2``. Nothing in the array records "radius 100 nm", so holding it
+says the pattern is *fractions of the cell* and redrawing it says the pattern is *Cartesian
+lengths*. Both are real specifications; the sweep separates them.
 
-Three arms, so the failure and the fix are separated from the physics:
+Three arms:
 
-* ``redrawn``  -- ``A.grid`` at each angle, the correct raster route
-* ``reused``   -- drawn once at the first angle and passed on unchanged, the trap
-* ``analytic`` -- parametric circles, whose lengths are absolute Cartesian quantities and so
-  need no redrawing at all; the staircase-free control that says what the answer is
+* ``redrawn``  -- ``A.grid`` at each angle: the Cartesian frame, a circle at every angle
+* ``reused``   -- drawn once and passed on: the lattice frame, sheared by the basis change
+* ``analytic`` -- parametric circles, Cartesian by construction and staircase-free; the control
+  for the *Cartesian* frame, and not an answer key for the other one
+
+**Neither arm is the mistake.** The lattice frame is the right answer wherever a feature is a
+duty cycle or a fill fraction, and one case settles it: scale the whole design -- cell,
+thickness and wavelength by ``s`` -- and Maxwell says the answer cannot move. Holding the array
+gives 0.124231941 at ``s`` = 0.5, 1, 2, 4, identical to nine digits; redrawing pins the rod at
+radius 100 while the cell grows and reads 0.330 / 0.124 / 0.99986 / 0.99999. There the Cartesian
+frame is the wrong one.
+
+Tilting and scaling are also not the same case. Holding the array, the pattern keeps its shape
+exactly when the basis change is a **similarity**: the axis ratio of the lit pixels stays 1.000
+under an isotropic 2x scale, and goes to 2.000 under ``Lx`` alone and 2.414 under a 45-degree
+tilt. An angle sweep is therefore where the two frames are easiest to tell apart, which is why
+this study sweeps one.
 
 Note what this study is *not* about. Differentiating with respect to the angle is a separate
 question with a different answer: redrawing a **binary** raster inside ``jax.grad`` does not
