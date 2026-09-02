@@ -1,0 +1,83 @@
+# Publishes the MkDocs site to GitHub Pages. **Dormant on purpose** -- it has no automatic
+# trigger, and a guard below refuses to deploy from a private repository.
+#
+# Why dormant. `fieldalgo/wavebit` is private deliberately, and GitHub Pages does not inherit
+# that: a site published from a private repository is public on every plan that allows it at
+# all. Deploying today would announce an unreleased project and, until the repository itself is
+# public, would ship a site whose `repo_url` and whose links into `tests/` and `tutorials/`
+# all 404 for the reader.
+#
+# Two things to do on the day the public repository exists, and neither is this file's job to
+# decide:
+#
+#   1. Settings -> Pages -> Source: "GitHub Actions".
+#   2. Uncomment the `push` trigger below.
+#
+# Until then the workflow can still be run by hand from the Actions tab, which is how you check
+# it works before either of those. It will build and then skip the deploy, because of the guard.
+#
+# A custom domain (`docs.fieldalgo.com`, say) is a `CNAME` file in `docs/` plus the DNS record;
+# nothing here changes for it.
+name: docs deploy
+
+on:
+  workflow_dispatch:
+  # Uncomment on publication day. `develop` rather than `main` because that is where this
+  # project's history is linear and where documentation lands.
+  # push:
+  #   branches: [develop]
+
+# The Pages deployment needs these three and nothing else. `id-token` is what lets
+# `deploy-pages` prove to Pages that this run is the one that built the artifact.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and never cancel one in flight: a half-applied deploy leaves the
+# site in a state nobody wrote. This is the opposite setting from `tests.yml`, where cancelling
+# a superseded run is exactly right.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: build and deploy
+    runs-on: ubuntu-latest
+
+    # The second belt, and the one that does not depend on anybody remembering. Even a manual
+    # run from the Actions tab will not publish while the repository is private. If the field
+    # is ever missing from the event payload the expression is falsy and the job is skipped,
+    # which is the direction a guard should fail in.
+    if: github.event.repository.private == false
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      # mkdocstrings imports the package to read its docstrings, so the site cannot be built
+      # from the markdown alone. NumPy only -- nothing on the public surface needs an optional
+      # backend to be introspected.
+      - name: Install Wavebit and the docs extra
+        run: pip install -e '.[docs]'
+
+      - name: Build the site
+        run: mkdocs build
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v5

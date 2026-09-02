@@ -109,6 +109,25 @@ pip install -e .[jax]      # or .[pytorch], or plain -e . for NumPy only
 pytest tests/ -q
 ```
 
+### Documentation
+
+`docs/` is the source of a MkDocs site as well as a folder of markdown, and a page has to read
+the same in both -- so a link there is a relative link to a real file, or a full `github.com`
+URL when the target is outside `docs/`. To see what you wrote:
+
+```shell
+pip install -e '.[docs]'
+mkdocs serve               # http://127.0.0.1:8000, reloads as you save
+```
+
+`mkdocs build` is what the `docs` CI job runs. Two of its checks are worth knowing about,
+because both catch a failure that is otherwise silent: `docs/reference/api.md` names members by
+hand and mkdocstrings drops an unknown one without saying so, and a `github.com` URL into this
+repository is checked against the tree by `tests/test_docs_contract.py`.
+
+Nothing is deployed. `.github/workflows/docs-deploy.yml` is written and dormant; its header
+says what has to be true before it runs.
+
 ## Licensing
 
 Wavebit is licensed under Apache-2.0. By submitting a contribution, you agree that it is your own work and is provided under the same license (inbound = outbound). The third-party notices recorded in [LICENSE](LICENSE) must be preserved.
