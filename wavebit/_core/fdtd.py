@@ -557,6 +557,15 @@ class _Incident1D:
     def __init__(self, nz, dz, dt, eps_r, n_pml, k_src, wavelength, f0, width, t0,
                  tetm, kx_op, dtype, mu_r=1.0, ky=0.0, drive=None):
         self.dz, self.dt, self.eps_r, self.k_src = dz, dt, eps_r, k_src
+        #: The auxiliary grid rides the SAME mesh as the 2D one -- it is handed the same
+        #: object, not a copy, so a graded 2D mesh grades this too. That is not a nicety:
+        #: measured on a 1D prototype, grading the 2D mesh while leaving this uniform leaks
+        #: 9.0e-2 of the incident amplitude into the scattered-field region. And the quieter
+        #: variant is worse -- grading only BELOW the TFSF plane leaks just 9.6e-4, but the
+        #: incident reference every amplitude is divided by comes out 1.3 % wrong, so `R` and
+        #: `T` scale together and `check_physical` sees a plausible `R + T = 0.974`.
+        self.dz_cell = np.full(nz - 1, dz) if np.isscalar(dz) else np.asarray(dz)
+        self.dz_dual = np.full(nz, dz) if np.isscalar(dz) else np.asarray(dz)
         self.mu_r = float(np.real(mu_r))
         self.f0, self.width, self.t0 = f0, width, t0
         #: **Dimensional** (1/length), like `kx_op` beside it -- NOT the normalised `ky_inc`
@@ -600,8 +609,8 @@ class _Incident1D:
         return self.hx if self.tetm == 'te' else -self.hy
 
     def _dz(self, field):
-        """``d/dz`` of a node array onto the half grid."""
-        return (field[1:] - field[:-1]) / self.dz
+        """``d/dz`` of a node array onto the half grid -- the PRIMARY cell size."""
+        return (field[1:] - field[:-1]) / self.dz_cell
 
     def step_h(self):
         ky, kx_op, dt, mu = 1j * self.ky, self.kx_op, self.dt, self.mu_r
@@ -631,13 +640,13 @@ class _Incident1D:
         tm = self.tetm in ('tm', None)
         if te:
             d = np.zeros_like(self.ey)
-            d[1:-1] = (self.hx[1:] - self.hx[:-1]) / self.dz
+            d[1:-1] = (self.hx[1:] - self.hx[:-1]) / self.dz_dual[1:-1]
             self.psi_ey = self.node['b'] * self.psi_ey + self.node['a'] * d
             curl = d / self.node['kappa'] + self.psi_ey - self.hz * kx_op
             self.ey[1:-1] += (dt / eps) * curl[1:-1]
         if tm:
             d = np.zeros_like(self.ex)
-            d[1:-1] = -(self.hy[1:] - self.hy[:-1]) / self.dz
+            d[1:-1] = -(self.hy[1:] - self.hy[:-1]) / self.dz_dual[1:-1]
             self.psi_ex = self.node['b'] * self.psi_ex + self.node['a'] * d
             curl = d / self.node['kappa'] + self.psi_ex
             if self.conical:
@@ -796,6 +805,19 @@ class _Grid:
         # twenty cells per wavelength -- but it is not zero, and a bound that ignores a term is
         # a bound that fails at the one angle nobody tested.
         ky_phys = 2.0 * np.pi / self.wavelength * self.ky_inc
+        #: The two z divisors, which are one number today and two arrays under a graded mesh.
+        #: A node-to-node difference lands on a half point and divides by the **primary cell
+        #: size**; a half-to-half difference lands on a node and divides by the **dual
+        #: spacing**, ``(dz[k-1] + dz[k])/2``. On a uniform mesh they are equal, which is why
+        #: one scalar has served both -- and using the wrong one is not a small error but an
+        #: O(1) one: measured on a 1.15x graded mesh, the right divisor converges at 2.00 and
+        #: the wrong one does not converge at all (0.22 / 0.06 / 0.02, stalling at 4.9e-2).
+        #:
+        #: They are given **different lengths on purpose** -- ``nz - 1`` against ``nz`` -- so
+        #: that swapping them is a shape error rather than a plausible wrong number.
+        self.dz_cell = np.full(self.nz - 1, self.dz)
+        self.dz_dual = np.full(self.nz, self.dz)
+
         self.dt = courant * n_min / np.sqrt(1.0 / self.dx ** 2 + 1.0 / self.dz ** 2
                                             + (0.5 * ky_phys) ** 2)
 
@@ -894,6 +916,8 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None):
             f'so it is refused rather than reported with a residual nobody reads.')
 
     nz, nx, dz, dx, dt = grid.nz, grid.nx, grid.dz, grid.dx, grid.dt
+    # The z divisors. `dz` itself stays scalar here and owns POSITIONS only.
+    dzc, dzd = grid.dz_cell[:, None], grid.dz_dual[:, None]
     hb, ha, hk = (grid.half[k][:, None] for k in ('b', 'a', 'kappa'))
     nb, na, nk = (grid.node[k][:, None] for k in ('b', 'a', 'kappa'))
     kt = grid.k_tfsf
@@ -992,7 +1016,7 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None):
             # Yee 1966: dHx/dt = dEy/dz - i ky Ez, dHz/dt = i ky Ex - dEy/dx. Only z has a PML.
             # `Ez` sits where `Hx` does and `Ex` where `Hz` does, so the conical coupling is
             # co-located and no interpolation enters.
-            d = (ey[1:] - ey[:-1]) / dz
+            d = (ey[1:] - ey[:-1]) / dzc
             psi_hx = hb * psi_hx + ha * d
             curl_hx = d / hk + psi_hx
             curl_hz = -(_shift_up(ey, grid.bloch) - ey) / dx
@@ -1003,21 +1027,21 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None):
             hz += dt * curl_hz / mu_z
             # TFSF (Umashankar & Taflove 1982): Hx at kt-1/2 is a scattered-field quantity
             # whose stencil reached across the boundary into the total-field Ey[kt].
-            hx[kt - 1] -= dt * inc.ey[kt] * x_node / dz / mu_x[kt - 1]
+            hx[kt - 1] -= dt * inc.ey[kt] * x_node / dzc[kt - 1, 0] / mu_x[kt - 1]
         if tm_on:
             # dHy/dt = dEz/dx - dEx/dz -- the one component no `ky` term reaches.
             d_ez = (_shift_up(ez, grid.bloch) - ez) / dx
-            d_ex = (ex[1:] - ex[:-1]) / dz
+            d_ex = (ex[1:] - ex[:-1]) / dzc
             psi_hy = hb * psi_hy + ha * d_ex
             hy += dt * (d_ez - d_ex / hk - psi_hy) / mu_y
-            hy[kt - 1] += dt * inc.ex[kt] * x_half / dz / mu_y[kt - 1]
+            hy[kt - 1] += dt * inc.ex[kt] * x_half / dzc[kt - 1, 0] / mu_y[kt - 1]
 
         # --- E, to level n + 1 ----------------------------------------------------------
         inc.step_e((step + 1) * dt)
         if te_on:
             # eps dEy/dt = dHx/dz - dHz/dx -- the other component no `ky` term reaches.
             d = np.zeros((nz, nx), dtype=dtype)
-            d[1:-1] = (hx[1:] - hx[:-1]) / dz
+            d[1:-1] = (hx[1:] - hx[:-1]) / dzd[1:-1]
             psi_ey = nb * psi_ey + na * d
             curl = (d / nk + psi_ey
                     - (hz - _shift_down(hz, grid.bloch)) / dx)
@@ -1027,11 +1051,11 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None):
             if poles_y is not None:
                 drive = drive - poles_y.advance(ey)
             ey[1:-1] += drive[1:-1] / eps[1:-1]
-            ey[kt] -= dt * inc.hx[kt - 1] * x_node / dz / eps[kt]
+            ey[kt] -= dt * inc.hx[kt - 1] * x_node / dzd[kt, 0] / eps[kt]
         if tm_on:
             # eps dEx/dt = i ky Hz - dHy/dz ; eps dEz/dt = dHy/dx - i ky Hx.
             d = np.zeros((nz, nx), dtype=dtype)
-            d[1:-1] = -(hy[1:] - hy[:-1]) / dz
+            d[1:-1] = -(hy[1:] - hy[:-1]) / dzd[1:-1]
             psi_ex = nb * psi_ex + na * d
             curl_ex = d / nk + psi_ex
             if conical:
@@ -1042,7 +1066,7 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None):
             ex[1:-1] += drive[1:-1] / eps_x[1:-1]
             # Hy_inc is MINUS `inc.hy`, which is where this sign comes from -- the same
             # double negation the `inc.h` accessor used to hide.
-            ex[kt] -= dt * (-inc.hy[kt - 1]) * x_half / dz / eps_x[kt]
+            ex[kt] -= dt * (-inc.hy[kt - 1]) * x_half / dzd[kt, 0] / eps_x[kt]
             curl_ez = (hy - _shift_down(hy, grid.bloch)) / dx
             if conical:
                 curl_ez = curl_ez - ky * hx
