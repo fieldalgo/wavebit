@@ -227,11 +227,11 @@ def _refuse_out_of_scope(structure, mu, theta, phi, tetm, incidence_side, lattic
             'geometry builder beside `draw.slice_structure`, which is NumPy-only, square-only '
             'and refuses a traced shape parameter, so the two would disagree about the same '
             'scene. Pass the raster you want solved.')
-    if structure.ndim != 3 or structure.shape[1] != 1:
+    if structure.ndim != 3:
         raise ValueError(
-            f'fdtd: structure is {tuple(structure.shape)}. This is a 2D solve in the x-z '
-            f'plane, so the grating must be invariant along y: shape (n_layers, 1, Nx). A '
-            f'crossed grating needs a 3D FDTD, which this is not.')
+            f'fdtd: structure is {tuple(structure.shape)}. It is a permittivity raster of '
+            f'shape (n_layers, Ny, Nx); `Ny = 1` is a grating invariant along y and anything '
+            f'larger is a crossed one.')
 
     half_spaces = [as_material(top, 'top'), as_material(bot, 'bot')]
     values = np.concatenate(
@@ -1616,6 +1616,137 @@ def _combine_at_normal_incidence(grid, sub_te, sub_tm, kx, wavelength, phi, a_s,
                      row(T_s + T_p), row(T_s), row(T_p))
 
 
+def propagating_window_2d(wavelength, period_x, period_y, n_top_sq, n_bot_sq,
+                          kx_inc=0.0, ky_inc=0.0):
+    """The bounding rectangle of the orders that propagate on a crossed grating.
+
+    **The propagating set is a DISC, not a rectangle.** An order propagates where
+    ``kx_m**2 + ky_l**2 <= n**2`` with ``kx_m = kx_inc + m*wl/Px`` and ``ky_l`` its twin -- a
+    disc centred on ``(-kx_inc, -ky_inc)``. `Result.order_window` carries a `(centre, half)`
+    pair per axis, so a disc has to be reported as the rectangle around it; the corners hold
+    orders that carry nothing and report zero, which is the honest way round.
+
+    **The per-axis shortcut is what must not be written.** Calling the 1D
+    `_propagating_window` once per axis narrows the x range by the INCIDENT ``ky`` -- but order
+    ``(m, l)`` has ``ky_inc + l*wl/Py``, not ``ky_inc``, so an ``l`` that moves ``ky`` toward
+    zero widens the x range the disc actually allows. The shortcut is wrong in both directions
+    depending on the scene, and its usual direction is to report orders that carry nothing,
+    which is silent: `check_physical` refuses a sum ABOVE one, so a short sum reads as
+    absorption. The same shape of defect as the 1D window fixed in 9306834.
+    """
+    step_x, step_y = wavelength / period_x, wavelength / period_y
+    lo_x = lo_y = hi_x = hi_y = 0
+    for n_sq in (n_top_sq, n_bot_sq):
+        n2 = float(np.real(n_sq))
+        if n2 <= 0.0:
+            continue
+        reach = np.sqrt(n2)
+        # The widest `l` this half-space allows at all, then the widest `m` at each of them.
+        l_lo = int(np.ceil((-reach - ky_inc) / step_y))
+        l_hi = int(np.floor((reach - ky_inc) / step_y))
+        for l in range(l_lo, l_hi + 1):
+            budget = n2 - (ky_inc + l * step_y) ** 2
+            if budget <= 0.0:
+                continue
+            span = np.sqrt(budget)
+            lo_x = min(lo_x, int(np.ceil((-span - kx_inc) / step_x)))
+            hi_x = max(hi_x, int(np.floor((span - kx_inc) / step_x)))
+            lo_y, hi_y = min(lo_y, l), max(hi_y, l)
+    c_x, c_y = int(round(0.5 * (lo_x + hi_x))), int(round(0.5 * (lo_y + hi_y)))
+    return ((c_x, max(hi_x - c_x, c_x - lo_x, 0)),
+            (c_y, max(hi_y - c_y, c_y - lo_y, 0)))
+
+
+def _extract_crossed(grid, out, window, index, sigma=(-1.0, 1.0, -1.0)):
+    """Per-order s/p amplitudes on a crossed grating: the conical extraction with two axes.
+
+    Every piece of per-order physics carries over untouched, and that is worth naming because
+    it is what the conical work bought. `conventions.order_azimuth` already takes ``(ky, kx)``
+    and already handles its two degenerate cases, so a 2D order grid needs no new frame code;
+    the ``n / kz_m`` factor comes from ``E . k_hat = 0`` and ``kz**2 + k_par**2 = n**2``, both
+    of which are statements about one order rather than about the lattice; and the three leg
+    signs are the same three.
+
+    **What does NOT carry over is the geometry around them.** In 2D the two monitors needed two
+    demodulation kernels because ``Ex`` sits on the x half-steps and ``Ey`` on the nodes, and
+    using one was a first-order error that every fixed-tolerance test passed through. In 3D
+    each component has an x offset AND a y offset, so there are four 1D factors, and the y one
+    is first order in the EFFICIENCIES as well -- there is no ``|r|**2`` cancellation left to
+    hide behind, because the s/p projection combines ``Ex`` and ``Ey`` coherently.
+    """
+    (cx, hx), (cy, hy) = window
+    nx, ny = grid.nx, grid.ny
+    wavelength = float(out['wavelengths'][index])
+    if hx >= nx // 2 or hy >= ny // 2:
+        raise ValueError(
+            f'fdtd: {2 * hx + 1} x {2 * hy + 1} orders asked of a {ny} x {nx} transverse grid. '
+            f'The transform resolves |m| < {nx // 2} and |l| < {ny // 2}; beyond that an order '
+            f'aliases onto another and comes back with a plausible amplitude.')
+
+    m = np.arange(cx - hx, cx + hx + 1)
+    l = np.arange(cy - hy, cy + hy + 1)
+    k0 = 2.0 * np.pi / wavelength
+    scale = wavelength / grid.wavelength
+    kx_inc, ky_inc = grid.kx_inc * scale, grid.ky_inc * scale
+    kx = kx_inc + m * wavelength / grid.period
+    ky = ky_inc + l * wavelength / grid.period_y
+
+    # Four 1D factors, two per axis, and each component picks the pair its Yee cell sits on.
+    cx_i, cy_i = np.arange(nx), np.arange(ny)
+    fx_node = np.exp(-1j * k0 * kx[:, None] * (cx_i[None, :] * grid.dx)) / nx
+    fx_half = np.exp(-1j * k0 * kx[:, None] * ((cx_i[None, :] + 0.5) * grid.dx)) / nx
+    fy_node = np.exp(-1j * k0 * ky[:, None] * (cy_i[None, :] * grid.dy)) / ny
+    fy_half = np.exp(-1j * k0 * ky[:, None] * ((cy_i[None, :] + 0.5) * grid.dy)) / ny
+    # `Ey` is (x-node, y-half); `Ex` is (x-half, y-node).
+    demod_y = lambda plane: fy_half @ plane @ fx_node.T
+    demod_x = lambda plane: fy_node @ plane @ fx_half.T
+
+    KX, KY = np.meshgrid(kx, ky)                    # (n_l, n_m), matching Result's (v, u)
+    n_top, n_bot = np.sqrt(grid.n_top_sq), np.sqrt(grid.n_bot_sq)
+    kz_top = _half_space_kz(grid.n_top_sq, KX, KY)
+    kz_bot = _half_space_kz(grid.n_bot_sq, KX, KY)
+    kz_inc = _half_space_kz(grid.n_top_sq, kx_inc, ky_inc)
+
+    #  flattens row-major into the (n_v, n_u) layout `Result` wants, which is
+    # the layout here -- but the demodulated planes are 2D, so the frame comes back to shape.
+    c_m, s_m = _order_frame(KX, KY, grid.phi)
+    c_m = np.real(c_m).reshape(KX.shape)
+    s_m = np.real(s_m).reshape(KX.shape)
+    c_i, s_i = float(np.cos(grid.phi)), float(np.sin(grid.phi))
+    sig_i, sig_r, sig_t = sigma
+    z_ref, z_trn, z_inc = out['z_ref'], out['z_trn'], out['z_inc']
+
+    e_y0 = out['inc_z0'][index] * np.exp(-1j * k0 * kz_inc * z_inc)
+    e_x0 = out['inc_z0_x'][index] * np.exp(-1j * k0 * kz_inc * z_inc)
+    a_s_inc = -s_i * e_x0 + c_i * e_y0
+    a_p_inc = sig_i * (n_top / kz_inc) * (c_i * e_x0 + s_i * e_y0)
+    a_inc = a_s_inc if abs(a_s_inc) >= abs(a_p_inc) else a_p_inc
+
+    def face(plane_y, plane_x, kz, n_half, z_face, z_shift, sig):
+        e_y = demod_y(plane_y) * np.exp(1j * k0 * kz * z_face * z_shift)
+        e_x = demod_x(plane_x) * np.exp(1j * k0 * kz * z_face * z_shift)
+        amp_s = (-s_m * e_x + c_m * e_y) / a_inc
+        amp_p = sig * (n_half / kz) * (c_m * e_x + s_m * e_y) / a_inc
+        return amp_s, amp_p
+
+    r_s, r_p = face(out['dft_ref'][index], out['dft_ref_x'][index],
+                    kz_top, n_top, z_ref, 1.0, sig_r)
+    t_s, t_p = face(out['dft_trn'][index], out['dft_trn_x'][index], kz_bot, n_bot,
+                    z_trn - grid.total_thickness, -1.0, sig_t)
+
+    for amp, kz, depth in ((r_s, kz_top, abs(z_ref)), (r_p, kz_top, abs(z_ref)),
+                           (t_s, kz_bot, abs(z_trn - grid.total_thickness)),
+                           (t_p, kz_bot, abs(z_trn - grid.total_thickness))):
+        amp[np.exp(k0 * np.abs(np.imag(kz)) * depth) > MAX_DEREFERENCE_GAIN] = np.nan
+
+    w_r = np.real(kz_top) / np.real(kz_inc)
+    w_t = np.real(kz_bot) / np.real(kz_inc)
+    sq = lambda a: np.nan_to_num(np.real(a * np.conj(a)), nan=0.0)
+    R_s, R_p = sq(r_s) * w_r, sq(r_p) * w_r
+    T_s, T_p = sq(t_s) * w_t, sq(t_p) * w_t
+    return ResultSub(r_s, r_p, t_s, t_p, R_s + R_p, R_s, R_p, T_s + T_p, T_s, T_p)
+
+
 def _extract_conical(grid, out, half_width, index, centre, sigma=(-1.0, 1.0, -1.0)):
     """Per-order s/p amplitudes for a conical mount, from the two transverse electric monitors.
 
@@ -2053,7 +2184,13 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
 
     period_x = float(period[0] if hasattr(period, '__len__') else period)
     period_y = (float(period[1]) if hasattr(period, '__len__') and len(period) > 1 else None)
-    raster = np.asarray(structure, dtype=complex)[:, 0, :]
+    # The y axis is DROPPED only when it holds nothing: a length-1 y is a grating invariant
+    # along y and the 2D machinery expects `(n_layers, Nx)`, while anything longer is a crossed
+    # grating and must keep all three. Dropping it unconditionally is what made the crossed
+    # path silently take the 1D window -- the solve ran, reported one `v` order, and came back
+    # with `R + T = 0.9167`.
+    raster = np.asarray(structure, dtype=complex)
+    raster = raster[:, 0, :] if raster.shape[1] == 1 else raster
     top_material, bot_material = as_material(top, 'top'), as_material(bot, 'bot')
     eps_top = complex(np.asarray(top_material.epsilon, dtype=complex))
     eps_bot = complex(np.asarray(bot_material.epsilon, dtype=complex))
@@ -2107,6 +2244,23 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
     n_steps = int(np.ceil(n_periods * centre / grid.dt))
     out = _time_loop(grid, name, n_steps, band, leg=_leg, record_field=record_field)
 
+    crossed = raster.ndim == 3 and raster.shape[1] > 1
+    window_2d = None
+    if crossed:
+        shortest = float(band.min())
+        if truncation_order is None:
+            window_2d = propagating_window_2d(
+                shortest, period_x, period_y, eps_top * mu_top, eps_bot * mu_bot,
+                kx_inc=grid.kx_inc * shortest / centre,
+                ky_inc=grid.ky_inc * shortest / centre)
+        else:
+            wanted = (truncation_order if hasattr(truncation_order, 'get')
+                      else {'x': truncation_order[0], 'y': truncation_order[1]}
+                      if hasattr(truncation_order, '__len__')
+                      else {'x': truncation_order, 'y': truncation_order})
+            window_2d = ((0, int(wanted.get('x', wanted.get('u', 0)))),
+                         (0, int(wanted.get('y', wanted.get('v', 0)))))
+
     centre_order = 0
     if truncation_order is None:
         # The SHORTEST wavelength has the most propagating orders, so the default covers the
@@ -2132,15 +2286,20 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
 
     results = []
     for index in range(band.size):
-        sub = (_extract_conical(grid, out, half_width, index, centre_order) if _leg
-               else _extract(grid, out, half_width, index, centre_order))
+        if crossed:
+            sub = _extract_crossed(grid, out, window_2d, index)
+        elif _leg:
+            sub = _extract_conical(grid, out, half_width, index, centre_order)
+        else:
+            sub = _extract(grid, out, half_width, index, centre_order)
         # The same tier of check the RCWA path applies: gain out of nothing, or negative
         # power. Every defect this module has had -- an over-conducting PML, a mis-scaled CFS
         # pole, an out-of-band DFT -- announced itself here first, as `R + T` between 1.1
         # and 106.
         check_physical(np, np.asarray(sub.R), np.asarray(sub.T),
                        np.sqrt(eps_top * mu_top))
-        results.append(Result(given=sub, order_window=((centre_order, half_width), (0, 0))))
+        results.append(Result(given=sub, order_window=(window_2d if crossed
+                                                       else ((centre_order, half_width), (0, 0)))))
 
     result = results[0] if single else results
     if not return_diagnostics:

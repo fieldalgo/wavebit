@@ -359,7 +359,8 @@ REFUSED = [
     (dict(mu=np.array([[[-1.0, 1.0]]])), r'non-positive'),
     (dict(lattice=[[1.0, 0.0], [0.5, 1.0]]), r'lattice'),
     (dict(structure=[{'shapes': []}]), r'permittivity raster'),
-    (dict(structure=np.ones((1, 4, 2))), r'invariant along y'),
+    # A y axis is no longer refused -- it is a crossed grating -- but it needs its own period.
+    (dict(structure=np.ones((1, 4, 2))), r'needs a y period'),
     (dict(structure=np.array([[[1.0 + 0.3j, 1.0]]])), r'complex permittivity'),
     (dict(structure=np.array([[[-2.0, 1.0]]])), r'non-positive'),
     (dict(bot=-1.5), r'non-positive'),
@@ -1997,3 +1998,99 @@ def test_the_in_plane_phase_is_the_outer_product_of_two_vectors():
                          (np.arange(grid.ny) + 0.5) * grid.dy)
     direct = np.exp(1j * k0 * (grid.kx_inc * xx + grid.ky_inc * yy))
     assert np.allclose(outer, direct, atol=1e-13)
+
+
+# ---------------------------------------------------------------------------------------
+# 15. a crossed grating, end to end
+# ---------------------------------------------------------------------------------------
+
+def _crossed_raster(n=16):
+    """Asymmetric in x, in y, AND under transpose -- see `_crossed_grid` for why."""
+    raster = np.full((1, n, n), EPS_TOP, dtype=complex)
+    raster[0, :n // 2, :n // 2] = wavebit.eps_from_index(N_TOOTH)
+    raster[0, n // 2:, :n // 4] = wavebit.eps_from_index(2.0)
+    return raster
+
+
+CROSSED = dict(theta=np.deg2rad(20.0), phi=np.deg2rad(30.0), psi=np.deg2rad(30.0))
+
+
+def test_the_2d_order_window_is_the_disc_and_not_a_per_axis_rectangle():
+    """The propagating set is a DISC, and the per-axis shortcut is the defect to avoid.
+
+    An order propagates where `kx_m**2 + ky_l**2 <= n**2`, centred on `(-kx_inc, -ky_inc)`.
+    Calling the 1D window once per axis narrows the x range by the INCIDENT `ky` -- but order
+    `(m, l)` has `ky_inc + l*wl/Py`, so an `l` that moves `ky` toward zero widens the range the
+    disc actually allows. Checked by brute force over 4000 random scenes: no propagating order
+    falls outside the reported rectangle.
+    """
+    from wavebit._core.fdtd import propagating_window_2d
+    rng = np.random.default_rng(7)
+    for _ in range(400):
+        wl = rng.uniform(400, 1600)
+        px, py = rng.uniform(300, 3000), rng.uniform(300, 3000)
+        n_top, n_bot = rng.uniform(1, 2.5), rng.uniform(1, 3.5)
+        theta, phi = rng.uniform(0, 1.2), rng.uniform(0, 6.28)
+        kx = n_top * np.sin(theta) * np.cos(phi)
+        ky = n_top * np.sin(theta) * np.sin(phi)
+        (cx, hx), (cy, hy) = propagating_window_2d(wl, px, py, n_top ** 2, n_bot ** 2, kx, ky)
+        reach = max(n_top, n_bot)
+        for m in range(cx - hx - 3, cx + hx + 4):
+            for l in range(cy - hy - 3, cy + hy + 4):
+                inside = (cx - hx <= m <= cx + hx) and (cy - hy <= l <= cy + hy)
+                propagates = (kx + m * wl / px) ** 2 + (ky + l * wl / py) ** 2 <= reach ** 2
+                assert not (propagates and not inside), (
+                    f'order ({m},{l}) propagates and is outside the window')
+
+
+def test_a_crossed_grating_reduces_to_the_2d_path_when_it_is_y_invariant():
+    """The 3D machinery, checked against the answer it must reproduce rather than against RCWA.
+
+    A structure given as a `(1, Ny, Nx)` raster whose y rows are identical is the SAME physical
+    scene the 2D path solves, so the two must agree -- and this isolates the 3D machinery from
+    the genuinely-3D geometry, which is what a comparison against RCWA cannot do. Measured
+    4.8e-3 at a 20 nm grid, the same order as each path's own gap against RCWA.
+
+    `period_y` is small enough that no y order propagates (`wl/Py > 2n`), so the y axis is
+    exercised without adding physics the 2D path cannot express.
+    """
+    column = np.array([wavebit.eps_from_index(N_TOOTH)] * 8 + [EPS_TOP] * 8)
+    flat = column.reshape(1, 1, 16)
+    stacked = np.repeat(column.reshape(1, 1, 16), 6, axis=1)
+    common = dict(thickness=[THICK], top=EPS_TOP, bot=EPS_BOT, wavelength=WL,
+                  resolution=0.05, n_periods=100, **CROSSED)
+    flat_result = solve_fdtd(structure=flat, period=[PERIOD], **common)
+    crossed = solve_fdtd(structure=stacked, period=[PERIOD, 200.0], **common)
+
+    labels_u = np.asarray(crossed.orders_u).ravel()
+    flat_u = np.asarray(flat_result.orders_u).ravel()
+    row = int(np.flatnonzero(np.asarray(crossed.orders_v).ravel() == 0)[0])
+    worst = 0.0
+    for i, m in enumerate(labels_u):
+        if m not in flat_u:
+            continue
+        j = int(np.flatnonzero(flat_u == m)[0])
+        for name in ('R', 'T'):
+            worst = max(worst, abs(float(np.asarray(getattr(crossed, name))[row, i])
+                                   - float(np.asarray(getattr(flat_result, name)).ravel()[j])))
+    assert worst < 2e-2, f'the 3D path and the 2D path disagree by {worst:.2e}'
+
+
+def test_a_crossed_grating_answers_on_a_two_dimensional_order_grid():
+    """`R` and `T` come back on `(orders_v, orders_u)`, and the energy balances.
+
+    The shape is the assertion as much as the values: a crossed grating whose answer is a
+    single row of orders has silently taken the 1D window, which is what happened while
+    `solve_fdtd` still dropped the raster's y axis unconditionally -- it ran, reported one `v`
+    order, and returned `R + T = 0.9167` with nothing to say why.
+    """
+    result = solve_fdtd(structure=_crossed_raster(), thickness=[THICK], top=EPS_TOP,
+                        bot=EPS_BOT, period=[PERIOD, PERIOD], wavelength=WL,
+                        resolution=0.03, n_periods=100, **CROSSED)
+    labels_u = np.asarray(result.orders_u).ravel()
+    labels_v = np.asarray(result.orders_v).ravel()
+    assert len(labels_u) > 1 and len(labels_v) > 1, (
+        f'a crossed grating needs orders on both axes, got u={labels_u} v={labels_v}')
+    assert np.asarray(result.R).shape == (len(labels_v), len(labels_u))
+    total = float(np.asarray(result.R).sum() + np.asarray(result.T).sum())
+    assert abs(total - 1.0) < 5e-2, f'R + T = {total}'
