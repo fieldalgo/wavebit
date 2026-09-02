@@ -33,7 +33,6 @@ properties every one of them carries.
 ```{eval-rst}
 .. autoclass:: wavebit.Material
    :members:
-   :undoc-members:
 
 .. autofunction:: wavebit.eps_from_index
 
@@ -41,21 +40,17 @@ properties every one of them carries.
 
 .. autoclass:: wavebit.Lattice
    :members:
-   :undoc-members:
 
 .. autofunction:: wavebit.grid
 
 .. autoclass:: wavebit.Layer
    :members:
-   :undoc-members:
 
 .. autoclass:: wavebit.Stack
    :members:
-   :undoc-members:
 
 .. autoclass:: wavebit.Incidence
    :members:
-   :undoc-members:
 
 ```
 
@@ -65,21 +60,17 @@ properties every one of them carries.
 ```{eval-rst}
 .. autoclass:: wavebit.JobSpec
    :members:
-   :undoc-members:
 
 .. autoclass:: wavebit.Numerics
    :members:
-   :undoc-members:
 
 .. autoclass:: wavebit.Sweep
    :members:
-   :undoc-members:
 
 .. autofunction:: wavebit.run
 
 .. autoclass:: wavebit.SpecError
    :members:
-   :undoc-members:
 
 ```
 
@@ -89,23 +80,18 @@ properties every one of them carries.
 ```{eval-rst}
 .. autoclass:: wavebit.ScatteringMatrix
    :members:
-   :undoc-members:
 
 .. autoclass:: wavebit.Port
    :members:
-   :undoc-members:
 
 .. autoclass:: wavebit.StaticGeometry
    :members:
-   :undoc-members:
 
 .. autoclass:: wavebit.StaleGeometryError
    :members:
-   :undoc-members:
 
 .. autoclass:: wavebit.ConvMatrices
    :members:
-   :undoc-members:
 
 ```
 
@@ -141,27 +127,21 @@ properties every one of them carries.
 
 .. autoclass:: wavebit.UnphysicalResultWarning
    :members:
-   :undoc-members:
 
 .. autoclass:: wavebit.PrecisionLossWarning
    :members:
-   :undoc-members:
 
 .. autoclass:: wavebit.UnresolvedBranchWarning
    :members:
-   :undoc-members:
 
 .. autoclass:: wavebit.RayleighPointWarning
    :members:
-   :undoc-members:
 
 .. autoclass:: wavebit.AutoDetuneWarning
    :members:
-   :undoc-members:
 
 .. autoclass:: wavebit.AxisNameWarning
    :members:
-   :undoc-members:
 
 ```
 

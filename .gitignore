@@ -24,9 +24,6 @@ dev/
 # No trailing slash -- a trailing slash matches directories, not symlinks.
 lab
 
-# The built documentation site. `mkdocs build` regenerates it from `docs/` in about a
-# second, so it is a derived artifact and not a record of anything.
-site/
-
-# The built Sphinx site (trial branch); `sphinx-build` regenerates it.
+# The built documentation site. `sphinx-build` regenerates it from `docs/`, so it is a
+# derived artifact and not a record of anything.
 docs/_build/

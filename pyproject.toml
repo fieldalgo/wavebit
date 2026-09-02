@@ -71,15 +71,23 @@ pytorch = [
     "tqdm>=4.67",
 ]
 
-# Building the documentation site (`mkdocs serve` / `mkdocs build`), which nothing at
-# runtime needs. Floored rather than pinned, unlike ruff in the CI workflow: these decide
-# how prose is rendered, not whether a check passes, so a newer one cannot turn a commit
-# that changed nothing red. mkdocs-material is what pulls MkDocs itself, and mkdocstrings
-# reads the docstrings for `docs/reference/api.md` -- 19.9k words that otherwise exist only
-# for someone reading the source.
+# Building the documentation site (`sphinx-build -b html docs docs/_build/html`), which
+# nothing at runtime needs. Floored rather than pinned, unlike ruff in the CI workflow: these
+# decide how prose is rendered, not whether a check passes, so a newer one cannot turn a
+# commit that changed nothing red.
+#
+# `myst-parser` is why `docs/` stays markdown; `sphinx-external-toc` is why the navigation
+# stays out of the pages, so that a document reads the same on GitHub as on the site.
+# `sphinx.ext.autodoc` needs no entry -- it ships with Sphinx, and it is what makes the 760
+# `:func:` / `:class:` roles in this codebase's docstrings resolve to links rather than
+# arriving as literal text.
 docs = [
-    "mkdocs-material>=9.7",
-    "mkdocstrings[python]>=1.0",
+    "sphinx>=9.1",
+    "pydata-sphinx-theme>=0.21",
+    "myst-parser>=5.1",
+    "sphinx-design>=0.7",
+    "sphinx-external-toc>=1.1",
+    "sphinxcontrib-mermaid>=2.1",
 ]
 
 # Only normal_method='contour' reads this (subpixel level-set extraction); everything else

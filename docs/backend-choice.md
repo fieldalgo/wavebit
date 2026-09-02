@@ -66,7 +66,7 @@ the speed of a wrong answer.
 An ellipse stack, `d(sum T)/d(lx)`. This is what the closed-form series exists for: the shape's
 outline enters the Fourier transform analytically, so the gradient reaches CD, sidewall angle
 and pitch. `normal_grid` is left at its default of 1024, which matters more than it looks —
-see [the decomposition](#where-the-time-goes) below. Times are ms per step.
+see [the decomposition](#where-the-time-goes-and-what-the-knob-actually-is) below. Times are ms per step.
 
 | config | torch | jax eager | jit (one freeze) | jit (re-freeze) | compile | freeze |
 |---|---|---|---|---|---|---|

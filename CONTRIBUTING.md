@@ -111,19 +111,23 @@ pytest tests/ -q
 
 ### Documentation
 
-`docs/` is the source of a MkDocs site as well as a folder of markdown, and a page has to read
+`docs/` is the source of a Sphinx site as well as a folder of markdown, and a page has to read
 the same in both -- so a link there is a relative link to a real file, or a full `github.com`
-URL when the target is outside `docs/`. To see what you wrote:
+URL when the target is outside `docs/`. **Prefer plain markdown to a MyST directive** for the
+same reason: a directive renders on the site and arrives as its own source text on GitHub. The
+navigation lives in `docs/_toc.yml` rather than in `toctree` blocks inside the pages, which is
+that rule applied to the nav itself.
 
 ```shell
 pip install -e '.[docs]'
-mkdocs serve               # http://127.0.0.1:8000, reloads as you save
+sphinx-build -b html docs docs/_build/html      # then open docs/_build/html/index.html
 ```
 
-`mkdocs build` is what the `docs` CI job runs. Two of its checks are worth knowing about,
-because both catch a failure that is otherwise silent: `docs/reference/api.md` names members by
-hand and mkdocstrings drops an unknown one without saying so, and a `github.com` URL into this
-repository is checked against the tree by `tests/test_docs_contract.py`.
+The `docs` CI job runs that with `-W`, so **any warning fails the build**. That is the check,
+not a tidiness rule: `docs/reference/api.md` names objects by hand, and autodoc reports one it
+cannot import as a warning -- so a renamed public symbol fails CI instead of leaving a quietly
+shorter page. A `github.com` URL into this repository is checked against the tree separately, by
+`tests/test_docs_contract.py`.
 
 Nothing is deployed. `.github/workflows/docs-deploy.yml` is written and dormant; its header
 says what has to be true before it runs.

@@ -1,13 +1,27 @@
-"""Sphinx build, as a trial against the MkDocs one that sits beside it.
+"""The documentation site.
 
-Both read the same `docs/` markdown. What differs, and the reason this exists:
+    sphinx-build -W -b html docs docs/_build/html
 
-* The docstrings cross-reference themselves in Sphinx's own notation -- ``:func:``,
-  ``:class:`` -- 760 times. MkDocs cannot interpret those and `mkdocs_hooks.py` strips them;
-  here they resolve to links, and `intersphinx` carries them out to numpy, jax and torch.
-* `pydata_sphinx_theme` is the design the MkDocs side was reconstructing in 78 lines of CSS.
+`-W` is how CI runs it, and the reason is `docs/reference/api.md`: it names objects by hand,
+and autodoc reports one it cannot import as a *warning*. Without `-W` a renamed public symbol
+leaves a quietly shorter page and nothing fails.
 
-Run it with `sphinx-build -b html docs docs/_build/html`.
+Two choices here are load-bearing rather than taste, and both serve the same rule -- **a
+document in `docs/` reads the same on GitHub as it does on the site**:
+
+* The navigation is in `_toc.yml`, through `sphinx-external-toc`, so no `toctree` directive
+  goes into a page. A directive renders here and arrives as its own source text there.
+* `myst_fence_as_directive` maps a plain ```mermaid fence, so the diagrams stay the fenced
+  blocks GitHub also draws rather than `{mermaid}` directives only this build reads.
+
+The one place the rule is broken on purpose is the card grid on `index.md`, which is the site's
+front door and has no GitHub reader -- `docs/README.md` is the folder's face there, and is
+excluded from this build.
+
+Sphinx rather than MkDocs because the docstrings cross-reference themselves in Sphinx's own
+notation -- ``:func:``, ``:class:``, 760 of them. Under MkDocs those arrived as literal text
+and a hook stripped them; here they resolve to links, and `intersphinx` carries them out to
+numpy, jax and torch.
 """
 import pathlib
 import sys
