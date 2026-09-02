@@ -31,14 +31,14 @@ HEX = np.column_stack(([P, 0.0], [P / 2, P * np.sqrt(3) / 2]))
 
 
 def raster(basis, n=128, radius=R):
-    """A rod at the centre of ``basis``'s cell, through ``wavebit.grid``.
+    """A rod at the centre of ``basis``'s cell, through ``wavebit.meshgrid_xy``.
 
-    ``grid`` puts the samples on the parallelogram (``cell[j, i]`` at the parametric point
+    ``meshgrid_xy`` puts the samples on the parallelogram (``cell[j, i]`` at the parametric point
     ``(i+.5)/n, (j+.5)/n``) *and* centres the cell on the origin, so a centred rod is stated by
     writing nothing -- the same ``cx = cy = 0`` the shape arms in this file use.
     """
     a1, a2 = np.asarray(basis)[:, 0], np.asarray(basis)[:, 1]
-    X, Y = (np.asarray(c) for c in wavebit.grid((n, n), lattice=basis))
+    X, Y = (np.asarray(c) for c in wavebit.meshgrid_xy((n, n), lattice=basis))
     inside = np.zeros(X.shape, dtype=bool)
     for i in (-1, 0, 1):                           # minimum image over the lattice
         for j in (-1, 0, 1):

@@ -231,7 +231,7 @@ def _index_disc(U, V, r=30.0):
     of the code that reads it, not of the shape being round** -- and an ellipse is a legitimate
     structure. It is not fine as a description. Where a genuine Cartesian circle on a skewed
     cell is wanted, ``tests/test_nvf_normal_methods.py::skewed_disc`` builds one through
-    ``wavebit.grid`` with a minimum-image membership test.
+    ``wavebit.meshgrid_xy`` with a minimum-image membership test.
     """
     return np.where(((U - 32) ** 2 + (V - 32) ** 2) <= r ** 2, 12.25, 1.0)
 
@@ -874,7 +874,7 @@ def test_a_round_feature_overlapping_its_own_images_is_periodic(radius, percolat
     into its own image"), so the raster is the only route to it -- and `'contour'` is the
     construction the oblique documentation tells you to reach for.
 
-    **The circle is built through `wavebit.grid`, and that is not a detail.** A circle written
+    **The circle is built through `wavebit.meshgrid_xy`, and that is not a detail.** A circle written
     from raster indices -- `(U - 32)**2 + (V - 32)**2 <= r**2` -- is the image of a disc under
     the basis, which at 20 degrees is a **5.67:1 ellipse**; `_index_disc` in this file is
     named for that reason. An ellipse that thin percolates at a quite different radius, so
@@ -883,7 +883,7 @@ def test_a_round_feature_overlapping_its_own_images_is_periodic(radius, percolat
     n = 64
     t = np.deg2rad(20.0)
     lattice = np.column_stack(([640.0, 0.0], [640.0 * np.cos(t), 640.0 * np.sin(t)]))
-    X, Y = wavebit.grid((n, n), lattice=lattice)
+    X, Y = wavebit.meshgrid_xy((n, n), lattice=lattice)
     cell = np.where(X ** 2 + Y ** 2 <= float(radius) ** 2, 12.25, 1.0)
 
     from wavebit._core.normal_methods import (_contour_polylines, _isotropic_blur,

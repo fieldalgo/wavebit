@@ -45,7 +45,7 @@ The ``- 0.5`` is a relabeling and nothing else: the integral above runs over ``u
 ``[0, 1]`` either way and the array is indexed the same, so **no coefficient moves**. What
 changed on 2026-08-31 is where the origin *is*, and it changed for every coordinate this
 library takes or hands back — a shape's ``cx`` / ``cy``, ``reconstruct_field``'s ``sample_x`` /
-``sample_y``, and :func:`grid`. One origin, so that a centred feature is ``0`` everywhere and
+``sample_y``, and :func:`meshgrid_xy`. One origin, so that a centred feature is ``0`` everywhere and
 nobody writes ``0.5*(a1 + a2)`` by hand.
 
 What the skew *does* reach is any quantity that is Cartesian-geometric rather than
@@ -59,7 +59,7 @@ import numpy as np
 
 from .backend import array_namespace, as_array
 
-__all__ = ['Lattice', 'as_lattice', 'grid', 'is_axis_aligned', 'jacobian',
+__all__ = ['Lattice', 'as_lattice', 'meshgrid_xy', 'is_axis_aligned', 'jacobian',
            'order_kxy', 'periods_of', 'sample_grid']
 
 _PYTREE_REGISTERED = False
@@ -122,10 +122,11 @@ class Lattice:
     def __getitem__(self, key):
         return self.columns[key]
 
-    def grid(self, grid_shape, backend=0, dtype=None):
-        """:func:`grid` on this cell -- ``A.grid((256, 256))``, the basis named once.
+    def meshgrid_xy(self, grid_shape, backend=0, dtype=None):
+        """The cell's sample points as Cartesian ``(X, Y)`` -- ``numpy.meshgrid`` on this cell.
 
-        Identical to ``wavebit.grid(grid_shape, lattice=A)`` in every respect, and it exists for the
+        Identical to ``wavebit.meshgrid_xy(grid_shape, lattice=A)`` in every respect, and it exists
+        for the
         naming and nothing else: the lattice appears **twice** in a raster workflow, once here
         and once at ``lattice=`` on the solver, and the only way that goes wrong is the two
         disagreeing. Measured on a 64-px raster of a radius-100 circle in a 640-unit cell,
@@ -144,15 +145,37 @@ class Lattice:
         0.157 -> 0.997 with no error, no warning, and energy conserved throughout. Pinned as
         ``tests/test_lattice_pytree.py::test_the_two_uses_of_a_lattice_have_to_be_the_same_one``.
 
-        **A nudge, not a guarantee, and it cannot be made one.** ``wavebit.grid(grid_shape,
-        lattice=B)`` still exists and still answers; this only makes the agreeing spelling the
+        **A nudge, not a guarantee, and it cannot be made one.** ``wavebit.meshgrid_xy(
+        grid_shape, lattice=B)`` still exists and still answers; this only makes the agreeing spelling the
         shorter one. Nothing downstream can catch the disagreement either, because what comes
         back is a pair of ordinary coordinate arrays and the first ``np.where`` consumes them --
         a raster is numbers on indices, and which cell it was drawn in is not among them. So the
         rule the naming is meant to carry has to be stated too: **change the cell and the array
         has to be drawn again.**
         """
-        return grid(grid_shape, lattice=self, backend=backend, dtype=dtype)
+        return meshgrid_xy(grid_shape, lattice=self, backend=backend, dtype=dtype)
+
+    def meshgrid_uv(self, grid_shape, backend=0, dtype=None):
+        """The same sample points as **lattice** ``(U, V)`` -- fractions of the cell, in [-0.5, 0.5].
+
+        The other half of the pair, and the reason both are spelled with a suffix: one mesh, two
+        frames to express it in. ``meshgrid_xy`` answers "where is this pixel in space", which
+        moves when the basis does; this answers "where is it in the cell", which does not.
+
+        **It does not read the basis, and that is the whole point.** A pattern written on ``U``
+        and ``V`` is a set of *fractions* -- a duty cycle, a fill fraction, a design scaled as a
+        whole -- so the same array stays correct on every cell, and reusing it across a change
+        of ``lattice=`` is right rather than the mistake it would be in the Cartesian frame.
+        Scale a design and the answer must not move: measured, the held array gives
+        ``sum(T) = 0.124231941`` at 0.5x, 1x, 2x and 4x, identical to nine digits.
+
+        Written out by hand this is ``(np.arange(n) + 0.5)/n - 0.5`` per axis, then a
+        ``meshgrid``; the tests in this repository spell that out in eight places, which is why
+        it is here. ``docs/oblique-lattice.md``, "The two frames a raster can mean", is the
+        write-up.
+        """
+        A = as_lattice(period=[1.0, 1.0])          # the unit square: u, v are the basis-free half
+        return A.meshgrid_xy(grid_shape, backend=backend, dtype=dtype)
 
     def __repr__(self):
         u, v = (np.asarray(x, dtype=float) for x in (self.u, self.v))
@@ -189,7 +212,7 @@ class Lattice:
 
         The way into this type for a basis written out by hand, which the docs bless and the
         solver has always accepted at ``lattice=``. Without it a hand-written cell was a bare
-        array, so it had no :meth:`grid` and the "name the basis once" spelling was unavailable
+        array, so it had no :meth:`meshgrid_xy` and the "name the basis once" spelling was unavailable
         to exactly the callers writing the most explicit code.
 
         Identical to what ``lattice=<2x2>`` does at ingest -- ``axis_aligned`` is read off the
@@ -426,7 +449,7 @@ def sample_grid(xp, grid_shape, lattice, dtype):
     ``r = (i + 0.5)/Nx * a1 + (j + 0.5)/Ny * a2`` -- the cell's *corner* at the origin, which
     is the frame the Fourier machinery works in and the one
     :func:`~wavebit._core.analytic.shape_geometry` resolves a shape's centre into. **The public
-    door is :func:`grid`**, which re-bases to the cell centre; the two differ by
+    door is :func:`meshgrid_xy`**, which re-bases to the cell centre; the two differ by
     ``0.5*(a1 + a2)``, and reaching for this one from user-facing code misplaces a structure by
     half a period with nothing to say so.
 
@@ -514,13 +537,19 @@ def order_kxy(xp, A, half_width_u, half_width_v, wavelength, k_inc_x, k_inc_y,
             xp.astype(xp.broadcast_to(ky, (n_orders_v, n_orders_u)), dtype))
 
 
-def grid(grid_shape, period=None, lattice=None, backend=0, dtype=None):
+def meshgrid_xy(grid_shape, period=None, lattice=None, backend=0, dtype=None):
     """Cartesian coordinates of a raster's pixel centres: ``(X, Y)``, both that shape.
+
+    ``numpy.meshgrid`` for a unit cell. On a skewed cell the two cannot be separated into 1-D
+    axes at all -- ``X`` depends on the row as well as the column, because a pixel's own edges
+    are ``a1/Nx`` and ``a2/Ny`` and the pixel is therefore a parallelogram rather than a square.
+    The values are the **centres** of those parallelograms; ``(i + 0.5)`` is what puts them
+    there, and there are ``Nx`` of them per row rather than ``Nx + 1``.
 
     The public way to build a structure without deciding an axis order. Write the layer in terms
     of the coordinates and the layout follows on its own::
 
-        X, Y = wavebit.grid((64, 96), period=[700., 1100.])
+        X, Y = wavebit.meshgrid_xy((64, 96), period=[700., 1100.])
         layer = np.where(X ** 2 + Y ** 2 < 200. ** 2, 12.25, 1.0)
 
     ``np.where`` is elementwise, so ``layer`` simply inherits whatever layout ``X`` and ``Y``
@@ -550,7 +579,7 @@ def grid(grid_shape, period=None, lattice=None, backend=0, dtype=None):
 
     **Neither half of the name is spare.** Plain ``shape`` collides with geometry: this package
     spells a piece of geometry a "shape" (``structure=[{'shapes': [...]}]``,
-    :func:`~wavebit._core.analytic.shape_ft`, ``shape_geometry``), so ``A.grid(shape)`` read as
+    :func:`~wavebit._core.analytic.shape_ft`, ``shape_geometry``), so ``A.meshgrid_xy(shape)`` read as
     *"put a shape on this lattice"*, which is the one thing it does not do. But ``shape`` is
     also what carries the **axis order**: an array's shape is rows-first, and that is what this
     pair is. A name that drops the word loses that -- ``samples`` would collide with
@@ -559,7 +588,7 @@ def grid(grid_shape, period=None, lattice=None, backend=0, dtype=None):
     the word stays and the prefix disambiguates it, which is also what
     :func:`sample_grid` and the three builders in :mod:`wavebit._core.boundary` already call it.
 
-    **Prefer :meth:`Lattice.grid` where the cell is already named.** ``A.grid(grid_shape)`` is this
+    **Prefer :meth:`Lattice.meshgrid_xy` where the cell is already named.** That method is this
     function with ``lattice=A``, and it spells the basis once instead of twice -- which matters
     because the *other* use of it is ``lattice=A`` on the solver, and a raster drawn on one cell
     and solved on another is a different structure, silently. That method's docstring has the
@@ -571,9 +600,9 @@ def grid(grid_shape, period=None, lattice=None, backend=0, dtype=None):
     A = as_lattice(period=period, lattice=lattice)
     shape = tuple(int(v) for v in grid_shape)
     if len(shape) != 2:
-        raise ValueError(f'grid: grid_shape must be (rows, columns); got {grid_shape!r}')
+        raise ValueError(f'meshgrid_xy: grid_shape must be (rows, columns); got {grid_shape!r}')
     if min(shape) < 1:
-        raise ValueError(f'grid: grid_shape must be positive; got {grid_shape!r}')
+        raise ValueError(f'meshgrid_xy: grid_shape must be positive; got {grid_shape!r}')
 
     if backend == 0:
         import array_api_compat.numpy as xp
@@ -582,7 +611,7 @@ def grid(grid_shape, period=None, lattice=None, backend=0, dtype=None):
     elif backend == 2:
         import array_api_compat.torch as xp
     else:
-        raise ValueError(f'grid: backend must be 0 (NumPy), 1 (JAX) or 2 (PyTorch); got {backend!r}')
+        raise ValueError(f'meshgrid_xy: backend must be 0 (NumPy), 1 (JAX) or 2 (PyTorch); got {backend!r}')
 
     X, Y = sample_grid(xp, shape, A, dtype if dtype is not None else xp.float64)
     # The one place the public frame is put on. `sample_grid` builds the cell from its corner

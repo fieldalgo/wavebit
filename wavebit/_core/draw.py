@@ -438,7 +438,7 @@ def plot_structure(solver, layer=0, n=512, show='eps', ax=None, band_limited=Fal
     skewed one with ``pcolormesh`` on ``(u - 0.5)*a1 + (v - 0.5)*a2``, as
     ``docs/oblique-lattice.md`` does for fields -- an index-space ``imshow`` of a skewed cell
     draws a parallelogram as a square. The axes run from ``-P/2`` to ``+P/2``: the cell is
-    centred at the origin, the same frame a shape's ``cx`` and :func:`wavebit.grid` use.
+    centred at the origin, the same frame a shape's ``cx`` and :func:`wavebit.meshgrid_xy` use.
 
     Complex values are drawn as their real part, and the title says so.
     """

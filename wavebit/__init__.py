@@ -92,9 +92,9 @@ from ._core.factorization import ConvMatrices
 # what it returns where `hexagonal(400.)` did not, and a hexagon is a plausible *shape* in a
 # package whose shape types are already `rectangle` / `circle` / `ellipse`. It is also the type
 # `solver.lattice` hands back and the one `repr` prints, so it was reachable and unnameable:
-# no import, no annotation, and since 2026-09-01 a public `.grid` method on a type callers
+# no import, no annotation, and since 2026-09-01 a public `.meshgrid_xy` method on a type callers
 # could not spell.
-from ._core.lattice import Lattice, grid
+from ._core.lattice import Lattice, meshgrid_xy
 from ._core.geometry import StaticGeometry, StaleGeometryError
 # What `solver.scattering` hands back after an SMM solve: the stack's own scattering matrix,
 # both sides and every order, incidence-relative, with the two half-spaces as its ports.
@@ -122,7 +122,7 @@ from ._core.spec import JobSpec, Numerics, Sweep, SpecError, run
 # offered, and without `__all__` a star import collected it along with the rest.
 __all__ = [
     'Lattice',
-    'grid',
+    'meshgrid_xy',
     'rcwa',
     # Defined in this file rather than imported -- see `enable_x64` above.
     'enable_x64',

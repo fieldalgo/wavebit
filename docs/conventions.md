@@ -186,7 +186,7 @@ Every coordinate this library takes or hands back is measured from the **centre 
 | --- | --- |
 | a shape's `cx` / `cy` | the centre of the cell — also what omitting them means |
 | `reconstruct_field`'s `sample_x` / `sample_y` | the same point; a *count* spans the cell, `[-period/2, +period/2]` |
-| `wavebit.grid`'s `X` / `Y` | the same point; `structure[layer][j, i]` sits at `r = (u - 0.5) * a1 + (v - 0.5) * a2` for `u = (i+0.5)/Nx`, `v = (j+0.5)/Ny` |
+| `wavebit.meshgrid_xy`'s `X` / `Y` | the same point; `structure[layer][j, i]` sits at `r = (u - 0.5) * a1 + (v - 0.5) * a2` for `u = (i+0.5)/Nx`, `v = (j+0.5)/Ny` |
 | the axes `plot_structure` draws | the same point; they run `-P/2` to `+P/2` |
 
 `sample_z` is the exception and deliberately so: `z` is not periodic and the stack *has* a
@@ -327,7 +327,7 @@ Measured across the whole public surface, there are exactly two and neither has 
 
 | | order |
 |---|---|
-| **array axes** | `v` first — `structure`, `grid`, `R`, `T`, `r_s`, `reconstruct_field`, `slice_structure`, and `S11`'s flat index |
+| **array axes** | `v` first — `structure`, `meshgrid_xy`, `R`, `T`, `r_s`, `reconstruct_field`, `slice_structure`, and `S11`'s flat index |
 | **hand-written pairs** | `x` first — `period`, `truncation_order`, `order(m, n)` (its `m` is `u`) |
 
 Neither is this package's choice. Array axes are numpy's — rows first, which is also what

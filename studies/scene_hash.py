@@ -84,12 +84,12 @@ SIDES = ('top', 'bottom')
 def _rod(basis, n=40, radius=ROD):
     """A disc on the cell's own parametric grid, so every cell carries the same object.
 
-    Through ``wavebit.grid``, which puts the samples on the parallelogram *and* centres the
+    Through ``wavebit.meshgrid_xy``, which puts the samples on the parallelogram *and* centres the
     cell on the origin -- so the disc is stated by writing nothing, exactly as the shape arms
     below state theirs with ``cx = cy = 0``.
     """
     a1, a2 = np.asarray(basis)[:, 0], np.asarray(basis)[:, 1]
-    X, Y = (np.asarray(c) for c in wavebit.grid((n, n), lattice=basis))
+    X, Y = (np.asarray(c) for c in wavebit.meshgrid_xy((n, n), lattice=basis))
     inside = np.zeros(X.shape, dtype=bool)
     for i in (-1, 0, 1):                               # minimum image over the lattice
         for j in (-1, 0, 1):

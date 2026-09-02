@@ -75,6 +75,59 @@ CONVERGENCE_ANGLE = 60.0
 FIG_DIR = 'docs/figures/oblique-lattice/'
 
 
+def _draw_one_mesh_two_arrays(plt):
+    """What `meshgrid_xy` hands back: one set of points, two arrays over it.
+
+    Drawn at 6 px so the numbers fit. The left panel is the mesh itself -- its lines run along
+    `a1` and `a2`, which is why a pixel is a parallelogram and not a square. The other two are
+    the same points twice, once holding x and once holding y; on a tilted cell `X` shifts from
+    row to row, which is exactly why the pair cannot be separated into 1-D axes.
+    """
+    n, gamma = 6, 60.0
+    g = np.radians(gamma)
+    A = np.array([[1.0, np.cos(g)], [0.0, np.sin(g)]])
+    t = (np.arange(n) + 0.5) / n - 0.5
+    U, V = np.meshgrid(t, t)
+    X, Y = U * A[0, 0] + V * A[0, 1], U * A[1, 0] + V * A[1, 1]
+    edges = np.arange(n + 1) / n - 0.5
+
+    fig, ax = plt.subplots(1, 3, figsize=(11.6, 3.1))
+
+    def frame(a, title):
+        box = np.array([[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5], [-.5, -.5]]) @ A.T
+        a.plot(box[:, 0], box[:, 1], color='0.6', lw=1.3)
+        a.set_aspect('equal'); a.set_xticks([]); a.set_yticks([])
+        a.set_xlim(-1.16, 1.16); a.set_ylim(-0.66, 0.66)
+        a.set_title(title, fontsize=9.5)
+        for sp in a.spines.values():
+            sp.set_visible(False)
+
+    frame(ax[0], 'two grids, one point set\n(grey: Cartesian x-y  ·  blue: the cell\'s mesh)')
+    # the Cartesian reference the values are read against -- axis-aligned, nothing to do
+    # with the cell. Drawn first and faintly: it is the ruler, not the subject.
+    for k in np.arange(-1.0, 1.01, 0.25):
+        ax[0].axvline(k, color='0.75', lw=.6, zorder=0)
+        ax[0].axhline(k, color='0.75', lw=.6, zorder=0)
+    ax[0].axvline(0, color='0.45', lw=1.0, zorder=1)
+    ax[0].axhline(0, color='0.45', lw=1.0, zorder=1)
+    # the cell's own mesh, tilted with the basis
+    for k in edges:
+        for p0, p1 in (((k, -.5), (k, .5)), ((-.5, k), (.5, k))):
+            q0, q1 = np.array(p0) @ A.T, np.array(p1) @ A.T
+            ax[0].plot([q0[0], q1[0]], [q0[1], q1[1]], color='#2a78d6', lw=.9, alpha=.75, zorder=2)
+    ax[0].scatter(X, Y, s=17, color='#2a78d6', zorder=3)
+
+    for k, (M, name, cmap) in enumerate(((X, 'X — the x of each point', 'RdBu_r'),
+                                         (Y, 'Y — the y of each point', 'PuOr_r')), start=1):
+        frame(ax[k], name)
+        ax[k].scatter(X, Y, c=M, s=190, cmap=cmap, edgecolors='none')
+        for xx, yy, vv in zip(X.ravel(), Y.ravel(), M.ravel()):
+            ax[k].text(xx, yy, f'{vv:+.2f}', ha='center', va='center', fontsize=5, color='k')
+
+    fig.tight_layout()
+    fig.savefig(FIG_DIR + 'one-mesh-two-arrays.png', dpi=145)
+
+
 def _draw_two_frames(plt):
     """The concept figure: one pixel set, read in two frames, and redrawn in the second.
 
@@ -118,7 +171,7 @@ def _draw_two_frames(plt):
 
 def raster_at(cell):
     """A genuine Cartesian circle on ``cell`` -- the same expression at every angle."""
-    X, Y = (np.asarray(c) for c in cell.grid((N, N)))
+    X, Y = (np.asarray(c) for c in cell.meshgrid_xy((N, N)))
     return np.where(X ** 2 + Y ** 2 < RADIUS ** 2, EPS_ROD, 1.0)
 
 
@@ -183,7 +236,7 @@ def main():
     exact = solve(cell, [{'background': 1.0, 'shapes': [
         {'type': 'circle', 'cx': 0.0, 'cy': 0.0, 'lx': 2 * RADIUS, 'material': EPS_ROD}]}])
     for n in (64, 128, 256, 512):
-        X, Y = (np.asarray(c) for c in cell.grid((n, n)))
+        X, Y = (np.asarray(c) for c in cell.meshgrid_xy((n, n)))
         got = solve(cell, np.where(X ** 2 + Y ** 2 < RADIUS ** 2, EPS_ROD, 1.0)[None],
                     factorization='nvf')
         print(f'   N = {n:>4}   {abs(got - exact):.1e}')
@@ -219,6 +272,8 @@ def main():
 
     _draw_two_frames(plt)
     print(f'figure: {FIG_DIR}two-frames.png')
+    _draw_one_mesh_two_arrays(plt)
+    print(f'figure: {FIG_DIR}one-mesh-two-arrays.png')
 
 
 if __name__ == '__main__':

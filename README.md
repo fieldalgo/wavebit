@@ -430,16 +430,16 @@ gradient tilts the cell **and shears the pattern with it**, where an analytic sh
 Cartesian lengths tilt the cell only. They differ by 3.6x on a plain scene. See
 [`docs/oblique-lattice.md`](docs/oblique-lattice.md), "Differentiating the cell".
 
-**Building the layer.** `wavebit.grid` gives the Cartesian coordinates of the raster's pixel
+**Building the layer.** `wavebit.meshgrid_xy` gives the Cartesian coordinates of the raster's pixel
 centres, so a structure can be written in coordinates rather than indices:
 
 ```python
 A = wavebit.Lattice.hexagonal(400.)
-X, Y = A.grid((256, 256))                       # == wavebit.grid((256, 256), lattice=A)
+X, Y = A.meshgrid_xy((256, 256))                       # == wavebit.meshgrid_xy((256, 256), lattice=A)
 layer = np.where(X ** 2 + Y ** 2 < 90. ** 2, 12.25, 1.)
 ```
 
-Write it as `A.grid(...)` and pass the same `A` to `lattice=`. The cell is needed in **two**
+Write it as `A.meshgrid_xy(...)` and pass the same `A` to `lattice=`. The cell is needed in **two**
 places — to place the pixels and to solve them — and a raster drawn on one cell and solved on
 another is a different structure with nothing to say so: on a 64-px circle, drawing at 90
 degrees and solving at 20 gives a 5.67:1 ellipse and moves `sum(T)` from 0.157 to 0.997, energy
@@ -470,7 +470,7 @@ a converged high-contrast structure (~3x on a lightly-truncated sweep).
 the parametric point `u = (i + 0.5)/Nx`, `v = (j + 0.5)/Ny`, which — the cell being centred on
 the origin — is `r = (u - 0.5) * a1 + (v - 0.5) * a2`. Building a raster on a Cartesian grid and
 passing a tilted basis therefore describes a *different structure*, silently — energy still
-conserves to 1e-15. `wavebit.grid` is there so you need not write either form. Analytic shapes
+conserves to 1e-15. `wavebit.meshgrid_xy` is there so you need not write either form. Analytic shapes
 are immune to the skew in their lengths, which are absolute Cartesian quantities, so a rectangle
 stays a rectangle under one.
 
@@ -634,7 +634,7 @@ opposite sign; see [`docs/conventions.md`](docs/conventions.md).)
 fractions builds a structure `1/period` times too small and solves it without complaint.
 
 **The cell is centred at the origin**, everywhere a coordinate is taken or handed back: a
-shape's `cx` / `cy`, `reconstruct_field`'s `sample_x` / `sample_y`, `wavebit.grid`'s `X` / `Y`,
+shape's `cx` / `cy`, `reconstruct_field`'s `sample_x` / `sample_y`, `wavebit.meshgrid_xy`'s `X` / `Y`,
 and the axes `plot_structure` draws. A centred feature is `0` in all of them, and nobody writes
 `0.5*(a1 + a2)` by hand.
 

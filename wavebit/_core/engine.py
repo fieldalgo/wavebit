@@ -997,7 +997,7 @@ class CoreSolveMixin:
         lengths are absolute, so the same omission raises "shape is larger than the period".
         The raster was the only silent one.
 
-        :func:`wavebit.grid` has refused exactly this since it was written
+        :func:`wavebit.meshgrid_xy` has refused exactly this since it was written
         (``as_lattice: needs one of period or lattice``), so the two doors into a raster now
         say the same thing.
         """
@@ -1011,7 +1011,7 @@ class CoreSolveMixin:
             '    lattice=wavebit.Lattice.hexagonal(400.)      # or oblique(...) / a 2x2\n'
             'A raster carries no length of its own, so nothing further down can catch this: '
             'measured on a hex scene with `lattice=` forgotten, sum(T) read 0.989790 against '
-            'the correct 0.927664, energy conserving throughout. `wavebit.grid` has always '
+            'the correct 0.927664, energy conserving throughout. `wavebit.meshgrid_xy` has always '
             'refused the same omission.')
 
     @property

@@ -1396,7 +1396,7 @@ def test_every_reader_of_the_default_moves_together(cell_name, A):
     assert np.allclose(verts.mean(axis=0), (cx, cy), atol=1e-9)
 
     # the picture: the sample nearest the resolved centre must be inside the shape.
-    # `sample_grid`, not `wavebit.grid` -- `_shape_inside` reads the *internal* frame, the one
+    # `sample_grid`, not `wavebit.meshgrid_xy` -- `_shape_inside` reads the *internal* frame, the one
     # `shape_geometry` resolves into, and the public helper is the same points half a period
     # away. `draw` itself calls `sample_grid` here for the same reason.
     from wavebit._core.lattice import sample_grid
@@ -1451,11 +1451,11 @@ def test_omitting_the_centre_solves_what_stating_it_solves(cell_name, A, factori
     assert a_r.tobytes() == b_r.tobytes() and a_t.tobytes() == b_t.tobytes()
 
 
-# --------------------------------------------------------------------- wavebit.grid
+# ---------------------------------------------------------------- wavebit.meshgrid_xy
 
 @pytest.mark.parametrize('cell_name, A', _CELLS, ids=[c[0] for c in _CELLS])
 def test_grid_places_samples_on_the_cell_not_a_rectangle(cell_name, A):
-    """``grid`` returns ``r = (u - 0.5)*a1 + (v - 0.5)*a2`` -- the cell centred on the origin.
+    """``meshgrid_xy`` returns ``r = (u - 0.5)*a1 + (v - 0.5)*a2`` -- the cell centred on the origin.
 
     Checked against the closed form rather than against ``sample_grid``, which is the function
     it wraps -- comparing a wrapper to its callee proves only that the call happened, and the
@@ -1465,7 +1465,7 @@ def test_grid_places_samples_on_the_cell_not_a_rectangle(cell_name, A):
     still solves, still conserves energy, and sits half a period from where its recipe says.
     """
     n_v, n_u = 7, 11
-    X, Y = wavebit.grid((n_v, n_u), lattice=A)
+    X, Y = wavebit.meshgrid_xy((n_v, n_u), lattice=A)
     u = (np.arange(n_u) + 0.5) / n_u - 0.5
     v = (np.arange(n_v) + 0.5) / n_v - 0.5
     U, V = np.meshgrid(u, v)
@@ -1477,7 +1477,7 @@ def test_grid_places_samples_on_the_cell_not_a_rectangle(cell_name, A):
 
 
 def test_the_grid_and_a_shape_centre_are_the_same_origin():
-    """``grid``'s ``0`` and a shape's ``cx = 0`` are the same point. Nothing else says so.
+    """``meshgrid_xy``'s ``0`` and a shape's ``cx = 0`` are the same point. Nothing else says so.
 
     They are the two halves of one convention and they are re-based in two different functions
     -- ``grid`` shifts what ``sample_grid`` returns, ``shape_geometry`` shifts what the dict
@@ -1490,12 +1490,12 @@ def test_the_grid_and_a_shape_centre_are_the_same_origin():
     because that is where the offset stops being a period and becomes ``0.5*(a1 + a2)``.
 
     Measured: 1.5e-4 of the matrix's own scale, which is the staircase between a 512-pixel
-    raster and the closed form. The control is the corner spelling -- what ``grid`` returned
+    raster and the closed form. The control is the corner spelling -- what ``meshgrid_xy`` returned
     until 2026-08-31 -- at 5.2e-1, a factor of 3500.
     """
     A = np.column_stack([[400.0, 0.0], [200.0, 400.0 * np.sqrt(3) / 2]])
     R, EPS, n = 120.0, 5.76, 512
-    X, Y = (np.asarray(c) for c in wavebit.grid((n, n), lattice=A))
+    X, Y = (np.asarray(c) for c in wavebit.meshgrid_xy((n, n), lattice=A))
     kw = dict(backend=0, wavelength=900.0, lattice=A, truncation_order=[6, 6], top=1.0,
               bot=1.0, theta=0.0, phi=0.0, psi=0.0, thickness=[300.0], factorization='nvf')
 
@@ -1517,33 +1517,33 @@ def test_the_grid_and_a_shape_centre_are_the_same_origin():
 
 def test_grid_period_and_lattice_are_two_spellings_of_one_cell():
     """``period=[Lx, Ly]`` must land exactly where ``diag(Lx, Ly)`` does, and a lone period is square."""
-    a = [np.asarray(v).tobytes() for v in wavebit.grid((9, 13), period=[700.0, 1100.0])]
-    b = [np.asarray(v).tobytes() for v in wavebit.grid((9, 13), lattice=np.diag([700.0, 1100.0]))]
+    a = [np.asarray(v).tobytes() for v in wavebit.meshgrid_xy((9, 13), period=[700.0, 1100.0])]
+    b = [np.asarray(v).tobytes() for v in wavebit.meshgrid_xy((9, 13), lattice=np.diag([700.0, 1100.0]))]
     assert a == b
-    c = [np.asarray(v).tobytes() for v in wavebit.grid((9, 9), period=[640.0])]
-    d = [np.asarray(v).tobytes() for v in wavebit.grid((9, 9), lattice=np.diag([640.0, 640.0]))]
+    c = [np.asarray(v).tobytes() for v in wavebit.meshgrid_xy((9, 9), period=[640.0])]
+    d = [np.asarray(v).tobytes() for v in wavebit.meshgrid_xy((9, 9), lattice=np.diag([640.0, 640.0]))]
     assert c == d
 
 
 def test_grid_refuses_what_it_cannot_answer():
     with pytest.raises(ValueError, match='rows, columns'):
-        wavebit.grid((8,), period=[1.0])
+        wavebit.meshgrid_xy((8,), period=[1.0])
     with pytest.raises(ValueError, match='rows, columns'):
-        wavebit.grid((8, 8, 8), period=[1.0])
+        wavebit.meshgrid_xy((8, 8, 8), period=[1.0])
     with pytest.raises(ValueError, match='positive'):
-        wavebit.grid((0, 8), period=[1.0])
+        wavebit.meshgrid_xy((0, 8), period=[1.0])
     with pytest.raises(ValueError, match='one of period or lattice'):
-        wavebit.grid((8, 8))
+        wavebit.meshgrid_xy((8, 8))
     with pytest.raises(ValueError, match='backend'):
-        wavebit.grid((8, 8), period=[1.0], backend=9)
+        wavebit.meshgrid_xy((8, 8), period=[1.0], backend=9)
     with pytest.raises(ValueError, match='parallel'):
-        wavebit.grid((8, 8), lattice=np.column_stack([[1.0, 0.0], [2.0, 0.0]]))
+        wavebit.meshgrid_xy((8, 8), lattice=np.column_stack([[1.0, 0.0], [2.0, 0.0]]))
 
 
 def test_a_structure_built_through_grid_is_the_one_that_gets_solved():
     """The point of the helper: coordinates in, and the layout follows on its own.
 
-    Built through ``grid`` and built by hand from the same closed form must be the same raster
+    Built through ``meshgrid_xy`` and built by hand from the same closed form must be the same raster
     and therefore the same answer -- on a skewed cell, where hand-rolling is where the
     ``u*a1 + v*a2`` step is easy to omit.
     """
@@ -1552,7 +1552,7 @@ def test_a_structure_built_through_grid_is_the_one_that_gets_solved():
 
     # A centred rod is what the helper is for, and stating it takes nothing: the cell is
     # centred on the origin, so there is no cell centre left to compute.
-    X, Y = wavebit.grid((n, n), lattice=A)
+    X, Y = wavebit.meshgrid_xy((n, n), lattice=A)
     eps_helper = np.where(np.asarray(X) ** 2 + np.asarray(Y) ** 2 < 150.0 ** 2, 5.76, 1.0)
 
     t = (np.arange(n) + 0.5) / n - 0.5

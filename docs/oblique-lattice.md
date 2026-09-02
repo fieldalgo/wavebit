@@ -36,7 +36,7 @@ default — no `Lattice`, no import, and the coordinates it gives are bit-identi
 
 ```python
 P = [700.0, 1100.0]
-X, Y = wavebit.grid((256, 256), period=P)
+X, Y = wavebit.meshgrid_xy((256, 256), period=P)
 solver = wavebit.rcwa(period=P, ...)
 ```
 
@@ -58,7 +58,7 @@ signature of a rotated rectangle shape** — `{'type': 'rectangle', 'lx':, 'ly':
 with `angle` meaning the angle *between the edges* rather than a rotation. `Lattice.oblique(...)`
 carries the answer in the call. `Lattice.rectangular` is the object form of `period` and the
 exact-diagonal spelling, since `oblique(.., pi/2)` lands 6.1e-17 off it; `from_columns` is what
-gives a hand-written 2x2 the same `.grid` the constructors have.
+gives a hand-written 2x2 the same `.meshgrid_xy` the constructors have.
 
 `angle` is the angle between `a1` and `a2`, in radians, like every other angle in this API.
 These are spellings and not a new kind of cell — each returns the same object `lattice=` takes,
@@ -68,16 +68,16 @@ reason any expression is — but the two modeling paths differentiate *different
 read "Differentiating the cell" before using one. See also "Where the skew actually reaches the
 code".
 
-**Building the structure.** `wavebit.grid` gives the Cartesian coordinates of the raster's pixel
+**Building the structure.** `wavebit.meshgrid_xy` gives the Cartesian coordinates of the raster's pixel
 centres, so a layer can be written in coordinates rather than indices:
 
 ```python
 A = wavebit.Lattice.hexagonal(400.0)
-X, Y = A.grid((256, 256))                      # == wavebit.grid((256, 256), lattice=A)
+X, Y = A.meshgrid_xy((256, 256))                      # == wavebit.meshgrid_xy((256, 256), lattice=A)
 layer = np.where(X ** 2 + Y ** 2 < 90.0 ** 2, 12.25, 1.0)
 ```
 
-`A.grid(grid_shape)` is the free function with `lattice=A`, and it is the spelling to prefer for one
+`A.meshgrid_xy(grid_shape)` is the free function with `lattice=A`, and it is the spelling to prefer for one
 reason: the cell is needed **twice** — here, to place the pixels, and at `lattice=` on the
 solver — and the two disagreeing is what goes wrong. See "The two frames a raster can mean"
 below for what the disagreement costs.
@@ -110,13 +110,13 @@ and energy still conserves to 1e-15 because the NVF assembly is Hermitian whatev
 says. The way to write it:
 
 ```python
-X, Y = A.grid((ny, nx))                          # Cartesian position of every pixel
+X, Y = A.meshgrid_xy((ny, nx))                          # Cartesian position of every pixel
 ```
 
 then test membership in Cartesian space, with **minimum image over the lattice** (`i*a1 + j*a2`
 for `i, j` in `-1, 0, 1`) so a feature straddling an edge wraps correctly. Written out by hand
 it is `((np.arange(n) + 0.5)/n - 0.5)` per axis, then `U*a1 + V*a2` — the `- 0.5` being the
-centred cell. `wavebit.grid` exists so that neither half has to be remembered.
+centred cell. `wavebit.meshgrid_xy` exists so that neither half has to be remembered.
 
 Analytic shapes do not have this problem *in their lengths*: those are absolute Cartesian
 quantities, so a rectangle stays a rectangle under a skew. `cx` / `cy` are Cartesian too, and
@@ -170,10 +170,22 @@ change is a similarity. As the axis ratio of the lit pixels: an isotropic 2x sca
 45-degree tilt gives **2.414**. So the two frames coincide under a pure scale and separate most
 under a tilt.
 
-### Calling `grid` puts you in the Cartesian frame
+![One mesh, two arrays over it](figures/oblique-lattice/one-mesh-two-arrays.png)
 
-`grid` exists to hand back Cartesian `X`, `Y`, so a pattern written on them is Cartesian by
-construction — and then the cell is needed **twice**, once by `grid` to place the pixels and
+*Two grids over one point set. The grey one is the Cartesian ruler the values are read against
+— axis-aligned, nothing to do with the cell; the blue one is the cell's own mesh, whose lines run
+along `a1` and `a2`, so a pixel is a parallelogram with edges `a1/Nx` and `a2/Ny`. The values are
+those parallelograms' **centres** — `Nx` per row, not `Nx + 1`. The other two panels are the same
+points twice, once holding `x` and once holding `y`. On a tilted cell `X` shifts from row to row,
+which is why the pair cannot be separated into 1-D axes the way it can on a rectangle.*
+
+`meshgrid_uv` is the same mesh in the other frame: `U`, `V` in `[-0.5, 0.5]`, fractions of the
+cell. It does not read the basis at all, and that is what makes it the lattice frame.
+
+### Calling `meshgrid_xy` puts you in the Cartesian frame
+
+`meshgrid_xy` exists to hand back Cartesian `X`, `Y`, so a pattern written on them is Cartesian by
+construction — and then the cell is needed **twice**, once by `meshgrid_xy` to place the pixels and
 once by `rcwa` to solve them, and the two disagreeing is what goes wrong. Same indices,
 different basis, different points.
 
@@ -193,18 +205,23 @@ and reuses the array gets — `sum(T)` from 0.157 to 0.997 with no error, no war
 conserved throughout. It reads as a lattice effect, and the lattice effect and the *shape
 deformed into an ellipse* effect are mixed together with nothing separating them.
 
-`A.grid(grid_shape)` (`Lattice.grid`) is the same call as `wavebit.grid(grid_shape,
+`A.meshgrid_xy(grid_shape)` (`Lattice.meshgrid_xy`) is the same call as `wavebit.meshgrid_xy(grid_shape,
 lattice=A)` with the basis named once, which is the whole of what it is for. **It is a nudge
-and not a guarantee:** `wavebit.grid(grid_shape, lattice=B)` still exists and still answers, and
+and not a guarantee:** `wavebit.meshgrid_xy(grid_shape, lattice=B)` still exists and still answers, and
 provenance cannot be
 attached to the array either — the first `np.where` turns the coordinates into a permittivity
 raster, and a raster is numbers on indices with no record of the cell it was drawn in. So the
 rule has to be carried by the reader: **change the cell and redraw the array.** Pinned as
 `tests/test_lattice_pytree.py::test_the_two_uses_of_a_lattice_have_to_be_the_same_one`.
 
-(Its first parameter is `grid_shape`, not `shape`. Plain `shape` collides with geometry — this
-package spells a piece of geometry a shape, `structure=[{'shapes': [...]}]`, `shape_ft`,
-`shape_geometry` — so `A.grid(shape)` read as *"put a shape on this lattice"*. But the word is
+(The name says three things and needs all three. **`meshgrid`**, because that is what it is —
+`numpy.meshgrid` for a unit cell — and because it says the return is two filled 2-D arrays
+rather than a pair of 1-D axes. **`_xy`**, because this package names *both* coordinate systems
+("Cartesian coordinates" and "lattice coordinates" appear five times each), so `coordinates`
+alone would be the ambiguous half; the suffix is also what makes `meshgrid_uv` a matched pair
+rather than an afterthought. And its parameter is **`grid_shape`**, not `shape`: plain `shape`
+collides with geometry — this package spells a piece of geometry a shape,
+`structure=[{'shapes': [...]}]`, `shape_ft`, `shape_geometry` — but the word is
 also what says the pair is **rows-first**, the way an array's shape is, so dropping it loses
 that: `samples` would collide with `reconstruct_field`'s x-first `sample_x` / `sample_y` and
 invite `(nx, ny)`. The prefix disambiguates instead, and `sample_grid` and `boundary.py` were
@@ -236,7 +253,7 @@ downstream can notice: measured on a hex scene with `lattice=` forgotten, `sum(T
 
 The analytic path was already safe and this does not duplicate it — a shape's lengths are
 absolute, so the same omission raises *"shape is larger than the period"*. The raster was the
-only silent one. `wavebit.grid` has refused the same omission since it was written
+only silent one. `wavebit.meshgrid_xy` has refused the same omission since it was written
 (`as_lattice: needs one of period or lattice`), so the two doors into a raster now agree. The
 check runs at construction *and* at the solve, because a structure can be assigned long after
 the solver was built.
@@ -499,7 +516,7 @@ prints the table below; the figure it writes is `studies/results/sweep_cell_angl
 ```python
 for gamma in angles:
     A = wavebit.Lattice.oblique(640., 640., np.radians(gamma))   # the cell tilts
-    X, Y = A.grid((256, 256))                                    # its Cartesian coordinates
+    X, Y = A.meshgrid_xy((256, 256))                                    # its Cartesian coordinates
     layer = np.where(X ** 2 + Y ** 2 < 100. ** 2, 12.25, 1.0)    # the circle does not
     solver = wavebit.rcwa(lattice=A, structure=layer[None], factorization='nvf', ...)
 ```

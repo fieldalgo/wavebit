@@ -165,10 +165,10 @@ def test_the_constructors_say_what_they_return():
 
 
 def test_a_hand_written_basis_can_join_the_type():
-    """``from_columns`` is what gives a 2x2 written by hand the same ``.grid`` as a constructor.
+    """``from_columns`` is what gives a 2x2 written by hand the same ``.meshgrid_xy`` as a constructor.
 
     The docs bless writing the basis out (``np.column_stack((a1, a2))``) and ``lattice=`` has
-    always taken it, but a bare array has no :meth:`Lattice.grid`, so the "name the basis once"
+    always taken it, but a bare array has no :meth:`Lattice.meshgrid_xy`, so the "name the basis once"
     spelling was unavailable to exactly the callers writing the most explicit code.
 
     It is what ``lattice=<2x2>`` already does at ingest, so ``axis_aligned`` is read off the
@@ -182,8 +182,8 @@ def test_a_hand_written_basis_can_join_the_type():
     assert wavebit.Lattice.from_columns(np.diag([700.0, 1100.0])).axis_aligned is True
 
     # the gap it closes: the method is now reachable, and agrees with the free function
-    assert [np.asarray(c).tobytes() for c in A.grid((9, 13))] == \
-        [np.asarray(c).tobytes() for c in wavebit.grid((9, 13),
+    assert [np.asarray(c).tobytes() for c in A.meshgrid_xy((9, 13))] == \
+        [np.asarray(c).tobytes() for c in wavebit.meshgrid_xy((9, 13),
                                                        lattice=np.column_stack((a1, a2)))]
 
 
@@ -195,9 +195,9 @@ def test_an_orthogonal_cell_still_needs_no_lattice_at_all():
     coordinates it produces are bit-identical to the ones the object produces.
     """
     P = [700.0, 1100.0]
-    by_period = [np.asarray(c).tobytes() for c in wavebit.grid((17, 23), period=P)]
+    by_period = [np.asarray(c).tobytes() for c in wavebit.meshgrid_xy((17, 23), period=P)]
     by_object = [np.asarray(c).tobytes()
-                 for c in wavebit.Lattice.rectangular(700.0, 1100.0).grid((17, 23))]
+                 for c in wavebit.Lattice.rectangular(700.0, 1100.0).meshgrid_xy((17, 23))]
     assert by_period == by_object
 
     # and `rectangular` is the *exact* diagonal, which `oblique(.., pi/2)` is not
@@ -264,7 +264,7 @@ def test_the_raster_path_differentiates_the_basis_through_its_index_offsets():
     shrink with raster resolution, which is what said it was systematic. Rebuilding the
     distance from the returned offsets brings every component under 0.5%.
 
-    **Which derivative this is.** ``grid`` is called once, at ``A``, and then ``loss(M)`` is
+    **Which derivative this is.** ``meshgrid_xy`` is called once, at ``A``, and then ``loss(M)`` is
     differentiated -- so the array is held in *lattice* coordinates while the cell moves, and
     the pattern shears along with it. That is not an oversight here and it is not fixable
     there: a raster is numbers on indices, so a fixed array has no choice but to drag its
@@ -283,7 +283,7 @@ def test_the_raster_path_differentiates_the_basis_through_its_index_offsets():
     import jax.numpy as jnp
     A = np.asarray(wavebit.Lattice.hexagonal(400.0))
     n = 48
-    X, Y = (np.asarray(c) for c in wavebit.grid((n, n), lattice=A))
+    X, Y = (np.asarray(c) for c in wavebit.meshgrid_xy((n, n), lattice=A))
     eps = np.where(X ** 2 + Y ** 2 < 150.0 ** 2, 12.25, 1.0)
 
     def loss(M):
@@ -297,7 +297,7 @@ def test_the_raster_path_differentiates_the_basis_through_its_index_offsets():
     assert np.count_nonzero(np.abs(g) > 1e-12) == 4, g
 
 
-# ------------------------------------------------- one lattice, two uses: `grid` and `rcwa`
+# ------------------------------------------------- one lattice, two uses: `meshgrid_xy` and `rcwa`
 
 #: The scene both of the next two tests are sited on: a genuine Cartesian circle in a cell that
 #: is square at 90 degrees and strongly skewed at 20, where a raster read on the wrong basis is
@@ -336,7 +336,7 @@ def _aspect_of_the_lit_pixels(eps, basis):
 def test_the_two_uses_of_a_lattice_have_to_be_the_same_one():
     """The cell is needed twice -- to place the pixels and to solve them -- and only sameness saves it.
 
-    ``grid`` returns genuine Cartesian coordinates; the lattice is not in the output, it is the
+    ``meshgrid_xy`` returns genuine Cartesian coordinates; the lattice is not in the output, it is the
     *conversion*, because the array holds pixel indices and ``r = (u-0.5)*a1 + (v-0.5)*a2`` is
     the only thing that places them. So the same array means a different structure under a
     different basis, and the failure mode is the two uses diverging. Measured here, on a
@@ -354,13 +354,13 @@ def test_the_two_uses_of_a_lattice_have_to_be_the_same_one():
     and reuses the array gets: ``sum(T)`` 0.157 -> 0.997, no error, no warning, and energy
     conserved throughout, which is why nothing downstream can be made to catch it.
 
-    :meth:`Lattice.grid` exists for this and only this. It is a nudge, not a guarantee -- the
+    :meth:`Lattice.meshgrid_xy` exists for this and only this. It is a nudge, not a guarantee -- the
     free function still takes any ``lattice=`` -- and provenance cannot be attached to the
     array either, because the first ``np.where`` turns the coordinates into permittivity and
     there is nothing left to carry a tag.
     """
-    drawn = {g: np.where(np.asarray(_cell_at(g).grid((_N, _N))[0]) ** 2
-                         + np.asarray(_cell_at(g).grid((_N, _N))[1]) ** 2 < _R ** 2, _EPS, 1.0)
+    drawn = {g: np.where(np.asarray(_cell_at(g).meshgrid_xy((_N, _N))[0]) ** 2
+                         + np.asarray(_cell_at(g).meshgrid_xy((_N, _N))[1]) ** 2 < _R ** 2, _EPS, 1.0)
              for g in (90, 20)}
 
     aspect = {(g, s): _aspect_of_the_lit_pixels(drawn[g], _cell_at(s))
@@ -378,30 +378,30 @@ def test_the_two_uses_of_a_lattice_have_to_be_the_same_one():
 
 
 def test_the_method_and_the_free_function_are_one_call():
-    """``A.grid(g)`` is ``wavebit.grid(g, lattice=A)``, to the byte, on every spelling of a cell."""
+    """``A.meshgrid_xy(g)`` is ``wavebit.meshgrid_xy(g, lattice=A)``, to the byte, on every spelling of a cell."""
     for A in (wavebit.Lattice.hexagonal(400.0), wavebit.Lattice.rectangular(700.0, 1100.0),
               wavebit.Lattice.oblique(400.0, 520.0, np.radians(105.0)), as_lattice(lattice=SHEAR)):
-        by_method = [np.asarray(c).tobytes() for c in A.grid((9, 13))]
-        by_function = [np.asarray(c).tobytes() for c in wavebit.grid((9, 13), lattice=A)]
+        by_method = [np.asarray(c).tobytes() for c in A.meshgrid_xy((9, 13))]
+        by_function = [np.asarray(c).tobytes() for c in wavebit.meshgrid_xy((9, 13), lattice=A)]
         assert by_method == by_function, A
 
     # the keywords ride through rather than being quietly dropped
     A = wavebit.Lattice.hexagonal(400.0)
-    assert [np.asarray(c).tobytes() for c in A.grid((5, 7), dtype=np.float32)] == \
-        [np.asarray(c).tobytes() for c in wavebit.grid((5, 7), lattice=A, dtype=np.float32)]
+    assert [np.asarray(c).tobytes() for c in A.meshgrid_xy((5, 7), dtype=np.float32)] == \
+        [np.asarray(c).tobytes() for c in wavebit.meshgrid_xy((5, 7), lattice=A, dtype=np.float32)]
     with pytest.raises(ValueError, match='backend'):
-        A.grid((4, 4), backend=9)
+        A.meshgrid_xy((4, 4), backend=9)
     with pytest.raises(ValueError, match='rows, columns'):
-        A.grid((4,))
+        A.meshgrid_xy((4,))
 
     # The first parameter is `grid_shape`. Plain `shape` collides with geometry -- this package
     # spells a piece of geometry a shape -- but the word is also what says the pair is
     # rows-first, the way an array's shape is; `sample_x` / `sample_y` are the x-first spelling
     # and mean counts per named axis. So the prefix disambiguates rather than the word changing.
-    assert [np.asarray(c).tobytes() for c in A.grid(grid_shape=(9, 13))] == \
-        [np.asarray(c).tobytes() for c in wavebit.grid(grid_shape=(9, 13), lattice=A)]
+    assert [np.asarray(c).tobytes() for c in A.meshgrid_xy(grid_shape=(9, 13))] == \
+        [np.asarray(c).tobytes() for c in wavebit.meshgrid_xy(grid_shape=(9, 13), lattice=A)]
     with pytest.raises(TypeError):
-        A.grid(shape=(9, 13))
+        A.meshgrid_xy(shape=(9, 13))
 
 
 def test_naming_both_period_and_lattice_is_refused():
@@ -417,7 +417,7 @@ def test_naming_both_period_and_lattice_is_refused():
     the typed container, or the document format with it.
     """
     A = wavebit.Lattice.hexagonal(400.0)
-    eps = np.where(np.asarray(A.grid((16, 16))[0]) ** 2 < 100.0 ** 2, 5.76, 1.0)[None]
+    eps = np.where(np.asarray(A.meshgrid_xy((16, 16))[0]) ** 2 < 100.0 ** 2, 5.76, 1.0)[None]
     base = dict(backend=0, structure=eps, thickness=[300.0], wavelength=900.0,
                 truncation_order=[2, 2], factorization='nvf')
 
@@ -511,7 +511,7 @@ def test_a_structure_with_no_cell_is_refused_rather_than_solved_on_the_unit_one(
     a raster carries no length of its own.
     """
     A = wavebit.Lattice.hexagonal(400.0)
-    X, Y = (np.asarray(c) for c in A.grid((64, 64)))
+    X, Y = (np.asarray(c) for c in A.meshgrid_xy((64, 64)))
     eps = np.where(X ** 2 + Y ** 2 < 90.0 ** 2, 12.25, 1.0)[None]
     base = dict(backend=0, thickness=[300.0], wavelength=900.0, truncation_order=[6, 6],
                 top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, factorization='nvf')
@@ -536,6 +536,50 @@ def test_a_structure_with_no_cell_is_refused_rather_than_solved_on_the_unit_one(
     got = float(np.sum(np.asarray(silent.solve().T)))
     assert got == pytest.approx(0.989790, abs=1e-4)
     assert abs(got - stated) > 0.05                       # not a rounding difference
+
+
+def test_the_two_meshgrids_are_one_mesh_in_two_frames():
+    """``meshgrid_xy`` and ``meshgrid_uv`` are the same points, expressed two ways.
+
+    The suffix is the whole point of the pair: one mesh, and the question is which coordinate
+    system to hand it back in. ``_xy`` moves when the basis does; ``_uv`` does not read the
+    basis at all, which is what makes it the lattice frame -- a pattern written on it is a set
+    of *fractions* and stays correct on every cell.
+
+    Both return filled 2-D arrays rather than 1-D axes, and on a skewed cell they have to:
+    ``X`` depends on the row as well as the column, because a pixel's own edges are ``a1/Nx``
+    and ``a2/Ny``. That is asserted below rather than described.
+    """
+    hexa = wavebit.Lattice.hexagonal(640.0)
+    X, Y = (np.asarray(c) for c in hexa.meshgrid_xy((8, 8)))
+    U, V = (np.asarray(c) for c in hexa.meshgrid_uv((8, 8)))
+    assert X.shape == U.shape == (8, 8)                    # filled, not 1-D axes
+
+    # `_uv` ignores the basis: any cell gives the same fractions
+    for other in (wavebit.Lattice.rectangular(999.0, 7.0),
+                  wavebit.Lattice.oblique(3.0, 400.0, np.radians(20.0))):
+        assert np.array_equal(U, np.asarray(other.meshgrid_uv((8, 8))[0]))
+    assert U.min() == pytest.approx(-0.4375) and U.max() == pytest.approx(0.4375)
+
+    # `_xy` is exactly that mesh carried through the basis
+    A = np.asarray(hexa)
+    assert np.allclose(X, U * A[0, 0] + V * A[0, 1])
+    assert np.allclose(Y, U * A[1, 0] + V * A[1, 1])
+
+    # pixel centres, not edges: N per row, and half a pixel in from the wall
+    rect = wavebit.Lattice.rectangular(640.0, 640.0)
+    xs = np.asarray(rect.meshgrid_xy((4, 4))[0])[0]
+    assert len(xs) == 4                                    # edges would be 5
+    assert xs[0] == pytest.approx(-320.0 + 0.5 * 160.0)
+
+    # a pixel is a parallelogram, and its edges are a1/n and a2/n -- which is why a skewed
+    # cell cannot separate into 1-D axes and a rectangular one can
+    step_col = np.array([X[0, 1] - X[0, 0], Y[0, 1] - Y[0, 0]])
+    step_row = np.array([X[1, 0] - X[0, 0], Y[1, 0] - Y[0, 0]])
+    assert np.allclose(step_col, A[:, 0] / 8) and np.allclose(step_row, A[:, 1] / 8)
+    assert not np.allclose(X, X[0][None, :])               # skewed: X reads the row too
+    Xr = np.asarray(rect.meshgrid_xy((8, 8))[0])
+    assert np.allclose(Xr, Xr[0][None, :])                 # rectangular: it does not
 
 
 def test_the_raster_basis_gradient_is_the_shear_along_one():
@@ -584,7 +628,7 @@ def test_the_raster_basis_gradient_is_the_shear_along_one():
 
     gamma, h = 75.0, 0.5
     A0 = np.asarray(_cell_at(gamma))
-    X, Y = (np.asarray(c) for c in _cell_at(gamma).grid((_N, _N)))
+    X, Y = (np.asarray(c) for c in _cell_at(gamma).meshgrid_xy((_N, _N)))
     eps = np.where(X ** 2 + Y ** 2 < _R ** 2, _EPS, 1.0)
 
     def loss(M):
@@ -770,7 +814,7 @@ def test_a_traced_period_is_still_a_cell():
 
 def _rod_on_cell(basis, n=48, radius=150.0):
     """A disc on the parametric grid of ``basis`` -- the same object whatever the spelling."""
-    X, Y = (np.asarray(c) for c in wavebit.grid((n, n), lattice=basis))
+    X, Y = (np.asarray(c) for c in wavebit.meshgrid_xy((n, n), lattice=basis))
     return np.where(X ** 2 + Y ** 2 < radius ** 2, 12.25, 1.0)
 
 
