@@ -2002,9 +2002,12 @@ class CoreFactorizationMixin:
                  # analytic shapes, which is the only rule the shape path implements.
                  # Naming the other one raises.
                  normal_grid=None,  # normal-field sampling, per axis; None resolves to
-                 # max(256, 4*truncation_order+1). Read by the shape paths only -- the
-                 # normal field has no closed-form transform, so it is sampled and read off
-                 # this grid. See `_resolve_normal_grid`.
+                 # max(_NORMAL_GRID_DEFAULT, 4*half_width+1) -- 1024, lifted to the aliasing
+                 # floor. This comment said 256 until 2026-09-02, which is a number that was
+                 # tried and reverted: it is a rectangle's *angle* that sets the grid, and 256
+                 # sits 9.7% from the converged gradient there. Read by the shape paths only --
+                 # the normal field has no closed-form transform, so it is sampled and read off
+                 # this grid. See `_resolve_normal_grid` for the measurements.
                  lattice=None,               # 2x2 cell basis (columns a1, a2); None = diag(period).
                  # New parameters go at the end on purpose: SolverJax._tree_unflatten passes
                  # the children positionally, so one added earlier silently shifts them.
