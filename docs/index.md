@@ -21,25 +21,25 @@ PyTorch, so a result never depends on which you pick.
     New to Wavebit? A binary grating solved in fifteen lines, and the seven conventions that
     decide whether your input means what you think it means.
 
-    [:octicons-arrow-right-24: Quickstart](#quickstart)
+    [:octicons-arrow-right-24: Quickstart](guide/quickstart.md)
 
--   :material-book-open-variant:{ .lg .middle } **Guide**
+-   :material-book-open-variant:{ .lg .middle } **User guide**
 
     ---
 
-    Every keyword `rcwa()` takes, what it defaults to and what it refuses; near fields,
-    autodiff, backends, and a run described as data.
+    What this solves and what it is bad at; describing a scene, saying what the light is,
+    choosing the numerics, near fields, autodiff and backends.
 
-    [:octicons-arrow-right-24: The scene, keyword by keyword](guide/scene.md)
+    [:octicons-arrow-right-24: What is Wavebit](guide/what-is-wavebit.md)
 
 -   :material-code-braces:{ .lg .middle } **Reference**
 
     ---
 
-    The normative contract — every sign, axis, name and unit a script can depend on — and the
-    API, generated from the docstrings.
+    The normative contract, every keyword with its default and its refusals, and the API
+    generated from the docstrings.
 
-    [:octicons-arrow-right-24: Conventions](conventions.md)
+    [:octicons-arrow-right-24: Conventions](conventions.md) · [Keywords](reference/keywords.md)
 
 -   :material-flask-outline:{ .lg .middle } **Decisions**
 
@@ -51,33 +51,6 @@ PyTorch, so a result never depends on which you pick.
     [:octicons-arrow-right-24: Backend choice](backend-choice.md)
 
 </div>
-
-## Quickstart
-
-```shell
-pip install git+https://github.com/fieldalgo/wavebit.git
-```
-
-```python
-import numpy as np
-import wavebit
-
-eps_hi = wavebit.eps_from_index(3.5)                     # 12.25 -- materials are permittivity
-structure = np.array([[[1.0, 1.0, eps_hi, eps_hi]]])     # (layer, y, x)
-
-solver = wavebit.rcwa(
-    backend=0, wavelength=900., period=[700.],
-    truncation_order=dict(x=10, y=0),
-    top=1., bot=wavebit.eps_from_index(1.5),
-    theta=0., phi=0., tetm='te',
-    structure=structure, thickness=[300.],
-)
-result = solver.solve()
-print(result.R.sum(), result.T.sum())    # 0.20533162825847726 0.7946683717415197
-```
-
-`R` and `T` are the reflected and transmitted diffraction efficiencies, one entry per order.
-Here they sum to 1 to within a few times 1e-15, as a lossless structure must.
 
 ## The seven conventions
 

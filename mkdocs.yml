@@ -141,40 +141,54 @@ markdown_extensions:
 # to `docs/` and forgotten shows up as a build warning rather than as a page nobody can reach.
 nav:
   - Home: index.md
-  - Guide:
+  - User guide:
       - Overview: guide/README.md
-      - The scene: guide/scene.md
-      - Backends and precision: guide/backends.md
-      - Near fields: guide/fields.md
-      - Differentiating a solve: guide/autodiff.md
-      - A run as data: guide/specs.md
+      - Getting started:
+          - What is Wavebit: guide/what-is-wavebit.md
+          - Installation: guide/installation.md
+          - Quickstart: guide/quickstart.md
+      - Fundamentals and usage:
+          - Describing a scene: guide/scene.md
+          - Saying what the light is: guide/light.md
+          - Choosing the numerics: guide/numerics.md
+          - Near fields: guide/fields.md
+          - Differentiating a solve: guide/autodiff.md
+          - Backends and precision: guide/backends.md
+      - Advanced:
+          - A run as data: guide/specs.md
   - Reference:
       - Conventions: conventions.md
-      - API: reference/api.md
+      - Keywords: reference/keywords.md
+      - Python API: reference/api.md
   - Decisions:
-      - Analytic modeling: analytic-modeling.md
-      - Boundary modeling: boundary-modeling.md
-      - Oblique lattices: oblique-lattice.md
-      - NVF normal methods: nvf-normal-methods.md
-      - NVF sampling grid: nvf-upsampling.md
-      - Truncation shape: fourier-truncation-shape.md
-      - Factorization terms: factorization-terms.md
-      - Off-diagonal slots: off-diagonal-slot-convention.md
-      - The five-slot limit: five-slot-limit.md
-      - Anisotropic materials: anisotropic-materials.md
-      - Patterned anisotropic: patterned-anisotropic-factorization.md
-      - Magnetic materials: magnetic-materials.md
-      - The formulation: formulation.md
-      - The 4ff solver: first-order-4ff.md
-      - Connecting algorithms: connecting-algorithms.md
-      - What a solve answers: what-a-solve-answers.md
-      - Multimode incidence: multimode-incidence.md
-      - The s/p frame: amplitude-sp-frame.md
-      - Branch cuts: branch-cuts.md
-      - Rayleigh points: rayleigh-points.md
-      - Rayleigh, walked through: rayleigh-handling-walkthrough.md
-      - Time-convention audit: time-convention-audit.md
-      - Backend choice: backend-choice.md
-      - torch.compile: torch-compile.md
-      - Bessel J1: bessel-j1.md
-      - Capability manifest: capability-manifest.md
+      - Modeling and geometry:
+          - Analytic modeling: analytic-modeling.md
+          - Boundary modeling: boundary-modeling.md
+          - Oblique lattices: oblique-lattice.md
+          - NVF normal methods: nvf-normal-methods.md
+          - NVF sampling grid: nvf-upsampling.md
+          - Truncation shape: fourier-truncation-shape.md
+      - Factorization and materials:
+          - Factorization terms: factorization-terms.md
+          - Off-diagonal slots: off-diagonal-slot-convention.md
+          - The five-slot limit: five-slot-limit.md
+          - Anisotropic materials: anisotropic-materials.md
+          - Patterned anisotropic: patterned-anisotropic-factorization.md
+          - Magnetic materials: magnetic-materials.md
+      - The solve:
+          - The formulation: formulation.md
+          - The 4ff solver: first-order-4ff.md
+          - Connecting algorithms: connecting-algorithms.md
+          - What a solve answers: what-a-solve-answers.md
+          - Multimode incidence: multimode-incidence.md
+      - Numerical conventions:
+          - The s/p frame: amplitude-sp-frame.md
+          - Branch cuts: branch-cuts.md
+          - Rayleigh points: rayleigh-points.md
+          - Rayleigh, walked through: rayleigh-handling-walkthrough.md
+          - Time-convention audit: time-convention-audit.md
+      - Performance and tooling:
+          - Backend choice: backend-choice.md
+          - torch.compile: torch-compile.md
+          - Bessel J1: bessel-j1.md
+          - Capability manifest: capability-manifest.md
