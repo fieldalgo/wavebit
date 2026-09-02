@@ -79,7 +79,7 @@ layer = np.where(X ** 2 + Y ** 2 < 90.0 ** 2, 12.25, 1.0)
 
 `A.grid(grid_shape)` is the free function with `lattice=A`, and it is the spelling to prefer for one
 reason: the cell is needed **twice** — here, to place the pixels, and at `lattice=` on the
-solver — and the only way that goes wrong is the two disagreeing. See "Two uses of one lattice"
+solver — and the two disagreeing is what goes wrong. See "The two frames a raster can mean"
 below for what the disagreement costs.
 
 **The cell is centred on the origin**, so the pillar above needs no arithmetic to be centred.
@@ -131,22 +131,45 @@ a disc at `r/a = 0.45`, 21% of the surface band was more than 0.05 out and the s
 1.1e-3 from the raster path, which the fix brings to 5e-6. Energy conserved to 1e-12 either
 way, and an axis-aligned cell is bit-identical, which is why nothing caught it.
 
-## Two uses of one lattice
+## The two frames a raster can mean
 
-The cell is needed **twice** in a raster workflow — once by `grid`, to place the pixels, and
-once by `rcwa`, to solve them — and the two disagreeing is what goes wrong.
+A raster records **pixel indices and nothing else**: pixel `(i, j)` is the parametric point
+`u = (i+0.5)/Nx`, `v = (j+0.5)/Ny`, and `r = (u-0.5)*a1 + (v-0.5)*a2` is the only thing that
+places it. "Radius 100 nm" is not in the array. So writing one down says one of two things, and
+which one is not recorded anywhere:
 
-**Scope, because this rule is not absolute.** It holds because calling `grid` *is* the
-declaration: the function's whole job is to hand back Cartesian coordinates, so a pattern
-written on them is a set of Cartesian lengths and stays that shape only if the array is rebuilt
-when the cell moves. A pattern meant as *fractions of the cell* — a duty cycle, a fill fraction,
-or the whole design scaled — is the other frame, and there reusing the array across a cell
-change is the **correct** thing rather than the mistake; see "Sweeping the cell angle" for the
-measurement that settles it. What follows is the Cartesian frame's rule, which is the one
-`grid` puts you in.
-`grid` returns genuine Cartesian `X`, `Y`; the lattice is not in its output, it is the
-*conversion*, because the array holds pixel indices and `r = (u-0.5)*a1 + (v-0.5)*a2` is the
-only thing that places them. Same indices, different basis, different points.
+| | the pattern means | when the cell changes | what you do |
+|---|---|---|---|
+| **Cartesian frame** | absolute lengths — "a 100 nm rod" | shape must be preserved | **redraw** the array |
+| **lattice frame** | fractions of the cell — "a rod filling 30% of it" | shape rides the basis | **keep** the array |
+
+**Both are real specifications, and each is wrong in the other's case.** Two measurements fix
+which is which.
+
+*The lattice frame, settled by scale invariance.* Scale the whole design — cell, thickness and
+wavelength all by `s` — and Maxwell says the answer cannot move. Keeping the array gives
+0.124231941 at `s` = 0.5, 1, 2, 4, **identical to nine digits**, because the rod scales with the
+cell as it must. Redrawing pins the rod at radius 100 while the cell grows, solves a different
+fill fraction at every `s`, and reads 0.330 / 0.124 / 0.99986 / 0.99999. **Here redrawing is the
+error.** The same holds for any feature stated as a duty cycle or a fill fraction.
+
+*The Cartesian frame, settled by a feature whose size is fixed.* That is the angle sweep below:
+redrawn stays on the staircase-free control at every angle while the held array reaches a
+3.73:1 ellipse.
+
+**Tilting and scaling are not one case, and the dividing line is *similarity*.** Holding the
+array, the pattern is carried by the basis change, so it keeps its shape exactly when that
+change is a similarity. As the axis ratio of the lit pixels: an isotropic 2x scale leaves it at
+**1.000** (radius 99.8 -> 199.6, a bigger circle), `Lx` alone at 2x gives **2.000**, and a
+45-degree tilt gives **2.414**. So the two frames coincide under a pure scale and separate most
+under a tilt.
+
+### Calling `grid` puts you in the Cartesian frame
+
+`grid` exists to hand back Cartesian `X`, `Y`, so a pattern written on them is Cartesian by
+construction — and then the cell is needed **twice**, once by `grid` to place the pixels and
+once by `rcwa` to solve them, and the two disagreeing is what goes wrong. Same indices,
+different basis, different points.
 
 Measured on a genuine Cartesian circle of radius 100 in a 640-unit cell at 64 px, drawing at one
 cell and solving at another:
@@ -158,7 +181,8 @@ cell and solving at another:
 | 20 deg | 90 deg | **an ellipse, 5.60:1** | 0.532 |
 | 20 deg | 20 deg | a circle, 1.01:1 | 0.288 |
 
-Only the diagonal is a circle. **The angle is irrelevant; sameness is the whole rule here.** The
+Only the diagonal is a circle. **The angle is irrelevant; sameness is the whole rule in this
+frame.** The
 second row is the dangerous one, because it is what a caller who swaps `lattice=` and reuses
 the array gets — `sum(T)` from 0.157 to 0.997 with no error, no warning, and energy conserved
 throughout. It reads as a lattice effect, and the lattice effect and the *shape deformed into
@@ -462,12 +486,9 @@ this kind of sweep and ~7x when you genuinely need the harmonics.
 
 ## Sweeping the cell angle
 
-**Whether a raster has to be redrawn when the cell changes depends on which frame the pattern
-was specified in, and both frames are real.** Keeping the array says the pattern is a set of
-*fractions of the cell*; redrawing it says the pattern is a set of *Cartesian lengths*. Neither
-is a mistake — what is a mistake is not knowing which one you asked for, because nothing tells
-you. `studies/sweep_cell_angle.py` runs it three ways and prints the table below; the figure it
-writes is `studies/results/sweep_cell_angle.png`.
+The measurement behind "The two frames a raster can mean" — the case where the two separate
+most, because a tilt is not a similarity. `studies/sweep_cell_angle.py` runs it three ways and
+prints the table below; the figure it writes is `studies/results/sweep_cell_angle.png`.
 
 ```python
 for gamma in angles:
@@ -498,22 +519,10 @@ divergence grows with the tilt because the tilt *is* what it is tracking. The ax
 are the mechanism rather than a symptom: the redrawn raster stays round to 0.3% at every angle
 (that residue is pixelation, not deformation) while the reused one reaches 3.73:1.
 
-**Read that as "the two frames separate", not as "one arm is wrong".** The lattice frame is the
-right answer to a real question, and one of them settles it on its own: **scale the whole
-design** — cell, thickness and wavelength all by `s` — and Maxwell says the answer cannot move.
-Holding the array gives 0.124231941 at `s` = 0.5, 1, 2, 4, **identical to nine digits**, because
-the rod scales with the cell as it must. Redrawing pins the rod at radius 100 while the cell
-grows, so it solves a different fill fraction at every `s` and reads 0.330 / 0.124 / 0.99986 /
-0.99999. **Here the Cartesian frame is the wrong one.** The same holds wherever a feature is
-specified as a duty cycle or a fill fraction rather than as a length.
-
-**Tilting and scaling are not the same case, and the dividing line is *similarity*.** Holding
-the array, the pattern is carried by the basis change itself, so it keeps its shape exactly when
-that change is a similarity. Measured as the axis ratio of the lit pixels: an isotropic scale to
-2x leaves it at **1.000** (radius 99.8 -> 199.6, a bigger circle), while stretching `Lx` alone to
-2x gives **2.000** and a 45-degree tilt gives **2.414**. So holding the array is safe under a
-pure scale and deforms the feature under anything else — which is why the angle sweep above is
-where the two frames are easiest to tell apart, and a scale sweep is where they are hardest.
+This is the two frames separating, not one arm being wrong; "The two frames a raster can mean"
+above says which is which and when each is the right one. The angle sweep is where they are
+easiest to tell apart, because a tilt is not a similarity — a pure scale would not separate them
+at all.
 
 The gap on the redrawn arm is the staircase and nothing else, which the study measures rather
 than asserts — at `gamma = 60`, holding the truncation and refining the raster: **5.2e-2,
