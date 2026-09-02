@@ -4,7 +4,7 @@ One implementation of the physics sits behind a thin adapter and runs on all thr
 a result never depends on which you pick — cross-backend agreement is part of the test suite,
 not a claim.
 
-![NumPy, JAX and PyTorch](../../images/backends.png "Backends")
+![NumPy, JAX and PyTorch](../figures/backends.png "Backends")
 
 * [NumPy](https://github.com/numpy/numpy) — the baseline. No autodiff, no GPU, nothing to
   compile, and the only backend that checks its own output.
