@@ -68,13 +68,25 @@ myst_fence_as_directive = ['mermaid']
 # links are written once and followed in both readers.
 myst_heading_anchors = 3
 
+# Every inventory here is fetched at build time, and a host that does not answer is a
+# WARNING -- which `-W` turns into a failed build. So an entry has to earn the risk it adds.
+#
+# `scipy` is deliberately absent, and this note is here so that it is not helpfully restored.
+# It earned nothing: the handful of scipy names in this codebase's prose are written as
+# literals (``scipy.ndimage.gaussian_filter``), not as roles, so the inventory produced zero
+# links -- while `docs.scipy.org` was the one host of the five that did not respond, failing
+# the build twice on the day this was set up. An unreachable mapping that also links nothing
+# is a build risk with no upside.
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
     'numpy': ('https://numpy.org/doc/stable/', None),
-    'scipy': ('https://docs.scipy.org/doc/scipy/', None),
     'jax': ('https://docs.jax.dev/en/latest/', None),
     'torch': ('https://docs.pytorch.org/docs/stable/', None),
 }
+
+# Fail a dead host fast rather than hanging the build on a connect that never returns --
+# the scipy timeout above had no bound at all.
+intersphinx_timeout = 15
 
 autodoc_member_order = 'bysource'
 autodoc_typehints = 'description'
