@@ -242,6 +242,13 @@ the jit round trip. Nothing downstream sees the type. And the tag cannot go on t
 `X**2 + Y**2` and `< R**2` — all ufuncs — and dies at the one call every raster expression on
 this page ends with.
 
+**An analytic structure is refused rather than wrapped**, because that path has no frame to
+declare: a shape's `lx` and `cx` are absolute lengths, so the same recipe is the same geometry
+on every cell and moving the basis is a legitimate thing to do with it. Two shapes on a 640
+square give 0.999233 and the identical structure on `hexagonal(640.)` gives 0.999851 — both
+right, so declaring one would turn a correct answer into a refusal, which is worse than no
+guard at all.
+
 **It is opt-in, and that is the ceiling.** A bare array has to keep working, so this guards the
 callers who ask for it and no one else.
 

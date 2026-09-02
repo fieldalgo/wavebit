@@ -617,6 +617,46 @@ def test_a_declared_structure_is_refused_on_another_cell():
     assert abs(total(hx, hx.drawn(redrawn)) - total(hx, layer)) > 0.09
 
 
+def test_the_analytic_spelling_has_no_frame_to_declare():
+    """``drawn`` refuses an analytic structure, because moving its cell is *legal*.
+
+    A shape's ``lx`` and ``cx`` are absolute Cartesian lengths, so the same recipe describes
+    the same geometry on every cell -- solving it on a different one is a thing a caller may
+    legitimately want, not a mistake. Wrapping it would turn that into a refusal of a
+    **correct** answer, and a guard that blocks correct work is worse than no guard: measured,
+    two shapes on a 640 square give 0.999233 and the identical structure on ``hexagonal(640.)``
+    gives 0.999851, and both are right.
+
+    The raster is the only spelling with a frame, because its pixels are fractions of the cell.
+    """
+    sq, hx = wavebit.Lattice.rectangular(640.0, 640.0), wavebit.Lattice.hexagonal(640.0)
+    shapes = [{'background': 1.0, 'shapes': [
+        {'type': 'circle', 'cx': -150.0, 'cy': 0.0, 'lx': 160.0, 'material': 12.25},
+        {'type': 'rectangle', 'cx': 150.0, 'cy': 0.0, 'lx': 160.0, 'ly': 100.0,
+         'material': 9.0}]}]
+
+    with pytest.raises(ValueError, match='no frame to declare'):
+        sq.drawn(shapes)
+
+    def total(cell):
+        s = wavebit.rcwa(backend=0, lattice=cell, structure=shapes, thickness=[300.0],
+                         wavelength=900.0, truncation_order=[6, 6], top=1.0, bot=1.0,
+                         theta=0.0, phi=0.0, psi=0.0)
+        return float(np.sum(np.asarray(s.solve().T)))
+
+    assert total(sq) == pytest.approx(0.999233, abs=1e-5)
+    assert total(hx) == pytest.approx(0.999851, abs=1e-5)      # a different cell, still right
+
+    # the raster with the same two features does have a frame, and keeps its guard
+    X, Y = (np.asarray(c) for c in sq.meshgrid_xy((64, 64)))
+    two = np.where(((X + 150.0) ** 2 + Y ** 2 < 80.0 ** 2)
+                   | ((X - 150.0) ** 2 + Y ** 2 < 80.0 ** 2), 12.25, 1.0)[None]
+    with pytest.raises(ValueError, match='drawn on a different cell'):
+        wavebit.rcwa(backend=0, lattice=hx, structure=sq.drawn(two), thickness=[300.0],
+                     wavelength=900.0, truncation_order=[6, 6], top=1.0, bot=1.0,
+                     theta=0.0, phi=0.0, psi=0.0, factorization='nvf').solve()
+
+
 def test_the_declaration_survives_every_backend_and_the_jit_boundary():
     """The reason it is a wrapper and not an ndarray subclass, pinned.
 

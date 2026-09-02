@@ -224,7 +224,23 @@ class Lattice:
         coordinates instead, because ``np.where`` -- which every raster expression in these
         docs ends with -- drops it. Applying it after the expression is the only placement that
         works.
+
+        **An analytic structure is refused rather than wrapped.** That path has no frame to
+        declare: a shape's ``lx`` and ``cx`` are absolute Cartesian lengths, so a circle stays
+        the same circle on every cell and moving the basis is a legitimate thing to do with the
+        same structure. Wrapping one and solving it elsewhere would refuse an answer that is
+        *correct* -- measured, two shapes on a 640 square give 0.999233 and the identical
+        structure on ``hexagonal(640.)`` gives 0.999851, both right -- and a guard that blocks
+        correct work is worse than no guard at all.
         """
+        if isinstance(values, list):
+            raise ValueError(
+                'drawn: this is the analytic spelling (a list of layer dicts), and it has no '
+                'frame to declare -- a shape\'s `lx` and `cx` are absolute Cartesian lengths, '
+                'so it describes the same geometry on every cell and may be solved on any of '
+                'them. Pass it to `structure=` directly.\n'
+                '`drawn` is for a *raster*, whose pixels are fractions of the cell and so '
+                'belong to the one they were drawn on.')
         return DrawnOn(values, self.columns)
 
     def __repr__(self):
