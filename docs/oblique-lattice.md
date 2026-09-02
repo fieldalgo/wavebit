@@ -134,7 +134,16 @@ way, and an axis-aligned cell is bit-identical, which is why nothing caught it.
 ## Two uses of one lattice
 
 The cell is needed **twice** in a raster workflow — once by `grid`, to place the pixels, and
-once by `rcwa`, to solve them — and the only way that goes wrong is the two disagreeing.
+once by `rcwa`, to solve them — and the two disagreeing is what goes wrong.
+
+**Scope, because this rule is not absolute.** It holds because calling `grid` *is* the
+declaration: the function's whole job is to hand back Cartesian coordinates, so a pattern
+written on them is a set of Cartesian lengths and stays that shape only if the array is rebuilt
+when the cell moves. A pattern meant as *fractions of the cell* — a duty cycle, a fill fraction,
+or the whole design scaled — is the other frame, and there reusing the array across a cell
+change is the **correct** thing rather than the mistake; see "Sweeping the cell angle" for the
+measurement that settles it. What follows is the Cartesian frame's rule, which is the one
+`grid` puts you in.
 `grid` returns genuine Cartesian `X`, `Y`; the lattice is not in its output, it is the
 *conversion*, because the array holds pixel indices and `r = (u-0.5)*a1 + (v-0.5)*a2` is the
 only thing that places them. Same indices, different basis, different points.
@@ -149,7 +158,7 @@ cell and solving at another:
 | 20 deg | 90 deg | **an ellipse, 5.60:1** | 0.532 |
 | 20 deg | 20 deg | a circle, 1.01:1 | 0.288 |
 
-Only the diagonal is a circle. **The angle is irrelevant; sameness is the whole rule.** The
+Only the diagonal is a circle. **The angle is irrelevant; sameness is the whole rule here.** The
 second row is the dangerous one, because it is what a caller who swaps `lattice=` and reuses
 the array gets — `sum(T)` from 0.157 to 0.997 with no error, no warning, and energy conserved
 throughout. It reads as a lattice effect, and the lattice effect and the *shape deformed into
