@@ -83,6 +83,9 @@ validation:
     absolute_links: info
     unrecognized_links: warn
 
+extra_css:
+  - stylesheets/extra.css
+
 hooks:
   - mkdocs_hooks.py
 

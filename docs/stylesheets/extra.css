@@ -1,0 +1,41 @@
+/* Sidebar density.
+ *
+ * Material's navigation is built to a compact spec: 14px text on an 18px row, no vertical
+ * padding. The scientific-Python sites this one is arranged after are markedly airier -- the
+ * same 14px text on a 32px row, measured on numpy.org/doc/stable -- and with 41 nav entries
+ * across four sections, the difference decides whether the sidebar is scannable or a wall.
+ *
+ * Nothing here changes the type size, which was already within half a pixel. It is the
+ * leading and the padding that were doing all of it.
+ */
+:root {
+  --wb-nav-line-height: 1.65;      /* 23.8px at 14.4px, PyData's ratio */
+  --wb-nav-pad-y: 0.25rem;
+}
+
+.md-nav__link {
+  line-height: var(--wb-nav-line-height);
+  padding-top: var(--wb-nav-pad-y);
+  padding-bottom: var(--wb-nav-pad-y);
+}
+
+/* The group headings ("Getting started", "Fundamentals and usage"). They carry the structure,
+ * so they get the air above them that separates one group from the next rather than sitting
+ * flush against the last link of the previous one. They are 400 by default here, the same
+ * weight as the links under them, which is what makes the sidebar read as one long list --
+ * PyData sets 600, and that is the number below. */
+.md-nav__item--section > .md-nav__link,
+.md-nav__title {
+  margin-top: 0.9rem;
+  font-weight: 600;
+}
+
+.md-nav__item--section:first-child > .md-nav__link {
+  margin-top: 0;
+}
+
+/* Wrapped entries -- several of these titles run to two lines -- should read as one item, so
+ * the gap between two entries stays larger than the gap inside one. */
+.md-nav__list .md-nav__item {
+  margin-bottom: 0.1rem;
+}
