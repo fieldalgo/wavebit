@@ -12,45 +12,42 @@ calculation — so the same code that predicts a device's response can also opti
 rigorous, fully vectorial RCWA solver whose physics is written once and runs on NumPy, JAX and
 PyTorch, so a result never depends on which you pick.
 
-<div class="grid cards" markdown>
+::::{grid} 1 2 2 2
+:gutter: 3
 
--   :material-rocket-launch:{ .lg .middle } **Getting started**
+:::{grid-item-card} Getting started
+:link: guide/what-is-wavebit
+:link-type: doc
 
-    ---
+New to Wavebit? What it solves and what it is bad at, how to install it, and a binary grating
+in fifteen lines.
+:::
 
-    New to Wavebit? A binary grating solved in fifteen lines, and the seven conventions that
-    decide whether your input means what you think it means.
+:::{grid-item-card} User guide
+:link: guide/README
+:link-type: doc
 
-    [:octicons-arrow-right-24: Quickstart](guide/quickstart.md)
+Describing a scene, saying what the light is, choosing the numerics, near fields, autodiff
+and backends.
+:::
 
--   :material-book-open-variant:{ .lg .middle } **User guide**
+:::{grid-item-card} Reference
+:link: reference/index
+:link-type: doc
 
-    ---
+The normative contract, every keyword with its default and its refusals, and the API
+generated from the docstrings.
+:::
 
-    What this solves and what it is bad at; describing a scene, saying what the light is,
-    choosing the numerics, near fields, autodiff and backends.
+:::{grid-item-card} Decisions
+:link: decisions/index
+:link-type: doc
 
-    [:octicons-arrow-right-24: What is Wavebit](guide/what-is-wavebit.md)
+Why a default is what it is, and what was measured to decide it. Twenty-six write-ups, cited
+from the code they explain.
+:::
 
--   :material-code-braces:{ .lg .middle } **Reference**
-
-    ---
-
-    The normative contract, every keyword with its default and its refusals, and the API
-    generated from the docstrings.
-
-    [:octicons-arrow-right-24: Conventions](conventions.md) · [Keywords](reference/keywords.md)
-
--   :material-flask-outline:{ .lg .middle } **Decisions**
-
-    ---
-
-    Why a default is what it is, and what was measured to decide it. Twenty-six write-ups,
-    cited from the code they explain.
-
-    [:octicons-arrow-right-24: Backend choice](backend-choice.md)
-
-</div>
+::::
 
 ## The seven conventions
 

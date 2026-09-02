@@ -6,82 +6,162 @@ to a contributor rather than the interface to a caller.
 
 ## Building a solver
 
-::: wavebit.rcwa
+```{eval-rst}
+.. autofunction:: wavebit.rcwa
+
+```
+
 
 ## The solver object
 
 `rcwa()` returns a solver whose class is chosen by the backend. These are the methods and
 properties every one of them carries.
 
-::: wavebit._core.engine.CoreFactorizationMixin
-    options:
-      members:
-        - solve
-        - reconstruct_field
-        - freeze_geometry
-        - solve_conv
-        - eps_conv_matrices
-        - factorization
-        - fourier_coefficients
-        - normal_method
-        - projector
-        - normal_grid
+```{eval-rst}
+.. autoclass:: wavebit._core.engine.CoreFactorizationMixin
+   :members: solve, reconstruct_field, freeze_geometry, solve_conv, eps_conv_matrices, factorization, fourier_coefficients, normal_method, projector, normal_grid
 
-::: wavebit._core.engine.CoreSolveMixin
-    options:
-      members:
-        - answers
-        - excitation
-        - scattering
-        - truncation_order
-        - period
-        - lattice
+
+.. autoclass:: wavebit._core.engine.CoreSolveMixin
+   :members: answers, excitation, scattering, truncation_order, period, lattice
+
+
+```
 
 ## Describing a scene
 
-::: wavebit.Material
-::: wavebit.eps_from_index
-::: wavebit.index_from_eps
-::: wavebit.Lattice
-::: wavebit.grid
-::: wavebit.Layer
-::: wavebit.Stack
-::: wavebit.Incidence
+```{eval-rst}
+.. autoclass:: wavebit.Material
+   :members:
+   :undoc-members:
+
+.. autofunction:: wavebit.eps_from_index
+
+.. autofunction:: wavebit.index_from_eps
+
+.. autoclass:: wavebit.Lattice
+   :members:
+   :undoc-members:
+
+.. autofunction:: wavebit.grid
+
+.. autoclass:: wavebit.Layer
+   :members:
+   :undoc-members:
+
+.. autoclass:: wavebit.Stack
+   :members:
+   :undoc-members:
+
+.. autoclass:: wavebit.Incidence
+   :members:
+   :undoc-members:
+
+```
+
 
 ## A run as data
 
-::: wavebit.JobSpec
-::: wavebit.Numerics
-::: wavebit.Sweep
-::: wavebit.run
-::: wavebit.SpecError
+```{eval-rst}
+.. autoclass:: wavebit.JobSpec
+   :members:
+   :undoc-members:
+
+.. autoclass:: wavebit.Numerics
+   :members:
+   :undoc-members:
+
+.. autoclass:: wavebit.Sweep
+   :members:
+   :undoc-members:
+
+.. autofunction:: wavebit.run
+
+.. autoclass:: wavebit.SpecError
+   :members:
+   :undoc-members:
+
+```
+
 
 ## Results and state
 
-::: wavebit.ScatteringMatrix
-::: wavebit.Port
-::: wavebit.StaticGeometry
-::: wavebit.StaleGeometryError
-::: wavebit.ConvMatrices
+```{eval-rst}
+.. autoclass:: wavebit.ScatteringMatrix
+   :members:
+   :undoc-members:
+
+.. autoclass:: wavebit.Port
+   :members:
+   :undoc-members:
+
+.. autoclass:: wavebit.StaticGeometry
+   :members:
+   :undoc-members:
+
+.. autoclass:: wavebit.StaleGeometryError
+   :members:
+   :undoc-members:
+
+.. autoclass:: wavebit.ConvMatrices
+   :members:
+   :undoc-members:
+
+```
+
 
 ## Materials data
 
-::: wavebit.find_material
-::: wavebit.find_nk_index
-::: wavebit.read_material_table
+```{eval-rst}
+.. autofunction:: wavebit.find_material
+
+.. autofunction:: wavebit.find_nk_index
+
+.. autofunction:: wavebit.read_material_table
+
+```
+
 
 ## Plotting
 
-::: wavebit.plot_structure
-::: wavebit.slice_structure
+```{eval-rst}
+.. autofunction:: wavebit.plot_structure
+
+.. autofunction:: wavebit.slice_structure
+
+```
+
 
 ## Precision, and what warns
 
-::: wavebit.enable_x64
-::: wavebit.branch_tolerance
-::: wavebit.UnphysicalResultWarning
-::: wavebit.PrecisionLossWarning
-::: wavebit.UnresolvedBranchWarning
-::: wavebit.RayleighPointWarning
-::: wavebit.AutoDetuneWarning
-::: wavebit.AxisNameWarning
+```{eval-rst}
+.. autofunction:: wavebit.enable_x64
+
+.. autofunction:: wavebit.branch_tolerance
+
+.. autoclass:: wavebit.UnphysicalResultWarning
+   :members:
+   :undoc-members:
+
+.. autoclass:: wavebit.PrecisionLossWarning
+   :members:
+   :undoc-members:
+
+.. autoclass:: wavebit.UnresolvedBranchWarning
+   :members:
+   :undoc-members:
+
+.. autoclass:: wavebit.RayleighPointWarning
+   :members:
+   :undoc-members:
+
+.. autoclass:: wavebit.AutoDetuneWarning
+   :members:
+   :undoc-members:
+
+.. autoclass:: wavebit.AxisNameWarning
+   :members:
+   :undoc-members:
+
+```
+

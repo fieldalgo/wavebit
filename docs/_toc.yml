@@ -1,0 +1,65 @@
+root: index
+subtrees:
+- entries:
+  - file: guide/README
+    subtrees:
+    - caption: Getting started
+      entries:
+      - file: guide/what-is-wavebit
+      - file: guide/installation
+      - file: guide/quickstart
+    - caption: Fundamentals and usage
+      entries:
+      - file: guide/scene
+      - file: guide/light
+      - file: guide/numerics
+      - file: guide/fields
+      - file: guide/autodiff
+      - file: guide/backends
+    - caption: Advanced
+      entries:
+      - file: guide/specs
+  - file: reference/index
+    subtrees:
+    - entries:
+      - file: conventions
+      - file: reference/keywords
+      - file: reference/api
+  - file: decisions/index
+    subtrees:
+    - caption: Modeling and geometry
+      entries:
+      - file: analytic-modeling
+      - file: boundary-modeling
+      - file: oblique-lattice
+      - file: nvf-normal-methods
+      - file: nvf-upsampling
+      - file: fourier-truncation-shape
+    - caption: Factorization and materials
+      entries:
+      - file: factorization-terms
+      - file: off-diagonal-slot-convention
+      - file: five-slot-limit
+      - file: anisotropic-materials
+      - file: patterned-anisotropic-factorization
+      - file: magnetic-materials
+    - caption: The solve
+      entries:
+      - file: formulation
+      - file: first-order-4ff
+      - file: connecting-algorithms
+      - file: what-a-solve-answers
+      - file: multimode-incidence
+    - caption: Numerical conventions
+      entries:
+      - file: amplitude-sp-frame
+      - file: branch-cuts
+      - file: rayleigh-points
+      - file: rayleigh-handling-walkthrough
+      - file: time-convention-audit
+    - caption: Performance and tooling
+      entries:
+      - file: backend-choice
+      - file: torch-compile
+      - file: bessel-j1
+      - file: capability-manifest
