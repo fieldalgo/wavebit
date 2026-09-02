@@ -41,7 +41,7 @@ properties every one of them carries.
 .. autoclass:: wavebit.Lattice
    :members:
 
-.. autofunction:: wavebit.grid
+.. autofunction:: wavebit.meshgrid_xy
 
 .. autoclass:: wavebit.Layer
    :members:

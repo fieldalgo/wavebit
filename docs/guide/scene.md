@@ -99,15 +99,19 @@ a design variable — see [`autodiff.md`](autodiff.md).
 `u = (i + 0.5)/Nx`, `v = (j + 0.5)/Ny`, which — the cell being centred on the origin — is
 `r = (u - 0.5) * a1 + (v - 0.5) * a2`. Building a raster on a Cartesian grid and passing a
 tilted basis therefore describes a *different structure*, silently, with energy still conserved
-to 1e-15. `wavebit.grid` exists so you need not write either form:
+to 1e-15. `wavebit.meshgrid_xy` exists so you need not write either form:
 
 ```python
 A = wavebit.Lattice.hexagonal(400.)
-X, Y = A.grid((256, 256))                       # == wavebit.grid((256, 256), lattice=A)
+X, Y = A.meshgrid_xy((256, 256))                # == wavebit.meshgrid_xy((256, 256), lattice=A)
 layer = np.where(X ** 2 + Y ** 2 < 90. ** 2, 12.25, 1.)
 ```
 
-Write it as `A.grid(...)` and pass the same `A` to `lattice=`. The cell is needed in **two**
+`A.meshgrid_uv(...)` gives the same points as lattice coordinates instead, which is the frame
+the raster is actually read in. And `A.drawn(layer)` declares that an array was drawn on *this*
+cell, so that solving it on another is refused rather than answered.
+
+Write it as `A.meshgrid_xy(...)` and pass the same `A` to `lattice=`. The cell is needed in **two**
 places — to place the pixels and to solve them — and a raster drawn on one cell and solved on
 another is a different structure with nothing to say so. **Change the cell and redraw the
 array.** Analytic shapes are immune, their lengths being absolute Cartesian quantities.
