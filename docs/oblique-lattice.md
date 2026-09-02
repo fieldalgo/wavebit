@@ -211,8 +211,39 @@ and not a guarantee:** `wavebit.meshgrid_xy(grid_shape, lattice=B)` still exists
 provenance cannot be
 attached to the array either — the first `np.where` turns the coordinates into a permittivity
 raster, and a raster is numbers on indices with no record of the cell it was drawn in. So the
-rule has to be carried by the reader: **change the cell and redraw the array.** Pinned as
+rule has to be carried by the reader — or handed to the code, which is what `Lattice.drawn`
+is for. Pinned as
 `tests/test_lattice_pytree.py::test_the_two_uses_of_a_lattice_have_to_be_the_same_one`.
+
+### Declaring the frame: `Lattice.drawn`
+
+The Cartesian frame is the half with a **checkable invariant** — this array belongs to this
+cell — so it is the half worth declaring. The lattice frame has none to check: an array of
+fractions is *meant* to be portable, so it stays a bare array, accepted on every cell, which is
+also what every existing caller passes.
+
+```python
+X, Y = lattice.meshgrid_xy((256, 256))
+layer = np.where(X ** 2 + Y ** 2 < 100. ** 2, 12.25, 1.0)
+wavebit.rcwa(lattice=lattice, structure=lattice.drawn(layer[None]), ...)
+```
+
+Solve that on another cell and it raises instead of answering 0.251270 where 0.350164 was
+meant. Hand it the finished structure, layer axis and all — it wraps rather than forwards, so
+there is no indexing left to do.
+
+**Why a wrapper and not a tagged array.** An `ndarray` subclass was the obvious mechanism and
+it survives only NumPy: `jnp.asarray` and `torch.as_tensor` copy the numbers into their own
+type and the attribute is gone, so the guard would have been live on one backend and *silently
+absent* on the other two. The wrapper never travels — the `structure` setter takes it apart at
+ingest, the array goes on exactly as before, and the basis rides as one aux key so it survives
+the jit round trip. Nothing downstream sees the type. And the tag cannot go on the
+*coordinates* instead, because `np.where` drops it: measured, an attribute survives `X**2`,
+`X**2 + Y**2` and `< R**2` — all ufuncs — and dies at the one call every raster expression on
+this page ends with.
+
+**It is opt-in, and that is the ceiling.** A bare array has to keep working, so this guards the
+callers who ask for it and no one else.
 
 (The name says three things and needs all three. **`meshgrid`**, because that is what it is —
 `numpy.meshgrid` for a unit cell — and because it says the return is two filled 2-D arrays

@@ -582,6 +582,80 @@ def test_the_two_meshgrids_are_one_mesh_in_two_frames():
     assert np.allclose(Xr, Xr[0][None, :])                 # rectangular: it does not
 
 
+def test_a_declared_structure_is_refused_on_another_cell():
+    """``Lattice.drawn`` is the Cartesian frame's invariant, and the only one either frame has.
+
+    A raster is legal on any basis, so a structure drawn on one cell and solved on another is
+    silent and large: a radius-100 circle on a 640 square, solved on ``hexagonal(640.)``, gives
+    ``sum(T) = 0.251270`` where redrawing gives 0.350164. Energy conserves either way and it
+    reads as the lattice effect the caller asked for, which is what makes it hard to catch.
+
+    **The lattice frame has nothing to check and is left alone.** A bare array is *meant* to be
+    portable -- fractions of the cell -- so it stays accepted everywhere, which is also what
+    every pre-existing caller passes.
+    """
+    sq, hx = wavebit.Lattice.rectangular(640.0, 640.0), wavebit.Lattice.hexagonal(640.0)
+    X, Y = (np.asarray(c) for c in sq.meshgrid_xy((64, 64)))
+    layer = np.where(X ** 2 + Y ** 2 < 100.0 ** 2, 12.25, 1.0)[None]
+    base = dict(thickness=[300.0], wavelength=900.0, truncation_order=[6, 6], top=1.0, bot=1.0,
+                theta=0.0, phi=0.0, psi=0.0, factorization='nvf')
+
+    def total(cell, structure, backend=0):
+        s = wavebit.rcwa(backend=backend, lattice=cell, structure=structure, **base)
+        return float(np.sum(np.asarray(s.solve().T)))
+
+    assert total(sq, sq.drawn(layer)) == pytest.approx(0.157394, abs=1e-5)
+    with pytest.raises(ValueError, match='drawn on a different cell'):
+        total(hx, sq.drawn(layer))
+
+    # the bare array is the other frame, and is not touched
+    assert total(hx, layer) == pytest.approx(0.251270, abs=1e-5)
+
+    # ...and the number the refusal stands in front of is not a rounding difference
+    Xh, Yh = (np.asarray(c) for c in hx.meshgrid_xy((64, 64)))
+    redrawn = np.where(Xh ** 2 + Yh ** 2 < 100.0 ** 2, 12.25, 1.0)[None]
+    assert abs(total(hx, hx.drawn(redrawn)) - total(hx, layer)) > 0.09
+
+
+def test_the_declaration_survives_every_backend_and_the_jit_boundary():
+    """The reason it is a wrapper and not an ndarray subclass, pinned.
+
+    A subclass was the obvious mechanism and it only works on NumPy: ``jnp.asarray`` and
+    ``torch.as_tensor`` copy the numbers into their own type and the Python attribute is gone,
+    so the guard would have been live on one backend and **silently absent** on the other two
+    -- the worst shape a guard can have. The wrapper is taken apart at ingest instead, so what
+    travels is an ordinary array plus one aux key.
+
+    It has to survive the pytree round trip too: ``solve_field`` is ``jax.jit``-decorated with
+    ``self`` at argnum 0, so every jitted call rebuilds the solver, and a declaration lost
+    there would stop checking without saying so.
+    """
+    sq, hx = wavebit.Lattice.rectangular(640.0, 640.0), wavebit.Lattice.hexagonal(640.0)
+    X, Y = (np.asarray(c) for c in sq.meshgrid_xy((24, 24)))
+    layer = np.where(X ** 2 + Y ** 2 < 100.0 ** 2, 12.25, 1.0)[None]
+    base = dict(thickness=[300.0], wavelength=900.0, truncation_order=[3, 3], top=1.0, bot=1.0,
+                theta=0.0, phi=0.0, psi=0.0, factorization='nvf')
+
+    for backend, cast in ((0, lambda a: a),
+                          (1, lambda a: pytest.importorskip('jax.numpy').asarray(a)),
+                          (2, lambda a: pytest.importorskip('torch').as_tensor(a))):
+        wavebit.rcwa(backend=backend, lattice=sq, structure=sq.drawn(cast(layer)), **base).solve()
+        with pytest.raises(ValueError, match='drawn on a different cell'):
+            wavebit.rcwa(backend=backend, lattice=hx,
+                         structure=sq.drawn(cast(layer)), **base).solve()
+
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    solver = wavebit.rcwa(backend=1, lattice=sq, structure=sq.drawn(jnp.asarray(layer)), **base)
+    leaves, treedef = jax.tree_util.tree_flatten(solver)
+    rebuilt = jax.tree_util.tree_unflatten(treedef, leaves)
+    assert rebuilt._structure_drawn_on is not None
+    assert np.allclose(np.asarray(rebuilt._structure_drawn_on, dtype=float), np.asarray(sq))
+    rebuilt.lattice = hx
+    with pytest.raises(ValueError, match='drawn on a different cell'):
+        rebuilt.solve()
+
+
 def test_the_raster_basis_gradient_is_the_shear_along_one():
     """Which of the two lattice-derivatives the raster path computes, named by measurement.
 

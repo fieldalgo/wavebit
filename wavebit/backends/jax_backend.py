@@ -296,6 +296,12 @@ class SolverJax(RCWAJax, OptimizerJax):
             'projector': self._projector,
             # A dispatch key like `pol`: the solves branch on it (which cascade blocks are
             # read, which way the stack is walked), so it must come back static, never traced.
+            # The cell a `Lattice.drawn(...)` structure declared, if any. A dispatch fact about
+            # the *structure*, not a value in it -- and it must survive, or a jitted solve
+            # would rebuild without the declaration and stop checking it. Carried as the plain
+            # nested list the wrapper stored, so it hashes into the treedef.
+            'structure_drawn_on': (None if self._structure_drawn_on is None
+                                   else tuple(map(tuple, self._structure_drawn_on.tolist()))),
             'incidence_side': self.incidence_side,
             # The last settable condition to reach this dict, 2026-08-30. It is a *declaration*
             # -- `'4ff'` asks for the four-field form where `auto` would have picked two -- and
@@ -376,6 +382,11 @@ class SolverJax(RCWAJax, OptimizerJax):
         # `formulation` is settable on the instance and on `solve()`, but not on `rcwa()`,
         # so it cannot go through the constructor either. Same treatment as `polarization`.
         formulation = aux_data.pop('formulation')
+        # Same treatment, same reason: `structure` is assigned inside `__init__` and would
+        # overwrite the slot, so the declaration is restored after the rebuild rather than
+        # handed in. `__init__` has no keyword for it either -- it is a fact the structure
+        # carried, not a parameter anyone passes.
+        drawn_on = aux_data.pop('structure_drawn_on')
         named = dict(zip(CHILD_NAMES, children))
         polarization = named.pop('polarization')
         # `period` and `lattice` are two spellings of one cell and naming both is refused at
@@ -394,6 +405,9 @@ class SolverJax(RCWAJax, OptimizerJax):
         # this pair was validated when the solver it came from was built.
         solver._polarization = polarization
         solver._psi_given = psi_given
+        # Left as the nested tuple it hashed as; the refusal converts when it compares, so
+        # this module needs no numpy of its own.
+        solver._structure_drawn_on = drawn_on
 
         return solver
 

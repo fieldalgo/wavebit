@@ -982,6 +982,56 @@ class CoreSolveMixin:
     #: sets the real answer.
     _cell_named = True
 
+    #: The basis a ``Lattice.drawn(...)`` structure declared, or ``None`` for a bare array.
+    #: A bare array is the lattice frame and is portable by definition, so ``None`` is not a
+    #: missing value -- it is the other answer.
+    _structure_drawn_on = None
+
+    @property
+    def structure_drawn_on(self):
+        """The cell this structure declared through :meth:`~wavebit._core.lattice.Lattice.drawn`.
+
+        ``None`` for a bare array, and that is an answer rather than a gap: a bare array is the
+        *lattice* frame, portable across cells by construction, so there is nothing for it to
+        have declared. Read-only -- the declaration is made where the structure is built.
+        """
+        return self._structure_drawn_on
+
+    def _refuse_a_raster_drawn_on_another_cell(self):
+        """A structure that named its cell may not be solved on a different one.
+
+        This is the Cartesian frame's invariant and the only one either frame has. A raster is
+        legal on any basis, so nothing downstream can notice the mismatch: measured, a
+        radius-100 circle drawn on a 640 square and solved on ``hexagonal(640.)`` gives
+        ``sum(T) = 0.252202`` against the 0.352836 a redrawn array gives -- silent, large, and
+        indistinguishable from the lattice effect the caller was asking for.
+
+        Only a declared structure is checked. A bare array stays accepted on every cell,
+        because that is the *lattice* frame rather than an undeclared Cartesian one, and it is
+        what every pre-existing caller passes.
+        """
+        if self._structure_drawn_on is None:
+            return
+        # Converted here rather than at either producer: the setter stores an array and the
+        # pytree round trip restores the nested tuple it hashed as, and both are the same cell.
+        drawn = _np.asarray(self._structure_drawn_on, dtype=float)
+        here = _np.asarray(self.lattice, dtype=float)
+        if _np.allclose(drawn, here, rtol=1e-10, atol=1e-10):
+            return
+        raise ValueError(
+            'this structure was drawn on a different cell than the one it is being solved '
+            'on.\n'
+            f'    drawn on : {drawn.tolist()}\n'
+            f'    solved on: {here.tolist()}\n'
+            'A raster holds pixel indices, so it is legal on any basis and nothing further '
+            'down can catch this -- the answer moves, and it moves the way a lattice effect '
+            'would. Redraw it on the cell you are solving:\n'
+            '    X, Y = lattice.meshgrid_xy(grid_shape)\n'
+            '    structure = lattice.drawn(...)\n'
+            'Or, if the pattern is meant as fractions of the cell rather than as lengths, it '
+            'is in the lattice frame: build it from `meshgrid_uv` and pass the bare array, '
+            'which is portable across cells by definition.')
+
     def _refuse_a_structure_with_no_cell(self):
         """A structure to solve, and no cell ever stated — refuse rather than assume ``(1, 1)``.
 
@@ -1662,6 +1712,7 @@ class CoreSolveMixin:
         * ``2`` -- 2D: everything else, and every scene whose k layout is not separable.
         """
         self._refuse_a_structure_with_no_cell()
+        self._refuse_a_raster_drawn_on_another_cell()
         if self.structure is None:
             if self._grating_type is None:
                 self._grating_type = 2
@@ -2304,6 +2355,15 @@ class CoreFactorizationMixin:
         and a copy of them here would be a second thing to keep in step -- which is the reason
         ``_revalidate_mu`` re-assigns rather than re-checking inline, given in its own docstring.
         """
+        # `Lattice.drawn(...)` arrives here and is taken apart on the spot: the array goes on
+        # exactly as it always did and the basis it was drawn on goes in a slot beside it. The
+        # wrapper never travels past this line -- no backend, builder or document sees it, which
+        # is the whole reason it is a wrapper rather than an ndarray subclass (a subclass
+        # survives only NumPy; jax and torch copy the numbers and drop the attribute).
+        drawn_on = None
+        if isinstance(structure, _lattice.DrawnOn):
+            structure, drawn_on = structure.values, _np.asarray(structure.lattice, dtype=float)
+
         if isinstance(structure, self._raster_types()):     # Raster
             kind, value = 0, self._coerce_raster('structure', structure)
         elif type(structure) is list:
@@ -2336,6 +2396,7 @@ class CoreFactorizationMixin:
 
         previous = (self._structure, self._modeling_type)
         self._structure, self._modeling_type = value, kind
+        self._structure_drawn_on = drawn_on
         try:
             # `mu` and `structure` are one raster pair and either can be assigned second, so
             # the pair is checked from whichever side completes it -- see `_revalidate_mu`.

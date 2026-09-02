@@ -26,6 +26,7 @@ import numpy as np
 import pytest
 
 import wavebit
+from wavebit._core.lattice import as_lattice
 
 pytest.importorskip('jax')
 
@@ -39,6 +40,7 @@ CARRIED = (
     'answers',
     'normal_grid', 'theta', 'phi', 'psi', 'chi', 'polarization', 'period', 'wavelength',
     'thickness', 'structure', 'mu', 'top', 'bot', 'lattice', 'excitation', 'formulation',
+    'structure_drawn_on',
 )
 
 #: Aux keys that are not attributes under the same name. `psi_given` is the *fact* that `psi`
@@ -57,7 +59,11 @@ def _scene(**over):
     # spelling it means. It also passed `period=[P, P]`, which was always a no-op here (the
     # basis overwrites the period slot) and is refused outright since 2026-09-01. `period` is
     # still carried and still non-default: it reads back as `periods_of(basis)`.
-    kw = dict(backend=1, structure=eps, mu=mu, lattice=basis.tolist(),
+    # the structure declares its cell, so the round trip carries a real value rather than the
+    # `None` a bare array would leave -- which is what `test_the_scene_holds_nothing_at_its_default`
+    # is there to insist on.
+    kw = dict(backend=1, structure=as_lattice(lattice=basis).drawn(eps), mu=mu,
+              lattice=basis.tolist(),
               truncation_order=[3, 2], thickness=[H, 0.5 * H], wavelength=WL,
               top=wavebit.Material(2.25, mu=1.4), bot=wavebit.Material(4.0),
               theta=0.31, phi=0.47, psi=0.29, chi=np.pi / 9,

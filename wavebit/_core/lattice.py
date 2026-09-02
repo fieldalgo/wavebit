@@ -59,10 +59,30 @@ import numpy as np
 
 from .backend import array_namespace, as_array
 
-__all__ = ['Lattice', 'as_lattice', 'meshgrid_xy', 'is_axis_aligned', 'jacobian',
+__all__ = ['DrawnOn', 'Lattice', 'as_lattice', 'meshgrid_xy', 'is_axis_aligned', 'jacobian',
            'order_kxy', 'periods_of', 'sample_grid']
 
 _PYTREE_REGISTERED = False
+
+
+@dataclasses.dataclass(frozen=True)
+class DrawnOn:
+    """A raster together with the cell it was drawn on -- what :meth:`Lattice.drawn` returns.
+
+    **Not an ndarray subclass, deliberately.** A subclass was tried first and it only survives
+    on NumPy: ``jnp.asarray`` and ``torch.as_tensor`` copy the numbers into their own type and
+    the Python attribute is gone, so the check would have been live on one backend and silently
+    absent on the other two. A wrapper does not have that problem because **it never travels**:
+    :attr:`~wavebit._core.engine.CoreSolveMixin.structure` takes it apart at ingest, keeps the
+    array exactly as it always did, and keeps the basis in a slot beside it. Nothing downstream
+    -- no backend, no builder, no document -- ever sees this type.
+
+    ``values`` is whatever the caller handed over, layer axis included; the basis is not read
+    from it and no shape is assumed.
+    """
+
+    values: Any
+    lattice: Any
 
 
 @dataclasses.dataclass(frozen=True)
@@ -176,6 +196,36 @@ class Lattice:
         """
         A = as_lattice(period=[1.0, 1.0])          # the unit square: u, v are the basis-free half
         return A.meshgrid_xy(grid_shape, backend=backend, dtype=dtype)
+
+    def drawn(self, values):
+        """Declare that ``values`` was drawn on **this** cell, so solving it on another refuses.
+
+        The Cartesian frame is the half of "The two frames a raster can mean" that has a
+        checkable invariant: a pattern written on :meth:`meshgrid_xy` is a set of absolute
+        lengths, so it belongs to the cell it was written on and has to be rebuilt when that
+        cell moves. The lattice frame has nothing to check -- an array of *fractions* is
+        supposed to be portable -- so it stays what it has always been: a bare array, accepted
+        anywhere, and this is not needed for it::
+
+            X, Y = lattice.meshgrid_xy((256, 256))
+            layer = np.where(X ** 2 + Y ** 2 < 100. ** 2, 12.25, 1.0)
+            wavebit.rcwa(lattice=lattice, structure=lattice.drawn(layer[None]), ...)
+
+        Hand it the finished structure, layer axis and all, because it wraps rather than
+        forwards: there is no indexing left to do afterwards.
+
+        **What it buys, measured.** A radius-100 circle drawn on a 640 square and solved on
+        ``hexagonal(640.)`` returns ``sum(T) = 0.252202`` where redrawing gives 0.352836 -- no
+        error, no warning, energy conserved, and it reads as the lattice effect the caller was
+        asking for. That is now a refusal.
+
+        **It is opt-in and cannot be otherwise.** A bare array has to keep working, so the
+        guard exists only for callers who ask for it; and the tag cannot be attached to the
+        coordinates instead, because ``np.where`` -- which every raster expression in these
+        docs ends with -- drops it. Applying it after the expression is the only placement that
+        works.
+        """
+        return DrawnOn(values, self.columns)
 
     def __repr__(self):
         u, v = (np.asarray(x, dtype=float) for x in (self.u, self.v))
