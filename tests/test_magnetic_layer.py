@@ -690,7 +690,7 @@ HEX_CELL = np.column_stack(([PERIOD, 0.0], [PERIOD / 2, PERIOD * np.sqrt(3) / 2]
 
 
 def _disc_raster(basis, cu, cv, radius, inside, outside, n=64):
-    """One disc of Cartesian ``radius`` on the parametric grid of ``basis``.
+    """One disc of Cartesian ``radius`` on the lattice grid of ``basis``.
 
     ``cell[j, i]`` samples ``(i+.5)/n * a1 + (j+.5)/n * a2``; the centre is given in those same
     lattice coordinates, and the minimum image is taken over the nine nearest cells so the

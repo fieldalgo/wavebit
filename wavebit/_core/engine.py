@@ -3400,9 +3400,9 @@ class CoreFactorizationMixin:
         implemented:
 
         * The **integrated** coefficients are computed by ``fourier2d_integrated`` as an integral over the
-          *parametric* cell, where the Jacobian cancels against the ``1/area`` normalisation.
+          *lattice* cell, where the Jacobian cancels against the ``1/area`` normalisation.
           There is no metric in it, so it was always lattice-general.
-        * The **smooth shape** path (``modeling_path='parametric'``) states shape lengths as absolute
+        * The **parametric** path (``modeling_path='parametric'``) states shape lengths as absolute
           Cartesian quantities, so nothing about a shape deforms under a skew — a rectangle
           stays a rectangle. Only the grid of frequencies its transform is sampled at moves,
           which is one expression in :func:`~wavebit._core.parametric.shape_ft`. Overlapping

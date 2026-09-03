@@ -870,7 +870,7 @@ def test_a_round_feature_overlapping_its_own_images_is_periodic(radius, percolat
     back closed and the open fragments moved with the placement. Both radii sit at 2e-15 now.
 
     That was the state until 2026-09-01. It matters more than a percentage suggests, because
-    the *analytic* path refuses a shape this size outright ("larger than the period and runs
+    the *parametric* path refuses a shape this size outright ("larger than the period and runs
     into its own image"), so the raster is the only route to it -- and `'contour'` is the
     construction the oblique documentation tells you to reach for.
 

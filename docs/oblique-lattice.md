@@ -102,7 +102,7 @@ does so silently on a non-square raster.
 
 ## The one thing that will bite you
 
-**The raster is read in lattice coordinates.** `structure[layer][j, i]` sits at the parametric
+**The raster is read in lattice coordinates.** `structure[layer][j, i]` sits at the lattice
 point `u = (i + 0.5)/Nx`, `v = (j + 0.5)/Ny`, and the cell is centred on the origin:
 
     r = (u - 0.5) * a1  +  (v - 0.5) * a2
@@ -137,7 +137,7 @@ way, and an axis-aligned cell is bit-identical, which is why nothing caught it.
 
 ## The two frames a raster can mean
 
-A raster records **pixel indices and nothing else**: pixel `(i, j)` is the parametric point
+A raster records **pixel indices and nothing else**: pixel `(i, j)` is the lattice point
 `u = (i+0.5)/Nx`, `v = (j+0.5)/Ny`, and `r = (u-0.5)*a1 + (v-0.5)*a2` is the only thing that
 places it. "Radius 100 nm" is not in the array. So writing one down says one of two things, and
 which one is not recorded anywhere:
@@ -785,7 +785,7 @@ only diagonal `Kx` / `Ky`, and substituting `r = u*a1 + v*a2` leaves
 
     eps_hat[m, n] = \int_0^1 \int_0^1 eps(u, v) exp(-2i*pi*(m*u + n*v)) du dv
 
-an ordinary DFT on the parametric grid for *any* basis — still indexed by integer differences,
+an ordinary DFT on the lattice grid for *any* basis — still indexed by integer differences,
 still block-Toeplitz. The `dfs2d_*` builders, the Toeplitz builds and `final_matching` are
 untouched. Truncation
 stays rectangular in `(m, n)`; Li introduced circular truncation *in* the non-orthogonal setting

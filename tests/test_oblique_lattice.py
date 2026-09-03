@@ -33,7 +33,7 @@ HEX = np.column_stack(([P, 0.0], [P / 2, P * np.sqrt(3) / 2]))
 def raster(basis, n=128, radius=R):
     """A rod at the centre of ``basis``'s cell, through ``wavebit.meshgrid_xy``.
 
-    ``meshgrid_xy`` puts the samples on the parallelogram (``cell[j, i]`` at the parametric point
+    ``meshgrid_xy`` puts the samples on the parallelogram (``cell[j, i]`` at the lattice point
     ``(i+.5)/n, (j+.5)/n``) *and* centres the cell on the origin, so a centred rod is stated by
     writing nothing -- the same ``cx = cy = 0`` the shape arms in this file use.
     """
@@ -535,7 +535,7 @@ def test_analytic_shapes_survive_a_unimodular_shear():
 
 
 def test_integrated_coefficients_survive_a_unimodular_shear():
-    """``fourier2d_integrated`` integrates over the *parametric* cell, where there is no metric to get wrong.
+    """``fourier2d_integrated`` integrates over the *lattice* cell, where there is no metric to get wrong.
 
     The Jacobian cancels against the ``1/area`` normalisation, so this path was lattice-general
     before anyone asked it to be. Refused for a while on the assumption it was not.
@@ -558,7 +558,7 @@ def test_the_reconstructed_field_agrees_across_a_unimodular_shear():
     """Compared where the comparison is meaningful: in a homogeneous region.
 
     The two bases describe the same lattice, so the field at the same *Cartesian* point must
-    agree. Their parametric grids differ, but for a given ``v`` the sheared row visits exactly
+    agree. Their lattice grids differ, but for a given ``v`` the sheared row visits exactly
     the orthogonal row's x-values, cyclically shifted — ``x = (i+j)/(N-1) * P`` against
     ``i'/(N-1) * P`` — so the alignment below is exact rather than interpolated.
 
@@ -1126,7 +1126,7 @@ def test_backside_illumination_survives_a_unimodular_shear():
 # ------------------------- the Popov-Neviere (patterned anisotropic) build on a skewed cell
 
 #: ``a2' = a2 + 2*a1``. Unimodular (det U = +1), so the *same point lattice* as ``ORTHO`` --
-#: and the shear is **even**, which is what puts the two parametric grids on the same physical
+#: and the shear is **even**, which is what puts the two lattice grids on the same physical
 #: points: sample ``(i, j)`` of one is sample ``(i + 2j + 1 mod n, j)`` of the other. The odd
 #: ``SHEAR`` above re-discretizes the rod instead, and the staircase term that opens up costs
 #: an order of magnitude here -- 5.3e-4 to 6.7e-4 on ``sum(R)`` against the 1.6e-5 to 1.0e-4
@@ -1146,7 +1146,7 @@ def _pn_disc(basis, n=PN_N):
 
     Written out here rather than taken from a helper because the **shape** is what has to
     cross between the two cells, not an array: the disc has a Cartesian centre and a Cartesian
-    radius, and each cell samples that same disc on its own parametric grid.
+    radius, and each cell samples that same disc on its own lattice grid.
     :func:`wavebit._core.draw._shape_inside` cannot serve -- its periodic image loop is fixed
     at ``(-1, 0, 1)``, which does not reach across a cell sheared by two lattice vectors: it
     draws 0.262 of ``SHEAR_2A1`` filled where the disc covers 0.503.
@@ -1225,7 +1225,7 @@ def test_a_patterned_tensor_is_the_same_physics_under_a_unimodular_shear(method)
     array. Two things about that are asserted before any physics runs: the disc's area comes
     out right (a periodic image loop too short for the shear clips it silently), and the
     sheared raster is the square one re-indexed pixel for pixel -- an even shear puts both
-    parametric grids on the same physical points, so the staircase is not merely similar, it is
+    lattice grids on the same physical points, so the staircase is not merely similar, it is
     the same staircase. Energy conservation would say nothing here: the tensor is Hermitian at
     every pixel, so ``R + T`` comes back 1 to 1e-15 however the cell is read.
 

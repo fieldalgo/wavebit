@@ -309,7 +309,7 @@ SKEWS = [90.0, 60.0, 30.0]
 
 
 def skewed_disc(N, gamma_deg, P=400.0, r=60.0, eps_in=5.76):
-    """``(A, eps, tx, ty)``: a disc on the parametric grid of a skewed cell, and its exact normal.
+    """``(A, eps, tx, ty)``: a disc on the lattice grid of a skewed cell, and its exact normal.
 
     ``eps[j, i]`` is the permittivity at ``(i+.5)/N * a1 + (j+.5)/N * a2`` — the convention an
     oblique raster is read in (``docs/oblique-lattice.md``), and what makes this a disc rather

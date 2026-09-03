@@ -180,7 +180,7 @@ MATERIAL_QUANTITY = {
     'source': 'docs/conventions.md',
 }
 
-#: How a shape dict's numbers are read, on both parametric paths. It says two things, and each
+#: How a shape dict's numbers are read, on the parametric path. It says two things, and each
 #: is here because getting it wrong is not an error: a fraction where a length belongs solves a
 #: different, much smaller structure, and a corner-relative centre solves a correctly sized one
 #: in the wrong place. Both raise nothing.

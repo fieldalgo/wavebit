@@ -22,7 +22,7 @@ the Fourier machinery: substituting ``r = u*a1 + v*a2`` turns the cell integral 
 
     eps_hat[m, n] = \\int_0^1 \\int_0^1 eps(u, v) exp(-2i*pi*(m*u + n*v)) du dv
 
-an ordinary DFT on the parametric ``(u, v)`` grid for *any* basis, still indexed by integer
+an ordinary DFT on the lattice ``(u, v)`` grid for *any* basis, still indexed by integer
 differences and therefore still block-Toeplitz. That is why the ``fourier2d_*`` builders and
 the convolution matrix builds in :mod:`wavebit._core.factorization` are untouched by
 this module.
@@ -31,7 +31,7 @@ this module.
 differences survives the skew. The exact structure is BTTB; ``docs/factorization-terms.md`` §3
 has the distinction and the check.)
 
-The raster follows that substitution. ``structure[layer][j, i]`` sits at the parametric point
+The raster follows that substitution. ``structure[layer][j, i]`` sits at the lattice point
 ``u = (i + 0.5)/Nx``, ``v = (j + 0.5)/Ny``, and **the cell is centred at the origin**, so its
 Cartesian position is
 
@@ -179,8 +179,10 @@ class Lattice:
         """The same sample points as **lattice** ``(U, V)`` -- fractions of the cell, in [-0.5, 0.5].
 
         The other half of the pair, and the reason both are spelled with a suffix: one mesh, two
-        frames to express it in. ``meshgrid_xy`` answers "where is this pixel in space", which
-        moves when the basis does; this answers "where is it in the cell", which does not.
+        frames to express it in. The points are the same points either way -- both lie in the
+        cell -- and what differs is the units: ``meshgrid_xy`` gives them as **Cartesian
+        lengths**, which move when the basis does, and this gives them as **fractions of the
+        cell**, which do not.
 
         **It does not read the basis, and that is the whole point.** A pattern written on ``U``
         and ``V`` is a set of *fractions* -- a duty cycle, a fill fraction, a design scaled as a

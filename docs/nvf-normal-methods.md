@@ -373,7 +373,7 @@ of every scene in the sweep. Rolling
 *somewhere* does not test any of it: eight
 of the ten rolls in `test_contour_is_periodic_under_a_roll_that_lands_on_the_corner` agreed
 with each other even with the defect in place, and the small-disc case turns on exactly one
-of the ten. The sibling defect in the *analytic* path was
+of the ten. The sibling defect in the *parametric* path was
 older and is also fixed (`c128fd8`) — its normal field was distance-blind, not merely aperiodic,
 and `test_shape_position_gradients.test_a_multishape_layer_is_periodic_across_the_cell_edge` now
 states the property where a test of the opposite name used to pin the defect.

@@ -323,7 +323,7 @@ def test_smm_field_with_an_order_exactly_at_the_substrate_cutoff(extra):
     assert np.max(np.abs(tmm - smm)) < 1e-10 * np.max(np.abs(tmm))
 
 
-# A rod on a hexagonal cell, sampled on that cell's own parametric grid. The skewed field
+# A rod on a hexagonal cell, sampled on that cell's own lattice grid. The skewed field
 # path indexes its output by the lattice coordinates (u, v), not by (x, y) -- both algorithms
 # go through the same reconstruction, so agreement here is about the amplitudes reaching it.
 HEX_P = 400.0

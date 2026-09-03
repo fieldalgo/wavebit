@@ -82,7 +82,7 @@ SIDES = ('top', 'bottom')
 
 
 def _rod(basis, n=40, radius=ROD):
-    """A disc on the cell's own parametric grid, so every cell carries the same object.
+    """A disc on the cell's own lattice grid, so every cell carries the same object.
 
     Through ``wavebit.meshgrid_xy``, which puts the samples on the parallelogram *and* centres the
     cell on the origin -- so the disc is stated by writing nothing, exactly as the shape arms

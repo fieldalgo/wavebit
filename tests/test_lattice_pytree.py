@@ -970,7 +970,7 @@ def test_a_traced_period_is_still_a_cell():
 
 
 def _rod_on_cell(basis, n=48, radius=150.0):
-    """A disc on the parametric grid of ``basis`` -- the same object whatever the spelling."""
+    """A disc on the lattice grid of ``basis`` -- the same object whatever the spelling."""
     X, Y = (np.asarray(c) for c in wavebit.meshgrid_xy((n, n), lattice=basis))
     return np.where(X ** 2 + Y ** 2 < radius ** 2, 12.25, 1.0)
 

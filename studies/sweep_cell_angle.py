@@ -15,7 +15,7 @@ you pick 60 or 90 -- and it hits the same trap on the one change it makes.
 
 **The answer is that it depends which frame the pattern was specified in, and that nothing
 tells you which one you asked for.** A raster holds pixel *indices*: pixel ``(i, j)`` means the
-parametric point ``u = (i+0.5)/Nx``, ``v = (j+0.5)/Ny``, whose Cartesian position is
+lattice point ``u = (i+0.5)/Nx``, ``v = (j+0.5)/Ny``, whose Cartesian position is
 ``r = (u-0.5)*a1 + (v-0.5)*a2``. Nothing in the array records "radius 100 nm", so holding it
 says the pattern is *fractions of the cell* and redrawing it says the pattern is *Cartesian
 lengths*. Both are real specifications; the sweep separates them.
