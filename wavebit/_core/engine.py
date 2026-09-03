@@ -1909,7 +1909,7 @@ _FACTORIZATION_IMPLEMENTED_BY = {
 # the other one. The distinction matters: one is unbuilt, the other is unbuildable.
 _FACTORIZATION_REASON = {
     ModelingPath.PARAMETRIC: (
-        "the smooth shape path (modeling_type=2) builds eps from an analytic normal field -- "
+        "the parametric path builds eps from a normal field taken from the geometry -- "
         "the shapes' own (wavebit._core.analytic.to_conv_mat_smooth_nvf), or, for a painted "
         "layer whose shapes overlap, that of the disjoint polygons the painting resolves into "
         "(wavebit._core.boundary.to_conv_mat_boundary_layer). There is no raster "
@@ -1931,7 +1931,7 @@ _COEFFICIENTS_IMPLEMENTED_BY = {
 # not merely unbuilt but unbuildable -- a parametric shape has no samples to take.
 _COEFFICIENTS_REASON = {
     ModelingPath.PARAMETRIC: (
-        "the smooth shape path (modeling_type=2) transforms geometry analytically -- each "
+        "the parametric path transforms geometry in closed form -- each "
         "shape in turn (wavebit._core.analytic.shape_ft), or, for a painted layer whose "
         "shapes overlap, the disjoint polygons the painting resolves into "
         "(wavebit._core.boundary.to_conv_mat_boundary_layer). Either transform *is* the "
@@ -3004,7 +3004,7 @@ class CoreFactorizationMixin:
         if self._modeling_path == ModelingPath.RASTER and factorization == Factorization.NVF:
             return
         if self._modeling_path == ModelingPath.PARAMETRIC:
-            where = 'the smooth shape path builds its normal field from the geometry itself'
+            where = 'the parametric path builds its normal field from the geometry itself'
         else:
             where = "factorization='li' builds no normal field at all"
         raise NotImplementedError(
@@ -3032,7 +3032,7 @@ class CoreFactorizationMixin:
         if self._modeling_path == ModelingPath.RASTER and factorization == Factorization.NVF:
             return
         if self._modeling_path == ModelingPath.PARAMETRIC:
-            where = ('the smooth shape path builds its normal field from the geometry, which '
+            where = ('the parametric path builds its normal field from the geometry, which '
                      'carries no magnitude for the circular limit to read')
         else:
             where = "factorization='li' builds no normal field at all"

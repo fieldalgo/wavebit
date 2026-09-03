@@ -61,6 +61,8 @@ from ._core.spec import SPEC_VERSION
 #: gracefully -- but ``fields`` is a *recognisable* key whose contents are attribute names a
 #: consumer indexes a result object with, so the old contents keep their shape while ceasing
 #: to resolve. That is the same failure the '5' bump exists for, one level down.
+#: '7': ``max_order`` -> ``truncation_order`` (2026-08-22), the last of the rename set the
+#: '6' entry lists; it took its own number because it landed on its own commit.
 #: '8': the shape origin (2026-08-31). ``cx`` / ``cy`` are measured from the centre of the cell
 #: rather than from its corner, and ``shape_coordinates`` says so -- it was the bare string
 #: ``'absolute'``, which said only half of what a generator has to know. Same argument as '5':
@@ -76,7 +78,20 @@ from ._core.spec import SPEC_VERSION
 #: with. ``normal_method`` took '3' and ``answers`` took '4' on the same shape of change, but
 #: both predate the rule being written down, and a bump a consumer must react to for an
 #: addition it can ignore is the false alarm the rule exists to prevent.
-MANIFEST_VERSION = '8'
+#: '9': two modeling paths instead of three (2026-09-03). ``smooth`` and ``boundary`` were one
+#: path published twice -- identical option lists, one ``structure`` spelling, and a choice
+#: taken per layer rather than per solve -- so they became ``parametric`` with an ``overlap``
+#: property, and ``raster`` kept its name. The ``modeling_type`` integer went with them.
+#:
+#: A rename alone would not earn this, and the argument that it *is* a value a consumer
+#: branches on is not the one that carries it: ``path`` is a label, not something fed back to
+#: the solver, so a branch that stops matching falls through rather than solving the wrong
+#: thing. What carries it is ``shape_coordinates.applies_to``, which is a **membership test
+#: keyed on these names** and gates a coordinate convention. A consumer holding ``'smooth'``
+#: in its own source now gets ``False``, concludes absolute lengths and a cell-centre origin
+#: do not apply here, and emits fractions or a corner-relative centre. That scene solves and
+#: conserves energy -- the '8' failure exactly, on the convention '8' was about.
+MANIFEST_VERSION = '9'
 
 
 # --------------------------------------------------------------- how a structure is spelled
@@ -87,40 +102,49 @@ MANIFEST_VERSION = '8'
 #: it from a keyword.
 #:
 #: ``material_form`` is the second half of the same fact and is what :data:`MATERIAL_QUANTITY`
-#: is stated against: two of the three spellings name a material per region ('assignment') and
-#: one samples a field ('field'), which is why only the raster takes a ``mu=`` array while the
-#: other two carry permeability inside each ``Material``.
+#: is stated against: one spelling names a material per region ('assignment') and one samples a
+#: field ('field'), which is why only the raster takes a ``mu=`` array while the parametric
+#: path carries permeability inside each ``Material``.
 SPELLINGS = (
     {
         'path': 'raster',
-        'modeling_type': 0,
         'structure': 'a NumPy array of relative permittivity, one 2D grid per layer',
         'material_form': 'field',
         'mu': 'a second array of the same shape, passed as mu=',
+        'overlap': None,
         'summary': 'Permittivity as samples. The only path that implements both Fourier '
                    'series and both factorization rules, and the one topology optimisation '
                    'uses.',
     },
     {
-        'path': 'smooth',
-        'modeling_type': 2,
+        'path': 'parametric',
         'structure': 'a list of dict(background=..., shapes=[...]) layers, each shape '
                      'dict carrying material=',
         'material_form': 'assignment',
         'mu': 'inside each Material',
+        #: **Not a third path.** Overlap handling used to be published as one, under the name
+        #: `boundary`, beside a `smooth` that was the same path without an overlap. They
+        #: carried identical option lists and one `structure` spelling, and the choice between
+        #: them is taken *per layer* from the shapes' own coordinates -- so one structure can
+        #: have its first layer resolved and its second transformed in closed form, which two
+        #: sibling path entries cannot express. It is a property of this path instead.
+        'overlap': {
+            'allowed': True,
+            'decided': 'per layer, from the shapes\' own coordinates',
+            'selected_by': 'the overlap itself, not a keyword',
+            'resolution': 'shapes that intersect are resolved into disjoint polygons before '
+                          'the transform, so a later shape covers an earlier one and the '
+                          'polygon transform keeps every edge exact',
+            'why_not_summed': "summing each shape's transform would give the overlap both "
+                              'materials, which is not a material',
+            'observed_at': 'geometry.boundary_plans -- a layer\'s slot holds a plan if it '
+                           'resolved, None if it stayed on the closed form',
+            'source': 'docs/boundary-modeling.md',
+        },
         'summary': 'Shape edges enter the Fourier transform in closed form, so a tilted or '
-                   'curved boundary carries no staircase error. Shapes that do not overlap '
-                   'are transformed one by one.',
-    },
-    {
-        'path': 'boundary',
-        'modeling_type': 2,
-        'structure': 'the smooth spelling, for a layer whose shapes overlap',
-        'material_form': 'assignment',
-        'mu': 'inside each Material',
-        'summary': 'The smooth path with overlaps resolved into disjoint polygons first, so '
-                   'later shapes cover earlier ones without losing edge exactness. Selected '
-                   'by the overlap itself, not by a keyword.',
+                   'curved boundary carries no staircase error at any truncation order. '
+                   'Shapes are transformed one by one, or, where they overlap, as the '
+                   'disjoint polygons that overlap resolves into.',
     },
 )
 
@@ -171,15 +195,11 @@ SHAPE_COORDINATES = {
     'origin': 'cell_centre',
     'origin_expression': '0.5*(a1 + a2)',
     'omitted_centre': 'cx = cy = 0',
-    'applies_to': ('smooth', 'boundary'),
+    'applies_to': ('parametric',),
 }
 
 
 # ------------------------------------------------------------------ per-path option support
-
-#: The integer ``SPELLINGS`` still publishes, mapped to the path the engine's tables key on.
-_PATH_OF_TYPE = {0: ModelingPath.RASTER, 2: ModelingPath.PARAMETRIC}
-
 
 def _options_for(path):
     """The two Fourier axes for one modeling path, as implemented rather than as documented.
@@ -207,12 +227,12 @@ def _options_for(path):
         # optional contourpy dependency, and offering an option this environment cannot
         # build is exactly the drift the manifest tests exist to prevent -- and the axis is
         # read only under factorization='nvf' (explicitly set anywhere it has no reader, it
-        # is refused rather than ignored). The smooth shape path builds its normal field
+        # is refused rather than ignored). The parametric path builds its normal field
         # from the geometry itself, so it has no raster construction to select.
         'normal_method': _raster_normal_methods() if path == ModelingPath.RASTER else [],
         'normal_method_reason': (
             "read only under factorization='nvf'" if path == ModelingPath.RASTER
-            else 'the smooth shape path builds its normal field from the geometry itself; '
+            else 'the parametric path builds its normal field from the geometry itself; '
                  'there is no raster construction to select'),
         # A fourth axis, and deliberately *not* four more `normal_method` values. That one
         # says how the field is built; this says how the projector is formed from it, so the
@@ -222,7 +242,7 @@ def _options_for(path):
         'projector_reason': (
             "read only under factorization='nvf', beside normal_method"
             if path == ModelingPath.RASTER
-            else 'the smooth shape path builds its normal field from the geometry, which '
+            else 'the parametric path builds its normal field from the geometry, which '
                  'carries no magnitude for the circular limit to read'),
     }
 
@@ -479,7 +499,7 @@ def manifest() -> dict:
         'shape_coordinates': SHAPE_COORDINATES,
         'material_quantity': _jsonable_material_quantity(),
         'paths': [
-            dict(spelling, **_options_for(_PATH_OF_TYPE[spelling['modeling_type']]))
+            dict(spelling, **_options_for(ModelingPath(spelling['path'])))
             for spelling in SPELLINGS
         ],
         'lattice': {
@@ -517,8 +537,13 @@ def _jsonable_results() -> dict:
 
 
 def cited_sources() -> set:
-    """Every repository path the manifest points at, for the staleness check."""
-    return {m['source'] for m in MATERIALS} | {MATERIAL_QUANTITY['source']}
+    """Every repository path the manifest points at, for the staleness check.
+
+    Read from the published structures rather than listed here, so a citation added to one of
+    them joins the check by being added -- which is what a hand-kept list would not do.
+    """
+    return ({m['source'] for m in MATERIALS} | {MATERIAL_QUANTITY['source']}
+            | {s['overlap']['source'] for s in SPELLINGS if s['overlap'] is not None})
 
 
 def main():

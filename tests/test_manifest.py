@@ -20,9 +20,9 @@ import pytest
 
 import wavebit
 from wavebit.manifest import (LATTICE, MATERIAL_QUANTITY, MATERIALS, SPELLINGS,
-                              _PATH_OF_TYPE, cited_sources, manifest)
-from wavebit._core.enums import (Backend, Factorization, FourierCoefficients, NormalMethod,
-                                   Projector, Tetm)
+                              cited_sources, manifest)
+from wavebit._core.enums import (Backend, Factorization, FourierCoefficients, ModelingPath,
+                                   NormalMethod, Projector, Tetm)
 
 import pathlib
 
@@ -50,16 +50,21 @@ _RASTER[0, _X ** 2 + _Y ** 2 <= 0.3 ** 2] = 6.25          # permittivity: 2.5**2
 #: what `material_quantity` publishes.
 STRUCTURES = {
     'raster': _RASTER,
-    'smooth': [{'background': 1.0,
-                'shapes': [{'type': 'circle', 'cx': 0.0, 'cy': 0.0,
-                            'lx': 0.6, 'material': 6.25}]}],
-    'boundary': [{'background': 1.0, 'shapes': [
-        {'type': 'rectangle', 'cx': -0.10, 'cy': -0.10, 'lx': 0.34, 'ly': 0.34,
-         'angle': 0.0, 'material': 4.0},
-        {'type': 'rectangle', 'cx': 0.06, 'cy': 0.06, 'lx': 0.34, 'ly': 0.34,
-         'angle': 0.3, 'material': 9.0},
-    ]}],
+    'parametric': [{'background': 1.0,
+                    'shapes': [{'type': 'circle', 'cx': 0.0, 'cy': 0.0,
+                                'lx': 0.6, 'material': 6.25}]}],
 }
+
+#: The same parametric spelling with its shapes overlapping. It is not a third entry in
+#: `STRUCTURES` because it is not a third path -- it selects the same one, and what differs is
+#: what the layer does about the overlap. `test_an_overlap_is_a_property_of_one_path_not
+#: _another_path` is what holds that.
+_OVERLAPPING = [{'background': 1.0, 'shapes': [
+    {'type': 'rectangle', 'cx': -0.10, 'cy': -0.10, 'lx': 0.34, 'ly': 0.34,
+     'angle': 0.0, 'material': 4.0},
+    {'type': 'rectangle', 'cx': 0.06, 'cy': 0.06, 'lx': 0.34, 'ly': 0.34,
+     'angle': 0.3, 'material': 9.0},
+]}]
 
 PATHS = {entry['path']: entry for entry in manifest()['paths']}
 
@@ -67,7 +72,7 @@ PATHS = {entry['path']: entry for entry in manifest()['paths']}
 # ------------------------------------------------------- the spellings select the paths
 
 @pytest.mark.parametrize('spelling', SPELLINGS, ids=[s['path'] for s in SPELLINGS])
-def test_each_spelling_selects_the_modeling_type_it_claims(spelling):
+def test_each_spelling_selects_the_modeling_path_it_claims(spelling):
     """`structure`'s *type* is the path selector — there is no keyword to check it against.
 
     So the manifest's prose description of how to spell a structure is load-bearing in a way
@@ -75,13 +80,57 @@ def test_each_spelling_selects_the_modeling_type_it_claims(spelling):
     than the one whose trade-offs it just explained.
     """
     solver = wavebit.rcwa(structure=STRUCTURES[spelling['path']], **KW)
-    assert solver.modeling_path == _PATH_OF_TYPE[spelling['modeling_type']]
+    assert solver.modeling_path == ModelingPath(spelling['path'])
 
 
 def test_the_manifest_covers_every_spelling_the_setter_accepts():
     """A path the solver can assign but the manifest omits is a path nobody is told about."""
     assigned = {wavebit.rcwa(structure=u, **KW).modeling_path for u in STRUCTURES.values()}
-    assert assigned == {_PATH_OF_TYPE[s['modeling_type']] for s in SPELLINGS}
+    assert assigned == {ModelingPath(s['path']) for s in SPELLINGS}
+
+
+# ------------------------------------------------------- an overlap is a property, not a path
+
+def test_an_overlap_selects_the_same_path_rather_than_another_one():
+    """The whole of the '9' reshape, as one assertion.
+
+    `smooth` and `boundary` were published as sibling paths until 2026-09-03, which said that
+    a `structure` picks between them. It does not: the spelling is the same and so is the
+    path. What differs is what a layer does about an overlap, which is why `overlap` is a key
+    on this entry rather than an entry of its own.
+    """
+    disjoint = wavebit.rcwa(structure=STRUCTURES['parametric'], **KW)
+    overlapping = wavebit.rcwa(structure=_OVERLAPPING, **KW)
+    assert disjoint.modeling_path == overlapping.modeling_path == ModelingPath.PARAMETRIC
+
+
+def test_the_published_overlap_property_is_the_one_the_solver_takes():
+    """`overlap` says the choice is per layer and read at `geometry.boundary_plans`. Both halves.
+
+    A solver-wide answer cannot express a structure whose first layer resolves and whose
+    second does not, so the per-layer claim is the one that has to be checked against a real
+    mixed structure rather than against two single-layer ones.
+    """
+    published = PATHS['parametric']['overlap']
+    assert published['allowed'] is True
+    assert 'per layer' in published['decided']
+
+    mixed = [_OVERLAPPING[0], STRUCTURES['parametric'][0]]
+    solver = wavebit.rcwa(structure=mixed, **dict(KW, thickness=[0.3, 0.3]))
+    solver.solve()
+    plans = solver.freeze_geometry().boundary_plans
+    assert [plan is not None for plan in plans] == [True, False], (
+        'the overlapping layer must resolve and the disjoint one must not; '
+        f'got {plans!r}')
+
+
+def test_the_raster_path_publishes_no_overlap_property():
+    """`None` rather than a missing key: a consumer's membership test gets an answer.
+
+    Same argument as `normal_methods_refused_on_oblique` being kept while empty -- the absence
+    of the concept on this path is a fact about the path, not a gap in the document.
+    """
+    assert 'overlap' in PATHS['raster'] and PATHS['raster']['overlap'] is None
 
 
 # ------------------------------------------------------- unavailable options are refused
@@ -133,6 +182,28 @@ def test_a_projector_the_manifest_withholds_is_refused(path):
             wavebit.rcwa(structure=STRUCTURES[path], projector=value, **KW).solve()
         assert value in str(excinfo.value), (
             f'{path}: refused projector={value!r} without naming it')
+
+
+def test_an_option_the_manifest_offers_builds_on_an_overlapping_layer_too():
+    """The `parametric` entry's options are claimed for every layer that spelling accepts.
+
+    An overlapping layer takes a different route inside (`_core.boundary` rather than the
+    closed-form sum), and while it was published as its own path that route had its own row of
+    the option battery. Collapsing the entries must not quietly drop the coverage with them.
+    """
+    entry = PATHS['parametric']
+    for value in entry['factorization']:
+        wavebit.rcwa(structure=_OVERLAPPING, factorization=value, **KW).solve()
+    for value in entry['fourier_coefficients']:
+        wavebit.rcwa(structure=_OVERLAPPING, fourier_coefficients=value, **KW).solve()
+    for axis, enum_cls in (('factorization', Factorization),
+                           ('fourier_coefficients', FourierCoefficients),
+                           ('normal_method', NormalMethod), ('projector', Projector)):
+        for value in _unavailable('parametric', axis, enum_cls):
+            with pytest.raises(Exception) as excinfo:
+                wavebit.rcwa(structure=_OVERLAPPING, **{axis: value}, **KW).solve()
+            assert value in str(excinfo.value), (
+                f'overlapping layer: refused {axis}={value!r} without naming it')
 
 
 @pytest.mark.parametrize('path', sorted(STRUCTURES))
@@ -227,8 +298,8 @@ def test_a_smoothing_normal_method_builds_on_a_skewed_cell(method):
 
 
 def test_a_skewed_cell_still_builds_on_the_paths_the_manifest_leaves_open():
-    for path in ('raster', 'smooth', 'boundary'):
-        wavebit.rcwa(structure=STRUCTURES[path], lattice=HEX, factorization='nvf',
+    for structure in (*STRUCTURES.values(), _OVERLAPPING):
+        wavebit.rcwa(structure=structure, lattice=HEX, factorization='nvf',
                        **KW_NO_CELL).solve()
 
 
