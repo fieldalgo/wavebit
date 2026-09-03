@@ -551,8 +551,12 @@ def _in_subprocess(body):
     import textwrap
     env = {k: v for k, v in os.environ.items() if not k.startswith('JAX')}
     env['PYTHONPATH'] = str(pathlib.Path(__file__).resolve().parent.parent)
+    # `capture_output` means `run` waits for EOF on the pipes, not merely for the
+    # child to exit -- anything that inherits them holds the parent here forever.
+    # A bound is cheap: the body is an import and an assert, about a second, and
+    # 300 is chosen only to stay clear of a cold runner importing jax from disk.
     out = subprocess.run([sys.executable, '-c', textwrap.dedent(body)],
-                         capture_output=True, text=True, env=env)
+                         capture_output=True, text=True, env=env, timeout=300)
     assert out.returncode == 0, out.stderr[-2000:]
     return out.stdout
 
