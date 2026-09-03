@@ -95,15 +95,28 @@ jobs:
       - name: Install CPU-only PyTorch
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu
 
-      - name: Install Wavebit with both optional backends
-        run: pip install -e '.[jax,pytorch]' pytest pytest-timeout
+      # `contour` belongs here with the backends, and its absence cost 41 of the 42
+      # failures in run 33738428639 -- every one of them the same ImportError,
+      # `normal_method='contour'` reaching for contourpy that no step had installed.
+      # It is a real optional extra (pyproject declares it, the default normal method
+      # is 'distance', and nothing else in the package reads it), so a user who skips
+      # it is fine. This job is not that user: it is the one that installs everything
+      # precisely so that no part of the suite goes unexercised.
+      - name: Install Wavebit with both optional backends and the contour extra
+        run: pip install -e '.[jax,pytorch,contour]' pytest pytest-timeout
 
       # Fails the run if a backend is missing, which would otherwise turn the
       # cross-backend tests into silent skips: the suite guards them with
       # pytest.importorskip, so an absent backend drops those tests and still
       # reports success.
-      - name: Verify all three backends are importable
-        run: python -c "import numpy, jax, torch, wavebit; print(wavebit.__file__)"
+      #
+      # contourpy is checked here too, and it is the reason this step is worth more
+      # than it looks. The contour tests do *not* guard with importorskip -- they fail
+      # outright -- so a missing optional does not go quiet, it goes loud 41 times and
+      # buries the one real failure underneath. Naming it here fails the job in three
+      # seconds instead, on the install and not on the physics.
+      - name: Verify all three backends and contourpy are importable
+        run: python -c "import numpy, jax, torch, contourpy, wavebit; print(wavebit.__file__)"
 
       # Single-threaded BLAS, so that two calls with the same inputs give the same bits.
       #
