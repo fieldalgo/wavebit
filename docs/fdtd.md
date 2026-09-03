@@ -345,21 +345,24 @@ residual there rather than trusting the number.
 
 ## 6. The refusals
 
-Eleven, each refused by name. The common thread: every one returns a *plausible* number if it
+Ten, each refused by name. The common thread: every one returns a *plausible* number if it
 is quietly ignored, and a plausible wrong number from the cross-check solver is worse than no
 cross-check at all.
 
+Three rows have left this table since it was written, and they left by being implemented rather
+than by being reconsidered: `psi` (§8d, §8e), `phi != 0` (§8e) and `(n_layers, Ny>1, Nx)` (§8g).
+A refusal is a statement about today, and these three outlived their subject by four commits
+inside this document's own branch.
+
 | Refused | Why not just implement it |
 | --- | --- |
-| `psi` / `chi` / `polarization` incidence | A different problem, not a different spelling — same reason `solve_1d` is separate from `solve_1d_conical` |
+| `chi` / `polarization` incidence | An elliptical or named polarisation is a superposition of the two eigenpolarisations with a phase between them, and this solver drives one real field. `psi` is answered (§8d, §8e); these two need both legs run and recombined, which is what the RCWA path already does |
 | complex `theta` | Evanescent incidence has no propagating incident wave to normalise against, and the TFSF plane injects one by construction. The RCWA path answers this — see `docs/branch-cuts.md` |
-| `phi != 0` (conical mount) | It couples the two polarisations, and this is the pure TE/TM formulation — the same split `solve_1d` and `solve_1d_conical` make. The classical mount leaves them decoupled at every `theta`, which is what makes §5b answerable at all |
 | `incidence_side='bottom'` | The mirror the ETM applies has no counterpart here yet |
 | complex permittivity | One complex number describes a material at **one** frequency, and a run carries every frequency in its band. Give the dispersion as poles instead (§8b) — that *is* the frequency dependence, rather than one sample of it |
 | `Re(ε) ≤ 0` | A metal below its plasma frequency — the same dispersion problem, and no real wave speed, so no stable time step exists |
-| analytic shape structure | Rasterising it would put a second geometry builder beside `draw.slice_structure`, which is NumPy-only, square-only and refuses a traced shape parameter. The two would disagree about one scene |
-| `(n_layers, Ny>1, Nx)` | A crossed grating needs a 3D FDTD |
-| oblique `lattice` | The Yee grid is Cartesian; a skewed cell needs the metric in every update |
+| parametric shape structure | Rasterising it would put a second geometry builder beside `draw.slice_structure`, which is NumPy-only, square-only and refuses a traced shape parameter. The two would disagree about one scene |
+| `lattice`, axis-aligned or not | The Yee grid is Cartesian, so a skewed cell needs the metric in every update. An axis-aligned one would not, and is a gap rather than a limit: pass `period` |
 | a run shorter than the source | The source is not finished emitting until 48 optical cycles. A 20-cycle run returns 0.033 where the answer is 0.543 — an efficiency-shaped number, so it is refused rather than reported with a residual nobody reads |
 | `\|m\| ≥ nx/2` | Past Nyquist the x transform aliases one order onto another and returns a plausible amplitude — with a flipped sign on TM, from the half-cell sample offset |
 | `backend` | §7 |
@@ -486,7 +489,7 @@ material. Half-spaces are not dispersive.
 
 ## 8c. Permeability
 
-Implemented 2026-09-01, the day `644f881` lifted the same refusal on the RCWA path's 1D and
+Implemented 2026-09-01, the day `545dd4c` lifted the same refusal on the RCWA path's 1D and
 conical operators. Until then this module refused `mu` *for parity* — there was no reference to
 compare a magnetic 1D grating against. That justification is now withdrawn, and with it the
 refusal.
@@ -578,7 +581,7 @@ for both it returned `T_p[0] = 0.241` against a true 0.017 — while `R` was cor
 efficiencies, and that is the only reason this was caught.** Twelve complex numbers fixed the
 reflected rule; the transmitted rule needed its own six. An efficiency is quadratic and blind
 to exactly the sign most likely to be wrong. Same family as the TM monitor offset in §5, and
-as `per-order-sp-frame-half-turn` in the RCWA path.
+as the half-turn the RCWA path's per-order frame lost, in `docs/amplitude-sp-frame.md`.
 
 ## 8e. A conical mount away from normal
 
@@ -785,6 +788,40 @@ this does not win: the crossed-grating RCWA solve costs 2.8 s at `truncation_ord
 module can only cover to about ±10 % before the blue end is under-resolved. **The reason to have
 a 3D FDTD is what RCWA cannot express at all** (§9), not what it expresses more slowly.
 
+## 8h. A time record
+
+`record_field=N` keeps every `N`-th step of the electric field, in the diagnostics, alongside
+the axes it is measured on. It is off by default and costs nothing when it is off: the snapshot
+buffer is not allocated, and the keyword is the only thing that allocates it.
+
+It exists because it is the one thing this module can do that the RCWA path cannot state. A
+harmonic solve answers what the field *is*, having assumed `e^{-iωt}` and therefore assumed that
+a single frequency describes the whole problem. There is no picture of light arriving, because
+the assumption is that it always has been. A time-domain solve is stepping a real field anyway,
+so a record of it is a read rather than a computation.
+
+**The record carries its own abscissae, and that is the whole design.** A reader who rebuilds
+them is wrong three separate ways, each silently:
+
+| the axis | rebuilt as | why that is wrong |
+| --- | --- | --- |
+| `field_z` | `arange(nz) * dz` | a graded mesh (§8f) has no single `dz` |
+| `field_x` | `arange(nx) * dx` | in-plane coordinates are measured from the centre of the cell |
+| `field_x` | the pixel centres | `Ey` sits on the x *nodes*, half a cell from them |
+
+The third is the one worth stating twice. The Yee grid stages `Ey` on `(x-node, y-half)` and
+`Ex` on `(x-half, y-node)`, so the two components do not share an abscissa and neither shares
+one with the raster. `field_e_component` says which component the record holds — `ey` for a TE
+run and for either conical leg, `ex` for TM — and `field_x` / `field_y` are that component's own
+axes. A conical run also carries `field_ex` with `field_ex_x` / `field_ex_y` beside it, because
+a conical mount genuinely has two electric components and showing one of them is the lesser
+answer.
+
+Each of those three was a real error here, not a hypothetical: `field_x` was published from the
+cell corner for as long as the feature existed, and the document above had already reasoned
+about the origin move and concluded the module was unaffected — which was true when written,
+four commits before this axis was added.
+
 ## 9. What is not yet answered
 
 - **A backend other than NumPy**, which is the item that decides whether this is a first-class
@@ -828,13 +865,13 @@ a 3D FDTD is what RCWA cannot express at all** (§9), not what it expresses more
   metal grating and loses on a dielectric one. What would change that is a transition cheaper
   than a geometric ramp — the literature's subgridding schemes (Okoniewski 1997, Berenger 2006)
   buy a smaller reflection for a more complicated interface, and none of them is measured here.
-- **Field output.** The solve returns two monitor planes; cross-checking `calculate_field` —
+- **Field output.** The solve returns two monitor planes; cross-checking `reconstruct_field` —
   the part of the solver with the most recent bug history — is impossible without it.
 - **The Yee grid's numerical anisotropy** is unmeasured. Convergence order was measured at
   normal incidence only, and phase-velocity error as a function of propagation angle is
   exactly what limits the high-`|m|` orders a grating oracle exists to check.
 - **What only a time-domain solver can do, now that the geometry is general.** With a crossed
-  grating (§8g) and a time record () in place, the features that are not a slower way of
+  grating (§8g) and a time record (§8h) in place, the features that are not a slower way of
   answering an RCWA question become reachable: a medium whose permittivity changes *while* the
   light is inside it (photonic time crystals, time boundaries — a one-frequency formulation
   cannot express a medium that mixes frequencies), and a nonlinear one whose response depends on

@@ -207,7 +207,7 @@ MAX_DEREFERENCE_GAIN = 1e10
 # ---------------------------------------------------------------------------------------
 
 def _refuse_out_of_scope(structure, mu, theta, phi, tetm, incidence_side, lattice,
-                         top, bot):
+                         top, bot, chi=None, polarization=None):
     """Every input this formulation cannot answer, refused by name.
 
     Refused rather than approximated: each of these returns a *plausible* number if it is
@@ -219,6 +219,14 @@ def _refuse_out_of_scope(structure, mu, theta, phi, tetm, incidence_side, lattic
             "fdtd: an incidence needs either `tetm` or `psi`. `tetm='te'` / `'tm'` is the "
             "pure formulation, the time-domain twin of `solve_1d`; `psi` is the conical one, "
             "which couples the two polarisations and is what a mount with `phi != 0` needs.")
+    for spelling, given in (('chi', chi), ('polarization', polarization)):
+        if given is not None:
+            raise ValueError(
+                f'fdtd: {spelling}={given!r}. An elliptical or named polarisation is a '
+                f'superposition of the two eigenpolarisations with a phase between them, and '
+                f'this solver drives one real field: the two legs would have to be run and '
+                f'recombined, which is what the RCWA path already does. Pass `psi` for a '
+                f'linear polarisation, or take this scene to `wavebit.rcwa`.')
     name = tetm.value if hasattr(tetm, 'value') else str(tetm).lower()
     if name not in ('te', 'tm'):
         raise ValueError(f"fdtd: tetm must be 'te' or 'tm', got {tetm!r}.")
@@ -1570,8 +1578,8 @@ def _combine_at_normal_incidence(grid, sub_te, sub_tm, kx, wavelength, phi, a_s,
 
     The weights were fixed against RCWA *amplitudes*, not efficiencies, across
     ``phi = 0, 45, 90 deg`` and both legs -- twelve complex numbers. Efficiencies are blind to
-    exactly the sign this is most likely to get wrong; see `docs/fdtd.md` and
-    ``per-order-sp-frame-half-turn``.
+    exactly the sign this is most likely to get wrong; see `docs/fdtd.md` §8d and
+    `docs/amplitude-sp-frame.md`, which is the same defect on the RCWA path.
     """
     c_i, s_i = float(np.cos(phi)), float(np.sin(phi))
     # Rotate the incidence out of its own frame and into the grid's. `w_tm` carries the sign
@@ -2175,7 +2183,7 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
                resolution=None, n_pml=PML_CELLS, n_periods=None, courant=COURANT,
                subpixel=True, truncation_order=None, return_diagnostics=False,
                dispersion=None, poles=None, pad_scale=1.0, grading=None,
-               record_field=None, _leg=None):
+               record_field=None, chi=None, polarization=None, _leg=None):
     # `mu` is the raster's permeability field, layer-major beside `structure`, and the two
     # half-spaces carry theirs inside their `Material` -- the same two spellings the RCWA path
     # takes, so one `Stack` reaches both solvers unchanged.
@@ -2198,7 +2206,8 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
     # names which eigenpolarisation this run drives. It is the one door `phi != 0` comes
     # through, so it bypasses that refusal and nothing else.
     name = _refuse_out_of_scope(structure, mu, theta, None if _leg else phi,
-                                'te' if _leg else tetm, incidence_side, lattice, top, bot)
+                                'te' if _leg else tetm, incidence_side, lattice, top, bot,
+                                chi=chi, polarization=polarization)
 
     period_x = float(period[0] if hasattr(period, '__len__') else period)
     period_y = (float(period[1]) if hasattr(period, '__len__') and len(period) > 1 else None)

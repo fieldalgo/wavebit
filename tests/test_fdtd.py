@@ -351,8 +351,10 @@ def test_the_result_is_the_same_container_an_rcwa_solve_returns():
 # ---------------------------------------------------------------------------------------
 
 REFUSED = [
-    (dict(tetm=None), r'tetm must be'),
+    (dict(tetm=None), r'needs either `tetm` or `psi`'),
     (dict(tetm='psi'), r'tetm must be'),
+    (dict(chi=10.0), r'elliptical or named polarisation'),
+    (dict(polarization='rcp'), r'elliptical or named polarisation'),
     (dict(theta=0.3 + 0.1j), r'is complex'),
     (dict(phi=0.5), r'conical mount'),
     (dict(incidence_side='bottom'), r'incidence_side'),
@@ -1088,7 +1090,7 @@ def test_a_magnetic_grating_agrees_with_the_rcwa_solve(tetm):
     """The cross-check that only became possible on 2026-09-01.
 
     The RCWA path refused `mu` on its 1D operators until then, so a magnetic 1D grating had no
-    reference at all and this module refused it for parity. `644f881` lifted that, and this is
+    reference at all and this module refused it for parity. `545dd4c` lifted that, and this is
     the test the lifting bought.
     """
     eps_tooth, mu_tooth, thickness = 4.0, 2.5, 200.0
