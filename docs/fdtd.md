@@ -293,9 +293,12 @@ rectangle (symmetric about its own tooth centre) are all in that class. A two-st
 and RCWA amplitudes agree to 2.1e-3 with `arg` differences of 0.007 rad, against the π a
 half-period origin shift would put on every odd order. That is the check that says the two
 solvers share a frame, and wavebit moved every user-facing coordinate to the centre of the
-cell on 2026-08-31 — this module was unaffected because the raster's index convention and the
-transform's `[0, 1]` integration did not move with it, but that is now pinned rather than
-reasoned about.
+cell on 2026-08-31 — the *solve* was unaffected because the raster's index convention and the
+transform's `[0, 1]` integration did not move with it, and that is pinned rather than reasoned
+about. **The paragraph's scope is the solve, and this is worth saying because the conclusion was
+read too widely once.** The record's x axis (§8h) was added four commits later and did not take
+the rule: it was published from the corner until 7d7a943. A verdict about a module can be older
+than a part of it.
 
 The common instrument for the first two is **comparing amplitudes, not efficiencies**, against
 a closed form. The common instrument for the last is asking what a quantity means when its

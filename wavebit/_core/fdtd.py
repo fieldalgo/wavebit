@@ -2178,7 +2178,7 @@ def _solve_conical(psi, phi, theta, tetm, return_diagnostics, **kw):
     return (result, te_diag) if return_diagnostics else result
 
 
-def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
+def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tetm=None,
                theta=0.0, phi=None, psi=None, mu=None, incidence_side='top', lattice=None,
                resolution=None, n_pml=PML_CELLS, n_periods=None, courant=COURANT,
                subpixel=True, truncation_order=None, return_diagnostics=False,
@@ -2209,6 +2209,30 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
                                 'te' if _leg else tetm, incidence_side, lattice, top, bot,
                                 chi=chi, polarization=polarization)
 
+    # `period` reaches its defaults so that a scene arriving through the typed door is refused
+    # by NAME. `Stack.as_kwargs` emits `period` XOR `lattice` (4098406), so a `Stack` built on a
+    # `Lattice` sends no `period` at all: with it a required positional, that scene died on
+    # Python's argument binding -- a `TypeError` naming neither the cell nor the alternative --
+    # before `_refuse_out_of_scope` could say what this solver does with a lattice.
+    if period is None:
+        raise ValueError(
+            'fdtd: period is unset. A `Stack` built on a `lattice` sends no `period`, and this '
+            'solver reads only `period` -- see the `lattice` refusal for why. Give the cell as '
+            '`period=Lx` or `period=[Lx, Ly]`.')
+    if wavelength is None:
+        raise ValueError('fdtd: wavelength is unset. One wavelength, or a band to cover in a '
+                         'single run -- see the broadband section of `docs/fdtd.md`.')
+    if isinstance(period, dict):
+        # The mapping spelling `docs/reference/keywords.md` documents. A dict has `__len__`, so
+        # without this the indexing below reached it and raised a bare `KeyError: 0`.
+        keys = set(period)
+        if keys != {'x', 'y'}:
+            raise ValueError(
+                f"fdtd: period: a mapping needs exactly {{'x', 'y'}}; got {sorted(keys)}. "
+                f"`period` is the axis-aligned spelling of the cell, so x and y are what it "
+                f"has -- a skewed cell is given as `lattice=` instead, which this solver "
+                f"refuses.")
+        period = [period['x'], period['y']]
     period_x = float(period[0] if hasattr(period, '__len__') else period)
     period_y = (float(period[1]) if hasattr(period, '__len__') and len(period) > 1 else None)
     # The y axis is DROPPED only when it holds nothing: a length-1 y is a grating invariant

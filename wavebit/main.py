@@ -1,13 +1,17 @@
-def _merge_domain(kwargs, domain_kwargs, source):
+def _merge_domain(kwargs, domain_kwargs, source, solver='rcwa'):
     """Fold a domain object's keyword arguments into ``kwargs``, rejecting duplicates.
 
     Passing e.g. both ``stack=`` and ``structure=`` is ambiguous, so it is an explicit error
     rather than a silent override.
+
+    ``solver`` names the door in the message. It is a parameter rather than a constant because
+    :func:`fdtd` is the second caller, and a duplicate keyword on the time-domain entry point
+    was being reported as a mistake made to ``rcwa``.
     """
     clash = set(kwargs) & set(domain_kwargs)
     if clash:
         raise ValueError(
-            f"{source} already sets {sorted(clash)}; do not also pass them to rcwa.")
+            f"{source} already sets {sorted(clash)}; do not also pass them to {solver}.")
     merged = dict(kwargs)
     merged.update(domain_kwargs)
     return merged
@@ -89,9 +93,9 @@ def fdtd(stack=None, incidence=None, **kwargs):
     """
     from ._core.fdtd import solve_fdtd
     if stack is not None:
-        kwargs = _merge_domain(kwargs, stack.as_kwargs(), 'stack')
+        kwargs = _merge_domain(kwargs, stack.as_kwargs(), 'stack', 'fdtd')
     if incidence is not None:
-        kwargs = _merge_domain(kwargs, incidence.as_kwargs(), 'incidence')
+        kwargs = _merge_domain(kwargs, incidence.as_kwargs(), 'incidence', 'fdtd')
     # `Incidence.as_kwargs` always names the whole polarization family; the three this
     # formulation cannot carry are dropped only when they are unset, and refused otherwise.
     for unset in ('psi', 'chi', 'polarization'):
