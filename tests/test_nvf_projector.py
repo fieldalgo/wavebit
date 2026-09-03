@@ -610,14 +610,28 @@ def _translation_defect(cell, shift, method, projector, to=3):
                for a, b in slots)
 
 
-#: Rolls chosen from the **failing** set of the shear-off sweep, for the reason
-#: `test_nvf_lattice_translation` gives: a pin that never reaches the defect proves nothing.
-#: The full sweep is in `docs/nvf-normal-methods.md`; this is its pin.
-BROKEN_ROLLS = ((1, 1), (5, 5), (13, 29), (17, 3), (23, 5), (31, 17), (40, 40))
+#: Roll *candidates*, not a pin. Strides coprime with 64 so the set does not align with the
+#: raster it rolls; which of them actually break is decided per machine, below.
+#:
+#: The pinned set that stood here -- ((1, 1), (5, 5), (13, 29), (17, 3), (23, 5), (31, 17),
+#: (40, 40)) -- was drawn from the failing half of a 4095-roll sweep, and four of the seven
+#: came up clean on GitHub's ubuntu runners: 5.55e-16 against 9.87e-05 here, eleven orders
+#: apart on the same commit. Which roll lands on the medial-axis tie is a last-bit question,
+#: and the last bit is not the same on Accelerate and on OpenBLAS.
+#:
+#: The docstring below already said hand-picking was the error -- "the rolls that break are
+#: not the ones a hand-picked set finds" -- and then hand-picked seven anyway, from one
+#: machine's sweep. Selecting per machine is what that sentence actually asks for.
+CANDIDATE_ROLLS = tuple(((5 * i) % 64, (13 * i) % 64) for i in range(1, 25))
+
+#: How many of them must break before the measurement below means anything. 17 of 24 break
+#: on this developer machine and 12 of 12 saddle rolls do, so 4 is not a tight bound -- it is
+#: there to fail loudly if a future change makes the instrument blind everywhere, which is
+#: the one way this test could go quietly green while proving nothing.
+MIN_BROKEN = 4
 
 
-@pytest.mark.parametrize('shift', BROKEN_ROLLS)
-def test_the_circular_limit_removes_the_medial_axis_defect(monkeypatch, shift):
+def test_the_circular_limit_removes_the_medial_axis_defect(monkeypatch):
     """With the tie-shear off, `'linear'` is non-covariant on the annulus and `'circular'` is not.
 
     **Why the shear has to be off.** `_CONTOUR_TIE_SHEAR` (2026-09-01) already settles the
@@ -649,12 +663,20 @@ def test_the_circular_limit_removes_the_medial_axis_defect(monkeypatch, shift):
     monkeypatch.setattr('wavebit._core.normal_methods._CONTOUR_TIE_SHEAR', 0.0)
     pytest.importorskip('contourpy')
 
-    linear = _translation_defect(ANNULUS, shift, 'contour', 'linear')
-    circular = _translation_defect(ANNULUS, shift, 'contour', 'circular')
-    assert linear > 1e-8, (
-        f'roll {shift} was chosen because the linear projector breaks there and it did not '
-        f'({linear:.2e}) — the pin has stopped reaching the defect')
-    assert circular < 1e-12, f'roll {shift}: circular moved E by {circular:.2e}'
+    # Select, then measure. The first pass asks this machine which rolls reach the defect;
+    # only those say anything about the projector. A roll that is clean under 'linear' is not
+    # evidence either way, and asserting on it is what made four of the seven pins fail on a
+    # runner while the projector itself was fine. The whole sweep is under a second.
+    broken = [r for r in CANDIDATE_ROLLS
+              if _translation_defect(ANNULUS, r, 'contour', 'linear') > 1e-8]
+    assert len(broken) >= MIN_BROKEN, (
+        f'only {len(broken)} of {len(CANDIDATE_ROLLS)} candidate rolls reach the medial-axis '
+        f'defect under the linear projector with the shear off. Below {MIN_BROKEN} there is '
+        f'nothing here to fix, so what follows would pass without measuring anything.')
+
+    for shift in broken:
+        circular = _translation_defect(ANNULUS, shift, 'contour', 'circular')
+        assert circular < 1e-12, f'roll {shift}: circular moved E by {circular:.2e}'
 
 
 def test_the_saddle_is_not_fixed_by_the_limit():
@@ -672,15 +694,21 @@ def test_the_saddle_is_not_fixed_by_the_limit():
     import wavebit._core.normal_methods as nm
     old, nm._CONTOUR_TIE_SHEAR = nm._CONTOUR_TIE_SHEAR, 0.0
     try:
-        linear = _translation_defect(SADDLE, (32, 0), 'contour', 'linear')
-        circular = _translation_defect(SADDLE, (32, 0), 'contour', 'circular')
+        # Selected the same way and for the same reason as the test above: the single roll
+        # (32, 0) that stood here read 3.64e-16 on a runner, which is a fact about that
+        # machine's last bit and not about the saddle.
+        candidates = tuple((4 * i % 64, 0) for i in range(1, 13))
+        broken = [r for r in candidates
+                  if _translation_defect(SADDLE, r, 'contour', 'linear') > 1e-8]
+        assert broken, 'no saddle roll reaches its defect on this machine'
+        circulars = {r: _translation_defect(SADDLE, r, 'contour', 'circular') for r in broken}
     finally:
         nm._CONTOUR_TIE_SHEAR = old
-    assert linear > 1e-8, 'the saddle roll stopped reaching its defect'
-    assert circular > 1e-8, (
-        f'the saddle now holds at {circular:.2e} under the circular projector. That would be '
-        f'good news and this test is wrong — but check first that the *shear* is not simply '
-        f'back on, which fixes it for an unrelated reason.')
+    held = {r: c for r, c in circulars.items() if c <= 1e-8}
+    assert not held, (
+        f'the saddle now holds at {held} under the circular projector. That would be good '
+        f'news and this test is wrong — but check first that the *shear* is not simply back '
+        f'on, which fixes it for an unrelated reason.')
 
 
 @pytest.mark.parametrize('method', ['distance', 'contour', 'spectral', 'smooth'])
