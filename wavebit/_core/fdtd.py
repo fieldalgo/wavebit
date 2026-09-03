@@ -2330,9 +2330,34 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
     # against the wrong abscissa on every graded run.
     record = {}
     if record_field is not None:
+        # In-plane coordinates are measured from the CENTRE of the cell -- the frame every
+        # public coordinate in this library uses (`docs/conventions.md`, "Every coordinate this
+        # library takes or hands back"), with `z` the one declared exception, which is why
+        # `field_z` above stays the node table and these do not start at zero.
+        # The two components do NOT share an abscissa: `Ey` sits on (x-node, y-half) and `Ex` on
+        # (x-half, y-node), so one x axis published for both misplaces whichever it was not built
+        # for by half a cell -- and half a cell is the whole distance between them.
+        def axis(n, step, extent, half):
+            return (np.arange(n) + (0.5 if half else 0.0)) * step - 0.5 * extent
+
+        x_node, x_half = axis(grid.nx, grid.dx, grid.period, False), \
+                         axis(grid.nx, grid.dx, grid.period, True)
+        if grid.ny > 1:
+            y_node, y_half = axis(grid.ny, grid.dy, grid.period_y, False), \
+                             axis(grid.ny, grid.dy, grid.period_y, True)
+        else:
+            # Invariant along y: one row, and the staggering has no distance to express.
+            y_node = y_half = np.zeros(1)
+        # `_time_loop` records `ey` whenever it steps one -- which a conical leg always does.
+        te_on = out['conical'] or out['tetm'] == 'te'
         record = {'field_t': out['snap_t'], 'field_e': out['snap_e'],
-                  'field_ex': out['snap_x'],
-                  'field_z': grid.z_node, 'field_x': np.arange(grid.nx) * grid.dx}
+                  'field_e_component': 'ey' if te_on else 'ex',
+                  'field_z': grid.z_node,
+                  'field_x': x_node if te_on else x_half,
+                  'field_y': y_half if te_on else y_node}
+        if out['snap_x'] is not None:
+            record.update({'field_ex': out['snap_x'],
+                           'field_ex_x': x_half, 'field_ex_y': y_node})
 
     return result, {'grid': grid, 'dz': grid.dz, 'nz': grid.nz, 'nx': grid.nx, 'dt': grid.dt,
                     **record,

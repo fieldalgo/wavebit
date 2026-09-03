@@ -1818,7 +1818,23 @@ def test_the_record_carries_the_axes_it_is_measured_on():
         'what this test is for')
     assert np.allclose(z, diag['grid'].z_node), 'field_z must BE the node table, not a rebuild'
     assert diag['field_t'].shape[0] == diag['field_e'].shape[0]
-    assert diag['field_x'].shape == (diag['nx'],)
+
+    # The in-plane axes by VALUE, not by shape. `field_z` above is pinned to the node table
+    # because a rebuild from `dz` is wrong on a graded mesh; the same argument applies in x and
+    # it is what this assertion was missing. Two things are being pinned at once: the ORIGIN --
+    # every in-plane coordinate the library hands back is measured from the centre of the cell,
+    # not its corner -- and the STAGGERING, since a TE run records `Ey`, which sits on the x
+    # nodes, half a cell away from the pixel centres `wavebit.meshgrid_xy` returns.
+    x, dx = diag['field_x'], diag['grid'].dx
+    assert diag['field_e_component'] == 'ey', 'a TE run records Ey'
+    assert np.allclose(x, np.arange(diag['nx']) * dx - 0.5 * PERIOD), (
+        'field_x must be the Ey node axis in the cell-centre frame')
+    assert abs(x.mean() + 0.5 * dx) < 1e-9, 'the node axis straddles the centre, off by dx/2'
+    centres = wavebit.meshgrid_xy((1, diag['nx']), period=(PERIOD, PERIOD))[0][0]
+    assert np.allclose(x + 0.5 * dx, centres), (
+        'shifting Ey by half a cell must land exactly on the pixel centres the RCWA path uses; '
+        'if this fails the two solvers are quoting fields on different grids')
+    assert diag['field_y'].shape == (diag['grid'].ny,), 'the y axis is published beside field_y'
     assert diag['field_e'].shape[1:] == (diag['nz'], diag['grid'].ny, diag['nx']), (
         'the record carries the y axis even at ny = 1, so a crossed grating is a larger ny '
         'rather than a different array shape')
