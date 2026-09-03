@@ -28,7 +28,7 @@ from .domain import Material, as_material, index_from_eps
 from .enums import (Answers, DEFAULT_ANSWERS, DEFAULT_FACTORIZATION, DEFAULT_FORMULATION,
                     DEFAULT_FOURIER_COEFFICIENTS, DEFAULT_NORMAL_METHOD, DEFAULT_PROJECTOR,
                     answers_of, normal_method_of, projector_of,
-                    Factorization, Formulation, FourierCoefficients, Tetm,
+                    Factorization, Formulation, FourierCoefficients, ModelingPath, Tetm,
                     coefficients_of,
                     factorization_of, formulation_of, resolve_fourier_options)
 from .fields import (field_1d, field_1d_conical, field_2d, field_2d_4ff,
@@ -1718,7 +1718,7 @@ class CoreSolveMixin:
                 self._grating_type = 2
             return
 
-        if self.modeling_type == 0:                      # raster
+        if self.modeling_path == ModelingPath.RASTER:
             one_row = self.structure.shape[1] == 1
             self._refuse_y_orders_on_a_y_invariant_cell(one_row)
             # One raster row means invariant along `a2`, which is a 1D grating -- but only on
@@ -1742,7 +1742,7 @@ class CoreSolveMixin:
             else:
                 self._grating_type = 2
 
-        elif self.modeling_type == 2:                    # analytic, staircase-free
+        elif self.modeling_path == ModelingPath.PARAMETRIC:   # staircase-free
             self._grating_type = 2
 
     @property
@@ -1765,17 +1765,20 @@ class CoreSolveMixin:
         return self._grating_type
 
     @property
-    def modeling_type(self):
-        """Which modeling path the structure selected: ``0`` raster, ``2`` shapes.
+    def modeling_path(self):
+        """Which modeling path the structure selected, as a :class:`.ModelingPath`.
 
         ``None`` before a structure has been assigned. The *type of the object* passed as
         ``structure`` is the choice -- there is no separate mode switch -- so this is the only
         place that says which one was read, and it is what ``_core.draw`` reads to label a
-        picture with the path that drew it. Read-only, and spelled the way every refusal in
-        this package already spells the concept (``modeling_type=0`` is how the messages in
-        ``_FACTORIZATION_REASON`` name a raster).
+        picture with the path that drew it. Read-only.
+
+        A ``str`` enum, so ``solver.modeling_path == 'raster'`` holds without importing
+        anything. It was a bare integer (``modeling_type``, ``0`` and ``2``) until the paths
+        were named: the missing ``1`` was the block path, removed in ``ad415b4``, and an
+        integer that has to be looked up is a poor thing to print in a refusal.
         """
-        return self._modeling_type
+        return self._modeling_path
 
     def plot_field(self, field_cell):
         """Draw a reconstructed cell. See :func:`wavebit._core.fields.plot_field`."""
@@ -1895,17 +1898,18 @@ class CoreSolveMixin:
             eps_top=eps_top, eps_bot=eps_bot))
 
 
-# The rule each modeling path actually implements, for the two paths that implement exactly
-# one. The raster path (0) is absent because it implements both and so takes the option as
-# given; on the shape path the option is a claim to check rather than a choice to make.
+# The rule each modeling path actually implements, for the paths that implement exactly one.
+# `ModelingPath.RASTER` is absent because it implements both and so takes the option as
+# given; on the parametric path the option is a claim to check rather than a choice to make.
 _FACTORIZATION_IMPLEMENTED_BY = {
-    2: Factorization.NVF,
+    ModelingPath.PARAMETRIC: Factorization.NVF,
 }
 
 # Why each of those two is the only rule its path has, phrased for the person who asked for
 # the other one. The distinction matters: one is unbuilt, the other is unbuildable.
 _FACTORIZATION_REASON = {
-    2: ("the smooth shape path (modeling_type=2) builds eps from an analytic normal field -- "
+    ModelingPath.PARAMETRIC: (
+        "the smooth shape path (modeling_type=2) builds eps from an analytic normal field -- "
         "the shapes' own (wavebit._core.analytic.to_conv_mat_smooth_nvf), or, for a painted "
         "layer whose shapes overlap, that of the disjoint polygons the painting resolves into "
         "(wavebit._core.boundary.to_conv_mat_boundary_layer). There is no raster "
@@ -1917,16 +1921,17 @@ _FACTORIZATION_REASON = {
 
 # The other Fourier axis, exactly the same shape of fact. The shape path describes a layer as
 # geometry rather than as samples, and integrates the permittivity over that geometry in
-# closed form; it has no raster underneath to run a discrete series along. The raster path (0)
-# is again absent because it is the one that implements both.
+# closed form; it has no raster underneath to run a discrete series along.
+# `ModelingPath.RASTER` is again absent because it is the one that implements both.
 _COEFFICIENTS_IMPLEMENTED_BY = {
-    2: FourierCoefficients.INTEGRATED,
+    ModelingPath.PARAMETRIC: FourierCoefficients.INTEGRATED,
 }
 
 # Why, phrased for the person who asked for 'sampled'. The smooth path's missing series is
 # not merely unbuilt but unbuildable -- a parametric shape has no samples to take.
 _COEFFICIENTS_REASON = {
-    2: ("the smooth shape path (modeling_type=2) transforms geometry analytically -- each "
+    ModelingPath.PARAMETRIC: (
+        "the smooth shape path (modeling_type=2) transforms geometry analytically -- each "
         "shape in turn (wavebit._core.analytic.shape_ft), or, for a painted layer whose "
         "shapes overlap, the disjoint polygons the painting resolves into "
         "(wavebit._core.boundary.to_conv_mat_boundary_layer). Either transform *is* the "
@@ -1952,7 +1957,7 @@ class CoreFactorizationMixin:
       the builders, which needs concrete values. For JAX-traced use, call the core builders
       directly with a precomputed ``normal_field`` / ``compression``.
 
-    The smooth shape path (``modeling_type == 2``) is built from parametric shapes rather
+    The smooth shape path (``modeling_path`` ``PARAMETRIC``) is built from parametric shapes rather
     than an array, so there is no input array to read the namespace from — it comes from the
     backend code instead.
 
@@ -2078,7 +2083,7 @@ class CoreFactorizationMixin:
         self.incidence_side = incidence_side
         self.answers = answers
 
-        self._modeling_type = None
+        self._modeling_path = None
         self._grating_type = None
         self._structure = None
 
@@ -2104,7 +2109,7 @@ class CoreFactorizationMixin:
     #: Which of the three modeling paths the current ``structure`` selected; the concrete
     #: solver classes assign it. Defaulted here because both option properties resolve against
     #: it, so the mixin would otherwise only work inside a class that happens to set it first.
-    _modeling_type = None
+    _modeling_path = None
     #: The raster permeability field; ``None`` is non-magnetic. Read through :attr:`mu`.
     _mu = None
     #: What was *asked for*, with ``None`` meaning "nobody said". Read through the
@@ -2333,7 +2338,7 @@ class CoreFactorizationMixin:
         A raster is an ``(n_layers, Ny, Nx)`` array of **relative permittivity**; the analytic
         spelling is a per-layer list that names a
         :class:`~wavebit._core.domain.Material` per region. Assigning it settles
-        :attr:`modeling_type`, which is the only thing that selects the modeling
+        :attr:`modeling_path`, which is the only thing that selects the modeling
         path -- there is no separate mode switch.
         """
         return self._structure
@@ -2347,7 +2352,7 @@ class CoreFactorizationMixin:
         coercion, and both of ``_revalidate_mu``'s refusals. A caller who caught any of them
         was left holding the state the refusal exists to prevent -- measured, assigning a shape
         recipe over a raster that had a ``mu``: ``ValueError`` raised, and afterwards
-        ``modeling_type == 2`` with ``mu`` still attached, which is verbatim the
+        ``modeling_path == PARAMETRIC`` with ``mu`` still attached, which is verbatim the
         silently-dropped knob :data:`_MU_ON_A_SHAPE_PATH` is worded to stop. The mismatched-grid
         refusal was worse: it left a ``(1, 2, 8)`` permittivity beside a ``(1, 2, 4)``
         permeability and the next ``solve()`` *answered*.
@@ -2368,7 +2373,7 @@ class CoreFactorizationMixin:
             structure, drawn_on = structure.values, _np.asarray(structure.lattice, dtype=float)
 
         if isinstance(structure, self._raster_types()):     # Raster
-            kind, value = 0, self._coerce_raster('structure', structure)
+            kind, value = ModelingPath.RASTER, self._coerce_raster('structure', structure)
         elif type(structure) is list:
             # Analytic: one dict(background=..., shapes=[...]) per layer. Shape
             # coordinates are absolute lengths in the units of `period`, not fractions
@@ -2389,7 +2394,7 @@ class CoreFactorizationMixin:
                     'the same rule on a commensurate 1D grating and behind NVF everywhere '
                     'else. Write the shapes as dicts for the analytic path, or sample them '
                     'onto a raster.')
-            kind, value = 2, structure
+            kind, value = ModelingPath.PARAMETRIC, structure
         elif structure is None:
             kind, value = None, None
         else:
@@ -2397,15 +2402,15 @@ class CoreFactorizationMixin:
                 f'structure: expected a raster array, a list of layers, or None -- got '
                 f'{type(structure).__name__}')
 
-        previous = (self._structure, self._modeling_type)
-        self._structure, self._modeling_type = value, kind
+        previous = (self._structure, self._modeling_path)
+        self._structure, self._modeling_path = value, kind
         self._structure_drawn_on = drawn_on
         try:
             # `mu` and `structure` are one raster pair and either can be assigned second, so
             # the pair is checked from whichever side completes it -- see `_revalidate_mu`.
             self._revalidate_mu()
         except Exception:
-            self._structure, self._modeling_type = previous
+            self._structure, self._modeling_path = previous
             raise
 
     def _coerce_raster(self, where, grid):
@@ -2761,7 +2766,7 @@ class CoreFactorizationMixin:
         if value is None:
             self._mu = None
             return
-        if self._modeling_type == 2:
+        if self._modeling_path == ModelingPath.PARAMETRIC:
             raise ValueError(_MU_ON_A_SHAPE_PATH)
         field = self._coerce_raster('mu', value)
         # Same grid or nothing. The two fields are sampled on one raster and are transformed
@@ -2817,7 +2822,7 @@ class CoreFactorizationMixin:
                 touched the keyword is not asking for anything and keeps the closed-form
                 series that path always ran.
         """
-        implemented = _COEFFICIENTS_IMPLEMENTED_BY.get(self._modeling_type)
+        implemented = _COEFFICIENTS_IMPLEMENTED_BY.get(self._modeling_path)
         if implemented is None:                       # raster, or no structure yet: free choice
             return (DEFAULT_FOURIER_COEFFICIENTS if self._fourier_coefficients is None
                     else self._fourier_coefficients)
@@ -2828,7 +2833,7 @@ class CoreFactorizationMixin:
             raise NotImplementedError(
                 f"fourier_coefficients="
                 f"{coefficients_of(self._fourier_coefficients).value!r} is not available "
-                f"here: {_COEFFICIENTS_REASON[self._modeling_type]}.")
+                f"here: {_COEFFICIENTS_REASON[self._modeling_path]}.")
         return implemented
 
     @fourier_coefficients.setter
@@ -2853,7 +2858,7 @@ class CoreFactorizationMixin:
                 resolved per path, so a user who never touched the keyword gets Li on a raster
                 and NVF on smooth shapes, which is what each path always did.
         """
-        implemented = _FACTORIZATION_IMPLEMENTED_BY.get(self._modeling_type)
+        implemented = _FACTORIZATION_IMPLEMENTED_BY.get(self._modeling_path)
         if implemented is None:                       # raster, or no structure yet: free choice
             return DEFAULT_FACTORIZATION if self._factorization is None else self._factorization
         if self._factorization is not None and self._factorization != implemented:
@@ -2862,7 +2867,7 @@ class CoreFactorizationMixin:
             # formatting below tolerates one rather than dying inside the error path.
             raise NotImplementedError(
                 f"factorization={factorization_of(self._factorization).value!r} is not "
-                f"available here: {_FACTORIZATION_REASON[self._modeling_type]}.")
+                f"available here: {_FACTORIZATION_REASON[self._modeling_path]}.")
         return implemented
 
     @factorization.setter
@@ -2988,7 +2993,7 @@ class CoreFactorizationMixin:
         field — before it silently decides nothing.
 
         The keyword is read exactly when the raster path builds a normal field, which is
-        ``factorization='nvf'`` on ``modeling_type == 0``. Everywhere else — Li on a raster,
+        ``factorization='nvf'`` on the raster path. Everywhere else — Li on a raster,
         either shape path — the build would run to completion with the request ignored,
         which is the same silent non-choice the ``enhanced_dfs`` parameter used to be
         (``docs/nvf-upsampling.md``): a knob whose reader does not exist. The default is
@@ -2996,9 +3001,9 @@ class CoreFactorizationMixin:
         """
         if self._normal_method is None:
             return
-        if self._modeling_type == 0 and factorization == Factorization.NVF:
+        if self._modeling_path == ModelingPath.RASTER and factorization == Factorization.NVF:
             return
-        if self._modeling_type == 2:
+        if self._modeling_path == ModelingPath.PARAMETRIC:
             where = 'the smooth shape path builds its normal field from the geometry itself'
         else:
             where = "factorization='li' builds no normal field at all"
@@ -3024,9 +3029,9 @@ class CoreFactorizationMixin:
         """
         if self._projector is None:
             return
-        if self._modeling_type == 0 and factorization == Factorization.NVF:
+        if self._modeling_path == ModelingPath.RASTER and factorization == Factorization.NVF:
             return
-        if self._modeling_type == 2:
+        if self._modeling_path == ModelingPath.PARAMETRIC:
             where = ('the smooth shape path builds its normal field from the geometry, which '
                      'carries no magnitude for the circular limit to read')
         else:
@@ -3052,7 +3057,7 @@ class CoreFactorizationMixin:
         The default is exempt for the same reason as everywhere else -- an untouched keyword is
         not a request -- which is what `None` now means (see :meth:`_resolve_normal_grid`).
         """
-        if self._normal_grid is None or self._modeling_type == 2:
+        if self._normal_grid is None or self._modeling_path == ModelingPath.PARAMETRIC:
             return
         raise NotImplementedError(
             f'normal_grid={self._normal_grid!r} has no reader here: the raster path builds its '
@@ -3100,7 +3105,7 @@ class CoreFactorizationMixin:
         # -- the combination the old integer could not spell -- needs both.
         normal_field = normal_field_source = compression = None
         mu_normal_field = mu_normal_field_source = mu_compression = None
-        if self._modeling_type == 0:
+        if self._modeling_path == ModelingPath.RASTER:
             if factorization == Factorization.NVF:
                 basis = self._geometry_lattice_for(None)
                 normal_field = _fac.normal_field_for_raster(
@@ -3132,7 +3137,7 @@ class CoreFactorizationMixin:
                                   mu_normal_field=mu_normal_field,
                                   mu_normal_field_source=mu_normal_field_source,
                                   mu_compression=mu_compression)
-        if self._modeling_type == 2:
+        if self._modeling_path == ModelingPath.PARAMETRIC:
             # The layer refusals run here, not only on the solve. This *is* the eager pass --
             # it is where the shapes are concrete by construction -- and a record taken over a
             # layer that would be refused is a record that lets the refusal be replayed past:
@@ -3397,7 +3402,7 @@ class CoreFactorizationMixin:
         * The **integrated** coefficients are computed by ``fourier2d_integrated`` as an integral over the
           *parametric* cell, where the Jacobian cancels against the ``1/area`` normalisation.
           There is no metric in it, so it was always lattice-general.
-        * The **smooth shape** path (``modeling_type=2``) states shape lengths as absolute
+        * The **smooth shape** path (``modeling_path='parametric'``) states shape lengths as absolute
           Cartesian quantities, so nothing about a shape deforms under a skew — a rectangle
           stays a rectangle. Only the grid of frequencies its transform is sampled at moves,
           which is one expression in :func:`~wavebit._core.analytic.shape_ft`. Overlapping
@@ -3549,7 +3554,7 @@ class CoreFactorizationMixin:
         (_, half_width_u), (_, half_width_v) = self.order_window
         mu_pass = quantity == 'permeability'
 
-        if self._modeling_type == 0:                      # raster
+        if self._modeling_path == ModelingPath.RASTER:
             # The two axes are dispatched independently. Splitting on the factorization
             # first is not arbitrary: Li's rules return three matrices and NVF returns five
             # (it couples x and y, so epxy / epyx stop being zero).
@@ -3591,7 +3596,7 @@ class CoreFactorizationMixin:
                         normal_method=self.normal_method,
                         projector=self.projector)
 
-        elif self._modeling_type == 2:      # smooth shapes -- NVF on exact transforms
+        elif self._modeling_path == ModelingPath.PARAMETRIC:  # NVF on exact transforms
             # Fixed on both axes: the epsilon tensor comes from the shapes' analytic normal
             # field, so five matrices always, and each shape's transform is the exact integral
             # over the cell, so the coefficients are integrated ones. Naming
@@ -3611,7 +3616,7 @@ class CoreFactorizationMixin:
 
         else:
             raise ValueError(
-                f'no modeling path is assigned (modeling_type={self._modeling_type!r}), so '
+                f'no modeling path is assigned (modeling_path={self._modeling_path!r}), so '
                 f'there is nothing to build convolution matrices from. Assign `structure`: '
                 f'its type is what selects the path.')
 
@@ -3648,7 +3653,7 @@ class CoreFactorizationMixin:
         building five identities for it instead would be an eigenproblem's worth of work to
         express "nothing here is magnetic".
         """
-        if self._modeling_type == 0:
+        if self._modeling_path == ModelingPath.RASTER:
             return self._mu is not None
         return any(m.is_magnetic for m in self._structure_materials())
 
@@ -3678,7 +3683,7 @@ class CoreFactorizationMixin:
         means; handing the builder a ``None`` would raise, and defaulting it here to anything
         else would be a second, quieter statement of a convention the type already owns.
         """
-        if self._modeling_type == 0:
+        if self._modeling_path == ModelingPath.RASTER:
             return self._mu
         out = []
         for layer in self.structure:

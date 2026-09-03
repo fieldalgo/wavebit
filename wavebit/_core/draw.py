@@ -25,6 +25,7 @@ from . import boundary as _boundary
 from . import clipper as _clipper
 from . import factorization as _fac
 from .domain import as_material, index_from_eps
+from .enums import ModelingPath
 from .lattice import meshgrid_xy, sample_grid
 
 #: Periodic images drawn around the cell. A shape's transform is periodic by construction, so
@@ -269,10 +270,10 @@ def _inverse_series(coeffs, half_width_u, half_width_v, n_u, n_v):
 def _band_limited(solver, layer, n):
     """The layer's own eps coefficients, evaluated on an ``n x n`` fractional grid."""
     half_width_u, half_width_v = int(solver.truncation_order[0]), int(solver.truncation_order[1])
-    mt = solver.modeling_type
+    mt = solver.modeling_path
     period = _periods(solver)
 
-    if mt == 0:
+    if mt == ModelingPath.RASTER:
         eps = _np_complex(solver.structure[layer])
         grid = _grid_from_conv_matrix(
             _fac.fourier2d_piecewise_constant(xnp, eps, half_width_u, half_width_v, inverse_rule=None),
@@ -307,7 +308,7 @@ def _band_limited(solver, layer, n):
 # ==================================================================== the two public entries
 
 def _refuse_layer(solver, layer):
-    if solver.modeling_type is None or solver.structure is None:
+    if solver.modeling_path is None or solver.structure is None:
         raise ValueError('this solver has no structure to draw.')
     n_layers = len(solver.structure)
     if not (-n_layers <= layer < n_layers):
@@ -315,7 +316,7 @@ def _refuse_layer(solver, layer):
             f'layer {layer} is out of range for a {n_layers}-layer stack. `layer` indexes the '
             f'way `structure` does -- 0 is the layer nearest `top`, whichever side the light '
             f'arrives from (docs/conventions.md).')
-    if solver.modeling_type == 2:
+    if solver.modeling_path == ModelingPath.PARAMETRIC:
         # The same refusals the solve makes, so a picture cannot be drawn of a structure the
         # solver will not build. Only the layer asked for: drawing layer 0 should not be
         # stopped by layer 3, and a renderer is where someone goes to *find out* what a
@@ -367,10 +368,10 @@ def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
 
     What ``n`` means depends on the path, and the difference is deliberate:
 
-    * **raster** (``modeling_type=0``) -- ``structure[layer]`` itself, at the raster's own
+    * **raster** (``modeling_path='raster'``) -- ``structure[layer]`` itself, at the raster's own
       resolution. ``n`` is ignored, because resampling a raster invents detail it does not
       carry.
-    * **analytic** (``modeling_type=2``) -- ``n x n`` samples of the shapes themselves, through
+    * **analytic** (``modeling_path='parametric'``) -- ``n x n`` samples of the shapes themselves, through
       :func:`~wavebit._core.analytic.shape_geometry`, periodic images included. A painted layer
       whose shapes overlap is resolved into disjoint loops by
       :mod:`~wavebit._core.boundary` first, exactly as the solver resolves it: falling back to
@@ -405,12 +406,12 @@ def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
     if band_limited:
         values = _band_limited(solver, layer, n)
     else:
-        mt = solver.modeling_type
+        mt = solver.modeling_path
         period = _periods(solver)
         basis = _basis(solver)
-        if mt == 0:
+        if mt == ModelingPath.RASTER:
             values = _np_complex(solver.structure[layer])
-        elif mt == 2:
+        elif mt == ModelingPath.PARAMETRIC:
             lay = solver.structure[layer]
             if _analytic.layer_needs_resolving(lay, solver._geometry_lattice_for(None)):
                 # Fractional samples mapped through the basis, so the loops -- which are
@@ -473,7 +474,7 @@ def plot_structure(solver, layer=0, n=512, show='eps', ax=None, band_limited=Fal
         X, Y = meshgrid_xy(image.shape, lattice=basis)
         art = ax.pcolormesh(X, Y, image, shading='nearest', cmap='viridis')
 
-    what = {0: 'raster', 2: 'shapes'}.get(solver.modeling_type, '?')
+    what = solver.modeling_path.value if solver.modeling_path is not None else '?'
     title = f'layer {layer} ({what}), {show}'
     if band_limited:
         title += f' band-limited to truncation_order={tuple(int(f) for f in solver.truncation_order)}'

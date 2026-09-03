@@ -266,7 +266,7 @@ def test_the_guard_leaves_the_descriptor_protocol_in_charge(backend, name):
     only ``pytest.raises(AttributeError)`` could not see it.
     """
     solver = _guard_solver(backend)
-    for prop in ('n_top', 'n_bot', 'modeling_type', 'grating_type', 'scattering',
+    for prop in ('n_top', 'n_bot', 'modeling_path', 'grating_type', 'scattering',
                  'formulation_assigned', 'order_window', 'tetm_index'):
         with pytest.raises(AttributeError, match='has no setter'):
             setattr(solver, prop, 1.5)

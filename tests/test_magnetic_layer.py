@@ -276,7 +276,7 @@ def test_clearing_the_mu_first_makes_the_swap_legal():
     mee.mu = None
     mee.structure = SHAPE_LAYER
     assert mee.mu is None
-    assert mee.modeling_type == 2
+    assert mee.modeling_path == 'parametric'
 
 
 # ============================================================ the reconstructed field

@@ -55,7 +55,7 @@ def _grating(rows, **kw):
     One row plus a ``tetm`` is the pure TE/TM path, one row plus a ``psi`` the conical one, and
     three identical rows the 2D path at ``n_orders_v == 1`` — the same physical grating each
     time. The raster front door is the one that reaches these paths at all: a shape structure
-    sets ``modeling_type=2``, which routes to the 2D solve whatever its geometry.
+    sets ``modeling_path='parametric'``, which routes to the 2D solve whatever its geometry.
     """
     return wavebit.rcwa(backend=0, top=1.0, bot=Material(2.25, mu=1.3), theta=THETA,
                         truncation_order=(TO, 0), period=(PERIOD, PERIOD), wavelength=WL,

@@ -183,7 +183,7 @@ def test_the_refusal_holds_on_every_backend(name, code, path, series):
 # `shape_ft` or `to_conv_mat_smooth_nvf` -- it clips the painting into disjoint polygons and
 # transforms those (`boundary.to_conv_mat_boundary_layer`).
 #
-# Both tables key on `_modeling_type`, so it inherits the smooth path's row, and that
+# Both tables key on `_modeling_path`, so it inherits the smooth path's row, and that
 # is right on the substance: a polygon transform is exact, so the coefficients are integrated
 # ones, and the assembly is the same NVF five-matrix form. What it does *not* inherit for free
 # is an accurate refusal -- both messages used to name only the per-shape transform, which is
@@ -213,7 +213,7 @@ def test_the_boundary_sub_path_is_covered_by_the_smooth_row():
     from wavebit._core import analytic
     assert analytic.layer_needs_resolving(PAINTED[0], as_lattice(period=PAINTED_PERIOD))
     s = _painted()
-    assert s._modeling_type == 2
+    assert s._modeling_path == 'parametric'
     assert s.fourier_coefficients == 'integrated' and s.factorization == 'nvf'
     assert sum(m is not None for m in s._eps_conv_matrices()) == 5
 

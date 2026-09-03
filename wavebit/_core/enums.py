@@ -7,6 +7,10 @@ index the pure 1D solves dispatch on (``CoreSolveMixin.tetm_index``). Users writ
 number invited a third meaning: the retired ``pol`` accepted the interior of ``[0, 1]``,
 where it was a linear angle in a bad unit rather than a declaration at all.
 
+``ModelingPath`` is the one nobody sets. It is reported rather than passed -- the type of
+``structure`` selects it -- and it is what the other axes are conditioned on, which is why it
+is a member of this module rather than an integer on the solver.
+
 ``FourierCoefficients`` and ``Factorization`` are ``str`` enums, equal to the lowercase
 strings the solver stores, so ``factorization=Factorization.NVF`` and ``factorization='nvf'``
 are the same thing.
@@ -45,6 +49,35 @@ class Tetm(IntEnum):
     """The two states of the ``tetm`` declaration; the value is ``tetm_index``."""
     TE = 0
     TM = 1
+
+
+class ModelingPath(str, Enum):
+    """How a layer is described -- the choice every other axis is conditioned on.
+
+    There is no keyword to set this. The *type of the object* passed as ``structure`` is the
+    choice: an array selects :attr:`RASTER`, a list of layer dicts selects :attr:`PARAMETRIC`.
+    :attr:`~wavebit._core.engine.SolverBase.modeling_path` reports which was read.
+
+    The two names sit on one axis -- what the input *is* -- because that is the only thing a
+    caller picks. ``'parametric'`` rather than ``'analytic'`` for that reason: closed form is
+    not exclusive to it (``fourier_coefficients='integrated'`` is closed form over a raster's
+    constant blocks), and the pair as spelled is the one the inverse-design literature already
+    uses -- a permittivity field on a grid for topology optimization, a handful of geometric
+    parameters for parametric optimization.
+
+    **An overlap is not a third path.** Where a parametric layer's shapes intersect, the layer
+    is resolved into disjoint polygons first (:mod:`wavebit._core.boundary`) because summing
+    each shape's transform would give the overlap both materials. That choice is taken **per
+    layer** from the shapes' own coordinates, so one ``structure`` can have its first layer
+    resolved and its second transformed in closed form -- which is why it cannot be a member
+    here, and why what records it is ``geometry.boundary_plans`` rather than this. See
+    ``docs/boundary-modeling.md``.
+
+    Replaced a bare ``modeling_type`` integer whose values were ``0`` and ``2``: ``1`` was the
+    block path, removed in ``ad415b4``, and the hole outlived it.
+    """
+    RASTER = 'raster'          # a 2D array of sampled permittivity, one grid per layer
+    PARAMETRIC = 'parametric'  # a background material plus a list of shapes carrying material=
 
 
 class FourierCoefficients(str, Enum):

@@ -20,7 +20,7 @@ import pytest
 
 import wavebit
 from wavebit.manifest import (LATTICE, MATERIAL_QUANTITY, MATERIALS, SPELLINGS,
-                              cited_sources, manifest)
+                              _PATH_OF_TYPE, cited_sources, manifest)
 from wavebit._core.enums import (Backend, Factorization, FourierCoefficients, NormalMethod,
                                    Projector, Tetm)
 
@@ -75,13 +75,13 @@ def test_each_spelling_selects_the_modeling_type_it_claims(spelling):
     than the one whose trade-offs it just explained.
     """
     solver = wavebit.rcwa(structure=STRUCTURES[spelling['path']], **KW)
-    assert solver.modeling_type == spelling['modeling_type']
+    assert solver.modeling_path == _PATH_OF_TYPE[spelling['modeling_type']]
 
 
 def test_the_manifest_covers_every_spelling_the_setter_accepts():
     """A path the solver can assign but the manifest omits is a path nobody is told about."""
-    assigned = {wavebit.rcwa(structure=u, **KW).modeling_type for u in STRUCTURES.values()}
-    assert assigned == {s['modeling_type'] for s in SPELLINGS}
+    assigned = {wavebit.rcwa(structure=u, **KW).modeling_path for u in STRUCTURES.values()}
+    assert assigned == {_PATH_OF_TYPE[s['modeling_type']] for s in SPELLINGS}
 
 
 # ------------------------------------------------------- unavailable options are refused

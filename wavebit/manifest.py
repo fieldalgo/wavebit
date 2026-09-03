@@ -29,7 +29,7 @@ import json
 
 from ._core.enums import (Answers, Backend, DEFAULT_ANSWERS, DIFFERENTIABLE_BACKENDS,
                           Factorization,
-                          FourierCoefficients, NormalMethod, Projector, Tetm)
+                          FourierCoefficients, ModelingPath, NormalMethod, Projector, Tetm)
 from ._core.engine import (_COEFFICIENTS_IMPLEMENTED_BY, _COEFFICIENTS_REASON,
                            _FACTORIZATION_IMPLEMENTED_BY, _FACTORIZATION_REASON)
 from ._core.spec import SPEC_VERSION
@@ -177,7 +177,11 @@ SHAPE_COORDINATES = {
 
 # ------------------------------------------------------------------ per-path option support
 
-def _options_for(modeling_type):
+#: The integer ``SPELLINGS`` still publishes, mapped to the path the engine's tables key on.
+_PATH_OF_TYPE = {0: ModelingPath.RASTER, 2: ModelingPath.PARAMETRIC}
+
+
+def _options_for(path):
     """The two Fourier axes for one modeling path, as implemented rather than as documented.
 
     Read from :mod:`wavebit._core.engine`'s own tables. A path absent from a table
@@ -185,19 +189,19 @@ def _options_for(modeling_type):
     implements exactly the value it names, and the reason says whether the others are unbuilt
     or unbuildable.
     """
-    factorization = _FACTORIZATION_IMPLEMENTED_BY.get(modeling_type)
-    coefficients = _COEFFICIENTS_IMPLEMENTED_BY.get(modeling_type)
+    factorization = _FACTORIZATION_IMPLEMENTED_BY.get(path)
+    coefficients = _COEFFICIENTS_IMPLEMENTED_BY.get(path)
     return {
         'factorization': (
             [m.value for m in Factorization] if factorization is None
             else [factorization.value]),
         'factorization_reason': (
-            None if factorization is None else _FACTORIZATION_REASON[modeling_type]),
+            None if factorization is None else _FACTORIZATION_REASON[path]),
         'fourier_coefficients': (
             [m.value for m in FourierCoefficients] if coefficients is None
             else [coefficients.value]),
         'fourier_coefficients_reason': (
-            None if coefficients is None else _COEFFICIENTS_REASON[modeling_type]),
+            None if coefficients is None else _COEFFICIENTS_REASON[path]),
         # The third axis exists only where a raster normal field is built. On the raster
         # path the constructions are probed rather than assumed -- 'contour' needs the
         # optional contourpy dependency, and offering an option this environment cannot
@@ -205,18 +209,19 @@ def _options_for(modeling_type):
         # read only under factorization='nvf' (explicitly set anywhere it has no reader, it
         # is refused rather than ignored). The smooth shape path builds its normal field
         # from the geometry itself, so it has no raster construction to select.
-        'normal_method': _raster_normal_methods() if modeling_type == 0 else [],
+        'normal_method': _raster_normal_methods() if path == ModelingPath.RASTER else [],
         'normal_method_reason': (
-            "read only under factorization='nvf'" if modeling_type == 0
+            "read only under factorization='nvf'" if path == ModelingPath.RASTER
             else 'the smooth shape path builds its normal field from the geometry itself; '
                  'there is no raster construction to select'),
         # A fourth axis, and deliberately *not* four more `normal_method` values. That one
         # says how the field is built; this says how the projector is formed from it, so the
         # two compose -- publishing them as one list of eight would tell a consumer there are
         # eight independent choices where there are two.
-        'projector': ([m.value for m in Projector] if modeling_type == 0 else []),
+        'projector': ([m.value for m in Projector] if path == ModelingPath.RASTER else []),
         'projector_reason': (
-            "read only under factorization='nvf', beside normal_method" if modeling_type == 0
+            "read only under factorization='nvf', beside normal_method"
+            if path == ModelingPath.RASTER
             else 'the smooth shape path builds its normal field from the geometry, which '
                  'carries no magnitude for the circular limit to read'),
     }
@@ -474,7 +479,7 @@ def manifest() -> dict:
         'shape_coordinates': SHAPE_COORDINATES,
         'material_quantity': _jsonable_material_quantity(),
         'paths': [
-            dict(spelling, **_options_for(spelling['modeling_type']))
+            dict(spelling, **_options_for(_PATH_OF_TYPE[spelling['modeling_type']]))
             for spelling in SPELLINGS
         ],
         'lattice': {

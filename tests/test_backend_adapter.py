@@ -637,16 +637,16 @@ def test_a_refused_structure_leaves_the_solver_exactly_as_it_was(backend):
     state the refusal exists to prevent. All three measured before the fix:
 
     * a shape recipe assigned over a raster that carries a `mu`: `ValueError` raised, and
-      afterwards `modeling_type == 2` with `mu` still attached. That is verbatim the
+      afterwards `modeling_path == 'parametric'` with `mu` still attached. That is verbatim the
       silently-dropped knob `_MU_ON_A_SHAPE_PATH` is worded to stop, reached through the
       refusal written to stop it.
     * a mismatched grid: left a `(1, 2, 8)` permittivity beside a `(1, 2, 4)` permeability,
       and the next `solve()` *answered* rather than raising.
-    * a bad-dtype raster over a shape structure: left `modeling_type == 0` with a list in
+    * a bad-dtype raster over a shape structure: left `modeling_path == 'raster'` with a list in
       `structure` -- a pair that contradicts itself.
 
     Asserted on the state *and* on the answer, because the state is what a reader inspects and
-    the answer is what actually goes wrong. A solver that reports the right `modeling_type`
+    the answer is what actually goes wrong. A solver that reports the right `modeling_path`
     while solving a different scene would pass the first half alone.
     """
     if backend == 1:
@@ -659,7 +659,7 @@ def test_a_refused_structure_leaves_the_solver_exactly_as_it_was(backend):
                                               'lx': 120.0, 'material': 4.0}]}]
 
     def state(s):
-        return (s.modeling_type, s.mu is not None, type(s.structure).__name__,
+        return (s.modeling_path, s.mu is not None, type(s.structure).__name__,
                 None if s.mu is None else tuple(np.asarray(s.mu).shape))
 
     def totals(s):
