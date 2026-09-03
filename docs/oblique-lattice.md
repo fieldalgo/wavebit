@@ -634,7 +634,7 @@ N=256:
 *Left, `sum(T)`; right, the axis ratio of what the solver was actually handed. The redrawn
 raster sits on the staircase-free control at every angle; the held one leaves it.*
 
-    gamma    redrawn     reused   analytic   axis ratio redrawn   axis ratio reused
+    gamma    redrawn     reused      exact   axis ratio redrawn   axis ratio reused
        90   0.164669   0.164669   0.159837              1.0000              1.0000
        80   0.191967   0.381166   0.195321              1.0004              1.1918
        70   0.291714   0.373390   0.279065              1.0006              1.4281

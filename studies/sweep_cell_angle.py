@@ -24,7 +24,7 @@ Three arms:
 
 * ``redrawn``  -- ``A.grid`` at each angle: the Cartesian frame, a circle at every angle
 * ``reused``   -- drawn once and passed on: the lattice frame, sheared by the basis change
-* ``analytic`` -- parametric circles, Cartesian by construction and staircase-free; the control
+* ``exact``    -- parametric circles, Cartesian by construction and staircase-free; the control
   for the *Cartesian* frame, and not an answer key for the other one
 
 **Neither arm is the mistake.** The lattice frame is the right answer wherever a feature is a
@@ -217,20 +217,20 @@ def main():
             aspect_of(stale > 1.0, cell),
         ))
 
-    head = ('gamma', 'redrawn', 'reused', 'analytic', 'aspect redrawn', 'aspect reused')
+    head = ('gamma', 'redrawn', 'reused', 'exact', 'aspect redrawn', 'aspect reused')
     print(f'{head[0]:>7} {head[1]:>11} {head[2]:>11} {head[3]:>11} '
           f'{head[4]:>15} {head[5]:>14}')
     for g, a, b, c, ar, br in rows:
         print(f'{g:>6.0f}  {a:>11.6f} {b:>11.6f} {c:>11.6f} {ar:>15.4f} {br:>14.4f}')
 
     ga = np.array([r[0] for r in rows])
-    red, reu, ana = (np.array([r[i] for r in rows]) for i in (1, 2, 3))
-    print(f'\nredrawn vs analytic : worst {np.max(np.abs(red - ana)):.2e}')
-    print(f'reused  vs analytic : worst {np.max(np.abs(reu - ana)):.2e}')
+    red, reu, exa = (np.array([r[i] for r in rows]) for i in (1, 2, 3))
+    print(f'\nredrawn vs exact : worst {np.max(np.abs(red - exa)):.2e}')
+    print(f'reused  vs exact : worst {np.max(np.abs(reu - exa)):.2e}')
 
     # The gap on the `redrawn` arm is the staircase and nothing else, which is worth measuring
     # rather than asserting: it shrinks with the raster while the truncation is held.
-    print('\nthe redrawn arm against the same analytic answer, as the raster is refined '
+    print('\nthe redrawn arm against the same exact answer, as the raster is refined '
           f'(gamma = {CONVERGENCE_ANGLE:.0f}):')
     cell = wavebit.Lattice.oblique(EDGE, EDGE, np.radians(CONVERGENCE_ANGLE))
     exact = solve(cell, [{'background': 1.0, 'shapes': [
@@ -250,7 +250,7 @@ def main():
         return
 
     fig, ax = plt.subplots(1, 2, figsize=(11.5, 4.4))
-    ax[0].plot(ga, ana, 'k-', lw=2.2, label='analytic (staircase-free)')
+    ax[0].plot(ga, exa, 'k-', lw=2.2, label='exact (staircase-free)')
     ax[0].plot(ga, red, 'o-', ms=5, color='#2a78d6', label='raster, redrawn each angle')
     ax[0].plot(ga, reu, 's--', ms=5, color='crimson', label='raster, drawn once and reused')
     ax[0].set_xlabel('angle between a1 and a2 (degrees)')
