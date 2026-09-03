@@ -68,10 +68,10 @@ jobs:
   test:
     name: full backends
     runs-on: ubuntu-latest
-    # The backstop, not the mechanism: `--timeout` below fails a stuck test by name
-    # and lets the run continue, which is what actually diagnoses a hang. This only
-    # bounds the case that signal cannot reach -- a stall inside a C extension that
-    # never returns to the interpreter, where no alarm handler ever runs.
+    # The backstop, and it has already been the thing that fired: on run 33715389225
+    # the per-test `--timeout` never triggered at all and this is what ended the job,
+    # at three hours instead of GitHub's six. The per-test bound is the mechanism and
+    # this is the net under it.
     #
     # 180, not 90: the suite legitimately needs about two hours on these runners
     # (it was 55 minutes to 43% on the run that hung), so a tighter number would
@@ -147,13 +147,31 @@ jobs:
         #
         # 1200s is deliberately far above anything here rather than merely above it.
         # The slowest single test in the suite is 63 seconds on a developer machine,
-        # but these runners are not that machine -- one 72-test block of this same
-        # run took 30 minutes, a mean of 25 seconds a test -- and a bound that fires
-        # on a slow test rather than a stuck one would be a false red mark on a
-        # healthy commit. Nineteen times the known worst case has no such reading.
-        # A true hang is bounded either way, and the diagnostic -- the test's name --
-        # is the same at 1200 as at 60.
-        run: pytest tests -q --timeout=1200 --timeout-method=signal
+        # but these runners are not that machine -- one 72-test block took 30 minutes,
+        # a mean of 25 seconds a test -- and a bound that fires on a slow test rather
+        # than a stuck one would be a false red mark on a healthy commit.
+        #
+        # `-v`, not `-q`, and this is the part that actually diagnoses a hang. `-q`
+        # prints one character per test and flushes a line every 72 of them, so a
+        # job killed mid-line names none of the 72 -- run 33656262958 and run
+        # 33715389225 both died that way, and recovering even the *identity* of what
+        # failed took rebuilding pytest's collection order offline and matching it
+        # against the skip pattern. `-v` writes the node id *before* running the test
+        # and flushes, so the last line of a killed log is the stuck test by name,
+        # and every failure is named inline as it happens rather than in a summary
+        # that a killed run never reaches.
+        #
+        # `thread`, not `signal`, and this is a retreat from a choice made one commit
+        # ago. `signal` was chosen so a stuck test would fail and let the run carry
+        # on; on run 33715389225 it sat through 2h05m of stall without firing once,
+        # which says the interpreter never becomes reachable there -- the alarm is
+        # set, and no bytecode boundary ever arrives to deliver it. `thread` watches
+        # from a second thread that the main thread cannot block, dumps every
+        # thread's stack, and exits. That ends the run, which is why it was rejected
+        # before; with `-v` above, every failure up to that point is already in the
+        # log, so the objection no longer holds. What it buys is the one thing still
+        # missing: *where* the process is stuck, not merely which test was running.
+        run: pytest tests -v --timeout=1200 --timeout-method=thread
 
   examples:
     name: examples smoke
