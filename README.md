@@ -154,7 +154,7 @@ manual uses, with the decision records outside the manual the way NEPs are.
 | --- | --- | --- |
 | [`docs/guide/`](docs/guide) | needs the contract for one keyword | **The manual.** What Wavebit solves and what it is bad at, installation, a quickstart; then describing a scene, saying what the light is, choosing the numerics, near fields, autodiff, backends, and a run described as data |
 | [`docs/reference/`](docs/reference) | needs a signature or a guarantee | [`conventions.md`](docs/conventions.md) is the **normative** contract; `keywords.md` is all 27 `rcwa()` keywords with their defaults and refusals; `api.md` is generated from the docstrings |
-| [`docs/`](docs) | is questioning a default | **Why it is what it is**, and what was measured to decide it — 26 write-ups, cited from the code they explain. [`docs/decisions/`](docs/decisions) groups them |
+| [`docs/`](docs) | is questioning a default | **Why it is what it is**, and what was measured to decide it — 27 write-ups, cited from the code they explain. [`docs/decisions/`](docs/decisions) groups them |
 | [`tutorials/`](tutorials) | has not used the API yet | Lessons in order, as runnable notebooks: a first solve, autograd and optimization, device and precision, NVF factorization, oblique cells, polarization, multimode incidence |
 | [`examples/`](examples) | wants it applied | Wavebit against outside problems |
 | [`studies/`](studies) | wants the raw measurement | The scripts behind the numbers in `docs/` |
