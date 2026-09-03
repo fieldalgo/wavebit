@@ -35,8 +35,8 @@ discontinuous functions:
   Fourier with NVF.
 
 The removed block path's layers were the closed-form series on explicitly
-given segment edges, with Li's rules; the analytic *shape* path lives in
-:mod:`wavebit._core.analytic` and is always NVF.
+given segment edges, with Li's rules; the parametric shape path lives in
+:mod:`wavebit._core.parametric` and is always NVF.
 
 A recurring rule runs through this module: **discrete geometry decisions are computed eagerly
 and passed in as static inputs, while material values flow through differentiably.** Two
@@ -449,9 +449,9 @@ def check_normal_grid(grid_shape, half_width_u, half_width_v):
     instead.
 
     It lives here rather than beside either caller because both shape paths need it and
-    :mod:`.boundary` imports :mod:`.analytic`, so the analytic one could not reach it there.
-    Until 2026-08-27 only the boundary path called it, and the asymmetry was not a decision:
-    at ``truncation_order=10`` the boundary path refused ``normal_grid=8`` while the analytic
+    :mod:`.boundary` imports :mod:`.parametric`, so the parametric one could not reach it there.
+    Until 2026-08-27 only the boundary route called it, and the asymmetry was not a decision:
+    at ``truncation_order=10`` the boundary route refused ``normal_grid=8`` while the parametric
     path built it, 4.9e-4 adrift and conserving energy to twelve digits.
     """
     Ny, Nx = grid_shape
@@ -740,7 +740,7 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
     was never reachable from the solver and was dropped in the port. See
     ``tests/test_nvf_normal_field.py``.
     For the shape-based (non-raster) normal field, see
-    :func:`wavebit._core.analytic.normal_vector_field_analytical`.
+    :func:`wavebit._core.parametric.normal_vector_field_analytical`.
 
     ``with_magnitude=True`` appends a third array: ``|grad d|`` of the periodic distance map
     (:func:`_distance_gradient`), scaled so its maximum over the cell is exactly 1. It is the
@@ -1424,7 +1424,7 @@ def _refuse_z_coupling(xp, tensor33):
     **Skipped under a trace, and that is the softer pole on purpose.** ``bool(any(z != 0))``
     survives ``jax.grad`` -- a comparison drops the tangent in one whole-array step, where
     ``float(max(abs(z)))`` stays a tracer -- but not ``jax.jit``. Unlike
-    :func:`~wavebit._core.analytic.layer_needs_resolving`, whose traced answer *routes* a layer
+    :func:`~wavebit._core.parametric.layer_needs_resolving`, whose traced answer *routes* a layer
     and so must raise, this one routes nothing: both answers build the same matrices, and it
     decides only whether to report. There is also no frozen record that could carry an eager
     answer forward, so refusing when traced would refuse *every* jitted call on a path that
@@ -1879,7 +1879,7 @@ def fourier2d_integrated(xp, cell, x, y, half_width_u, half_width_v, *, inverse_
     then transformed exactly; here the edge is a number this function integrates to. Both are
     exact for the staircase they are given — they differ in which staircases they can be
     given. Curved boundaries are still approximated by steps in both;
-    :mod:`wavebit._core.analytic` is the path where the staircase itself is gone.
+    :mod:`wavebit._core.parametric` is the path where the staircase itself is gone.
 
     ``inverse_rule`` is as in :func:`fourier2d_piecewise_constant`.
     """
@@ -2053,7 +2053,7 @@ def compress_cell(xp, cell, row_idx, col_idx):
 
 
 def to_conv_mat_raster_integrated(structure, half_width_u, half_width_v, compression=None):
-    """Per-layer convolution matrices via the analytic (staircase-free) integrated path.
+    """Per-layer convolution matrices via the integrated (closed-form) series.
 
     Args:
         structure: relative-permittivity raster ``(n_layers, Ny, Nx)`` — the design variable.

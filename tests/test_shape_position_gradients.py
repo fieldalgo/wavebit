@@ -1,4 +1,4 @@
-"""Gradients with respect to a shape's *position* on the smooth path.
+"""Gradients with respect to a shape's *position* on the parametric path.
 
 ``cx`` and ``cy`` were the two shape parameters ``test_gradients`` never covered. The reason
 was recorded as a gap — a finite-difference comparison that failed and got removed — and the
@@ -21,7 +21,7 @@ was *sampled at the shape's actual place*.
   where the shape sits, so the same structure translated was a *different* structure to the
   factorization — 1.6e-3 on ``sum(R)`` for a circle.
 
-:func:`wavebit._core.analytic.normal_projector_coeffs` now builds a lone shape's field at the
+:func:`wavebit._core.parametric.normal_projector_coeffs` now builds a lone shape's field at the
 centre of the cell and translates the coefficients by a phase, which removes both at once. The
 numbers below are what that is worth, and they are absolute now rather than relative to a
 spread, because there is no longer a spread to measure against.
@@ -31,7 +31,7 @@ from wavebit._core.lattice import as_lattice
 import pytest
 
 import wavebit
-from wavebit._core import analytic as _an
+from wavebit._core import parametric as _an
 
 pytest.importorskip('jax')
 import jax                                                     # noqa: E402
@@ -134,7 +134,7 @@ def test_the_projectors_move_by_a_phase_and_by_nothing_else():
     convolution matrix is ``D X D^-1`` for one diagonal ``D``, the solve is conjugated by it,
     and each order's efficiency cannot move — which is why the assertions above can be absolute.
     """
-    from wavebit._core.analytic import normal_projector_coeffs
+    from wavebit._core.parametric import normal_projector_coeffs
 
     truncation_order, grid = 4, 256
     cy0, cy = 0.0, -0.19 * P
@@ -159,7 +159,7 @@ def test_the_position_reaches_the_projectors_through_that_phase():
     that moves: ``ky = 1``, whose derivative is ``-2i*pi/Py`` times itself. A difference quotient
     is the independent witness; before the fix autograd returned exactly 0.0 here.
     """
-    from wavebit._core.analytic import normal_projector_coeffs
+    from wavebit._core.parametric import normal_projector_coeffs
 
     truncation_order, grid = 4, 256
 
@@ -199,7 +199,7 @@ def test_the_sampled_field_no_longer_depends_on_where_in_the_cell_a_shape_SITS()
     measured at the solve in the two tests above, where it converges under grid refinement
     rather than changing sign.
     """
-    from wavebit._core.analytic import normal_vector_field_analytical
+    from wavebit._core.parametric import normal_vector_field_analytical
 
     def mean_nx2(kind, cy):
         normal_x, _ = normal_vector_field_analytical(

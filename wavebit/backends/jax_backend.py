@@ -33,7 +33,7 @@ from .._core.result import Result, ResultSub                     # noqa: E402
 
 class _BaseRCWA(CoreSolveMixin):
     #: The array namespace this solver's arrays live in. A class attribute rather than a
-    #: lookup, because the one caller that needs it -- the analytic builder, which starts from
+    #: lookup, because the one caller that needs it -- the parametric builder, which starts from
     #: parametric shapes and so cannot infer a namespace from its input -- used to reach a
     #: `_namespace_for_backend(self.backend)` living in `_core` that imported jax and torch by
     #: name and fell through to numpy on an unrecognised code, with no `else`. The solver

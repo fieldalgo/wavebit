@@ -295,7 +295,7 @@ path, whose `n_split` is the abscissa of the table below and does not exist any 
 kept for the *shape* of the answer, which is what it was about: the boundary is sharp, exact up
 to it (a replay at 106.31 matched a rebuild at 0.0e+00) and refused past it (106.33), and it
 narrows sharply as a shape is described more finely. The equivalent measurement on the boundary
-path — where the abscissa is which shapes overlap, not how many slabs a shape has — has not
+route — where the abscissa is which shapes overlap, not how many slabs a shape has — has not
 been taken; the recompilation sweep above shows its boundary on one pair, which is a different
 and much weaker statement.
 

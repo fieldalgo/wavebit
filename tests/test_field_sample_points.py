@@ -12,7 +12,7 @@ that holds until someone adds an FFT for speed. The strongest statement availabl
 the same point asked for as part of a grid, to the bit, not to a tolerance.
 
 ``sample_x`` / ``sample_y`` are measured from the **centre of the cell**, the same origin an
-analytic shape's ``cx`` uses since 2026-08-31, so a count spans ``[-period/2, +period/2]``.
+parametric shape's ``cx`` uses since 2026-08-31, so a count spans ``[-period/2, +period/2]``.
 :func:`test_the_shape_origin_and_the_sample_origin_are_one_origin` is the one that says the two
 halves of that sentence are the same origin, against a raster, which has no origin to move.
 

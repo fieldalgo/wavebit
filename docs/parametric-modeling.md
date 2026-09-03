@@ -4,7 +4,7 @@ Written: 2026-08. Paths updated after the single-source rewrite folded the three
 copies into `_core`.
 
 Targets:
-- `wavebit/_core/analytic.py` — the analytic Fourier coefficients, and
+- `wavebit/_core/parametric.py` — the analytic Fourier coefficients, and
   `normal_vector_field_analytical` for the normal field
 - `wavebit/_core/solve_2d.py::layer_modes_2d` — the `epxy` / `epyx` off-diagonal slots the
   NVF form fills
@@ -36,12 +36,12 @@ Two qualifications, both measured, both easy to trip over:
   improved raster-NVF by ~8x on the metallic circle, and the two are now level there — see §4
   case [2]. The separation that survives is against a *staircase* (case [1]), where the
   geometric error has a floor no Fourier order removes.
-- **On an axis-aligned boundary the smooth path is the slower one.** Li's rules along x and y
+- **On an axis-aligned boundary the parametric path is the slower one.** Li's rules along x and y
   are already optimal when the interfaces are axis-aligned, so NVF only costs there. Measured
-  against RETICOLO: the block path matches at 1e-14 every order while the smooth path needs
+  against RETICOLO: the block path matches at 1e-14 every order while the parametric path needs
   truncation_order≈16 to reach 1e-4.
 
-Choose the path by the boundary, not on a general expectation that the smooth path wins.
+Choose the path by the boundary, not on a general expectation that the parametric path wins.
 
 ---
 
@@ -66,7 +66,7 @@ rotated frequency coordinate `κ = Rot(θ)^T k` and the center phase `e^{-i k·c
 
 Here `sinc(z)=sin z/z`, `jinc(z)=2 J1(z)/z` (both removable at 0, value 1). The circle is the
 `a=b=R` special case of the ellipse. All three formulas are verified against a fine
-midpoint DFT (`tests/test_analytic.py`).
+midpoint DFT (`tests/test_parametric.py`).
 
 A layer's coefficients are assembled as background + sum of (non-overlapping) shapes:
 
@@ -97,7 +97,7 @@ epz_i = inv(⟦ε⟧)
 ```
 
 The projectors `Cxx=⟦nx²⟧` etc. are obtained by sampling the **analytic unit normal field**
-(`_core/analytic.py::normal_vector_field_analytical` — a level-set gradient per shape until
+(`_core/parametric.py::normal_vector_field_analytical` — a level-set gradient per shape until
 2026-08-17, a distance-product blend of per-shape surface normals since) on a fine grid
 and transforming it (`normal_projector_coeffs`). Unlike the SDF normals of a staircased
 boundary, these are the true-boundary normals, so the full NVF benefit is realized.
@@ -145,14 +145,14 @@ underfoot, which put the normal 40 deg off at a boundary with two shapes in the 
 three. The weights collapse to one shape's own normal exactly at its surface, so boundaries read
 0.000 deg for any number of shapes, naming a shape a period over moves 5.3e−15, and the position
 gradient survives for rectangles as well as circles. See
-`analytic.normal_vector_field_analytical` and `_shape_surface_normal`. Why the `½`-symmetrization is
+`parametric.normal_vector_field_analytical` and `_shape_surface_normal`. Why the `½`-symmetrization is
 needed — the plain product `Δ C` is not Hermitian, which gives complex `q²` and gross
 energy-conservation violation on curved boundaries — is written out in the
 `nvf_conv_matrices` docstring in `_core/factorization.py`.
 
 ## 3. Usage (new modeling type)
 
-Passing `structure` as a **list of layer dicts** dispatches to the smooth path (modeling type
+Passing `structure` as a **list of layer dicts** dispatches to the parametric path (modeling type
 2, grating type 2). The raster (ndarray) path keeps working; the other list spelling, a
 per-layer `[background, [[shape, ...], ...]]`, was the block modeller and is refused by name
 since 2026-08-26.
@@ -235,7 +235,7 @@ dielectric, is the one that still separates the paths, because there the stairca
 geometric error floor that no Fourier order removes and no raster refinement reaches.
 
 For a curved boundary the honest evidence is now the RETICOLO comparison, which has an external
-reference rather than the smooth path's own truncation_order=16: the analytic result is flat from truncation_order=5
+reference rather than the parametric path's own truncation_order=16: the analytic result is flat from truncation_order=5
 while two independent staircases are still climbing toward it at truncation_order=20.
 
 **[3] Lossless multi-shape / multi-layer** (ellipse + rectangle + circle, conical
@@ -252,11 +252,11 @@ precision energy conservation. Backend agreement: `|np−jax|`~1e-14, `|np−tor
 - The ellipse coefficient's `κ=√(...)` has a NaN sqrt(0) derivative at the DC point, guarded
   with a safe-sqrt.
 - Verification: `dT/dlx` w.r.t. circle/ellipse semi-axes matches finite differences
-  (torch·jax, `test_analytic.py`).
+  (torch·jax, `test_parametric.py`).
 
 ## 6. Regression tests
 
-`tests/test_analytic.py`: (1) conv_matrix_2d==fourier2d_pointwise convention, (2) the three shape
+`tests/test_parametric.py`: (1) conv_matrix_2d==fourier2d_pointwise convention, (2) the three shape
 formulas vs a fine DFT, (3) axis-aligned analytic==raster-NVF, (4) lossless energy
 conservation, (5) backend agreement, (6) torch/jax differentiability, (7) analytic ≥5× more
 accurate than staircase for a tilted dielectric. Existing `test_nvf*` and `test_fixes` all
@@ -315,7 +315,7 @@ keep passing.
   [doi:10.1364/OE.16.017295](https://doi.org/10.1364/OE.16.017295) — a **distinct** paper (Götz is
   not an author of the 2007 one, and the two are easy to merge). It supplies the field for
   *arbitrary* shapes, the gap its abstract names; both papers call the simple-shape case trivial.
-  This path is that trivial case — `analytic.normal_vector_field_analytical` writes the normal
+  This path is that trivial case — `parametric.normal_vector_field_analytical` writes the normal
   down in closed form from the rectangle/ellipse parameters, so it follows the 2007 method and
   owes nothing to the 2008 algorithm. The raster path
   (`factorization.normal_vector_field`) is the one solving the 2008 paper's problem, by a
@@ -375,7 +375,7 @@ in [`boundary-modeling.md`](boundary-modeling.md) and [`backend-choice.md`](back
 
 This module **sums** its shapes, so an overlap would get both contributions and be neither
 shape's material. It refuses one instead. A layer whose shapes actually intersect is built by
-the boundary path — it resolves the painting into disjoint polygons, later shape over earlier,
+the boundary route — it resolves the painting into disjoint polygons, later shape over earlier,
 and transforms those, keeping the tilted edges exact. See
 [`boundary-modeling.md`](boundary-modeling.md).
 

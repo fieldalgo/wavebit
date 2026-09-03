@@ -429,7 +429,7 @@ def test_a_lossy_half_space_is_written_as_a_pair():
 def test_a_material_inside_a_shape_recipe_survives_too():
     """A Material is self-identifying in JSON, so it travels at any depth the schema allows.
 
-    ``_jsonable`` writes one wherever it meets it -- a block background, an analytic shape's
+    ``_jsonable`` writes one wherever it meets it -- a block background, a parametric shape's
     ``material`` -- so the reader has to meet it at the same depths, or ``to_dict`` would emit
     a document its own ``from_dict`` reads as something else.
     """

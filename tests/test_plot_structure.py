@@ -23,7 +23,7 @@ import array_api_compat.numpy as xnp
 import wavebit
 from wavebit._core import boundary as _b
 from wavebit._core import clipper as _c
-from wavebit._core.analytic import assemble_eps_coeffs
+from wavebit._core.parametric import assemble_eps_coeffs
 from wavebit._core.lattice import as_lattice
 
 P = 1000.0
@@ -130,7 +130,7 @@ OVERLAP = [dict(type='rectangle', cx=-70.0, cy=0.0, lx=300.0, ly=300.0, material
 
 
 def loop_mean_eps(shapes, background=1.0):
-    """`<eps>` straight off the boundary path's resolved loops -- areas, no sampling at all."""
+    """`<eps>` straight off the boundary route's resolved loops -- areas, no sampling at all."""
     recs, regions = _b.plan_layer(shapes, CELL)
     verts = [_b.shape_vertices(xnp, s, CELL) for s in shapes]
     vals = _c.eval_table(xnp, recs, verts)

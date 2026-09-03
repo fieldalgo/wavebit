@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Resolve painting order into disjoint polygons -- the planning half of the boundary path.
+"""Resolve painting order into disjoint polygons -- the planning half of the boundary route.
 
 Everything here is NumPy on concrete values and runs **outside any trace**. What it produces is
 a *plan*: which vertices a loop is made of, and which pairs of edges cross. The plan holds

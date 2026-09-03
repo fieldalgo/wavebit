@@ -464,7 +464,7 @@ def test_contour_is_periodic_where_the_medial_axis_is_reachable(name, build, rol
     field API to carry a magnitude (the constructions return unit vectors), complex projector
     coefficients, and distinct `eps_xy` / `eps_yx` -- today one object fills both slots.
 
-    This is the raster twin of the exact-tangency singularity in the analytic path
+    This is the raster twin of the exact-tangency singularity in the parametric path
     (`analytic._blend`): a normal field asked for a direction where geometry defines none.
     The shear makes that answer stable. It does not make it right, and nothing here does.
     """

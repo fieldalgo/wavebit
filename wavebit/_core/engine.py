@@ -14,7 +14,7 @@ import functools as _functools
 
 import numpy as _np
 
-from . import analytic as _analytic
+from . import parametric as _parametric
 from . import boundary as _boundary
 from . import factorization as _fac
 from . import lattice as _lattice
@@ -68,7 +68,7 @@ _SOLVES = {
 #: cell and the coherent partner of the ``wavelength=1.`` default in normalized units. The two
 #: were one value until 2026-09-01, so a scene that forgot its cell was indistinguishable from
 #: one written in normalized units and simply solved, on a cell 900x smaller than its own
-#: wavelength. Only the raster path could reach that: an analytic shape carries absolute
+#: wavelength. Only the raster path could reach that: a parametric shape carries absolute
 #: lengths, so it is already refused by "shape is larger than the period".
 _CELL_UNSET = object()
 
@@ -1043,7 +1043,7 @@ class CoreSolveMixin:
         ``lattice=`` was forgotten, ``sum(T)`` came back **0.989790** against the correct
         **0.927664**, with no error and energy conserved.
 
-        The analytic path is already safe here and this does not duplicate it — a shape's
+        The parametric path is already safe here and this does not duplicate it — a shape's
         lengths are absolute, so the same omission raises "shape is larger than the period".
         The raster was the only silent one.
 
@@ -1910,7 +1910,7 @@ _FACTORIZATION_IMPLEMENTED_BY = {
 _FACTORIZATION_REASON = {
     ModelingPath.PARAMETRIC: (
         "the parametric path builds eps from a normal field taken from the geometry -- "
-        "the shapes' own (wavebit._core.analytic.to_conv_mat_smooth_nvf), or, for a painted "
+        "the shapes' own (wavebit._core.parametric.to_conv_mat_parametric_nvf), or, for a painted "
         "layer whose shapes overlap, that of the disjoint polygons the painting resolves into "
         "(wavebit._core.boundary.to_conv_mat_boundary_layer). There is no raster "
         "axis to run Li's nested 1D rule along, so Li's rules are not something that path has "
@@ -1927,12 +1927,12 @@ _COEFFICIENTS_IMPLEMENTED_BY = {
     ModelingPath.PARAMETRIC: FourierCoefficients.INTEGRATED,
 }
 
-# Why, phrased for the person who asked for 'sampled'. The smooth path's missing series is
+# Why, phrased for the person who asked for 'sampled'. The parametric path's missing series is
 # not merely unbuilt but unbuildable -- a parametric shape has no samples to take.
 _COEFFICIENTS_REASON = {
     ModelingPath.PARAMETRIC: (
         "the parametric path transforms geometry in closed form -- each "
-        "shape in turn (wavebit._core.analytic.shape_ft), or, for a painted layer whose "
+        "shape in turn (wavebit._core.parametric.shape_ft), or, for a painted layer whose "
         "shapes overlap, the disjoint polygons the painting resolves into "
         "(wavebit._core.boundary.to_conv_mat_boundary_layer). Either transform *is* the "
         "integral of eps over the cell, evaluated in closed form. Parametric geometry has no "
@@ -1957,7 +1957,7 @@ class CoreFactorizationMixin:
       the builders, which needs concrete values. For JAX-traced use, call the core builders
       directly with a precomputed ``normal_field`` / ``compression``.
 
-    The smooth shape path (``modeling_path`` ``PARAMETRIC``) is built from parametric shapes rather
+    The parametric path (``modeling_path`` ``PARAMETRIC``) is built from parametric shapes rather
     than an array, so there is no input array to read the namespace from — it comes from the
     backend code instead.
 
@@ -2004,7 +2004,7 @@ class CoreFactorizationMixin:
                  # the only series it can form. Naming the other one raises.
                  factorization=None,         # 'li' | 'nvf' (normal vector field); the
                  # default resolves per modeling path -- 'li' on a raster, 'nvf' on
-                 # analytic shapes, which is the only rule the shape path implements.
+                 # parametric shapes, which is the only rule the shape path implements.
                  # Naming the other one raises.
                  normal_grid=None,  # normal-field sampling, per axis; None resolves to
                  # max(_NORMAL_GRID_DEFAULT, 4*half_width+1) -- 1024, lifted to the aliasing
@@ -2335,7 +2335,7 @@ class CoreFactorizationMixin:
     def structure(self):
         """The layer stack, in whichever of the two encodings it was given in.
 
-        A raster is an ``(n_layers, Ny, Nx)`` array of **relative permittivity**; the analytic
+        A raster is an ``(n_layers, Ny, Nx)`` array of **relative permittivity**; the parametric
         spelling is a per-layer list that names a
         :class:`~wavebit._core.domain.Material` per region. Assigning it settles
         :attr:`modeling_path`, which is the only thing that selects the modeling
@@ -2378,21 +2378,21 @@ class CoreFactorizationMixin:
             # Analytic: one dict(background=..., shapes=[...]) per layer. Shape
             # coordinates are absolute lengths in the units of `period`, not fractions
             # of it. Shapes that overlap paint, later over earlier, and are routed to
-            # the boundary builder by the overlap itself. See wavebit._core.analytic.
+            # the boundary builder by the overlap itself. See wavebit._core.parametric.
             # The block spelling -- a per-layer `[background, [[shape, ...], ...]]` -- used
-            # to be the `else` of this line, so every list that was not the analytic one became
+            # to be the `else` of this line, so every list that was not the parametric one became
             # a block. That path is gone; the shape it accepted has to be refused by name here,
-            # or it falls through to the analytic builder and dies as
+            # or it falls through to the parametric builder and dies as
             # `TypeError: unhashable type: 'list'` from somewhere with no bearing on the input.
             if not structure or not isinstance(structure[0], dict):
                 raise ValueError(
-                    'structure: a list of layers has to be the analytic spelling -- one '
+                    'structure: a list of layers has to be the parametric spelling -- one '
                     'dict(background=..., shapes=[...]) per layer. The other list spelling, a '
                     'per-layer [background, [[shape, ...], ...]], was the block modeller, and '
                     'that path is gone: it decomposed shapes into axis-aligned rectangles and '
                     "applied Li's rule to them, which measured bit-identical to a raster under "
                     'the same rule on a commensurate 1D grating and behind NVF everywhere '
-                    'else. Write the shapes as dicts for the analytic path, or sample them '
+                    'else. Write the shapes as dicts for the parametric path, or sample them '
                     'onto a raster.')
             kind, value = ModelingPath.PARAMETRIC, structure
         elif structure is None:
@@ -2626,7 +2626,7 @@ class CoreFactorizationMixin:
         They are named for taking either; a count is one way to say where to sample.
 
         ``sample_x`` / ``sample_y`` are lengths in ``period``'s units, measured from the
-        **centre of the cell** -- the origin an analytic shape's ``cx`` uses since 2026-08-31 --
+        **centre of the cell** -- the origin a parametric shape's ``cx`` uses since 2026-08-31 --
         and are otherwise unconstrained; a count spans the cell, which is ``[-period/2,
         +period/2]`` in that frame and the same physical grid it always was.
         ``sample_z`` is absolute, measured from the top of the stack, must lie inside it, and
@@ -2856,7 +2856,7 @@ class CoreFactorizationMixin:
                 a smooth-path circle used to answer to ``factorization='li'`` with NVF numbers
                 and no way to tell. The default is exempt because it is not a request: it is
                 resolved per path, so a user who never touched the keyword gets Li on a raster
-                and NVF on smooth shapes, which is what each path always did.
+                and NVF on parametric shapes, which is what each path always did.
         """
         implemented = _FACTORIZATION_IMPLEMENTED_BY.get(self._modeling_path)
         if implemented is None:                       # raster, or no structure yet: free choice
@@ -2968,7 +2968,7 @@ class CoreFactorizationMixin:
         give d/dcx == 0 exactly; the sampling leaves a sawtooth instead -- 5e-4 at 256, 4.2e-5
         at 1024)". That *translation* number is a multi-shape one written as a general one: a
         lone shape is built at the centre of the cell and carried to its position by a phase
-        (`analytic.normal_projector_coeffs`), so it is translation-exact at every grid.
+        (`parametric.normal_projector_coeffs`), so it is translation-exact at every grid.
         Peak-to-peak `sum(T)` over a one-pixel rigid translation, `truncation_order=6`:
 
             normal_grid        128       256       512      1024
@@ -3021,7 +3021,7 @@ class CoreFactorizationMixin:
         both so that a caller naming one gets told about the one they named -- the two are
         independent axes and a message about the other sends them to change the wrong thing.
 
-        The smooth shape path is the case worth naming. It *does* build a normal field, from
+        The parametric path is the case worth naming. It *does* build a normal field, from
         the geometry rather than from a raster, and it has no magnitude to open into an
         ellipse -- an analytic normal is exact everywhere its shape is smooth, and the medial
         axis this exists for is a raster artefact. So the refusal there is not "there is no
@@ -3148,14 +3148,14 @@ class CoreFactorizationMixin:
             # until 2026-08-27 it did not make it.
             basis = self._geometry_lattice_for(None)
             for index, layer in enumerate(self.structure):
-                _analytic.check_layer_spec(layer, index)
-                _analytic.check_layer_shapes(layer, basis, index)
+                _parametric.check_layer_spec(layer, index)
+                _parametric.check_layer_shapes(layer, basis, index)
             # Only a layer that actually overlaps has a plan to freeze. One with nothing
             # overlapping means the same structure either way and stays on the closed-form
             # path, so its slot stays None and the replay never looks.
             plans = [_boundary.plan_layer(layer.get('shapes', []),
                                           self._geometry_lattice_for(None))
-                     if _analytic.layer_needs_resolving(
+                     if _parametric.layer_needs_resolving(
                          layer, self._geometry_lattice_for(None)) else None
                      for layer in self.structure]
             # Recorded whether or not anything needed a plan. The entry *is* the decision:
@@ -3405,7 +3405,7 @@ class CoreFactorizationMixin:
         * The **smooth shape** path (``modeling_path='parametric'``) states shape lengths as absolute
           Cartesian quantities, so nothing about a shape deforms under a skew — a rectangle
           stays a rectangle. Only the grid of frequencies its transform is sampled at moves,
-          which is one expression in :func:`~wavebit._core.analytic.shape_ft`. Overlapping
+          which is one expression in :func:`~wavebit._core.parametric.shape_ft`. Overlapping
           *painted* layers were refused inside that path for a while, on the belief that
           resolving an overlap clips against a rectangular cell. It does not: the clipper does
           Cartesian polygon booleans and never sees the cell, and ``exp(-i G.r)`` carries the
@@ -3428,7 +3428,7 @@ class CoreFactorizationMixin:
         (``docs/nvf-normal-methods.md``).
 
         The Li check below reads the *resolved* :attr:`factorization`, which is why a skewed
-        run on the smooth shape path no longer has to spell ``factorization='nvf'`` out: that
+        run on the parametric path no longer has to spell ``factorization='nvf'`` out: that
         path resolves to NVF on its own, and demanding the keyword was this refusal reading the
         unresolved default and mistaking it for a request.
         """
@@ -3602,7 +3602,7 @@ class CoreFactorizationMixin:
             # over the cell, so the coefficients are integrated ones. Naming
             # `factorization='li'` or `fourier_coefficients='sampled'` was refused above.
             xp = self.xp
-            conv = _analytic.to_conv_mat_smooth_layers(
+            conv = _parametric.to_conv_mat_parametric_layers(
                 structure, half_width_u, half_width_v,
                 self._geometry_lattice_for(geometry),
                 normal_grid=self._resolve_normal_grid(half_width_u, half_width_v),
@@ -3621,7 +3621,7 @@ class CoreFactorizationMixin:
                 f'its type is what selects the path.')
 
         # Returned as the builder made it. Every builder in `_core.factorization` and
-        # `_core.analytic` answers with a `ConvMatrices`, the Li-rule ones carrying `None` in
+        # `_core.parametric` answers with a `ConvMatrices`, the Li-rule ones carrying `None` in
         # the off-diagonal pair, so there is no padding step here to get the arity wrong.
         return conv
 

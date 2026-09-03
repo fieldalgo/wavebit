@@ -4,14 +4,14 @@
 The third modeling path, and the only one that gets both halves of the problem right at once:
 
 ===============  ==================  =====================
-path             tilted edge         overlapping shapes
+route            tilted edge         overlapping shapes
 ===============  ==================  =====================
 raster           staircase           as drawn (painted)
-analytic         **exact**           summed
+parametric       **exact**           summed
 **this one**     **exact**           **painted**
 ===============  ==================  =====================
 
-A raster paints -- the later sample wins -- but staircases a tilted edge. The smooth path
+A raster paints -- the later sample wins -- but staircases a tilted edge. The parametric path
 transforms a tilted shape in closed form but *sums* the shapes, so an overlap would get both
 contributions and end up as neither shape's material; it refuses one rather than answering.
 Neither gap can be closed by mixing the two: the analytic normal field never asks which
@@ -34,7 +34,7 @@ removed block path, while tying on axis-aligned overlap, where a staircase has n
 lose.
 """
 from . import clipper as _clipper
-from .analytic import nvf_from_coeffs, shape_geometry, _sampled_coeffs
+from .parametric import nvf_from_coeffs, shape_geometry, _sampled_coeffs
 from .domain import as_material
 from .backend import checked_float
 from .factorization import check_normal_grid
@@ -70,7 +70,7 @@ def periodic_segments(xp, A, E, L2, lattice):
     `sum(T)` stopped converging (1.8e-3 to 3.9e-4 over truncation order 4 to 16, against
     5.6e-4 to 3.6e-5 for the same structure sitting inside the cell).
 
-    Two steps, and both are the ones :func:`wavebit._core.analytic._fold_to_nearest_image`
+    Two steps, and both are the ones :func:`wavebit._core.parametric._fold_to_nearest_image`
     takes, because this is the same theorem one representation over:
 
     * **Fold in the lattice, not in a rectangle.** ``A % P`` answers "which cell is this in"
@@ -85,7 +85,7 @@ def periodic_segments(xp, A, E, L2, lattice):
     sign the winding would have carried is not read either.
 
     One ring is enough because a shape wider than the period is refused before this
-    (:func:`wavebit._core.analytic.check_layer_shapes`); with every segment shorter than the
+    (:func:`wavebit._core.parametric.check_layer_shapes`); with every segment shorter than the
     period, folding its start into the cell puts the whole segment within one period of it.
 
     ``E`` and ``L2`` are translation invariant, so an image needs neither recomputed -- which
@@ -150,7 +150,7 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
     ``normal_y**2``.
 
     The sample points come from :func:`wavebit._core.lattice.sample_grid`, shared with the
-    analytic builder — this body was written by copying that one, and copying it is how it
+    parametric builder — this body was written by copying that one, and copying it is how it
     inherited a reversed ``period`` unpack that sampled over a transposed cell. It is also how
     it *failed* to inherit the periodic fold the analytic field was given on 2026-08-17: the
     copy carried a bug across and then missed the fix. :func:`periodic_segments` is that fix in
@@ -315,8 +315,8 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, norm
     zero = xp.zeros(KY.shape, dtype=cdtype)
 
     # `eps`, not `conj(eps)`. Wavebit works in `e^{-iwt}` throughout (`Im(eps) > 0` = loss)
-    # with no conjugation on the way in — the same sentence `analytic.assemble_eps_coeffs`
-    # carries, and this builder is its later copy. It kept the conjugate that the smooth path
+    # with no conjugation on the way in — the same sentence `parametric.assemble_eps_coeffs`
+    # carries, and this builder is its later copy. It kept the conjugate that the parametric path
     # was moved off in 2026-08, which turned an absorbing painted layer into a gain medium:
     # `R + T` up to 1.11 and reflectance off by 0.16 on gold. Invisible to `test_boundary.py`,
     # which builds every shape with a real material, where the two spellings are identical.
@@ -355,12 +355,12 @@ POLYGON_VERTICES = 256
 
 
 def shape_vertices(xp, shape, lattice, n_poly=POLYGON_VERTICES):
-    """Counter-clockwise vertices of one analytic primitive.
+    """Counter-clockwise vertices of one parametric primitive.
 
-    Same shape dictionaries the smooth path takes, and the same convention: ``lx`` / ``ly``
+    Same shape dictionaries the parametric path takes, and the same convention: ``lx`` / ``ly``
     are full lengths, so a circle is ``lx = ly = diameter``.
 
-    The dict is read by :func:`~wavebit._core.analytic.shape_geometry` and nowhere else, for
+    The dict is read by :func:`~wavebit._core.parametric.shape_geometry` and nowhere else, for
     the reason that function was written: it used to be read here as well, directly, and the
     two readings disagreed. ``ly`` had no default here at all, so the natural spelling of a
     circle — give the diameter once — summed fine and raised ``KeyError`` the moment the same
@@ -376,7 +376,7 @@ def shape_vertices(xp, shape, lattice, n_poly=POLYGON_VERTICES):
     if kind in ('circle', 'disk', 'ellipse'):
         return ellipse_verts(xp, cx, cy, lx, ly, angle, n_poly)
     raise NotImplementedError(
-        f"The boundary path cannot draw a {kind!r} yet; it needs the shape as a polygon. "
+        f"The boundary route cannot draw a {kind!r} yet; it needs the shape as a polygon. "
         f"Supported: rectangle, square, circle, disk, ellipse.")
 
 
@@ -426,7 +426,7 @@ def _concrete_basis(lattice):
     """The cell basis as plain floats, read the way :func:`_concrete_shape` reads a centre.
 
     The basis became part of *where a shape is* on 2026-08-31, when ``cx`` / ``cy`` moved to
-    the centre of the cell: :func:`~wavebit._core.analytic.shape_geometry` adds
+    the centre of the cell: :func:`~wavebit._core.parametric.shape_geometry` adds
     ``0.5*(a1 + a2)`` to every shape now, not only to a defaulted one. Without this read a plan
     cut from perfectly concrete shapes on a *differentiated cell* would fail the way the shape
     half used to -- ``TracerArrayConversionError`` under ``jax.grad`` -- and the staleness check
@@ -473,7 +473,7 @@ def check_plan_still_fits(shapes, lattice, plan, n_poly=POLYGON_VERTICES):
     those ten at ``truncation_order = 8``) because the solve grows faster than the painting does. The
     freeze on this path buys traceability, not speed, so there is no plateau being given up for
     it. Under a trace it is skipped -- a tracer has no coordinates to re-plan from, which is the
-    same reading of "not concrete" that :func:`analytic._primitives` takes, and for the same
+    same reading of "not concrete" that :func:`parametric._primitives` takes, and for the same
     reason.
     """
     try:

@@ -188,7 +188,7 @@ MATERIAL_QUANTITY = {
 #: ``lengths``: absolute, in the units of ``period``, never fractions of it.
 #: ``origin``: what ``cx`` / ``cy`` are measured from -- the centre of the cell,
 #: ``0.5*(a1 + a2)``, which is also what an omitted centre means. Corner-relative until
-#: 2026-08-31; moved to match S4, the only other solver that takes analytic shapes.
+#: 2026-08-31; moved to match S4, the only other solver that takes parametric shapes.
 #: The **raster** path has no such coordinate and did not move: an array is the geometry.
 SHAPE_COORDINATES = {
     'lengths': 'absolute',

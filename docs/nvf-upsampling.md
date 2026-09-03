@@ -240,7 +240,7 @@ where either column has stopped converging.
 
 ## The sweep
 
-Base raster 240x240 (fine enough that the staircase error is small), truth from the analytic
+Base raster 240x240 (fine enough that the staircase error is small), truth from the parametric
 shape path at `truncation_order=16`, error on the specular transmitted order.
 
 | case | `truncation_order` | sampled | R=1 | R=2 | R=4 |
@@ -296,8 +296,8 @@ for a smooth boundary, and a random raster has none. The justification is this d
 ## Reproduce
 
 The sweeps here are not checked in as a benchmark; they are one-off measurements against the
-analytic shape path. Three neighbouring write-ups cover the questions around this one:
-[`analytic-modeling.md`](analytic-modeling.md) on how the smooth path compares to the raster
+parametric shape path. Three neighbouring write-ups cover the questions around this one:
+[`parametric-modeling.md`](parametric-modeling.md) on how the parametric path compares to the raster
 and staircase representations, [`backend-choice.md`](backend-choice.md) on what the change
 here did to the cost of NVF relative to the other two strategies (it removed the difference),
 and [`nvf-normal-methods.md`](nvf-normal-methods.md) on the raster constructions that remove
@@ -317,4 +317,4 @@ the quantization this file measured (the `normal_method` keyword).
   [doi:10.1364/OE.16.017295](https://doi.org/10.1364/OE.16.017295) — the paper that addresses
   generating the field for an arbitrary shape, which is the problem the distance transform here
   solves. Whether it is the *same* construction has not been checked against the full text; see
-  the same caveat in [`analytic-modeling.md`](analytic-modeling.md).
+  the same caveat in [`parametric-modeling.md`](parametric-modeling.md).

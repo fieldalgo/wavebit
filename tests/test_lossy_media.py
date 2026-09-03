@@ -23,7 +23,7 @@ conjugated formulation, which is what the code ran on when they were found (see
   wrong outright — by ~1% at normal incidence and by more than the amplitude itself at oblique.
 * The analytic (shape-based) Fourier builder kept conjugating after the seam was removed, so an
   absorbing *layer* built that way came out as gain — R + T above 1, and ~9% on the reflectance
-  of a single gold film. Hence ``test_absorbing_layer_via_the_analytic_path`` below: the raster
+  of a single gold film. Hence ``test_absorbing_layer_via_the_parametric_path`` below: the raster
   builder was already covered here, the analytic one was not covered anywhere.
 
 Real indices were never affected by any of them, which is why all three survived every
@@ -210,7 +210,7 @@ def solver_R_analytic(ns, thicknesses, wavelength, theta, tetm):
 
     ``shapes=[]`` makes each layer uniform ``background``, so the structure is identical to the
     one ``solver_RT`` rasters — only the coefficient builder differs. That routes through the 2D
-    solve (the smooth path always does), so the polarization comes in as ``psi`` rather than
+    solve (the parametric path always does), so the polarization comes in as ``psi`` rather than
     ``tetm``, and the period must be 2D.
     """
     structure = [dict(background=eps_from_index(n), shapes=[]) for n in ns[1:-1]]
@@ -227,10 +227,10 @@ ANALYTIC_CASES = KNOWN_GOOD + LOSSY_SUBSTRATE
 
 @pytest.mark.parametrize('tetm,theta', INCIDENCE, ids=IDS)
 @pytest.mark.parametrize('case', ANALYTIC_CASES, ids=[c[0] for c in ANALYTIC_CASES])
-def test_absorbing_layer_via_the_analytic_path(case, tetm, theta):
-    """The analytic builder must land on the same physics as the raster one, for complex ``n``.
+def test_absorbing_layer_via_the_parametric_path(case, tetm, theta):
+    """The parametric builder must land on the same physics as the raster one, for complex ``n``.
 
-    The smooth path had no complex-index coverage at all: ``tests/test_analytic``
+    The parametric path had no complex-index coverage at all: ``tests/test_parametric``
     was entirely real, where ``conj(n)**2 == n**2``. Running the *uniform* stack through it puts
     it against the absolute oracle rather than against another solver — gold as a layer landed
     ~9% off here and tripped the ``R + T > 1`` guard, because the conjugation turned it into a
@@ -293,12 +293,12 @@ def solver_R_painted(n, thickness, wavelength, theta, tetm):
 def test_absorbing_layer_via_the_painted_path(n, tetm, theta):
     """The boundary (painted-polygon) builder, for complex ``n``. It was the last one left.
 
-    ``_core/boundary.py`` is a later copy of ``_core/analytic.py``'s coefficient assembly, and
-    it kept the ``conj(n)**2`` that the smooth path was moved off — so a painted absorbing
+    ``_core/boundary.py`` is a later copy of ``_core/parametric.py``'s coefficient assembly, and
+    it kept the ``conj(n)**2`` that the parametric path was moved off — so a painted absorbing
     layer came out as *gain*: reflectance off by 0.15 on gold and 0.023 on the weak absorber,
     with ``R + T`` up to 1.11.
 
-    Nothing objected, for the same reason the analytic path went uncovered before it:
+    Nothing objected, for the same reason the parametric path went uncovered before it:
     ``test_boundary.py`` builds every shape with a **real** material, where ``conj(eps)``
     and ``eps`` are the same number. Its two builders are cross-checked against each other to
     5e-9 and both were on the same real materials, so agreeing proved nothing about this.

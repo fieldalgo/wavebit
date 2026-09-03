@@ -11,10 +11,10 @@ A ``structure`` is layer-major on its first axis in every encoding the solver ac
 single layer is exactly ``(thickness[i], structure[i])``:
 
   - raster   : ndarray ``(n_layers, Ny, Nx)`` of PERMITTIVITY -- one sample per pixel
-  - analytic : list of layer dicts -- one dict per layer
+  - parametric : list of layer dicts -- one dict per layer
 
 There are three places in there that say what a region is made of, and two of them -- the
-analytic layer's ``background`` and the analytic shape's ``material`` -- are
+parametric layer's ``background`` and the parametric shape's ``material`` -- are
 **assignments**: a name for the stuff that fills a region. :class:`Material` is that name, and
 it carries permittivity and permeability together because a medium has both. The raster is the
 third and stays arrays: it is not an assignment but a *sampled field*, one number per pixel,
@@ -55,7 +55,7 @@ _PYTREE_REGISTERED = False
 def _register_pytree_if_jax_loaded():
     """Register :class:`Material` as a JAX pytree, if JAX is in the process already.
 
-    A material is a legitimate *design variable* -- the analytic path already tolerates a
+    A material is a legitimate *design variable* -- the parametric path already tolerates a
     tracer in a shape's coordinates, and there is no reason permittivity should be the one
     parameter you cannot differentiate. For that to work JAX has to be able to see inside a
     ``Material``: an unregistered class is an opaque **leaf**, so ``jax.grad`` has nothing to
@@ -244,8 +244,8 @@ def as_material(value, where='material') -> Material:
     """A :class:`Material` from whatever a caller wrote: a Material, a number, or nothing.
 
     **The single coercion point.** Every path that accepts a material calls this, so the
-    scalar shorthand is defined once and cannot drift between the analytic layer's
-    ``background`` and the analytic shape's ``material`` key -- the two spellings that
+    scalar shorthand is defined once and cannot drift between the parametric layer's
+    ``background`` and the parametric shape's ``material`` key -- the two spellings that
     :class:`Material` exists to unify. ``where`` names the slot in the error message
     (``'stack.top'``, ``'shapes[2].material'``), matching how ``_core/spec.py`` reports paths.
 
@@ -362,7 +362,7 @@ class Layer:
     """One layer of a :class:`Stack`: a thickness paired with the structure filling it.
 
     ``structure`` is the layer's entry of the stack's ``structure`` in either encoding -- a
-    raster grid array ``(Ny, Nx)`` of permittivity, or an analytic layer dict.
+    raster grid array ``(Ny, Nx)`` of permittivity, or a parametric layer dict.
 
     It is a *structure*, not a material, which is why the field is no longer called ``eps``:
     the raster case is a single quantity end to end, and even there it is one sample per pixel
@@ -429,7 +429,7 @@ class Stack:
                        mu=None, lattice=None) -> "Stack":
         """Adapt a ``(structure, thickness)`` pair into a typed ``Stack``.
 
-        ``structure`` may be either encoding (raster ndarray / analytic list); it is
+        ``structure`` may be either encoding (raster ndarray / parametric list); it is
         layer-major on its first axis, so layer *i* is ``(thickness[i], structure[i])``. The
         inverse of :attr:`structure` — ``Stack.from_structure(s, t).structure`` reproduces
         ``s``. ``mu`` is the raster path's optional permeability field, layer-major the same
@@ -453,7 +453,7 @@ class Stack:
         """Rebuild the stack-wide ``structure`` for the solver.
 
         Raster layers (array grids) stack into an ``(n_layers, Ny, Nx)`` array through the
-        Array-API namespace, preserving backend and dtype; analytic layers return a
+        Array-API namespace, preserving backend and dtype; parametric layers return a
         plain per-layer list. An empty stack is ``None`` (matching the ``structure`` default).
         """
         return self._stacked([layer.structure for layer in self.layers])

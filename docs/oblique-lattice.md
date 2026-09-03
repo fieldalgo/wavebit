@@ -122,7 +122,7 @@ for `i, j` in `-1, 0, 1`) so a feature straddling an edge wraps correctly. Writt
 it is `((np.arange(n) + 0.5)/n - 0.5)` per axis, then `U*a1 + V*a2` — the `- 0.5` being the
 centred cell. `wavebit.meshgrid_xy` exists so that neither half has to be remembered.
 
-Analytic shapes do not have this problem *in their lengths*: those are absolute Cartesian
+Parametric shapes do not have this problem *in their lengths*: those are absolute Cartesian
 quantities, so a rectangle stays a rectangle under a skew. `cx` / `cy` are Cartesian too, and
 they are measured from the same origin the raster grid above uses — the centre of the cell —
 so `cx = cy = 0` is a centred shape on every cell, skewed or not.
@@ -246,7 +246,7 @@ the jit round trip. Nothing downstream sees the type. And the tag cannot go on t
 `X**2 + Y**2` and `< R**2` — all ufuncs — and dies at the one call every raster expression on
 this page ends with.
 
-**An analytic structure is refused rather than wrapped**, because that path has no frame to
+**A parametric structure is refused rather than wrapped**, because that path has no frame to
 declare: a shape's `lx` and `cx` are absolute lengths, so the same recipe is the same geometry
 on every cell and moving the basis is a legitimate thing to do with it. Two shapes on a 640
 square give 0.999233 and the identical structure on `hexagonal(640.)` gives 0.999851 — both
@@ -293,7 +293,7 @@ structure* to exercise the spec plumbing, and those still build. What is refused
 downstream can notice: measured on a hex scene with `lattice=` forgotten, `sum(T)` came back
 **0.989790** against the correct **0.927664**, no error and energy conserved throughout.
 
-The analytic path was already safe and this does not duplicate it — a shape's lengths are
+The parametric path was already safe and this does not duplicate it — a shape's lengths are
 absolute, so the same omission raises *"shape is larger than the period"*. The raster was the
 only silent one. `wavebit.meshgrid_xy` has refused the same omission since it was written
 (`as_lattice: needs one of period or lattice`), so the two doors into a raster now agree. The
@@ -312,7 +312,7 @@ truncation 6, 300 thick, index 3.5 at 900 nm. `A` is the 640 square it was drawn
         +----------------+----------------+
         |                                 |
    list of dicts                    array of numbers
-   (analytic)                       (raster)
+   (parametric)                     (raster)
         |                                 |
    absolute lengths            fractions of the pixel grid,
    -- no frame to declare      and the grid needs a cell
@@ -336,10 +336,10 @@ truncation 6, 300 thick, index 3.5 at 900 nm. `A` is the 640 square it was drawn
 | `A.drawn(raster)` | `lattice=A` | answers, unchanged from bare | 0.420214 |
 | `A.drawn(raster)` | `lattice=B` | **refused**: *drawn on a different cell* | — |
 | `A.drawn(raster)` | `period=[640., 640.]` | answers — the same cell, spelled the other way | 0.420214 |
-| analytic | `lattice=A` | answers | 0.438099 |
-| analytic | `lattice=B` | answers, and **0.121451 is correct** — same circle, skewed cell | 0.121451 |
-| analytic | neither | refused: *no cell was given* | — |
-| `A.drawn(analytic)` | — | **refused at the wrap**: no frame to declare | — |
+| parametric | `lattice=A` | answers | 0.438099 |
+| parametric | `lattice=B` | answers, and **0.121451 is correct** — same circle, skewed cell | 0.121451 |
+| parametric | neither | refused: *no cell was given* | — |
+| `A.drawn(parametric)` | — | **refused at the wrap**: no frame to declare | — |
 
 Read the two bolded rows together, because they are the same input pattern with opposite
 verdicts and that is the entire design. `lattice=B` under a bare raster returns 0.110040 rather
@@ -347,7 +347,7 @@ than raising, because it is a *legal reading*: the array is fractions of the cel
 rides along and becomes an ellipse in a skewed cell, which is exactly what a duty cycle or a
 fill fraction is meant to do. Nothing downstream can tell that apart from a mistake — the array
 carries no length of its own — so the only thing that can is the caller, and `.drawn` is how
-they say it. `lattice=B` under an analytic structure returns 0.121451 and that number needs no
+they say it. `lattice=B` under a parametric structure returns 0.121451 and that number needs no
 declaration at all: `lx=300.` is 300 units on every cell, so there is no second reading to
 disambiguate, which is why declaring one is refused rather than allowed-and-ignored.
 
@@ -357,7 +357,7 @@ the same cell. And declaring costs nothing when it agrees — 0.420214 either wa
 wrapper is taken apart at ingest and no array downstream ever sees the type.
 
 The rule underneath all twelve rows fits in a line: **a raster belongs to a cell and an
-analytic structure does not.** The refusals are the places that sentence is enforced.
+parametric structure does not.** The refusals are the places that sentence is enforced.
 
 ## What it buys
 
@@ -406,21 +406,21 @@ are independent and multiply.
 | | status | note |
 |---|---|---|
 | `factorization='nvf'`, sampled or integrated | supported | — |
-| analytic shapes, summed | supported | lengths are absolute Cartesian; nothing deforms |
-| analytic shapes, painted **overlap** | supported | the clipper is Cartesian; only the periodic images and the transform needed the basis |
+| parametric shapes, summed | supported | lengths are absolute Cartesian; nothing deforms |
+| parametric shapes, painted **overlap** | supported | the clipper is Cartesian; only the periodic images and the transform needed the basis |
 | every `normal_method` on a raster | supported | since 2026-08-21; **use `'contour'`** for accuracy, including where a feature overlaps its own images (2026-09-01) — see below |
 | field reconstruction | supported | output grid is indexed by `(v, u)`, not `(y, x)` — see below |
 | `factorization='li'` on a raster | **refused** | see below |
 
 Everything except `li` works on a skewed cell, and `li` has a supported route to the same
-structure — analytic shapes, which carry the metric. The block modeller was refused here too,
+structure — parametric shapes, which carry the metric. The block modeller was refused here too,
 on the same grounds (it rasterised onto a rectangular grid of its own); that whole path was
 removed on 2026-08-26.
 
-**Analytic shapes need no keyword at all.** `factorization` resolves per modeling path, and the
-analytic path implements only `nvf` — it builds `eps` from the shapes' own analytic normal field,
+**Parametric shapes need no keyword at all.** `factorization` resolves per modeling path, and the
+parametric path implements only `nvf` — it builds `eps` from the shapes' own analytic normal field,
 so there is no raster axis for `li` to run along. Its default is therefore already `nvf`, and the
-`li` refusal above never applied to it. Passing `factorization='li'` with analytic shapes raises
+`li` refusal above never applied to it. Passing `factorization='li'` with parametric shapes raises
 whether or not the cell is skewed, because that path cannot express it; the `factorization='nvf'`
 in the example at the top of this page is required for the **raster** it uses.
 
@@ -517,7 +517,7 @@ wrongly. Four checks that are, the first of them against numbers from the litera
 Table 5.4. Parameters: `phi0 = theta0 = 0`, `psi0 = 45 deg`, `dx = dy = 5*lambda*sqrt(2)/4`,
 `h = lambda`, `eps+ = 2.25`, `eps- = 1`.
 
-(Run through the *analytic shape* path, where the geometry is exact. Rasterized instead, the
+(Run through the *parametric shape* path, where the geometry is exact. Rasterized instead, the
 same benchmark lands at 3.1e-3 at N=256 whatever the `normal_method` — that is the staircase,
 and it is why this table cannot arbitrate a normal field.)
 
@@ -555,7 +555,7 @@ Three more:
 
 **A unimodular shear.** `a2' = a2 + a1` generates the *identical* point lattice: same cell area,
 same reciprocal set. So the two runs must agree, and they do — 1.2e-4 on a raster, 2.0e-6 on
-analytic shapes (tighter because there is no staircase in it). This is the cheapest correctness
+parametric shapes (tighter because there is no staircase in it). This is the cheapest correctness
 check available and it is worth running on your own structure; `tests/test_oblique_lattice.py`
 has it as `test_unimodular_shear_is_the_same_physics`. With the normal field's metric correction
 removed the same comparison drifts to 8.5e-4 — that is the test having teeth.
@@ -657,7 +657,7 @@ The gap on the redrawn arm is the staircase and nothing else, which the study me
 than asserts — at `gamma = 60`, holding the truncation and refining the raster: **5.2e-2,
 8.5e-3, 1.1e-2, 6.4e-4** at N = 64, 128, 256, 512.
 
-Analytic shapes need no redrawing at all: `lx` is an absolute Cartesian length, so a circle
+Parametric shapes need no redrawing at all: `lx` is an absolute Cartesian length, so a circle
 stays a circle whatever the basis does. That is also why they are the control here.
 
 **Differentiating the angle is a different question** and has a different answer: redrawing a
@@ -672,7 +672,7 @@ modeling paths do not differentiate the same thing, and until 2026-09-01 nothing
 
 **A raster is held in lattice coordinates**, so a fixed array drags its pixels when the cell
 moves. Differentiating through one therefore asks *"tilt the cell **and shear the pattern with
-it**"*. An analytic shape's lengths are absolute Cartesian quantities, so the same
+it**"*. A parametric shape's lengths are absolute Cartesian quantities, so the same
 differentiation there asks *"tilt the cell **only**"*. Both are real questions; they are not
 the same number. At `gamma = 75` on the circle above, `d sum(T) / d gamma` per degree:
 
@@ -685,7 +685,7 @@ the same number. At `gamma = 75` on the circle above, `d sum(T) / d gamma` per d
 The middle row is the identification, and it is made against an independent, staircase-free
 path rather than against the raster itself: shearing the circle along the cell makes an ellipse
 whose semi-axes and angle are the singular values and left singular vectors of
-`A(gamma) @ A(gamma0)^-1`, which the analytic path can state exactly. The raster sits 10% from
+`A(gamma) @ A(gamma0)^-1`, which the parametric path can state exactly. The raster sits 10% from
 it and **3.6x** from the fixed-shape derivative.
 
 Checked for stability rather than asserted from one point: over `truncation_order` 6/8/10/12/14
@@ -726,7 +726,7 @@ measurements say so.
   `LinearizeTracer`), so the obvious spelling of the guard would silently never fire — the
   quietest possible failure for something whose whole job is to be loud.
 
-**If you want the fixed-shape derivative, use analytic shapes.** That is not a workaround; it is
+**If you want the fixed-shape derivative, use parametric shapes.** That is not a workaround; it is
 the path whose geometry is stated in Cartesian lengths, so the question is expressible there and
 is not on a raster. This is also the derivative the application family that motivates an oblique
 cell actually needs: monoclinic chiral metasurfaces, where achiral meta-atoms on a cell with
@@ -748,9 +748,9 @@ does, and a binary raster's answer then moves in steps.
 | what you are doing | geometry | works | measured |
 |---|---|---|---|
 | solve only | binary raster | yes | converges with the raster (1.8e-3 at N=512) |
-| solve only | analytic shapes | yes | no staircase at all; the control for every row below |
+| solve only | parametric shapes | yes | no staircase at all; the control for every row below |
 | **permittivity** gradient (topology optimization) | **binary raster** | **yes** | AD against FD, **0.00%** |
-| **geometry** gradient (cell lengths / angle, shape position / size) | analytic shapes | yes | -9.4996e-03 /deg; the geometry is exact |
+| **geometry** gradient (cell lengths / angle, shape position / size) | parametric shapes | yes | -9.4996e-03 /deg; the geometry is exact |
 | | binary raster, array **held** | yes, *but a different question* | -3.3806e-02 /deg — see above |
 | | binary raster, **redrawn** | **no** | FD diverges: -2.12e-01, -3.25e-01, -7.64e-01 as `h` falls |
 | | **smoothed** raster, redrawn | **yes** | `jax.grad` against FD, **0.54%** (-8.0137e-03 vs -7.9710e-03 /deg, float64) |
@@ -840,7 +840,7 @@ also wrong — a raster whose pixels are not square in real space; see
 > **There is no `normal_method` preference left to state for an oblique cell**, and there is
 > none for a feature that overlaps its own periodic images either -- which matters because on a
 > strongly skewed cell that is the ordinary case rather than an exotic one: at 20 degrees with
-> `|a1| = |a2| = 640` any circle of radius over 109 is in it, and the analytic path refuses such
+> `|a1| = |a2| = 640` any circle of radius over 109 is in it, and the parametric path refuses such
 > a shape outright, so the raster is the only route to it.
 >
 > **What is still open** is not periodicity but *accuracy on the medial axis*: where two points

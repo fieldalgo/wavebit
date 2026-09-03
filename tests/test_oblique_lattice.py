@@ -478,7 +478,7 @@ def test_a_painted_overlap_is_not_the_same_as_summing_it():
     level, on the same shapes and the same sheared cell, and compared with what the solve's own
     convolution matrix holds.
     """
-    from wavebit._core.analytic import assemble_eps_coeffs
+    from wavebit._core.parametric import assemble_eps_coeffs
     import array_api_compat.numpy as xnp
 
     ox, oy = cell_centre(SHEAR)

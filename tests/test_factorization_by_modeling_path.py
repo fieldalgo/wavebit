@@ -1,18 +1,18 @@
 """``factorization`` means different things to the two modeling paths — and used to say so to
 neither of them.
 
-Only the raster path implements both rules. The smooth shape path has NVF alone
-(``to_conv_mat_smooth_nvf`` builds eps from the shapes' own analytic normal field, and there
+Only the raster path implements both rules. The parametric path has NVF alone
+(``to_conv_mat_parametric_nvf`` builds eps from the shapes' own analytic normal field, and there
 is no raster axis to run Li's nested 1D rule along), and it used to not look at the keyword at
 all: a smooth-path circle asked for ``factorization='li'`` returned NVF numbers —
 bit-identical to ``'nvf'``, five convolution matrices either way — with nothing in the result
 to say so. The removed block path had Li's rules alone and the same silence, which is why this
 file was written about *paths* rather than about one path.
 
-The fix is not to implement the missing rule; on the smooth path there is nothing to implement,
+The fix is not to implement the missing rule; on the parametric path there is nothing to implement,
 since NVF is a superset of Li and the path has no other axis to factorize along. It is to stop
 substituting silently, in the style the rest of the module already uses
-(``_reject_unsupported_lattice``, ``analytic.check_layer_shapes``): refuse, and say why.
+(``_reject_unsupported_lattice``, ``parametric.check_layer_shapes``): refuse, and say why.
 That also settles a temperament the path did not share with itself — it already refuses a
 layer whose geometry it cannot read rather than guessing, while swallowing a factorization
 request whole.
@@ -39,7 +39,7 @@ KW_NO_CELL = {k: v for k, v in KW.items() if k != 'period'}
 
 # One structure per modeling path, as close to the same circle as each path can state it.
 # `modeling_type` is inferred from the type of `structure`, never passed. A `circle` takes `lx`
-# alone -- passing `ly` to one is refused by `analytic.check_shape_spec`.
+# alone -- passing `ly` to one is refused by `parametric.check_shape_spec`.
 # Permittivity throughout: 6.25 is the index 2.5 all three used to be written with.
 SMOOTH = [{'background': 1.0,
            'shapes': [{'type': 'circle', 'cx': 0.0, 'cy': 0.0,
@@ -86,7 +86,7 @@ def test_the_default_resolves_to_whatever_the_path_implements(path, rule):
     """The substance of the change: the default is resolved per path, not asserted globally.
 
     Without this the refusal below would be unshippable — ``'li'`` is the module-wide default,
-    so refusing it on the smooth path would break every smooth-path user who never set the
+    so refusing it on the parametric path would break every smooth-path user who never set the
     keyword, which is most of them.
     """
     assert solver(path).factorization == rule
@@ -95,7 +95,7 @@ def test_the_default_resolves_to_whatever_the_path_implements(path, rule):
 def test_the_smooth_default_is_still_nvf_to_the_bit():
     """Resolving the default must not have moved any smooth-path user's numbers.
 
-    The smooth path always ran NVF; the change is only that it now admits it. So the untouched
+    The parametric path always ran NVF; the change is only that it now admits it. So the untouched
     default and a spelled-out ``'nvf'`` have to be the same run, exactly.
     """
     assert totals('smooth') == totals('smooth', factorization='nvf')
@@ -163,7 +163,7 @@ def test_the_refusal_names_the_rule_the_path_does_use(path, rule):
 
 
 # A painted layer whose shapes actually overlap is still `modeling_type=2`, but it does not
-# reach `to_conv_mat_smooth_nvf` at all: `to_conv_mat_smooth_layers` resolves the painting into
+# reach `to_conv_mat_parametric_nvf` at all: `to_conv_mat_parametric_layers` resolves the painting into
 # disjoint polygons and transforms those instead (`boundary.to_conv_mat_boundary_layer`).
 PAINTED_OVERLAP = [{'background': 1.0, 'shapes': [
     {'type': 'rectangle', 'cx': -0.05, 'cy': 0.0, 'lx': 0.4, 'ly': 0.4, 'material': 4.0},
@@ -182,13 +182,13 @@ def test_the_boundary_sub_path_is_classified_and_refused_like_the_rest_of_smooth
 def test_the_smooth_refusal_names_the_route_the_refused_layer_actually_takes():
     """A refusal that cites one concrete function has to cite the right one.
 
-    The message named only ``to_conv_mat_smooth_nvf``, which a painted overlapping layer never
+    The message named only ``to_conv_mat_parametric_nvf``, which a painted overlapping layer never
     calls — so the single pointer it offered sent that reader to code their structure does not
     run. Nothing but a test keeps message text honest, hence this one.
     """
     with pytest.raises(NotImplementedError, match='to_conv_mat_boundary_layer'):
         wavebit.rcwa(structure=PAINTED_OVERLAP, factorization='li', **KW).solve()
-    with pytest.raises(NotImplementedError, match='to_conv_mat_smooth_nvf'):
+    with pytest.raises(NotImplementedError, match='to_conv_mat_parametric_nvf'):
         totals('smooth', factorization='li')
 
 
@@ -248,7 +248,7 @@ def test_a_skewed_smooth_cell_no_longer_has_to_spell_out_nvf():
     """The lattice refusal was reading the *unresolved* default and calling it a request.
 
     ``_reject_unsupported_lattice`` refuses Li on a skewed cell because Li's inverse rule runs
-    along the raster axes, which stop being x and y under a skew. The smooth path never used
+    along the raster axes, which stop being x and y under a skew. The parametric path never used
     Li, so that refusal never applied to it — but with the default unresolved it fired anyway,
     and every skewed smooth-path run had to pass ``factorization='nvf'`` to talk it down.
     """

@@ -109,7 +109,7 @@ class Lattice:
     **Why those two are not the same kind of thing.** The numbers are a legitimate design
     variable -- optimising a hex angle or a shear is a real thing to want, and until this class
     existed ``lattice`` was eager NumPy so ``jax.grad`` could not reach it at all. But
-    ``axis_aligned`` decides *which branch runs* (:func:`~wavebit._core.analytic.
+    ``axis_aligned`` decides *which branch runs* (:func:`~wavebit._core.parametric.
     _shape_surface_normal` picks the rectangular fold from it, and it is what keeps the
     orthogonal path bit-identical), and a traced value cannot be branched on. Carried as a
     child it would kill every jitted solve while staying invisible eagerly -- the same trap
@@ -225,7 +225,7 @@ class Lattice:
         docs ends with -- drops it. Applying it after the expression is the only placement that
         works.
 
-        **An analytic structure is refused rather than wrapped.** That path has no frame to
+        **A parametric structure is refused rather than wrapped.** That path has no frame to
         declare: a shape's ``lx`` and ``cx`` are absolute Cartesian lengths, so a circle stays
         the same circle on every cell and moving the basis is a legitimate thing to do with the
         same structure. Wrapping one and solving it elsewhere would refuse an answer that is
@@ -235,7 +235,7 @@ class Lattice:
         """
         if isinstance(values, list):
             raise ValueError(
-                'drawn: this is the analytic spelling (a list of layer dicts), and it has no '
+                'drawn: this is the parametric spelling (a list of layer dicts), and it has no '
                 'frame to declare -- a shape\'s `lx` and `cx` are absolute Cartesian lengths, '
                 'so it describes the same geometry on every cell and may be solved on any of '
                 'them. Pass it to `structure=` directly.\n'
@@ -353,7 +353,7 @@ class Lattice:
         are not the same calculation:
 
         * the *fundamental cell* differs, so an omitted shape centre lands elsewhere: ``(100, 173)``
-          against ``(300, 173)`` at ``a = 400``. See :func:`~wavebit._core.analytic.shape_geometry`.
+          against ``(300, 173)`` at ``a = 400``. See :func:`~wavebit._core.parametric.shape_geometry`.
         * ``truncation_order`` cuts a parallelogram in ``(m, n)``, and a different basis maps that
           onto a different set of ``G``. Measured at ``truncation_order=4``: 81 orders either way,
           **61 of them shared**. The two agree in the converged limit and not before it.
@@ -514,24 +514,24 @@ def sample_grid(xp, grid_shape, lattice, dtype):
 
     ``r = (i + 0.5)/Nx * a1 + (j + 0.5)/Ny * a2`` -- the cell's *corner* at the origin, which
     is the frame the Fourier machinery works in and the one
-    :func:`~wavebit._core.analytic.shape_geometry` resolves a shape's centre into. **The public
+    :func:`~wavebit._core.parametric.shape_geometry` resolves a shape's centre into. **The public
     door is :func:`meshgrid_xy`**, which re-bases to the cell centre; the two differ by
     ``0.5*(a1 + a2)``, and reaching for this one from user-facing code misplaces a structure by
     half a period with nothing to say so.
 
     Evaluated as *positions* rather than read as indices. That is what the two
     non-raster normal-field builders need
-    (:func:`wavebit._core.analytic.normal_vector_field_analytical`,
+    (:func:`wavebit._core.parametric.normal_vector_field_analytical`,
     :func:`wavebit._core.boundary.distance_gradient_normal_field`): both measure something
-    Cartesian at each sample — analytic shape gradients on one side, distances to polygon edges
+    Cartesian at each sample — parametric shape gradients on one side, distances to polygon edges
     on the other — so a skewed basis moves the sample points and nothing else. No metric follows.
     :func:`jacobian`, which converts index steps, is the raster path's correction and not theirs.
 
     Here rather than once per builder because ``period`` is a positional pair of two same-typed
     floats: unpacking it as ``(Py, Px)`` is a mistake nothing reacts to — not the types, not the
     runtime, and not a test on a square cell, where both names bind to the same number. It
-    happened. The reversed unpack travelled from the analytic builder to the boundary one with a
-    copy of this block, while the caller that reversed it back did not, so the boundary path
+    happened. The reversed unpack travelled from the parametric builder to the boundary one with a
+    copy of this block, while the caller that reversed it back did not, so the boundary route
     sampled its field over a transposed cell on any non-square period (fixed 2026-08-11). One
     reader is one opportunity to get it wrong.
 
@@ -624,7 +624,7 @@ def meshgrid_xy(grid_shape, period=None, lattice=None, backend=0, dtype=None):
     silently on a non-square raster. Hand-rolling the grid is what pushes callers towards
     indices; this exists so they need not.
 
-    **The cell is centred at the origin**, the same origin an analytic shape's ``cx`` / ``cy``
+    **The cell is centred at the origin**, the same origin a parametric shape's ``cx`` / ``cy``
     and ``reconstruct_field``'s ``sample_x`` / ``sample_y`` use, so the rod above is centred by
     writing nothing. It read ``(X - 350.)**2 + (Y - 550.)**2`` until 2026-08-31 -- the caller
     computed the centre of the cell, which on a skewed cell is ``0.5*(a1 + a2)``, two
@@ -645,7 +645,7 @@ def meshgrid_xy(grid_shape, period=None, lattice=None, backend=0, dtype=None):
 
     **Neither half of the name is spare.** Plain ``shape`` collides with geometry: this package
     spells a piece of geometry a "shape" (``structure=[{'shapes': [...]}]``,
-    :func:`~wavebit._core.analytic.shape_ft`, ``shape_geometry``), so ``A.meshgrid_xy(shape)`` read as
+    :func:`~wavebit._core.parametric.shape_ft`, ``shape_geometry``), so ``A.meshgrid_xy(shape)`` read as
     *"put a shape on this lattice"*, which is the one thing it does not do. But ``shape`` is
     also what carries the **axis order**: an array's shape is rows-first, and that is what this
     pair is. A name that drops the word loses that -- ``samples`` would collide with

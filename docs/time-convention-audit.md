@@ -306,7 +306,7 @@ eps_bg = xp.conj(...(n_base)...) ** 2
 eps_s  = xp.conj(...(n_index)...) ** 2
 ```
 
-`_core/analytic.py::assemble_eps_coeffs` — of which this is a later copy — carried the
+`_core/parametric.py::assemble_eps_coeffs` — of which this is a later copy — carried the
 sentence *"`e^{-iwt}` throughout, with no conjugation on the way in"* and did `n ** 2`. The
 copy kept the conjugate the original was moved off in 2026-08. An absorbing painted layer
 therefore came out as a **gain medium**.
@@ -334,7 +334,7 @@ After: every row agrees with the oracle to **3.3e-16** and `R + T` sits below 1.
 **Why nothing objected.** `test_boundary.py` built every shape with a real material (`n_index`,
 as the key was spelled then), where `conj(n)**2 == n**2`. It cross-checks the two builders against each other to 5e-9 — and both
 were on real indices, so agreeing proved nothing about this. The same blind-spot shape as the
-analytic path had before `test_absorbing_layer_via_the_analytic_path` was written, and the
+parametric path had before `test_absorbing_layer_via_the_parametric_path` was written, and the
 same shape as the NVF goldens all being 1D or square-pixel.
 
 `check_physical` *does* fire here (`R + T > 1` on a real `n_top`), as a warning. It is the

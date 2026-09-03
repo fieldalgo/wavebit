@@ -53,7 +53,7 @@ grid leaves the shared points bit-identical, which is what says the sampling is 
 pointwise rather than merely appearing to be.
 
 Explicit ``sample_x`` / ``sample_y`` are lengths in ``period``'s units, measured from the
-**centre of the cell** (the origin an analytic shape's ``cx`` uses), and are unconstrained —
+**centre of the cell** (the origin a parametric shape's ``cx`` uses), and are unconstrained —
 unsorted, non-uniform and outside the cell are all fine, the last being a periodic
 continuation. A count spans the cell, which in that frame is ``[-period/2, +period/2]``.
 Explicit ``sample_z`` is absolute, measured from the **top of the stack**, and is
@@ -274,7 +274,7 @@ def _axis_samples(xp, spec, extent, C, dev):
     respect. That is also why this is cheap: cost is points x orders either way.
 
     **Both spellings name the cell, and both are measured from its centre**: ``sample_x = 0``
-    is the middle of the cell, the same origin an analytic shape's ``cx`` has used since
+    is the middle of the cell, the same origin a parametric shape's ``cx`` has used since
     2026-08-31. A count therefore spans ``[-extent/2, +extent/2]``, which is exactly the grid
     that read ``[0, extent]`` while the origin was the corner -- the same physical points under
     a new name, so no golden moves. It is still *built* as ``linspace(0, extent, n)`` rather
@@ -338,7 +338,7 @@ def _inv_fourier(xp, kx, ky, lattice, sample_x, sample_y, k0, C):
         #
         # The ``+ 0.5`` is the centre-relative origin the length spelling carries too: the
         # centre of the cell is ``u = v = 0.5``, and this branch only ever converts on an
-        # axis-aligned cell, where that is the ``0.5*(a1 + a2)`` an analytic ``cx`` is measured
+        # axis-aligned cell, where that is the ``0.5*(a1 + a2)`` a parametric ``cx`` is measured
         # from. A count needs no shift -- it spans the whole cell either way.
         def _frac(spec, a_par, a_perp, axis):
             if is_count(spec):

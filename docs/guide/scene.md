@@ -32,17 +32,17 @@ the passive root (`Im(n) >= 0`).
 material is a design variable like any other -- `jax.grad` reaches inside it.
 
 ## The stack
-The type of `structure` selects the modeling path; there is no separate mode switch. A third
-path, **boundary**, is what a smooth layer becomes when its shapes actually overlap — decided
-per layer, not per solver, so one `structure` can hold layers of both kinds.
+The type of `structure` selects the modeling path; there is no separate mode switch. There are
+two. What an overlap does is a property of the parametric path rather than a path of its own —
+decided per layer, not per solver, so one `structure` can hold layers of both kinds.
 
 ```mermaid
 flowchart TD
     S["structure"] --> T{"what type?"}
     T -->|ndarray| R["<b>raster</b><br/>one permittivity per pixel"]
     T -->|list of dict| A{"shapes intersect<br/>in this layer?"}
-    A -->|no| P["<b>smooth</b><br/>each shape's transform, added"]
-    A -->|yes| B["<b>boundary</b><br/>overlap resolved into polygons,<br/>then transformed"]
+    A -->|no| P["<b>parametric</b><br/>each shape's transform, added"]
+    A -->|yes| B["<b>parametric</b>, overlap resolved<br/>into polygons, then transformed"]
 ```
 
 Nothing selects between the last two: the geometry does, per layer, and a layer pays for the
@@ -54,7 +54,7 @@ overlapping the sum *is* the painting; where they do intersect, the overlap is r
 disjoint polygons first, so a layer can be painted *and* keep a tilted edge exact. Nothing has
 to be said either way.
 
-On the smooth path `lx` / `ly` are absolute lengths in `period`'s units — **not fractions of
+On the parametric path `lx` / `ly` are absolute lengths in `period`'s units — **not fractions of
 it** — and `cx` / `cy` are measured from the centre of the cell, so a centred shape is
 `cx = cy = 0`, which is also what omitting them means:
 
@@ -70,7 +70,7 @@ name — and it would otherwise solve and conserve energy. Sample it onto a rast
 negative length is refused for the same reason it used to be dangerous: it *subtracted* the
 shape.
 
-See [`../analytic-modeling.md`](../analytic-modeling.md) and
+See [`../parametric-modeling.md`](../parametric-modeling.md) and
 [`../boundary-modeling.md`](../boundary-modeling.md).
 
 ## The cell
@@ -114,7 +114,7 @@ cell, so that solving it on another is refused rather than answered.
 Write it as `A.meshgrid_xy(...)` and pass the same `A` to `lattice=`. The cell is needed in **two**
 places — to place the pixels and to solve them — and a raster drawn on one cell and solved on
 another is a different structure with nothing to say so. **Change the cell and redraw the
-array.** Analytic shapes are immune, their lengths being absolute Cartesian quantities.
+array.** Parametric shapes are immune, their lengths being absolute Cartesian quantities.
 
 One build is refused on a skewed cell rather than answering, because it runs and returns a
 plausible wrong number: `factorization='li'` on a raster, whose inverse rule follows the raster

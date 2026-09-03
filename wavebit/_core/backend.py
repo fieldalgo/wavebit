@@ -59,7 +59,7 @@ def checked_float(v):
     ``detach`` where it exists, then ``float``, then ``stop_gradient`` for what is left.
 
     **Why it matters that this is not `float`.** :func:`wavebit._core.overlap.primitive` spelled
-    it ``float(cx)``, and :func:`wavebit._core.analytic._primitives` reads the failure as "this
+    it ``float(cx)``, and :func:`wavebit._core.parametric._primitives` reads the failure as "this
     is traced -- skip the check". A grad tracer refuses ``float()`` while answering
     ``stop_gradient`` and ``bool(x > 300)`` perfectly, so it was saying "this spelling carries a
     tangent", not "there is no value here" -- and the geometry refusals were skipped under
@@ -71,7 +71,7 @@ def checked_float(v):
     ``detach`` first also silences the ``UserWarning`` torch emits for a ``requires_grad``
     scalar conversion, which the checks were printing on every eager torch shape solve.
 
-    Deliberately **not** :func:`wavebit._core.analytic._static_float`, which refuses an autograd
+    Deliberately **not** :func:`wavebit._core.parametric._static_float`, which refuses an autograd
     value on purpose: that one keys a cache, where reading a differentiated value would serve a
     stale build. Reading one to *check* geometry is the opposite -- it is the case that most
     needs checking.
@@ -772,7 +772,7 @@ def get_j1_implementation():
 def j1(x):
     """Bessel function of the first kind, order 1 — differentiable on every backend.
 
-    Defined for ``x >= 0`` (the analytic shape transforms only ever evaluate it there).
+    Defined for ``x >= 0`` (the parametric path's shape transforms only ever evaluate it there).
     Which implementation runs is :func:`set_j1_implementation`'s to decide.
     """
     xp = ac.array_namespace(x)

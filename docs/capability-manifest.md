@@ -42,7 +42,7 @@ recommend anything.
 | Which material cases are unsolvable | An extraction schema, a system prompt |
 
 The test is whether the fact can be checked against the code. `_FACTORIZATION_IMPLEMENTED_BY`
-can be — build a shape-path solver, ask for `li`, watch it refuse. *"PyTorch wins below
+can be — build a parametric solver, ask for `li`, watch it refuse. *"PyTorch wins below
 `truncation_order≈5`"* cannot: it is a measurement on one CPU host about a workload, and the solver has no
 opinion about it. A fact that cannot be checked that way does not belong in the module, because
 publishing it would extend the manifest's guarantee to something the guarantee does not cover.
@@ -74,7 +74,7 @@ manifest against **runtime behaviour** instead:
 
 | Test | What would have to break for it to fail |
 | --- | --- |
-| Each spelling selects the modeling type it claims | The `structure` setter's type dispatch changes, or the prose describing a spelling stops matching what it accepts |
+| Each spelling selects the modeling path it claims | The `structure` setter's type dispatch changes, or the prose describing a spelling stops matching what it accepts |
 | An option the manifest withholds is refused | A path stops refusing what the manifest says it cannot express |
 | An option the manifest offers actually builds | A path is described as implementing something it refuses |
 | The skewed-cell refusals hold | `_reject_unsupported_lattice` loosens or tightens |
@@ -130,6 +130,40 @@ pre-release rename set moved `results.incidences.fields` from `('res', 'res_te_i
 they are attribute names it indexes a result object with, published under a key that still
 looks exactly the same. The contents kept their shape and stopped resolving, which is the
 `material_quantity` failure in miniature.
+
+## Two paths, after publishing three (2026-09-03)
+
+`paths` carried three entries — `raster`, `smooth`, `boundary` — and the last two were one
+path published twice. Every machine-readable key on them was identical, they take the same
+`structure` spelling, and the choice between them is made **per layer** from the shapes'
+coordinates, so one structure can occupy both at once. Two sibling entries cannot say that,
+and the suite could not see the difference either: both tests that distinguished them
+compared `modeling_type`, which was `2` for both.
+
+They are now `parametric` with an `overlap` property, and `raster` is unchanged. The property
+is held against runtime like every other claim here — that the overlapping spelling selects
+the same path, that a mixed structure resolves one layer and not the other, and that the
+option battery the `boundary` entry used to carry still runs against an overlapping layer.
+
+`smooth` also collided with `NormalMethod.SMOOTH`, which the published JSON showed plainly:
+`paths[0].normal_method` (the **raster**'s options) contained `'smooth'` while `paths[1].path`
+*was* `'smooth'`. A caller on the overlapping route asking for `normal_method='smooth'` was
+told "the smooth shape path builds its normal field from the geometry itself" — one word
+meaning two things in one sentence, naming a path they were not on.
+
+**The version bump, and which argument carries it.** `MANIFEST_VERSION` went `8` -> `9`, but
+not because a value a consumer branches on changed. `path` is a label, not something fed back
+to the solver — there is no `path=` keyword — so a branch that stops matching falls through
+rather than solving the wrong scene. That is the "reading unknown keys degrades gracefully"
+case, and on its own it would not earn a bump.
+
+What earns it is `shape_coordinates.applies_to`, which held `('smooth', 'boundary')`. That is
+a **membership test keyed on these names**, and what it gates is a coordinate convention. A
+consumer with `'smooth'` hardcoded in its own source now gets `False`, concludes absolute
+lengths and a cell-centre origin do not apply, and emits fractions or a corner-relative
+centre. The scene it builds solves and conserves energy — the `'8'` failure exactly, on the
+convention `'8'` was about. The lesson generalises: when path names are used as keys
+*elsewhere in the document*, renaming them is not a rename.
 
 ## Refusals are facts, not roadmap
 

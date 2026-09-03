@@ -164,8 +164,8 @@ def _jsonable(value):
     """Plain-Python form of a value, so ``to_dict`` output survives ``json.dumps``.
 
     A :class:`~wavebit._core.domain.Material` is handled here rather than only at the two
-    half-space slots because it can sit at any depth -- an analytic layer's background, an
-    analytic shape's ``material`` -- and its JSON form is *self-identifying* (a dict with an
+    half-space slots because it can sit at any depth -- a parametric layer's background, an
+    parametric shape's ``material`` -- and its JSON form is *self-identifying* (a dict with an
     ``epsilon`` key), so it can be recognised again on the way back in without the reader
     having to know which position in which recipe it came from. That is exactly the property a
     bare ``complex`` does not have, which is why complex is spelled out only where the slot is
@@ -241,7 +241,7 @@ def _material_from_json(value, where):
 
     Parsing is deliberately narrow. A dict is the object form and its keys are checked, so
     ``{'epsilon': 4.0, 'my': 1.0}`` is a refusal rather than a silently non-magnetic medium --
-    the same reason the analytic path funnels its keys: an unread key here leaves a scene that
+    the same reason the parametric path funnels its keys: an unread key here leaves a scene that
     still builds and still conserves energy.
 
     ``'mu': null`` reads as *absent*, giving the non-magnetic ``Material(epsilon)``. JSON's
@@ -340,9 +340,9 @@ class Numerics:
     #: the sampled series.
     fourier_coefficients: Optional[FourierCoefficients] = None
     #: ``None`` = unset, and it has to stay spellable: the solver resolves an unset
-    #: factorization against the modeling path (Li on a raster, NVF on analytic shapes) and
+    #: factorization against the modeling path (Li on a raster, NVF on parametric shapes) and
     #: refuses a rule the path cannot express. Defaulting this to ``Factorization.LI`` would
-    #: hand every spec an explicit request it never made, so a spec carrying analytic layers
+    #: hand every spec an explicit request it never made, so a spec carrying parametric layers
     #: would be refused for asking for Li.
     factorization: Optional[Factorization] = None
     #: ``None`` = unset, same shape as the two above though the reason is simpler: the

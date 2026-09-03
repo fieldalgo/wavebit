@@ -1,13 +1,13 @@
 """benchmark_boundary_normal_field.py -- which normal field carries a position gradient?
 
 A multi-shape *smooth* layer keeps the sampled analytic normal field
-(``analytic.normal_projector_coeffs``), whose position gradient is poor for a reason that
+(``parametric.normal_projector_coeffs``), whose position gradient is poor for a reason that
 module states in full: a rectangle's level-set gradient is piecewise constant, so ``cx``
-reaches the field only through ``sign()``. The boundary path builds a different field -- the
+reaches the field only through ``sign()``. The boundary route builds a different field -- the
 gradient of the distance to the resolved boundary
 (``boundary.distance_gradient_normal_field``) -- in which a vertex coordinate arrives as
 arithmetic instead. A *disjoint* layer can be given that field today, without any code change,
-by handing ``boundary_plans`` to ``to_conv_mat_smooth_layers``. So: is the swap a fix?
+by handing ``boundary_plans`` to ``to_conv_mat_parametric_layers``. So: is the swap a fix?
 
 **Why autodiff against finite differences cannot answer it.** Both models make the loss
 piecewise smooth in ``cx`` with jumps at pixel crossings. Autodiff returns the slope of the
@@ -45,7 +45,7 @@ import time
 import numpy as np
 
 import wavebit
-from wavebit._core import analytic as _analytic
+from wavebit._core import parametric as _parametric
 from wavebit._core import boundary as _boundary
 from wavebit._core import clipper as _clipper
 from wavebit._core.geometry import StaticGeometry
@@ -114,7 +114,7 @@ def geometries(structure):
 
     ``boundary_plans[i] = None`` is not "unknown": it is what ``freeze_geometry`` records for a
     layer it has looked at and found disjoint, and it keeps the layer on the closed-form path.
-    Building the plan anyway is what routes the same disjoint layer through the boundary path
+    Building the plan anyway is what routes the same disjoint layer through the boundary route
     and so swaps its normal field -- the permittivity coefficients are untouched, agreeing to
     1e-15 between the two, so the field is the only thing that moves.
     """
@@ -167,7 +167,7 @@ def normal_field_cost(build, cx0, grid, repeats=3):
             fn()
         return (time.perf_counter() - start) / repeats * 1e3
 
-    sampled = timed(lambda: _analytic.normal_vector_field_analytical(
+    sampled = timed(lambda: _parametric.normal_vector_field_analytical(
         np, (grid, grid), shapes, np.float64, LATTICE))
     distance = timed(lambda: _boundary.distance_gradient_normal_field(
         np, loops, (grid, grid), LATTICE, np.float64))

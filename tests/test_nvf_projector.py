@@ -459,7 +459,7 @@ def test_it_is_refused_where_nothing_would_read_it():
     """An unread knob is the defect this library refuses everywhere, and this is its door.
 
     Two places have no raster normal field to form a projector from: Li builds none at all,
-    and the smooth shape path builds one from the geometry, which carries no magnitude for the
+    and the parametric path builds one from the geometry, which carries no magnitude for the
     limit to read. Both run to completion with the request ignored, which is exactly the
     silent non-choice `_reject_unread_normal_method` exists to stop one axis over.
     """

@@ -1,4 +1,4 @@
-"""Single-source analytic (staircase-free) Fourier modeling.
+"""Single-source parametric (staircase-free) Fourier modeling.
 
 A layer is described by a background material plus a list of parametric shapes — rectangles,
 circles, ellipses — and its permittivity is Fourier-transformed *analytically* rather than
@@ -45,7 +45,7 @@ and needs concrete numbers, so a layer whose parameters are tracers is passed th
 **Shape parameters are absolute lengths, in whatever unit ``period`` is given in** -- not
 fractions of the period. A rod filling half a 0.77-long period is ``lx=0.385``. Passing
 fractions builds a rod ``1/period`` times too large and says nothing about it, so
-``test_analytic_shape_parameters_are_absolute_lengths`` pins the distinction.
+``test_parametric_shape_parameters_are_absolute_lengths`` pins the distinction.
 
 **A centre is measured from the centre of the cell**, not from its corner, so that same rod
 sits at ``cx=0`` -- which is also what an omitted ``cx`` means. See :func:`shape_geometry`.
@@ -91,7 +91,7 @@ three FFTs that transform it (0.36 s against 0.08 s at N = 1024), so the transfo
 place to look. Whole-solve share falls away with ``truncation_order`` as the eigendecomposition takes
 over, from 8.5% at truncation_order 4 to 0.13% at truncation_order 16, which is the range where it might
 matter to an optimizer looping at low truncation. Side effect worth knowing when reading
-``docs/boundary-modeling.md``: the cost ratio it quotes for swapping in the boundary path's
+``docs/boundary-modeling.md``: the cost ratio it quotes for swapping in the boundary route's
 field fell from 12x/486x to 2x/182x because this side got slower, not because that one got
 faster.
 """
@@ -145,7 +145,7 @@ def shape_geometry(shape, lattice):
     added here, in the one place a shape dict is read, so no builder knows the difference.
 
     Corner-relative until 2026-08-31. It moved to match S4, the only other solver that takes
-    analytic shapes, whose centres are likewise *"relative to the center of the unit cell"*.
+    parametric shapes, whose centres are likewise *"relative to the center of the unit cell"*.
     A centred structure is the common case and ``0`` is the natural spelling for it; the
     corner spelling of the same thing was ``0.5*(a1 + a2)`` written out by hand, which on a
     skewed cell is two components, neither of them a period. Nothing has been released, so
@@ -337,7 +337,7 @@ def check_layer_spec(layer, layer_index=0):
 def check_layer_shapes(layer, lattice, layer_index=0):
     """Check every shape's keys, and refuse a layer that needs a shape's periodic image.
 
-    This function is the funnel the smooth path reaches the solver through, which is why the
+    This function is the funnel the parametric path reaches the solver through, which is why the
     per-shape check is repeated here and — unlike :func:`shape_geometry`, where it would sit
     closer to the mistake — not inside :func:`_primitives`, whose ``except Exception`` would
     catch the refusal and answer it by silently building without that shape.
@@ -458,18 +458,18 @@ def check_layer_shapes(layer, lattice, layer_index=0):
     raise ValueError(
         f'Analytic layer {layer_index}: {what}{more}. Neither shape builder here reads a '
         f"shape's periodic images: the closed form sums each shape's own transform, and the "
-        f'boundary path clips its polygons in unwrapped coordinates. So the layer would be '
+        f'boundary route clips its polygons in unwrapped coordinates. So the layer would be '
         f'built as a different structure -- one that solves, conserves energy, and does not '
         f'converge.\n'
         f'  {fix}, or state the layer as a raster structure, which carries the wrap.')
 
 
 def layer_needs_resolving(layer, lattice):
-    """Does this layer actually need the boundary path — i.e. is it painted *and* overlapping?
+    """Does this layer actually need the boundary route — i.e. is it painted *and* overlapping?
 
     While nothing intersects, painting and summing describe the same structure, and the closed
     form here is both exact and cheaper than resolving a polygon that has nothing to resolve.
-    Routing every shape layer through the boundary path would also move the answer on a layer
+    Routing every shape layer through the boundary route would also move the answer on a layer
     that has no overlap at all -- measured 0.8% apart on disjoint rods.
 
     Raises when the parameters are not concrete and no plan was frozen. That case used to
@@ -585,7 +585,7 @@ def shape_ft(xp, shape, ky, kx, lattice):
                      xp.ones_like(kap))
         s = (pi * a * b) * j
     else:
-        raise ValueError(f'Unknown analytic shape type: {stype!r}')
+        raise ValueError(f'Unknown parametric shape type: {stype!r}')
 
     return phase * s / area
 
@@ -621,7 +621,7 @@ def _refuse_overlap(shapes, lattice):
         f'permittivity 4 and 9 -- so returning the sum under the name of the paint would '
         f'be a plausible wrong answer rather than a refusal.\n'
         f'  For the painted layer, go through wavebit._core.boundary.to_conv_mat_boundary_layer '
-        f'(or analytic.to_conv_mat_smooth_layers, which routes to it), where the overlap is '
+        f'(or parametric.to_conv_mat_parametric_layers, which routes to it), where the overlap is '
         f'resolved into disjoint polygons before anything is transformed.')
 
 
@@ -647,7 +647,7 @@ def assemble_eps_coeffs(xp, shapes, background, half_width_u, half_width_v, latt
     painting describe two different structures, so reconstructing a painted layer from this
     function is wrong -- silently: two 300x300 rods of permittivity 4 and 9 in a 1000x1000 cell
     come back at ``<eps> = 1.99`` where the solver integrates ``1.90``, a 4.7% error that looks
-    entirely plausible. The solver does not make that mistake -- :func:`to_conv_mat_smooth_layers`
+    entirely plausible. The solver does not make that mistake -- :func:`to_conv_mat_parametric_layers`
     routes an overlapping layer to :mod:`.boundary` and only reaches this builder where the
     shapes are disjoint, and where they are disjoint the two rules coincide exactly.
 
@@ -693,7 +693,7 @@ def conv_matrix_2d(xp, coeff2d, half_width_u, half_width_v):
 
     **Rule-neutral, which is what the name is for.** This was ``laurent_conv_2d`` until
     2026-08-12, and ``Laurent`` is the *direct* factorization rule — a rule word on a builder
-    that implements neither. :func:`to_conv_mat_smooth_nvf` calls it on ``eps`` and on
+    that implements neither. :func:`to_conv_mat_parametric_nvf` calls it on ``eps`` and on
     ``1/eps`` two lines apart, and on the three normal-field products; the inverse rule's
     inversion happens in the caller.
 
@@ -1057,7 +1057,7 @@ def _sampled_coeffs(xp, field, half_width_u, half_width_v):
     # which places it at `i/N`, describes a field shifted half a pixel against the permittivity
     # these coefficients are multiplied by. Applied here as well as there because these two are
     # the *same transform written twice*, and `test_conv_matrix_matches_grid_convention` is what
-    # says so; correcting one alone silently splits the analytic path from the raster one.
+    # says so; correcting one alone silently splits the parametric path from the raster one.
     ky = xp.asarray([float(k) for k in range(-2 * half_width_v, 2 * half_width_v + 1)], device=dev)
     kx = xp.asarray([float(k) for k in range(-2 * half_width_u, 2 * half_width_u + 1)], device=dev)
     pi = 3.141592653589793
@@ -1194,10 +1194,10 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
       ``test_analytic_angle_is_smooth_through_normal``, and any value chosen between the two is
       a tuning constant.
 
-    A fourth is *replacing the field wholesale* for multi-shape layers with the boundary path's
+    A fourth is *replacing the field wholesale* for multi-shape layers with the boundary route's
     gradient-of-distance field
     (:func:`~wavebit._core.boundary.distance_gradient_normal_field`), which a disjoint layer
-    can be given today by passing ``boundary_plans`` to :func:`to_conv_mat_smooth_layers`.
+    can be given today by passing ``boundary_plans`` to :func:`to_conv_mat_parametric_layers`.
     Tried, and rejected on the half it was reached for. Integrate its autodiff position
     gradient across a six-pixel window on two tilted rectangles and it comes to -3.5e-4 over a
     window the loss *rises* through by +1.4e-4 -- the wrong sign, at all 25 sampled positions,
@@ -1224,13 +1224,13 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
     it. Several shapes do not: for a rod at ``cx`` = 0.10 / 1.10 / 2.10 beside a fixed second
     rod, total transmission comes out 0.8532 / 0.8678 / 0.8665. Splitting the layer's inputs
     puts it here rather than in the transform — across one period the permittivity coefficients
-    agree to 1.1e-15 while ``<normal_x**2>`` differs by 3.1e-1. The boundary path inherits it
+    agree to 1.1e-15 while ``<normal_x**2>`` differs by 3.1e-1. The boundary route inherits it
     identically, bit for bit, since it takes its field from the same place. An optimizer left
     free to move a shape will walk it over the edge and climb the artefact, so clamp the
     centres. Pinned by ``test_a_multishape_layer_is_not_periodic_across_the_cell_edge``.
 
     ``grid_shape`` is checked against the ``4*truncation_order+1`` floor
-    (:func:`~wavebit._core.factorization.check_normal_grid`). The boundary path has done that
+    (:func:`~wavebit._core.factorization.check_normal_grid`). The boundary route has done that
     since it was written and this one did not, which was not a decision: at
     ``truncation_order=10`` the two disagreed about ``normal_grid=8``, one refusing and the
     other building it 4.9e-4 adrift with energy conserved to twelve digits. The floor is a
@@ -1299,9 +1299,9 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
     return tuple(c * phase for c in coeffs)
 
 
-def to_conv_mat_smooth_nvf(xp, shapes, background, half_width_u, half_width_v, lattice, dtype,
+def to_conv_mat_parametric_nvf(xp, shapes, background, half_width_u, half_width_v, lattice, dtype,
                            normal_grid=256):
-    """The five 2D-solve convolution matrices for one analytic layer, via NVF.
+    """The five 2D-solve convolution matrices for one parametric layer, via NVF.
 
     ``eps`` / ``1/eps`` come from the exact shape transform (no staircase); the normal
     projectors come from the shapes' analytic normal field. Same Hermitian symmetrization as
@@ -1325,7 +1325,7 @@ def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, half_width_u, half_w
     """Assemble the five convolution matrices from coefficient grids — the NVF tensor itself.
 
     The last step of every non-raster NVF path, and the same step for all of them: what differs
-    between the analytic, boundary and level-set paths is *how* the five coefficient grids were
+    between the parametric, boundary and level-set routes is *how* the five coefficient grids were
     obtained, never what is done with them. Kept in one place so a change to the tensor cannot
     reach one path and miss another — the raster path's equivalent is
     :func:`wavebit._core.factorization.nvf_conv_matrices`.
@@ -1363,7 +1363,7 @@ def check_no_plan_still_fits(layer, lattice, index):
 
     It used to go stale in a worse place. The dispatch below summed on the record's word, and
     :func:`_refuse_overlap` stopped it there with a ``ValueError`` about *this* builder --
-    naming neither the frozen record nor the fix, and pointing at the boundary path the caller
+    naming neither the frozen record nor the fix, and pointing at the boundary route the caller
     was already trying to reach. Reproduced by freezing a disjoint rectangle-and-circle layer and
     sliding the rectangle onto the circle; the same call without ``geometry=`` returns
     0.933226529 quite happily.
@@ -1386,10 +1386,10 @@ def check_no_plan_still_fits(layer, lattice, index):
         f'(Moving a shape never trips this on its own; moving it into another shape does.)')
 
 
-def to_conv_mat_smooth_layers(layer_shapes, half_width_u, half_width_v, lattice,
+def to_conv_mat_parametric_layers(layer_shapes, half_width_u, half_width_v, lattice,
                               normal_grid=256, complex_dtype=None, xp=None,
                               boundary_plans=None):
-    """Stack the analytic-NVF convolution matrices over layers.
+    """Stack the parametric-NVF convolution matrices over layers.
 
     ``layer_shapes`` is one ``dict(background=..., shapes=[...])`` per layer, with the shapes'
     ``cx`` / ``cy`` / ``lx`` / ``ly`` as absolute lengths in the units of ``period`` (see the
@@ -1397,7 +1397,7 @@ def to_conv_mat_smooth_layers(layer_shapes, half_width_u, half_width_v, lattice,
     ``(n_layers, n_orders, n_orders)``.
 
     Every layer goes through :func:`check_layer_spec` and :func:`check_layer_shapes` first —
-    this is the funnel the smooth path reaches the solver through, so it is the one place that
+    this is the funnel the parametric path reaches the solver through, so it is the one place that
     can guarantee a misspelled recipe is never answered with a plausible structure.
 
     The array namespace is taken from the first differentiable shape parameter found, so
@@ -1441,7 +1441,7 @@ def to_conv_mat_smooth_layers(layer_shapes, half_width_u, half_width_v, lattice,
             # frozen while the shapes were disjoint routes by its own answer, not by the two
             # rules, and once the shapes moved together the check below is what fired -- with
             # a message about this builder rather than about the stale record.
-            mats = to_conv_mat_smooth_nvf(
+            mats = to_conv_mat_parametric_nvf(
                 xp, layer.get('shapes', []), background, half_width_u, half_width_v, lattice,
                 dtype, normal_grid=normal_grid)
         for slot, m in zip(out, mats):

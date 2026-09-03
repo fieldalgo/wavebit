@@ -162,7 +162,7 @@ def test_a_frozen_geometry_makes_a_shape_parameter_traceable(name, make, start):
     change the combinatorics leaves the record describing a layer that is no longer there.
 
     The overlapping pair is here because it is the case that has no alternative: the closed-form
-    builder superposes rather than paints and refuses an overlap outright (see test_analytic.py),
+    builder superposes rather than paints and refuses an overlap outright (see test_parametric.py),
     so a layer whose objects cover each other can only be built through the boundary sub-path.
 
     These four were block instructions until that path was removed. The theorem is the same one
@@ -613,7 +613,7 @@ def test_a_stale_painting_plan_is_refused_rather_than_answered():
 
     This record is unlike the others here. It holds no coordinates at all -- only which loop
     holds which vertex and which edges cross -- and that is deliberate: it is what lets a replay
-    carry a gradient to vertices that have moved, which is the whole reason the boundary path
+    carry a gradient to vertices that have moved, which is the whole reason the boundary route
     can be traced. So the usual reading of "stale" is wrong for it. Moving a shape is *exactly*
     what it is built to survive, and the first loop below pins that, bit-for-bit.
 
@@ -718,7 +718,7 @@ def test_a_frozen_no_overlap_is_a_claim_about_the_layer_and_is_checked_too():
     freeze records that decision as a ``None`` plan. It is a claim about the geometry, and it
     goes stale the same way a plan does — but for a long time it went stale silently in a
     different place: the dispatch took the summing branch on the record's word, and the summing
-    builder refused with a ``ValueError`` naming *itself* and pointing at the boundary path the
+    builder refused with a ``ValueError`` naming *itself* and pointing at the boundary route the
     caller was already inside. Nothing in it mentioned the frozen record or said to re-freeze,
     and the same call without ``geometry=`` returns 0.933226529 quite happily.
     """

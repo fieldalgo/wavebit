@@ -286,7 +286,7 @@ closed form gets there roughly a raster doubling sooner.
 shape's own pixelation, which both arms carry equally: the error is non-monotone in N and the ratio
 wanders between 0.6 and 1.6 with no trend. That is not evidence against the switch, it is the
 statement that the z slot is not what limits a curved layer — the staircase is
-([`analytic-modeling.md`](analytic-modeling.md), the path where it is gone).
+([`parametric-modeling.md`](parametric-modeling.md), the path where it is gone).
 
 `tests/test_pn_factorization.py::test_the_z_slot_reads_the_raster_as_the_staircase_it_is` pins the
 choice, by the invariance that *is* exactness: pixel-repeating a raster respells the same staircase,

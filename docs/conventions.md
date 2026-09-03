@@ -63,7 +63,7 @@ The *type* of `structure` selects the modeling path; there is no separate mode s
 A third encoding, `[[background, [['rectangle', cx, cy, lx, ly, material, angle], ...]], ...]`,
 was the block modeller and is refused by name since 2026-08-26.
 
-Two of those three ways of saying what fills a region — the analytic layer's `background` and
+Two of those three ways of saying what fills a region — the parametric layer's `background` and
 each shape's `material` — are **assignments**: a name for the stuff in a region, and a medium
 has both a permittivity and a permeability, which is why one type carries the pair. The raster
 is the third and is not an assignment at all but a **sampled field**, one number per pixel,
@@ -76,8 +76,8 @@ the raster's permeability is a second array (`mu=`) rather than a second slot on
 | --- | --- | --- |
 | `ucell` | `structure` | the layer stack |
 | `n_top` / `n_bot` | `top` / `bot` | the two half-space materials |
-| `n_base` / `base` (analytic layer keys) | `background` | a layer's background material |
-| `n_index` (analytic shape key) | `material` | a shape's material |
+| `n_base` / `base` (parametric layer keys) | `background` | a layer's background material |
+| `n_index` (parametric shape key) | `material` | a shape's material |
 | `ucell_materials` | — | deleted; it was assigned by every backend and read by nothing |
 
 Every one of these raises, naming its replacement **and** saying that the quantity changed
@@ -173,7 +173,7 @@ converge rather than merely scoring worse.
 
 ## Units and angles
 
-`wavelength`, `period`, `thickness` and the smooth-path shape coordinates (`cx`, `lx`,
+`wavelength`, `period`, `thickness` and the parametric shape coordinates (`cx`, `lx`,
 …) share **one length unit of your choosing** — nothing in the solver assumes nm. Shape
 coordinates are absolute lengths, not fractions of the period.
 

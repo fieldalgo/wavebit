@@ -40,7 +40,7 @@ jax.grad(loss)(jnp.asarray(np.radians(105.)))
 
 The two modeling paths do not differentiate the same question there. A raster is held in
 lattice coordinates, so its basis gradient tilts the cell **and shears the pattern with it**,
-where an analytic shape's absolute Cartesian lengths tilt the cell only. They differ by 3.6x on
+where a parametric shape's absolute Cartesian lengths tilt the cell only. They differ by 3.6x on
 a plain scene — see [`../oblique-lattice.md`](../oblique-lattice.md), "Differentiating the
 cell".
 

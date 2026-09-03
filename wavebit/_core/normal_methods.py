@@ -479,7 +479,7 @@ def _contour_polylines(smoothed):
     9 / 12 fragments across rolls of one scene), which is what made ``'contour'`` the one
     construction that is not covariant under a lattice translation on a percolating level
     set. That regime is ordinary rather than exotic: on a 20-degree cell the lattice rows sit
-    0.34 of a period apart, so any feature wider than that percolates, and the analytic path
+    0.34 of a period apart, so any feature wider than that percolates, and the parametric path
     refuses such a shape entirely.
 
     Each polyline is then folded by whole periods so its centroid lands in the cell. The

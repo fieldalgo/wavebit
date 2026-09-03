@@ -58,7 +58,7 @@ Written: 2026-08-17. Measured 2026-08-16/17 on CPU, NumPy backend, float64.
 > one differs from the shipped construction on exactly 8 pixels, all within 4.2 px of a disc's
 > centre, and is *less* periodic overall (2.8e-3).
 >
-> So this is the raster twin of the exact-tangency singularity in the analytic path: a normal
+> So this is the raster twin of the exact-tangency singularity in the parametric path: a normal
 > field asked for a direction at a place geometry does not define one.
 >
 > The accuracy tables below were taken on interior features, where none of this fired, and
@@ -251,7 +251,7 @@ way general shapes are not — a corner-bearing scene belongs in any future sele
 
 ### Where improvement is possible at all — the truncation floor
 
-The analytic path itself (exact geometry, exact normal field) at the working `truncation_order`,
+The parametric path itself (exact geometry, exact normal field) at the working `truncation_order`,
 against the finest references:
 
 | scene | truncation_order=6 | truncation_order=10 |
@@ -420,7 +420,7 @@ rule was fine; the window was wrong.)
 
 **This regime is ordinary rather than exotic on a skewed cell**, which is what makes it worth
 the machinery: at 20 degrees with `|a1| = |a2| = 640` the lattice rows sit 219 apart, so any
-circle past radius 109 percolates — and the analytic path refuses such a shape outright, so the
+circle past radius 109 percolates — and the parametric path refuses such a shape outright, so the
 raster is the only route to it.
 
 Two further rules were needed, and neither is about percolation. Both are stated at their
@@ -630,7 +630,7 @@ pre-change tree.
   "no golden moved" held when this option landed and does not hold across that commit.
 - **Refused where unread.** Explicitly set with `factorization='li'` or on either shape
   path, the solve raises `NotImplementedError` naming the keyword. The shape paths build
-  their normal fields from the geometry itself (`analytic.normal_vector_field_analytical`);
+  their normal fields from the geometry itself (`parametric.normal_vector_field_analytical`);
   there is nothing to select.
 - **The frozen-geometry record carries the method.** `freeze_geometry()` under one method
   and `solve(geometry=...)` under another raises `StaleGeometryError`: same raster,
@@ -768,7 +768,7 @@ property of that scene; r=60 and r=40 both sit near 0.1 there.
 ### Solver-level A/B on a hex cell
 
 Rod r=90 in a hex cell of pitch 400, eps 5.76, thickness 300, wavelength 900, theta 12 / phi
-30 / psi 40 deg. The reference is the same rod through the *analytic shape* path (exact
+30 / psi 40 deg. The reference is the same rod through the *parametric shape* path (exact
 geometry, exact normal field) at `truncation_order=14`, whose own `|14 - 12|` floor is 1.8e-6 — well
 under every gap below, so all eight cells are resolved. Error is the worst per-order
 `|R - R_ref|`, `|T - T_ref|` over shared orders.
@@ -792,12 +792,12 @@ the obvious candidate for an outside oracle here, and it cannot see this. Raster
 primitive cell and run through the raster NVF path at `truncation_order=12`, the worst deviation from
 the paper's FEM column is:
 
-| N | `distance` | `contour` | `spectral` | `smooth` | analytic shapes |
+| N | `distance` | `contour` | `spectral` | `smooth` | parametric shapes |
 |---|---|---|---|---|---|
 | 128 | 6.52e-03 | 6.75e-03 | 6.67e-03 | 6.54e-03 | 2.78e-04 |
 | 256 | 3.11e-03 | 3.26e-03 | 3.20e-03 | 3.11e-03 | 2.78e-04 |
 
-All four within 5% of each other, halving with N, and an order above the analytic path at the
+All four within 5% of each other, halving with N, and an order above the parametric path at the
 same `truncation_order`. That is the *permittivity* staircase, not the normal field: a checkerboard is
 straight-edged, and the axis-aligned tables already say `distance` is near the floor on
 straight edges — the rotated-rectangle scene looked flat for the same reason. A benchmark has

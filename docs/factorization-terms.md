@@ -4,13 +4,13 @@ Written: 2026-08-12. Structure claims below are measured, not asserted; the chec
 §3 and reproduces in seconds.
 
 Targets:
-- `wavebit/_core/analytic.py::conv_matrix_2d` — the builder the collision used to be in; it
+- `wavebit/_core/parametric.py::conv_matrix_2d` — the builder the collision used to be in; it
   was called `laurent_conv_2d` until this document was written
-- `wavebit/_core/analytic.py::_grid`, `wavebit/_core/analytic.py::assemble_eps_coeffs` —
+- `wavebit/_core/parametric.py::_grid`, `wavebit/_core/parametric.py::assemble_eps_coeffs` —
   the doubled reciprocal grid the builder consumes, and why it is doubled
 - `wavebit/_core/factorization.py::fourier2d_piecewise_constant` — the raster twin, and where
   `inverse_rule` chooses the rule
-- `tests/test_analytic.py` — `test_conv_matrix_matches_grid_convention`, which pins the ordering
+- `tests/test_parametric.py` — `test_conv_matrix_matches_grid_convention`, which pins the ordering
   the two builders share
 
 ---
@@ -43,7 +43,7 @@ discontinuous at the same place.
 | inverse | Li's rule | `<1/eps>^-1` | they are — along that direction |
 
 Both names for the first rule are in use in this repository and both are correct.
-`docs/formulation.md` writes `Laurent (direct)`, `docs/analytic-modeling.md` writes
+`docs/formulation.md` writes `Laurent (direct)`, `docs/parametric-modeling.md` writes
 `Laurent (direct-rule)`, and `_core/factorization.py` writes the pair as `direct` / `inverse`
 in code (`ep_dir`, `ep_inv`). The gloss form — naming one and parenthesising the other — is the
 one to copy in new prose, because a reader who knows only one name still lands.
@@ -64,7 +64,7 @@ M[(r,s),(c,d)] = coeff(ky = r - c, kx = s - d)
 ```
 
 That is all it does. It never sees a permittivity, and it does not know which rule its caller
-is building. In `to_conv_mat_smooth_nvf` it is called five times in a row — on `eps`, on
+is building. In `to_conv_mat_parametric_nvf` it is called five times in a row — on `eps`, on
 `1/eps`, and on the three normal-field products `nx^2`, `nx ny`, `ny^2`:
 
 ```python
@@ -106,7 +106,7 @@ Checked directly on `half_width_u, half_width_v = 2, 3` (a 35x35 matrix, random 
 
 The last two together are the definition of **BTTB**, block-Toeplitz with Toeplitz blocks.
 `block-Toeplitz` alone is the usual shorthand and appears in `_core/lattice.py`,
-`docs/formulation.md`, `docs/analytic-modeling.md` and `docs/oblique-lattice.md`; it is
+`docs/formulation.md`, `docs/parametric-modeling.md` and `docs/oblique-lattice.md`; it is
 under-specified rather than wrong, since a block-Toeplitz matrix may have arbitrary blocks.
 Harmless in prose, too weak to justify a function name.
 
@@ -125,16 +125,16 @@ Harmless in prose, too weak to justify a function name.
 `laurent_conv_2d` became `conv_matrix_2d`. Naming it for the structure was considered and
 rejected: `toeplitz_` is false, `block_toeplitz_` under-specified, `bttb_` unreadable. What is
 left is naming it for what it produces — a convolution matrix — which is the vocabulary the
-rest of the code already uses (`nvf_conv_matrices`, `to_conv_mat_smooth_nvf`, `epx_conv`).
+rest of the code already uses (`nvf_conv_matrices`, `to_conv_mat_parametric_nvf`, `epx_conv`).
 
 Done before the first release, while `_core` is private and nothing outside it imports the
 name, so no alias was kept and none is owed.
 
 | Moved | Count | Where |
 | --- | --- | --- |
-| `laurent_conv_2d` → `conv_matrix_2d` | 14 | `_core/analytic.py`, `tests/test_analytic.py`, `analytic-modeling.md` |
-| `test_laurent_matches_dfs2d_convention` → `test_conv_matrix_matches_grid_convention` | 4 | `tests/test_analytic.py`, `_core/analytic.py`, `analytic-modeling.md` |
-| "Laurent matrix" meaning the structure → "convolution matrix" | 2 | `_core/analytic.py` |
+| `laurent_conv_2d` → `conv_matrix_2d` | 14 | `_core/parametric.py`, `tests/test_parametric.py`, `parametric-modeling.md` |
+| `test_laurent_matches_dfs2d_convention` → `test_conv_matrix_matches_grid_convention` | 4 | `tests/test_parametric.py`, `_core/parametric.py`, `parametric-modeling.md` |
+| "Laurent matrix" meaning the structure → "convolution matrix" | 2 | `_core/parametric.py` |
 
 **`Laurent` meaning the rule stayed, in all 15 places.** It is correct there, and one of them
 is not prose at all: `modes=('nvf', 'laurent')` in
@@ -232,7 +232,7 @@ projector identity `C_xx + C_yy = I` that the rest of that file checks holds und
 build: one assertion that the sampled build is what runs, and one that the two builds are far
 enough apart (1.1e-2 here) for the first to be pinning anything.
 
-The convention probe in `tests/test_analytic.py` calls `fourier2d_pointwise` for a third reason: it
+The convention probe in `tests/test_parametric.py` calls `fourier2d_pointwise` for a third reason: it
 compares against a raw `np.fft.fft2` and wants no pixel correction in the way. The name still
 fits — asking for the uncorrected build *is* declaring the input to be samples — but the intent
 there is "show me the plain DFT", not "this is a measured field".
@@ -278,7 +278,7 @@ On the **raster** path both values are accepted and the normal field is unaffect
 So `('integrated', 'nvf')` integrates `eps` and `1/eps` exactly and still samples the
 projector. Not a gap in the implementation — it is what the normal field is.
 
-On the **shape** path (analytic layer dicts) the question never arises:
+On the **shape** path (parametric layer dicts) the question never arises:
 `fourier_coefficients='sampled'` is refused outright with `NotImplementedError` — parametric
 geometry has no samples to take a discrete series of — so `'integrated'` is the only value
 there.

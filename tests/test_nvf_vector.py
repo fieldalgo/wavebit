@@ -2,7 +2,7 @@ import numpy as np
 import wavebit
 from wavebit._core.lattice import as_lattice
 import array_api_compat.numpy as xnp
-from wavebit._core.analytic import normal_vector_field_analytical as _nvf_analytic
+from wavebit._core.parametric import normal_vector_field_analytical as _nvf_analytic
 from wavebit._core.factorization import nvf_conv_matrices as _nvf_conv
 
 

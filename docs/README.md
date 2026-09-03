@@ -13,7 +13,7 @@ tables. Say what was measured on what hardware, and where the result stops being
 Every path in `Targets:` must resolve — `tests/test_docs_contract.py` checks it.
 
 Two spellings both count as resolving, and both are intended. A path from the repository root
-(`wavebit/_core/analytic.py`) always works, and so does the `_core/...` shorthand this
+(`wavebit/_core/parametric.py`) always works, and so does the `_core/...` shorthand this
 codebase uses for its own internals — there is only one `_core/`, and writing the prefix out
 every time is longer without being clearer. `Targets:` lists use the full path; running prose
 may use either.
@@ -71,7 +71,7 @@ comes next. The outward-pointing rule above binds `guide/` too; only the house s
 | Document | Question it answers | Decision |
 | --- | --- | --- |
 | [`backend-choice.md`](backend-choice.md) | Which backend, and whether to freeze the geometry, for a *differentiated* run? | Shapes: `jax jit` at every size, re-freezing every step. Rasters: PyTorch below `truncation_order≈5`. And `normal_grid` outweighs both |
-| [`analytic-modeling.md`](analytic-modeling.md) | How does the staircase-free shape path converge against a raster staircase? | The smooth path for tilted and curved boundaries |
+| [`parametric-modeling.md`](parametric-modeling.md) | How does the staircase-free shape path converge against a raster staircase? | The parametric path for tilted and curved boundaries |
 | [`boundary-modeling.md`](boundary-modeling.md) | Can a layer be painted *and* keep a tilted edge exact? | Yes — resolve the painting into polygons once, then transform those |
 | [`nvf-upsampling.md`](nvf-upsampling.md) | What grid should the NVF normal field be taken on? | Not the fine one: it lost accuracy in 27 of 32 combinations and cost the most |
 | [`nvf-normal-methods.md`](nvf-normal-methods.md) | Can the raster normal field do better than the {0, 45}-degree staircase gradient? And is it periodic? | Yes — `normal_method='contour'` won 11/12 resolved solver cells and lost none; the best *angular* field (`'smooth'`) loses on corners, which is why the solver A/B decides. Periodic only since 2026-08-17: `'distance'` read the cell as a flat array in three places, so a lattice translation of the raster moved `R` by 1e-2 at every `truncation_order` |

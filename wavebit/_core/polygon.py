@@ -48,7 +48,7 @@ def polygon_ft(xp, verts, ky, kx, lattice):
     ``verts`` is (N, 2) in (x, y), counter-clockwise. Returns an array shaped like ``kx``.
 
     ``lattice`` is the cell basis (``None`` = axis-aligned ``diag(period)``), and as in
-    :func:`wavebit._core.analytic.shape_ft` it reaches only the two lines that turn the order
+    :func:`wavebit._core.parametric.shape_ft` it reaches only the two lines that turn the order
     indices into ``(Gx, Gy)``. Everything after them is the contour integral in **Cartesian**
     frequency, so a skewed cell changes where the transform is sampled and nothing about the
     polygon. Vertices are absolute Cartesian positions, and the shape needs no wrapping at the

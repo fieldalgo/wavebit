@@ -21,7 +21,7 @@ reachable from the solver (the legacy entry point ``to_conv_mat_raster_nvf`` had
 parameter) and only ever appeared in a tutorial comparison illustrating that SDF is better.
 
 The third legacy method, ``'analytical'``, was *not* dropped: it lives on as
-``wavebit._core.analytic.normal_vector_field_analytical`` (see ``test_nvf_vector.py``).
+``wavebit._core.parametric.normal_vector_field_analytical`` (see ``test_nvf_vector.py``).
 """
 import numpy as np
 import pytest

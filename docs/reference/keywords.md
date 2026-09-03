@@ -40,7 +40,7 @@ Explained in [Describing a scene](../guide/scene.md).
 
 | Keyword | Default | What it takes |
 | --- | --- | --- |
-| `structure` | `None` | the layers. An `ndarray` of shape `(n_layers, Ny, Nx)` is a **raster** of relative permittivity; a `list` of `dict(background=..., shapes=[...])` is the **smooth** path |
+| `structure` | `None` | the layers. An `ndarray` of shape `(n_layers, Ny, Nx)` is a **raster** of relative permittivity; a `list` of `dict(background=..., shapes=[...])` is the **parametric** path |
 | `thickness` | `(0.,)` | one length per layer, same unit as `period` |
 | `top` | `1.` | superstrate material — a `Material`, or a bare relative permittivity |
 | `bot` | `1.` | substrate, read the same way |

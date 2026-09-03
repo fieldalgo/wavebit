@@ -6,7 +6,7 @@ purpose.
 
 Only the raster path obtains coefficients two ways. The shape path states a layer as geometry
 rather than as samples and integrates the permittivity over that geometry in closed form, over
-each shape's analytic transform (``analytic.shape_ft``, which *is* that integral). It has no
+each shape's analytic transform (``parametric.shape_ft``, which *is* that integral). It has no
 raster underneath to run a discrete series along, and used to not look at the keyword at all.
 The removed block path was the same case by a different route -- it integrated over the
 rectangles its modeler painted -- which is why this file is written about paths.
@@ -178,12 +178,12 @@ def test_the_refusal_holds_on_every_backend(name, code, path, series):
 
 # A painted layer whose two rectangles actually overlap. This is the fourth build in the
 # codebase and the one neither `_..._IMPLEMENTED_BY` table names: it is not a modeling type of
-# its own but a branch inside `to_conv_mat_smooth_layers`, taken when
-# `analytic.layer_needs_resolving` says the painting has to be resolved. It never calls
-# `shape_ft` or `to_conv_mat_smooth_nvf` -- it clips the painting into disjoint polygons and
+# its own but a branch inside `to_conv_mat_parametric_layers`, taken when
+# `parametric.layer_needs_resolving` says the painting has to be resolved. It never calls
+# `shape_ft` or `to_conv_mat_parametric_nvf` -- it clips the painting into disjoint polygons and
 # transforms those (`boundary.to_conv_mat_boundary_layer`).
 #
-# Both tables key on `_modeling_path`, so it inherits the smooth path's row, and that
+# Both tables key on `_modeling_path`, so it inherits the parametric path's row, and that
 # is right on the substance: a polygon transform is exact, so the coefficients are integrated
 # ones, and the assembly is the same NVF five-matrix form. What it does *not* inherit for free
 # is an accurate refusal -- both messages used to name only the per-shape transform, which is
@@ -210,8 +210,8 @@ def _painted(**strategy):
 
 def test_the_boundary_sub_path_is_covered_by_the_smooth_row():
     """It really does take the resolving branch, and really does resolve to the smooth pair."""
-    from wavebit._core import analytic
-    assert analytic.layer_needs_resolving(PAINTED[0], as_lattice(period=PAINTED_PERIOD))
+    from wavebit._core import parametric
+    assert parametric.layer_needs_resolving(PAINTED[0], as_lattice(period=PAINTED_PERIOD))
     s = _painted()
     assert s._modeling_path == 'parametric'
     assert s.fourier_coefficients == 'integrated' and s.factorization == 'nvf'

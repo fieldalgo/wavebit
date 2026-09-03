@@ -1,6 +1,6 @@
 """Gradients where the analytic normal field has no direction to report.
 
-:func:`wavebit._core.analytic.normal_vector_field_analytical` normalizes twice — once per
+:func:`wavebit._core.parametric.normal_vector_field_analytical` normalizes twice — once per
 shape, once over the combination — and the norm reaches exactly zero on perfectly ordinary
 geometry: **a shape's own centre**, where its level-set gradient ``g`` vanishes.
 
@@ -19,7 +19,7 @@ gradient. The forward pass stays finite throughout, so nothing raises and nothin
 only symptom is a NaN arriving at the caller. The guard now replaces the *radicand*, so the
 root is only ever taken at 1, where the derivative is finite.
 
-The same shape appeared a second time in :func:`wavebit._core.analytic.shape_ft`: the circle
+The same shape appeared a second time in :func:`wavebit._core.parametric.shape_ft`: the circle
 branch took a bare ``**0.5`` of ``u**2 + v**2`` and handed it to ``jinc``, whose own ``where``
 supplied the ``0``. The ellipse branch beside it was already guarded, which is why
 ``d/d(period)`` used to come back NaN on a circle and finite on an ellipse — the same layer,
@@ -43,7 +43,7 @@ import jax                                                     # noqa: E402
 import jax.numpy as jnp                                        # noqa: E402
 wavebit.enable_x64()
 
-from wavebit._core.analytic import (                         # noqa: E402
+from wavebit._core.parametric import (                         # noqa: E402
     assemble_eps_coeffs, normal_vector_field_analytical)
 
 P = 0.77

@@ -253,7 +253,7 @@ def test_paths_cited_anywhere_are_in_the_repository():
                 # exemptions to write and maintain is a worse document than the one stale line.
                 continue
             # Three bases, and the middle one is a deliberate house style rather than slack:
-            # `_core/analytic.py` is how this codebase refers to its own internals, in 13 files
+            # `_core/parametric.py` is how this codebase refers to its own internals, in 13 files
             # and counting, and there is only one `_core/` for it to mean. Spelling it
             # `wavebit/_core/...` everywhere would be longer and no clearer. The third base
             # accepts a link relative to the citing file, which is how one doc points at another.

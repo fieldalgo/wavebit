@@ -1,7 +1,7 @@
 # Boundary modeling — painting an overlap without staircasing the edges
 
 Written: 2026-08. Targets `wavebit/_core/boundary.py`, `_core/clipper.py`, `_core/polygon.py`,
-and the overlap route through `_core/analytic.py::to_conv_mat_smooth_layers`.
+and the overlap route through `_core/parametric.py::to_conv_mat_parametric_layers`.
 
 ---
 
@@ -9,15 +9,15 @@ and the overlap route through `_core/analytic.py::to_conv_mat_smooth_layers`.
 
 Two things a layer can need at once, and until now no path gave both:
 
-| path | tilted edge | overlapping shapes |
+| route | tilted edge | overlapping shapes |
 |---|---|---|
 | raster | staircase | as drawn (painted) |
 | block (removed) | staircase | **painted** |
-| smooth | **exact** | added (superposed) |
-| **boundary** | **exact** | **painted** |
+| parametric, closed form | **exact** | added (superposed) |
+| **parametric, resolved** | **exact** | **painted** |
 
 A raster paints — the later sample wins — but it staircases a tilted edge. So did the block
-path, which decomposed shapes into axis-aligned blocks. The smooth path transforms a tilted
+path, which decomposed shapes into axis-aligned blocks. The parametric path transforms a tilted
 shape in closed form but *sums* the shapes, so where two overlap the layer would get both
 contributions and the permittivity there is neither shape's; asking it to paint used to raise
 `NotImplementedError`, and it now refuses an overlap outright and hands the layer here.
@@ -83,36 +83,42 @@ Shapes are in painting order — a later shape covers an earlier one. `rectangle
 error far below the normal field's.
 
 **Routing is on the overlap, and nothing else says it.** While no two shapes intersect,
-painting and adding describe the same structure, so the layer stays on the closed-form smooth
+painting and adding describe the same structure, so the layer stays on the closed-form parametric
 path: exact and cheaper. Routing every shape layer here regardless would move the answer on a
 layer that has no overlap at all — measured 0.8% apart on disjoint rods, because the two paths
 extend the normal differently. A `combine=` key chose the rule by name until 2026-08-27, when
 `'add'` was removed (its overlap is `eps_a + eps_b - eps_background`, which is not a material)
 and `'paint'` stopped being a choice.
 
-### Which path a layer took
+### Which route a layer took
 
-**There is no `modeling_type` for this path**, and the omission is deliberate rather than
-pending. `modeling_type` is a property of the whole solver, decided from the *type* of `structure`
-alone — 0 raster, 2 smooth. The choice between boundary and the closed form is taken
-**per layer**, by the loop in `to_conv_mat_smooth_layers`, from the shapes' actual coordinates.
-One smooth `structure` can have its first layer resolved into polygons and its second transformed in
-closed form; a solver-wide integer cannot say that. Both layers report `modeling_type == 2`.
+**There is no modeling path of its own for this route**, and the omission is deliberate rather
+than pending. `modeling_path` is a property of the whole solver, decided from the *type* of
+`structure` alone — `raster` or `parametric`. The choice between resolving and the closed form
+is taken **per layer**, by the loop in `to_conv_mat_parametric_layers`, from the shapes' actual
+coordinates. One parametric `structure` can have its first layer resolved into polygons and its
+second transformed in closed form; a solver-wide value cannot say that. Both layers report
+`modeling_path == 'parametric'`.
 
 Two consequences worth keeping straight:
 
 - The rows of the table above are not settings to pick between. The first two are `structure`
-  types (and the third, marked removed, was one); the last is what the smooth one *becomes*,
-  layer by layer, where it has to.
+  types (and the third, marked removed, was one); the last is what the parametric one
+  *becomes*, layer by layer, where it has to.
 - What records the choice is `geometry.boundary_plans`: a layer's slot holds a plan if that layer
-  resolved, and `None` if it stayed on the closed form. That, not `modeling_type`, is what to
-  read when you want to know which happened.
+  resolved, and `None` if it stayed on the closed form. That is what to read when you want to
+  know which happened.
 
-Nothing else about such a layer changes, which is the other half of why the integer was not
-split. Boundary and smooth share one option contract — `factorization='nvf'` and
+Nothing else about such a layer changes, which is the other half of why the path was not split.
+The two routes share one option contract — `factorization='nvf'` and
 `fourier_coefficients='integrated'`, both fixed, neither a choice — and one coordinate
-convention, absolute lengths in the units of `period`. A separate code would duplicate every
+convention, absolute lengths in the units of `period`. A separate path would duplicate every
 entry in `engine.py`'s refusal tables and distinguish nothing a user can act on.
+
+This argument used to be made against a document that did not take it: the capability manifest
+published `smooth` and `boundary` as sibling paths until MANIFEST_VERSION `'9'` (2026-09-03).
+It now publishes `parametric` with an `overlap` property, which is this section in
+machine-readable form.
 
 ## Differentiability
 
@@ -138,10 +144,10 @@ res = solver.solve(geometry=solver.freeze_geometry())
 A gradient runs from `(cx, cy, lx, ly, angle)` through the replay, the polygon transform and the
 normal field to the convolution matrices, and matches finite differences to 2.3e-08.
 
-### It carried a position gradient the smooth path could not — and no longer does
+### It carried a position gradient the parametric path could not — and no longer does
 
 **This section's advantage is gone as of 2026-08-17 (`c128fd8`), and the reasoning is kept
-because the diagnosis in it is what eventually closed the gap.** The smooth path now carries the
+because the diagnosis in it is what eventually closed the gap.** The parametric path now carries the
 `cx`/`cy` gradient too, so what separates the two paths is the paint-vs-add semantics this
 document opens with, and nothing about differentiability.
 
@@ -188,10 +194,10 @@ answer is not the one the `h`-sweep implies.
 The distinction matters for what could be done about it. The measurement above holds for a
 painted **disjoint** pair as well (3.878496e-01 analytic against 3.878512e-01 at `h` = 1e-7), so
 the grad-of-distance field carries a position gradient whether or not anything overlaps — which
-makes "give multi-shape smooth layers this field instead" a route the three already rejected at
+makes "give multi-shape parametric layers this field instead" a route the three already rejected at
 `normal_projector_coeffs` did not consider. It is not free — it is a different NVF choice, so
 forward answers on those layers move — and it has now been tried. (It is also moot since
-`c128fd8`: the smooth path carries the gradient on its own field, so there is nothing left for
+`c128fd8`: the parametric path carries the gradient on its own field, so there is nothing left for
 the swap to buy. The measurement below stands as the record of why the swap was rejected on its
 own terms.)
 
@@ -329,7 +335,7 @@ central differences is exactly what that layer would show on its own.
 
 The routing test of the previous section compares coordinates. Whether a tracer *has* one is
 the whole question, and for a long time this code answered it by asking the wrong thing:
-`analytic._primitives` spelled its read as `float(value)` and treated any refusal as "this is
+`parametric._primitives` spelled its read as `float(value)` and treated any refusal as "this is
 traced". A `jax.jit` tracer genuinely has no number. A **`jax.grad` tracer carries a concrete
 primal** and was refusing only the spelling — so the checks were skipped in an un-jitted
 gradient loop, which is exactly where an optimizer lives, and a rod grown by plain gradient
@@ -379,7 +385,7 @@ A painted layer with nothing overlapping is summed, which is exact and cheaper, 
 records that decision as a `None` plan — an answer, not a gap. Drag a shape onto another and the
 answer is stale too, but the dispatch summed on the record's word and
 `analytic._refuse_paint_overlap` stopped it with a `ValueError` about the summing builder, pointing
-at the boundary path the caller was already inside and naming neither the record nor the fix. The
+at the boundary route the caller was already inside and naming neither the record nor the fix. The
 same call with no `geometry=` solves the layer fine.
 
 Checking costs one re-plan. That is **0.2%** of a frozen `solve` for the two-rectangle
@@ -444,7 +450,7 @@ the truncation set matched exactly (`LatticeTruncation='Parallelogramic'`,
   ellipse — the one case where S4 holds the true closed-form shape and this path holds a 256-gon —
   the permittivity coefficients differ by 3.70e-05 (2.7e-05 relative), which is the polygonisation
   in isolation; every other case is 1e-15 because both sides then hold the same polygons. In the
-  *answer* it does not show: 1.52e-02 here against 1.51e-02 for the closed-form smooth path,
+  *answer* it does not show: 1.52e-02 here against 1.51e-02 for the closed-form parametric path,
   the two tracking each other all the way down. The block staircase sat at 3.29e-01 and
   **flat** — on a curve a staircase does not shrink with truncation at all.
 
@@ -456,12 +462,12 @@ than a property of this path; the existing paths meet the same wall.
 
 Against the repository's own paths: two overlapping rods give 0.548127 painted here and
 0.824944 if summed — and 0.547893 on the block path, which painted, and so agreed.
-On a single shape, where there is nothing to resolve, the permittivity matches the smooth path
+On a single shape, where there is nothing to resolve, the permittivity matches the parametric path
 to 5e-16.
 
 ---
 
-See also: [`analytic-modeling.md`](analytic-modeling.md) for the closed-form shape transforms this
+See also: [`parametric-modeling.md`](parametric-modeling.md) for the closed-form shape transforms this
 path reuses, and [`nvf-upsampling.md`](nvf-upsampling.md) for the normal field's grid on the
 raster path.
 

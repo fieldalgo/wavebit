@@ -18,7 +18,7 @@ user a real warning later.
 What this file pins:
 
 * the warning stream is clean on every user-facing path — both connecting algorithms, all three
-  factorizations, the analytic builder, field reconstruction — which is what the version floor
+  factorizations, the parametric builder, field reconstruction — which is what the version floor
   buys and would catch a regression to a broken NumPy;
 * the result is right, checked by energy conservation rather than a frozen number;
 * contamination is loud, in two tiers: a non-finite efficiency raises, and a finite but
@@ -129,7 +129,7 @@ def test_every_factorization_is_silent(strategy):
     assert abs(_energy(res) - 1.0) < 1e-10
 
 
-def test_analytic_shape_path_is_silent():
+def test_parametric_path_is_silent():
     """The analytic (staircase-free) builder carries its own copy of the NVF assembly."""
     structure = [dict(background=1.0, shapes=[dict(type='ellipse', cx=0.0, cy=0.0, lx=0.5,
                                               ly=0.3, angle=np.deg2rad(40), material=5.76),

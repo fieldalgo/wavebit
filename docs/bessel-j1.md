@@ -223,7 +223,7 @@ and be aware of it if two things share an interpreter.
 
 See also: [`backend-choice.md`](backend-choice.md) for which backend to use, which is now a
 performance question rather than an accuracy one on every path; and
-[`analytic-modeling.md`](analytic-modeling.md) for the closed-form shape transforms that call
+[`parametric-modeling.md`](parametric-modeling.md) for the closed-form shape transforms that call
 `jinc`.
 
 ### References

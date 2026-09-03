@@ -2,7 +2,7 @@
 
 :func:`~wavebit._core.fields.plot_field` draws what came out of a solve. This draws what went
 in, which had no helper at all: every tutorial that shows a layer builds the array itself,
-before Wavebit sees it, so the path where rendering is not trivial -- the analytic shapes --
+before Wavebit sees it, so the path where rendering is not trivial -- the parametric shapes --
 was never pictured by anything the library ships.
 
 Presentation rather than physics, and like ``plot_field`` there is no reason for it to exist
@@ -20,7 +20,7 @@ weights each segment by its **signed** width. That path is gone and so is the re
 import array_api_compat.numpy as xnp
 import numpy as np
 
-from . import analytic as _analytic
+from . import parametric as _parametric
 from . import boundary as _boundary
 from . import clipper as _clipper
 from . import factorization as _fac
@@ -60,7 +60,7 @@ def _eps_of(material):
     :class:`~wavebit._core.domain.Material` are read the same way here as in the builder --
     which is the point. A picture that read a shape dict by its own rules is how this module's
     two predecessors came to disagree with the transform about what a dict meant (see
-    :func:`~wavebit._core.analytic.shape_geometry`), and a material is the slot where the
+    :func:`~wavebit._core.parametric.shape_geometry`), and a material is the slot where the
     disagreement would be invisible: the shape would be in the right place, made of the wrong
     stuff.
     """
@@ -105,11 +105,11 @@ def _periods(solver):
     return float(np.real(solver.period[0])), float(np.real(solver.period[1]))
 
 
-# =========================================================== path 1: analytic shape sampling
+# =========================================================== path 1: parametric shape sampling
 
 def _shape_inside(shape, X, Y, basis, Px, Py):
     """Signed cover count of one shape and its periodic images at every sample point."""
-    kind, cx, cy, lx, ly, angle = _analytic.shape_geometry(shape, basis)
+    kind, cx, cy, lx, ly, angle = _parametric.shape_geometry(shape, basis)
     cx, cy, lx, ly, angle = (float(np.real(np.asarray(v, dtype=complex)))
                              for v in (cx, cy, lx, ly, angle))
     cos_a, sin_a = np.cos(angle), np.sin(angle)
@@ -136,7 +136,7 @@ def _shape_inside(shape, X, Y, basis, Px, Py):
 def _render_summed(layer, X, Y, basis, Px, Py):
     """The summed structure: ``eps_base + sum_s (eps_s - eps_base) * indicator_s``.
 
-    Read through :func:`~wavebit._core.analytic.shape_geometry` rather than off the shape dict,
+    Read through :func:`~wavebit._core.parametric.shape_geometry` rather than off the shape dict,
     which is the whole reason that function exists -- a circle takes its diameter once, ``ly``
     and the centres have defaults, and a second reader is a second chance to disagree with the
     transform about what the dict meant.
@@ -149,10 +149,10 @@ def _render_summed(layer, X, Y, basis, Px, Py):
     return out
 
 
-# ============================================ path 2: analytic shapes, painted where they overlap
+# ============================================ path 2: parametric shapes, painted where they overlap
 
 def _resolved_regions(shapes, period, basis=None):
-    """``[(eps, [vertices, ...]), ...]`` -- the disjoint loops the boundary path holds.
+    """``[(eps, [vertices, ...]), ...]`` -- the disjoint loops the boundary route holds.
 
     Painting order resolved once by :func:`~wavebit._core.boundary.plan_layer`, exactly as the
     solver resolves it. **The orientation is the value**: a loop comes back counter-clockwise
@@ -214,7 +214,7 @@ def _winding(V, xs, ys):
 
 
 def _render_paint(layer, xs, ys, basis, period):
-    """The painted structure, from the same disjoint loops the boundary path integrates."""
+    """The painted structure, from the same disjoint loops the boundary route integrates."""
     eps_b = _eps_of(layer.get('background', 1.0))
     out = np.full((ys.size, xs.size), eps_b, dtype=complex)
     for eps_s, loops in _resolved_regions(layer.get('shapes', []), period, basis):
@@ -236,7 +236,7 @@ def _grid_from_conv_matrix(M, half_width_u, half_width_v):
     from.
 
     ``M[(r,s),(c,d)] = coeff(ky = r-c, kx = s-d)`` (see
-    :func:`~wavebit._core.analytic.conv_matrix_2d`), and ``r``, ``c`` each run over
+    :func:`~wavebit._core.parametric.conv_matrix_2d`), and ``r``, ``c`` each run over
     ``2*half_width_v+1`` values, so every difference in ``[-2*half_width_v, 2*half_width_v]`` is
     reachable. Reading the grid back out of the builder's own output beats re-deriving it here:
     there is then no second opinion about the order-index sign, which is the convention this
@@ -284,7 +284,7 @@ def _band_limited(solver, layer, n):
         # `diag(period)` here rather than `None`, and taking it from the same accessor is what
         # keeps this reconstruction the transform the solve holds instead of a lookalike.
         basis = solver._geometry_lattice_for(None)
-        if _analytic.layer_needs_resolving(lay, basis):
+        if _parametric.layer_needs_resolving(lay, basis):
             KY, KX = _boundary._k_grids(xnp, half_width_u, half_width_v, np.float64)
             eps_b = _eps_of(lay.get('background', 1.0))
             grid = np.zeros(KY.shape, dtype=complex)
@@ -299,7 +299,7 @@ def _band_limited(solver, layer, n):
             # nothing overlaps the sum and the painting are the same structure. It refuses an
             # overlap unconditionally, so a branch that stopped being right would raise here
             # rather than draw a picture the solver does not build.
-            grid = np.asarray(_analytic.assemble_eps_coeffs(
+            grid = np.asarray(_parametric.assemble_eps_coeffs(
                 xnp, lay.get('shapes', []), lay.get('background', 1.0), half_width_u,
                 half_width_v, basis, np.complex128)[0])
     return _inverse_series(grid, half_width_u, half_width_v, n, n)
@@ -322,8 +322,8 @@ def _refuse_layer(solver, layer):
         # stopped by layer 3, and a renderer is where someone goes to *find out* what a
         # refusal is about.
         index = layer % n_layers
-        _analytic.check_layer_spec(solver.structure[index], index)
-        _analytic.check_layer_shapes(solver.structure[index], _basis(solver), index)
+        _parametric.check_layer_spec(solver.structure[index], index)
+        _parametric.check_layer_shapes(solver.structure[index], _basis(solver), index)
 
         # A picture is a picture: every renderer below samples on a NumPy grid, so a traced
         # shape parameter has nowhere to go. Said here rather than left to surface as a
@@ -371,8 +371,8 @@ def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
     * **raster** (``modeling_path='raster'``) -- ``structure[layer]`` itself, at the raster's own
       resolution. ``n`` is ignored, because resampling a raster invents detail it does not
       carry.
-    * **analytic** (``modeling_path='parametric'``) -- ``n x n`` samples of the shapes themselves, through
-      :func:`~wavebit._core.analytic.shape_geometry`, periodic images included. A painted layer
+    * **parametric** (``modeling_path='parametric'``) -- ``n x n`` samples of the shapes themselves, through
+      :func:`~wavebit._core.parametric.shape_geometry`, periodic images included. A painted layer
       whose shapes overlap is resolved into disjoint loops by
       :mod:`~wavebit._core.boundary` first, exactly as the solver resolves it: falling back to
       the summed rule there is a 5.4% lie in ``<eps>`` (1.9134 against 1.8158 for a 300x300
@@ -413,7 +413,7 @@ def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
             values = _np_complex(solver.structure[layer])
         elif mt == ModelingPath.PARAMETRIC:
             lay = solver.structure[layer]
-            if _analytic.layer_needs_resolving(lay, solver._geometry_lattice_for(None)):
+            if _parametric.layer_needs_resolving(lay, solver._geometry_lattice_for(None)):
                 # Fractional samples mapped through the basis, so the loops -- which are
                 # absolute Cartesian positions -- are tested where they actually are.
                 if not solver.lattice_is_axis_aligned:

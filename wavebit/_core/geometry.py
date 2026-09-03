@@ -44,7 +44,7 @@ check and a long fit should re-freeze on a schedule rather than wait to be told.
 
 ``boundary_plans`` reads that rule differently from the other two, because it holds no
 coordinates at all. A shape *moving* is what it is built to survive -- that is what makes the
-boundary path differentiable -- so only the combinatorics changing makes it stale: shapes that
+boundary route differentiable -- so only the combinatorics changing makes it stale: shapes that
 begin to overlap, or stop, or a shape that was covered coming out from under the one covering
 it. Its ``None`` entry is a recorded answer too ("painted, and nothing overlapped"), and goes
 stale the same way. Both are checked by re-asking, which costs a re-plan -- 0.2% of a frozen
@@ -81,13 +81,13 @@ class StaticGeometry:
             quantity is built on the normal of its own boundary. All three are ``None``
             unless the structure carries a raster ``mu``; the two shape paths need no twin
             here at all, since their records hold the geometry both quantities share.
-        boundary_plans: per-layer ``(table_records, regions)`` for the boundary path — which
+        boundary_plans: per-layer ``(table_records, regions)`` for the boundary route — which
             loop holds which vertex and which edges cross, once the painting is resolved. These
             are pure Python indices, never coordinates, so a replay
             carries a gradient to the vertices and they compare by content. ``None`` for a layer
             is an answer rather than a gap: painted, looked at while concrete, and nothing
             overlapped, so it is summed. Both answers are re-asked eagerly
-            (:func:`boundary.check_plan_still_fits`, :func:`analytic.check_no_plan_still_fits`).
+            (:func:`boundary.check_plan_still_fits`, :func:`parametric.check_no_plan_still_fits`).
 
     A field left ``None`` means "auto-detect", which is what the strategy in use does not need
     (a sampled build never touches ``normal_field``, for instance).

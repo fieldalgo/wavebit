@@ -465,7 +465,7 @@ def sweep_recompile_shapes(budget, reps):
 # `sweep_stale_window` lived here until 2026-08-27: it bisected how far a *held* freeze stays
 # valid, per shape and per `n_split`. The block modeller it measured is gone, and `n_split`
 # with it, so the sweep could not be renamed -- its whole abscissa was that parameter. The
-# question it asked is still real on the boundary path, where the plan holds combinatorics
+# question it asked is still real on the boundary route, where the plan holds combinatorics
 # rather than grid lines and what makes it stale is shapes starting or stopping overlapping;
 # re-earning the answer there is a measurement, not a rename, and it has not been taken.
 

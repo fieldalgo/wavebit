@@ -14,7 +14,7 @@ import pytest
 import wavebit
 from wavebit._core.lattice import as_lattice
 import array_api_compat.numpy as xnp
-from wavebit._core.analytic import (
+from wavebit._core.parametric import (
     shape_ft as _shape_ft, conv_matrix_2d as _conv_matrix_2d,
     assemble_eps_coeffs as _assemble_eps_coeffs, normal_vector_field_analytical as _nvf_analytic,
     _sampled_coeffs)
@@ -37,7 +37,7 @@ def conv_matrix_2d(coeff2d, half_width_u, half_width_v):
 
 
 def sampled_coeffs(field, fx, fy):
-    """The analytic path's spelling of the sampled transform's coefficients."""
+    """The parametric path's spelling of the sampled transform's coefficients."""
     return _sampled_coeffs(xnp, field, fx, fy)
 
 
@@ -58,7 +58,7 @@ def to_conv_mat_smooth(shapes, background, half_width_u, half_width_v, period):
 def test_conv_matrix_matches_grid_convention():
     """The sampled transform is written twice; the two spellings must stay one transform.
 
-    ``fourier2d_pointwise`` (raster path) and ``_sampled_coeffs`` + ``conv_matrix_2d`` (analytic
+    ``fourier2d_pointwise`` (raster path) and ``_sampled_coeffs`` + ``conv_matrix_2d`` (parametric
     path) are the same Fourier transform of the same kind of data, reached by different routes.
     Nothing forces them to agree, and the NVF projectors go through one on a raster layer and
     the other on a shape layer -- so a change applied to one alone silently splits the two
@@ -66,7 +66,7 @@ def test_conv_matrix_matches_grid_convention():
 
     That is not hypothetical. This test used to compare ``fourier2d_pointwise`` against a
     hand-rolled ``np.fft.fft2`` here in the test file, which made the *test* the second
-    implementation rather than the analytic path. When the half-pixel cell-centre phase was
+    implementation rather than the parametric path. When the half-pixel cell-centre phase was
     added to the raster side on 2026-08-16 this failed, correctly reporting that the two had
     diverged -- and it was briefly misread as a stale convention probe rather than as the
     finding it was. Comparing the two shipped spellings instead is what makes the failure
@@ -203,7 +203,7 @@ def test_the_analytic_normal_field_gets_the_two_axes_the_right_way_round():
     """A disc's normal is radial in REAL space -- true only if the sample cell is not transposed.
 
     ``period[0]`` is Px everywhere in this package (:func:`shape_ft`,
-    :func:`~wavebit._core.analytic.shape_geometry`, ``polygon.polygon_ft``,
+    :func:`~wavebit._core.parametric.shape_geometry`, ``polygon.polygon_ft``,
     ``boundary.normal_projector_coeffs``), so the sample grid has to stretch ``u`` -- which
     indexes Nx -- by ``period[0]``. ``normal_vector_field_analytical`` read the pair backwards
     until 2026-08-11 and its one production caller reversed it back, so the path was right and
@@ -217,7 +217,7 @@ def test_the_analytic_normal_field_gets_the_two_axes_the_right_way_round():
     ``g = 2*(dx, dy)/a**2``, exactly parallel to the radius at every sample -- so there is no
     polygonisation angle to allow for and the tolerance is machine epsilon rather than the 1e-3
     its counterpart in ``test_boundary`` needs. The centre pixel is the one exclusion: ``g``
-    vanishes there, :func:`~wavebit._core.analytic._hypot_safe` returns ``(0, 0)`` by design,
+    vanishes there, :func:`~wavebit._core.parametric._hypot_safe` returns ``(0, 0)`` by design,
     and the grid being odd on both axes lands a sample exactly on it. A swapped pair is not a
     small effect: it takes the worst deviation to 1.0, i.e. somewhere in the cell the field
     comes out square to the radius instead of along it.
@@ -305,7 +305,7 @@ def test_metal_rod_absorbs_end_to_end(psi):
     assert 0.5 < total < 0.95, total       # absorbing, and absorbing by a visible margin
 
 
-def test_analytic_shape_parameters_are_absolute_lengths():
+def test_parametric_shape_parameters_are_absolute_lengths():
     """``cx`` / ``lx`` are lengths, not fractions of the period.
 
     Nothing else says so, and every other test here uses ``period = 1``, where the two readings
@@ -434,7 +434,7 @@ def test_jax_gradient(shape_type):
 # ----------------------------------------------------------------------
 # 7. analytic converges faster than the staircase path (tilted dielectric)
 # ----------------------------------------------------------------------
-def test_analytic_beats_staircase_tilted():
+def test_parametric_beats_staircase_tilted():
     cfg = dict(top=1.0, bot=1.0, theta=0.0, phi=None,
                period=(1.0, 1.0), wavelength=1.6, thickness=(0.6,), psi=0.0)
     EPS_R, ang, L, c = 12.25, np.deg2rad(30), 0.5, 0.5    # eps 12.25 is the old n = 3.5
@@ -532,8 +532,8 @@ def test_the_closed_form_builder_refuses_an_overlap_rather_than_summing_it():
     plausible number -- 2.76 against the 2.52 painting gives -- which is why this is refused
     rather than left to be noticed downstream.
 
-    The layer above never reaches here with an overlap: :func:`to_conv_mat_smooth_layers`
-    routes it to the boundary path. This is the second reading of that dispatch.
+    The layer above never reaches here with an overlap: :func:`to_conv_mat_parametric_layers`
+    routes it to the boundary route. This is the second reading of that dispatch.
     """
     period, eps_base = [300.0, 300.0], 1.0
     rods = [dict(type='rectangle', cx=-20.0, cy=0.0, lx=120.0, ly=120.0, angle=0.0,
@@ -562,7 +562,7 @@ def test_the_closed_form_builder_refuses_an_overlap_rather_than_summing_it():
 
 
 def test_an_overlapping_smooth_layer_paints_like_the_raster_of_the_same_recipe():
-    """What the user sees of the rule: the smooth path lands on the raster's structure.
+    """What the user sees of the rule: the parametric path lands on the raster's structure.
 
     Painting is what a raster does -- the later box covers the earlier -- and it is what an
     overlapping smooth layer now means, resolved into disjoint polygons by the boundary
@@ -624,14 +624,14 @@ def solve(shapes, **layer):
 def test_an_overlapping_layer_is_built_by_painting_and_routes_itself():
     """The same recipe used to mean two structures, and the layer had to name which.
 
-    A vector recipe moved onto the smooth path came back superposed, with nothing said. The
+    A vector recipe moved onto the parametric path came back superposed, with nothing said. The
     ``combine`` keyword was the first answer -- refuse the layer until it names the rule --
     and it taxed every layer for a question only an overlap raises. The rule is now fixed
     (later shape over earlier, as a raster reads the same recipe) and the *geometry* picks the
-    builder: :func:`layer_needs_resolving` says yes, and the boundary path resolves the
+    builder: :func:`layer_needs_resolving` says yes, and the boundary route resolves the
     overlap into disjoint polygons.
     """
-    from wavebit._core.analytic import layer_needs_resolving
+    from wavebit._core.parametric import layer_needs_resolving
 
     shapes = [rod(130.0, material=4.0), rod(190.0, material=9.0)]
     lattice = as_lattice(period=CHECK_CFG['period'])
@@ -647,13 +647,13 @@ def test_an_overlapping_layer_is_built_by_painting_and_routes_itself():
 
 
 def test_a_disjoint_layer_stays_on_the_closed_form_builder():
-    """No overlap, no polygon to resolve -- the case the smooth path exists for stays free.
+    """No overlap, no polygon to resolve -- the case the parametric path exists for stays free.
 
-    Routing every shape layer through the boundary path would cost this case for nothing, and
+    Routing every shape layer through the boundary route would cost this case for nothing, and
     it would move the answer: measured 0.8% apart on disjoint rods. So the routing question is
     asked of the geometry, and answered ``False`` here.
     """
-    from wavebit._core.analytic import layer_needs_resolving
+    from wavebit._core.parametric import layer_needs_resolving
 
     shapes = [rod(70.0, lx=100.0), rod(220.0, lx=100.0, material=9.0)]
     lattice = as_lattice(period=CHECK_CFG['period'])
@@ -688,8 +688,8 @@ def test_the_removed_combine_key_is_refused_not_ignored():
 
 # --------------------------------------------- which side of the overlap each builder sits on
 #
-# `assemble_eps_coeffs` sums, and refuses an overlap. `to_conv_mat_smooth_layers` looks at the
-# geometry and routes an overlapping layer to the boundary path instead. Reading only the first
+# `assemble_eps_coeffs` sums, and refuses an overlap. `to_conv_mat_parametric_layers` looks at the
+# geometry and routes an overlapping layer to the boundary route instead. Reading only the first
 # of those looks exactly like a solver that cannot paint, which is a diagnosis worth being able
 # to settle with a number: `<eps>` is the DC coefficient, so both rules give it in closed form
 # and nothing about truncation, factorization or the normal field is in the way.
@@ -706,9 +706,9 @@ EPS_SUMMED, EPS_PAINTED = 1.99, 1.90
 
 def _solver_mean_eps(shapes=PAINT_RODS):
     """``<eps>`` as the solve reads it: the DC entry of ``ep_dir``, recovered from ``epz_i``."""
-    from wavebit._core.analytic import to_conv_mat_smooth_layers
+    from wavebit._core.parametric import to_conv_mat_parametric_layers
     layer = dict(background=1.0, shapes=shapes)
-    mats = to_conv_mat_smooth_layers([layer], 6, 6, as_lattice(period=PAINT_PERIOD),
+    mats = to_conv_mat_parametric_layers([layer], 6, 6, as_lattice(period=PAINT_PERIOD),
                                      normal_grid=256,
                                      complex_dtype=np.complex128, xp=xnp)
     return float(np.real(np.linalg.inv(np.asarray(mats.epz_i[0]))[0, 0]))
@@ -804,7 +804,7 @@ def test_a_traced_ly_on_a_circle_is_refused_where_a_comparison_cannot_reach():
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    from wavebit._core.analytic import check_shape_spec
+    from wavebit._core.parametric import check_shape_spec
 
     def f(ly):
         check_shape_spec(_circle(ly=ly))
@@ -818,7 +818,7 @@ def test_an_overlap_that_happens_only_through_an_edge_is_refused():
     """The layer is a unit cell: shapes that miss inside it can still meet through the edge.
 
     And when they do, neither builder can read it. The closed form sums each shape's own
-    transform; the boundary path clips its polygons in unwrapped coordinates and enumerates no
+    transform; the boundary route clips its polygons in unwrapped coordinates and enumerates no
     images, so the wrapped part of the overlap is simply cut away. What comes back is not a
     second structure but a **non-convergent** one -- the pinned numbers below are ``sum(T)``
     against a raster painted with every image, and the solver's column is still moving where
@@ -837,7 +837,7 @@ def test_an_overlap_that_happens_only_through_an_edge_is_refused():
     reach. The bare builder said so all along, which is the second half of this test -- a
     refusal that only the internals can raise is one a user never sees.
     """
-    from wavebit._core.analytic import layer_needs_resolving
+    from wavebit._core.parametric import layer_needs_resolving
 
     shapes = [rod(20.0, lx=100.0), rod(280.0, lx=100.0, material=9.0)]   # meet through x = 0
     lattice = as_lattice(period=CHECK_CFG['period'])
@@ -892,7 +892,7 @@ def test_detection_follows_the_shapes_and_not_their_bounding_boxes():
     crossing = [rod(-30.0, 0.0, lx=160.0, ly=30.0, type='ellipse'),
                 rod(75.0, 0.0, lx=30.0, ly=160.0, type='ellipse', material=9.0)]
 
-    from wavebit._core.analytic import layer_needs_resolving
+    from wavebit._core.parametric import layer_needs_resolving
     lattice = as_lattice(period=CHECK_CFG['period'])
 
     for shapes in (diagonal, crossing):
@@ -968,7 +968,7 @@ def test_the_tiled_blend_is_bit_identical_to_the_whole_grid_one():
     Both branches are exercised by flipping the pixel threshold rather than the grid size, so
     the two arms see an identical layer.
     """
-    from wavebit._core import analytic as _an
+    from wavebit._core import parametric as _an
 
     shapes = [dict(type='rectangle', cx=-0.19, cy=-0.06, lx=0.30, ly=0.22, angle=0.4,
                    material=12.25),
@@ -997,7 +997,7 @@ def test_only_numpy_takes_the_tiled_path():
     would trade a memory win it does not need — XLA and the compiler already fuse the chain
     into one pass — for a compile time that scales with the tile count.
     """
-    from wavebit._core import analytic as _an
+    from wavebit._core import parametric as _an
 
     numpy_grid = np.zeros((4, 4))
     assert _an._tiles_pay(numpy_grid, 1024, 1024, 2)
@@ -1043,7 +1043,7 @@ def test_the_projector_cache_never_changes_an_answer(build):
     fresh every call.
     """
     import wavebit
-    from wavebit._core import analytic as _an
+    from wavebit._core import parametric as _an
 
     def total(cell):
         return np.asarray(wavebit.rcwa(backend=0, structure=cell, **PROJ_KW).solve().T)
@@ -1059,7 +1059,7 @@ def test_the_projector_cache_never_changes_an_answer(build):
 def test_the_cache_holds_no_material_value_so_a_material_sweep_reuses_one_field():
     """The point of the key: the build reads geometry only, so only geometry may enter it."""
     import wavebit
-    from wavebit._core import analytic as _an
+    from wavebit._core import parametric as _an
 
     built = []
     original = _an.normal_vector_field_analytical
@@ -1097,7 +1097,7 @@ def test_a_traced_or_autograd_value_is_never_served_from_the_cache():
     zero from the failure rather than to chase that.
     """
     import wavebit
-    from wavebit._core import analytic as _an
+    from wavebit._core import parametric as _an
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
 
@@ -1147,7 +1147,7 @@ def test_the_cache_key_carries_everything_the_build_depends_on():
     itself be a cache hit.
     """
     import wavebit
-    from wavebit._core import analytic as _an
+    from wavebit._core import parametric as _an
 
     def total(truncation_order, normal_grid):
         kw = dict(PROJ_KW, truncation_order=(truncation_order, truncation_order), normal_grid=normal_grid)
@@ -1175,7 +1175,7 @@ def test_one_geometry_solved_on_three_backends_gets_three_entries():
     the outcome rather than either mechanism.
     """
     import wavebit
-    from wavebit._core import analytic as _an
+    from wavebit._core import parametric as _an
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
 
@@ -1214,7 +1214,7 @@ def _band_misalignment(A, shape, n=512):
     """``1 - |n_analytic . n_raster|`` over the surface band, against the raster contour field.
 
     The arbiter is the *raster* normal field, which reaches its neighbours by tiling in index
-    space and is therefore lattice-correct by construction. It is independent of the analytic
+    space and is therefore lattice-correct by construction. It is independent of the parametric
     path in every part except the shape it is handed -- which is what a golden could not be.
     """
     from scipy import ndimage
@@ -1247,8 +1247,8 @@ def test_analytic_normal_field_folds_on_the_cells_own_lattice():
 
     ``periods_of`` reports ``(|a1|, |a2|)``, so a fold written as ``d % Px`` reduces towards a
     point where no image is -- on a 60-degree cell it looks straight up while the neighbour is
-    up and to the right. Until 2026-08-23 the analytic path did exactly that, and
-    ``docs/oblique-lattice.md`` asserted the opposite ("Analytic shapes do not have this
+    up and to the right. Until 2026-08-23 the parametric path did exactly that, and
+    ``docs/oblique-lattice.md`` asserted the opposite ("Parametric shapes do not have this
     problem"), which is true of their *lengths* and was never true of their *fold*.
 
     Measured on this scene before the fix: 21% of the surface band more than 0.05 out, worst
@@ -1353,7 +1353,7 @@ def test_an_omitted_centre_is_the_cell_centre_on_every_cell(cell_name, A, shape)
     The comparison is against an explicit centre rather than against a stored number, because a
     frozen expectation would have to be recomputed by the same formula it is checking.
     """
-    from wavebit._core.analytic import shape_geometry
+    from wavebit._core.parametric import shape_geometry
 
     want = (0.5 * (A[0, 0] + A[0, 1]), 0.5 * (A[1, 0] + A[1, 1]))
     _, cx, cy, _, _, _ = shape_geometry(shape, A)
@@ -1595,7 +1595,7 @@ def test_an_alias_spelling_gets_the_same_normal_field(first, second):
     spellings resolve to the same geometry through ``shape_geometry``, so every number
     downstream must agree to the last bit. A tolerance here would have passed the defect.
     """
-    from wavebit._core.analytic import normal_vector_field_analytical
+    from wavebit._core.parametric import normal_vector_field_analytical
 
     lattice = as_lattice(period=(300.0, 300.0))
     made = [dict(spelling, cx=0.0, cy=0.0, angle=0.3, material=4.0)
@@ -1652,7 +1652,7 @@ def test_the_projector_cache_keys_on_what_the_field_depends_on(name, make, entri
     five structures would satisfy the entry count and be a much worse bug than the one this
     replaced.
     """
-    from wavebit._core import analytic as _an
+    from wavebit._core import parametric as _an
 
     cfg = dict(backend=0, period=[300.0, 300.0], thickness=[205.0], truncation_order=(4, 4),
                top=1.0, bot=1.0, wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0,
@@ -1758,7 +1758,7 @@ def test_a_length_is_a_size_and_the_transform_carries_its_sign():
     geometry, and an *omitted* length is the same case, since ``shape_geometry`` defaults it
     to 0.0.
     """
-    from wavebit._core.analytic import shape_ft
+    from wavebit._core.parametric import shape_ft
     lattice = np.array([[300.0, 0.0], [0.0, 300.0]])
     zero = np.array([[0.0]])
     claimed = lambda lx: float(np.asarray(shape_ft(

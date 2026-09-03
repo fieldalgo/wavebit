@@ -57,7 +57,7 @@ def _backend(name):
 def _derivative(backend, objective, value, rel_step=1e-6):
     """(autograd, central difference) of ``objective`` at ``value``.
 
-    ``rel_step`` matters more than it looks on the smooth path: the normal field is sampled
+    ``rel_step`` matters more than it looks on the parametric path: the normal field is sampled
     on a grid of ``period / normal_grid``, so the objective carries a sawtooth of that
     period. A difference step that straddles one of those steps reports the jump, not the
     derivative — at ``cx = period/2``, which sits exactly on a grid line, ``h = 1e-6`` gives
@@ -227,7 +227,7 @@ def test_translation_leaves_nothing_behind_within_one_normal_field_cell():
     sampled at the shape's place, so its cell size set a noise floor under every shape gradient
     on this path — 5e-4 at ``normal_grid=256``, which is why the default rose to 1024.
     A lone shape's field is now translated by a phase instead
-    (:func:`wavebit._core.analytic.normal_projector_coeffs`) and the floor is gone: this reads
+    (:func:`wavebit._core.parametric.normal_projector_coeffs`) and the floor is gone: this reads
     5.8e-13, and ``test_shape_position_gradients`` is where the full statement lives. The bound
     stays loose here because the sweep no longer probes anything that varies.
     """

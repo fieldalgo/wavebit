@@ -156,11 +156,11 @@ def test_normal_grid_floor_is_enforced(truncation_order):
 def test_both_shape_paths_draw_the_floor_in_the_same_place(overlapping):
     """The floor is a property of reading a field off a grid, not of which builder read it.
 
-    Only the boundary path checked it until 2026-08-27, and the asymmetry was not a decision:
-    at ``truncation_order=10`` the boundary path refused ``normal_grid=8`` while the analytic
+    Only the boundary route checked it until 2026-08-27, and the asymmetry was not a decision:
+    at ``truncation_order=10`` the boundary route refused ``normal_grid=8`` while the parametric
     path built it -- ``sum(T)`` 4.9e-4 adrift, ``R + T`` exactly 1. Both go through
     ``factorization.check_normal_grid`` now, which is where it had to live because
-    :mod:`~wavebit._core.boundary` imports :mod:`~wavebit._core.analytic` and the analytic
+    :mod:`~wavebit._core.boundary` imports :mod:`~wavebit._core.parametric` and the analytic
     builder could not reach it in the other direction.
 
     Crossed over the two paths for the same reason every other refusal in this file is: a rule
@@ -206,7 +206,7 @@ def test_the_normal_field_gets_the_two_axes_the_right_way_round():
     """A disc's normal is radial in REAL space -- true only if the sample cell is not transposed.
 
     ``period[0]`` is Px everywhere in this package (``polygon.polygon_ft``,
-    ``boundary.normal_projector_coeffs``, ``analytic.shape_ft``), so the sample grid has to
+    ``boundary.normal_projector_coeffs``, ``parametric.shape_ft``), so the sample grid has to
     stretch ``u`` -- which indexes Nx -- by ``period[0]``. Reading the pair the other way round
     samples the field over a transposed cell, and **a square cell hides it completely**: every
     other normal-field test here runs on 1x1. So this one is 2:1, and a disc is the shape that
@@ -277,11 +277,11 @@ def test_permittivity_matches_the_analytic_path_for_one_shape(truncation_order):
     (measured 4.8e-3 flat over truncation_order 4..12), so requiring them to agree would be requiring one
     extension to be the other.
     """
-    from wavebit._core.analytic import to_conv_mat_smooth_nvf
+    from wavebit._core.parametric import to_conv_mat_parametric_nvf
     shape = dict(type='rectangle', cx=0.0, cy=0.0, lx=0.42, ly=0.31, angle=0.4, material=4.0)
     ng = 1024
     (mine, _) = _mats(xnp, [(0.5, 0.5, 0.42, 0.31, 0.4, 4.0)], truncation_order=truncation_order, ng=ng)
-    theirs = to_conv_mat_smooth_nvf(xnp, [shape], 1.0, truncation_order, truncation_order,
+    theirs = to_conv_mat_parametric_nvf(xnp, [shape], 1.0, truncation_order, truncation_order,
                                     CELL, xnp.complex128, normal_grid=ng)
     rel = (np.abs(np.asarray(mine.epz_i) - np.asarray(theirs.epz_i)).max()
            / np.abs(np.asarray(theirs.epz_i)).max())
@@ -357,7 +357,7 @@ CIRCLE_NO_LY = dict(type='circle', cx=-0.08, cy=-0.12, lx=0.34, material=5.76)
      dict(type='ellipse', cx=-0.1, cy=0.1, lx=0.3, ly=0.2, angle=-0.7)),
 ])
 def test_shape_vertices_reads_the_dict_like_the_transform(shape, spelt_out):
-    """One shape dict, one reading -- `analytic.shape_geometry` -- for polygons too.
+    """One shape dict, one reading -- `parametric.shape_geometry` -- for polygons too.
 
     Every default this path used to carry on its own is checked against a dict that states the
     same geometry outright, so the two have to draw the *identical* polygon: omitted ``ly``,
@@ -368,7 +368,7 @@ def test_shape_vertices_reads_the_dict_like_the_transform(shape, spelt_out):
     ``rectangle``): a round type has one length, so the form that states two *is* the other
     type. Only the geometry is compared, not the name.
     """
-    from wavebit._core.analytic import shape_geometry
+    from wavebit._core.parametric import shape_geometry
     from wavebit._core.lattice import as_lattice
     cell = as_lattice(period=PERIOD)
     assert shape_geometry(shape, cell)[1:] == shape_geometry(spelt_out, cell)[1:]
@@ -396,7 +396,7 @@ def test_a_circle_without_ly_is_the_same_circle_on_both_paths(truncation_order):
     rule. What this asserts is unchanged either way: the two paths **agree**, because there is
     one reader and it moves them together.
     """
-    from wavebit._core.analytic import to_conv_mat_smooth_nvf
+    from wavebit._core.parametric import to_conv_mat_parametric_nvf
     from wavebit._core.lattice import as_lattice, periods_of
     ng = 1024
     for name, lat in (('square', as_lattice(period=PERIOD)),
@@ -406,7 +406,7 @@ def test_a_circle_without_ly_is_the_same_circle_on_both_paths(truncation_order):
         mine = _b.to_conv_mat_boundary_layer(xnp, [shape], 1.0, truncation_order,
                                              truncation_order, lat, xnp.complex128,
                                              normal_grid=ng)
-        theirs = to_conv_mat_smooth_nvf(xnp, [shape], 1.0, truncation_order,
+        theirs = to_conv_mat_parametric_nvf(xnp, [shape], 1.0, truncation_order,
                                         truncation_order, lat, xnp.complex128, normal_grid=ng)
         rel = (np.abs(np.asarray(mine.epz_i) - np.asarray(theirs.epz_i)).max()
                / np.abs(np.asarray(theirs.epz_i)).max())
@@ -443,7 +443,7 @@ def test_an_overlap_cannot_be_answered_by_the_summing_builder():
     overlap: :func:`assemble_eps_coeffs` refuses these shapes outright, which is what makes the
     routing below safe to state as a plan rather than as a number.
     """
-    from wavebit._core.analytic import assemble_eps_coeffs
+    from wavebit._core.parametric import assemble_eps_coeffs
 
     painted = _total(_solve([dict(background=1.0, shapes=PAINT_SHAPES)]).solve())
     assert 0.0 < painted < 1.0
@@ -456,7 +456,7 @@ def test_paint_agrees_with_a_raster_of_the_same_painting():
     """A raster paints too -- later sample wins -- so both describe the same structure.
 
     The arm was the block path until it was removed; a raster is what is left that paints, and
-    it is the more honest comparison anyway: it shares no code with the boundary path at all.
+    it is the more honest comparison anyway: it shares no code with the boundary route at all.
     """
     painted = _total(_solve([dict(background=1.0, shapes=PAINT_SHAPES)]).solve())
 
@@ -477,7 +477,7 @@ def test_paint_agrees_with_a_raster_of_the_same_painting():
 def test_a_disjoint_layer_never_reaches_the_polygon_path():
     """While nothing intersects, the closed form is the same structure and stays in charge.
 
-    Both halves matter. Routing here anyway would cost the case the smooth path exists for --
+    Both halves matter. Routing here anyway would cost the case the parametric path exists for --
     and it would *move the answer*, by 0.8% on disjoint rods, because the polygon transform and
     the closed form discretize differently. So the plan is ``None`` and the solve still lands.
     """
@@ -594,7 +594,7 @@ ENCLOSED_SHAPES = [dict(type='rectangle', cx=0.0, cy=0.0, lx=0.6, ly=0.6, angle=
                    dict(type='circle', cx=0.0, cy=0.0, lx=0.2, material=9.0)]
 
 #: The same two shapes moved so they overlap without either containing the other -- the control
-#: that says the boundary path as a whole is sound and only enclosure was broken.
+#: that says the boundary route as a whole is sound and only enclosure was broken.
 CLIPPED_SHAPES = [dict(type='rectangle', cx=-0.07, cy=0.00, lx=0.30, ly=0.30, angle=0.0,
                        material=4.0),
                   dict(type='circle', cx=0.10, cy=0.02, lx=0.32, material=9.0)]
@@ -664,7 +664,7 @@ def test_paint_with_an_enclosed_shape_agrees_with_a_fine_raster():
     raster is a fixed reference and not the thing under test.
 
     The remaining 1.8e-3 is not error in either path -- it is the normal field. The boundary
-    path takes it from the distance gradient off the exact polygons, the raster path from the
+    route takes it from the distance gradient off the exact polygons, the raster path from the
     pixel grid, and the two are different valid NVF choices whose gap does not shrink with the
     raster (it is the same at N=800 and N=1600). The control below fixes the size of that gap
     independently, on geometry that never produces a hole: 5.1e-4 there, same configuration.
@@ -687,7 +687,7 @@ def test_paint_with_an_enclosed_shape_agrees_with_a_fine_raster():
 def test_a_partial_overlap_was_never_affected():
     """The control: the same two shapes moved apart until neither contains the other.
 
-    This is what says the fix is about the enclosure branch and not about the boundary path in
+    This is what says the fix is about the enclosure branch and not about the boundary route in
     general. With crossings present the difference walk returns disjoint simple pieces, every
     one of them counter-clockwise -- asserted below rather than assumed, because a region with
     no reversed loop in it is exactly a region no orientation convention can get wrong, which
@@ -871,7 +871,7 @@ def test_a_painted_overlap_agrees_across_backends(curved):
       accident -- its arrays satisfy ``__array__`` and convert on contact -- so testing on
       JAX proved nothing about torch here.
     * ``ellipse_verts`` called ``xp.cos`` on a scalar, which torch refuses. That one fired
-      for *every* angle including 0.0, so the boundary path could not draw a circle or an
+      for *every* angle including 0.0, so the boundary route could not draw a circle or an
       ellipse on torch at all.
 
     Routing is on the overlap, so both are reached only when the shapes actually intersect --

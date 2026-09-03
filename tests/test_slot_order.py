@@ -41,7 +41,7 @@ from wavebit._core.lattice import as_lattice
 import pytest
 
 import wavebit
-from wavebit._core import analytic as _analytic
+from wavebit._core import parametric as _parametric
 from wavebit._core import factorization as _fac
 
 
@@ -113,7 +113,7 @@ BUILDERS = {
     'raster_integrated_nvf': lambda: _fac.to_conv_mat_raster_integrated_nvf(
         _raster(), MAX_ORDER, MAX_ORDER),
     'raster_pn_eps': lambda: _fac.to_conv_mat_raster_pn_eps(_tensor_raster(), MAX_ORDER, MAX_ORDER),
-    'smooth_layers': lambda: _analytic.to_conv_mat_smooth_layers(
+    'parametric_layers': lambda: _parametric.to_conv_mat_parametric_layers(
         _shapes(), MAX_ORDER, MAX_ORDER, as_lattice(period=KW['period']), normal_grid=256,
         complex_dtype=np.complex128, xp=np),
 }
@@ -206,11 +206,11 @@ def test_every_five_slot_builder_is_exercised():
         # positionally. Pinned against fmmax in tests/references/.
         'to_conv_mat_raster_pn_mu',
         # one layer, and it takes resolved polygons rather than a structure; reached through
-        # to_conv_mat_smooth_layers, which is exercised above.
+        # to_conv_mat_parametric_layers, which is exercised above.
         'to_conv_mat_boundary_layer',
-        'to_conv_mat_smooth_nvf',
+        'to_conv_mat_parametric_nvf',
     }
-    found = {n for mod in (_fac, _analytic) for n in dir(mod)
+    found = {n for mod in (_fac, _parametric) for n in dir(mod)
              if n.startswith('to_conv_mat_')}
     covered = {f'to_conv_mat_{n}' for n in BUILDERS}
 

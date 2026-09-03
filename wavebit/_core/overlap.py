@@ -1,9 +1,9 @@
-"""Do two analytic shapes overlap? — the geometry behind the layer-semantics check.
+"""Do two parametric shapes overlap? — the geometry behind the layer-semantics check.
 
-:mod:`wavebit._core.analytic` sums its shapes and :mod:`wavebit._core.boundary` paints them,
+:mod:`wavebit._core.parametric` sums its shapes and :mod:`wavebit._core.boundary` paints them,
 so the two only describe the same structure while no two shapes intersect. That makes "do these
 intersect?" the question the modeling layer has to answer before it can let a layer through,
-and this module answers it for the analytic primitives: rectangle / square (a rotated box) and
+and this module answers it for the parametric primitives: rectangle / square (a rotated box) and
 circle / disk / ellipse (a rotated ellipse). Both are convex, which is what makes it cheap.
 
 Everything here works on the *signed gap* between two shapes — positive is the distance
@@ -64,7 +64,7 @@ def primitive(stype, cx, cy, lx, ly, angle):
     else:
         return None
     # `checked_float`, not `float`: a `jax.grad` tracer refuses `float()` while carrying a
-    # perfectly concrete primal, and `analytic._primitives` reads that refusal as "traced --
+    # perfectly concrete primal, and `parametric._primitives` reads that refusal as "traced --
     # skip the check". See the helper for what that cost.
     return (kind, checked_float(cx), checked_float(cy),
             checked_float(lx) / 2.0, checked_float(ly) / 2.0,

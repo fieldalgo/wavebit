@@ -1,7 +1,7 @@
 """The ``Material`` type itself: the shorthand, the pytree, and the two conversions.
 
-``Material(epsilon, mu=None)`` is what the two *assignment* slots (the analytic layer's
-``background`` and the analytic shape's ``material`` key) now spell their contents with, in
+``Material(epsilon, mu=None)`` is what the two *assignment* slots (the parametric layer's
+``background`` and the parametric shape's ``material`` key) now spell their contents with, in
 place of two different spellings of "what is here". This file tests the type in
 isolation -- no solver runs here. Which convention the solver reads is a different question
 and is pinned against closed-form Fresnel in ``tests/test_material_convention_anchor.py``;
@@ -418,7 +418,7 @@ def test_grad_flows_to_a_materials_epsilon():
 def test_a_traced_epsilon_survives_construction_inside_a_trace():
     """The other direction: a ``Material`` *built* from a tracer, mid-solve.
 
-    This is the analytic path's shape-material case -- the value is a tracer by the time the
+    This is the parametric path's shape-material case -- the value is a tracer by the time the
     scene is assembled. It works only because ``Material`` coerces nothing in
     ``__post_init__``: a ``float()`` or an ``asarray`` there would raise at trace time, or
     worse, drop the tangent and return a plausible zero.

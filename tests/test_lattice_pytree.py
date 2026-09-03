@@ -7,7 +7,7 @@ or a shear was not expressible as a design variable at all.
 
 Splitting it takes a pytree, and the split is the whole point: the four numbers are children,
 ``axis_aligned`` is aux_data. That flag decides *which branch runs* -- the rectangular fold in
-``analytic._shape_surface_normal`` reads it, and it is what keeps the orthogonal path
+``parametric._shape_surface_normal`` reads it, and it is what keeps the orthogonal path
 bit-identical -- and a traced value cannot be branched on. As a child it would kill every
 jitted solve while staying invisible eagerly.
 """
@@ -269,7 +269,7 @@ def test_the_raster_path_differentiates_the_basis_through_its_index_offsets():
     the pattern shears along with it. That is not an oversight here and it is not fixable
     there: a raster is numbers on indices, so a fixed array has no choice but to drag its
     pixels when the basis moves. It does mean this path answers a **different question** from
-    the analytic one -- *"tilt the cell and shear the pattern with it"* against *"tilt the cell
+    the parametric one -- *"tilt the cell and shear the pattern with it"* against *"tilt the cell
     only"* -- and the two differ by 3.6x on a plain scene. Named and pinned by
     ``test_the_raster_basis_gradient_is_the_shear_along_one``; see also
     ``docs/oblique-lattice.md``, "Differentiating the cell".
@@ -506,7 +506,7 @@ def test_a_structure_with_no_cell_is_refused_rather_than_solved_on_the_unit_one(
 
     Measured, and it is why this is a refusal and not a warning: the same hex scene with
     ``lattice=`` forgotten answers **0.989790** against the correct **0.927664**, no error and
-    energy conserved. The analytic path was already safe (a shape's lengths are absolute, so
+    energy conserved. The parametric path was already safe (a shape's lengths are absolute, so
     the omission raises "larger than the period"); the raster was the only silent one, because
     a raster carries no length of its own.
     """
@@ -621,7 +621,7 @@ def test_the_documented_combination_table_is_what_the_code_does():
     """Every row of ``docs/oblique-lattice.md`` "Every combination, measured", re-measured.
 
     The table is the page's summary of four separate mechanisms -- the two refusals on naming a
-    cell, the declaration check, and the analytic path's freedom -- so it is exactly the kind of
+    cell, the declaration check, and the parametric path's freedom -- so it is exactly the kind of
     text that rots one row at a time while each mechanism's own test stays green.
     """
     A = wavebit.Lattice.rectangular(640.0, 640.0)
@@ -660,8 +660,8 @@ def test_the_documented_combination_table_is_what_the_code_does():
         A.drawn(ana)
 
 
-def test_the_analytic_spelling_has_no_frame_to_declare():
-    """``drawn`` refuses an analytic structure, because moving its cell is *legal*.
+def test_the_parametric_spelling_has_no_frame_to_declare():
+    """``drawn`` refuses a parametric structure, because moving its cell is *legal*.
 
     A shape's ``lx`` and ``cx`` are absolute Cartesian lengths, so the same recipe describes
     the same geometry on every cell -- solving it on a different one is a thing a caller may
@@ -744,7 +744,7 @@ def test_the_raster_basis_gradient_is_the_shear_along_one():
 
     A raster is held in *lattice* coordinates, so a fixed array drags its pixels when the basis
     moves: differentiating through one asks *"tilt the cell and shear the pattern with it"*.
-    The analytic path asks *"tilt the cell only"*, because its lengths are absolute Cartesian
+    The parametric path asks *"tilt the cell only"*, because its lengths are absolute Cartesian
     quantities. Both are legitimate questions and the code says which is which nowhere, so this
     test says it.
 

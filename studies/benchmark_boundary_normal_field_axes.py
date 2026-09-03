@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.join(os.getcwd(), 'studies'))
 
 import numpy as np, jax, jax.numpy as jnp
 import wavebit
-from wavebit._core import analytic as _analytic
+from wavebit._core import parametric as _parametric
 from wavebit._core import boundary as _boundary
 from wavebit._core.geometry import StaticGeometry
 from wavebit._core.lattice import as_lattice
@@ -116,7 +116,7 @@ PLAN = _boundary.plan_layer(build(CX0, 3.0, 2.2)[0]['shapes'], LATTICE)
 
 def probe(na, nb, plans, block):
     def loss(cx):
-        m = _analytic.to_conv_mat_smooth_layers(
+        m = _parametric.to_conv_mat_parametric_layers(
             build(cx, na, nb), MAX_ORDER, MAX_ORDER, LATTICE, normal_grid=NGRID,
             complex_dtype=jnp.complex128, xp=jnp, boundary_plans=plans)[block]
         return jnp.real(jnp.sum(m * jnp.conj(m)))
