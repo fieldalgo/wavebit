@@ -624,12 +624,6 @@ def _translation_defect(cell, shift, method, projector, to=3):
 #: machine's sweep. Selecting per machine is what that sentence actually asks for.
 CANDIDATE_ROLLS = tuple(((5 * i) % 64, (13 * i) % 64) for i in range(1, 25))
 
-#: How many of them must break before the measurement below means anything. 17 of 24 break
-#: on this developer machine and 12 of 12 saddle rolls do, so 4 is not a tight bound -- it is
-#: there to fail loudly if a future change makes the instrument blind everywhere, which is
-#: the one way this test could go quietly green while proving nothing.
-MIN_BROKEN = 4
-
 
 def test_the_circular_limit_removes_the_medial_axis_defect(monkeypatch):
     """With the tie-shear off, `'linear'` is non-covariant on the annulus and `'circular'` is not.
@@ -663,20 +657,28 @@ def test_the_circular_limit_removes_the_medial_axis_defect(monkeypatch):
     monkeypatch.setattr('wavebit._core.normal_methods._CONTOUR_TIE_SHEAR', 0.0)
     pytest.importorskip('contourpy')
 
-    # Select, then measure. The first pass asks this machine which rolls reach the defect;
-    # only those say anything about the projector. A roll that is clean under 'linear' is not
-    # evidence either way, and asserting on it is what made four of the seven pins fail on a
-    # runner while the projector itself was fine. The whole sweep is under a second.
-    broken = [r for r in CANDIDATE_ROLLS
-              if _translation_defect(ANNULUS, r, 'contour', 'linear') > 1e-8]
-    assert len(broken) >= MIN_BROKEN, (
-        f'only {len(broken)} of {len(CANDIDATE_ROLLS)} candidate rolls reach the medial-axis '
-        f'defect under the linear projector with the shear off. Below {MIN_BROKEN} there is '
-        f'nothing here to fix, so what follows would pass without measuring anything.')
+    # Two independent claims, and deliberately not one conditioned on the other. Selecting the
+    # rolls where 'linear' breaks and checking 'circular' only there reads as the careful
+    # thing and is weaker: it never looks where 'linear' happens to be clean, which on a
+    # machine whose ties fall differently is most of the set. Measured over these candidates
+    # here, 'circular' is 9.72e-16 where 'linear' breaks and 8.35e-16 where it does not --
+    # clean everywhere, so there is nothing to gain by narrowing and a blind spot to lose.
+    #
+    # It also removes the threshold that narrowing needs. "How many rolls must break before
+    # this means anything" has no principled answer and any number is one more thing pinned
+    # to one machine; "at least one" is the natural floor and is not a number anyone chose.
+    linear = {r: _translation_defect(ANNULUS, r, 'contour', 'linear') for r in CANDIDATE_ROLLS}
+    circular = {r: _translation_defect(ANNULUS, r, 'contour', 'circular')
+                for r in CANDIDATE_ROLLS}
 
-    for shift in broken:
-        circular = _translation_defect(ANNULUS, shift, 'contour', 'circular')
-        assert circular < 1e-12, f'roll {shift}: circular moved E by {circular:.2e}'
+    worst = max(linear, key=linear.get)
+    assert linear[worst] > 1e-8, (
+        f'no candidate roll reaches the medial-axis defect under the linear projector with '
+        f'the shear off -- worst is {worst} at {linear[worst]:.2e}. Nothing here is broken, '
+        f'so the claim below would pass without measuring anything.')
+
+    moved = {r: f'{c:.2e}' for r, c in circular.items() if c >= 1e-12}
+    assert not moved, f'circular moved E at {len(moved)} of {len(CANDIDATE_ROLLS)}: {moved}'
 
 
 def test_the_saddle_is_not_fixed_by_the_limit():
