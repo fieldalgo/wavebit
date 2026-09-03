@@ -68,6 +68,17 @@ jobs:
   test:
     name: full backends
     runs-on: ubuntu-latest
+    # The backstop, not the mechanism: `--timeout` below fails a stuck test by name
+    # and lets the run continue, which is what actually diagnoses a hang. This only
+    # bounds the case that signal cannot reach -- a stall inside a C extension that
+    # never returns to the interpreter, where no alarm handler ever runs.
+    #
+    # 180, not 90: the suite legitimately needs about two hours on these runners
+    # (it was 55 minutes to 43% on the run that hung), so a tighter number would
+    # cut a healthy run. What this buys is that a hang costs three hours of runner
+    # time instead of GitHub's six-hour maximum -- and, unlike that maximum, it is
+    # a number this repository chose and can lower once the suite is faster.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v7
 
@@ -85,7 +96,7 @@ jobs:
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Install Wavebit with both optional backends
-        run: pip install -e '.[jax,pytorch]' pytest
+        run: pip install -e '.[jax,pytorch]' pytest pytest-timeout
 
       # Fails the run if a backend is missing, which would otherwise turn the
       # cross-backend tests into silent skips: the suite guards them with
@@ -118,7 +129,31 @@ jobs:
           MKL_NUM_THREADS: 1
           NUMEXPR_NUM_THREADS: 1
           VECLIB_MAXIMUM_THREADS: 1
-        run: pytest tests -q
+        #
+        # `--timeout` turns a hung test into a named failure instead of a dead job.
+        # Without it the run that hangs reports nothing at all: pytest prints its
+        # summary at the end, so when GitHub cancels the job at the six-hour mark
+        # every failure the run had already found is lost with it. That is not
+        # hypothetical -- run 33656262958 stalled at 43% and took two real assertion
+        # failures down with it, and neither the stuck test nor the failing ones are
+        # named anywhere in its log.
+        #
+        # The `signal` method is chosen, not inherited. `thread` dumps every stack
+        # and then calls `os._exit`, which kills the whole run at the first stuck
+        # test -- the same dead job, only faster. `signal` raises inside the test, so
+        # the run carries on and the summary still arrives. The cost is that SIGALRM
+        # is only delivered when the interpreter is reachable, which is why the job
+        # keeps a `timeout-minutes` above it.
+        #
+        # 1200s is deliberately far above anything here rather than merely above it.
+        # The slowest single test in the suite is 63 seconds on a developer machine,
+        # but these runners are not that machine -- one 72-test block of this same
+        # run took 30 minutes, a mean of 25 seconds a test -- and a bound that fires
+        # on a slow test rather than a stuck one would be a false red mark on a
+        # healthy commit. Nineteen times the known worst case has no such reading.
+        # A true hang is bounded either way, and the diagnostic -- the test's name --
+        # is the same at 1200 as at 60.
+        run: pytest tests -q --timeout=1200 --timeout-method=signal
 
   examples:
     name: examples smoke
