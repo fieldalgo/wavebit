@@ -1576,7 +1576,10 @@ def _combine_at_normal_incidence(grid, sub_te, sub_tm, kx, wavelength, phi, a_s,
     w_te = a_s * c_i - a_p * s_i
     w_tm = a_s * s_i + a_p * c_i
 
-    ky = np.zeros_like(np.asarray(kx, dtype=float))     # exactly zero: theta = 0
+    # `ky` is exactly zero on this path -- that is what defines it -- but `kx_inc` is NOT:
+    # the path also serves `theta != 0` at `phi = 0`, where the incidence is oblique in the
+    # x-z plane and every order's azimuth is still 0 or pi.
+    ky = np.zeros_like(np.asarray(kx, dtype=float))
     c_m, s_m = _order_frame(kx, ky, phi)
     c_m, s_m = np.real(c_m), np.real(s_m)
 
@@ -1600,7 +1603,7 @@ def _combine_at_normal_incidence(grid, sub_te, sub_tm, kx, wavelength, phi, a_s,
     # `g`, so dividing by |g|**2 puts them back on one footing.
     kz_top = _half_space_kz(grid.n_top_sq, kx)
     kz_bot = _half_space_kz(grid.n_bot_sq, kx)
-    kz_inc = _half_space_kz(grid.n_top_sq, 0.0)
+    kz_inc = _half_space_kz(grid.n_top_sq, grid.kx_inc * wavelength / grid.wavelength)
     n_top, n_bot = np.sqrt(grid.n_top_sq), np.sqrt(grid.n_bot_sq)
     g = (n_top / grid.mu_top) / (n_bot / grid.mu_bot)
     fr = np.real(kz_top / kz_inc)
@@ -2109,12 +2112,19 @@ def _solve_conical(psi, phi, theta, tetm, return_diagnostics, **kw):
             f'decoupled scalar problem. Pass one.')
 
     phi_v = 0.0 if phi is None else float(np.real(phi))
-    if float(np.real(theta)) != 0.0:
+    theta_v = float(np.real(theta))
+    # **The two polarisations decouple where `ky` vanishes, and `ky = n sin(theta) sin(phi)`
+    # vanishes at `theta = 0` OR at `phi = 0`.** Routing on `theta` alone sent
+    # `theta != 0, phi = 0` to the coupled path, where `conical` is False because `ky_inc` is
+    # zero -- so both legs ran the SAME `tetm='te'` problem and were then added, returning
+    # **twice the incident power**: measured `R + T = 2.0042` at theta = 30 deg, phi exactly 0,
+    # against 1.0023 at phi = 1e-9 deg. A knife edge, and `check_physical` did not stop it.
+    if theta_v != 0.0 and phi_v != 0.0:
         return _solve_conical_oblique(psi, phi_v, theta, return_diagnostics, **kw)
 
     legs = {}
     for leg, tt in (('s', 'te'), ('p', 'tm')):
-        legs[leg] = solve_fdtd(tetm=tt, theta=0.0, phi=None, return_diagnostics=True, **kw)
+        legs[leg] = solve_fdtd(tetm=tt, theta=theta_v, phi=None, return_diagnostics=True, **kw)
     (te_res, te_diag), (tm_res, tm_diag) = legs['s'], legs['p']
     single = not isinstance(te_res, list)
     te_list = [te_res] if single else te_res
@@ -2136,8 +2146,12 @@ def _solve_conical(psi, phi, theta, tetm, return_diagnostics, **kw):
     out = []
     for i, (te, tm) in enumerate(zip(te_list, tm_list)):
         wl = float(band[i])
-        # theta = 0, so kx_inc is zero and the ladder is the grating harmonic alone.
-        kx = np.arange(centre - half, centre + half + 1) * wl / period_x
+        # The order ladder starts at the INCIDENT wavevector, not at zero. That is invisible
+        # while this path only served `theta = 0`, where `kx_inc` is zero and the ladder is the
+        # grating harmonic alone -- and it is what made the first fix return `R + T = 0.8864`
+        # instead of 2.0042: the legs were right and every order was read at the wrong `kx`.
+        kx_inc = grid.kx_inc * wl / grid.wavelength
+        kx = kx_inc + np.arange(centre - half, centre + half + 1) * wl / period_x
         subs = {}
         for leg, (a_s, a_p) in (('given', (np.sin(psi), np.cos(psi))),
                                 ('s_inc', (1.0, 0.0)), ('p_inc', (0.0, 1.0))):

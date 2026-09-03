@@ -2094,3 +2094,61 @@ def test_a_crossed_grating_answers_on_a_two_dimensional_order_grid():
     assert np.asarray(result.R).shape == (len(labels_v), len(labels_u))
     total = float(np.asarray(result.R).sum() + np.asarray(result.T).sum())
     assert abs(total - 1.0) < 5e-2, f'R + T = {total}'
+
+
+@pytest.mark.parametrize('theta_deg,phi_deg', [(0.0, 0.0), (0.0, 45.0), (30.0, 0.0),
+                                               (30.0, 1e-9), (30.0, 40.0), (50.0, 0.0)])
+def test_a_polarisation_mixed_run_is_continuous_across_phi_zero(theta_deg, phi_deg):
+    """`phi` exactly 0 is not a special case of the physics, and it must not be one of the code.
+
+    The two polarisations decouple where `ky` vanishes, and `ky = n sin(theta) sin(phi)`
+    vanishes at `theta = 0` **or** at `phi = 0`. Routing on `theta` alone sent
+    `theta != 0, phi = 0` down the coupled path, where `conical` is False because `ky_inc` is
+    zero -- so both legs ran the same `tetm='te'` problem and were added together. Measured
+    `R + T = 2.0042` at theta = 30 deg with phi exactly 0, against 1.0023 at phi = 1e-9 deg.
+
+    **Twice the incident power, and nothing refused it.** `check_physical` is applied to each
+    sub-result, and it did not fire -- which is the second half of the finding.
+
+    The first repair routed on `ky` and was still wrong, at `R + T = 0.8864`: the order ladder
+    was built as `m * wl / period` with no `kx_inc`, correct while the path only served
+    `theta = 0` and wrong the moment it did not. Both are pinned here because the knife edge is
+    the same either way -- a value that is only ever exercised at one exact input.
+    """
+    theta, phi, psi = np.deg2rad(theta_deg), np.deg2rad(phi_deg), np.deg2rad(45.0)
+    got = solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+                     period=[PERIOD], wavelength=WL, theta=theta, phi=phi, psi=psi,
+                     resolution=0.05, n_periods=80)
+    total = float(np.asarray(got.given.R).sum() + np.asarray(got.given.T).sum())
+    assert abs(total - 1.0) < 2e-2, f'R + T = {total}'
+
+    ref = wavebit.rcwa(backend=0, wavelength=WL, period=[PERIOD],
+                       truncation_order=dict(x=40, y=0), top=EPS_TOP, bot=EPS_BOT,
+                       theta=theta, phi=phi, psi=psi,
+                       structure=_grating(), thickness=[THICK]).solve()
+    for leg in ('given', 's_inc', 'p_inc'):
+        for name in ('R_s', 'R_p', 'T_s', 'T_p'):
+            a, b = _channels(got, leg, name), _channels(ref, leg, name)
+            for m in a:
+                assert float(np.real(a[m])) == pytest.approx(float(np.real(b[m])), abs=3e-2), \
+                    f'{leg}.{name}[{m}]'
+
+
+def test_the_two_pure_legs_are_never_the_same_solve():
+    """s and p incidence are different problems, and two identical legs mean one was not run.
+
+    This is the shape of the phi = 0 defect stated as an invariant rather than as a number: at
+    any incidence the s leg and the p leg solve different problems, so their amplitudes differ.
+    Two legs that agree bit for bit is not a coincidence to tolerate -- it is one leg reported
+    twice, and the sum then doubles.
+    """
+    for theta_deg, phi_deg in ((30.0, 0.0), (30.0, 40.0), (0.0, 45.0)):
+        got = solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+                         period=[PERIOD], wavelength=WL, theta=np.deg2rad(theta_deg),
+                         phi=np.deg2rad(phi_deg), psi=np.deg2rad(45.0),
+                         resolution=0.05, n_periods=80)
+        s_amp = np.asarray(got.s_inc.r_s)
+        p_amp = np.asarray(got.p_inc.r_s)
+        assert not np.allclose(s_amp, p_amp), (
+            f'theta={theta_deg} phi={phi_deg}: the two legs returned the same amplitudes, so '
+            f'one polarisation was never solved')
