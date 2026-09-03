@@ -171,7 +171,81 @@ jobs:
         # before; with `-v` above, every failure up to that point is already in the
         # log, so the objection no longer holds. What it buys is the one thing still
         # missing: *where* the process is stuck, not merely which test was running.
-        run: pytest tests -v --timeout=1200 --timeout-method=thread
+        #
+        # The deselect is temporary and is tracked by `hang probe` below. Run
+        # 33730652133 named this test as the one that hangs -- it sits in
+        # `float(jax.jit(jax.grad(total))(x))` waiting on a computation that never
+        # returns, and `thread` ends the run there, so every test after it in
+        # collection order becomes invisible. That is not a small blind spot: the
+        # parametric refactor renamed `test_analytic.py` to `test_parametric.py`,
+        # which moved two known failures from before this point to after it, and
+        # that run reported zero failures while both were still there unrun.
+        #
+        # The whole function, not the one parametrisation that was reached. The
+        # `ellipse lx` case is merely the first of the four; `overlapping pair` is
+        # 2.3x heavier again locally (36.7s against 16.2s), so deselecting only the
+        # case that was observed would buy one more 74-minute run to discover the
+        # next one. The two cheap cases go with them, which is the price.
+        #
+        # It passes locally in 16 seconds, so this is a fact about the runner and
+        # not about the feature. Restore it once `hang probe` says which.
+        run: >
+          pytest tests -v --timeout=1200 --timeout-method=thread
+          --deselect 'tests/test_frozen_geometry.py::test_a_frozen_geometry_makes_a_shape_parameter_traceable'
+
+  # Temporary, and paired with the `--deselect` in `test` above. It answers one
+  # question and then it should go.
+  #
+  # `test_a_frozen_geometry_makes_a_shape_parameter_traceable` hangs in the full
+  # suite -- 5h, then 2h, then over 1200s across three runs -- and takes 16
+  # seconds on a developer machine. Four vCPUs do not explain that ratio. The
+  # candidate explanation is what the process is carrying by the time the suite
+  # reaches it: jax and torch both resident, plus seventeen hundred tests worth of
+  # caches, against 16 GB and a little swap. Thrashing looks exactly like this --
+  # no crash, no progress, and stuck inside a C call where no alarm is delivered.
+  #
+  # So run the same file in a process that carries none of it. Passing means the
+  # test is fine and the suite's accumulated footprint is the subject; hanging
+  # means the test is, and the deselect above becomes something more permanent.
+  # Either answer costs about five minutes and neither needs the full suite.
+  hang-probe:
+    name: hang probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install CPU-only PyTorch
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install Wavebit with both optional backends
+        run: pip install -e '.[jax,pytorch]' pytest pytest-timeout
+
+      # The number this is here to compare against. `test` reaches the same file
+      # having already run about seventeen hundred tests.
+      - name: What the runner has before anything runs
+        run: free -m && nproc
+
+      # 300s, not the suite's 1200: alone the file is a minute's work, so a bound
+      # that low still cannot fire on a healthy run, and a hang is reported in five
+      # minutes instead of twenty.
+      - name: The suspect file, alone, in a fresh process
+        env:
+          OPENBLAS_NUM_THREADS: 1
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          NUMEXPR_NUM_THREADS: 1
+          VECLIB_MAXIMUM_THREADS: 1
+        run: pytest tests/test_frozen_geometry.py -v --timeout=300 --timeout-method=thread
+
+      - name: What it left behind
+        if: always()
+        run: free -m
 
   examples:
     name: examples smoke
