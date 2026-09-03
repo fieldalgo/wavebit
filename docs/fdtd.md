@@ -127,9 +127,9 @@ error, against an RCWA reference at `truncation_order=400`:
 
 | scene | FDTD | its error | the cheapest RCWA that matches it | `N*` |
 | --- | --- | --- | --- | --- |
-| this grating, TE, 20 nm cell | 0.5 s | 1.2e-2 | fto 5, 0.51 ms | 1009 |
-| this grating, TE, 10 nm cell | 2.0 s | 2.9e-3 | fto 10, 0.71 ms | 2850 |
-| **60 nm metal grating, TM, 10 nm cell** | 2.4 s | 1.6e-3 | fto 60, 21.4 ms | **112** |
+| this grating, TE, 20 nm cell | 0.5 s | 1.2e-2 | truncation_order 5, 0.51 ms | 1009 |
+| this grating, TE, 10 nm cell | 2.0 s | 2.9e-3 | truncation_order 10, 0.71 ms | 2850 |
+| **60 nm metal grating, TM, 10 nm cell** | 2.4 s | 1.6e-3 | truncation_order 60, 21.4 ms | **112** |
 
 **Half of that came from one constant.** The clearance between the structure and each of the
 TFSF plane, the monitors and the PML was a full wavelength, chosen so a grating's evanescent
@@ -147,7 +147,7 @@ figure on a lossless dielectric is nearer a thousand.
 
 `N*` is a property of the scene. It moves toward FDTD as the RCWA side gets harder — the metal
 row is 19x better than the dielectric at the same cell size, because RCWA in TM on a metal
-converges slowly and non-monotonically (its error at `fto` 40 is *worse* than at 20) — and away
+converges slowly and non-monotonically (its error at `truncation_order` 40 is *worse* than at 20) — and away
 as the FDTD grid is refined, which is why the 5 nm rows are worse than the 10 nm ones.
 
 ---

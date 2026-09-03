@@ -33,9 +33,10 @@ did on 2026-08-31.
 **What this file cannot see.** The uniform-slab and multilayer gates are blind to both
 subpixel harmonic averages -- `Ez` is identically zero at normal incidence with no x variation,
 and a harmonic mean along x of a constant is that constant -- so only the grating cases
-arbitrate `component_property`'s rule. Nothing here tests oblique incidence, loss, `mu`, a
-crossed grating or a skewed cell, because all five are refused; `test_refusals` is what keeps
-that honest, by pinning the refusal rather than the behaviour.
+arbitrate `component_property`'s rule. Of the five scopes this file once listed as refused, four are
+now implemented and tested here -- oblique incidence, loss, `mu` and a crossed grating -- and
+only a skewed cell is still refused; `test_refusals` is what keeps that last one honest, by
+pinning the refusal rather than the behaviour.
 """
 import numpy as np
 import pytest
@@ -77,9 +78,9 @@ def _fdtd(structure, thickness, tetm, **kw):
                       period=[PERIOD], wavelength=WL, tetm=tetm, **kw)
 
 
-def _rcwa(structure, thickness, tetm, fto=80):
+def _rcwa(structure, thickness, tetm, orders=80):
     solver = wavebit.rcwa(backend=0, wavelength=WL, period=[PERIOD],
-                          truncation_order=dict(x=fto, y=0), top=EPS_TOP, bot=EPS_BOT,
+                          truncation_order=dict(x=orders, y=0), top=EPS_TOP, bot=EPS_BOT,
                           theta=0.0, phi=0.0, tetm=tetm,
                           structure=structure, thickness=thickness)
     return solver.solve()
@@ -336,7 +337,7 @@ def test_the_result_is_the_same_container_an_rcwa_solve_returns():
     ``R = R_s + R_p`` with everything on one side, as the pure path does it.
     """
     result = _fdtd(_uniform(), [THICK], 'te')
-    reference = _rcwa(_uniform(), [THICK], 'te', fto=1)
+    reference = _rcwa(_uniform(), [THICK], 'te', orders=1)
     assert type(result) is type(reference)
     assert np.asarray(result.R).shape == (1, len(np.asarray(result.orders_u)))
     assert np.array_equal(np.asarray(result.orders_v), [0])
@@ -1171,9 +1172,9 @@ def _conical(phi_deg, psi_deg, resolution=0.1, n_periods=60):
                       resolution=resolution, n_periods=n_periods)
 
 
-def _conical_rcwa(phi_deg, psi_deg, fto=40):
+def _conical_rcwa(phi_deg, psi_deg, orders=40):
     return wavebit.rcwa(backend=0, wavelength=WL, period=[PERIOD],
-                        truncation_order=dict(x=fto, y=0), top=EPS_TOP, bot=EPS_BOT,
+                        truncation_order=dict(x=orders, y=0), top=EPS_TOP, bot=EPS_BOT,
                         theta=0.0, phi=np.deg2rad(phi_deg), psi=np.deg2rad(psi_deg),
                         structure=_grating(), thickness=[THICK]).solve()
 
@@ -1373,10 +1374,10 @@ def _oblique_fdtd(resolution=0.1, n_periods=120, **over):
                       n_periods=n_periods, **kw)
 
 
-def _oblique_rcwa(fto=40, **over):
+def _oblique_rcwa(orders=40, **over):
     kw = dict(OBLIQUE, **over)
     return wavebit.rcwa(backend=0, wavelength=WL, period=[PERIOD],
-                        truncation_order=dict(x=fto, y=0), top=EPS_TOP, bot=EPS_BOT,
+                        truncation_order=dict(x=orders, y=0), top=EPS_TOP, bot=EPS_BOT,
                         structure=_grating(), thickness=[THICK], **kw).solve()
 
 
@@ -1523,7 +1524,7 @@ def test_the_conical_amplitudes_converge_at_second_order():
     there. The classical controls at the same angle are 2.02 / 1.78 (TE) and 1.89 / 1.85 (TM),
     which is what made the difference look real.
     """
-    ref = _oblique_rcwa(fto=200, **CLEAN)
+    ref = _oblique_rcwa(orders=200, **CLEAN)
     coarse, fine = _amplitude_gap(CLEAN, 0.05, ref), _amplitude_gap(CLEAN, 0.1, ref)
     ratio = coarse / fine
     assert ratio > 3.4, (
@@ -1547,7 +1548,7 @@ def test_the_two_monitors_need_two_demodulation_kernels():
     at all. The default scene's m = -1 carries `kx = -0.903`, four times the phase. A scene
     chosen for margin and a scene chosen for sensitivity are not the same scene.
     """
-    ref = _oblique_rcwa(fto=200)
+    ref = _oblique_rcwa(orders=200)
     coarse, fine = _amplitude_gap(OBLIQUE, 0.05, ref), _amplitude_gap(OBLIQUE, 0.1, ref)
     ratio = coarse / fine
     assert ratio > 3.0, (
@@ -1627,11 +1628,11 @@ def test_the_grading_ratio_is_what_bounds_the_transition():
 def test_a_graded_run_agrees_with_the_rcwa_path():
     """The grading is allowed to cost accuracy; it is not allowed to cost correctness.
 
-    Measured against `solve_1d` at fto = 200 on the benchmark grating: 5.0e-3 uniform against
+    Measured against `solve_1d` at orders = 200 on the benchmark grating: 5.0e-3 uniform against
     6.5e-3 / 8.8e-3 / 7.9e-3 at grading 1.03 / 1.06 / 1.12, with amplitudes 1.6e-2 against
     1.7e-2 / 1.9e-2 / 1.8e-2. That is the transition reflection, and it is the price.
     """
-    ref = _rcwa(_grating(), [THICK], 'te', fto=200)
+    ref = _rcwa(_grating(), [THICK], 'te', orders=200)
     labels = np.asarray(ref.orders_u).ravel()
     want = {int(m): (float(np.asarray(ref.R).ravel()[i]),
                      float(np.asarray(ref.T).ravel()[i])) for i, m in enumerate(labels)}

@@ -72,10 +72,10 @@ def fdtd(stack=None, incidence=None, **kwargs):
     gradient to take. A solver object would be a place to put the state this method does not
     have.
 
-    Its scope is deliberately :func:`~wavebit._core.solve_1d.solve_1d`'s -- pure TE / TM,
-    normal incidence, a raster structure periodic along one axis -- and everything outside
-    that is refused by name. There is no ``backend`` argument; ``wavebit/_core/fdtd.py``'s
-    docstring says why.
+    It answers pure TE / TM at normal and oblique incidence, a conical mount through ``psi``
+    at any ``theta`` and ``phi``, and a crossed grating; dispersive and magnetic media are
+    carried on all of them. Everything outside that is refused by name. There is no ``backend``
+    argument; ``wavebit/_core/fdtd.py``'s docstring says why.
 
     Args:
         stack: optional typed ``Stack`` supplying ``structure`` / ``thickness`` / ``top`` /

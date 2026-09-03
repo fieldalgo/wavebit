@@ -1,6 +1,6 @@
-"""A 2D FDTD solve for a 1D-periodic grating, answering the same question as ``solve_1d``.
+"""An FDTD solve beside the RCWA one, answering the same questions and some it cannot.
 
-This is roadmap item 2 -- **a second solver the caller chooses**, reading the same
+**A second solver the caller chooses**, reading the same
 :class:`~wavebit._core.domain.Stack` and :class:`~wavebit._core.domain.Incidence` the RCWA path
 reads and returning the same :class:`~wavebit._core.result.Result`. It is not a test harness:
 it is meant to be picked when it is the better tool, which it is wherever a broadband answer
@@ -11,11 +11,14 @@ space and time -- is a second dividend rather than the point: a defect surviving
 unlikely to belong to either, so the two paths cross-check each other for free. Which is also
 why the conventions below are wavebit's rather than the FDTD literature's.
 
-**What it answers.** The pure TE / TM problem, normal incidence, on a raster structure that is
-periodic along one axis. That is deliberately the scope of :func:`~wavebit._core.solve_1d.
-solve_1d`, which this mirrors down to the amplitude conventions: TE carries everything on
-``s``, TM everything on ``p``, and the opposite side is identically zero. Everything outside
-that scope is refused by name rather than approximated -- see :func:`_refuse_out_of_scope`.
+**What it answers.** Pure TE / TM on a raster periodic along one axis, at normal and at
+oblique incidence; a conical mount through ``psi``, at normal incidence and away from it; and a
+crossed grating, where the raster is periodic along both. Dispersive and magnetic media are
+carried on every one of those. The pure branch mirrors :func:`~wavebit._core.solve_1d.solve_1d`
+down to the amplitude conventions -- TE carries everything on ``s``, TM everything on ``p``, and
+the opposite side is identically zero -- and the conical branch mirrors ``solve_1d_conical``.
+Everything outside that is refused by name rather than approximated; the list, and what each
+refusal is protecting, is :func:`_refuse_out_of_scope`.
 
 **Conventions.** All of them are wavebit's, and each one is a place a from-scratch FDTD
 normally parts company with the rest of the package:
@@ -213,17 +216,17 @@ def _refuse_out_of_scope(structure, mu, theta, phi, tetm, incidence_side, lattic
     """
     if tetm is None:
         raise ValueError(
-            "fdtd: tetm must be 'te' or 'tm'. This is the pure TE/TM formulation -- the "
-            "time-domain twin of `solve_1d` -- and like it, a `psi` / `chi` / `polarization` "
-            "incidence is a different problem, not a different spelling of this one.")
+            "fdtd: an incidence needs either `tetm` or `psi`. `tetm='te'` / `'tm'` is the "
+            "pure formulation, the time-domain twin of `solve_1d`; `psi` is the conical one, "
+            "which couples the two polarisations and is what a mount with `phi != 0` needs.")
     name = tetm.value if hasattr(tetm, 'value') else str(tetm).lower()
     if name not in ('te', 'tm'):
         raise ValueError(f"fdtd: tetm must be 'te' or 'tm', got {tetm!r}.")
 
     if not hasattr(structure, 'shape'):
         raise ValueError(
-            'fdtd: structure must be a permittivity raster, shape (n_layers, 1, Nx). The '
-            'analytic shape encoding is not read here -- rasterising it would put a second '
+            'fdtd: structure must be a permittivity raster, shape (n_layers, Ny, Nx). The '
+            'parametric shape encoding is not read here -- rasterising it would put a second '
             'geometry builder beside `draw.slice_structure`, which is NumPy-only, square-only '
             'and refuses a traced shape parameter, so the two would disagree about the same '
             'scene. Pass the raster you want solved.')
@@ -266,16 +269,17 @@ def _refuse_out_of_scope(structure, mu, theta, phi, tetm, incidence_side, lattic
             f'fdtd: phi={phi!r} with tetm={tetm!r}. A conical mount couples the two '
             f'polarisations, so it has no TE/TM answer to give -- the same split `solve_1d` '
             f'and `solve_1d_conical` make. Ask for it the way the conical path is asked: pass '
-            f'`psi` (or `polarization`) instead of `tetm`, which is answered at theta = 0 for '
-            f'any phi.')
+            f'`psi` (or `polarization`) instead of `tetm`, which is answered at any theta '
+            f'and any phi.')
     if incidence_side not in (None, 'top'):
         raise ValueError(
             f"fdtd: incidence_side={incidence_side!r}. Only 'top' is implemented; the mirror "
             f"the ETM applies for backside illumination has no counterpart here yet.")
     if lattice is not None:
         raise ValueError(
-            'fdtd: a non-axis-aligned lattice is not read here. The Yee grid is Cartesian, so '
-            'a skewed cell would need the metric carried through every update.')
+            'fdtd: a `lattice` is not read here, axis-aligned or not -- pass `period`. The Yee '
+            'grid is Cartesian, so a skewed cell would need the metric carried through every '
+            'update; an axis-aligned one would not, and is a gap rather than a limit.')
     return name
 
 
