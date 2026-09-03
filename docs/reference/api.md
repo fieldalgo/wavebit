@@ -11,6 +11,14 @@ to a contributor rather than the interface to a caller.
 
 ```
 
+`fdtd()` is the other door. It hands back the answer rather than a solver, because there is no
+per-instance state to keep -- no eigen-decomposition to cache, no frozen geometry, no gradient.
+
+```{eval-rst}
+.. autofunction:: wavebit.fdtd
+
+```
+
 
 ## The solver object
 

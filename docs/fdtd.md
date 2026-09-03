@@ -1,18 +1,18 @@
 # FDTD — the time-domain solve beside the RCWA one
 
-Landed 2026-08-31. Roadmap item 2: a second method reading the same `Stack` and `Incidence`,
-so that one structure can be solved two ways and the answers compared without a translation
-layer.
+Written: 2026-08-31, extended through 2026-09-04.
+Targets: `wavebit/_core/fdtd.py`, `wavebit/main.py`, `tests/test_fdtd.py`
 
-Target: `wavebit/_core/fdtd.py` — `solve_fdtd`, `component_property`, `cpml_coefficients`,
-`_refuse_out_of_scope`; `wavebit/main.py` — `fdtd`; `tests/test_fdtd.py`.
+A second method reading the same `Stack` and `Incidence`, so that one structure can be solved
+two ways and the answers compared without a translation layer.
 
-**Scope.** Pure TE / TM at any polar angle in the classical mount (`phi = 0`), on a raster
-structure periodic along one axis, with Drude/Lorentz dispersion and permeability —
-deliberately the scope of
-`wavebit/_core/solve_1d.py`, which this mirrors down to the amplitude conventions. Everything
-outside it is refused by name; §6 lists the refusals and why each is a refusal rather than an
-approximation.
+**Scope.** Pure TE / TM in the classical mount (`phi = 0`) at any polar angle, which mirrors
+`wavebit/_core/solve_1d.py` down to the amplitude conventions; a conical mount through `psi` at
+any `theta` and `phi` (§8d, §8e), which mirrors `solve_1d_conical`; and a crossed grating, the
+raster periodic along both axes (§8g). Drude/Lorentz dispersion (§8b) and permeability (§8c)
+are carried on all of them, the z mesh can be graded (§8f), and a run can keep a record of the
+field in time (§8h). Everything outside that is refused by name; §6 lists the refusals and why
+each is a refusal rather than an approximation.
 
 ---
 

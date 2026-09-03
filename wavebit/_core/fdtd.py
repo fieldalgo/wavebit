@@ -2400,10 +2400,22 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
             record.update({'field_ex': out['snap_x'],
                            'field_ex_x': x_half, 'field_ex_y': y_node})
 
-    return result, {'grid': grid, 'dz': grid.dz, 'nz': grid.nz, 'nx': grid.nx, 'dt': grid.dt,
+    # Read off the node table rather than off `grid.dz`, which is the NOMINAL cell and is set
+    # once (`self.dz = self.dx`) whatever the mesh does afterwards. On a graded run (§8f) the
+    # cells coarsen toward the boundaries, so both of these were computed as if the mesh were
+    # uniform: measured on the benchmark grating at `grading=1.06`, `pml_thickness` reported 240
+    # against a true 546.5 above and 367.6 below -- and those two differ from each other, so one
+    # number could not have been right regardless of which cell it was built from. The PML runs
+    # from index 0 to `n_pml`, and from `nz - 1 - n_pml` to the end.
+    z_node = np.asarray(grid.z_node, dtype=float)
+    dz_cells = np.diff(z_node)
+    return result, {'grid': grid, 'dz': float(dz_cells.min()), 'dz_max': float(dz_cells.max()),
+                    'nz': grid.nz, 'nx': grid.nx, 'dt': grid.dt,
                     **record,
                     'n_steps': n_steps, 'n_pml': grid.n_pml,
-                    'pml_thickness': grid.n_pml * grid.dz, 'residual': out['residual'],
+                    'pml_thickness': (float(z_node[grid.n_pml] - z_node[0]),
+                                      float(z_node[-1] - z_node[-1 - grid.n_pml])),
+                    'residual': out['residual'],
                     'incident_balance': abs(out['inc_trn'][0] / out['inc_ref'][0]) - 1.0,
                     'wavelengths': band,
                     'incident_fraction': (np.abs(out['inc_z0'])

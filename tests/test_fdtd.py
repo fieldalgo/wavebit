@@ -405,6 +405,46 @@ def test_the_diagnostics_report_whether_the_run_was_long_enough():
     assert long['pml_thickness'] == short['pml_thickness']
 
 
+def test_the_reported_mesh_is_the_mesh_that_ran():
+    """`dz` and `pml_thickness` come off the node table, not off the nominal cell.
+
+    `grid.dz` is set once, as `self.dz = self.dx`, and a graded run (§8f) never updates it --
+    so both of these were computed as if the mesh were uniform. The reported PML was 240 nm
+    against a true 546.5 above and 367.6 below, which is the number a reader consults to decide
+    whether the absorber is thick enough: it understated it by a factor of 2.3.
+
+    The two sides differ from each other, which is the part no single number could have got
+    right. Grading coarsens toward the cell each half-space asks for, and the two half-spaces
+    here are air and glass, so they ask for different cells.
+    """
+    kw = dict(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+              period=[PERIOD], wavelength=WL, tetm='te', theta=0.0, resolution=0.05,
+              n_periods=60, return_diagnostics=True)
+    uniform = solve_fdtd(**kw)[1]
+    graded = solve_fdtd(grading=1.06, **kw)[1]
+
+    for tag, diag in (('uniform', uniform), ('graded', graded)):
+        z = np.asarray(diag['grid'].z_node, dtype=float)
+        cells = np.diff(z)
+        n = diag['n_pml']
+        assert np.isclose(diag['dz'], cells.min()), f'{tag}: dz must be the finest cell'
+        assert np.isclose(diag['dz_max'], cells.max()), f'{tag}: dz_max must be the coarsest'
+        assert np.allclose(diag['pml_thickness'],
+                           (z[n] - z[0], z[-1] - z[-1 - n])), (
+            f'{tag}: the PML thickness must be read off the node table')
+
+    # On a uniform mesh the old arithmetic was right, which is why nothing caught this.
+    assert np.isclose(uniform['dz'], uniform['dz_max'])
+    assert np.allclose(uniform['pml_thickness'], uniform['n_pml'] * uniform['dz'])
+
+    # On a graded one it is wrong in three separate ways at once.
+    assert graded['dz_max'] / graded['dz'] > 2.0, 'the graded mesh must actually vary'
+    assert graded['pml_thickness'][0] > 2.0 * graded['n_pml'] * graded['dz'], (
+        'the graded PML is far thicker than the nominal cell says')
+    assert graded['pml_thickness'][0] != graded['pml_thickness'][1], (
+        'the two half-spaces ask for different cells, so the two sides differ')
+
+
 # ---------------------------------------------------------------------------------------
 # 5. the checks with the most resolving power, all oracle-free
 # ---------------------------------------------------------------------------------------
