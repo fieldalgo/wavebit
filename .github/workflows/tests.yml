@@ -206,25 +206,40 @@ jobs:
           pytest tests -v --timeout=1200 --timeout-method=thread
           --deselect 'tests/test_frozen_geometry.py::test_a_frozen_geometry_makes_a_shape_parameter_traceable'
 
-  # Temporary, and paired with the `--deselect` in `test` above. It answers one
-  # question and then it should go.
+  # Temporary, non-blocking, and paired with the `--deselect` in `test` above. It is a
+  # bench, not a gate: it is expected to be red for as long as the hang is unfixed, so
+  # `continue-on-error` keeps it from colouring the run. Delete it with the deselect.
   #
-  # `test_a_frozen_geometry_makes_a_shape_parameter_traceable` hangs in the full
-  # suite -- 5h, then 2h, then over 1200s across three runs -- and takes 16
-  # seconds on a developer machine. Four vCPUs do not explain that ratio. The
-  # candidate explanation is what the process is carrying by the time the suite
-  # reaches it: jax and torch both resident, plus seventeen hundred tests worth of
-  # caches, against 16 GB and a little swap. Thrashing looks exactly like this --
-  # no crash, no progress, and stuck inside a C call where no alarm is delivered.
+  # Its first question is already answered. `test_a_frozen_geometry_makes_a_shape_parameter_traceable`
+  # hangs in `float(jax.jit(jax.grad(total))(x))` -- 5h, then 2h, then past 1200s -- and
+  # takes 16 seconds on a developer machine. The candidate was what the process carries
+  # by the time the suite reaches it. Run 33738428639 killed that: alone in a fresh
+  # process it still hung, the runner turned out to be 2 cores and 7.9 GB rather than
+  # the 4 and 16 assumed, and it used 975 MB with zero swap either side. Nothing is
+  # short of memory. It also hung on a *different* case than the full suite did -- and
+  # on the cheapest of the four, 3.4s locally -- so it is not one parametrisation.
   #
-  # So run the same file in a process that carries none of it. Passing means the
-  # test is fine and the suite's accumulated footprint is the subject; hanging
-  # means the test is, and the deselect above becomes something more permanent.
-  # Either answer costs about five minutes and neither needs the full suite.
+  # What is left is a nondeterministic stall inside XLA:CPU on two cores, executing a
+  # compiled jit-of-grad whose body contains `lax.linalg.eig`. The eager grad on the
+  # line above completes every time; only the compiled one does not. So the three arms
+  # below are one hypothesis each, and each is allowed to fail:
+  #
+  #   control    the stall, unmodified, to keep the other two honest -- an arm that
+  #              passes means nothing if the control passes too.
+  #   eigen      serialise XLA's Eigen pool. If a two-thread intra-op pool is
+  #              deadlocking on itself, this is what says so.
+  #   unpinned   drop the single-threaded BLAS this job otherwise sets. Pinning was
+  #              added for bit-reproducibility, not speed, and `OPENBLAS_NUM_THREADS=1`
+  #              does not make OpenBLAS re-entrant -- LAPACK called concurrently from
+  #              XLA's pool is a known way to wedge it.
+  #
+  # `--xla_cpu_use_thunk_runtime=false`, the usual first thing to reach for, is not
+  # here: jaxlib 0.11 answers it with "no longer supported" and ignores it.
   hang-probe:
     name: hang probe
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    continue-on-error: true
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
@@ -237,17 +252,16 @@ jobs:
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Install Wavebit with both optional backends
-        run: pip install -e '.[jax,pytorch]' pytest pytest-timeout
+        run: pip install -e '.[jax,pytorch,contour]' pytest pytest-timeout
 
-      # The number this is here to compare against. `test` reaches the same file
-      # having already run about seventeen hundred tests.
-      - name: What the runner has before anything runs
-        run: free -m && nproc
+      - name: What the runner is
+        run: free -m && nproc && python -c "import jax, jaxlib; print('jax', jax.__version__, 'jaxlib', jaxlib.__version__)"
 
-      # 300s, not the suite's 1200: alone the file is a minute's work, so a bound
-      # that low still cannot fire on a healthy run, and a hang is reported in five
-      # minutes instead of twenty.
-      - name: The suspect file, alone, in a fresh process
+      # 300s, not the suite's 1200: alone the file is a minute's work, so a bound that
+      # low still cannot fire on a healthy run, and each arm reports in five.
+      - name: control -- as the suite runs it
+        if: always()
+        continue-on-error: true
         env:
           OPENBLAS_NUM_THREADS: 1
           OMP_NUM_THREADS: 1
@@ -256,9 +270,22 @@ jobs:
           VECLIB_MAXIMUM_THREADS: 1
         run: pytest tests/test_frozen_geometry.py -v --timeout=300 --timeout-method=thread
 
-      - name: What it left behind
+      - name: eigen -- XLA's Eigen pool serialised
         if: always()
-        run: free -m
+        continue-on-error: true
+        env:
+          OPENBLAS_NUM_THREADS: 1
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          NUMEXPR_NUM_THREADS: 1
+          VECLIB_MAXIMUM_THREADS: 1
+          XLA_FLAGS: --xla_cpu_multi_thread_eigen=false
+        run: pytest tests/test_frozen_geometry.py -v --timeout=300 --timeout-method=thread
+
+      - name: unpinned -- no single-threaded BLAS
+        if: always()
+        continue-on-error: true
+        run: pytest tests/test_frozen_geometry.py -v --timeout=300 --timeout-method=thread
 
   examples:
     name: examples smoke
