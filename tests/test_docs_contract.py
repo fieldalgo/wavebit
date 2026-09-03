@@ -281,3 +281,26 @@ def test_every_target_a_document_names_exists(doc):
     assert not missing, (
         f'docs/{doc} explains files that do not exist: {sorted(set(missing))}. '
         'Either the document is stale or the path is a typo; both make it decorative.')
+
+
+def test_every_toc_entry_names_a_document_that_exists():
+    """The navigation is the one place a renamed document fails silently.
+
+    Every other reference to a document is prose a reader can still follow, or a path
+    `test_paths_cited_anywhere_are_in_the_repository` already checks. `_toc.yml` is neither:
+    it is consumed by the site build rather than read, its entries carry no suffix, and a
+    stale one points at a page that is simply absent. Nothing in the suite noticed when
+    `analytic-modeling` was renamed to `parametric-modeling` (2026-09-03), because the sweep
+    that renamed it covered `.py`, `.md`, `.ipynb` and `.rst` and the navigation is `.yml`.
+
+    So the check is on the *extension the sweep did not have*, which is the general form of
+    that miss rather than the instance.
+    """
+    toc = (ROOT / 'docs' / '_toc.yml').read_text(encoding='utf-8')
+    missing = [name for name in re.findall(r'-\s*file:\s*(\S+)', toc)
+               if not any((ROOT / 'docs' / f'{name}{ext}').exists()
+                          for ext in ('.md', '.ipynb', '.rst'))]
+    assert not missing, (
+        f'docs/_toc.yml lists pages that do not exist: {sorted(set(missing))}. '
+        'The site build resolves these, so a stale entry is a missing page rather than a '
+        'broken link -- add the document, or drop the entry.')

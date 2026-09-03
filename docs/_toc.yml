@@ -29,7 +29,7 @@ subtrees:
     subtrees:
     - caption: Modeling and geometry
       entries:
-      - file: analytic-modeling
+      - file: parametric-modeling
       - file: boundary-modeling
       - file: oblique-lattice
       - file: nvf-normal-methods

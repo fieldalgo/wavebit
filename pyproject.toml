@@ -120,7 +120,7 @@ wavebit = ["nk_data/filmetrics/*.txt", "nk_data/matlab/*.mat"]
 #
 # F401 is the one that earns its place by history rather than by principle. It is the failure
 # this repo accumulates: a refactor moves a function, the import that fed it stays, and the
-# module goes on advertising a dependency it no longer has. `_core/analytic.py` carried
+# module goes on advertising a dependency it no longer has. `_core/parametric.py` carried
 # `from .factorization import dfs2d` unused across every commit since 672993c, which reads as
 # if the module obtains its coefficients off a raster -- the one thing it exists not to do.
 #
