@@ -77,7 +77,7 @@ import warnings
 import numpy as np
 
 from .backend import check_physical
-from .conventions import order_azimuth
+from .conventions import order_azimuth, parse_order_pair
 from .domain import as_material
 from .result import Result, ResultSub
 
@@ -2268,12 +2268,13 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
                 kx_inc=grid.kx_inc * shortest / centre,
                 ky_inc=grid.ky_inc * shortest / centre)
         else:
-            wanted = (truncation_order if hasattr(truncation_order, 'get')
-                      else {'x': truncation_order[0], 'y': truncation_order[1]}
-                      if hasattr(truncation_order, '__len__')
-                      else {'x': truncation_order, 'y': truncation_order})
-            window_2d = ((0, int(wanted.get('x', wanted.get('u', 0)))),
-                         (0, int(wanted.get('y', wanted.get('v', 0)))))
+            # `parse_order_pair` returns the pair u-first; `propagating_window_2d` -- the
+            # other producer of this value -- returns it x-first, and on the only cells this
+            # path accepts (axis-aligned; a `lattice` is refused above) u IS x. Written out
+            # rather than zipped, because the two halves being the same length is exactly what
+            # makes a swap here silent.
+            (want_u, want_v), _ = parse_order_pair(truncation_order)
+            window_2d = ((0, want_u), (0, want_v))
 
     centre_order = 0
     if truncation_order is None:
@@ -2283,11 +2284,14 @@ def solve_fdtd(structure, thickness, top, bot, period, wavelength, tetm=None,
         centre_order, half_width = _propagating_window(
             shortest, period_x, eps_top * mu_top, eps_bot * mu_bot,
             kx_inc=grid.kx_inc * shortest / centre, ky_inc=grid.ky_inc * shortest / centre)
-    elif hasattr(truncation_order, 'get'):
-        half_width = int(truncation_order.get('x', truncation_order.get('u', 0)))
     else:
-        half_width = int(truncation_order[0] if hasattr(truncation_order, '__len__')
-                         else truncation_order)
+        # `parse_order_pair` is CALLED, not respelled -- the same rule this module already
+        # follows for `order_azimuth`, and the one `conventions.py` opens by naming: a rule
+        # written twice is a rule that will disagree with itself, as `truncation_order`'s two
+        # copies did for years. Respelling it here made `truncation_order=5` mean 11x11 orders
+        # on the crossed path where it means 11x1 everywhere else, and turned `dict(y=3)` --
+        # which the canonical reader refuses by name -- into a silent specular-only answer.
+        half_width = parse_order_pair(truncation_order)[0][0]
 
     if out['residual'] > SETTLED_RESIDUAL:
         warnings.warn(
