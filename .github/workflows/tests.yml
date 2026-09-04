@@ -103,7 +103,7 @@ jobs:
       # it is fine. This job is not that user: it is the one that installs everything
       # precisely so that no part of the suite goes unexercised.
       - name: Install Wavebit with both optional backends and the contour extra
-        run: pip install -e '.[jax,pytorch,contour]' pytest pytest-timeout
+        run: pip install -e '.[jax,pytorch,contour]' pytest pytest-timeout pytest-xdist
 
       # Fails the run if a backend is missing, which would otherwise turn the
       # cross-backend tests into silent skips: the suite guards them with
@@ -159,6 +159,24 @@ jobs:
           # not less, which is the same direction the five above are set for.
           XLA_FLAGS: --xla_cpu_multi_thread_eigen=false
         #
+        # Two workers, because the runner has two cores and every thread count above pins
+        # this process to one of them. The suite spent 77 minutes using half the machine.
+        # `--dist loadfile` keeps a file's tests on one worker, which matters here: several
+        # files set process-wide state at import -- `test_boundary.py` turns on
+        # `JAX_ENABLE_X64` and `test_fp_warnings.py` reasons explicitly about what has been
+        # imported by the time it runs -- and per-test distribution would scatter that.
+        #
+        # Verified before landing rather than after: the whole suite under `-n 2 --dist
+        # loadfile` locally gives 3946 passed, 39 skipped, 1 xfailed, nothing failed. That
+        # is the claim worth checking, since the speedup is arithmetic and the breakage
+        # would not be.
+        #
+        # It also splits the six tests that cost 32 of those 77 minutes across two workers:
+        # four are in `test_boundary.py` and two in `test_oblique_lattice.py`, so they land
+        # on different ones. They are slow for a reason -- f453b21 folds polygon segments
+        # over the 3x3 periodic images, which is 9x the segments and is correctness work,
+        # not a regression to revert.
+        #
         # `--timeout` turns a hung test into a named failure instead of a dead job.
         # Without it the run that hangs reports nothing at all: pytest prints its
         # summary at the end, so when GitHub cancels the job at the six-hour mark
@@ -201,7 +219,7 @@ jobs:
         # log, so the objection no longer holds. What it buys is the one thing still
         # missing: *where* the process is stuck, not merely which test was running.
         #
-        # The deselect is temporary and is tracked by `probes` below. Run
+        # The deselect is temporary. Run
         # 33730652133 named this test as the one that hangs -- it sits in
         # `float(jax.jit(jax.grad(total))(x))` waiting on a computation that never
         # returns, and `thread` ends the run there, so every test after it in
@@ -217,9 +235,9 @@ jobs:
         # next one. The two cheap cases go with them, which is the price.
         #
         # Down to one case, and the reason the other three came back is the
-        # `XLA_FLAGS` line above rather than anything in this file. Sampling the
-        # resident set *while* they ran separated two failures that had looked like
-        # one: with XLA's Eigen pool serialised, `ellipse lx`, `rectangle lx` and
+        # `XLA_FLAGS` line above rather than anything in this file. The `probes` job
+        # that established it is gone, having answered; sampling the resident set
+        # *while* those tests ran separated two failures that had looked like one: with XLA's Eigen pool serialised, `ellipse lx`, `rectangle lx` and
         # `rectangle angle` pass in 91 seconds, and `overlapping pair` fails with
         # `RESOURCE_EXHAUSTED: Out of memory allocating 11559862304 bytes` after
         # climbing to 6347 MiB with 943 MiB left. The first three were a deadlock;
@@ -230,146 +248,8 @@ jobs:
         # it wants a decision this file cannot make: whether a backward pass over a
         # 98-square problem should be asking for eleven gigabytes at all.
         run: >
-          pytest tests -v --timeout=1200 --timeout-method=thread
+          pytest tests -v -n 2 --dist loadfile --timeout=1200 --timeout-method=thread
           --deselect 'tests/test_frozen_geometry.py::test_a_frozen_geometry_makes_a_shape_parameter_traceable[overlapping pair-<lambda>-120.0]'
-
-  # Temporary, non-blocking, and paired with the `--deselect` in `test`. A bench, not a
-  # gate: `continue-on-error` at the job and at every arm. Delete it with the deselect.
-  #
-  # THE ANSWER, and it is memory. Run 33761907085 ran three arms against the stalling test
-  # and I read it wrong, twice over. Attributing each pytest group to its step by the env it
-  # carries -- the `XLA_FLAGS` group is the second -- gives:
-  #
-  #   control    2 timeout markers, no summary line: the process was killed. HUNG.
-  #   eigen      no timeout marker at all, and a summary. `ellipse lx`, `rectangle lx` and
-  #              `rectangle angle` PASSED. `overlapping pair` failed with
-  #              `RESOURCE_EXHAUSTED: Out of memory allocating 11559862304 bytes` at
-  #              jax/_src/array.py:642.
-  #   unpinned   2 timeout markers, no summary. HUNG.
-  #
-  # `array.py:642` is the frame every hang stack ends on. So the stall is not a deadlock; it
-  # is an allocation the machine cannot satisfy, and `--xla_cpu_multi_thread_eigen=false`
-  # does not fix it so much as make it *report*. 11.6 GB asked of a 7.9 GB runner. The three
-  # lighter cases fit once the serial path stops inflating them.
-  #
-  # It also fits everything else that was measured and misread. The size threshold ([1, 1]
-  # fine, [2, 2] up hangs) is 18 square against 50 against 98. Shape-vs-thickness is the size
-  # of the backward graph. Eager grad never materialises the fused backward at once. And the
-  # memory hypothesis was raised first and dismissed on `free -m` readings taken BEFORE and
-  # AFTER the step rather than during the stall -- 975 MB used, zero swap, and the process
-  # that would have shown otherwise was the one not running yet.
-  #
-  # Local peaks for scale, on a 10-core machine where all four pass: 2.32 GB for the four
-  # together, 3.98 GB for `overlapping pair` alone. The runner asked for 11.6 GB in one
-  # allocation.
-  #
-  # So this job is now two arms over the deselected tests themselves, with the memory
-  # sampled WHILE they run, which is the measurement that was missing. Everything else is
-  # deleted: the eig reproducer (its scene `A(x) = xB + (1+x)I` commutes with B, so the
-  # eigenvectors are independent of x -- `sum(Re V)` differentiates to -4.5e-13 there -- and
-  # the term added to fix that is `V diag(w) V^-1`, which IS A, contributing exactly
-  # `grad sum(|A|)` to twelve digits; it cleared the eigenvalue backward and nothing else),
-  # and both bit-identity arms (43c0756 answered that one and shipped the tolerance; the
-  # arms still byte-compare the seam the suite deliberately stopped asserting, merge it with
-  # the comparison still held exact, and print `max |d|` for a pair that is the same array).
-  probes:
-    name: probes
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-          cache: pip
-
-      - name: Install CPU-only PyTorch
-        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
-
-      - name: Install Wavebit with both optional backends
-        run: pip install -e '.[jax,pytorch,contour]' pytest pytest-timeout
-
-      # The CPU model and the BLAS build are here because two claims in this file's history
-      # needed them and could not be checked: `probes` and `test` are separate jobs and so
-      # separate VMs, and a per-machine effect compared across them is not comparable at all
-      # unless both ends say which machine they were.
-      - name: What the runner is
-        run: |
-          free -m && nproc
-          grep -m1 'model name' /proc/cpuinfo || true
-          python -c "import numpy, jax, jaxlib; print('numpy', numpy.__version__, 'jax', jax.__version__, 'jaxlib', jaxlib.__version__); print('blas', numpy.show_config('dicts')['Build Dependencies']['blas'])"
-
-      - name: Write the memory-sampling runner
-        run: |
-          cat > /tmp/with_rss.sh <<'RSS'
-          #!/usr/bin/env bash
-          # Samples the child's resident set WHILE it runs. Measuring before and after is
-          # what hid this for five runs: a stall that is an allocation shows up only during.
-          "$@" &
-          pid=$!
-          hwm=0
-          while kill -0 $pid 2>/dev/null; do
-            if [ -r /proc/$pid/status ]; then
-              rss=$(awk '/^VmRSS:/{print $2}' /proc/$pid/status 2>/dev/null)
-              peak=$(awk '/^VmHWM:/{print $2}' /proc/$pid/status 2>/dev/null)
-              [ -n "$peak" ] && [ "$peak" -gt "$hwm" ] && hwm=$peak
-              [ -n "$rss" ] && echo "  [rss] $((rss/1024)) MiB now, $((hwm/1024)) MiB peak, $(awk '/^MemAvailable:/{print int($2/1024)}' /proc/meminfo) MiB available"
-            fi
-            sleep 10
-          done
-          wait $pid
-          rc=$?
-          echo "  [rss] peak $((hwm/1024)) MiB, exit $rc"
-          exit $rc
-          RSS
-          chmod +x /tmp/with_rss.sh
-
-      # Three of the four parametrisations `test` deselects, run directly rather than
-      # modelled. `overlapping pair` is excluded here and this is not tidiness: in run
-      # 33869683436 it raised RESOURCE_EXHAUSTED, and in run 33871982454 it did not raise at
-      # all -- resident set 7072 MiB, 221 MiB available, and the job was cancelled six
-      # minutes in with twenty-five on its clock. It took the runner with it. A probe that
-      # can kill its own job cannot report anything, including about the arms after it.
-      #
-      # 180s per test: they take 16s on a developer machine and the stall has never been
-      # within an order of that. `thread`, because `signal` never fires here.
-      - name: deselected tests -- XLA as the suite runs it
-        if: always()
-        continue-on-error: true
-        env:
-          OPENBLAS_NUM_THREADS: 1
-          OMP_NUM_THREADS: 1
-          MKL_NUM_THREADS: 1
-          NUMEXPR_NUM_THREADS: 1
-          VECLIB_MAXIMUM_THREADS: 1
-        run: |
-          /tmp/with_rss.sh python -m pytest \
-            'tests/test_frozen_geometry.py::test_a_frozen_geometry_makes_a_shape_parameter_traceable' \
-            --deselect 'tests/test_frozen_geometry.py::test_a_frozen_geometry_makes_a_shape_parameter_traceable[overlapping pair-<lambda>-120.0]' \
-            -v --timeout=180 --timeout-method=thread -p no:cacheprovider
-
-      # The same four with XLA's multi-threaded Eigen off. Run 33761907085 says three of them
-      # pass this way and the fourth reports its 11.6 GB rather than stalling on it. If that
-      # reproduces here, the deselect can come off for the three and `overlapping pair` needs
-      # a decision of its own -- it wants more memory than this runner has, which is a fact
-      # about the test and not about the flag.
-      - name: deselected tests -- serial Eigen
-        if: always()
-        continue-on-error: true
-        env:
-          XLA_FLAGS: --xla_cpu_multi_thread_eigen=false
-          OPENBLAS_NUM_THREADS: 1
-          OMP_NUM_THREADS: 1
-          MKL_NUM_THREADS: 1
-          NUMEXPR_NUM_THREADS: 1
-          VECLIB_MAXIMUM_THREADS: 1
-        run: |
-          /tmp/with_rss.sh python -m pytest \
-            'tests/test_frozen_geometry.py::test_a_frozen_geometry_makes_a_shape_parameter_traceable' \
-            --deselect 'tests/test_frozen_geometry.py::test_a_frozen_geometry_makes_a_shape_parameter_traceable[overlapping pair-<lambda>-120.0]' \
-            -v --timeout=180 --timeout-method=thread -p no:cacheprovider
 
   examples:
     name: examples smoke
