@@ -106,14 +106,44 @@ def test_each_rung_delivers_exactly_its_own_surface(algo):
     assert len(fld_solver.layer_info_list) == 1 and fld_solver.T1 is not None
 
 
+#: The efficiency rung against the other two, where the comparison crosses a change in the
+#: linear algebra and cannot be exact. Absolute rather than relative because most orders are
+#: identically zero and a relative floor says nothing there; efficiencies are O(1), so 1e-12
+#: is four orders above the ulp this is absorbing and far below any way of being wrong.
+_ACROSS_THE_COLUMN_CHANGE = 1e-12
+
+
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
-def test_the_rungs_agree_bit_for_bit_on_what_they_share(algo):
-    """A cheaper declaration must be a smaller answer, never a different one."""
+def test_the_rungs_agree_on_what_they_share(algo):
+    """A cheaper declaration must be a smaller answer, never a different one.
+
+    Exact where the rungs run the same call, and to a tolerance where they do not, which is
+    not a softening of the claim but the shape of it.
+
+    `scattering.py` builds the cascade's incidence columns as one, or three once the pure-TE
+    and pure-TM variants are wanted, and `answers` is what decides which. So `'efficiency'`
+    asks a one-column question and `'amplitude'` asks a three-column one, of the same matrix.
+    Whether a solve with one right-hand side and a solve with three land on the same last bit
+    in the column they share is a property of the BLAS -- of gemv against gemm, and of how
+    the kernel blocks -- and not of this code. Measured: identical on Accelerate, and 1.11e-16
+    apart on some of GitHub's ubuntu runners, 25 times out of 25 on the runner that does it,
+    while the same rung repeated against itself agrees 25 out of 25 everywhere. Deterministic
+    per machine, which is why it read as a flake across runs that landed on different ones.
+
+    That is the same argument `f150b49` made when it relaxed the four wiring tests -- "a claim
+    about the BLAS, not about this code" -- and it left this test exact on the reasoning that
+    these rungs do own their bit-identity. They do, but only where the call does not change,
+    and it changes at exactly one seam. `'amplitude'` and `'field'` are both three-column, so
+    everything compared between those two stays exact and the instrument keeps its edge.
+    """
     out = {r: _solver(answers=r, layer_algorithm=algo).solve() for r in RUNGS}
     for field in ('R', 'T'):
         ref = np.asarray(getattr(out['efficiency'], field))
         for rung in ('amplitude', 'field'):
-            assert np.array_equal(ref, np.asarray(getattr(out[rung], field))), (field, rung)
+            got = np.asarray(getattr(out[rung], field))
+            worst = float(np.abs(got - ref).max())
+            assert worst <= _ACROSS_THE_COLUMN_CHANGE, (field, rung, f'{worst:.3e}')
+    # Exact from here down: both rungs asked the three-column question.
     for field in ('r_s', 'r_p', 't_s', 't_p', 'R_s', 'R_p', 'T_s', 'T_p'):
         ref = np.asarray(getattr(out['amplitude'].given, field))
         assert np.array_equal(ref, np.asarray(getattr(out['field'].given, field))), field
