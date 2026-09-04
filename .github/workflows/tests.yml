@@ -326,10 +326,15 @@ jobs:
           RSS
           chmod +x /tmp/with_rss.sh
 
-      # The four parametrisations `test` deselects, run directly rather than modelled. 180s
-      # per test: they take 16s on a developer machine and the stall has never been within an
-      # order of that. `thread`, because `signal` never fires here -- the process is inside a
-      # C allocation and no bytecode boundary arrives.
+      # Three of the four parametrisations `test` deselects, run directly rather than
+      # modelled. `overlapping pair` is excluded here and this is not tidiness: in run
+      # 33869683436 it raised RESOURCE_EXHAUSTED, and in run 33871982454 it did not raise at
+      # all -- resident set 7072 MiB, 221 MiB available, and the job was cancelled six
+      # minutes in with twenty-five on its clock. It took the runner with it. A probe that
+      # can kill its own job cannot report anything, including about the arms after it.
+      #
+      # 180s per test: they take 16s on a developer machine and the stall has never been
+      # within an order of that. `thread`, because `signal` never fires here.
       - name: deselected tests -- XLA as the suite runs it
         if: always()
         continue-on-error: true
@@ -342,6 +347,7 @@ jobs:
         run: |
           /tmp/with_rss.sh python -m pytest \
             'tests/test_frozen_geometry.py::test_a_frozen_geometry_makes_a_shape_parameter_traceable' \
+            --deselect 'tests/test_frozen_geometry.py::test_a_frozen_geometry_makes_a_shape_parameter_traceable[overlapping pair-<lambda>-120.0]' \
             -v --timeout=180 --timeout-method=thread -p no:cacheprovider
 
       # The same four with XLA's multi-threaded Eigen off. Run 33761907085 says three of them
@@ -362,6 +368,7 @@ jobs:
         run: |
           /tmp/with_rss.sh python -m pytest \
             'tests/test_frozen_geometry.py::test_a_frozen_geometry_makes_a_shape_parameter_traceable' \
+            --deselect 'tests/test_frozen_geometry.py::test_a_frozen_geometry_makes_a_shape_parameter_traceable[overlapping pair-<lambda>-120.0]' \
             -v --timeout=180 --timeout-method=thread -p no:cacheprovider
 
   examples:
