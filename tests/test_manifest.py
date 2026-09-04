@@ -738,3 +738,68 @@ def test_the_manifest_does_not_import_an_optional_backend_to_answer():
     assert seen['backends'] == ['jax', 'numpy', 'torch'], seen
     assert not seen['jax'] and not seen['torch'], (
         f'building the manifest imported an optional backend: {seen}')
+
+
+# ------------------------------------------------------- the second door, against runtime
+
+def test_both_published_entry_points_exist_and_are_what_they_claim():
+    """A door named in the document has to be callable under that exact name."""
+    from wavebit.manifest import SOLVERS
+    for door, entry in SOLVERS.items():
+        module, _, name = entry['entry_point'].rpartition('.')
+        assert module == 'wavebit', entry['entry_point']
+        assert callable(getattr(wavebit, name)), entry['entry_point']
+    assert SOLVERS['fdtd']['differentiable'] is False
+    assert SOLVERS['fdtd']['backends'] == ('numpy',)
+
+
+def test_the_sections_a_door_claims_are_keys_of_this_document():
+    """`sections` is what scopes `backends` to the door it is true of.
+
+    Without it a consumer reads `backends.differentiable` as a promise about every solve here,
+    which is false of the time-domain one -- so the names have to resolve.
+    """
+    from wavebit.manifest import SOLVERS
+    keys = set(manifest())
+    for door, entry in SOLVERS.items():
+        missing = set(entry['sections']) - keys
+        assert not missing, (door, sorted(missing))
+
+
+#: One override per published refusal, keyed by the name the manifest publishes. A dict rather
+#: than a list so the two sets can be compared: a refusal published and not exercised, or
+#: exercised and not published, is what fails here.
+FDTD_REFUSALS = {
+    'chi': dict(chi=10.0),
+    'polarization': dict(polarization='rcp'),
+    'a complex theta': dict(theta=0.3 + 0.1j),
+    "incidence_side='bottom'": dict(incidence_side='bottom'),
+    'a complex permittivity': dict(structure=np.array([[[1.0 + 0.3j, 1.0]]])),
+    'Re(eps) <= 0': dict(structure=np.array([[[-2.0, 1.0]]])),
+    'a parametric structure': dict(structure=[{'background': 1.0, 'shapes': []}]),
+    'lattice': dict(lattice=[[1.0, 0.0], [0.5, 1.0]]),
+}
+
+FDTD_KW = dict(structure=np.full((1, 1, 2), 12.25), thickness=[300.0], top=1.0, bot=2.25,
+               period=[700.0], wavelength=900.0, tetm='te', resolution=0.02, n_periods=5)
+
+
+def test_every_published_refusal_is_one_the_door_performs():
+    from wavebit.manifest import SOLVERS
+    published = set(SOLVERS['fdtd']['refused'])
+    assert published == set(FDTD_REFUSALS), (
+        f'published and not exercised: {sorted(published - set(FDTD_REFUSALS))}; '
+        f'exercised and not published: {sorted(set(FDTD_REFUSALS) - published)}')
+
+
+@pytest.mark.parametrize('name', sorted(FDTD_REFUSALS), ids=sorted(FDTD_REFUSALS))
+def test_a_refusal_the_manifest_publishes_is_refused(name):
+    """Each raises before any time stepping, so the whole battery costs milliseconds."""
+    with pytest.raises(ValueError, match='fdtd:'):
+        wavebit.fdtd(**dict(FDTD_KW, **FDTD_REFUSALS[name]))
+
+
+def test_the_time_domain_door_takes_no_backend_keyword():
+    """`backends: ('numpy',)` is the published claim; this is the runtime half of it."""
+    with pytest.raises(TypeError, match='backend'):
+        wavebit.fdtd(backend=1, **FDTD_KW)

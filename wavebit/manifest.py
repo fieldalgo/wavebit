@@ -91,6 +91,16 @@ from ._core.spec import SPEC_VERSION
 #: in its own source now gets ``False``, concludes absolute lengths and a cell-centre origin
 #: do not apply here, and emits fractions or a corner-relative centre. That scene solves and
 #: conserves energy -- the '8' failure exactly, on the convention '8' was about.
+#: The ``solvers`` key (2026-09-04) did **not** earn a bump, for the reason the paragraph above
+#: gives from the other side. It adds a top-level key and changes the meaning of nothing already
+#: published: a consumer that never learns it keeps generating exactly the RCWA scenes it
+#: generated before, and cannot reach ``wavebit.fdtd`` without reading the key describing it.
+#: The near miss is ``backends``, which says jax and torch differentiate and now shares a
+#: document with a NumPy-only door -- but that entry is *about the backends*, and the fdtd door
+#: carries its own ``backends`` and ``differentiable`` rather than leaning on it, so nothing
+#: already read acquires a second meaning. What WOULD earn a bump is the other placement:
+#: folding ``paths`` / ``lattice`` / ``backends`` under ``solvers.rcwa``, which moves keys a
+#: consumer already indexes.
 MANIFEST_VERSION = '9'
 
 
@@ -452,6 +462,66 @@ RESULTS = {
     'source': 'docs/conventions.md',
 }
 
+# ------------------------------------------------------------------ the two doors
+
+#: **Two solvers, one document.** Everything above is the RCWA solve's parameter space, because
+#: for most of this document's life that was the only solve there was. ``wavebit.fdtd`` is a
+#: second door: it reads the same ``Stack`` and ``Incidence``, returns the same ``Result``, and
+#: takes almost none of the axes ``paths``, ``lattice`` and ``enums`` publish. Published as one
+#: key naming BOTH doors rather than as a bare ``fdtd`` entry, because what a bare entry would
+#: leave a consumer to guess is which of the sections above apply to which door -- ``backends``
+#: says jax and torch differentiate, and beside an unscoped entry that reads as a promise about
+#: every solve here.
+#:
+#: Same admission test as everything else: each claim is held against runtime by
+#: ``tests/test_manifest.py``. Both entry points are called, every name in ``refused`` is asked
+#: for and raises, and ``sections`` names keys of this very document.
+SOLVERS = {
+    'rcwa': {
+        'entry_point': 'wavebit.rcwa',
+        'domain': 'frequency',
+        'returns': 'a solver object; call .solve()',
+        #: Derived from the same enum ``enums.backend`` is, so the two spellings cannot drift.
+        'backends': tuple(m.name.lower() for m in Backend),
+        'differentiable': True,
+        'sections': ('paths', 'shape_coordinates', 'lattice', 'materials', 'enums',
+                     'backends', 'material_quantity', 'results'),
+    },
+    'fdtd': {
+        'entry_point': 'wavebit.fdtd',
+        'domain': 'time',
+        'returns': 'a Result directly -- not a solver object, because there is no per-instance '
+                   'state to reuse: no eigen-decomposition to cache, no frozen geometry, no '
+                   'gradient to take',
+        #: NumPy only, and a decision rather than a gap: the time loop is a Python ``for`` over
+        #: ~10^4 steps, which ``jax.jit`` unrolls and autograd tapes. Crossing either needs a
+        #: ``scan`` primitive ``_core/backend.py`` does not have.
+        'backends': ('numpy',),
+        'differentiable': False,
+        'sections': ('material_quantity', 'results'),
+        'structure': 'a NumPy array of relative permittivity, shape (n_layers, Ny, Nx); '
+                     'Ny = 1 is a grating invariant along y and anything larger is a crossed '
+                     'one. The parametric spelling `paths` publishes is refused here',
+        'answers': ('pure te/tm at any theta in the classical mount (phi = 0)',
+                    'a conical mount through psi, at any theta and any phi',
+                    'a crossed grating, the raster periodic along both axes',
+                    'drude/lorentz dispersion and permeability, on all of those',
+                    'a band of wavelengths covered by one run'),
+        #: Names, not prose: a consumer deciding what to send here needs a membership test, and
+        #: prose is not one -- the same argument ``normal_methods_refused_on_oblique`` is here
+        #: for. Each is refused rather than approximated because each returns a *plausible*
+        #: number if it is quietly ignored, and a plausible wrong number from the cross-check
+        #: solver is worse than no cross-check at all.
+        'refused': ('chi', 'polarization', 'a complex theta', "incidence_side='bottom'",
+                    'a complex permittivity', 'Re(eps) <= 0', 'a parametric structure',
+                    'lattice'),
+        #: Which of ``results`` this door fills. ``given`` only: there are no pure-s / pure-p
+        #: variants to average, and ``answers`` is not a keyword here.
+        'results_incidences': ('given',),
+        'source': 'docs/fdtd.md',
+    },
+}
+
 # ------------------------------------------------------------------ the document
 
 #: What each backend can do that is not the same everywhere. One entry so far, and it is the
@@ -515,6 +585,7 @@ def manifest() -> dict:
         },
         'materials': [dict(m) for m in MATERIALS],
         'results': _jsonable_results(),
+        'solvers': _jsonable_solvers(),
     }
 
 
@@ -536,6 +607,12 @@ def _jsonable_results() -> dict:
     return conv(RESULTS)
 
 
+def _jsonable_solvers() -> dict:
+    """``SOLVERS`` with its tuples as lists, so the document round-trips through JSON."""
+    return {door: {k: list(v) if isinstance(v, tuple) else v for k, v in entry.items()}
+            for door, entry in SOLVERS.items()}
+
+
 def cited_sources() -> set:
     """Every repository path the manifest points at, for the staleness check.
 
@@ -543,7 +620,8 @@ def cited_sources() -> set:
     them joins the check by being added -- which is what a hand-kept list would not do.
     """
     return ({m['source'] for m in MATERIALS} | {MATERIAL_QUANTITY['source']}
-            | {s['overlap']['source'] for s in SPELLINGS if s['overlap'] is not None})
+            | {s['overlap']['source'] for s in SPELLINGS if s['overlap'] is not None}
+            | {e['source'] for e in SOLVERS.values() if 'source' in e})
 
 
 def main():
