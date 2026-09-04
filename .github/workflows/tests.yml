@@ -142,6 +142,22 @@ jobs:
           MKL_NUM_THREADS: 1
           NUMEXPR_NUM_THREADS: 1
           VECLIB_MAXIMUM_THREADS: 1
+          # XLA's own thread pool, which none of the five above reach -- they set BLAS and
+          # OpenMP counts and XLA:CPU is neither. It deadlocks on these two-core runners:
+          # `probes` in run 33869683436 watched `test_a_frozen_geometry_makes_a_shape_parameter
+          # _traceable[ellipse lx]` sit at 1195 MiB of resident set, unchanging, for three
+          # minutes, with 5958 MiB still available. Nothing was being allocated and nothing
+          # was short; the process was stuck. With this flag the same three cases pass in 91
+          # seconds.
+          #
+          # Job-wide because it has to be: XLA reads it when the backend initialises, so it
+          # cannot be scoped to a test. That is the right scope anyway -- the stall was never
+          # specific to this test. It moved between parametrisations run to run, so any
+          # jit-of-grad in the suite could reach it, and most of the jax tests are that.
+          #
+          # It should not move a number. Serialising a reduction makes it more reproducible,
+          # not less, which is the same direction the five above are set for.
+          XLA_FLAGS: --xla_cpu_multi_thread_eigen=false
         #
         # `--timeout` turns a hung test into a named failure instead of a dead job.
         # Without it the run that hangs reports nothing at all: pytest prints its
@@ -200,18 +216,22 @@ jobs:
         # case that was observed would buy one more 74-minute run to discover the
         # next one. The two cheap cases go with them, which is the price.
         #
-        # It passes locally in 16 seconds, and `probes` has since said why: the stall
-        # is an allocation this machine cannot satisfy, not a deadlock. With XLA's
-        # multi-threaded Eigen off, three of the four pass and the fourth reports
-        # `RESOURCE_EXHAUSTED: Out of memory allocating 11559862304 bytes` at the
-        # same frame every hang stack ends on. 11.6 GB asked of a 7.9 GB runner.
+        # Down to one case, and the reason the other three came back is the
+        # `XLA_FLAGS` line above rather than anything in this file. Sampling the
+        # resident set *while* they ran separated two failures that had looked like
+        # one: with XLA's Eigen pool serialised, `ellipse lx`, `rectangle lx` and
+        # `rectangle angle` pass in 91 seconds, and `overlapping pair` fails with
+        # `RESOURCE_EXHAUSTED: Out of memory allocating 11559862304 bytes` after
+        # climbing to 6347 MiB with 943 MiB left. The first three were a deadlock;
+        # this one is a genuine 11.6 GB request against a 7.9 GB runner, and no flag
+        # will change that.
         #
-        # So this is a fact about the runner for three of them and a fact about the
-        # test for `overlapping pair`, which wants more memory than a hosted runner
-        # has. The deselect stays whole until `probes` reproduces the split here.
+        # So it stays deselected as a fact about the test rather than the runner, and
+        # it wants a decision this file cannot make: whether a backward pass over a
+        # 98-square problem should be asking for eleven gigabytes at all.
         run: >
           pytest tests -v --timeout=1200 --timeout-method=thread
-          --deselect 'tests/test_frozen_geometry.py::test_a_frozen_geometry_makes_a_shape_parameter_traceable'
+          --deselect 'tests/test_frozen_geometry.py::test_a_frozen_geometry_makes_a_shape_parameter_traceable[overlapping pair-<lambda>-120.0]'
 
   # Temporary, non-blocking, and paired with the `--deselect` in `test`. A bench, not a
   # gate: `continue-on-error` at the job and at every arm. Delete it with the deselect.
