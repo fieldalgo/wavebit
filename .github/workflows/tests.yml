@@ -200,29 +200,63 @@ jobs:
         # case that was observed would buy one more 74-minute run to discover the
         # next one. The two cheap cases go with them, which is the price.
         #
-        # It passes locally in 16 seconds, so this is a fact about the runner and
-        # not about the feature. Restore it once `probes` says which.
+        # It passes locally in 16 seconds, and `probes` has since said why: the stall
+        # is an allocation this machine cannot satisfy, not a deadlock. With XLA's
+        # multi-threaded Eigen off, three of the four pass and the fourth reports
+        # `RESOURCE_EXHAUSTED: Out of memory allocating 11559862304 bytes` at the
+        # same frame every hang stack ends on. 11.6 GB asked of a 7.9 GB runner.
+        #
+        # So this is a fact about the runner for three of them and a fact about the
+        # test for `overlapping pair`, which wants more memory than a hosted runner
+        # has. The deselect stays whole until `probes` reproduces the split here.
         run: >
           pytest tests -v --timeout=1200 --timeout-method=thread
           --deselect 'tests/test_frozen_geometry.py::test_a_frozen_geometry_makes_a_shape_parameter_traceable'
 
   # Temporary, non-blocking, and paired with the `--deselect` in `test`. A bench, not a
-  # gate: `continue-on-error` at the job and at every arm, because an arm that is expected
-  # to be inconclusive some of the time must not colour the run. Delete it with the
-  # deselect.
+  # gate: `continue-on-error` at the job and at every arm. Delete it with the deselect.
   #
-  # The three hang arms that stood here are gone, having answered. Across three runs the
-  # control, `--xla_cpu_multi_thread_eigen=false` and unpinned BLAS all stalled the same
-  # way, so neither XLA's Eigen pool nor OpenBLAS re-entrancy is the subject and running
-  # them again buys nothing. They also cost 5 minutes each, and in run 33840949962 the runner
-  # was reclaimed 8m32s in, after two of them, with every step below still `skipped` --
-  # `if: always()` holds only while the job is alive. Three arms whose answer was known
-  # starved two whose answer was not. So: shortest and least certain first.
+  # THE ANSWER, and it is memory. Run 33761907085 ran three arms against the stalling test
+  # and I read it wrong, twice over. Attributing each pytest group to its step by the env it
+  # carries -- the `XLA_FLAGS` group is the second -- gives:
+  #
+  #   control    2 timeout markers, no summary line: the process was killed. HUNG.
+  #   eigen      no timeout marker at all, and a summary. `ellipse lx`, `rectangle lx` and
+  #              `rectangle angle` PASSED. `overlapping pair` failed with
+  #              `RESOURCE_EXHAUSTED: Out of memory allocating 11559862304 bytes` at
+  #              jax/_src/array.py:642.
+  #   unpinned   2 timeout markers, no summary. HUNG.
+  #
+  # `array.py:642` is the frame every hang stack ends on. So the stall is not a deadlock; it
+  # is an allocation the machine cannot satisfy, and `--xla_cpu_multi_thread_eigen=false`
+  # does not fix it so much as make it *report*. 11.6 GB asked of a 7.9 GB runner. The three
+  # lighter cases fit once the serial path stops inflating them.
+  #
+  # It also fits everything else that was measured and misread. The size threshold ([1, 1]
+  # fine, [2, 2] up hangs) is 18 square against 50 against 98. Shape-vs-thickness is the size
+  # of the backward graph. Eager grad never materialises the fused backward at once. And the
+  # memory hypothesis was raised first and dismissed on `free -m` readings taken BEFORE and
+  # AFTER the step rather than during the stall -- 975 MB used, zero swap, and the process
+  # that would have shown otherwise was the one not running yet.
+  #
+  # Local peaks for scale, on a 10-core machine where all four pass: 2.32 GB for the four
+  # together, 3.98 GB for `overlapping pair` alone. The runner asked for 11.6 GB in one
+  # allocation.
+  #
+  # So this job is now two arms over the deselected tests themselves, with the memory
+  # sampled WHILE they run, which is the measurement that was missing. Everything else is
+  # deleted: the eig reproducer (its scene `A(x) = xB + (1+x)I` commutes with B, so the
+  # eigenvectors are independent of x -- `sum(Re V)` differentiates to -4.5e-13 there -- and
+  # the term added to fix that is `V diag(w) V^-1`, which IS A, contributing exactly
+  # `grad sum(|A|)` to twelve digits; it cleared the eigenvalue backward and nothing else),
+  # and both bit-identity arms (43c0756 answered that one and shipped the tolerance; the
+  # arms still byte-compare the seam the suite deliberately stopped asserting, merge it with
+  # the comparison still held exact, and print `max |d|` for a pair that is the same array).
   probes:
     name: probes
     runs-on: ubuntu-latest
     continue-on-error: true
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
 
@@ -237,400 +271,78 @@ jobs:
       - name: Install Wavebit with both optional backends
         run: pip install -e '.[jax,pytorch,contour]' pytest pytest-timeout
 
+      # The CPU model and the BLAS build are here because two claims in this file's history
+      # needed them and could not be checked: `probes` and `test` are separate jobs and so
+      # separate VMs, and a per-machine effect compared across them is not comparable at all
+      # unless both ends say which machine they were.
       - name: What the runner is
-        run: free -m && nproc && python -c "import jax, jaxlib; print('jax', jax.__version__, 'jaxlib', jaxlib.__version__)"
-
-      # Which ingredient of the stalled test hangs. Three runs have now named
-      # `test_a_frozen_geometry_makes_a_shape_parameter_traceable` and pointed at the same
-      # line; none has said whether the eig, our gradient rule, or the solver around them is
-      # the part that does not come back. Two arms on a bare 98x98 -- upstream's own eig
-      # rule via `enable_eigvec_derivs=True`, and `wavebit._core.backend.eig`, which is
-      # `enable_eigvec_derivs=False` under a `custom_vjp` with `_eig_grad`. It carries its
-      # own `faulthandler` deadline, so a hang reports every thread's stack rather than
-      # waiting for the job's clock to end it.
-      #
-      # One-sided, and worth saying so: a hang locates the ingredient, a clean run does not
-      # clear it. Neither arm carries the layer chain, the cascade or the frozen-geometry
-      # replay, so "did not reproduce" means "not this alone".
-      # Which ingredient above the eig makes `jit(grad(solve))` stop coming back.
-      #
-      # Settled so far. Run 33847846023 cleared the eig: a bare 98x98 under `jit(grad)`,
-      # upstream's rule or ours, comes back in 0.6s on these runners. Run 33848611699 split
-      # the scene -- `control` hung, `small` ([1, 1], shapes and freeze kept) came back in
-      # 4.49s, `uniform` ([3, 3], shapes and freeze dropped) in 3.41s -- so neither the
-      # geometry nor the size is sufficient alone. Run 33856476682 then found the seam:
-      # `thickness` keeps the patterned layer, the frozen replay AND [3, 3], moving only
-      # the traced parameter off the shape onto the thickness, and comes back in 2.88s,
-      # while `mid` hangs at [2, 2]. So it is differentiating a *shape* parameter through
-      # the replay, from [2, 2] up. Those four arms have answered and are retired.
-      #
-      # The li/nvf axis turned out not to exist on that scene:
-      # `_FACTORIZATION_IMPLEMENTED_BY` pins the parametric path to NVF and
-      # `_COEFFICIENTS_IMPLEMENTED_BY` to INTEGRATED, and the refusal says why -- a
-      # parametric shape has no samples to take. Three of the four pairings raise
-      # `NotImplementedError` there; the stalling test was always `integrated-nvf`.
-      #
-      # So the pairing is asked of a raster, where both axes are free, at the size that
-      # hangs, with `jit(grad)` composed -- which the suite never does anywhere: its own
-      # raster test takes `jit(loss)` and `grad(loss)` separately. Read the answer narrowly.
-      # A raster's traced parameter is a pixel value and not a length, so this varies the
-      # machinery under a different input rather than reproducing the stalling gradient. If
-      # `integrated-nvf` hangs and `sampled-li` does not, that pairing stalls on its own; if
-      # neither does, the subject is specific to the shape-parameter path.
-      - name: bisect -- write the probe
-        if: always()
         run: |
-          cat > /tmp/hang_bisect.py <<'BISECT'
-          """Which ingredient above the eig makes `jit(grad(solve))` stop coming back.
+          free -m && nproc
+          grep -m1 'model name' /proc/cpuinfo || true
+          python -c "import numpy, jax, jaxlib; print('numpy', numpy.__version__, 'jax', jax.__version__, 'jaxlib', jaxlib.__version__); print('blas', numpy.show_config('dicts')['Build Dependencies']['blas'])"
 
-          Run 33847... cleared the eig itself: a bare 98x98 under `jit(grad)`, with upstream's rule
-          or with `_core.backend.eig`, finishes in under a second on the same two-core runner. So
-          the hang needs something the solver puts around it, and this takes the real scene apart
-          one piece at a time. Every arm is a real `wavebit.rcwa(...).solve()` under
-          `jit(jax.grad(...))`, the exact call that stalls.
+      - name: Write the memory-sampling runner
+        run: |
+          cat > /tmp/with_rss.sh <<'RSS'
+          #!/usr/bin/env bash
+          # Samples the child's resident set WHILE it runs. Measuring before and after is
+          # what hid this for five runs: a stall that is an allocation shows up only during.
+          "$@" &
+          pid=$!
+          hwm=0
+          while kill -0 $pid 2>/dev/null; do
+            if [ -r /proc/$pid/status ]; then
+              rss=$(awk '/^VmRSS:/{print $2}' /proc/$pid/status 2>/dev/null)
+              peak=$(awk '/^VmHWM:/{print $2}' /proc/$pid/status 2>/dev/null)
+              [ -n "$peak" ] && [ "$peak" -gt "$hwm" ] && hwm=$peak
+              [ -n "$rss" ] && echo "  [rss] $((rss/1024)) MiB now, $((hwm/1024)) MiB peak, $(awk '/^MemAvailable:/{print int($2/1024)}' /proc/meminfo) MiB available"
+            fi
+            sleep 10
+          done
+          wait $pid
+          rc=$?
+          echo "  [rss] peak $((hwm/1024)) MiB, exit $rc"
+          exit $rc
+          RSS
+          chmod +x /tmp/with_rss.sh
 
-            small     the scene, at truncation_order [1, 1] instead of [3, 3]. If this hangs the
-                      subject is not size, and every matrix in the program is tiny.
-            uniform   one layer with no shapes and no `freeze_geometry`, the traced parameter being
-                      the permittivity itself. This is the solve with the geometry build and the
-                      frozen replay taken out and nothing else changed.
-            control   the scene as the test writes it. Here to prove the harness reproduces at all;
-                      an arm that passes means nothing if the control passes too.
-
-          Ordered least-certain first and each in its own step, because a hung arm takes its process
-          with it and the arm whose answer is already known must not be the one that runs first.
-          """
-          import faulthandler
-          import os
-          import time
-
-          import numpy as np
-
-          import jax
-          import jax.numpy as jnp
-
-          import wavebit
-
-          ARM = os.environ.get('ARM', 'control')
-          BUDGET = int(os.environ.get('ARM_BUDGET', 240))
-
-          wavebit.enable_x64()
-          faulthandler.dump_traceback_later(BUDGET, exit=True)
-
-          # The strategy pairing is a second axis, defaulted to what the stalling test runs. Both
-          # halves have to reach `freeze_geometry` as well as `solve`, or the record describes a
-          # build the traced call is not making -- which is why they live in CFG rather than in the
-          # solve call.
-          CFG = dict(period=[300.0, 300.0], thickness=[205.0], top=1.0, bot=1.0,
-                     theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0,
-                     fourier_coefficients=os.environ.get('FC', 'sampled'),
-                     factorization=os.environ.get('FACT', 'li'))
-
-
-          def scene(v):
-              return [dict(background=12.25, shapes=[dict(type='ellipse', cx=-10.0, cy=10.0,
-                                                          lx=v, ly=55.0, angle=0.27, material=4.0)])]
-
-
-          ORDERS = {'small': [1, 1], 'mid': [2, 2]}.get(ARM, [3, 3])
-
-          if ARM.startswith('raster'):
-              # The parametric path cannot answer the li/nvf question: `_FACTORIZATION_IMPLEMENTED_BY`
-              # pins it to NVF and `_COEFFICIENTS_IMPLEMENTED_BY` to INTEGRATED, and the refusal says
-              # why -- a parametric shape has no samples to take. So the pairing is asked of a raster,
-              # where both axes are free, at the size that hangs.
-              #
-              # Not an equivalent experiment and it should not be read as one: a raster's traced
-              # parameter is a pixel value, not a length, so this varies the machinery under a
-              # different input rather than reproducing the stalling gradient. What it can say is
-              # whether `integrated` + `nvf` stalls on its own.
-              #
-              # `jit(grad)` composed, which is the shape the suite never runs. Its own raster test
-              # takes `jit(loss)` and `grad(loss)` separately and never the composition.
-              RASTER = np.random.default_rng(0).uniform(1.0, 4.0, (1, 64, 64)) ** 2
-              x0 = 1.0
-              fc, fact = ('integrated', 'nvf') if 'nvf' in ARM else ('sampled', 'li')
-              CFG.update(fourier_coefficients=fc, factorization=fact)
-              _solver = wavebit.rcwa(backend=1, structure=RASTER, truncation_order=ORDERS, **CFG)
-              frozen = _solver.freeze_geometry()
-
-              def total(v):
-                  return jnp.sum(_solver.solve(structure=jnp.asarray(RASTER) * v,
-                                               geometry=frozen).given.T).real
-          elif ARM == 'uniform':
-              # No shapes and no freeze: the solve with the geometry build and the frozen replay
-              # taken out, at the size that hangs.
-              x0 = 12.25
-
-              def total(v):
-                  return jnp.sum(wavebit.rcwa(backend=1, structure=[dict(background=v)],
-                                              truncation_order=ORDERS, **CFG).solve().T).real
-          elif ARM == 'thickness':
-              # The patterned scene, the frozen replay still in the path, the size that hangs -- and
-              # the traced parameter moved off the shape. If this comes back, the subject is the
-              # gradient path *through* the replay and not the fact that the layer is patterned.
-              x0 = 205.0
-              frozen = wavebit.rcwa(backend=1, structure=scene(85.0),
-                                    truncation_order=ORDERS, **CFG).freeze_geometry()
-
-              def total(v):
-                  cfg = dict(CFG, thickness=[v])
-                  return jnp.sum(wavebit.rcwa(backend=1, structure=scene(85.0),
-                                              truncation_order=ORDERS,
-                                              **cfg).solve(geometry=frozen).T).real
-          else:
-              x0 = 85.0
-              frozen = wavebit.rcwa(backend=1, structure=scene(jnp.asarray(x0)),
-                                    truncation_order=ORDERS, **CFG).freeze_geometry()
-
-              def total(v):
-                  return jnp.sum(wavebit.rcwa(backend=1, structure=scene(v), truncation_order=ORDERS,
-                                              **CFG).solve(geometry=frozen).T).real
-
-
-          x = jnp.asarray(x0)
-          print(f'[{ARM}] to={ORDERS} {CFG["fourier_coefficients"]}-{CFG["factorization"]} '
-                f'cores={os.cpu_count()} jax={jax.__version__}', flush=True)
-
-          for label, fn in (('eager', total),
-                            ('eager grad', jax.grad(total)),
-                            ('jit(grad)', jax.jit(jax.grad(total)))):
-              t = time.perf_counter()
-              got = float(fn(x))
-              print(f'[{ARM}] {label:11s} {got:+.8e} in {time.perf_counter() - t:6.2f}s', flush=True)
-
-          faulthandler.cancel_dump_traceback_later()
-          print(f'[{ARM}] finished, no hang')
-          BISECT
-
-      - name: bisect -- raster-sampled-li
+      # The four parametrisations `test` deselects, run directly rather than modelled. 180s
+      # per test: they take 16s on a developer machine and the stall has never been within an
+      # order of that. `thread`, because `signal` never fires here -- the process is inside a
+      # C allocation and no bytecode boundary arrives.
+      - name: deselected tests -- XLA as the suite runs it
         if: always()
         continue-on-error: true
         env:
-          ARM: raster-sampled-li
-          ARM_BUDGET: 180
-          OPENBLAS_NUM_THREADS: 1
-          OMP_NUM_THREADS: 1
-          MKL_NUM_THREADS: 1
-          NUMEXPR_NUM_THREADS: 1
-          VECLIB_MAXIMUM_THREADS: 1
-        run: python /tmp/hang_bisect.py
-
-      - name: bisect -- raster-integrated-nvf
-        if: always()
-        continue-on-error: true
-        env:
-          ARM: raster-integrated-nvf
-          ARM_BUDGET: 180
-          OPENBLAS_NUM_THREADS: 1
-          OMP_NUM_THREADS: 1
-          MKL_NUM_THREADS: 1
-          NUMEXPR_NUM_THREADS: 1
-          VECLIB_MAXIMUM_THREADS: 1
-        run: python /tmp/hang_bisect.py
-
-      - name: bisect -- control
-        if: always()
-        continue-on-error: true
-        env:
-          ARM: control
-          ARM_BUDGET: 180
-          OPENBLAS_NUM_THREADS: 1
-          OMP_NUM_THREADS: 1
-          MKL_NUM_THREADS: 1
-          NUMEXPR_NUM_THREADS: 1
-          VECLIB_MAXIMUM_THREADS: 1
-        run: python /tmp/hang_bisect.py
-
-      - name: eig hang -- is it the eig, or ours, or neither
-        if: always()
-        continue-on-error: true
-        env:
-          EIG_ITERS: 8
           OPENBLAS_NUM_THREADS: 1
           OMP_NUM_THREADS: 1
           MKL_NUM_THREADS: 1
           NUMEXPR_NUM_THREADS: 1
           VECLIB_MAXIMUM_THREADS: 1
         run: |
-          python - <<'EIGREPRO'
-          """Which ingredient of the stalled test hangs: the eig, our gradient rule, or neither.
+          /tmp/with_rss.sh python -m pytest \
+            'tests/test_frozen_geometry.py::test_a_frozen_geometry_makes_a_shape_parameter_traceable' \
+            -v --timeout=180 --timeout-method=thread -p no:cacheprovider
 
-          `test_a_frozen_geometry_makes_a_shape_parameter_traceable` stalls inside
-          `float(jax.jit(jax.grad(total))(x))` on GitHub's two-core runners -- 5h, then 2h, then
-          past every bound since -- and takes 16s on a ten-core developer machine. The eager grad
-          one line above completes every time, and the compiled program's expensive contents are
-          one `lax.linalg.eig` on a 2*n_orders square, 98 for that test's truncation_order.
-
-          Two arms on a random 98x98, no solver and no geometry in either:
-
-            jax       `lax.linalg.eig(enable_eigvec_derivs=True)` -- upstream's own rule.
-            wavebit   `wavebit._core.backend.eig` -- `enable_eigvec_derivs=False` under a
-                      `custom_vjp` with `_eig_grad`, which is what the solver actually runs.
-
-          The asymmetry is worth stating: a hang here locates the ingredient, and a clean run does
-          NOT clear it. Neither arm carries the solver's layer chain, its scattering cascade or its
-          frozen-geometry replay, so "did not reproduce" means "not this alone", not "not ours".
-          """
-          import faulthandler
-          import os
-          import sys
-          import time
-
-          import jax
-          import jax.numpy as jnp
-          import jax.lax.linalg as jll
-
-          N = int(os.environ.get('EIG_N', 98))
-          ITERS = int(os.environ.get('EIG_ITERS', 20))
-          BUDGET = int(os.environ.get('EIG_BUDGET', 240))
-
-          jax.config.update('jax_enable_x64', True)
-          # Self-report rather than be killed by the job's clock: dumps every thread's stack.
-          faulthandler.dump_traceback_later(BUDGET, exit=True)
-
-          B = (jax.random.normal(jax.random.PRNGKey(0), (N, N), dtype=jnp.float64)
-               + 1j * jax.random.normal(jax.random.PRNGKey(1), (N, N), dtype=jnp.float64))
-
-
-          def make(which):
-              if which == 'wavebit':
-                  from wavebit._core.backend import eig as _eig
-              else:
-                  def _eig(A):
-                      return jll.eig(A, compute_left_eigenvectors=False,
-                                     compute_right_eigenvectors=True, enable_eigvec_derivs=True)
-
-              def f(x):
-                  A = B * x + jnp.eye(N, dtype=jnp.complex128) * (1.0 + x)
-                  w, V = _eig(A)
-                  # Rebuilding A from its own decomposition, which is the shape a layer uses and,
-                  # more to the point, the only term tried here that the eigenvectors actually reach.
-                  # Two that look like they do and do not: `sum(|solve(V, 1)|^2)` and `sum(Re V)`
-                  # each move the gradient by under 1e-9 on both arms, against a base of 7.32e+03.
-                  # This one moves it to 1.94e+04. A term that reads as exercising V without moving
-                  # the gradient would make both arms an eigenvalue test under another name.
-                  return jnp.real(jnp.sum(w * jnp.conj(w))
-                                  + jnp.sum(jnp.abs(V @ jnp.diag(w) @ jnp.linalg.inv(V))))
-              return f
-
-
-          print(f'N={N} cores={os.cpu_count()} jax={jax.__version__}', flush=True)
-          for which in ('jax', 'wavebit'):
-              try:
-                  f = make(which)
-              except Exception as e:                                          # noqa: BLE001
-                  print(f'[{which}] unavailable: {type(e).__name__}: {e}', flush=True)
-                  continue
-              x = jnp.asarray(0.37)
-              t = time.perf_counter()
-              eager = float(jax.grad(f)(x))
-              print(f'[{which}] eager grad {eager:.6e} in {time.perf_counter() - t:.2f}s', flush=True)
-
-              g = jax.jit(jax.grad(f))
-              worst = 0.0
-              for i in range(ITERS):
-                  t = time.perf_counter()
-                  got = float(g(jnp.asarray(0.37 + 0.001 * i)))
-                  dt = time.perf_counter() - t
-                  if dt > 20:
-                      print(f'[{which}] iter {i}: {dt:.1f}s  <-- slow', flush=True)
-                  worst = max(worst, dt)
-              print(f'[{which}] jit(grad) x{ITERS}: worst {worst:.2f}s, last {got:.6e}', flush=True)
-
-          faulthandler.cancel_dump_traceback_later()
-          print('finished, no hang')
-          sys.exit(0)
-          EIGREPRO
-
-      # Written once, run twice. Run 33820383369 measured the bare version on a runner and
-      # got 0 divergences in 25 iterations -- 100 solves -- while the suite in the *same run*
-      # failed the test. So the flake needs the suite's context, and the obvious candidate is
-      # what has been imported by then: the failing test sits about 700 tests in, and torch
-      # and jax are both long since loaded. torch ships its own OpenMP runtime on Linux, and
-      # a second OMP runtime in the process changes how OpenBLAS below numpy behaves --
-      # `OPENBLAS_NUM_THREADS=1` does not prevent that, it only sets a count.
-      #
-      # If only the preloaded arm diverges, that is the hole in this file's thread pinning,
-      # named. If neither does, the context is something else and the next thing to vary is
-      # which tests ran, not what was imported.
-      - name: bit identity -- write the probe
+      # The same four with XLA's multi-threaded Eigen off. Run 33761907085 says three of them
+      # pass this way and the fourth reports its 11.6 GB rather than stalling on it. If that
+      # reproduces here, the deselect can come off for the three and `overlapping pair` needs
+      # a decision of its own -- it wants more memory than this runner has, which is a fact
+      # about the test and not about the flag.
+      - name: deselected tests -- serial Eigen
         if: always()
+        continue-on-error: true
+        env:
+          XLA_FLAGS: --xla_cpu_multi_thread_eigen=false
+          OPENBLAS_NUM_THREADS: 1
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          NUMEXPR_NUM_THREADS: 1
+          VECLIB_MAXIMUM_THREADS: 1
         run: |
-          cat > /tmp/bitprobe.py <<'PROBE'
-          import os
-          import sys
-          import numpy as np
-
-          if os.environ.get('PROBE_PRELOAD'):
-              import torch                      # noqa: F401
-              import jax                        # noqa: F401
-              print(f'preloaded torch {torch.__version__}, jax {jax.__version__}, '
-                    f'torch threads {torch.get_num_threads()}')
-
-          sys.path.insert(0, '.')
-          sys.path.insert(0, 'tests')
-          from test_answers_declaration import _solver, RUNGS
-
-          FIELDS = ('R_s', 'R_p', 'T_s', 'T_p')
-
-          def once(rung, algo='SMM'):
-              r = _solver(answers=rung, layer_algorithm=algo).solve()
-              out = {'T': np.asarray(r.T), 'R': np.asarray(r.R)}
-              for k in FIELDS:
-                  v = getattr(r.given, k, None)
-                  if v is not None:
-                      out[k] = np.asarray(v)
-              return out
-
-          def differ(x, y):
-              return x.tobytes() != y.tobytes()
-
-          rung_bad = repeat_bad = 0
-          N = 25
-          for i in range(N):
-              a, b, c = once('efficiency'), once('amplitude'), once('field')
-              d = once('efficiency')                      # the control: same rung, again
-              across = [k for k in ('T', 'R') if differ(a[k], b[k]) or differ(a[k], c[k])]
-              amps = [k for k in FIELDS if k in b and k in c and differ(b[k], c[k])]
-              repeat = [k for k in ('T', 'R') if differ(a[k], d[k])]
-              if (across or amps) and rung_bad == 0:
-                  k = (across + amps)[0]
-                  ref, alt = a.get(k, b.get(k)), b.get(k, c.get(k))
-                  print(f'iter {i}: rungs differ in {across + amps}, '
-                        f'max |d| {np.abs(ref - alt).max():.3e}')
-              if repeat and repeat_bad == 0:
-                  k = repeat[0]
-                  print(f'iter {i}: SAME rung twice differs in {repeat}, '
-                        f'max |d| {np.abs(a[k] - d[k]).max():.3e}  <-- control fired')
-              rung_bad += bool(across or amps)
-              repeat_bad += bool(repeat)
-          print(f'{N} iterations: rungs differed {rung_bad}, '
-                f'same-rung-repeat differed {repeat_bad}')
-          PROBE
-
-      - name: bit identity -- bare process
-        if: always()
-        continue-on-error: true
-        env:
-          OPENBLAS_NUM_THREADS: 1
-          OMP_NUM_THREADS: 1
-          MKL_NUM_THREADS: 1
-          NUMEXPR_NUM_THREADS: 1
-          VECLIB_MAXIMUM_THREADS: 1
-        run: python /tmp/bitprobe.py
-
-      - name: bit identity -- after torch and jax are loaded
-        if: always()
-        continue-on-error: true
-        env:
-          PROBE_PRELOAD: 1
-          OPENBLAS_NUM_THREADS: 1
-          OMP_NUM_THREADS: 1
-          MKL_NUM_THREADS: 1
-          NUMEXPR_NUM_THREADS: 1
-          VECLIB_MAXIMUM_THREADS: 1
-        run: python /tmp/bitprobe.py
+          /tmp/with_rss.sh python -m pytest \
+            'tests/test_frozen_geometry.py::test_a_frozen_geometry_makes_a_shape_parameter_traceable' \
+            -v --timeout=180 --timeout-method=thread -p no:cacheprovider
 
   examples:
     name: examples smoke
