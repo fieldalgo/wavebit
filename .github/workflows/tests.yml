@@ -252,6 +252,138 @@ jobs:
       # One-sided, and worth saying so: a hang locates the ingredient, a clean run does not
       # clear it. Neither arm carries the layer chain, the cascade or the frozen-geometry
       # replay, so "did not reproduce" means "not this alone".
+      # Which ingredient above the eig makes `jit(grad(solve))` stop coming back. Run 33847846023
+      # cleared the eig itself -- a bare 98x98 under `jit(grad)`, with upstream's rule or
+      # with ours, finished in under a second on the same two-core runner -- so the hang
+      # needs something the solver puts around it. Every arm below is a real
+      # `rcwa(...).solve()` under `jit(jax.grad(...))`, the call that stalls, with one piece
+      # of the scene removed. The script says which piece and why.
+      #
+      # Each arm is its own step: a hung one takes its process with it, and `if: always()`
+      # does not survive the runner going away, which is how run 33840949962 left five
+      # steps `skipped`. Least certain first, control last.
+      #
+      # Not named bisect.py on disk. It was, and it shadowed the stdlib `bisect` that jax
+      # imports, which comes back as a circular-import traceback pointing at
+      # `jax/_src/lax/linalg.py` and says nothing about the cause.
+      - name: bisect -- write the probe
+        if: always()
+        run: |
+          cat > /tmp/hang_bisect.py <<'BISECT'
+          """Which ingredient above the eig makes `jit(grad(solve))` stop coming back.
+
+          Run 33847846023 cleared the eig itself: a bare 98x98 under `jit(grad)`, with upstream's rule
+          or with `_core.backend.eig`, finishes in under a second on the same two-core runner. So
+          the hang needs something the solver puts around it, and this takes the real scene apart
+          one piece at a time. Every arm is a real `wavebit.rcwa(...).solve()` under
+          `jit(jax.grad(...))`, the exact call that stalls.
+
+            small     the scene, at truncation_order [1, 1] instead of [3, 3]. If this hangs the
+                      subject is not size, and every matrix in the program is tiny.
+            uniform   one layer with no shapes and no `freeze_geometry`, the traced parameter being
+                      the permittivity itself. This is the solve with the geometry build and the
+                      frozen replay taken out and nothing else changed.
+            control   the scene as the test writes it. Here to prove the harness reproduces at all;
+                      an arm that passes means nothing if the control passes too.
+
+          Ordered least-certain first and each in its own step, because a hung arm takes its process
+          with it and the arm whose answer is already known must not be the one that runs first.
+          """
+          import faulthandler
+          import os
+          import time
+
+          import numpy as np
+
+          import jax
+          import jax.numpy as jnp
+
+          import wavebit
+
+          ARM = os.environ.get('ARM', 'control')
+          BUDGET = int(os.environ.get('ARM_BUDGET', 240))
+
+          wavebit.enable_x64()
+          faulthandler.dump_traceback_later(BUDGET, exit=True)
+
+          CFG = dict(period=[300.0, 300.0], thickness=[205.0], top=1.0, bot=1.0,
+                     theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0)
+
+
+          def scene(v):
+              return [dict(background=12.25, shapes=[dict(type='ellipse', cx=-10.0, cy=10.0,
+                                                          lx=v, ly=55.0, angle=0.27, material=4.0)])]
+
+
+          if ARM == 'uniform':
+              to, x0 = [3, 3], 12.25
+
+              def total(v):
+                  return jnp.sum(wavebit.rcwa(backend=1, structure=[dict(background=v)],
+                                              truncation_order=to, **CFG).solve().T).real
+          else:
+              to, x0 = ([1, 1] if ARM == 'small' else [3, 3]), 85.0
+              frozen = wavebit.rcwa(backend=1, structure=scene(jnp.asarray(x0)),
+                                    truncation_order=to, **CFG).freeze_geometry()
+
+              def total(v):
+                  return jnp.sum(wavebit.rcwa(backend=1, structure=scene(v), truncation_order=to,
+                                              **CFG).solve(geometry=frozen).T).real
+
+
+          x = jnp.asarray(x0)
+          print(f'[{ARM}] to={to} cores={os.cpu_count()} jax={jax.__version__}', flush=True)
+
+          for label, fn in (('eager', total),
+                            ('eager grad', jax.grad(total)),
+                            ('jit(grad)', jax.jit(jax.grad(total)))):
+              t = time.perf_counter()
+              got = float(fn(x))
+              print(f'[{ARM}] {label:11s} {got:+.8e} in {time.perf_counter() - t:6.2f}s', flush=True)
+
+          faulthandler.cancel_dump_traceback_later()
+          print(f'[{ARM}] finished, no hang')
+          BISECT
+
+      - name: bisect -- small
+        if: always()
+        continue-on-error: true
+        env:
+          ARM: small
+          ARM_BUDGET: 240
+          OPENBLAS_NUM_THREADS: 1
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          NUMEXPR_NUM_THREADS: 1
+          VECLIB_MAXIMUM_THREADS: 1
+        run: python /tmp/hang_bisect.py
+
+      - name: bisect -- uniform
+        if: always()
+        continue-on-error: true
+        env:
+          ARM: uniform
+          ARM_BUDGET: 240
+          OPENBLAS_NUM_THREADS: 1
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          NUMEXPR_NUM_THREADS: 1
+          VECLIB_MAXIMUM_THREADS: 1
+        run: python /tmp/hang_bisect.py
+
+      - name: bisect -- control
+        if: always()
+        continue-on-error: true
+        env:
+          ARM: control
+          ARM_BUDGET: 240
+          OPENBLAS_NUM_THREADS: 1
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          NUMEXPR_NUM_THREADS: 1
+          VECLIB_MAXIMUM_THREADS: 1
+        run: python /tmp/hang_bisect.py
+
       - name: eig hang -- is it the eig, or ours, or neither
         if: always()
         continue-on-error: true
