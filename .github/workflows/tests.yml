@@ -394,6 +394,118 @@ jobs:
           VECLIB_MAXIMUM_THREADS: 1
         run: python /tmp/bitprobe.py
 
+      # Which ingredient of the stalled test hangs. Three runs have now named
+      # `test_a_frozen_geometry_makes_a_shape_parameter_traceable` and pointed at the same
+      # line; none has said whether the eig, our gradient rule, or the solver around them is
+      # the part that does not come back. Two arms on a bare 98x98 -- upstream's own eig
+      # rule via `enable_eigvec_derivs=True`, and `wavebit._core.backend.eig`, which is
+      # `enable_eigvec_derivs=False` under a `custom_vjp` with `_eig_grad`. It carries its
+      # own `faulthandler` deadline, so a hang reports every thread's stack rather than
+      # waiting for the job's clock to end it.
+      #
+      # One-sided, and worth saying so: a hang locates the ingredient, a clean run does not
+      # clear it. Neither arm carries the layer chain, the cascade or the frozen-geometry
+      # replay, so "did not reproduce" means "not this alone".
+      - name: eig hang -- is it the eig, or ours, or neither
+        if: always()
+        continue-on-error: true
+        env:
+          OPENBLAS_NUM_THREADS: 1
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          NUMEXPR_NUM_THREADS: 1
+          VECLIB_MAXIMUM_THREADS: 1
+        run: |
+          python - <<'EIGREPRO'
+          """Which ingredient of the stalled test hangs: the eig, our gradient rule, or neither.
+
+          `test_a_frozen_geometry_makes_a_shape_parameter_traceable` stalls inside
+          `float(jax.jit(jax.grad(total))(x))` on GitHub's two-core runners -- 5h, then 2h, then
+          past every bound since -- and takes 16s on a ten-core developer machine. The eager grad
+          one line above completes every time, and the compiled program's expensive contents are
+          one `lax.linalg.eig` on a 2*n_orders square, 98 for that test's truncation_order.
+
+          Two arms on a random 98x98, no solver and no geometry in either:
+
+            jax       `lax.linalg.eig(enable_eigvec_derivs=True)` -- upstream's own rule.
+            wavebit   `wavebit._core.backend.eig` -- `enable_eigvec_derivs=False` under a
+                      `custom_vjp` with `_eig_grad`, which is what the solver actually runs.
+
+          The asymmetry is worth stating: a hang here locates the ingredient, and a clean run does
+          NOT clear it. Neither arm carries the solver's layer chain, its scattering cascade or its
+          frozen-geometry replay, so "did not reproduce" means "not this alone", not "not ours".
+          """
+          import faulthandler
+          import os
+          import sys
+          import time
+
+          import jax
+          import jax.numpy as jnp
+          import jax.lax.linalg as jll
+
+          N = int(os.environ.get('EIG_N', 98))
+          ITERS = int(os.environ.get('EIG_ITERS', 20))
+          BUDGET = int(os.environ.get('EIG_BUDGET', 240))
+
+          jax.config.update('jax_enable_x64', True)
+          # Self-report rather than be killed by the job's clock: dumps every thread's stack.
+          faulthandler.dump_traceback_later(BUDGET, exit=True)
+
+          B = (jax.random.normal(jax.random.PRNGKey(0), (N, N), dtype=jnp.float64)
+               + 1j * jax.random.normal(jax.random.PRNGKey(1), (N, N), dtype=jnp.float64))
+
+
+          def make(which):
+              if which == 'wavebit':
+                  from wavebit._core.backend import eig as _eig
+              else:
+                  def _eig(A):
+                      return jll.eig(A, compute_left_eigenvectors=False,
+                                     compute_right_eigenvectors=True, enable_eigvec_derivs=True)
+
+              def f(x):
+                  A = B * x + jnp.eye(N, dtype=jnp.complex128) * (1.0 + x)
+                  w, V = _eig(A)
+                  # Rebuilding A from its own decomposition, which is the shape a layer uses and,
+                  # more to the point, the only term tried here that the eigenvectors actually reach.
+                  # Two that look like they do and do not: `sum(|solve(V, 1)|^2)` and `sum(Re V)`
+                  # each move the gradient by under 1e-9 on both arms, against a base of 7.32e+03.
+                  # This one moves it to 1.94e+04. A term that reads as exercising V without moving
+                  # the gradient would make both arms an eigenvalue test under another name.
+                  return jnp.real(jnp.sum(w * jnp.conj(w))
+                                  + jnp.sum(jnp.abs(V @ jnp.diag(w) @ jnp.linalg.inv(V))))
+              return f
+
+
+          print(f'N={N} cores={os.cpu_count()} jax={jax.__version__}', flush=True)
+          for which in ('jax', 'wavebit'):
+              try:
+                  f = make(which)
+              except Exception as e:                                          # noqa: BLE001
+                  print(f'[{which}] unavailable: {type(e).__name__}: {e}', flush=True)
+                  continue
+              x = jnp.asarray(0.37)
+              t = time.perf_counter()
+              eager = float(jax.grad(f)(x))
+              print(f'[{which}] eager grad {eager:.6e} in {time.perf_counter() - t:.2f}s', flush=True)
+
+              g = jax.jit(jax.grad(f))
+              worst = 0.0
+              for i in range(ITERS):
+                  t = time.perf_counter()
+                  got = float(g(jnp.asarray(0.37 + 0.001 * i)))
+                  dt = time.perf_counter() - t
+                  if dt > 20:
+                      print(f'[{which}] iter {i}: {dt:.1f}s  <-- slow', flush=True)
+                  worst = max(worst, dt)
+              print(f'[{which}] jit(grad) x{ITERS}: worst {worst:.2f}s, last {got:.6e}', flush=True)
+
+          faulthandler.cancel_dump_traceback_later()
+          print('finished, no hang')
+          sys.exit(0)
+          EIGREPRO
+
   examples:
     name: examples smoke
     runs-on: ubuntu-latest
