@@ -79,7 +79,7 @@ import warnings
 
 import numpy as np
 
-from .conventions import order_azimuth, parse_order_pair
+from .conventions import order_azimuth, parse_order_pair, parse_period_mapping
 from .domain import as_material
 from .result import Result, ResultSub
 
@@ -2187,10 +2187,77 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
     # `mu` is the raster's permeability field, layer-major beside `structure`, and the two
     # half-spaces carry theirs inside their `Material` -- the same two spellings the RCWA path
     # takes, so one `Stack` reaches both solvers unchanged.
-    """Solve one TE or TM incidence in the time domain; returns a :class:`Result`.
+    """Solve one incidence in the time domain; returns a :class:`Result`.
 
     Every keyword this does not implement is refused by name rather than ignored -- see
     :func:`_refuse_out_of_scope`. The module docstring says why NumPy is the only backend.
+
+    The scene keywords are the RCWA path's, spelled the same way, so one ``Stack`` and one
+    ``Incidence`` reach both solvers unchanged. Everything under *the run* is this method's own:
+    a time-domain solve has a grid, a duration and an absorber where a harmonic one has a
+    truncation order. Each of their defaults was measured, and the constant that carries it
+    states the measurement -- ``PML_CELLS``, ``PAD_WAVELENGTHS``, ``COURANT``, ``N_PERIODS``,
+    ``CELLS_PER_WAVELENGTH``, ``GRADE_RATIO``.
+
+    Args:
+        structure: permittivity raster, ``(n_layers, Ny, Nx)``. ``Ny = 1`` is a grating
+            invariant along y; anything larger is a crossed grating. Real and positive -- a
+            complex value is refused, because one complex number describes a material at one
+            frequency and a run carries a whole band. Use ``dispersion`` / ``poles``.
+        thickness: one length per layer, in the unit ``period`` and ``wavelength`` share.
+        top: incidence half-space, as permittivity or a :class:`Material`.
+        bot: transmission half-space, same spellings.
+        period: the cell -- ``Lx``, ``[Lx, Ly]`` or ``dict(x=..., y=...)``. Required: a
+            ``lattice`` is refused, so a ``Stack`` built on one cannot reach this solver.
+        wavelength: one wavelength, or a band. A band costs **one** run: the running DFT
+            answers every wavelength in it at once (§8 of ``docs/fdtd.md``), which is the case
+            where this method beats the RCWA path outright.
+        tetm: ``'te'`` or ``'tm'``, the pure formulation. Give this or ``psi``, not both.
+        theta: polar angle in degrees. Real -- evanescent (complex-angle) incidence has no
+            propagating wave for the TFSF plane to inject, and is refused.
+        phi: azimuth in degrees. Non-zero couples the two polarisations, so it needs ``psi``.
+        psi: polarisation angle in degrees, the conical mount. Answered at any ``theta`` and
+            ``phi``; runs the two eigenpolarisations as separate legs and recombines them.
+        mu: permeability raster, laid out beside ``structure``. The half-spaces carry theirs
+            inside their :class:`Material`.
+        incidence_side: only ``'top'`` is implemented.
+        lattice: refused. The Yee grid is Cartesian; pass ``period``.
+
+        resolution: cells per unit length. Default ``CELLS_PER_WAVELENGTH * n_max /
+            wavelength`` -- 20 cells per wavelength **in the densest material in the scene**,
+            which is what the index has to be read for. This is the knob that costs: halving
+            ``dz`` is roughly 8x the work in 3D and buys second-order accuracy.
+        n_pml: CPML depth in cells (12). A correctly graded CPML is dz-independent, so cells
+            is the right unit -- and that conclusion was wrong once, in the direction of a
+            physical thickness, because the layer was broken rather than the unit.
+        n_periods: optical cycles to run (80). The pulse has to enter, scatter and leave
+            before the running DFT means anything. A run too short for the source even to
+            finish emitting is refused; one merely too short to settle warns
+            :class:`UnsettledFieldWarning` and reports ``residual``.
+        courant: fraction of the stability bound (0.99). The bound carries ``n_min``, so a
+            material faster than vacuum (``eps < 1``) is stable rather than divergent.
+        subpixel: smooth the permittivity at an interface (on). Harmonic along the component's
+            own axis, arithmetic along the others -- it is what buys second order on a
+            staircased boundary rather than first.
+        truncation_order: how many diffraction orders to report. Default is every order that
+            propagates, computed for the SHORTEST wavelength in the band.
+        dispersion: mask marking which cells of ``structure`` are dispersive.
+        poles: Drude/Lorentz pole list for those cells. ``structure`` then holds the real
+            ``eps_infinity``. :func:`permittivity_at` is the closed form being discretised.
+        pad_scale: multiplier on the clearance between the structure and the TFSF plane, the
+            monitors and the PML (1.0 = half a wavelength in that half-space).
+        grading: geometric ratio for coarsening the z mesh away from the structure, e.g.
+            ``1.06``. **Off by default and that is a measurement, not an oversight**: at equal
+            accuracy it wins on a metal grating and loses on a dielectric one (§8f).
+        record_field: keep every N-th step of the electric field, in the diagnostics, with the
+            axes it is measured on (§8h). Off by default and free when off.
+        return_diagnostics: return ``(result, diagnostics)`` instead of ``result``.
+        chi, polarization: refused. An elliptical or named polarisation needs both legs run
+            and recombined, which the RCWA path already does.
+
+    Returns:
+        Result: the same container an RCWA solve returns, or ``(Result, dict)`` when
+        ``return_diagnostics`` is set.
     """
     if psi is not None:
         return _solve_conical(
@@ -2222,17 +2289,12 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
     if wavelength is None:
         raise ValueError('fdtd: wavelength is unset. One wavelength, or a band to cover in a '
                          'single run -- see the broadband section of `docs/fdtd.md`.')
-    if isinstance(period, dict):
-        # The mapping spelling `docs/reference/keywords.md` documents. A dict has `__len__`, so
-        # without this the indexing below reached it and raised a bare `KeyError: 0`.
-        keys = set(period)
-        if keys != {'x', 'y'}:
-            raise ValueError(
-                f"fdtd: period: a mapping needs exactly {{'x', 'y'}}; got {sorted(keys)}. "
-                f"`period` is the axis-aligned spelling of the cell, so x and y are what it "
-                f"has -- a skewed cell is given as `lattice=` instead, which this solver "
-                f"refuses.")
-        period = [period['x'], period['y']]
+    # The mapping spelling `docs/reference/keywords.md` documents. A dict has `__len__`, so
+    # without this the indexing below reached it and raised a bare `KeyError: 0`. Read by
+    # `conventions.parse_period_mapping` rather than respelled -- the same rule this module
+    # already follows for `parse_order_pair` below, and what 3792901 named as the next step
+    # when it wrote the second copy deliberately.
+    period = parse_period_mapping(period, name='fdtd: period')
     period_x = float(period[0] if hasattr(period, '__len__') else period)
     period_y = (float(period[1]) if hasattr(period, '__len__') and len(period) > 1 else None)
     # The y axis is DROPPED only when it holds nothing: a length-1 y is a grating invariant

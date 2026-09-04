@@ -128,10 +128,17 @@ Which backend to use, and whether to jit at all, differs by modeling path and is
 
 The physics is checked against references, not only against itself:
 
-* **Three outside solvers** — RETICOLO through an Octave bridge, plus fmmax and S4. Their
+* **Three outside RCWA solvers** — RETICOLO through an Octave bridge, plus fmmax and S4. Their
   numbers are committed as goldens and checked in CI, so the half that needs software this
   project does not ship runs once, by hand. RETICOLO agrees to ~1e-13 and is the only reference
   here that validates individual diffraction *orders* rather than totals.
+* **A different method entirely** — Wavebit's own FDTD ([`docs/fdtd.md`](docs/fdtd.md)) solves
+  the same scene in the time domain, and Meep is the outside reference for it. RCWA truncates a
+  Fourier series and FDTD discretises space and time, so a defect surviving both belongs to
+  neither: on the benchmark grating at the 5 nm grid Meep uses, our worst per-order gap against
+  the converged RCWA answer is 7.4e-4 (TE) / 6.2e-4 (TM), against Meep's 7.4e-4 / 6.9e-4 — the
+  same number. Meep is GPL and this project is Apache-2.0, so it is run as a black-box oracle
+  and is not a dependency of anything here.
 * **Published benchmark tables** — Li's 1997 crossed-grating checkerboard as tabulated by
   Demésy et al. (2012). All nine transmitted orders agree to a worst 2.06e-4, on the oblique
   primitive cell, which puts that path against numbers from outside this project.

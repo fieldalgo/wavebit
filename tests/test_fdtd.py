@@ -354,6 +354,7 @@ REFUSED = [
     (dict(tetm=None), r'needs either `tetm` or `psi`'),
     (dict(tetm='psi'), r'tetm must be'),
     (dict(chi=10.0), r'elliptical or named polarisation'),
+    (dict(period=dict(u=700.0, v=700.0)), r"a mapping needs exactly \{'x', 'y'\}"),
     (dict(polarization='rcp'), r'elliptical or named polarisation'),
     (dict(theta=0.3 + 0.1j), r'is complex'),
     (dict(phi=0.5), r'conical mount'),
@@ -403,6 +404,33 @@ def test_the_diagnostics_report_whether_the_run_was_long_enough():
     assert long['residual'] < 1e-3, f"a 60-cycle run has, and reports {long['residual']}"
     assert long['n_steps'] > short['n_steps']
     assert long['pml_thickness'] == short['pml_thickness']
+
+
+def test_the_cell_is_read_the_way_the_rcwa_door_reads_it():
+    """`period=dict(x=..., y=...)` is one rule, read by `conventions.parse_period_mapping`.
+
+    It was written twice -- once in the solver's `period` setter and once here -- and the
+    second copy went in deliberately, with matching wording, because folding it meant editing
+    a file another session held. A dict has `__len__`, so before either copy existed the
+    positional indexing below reached it and raised a bare `KeyError: 0`.
+
+    What is NOT shared is what each door does afterwards, and both finishings are right: the
+    RCWA setter turns a lone number into a square cell, while this one keeps a scalar
+    distinguishable from a pair, because `period_y is None` is what tells a grating from a
+    crossed grating. So the test is that the mapping *agrees* with the list, not that the two
+    doors normalise alike.
+    """
+    kw = dict(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+              wavelength=WL, tetm='te', theta=0.0, resolution=0.05, n_periods=60)
+    as_list = solve_fdtd(period=[PERIOD], **kw)
+    as_map = solve_fdtd(period=dict(x=PERIOD, y=PERIOD), **kw)
+    assert np.allclose(as_list.R, as_map.R) and np.allclose(as_list.T, as_map.T), (
+        'the mapping spelling of the cell must solve the identical scene')
+
+    # A y period does NOT appear from a mapping that names one on a y-invariant raster: the
+    # raster has a single row, so this stays the 2D path rather than becoming a crossed run.
+    _, diag = solve_fdtd(period=dict(x=PERIOD, y=PERIOD), return_diagnostics=True, **kw)
+    assert diag['grid'].ny == 1, 'a one-row raster is a grating whatever the cell says'
 
 
 def test_the_reported_mesh_is_the_mesh_that_ran():

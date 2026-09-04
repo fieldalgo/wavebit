@@ -664,6 +664,36 @@ def warn_if_xy_on_a_skewed_cell(spelling, axis_aligned, name='truncation_order')
             AxisNameWarning, stacklevel=3)
 
 
+def parse_period_mapping(value, name='period'):
+    """``[x, y]`` from the mapping spelling of a period; every other spelling passed through.
+
+    Deliberately *less* than :func:`parse_order_pair` above, which normalises all four of its
+    spellings into one pair. Both doors here finish differently and both finishings are right:
+    the solver's :attr:`period` setter hands the value to ``_as_lengths``, where a lone number
+    means a square cell, while ``solve_fdtd`` keeps a scalar and a length-1 sequence
+    distinguishable from a pair, because ``period_y is None`` is what tells a grating from a
+    crossed one. Normalising here would hand the time-domain solver a y period nobody wrote.
+    So what is shared is only the part that was written twice -- which keys a mapping may hold,
+    and the sentence refusing the rest.
+
+    ``{'x', 'y'}`` is the whole of it, with no ``{'u', 'v'}`` reading beside it, and that is
+    the other difference from :func:`parse_order_pair`: ``period`` *is* the axis-aligned
+    spelling of a cell, so there is no cell it can describe on which those two names are
+    false. A skewed one is written ``lattice=``, which the RCWA door takes and the FDTD one
+    refuses by name -- each says so itself, so this message speaks for neither.
+    """
+    if not isinstance(value, dict):
+        return value
+    keys = set(value)
+    if keys != {'x', 'y'}:
+        raise ValueError(
+            f"{name}: a mapping needs exactly {{'x', 'y'}}; got {sorted(keys)}. "
+            f"`period` is the axis-aligned spelling of the cell, so x and y are what "
+            f"it has -- a skewed cell is given as `lattice=` instead, and its two "
+            f"directions are u and v.")
+    return [value['x'], value['y']]
+
+
 # --- the incidence spellings, and what makes them exclusive -----------------------------
 #
 # `psi`, `chi`, `polarization` and `tetm` are four names for one input, and the rules about

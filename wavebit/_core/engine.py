@@ -22,7 +22,8 @@ from .backend import _device_of, array_namespace, as_array, check_input_precisio
 from .conventions import (_CHI_POLARIZATION_CLASH, _COMPLEX_CHI,
                           _PSI_POLARIZATION_CLASH, _TETM_INCIDENCE_CLASH,
                           incident_sp_amplitudes, lit_orders, order_window,
-                          parse_order_pair, reject_complex_angle,
+                          parse_order_pair, parse_period_mapping,
+                          reject_complex_angle,
                           warn_if_xy_on_a_skewed_cell)
 from .domain import Material, as_material, index_from_eps
 from .enums import (Answers, DEFAULT_ANSWERS, DEFAULT_FACTORIZATION, DEFAULT_FORMULATION,
@@ -1586,15 +1587,7 @@ class CoreSolveMixin:
 
     @period.setter
     def period(self, period):
-        if isinstance(period, dict):
-            keys = set(period)
-            if keys != {'x', 'y'}:
-                raise ValueError(
-                    f"period: a mapping needs exactly {{'x', 'y'}}; got {sorted(keys)}. "
-                    f"`period` is the axis-aligned spelling of the cell, so x and y are what "
-                    f"it has -- a skewed cell is given as `lattice=` instead, and its two "
-                    f"directions are u and v.")
-            period = [period['x'], period['y']]
+        period = parse_period_mapping(period)
 
         # A cell basis outranks this. `period` is `(|a1|, |a2|)`, which drops the angle, so on
         # a skewed cell it cannot say what the new cell is -- and the sync only ever ran one
