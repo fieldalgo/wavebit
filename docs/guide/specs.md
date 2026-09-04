@@ -33,6 +33,13 @@ part of the scene; `sweep` declares what varies.
 
 `solver` (`'rcwa'`) and `version` complete it.
 
+**A spec describes an RCWA run, and only that.** `wavebit.fdtd()`
+([`time-domain.md`](time-domain.md)) is a second solver but not a second `solver` value: every
+field of `numerics` above is harmonic vocabulary -- a truncation order, a factorization, a
+normal field -- while a time-domain run is described by a grid, a duration and an absorber.
+Nothing in this schema carries those, so `solver='fdtd'` is refused by name rather than
+accepted into a spec that would round-trip and then fail to run.
+
 Two differences from the constructor are deliberate. `numerics.complex_dtype` is the **bit
 width** (`128` / `64`) rather than a dtype object, so the spec stays backend-neutral. And
 `answers` lives in `numerics` rather than in `incidence`, because it describes the job and not

@@ -46,6 +46,8 @@ properties every one of them carries.
 
 .. autofunction:: wavebit.index_from_eps
 
+.. autofunction:: wavebit.permittivity_at
+
 .. autoclass:: wavebit.Lattice
    :members:
 

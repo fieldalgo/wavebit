@@ -600,7 +600,13 @@ class JobSpec:
                 f"got {version!r}")
         solver = d.get('solver', 'rcwa')
         if solver != 'rcwa':
-            raise SpecError(f"spec.solver: only 'rcwa' exists so far, got {solver!r}")
+            raise SpecError(
+                f"spec.solver: a spec describes an RCWA run, got {solver!r}. "
+                f"`wavebit.fdtd` exists but is not expressible here: every field of "
+                f"`numerics` is harmonic vocabulary -- a truncation order, a factorization, a "
+                f"normal field -- and a time-domain run is described by a grid, a duration and "
+                f"an absorber instead. Nothing in this schema can carry those, so accepting "
+                f"the name would produce a spec that round-trips and cannot be run.")
 
         return cls(
             stack=_stack_from_dict(d.get('stack')),

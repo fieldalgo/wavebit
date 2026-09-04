@@ -76,7 +76,7 @@ def enable_x64():
     jax.config.update('jax_enable_x64', True)
 
 from .main import fdtd, rcwa
-from ._core.fdtd import UnsettledFieldWarning
+from ._core.fdtd import UnsettledFieldWarning, permittivity_at
 from ._core.backend import (AutoDetuneWarning, AxisNameWarning, PrecisionLossWarning, RayleighPointWarning,
                             UnresolvedBranchWarning,
                             get_j1_implementation, set_j1_implementation)
@@ -133,6 +133,7 @@ __all__ = [
     'AutoDetuneWarning',
     'AxisNameWarning', 'PrecisionLossWarning', 'RayleighPointWarning',
     'UnresolvedBranchWarning', 'UnsettledFieldWarning',
+    'permittivity_at',
     'get_j1_implementation', 'set_j1_implementation',
     'branch_tolerance',
     'plot_structure', 'slice_structure',

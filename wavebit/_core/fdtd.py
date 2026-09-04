@@ -625,10 +625,22 @@ class _PoleSet:
 
 
 def permittivity_at(poles, wavelength, eps_infinity=1.0):
-    """``eps(w)`` of a pole list, for stating what a scene's material actually is.
+    """``eps(w)`` of a Drude/Lorentz pole list -- what a dispersive scene's material *is*.
 
-    The closed form the time stepping is discretising, in one place, so a test can compare
-    against it rather than against a second implementation of the same sum.
+    The closed form the time stepping discretises, written once so that nothing has to compare
+    against a second implementation of the same sum. Public because the caller needs it for the
+    same reason the tests do: ``dispersion`` and ``poles`` describe a material across a band,
+    and pinning a time-domain answer against :func:`~wavebit.rcwa` at one wavelength means
+    handing that solver the single complex permittivity this returns.
+
+    Args:
+        poles: the pole list, as ``solve_fdtd``'s ``poles`` keyword takes it.
+        wavelength: free-space wavelength, in the unit the scene uses.
+        eps_infinity: the high-frequency limit -- what ``structure`` holds for those cells.
+
+    Returns:
+        complex: the relative permittivity at that wavelength, in this library's
+        ``e^{-iwt}`` convention, where a lossy material has ``Im(eps) > 0``.
     """
     omega = 2.0 * np.pi / wavelength
     eps = complex(eps_infinity)

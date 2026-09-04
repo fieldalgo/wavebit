@@ -125,10 +125,6 @@ from wavebit import Stack, Layer, Incidence
 gold = [(0.0, 2 * np.pi / 17000., (2 * np.pi / 136.) ** 2)]
 band = [820., 900., 980.]
 
-def eps_at(wl):                       # the closed form the time stepping discretises
-    w = 2 * np.pi / wl
-    return 1.0 + sum(f / (w0 ** 2 - w ** 2 - 1j * g * w) for w0, g, f in gold)
-
 scene = Stack(layers=[Layer(thickness=60., structure=np.ones((1, 2)))],
               top=1., bot=wavebit.eps_from_index(1.5), period=(700.,))
 light = Incidence(wavelength=band, theta=0., phi=0., tetm='te')
@@ -137,7 +133,7 @@ spectrum = wavebit.fdtd(stack=scene, incidence=light, resolution=0.1, n_periods=
                         dispersion=np.array([[1, 0]]), poles={1: gold})   # one run
 
 for wl, r in zip(band, spectrum):
-    eps = eps_at(wl)
+    eps = wavebit.permittivity_at(gold, wl)     # the closed form the stepping discretises
     ref = wavebit.rcwa(backend=0, wavelength=wl, period=[700.], theta=0., phi=0., tetm='te',
                        truncation_order=dict(x=60, y=0), top=1.,
                        bot=wavebit.eps_from_index(1.5),
