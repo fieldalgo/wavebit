@@ -305,19 +305,31 @@ jobs:
       # nondeterminism in the solve; if only the rungs diverge, it is not.
       #
       # Repeated because the flake is intermittent: one clean pass would prove nothing.
-      - name: bit identity -- where do the rungs stop agreeing
+      # Written once, run twice. Run 33820383369 measured the bare version on a runner and
+      # got 0 divergences in 25 iterations -- 100 solves -- while the suite in the *same run*
+      # failed the test. So the flake needs the suite's context, and the obvious candidate is
+      # what has been imported by then: the failing test sits about 700 tests in, and torch
+      # and jax are both long since loaded. torch ships its own OpenMP runtime on Linux, and
+      # a second OMP runtime in the process changes how OpenBLAS below numpy behaves --
+      # `OPENBLAS_NUM_THREADS=1` does not prevent that, it only sets a count.
+      #
+      # If only the preloaded arm diverges, that is the hole in this file's thread pinning,
+      # named. If neither does, the context is something else and the next thing to vary is
+      # which tests ran, not what was imported.
+      - name: bit identity -- write the probe
         if: always()
-        continue-on-error: true
-        env:
-          OPENBLAS_NUM_THREADS: 1
-          OMP_NUM_THREADS: 1
-          MKL_NUM_THREADS: 1
-          NUMEXPR_NUM_THREADS: 1
-          VECLIB_MAXIMUM_THREADS: 1
         run: |
-          python - <<'PROBE'
+          cat > /tmp/bitprobe.py <<'PROBE'
+          import os
           import sys
           import numpy as np
+
+          if os.environ.get('PROBE_PRELOAD'):
+              import torch                      # noqa: F401
+              import jax                        # noqa: F401
+              print(f'preloaded torch {torch.__version__}, jax {jax.__version__}, '
+                    f'torch threads {torch.get_num_threads()}')
+
           sys.path.insert(0, '.')
           sys.path.insert(0, 'tests')
           from test_answers_declaration import _solver, RUNGS
@@ -326,31 +338,61 @@ jobs:
 
           def once(rung, algo='SMM'):
               r = _solver(answers=rung, layer_algorithm=algo).solve()
-              out = {'T': np.asarray(r.T).tobytes(), 'R': np.asarray(r.R).tobytes()}
+              out = {'T': np.asarray(r.T), 'R': np.asarray(r.R)}
               for k in FIELDS:
                   v = getattr(r.given, k, None)
                   if v is not None:
-                      out[k] = np.asarray(v).tobytes()
+                      out[k] = np.asarray(v)
               return out
+
+          def differ(x, y):
+              return x.tobytes() != y.tobytes()
 
           rung_bad = repeat_bad = 0
           N = 25
           for i in range(N):
               a, b, c = once('efficiency'), once('amplitude'), once('field')
               d = once('efficiency')                      # the control: same rung, again
-              across = [k for k in ('T', 'R') if not (a[k] == b[k] == c[k])]
-              amps = [k for k in FIELDS if b.get(k) != c.get(k)]
-              repeat = [k for k in ('T', 'R') if a[k] != d[k]]
-              if across or amps:
-                  rung_bad += 1
-                  if rung_bad == 1:
-                      print(f'iter {i}: rungs differ in {across + amps}')
-              if repeat:
-                  repeat_bad += 1
-                  if repeat_bad == 1:
-                      print(f'iter {i}: SAME rung twice differs in {repeat}  <-- control fired')
-          print(f'{N} iterations: rungs differed {rung_bad}, same-rung-repeat differed {repeat_bad}')
+              across = [k for k in ('T', 'R') if differ(a[k], b[k]) or differ(a[k], c[k])]
+              amps = [k for k in FIELDS if k in b and k in c and differ(b[k], c[k])]
+              repeat = [k for k in ('T', 'R') if differ(a[k], d[k])]
+              if (across or amps) and rung_bad == 0:
+                  k = (across + amps)[0]
+                  ref, alt = a.get(k, b.get(k)), b.get(k, c.get(k))
+                  print(f'iter {i}: rungs differ in {across + amps}, '
+                        f'max |d| {np.abs(ref - alt).max():.3e}')
+              if repeat and repeat_bad == 0:
+                  k = repeat[0]
+                  print(f'iter {i}: SAME rung twice differs in {repeat}, '
+                        f'max |d| {np.abs(a[k] - d[k]).max():.3e}  <-- control fired')
+              rung_bad += bool(across or amps)
+              repeat_bad += bool(repeat)
+          print(f'{N} iterations: rungs differed {rung_bad}, '
+                f'same-rung-repeat differed {repeat_bad}')
           PROBE
+
+      - name: bit identity -- bare process
+        if: always()
+        continue-on-error: true
+        env:
+          OPENBLAS_NUM_THREADS: 1
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          NUMEXPR_NUM_THREADS: 1
+          VECLIB_MAXIMUM_THREADS: 1
+        run: python /tmp/bitprobe.py
+
+      - name: bit identity -- after torch and jax are loaded
+        if: always()
+        continue-on-error: true
+        env:
+          PROBE_PRELOAD: 1
+          OPENBLAS_NUM_THREADS: 1
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          NUMEXPR_NUM_THREADS: 1
+          VECLIB_MAXIMUM_THREADS: 1
+        run: python /tmp/bitprobe.py
 
   examples:
     name: examples smoke
