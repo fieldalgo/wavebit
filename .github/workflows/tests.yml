@@ -252,27 +252,31 @@ jobs:
       # One-sided, and worth saying so: a hang locates the ingredient, a clean run does not
       # clear it. Neither arm carries the layer chain, the cascade or the frozen-geometry
       # replay, so "did not reproduce" means "not this alone".
-      # Which ingredient above the eig makes `jit(grad(solve))` stop coming back. Run
-      # 33847846023 cleared the eig itself; run 33848611699's bisect then split it cleanly.
-      # `control` hung as it should, and both removals came back: `small` kept the shapes
-      # and the freeze at [1, 1] and finished in 4.49s, `uniform` kept [3, 3] and dropped
-      # the shapes and the freeze and finished in 3.41s. Neither the geometry nor the size
-      # is sufficient alone -- it takes both, so those two arms have answered and are
-      # retired from the run (the script still carries them).
+      # Which ingredient above the eig makes `jit(grad(solve))` stop coming back.
       #
-      # The two that have not: `thickness` keeps the patterned scene, the frozen replay and
-      # the size, and moves the traced parameter off the shape -- if it comes back, the
-      # subject is the gradient path *through* the replay rather than the layer being
-      # patterned at all. `mid` asks where between [1, 1] and [3, 3] the size crosses,
-      # which is 18 square against 98 square with 50 in between.
+      # Settled so far. Run 33847846023 cleared the eig: a bare 98x98 under `jit(grad)`,
+      # upstream's rule or ours, comes back in 0.6s on these runners. Run 33848611699 split
+      # the scene -- `control` hung, `small` ([1, 1], shapes and freeze kept) came back in
+      # 4.49s, `uniform` ([3, 3], shapes and freeze dropped) in 3.41s -- so neither the
+      # geometry nor the size is sufficient alone. Run 33856476682 then found the seam:
+      # `thickness` keeps the patterned layer, the frozen replay AND [3, 3], moving only
+      # the traced parameter off the shape onto the thickness, and comes back in 2.88s,
+      # while `mid` hangs at [2, 2]. So it is differentiating a *shape* parameter through
+      # the replay, from [2, 2] up. Those four arms have answered and are retired.
       #
-      # Each arm is its own step: a hung one takes its process with it, and `if: always()`
-      # does not survive the runner going away, which is how run 33840949962 left five
-      # steps `skipped`. Least certain first, control last.
+      # The li/nvf axis turned out not to exist on that scene:
+      # `_FACTORIZATION_IMPLEMENTED_BY` pins the parametric path to NVF and
+      # `_COEFFICIENTS_IMPLEMENTED_BY` to INTEGRATED, and the refusal says why -- a
+      # parametric shape has no samples to take. Three of the four pairings raise
+      # `NotImplementedError` there; the stalling test was always `integrated-nvf`.
       #
-      # Not named bisect.py on disk. It was, and it shadowed the stdlib `bisect` that jax
-      # imports, which comes back as a circular-import traceback pointing at
-      # `jax/_src/lax/linalg.py` and says nothing about the cause.
+      # So the pairing is asked of a raster, where both axes are free, at the size that
+      # hangs, with `jit(grad)` composed -- which the suite never does anywhere: its own
+      # raster test takes `jit(loss)` and `grad(loss)` separately. Read the answer narrowly.
+      # A raster's traced parameter is a pixel value and not a length, so this varies the
+      # machinery under a different input rather than reproducing the stalling gradient. If
+      # `integrated-nvf` hangs and `sampled-li` does not, that pairing stalls on its own; if
+      # neither does, the subject is specific to the shape-parameter path.
       - name: bisect -- write the probe
         if: always()
         run: |
@@ -313,8 +317,14 @@ jobs:
           wavebit.enable_x64()
           faulthandler.dump_traceback_later(BUDGET, exit=True)
 
+          # The strategy pairing is a second axis, defaulted to what the stalling test runs. Both
+          # halves have to reach `freeze_geometry` as well as `solve`, or the record describes a
+          # build the traced call is not making -- which is why they live in CFG rather than in the
+          # solve call.
           CFG = dict(period=[300.0, 300.0], thickness=[205.0], top=1.0, bot=1.0,
-                     theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0)
+                     theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0,
+                     fourier_coefficients=os.environ.get('FC', 'sampled'),
+                     factorization=os.environ.get('FACT', 'li'))
 
 
           def scene(v):
@@ -324,7 +334,30 @@ jobs:
 
           ORDERS = {'small': [1, 1], 'mid': [2, 2]}.get(ARM, [3, 3])
 
-          if ARM == 'uniform':
+          if ARM.startswith('raster'):
+              # The parametric path cannot answer the li/nvf question: `_FACTORIZATION_IMPLEMENTED_BY`
+              # pins it to NVF and `_COEFFICIENTS_IMPLEMENTED_BY` to INTEGRATED, and the refusal says
+              # why -- a parametric shape has no samples to take. So the pairing is asked of a raster,
+              # where both axes are free, at the size that hangs.
+              #
+              # Not an equivalent experiment and it should not be read as one: a raster's traced
+              # parameter is a pixel value, not a length, so this varies the machinery under a
+              # different input rather than reproducing the stalling gradient. What it can say is
+              # whether `integrated` + `nvf` stalls on its own.
+              #
+              # `jit(grad)` composed, which is the shape the suite never runs. Its own raster test
+              # takes `jit(loss)` and `grad(loss)` separately and never the composition.
+              RASTER = np.random.default_rng(0).uniform(1.0, 4.0, (1, 64, 64)) ** 2
+              x0 = 1.0
+              fc, fact = ('integrated', 'nvf') if 'nvf' in ARM else ('sampled', 'li')
+              CFG.update(fourier_coefficients=fc, factorization=fact)
+              _solver = wavebit.rcwa(backend=1, structure=RASTER, truncation_order=ORDERS, **CFG)
+              frozen = _solver.freeze_geometry()
+
+              def total(v):
+                  return jnp.sum(_solver.solve(structure=jnp.asarray(RASTER) * v,
+                                               geometry=frozen).given.T).real
+          elif ARM == 'uniform':
               # No shapes and no freeze: the solve with the geometry build and the frozen replay
               # taken out, at the size that hangs.
               x0 = 12.25
@@ -356,7 +389,8 @@ jobs:
 
 
           x = jnp.asarray(x0)
-          print(f'[{ARM}] to={ORDERS} cores={os.cpu_count()} jax={jax.__version__}', flush=True)
+          print(f'[{ARM}] to={ORDERS} {CFG["fourier_coefficients"]}-{CFG["factorization"]} '
+                f'cores={os.cpu_count()} jax={jax.__version__}', flush=True)
 
           for label, fn in (('eager', total),
                             ('eager grad', jax.grad(total)),
@@ -369,11 +403,11 @@ jobs:
           print(f'[{ARM}] finished, no hang')
           BISECT
 
-      - name: bisect -- thickness
+      - name: bisect -- raster-sampled-li
         if: always()
         continue-on-error: true
         env:
-          ARM: thickness
+          ARM: raster-sampled-li
           ARM_BUDGET: 180
           OPENBLAS_NUM_THREADS: 1
           OMP_NUM_THREADS: 1
@@ -382,11 +416,11 @@ jobs:
           VECLIB_MAXIMUM_THREADS: 1
         run: python /tmp/hang_bisect.py
 
-      - name: bisect -- mid
+      - name: bisect -- raster-integrated-nvf
         if: always()
         continue-on-error: true
         env:
-          ARM: mid
+          ARM: raster-integrated-nvf
           ARM_BUDGET: 180
           OPENBLAS_NUM_THREADS: 1
           OMP_NUM_THREADS: 1
