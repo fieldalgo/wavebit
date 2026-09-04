@@ -7,35 +7,22 @@ checked; this takes well under a minute and only asks whether the examples still
 them apart means a broken example is a fast, separately-named red mark rather than nine minutes
 of waiting, and the suite stays the thing that says whether the library is correct.
 
-It is still an assert-first check -- the three conditions below can be written down before the
+It is still an assert-first check -- both conditions below can be written down before the
 run -- so by the routing rule in ``CONTRIBUTING.md`` it lives here rather than in ``studies/``.
 
 A script fails on any of:
 
 * **a non-zero exit status** -- the ordinary signal;
 * **``Traceback`` in the output** -- a script that catches its own exception, prints the
-  traceback and exits 0 would otherwise pass;
-* **``UnphysicalResultWarning`` in the output** -- because a script can run to completion, exit
-  0, and still be returning R+T > 1 on a passive stack. An exit-code-only check would pass a
-  solve that is physically wrong, so this condition is not optional. The solver already emits
-  the warning; all this has to do is refuse to ignore it.
+  traceback and exits 0 would otherwise pass.
 
-How far the third condition actually reaches. The result guards run wherever the values are
-concrete, which is every backend solving eagerly -- ``check_physical`` steps aside only for an
-abstract value, and under ``jit`` it has to, since a traced array carries no value to compare.
-``shapes_1d.py`` solves on PyTorch and ``shapes_2d.py`` on JAX, both eagerly, so this condition
-reaches all four scripts. It used to reach only the two ``_verification.py`` files, because the
-guards keyed their exemption on the namespace rather than on concreteness; that was the bug
-``tests/test_rayleigh_guard.py`` was written for. Should a script here ever wrap its solve in
-``jax.jit``, the condition goes quiet for that script again and this paragraph stops being true.
-
-Known hole, since honesty about coverage is cheaper than discovering it later: detection is by
-scanning the child's output, so a script that silences the category itself -- ``simplefilter
-('ignore', UnphysicalResultWarning)``, or a ``catch_warnings`` block that swallows it -- prints
-nothing and passes. Escalating the category to an error instead would not close it either, since
-an in-script filter outranks ``PYTHONWARNINGS`` just the same. Nothing under ``examples/``
-filters warnings today; if something needs to (a deliberate gain medium is the legitimate case),
-say so in the script and expect this check to stop seeing it.
+There used to be a third: ``UnphysicalResultWarning`` in the output, on the reasoning that a
+script can exit 0 while returning R+T > 1 on a passive stack. That warning no longer exists --
+``check_physical`` was removed because it could not tell a broken solve from an active medium
+or from a time-domain discretisation, and warned on both. **So this file no longer says
+anything about whether an example is physically right**, only that it runs. What replaces it
+is per-scene assertions in ``tests/``, where the expected number is known and can be written
+down; a smoke run over scripts has no such number and never did.
 
 Usage::
 
@@ -63,7 +50,6 @@ TIMEOUT_S = 300
 # together, because the traceback goes to one and a print to the other.
 BAD_OUTPUT = (
     ('Traceback', 'the script raised, and either caught it or printed it on the way out'),
-    ('UnphysicalResultWarning', 'the solve returned a finite but impossible result'),
 )
 
 

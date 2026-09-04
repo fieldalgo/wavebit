@@ -156,7 +156,13 @@ def test_single_precision_tracks_double():
 # ---------------------------------------------------------------- the guard itself
 
 def test_results_are_finite_and_non_negative_at_the_extreme():
-    """The two things ``check_physical`` looks for, asserted rather than warned about."""
+    """Finite, and no negative power -- asserted on a named scene rather than guessed at.
+
+    These two conditions used to be warned about generically by ``check_physical``, on every
+    solve. That check was removed: it could not tell a broken solve from an active medium or
+    from a time-domain discretisation. A scene whose right answer is known, like this one,
+    is where the conditions can be asserted instead of guessed at.
+    """
     result = _solve(truncation_order=40, thickness=50_000.0)
     for name, array in (('R', result.R), ('T', result.T)):
         values = np.real(np.asarray(array))

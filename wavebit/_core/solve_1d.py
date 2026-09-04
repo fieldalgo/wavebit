@@ -21,7 +21,7 @@ Stages (matching the legacy chain, kept as one function each to make bit-parity 
   3. final matching      — incident field -> R, T -> diffraction efficiency
 """
 from .backend import (_concrete, array_namespace, as_array, check_finite,
-                      check_physical, eig)
+                      eig)
 from .conventions import (boundary_kz, incident_column, incident_kz, mode_q,
                           order_azimuth)
 from .enums import Answers, answers_of
@@ -481,7 +481,6 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
                         * xp.real(kz_bot / eps_bot / denom_t_tm))
 
     check_finite(xp, de_ri=de_ri, de_ti=de_ti)
-    check_physical(xp, de_ri, de_ti, n_top)
 
     if not answers.covers(Answers.AMPLITUDE):
         return de_ri, de_ti
@@ -827,7 +826,6 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     de_ri_s, de_ri_p, de_ti_s, de_ti_p = efficiencies(R_s, R_p, T_s, T_p)
 
     check_finite(xp, de_ri=de_ri_s + de_ri_p, de_ti=de_ti_s + de_ti_p)
-    check_physical(xp, de_ri_s + de_ri_p, de_ti_s + de_ti_p, n_top)
 
     if not answers.covers(Answers.AMPLITUDE):
         return de_ri_s + de_ri_p, de_ti_s + de_ti_p

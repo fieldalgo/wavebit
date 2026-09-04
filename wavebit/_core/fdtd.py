@@ -79,7 +79,6 @@ import warnings
 
 import numpy as np
 
-from .backend import check_physical
 from .conventions import order_azimuth, parse_order_pair
 from .domain import as_material
 from .result import Result, ResultSub
@@ -688,7 +687,8 @@ class _Incident1D:
         #: 9.0e-2 of the incident amplitude into the scattered-field region. And the quieter
         #: variant is worse -- grading only BELOW the TFSF plane leaks just 9.6e-4, but the
         #: incident reference every amplitude is divided by comes out 1.3 % wrong, so `R` and
-        #: `T` scale together and `check_physical` sees a plausible `R + T = 0.974`.
+        #: `T` scale together and the result reads as a plausible `R + T = 0.974`, which is an
+        #: ordinary absorbing number that nothing downstream can question.
         cells = np.full(nz - 1, dz) if np.ndim(dz) == 0 else np.asarray(dz, dtype=float)
         if cells.size != nz - 1:
             raise ValueError(
@@ -1646,8 +1646,8 @@ def propagating_window_2d(wavelength, period_x, period_y, n_top_sq, n_bot_sq,
     ``(m, l)`` has ``ky_inc + l*wl/Py``, not ``ky_inc``, so an ``l`` that moves ``ky`` toward
     zero widens the x range the disc actually allows. The shortcut is wrong in both directions
     depending on the scene, and its usual direction is to report orders that carry nothing,
-    which is silent: `check_physical` refuses a sum ABOVE one, so a short sum reads as
-    absorption. The same shape of defect as the 1D window fixed in 9306834.
+    which is silent: a short sum reads as ordinary absorption, and nothing anywhere refuses
+    that. The same shape of defect as the 1D window fixed in 9306834.
     """
     step_x, step_y = wavelength / period_x, wavelength / period_y
     lo_x = lo_y = hi_x = hi_y = 0
@@ -2063,9 +2063,6 @@ def _solve_conical_oblique(psi, phi, theta, return_diagnostics, **kw):
                           for n in ('r_s', 'r_p', 't_s', 't_p')],
                         *[None] * 6)
         mix = _efficiencies_from(mix, s_one, p_one, a_s, a_p)
-        for sub in (mix, s_one.given, p_one.given):
-            check_physical(np, np.asarray(sub.R), np.asarray(sub.T),
-                           np.sqrt(s_diag['grid'].n_top_sq))
         out.append(Result(given=mix, s_inc=s_one.given, p_inc=p_one.given,
                           order_window=s_one.order_window))
 
@@ -2130,7 +2127,13 @@ def _solve_conical(psi, phi, theta, tetm, return_diagnostics, **kw):
     # `theta != 0, phi = 0` to the coupled path, where `conical` is False because `ky_inc` is
     # zero -- so both legs ran the SAME `tetm='te'` problem and were then added, returning
     # **twice the incident power**: measured `R + T = 2.0042` at theta = 30 deg, phi exactly 0,
-    # against 1.0023 at phi = 1e-9 deg. A knife edge, and `check_physical` did not stop it.
+    # against 1.0023 at phi = 1e-9 deg. A knife edge, found by reading the code.
+    #
+    # The efficiency guard that was supposed to catch this ran on the result and said nothing
+    # anyone heard, because on this path it also fired on 85 of 243 ordinary solves -- second-
+    # order Yee truncation error, which is not a defect. It has since been removed; what pins
+    # this case is the `abs(total - 1.0) < 2e-2` assertion in `test_fdtd.py`, whose tolerance
+    # is chosen for the method rather than inherited from the frequency-domain path.
     if theta_v != 0.0 and phi_v != 0.0:
         return _solve_conical_oblique(psi, phi_v, theta, return_diagnostics, **kw)
 
@@ -2169,9 +2172,6 @@ def _solve_conical(psi, phi, theta, tetm, return_diagnostics, **kw):
                                 ('s_inc', (1.0, 0.0)), ('p_inc', (0.0, 1.0))):
             subs[leg] = _combine_at_normal_incidence(grid, te.given, tm.given, kx, wl,
                                                      phi_v, a_s, a_p)
-        for sub in subs.values():
-            check_physical(np, np.asarray(sub.R), np.asarray(sub.T),
-                           np.sqrt(grid.n_top_sq))
         out.append(Result(order_window=((centre, half), (0, 0)), **subs))
 
     result = out[0] if single else out
@@ -2347,12 +2347,6 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
             sub = _extract_conical(grid, out, half_width, index, centre_order)
         else:
             sub = _extract(grid, out, half_width, index, centre_order)
-        # The same tier of check the RCWA path applies: gain out of nothing, or negative
-        # power. Every defect this module has had -- an over-conducting PML, a mis-scaled CFS
-        # pole, an out-of-band DFT -- announced itself here first, as `R + T` between 1.1
-        # and 106.
-        check_physical(np, np.asarray(sub.R), np.asarray(sub.T),
-                       np.sqrt(eps_top * mu_top))
         results.append(Result(given=sub, order_window=(window_2d if crossed
                                                        else ((centre_order, half_width), (0, 0)))))
 

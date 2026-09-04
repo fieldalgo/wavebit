@@ -1183,8 +1183,8 @@ def test_the_default_order_window_follows_the_incidence():
 
     Measured at 60 degrees into an `n = 2` substrate: order `-2` propagates and carries 7.2 %
     of the power. The symmetric window reported `sum(R) + sum(T) = 0.928`, with nothing on the
-    number to say an order had been left out -- and `check_physical` cannot see it either,
-    since it only refuses a sum ABOVE one.
+    number to say an order had been left out. No result-level check can see this: a short sum
+    is what ordinary absorption looks like.
     """
     theta = np.deg2rad(60.0)
     eps_bot = wavebit.eps_from_index(2.0)
@@ -2166,8 +2166,12 @@ def test_a_polarisation_mixed_run_is_continuous_across_phi_zero(theta_deg, phi_d
     zero -- so both legs ran the same `tetm='te'` problem and were added together. Measured
     `R + T = 2.0042` at theta = 30 deg with phi exactly 0, against 1.0023 at phi = 1e-9 deg.
 
-    **Twice the incident power, and nothing refused it.** `check_physical` is applied to each
-    sub-result, and it did not fire -- which is the second half of the finding.
+    **Twice the incident power, and nothing refused it.** The efficiency guard of the day was
+    applied to each sub-result and said nothing anyone heard: on this path it also fired on 85
+    of 243 ordinary solves, which is second-order Yee truncation error and not a defect. It
+    has since been removed. What pins this case is the `abs(total - 1.0) < 2e-2` assertion
+    below, whose tolerance is chosen for a time-domain discretisation rather than inherited
+    from the frequency-domain path.
 
     The first repair routed on `ky` and was still wrong, at `R + T = 0.8864`: the order ladder
     was built as `m * wl / period` with no `kx_inc`, correct while the path only served

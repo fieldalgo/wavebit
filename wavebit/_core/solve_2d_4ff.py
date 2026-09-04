@@ -256,11 +256,11 @@ def split_forward_backward(xp, M, n_orders):
     every shipped path (``tests/test_formulation_dispatch.py``).
 
     The count check is the one thing that cannot be traced, so it runs only where the values
-    are concrete — the same rule :func:`wavebit._core.backend.check_finite` and
-    ``check_physical`` follow, and for the same reason. Note that "concrete" is the whole of
-    it: those two once keyed the exemption on the *namespace* instead, which skipped eager JAX
-    and eager PyTorch and cost a silently wrong answer on both. Under ``jit`` a degenerate
-    layer still gets no complaint; see :func:`_forward_count`.
+    are concrete — the same rule :func:`wavebit._core.backend.check_finite` follows, and for
+    the same reason. Note that "concrete" is the whole of it: the result guards once keyed
+    the exemption on the *namespace* instead, which skipped eager JAX and eager PyTorch and
+    cost a silently wrong answer on both. Under ``jit`` a degenerate layer still gets no
+    complaint; see :func:`_forward_count`.
     """
     lam, psi = eig(M)
     flux = mode_flux_z(xp, psi, n_orders) / xp.sum(xp.abs(psi) ** 2, axis=0)

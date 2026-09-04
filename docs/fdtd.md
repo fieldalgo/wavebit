@@ -370,8 +370,15 @@ inside this document's own branch.
 | `\|m\| ≥ nx/2` | Past Nyquist the x transform aliases one order onto another and returns a plausible amplitude — with a flipped sign on TM, from the half-cell sample offset |
 | `backend` | §7 |
 
-Beyond the refusals, the solve runs the same `check_physical` the RCWA path runs. Every defect
-this module has had announced itself there first, as `R + T` between 1.1 and 106.
+Beyond the refusals, the solve checks that what it hands back is finite, and nothing more.
+Three defects this module has had did announce themselves first as `R + T` between 1.1 and
+106 — an over-conducting PML, a mis-scaled CFS pole, an out-of-band DFT — and there was a
+generic check that reported it. It was removed on 2026-09-03: a Yee grid conserves energy to
+`O(dz^2)` rather than exactly, so on this path that check also fired on **85 of 243 ordinary
+solves**, the uniform slab against its own closed form among them. A signal present on a third
+of correct results is why `R + T = 2.0042` (§10) went unheard. Energy is asserted per scene in
+`tests/test_fdtd.py` instead, at a tolerance chosen for the discretisation. See
+[`result-guards.md`](result-guards.md).
 
 ---
 

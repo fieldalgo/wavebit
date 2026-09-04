@@ -339,8 +339,9 @@ Equivalently `mee.solve_conv(*to_conv_mat_raster_pn_eps(t[None], truncation_orde
 splat is correct rather than merely shorter. It was not always — the five-slot builders used to
 group the in-plane pair together and put `epz_i` last, and splatting then landed the inverted zz
 matrix in the `epxy` slot. Nothing raised; `R + T` came back 1.61 on a lossless passive pillar
-against 1.0000000000 for the same structure, with only `UnphysicalResultWarning` to show for it.
-`tests/test_slot_order.py` is what stops that returning.
+against 1.0000000000 for the same structure, with only a generic result warning to show for it
+(since removed — see [`result-guards.md`](result-guards.md)).
+`tests/test_slot_order.py` asserts the energy directly, and is what stops that returning.
 
 The remaining way to get this wrong is silent in the same way: the off-diagonal **slots hold the
 negation**, which `to_conv_mat_raster_pn_eps` has already applied. See

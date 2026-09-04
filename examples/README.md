@@ -14,13 +14,13 @@ frameworks, no vendored dependencies, nothing that needs a dataset or a GPU.
 that the examples still run.
 
 The `examples smoke` job in [`../.github/workflows/tests.yml`](../.github/workflows/tests.yml)
-runs every script from its own directory with `MPLBACKEND=Agg` and fails on a non-zero exit, on
-`Traceback` in the output, or on an `UnphysicalResultWarning`. That last one matters because an
-example can run to completion and still be returning R+T > 1. The whole set takes well under a
-minute, which is why it is a separate job from the verification suite rather than part of it.
+runs every script from its own directory with `MPLBACKEND=Agg` and fails on a non-zero exit or
+on `Traceback` in the output. The whole set takes well under a minute, which is why it is a
+separate job from the verification suite rather than part of it.
 
-**It cannot tell you the numbers are right.** A green tick means the code ran and did not
-warn; it says nothing about what was printed.
+**It cannot tell you the numbers are right.** A green tick means the code ran; it says nothing
+about what was printed. It used to also fail on an `UnphysicalResultWarning`, but that check
+was removed from the solver — see [`../README.md`](../README.md) for why.
 
 Nor does it check what a verification example is *for*. Until 2026-08-11 the 2D one compared a
 shape `structure` against a raster that was the vertical mirror of it — a defect that survived

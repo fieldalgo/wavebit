@@ -41,9 +41,10 @@ result.r_s, result.t_p          # the complex Fresnel amplitudes
 `t_s` / `t_p` are the complex amplitudes, directly comparable to the textbook coefficients.
 
 Every eager NumPy solve also checks what it hands back: a NaN or infinity raises
-`FloatingPointError` naming the contaminated array, and a finite result that cannot be physical
-warns `UnphysicalResultWarning`. If you are modelling gain (`Im(eps) < 0` here), `R + T` above
-one is correct and the warning is a false positive — filter that category.
+`FloatingPointError` naming the contaminated array. There is deliberately no generic
+"`R + T` above one" warning, because that is the right answer for a medium with gain
+(`Im(eps) < 0` here) and it is also what a time-domain discretisation returns by construction —
+see [`result-guards.md`](../result-guards.md).
 
 ## What to read next
 

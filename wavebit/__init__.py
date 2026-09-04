@@ -78,7 +78,7 @@ def enable_x64():
 from .main import fdtd, rcwa
 from ._core.fdtd import UnsettledFieldWarning
 from ._core.backend import (AutoDetuneWarning, AxisNameWarning, PrecisionLossWarning, RayleighPointWarning,
-                            UnphysicalResultWarning, UnresolvedBranchWarning,
+                            UnresolvedBranchWarning,
                             get_j1_implementation, set_j1_implementation)
 from ._core.conventions import branch_tolerance
 from ._core.draw import plot_structure, slice_structure
@@ -132,7 +132,7 @@ __all__ = [
     'enable_x64',
     'AutoDetuneWarning',
     'AxisNameWarning', 'PrecisionLossWarning', 'RayleighPointWarning',
-    'UnphysicalResultWarning', 'UnresolvedBranchWarning', 'UnsettledFieldWarning',
+    'UnresolvedBranchWarning', 'UnsettledFieldWarning',
     'get_j1_implementation', 'set_j1_implementation',
     'branch_tolerance',
     'plot_structure', 'slice_structure',

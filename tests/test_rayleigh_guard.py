@@ -44,8 +44,7 @@ import numpy as np
 import pytest
 
 import wavebit
-from wavebit._core.backend import (UnphysicalResultWarning, array_namespace,
-                                   check_finite, check_physical)
+from wavebit._core.backend import array_namespace, check_finite
 
 PERIOD = 1000.0
 WL = 500.0
@@ -184,13 +183,9 @@ def test_exact_rayleigh_point_solves_correctly(backend, truncation_order, name, 
     elif backend == 2:
         pytest.importorskip('torch')
 
-    with warnings.catch_warnings(record=True) as rec:
-        warnings.simplefilter('always')
-        R, T = _exact_point_or_refusal(
-            lambda: _totals(_solve(backend, truncation_order, layer_algorithm=algo)))
+    R, T = _exact_point_or_refusal(
+        lambda: _totals(_solve(backend, truncation_order, layer_algorithm=algo)))
 
-    flagged = [r for r in rec if issubclass(r.category, UnphysicalResultWarning)]
-    assert not flagged, f'{name}/{algo} warned on a solve that is now ordinary: {flagged}'
     assert abs(R - _truth(truncation_order)) < TOL, (
         f'{name}/{algo} truncation_order={truncation_order}: exact-point R={R!r} vs detuned {_truth(truncation_order)!r} — the '
         'exact Rayleigh solve has come apart from its one-ULP neighbour again')
@@ -532,8 +527,12 @@ def test_exact_zero_eigenvalue_is_loud_on_every_backend():
     """``truncation_order=3`` retains the grazing order with an eigenvalue that is *exactly* zero.
 
     There the mode partner is 0/0 — no nearby problem to stand on — and the NaN must reach
-    :func:`~wavebit._core.backend.check_finite`. Raising and warning are both fine outcomes —
-    a returned ``nan`` is not.
+    :func:`~wavebit._core.backend.check_finite`, which raises. A returned ``nan`` is not an
+    acceptable outcome.
+
+    This used to accept a warning as an alternative outcome, from ``check_physical``. That
+    branch was dead: measured on all three backends at the time it was removed, every one
+    raises here, and none of them reached the efficiency check at all.
 
     The outcome per backend is collected rather than asserted in the loop, so the test states
     what it saw instead of passing by falling through three ``continue``\\ s.
@@ -546,17 +545,12 @@ def test_exact_zero_eigenvalue_is_loud_on_every_backend():
         elif backend == 2:
             pytest.importorskip('torch')
 
-        with warnings.catch_warnings(record=True) as rec:
-            warnings.simplefilter('always')
-            try:
-                got, _ = _totals(_solve(backend, 3))
-            except Exception as exc:
-                outcomes[name] = f'raised {type(exc).__name__}'
-                continue
-        if [r for r in rec if issubclass(r.category, UnphysicalResultWarning)]:
-            outcomes[name] = f'warned (R={got:.6f})'
-        else:
-            outcomes[name] = f'RETURNED QUIETLY: R={got!r}'
+        try:
+            got, _ = _totals(_solve(backend, 3))
+        except Exception as exc:
+            outcomes[name] = f'raised {type(exc).__name__}'
+            continue
+        outcomes[name] = f'RETURNED QUIETLY: R={got!r}'
 
     assert len(outcomes) == 3, f'a backend was skipped: {outcomes}'
     quiet = {k: v for k, v in outcomes.items() if v.startswith('RETURNED')}
@@ -578,8 +572,6 @@ def test_guards_read_concrete_jax_and_torch_values():
         xp = array_namespace(big)
         with pytest.raises(FloatingPointError):
             check_finite(xp, de_ri=nan)
-        with pytest.warns(UnphysicalResultWarning):
-            check_physical(xp, big, big, 1.0)
 
 
 def _jax_arrays():
@@ -608,15 +600,11 @@ def test_guards_are_skipped_under_jit_and_do_not_break_the_trace():
     def f(x):
         xp = array_namespace(x)
         check_finite(xp, de_ri=x)
-        check_physical(xp, x, x, 1.0)
         return jnp.sum(x)
 
     bad = jnp.asarray([np.nan, 9.0])
-    with warnings.catch_warnings(record=True) as rec:
-        warnings.simplefilter('always')
-        out = jax.jit(f)(bad)                   # must not raise, must not warn
+    out = jax.jit(f)(bad)                       # must not raise
     assert np.isnan(float(out))
-    assert [r for r in rec if issubclass(r.category, UnphysicalResultWarning)] == []
 
 
 def test_grad_is_guarded_and_still_differentiates():
@@ -640,9 +628,5 @@ def test_grad_is_guarded_and_still_differentiates():
                          structure=structure, thickness=[220.0]).solve()
         return jnp.real(r.R).sum()
 
-    with warnings.catch_warnings(record=True) as rec:
-        warnings.simplefilter('always')
-        g = float(jax.grad(loss)(jnp.asarray(12.25)))   # a permittivity: the old n = 3.5
+    g = float(jax.grad(loss)(jnp.asarray(12.25)))   # a permittivity: the old n = 3.5
     assert np.isfinite(g) and g != 0.0
-    # A healthy solve: the guard ran (grad is readable) and found nothing to say.
-    assert [r for r in rec if issubclass(r.category, UnphysicalResultWarning)] == []

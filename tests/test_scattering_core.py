@@ -13,7 +13,6 @@ pinned to the legacy results in test_golden_legacy_parity.py. So the properties 
                    it is built from, match the ETM's, on an axis-aligned and a skewed cell;
   * portability  — same numbers on numpy / jax / torch, and gradients still flow.
 """
-import warnings
 
 import numpy as np
 import pytest
@@ -146,16 +145,14 @@ def test_half_space_permittivity_reaches_both_connecting_algorithms(slot):
     depending on a keyword that is supposed to select an algorithm, not a structure.
 
     The probe is deliberately **not** a physical scene -- an index and a permittivity that
-    disagree describe no medium, so ``R + T`` leaves 1 and the solve says so. That warning is
-    the honest report of the input and is not what is under test, so it is filtered rather
-    than asserted; a case where it happened not to fire would prove nothing either way.
+    disagree describe no medium, so ``R + T`` leaves 1. That is the honest report of the
+    input and is not what is under test; the assertions below read how far the answer MOVED,
+    which is well defined whatever the absolute level is.
     """
     _, inputs = _core_inputs(CASES_2D[0][1])
     base = solve_2d(**inputs)
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', wavebit.UnphysicalResultWarning)
-        etm = solve_2d(**inputs, **{slot: 100.0})
-        smm = smm_2d(**inputs, **{slot: 100.0})
+    etm = solve_2d(**inputs, **{slot: 100.0})
+    smm = smm_2d(**inputs, **{slot: 100.0})
 
     moved = max(float(np.max(np.abs(np.array(etm[i]) - np.array(base[i])))) for i in (0, 1))
     assert moved > 1e-3, f'{slot} moved the ETM answer by only {moved:.3e}: nothing reads it'

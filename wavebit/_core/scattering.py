@@ -54,7 +54,7 @@ from typing import NamedTuple
 
 import numpy as np
 
-from .backend import _device_of, array_namespace, as_array, check_finite, check_physical
+from .backend import _device_of, array_namespace, as_array, check_finite
 from .conventions import boundary_kz, order_azimuth
 from .enums import Answers, answers_of
 from .conventions import incident_column, incident_kz
@@ -545,7 +545,6 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
                         * xp.real(kz_trn / eps_trn / denom_t_tm))
 
     check_finite(xp, de_ri=de_ri, de_ti=de_ti)
-    check_physical(xp, de_ri, de_ti, n_ref)
 
     if not answers.covers(Answers.AMPLITUDE):
         return de_ri, de_ti
@@ -743,7 +742,6 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
                           mu_top=mu_ref, mu_bot=mu_trn)
 
     check_finite(xp, de_ri=eff[0][0] + eff[1][0], de_ti=eff[2][0] + eff[3][0])
-    check_physical(xp, eff[0][0] + eff[1][0], eff[2][0] + eff[3][0], n_ref)
 
     if not keep_amplitude:
         return eff[0][0] + eff[1][0], eff[2][0] + eff[3][0]

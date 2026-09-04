@@ -267,12 +267,12 @@ jobs:
         run: pip install -e '.[jax,pytorch]'
 
       # Runs every examples/**/*.py from its own directory under MPLBACKEND=Agg and
-      # fails on a non-zero exit, a `Traceback`, or an `UnphysicalResultWarning`.
+      # fails on a non-zero exit or a `Traceback`.
       #
-      # That third condition is the one worth defending: a script can run to
-      # completion and still return R+T > 1 on a passive stack, so an exit-code-only
-      # check would pass a solve that is physically wrong. The runner's docstring
-      # says what the check cannot see.
+      # This says the examples still RUN, and nothing about whether their numbers are
+      # right -- there is no per-scene expected value here to compare against. It used
+      # to also fail on an `UnphysicalResultWarning`; that check was removed from the
+      # solver (docs/result-guards.md). The physics is checked in tests/.
       - name: Run every example
         run: python tests/run_examples_smoke.py
 

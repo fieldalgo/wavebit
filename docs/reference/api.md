@@ -133,9 +133,6 @@ properties every one of them carries.
 
 .. autofunction:: wavebit.branch_tolerance
 
-.. autoclass:: wavebit.UnphysicalResultWarning
-   :members:
-
 .. autoclass:: wavebit.PrecisionLossWarning
    :members:
 

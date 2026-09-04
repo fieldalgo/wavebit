@@ -170,15 +170,6 @@ def check_finite(xp, **named):
             'reformulated against this. See layer_modes_1d_conical.')
 
 
-class UnphysicalResultWarning(UserWarning):
-    """A solve returned finite but physically impossible efficiencies.
-
-    Its own category so it can be escalated (``warnings.simplefilter('error',
-    UnphysicalResultWarning)`` gives a traceback with the values still in scope) or silenced
-    independently of everything else the library might warn about.
-    """
-
-
 class UnresolvedBranchWarning(UserWarning):
     """A ``sqrt`` branch was chosen from a value that carries no information about it.
 
@@ -356,57 +347,6 @@ def check_input_precision(name, value, target_dtype):
         'only if JAX was already loaded, and the backend lifts it at the first solve, which '
         'is too late for an array made before that.',
         PrecisionLossWarning, stacklevel=3)
-
-
-def check_physical(xp, de_ri, de_ti, n_top, atol=1e-3):
-    """Warn if efficiencies are finite but cannot describe a physical result.
-
-    :func:`check_finite` catches contamination that announces itself. This catches the tier
-    below it — a solve that stayed finite and is still wrong, which nothing else would notice.
-    Two signals, both properties of the result rather than of the arithmetic that produced it:
-
-    * a negative efficiency, which is negative power;
-    * ``sum(R) + sum(T) > 1`` for a passive stack, which is gain out of nothing.
-
-    Deliberately *not* checked: ``R + T < 1``, which is just absorption. And the whole check is
-    skipped for a complex ``n_top``, where the incident-power normalization is
-    convention-dependent and the efficiencies are not comparable to 1 at all (the same reason
-    ``test_lossy_media`` declines to compare ``de_ri`` there).
-
-    Known false positive: a gain medium (``Im(n) < 0`` in this codebase's convention) legitimately
-    exceeds 1. Filter :class:`UnphysicalResultWarning` if that is what you are modelling.
-
-    The message carries no numbers, so Python's default filter collapses a sweep's worth of
-    occurrences into one report instead of re-emitting per wavelength; escalate the category to
-    an error when you want to catch a specific one.
-
-    Runs wherever the values are concrete — eager NumPy, eager JAX, eager PyTorch, and an
-    un-jitted ``jax.grad``. See :func:`_concrete`.
-    """
-    n = _readable(n_top, xp)
-    if xp.isdtype(n.dtype, 'complex floating'):
-        lossy = _concrete(xp.any(xp.imag(n) != 0))
-        if lossy is None or lossy:
-            return
-
-    r, t = xp.real(_readable(de_ri, xp)), xp.real(_readable(de_ti, xp))
-    negative = _concrete(xp.minimum(xp.min(r), xp.min(t)) < -atol)
-    excess = _concrete(xp.sum(r) + xp.sum(t) > 1 + atol)
-    if negative is None or excess is None:
-        return                                  # traced — no value to inspect
-
-    problems = []
-    if negative:
-        problems.append('a negative efficiency (negative power)')
-    if excess:
-        problems.append('R+T above 1 for a passive stack (gain out of nothing)')
-    if problems:
-        import warnings
-        warnings.warn(
-            f"solve returned {' and '.join(problems)}. The result is finite but not physical, "
-            'so treat it as a failed solve: check for a degenerate structure, and try adjusting '
-            'truncation_order or re-slicing the stack into thinner layers.',
-            UnphysicalResultWarning, stacklevel=2)
 
 
 def forward_strided(v):

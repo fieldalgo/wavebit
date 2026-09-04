@@ -637,7 +637,7 @@ class CoreSolveMixin:
     # permittivity and now get it. A half-space is not: `n_top` appears to the *first* power
     # at about sixteen sites where the quantity genuinely is an amplitude ratio (the
     # incident-power normalisation, the efficiency denominators, the Fresnel `-i*n`
-    # conversion, the TM `n_ref/n_trn` step, `check_physical`'s argument), and flipping those
+    # conversion, the TM `n_ref/n_trn` step), and flipping those
     # would put a complex square root, with a branch choice, at each one -- in a codebase whose
     # own trap list names "the half-space sqrt branch". So the setter takes the root once,
     # where the branch can be argued about in one place, and the ~43 internal readers keep

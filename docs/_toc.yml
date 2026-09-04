@@ -52,6 +52,7 @@ subtrees:
       - file: what-a-solve-answers
       - file: multimode-incidence
       - file: fdtd
+      - file: result-guards
     - caption: Numerical conventions
       entries:
       - file: amplitude-sp-frame
