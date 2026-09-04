@@ -252,12 +252,19 @@ jobs:
       # One-sided, and worth saying so: a hang locates the ingredient, a clean run does not
       # clear it. Neither arm carries the layer chain, the cascade or the frozen-geometry
       # replay, so "did not reproduce" means "not this alone".
-      # Which ingredient above the eig makes `jit(grad(solve))` stop coming back. Run 33847846023
-      # cleared the eig itself -- a bare 98x98 under `jit(grad)`, with upstream's rule or
-      # with ours, finished in under a second on the same two-core runner -- so the hang
-      # needs something the solver puts around it. Every arm below is a real
-      # `rcwa(...).solve()` under `jit(jax.grad(...))`, the call that stalls, with one piece
-      # of the scene removed. The script says which piece and why.
+      # Which ingredient above the eig makes `jit(grad(solve))` stop coming back. Run
+      # 33847846023 cleared the eig itself; run 33848611699's bisect then split it cleanly.
+      # `control` hung as it should, and both removals came back: `small` kept the shapes
+      # and the freeze at [1, 1] and finished in 4.49s, `uniform` kept [3, 3] and dropped
+      # the shapes and the freeze and finished in 3.41s. Neither the geometry nor the size
+      # is sufficient alone -- it takes both, so those two arms have answered and are
+      # retired from the run (the script still carries them).
+      #
+      # The two that have not: `thickness` keeps the patterned scene, the frozen replay and
+      # the size, and moves the traced parameter off the shape -- if it comes back, the
+      # subject is the gradient path *through* the replay rather than the layer being
+      # patterned at all. `mid` asks where between [1, 1] and [3, 3] the size crosses,
+      # which is 18 square against 98 square with 50 in between.
       #
       # Each arm is its own step: a hung one takes its process with it, and `if: always()`
       # does not survive the runner going away, which is how run 33840949962 left five
@@ -272,7 +279,7 @@ jobs:
           cat > /tmp/hang_bisect.py <<'BISECT'
           """Which ingredient above the eig makes `jit(grad(solve))` stop coming back.
 
-          Run 33847846023 cleared the eig itself: a bare 98x98 under `jit(grad)`, with upstream's rule
+          Run 33847... cleared the eig itself: a bare 98x98 under `jit(grad)`, with upstream's rule
           or with `_core.backend.eig`, finishes in under a second on the same two-core runner. So
           the hang needs something the solver puts around it, and this takes the real scene apart
           one piece at a time. Every arm is a real `wavebit.rcwa(...).solve()` under
@@ -315,24 +322,41 @@ jobs:
                                                           lx=v, ly=55.0, angle=0.27, material=4.0)])]
 
 
+          ORDERS = {'small': [1, 1], 'mid': [2, 2]}.get(ARM, [3, 3])
+
           if ARM == 'uniform':
-              to, x0 = [3, 3], 12.25
+              # No shapes and no freeze: the solve with the geometry build and the frozen replay
+              # taken out, at the size that hangs.
+              x0 = 12.25
 
               def total(v):
                   return jnp.sum(wavebit.rcwa(backend=1, structure=[dict(background=v)],
-                                              truncation_order=to, **CFG).solve().T).real
-          else:
-              to, x0 = ([1, 1] if ARM == 'small' else [3, 3]), 85.0
-              frozen = wavebit.rcwa(backend=1, structure=scene(jnp.asarray(x0)),
-                                    truncation_order=to, **CFG).freeze_geometry()
+                                              truncation_order=ORDERS, **CFG).solve().T).real
+          elif ARM == 'thickness':
+              # The patterned scene, the frozen replay still in the path, the size that hangs -- and
+              # the traced parameter moved off the shape. If this comes back, the subject is the
+              # gradient path *through* the replay and not the fact that the layer is patterned.
+              x0 = 205.0
+              frozen = wavebit.rcwa(backend=1, structure=scene(85.0),
+                                    truncation_order=ORDERS, **CFG).freeze_geometry()
 
               def total(v):
-                  return jnp.sum(wavebit.rcwa(backend=1, structure=scene(v), truncation_order=to,
+                  cfg = dict(CFG, thickness=[v])
+                  return jnp.sum(wavebit.rcwa(backend=1, structure=scene(85.0),
+                                              truncation_order=ORDERS,
+                                              **cfg).solve(geometry=frozen).T).real
+          else:
+              x0 = 85.0
+              frozen = wavebit.rcwa(backend=1, structure=scene(jnp.asarray(x0)),
+                                    truncation_order=ORDERS, **CFG).freeze_geometry()
+
+              def total(v):
+                  return jnp.sum(wavebit.rcwa(backend=1, structure=scene(v), truncation_order=ORDERS,
                                               **CFG).solve(geometry=frozen).T).real
 
 
           x = jnp.asarray(x0)
-          print(f'[{ARM}] to={to} cores={os.cpu_count()} jax={jax.__version__}', flush=True)
+          print(f'[{ARM}] to={ORDERS} cores={os.cpu_count()} jax={jax.__version__}', flush=True)
 
           for label, fn in (('eager', total),
                             ('eager grad', jax.grad(total)),
@@ -345,12 +369,12 @@ jobs:
           print(f'[{ARM}] finished, no hang')
           BISECT
 
-      - name: bisect -- small
+      - name: bisect -- thickness
         if: always()
         continue-on-error: true
         env:
-          ARM: small
-          ARM_BUDGET: 240
+          ARM: thickness
+          ARM_BUDGET: 180
           OPENBLAS_NUM_THREADS: 1
           OMP_NUM_THREADS: 1
           MKL_NUM_THREADS: 1
@@ -358,12 +382,12 @@ jobs:
           VECLIB_MAXIMUM_THREADS: 1
         run: python /tmp/hang_bisect.py
 
-      - name: bisect -- uniform
+      - name: bisect -- mid
         if: always()
         continue-on-error: true
         env:
-          ARM: uniform
-          ARM_BUDGET: 240
+          ARM: mid
+          ARM_BUDGET: 180
           OPENBLAS_NUM_THREADS: 1
           OMP_NUM_THREADS: 1
           MKL_NUM_THREADS: 1
@@ -376,7 +400,7 @@ jobs:
         continue-on-error: true
         env:
           ARM: control
-          ARM_BUDGET: 240
+          ARM_BUDGET: 180
           OPENBLAS_NUM_THREADS: 1
           OMP_NUM_THREADS: 1
           MKL_NUM_THREADS: 1
