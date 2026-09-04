@@ -287,6 +287,71 @@ jobs:
         continue-on-error: true
         run: pytest tests/test_frozen_geometry.py -v --timeout=300 --timeout-method=thread
 
+      # The second subject, unrelated to the hang and here because this is where a Linux
+      # measurement is cheap. `test_the_rungs_agree_bit_for_bit_on_what_they_share[SMM]` has
+      # failed twice and passed once across the runs that reached it, on two arrays agreeing
+      # to every digit that prints. Reading the code says the claim is sound: final_matching
+      # computes the efficiencies once, before the `answers` branch, and the amplitude rung
+      # packs those same variables rather than recomputing them -- so the rungs cannot be
+      # taking different arithmetic, and something under them is not reproducing.
+      #
+      # Ruled out on the developer machine already: all six orderings of the three rungs
+      # agree byte for byte, and one rung repeated five times agrees with itself. The
+      # remaining candidates only exist on the runner, so they are measured on the runner.
+      #
+      # The control is the point. Comparing three *rungs* cannot tell "the rungs disagree"
+      # from "any two solves disagree" -- so this repeats one rung against itself as well. If
+      # the repeat diverges too, the rung is a red herring and the subject is plain
+      # nondeterminism in the solve; if only the rungs diverge, it is not.
+      #
+      # Repeated because the flake is intermittent: one clean pass would prove nothing.
+      - name: bit identity -- where do the rungs stop agreeing
+        if: always()
+        continue-on-error: true
+        env:
+          OPENBLAS_NUM_THREADS: 1
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          NUMEXPR_NUM_THREADS: 1
+          VECLIB_MAXIMUM_THREADS: 1
+        run: |
+          python - <<'PROBE'
+          import sys
+          import numpy as np
+          sys.path.insert(0, '.')
+          sys.path.insert(0, 'tests')
+          from test_answers_declaration import _solver, RUNGS
+
+          FIELDS = ('R_s', 'R_p', 'T_s', 'T_p')
+
+          def once(rung, algo='SMM'):
+              r = _solver(answers=rung, layer_algorithm=algo).solve()
+              out = {'T': np.asarray(r.T).tobytes(), 'R': np.asarray(r.R).tobytes()}
+              for k in FIELDS:
+                  v = getattr(r.given, k, None)
+                  if v is not None:
+                      out[k] = np.asarray(v).tobytes()
+              return out
+
+          rung_bad = repeat_bad = 0
+          N = 25
+          for i in range(N):
+              a, b, c = once('efficiency'), once('amplitude'), once('field')
+              d = once('efficiency')                      # the control: same rung, again
+              across = [k for k in ('T', 'R') if not (a[k] == b[k] == c[k])]
+              amps = [k for k in FIELDS if b.get(k) != c.get(k)]
+              repeat = [k for k in ('T', 'R') if a[k] != d[k]]
+              if across or amps:
+                  rung_bad += 1
+                  if rung_bad == 1:
+                      print(f'iter {i}: rungs differ in {across + amps}')
+              if repeat:
+                  repeat_bad += 1
+                  if repeat_bad == 1:
+                      print(f'iter {i}: SAME rung twice differs in {repeat}  <-- control fired')
+          print(f'{N} iterations: rungs differed {rung_bad}, same-rung-repeat differed {repeat_bad}')
+          PROBE
+
   examples:
     name: examples smoke
     runs-on: ubuntu-latest
